@@ -1,87 +1,167 @@
-"""PURE P1 initial-state witnesses; no DB, server, provider or solver fixtures.
+"""Pure Decimal-domain tests for PAC allocation and portfolio rebalancing P1.
 
-All expectations use literal decimals or independently calculated Fractions. The
-public adapters are also exercised on actual results, not substitute wire models.
-Catalogue ownership belongs to the coordinator: services / pac-analyze.
+All inputs are owned in-memory witnesses.  Expectations are literal monetary
+values or independently evaluated :class:`fractions.Fraction` ratios; the tests
+do not reproduce the production evaluator.
 """
 
 from __future__ import annotations
 
 import json
-import subprocess
-import sys
 from copy import deepcopy
-from decimal import ROUND_DOWN, ROUND_UP, getcontext, localcontext
+from decimal import Decimal, localcontext
 from fractions import Fraction
-from pathlib import Path
-from textwrap import dedent
+from typing import Any
 
 import pytest
 
 from backend.app.schemas.pac_allocator import (
+    P1_MAX_CURRENCIES,
+    P1_MAX_ISSUES,
+    P1_MAX_NATIVE_AMOUNT_CHARS,
+    P1_MAX_ROWS,
+    P1_RESULT_BYTES,
     PAC_ANALYZE_INPUT_ADAPTER,
     PAC_ANALYZE_OUTPUT_ADAPTER,
+    REBALANCE_ANALYZE_INPUT_ADAPTER,
+    REBALANCE_ANALYZE_OUTPUT_ADAPTER,
+    RebalanceAnalyzeInvalid,
 )
-from backend.app.services.pac_allocator import analyze_initial_state
+from backend.app.services.pac_allocator import (
+    analyze_pac_budget,
+    analyze_rebalancing,
+)
+from backend.app.services.pac_allocator.numeric import (
+    decimal_context,
+    decimal_text,
+)
+
+Path = tuple[str | int, ...]
 
 
-def _row(
-    key="Alfa/X",
+def _asset(
+    instrument_key: str = "asset-alpha",
     *,
-    quantity="1",
-    price="10",
-    currency="EUR",
-    basis=1,
-    target="100",
-    mode="whole",
-    step="1",
-    instrument="Alfa",
-):
+    name: str = "Alpha",
+    buy_grid: dict[str, object] | None = None,
+) -> dict[str, object]:
     return {
-        "row_key": key,
-        "instrument_key": instrument,
-        "name": key,
-        "initial_quantity": quantity,
+        "instrument_key": instrument_key,
+        "name": name,
+        "buy_grid": buy_grid,
+    }
+
+
+def _target(
+    instrument_key: str = "asset-alpha",
+    percent: str | None = "100",
+) -> dict[str, object]:
+    return {
+        "instrument_key": instrument_key,
+        "target_percent": percent,
+    }
+
+
+def _holding(
+    row_key: str = "custody-alpha",
+    instrument_key: str = "asset-alpha",
+    *,
+    name: str = "Alpha",
+    quantity: str | None = "2",
+    price: str | None = "25",
+    currency: str | None = "EUR",
+    basis: int | None = 1,
+    reference_date: str | None = "2026-09-14",
+    buy_grid: dict[str, object] | None = None,
+) -> dict[str, object]:
+    return {
+        "row_key": row_key,
+        "instrument_key": instrument_key,
+        "name": name,
+        "quantity": quantity,
         "quote": {
             "raw_price": price,
             "currency": currency,
             "quote_base_quantity": basis,
-            "reference_date": "2026-09-08",
+            "reference_date": reference_date,
         },
-        "target_percent": target,
-        "buy_grid": {"mode": mode, "quantity_step": step},
+        "buy_grid": buy_grid,
     }
 
 
-def _request(rows=None):
+def _rate(
+    currency: str,
+    rate: str | None,
+    reference_date: str | None = "2026-09-14",
+) -> dict[str, object]:
+    return {
+        "currency": currency,
+        "rate_to_report": rate,
+        "reference_date": reference_date,
+    }
+
+
+def _contribution(
+    currency: str = "EUR",
+    amount: str | None = "5",
+    monetary_step: str | None = "0.01",
+) -> dict[str, object]:
+    return {
+        "currency": currency,
+        "amount": amount,
+        "monetary_step": monetary_step,
+    }
+
+
+def _pac_request(
+    *,
+    assets: list[dict[str, object]] | None = None,
+    targets: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
+    selected = [_asset()] if assets is None else assets
+    target_vector = [_target()] if targets is None else targets
     return {
         "operation": "analyze",
         "report_currency": "EUR",
-        "as_of_date": "2026-09-08",
-        "rows": [_row()] if rows is None else rows,
+        "as_of_date": "2026-09-14",
+        "assets": selected,
+        "targets": target_vector,
         "cash_balances": [],
         "contributions": [],
         "valuation_rates": [],
     }
 
 
-def _rate(currency="USD", value="0.9", reference_date="2026-09-08"):
+def _rebalance_request(
+    *,
+    holdings: list[dict[str, object]] | None = None,
+    targets: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
+    selected = [_holding()] if holdings is None else holdings
+    target_vector = [_target()] if targets is None else targets
     return {
-        "currency": currency,
-        "rate_to_report": value,
-        "reference_date": reference_date,
+        "operation": "analyze",
+        "report_currency": "EUR",
+        "as_of_date": "2026-09-14",
+        "holdings": selected,
+        "targets": target_vector,
+        "cash_balances": [],
+        "contributions": [],
+        "valuation_rates": [],
     }
 
 
-def _put(raw, path, value):
-    """Address a field of this test's own, explicitly constructed input."""
-    parent = raw
-    for token in path[:-1]:
-        parent = parent[token]
-    parent[path[-1]] = value
+def _at(value: Any, path: Path) -> Any:
+    for token in path:
+        value = value[token]
+    return value
 
 
-def _facts_have_one_primary_reason(node):
+def _set(value: Any, path: Path, replacement: Any) -> None:
+    _at(value, path[:-1])[path[-1]] = replacement
+
+
+def _facts_have_one_primary_reason(node: Any) -> None:
     if isinstance(node, dict):
         if "reason_codes" in node:
             if node["availability"] == "available":
@@ -91,51 +171,59 @@ def _facts_have_one_primary_reason(node):
                 assert node["availability"] == "unavailable"
                 assert node["value"] is None
                 assert len(node["reason_codes"]) == 1
-        for value in node.values():
-            _facts_have_one_primary_reason(value)
+        for child in node.values():
+            _facts_have_one_primary_reason(child)
     elif isinstance(node, list):
-        for value in node:
-            _facts_have_one_primary_reason(value)
+        for child in node:
+            _facts_have_one_primary_reason(child)
 
 
-def _analyze(raw):
+def _analyze_pac(raw: dict[str, object]) -> dict[str, Any]:
     before = deepcopy(raw)
-    request = PAC_ANALYZE_INPUT_ADAPTER.validate_python(raw)
+    request = PAC_ANALYZE_INPUT_ADAPTER.validate_python(raw, strict=True)
     model_before = request.model_dump(mode="json")
-    result = analyze_initial_state(request)
+    result = analyze_pac_budget(request)
     emitted = PAC_ANALYZE_OUTPUT_ADAPTER.dump_json(result)
-    decoded = PAC_ANALYZE_OUTPUT_ADAPTER.validate_json(emitted)
-    assert PAC_ANALYZE_OUTPUT_ADAPTER.dump_json(decoded) == emitted
+    assert PAC_ANALYZE_OUTPUT_ADAPTER.validate_json(emitted, strict=True) == result
     assert raw == before
     assert request.model_dump(mode="json") == model_before
     wire = json.loads(emitted)
     assert wire["operation"] == "analyze"
-    assert wire["result_kind"] == "initial_state_analysis"
-    assert wire["numeric_policy_id"] == "pac-initial-state-v1"
-    assert wire["trade_feasibility"] == "not_evaluated"
-    assert wire["optimization"] == "not_run"
-    assert (wire["normalized"] is not None) == (wire["availability"] == "ready")
-    for issue in wire["issues"]:
-        assert issue["related_row_indices"] == sorted(set(issue["related_row_indices"]))
-        assert all(type(index) is int and 0 <= index < len(wire["rows"]) for index in issue["related_row_indices"])
+    assert wire["result_kind"] == "pac_budget_analysis"
+    assert wire["numeric_policy_id"] == "pac-budget-allocation-v1"
+    assert (wire["normalized"] is not None) is (wire["availability"] == "ready")
     _facts_have_one_primary_reason(wire)
     return wire
 
 
-def _rows(result):
-    """Use identity for ordinary facts; ordered assertions have their own test."""
-    by_key = {row["row_key"]: row for row in result["rows"]}
-    assert len(by_key) == len(result["rows"]), "This helper requires unique row keys"
-    return by_key
+def _analyze_rebalancer(raw: dict[str, object]) -> dict[str, Any]:
+    before = deepcopy(raw)
+    request = REBALANCE_ANALYZE_INPUT_ADAPTER.validate_python(raw, strict=True)
+    model_before = request.model_dump(mode="json")
+    result = analyze_rebalancing(request)
+    emitted = REBALANCE_ANALYZE_OUTPUT_ADAPTER.dump_json(result)
+    assert REBALANCE_ANALYZE_OUTPUT_ADAPTER.validate_json(emitted, strict=True) == result
+    assert raw == before
+    assert request.model_dump(mode="json") == model_before
+    wire = json.loads(emitted)
+    assert wire["operation"] == "analyze"
+    assert wire["result_kind"] == "portfolio_rebalancing_analysis"
+    assert wire["numeric_policy_id"] == "portfolio-rebalancing-v1"
+    assert (wire["normalized"] is not None) is (wire["availability"] == "ready")
+    _facts_have_one_primary_reason(wire)
+    return wire
 
 
-def _value(fact):
+def _value(fact: dict[str, Any]) -> Any:
     assert fact["availability"] == "available", fact
     assert fact["reason_codes"] == []
     return fact["value"]
 
 
-def _unavailable(fact, reason=None):
+def _unavailable(
+    fact: dict[str, Any],
+    reason: str | None = None,
+) -> None:
     assert fact["availability"] == "unavailable", fact
     assert fact["value"] is None
     assert len(fact["reason_codes"]) == 1
@@ -143,961 +231,1523 @@ def _unavailable(fact, reason=None):
         assert fact["reason_codes"] == [reason]
 
 
-def _money(fact, amount, currency="EUR"):
+def _money(
+    fact: dict[str, Any],
+    amount: str,
+    currency: str = "EUR",
+) -> None:
     assert _value(fact) == {"currency": currency, "amount": amount}
 
 
-def _issue(result, code, path=None, kind=None):
-    matches = [issue for issue in result["issues"] if issue["code"] == code and (path is None or issue["path"] == list(path))]
-    assert len(matches) == 1, (code, path, result["issues"])
-    (found,) = matches
-    if kind is not None:
-        assert found["kind"] == kind
-    return found
-
-
-def _truncate_28(value):
-    """Independent integer-only oracle, including tiny negatives and exact zero."""
+def _truncate_28(value: Fraction) -> str:
+    """Independent truncation oracle for the public ratio approximation."""
     scaled = abs(value.numerator) * 10**28 // value.denominator
-    integer, fraction = divmod(scaled, 10**28)
+    whole, fraction = divmod(scaled, 10**28)
     suffix = f"{fraction:028d}".rstrip("0")
-    text = f"{integer}.{suffix}" if suffix else str(integer)
+    text = f"{whole}.{suffix}" if suffix else str(whole)
     return f"-{text}" if value < 0 and scaled else text
 
 
-def _ratio(fact, numerator, denominator, unit):
+def _ratio(
+    fact: dict[str, Any],
+    numerator: int | str,
+    denominator: int | str,
+    unit: str,
+) -> None:
     value = _value(fact)
     expected_numerator = Fraction(numerator)
     expected_denominator = Fraction(denominator)
-    assert expected_denominator > 0
-    # Check the authoritative unreduced evidence, not merely a rounded quotient.
+    expected = expected_numerator / expected_denominator
     assert Fraction(value["numerator"]) == expected_numerator
     assert Fraction(value["denominator"]) == expected_denominator
-    exact = expected_numerator / expected_denominator
     assert value["unit"] == unit
     assert value["approximation_decimal_places"] == 28
-    assert value["approximation"] == _truncate_28(exact)
-    assert value["approximation_exact"] is (Fraction(value["approximation"]) == exact)
-    assert abs(exact - Fraction(value["approximation"])) < Fraction(1, 10**28)
+    assert value["approximation"] == _truncate_28(expected)
+    assert value["approximation_exact"] is (Fraction(value["approximation"]) == expected)
 
 
-def _cash_witness():
-    raw = _request(
-        [
-            _row("Alfa/X", quantity="10", target="50"),
-            _row("Alfa/Y", quantity="0", target="50"),
-        ]
+def _issue(
+    result: dict[str, Any],
+    code: str,
+    path: Path | None = None,
+    kind: str | None = None,
+) -> dict[str, Any]:
+    matches = [issue for issue in result["issues"] if issue["code"] == code and (path is None or issue["path"] == list(path))]
+    assert len(matches) == 1, (code, path, result["issues"])
+    (issue,) = matches
+    if kind is not None:
+        assert issue["kind"] == kind
+    return issue
+
+
+def _allocations(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    by_key = {allocation["instrument_key"]: allocation for allocation in result["allocations"]}
+    assert len(by_key) == len(result["allocations"])
+    return by_key
+
+
+def _holdings(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    by_key = {holding["row_key"]: holding for holding in result["holdings"]}
+    assert len(by_key) == len(result["holdings"])
+    return by_key
+
+
+def _instruments(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    by_key = {instrument["instrument_key"]: instrument for instrument in result["instruments"]}
+    assert len(by_key) == len(result["instruments"])
+    return by_key
+
+
+def test_rebalancer_maximal_malformed_draft_exceeds_legacy_issue_cap_and_stays_typed():
+    holdings = [
+        _holding(
+            row_key=f"duplicate-row-{index // 2}",
+            instrument_key=f"selected-{index}",
+            name="",
+            quantity="-1",
+            price="0",
+            currency="INVALID",
+            basis=0,
+            reference_date="2026-99-99",
+            buy_grid={"mode": None, "quantity_step": "0"},
+        )
+        for index in range(P1_MAX_ROWS)
+    ]
+    contributions = [_contribution("INVALID", "-1", "0") for _index in range(P1_MAX_ROWS)]
+    targets = [_target(f"orphan-{index // 2}", "-1") for index in range(P1_MAX_ROWS)]
+    cash_balances = [{"currency": "INVALID", "amount": "-1"} for _index in range(P1_MAX_CURRENCIES)]
+    valuation_rates = [_rate("INVALID", "0", "2026-99-99") for _index in range(P1_MAX_CURRENCIES)]
+    assert len(holdings) == len(contributions) == len(targets) == P1_MAX_ROWS == 32
+    assert len(cash_balances) == len(valuation_rates) == P1_MAX_CURRENCIES == 4
+
+    raw = _rebalance_request(holdings=holdings, targets=targets)
+    raw.update(
+        {
+            "report_currency": "INVALID",
+            "as_of_date": "2026-99-99",
+            "cash_balances": cash_balances,
+            "contributions": contributions,
+            "valuation_rates": valuation_rates,
+        }
+    )
+    request = REBALANCE_ANALYZE_INPUT_ADAPTER.validate_python(raw, strict=True)
+
+    result = analyze_rebalancing(request)
+    emitted = REBALANCE_ANALYZE_OUTPUT_ADAPTER.dump_json(result)
+    round_tripped = REBALANCE_ANALYZE_OUTPUT_ADAPTER.validate_json(
+        emitted,
+        strict=True,
+    )
+
+    assert isinstance(result, RebalanceAnalyzeInvalid)
+    assert isinstance(round_tripped, RebalanceAnalyzeInvalid)
+    assert round_tripped == result
+    assert P1_MAX_ISSUES == 512
+    assert 384 < len(result.issues) <= P1_MAX_ISSUES
+    assert P1_RESULT_BYTES == 256 * 1024
+    assert len(emitted) < P1_RESULT_BYTES
+
+    wire = json.loads(emitted)
+    assert wire["availability"] == "invalid"
+    assert wire["normalized"] is None
+    assert len(wire["issues"]) == len(result.issues)
+    issue_shapes = {(issue["kind"], issue["code"], tuple(issue["path"])) for issue in wire["issues"]}
+    assert {
+        ("invalid", "invalid_currency", ("report_currency",)),
+        (
+            "unsupported",
+            "short_inventory_unsupported",
+            ("holdings", 31, "quantity"),
+        ),
+        (
+            "invalid",
+            "duplicate_row_key",
+            ("holdings", 0, "row_key"),
+        ),
+        (
+            "invalid",
+            "negative_contribution",
+            ("contributions", 31, "amount"),
+        ),
+        (
+            "invalid",
+            "duplicate_target_instrument",
+            ("targets", 0, "instrument_key"),
+        ),
+        (
+            "invalid",
+            "target_instrument_not_selected",
+            ("targets", 0, "instrument_key"),
+        ),
+        ("missing", "target_required", ("targets",)),
+    } <= issue_shapes
+    assert any(issue.kind == "missing" and issue.code == "target_required" and issue.path == ["targets"] and issue.related_indices == [31] and issue.params.instrument_key == "selected-31" for issue in result.issues)
+
+
+def test_pac_multicurrency_cash_and_contributions_are_counted_once():
+    raw = _pac_request(
+        assets=[
+            _asset("asset-alpha", name="Alpha"),
+            _asset("asset-beta", name="Beta"),
+        ],
+        targets=[
+            _target("asset-alpha", "25"),
+            _target("asset-beta", "75"),
+        ],
     )
     raw["cash_balances"] = [
         {"currency": "EUR", "amount": "0.005"},
         {"currency": "USD", "amount": "10"},
     ]
-    raw["contributions"] = [{"currency": "EUR", "amount": "5"}]
-    raw["valuation_rates"] = [_rate()]
-    return raw
+    raw["contributions"] = [
+        _contribution("EUR", "5", "0.01"),
+        _contribution("GBP", "4", "0.25"),
+    ]
+    raw["valuation_rates"] = [
+        _rate("USD", "0.9"),
+        _rate("GBP", "1.25"),
+    ]
 
+    result = _analyze_pac(raw)
 
-def test_empty_draft_is_unknown_not_an_empty_zero_portfolio():
-    result = _analyze({"operation": "analyze"})
-    assert result["availability"] == "needs_input"
-    assert result["rows"] == []
-    _issue(result, "rows_required", ("rows",), "missing")
-    for vector in ("cash_balances", "contributions"):
-        _issue(result, "cash_vector_required", (vector,), "missing")
-    _unavailable(result["totals"]["initial_invested_reporting"])
-    _unavailable(result["totals"]["max_abs_gap_pp"])
-    _unavailable(result["totals"]["squared_gap_pp2"])
-    _unavailable(result["cash_pools"])
-
-
-@pytest.mark.parametrize(
-    ("quantity", "price", "basis", "expected"),
-    [("10.125", "10", 1, "101.25"), ("3.25", "98.5", 100, "3.20125")],
-)
-def test_custody_fractions_are_not_rounded_to_the_whole_buy_grid(quantity, price, basis, expected):
-    result = _analyze(_request([_row(quantity=quantity, price=price, basis=basis)]))
     assert result["availability"] == "ready"
-    row = _rows(result)["Alfa/X"]
-    assert _value(row["quantity"]) == quantity
-    _money(row["initial_value_native"], expected)
-    _money(row["initial_value_reporting"], expected)
-    _money(result["totals"]["initial_invested_reporting"], expected)
-    assert Fraction(expected) == Fraction(quantity) * Fraction(price) / basis
-    normalized = {item["row_key"]: item for item in result["normalized"]["rows"]}["Alfa/X"]
-    assert normalized["initial_quantity"] == quantity
-    assert normalized["buy_grid"] == {"mode": "whole", "quantity_step": "1"}
-    issue = _issue(result, "inventory_off_buy_grid", ("rows", 0, "initial_quantity"), "info")
-    assert issue["related_row_indices"] == [0]
+    assert result["issues"] == []
+    _money(result["totals"]["existing_cash_reporting"], "9.005")
+    _money(result["totals"]["contributions_reporting"], "10")
+    _money(result["totals"]["investable_budget_reporting"], "19.005")
+    assert _value(result["totals"]["target_total_percent"]) == "100"
 
+    allocations = _allocations(result)
+    _money(
+        allocations["asset-alpha"]["ideal_allocation_reporting"],
+        "4.75125",
+    )
+    _money(
+        allocations["asset-beta"]["ideal_allocation_reporting"],
+        "14.25375",
+    )
+    assert Fraction("4.75125") == Fraction("19.005") * Fraction(25, 100)
+    assert Fraction("14.25375") == Fraction("19.005") * Fraction(75, 100)
 
-def test_repeated_instrument_is_scored_per_compound_row_not_aggregated():
-    result = _analyze(_request([_row("Alfa/X", quantity="10", target="50"), _row("Alfa/Y", quantity="0", target="50")]))
-    assert result["availability"] == "ready"
-    rows = _rows(result)
-    assert rows["Alfa/X"]["instrument_key"] == rows["Alfa/Y"]["instrument_key"] == "Alfa"
-    _money(result["totals"]["initial_invested_reporting"], "100")
-    _ratio(rows["Alfa/X"]["current_weight_percent"], 10000, 100, "percent")
-    _ratio(rows["Alfa/Y"]["current_weight_percent"], 0, 100, "percent")
-    _ratio(rows["Alfa/X"]["deviation_pp"], 5000, 100, "percentage_points")
-    _ratio(rows["Alfa/Y"]["deviation_pp"], -5000, 100, "percentage_points")
-    _ratio(result["totals"]["max_abs_gap_pp"], 5000, 100, "percentage_points")
-    _ratio(result["totals"]["squared_gap_pp2"], 50_000_000, 10000, "percentage_points_squared")
-    assert _value(result["totals"]["squared_gap_pp2"])["approximation"] == "5000"
-    assert "trades" not in result
-    assert "proposals" not in result
-
-
-def test_cash_is_pooled_once_and_valued_without_changing_native_currency():
-    result = _analyze(_cash_witness())
-    assert result["availability"] == "ready"
     pools = {pool["currency"]: pool for pool in _value(result["cash_pools"])}
-    assert set(pools) == {"EUR", "USD"}
+    assert set(pools) == {"EUR", "GBP", "USD"}
     assert pools["EUR"]["existing_amount"] == "0.005"
     assert pools["EUR"]["contribution_amount"] == "5"
     assert pools["EUR"]["combined_amount"] == "5.005"
-    assert pools["USD"]["existing_amount"] == pools["USD"]["combined_amount"] == "10"
+    assert pools["USD"]["existing_amount"] == "10"
     assert pools["USD"]["contribution_amount"] == "0"
+    assert pools["GBP"]["existing_amount"] == "0"
+    assert pools["GBP"]["contribution_amount"] == "4"
     _money(pools["USD"]["combined_reporting"], "9")
-    _money(result["totals"]["existing_cash_reporting"], "9.005")
-    _money(result["totals"]["contributions_reporting"], "5")
-    _money(result["totals"]["cash_plus_contributions_reporting"], "14.005")
-    assert Fraction("14.005") == Fraction("0.005") + Fraction("10") * Fraction("0.9") + 5
-    assert all("broker" not in pool for pool in pools.values())
-    balances = {item["currency"]: item["amount"] for item in result["normalized"]["cash_balances"]}
-    assert balances == {"EUR": "0.005", "USD": "10"}
-
-
-def test_missing_cash_fx_keeps_native_pools_but_not_a_subset_total():
-    raw = _cash_witness()
-    raw["valuation_rates"] = []
-    result = _analyze(raw)
-    assert result["availability"] == "needs_input"
-    _issue(result, "valuation_rate_required", kind="missing")
-    pools = {pool["currency"]: pool for pool in _value(result["cash_pools"])}
-    assert pools["EUR"]["combined_amount"] == "5.005"
-    assert pools["USD"]["combined_amount"] == "10"
-    _money(pools["EUR"]["combined_reporting"], "5.005")
-    _unavailable(pools["USD"]["existing_reporting"])
-    _unavailable(pools["USD"]["combined_reporting"])
-    _money(pools["USD"]["contribution_reporting"], "0")
-    _unavailable(result["totals"]["existing_cash_reporting"])
-    _unavailable(result["totals"]["cash_plus_contributions_reporting"])
-    _money(result["totals"]["contributions_reporting"], "5")
-    _money(result["totals"]["initial_invested_reporting"], "100")
-
-
-def test_missing_nonzero_row_fx_never_renormalizes_the_known_subset():
-    raw = _request([_row("Alfa/X", target="50"), _row("Alfa/Y", currency="USD", target="50")])
-    result = _analyze(raw)
-    assert result["availability"] == "needs_input"
-    rows = _rows(result)
-    _money(rows["Alfa/X"]["initial_value_reporting"], "10")
-    _money(rows["Alfa/Y"]["initial_value_native"], "10", "USD")
-    _unavailable(rows["Alfa/Y"]["initial_value_reporting"])
-    _unavailable(result["totals"]["initial_invested_reporting"])
-    for row in rows.values():
-        _unavailable(row["current_weight_percent"])
-        _unavailable(row["deviation_pp"])
-    _unavailable(result["totals"]["max_abs_gap_pp"])
-    _unavailable(result["totals"]["squared_gap_pp2"])
-
-
-def test_explicit_zero_conversion_is_known_without_inventing_a_missing_fx_rate():
-    raw = _request([_row("Alfa/X"), _row("Alfa/Y", quantity="0", currency="USD", target="0")])
-    result = _analyze(raw)
-    assert result["availability"] == "needs_input"
-    _issue(result, "valuation_rate_required", kind="missing")
-    rows = _rows(result)
-    _money(rows["Alfa/Y"]["initial_value_native"], "0", "USD")
-    _money(rows["Alfa/Y"]["initial_value_reporting"], "0")
-    _money(result["totals"]["initial_invested_reporting"], "10")
-    _ratio(rows["Alfa/X"]["current_weight_percent"], 1000, 10, "percent")
-    _ratio(rows["Alfa/Y"]["current_weight_percent"], 0, 10, "percent")
-    _ratio(result["totals"]["max_abs_gap_pp"], 0, 10, "percentage_points")
-
-
-def test_zero_initial_investment_can_be_ready_but_has_no_weights_or_score():
-    raw = _request([_row(quantity="0")])
-    raw["contributions"] = [{"currency": "EUR", "amount": "100"}]
-    result = _analyze(raw)
-    assert result["availability"] == "ready"
-    _money(result["totals"]["initial_invested_reporting"], "0")
-    _money(result["totals"]["cash_plus_contributions_reporting"], "100")
-    row = _rows(result)["Alfa/X"]
-    for fact in (
-        row["current_weight_percent"],
-        row["deviation_pp"],
-        result["totals"]["max_abs_gap_pp"],
-        result["totals"]["squared_gap_pp2"],
-    ):
-        _unavailable(fact, "zero_initial_invested_value")
-
-
-@pytest.mark.parametrize("vector", ["cash_balances", "contributions"])
-def test_null_vector_is_unknown_while_explicit_empty_is_closed_zero(vector):
-    raw = _request()
-    raw[vector] = None
-    missing = _analyze(raw)
-    assert missing["availability"] == "needs_input"
-    _issue(missing, "cash_vector_required", (vector,), "missing")
-    _unavailable(missing["cash_pools"], "input_missing")
-    _unavailable(missing["totals"]["cash_plus_contributions_reporting"])
-    other_total = "contributions_reporting" if vector == "cash_balances" else "existing_cash_reporting"
-    _money(missing["totals"][other_total], "0")
-    raw[vector] = []
-    complete = _analyze(raw)
-    assert complete["availability"] == "ready"
-    for total in ("existing_cash_reporting", "contributions_reporting", "cash_plus_contributions_reporting"):
-        _money(complete["totals"][total], "0")
-
-
-def test_closed_sparse_vectors_zero_fill_only_the_declared_active_universe():
-    raw = _request([_row(currency="USD")])
-    raw["cash_balances"] = [{"currency": "EUR", "amount": "10"}]
-    raw["valuation_rates"] = [_rate()]
-    result = _analyze(raw)
-    pools = {item["currency"]: item for item in _value(result["cash_pools"])}
-    assert set(pools) == {"EUR", "USD"}
-    assert pools["USD"]["existing_amount"] == pools["USD"]["contribution_amount"] == "0"
-    assert pools["EUR"]["combined_amount"] == "10"
-    _money(result["totals"]["cash_plus_contributions_reporting"], "10")
-
-
-@pytest.mark.parametrize("amount", [None, "12abc"])
-def test_unresolved_vector_entry_cannot_supply_zero_for_omitted_currencies(amount):
-    raw = _request([_row(currency="USD")])
-    raw["valuation_rates"] = [_rate()]
-    raw["cash_balances"] = [{"currency": "EUR", "amount": amount}]
-    result = _analyze(raw)
-    assert result["availability"] == ("needs_input" if amount is None else "invalid")
-    _unavailable(result["cash_pools"])
-    _unavailable(result["totals"]["existing_cash_reporting"])
-    _money(result["totals"]["contributions_reporting"], "0")
-    _money(result["totals"]["initial_invested_reporting"], "9")
-
-
-@pytest.mark.parametrize("vector", ["cash_balances", "contributions", "valuation_rates"])
-def test_duplicate_normalized_currency_is_invalid_and_not_summed(vector):
-    raw = _request([_row(currency="USD")])
-    raw["valuation_rates"] = [_rate()]
-    if vector == "valuation_rates":
-        raw[vector] = [_rate("USD", "0.9"), _rate(" usd ", "0.1"), _rate("usd", "1")]
-    else:
-        raw[vector] = [
-            {"currency": "USD", "amount": "1"},
-            {"currency": " usd ", "amount": "2"},
-            {"currency": "usd", "amount": "3"},
-        ]
-    result = _analyze(raw)
-    assert result["availability"] == "invalid"
-    duplicate = _issue(result, "duplicate_currency", kind="invalid")
-    assert duplicate["params"]["vector"] == vector
-    assert duplicate["params"]["currency"] == "USD"
-    if vector == "valuation_rates":
-        _unavailable(_rows(result)["Alfa/X"]["initial_value_reporting"])
-    else:
-        _unavailable(result["cash_pools"], "input_invalid")
-        total = "existing_cash_reporting" if vector == "cash_balances" else "contributions_reporting"
-        _unavailable(result["totals"][total], "input_invalid")
-
-
-def test_duplicate_row_keys_retain_each_input_row_and_one_group_issue():
-    raw = _request([_row("same", quantity=str(index), target=target) for index, target in enumerate(("20", "30", "50"))])
-    result = _analyze(raw)
-    assert result["availability"] == "invalid"
-    assert [(row["row_index"], row["row_key"], _value(row["quantity"])) for row in result["rows"]] == [(0, "same", "0"), (1, "same", "1"), (2, "same", "2")]
-    assert _issue(result, "duplicate_row_key", kind="invalid")["related_row_indices"] == [0, 1, 2]
-
-
-@pytest.mark.parametrize(
-    ("raw_quantity", "canonical"),
-    [
-        ("999999999999.123456789012", "999999999999.123456789012"),
-        ("0.000000000001", "0.000000000001"),
-        ("000000000001.2300000000000", "1.23"),
-        ("  +00010.125000000000000  ", "10.125"),
-        ("-000.000000000000000", "0"),
-        ("0" * 63 + "1", "1"),
-        ("1." + "0" * 62, "1"),
-    ],
-)
-def test_numeric_admission_normalizes_zero_padding_without_value_loss(raw_quantity, canonical):
-    result = _analyze(_request([_row(quantity=raw_quantity, price="1")]))
-    assert result["availability"] == "ready"
-    row = _rows(result)["Alfa/X"]
-    assert _value(row["quantity"]) == canonical
-    _money(row["initial_value_native"], canonical)
-
-
-@pytest.mark.parametrize(
-    "path",
-    [
-        ("rows", 0, "initial_quantity"),
-        ("rows", 0, "quote", "raw_price"),
-        ("rows", 0, "target_percent"),
-        ("rows", 0, "buy_grid", "quantity_step"),
-        ("cash_balances", 0, "amount"),
-        ("contributions", 0, "amount"),
-        ("valuation_rates", 0, "rate_to_report"),
-    ],
-)
-@pytest.mark.parametrize("text", ["1000000000000", "0.0000000000001", "1.1234567890121"])
-def test_nonzero_thirteenth_digit_is_unsupported_not_rounded(path, text):
-    raw = _request()
-    raw["cash_balances"] = [{"currency": "EUR", "amount": "0"}]
-    raw["contributions"] = [{"currency": "EUR", "amount": "0"}]
-    raw["valuation_rates"] = [_rate()]
-    _put(raw, path, text)
-    result = _analyze(raw)
-    assert result["availability"] == "unsupported"
-    assert _issue(result, "numeric_domain_exceeded", path, "unsupported")["params"]["limit"] == 12
-    if path == ("rows", 0, "initial_quantity"):
-        _unavailable(_rows(result)["Alfa/X"]["quantity"], "outside_p1_domain")
-        _unavailable(result["totals"]["initial_invested_reporting"])
-
-
-@pytest.mark.parametrize(
-    "path",
-    [
-        ("rows", 0, "initial_quantity"),
-        ("rows", 0, "quote", "raw_price"),
-        ("rows", 0, "target_percent"),
-        ("rows", 0, "buy_grid", "quantity_step"),
-        ("cash_balances", 0, "amount"),
-        ("contributions", 0, "amount"),
-        ("valuation_rates", 0, "rate_to_report"),
-    ],
-)
-@pytest.mark.parametrize("text", ["1e3", "12abc", "NaN", "Infinity", "-Infinity", "1,25", "1_000", "1 000", "１２", "🧮" * 64])
-def test_malformed_decimal_cells_are_domain_issues_not_cleaned_or_coerced(path, text):
-    raw = _request()
-    raw["cash_balances"] = [{"currency": "EUR", "amount": "0"}]
-    raw["contributions"] = [{"currency": "EUR", "amount": "0"}]
-    raw["valuation_rates"] = [_rate()]
-    _put(raw, path, text)
-    result = _analyze(raw)
-    assert result["availability"] == "invalid"
-    issue = _issue(result, "invalid_decimal_syntax", path, "invalid")
-    assert issue["related_row_indices"] == ([0] if path[0] == "rows" else [])
-    assert text not in json.dumps(result["issues"], ensure_ascii=False)
-
-
-@pytest.mark.parametrize(("text", "code"), [(None, "field_required"), ("", "field_required"), (" ", "field_required"), ("+", "incomplete_decimal"), ("-.", "incomplete_decimal"), (".", "incomplete_decimal")])
-def test_unfinished_numeric_cell_is_missing_not_zero(text, code):
-    result = _analyze(_request([_row(quantity=text)]))
-    assert result["availability"] == "needs_input"
-    _issue(result, code, ("rows", 0, "initial_quantity"), "missing")
-    _unavailable(_rows(result)["Alfa/X"]["quantity"], "input_missing")
-
-
-@pytest.mark.parametrize(
-    ("path", "value", "availability", "code"),
-    [
-        (("rows", 0, "initial_quantity"), "-0.001", "unsupported", "short_inventory_unsupported"),
-        (("cash_balances", 0, "amount"), "-0.001", "unsupported", "initial_debt_unsupported"),
-        (("contributions", 0, "amount"), "-0.001", "invalid", "negative_contribution"),
-        (("rows", 0, "quote", "raw_price"), "0", "invalid", "nonpositive_price"),
-        (("rows", 0, "quote", "raw_price"), "-1", "invalid", "nonpositive_price"),
-        (("valuation_rates", 0, "rate_to_report"), "0", "invalid", "nonpositive_fx_rate"),
-        (("valuation_rates", 0, "rate_to_report"), "-1", "invalid", "nonpositive_fx_rate"),
-        (("rows", 0, "quote", "quote_base_quantity"), 2, "unsupported", "quote_basis_unsupported"),
-        (("rows", 0, "quote", "quote_base_quantity"), 1000, "unsupported", "quote_basis_unsupported"),
-        (("rows", 0, "quote", "quote_base_quantity"), 0, "invalid", "invalid_quote_basis"),
-        (("rows", 0, "quote", "quote_base_quantity"), -1, "invalid", "invalid_quote_basis"),
-        (("rows", 0, "quote", "quote_base_quantity"), None, "needs_input", "field_required"),
-        (("rows", 0, "target_percent"), "-1", "invalid", "target_percent_out_of_range"),
-        (("rows", 0, "target_percent"), "100.000000000001", "invalid", "target_percent_out_of_range"),
-        (("rows", 0, "buy_grid", "quantity_step"), "0", "invalid", "nonpositive_quantity_step"),
-        (("rows", 0, "buy_grid", "quantity_step"), "-1", "invalid", "nonpositive_quantity_step"),
-        (("rows", 0, "buy_grid", "quantity_step"), "0.5", "invalid", "noninteger_whole_step"),
-    ],
-)
-def test_domain_classification_for_sign_basis_target_and_buy_step(path, value, availability, code):
-    raw = _request()
-    raw["cash_balances"] = [{"currency": "EUR", "amount": "0"}]
-    raw["contributions"] = [{"currency": "EUR", "amount": "0"}]
-    raw["valuation_rates"] = [_rate()]
-    _put(raw, path, value)
-    result = _analyze(raw)
-    assert result["availability"] == availability
-    _issue(result, code, path)
-
-
-@pytest.mark.parametrize(("mode", "step"), [("whole", "2"), ("fractional", "0.000000000001"), ("fractional", "0.3"), ("fractional", "2")])
-def test_effective_buy_grid_accepts_any_admitted_positive_step_for_its_mode(mode, step):
-    result = _analyze(_request([_row(quantity="1.125", mode=mode, step=step)]))
-    assert result["availability"] == "ready"
-    assert _value(_rows(result)["Alfa/X"]["quantity"]) == "1.125"
-    _money(result["totals"]["initial_invested_reporting"], "11.25")
-
-
-@pytest.mark.parametrize(("targets", "total"), [(("0.5", "0.5"), "1"), (("50", "49.99"), "99.99"), (("50", "49.999999999999"), "99.999999999999")])
-def test_targets_must_sum_exactly_100_without_fraction_inference_or_rebalancing(targets, total):
-    raw = _request([_row("Alfa/X", target=targets[0]), _row("Alfa/Y", target=targets[1])])
-    result = _analyze(raw)
-    assert result["availability"] == "invalid"
-    _issue(result, "target_total_not_100", kind="invalid")
-    assert Fraction(total) == sum(map(Fraction, targets))
-    for key, target in zip(("Alfa/X", "Alfa/Y"), targets, strict=True):
-        row = _rows(result)[key]
-        assert _value(row["target_percent"]) == target
-        _ratio(row["current_weight_percent"], 1000, 20, "percent")
-        _unavailable(row["deviation_pp"])
-    _unavailable(result["totals"]["max_abs_gap_pp"])
-
-
-@pytest.mark.parametrize("target", [None, "abc"])
-def test_unresolved_target_preserves_complete_market_values_and_weights(target):
-    result = _analyze(_request([_row(target=target)]))
-    assert result["availability"] == ("needs_input" if target is None else "invalid")
-    row = _rows(result)["Alfa/X"]
-    _money(row["initial_value_reporting"], "10")
-    _money(result["totals"]["initial_invested_reporting"], "10")
-    _ratio(row["current_weight_percent"], 1000, 10, "percent")
-    _unavailable(row["target_percent"])
-    _unavailable(row["deviation_pp"])
-    _unavailable(result["totals"]["target_total_percent"])
-    _unavailable(result["totals"]["squared_gap_pp2"])
-
-
-def test_fractional_target_sum_of_exactly_100_is_ready():
-    result = _analyze(_request([_row("Alfa/X", target="33.333333333333"), _row("Alfa/Y", target="66.666666666667")]))
-    assert result["availability"] == "ready"
-    assert _value(result["totals"]["target_total_percent"]) == "100"
-
-
-@pytest.mark.parametrize(("path", "code"), [(("rows", 0, "name"), "field_required"), (("rows", 0, "quote"), "quote_required"), (("rows", 0, "buy_grid"), "grid_required")])
-def test_missing_row_inputs_keep_other_independent_facts(path, code):
-    raw = _request()
-    _put(raw, path, None)
-    result = _analyze(raw)
-    assert result["availability"] == "needs_input"
-    _issue(result, code, path, "missing")
-    assert _value(_rows(result)["Alfa/X"]["quantity"]) == "1"
-
-
-def test_currency_normalization_and_identity_rate_are_explicit_and_deterministic():
-    raw = _request([_row(currency=" usd ")])
-    raw["report_currency"] = " eur "
-    raw["cash_balances"] = [{"currency": " usd ", "amount": "2"}, {"currency": "eur", "amount": "3"}]
-    raw["valuation_rates"] = [_rate("usd", "0.9")]
-    result = _analyze(raw)
-    assert result["availability"] == "ready"
-    state = result["normalized"]
-    assert state["report_currency"] == "EUR"
-    assert [item["currency"] for item in state["cash_balances"]] == ["EUR", "USD"]
-    rates = {item["currency"]: item for item in state["valuation_rates"]}
-    assert rates["EUR"]["rate_to_report"] == "1"
-    assert rates["USD"]["rate_to_report"] == "0.9"
-    assert len(rates) == len(state["valuation_rates"]) == 2
-    _money(result["totals"]["initial_invested_reporting"], "9")
-
-
-@pytest.mark.parametrize(("rate", "availability", "code"), [("1", "ready", "identity_rate_redundant"), ("2", "invalid", "identity_rate_mismatch")])
-def test_supplied_identity_rate_cannot_redefine_reporting_currency(rate, availability, code):
-    raw = _request()
-    raw["valuation_rates"] = [_rate("EUR", rate)]
-    result = _analyze(raw)
-    assert result["availability"] == availability
-    _issue(result, code)
-    _money(result["totals"]["initial_invested_reporting"], "10")
-    if availability == "ready":
-        identity = [entry for entry in result["normalized"]["valuation_rates"] if entry["currency"] == "EUR"]
-        assert len(identity) == 1
-        (entry,) = identity
-        assert entry["rate_to_report"] == "1"
-
-
-def test_unused_rates_are_retained_without_creating_cash_or_active_currencies():
-    raw = _request()
-    raw["valuation_rates"] = [_rate(currency) for currency in ("USD", "GBP", "CHF", "JPY")]
-    result = _analyze(raw)
-    assert result["availability"] == "ready"
-    assert {entry["currency"] for entry in result["normalized"]["valuation_rates"]} == {"EUR", "USD", "GBP", "CHF", "JPY"}
-    assert len(result["normalized"]["valuation_rates"]) == 5
-    assert {pool["currency"] for pool in _value(result["cash_pools"])} == {"EUR"}
-    assert {issue["params"]["currency"] for issue in result["issues"] if issue["code"] == "unused_valuation_reference"} == {"USD", "GBP", "CHF", "JPY"}
-    _money(result["totals"]["cash_plus_contributions_reporting"], "0")
-
-
-@pytest.mark.parametrize("path", [("report_currency",), ("rows", 0, "quote", "currency"), ("cash_balances", 0, "currency"), ("valuation_rates", 0, "currency")])
-def test_invalid_currency_is_not_silently_replaced_by_reporting_currency(path):
-    raw = _request()
-    raw["cash_balances"] = [{"currency": "EUR", "amount": "1"}]
-    raw["valuation_rates"] = [_rate()]
-    _put(raw, path, "BADCODE")
-    result = _analyze(raw)
-    assert result["availability"] == "invalid"
-    _issue(result, "invalid_currency", path, "invalid")
-
-
-def test_four_active_currencies_are_ready_but_five_are_unsupported_without_missing_rate_cascade():
-    currencies = ("EUR", "USD", "GBP", "CHF")
-    raw = _request([_row(currency, currency=currency, target="25") for currency in currencies])
-    raw["valuation_rates"] = [_rate(currency, "1") for currency in currencies if currency != "EUR"]
-    ready = _analyze(raw)
-    assert ready["availability"] == "ready"
-    assert {pool["currency"] for pool in _value(ready["cash_pools"])} == set(currencies)
-    raw["cash_balances"] = [{"currency": "JPY", "amount": "1"}]
-    raw["valuation_rates"] = []
-    unsupported = _analyze(raw)
-    assert unsupported["availability"] == "unsupported"
-    assert _issue(unsupported, "currency_domain_exceeded", kind="unsupported")["params"]["limit"] == 4
-    assert not any(issue["code"] == "valuation_rate_required" for issue in unsupported["issues"])
-    _unavailable(unsupported["cash_pools"], "outside_p1_domain")
-
-
-@pytest.mark.parametrize("path", [("as_of_date",), ("rows", 0, "quote", "reference_date"), ("valuation_rates", 0, "reference_date")])
-@pytest.mark.parametrize("text", ["2026-02-30", "2026-2-01", "not-a-date", "0000-01-01"])
-def test_dates_require_a_complete_real_calendar_date(path, text):
-    raw = _request()
-    raw["valuation_rates"] = [_rate()]
-    _put(raw, path, text)
-    result = _analyze(raw)
-    assert result["availability"] == "invalid"
-    _issue(result, "invalid_date", path, "invalid")
-
-
-@pytest.mark.parametrize("source", ["quote", "rate"])
-@pytest.mark.parametrize(
-    ("reference_date", "code"),
-    [("2026-02-30", "invalid_date"), ("2026-09-09", "reference_after_asof")],
-)
-def test_invalid_reference_date_blocks_only_its_dependent_valuations(source, reference_date, code):
-    raw = _request(
-        [
-            _row("Domestic/X", target="50"),
-            _row("Foreign/Y", currency="USD", target="50"),
-        ]
-    )
-    raw["valuation_rates"] = [_rate()]
-    raw["cash_balances"] = [{"currency": "USD", "amount": "1"}]
-    raw["contributions"] = [{"currency": "EUR", "amount": "5"}]
-    path = ("rows", 1, "quote", "reference_date") if source == "quote" else ("valuation_rates", 0, "reference_date")
-    _put(raw, path, reference_date)
-    result = _analyze(raw)
-    assert result["availability"] == "invalid"
-    _issue(result, code, path, "invalid")
-    rows = _rows(result)
-    foreign = rows["Foreign/Y"]
-    assert _value(foreign["quantity"]) == "1"
-    _unavailable(foreign["initial_value_reporting"], "input_invalid")
-    _money(rows["Domestic/X"]["initial_value_native"], "10")
-    _money(rows["Domestic/X"]["initial_value_reporting"], "10")
-    _unavailable(result["totals"]["initial_invested_reporting"])
-    for row in rows.values():
-        _unavailable(row["current_weight_percent"])
-        _unavailable(row["deviation_pp"])
-    pools = {pool["currency"]: pool for pool in _value(result["cash_pools"])}
-    assert pools["USD"]["existing_amount"] == pools["USD"]["combined_amount"] == "1"
-    _money(result["totals"]["contributions_reporting"], "5")
-    if source == "quote":
-        _unavailable(foreign["initial_value_native"], "input_invalid")
-        _money(pools["USD"]["combined_reporting"], "0.9")
-        _money(result["totals"]["existing_cash_reporting"], "0.9")
-        _money(result["totals"]["cash_plus_contributions_reporting"], "5.9")
-    else:
-        _money(foreign["initial_value_native"], "10", "USD")
-        _unavailable(pools["USD"]["combined_reporting"], "input_invalid")
-        _unavailable(result["totals"]["existing_cash_reporting"], "input_invalid")
-        _unavailable(result["totals"]["cash_plus_contributions_reporting"])
-
-
-@pytest.mark.parametrize("path", [("rows", 0, "quote", "reference_date"), ("valuation_rates", 0, "reference_date")])
-def test_future_reference_is_compared_only_with_the_provided_as_of_date(path):
-    raw = _request([_row(currency="USD")])
-    raw["valuation_rates"] = [_rate()]
-    _put(raw, path, "2099-01-02")
-    raw["as_of_date"] = "2099-01-01"
-    invalid = _analyze(raw)
-    assert invalid["availability"] == "invalid"
-    _issue(invalid, "reference_after_asof", path, "invalid")
-    raw["as_of_date"] = "2099-01-02"
-    assert _analyze(raw)["availability"] == "ready"
-    raw["as_of_date"] = None
-    undated = _analyze(raw)
-    assert undated["availability"] == "ready"
-    assert undated["normalized"]["as_of_date"] is None
-    assert not any(issue["code"] == "reference_after_asof" for issue in undated["issues"])
-
-
-def test_missing_dates_are_informational_and_never_replaced_with_today():
-    raw = _request([_row(currency="USD")])
-    raw["as_of_date"] = None
-    _put(raw, ("rows", 0, "quote", "reference_date"), None)
-    raw["valuation_rates"] = [_rate(reference_date=None)]
-    result = _analyze(raw)
-    assert result["availability"] == "ready"
-    for path in (("as_of_date",), ("rows", 0, "quote", "reference_date"), ("valuation_rates", 0, "reference_date")):
-        _issue(result, "reference_date_unspecified", path, "info")
-    assert result["normalized"]["as_of_date"] is None
-    assert all(row["quote"]["reference_date"] is None for row in result["normalized"]["rows"])
-    assert all(rate["reference_date"] is None for rate in result["normalized"]["valuation_rates"])
-
-
-def test_availability_precedence_collects_all_primary_field_issues():
-    raw = _request([_row(quantity="-1", target=None, price="abc")])
-    invalid = _analyze(raw)
-    assert invalid["availability"] == "invalid"
-    for code, path, kind in (
-        ("invalid_decimal_syntax", ("rows", 0, "quote", "raw_price"), "invalid"),
-        ("short_inventory_unsupported", ("rows", 0, "initial_quantity"), "unsupported"),
-        ("field_required", ("rows", 0, "target_percent"), "missing"),
-    ):
-        _issue(invalid, code, path, kind)
-    assert len(invalid["issues"]) == 3
-    _put(raw, ("rows", 0, "quote", "raw_price"), "10")
-    assert _analyze(raw)["availability"] == "unsupported"
-    _put(raw, ("rows", 0, "initial_quantity"), "1")
-    assert _analyze(raw)["availability"] == "needs_input"
-    _put(raw, ("rows", 0, "target_percent"), "100")
-    assert _analyze(raw)["availability"] == "ready"
-
-
-def test_semantic_error_rows_keep_input_order_identity_and_revision_relative_indices():
-    raw = _request([_row("Z/X", quantity="1", target="30"), _row("A/X", quantity="bad", target="40"), _row("M/X", quantity="-1", target="30")])
-    result = _analyze(raw)
-    assert [(row["row_index"], row["row_key"], row["instrument_key"]) for row in result["rows"]] == [(0, "Z/X", "Alfa"), (1, "A/X", "Alfa"), (2, "M/X", "Alfa")]
-    for index, code in ((1, "invalid_decimal_syntax"), (2, "short_inventory_unsupported")):
-        assert _issue(result, code)["related_row_indices"] == [index]
-    assert [issue["path"] for issue in result["issues"]] == [["rows", 1, "initial_quantity"], ["rows", 2, "initial_quantity"]]
-    raw["rows"].reverse()
-    reordered = _analyze(raw)
-    assert [row["row_key"] for row in reordered["rows"]] == ["M/X", "A/X", "Z/X"]
-    assert _issue(reordered, "short_inventory_unsupported")["related_row_indices"] == [0]
-
-
-def test_issue_order_is_header_rows_vectors_rates_then_cross_field_groups():
-    raw = _request([_row("same", quantity="bad", target="50"), _row("same", price="bad", target="50")])
-    raw["as_of_date"] = "bad"
-    raw["cash_balances"] = [{"currency": "EUR", "amount": "bad"}]
-    raw["contributions"] = [{"currency": "EUR", "amount": "-1"}]
-    raw["valuation_rates"] = [_rate("USD", "bad")]
-    result = _analyze(raw)
-    assert [issue["path"] for issue in result["issues"]] == [
-        ["as_of_date"],
-        ["rows", 0, "initial_quantity"],
-        ["rows", 1, "quote", "raw_price"],
-        ["cash_balances", 0, "amount"],
-        ["contributions", 0, "amount"],
-        ["valuation_rates", 0, "rate_to_report"],
-        ["rows", 0, "row_key"],
+    _money(pools["GBP"]["combined_reporting"], "5")
+    assert result["normalized"]["cash_balances"] == [
+        {"currency": "EUR", "amount": "0.005"},
+        {"currency": "USD", "amount": "10"},
+    ]
+    assert result["normalized"]["contributions"] == [
+        {"currency": "EUR", "amount": "5", "monetary_step": "0.01"},
+        {"currency": "GBP", "amount": "4", "monetary_step": "0.25"},
     ]
 
 
-def test_nonterminating_ratios_truncate_towards_zero_but_preserve_exact_evidence():
-    raw = _request([_row("Alfa/X", quantity="1", price="1", target="50"), _row("Alfa/Y", quantity="2", price="1", target="50")])
-    result = _analyze(raw)
-    rows = _rows(result)
-    _ratio(rows["Alfa/X"]["current_weight_percent"], 100, 3, "percent")
-    _ratio(rows["Alfa/Y"]["current_weight_percent"], 200, 3, "percent")
-    _ratio(rows["Alfa/X"]["deviation_pp"], -50, 3, "percentage_points")
-    _ratio(rows["Alfa/Y"]["deviation_pp"], 50, 3, "percentage_points")
-    _ratio(result["totals"]["max_abs_gap_pp"], 50, 3, "percentage_points")
-    _ratio(result["totals"]["squared_gap_pp2"], 5000, 9, "percentage_points_squared")
-    assert _value(rows["Alfa/X"]["deviation_pp"])["approximation"] == "-16.6666666666666666666666666666"
+@pytest.mark.parametrize("service", ["pac", "rebalancer"])
+def test_more_than_four_same_currency_contributions_are_valid_and_sum_exactly(
+    service,
+):
+    raw = _pac_request() if service == "pac" else _rebalance_request()
+    raw["cash_balances"] = [{"currency": "EUR", "amount": "0.499999999985"}]
+    contributions = [
+        _contribution(
+            "EUR",
+            "0.100000000001",
+            "0.000000000001",
+        ),
+        _contribution(
+            "EUR",
+            "0.100000000002",
+            "0.000000000001",
+        ),
+        _contribution(
+            "EUR",
+            "0.100000000003",
+            "0.000000000001",
+        ),
+        _contribution(
+            "EUR",
+            "0.100000000004",
+            "0.000000000001",
+        ),
+        _contribution(
+            "EUR",
+            "0.100000000005",
+            "0.000000000001",
+        ),
+    ]
+    assert len(contributions) > 4
+    raw["contributions"] = contributions
 
+    result = _analyze_pac(raw) if service == "pac" else _analyze_rebalancer(raw)
 
-def test_approximate_zero_does_not_claim_exact_alignment():
-    raw = _request(
-        [
-            _row("Tiny/X", quantity="0.000000000001", price="0.000000000001", currency="USD", basis=100, target="0"),
-            _row("Large/X", quantity="999999999999", price="999999999999", target="100"),
-        ]
-    )
-    raw["valuation_rates"] = [_rate("USD", "0.000000000001")]
-    result = _analyze(raw)
     assert result["availability"] == "ready"
-    tiny_value = Fraction(1, 10**38)
-    large_value = Fraction(999999999999**2)
-    invested = tiny_value + large_value
-    rows = _rows(result)
-    for key, numerator in (("Tiny/X", 100 * tiny_value), ("Large/X", -100 * tiny_value)):
-        _ratio(rows[key]["deviation_pp"], numerator, invested, "percentage_points")
-        gap = _value(rows[key]["deviation_pp"])
-        assert gap["approximation"] == "0"
-        assert gap["approximation_exact"] is False
-        assert Fraction(gap["numerator"]) != 0
-    _ratio(result["totals"]["squared_gap_pp2"], 2 * (100 * tiny_value) ** 2, invested**2, "percentage_points_squared")
+    assert all(issue["code"] != "duplicate_currency" for issue in result["issues"])
+    _money(result["totals"]["existing_cash_reporting"], "0.499999999985")
+    _money(result["totals"]["contributions_reporting"], "0.500000000015")
+    combined_field = "investable_budget_reporting" if service == "pac" else "cash_plus_contributions_reporting"
+    _money(result["totals"][combined_field], "1")
 
+    pools = {pool["currency"]: pool for pool in _value(result["cash_pools"])}
+    assert set(pools) == {"EUR"}
+    assert pools["EUR"]["existing_amount"] == "0.499999999985"
+    assert pools["EUR"]["contribution_amount"] == "0.500000000015"
+    assert pools["EUR"]["combined_amount"] == "1"
 
-@pytest.mark.parametrize(("precision", "rounding"), [(2, ROUND_DOWN), (7, ROUND_UP)])
-def test_boundary_arithmetic_is_independent_of_hostile_ambient_decimal_context(precision, rounding):
-    raw = _request(
-        [
-            _row("Large/X", quantity="999999999999.999999999999", price="999999999999.999999999999", currency="USD", basis=100, target="33.333333333333", mode="fractional", step="0.000000000001"),
-            _row("Small/Y", quantity="0.000000000001", price="0.000000000001", target="66.666666666667", mode="fractional", step="0.000000000001"),
-        ]
-    )
-    raw["valuation_rates"] = [_rate("USD", "999999999999.999999999999")]
-    raw["cash_balances"] = [{"currency": "USD", "amount": "999999999999.999999999999"}]
-    raw["contributions"] = [{"currency": "USD", "amount": "0.000000000001"}]
-    ordinary = _analyze(raw)
-    with localcontext() as ambient:
-        ambient.prec = precision
-        ambient.rounding = rounding
-        ambient.Emin = -6
-        ambient.Emax = 6
-        for signal in ambient.traps:
-            ambient.traps[signal] = True
-        ambient.clear_flags()
-        before = (ambient.prec, ambient.rounding, ambient.Emin, ambient.Emax, dict(ambient.traps), dict(ambient.flags))
-        hostile = _analyze(raw)
-        assert getcontext() is ambient
-        assert (ambient.prec, ambient.rounding, ambient.Emin, ambient.Emax, dict(ambient.traps), dict(ambient.flags)) == before
-    assert hostile == ordinary
-    assert hostile["availability"] == "ready"
-    maximum = Fraction("999999999999.999999999999")
-    values = {"Large/X": maximum**3 / 100, "Small/Y": Fraction(1, 10**24)}
-    invested = sum(values.values())
-    assert Fraction(_value(hostile["totals"]["initial_invested_reporting"])["amount"]) == invested
-    gaps = {}
-    for key, target in (("Large/X", "33.333333333333"), ("Small/Y", "66.666666666667")):
-        gaps[key] = 100 * values[key] - Fraction(target) * invested
-        row = _rows(hostile)[key]
-        _ratio(row["current_weight_percent"], 100 * values[key], invested, "percent")
-        _ratio(row["deviation_pp"], gaps[key], invested, "percentage_points")
-    _ratio(hostile["totals"]["max_abs_gap_pp"], max(map(abs, gaps.values())), invested, "percentage_points")
-    _ratio(hostile["totals"]["squared_gap_pp2"], sum(gap**2 for gap in gaps.values()), invested**2, "percentage_points_squared")
-    expected_cash = maximum**2 + Fraction("0.000000000001") * maximum
-    assert Fraction(_value(hostile["totals"]["cash_plus_contributions_reporting"])["amount"]) == expected_cash
+    normalized = result["normalized"]["contributions"]
+    assert normalized == contributions
 
-
-def test_raw_and_validated_input_are_unmodified_and_results_do_not_share_mutable_lists():
-    raw = _cash_witness()
-    before = deepcopy(raw)
-    request = PAC_ANALYZE_INPUT_ADAPTER.validate_python(raw)
-    model_before = request.model_dump(mode="json")
-    first = analyze_initial_state(request)
-    first_wire = PAC_ANALYZE_OUTPUT_ADAPTER.dump_json(first)
-    # Containers are deliberately mutated only on this test's returned object.
-    # Frozen scalar fields do not prove nested-list ownership or absence of caches.
-    first.rows.clear()
-    first.issues.clear()
-    assert first.normalized is not None
-    first.normalized.rows.clear()
-    first.normalized.cash_balances.clear()
-    second = analyze_initial_state(request)
-    assert PAC_ANALYZE_OUTPUT_ADAPTER.dump_json(second) == first_wire
-    assert request.model_dump(mode="json") == model_before
-    assert raw == before
-    assert _analyze({"operation": "analyze"})["availability"] == "needs_input"
-    assert PAC_ANALYZE_OUTPUT_ADAPTER.dump_json(analyze_initial_state(request)) == first_wire
-
-
-def test_checkpoint_cancellation_propagates_unchanged_at_early_middle_and_last_checks():
-    raw = _request([_row(f"row-{index}", quantity=str(index), target="3.125") for index in range(32)])
-    request = PAC_ANALYZE_INPUT_ADAPTER.validate_python(raw)
-    calls = 0
-
-    def count():
-        nonlocal calls
-        calls += 1
-
-    complete = analyze_initial_state(request, checkpoint=count)
-    expected = PAC_ANALYZE_OUTPUT_ADAPTER.dump_json(analyze_initial_state(request))
-    assert PAC_ANALYZE_OUTPUT_ADAPTER.dump_json(complete) == expected
-    assert calls >= 3, "P1 must offer cooperative checkpoints during bounded work"
-    for stop_at in sorted({1, calls // 2, calls}):
-        seen = 0
-        error = ArithmeticError(f"cancel-at-{stop_at}")
-
-        def cancel(stop_at=stop_at, error=error):
-            nonlocal seen
-            seen += 1
-            if seen == stop_at:
-                raise error
-
-        with pytest.raises(ArithmeticError) as caught:
-            analyze_initial_state(request, checkpoint=cancel)
-        assert caught.value is error
-        assert seen == stop_at
-        assert PAC_ANALYZE_OUTPUT_ADAPTER.dump_json(analyze_initial_state(request)) == expected
-
-
-@pytest.mark.parametrize("invalid", [False, True])
-def test_actual_32_row_unicode_wire_witness_is_bounded_without_clipping_facts(invalid):
-    currencies = ("EUR", "USD", "GBP", "CHF")
-    rows = []
-    for index in range(32):
-        key = f"{index:02d}" + '\\"' * 127
-        row = _row(
-            key,
-            quantity="9" * 12 + "." + "9" * 12,
-            price="9" * 12 + "." + "9" * 12,
-            currency=currencies[index % len(currencies)],
-            target="3.125",
-            basis=100,
-            instrument='\\"' * 64,
-        )
-        row["name"] = ("🧮" if index % 2 else "\x01") * 128
-        row["quote"]["reference_date"] = None
-        if invalid:
-            row["initial_quantity"] = "🧮" * 64
-            row["quote"]["raw_price"] = "x" * 64
-            row["target_percent"] = "NaN"
-            row["buy_grid"]["quantity_step"] = "1e3"
-        rows.append(row)
-    raw = _request(rows)
-    raw["as_of_date"] = None
-    raw["cash_balances"] = [{"currency": currency, "amount": "999999999999.999999999999"} for currency in currencies]
-    raw["contributions"] = deepcopy(raw["cash_balances"])
-    raw["valuation_rates"] = [_rate(currency, "999999999999.999999999999", None) for currency in currencies if currency != "EUR"]
-    result = _analyze(raw)
-    assert result["availability"] == ("invalid" if invalid else "ready")
-    assert [row["row_key"] for row in result["rows"]] == [row["row_key"] for row in raw["rows"]]
-    assert [row["row_index"] for row in result["rows"]] == list(range(32))
-    assert len(result["issues"]) <= (384 if invalid else 80)
-    if invalid:
-        assert len([issue for issue in result["issues"] if issue["code"] == "invalid_decimal_syntax"]) == 4 * 32
+    if service == "pac":
+        allocation = _allocations(result)["asset-alpha"]
+        _money(allocation["ideal_allocation_reporting"], "1")
     else:
-        assert len(result["normalized"]["rows"]) == 32
-    emitted = PAC_ANALYZE_OUTPUT_ADAPTER.dump_json(PAC_ANALYZE_OUTPUT_ADAPTER.validate_python(result))
-    compact_utf8 = json.dumps(result, ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode()
-    assert len(emitted) <= 256 * 1024
-    assert len(compact_utf8) <= 256 * 1024
-    assert "🧮".encode() in emitted
-    assert b"\\u0001" in emitted
-    assert json.loads(emitted) == json.loads(compact_utf8)
+        instrument = _instruments(result)["asset-alpha"]
+        _money(result["totals"]["current_invested_reporting"], "50")
+        _money(instrument["current_value_reporting"], "50")
+        _money(instrument["target_value_reporting"], "50")
+        _money(instrument["value_gap_to_target_reporting"], "0")
+
+
+@pytest.mark.parametrize("service", ["pac", "rebalancer"])
+def test_more_than_four_distinct_native_currencies_is_typed_unsupported(
+    service,
+):
+    raw = _pac_request() if service == "pac" else _rebalance_request()
+    raw["contributions"] = [_contribution(currency, "1", "1") for currency in ("EUR", "USD", "GBP", "CHF", "JPY")]
+
+    result = _analyze_pac(raw) if service == "pac" else _analyze_rebalancer(raw)
+
+    assert result["availability"] == "unsupported"
+    assert result["normalized"] is None
+    assert all(issue["code"] != "duplicate_currency" for issue in result["issues"])
+    assert [(issue["kind"], issue["code"], issue["path"]) for issue in result["issues"]] == [
+        (
+            "unsupported",
+            "currency_domain_exceeded",
+            ["report_currency"],
+        )
+    ]
+    (issue,) = result["issues"]
+    assert issue["related_indices"] == []
+    assert issue["params"]["limit"] == 4
+
+
+@pytest.mark.parametrize("service", ["pac", "rebalancer"])
+def test_duplicate_existing_cash_currency_remains_invalid(service):
+    raw = _pac_request() if service == "pac" else _rebalance_request()
+    raw["cash_balances"] = [
+        {"currency": "EUR", "amount": "1"},
+        {"currency": "EUR", "amount": "2"},
+    ]
+
+    result = _analyze_pac(raw) if service == "pac" else _analyze_rebalancer(raw)
+
+    assert result["availability"] == "invalid"
+    assert result["normalized"] is None
+    issue = _issue(
+        result,
+        "duplicate_currency",
+        ("cash_balances", 0, "currency"),
+        "invalid",
+    )
+    assert issue["related_indices"] == [0, 1]
+    assert issue["params"]["currency"] == "EUR"
+    assert issue["params"]["vector"] == "cash_balances"
+    _unavailable(result["cash_pools"], "input_invalid")
+    _unavailable(
+        result["totals"]["existing_cash_reporting"],
+        "input_invalid",
+    )
+    combined_field = "investable_budget_reporting" if service == "pac" else "cash_plus_contributions_reporting"
+    _unavailable(result["totals"][combined_field], "input_invalid")
+
+
+@pytest.mark.parametrize("service", ["pac", "rebalancer"])
+def test_duplicate_valuation_rate_currency_remains_invalid(service):
+    if service == "pac":
+        raw = _pac_request()
+        raw["cash_balances"] = [{"currency": "USD", "amount": "10"}]
+    else:
+        raw = _rebalance_request(
+            holdings=[_holding(currency="USD")],
+        )
+    raw["valuation_rates"] = [
+        _rate("USD", "0.9"),
+        _rate("USD", "0.8"),
+    ]
+
+    result = _analyze_pac(raw) if service == "pac" else _analyze_rebalancer(raw)
+
+    assert result["availability"] == "invalid"
+    assert result["normalized"] is None
+    issue = _issue(
+        result,
+        "duplicate_currency",
+        ("valuation_rates", 0, "currency"),
+        "invalid",
+    )
+    assert issue["related_indices"] == [0, 1]
+    assert issue["params"]["currency"] == "USD"
+    assert issue["params"]["vector"] == "valuation_rates"
 
 
 @pytest.mark.parametrize(
-    ("package", "exports", "module_aliases"),
+    ("cash", "contribution", "step", "targets", "budget", "ideals"),
     [
         (
-            "backend.app.services",
-            {
-                "BrokerService": "broker_service",
-                "TransactionService": "transaction_service",
-                "BalanceValidationError": "transaction_service",
-                "LinkedTransactionError": "transaction_service",
-            },
-            ("broker_service", "transaction_service"),
+            "0",
+            "0",
+            "0.01",
+            ("20", "80"),
+            "0",
+            ("0", "0"),
         ),
         (
-            "backend.app.schemas",
-            {
-                "BRCreateItem": "brokers",
-                "TXCreateItem": "transactions",
-                "TX_TYPE_METADATA": "transactions",
-                "FAAssetCreateItem": "assets",
-                "FAPricePoint": "prices",
-                "FAProviderInfo": "provider",
-                "FARefreshItem": "refresh",
-                "FXConversionRequest": "fx",
-                "SignalRequest": "signals",
-                "SystemInfoResponse": "system",
-                "BRIMFileInfo": "brim",
-                "BRIMParseRequest": "brim",
-                "FAKE_ASSET_ID_BASE": "brim",
-                "is_fake_asset_id": "brim",
-            },
-            (
-                "brokers",
-                "transactions",
-                "assets",
-                "prices",
-                "provider",
-                "refresh",
-                "fx",
-                "signals",
-                "system",
-                "brim",
+            "0.000000000001",
+            "0.000000000002",
+            "0.000000000001",
+            ("1", "99"),
+            "0.000000000003",
+            ("0.00000000000003", "0.00000000000297"),
+        ),
+        (
+            "7.25",
+            "0",
+            "0.25",
+            ("12.5", "87.5"),
+            "7.25",
+            ("0.90625", "6.34375"),
+        ),
+    ],
+    ids=["zero-no-op", "sub-picounit-ideals", "arbitrary-decimal"],
+)
+def test_pac_zero_low_and_decimal_budgets_remain_ready_and_exact(
+    cash,
+    contribution,
+    step,
+    targets,
+    budget,
+    ideals,
+):
+    raw = _pac_request(
+        assets=[_asset("asset-a"), _asset("asset-b")],
+        targets=[
+            _target("asset-a", targets[0]),
+            _target("asset-b", targets[1]),
+        ],
+    )
+    raw["cash_balances"] = [{"currency": "EUR", "amount": cash}]
+    raw["contributions"] = [_contribution("EUR", contribution, step)]
+
+    result = _analyze_pac(raw)
+
+    assert result["availability"] == "ready"
+    _money(result["totals"]["investable_budget_reporting"], budget)
+    allocations = _allocations(result)
+    _money(allocations["asset-a"]["ideal_allocation_reporting"], ideals[0])
+    _money(allocations["asset-b"]["ideal_allocation_reporting"], ideals[1])
+    assert not result["issues"]
+
+
+def test_pac_optional_future_buy_grid_never_quantizes_budget_allocations():
+    raw = _pac_request(
+        assets=[
+            _asset(
+                "asset-a",
+                buy_grid={"mode": "whole", "quantity_step": "3"},
             ),
+            _asset(
+                "asset-b",
+                buy_grid={"mode": "fractional", "quantity_step": "0.125"},
+            ),
+        ],
+        targets=[_target("asset-a", "50"), _target("asset-b", "50")],
+    )
+    raw["cash_balances"] = [{"currency": "EUR", "amount": "10"}]
+
+    result = _analyze_pac(raw)
+
+    assert result["availability"] == "ready"
+    for allocation in _allocations(result).values():
+        _money(allocation["ideal_allocation_reporting"], "5")
+        assert set(allocation) == {
+            "target_index",
+            "instrument_key",
+            "name",
+            "target_percent",
+            "ideal_allocation_reporting",
+        }
+    assert all("quantity" not in key for allocation in result["allocations"] for key in allocation)
+
+
+def _aggregation_request() -> dict[str, object]:
+    raw = _rebalance_request(
+        holdings=[
+            _holding(
+                "broker-a::shared",
+                "instrument-shared",
+                name="Same display",
+                quantity="30",
+                price="10",
+                currency="USD",
+                basis=3,
+            ),
+            _holding(
+                "broker-b::shared",
+                "instrument-shared",
+                name="Same display",
+                quantity="250",
+                price="4",
+                currency="GBP",
+                basis=100,
+            ),
+            _holding(
+                "broker-c::distinct",
+                "instrument-distinct",
+                name="Same display",
+                quantity="2",
+                price="49",
+                currency="EUR",
+                basis=1,
+            ),
+        ],
+        targets=[
+            _target("instrument-shared", "60"),
+            _target("instrument-distinct", "40"),
+        ],
+    )
+    raw["cash_balances"] = [{"currency": "USD", "amount": "1000"}]
+    raw["contributions"] = [_contribution("GBP", "100", "0.25")]
+    raw["valuation_rates"] = [_rate("USD", "0.9"), _rate("GBP", "1.2")]
+    return raw
+
+
+def test_rebalancer_aggregates_custodies_by_instrument_not_display_name():
+    result = _analyze_rebalancer(_aggregation_request())
+
+    assert result["availability"] == "ready"
+    holdings = _holdings(result)
+    assert set(holdings) == {
+        "broker-a::shared",
+        "broker-b::shared",
+        "broker-c::distinct",
+    }
+    _money(
+        holdings["broker-a::shared"]["current_value_native"],
+        "100",
+        "USD",
+    )
+    _money(
+        holdings["broker-a::shared"]["current_value_reporting"],
+        "90",
+    )
+    _money(
+        holdings["broker-b::shared"]["current_value_native"],
+        "10",
+        "GBP",
+    )
+    _money(
+        holdings["broker-b::shared"]["current_value_reporting"],
+        "12",
+    )
+    _money(
+        holdings["broker-c::distinct"]["current_value_reporting"],
+        "98",
+    )
+
+    instruments = _instruments(result)
+    assert set(instruments) == {
+        "instrument-shared",
+        "instrument-distinct",
+    }
+    shared = instruments["instrument-shared"]
+    distinct = instruments["instrument-distinct"]
+    assert shared["custody_context_count"] == 2
+    assert distinct["custody_context_count"] == 1
+    assert shared["name"] == distinct["name"] == "Same display"
+    _money(shared["current_value_reporting"], "102")
+    _money(distinct["current_value_reporting"], "98")
+    _money(result["totals"]["current_invested_reporting"], "200")
+
+    _ratio(shared["current_weight_percent"], 10_200, 200, "percent")
+    _ratio(distinct["current_weight_percent"], 9_800, 200, "percent")
+    _money(shared["target_value_reporting"], "120")
+    _money(distinct["target_value_reporting"], "80")
+    _money(shared["value_gap_to_target_reporting"], "18")
+    _money(distinct["value_gap_to_target_reporting"], "-18")
+    _ratio(shared["gap_to_target_pp"], 1_800, 200, "percentage_points")
+    _ratio(
+        distinct["gap_to_target_pp"],
+        -1_800,
+        200,
+        "percentage_points",
+    )
+    _ratio(
+        result["totals"]["max_abs_gap_pp"],
+        1_800,
+        200,
+        "percentage_points",
+    )
+    _ratio(
+        result["totals"]["squared_gap_pp2"],
+        6_480_000,
+        40_000,
+        "percentage_points_squared",
+    )
+
+    # Cash and contributions are contextual pools, never the invested denominator.
+    _money(result["totals"]["existing_cash_reporting"], "900")
+    _money(result["totals"]["contributions_reporting"], "120")
+    _money(result["totals"]["cash_plus_contributions_reporting"], "1020")
+    assert _value(shared["current_weight_percent"])["denominator"] == "200"
+    assert _value(shared["gap_to_target_pp"])["denominator"] == "200"
+
+
+def _instrument_projection(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    projection = {}
+    for key, instrument in _instruments(result).items():
+        projection[key] = {field: value for field, value in instrument.items() if field not in {"target_index", "name"}}
+    return projection
+
+
+def _holding_projection(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    projection = {}
+    for key, holding in _holdings(result).items():
+        projection[key] = {field: value for field, value in holding.items() if field != "holding_index"}
+    return projection
+
+
+def test_custody_permutation_preserves_source_and_canonical_values():
+    original_raw = _aggregation_request()
+    permuted_raw = deepcopy(original_raw)
+    permuted_raw["holdings"] = list(reversed(permuted_raw["holdings"]))
+
+    original = _analyze_rebalancer(original_raw)
+    permuted = _analyze_rebalancer(permuted_raw)
+
+    assert _instrument_projection(permuted) == _instrument_projection(original)
+    assert _holding_projection(permuted) == _holding_projection(original)
+    assert permuted["totals"] == original["totals"]
+    assert [holding["row_key"] for holding in original["holdings"]] == [item["row_key"] for item in original_raw["holdings"]]
+    assert [holding["row_key"] for holding in permuted["holdings"]] == [item["row_key"] for item in permuted_raw["holdings"]]
+
+
+def test_target_permutation_changes_presentation_only():
+    original_raw = _aggregation_request()
+    permuted_raw = deepcopy(original_raw)
+    permuted_raw["targets"] = list(reversed(permuted_raw["targets"]))
+
+    original = _analyze_rebalancer(original_raw)
+    permuted = _analyze_rebalancer(permuted_raw)
+
+    assert _instrument_projection(permuted) == _instrument_projection(original)
+    assert permuted["totals"] == original["totals"]
+    assert [instrument["instrument_key"] for instrument in original["instruments"]] == [item["instrument_key"] for item in original_raw["targets"]]
+    assert [instrument["instrument_key"] for instrument in permuted["instruments"]] == [item["instrument_key"] for item in permuted_raw["targets"]]
+    assert [target["instrument_key"] for target in permuted["normalized"]["targets"]] == [item["instrument_key"] for item in permuted_raw["targets"]]
+
+
+def test_zero_invested_rebalancing_is_ready_with_unavailable_ratios():
+    raw = _rebalance_request(
+        holdings=[
+            _holding("custody-a", "asset-a", quantity="0"),
+            _holding("custody-b", "asset-b", quantity="0"),
+        ],
+        targets=[_target("asset-a", "30"), _target("asset-b", "70")],
+    )
+    raw["cash_balances"] = [{"currency": "EUR", "amount": "1000"}]
+    raw["contributions"] = [_contribution("EUR", "500", "1")]
+
+    result = _analyze_rebalancer(raw)
+
+    assert result["availability"] == "ready"
+    _money(result["totals"]["current_invested_reporting"], "0")
+    _money(result["totals"]["cash_plus_contributions_reporting"], "1500")
+    for instrument in _instruments(result).values():
+        _money(instrument["current_value_reporting"], "0")
+        _money(instrument["target_value_reporting"], "0")
+        _money(instrument["value_gap_to_target_reporting"], "0")
+        _unavailable(
+            instrument["current_weight_percent"],
+            "zero_invested_value",
+        )
+        _unavailable(instrument["gap_to_target_pp"], "zero_invested_value")
+    _unavailable(
+        result["totals"]["max_abs_gap_pp"],
+        "zero_invested_value",
+    )
+    _unavailable(
+        result["totals"]["squared_gap_pp2"],
+        "zero_invested_value",
+    )
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "availability", "code", "kind"),
+    [
+        ("quote", None, "needs_input", "quote_required", "missing"),
+        ("raw_price", None, "needs_input", "field_required", "missing"),
+        (
+            "raw_price",
+            "NaN",
+            "invalid",
+            "invalid_decimal_syntax",
+            "invalid",
         ),
         (
-            "backend.app.utils.financial",
-            {
-                "WACInputTX": "wac_utils",
-                "WACCalcResult": "wac_utils",
-                "compute_wac_from_txlist": "wac_utils",
-                "determine_target_currency": "wac_utils",
-                "CashFlowInput": "roi_utils",
-                "NAVSnapshot": "roi_utils",
-                "ROIResult": "roi_utils",
-                "SimpleROIPoint": "roi_utils",
-                "TWRRPoint": "roi_utils",
-                "MWRRPoint": "roi_utils",
-                "calculate_simple_roi": "roi_utils",
-                "calculate_simple_roi_series": "roi_utils",
-                "calculate_twrr": "roi_utils",
-                "calculate_twrr_series": "roi_utils",
-                "calculate_mwrr": "roi_utils",
-                "calculate_mwrr_series": "roi_utils",
-            },
-            ("roi_utils", "wac_utils"),
+            "raw_price",
+            "Infinity",
+            "invalid",
+            "invalid_decimal_syntax",
+            "invalid",
+        ),
+        (
+            "raw_price",
+            "-Infinity",
+            "invalid",
+            "invalid_decimal_syntax",
+            "invalid",
+        ),
+        ("raw_price", "0", "invalid", "nonpositive_price", "invalid"),
+        (
+            "quote_base_quantity",
+            None,
+            "needs_input",
+            "field_required",
+            "missing",
+        ),
+        (
+            "quote_base_quantity",
+            0,
+            "invalid",
+            "invalid_quote_basis",
+            "invalid",
+        ),
+        ("currency", "BAD", "invalid", "invalid_currency", "invalid"),
+    ],
+)
+def test_missing_invalid_and_nonfinite_quote_keeps_holding_facts(
+    field,
+    value,
+    availability,
+    code,
+    kind,
+):
+    raw = _rebalance_request()
+    if field == "quote":
+        raw["holdings"][0]["quote"] = value
+        path = ("holdings", 0, "quote")
+    else:
+        raw["holdings"][0]["quote"][field] = value
+        path = ("holdings", 0, "quote", field)
+
+    result = _analyze_rebalancer(raw)
+
+    assert result["availability"] == availability
+    assert result["normalized"] is None
+    issue = _issue(result, code, path, kind)
+    assert issue["related_indices"] == [0]
+    holding = _holdings(result)["custody-alpha"]
+    assert _value(holding["quantity"]) == "2"
+    _unavailable(
+        holding["current_value_native"],
+        "input_missing" if availability == "needs_input" else "input_invalid",
+    )
+    _unavailable(
+        holding["current_value_reporting"],
+        "input_missing" if availability == "needs_input" else "input_invalid",
+    )
+    assert "asset-alpha" in _instruments(result)
+
+
+@pytest.mark.parametrize(
+    ("rate", "availability", "code", "kind", "reason"),
+    [
+        (
+            None,
+            "needs_input",
+            "valuation_rate_required",
+            "missing",
+            "input_missing",
+        ),
+        (
+            "NaN",
+            "invalid",
+            "invalid_decimal_syntax",
+            "invalid",
+            "input_invalid",
+        ),
+        (
+            "Infinity",
+            "invalid",
+            "invalid_decimal_syntax",
+            "invalid",
+            "input_invalid",
+        ),
+        (
+            "0",
+            "invalid",
+            "nonpositive_fx_rate",
+            "invalid",
+            "input_invalid",
         ),
     ],
 )
-def test_legacy_lazy_reexports_preserve_canonical_identity_in_a_fresh_process(package, exports, module_aliases):
-    """Deferred service-slot test: never part of the lightweight schema selector.
-
-    Resolves real legacy Broker/BRIM/ROI/WAC imports, but invokes no service,
-    database operation, provider, HTTP request or application lifecycle.
-    """
-    script = dedent("""
-        import importlib
-        import json
-        import sys
-
-        package_name, expected, aliases = sys.argv[1:]
-        expected = json.loads(expected)
-        aliases = json.loads(aliases)
-        root = importlib.import_module(package_name)
-        declared_before = list(root.__all__)
-        directory_before = dir(root)
-        assert set(expected) <= set(declared_before)
-        assert set(declared_before) | set(aliases) <= set(directory_before)
-        checked = []
-        for name, module_name in expected.items():
-            # Ask the package first so the real lazy re-export path is exercised.
-            exported = getattr(root, name)
-            canonical_module = importlib.import_module(package_name + "." + module_name)
-            assert exported is getattr(canonical_module, name), name
-            assert getattr(root, name) is exported, name
-            checked.append(name)
-        for module_name in aliases:
-            exported_module = getattr(root, module_name)
-            assert exported_module is importlib.import_module(package_name + "." + module_name)
-        # Every declared star-import name must still resolve, not only examples.
-        for name in root.__all__:
-            getattr(root, name)
-        assert root.__all__ == declared_before
-        assert set(directory_before) <= set(dir(root))
-        try:
-            getattr(root, "unknown_pac_legacy_export")
-        except AttributeError:
-            pass
-        else:
-            raise AssertionError("Unknown legacy export must raise AttributeError")
-        print("PAC_LEGACY_IMPORT_RESULT=" + json.dumps({
-            "package": package_name, "checked": sorted(checked),
-            "module_aliases": sorted(aliases),
-        }))
-        """)
-    completed = subprocess.run(
-        [
-            sys.executable,
-            "-B",
-            "-c",
-            script,
-            package,
-            json.dumps(exports),
-            json.dumps(module_aliases),
-        ],
-        cwd=Path(__file__).resolve().parents[3],
-        capture_output=True,
-        text=True,
-        timeout=60,
-        check=False,
+def test_missing_invalid_and_nonfinite_fx_never_defaults_or_omits(
+    rate,
+    availability,
+    code,
+    kind,
+    reason,
+):
+    raw = _rebalance_request(
+        holdings=[
+            _holding(
+                currency="USD",
+                quantity="2",
+                price="25",
+            )
+        ]
     )
-    assert completed.returncode == 0, completed.stderr
-    marker = "PAC_LEGACY_IMPORT_RESULT="
-    observations = [json.loads(line.removeprefix(marker)) for line in completed.stdout.splitlines() if line.startswith(marker)]
-    assert len(observations) == 1, completed.stdout
-    (observation,) = observations
-    assert observation == {
-        "package": package,
-        "checked": sorted(exports),
-        "module_aliases": sorted(module_aliases),
+    raw["valuation_rates"] = [] if rate is None else [_rate("USD", rate)]
+
+    result = _analyze_rebalancer(raw)
+
+    assert result["availability"] == availability
+    assert result["normalized"] is None
+    issue = _issue(result, code, kind=kind)
+    if code == "valuation_rate_required":
+        assert issue["path"] == ["valuation_rates"]
+        assert issue["related_indices"] == [0]
+        assert issue["params"]["currency"] == "USD"
+    holding = _holdings(result)["custody-alpha"]
+    _money(holding["current_value_native"], "50", "USD")
+    _unavailable(holding["current_value_reporting"], reason)
+    instrument = _instruments(result)["asset-alpha"]
+    _unavailable(instrument["current_value_reporting"], reason)
+    _unavailable(result["totals"]["current_invested_reporting"], reason)
+
+
+@pytest.mark.parametrize(
+    ("target", "availability", "code", "kind", "reason"),
+    [
+        (None, "needs_input", "field_required", "missing", "input_missing"),
+        (
+            "NaN",
+            "invalid",
+            "invalid_decimal_syntax",
+            "invalid",
+            "input_invalid",
+        ),
+        (
+            "Infinity",
+            "invalid",
+            "invalid_decimal_syntax",
+            "invalid",
+            "input_invalid",
+        ),
+        (
+            "-1",
+            "invalid",
+            "target_percent_out_of_range",
+            "invalid",
+            "input_invalid",
+        ),
+        (
+            "100.000000000001",
+            "invalid",
+            "target_percent_out_of_range",
+            "invalid",
+            "input_invalid",
+        ),
+    ],
+)
+def test_missing_and_nonfinite_target_preserve_current_market_facts(
+    target,
+    availability,
+    code,
+    kind,
+    reason,
+):
+    raw = _rebalance_request(targets=[_target(percent=target)])
+    result = _analyze_rebalancer(raw)
+
+    assert result["availability"] == availability
+    _issue(result, code, ("targets", 0, "target_percent"), kind)
+    holding = _holdings(result)["custody-alpha"]
+    _money(holding["current_value_reporting"], "50")
+    _money(result["totals"]["current_invested_reporting"], "50")
+    instrument = _instruments(result)["asset-alpha"]
+    _ratio(instrument["current_weight_percent"], 5_000, 50, "percent")
+    _unavailable(instrument["target_percent"], reason)
+    _unavailable(instrument["target_value_reporting"], reason)
+    _unavailable(instrument["value_gap_to_target_reporting"], reason)
+    _unavailable(instrument["gap_to_target_pp"], reason)
+
+
+def test_pac_missing_fx_preserves_native_pool_without_subset_budget():
+    raw = _pac_request()
+    raw["cash_balances"] = [{"currency": "USD", "amount": "10"}]
+
+    result = _analyze_pac(raw)
+
+    assert result["availability"] == "needs_input"
+    issue = _issue(
+        result,
+        "valuation_rate_required",
+        ("valuation_rates",),
+        "missing",
+    )
+    assert issue["params"]["currency"] == "USD"
+    pools = {pool["currency"]: pool for pool in _value(result["cash_pools"])}
+    assert pools["USD"]["existing_amount"] == "10"
+    assert pools["USD"]["combined_amount"] == "10"
+    _unavailable(pools["USD"]["existing_reporting"], "input_missing")
+    _unavailable(pools["USD"]["combined_reporting"], "input_missing")
+    _unavailable(
+        result["totals"]["investable_budget_reporting"],
+        "input_missing",
+    )
+    _unavailable(
+        _allocations(result)["asset-alpha"]["ideal_allocation_reporting"],
+        "input_missing",
+    )
+
+
+@pytest.mark.parametrize("vector", ["cash_balances", "contributions"])
+def test_unsupplied_cash_vector_is_unknown_while_explicit_empty_is_zero(vector):
+    raw = _pac_request()
+    raw[vector] = None
+
+    missing = _analyze_pac(raw)
+
+    assert missing["availability"] == "needs_input"
+    issue = _issue(
+        missing,
+        "cash_vector_required",
+        (vector,),
+        "missing",
+    )
+    assert issue["params"]["vector"] == vector
+    assert missing["normalized"] is None
+    _unavailable(missing["cash_pools"], "input_missing")
+    _unavailable(
+        missing["totals"]["investable_budget_reporting"],
+        "input_missing",
+    )
+
+    raw[vector] = []
+    closed = _analyze_pac(raw)
+    assert closed["availability"] == "ready"
+    _money(closed["totals"]["investable_budget_reporting"], "0")
+    assert _value(closed["cash_pools"]) == []
+
+
+@pytest.mark.parametrize(
+    ("basis", "quantity", "price", "expected"),
+    [
+        pytest.param(3, "9", "10", "30", id="basis-three"),
+        pytest.param(100, "3.25", "98.5", "3.20125", id="basis-hundred"),
+        pytest.param(1000, "2500", "4", "10", id="basis-thousand"),
+        pytest.param(
+            999_999_999_999,
+            "999999999999",
+            "1",
+            "1",
+            id="maximum-twelve-digit-basis",
+        ),
+    ],
+)
+def test_admitted_positive_quote_base_scales_exactly(
+    basis,
+    quantity,
+    price,
+    expected,
+):
+    raw = _rebalance_request(
+        holdings=[
+            _holding(
+                quantity=quantity,
+                price=price,
+                basis=basis,
+            )
+        ]
+    )
+    result = _analyze_rebalancer(raw)
+
+    assert result["availability"] == "ready"
+    holding = _holdings(result)["custody-alpha"]
+    _money(holding["current_value_native"], expected)
+    _money(holding["current_value_reporting"], expected)
+    _money(result["totals"]["current_invested_reporting"], expected)
+    normalized = {item["row_key"]: item for item in result["normalized"]["holdings"]}
+    assert normalized["custody-alpha"]["quote_base_quantity"] == basis
+    assert Fraction(expected) == Fraction(quantity) * Fraction(price) / basis
+
+
+def test_thirteen_digit_quote_base_is_typed_unsupported_at_its_input_path():
+    raw = _rebalance_request(
+        holdings=[
+            _holding(
+                quantity="1",
+                price="1",
+                basis=1_000_000_000_000,
+            )
+        ]
+    )
+
+    result = _analyze_rebalancer(raw)
+
+    assert result["availability"] == "unsupported"
+    assert result["normalized"] is None
+    issue = _issue(
+        result,
+        "numeric_domain_exceeded",
+        ("holdings", 0, "quote", "quote_base_quantity"),
+        "unsupported",
+    )
+    assert issue["related_indices"] == [0]
+    assert issue["params"]["unit"] == "quantity"
+    assert issue["params"]["limit"] == 12
+
+    holding = _holdings(result)["custody-alpha"]
+    assert _value(holding["quantity"]) == "1"
+    _unavailable(holding["current_value_native"], "outside_p1_domain")
+    _unavailable(holding["current_value_reporting"], "outside_p1_domain")
+
+
+def test_rebalancer_quote_basis_three_without_cancellation_is_typed_unsupported():
+    raw = _rebalance_request(
+        holdings=[
+            _holding(
+                quantity="1",
+                price="1",
+                basis=3,
+            )
+        ]
+    )
+
+    result = _analyze_rebalancer(raw)
+
+    assert result["availability"] == "unsupported"
+    issue = _issue(
+        result,
+        "numeric_domain_exceeded",
+        ("holdings", 0, "quote"),
+        "unsupported",
+    )
+    assert issue["related_indices"] == [0]
+    assert issue["params"]["unit"] == "quote"
+    assert issue["params"]["limit"] == 256
+
+    holding = _holdings(result)["custody-alpha"]
+    _unavailable(holding["current_value_native"], "outside_p1_domain")
+    _unavailable(holding["current_value_reporting"], "outside_p1_domain")
+
+    instrument = _instruments(result)["asset-alpha"]
+    _unavailable(instrument["current_value_reporting"], "outside_p1_domain")
+    _unavailable(instrument["current_weight_percent"], "outside_p1_domain")
+    _unavailable(instrument["target_value_reporting"], "outside_p1_domain")
+    _unavailable(
+        instrument["value_gap_to_target_reporting"],
+        "outside_p1_domain",
+    )
+    _unavailable(instrument["gap_to_target_pp"], "outside_p1_domain")
+
+    _unavailable(
+        result["totals"]["current_invested_reporting"],
+        "outside_p1_domain",
+    )
+    _unavailable(result["totals"]["max_abs_gap_pp"], "outside_p1_domain")
+    _unavailable(result["totals"]["squared_gap_pp2"], "outside_p1_domain")
+
+
+def test_rebalancer_terminating_native_value_over_canonical_limit_is_typed_unsupported():
+    quantity = "0.000000000001"
+    raw_price = "0.000000000001"
+    quote_base_quantity = 2**39
+    with localcontext(decimal_context()):
+        product = Decimal(quantity) * Decimal(raw_price)
+        basis = Decimal(quote_base_quantity)
+        native_value = product / basis
+        assert native_value * basis == product
+    canonical = decimal_text(native_value)
+    assert canonical == ("0.000000000000000000000000000000000001818989403545856475830078125")
+    assert len(canonical) == 65
+    assert len(canonical) > P1_MAX_NATIVE_AMOUNT_CHARS == 52
+
+    raw = _rebalance_request(
+        holdings=[
+            _holding(
+                quantity=quantity,
+                price=raw_price,
+                basis=quote_base_quantity,
+            )
+        ]
+    )
+
+    result = _analyze_rebalancer(raw)
+
+    assert result["availability"] == "unsupported"
+    assert result["normalized"] is None
+    issue = _issue(
+        result,
+        "numeric_domain_exceeded",
+        ("holdings", 0, "quote"),
+        "unsupported",
+    )
+    assert issue["related_indices"] == [0]
+    assert issue["params"]["unit"] == "quote"
+    assert issue["params"]["limit"] == 256
+
+    holding = _holdings(result)["custody-alpha"]
+    assert _value(holding["quantity"]) == quantity
+    for field in ("current_value_native", "current_value_reporting"):
+        _unavailable(holding[field], "outside_p1_domain")
+
+    instrument = _instruments(result)["asset-alpha"]
+    for field in (
+        "current_value_reporting",
+        "current_weight_percent",
+        "target_value_reporting",
+        "value_gap_to_target_reporting",
+        "gap_to_target_pp",
+    ):
+        _unavailable(instrument[field], "outside_p1_domain")
+
+    for field in (
+        "current_invested_reporting",
+        "max_abs_gap_pp",
+        "squared_gap_pp2",
+    ):
+        _unavailable(result["totals"][field], "outside_p1_domain")
+
+
+def test_rebalancer_quote_basis_three_with_cancellation_is_exact_and_ready():
+    raw = _rebalance_request(
+        holdings=[
+            _holding(
+                quantity="1",
+                price="3",
+                basis=3,
+            )
+        ]
+    )
+
+    result = _analyze_rebalancer(raw)
+
+    assert result["availability"] == "ready"
+    assert result["issues"] == []
+
+    holding = _holdings(result)["custody-alpha"]
+    _money(holding["current_value_native"], "1")
+    _money(holding["current_value_reporting"], "1")
+
+    instrument = _instruments(result)["asset-alpha"]
+    _money(instrument["current_value_reporting"], "1")
+    _ratio(instrument["current_weight_percent"], 100, 1, "percent")
+    _money(instrument["target_value_reporting"], "1")
+    _money(instrument["value_gap_to_target_reporting"], "0")
+    _ratio(instrument["gap_to_target_pp"], 0, 1, "percentage_points")
+
+    _money(result["totals"]["current_invested_reporting"], "1")
+    _ratio(result["totals"]["max_abs_gap_pp"], 0, 1, "percentage_points")
+    _ratio(
+        result["totals"]["squared_gap_pp2"],
+        0,
+        1,
+        "percentage_points_squared",
+    )
+
+
+def test_negative_inventory_is_unsupported_and_never_omitted():
+    raw = _rebalance_request(holdings=[_holding(quantity="-0.001")])
+    result = _analyze_rebalancer(raw)
+
+    assert result["availability"] == "unsupported"
+    assert result["normalized"] is None
+    issue = _issue(
+        result,
+        "short_inventory_unsupported",
+        ("holdings", 0, "quantity"),
+        "unsupported",
+    )
+    assert issue["related_indices"] == [0]
+    holding = _holdings(result)["custody-alpha"]
+    _unavailable(holding["quantity"], "outside_p1_domain")
+    _unavailable(holding["current_value_native"], "outside_p1_domain")
+    _unavailable(holding["current_value_reporting"], "outside_p1_domain")
+    assert "asset-alpha" in _instruments(result)
+
+
+def _two_instrument_request(service: str) -> dict[str, object]:
+    targets = [_target("asset-a", "50"), _target("asset-b", "50")]
+    if service == "pac":
+        return _pac_request(
+            assets=[_asset("asset-a"), _asset("asset-b")],
+            targets=targets,
+        )
+    return _rebalance_request(
+        holdings=[
+            _holding("custody-a", "asset-a"),
+            _holding("custody-b", "asset-b"),
+        ],
+        targets=targets,
+    )
+
+
+@pytest.mark.parametrize(
+    ("case", "availability", "expected_codes"),
+    [
+        (
+            "missing-all",
+            "needs_input",
+            {"targets_required", "target_required"},
+        ),
+        ("missing-selected", "needs_input", {"target_required"}),
+        (
+            "orphan",
+            "invalid",
+            {"target_instrument_not_selected", "target_required"},
+        ),
+        (
+            "duplicate",
+            "invalid",
+            {"duplicate_target_instrument", "target_required"},
+        ),
+        ("wrong-total", "invalid", {"target_total_not_100"}),
+    ],
+)
+@pytest.mark.parametrize("service", ["pac", "rebalancer"])
+def test_target_vector_is_complete_unique_selected_and_exactly_100(
+    service,
+    case,
+    availability,
+    expected_codes,
+):
+    raw = _two_instrument_request(service)
+    if case == "missing-all":
+        raw["targets"] = []
+    elif case == "missing-selected":
+        raw["targets"] = [_target("asset-a", "100")]
+    elif case == "orphan":
+        raw["targets"] = [
+            _target("asset-a", "50"),
+            _target("asset-orphan", "50"),
+        ]
+    elif case == "duplicate":
+        raw["targets"] = [
+            _target("asset-a", "50"),
+            _target("asset-a", "50"),
+        ]
+    else:
+        raw["targets"] = [
+            _target("asset-a", "50"),
+            _target("asset-b", "49.999999999999"),
+        ]
+
+    analyze = _analyze_pac if service == "pac" else _analyze_rebalancer
+    result = analyze(raw)
+
+    assert result["availability"] == availability
+    assert result["normalized"] is None
+    codes = {issue["code"] for issue in result["issues"]}
+    assert expected_codes <= codes
+    if "target_required" in expected_codes:
+        missing = [issue for issue in result["issues"] if issue["code"] == "target_required"]
+        assert missing
+        assert all(issue["kind"] == "missing" for issue in missing)
+    if case == "orphan":
+        issue = _issue(
+            result,
+            "target_instrument_not_selected",
+            kind="invalid",
+        )
+        assert issue["params"]["instrument_key"] == "asset-orphan"
+    if case == "duplicate":
+        issue = _issue(
+            result,
+            "duplicate_target_instrument",
+            kind="invalid",
+        )
+        assert issue["related_indices"] == [0, 1]
+    if case == "wrong-total":
+        issue = _issue(
+            result,
+            "target_total_not_100",
+            ("targets",),
+            "invalid",
+        )
+        assert issue["related_indices"] == [0, 1]
+
+
+def test_pac_duplicate_instrument_is_invalid_not_aggregated():
+    raw = _pac_request(
+        assets=[
+            _asset("same-instrument", name="Custody-looking A"),
+            _asset("same-instrument", name="Custody-looking B"),
+        ],
+        targets=[_target("same-instrument", "100")],
+    )
+    raw["cash_balances"] = [{"currency": "EUR", "amount": "10"}]
+
+    result = _analyze_pac(raw)
+
+    assert result["availability"] == "invalid"
+    assert result["normalized"] is None
+    issue = _issue(
+        result,
+        "duplicate_instrument",
+        ("assets", 0, "instrument_key"),
+        "invalid",
+    )
+    assert issue["related_indices"] == [0, 1]
+    allocation = _allocations(result)["same-instrument"]
+    _unavailable(allocation["ideal_allocation_reporting"], "input_invalid")
+
+
+def test_duplicate_holding_row_key_is_invalid_but_source_rows_remain():
+    raw = _rebalance_request(
+        holdings=[
+            _holding("duplicate-row", "asset-a", quantity="1"),
+            _holding("duplicate-row", "asset-b", quantity="2"),
+        ],
+        targets=[_target("asset-a", "50"), _target("asset-b", "50")],
+    )
+    result = _analyze_rebalancer(raw)
+
+    assert result["availability"] == "invalid"
+    assert result["normalized"] is None
+    issue = _issue(
+        result,
+        "duplicate_row_key",
+        ("holdings", 0, "row_key"),
+        "invalid",
+    )
+    assert issue["related_indices"] == [0, 1]
+    assert [holding["instrument_key"] for holding in result["holdings"]] == ["asset-a", "asset-b"]
+    assert [_value(holding["quantity"]) for holding in result["holdings"]] == [
+        "1",
+        "2",
+    ]
+    _unavailable(
+        result["totals"]["current_invested_reporting"],
+        "input_invalid",
+    )
+
+
+@pytest.mark.parametrize("service", ["pac", "rebalancer"])
+@pytest.mark.parametrize(
+    ("grid", "availability", "code"),
+    [
+        ({"mode": "whole", "quantity_step": "2"}, "ready", None),
+        (
+            {"mode": "fractional", "quantity_step": "0.125"},
+            "ready",
+            None,
+        ),
+        (
+            {"mode": "whole", "quantity_step": "0.5"},
+            "invalid",
+            "noninteger_whole_step",
+        ),
+        (
+            {"mode": "fractional", "quantity_step": "0"},
+            "invalid",
+            "nonpositive_quantity_step",
+        ),
+        (
+            {"mode": None, "quantity_step": "1"},
+            "needs_input",
+            "field_required",
+        ),
+    ],
+)
+def test_optional_future_buy_grid_validation(
+    service,
+    grid,
+    availability,
+    code,
+):
+    if service == "pac":
+        raw = _pac_request(assets=[_asset(buy_grid=grid)])
+        path = ("assets", 0, "buy_grid")
+        result = _analyze_pac(raw)
+    else:
+        raw = _rebalance_request(holdings=[_holding(quantity="2", buy_grid=grid)])
+        path = ("holdings", 0, "buy_grid")
+        result = _analyze_rebalancer(raw)
+    assert result["availability"] == availability
+    if code == "field_required":
+        _issue(result, code, (*path, "mode"), "missing")
+    elif code is not None:
+        _issue(result, code, (*path, "quantity_step"), "invalid")
+
+
+@pytest.mark.parametrize(
+    ("mode", "step", "quantity", "off_grid"),
+    [
+        ("whole", "1", "10.125", True),
+        ("fractional", "0.125", "10.125", False),
+        ("fractional", "0.2", "10.125", True),
+    ],
+)
+def test_existing_inventory_is_unchanged_and_off_grid_is_info_only(
+    mode,
+    step,
+    quantity,
+    off_grid,
+):
+    raw = _rebalance_request(
+        holdings=[
+            _holding(
+                quantity=quantity,
+                price="10",
+                buy_grid={"mode": mode, "quantity_step": step},
+            )
+        ]
+    )
+    result = _analyze_rebalancer(raw)
+
+    assert result["availability"] == "ready"
+    holding = _holdings(result)["custody-alpha"]
+    assert _value(holding["quantity"]) == quantity
+    _money(holding["current_value_reporting"], "101.25")
+    normalized = {item["row_key"]: item for item in result["normalized"]["holdings"]}["custody-alpha"]
+    assert normalized["quantity"] == quantity
+    assert normalized["buy_grid"] == {
+        "mode": mode,
+        "quantity_step": step,
     }
+    issues = [issue for issue in result["issues"] if issue["code"] == "inventory_off_buy_grid"]
+    assert len(issues) == int(off_grid)
+    if off_grid:
+        (issue,) = issues
+        assert issue["kind"] == "info"
+        assert issue["path"] == ["holdings", 0, "quantity"]
+        assert issue["related_indices"] == [0]
+
+
+@pytest.mark.parametrize(
+    ("amount", "step", "availability", "code", "kind"),
+    [
+        ("0.3", "0.1", "ready", None, None),
+        (
+            "0.300000000001",
+            "0.1",
+            "invalid",
+            "contribution_not_multiple_of_monetary_step",
+            "invalid",
+        ),
+        ("0.03", None, "needs_input", "field_required", "missing"),
+        ("0.03", "0", "invalid", "nonpositive_monetary_step", "invalid"),
+        ("-1", "0.01", "invalid", "negative_contribution", "invalid"),
+    ],
+)
+def test_contribution_monetary_step_is_positive_and_an_exact_multiple(
+    amount,
+    step,
+    availability,
+    code,
+    kind,
+):
+    raw = _pac_request()
+    raw["contributions"] = [_contribution(amount=amount, monetary_step=step)]
+    result = _analyze_pac(raw)
+
+    assert result["availability"] == availability
+    if code is None:
+        assert result["normalized"]["contributions"] == [
+            {
+                "currency": "EUR",
+                "amount": amount,
+                "monetary_step": step,
+            }
+        ]
+        _money(result["totals"]["contributions_reporting"], amount)
+    else:
+        path_field = (
+            "amount"
+            if code
+            in {
+                "contribution_not_multiple_of_monetary_step",
+                "negative_contribution",
+            }
+            else "monetary_step"
+        )
+        issue = _issue(
+            result,
+            code,
+            ("contributions", 0, path_field),
+            kind,
+        )
+        if code == "contribution_not_multiple_of_monetary_step":
+            assert issue["params"]["unit"] == "native_amount"
+
+
+@pytest.mark.parametrize(
+    ("service", "path"),
+    [
+        ("pac", ("cash_balances", 0, "amount")),
+        ("pac", ("contributions", 0, "amount")),
+        ("pac", ("targets", 0, "target_percent")),
+        ("rebalancer", ("holdings", 0, "quantity")),
+        ("rebalancer", ("holdings", 0, "quote", "raw_price")),
+        ("rebalancer", ("valuation_rates", 0, "rate_to_report")),
+    ],
+)
+@pytest.mark.parametrize(
+    "text",
+    ["1000000000000", "0.0000000000001", "1.1234567890121"],
+)
+def test_nonzero_thirteenth_digit_is_unsupported_never_rounded(
+    service,
+    path,
+    text,
+):
+    if service == "pac":
+        raw = _pac_request()
+        raw["cash_balances"] = [{"currency": "EUR", "amount": "0"}]
+        raw["contributions"] = [_contribution("EUR", "0", "0.000000000001")]
+        result_analyzer = _analyze_pac
+    else:
+        raw = _rebalance_request(holdings=[_holding(currency="USD" if path[0] == "valuation_rates" else "EUR")])
+        raw["valuation_rates"] = [_rate("USD", "1")] if path[0] == "valuation_rates" else []
+        result_analyzer = _analyze_rebalancer
+    _set(raw, path, text)
+
+    result = result_analyzer(raw)
+
+    assert result["availability"] == "unsupported"
+    assert result["normalized"] is None
+    issue = _issue(
+        result,
+        "numeric_domain_exceeded",
+        path,
+        "unsupported",
+    )
+    assert issue["params"]["limit"] == 12
+
+
+def test_maximum_admitted_whole_and_fraction_digits_are_preserved():
+    maximum = "999999999999.123456789012"
+    pac_raw = _pac_request()
+    pac_raw["cash_balances"] = [{"currency": "EUR", "amount": maximum}]
+    pac = _analyze_pac(pac_raw)
+    assert pac["availability"] == "ready"
+    _money(pac["totals"]["investable_budget_reporting"], maximum)
+    assert pac["normalized"]["cash_balances"] == [{"currency": "EUR", "amount": maximum}]
+
+    rebalance_raw = _rebalance_request(holdings=[_holding(quantity=maximum, price="1")])
+    rebalancer = _analyze_rebalancer(rebalance_raw)
+    assert rebalancer["availability"] == "ready"
+    holding = _holdings(rebalancer)["custody-alpha"]
+    assert _value(holding["quantity"]) == maximum
+    _money(holding["current_value_reporting"], maximum)

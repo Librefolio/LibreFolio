@@ -12,16 +12,33 @@ all data is available via /report with include_* flags.
 
 from datetime import date as date_type
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from backend.app.api.v1.auth import get_current_user
-from backend.app.db.models import Asset, User
+from backend.app.db.models import Asset, BrokerUserAccess, User
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
-from backend.app.schemas.portfolio import LotsAnalysisQuery, LotsAnalysisResponse, PortfolioReportQuery, PortfolioReportResponse, WACAnalyticsRequest, WACAnalyticsResponse, WACAnalyticsResultItem, WACSeriesPoint
+from backend.app.schemas.portfolio import (
+    LotsAnalysisQuery,
+    LotsAnalysisResponse,
+    PortfolioPlannerSourceRequest,
+    PortfolioPlannerSourceResponse,
+    PortfolioReportQuery,
+    PortfolioReportResponse,
+    WACAnalyticsRequest,
+    WACAnalyticsResponse,
+    WACAnalyticsResultItem,
+    WACSeriesPoint,
+)
 from backend.app.services.lots_analysis_service import LotsAnalysisService
+from backend.app.services.portfolio_allocation_source import (
+    PortfolioAllocationSourceAccessError,
+    PortfolioPlannerSourceAccessError,
+    PortfolioPlannerSourceAssetNotFoundError,
+    build_portfolio_planner_source,
+)
 from backend.app.services.portfolio_service import PortfolioService, compute_wac_iterative
 
 logger = get_logger(__name__)
@@ -29,18 +46,54 @@ logger = get_logger(__name__)
 portfolio_router = APIRouter(prefix="/portfolio", tags=["Portfolio"])
 
 
+async def _get_allocation_source_user(
+    request: Request,
+    session: AsyncSession = Depends(get_session_generator),
+) -> User:
+    """Reuse standard authentication while marking only its 401 responses no-store."""
+    try:
+        return await get_current_user(request, session)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            exc.headers = {
+                **(exc.headers or {}),
+                "Cache-Control": "no-store",
+            }
+        raise
+
+
 @portfolio_router.post(
     "/wac",
     response_model=WACAnalyticsResponse,
     summary="WAC time series",
-    description="Compute WAC (Weighted Average Cost) time series for committed transactions. " "Returns point-per-transaction data where WAC changes — useful for chart overlays and P&L.",
+    description="Compute WAC (Weighted Average Cost) time series for committed transactions. Returns point-per-transaction data where WAC changes — useful for chart overlays and P&L.",
 )
 async def get_portfolio_wac(
     body: WACAnalyticsRequest,
     session: AsyncSession = Depends(get_session_generator),
+    current_user: User = Depends(get_current_user),
 ) -> WACAnalyticsResponse:
     """Compute WAC time series for each (broker, asset) query."""
     results: list[WACAnalyticsResultItem] = []
+
+    # The WAC helper accepts raw Broker ids and performs no authorization itself.
+    # Validate the complete requested set before reading Assets or transactions.
+    requested_broker_ids = {query.broker_id for query in body.queries}
+    accessible_broker_ids = set(
+        (
+            await session.execute(
+                select(BrokerUserAccess.broker_id).where(
+                    BrokerUserAccess.user_id == current_user.id,
+                    BrokerUserAccess.broker_id.in_(requested_broker_ids),
+                )
+            )
+        ).scalars()
+    )
+    if accessible_broker_ids != requested_broker_ids:
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "portfolio_wac_broker_forbidden"},
+        )
 
     # P0-5b (audit 08): no N+1 — preload every queried asset in ONE SELECT
     # instead of one session.get() per query. The identity map keeps the
@@ -133,10 +186,44 @@ async def get_portfolio_wac(
 
 
 @portfolio_router.post(
+    "/allocation-source",
+    response_model=PortfolioPlannerSourceResponse,
+    summary="Planner domain-copy source",
+    description=("Return an authenticated, uncached, read-only snapshot of selected Portfolio, Broker, Asset, saved-price, WAC, and saved-FX facts. The response contains no targets, recommendations, or provider refreshes."),
+)
+async def get_portfolio_allocation_source(
+    body: PortfolioPlannerSourceRequest,
+    response: Response,
+    session: AsyncSession = Depends(get_session_generator),
+    current_user: User = Depends(_get_allocation_source_user),
+) -> PortfolioPlannerSourceResponse:
+    """Return explicit domain facts for user-confirmed planner copy actions."""
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        return await build_portfolio_planner_source(
+            session,
+            user_id=current_user.id,
+            request=body,
+        )
+    except PortfolioPlannerSourceAccessError as exc:
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "portfolio_planner_source_broker_forbidden"},
+            headers={"Cache-Control": "no-store"},
+        ) from exc
+    except PortfolioPlannerSourceAssetNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "portfolio_planner_source_asset_not_found"},
+            headers={"Cache-Control": "no-store"},
+        ) from exc
+
+
+@portfolio_router.post(
     "/report",
     response_model=PortfolioReportResponse,
     summary="Unified portfolio report",
-    description=("Run the PortfolioCalculationEngine once and return all requested views " "(summary, history, allocation history, data quality) in a single response. " "Use this instead of separate summary/history/allocation-history calls to avoid " "multiple engine runs."),
+    description=("Run the PortfolioCalculationEngine once and return all requested views (summary, history, allocation history, data quality) in a single response. Use this instead of separate summary/history/allocation-history calls to avoid multiple engine runs."),
 )
 async def get_portfolio_report(
     body: PortfolioReportQuery,
@@ -151,7 +238,16 @@ async def get_portfolio_report(
         body.date_range = await resolve_date_sentinels(body.date_range, current_user.id, session, broker_ids=body.broker_ids)
 
     service = PortfolioService(session)
-    return await service.get_report(user_id=current_user.id, query=body)
+    try:
+        return await service.get_report(user_id=current_user.id, query=body)
+    except PortfolioAllocationSourceAccessError as exc:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "allocation_source_cash_broker_forbidden",
+                "broker_ids": list(exc.broker_ids),
+            },
+        ) from exc
 
 
 @portfolio_router.post(

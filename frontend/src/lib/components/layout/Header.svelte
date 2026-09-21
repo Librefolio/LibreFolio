@@ -6,6 +6,7 @@
     import ThemeToggle from '$lib/components/ui/ThemeToggle.svelte';
     import HelpMenu from '$lib/components/layout/HelpMenu.svelte';
     import {getDocumentScrollY} from '$lib/utils/layout/headerScroll';
+    import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
 
     type ScrollState = 'visible' | 'hidden' | 'pinned';
 
@@ -14,9 +15,10 @@
         sidebarOpen?: boolean;
         routeKey?: string;
         keepVisible?: boolean;
+        guideActive?: boolean;
     }
 
-    let {onToggleSidebar = () => {}, sidebarOpen = false, routeKey = '', keepVisible = false}: Props = $props();
+    let {onToggleSidebar = () => {}, sidebarOpen = false, routeKey = '', keepVisible = false, guideActive = false}: Props = $props();
 
     const HIDE_SCROLL_THRESHOLD = 8;
     const SHOW_SCROLL_THRESHOLD = 4;
@@ -38,7 +40,7 @@
     let modalObserver: MutationObserver | null = null;
 
     function isPinned(): boolean {
-        return keepVisible || sidebarOpen || helpMenuOpen || languageMenuOpen || modalScrollLockCount > 0 || focusPinned;
+        return guideActive || keepVisible || sidebarOpen || helpMenuOpen || languageMenuOpen || modalScrollLockCount > 0 || focusPinned;
     }
 
     function cancelScrollFrame() {
@@ -198,6 +200,7 @@
 
     $effect(() => {
         keepVisible;
+        guideActive;
         sidebarOpen;
         routeKey;
         syncScrollContext();
@@ -214,9 +217,10 @@
     data-modal-open={modalScrollLockCount > 0 ? 'true' : 'false'}
     data-help-menu-open={helpMenuOpen ? 'true' : 'false'}
     data-language-menu-open={languageMenuOpen ? 'true' : 'false'}
+    data-guide-active={guideActive ? 'true' : 'false'}
 >
     <div class="flex items-center justify-between">
-        <button aria-label="Toggle menu" class="lg:hidden p-2 rounded-lg transition-colors" data-testid="mobile-menu-toggle" onclick={onToggleSidebar}>
+        <button aria-label="Toggle menu" class="lg:hidden p-2 rounded-lg transition-colors" data-testid="mobile-menu-toggle" use:guideAnchor={'nav.toggle.mobile'} onclick={onToggleSidebar}>
             <Menu class="text-libre-dark dark:text-gray-200" size={24} />
         </button>
 

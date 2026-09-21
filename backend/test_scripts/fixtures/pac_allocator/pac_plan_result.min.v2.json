@@ -1,0 +1,402 @@
+{
+  "operation": "plan",
+  "result_state": "ready_no_op",
+  "availability": "ready",
+  "outcome": "no_op",
+  "snapshot": {
+    "snapshot_id": "snapshot-pac-min",
+    "request_fingerprint": "fixture-pac-min-not-a-production-hash"
+  },
+  "catalogs": {
+    "assets": [
+      {
+        "asset_id": "asset-one",
+        "name": "Synthetic Asset One",
+        "ticker": "SYN1",
+        "asset_class": "etf"
+      }
+    ],
+    "brokers": [
+      {
+        "broker_id": "broker-one",
+        "name": "Synthetic Broker One"
+      }
+    ],
+    "currencies": [
+      {
+        "currency": "EUR",
+        "minor_unit": "0.01"
+      }
+    ]
+  },
+  "provenance": [
+    {
+      "kind": "manual",
+      "provenance_id": "prov-manual",
+      "label": "Synthetic manual fixture",
+      "entered_at": "2026-09-15T12:00:00Z"
+    }
+  ],
+  "scenario_basis": {
+    "as_of": "2026-09-15",
+    "valuation_currency": "EUR",
+    "policy": "proportional",
+    "counts": {
+      "assets": 1,
+      "brokers": 1,
+      "currencies": 1,
+      "holdings": 0,
+      "existing_cash": 1,
+      "contributions": 0,
+      "funding_routes": 0,
+      "capabilities": 1,
+      "fx_rates": 0,
+      "order_routes": 1,
+      "provenance": 1
+    },
+    "current_invested": {
+      "value": {
+        "kind": "finite_decimal",
+        "value": "0"
+      },
+      "currency": "EUR"
+    },
+    "selected_funding": {
+      "value": {
+        "kind": "finite_decimal",
+        "value": "5.00"
+      },
+      "currency": "EUR"
+    },
+    "reachable_funding": {
+      "value": {
+        "kind": "finite_decimal",
+        "value": "5.00"
+      },
+      "currency": "EUR"
+    },
+    "trapped_funding": {
+      "value": {
+        "kind": "finite_decimal",
+        "value": "0"
+      },
+      "currency": "EUR"
+    },
+    "fixed_reference": {
+      "value": {
+        "kind": "finite_decimal",
+        "value": "5.00"
+      },
+      "currency": "EUR"
+    }
+  },
+  "proof": {
+    "kind": "not_proven",
+    "reason_code": "allocation.exact_proof_not_established"
+  },
+  "stop_reason": "completed",
+  "solver_evidence": {
+    "kind": "not_run",
+    "reason": "allocation.solver_not_required"
+  },
+  "issues": [
+    {
+      "code": "allocation.no_positive_order_fundable",
+      "severity": "info",
+      "kind": "constraint",
+      "path": {
+        "kind": "entity",
+        "section": "routing",
+        "entity_kind": "order_route",
+        "entity_id": "route-asset-one-broker-one-buy"
+      },
+      "message_key": "tools.allocation.issues.noPositiveOrderFundable",
+      "params": [
+        {
+          "kind": "money",
+          "name": "reachable_cash",
+          "value": {
+            "amount": "5.00",
+            "currency": "EUR"
+          }
+        },
+        {
+          "kind": "money",
+          "name": "minimum_order_debit",
+          "value": {
+            "amount": "10.00",
+            "currency": "EUR"
+          }
+        }
+      ]
+    }
+  ],
+  "primary_solution": {
+    "solution_id": "solution-pac-min-primary",
+    "solution_kind": "primary",
+    "validation": "decimal_verified",
+    "asset_rows": [
+      {
+        "asset_id": "asset-one",
+        "target_weight": {
+          "kind": "finite_decimal",
+          "value": "1"
+        },
+        "target_value": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "5.00"
+          },
+          "currency": "EUR"
+        },
+        "final_value": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        },
+        "residual": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "-5.00"
+          },
+          "currency": "EUR"
+        },
+        "final_weight": {
+          "kind": "unavailable",
+          "reason": "zero_final_invested"
+        },
+        "buy_mid_value": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        }
+      }
+    ],
+    "funding_actions": [],
+    "fx_actions": [],
+    "order_rows": [],
+    "ledger_rows": [
+      {
+        "broker_id": "broker-one",
+        "currency": "EUR",
+        "initial_selected": "5.00",
+        "funding_in": "0",
+        "funding_out": "0",
+        "fx_debit": "0",
+        "fx_credit": "0",
+        "buy_debit": "0",
+        "gross_sell_credit": "0",
+        "buy_fees": "0",
+        "sell_fees": "0",
+        "broker_withheld_tax": "0",
+        "self_reserved_tax": "0",
+        "rounding_delta": "0",
+        "final_spendable": "5.00",
+        "final_physical": "5.00"
+      }
+    ],
+    "exposure_rows": [
+      {
+        "dimension": "asset_type",
+        "category_id": "equity",
+        "label": "Equity",
+        "target_weight": {
+          "kind": "finite_decimal",
+          "value": "1"
+        },
+        "final_weight": {
+          "kind": "unavailable",
+          "reason": "zero_final_invested"
+        },
+        "provenance_ids": [
+          "prov-manual"
+        ]
+      },
+      {
+        "dimension": "sector",
+        "category_id": "broad",
+        "label": "Broad",
+        "target_weight": {
+          "kind": "finite_decimal",
+          "value": "1"
+        },
+        "final_weight": {
+          "kind": "unavailable",
+          "reason": "zero_final_invested"
+        },
+        "provenance_ids": [
+          "prov-manual"
+        ]
+      },
+      {
+        "dimension": "geography",
+        "category_id": "unknown",
+        "label": "Unknown",
+        "target_weight": {
+          "kind": "finite_decimal",
+          "value": "1"
+        },
+        "final_weight": {
+          "kind": "unavailable",
+          "reason": "zero_final_invested"
+        },
+        "provenance_ids": [
+          "prov-manual"
+        ]
+      }
+    ],
+    "accounting": {
+      "current_invested": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "0"
+        },
+        "currency": "EUR"
+      },
+      "selected_funding": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "5.00"
+        },
+        "currency": "EUR"
+      },
+      "reachable_funding": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "5.00"
+        },
+        "currency": "EUR"
+      },
+      "trapped_funding": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "0"
+        },
+        "currency": "EUR"
+      },
+      "fixed_reference": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "5.00"
+        },
+        "currency": "EUR"
+      },
+      "final_invested": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "0"
+        },
+        "currency": "EUR"
+      },
+      "shortfall": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "5.00"
+        },
+        "currency": "EUR"
+      },
+      "free_cash": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "5.00"
+        },
+        "currency": "EUR"
+      },
+      "physical_reserves": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "0"
+        },
+        "currency": "EUR"
+      },
+      "economic_losses": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "0"
+        },
+        "currency": "EUR"
+      },
+      "rounding_delta": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "0"
+        },
+        "currency": "EUR"
+      },
+      "rounding_bound": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "0"
+        },
+        "currency": "EUR"
+      },
+      "identity_delta": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "0"
+        },
+        "currency": "EUR"
+      }
+    },
+    "costs": {
+      "buy_fees": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+      "sell_fees": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+      "fx_spread_loss": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+      "execution_margin_cost": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+      "broker_withheld_tax": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+      "self_reserved_tax": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}
+    },
+    "objectives": {
+      "stages": [
+        {
+          "objective_code": "fixed_l2",
+          "ordinal": 1,
+          "sense": "min",
+          "unit": {"kind": "valuation_money_squared", "currency_code": "EUR"},
+          "value": {"kind": "finite_decimal", "value": "25.0000"}
+        },
+        {
+          "objective_code": "shortfall",
+          "ordinal": 2,
+          "sense": "min",
+          "unit": {"kind": "valuation_money", "currency_code": "EUR"},
+          "value": {"kind": "finite_decimal", "value": "5.00"}
+        },
+        {
+          "objective_code": "route_priority",
+          "ordinal": 3,
+          "sense": "min",
+          "unit": {"kind": "ordinal_penalty"},
+          "value": {"kind": "finite_decimal", "value": "0"}
+        },
+        {
+          "objective_code": "explicit_cost",
+          "ordinal": 4,
+          "sense": "min",
+          "unit": {"kind": "valuation_money", "currency_code": "EUR"},
+          "value": {"kind": "finite_decimal", "value": "0"}
+        },
+        {
+          "objective_code": "active_order_rows",
+          "ordinal": 5,
+          "sense": "min",
+          "unit": {"kind": "count"},
+          "value": {"kind": "finite_decimal", "value": "0"}
+        }
+      ],
+      "tie_break": {
+        "code": "canonical_key",
+        "unit": {"kind": "canonical_key"},
+        "ordered_keys": []
+      }
+    }
+  },
+  "deployment": {
+    "kind": "coincident",
+    "reason_code": "allocation.no_additional_buy_feasible"
+  }
+}

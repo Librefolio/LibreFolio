@@ -29,6 +29,10 @@ export interface ToolReadOptions {
     signal?: AbortSignal;
 }
 
+export interface ToolCatalogReadOptions extends ToolReadOptions {
+    reload?: boolean;
+}
+
 export interface ToolRunOptions<C extends ToolCode, V extends ToolVersion<C>> {
     descriptor: CompatibleToolDescriptor<C, V>;
     correlationId: ToolComputeRequest['items'][number]['correlation_id'];
@@ -56,7 +60,7 @@ function assertResponseCurrent(accountGeneration: number, signal: AbortSignal): 
     if (signal.aborted) throw new ToolClientError('aborted', 'waiting_stopped');
 }
 
-function safeTransportError(error: unknown, accountGeneration: number): ToolClientError {
+export function safeToolTransportError(error: unknown, accountGeneration: number): ToolClientError {
     assertToolAccount(accountGeneration);
     if (error instanceof ToolClientError) return error;
     if (isAxiosError<unknown>(error)) {
@@ -76,21 +80,92 @@ function safeTransportError(error: unknown, accountGeneration: number): ToolClie
     return new ToolClientError('internal', 'unexpected_transport_error');
 }
 
-export async function fetchToolCatalog({signal}: ToolReadOptions = {}): Promise<VerifiedToolCatalog> {
-    const {generation} = getToolAccountState();
-    try {
-        return await runToolSessionTask(
-            generation,
-            async (requestSignal) => {
-                const response = await axiosInstance.get<unknown>('/api/v1/tools/catalog', {signal: requestSignal});
-                assertResponseCurrent(generation, requestSignal);
-                return validateToolCatalog(response.data, generation);
+let catalogGeneration = -1;
+let catalogValue: VerifiedToolCatalog | null = null;
+let catalogInflight: Promise<VerifiedToolCatalog> | null = null;
+let catalogRequestToken: object | null = null;
+
+function alignCatalogGeneration(generation: number): void {
+    if (catalogGeneration === generation) return;
+    catalogGeneration = generation;
+    catalogValue = null;
+    catalogInflight = null;
+    catalogRequestToken = null;
+}
+
+function waitForCaller<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+    if (!signal) return promise;
+    if (signal.aborted) return Promise.reject(new ToolClientError('aborted', 'waiting_stopped'));
+    return new Promise<T>((resolve, reject) => {
+        const stop = () => reject(new ToolClientError('aborted', 'waiting_stopped'));
+        signal.addEventListener('abort', stop, {once: true});
+        promise.then(
+            (value) => {
+                signal.removeEventListener('abort', stop);
+                resolve(value);
             },
-            signal,
+            (error: unknown) => {
+                signal.removeEventListener('abort', stop);
+                reject(error);
+            },
         );
-    } catch (error) {
-        throw safeTransportError(error, generation);
+    });
+}
+
+export function peekToolCatalog(): VerifiedToolCatalog | null {
+    const {generation} = getToolAccountState();
+    alignCatalogGeneration(generation);
+    if (!catalogValue) return null;
+    assertToolAccount(generation);
+    return catalogValue;
+}
+
+export function invalidateToolCatalogCache(): void {
+    const {generation} = getToolAccountState();
+    alignCatalogGeneration(generation);
+    catalogValue = null;
+    catalogInflight = null;
+    catalogRequestToken = null;
+}
+
+export async function fetchToolCatalog({signal, reload = false}: ToolCatalogReadOptions = {}): Promise<VerifiedToolCatalog> {
+    const {generation} = getToolAccountState();
+    alignCatalogGeneration(generation);
+    if (reload) {
+        catalogValue = null;
+        catalogInflight = null;
+        catalogRequestToken = null;
+    } else if (catalogValue) {
+        assertToolAccount(generation);
+        return catalogValue;
+    } else if (catalogInflight) {
+        return waitForCaller(catalogInflight, signal);
     }
+
+    const token = {};
+    catalogRequestToken = token;
+    const request = runToolSessionTask(generation, async (requestSignal) => {
+        const response = await axiosInstance.get<unknown>('/api/v1/tools/catalog', {signal: requestSignal});
+        assertResponseCurrent(generation, requestSignal);
+        return validateToolCatalog(response.data, generation);
+    })
+        .then((catalog) => {
+            if (catalogGeneration === generation && catalogRequestToken === token) {
+                catalogValue = catalog;
+            }
+            return catalog;
+        })
+        .catch((error: unknown) => {
+            throw safeToolTransportError(error, generation);
+        })
+        .finally(() => {
+            if (catalogGeneration === generation && catalogRequestToken === token) {
+                catalogInflight = null;
+                catalogRequestToken = null;
+            }
+        });
+    catalogInflight = request;
+    return waitForCaller(request, signal);
 }
 
 export async function fetchToolDiagnostics({signal}: ToolReadOptions = {}): Promise<ToolDiagnosticsResponse> {
@@ -106,7 +181,7 @@ export async function fetchToolDiagnostics({signal}: ToolReadOptions = {}): Prom
             signal,
         );
     } catch (error) {
-        throw safeTransportError(error, generation);
+        throw safeToolTransportError(error, generation);
     }
 }
 
@@ -282,6 +357,6 @@ export async function runTool<const C extends ToolCode, const V extends ToolVers
             signal,
         );
     } catch (error) {
-        throw safeTransportError(error, context.accountGeneration);
+        throw safeToolTransportError(error, context.accountGeneration);
     }
 }

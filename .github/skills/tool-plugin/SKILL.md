@@ -25,10 +25,13 @@ a claim that the real Tool is integrated.
    union is supported; a free-form schema dictionary is not a plugin contract.
 2. Require `operation` explicitly, without a default, and declare the matching
    `ToolOperationPolicy` entries. Do not advertise unfinished operations.
-3. Derive the plugin from `ToolPlugin[Input, Output]`; expose `input_type` and
-   `output_type`, including the actual annotated output union when applicable.
-4. Implement synchronous `compute(parameters, context)`. Forward `context.checkpoint`
-   into reusable pure numerical kernels rather than importing the Tool runtime there.
+3. Derive the packaged plugin from `ToolPlugin` and declare a nonempty
+   `services: tuple[ToolService, ...]`. Every public service owns its stable
+   `tool_code`, metadata, policies, `input_type` and `output_type`, including the
+   actual annotated output union when applicable.
+4. Implement synchronous `compute(tool_code, parameters, context)` and dispatch only
+   the declared service/model combinations. Forward `context.checkpoint` into reusable
+   pure numerical kernels rather than importing the Tool runtime there.
 5. Return a complete model. Output is serialized and revalidated at the process
    boundary; unchecked `model_construct` is not a validation bypass.
 
@@ -44,23 +47,31 @@ Put the thin wrapper in `backend/app/services/tool_plugins/` and register it wit
 `@register_plugin(ToolPluginRegistry)`. Reuse this registry specialization; do not
 introduce another discovery system.
 
-Required metadata:
+`contract_version` and `implementation_version` belong to the packaged plugin and are
+shared by its services. A plugin may expose one or more complete public calculations;
+each becomes an independent catalogue card/route/compute identity. Do not use a mode
+selector to disguise separate services.
+
+Required metadata for every `ToolService`:
 
 - Stable lowercase `tool_code`.
-- Exact contract and implementation versions.
 - Plain `name`/`description`, optional `name_i18n_key`/`description_i18n_key`.
 - Category and compiled icon key.
-- `ToolUIDescriptor(kind="custom", component_key=..., ui_contract_version=...)`.
+- `ToolUIDescriptor(kind="custom", component_key=..., version="x.y.z")`. UI version
+  is an independent SemVer compatibility contract, not the plugin implementation
+  version.
 - `ToolDocumentation(path=..., version=...)`, relative to the MkDocs root.
 - A nonempty tuple of operation policies.
+- Real Pydantic `input_type` and `output_type`.
 
 Initialization takes no user parameters and is attempted once. Never recover a
 constructor `TypeError` by silently trying another signature.
 
 Do not compute, fetch data or run a self-test at import/registration. Claims remain
-private until discovery finishes. Import failures and invalid declarations are
-quarantined; every distinct claimant of a colliding code loses. Re-registering the
-same class object is not a new claimant.
+private until discovery finishes. The registry expands each plugin claim into its
+declared services. Import failures and invalid declarations are quarantined; every
+distinct claimant of a colliding service code loses. Re-registering the same class
+object is not a new claimant.
 
 Pydantic is the source and validator; no additional `jsonschema` dependency is needed.
 Published schemas are derived from the TypeAdapters, use resolved local references
@@ -103,7 +114,8 @@ must not repair, normalize or silently shorten raw text. Validate input without 
 default-expanded parser output in place of the original draft.
 
 Register only compiled component imports. Compatibility checks exact code, contract,
-schema fingerprint and UI key/version; the request separately pins the live implementation.
+schema fingerprint and UI component key/string SemVer (`descriptor.ui.version`); the
+request separately pins the live implementation.
 An unknown/incompatible renderer is unavailable, not a reason to execute arbitrary
 server-provided code or fall back to a generic financial form.
 

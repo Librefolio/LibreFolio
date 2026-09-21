@@ -1,0 +1,162 @@
+{
+  "operation": "plan",
+  "snapshot": {
+    "snapshot_id": "snapshot-pac-min",
+    "draft_revision": 1,
+    "captured_at": "2026-09-15T12:00:00Z"
+  },
+  "as_of": "2026-09-15",
+  "valuation_currency": "EUR",
+  "currency_specs": [
+    {
+      "currency": "EUR",
+      "minor_unit": "0.01"
+    }
+  ],
+  "provenance": [
+    {
+      "kind": "manual",
+      "provenance_id": "prov-manual",
+      "label": "Synthetic manual fixture",
+      "entered_at": "2026-09-15T12:00:00Z"
+    }
+  ],
+  "fx_rates": {},
+  "fx_spread_rate": "0",
+  "assets": [
+    {
+      "asset_id": "asset-one",
+      "identity": {
+        "kind": "manual_asset",
+        "name": "Synthetic Asset One",
+        "ticker": "SYN1",
+        "asset_class": "etf"
+      },
+      "quote": {
+        "amount": "10.00",
+        "currency": "EUR",
+        "quote_base_quantity": "1",
+        "reference_date": "2026-09-15",
+        "freshness": {
+          "kind": "fresh"
+        },
+        "provenance_id": "prov-manual"
+      },
+      "exposures": [
+        {
+          "dimension": "asset_type",
+          "category_id": "equity",
+          "label": "Equity",
+          "weight": "1",
+          "provenance_id": "prov-manual"
+        },
+        {
+          "dimension": "sector",
+          "category_id": "broad",
+          "label": "Broad",
+          "weight": "1",
+          "provenance_id": "prov-manual"
+        },
+        {
+          "dimension": "geography",
+          "category_id": "unknown",
+          "label": "Unknown",
+          "weight": "1",
+          "provenance_id": "prov-manual"
+        }
+      ]
+    }
+  ],
+  "brokers": [
+    {
+      "broker_id": "broker-one",
+      "identity": {
+        "kind": "manual_broker",
+        "name": "Synthetic Broker One"
+      },
+      "provenance_id": "prov-manual",
+      "capabilities": [
+        {
+          "kind": "whole_quantity",
+          "capability_id": "cap-broker-one-eur-whole",
+          "quantity_unit": "asset_unit",
+          "quantity_step": "1"
+        }
+      ],
+      "fee_schedules": [
+        {
+          "fee_schedule_id": "fee-broker-one-eur-buy",
+          "capability_id": "cap-broker-one-eur-whole",
+          "side": "buy",
+          "fixed_fee": {
+            "amount": "0",
+            "currency": "EUR"
+          },
+          "rate": "0",
+          "variable_floor": {
+            "amount": "0",
+            "currency": "EUR"
+          },
+          "variable_cap": {
+            "kind": "amount",
+            "amount": {
+              "amount": "0",
+              "currency": "EUR"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "existing_cash": [
+    {
+      "source_kind": "local_broker_cash",
+      "cash_id": "cash-broker-one-eur",
+      "broker_id": "broker-one",
+      "available": {
+        "amount": "5.00",
+        "currency": "EUR"
+      },
+      "selected": {
+        "amount": "5.00",
+        "currency": "EUR"
+      },
+      "provenance_id": "prov-manual"
+    }
+  ],
+  "contributions": [],
+  "funding_routes": [],
+  "order_routes": [
+    {
+      "route_id": "route-asset-one-broker-one-buy",
+      "asset_id": "asset-one",
+      "broker_id": "broker-one",
+      "capability_id": "cap-broker-one-eur-whole",
+      "side": "buy",
+      "priority": 1,
+      "minimum_if_active": {
+        "kind": "whole_quantity",
+        "quantity": "0",
+        "unit": "asset_unit"
+      },
+      "required_minimum": {
+        "kind": "none"
+      },
+      "cap": {
+        "kind": "quantity",
+        "quantity": "10",
+        "unit": "asset_unit"
+      },
+      "execution_margin_rate": "0",
+      "fee_schedule_id": "fee-broker-one-eur-buy",
+      "provenance_id": "prov-manual"
+    }
+  ],
+  "target_weights": [
+    {
+      "asset_id": "asset-one",
+      "weight": "1"
+    }
+  ],
+  "policy": "proportional"
+}
