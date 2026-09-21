@@ -412,3 +412,75 @@ git show HEAD:<path> > <path>
 
 ⚠️ Se `git show` non basta, **ci si ferma e si chiede**: un ramo sporco costa meno di un ramo
 con una storia che nessuno può ricostruire.
+
+#### 🔴 E la regola è PERICOLOSA sul caso adiacente — trovato da B, che ci ha perso il lavoro
+
+`git show HEAD:<path> > <path>` ripristina **lo stato COMMITTATO**. Su un file che porta lavoro
+**non ancora committato**, quella riga **non annulla la modifica che volevi togliere: cancella
+tutto ciò che hai scritto.** B l'ha usata per annullare una mutazione di test e si è riscritto
+`simulation.py` da capo.
+
+> 🔑 **La regola è giusta per il caso che descrive — un file di ALTRI riformattato da
+> `dev.py format`, dove `HEAD` *è* lo stato corretto — e pericolosa per quello accanto:
+> un file TUO con lavoro in corso, dove `HEAD` è lo stato che stai superando.**
+
+✅ **Per annullare una propria mutazione temporanea**: copia in
+`~/.copilot/session-state/<id>/files/` **prima** di mutare, ripristino da lì.
+
+📌 **E la perdita non è stata silenziosa per merito del metodo, non dell'attenzione**: se n'è
+accorto il **banco di mutazioni**, perché una mutazione ha fatto fallire *anche* il test di
+un'altra — **un rosso nel posto sbagliato**. Senza quel banco sarebbe stato consegnato un
+sorgente senza guardie **con i test scritti per esse**: due verdi che si smentiscono a vicenda
+e nessuno che li confronta.
+
+### Ⓠ — uno strumento assente e uno strumento che passa producono lo stesso output
+
+**Trovato da E il 21 Set, su sé stesso.** In un worktree fresco `frontend/node_modules` manca:
+
+```
+npx tsc -p tsconfig.e2e.json --noEmit     →  0 errori
+```
+
+> 🔴 **Zero errori perché lo strumento non c'era.**
+
+🔑 **È la forma centrale della campagna nella versione più pura**: non uno strumento che
+risponde alla domanda sbagliata, ma **uno strumento assente il cui silenzio si legge come
+un'assoluzione**. E a differenza di un cancello cieco, qui **non c'è nessuna riga di codice da
+incolpare** — il difetto è l'assenza.
+
+✅ **Prima di dichiarare una baseline, prova che il cancello esista:**
+
+```bash
+ls frontend/node_modules >/dev/null || echo "NON INSTALLATO — nessun cancello frontend è valido"
+```
+
+⚠️ **E le baseline ereditate da un briefing vanno etichettate «non verificate» finché non si
+rimisurano nel proprio worktree.** E l'ha fatto: ha marcato `3 / 76-0 / 46 / 14-11-2` come
+**non verificate** invece di costruirci sopra un verdetto.
+
+📌 **Conseguenza sul metodo**: un numero che *un altro* ha misurato **su un altro albero** non è
+una misura per te — è una previsione. Confermarla costa un comando; ereditarla costa un giro.
+
+#### 🔴 La seconda metà, trovata da B: trascina giù anche i cancelli BACKEND
+
+`dev.py server` **ricostruisce il frontend** quando il build manca, e i test `api` hanno bisogno
+di quel server. Quindi senza `node_modules`:
+
+```
+dev.py test … api risk
+❌ Shared backend exited during startup (code 1)
+```
+
+⚠️ **Il sintomo non nomina né `node_modules` né `typescript`**: sembra un problema di corsia —
+porta occupata, cartella dati, permessi — ed è già costato un giro a un altro mandato su una
+causa diversa con lo stesso sintomo. La causa vera si vede solo avviando il server a mano:
+
+```
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'typescript'
+    imported from frontend/scripts/tools-codec-ast.mjs
+❌ API sync failed - aborting build
+```
+
+📌 `dev.py server --help` offre `--rebuild` per **forzare** la ricostruzione e **nulla per
+saltarla**. → **`api <qualunque>` non è eseguibile in un worktree senza `npm ci`**, e ogni numero
+`api …` ereditato da un briefing è **una previsione**.
