@@ -3254,7 +3254,11 @@
     },
     "betaBanner": {
       "title": "El análisis de riesgos está en beta.",
-      "description": "Los cálculos, los resultados y la interfaz pueden cambiar antes de la versión estable."
+      "description": "Los cálculos, los resultados y la interfaz pueden cambiar antes de la versión estable.",
+      "simulation": {
+        "title": "La simulación sigue en beta.",
+        "description": "Su resultado depende en gran medida de cuánto historial se solicita en relación con el horizonte: una ventana corta con un horizonte largo puede producir cifras inverosímiles. Todos los demás niveles del análisis de riesgos han salido de la beta."
+      }
     },
     "levels": {
       "l1": {

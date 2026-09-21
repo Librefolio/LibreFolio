@@ -3254,7 +3254,11 @@
     },
     "betaBanner": {
       "title": "L'Analisi del rischio è in beta.",
-      "description": "Calcoli, risultati e interfaccia possono cambiare prima del rilascio stabile."
+      "description": "Calcoli, risultati e interfaccia possono cambiare prima del rilascio stabile.",
+      "simulation": {
+        "title": "La simulazione è ancora in beta.",
+        "description": "Il suo esito dipende fortemente da quanta storia viene richiesta rispetto all'orizzonte: una finestra corta con un orizzonte lungo può produrre cifre implausibili. Tutti gli altri livelli dell'Analisi del rischio sono usciti dalla beta."
+      }
     },
     "levels": {
       "l1": {
