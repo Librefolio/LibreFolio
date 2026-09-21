@@ -1255,6 +1255,62 @@ da proteggere abbia gia ricevuto una delle due.
 deve salire e scendere su un DB popolato, e le suite che toccano onboarding e
 tassonomia devono passare sul risultato combinato, non sui due rami separati.
 
+### 14.8 Audit i18n globale di fine round: lo strumento va corretto prima di usarlo
+
+Il developer ha deciso il 2026-09-21 di rimandare la pulizia dei cataloghi i18n a un
+**audit globale di fine round**, invece di farla a pezzi dentro i singoli workstream.
+La decisione immediata che la origina: le ~259 chiavi `tools.pacAllocator.*`,
+`tools.allocation.*` e `tools.portfolioRebalancer.*` restano nei cataloghi dopo la
+rimozione delle UI P1, perche' descrivono concetti che la UI v2 riusera' e perche'
+`dev.py i18n add` pretende tutte e quattro le lingue a mano: rimuoverle costa circa
+**1036 stringhe da riscrivere** quando la UI arrivera'.
+
+**Prerequisito non negoziabile di quell'audit**: `dev.py i18n audit` **non e' affidabile
+come criterio di cancellazione**. Misurato sul target a `38d44b717`:
+
+```
+Total keys: 3187      Unused: 236
+  di cui PAC/allocation/rebalancer:   79
+  di cui aiExport.* e altri:         157      <- falsi positivi
+```
+
+I 157 non sono orfani. Sono chiavi usate **per indirezione**: il catalogo AI Export le
+passa come dato, non come chiamata.
+
+```
+frontend/src/lib/features/ai-export/catalog/shared.ts:133
+    displayI18nKey: 'aiExport.analysis.portfolio.pac_planning.display'
+```
+
+L'audit cerca `$t('chiave')` e vede una stringa letterale assegnata a un campo, quindi
+non la conta. **Due terzi del contatore `Unused` sono falsi positivi**, e chi eseguisse
+la pulizia fidandosi di quel numero cancellerebbe chiavi vive dell'AI Export in quattro
+lingue, con un guasto che si manifesta a runtime e lontano dalla causa.
+
+E' la stessa forma dei difetti raccolti in questo round: **un controllo che funziona per
+una proprieta' del caso** — qui la forma sintattica `$t('...')` — e **fallisce in
+silenzio** su un'altra forma d'uso legittima. Un audit che non sa vedere l'indirezione
+non misura l'uso: misura una convenzione di scrittura.
+
+**Gate dell'audit globale**, nell'ordine:
+
+1. insegnare all'audit a riconoscere l'indirezione (`*I18nKey:` e affini), oppure
+   produrre una lista di esclusione esplicita e motivata;
+2. verificare che il contatore scenda a un numero **spiegabile riga per riga**;
+3. solo allora decidere le rimozioni, con `dev.py i18n remove --dry-run` prima di ogni
+   cancellazione reale;
+4. le 4 chiavi `monetary_step` (`tools.pacAllocator.cash.monetaryStep`,
+   `.monetaryStepHint`, `tools.allocation.issues.nonpositiveMonetaryStep`,
+   `.contributionStep`) sono **sicure per misura** — il campo e' morto con il
+   normalizer P1 — ma vanno rimosse **dopo** il rientro del ramo PAC, perche' finche'
+   le UI P1 sono sul target quelle chiavi hanno 9 consumatori reali.
+
+Il punto 4 e' esso stesso un caso: la misura "zero riferimenti" era stata presa nel
+worktree dove le UI erano gia' cancellate. Lo stesso comando, eseguito sul target,
+rispondeva 9. **Un conteggio di riferimenti non e' una proprieta' del codice: e' una
+proprieta' del checkout in cui lo esegui**, e l'unico che conta e' quello in cui la
+rimozione atterra.
+
 ## Appendice A - I 25 marker attuali, senza allargare il backlog
 
 | # | Simbolo / file:riga | Relazione con il round |
