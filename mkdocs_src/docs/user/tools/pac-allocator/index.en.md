@@ -1,198 +1,238 @@
 ---
-title: PAC allocator
-description: Manually enter a periodic-investment scenario and inspect its exact initial allocation state.
+title: PAC Allocator P1
+description: Split existing cash and new contributions across target Assets as exact theoretical reporting-currency amounts.
 ---
 
-# 🧮 PAC allocator
+# 🧮 PAC Allocator P1
 
-The **PAC allocator** is the implemented manual P1 pilot for a periodic
-investment plan. You enter one complete scenario, and LibreFolio evaluates its
-initial holdings, cash, target weights, and allocation gaps.
+The **PAC Allocator** answers one question:
 
-!!! warning "Initial-state analysis only"
+> How should the liquidity available for this contribution cycle be split across my target Assets?
 
-    This pilot does not propose purchases, solve an allocation problem, route
-    orders, or decide whether trades are feasible. A `ready` result means only
-    that the initial state could be evaluated.
+Its investable budget is **existing cash plus new contributions**, valued in
+your reporting currency. It applies each target percentage to that budget and
+returns an exact theoretical monetary allocation for each Asset.
 
-## 🎯 What the pilot calculates
+It does **not** inspect current holdings when calculating the split. If your
+question is instead “How far is my invested portfolio from its desired final
+allocation?”, use the
+[Portfolio Rebalancer P1](../portfolio-rebalancer/index.md).
 
-For each asset and custody context, the backend analysis returns:
+!!! warning "Planning amounts, not trade instructions"
 
-- the exact opening quantity;
-- its value in the quote currency and report currency;
-- its current weight among the invested rows;
-- its target percentage and deviation in percentage points.
+    The result contains monetary shares of a budget. It never chooses units,
+    creates orders, recommends purchases or sales, or proves that the native
+    cash can fund a trade.
 
-The current result table presents the reporting-currency value; the backend
-contract also keeps the exact native-currency value as a separate fact.
+## 🎯 Choose the right allocation target
 
-It also reports the initial invested value, existing cash, new contributions,
-cash plus contributions, the largest absolute allocation gap, and the sum of
-squared gaps. Cash and contributions remain separate from the invested-value
-denominator: the analyzer does not pretend that uninvested money is already
-allocated.
+The two P1 allocation Tools deliberately use different totals:
 
-All values come from the current form. You can edit them and run the analysis
-again. The pilot does **not** read Asset, Broker, or Portfolio records, and it
-does not call price, FX, or other data providers.
+| Tool | Target describes | Amount used in the calculation |
+|---|---|---|
+| **PAC Allocator** | How to distribute investable liquidity now | Existing cash + new contributions, valued in the reporting currency |
+| **[Portfolio Rebalancer](../portfolio-rebalancer/index.md)** | The desired final mix of the currently invested portfolio | Current Asset value only; cash and contributions stay separate |
 
-## ✍️ Enter a scenario
+Changing holdings cannot change a PAC allocation because holdings are not part
+of its calculation request. Conversely, a PAC percentage does not describe
+your portfolio's current or final invested weight.
 
-Use a dot (`.`) as the decimal separator, without thousands separators or
-scientific notation. For example, enter `10.125`, not `10,125` or `1.0125e1`.
-Blank and zero have different meanings: blank is missing input, while `0` is a
-known exact zero.
+## 🚪 Open the Tool
 
-| Input | Unit and meaning |
-|---|---|
-| **Reporting currency** | The three-letter currency used for reporting values and the invested-value denominator, for example `EUR`. |
-| **As-of date** | Optional scenario date in `YYYY-MM-DD` form. A quote or valuation observation cannot be later than this date. No date is inferred from the clock. |
-| **Asset and custody row** | Add one row for each asset × custody context. Two custody contexts for the same instrument remain two rows with separate targets and results. |
-| **Opening quantity** | Exact, non-negative custody quantity. Short inventory is outside P1. |
-| **Native price** | Positive price in the row's quote currency. It is the price for the selected quote base quantity. |
-| **Quote base quantity** | Either `1` or `100`. Holding value is `opening quantity × native price ÷ quote base quantity`. |
-| **Target** | Percentage from `0` to `100` for that row. All row targets must total exactly `100`. |
-| **Purchase grid** | Choose **Whole quantities** or **Fractional quantities**, then enter a positive quantity step. A whole-quantity step must be an integer. This rule applies only to possible new purchases, not to opening inventory. |
-| **Quote date** | Optional `YYYY-MM-DD` observation date for the native price. An omitted date is reported rather than silently replaced with today. |
+Open **Tools** from the sidebar and choose the **PAC Allocator** card. Its Tool
+code is `pac_allocator`, its route is `/tools/pac_allocator`, and its compiled
+interface key is `pac-allocator`.
 
-The form assigns every row its own opaque row identity and maintains a canonical
-instrument identity separately. Use **Same asset, another context** when two
-rows represent the same underlying instrument: this preserves that instrument
-identity across the custody contexts. The visible name is only a label; matching
-names do not join rows or establish identity.
+The PAC Allocator and Portfolio Rebalancer are separate catalogue entries and
+separate interfaces, even though one packaged backend plugin serves both. The
+PAC backend contract and implementation are version `1.0.0`; its independently
+versioned UI is also `1.0.0`.
 
-### 💶 Cash and contributions
+A new PAC draft starts with your account's base currency as the reporting
+currency, today's local date as the analysis date, no selected Broker cash, no
+contributions, and no Assets.
 
-Enter existing cash as one amount per currency. Enter new contributions in the
-separate contribution list, also one amount per currency. The analyzer reports
-both vectors separately and combines them only in the dedicated cash total.
+## 💶 Define the investable liquidity
 
-Use **No existing cash** or **No new contributions** when the corresponding
-vector is known to be empty. Leaving a vector as **Not supplied** does not mean
-zero and produces `needs_input`. Duplicate currencies are invalid. Contributions
-must be non-negative; an opening cash debt is outside the P1 domain.
+The **Available funds** step keeps two native-currency vectors separate:
 
-### 💱 Valuation rates
+- **Existing cash** is money already available.
+- **New contributions** are amounts you plan to add.
 
-Supply an explicit rate for every non-report currency used by a holding, cash
-balance, or contribution:
+The backend values both vectors in the reporting currency with the explicit
+rates in the draft, then adds the two reporting-currency totals. That sum is
+the **investable budget**.
 
-> `1 native currency unit = rate_to_report report-currency units`
+### 🏦 Copy existing cash or enter it manually
 
-For example, `USD` with a rate of `0.9` in an `EUR` report means
-`1 USD = 0.9 EUR`. The report currency has an identity rate of `1`.
+In **Broker reserves** mode, select any accessible OWNER Broker cards whose
+cash should be included. LibreFolio asks the backend to aggregate the selected
+native balances by currency and copies that aggregate into the calculation.
+Each imported Broker balance is the **full, unscaled native reserve** for that
+Broker and currency. `ownership_share_percent` is separate display metadata
+only and does not multiply or scale the cash balance. The Broker card labels
+the amount **Full native reserve** and shows the personal-share percentage
+separately.
 
-Each rate can have an optional observation date. These rates value native
-amounts for the report; they do not exchange, transfer, merge, or otherwise move
-cash between currency pools.
+No Broker is selected by default, so the initial existing-cash vector is an
+explicit empty list. Choose **Enter amounts** if you want a fully manual
+scenario or no OWNER Broker is available. Broker-copy and manual cash are
+alternative sources; they are not silently merged.
 
-## ▶️ Run and revise
+Existing cash allows **one row per currency**. Negative existing cash is
+outside P1.
 
-1. Open **Tools**, then choose **PAC allocator**.
-2. Enter every scenario value manually, including explicit empty cash or
-   contribution vectors where appropriate.
-3. Select **Check initial state**.
-4. Review the domain state, backend findings, totals, row facts, and native cash
-   pools.
-5. After editing the draft, run the analysis again for the new revision.
+### ➕ Add one or more contributions
 
-The result contains facts about the supplied initial state only. The current
-pilot performs no database writes, creates no transactions or orders, has no
-broker routing, and runs no solver or optimization. Trade feasibility is
-explicitly **not evaluated**.
+Choose **Add contribution** for each contribution event. Every row has:
 
-## 🧭 Understand the result states
+- a native currency;
+- a non-negative exact amount;
+- a positive **monetary step** that must divide that amount exactly.
 
-A successful Tool envelope can contain a PAC result that is not `ready`. The
-four PAC domain states are:
+Several contribution rows may use the same currency. They remain visible as
+separate inputs and are summed exactly by currency in the backend result.
+Removing the last row restores the explicit empty contribution vector.
+
+The contribution monetary step is metadata for that contribution. It is not
+an Asset quantity step, and P1 does not use it to create an order.
+
+## 🧺 Choose the Assets to fund
+
+Select canonical Assets from the gallery or choose **New manual Asset**. A
+manual draft needs no database Asset, saved quote, or existing position.
+
+For PAC, selecting a catalog Asset copies its canonical identity and display
+name into the draft. The gallery can show current quote and custody context as
+source information, but neither prices nor holdings enter the PAC calculation.
+For a selected source Asset, the card also shows the saved quote provider and
+quote date when available. The calculation receives only the selected Asset
+identities, their targets, and optional future purchase-grid metadata.
+
+Each canonical Asset appears once in the PAC draft. Equal display names do not
+establish identity, and manual Assets receive their own local identities.
+
+For each Asset, **Future purchase constraints** can record:
+
+- **Whole quantities** with a positive whole-number quantity step; or
+- **Fractional quantities** with a positive decimal quantity step.
+
+These fields describe a possible future purchase grid. P1 does not convert its
+monetary allocation into quantities or round it to that grid.
+
+## 📊 Set one exact target distribution
+
+The **Liquidity distribution** DataTable has one row per selected canonical
+Asset. Enter the target percentage in the table and use the colored
+distribution bar to review the shape of the split.
+
+Targets must each be between `0` and `100` and must total **exactly `100`**.
+The interface computes the displayed total with exact decimal arithmetic, and
+the backend validates the exact total again. A rounded-looking total is not
+silently accepted.
+
+## 💱 Value currencies explicitly
+
+The valuation-rate section appears when active cash or contribution facts use
+a currency different from the reporting currency. Enter one positive rate per
+foreign currency:
+
+> 1 native currency unit = the entered number of reporting-currency units
+
+The reporting currency uses an identity rate of `1`. Other missing rates never
+default to `1`, and duplicate valuation-rate rows for one currency are
+invalid.
+
+You can enter a rate and optional source date manually, or choose **Copy rate**
+to copy the saved rate available for the analysis date. A copied value and its
+actual source date are placed in ordinary editable fields, so you can review or
+replace them before analysis. A missing date is reported for review; a source
+date after the analysis date is invalid.
+
+Rates are for valuation only. Native pools remain distinct, and LibreFolio
+does not exchange or transfer cash.
+
+## ▶️ Analyze the allocation
+
+1. Confirm the reporting currency and analysis date.
+2. Select OWNER Broker reserves or enter existing cash manually.
+3. Add any contributions, including their monetary steps.
+4. Select catalog Assets, add manual Assets, or mix both.
+5. Enter one target per Asset and make the total exactly `100%`.
+6. Resolve each displayed currency-rate requirement.
+7. Choose **Analyze PAC allocation**.
+
+The result presents human-readable diagnostics followed by:
+
+- exact reporting-currency totals for existing cash, contributions, and the
+  combined investable budget;
+- a DataTable with each Asset's target percentage and exact theoretical
+  monetary allocation;
+- native cash pools that preserve the distinction between existing cash and
+  contributions.
+
+The allocation for each target is the exact investable budget multiplied by
+that target percentage and divided by 100. Decimal strings remain
+authoritative even when the interface shortens them for display.
+
+## 🧭 Understand diagnostics
+
+A successful Tool request can still report one of four domain states:
 
 | State | Meaning |
 |---|---|
-| `ready` | The initial state is evaluable within P1. Informational findings can still be present, and the current allocation does not have to match its targets. |
-| `needs_input` | Required information is missing or incomplete, such as an unsupplied cash vector or a valuation rate for a foreign currency. |
-| `invalid` | Supplied data is malformed or inconsistent, such as scientific decimal notation, duplicate currencies, an observation after the as-of date, or targets that do not total `100`. |
-| `unsupported` | The input is understood but outside the P1 domain, such as quote base `3`, short inventory, opening cash debt, or a value beyond the supported numeric or currency bounds. |
+| `ready` | Every dependency needed for this P1 calculation is available. Informational findings can still be present. |
+| `needs_input` | A required value is missing, such as an Asset target or foreign-currency valuation rate. |
+| `invalid` | A supplied value or relationship is inconsistent, such as a target total other than exactly `100`. |
+| `unsupported` | The draft is understood but outside P1, such as negative existing cash or a value outside the supported exact numeric domain. |
 
-Backend findings point to the affected field. Correct the draft and submit a new
-revision; a non-ready state is still a valid analysis response, not a platform
-failure.
+The interface translates backend issue codes into friendly messages and keeps
+technical details available in a disclosure. Platform failures such as a
+timeout, unavailable Tool, or incompatible version are separate from these
+financial-domain states.
 
-Platform errors are separate. A queue or compatibility error, timeout, worker
-failure, invalid output, transport failure, or stopped wait means that the
-analysis did not deliver an accepted PAC result. In particular, a timeout is
-**not** evidence that the scenario is infeasible. The interface preserves the
-draft so you can review it or try again.
+## 🔄 Keep copied facts and results current
 
-If you edit the draft while a request is running, that response is ignored
-because it belongs to an older revision. A displayed result also becomes marked
-as stale after a later edit. Re-run the analyzer rather than treating a stale
-result as the answer to the current draft.
+Changing the analysis date or refreshing the source can mark a selected
+catalog Asset as **Outdated** rather than silently replacing a customized
+draft. Copied Broker cash is not submitted while its source request is still
+loading.
 
-An invested value of exactly zero is a valid known total. However, weights,
-deviations, and gap scores have no non-zero denominator, so they remain
-unavailable. This does not mean “no trade needed” or “optimal.”
+Source and calculation requests are guarded by request sequence, draft
+revision, selected date, Broker selection, and signed-in account generation.
+Late or superseded responses are ignored. After you edit an analyzed draft,
+the displayed result receives an amber stale warning until you run it again.
 
-## 🔢 Exact and formatted views
+Removing a source-linked Asset after changing its target or purchase-grid
+settings opens an amber confirmation warning so that customization is not
+discarded unnoticed.
 
-Use **Exact** when reconciling a result. Financial decimals are authoritative
-backend decimal strings, not browser floating-point numbers. Exact ratios are
-returned with their numerator, denominator, and unit; percentage points (`pp`)
-and squared percentage points (`pp²`) remain distinct.
+## 🚫 P1 boundaries
 
-Use **Formatted** for a shorter, easier-to-read presentation. It may shorten a
-decimal or show the backend ratio approximation, but it does not replace or
-change the exact result. The backend decimal strings and exact ratio
-numerator/denominator remain authoritative in both cases. In a `ready` result,
-**Normalized input and units** shows the canonical input returned by the
-backend.
+PAC Allocator P1 has:
 
-The purchase grid never rounds existing inventory. For example, an opening
-quantity of `10.125` remains `10.125` even if that row uses a whole-quantity
-purchase grid with step `1`; the backend reports an informational
-`inventory_off_buy_grid` finding instead.
+- no solver, optimization, or optimality claim;
+- no operative quantities, purchases, sales, or orders;
+- no Broker routing or native-cash feasibility check;
+- no automatic FX transfer or execution;
+- no tax recommendation;
+- no short positions, leverage, or opening cash debt.
 
-## 🧪 Synthetic manual example
+The P1 output schema cannot represent solver, optimization, optimality, or
+operational-feasibility concepts; it does not emit `not_run` or
+`not_evaluated` fields for them.
 
-Consider two custody contexts for the same synthetic instrument:
+## 🔒 Protect private financial data
 
-| Row | Opening quantity | Native quote | Target | Purchase grid |
-|---|---:|---:|---:|---|
-| `Alfa / X` | `10.125` | `10 EUR` per `1` unit | `50%` | Whole, step `1` |
-| `Alfa / Y` | `0` | `10 EUR` per `1` unit | `50%` | Fractional, step `0.001` |
+The optional source read is limited to catalog metadata plus your OWNER
+custody and Broker-cash context. The calculation receives only the scenario
+currently visible in the draft; it does not receive a live portfolio or
+database handle and does not write back to Assets, Brokers, or transactions.
 
-Use `EUR` as the report currency and `2026-09-08` as the as-of, quote, and rate
-date. Enter existing cash of `0.005 EUR` and `10 USD`, a new contribution of
-`5 EUR`, and the valuation rate `1 USD = 0.9 EUR`.
-
-The analyzer reports:
-
-- initial invested value: `101.25 EUR`;
-- current weights: `100%` for `Alfa / X` and `0%` for `Alfa / Y`;
-- target deviations: `+50 pp` and `-50 pp`;
-- largest absolute gap: `50 pp`;
-- sum of squared gaps: `5000 pp²`;
-- existing cash value: `9.005 EUR`;
-- new contributions: `5 EUR`;
-- cash plus contributions: `14.005 EUR`.
-
-The `10 USD` remains a native USD cash pool; `0.9` is used only to report its
-value as `9 EUR`. The `10.125` opening quantity is retained exactly and receives
-an off-grid information finding. No instruction is produced for spending the
-`14.005 EUR`.
-
-## 🔒 Privacy and safety
-
-Treat names, quantities, prices, cash, and rates as financial data. The form
-sends the scenario to your LibreFolio backend for this calculation, so use
-synthetic labels when real names are unnecessary and protect any screenshots or
-copied exact output.
-
-The PAC calculation itself receives the submitted scenario, not access to your
-Asset, Broker, or Portfolio records or data providers. It does not save the
-draft back to those records. Its result is analysis, not investment advice or
-authorization to trade.
+Avoid putting personal portfolio values, Broker exports, account identifiers,
+or screenshots of real holdings into examples or support messages.
 
 ## 🔗 Related
 
+- [Portfolio Rebalancer P1](../portfolio-rebalancer/index.md)
 - [Tools overview](../index.md)

@@ -27,11 +27,21 @@ class ToolExecutionError(RuntimeError):
 
 
 @dataclass(frozen=True, slots=True)
+class ToolEngineWindow:
+    """One cooperative engine budget inside the Tool soft wall."""
+
+    deadline: float
+    timeout_ms: int
+    post_engine_reserve_ms: int
+
+
+@dataclass(frozen=True, slots=True)
 class ToolExecutionContext:
     execution_id: str
     soft_deadline: float
     hard_deadline: float
     cancelled: Callable[[], bool]
+    engine_timeout_ms: int = 4_000
 
     def checkpoint(self) -> None:
         if self.cancelled():
@@ -39,33 +49,56 @@ class ToolExecutionContext:
         if time.monotonic() >= self.soft_deadline:
             raise ToolExecutionError("execution_limit", retryable=True)
 
+    def remaining_soft_ms(self) -> int:
+        return max(0, int((self.soft_deadline - time.monotonic()) * 1000))
 
-class ToolPlugin[InputT: BaseModel, OutputT: BaseModel](ABC):
-    """A packaged pure computation; inputs never carry ambient authority."""
+    def claim_engine_window(self, *, post_engine_reserve_ms: int) -> ToolEngineWindow:
+        """Reserve a full engine window plus caller-owned post-processing time."""
+        if type(post_engine_reserve_ms) is not int or post_engine_reserve_ms < 0:
+            raise ValueError("Post-engine reserve must be a non-negative integer")
+        self.checkpoint()
+        started = time.monotonic()
+        required_ms = self.engine_timeout_ms + post_engine_reserve_ms
+        if (self.soft_deadline - started) * 1000 < required_ms:
+            raise ToolExecutionError("execution_limit", retryable=True)
+        return ToolEngineWindow(
+            deadline=started + self.engine_timeout_ms / 1000,
+            timeout_ms=self.engine_timeout_ms,
+            post_engine_reserve_ms=post_engine_reserve_ms,
+        )
 
-    tool_code: ClassVar[str]
+
+@dataclass(frozen=True, slots=True)
+class ToolService:
+    """One public calculation exposed by a packaged plugin."""
+
+    tool_code: str
+    name: str
+    description: str
+    category: str
+    icon_key: str
+    ui: ToolUIDescriptor
+    documentation: ToolDocumentation
+    operations: tuple[ToolOperationPolicy, ...]
+    input_type: object
+    output_type: object
+    name_i18n_key: str | None = None
+    description_i18n_key: str | None = None
+
+    def input_adapter(self) -> TypeAdapter:
+        return TypeAdapter(self.input_type)
+
+    def output_adapter(self) -> TypeAdapter:
+        return TypeAdapter(self.output_type)
+
+
+class ToolPlugin(ABC):
+    """A packaged pure computation exposing one or more public services."""
+
     contract_version: ClassVar[str]
     implementation_version: ClassVar[str]
-    name: ClassVar[str]
-    description: ClassVar[str]
-    name_i18n_key: ClassVar[str | None] = None
-    description_i18n_key: ClassVar[str | None] = None
-    category: ClassVar[str]
-    icon_key: ClassVar[str]
-    ui: ClassVar[ToolUIDescriptor]
-    documentation: ClassVar[ToolDocumentation]
-    operations: ClassVar[tuple[ToolOperationPolicy, ...]]
-    input_type: ClassVar[object]
-    output_type: ClassVar[object]
-
-    @classmethod
-    def input_adapter(cls) -> TypeAdapter[InputT]:
-        return TypeAdapter[InputT](cls.input_type)
-
-    @classmethod
-    def output_adapter(cls) -> TypeAdapter[OutputT]:
-        return TypeAdapter[OutputT](cls.output_type)
+    services: ClassVar[tuple[ToolService, ...]]
 
     @abstractmethod
-    def compute(self, parameters: InputT, context: ToolExecutionContext) -> OutputT:
+    def compute(self, tool_code: str, parameters: BaseModel, context: ToolExecutionContext) -> BaseModel:
         """Return a complete result; all child work belongs to this job."""

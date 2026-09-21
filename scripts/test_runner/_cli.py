@@ -2,6 +2,9 @@
 CLI: argument parsers, dispatch, main entry point.
 """
 
+# Runner subsystems stay lazy to avoid registry cycles and optional setup imports.
+# ruff: noqa: PLC0415
+
 import argparse
 import contextlib
 import os
@@ -65,7 +68,6 @@ def generate_epilog(category: str) -> str:
     for action, info in cat_data.items():
         if action == "_meta":
             continue
-        name = info.get("name", action)
         desc = info.get("desc", "")
         accepts_names = info.get("test_names", False)
         names_hint = " [TEST_NAME]" if accepts_names else ""
@@ -180,7 +182,7 @@ def _check_orphan_tests() -> int:  # noqa: C901 — flat sequential scan/report 
         for m in re.finditer(r'test_scripts/([^"\']+\.py)', content):
             all_registered_paths.add(m.group(1))
 
-    for test_dir, runner_file in backend_dirs.items():
+    for test_dir, _runner_file in backend_dirs.items():
         dir_path = project_root / "backend" / "test_scripts" / test_dir
         if not dir_path.exists():
             continue
@@ -1084,6 +1086,9 @@ def _run_passes(args, test_names, verbose: bool) -> tuple:
     so the order — backend up, then pre-passes, then serial — cannot drift apart
     between them.
     """
+    if getattr(args, "list_tests", False):
+        return dispatch_to_category(args.category, test_names, verbose, args), True, True
+
     try:
         if not _run_exclusive_setups(args):
             return 1, False, False

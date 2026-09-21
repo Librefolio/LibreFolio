@@ -227,6 +227,23 @@ beforeEach(() => {
     vi.mocked(getConfiguredPairSlugs).mockReturnValue(new Set());
 });
 
+describe('FxPairAddModal — tour preview', () => {
+    it('keeps the pair selector anchor explanatory while removing save and every mutation path', async () => {
+        const {oncreated, onsynced, onclose} = mount({tourPreview: true});
+
+        expect(await screen.findByTestId('fx-tour-pair-selectors')).toBeVisible();
+        await waitFor(() => expect(findConversionPaths).toHaveBeenCalled());
+        expect(screen.queryByTestId('fx-add-pair-save')).toBeNull();
+        expect(createRoutes).not.toHaveBeenCalled();
+        expect(deleteRoutes).not.toHaveBeenCalled();
+        expect(syncRates).not.toHaveBeenCalled();
+        expect(oncreated).not.toHaveBeenCalled();
+        expect(onsynced).not.toHaveBeenCalled();
+        expect(onclose).not.toHaveBeenCalled();
+        expect(screen.getByTestId('fx-add-pair-modal')).toBeVisible();
+    });
+});
+
 describe('FxPairAddModal — configuration before background sync', () => {
     it('keeps creation pending until the POST commits and ignores a second save activation', async () => {
         const posted = deferred<Awaited<ReturnType<typeof zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post>>>();

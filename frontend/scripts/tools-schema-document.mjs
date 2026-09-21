@@ -5,14 +5,32 @@ const sourceKey = 'x-librefolio-tool-source';
 const referencePrefix = '#/components/schemas/';
 const identifierPattern = /^[A-Za-z][A-Za-z0-9_]*(?![\s\S])/u;
 const scalarPattern = /^[^\uD800-\uDFFF]*(?![\s\S])/u;
-const annotations = new Set([
-    'title', 'description', 'default', 'examples', 'deprecated', 'readOnly', 'writeOnly',
-]);
+const annotations = new Set(['title', 'description', 'default', 'examples', 'deprecated', 'readOnly', 'writeOnly']);
 const supportedKeywords = new Set([
-    ...annotations, '$ref', 'type', 'properties', 'required', 'additionalProperties',
-    'items', 'oneOf', 'anyOf', 'allOf', 'discriminator', 'enum', 'const',
-    'minLength', 'maxLength', 'pattern', 'format', 'minimum', 'maximum',
-    'exclusiveMinimum', 'exclusiveMaximum', 'multipleOf', 'minItems', 'maxItems',
+    ...annotations,
+    '$ref',
+    'type',
+    'properties',
+    'required',
+    'additionalProperties',
+    'items',
+    'oneOf',
+    'anyOf',
+    'allOf',
+    'discriminator',
+    'enum',
+    'const',
+    'minLength',
+    'maxLength',
+    'pattern',
+    'format',
+    'minimum',
+    'maximum',
+    'exclusiveMinimum',
+    'exclusiveMaximum',
+    'multipleOf',
+    'minItems',
+    'maxItems',
 ]);
 const stringFormats = new Set(['date', 'date-time', 'email', 'uri', 'uuid']);
 
@@ -42,11 +60,9 @@ export function assertJson(value, path = '$') {
 }
 
 export function componentName(reference, schemas) {
-    invariant(typeof reference === 'string' && reference.startsWith(referencePrefix),
-        `non-component reference ${JSON.stringify(reference)}`);
+    invariant(typeof reference === 'string' && reference.startsWith(referencePrefix), `non-component reference ${JSON.stringify(reference)}`);
     const name = reference.slice(referencePrefix.length);
-    invariant(identifierPattern.test(name) && Object.hasOwn(schemas, name),
-        `missing or invalid component ${JSON.stringify(name)}`);
+    invariant(identifierPattern.test(name) && Object.hasOwn(schemas, name), `missing or invalid component ${JSON.stringify(name)}`);
     return name;
 }
 
@@ -79,117 +95,98 @@ export function dereference(schema, schemas) {
 
 function integerBound(schema, keyword, path) {
     if (schema[keyword] === undefined) return;
-    invariant(Number.isSafeInteger(schema[keyword]) && schema[keyword] >= 0,
-        `unsupported ${keyword} at ${path}`);
+    invariant(Number.isSafeInteger(schema[keyword]) && schema[keyword] >= 0, `unsupported ${keyword} at ${path}`);
 }
 
 function validateShape(schema, path) {
     invariant(isRecord(schema), `boolean or missing schema at ${path}`);
     for (const keyword of Object.keys(schema)) {
-        invariant(supportedKeywords.has(keyword) || keyword.startsWith('x-'),
-            `unsupported keyword ${keyword} at ${path}`);
+        invariant(supportedKeywords.has(keyword) || keyword.startsWith('x-'), `unsupported keyword ${keyword} at ${path}`);
     }
     if (schema.$ref !== undefined) {
-        invariant(Object.keys(schema).every((key) =>
-            key === '$ref' || annotations.has(key) || key.startsWith('x-')),
-        `validation siblings on $ref require an explicit supported composition at ${path}`);
+        invariant(
+            Object.keys(schema).every((key) => key === '$ref' || annotations.has(key) || key.startsWith('x-')),
+            `validation siblings on $ref require an explicit supported composition at ${path}`,
+        );
         return;
     }
     const compositions = ['oneOf', 'anyOf', 'allOf'].filter((key) => schema[key] !== undefined);
     if (compositions.length) {
-        invariant(compositions.length === 1 && schema.type === undefined,
-            `mixed composition/type at ${path}`);
+        invariant(compositions.length === 1 && schema.type === undefined, `mixed composition/type at ${path}`);
         const keyword = compositions[0];
-        invariant(Array.isArray(schema[keyword]) && schema[keyword].length > 0,
-            `empty or invalid ${keyword} at ${path}`);
-        invariant(keyword !== 'oneOf' || schema.discriminator !== undefined || schema.oneOf.length === 1,
-            `oneOf without a discriminator cannot be widened to anyOf at ${path}`);
-        invariant(Object.keys(schema).every((key) =>
-            key === keyword || key === 'discriminator' || annotations.has(key) || key.startsWith('x-')),
-        `unsupported constraint on ${keyword} at ${path}`);
+        invariant(Array.isArray(schema[keyword]) && schema[keyword].length > 0, `empty or invalid ${keyword} at ${path}`);
+        invariant(keyword !== 'oneOf' || schema.discriminator !== undefined || schema.oneOf.length === 1, `oneOf without a discriminator cannot be widened to anyOf at ${path}`);
+        invariant(
+            Object.keys(schema).every((key) => key === keyword || key === 'discriminator' || annotations.has(key) || key.startsWith('x-')),
+            `unsupported constraint on ${keyword} at ${path}`,
+        );
         return;
     }
-    invariant(['object', 'array', 'string', 'integer', 'number', 'boolean', 'null'].includes(schema.type),
-        `untyped or unsupported schema at ${path}`);
+    invariant(['object', 'array', 'string', 'integer', 'number', 'boolean', 'null'].includes(schema.type), `untyped or unsupported schema at ${path}`);
     if (schema.type === 'object') {
         if (isRecord(schema.additionalProperties)) {
-            invariant(schema.properties === undefined || Object.keys(schema.properties).length === 0,
-                `mixed named properties and dictionary values at ${path}`);
-            invariant(schema.required === undefined || schema.required.length === 0,
-                `required dictionary keys at ${path}`);
+            invariant(schema.properties === undefined || Object.keys(schema.properties).length === 0, `mixed named properties and dictionary values at ${path}`);
+            invariant(schema.required === undefined || schema.required.length === 0, `required dictionary keys at ${path}`);
         } else {
-            invariant(schema.additionalProperties === false && isRecord(schema.properties),
-                `objects must be extra-forbid models or typed dictionaries at ${path}`);
-            invariant(!Object.hasOwn(schema.properties, '__proto__'),
-                `a named __proto__ model field needs a concrete-object preservation strategy at ${path}`);
+            invariant(schema.additionalProperties === false && isRecord(schema.properties), `objects must be extra-forbid models or typed dictionaries at ${path}`);
+            invariant(!Object.hasOwn(schema.properties, '__proto__'), `a named __proto__ model field needs a concrete-object preservation strategy at ${path}`);
             const required = schema.required ?? [];
-            invariant(Array.isArray(required) && new Set(required).size === required.length &&
-                required.every((key) => typeof key === 'string' && Object.hasOwn(schema.properties, key)),
-            `invalid required properties at ${path}`);
+            invariant(Array.isArray(required) && new Set(required).size === required.length && required.every((key) => typeof key === 'string' && Object.hasOwn(schema.properties, key)), `invalid required properties at ${path}`);
         }
     }
     if (schema.type === 'array') {
         invariant(isRecord(schema.items), `untyped array items at ${path}`);
         integerBound(schema, 'minItems', path);
         integerBound(schema, 'maxItems', path);
-        invariant((schema.minItems ?? 0) <= (schema.maxItems ?? Infinity),
-            `inverted array bounds at ${path}`);
+        invariant((schema.minItems ?? 0) <= (schema.maxItems ?? Infinity), `inverted array bounds at ${path}`);
     }
     if (schema.type === 'string') {
         integerBound(schema, 'minLength', path);
         integerBound(schema, 'maxLength', path);
-        invariant((schema.minLength ?? 0) <= (schema.maxLength ?? Infinity),
-            `inverted string bounds at ${path}`);
+        invariant((schema.minLength ?? 0) <= (schema.maxLength ?? Infinity), `inverted string bounds at ${path}`);
         if (schema.pattern !== undefined) {
             invariant(typeof schema.pattern === 'string', `invalid string pattern at ${path}`);
             portablePattern(schema.pattern);
         }
-        invariant(schema.format === undefined || stringFormats.has(schema.format),
-            `unsupported string format ${schema.format} at ${path}`);
+        invariant(schema.format === undefined || stringFormats.has(schema.format), `unsupported string format ${schema.format} at ${path}`);
     }
     for (const keyword of ['minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum', 'multipleOf']) {
         if (schema[keyword] === undefined) continue;
-        invariant(['integer', 'number'].includes(schema.type) && Number.isFinite(schema[keyword]),
-            `non-numeric ${keyword} at ${path}`);
-        invariant(keyword !== 'multipleOf' || schema[keyword] > 0,
-            `non-positive multipleOf at ${path}`);
+        invariant(['integer', 'number'].includes(schema.type) && Number.isFinite(schema[keyword]), `non-numeric ${keyword} at ${path}`);
+        invariant(keyword !== 'multipleOf' || schema[keyword] > 0, `non-positive multipleOf at ${path}`);
     }
     for (const [keywords, type] of [
         [['minLength', 'maxLength', 'pattern', 'format'], 'string'],
         [['minItems', 'maxItems', 'items'], 'array'],
         [['properties', 'required', 'additionalProperties'], 'object'],
     ]) {
-        invariant(schema.type === type || keywords.every((key) => schema[key] === undefined),
-            `constraint for ${type} on ${schema.type} at ${path}`);
+        invariant(schema.type === type || keywords.every((key) => schema[key] === undefined), `constraint for ${type} on ${schema.type} at ${path}`);
     }
     if (schema.const !== undefined || Object.hasOwn(schema, 'const')) {
-        invariant(schema.enum === undefined || (Array.isArray(schema.enum) &&
-            schema.enum.some((value) => Object.is(value, schema.const))), `inconsistent const/enum at ${path}`);
+        invariant(schema.enum === undefined || (Array.isArray(schema.enum) && schema.enum.some((value) => Object.is(value, schema.const))), `inconsistent const/enum at ${path}`);
         schema.enum = [schema.const];
         delete schema.const;
     }
     if (schema.enum !== undefined) {
-        invariant(Array.isArray(schema.enum) && schema.enum.length > 0,
-            `empty enum at ${path}`);
-        invariant(new Set(schema.enum.map((value) => JSON.stringify(value))).size === schema.enum.length,
-            `duplicate enum member at ${path}`);
+        invariant(Array.isArray(schema.enum) && schema.enum.length > 0, `empty enum at ${path}`);
+        invariant(new Set(schema.enum.map((value) => JSON.stringify(value))).size === schema.enum.length, `duplicate enum member at ${path}`);
         for (const value of schema.enum) {
             const expected = schema.type === 'integer' ? 'number' : schema.type;
-            invariant(expected === 'null' ? value === null : typeof value === expected &&
-                ['string', 'number', 'boolean'].includes(expected), `enum type mismatch at ${path}`);
+            invariant(expected === 'null' ? value === null : typeof value === expected && ['string', 'number', 'boolean'].includes(expected), `enum type mismatch at ${path}`);
             if (schema.type === 'integer') invariant(Number.isInteger(value), `non-integer enum at ${path}`);
             if (typeof value === 'string') {
-                invariant(unicodePattern(schema.minLength, schema.maxLength).test(value) &&
-                    (schema.pattern === undefined || new RegExp(portablePattern(schema.pattern), 'u').test(value)),
-                `enum and string constraints disagree at ${path}`);
+                invariant(unicodePattern(schema.minLength, schema.maxLength).test(value) && (schema.pattern === undefined || new RegExp(portablePattern(schema.pattern), 'u').test(value)), `enum and string constraints disagree at ${path}`);
                 invariant(schema.format === undefined, `formatted enums are unsupported at ${path}`);
             }
             if (typeof value === 'number') {
-                invariant((schema.minimum === undefined || value >= schema.minimum) &&
-                    (schema.maximum === undefined || value <= schema.maximum) &&
-                    (schema.exclusiveMinimum === undefined || value > schema.exclusiveMinimum) &&
-                    (schema.exclusiveMaximum === undefined || value < schema.exclusiveMaximum) &&
-                    schema.multipleOf === undefined, `enum and number constraints disagree at ${path}`);
+                invariant(
+                    (schema.minimum === undefined || value >= schema.minimum) &&
+                        (schema.maximum === undefined || value <= schema.maximum) &&
+                        (schema.exclusiveMinimum === undefined || value > schema.exclusiveMinimum) &&
+                        (schema.exclusiveMaximum === undefined || value < schema.exclusiveMaximum) &&
+                        schema.multipleOf === undefined,
+                    `enum and number constraints disagree at ${path}`,
+                );
             }
         }
     }
@@ -210,20 +207,15 @@ export function portablePattern(pattern) {
         if (character === '\\') {
             const escaped = pattern[++index];
             invariant(escaped !== undefined, 'trailing pattern escape');
-            invariant(!['w', 'W', 's', 'S', 'b', 'B', 'A', 'z', 'Z'].includes(escaped),
-                `pattern escape \\${escaped} has no verified cross-engine mapping`);
-            converted += escaped === 'd' ? '\\p{Decimal_Number}'
-                : escaped === 'D' ? '\\P{Decimal_Number}' : `\\${escaped}`;
+            invariant(!['w', 'W', 's', 'S', 'b', 'B', 'A', 'z', 'Z'].includes(escaped), `pattern escape \\${escaped} has no verified cross-engine mapping`);
+            converted += escaped === 'd' ? '\\p{Decimal_Number}' : escaped === 'D' ? '\\P{Decimal_Number}' : `\\${escaped}`;
         } else {
             if (character === '[') inClass = true;
             if (character === ']') inClass = false;
-            converted += character === '$' && !inClass ? '(?![\\s\\S])'
-                : character === '.' && !inClass ? '[^\\n]' : character;
+            converted += character === '$' && !inClass ? '(?![\\s\\S])' : character === '.' && !inClass ? '[^\\n]' : character;
         }
     }
-    invariant(!pattern.replaceAll('(?:', '(').includes('(?') && !pattern.includes('&&') &&
-        !pattern.includes('--') && !pattern.includes('~~'),
-    'pattern flags, lookarounds and class set operations need an explicit portable profile');
+    invariant(!pattern.replaceAll('(?:', '(').includes('(?') && !pattern.includes('&&') && !pattern.includes('--') && !pattern.includes('~~'), 'pattern flags, lookarounds and class set operations need an explicit portable profile');
     // Non-capturing groups have identical semantics in the two engines.
     new RegExp(converted, 'u');
     return converted;
@@ -242,33 +234,25 @@ export function discriminatorOptions(schemas, rootNames) {
             if (schema.$ref !== undefined) pending.push(componentName(schema.$ref, schemas));
             if (schema.discriminator === undefined) return;
             const {propertyName, mapping} = schema.discriminator;
-            invariant(typeof propertyName === 'string' && isRecord(mapping) &&
-                Array.isArray(schema.oneOf) && schema.oneOf.length > 1, 'invalid discriminator');
+            invariant(typeof propertyName === 'string' && isRecord(mapping) && Array.isArray(schema.oneOf) && schema.oneOf.length > 1, 'invalid discriminator');
             const values = new Set();
             for (const branch of schema.oneOf) {
-                invariant(isRecord(branch) && typeof branch.$ref === 'string',
-                    'discriminator options must be named model references');
+                invariant(isRecord(branch) && typeof branch.$ref === 'string', 'discriminator options must be named model references');
                 const optionName = componentName(branch.$ref, schemas);
                 const model = dereference(branch, schemas);
                 const field = model.properties?.[propertyName];
-                invariant(model.type === 'object' && model.additionalProperties === false &&
-                    model.required?.includes(propertyName) && isRecord(field) && !Object.hasOwn(field, 'default'),
-                `optional or non-strict discriminator ${optionName}.${propertyName}`);
+                invariant(model.type === 'object' && model.additionalProperties === false && model.required?.includes(propertyName) && isRecord(field) && !Object.hasOwn(field, 'default'), `optional or non-strict discriminator ${optionName}.${propertyName}`);
                 const tag = dereference(field, schemas);
                 const literals = Object.hasOwn(tag, 'const') ? [tag.const] : tag.enum;
-                invariant(!Object.hasOwn(tag, 'default') && Array.isArray(literals) &&
-                    literals.length > 0 && literals.every((value) => typeof value === 'string'),
-                `non-literal discriminator ${optionName}.${propertyName}`);
+                invariant(!Object.hasOwn(tag, 'default') && Array.isArray(literals) && literals.length > 0 && literals.every((value) => typeof value === 'string'), `non-literal discriminator ${optionName}.${propertyName}`);
                 for (const value of literals) {
-                    invariant(!values.has(value) && mapping[value] === branch.$ref,
-                        `duplicate or inconsistent discriminator mapping ${value}`);
+                    invariant(!values.has(value) && mapping[value] === branch.$ref, `duplicate or inconsistent discriminator mapping ${value}`);
                     values.add(value);
                 }
                 if (!options.has(optionName)) options.set(optionName, new Map());
                 const fields = options.get(optionName);
                 if (fields.has(propertyName)) {
-                    invariant(JSON.stringify(fields.get(propertyName)) === JSON.stringify(literals),
-                        `inconsistent discriminator declaration ${optionName}.${propertyName}`);
+                    invariant(JSON.stringify(fields.get(propertyName)) === JSON.stringify(literals), `inconsistent discriminator declaration ${optionName}.${propertyName}`);
                 }
                 fields.set(propertyName, literals);
             }
@@ -280,44 +264,49 @@ export function discriminatorOptions(schemas, rootNames) {
 
 export function prepareToolDocument(document) {
     assertJson(document);
-    invariant(document.openapi === '3.1.0' && isRecord(document.paths) &&
-        Object.keys(document.paths).length === 0, 'expected a build-only OpenAPI 3.1 document with paths:{}');
+    invariant(document.openapi === '3.1.0' && isRecord(document.paths) && Object.keys(document.paths).length === 0, 'expected a build-only OpenAPI 3.1 document with paths:{}');
     const manifest = document[manifestKey];
     const schemas = document.components?.schemas;
-    invariant(isRecord(manifest) && manifest.manifestVersion === 1 &&
-        Array.isArray(manifest.tools) && isRecord(manifest.transport) && isRecord(schemas),
-    'missing or unsupported Tool manifest');
+    invariant(isRecord(manifest) && manifest.manifestVersion === 2 && Array.isArray(manifest.tools) && isRecord(manifest.transport) && isRecord(schemas), 'missing or unsupported Tool manifest');
     const roots = new Set();
     const identities = new Set();
     for (const entry of manifest.tools) {
-        invariant(isRecord(entry) && typeof entry.toolCode === 'string' &&
-            typeof entry.contractVersion === 'string' && typeof entry.schemaFingerprint === 'string' &&
-            /^[a-f0-9]{64}(?![\s\S])/u.test(entry.schemaFingerprint) &&
-            typeof entry.componentKey === 'string' && entry.componentKey.length > 0 &&
-            Number.isSafeInteger(entry.uiContractVersion) && entry.uiContractVersion > 0 &&
-            Array.isArray(entry.operations) && entry.operations.length > 0 &&
-            entry.operations.every((operation) => typeof operation === 'string') &&
-            new Set(entry.operations).size === entry.operations.length, 'invalid Tool manifest entry');
+        invariant(
+            isRecord(entry) &&
+                typeof entry.toolCode === 'string' &&
+                typeof entry.contractVersion === 'string' &&
+                typeof entry.schemaFingerprint === 'string' &&
+                /^[a-f0-9]{64}(?![\s\S])/u.test(entry.schemaFingerprint) &&
+                typeof entry.componentKey === 'string' &&
+                entry.componentKey.length > 0 &&
+                typeof entry.uiVersion === 'string' &&
+                /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?(?![\s\S])/u.test(entry.uiVersion) &&
+                Array.isArray(entry.operations) &&
+                entry.operations.length > 0 &&
+                entry.operations.every((operation) => typeof operation === 'string') &&
+                new Set(entry.operations).size === entry.operations.length,
+            'invalid Tool manifest entry',
+        );
         const identity = JSON.stringify([entry.toolCode, entry.contractVersion]);
         invariant(!identities.has(identity), `duplicate Tool identity ${identity}`);
         identities.add(identity);
-        for (const [role, mode] of [['input', 'validation'], ['output', 'serialization']]) {
+        for (const [role, mode] of [
+            ['input', 'validation'],
+            ['output', 'serialization'],
+        ]) {
             const name = componentName(entry[role], schemas);
             invariant(schemas[name][sourceKey]?.mode === mode, `incorrect ${role} schema mode`);
             invariant(!roots.has(name), `shared Tool root ${name}`);
             roots.add(name);
         }
     }
-    const roles = {catalog: 'serialization', computeRequest: 'validation',
-        computeResponse: 'serialization', diagnostics: 'serialization'};
+    const roles = {catalog: 'serialization', computeRequest: 'validation', computeResponse: 'serialization', diagnostics: 'serialization'};
     invariant(Object.keys(manifest.transport).length === Object.keys(roles).length, 'unknown transport roles');
     for (const [role, mode] of Object.entries(roles)) {
         const entry = manifest.transport[role];
-        invariant(isRecord(entry) && entry.mode === mode && typeof entry.model === 'string' &&
-            identifierPattern.test(entry.model), `invalid transport role ${role}`);
+        invariant(isRecord(entry) && entry.mode === mode && typeof entry.model === 'string' && identifierPattern.test(entry.model), `invalid transport role ${role}`);
         const name = componentName(entry.schema, schemas);
-        invariant(schemas[name][sourceKey]?.mode === mode && !roots.has(name),
-            `invalid transport root ${role}`);
+        invariant(schemas[name][sourceKey]?.mode === mode && !roots.has(name), `invalid transport root ${role}`);
         roots.add(name);
     }
     const adapted = structuredClone(document);
@@ -325,10 +314,8 @@ export function prepareToolDocument(document) {
     for (const [name, schema] of Object.entries(adaptedSchemas)) {
         invariant(identifierPattern.test(name), `component name would be normalized by the generator: ${name}`);
         const source = schema[sourceKey];
-        invariant(isRecord(source) && ['validation', 'serialization'].includes(source.mode) &&
-            roots.has(componentName(source.root, adaptedSchemas)), `unowned component ${name}`);
-        invariant(adaptedSchemas[componentName(source.root, adaptedSchemas)][sourceKey].mode === source.mode,
-            `cross-mode component ${name}`);
+        invariant(isRecord(source) && ['validation', 'serialization'].includes(source.mode) && roots.has(componentName(source.root, adaptedSchemas)), `unowned component ${name}`);
+        invariant(adaptedSchemas[componentName(source.root, adaptedSchemas)][sourceKey].mode === source.mode, `cross-mode component ${name}`);
         walkSchemas(schema, (node) => {
             validateShape(node, name);
             if (source.mode === 'serialization') delete node.default;
@@ -359,11 +346,10 @@ export function generatorSchemaRefiner(schema) {
     const escape = (value) => JSON.stringify(value).slice(1, -1);
     const refined = {...schema};
     if (Array.isArray(schema.enum)) {
-        refined.enum = schema.enum.map((value) => typeof value === 'string' ? escape(value) : value);
+        refined.enum = schema.enum.map((value) => (typeof value === 'string' ? escape(value) : value));
     }
     if (isRecord(schema.properties)) {
-        refined.properties = Object.fromEntries(Object.entries(schema.properties).map(([key, value]) =>
-            [escape(key), value]));
+        refined.properties = Object.fromEntries(Object.entries(schema.properties).map(([key, value]) => [escape(key), value]));
         if (schema.required) refined.required = schema.required.map(escape);
     }
     if (schema.discriminator) {

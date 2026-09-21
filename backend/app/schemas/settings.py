@@ -10,6 +10,7 @@ from typing import Annotated, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from backend.app.db.models import OnboardingFlow, OnboardingStatus
 from backend.app.schemas.common import BaseListResponse
 from backend.app.utils.datetime_utils import UTCDateTime
 
@@ -34,6 +35,79 @@ class UserSettingsUpdate(BaseModel):
     base_currency: Optional[str] = Field(None, min_length=3, max_length=3)
     theme: Optional[Literal["light", "dark", "auto"]] = None
     avatar_url: Optional[str] = Field(None, max_length=500, description="URL to user avatar image")
+
+
+# ============================================================================
+# USER ONBOARDING
+# ============================================================================
+
+
+class OnboardingStepProgressItem(BaseModel):
+    """Versioned state for one step inside a step-managed onboarding flow."""
+
+    step_id: str
+    status: OnboardingStatus
+    version: int = Field(..., ge=1)
+    current_version: int = Field(..., ge=1)
+    update_available: bool
+    created_at: UTCDateTime
+    updated_at: UTCDateTime
+    completed_at: Optional[UTCDateTime] = None
+    skipped_at: Optional[UTCDateTime] = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class OnboardingProgressItem(BaseModel):
+    """Versioned state for one independent onboarding flow."""
+
+    flow: OnboardingFlow
+    status: OnboardingStatus
+    version: int = Field(..., ge=1, description="Content version recorded for this user")
+    current_version: int = Field(..., ge=1, description="Current content version supported by the server")
+    update_available: bool = Field(..., description="A newer flow version is available for optional replay")
+    created_at: UTCDateTime
+    updated_at: UTCDateTime
+    completed_at: Optional[UTCDateTime] = None
+    skipped_at: Optional[UTCDateTime] = None
+    steps: Optional[list[OnboardingStepProgressItem]] = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class OnboardingProgressResponse(BaseModel):
+    """Current user's onboarding state, ordered by the server flow registry."""
+
+    flows: list[OnboardingProgressItem]
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class OnboardingWelcomeSettings(BaseModel):
+    """Preferences committed atomically when the welcome flow finishes."""
+
+    language: Literal["en", "it", "fr", "es"]
+    base_currency: str = Field(..., min_length=3, max_length=3)
+    avatar_url: Optional[str] = Field(None, max_length=500)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class OnboardingTransitionRequest(BaseModel):
+    """Complete or skip a flow rendered from a specific content version."""
+
+    expected_version: int = Field(..., ge=1)
+    welcome_settings: Optional[OnboardingWelcomeSettings] = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class OnboardingStepTransitionRequest(BaseModel):
+    """Complete or skip one step rendered from a specific content version."""
+
+    expected_version: int = Field(..., ge=1)
+
+    model_config = ConfigDict(extra="forbid")
 
 
 # ============================================================================

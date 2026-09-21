@@ -297,6 +297,7 @@
         isLoading={loading}
         onRowClick={(row) => goto(`/assets/${row.id}${dateStart && dateEnd ? `?start=${dateStart}&end=${dateEnd}` : ''}`)}
         getRowHref={(row) => `/assets/${row.id}${dateStart && dateEnd ? `?start=${dateStart}&end=${dateEnd}` : ''}`}
+        getRowClass={(row) => (row.active ? '' : 'asset-row-inactive')}
         onSelectionChange={(ids) => onselectionchange?.(data.filter((row) => ids.includes(String(row.id))))}
         rowActions={[
             {
@@ -351,3 +352,21 @@
         {onColumnResize}
     />
 </div>
+
+<style>
+    :global(tr.asset-row-inactive:not(.selected):not(.highlighted)) {
+        background-color: #fffbeb !important;
+    }
+
+    :global(tr.asset-row-inactive:not(.selected):not(.highlighted):hover) {
+        background-color: #fef3c7 !important;
+    }
+
+    :global(.dark) :global(tr.asset-row-inactive:not(.selected):not(.highlighted)) {
+        background-color: rgb(120 53 15 / 0.24) !important;
+    }
+
+    :global(.dark) :global(tr.asset-row-inactive:not(.selected):not(.highlighted):hover) {
+        background-color: rgb(120 53 15 / 0.36) !important;
+    }
+</style>

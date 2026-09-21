@@ -18,6 +18,13 @@ Hover your avatar (while unlocked) and click the 📷 camera overlay to open the
 
 The avatar is saved immediately and is used across the app wherever your identity is shown — sidebar, broker sharing, and collaborator lists.
 
+!!! note "Also settable from the Welcome page"
+
+    Brand-new accounts can pick the same picture once, during the **[first-login Welcome
+    setup](../getting-started.md#welcome-setup)** — it's the
+    same picker, just reached from a different screen. Skipping that step leaves your initials
+    as the avatar; you can always add or change a picture later from here.
+
 ## ✏️ Username, Email, Account Created
 
 - **Username** and **Email** are editable (unlocked tab required). Changes apply to your login credentials straight away.

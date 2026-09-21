@@ -24,7 +24,7 @@ const DEMO = vi.hoisted(() => {
         implementationVersion: 'impl-1',
         schemaFingerprint: 'fp-demo-v1',
         componentKey: 'DemoToolPanel',
-        uiContractVersion: 1,
+        uiVersion: '1.0.0',
         operation: 'compute',
     } as const;
 });
@@ -37,7 +37,7 @@ const STRICT = vi.hoisted(() => {
         implementationVersion: 'impl-1',
         schemaFingerprint: 'fp-strict-v1',
         componentKey: 'StrictSnapshotToolPanel',
-        uiContractVersion: 1,
+        uiVersion: '1.0.0',
         operation: 'compute',
     } as const;
 });
@@ -59,7 +59,7 @@ vi.mock('$lib/api/generated-tools', async () => {
     const toolUiSchema = z.object({
         kind: z.literal('custom'),
         component_key: z.string(),
-        ui_contract_version: z.number(),
+        version: z.string(),
     });
     const toolDescriptorSchema = z.object({
         tool_code: z.string(),
@@ -75,6 +75,7 @@ vi.mock('$lib/api/generated-tools', async () => {
     });
     const toolPolicySchema = z.object({client_timeout_ms: z.number()});
     const catalogSchema = z.object({
+        catalog_version: z.literal('2'),
         items: z.array(toolDescriptorSchema),
         unavailable: z.array(toolUnavailableSchema),
         policy: toolPolicySchema,
@@ -151,7 +152,7 @@ vi.mock('$lib/api/tool-contract-map.generated', async () => {
                     contractVersion: DEMO.contractVersion,
                     schemaFingerprint: DEMO.schemaFingerprint,
                     componentKey: DEMO.componentKey,
-                    uiContractVersion: DEMO.uiContractVersion,
+                    uiVersion: DEMO.uiVersion,
                     input: z.any(),
                     output: z.any(),
                     operations: [DEMO.operation],
@@ -163,7 +164,7 @@ vi.mock('$lib/api/tool-contract-map.generated', async () => {
                     contractVersion: STRICT.contractVersion,
                     schemaFingerprint: STRICT.schemaFingerprint,
                     componentKey: STRICT.componentKey,
-                    uiContractVersion: STRICT.uiContractVersion,
+                    uiVersion: STRICT.uiVersion,
                     input: z
                         .object({
                             mode: z.literal('plain'),
@@ -181,7 +182,7 @@ vi.mock('$lib/api/tool-contract-map.generated', async () => {
 import {toolTransportSchemas} from '$lib/api/generated-tools';
 import {toolContractMap} from '$lib/api/tool-contract-map.generated';
 import {getClientSessionUserId, transitionClientSession} from '$lib/stores/app/clientSession';
-import {ToolClientError, fetchToolCatalog, runTool} from './client';
+import {ToolClientError, fetchToolCatalog, invalidateToolCatalogCache, peekToolCatalog, runTool} from './client';
 import {verifyToolDescriptor} from './contracts';
 
 type DemoResult = {status: 'success'; correlation_id: string; result: unknown} | {status: 'error'; correlation_id: string};
@@ -201,6 +202,7 @@ const toolContractMapForTest = toolContractMap as unknown as Record<
 /** Raw `/api/v1/tools/catalog` payload describing the compatible tools exercised in this file. */
 function rawCatalog() {
     return {
+        catalog_version: '2' as const,
         items: [
             {
                 tool_code: DEMO.toolCode,
@@ -210,7 +212,7 @@ function rawCatalog() {
                 ui: {
                     kind: 'custom' as const,
                     component_key: DEMO.componentKey,
-                    ui_contract_version: DEMO.uiContractVersion,
+                    version: DEMO.uiVersion,
                 },
                 operations: [{operation: DEMO.operation}],
             },
@@ -222,7 +224,7 @@ function rawCatalog() {
                 ui: {
                     kind: 'custom' as const,
                     component_key: STRICT.componentKey,
-                    ui_contract_version: STRICT.uiContractVersion,
+                    version: STRICT.uiVersion,
                 },
                 operations: [{operation: STRICT.operation}],
             },
@@ -230,6 +232,16 @@ function rawCatalog() {
         unavailable: [],
         policy: {client_timeout_ms: 5_000},
     };
+}
+
+function deferred<T>(): {promise: Promise<T>; resolve: (value: T) => void; reject: (reason: unknown) => void} {
+    let resolve!: (value: T) => void;
+    let reject!: (reason: unknown) => void;
+    const promise = new Promise<T>((res, rej) => {
+        resolve = res;
+        reject = rej;
+    });
+    return {promise, resolve, reject};
 }
 
 /**
@@ -338,6 +350,113 @@ describe('tools client — generated codec regressions', () => {
         expect(adapted).toContain('export type RecursiveIntNode = { "count": number; "next"?: (RecursiveIntNode | undefined) };');
         expect(adapted).toContain('export type RecursiveIntNodeInput = { "count": number; "next"?: (RecursiveIntNodeInput | undefined) };');
         expect(adapted).toContain('export const RecursiveIntNode: z.ZodType<RecursiveIntNode, z.ZodTypeDef, RecursiveIntNodeInput> =');
+    });
+});
+
+describe('tools client — account-scoped catalog cache', () => {
+    let accountSequence = 0;
+
+    function useFreshAccount(): void {
+        accountSequence += 1;
+        transitionClientSession(`catalog-cache-user-${accountSequence}`);
+        invalidateToolCatalogCache();
+        axiosGet.mockReset();
+    }
+
+    afterEach(() => {
+        transitionClientSession(`catalog-cache-cleanup-${++accountSequence}`);
+        invalidateToolCatalogCache();
+        axiosGet.mockReset();
+    });
+
+    it('reuses one successful catalogue object for the current account generation', async () => {
+        useFreshAccount();
+        axiosGet.mockResolvedValueOnce({data: rawCatalog()});
+
+        const first = await fetchToolCatalog();
+        const second = await fetchToolCatalog();
+
+        expect(axiosGet).toHaveBeenCalledTimes(1);
+        expect(second).toBe(first);
+        expect(peekToolCatalog()).toBe(first);
+    });
+
+    it('deduplicates concurrent callers onto one in-flight request', async () => {
+        useFreshAccount();
+        const response = deferred<{data: ReturnType<typeof rawCatalog>}>();
+        axiosGet.mockImplementationOnce(() => response.promise);
+
+        const first = fetchToolCatalog();
+        const second = fetchToolCatalog();
+        await vi.waitFor(() => expect(axiosGet).toHaveBeenCalledTimes(1));
+
+        response.resolve({data: rawCatalog()});
+
+        const [firstCatalog, secondCatalog] = await Promise.all([first, second]);
+        expect(secondCatalog).toBe(firstCatalog);
+        expect(peekToolCatalog()).toBe(firstCatalog);
+    });
+
+    it('reload bypasses a successful cache and replaces it with the fresh response', async () => {
+        useFreshAccount();
+        axiosGet.mockResolvedValueOnce({data: rawCatalog()}).mockResolvedValueOnce({data: rawCatalog()});
+
+        const cached = await fetchToolCatalog();
+        const reloaded = await fetchToolCatalog({reload: true});
+
+        expect(axiosGet).toHaveBeenCalledTimes(2);
+        expect(reloaded).not.toBe(cached);
+        expect(peekToolCatalog()).toBe(reloaded);
+    });
+
+    it('drops the successful cache when the authenticated account changes', async () => {
+        useFreshAccount();
+        axiosGet.mockResolvedValueOnce({data: rawCatalog()});
+        const previous = await fetchToolCatalog();
+        expect(peekToolCatalog()).toBe(previous);
+
+        transitionClientSession(`catalog-cache-other-${++accountSequence}`);
+        expect(peekToolCatalog()).toBeNull();
+
+        axiosGet.mockResolvedValueOnce({data: rawCatalog()});
+        const current = await fetchToolCatalog();
+        expect(axiosGet).toHaveBeenCalledTimes(2);
+        expect(current).not.toBe(previous);
+        expect(peekToolCatalog()).toBe(current);
+    });
+
+    it('lets one caller stop waiting without aborting the shared catalogue fetch', async () => {
+        useFreshAccount();
+        const response = deferred<{data: ReturnType<typeof rawCatalog>}>();
+        axiosGet.mockImplementationOnce(() => response.promise);
+        const caller = new AbortController();
+
+        const stopped = fetchToolCatalog({signal: caller.signal});
+        const survivor = fetchToolCatalog();
+        await vi.waitFor(() => expect(axiosGet).toHaveBeenCalledTimes(1));
+        const sharedSignal = axiosGet.mock.calls[0]?.[1]?.signal as AbortSignal;
+
+        caller.abort();
+        await expect(stopped).rejects.toMatchObject({kind: 'aborted', code: 'waiting_stopped'});
+        expect(sharedSignal.aborted).toBe(false);
+
+        response.resolve({data: rawCatalog()});
+        const catalog = await survivor;
+        expect(peekToolCatalog()).toBe(catalog);
+        expect(axiosGet).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not permanently cache a failed request and allows the next caller to retry', async () => {
+        useFreshAccount();
+        axiosGet.mockRejectedValueOnce(new Error('fixture failure'));
+
+        await expect(fetchToolCatalog()).rejects.toMatchObject({kind: 'internal', code: 'unexpected_transport_error'});
+        expect(peekToolCatalog()).toBeNull();
+
+        axiosGet.mockResolvedValueOnce({data: rawCatalog()});
+        const retried = await fetchToolCatalog();
+        expect(peekToolCatalog()).toBe(retried);
+        expect(axiosGet).toHaveBeenCalledTimes(2);
     });
 });
 

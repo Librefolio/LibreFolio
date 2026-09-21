@@ -718,7 +718,8 @@
       "fromDbHint": "Este título ya está en el archivo: el nombre es el guardado. Usa el lápiz de arriba para cambiarlo.",
       "linkAll": "{reason} · las {n} extracciones",
       "linkSome": "{reason} · {members}",
-      "linkScore": "similitud {score}%"
+      "linkScore": "similitud {score}%",
+      "confirmAll": "Confirmar todo ({count})"
     },
     "assetPicker": {
       "sectionImport": "En esta importación",
@@ -1578,7 +1579,8 @@
     "today": "Hoy",
     "resolvingStart": "Buscando…",
     "openCalendar": "Abrir el calendario",
-    "formatHint": "Escribe la fecha o elígela en el calendario. Formatos aceptados: 2026-08-07, 2026/8/7, 7-8-2026, 7.8.2026 — el año debe escribirse completo."
+    "formatHint": "Escribe la fecha o elígela en el calendario. Formatos aceptados: 2026-08-07, 2026/8/7, 7-8-2026, 7.8.2026 — el año debe escribirse completo.",
+    "invalidDate": "Introduce una fecha válida y disponible."
   },
   "error": {
     "pageNotFound": "Página No Encontrada",
@@ -3447,9 +3449,6 @@
   "tools": {
     "title": "Herramientas",
     "subtitle": "Cálculos independientes. No se guardan cambios en la cartera.",
-    "open": "Abrir herramienta",
-    "contractVersion": "Contrato",
-    "implementationVersion": "Implementación",
     "status": {
       "unavailable": "No disponible",
       "available": "Disponible"
@@ -3571,19 +3570,12 @@
     },
     "pacAllocator": {
       "name": "Asignador PAC",
-      "description": "Analiza el estado inicial exacto de la asignación.",
-      "pilotNotice": "Solo análisis manual del estado inicial. No se leen datos de la cartera, no se proponen órdenes y no se guarda nada.",
+      "description": "Distribuye el efectivo invertible entre los Asset seleccionados según el porcentaje objetivo.",
       "scenario": "Escenario",
       "reportCurrency": "Divisa del informe",
       "asOfDate": "Fecha de referencia (opcional)",
       "rows": {
-        "title": "Activos y contextos de custodia",
-        "description": "Cada fila representa un activo en un contexto. Usa la acción específica para conservar la identidad del instrumento entre contextos.",
-        "addAsset": "Nuevo activo local",
         "empty": "Añade al menos una fila. Hasta entonces, el backend indicará que faltan filas.",
-        "rowNumber": "Fila {number}",
-        "identity": "Identidad local del instrumento",
-        "sameAsset": "Mismo activo, otro contexto",
         "initialQuantity": "Cantidad inicial",
         "price": "Precio nativo",
         "quoteBasis": "Cantidad base de la cotización",
@@ -3592,7 +3584,13 @@
         "whole": "Cantidades enteras",
         "fractional": "Cantidades fraccionarias",
         "quantityStep": "Paso de cantidad de compra",
-        "quoteDate": "Fecha de la cotización (opcional)"
+        "quoteDate": "Fecha de la cotización (opcional)",
+        "addAsset": "Nuevo activo local",
+        "description": "Cada fila representa un activo en un contexto. Usa la acción específica para conservar la identidad del instrumento entre contextos.",
+        "identity": "Identidad local del instrumento",
+        "rowNumber": "Fila {number}",
+        "sameAsset": "Mismo activo, otro contexto",
+        "title": "Activos y contextos de custodia"
       },
       "cash": {
         "existing": "Efectivo existente",
@@ -3600,24 +3598,52 @@
         "noneExisting": "Sin efectivo existente, de forma explícita",
         "amount": "Importe",
         "addCurrency": "Añadir divisa",
-        "markNoneExisting": "Sin efectivo existente",
-        "markNotSupplied": "Marcar como no proporcionado",
         "contributions": "Nuevas aportaciones",
         "noneContributions": "Sin nuevas aportaciones, de forma explícita",
-        "markNoneContributions": "Sin nuevas aportaciones"
+        "existingHint": "Efectivo nativo ya disponible, agrupado por divisa.",
+        "contributionsHint": "Dinero nuevo para este escenario, separado del efectivo existente.",
+        "enterAmounts": "Introducir importes",
+        "addContribution": "Añadir aportación",
+        "backToBrokers": "Usar las reservas de los Broker",
+        "backendAggregate": "Agregado del backend",
+        "fromBrokers": "Desde brókeres",
+        "fullNativeReserve": "Reserva nativa completa",
+        "loadingBrokerCash": "Cargando las reservas de los Broker…",
+        "markNoneContributions": "Sin nuevas aportaciones",
+        "markNoneExisting": "Sin efectivo existente",
+        "markNotSupplied": "Marcar como no proporcionado",
+        "monetaryStep": "Incremento del importe",
+        "monetaryStepHint": "Incremento mínimo aceptado para esta aportación, por ejemplo 0.01 para los céntimos.",
+        "noNativeBalances": "Sin reserva nativa",
+        "noOwnerBrokers": "No hay ningún Broker OWNER disponible. Introduce el efectivo manualmente.",
+        "noSelectedBalances": "No hay saldo del bróker seleccionado.",
+        "refreshingSelection": "Actualizando las reservas nativas seleccionadas…",
+        "selectedReserves": "Reservas nativas seleccionadas",
+        "sourceStale": "Esperando los saldos actuales de los brókeres. La instantánea anterior no se enviará."
       },
       "rates": {
         "title": "Tipos de cambio de valoración",
-        "description": "Valor de informe de una unidad de divisa nativa. Estos tipos no convierten ni mueven efectivo.",
+        "description": "Compara los valores en la divisa del informe. El efectivo no se convierte, transfiere ni combina.",
         "add": "Añadir tipo",
         "value": "Tipo hacia la divisa del informe",
-        "date": "Fecha del tipo (opcional)"
+        "date": "Fecha del tipo (opcional)",
+        "noCashConversion": "Solo valoración: el efectivo no se convierte, transfiere ni combina.",
+        "copySaved": "Copiar tasa",
+        "copyUnavailable": "No hay ninguna tasa guardada de {currency} a {reportCurrency} disponible para el {date}.",
+        "enterManually": "Introducir manualmente",
+        "equationHint": "Ejemplo: 1 USD = 0.90 EUR significa que, en este informe, un USD se valora en 0.90 EUR.",
+        "nativeCurrency": "Moneda nativa",
+        "reason": "Los datos en {currency} deben valorarse en {reportCurrency}.",
+        "reasonAssets": "Precios de los activos: {assets}",
+        "reasonCash": "El efectivo existente seleccionado usa esta divisa.",
+        "reasonContribution": "Una nueva aportación usa esta divisa.",
+        "titleNumbered": "3. Tipos de cambio de valoración"
       },
       "revision": "Revisión del borrador",
       "noOrders": "Las órdenes, la viabilidad y la optimización no están incluidas en este piloto.",
       "stopWaiting": "Dejar de esperar",
       "analyzing": "Analizando la revisión {revision}…",
-      "analyze": "Comprobar el estado inicial",
+      "analyze": "Analizar la asignación PAC",
       "stale": {
         "pending": "La solicitud de la revisión {requestRevision} sigue en curso, pero el borrador está ahora en la revisión {draftRevision}. Su respuesta se ignorará.",
         "ignored": "La respuesta de la revisión {revision} se ignoró porque cambió el borrador o la cuenta.",
@@ -3652,7 +3678,668 @@
       },
       "cashPools": "Reservas de efectivo nativas",
       "issues": "Hallazgos del backend",
-      "normalizedInput": "Entrada normalizada y unidades"
+      "normalizedInput": "Entrada normalizada y unidades",
+      "addManualAsset": "Nuevo activo manual",
+      "loadingOwnedAssets": "Cargando el catálogo de activos…",
+      "noOwnedAssetsHint": "Aun así puedes añadir un activo manual.",
+      "custodyContext": "contexto de custodia",
+      "custodyContexts": "contextos de custodia",
+      "missingPrice": "Falta el precio",
+      "modified": "Modificado",
+      "staleLabel": "Desactualizado",
+      "noAssetMatches": "Ningún activo candidato coincide con los filtros actuales.",
+      "fullCustody": "Cantidad total en custodia",
+      "personalShare": "participación personal",
+      "manual": "Manual",
+      "snapshotAt": "Instantánea de la cartera",
+      "priceAt": "precio con fecha",
+      "duplicate": "Duplicar como fila manual",
+      "identityAndCustody": "Identidad y custodia",
+      "instrumentId": "ID del instrumento",
+      "selectedContexts": "Contextos de activos seleccionados",
+      "selectedContextsHint": "Los datos de origen importados son de solo lectura. Los objetivos y las cuadrículas de compra siguen siendo editables; las filas manuales son totalmente editables.",
+      "emptyRowsHint": "Selecciona un activo candidato arriba o añade un activo manual.",
+      "confirmDeselectTitle": "¿Eliminar los contextos de activo importados?",
+      "confirmDeselectMessage": "Se editaron algunas filas vinculadas. Al deseleccionar el activo se elimina cada contexto importado vinculado indicado abajo. Las copias manuales independientes permanecen.",
+      "assets": {
+        "hint": "Elige Asset canónicos. Los precios actuales son solo datos contextuales de la fuente y no afectan al reparto de P1.",
+        "title": "2. Asset que financiar"
+      },
+      "brokerCustody": "Custodia en el bróker",
+      "cashPoolsHint": "Los saldos nativos permanecen separados por divisa. Este informe no convierte, transfiere ni combina el efectivo.",
+      "customizedRemovalItems": "Ajustes que se perderán",
+      "customizedRemovalMessage": "Al eliminar este Asset se descartarán su objetivo y sus ajustes personalizados.",
+      "customizedRemovalTitle": "¿Eliminar el Asset personalizado?",
+      "denominatorHint": "Los pesos y las desviaciones actuales usan solo el valor invertido en activos. El efectivo existente y las nuevas aportaciones permanecen separados y no modifican estos porcentajes P1.",
+      "economicShare": "Participación económica personal",
+      "economicShareHint": "Participación de propiedad solo informativa. Las cantidades importadas siguen siendo las de la custodia completa y nunca se prorratean.",
+      "fundsHint": "Copia el efectivo nativo de los Broker OWNER o introduce importes exactos. Las nuevas aportaciones se mantienen separadas.",
+      "fundsTitle": "1. Fondos disponibles",
+      "gallery": {
+        "empty": "No se encontraron Asset candidatos",
+        "hint": "Selecciona Asset canónicos o añade uno manual.",
+        "inactive": "Inactivo",
+        "observed": "Observado",
+        "otherUsers": "Otros usuarios",
+        "owned": "En propiedad",
+        "search": "Buscar Asset o Broker",
+        "title": "2. Asset",
+        "zeroPosition": "cantidad inicial 0"
+      },
+      "gridModeHint": "Controla solo el incremento de cantidad de las compras futuras. El inventario fraccionario existente nunca se redondea.",
+      "importedSnapshot": "Instantánea de custodia importada",
+      "initialState": "Estado inicial",
+      "manualCopy": "Copia manual independiente",
+      "nativePrice": "Precio nativo",
+      "newManualAsset": "Asset manual",
+      "noCurrentCustody": "Sin custodia actual",
+      "p1": {
+        "description": "Distribuye el efectivo disponible según el porcentaje objetivo. No examina la cartera actual ni genera órdenes.",
+        "title": "Asignador PAC P1"
+      },
+      "pilotNotice": "Solo análisis manual del estado inicial. No se leen datos de la cartera, no se proponen órdenes y no se guarda nada.",
+      "quantityStepHint": "Incremento mínimo de cantidad para nuevas compras. Es distinto del paso monetario de las aportaciones.",
+      "quoteBasisHint": "Número de unidades del Asset representadas por el precio cotizado.",
+      "readOnlyFacts": "datos de origen de solo lectura",
+      "results": {
+        "boundary": "Estos son importes monetarios teóricos. No se ha seleccionado ningún precio, cantidad, ruta de Broker, transferencia FX ni orden.",
+        "budget": "Presupuesto invertible",
+        "contributions": "Nuevas aportaciones",
+        "empty": "Ejecuta el análisis para calcular la asignación monetaria teórica.",
+        "existingCash": "Efectivo existente",
+        "hint": "P1 reparte el efectivo disponible según el porcentaje objetivo. No calcula unidades, órdenes, viabilidad ni un valor óptimo.",
+        "idealAllocation": "Asignación teórica",
+        "title": "4. Análisis PAC"
+      },
+      "rowLimitHint": "Máximo {count} contextos. Añadir un activo con varios contextos de custodia siempre se hace todo o nada.",
+      "rowLimitWarning": "Espacios restantes: {count}",
+      "selectedContextCount": "Contextos seleccionados: {count}",
+      "target": "Objetivo",
+      "targetEditor": {
+        "hint": "Define cómo repartir el efectivo invertible. Estos porcentajes no describen la cartera actual.",
+        "title": "3. Distribución del efectivo"
+      },
+      "units": "unidades",
+      "valuationSettings": "Ajustes de valoración",
+      "valuationSettingsHint": "La divisa del informe expresa el valor de los activos, el efectivo y las aportaciones. La fecha es el corte inclusivo para los datos guardados.",
+      "valuationSettingsInfo": "Estos ajustes definen una única unidad de comparación y la fecha límite de los datos. No mueven efectivo ni ejecutan operaciones."
+    },
+    "version": "Versión",
+    "allocation": {
+      "asset": {
+        "custodyCount": "{count} contextos de custodia",
+        "futureConstraints": "Restricciones para compras futuras",
+        "futureConstraintsHint": "Registradas para el futuro solucionador. P1 no cuantiza esta asignación monetaria teórica."
+      },
+      "diagnostics": {
+        "invalid": "Corregir el escenario",
+        "needsInput": "Completar el escenario",
+        "noIssues": "Todos los datos requeridos son válidos para este análisis P1.",
+        "ready": "Escenario listo",
+        "technical": "Detalles técnicos",
+        "unsupported": "Escenario fuera de los límites de P1"
+      },
+      "fundingSummary": {
+        "afterAnalysis": "después del análisis",
+        "available": "Disponible",
+        "contributions": "Aportaciones",
+        "empty": "No se ha introducido efectivo ni aportaciones.",
+        "existing": "Existente",
+        "hint": "El efectivo existente y las nuevas aportaciones se mantienen como datos separados. Los totales combinados solo se muestran tras el análisis del backend.",
+        "title": "Fondos disponibles por moneda",
+        "updating": "Actualizando…"
+      },
+      "issues": {
+        "assetsRequired": "Selecciona al menos un Asset.",
+        "cashRequired": "Introduce filas de efectivo o mantén una lista explícitamente vacía.",
+        "contributionStep": "La aportación debe ser múltiplo de su incremento monetario.",
+        "currencyDomain": "Este escenario contiene más monedas que el límite de {limit} de P1.",
+        "duplicateCurrency": "{currency} aparece más de una vez donde solo se permite una fila por moneda.",
+        "duplicateInstrument": "Este Asset está seleccionado más de una vez.",
+        "duplicateRow": "Dos filas de custodia tienen la misma identidad técnica.",
+        "duplicateTarget": "Este Asset tiene más de un objetivo.",
+        "fieldRequired": "Completa este campo obligatorio.",
+        "generic": "Revisa este dato del escenario.",
+        "holdingsRequired": "Selecciona al menos una posición de la cartera.",
+        "identityRate": "La moneda de informe {currency} debe usar una tasa de valoración de identidad igual a 1.",
+        "identityRateRedundant": "La tasa de la moneda de informe es redundante y se ha considerado igual a 1.",
+        "incompleteDecimal": "Completa el valor decimal.",
+        "initialDebt": "El efectivo existente negativo queda fuera de este análisis P1.",
+        "invalidCurrency": "Elige una moneda válida de tres letras.",
+        "invalidDate": "Introduce una fecha válida.",
+        "invalidDecimal": "Introduce un número decimal válido.",
+        "invalidQuoteBasis": "La base unitaria de la cotización debe ser un número entero positivo.",
+        "inventoryOffGrid": "La custodia fraccionaria existente no coincide con el incremento de compra futuro. Se ha conservado exactamente.",
+        "negativeContribution": "Una nueva aportación no puede ser negativa.",
+        "nonintegerWholeStep": "Un incremento de compra en unidades enteras debe ser un número entero.",
+        "nonpositiveFxRate": "La tasa de valoración debe ser mayor que cero.",
+        "nonpositiveMonetaryStep": "El incremento monetario debe ser mayor que cero.",
+        "nonpositivePrice": "El precio actual debe ser mayor que cero.",
+        "nonpositiveQuantityStep": "El incremento de cantidad de compra debe ser mayor que cero.",
+        "numericDomain": "Un número supera el dominio numérico exacto admitido.",
+        "quoteRequired": "Introduce el precio actual y su moneda.",
+        "referenceAfterAsOf": "La fecha de la fuente no puede ser posterior a la fecha del análisis.",
+        "referenceDateUnspecified": "No se ha indicado una fecha de referencia; revisa manualmente la vigencia de los datos.",
+        "shortInventory": "Las posiciones cortas quedan fuera de este análisis P1.",
+        "targetOutOfRange": "Cada objetivo debe estar entre el 0% y el 100%.",
+        "targetRequired": "Cada Asset seleccionado necesita un porcentaje objetivo.",
+        "targetTotal": "Los porcentajes objetivo deben sumar exactamente el 100%.",
+        "targetsRequired": "Define una asignación objetivo para los Asset seleccionados.",
+        "unselectedTarget": "Un objetivo hace referencia a un Asset que ya no está seleccionado.",
+        "unusedValuation": "Este escenario no utiliza la tasa de valoración de {currency}.",
+        "valuationRateRequired": "Introduce una tasa de valoración para {currency}."
+      },
+      "path": {
+        "cash": "Efectivo existente",
+        "contributions": "Aportaciones",
+        "holdings": "Posiciones",
+        "targets": "Objetivos",
+        "valuationRates": "Tasas de valoración"
+      },
+      "results": {
+        "stale": "Los datos han cambiado después de este resultado. Vuelve a ejecutar el análisis antes de usarlo."
+      },
+      "target": {
+        "remaining": "Restante",
+        "selectAssetsFirst": "Selecciona al menos un Asset antes de definir los objetivos.",
+        "total": "Total",
+        "visual": "Distribución"
+      }
+    },
+    "backendVersion": "Backend/API",
+    "contractVersion": "Contrato",
+    "implementationVersion": "Implementación",
+    "open": "Abrir herramienta",
+    "portfolioRebalancer": {
+      "analyze": "Analizar las diferencias con los objetivos",
+      "custodyContext": "Contexto de custodia",
+      "customizedRemovalMessage": "Al eliminar esta posición se descartarán sus ajustes del escenario.",
+      "customizedRemovalTitle": "¿Eliminar la posición personalizada?",
+      "description": "Compara la asignación invertida actual con un objetivo final.",
+      "funding": {
+        "hint": "El efectivo y las aportaciones se muestran por separado. P1 no los usa para inferir operaciones ejecutables.",
+        "title": "Contexto de efectivo opcional"
+      },
+      "holdings": {
+        "hint": "Selecciona Asset para copiar todos sus contextos de custodia o añade una posición manual.",
+        "title": "1. Posiciones de la cartera"
+      },
+      "name": "Reequilibrador de cartera",
+      "p1": {
+        "description": "Compara la asignación invertida actual con un objetivo final. No recomienda ni genera operaciones.",
+        "title": "Reequilibrador de cartera P1"
+      },
+      "results": {
+        "availableCash": "Efectivo y nuevas aportaciones (solo contexto)",
+        "boundary": "Una diferencia positiva o negativa es descriptiva, no una instrucción de compra o venta. No se genera ninguna orden, ruta de Broker, transferencia FX ni acción fiscal.",
+        "currentValue": "Valor actual",
+        "currentWeight": "% actual",
+        "custodyContexts": "Custodias",
+        "empty": "Ejecuta el análisis para comparar la asignación actual con la asignación objetivo.",
+        "hint": "P1 compara el valor invertido actual con el objetivo final. No propone operaciones ni demuestra su viabilidad.",
+        "investedTotal": "Valor invertido actual",
+        "targetValue": "Valor objetivo",
+        "title": "3. Diferencias de asignación",
+        "valueGap": "Diferencia de valor",
+        "zeroInvested": "El valor invertido actual es cero, por lo que los pesos actuales y las diferencias en puntos porcentuales no están disponibles."
+      },
+      "targetEditor": {
+        "copyCurrent": "Usar la distribución actual",
+        "hint": "Define la asignación final deseada de la cartera invertida. El efectivo se mantiene como contexto separado.",
+        "title": "2. Asignación objetivo final"
+      },
+      "uncustodied": "Sin custodia"
+    },
+    "uiVersion": "UI"
+  },
+  "onboarding": {
+    "welcome": {
+      "title": "Te damos la bienvenida a LibreFolio",
+      "description": "Configura lo esencial antes de empezar a seguir tu cartera.",
+      "defaultsHint": "El idioma y la divisa parten de los valores predeterminados del administrador. Puedes cambiarlos ahora o más adelante.",
+      "avatarLabel": "Foto de perfil",
+      "avatarHint": "Opcional. Se usan tus iniciales cuando no seleccionas ninguna imagen.",
+      "chooseAvatar": "Elegir imagen",
+      "removeAvatar": "Quitar imagen",
+      "avatarAlt": "Vista previa de la foto de perfil",
+      "themeHint": "Tu preferencia de tema actual se mantiene sin cambios.",
+      "skip": "Omitir la configuración permanentemente",
+      "skipHint": "No se volverá a mostrar automáticamente. Puedes repetirla desde Ajustes.",
+      "completed": "Configuración guardada. Puedes continuar a LibreFolio.",
+      "skipped": "Configuración omitida. Puedes repetirla más tarde desde Ajustes.",
+      "logout": "Cerrar sesión"
+    },
+    "errors": {
+      "loadTitle": "No se pudo cargar la introducción",
+      "loadDescription": "Reintenta la configuración o cierra sesión de forma segura.",
+      "degraded": "No se pudo actualizar el estado de la introducción. Tu configuración completada sigue activa.",
+      "replayStart": "No se pudo iniciar la guía. Inténtalo de nuevo.",
+      "progressUnavailable": "El progreso de la introducción no está disponible. Recarga e inténtalo de nuevo.",
+      "complete": "No se pudo finalizar la guía. Inténtalo de nuevo.",
+      "skip": "No se pudo omitir la guía. Inténtalo de nuevo."
+    },
+    "actions": {
+      "finish": "Finalizar guía",
+      "skipPermanently": "Omitir permanentemente",
+      "pause": "Pausar",
+      "close": "Cerrar guía",
+      "back": "Atrás",
+      "next": "Siguiente",
+      "exitTour": "Salir del recorrido",
+      "skipCurrentTour": "Omitir este recorrido",
+      "gotIt": "Entendido",
+      "continueAnyway": "Continuar de todos modos"
+    },
+    "guide": {
+      "waiting": "Esperando a que esta zona esté disponible…",
+      "useWizardAction": "Continúa con el botón indicado.",
+      "exploreThenContinue": "Explora el control indicado y luego continúa.",
+      "loadProblem": "Esta parte de la página no se ha cargado a tiempo. Puedes continuar con la guía."
+    },
+    "tour": {
+      "progress": "Paso {current} de {total}",
+      "steps": {
+        "transactionsImport": {
+          "title": "Empieza con una importación",
+          "description": "Abre el importador de transacciones para convertir los informes de bróker en borradores. Nada se guarda automáticamente."
+        },
+        "brokers": {
+          "title": "Brókeres y acceso",
+          "description": "Los brókeres representan cuentas y controlan la propiedad, la edición y el uso compartido."
+        },
+        "assets": {
+          "title": "Tu catálogo de activos",
+          "description": "Los activos contienen identificadores, divisas, proveedores, precios y eventos."
+        },
+        "dashboard": {
+          "title": "Tu cartera de un vistazo",
+          "description": "El panel es tu página de inicio para el valor, el rendimiento, la asignación y la calidad de los datos de la cartera."
+        },
+        "tools": {
+          "title": "Herramientas de análisis",
+          "description": "Las herramientas ofrecen análisis guiados, como la planificación PAC, sin ejecutar órdenes."
+        },
+        "settings": {
+          "title": "Repite cuando lo necesites",
+          "description": "Ajustes te permite repetir este recorrido, la configuración de bienvenida o la guía de importación."
+        },
+        "navigation": {
+          "title": "Oriéntate en la aplicación",
+          "description": "Usa este control para contraer o ampliar la barra lateral en el escritorio, o abrir el menú de navegación en pantallas pequeñas."
+        },
+        "transactionsNav": {
+          "title": "Empieza por tus transacciones",
+          "description": "Transacciones contiene las entradas manuales y el historial de la cartera. Importar tiene su propia guía contextual."
+        },
+        "brokersAdd": {
+          "title": "Añade un bróker",
+          "description": "Los brókeres representan las cuentas que contienen tus transacciones y definen propiedad y uso compartido."
+        },
+        "brokersCurrency": {
+          "title": "Configura la divisa del bróker",
+          "description": "Elige la divisa de cada saldo inicial. Esta vista previa nunca guarda un bróker."
+        },
+        "fxAdd": {
+          "title": "Añade un par de divisas",
+          "description": "Los pares de divisas permiten que LibreFolio convierta los valores de la cartera entre monedas."
+        },
+        "fxPair": {
+          "title": "Elige las divisas base y cotizada",
+          "description": "Define el par de divisas que necesitas. Esta vista previa nunca guarda un par de divisas."
+        },
+        "assetsAdd": {
+          "title": "Añade un activo",
+          "description": "Los activos conectan las transacciones con instrumentos, divisas, precios y datos de mercado."
+        },
+        "assetsConfig": {
+          "title": "Configura el activo",
+          "description": "Elige su divisa de cotización y proveedor de datos. Esta vista previa nunca guarda un activo."
+        },
+        "brokersNav": {
+          "title": "Brókeres",
+          "description": "Abre Brókeres para configurar tus cuentas. Una breve guía comienza cuando eliges Añadir bróker."
+        },
+        "fxNav": {
+          "title": "Tipos de cambio",
+          "description": "Abre Tipos de cambio para configurar los pares de divisas y sus proveedores de datos."
+        },
+        "assetsNav": {
+          "title": "Activos",
+          "description": "Abre Activos para definir los instrumentos, las divisas y los datos de mercado usados por tu cartera."
+        },
+        "toolsNav": {
+          "title": "Herramientas",
+          "description": "Herramientas reúne programas y calculadoras para explorar escenarios y tomar decisiones financieras más informadas."
+        },
+        "settingsNav": {
+          "title": "Ajustes",
+          "description": "Ajustes contiene las preferencias y permite repetir cualquier guía cuando sea necesario."
+        }
+      }
+    },
+    "flows": {
+      "welcome": "Configuración de bienvenida",
+      "intro_tour": "Recorrido rápido",
+      "import_guide": "Guía de importación",
+      "broker_guide": "Guía de brókeres",
+      "fx_guide": "Guía de tipos de cambio",
+      "asset_guide": "Guía de activos",
+      "transactions_page_guide": "Resumen de transacciones",
+      "transaction_create_guide": "Guía para añadir una transacción",
+      "transaction_bulk_guide": "Resumen del espacio de trabajo masivo",
+      "broker_page_guide": "Resumen de brókeres",
+      "broker_detail_guide": "Guía de detalles del bróker",
+      "fx_page_guide": "Resumen de FX",
+      "fx_detail_guide": "Guía de detalles del par de divisas",
+      "asset_page_guide": "Resumen de activos",
+      "asset_detail_guide": "Guía de detalles del activo"
+    },
+    "status": {
+      "pending": "Pendiente",
+      "completed": "Completado",
+      "skipped": "Omitido"
+    },
+    "settings": {
+      "category": "Introducción",
+      "title": "Introducción y guías",
+      "description": "Repite la configuración y las guías contextuales sin cambiar tus datos guardados.",
+      "replayAll": "Repetir todo",
+      "updateAvailable": "Nueva versión por ver",
+      "nextImport": "Lista para la próxima importación",
+      "replayReady": "Repetición lista",
+      "version": "Vista v{seen} · actual v{current}",
+      "replayOnNextImport": "Repetir en la próxima importación",
+      "replay": "Repetir",
+      "groups": {
+        "setup": "Configuración",
+        "core": "Recorrido principal",
+        "contextual": "Guías contextuales",
+        "transactions": "Transacciones",
+        "broker": "Brókeres",
+        "fx": "FX",
+        "asset": "Activos"
+      },
+      "armedToast": "{flow} está listo en esta pestaña. Abre la función para empezar.",
+      "cancelArmed": "Cancelar activación",
+      "groupProgress": "{completed}/{total} guías completadas",
+      "armedAtNextTrigger": "Listo en esta pestaña: {flow} se iniciará en la próxima activación. Cerrar la pestaña lo cancela.",
+      "replayNextTrigger": "Repetir en la próxima activación"
+    },
+    "importGuide": {
+      "steps": {
+        "upload": {
+          "title": "Subir informes",
+          "description": "Añade uno o varios informes y asigna cada informe a un bróker."
+        },
+        "select": {
+          "title": "Elige archivos y analizadores",
+          "description": "Selecciona uno o varios informes guardados. Para cada archivo, elige el plugin de análisis adecuado; cuando todas las selecciones estén completas, usa el botón de la derecha para continuar. Según el plugin elegido y los datos extraídos, pueden aparecer pasos opcionales para unificar activos, corregir filas o gestionar duplicados."
+        },
+        "analyze": {
+          "title": "Analiza los datos extraídos",
+          "description": "Ejecuta los analizadores y revisa los registros extraídos, los avisos y los resultados de validación."
+        },
+        "assets": {
+          "title": "Unifica las identidades de activos",
+          "description": "Relaciona los registros extraídos que puedan referirse al mismo activo."
+        },
+        "fix": {
+          "title": "Resuelve las filas señaladas",
+          "description": "Corrige o conserva explícitamente las filas que el analizador no pudo resolver."
+        },
+        "duplicates": {
+          "title": "Elige entre duplicados",
+          "description": "Decide qué filas importadas solapadas conservar."
+        },
+        "review": {
+          "title": "Revisa la importación",
+          "description": "Selecciona las filas aptas y resuelve los activos necesarios antes de abrir el editor masivo."
+        },
+        "bulk": {
+          "title": "Guardar todo escribe las transacciones",
+          "description": "Revisa y modifica los borradores de transacciones y elige Guardar todo cuando estén listos."
+        }
+      }
+    },
+    "intro": {
+      "title": "Te damos la bienvenida a LibreFolio",
+      "line1": "Te damos la bienvenida.",
+      "line2": "Nos alegra tenerte con nosotros.",
+      "line3": "Aquí tienes un recorrido rápido para empezar.",
+      "start": "Iniciar recorrido",
+      "progress": "Progreso de la introducción"
+    },
+    "brokerGuide": {
+      "steps": {
+        "overview": {
+          "title": "Crea un bróker",
+          "description": "Este formulario define la cuenta que contendrá transacciones e importaciones."
+        },
+        "plugin": {
+          "title": "Elige el plugin de importación predeterminado",
+          "description": "El plugin predeterminado se preselecciona al importar informes de este bróker."
+        },
+        "icon": {
+          "title": "Añade un icono personalizado",
+          "description": "Elige una imagen para este bróker o conserva el icono automático derivado de su plugin o sitio web."
+        }
+      }
+    },
+    "fxGuide": {
+      "steps": {
+        "currencies": {
+          "title": "Elige el par de divisas",
+          "description": "Selecciona las divisas base y cotizada entre las que LibreFolio debe realizar la conversión."
+        },
+        "providers": {
+          "title": "Configura los proveedores de tipos",
+          "description": "Elige una ruta de proveedores directa o encadenada, o mantén el par en modo manual cuando no sea adecuada ninguna fuente automática."
+        }
+      }
+    },
+    "assetGuide": {
+      "steps": {
+        "search": {
+          "title": "Busca antes de introducir datos",
+          "description": "Busca en línea para prerrellenar identificadores y metadatos conocidos, o introduce el activo manualmente."
+        },
+        "identity": {
+          "title": "Define el activo",
+          "description": "Revisa su nombre, tipo, cantidad base de cotización y divisa."
+        },
+        "provider": {
+          "title": "Configura el proveedor de datos",
+          "description": "Selecciona el proveedor, el identificador y los parámetros, o mantén explícitamente el activo sin proveedor."
+        }
+      }
+    },
+    "transactionsPageGuide": {
+      "steps": {
+        "overview": {
+          "title": "Gestiona todas las transacciones",
+          "description": "Esta página reúne entradas manuales, operaciones importadas y el historial utilizado para construir tu cartera."
+        },
+        "add": {
+          "title": "Añade una transacción",
+          "description": "Añadir abre el formulario guiado para una sola operación. Su guía específica comienza la primera vez que se usa."
+        },
+        "import": {
+          "title": "Importa varias operaciones",
+          "description": "Importar lee los informes del bróker y guía su revisión hasta el editor masivo."
+        },
+        "columns": {
+          "title": "Filtra y organiza",
+          "description": "Usa los filtros de columna, la ordenación y la visibilidad de las columnas para buscar y comparar operaciones."
+        }
+      }
+    },
+    "transactionCreateGuide": {
+      "steps": {
+        "basics": {
+          "title": "Elige el tipo de transacción",
+          "description": "El tipo define el significado y la estructura de la operación."
+        },
+        "amounts": {
+          "title": "Completa los campos obligatorios",
+          "description": "Los campos obligatorios y las combinaciones válidas cambian según el tipo de transacción seleccionado."
+        },
+        "details": {
+          "title": "Añade información opcional",
+          "description": "Incluye cualquier detalle adicional que facilite la comprensión y el seguimiento de la transacción."
+        },
+        "save": {
+          "title": "Valida en el contexto del espacio de trabajo",
+          "description": "La validación evalúa este borrador junto con todas las demás operaciones pendientes del espacio de trabajo. Un error puede depender de otro borrador o del saldo resultante, no solo de este formulario; cuando está disponible, el mensaje identifica las filas y el contexto afectados."
+        }
+      }
+    },
+    "transactionBulkGuide": {
+      "steps": {
+        "workspace": {
+          "title": "Tu espacio de trabajo de transacciones",
+          "description": "Cada fila es un borrador que puedes revisar y perfeccionar antes del guardado final."
+        },
+        "validation": {
+          "title": "Valida y resuelve los problemas",
+          "description": "La validación resalta las filas incompletas o incoherentes y te lleva directamente a los campos que debes revisar."
+        },
+        "selection": {
+          "title": "Trabaja con la selección",
+          "description": "Selecciona filas para editar, clonar, restablecer, vincular o eliminar varios borradores a la vez."
+        },
+        "save": {
+          "title": "Finaliza con Guardar todo",
+          "description": "Guardar todo registra los borradores válidos. Cancelar cierra el espacio de trabajo y conserva la cartera existente."
+        }
+      }
+    },
+    "brokerPageGuide": {
+      "steps": {
+        "overview": {
+          "title": "Tus cuentas financieras",
+          "description": "Los brókeres agrupan las transacciones por cuenta y definen la propiedad, los permisos de edición y el uso compartido."
+        },
+        "currency": {
+          "title": "Elige la divisa de informe",
+          "description": "El selector recalcula el resumen de la página en la divisa que quieres comparar."
+        },
+        "views": {
+          "title": "Tarjetas, tabla y acciones de las cuentas",
+          "description": "Cambia de vista para comparar cuentas y abre una para revisar saldos, posiciones, transacciones y accesos."
+        },
+        "add": {
+          "title": "Añade un bróker",
+          "description": "Crea la cuenta que recibirá transacciones e importaciones. Una guía específica acompaña el formulario."
+        }
+      }
+    },
+    "brokerDetailGuide": {
+      "steps": {
+        "header": {
+          "title": "Identidad y acciones del bróker",
+          "description": "El encabezado identifica la cuenta y reúne sus principales acciones de edición, sincronización, uso compartido y navegación."
+        },
+        "overview": {
+          "title": "Resumen y efectivo",
+          "description": "El resumen muestra el valor, el rendimiento, la asignación y los saldos de efectivo de esta cuenta."
+        },
+        "positions": {
+          "title": "Posiciones y lotes",
+          "description": "Posiciones muestra qué contiene la cuenta y permite revisar los lotes que hay detrás de cada cantidad y coste."
+        },
+        "transactions": {
+          "title": "Transacciones e importaciones",
+          "description": "Esta pestaña filtra el historial de la cuenta y ofrece la ruta para añadir o importar sus operaciones."
+        },
+        "info": {
+          "title": "Información y uso compartido",
+          "description": "Revisa los metadatos de la cuenta y gestiona quién puede ver o editar este bróker."
+        }
+      }
+    },
+    "fxPageGuide": {
+      "steps": {
+        "overview": {
+          "title": "Tus pares de divisas",
+          "description": "Los pares de divisas proporcionan el historial de conversión que LibreFolio necesita para comparar valores expresados en distintas divisas."
+        },
+        "filters": {
+          "title": "Filtra fechas, divisas y vistas",
+          "description": "Acota el periodo y las divisas y elige tarjetas o tabla según la comparación que necesites."
+        },
+        "sync": {
+          "title": "Actualiza los tipos de cambio",
+          "description": "Sincronizar solicita tipos actualizados a la ruta de proveedores configurada para cada par."
+        },
+        "add": {
+          "title": "Añade un par de divisas",
+          "description": "Define una nueva dirección de conversión. Una guía específica explica las divisas y los proveedores."
+        }
+      }
+    },
+    "fxDetailGuide": {
+      "steps": {
+        "header": {
+          "title": "Par y dirección de conversión",
+          "description": "El encabezado muestra las divisas base y cotizada y las acciones para volver o invertir la dirección."
+        },
+        "provider": {
+          "title": "Ruta de proveedores y sincronización",
+          "description": "Elige cómo se obtienen los tipos y sincroniza cuando necesites actualizar la serie."
+        },
+        "chart": {
+          "title": "Explora el historial de tipos",
+          "description": "Usa el gráfico, las señales y las herramientas de medición para examinar cómo cambió el tipo de cambio con el tiempo."
+        },
+        "editor": {
+          "title": "Edita las observaciones manuales",
+          "description": "Abre el editor de datos para revisar o mantener los puntos de tipo manuales de este par."
+        }
+      }
+    },
+    "assetPageGuide": {
+      "steps": {
+        "overview": {
+          "title": "Tu catálogo de activos",
+          "description": "Los activos conectan las transacciones con instrumentos, divisas, precios, eventos y fuentes de datos de mercado."
+        },
+        "filters": {
+          "title": "Busca y compara activos",
+          "description": "Filtra por nombre, estado, divisa o tipo y alterna entre tarjetas y tabla."
+        },
+        "sync": {
+          "title": "Actualiza los datos de mercado",
+          "description": "Sincronizar solicita los valores actuales y el historial disponible a la fuente configurada de cada activo."
+        },
+        "add": {
+          "title": "Añade un activo",
+          "description": "Busca o define un nuevo instrumento. Una guía específica explica su identidad, divisa y proveedor."
+        }
+      }
+    },
+    "assetDetailGuide": {
+      "steps": {
+        "header": {
+          "title": "Identidad y estado del activo",
+          "description": "El encabezado identifica el instrumento y reúne su estado, navegación y acciones principales."
+        },
+        "chart": {
+          "title": "Historial de precios y análisis",
+          "description": "Usa el gráfico, las señales técnicas, la comparación y las herramientas de medición para explorar el historial del activo."
+        },
+        "editor": {
+          "title": "Gestiona precios y eventos",
+          "description": "Abre el editor de datos para revisar los precios manuales y los eventos que afectan a la serie del activo."
+        },
+        "metadata": {
+          "title": "Identificadores y metadatos",
+          "description": "Amplía los metadatos para revisar identificadores, clasificación, divisa y configuración del proveedor."
+        },
+        "risk": {
+          "title": "Escenarios de riesgo",
+          "description": "Abre Riesgo para examinar medidas históricas, escenarios de estrés, simulaciones y el contexto de la cartera."
+        }
+      }
     }
   }
 }

@@ -24,7 +24,7 @@ export interface ToolHostPropsV1<C extends ToolCode, V extends ToolVersion<C>> {
 
 export interface ToolRendererOptions<C extends ToolCode, V extends ToolVersion<C>> {
     componentKey: string;
-    uiContractVersion: number;
+    uiVersion: string;
     load: () => Promise<{default: Component<ToolHostPropsV1<C, V>>}>;
 }
 
@@ -45,6 +45,7 @@ export interface LoadedToolRenderer {
 export interface ToolRendererBinding {
     readonly descriptor: VerifiedToolDescriptor;
     readonly accountGeneration: number;
+    peek: () => LoadedToolRenderer | null;
     load: (options?: {signal?: AbortSignal}) => Promise<LoadedToolRenderer>;
 }
 
@@ -59,7 +60,7 @@ export interface CompiledToolRendererRegistration {
     readonly toolCode: string;
     readonly contractVersion: string;
     readonly componentKey: string;
-    readonly uiContractVersion: number;
+    readonly uiVersion: string;
     readonly [registrationBrand]: true;
     readonly [bindRenderer]: (catalog: VerifiedToolCatalog) => ToolRendererBinding;
 }
@@ -123,16 +124,42 @@ function mountToolComponent<C extends ToolCode, V extends ToolVersion<C>>(compon
 
 /** Register source-owned literal imports only; catalogue metadata never becomes an import path. */
 export function defineToolRenderer<const C extends ToolCode, const V extends ToolVersion<C>>(code: C, version: V, options: ToolRendererOptions<NoInfer<C>, NoInfer<V>>): CompiledToolRendererRegistration {
-    const {componentKey, uiContractVersion, load} = options;
+    const {componentKey, uiVersion, load} = options;
+    let loadedComponent: Component<ToolHostPropsV1<C, V>> | null = null;
+    let componentPromise: Promise<Component<ToolHostPropsV1<C, V>>> | null = null;
+
+    const resolvedRenderer = (component: Component<ToolHostPropsV1<C, V>>, descriptor: CompatibleToolDescriptor<C, V>): LoadedToolRenderer => ({
+        mount: (target: HTMLElement, mountOptions?: ToolRendererMountOptions) => mountToolComponent(component, descriptor, target, mountOptions),
+    });
+
+    const loadComponent = (): Promise<Component<ToolHostPropsV1<C, V>>> => {
+        if (loadedComponent) return Promise.resolve(loadedComponent);
+        if (componentPromise) return componentPromise;
+        componentPromise = load()
+            .then((module) => {
+                if (typeof module.default !== 'function') {
+                    throw new ToolClientError('renderer', 'renderer_load_failed');
+                }
+                loadedComponent = module.default;
+                return loadedComponent;
+            })
+            .catch((error: unknown) => {
+                componentPromise = null;
+                if (error instanceof ToolClientError) throw error;
+                throw new ToolClientError('renderer', 'renderer_load_failed');
+            });
+        return componentPromise;
+    };
+
     const registration: CompiledToolRendererRegistration = {
         toolCode: code,
         contractVersion: version,
         componentKey,
-        uiContractVersion,
+        uiVersion,
         [registrationBrand]: true,
         [bindRenderer](catalog: VerifiedToolCatalog): ToolRendererBinding {
             const contract = getCompiledToolContract(code, version);
-            if (!contract || contract.componentKey !== componentKey || contract.uiContractVersion !== uiContractVersion) {
+            if (!contract || contract.componentKey !== componentKey || contract.uiVersion !== uiVersion) {
                 throw new ToolClientError('renderer', 'renderer_registration_invalid');
             }
             const descriptor = verifyToolDescriptor(catalog, code, version);
@@ -140,22 +167,20 @@ export function defineToolRenderer<const C extends ToolCode, const V extends Too
             return Object.freeze({
                 descriptor,
                 accountGeneration,
+                peek(): LoadedToolRenderer | null {
+                    getToolDescriptorGeneration(descriptor);
+                    return loadedComponent ? resolvedRenderer(loadedComponent, descriptor) : null;
+                },
                 async load({signal}: {signal?: AbortSignal} = {}): Promise<LoadedToolRenderer> {
                     try {
                         getToolDescriptorGeneration(descriptor);
                         return await runToolSessionTask(
                             accountGeneration,
                             async (requestSignal) => {
-                                const component = await load();
+                                const component = await loadComponent();
                                 getToolDescriptorGeneration(descriptor);
                                 if (requestSignal.aborted) throw new ToolClientError('aborted', 'waiting_stopped');
-                                if (typeof component.default !== 'function') {
-                                    throw new ToolClientError('renderer', 'renderer_load_failed');
-                                }
-                                // The closure keeps the generated C/V props paired with their component.
-                                return {
-                                    mount: (target: HTMLElement, options?: ToolRendererMountOptions) => mountToolComponent(component.default, descriptor, target, options),
-                                };
+                                return resolvedRenderer(component, descriptor);
                             },
                             signal,
                         );
@@ -185,7 +210,7 @@ export function createToolRendererRegistry(registrations: readonly CompiledToolR
         if (entries.has(key)) blocked.set(key, 'renderer_collision');
         else entries.set(key, registration);
         const contract = getCompiledToolContract(registration.toolCode, registration.contractVersion);
-        if (!contract || registration[registrationBrand] !== true || registration.componentKey !== contract.componentKey || registration.uiContractVersion !== contract.uiContractVersion) {
+        if (!contract || registration[registrationBrand] !== true || registration.componentKey !== contract.componentKey || registration.uiVersion !== contract.uiVersion) {
             if (!blocked.has(key)) blocked.set(key, 'renderer_registration_invalid');
         }
         const claims = componentClaims.get(registration.componentKey) ?? [];
@@ -215,8 +240,13 @@ export function createToolRendererRegistry(registrations: readonly CompiledToolR
 const compiledRendererRegistrations: readonly CompiledToolRendererRegistration[] = [
     defineToolRenderer('pac_allocator', '1.0.0', {
         componentKey: 'pac-allocator',
-        uiContractVersion: 1,
+        uiVersion: '1.0.0',
         load: () => import('./pac-allocator/PacAllocatorTool.svelte'),
+    }),
+    defineToolRenderer('portfolio_rebalancer', '1.0.0', {
+        componentKey: 'portfolio-rebalancer',
+        uiVersion: '1.0.0',
+        load: () => import('./pac-allocator/PortfolioRebalancerTool.svelte'),
     }),
 ];
 const compiledRegistry = createToolRendererRegistry(compiledRendererRegistrations);
