@@ -1213,6 +1213,32 @@ chiuderne uno.**
 📌 **Raggio piccolo sul lato chiamanti** — `formatPercent` ha **5** consumatori — **ma il
 cambio è osservabile ovunque**, perché il formattatore del denaro è usato in tutta l'app.
 
+### 21 Set 2026 — misurato il perimetro vero, e il rischio è il 16 %
+
+Il pacchetto `T4` del round 2 non è mai partito. Prima di aprirlo ho contato i siti:
+
+```
+frontend/src/lib/components/risk/     26  toFixed
+tutto il resto dell'app              139  toFixed
+                                    ─────
+                                     165
+```
+
+> 🔑 **Il sottosistema rischio è un sesto del difetto.** Ripararlo lì dentro
+> produrrebbe l'unica pagina dell'app con il separatore giusto — cioè
+> **renderebbe la divergenza più visibile, non meno**: l'utente passerebbe da
+> «tutta l'app sbaglia allo stesso modo» a «questa pagina dice `−1,3 %` e quella
+> accanto `−1.3%`». Un difetto uniforme si legge come una convenzione; **un
+> difetto a chiazze si legge come un bug.**
+
+✅ **Decisione dello sviluppatore, 21 Set 2026**: *«mettiamo in TODO e facciamo tutto
+in futuro»*. `T4` esce dal round 2 **per intero** — non il rischio prima e il resto
+poi. Diventa una campagna sua, con i suoi tre passi qui sopra.
+
+⚠️ **E il passo 1 resta il vero lavoro**: i 165 `toFixed` sono meccanici, **la scelta
+della fonte della lingua no**. Chi riaprirà questa voce cominci da lì, o sostituirà
+165 chiamate legate al browser con 165 chiamate legate al browser.
+
 **Priorità**: media. **Non blocca il rischio**, e va fatto come lavoro di progetto con la sua
 verifica, non infilato dentro un pacchetto di superficie.
 
@@ -1464,21 +1490,39 @@ L'audit estrae come prefisso tutto ciò che precede la prima `${`, cioè `risk.`
 
 ### La taglia
 
+⚠️ **Cifre corrette il 21 Set da C**, su un catalogo nel frattempo cresciuto. Le misure di S4
+restano vere alla loro data; quelle qui sotto sono le attuali.
+
 ```
-prefissi radice NUDI: 12     →     954 chiavi su 2 886     =     33,1 % del catalogo
+prefissi radice NUDI: 14     →     1 016 chiavi su 3 363     =     30,2 % del catalogo
+                       ↑ ma 4 sono spazzatura di regex: `0`, `axios`, `msg`, `test`
 ```
+
+🔑 **E la cifra che conta è più piccola e più precisa**: delle 1 016 schermate, **819 hanno un
+riscontro letterale indipendente**. Le chiavi **senza altra prova che il cancello cieco** sono
+**197 — il 5,9 %**.
+
+> ⚠️ **Il 5,9 % non consola**, ed è C stesso a mostrare perché: quei riscontri indipendenti
+> possono essere **accidentali**. Le 14 `risk.errors.*` si salvano solo perché un *secondo* sito
+> (`levelHelpers.ts:210`) scrive il segmento **fisso**. Se domani quella riga usasse
+> `translatedCode('errors', …)` come il suo gemello, **cadrebbero tutte e quattordici in
+> silenzio**. Un riscontro accidentale è una prova che può sparire con un refactor innocuo.
+
+🔴 **E `risk.warnings` non esiste come stringa da nessuna parte nel sorgente**: l'unione
+tipizzata è **l'unica prova che quel prefisso esista**. Leggerla non è un modo più preciso di
+indovinare — è l'unico posto dove l'informazione c'è.
 
 | namespace | chiavi rese non verificabili |
 |---|---:|
-| `risk` | **282** |
+| `risk` | **332** |
 | `importWizard` | 273 |
 | `signals` | 148 |
 | `common` | 120 |
 | `chartSettings` | 102 |
 | `providerErrors` · `sectors` · `fileStatus` | 29 |
 
-⚠️ **Il `2 886 / 2 886 complete · 0 incomplete` riportato più volte in questa campagna era vero
-come uscita del comando, e su un terzo del catalogo non misurava niente.**
+⚠️ **Il `complete · 0 incomplete` riportato più volte in questa campagna era vero
+come uscita del comando, e su quei namespace non misurava niente.**
 
 ### 🔑 Perché è peggio del cancello dei link
 
@@ -1500,15 +1544,45 @@ butta via e ripiega sul troncamento alla prima interpolazione.
 Il lavoro è insegnare all'audit a leggere le unioni tipizzate dove ci sono, e a **dichiarare
 "non verificabile"** dove non ci sono — invece di dire «usata».
 
-### ⚠️ E una trappola per chi lo raccoglie
+### 🔴 21 Set — la trappola era nel MIO testo, e C l'ha disinnescata prima di raccoglierla
 
-La regola ancorata al punto (`risk.` invece di `risk`) dà **63 chiavi `risk.*` orfane**.
-**Almeno 14 sono vive**: `risk.errors.*` (8) e `risk.warnings.*` (6) sono legittimamente
-dinamiche. **«Non verificate» e «morte» sono due parole diverse.**
+Avevo scritto: *«la regola ancorata al punto (`risk.` invece di `risk`) dà 63 chiavi orfane»*.
+**Falso, e in modo pericoloso.** C ha girato **cinque varianti** invece di dichiarare il numero
+irriproducibile:
 
-L'unica orfana **provata per grep** è `risk.simulation.regimeTruncated` — presente in quattro
-lingue, con i campi che la alimenterebbero (`regime_declared_days`/`applied`) **già letti dieci
-volte dal frontend**, e resa da nessuno.
+| regola | orfane `risk.*` |
+|---|---:|
+| il cancello com'è oggi | 0 |
+| **«ancorata al punto»** ← *la mia etichetta* | 🔴 **0 — inerte** |
+| togliere il prefisso nudo `risk` | 47 |
+| + scartare il credito di `find_used_keys_in_backend()` | **60** ← *era questa la mia misura* |
+| solo riscontri letterali | 115 |
 
-**Priorità**: media. **Non blocca nulla**, ma ogni misura i18n fatta finora su quei dodici
-namespace va riletta come «non verificata» invece che come «pulita».
+`'risk.simulation.regimeTruncated'.startswith('risk.')` è **ancora `True`**: ancorare al punto
+ferma `riskFoo`, **mai `risk.qualunque.cosa`**. La regola che avevo girato non ancorava al punto:
+**buttava via il credito del backend.**
+
+> 🔑 **«Chi raccoglie questo testo e implementa alla lettera ciò che c'è scritto ottiene zero
+> orfane e un cancello che si dichiara riparato.»**
+>
+> È **la stessa forma del difetto che la voce descrive**, applicata alla voce che lo descrive:
+> un'istruzione che sembra prescrivere una misura e ne prescrive una **inerte**.
+
+### 🎯 Il numero da raggiungere è **4**, non 63 e non 47
+
+Triage delle 47 (*leaf* presente in `src` **oppure** codice snake emesso da `backend/app`):
+**43 vive · 4 morte.**
+
+| chiave | prova |
+|---|---|
+| `risk.simulation.regimeTruncated` | codice `regime_truncated` emesso da **0** file di backend |
+| `risk.levels.l3.{beta,sharpe,sortino}Help` | leaf assente e **nessun template `${…}Help` esiste** |
+
+I 7 `risk.warnings.*` che emergono sono **tutti emessi dal backend** → vivi. Le 14
+`risk.errors.*` pure.
+
+> **63 = rotto · 47 = a metà · 4 = riparato.** Il cancello di accettazione è un **diff
+> prima/dopo** in cui l'unico delta ammesso sono quelle quattro.
+
+**Priorità**: media. **Non blocca nulla**, ma ogni misura i18n fatta finora su quei namespace
+va riletta come «non verificata» invece che come «pulita».
