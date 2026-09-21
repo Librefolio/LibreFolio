@@ -1106,7 +1106,9 @@ describe('canonical overlay axis and reference helpers', () => {
                 const renderChart = source.slice(renderStart, renderEnd);
                 expect(resetState).toContain('resolutionResetPending = true;');
                 expect(source).toMatch(/if \(history !== lastHistoryRef\) \{[\s\S]*?resetResolutionState\(preservedRange\);[\s\S]*?\}/);
-                expect(renderChart).toMatch(/if \(resolutionResetPending\) \{\s*const counts = computeBucketCounts\(logicalRange\.startDate, logicalRange\.endDate\);\s*currentResolution = chooseInitialResolution\(counts, chartInstance\.getWidth\(\)\);\s*resolutionResetPending = false;\s*\}/);
+                expect(renderChart).toMatch(
+                    /if \(resolutionResetPending\) \{\s*const counts = computeBucketCounts\(logicalRange\.startDate, logicalRange\.endDate\);\s*currentResolution = chooseInitialResolution\(counts, chartInstance\.getWidth\(\), resolutionGrammar\);\s*resolutionResetPending = false;\s*\}/,
+                );
 
                 const historyDates = Array.from({length: 3_000}, (_, index) => new Date(Date.UTC(2020, 0, index + 1)).toISOString().slice(0, 10));
                 const preservedRange = {
