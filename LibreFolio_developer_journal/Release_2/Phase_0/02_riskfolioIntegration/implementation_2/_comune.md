@@ -18,12 +18,18 @@
 
 | superficie | chi scrive | gli altri |
 |---|---|---|
-| `levels/RiskLevelsPanel.svelte` | **S1** | chiedono a S1 |
+| `levels/RiskLevelsPanel.svelte` | round 2: **S1** → round 3: **A**, sole aggiunte | chiedono ad A |
 | `levels/levelHelpers.ts` | **S1** | chiedono a S1 |
 | `i18n/*.json` | ciascuno **solo** nel proprio namespace | il coordinatore verifica l'unione |
-| `scripts/test_runner/*` | **T3** | nessun altro |
-| `frontend/e2e/portfolio/*.spec.ts` | **T3** | nessun altro |
+| `scripts/test_runner/*` | ~~**T3**~~ → **il coordinatore** | i mandati **dichiarano** i file nuovi nell'handoff, non li registrano |
+| `frontend/e2e/portfolio/*.spec.ts` | ~~**T3**~~ → round 3: **A** su `risk-lab.spec.ts` | gli altri passano dal coordinatore |
+| `ui/display/ScatterChart.svelte` | round 3: **A**, sole aggiunte | mai un default cambiato |
 | `implementation_2/PRIMITIVE.md` | **F2** (chiuso) | lo leggono tutti |
+
+> 🔴 **21 Set — `T3` non esiste più.** Si è svuotata durante la fase 2: ogni superficie ha
+> scritto i propri spec e `check-orphans` dà zero orfani. **Una riga che nomina un mandato
+> mai aperto non è vuota, è falsa** — e si legge come un divieto, perché un divieto non ha
+> bisogno di un titolare vivo per sembrare valido. Dettaglio in `REGISTRO.md §2`.
 
 ## I quattro vincoli misurati
 
@@ -211,3 +217,102 @@ Non «i test passano».
   e **nominalo a ogni handoff**: nel round 1 gli otto `*-esecuzione.md` sono stati gli unici file
   a esistere solo sul disco, perché il piano si aggiorna *dopo* il passo e nessun checkpoint
   automatico lo contiene mai.
+
+---
+
+## I vincoli del round 3
+
+### Ⓘ — `front check` non ha mai controllato uno spec, e il cancello di fase lo ignorava
+
+**Trovato da A il 21 Set**, per mano del suo specialista: `./dev.py front check` esegue
+`svelte-check --tsconfig ./tsconfig.json`, e **quel tsconfig ha `"exclude": ["e2e/**/*"]`**.
+
+> 🔑 ***«La risposta giusta a una domanda che quello strumento non sta ascoltando.»***
+> Il cancello *«non deve aggiungere un quarto errore»* non poteva dire niente su uno spec,
+> perché lo spec non è nel suo perimetro — e passava, verde, esattamente come se lo avesse
+> controllato.
+
+✅ **Chiunque tocchi un file sotto `frontend/e2e/` aggiunge al proprio cancello:**
+
+```bash
+npx tsc -p tsconfig.e2e.json --noEmit
+```
+
+⚠️ Sulla baseline `f829cd76b` ci sono **76 errori preesistenti** (`onboarding-tour`, `tools/*`) e
+**0 in tutto `e2e/portfolio/`**. Il cancello è quindi *«zero in `e2e/portfolio/`»*, non «zero».
+
+### Ⓙ — il cancello `front check` non è «verde», ed è così per costruzione
+
+La baseline eredita **3 errori** da `dev_release2`, verificati **byte-identici** e con **zero file
+`risk`** coinvolti:
+
+```
+ToolExecutionMetrics.svelte:44:55
+TransactionFormModal.test.ts:787:48  ·  :819:48
+```
+
+✅ **Il cancello è: «gli stessi 3, e nessuno in un file risk».**
+
+> **Un cancello che non si può passare va ridefinito con la sua misura, non ignorato** —
+> altrimenti il primo rosso vero si legge come quello ereditato.
+
+### Ⓚ — un worktree fresco non compila il frontend, e una corsia sana e una malata danno lo stesso verde
+
+**Riprodotto da A e dal coordinatore indipendentemente**, 21 Set. Su una corsia nuova:
+
+```
+❌ Download failed and no cached version exists   (mathjax)
+❌ Resource cache incomplete - aborting frontend build
+```
+
+**Due cause sovrapposte:**
+
+| | causa | chi ripara |
+|---|---|---|
+| **SSL** | il `certifi` del venv condiviso non verifica il CDN — `curl -I` → **200**, `urlopen` dentro il venv → `CERTIFICATE_VERIFY_FAILED` | 🔴 **developer**, a corsie ferme |
+| **politica** | `scripts/update_js_cache.py` rende **hard failure** un asset con `vendor_dir_key: "mkdocs"`, e con quello **aborta il build dell'applicazione** — benché `grep mathjax frontend/` dia **zero** | **C**, round 3 |
+
+🔑 **E l'aggravante è di metodo**: la corsia del coordinatore gira **perché ha una cache del
+18 Set**, non perché sia sana. **Una corsia sana e una malata producono lo stesso verde, e il
+verde della prima non significa niente.**
+
+📌 **Ripristino autorizzato solo con provenienza verificata**: il manifesto porta
+`current_hash` e `size`, e la copia vale solo se **entrambi combaciano** con la fonte canonica
+(`300480069078` · `1 173 007`, confermato contro il `Content-Length` del CDN). Un ripristino di
+cache con hash verificato **non è un aggiramento**; `pip install --upgrade certifi` lo sarebbe,
+perché tocca il venv di **tutte** le corsie.
+
+### Ⓛ — la cartella dati si passa solo con `--data-dir`
+
+**Trovato da A il 21 Set.** `LIBREFOLIO_DATA_DIR` **non è il meccanismo**: il server la ignora e
+usa `backend/data/test/`.
+
+> 🔑 **Non «uno strumento risponde alla domanda che gli si fa», ma uno strumento che risponde
+> correttamente alla domanda giusta, su un soggetto che non ha dichiarato.** I numeri erano
+> esatti e venivano dal database sbagliato — e niente nella risposta lo diceva.
+
+⚠️ Non produce contaminazione tracciata (`backend/data/**` è ignorato), **ma fa misurare la
+corsia sbagliata**, che è peggio: una contaminazione si vede, una misura fuori soggetto no.
+
+### Ⓜ — il grafo Alembic non è unito da Git, e nessun cancello lo guarda
+
+Il merge `f829cd76b` ha prodotto **due teste** — `003_asset_benchmark_flag_and_taxonomy` e
+`003_user_onboarding_progress`, entrambe con `down_revision = "5b1333fa6b07"`.
+
+> **File diversi, stesso genitore: un conflitto semantico senza conflitto testuale.**
+> Git ha unito i file **senza unire il grafo**.
+
+✅ **Dopo ogni aggiornamento di baseline che porti migrazioni, prima di qualunque altra cosa:**
+
+```bash
+PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run alembic -c backend/alembic.ini heads
+```
+
+**Una sola riga, o il grafo è biforcato.** ⚠️ Un DB **già esistente** continua a funzionare su
+una delle due teste: **solo chi ne crea uno nuovo incontra il muro**. Le corsie che girano,
+girano **per anzianità, non per salute**.
+
+🔴 **E il cancello della riparazione ha tre livelli, di cui il terzo è quello che nessuno
+penserebbe di fare**: ① `heads` dà una testa · ② un DB fresco si crea · ③ **un DB stampato sulla
+testa preesistente fa `upgrade head`** — *il percorso delle installazioni rilasciate, l'unico che
+prova che un utente che aggiorna non si rompe*.
