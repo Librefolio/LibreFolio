@@ -27,7 +27,7 @@
     import {buildResponsiveXAxisPolicy} from '$lib/components/charts/responsiveXAxis';
     import {clampGrowthLogicalRange, type GrowthLogicalRange} from './growthChartRange';
     import ResolutionBadge from '$lib/components/charts/ResolutionBadge.svelte';
-    import {aggregateLineSeries, mapDateToBucket, cascadeResolution, chooseInitialResolution} from '$lib/components/charts/timeSeriesAggregation';
+    import {aggregateLineSeries, mapDateToBucket, cascadeResolution, chooseInitialResolution, type ChartGrammar} from '$lib/components/charts/timeSeriesAggregation';
     import type {ChartResolution} from '$lib/components/charts/timeSeriesAggregation';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import type {PortfolioHistoryPoint, PortfolioBrokerPnlHistory, PortfolioPnlCandleSeries, PortfolioIncomeHistorySeries, PortfolioCostHistorySeries, PortfolioDepositHistorySeries, PortfolioAcquisitionFundingSeries} from '$lib/stores/portfolio/portfolioStore.svelte';
@@ -79,8 +79,9 @@
     // coreMode = value|return|pnl (plan §5.1); kept as the existing 'eur'/'pct'/'pnl'
     // literal union for minimal churn on the 14 existing branches, not a rename.
     let viewMode: 'eur' | 'pct' | 'pnl' = $state('eur');
-    // pnlSubmode = line|candles|income (plan §5.1); only 'line' has a real branch until
-    // G1b/G1c land — no submode picker UI is shown while the other two are inert.
+    // pnlSubmode = line|candles|income (plan §5.1). All three submodes are live and the
+    // picker is rendered (data-testid growth-pnl-submode-*); 'candles' is where the
+    // synthetic OHLC series is shown.
     let pnlSubmode: 'line' | 'candles' | 'income' = $state('line');
     // Zoom-window preset, shared by ALL THREE P&L submodes (see selectZoomWindow).
     // Named for the zoom it drives, NOT for a submode: it began life income-only, but
@@ -100,6 +101,7 @@
     let lastRenderedMode: string | null = null;
     let lastRenderedDark: boolean | null = null;
     let lastHistoryRef: PortfolioHistoryPoint[] | null = null;
+    let lastSyncedGrammar: ChartGrammar | null = null;
     let responsiveXAxisCompact = false;
     const resizeWatcher = createResizeWatcher(() => {
         chartInstance?.resize();
@@ -229,6 +231,13 @@
             acquisition: {fromNewCapital: AggregatedMetric; fromReinvested: AggregatedMetric};
         };
     }
+
+    /**
+     * Candles need a far wider bucket slot than a line to stay legible, so the resolution
+     * cascade is asked a grammar-specific question. Only the submode decides this — the
+     * bucketing itself is identical for every grammar.
+     */
+    const resolutionGrammar: ChartGrammar = $derived.by(() => (viewMode === 'pnl' && pnlSubmode === 'candles' ? 'candle' : 'line'));
 
     const resolutionCache = new Map<ChartResolution, {inputs: AggregationInputs; data: AggregatedResolutionData}>();
     let activeChartData: AggregatedResolutionData | null = null;
@@ -476,6 +485,7 @@
 
     function resetResolutionState(preservedRange: GrowthLogicalRange | null = null) {
         resolutionCache.clear();
+        lastSyncedGrammar = null;
         activeChartData = null;
         currentResolution = 'daily';
         resolutionResetPending = true;
@@ -1194,7 +1204,7 @@
 
         const counts = computeBucketCounts(logicalRange.startDate, logicalRange.endDate);
         const plotWidthPx = chartInstance.getWidth();
-        const targetResolution = cascadeResolution(currentResolution, counts, plotWidthPx);
+        const targetResolution = cascadeResolution(currentResolution, counts, plotWidthPx, resolutionGrammar);
 
         if (targetResolution === currentResolution) return;
 
@@ -1276,6 +1286,16 @@
             tick().then(() => {
                 setupResizeObserver();
                 renderChart();
+                // Switching submode changes the grammar, and the grammar changes the
+                // density threshold the cascade answers with — but nothing else on this
+                // path re-runs the cascade (it fires only on dataZoom and resize). Without
+                // this, entering the candles submode keeps the resolution chosen under the
+                // line threshold and the candles stay unreadably narrow until the user
+                // happens to zoom.
+                if (resolutionGrammar !== lastSyncedGrammar) {
+                    lastSyncedGrammar = resolutionGrammar;
+                    syncResolutionToViewport();
+                }
             });
         }
     });
@@ -1327,7 +1347,7 @@
 
         if (resolutionResetPending) {
             const counts = computeBucketCounts(logicalRange.startDate, logicalRange.endDate);
-            currentResolution = chooseInitialResolution(counts, chartInstance.getWidth());
+            currentResolution = chooseInitialResolution(counts, chartInstance.getWidth(), resolutionGrammar);
             resolutionResetPending = false;
         }
 
