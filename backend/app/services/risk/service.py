@@ -256,16 +256,36 @@ class RiskService:
                     data_quality=self._data_quality(plan, plan_context),
                 )
                 continue
-            except (ValueError, ArithmeticError) as exc:
-                results[index] = self._unavailable(
-                    plan.request,
-                    RiskErrorCode.UNDEFINED_METRIC,
-                    str(exc),
-                    metadata=self._metadata(plan, plan_context),
-                    data_quality=self._data_quality(plan, plan_context),
-                )
-                continue
-            except Exception as exc:  # pragma: no cover - defensive isolation boundary
+            except Exception as exc:
+                # Every failure that a plugin did not DECLARE lands here, and it is
+                # reported as ours rather than as a property of the user's data.
+                #
+                # This branch used to be preceded by `except (ValueError,
+                # ArithmeticError)`, which answered the same class of event with
+                # `UNDEFINED_METRIC` -- "The metric is undefined for these data." --
+                # and, unlike this one, WITHOUT logging. Two consequences made that
+                # the wrong pairing, and neither is a matter of taste:
+                #
+                #  * a violated internal invariant was delivered to the user as a
+                #    verdict about their portfolio. Nobody reports a bug they have
+                #    been told is a limitation of their own data, so the defect was
+                #    both invisible to us (no log) and un-actionable for them;
+                #  * an over-reported fault gets investigated and then narrowed into
+                #    an explicit code; an under-reported one stays silent forever.
+                #    The two errors are not symmetric, so the safe default is the
+                #    one that says "we failed" rather than "your data cannot".
+                #
+                # A metric that is genuinely undefined for well-formed data is NOT
+                # expressed by raising: it is a per-value `RiskValueStatus.UNDEFINED`
+                # (see `correlation.py`), which keeps the rest of the result usable.
+                # So an exception arriving here never meant "undefined metric" in the
+                # first place. `UNDEFINED_METRIC` stays in the enum for a plugin that
+                # declares it through `RiskUnavailableError`, caught above.
+                #
+                # `str(exc)` is deliberately NOT propagated: internal English prose
+                # would reach the payload while the client renders only the code. The
+                # detail belongs in the log, where it is actionable; the code is what
+                # crosses the wire.
                 logger.exception(
                     "Risk analytic execution failed",
                     analytic_code=plan.request.analytic_code,

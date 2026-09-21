@@ -24,6 +24,7 @@ from backend.app.schemas.risk import (
     PreparedAssetSeries,
     PreparedAssetSeriesSet,
     RiskAnalyticRequest,
+    RiskErrorCode,
     RiskKpiOutput,
     RiskMode,
     RiskOutputKind,
@@ -38,6 +39,7 @@ from backend.app.services.risk.base import (
     RiskAnalytic,
     RiskAssetClassification,
     RiskComputation,
+    RiskUnavailableError,
 )
 from backend.app.services.risk.service import (
     RiskScopeAccessError,
@@ -1242,3 +1244,110 @@ async def test_worthless_slice_fails_on_its_own_value_not_on_net_worth(monkeypat
     assert sliced.composition_error == "Current composition requires positive slice value"
     assert whole.scope_value == Decimal("400")
     assert whole.composition_error is None
+
+
+# ---------------------------------------------------------------------------
+# A failure the plugin did not declare is OURS, not a verdict on the user's data
+# ---------------------------------------------------------------------------
+
+
+class ValueErrorAnalytic(GoodAnalytic):
+    """A violated internal invariant, which is what a bare ValueError means here."""
+
+    analytic_code = "value_error_analytic"
+
+    def compute(self, params, context):
+        raise ValueError("covariance matrix is not symmetric")
+
+
+class DeclaredUndefinedAnalytic(GoodAnalytic):
+    """A metric a plugin DECLARES undefined, through the documented mechanism."""
+
+    analytic_code = "declared_undefined_analytic"
+
+    def compute(self, params, context):
+        raise RiskUnavailableError(
+            "the ratio has no denominator for this window",
+            code=RiskErrorCode.UNDEFINED_METRIC,
+        )
+
+
+@pytest.mark.asyncio
+async def test_undeclared_value_error_is_reported_as_ours_while_a_declared_one_survives(monkeypatch):
+    """The two halves of the same rule, asserted together on purpose.
+
+    `ValueError` used to be caught one branch earlier than `Exception` and
+    answered with `UNDEFINED_METRIC` -- "The metric is undefined for these
+    data." -- and without any log. So a violated invariant was delivered as a
+    statement about the user's portfolio: unfixable for them, and invisible to
+    us. Nobody files a bug against a limitation they have been told is theirs.
+
+    Removing that branch must remove the PRESUMPTION without removing the
+    CAPABILITY, which is why both analytics run in one query:
+
+      * the undeclared `ValueError` must now read `execution_failed`;
+      * a plugin that deliberately declares `UNDEFINED_METRIC` must still get
+        it, unchanged.
+
+    Asserted in a single response because that is the pair that can regress:
+    re-adding a blanket `except ValueError` would keep the second assertion
+    green while silently breaking the first.
+    """
+    service = RiskService(db=object())
+    prepared = make_prepared_set({1: [0.01, -0.01] * 10})
+
+    async def fake_scope(**_kwargs):
+        return scope_inputs((1,))
+
+    async def fake_assets(_asset_ids):
+        return {1}
+
+    async def fake_prepare(**_kwargs):
+        return prepared
+
+    plugin_map = {
+        ValueErrorAnalytic.analytic_code: ValueErrorAnalytic,
+        DeclaredUndefinedAnalytic.analytic_code: DeclaredUndefinedAnalytic,
+        GoodAnalytic.analytic_code: GoodAnalytic,
+    }
+    monkeypatch.setattr(
+        RiskAnalyticRegistry,
+        "get_plugin",
+        classmethod(lambda cls, code: plugin_map.get(code)),
+    )
+    monkeypatch.setattr(service, "_load_scope_inputs", fake_scope)
+    monkeypatch.setattr(service, "_existing_asset_ids", fake_assets)
+    monkeypatch.setattr(service, "_prepare_asset_series", fake_prepare)
+
+    response = await service.execute(
+        user_id=7,
+        request=RiskQueryRequest(
+            scope={"kind": "asset", "asset_id": 1},
+            date_range=prepared.requested_range,
+            target_currency="EUR",
+            mode=RiskMode.HISTORICAL,
+            analytics=[
+                RiskAnalyticRequest(instance_id="undeclared", analytic_code=ValueErrorAnalytic.analytic_code),
+                RiskAnalyticRequest(instance_id="declared", analytic_code=DeclaredUndefinedAnalytic.analytic_code),
+                RiskAnalyticRequest(instance_id="fine", analytic_code=GoodAnalytic.analytic_code),
+            ],
+        ),
+    )
+
+    undeclared, declared, fine = response.items
+    assert undeclared.status == RiskResultStatus.FAILED
+    assert undeclared.error.code == RiskErrorCode.EXECUTION_FAILED
+    # The internal sentence stays server-side. It reached the payload before,
+    # under a code saying the data were at fault -- prose the client never
+    # renders anyway, since it translates the CODE. The traceback goes to the
+    # log, where it can be acted on; only `error_type` crosses the wire.
+    assert "covariance" not in undeclared.error.message
+    assert undeclared.error.details == {"error_type": "ValueError"}
+
+    # The declared refusal is untouched: same exception base class, opposite
+    # treatment, because this one carries an intent.
+    assert declared.status == RiskResultStatus.UNAVAILABLE
+    assert declared.error.code == RiskErrorCode.UNDEFINED_METRIC
+
+    # And neither failure aborts the query for its neighbours.
+    assert fine.status == RiskResultStatus.OK

@@ -12,6 +12,7 @@ from pydantic import ValidationError
 
 from backend.app.schemas.risk import (
     RiskCompositionPolicy,
+    RiskErrorCode,
     RiskSamplingStrategy,
     RiskSimulationBandPoint,
     RiskSimulationCovarianceEstimator,
@@ -20,6 +21,7 @@ from backend.app.schemas.risk import (
     RiskSimulationProcess,
     RiskSimulationRegime,
 )
+from backend.app.services.risk.base import RiskUnavailableError
 from backend.app.services.risk.quant import engine as simulation_engine_module
 from backend.app.services.risk.quant import resampling as resampling_module
 from backend.app.services.risk.quant.engine import (
@@ -34,6 +36,7 @@ from backend.app.services.risk.quant.estimation import (
     estimate_gbm_parameters,
 )
 from backend.app.services.risk.quant.models import (
+    MAX_SOBOL_DIMENSION,
     SimulationEngineRequest,
     SimulationEngineResult,
     historical_returns_digest,
@@ -50,7 +53,10 @@ from backend.app.services.risk.quant.spawn_worker import SpawnWorkerResult
 from backend.app.services.risk.quant.workers import (
     shutdown_quant_worker_pools,
 )
-from backend.app.services.risk_plugins.simulation import SimulationParams
+from backend.app.services.risk_plugins.simulation import (
+    SimulationAnalytic,
+    SimulationParams,
+)
 
 
 def engine_request(**overrides) -> SimulationEngineRequest:
@@ -1563,3 +1569,108 @@ def test_simulation_output_refuses_half_a_drift_uncertainty_disclosure():
             drift_uncertainty_factor=1.2,
             drift_uncertainty_observations=0,
         )
+
+
+# ---------------------------------------------------------------------------
+# Declared refusals: the two guards whose predicate `validate_params` cannot see
+# ---------------------------------------------------------------------------
+#
+# Both predicates compare a PARAMETER against something only known at execution
+# time -- the observation count, the size of the scope. Parameter validation runs
+# before either exists, so these cannot be moved upstream: they are reachable by
+# construction for any user who picks the combination.
+#
+# The engine checks both too, but it raises a bare ValueError, which the service
+# can only report as a failure of ours. These tests assert the PLUGIN refuses
+# first, with a code that names the user's choice -- and each is paired with a
+# control that keeps everything else fixed, so a green cannot come from the
+# request being malformed for some unrelated reason.
+
+
+def _returns_by_asset(asset_count: int, observations: int) -> dict[int, list[float]]:
+    """Synthetic returns. Only the SHAPE is under test, never the values."""
+    return {asset_id: [0.001] * observations for asset_id in range(1, asset_count + 1)}
+
+
+def test_bootstrap_refuses_a_block_longer_than_the_history_as_invalid_parameters():
+    params = SimulationParams.model_validate({"process": "block_bootstrap", "block_length_days": 900})
+    asset_ids = (1,)
+
+    with pytest.raises(RiskUnavailableError) as refused:
+        SimulationAnalytic._build_bootstrap_request(params, _returns_by_asset(1, 30), asset_ids, [1.0], 0.0)
+
+    # INVALID_PARAMETERS, not INSUFFICIENT_HISTORY: the user can lower the block
+    # length, which is an action available to them; "find more history" usually
+    # is not. The code has to name the door that is actually open.
+    assert refused.value.code == RiskErrorCode.INVALID_PARAMETERS
+    assert refused.value.details == {"block_length_days": 900, "observations": 30}
+
+    # CONTROL -- the identical parameters against a longer history are accepted.
+    # Without this the test above would also pass if the builder refused every
+    # bootstrap request, which is a different bug wearing the same green.
+    request, observations = SimulationAnalytic._build_bootstrap_request(params, _returns_by_asset(1, 1000), asset_ids, [1.0], 0.0)
+    assert observations == 1000
+    assert request.block_length_days == 900
+
+
+def test_parametric_qmc_refuses_an_oversized_sobol_dimension_as_resource_limit():
+    horizon = 3650
+    params = SimulationParams.model_validate(
+        {
+            "process": "gbm",
+            "sampling_method": "qmc",
+            "horizon_days": horizon,
+            "path_count": 8192,
+        }
+    )
+    # Derived from the live limit rather than hard-coded: if MAX_SOBOL_DIMENSION
+    # moves, this test follows it instead of turning red for the wrong reason.
+    largest_allowed = MAX_SOBOL_DIMENSION // horizon
+    over = largest_allowed + 1
+
+    with pytest.raises(RiskUnavailableError) as refused:
+        SimulationAnalytic._build_parametric_request(
+            params,
+            _returns_by_asset(over, 60),
+            [1.0 / over] * over,
+            0.0,
+            annualization_factor=252.0,
+        )
+
+    assert refused.value.code == RiskErrorCode.RESOURCE_LIMIT
+    assert refused.value.details["limit"] == MAX_SOBOL_DIMENSION
+    assert refused.value.details["required_dimension"] == over * horizon
+    assert refused.value.details["horizon_days"] == horizon
+
+    # CONTROL: one asset fewer, everything else identical, is accepted. The only
+    # moving part between the refusal and this line is the size of the scope.
+    request, _observations = SimulationAnalytic._build_parametric_request(
+        params,
+        _returns_by_asset(largest_allowed, 60),
+        [1.0 / largest_allowed] * largest_allowed,
+        0.0,
+        annualization_factor=252.0,
+    )
+    assert len(request.asset_ids) == largest_allowed
+    assert request.horizon_days == horizon
+
+
+def test_mc_sampling_is_not_subject_to_the_sobol_dimension_limit():
+    """The Sobol ceiling belongs to QMC, and must not leak onto the MC path.
+
+    Guarding unconditionally would refuse a scope that the engine runs happily,
+    which is the mirror of the defect being fixed: a working request reported as
+    a limit. The engine applies the check only under QMC, so the plugin must too.
+    """
+    horizon = 3650
+    params = SimulationParams.model_validate({"process": "gbm", "sampling_method": "mc", "horizon_days": horizon})
+    over = (MAX_SOBOL_DIMENSION // horizon) + 1
+
+    request, _observations = SimulationAnalytic._build_parametric_request(
+        params,
+        _returns_by_asset(over, 60),
+        [1.0 / over] * over,
+        0.0,
+        annualization_factor=252.0,
+    )
+    assert len(request.asset_ids) * request.horizon_days > MAX_SOBOL_DIMENSION
