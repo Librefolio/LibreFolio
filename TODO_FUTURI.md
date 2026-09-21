@@ -487,6 +487,38 @@ sua unità minima di valuta è ora derivata da Babel (`minor_unit`), che è nel
 contratto v2 e che il motore legge davvero. È il primo campo che la regola
 condanna, ed è quello che l'ha generata.
 
+**Secondo precedente, con il segno invertito** (21/09/2026): `ToolDocumentation.path`
+nel descrittore di un Tool. Il modello ne valida **la forma** — relativo, niente
+`..` — e **non l'esistenza**. Il frontend lo consuma davvero (`ToolAboutPanel`,
+`ToolDiagnosticsPanel`, `presentation.ts`) e ci porta l'utente con un pulsante.
+Quindi un path verso una pagina cancellata **supera ogni gate**.
+
+> Vale la pena tenerli accoppiati, perché insieme dicono una cosa che nessuno
+> dei due dice da solo: `monetary_step` era **dichiarato e mai consumato**,
+> `ToolDocumentation.path` è **consumato e mai verificato**. Il difetto non sta
+> in una direzione particolare — sta nel **non controllare l'estremo**. Una
+> regola con due casi opposti è più forte di una con un caso solo, perché il
+> lettore capisce dov'è il buco invece di imparare un esempio.
+
+**Terzo precedente, con la prova accanto** (21/09/2026): `RebalancerPolicy`,
+`type RebalancerPolicy = Literal["invest_only", "invest_and_sell"]` in
+`services/pac_allocator/models.py`. Zero consumatori in tutto il repository, e i
+suoi due valori sono **interamente contenuti** in `PlannerPolicy`, che è il tipo
+davvero usato (campo `policy` in due dataclass).
+
+L'argomento che lo ha condannato non è il conteggio, che si poteva leggere come
+«predisposizione per il lavoro che viene»: è che il disegno del Rebalancer v2 —
+`plan-phase00PacRebalancerArchitecture.prompt.md`, **1226 righe** — non lo nomina
+mai. `RebalancerPolicy` 0 occorrenze, `PlannerPolicy` 0 occorrenze,
+`invest_and_sell` 1 sola occorrenza in §12.4 e come nome di un *programma
+ristretto del solver*, cioè un concetto diverso da un valore di policy.
+
+> Registrato **con la misura, non con la conclusione**: chi lo rileggerà saprà
+> che è stato deciso su una prova e non su una preferenza. Se il Rebalancer avrà
+> bisogno di un tipo ristretto, nascerà con il disegno in mano — un tipo
+> ereditato da un'epoca precedente arriva con le sue assunzioni e nessuno che le
+> ricordi.
+
 **Perché è differito e non dimenticato**: decisione developer del 21/09 —
 *«buona idea, ma da fare solo alla fine, quando il sistema è funzionante e si
 passa alla fase di condensazione e potenziamento»*. Costruire il gate adesso
