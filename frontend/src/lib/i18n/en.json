@@ -3354,6 +3354,7 @@
         "replayExcludeAndRetry": "Leave it out and run again",
         "replayTotal": "This composition would have ended the period at {percent} {amount}",
         "replayAudit": "Stand-ins: {proxies} · Left out: {excluded} ({weight} of the scope, carried at zero return)",
+        "replayAuditOmitted": "Stand-ins: {proxies} · Left out: {excluded} (omitted from the replay: the figures speak for the rest)",
         "shockShowDetail": "Show the shock per bucket",
         "shockHideDetail": "Hide the shock per bucket",
         "shockTotal": "This scenario would move the scope by {percent} {amount}",

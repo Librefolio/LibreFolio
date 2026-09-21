@@ -3354,6 +3354,7 @@
         "replayExcludeAndRetry": "Exclure et relancer",
         "replayTotal": "Cette composition aurait terminé la période à {percent} {amount}",
         "replayAudit": "Substituts : {proxies} · Exclus : {excluded} ({weight} du périmètre, à rendement nul)",
+        "replayAuditOmitted": "Substituts : {proxies} · Exclus : {excluded} (omis du rejeu : les chiffres parlent pour les autres)",
         "shockShowDetail": "Afficher le choc par compartiment",
         "shockHideDetail": "Masquer le choc par compartiment",
         "shockTotal": "Ce scénario déplacerait le périmètre de {percent} {amount}",

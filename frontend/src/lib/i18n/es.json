@@ -3354,6 +3354,7 @@
         "replayExcludeAndRetry": "Excluir y reintentar",
         "replayTotal": "Esta composición habría cerrado el periodo en {percent} {amount}",
         "replayAudit": "Sustitutos: {proxies} · Excluidos: {excluded} ({weight} del ámbito, con rendimiento cero)",
+        "replayAuditOmitted": "Sustitutos: {proxies} · Excluidos: {excluded} (omitidos de la repetición: las cifras hablan por el resto)",
         "shockShowDetail": "Mostrar el choque por bucket",
         "shockHideDetail": "Ocultar el choque por bucket",
         "shockTotal": "Este escenario movería el ámbito un {percent} {amount}",
