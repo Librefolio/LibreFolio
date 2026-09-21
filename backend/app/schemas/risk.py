@@ -1056,6 +1056,22 @@ class RiskSimulationOutput(StrictModel):
     terminal_mean_return: FiniteFloat = Field(..., gt=-1)
     terminal_volatility: FiniteFloat = Field(..., ge=0)
     probability_of_loss: FiniteFloat = Field(..., ge=0, le=1)
+    drift_uncertainty_factor: Optional[FiniteFloat] = Field(
+        None,
+        ge=1,
+        description="95% confidence factor on the cumulative drift, from estimation error alone. Multiplicative: the band it qualifies is compounded.",
+    )
+    drift_uncertainty_observations: Optional[PositiveInt] = Field(
+        None,
+        description="Sample size the drift was estimated from, so the factor can be read as a consequence rather than a verdict.",
+    )
+
+    @model_validator(mode="after")
+    def validate_drift_uncertainty_disclosure(self) -> RiskSimulationOutput:
+        """A factor without its sample size is a number nobody can argue with."""
+        if (self.drift_uncertainty_factor is None) != (self.drift_uncertainty_observations is None):
+            raise ValueError("drift uncertainty must disclose both the factor and the observation count")
+        return self
 
     @model_validator(mode="after")
     def validate_regime_disclosure(self) -> RiskSimulationOutput:

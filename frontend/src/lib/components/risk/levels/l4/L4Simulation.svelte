@@ -1,4 +1,6 @@
 <script lang="ts">
+    import {AlertTriangle} from 'lucide-svelte';
+
     import {schemas} from '$lib/api';
     import {_ as t} from '$lib/i18n';
     import type {RenderedSignal} from '$lib/charts/signals';
@@ -11,6 +13,7 @@
     import {addDays} from '../../riskAnalysisHelpers';
     import SimulationProvenance from '../SimulationProvenance.svelte';
     import {buildSimulationProvenance} from '../simulationProvenance';
+    import {buildDriftUncertainty} from './driftUncertainty';
     import {DEFAULT_SIMULATION_MODE, SIMULATION_MODES, simulationModeSpec, type SimulationMode} from './simulationModes';
 
     /**
@@ -64,6 +67,20 @@
     let output = $derived(riskOutput(result, schemas.RiskSimulationOutput));
     let provenance = $derived(buildSimulationProvenance(result));
     let terminal = $derived(output?.percentile_bands.at(-1) ?? null);
+
+    /**
+     * What the band leaves out: that the drift it rests on is itself an estimate.
+     *
+     * The arithmetic lives in a sibling module, like the modes and the provenance
+     * beside it, because it is the part worth asserting on directly.
+     */
+    let driftUncertainty = $derived(
+        buildDriftUncertainty({
+            driftUncertaintyFactor: output?.drift_uncertainty_factor,
+            driftUncertaintyObservations: output?.drift_uncertainty_observations,
+            terminal,
+        }),
+    );
 
     let coneData = $derived.by<LineDataPoint[]>(() => (output?.percentile_bands ?? []).map((point) => ({date: addDays(dateEnd, point.day), value: point.p50 * 100})));
 
@@ -197,14 +214,30 @@
 
     {#if output}
         <div class="flex flex-wrap gap-4 text-sm" data-testid="risk-simulation-terminal">
-            <span class="text-gray-700 dark:text-gray-200">{$t('risk.simulation.terminalMean')}: <strong class="tabular-nums">{signedPercent(output.terminal_mean_return)}</strong></span>
-            <span class="text-gray-700 dark:text-gray-200">{$t('risk.simulation.probabilityOfLoss')}: <strong class="tabular-nums">{(output.probability_of_loss * 100).toFixed(1)}%</strong></span>
+            <span class="text-gray-700 dark:text-gray-200">{$t('risk.metrics.terminalMean')}: <strong class="tabular-nums">{signedPercent(output.terminal_mean_return)}</strong></span>
+            <span class="text-gray-700 dark:text-gray-200">{$t('risk.metrics.probabilityOfLoss')}: <strong class="tabular-nums">{(output.probability_of_loss * 100).toFixed(1)}%</strong></span>
             {#if terminal}
                 <!-- The band, not just its middle: a median alone reads as a
                      prediction, and the whole point of a cone is that it is not one. -->
                 <span class="text-gray-500 dark:text-gray-400" data-testid="risk-simulation-band-range">{signedPercent(terminal.p05)} … {signedPercent(terminal.p95)}</span>
             {/if}
         </div>
+        {#if driftUncertainty}
+            <!-- Adjacent to the numbers it qualifies, above the picture of them:
+                 the reader meets the caveat before the cone, not after it. -->
+            {#if driftUncertainty.exceedsBand}
+                <div class="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 dark:bg-amber-900/20" data-testid="risk-simulation-drift-uncertainty" data-exceeds-band="true">
+                    <AlertTriangle size={14} class="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                    <p class="text-xs text-amber-800 dark:text-amber-200">
+                        {$t('risk.simulation.driftUncertaintyWide', {values: {count: driftUncertainty.observations, low: signedPercent(driftUncertainty.low), high: signedPercent(driftUncertainty.high)}})}
+                    </p>
+                </div>
+            {:else}
+                <p class="text-xs text-gray-500 dark:text-gray-400" data-testid="risk-simulation-drift-uncertainty" data-exceeds-band="false">
+                    {$t('risk.simulation.driftUncertainty', {values: {count: driftUncertainty.observations, low: signedPercent(driftUncertainty.low), high: signedPercent(driftUncertainty.high)}})}
+                </p>
+            {/if}
+        {/if}
         <div class="rounded-lg border border-gray-100 p-2 dark:border-slate-700">
             <LineChart data={coneData} overlaySignals={coneOverlay} currency="%" viewMode="percentage" colorByBaseline={false} showGradient={false} height="280px" />
         </div>

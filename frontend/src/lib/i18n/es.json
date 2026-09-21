@@ -3141,7 +3141,9 @@
           "hypothesis": "Modelo clásico: supone oscilaciones regulares y subestima las colas."
         }
       },
-      "regimeTruncated": "Esta hipótesis dura {declared} días; tu horizonte solo cubre {applied}."
+      "regimeTruncated": "Esta hipótesis dura {declared} días; tu horizonte solo cubre {applied}.",
+      "driftUncertainty": "La deriva proviene de {count} observaciones: solo por eso esta mediana está entre {low} y {high}.",
+      "driftUncertaintyWide": "La deriva proviene de apenas {count} observaciones: solo por eso esta mediana está entre {low} y {high} — más ancha que la banda de arriba."
     },
     "errors": {
       "analytic_not_found": "Analítica no disponible.",
