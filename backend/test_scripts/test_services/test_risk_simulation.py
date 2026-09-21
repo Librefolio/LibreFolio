@@ -30,6 +30,7 @@ from backend.app.services.risk.quant.engine import (
     validate_resource_budget,
 )
 from backend.app.services.risk.quant.estimation import (
+    estimate_drift_uncertainty,
     estimate_gbm_parameters,
 )
 from backend.app.services.risk.quant.models import (
@@ -1326,3 +1327,239 @@ def test_degenerate_collinear_history_still_resamples():
             strict=True,
         )
     )
+
+
+# --- Drift uncertainty -------------------------------------------------------
+#
+# A band is dispersion *conditional on* an estimated drift, and that drift is a
+# sample mean: it carries a standard error of sigma/sqrt(n) which compounds over
+# the horizon. Everything below is about the factor that publishes that missing
+# part, and about the contract that refuses to publish half of it.
+
+DRIFT_UNCERTAINTY_Z_SCORE = 1.959963984540054
+
+
+def drift_history() -> dict[int, list[float]]:
+    """Two short return series, written out rather than drawn.
+
+    Every expectation below is a closed form recomputed from these exact
+    numbers, so a draw would buy nothing here and an unseeded one would turn
+    each assertion into a bet on the weather.
+    """
+    return {
+        1: [0.012, -0.008, 0.021, -0.004, 0.015, 0.0, -0.011, 0.009],
+        2: [0.004, 0.006, -0.012, 0.011, -0.002, 0.007, 0.003, -0.005],
+    }
+
+
+def drift_projection(
+    history: dict[int, list[float]],
+    weights: list[float],
+) -> list[float]:
+    """Weight the two series into one, by hand.
+
+    Deliberately not ``matrix @ weights``: borrowing the estimator's own
+    arithmetic would make the closed form agree with the implementation by
+    construction rather than by result.
+    """
+    return [weights[0] * first + weights[1] * second for first, second in zip(history[1], history[2], strict=True)]
+
+
+def drift_factor_closed_form(
+    portfolio_returns: list[float],
+    *,
+    horizon_days: int,
+) -> float:
+    """``exp(z * H * sigma / sqrt(n))`` over the log returns of a projected series."""
+    log_returns = np.log1p(
+        np.asarray(portfolio_returns, dtype=float),
+    )
+    sigma = float(log_returns.std(ddof=1))
+    return math.exp(
+        DRIFT_UNCERTAINTY_Z_SCORE * horizon_days * sigma / math.sqrt(log_returns.size),
+    )
+
+
+def test_drift_uncertainty_matches_its_closed_form_and_sample_size():
+    """Pin the estimate to arithmetic recomputed outside the estimator."""
+    history = drift_history()
+    weights = [0.6, 0.4]
+
+    factor, observations = estimate_drift_uncertainty(
+        history,
+        [1, 2],
+        weights,
+        horizon_days=93,
+    )
+
+    assert factor == pytest.approx(
+        drift_factor_closed_form(
+            drift_projection(history, weights),
+            horizon_days=93,
+        ),
+        rel=1e-12,
+    )
+    assert observations == len(history[1])
+    assert factor > 1.0
+    # The default quantile is part of the claim, not an implementation detail:
+    # the schema calls the field a 95% confidence factor and nothing downstream
+    # re-states which quantile produced it.
+    explicit, _ = estimate_drift_uncertainty(
+        history,
+        [1, 2],
+        weights,
+        horizon_days=93,
+        z_score=DRIFT_UNCERTAINTY_Z_SCORE,
+    )
+    assert explicit == factor
+
+
+def test_drift_uncertainty_compounds_with_the_horizon():
+    """Estimation error is not a fixed margin: it grows with what it qualifies."""
+    history = drift_history()
+    weights = [0.6, 0.4]
+    factors = {horizon: estimate_drift_uncertainty(history, [1, 2], weights, horizon_days=horizon)[0] for horizon in (30, 93, 365)}
+
+    assert factors[30] < factors[93] < factors[365]
+    # Strictly more than monotone, and the reason the disclosure is a factor
+    # rather than a spread: its logarithm is linear in the horizon, so a year is
+    # the same error compounded 365 times and not added 365 times.
+    assert math.log(factors[93]) == pytest.approx(
+        math.log(factors[30]) * (93 / 30),
+        rel=1e-12,
+    )
+    assert math.log(factors[365]) == pytest.approx(
+        math.log(factors[30]) * (365 / 30),
+        rel=1e-12,
+    )
+
+
+def test_cash_damps_the_drift_uncertainty_instead_of_being_renormalised_away():
+    """Separate this definition from the plausible wrong one.
+
+    The weights are the portfolio's own, so a half-invested book arrives with
+    weights summing to 0.5 and the estimate shrinks with the exposure.
+    Renormalising onto the risky sleeve — the alternative most portfolio code
+    reaches for by reflex — would answer about a portfolio the user does not
+    hold, and would publish the *same* number for both of these.
+    """
+    history = drift_history()
+    half_invested = [0.3, 0.2]
+    fully_invested = [0.6, 0.4]
+    assert [weight / sum(half_invested) for weight in half_invested] == pytest.approx(fully_invested)
+
+    damped, damped_observations = estimate_drift_uncertainty(
+        history,
+        [1, 2],
+        half_invested,
+        horizon_days=365,
+    )
+    invested, invested_observations = estimate_drift_uncertainty(
+        history,
+        [1, 2],
+        fully_invested,
+        horizon_days=365,
+    )
+
+    assert damped < invested
+    # And by the right amount: half the exposure is half the compounded error,
+    # in logs. The tolerance covers the curvature of log1p over these returns
+    # (measured: 5e-4 of relative departure), not slack in the claim — the
+    # renormalised estimator would land on 1.0 here, not near 0.5.
+    assert math.log(damped) / math.log(invested) == pytest.approx(0.5, abs=0.01)
+    # Cash changes the exposure, never the sample the drift was estimated from.
+    assert damped_observations == invested_observations == len(history[1])
+
+
+def test_a_flat_history_discloses_no_estimation_error():
+    """Zero dispersion is an answer, and the schema's floor is exactly it."""
+    flat = {1: [0.001] * 8}
+
+    factor, observations = estimate_drift_uncertainty(
+        flat,
+        [1],
+        [1.0],
+        horizon_days=365,
+    )
+
+    assert factor == 1.0
+    assert observations == 8
+    # `drift_uncertainty_factor` is declared `ge=1`, so the degenerate case sits
+    # on the boundary rather than outside it: it is published, not suppressed.
+    degenerate = bootstrap_output(
+        drift_uncertainty_factor=factor,
+        drift_uncertainty_observations=observations,
+    )
+    assert degenerate.drift_uncertainty_factor == 1.0
+
+
+def test_drift_uncertainty_refuses_the_questions_it_cannot_answer():
+    """Every documented raise, including one it is easy to think unreachable."""
+    history = drift_history()
+
+    for horizon in (0, -1):
+        with pytest.raises(ValueError, match="positive horizon"):
+            estimate_drift_uncertainty(history, [1, 2], [0.6, 0.4], horizon_days=horizon)
+
+    for weights in ([1.0], [0.5, 0.3, 0.2]):
+        with pytest.raises(ValueError, match="one weight per aligned asset"):
+            estimate_drift_uncertainty(history, [1, 2], weights, horizon_days=93)
+
+    # A long-only book cannot reach the third: weights in [0, 1] summing to at
+    # most 1 project returns above -1 onto returns above -1. It takes leverage or
+    # a short, which is precisely when the log becomes undefined rather than
+    # merely large — the guard is about the arithmetic, not about taste.
+    levered = {
+        1: [-0.6, 0.02, 0.01, -0.03],
+        2: [0.3, 0.01, 0.0, 0.02],
+    }
+    with pytest.raises(ValueError, match="greater than -1"):
+        estimate_drift_uncertainty(levered, [1, 2], [2.0, -1.0], horizon_days=93)
+
+
+def test_simulation_output_refuses_half_a_drift_uncertainty_disclosure():
+    """A factor without its sample size is a number nobody can argue with."""
+    silent = bootstrap_output()
+
+    assert silent.drift_uncertainty_factor is None
+    assert silent.drift_uncertainty_observations is None
+
+    disclosed = bootstrap_output(
+        drift_uncertainty_factor=1.2032,
+        drift_uncertainty_observations=93,
+    )
+
+    assert disclosed.drift_uncertainty_factor == pytest.approx(1.2032)
+    assert disclosed.drift_uncertainty_observations == 93
+
+    for half in (
+        {"drift_uncertainty_factor": 1.2032},
+        {"drift_uncertainty_observations": 93},
+    ):
+        with pytest.raises(
+            ValidationError,
+            match="must disclose both the factor and the observation count",
+        ):
+            bootstrap_output(**half)
+
+    # The pair validator is about disclosure; the two field bounds are about
+    # plausibility. Together they are what lets the renderer treat a factor below
+    # 1 or an empty sample as a payload this build cannot have produced — the
+    # generated client keeps neither bound, so that inference is the only one
+    # left on the other side of the wire.
+    with pytest.raises(
+        ValidationError,
+        match="greater than or equal to 1",
+    ):
+        bootstrap_output(
+            drift_uncertainty_factor=0.9,
+            drift_uncertainty_observations=93,
+        )
+    with pytest.raises(
+        ValidationError,
+        match="greater than 0",
+    ):
+        bootstrap_output(
+            drift_uncertainty_factor=1.2,
+            drift_uncertainty_observations=0,
+        )

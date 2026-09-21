@@ -10,6 +10,7 @@ from backend.app.services.risk.quant.engine import (
 from backend.app.services.risk.quant.estimation import (
     GbmParameterEstimates,
     align_simple_returns,
+    estimate_drift_uncertainty,
     estimate_gbm_parameters,
 )
 from backend.app.services.risk.quant.models import (
@@ -36,6 +37,7 @@ __all__ = [
     "SimulationResourceLimitError",
     "align_simple_returns",
     "clear_simulation_cache",
+    "estimate_drift_uncertainty",
     "estimate_gbm_parameters",
     "historical_returns_digest",
     "resolve_block_length",
