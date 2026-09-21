@@ -1,5 +1,6 @@
 <script lang="ts">
     import {browser} from '$app/environment';
+    import {untrack} from 'svelte';
     import {ArrowLeft, ArrowRight, LogOut, MousePointer2, X} from 'lucide-svelte';
     import type {GuideHighlightMode, GuidePanelPlacement, GuidePointerMode, GuideScrollPolicy} from '$lib/features/onboarding/onboardingGuideCatalog';
 
@@ -23,6 +24,7 @@
         skipLabel?: string;
         closeLabel?: string;
         busyLabel?: string;
+        stalledLabel?: string;
         error?: string | null;
         showBack?: boolean;
         backDisabled?: boolean;
@@ -37,6 +39,8 @@
         onskip?: () => void;
         onclose?: () => void;
         ontargetactivate?: () => void;
+        onstall?: () => void;
+        onstallend?: () => void;
     }
 
     interface AnchorRect {
@@ -76,6 +80,7 @@
         skipLabel = 'Skip',
         closeLabel = 'Close',
         busyLabel = 'Waiting for this area...',
+        stalledLabel = "This part of the page didn't load in time. You can continue with the guide.",
         error = null,
         showBack = true,
         backDisabled = false,
@@ -90,6 +95,8 @@
         onskip,
         onclose,
         ontargetactivate,
+        onstall,
+        onstallend,
     }: Props = $props();
 
     let panel = $state<HTMLElement | null>(null);
@@ -106,6 +113,7 @@
     let panelHovered = $state(false);
     let panelFocused = $state(false);
     let baseSubdued = $state(false);
+    let stalled = $state(false);
     let panelSubdued = $derived(baseSubdued && !panelHovered && !panelFocused);
 
     const titleId = 'onboarding-coachmark-title';
@@ -114,7 +122,9 @@
     const targetGap = 16;
     const cursorPadding = 6;
     const cursorGlyphTip = 3;
-    let guideState = $derived(error ? 'error' : anchorRect && targetStable ? 'anchored' : 'waiting');
+    const PANEL_FADE_MS = 3_000;
+    const GUIDE_STALL_MS = 3_000;
+    let guideState = $derived(error ? 'error' : anchorRect && targetStable ? 'anchored' : stalled ? 'stalled' : 'waiting');
     let highlightStyle = $derived.by(() => {
         const rect = anchorRect;
         return rect ? `left:${Math.max(rect.left - 6, 4)}px;top:${Math.max(rect.top - 6, 4)}px;width:${Math.max(rect.width + 12, 12)}px;height:${Math.max(rect.height + 12, 12)}px;` : '';
@@ -377,12 +387,30 @@
         void stepId;
         void error;
         void suspended;
+        void stalled;
         baseSubdued = false;
-        if (!browser || !open || suspended) return;
+        if (!browser || !open || suspended || stalled) return;
         const timer = window.setTimeout(() => {
             baseSubdued = true;
-        }, 3_000);
+        }, PANEL_FADE_MS);
         return () => window.clearTimeout(timer);
+    });
+
+    $effect(() => {
+        void stepId;
+        void error;
+        void suspended;
+        const settled = Boolean(anchorRect) && targetStable;
+        stalled = false;
+        if (!browser || !open || suspended || error || settled) return;
+        const timer = window.setTimeout(() => {
+            stalled = true;
+            onstall?.();
+        }, GUIDE_STALL_MS);
+        return () => {
+            window.clearTimeout(timer);
+            if (untrack(() => stalled)) onstallend?.();
+        };
     });
 
     $effect(() => {
@@ -570,7 +598,7 @@
                 {title}
             </h2>
             <p id={descriptionId} class="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">
-                {error ?? (guideState === 'waiting' ? busyLabel : description)}
+                {error ?? (guideState === 'stalled' ? stalledLabel : guideState === 'waiting' ? busyLabel : description)}
             </p>
             {#if actionHint && guideState === 'anchored' && !error}
                 <p class="mt-3 flex items-center gap-2 text-xs font-medium text-libre-green dark:text-emerald-300" data-testid="onboarding-coachmark-action-hint">
