@@ -28,6 +28,7 @@ from backend.app.services.risk.base import (
     RiskUnavailableError,
 )
 from backend.app.services.risk.quant import (
+    MAX_SOBOL_DIMENSION,
     SimulationEngineRequest,
     SimulationResourceLimitError,
     align_simple_returns,
@@ -363,6 +364,31 @@ class SimulationAnalytic(RiskAnalytic):
     ) -> tuple[SimulationEngineRequest, int]:
         """Carry the real history across the boundary, and nothing estimated."""
         matrix = align_simple_returns(returns_by_asset, asset_ids)
+        observations = int(matrix.shape[0])
+        # DECLARED, because the engine's identical check cannot be: the engine
+        # raises a bare ValueError, which the service can only report as "we
+        # failed". The refusal below is a refusal of the USER'S CHOICE, so it
+        # has to name that choice.
+        #
+        # It is unreachable by `validate_params`, and not by oversight: the
+        # predicate compares a parameter against the OBSERVATION COUNT, and
+        # parameter validation runs before any series exists. Measured: the same
+        # `block_length_days=900` is accepted against 1000 observations and
+        # refused against 30 -- the payload never changes, only the user's data.
+        #
+        # INVALID_PARAMETERS rather than INSUFFICIENT_HISTORY on purpose. The
+        # latter says "get more history", which the user usually cannot do; the
+        # block length is a control they can simply lower. The code has to name
+        # the action that is actually available.
+        if params.block_length_days is not None and params.block_length_days > observations:
+            raise RiskUnavailableError(
+                f"block_length_days {params.block_length_days} exceeds the {observations} observations available in the selected range",
+                code=RiskErrorCode.INVALID_PARAMETERS,
+                details={
+                    "block_length_days": params.block_length_days,
+                    "observations": observations,
+                },
+            )
         request = SimulationEngineRequest(
             process=RiskSimulationProcess.BLOCK_BOOTSTRAP,
             regime=params.regime,
@@ -377,7 +403,7 @@ class SimulationAnalytic(RiskAnalytic):
             horizon_days=params.horizon_days,
             path_count=params.path_count,
         )
-        return request, int(matrix.shape[0])
+        return request, observations
 
     @staticmethod
     def _build_parametric_request(
@@ -392,6 +418,34 @@ class SimulationAnalytic(RiskAnalytic):
             returns_by_asset,
             annualization_factor=annualization_factor,
         )
+        # DECLARED for the same reason as the bootstrap guard above, and with a
+        # different code because it is a different refusal.
+        #
+        # The predicate multiplies a parameter (`horizon_days`) by the SIZE OF
+        # THE USER'S SCOPE, which `validate_params` cannot see, so no amount of
+        # parameter validation can move this check earlier. Measured against the
+        # live limit: at the maximum horizon the same request is accepted with 5
+        # assets and refused with 6 -- ordinary portfolios, not a pathological
+        # input.
+        #
+        # RESOURCE_LIMIT -- "This calculation is too large to run." -- because
+        # that is literally the fact. Nothing is wrong with the parameters or
+        # with the data: the requested sequence simply does not fit the
+        # generator, and the user can act on it by shortening the horizon or
+        # narrowing the scope.
+        if params.sampling_method == RiskSamplingStrategy.QMC:
+            dimension = len(estimates.asset_ids) * params.horizon_days
+            if dimension > MAX_SOBOL_DIMENSION:
+                raise RiskUnavailableError(
+                    f"QMC needs {dimension} Sobol dimensions ({len(estimates.asset_ids)} assets x {params.horizon_days} days), above the supported maximum of {MAX_SOBOL_DIMENSION}",
+                    code=RiskErrorCode.RESOURCE_LIMIT,
+                    details={
+                        "required_dimension": dimension,
+                        "limit": MAX_SOBOL_DIMENSION,
+                        "assets": len(estimates.asset_ids),
+                        "horizon_days": params.horizon_days,
+                    },
+                )
         request = SimulationEngineRequest(
             process=params.process,
             sampling_method=params.sampling_method,
