@@ -3137,7 +3137,9 @@
           "hypothesis": "Modèle classique : il suppose des variations régulières et sous-estime les extrêmes."
         }
       },
-      "regimeTruncated": "Cette hypothèse dure {declared} jours ; votre horizon n’en couvre que {applied}."
+      "regimeTruncated": "Cette hypothèse dure {declared} jours ; votre horizon n’en couvre que {applied}.",
+      "driftUncertainty": "La dérive provient de {count} observations : cela seul situe cette médiane entre {low} et {high}.",
+      "driftUncertaintyWide": "La dérive provient de seulement {count} observations : cela seul situe cette médiane entre {low} et {high} — plus large que la bande ci-dessus."
     },
     "errors": {
       "analytic_not_found": "Analyse indisponible.",

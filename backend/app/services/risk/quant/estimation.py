@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 import numpy as np
+
+_NORMAL_95_PERCENT = 1.959963984540054
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,8 +83,50 @@ def align_simple_returns(
     return matrix
 
 
+def estimate_drift_uncertainty(
+    returns_by_asset: Mapping[int, Sequence[float]],
+    asset_ids: Sequence[int],
+    weights: Sequence[float],
+    *,
+    horizon_days: int,
+    z_score: float = _NORMAL_95_PERCENT,
+) -> tuple[float, int]:
+    """Return the 95% confidence factor on the portfolio drift, and its sample size.
+
+    A simulated band is dispersion *conditional on* the estimated drift. The drift
+    is itself a sample mean, so it carries a standard error of sigma/sqrt(n), and
+    over the horizon that error compounds along with everything else. A band drawn
+    without it reads as the whole uncertainty while being only part of it.
+
+    The result is a multiplicative factor because the quantity it qualifies is
+    compounded: over a horizon an additive margin would be false.
+
+    Weights are the portfolio's own, so cash enters as the weight that is missing
+    from their sum and correctly damps the estimate. Renormalising onto the risky
+    sleeve instead would answer a question about a portfolio the user does not hold.
+    """
+    if horizon_days <= 0:
+        raise ValueError("drift uncertainty requires a positive horizon")
+    matrix = align_simple_returns(returns_by_asset, asset_ids)
+    weight_vector = np.asarray(weights, dtype=float)
+    if weight_vector.shape != (matrix.shape[1],):
+        raise ValueError("drift uncertainty requires one weight per aligned asset")
+    portfolio_simple = matrix @ weight_vector
+    if np.any(portfolio_simple <= -1):
+        raise ValueError("drift uncertainty requires portfolio returns greater than -1")
+
+    log_returns = np.log1p(portfolio_simple)
+    observations = int(log_returns.size)
+    sigma = float(log_returns.std(ddof=1))
+    if not np.isfinite(sigma):
+        raise ValueError("drift uncertainty produced a non-finite dispersion")
+    standard_error = horizon_days * sigma / math.sqrt(observations)
+    return math.exp(z_score * standard_error), observations
+
+
 __all__ = [
     "GbmParameterEstimates",
     "align_simple_returns",
+    "estimate_drift_uncertainty",
     "estimate_gbm_parameters",
 ]
