@@ -2944,6 +2944,26 @@
       "drawdownSummary": {
         "name": "Riepilogo drawdown",
         "description": "Episodi di drawdown corrente e massimo rispetto al picco, datati e con stato di recupero, dai rendimenti canonici dello scope selezionato."
+      },
+      "assetSetKpi": {
+        "name": "Indicatori di rischio per asset",
+        "description": "Volatilità, discesa peggiore e rapporti corretti per il rischio, misurati per ogni asset selezionato sulla stessa finestra."
+      },
+      "assetSetVar": {
+        "name": "Rischio di coda per asset",
+        "description": "La perdita che ogni asset selezionato ha raggiunto nei suoi esiti peggiori, stimata sulla sua storia."
+      },
+      "assetSetDrawdown": {
+        "name": "Discese per asset",
+        "description": "Quanto ogni asset selezionato è sceso dal proprio massimo, quanto è durata e se è rientrata."
+      },
+      "assetSetRiskReturn": {
+        "name": "Rischio e rendimento per asset",
+        "description": "Volatilità annua contro rendimento atteso, un punto per ogni asset selezionato."
+      },
+      "assetSetComparison": {
+        "name": "Confronto per asset",
+        "description": "Come ogni asset selezionato si è mosso rispetto al benchmark scelto."
       }
     },
     "params": {
@@ -3048,6 +3068,29 @@
         "offsettingHint": "Coppie che si muovono in direzioni opposte: una attutisce l’altra.",
         "noneCorrelated": "Nessuna coppia si muove chiaramente insieme.",
         "noneOffsetting": "Nessuna coppia ne compensa un’altra: qui niente attutisce niente."
+      },
+      "levels": {
+        "asset": "Asset",
+        "blankNote": "Un trattino significa che la misura non è stata possibile per quell'asset su questa finestra — non significa zero.",
+        "l1": {
+          "title": "Quanto ha fatto male ciascuno?",
+          "description": "La stessa scala del danno, chiesta a ogni asset selezionato. Solo percentuali: un insieme di asset non ha pesi, quindi non c'è un importo da affiancare.",
+          "lastedDays": "durata {{days}} g",
+          "columns": {
+            "badDay": "Giornata storta",
+            "badMonth": "Mese storto",
+            "worstFall": "Peggior discesa",
+            "currentFall": "Sotto il massimo",
+            "toPeak": "Risalita al massimo"
+          }
+        },
+        "l3": {
+          "title": "Quanto ha pagato ciascuno per il suo rischio?",
+          "description": "Rischio contro rendimento, un punto per asset. Non ci passa nessuna retta: una selezione non ha un tutto, quindi non c'è niente sopra o sotto cui stare.",
+          "expectedReturn": "Rendimento atteso",
+          "correlation": "Correlazione",
+          "noBenchmark": "Scegli un benchmark nella Dashboard per aggiungere beta e correlazione. Un benchmark che è già nella selezione non può fare da metro a sé stesso."
+        }
       }
     },
     "metrics": {

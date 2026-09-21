@@ -59,8 +59,10 @@
     import {assetStoreVersion, getAssetInfo} from '$lib/stores/reference/assetStore';
     import {brokerStoreVersion, ensureBrokersLoaded, getAccessibleBrokers} from '$lib/stores/reference/brokerStore';
     import AssetSetCorrelationSection from './AssetSetCorrelationSection.svelte';
+    import AssetSetComparisonLevels from './AssetSetComparisonLevels.svelte';
     import AssetSetReplaySection from './AssetSetReplaySection.svelte';
     import RiskBetaBanner from './RiskBetaBanner.svelte';
+    import {riskBenchmark} from '$lib/stores/risk/riskBenchmarkStore.svelte';
     import {applyBulkAction, applyFilters, MAX_SELECTED_ASSETS, readPersistedSelection, resolveInitialSelectionWithSource, writePersistedSelection, type BulkAction, type SelectionFilters, type SelectionSource} from './assetSetSelection';
 
     interface AssetOption {
@@ -202,6 +204,43 @@
         }
     }
 
+    /**
+     * The benchmark the comparison levels measure against, when one applies.
+     *
+     * Read from the shared `riskBenchmark` and never from a picker of this page's
+     * own: `03-mappa-livelli-pagine` §3.1 makes the benchmark identical across
+     * scopes, because two pages comparing against different references stop being
+     * comparable — which is the property the redesign exists to build.
+     *
+     * 🔴 **Mirrored through `$effect` and not read inside a `$derived`, and that
+     * is a correctness requirement rather than a style.** `riskBenchmark.assetId`
+     * is a getter that *hydrates on read*: it calls `localStorage` and assigns to
+     * the store's `$state`. Writing state while a derived is being evaluated is
+     * fatal in runes mode, so reading it from a `$derived` threw and took the
+     * whole `{#if}` block with it — the controls stayed on screen and every
+     * section below them vanished, which looks exactly like "no assets selected".
+     * An effect may write, so the choice is mirrored here and derived from the
+     * mirror. `L3Benchmark` gets away with a direct read because its read happens
+     * inside a handler, not inside a derivation.
+     */
+    let benchmarkChoice = $state<number | null>(null);
+
+    $effect(() => {
+        // Reading inside the effect both triggers the hydration and subscribes to
+        // the store's state, so a benchmark chosen on another page still arrives.
+        benchmarkChoice = riskBenchmark.assetId;
+    });
+
+    /**
+     * 🔴 Withheld when the benchmark is itself one of the selected assets.
+     * `RiskAssetSetComparisonOutput` rejects that outright — "the comparison
+     * asset cannot appear among the compared items" — because a yardstick cannot
+     * also be one of the measured. Asking anyway would turn a coherent state into
+     * a validation error the reader has no way to act on, so the request simply
+     * does not carry it and L3° says the columns are unavailable.
+     */
+    let benchmarkId = $derived(benchmarkChoice !== null && !selectedAssetIds.includes(benchmarkChoice) ? benchmarkChoice : null);
+
     function runBulkAction(action: BulkAction): void {
         selectedAssetIds = applyBulkAction(action, selectedAssetIds, candidates, assets).sort((left, right) => left - right);
     }
@@ -332,6 +371,7 @@
 
     {#if selectedAssetIds.length > 0}
         <AssetSetCorrelationSection assetIds={selectedAssetIds} assetLabels={selectionLabels} {dateStart} {dateEnd} {targetCurrency} />
+        <AssetSetComparisonLevels assetIds={selectedAssetIds} assetLabels={selectionLabels} {dateStart} {dateEnd} {targetCurrency} {benchmarkId} />
         <AssetSetReplaySection assetIds={selectedAssetIds} assetLabels={selectionLabels} {dateStart} {dateEnd} {targetCurrency} />
     {:else}
         <div class="rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 p-8 text-center text-sm text-gray-400 dark:text-gray-500" data-testid="risk-asset-set-empty">

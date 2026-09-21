@@ -2944,6 +2944,26 @@
       "drawdownSummary": {
         "name": "Drawdown summary",
         "description": "Dated current and maximum peak-relative drawdown episodes with recovery status from the selected scope's canonical returns."
+      },
+      "assetSetKpi": {
+        "name": "Per-asset risk KPIs",
+        "description": "Volatility, deepest fall and risk-adjusted ratios, measured for each selected asset over one shared window."
+      },
+      "assetSetVar": {
+        "name": "Per-asset tail risk",
+        "description": "The loss each selected asset reached in its worst outcomes, estimated from its own history."
+      },
+      "assetSetDrawdown": {
+        "name": "Per-asset drawdowns",
+        "description": "How far each selected asset fell from its peak, how long it took, and whether it has recovered."
+      },
+      "assetSetRiskReturn": {
+        "name": "Per-asset risk and return",
+        "description": "Annualised volatility against expected return, one point per selected asset."
+      },
+      "assetSetComparison": {
+        "name": "Per-asset comparison",
+        "description": "How each selected asset moved relative to the chosen benchmark."
       }
     },
     "params": {
@@ -3048,6 +3068,29 @@
         "offsettingHint": "Pairs that move in opposite directions: one cushions the other.",
         "noneCorrelated": "No pair moves clearly together.",
         "noneOffsetting": "No pair offsets another: nothing here cushions anything else."
+      },
+      "levels": {
+        "asset": "Asset",
+        "blankNote": "An em-dash means the measurement could not be made for that asset over this window — it does not mean zero.",
+        "l1": {
+          "title": "How much did each of these hurt?",
+          "description": "The same scale of harm, asked of every selected asset. Percentages only: a set of assets has no weights, so there is no amount to put beside them.",
+          "lastedDays": "lasted {{days}} d",
+          "columns": {
+            "badDay": "Bad day",
+            "badMonth": "Bad month",
+            "worstFall": "Worst fall",
+            "currentFall": "Below peak now",
+            "toPeak": "Rise to peak"
+          }
+        },
+        "l3": {
+          "title": "What did each of these pay for its risk?",
+          "description": "Risk against reward, one point per asset. No line is drawn through them: a selection has no whole, so there is nothing to be above or below.",
+          "expectedReturn": "Expected return",
+          "correlation": "Correlation",
+          "noBenchmark": "Choose a benchmark on the Dashboard to add beta and correlation. A benchmark that is itself in the selection cannot be used as its own yardstick."
+        }
       }
     },
     "metrics": {
