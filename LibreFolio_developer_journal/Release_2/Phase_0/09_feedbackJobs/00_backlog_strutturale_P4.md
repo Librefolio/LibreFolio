@@ -84,3 +84,97 @@ e dopo walkthrough operativo e feedback, come G-UX-DESIGN/G-UX-REVIEW del piano.
 > `awaiting_dev_review`, rinviato dal dev alla propria disponibilità. La chiusura
 > complessiva non è attestata dalle spunte di presa in carico. Server TEST B fermato
 > e coda runtime restituita; nessun avvio automatico di A/C/D.
+
+## Debito nuovo registrato 2026-09-22 — round D / I / Risk / J
+
+Baseline `0a1d98eaf` (`dev_release2`), dopo l'integrazione dei quattro workstream.
+Tre voci **misurate**, non stimate: ciascuna riporta il comando che la riproduce.
+
+| # | Task | Perché / cosa comporta | Dimensione |
+|---|------|------------------------|-----------|
+| P4-9 | **Conversione dei 12 test specchio** di `frontend/src/lib/components/charts/chartCoreHelpers.test.ts` da lettura del testo sorgente a esecuzione delle funzioni | Rossi **noti e nominati**, non silenziosi. 5 descrivono comportamenti rimossi su richiesta (residui da cancellare), 7 pinnano proprietà ancora vere in helper rinominati o rimodellati | M |
+| P4-10 | **Sei siti di Risk** che rendono denaro fuori dal canale di mascheratura: 3 `not-money`, 3 che delegano a una funzione mascherata | Non registrabili nel gate per ragioni strutturali (sotto); vanno decisi come classe, non uno per uno | S |
+| P4-11 | **Copertura del gate privacy**: aggancia 1 degli 8 consumatori di `fmtCurrency` in `GrowthChart.svelte` | Lo scanner esige **due** token nello stesso template literal (uno valuta, uno numerico): quattro righe che rendono denaro cadono lì, e l'unico hit sopravvive per i nomi delle variabili accanto | M |
+
+### P4-9 — le due trappole già pagate
+
+**Non cancellare i 5 residui in automatico.** Un passaggio a conteggio di parentesi ha
+tagliato oltre il confine di un `it()` e vitest è passato a *«no tests»*: **12 rossi
+nominati sono diventati 162 test spariti in silenzio**. Se si cancellano, una alla volta
+a mano, verificando il conteggio dopo ciascuna.
+
+**Non usare `.skip`.** Criterio del developer del 22/09: *«non mi importa di chi è la
+causa, basta che non si nasconda… l'importante è che i rossi non diventino silenziosi»*.
+Uno `.skip` è un rosso che smette di chiedere.
+
+I dodici nomi sono nel corpo del commit `22b82e3fb`, divisi in 5 + 7. È l'unico testo
+legato alla revisione esatta: al 22/09 la corrispondenza è **12 su 12** verificata per
+nome, quindi l'elenco sa ancora distinguere un rosso ereditato da uno nuovo.
+
+```
+cd frontend && npx vitest run src/lib/components/charts/chartCoreHelpers.test.ts
+atteso: 12 failed | 150 passed (162)
+```
+
+Rinvio deciso dal developer con la sua causa: *«è imperativo riallineare la baseline,
+tanto i test bisognerà rigirarli tutti»*. Un debito senza causa si eredita; con causa si
+ri-discute.
+
+### P4-10 — perché non bastava registrarli
+
+Il registro di `moneyRenderSites.test.ts` è **indicizzato sul contenuto ma popolato dallo
+scanner**: `stale = REGISTRY.filter((s) => !found.has(key(s)))`. Una voce che lo scanner
+non produce è stantia nell'istante in cui la si scrive — provato con una sonda temporanea,
+**due rossi insieme** (il controllo del marcio e il controllo positivo).
+
+Serve a impedire che un sito **noto** cambi in silenzio, non a ricordarne uno invisibile.
+I sei sono dichiarati nel [piano di J](../24_privacyGlobal/plan-phase00PrivacyGlobalRound1-MaskingCore.prompt.md);
+`formatScopedCurrencyAmount` è entrata invece in `SAFE_CALL`, che è il posto dove una
+promessa si può verificare.
+
+⚠️ **`SAFE_CALL` non è la scorciatoia.** Una voce lì è una promessa, e ha un prezzo:
+la funzione dev'essere un export fissato da un test che si romperebbe togliendo la
+mascheratura. E va **ancorata** con `\b`: un prefisso nudo assolve ogni nome più lungo
+che comincia uguale, creando un permesso che non si può revocare cancellando la riga che
+sembra concederlo.
+
+### P4-11 — perché un rosso piccolo è il segnale peggiore
+
+La dimensione del rosso misura quanto il gate **vede**, non quanto il file **espone**, e
+le due quantità divergono esattamente dove il file è peggiore. `GrowthChart.svelte`
+(2 246 righe dopo il merge) definisce `fmtCurrency` a `:1834` e la consuma **8** volte;
+il gate ne aggancia **1**. Le sette invisibili non sono una classe sola — replicando la
+logica dello scanner riga per riga:
+
+| righe | perché il gate non le vede |
+|---|---|
+| `:1893` `:1896` | `fmtCurrency(...)` è **argomento di chiamata**, fuori da ogni template literal |
+| `:1895` | il literal c'è, ma il denaro è fuori: dentro c'è solo `${eurLabels.nav}` |
+| `:1915` `:1927` `:1943` `:1958` | 🔴 il literal **contiene** il token valuta, ed è scartato dalla **regola di co-occorrenza** |
+
+Lo scanner esige **due** token distinti nello stesso literal: uno che somigli a valuta
+(`/currency|symbol/i`) **e un altro** che somigli a un numero. È un filtro anti-falsi-positivi
+sensato — senza, un nome di classe CSS farebbe scattare il gate — ma su queste quattro righe
+gli unici altri token sono `color`, `label`, `signColor`, e il denaro esce lo stesso.
+
+🔑 **L'unico hit sopravvive per i nomi delle variabili accanto.** `:1899` passa perché
+`pnlColor` e `totalPnlVal` contengono `pnl` e `total`. Se quella variabile si chiamasse
+`tp`, la copertura del gate su questo file sarebbe **0 su 8** — e nulla nel verde lo direbbe.
+Un rename innocuo può spegnere un controllo di sicurezza.
+
+Le opzioni sono due, e vanno decise insieme: allentare la co-occorrenza accettando i falsi
+positivi che ne derivano, oppure mascherare `fmtCurrency` **alla definizione** — una riga
+sola a `:1834`, che coprirebbe tutti e otto i siti indipendentemente da come il gate li vede.
+La seconda è già registrata come `residual` nel gate.
+
+### Contromisure di misura adottate nel round
+
+- **N path in ⇒ `Test Files` deve dire N.** `vitest` con un path inesistente *da solo*
+  esce con codice 1; **in compagnia di un path valido esegue quello e riporta verde**,
+  senza una riga sui mancanti. Una suite può rimpicciolirsi in silenzio.
+- **`git check-ignore -v`**, non la lettura del `.gitignore` ovvio: i file generati del
+  frontend sono ignorati da **due** file diversi, e chi ne legge uno ne trova un terzo.
+- **`git merge-tree --write-tree` + confronto blob** dice quali file una mano ha toccato
+  in un merge. È cieco sui path in conflitto (il blob contiene i marker): lì si estraggono
+  i due lati dal blob e si verifica che ogni **simbolo** sopravviva — non ogni riga, perché
+  una risoluzione additiva *deve* fondere le righe.
