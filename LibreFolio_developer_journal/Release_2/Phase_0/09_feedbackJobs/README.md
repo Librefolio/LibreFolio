@@ -14,6 +14,8 @@ di TODO_FUTURI.md (classificazione con l'utente) + gli 8 P4 ereditati dall'audit
 | [05_pac_allocation_tool.md](05_pac_allocation_tool.md) | Tool platform | Tool platform integrata; PAC/Rebalancer fixed-L2 congelati; SCIP dependency/capacità e payload ancora a gate |
 | [06_piano_sprint.md](06_piano_sprint.md) | Analysis and sprint plan | Current-code evidence, 16 sprints, parallel-work dependency map, shared-resource ownership and developer UI review gates |
 | [07_feedback_import_critici.md](07_feedback_import_critici.md) | Urgent import/UX/update feedback | ✅ E1-E9 plus U1/U4/U5/U7/U9 integrati in `dev_release2` (`ef722b552`) |
+| [08_review_visiva_20260922.md](08_review_visiva_20260922.md) | Review visiva end-to-end in produzione | 20 voci (14 difetti, 3 non-difetti, 3 evoluzioni) verificate su `e4a46e9e0`; 6 con causa esatta, owner proposti, screenshot |
+| [09_reperti_analisi_statica_20260922.md](09_reperti_analisi_statica_20260922.md) | Reperti del round di analisi statica | Difetti, debito e 16 reperti di metodo; §9 registra le rettifiche che la review d'uso ha imposto all'analisi statica |
 
 ## Glossario degli alias — leggilo prima della tabella
 
