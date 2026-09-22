@@ -1,0 +1,16 @@
+function toolRecordCodec<Value extends z.ZodType<unknown, z.ZodTypeDef, unknown>>(
+    record: z.ZodRecord<z.ZodString, Value>,
+): z.ZodType<z.output<typeof record>, z.ZodTypeDef, z.input<typeof record>> {
+    // Zod 3 drops "__proto__" when merging records. Reversible key escaping keeps
+    // real JSON dictionaries intact before a later extra-forbid domain validation.
+    const prefix = "\u0000";
+    const codec = z.preprocess((input) => {
+        if (z.getParsedType(input) !== z.ZodParsedType.object) return input;
+        return Object.fromEntries(Object.entries(input as Record<string, unknown>).map(([key, value]) =>
+            [key === "__proto__" || key.startsWith(prefix) ? prefix + key : key, value] as const));
+    }, record).transform((parsed) => Object.fromEntries(Object.entries(parsed).map(([key, value]) =>
+        [key.startsWith(prefix) ? key.slice(prefix.length) : key, value] as const)));
+    // The preprocessor changes only dictionary keys bijectively; the generated
+    // record still validates every value and every scalar-only, unbounded key.
+    return codec as z.ZodType<z.output<typeof record>, z.ZodTypeDef, z.input<typeof record>>;
+}

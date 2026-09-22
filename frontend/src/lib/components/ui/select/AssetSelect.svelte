@@ -44,15 +44,43 @@
         onchange?: (value: number | null) => void;
         /** Prioritized items shown at the top of the list with a badge (e.g. BRIM candidates). */
         suggestedIds?: Array<{id: number; badge: string; badgeClass?: string; badgeTooltip?: string}>;
+        /**
+         * Split the list into labelled, ordered sections (K3).
+         *
+         * Each asset joins the **first** section whose `match` accepts it, so the
+         * array order is the screen order and overlapping predicates are resolved
+         * rather than duplicated. A section that ends up empty prints no title:
+         * `SearchSelect` already drops a header whose section is emptied by the
+         * search, and an always-empty one would be a promise the list never keeps.
+         *
+         * Leave it undefined for a flat list — that is still the right answer for
+         * pickers where every asset is equally plausible.
+         */
+        sections?: Array<{key: string; label: string; match: (a: AssetInfo) => boolean}>;
+        /** Title for the assets no section claimed. Omit to leave them untitled. */
+        restLabel?: string;
+        /** Dropdown side. 'auto' flips it above the trigger when there is no room below. */
+        dropdownPosition?: 'top' | 'bottom' | 'auto';
+        /** Minimum dropdown width in px, for triggers narrower than their content. */
+        dropdownMinWidth?: number;
+        /** Called when the asset cache fails to load, so the caller can say so in its own layout. */
+        onLoadError?: () => void;
     }
 
-    let {value = $bindable(null), disabled = false, filter, placeholder, testid = 'asset-select', compact = false, createLabel, onCreateNew, onchange, suggestedIds}: Props = $props();
+    let {value = $bindable(null), disabled = false, filter, placeholder, testid = 'asset-select', compact = false, createLabel, onCreateNew, onchange, suggestedIds, sections, restLabel, dropdownPosition, dropdownMinWidth, onLoadError}: Props = $props();
 
     let loading = $state(true);
 
     onMount(async () => {
-        await ensureAssetsLoaded();
-        loading = false;
+        try {
+            await ensureAssetsLoaded();
+        } catch {
+            // Without this the rejection escaped and `loading` was never cleared, so a
+            // failed cache load left the select spinning forever with no way to report it.
+            onLoadError?.();
+        } finally {
+            loading = false;
+        }
     });
 
     /** Build SearchSelect options from the asset store cache. */
@@ -85,7 +113,7 @@
             icon: a.icon_url || (a.asset_type ? getAssetTypeIconUrl(a.asset_type) : undefined),
             data: a,
         }));
-        if (!suggestedIds || suggestedIds.length === 0) return baseOptions;
+        if (!suggestedIds || suggestedIds.length === 0) return sectioned(baseOptions);
         // Pin suggested items at the top with a badge.
         const suggestedSet = new Map(suggestedIds.map((s) => [String(s.id), s]));
         const suggested: SelectOption[] = [];
@@ -98,8 +126,40 @@
                 rest.push(opt);
             }
         }
-        return [...suggested, ...rest];
+        // Sections are structure, badges are decoration: when both are given the
+        // sections decide the order and the badges simply travel with their option.
+        return sections && sections.length > 0 ? sectioned([...suggested, ...rest]) : [...suggested, ...rest];
     });
+
+    /**
+     * Group options under section titles, preserving the order of `sections`.
+     * Returns the input untouched when no sections are configured.
+     */
+    function sectioned(opts: SelectOption[]): SelectOption[] {
+        if (!sections || sections.length === 0) return opts;
+        const buckets = new Map<string, SelectOption[]>(sections.map((section) => [section.key, []]));
+        const unclaimed: SelectOption[] = [];
+        for (const opt of opts) {
+            const asset = asAsset(opt.data);
+            const section = asset ? sections.find((candidate) => candidate.match(asset)) : undefined;
+            if (section) buckets.get(section.key)!.push(opt);
+            else unclaimed.push(opt);
+        }
+        const out: SelectOption[] = [];
+        for (const section of sections) {
+            const members = buckets.get(section.key)!;
+            if (members.length === 0) continue;
+            out.push({value: `__section:${section.key}`, label: section.label, header: true});
+            out.push(...members);
+        }
+        if (unclaimed.length > 0) {
+            // Only title the remainder when something above it was titled, otherwise
+            // the list would carry a single heading over the whole of itself.
+            if (restLabel && out.length > 0) out.push({value: '__section:__rest', label: restLabel, header: true});
+            out.push(...unclaimed);
+        }
+        return out;
+    }
 
     let stringValue = $derived(value == null ? '' : String(value));
 
@@ -120,8 +180,12 @@
     }
 </script>
 
-<div data-testid={testid}>
-    <SearchSelect value={stringValue} {options} {disabled} {loading} placeholder={placeholder ?? $t('common.select')} {compact} inlineSearch={true} {createLabel} {onCreateNew} onchange={handleChange}>
+<!-- The test id lives on SearchSelect (via `testId` below), not here: carrying it on
+     both would render two nested elements with the same `data-testid`, and every
+     exact resolution of it fails Playwright's strict mode. This wrapper stays for
+     layout only. -->
+<div>
+    <SearchSelect value={stringValue} {options} {disabled} {loading} placeholder={placeholder ?? $t('common.select')} {compact} inlineSearch={true} {dropdownPosition} {dropdownMinWidth} testId={testid} {createLabel} {onCreateNew} onchange={handleChange}>
         {#snippet selectedItem(option)}
             {@const a = asAsset(option.data)}
             <div class="flex items-center gap-2 min-w-0">

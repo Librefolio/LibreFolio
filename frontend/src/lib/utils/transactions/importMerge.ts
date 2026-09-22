@@ -42,20 +42,21 @@ export interface MergeResult {
     fileIdOfFake: Map<number, string>;
 }
 
-/** If exactly one candidate is an exact match, its asset id — else null. Used to auto-bind. */
-export function uniqueExactCandidateId(candidates: AssetResolution['candidates']): number | null {
-    const exact = (candidates ?? []).filter((c) => String(c.match_confidence).toLowerCase() === 'exact');
-    return exact.length === 1 ? exact[0].asset_id : null;
+/** Mirror BRIM selection: one distinct candidate; conflicting aliases remain unresolved. */
+export function uniqueCandidateId(candidates: AssetResolution['candidates']): number | null {
+    const ids = new Set((candidates ?? []).map((candidate) => candidate.asset_id));
+    return ids.size === 1 ? (ids.values().next().value ?? null) : null;
 }
 
 /** Union two candidate lists, keeping the strongest confidence per asset id, sorted strongest-first. */
 export function mergeCandidates(a: AssetResolution['candidates'], b: AssetResolution['candidates']): AssetResolution['candidates'] {
+    const rank = (confidence: string) => CONF_ORDER[confidence.toLowerCase()] ?? 9;
     const byId = new Map<number, AssetResolution['candidates'][number]>();
     for (const candidate of [...a, ...b]) {
         const existing = byId.get(candidate.asset_id);
-        if (!existing || (CONF_ORDER[candidate.match_confidence] ?? 9) < (CONF_ORDER[existing.match_confidence] ?? 9)) byId.set(candidate.asset_id, candidate);
+        if (!existing || rank(candidate.match_confidence) < rank(existing.match_confidence)) byId.set(candidate.asset_id, candidate);
     }
-    return [...byId.values()].sort((x, y) => (CONF_ORDER[x.match_confidence] ?? 9) - (CONF_ORDER[y.match_confidence] ?? 9));
+    return [...byId.values()].sort((x, y) => rank(x.match_confidence) - rank(y.match_confidence));
 }
 
 /**
@@ -152,8 +153,8 @@ export function buildMergedTransactions(parseResults: MergeSourceResult[], broke
                             extractedIsin: (mapping.extracted_isin as string | null) ?? null,
                             extractedName: (mapping.extracted_name as string | null) ?? null,
                             candidates,
-                            // Auto-bind an exact-ISIN match even if the backend left it unselected.
-                            resolvedAssetId: selected ?? uniqueExactCandidateId(candidates),
+                            resolvedAssetId: selected ?? uniqueCandidateId(candidates),
+                            selectionOrigin: 'automatic',
                             txCount: 0,
                             sourceFiles: [],
                             notices: ((mapping.notices ?? []) as Array<{kind?: string; reason?: string}>).map((n) => ({kind: String(n.kind ?? ''), reason: String(n.reason ?? '')})),

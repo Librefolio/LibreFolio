@@ -15,7 +15,7 @@ vi.mock('$lib/api', async (importOriginal) => {
     };
 });
 
-import {buildHistoricalReplayParameters, buildRiskQueryRequest, buildSimulationParameters} from '$lib/risk/riskRequest';
+import {buildHistoricalReplayParameters, buildRiskQueryRequest, buildSimulationParameters, canonicalizeScope, type RiskScope} from '$lib/risk/riskRequest';
 import {transitionClientSession} from '$lib/stores/app/clientSession';
 import {notifyPortfolioMutation} from '$lib/stores/portfolio/portfolioMutation';
 
@@ -74,6 +74,45 @@ describe('riskStore', () => {
         };
 
         expect(makeRiskRequestKey(first)).toBe(makeRiskRequestKey(second));
+    });
+
+    it('canonicalizes a portfolio slice that carries no broker subset', () => {
+        // The Dashboard mounts `{kind: 'portfolio'}` with no broker subset, so an asset
+        // slice there reaches canonicalization with `broker_ids` absent. Ordering must
+        // not depend on the presence of the other narrowing.
+        // Asserted on `canonicalizeScope` directly and not through the request key,
+        // because the key currently cannot see the field at all — see the boundary
+        // test below, which is what makes this one non-vacuous.
+        const sliced = (assetIds: number[]) => canonicalizeScope({kind: 'portfolio', asset_ids: assetIds} as unknown as RiskScope) as unknown as {asset_ids: number[]};
+
+        expect(sliced([9, 3]).asset_ids).toEqual([3, 9]);
+        expect(sliced([3, 9]).asset_ids).toEqual([3, 9]);
+    });
+
+    it('keeps the broker and asset narrowings independent', () => {
+        const scoped = canonicalizeScope({kind: 'portfolio', broker_ids: [9, 3], asset_ids: [4, 2]} as unknown as RiskScope) as unknown as {
+            broker_ids: number[];
+            asset_ids: number[];
+        };
+
+        expect(scoped.broker_ids).toEqual([3, 9]);
+        expect(scoped.asset_ids).toEqual([2, 4]);
+    });
+
+    it('gives a portfolio slice its own request key, apart from another slice and from the whole', () => {
+        transitionClientSession(105);
+        // The alarm planted at `bf34f3a0a` has fired, and this is the invariant it asked
+        // for. Before the field landed, `canonicalizeRiskRequest` ended in
+        // `schemas.RiskQueryRequest.parse(...)`, Zod dropped `asset_ids` as an unknown
+        // key, and every slice collapsed onto the unsliced portfolio's key. The danger
+        // was never a cache that doubles: it was the whole portfolio served under a
+        // sliced heading. `PortfolioRiskScope` now carries the field, so the key has to
+        // keep apart three requests that used to be one — and the cast this test needed
+        // while the field was missing is gone, which is the same fact stated in types.
+        const scoped = (assetIds: number[]) => ({...baseRequest, scope: {...baseRequest.scope, asset_ids: assetIds}});
+
+        expect(makeRiskRequestKey(scoped([2, 4])), 'two different slices must not share one cached answer').not.toBe(makeRiskRequestKey(scoped([2, 5])));
+        expect(makeRiskRequestKey(scoped([2, 4])), 'a slice must not be served the unsliced portfolio — the failure the alarm was planted for').not.toBe(makeRiskRequestKey(baseRequest));
     });
 
     it('canonicalizes asset universes, replay proxies, exclusions, and currency', () => {
@@ -283,6 +322,8 @@ describe('riskStore', () => {
     it('builds mutually exclusive MC and QMC simulation controls', () => {
         expect(
             buildSimulationParameters({
+                process: 'gbm',
+                regime: 'none',
                 samplingMethod: 'mc',
                 horizonDays: 365,
                 pathCount: 8192,
@@ -291,6 +332,7 @@ describe('riskStore', () => {
             }),
         ).toEqual({
             process: 'gbm',
+            regime: 'none',
             sampling_method: 'mc',
             horizon_days: 365,
             path_count: 8192,
@@ -298,6 +340,8 @@ describe('riskStore', () => {
         });
         expect(
             buildSimulationParameters({
+                process: 'gbm',
+                regime: 'none',
                 samplingMethod: 'qmc',
                 horizonDays: 365,
                 pathCount: 8192,
@@ -306,6 +350,7 @@ describe('riskStore', () => {
             }),
         ).toEqual({
             process: 'gbm',
+            regime: 'none',
             sampling_method: 'qmc',
             horizon_days: 365,
             path_count: 8192,
@@ -350,5 +395,48 @@ describe('riskStore — first identity resolution', () => {
         // the panel would sit unable to load for the life of the page.
         expect(await straddling).toEqual({items: [{analytic_code: 'fresh'}]});
         expect(catalogApi).toHaveBeenCalledTimes(2);
+    });
+
+    it('discards an answer to a question asked before the identity existed', async () => {
+        // Not a second copy of 'drops stale responses after an account transition'
+        // in the block above. That one moves 301 → 302 — the *second* transition,
+        // which runs the registered resetters on its way through, so the cache is
+        // cleared as it passes. This is the *first* resolution, which returns early
+        // before any resetter runs, and it is the only one a page reload performs.
+        //
+        // The ordering is the whole subject. Every test in the block above resolves
+        // the identity and *then* queries; the app does the opposite, and has no
+        // choice about it: `(app)/+layout.svelte` fires `checkAuth()` from `onMount`
+        // behind no auth gate — its only top-level `{#if}` is `$i18nLoading` — so a
+        // panel mounts and asks its question at generation 0 while `GET /auth/me` is
+        // still in flight.
+        vi.resetModules();
+        queryApi.mockReset();
+
+        const {transitionClientSession: freshTransition} = await import('$lib/stores/app/clientSession');
+        const {queryRisk: freshQueryRisk} = await import('./riskStore.svelte');
+
+        let resolveStraddling: (value: unknown) => void = () => undefined;
+        queryApi.mockImplementationOnce(
+            () =>
+                new Promise((resolve) => {
+                    resolveStraddling = resolve;
+                }),
+        );
+        // Asked before the app knows who is logged in.
+        const straddling = freshQueryRisk(baseRequest);
+
+        // Identity resolves for the first time, on top of the question. The generation
+        // moves without anything being cleared, so the request is still parked in its
+        // in-flight slot at the moment its own answer stops being usable.
+        freshTransition(801);
+        resolveStraddling({items: [{instance_id: 'kpi', analytic_code: 'correlation'}]});
+
+        // Discarding it is right — it was computed for nobody in particular. What the
+        // null cannot say is that it is a discard: it is shaped exactly like a query
+        // that ran and found nothing, and folding the two together is how a complete
+        // 16/16 matrix reached the screen as an empty panel that never refilled.
+        expect(await straddling, 'a full answer to a question asked before the identity resolved was handed back as though it belonged to the resolved account').toBeNull();
+        expect(queryApi, 'queryRisk re-asked the discarded question by itself; unlike the catalog above it deliberately does not, because only the caller knows whether the question still stands').toHaveBeenCalledTimes(1);
     });
 });

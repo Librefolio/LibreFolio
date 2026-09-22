@@ -25,9 +25,9 @@ from enum import StrEnum
 from typing import Literal, Optional
 
 import structlog
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 
-from backend.app.db.models import Asset, AssetEvent, AssetEventType, BrokerUserAccess, PriceHistory, Transaction, TransactionType, UserRole
+from backend.app.db.models import Asset, AssetEvent, AssetEventType, BrokerUserAccess, FxConversionRoute, FxRate, PriceHistory, Transaction, TransactionType, UserRole
 from backend.app.schemas.common import Currency as CurrencySchema
 from backend.app.schemas.portfolio import (
     DataQualityIssue,
@@ -74,6 +74,8 @@ SECTOR_EMOJIS: dict[str, str] = {
     "Telecommunication": "📡",
     "Real Estate": "🏢",
     "Utilities": "🔌",
+    "Corporate Bonds": "🏢",
+    "Government Bonds": "🏛️",
     "Other": "📦",
     "Unknown": "❓",
     "Liquidity": "💵",
@@ -140,6 +142,14 @@ class ValuationResult:
     split_adjusted: bool = False
     stale: bool = False
     missing_fx_pair: str | None = None
+    # G1b — synthetic P&L candles (plan §4.3). Only ever populated when the caller passed
+    # compute_ohlc=True AND the resolved mark is an exact MARKET day with a full OHLC triple
+    # (never for CARRIED/TRADE_AVG/MISSING) — same conversion pipeline as market_value, applied
+    # to open/high/low instead of close. None means "no intraday range known for this day";
+    # the candle composer's flat fallback is open=high=low=close=market_value, not a guess here.
+    market_value_open: Decimal | None = None
+    market_value_high: Decimal | None = None
+    market_value_low: Decimal | None = None
 
 
 def _cumulative_split_ratio(history: SplitHistory, reference_date: date_type, valuation_date: date_type) -> tuple[Decimal, bool]:
@@ -197,7 +207,7 @@ class ClassificationResult:
 
     classified: list[ClassifiedTransaction] = field(default_factory=list)
     in_transit_intervals: list[InTransitInterval] = field(default_factory=list)
-    external_cash_flows: list[tuple[date_type, Decimal, str]] = field(default_factory=list)
+    external_cash_flows: list[tuple[date_type, int, Decimal, str]] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
     def get_needed_paired_ids(self) -> set[int]:
@@ -263,7 +273,7 @@ class ScopeAwareTransactionClassifier:
 
         classified: list[ClassifiedTransaction] = []
         in_transit_intervals: list[InTransitInterval] = []
-        external_cash_flows: list[tuple[date_type, Decimal, str]] = []
+        external_cash_flows: list[tuple[date_type, int, Decimal, str]] = []
         warnings: list[str] = []
 
         # Track which linked pairs we've already processed (avoid duplicates)
@@ -279,7 +289,7 @@ class ScopeAwareTransactionClassifier:
 
                 # Unlinked DEPOSIT/WITHDRAWAL → external cash flow
                 if tx.type in _EXTERNAL_CASH_TYPES and tx.amount and tx.amount != 0 and tx.currency:
-                    external_cash_flows.append((tx.date, tx.amount * share, tx.currency))
+                    external_cash_flows.append((tx.date, tx.broker_id, tx.amount * share, tx.currency))
                 continue
 
             # ── LINKED transaction — find paired leg ──
@@ -292,7 +302,7 @@ class ScopeAwareTransactionClassifier:
                 warnings.append(f"Transaction {tx.id} ({tx.type}) has related_transaction_id={tx.related_transaction_id} " f"but paired transaction not found — treating as normal")
                 # If it looks like a deposit/withdrawal, count as external
                 if tx.amount and tx.amount != 0 and tx.currency:
-                    external_cash_flows.append((tx.date, tx.amount * share, tx.currency))
+                    external_cash_flows.append((tx.date, tx.broker_id, tx.amount * share, tx.currency))
                 continue
 
             pair_key = (min(tx.id or 0, paired.id or 0), max(tx.id or 0, paired.id or 0))
@@ -307,6 +317,15 @@ class ScopeAwareTransactionClassifier:
                 if pair_key not in processed_pairs and tx.date != paired.date:
                     interval = self._build_in_transit_interval(tx, paired)
                     if interval is not None:
+                        # F2 — ownership scaling: attribute in-transit value at the
+                        # departure broker's actual ownership share, not a fixed 100%.
+                        # Without this, a <100%-owned shared broker would report the
+                        # full untouched value while it is in transit, then jump to the
+                        # correct scaled value the moment it lands — an owner-share
+                        # regression `_build_in_transit_interval` deliberately leaves
+                        # for this call site to close, since only here is
+                        # `self.broker_shares` in scope.
+                        interval.share = self.broker_shares.get(interval.departure_leg.broker_id, Decimal("1"))
                         in_transit_intervals.append(interval)
 
                     # Warn if share percentages differ between source/dest brokers
@@ -322,7 +341,7 @@ class ScopeAwareTransactionClassifier:
 
                 # External linked → generates external cash flow
                 if tx.amount and tx.amount != 0 and tx.currency:
-                    external_cash_flows.append((tx.date, tx.amount * share, tx.currency))
+                    external_cash_flows.append((tx.date, tx.broker_id, tx.amount * share, tx.currency))
 
             processed_pairs.add(pair_key)
 
@@ -442,6 +461,54 @@ class DailyPositionState:
 
 
 @dataclass
+class BrokerDailyContribution:
+    """One broker's additive slice of a given day's portfolio NAV/capital/P&L.
+
+    Built from the exact same Decimal components as the scope-aggregate
+    DailyPortfolioState fields (market value, cash, in-transit, external cash
+    flow) at the same accumulation sites, so summing this across all brokers
+    for a given day reproduces the aggregate exactly — never a residual/plug.
+    """
+
+    broker_id: int
+    nav_contribution: Decimal  # market_value_by_broker + cash_by_broker + in_transit_by_broker
+    capital_contribution: Decimal  # cumulative_ecf_by_broker (this broker's capital baseline)
+    pnl_contribution: Decimal  # nav_contribution - capital_contribution
+
+
+@dataclass(frozen=True, slots=True)
+class PnlCandleContribution:
+    """One day's synthetic total-P&L candle (G1b, plan §4.3).
+
+    Composed as: offset = total_pnl - sum(asset_close); {open,high,low} = offset +
+    sum(asset_{open,high,low}); close = total_pnl exactly (by construction, never a
+    residual check — the offset absorbs cash/capital-baseline/realized/income/
+    in-transit/flat-fallback contributions that have no per-asset OHLC of their own).
+    Cross-asset high/low are explicitly synthetic/non-simultaneous (plan §3.3) — this
+    is a presentation candle, never an intraday series or a factual AI Export input.
+    """
+
+    open: Decimal
+    high: Decimal
+    low: Decimal
+    close: Decimal
+
+
+@dataclass(frozen=True, slots=True)
+class AcquisitionFundingContribution:
+    """One day's aggregate BUY funding split (batch 2 follow-up — "new vs reinvested
+    liquidity", plan §5.2). Surfaces the engine's own already-existing per-BUY K/R-pool
+    draw (from_k/from_r — computed to update the running 3-pool balances, see the BUY
+    branch in build()) as a new daily output, summed across every BUY that day. Not
+    new business logic: from_new_capital + from_reinvested reproduces that day's total
+    BUY cash outflow exactly, by construction (the same amount_target already consumed
+    by the pool update, just also captured here instead of discarded)."""
+
+    from_new_capital: Decimal  # sum of from_k across the day's BUYs
+    from_reinvested: Decimal  # sum of from_r across the day's BUYs
+
+
+@dataclass
 class DailyPortfolioState:
     """Complete daily portfolio state — the heart of the calculation engine."""
 
@@ -479,6 +546,17 @@ class DailyPortfolioState:
     stale_price_asset_ids: set[int] = field(default_factory=set)
     transaction_implied_asset_ids: set[int] = field(default_factory=set)
     nav_complete: bool = True
+    # G1a — per-broker additive NAV/capital/P&L slice (see BrokerDailyContribution)
+    broker_contributions: dict[int, BrokerDailyContribution] = field(default_factory=dict)
+    # G1b — synthetic P&L candle for this day (see PnlCandleContribution). None unless
+    # the engine was run with compute_candles=True AND the day's candle is composable
+    # (no MISSING held-asset valuation that day).
+    pnl_candle: PnlCandleContribution | None = None
+    # Batch 2 — new-vs-reinvested BUY funding split for this day (see
+    # AcquisitionFundingContribution). None unless the engine was run with
+    # compute_acquisition_funding=True AND at least one BUY happened this day (a
+    # genuine "no acquisition today" gap, never a zero-valued contribution).
+    acquisition_funding: AcquisitionFundingContribution | None = None
 
 
 # =============================================================================
@@ -501,7 +579,7 @@ class DailyStateBuilder:
         *,
         classified_txs: list[ClassifiedTransaction],
         in_transit_intervals: list[InTransitInterval],
-        external_cash_flows: list[tuple[date_type, Decimal, str]],
+        external_cash_flows: list[tuple[date_type, int, Decimal, str]],
         price_map: dict[int, list[tuple[date_type, Decimal, str]]],
         quote_base_map: dict[int, int | None],
         fx_rate_map: dict[tuple[str, str, date_type], Decimal],
@@ -515,6 +593,8 @@ class DailyStateBuilder:
         split_linked_tx_ids: set[int] | None = None,
         split_history: dict[int, SplitHistory] | None = None,
         mark_series: dict[int, AssetPriceSeries] | None = None,
+        compute_candles: bool = False,
+        compute_acquisition_funding: bool = False,
     ) -> None:
         self.classified_txs = classified_txs
         self.in_transit_intervals = in_transit_intervals
@@ -551,6 +631,16 @@ class DailyStateBuilder:
         # native currency); _market_value_for converts each mark to the reporting currency at the
         # valuation date. Populated by PortfolioCalculationEngine.calculate().
         self.mark_series: dict[int, AssetPriceSeries] = mark_series or {}
+        # G1b — synthetic P&L candles (plan §4.3). False by default: the daily OHLC composition
+        # below is opt-in extra Decimal/FX work per plan §4.1 ("expensive OHLC work stays off
+        # ordinary reports"), never run unless a caller explicitly requests candles.
+        self.compute_candles = compute_candles
+        # Batch 2 — new-vs-reinvested BUY funding split (plan §5.2). False by default:
+        # this is a pure bookkeeping side-capture of values the BUY branch already
+        # computes for the 3-pool update, so the extra cost is negligible either way,
+        # but stays opt-in for consistency with compute_candles's "extra output stays
+        # off ordinary reports unless requested" convention.
+        self.compute_acquisition_funding = compute_acquisition_funding
 
     def build(self) -> PortfolioCalculationResult:  # noqa: C901 — TODO(P2-refactor): monolithic daily-replay engine; extract pre-frame/frame stages
         """Build daily states for [frame_start, date_to] + position snapshots + period accumulators.
@@ -564,12 +654,15 @@ class DailyStateBuilder:
 
         # ── 1. Cash ledger: sum amount deltas per day ──
         cash_deltas: dict[date_type, Decimal] = defaultdict(lambda: zero)
+        cash_deltas_by_broker: dict[tuple[date_type, int], Decimal] = defaultdict(lambda: zero)
         for ctxn in self.classified_txs:
             tx = ctxn.tx
             if tx.amount and tx.amount != 0 and tx.currency:
                 converted = self._convert(tx.amount, tx.currency, tx.date)
                 if converted is not None:
-                    cash_deltas[tx.date] += converted * ctxn.share
+                    delta = converted * ctxn.share
+                    cash_deltas[tx.date] += delta
+                    cash_deltas_by_broker[(tx.date, tx.broker_id)] += delta
 
         # ── 2. Position transactions by date (for inline WAC computation) ──
         position_txs_by_date: dict[date_type, list[ClassifiedTransaction]] = defaultdict(list)
@@ -585,15 +678,23 @@ class DailyStateBuilder:
 
         # ── 3. External cash flow index ──
         ecf_by_date: dict[date_type, Decimal] = defaultdict(lambda: zero)
-        for dt, amount, ccy in self.external_cash_flows:
+        ecf_by_date_by_broker: dict[tuple[date_type, int], Decimal] = defaultdict(lambda: zero)
+        for dt, bid, amount, ccy in self.external_cash_flows:
             converted = self._convert(amount, ccy, dt)
             if converted is not None:
                 ecf_by_date[dt] += converted
+                ecf_by_date_by_broker[(dt, bid)] += converted
 
         # ── 4. Accumulators (shared across pre-frame and frame) ──
         states: list[DailyPortfolioState] = []
         cumulative_cash = zero
         cumulative_ecf = zero
+        # G1a — additive per-broker contribution accumulators. Mirrors of the scope
+        # aggregates above, incremented at every one of the same mutation sites with
+        # the same Decimal amounts, so sum(...values()) == the aggregate holds by
+        # construction rather than by a post-hoc reconciliation/residual line.
+        cumulative_cash_by_broker: dict[int, Decimal] = defaultdict(lambda: zero)
+        cumulative_ecf_by_broker: dict[int, Decimal] = defaultdict(lambda: zero)
         cumulative_qty: dict[tuple[int, int], Decimal] = defaultdict(lambda: zero)
         wac_pool_qty: dict[tuple[int, int], Decimal] = defaultdict(lambda: zero)
         wac_pool_cost: dict[tuple[int, int], Decimal] = defaultdict(lambda: zero)
@@ -611,6 +712,9 @@ class DailyStateBuilder:
         position_states_start: list[DailyPositionState] = []
         position_states_end: list[DailyPositionState] = []
         is_first_frame_day = True
+        # Universe of broker ids in this scope — used to fan out the date-only
+        # cash/ECF aggregates above into their per-broker components below.
+        all_broker_ids: set[int] = {ctxn.tx.broker_id for ctxn in self.classified_txs}
 
         # ── 5. PRE-FRAME: [date_from, frame_start) — accounting only ──
         # Process all transaction days before frame_start: update cash, qty, WAC, ECF.
@@ -619,6 +723,9 @@ class DailyStateBuilder:
         for day in preframe_tx_dates:
             cumulative_cash += cash_deltas.get(day, zero)
             cumulative_ecf += ecf_by_date.get(day, zero)
+            for bid in all_broker_ids:
+                cumulative_cash_by_broker[bid] += cash_deltas_by_broker.get((day, bid), zero)
+                cumulative_ecf_by_broker[bid] += ecf_by_date_by_broker.get((day, bid), zero)
             # Pre-frame 3-pool per-broker: process all tx types
             for ctxn in all_txs_by_date.get(day, []):
                 tx = ctxn.tx
@@ -642,7 +749,11 @@ class DailyStateBuilder:
                     R[bid] -= from_r
                     W += from_r
                 elif tx.type in (TransactionType.DIVIDEND, TransactionType.INTEREST):
-                    R[bid] += amt
+                    # Signed: preserve a legacy negative correction (plan §4.4). `amt` is
+                    # abs(tx.amount) converted through the same (sign-agnostic) FX rate —
+                    # flip its sign to match the original tx.amount instead of re-querying.
+                    signed_amt = amt if tx.amount >= 0 else -amt
+                    R[bid] += signed_amt
                 elif tx.type in (TransactionType.FEE, TransactionType.TAX):
                     R[bid] -= amt
                     if R[bid] < zero:
@@ -704,6 +815,7 @@ class DailyStateBuilder:
                             contributed = self._capital_flow_for_adjustment_in(tx, tx_qty, unit_cost_asset_ccy)
                             if contributed is not None:
                                 cumulative_ecf += contributed
+                                cumulative_ecf_by_broker[tx.broker_id] += contributed
                     else:
                         old_qty = wac_pool_qty[key]
                         old_cost = wac_pool_cost[key]
@@ -718,6 +830,7 @@ class DailyStateBuilder:
                             removed_target = self._convert(old_cost - wac_pool_cost[key], self.asset_currencies.get(tx.asset_id, self.target_currency), tx.date)
                             if removed_target is not None:
                                 cumulative_ecf -= removed_target
+                                cumulative_ecf_by_broker[tx.broker_id] -= removed_target
                     cumulative_qty[key] += tx_qty
 
         # ── 6. FRAME: [frame_start, date_to] — full daily evaluation ──
@@ -789,6 +902,9 @@ class DailyStateBuilder:
                         stale_price_asset_ids=set(prev.stale_price_asset_ids),
                         transaction_implied_asset_ids=set(prev.transaction_implied_asset_ids),
                         nav_complete=prev.nav_complete,
+                        broker_contributions=dict(prev.broker_contributions),
+                        pnl_candle=prev.pnl_candle,
+                        acquisition_funding=None,
                     )
                 )
                 current += timedelta(days=1)
@@ -796,6 +912,13 @@ class DailyStateBuilder:
 
             # 4a. Update cash
             cumulative_cash += cash_deltas.get(current, zero)
+            for bid in all_broker_ids:
+                cumulative_cash_by_broker[bid] += cash_deltas_by_broker.get((current, bid), zero)
+
+            # Batch 2 — per-day BUY funding split accumulator (see
+            # AcquisitionFundingContribution), reset every day like external_cash_flow.
+            day_acq_from_k = zero
+            day_acq_from_r = zero
 
             # 4b. Unified per-transaction loop: WAC + 3-pool + period accumulators
             # Single pass: for each tx, in additions-first order:
@@ -805,6 +928,8 @@ class DailyStateBuilder:
             #   4. Update period accumulators (realized, income, fees)
             ecf_today = ecf_by_date.get(current, zero)
             cumulative_ecf += ecf_today
+            for bid in all_broker_ids:
+                cumulative_ecf_by_broker[bid] += ecf_by_date_by_broker.get((current, bid), zero)
 
             day_all_txs = all_txs_by_date.get(current, [])
             # Sort: additions (qty > 0) first, then reductions (qty < 0), then non-position txs
@@ -859,6 +984,7 @@ class DailyStateBuilder:
                             contributed = self._capital_flow_for_adjustment_in(tx, tx_qty, unit_cost_asset_ccy)
                             if contributed is not None:
                                 cumulative_ecf += contributed
+                                cumulative_ecf_by_broker[bid] += contributed
                     else:
                         # Reduction: READ WAC before reducing, then reduce
                         old_qty = wac_pool_qty[key]
@@ -888,6 +1014,7 @@ class DailyStateBuilder:
                         # tracking unrealized instead of dumping the book into "Other".
                         if self._is_capital_adjustment(tx):
                             cumulative_ecf -= sell_cb_target
+                            cumulative_ecf_by_broker[bid] -= sell_cb_target
 
                         # 3-pool per-broker: SELL → K[bid] += cost_basis, R[bid] += gain
                         if amount_target is not None:
@@ -924,12 +1051,16 @@ class DailyStateBuilder:
                     W += from_r
 
                 elif tx.type in (TransactionType.DIVIDEND, TransactionType.INTEREST):
-                    R[bid] += amount_target
+                    # Signed: preserve a legacy negative correction (plan §4.4). `amount_target`
+                    # is abs(tx.amount) converted through the same (sign-agnostic) FX rate —
+                    # flip its sign to match the original tx.amount instead of re-querying.
+                    signed_amount_target = amount_target if tx.amount >= 0 else -amount_target
+                    R[bid] += signed_amount_target
                     # Period accumulator
                     if tx.asset_id:
-                        per_income[(tx.asset_id, tx.broker_id)] += amount_target
+                        per_income[(tx.asset_id, tx.broker_id)] += signed_amount_target
                     else:
-                        unalloc_income[tx.broker_id] += amount_target
+                        unalloc_income[tx.broker_id] += signed_amount_target
 
                 elif tx.type in (TransactionType.FEE, TransactionType.TAX):
                     R[bid] -= amount_target
@@ -946,6 +1077,9 @@ class DailyStateBuilder:
                     from_r = min(amount_target, max(R[bid], zero))
                     R[bid] -= from_r
                     K[bid] -= amount_target - from_r
+                    if self.compute_acquisition_funding:
+                        day_acq_from_r += from_r
+                        day_acq_from_k += amount_target - from_r
 
                 elif tx.type in (TransactionType.CASH_TRANSFER, TransactionType.FX_CONVERSION):
                     # Linked-internal: pool transfer between brokers
@@ -962,6 +1096,7 @@ class DailyStateBuilder:
 
             # 4c. Market value per asset (after all txs for the day are processed)
             market_value = zero
+            market_value_by_broker: dict[int, Decimal] = defaultdict(lambda: zero)
             by_type: dict[str, Decimal] = defaultdict(lambda: zero)
             by_sector: dict[str, Decimal] = defaultdict(lambda: zero)
             by_geo: dict[str, Decimal] = defaultdict(lambda: zero)
@@ -969,14 +1104,29 @@ class DailyStateBuilder:
             stale: set[int] = set()
             missing_fx: set[str] = set()
             implied: set[int] = set()
+            # G1b — synthetic P&L candles (plan §4.3): sum every held asset's resolved daily OHLC
+            # contribution (flat open=high=low=close=market_value when no intraday range is known,
+            # never a guess). A MISSING valuation makes the whole day's candle unavailable, mirroring
+            # nav_complete — a resolved contribution cannot be composed from an unresolved one.
+            candle_open_sum = zero
+            candle_high_sum = zero
+            candle_low_sum = zero
+            candle_close_sum = zero
 
-            for (asset_id, _broker_id), qty in cumulative_qty.items():
+            for (asset_id, position_broker_id), qty in cumulative_qty.items():
                 if qty <= 0:
                     continue
-                valuation = self._market_value_for(asset_id, qty, current)
+                valuation = self._market_value_for(asset_id, qty, current, compute_ohlc=self.compute_candles)
                 if valuation.market_value is not None:
                     market_value += valuation.market_value
+                    market_value_by_broker[position_broker_id] += valuation.market_value
                     self._distribute_allocation(asset_id, valuation.market_value, by_type, by_sector, by_geo)
+                    if self.compute_candles:
+                        has_ohlc = valuation.market_value_open is not None and valuation.market_value_high is not None and valuation.market_value_low is not None
+                        candle_open_sum += valuation.market_value_open if has_ohlc else valuation.market_value
+                        candle_high_sum += valuation.market_value_high if has_ohlc else valuation.market_value
+                        candle_low_sum += valuation.market_value_low if has_ohlc else valuation.market_value
+                        candle_close_sum += valuation.market_value
                 if valuation.source == ValuationSource.MISSING:
                     missing.add(asset_id)
                 if valuation.stale:
@@ -986,8 +1136,12 @@ class DailyStateBuilder:
                 if valuation.source == ValuationSource.LAST_TRADE_PRICE:
                     implied.add(asset_id)
 
-            # 4d. In-transit values
-            it_cash, it_asset_mv, it_asset_cb = self._compute_in_transit(current, missing_fx)
+            # 4d. In-transit values. `it_by_broker` is attributed to each interval's
+            # departure-broker (cash+asset market value only — additive NAV
+            # component, not the cost-basis breakdown), per plan §3.2: value stays
+            # with the departure broker for the whole transit window.
+            it_by_broker: dict[int, Decimal] = defaultdict(lambda: zero)
+            it_cash, it_asset_mv, it_asset_cb = self._compute_in_transit(current, missing_fx, it_by_broker)
 
             # 4e. Open cost basis from inline WAC pool
             open_cost_basis = self._compute_open_cost_basis_inline(cumulative_qty, wac_pool_qty, wac_pool_cost, current, missing_fx)
@@ -999,6 +1153,24 @@ class DailyStateBuilder:
             in_transit_bv = it_cash + it_asset_cb
             book = open_cost_basis + cumulative_cash + in_transit_bv
             ug = nav - book
+
+            # 4f2. G1a — additive per-broker NAV/capital/P&L contribution. Built from
+            # exactly the same Decimal components summed above (market value, cash,
+            # in-transit, external capital flow), so
+            #   sum(nav_contribution) == nav
+            #   sum(capital_contribution) == capital_baseline
+            #   sum(pnl_contribution) == total_pnl
+            # hold by construction — never a residual/plug line.
+            broker_contributions: dict[int, BrokerDailyContribution] = {}
+            for bid in all_broker_ids:
+                broker_nav_contribution = market_value_by_broker.get(bid, zero) + cumulative_cash_by_broker.get(bid, zero) + it_by_broker.get(bid, zero)
+                broker_capital_contribution = cumulative_ecf_by_broker.get(bid, zero)
+                broker_contributions[bid] = BrokerDailyContribution(
+                    broker_id=bid,
+                    nav_contribution=broker_nav_contribution,
+                    capital_contribution=broker_capital_contribution,
+                    pnl_contribution=broker_nav_contribution - broker_capital_contribution,
+                )
 
             # 4g. Clamp pools per-broker (rounding safety)
             for bid in list(K.keys()):
@@ -1024,6 +1196,32 @@ class DailyStateBuilder:
             # cumulative_ecf inside the per-transaction loop above, so re-read it here.
             capital_baseline = cumulative_ecf
             total_pnl = nav - capital_baseline
+
+            # 4f3. G1b — synthetic P&L candle (plan §4.3). offset absorbs every non-
+            # per-asset-OHLC contribution (cash, capital baseline, realized/income,
+            # in-transit, flat fallback) so close = total_pnl exactly, by construction.
+            # Unavailable (None) when candles weren't requested or a held asset's
+            # valuation is MISSING that day (mirrors nav_complete: a resolved
+            # contribution cannot be composed from an unresolved one).
+            pnl_candle: PnlCandleContribution | None = None
+            if self.compute_candles and len(missing) == 0:
+                candle_offset = total_pnl - candle_close_sum
+                pnl_candle = PnlCandleContribution(
+                    open=candle_offset + candle_open_sum,
+                    high=candle_offset + candle_high_sum,
+                    low=candle_offset + candle_low_sum,
+                    close=total_pnl,
+                )
+
+            # Batch 2 — new-vs-reinvested BUY funding split (see
+            # AcquisitionFundingContribution). None when not requested or no BUY
+            # happened today (a genuine gap, not a zero-valued contribution).
+            acquisition_funding: AcquisitionFundingContribution | None = None
+            if self.compute_acquisition_funding and (day_acq_from_k != zero or day_acq_from_r != zero):
+                acquisition_funding = AcquisitionFundingContribution(
+                    from_new_capital=day_acq_from_k,
+                    from_reinvested=day_acq_from_r,
+                )
 
             # 4b2. Position state snapshots (start of frame + every day end)
             if is_first_frame_day:
@@ -1067,6 +1265,9 @@ class DailyStateBuilder:
                     stale_price_asset_ids=stale,
                     transaction_implied_asset_ids=implied,
                     nav_complete=len(missing) == 0,
+                    broker_contributions=broker_contributions,
+                    pnl_candle=pnl_candle,
+                    acquisition_funding=acquisition_funding,
                 )
             )
             current += timedelta(days=1)
@@ -1096,6 +1297,8 @@ class DailyStateBuilder:
                 capital_pool=dict(K),
                 returns_pool=dict(R),
                 withdrawn_pool=W,
+                cumulative_cash_by_broker=dict(cumulative_cash_by_broker),
+                cumulative_ecf_by_broker=dict(cumulative_ecf_by_broker),
             ),
             scope_broker_ids=list({ctxn.tx.broker_id for ctxn in self.classified_txs}),
             target_currency=self.target_currency,
@@ -1167,6 +1370,8 @@ class DailyStateBuilder:
         asset_id: int,
         qty: Decimal,
         dt: date_type,
+        *,
+        compute_ohlc: bool = False,
     ) -> ValuationResult:
         """Value one holding via the unified price resolver — the single valuation brain.
 
@@ -1179,6 +1384,11 @@ class DailyStateBuilder:
         tracks the current FX rather than a frozen one. When the resolver has no observation on/before
         ``dt`` the holding is ``MISSING`` (no legacy price-map / last-buy / last-seed cascade — those
         tiers are subsumed by the resolver's trade observations).
+
+        ``compute_ohlc`` (G1b, default False — stays off the ordinary hot path per plan §4.1's
+        "expensive OHLC work stays off ordinary reports") additionally resolves
+        ``market_value_open/high/low`` through the exact same conversion as ``market_value``,
+        when the mark carries a same-day OHLC triple (never for CARRIED/TRADE_AVG/MISSING).
         """
         mark_series = self.mark_series.get(asset_id)
         if mark_series is not None:
@@ -1208,6 +1418,14 @@ class DailyStateBuilder:
                     display_ref = native_ref
                     source = ValuationSource.MARKET_PRICE
                 holding_value = compute_holding_value(qty, native_effective, quote_base)
+                # G1b: OHLC is only ever present on a mark.estimated=False exact MARKET day (see
+                # price_resolver — CARRIED/TRADE_AVG always report None), so it never needs the
+                # split-restatement above (real quotes already sit on the current-unit axis).
+                holding_open = holding_high = holding_low = None
+                if compute_ohlc and mark.open is not None and mark.high is not None and mark.low is not None:
+                    holding_open = compute_holding_value(qty, mark.open, quote_base)
+                    holding_high = compute_holding_value(qty, mark.high, quote_base)
+                    holding_low = compute_holding_value(qty, mark.low, quote_base)
                 is_stale = days_back > STALE_PRICE_THRESHOLD_DAYS
                 if native_ccy == self.target_currency:
                     return ValuationResult(
@@ -1220,6 +1438,9 @@ class DailyStateBuilder:
                         reference_currency=native_ccy,
                         stale=is_stale,
                         split_adjusted=split_adjusted,
+                        market_value_open=holding_open,
+                        market_value_high=holding_high,
+                        market_value_low=holding_low,
                     )
                 # Foreign mark: convert to the reporting currency at the *valuation date* dt (never at
                 # the observation date) so a carried mark tracks the current FX, not a frozen one.
@@ -1235,6 +1456,9 @@ class DailyStateBuilder:
                     stale=is_stale,
                     split_adjusted=split_adjusted,
                     missing_fx_pair=f"{native_ccy}/{self.target_currency}" if rate is None else None,
+                    market_value_open=holding_open * rate if (rate is not None and holding_open is not None) else None,
+                    market_value_high=holding_high * rate if (rate is not None and holding_high is not None) else None,
+                    market_value_low=holding_low * rate if (rate is not None and holding_low is not None) else None,
                 )
 
         return ValuationResult(
@@ -1247,8 +1471,14 @@ class DailyStateBuilder:
             reference_currency=None,
         )
 
-    def _compute_in_transit(self, dt: date_type, missing_fx: set[str]) -> tuple[Decimal, Decimal, Decimal]:  # noqa: C901 — TODO(P2-refactor): nested per-interval valuation with FX/cost fallbacks
-        """Compute in_transit_cash, in_transit_asset_mv, in_transit_asset_cb."""
+    def _compute_in_transit(self, dt: date_type, missing_fx: set[str], it_by_broker: dict[int, Decimal] | None = None) -> tuple[Decimal, Decimal, Decimal]:  # noqa: C901 — TODO(P2-refactor): nested per-interval valuation with FX/cost fallbacks
+        """Compute in_transit_cash, in_transit_asset_mv, in_transit_asset_cb.
+
+        `it_by_broker`, if given, is mutated in place with each interval's NAV
+        contribution (cash + asset market value, no cost basis) attributed to
+        the departure broker — the broker whose portfolio the in-transit value
+        stays with for the whole transit window (plan §3.2).
+        """
         zero = Decimal("0")
         it_cash = zero
         it_asset_mv = zero
@@ -1264,7 +1494,10 @@ class DailyStateBuilder:
                 if dep.currency:
                     converted = self._convert(cash_amount, dep.currency, dt)
                     if converted is not None:
-                        it_cash += converted * interval.share
+                        contribution = converted * interval.share
+                        it_cash += contribution
+                        if it_by_broker is not None:
+                            it_by_broker[dep.broker_id] += contribution
                     else:
                         missing_fx.add(f"{dep.currency}/{self.target_currency}")
             else:
@@ -1285,9 +1518,15 @@ class DailyStateBuilder:
 
                         valuation = self._market_value_for(interval.asset_id, qty, dt)
                         if valuation.market_value is not None:
-                            it_asset_mv += valuation.market_value * interval.share
+                            contribution = valuation.market_value * interval.share
+                            it_asset_mv += contribution
+                            if it_by_broker is not None:
+                                it_by_broker[dep.broker_id] += contribution
                         elif valuation.source == ValuationSource.MISSING and authoritative_cost_value is not None:
-                            it_asset_mv += authoritative_cost_value * interval.share
+                            contribution = authoritative_cost_value * interval.share
+                            it_asset_mv += contribution
+                            if it_by_broker is not None:
+                                it_by_broker[dep.broker_id] += contribution
                         if valuation.missing_fx_pair:
                             missing_fx.add(valuation.missing_fx_pair)
 
@@ -1496,6 +1735,10 @@ class EngineEndState:
     capital_pool: dict[int, Decimal]  # K per broker
     returns_pool: dict[int, Decimal]  # R per broker
     withdrawn_pool: Decimal  # W global
+    # G1a — per-broker mirrors of cumulative_cash/cumulative_ecf, so a future
+    # forward-cache resume carries broker attribution alongside the aggregate.
+    cumulative_cash_by_broker: dict[int, Decimal]
+    cumulative_ecf_by_broker: dict[int, Decimal]
 
 
 @dataclass
@@ -1569,6 +1812,70 @@ class DerivedViewsBuilder:
             }
             for s in self.daily_states
         ]
+
+    def build_broker_pnl_history(self) -> dict[int, list[dict]]:
+        """Per-broker additive P&L history: broker_id -> [{date, total_pnl}, ...].
+
+        Derived from DailyPortfolioState.broker_contributions (see G1a/§4.2), which
+        is built additively in the same daily replay as the scope-aggregate
+        total_pnl, so for every date sum(points[bid].total_pnl) == aggregate total_pnl.
+        Returns raw dicts (not BrokerPnlHistory) to avoid circular import, mirroring
+        build_history()'s adapter-conversion pattern.
+        """
+        by_broker: dict[int, list[dict]] = defaultdict(list)
+        for s in self.daily_states:
+            for bid, contribution in s.broker_contributions.items():
+                by_broker[bid].append({"date": s.date, "total_pnl": CurrencySchema(code=self.target_currency, amount=contribution.pnl_contribution)})
+        return dict(by_broker)
+
+    def build_pnl_candles(self) -> list[dict]:
+        """Synthetic total-P&L candle series (G1b): [{date, open, high, low, close}, ...].
+
+        Days whose candle is unavailable (DailyPortfolioState.pnl_candle is None — a held
+        asset's valuation was MISSING that day) are omitted entirely, a genuine gap rather
+        than a guessed/zeroed candle. ``close`` reproduces the canonical
+        PortfolioHistoryPoint.total_pnl for the same date exactly (see PnlCandleContribution
+        / DailyStateBuilder §4.3). Returns raw dicts, mirroring build_history()'s
+        adapter-conversion pattern (avoids a circular import on the API schema).
+        """
+        points: list[dict] = []
+        for s in self.daily_states:
+            if s.pnl_candle is None:
+                continue
+            points.append(
+                {
+                    "date": s.date,
+                    "open": CurrencySchema(code=self.target_currency, amount=s.pnl_candle.open),
+                    "high": CurrencySchema(code=self.target_currency, amount=s.pnl_candle.high),
+                    "low": CurrencySchema(code=self.target_currency, amount=s.pnl_candle.low),
+                    "close": CurrencySchema(code=self.target_currency, amount=s.pnl_candle.close),
+                }
+            )
+        return points
+
+    def build_acquisition_funding(self) -> list[dict]:
+        """New-vs-reinvested BUY funding split (batch 2): [{date, from_new_capital,
+        from_reinvested}, ...].
+
+        Days with no BUY activity (DailyPortfolioState.acquisition_funding is None) are
+        omitted entirely — a genuine "nothing acquired that day" gap, not a zeroed row
+        (mirrors build_pnl_candles's own omission convention). from_new_capital +
+        from_reinvested reproduces that day's total BUY cash outflow exactly, by
+        construction (see AcquisitionFundingContribution). Returns raw dicts, mirroring
+        build_history()'s adapter-conversion pattern.
+        """
+        points: list[dict] = []
+        for s in self.daily_states:
+            if s.acquisition_funding is None:
+                continue
+            points.append(
+                {
+                    "date": s.date,
+                    "from_new_capital": CurrencySchema(code=self.target_currency, amount=s.acquisition_funding.from_new_capital),
+                    "from_reinvested": CurrencySchema(code=self.target_currency, amount=s.acquisition_funding.from_reinvested),
+                }
+            )
+        return points
 
     def build_performance_inputs(
         self,
@@ -1886,6 +2193,81 @@ def _compute_tx_fingerprint(transactions: list[Transaction]) -> str:
     return h.hexdigest()
 
 
+async def compute_portfolio_fx_cache_identity(
+    db,
+    scope_broker_ids: set[int],
+    target_currency: str,
+    date_to: date_type,
+) -> str:
+    """Fingerprint all FX data/config that can affect a portfolio scope.
+
+    This is the shared identity contract for both portfolio cache layers.
+    Dependencies are limited to cash and cost-basis currencies present in
+    scoped transactions, held assets, and their price history, paired with the
+    target currency.
+    """
+    if not scope_broker_ids:
+        return "no_fx"
+
+    tx_rows = (
+        await db.execute(
+            select(
+                Transaction.currency,
+                Transaction.cost_basis_currency,
+                Transaction.asset_id,
+                Transaction.quantity,
+            ).where(Transaction.broker_id.in_(scope_broker_ids))
+        )
+    ).all()
+    source_currencies = {currency for cash_currency, cost_basis_currency, _, _ in tx_rows for currency in (cash_currency, cost_basis_currency) if currency}
+    held_asset_ids = {asset_id for _, _, asset_id, quantity in tx_rows if asset_id is not None and quantity and quantity != 0}
+
+    if held_asset_ids:
+        asset_currency_rows = (await db.execute(select(Asset.currency).where(Asset.id.in_(held_asset_ids)).distinct())).scalars()
+        source_currencies.update(currency for currency in asset_currency_rows if currency)
+
+        price_currency_rows = (await db.execute(select(PriceHistory.currency).where(PriceHistory.asset_id.in_(held_asset_ids)).where(PriceHistory.date <= date_to).distinct())).scalars()
+        source_currencies.update(currency for currency in price_currency_rows if currency)
+
+    normalized_target = target_currency.strip().upper()
+    pairs = sorted({tuple(sorted((currency.strip().upper(), normalized_target))) for currency in source_currencies if currency.strip().upper() != normalized_target})
+    if not pairs:
+        return "no_fx"
+
+    pair_conditions = [and_(FxRate.base == base, FxRate.quote == quote) for base, quote in pairs]
+    rate_rows = (await db.execute(select(FxRate).where(or_(*pair_conditions)).where(FxRate.date <= date_to).order_by(FxRate.base, FxRate.quote, FxRate.date, FxRate.id))).scalars()
+
+    route_conditions = [and_(FxConversionRoute.base == base, FxConversionRoute.quote == quote) for base, quote in pairs]
+    route_rows = (await db.execute(select(FxConversionRoute).where(or_(*route_conditions)).order_by(FxConversionRoute.base, FxConversionRoute.quote, FxConversionRoute.priority, FxConversionRoute.id))).scalars()
+
+    payload = {
+        "pairs": pairs,
+        "rates": [
+            (
+                rate.base,
+                rate.quote,
+                rate.date.isoformat(),
+                str(rate.rate),
+                rate.source,
+                rate.fetched_at.isoformat(),
+            )
+            for rate in rate_rows
+        ],
+        "routes": [
+            (
+                route.base,
+                route.quote,
+                route.priority,
+                route.parsed_steps,
+                route.updated_at.isoformat(),
+            )
+            for route in route_rows
+        ],
+    }
+    serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(serialized.encode()).hexdigest()
+
+
 class PortfolioCalculationEngine:
     """Async orchestrator that loads data from DB and runs the calculation pipeline.
 
@@ -1906,11 +2288,22 @@ class PortfolioCalculationEngine:
         date_from: date_type | None = None,
         date_to: date_type | None = None,
         target_currency: str | None = None,
+        include_candles: bool = False,
+        include_acquisition_funding: bool = False,
     ) -> PortfolioCalculationResult:
         """Run the full portfolio calculation pipeline.
 
         WAC is computed inline during the daily state build — no separate
         compute_wac_iterative calls needed (eliminates N×M DB round-trips).
+
+        ``include_candles`` (G1b, default False) additionally resolves each held asset's
+        daily OHLC and composes the synthetic total-P&L candle (plan §4.3) — kept opt-in
+        per plan §4.1 so ordinary report generation never pays for it.
+
+        ``include_acquisition_funding`` (batch 2, default False) additionally surfaces
+        the engine's existing per-BUY K/R-pool draw as a daily new-vs-reinvested output
+        (see AcquisitionFundingContribution) — kept opt-in for consistency, though the
+        extra cost is negligible (pure bookkeeping capture, no new data resolution).
         """
         # ── 1. Resolve target currency ──
         if target_currency is None:
@@ -1996,6 +2389,12 @@ class PortfolioCalculationEngine:
         tx_fingerprint = _compute_tx_fingerprint(all_txs)
         held_asset_ids = {tx.asset_id for tx in all_txs if tx.asset_id and tx.quantity and tx.quantity != 0}
         price_fingerprint = await self._compute_price_fingerprint(held_asset_ids, actual_to)
+        fx_fingerprint = await compute_portfolio_fx_cache_identity(
+            self.db,
+            scope_broker_ids,
+            target_currency,
+            actual_to,
+        )
         # Split events influence valuation without necessarily changing scope
         # Transaction.updated_at values.
         split_fingerprint = (
@@ -2016,7 +2415,10 @@ class PortfolioCalculationEngine:
             target_currency,
             tx_fingerprint,
             price_fingerprint,
+            fx_fingerprint,
             split_fingerprint,
+            include_candles,
+            include_acquisition_funding,
         )
 
         cached_blob, blob_hit = _portfolio_blob_cache.get(blob_key)
@@ -2043,11 +2445,15 @@ class PortfolioCalculationEngine:
 
         # ── 6. Preload prices (bulk) ──
         price_map: dict[int, list[tuple[date_type, Decimal, str]]] = {}
+        # G1b: per-asset OHLC keyed by date, from the same already-loaded rows — no extra query.
+        ohlc_map: dict[int, dict[date_type, tuple[Optional[Decimal], Optional[Decimal], Optional[Decimal]]]] = {}
         if held_asset_ids:
             price_stmt = select(PriceHistory).where(PriceHistory.asset_id.in_(held_asset_ids)).where(PriceHistory.date <= actual_to).order_by(PriceHistory.asset_id, PriceHistory.date)
             price_result = await self.db.execute(price_stmt)
             for ph in price_result.scalars().all():
                 price_map.setdefault(ph.asset_id, []).append((ph.date, ph.close, ph.currency))
+                if include_candles:
+                    ohlc_map.setdefault(ph.asset_id, {})[ph.date] = (ph.open, ph.high, ph.low)
 
         # ── 7. Preload quote_base_quantity ──
         quote_base_map: dict[int, int | None] = {}
@@ -2108,6 +2514,7 @@ class PortfolioCalculationEngine:
                     split_linked_tx_ids=split_linked_tx_ids,
                     asset_currency=asset_currencies.get(aid, target_currency),
                     quote_base_quantity=quote_base_map.get(aid) or 1,
+                    ohlc_by_date=ohlc_map.get(aid),
                 )
                 if series.has_observations:
                     mark_series[aid] = series
@@ -2129,6 +2536,8 @@ class PortfolioCalculationEngine:
             split_linked_tx_ids=split_linked_tx_ids,
             split_history=split_history,
             mark_series=mark_series,
+            compute_candles=include_candles,
+            compute_acquisition_funding=include_acquisition_funding,
         )
         result = builder.build()
 
@@ -2167,7 +2576,7 @@ class PortfolioCalculationEngine:
         self,
         classified_txs: list[ClassifiedTransaction],
         in_transit_intervals: list[InTransitInterval],
-        external_cash_flows: list[tuple[date_type, Decimal, str]],
+        external_cash_flows: list[tuple[date_type, int, Decimal, str]],
         price_map: dict[int, list[tuple[date_type, Decimal, str]]],
         asset_currencies: dict[int, str],
         target_currency: str,
@@ -2193,7 +2602,7 @@ class PortfolioCalculationEngine:
                 fx_needs.add((tx.currency, tx.date))
 
         # From external cash flows
-        for dt, _, ccy in external_cash_flows:
+        for dt, _, _, ccy in external_cash_flows:
             if ccy != target_currency:
                 fx_needs.add((ccy, dt))
 

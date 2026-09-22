@@ -18,7 +18,7 @@ from typing import Callable
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 
 # Setup test database configuration
-from backend.test_scripts.test_db_config import TEST_DATABASE_URL, TEST_DB_PATH, setup_test_database
+from backend.test_scripts.test_db_config import get_test_database_url
 
 # Import test utilities
 from backend.test_scripts.test_utils import Colors, print_error, print_header, print_info, print_section, print_success, print_warning
@@ -398,11 +398,7 @@ def nothing_left_to_run(category: str) -> bool:
     actions = TEST_REGISTRY.get(category)
     if not actions:
         return False
-    runnable = [
-        a
-        for a, info in actions.items()
-        if a not in ("_meta", "all") and info.get("in_all", True)
-    ]
+    runnable = [a for a, info in actions.items() if a not in ("_meta", "all") and info.get("in_all", True)]
     if not runnable:
         return False
     return all((category, a) in _SKIP_ACTIONS for a in runnable)
@@ -440,6 +436,25 @@ def _build_pytest_cmd(test_path: str, test_names: list = None) -> list:
     if test_names:
         cmd.extend(["-k", " or ".join(test_names)])
     return cmd
+
+
+def _missing_pytest_paths(cmd: list[str]) -> list[str]:
+    """Return referenced backend test paths that do not exist."""
+    if "pytest" not in " ".join(str(part) for part in cmd):
+        return []
+
+    missing: list[str] = []
+    for raw_part in cmd:
+        part = str(raw_part)
+        if part.startswith("-") or "backend/test_scripts/" not in part:
+            continue
+        test_path = part.split("::", 1)[0]
+        resolved = Path(test_path)
+        if not resolved.is_absolute():
+            resolved = PROJECT_ROOT / resolved
+        if not resolved.exists():
+            missing.append(test_path)
+    return missing
 
 
 # TODO: riscrivere in maniera sensata questa funzione affinchè per i test si prenda solo il path e aggiunga tutto lei
@@ -480,6 +495,13 @@ def _run_command_body(cmd: list[str], description: str, verbose: bool = False, t
     """
     # Check if this is a pytest command and coverage is enabled
     is_pytest = "pytest" in " ".join(cmd)
+    if is_pytest:
+        missing_paths = _missing_pytest_paths(cmd)
+        if missing_paths:
+            for path in missing_paths:
+                print_error(f"Test path not found: {path}")
+            return False
+
     use_coverage = _COVERAGE_PY and is_pytest
 
     # If coverage mode, enhance pytest command
@@ -523,7 +545,7 @@ def _run_command_body(cmd: list[str], description: str, verbose: bool = False, t
             if any("backend.test_scripts" in c or c.endswith(".py") and "backend/test_scripts" in c for c in cmd):
                 env = os.environ.copy()
                 env["LIBREFOLIO_TEST_MODE"] = "1"
-                env["DATABASE_URL"] = TEST_DATABASE_URL
+                env["DATABASE_URL"] = get_test_database_url()
                 if use_coverage:
                     env["COVERAGE_RUN"] = "1"
                     # Let multiprocessing spawn children (spawn_worker.py) start

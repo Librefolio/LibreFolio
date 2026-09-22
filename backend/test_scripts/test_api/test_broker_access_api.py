@@ -15,18 +15,26 @@ by a single PUT bulk endpoint.
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
+from pathlib import Path
 from typing import Optional
 
 import httpx
 import pytest
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.config import get_settings
+from backend.app.db.models import Broker, BrokerUserAccess, Transaction, User, UserRole
+from backend.app.db.session import get_async_engine
+from backend.app.services import user_service
+from backend.test_scripts.test_db_config import get_test_db_path, verify_test_database
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success
 
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30
+SOLE_ADMIN_DELETE_DETAIL = "Cannot delete account: you are the only administrator"
 
 
 def unique_name(prefix: str) -> str:
@@ -686,6 +694,27 @@ async def self_leave(client: httpx.AsyncClient, broker_id: int) -> httpx.Respons
     return await client.delete(f"{API_BASE}/brokers/{broker_id}/access/me", timeout=TIMEOUT)
 
 
+async def cleanup_owned_user_account(client: httpx.AsyncClient, user_id: int, engine) -> Optional[str]:
+    """Delete a test-owned user through the API, with exact sole-admin fallback."""
+    try:
+        resp = await client.delete(f"{API_BASE}/auth/users/me", timeout=TIMEOUT)
+    except httpx.HTTPError as exc:
+        return f"User {user_id}: {exc}"
+
+    if resp.status_code == 400 and resp.json().get("detail") == SOLE_ADMIN_DELETE_DETAIL:
+        async with AsyncSession(engine) as session:
+            user = await session.get(User, user_id)
+            if user is None or not user.is_superuser:
+                return f"User {user_id}: unexpected sole-administrator response"
+            if not await user_service.delete_user(session, user_id):
+                return f"User {user_id}: service cleanup failed"
+        return None
+
+    if resp.status_code != 200:
+        return f"User {user_id}: {resp.status_code} {resp.text}"
+    return None
+
+
 class TestSelfServiceAccess:
     """F4 — self-service access: a user manages their OWN access row only.
 
@@ -901,60 +930,156 @@ class TestSelfServiceAccess:
     @pytest.mark.asyncio
     async def test_last_owner_leaving_cascade_deletes_broker(self, test_server):
         """ACCESS-076: last OWNER leaves → broker_deleted=true; broker, its
-        transactions and every access row are gone (confirmed F4 semantics)."""
+        transaction and all three grants are physically gone; users and an
+        unrelated owned broker with the same members survive."""
         print_section("ACCESS-076: Last owner leaving cascade-deletes the broker")
 
-        async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2:
-            user1_id, _, _, _ = await create_user_and_login(client1)
-            broker_id = await create_broker(client1, name=unique_name("CascadeBroker"))
-            user2_id, _, _, _ = await create_user_and_login(client2)
+        # Inspect the runner's existing migrated test DB, never create a schema
+        # from ORM metadata or silently fall back to a production engine.
+        is_test_db, database_url = verify_test_database()
+        test_db_path = get_test_db_path().resolve()
+        assert is_test_db and database_url == f"sqlite:///{test_db_path}", "Physical assertions require the configured test database"
+        assert test_db_path.is_file(), "The runner must provide the migrated test database"
+        engine = get_async_engine()
+        assert engine.url.database and Path(engine.url.database).resolve() == test_db_path, "Refusing to use a non-test database engine"
 
-            # A second (non-owner) member, to prove their access row goes too.
-            resp = await add_user_via_bulk(client1, broker_id, user1_id, user2_id, "VIEWER")
-            assert resp.status_code == 200
+        owned_users: dict[int, httpx.AsyncClient] = {}
+        owned_broker_ids: set[int] = set()
 
-            # One committed transaction on this broker — the cascade must take it too.
-            tx_resp = await client1.post(
-                f"{API_BASE}/transactions/commit",
-                json={
-                    "creates": [
-                        {
-                            "broker_id": broker_id,
-                            "type": "DEPOSIT",
-                            "date": date.today().isoformat(),
-                            "cash": {"code": "EUR", "amount": "1000"},
-                        }
-                    ]
-                },
-                timeout=TIMEOUT,
+        async def read_owned_grants(session: AsyncSession) -> set[tuple]:
+            rows = await session.execute(
+                select(
+                    BrokerUserAccess.broker_id,
+                    BrokerUserAccess.user_id,
+                    BrokerUserAccess.role,
+                    BrokerUserAccess.share_percentage,
+                ).where(BrokerUserAccess.broker_id.in_(owned_broker_ids))
             )
-            assert tx_resp.status_code == 200, f"Failed to commit tx: {tx_resp.text}"
-            tx_id = tx_resp.json()["results"][0]["ids"][0]
-            assert tx_id is not None
+            return {tuple(row) for row in rows.all()}
 
-            resp = await self_leave(client1, broker_id)
-            assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
-            body = resp.json()
-            assert body["success"] is True
-            assert body["broker_deleted"] is True, "Last owner leaving must report broker_deleted=true"
+        async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2, httpx.AsyncClient() as client3:
+            try:
+                user1_id, _, _, _ = await create_user_and_login(client1)
+                owned_users[user1_id] = client1
+                user2_id, _, _, _ = await create_user_and_login(client2)
+                owned_users[user2_id] = client2
+                user3_id, _, _, _ = await create_user_and_login(client3)
+                owned_users[user3_id] = client3
 
-            # The broker is gone for everyone.
-            resp = await client1.get(f"{API_BASE}/brokers/{broker_id}", timeout=TIMEOUT)
-            assert resp.status_code == 404, f"Deleted broker must 404, got {resp.status_code}"
-            resp = await client2.get(f"{API_BASE}/brokers/{broker_id}", timeout=TIMEOUT)
-            assert resp.status_code == 404, f"Deleted broker must 404 for the ex-viewer too, got {resp.status_code}"
+                broker_id = await create_broker(client1, name=unique_name("CascadeBroker"))
+                owned_broker_ids.add(broker_id)
+                unrelated_broker_id = await create_broker(client1, name=unique_name("CascadeControl"))
+                owned_broker_ids.add(unrelated_broker_id)
 
-            # The transaction committed above is gone (cascade), checked by id.
-            resp = await client1.get(f"{API_BASE}/transactions", params={"ids": [tx_id]}, timeout=TIMEOUT)
-            assert resp.status_code == 200
-            remaining_tx_ids = {t["id"] for t in resp.json()}
-            assert tx_id not in remaining_tx_ids, f"Transaction {tx_id} survived the broker cascade"
+                # PUT replaces the entire ACL: include OWNER, EDITOR and VIEWER
+                # together, rather than calling the two-member helper twice.
+                accesses = [
+                    {"user_id": user1_id, "role": "OWNER", "share_percentage": 1.0},
+                    {"user_id": user2_id, "role": "EDITOR", "share_percentage": 0},
+                    {"user_id": user3_id, "role": "VIEWER", "share_percentage": 0},
+                ]
+                for owned_broker_id in owned_broker_ids:
+                    resp = await bulk_set_access(client1, owned_broker_id, accesses)
+                    assert resp.status_code == 200, resp.text
 
-            # The access surface is gone with the broker (404, like any missing broker).
-            resp = await client1.get(f"{API_BASE}/brokers/{broker_id}/access", timeout=TIMEOUT)
-            assert resp.status_code == 404, f"Access list of a deleted broker must 404, got {resp.status_code}"
+                # One committed transaction on this broker — the cascade must take it too.
+                tx_resp = await client1.post(
+                    f"{API_BASE}/transactions/commit",
+                    json={
+                        "creates": [
+                            {
+                                "broker_id": broker_id,
+                                "type": "DEPOSIT",
+                                "date": date.today().isoformat(),
+                                "cash": {"code": "EUR", "amount": "1000"},
+                            }
+                        ]
+                    },
+                    timeout=TIMEOUT,
+                )
+                assert tx_resp.status_code == 200, f"Failed to commit tx: {tx_resp.text}"
+                assert tx_resp.json()["committed"] is True, tx_resp.text
+                # This result belongs to the single create submitted above.
+                (tx_result,) = tx_resp.json()["results"]
+                (tx_id,) = tx_result["ids"]
+                assert tx_id is not None
 
-            print_success("✓ Last owner left: broker, transaction and access rows cascade-deleted")
+                expected_grants = {
+                    (owned_broker_id, member_id, role, share)
+                    for owned_broker_id in owned_broker_ids
+                    for member_id, role, share in (
+                        (user1_id, UserRole.OWNER, Decimal("1")),
+                        (user2_id, UserRole.EDITOR, Decimal("0")),
+                        (user3_id, UserRole.VIEWER, Decimal("0")),
+                    )
+                }
+                async with AsyncSession(engine) as session:
+                    assert await read_owned_grants(session) == expected_grants, "All three grants must exist on each owned broker before leaving"
+                    brokers = await session.scalars(select(Broker.id).where(Broker.id.in_(owned_broker_ids)))
+                    assert set(brokers.all()) == owned_broker_ids
+                    transaction = await session.get(Transaction, tx_id)
+                    assert transaction is not None and transaction.broker_id == broker_id
+                    users = await session.scalars(select(User.id).where(User.id.in_(owned_users)))
+                    assert set(users.all()) == set(owned_users)
+
+                resp = await self_leave(client1, broker_id)
+                assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+                body = resp.json()
+                assert body["success"] is True
+                assert body["broker_deleted"] is True, "Last owner leaving must report broker_deleted=true"
+
+                # Fresh session after the API's commit: an HTTP 404 alone cannot
+                # distinguish physical deletion from merely losing access.
+                async with AsyncSession(engine) as session:
+                    remaining_grants = await read_owned_grants(session)
+                    expected_control_grants = {grant for grant in expected_grants if grant[0] == unrelated_broker_id}
+                    assert remaining_grants == expected_control_grants, f"Deleted broker {broker_id} must lose every exact grant; control grants must remain: {remaining_grants}"
+                    brokers = await session.scalars(select(Broker.id).where(Broker.id.in_(owned_broker_ids)))
+                    assert set(brokers.all()) == {unrelated_broker_id}, "Only the unrelated broker must survive"
+                    assert await session.get(Transaction, tx_id) is None, f"Transaction {tx_id} survived the broker cascade"
+                    users = await session.scalars(select(User.id).where(User.id.in_(owned_users)))
+                    assert set(users.all()) == set(owned_users), "Leaving must not delete the OWNER, EDITOR or VIEWER account"
+
+                # Preserve the HTTP contract for every former member.
+                for member_id, client in owned_users.items():
+                    resp = await client.get(f"{API_BASE}/brokers/{broker_id}", timeout=TIMEOUT)
+                    assert resp.status_code == 404, f"Deleted broker must 404 for user {member_id}, got {resp.status_code}"
+
+                resp = await client1.get(f"{API_BASE}/transactions", params={"ids": [tx_id]}, timeout=TIMEOUT)
+                assert resp.status_code == 200
+                remaining_tx_ids = {t["id"] for t in resp.json()}
+                assert tx_id not in remaining_tx_ids, f"Transaction {tx_id} survived the broker cascade"
+
+                resp = await client1.get(f"{API_BASE}/brokers/{broker_id}/access", timeout=TIMEOUT)
+                assert resp.status_code == 404, f"Access list of a deleted broker must 404, got {resp.status_code}"
+
+            finally:
+                # Only IDs created here are eligible for cleanup. Use the API
+                # for writes except for the sole-admin fallback below; the
+                # physical verification sessions above stay SELECT-only.
+                try:
+                    async with AsyncSession(engine) as session:
+                        brokers = await session.scalars(select(Broker.id).where(Broker.id.in_(owned_broker_ids)))
+                        surviving_broker_ids = set(brokers.all())
+                    if surviving_broker_ids:
+                        resp = await client1.delete(
+                            f"{API_BASE}/brokers",
+                            params={"ids": sorted(surviving_broker_ids), "force": True},
+                            timeout=TIMEOUT,
+                        )
+                        assert resp.status_code == 200, f"Owned broker cleanup failed: {resp.text}"
+                        results = {item["id"]: item for item in resp.json()["results"]}
+                        assert surviving_broker_ids <= results.keys(), resp.text
+                        assert all(results[owned_id]["success"] for owned_id in surviving_broker_ids), resp.text
+                finally:
+                    cleanup_errors = []
+                    for user_id, client in reversed(owned_users.items()):
+                        cleanup_error = await cleanup_owned_user_account(client=client, user_id=user_id, engine=engine)
+                        if cleanup_error is not None:
+                            cleanup_errors.append(cleanup_error)
+                    assert not cleanup_errors, f"Owned account cleanup failed: {cleanup_errors}"
+
+            print_success("✓ Last owner left: broker, transaction and all three grants deleted; users and unrelated grants intact")
 
     @pytest.mark.asyncio
     async def test_user_without_access_gets_403(self, test_server):

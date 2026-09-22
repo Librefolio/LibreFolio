@@ -28,6 +28,8 @@
  */
 import {beforeEach, describe, expect, it, vi} from 'vitest';
 import {fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
+import {addMessages, dictionary} from 'svelte-i18n';
+import {get} from 'svelte/store';
 
 vi.mock('$lib/api', () => ({
     zodiosApi: {
@@ -53,6 +55,11 @@ const wipe = vi.mocked(zodiosApi.wipe_market_data_api_v1_assets__asset_id__marke
 const patch = vi.mocked(zodiosApi.patch_assets_bulk_api_v1_assets_patch);
 const sync = vi.mocked(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post);
 const download = vi.mocked(downloadAssetBackup);
+const patchSuccessResponse = {
+    results: [{asset_id: 42, success: true, message: 'Synthetic patch accepted', updated_fields: null}],
+    success_count: 1,
+    errors: [],
+};
 
 function blockerOf(over: Record<string, unknown> = {}) {
     return {assetId: 42, prices: 5, eventsManual: 2, eventsProvider: 1, linkedTx: 3, oldest: '2020-01-01', newest: '2024-01-01', from: 'USD', to: 'EUR', ...over};
@@ -61,7 +68,15 @@ function blockerOf(over: Record<string, unknown> = {}) {
 function mount(props: Record<string, unknown> = {}) {
     const onconfirmed = vi.fn();
     const oncanceled = vi.fn();
-    const utils = render(AssetCurrencyChangeModal, {open: true, blocker: blockerOf(), patchPayload: {id: 42, currency: 'EUR'}, providerAssigned: true, onconfirmed, oncanceled, ...props});
+    const utils = render(AssetCurrencyChangeModal, {
+        open: true,
+        blocker: blockerOf(),
+        patchPayload: {asset_id: 42, currency: 'EUR'},
+        providerAssigned: true,
+        onconfirmed,
+        oncanceled,
+        ...props,
+    });
     return {onconfirmed, oncanceled, ...utils};
 }
 
@@ -79,7 +94,7 @@ beforeEach(async () => {
     await setupI18n();
     vi.clearAllMocks();
     wipe.mockResolvedValue(undefined as never);
-    patch.mockResolvedValue(undefined as never);
+    patch.mockResolvedValue(patchSuccessResponse as never);
     sync.mockResolvedValue({results: [{status: 'ok'}]} as never);
     download.mockResolvedValue(undefined as never);
 });
@@ -102,6 +117,28 @@ describe('AssetCurrencyChangeModal — conditional rendering', () => {
         expect(screen.getByTestId('currency-change-summary-linkedtx')).toBeInTheDocument();
         expect(screen.getByTestId('currency-change-export-prices-csv')).toBeInTheDocument();
         expect(screen.getByTestId('currency-change-export-events-json')).toBeInTheDocument();
+    });
+
+    it('interpolates the price and linked-transaction counts through the real {n} contract', () => {
+        // Synthetic messages exercise the real ICU formatter, not translated prose.
+        // Distinct counts catch accidental reuse of the price count for linked TX.
+        const originalDictionary = structuredClone(get(dictionary));
+        try {
+            addMessages('en', {
+                assetDetail: {
+                    currencyChange: {
+                        summaryPrices: 'prices={n};oldest={oldest};newest={newest}',
+                        summaryLinkedTx: 'linked={n}',
+                    },
+                },
+            });
+            mount({blocker: blockerOf({prices: 17, linkedTx: 4, oldest: '2021-02-03', newest: '2024-05-06'})});
+            expect(screen.getByTestId('currency-change-modal')).toBeVisible();
+            expect(screen.getByTestId('currency-change-summary-prices')).toHaveTextContent('prices=17;oldest=2021-02-03;newest=2024-05-06');
+            expect(screen.getByTestId('currency-change-summary-linkedtx')).toHaveTextContent('linked=4');
+        } finally {
+            dictionary.set(originalDictionary);
+        }
     });
 
     it('omits the price rows when there are no prices', () => {
@@ -141,7 +178,7 @@ describe('AssetCurrencyChangeModal — the confirm sequence', () => {
         await waitFor(() => expect(patch).toHaveBeenCalled());
 
         expect(wipe.mock.calls[0][1]).toEqual({params: {asset_id: 42}});
-        expect(patch.mock.calls[0][0]).toEqual([{id: 42, currency: 'EUR'}]);
+        expect(patch.mock.calls[0][0]).toEqual([{asset_id: 42, currency: 'EUR'}]);
     });
 
     it('skips sync when no provider is assigned', async () => {
@@ -202,6 +239,21 @@ describe('AssetCurrencyChangeModal — the confirm sequence', () => {
 
         await waitFor(() => expect(onconfirmed).toHaveBeenCalled());
         expect(toasts.error).toHaveBeenCalled();
+    });
+
+    it('keeps the modal open when the per-item patch result reports success false', async () => {
+        patch.mockResolvedValueOnce({
+            results: [{asset_id: 42, success: false, message: 'Asset patch rejected by API', updated_fields: null}],
+            success_count: 0,
+            errors: [],
+        } as never);
+        const {onconfirmed} = mount({providerAssigned: true});
+        await fireEvent.click(screen.getByTestId('currency-change-confirm'));
+
+        await waitFor(() => expect(toasts.error).toHaveBeenCalled());
+        expect(sync).not.toHaveBeenCalled();
+        expect(onconfirmed).not.toHaveBeenCalled();
+        expect(screen.getByTestId('currency-change-modal')).toBeInTheDocument();
     });
 });
 

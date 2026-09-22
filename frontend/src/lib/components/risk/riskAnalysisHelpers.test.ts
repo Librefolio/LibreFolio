@@ -10,14 +10,28 @@
  *
  * formatCurrencyAmount is asserted with an explicit locale ('en-US') so the
  * expected string is deterministic regardless of the host process locale.
+ *
+ * It is also the one function here that reads a store — the global privacy flag
+ * — so this file resets that flag around every test. The reset is not optional:
+ * the store is module level and shared with every other suite in the run, and a
+ * leftover `true` would turn each `'$1,234.50'` below into a placeholder.
  */
-import {describe, expect, it} from 'vitest';
+import {readFileSync} from 'node:fs';
+import {afterEach, beforeEach, describe, expect, it} from 'vitest';
 
 import type {RiskDataQualityReport} from '$lib/risk/riskTypes';
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
-import {addDays, buildBaseAnalytics, formatCurrencyAmount, formatRatio, localizedScenarioText, normalizeQualityIssue, numberRecord, presentStressBuckets, resultByCode, scalarString, stressImpactDimension, type BaseAnalyticsContext} from './riskAnalysisHelpers';
+import {setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
+import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
+import {addDays, buildBaseAnalytics, formatCurrencyAmount, formatRatio, formatScopedCurrencyAmount, localizedScenarioText, normalizeQualityIssue, numberRecord, presentStressBuckets, resultByCode, scalarString, stressImpactDimension, type BaseAnalyticsContext} from './riskAnalysisHelpers';
 
 type Issue = NonNullable<RiskDataQualityReport['issues']>[number];
+
+const riskAnalysisPanelSource = readFileSync(new URL('./RiskAnalysisPanel.svelte', import.meta.url), 'utf8');
+const assetRiskScenariosViewSource = readFileSync(new URL('./AssetRiskScenariosView.svelte', import.meta.url), 'utf8');
+
+beforeEach(() => setPrivacyEnabled(false));
+afterEach(() => setPrivacyEnabled(false));
 
 /** A result whose only field the code under test reads is `analytic_code`. */
 function result(code: string): RiskAnalyticResult {
@@ -304,6 +318,119 @@ describe('formatCurrencyAmount', () => {
     it('respects the currency argument', () => {
         expect(formatCurrencyAmount('1000', 'EUR', 'en-US')).toBe('€1,000.00');
     });
+
+    describe('with global privacy on', () => {
+        it('replaces a formattable amount with the placeholder', () => {
+            // Control: the same call, one line earlier in time, with the flag
+            // off. It is what makes the next assertion a substitution rather
+            // than a function that has always returned a placeholder.
+            expect(formatCurrencyAmount('1234.5', 'USD', 'en-US')).toBe('$1,234.50');
+
+            setPrivacyEnabled(true);
+            expect(formatCurrencyAmount('1234.5', 'USD', 'en-US')).toBe(PRIVACY_PLACEHOLDER);
+            expect(formatCurrencyAmount(['1234.5', '99'], 'USD', 'en-US')).toBe(PRIVACY_PLACEHOLDER);
+        });
+
+        it('still says em-dash for an absent value', () => {
+            setPrivacyEnabled(true);
+
+            // Masking an absence would promote "there is no figure here" into
+            // "there is a figure here and you may not see it" — a number the
+            // portfolio does not have.
+            expect(formatCurrencyAmount(null, 'USD', 'en-US')).toBe('—');
+            expect(formatCurrencyAmount(undefined, 'USD', 'en-US')).toBe('—');
+            expect(formatCurrencyAmount([null], 'USD', 'en-US')).toBe('—');
+            expect(formatCurrencyAmount([], 'USD', 'en-US')).toBe('—');
+
+            // Positive control for the flag: in this exact state a *present*
+            // value comes back masked. Without it every line above would also
+            // hold on a run where privacy never turned on, which is the one way
+            // this test could pass while testing nothing.
+            expect(formatCurrencyAmount('0', 'USD', 'en-US')).toBe(PRIVACY_PLACEHOLDER);
+        });
+
+        it('still says em-dash for a value that is not a finite number', () => {
+            setPrivacyEnabled(true);
+
+            expect(formatCurrencyAmount('not-a-number', 'USD', 'en-US')).toBe('—');
+            expect(formatCurrencyAmount('Infinity', 'USD', 'en-US')).toBe('—');
+            // Control: a parseable neighbour of the same shape is masked, so the
+            // two em-dashes above are the absence check and not a masked branch
+            // that happens to look like one.
+            expect(formatCurrencyAmount('12', 'USD', 'en-US')).toBe(PRIVACY_PLACEHOLDER);
+        });
+
+        it('gives two very different magnitudes the identical placeholder', () => {
+            // Control: unmasked they differ, and by length.
+            const small = formatCurrencyAmount('1000', 'USD', 'en-US');
+            const large = formatCurrencyAmount('9999999', 'USD', 'en-US');
+            expect(small).not.toBe(large);
+            expect(small.length).not.toBe(large.length);
+
+            setPrivacyEnabled(true);
+            const maskedSmall = formatCurrencyAmount('1000', 'USD', 'en-US');
+            const maskedLarge = formatCurrencyAmount('9999999', 'USD', 'en-US');
+
+            expect(maskedSmall).toBe(maskedLarge);
+            expect(maskedSmall).toBe(PRIVACY_PLACEHOLDER);
+            expect(maskedSmall).not.toMatch(/\d/);
+        });
+
+        it('hides the sign of a loss', () => {
+            expect(formatCurrencyAmount('-1234.5', 'USD', 'en-US')).toBe('-$1,234.50');
+
+            setPrivacyEnabled(true);
+            expect(formatCurrencyAmount('-1234.5', 'USD', 'en-US')).toBe(formatCurrencyAmount('1234.5', 'USD', 'en-US'));
+            expect(formatCurrencyAmount('-1234.5', 'USD', 'en-US')).not.toContain('-');
+        });
+
+        it('drops the currency marker too, unlike the shared currency formatter', () => {
+            // Control: the currency is visible in the clear.
+            expect(formatCurrencyAmount('1000', 'USD', 'en-US')).toContain('$');
+            expect(formatCurrencyAmount('1000', 'EUR', 'en-US')).toContain('€');
+
+            setPrivacyEnabled(true);
+            // A deliberate asymmetry, pinned rather than judged: this formatter
+            // returns the bare placeholder, where formatCurrencyAmountPlain keeps
+            // `••• $ 🇺🇸 USD`. Here the currency labels the column, not the cell.
+            expect(formatCurrencyAmount('1000', 'USD', 'en-US')).toBe(formatCurrencyAmount('1000', 'EUR', 'en-US'));
+            expect(formatCurrencyAmount('1000', 'USD', 'en-US')).toBe(PRIVACY_PLACEHOLDER);
+        });
+
+        it('comes back unmasked as soon as the flag goes off', () => {
+            setPrivacyEnabled(true);
+            expect(formatCurrencyAmount('1234.5', 'USD', 'en-US')).toBe(PRIVACY_PLACEHOLDER);
+
+            setPrivacyEnabled(false);
+            // The formatter reads the flag per call: nothing is memoised, so a
+            // toggle is visible on the next render without an invalidation.
+            expect(formatCurrencyAmount('1234.5', 'USD', 'en-US')).toBe('$1,234.50');
+        });
+    });
+});
+
+describe('formatScopedCurrencyAmount', () => {
+    it('formats normally on a portfolio scope', () => {
+        expect(formatScopedCurrencyAmount('1234.5', 'USD', 'portfolio', 'en-US')).toBe('$1,234.50');
+    });
+
+    // The mutation-sensitive pair. The backend sends null on these scopes today,
+    // so both would read '—' with or without the guard; passing a real amount is
+    // the only way to make the assertion capable of failing.
+    it('suppresses a real amount on an asset scope', () => {
+        expect(formatScopedCurrencyAmount('1234.5', 'USD', 'asset', 'en-US')).toBe('—');
+    });
+
+    it('suppresses a real amount on an asset_set scope', () => {
+        expect(formatScopedCurrencyAmount('1234.5', 'USD', 'asset_set', 'en-US')).toBe('—');
+    });
+
+    // Guards the other direction: a guard that blanked every scope would also
+    // pass the two above, and would silently empty the dashboard's amounts on
+    // the day the backend starts computing them.
+    it('still em-dashes a missing amount on a portfolio scope', () => {
+        expect(formatScopedCurrencyAmount(null, 'USD', 'portfolio', 'en-US')).toBe('—');
+    });
 });
 
 describe('addDays', () => {
@@ -343,6 +470,27 @@ describe('buildBaseAnalytics', () => {
         const analytics = buildBaseAnalytics('historical', ctx(['historical_kpi', 'correlation', 'historical_var']));
         expect(analytics.map((a) => a.analytic_code)).toEqual(['historical_kpi', 'correlation', 'historical_var']);
         expect(analytics.map((a) => a.instance_id)).toEqual(['base-historical-historical_kpi', 'base-historical-correlation', 'base-historical-historical_var']);
+    });
+
+    it('historical: omits the drawdown summary unless the call site opts in, even when advertised', () => {
+        // The guard that keeps the parked Asset Detail surface off the wire.
+        // If this ever defaults to on, Asset Detail starts requesting an analytic
+        // nobody added to Asset Detail.
+        const advertised = ['historical_kpi', 'correlation', 'historical_var', 'drawdown_summary'];
+        expect(buildBaseAnalytics('historical', ctx(advertised)).map((a) => a.analytic_code)).not.toContain('drawdown_summary');
+    });
+
+    it('historical: appends the drawdown summary when the call site opts in', () => {
+        const advertised = ['historical_kpi', 'correlation', 'historical_var', 'drawdown_summary'];
+        const analytics = buildBaseAnalytics('historical', {...ctx(advertised), includeDrawdownSummary: true});
+        expect(analytics.map((a) => a.analytic_code)).toEqual(['historical_kpi', 'correlation', 'historical_var', 'drawdown_summary']);
+    });
+
+    it('historical: opting in cannot conjure a capability the catalog withholds', () => {
+        // `drawdown_summary` does not accept an asset set; an opt-in must not
+        // turn that into a request the backend will reject.
+        const analytics = buildBaseAnalytics('historical', {...ctx(['historical_kpi']), includeDrawdownSummary: true});
+        expect(analytics.map((a) => a.analytic_code)).toEqual(['historical_kpi']);
     });
 
     it('historical: seeds KPI with the applied risk-free rate as a fraction', () => {
@@ -394,5 +542,32 @@ describe('buildBaseAnalytics', () => {
             ['correlation', 'historical'],
             ['historical_var', 'historical'],
         ]);
+    });
+});
+
+describe('sync completion source contracts', () => {
+    it('forwards PageSyncModal completion detail through RiskAnalysisPanel unchanged', () => {
+        const modalTag = riskAnalysisPanelSource.match(/<PageSyncModal\b[\s\S]*?\/>/)?.at(0) ?? '';
+        expect(modalTag).not.toBe('');
+        expect(modalTag).toMatch(/\bonsynced\s*=\s*\{handleSynced\}/);
+
+        const handlerMatch = riskAnalysisPanelSource.match(/async\s+function\s+handleSynced\(\s*detail\s*:\s*\{\s*accepted\s*:\s*boolean\s*\}\s*\)\s*:\s*Promise<void>\s*\{([\s\S]*?)\n\s{4}\}/);
+        expect(handlerMatch).not.toBeNull();
+        const handlerBody = handlerMatch?.at(1)?.replace(/\s+/g, ' ').trim() ?? '';
+        expect(handlerBody).toMatch(/\bawait\s+onsynced\?\.\(\s*detail\s*\)\s*;/);
+        expect(handlerBody).not.toMatch(/\bonsynced\?\.\(\s*\)/);
+        expect(handlerBody).not.toMatch(/\bonsynced\?\.\(\s*\{/);
+    });
+
+    it('types and forwards AssetRiskScenariosView completion callbacks unchanged', () => {
+        expect(assetRiskScenariosViewSource).toMatch(/\bonsynced\?\s*:\s*\(\s*detail\s*:\s*\{\s*accepted\s*:\s*boolean\s*\}\s*\)\s*=>\s*void\s*\|\s*Promise<void>\s*;/);
+
+        const propsBinding = assetRiskScenariosViewSource.match(/let\s*\{([\s\S]*?)\}\s*:\s*Props\s*=\s*\$props\(\)\s*;/)?.at(1) ?? '';
+        expect(propsBinding).toMatch(/(?:^|,)\s*onsynced\s*(?:,|$)/);
+
+        const riskPanelTag = assetRiskScenariosViewSource.match(/<RiskAnalysisPanel\b[\s\S]*?\/>/)?.at(0) ?? '';
+        expect(riskPanelTag).not.toBe('');
+        expect(riskPanelTag).toContain('{onsynced}');
+        expect(riskPanelTag).not.toMatch(/\bonsynced\s*=/);
     });
 });

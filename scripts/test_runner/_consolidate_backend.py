@@ -165,7 +165,7 @@ def _run_group(category: str, paths: list, coverage: bool, verbose: bool) -> dic
     import os
     import shutil
 
-    from backend.test_scripts.test_db_config import TEST_DATABASE_URL
+    from backend.test_scripts.test_db_config import get_test_database_url
 
     report = Path(tempfile.mkdtemp(prefix="lf_junit_")) / "report.xml"
     full = [f"backend/test_scripts/{p}" for p in paths]
@@ -179,7 +179,7 @@ def _run_group(category: str, paths: list, coverage: bool, verbose: bool) -> dic
 
     env = os.environ.copy()
     env["LIBREFOLIO_TEST_MODE"] = "1"
-    env["DATABASE_URL"] = TEST_DATABASE_URL
+    env["DATABASE_URL"] = get_test_database_url()
 
     # Same copy-in/copy-out of the accumulated database that run_command does:
     # pytest-cov appends to ./.coverage, and the per-source accumulation lives

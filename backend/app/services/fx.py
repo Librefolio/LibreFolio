@@ -997,8 +997,8 @@ async def sync_pairs_bulk(  # noqa: C901 — TODO(P2-refactor): 3-phase concurre
 
                 # If fallback was used, log it
                 if route_idx > 0 and result.status in (SyncStatus.OK, SyncStatus.PARTIAL):
-                    providers_used = [s["provider"] for s in steps if s["provider"].upper() != "MANUAL"]
-                    logger.warning(f"Pair {pair_slug}: primary route failed, used fallback route {route_idx + 1} " f"(providers: {', '.join(providers_used)})")
+                    non_manual_step_provider_codes = [s["provider"] for s in steps if s["provider"].upper() != "MANUAL"]
+                    logger.warning(f"Pair {pair_slug}: primary route failed, used fallback route {route_idx + 1} " f"(providers: {', '.join(non_manual_step_provider_codes)})")
 
                 return result
 
@@ -1105,8 +1105,8 @@ async def sync_pairs_bulk(  # noqa: C901 — TODO(P2-refactor): 3-phase concurre
         fallback_errors: list[str],
     ) -> FXSyncPairResult:
         """Compute rates for a multi-step chain route."""
-        providers_used = [s["provider"] for s in steps]
-        source = "CHAIN:" + "+".join(providers_used)
+        step_provider_codes = [s["provider"] for s in steps]
+        source = "CHAIN:" + "+".join(step_provider_codes)
 
         # Collect all dates from leg_rates
         all_dates = sorted({key[2] for key in leg_rates.keys() if _is_date_within_sync_range(key[2], start_date, end_date)})
@@ -1655,5 +1655,11 @@ async def delete_rates_bulk(  # noqa: C901 — flat batch delete: normalize, cou
 
     # Single commit for all deletions
     await session.commit()
+
+    if deleted_count_total > 0:
+        from backend.app.utils.cache_utils import clear_cache  # noqa: PLC0415 — avoids a utils→services import cycle at module load
+
+        clear_cache("portfolio_layer2")
+        clear_cache("portfolio_blob")
 
     return results

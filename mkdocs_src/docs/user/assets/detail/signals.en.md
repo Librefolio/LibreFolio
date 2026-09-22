@@ -12,6 +12,23 @@ The Signals panel lets you overlay **technical indicators**, **comparison series
 
 Signals are organized into **three categories**, each with its own dropdown at the top of the panel.
 
+### 🔀 Prices and Rolling Return Modes
+
+The Signals panel follows the chart's primary mode:
+
+| Primary mode | Signals exposed in the panel | What is drawn |
+|---|---|---|
+| **Prices** | Technical Indicators, Data Comparison, and Synthetic Benchmarks | The configured overlays for the price chart |
+| **Rolling Return** | **Asset Comparison** only | The main asset and each selected comparison asset as backend-computed rolling returns |
+
+Rolling Return reuses the Asset comparison selections and their saved line styles from **Prices** mode. For every selected asset, the page asks the backend for the same _N_-calendar-day calculation in the chart's selected target currency. This keeps the comparison lines on the same percentage basis as the main asset.
+
+Technical indicators, FX Pair comparisons, and synthetic benchmarks are hidden—not removed—while Rolling Return is active. Their configurations remain saved and reappear when you switch back to **Prices**.
+
+!!! note "Price-only comparison"
+
+    These lines compare price-only rolling returns. They are not portfolio P&L and do not add dividends, cash flows, or transactions.
+
 ### 📉 Technical Indicators — 22 Backend Plugins
 
 Asset charts can run **22 indicator plugins**, grouped by the market property they measure. The mathematics of each indicator lives in the Financial Theory section — follow the links below, or click the 📖 icon on any signal card to jump straight to its theory page.
@@ -35,10 +52,18 @@ For the risk family's concepts, see the [Risk Metrics](../../../financial-theory
 
 ### 💱 Data Comparison
 
-Browser-computed overlays that normalize another series onto the same chart:
+In **Prices** mode, these browser-computed overlays normalize another series onto the same chart:
 
 - ↔️ **Asset Comparison** — overlay another asset's performance, normalized to the same scale (e.g. a stock against its benchmark index)
 - 💱 **FX Pair** — overlay a configured currency pair's rate
+
+In Rolling Return mode, only Asset Comparison remains available, and its rolling-return line is computed by the backend rather than normalized in the browser.
+
+#### Syncing an Asset Comparison
+
+Select **Sync** on an Asset Comparison card to refresh the selected peer Asset over the same start/end range currently requested by the chart. If the peer's native currency differs from the chart's display currency, the same action also refreshes every required canonical FX conversion pair that is **already configured**, over that same range, before reloading the comparison. This coordinated refresh applies in both **Prices** and **Rolling Return** modes.
+
+Sync never registers a missing FX pair. In **Prices** mode, use the comparison card's amber create-pair action first; after the pair exists, Sync can refresh its rates. If a configured pair has no usable rate for some requested dates, the backend leaves those peer observations in their native currency and reports the conversion failure; the chart excludes them rather than mixing currencies. A partial or absent comparison can therefore come from missing FX coverage for the peer-currency/display-currency pair even when the peer Asset has valid Close prices. Sync or extend that FX history instead of treating the problem as generically missing Close data.
 
 ### 📐 Synthetic Benchmarks
 
@@ -106,9 +131,18 @@ The **Underwater Drawdown** card carries a **Full history** checkbox (on by defa
 
 1. Click the **Signals** toggle button (📈) in the toolbar
 2. The signals panel opens below the toolbar
-3. Add signals from the three category dropdowns (**Technical Indicators**, **Data Comparison**, **Synthetic Benchmarks**)
+3. In **Prices** mode, add signals from the three category dropdowns (**Technical Indicators**, **Data Comparison**, **Synthetic Benchmarks**); in Rolling Return mode, add or edit **Asset Comparison**
 4. Adjust each signal's parameters inline on its card
 5. Signals are rendered as overlays directly on the chart
+
+---
+
+## 💾 Stored Data, Saved Settings, and Runtime Results
+
+- **Backend-persisted source data**: asset prices and FX rates used to resolve the requested target-currency series. Asset events are also persisted source data, but Rolling Return does not include them.
+- **Browser `localStorage` configuration**: chart settings, the selected Rolling Return window, and signal/comparison selections, parameters, order, and styles, stored under the current account and asset. Source data and computed series are not stored there.
+- **Browser `sessionStorage` range**: only the shared visible start/end dates for the current tab.
+- **Runtime-only results**: backend signal responses, including the main and comparison Rolling Return series, and browser-computed comparisons and benchmarks shown in **Prices** mode. These results are rendered for the current page but are not persisted as backend records or browser-stored series.
 
 ---
 

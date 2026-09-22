@@ -4,6 +4,41 @@ Questo file documenta i TODO che sono stati completati durante lo sviluppo di Li
 
 ---
 
+## 🚨 Feedback import e UX urgenti — Gruppo E ✅
+
+**Data completamento tecnico e applicazione al checkout:** 9 Settembre 2026
+**Status:** ✅ COMPLETATO — commit/SHA e archivio in attesa del commit manuale
+
+### Risultato
+
+- Inspector asset del wizard riparato: conferme annidate raggiungibili e lettura
+  completa; edit estranei non cancellano descrizione o distribuzioni.
+- Cambio valuta bulk completo e preciso, con broker nascosto coerente, date
+  distinte preservate e nessun bypass dei controlli finanziari.
+- Matching Generic CSV allineato al backend per identificatori primari/alternativi,
+  refresh e ambiguita'; prima creazione asset resta esplicita.
+- Diagnostica deficit con tutte le righe coinvolte e ordinamento cronologico
+  stabile sotto filtri, senza alterare pairing o ordine del payload.
+- Errori broker duplicato e lifecycle create/reopen localizzati e azionabili.
+- Files con uploader ordinabile e filtro multi-selezione; header auto-hide
+  desktop/mobile; tooltip valuta prezzi; supporto in About/DonationPopup con
+  cinque social e fallback onesti.
+- Controllo aggiornamenti distingue errori/cache/dismissal, mostra la versione
+  remota e verifica l'immagine pubblica con challenge GHCR sul backend same-origin.
+- Guida Generic CSV chiarita: un file piatto per broker, valute multiple ammesse,
+  nessuna generazione FX nel parser.
+
+### Evidenze e confini
+
+- Piano, cinque round, checklist e inventario:
+  [`14_feedbackImportUrgent`](LibreFolio_developer_journal/Release_2/Phase_0/14_feedbackImportUrgent/manifest-integrazione-E.md).
+- Tutte le fixture versionate sono sintetiche; ledger, DB, upload, backup e log
+  privati sono esclusi.
+- Restano aperti privacy globale, YOC, onboarding e i tre approfondimenti
+  multicurrency/esposizione in `TODO_FUTURI.md`.
+
+---
+
 ## 📝 Changelog nella UI (click sulla versione) ✅
 
 **Data aggiunta**: (preesistente, sezione orfana in TODO_FUTURI)

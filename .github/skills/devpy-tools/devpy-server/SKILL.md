@@ -17,7 +17,26 @@ description: "Use this skill when the user needs to start/stop the development s
 ./dev.py server --rebuild              # Force frontend rebuild before start
 ./dev.py server --host 0.0.0.0        # Override host
 ./dev.py server --port 9000           # Override port
+./dev.py server --data-dir /tmp/lf-b  # Override this server's data root
+./dev.py server --test --port 6151 --data-dir /tmp/lf-test-b
 ```
+
+### Independent worktree runtimes
+
+Use a unique **pair** for every concurrent worktree:
+
+```bash
+./dev.py server --test --port 6151 --data-dir /tmp/librefolio-r2-b
+./dev.py test --test-port 6151 --data-dir /tmp/librefolio-r2-b api all
+```
+
+The second command propagates the lane to pytest, the shared backend,
+Playwright and setup children. Defaults remain `6041` +
+`backend/data/test`. Never reuse a port or data directory in two active lanes;
+the test runner fails closed on an occupied port. Use `server --force` only as
+an explicit manual cleanup of a port you own.
+Test data is kept in `LIBREFOLIO_TEST_DATA_DIR`, never
+`LIBREFOLIO_DATA_DIR`, and production paths are rejected.
 
 ### What `server` does automatically
 1. Checks if port is in use (with `--force`: kills blockers)
@@ -52,7 +71,8 @@ Playwright `webServer` command line.
 - Edit `backend/alembic/versions/001_initial.py` only for brand-new never-shipped tables
 - `./dev.py db create-clean` only for fresh installs / test DBs, not to evolve an existing schema
 - Every migration needs working `upgrade()` + `downgrade()`, tested on a populated DB
-- Test DB and prod DB are completely isolated (`backend/data/test/` vs `backend/data/prod/`)
+- Test DB and prod DB are completely isolated (`backend/data/test/` by default,
+  or a lane-specific `--data-dir`, vs `backend/data/prod/`)
 
 ### Populate test data
 ```bash
@@ -86,9 +106,29 @@ After modifying backend API endpoints or Pydantic schemas, regenerate the TypeSc
 ```
 
 ### What `api sync` does
-1. Starts a temporary server instance
-2. Fetches `/openapi.json`
-3. Writes `frontend/src/lib/api/openapi.json`
-4. Runs the Zodios code generator → `frontend/src/lib/api/generated.ts`
-5. Stops the temporary server
+1. `api schema` runs `scripts/list_api_endpoints.py`, which imports the FastAPI app
+   **in-process** and calls `app.openapi()`
+2. Writes `frontend/src/lib/api/openapi.json` and
+   `frontend/src/lib/api/tool-contracts.openapi.json`
+3. `api client` runs `npm run generate-api`, feeding the **local** `openapi.json`
+   to `openapi-zod-client` → `frontend/src/lib/api/generated.ts`
+4. That same script chains `npm run generate-tools` →
+   `frontend/src/lib/api/generated-tools.ts`
 
+**No server is started and no port is bound.** `api sync` is therefore safe to run in
+any worktree lane, concurrently with other lanes, without coordination.
+
+### Regenerate before you trust a measurement
+
+The five generated client files are git-ignored, so a merge never refreshes them: they
+stay at whatever age the last build left them, and keep answering.
+
+| Command | Regenerates the client? |
+|---------|------------------------|
+| `./dev.py api sync` | yes — both `generated.ts` and `generated-tools.ts`, no compile, no port |
+| `./dev.py front build` | yes — it calls `api sync` first, then pays for a full compile |
+| `./dev.py front check` | **no** — `svelte-check` only reads |
+
+Running `front check` against a stale client reports type errors in the files that
+*consume* the contract, never in the artifact that is wrong. Run `api sync` first, or
+the number describes a contract that no longer exists.

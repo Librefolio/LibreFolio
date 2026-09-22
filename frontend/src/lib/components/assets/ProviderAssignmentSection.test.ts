@@ -18,9 +18,27 @@
  * `summarizeProbeError`, `buildProbeTooltipHtml`, …) are covered exhaustively in
  * `providerProbe.test.ts`; here we only prove the component wires them up.
  */
-import {beforeEach, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
+import {flushSync, tick} from 'svelte';
 import {writable} from 'svelte/store';
-import {fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
+import type {z} from 'zod';
+import type {schemas} from '$lib/api/generated';
+import type {ProviderConfiguration} from './providerProbeState.svelte';
+import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+import ProviderProbeLifecycleHarness from '$test/ProviderProbeLifecycleHarness.svelte';
+
+type LifecycleProvider = z.infer<typeof schemas.FAProviderInfo>;
+type LifecycleProbeRequest = z.infer<typeof schemas.FAProviderProbeRequest>;
+type LifecycleProbeResponse = z.infer<typeof schemas.FAProviderProbeResponse>;
+
+// The added lifecycle cases opt into explicit routes; the older cases keep
+// their existing mock behaviour unchanged.
+const lifecycleApi = vi.hoisted(() => ({
+    enabled: false,
+    unexpected: [] as string[],
+    list: vi.fn<() => Promise<LifecycleProvider[]>>(),
+    probe: vi.fn<(request: LifecycleProbeRequest) => Promise<LifecycleProbeResponse>>(),
+}));
 
 // --- Mocks --------------------------------------------------------------
 // zodiosApi: a Proxy minting a cached spy per method, so `vi.mocked(zodiosApi.foo)`
@@ -31,6 +49,12 @@ vi.mock('$lib/api', () => {
         {},
         {
             get(_t, prop: string) {
+                if (lifecycleApi.enabled) {
+                    if (prop === 'list_providers_api_v1_assets_provider_get') return lifecycleApi.list;
+                    if (prop === 'probe_provider_config_api_v1_assets_provider_probe_post') return lifecycleApi.probe;
+                    lifecycleApi.unexpected.push(prop);
+                    throw new Error(`Unexpected provider lifecycle API method: ${prop}`);
+                }
                 if (!cache.has(prop))
                     cache.set(
                         prop,
@@ -340,5 +364,389 @@ describe('ProviderAssignmentSection — readonly & disabled', () => {
         mount({providerCode: 'yahoo', identifier: 'AAPL', disabled: true});
         await waitLoaded('Yahoo');
         expect(idInput()).toBeDisabled();
+    });
+});
+
+// =========================================================================
+describe('ProviderAssignmentSection — probe ownership lifecycle', () => {
+    const providers: LifecycleProvider[] = [
+        {
+            code: 'lifecycle-a',
+            name: 'Lifecycle A',
+            description: 'Synthetic provider with an editable parameter',
+            supports_search: false,
+            params_schema: [{key: 'note', type: 'text', required: true, description: ''}],
+            accepted_identifier_types: ['TICKER', 'ISIN'],
+            supports_meaningful_volume: false,
+        },
+        {
+            code: 'lifecycle-b',
+            name: 'Lifecycle B',
+            description: 'Synthetic alternative provider without parameters',
+            supports_search: false,
+            params_schema: [],
+            accepted_identifier_types: ['TICKER', 'ISIN'],
+            supports_meaningful_volume: false,
+        },
+    ];
+    const pending: Array<() => Promise<void>> = [];
+
+    function configuration(): ProviderConfiguration {
+        return {
+            providerCode: 'lifecycle-a',
+            identifier: 'OWNED.PROBE',
+            identifierType: 'TICKER',
+            providerParams: {note: 'owned note'},
+            noProvider: false,
+        };
+    }
+
+    function expectedRequest(): LifecycleProbeRequest {
+        // Independent of the bound props, and frozen so a later UI edit cannot
+        // change the oracle alongside the request reference retained by the spy.
+        const request: LifecycleProbeRequest = {
+            provider_code: 'lifecycle-a',
+            identifier: 'OWNED.PROBE',
+            identifier_type: 'TICKER',
+            provider_params: {note: 'owned note'},
+            operations: ['current_price', 'history'],
+        };
+        Object.freeze(request.provider_params);
+        Object.freeze(request.operations);
+        return Object.freeze(request);
+    }
+
+    function probeResponse(): LifecycleProbeResponse {
+        return {
+            provider_code: 'lifecycle-a',
+            identifier: 'OWNED.PROBE',
+            provider_url: 'https://provider.invalid/owned-probe',
+            total_execution_time_ms: 9,
+            current_price: {
+                success: true,
+                value: '123.45',
+                currency: 'USD',
+                as_of_date: '2024-01-02',
+                execution_time_ms: 4,
+            },
+            history: {
+                success: true,
+                points_count: 1,
+                date_range: '2024-01-01..2024-01-01',
+                sample_prices: [{date: '2024-01-01', close: '123.40'}],
+                execution_time_ms: 5,
+            },
+        };
+    }
+
+    function deferred<T>(fallback: T) {
+        let resolve!: (value: T) => void;
+        const promise = new Promise<T>((complete) => {
+            resolve = complete;
+        });
+        async function finish(value: T = fallback) {
+            resolve(value);
+            // This is the promise actually returned to the component/controller,
+            // followed by Svelte's update boundary, never clock-based polling.
+            await promise;
+            await tick();
+            flushSync();
+        }
+        pending.push(() => finish());
+        return {promise, finish};
+    }
+
+    function unexpected(operation: string): never {
+        lifecycleApi.unexpected.push(operation);
+        throw new Error(`Unplanned provider lifecycle request: ${operation}`);
+    }
+
+    function queueCatalogue() {
+        const reply = deferred(providers);
+        lifecycleApi.list.mockImplementationOnce(() => reply.promise);
+        return reply;
+    }
+
+    function queueProbe() {
+        const reply = deferred(probeResponse());
+        lifecycleApi.probe.mockImplementationOnce((request) => {
+            if (request.operations.join(',') !== 'current_price,history') {
+                return unexpected(`probe operations: ${request.operations.join(',')}`);
+            }
+            return reply.promise;
+        });
+        return reply;
+    }
+
+    function expectManualResults(container: HTMLElement) {
+        // getAllByTestId is the positive barrier: an empty result set throws.
+        // Every row here belongs to this mount and this synthetic response.
+        for (const row of within(container).getAllByTestId('provider-test-result')) {
+            expect(row).toBeVisible();
+            expect(row).toHaveAttribute('data-status', 'success');
+        }
+    }
+
+    beforeEach(() => {
+        lifecycleApi.enabled = true;
+        lifecycleApi.unexpected.length = 0;
+        pending.length = 0;
+        lifecycleApi.list.mockReset().mockImplementation(() => unexpected('provider catalogue'));
+        lifecycleApi.probe.mockReset().mockImplementation(() => unexpected('provider probe'));
+    });
+
+    afterEach(async () => {
+        try {
+            // Dispose every owner before releasing even an unused/failed-case
+            // deferred. These cases do not change globals or client identity.
+            await cleanup();
+            for (const finish of pending) await finish();
+            expect(lifecycleApi.unexpected).toEqual([]);
+        } finally {
+            lifecycleApi.enabled = false;
+            lifecycleApi.list.mockReset();
+            lifecycleApi.probe.mockReset();
+            pending.length = 0;
+        }
+    });
+
+    it('keeps shared manual work across collapse/remount and clears it on a provider switch', async () => {
+        const catalogue = queueCatalogue();
+        const firstRemount = queueCatalogue();
+        const secondRemount = queueCatalogue();
+        const manual = queueProbe();
+        const request = expectedRequest();
+        const onchange = vi.fn();
+        const {container} = render(ProviderProbeLifecycleHarness, {...configuration(), onchange});
+        await catalogue.finish();
+
+        expect(testBtn()).toBeVisible();
+        expect(testBtn()).toHaveAttribute('data-status', 'not_tested');
+        expect(testBtn()).toBeEnabled();
+        expect(idInput()).toHaveValue('OWNED.PROBE');
+        expect(screen.getByTestId('param-note')).toHaveValue('owned note');
+
+        await fireEvent.click(testBtn());
+        expect(testBtn()).toHaveAttribute('data-status', 'testing');
+        expect(testBtn()).toBeDisabled();
+        expect(lifecycleApi.probe.mock.calls).toStrictEqual([[request]]);
+
+        // The child disappears while its manual request is still in flight.
+        // Only the parent-owned controller can accept the response now.
+        await fireEvent.click(screen.getByTestId('provider-probe-collapse'));
+        expect(screen.getByTestId('provider-probe-expand')).toBeEnabled();
+        expect(screen.queryByTestId('provider-test-config')).toBeNull();
+        await manual.finish();
+
+        await fireEvent.click(screen.getByTestId('provider-probe-expand'));
+        await firstRemount.finish();
+        expect(testBtn()).toHaveAttribute('data-status', 'passed');
+        expect(testBtn()).toBeEnabled();
+        expectManualResults(container);
+        expect(idInput()).toHaveValue('OWNED.PROBE');
+        expect(screen.getByTestId('param-note')).toHaveValue('owned note');
+
+        // A second collapse starts with visible results, proving that completed
+        // manual details survive as well as the in-flight work above.
+        await fireEvent.click(screen.getByTestId('provider-probe-collapse'));
+        expect(screen.getByTestId('provider-probe-expand')).toBeEnabled();
+        expect(screen.queryByTestId('provider-test-result')).toBeNull();
+        await fireEvent.click(screen.getByTestId('provider-probe-expand'));
+        await secondRemount.finish();
+        expect(testBtn()).toHaveAttribute('data-status', 'passed');
+        expectManualResults(container);
+
+        await fireEvent.click(screen.getByTestId('provider-code-select-button'));
+        expect(screen.getByTestId('provider-option-lifecycle-b')).toBeVisible();
+        await fireEvent.click(screen.getByTestId('provider-option-lifecycle-b'));
+
+        expect(idInput()).toBeVisible();
+        expect(idInput()).toHaveValue('');
+        expect(testBtn()).toHaveAttribute('data-status', 'not_tested');
+        expect(testBtn()).toBeDisabled();
+        expect(screen.queryByTestId('provider-test-result')).toBeNull();
+        expect(screen.queryByTestId('param-note')).toBeNull();
+        expect(onchange).toHaveBeenLastCalledWith({
+            providerCode: 'lifecycle-b',
+            identifier: '',
+            identifierType: 'TICKER',
+            providerParams: null,
+            noProvider: false,
+            testStatus: 'not_tested',
+        });
+        // The actual argument reference is still the original configuration;
+        // neither remount nor the switch silently issued another probe.
+        expect(lifecycleApi.probe.mock.calls).toStrictEqual([[request]]);
+        expect(lifecycleApi.list.mock.calls).toStrictEqual([[], [], []]);
+    });
+
+    it('discards a standalone response after unmount before a fresh instance uses the same configuration', async () => {
+        const oldCatalogue = queueCatalogue();
+        const lateResponse = queueProbe();
+        const request = expectedRequest();
+        const oldOnchange = vi.fn();
+        const oldMount = render(ProviderAssignmentSection, {...configuration(), onchange: oldOnchange});
+        await oldCatalogue.finish();
+
+        const oldButton = testBtn();
+        expect(oldButton).toBeVisible();
+        expect(oldButton).toBeEnabled();
+        await fireEvent.click(oldButton);
+        expect(oldButton).toHaveAttribute('data-status', 'testing');
+        expect(oldButton).toBeDisabled();
+        expect(lifecycleApi.probe.mock.calls).toStrictEqual([[request]]);
+        expect(oldOnchange).not.toHaveBeenCalled();
+
+        await oldMount.unmount();
+        expect(oldButton).not.toBeInTheDocument();
+        await lateResponse.finish();
+        // A fresh mount alone would not catch the old destroyed child's late
+        // emitChange: this callback proves its owner rejected the response.
+        expect(oldOnchange).not.toHaveBeenCalled();
+
+        const newCatalogue = queueCatalogue();
+        const currentResponse = queueProbe();
+        const newOnchange = vi.fn();
+        const {container} = render(ProviderAssignmentSection, {...configuration(), onchange: newOnchange});
+        await newCatalogue.finish();
+
+        expect(testBtn()).toBeVisible();
+        expect(testBtn()).toBeEnabled();
+        expect(testBtn()).toHaveAttribute('data-status', 'not_tested');
+        expect(idInput()).toHaveValue('OWNED.PROBE');
+        expect(screen.getByTestId('param-note')).toHaveValue('owned note');
+        expect(screen.queryByTestId('provider-test-result')).toBeNull();
+
+        await fireEvent.click(testBtn());
+        expect(testBtn()).toHaveAttribute('data-status', 'testing');
+        expect(testBtn()).toBeDisabled();
+        await currentResponse.finish();
+        expect(testBtn()).toHaveAttribute('data-status', 'passed');
+        expect(testBtn()).toBeEnabled();
+        expectManualResults(container);
+        expect(newOnchange).toHaveBeenLastCalledWith({...configuration(), testStatus: 'passed'});
+        expect(oldOnchange).not.toHaveBeenCalled();
+        expect(lifecycleApi.probe.mock.calls).toStrictEqual([[request], [request]]);
+        expect(lifecycleApi.list.mock.calls).toStrictEqual([[], []]);
+    });
+
+    it('clears mounted parameter controls and verification when the parent resets params to null', async () => {
+        const catalogue = queueCatalogue();
+        const firstProbe = queueProbe();
+        const originalRequest = expectedRequest();
+        const onchange = vi.fn();
+        const {container, rerender} = render(ProviderAssignmentSection, {...configuration(), onchange});
+        await catalogue.finish();
+        expect(idInput()).toHaveValue('OWNED.PROBE');
+        expect(screen.getByTestId('param-note')).toHaveValue('owned note');
+        expect(testBtn()).toBeEnabled();
+
+        await fireEvent.click(testBtn());
+        expect(testBtn()).toHaveAttribute('data-status', 'testing');
+        await firstProbe.finish();
+        expect(testBtn()).toHaveAttribute('data-status', 'passed');
+        expectManualResults(container);
+
+        // The schema remains mounted: disappearing controls on a provider switch
+        // would not detect a stale local params object after this parent reset.
+        await rerender({providerParams: null});
+        await tick();
+        flushSync();
+        expect(screen.getByTestId('param-note')).toBeVisible();
+        expect(screen.getByTestId('param-note')).toHaveValue('');
+        expect(idInput()).toHaveValue('OWNED.PROBE');
+        expect(testBtn()).toHaveAttribute('data-status', 'not_tested');
+        expect(testBtn()).toBeEnabled();
+        expect(screen.queryByTestId('provider-test-result')).toBeNull();
+
+        const resetProbe = queueProbe();
+        await fireEvent.click(testBtn());
+        expect(testBtn()).toHaveAttribute('data-status', 'testing');
+        expect(lifecycleApi.probe.mock.calls).toStrictEqual([[originalRequest], [{...originalRequest, provider_params: null}]]);
+        await resetProbe.finish();
+        expect(testBtn()).toHaveAttribute('data-status', 'passed');
+        expectManualResults(container);
+        expect(onchange).toHaveBeenLastCalledWith({...configuration(), providerParams: null, testStatus: 'passed'});
+        expect(lifecycleApi.probe.mock.calls).toStrictEqual([[originalRequest], [{...originalRequest, provider_params: null}]]);
+        expect(lifecycleApi.list.mock.calls).toStrictEqual([[]]);
+    });
+
+    it('preserves a standalone URL binding seed and probes with full params before the catalog resolves', async () => {
+        const catalogue = queueCatalogue();
+        const manual = queueProbe();
+        const request = expectedRequest();
+        const seedUrl = 'https://provider.invalid/stored-seed';
+        const onchange = vi.fn();
+        const {container, rerender} = render(ProviderProbeLifecycleHarness, {...configuration(), providerUrl: seedUrl, shared: false, onchange});
+        await tick();
+        flushSync();
+
+        const boundUrl = screen.getByTestId('provider-probe-bound-url');
+        expect(boundUrl).toHaveTextContent(seedUrl);
+        expect(idInput()).toHaveValue('OWNED.PROBE');
+        expect(testBtn()).toHaveAttribute('data-status', 'not_tested');
+        expect(testBtn()).toBeEnabled();
+        expect(lifecycleApi.list.mock.calls).toStrictEqual([[]]);
+
+        // The catalogue is still pending. Provider params belong to the draft,
+        // not to whichever schema the panel has managed to load so far.
+        await fireEvent.click(testBtn());
+        expect(testBtn()).toHaveAttribute('data-status', 'testing');
+        expect(lifecycleApi.probe.mock.calls).toStrictEqual([[request]]);
+        expect(boundUrl).toHaveTextContent(seedUrl);
+        await manual.finish();
+        expect(testBtn()).toHaveAttribute('data-status', 'passed');
+        expect(boundUrl).toHaveTextContent('https://provider.invalid/owned-probe');
+        expectManualResults(container);
+        expect(onchange).toHaveBeenLastCalledWith({...configuration(), testStatus: 'passed'});
+
+        await catalogue.finish();
+        expect(screen.getByTestId('param-note')).toHaveValue('owned note');
+        expect(testBtn()).toHaveAttribute('data-status', 'passed');
+        expect(boundUrl).toHaveTextContent('https://provider.invalid/owned-probe');
+        expect(lifecycleApi.probe.mock.calls).toStrictEqual([[request]]);
+
+        await rerender({providerParams: null});
+        await tick();
+        flushSync();
+        expect(screen.getByTestId('param-note')).toBeVisible();
+        expect(screen.getByTestId('param-note')).toHaveValue('');
+        expect(testBtn()).toHaveAttribute('data-status', 'not_tested');
+        expect(boundUrl.textContent).toBe('');
+        expect(screen.queryByTestId('provider-test-result')).toBeNull();
+        expect(lifecycleApi.probe.mock.calls).toStrictEqual([[request]]);
+    });
+
+    it('shows an automatic result only as status until the section runs a manual probe', async () => {
+        const catalogue = queueCatalogue();
+        const automatic = queueProbe();
+        const manual = queueProbe();
+        const request = expectedRequest();
+        const {container} = render(ProviderProbeLifecycleHarness, configuration());
+        await catalogue.finish();
+
+        expect(testBtn()).toBeVisible();
+        expect(testBtn()).toHaveAttribute('data-status', 'not_tested');
+        await fireEvent.click(screen.getByTestId('provider-probe-auto'));
+        expect(testBtn()).toHaveAttribute('data-status', 'testing');
+        expect(testBtn()).toBeDisabled();
+        expect(lifecycleApi.probe.mock.calls).toStrictEqual([[request]]);
+        await automatic.finish();
+
+        // The completed status is the positive barrier before checking that
+        // automatic work did not render manual-only detail rows.
+        expect(testBtn()).toHaveAttribute('data-status', 'passed');
+        expect(testBtn()).toBeEnabled();
+        expect(screen.queryByTestId('provider-test-result')).toBeNull();
+
+        await fireEvent.click(testBtn());
+        expect(testBtn()).toHaveAttribute('data-status', 'testing');
+        expect(testBtn()).toBeDisabled();
+        await manual.finish();
+        expect(testBtn()).toHaveAttribute('data-status', 'passed');
+        expect(testBtn()).toBeEnabled();
+        expectManualResults(container);
+        expect(lifecycleApi.probe.mock.calls).toStrictEqual([[request], [request]]);
+        expect(lifecycleApi.list.mock.calls).toStrictEqual([[]]);
     });
 });

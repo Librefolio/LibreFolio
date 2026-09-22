@@ -165,7 +165,6 @@ class FAPricePoint(StrictModel):
         return v
 
 
-
 class FAUpsert(StrictModel):
     """Price upsert for a single asset (multiple dates).
 
@@ -257,7 +256,6 @@ class FACurrentValue(StrictModel):
     @classmethod
     def currency_validate(cls, v: str) -> str:
         return Currency.validate_code(v)
-
 
 
 class FAHistoricalData(StrictModel):

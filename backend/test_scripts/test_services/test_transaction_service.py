@@ -10,6 +10,7 @@ Reference: backend/app/services/transaction_service.py
 import sys
 from datetime import date, timedelta
 from decimal import Decimal
+from unittest.mock import AsyncMock
 
 import pytest
 import pytest_asyncio
@@ -350,6 +351,106 @@ class TestServiceHelpers:
 
         assert paired_source == partner_tx.broker_id
         assert fallback_source == self_tx.broker_id
+
+
+# ============================================================================
+# EXECUTE_BATCH BASELINE CONTRACT
+# ============================================================================
+
+
+class TestExecuteBatchBaseline:
+    """Freeze orchestration semantics before the batch stages are extracted."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("commit", "with_issue", "expected_committed", "expected_status"),
+        [
+            (False, False, False, "success"),
+            (True, False, True, "success"),
+            (False, True, False, "success"),
+            (True, True, False, "simulated"),
+        ],
+    )
+    async def test_finalize_matrix_counts_operations_and_leaves_transaction_to_caller(
+        self,
+        session,
+        test_broker_overdraft,
+        monkeypatch,
+        commit,
+        with_issue,
+        expected_committed,
+        expected_status,
+    ):
+        """Preview/commit finalization is independent from session ownership."""
+        tx_from = Transaction(
+            broker_id=test_broker_overdraft.id,
+            type=TransactionType.FX_CONVERSION,
+            date=date.today(),
+            quantity=Decimal("0"),
+            amount=Decimal("-100"),
+            currency="EUR",
+            created_at=utcnow(),
+            updated_at=utcnow(),
+        )
+        tx_to = Transaction(
+            broker_id=test_broker_overdraft.id,
+            type=TransactionType.FX_CONVERSION,
+            date=date.today(),
+            quantity=Decimal("0"),
+            amount=Decimal("110"),
+            currency="USD",
+            created_at=utcnow(),
+            updated_at=utcnow(),
+        )
+        session.add_all([tx_from, tx_to])
+        await session.flush()
+        tx_from.related_transaction_id = tx_to.id
+        tx_to.related_transaction_id = tx_from.id
+        await session.flush()
+
+        original_commit = session.commit
+        original_rollback = session.rollback
+        commit_spy = AsyncMock(wraps=original_commit)
+        rollback_spy = AsyncMock(wraps=original_rollback)
+        monkeypatch.setattr(session, "commit", commit_spy)
+        monkeypatch.setattr(session, "rollback", rollback_spy)
+
+        malformed_creates = (
+            [
+                {
+                    "type": TransactionType.DEPOSIT,
+                    "date": date.today().isoformat(),
+                    "cash": {"code": "EUR", "amount": "10"},
+                }
+            ]
+            if with_issue
+            else []
+        )
+
+        try:
+            response = await TransactionService(session).execute_batch(
+                creates_raw=malformed_creates,
+                updates_raw=[],
+                deletes=[],
+                splits_raw=[{"id_a": tx_from.id, "id_b": tx_to.id}],
+                commit=commit,
+            )
+
+            assert response.committed is expected_committed
+            assert response.success_count == 1
+            assert [(result.operation, result.index, result.ids, result.status) for result in response.results] == [("split", 0, [tx_from.id, tx_to.id], expected_status)]
+            assert len(response.results[0].ids) == 2
+
+            if with_issue:
+                assert [(issue.operation, issue.index, issue.field, issue.code) for issue in response.issues] == [("create", 0, "broker_id", "missing")]
+            else:
+                assert response.issues == []
+
+            commit_spy.assert_not_awaited()
+            rollback_spy.assert_not_awaited()
+        finally:
+            # execute_batch deliberately leaves transaction completion to its caller.
+            await original_rollback()
 
 
 # ============================================================================

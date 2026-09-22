@@ -7,13 +7,20 @@
 **Valuta di conto:** EUR  
 **Scopo:** documentare una procedura ripetibile per trasformare pesi strategici continui in ordini eseguibili a quote intere, minimizzando lo scostamento dall'allocazione desiderata e la liquidità residua.
 
+> **Autorità corrente — correzione 16 settembre 2026:** questo studio conserva
+> esempi e alternative storiche. La specifica prodotto corrente usa target
+> monetari fissi e un primario discreto globale che minimizza
+> `L2_fixed = Σ_a(V_a_final-w_aF_ref)²`; la variante margine congela il primario,
+> aggiunge BUY e massimizza prima l'impiego del cash. Le procedure
+> `target→floor` e solve continuo→rounding restano analisi storiche, non autorità.
+
 ---
 
 ## Abstract
 
 La costruzione di un piano di accumulo multi-asset presenta due problemi distinti. Il primo è strategico: determinare la distribuzione percentuale dei nuovi flussi tra un nucleo diversificato e più esposizioni satellitari. Il secondo è operativo: tradurre importi teorici continui in quantità intere di quote, nel rispetto del budget disponibile.
 
-La procedura qui descritta separa rigorosamente i due livelli. I pesi target vengono prima determinati sulla base della funzione economica degli strumenti e delle concentrazioni già presenti nel portafoglio. Successivamente, gli importi teorici vengono convertiti in quantità acquistabili mediante arrotondamento per difetto. Il capitale residuo viene infine riallocato risolvendo un problema di ottimizzazione discreta con due obiettivi: preservare il più possibile la distribuzione target e mantenere minima la liquidità non investita.
+La procedura qui descritta separa rigorosamente i due livelli. I pesi target vengono prima determinati sulla base della funzione economica degli strumenti e delle concentrazioni già presenti nel portafoglio. Successivamente, gli importi teorici vengono convertiti in quantità acquistabili mediante arrotondamento per difetto. Il capitale residuo viene infine riallocato con incrementi BUY-only: prima si massimizza l’investimento aggiuntivo, poi si sceglie la variante meno distante dalla distribuzione target.
 
 Il metodo non tenta di prevedere il mercato. I prezzi sono utilizzati esclusivamente come vincoli operativi per determinare quantità e residui.
 
@@ -213,7 +220,11 @@ r^{(0)} = 3.500 - 3.409{,}67 = 90{,}33.
 
 ---
 
-## 6. Riallocazione ottimizzata del residuo
+## 6. Riallocazione del residuo — studio storico delle alternative
+
+> Gli esempi numerici restano utili, ma entrambe le gerarchie storiche sono
+> superate. Il primario corrente minimizza `L2_fixed` e la variante margine
+> minimizza prima `U`, poi il `L2_fixed` risultante.
 
 ### 6.1 Perché non basta acquistare lo strumento più economico
 
@@ -221,7 +232,11 @@ Con 90,33 EUR residui sarebbe possibile acquistare, per esempio, più quote di H
 
 La sola massimizzazione della spesa è quindi insufficiente. Occorre introdurre una misura della qualità dell'allocazione.
 
-### 6.2 Funzione di perdita
+### 6.2 Funzione di perdita storica — superata
+
+> La funzione e la gerarchia sotto documentano l’analisi originale. Non sono il
+> criterio prodotto corrente: la variante margine congela il primario globale,
+> minimizza `U` e poi il `L2_fixed` risultante. D∞/D1 sono diagnostici.
 
 Una possibile funzione di perdita normalizzata è:
 
@@ -352,7 +367,12 @@ Le colonne precedenti risolvono la fase esecutiva. Per riesaminare mensilmente i
 
 ---
 
-## 8. Algoritmo generale
+## 8. Algoritmo storico base + residuo — superato
+
+> **SUPERATO 2026-09-16:** la procedura seguente è conservata come analisi del
+> metodo originale. Il primario prodotto corrente è un solve discreto globale
+> `L2_fixed → U`; la variante congela tutte le azioni primarie e aggiunge BUY
+> secondo `U → L2_fixed`. D∞/D1 non selezionano più gli ordini.
 
 ### 8.1 Procedura
 
@@ -362,11 +382,14 @@ Le colonne precedenti risolvono la fase esecutiva. Per riesaminare mensilmente i
 4. Calcolare le quantità iniziali mediante arrotondamento per difetto.
 5. Calcolare residuo e scostamenti.
 6. Generare acquisti aggiuntivi compatibili con il residuo.
-7. Valutare ogni combinazione mediante la funzione di perdita.
-8. Selezionare la combinazione con perdita minima.
-9. Applicare, se desiderato, un criterio secondario di minimizzazione del residuo.
-10. Registrare prezzi, quantità, scostamenti e residuo per l'audit.
-11. Riportare il residuo non investito al mese successivo.
+7. Scartare ogni combinazione che riduce la base o viola budget/step/vincoli.
+8. Selezionare lessicograficamente secondo la policy:
+   - `proportional`: massimo investimento aggiuntivo, minimo D∞, minimo D1,
+     route/costi/righe/tie-break;
+   - `min_fragmentation`: massimo investimento aggiuntivo, minimo Asset
+     splittati, minimo righe, minimo D∞, minimo D1, route/costi/tie-break.
+9. Registrare prezzi, quantità, scostamenti e residuo per l'audit.
+10. Riportare il residuo non investito al mese successivo.
 
 ### 8.2 Pseudocodice
 
@@ -375,6 +398,7 @@ input:
     budget B
     target weights w[1..n]
     unit prices p[1..n]
+    policy = proportional | min_fragmentation
 
 assert sum(w) = 1
 
@@ -383,19 +407,33 @@ for each asset i:
     initial_quantity[i] = floor(target_amount[i] / p[i])
 
 best_quantity = initial_quantity
-best_loss = loss(best_quantity)
+best_key = lexicographic_key(best_quantity)
 
 for each feasible vector of additional integer quantities delta:
     candidate_quantity = initial_quantity + delta
     candidate_cost = sum(candidate_quantity[i] * p[i])
 
     if candidate_cost <= B:
-        candidate_loss = allocation_error(candidate_quantity)
-                       + residual_penalty(candidate_quantity)
+        if policy == proportional:
+            candidate_key = (
+                -additional_mid_investment(candidate_quantity),
+                D_infinity(candidate_quantity),
+                D_1(candidate_quantity),
+                route_cost_rows_stable_tie(candidate_quantity),
+            )
+        else:
+            candidate_key = (
+                -additional_mid_investment(candidate_quantity),
+                split_asset_count(candidate_quantity),
+                order_row_count(candidate_quantity),
+                D_infinity(candidate_quantity),
+                D_1(candidate_quantity),
+                route_cost_stable_tie(candidate_quantity),
+            )
 
-        if candidate_loss < best_loss:
+        if candidate_key < best_key:
             best_quantity = candidate_quantity
-            best_loss = candidate_loss
+            best_key = candidate_key
 
 return:
     best_quantity
@@ -1136,7 +1174,34 @@ mesi successivi da decidere con revisione mensile.
 
 Quindi non formalizzerei più nel report una durata di otto mesi.
 
-Funzione obiettivo
+### Correzione autorevole del 16 settembre 2026
+
+La conclusione storica seguente proponeva un solo solve intero e sconsigliava un
+secondo passaggio operativo. Le decisioni prodotto successive la sostituiscono:
+la specifica corrente completa è la suite con
+[piano maestro PAC/Rebalancer](Phase_0/13_pacAllocator/plan-phase00PacRebalancerTargetDesign.prompt.md).
+
+1. `F_ref` è il budget route-reachable; `T_a=w_aF_ref`;
+2. il primario sceglie globalmente ordini interi o importi monetari a step per
+   minimizzare `L2_fixed=Σ_a(V_a_final-T_a)²`, poi `U`;
+3. route, fee, FX, buffer, minimi e cap sono constraint/tier espliciti;
+4. la variante margine congela tutte le azioni primarie, aggiunge soltanto BUY,
+   minimizza prima `U` e poi il `L2_fixed` risultante;
+5. la variante può peggiorare `L2_fixed` per usare cash altrimenti inattivo, ma
+   mostra sempre il delta;
+6. uno stesso piano può combinare quantità intere e ordini monetari frazionari;
+   questi ultimi restano multipli interi dello step/minor unit, quindi il piano
+   eseguibile non è il semplice floor di un QP continuo;
+7. ogni piano ottenuto da ricerca viene verificato sui ledger Decimal, ma lo status
+   floating del solver non prova l’ottimalità o l’infeasibilità esatta:
+   `optimal_proven` richiede oracle esaustivo o chiusura score-lattice
+   coefficient-safe; `infeasible_proven` richiede conflict witness Decimal o
+   oracle esaustivo.
+
+Il testo sotto resta come analisi storica della variante “solve unico”; non è più
+la specifica corrente.
+
+### Funzione obiettivo storica superata
 
 La formulazione originale privilegia l’errore minimo e solo subordinatamente la saturazione. La richiesta più recente è invece:
 
@@ -1144,7 +1209,7 @@ massimizzare l’investito mantenendo i pesi entro una tolleranza accettabile e 
 
 La funzione obiettivo va quindi aggiornata nella gerarchia indicata sopra.
 
-Conclusione
+### Conclusione storica superata
 
 Tra le due strade sceglierei nettamente:
 
@@ -1164,4 +1229,7 @@ e infine:
 
 geff=B∑iqipi−1g_{\mathrm{eff}} = \frac{B}{\sum_iq_ip_i}-1
 
-In sintesi: la percentuale uniforme è la maniglia prudenziale; il residuo discreto è un ulteriore cuscino globale, non qualcosa che deve necessariamente essere redistribuito.
+In sintesi, questa variante storica trattava la percentuale uniforme come maniglia
+prudenziale e il residuo discreto come cuscino globale non necessariamente
+redistribuito. La correzione autorevole sopra definisce invece i due risultati
+operativi correnti: primario globale fixed-L2 e variante margine add-only.

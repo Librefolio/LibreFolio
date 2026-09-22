@@ -64,7 +64,7 @@ class TestUnlinkedTransactions:
         assert len(result.classified) == 1
         assert result.classified[0].classification == "normal"
         assert len(result.external_cash_flows) == 1
-        assert result.external_cash_flows[0] == (date(2025, 1, 1), Decimal("1000"), "EUR")
+        assert result.external_cash_flows[0] == (date(2025, 1, 1), 10, Decimal("1000"), "EUR")
 
     def test_unlinked_withdrawal(self):
         """WITHDRAWAL → normal + external cash flow (negative)."""
@@ -73,7 +73,7 @@ class TestUnlinkedTransactions:
         result = c.classify()
 
         assert result.classified[0].classification == "normal"
-        assert result.external_cash_flows[0][1] == Decimal("-500")
+        assert result.external_cash_flows[0][2] == Decimal("-500")
 
     def test_unlinked_buy(self):
         """BUY → normal, no external cash flow (internal capital movement)."""
@@ -287,7 +287,7 @@ class TestLinkedExternal:
         assert len(result.classified) == 1
         assert result.classified[0].classification == "linked_external_outflow"
         assert len(result.external_cash_flows) == 1
-        assert result.external_cash_flows[0][1] == Decimal("-3000")
+        assert result.external_cash_flows[0][2] == Decimal("-3000")
 
     def test_external_inflow(self):
         """CASH_TRANSFER: only inflow leg in scope → linked_external_inflow."""
@@ -302,7 +302,7 @@ class TestLinkedExternal:
         result = c.classify(external_paired={70: tx_out})
 
         assert result.classified[0].classification == "linked_external_inflow"
-        assert result.external_cash_flows[0][1] == Decimal("3000")
+        assert result.external_cash_flows[0][2] == Decimal("3000")
 
     def test_asset_transfer_external_inflow(self):
         """TRANSFER: asset arrives from outside scope → linked_external_inflow."""
@@ -380,7 +380,7 @@ class TestEdgeCases:
         )
         result = c.classify()
 
-        assert result.external_cash_flows[0][1] == Decimal("1000")
+        assert result.external_cash_flows[0][2] == Decimal("1000")
         assert result.classified[0].share == Decimal("0.5")
 
     def test_get_needed_paired_ids(self):

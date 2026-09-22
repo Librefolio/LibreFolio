@@ -12,7 +12,9 @@
 | `04_webSearchEngine/` | Web link-finder transport: raw DDG scraper → `ddgs` metasearch (+ SearXNG plan, not needed) | ✅ ddgs Steps 1–6; SearXNG dropped |
 | `05_cleanAudit/` | Systematic dead-code/optimization audit (17 reports) + stabilization | ✅ Suite stabilized |
 | `07_coverageAndConsolidationCampaign/` | Test runner parallelization, JS/Svelte coverage, 16 defects closed | ✅ Suite 15/15 green, 78% lines |
+| `06_betaTestingReportAndFixing/` | Beta feedback consolidation (F1–F17, piani P1–P8) | ✅ Tutti i task eseguiti — archiviata il 03/09 (07/09: i residui P8 erano una scelta deliberata — le scritture restano seriali per la validità dei test; voce TODO rimossa) |
+| `08_newCleanAndDocumentation_audit/` | Riverifica integrale dell'audit di agosto + esecuzione backlog (P0→P3), ondata docs/gallery/traduzioni, report 50 (gap v1.0.1→HEAD) | ✅ P0/P1/P2/P3 tutti chiusi e validati a zero; **residuo**: 8 task strutturali P4 → `Phase_0/09_feedbackJobs/` — archiviata il 07/09 |
 
 **Not archived (still active / paused):**
 - `../Phase_0/02_riskfolioIntegration/` — Risk Analysis subsystem, paused in beta per user decision.
-- `06_betaTestingReportAndFixing/` — beta feedback consolidation (F1–F17, piani P1–P8); **archiviata il 03/09**: tutti i task eseguiti, residui veri tracciati in TODO_FUTURI (P8: tappe 5.1–5.3).
+- `../Phase_0/09_feedbackJobs/` — backlog strutturale P4 ereditato dall'audit 08 (attivo: si pesca da lì al prossimo round).

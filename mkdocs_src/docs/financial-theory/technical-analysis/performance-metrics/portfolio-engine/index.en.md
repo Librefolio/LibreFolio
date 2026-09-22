@@ -2,7 +2,7 @@
 
 ## 💡 Overview
 
-This page formally defines the mathematical model underlying LibreFolio's portfolio calculation engine. All other metric pages ([NAV](nav.md), [Book Value](book-value.md), [Period P&L](period-pnl.md), [WAC](../weighted-average-cost.md), [Deposited Capital](deposited-capital.md)) reference this page for their precise computation rules.
+This page formally defines the mathematical model underlying LibreFolio's portfolio calculation engine. All other metric pages ([NAV](nav.md), [Book Value](book-value.md), [Period P&L](period-pnl.md), [Yield on Cost](yield-on-cost.md), [WAC](../weighted-average-cost.md), [Deposited Capital](deposited-capital.md)) reference this page for their precise computation rules.
 
 ---
 
@@ -229,6 +229,7 @@ Computed **after** daily states, as a separate pass:
 | MWRR | XIRR solving $\sum \frac{CF_i}{(1+r)^{d_i/365}} = 0$ | [MWRR](mwrr.md) |
 | Simple ROI | $(\mathrm{NAV} - \text{NetInvested}) / \text{NetInvested}$ | [ROI](roi.md) |
 | Net annualized return | $(1+r_{\mathrm{net}})^{365/d}-1$, suppressed below 30 days | [Net Annualized Return](net-annualized-return.md) |
+| Yield on Cost | Trailing-365-day gross transaction income per eligible historical unit, divided by residual unit WAC at $t_1$ | [Yield on Cost](yield-on-cost.md) |
 | Timing Effect | $\text{MWRR}_{\text{cum}} - \text{TWRR}_{\text{cum}}$ | [Timing Effect](timing-effect.md) |
 
 ---
@@ -238,6 +239,7 @@ Computed **after** daily states, as a separate pass:
 - 💼 [NAV](nav.md) — snapshot valuation
 - 🧭 [Price Resolution](price-resolution.md) — unified valuation resolver
 - 📈 [Net Annualized Return](net-annualized-return.md) — holdings, period, and FIFO CAGR definitions
+- 💸 [Yield on Cost](yield-on-cost.md) — trailing gross recorded income relative to residual unit WAC
 - 📖 [Book Value](book-value.md) — cost basis aggregate
 - 📊 [Period P&L](period-pnl.md) — windowed gain/loss with contribution
 - 💸 [Deposited Capital](deposited-capital.md) — 3-pool details and worked examples

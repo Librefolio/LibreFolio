@@ -55,6 +55,8 @@ from backend.app.services.transaction_service import (
 from backend.app.utils.datetime_utils import today_date, utcnow
 from backend.app.utils.financial.valuation_utils import compute_holding_value
 
+BROKER_NAME_RECOVERY = "To resolve this, rename the existing broker or choose a different name for the broker you are adding."
+
 
 class BrokerService:
     """
@@ -116,6 +118,7 @@ class BrokerService:
                         error_msg = f"Broker '{item.name}' already exists (owned by '{owner_name}')"
                     else:
                         error_msg = f"Broker with name '{item.name}' already exists"
+                    error_msg = f"{error_msg}. {BROKER_NAME_RECOVERY}"
 
                     results.append(
                         BRCreateResult(

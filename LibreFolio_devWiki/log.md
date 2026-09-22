@@ -4,6 +4,24 @@
 > Format: `## [YYYY-MM-DD] {operation} | {title}`
 > Parse: `grep "^## \[" log.md | tail -10`
 
+## [2026-09-10] file | SQLite savepoint without an outer write transaction commits on release
+Recorded the deferred-BEGIN trap found by the asset deletion commit-failure
+regression and the no-op-write fix that restores real outer rollback semantics.
+Filed: [[problems/sqlite-savepoint-without-write-begins-as-transaction]].
+
+## [2026-09-09] file | Browser GHCR image probe could not complete the anonymous Bearer flow
+Filed the integrated update-check lesson: stable release metadata and image
+pullability are separate probes; GHCR's anonymous challenge is completed by a
+fixed-target authenticated same-origin endpoint with strict trust validation,
+explicit pending/error mapping, and a fail-closed frontend.
+Filed: [[problems/ghcr-browser-cors-auth-flow]].
+Updated: [[concepts/ci-release-pipeline]].
+Graph updated with a scoped incremental pass over those two pages: +28 nodes,
++35 edges, 3 hyperedges total, and 169 recomputed communities. The manifest
+was stamped only for the two target pages; unrelated dirty corpus files were
+not extracted. Source-path validation remained at the same 43 missing paths /
+65 occurrences present before this filing, with no new failure from this work.
+
 ## [2026-09-02] file | MWRR pole when the period starts on a data-less day
 Filed the beta-reported MWRR cumulative pole (+9.94% on a −1.5% period): deposit on the first NAV day double-counted when the start date had no data. Fixed in the period re-basing (flows embedded in the first snapshot are no longer re-added).
 Filed: [[problems/mwrr-pole-dataless-period-start]].
@@ -2061,3 +2079,44 @@ mid-typing (`12,` → `12`); fix = confronto numerico normalizzato. Include la t
 Filed: [[problems/compactcashcell-decimal-separator-feedback-loop]].
 
 2026-09-03 — P1 audit wave executed (all 18 tasks): C901 gate@10 (199 sites triaged: 173 flat noqa, 26 TODO-refactor), TRY400 55/55, dead code backend+frontend, i18n -25 keys, currency-graph dead machinery removed (user hypothesis confirmed), response_model ×6 + TS discriminator fix (enum extra + post-processor list), spawn-worker coverage via sitecustomize. Filed: [[problems/sitecustomize-shadows-homebrew-python]] (PYTHONPATH sitecustomize shadowing Homebrew's → pipenv broken; chain-exec fix). WS-H migration proof: published 1.0.1 image → current image on same volume, both data migrations verified correct.
+
+## [2026-09-09] update | Group E import and bulk UX reconciliation
+Reconciled the broker-scoped upload decision and import knowledge against the integrated
+code after Group E. Corrected the multipart upload route, single-broker-per-file Generic
+CSV boundary, positive high fake IDs, explicit asset resolution, full inspector PATCH
+semantics, final duplicate recheck, guarded bulk handoff, and E7/E8 stable-row diagnostics
+with display-only chronological sorting.
+Updated: [[decisions/brim-broker-scoped]], [[decisions/brim-fake-asset-id]],
+[[decisions/brim-parser-only]], [[entities/import-wizard-modal]],
+[[workflows/brim-import-flow]], [[features/F-012]], [[features/F-049]],
+[[features/F-083]], [[decisions/import-wizard-v5-paradigm]], and
+[[features/F-011]], [[features/F-013]], [[concepts/import-todo-signals]],
+[[domains/transactions]], and [[features/registry]].
+
+## [2026-09-05] file | Asset Global laboratory — the no-money rule and three verified traps
+
+Mandate F of the Risk Analysis replan rewrote the Asset Global correlation surface.
+`wiki-search` found **zero** prior pages on Asset Global, correlation or the heatmap,
+so the session's findings had no home to be added to.
+
+Filed the governing invariant — no position, exposure or portfolio impact in money on
+a page whose subject has no weights — together with the reason its obvious test is
+worthless: the euro there is *latent, not present*, so "assert no `€` on screen" passes
+because the backend sends no numbers and would keep passing with every guard deleted.
+The guard is a net that stubs money **in**.
+
+Also filed three traps verified against code, not inherited from the plan: `front check`
+is blind to `e2e/**` and born red without `api sync`; the generated client's TS type for
+`RiskMatrixCell.value` contradicts its own Zod validator; and the ASSET_SET scope has no
+primary series, which cancelled a planned KPI-column deliverable rather than faking it.
+
+Filed: [[decisions/asset-global-page-shows-no-money]],
+[[problems/front-check-does-not-check-what-you-think]],
+[[problems/generated-client-widens-nullable-scalar]],
+[[problems/asset-set-scope-has-no-primary-series]].
+
+## [2026-09-18] file | Risk request ordering and test-id grep false negatives
+Mandate F's E2E round produced two failures whose causes were both *the observer*, not the code: a
+correlation stub indexed by chip order while `riskRequest.ts` canonicalises `asset_ids` ascending, and a
+`grep -c` on a composed test id reported a selector deleted when the primitive still emits it.
+Filed: [[problems/risk-request-sorts-asset-ids]], [[problems/testid-grep-false-negative]].

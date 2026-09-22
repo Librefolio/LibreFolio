@@ -23,9 +23,14 @@
     import SchedulerConfigModal from '$lib/components/settings/SchedulerConfigModal.svelte';
     import SchedulerLogModal from '$lib/components/settings/SchedulerLogModal.svelte';
     import CachePanel from '$lib/components/settings/CachePanel.svelte';
+    import {ConfirmModal} from '$lib/components/table';
 
     // Props
-    export let canEdit: boolean = false;
+    interface Props {
+        canEdit?: boolean;
+    }
+
+    let {canEdit = false}: Props = $props();
 
     // Default values for global settings
     const SETTING_DEFAULTS: Record<string, string> = {
@@ -65,19 +70,20 @@
     // Placeholder settings: rendered read-only with a "Coming soon" badge until the feature lands
     const PLACEHOLDER_KEYS = new Set(['require_email_verification']);
 
-    let settings: GlobalSetting[] = [];
-    let editedValues: Record<string, string> = {};
-    let isLocked = true;
-    let isLoading = true;
-    let isSaving = false;
-    let error: string | null = null;
-    let selectedCategory: string = 'all';
+    let settings: GlobalSetting[] = $state([]);
+    let editedValues: Record<string, string> = $state({});
+    let isLocked = $state(true);
+    let isLoading = $state(true);
+    let isSaving = $state(false);
+    let error: string | null = $state(null);
+    let selectedCategory: string = $state('all');
+    let showDiscardConfirm = $state(false);
 
     // Scheduler UI state
-    let showConfigModal = false;
-    let showLogModal = false;
-    let schedulerState: any = null;
-    let serverTz = '';
+    let showConfigModal = $state(false);
+    let showLogModal = $state(false);
+    let schedulerState: any = $state(null);
+    let serverTz = $state('');
 
     // Language options for dropdown
     const languageOptions: SelectOption[] = LANGUAGE_OPTIONS.map((l) => ({
@@ -301,11 +307,11 @@
         return localized !== key ? localized : id.replace(/\b\w/g, (l) => l.toUpperCase());
     }
 
-    // The store subscription is what makes the labels re-render on language change:
-    // without referencing $currentLanguage, Svelte has no reason to re-evaluate the
-    // getCategoryLabel(...) calls in the template below (they're plain function calls).
-    $: ($currentLanguage, (categoryLabels = Object.fromEntries(['all', ...visibleCategories.map((c) => c.id)].map((id) => [id, getCategoryLabel(id)]))));
-    let categoryLabels: Record<string, string> = {};
+    // Keep the explicit locale dependency alongside the translator-store reads.
+    let categoryLabels: Record<string, string> = $derived.by(() => {
+        $currentLanguage;
+        return Object.fromEntries(['all', ...visibleCategories.map((c) => c.id)].map((id) => [id, getCategoryLabel(id)]));
+    });
 
     function getSettingUnit(key: string): string {
         const localizedKey = `settings.globalSettingUnits.${key}`;
@@ -332,36 +338,42 @@
     }
 
     // Reactive: compute changed keys based on editedValues
-    $: changedKeys = settings.filter((s) => s.value !== editedValues[s.key]).map((s) => s.key);
+    let changedKeys = $derived(settings.filter((s) => s.value !== editedValues[s.key]).map((s) => s.key));
 
     // Reactive: check if any setting has changes
-    $: hasAnyChanges = changedKeys.length > 0;
+    let hasAnyChanges = $derived(changedKeys.length > 0);
 
     // Reactive: compute non-default keys
-    $: nonDefaultKeys = Object.keys(editedValues).filter((key) => SETTING_DEFAULTS[key] !== undefined && editedValues[key] !== SETTING_DEFAULTS[key]);
+    let nonDefaultKeys = $derived(Object.keys(editedValues).filter((key) => SETTING_DEFAULTS[key] !== undefined && editedValues[key] !== SETTING_DEFAULTS[key]));
 
     // Reactive: check if any setting differs from default
-    $: hasAnyNonDefault = nonDefaultKeys.length > 0;
+    let hasAnyNonDefault = $derived(nonDefaultKeys.length > 0);
 
     // Toggle lock with confirmation if there are pending changes
     function toggleLock() {
         if (!isLocked) {
             // Trying to lock - check for pending changes
             if (hasAnyChanges) {
-                const confirmed = confirm($_('settings.discardChangesConfirm'));
-                if (!confirmed) return;
+                showDiscardConfirm = true;
+                return;
             }
             undoAll();
         }
         isLocked = !isLocked;
     }
 
+    function discardAndLock() {
+        undoAll();
+        isLocked = true;
+        showDiscardConfirm = false;
+    }
+
     // Reactive: show Other only when server sent unclaimed, visible settings.
-    $: hasUnclaimedSettings = settings.some((s) => isUnclaimedSetting(s.key));
-    $: visibleCategories = hasUnclaimedSettings ? [...baseCategories, otherCategory] : baseCategories;
+    let hasUnclaimedSettings = $derived(settings.some((s) => isUnclaimedSetting(s.key)));
+    let visibleCategories = $derived(hasUnclaimedSettings ? [...baseCategories, otherCategory] : baseCategories);
 
     // Reactive: filter settings based on selected category
-    $: filteredSettings =
+    let filteredSettings = $derived(
         selectedCategory === 'all'
             ? settings.filter((s) => !SCHEDULER_HIDDEN_KEYS.has(s.key))
             : selectedCategory === otherCategory.id
@@ -370,17 +382,18 @@
                     if (SCHEDULER_HIDDEN_KEYS.has(s.key)) return false;
                     const category = baseCategories.find((c) => c.id === selectedCategory);
                     return category ? category.keys.includes(s.key) : false;
-                });
+                }),
+    );
 
     // Mobile dropdown state
-    let showDropdown = false;
-    let dropdownRef: HTMLDivElement | null = null;
+    let showDropdown = $state(false);
+    let dropdownRef: HTMLDivElement | null = $state(null);
 
     // Get selected category label for mobile display
-    $: selectedCategoryLabel = categoryLabels[selectedCategory] ?? selectedCategory;
+    let selectedCategoryLabel = $derived(categoryLabels[selectedCategory] ?? selectedCategory);
 
     // Get selected category icon
-    $: selectedCategoryIcon = selectedCategory === 'all' ? null : visibleCategories.find((c) => c.id === selectedCategory)?.icon || null;
+    let selectedCategoryIcon = $derived(selectedCategory === 'all' ? null : visibleCategories.find((c) => c.id === selectedCategory)?.icon || null);
 
     function toggleDropdown() {
         showDropdown = !showDropdown;
@@ -419,6 +432,7 @@
                    focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-all"
             on:click={toggleDropdown}
             type="button"
+            data-testid="global-settings-mobile-category-trigger"
         >
             <span class="flex items-center gap-2">
                 {#if selectedCategoryIcon}
@@ -433,11 +447,13 @@
             <div
                 class="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-gray-200
                         dark:border-slate-600 rounded-lg shadow-lg overflow-hidden z-50"
+                data-testid="global-settings-mobile-category-menu"
             >
                 <!-- All Settings option -->
                 <button
                     type="button"
                     on:click={() => selectCategoryMobile('all')}
+                    data-testid="global-settings-mobile-category-all"
                     class="w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-colors
                            {selectedCategory === 'all' ? 'bg-libre-green/10 text-libre-green font-medium' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700'}"
                 >
@@ -452,6 +468,7 @@
                     <button
                         type="button"
                         on:click={() => selectCategoryMobile(cat.id)}
+                        data-testid="global-settings-mobile-category-{cat.id}"
                         class="w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-colors
                                {selectedCategory === cat.id ? 'bg-libre-green/10 text-libre-green font-medium' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700'}"
                     >
@@ -583,7 +600,7 @@
                         </div>
                     {:else if setting.value_type === 'int' || setting.value_type === 'float'}
                         <!-- Numeric input (self-contained component) -->
-                        <div class="bg-gray-50 dark:bg-slate-800 rounded-lg px-4">
+                        <div class="bg-gray-50 dark:bg-slate-800 rounded-lg px-4" data-testid="global-setting-{setting.key}">
                             <SettingNumber
                                 value={editedValues[setting.key]}
                                 label={getSettingLabel(setting.key)}
@@ -606,7 +623,7 @@
                         </div>
                     {:else}
                         <!-- Language / Currency / Theme use the shared wrappers (same controls as PreferencesTab); any other string setting keeps the generic text row -->
-                        <div class="bg-gray-50 dark:bg-slate-800 rounded-lg p-4">
+                        <div class="bg-gray-50 dark:bg-slate-800 rounded-lg p-4" data-testid="global-setting-{setting.key}">
                             {#if setting.key === 'default_language'}
                                 <SettingSelect
                                     value={editedValues[setting.key]}
@@ -804,3 +821,15 @@
 />
 
 <SchedulerLogModal bind:open={showLogModal} />
+
+<ConfirmModal
+    open={showDiscardConfirm}
+    title={$_('common.discardChanges')}
+    message={$_('settings.discardChangesConfirm')}
+    confirmText={$_('common.discard')}
+    cancelText={$_('common.cancel')}
+    warning
+    onConfirm={discardAndLock}
+    onCancel={() => (showDiscardConfirm = false)}
+    testId="global-settings-discard-confirm"
+/>

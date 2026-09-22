@@ -137,11 +137,24 @@
       "CRYPTO": "Crypto",
       "FUND": "Fund",
       "CROWDFUND": "Crowdfund",
-      "HOLD": "Hold",
+      "HOLD": "Held asset",
+      "COMMODITY": "Commodity",
+      "REAL_ESTATE": "Real estate",
       "OTHER": "Other",
       "INDEX": "Index",
+      "ETF_STOCK": "Equity ETF",
+      "ETF_BOND": "Bond ETF",
+      "ETF_COMMODITY": "Commodity ETF",
+      "ETF_REAL_ESTATE": "Real estate ETF",
+      "ETF_CRYPTO": "Crypto ETF",
+      "ETF_MONETARY": "Money market ETF",
       "LIQUIDITY": "Liquidity"
     },
+    "typeSections": {
+      "ETF": "ETF"
+    },
+    "benchmarkSection": "Benchmarks",
+    "otherAssetsSection": "Other assets",
     "modal": {
       "title": "Add Asset",
       "titleEdit": "Edit Asset",
@@ -186,8 +199,13 @@
       "quoteBaseTooltip": "Specifies how many shares or units the market price refers to. For ETFs or stocks it is typically 1; bonds are usually quoted on a base of 100.",
       "bondQuoteBaseHint": "Bonds are usually quoted per 100 nominal (e.g. BTP): check this value — it's typically 100.",
       "activeTooltip": "If active, the asset will be updated automatically by the scheduler and remain visible in selectors. Disable it to hide the asset when you no longer own it or do not want to keep downloading prices.",
+      "benchmark": "Benchmark",
+      "benchmarkTooltip": "Mark this asset as available as a comparison benchmark. Benchmarks are offered first in the risk analysis selectors; it changes nothing about how the asset is priced or counted in the portfolio.",
       "quoteBaseMin": "Must be at least 1",
-      "quoteBaseInteger": "Whole numbers only"
+      "quoteBaseInteger": "Whole numbers only",
+      "currencyHelp": "Currency used to store this asset's prices.",
+      "currencyHelpLabel": "About the asset currency",
+      "nameRequired": "Enter an asset name to continue."
     },
     "provider": {
       "assignment": "Provider Assignment",
@@ -700,14 +718,20 @@
       "fromDbHint": "This security is already in the archive: the name is the stored one. Use the pencil above to change it.",
       "linkAll": "{reason} · all {n} extractions",
       "linkSome": "{reason} · {members}",
-      "linkScore": "{score}% similarity"
+      "linkScore": "{score}% similarity",
+      "confirmAll": "Confirm all ({count})"
     },
     "assetPicker": {
       "sectionImport": "In this import",
       "sectionArchive": "In the archive",
       "create": "Create a new asset",
       "createNamed": "Create “{name}”"
-    }
+    },
+    "manualAssets": {
+      "title": "Assets to create manually",
+      "body": "Link an existing asset or create it manually. Future imports will recognize its saved identifier when the match is unique."
+    },
+    "selectionChangedReview": "The final duplicate check changed the selection. Review it before importing."
   },
   "brokers": {
     "title": "Brokers",
@@ -1018,7 +1042,14 @@
     "deleteBlockedMessage": "Cannot delete: this broker has {count} transaction(s).",
     "forceCascadeDelete": "Delete broker and transactions",
     "goToTransactions": "Go to transactions",
-    "deleteFailed": "Could not delete broker"
+    "deleteFailed": "Could not delete broker",
+    "duplicateNameRecovery": "To resolve this, rename the existing broker or choose a different name for the broker you are adding.",
+    "duplicateNameOwn": "You already have a broker named \"{name}\".",
+    "duplicateNameOwned": "Broker \"{name}\" already exists (owned by \"{owner}\").",
+    "duplicateNameExists": "A broker named \"{name}\" already exists.",
+    "deleted": "Broker \"{name}\" deleted.",
+    "deletedWithTransactions": "Broker \"{name}\" and {count} transactions deleted.",
+    "created": "Broker \"{name}\" created."
   },
   "chart": {
     "tooltip": {
@@ -1154,6 +1185,13 @@
       "partialResult": "This signal is only partially available with the current data.",
       "unavailable": "This signal cannot be calculated with the available data.",
       "partialContiguousSegment": "Signal calculated on the complete contiguous segment {start}–{end}. {excluded} loaded points were excluded because required dates or fields were incomplete. Complete input: {available}/{requested} ({coverage}%, including warm-up). Longest missing streak: {consecutive} points."
+    },
+    "axes": {
+      "exchangeRate": "Exchange-rate axis ({pair})",
+      "percentage": "Percentage axis",
+      "price": "Price axis ({currency})",
+      "signal": "{name} axis",
+      "volume": "Volume axis"
     }
   },
   "common": {
@@ -1416,7 +1454,38 @@
     "annualizedReturn": "Annualized",
     "annualizedReturnTooltip": "Net annualized return (CAGR) of all still-open lots of this position, from the first transaction to today — including income minus fees; valued at cost when no market price. For comparison across positions held for different durations.",
     "annualizedReturnPeriodTooltip": "Net annualized return (CAGR) over the position's holding window within the selected period, for comparison across periods of different durations.",
-    "netWorthTooltip": "Securities at market value + cash (+ value in transit). Includes liquidity — not comparable to the securities-only figure in a bank statement."
+    "netWorthTooltip": "Securities at market value + cash (+ value in transit). Includes liquidity — not comparable to the securities-only figure in a bank statement.",
+    "yieldOnCost": "YOC",
+    "yieldOnCostDisplayName": "Yield on Cost (YOC)",
+    "yieldOnCostTooltip": "Compares gross dividends and interest recorded over the last year with the average purchase price (WAC).",
+    "yieldOnCostUnavailable": "Yield on Cost unavailable",
+    "yieldOnCostGrossPerUnit": "Gross income per unit",
+    "yieldOnCostFxPair": "Conversion",
+    "yieldOnCostIssueDate": "Payment date",
+    "yieldOnCostFirstTransaction": "First transaction",
+    "yieldOnCostNoIncome": "No dividends or interest in the last year.",
+    "yieldOnCostReasons": {
+      "insufficientHistory": "History at this broker is shorter than one year.",
+      "incomeWithoutEligibleQuantity": "A recorded payment has no quantity held on the previous day.",
+      "replayInconsistent": "Purchase, sale, or transfer history cannot be reconstructed correctly.",
+      "invalidSplit": "A linked split is inconsistent with the recorded quantities.",
+      "missingFx": "The exchange rate required for a payment is unavailable.",
+      "missingWac": "The average purchase price (WAC) is unavailable.",
+      "nonPositiveWac": "The average purchase price (WAC) is zero or negative.",
+      "missingFxDetails": "The {pair} exchange rate required for the calculation is missing on {date}."
+    },
+    "yieldOnCostValue": "Yield on Cost",
+    "yieldOnCostPeriod": "Period",
+    "yieldOnCostFxRateDate": "rate from",
+    "yieldOnCostNoIncomeTitle": "No income recorded",
+    "pnl": "P&L",
+    "pnlSubmodeLine": "Line",
+    "pnlSubmodeCandles": "Candles",
+    "pnlSubmodeIncome": "Income",
+    "pnlCandlesHypothetical": "Synthetic — cross-asset high/low are hypothetical and non-simultaneous, not a real intraday series.",
+    "pnlCandlesHypotheticalShort": "Synthetic — cross-asset high/low are hypothetical and non-simultaneous",
+    "pnlAcqNewCapital": "New capital",
+    "pnlAcqReinvested": "Reinvested"
   },
   "dataQuality": {
     "headerInfoOnly": "Data quality note",
@@ -1525,7 +1594,8 @@
     "today": "Today",
     "resolvingStart": "Finding…",
     "openCalendar": "Open the calendar",
-    "formatHint": "Type the date or pick it from the calendar. Accepted: 2026-08-07, 2026/8/7, 7-8-2026, 7.8.2026 — the year must be written in full."
+    "formatHint": "Type the date or pick it from the calendar. Accepted: 2026-08-07, 2026/8/7, 7-8-2026, 7.8.2026 — the year must be written in full.",
+    "invalidDate": "Enter a valid available date."
   },
   "error": {
     "pageNotFound": "Page Not Found",
@@ -1703,7 +1773,9 @@
     "Utilities": "Utilities",
     "Other": "Other",
     "Unknown": "Unknown",
-    "Liquidity": "Liquidity"
+    "Liquidity": "Liquidity",
+    "CorporateBonds": "Corporate Bonds",
+    "GovernmentBonds": "Government Bonds"
   },
   "settings": {
     "profile": "Profile",
@@ -2005,7 +2077,6 @@
     "form": {
       "titleCreate": "New transaction",
       "titleEdit": "Edit transaction",
-      "titleDuplicate": "Duplicate transaction",
       "titleView": "View transaction",
       "sectionRequired": "Required",
       "sectionOptional": "Optional",
@@ -2057,7 +2128,12 @@
       "suggestLightbulb": "Show suggestion",
       "partnerInaccessible": "Partner on inaccessible broker",
       "eventTooltipAmount": "Amount",
-      "splitHint": "To delete only one side, first use Split to unlink the pair."
+      "splitHint": "To delete only one side, first use Split to unlink the pair.",
+      "workspaceRows": "Workspace rows: {rows}",
+      "dateSortHint": "Date is primary. Pairs stay together, ordered by earliest leg date, then latest leg date and stable row ID.",
+      "balanceGroupOutsideWorkspace": "No contributing rows from this workspace match this group. Check the broker's history.",
+      "workspaceRowHint": "Position in the current sort. a/b are paired sides, not transaction IDs.",
+      "issueRowsHidden": "The affected rows are hidden by the table filters."
     },
     "commit": {
       "serverError": "Save failed — server error"
@@ -2299,7 +2375,11 @@
     "size": "Size",
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out",
-    "previewAutofitHint": "Double-click a column header to fit its width"
+    "previewAutofitHint": "Double-click a column header to fit its width",
+    "uploader": "Uploaded by",
+    "uploaderHint": "User who uploaded the file.",
+    "noUploader": "Uploader not recorded",
+    "uploaderLookupFailed": "Uploader names could not be loaded. Files remain available with user IDs."
   },
   "donationPopup": {
     "title": "LibreFolio grows thanks to users like you!",
@@ -2860,6 +2940,10 @@
         "name": "Risk contribution",
         "description": "Current-composition volatility contributions by asset."
       },
+      "assetRiskReturn": {
+        "name": "Risk and return by asset",
+        "description": "Volatility and expected annualised return of each asset and of the portfolio, on the current composition."
+      },
       "stress": {
         "name": "Stress test",
         "description": "Apply hypothetical shocks or replay a historical period."
@@ -2875,6 +2959,26 @@
       "drawdownSummary": {
         "name": "Drawdown summary",
         "description": "Dated current and maximum peak-relative drawdown episodes with recovery status from the selected scope's canonical returns."
+      },
+      "assetSetKpi": {
+        "name": "Per-asset risk KPIs",
+        "description": "Volatility, deepest fall and risk-adjusted ratios, measured for each selected asset over one shared window."
+      },
+      "assetSetVar": {
+        "name": "Per-asset tail risk",
+        "description": "The loss each selected asset reached in its worst outcomes, estimated from its own history."
+      },
+      "assetSetDrawdown": {
+        "name": "Per-asset drawdowns",
+        "description": "How far each selected asset fell from its peak, how long it took, and whether it has recovered."
+      },
+      "assetSetRiskReturn": {
+        "name": "Per-asset risk and return",
+        "description": "Annualised volatility against expected return, one point per selected asset."
+      },
+      "assetSetComparison": {
+        "name": "Per-asset comparison",
+        "description": "How each selected asset moved relative to the chosen benchmark."
       }
     },
     "params": {
@@ -2924,7 +3028,8 @@
     },
     "returnBasis": {
       "price_only": "Price only",
-      "twrr": "Portfolio TWRR"
+      "twrr": "Portfolio TWRR",
+      "current_composition_backtest": "Backtest of today’s composition"
     },
     "valueStatus": {
       "ok": "Available",
@@ -2943,7 +3048,65 @@
       "assetsTab": "Assets",
       "correlationTab": "Correlation",
       "addAsset": "Add asset to matrix",
-      "maxAssets": "The API limit of 100 assets has been reached."
+      "maxAssets": "The API limit of 100 assets has been reached.",
+      "presetBroker": "Preload the assets of…",
+      "presetNone": "Choose a broker…",
+      "panelTitle": "Relationships and scenarios",
+      "selectedCount": "{selected} selected of {total}",
+      "nearIdentical": "near-identical",
+      "bulk": {
+        "selectAll": "Select all",
+        "selectNone": "Deselect all",
+        "invert": "Invert",
+        "mine": "My assets"
+      },
+      "filters": {
+        "type": "Type",
+        "currency": "Currency",
+        "clear": "Clear filters"
+      },
+      "band": {
+        "high": "they move together",
+        "moderate": "they move together in part",
+        "low": "they move independently",
+        "inverse": "they move in opposite directions"
+      },
+      "ordering": {
+        "label": "Matrix order",
+        "similarity": "By similarity",
+        "original": "By name"
+      },
+      "pairs": {
+        "correlatedTitle": "The most alike",
+        "correlatedHint": "Pairs that move together: holding both adds little.",
+        "offsettingTitle": "The ones that offset",
+        "offsettingHint": "Pairs that move in opposite directions: one cushions the other.",
+        "noneCorrelated": "No pair moves clearly together.",
+        "noneOffsetting": "No pair offsets another: nothing here cushions anything else."
+      },
+      "levels": {
+        "asset": "Asset",
+        "blankNote": "An em-dash means the measurement could not be made for that asset over this window — it does not mean zero.",
+        "l1": {
+          "title": "How much did each of these hurt?",
+          "description": "The same scale of harm, asked of every selected asset. Percentages only: a set of assets has no weights, so there is no amount to put beside them.",
+          "lastedDays": "lasted {{days}} d",
+          "columns": {
+            "badDay": "Bad day",
+            "badMonth": "Bad month",
+            "worstFall": "Worst fall",
+            "currentFall": "Below peak now",
+            "toPeak": "Rise to peak"
+          }
+        },
+        "l3": {
+          "title": "What did each of these pay for its risk?",
+          "description": "Risk against reward, one point per asset. No line is drawn through them: a selection has no whole, so there is nothing to be above or below.",
+          "expectedReturn": "Expected return",
+          "correlation": "Correlation",
+          "noBenchmark": "Choose a benchmark on the Dashboard to add beta and correlation. A benchmark that is itself in the selection cannot be used as its own yardstick."
+        }
+      }
     },
     "metrics": {
       "volatility": "Volatility",
@@ -2952,7 +3115,7 @@
       "sharpe": "Sharpe",
       "sortino": "Sortino",
       "portfolioVolatility": "Portfolio volatility",
-      "cashWeight": "Cash weight",
+      "cashWeight": "Cash and uncovered",
       "var": "Value at Risk",
       "cvar": "Conditional VaR",
       "activeReturn": "Active return",
@@ -3012,7 +3175,35 @@
       "terminalDistribution": "Terminal distribution",
       "p05": "Terminal P5",
       "p50": "Terminal P50",
-      "p95": "Terminal P95"
+      "p95": "Terminal P95",
+      "mode": {
+        "label": "Simulation mode",
+        "recommended": "Recommended",
+        "advanced": "Advanced",
+        "block_bootstrap": {
+          "label": "Reshuffled history",
+          "hypothesis": "Your own returns, reordered in blocks. No assumption is added."
+        },
+        "calm": {
+          "label": "Calm market",
+          "hypothesis": "Assumption: your real swings, reduced by 30%. Correlations and direction stay those of your history."
+        },
+        "prolonged_crisis": {
+          "label": "Prolonged crisis",
+          "hypothesis": "Assumption: swings ×2.5 and a −20% annual return for 14 months. Correlations stay those of your history."
+        },
+        "shock_recovery": {
+          "label": "Shock and recovery",
+          "hypothesis": "Assumption: a 35% drop applied on top of your history over 2 months, then your real history resumes."
+        },
+        "gbm": {
+          "label": "Normal curve (GBM)",
+          "hypothesis": "Classic model: it assumes regular swings and underestimates the tails."
+        }
+      },
+      "regimeTruncated": "This assumption lasts {declared} days; your horizon covers only {applied}.",
+      "driftUncertainty": "The drift comes from {count} observations: that alone puts this median between {low} and {high}.",
+      "driftUncertaintyWide": "The drift comes from just {count} observations: that alone puts this median between {low} and {high} — wider than the band above."
     },
     "errors": {
       "analytic_not_found": "Analytic not available.",
@@ -3022,7 +3213,13 @@
       "insufficient_history": "Insufficient history for this calculation.",
       "undefined_metric": "The metric is undefined for these data.",
       "data_unavailable": "Required source data are unavailable.",
-      "execution_failed": "The backend calculation failed."
+      "execution_failed": "The backend calculation failed.",
+      "invalid_covariance": "The relationships between these assets could not be computed.",
+      "resource_limit": "This calculation is too large to run.",
+      "worker_busy": "The calculation service is busy. Try again shortly.",
+      "execution_timeout": "The calculation took too long and was stopped.",
+      "optimization_infeasible": "No allocation satisfies the requested constraints.",
+      "unknown": "This measurement did not return a result."
     },
     "warnings": {
       "sharpe_undefined": "Sharpe is undefined because volatility is zero.",
@@ -3072,7 +3269,164 @@
     },
     "betaBanner": {
       "title": "Risk Analysis is in beta.",
-      "description": "Calculations, results, and the interface may change before the stable release."
+      "description": "Calculations, results, and the interface may change before the stable release.",
+      "simulation": {
+        "title": "Simulation is still in beta.",
+        "description": "Its outcome depends heavily on how much history is requested relative to the horizon: a short window with a long horizon can produce implausible figures. Every other level of Risk Analysis has left beta."
+      }
+    },
+    "levels": {
+      "l1": {
+        "title": "How much can it hurt?",
+        "rows": {
+          "day": "A bad day (worst 5%)",
+          "month": "A bad month (worst 5%)",
+          "worst": "The worst fall (actually lived through)"
+        },
+        "technical": {
+          "day": "CVaR · 1 day",
+          "month": "CVaR · 1 month",
+          "worst": "Maximum drawdown",
+          "current": "Current drawdown"
+        },
+        "durationDays": "lasted {days} days",
+        "requiredRecovery": "recovery needed {percent}",
+        "currentDrawdown": "Currently down from the peak",
+        "sincePeak": "since {date}",
+        "tails": {
+          "worstRealization": "Worst day actually seen",
+          "worstRealizationOn": "on {date}",
+          "drawdownAtRisk": "Drawdown at risk ({confidence})",
+          "conditionalDrawdownAtRisk": "Average beyond that threshold",
+          "ulcerIndex": "Ulcer index {value}",
+          "ulcerIndexHint": "root-mean-square depth below the peak: lower is calmer"
+        },
+        "underwater": {
+          "title": "Time spent below the peak",
+          "empty": "No underwater curve available for this period."
+        },
+        "histogram": {
+          "title": "Distribution of daily returns",
+          "observations": "{count} days observed",
+          "cut": "VaR threshold at {value}",
+          "noCut": "No threshold published for this window.",
+          "empty": "No return distribution available for this period."
+        }
+      },
+      "l2": {
+        "title": "Am I as diversified as I think?",
+        "weight": "weight",
+        "contribution": "risk contribution",
+        "lead": "{name} weighs {weight} but produces {contribution} of the risk",
+        "showAll": "Show all",
+        "showLess": "Show less",
+        "effectiveAssets": {
+          "label": "How many independent bets do I really hold?",
+          "aboveCount": "Above the {positions} measured positions: the excess is cash, and says nothing about the weights",
+          "belowCount": "Below the {positions} measured positions: the weights are lopsided, and a few carry the portfolio",
+          "evenCount": "Exactly the {positions} measured positions: even weights and no cash"
+        },
+        "diversificationRatio": {
+          "label": "Did spreading the money achieve anything?",
+          "caption": "1.00 means the holdings move as one; higher means they offset each other"
+        },
+        "uncovered": {
+          "label": "How much of me is not measured here?",
+          "caption": "Cash, plus every holding without a usable price series",
+          "residual": "The rows below describe the rest of the portfolio; {share} is not among them"
+        },
+        "rowsCaption": "The bar shows the gap between weight and risk: right means more risk than weight, left means less. Weights are shares of the whole portfolio.",
+        "correlation": {
+          "title": "Which of these are the same bet?",
+          "basis": "Measured over the historical window; the weights above are today's.",
+          "noRedundancy": "No pair in this set reaches the redundancy threshold."
+        }
+      },
+      "l3": {
+        "title": "Am I being paid for this risk?",
+        "sortino": "Sortino",
+        "sharpe": "Sharpe",
+        "volatility": "Volatility",
+        "beta": "Beta",
+        "sortinoHelp": "Return per unit of downside risk. Unlike Sharpe, it does not penalise violent rises.",
+        "sharpeHelp": "Return per unit of total volatility, so it penalises rises as well as falls.",
+        "betaHelp": "How much this moves when the benchmark moves.",
+        "benchmark": "Compared with",
+        "perimeter": {
+          "current_composition": "on the current composition",
+          "historical": "on the real history"
+        },
+        "scatter": {
+          "title": "Risk against return, asset by asset",
+          "portfolio": "Portfolio",
+          "axisVolatility": "Annualised volatility",
+          "axisReturn": "Expected annualised return",
+          "line": "Risk-return line",
+          "note": "Above the line means better paid for the risk taken. The dots show the mean-variance expected return, the quantity in which the line's slope is the Sharpe ratio: on a very volatile asset the return actually lived through is lower, because volatility erodes compounding.",
+          "cash": "Cash ({share} of net worth) is not a dot: under the model it returns exactly zero, and drawing it would turn that into a measurement."
+        }
+      },
+      "l4": {
+        "title": "What if…?",
+        "replay": "Historical replay",
+        "replayHint": "Real returns from a real period.",
+        "shock": "Hypothetical shock",
+        "shockHint": "Deterministic, on an assumption you state.",
+        "simulation": "Simulation",
+        "simulationHint": "A probabilistic model, on the model’s assumptions.",
+        "modelWarning": "This is the only rung that is a model rather than a measurement. Read it as a range of possibilities, not a forecast.",
+        "provenance": {
+          "title": "What this simulation assumed",
+          "hint": "Read from the result itself, not assumed by this screen.",
+          "labels": {
+            "process": "Stochastic process",
+            "sampling": "Sampling strategy",
+            "driftEstimator": "Drift estimator",
+            "covarianceEstimator": "Covariance estimator",
+            "aggregation": "Composition policy",
+            "regime": "Regime",
+            "blockLength": "Block length",
+            "seed": "Seed"
+          },
+          "values": {
+            "block_bootstrap": "Moving-block bootstrap",
+            "gbm": "Geometric Brownian motion",
+            "mc": "Monte Carlo",
+            "qmc": "Quasi-Monte Carlo",
+            "historical_log_mle": "Historical log-return MLE",
+            "empirical_resampled": "Empirical, from resampled returns",
+            "sample_log_returns": "Sample log-return covariance",
+            "not_estimated_joint_resampling": "Not estimated: joint resampling",
+            "current_buy_and_hold": "Current buy and hold",
+            "calm": "Calm market",
+            "prolonged_crisis": "Prolonged crisis",
+            "shock_recovery": "Shock and recovery"
+          },
+          "days": "{count} days",
+          "regimeValue": "{regime}, declared over {days} days",
+          "includes": "Included in the cone",
+          "excludes": "Left out of the cone",
+          "effects": {
+            "costs": "costs",
+            "cashFlows": "cash flows",
+            "inflation": "inflation",
+            "rebalancing": "rebalancing"
+          },
+          "truncation": "Declared over {declared} days, applied over {applied}: the cone answers the shorter question."
+        },
+        "replayExcluded": "Left out:",
+        "replayNeedsChoice": "{name} has no usable history in this period. Leave it out, or give it a stand-in — a stand-in is an opinion about what it would have done.",
+        "replayProxyUnusable": "The stand-in chosen for {name} has no usable history either. Pick a different one.",
+        "replayExcludeAndRetry": "Leave it out and run again",
+        "replayTotal": "This composition would have ended the period at {percent} {amount}",
+        "replayAudit": "Stand-ins: {proxies} · Left out: {excluded} ({weight} of the scope, carried at zero return)",
+        "replayAuditOmitted": "Stand-ins: {proxies} · Left out: {excluded} (omitted from the replay: the figures speak for the rest)",
+        "shockShowDetail": "Show the shock per bucket",
+        "shockHideDetail": "Hide the shock per bucket",
+        "shockTotal": "This scenario would move the scope by {percent} {amount}",
+        "shockCoverage": "Only {percent} of the scope could be classified, so the total speaks for that part alone."
+      },
+      "backtestNotice": "With a slice active, these figures are rebuilt from today’s composition: they say how it *would* have gone, not how it actually went."
     }
   },
   "updateCheck": {
@@ -3091,13 +3445,19 @@
     "expandAll": "Expand all",
     "collapseAll": "Collapse all",
     "checkNow": "Check for updates",
-    "upToDate": "You are running the latest version.",
+    "upToDate": "You're up to date with the latest version!",
     "askAdmin": "A newer version exists. Ask an administrator to update:",
     "searchResults": "Matches:",
     "copyEmail": "Copy email",
     "copied": "Copied!",
     "askAdminTitle": "Update available — contact an administrator",
-    "emailCopied": "Email copied to clipboard"
+    "emailCopied": "Email copied to clipboard",
+    "detectedRemoteVersion": "Version detected online: {version}",
+    "checkFailed": "Unable to complete the update check. Try again.",
+    "noStableRelease": "No stable release was found on GitHub.",
+    "imagePending": "A newer stable release was detected, but its Docker image is not available yet.",
+    "imageCheckFailed": "A newer stable release was detected, but its Docker image could not be verified. Try again.",
+    "adminLookupFailed": "Update available, but the administrator list could not be loaded."
   },
   "providerErrors": {
     "NO_DATA": "No data available for this instrument on the provider.",
@@ -3110,5 +3470,938 @@
     "PARSE_ERROR": "The provider response could not be parsed.",
     "SCRAPE_ERROR": "The provider page could not be read.",
     "UNSUPPORTED_PAGE": "The provider found this instrument but its market page cannot be read yet. Please open an issue on GitHub (Librefolio/LibreFolio) reporting this ISIN so support can be added."
+  },
+  "support": {
+    "title": "Support LibreFolio",
+    "description": "Buy a coffee or help others discover the project.",
+    "shareDivider": "Or share",
+    "shareOn": "Share on",
+    "share": {
+      "titleLabel": "Suggested title",
+      "x": {
+        "message": "Hey! I'm using LibreFolio to track my investments and I'm loving it. Give it a try!\n#LibreFolio #OpenSource #SelfHosted #Investing #Privacy",
+        "hint": "The project link is added to the copy and the post. X opens in a new tab."
+      },
+      "reddit": {
+        "title": "Trying LibreFolio to track my portfolio on my own server",
+        "message": "I've been looking for a simpler way to follow my investments without handing all my portfolio data to an external service. Lately I've been trying LibreFolio, and I'm enjoying having everything in one place.\n\nIt's an open-source portfolio tracker you can install on your own server to organize your holdings and explore their performance while keeping your data under your control. If that sounds useful, take a look!",
+        "hint": "We open a text post with a separate title and body. If Reddit leaves the body empty, paste the text already copied."
+      },
+      "facebook": {
+        "message": "Lately I've been using LibreFolio to keep an eye on my investments, and I like having everything in one place without giving up control of my data.\n\nIf you're looking for an open-source portfolio tracker you can run on your own server, give it a look!",
+        "hint": "Facebook prepares only the link preview. After opening it, paste the copied text into the post's message field.",
+        "afterCopy": "Text and link copied. Paste the text into Facebook's post message."
+      },
+      "instagram": {
+        "message": "A little more order in my investments, without leaving my data elsewhere. I'm trying LibreFolio: an open-source portfolio tracker you can host on your own server.\n\n#LibreFolio #OpenSource #SelfHosted #Investing #Privacy",
+        "hint": "Instagram cannot prepare a post from this link. After opening it, choose Create (+), select a photo or video, then paste the copied caption.",
+        "afterCopy": "Caption and link copied. On Instagram: Create (+), choose your photo/video, then paste the caption."
+      },
+      "tiktok": {
+        "message": "My new sidekick for tracking my portfolio: LibreFolio. Open source, on my own server, with my data under my control. If you like tinkering, check it out!\n\n#LibreFolio #OpenSource #SelfHosted #PersonalFinance",
+        "hint": "We open TikTok's upload page; sign in if asked. Select your video, then paste the copied caption. No video or caption is uploaded automatically.",
+        "afterCopy": "Caption and link copied. On TikTok's upload page, select your video and paste the caption."
+      }
+    },
+    "shareMessageLabel": "Suggested message",
+    "clipboardUnavailable": "Could not copy to the clipboard. Allow clipboard access and try again.",
+    "copyAndGo": "Copy and go",
+    "navigationFailed": "Text and link copied, but the social site could not be opened. Allow pop-ups and try again."
+  },
+  "tools": {
+    "title": "Tools",
+    "subtitle": "Independent calculations. No portfolio changes are written.",
+    "status": {
+      "unavailable": "Unavailable",
+      "available": "Available"
+    },
+    "authRequired": "Sign in to use tools.",
+    "documentationUnavailable": "Documentation link unavailable",
+    "catalog": {
+      "emptyTitle": "No tools available",
+      "emptyDescription": "No healthy tools were returned by this catalogue. Reload after a tool is installed or repaired.",
+      "degraded": "Unavailable backend entries: {count}.",
+      "uiUnavailable": "Interfaces unavailable in this build: {count}.",
+      "degradedToast": "Tools loaded with unavailable entries or interfaces. See the catalogue for details.",
+      "diagnosticsHint": "Read-only diagnostics are available in Settings → About → Plugin diagnostics.",
+      "unavailableEntries": "Unavailable backend entries",
+      "unknownTool": "Unidentified tool"
+    },
+    "availability": {
+      "notInstalled": "This tool is not listed in the current backend catalogue.",
+      "backendUnavailable": "This tool is unavailable on the backend. No calculation has been started.",
+      "incompatible": "This tool requires a compatible frontend build. No calculation has been started.",
+      "rendererMissing": "The backend tool is installed, but its interface is not included in this frontend build. No calculation has been started.",
+      "rendererInvalid": "The compiled interface registration is invalid or duplicated. No calculation has been started."
+    },
+    "host": {
+      "loadingInterface": "Loading tool interface…",
+      "reloadTitle": "Reload tool?",
+      "reloadWarning": "Reloading replaces this tool interface and discards its current draft. Continue?"
+    },
+    "errors": {
+      "network": "The tool service could not be reached. Check your connection and retry explicitly.",
+      "timeout": "The tool request timed out. No result has been accepted and nothing was retried automatically.",
+      "requestRejected": "The server rejected the tool request.",
+      "requestInvalid": "The tool request failed local structural validation.",
+      "protocol": "The server response did not match the expected tool contract.",
+      "mismatch": "Tool metadata no longer matches this frontend. Reload explicitly to obtain updated metadata.",
+      "internal": "An unexpected tool interface error occurred.",
+      "componentLoad": "The tool interface could not be loaded.",
+      "componentMount": "The tool interface could not be opened.",
+      "cleanup": "The tool view was removed, but its cleanup reported an error.",
+      "sessionChanged": "The account changed. Previous tool data was cleared.",
+      "stopped": "Waiting stopped. This does not confirm cancellation on the server."
+    },
+    "metrics": {
+      "title": "Backend timings",
+      "description": "Measured by the backend, excluding network time. Phases can overlap; parallel items are not added to obtain the request duration.",
+      "milliseconds": "{value} ms",
+      "serverProcessing": "Request · server processing",
+      "itemTotal": "Item · total",
+      "queueWait": "Queue wait",
+      "startup": "Worker startup",
+      "inputValidation": "Input validation",
+      "compute": "Compute",
+      "outputValidation": "Output validation",
+      "serialization": "Output serialization",
+      "execution": "Worker execution",
+      "cleanup": "Cleanup"
+    },
+    "about": {
+      "readOnly": "Read-only catalogue and diagnostics. No calculations, probes or repairs are run.",
+      "inactive": "Open Plugin diagnostics to load tool metadata.",
+      "interfaceRegistered": "Compatible interface registered in this build."
+    },
+    "diagnostics": {
+      "title": "Tool diagnostics",
+      "scopeDescription": "This snapshot describes one responding API process, not the whole instance. Catalogue and diagnostics are separate reads. Reload to update the snapshot.",
+      "scope": "Snapshot scope",
+      "runtime": "API process identifier",
+      "degraded": "Discovery failures or reduced execution capacity were reported. Other tools may remain available.",
+      "pool": {
+        "title": "Execution pool snapshot",
+        "availability": "Execution pool availability",
+        "active": "Active jobs",
+        "queued": "Queued jobs",
+        "pending": "Pending jobs",
+        "degradedLanes": "Degraded lanes",
+        "completed": "Completed jobs",
+        "failed": "Failed jobs"
+      },
+      "loaded": "Tools loaded in this API process",
+      "noLoaded": "No tools are loaded in this API process.",
+      "failures": "Discovery failures",
+      "noFailures": "No discovery failures were reported in this snapshot.",
+      "notLoaded": "No diagnostic snapshot is loaded. Reload to request one.",
+      "policy": {
+        "title": "Effective platform limits",
+        "description": "Configuration limits, not measured timings or performance guarantees. Tool operations may declare stricter limits. Durations are not added together.",
+        "workers": "Worker lanes",
+        "maxBatchItems": "Maximum items per batch",
+        "maxPendingItems": "Maximum pending jobs",
+        "maxPendingPerPrincipal": "Maximum pending jobs per account",
+        "maxBatchesPerPrincipal": "Maximum concurrent batches per account",
+        "maxJsonDepth": "Maximum JSON depth",
+        "maxRequestBytes": "Maximum request size",
+        "maxParameterBytes": "Maximum parameter size per item",
+        "maxResultBytes": "Maximum result size per item",
+        "maxResponseBytes": "Maximum response size",
+        "envelopeReserveBytes": "Envelope size reserve",
+        "queueTimeout": "Queue timeout",
+        "jobTimeout": "Job hard timeout",
+        "softTimeout": "Job soft timeout",
+        "outputReserve": "Output time reserve",
+        "cleanupTimeout": "Cleanup timeout",
+        "ingressTimeout": "Ingress timeout",
+        "responseReserve": "Response time reserve",
+        "requestTimeout": "Server request timeout",
+        "clientTimeout": "Tool client timeout"
+      },
+      "reason": {
+        "import_failed": "Plugin import failed",
+        "invalid_plugin": "Invalid plugin definition",
+        "invalid_code": "Invalid tool code",
+        "duplicate_code": "Duplicate tool code; claimants quarantined",
+        "invalid_descriptor": "Invalid tool descriptor",
+        "invalid_input_model": "Invalid input model",
+        "invalid_output_model": "Invalid output model",
+        "invalid_schema": "Schema cannot be published",
+        "invalid_operation_policy": "Invalid operation policy"
+      }
+    },
+    "pacAllocator": {
+      "name": "PAC allocator",
+      "description": "Distribute investable liquidity across selected Assets by target percentage.",
+      "scenario": "Scenario",
+      "reportCurrency": "Reporting currency",
+      "asOfDate": "As-of date (optional)",
+      "rows": {
+        "empty": "Add at least one row. The backend will report missing rows until then.",
+        "initialQuantity": "Initial quantity",
+        "price": "Native price",
+        "quoteBasis": "Quote base quantity",
+        "target": "Target (%)",
+        "gridMode": "Purchase grid",
+        "whole": "Whole quantities",
+        "fractional": "Fractional quantities",
+        "quantityStep": "Purchase quantity step",
+        "quoteDate": "Quote date (optional)",
+        "addAsset": "New local asset",
+        "description": "Each row is one asset in one context. Use the dedicated action to preserve instrument identity across contexts.",
+        "identity": "Local instrument identity",
+        "rowNumber": "Row {number}",
+        "sameAsset": "Same asset, another context",
+        "title": "Assets and custody contexts"
+      },
+      "cash": {
+        "existing": "Existing cash",
+        "notSupplied": "Not supplied",
+        "noneExisting": "Explicitly no existing cash",
+        "amount": "Amount",
+        "addCurrency": "Add currency",
+        "contributions": "New contributions",
+        "noneContributions": "Explicitly no new contributions",
+        "existingHint": "Native cash already held, grouped by currency.",
+        "contributionsHint": "New money for this scenario, separate from existing cash.",
+        "enterAmounts": "Enter amounts",
+        "addContribution": "Add contribution",
+        "backToBrokers": "Use Broker reserves",
+        "backendAggregate": "Backend aggregate",
+        "fromBrokers": "From brokers",
+        "fullNativeReserve": "Full native reserve",
+        "loadingBrokerCash": "Loading Broker reserves…",
+        "markNoneContributions": "No new contributions",
+        "markNoneExisting": "No existing cash",
+        "markNotSupplied": "Mark as not supplied",
+        "monetaryStep": "Amount increment",
+        "monetaryStepHint": "Smallest accepted increment for this contribution, for example 0.01 for cents.",
+        "noNativeBalances": "No native reserve",
+        "noOwnerBrokers": "No OWNER Broker is available. Enter cash manually.",
+        "noSelectedBalances": "No selected broker balance.",
+        "refreshingSelection": "Updating selected native reserves…",
+        "selectedReserves": "Selected native reserves",
+        "sourceStale": "Waiting for current broker balances. The previous snapshot will not be submitted."
+      },
+      "rates": {
+        "title": "Valuation exchange rates",
+        "description": "Compare values in the reporting currency. No cash is exchanged, transferred, or merged.",
+        "add": "Add rate",
+        "value": "Rate to reporting currency",
+        "date": "Rate date (optional)",
+        "noCashConversion": "Valuation only: cash is not exchanged, transferred, or merged.",
+        "copySaved": "Copy rate",
+        "copyUnavailable": "No saved {currency} to {reportCurrency} rate is available for {date}.",
+        "enterManually": "Enter manually",
+        "equationHint": "Example: 1 USD = 0.90 EUR means one USD is valued at 0.90 EUR in this report.",
+        "nativeCurrency": "Native currency",
+        "reason": "{currency} facts must be valued in {reportCurrency}.",
+        "reasonAssets": "Asset prices: {assets}",
+        "reasonCash": "Selected existing cash uses this currency.",
+        "reasonContribution": "A new contribution uses this currency.",
+        "titleNumbered": "3. Valuation exchange rates"
+      },
+      "revision": "Draft revision",
+      "noOrders": "Orders, feasibility, and optimization are not included in this pilot.",
+      "stopWaiting": "Stop waiting",
+      "analyzing": "Analyzing revision {revision}…",
+      "analyze": "Analyze PAC allocation",
+      "stale": {
+        "pending": "Request revision {requestRevision} is still running, but the draft is now revision {draftRevision}. Its response will be ignored.",
+        "ignored": "Response for revision {revision} was ignored because the draft or account changed.",
+        "result": "This result belongs to an older draft revision."
+      },
+      "draftPreserved": "Your draft was preserved.",
+      "platformErrorTitle": "Analysis not completed",
+      "platformError": "The backend could not complete this analysis. Your draft was preserved.",
+      "state": {
+        "ready": "Ready · initial state is evaluable",
+        "needsInput": "Needs input",
+        "invalid": "Invalid scenario",
+        "unsupported": "Outside the P1 domain"
+      },
+      "resultMeaning": "This is an initial-state analysis. It does not certify trade feasibility, target attainment, or optimality.",
+      "exactView": "Exact",
+      "formattedView": "Formatted",
+      "totals": {
+        "invested": "Initial invested value",
+        "existingCash": "Existing cash",
+        "contributions": "New contributions",
+        "combinedCash": "Cash plus contributions",
+        "maxGap": "Maximum absolute gap (pp)",
+        "squaredGap": "Squared gap (pp²)"
+      },
+      "result": {
+        "row": "Row",
+        "value": "Reporting value",
+        "weight": "Current weight",
+        "target": "Target",
+        "gap": "Gap (pp)"
+      },
+      "cashPools": "Native cash pools",
+      "issues": "Backend findings",
+      "normalizedInput": "Normalized input and units",
+      "addManualAsset": "New manual asset",
+      "loadingOwnedAssets": "Loading Asset catalog…",
+      "noOwnedAssetsHint": "You can still add a manual Asset.",
+      "custodyContext": "custody context",
+      "custodyContexts": "custody contexts",
+      "missingPrice": "Price missing",
+      "modified": "Modified",
+      "staleLabel": "Outdated",
+      "noAssetMatches": "No Asset candidates match the current filters.",
+      "fullCustody": "Full custody quantity",
+      "personalShare": "personal share",
+      "manual": "Manual",
+      "snapshotAt": "Portfolio snapshot",
+      "priceAt": "price dated",
+      "duplicate": "Duplicate as manual row",
+      "identityAndCustody": "Identity and custody",
+      "instrumentId": "Instrument ID",
+      "selectedContexts": "Selected Asset contexts",
+      "selectedContextsHint": "Imported source facts are read-only. Targets and purchase grids remain editable; manual rows are fully editable.",
+      "emptyRowsHint": "Select an Asset candidate above or add a manual Asset.",
+      "confirmDeselectTitle": "Remove imported Asset contexts?",
+      "confirmDeselectMessage": "Some linked rows were edited. Deselecting the Asset removes every linked imported context listed below. Independent manual copies remain.",
+      "assets": {
+        "hint": "Choose canonical Assets. Current prices are source context only and do not affect the P1 split.",
+        "title": "2. Assets to fund"
+      },
+      "brokerCustody": "Broker custody",
+      "cashPoolsHint": "Native balances remain separate by currency. This report does not exchange, transfer, or merge cash.",
+      "customizedRemovalItems": "Settings that will be lost",
+      "customizedRemovalMessage": "Removing this Asset will discard its target and custom settings.",
+      "customizedRemovalTitle": "Remove customized Asset?",
+      "denominatorHint": "Current weights and gaps use invested Asset value only. Existing cash and new contributions stay separate and do not change these P1 percentages.",
+      "economicShare": "Personal economic share",
+      "economicShareHint": "Informational ownership share. Imported custody quantities remain whole and are never scaled.",
+      "fundsHint": "Copy native OWNER Broker cash or enter exact amounts. New contributions remain separate.",
+      "fundsTitle": "1. Available funds",
+      "gallery": {
+        "empty": "No Asset candidates found",
+        "hint": "Select canonical Assets or add a manual one.",
+        "inactive": "Inactive",
+        "observed": "Observed",
+        "otherUsers": "Other users",
+        "owned": "Owned",
+        "search": "Search Assets or Brokers",
+        "title": "2. Assets",
+        "zeroPosition": "initial quantity 0"
+      },
+      "gridModeHint": "Controls only the quantity increment of future purchases. Existing fractional inventory is never rounded.",
+      "importedSnapshot": "Imported custody snapshot",
+      "initialState": "Initial state",
+      "manualCopy": "Independent manual copy",
+      "nativePrice": "Native price",
+      "newManualAsset": "Manual Asset",
+      "noCurrentCustody": "No current custody",
+      "p1": {
+        "description": "Distributes available liquidity by target percentage. It does not inspect the current portfolio or generate orders.",
+        "title": "PAC Allocator P1"
+      },
+      "pilotNotice": "Manual initial-state analysis only. No portfolio data is read, no orders are proposed, and nothing is saved.",
+      "quantityStepHint": "Minimum quantity increment for new purchases. This is separate from contribution monetary step.",
+      "quoteBasisHint": "Number of Asset units represented by the quoted price.",
+      "readOnlyFacts": "source facts read-only",
+      "results": {
+        "boundary": "These are theoretical money amounts. No price, quantity, Broker route, FX transfer or order has been selected.",
+        "budget": "Investable budget",
+        "contributions": "New contributions",
+        "empty": "Run the analysis to calculate the theoretical monetary allocation.",
+        "existingCash": "Existing cash",
+        "hint": "P1 splits the available liquidity by target percentage. It does not calculate units, orders, feasibility or an optimum.",
+        "idealAllocation": "Theoretical allocation",
+        "title": "4. PAC analysis"
+      },
+      "rowLimitHint": "Maximum {count} contexts. Adding an Asset with multiple custody contexts is always all-or-nothing.",
+      "rowLimitWarning": "Remaining slots: {count}",
+      "selectedContextCount": "Selected contexts: {count}",
+      "target": "Target",
+      "targetEditor": {
+        "hint": "Set how the investable liquidity should be split. These percentages do not describe the current portfolio.",
+        "title": "3. Liquidity distribution"
+      },
+      "units": "units",
+      "valuationSettings": "Valuation settings",
+      "valuationSettingsHint": "Reporting currency values assets, cash, and contributions. The date is the inclusive cutoff for saved facts.",
+      "valuationSettingsInfo": "These settings define one comparison unit and fact cutoff. They do not move cash or execute trades."
+    },
+    "version": "Version",
+    "allocation": {
+      "asset": {
+        "custodyCount": "{count} custody contexts",
+        "futureConstraints": "Future purchase constraints",
+        "futureConstraintsHint": "Recorded for the future solver. P1 does not quantize this theoretical monetary allocation."
+      },
+      "diagnostics": {
+        "invalid": "Correct the scenario",
+        "needsInput": "Complete the scenario",
+        "noIssues": "All required inputs are valid for this P1 analysis.",
+        "ready": "Scenario ready",
+        "technical": "Technical details",
+        "unsupported": "Scenario outside P1 boundaries"
+      },
+      "fundingSummary": {
+        "afterAnalysis": "after analysis",
+        "available": "Available",
+        "contributions": "Contributions",
+        "empty": "No cash or contribution entered.",
+        "existing": "Existing",
+        "hint": "Existing cash and new contributions remain separate facts. Combined totals are shown only after backend analysis.",
+        "title": "Available funds by currency",
+        "updating": "Updating…"
+      },
+      "issues": {
+        "assetsRequired": "Select at least one Asset.",
+        "cashRequired": "Enter cash rows, or keep an explicit empty list.",
+        "contributionStep": "The contribution must be a multiple of its monetary step.",
+        "currencyDomain": "This scenario contains more currencies than the P1 limit of {limit}.",
+        "duplicateCurrency": "{currency} appears more than once where only one row per currency is allowed.",
+        "duplicateInstrument": "This Asset is selected more than once.",
+        "duplicateRow": "Two custody rows have the same technical identity.",
+        "duplicateTarget": "This Asset has more than one target.",
+        "fieldRequired": "Complete this required field.",
+        "generic": "Review this scenario input.",
+        "holdingsRequired": "Select at least one portfolio holding.",
+        "identityRate": "The report currency {currency} must use an identity valuation rate of 1.",
+        "identityRateRedundant": "The report-currency rate is redundant and was treated as 1.",
+        "incompleteDecimal": "Complete the decimal value.",
+        "initialDebt": "Negative existing cash is outside this P1 analysis.",
+        "invalidCurrency": "Choose a valid three-letter currency.",
+        "invalidDate": "Enter a valid date.",
+        "invalidDecimal": "Enter a valid decimal number.",
+        "invalidQuoteBasis": "The quoted unit basis must be a positive whole number.",
+        "inventoryOffGrid": "Existing fractional custody does not match the future purchase step. It was preserved exactly.",
+        "negativeContribution": "A new contribution cannot be negative.",
+        "nonintegerWholeStep": "A whole-unit purchase step must be a whole number.",
+        "nonpositiveFxRate": "The valuation rate must be greater than zero.",
+        "nonpositiveMonetaryStep": "The monetary step must be greater than zero.",
+        "nonpositivePrice": "The current price must be greater than zero.",
+        "nonpositiveQuantityStep": "The purchase quantity step must be greater than zero.",
+        "numericDomain": "A number exceeds the supported exact numeric domain.",
+        "quoteRequired": "Enter the current price and its currency.",
+        "referenceAfterAsOf": "The source date cannot be after the analysis date.",
+        "referenceDateUnspecified": "A reference date was not provided; review data freshness manually.",
+        "shortInventory": "Short positions are outside this P1 analysis.",
+        "targetOutOfRange": "Each target must be between 0% and 100%.",
+        "targetRequired": "Every selected Asset needs a target percentage.",
+        "targetTotal": "Target percentages must total exactly 100%.",
+        "targetsRequired": "Set a target allocation for the selected Assets.",
+        "unselectedTarget": "A target refers to an Asset that is no longer selected.",
+        "unusedValuation": "The valuation rate for {currency} is not used by this scenario.",
+        "valuationRateRequired": "Enter a valuation rate for {currency}."
+      },
+      "path": {
+        "cash": "Existing cash",
+        "contributions": "Contributions",
+        "holdings": "Holdings",
+        "targets": "Targets",
+        "valuationRates": "Valuation rates"
+      },
+      "results": {
+        "stale": "Inputs changed after this result. Run the analysis again before using it."
+      },
+      "target": {
+        "remaining": "Remaining",
+        "selectAssetsFirst": "Select at least one Asset before setting targets.",
+        "total": "Total",
+        "visual": "Distribution"
+      }
+    },
+    "backendVersion": "Backend/API",
+    "contractVersion": "Contract",
+    "implementationVersion": "Implementation",
+    "open": "Open tool",
+    "portfolioRebalancer": {
+      "analyze": "Analyze target gaps",
+      "custodyContext": "Custody context",
+      "customizedRemovalMessage": "Removing this holding will discard its scenario settings.",
+      "customizedRemovalTitle": "Remove customized holding?",
+      "description": "Compare current invested allocation with a final target.",
+      "funding": {
+        "hint": "Cash and contributions are reported separately. P1 does not use them to infer executable trades.",
+        "title": "Optional liquidity context"
+      },
+      "holdings": {
+        "hint": "Select Assets to copy all their custody contexts, or add a manual holding.",
+        "title": "1. Portfolio holdings"
+      },
+      "name": "Portfolio rebalancer",
+      "p1": {
+        "description": "Compares current invested allocation with a final target. It does not recommend or generate trades.",
+        "title": "Portfolio Rebalancer P1"
+      },
+      "results": {
+        "availableCash": "Cash and new contributions (context only)",
+        "boundary": "A positive or negative gap is descriptive, not a buy or sell instruction. No order, Broker route, FX transfer or tax action is generated.",
+        "currentValue": "Current value",
+        "currentWeight": "Current %",
+        "custodyContexts": "Custodies",
+        "empty": "Run the analysis to compare current and target allocation.",
+        "hint": "P1 compares current invested value with the final target. It does not propose trades or prove feasibility.",
+        "investedTotal": "Current invested value",
+        "targetValue": "Target value",
+        "title": "3. Allocation gaps",
+        "valueGap": "Value gap",
+        "zeroInvested": "Current invested value is zero, so current weights and percentage-point gaps are unavailable."
+      },
+      "targetEditor": {
+        "copyCurrent": "Use current distribution",
+        "hint": "Set the desired final allocation of the invested portfolio. Cash remains separate context.",
+        "title": "2. Final target allocation"
+      },
+      "uncustodied": "No custody"
+    },
+    "uiVersion": "UI"
+  },
+  "onboarding": {
+    "welcome": {
+      "title": "Welcome to LibreFolio",
+      "description": "Set up the essentials before you start tracking your portfolio.",
+      "defaultsHint": "Language and currency start from your administrator's defaults. You can change them now or later.",
+      "avatarLabel": "Profile picture",
+      "avatarHint": "Optional. Your initials are used when no image is selected.",
+      "chooseAvatar": "Choose picture",
+      "removeAvatar": "Remove picture",
+      "avatarAlt": "Profile picture preview",
+      "themeHint": "Your current theme preference is kept unchanged.",
+      "skip": "Skip setup permanently",
+      "skipHint": "This will not be shown again automatically. You can replay it from Settings.",
+      "completed": "Setup saved. You can continue to LibreFolio.",
+      "skipped": "Setup skipped. You can replay it later from Settings.",
+      "logout": "Log out"
+    },
+    "errors": {
+      "loadTitle": "We couldn't load onboarding",
+      "loadDescription": "Retry the setup or log out safely.",
+      "degraded": "Onboarding status could not be refreshed. Your completed setup remains active.",
+      "replayStart": "Could not start the guide. Try again.",
+      "progressUnavailable": "Onboarding progress is unavailable. Reload and try again.",
+      "complete": "Could not finish the guide. Try again.",
+      "skip": "Could not skip the guide. Try again."
+    },
+    "actions": {
+      "finish": "Finish guide",
+      "skipPermanently": "Skip permanently",
+      "pause": "Pause",
+      "close": "Close guide",
+      "back": "Back",
+      "next": "Next",
+      "exitTour": "Exit tour",
+      "skipCurrentTour": "Skip this tour",
+      "gotIt": "Got it",
+      "continueAnyway": "Continue anyway"
+    },
+    "guide": {
+      "waiting": "Waiting for this area to become available…",
+      "useWizardAction": "Continue with the indicated button.",
+      "exploreThenContinue": "Explore the indicated control, then continue.",
+      "loadProblem": "This part of the page didn't load in time. You can continue with the guide."
+    },
+    "tour": {
+      "progress": "Step {current} of {total}",
+      "steps": {
+        "transactionsImport": {
+          "title": "Start with an import",
+          "description": "Open the transaction importer to turn broker reports into drafts. Nothing is saved automatically."
+        },
+        "brokers": {
+          "title": "Brokers and access",
+          "description": "Brokers represent accounts and control ownership, editing, and sharing."
+        },
+        "assets": {
+          "title": "Your asset catalogue",
+          "description": "Assets hold identifiers, currencies, providers, prices, and events."
+        },
+        "dashboard": {
+          "title": "Your portfolio at a glance",
+          "description": "The Dashboard is your home for portfolio value, performance, allocation, and data quality."
+        },
+        "tools": {
+          "title": "Analysis tools",
+          "description": "Tools provide guided analyses such as PAC planning without executing orders."
+        },
+        "settings": {
+          "title": "Replay whenever needed",
+          "description": "Settings lets you replay this tour, the welcome setup, or the import guide."
+        },
+        "navigation": {
+          "title": "Find your way around",
+          "description": "Use this control to collapse or expand the sidebar on desktop, or open the navigation menu on smaller screens."
+        },
+        "transactionsNav": {
+          "title": "Start with your transactions",
+          "description": "Transactions contains manual entries and portfolio history. Import has its own contextual guide."
+        },
+        "brokersAdd": {
+          "title": "Add a broker",
+          "description": "Brokers represent the accounts that hold your transactions and define ownership and sharing."
+        },
+        "brokersCurrency": {
+          "title": "Set the broker currency",
+          "description": "Choose the currency of each initial balance. This preview never saves a broker."
+        },
+        "fxAdd": {
+          "title": "Add an FX pair",
+          "description": "FX pairs let LibreFolio convert portfolio values between currencies."
+        },
+        "fxPair": {
+          "title": "Choose base and quote currencies",
+          "description": "Define the currency pair you need. This preview never saves an FX pair."
+        },
+        "assetsAdd": {
+          "title": "Add an asset",
+          "description": "Assets connect transactions to instruments, currencies, prices, and market data."
+        },
+        "assetsConfig": {
+          "title": "Configure the asset",
+          "description": "Choose its quote currency and data provider. This preview never saves an asset."
+        },
+        "brokersNav": {
+          "title": "Brokers",
+          "description": "Open Brokers to configure your accounts. A short guide starts when you choose Add Broker."
+        },
+        "fxNav": {
+          "title": "FX rates",
+          "description": "Open FX rates to configure currency conversion pairs and their data providers."
+        },
+        "assetsNav": {
+          "title": "Assets",
+          "description": "Open Assets to define the instruments, currencies, and market data used by your portfolio."
+        },
+        "toolsNav": {
+          "title": "Tools",
+          "description": "Tools brings together programs and calculators for exploring scenarios and making more informed financial decisions."
+        },
+        "settingsNav": {
+          "title": "Settings",
+          "description": "Settings contains preferences and lets you replay any guide when needed."
+        }
+      }
+    },
+    "flows": {
+      "welcome": "Welcome setup",
+      "intro_tour": "Quick tour",
+      "import_guide": "Import guide",
+      "broker_guide": "Broker guide",
+      "fx_guide": "FX guide",
+      "asset_guide": "Asset guide",
+      "transactions_page_guide": "Transactions overview",
+      "transaction_create_guide": "Add transaction guide",
+      "transaction_bulk_guide": "Bulk workspace overview",
+      "broker_page_guide": "Brokers overview",
+      "broker_detail_guide": "Broker details guide",
+      "fx_page_guide": "FX overview",
+      "fx_detail_guide": "FX pair details guide",
+      "asset_page_guide": "Assets overview",
+      "asset_detail_guide": "Asset details guide"
+    },
+    "status": {
+      "pending": "Pending",
+      "completed": "Completed",
+      "skipped": "Skipped"
+    },
+    "settings": {
+      "category": "Onboarding",
+      "title": "Onboarding and guides",
+      "description": "Replay setup and contextual guides without changing your saved data.",
+      "replayAll": "Replay all",
+      "updateAvailable": "New version to view",
+      "nextImport": "Ready for next import",
+      "replayReady": "Replay ready",
+      "version": "Seen v{seen} · current v{current}",
+      "replayOnNextImport": "Replay on next import",
+      "replay": "Replay",
+      "groups": {
+        "setup": "Setup",
+        "core": "Core tour",
+        "contextual": "Contextual guides",
+        "transactions": "Transactions",
+        "broker": "Brokers",
+        "fx": "FX",
+        "asset": "Assets"
+      },
+      "armedToast": "{flow} is ready in this tab. Open its feature to start.",
+      "cancelArmed": "Cancel activation",
+      "groupProgress": "{completed}/{total} guides completed",
+      "armedAtNextTrigger": "Ready in this tab: {flow} starts at its next trigger. Closing the tab cancels it.",
+      "replayNextTrigger": "Replay at next trigger"
+    },
+    "importGuide": {
+      "steps": {
+        "upload": {
+          "title": "Upload reports",
+          "description": "Add one or more broker reports and assign each report to a broker."
+        },
+        "select": {
+          "title": "Choose files and parsers",
+          "description": "Select one or more saved reports. Choose the appropriate analysis plugin for each file; when every selection is complete, use the button on the right to continue. Depending on the chosen plugin and extracted data, optional steps may appear to unify assets, correct rows, or manage duplicates."
+        },
+        "analyze": {
+          "title": "Analyze extracted data",
+          "description": "Run the parsers and review extracted records, notices, and validation results."
+        },
+        "assets": {
+          "title": "Unify asset identities",
+          "description": "Match extracted records that may refer to the same asset."
+        },
+        "fix": {
+          "title": "Resolve flagged rows",
+          "description": "Correct or explicitly keep rows that the parser could not resolve."
+        },
+        "duplicates": {
+          "title": "Choose between duplicates",
+          "description": "Decide which overlapping imported rows to retain."
+        },
+        "review": {
+          "title": "Review the import",
+          "description": "Select eligible rows and resolve required assets before opening the bulk editor."
+        },
+        "bulk": {
+          "title": "Save All writes the transactions",
+          "description": "Review and edit prepared transaction drafts, then choose Save All when they are ready."
+        }
+      }
+    },
+    "intro": {
+      "title": "Welcome to LibreFolio",
+      "line1": "Welcome.",
+      "line2": "It's great to have you on board.",
+      "line3": "Here is a quick tour to help you get started.",
+      "start": "Start tour",
+      "progress": "Intro progress"
+    },
+    "brokerGuide": {
+      "steps": {
+        "overview": {
+          "title": "Create a broker",
+          "description": "This form defines the account that will own transactions and imports."
+        },
+        "plugin": {
+          "title": "Choose the default import plugin",
+          "description": "The default plugin is preselected when you import reports from this broker."
+        },
+        "icon": {
+          "title": "Add a custom icon",
+          "description": "Choose an image for this broker, or keep the automatic icon derived from its plugin or website."
+        }
+      }
+    },
+    "fxGuide": {
+      "steps": {
+        "currencies": {
+          "title": "Choose the currency pair",
+          "description": "Select the base and quote currencies that LibreFolio must convert between."
+        },
+        "providers": {
+          "title": "Configure rate providers",
+          "description": "Choose a direct or chained provider route, or keep the pair manual when no automatic source is suitable."
+        }
+      }
+    },
+    "assetGuide": {
+      "steps": {
+        "search": {
+          "title": "Search before entering data",
+          "description": "Search online to prefill known identifiers and metadata, or enter the asset manually."
+        },
+        "identity": {
+          "title": "Define the asset",
+          "description": "Review its name, type, quote-base quantity, and currency."
+        },
+        "provider": {
+          "title": "Configure the data provider",
+          "description": "Select the provider, identifier, and parameters, or explicitly keep the asset without a provider."
+        }
+      }
+    },
+    "transactionsPageGuide": {
+      "steps": {
+        "overview": {
+          "title": "Manage all transactions",
+          "description": "This page brings together manual entries, imported operations, and the history used to build your portfolio."
+        },
+        "add": {
+          "title": "Add one transaction",
+          "description": "Add opens the guided form for a single operation. Its dedicated guide starts on first use."
+        },
+        "import": {
+          "title": "Import multiple operations",
+          "description": "Import reads broker reports and guides their review through to the bulk editor."
+        },
+        "columns": {
+          "title": "Filter and organize",
+          "description": "Use column filters, sorting, and column visibility to find and compare operations."
+        }
+      }
+    },
+    "transactionCreateGuide": {
+      "steps": {
+        "basics": {
+          "title": "Choose the transaction type",
+          "description": "The type defines the meaning and structure of the operation."
+        },
+        "amounts": {
+          "title": "Complete the required fields",
+          "description": "Required fields and valid combinations change according to the selected transaction type."
+        },
+        "details": {
+          "title": "Add optional information",
+          "description": "Include any additional details that make the transaction easier to understand and trace."
+        },
+        "save": {
+          "title": "Validate in the workspace context",
+          "description": "Validation evaluates this draft together with all other pending operations in the workspace. An error may depend on another draft or on the resulting balance, not only on this form; when available, the message identifies the affected rows and context."
+        }
+      }
+    },
+    "transactionBulkGuide": {
+      "steps": {
+        "workspace": {
+          "title": "Your transaction workspace",
+          "description": "Each row is a draft you can inspect and refine before the final save."
+        },
+        "validation": {
+          "title": "Validate and resolve issues",
+          "description": "Validation highlights incomplete or inconsistent rows and takes you directly to the fields to review."
+        },
+        "selection": {
+          "title": "Work on the selection",
+          "description": "Select rows to edit, clone, reset, link, or remove several drafts together."
+        },
+        "save": {
+          "title": "Complete with Save All",
+          "description": "Save All commits the valid drafts. Cancel closes the workspace and preserves the existing portfolio."
+        }
+      }
+    },
+    "brokerPageGuide": {
+      "steps": {
+        "overview": {
+          "title": "Your financial accounts",
+          "description": "Brokers group transactions by account and define ownership, editing permissions, and sharing."
+        },
+        "currency": {
+          "title": "Choose the reporting currency",
+          "description": "The selector recalculates the page summary in the currency you want to compare."
+        },
+        "views": {
+          "title": "Cards, table, and account actions",
+          "description": "Switch view to compare accounts, then open one to inspect balances, positions, transactions, and access."
+        },
+        "add": {
+          "title": "Add a broker",
+          "description": "Create the account that will receive transactions and imports. A dedicated guide follows the form."
+        }
+      }
+    },
+    "brokerDetailGuide": {
+      "steps": {
+        "header": {
+          "title": "Broker identity and actions",
+          "description": "The header identifies the account and provides its main edit, sync, sharing, and navigation actions."
+        },
+        "overview": {
+          "title": "Overview and cash",
+          "description": "Overview summarizes value, performance, allocation, and cash balances for this account."
+        },
+        "positions": {
+          "title": "Positions and lots",
+          "description": "Positions explains what the account holds and lets you inspect the lots behind each quantity and cost."
+        },
+        "transactions": {
+          "title": "Transactions and imports",
+          "description": "This tab filters the account history and provides the path for adding or importing its operations."
+        },
+        "info": {
+          "title": "Information and sharing",
+          "description": "Review account metadata and manage who can view or edit this broker."
+        }
+      }
+    },
+    "fxPageGuide": {
+      "steps": {
+        "overview": {
+          "title": "Your currency pairs",
+          "description": "FX pairs provide the conversion history LibreFolio needs to compare values expressed in different currencies."
+        },
+        "filters": {
+          "title": "Filter dates, currencies, and views",
+          "description": "Narrow the period and currencies, then choose cards or table according to the comparison you need."
+        },
+        "sync": {
+          "title": "Update exchange rates",
+          "description": "Sync requests fresh rates from each pair’s configured provider route."
+        },
+        "add": {
+          "title": "Add an FX pair",
+          "description": "Define a new conversion direction. A dedicated guide explains currencies and providers."
+        }
+      }
+    },
+    "fxDetailGuide": {
+      "steps": {
+        "header": {
+          "title": "Pair and conversion direction",
+          "description": "The header shows base and quote currencies and the actions for returning or swapping direction."
+        },
+        "provider": {
+          "title": "Provider route and sync",
+          "description": "Choose how rates are obtained, then sync when you need to refresh the series."
+        },
+        "chart": {
+          "title": "Explore rate history",
+          "description": "Use the chart, signals, and measurement tools to examine how the exchange rate changed over time."
+        },
+        "editor": {
+          "title": "Edit manual observations",
+          "description": "Open the data editor to review or maintain manual rate points for this pair."
+        }
+      }
+    },
+    "assetPageGuide": {
+      "steps": {
+        "overview": {
+          "title": "Your asset catalogue",
+          "description": "Assets connect transactions to instruments, currencies, prices, events, and market-data sources."
+        },
+        "filters": {
+          "title": "Search and compare assets",
+          "description": "Filter by name, status, currency, or type and switch between cards and table."
+        },
+        "sync": {
+          "title": "Refresh market data",
+          "description": "Sync requests current values and available history from each asset’s configured source."
+        },
+        "add": {
+          "title": "Add an asset",
+          "description": "Search or define a new instrument. A dedicated guide explains identity, currency, and provider."
+        }
+      }
+    },
+    "assetDetailGuide": {
+      "steps": {
+        "header": {
+          "title": "Asset identity and status",
+          "description": "The header identifies the instrument and gathers its status, navigation, and primary actions."
+        },
+        "chart": {
+          "title": "Price history and analysis",
+          "description": "Use the chart, technical signals, comparison, and measurement tools to explore the asset’s history."
+        },
+        "editor": {
+          "title": "Maintain prices and events",
+          "description": "Open the data editor to review manual prices and the events that affect the asset series."
+        },
+        "metadata": {
+          "title": "Identifiers and metadata",
+          "description": "Expand metadata to inspect identifiers, classification, currency, and provider configuration."
+        },
+        "risk": {
+          "title": "Risk scenarios",
+          "description": "Open Risk to examine historical measures, stress scenarios, simulations, and portfolio context."
+        }
+      }
+    }
   }
 }

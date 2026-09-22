@@ -35,6 +35,7 @@ AI_EXPORT_SERVICE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_ai_export_composer.py",
     "backend/test_scripts/test_services/test_ai_export_dataset_analysis_catalogs.py",
     "backend/test_scripts/test_services/test_ai_export_runtime_service.py",
+    "backend/test_scripts/test_services/test_ai_export_structural_invariants.py",
     "backend/test_scripts/test_services/test_ai_export_telemetry.py",
     "backend/test_scripts/test_services/test_ai_export_temporal.py",
 )
@@ -69,15 +70,95 @@ RISK_SERVICE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_quantlib_smoke.py",
     "backend/test_scripts/test_services/test_series_preparation.py",
     "backend/test_scripts/test_services/test_risk_metrics.py",
+    "backend/test_scripts/test_services/test_risk_metrics_oracle.py",
     "backend/test_scripts/test_services/test_risk_registry.py",
     "backend/test_scripts/test_services/test_risk_signal_plugins.py",
     "backend/test_scripts/test_services/test_risk_service.py",
     "backend/test_scripts/test_services/test_risk_scenario_catalog.py",
     "backend/test_scripts/test_services/test_risk_analytics.py",
+    "backend/test_scripts/test_services/test_risk_asset_set.py",
     "backend/test_scripts/test_services/test_risk_simulation.py",
     "backend/test_scripts/test_services/test_risk_optimization.py",
     "backend/test_scripts/test_services/test_risk_spawn_worker.py",
 )
+
+PAC_PLANNER_CORE_TEST_PATHS = (
+    "backend/test_scripts/test_services/test_pac_planner_exact.py",
+    "backend/test_scripts/test_services/test_pac_planner_normalize.py",
+)
+PAC_PLANNER_EVALUATOR_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_evaluator.py"
+PAC_PLANNER_ORACLE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_oracle.py"
+PAC_PLANNER_POLICIES_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_policies.py"
+PAC_PLANNER_SOLVER_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_solver.py"
+PAC_PLANNER_PROOF_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_proof.py"
+PAC_PLANNER_WIRE_NUMBERS_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_wire_numbers.py"
+PAC_PLANNER_REPORT_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_report.py"
+PAC_PLANNER_SERVICE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_planner.py"
+
+
+def services_pac_planner_core(verbose: bool = False, test_names: list = None) -> bool:
+    """Test exact PAC/Rebalancer primitives, models, and normalization."""
+    print_section("Services: PAC/Rebalancer Exact Core")
+    cmd = [*pipenv_prefix(), "python", "-m", "pytest", *PAC_PLANNER_CORE_TEST_PATHS, "-v"]
+    if test_names:
+        cmd.extend(["-k", " or ".join(test_names)])
+    return run_command(cmd, "PAC/Rebalancer exact core tests", verbose=verbose)
+
+
+def services_pac_planner_evaluator(verbose: bool = False, test_names: list = None) -> bool:
+    """Test exact PAC/Rebalancer policy views, ledger replay, and evaluation."""
+    print_section("Services: PAC/Rebalancer Exact Evaluator")
+    cmd = _build_pytest_cmd(PAC_PLANNER_EVALUATOR_TEST_PATH, test_names)
+    return run_command(cmd, "PAC/Rebalancer exact evaluator tests", verbose=verbose)
+
+
+def services_pac_planner_oracle(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the zero-SCIP-dependency exhaustive oracle over one policy view's discrete domain."""
+    print_section("Services: PAC/Rebalancer Exhaustive Oracle")
+    cmd = _build_pytest_cmd(PAC_PLANNER_ORACLE_TEST_PATH, test_names)
+    return run_command(cmd, "PAC/Rebalancer exhaustive oracle tests", verbose=verbose)
+
+
+def services_pac_planner_policies(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the SCIP policy compiler: scenario facts, hard constraints, objective cascade and scope guard."""
+    print_section("Services: PAC/Rebalancer Policy Compiler")
+    cmd = _build_pytest_cmd(PAC_PLANNER_POLICIES_TEST_PATH, test_names)
+    return run_command(cmd, "PAC/Rebalancer policy compiler tests", verbose=verbose)
+
+
+def services_pac_planner_solver(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the lexicographic SCIP search adapter against the exhaustive oracle's exact optimum."""
+    print_section("Services: PAC/Rebalancer Lexicographic Solver")
+    cmd = _build_pytest_cmd(PAC_PLANNER_SOLVER_TEST_PATH, test_names)
+    return run_command(cmd, "PAC/Rebalancer lexicographic solver tests", verbose=verbose)
+
+
+def services_pac_planner_proof(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that a floating solve structurally cannot express a proven outcome."""
+    print_section("Services: PAC/Rebalancer Proof Semantics")
+    cmd = _build_pytest_cmd(PAC_PLANNER_PROOF_TEST_PATH, test_names)
+    return run_command(cmd, "PAC/Rebalancer proof semantics tests", verbose=verbose)
+
+
+def services_pac_planner_wire_numbers(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the exact-rational to wire-number projection every published figure passes through."""
+    print_section("Services: PAC/Rebalancer Wire Numbers")
+    cmd = _build_pytest_cmd(PAC_PLANNER_WIRE_NUMBERS_TEST_PATH, test_names)
+    return run_command(cmd, "PAC/Rebalancer wire number tests", verbose=verbose)
+
+
+def services_pac_planner_report(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the wire projection: rows, exposure closure, solver evidence and proof."""
+    print_section("Services: PAC/Rebalancer Wire Projection")
+    cmd = _build_pytest_cmd(PAC_PLANNER_REPORT_TEST_PATH, test_names)
+    return run_command(cmd, "PAC/Rebalancer wire projection tests", verbose=verbose)
+
+
+def services_pac_planner_service(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the plan orchestration end to end, from a wire request to a wire result."""
+    print_section("Services: PAC/Rebalancer Plan Orchestration")
+    cmd = _build_pytest_cmd(PAC_PLANNER_SERVICE_TEST_PATH, test_names)
+    return run_command(cmd, "PAC/Rebalancer plan orchestration tests", verbose=verbose)
 
 
 def services_fx_conversion(verbose: bool = False, test_names: list = None) -> bool:
@@ -138,6 +219,17 @@ def services_risk_simulation(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Risk simulation tests", verbose=verbose)
 
 
+def services_risk_asset_set(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the weightless ASSET_SET analytic family and the shapes that keep an aggregate inexpressible."""
+    print_section("Services: Risk Asset Set")
+    print_info("Testing: five per-asset analytics, one preparation per request, refused set-level aggregate")
+    cmd = _build_pytest_cmd(
+        "backend/test_scripts/test_services/test_risk_asset_set.py",
+        test_names,
+    )
+    return run_command(cmd, "Risk asset-set tests", verbose=verbose)
+
+
 def services_risk_optimization(verbose: bool = False, test_names: list = None) -> bool:
     """Test Riskfolio strategies, estimators, constraints and cache."""
     print_section("Services: Risk Optimization")
@@ -158,6 +250,16 @@ def services_risk_workers(verbose: bool = False, test_names: list = None) -> boo
         test_names,
     )
     return run_command(cmd, "Risk worker tests", verbose=verbose)
+
+
+def services_risk_oracle(verbose: bool = False, test_names: list = None) -> bool:
+    """Pin hand-written risk mathematics against riskfolio, NumPy and SciPy."""
+    print_section("Services: Risk Metrics Oracle")
+    print_info("Testing: metrics.py and signal_helpers.py against independent references")
+    print_info("Guards: the four name traps, undefined-window semantics, matrix/scalar consistency")
+    print_info("Note: riskfolio is imported here and only here — never in the web process")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_risk_metrics_oracle.py", test_names)
+    return run_command(cmd, "Risk metrics oracle tests", verbose=verbose)
 
 
 def services_risk_all(verbose: bool = False, test_names: list = None) -> bool:
@@ -462,6 +564,19 @@ def services_roi_fifo_engine(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "ROI/FIFO/Portfolio service tests", verbose=verbose)
 
 
+def services_portfolio_allocation_source(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the read-only PAC/Rebalancer portfolio source snapshot."""
+    print_section("Services: Portfolio Allocation Source")
+    print_info("Testing: backend/app/services/portfolio_allocation_source.py")
+    print_info("Tests: selectors, exact facts, saved evidence, provenance and no side effects")
+
+    cmd = _build_pytest_cmd(
+        "backend/test_scripts/test_services/test_portfolio_allocation_source.py",
+        test_names,
+    )
+    return run_command(cmd, "Portfolio allocation-source tests", verbose=verbose)
+
+
 def services_lots_analysis_pure(verbose: bool = False, test_names: list = None) -> bool:
     """Run the pure LotsAnalysisService builders (no DB, no server, no network)."""
     print_section("Services: Lots Analysis Pure Builders")
@@ -709,6 +824,24 @@ def _services_setup() -> bool:
     return True
 
 
+def services_tools_registry(verbose: bool = False, test_names: list = None) -> bool:
+    """Test private Tool registry publication and read-only catalog projection."""
+    print_section("Services: Tool Registry")
+    print_info("Testing: private typed plugins, transactional discovery and catalog policies")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_tools_registry.py", test_names)
+    return run_command(cmd, "Tool registry tests", verbose=verbose)
+
+
+def services_tools_lifecycle(verbose: bool = False, test_names: list = None) -> bool:
+    """Test owned Tool worker lifecycles in a separately authorized resource slot."""
+    print_section("Services: Tool Lifecycle")
+    print_info("Testing: real POSIX spawn, pipes, quotas, cancellation and descendant teardown")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_tools_executor.py", test_names)
+    return run_command(cmd, "Tool lifecycle tests", verbose=verbose)
+
+
 def services_all(verbose: bool = False) -> bool:
     """Run all backend service tests."""
     if _common.nothing_left_to_run("services"):
@@ -770,13 +903,93 @@ Note: No backend server required.
         prereq="Database created",
         exclusive_because="its assertions are about the oldest and newest EUR/USD row in the whole fx_rates table (backward fill, missing-rate boundary), and the service under test queries that table without a source filter, so a neighbour inserting any EUR/USD rate moves the boundary this unit measures",
     )
+    add_test(
+        cat,
+        "pac-planner-core",
+        services_pac_planner_core,
+        name="PAC/Rebalancer Exact Core",
+        desc="Canonical rational arithmetic, posting, fee, FX and tax primitives plus strict v2 normalization, exact model mapping and typed issue precedence",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pac-planner-evaluator",
+        services_pac_planner_evaluator,
+        name="PAC/Rebalancer Exact Evaluator",
+        desc="Exact policy views, Broker-qualified decisions, ledger replay, constraints, objectives and deterministic conflicts",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pac-planner-oracle",
+        services_pac_planner_oracle,
+        name="PAC/Rebalancer Exhaustive Oracle",
+        desc="Exhaustive candidate enumeration, domain-size estimation and cap, lexicographic best-candidate selection and checkpoint cancellation",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pac-planner-policies",
+        services_pac_planner_policies,
+        name="PAC/Rebalancer Policy Compiler",
+        desc="Scenario facts, hard constraint boundaries, objective cascade and scope guard over a compiled SCIP MIP",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pac-planner-solver",
+        services_pac_planner_solver,
+        name="PAC/Rebalancer Lexicographic Solver",
+        desc="Lexicographic SCIP cascade adapter: exhaustive-oracle agreement, stage scoping, evidence shape, honest limits and floating infeasibility",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pac-planner-proof",
+        services_pac_planner_proof,
+        name="PAC/Rebalancer Proof Semantics",
+        desc="Sealed witnesses, oracle-only promotion and the structural impossibility of a floating solve claiming a proof",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pac-planner-wire-numbers",
+        services_pac_planner_wire_numbers,
+        name="PAC/Rebalancer Wire Numbers",
+        desc="Lossless exact-to-wire projection, canonical spelling, non-authoritative display and fail-closed envelope limits",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pac-planner-report",
+        services_pac_planner_report,
+        name="PAC/Rebalancer Wire Projection",
+        desc="Asset, action, ledger and exposure rows, exact exposure closure, tie-filtered solver evidence and proof projection",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pac-planner-service",
+        services_pac_planner_service,
+        name="PAC/Rebalancer Plan Orchestration",
+        desc="plan_pac_allocation end to end: ready states, failure availabilities, oracle-settled evidence and SCIP import isolation",
+        isolation="pure",
+    )
     add_test(cat, "asset-source", services_asset_source, name="Asset Source", desc="Provider assignment, synthetic yield")
     add_test(cat, "asset-source-refresh", services_asset_source_refresh, name="Asset Source Refresh", desc="Bulk refresh orchestration smoke test")
     add_test(cat, "provider-registry", services_provider_registry, name="Provider Registry", desc="Registration, lookup, priority, fallback")
     add_test(cat, "quantlib-runtime", services_quantlib_runtime, name="QuantLib Runtime", desc="Pinned version, required APIs and seeded path reproducibility")
     add_test(cat, "risk-simulation", services_risk_simulation, name="Risk Simulation", desc="Serializable contracts, sampling, moments, chunking and cache")
+    add_test(
+        cat,
+        "risk-asset-set",
+        services_risk_asset_set,
+        name="Risk Asset Set",
+        desc="Five per-asset analytics for a weightless selection: one preparation per request whatever the number of codes, a set-level aggregate that the payload cannot express rather than one it declines to fill, and a required items list so an empty result and an absent key cannot read the same",
+    )
     add_test(cat, "risk-optimization", services_risk_optimization, name="Risk Optimization", desc="Riskfolio objectives, estimators, constraints, frontier and cache")
     add_test(cat, "risk-workers", services_risk_workers, name="Risk Workers", desc="Spawn lifecycle, queue bounds, timeout, recycle and cancellation")
+    add_test(cat, "risk-oracle", services_risk_oracle, name="Risk Metrics Oracle", desc="riskfolio/NumPy/SciPy reference pins, name traps, undefined windows and matrix consistency", isolation="pure")
     add_test(cat, "risk-all", services_risk_all, name="Risk Analysis", desc="Complete canonical-series, analytic, QuantLib, Riskfolio and worker suite")
     add_test(cat, "series-preparation", services_series_preparation, name="Canonical Series", desc="Converted valuations, joint calendar, returns, annualization and FX fingerprint")
     add_test(cat, "signal-registry", services_signal_registry, name="Signal Registry", desc="SignalPlugin contract, strict discovery and duplicate rejection")
@@ -824,6 +1037,14 @@ Note: No backend server required.
     add_test(cat, "brim-create-transaction", services_brim_create_transaction, name="BRIM Create Transaction", desc="_create_transaction + _loc_to_field")
     add_test(cat, "financial-utils", services_financial_utils, name="Financial Utils", desc="WAC pure math (compute_wac_from_txlist, determine_target_currency)")
     add_test(cat, "roi-fifo-utils", services_roi_fifo_engine, name="ROI/FIFO/Portfolio Utils", desc="TWRR/MWRR/SimpleROI series, FIFO lots (FifoLotEngine), WAC multi-broker, price resolver")
+    add_test(
+        cat,
+        "portfolio-allocation-source",
+        services_portfolio_allocation_source,
+        name="Portfolio Allocation Source",
+        desc="Read-only exact planner facts, authorization boundaries, provenance and saved evidence",
+        isolation="pure",
+    )
     add_test(
         cat,
         "lots-analysis-pure",
@@ -906,5 +1127,21 @@ Note: No backend server required.
     add_test(cat, "borsa-italiana-search", services_borsa_italiana_search, name="Borsa Italiana Search", desc="Single-fetch search, IT+EN variants, ISIN direct hit (engine mocked)")
     add_test(cat, "borsa-italiana-funds", services_borsa_italiana_funds, name="Borsa Italiana Funds", desc="Mutual-fund NAV via codice_fondo detail page + resolve_url (scraper mocked)")
     add_test(cat, "web-link-finder", services_web_link_finder, name="Web Link Finder", desc="find_candidate_urls + search orchestration augmentation (ddgs mocked)")
+    add_test(
+        cat,
+        "tools-registry",
+        services_tools_registry,
+        name="Tool Registry",
+        desc="Typed plugins, transactional discovery, quarantine and read-only catalog",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "tools-lifecycle",
+        services_tools_lifecycle,
+        name="Tool Lifecycle",
+        desc="Owned spawn workers, quotas, ready/ACK, cancellation, PID identity and full-tree cleanup",
+        exclusive_because=("owns native POSIX process groups and exercises forceful teardown and executor quarantine; " "requires an explicitly leased lifecycle run rather than concurrent shared-backend manual review"),
+    )
     add_test(cat, "all", services_all, test_names=False, name="All Services Tests", desc="Run all service tests")
     registry["services"] = cat

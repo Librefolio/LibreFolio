@@ -51,7 +51,7 @@
         type SignalDefinition,
         type SignalInstanceResult,
     } from '$lib/charts/signals';
-    import {getSettingsForPair, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
+    import {DEFAULT_AXIS_SCALE, getSettingsForPair, normalizeAxisScaleSettings, setPairSettings, type AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import {globalSettings} from '$lib/stores/app/globalSettings';
@@ -64,16 +64,22 @@
     import {replaceHistoryDateRange} from '$lib/utils/url/dateRangeUrl';
     import type {SignalLabelInfo} from '$lib/charts/signalLabel';
     import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
-    import {loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
+    import {applyComparisonAssetsData, clearComparisonAssetsData, COMPARISON_ASSET_RUNTIME_PARAM_KEYS, loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
     import {COLORS} from '$lib/components/charts/lineChartHelpers';
+    import {collectConfigurableSecondaryAxes} from '$lib/components/charts/chartCoreHelpers';
+    import {exchangeRateAxisLabel, percentageAxisLabel, secondaryAxisLabel} from '$lib/components/charts/axisLabelHelpers';
     import AiExportMenu from '$lib/features/ai-export/AiExportMenu.svelte';
     import {prepareAiExport, type PreparedAiExport} from '$lib/features/ai-export/aiExportClipboard';
     import type {AiExportOptionsSelection} from '$lib/features/ai-export/aiExportOptions';
     import {aiExportCatalogLoader, emptyAiExportCompatibility, type AiExportCatalogCompatibilityResult} from '$lib/features/ai-export/catalog/compatibility';
     import {buildAiExportMenuLabels, getAiExportErrorMessage, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
     import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
+    import {clientSessionUserId, getClientSessionGeneration, getClientSessionUserId, isClientSessionCurrent} from '$lib/stores/app/clientSession';
+    import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
+    import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
+    import {subscribeFxCreationSyncCompleted} from '$lib/services/fxCreationSync';
 
     const DISABLED_AI_EXPORT_COMPATIBILITY = emptyAiExportCompatibility();
 
@@ -93,12 +99,20 @@
     }
 
     let {data}: Props = $props();
+    let pageMounted = false;
+    let signalDefinitionsReady = false;
+    let initialSignalDefinitions: Promise<void> | null = null;
+    let chartLoadVersion = 0;
+    let completionWhileInitializing = false;
+    let completionSubscriptionKey = '';
+    let unsubscribeCreationCompletion = () => {};
 
     // =========================================================================
     // State
     // =========================================================================
 
     let chartData: FxDataPoint[] = $state([]);
+    let discardedChartLoads = $state(0);
     let loading = $state(true);
     /** Stores either a raw message or an i18n key prefixed with `_i18n:` for reactive translation */
     let error: string | null = $state(null);
@@ -196,6 +210,13 @@
 
     // Comparison events (asset-comparison signals)
     let comparisonEvents = $state<Map<number, any[]>>(new Map());
+    let comparisonRequestGeneration = 0;
+    let refreshRequestGeneration = 0;
+    let comparisonAppliedFingerprint: string | null = null;
+    let comparisonInFlight: {fingerprint: string; promise: Promise<void>} | null = null;
+    const assetSyncRequestGenerations = new Map<number, number>();
+    const activeAssetSyncRequests = new Map<number, number>();
+    let syncingComparisonAssetIds = $state<Set<number>>(new Set());
 
     // AI export (page toolbar) — dropdown open/position handled internally by AiExportMenu
     let fxAiExportCompatibility = $state<AiExportCatalogCompatibilityResult>(DISABLED_AI_EXPORT_COMPATIBILITY);
@@ -209,6 +230,13 @@
 
     /** Incremented to force overlay signals recomputation after store data changes */
     let overlayDataVersion = $state(0);
+    let signalPanelConfigs = $derived.by(() => {
+        void overlayDataVersion;
+        return signals.map((signal) => ({
+            ...signal,
+            params: {...signal.params},
+        }));
+    });
 
     // Page sync modal state
     let showPageSyncModal = $state(false);
@@ -370,6 +398,21 @@
 
     /** Combined overlay signals: computed from settings + measure signals */
     let allOverlaySignals: RenderedSignal[] = $derived([...overlaySignals, ...measureSignals, ...(pendingPreviewSignal ? [pendingPreviewSignal] : [])]);
+    let activePrimaryAxisKind = $derived<'absolute' | 'percentage'>(viewMode === 'percentage' ? 'percentage' : 'absolute');
+    let activePrimaryAxisScale = $derived(settings.axisScales[activePrimaryAxisKind]);
+    let activeSecondaryAxes = $derived(collectConfigurableSecondaryAxes(allOverlaySignals));
+    let aestheticsAxisRows = $derived([
+        {
+            key: `primary:${activePrimaryAxisKind}`,
+            label: activePrimaryAxisKind === 'percentage' ? percentageAxisLabel((key, values) => $t(key, {values})) : exchangeRateAxisLabel((key, values) => $t(key, {values}), `${displayBase}/${displayQuote}`),
+            settings: activePrimaryAxisScale,
+        },
+        ...activeSecondaryAxes.map((axis) => ({
+            key: axis.key,
+            label: secondaryAxisLabel((key, values) => $t(key, {values}), axis),
+            settings: settings.axisScales.secondary[axis.key] ?? DEFAULT_AXIS_SCALE,
+        })),
+    ]);
 
     // Trigger flag re-evaluation when currencies finish loading
     let flagVersion = $state(0);
@@ -504,22 +547,146 @@
         );
     }
 
+    const comparisonRuntimeParamKeys = new Set<string>(COMPARISON_ASSET_RUNTIME_PARAM_KEYS);
+
+    function signalDataContextFingerprint(configs: SignalConfig[]): string {
+        return JSON.stringify(
+            configs
+                .map((config) => ({
+                    id: config.id,
+                    signalType: config.signalType,
+                    params: Object.fromEntries(
+                        Object.entries(config.params)
+                            .filter(([key]) => !comparisonRuntimeParamKeys.has(key))
+                            .sort(([left], [right]) => left.localeCompare(right)),
+                    ),
+                }))
+                .sort((left, right) => left.id.localeCompare(right.id)),
+        );
+    }
+
+    function comparisonAssetIds(configs: SignalConfig[]): number[] {
+        return [
+            ...new Set(
+                configs
+                    .filter((config) => config.signalType === 'asset-comparison')
+                    .map((config) => Number(config.params.assetId))
+                    .filter((assetId) => Number.isSafeInteger(assetId) && assetId > 0),
+            ),
+        ].sort((left, right) => left - right);
+    }
+
+    function comparisonLoadFingerprint(configs: SignalConfig[]): string {
+        return JSON.stringify({
+            peers: configs
+                .filter((config) => config.signalType === 'asset-comparison')
+                .map((config) => ({configId: config.id, assetId: Number(config.params.assetId)}))
+                .filter((peer) => Number.isSafeInteger(peer.assetId) && peer.assetId > 0)
+                .sort((left, right) => left.configId.localeCompare(right.configId)),
+            start: dateStart,
+            end: dateEnd,
+        });
+    }
+
+    function invalidateComparisonState() {
+        comparisonRequestGeneration += 1;
+        comparisonAppliedFingerprint = null;
+        comparisonInFlight = null;
+        comparisonEvents = clearComparisonAssetsData(signals.filter((signal) => signal.signalType === 'asset-comparison'));
+        overlayDataVersion++;
+    }
+
     async function retryBackendSignals() {
         await loadFxSignalDefinitions(true);
         await loadChartData();
     }
 
-    onMount(async () => {
-        // Persist the inversion state from the URL so FxCard reflects it on back-navigation
-        setCardInverted(data.canonicalSlug, data.inverted);
-        void loadFxAiExportCompatibility();
+    function connectCreationCompletion() {
+        const slug = data.canonicalSlug;
+        const sessionGeneration = getClientSessionGeneration();
+        const key = `${sessionGeneration}:${slug}`;
+        if (completionSubscriptionKey === key) return;
+        unsubscribeCreationCompletion();
+        completionSubscriptionKey = key;
+        chartLoadVersion += 1;
+        if (getClientSessionUserId() === null) {
+            unsubscribeCreationCompletion = () => {};
+            return;
+        }
+        unsubscribeCreationCompletion = subscribeFxCreationSyncCompleted(async (completion) => {
+            if (!pageMounted || completion.sessionGeneration !== sessionGeneration || !isClientSessionCurrent(sessionGeneration) || data.canonicalSlug !== slug || !completion.pairs.includes(slug)) return;
+            chartLoadVersion += 1;
+            rearmMaxPendingBeforeReload();
+            if (!signalDefinitionsReady) {
+                completionWhileInitializing = true;
+                await (initialSignalDefinitions ??= loadFxSignalDefinitions());
+                if (!pageMounted || !isClientSessionCurrent(sessionGeneration) || data.canonicalSlug !== slug) return;
+                signalDefinitionsReady = true;
+            }
+            await loadChartData(signals, true);
+        });
+    }
 
-        await loadFxSignalDefinitions();
-        await Promise.all([ensureCurrenciesLoaded(get(currentLanguage)), loadChartData(), loadProviders(), loadAssetList()]);
-        // Force flag reactivity after currencies load
-        flagVersion++;
-        // Load comparison asset data after initial data is ready
-        await maybeLoadComparison();
+    async function initializePage() {
+        const sessionGeneration = getClientSessionGeneration();
+        const current = () => pageMounted && isClientSessionCurrent(sessionGeneration);
+        let initialLoadVersion = chartLoadVersion;
+        try {
+            // Persist URL inversion so FxCard reflects it on back-navigation.
+            setCardInverted(data.canonicalSlug, data.inverted);
+            void loadFxAiExportCompatibility();
+
+            await (initialSignalDefinitions ??= loadFxSignalDefinitions());
+            if (!current()) return;
+            signalDefinitionsReady = true;
+            if (completionWhileInitializing) {
+                rearmMaxPendingBeforeReload();
+                completionWhileInitializing = false;
+            }
+            const initialChartLoad = loadChartData();
+            initialLoadVersion = chartLoadVersion;
+            await Promise.all([ensureCurrenciesLoaded(get(currentLanguage)), initialChartLoad, loadProviders(), loadAssetList()]);
+            if (!current()) return;
+            flagVersion++;
+            await maybeLoadComparison();
+        } catch (initializationError) {
+            if (!current() || initialLoadVersion !== chartLoadVersion) return;
+            console.error('Failed to initialize FX detail:', initializationError);
+            error = initializationError instanceof Error ? initializationError.message : get(t)('common.error');
+            loading = false;
+            signalsLoading = false;
+        }
+    }
+
+    onMount(() => {
+        pageMounted = true;
+        const initializeAndStartGuide = async () => {
+            await initializePage();
+            if (pageMounted) onboardingGuide.maybeStartContextual('fx_detail_guide');
+        };
+        let initialSession = true;
+        const unsubscribeSession = clientSessionUserId.subscribe(() => {
+            connectCreationCompletion();
+            if (!initialSession && getClientSessionUserId() !== null) {
+                invalidateComparisonState();
+                if (signalDefinitionsReady) {
+                    void loadChartData().then(async () => {
+                        await maybeLoadComparison();
+                        if (pageMounted) onboardingGuide.maybeStartContextual('fx_detail_guide');
+                    });
+                } else void initializeAndStartGuide();
+            }
+            initialSession = false;
+        });
+        if (getClientSessionUserId() !== null) void initializeAndStartGuide();
+        return () => {
+            pageMounted = false;
+            chartLoadVersion += 1;
+            comparisonRequestGeneration += 1;
+            comparisonInFlight = null;
+            unsubscribeCreationCompletion();
+            unsubscribeSession();
+        };
     });
 
     let previousDisplayOrientation = $state('');
@@ -531,7 +698,13 @@
         }
         if (orientation !== previousDisplayOrientation) {
             previousDisplayOrientation = orientation;
-            void loadChartData();
+            if (pageMounted) {
+                connectCreationCompletion();
+                invalidateComparisonState();
+                if (signalDefinitionsReady) {
+                    void loadChartData().then(() => maybeLoadComparison());
+                }
+            }
         }
     });
 
@@ -571,93 +744,112 @@
         displayDateStart = 'min';
     }
 
-    async function loadChartData(requestedSignalConfigs: SignalConfig[] = signals) {
+    async function loadChartData(requestedSignalConfigs: SignalConfig[] = signals, propagateError = false) {
+        if (!pageMounted) return;
+        const slug = data.canonicalSlug;
+        const base = data.urlBase;
+        const quote = data.urlQuote;
+        const inverted = data.inverted;
+        const canonicalBase = data.canonicalBase;
+        const canonicalQuote = data.canonicalQuote;
+        const start = dateStart;
+        const end = dateEnd;
+        const sessionGeneration = getClientSessionGeneration();
+        const loadVersion = ++chartLoadVersion;
+        const current = () => pageMounted && loadVersion === chartLoadVersion && isClientSessionCurrent(sessionGeneration) && data.canonicalSlug === slug && data.urlBase === base && data.urlQuote === quote;
+        const discardObsoleteResponse = () => {
+            if (current()) return false;
+            if (pageMounted && isClientSessionCurrent(sessionGeneration)) discardedChartLoads += 1;
+            return true;
+        };
         error = null;
-        const store = getFxStore(data.canonicalSlug);
-        const hasCachedRange = store.getMissingIntervals(dateStart, dateEnd).length === 0;
+        const store = getFxStore(slug);
+        const gaps = store.getMissingIntervals(start, end);
+        const hasCachedRange = gaps.length === 0;
         const requestPlan = buildBackendSignalRequestPlan(requestedSignalConfigs, signalDefinitions);
         const requestVersion = signalResultState.beginRequest();
+        const withSignals = requestPlan.requests.length > 0;
 
         if (hasCachedRange) {
-            chartData = store.getRange(dateStart, dateEnd).data;
+            chartData = store.getRange(start, end).data;
             if (chartData.length === 0) error = '_i18n:fxDetail.noData';
             resolveMaxStartFromChartData();
         }
 
-        if (requestPlan.requests.length === 0) {
-            if (!hasCachedRange) {
-                loading = true;
-                try {
-                    chartData = await ensureFxRangeLoaded(data.canonicalSlug, dateStart, dateEnd);
-                    if (chartData.length === 0 && !error) {
-                        error = '_i18n:fxDetail.noData';
-                    }
-                    resolveMaxStartFromChartData();
-                } finally {
-                    loading = false;
-                }
-            }
+        if (!withSignals && hasCachedRange) {
             applyBackendSignalResults(requestedSignalConfigs, requestVersion, []);
             signalRequestFailed = false;
+            loading = false;
+            signalsLoading = false;
             return;
         }
 
         loading = !hasCachedRange;
         signalRequestFailed = false;
-        signalsLoading = true;
+        signalsLoading = withSignals;
+        // Keep gap requests canonical; only signal requests follow the displayed orientation.
+        const ranges = withSignals ? [{start, end}] : gaps;
         try {
-            const response = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post([
-                {
-                    from_amount: {
-                        code: data.urlBase,
-                        amount: '1',
-                    },
-                    to: data.urlQuote,
-                    date_range: {
-                        start: dateStart,
-                        end: dateEnd,
-                    },
-                    signals: requestPlan.requests,
-                },
-            ]);
-            const dailyResults = (response as any)?.results ?? [];
-            const canonicalPoints = apiResultsToCanonicalFxDataPoints(dailyResults, data.inverted);
+            const response = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post(
+                ranges.map((range) => ({
+                    from_amount: {code: withSignals ? base : canonicalBase, amount: '1'},
+                    to: withSignals ? quote : canonicalQuote,
+                    date_range: {start: range.start, end: range.end},
+                    ...(withSignals ? {signals: requestPlan.requests} : {}),
+                })),
+            );
+            if (discardObsoleteResponse()) return;
+            const canonicalPoints = apiResultsToCanonicalFxDataPoints(response.results, withSignals && inverted);
             if (canonicalPoints.length > 0) {
                 store.merge(canonicalPoints);
             }
-            store.markFetched(dateStart, dateEnd);
-            chartData = store.getRange(dateStart, dateEnd).data;
+            for (const range of ranges) store.markFetched(range.start, range.end);
+            chartData = store.getRange(start, end).data;
 
-            const signalGroup = ((response as any)?.signal_results ?? []).find((group: any) => group.request_index === 0);
+            const signalGroup = withSignals ? response.signal_results?.find((group) => group.request_index === 0) : undefined;
             applyBackendSignalResults(requestedSignalConfigs, requestVersion, parseBackendSignalResults(signalGroup?.signals));
             if (chartData.length === 0 && !error) {
                 error = '_i18n:fxDetail.noData';
             }
             resolveMaxStartFromChartData();
         } catch (e: any) {
-            signalRequestFailed = true;
-            const existingData = store.getRange(dateStart, dateEnd).data;
-            if (existingData.length > 0) {
+            if (discardObsoleteResponse()) return;
+            signalRequestFailed = withSignals;
+            const existingData = store.getRange(start, end).data;
+            if (!withSignals) {
+                if (e?.response?.status === 404) {
+                    for (const gap of gaps) store.markFetched(gap.start, gap.end);
+                } else {
+                    console.error('Failed to load FX chart range:', e);
+                }
+                chartData = existingData;
+                if (chartData.length === 0) error = '_i18n:fxDetail.noData';
+                applyBackendSignalResults(requestedSignalConfigs, requestVersion, []);
+                resolveMaxStartFromChartData();
+            } else if (existingData.length > 0) {
                 chartData = existingData;
             } else if (e?.response?.status === 404) {
                 chartData = [];
-                store.invalidateRange(dateStart, dateEnd);
+                store.invalidateRange(start, end);
                 error = '_i18n:fxDetail.noData';
             } else {
                 console.error('Failed to load chart data:', e);
                 chartData = [];
                 error = e?.message || 'Failed to load rates';
             }
+            if (propagateError && e?.response?.status !== 404) throw e;
         } finally {
-            loading = false;
-            signalsLoading = false;
+            if (current()) {
+                loading = false;
+                signalsLoading = false;
+            }
         }
     }
 
     async function loadProviders() {
         try {
             const response = await zodiosApi.list_routes_api_v1_fx_providers_routes_get();
-            const items = (response as any)?.items || [];
+            const items = response?.items ?? [];
 
             // Extract ALL unique configured pair slugs (for FxPair signal dropdown)
             const slugSet = new Set<string>();
@@ -670,12 +862,12 @@
 
             // Filter routes for current pair only
             providers = items
-                .filter((i: any) => ((i.base === data.canonicalBase && i.quote === data.canonicalQuote) || (i.base === data.canonicalQuote && i.quote === data.canonicalBase)) && !(i.chain_steps?.length === 1 && i.chain_steps[0].provider === 'MANUAL'))
-                .sort((a: any, b: any) => a.priority - b.priority)
-                .map((i: any) => {
+                .filter((i) => ((i.base === data.canonicalBase && i.quote === data.canonicalQuote) || (i.base === data.canonicalQuote && i.quote === data.canonicalBase)) && !(!i.is_chain && i.chain_steps[0]?.provider === 'MANUAL'))
+                .sort((a, b) => a.priority - b.priority)
+                .map((i) => {
                     const steps = i.chain_steps ?? [];
                     return {
-                        providerCode: steps.length === 1 ? steps[0].provider : 'CHAIN:' + steps.map((s: any) => s.provider).join('+'),
+                        providerCode: i.is_chain ? 'CHAIN:' + steps.map((s) => s.provider).join('+') : steps[0].provider,
                         priority: i.priority,
                         chainSteps: steps,
                     };
@@ -703,15 +895,53 @@
      * Load comparison asset data if any comparison signals are configured.
      * Called explicitly from onMount, handleRefresh, handleDateRangeChange, handleSignalsChange.
      */
-    async function maybeLoadComparison() {
-        const compSignals = signals.filter((s) => s.signalType === 'asset-comparison');
-        if (compSignals.length === 0 || lineData.length === 0) return;
-        try {
-            comparisonEvents = await loadComparisonAssetsData(compSignals, {start: dateStart, end: dateEnd}, allAssets, comparisonEvents);
-            overlayDataVersion++;
-        } catch (e) {
-            console.error('Failed to load comparison asset data:', e);
+    function maybeLoadComparison(requestedSignalConfigs: SignalConfig[] = signals, force = false): Promise<void> {
+        const slug = data.canonicalSlug;
+        const base = data.urlBase;
+        const quote = data.urlQuote;
+        const sessionGeneration = getClientSessionGeneration();
+        const requestedFingerprint = comparisonLoadFingerprint(requestedSignalConfigs);
+        if (!force && comparisonInFlight?.fingerprint === requestedFingerprint) {
+            return comparisonInFlight.promise;
         }
+        if (!force && comparisonAppliedFingerprint === requestedFingerprint) {
+            return Promise.resolve();
+        }
+        comparisonInFlight = null;
+        const requestVersion = ++comparisonRequestGeneration;
+        const current = () => pageMounted && isClientSessionCurrent(sessionGeneration) && data.canonicalSlug === slug && data.urlBase === base && data.urlQuote === quote && requestVersion === comparisonRequestGeneration && comparisonLoadFingerprint(signals) === requestedFingerprint;
+        if (!current()) return Promise.resolve();
+        if (requestedFingerprint !== comparisonAppliedFingerprint) {
+            comparisonEvents = clearComparisonAssetsData(signals.filter((signal) => signal.signalType === 'asset-comparison'));
+            overlayDataVersion++;
+        }
+        const requestedAssetIds = comparisonAssetIds(requestedSignalConfigs);
+        if (requestedAssetIds.length === 0) {
+            comparisonAppliedFingerprint = requestedFingerprint;
+            return Promise.resolve();
+        }
+        if (lineData.length === 0) return Promise.resolve();
+        const promise = (async () => {
+            try {
+                const loaded = await loadComparisonAssetsData(requestedAssetIds, {start: dateStart, end: dateEnd}, allAssets);
+                if (!current()) return;
+                comparisonEvents = applyComparisonAssetsData(
+                    signals.filter((signal) => signal.signalType === 'asset-comparison'),
+                    loaded,
+                );
+                comparisonAppliedFingerprint = requestedFingerprint;
+                overlayDataVersion++;
+            } catch (error) {
+                if (!current()) return;
+                console.error('Failed to load comparison asset data:', error);
+            }
+        })();
+        comparisonInFlight = {fingerprint: requestedFingerprint, promise};
+        const clearInFlight = () => {
+            if (comparisonInFlight?.promise === promise) comparisonInFlight = null;
+        };
+        void promise.then(clearInFlight, clearInFlight);
+        return promise;
     }
 
     // =========================================================================
@@ -719,22 +949,44 @@
     // =========================================================================
 
     async function handleRefresh() {
+        const slug = data.canonicalSlug;
+        const base = data.urlBase;
+        const quote = data.urlQuote;
+        const sessionGeneration = getClientSessionGeneration();
+        const requestGeneration = ++refreshRequestGeneration;
+        const requestedSignals = signals;
+        const requestedSignalDataFingerprint = signalDataContextFingerprint(requestedSignals);
         rearmMaxPendingBeforeReload();
-        const store = getFxStore(data.canonicalSlug);
+        const requestedUrlStart = urlDateStart;
+        const requestedUrlEnd = urlDateEnd;
+        const current = () =>
+            pageMounted &&
+            isClientSessionCurrent(sessionGeneration) &&
+            requestGeneration === refreshRequestGeneration &&
+            data.canonicalSlug === slug &&
+            data.urlBase === base &&
+            data.urlQuote === quote &&
+            urlDateStart === requestedUrlStart &&
+            urlDateEnd === requestedUrlEnd &&
+            signalDataContextFingerprint(signals) === requestedSignalDataFingerprint;
+        if (!current()) return;
+        const store = getFxStore(slug);
         store.invalidateRange(dateStart, dateEnd);
-        await loadChartData();
+        await loadChartData(requestedSignals);
+        if (!current()) return;
         // Also invalidate overlay pair stores so comparison signals refresh
-        for (const cfg of signals) {
+        for (const cfg of requestedSignals) {
             if (cfg.signalType === 'fx-pair') {
                 const pairSlug = String(cfg.params.pairSlug || '');
-                if (pairSlug && pairSlug !== data.canonicalSlug) {
+                if (pairSlug && pairSlug !== slug) {
                     getFxStore(pairSlug).invalidateRange(dateStart, dateEnd);
                     await ensureFxRangeLoaded(pairSlug, dateStart, dateEnd);
+                    if (!current()) return;
                 }
             }
         }
         overlayDataVersion++;
-        await maybeLoadComparison();
+        await maybeLoadComparison(requestedSignals, true);
     }
 
     async function loadFxAiExportCompatibility() {
@@ -777,7 +1029,6 @@
 
     async function handlePageSyncComplete() {
         await handleRefresh();
-        await maybeLoadComparison();
         overlayDataVersion++;
     }
 
@@ -801,13 +1052,42 @@
     }
 
     function handleAestheticsChange(values: {colorByBaseline: boolean; areaFill: boolean; gridLines: boolean; staleGradient: boolean; yAxisMode: 'auto' | 'include0' | 'custom'; yAxisMin: number | undefined; yAxisMax: number | undefined}) {
-        setPairSettings(data.canonicalSlug, {...settings, ...values, signals: [...signals]});
+        setPairSettings(data.canonicalSlug, {
+            ...settings,
+            colorByBaseline: values.colorByBaseline,
+            areaFill: values.areaFill,
+            gridLines: values.gridLines,
+            staleGradient: values.staleGradient,
+            signals: [...signals],
+        });
+    }
+
+    function handleAxisScaleChange(key: string, scale: AxisScaleSettings) {
+        const normalized = normalizeAxisScaleSettings(scale, DEFAULT_AXIS_SCALE);
+        const axisScales = {
+            absolute: {...settings.axisScales.absolute},
+            percentage: {...settings.axisScales.percentage},
+            secondary: {...settings.axisScales.secondary},
+        };
+        if (key === 'primary:absolute') {
+            axisScales.absolute = normalized;
+        } else if (key === 'primary:percentage') {
+            axisScales.percentage = normalized;
+        } else {
+            axisScales.secondary[key] = normalized;
+        }
+        setPairSettings(data.canonicalSlug, {
+            ...settings,
+            axisScales,
+            signals: [...signals],
+        });
     }
 
     function handleSignalsChange(newSignals: SignalConfig[]) {
         const shouldReloadBackend = backendRequestFingerprint(signals) !== backendRequestFingerprint(newSignals);
+        const shouldReloadComparison = comparisonLoadFingerprint(signals) !== comparisonLoadFingerprint(newSignals);
         setPairSettings(data.canonicalSlug, {...settings, signals: JSON.parse(JSON.stringify(newSignals))});
-        maybeLoadComparison(); // fire-and-forget: load data for newly added comparison signals
+        if (shouldReloadComparison) void maybeLoadComparison(newSignals);
         if (shouldReloadBackend) {
             void loadChartData(newSignals);
         }
@@ -848,13 +1128,48 @@
     }
 
     async function handleSyncAsset(assetId: number) {
+        if (activeAssetSyncRequests.has(assetId)) return;
+        const requestGeneration = (assetSyncRequestGenerations.get(assetId) ?? 0) + 1;
+        assetSyncRequestGenerations.set(assetId, requestGeneration);
+        activeAssetSyncRequests.set(assetId, requestGeneration);
+        syncingComparisonAssetIds = new Set(activeAssetSyncRequests.keys());
+        try {
+            await runSyncAsset(assetId, requestGeneration);
+        } finally {
+            if (activeAssetSyncRequests.get(assetId) === requestGeneration) {
+                activeAssetSyncRequests.delete(assetId);
+            }
+            syncingComparisonAssetIds = new Set(activeAssetSyncRequests.keys());
+        }
+    }
+
+    async function runSyncAsset(assetId: number, requestGeneration: number) {
+        const slug = data.canonicalSlug;
+        const base = data.urlBase;
+        const quote = data.urlQuote;
+        const sessionGeneration = getClientSessionGeneration();
+        const requestedStart = syncDateStart;
+        const requestedEnd = dateEnd;
+        const requestedSignals = signals;
+        const requestedFingerprint = comparisonLoadFingerprint(requestedSignals);
+        const current = () =>
+            pageMounted &&
+            isClientSessionCurrent(sessionGeneration) &&
+            data.canonicalSlug === slug &&
+            data.urlBase === base &&
+            data.urlQuote === quote &&
+            activeAssetSyncRequests.get(assetId) === requestGeneration &&
+            syncDateStart === requestedStart &&
+            dateEnd === requestedEnd &&
+            comparisonLoadFingerprint(signals) === requestedFingerprint;
         try {
             const response = await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([
                 {
                     asset_id: assetId,
-                    date_range: {start: syncDateStart, end: dateEnd},
+                    date_range: {start: requestedStart, end: requestedEnd},
                 },
             ]);
+            if (!current()) return;
             const r = (response as any)?.results?.[0];
             const tr = get(t);
             if (r) {
@@ -863,11 +1178,11 @@
             } else {
                 toasts.error(`${tr('common.sync')} — ${tr('prices.sync.noResponse')}`);
             }
+            if (r?.status !== 'ok' && r?.status !== 'partial') return;
+            await maybeLoadComparison(requestedSignals, true);
         } catch (e: any) {
-            toasts.error('Sync failed: ' + (e?.message || 'unknown'));
+            if (current()) toasts.error('Sync failed: ' + (e?.message || 'unknown'));
         }
-        // Reload comparison data for the synced asset
-        await maybeLoadComparison();
     }
 
     function handleDetailAsset(assetId: number) {
@@ -910,11 +1225,11 @@
     }
 </script>
 
-<div class="space-y-4" data-testid="fx-detail-page" data-busy={loading}>
+<div class="space-y-4" data-testid="fx-detail-page" data-busy={loading} data-chart-pair={data.canonicalSlug} data-chart-last-rate={chartData.at(-1)?.rate ?? ''} data-discarded-chart-loads={discardedChartLoads}>
     <!-- ======================================================================= -->
     <!-- Header: pair info + back button -->
     <!-- ======================================================================= -->
-    <div class="flex items-center gap-3" data-testid="fx-detail-header">
+    <div class="flex items-center gap-3" data-testid="fx-detail-header" use:guideAnchor={'fx.detail.header'}>
         <button class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-gray-400 transition-colors" data-testid="fx-detail-back-btn" onclick={() => goBack('/fx')} title={$t('fxDetail.backToList')}>
             <ArrowLeft size={20} />
         </button>
@@ -986,6 +1301,7 @@
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                 data-testid="fx-detail-provider-btn"
+                use:guideAnchor={'fx.detail.provider'}
                 onclick={() => (showProviderModal = true)}
             >
                 <Wrench size={14} />
@@ -1034,7 +1350,7 @@
         {#if showSignals}
             <div data-testid="fx-detail-signals-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
                 <ChartSignalsSection
-                    signals={[...signals]}
+                    signals={signalPanelConfigs}
                     definitions={signalDefinitions}
                     backendError={signalBackendError}
                     {signalsLoading}
@@ -1046,6 +1362,7 @@
                     onsyncpair={handleSyncPair}
                     ondetailpair={handleDetailPair}
                     onsyncasset={handleSyncAsset}
+                    syncingAssetIds={syncingComparisonAssetIds}
                     ondetailasset={handleDetailAsset}
                     {signalSummaries}
                     {dateStart}
@@ -1057,7 +1374,7 @@
     <!-- ======================================================================= -->
     <!-- Chart with left toolbar -->
     <!-- ======================================================================= -->
-    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4" data-testid="fx-detail-chart" data-view-mode={viewMode}>
+    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4" data-testid="fx-detail-chart" data-view-mode={viewMode} use:guideAnchor={'fx.detail.chart'}>
         {#if loading && lineData.length === 0}
             <div class="h-96 flex items-center justify-center">
                 <div class="text-center">
@@ -1072,16 +1389,7 @@
                     <button class="absolute top-0 right-0 p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors" onclick={() => (showAesthetics = false)} title={$t('common.close')}>
                         <X size={16} />
                     </button>
-                    <ChartAestheticsSection
-                        colorByBaseline={settings.colorByBaseline}
-                        areaFill={settings.areaFill}
-                        gridLines={settings.gridLines}
-                        staleGradient={settings.staleGradient}
-                        yAxisMode={settings.yAxisMode}
-                        yAxisMin={settings.yAxisMin}
-                        yAxisMax={settings.yAxisMax}
-                        onchange={handleAestheticsChange}
-                    />
+                    <ChartAestheticsSection colorByBaseline={settings.colorByBaseline} areaFill={settings.areaFill} gridLines={settings.gridLines} staleGradient={settings.staleGradient} axisRows={aestheticsAxisRows} onchange={handleAestheticsChange} onaxischange={handleAxisScaleChange} />
                 </div>
             {/if}
 
@@ -1108,6 +1416,7 @@
                     </button>
                     <button
                         data-testid="fx-detail-edit-btn"
+                        use:guideAnchor={'fx.detail.editor'}
                         class="p-1.5 rounded-lg transition-colors {showDataEditor
                             ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 ring-1 ring-amber-300 dark:ring-amber-700'
                             : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
@@ -1157,9 +1466,10 @@
                     areaFill={settings.areaFill}
                     showGridLines={settings.gridLines}
                     showGradient={settings.staleGradient}
-                    yAxisMode={settings.yAxisMode}
-                    yAxisMin={settings.yAxisMin}
-                    yAxisMax={settings.yAxisMax}
+                    yAxisMode={activePrimaryAxisScale.mode}
+                    yAxisMin={activePrimaryAxisScale.min}
+                    yAxisMax={activePrimaryAxisScale.max}
+                    secondaryAxisScales={settings.axisScales.secondary}
                     {measureMode}
                     onMeasureClick={handleMeasureClick}
                     onMeasureHover={(date, value) => measurePanel?.updatePendingEnd(date, value)}

@@ -11,6 +11,7 @@ Reference: plan-phase07-transaction-Part4_Round6_PlanD1_BackendBatchSuggest.prom
 
 import uuid
 from datetime import date
+from decimal import Decimal
 from typing import Optional
 
 import httpx
@@ -269,7 +270,12 @@ class TestBatchSplit:
                 assert tx["related_transaction_id"] is None
             print_success("TRANSFER split → 2 ADJUSTMENT standalone ✓")
 
-    async def test_commit_with_split_cash_transfer(self):
+    @pytest.mark.parametrize(
+        "reverse_ids",
+        [False, True],
+        ids=["source-as-id-a", "destination-as-id-a"],
+    )
+    async def test_commit_with_split_cash_transfer(self, reverse_ids):
         """Split a CASH_TRANSFER pair → WITHDRAWAL + DEPOSIT standalone, asset_id=null."""
         print_section("B1.2 — Split CASH_TRANSFER pair via batch")
         async with httpx.AsyncClient() as client:
@@ -279,15 +285,20 @@ class TestBatchSplit:
 
             tx_ids = await create_cash_transfer_pair(client, broker_a, broker_b)
             assert len(tx_ids) == 2
+            source_id, destination_id = tx_ids
+            id_a, id_b = (destination_id, source_id) if reverse_ids else (source_id, destination_id)
 
             resp = await client.post(
                 f"{API_BASE}/transactions/commit",
-                json={"splits": [{"id_a": tx_ids[0], "id_b": tx_ids[1]}]},
+                json={"splits": [{"id_a": id_a, "id_b": id_b}]},
                 timeout=TIMEOUT,
             )
             assert resp.status_code == 200
             data = resp.json()
             assert data["committed"] is True
+            split_results = [result for result in data["results"] if result["operation"] == "split"]
+            assert len(split_results) == 1
+            assert split_results[0]["ids"] == [source_id, destination_id]
 
             resp2 = await client.get(
                 f"{API_BASE}/transactions",
@@ -295,11 +306,14 @@ class TestBatchSplit:
                 timeout=TIMEOUT,
             )
             txs = resp2.json()
-            types = sorted(tx["type"] for tx in txs)
-            assert types == ["DEPOSIT", "WITHDRAWAL"], f"Expected DEPOSIT+WITHDRAWAL, got {types}"
-            for tx in txs:
-                assert tx["related_transaction_id"] is None
-                assert tx["asset_id"] is None
+            by_id = {tx["id"]: tx for tx in txs}
+            assert set(by_id) == {source_id, destination_id}
+            assert by_id[source_id]["type"] == "WITHDRAWAL"
+            assert Decimal(by_id[source_id]["cash"]["amount"]) == Decimal("-1000")
+            assert by_id[destination_id]["type"] == "DEPOSIT"
+            assert Decimal(by_id[destination_id]["cash"]["amount"]) == Decimal("1000")
+            assert all(tx["related_transaction_id"] is None for tx in by_id.values())
+            assert all(tx["asset_id"] is None for tx in by_id.values())
             print_success("CASH_TRANSFER split → WITHDRAWAL + DEPOSIT standalone ✓")
 
     async def test_validate_split_not_found(self):
@@ -351,18 +365,20 @@ class TestBatchSplit:
             print_success("Split standalone → splitIdsMismatch issue ✓")
 
     async def test_split_in_mixed_batch(self):
-        """Creates + updates + splits in the same commit batch."""
-        print_section("B1.5 — Mixed batch with split")
+        """Split runs before updates whose type swaps only become valid post-split."""
+        print_section("B1.5 — Split precedes dependent updates")
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
             broker_a = await create_broker(client, "MixA")
             broker_b = await create_broker(client, "MixB")
-            asset_id = await get_or_create_asset(client)
+            source_id, destination_id = await create_cash_transfer_pair(
+                client,
+                broker_a,
+                broker_b,
+            )
+            source_description = f"post-split-source-{uuid.uuid4().hex}"
+            destination_description = f"post-split-destination-{uuid.uuid4().hex}"
 
-            # Create a TRANSFER pair first
-            tx_ids = await create_transfer_pair(client, broker_a, broker_b, asset_id)
-
-            # Now commit with a create + a split in the same batch
             resp = await client.post(
                 f"{API_BASE}/transactions/commit",
                 json={
@@ -375,20 +391,51 @@ class TestBatchSplit:
                             "cash": {"code": "EUR", "amount": "500"},
                         }
                     ],
-                    "splits": [{"id_a": tx_ids[0], "id_b": tx_ids[1]}],
+                    "updates": [
+                        {
+                            "id": source_id,
+                            "type": "DEPOSIT",
+                            "cash": {"code": "EUR", "amount": "125"},
+                            "description": source_description,
+                        },
+                        {
+                            "id": destination_id,
+                            "type": "WITHDRAWAL",
+                            "cash": {"code": "EUR", "amount": "-125"},
+                            "description": destination_description,
+                        },
+                    ],
+                    "splits": [{"id_a": destination_id, "id_b": source_id}],
                 },
                 timeout=TIMEOUT,
             )
             assert resp.status_code == 200
             data = resp.json()
-            assert data["committed"] is True
+            assert data["committed"] is True, data
+            assert data["success_count"] == 4
+            assert [(result["operation"], result["index"], result["status"]) for result in data["results"]] == [
+                ("split", 0, "success"),
+                ("update", 0, "success"),
+                ("update", 1, "success"),
+                ("create", 0, "success"),
+            ]
 
-            # Verify: 1 create + 1 split
-            create_results = [r for r in data["results"] if r["operation"] == "create"]
-            split_results = [r for r in data["results"] if r["operation"] == "split"]
-            assert len(create_results) == 1
-            assert len(split_results) == 1
-            print_success("Mixed batch (create + split) committed ✓")
+            rows_response = await client.get(
+                f"{API_BASE}/transactions",
+                params={"ids": [source_id, destination_id]},
+                timeout=TIMEOUT,
+            )
+            assert rows_response.status_code == 200, rows_response.text
+            by_id = {tx["id"]: tx for tx in rows_response.json()}
+            assert set(by_id) == {source_id, destination_id}
+            assert by_id[source_id]["type"] == "DEPOSIT"
+            assert by_id[source_id]["description"] == source_description
+            assert Decimal(by_id[source_id]["cash"]["amount"]) == Decimal("125")
+            assert by_id[destination_id]["type"] == "WITHDRAWAL"
+            assert by_id[destination_id]["description"] == destination_description
+            assert Decimal(by_id[destination_id]["cash"]["amount"]) == Decimal("-125")
+            assert all(tx["related_transaction_id"] is None for tx in by_id.values())
+            print_success("Post-split type swaps and fields persisted in stage order ✓")
 
 
 # ============================================================================
@@ -402,7 +449,12 @@ class TestBatchPromote:
     def server(self, test_server):
         yield
 
-    async def test_commit_promote_saved_saved(self):
+    @pytest.mark.parametrize(
+        "reverse_ids",
+        [False, True],
+        ids=["withdrawal-as-id-a", "deposit-as-id-a"],
+    )
+    async def test_commit_promote_saved_saved(self, reverse_ids):
         """Promote 2 saved standalone WITHDRAWAL+DEPOSIT → CASH_TRANSFER pair."""
         print_section("B2.1 — Promote saved+saved → CASH_TRANSFER")
         async with httpx.AsyncClient() as client:
@@ -422,16 +474,20 @@ class TestBatchPromote:
                 "DEPOSIT",
                 cash={"code": "EUR", "amount": "800"},
             )
+            id_a, id_b = (d_id, w_id) if reverse_ids else (w_id, d_id)
 
             resp = await client.post(
                 f"{API_BASE}/transactions/commit",
-                json={"promotes": [{"id_a": w_id, "id_b": d_id}]},
+                json={"promotes": [{"id_a": id_a, "id_b": id_b}]},
                 timeout=TIMEOUT,
             )
             assert resp.status_code == 200
             data = resp.json()
             assert data["committed"] is True, f"Promote not committed: {data}"
             assert data["issues"] == []
+            promote_results = [result for result in data["results"] if result["operation"] == "promote"]
+            assert len(promote_results) == 1
+            assert promote_results[0]["ids"] == [id_a, id_b]
 
             # Verify both are CASH_TRANSFER with bidirectional link
             resp2 = await client.get(
@@ -440,9 +496,13 @@ class TestBatchPromote:
                 timeout=TIMEOUT,
             )
             txs = resp2.json()
-            assert all(tx["type"] == "CASH_TRANSFER" for tx in txs)
-            assert txs[0]["related_transaction_id"] == txs[1]["id"]
-            assert txs[1]["related_transaction_id"] == txs[0]["id"]
+            by_id = {tx["id"]: tx for tx in txs}
+            assert set(by_id) == {w_id, d_id}
+            assert all(tx["type"] == "CASH_TRANSFER" for tx in by_id.values())
+            assert by_id[w_id]["related_transaction_id"] == d_id
+            assert by_id[d_id]["related_transaction_id"] == w_id
+            assert Decimal(by_id[w_id]["cash"]["amount"]) == Decimal("-800")
+            assert Decimal(by_id[d_id]["cash"]["amount"]) == Decimal("800")
             print_success("Promote saved+saved → CASH_TRANSFER pair ✓")
 
     async def test_commit_promote_new_new(self):

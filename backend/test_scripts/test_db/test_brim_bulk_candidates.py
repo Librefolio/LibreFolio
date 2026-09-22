@@ -20,6 +20,7 @@ these tests are. Every case here is a shape the parser really produces:
 from __future__ import annotations
 
 import uuid
+from typing import List
 
 import pytest
 import pytest_asyncio
@@ -28,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetType
 from backend.app.db.session import get_async_engine
+from backend.app.schemas.brim import BRIMMatchConfidence
 from backend.app.services.brim_provider import search_asset_candidates, search_asset_candidates_bulk
 
 
@@ -153,3 +155,100 @@ async def test_bulk_finds_the_placement_isin_among_alternates(async_session: Asy
 async def test_bulk_on_empty_input_is_a_no_op(async_session: AsyncSession):
     """No extractions, no query."""
     assert await search_asset_candidates_bulk(async_session, []) == {}
+
+
+# =============================================================================
+# Explicit invariants — one asset per test, not the shared `candidate_assets` universe.
+#
+# The frontend fix (`uniqueCandidateId` in importMerge.ts, formerly the buggy
+# `uniqueExactCandidateId`) only makes sense if the backend it mirrors really does select
+# on "one distinct candidate, any confidence" and reject "more than one distinct id" — and
+# really does search inactive assets and alternates the same as primary/active ones. These
+# three are exactly that, kept off the shared fixture above so as not to widen a universe
+# every other case in this file also queries against.
+# =============================================================================
+
+
+@pytest_asyncio.fixture
+async def solo_assets(async_session: AsyncSession):
+    """Assets scoped to a single test — a factory, so each case creates only what it needs."""
+    created: List[Asset] = []
+
+    async def make(**kwargs) -> Asset:
+        suffix = uuid.uuid4().hex[:6]
+        kwargs.setdefault("display_name", f"Solo invariant asset {suffix}")
+        kwargs.setdefault("currency", "EUR")
+        kwargs.setdefault("asset_type", AssetType.BOND)
+        asset = Asset(**kwargs)
+        async_session.add(asset)
+        await async_session.commit()
+        await async_session.refresh(asset)
+        created.append(asset)
+        return asset
+
+    yield make
+
+    for asset in created:
+        leftover = (await async_session.execute(select(Asset).where(Asset.id == asset.id))).scalars().first()
+        if leftover:
+            await async_session.delete(leftover)
+    await async_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_inactive_asset_is_still_a_candidate_and_still_auto_selects(async_session: AsyncSession, solo_assets):
+    """Imports are retroactive by nature (final coupons, redemptions land on matured
+    securities): the active filter must default to "both", not "active only"."""
+    isin = f"IT{uuid.uuid4().hex[:10].upper()}"
+    asset = await solo_assets(identifier_isin=isin, active=False)
+
+    candidates, auto = await search_asset_candidates(session=async_session, extracted_symbol=None, extracted_isin=isin, extracted_name=None)
+    assert [c.asset_id for c in candidates] == [asset.id]
+    assert auto == asset.id
+
+    bulk = await search_asset_candidates_bulk(async_session, [(None, isin, None)])
+    bulk_candidates, bulk_auto = bulk[(None, isin, None)]
+    assert [c.asset_id for c in bulk_candidates] == [asset.id]
+    assert bulk_auto == asset.id
+
+
+@pytest.mark.asyncio
+async def test_primary_and_alternate_hit_on_the_same_asset_collapse_to_one_candidate(async_session: AsyncSession, solo_assets):
+    """The same ISIN, primary column AND repeated in identifier_other on the SAME asset —
+    e.g. a re-saved alternate that duplicates the quoted code. Deduplication is by asset id,
+    so this must stay one candidate (EXACT, the stronger of the two hits), not two, and it
+    must still auto-select: dedup, not ambiguity."""
+    isin = f"IT{uuid.uuid4().hex[:10].upper()}"
+    asset = await solo_assets(identifier_isin=isin, identifier_other=[isin])
+
+    candidates, auto = await search_asset_candidates(session=async_session, extracted_symbol=None, extracted_isin=isin, extracted_name=None)
+    assert len(candidates) == 1
+    assert candidates[0].asset_id == asset.id
+    assert candidates[0].match_confidence == BRIMMatchConfidence.EXACT
+    assert auto == asset.id
+
+    bulk = await search_asset_candidates_bulk(async_session, [(None, isin, None)])
+    bulk_candidates, bulk_auto = bulk[(None, isin, None)]
+    assert len(bulk_candidates) == 1
+    assert bulk_candidates[0].match_confidence == BRIMMatchConfidence.EXACT
+    assert bulk_auto == asset.id
+
+
+@pytest.mark.asyncio
+async def test_two_different_assets_sharing_one_isin_have_no_auto_select(async_session: AsyncSession, solo_assets):
+    """The genuine ambiguity: the code is primary on one asset and an alternate on a
+    DIFFERENT one. Candidates stay plural (both must be offered) and neither search path
+    may auto-select — this is the "multiple -> null" half of the policy the frontend now
+    mirrors regardless of the tier either candidate matched at."""
+    isin = f"IT{uuid.uuid4().hex[:10].upper()}"
+    primary = await solo_assets(identifier_isin=isin)
+    alias = await solo_assets(identifier_other=[isin])
+
+    candidates, auto = await search_asset_candidates(session=async_session, extracted_symbol=None, extracted_isin=isin, extracted_name=None)
+    assert {c.asset_id for c in candidates} == {primary.id, alias.id}
+    assert auto is None
+
+    bulk = await search_asset_candidates_bulk(async_session, [(None, isin, None)])
+    bulk_candidates, bulk_auto = bulk[(None, isin, None)]
+    assert {c.asset_id for c in bulk_candidates} == {primary.id, alias.id}
+    assert bulk_auto is None

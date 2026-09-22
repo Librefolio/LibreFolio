@@ -3,13 +3,13 @@ Database tests: create, validate, populate, fx_rates, brim, referential integrit
 """
 
 import shutil
+import sys
 
-from backend.test_scripts.test_db_config import TEST_DATA_DIR
+from backend.test_scripts.test_db_config import get_test_data_dir, get_test_db_path, setup_test_database
 from scripts.cli_base import pipenv_prefix
 
 from . import _common
 from ._common import (
-    TEST_DB_PATH,
     _build_pytest_cmd,
     _run_test_suite,
     add_test,
@@ -20,7 +20,6 @@ from ._common import (
     print_success,
     print_warning,
     run_command,
-    setup_test_database,
 )
 
 
@@ -51,11 +50,12 @@ def _reset_test_file_store() -> None:
     The stores are rebuilt by ``db populate`` (``--with-reports`` / ``--with-static``)
     and the default avatars re-copy themselves at startup, so clearing costs nothing.
     """
+    test_data_dir = get_test_data_dir()
     for name in ("broker_reports", "custom-uploads"):
-        target = TEST_DATA_DIR / name
+        target = test_data_dir / name
 
         # Never let a path bug reach outside the test data directory.
-        if not target.resolve().is_relative_to(TEST_DATA_DIR.resolve()):
+        if not target.resolve().is_relative_to(test_data_dir.resolve()):
             print_error(f"Refusing to clear {target}: outside the test data directory")
             continue
 
@@ -72,7 +72,8 @@ def _db_create_body(verbose: bool = False) -> bool:
 
     setup_test_database()
 
-    print_info(f"This test operates on: {TEST_DB_PATH}")
+    test_db_path = get_test_db_path()
+    print_info(f"This test operates on: {test_db_path}")
     print_info("The backend server is NOT used in this test")
 
     # The precondition is checked *before* the destructive step, not by the
@@ -89,9 +90,9 @@ def _db_create_body(verbose: bool = False) -> bool:
         print_error("Test database creation aborted — the database was left untouched")
         return False
 
-    if TEST_DB_PATH.exists():
-        print_warning(f"Removing existing test database: {TEST_DB_PATH}")
-        TEST_DB_PATH.unlink()
+    if test_db_path.exists():
+        print_warning(f"Removing existing test database: {test_db_path}")
+        test_db_path.unlink()
         print_success("Test database removed")
     else:
         print_info("No existing test database found")
@@ -102,17 +103,17 @@ def _db_create_body(verbose: bool = False) -> bool:
 
     print("\nCreating fresh test database from migrations...")
     success = run_command(
-        ["./dev.sh", "db:upgrade", str(TEST_DB_PATH)],
+        [sys.executable, "dev.py", "db", "upgrade", str(test_db_path)],
         "Create database via Alembic migrations",
         verbose=verbose
         )
 
     if success:
-        if TEST_DB_PATH.exists():
-            print_success(f"Test database created successfully: {TEST_DB_PATH}")
-            print_info(f"Database file size: {TEST_DB_PATH.stat().st_size} bytes")
+        if test_db_path.exists():
+            print_success(f"Test database created successfully: {test_db_path}")
+            print_info(f"Database file size: {test_db_path.stat().st_size} bytes")
         else:
-            print_error(f"Test database file not found at: {TEST_DB_PATH}")
+            print_error(f"Test database file not found at: {test_db_path}")
             print_error("Migration succeeded but database file was not created")
             success = False
     else:
@@ -124,7 +125,7 @@ def _db_create_body(verbose: bool = False) -> bool:
 def db_validate(verbose: bool = False, test_names: list = None) -> bool:
     """Validate database schema."""
     print_section("Database Schema Validation")
-    print_info(f"This test operates on: {TEST_DB_PATH}")
+    print_info(f"This test operates on: {get_test_db_path()}")
     print_info("The backend server is NOT used in this test")
     print_info("Testing: Tables, Foreign Keys, Constraints, Indexes, Enums")
 
@@ -138,7 +139,7 @@ def db_populate(verbose: bool = False, force: bool = False,
                 with_reports: bool = False) -> bool:
     """Populate database with mock data for testing."""
     print_section("Database Mock Data Population")
-    print_info(f"This test operates on: {TEST_DB_PATH}")
+    print_info(f"This test operates on: {get_test_db_path()}")
     print_info("The backend server is NOT used in this test")
     print_info("⚠️  Populating MOCK DATA for testing purposes")
 
@@ -169,7 +170,7 @@ def db_populate(verbose: bool = False, force: bool = False,
 def db_fx_rates(verbose: bool = False, test_names: list = None) -> bool:
     """Test FX rates persistence in database."""
     print_section("DB Test: FX Rates Persistence")
-    print_info(f"This test operates on: {TEST_DB_PATH} (test database)")
+    print_info(f"This test operates on: {get_test_db_path()} (test database)")
     print_info("Testing: Fetch rates, Persist to DB, Overwrite, Idempotency, Constraints")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_fx_rates_persistence.py", test_names)
@@ -179,7 +180,7 @@ def db_fx_rates(verbose: bool = False, test_names: list = None) -> bool:
 def db_brim(verbose: bool = False, test_names: list = None) -> bool:
     """Test BRIM database operations."""
     print_section("DB Test: BRIM Asset Search & Duplicate Detection")
-    print_info(f"This test operates on: {TEST_DB_PATH} (test database)")
+    print_info(f"This test operates on: {get_test_db_path()} (test database)")
     print_info("Testing: Asset candidate search, duplicate detection")
     print_info("Tests: ISIN/ticker search, confidence levels, auto-selection")
 
@@ -190,7 +191,7 @@ def db_brim(verbose: bool = False, test_names: list = None) -> bool:
 def db_brim_bulk(verbose: bool = False, test_names: list = None) -> bool:
     """Test that the bulk candidate search agrees with the per-asset one."""
     print_section("DB Test: BRIM Bulk Candidate Search")
-    print_info(f"This test operates on: {TEST_DB_PATH} (test database)")
+    print_info(f"This test operates on: {get_test_db_path()} (test database)")
     print_info("Testing: bulk vs per-asset equivalence, dual-ISIN bonds, '%' in names")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_brim_bulk_candidates.py", test_names)
@@ -261,7 +262,7 @@ def db_all(verbose: bool = False) -> bool:
         info_msgs=[
             "Testing the database layer (SQLite file)",
             "Backend server is NOT required for these tests",
-            f"Target: {TEST_DB_PATH}",
+            f"Target: {get_test_db_path()}",
             ],
         summary_title="Database Test Summary",
             resume=_common._RESUME_MODE,
@@ -313,4 +314,3 @@ Note: No backend server required. Tests operate directly on test DB.
     add_test(cat, "all", db_all, test_names=False, name="All DB Tests",
              desc="Run all database tests in order")
     registry["db"] = cat
-

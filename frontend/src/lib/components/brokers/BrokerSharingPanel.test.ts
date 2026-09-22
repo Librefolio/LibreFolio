@@ -33,13 +33,10 @@
  *     column is, and that is read from `sharing-{owners,editors,viewers}-column`.
  *   - the donut's pixels. `data-slices` is the *input* to the chart, nothing more.
  *
- * Two selectors here are weaker than they should be, and both are noted in the
- * report as requests rather than worked around silently: the role dropdown (its
- * trigger and its three options carry no `data-*`, so they are reached by index
- * into `roleOptions`, a constant declared in the source — never data — and every
- * use is immediately verified by its consequence) and the Reset control (reached
- * by `title="Reset"`, which is hard-coded English in the markup, not a catalogue
- * key — that this lookup works at all is itself an i18n gap).
+ * The Runes regressions require additive role trigger/option and Reset testids
+ * in the owning production panel. pickRole uses those precise handles while
+ * preserving its callers and its role/share postconditions. Older Reset/footer
+ * lookups remain unchanged; they are not a selector-cleanup campaign.
  *
  * Left uncovered on purpose: `$: if (brokerId)` skipping a falsy id (broker ids
  * come from a route and are never 0), and the `readOnly` early-returns inside
@@ -51,6 +48,8 @@
  * the real button is disabled.
  */
 import {beforeEach, describe, expect, it, vi} from 'vitest';
+import {tick} from 'svelte';
+import {locale, waitLocale} from 'svelte-i18n';
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 
 // --- Mocks --------------------------------------------------------------
@@ -117,6 +116,7 @@ const LIST = 'list_broker_access_api_v1_brokers__broker_id__access_get';
 const SEARCH = 'search_users_endpoint_api_v1_users_search_get';
 const PUT = 'bulk_update_broker_access_api_v1_brokers__broker_id__access_put';
 const DELETE_ME = 'leave_broker_access_api_v1_brokers__broker_id__access_me_delete';
+const PATCH_ME = 'update_own_broker_role_api_v1_brokers__broker_id__access_me_patch';
 
 type Role = 'OWNER' | 'EDITOR' | 'VIEWER';
 
@@ -228,36 +228,39 @@ function lastPutBody(): {user_id: number; role: Role; share_percentage: number}[
 // =========================================================================
 
 /**
- * The buttons in a scope that carry no `data-testid`. Used only for the role
- * dropdown and the edit dialog's footer, which publish no handles of their own;
- * every call asserts the expected length first, so a markup change fails here
- * with a readable count instead of silently clicking the wrong control.
+ * Legacy footer readers count the role trigger among otherwise unlabelled
+ * buttons. Keep that same set when the trigger gains a testid; excluding it
+ * would silently shift every existing Remove/Cancel index. New role selection
+ * below does not use these positional readers.
  */
 function plainButtons(scope: HTMLElement): HTMLButtonElement[] {
     return within(scope)
         .getAllByRole('button')
-        .filter((b) => !b.hasAttribute('data-testid')) as HTMLButtonElement[];
+        .filter((b) => !b.hasAttribute('data-testid') || ['sharing-add-role-trigger', 'sharing-edit-role-trigger'].includes(b.getAttribute('data-testid')!)) as HTMLButtonElement[];
 }
 
 /**
  * Choose a role in the dropdown of `scope` (the add form or the edit dialog).
  *
- * `roleOptions` is a constant declared in the component in the fixed order
- * OWNER, EDITOR, VIEWER — a source-order enum, not data — so the index is stable
- * by construction. It is still verified rather than trusted: picking OWNER must
- * reveal the share input, and picking anything else must remove it, which is the
- * `{#if newRole === 'OWNER'}` / `{#if editRole === 'OWNER'}` arm. If the index
- * were wrong the assertion below fails immediately.
+ * The optional legacy argument is retained so all existing callers, including
+ * F3, stay unchanged. Scope identity replaces the index. Picking OWNER must
+ * still reveal the share input; picking any other role must remove it.
  */
-async function pickRole(scope: HTMLElement, role: Role, opts: {triggerIndex?: number} = {}) {
-    const triggerIndex = opts.triggerIndex ?? 0;
-    const closed = plainButtons(scope);
-    await fireEvent.click(closed[triggerIndex]);
-
-    const open = plainButtons(scope);
-    expect(open).toHaveLength(closed.length + 3); // trigger + the three options
-    const optionIndex = triggerIndex + 1 + ['OWNER', 'EDITOR', 'VIEWER'].indexOf(role);
-    await fireEvent.click(open[optionIndex]);
+async function pickRole(scope: HTMLElement, role: Role, _opts: {triggerIndex?: number} = {}) {
+    const scopeId = scope.getAttribute('data-testid');
+    expect(['sharing-add-form', 'sharing-edit-user-modal']).toContain(scopeId);
+    const kind = scopeId === 'sharing-add-form' ? 'add' : 'edit';
+    const prefix = `sharing-${kind}-role-option-`;
+    await fireEvent.click(within(scope).getByTestId(`sharing-${kind}-role-trigger`));
+    await waitFor(() => {
+        expect(
+            within(scope)
+                .getAllByTestId(new RegExp(`^${prefix}`))
+                .map((button) => button.getAttribute('data-testid')),
+        ).toEqual(['OWNER', 'EDITOR', 'VIEWER'].map((value) => `${prefix}${value}`));
+    });
+    await fireEvent.click(within(scope).getByTestId(`${prefix}${role}`));
+    await waitFor(() => expect(within(scope).queryAllByTestId(new RegExp(`^${prefix}`))).toHaveLength(0));
 
     if (role === 'OWNER') {
         await waitFor(() => expect(within(scope).getAllByRole('spinbutton')).toHaveLength(1));
@@ -315,7 +318,7 @@ function editRemoveButton(dialog: HTMLElement): HTMLButtonElement {
 }
 
 beforeEach(() => {
-    for (const name of [LIST, SEARCH, PUT, DELETE_ME]) api[name].mockReset();
+    for (const name of [LIST, SEARCH, PUT, DELETE_ME, PATCH_ME]) api[name].mockReset();
     api[PUT].mockResolvedValue({results: [], success_count: 0});
     vi.mocked(toasts.success).mockClear();
     vi.mocked(toasts.error).mockClear();
@@ -1208,5 +1211,290 @@ describe('BrokerSharingPanel — self-service leave (F4, R3-F4, R5-F4)', () => {
         await waitFor(() => expect(screen.getByTestId('confirm-modal-message')).toBeInTheDocument());
 
         expect(leaveDescription()).toBeNull();
+    });
+});
+
+// =========================================================================
+describe('BrokerSharingPanel — Runes read and binding boundaries', () => {
+    const expectOneRead = () => expect(api[LIST].mock.calls).toEqual([[{params: {broker_id: 7}}]]);
+    const boundDirty = () => screen.getByTestId('harness-has-changes');
+
+    it('does not refetch the ACL for local roles, shares, candidates, auth, locale or readOnly', async () => {
+        await setupI18n();
+        api[LIST].mockResolvedValue({items: [access(1, 'alice', 'OWNER', 0.6), access(2, 'bob', 'VIEWER')]});
+        api[SEARCH].mockResolvedValue({items: [{id: 9, username: 'zoe', avatar_url: null}]});
+        const {component} = render(BrokerSharingPanelHarness, {brokerId: 7});
+        await settled();
+        const mountedPanel = panel();
+        expectOneRead();
+
+        const edit = await openEdit(2);
+        await pickRole(edit, 'EDITOR');
+        expectOneRead();
+        await fireEvent.click(screen.getByTestId('sharing-confirm-edit'));
+        await waitFor(() => expect(columnOf(2)).toBe('EDITOR'));
+        expectOneRead();
+
+        const owner = await openEdit(1);
+        await typeShare(owner, '40');
+        expectOneRead();
+        await fireEvent.click(screen.getByTestId('sharing-confirm-edit'));
+        await waitFor(() => expect(slices()).toEqual([{name: 'alice', percentage: 40, avatarUrl: null}]));
+        expectOneRead();
+
+        const add = await openAdd();
+        await pickRole(add, 'OWNER');
+        await pickUser(9);
+        await typeShare(add, '30');
+        expect(screen.getByTestId('sharing-confirm-add')).toBeEnabled();
+        expectOneRead();
+        await fireEvent.click(screen.getByTestId('sharing-confirm-add'));
+        await waitFor(() => expect(columnOf(9)).toBe('OWNER'));
+        expect(slices()).toEqual([
+            {name: 'alice', percentage: 40, avatarUrl: null},
+            {name: 'zoe', percentage: 30, avatarUrl: null},
+        ]);
+        expectOneRead();
+
+        authStore.set({user: {id: 2, username: 'bob'}});
+        await waitFor(() => expect(screen.getByTestId('sharing-self-demote-btn')).toBeEnabled());
+        expectOneRead();
+        try {
+            locale.set('it');
+            await waitLocale('it');
+            await tick();
+            expect(columnOf(2)).toBe('EDITOR');
+            expect(columnOf(9)).toBe('OWNER');
+            expect(saveBtn()).toBeEnabled();
+            expectOneRead();
+
+            // svelte-core/src/props.svelte.js stores direct-render props in a
+            // single $state.raw object: rerender replaces it even for a partial
+            // update and invalidates the brokerId read too. Drive this change
+            // through the compiled legacy host instead, leaving brokerId alone.
+            component.setReadOnly(true);
+            await tick();
+            expect(panel()).toBe(mountedPanel);
+            expect(panel()).toHaveAttribute('data-access-state', 'ready');
+            expect(entry(2)).toBeDisabled();
+            expect(screen.getByTestId('sharing-self-service')).toBeInTheDocument();
+            expect(screen.queryByTestId('sharing-save-btn')).not.toBeInTheDocument();
+            expect(boundDirty()).toHaveAttribute('data-value', 'true');
+            expectOneRead();
+            component.setReadOnly(false);
+            await tick();
+            expect(panel()).toBe(mountedPanel);
+            expect(entry(2)).toBeEnabled();
+            expect(saveBtn()).toBeEnabled();
+            expect(boundDirty()).toHaveAttribute('data-value', 'true');
+            expect(slices()).toEqual([
+                {name: 'alice', percentage: 40, avatarUrl: null},
+                {name: 'zoe', percentage: 30, avatarUrl: null},
+            ]);
+            expectOneRead();
+        } finally {
+            locale.set('en');
+            await waitLocale('en');
+            await tick();
+        }
+        expectOneRead();
+        expect(api[PUT]).not.toHaveBeenCalled();
+        expect(api[PATCH_ME]).not.toHaveBeenCalled();
+        expect(api[DELETE_ME]).not.toHaveBeenCalled();
+    });
+
+    it('reads exactly once per broker change and again for the same broker on remount', async () => {
+        await setupI18n();
+        const first = await mountPanel({accesses: [access(1, 'alice', 'OWNER', 1)]});
+        expectOneRead();
+
+        const next = deferred<{items: ReturnType<typeof access>[]}>();
+        api[LIST].mockReturnValueOnce(next.promise);
+        await first.rerender({brokerId: 8});
+        expect(panel()).toHaveAttribute('data-access-state', 'loading');
+        next.resolve({items: [access(8, 'owned-broker-eight', 'OWNER', 1)]});
+        await settled();
+        expect(entry(8)).toHaveTextContent('owned-broker-eight');
+        expect(screen.queryByTestId('access-entry-1')).not.toBeInTheDocument();
+        expect(api[LIST].mock.calls).toEqual([[{params: {broker_id: 7}}], [{params: {broker_id: 8}}]]);
+
+        first.unmount();
+        expect(screen.queryByTestId('broker-sharing-panel')).not.toBeInTheDocument();
+        api[LIST].mockResolvedValue({items: [access(8, 'owned-broker-eight', 'OWNER', 1)]});
+        render(BrokerSharingPanel, {brokerId: 8});
+        await settled();
+        await tick();
+        expect(entry(8)).toHaveTextContent('owned-broker-eight');
+        expect(api[LIST].mock.calls).toEqual([[{params: {broker_id: 7}}], [{params: {broker_id: 8}}], [{params: {broker_id: 8}}]]);
+    });
+
+    it('publishes bound dirty true for an edit and false after Reset without a read or write', async () => {
+        await setupI18n();
+        const onChanged = vi.fn();
+        const onCancelProbe = vi.fn();
+        api[LIST].mockResolvedValue({items: [access(1, 'alice', 'OWNER', 1), access(2, 'bob', 'VIEWER')]});
+        render(BrokerSharingPanelHarness, {brokerId: 7, onChanged, onCancelProbe});
+        await settled();
+        expect(boundDirty()).toHaveAttribute('data-value', 'false');
+
+        const dialog = await openEdit(2);
+        await pickRole(dialog, 'EDITOR');
+        await fireEvent.click(screen.getByTestId('sharing-confirm-edit'));
+        await waitFor(() => expect(boundDirty()).toHaveAttribute('data-value', 'true'));
+        expect(columnOf(2)).toBe('EDITOR');
+        expect(saveBtn()).toBeEnabled();
+        await fireEvent.click(screen.getByTestId('sharing-reset-btn'));
+
+        await waitFor(() => expect(boundDirty()).toHaveAttribute('data-value', 'false'));
+        expect(columnOf(2)).toBe('VIEWER');
+        expect(saveBtn()).toBeDisabled();
+        expect(screen.queryByTestId('sharing-reset-btn')).not.toBeInTheDocument();
+        expectOneRead();
+        expect(api[PUT]).not.toHaveBeenCalled();
+        expect(onChanged).not.toHaveBeenCalled();
+        expect(onCancelProbe).not.toHaveBeenCalled();
+    });
+
+    it('keeps bound dirty true during and after a refused save without invoking close', async () => {
+        await setupI18n();
+        const onChanged = vi.fn();
+        const onCancelProbe = vi.fn();
+        const save = deferred<unknown>();
+        api[LIST].mockResolvedValue({items: [access(1, 'alice', 'OWNER', 1), access(2, 'bob', 'VIEWER')]});
+        api[PUT].mockReturnValue(save.promise);
+        render(BrokerSharingPanelHarness, {brokerId: 7, onChanged, onCancelProbe});
+        await settled();
+        expect(boundDirty()).toHaveAttribute('data-value', 'false');
+
+        const dialog = await openEdit(2);
+        await pickRole(dialog, 'EDITOR');
+        await fireEvent.click(screen.getByTestId('sharing-confirm-edit'));
+        await waitFor(() => expect(boundDirty()).toHaveAttribute('data-value', 'true'));
+        await fireEvent.click(saveBtn());
+        expect(api[PUT]).toHaveBeenCalledTimes(1);
+        expect(saveBtn()).toBeDisabled();
+        expect(boundDirty()).toHaveAttribute('data-value', 'true');
+        expect(onCancelProbe).not.toHaveBeenCalled();
+
+        save.reject(httpError('RUNES-BOUND-SAVE-REFUSED'));
+        await waitFor(() => expect(errorText()).toBe('RUNES-BOUND-SAVE-REFUSED'));
+        expect(boundDirty()).toHaveAttribute('data-value', 'true');
+        expect(columnOf(2)).toBe('EDITOR');
+        expect(saveBtn()).toBeEnabled();
+        expectOneRead();
+        expect(onChanged).not.toHaveBeenCalled();
+        expect(onCancelProbe).not.toHaveBeenCalled();
+        expect(toasts.success).not.toHaveBeenCalled();
+        expect(toasts.error).not.toHaveBeenCalled();
+    });
+});
+
+// =========================================================================
+describe('BrokerSharingPanel — Runes self-service boundaries', () => {
+    it.each([false, true])('EDITOR self-demotion reloads after success before onChanged, without closing (readOnly=%s)', async (readOnly) => {
+        await setupI18n();
+        authStore.set({user: {id: 2, username: 'bob'}});
+        const onChanged = vi.fn();
+        const onCancel = vi.fn();
+        await mountPanel({accesses: [access(1, 'alice', 'OWNER', 1), access(2, 'bob', 'EDITOR')], props: {readOnly, onChanged, onCancel}});
+        const patch = deferred<unknown>();
+        const reload = deferred<{items: ReturnType<typeof access>[]}>();
+        api[PATCH_ME].mockReturnValue(patch.promise);
+        api[LIST].mockReturnValueOnce(reload.promise);
+
+        expect(screen.getByTestId('sharing-self-demote-btn')).toBeEnabled();
+        await fireEvent.click(screen.getByTestId('sharing-self-demote-btn'));
+        await fireEvent.click(await screen.findByTestId('confirm-modal-confirm'));
+        expect(api[PATCH_ME].mock.calls).toEqual([[{role: 'VIEWER'}, {params: {broker_id: 7}}]]);
+        expect(screen.getByTestId('sharing-self-demote-btn')).toBeDisabled();
+        expect(api[LIST]).toHaveBeenCalledTimes(1);
+        expect(onChanged).not.toHaveBeenCalled();
+        expect(toasts.success).not.toHaveBeenCalled();
+
+        patch.resolve({});
+        await waitFor(() => expect(api[LIST]).toHaveBeenCalledTimes(2));
+        expect(panel()).toHaveAttribute('data-access-state', 'loading');
+        expect(onChanged).not.toHaveBeenCalled();
+        expect(onCancel).not.toHaveBeenCalled();
+        expect(gotoMock).not.toHaveBeenCalled();
+
+        reload.resolve({items: [access(1, 'alice', 'OWNER', 1), access(2, 'bob', 'VIEWER')]});
+        await settled();
+        await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
+        expect(columnOf(2)).toBe('VIEWER');
+        expect(screen.getByTestId('sharing-self-leave-btn')).toBeEnabled();
+        expect(screen.queryByTestId('sharing-self-demote-btn')).not.toBeInTheDocument();
+        await waitFor(() => expect(screen.queryByTestId('confirm-modal-confirm')).not.toBeInTheDocument());
+        expect(api[LIST].mock.calls).toEqual([[{params: {broker_id: 7}}], [{params: {broker_id: 7}}]]);
+        expect(onCancel).not.toHaveBeenCalled();
+        expect(gotoMock).not.toHaveBeenCalled();
+        expect(api[PUT]).not.toHaveBeenCalled();
+        expect(toasts.success).toHaveBeenCalledTimes(1);
+        expect(toasts.error).not.toHaveBeenCalled();
+        if (readOnly) {
+            expect(entry(2)).toBeDisabled();
+            expect(screen.queryByTestId('sharing-save-btn')).not.toBeInTheDocument();
+        } else {
+            expect(saveBtn()).toBeDisabled();
+        }
+    });
+
+    it.each([false, true])('EDITOR self-demotion failure keeps the role and confirmation without reload or callbacks (readOnly=%s)', async (readOnly) => {
+        await setupI18n();
+        authStore.set({user: {id: 2, username: 'bob'}});
+        const onChanged = vi.fn();
+        const onCancel = vi.fn();
+        await mountPanel({accesses: [access(1, 'alice', 'OWNER', 1), access(2, 'bob', 'EDITOR')], props: {readOnly, onChanged, onCancel}});
+        api[PATCH_ME].mockRejectedValue(httpError('RUNES-DEMOTE-REFUSED'));
+
+        await fireEvent.click(screen.getByTestId('sharing-self-demote-btn'));
+        await fireEvent.click(await screen.findByTestId('confirm-modal-confirm'));
+        await waitFor(() => expect(toasts.error).toHaveBeenCalledTimes(1));
+        expect(api[PATCH_ME].mock.calls).toEqual([[{role: 'VIEWER'}, {params: {broker_id: 7}}]]);
+        expect(panel()).toHaveAttribute('data-access-state', 'ready');
+        expect(columnOf(2)).toBe('EDITOR');
+        expect(screen.getByTestId('confirm-modal-confirm')).toBeInTheDocument();
+        expect(screen.getByTestId('sharing-self-demote-btn')).toBeEnabled();
+        expect(api[LIST].mock.calls).toEqual([[{params: {broker_id: 7}}]]);
+        expect(onChanged).not.toHaveBeenCalled();
+        expect(onCancel).not.toHaveBeenCalled();
+        expect(gotoMock).not.toHaveBeenCalled();
+        expect(api[PUT]).not.toHaveBeenCalled();
+        expect(toasts.success).not.toHaveBeenCalled();
+
+        await fireEvent.click(screen.getByTestId('confirm-modal-cancel'));
+        await waitFor(() => expect(screen.queryByTestId('confirm-modal-confirm')).not.toBeInTheDocument());
+        expect(screen.getByTestId('sharing-self-leave-btn')).toBeEnabled();
+    });
+
+    it('keeps VIEWER self-leave usable in readOnly mode and preserves navigation then change then close', async () => {
+        await setupI18n();
+        authStore.set({user: {id: 2, username: 'bob'}});
+        const order: string[] = [];
+        gotoMock.mockImplementation(async () => {
+            order.push('goto');
+        });
+        const onChanged = vi.fn(() => order.push('changed'));
+        const onCancel = vi.fn(() => order.push('cancel'));
+        try {
+            await mountPanel({accesses: [access(1, 'alice', 'OWNER', 1), access(2, 'bob', 'VIEWER')], props: {readOnly: true, onChanged, onCancel}});
+            api[DELETE_ME].mockResolvedValue({success: true, broker_deleted: false});
+            expect(entry(2)).toBeDisabled();
+            expect(screen.getByTestId('sharing-self-leave-btn')).toBeEnabled();
+            expect(screen.queryByTestId('sharing-add-user-btn')).not.toBeInTheDocument();
+            expect(screen.queryByTestId('sharing-save-btn')).not.toBeInTheDocument();
+            expect(screen.queryByTestId('sharing-self-demote-btn')).not.toBeInTheDocument();
+
+            await fireEvent.click(screen.getByTestId('sharing-self-leave-btn'));
+            await fireEvent.click(await screen.findByTestId('confirm-modal-confirm'));
+            await waitFor(() => expect(order).toEqual(['goto', 'changed', 'cancel']));
+            expect(api[DELETE_ME].mock.calls).toEqual([[undefined, {params: {broker_id: 7}}]]);
+            expect(gotoMock).toHaveBeenCalledWith('/brokers');
+            expect(api[LIST].mock.calls).toEqual([[{params: {broker_id: 7}}]]);
+            expect(toasts.success).toHaveBeenCalledTimes(1);
+            expect(toasts.error).not.toHaveBeenCalled();
+        } finally {
+            gotoMock.mockReset();
+        }
     });
 });

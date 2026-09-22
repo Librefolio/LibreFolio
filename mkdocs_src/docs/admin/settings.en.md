@@ -10,8 +10,18 @@ LibreFolio has a set of **system-wide settings** that affect all users. These ar
 
 1. Navigate to **Settings** (gear icon in the sidebar)
 2. Click the **Global Settings** tab (visible to all users; only admin/superuser can edit)
-3. Click the **lock icon** next to a setting to unlock it for editing
-4. Modify the value and the change is saved automatically
+3. Click the **lock icon** (🔒) in the header to unlock the tab for editing — this is a single
+   header-level lock, not a per-field one
+4. Modify one or more values. **Nothing is written until you save**: each field has its own
+   **Save** (and **Undo** / **Reset to default**) button, or you can use **Save All** in the
+   header to save every changed field in one call
+
+!!! warning "Locking with unsaved changes asks first"
+
+    If you click the lock icon again while a value is still unsaved, a confirmation dialog
+    asks whether to discard the changes. **Cancel** (or <kbd>Esc</kbd>) leaves the tab
+    unlocked with your edits intact; **Discard** reverts every field to its last saved value
+    and locks the tab — no API call is made in either case.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Global Settings" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">

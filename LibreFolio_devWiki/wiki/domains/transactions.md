@@ -53,7 +53,7 @@ graph TD
 
 - **FIFO at runtime** (see [[decisions/fifo-runtime-decision]] and [[features/F-056]]) — cost basis is computed on demand, never stored. This decision was made to support retroactive edits: correcting a BRIM import error (wrong price, wrong quantity) immediately corrects all downstream P&L without cache invalidation.
 - **Multi-broker atomic bulk API** — all transactions across brokers in a bulk call are committed or rolled back together in a single DB session (see [[decisions/multi-broker-atomic-tx]]). A `validate=true` dry-run allows preview without committing. A single DEFERRABLE FK constraint (`link_uuid → related_transaction_id`) enables TRANSFER pairs that span different brokers to be inserted atomically.
-- **Fake asset ID flow** (see [[decisions/brim-fake-asset-id]]) — BRIM parsers emit negative integers as placeholder asset IDs, decoupling parse from the asset catalog. The matching wizard maps them to real asset IDs before commit.
+- **Fake asset ID flow** (see [[decisions/brim-fake-asset-id]]) — BRIM parsers emit reserved positive-high placeholder asset IDs, decoupling parse from the asset catalog. The import wizard remaps them across files and resolves them to real asset IDs before bulk handoff.
 
 ## Known problems / limitations
 

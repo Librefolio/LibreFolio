@@ -38,7 +38,7 @@ from backend.app.services.ai_export.catalog_visibility import CatalogVisibility
 from backend.app.services.ai_export.components.catalog import build_component_registry
 from backend.app.services.ai_export.components.registry import ComponentRegistry
 from backend.app.services.ai_export.components.types import ALL_DETAIL_LEVELS, Domain, PeriodBehavior
-from backend.app.services.ai_export.datasets.spec import DatasetRegistry, DatasetSpec, build_all_data_dataset
+from backend.app.services.ai_export.datasets.spec import DatasetRegistry, DatasetRegistryError, DatasetSpec, build_all_data_dataset
 
 EXPECTED_DATASET_COUNT = 40
 EXPECTED_PUBLIC_DATASET_COUNT = 8
@@ -864,7 +864,8 @@ PUBLIC_DATASETS: tuple[DatasetSpec, ...] = (
     FX_MARKET_HISTORY,
 )
 
-assert len(PUBLIC_DATASETS) == EXPECTED_PUBLIC_DATASET_COUNT
+if len(PUBLIC_DATASETS) != EXPECTED_PUBLIC_DATASET_COUNT:
+    raise DatasetRegistryError(f"PUBLIC_DATASETS must contain exactly {EXPECTED_PUBLIC_DATASET_COUNT} datasets, got {len(PUBLIC_DATASETS)}")
 
 
 def _build_all_data_specs(component_registry: ComponentRegistry) -> tuple[DatasetSpec, DatasetSpec, DatasetSpec, DatasetSpec]:
@@ -970,5 +971,6 @@ def build_dataset_registry(component_registry: ComponentRegistry | None = None) 
         FX_DIRECT_EXPOSURE,
         fx_all_data,
     )
-    assert len(specs) == EXPECTED_DATASET_COUNT
+    if len(specs) != EXPECTED_DATASET_COUNT:
+        raise DatasetRegistryError(f"dataset registry must contain exactly {EXPECTED_DATASET_COUNT} datasets, got {len(specs)}")
     return DatasetRegistry(specs, component_registry=registry)

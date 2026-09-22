@@ -33,13 +33,33 @@
         type: 'number' | 'string';
         /** Whether this column must have a non-empty value */
         required: boolean;
+        /** Optional domain parser. Return null when the value is unknown/invalid. */
+        parse?: (raw: string) => unknown | null;
+        /** Optional validation after parsing. Return an error message when invalid. */
+        validate?: (value: unknown) => string | null;
     }
 
-    export interface ParsedRow {
+    export interface CsvIdentityDef {
+        key: string;
+        label: string;
+        parse?: (raw: string) => string | null;
+    }
+
+    export interface DatedParsedRow {
+        kind: 'dated';
         date: string;
         values: Record<string, unknown>;
         lineNumber: number;
     }
+
+    export interface IdentifiedParsedRow {
+        kind: 'identified';
+        identity: string;
+        values: Record<string, unknown>;
+        lineNumber: number;
+    }
+
+    export type ParsedRow = DatedParsedRow | IdentifiedParsedRow;
 
     // =========================================================================
     // Number parsing — supports . and , as decimal, _ as thousands separator
@@ -67,7 +87,40 @@
             s = s.replace(',', '.');
         }
 
-        return parseFloat(s);
+        if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(s)) {
+            return Number.NaN;
+        }
+        const value = Number(s);
+        return Number.isFinite(value) ? value : Number.NaN;
+    }
+
+    /** Parse one RFC 4180-style record, including quoted separators and escaped quotes. */
+    function parseRecord(line: string, separator: ';' | ','): string[] | null {
+        const fields: string[] = [];
+        let field = '';
+        let quoted = false;
+
+        for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+            if (char === '"') {
+                if (quoted && line[i + 1] === '"') {
+                    field += '"';
+                    i++;
+                } else if (quoted || field.length === 0) {
+                    quoted = !quoted;
+                } else {
+                    field += char;
+                }
+            } else if (char === separator && !quoted) {
+                fields.push(field);
+                field = '';
+            } else {
+                field += char;
+            }
+        }
+        if (quoted) return null;
+        fields.push(field);
+        return fields;
     }
 
     // =========================================================================
@@ -77,6 +130,8 @@
     interface Props {
         /** Column definitions (determines expected CSV structure) */
         columns: CsvColumnDef[];
+        /** Primary identity column. Defaults to the legacy required date column. */
+        identity?: CsvIdentityDef;
         /** Current CSV text content (bindable) */
         value?: string;
         /** Whether the editor is read-only */
@@ -93,7 +148,7 @@
         onchange?: (text: string) => void;
     }
 
-    let {columns, value = $bindable(''), readonly: isReadonly = false, minHeight = '200px', placeholder = '', onvalidchange, oninput, onchange}: Props = $props();
+    let {columns, identity, value = $bindable(''), readonly: isReadonly = false, minHeight = '200px', placeholder = '', onvalidchange, oninput, onchange}: Props = $props();
 
     // =========================================================================
     // State
@@ -107,7 +162,8 @@
     // =========================================================================
 
     /** Expected header string derived from column definitions (display-only hint) */
-    let expectedHeader = $derived('date;' + columns.map((c) => c.label).join(';'));
+    let identityLabel = $derived(identity?.label ?? 'date');
+    let expectedHeader = $derived(identityLabel + ';' + columns.map((c) => c.label).join(';'));
 
     // -------------------------------------------------------------------------
     // I-bis #5 (Batch 4.d-part3) — CSV resilience
@@ -133,8 +189,8 @@
     interface HeaderMap {
         valid: boolean;
         separator: ';' | ',';
-        /** Index of the ``date`` column in the CSV header parts (-1 = missing) */
-        dateIdx: number;
+        /** Index of the primary identity column in the CSV header parts. */
+        identityIdx: number;
         /** Mapping CsvColumnDef.key → column index in CSV (-1 = not present) */
         colIndices: Record<string, number>;
         /** Required column labels that are absent (including ``date``) */
@@ -161,7 +217,8 @@
 
     /** Parse a header line into a HeaderMap, resolving columns by name. */
     function parseHeaderLine(line: string, sep: ';' | ','): HeaderMap {
-        const parts = line.split(sep).map((p) => p.trim().toLowerCase());
+        const record = parseRecord(line.replace(/^\uFEFF/, ''), sep);
+        const parts = (record ?? []).map((p) => p.trim().toLowerCase());
         // Honour the ``A<B`` inverse-direction syntax only in canonical mode
         // (keeps backward compatibility for the FX editor use case).
         const normalizedParts = parts.map((p) => {
@@ -169,11 +226,11 @@
             return m ? `${m[2]}>${m[1]}` : p;
         });
 
-        const dateIdx = normalizedParts.indexOf('date');
+        const identityIdx = normalizedParts.indexOf(identityLabel.toLowerCase());
         const colIndices: Record<string, number> = {};
         const missingRequired: string[] = [];
 
-        if (dateIdx < 0) missingRequired.push('date');
+        if (identityIdx < 0) missingRequired.push(identityLabel);
 
         for (const col of columns) {
             const idx = normalizedParts.indexOf(col.label.toLowerCase());
@@ -184,7 +241,7 @@
         return {
             valid: missingRequired.length === 0,
             separator: sep,
-            dateIdx,
+            identityIdx,
             colIndices,
             missingRequired,
         };
@@ -195,14 +252,13 @@
         // AND has a ``date`` token. The by-name matching then decides if it's
         // actually valid (missingRequired list).
         if (!trimmed.includes(sep)) return false;
-        const parts = trimmed
-            .split(sep)
+        const parts = (parseRecord(trimmed.replace(/^\uFEFF/, ''), sep) ?? [])
             .map((p) => p.trim().toLowerCase())
             .map((p) => {
                 const m = p.match(/^([^<\s]+)\s*<\s*([^<\s]+)$/);
                 return m ? `${m[2]}>${m[1]}` : p;
             });
-        return parts.includes('date');
+        return parts.includes(identityLabel.toLowerCase());
     }
 
     // =========================================================================
@@ -279,20 +335,29 @@
             }
 
             // Parse data row using the by-name column mapping (I-bis #5).
-            const parts = trimmed.split(sep);
+            const parts = parseRecord(trimmed, sep);
+            if (!parts) {
+                return {lineNumber, text: line, valid: false, error: 'Invalid quoted CSV field'};
+            }
             // NOTE: extra columns (parts.length > declared header width) are
             // accepted and silently ignored — the header decides which slots
             // matter via ``hmap.colIndices`` / ``hmap.dateIdx``.
 
-            const dateStr = (parts[hmap.dateIdx] ?? '').trim();
-
-            // Validate date (YYYY-MM-DD)
-            if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-                return {lineNumber, text: line, valid: false, error: `Invalid date format: "${dateStr}". Use YYYY-MM-DD`};
-            }
-            const dateObj = new Date(dateStr + 'T00:00:00Z');
-            if (isNaN(dateObj.getTime())) {
-                return {lineNumber, text: line, valid: false, error: `Invalid date: "${dateStr}"`};
+            const identityRaw = (parts[hmap.identityIdx] ?? '').trim();
+            let parsedIdentity = identityRaw;
+            if (identity) {
+                parsedIdentity = identity.parse ? (identity.parse(identityRaw) ?? '') : identityRaw;
+                if (!identityRaw || !parsedIdentity) {
+                    return {lineNumber, text: line, valid: false, error: `Invalid ${identity.label}: "${identityRaw}"`};
+                }
+            } else {
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(identityRaw)) {
+                    return {lineNumber, text: line, valid: false, error: `Invalid date format: "${identityRaw}". Use YYYY-MM-DD`};
+                }
+                const dateObj = new Date(identityRaw + 'T00:00:00Z');
+                if (isNaN(dateObj.getTime())) {
+                    return {lineNumber, text: line, valid: false, error: `Invalid date: "${identityRaw}"`};
+                }
             }
 
             // Parse each declared column by its CSV index (from header map).
@@ -313,14 +378,24 @@
                 }
 
                 if (col.type === 'number') {
-                    const num = parseNumber(rawVal);
-                    if (isNaN(num)) {
+                    const num = col.parse ? col.parse(rawVal) : parseNumber(rawVal);
+                    if (num === null || typeof num !== 'number' || !Number.isFinite(num)) {
                         parseError = `Invalid number in "${col.label}": "${rawVal}"`;
                         break;
                     }
                     values[col.key] = num;
                 } else {
-                    values[col.key] = rawVal;
+                    const parsed = col.parse ? col.parse(rawVal) : rawVal;
+                    if (parsed === null) {
+                        parseError = `Invalid value in "${col.label}": "${rawVal}"`;
+                        break;
+                    }
+                    values[col.key] = parsed;
+                }
+                const validationError = col.validate?.(values[col.key]);
+                if (validationError) {
+                    parseError = validationError;
+                    break;
                 }
             }
 
@@ -332,25 +407,27 @@
                 lineNumber,
                 text: line,
                 valid: true,
-                parsed: {date: dateStr, values, lineNumber},
+                parsed: identity ? {kind: 'identified', identity: parsedIdentity, values, lineNumber} : {kind: 'dated', date: identityRaw, values, lineNumber},
             };
         });
 
         // Duplicate date detection
-        const dateCount = new Map<string, number[]>();
+        const identityCount = new Map<string, number[]>();
         for (const v of result) {
             if (v.parsed) {
-                const indices = dateCount.get(v.parsed.date) ?? [];
+                const key = v.parsed.kind === 'dated' ? v.parsed.date : v.parsed.identity;
+                const indices = identityCount.get(key) ?? [];
                 indices.push(v.lineNumber);
-                dateCount.set(v.parsed.date, indices);
+                identityCount.set(key, indices);
             }
         }
-        for (const [date, indices] of dateCount) {
+        for (const [key, indices] of identityCount) {
             if (indices.length > 1) {
                 for (const v of result) {
-                    if (v.parsed && v.parsed.date === date) {
+                    const parsedKey = v.parsed?.kind === 'dated' ? v.parsed.date : v.parsed?.identity;
+                    if (v.parsed && parsedKey === key) {
                         v.duplicate = true;
-                        v.error = `Duplicate date: ${date}`;
+                        v.error = `Duplicate ${identityLabel}: ${key}`;
                     }
                 }
             }
@@ -423,7 +500,7 @@
                 <span class="text-red-500 dark:text-red-400 ml-2">• {errorCount} error{errorCount !== 1 ? 's' : ''}</span>
             {/if}
             {#if hasDuplicates}
-                <span class="text-amber-500 dark:text-amber-400 ml-2">• duplicate dates</span>
+                <span class="text-amber-500 dark:text-amber-400 ml-2">• duplicate {identityLabel}s</span>
             {/if}
         </span>
         <span class="inline-flex items-center gap-1.5 text-gray-400 dark:text-gray-500 text-[10px]">
@@ -483,6 +560,7 @@
             bind:this={textareaEl}
             bind:value
             class="flex-1 font-mono text-xs leading-5 p-0 pl-2 border-0 bg-transparent text-gray-700 dark:text-gray-300 focus:ring-0 resize-y overflow-y-auto"
+            data-testid="csv-editor-input"
             oninput={handleInput}
             onscroll={handleScroll}
             {placeholder}

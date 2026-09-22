@@ -135,6 +135,53 @@ export function hslToHex(h: number, s: number, l: number): string {
 }
 
 /**
+ * Convert a hex color to HSL — the exact inverse of {@link hslToHex}.
+ *
+ * Accepts `#rrggbb`, `#rgb`, and both forms without the leading `#`.
+ * Returns hue in degrees (0-360) and saturation/lightness in percent (0-100),
+ * **unrounded**, so a caller can move lightness by a fractional step and convert
+ * back without accumulating error.
+ *
+ * Why it exists: palettes written by hand "at maximum chromatic distance" are
+ * opaque hex. Deriving a *related* shade — rather than another arbitrary color —
+ * means going back to a space where lightness is a number you can move.
+ *
+ * Returns `null` for anything that is not a hex color, so the caller can fall
+ * back to the original string. Throwing, or returning black, would turn a typo
+ * into an invisible slice.
+ */
+export function hexToHsl(hex: string): {h: number; s: number; l: number} | null {
+    const raw = hex.trim().replace(/^#/, '');
+    const expanded = raw.length === 3 ? raw.replace(/./g, (c) => c + c) : raw;
+    if (!/^[0-9a-fA-F]{6}$/.test(expanded)) return null;
+
+    const r = parseInt(expanded.slice(0, 2), 16) / 255;
+    const g = parseInt(expanded.slice(2, 4), 16) / 255;
+    const b = parseInt(expanded.slice(4, 6), 16) / 255;
+
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const delta = max - min;
+    const l = (max + min) / 2;
+
+    // Achromatic: hue is undefined, and the saturation formula divides by zero
+    // at l=0 or l=1 — both cases land here, so the guard covers them together.
+    if (delta === 0) return {h: 0, s: 0, l: l * 100};
+
+    const s = delta / (1 - Math.abs(2 * l - 1));
+
+    let h: number;
+    if (max === r) h = (g - b) / delta;
+    else if (max === g) h = (b - r) / delta + 2;
+    else h = (r - g) / delta + 4;
+
+    h *= 60;
+    if (h < 0) h += 360;
+
+    return {h, s: s * 100, l: l * 100};
+}
+
+/**
  * Stable string hash → unsigned int. Used to fold an arbitrary string
  * (e.g. a tag name) into the same golden-ratio hue distribution used by
  * `getIndexColor()`.

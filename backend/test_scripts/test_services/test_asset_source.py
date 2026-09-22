@@ -33,6 +33,7 @@ setup_test_database()
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import (
@@ -55,23 +56,32 @@ from backend.app.schemas import FAGeographicArea, FASectorArea, SignalVolumeKind
 from backend.app.schemas.assets import FAAssetCreateItem, FAAssetPatchItem, FAClassificationParams
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.prices import AssetBackwardFillInfo, FAAssetDelete, FAPricePoint, FAPriceQueryItem, FAUpsert
-from backend.app.schemas.provider import FAProviderAssignmentItem, FAProviderConfigBase, FAVolumeKind, ProbeOperation
-from backend.app.schemas.refresh import FARefreshItem, FXSyncPairRequest
-from backend.app.services import asset_source as asset_source_module
+from backend.app.schemas.provider import (
+    FAProviderAssignmentItem,
+    FAProviderConfigBase,
+    FAProviderKind,
+    FAVolumeKind,
+    ProbeOperation,
+)
+from backend.app.schemas.refresh import FARefreshItem, FXSyncPairRequest, SyncStatus
 from backend.app.services.asset_source import (
     AssetCRUDService,
     AssetSearchService,
     AssetSourceManager,
     AssetSourceProvider,
-    _provider_params_hash,
 )
 from backend.app.services.asset_source_providers import borsa_italiana as borsa_provider_module
 from backend.app.services.asset_source_providers import yahoo_finance as yahoo_provider_module
 from backend.app.services.asset_source_providers.scheduled_investment import (
     calculate_day_count_fraction,
 )
+from backend.app.services.asset_sources import core as asset_source_core
+from backend.app.services.asset_sources import price_query as price_query_module
+from backend.app.services.asset_sources import price_store as price_store_module
+from backend.app.services.asset_sources import refresh as refresh_module
+from backend.app.services.asset_sources import search as search_module
+from backend.app.services.asset_sources.provider_management import AssetProviderRegistry
 from backend.app.services.fx_providers.mockfx import MOCKFX_FIXED_RATE, MockFXProvider
-from backend.app.services.provider_registry import AssetProviderRegistry
 from backend.test_scripts.test_utils import (
     print_info,
     print_section,
@@ -762,7 +772,7 @@ async def test_bulk_upsert_prices_spans_chunk_boundaries():
     pins that: every row lands, and the F.4 "preserve" sentinel still sees the value
     written by a previous call on dates that fall in different slices.
     """
-    chunk = asset_source_module.PRICE_UPSERT_CHUNK_SIZE
+    chunk = price_store_module.PRICE_UPSERT_CHUNK_SIZE
     total = chunk * 2 + 137  # three slices, last one deliberately partial
     timestamp = int(time.time() * 1000)
 
@@ -1504,8 +1514,8 @@ def test_provider_param_helpers_and_identifier_mapping():
     params_a = {"b": 2, "a": 1}
     params_b = {"a": 1, "b": 2}
 
-    assert _provider_params_hash(None) == "none"
-    assert _provider_params_hash(params_a) == _provider_params_hash(params_b)
+    assert asset_source_core._provider_params_hash(None) == "none"
+    assert asset_source_core._provider_params_hash(params_a) == asset_source_core._provider_params_hash(params_b)
     assert AssetSourceManager._parse_provider_params(None) == {}
     assert AssetSourceManager._parse_provider_params(params_a) == params_a
     assert AssetSourceManager._parse_provider_params('{"x": 1, "y": "z"}') == {"x": 1, "y": "z"}
@@ -1567,7 +1577,7 @@ async def test_refresh_assets_from_provider_mixed_results():
     print_section("Test 22: refresh_assets_from_provider mixed batch")
 
     AssetProviderRegistry.auto_discover()
-    asset_source_module._asset_metadata_cache.clear()
+    asset_source_core._asset_metadata_cache.clear()
     timestamp = int(time.time() * 1000)
 
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
@@ -1630,7 +1640,7 @@ async def test_refresh_assets_from_provider_uses_metadata_cache(monkeypatch):
     print_section("Test 23: refresh_assets_from_provider metadata cache")
 
     AssetProviderRegistry.auto_discover()
-    asset_source_module._asset_metadata_cache.clear()
+    asset_source_core._asset_metadata_cache.clear()
     timestamp = int(time.time() * 1000)
 
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
@@ -1658,7 +1668,7 @@ async def test_refresh_assets_from_provider_uses_metadata_cache(monkeypatch):
         async def _unexpected_provider_call(*args, **kwargs):
             raise AssertionError("provider fetch should not run on cache hit")
 
-        monkeypatch.setattr(asset_source_module, "_run_provider_in_thread", _unexpected_provider_call)
+        monkeypatch.setattr(asset_source_core, "_run_provider_in_thread", _unexpected_provider_call)
 
         second = await AssetSourceManager.refresh_assets_from_provider([asset.id], session)
         assert second.results[0].success is True
@@ -1897,7 +1907,7 @@ async def test_bulk_refresh_prices_current_only_marks_partial(monkeypatch):
 
     class PartialProvider:
         supports_history = True
-        provider_kind = asset_source_module.FAProviderKind.ONLINE_SCRAPER
+        provider_kind = FAProviderKind.ONLINE_SCRAPER
 
         async def get_history_value(self, identifier, identifier_type, provider_params, start_date, end_date):
             return SimpleNamespace(prices=[], events=[])
@@ -1908,14 +1918,18 @@ async def test_bulk_refresh_prices_current_only_marks_partial(monkeypatch):
         def validate_params(self, params):
             return None
 
-    original_get_provider_instance = AssetProviderRegistry.get_provider_instance
+    original_get_provider_instance = refresh_module.AssetProviderRegistry.get_provider_instance
 
     def _patched_get_provider_instance(cls, code: str, **kwargs):
         if code == "partialprov":
             return PartialProvider()
         return original_get_provider_instance.__func__(cls, code, **kwargs)
 
-    monkeypatch.setattr(AssetProviderRegistry, "get_provider_instance", classmethod(_patched_get_provider_instance))
+    monkeypatch.setattr(
+        refresh_module.AssetProviderRegistry,
+        "get_provider_instance",
+        classmethod(_patched_get_provider_instance),
+    )
 
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
         asset = Asset(display_name=f"Partial Refresh {timestamp}", currency="USD", asset_type=AssetType.STOCK, active=True)
@@ -1945,7 +1959,7 @@ async def test_bulk_refresh_prices_current_only_marks_partial(monkeypatch):
         )
 
         result = response.results[0]
-        assert result.status == asset_source_module.SyncStatus.PARTIAL
+        assert result.status == SyncStatus.PARTIAL
         assert result.points_fetched == 1
         assert result.inserted_count == 1
         assert result.message == "Current value only, history unavailable"
@@ -1960,7 +1974,7 @@ async def test_asset_search_service_search_handles_cache_and_errors(monkeypatch)
     """Search aggregates successes, skips unsupported providers, and reuses cache on repeat query."""
     print_section("Test 28: AssetSearchService.search")
 
-    asset_source_module._search_query_cache.clear()
+    asset_source_core._search_query_cache.clear()
 
     class OkSearchProvider:
         supports_search = True
@@ -1998,12 +2012,12 @@ async def test_asset_search_service_search_handles_cache_and_errors(monkeypatch)
     providers = {"okprov": ok_provider, "errprov": err_provider, "nosrch": no_provider}
 
     monkeypatch.setattr(
-        AssetProviderRegistry,
+        search_module.AssetProviderRegistry,
         "list_providers",
         classmethod(lambda cls: [{"code": "okprov"}, {"code": "errprov"}, {"code": "nosrch"}]),
     )
     monkeypatch.setattr(
-        AssetProviderRegistry,
+        search_module.AssetProviderRegistry,
         "get_provider_instance",
         classmethod(lambda cls, code, **kwargs: providers.get(code)),
     )
@@ -2055,7 +2069,7 @@ class TestDeriveSignalSourceCapability:
     def test_all_backward_filled_series_is_unsupported(self, monkeypatch):
         """Backward-filled points must never count as observed evidence."""
         monkeypatch.setattr(
-            AssetProviderRegistry,
+            price_query_module.AssetProviderRegistry,
             "get_provider_instance",
             classmethod(lambda cls, code, **kwargs: SimpleNamespace(supports_meaningful_volume=True, volume_kind=FAVolumeKind.TRADED_SHARES)),
         )
@@ -2065,7 +2079,7 @@ class TestDeriveSignalSourceCapability:
 
     def test_single_registered_capable_source_is_supported(self, monkeypatch):
         monkeypatch.setattr(
-            AssetProviderRegistry,
+            price_query_module.AssetProviderRegistry,
             "get_provider_instance",
             classmethod(lambda cls, code, **kwargs: SimpleNamespace(supports_meaningful_volume=True, volume_kind=FAVolumeKind.TRADED_SHARES)),
         )
@@ -2075,7 +2089,11 @@ class TestDeriveSignalSourceCapability:
         assert capability.volume_kind == SignalVolumeKind.TRADED_SHARES
 
     def test_unregistered_source_fails_closed(self, monkeypatch):
-        monkeypatch.setattr(AssetProviderRegistry, "get_provider_instance", classmethod(lambda cls, code, **kwargs: None))
+        monkeypatch.setattr(
+            price_query_module.AssetProviderRegistry,
+            "get_provider_instance",
+            classmethod(lambda cls, code, **kwargs: None),
+        )
         points = [_capable_point(1, "MANUAL")]
         capability = AssetSourceManager.derive_signal_source_capability(points)
         assert capability.supports_meaningful_volume is False
@@ -2092,7 +2110,7 @@ class TestDeriveSignalSourceCapability:
         key is ever registered, so this must fail closed without needing to
         simulate an unresolvable provider.
         """
-        assert AssetProviderRegistry.get_provider_instance(sentinel_key) is None
+        assert price_query_module.AssetProviderRegistry.get_provider_instance(sentinel_key) is None
         points = [_capable_point(1, sentinel_key)]
         capability = AssetSourceManager.derive_signal_source_capability(points)
         assert capability.supports_meaningful_volume is False
@@ -2103,7 +2121,11 @@ class TestDeriveSignalSourceCapability:
             "yfinance": SimpleNamespace(supports_meaningful_volume=True, volume_kind=FAVolumeKind.TRADED_SHARES),
             "justetf": SimpleNamespace(supports_meaningful_volume=False, volume_kind=FAVolumeKind.UNKNOWN),
         }
-        monkeypatch.setattr(AssetProviderRegistry, "get_provider_instance", classmethod(lambda cls, code, **kwargs: providers.get(code)))
+        monkeypatch.setattr(
+            price_query_module.AssetProviderRegistry,
+            "get_provider_instance",
+            classmethod(lambda cls, code, **kwargs: providers.get(code)),
+        )
         points = [_capable_point(1, "yfinance"), _capable_point(2, "justetf")]
         capability = AssetSourceManager.derive_signal_source_capability(points)
         assert capability.supports_meaningful_volume is False
@@ -2123,7 +2145,11 @@ class TestDeriveSignalSourceCapability:
             "yfinance": SimpleNamespace(supports_meaningful_volume=True, volume_kind=FAVolumeKind.TRADED_SHARES),
             "borsa_italiana": SimpleNamespace(supports_meaningful_volume=True, volume_kind=FAVolumeKind.TRADED_SHARES),
         }
-        monkeypatch.setattr(AssetProviderRegistry, "get_provider_instance", classmethod(lambda cls, code, **kwargs: providers.get(code)))
+        monkeypatch.setattr(
+            price_query_module.AssetProviderRegistry,
+            "get_provider_instance",
+            classmethod(lambda cls, code, **kwargs: providers.get(code)),
+        )
         points = [_capable_point(1, "yfinance"), _capable_point(2, "borsa_italiana")]
         capability = AssetSourceManager.derive_signal_source_capability(points)
         assert capability.supports_meaningful_volume is True
@@ -2133,7 +2159,11 @@ class TestDeriveSignalSourceCapability:
         """Even a single unresolvable source_plugin_key among otherwise-capable
         sources must fail closed (no partial trust)."""
         providers = {"yfinance": SimpleNamespace(supports_meaningful_volume=True, volume_kind=FAVolumeKind.TRADED_SHARES)}
-        monkeypatch.setattr(AssetProviderRegistry, "get_provider_instance", classmethod(lambda cls, code, **kwargs: providers.get(code)))
+        monkeypatch.setattr(
+            price_query_module.AssetProviderRegistry,
+            "get_provider_instance",
+            classmethod(lambda cls, code, **kwargs: providers.get(code)),
+        )
         points = [_capable_point(1, "yfinance"), _capable_point(2, "MANUAL")]
         capability = AssetSourceManager.derive_signal_source_capability(points)
         assert capability.supports_meaningful_volume is False
@@ -2385,3 +2415,190 @@ async def test_fx_conversion_errors_dedup_once_per_job_capped_and_fast():
             await session.execute(delete(PriceHistory).where(PriceHistory.asset_id == asset_id))
             await session.execute(delete(Asset).where(Asset.id == asset_id))
             await session.commit()
+
+
+# ============================================================================
+# B3: AssetCRUDService.delete_assets_bulk — commit-failure and FK-race contracts
+# ============================================================================
+#
+# The API-level shape of delete_assets_bulk (NOT_FOUND/HAS_TRANSACTIONS results,
+# global transaction_count, mixed-batch savepoint isolation, duplicate ids) is
+# covered end-to-end in backend/test_scripts/test_api/test_assets_crud.py. The
+# two contracts below need to reach inside the service's own AsyncSession —
+# forcing the final commit to fail, and forcing a real SQLite FK violation to
+# appear *after* the transaction-count precheck ran — which only a direct,
+# non-HTTP call to the service can do deterministically.
+
+
+@pytest.mark.asyncio
+async def test_delete_assets_bulk_commit_failure_propagates_and_rolls_back_tentative_deletes(monkeypatch):
+    """B3: a failure at the final commit must not be swallowed into a success-shaped
+    response. It has to propagate, and the resulting rollback means the delete that
+    happened inside its own per-item SAVEPOINT never actually reaches disk."""
+    print_section("Test: delete_assets_bulk commit failure propagates and rolls back")
+
+    uid = uuid.uuid4().hex[:8]
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as setup_session:
+        asset = Asset(display_name=f"CommitFail {uid}", currency="USD", asset_type=AssetType.STOCK, active=True)
+        setup_session.add(asset)
+        await setup_session.commit()
+        await setup_session.refresh(asset)
+        asset_id = asset.id
+
+    async def failing_commit():
+        raise RuntimeError("simulated commit failure")
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        # Patch only the final session.commit() — the per-item SAVEPOINT commit
+        # inside begin_nested() is a different call and is untouched, so the
+        # tentative delete genuinely happens before the outer commit fails.
+        monkeypatch.setattr(session, "commit", failing_commit)
+
+        with pytest.raises(RuntimeError, match="simulated commit failure"):
+            await AssetCRUDService.delete_assets_bulk([asset_id], session)
+
+    # A fresh, unpatched session sees exactly what the rollback left behind.
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as verify_session:
+        still_there = await verify_session.get(Asset, asset_id)
+        assert still_there is not None, "a commit failure must roll back the tentative delete, not persist it"
+
+    print_success("✓ Commit failure propagates; the tentative delete is rolled back, not persisted")
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as cleanup_session:
+        await cleanup_session.execute(delete(Asset).where(Asset.id == asset_id))
+        await cleanup_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_delete_assets_bulk_fk_race_reports_accurate_count_and_spares_neighbours(monkeypatch):
+    """B3 (FK race): a transaction that appears in the narrow window between the
+    transaction-count precheck and this asset's own delete attempt still trips a real
+    SQLite FK violation. delete_assets_bulk must catch it, re-query the *current* global
+    count (not the stale precheck value), report HAS_TRANSACTIONS accurately — and because
+    each attempt runs in its own SAVEPOINT, it must not disturb the valid deletes right
+    before and after it in the same batch."""
+    print_section("Test: delete_assets_bulk FK race is isolated from neighbouring deletes")
+
+    uid = uuid.uuid4().hex[:8]
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as setup_session:
+        broker = Broker(name=f"Race Broker {uid}")
+        before_asset = Asset(display_name=f"Race Before {uid}", currency="USD", asset_type=AssetType.STOCK, active=True)
+        race_asset = Asset(display_name=f"Race Target {uid}", currency="USD", asset_type=AssetType.STOCK, active=True)
+        after_asset = Asset(display_name=f"Race After {uid}", currency="USD", asset_type=AssetType.STOCK, active=True)
+        setup_session.add_all([broker, before_asset, race_asset, after_asset])
+        await setup_session.commit()
+        for obj in (broker, before_asset, race_asset, after_asset):
+            await setup_session.refresh(obj)
+        broker_id, before_id, race_id, after_id = broker.id, before_asset.id, race_asset.id, after_asset.id
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        original_execute = session.execute
+        call_count = {"n": 0}
+
+        async def racing_execute(*args, **kwargs):
+            # Pass every call through untouched; only the SECOND top-level
+            # session.execute() in delete_assets_bulk is the transaction-count
+            # precheck (the first is the asset lookup). It genuinely sees zero
+            # transactions at that instant.
+            call_count["n"] += 1
+            result = await original_execute(*args, **kwargs)
+            if call_count["n"] == 2:
+                # Insert the "concurrent" transaction into the SAME session/
+                # transaction right after the precheck snapshot was taken, but
+                # before the loop reaches race_id's own delete attempt — so the
+                # delete below hits a real, un-mocked SQLite FK violation.
+                session.add(
+                    Transaction(
+                        broker_id=broker_id,
+                        asset_id=race_id,
+                        type=TransactionType.BUY,
+                        date=date.today(),
+                        quantity=Decimal("1"),
+                        amount=Decimal("-1"),
+                        currency="USD",
+                    )
+                )
+                await session.flush()
+            return result
+
+        monkeypatch.setattr(session, "execute", racing_execute)
+
+        response = await AssetCRUDService.delete_assets_bulk([before_id, race_id, after_id], session)
+
+    by_id = {r.asset_id: r for r in response.results}
+
+    assert by_id[before_id].success is True and by_id[before_id].deleted_count == 1
+    assert by_id[after_id].success is True and by_id[after_id].deleted_count == 1
+
+    race_result = by_id[race_id]
+    assert race_result.success is False
+    assert race_result.error_code == "HAS_TRANSACTIONS"
+    assert race_result.deleted_count == 0
+    assert race_result.transaction_count == 1, f"race count must reflect the transaction that appeared after the precheck, got {race_result.transaction_count}"
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as verify_session:
+        assert await verify_session.get(Asset, before_id) is None, "the valid delete before the race must still have committed"
+        assert await verify_session.get(Asset, after_id) is None, "the valid delete after the race must still have committed"
+        assert await verify_session.get(Asset, race_id) is not None, "the raced asset must remain persisted, not partially removed"
+
+    print_success("✓ FK race is caught, reported with an accurate count, and does not disturb neighbouring deletes")
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as cleanup_session:
+        await cleanup_session.execute(delete(Transaction).where(Transaction.asset_id == race_id))
+        await cleanup_session.execute(delete(Asset).where(Asset.id == race_id))
+        await cleanup_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_delete_assets_bulk_non_transaction_integrity_error_omits_transaction_claim(monkeypatch):
+    """B3 (non-transaction IntegrityError): when the delete raises an integrity
+    violation but the transaction recount is zero, delete_assets_bulk must not invent
+    a HAS_TRANSACTIONS claim. The result carries neither that error code nor a count
+    nor a message that talks about transactions — the caller has nothing truthful to
+    link to."""
+    print_section("Test: delete_assets_bulk non-transaction IntegrityError omits the transaction claim")
+
+    uid = uuid.uuid4().hex[:8]
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as setup_session:
+        asset = Asset(display_name=f"ConstraintBlocked {uid}", currency="USD", asset_type=AssetType.STOCK, active=True)
+        setup_session.add(asset)
+        await setup_session.commit()
+        await setup_session.refresh(asset)
+        asset_id = asset.id
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        original_flush = session.flush
+        delete_flush_seen = False
+
+        async def fail_delete_flush(*args, **kwargs):
+            nonlocal delete_flush_seen
+            if session.deleted:
+                delete_flush_seen = True
+                raise IntegrityError("simulated referential constraint", {}, RuntimeError("constraint"))
+            return await original_flush(*args, **kwargs)
+
+        # Price history and provider rows cascade, so a real child row cannot model
+        # this branch. Inject the database exception at the delete flush instead;
+        # the unpatched transaction recount then proves the important condition:
+        # zero transactions after an IntegrityError.
+        monkeypatch.setattr(session, "flush", fail_delete_flush)
+        response = await AssetCRUDService.delete_assets_bulk([asset_id], session)
+
+    assert delete_flush_seen, "the test must exercise the IntegrityError recovery branch"
+    assert len(response.results) == 1
+    result = response.results[0]
+    assert result.asset_id == asset_id
+    assert result.success is False
+    assert result.deleted_count == 0
+    assert result.error_code is None, f"a non-transaction FK violation must not be reported as HAS_TRANSACTIONS, got {result.error_code!r}"
+    assert result.transaction_count is None, f"zero transactions in the recount must omit transaction_count entirely, got {result.transaction_count!r}"
+    assert "transaction" not in (result.message or "").lower(), f"message must not claim transactions block this delete: {result.message!r}"
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as verify_session:
+        assert await verify_session.get(Asset, asset_id) is not None, "a blocked delete must not leave the asset removed"
+
+    print_success("✓ Non-transaction IntegrityError is reported without a false HAS_TRANSACTIONS claim")
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as cleanup_session:
+        await cleanup_session.execute(delete(Asset).where(Asset.id == asset_id))
+        await cleanup_session.commit()

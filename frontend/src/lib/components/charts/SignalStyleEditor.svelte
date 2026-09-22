@@ -62,6 +62,12 @@
     }
 </script>
 
+<svelte:window
+    onkeydown={(event) => {
+        if (event.key === 'Escape') closePopover();
+    }}
+/>
+
 <div class="flex items-center gap-1.5">
     <input class="w-6 h-6 p-0 border border-gray-200 dark:border-slate-600 rounded cursor-pointer shrink-0" onchange={(e) => onstylechange('color', (e.currentTarget as HTMLInputElement).value)} oninput={handleColorInput} title={$t('chartSettings.style.color')} type="color" value={style.color} />
     {#if !simplified || !hideLineType || !hideWidth}
@@ -80,13 +86,14 @@
             {#if popoverOpen}
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <!-- svelte-ignore a11y_click_events_have_key_events -->
-                <div class="fixed inset-0 z-40" onclick={closePopover}></div>
+                <div class="fixed inset-0 z-40" data-testid="signal-style-backdrop" onclick={closePopover}></div>
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <!-- svelte-ignore a11y_click_events_have_key_events -->
                 <div
                     class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-50
                     bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600
                     rounded-lg shadow-lg p-3 w-max"
+                    data-testid="signal-style-popover"
                     onclick={(e) => e.stopPropagation()}
                 >
                     <div class="flex items-center gap-4">

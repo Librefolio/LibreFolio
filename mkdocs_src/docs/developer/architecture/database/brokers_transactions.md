@@ -47,6 +47,7 @@ erDiagram
         string tags "CSV"
         string description
         decimal cost_basis_override "Nullable"
+        string cost_basis_currency "ISO 4217, nullable"
     }
 ```
 
@@ -103,12 +104,14 @@ The single source of truth for all financial operations. Each transaction belong
 | `tags` | Comma-separated user tags |
 | `description` | Free-text |
 | `cost_basis_override` | Frozen per-unit cost for incoming seeded lots: receiving `TRANSFER`s, positive `ADJUSTMENT`s, imported snapshots, inheritances (see below) |
+| `cost_basis_currency` | ISO currency code for `cost_basis_override`; nullable with the amount |
 | `asset_event_id` | FK to AssetEvent — links transaction to a global asset event |
 
 **Design rules:**
 
 - `quantity` and `amount` are **signed** and **NOT NULL** — enables simple `SUM()` for balance calculation
 - Paired transactions are **bidirectional** (A→B and B→A) using `DEFERRABLE INITIALLY DEFERRED` FK
+- `link_uuid` is accepted by create payloads only as transient batch correlation; it is not a `transactions` column
 - Tags are stored as CSV for simple `LIKE` queries without a join table
 
 ---
@@ -123,7 +126,16 @@ When assets move from Broker A to Broker B, or when a broker-import plugin seeds
 
 ### ⚙️ Solution
 
-At commit time, the backend **computes the Weighted Average Cost (WAC)** at the source broker and writes it to `cost_basis_override` on the **receiver** transaction (qty > 0).
+Create and update payloads can request backend WAC with
+`cost_basis_mode="auto"` or `"auto-detail"`. After create-link resolution, the
+batch service computes a per-unit WAC and writes its amount and currency to the
+staged receiver row. A manual payload instead supplies the
+`cost_basis_override` currency object directly.
+
+Batch promote is a separate boundary: `TXPromoteBatchItem` has no
+`cost_basis_mode`, and the promote stage does not calculate WAC. Its resolved
+per-unit value comes from `resolved_fields.cost_basis_override`, normally
+prepared by the frontend merge flow.
 
 See **[📊 Weighted Average Cost (WAC)](../../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md)** for the full formula, transaction effects, and examples.
 
@@ -131,14 +143,26 @@ See **[📊 Weighted Average Cost (WAC)](../../../financial-theory/technical-ana
 
 | Side | `cost_basis_override` |
 |------|----------------------|
-| Sender (qty < 0) | Always `NULL` |
-| Receiver (qty > 0) | Auto-calculated if empty; can be manually set |
+| Sender (qty < 0) | Not required; promote resolution explicitly clears it |
+| Receiver (qty > 0) | Required for `TRANSFER` and `ADJUSTMENT`; supplied manually, resolved by promote, or computed for a create/update auto mode |
 
-### 🧮 Why auto-calc happens at commit
+### 🧮 How batch auto-WAC is staged
 
-- `compute_weighted_avg_cost(session, source_broker_id, asset_id, as_of_date)` runs in `execute_batch` Step 6b (for creates) and in promote Step 5c (for promote-to-TRANSFER)
-- It queries both BUY transactions and previous incoming TRANSFERs with frozen cost
-- If no qualifying transactions exist at the source → returns `None` (lot with zero cost)
+- `compute_wac_and_fx_issues()` runs after create, promote, and create-link resolution.
+- `_compute_wac_for_auto_items()` selects only parsed create/update rows whose
+  `cost_basis_mode` is `auto` or `auto-detail`.
+- A linked create resolves its source broker from the partner in the transient
+  `link_uuid_map`; an unlinked row uses its own broker and excludes itself.
+- `compute_wac_iterative()` reads session-visible transaction history and writes
+  the resulting per-unit amount to `cost_basis_override`.
+- Missing FX data becomes a `wacFxUnavailable` batch issue instead of silently
+  persisting an unresolved cost.
+- A split-linked `ADJUSTMENT` skips stored auto-WAC because the portfolio engine
+  rescales total cost from the live split relationship.
+
+The service only mutates and flushes the existing session. The
+`/transactions/validate` caller always rolls it back; the
+`/transactions/commit` caller commits only when `response.committed` is true.
 
 ### ✍️ Manual override cases
 

@@ -99,7 +99,16 @@ def test_infer_country_from_issuer():
 
 def test_infer_sector():
     assert bi._infer_sector(_scheda(settore="Technology")) == "Technology"  # stock
-    assert bi._infer_sector(_scheda(settore=None, tipologia="Government Bonds")) == "Financials"  # bond map
+    assert bi._infer_sector(_scheda(settore=None, tipologia="Government Bonds")) == "Government Bonds"
+    assert bi._infer_sector(_scheda(settore=None, tipologia="government")) == "Government Bonds"
+    assert bi._infer_sector(_scheda(settore=None, tipologia="t-bonds")) == "Government Bonds"
+    assert bi._infer_sector(_scheda(settore=None, tipologia="Italian Government Bonds")) == "Government Bonds"
+    assert bi._infer_sector(_scheda(settore=None, tipologia="Titoli di Stato Italiani")) == "Government Bonds"
+    assert bi._infer_sector(_scheda(settore=None, tipologia="corporate")) == "Corporate Bonds"
+    assert bi._infer_sector(_scheda(settore=None, tipologia="Corporate Bonds")) == "Corporate Bonds"
+    assert bi._infer_sector(_scheda(settore=None, tipologia="Obbligazioni Corporate")) == "Corporate Bonds"
+    assert bi._infer_sector(_scheda(settore=None, tipologia="Supranational Bonds")) == "Financials"
+    assert bi._infer_sector(_scheda(settore=None, tipologia="Obbligazioni Sovranazionali")) == "Financials"
     assert bi._infer_sector(_scheda(settore=None, tipologia="Something Unmapped")) is None
     assert bi._infer_sector(_scheda(settore=None, tipologia=None)) is None
 
@@ -459,9 +468,10 @@ async def test_metadata_scheda_bond_full(monkeypatch):
     assert "Market: MOT" in sd and "Issuer: Republic of Italy" in sd
     assert "Maturity: 2030-03-01" in sd and "Annual coupon: 2.5%" in sd
     assert "Structure: Fixed rate" in sd and "Coupon frequency: Semi-annual" in sd
-    # issuer → geographic area (ITA), tipologia → sector (Financials)
+    # issuer → geographic area (ITA), tipologia → canonical bond sector
     assert result.classification_params.geographic_area is not None
     assert result.classification_params.sector_area is not None
+    assert set(result.classification_params.sector_area.distribution) == {"Government Bonds"}
 
 
 @pytest.mark.asyncio

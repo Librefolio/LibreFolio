@@ -13,7 +13,7 @@
      *
      * Svelte 5 runes throughout.
      */
-    import {onMount, tick} from 'svelte';
+    import {onDestroy, onMount, tick} from 'svelte';
     import {goto} from '$app/navigation';
     import {page} from '$app/stores';
     import {_ as t} from '$lib/i18n';
@@ -26,6 +26,11 @@
     import type {LivePriceDirection} from '$lib/services/livePriceService';
     import AssetSyncModal from '$lib/components/assets/AssetSyncModal.svelte';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
+    import {entityDetailLinkHtml} from '$lib/utils/core/entityLink';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {loadAssetEditData, type AssetEditData} from '$lib/components/assets/assetEditData';
+    import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
+    import {extractErrorMessage} from '$lib/utils/trySave';
     import AssetMergeModal from '$lib/components/assets/AssetMergeModal.svelte';
     import {invalidateAfterMutation} from '$lib/stores/reference/assetStore';
     import ViewModeToggle from '$lib/components/ui/ViewModeToggle.svelte';
@@ -38,6 +43,8 @@
     import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
+    import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
+    import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import AssetSetRiskPanel from '$lib/components/risk/AssetSetRiskPanel.svelte';
@@ -53,7 +60,10 @@
     import type {ProcessedAssetResult} from '$lib/workers/priceProcessing.worker';
     import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
     import {globalSettings} from '$lib/stores/app/globalSettings';
+    import {matchesAssetLifecycle, orderAssetsByLifecycle} from '$lib/components/assets/assetLifecycle';
     import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
+    import {buildTransactionsFiltersUrl} from '../transactions/filterState';
+    import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
 
     // =========================================================================
     // Types
@@ -118,11 +128,12 @@
     let mergeModalOpen = $state(false);
     let mergingAsset: AssetRow | null = $state(null);
     let deleteLoading = $state(false);
+    let singleDeleteResults = $state<{label: string; success: boolean; detail?: string; action?: {href: string; label: string; testId?: string}}[]>([]);
 
     // Bulk delete confirmation dialog
     let bulkDeleteDialogOpen = $state(false);
     let deletingAssets = $state<AssetRow[]>([]);
-    let bulkDeleteResults = $state<{label: string; success: boolean; detail?: string}[]>([]);
+    let bulkDeleteResults = $state<{label: string; success: boolean; detail?: string; action?: {href: string; label: string; testId?: string}}[]>([]);
 
     // Sync modal
     let syncModalOpen = $state(false);
@@ -130,8 +141,12 @@
 
     // Asset modal (create/edit)
     let assetModalOpen = $state(false);
+    let assetTourPreview = $state(false);
     let assetModalEditMode = $state(false);
-    let assetModalEditData = $state<any>(null);
+    let assetModalEditData = $state<AssetEditData | null>(null);
+    let assetEditLoading = $state(false);
+    let assetEditRequest = 0;
+    onDestroy(() => (assetEditRequest += 1));
 
     // Filters
     let searchText = $state('');
@@ -206,19 +221,10 @@
     // Grid delta display mode: absolute or percentage (E3)
     let globalViewMode = $state<'percentage' | 'absolute'>('percentage');
 
-    // Asset type → icon PNG filename mapping (used in type filter dropdown)
-    const TYPE_ICON_MAP: Record<string, string> = {
-        STOCK: 'stock',
-        ETF: 'etf',
-        BOND: 'bond',
-        CRYPTO: 'crypto',
-        FUND: 'fund',
-        HOLD: 'hold',
-        CROWDFUND: 'crowdfunding',
-        INDEX: 'index',
-        OTHER: 'other',
-    };
-    const ALL_ASSET_TYPES = ['STOCK', 'ETF', 'BOND', 'CRYPTO', 'FUND', 'HOLD', 'CROWDFUND', 'INDEX', 'OTHER'] as const;
+    // Asset type → icon: getAssetTypeIconUrl() is the single source. The local
+    // TYPE_ICON_MAP that used to live here knew nine types, so every value added to
+    // ALL_ASSET_TYPES below would have been drawn as other.png in this very dropdown.
+    const ALL_ASSET_TYPES = ['STOCK', 'ETF', 'BOND', 'CRYPTO', 'FUND', 'CROWDFUND', 'HOLD', 'COMMODITY', 'REAL_ESTATE', 'INDEX', 'OTHER', 'ETF_STOCK', 'ETF_BOND', 'ETF_COMMODITY', 'ETF_REAL_ESTATE', 'ETF_CRYPTO', 'ETF_MONETARY'] as const;
 
     // Count assets per type (for E5b badge in type filter dropdown)
     let typeCounts = $derived(
@@ -275,23 +281,18 @@
     let configuredCurrencies = $derived([...new Set(assets.map((a) => a.currency))].sort());
 
     let filteredAssets = $derived(
-        assets.filter((a) => {
-            // Tri-state active filter: if both toggles match (both on or both off),
-            // no filter is applied. Otherwise keep only the state matching the
-            // single selected toggle.
-            const bothSameState = filterShowActive === filterShowInactive;
-            if (!bothSameState) {
-                if (filterShowActive && !a.active) return false;
-                if (filterShowInactive && a.active) return false;
-            }
-            if (filterTypes.size > 0 && !filterTypes.has(a.asset_type ?? '')) return false;
-            if (filterCurrencies.size > 0 && !filterCurrencies.has(a.currency)) return false;
-            if (searchText) {
-                const q = searchText.toLowerCase();
-                if (!a.display_name.toLowerCase().includes(q)) return false;
-            }
-            return true;
-        }),
+        orderAssetsByLifecycle(
+            assets.filter((a) => {
+                if (!matchesAssetLifecycle(a.active, filterShowActive, filterShowInactive)) return false;
+                if (filterTypes.size > 0 && !filterTypes.has(a.asset_type ?? '')) return false;
+                if (filterCurrencies.size > 0 && !filterCurrencies.has(a.currency)) return false;
+                if (searchText) {
+                    const q = searchText.toLowerCase();
+                    if (!a.display_name.toLowerCase().includes(q)) return false;
+                }
+                return true;
+            }),
+        ),
     );
 
     // Which delta periods are visible for the selected date range
@@ -387,6 +388,7 @@
         await loadAssets();
         // Load FX pair slugs for cross-domain signal selection in settings modal
         loadFxPairSlugs();
+        onboardingGuide.maybeStartContextual('asset_page_guide');
     });
 
     // Live price polling — only active when dateEnd includes today
@@ -751,28 +753,41 @@
     // Actions
     // =========================================================================
 
-    function handleAddAsset() {
+    function openAssetCreate() {
+        assetEditRequest += 1;
+        assetEditLoading = false;
         assetModalEditMode = false;
         assetModalEditData = null;
         assetModalOpen = true;
     }
 
-    function handleEditAsset(asset: any) {
-        assetModalEditMode = true;
-        assetModalEditData = {
-            id: asset.id,
-            display_name: asset.display_name,
-            currency: asset.currency,
-            asset_type: asset.asset_type ?? 'STOCK',
-            icon_url: asset.icon_url,
-            quote_base_quantity: asset.quote_base_quantity ?? 1,
-            active: asset.active,
-            provider_code: asset.provider_code,
-        };
-        assetModalOpen = true;
+    function handleAddAsset() {
+        if (onboardingGuide.active?.flow === 'asset_page_guide') {
+            onboardingGuide.dismissHost();
+        }
+        assetTourPreview = false;
+        openAssetCreate();
+        onboardingGuide.maybeStartContextual('asset_guide');
     }
 
-    async function handleSyncAsset(asset: any) {
+    async function handleEditAsset(asset: {id: number}) {
+        const request = ++assetEditRequest;
+        const session = getClientSessionGeneration();
+        assetEditLoading = true;
+        try {
+            const data = await loadAssetEditData(asset.id);
+            if (request !== assetEditRequest || !isClientSessionCurrent(session)) return;
+            assetModalEditMode = true;
+            assetModalEditData = data;
+            assetModalOpen = true;
+        } catch (error: unknown) {
+            if (request === assetEditRequest && isClientSessionCurrent(session)) toasts.error(extractErrorMessage(error, $t('common.errorOccurred')));
+        } finally {
+            if (request === assetEditRequest) assetEditLoading = false;
+        }
+    }
+
+    async function handleSyncAsset(asset: any, linkCreatedAsset = false) {
         syncingAssetIds = new Set([...syncingAssetIds, asset.id]);
         try {
             const response = await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([
@@ -789,7 +804,7 @@
                 const changed = inserted + updated;
                 toasts.success(
                     $t('assets.sync.toastOk', {
-                        values: {name: asset.display_name, fetched, changed},
+                        values: {name: linkCreatedAsset ? entityDetailLinkHtml({kind: 'asset', id: asset.id}, asset.display_name) : escapeHtml(asset.display_name), fetched, changed},
                     }),
                 );
             } else {
@@ -829,6 +844,7 @@
 
     function handleDeleteAsset(asset: any) {
         deletingAsset = asset;
+        singleDeleteResults = [];
         deleteDialogOpen = true;
     }
 
@@ -851,17 +867,34 @@
                 invalidateAfterMutation(deletingAsset.id);
                 assets = assets.filter((a) => a.id !== deletingAsset!.id);
                 toasts.success($t('assets.delete.toastOk', {values: {name: deletingAsset!.display_name}}));
+                deleteDialogOpen = false;
+                deletingAsset = null;
             } else if (r?.error_code === 'HAS_TRANSACTIONS') {
+                const count = Number(r.transaction_count ?? 0);
+                singleDeleteResults = [
+                    {
+                        label: r.display_name || deletingAsset.display_name,
+                        success: false,
+                        detail: `${$t('assets.delete.resultHasTransactions')} (${count})`,
+                        action: {
+                            href: buildTransactionsFiltersUrl({asset_id: deletingAsset.id}),
+                            label: $t('transactions.title'),
+                            testId: 'asset-delete-transactions-link',
+                        },
+                    },
+                ];
                 toasts.error($t('assets.delete.hasTransactions', {values: {name: deletingAsset!.display_name}}));
             } else {
                 toasts.error(r?.message || $t('assets.delete.toastFailed', {values: {name: deletingAsset!.display_name}}));
+                deleteDialogOpen = false;
+                deletingAsset = null;
             }
         } catch (e: any) {
             toasts.error($t('assets.delete.toastFailed', {values: {name: deletingAsset!.display_name}}));
-        } finally {
-            deleteLoading = false;
             deleteDialogOpen = false;
             deletingAsset = null;
+        } finally {
+            deleteLoading = false;
         }
     }
 
@@ -900,11 +933,21 @@
             assets = assets.filter((a) => !succeeded.includes(a.id));
 
             // Populate results for the ConfirmModal
-            bulkDeleteResults = (res.results ?? []).map((r: any) => ({
-                label: r.display_name || `Asset #${r.asset_id}`,
-                success: r.success,
-                detail: r.success ? $t('assets.delete.resultDeleted') : r.error_code === 'HAS_TRANSACTIONS' ? $t('assets.delete.resultHasTransactions') : r.message || 'Error',
-            }));
+            bulkDeleteResults = (res.results ?? []).map((r: any) => {
+                const blocked = r.error_code === 'HAS_TRANSACTIONS';
+                return {
+                    label: r.display_name || `Asset #${r.asset_id}`,
+                    success: r.success,
+                    detail: r.success ? $t('assets.delete.resultDeleted') : blocked ? `${$t('assets.delete.resultHasTransactions')} (${Number(r.transaction_count ?? 0)})` : r.message || 'Error',
+                    action: blocked
+                        ? {
+                              href: buildTransactionsFiltersUrl({asset_id: r.asset_id}),
+                              label: $t('transactions.title'),
+                              testId: `asset-bulk-delete-transactions-${r.asset_id}`,
+                          }
+                        : undefined,
+                };
+            });
         } catch (e: any) {
             toasts.error('Delete failed: ' + (e?.message || 'unknown'));
             bulkDeleteDialogOpen = false;
@@ -1118,7 +1161,7 @@
      * is readable by assistive tech (`aria-busy`) and by anything else that needs to know
      * whether what it is looking at is final.
      */
-    let busy = $derived(loading || assets.some((a) => a.loadingPrices));
+    let busy = $derived(loading || assetEditLoading || assets.some((a) => a.loadingPrices));
 </script>
 
 <div class="space-y-6" aria-busy={busy} data-busy={busy ? 'true' : 'false'} data-testid="assets-page">
@@ -1127,7 +1170,7 @@
          whether the actual header row has room. Plain `flex-wrap` reacts to the row's OWN
          available width instead (see fx/+page.svelte's equivalent header for the full note). -->
     <div class="flex flex-wrap items-start justify-between gap-4">
-        <div>
+        <div use:guideAnchor={'asset.page.overview'} data-testid="asset-page-overview-guide-target">
             <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
                 {$t('common.assets')}
                 {#if assets.length > 0}
@@ -1173,7 +1216,7 @@
                 </div>
             {/if}
             <ViewModeToggle bind:mode={viewMode} storageKey="assetsViewMode" />
-            <button class="flex items-center gap-1.5 px-3 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors whitespace-nowrap" data-testid="assets-add-button" onclick={handleAddAsset}>
+            <button class="flex items-center gap-1.5 px-3 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors whitespace-nowrap" data-testid="assets-add-button" use:guideAnchor={'asset.page.add'} onclick={handleAddAsset}>
                 <Plus size={16} />
                 {$t('assets.modal.title')}
             </button>
@@ -1210,7 +1253,12 @@
                  dashboard/brokerDetail/fxList "giustificata" pattern). Round 13: each ROW
                  individually needs its own w-full+justify-around too — the OUTER wrapper's cap
                  alone doesn't distribute space to children that don't ALSO stretch to it. -->
-            <div class="flex gap-2 {layoutMode === 'oneRow' ? 'flex-row items-center flex-wrap' : filtersStacked ? 'flex-col items-start w-full' : 'flex-col'}" style={filtersStacked && pickerMaxWidth ? `max-width: ${pickerMaxWidth}px` : ''}>
+            <div
+                class="flex gap-2 {layoutMode === 'oneRow' ? 'flex-row items-center flex-wrap' : filtersStacked ? 'flex-col items-start w-full' : 'flex-col'}"
+                style={filtersStacked && pickerMaxWidth ? `max-width: ${pickerMaxWidth}px` : ''}
+                use:guideAnchor={'asset.page.filters'}
+                data-testid="asset-page-filters"
+            >
                 <!-- Row 1: Search + Active -->
                 <div class="flex items-center gap-2 {filtersStacked ? 'w-full justify-around' : ''}">
                     <!-- Search — Round 14: min-w bumped (was a flat w-44/176px that felt too
@@ -1345,8 +1393,13 @@
                                 <!-- Option list -->
                                 <div class="max-h-52 overflow-y-auto border border-gray-100 dark:border-slate-700 mx-2.5 my-2 rounded-md">
                                     {#each availableTypes as typeVal}
+                                        <!-- The per-type testid is the only handle a test has on these rows: the
+                                             row carries a shared icon (the six ETF subtypes all draw etf.png by
+                                             design) and a translated label, so neither identifies a type. Same
+                                             convention as column-visibility-item-{id} and provider-option-{code}. -->
                                         <button
                                             type="button"
+                                            data-testid="assets-type-filter-option-{typeVal}"
                                             class="flex items-center gap-2 w-full px-2 py-1.5 text-left text-[13px] text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors cursor-pointer"
                                             onclick={() => {
                                                 const next = new Set(filterTypes);
@@ -1363,7 +1416,7 @@
                                                     <Check size={12} />
                                                 {/if}
                                             </span>
-                                            <img src="/icons/asset-types/{TYPE_ICON_MAP[typeVal] ?? 'other'}.png" alt="" class="w-4 h-4 object-contain shrink-0" />
+                                            <img src={getAssetTypeIconUrl(typeVal)} alt="" class="w-4 h-4 object-contain shrink-0" />
                                             <span class="flex-1">{$t(`assets.types.${typeVal}`) || typeVal}</span>
                                             <span class="text-[10px] font-mono text-gray-400 dark:text-gray-500 tabular-nums">{typeCounts[typeVal] ?? 0}</span>
                                         </button>
@@ -1390,14 +1443,18 @@
             {:else}
                 <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
                     <button
+                        type="button"
                         class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'absolute' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        data-testid="assets-global-view-absolute"
                         onclick={() => {
                             globalViewMode = 'absolute';
                         }}
                         >Abs
                     </button>
                     <button
+                        type="button"
                         class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'percentage' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        data-testid="assets-global-view-percentage"
                         onclick={() => {
                             globalViewMode = 'percentage';
                         }}
@@ -1418,6 +1475,8 @@
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                 onclick={handleSyncAllAssets}
+                data-testid="assets-sync-all-button"
+                use:guideAnchor={'asset.page.sync'}
             >
                 <RotateCw size={14} />
                 {#if showActionLabels}<span>{$t('sharedResource.syncAll')}</span>{/if}
@@ -1448,17 +1507,7 @@
                 <p class="text-red-600 dark:text-red-400">{error}</p>
             </div>
         {:else}
-            <AssetSetRiskPanel
-                {assets}
-                {dateStart}
-                {dateEnd}
-                targetCurrency={$globalSettings.default_currency || 'EUR'}
-                onsynced={async () => {
-                    for (const asset of assets) invalidateAssetPriceStore(asset.id);
-                    rearmMaxPendingBeforeReload();
-                    await fetchAllPriceData();
-                }}
-            />
+            <AssetSetRiskPanel {assets} {dateStart} {dateEnd} targetCurrency={$globalSettings.default_currency || 'EUR'} />
         {/if}
     {:else if loading}
         <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-12 text-center border border-gray-100 dark:border-slate-700">
@@ -1483,7 +1532,7 @@
             {#if assets.length === 0}
                 <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2">{$t('assets.empty.noAssets')}</h3>
                 <p class="text-gray-500 dark:text-gray-400 mb-4">{$t('assets.empty.noAssetsDesc')}</p>
-                <button class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" onclick={handleAddAsset}>
+                <button class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" use:guideAnchor={'assets.add'} onclick={handleAddAsset}>
                     <Plus size={16} class="inline mr-1" />
                     {$t('assets.modal.title')}
                 </button>
@@ -1523,6 +1572,7 @@
                                     deltaAbs={asset.deltaAbs}
                                     dateStart={urlDateStart}
                                     dateEnd={urlDateEnd}
+                                    {globalViewMode}
                                     chartSettings={getSettingsForPair(`asset-${asset.id}`, 'assets')}
                                     renderSignals={(chartData, vm) => getRenderedSignals(asset.id, chartData, vm)}
                                     chartData={asset.chartData}
@@ -1582,6 +1632,8 @@
 
 <!-- Chart Settings Modal (D4) -->
 <ChartSettingsModal
+    axisContext={settingsTargetId ? (assets.find((asset) => asset.id === Number(settingsTargetId))?.currency ?? '—') : $t('common.preview')}
+    axisDomain="asset"
     open={settingsModalOpen}
     mode={settingsTargetId ? 'pair' : 'global'}
     {signalDefinitions}
@@ -1611,9 +1663,11 @@
     onCancel={() => {
         deleteDialogOpen = false;
         deletingAsset = null;
+        singleDeleteResults = [];
     }}
     onConfirm={confirmDeleteAsset}
     open={deleteDialogOpen}
+    results={singleDeleteResults}
     title={$t('common.confirmDelete')}
 />
 
@@ -1650,19 +1704,25 @@
 <!-- Asset Create/Edit Modal -->
 <AssetModal
     bind:open={assetModalOpen}
+    tourPreview={assetTourPreview}
     editMode={assetModalEditMode}
     editData={assetModalEditData}
+    linkCreatedAsset
     oncreated={async (assetId) => {
         await loadAssets();
         // Auto-sync the newly created asset to fetch initial price data
         const newAsset = assets.find((a) => a.id === assetId);
         if (newAsset?.provider_code) {
-            await handleSyncAsset(newAsset);
+            await handleSyncAsset(newAsset, true);
         }
     }}
     onupdated={() => loadAssets()}
     onclose={() => {
         assetModalOpen = false;
+        assetTourPreview = false;
+        if (onboardingGuide.active?.flow === 'asset_guide') {
+            onboardingGuide.dismissHost({restartAtFirst: true});
+        }
     }}
 />
 

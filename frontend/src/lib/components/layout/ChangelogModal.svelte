@@ -10,21 +10,22 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
     import {marked} from 'marked';
-    import {tick} from 'svelte';
+    import {onDestroy, tick} from 'svelte';
     import {ChevronDown, ChevronsDownUp, ChevronsUpDown, ExternalLink, RefreshCw, Search} from 'lucide-svelte';
     import AskAdminModal from '$lib/components/auth/AskAdminModal.svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import {CHANGELOG_REMOTE_URL, changelogChapters, type ChangelogChapter, type ChangelogSection} from '$lib/features/changelog/changelog';
     import {auth} from '$lib/stores/app/auth';
-    import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {notify} from '$lib/stores/app/notify.svelte';
     import {zodiosApi} from '$lib/api';
-    import {checkForNewerRelease, type NewerRelease} from '$lib/features/update-check/updateCheck';
+    import {checkForUpdates, type UpdateCheckResult} from '$lib/features/update-check/updateCheck';
     import {updateAvailable} from '$lib/features/update-check/updateCheckStore.svelte';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
 
     interface Props {
         open: boolean;
         onClose: () => void;
-        /** Running app version (for the update check). */
+        /** Version displayed by the caller; checks resolve the running backend version. */
         currentVersion?: string;
     }
 
@@ -38,6 +39,9 @@
 
     // Reset to defaults every time the modal opens.
     $effect(() => {
+        checkGeneration++;
+        checkState = 'idle';
+        lastCheck = null;
         if (open) {
             openChapters = {0: true};
             openSections = {};
@@ -173,38 +177,86 @@
     }
 
     // =========================================================================
-    // Update check (round 5): manual probe from the modal header — same
-    // checkForNewerRelease the login flow uses (never duplicated). Admins get
+    // Manual probe uses the same release selection and image gate as login.
+    // Only explicit checks bypass the cache and prompt dismissal. Admins get
     // the update modal; non-admins get a hint with the admin list as badges.
     // =========================================================================
     type CheckState = 'idle' | 'checking' | 'newer' | 'ask-admin';
     let checkState = $state<CheckState>('idle');
+    let lastCheck = $state<UpdateCheckResult | null>(null);
+    let checkedVersion = $state('');
+    let checkGeneration = 0;
     let admins = $state<Array<{username: string; email: string | null}>>([]);
     const isAdmin = $derived($auth.user?.is_superuser === true);
 
+    onDestroy(() => {
+        checkGeneration++;
+    });
+
+    function checkMessage(result: UpdateCheckResult): string {
+        if (result.status === 'up-to-date') return $_('changelog.upToDate');
+        if (result.status === 'no-release') return $_('changelog.noStableRelease');
+        if (result.status === 'image-pending') return $_('changelog.imagePending');
+        if (result.status === 'error') {
+            return $_(result.reason?.startsWith('image-') ? 'changelog.imageCheckFailed' : 'changelog.checkFailed');
+        }
+        return $_('updateCheck.title');
+    }
+
+    function reportCheck(result: UpdateCheckResult) {
+        const message = result.status === 'up-to-date' && result.latest ? `${checkMessage(result)}\n${$_('changelog.detectedRemoteVersion', {values: {version: result.latest.tag ?? result.latest.version}})}` : checkMessage(result);
+        notify({
+            name: 'app.update.checked',
+            detail: {status: result.status, source: result.source, checkedAt: result.checkedAt, currentVersion: checkedVersion, reportedVersion: currentVersion, remoteVersion: result.latest?.version ?? null, remoteTag: result.latest?.tag ?? null, reason: result.reason},
+            toast:
+                result.status === 'up-to-date'
+                    ? {variant: 'success', message: escapeHtml(message)}
+                    : result.status === 'error'
+                      ? {variant: 'error', message: escapeHtml(message)}
+                      : result.status === 'image-pending' || result.status === 'no-release'
+                        ? {variant: 'warning', message: escapeHtml(message)}
+                        : undefined,
+        });
+    }
+
     async function handleCheckNow() {
         if (checkState === 'checking') return;
+        const generation = ++checkGeneration;
         checkState = 'checking';
+        lastCheck = null;
+        checkedVersion = '';
         try {
-            const release: NewerRelease | null = currentVersion ? await checkForNewerRelease(currentVersion) : null;
-            if (!release) {
-                // Round 6: "up to date" is a toast, not a banner in the modal.
+            const info = await zodiosApi.get_system_info_api_v1_system_info_get();
+            if (generation !== checkGeneration || !open) return;
+            checkedVersion = info.app_version;
+            const result = await checkForUpdates(checkedVersion, {force: true, ignoreDismissed: true});
+            if (generation !== checkGeneration || !open) return;
+            lastCheck = result;
+            reportCheck(result);
+            if (result.status !== 'update-available' || !result.latest) {
                 checkState = 'idle';
-                toasts.success($_('changelog.upToDate'));
                 return;
             }
             if (isAdmin) {
                 // Admin: the real modal takes over from here.
-                updateAvailable.show(release);
+                updateAvailable.show(result.latest);
                 checkState = 'newer';
             } else {
                 // Non-admin: open the ask-admin modal listing the administrators.
-                checkState = 'ask-admin';
                 const res = await zodiosApi.search_users_endpoint_api_v1_users_search_get({queries: {q: '', admins: true}});
+                if (generation !== checkGeneration || !open) return;
                 admins = ((res as {items?: Array<{username: string; email?: string | null}>}).items ?? []).map((u) => ({username: u.username, email: u.email ?? null}));
+                checkState = 'ask-admin';
             }
         } catch {
+            if (generation !== checkGeneration || !open) return;
             checkState = 'idle';
+            if (lastCheck?.status === 'update-available') {
+                notify({name: 'app.update.admin-lookup-failed', toast: {variant: 'error', message: $_('changelog.adminLookupFailed')}});
+                return;
+            }
+            lastCheck = {status: 'error', latest: null, source: 'none', checkedAt: null, reason: 'check-failed'};
+            reportCheck(lastCheck);
         }
     }
 </script>
@@ -242,7 +294,7 @@
                 />
             </div>
             <div class="flex items-center gap-1 shrink-0 order-4 sm:order-4 ml-auto sm:ml-0">
-                <!-- Update check (F14): same checkForNewerRelease as the login flow -->
+                <!-- Update check (F14): force a fresh result, retaining the login flow's gates. -->
                 <button
                     type="button"
                     class="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-slate-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"

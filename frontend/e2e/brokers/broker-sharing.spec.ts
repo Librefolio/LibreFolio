@@ -1,6 +1,7 @@
-import {expect, type Page, test} from '../fixtures/playwright';
+import {type APIRequestContext, expect, type Page, type Request, test} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_ADMIN, TEST_USER, TEST_USER_2} from '../fixtures/test-users';
+import {uniqueSuffix} from '../fixtures/unique';
 
 /**
  * Broker Sharing E2E Tests
@@ -53,6 +54,236 @@ async function openSharingModalFromList(page: Page) {
     await expect(page.getByTestId('broker-sharing-modal')).toBeVisible({timeout: 5000});
 }
 
+test.describe('Runes parity', () => {
+    test.setTimeout(60_000);
+
+    type OwnedUser = {id: number; username: string; email: string; password: string};
+    type Grant = {user_id: number; role: 'OWNER' | 'EDITOR' | 'VIEWER'; share_percentage: number | string};
+    type OwnedSharing = {owner: OwnedUser; viewer: OwnedUser; brokerId: number};
+
+    async function authenticateOwned(request: APIRequestContext, user: OwnedUser) {
+        const response = await request.post('/api/v1/auth/login', {data: {username: user.username, password: user.password}});
+        expect(response.ok()).toBe(true);
+        expect((await response.json()).user.id).toBe(user.id);
+    }
+
+    // Each test owns two disposable accounts, their complete ACL, and one empty
+    // broker. Cleanup addresses only returned IDs, never a shared-row snapshot.
+    async function withOwnedSharing(request: APIRequestContext, run: (owned: OwnedSharing) => Promise<void>) {
+        const users: OwnedUser[] = [];
+        let owner: OwnedUser | undefined;
+        let brokerId: number | undefined;
+        async function register(role: string): Promise<OwnedUser> {
+            const suffix = uniqueSuffix();
+            const credentials = {username: `runes_${role}_${suffix}`, email: `runes_${role}_${suffix}@example.com`, password: `Runes9!_${suffix}`};
+            const response = await request.post('/api/v1/auth/register', {data: credentials});
+            expect(response.status(), 'Disposable-account registration must be enabled; do not repair global state').toBe(201);
+            const {user} = (await response.json()) as {user: {id: number; is_superuser: boolean}};
+            const owned = {...credentials, id: user.id};
+            users.push(owned);
+            expect(user.is_superuser, 'These cases require ordinary disposable members').toBe(false);
+            return owned;
+        }
+        try {
+            owner = await register('owner');
+            const viewer = await register('viewer');
+            await authenticateOwned(request, owner);
+            const name = `Runes sharing ${uniqueSuffix()}`;
+            const created = await request.post('/api/v1/brokers', {data: [{name}]});
+            expect(created.ok()).toBe(true);
+            const {results} = (await created.json()) as {results: {name: string; success: boolean; broker_id: number | null}[]};
+            const ownedBroker = results.find((result) => result.name === name);
+            if (ownedBroker?.broker_id != null) brokerId = ownedBroker.broker_id;
+            expect(ownedBroker).toMatchObject({name, success: true});
+            if (brokerId === undefined) throw new Error(`No created broker ID returned for ${name}`);
+            const seeded = await request.put(`/api/v1/brokers/${brokerId}/access`, {
+                data: [
+                    {user_id: owner.id, role: 'OWNER', share_percentage: 1},
+                    {user_id: viewer.id, role: 'VIEWER', share_percentage: 0},
+                ],
+            });
+            expect(seeded.ok()).toBe(true);
+            await expectAcl(request, brokerId, owner.id, viewer.id, 'VIEWER');
+            await run({owner, viewer, brokerId});
+        } finally {
+            // Continue cleaning the other owned resources even if one cleanup
+            // fails, but never hide that failure or expand cleanup beyond IDs.
+            const failures: unknown[] = [];
+            if (owner && brokerId !== undefined) {
+                try {
+                    await authenticateOwned(request, owner);
+                    const deleted = await request.delete('/api/v1/brokers', {params: {ids: brokerId}});
+                    expect(deleted.ok()).toBe(true);
+                    const {results} = (await deleted.json()) as {results: {id: number; success: boolean}[]};
+                    expect(results.find((result) => result.id === brokerId)).toMatchObject({id: brokerId, success: true});
+                } catch (error) {
+                    failures.push(error);
+                }
+            }
+            for (const user of users) {
+                try {
+                    await authenticateOwned(request, user);
+                    const deleted = await request.delete('/api/v1/auth/users/me');
+                    expect(deleted.ok()).toBe(true);
+                } catch (error) {
+                    failures.push(error);
+                }
+            }
+            if (failures.length) throw new AggregateError(failures, 'Runes parity could not clean all owned resources');
+        }
+    }
+
+    function aclProjection(grants: Grant[]) {
+        return grants.map((grant) => ({user_id: grant.user_id, role: grant.role, share_percentage: Number(grant.share_percentage)})).sort((a, b) => a.user_id - b.user_id);
+    }
+
+    async function expectAcl(request: APIRequestContext, brokerId: number, ownerId: number, viewerId: number, role: 'EDITOR' | 'VIEWER') {
+        const response = await request.get(`/api/v1/brokers/${brokerId}/access`);
+        expect(response.ok()).toBe(true);
+        const {items} = (await response.json()) as {items: Grant[]};
+        // Cardinality is intentional: the test owns the broker's complete ACL.
+        expect(aclProjection(items)).toEqual(
+            aclProjection([
+                {user_id: ownerId, role: 'OWNER', share_percentage: 1},
+                {user_id: viewerId, role, share_percentage: 0},
+            ]),
+        );
+    }
+
+    async function openOwnedModal(page: Page, brokerId: number, ownerId: number) {
+        await navigateTo(page, '/brokers');
+        await expect(page.getByTestId('brokers-page')).toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+        // The grid is not paginated. The exact ID remains safe even when the
+        // discovery section lists brokers owned by neighbouring workers.
+        await page.getByTestId(`broker-share-${brokerId}`).click();
+        await expect(page.getByTestId('broker-sharing-modal')).toBeVisible();
+        await expect(page.getByTestId('broker-sharing-panel')).toHaveAttribute('data-access-state', 'ready', {timeout: 10_000});
+        await expect(page.getByTestId('sharing-owners-column').getByTestId(`access-entry-${ownerId}`)).toBeVisible();
+    }
+
+    async function editOwnedRole(page: Page, userId: number, role: 'EDITOR' | 'VIEWER') {
+        await page.getByTestId(`access-entry-${userId}`).click();
+        const editor = page.getByTestId('sharing-edit-user-modal');
+        await expect(editor).toBeVisible();
+        await editor.getByTestId('sharing-edit-role-trigger').click();
+        await editor.getByTestId(`sharing-edit-role-option-${role}`).click();
+        await editor.getByTestId('sharing-confirm-edit').click();
+        await expect(editor).toBeHidden();
+        const column = role === 'EDITOR' ? 'sharing-editors-column' : 'sharing-viewers-column';
+        await expect(page.getByTestId(column).getByTestId(`access-entry-${userId}`)).toBeVisible();
+        await expect(page.getByTestId('sharing-save-btn')).toBeEnabled();
+    }
+
+    test('owned modal resets and discards drafts, then saves the complete ACL and reopens clean', async ({page, request}) => {
+        await withOwnedSharing(request, async ({owner, viewer, brokerId}) => {
+            await login(page, owner);
+            const path = `/api/v1/brokers/${brokerId}/access`;
+            const puts: Grant[][] = [];
+            const recordPut = (req: Request) => {
+                if (req.method() === 'PUT' && new URL(req.url()).pathname === path) puts.push(req.postDataJSON() as Grant[]);
+            };
+            page.on('request', recordPut);
+            try {
+                await openOwnedModal(page, brokerId, owner.id);
+                const modal = page.getByTestId('broker-sharing-modal');
+                const viewerEntry = page.getByTestId('sharing-viewers-column').getByTestId(`access-entry-${viewer.id}`);
+                await expect(viewerEntry).toBeVisible();
+                await expect(page.getByTestId('sharing-save-btn')).toBeDisabled();
+
+                await editOwnedRole(page, viewer.id, 'EDITOR');
+                await page.getByTestId('sharing-reset-btn').click();
+                await expect(viewerEntry).toBeVisible();
+                await expect(page.getByTestId('sharing-save-btn')).toBeDisabled();
+                await expectAcl(request, brokerId, owner.id, viewer.id, 'VIEWER');
+                expect(puts).toEqual([]);
+
+                await editOwnedRole(page, viewer.id, 'EDITOR');
+                await modal.press('Escape');
+                await expect(page.getByTestId('confirm-modal-confirm')).toBeVisible();
+                await page.getByTestId('confirm-modal-cancel').click();
+                await expect(page.getByTestId('confirm-modal-confirm')).toBeHidden();
+                await expect(modal).toBeVisible();
+                await expect(page.getByTestId('sharing-editors-column').getByTestId(`access-entry-${viewer.id}`)).toBeVisible();
+                await expect(page.getByTestId('sharing-save-btn')).toBeEnabled();
+
+                await modal.press('Escape');
+                await expect(page.getByTestId('confirm-modal-confirm')).toBeVisible();
+                await page.getByTestId('confirm-modal-confirm').click();
+                await expect(modal).toBeHidden();
+                await expect(page.getByTestId('confirm-modal-confirm')).toBeHidden();
+                await openOwnedModal(page, brokerId, owner.id);
+                await expect(viewerEntry).toBeVisible();
+                await expect(page.getByTestId('sharing-save-btn')).toBeDisabled();
+                await expectAcl(request, brokerId, owner.id, viewer.id, 'VIEWER');
+                expect(puts).toEqual([]);
+
+                await editOwnedRole(page, viewer.id, 'EDITOR');
+                const response = page.waitForResponse((res) => res.request().method() === 'PUT' && new URL(res.url()).pathname === path);
+                await page.getByTestId('sharing-save-btn').click();
+                const saved = await response;
+                expect(saved.ok()).toBe(true);
+                const expectedAcl: Grant[] = [
+                    {user_id: owner.id, role: 'OWNER', share_percentage: 1},
+                    {user_id: viewer.id, role: 'EDITOR', share_percentage: 0},
+                ];
+                expect(aclProjection(saved.request().postDataJSON() as Grant[])).toEqual(aclProjection(expectedAcl));
+                // F3 through the actual legacy modal host: Save must close it,
+                // not open a second discard prompt while dirty clears later.
+                await expect(modal).toBeHidden({timeout: 10_000});
+                await expect(page.getByTestId('brokers-page')).toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+                await expect(page.getByTestId('confirm-modal-confirm')).toBeHidden();
+                await expectAcl(request, brokerId, owner.id, viewer.id, 'EDITOR');
+
+                await openOwnedModal(page, brokerId, owner.id);
+                await expect(page.getByTestId('sharing-editors-column').getByTestId(`access-entry-${viewer.id}`)).toBeVisible();
+                await expect(page.getByTestId('sharing-save-btn')).toBeDisabled();
+                await modal.press('Escape');
+                await expect(modal).toBeHidden();
+                expect(puts.map(aclProjection)).toEqual([aclProjection(expectedAcl)]);
+            } finally {
+                page.off('request', recordPut);
+            }
+        });
+    });
+
+    test('owned viewer reloads the Info panel read-only while self-service stays reachable', async ({page, request}) => {
+        await withOwnedSharing(request, async ({owner, viewer, brokerId}) => {
+            await login(page, viewer);
+            const writes: string[] = [];
+            const recordWrite = (req: Request) => {
+                if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method()) && new URL(req.url()).pathname.startsWith(`/api/v1/brokers/${brokerId}/access`)) writes.push(req.url());
+            };
+            page.on('request', recordWrite);
+            try {
+                // Two real document loads exercise the unchanged legacy Info
+                // host and remount, rather than inspecting only a modal shell.
+                for (const visit of ['initial', 'reload']) {
+                    await test.step(visit, async () => {
+                        await navigateTo(page, `/brokers/${brokerId}`);
+                        await expect(page.getByTestId('broker-detail-page')).toBeVisible({timeout: 15_000});
+                        await page.getByTestId('broker-share-button').click();
+                        const panel = page.getByTestId('broker-sharing-panel');
+                        await expect(panel).toHaveAttribute('data-access-state', 'ready', {timeout: 10_000});
+                        const entry = panel.getByTestId('sharing-viewers-column').getByTestId(`access-entry-${viewer.id}`);
+                        await expect(entry).toBeVisible();
+                        await expect(entry).toBeDisabled();
+                        await expect(panel.getByTestId(`access-entry-${owner.id}`)).toBeDisabled();
+                        await expect(panel.getByTestId('sharing-self-leave-btn')).toBeEnabled();
+                        // Presence/ready barriers above give these negatives teeth.
+                        await expect(panel.getByTestId('sharing-add-user-btn')).toBeHidden();
+                        await expect(panel.getByTestId('sharing-save-btn')).toBeHidden();
+                        await expect(panel.getByTestId('sharing-reset-btn')).toBeHidden();
+                        await expect(panel.getByTestId('sharing-self-demote-btn')).toBeHidden();
+                    });
+                }
+                await expectAcl(request, brokerId, owner.id, viewer.id, 'VIEWER');
+                expect(writes).toEqual([]);
+            } finally {
+                page.off('request', recordWrite);
+            }
+        });
+    });
+});
 async function expectOwnershipChartCanvas(page: Page) {
     const section = page.getByTestId('ownership-chart-section');
     await expect(section).toBeVisible({timeout: 5000});

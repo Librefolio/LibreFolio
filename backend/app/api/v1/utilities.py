@@ -80,6 +80,8 @@ async def list_sectors(include_other: bool = Query(True, description="Include 'O
         "Consumer Staples": "🛒",
         "Telecommunication": "📡",
         "Utilities": "💡",
+        "Corporate Bonds": "🏢",
+        "Government Bonds": "🏛️",
         "Other": "📦",
         "Liquidity": "💰",
         "Unknown": "❓",

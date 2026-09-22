@@ -5,7 +5,7 @@
   - Backdrop with click-outside-to-close
   - Escape key handling (with stopPropagation for stacked modals)
   - Fade + scale transitions
-  - Focus trapping (backdrop gets focus to capture keyboard events)
+  - Backdrop focus, with opt-in keyboard focus trapping and restoration
   - Configurable z-index for modal stacking
   - Dark mode support
   - Snippet-based content injection (Svelte 5)
@@ -37,6 +37,11 @@
         contentClass?: string;
         /** data-testid for testing */
         testId?: string;
+        labelledBy?: string;
+        /** Keep keyboard navigation within this modal. Opt-in for existing callers. */
+        trapFocus?: boolean;
+        /** Return focus to the opener when this modal closes. */
+        restoreFocus?: boolean;
         /** Disable transitions (useful for nested modals) */
         noTransition?: boolean;
         /** Allow content overflow (for dropdowns inside compact modals) */
@@ -45,7 +50,7 @@
         children?: Snippet;
     }
 
-    let {open = false, zIndex = 50, maxWidth = 'lg', closeOnBackdropClick = true, closeOnEscape = true, onRequestClose = () => {}, contentClass = '', testId = '', noTransition = false, allowOverflow = false, children}: Props = $props();
+    let {open = false, zIndex = 50, maxWidth = 'lg', closeOnBackdropClick = true, closeOnEscape = true, onRequestClose = () => {}, contentClass = '', testId = '', labelledBy, trapFocus = false, restoreFocus = false, noTransition = false, allowOverflow = false, children}: Props = $props();
 
     // Max-width preset map
     const maxWidthMap: Record<string, string> = {
@@ -75,22 +80,21 @@
 
     // Ref for backdrop focus
     let backdropEl: HTMLDivElement | undefined = $state(undefined);
-    let hasFocusedOnOpen = $state(false);
     let bodyScrollLocked = false;
 
-    // Focus the backdrop ONCE when modal opens so keyboard events are captured
     $effect(() => {
-        if (open && backdropEl && !hasFocusedOnOpen) {
-            hasFocusedOnOpen = true;
-            requestAnimationFrame(() => backdropEl?.focus());
-        }
-    });
-
-    // Reset when modal closes
-    $effect(() => {
-        if (!open) {
-            hasFocusedOnOpen = false;
-        }
+        if (!browser || !open || !backdropEl) return;
+        const root = backdropEl;
+        const opener = restoreFocus && document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        const shouldTrap = trapFocus;
+        const frame = requestAnimationFrame(() => {
+            const target = shouldTrap ? (focusableElements(root)[0] ?? root) : root;
+            target.focus({preventScroll: true});
+        });
+        return () => {
+            cancelAnimationFrame(frame);
+            if (opener?.isConnected) opener.focus({preventScroll: true});
+        };
     });
 
     $effect(() => {
@@ -125,10 +129,33 @@
     }
 
     function handleKeydown(event: KeyboardEvent) {
+        if (trapFocus && event.key === 'Tab' && backdropEl) {
+            event.stopPropagation();
+            const elements = focusableElements(backdropEl);
+            const first = elements[0];
+            const last = elements.at(-1);
+            const active = document.activeElement;
+            if (!first || !last) {
+                event.preventDefault();
+                backdropEl.focus({preventScroll: true});
+            } else if (event.shiftKey && (active === first || active === backdropEl)) {
+                event.preventDefault();
+                last.focus({preventScroll: true});
+            } else if (!event.shiftKey && (active === last || active === backdropEl)) {
+                event.preventDefault();
+                first.focus({preventScroll: true});
+            }
+        }
         if (closeOnEscape && event.key === 'Escape') {
             event.stopPropagation();
             onRequestClose();
         }
+    }
+
+    function focusableElements(root: HTMLElement): HTMLElement[] {
+        return Array.from(root.querySelectorAll<HTMLElement>('a[href], area[href], input, select, textarea, button, iframe, [tabindex], [contenteditable="true"]')).filter(
+            (element) => element.tabIndex >= 0 && !element.matches(':disabled') && !element.closest('[inert]') && element.getClientRects().length > 0 && getComputedStyle(element).visibility !== 'hidden',
+        );
     }
 
     function stopPropagation(event: MouseEvent) {
@@ -190,13 +217,26 @@
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     {#if noTransition}
-        <div class="modal-backdrop" style="z-index: {zIndex};" bind:this={backdropEl} tabindex="-1" onmousedown={handleBackdropMouseDown} onclick={handleBackdropClick} onkeydown={handleKeydown} role="dialog" aria-modal="true" data-testid={testId || undefined}>
+        <div class="modal-backdrop" style="z-index: {zIndex};" bind:this={backdropEl} tabindex="-1" onmousedown={handleBackdropMouseDown} onclick={handleBackdropClick} onkeydown={handleKeydown} role="dialog" aria-modal="true" aria-labelledby={labelledBy} data-testid={testId || undefined}>
             <div class="modal-content {contentClass}" style="max-width: {maxWidthValue};{allowOverflow ? ' overflow: visible;' : ''}" onclick={stopPropagation}>
                 {#if children}{@render children()}{/if}
             </div>
         </div>
     {:else}
-        <div class="modal-backdrop" style="z-index: {zIndex};" bind:this={backdropEl} tabindex="-1" onmousedown={handleBackdropMouseDown} onclick={handleBackdropClick} onkeydown={handleKeydown} role="dialog" aria-modal="true" data-testid={testId || undefined} transition:fade={{duration: 150}}>
+        <div
+            class="modal-backdrop"
+            style="z-index: {zIndex};"
+            bind:this={backdropEl}
+            tabindex="-1"
+            onmousedown={handleBackdropMouseDown}
+            onclick={handleBackdropClick}
+            onkeydown={handleKeydown}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={labelledBy}
+            data-testid={testId || undefined}
+            transition:fade={{duration: 150}}
+        >
             <div class="modal-content {contentClass}" style="max-width: {maxWidthValue};{allowOverflow ? ' overflow: visible;' : ''}" onclick={stopPropagation} transition:scale={{duration: 200, start: 0.95}}>
                 {#if children}{@render children()}{/if}
             </div>

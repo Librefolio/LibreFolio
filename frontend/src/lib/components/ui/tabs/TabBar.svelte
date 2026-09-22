@@ -1,6 +1,7 @@
 <script lang="ts">
     import type {ComponentType} from 'svelte';
     import {applyLinearShrink, innerContentWidth, type ShrinkTarget} from '$lib/utils/layout/labelShrink';
+    import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
 
     export interface TabItem {
         id: string;
@@ -8,6 +9,7 @@
         icon?: ComponentType | null;
         badge?: number;
         testId?: string;
+        guideAnchor?: string;
         className?: string;
     }
 
@@ -96,6 +98,7 @@
                     : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800/50 hover:border-gray-300 dark:hover:border-slate-500'
             } ${tab.className ?? ''}`.trim()}
             data-testid={tab.testId ?? `tab-${tab.id}`}
+            use:guideAnchor={tab.guideAnchor ?? ''}
             role="tab"
             aria-selected={activeTab === tab.id}
             title={tab.label}

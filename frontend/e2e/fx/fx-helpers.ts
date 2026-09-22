@@ -8,6 +8,7 @@
 import {expect} from '../fixtures/playwright';
 import {navigateTo} from '../fixtures/auth-helpers';
 import {waitForSettled} from '../fixtures/app-events';
+import {optionsClosed} from '../fixtures/probe';
 
 /**
  * Navigate to FX page and wait for content to load.
@@ -42,13 +43,15 @@ export async function selectCurrency(page: import('@playwright/test').Page, cont
     await searchInput.fill(currencyCode);
 
     // Click the matching option in the listbox
-    const listbox = page.locator('[role="listbox"]');
+    const listbox = container.locator('[role="listbox"]');
     await expect(listbox).toBeVisible({timeout: 3000});
     await expect(listbox).toHaveAttribute('aria-busy', 'false', {timeout: 10_000});
 
-    // Find option that contains the currency code
-    const option = listbox.locator('[role="option"]').filter({hasText: currencyCode}).first();
+    // SearchSelect options are buttons identified by their stable value testid.
+    const option = listbox.getByTestId(`search-select-option-${currencyCode}`);
+    await expect(option).toBeVisible({timeout: 3000});
     await option.click();
+    await optionsClosed(page);
 }
 
 /**

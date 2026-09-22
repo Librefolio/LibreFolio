@@ -41,6 +41,7 @@ class RiskReturnBasis(StrEnum):
 
     PRICE_ONLY = "price_only"
     TWRR = "twrr"
+    CURRENT_COMPOSITION_BACKTEST = "current_composition_backtest"
 
 
 class RiskScopeKind(StrEnum):
@@ -63,6 +64,19 @@ class RiskOutputKind(StrEnum):
     SIMULATION = "simulation"
     OPTIMIZATION = "optimization"
     DRAWDOWN = "drawdown"
+    RISK_RETURN = "risk_return"
+    # The weightless multi-asset family, for the ASSET_SET scope. Each one is a
+    # *list* of per-asset measurements carrying no set-level aggregate, because a
+    # selection of assets has no weights and therefore nothing to aggregate into.
+    # They are separate kinds rather than optional fields on the four singular
+    # ones above: widening those would have meant making required scalars
+    # optional, and an optional field is exactly the mechanism by which a
+    # fabricated number becomes expressible. See RiskAssetSetReturnOutput.
+    KPI_SET = "kpi_set"
+    VAR_CVAR_SET = "var_cvar_set"
+    DRAWDOWN_SET = "drawdown_set"
+    RISK_RETURN_SET = "risk_return_set"
+    COMPARISON_SET = "comparison_set"
 
 
 class RiskDrawdownRecoveryStatus(StrEnum):
@@ -134,9 +148,33 @@ class RiskHistoricalReplayExclusionTreatment(StrEnum):
 
 
 class RiskSimulationProcess(StrEnum):
-    """Stochastic process exposed by the first simulation implementation."""
+    """Stochastic or resampling process available to simulation."""
 
+    BLOCK_BOOTSTRAP = "block_bootstrap"
     GBM = "gbm"
+
+
+class RiskSimulationRegime(StrEnum):
+    """Prescribed market regime overlaid on a resampled simulation.
+
+    A regime is *declared*, never estimated from the data: every non-NONE
+    value applies a stated transformation whose hypothesis must be shown to the
+    user next to the choice that selects it.
+
+    No backticks here, and that is load-bearing rather than a style choice.
+    This docstring is the OpenAPI description of a NAMED enum, so the client
+    generator emits it inside a JavaScript template literal, as an argument to
+    the describe() call on the generated Zod enum. A backtick inside such a
+    literal terminates the string, and the file then stops compiling at a point
+    far from this line. Object schemas escape this because their descriptions
+    become JSDoc comments instead; an enum is the one shape where the text lands
+    in executable position.
+    """
+
+    NONE = "none"
+    CALM = "calm"
+    PROLONGED_CRISIS = "prolonged_crisis"
+    SHOCK_RECOVERY = "shock_recovery"
 
 
 class RiskSamplingStrategy(StrEnum):
@@ -173,12 +211,14 @@ class RiskSimulationDriftEstimator(StrEnum):
     """Drift estimator disclosed by simulation results."""
 
     HISTORICAL_LOG_MLE = "historical_log_mle"
+    EMPIRICAL_RESAMPLED = "empirical_resampled"
 
 
 class RiskSimulationCovarianceEstimator(StrEnum):
     """Covariance estimator disclosed by simulation results."""
 
     SAMPLE_LOG_RETURNS = "sample_log_returns"
+    NOT_ESTIMATED_JOINT_RESAMPLING = "not_estimated_joint_resampling"
 
 
 class RiskExcludedAsset(StrictModel):
@@ -453,6 +493,10 @@ class RiskResultMetadata(StrictModel):
     scope: Optional[RiskScopeKind] = None
     scope_reference: Optional[str] = None
     broker_ids: Optional[List[PositiveInt]] = None
+    sliced_asset_ids: Optional[List[PositiveInt]] = Field(
+        None,
+        description="Effective asset slice of a portfolio scope. When set, weights are renormalized to 100% of the slice and no zero-return cash residual remains.",
+    )
     composition_as_of: Optional[date] = None
     method: Optional[str] = None
     params: Dict[str, JsonValue] = Field(default_factory=dict)
@@ -468,6 +512,7 @@ class RiskResultMetadata(StrictModel):
     path_count: Optional[int] = Field(None, ge=1)
     random_seed: Optional[int] = Field(None, ge=0, le=2**32 - 1)
     sobol_start_index: Optional[int] = Field(None, ge=0, le=2**32 - 1)
+    bootstrap_seed: Optional[int] = Field(None, ge=0, le=2**32 - 1)
     historical_replay_audit: Optional[RiskHistoricalReplayAudit] = None
 
     @field_validator("currency")
@@ -491,6 +536,17 @@ class RiskResultMetadata(StrictModel):
             raise ValueError("broker_ids must be unique")
         return sorted(value)
 
+    @field_validator("sliced_asset_ids")
+    @classmethod
+    def normalize_sliced_asset_ids(cls, value: Optional[List[int]]) -> Optional[List[int]]:
+        if value is None:
+            return None
+        if not value:
+            raise ValueError("sliced_asset_ids cannot be empty")
+        if len(value) != len(set(value)):
+            raise ValueError("sliced_asset_ids must be unique")
+        return sorted(value)
+
     @model_validator(mode="after")
     def validate_context(self) -> RiskResultMetadata:  # noqa: C901 — flat invariant raises, no nested logic
         if self.n_observations == 0:
@@ -508,16 +564,31 @@ class RiskResultMetadata(StrictModel):
             raise ValueError("current_composition requires a composition policy")
         if self.broker_ids is not None and self.scope != RiskScopeKind.PORTFOLIO:
             raise ValueError("broker_ids metadata requires portfolio scope")
+        if self.sliced_asset_ids is not None and self.scope != RiskScopeKind.PORTFOLIO:
+            raise ValueError("sliced_asset_ids metadata requires portfolio scope")
         if self.composition_as_of is not None and self.scope != RiskScopeKind.PORTFOLIO:
             raise ValueError("composition_as_of metadata requires portfolio scope")
         if self.sampling_method is None:
-            if self.path_count is not None or self.random_seed is not None or self.sobol_start_index is not None:
+            if self.path_count is not None or self.random_seed is not None or self.sobol_start_index is not None or self.bootstrap_seed is not None:
                 raise ValueError("simulation metadata fields require sampling_method")
         elif self.path_count is None:
             raise ValueError("simulation metadata requires path_count")
         elif self.sampling_method == RiskSamplingStrategy.MC:
-            if self.random_seed is None or self.sobol_start_index is not None:
-                raise ValueError("MC metadata requires random_seed and forbids sobol_start_index")
+            # Pseudo-random sampling covers two engines, not one. The parametric
+            # engine draws its normals from `random_seed`; the block bootstrap
+            # resamples real history under `bootstrap_seed` and is forbidden a
+            # `random_seed` by `SimulationParams` itself. Metadata carries no
+            # `process` field, but it does not need one: the params validator
+            # makes the seeds mutually exclusive, so *which* seed is present is
+            # the process, encoded. Asking for `random_seed` unconditionally made
+            # this model unable to describe the default engine at all.
+            if self.sobol_start_index is not None:
+                raise ValueError("MC metadata forbids sobol_start_index")
+            if self.bootstrap_seed is not None:
+                if self.random_seed is not None:
+                    raise ValueError("block bootstrap metadata forbids random_seed")
+            elif self.random_seed is None:
+                raise ValueError("parametric MC metadata requires random_seed")
         elif self.sobol_start_index is None or self.random_seed is not None:
             raise ValueError("QMC metadata requires sobol_start_index and forbids random_seed")
         return self
@@ -554,6 +625,12 @@ class PortfolioRiskScope(RiskScopeBase):
         max_length=100,
         description="Exact broker subset. None includes all brokers accessible to the user.",
     )
+    asset_ids: Optional[List[PositiveInt]] = Field(
+        None,
+        min_length=1,
+        max_length=100,
+        description=("Exact asset subset of the portfolio. None includes every held asset. The scope stays 'portfolio', and weights are renormalized to 100% of the slice."),
+    )
 
     @field_validator("broker_ids")
     @classmethod
@@ -562,6 +639,15 @@ class PortfolioRiskScope(RiskScopeBase):
             return None
         if len(value) != len(set(value)):
             raise ValueError("broker_ids must be unique")
+        return sorted(value)
+
+    @field_validator("asset_ids")
+    @classmethod
+    def normalize_asset_ids(cls, value: Optional[List[int]]) -> Optional[List[int]]:
+        if value is None:
+            return None
+        if len(value) != len(set(value)):
+            raise ValueError("asset_ids must be unique")
         return sorted(value)
 
 
@@ -645,6 +731,31 @@ class RiskKpiOutput(StrictModel):
     max_drawdown_duration_days: int = Field(..., ge=0)
     sharpe: Optional[FiniteFloat] = None
     sortino: Optional[FiniteFloat] = None
+    # Acquired measures. Sign convention for this output: drawdowns and returns are
+    # negative, dispersions are non-negative — so ulcer_index is ge=0 like volatility
+    # above, while every other field added here is le=0.
+    # max_drawdown already *is* the peak-relative maximum drawdown; no second field
+    # restates it.
+    worst_realization: Optional[FiniteFloat] = Field(None, le=0)
+    worst_realization_date: Optional[date] = None
+    drawdown_confidence_level: Optional[FiniteFloat] = Field(None, gt=0, lt=1)
+    drawdown_at_risk: Optional[FiniteFloat] = Field(None, le=0)
+    conditional_drawdown_at_risk: Optional[FiniteFloat] = Field(None, le=0)
+    ulcer_index: Optional[FiniteFloat] = Field(None, ge=0)
+
+    @model_validator(mode="after")
+    def validate_drawdown_tail_ordering(self) -> RiskKpiOutput:
+        """Catches a swapped assignment, which no range constraint can see.
+
+        Both values are negative and both are plausible on their own; only their
+        order distinguishes the quantile from its conditional mean. Mirrors
+        ``RiskVarCvarOutput.validate_tail_ordering`` with the sign reversed.
+        """
+        if self.drawdown_at_risk is not None and self.conditional_drawdown_at_risk is not None and self.conditional_drawdown_at_risk > self.drawdown_at_risk:
+            raise ValueError("conditional_drawdown_at_risk must be <= drawdown_at_risk")
+        if self.conditional_drawdown_at_risk is not None and self.max_drawdown > self.conditional_drawdown_at_risk:
+            raise ValueError("conditional_drawdown_at_risk must be >= max_drawdown")
+        return self
 
 
 class RiskMatrixCell(StrictModel):
@@ -679,6 +790,43 @@ class RiskContributionOutput(StrictModel):
     portfolio_volatility: FiniteFloat = Field(..., ge=0)
     cash_weight: FiniteFloat = Field(0, ge=0)
     items: List[RiskContributionItem] = Field(default_factory=list)
+    # Concentration, acquired. These two are published together on purpose: the
+    # effective count is blind to correlation, so ten equally weighted holdings score
+    # ten whether they are independent or move as one. Only the ratio tells them apart.
+    # Unit of effective_number_of_assets is *positions*, never a percentage.
+    effective_number_of_assets: Optional[FiniteFloat] = Field(None, gt=0)
+    # >= 1 for long-only weights by Cauchy-Schwarz, but constrained only to gt=0 so a
+    # portfolio sitting exactly at the bound cannot fail validation on a rounding.
+    diversification_ratio: Optional[FiniteFloat] = Field(None, gt=0)
+
+
+class RiskReturnItem(StrictModel):
+    """One point of a risk/return plot: what it risks, what it is expected to pay."""
+
+    asset_id: PositiveInt
+    # Share of net worth, exactly as risk_contribution states it — not renormalized to
+    # the invested part. A plot whose bubbles sum to less than the whole is telling the
+    # truth about cash; one renormalized behind the reader's back is not.
+    weight: FiniteFloat
+    volatility: FiniteFloat = Field(..., ge=0)
+    # Arithmetic. See services/risk/metrics.annualized_expected_return: this is the
+    # mean-variance expected return, the quantity in which a line through the risk-free
+    # intercept has the Sharpe ratio as its slope. It is NOT what the holder earned —
+    # on a highly volatile asset the two differ by tens of percentage points.
+    expected_annual_return: FiniteFloat
+
+
+class RiskReturnOutput(StrictModel):
+    """Per-asset risk and reward for the composition held today, plus the whole."""
+
+    kind: Literal[RiskOutputKind.RISK_RETURN] = Field(default=RiskOutputKind.RISK_RETURN, json_schema_extra={"enum": ["risk_return"]})
+    portfolio_volatility: FiniteFloat = Field(..., ge=0)
+    portfolio_expected_annual_return: FiniteFloat
+    # Published beside the points because it is the difference between them: the asset
+    # weights sum to 1 - cash_weight, so a reader who adds up the bubbles and finds
+    # they miss the whole deserves the reason rather than the puzzle.
+    cash_weight: FiniteFloat = Field(0, ge=0)
+    items: List[RiskReturnItem] = Field(default_factory=list)
 
 
 class RiskStressBucketAudit(StrictModel):
@@ -814,7 +962,45 @@ class RiskComparisonOutput(StrictModel):
     correlation: Optional[FiniteFloat] = Field(None, ge=-1, le=1)
     beta: Optional[FiniteFloat] = None
     observations: int = Field(..., ge=0)
+    # The reference's own risk and reward, so a risk/return plot can place the
+    # benchmark without a second analytic and without re-deriving the arithmetic in
+    # the client. Both are measured on the *common* observations the beta above used,
+    # never on the comparison asset's full history: a diamond drawn from a different
+    # window than the dots would sit somewhere no measurement puts it.
+    comparison_volatility: Optional[FiniteFloat] = Field(None, ge=0)
+    # Arithmetic, matching RiskReturnItem.expected_annual_return. See
+    # services/risk/metrics.annualized_expected_return for why the convention is not
+    # interchangeable with a compounded one.
+    comparison_expected_annual_return: Optional[FiniteFloat] = None
     series: List[RiskComparisonPoint] = Field(default_factory=list)
+
+
+class RiskVarCvarBin(StrictModel):
+    """One bucket of the horizon-compounded return distribution.
+
+    ⚠️ SIGN CONVENTION — this model lives in **signed return space**: a loss is a
+    negative bound, so the left-hand bins are the losing ones. Its sibling fields
+    ``value_at_risk`` and ``conditional_value_at_risk`` on :class:`RiskVarCvarOutput`
+    are **positive loss magnitudes** instead, because a zero floor is applied there.
+    Two conventions therefore coexist in one payload, deliberately: the histogram
+    must show gains, while the headline tail figures must never render negative.
+    Cross the boundary with :attr:`RiskVarCvarOutput.var_bin_edge`, which is the
+    same cut expressed in this model's space.
+
+    Bounds are decimal ratios (``-0.1`` == a 10% loss over the horizon), never
+    percentages. The interval is half-open ``[lower_bound, upper_bound)`` except for
+    the last bin of a series, which includes its upper bound.
+    """
+
+    lower_bound: FiniteFloat
+    upper_bound: FiniteFloat
+    count: int = Field(..., ge=0)
+
+    @model_validator(mode="after")
+    def validate_bin_width(self) -> RiskVarCvarBin:
+        if self.upper_bound <= self.lower_bound:
+            raise ValueError("upper_bound must be greater than lower_bound")
+        return self
 
 
 class RiskVarCvarOutput(StrictModel):
@@ -825,11 +1011,22 @@ class RiskVarCvarOutput(StrictModel):
     observations: PositiveInt
     value_at_risk: FiniteFloat = Field(..., ge=0)
     conditional_value_at_risk: FiniteFloat = Field(..., ge=0)
+    return_bins: List[RiskVarCvarBin] = Field(default_factory=list)
+    var_bin_edge: Optional[FiniteFloat] = None
 
     @model_validator(mode="after")
     def validate_tail_ordering(self) -> RiskVarCvarOutput:
         if self.conditional_value_at_risk < self.value_at_risk:
             raise ValueError("conditional_value_at_risk must be >= value_at_risk")
+        return self
+
+    @model_validator(mode="after")
+    def validate_return_bins(self) -> RiskVarCvarOutput:
+        previous: Optional[RiskVarCvarBin] = None
+        for current in self.return_bins:
+            if previous is not None and current.lower_bound <= previous.lower_bound:
+                raise ValueError("return_bins must be ordered by ascending lower_bound")
+            previous = current
         return self
 
 
@@ -853,9 +1050,13 @@ class RiskSimulationOutput(StrictModel):
 
     kind: Literal[RiskOutputKind.SIMULATION] = Field(default=RiskOutputKind.SIMULATION, json_schema_extra={"enum": ["simulation"]})
     process: RiskSimulationProcess
+    regime: RiskSimulationRegime = RiskSimulationRegime.NONE
     sampling_method: RiskSamplingStrategy
     horizon_days: PositiveInt
     path_count: PositiveInt
+    block_length_days: PositiveInt | None = None
+    regime_declared_days: PositiveInt | None = None
+    regime_applied_days: PositiveInt | None = None
     drift_estimator: RiskSimulationDriftEstimator
     covariance_estimator: RiskSimulationCovarianceEstimator
     aggregation_policy: RiskCompositionPolicy
@@ -867,6 +1068,42 @@ class RiskSimulationOutput(StrictModel):
     terminal_mean_return: FiniteFloat = Field(..., gt=-1)
     terminal_volatility: FiniteFloat = Field(..., ge=0)
     probability_of_loss: FiniteFloat = Field(..., ge=0, le=1)
+    drift_uncertainty_factor: Optional[FiniteFloat] = Field(
+        None,
+        ge=1,
+        description="95% confidence factor on the cumulative drift, from estimation error alone. Multiplicative: the band it qualifies is compounded.",
+    )
+    drift_uncertainty_observations: Optional[PositiveInt] = Field(
+        None,
+        description="Sample size the drift was estimated from, so the factor can be read as a consequence rather than a verdict.",
+    )
+
+    @model_validator(mode="after")
+    def validate_drift_uncertainty_disclosure(self) -> RiskSimulationOutput:
+        """A factor without its sample size is a number nobody can argue with."""
+        if (self.drift_uncertainty_factor is None) != (self.drift_uncertainty_observations is None):
+            raise ValueError("drift uncertainty must disclose both the factor and the observation count")
+        return self
+
+    @model_validator(mode="after")
+    def validate_regime_disclosure(self) -> RiskSimulationOutput:
+        """Force every prescribed hypothesis to be disclosed, never implied."""
+        if self.process == RiskSimulationProcess.BLOCK_BOOTSTRAP:
+            if self.block_length_days is None:
+                raise ValueError("block bootstrap results must disclose block_length_days")
+        elif self.block_length_days is not None:
+            raise ValueError("block_length_days is meaningful only for the block bootstrap process")
+        if self.regime == RiskSimulationRegime.NONE:
+            if self.regime_declared_days is not None or self.regime_applied_days is not None:
+                raise ValueError("regime day counts are meaningful only for a prescribed regime")
+            return self
+        if self.process != RiskSimulationProcess.BLOCK_BOOTSTRAP:
+            raise ValueError("prescribed regimes require the block bootstrap process")
+        if self.regime_declared_days is None or self.regime_applied_days is None:
+            raise ValueError("a prescribed regime must disclose declared and applied day counts")
+        if self.regime_applied_days > self.regime_declared_days:
+            raise ValueError("regime_applied_days cannot exceed regime_declared_days")
+        return self
 
     @model_validator(mode="after")
     def validate_band_horizon(self) -> RiskSimulationOutput:
@@ -942,6 +1179,18 @@ class RiskPortfolioOptimizationOutput(StrictModel):
     algorithm_version: str = Field(..., min_length=1)
 
 
+class RiskDrawdownPoint(StrictModel):
+    """One dated point of the underwater (peak-relative) drawdown curve.
+
+    ``drawdown`` is a decimal ratio and never positive: ``0.0`` means the series is
+    at a new high, ``-0.1`` means 10% below the running peak. The convention matches
+    :class:`RiskComparisonPoint`, and percentage formatting stays a renderer concern.
+    """
+
+    date: date
+    drawdown: FiniteFloat = Field(..., le=0)
+
+
 class RiskDrawdownOutput(StrictModel):
     """Renderer-neutral current and maximum drawdown episode summary.
 
@@ -967,6 +1216,7 @@ class RiskDrawdownOutput(StrictModel):
     coverage: FiniteFloat = Field(..., ge=0, le=1)
     calculation_basis: str = Field(..., min_length=1)
     return_basis: RiskReturnBasis
+    underwater_series: List[RiskDrawdownPoint] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_episode_contract(self) -> RiskDrawdownOutput:  # noqa: C901 — flat status-branch invariant raises
@@ -1001,17 +1251,294 @@ class RiskDrawdownOutput(StrictModel):
         return self
 
 
+# ---------------------------------------------------------------------------
+# The weightless multi-asset family — outputs for the ASSET_SET scope.
+#
+# WHY THESE ARE NEW SHAPES AND NOT NEW FIELDS ON THE FOUR ABOVE.
+# An asset set is *n* independent series with no weights. The four singular
+# outputs above each describe **one** series, and their leading scalars
+# (`volatility`, `max_drawdown`, `value_at_risk`, …) are required. Adding a
+# per-asset list to them would have meant making those scalars optional — a
+# substitutive change to a shipped contract, and worse, the precise mechanism by
+# which an absent quantity becomes expressible again. A separate shape that
+# simply **has no field** for the aggregate cannot be handed one by accident:
+# every model here inherits `extra="forbid"`, so fabricating a set-level figure
+# would require editing this file, which is visible in a diff and pinned by a
+# test.
+#
+# WHY NO PER-ASSET `n_observations`. `PreparedAssetSeriesSet` validates that
+# every series in one prepared set uses the same joint calendar, so within a
+# single request that number is a **constant**. Publishing it per asset would
+# not be redundant but misleading: it would suggest the values could differ,
+# which is exactly what the one-preparation-per-request rule guarantees they
+# cannot. It travels once, in `RiskResultMetadata.n_observations`.
+#
+# WHY NO `weight` ANYWHERE. `RiskStressImpact.weight` is `Optional` because
+# `stress` serves weighted and weightless scopes with one shape. These models
+# serve only the weightless one, so the field is absent rather than always-null.
+# WHY `items` IS REQUIRED ON ALL FIVE, where every sibling output above defaults
+# it to an empty list. The list *is* the payload here: these analytics have no
+# set-level figure to fall back on, so an output that omitted `items` would carry
+# nothing at all. Defaulting it would let "the analytic returned no rows" and
+# "the key never arrived" collapse into the same `[]` on the client, which is the
+# distinction clause (3) — declare an omission, never zero-fill it — exists to
+# keep. A successful result always states its rows, even when there are none.
+#
+# It also keeps the family uniform with the ten singular outputs in one respect
+# that matters to the build: each of those has at least one required field, and a
+# schema with no required field at all is emitted by openapi-zod-client as
+# `z.object({...}).partial()`, which makes every property optional — including
+# the `kind` discriminator that `z.discriminatedUnion` needs to be required.
+# ---------------------------------------------------------------------------
+
+
+class RiskAssetSetKpiItem(StrictModel):
+    """Historical risk KPIs of one asset, measured on the shared joint calendar."""
+
+    asset_id: PositiveInt
+    volatility: FiniteFloat = Field(..., ge=0)
+    max_drawdown: FiniteFloat = Field(..., le=0)
+    max_drawdown_duration_days: int = Field(..., ge=0)
+    sharpe: Optional[FiniteFloat] = None
+    sortino: Optional[FiniteFloat] = None
+    worst_realization: Optional[FiniteFloat] = Field(None, le=0)
+    worst_realization_date: Optional[date] = None
+    drawdown_at_risk: Optional[FiniteFloat] = Field(None, le=0)
+    conditional_drawdown_at_risk: Optional[FiniteFloat] = Field(None, le=0)
+    ulcer_index: Optional[FiniteFloat] = Field(None, ge=0)
+
+    @model_validator(mode="after")
+    def validate_drawdown_tail_ordering(self) -> RiskAssetSetKpiItem:
+        """Same invariant as :class:`RiskKpiOutput`, applied per asset.
+
+        Both tail values are negative and both are plausible alone; only their
+        order distinguishes the quantile from its conditional mean, so no range
+        constraint can catch a swapped assignment.
+        """
+        if self.drawdown_at_risk is not None and self.conditional_drawdown_at_risk is not None and self.conditional_drawdown_at_risk > self.drawdown_at_risk:
+            raise ValueError("conditional_drawdown_at_risk must be <= drawdown_at_risk")
+        if self.conditional_drawdown_at_risk is not None and self.max_drawdown > self.conditional_drawdown_at_risk:
+            raise ValueError("conditional_drawdown_at_risk must be >= max_drawdown")
+        return self
+
+
+class RiskAssetSetKpiOutput(StrictModel):
+    """One KPI row per selected asset, and deliberately no row for the set."""
+
+    kind: Literal[RiskOutputKind.KPI_SET] = Field(default=RiskOutputKind.KPI_SET, json_schema_extra={"enum": ["kpi_set"]})
+    # An echo of the request parameter, identical for every item. It is a choice
+    # the caller made, not a measurement, which is why it sits at set level.
+    drawdown_confidence_level: Optional[FiniteFloat] = Field(None, gt=0, lt=1)
+    items: List[RiskAssetSetKpiItem]
+
+
+class RiskAssetSetVarCvarItem(StrictModel):
+    """Historical-simulation tail risk of one asset."""
+
+    asset_id: PositiveInt
+    value_at_risk: FiniteFloat = Field(..., ge=0)
+    conditional_value_at_risk: FiniteFloat = Field(..., ge=0)
+
+    @model_validator(mode="after")
+    def validate_tail_ordering(self) -> RiskAssetSetVarCvarItem:
+        if self.conditional_value_at_risk < self.value_at_risk:
+            raise ValueError("conditional_value_at_risk must be >= value_at_risk")
+        return self
+
+
+class RiskAssetSetVarCvarOutput(StrictModel):
+    """Per-asset VaR and CVaR at one confidence level and one horizon.
+
+    `observations` sits here and not on each row for the same reason
+    `n_observations` is not repeated per asset: one joint calendar compounded to
+    one horizon gives every asset the same count, so a per-row copy would suggest
+    they could differ. It is stated anyway, rather than left to the metadata,
+    because compounding to a multi-day horizon *consumes* observations — this is
+    the count the tail was actually estimated from, which is `horizon_days - 1`
+    fewer than the window's.
+
+    No `return_bins`. The singular :class:`RiskVarCvarOutput` publishes a
+    histogram because one surface draws one distribution; *n* histograms would
+    be *n* charts nobody has asked for. Adding them later is additive, whereas
+    shipping them now would put weight on a contract to carry something unread.
+    """
+
+    kind: Literal[RiskOutputKind.VAR_CVAR_SET] = Field(default=RiskOutputKind.VAR_CVAR_SET, json_schema_extra={"enum": ["var_cvar_set"]})
+    confidence_level: FiniteFloat = Field(..., gt=0, lt=1)
+    horizon_days: PositiveInt
+    observations: PositiveInt
+    items: List[RiskAssetSetVarCvarItem]
+
+
+class RiskAssetSetDrawdownItem(StrictModel):
+    """Dated current and maximum drawdown episode of one asset."""
+
+    asset_id: PositiveInt
+    current_drawdown: FiniteFloat = Field(..., le=0)
+    current_peak_date: date
+    current_drawdown_duration_days: int = Field(..., ge=0)
+    maximum_drawdown: FiniteFloat = Field(..., le=0)
+    maximum_drawdown_peak_date: Optional[date] = None
+    maximum_drawdown_trough_date: Optional[date] = None
+    maximum_drawdown_recovery_status: RiskDrawdownRecoveryStatus
+    maximum_drawdown_recovery_date: Optional[date] = None
+    maximum_drawdown_duration_days: int = Field(..., ge=0)
+    maximum_drawdown_recovered_ratio: Optional[FiniteFloat] = Field(None, ge=0, le=1)
+    remaining_to_peak_ratio: FiniteFloat = Field(..., ge=0)
+
+    @model_validator(mode="after")
+    def validate_episode_contract(self) -> RiskAssetSetDrawdownItem:  # noqa: C901 — flat status-branch invariant raises
+        """Same episode contract as :class:`RiskDrawdownOutput`, applied per asset."""
+        status = self.maximum_drawdown_recovery_status
+        if status == RiskDrawdownRecoveryStatus.NO_DRAWDOWN:
+            if self.maximum_drawdown != 0:
+                raise ValueError("no_drawdown requires a zero maximum_drawdown")
+            if self.maximum_drawdown_peak_date is not None or self.maximum_drawdown_trough_date is not None or self.maximum_drawdown_recovery_date is not None:
+                raise ValueError("no_drawdown must not expose episode dates")
+            if self.maximum_drawdown_recovered_ratio is not None:
+                raise ValueError("no_drawdown must not expose a recovered ratio")
+            if self.maximum_drawdown_duration_days != 0:
+                raise ValueError("no_drawdown must report a zero maximum duration")
+            return self
+        if self.maximum_drawdown >= 0:
+            raise ValueError("a drawdown episode requires a negative maximum_drawdown")
+        if self.maximum_drawdown_peak_date is None or self.maximum_drawdown_trough_date is None:
+            raise ValueError("a drawdown episode requires peak and trough dates")
+        if self.maximum_drawdown_trough_date < self.maximum_drawdown_peak_date:
+            raise ValueError("maximum_drawdown_trough_date must not precede the peak date")
+        if self.maximum_drawdown_recovered_ratio is None:
+            raise ValueError("a drawdown episode requires a recovered ratio")
+        if status == RiskDrawdownRecoveryStatus.RECOVERED:
+            if self.maximum_drawdown_recovery_date is None:
+                raise ValueError("recovered episodes require a recovery date")
+            if self.maximum_drawdown_recovery_date < self.maximum_drawdown_trough_date:
+                raise ValueError("recovery date must not precede the trough date")
+        elif self.maximum_drawdown_recovery_date is not None:
+            raise ValueError("open episodes must not expose a recovery date")
+        return self
+
+
+class RiskAssetSetDrawdownOutput(StrictModel):
+    """One drawdown episode per selected asset over one shared window.
+
+    `available_start` / `available_end` sit at set level rather than on every
+    item because the joint calendar makes them identical for all of them — the
+    same reason `n_observations` is not repeated per asset.
+
+    No per-asset `underwater_series`. The singular output carries one dated curve
+    for one chart; *n* curves would be a different chart that does not exist yet,
+    and publishing them unread is how a payload grows fields nobody maintains.
+    """
+
+    kind: Literal[RiskOutputKind.DRAWDOWN_SET] = Field(default=RiskOutputKind.DRAWDOWN_SET, json_schema_extra={"enum": ["drawdown_set"]})
+    available_start: date
+    available_end: date
+    calculation_basis: str = Field(..., min_length=1)
+    return_basis: RiskReturnBasis
+    items: List[RiskAssetSetDrawdownItem]
+
+    @model_validator(mode="after")
+    def validate_window(self) -> RiskAssetSetDrawdownOutput:
+        if self.available_end < self.available_start:
+            raise ValueError("available_end must not precede available_start")
+        return self
+
+
+class RiskAssetSetReturnItem(StrictModel):
+    """One point of a weightless risk/return plot: what it risks, what it is expected to pay."""
+
+    asset_id: PositiveInt
+    volatility: FiniteFloat = Field(..., ge=0)
+    # Arithmetic, exactly as RiskReturnItem.expected_annual_return. See
+    # services/risk/metrics.annualized_expected_return: paired with the
+    # annualized volatility it makes the slope from a risk-free intercept
+    # identically the Sharpe ratio. It is NOT what a holder earned.
+    expected_annual_return: FiniteFloat
+
+
+class RiskAssetSetReturnOutput(StrictModel):
+    """Per-asset risk and reward for a selection that has no composition.
+
+    🔴 THERE IS NO PORTFOLIO PAIR IN THIS MODEL, AND ITS ABSENCE IS THE FEATURE.
+
+    On a scatter, the judgement "paid well for the risk" is the Capital Market
+    Line, and the line is not suppressed by a setting: it is drawn only when the
+    payload yields a point whose role is the portfolio, which in turn exists only
+    when a portfolio volatility *and* expected return are both present. A
+    selection of assets has no weights, so it has no whole — the point cannot be
+    measured, the line cannot be drawn, and the judgement the comparison surface
+    forbids is impossible rather than merely disabled.
+
+    That impossibility lasts exactly as long as this model has no field to put an
+    aggregate in. An equally weighted average computed "for convenience" would
+    restore the point, restore the line, and restore the judgement **through the
+    data**, invisible to any test of the renderer — because the renderer would be
+    doing precisely its job. So the defence lives here, in a shape, and not in a
+    flag: `extra="forbid"` means the fabricated figure is not merely absent but
+    unexpressible, and making it expressible again requires an edit to this file.
+
+    There is also no `cash_weight`: a selection holds no cash residual, so a zero
+    would be a measurement of something that was never measured.
+    """
+
+    kind: Literal[RiskOutputKind.RISK_RETURN_SET] = Field(default=RiskOutputKind.RISK_RETURN_SET, json_schema_extra={"enum": ["risk_return_set"]})
+    items: List[RiskAssetSetReturnItem]
+
+
+class RiskAssetSetComparisonItem(StrictModel):
+    """One asset's relative performance against the shared comparison asset."""
+
+    asset_id: PositiveInt
+    active_return: FiniteFloat
+    tracking_error: FiniteFloat = Field(..., ge=0)
+    information_ratio: Optional[FiniteFloat] = None
+    correlation: Optional[FiniteFloat] = Field(None, ge=-1, le=1)
+    beta: Optional[FiniteFloat] = None
+
+
+class RiskAssetSetComparisonOutput(StrictModel):
+    """Per-asset beta against one reference, plus the reference's own coordinates.
+
+    `comparison_volatility` and `comparison_expected_annual_return` describe the
+    **reference asset**, which is a real series with a real measurement — not an
+    aggregate of the selection. They are published so a scatter can place the
+    benchmark next to the holdings without a second analytic, and they are
+    measured on the same joint calendar as every item, because the reference is
+    prepared inside the same request as the scope.
+    """
+
+    kind: Literal[RiskOutputKind.COMPARISON_SET] = Field(default=RiskOutputKind.COMPARISON_SET, json_schema_extra={"enum": ["comparison_set"]})
+    comparison_asset_id: PositiveInt
+    observations: int = Field(..., ge=0)
+    comparison_volatility: Optional[FiniteFloat] = Field(None, ge=0)
+    comparison_expected_annual_return: Optional[FiniteFloat] = None
+    items: List[RiskAssetSetComparisonItem]
+
+    @model_validator(mode="after")
+    def validate_reference_is_not_a_subject(self) -> RiskAssetSetComparisonOutput:
+        """The reference is the yardstick, so it cannot also be one of the measured."""
+        if any(item.asset_id == self.comparison_asset_id for item in self.items):
+            raise ValueError("the comparison asset cannot appear among the compared items")
+        return self
+
+
 RiskAnalyticOutput = Annotated[
     Union[
         RiskKpiOutput,
         RiskCorrelationOutput,
         RiskContributionOutput,
+        RiskReturnOutput,
         RiskStressOutput,
         RiskComparisonOutput,
         RiskVarCvarOutput,
         RiskSimulationOutput,
         RiskPortfolioOptimizationOutput,
         RiskDrawdownOutput,
+        RiskAssetSetKpiOutput,
+        RiskAssetSetVarCvarOutput,
+        RiskAssetSetDrawdownOutput,
+        RiskAssetSetReturnOutput,
+        RiskAssetSetComparisonOutput,
     ],
     Field(discriminator="kind"),
 ]
@@ -1087,6 +1614,7 @@ __all__ = [
     "RiskCorrelationOutput",
     "RiskDataFrequency",
     "RiskDrawdownOutput",
+    "RiskDrawdownPoint",
     "RiskDrawdownRecoveryStatus",
     "RiskError",
     "RiskErrorCode",
@@ -1105,6 +1633,8 @@ __all__ = [
     "RiskResultMetadata",
     "RiskResultStatus",
     "RiskReturnBasis",
+    "RiskReturnItem",
+    "RiskReturnOutput",
     "RiskSamplingStrategy",
     "RiskScope",
     "RiskScopeBase",
@@ -1114,6 +1644,7 @@ __all__ = [
     "RiskSimulationDriftEstimator",
     "RiskSimulationOutput",
     "RiskSimulationProcess",
+    "RiskSimulationRegime",
     "RiskStressApplicationRule",
     "RiskStressBucketAudit",
     "RiskStressConfiguredBucketImpact",
@@ -1121,6 +1652,7 @@ __all__ = [
     "RiskStressMethod",
     "RiskStressOutput",
     "RiskValueStatus",
+    "RiskVarCvarBin",
     "RiskVarCvarOutput",
     "RiskWarning",
 ]

@@ -1,6 +1,6 @@
 <!--
   UpdateAvailableModal — F14: tells an admin that a newer stable LibreFolio
-  release exists. Shown at most once per login (probe throttled to once/24h,
+  release exists. Shown at most once per login (probe throttled to once/hour,
   see updateCheck.ts). Two ways out: "later" (prompts again next login) or
   "skip this version" (never prompts for that version again). Links point to
   the updating guide (locale-aware mkdocs) and to the GitHub release page.
@@ -46,7 +46,7 @@
             <div class="flex items-center justify-center gap-2" data-testid="update-available-versions">
                 <span class="version-badge px-2.5 py-1 rounded-lg font-mono text-xs font-medium" style={getStringBadgeStyle('installed')} data-testid="update-available-current">{currentVersion.startsWith('v') ? currentVersion : `v${currentVersion}`}</span>
                 <ArrowRight size={16} class="text-libre-green dark:text-green-400 shrink-0" />
-                <span class="version-badge px-2.5 py-1 rounded-lg font-mono text-xs font-semibold" style={getStringBadgeStyle('latest-release')} data-testid="update-available-latest">v{release.version}</span>
+                <span class="version-badge px-2.5 py-1 rounded-lg font-mono text-xs font-semibold" style={getStringBadgeStyle('latest-release')} data-testid="update-available-latest" data-version={release.version} data-tag={release.tag ?? ''}>{release.tag ?? `v${release.version}`}</span>
             </div>
             <div class="flex flex-col gap-1.5 text-sm">
                 <a href={updatingGuideUrl()} target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 font-medium text-libre-green dark:text-green-400 hover:underline" data-testid="update-available-guide">

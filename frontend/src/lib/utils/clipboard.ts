@@ -11,26 +11,41 @@ export type ToastFn = {
 
 const PROMPT_SIZE_WARNING_THRESHOLD = 50_000;
 
+export function writeTextToClipboard(text: string): Promise<void> {
+    if (navigator.clipboard?.writeText && window.isSecureContext) {
+        return navigator.clipboard.writeText(text);
+    }
+
+    const previousFocus = document.activeElement;
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.readOnly = true;
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    try {
+        textarea.focus({preventScroll: true});
+        textarea.select();
+        textarea.setSelectionRange(0, text.length);
+        if (typeof document.execCommand !== 'function' || !document.execCommand('copy')) {
+            throw new Error('Clipboard copy was rejected.');
+        }
+    } finally {
+        textarea.remove();
+        if (previousFocus instanceof HTMLElement && previousFocus.isConnected) {
+            previousFocus.focus({preventScroll: true});
+        }
+    }
+    return Promise.resolve();
+}
+
 /**
  * Writes `text` to the clipboard and shows a success/warning toast with
  * `copiedMessage`. Large exports get the char count appended as a warning
  * instead of a plain success, so the user knows to expect a sizeable paste.
  */
 export async function writeExportToClipboard(text: string, toast: ToastFn, copiedMessage: string): Promise<void> {
-    // navigator.clipboard requires a secure context, so self-hosted HTTP deployments need a textarea fallback.
-    if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(text);
-    } else {
-        const ta = document.createElement('textarea');
-        ta.value = text;
-        ta.style.position = 'fixed';
-        ta.style.left = '-9999px';
-        document.body.appendChild(ta);
-        ta.focus();
-        ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
-    }
+    await writeTextToClipboard(text);
 
     if (text.length > PROMPT_SIZE_WARNING_THRESHOLD) {
         const sizeKb = Math.round(text.length / 1000);

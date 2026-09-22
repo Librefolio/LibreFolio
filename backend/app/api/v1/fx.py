@@ -6,7 +6,7 @@ Handles currency conversion and FX rate synchronization.
 import json
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import List, Optional
+from typing import List, Optional, TypedDict
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import tuple_
@@ -32,6 +32,7 @@ from backend.app.schemas.fx import (
     FXConversionRequest,
     FXConversionResult,
     FXConversionRouteItem,
+    FXConversionRouteReadItem,
     FXConversionRouteResult,
     FXConversionRoutesResponse,
     FXConvertResponse,
@@ -716,13 +717,23 @@ async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: exp
 # ============================================================================
 
 
+class _RouteMetadata(TypedDict):
+    is_chain: bool
+    providers_used: list[str]
+
+
+def _route_metadata(route: FxConversionRoute) -> _RouteMetadata:
+    return {"is_chain": route.is_chain, "providers_used": sorted(route.providers_used)}
+
+
 @router_providers.get("/routes", response_model=FXConversionRoutesResponse)
 async def list_routes(session: AsyncSession = Depends(get_session_generator), _current_user: User = Depends(get_current_user)):
     """
     Get the list of configured conversion routes.
 
     Returns all configured routes ordered by base, quote, and priority.
-    Each route contains chain_steps describing how to compute the rate.
+    Each route contains ordered chain_steps, a derived is_chain flag and sorted
+    configured providers_used membership (not successful-fetch provenance).
 
     Returns:
         List of conversion route configurations
@@ -733,11 +744,12 @@ async def list_routes(session: AsyncSession = Depends(get_session_generator), _c
         routes = result.scalars().all()
 
         routes_list = [
-            FXConversionRouteItem(
+            FXConversionRouteReadItem(
                 base=r.base,
                 quote=r.quote,
                 priority=r.priority,
                 chain_steps=[FXRouteStep(**s) for s in json.loads(r.chain_steps)],
+                **_route_metadata(r),
             )
             for r in routes
         ]
@@ -784,6 +796,8 @@ async def create_routes_bulk(  # noqa: C901 — flat bulk upsert loop, per-item 
         available_providers = {p["code"] for p in FXProviderRegistry.list_providers()}
 
         for route_item in routes:
+            chain_steps_json = json.dumps([{"from": s.from_currency, "to": s.to_currency, "provider": s.provider} for s in route_item.chain_steps])
+
             # Validate all provider codes in chain_steps
             invalid_providers = []
             for step in route_item.chain_steps:
@@ -791,6 +805,12 @@ async def create_routes_bulk(  # noqa: C901 — flat bulk upsert loop, per-item 
                     invalid_providers.append(step.provider)
 
             if invalid_providers:
+                submitted_route = FxConversionRoute(
+                    base=route_item.base,
+                    quote=route_item.quote,
+                    priority=route_item.priority,
+                    chain_steps=chain_steps_json,
+                )
                 results.append(
                     FXConversionRouteResult(
                         success=False,
@@ -800,6 +820,7 @@ async def create_routes_bulk(  # noqa: C901 — flat bulk upsert loop, per-item 
                         priority=route_item.priority,
                         chain_steps=route_item.chain_steps,
                         message=f"Unknown provider(s): {', '.join(invalid_providers)}",
+                        **_route_metadata(submitted_route),
                     )
                 )
                 error_count += 1
@@ -808,9 +829,6 @@ async def create_routes_bulk(  # noqa: C901 — flat bulk upsert loop, per-item 
             # Normalize base/quote to alphabetical order
             base = min(route_item.base.upper(), route_item.quote.upper())
             quote = max(route_item.base.upper(), route_item.quote.upper())
-
-            # Serialize chain_steps to JSON
-            chain_steps_json = json.dumps([{"from": s.from_currency, "to": s.to_currency, "provider": s.provider} for s in route_item.chain_steps])
 
             # Check if already exists
             stmt = select(FxConversionRoute).where(
@@ -824,6 +842,7 @@ async def create_routes_bulk(  # noqa: C901 — flat bulk upsert loop, per-item 
             if existing:
                 existing.chain_steps = chain_steps_json
                 session.add(existing)
+                stored_route = existing
                 action = "updated"
             else:
                 new_route = FxConversionRoute(
@@ -833,6 +852,7 @@ async def create_routes_bulk(  # noqa: C901 — flat bulk upsert loop, per-item 
                     chain_steps=chain_steps_json,
                 )
                 session.add(new_route)
+                stored_route = new_route
                 action = "created"
 
             results.append(
@@ -844,6 +864,7 @@ async def create_routes_bulk(  # noqa: C901 — flat bulk upsert loop, per-item 
                     priority=route_item.priority,
                     chain_steps=route_item.chain_steps,
                     message=None,
+                    **_route_metadata(stored_route),
                 )
             )
             success_count += 1

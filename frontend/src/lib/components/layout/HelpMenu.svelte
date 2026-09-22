@@ -4,8 +4,14 @@
     import {onMount} from 'svelte';
     import {Book, Bug, ChevronDown, Coffee, Download, ExternalLink, HelpCircle, MessageCircle} from 'lucide-svelte';
 
+    interface Props {
+        onOpenChange?: (open: boolean) => void;
+    }
+
+    let {onOpenChange = () => {}}: Props = $props();
+
     let isOpen = $state(false);
-    let menuRef: HTMLDivElement;
+    let menuRef: HTMLDivElement | null = $state(null);
     let deferredPrompt: any = null;
     let isStandalone = $state(false);
     let isIos = $state(false);
@@ -23,15 +29,21 @@
         return `/mkdocs/${prefix}${path}`;
     }
 
+    function setOpen(next: boolean) {
+        if (isOpen === next) return;
+        isOpen = next;
+        onOpenChange(next);
+    }
+
     function toggleMenu() {
-        isOpen = !isOpen;
+        setOpen(!isOpen);
         showIosHint = false;
         showDesktopHint = false;
     }
 
     function handleClickOutside(event: MouseEvent) {
         if (isOutsideClick(event.target, (el) => !menuRef || menuRef.contains(el))) {
-            isOpen = false;
+            setOpen(false);
             showIosHint = false;
             showDesktopHint = false;
         }
@@ -48,30 +60,26 @@
         } else if (isIos) {
             showIosHint = !showIosHint;
         } else {
-            // Desktop browser without captured prompt — show hint
             showDesktopHint = !showDesktopHint;
         }
     }
 
     onMount(() => {
+        onOpenChange(isOpen);
         document.addEventListener('click', handleClickOutside);
 
-        // Detect standalone mode
         isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
 
-        // Detect iOS
         const ua = navigator.userAgent;
         isIos = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
         isAndroid = /Android/.test(ua);
 
-        // Listen for beforeinstallprompt (Chrome/Android/Edge)
         const handler = (e: Event) => {
             e.preventDefault();
             deferredPrompt = e;
         };
         window.addEventListener('beforeinstallprompt', handler);
 
-        // Check if event already fired before mount (race condition workaround)
         if ((window as any).__pwaInstallPrompt) {
             deferredPrompt = (window as any).__pwaInstallPrompt;
         }
@@ -83,17 +91,25 @@
     });
 </script>
 
-<div bind:this={menuRef} class="relative">
-    <button class="flex items-center space-x-1 p-2 rounded-lg hover:bg-white/20 dark:hover:bg-slate-600 transition-colors text-gray-600 dark:text-gray-300" onclick={toggleMenu} title={$_('help.helpAndSupport')}>
+<div bind:this={menuRef} class="relative" data-menu-open={isOpen ? 'true' : 'false'} data-testid="help-menu">
+    <button
+        type="button"
+        class="flex items-center space-x-1 p-2 rounded-lg hover:bg-white/20 dark:hover:bg-slate-600 transition-colors text-gray-600 dark:text-gray-300"
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
+        aria-controls="help-menu-panel"
+        onclick={toggleMenu}
+        title={$_('help.helpAndSupport')}
+        data-testid="help-menu-button"
+    >
         <HelpCircle size={20} />
         <ChevronDown class="transition-transform {isOpen ? 'rotate-180' : ''}" size={14} />
     </button>
 
     {#if isOpen}
-        <div class="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 dark:bg-slate-800 dark:border-slate-700 py-1 z-50">
-            <!-- Install App (always shown unless already standalone) -->
+        <div id="help-menu-panel" class="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 dark:bg-slate-800 dark:border-slate-700 py-1 z-50" role="menu" data-menu-open="true" data-testid="help-menu-panel">
             {#if !isStandalone}
-                <button onclick={handleInstall} class="w-full flex items-center space-x-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
+                <button onclick={handleInstall} class="w-full flex items-center space-x-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors" type="button" role="menuitem">
                     <Download size={18} class="text-libre-green dark:text-green-400" />
                     <span>{$_('help.installApp')}</span>
                 </button>
@@ -110,22 +126,19 @@
                 <div class="border-t border-gray-100 dark:border-slate-600 my-1"></div>
             {/if}
 
-            <!-- FAQ -->
-            <a href={mkdocsUrl('community/faq/')} target="_blank" rel="noopener noreferrer" class="flex items-center space-x-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
+            <a href={mkdocsUrl('community/faq/')} target="_blank" rel="noopener noreferrer" class="flex items-center space-x-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors" role="menuitem">
                 <Book size={18} class="text-gray-500 dark:text-gray-400" />
                 <span>{$_('help.faq')}</span>
             </a>
 
-            <!-- Documentation -->
-            <a href={mkdocsUrl()} target="_blank" rel="noopener noreferrer" class="flex items-center space-x-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
+            <a href={mkdocsUrl()} target="_blank" rel="noopener noreferrer" class="flex items-center space-x-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors" role="menuitem">
                 <MessageCircle size={18} class="text-gray-500 dark:text-gray-400" />
                 <span>{$_('common.documentation')}</span>
             </a>
 
             <div class="border-t border-gray-100 dark:border-slate-600 my-1"></div>
 
-            <!-- Report Bug on GitHub -->
-            <a href={githubIssuesUrl} target="_blank" rel="noopener noreferrer" class="flex items-center justify-between px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors group">
+            <a href={githubIssuesUrl} target="_blank" rel="noopener noreferrer" class="flex items-center justify-between px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors group" role="menuitem">
                 <div class="flex items-center space-x-3">
                     <Bug size={18} class="text-orange-500" />
                     <span>{$_('help.reportBug')}</span>
@@ -135,8 +148,7 @@
 
             <div class="border-t border-gray-100 dark:border-slate-600 my-1"></div>
 
-            <!-- Buy Me a Coffee -->
-            <a href={bmcUrl} target="_blank" rel="noopener noreferrer" class="flex items-center justify-between px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors group">
+            <a href={bmcUrl} target="_blank" rel="noopener noreferrer" class="flex items-center justify-between px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors group" role="menuitem">
                 <div class="flex items-center space-x-3">
                     <Coffee size={18} class="text-amber-600" />
                     <span>{$_('help.buyMeACoffee')}</span>

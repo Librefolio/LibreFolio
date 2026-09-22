@@ -11,6 +11,7 @@
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
+    import type {AxisScaleMode, AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
 
     import {numericArrows} from '$lib/actions/numericArrows';
     // =========================================================================
@@ -27,6 +28,14 @@
         yAxisMax?: number | undefined;
         /** Called when any value changes */
         onchange?: (values: {colorByBaseline: boolean; areaFill: boolean; gridLines: boolean; staleGradient: boolean; yAxisMode: 'auto' | 'include0' | 'custom'; yAxisMin: number | undefined; yAxisMax: number | undefined}) => void;
+        /** Contextual primary + active semantic secondary axes. */
+        axisRows?: Array<{
+            key: string;
+            label: string;
+            settings: AxisScaleSettings;
+        }>;
+        /** Called when one contextual axis profile changes. */
+        onaxischange?: (key: string, settings: AxisScaleSettings) => void;
         /** Fields that don't apply in current chart type — rendered greyed out and non-interactive */
         disabledFields?: Set<string>;
     }
@@ -40,6 +49,8 @@
         yAxisMin = $bindable<number | undefined>(),
         yAxisMax = $bindable<number | undefined>(),
         onchange,
+        axisRows,
+        onaxischange,
         disabledFields = new Set<string>(),
     }: Props = $props();
 
@@ -49,6 +60,38 @@
 
     function emitChange() {
         onchange?.({colorByBaseline, areaFill, gridLines, staleGradient, yAxisMode, yAxisMin, yAxisMax});
+    }
+
+    let effectiveAxisRows = $derived(
+        axisRows?.length
+            ? axisRows
+            : [
+                  {
+                      key: 'legacy',
+                      label: '',
+                      settings: {
+                          mode: yAxisMode,
+                          min: yAxisMin,
+                          max: yAxisMax,
+                      },
+                  },
+              ],
+    );
+
+    function axisTestId(key: string): string {
+        return key.replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase();
+    }
+
+    function updateAxis(key: string, current: AxisScaleSettings, patch: Partial<AxisScaleSettings>): void {
+        const next = {...current, ...patch};
+        if (key === 'legacy') {
+            yAxisMode = next.mode;
+            yAxisMin = next.min;
+            yAxisMax = next.max;
+            emitChange();
+            return;
+        }
+        onaxischange?.(key, next);
     }
 </script>
 
@@ -63,6 +106,8 @@
             </span>
             <button
                 aria-label={$t('chartSettings.baselineColors')}
+                data-testid="chart-aesthetic-baseline"
+                aria-pressed={colorByBaseline}
                 class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {colorByBaseline ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
                 disabled={disabledFields.has('colorByBaseline')}
                 onclick={() => {
@@ -83,6 +128,8 @@
             </span>
             <button
                 aria-label={$t('chartSettings.areaFill')}
+                data-testid="chart-aesthetic-area-fill"
+                aria-pressed={areaFill}
                 class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {areaFill ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
                 disabled={disabledFields.has('areaFill')}
                 onclick={() => {
@@ -103,6 +150,8 @@
             </span>
             <button
                 aria-label={$t('chartSettings.gridLines')}
+                data-testid="chart-aesthetic-grid-lines"
+                aria-pressed={gridLines}
                 class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {gridLines ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
                 onclick={() => {
                     gridLines = !gridLines;
@@ -122,6 +171,8 @@
             </span>
             <button
                 aria-label={$t('chartSettings.staleGradient')}
+                data-testid="chart-aesthetic-stale-gradient"
+                aria-pressed={staleGradient}
                 class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {staleGradient ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
                 disabled={disabledFields.has('staleGradient')}
                 onclick={() => {
@@ -134,72 +185,71 @@
             </button>
         </div>
 
-        <!-- Y-axis scale mode -->
-        <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-slate-600 sm:col-span-2">
-            <span class="shrink-0">
+        <!-- Contextual Y-axis scale modes -->
+        <div class="p-2.5 rounded-lg border border-gray-200 dark:border-slate-600 sm:col-span-2 space-y-2">
+            <span>
                 <span class="block text-sm font-medium text-gray-700 dark:text-gray-200">{$t('chartSettings.yAxisScale')}</span>
                 <span class="block text-xs text-gray-500 dark:text-gray-400">{$t('chartSettings.yAxisScaleDesc')}</span>
             </span>
-            <div class="flex items-center gap-2 flex-wrap">
-                <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
-                    <button
-                        class="px-2.5 py-1 text-[10px] font-medium transition-colors {yAxisMode === 'auto' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                        onclick={() => {
-                            yAxisMode = 'auto';
-                            emitChange();
-                        }}
-                        type="button"
-                        >Auto
-                    </button>
-                    <button
-                        class="px-2.5 py-1 text-[10px] font-medium transition-colors {yAxisMode === 'include0' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                        onclick={() => {
-                            yAxisMode = 'include0';
-                            emitChange();
-                        }}
-                        type="button">{$t('chartSettings.yAxisInclude0')}</button
-                    >
-                    <button
-                        class="px-2.5 py-1 text-[10px] font-medium transition-colors {yAxisMode === 'custom' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                        onclick={() => {
-                            yAxisMode = 'custom';
-                            emitChange();
-                        }}
-                        type="button">{$t('common.custom')}</button
-                    >
-                </div>
-                {#if yAxisMode === 'custom'}
-                    <div class="flex items-center gap-1.5 text-xs">
-                        <span class="text-[10px] text-gray-500 dark:text-gray-400">Min</span>
-                        <input
-                            type="number"
-                            use:numericArrows
-                            class="w-20 px-1.5 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-libre-green"
-                            step="any"
-                            value={yAxisMin ?? ''}
-                            oninput={(e) => {
-                                const v = e.currentTarget.value;
-                                yAxisMin = v === '' ? undefined : Number(v);
-                                emitChange();
-                            }}
-                            placeholder="—"
-                        />
-                        <span class="text-[10px] text-gray-500 dark:text-gray-400">Max</span>
-                        <input
-                            type="number"
-                            use:numericArrows
-                            class="w-20 px-1.5 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-libre-green"
-                            step="any"
-                            value={yAxisMax ?? ''}
-                            oninput={(e) => {
-                                const v = e.currentTarget.value;
-                                yAxisMax = v === '' ? undefined : Number(v);
-                                emitChange();
-                            }}
-                            placeholder="—"
-                        />
+            <div class="space-y-2">
+                {#each effectiveAxisRows as row (row.key)}
+                    <div class="flex items-center justify-between gap-3 flex-wrap" data-testid={`chart-axis-row-${axisTestId(row.key)}`}>
+                        {#if row.label}
+                            <span class="text-xs font-medium text-gray-600 dark:text-gray-300">{row.label}</span>
+                        {/if}
+                        <div class="flex items-center gap-2 flex-wrap {row.label ? '' : 'ml-auto'}">
+                            <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
+                                {#each ['auto', 'include0', 'custom'] as mode}
+                                    <button
+                                        class="px-2.5 py-1 text-[10px] font-medium transition-colors {row.settings.mode === mode ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                                        data-testid={`chart-axis-${axisTestId(row.key)}-${mode}`}
+                                        aria-pressed={row.settings.mode === mode}
+                                        onclick={() => updateAxis(row.key, row.settings, {mode: mode as AxisScaleMode})}
+                                        type="button"
+                                    >
+                                        {mode === 'auto' ? 'Auto' : mode === 'include0' ? $t('chartSettings.yAxisInclude0') : $t('common.custom')}
+                                    </button>
+                                {/each}
+                            </div>
+                            {#if row.settings.mode === 'custom'}
+                                <div class="flex items-center gap-1.5 text-sm sm:text-xs">
+                                    <span class="text-xs sm:text-[10px] text-gray-500 dark:text-gray-400">Min</span>
+                                    <input
+                                        type="number"
+                                        use:numericArrows
+                                        data-testid={`chart-axis-${axisTestId(row.key)}-min`}
+                                        class="lf-compact-number-input w-20 px-1.5 py-0.5 border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-libre-green"
+                                        step="any"
+                                        value={row.settings.min ?? ''}
+                                        oninput={(event) => {
+                                            const value = event.currentTarget.value;
+                                            updateAxis(row.key, row.settings, {
+                                                min: value === '' ? undefined : Number(value),
+                                            });
+                                        }}
+                                        placeholder="—"
+                                    />
+                                    <span class="text-xs sm:text-[10px] text-gray-500 dark:text-gray-400">Max</span>
+                                    <input
+                                        type="number"
+                                        use:numericArrows
+                                        data-testid={`chart-axis-${axisTestId(row.key)}-max`}
+                                        class="lf-compact-number-input w-20 px-1.5 py-0.5 border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-libre-green"
+                                        step="any"
+                                        value={row.settings.max ?? ''}
+                                        oninput={(event) => {
+                                            const value = event.currentTarget.value;
+                                            updateAxis(row.key, row.settings, {
+                                                max: value === '' ? undefined : Number(value),
+                                            });
+                                        }}
+                                        placeholder="—"
+                                    />
+                                </div>
+                            {/if}
+                        </div>
                     </div>
-                {/if}
+                {/each}
             </div>
         </div>
     </div>

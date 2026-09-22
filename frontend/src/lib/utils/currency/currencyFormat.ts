@@ -8,6 +8,7 @@
 
 import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
 import {escapeHtml} from '$lib/utils/core/escapeHtml';
+import {maskable, type AmountSensitivity} from '$lib/utils/privacy/maskable';
 
 /**
  * Escape a string for safe inclusion in an HTML attribute / text node.
@@ -19,6 +20,8 @@ export interface CurrencyAmountFormatOptions {
     minFraction?: number;
     /** Maximum fraction digits (default: 2) */
     maxFraction?: number;
+    /** Omitted ⇒ treated as personal money ⇒ masked while privacy is on. */
+    sensitivity?: AmountSensitivity;
 }
 
 /**
@@ -28,13 +31,14 @@ export interface CurrencyAmountFormatOptions {
  * Suitable for tooltips, title attributes, plain-text contexts.
  */
 export function formatCurrencyAmountPlain(amount: number, code: string, opts: CurrencyAmountFormatOptions = {}): string {
-    const {showSign = false, minFraction = 2, maxFraction = 2} = opts;
+    const {showSign = false, minFraction = 2, maxFraction = 2, sensitivity} = opts;
     const info = getCurrencyInfo(code);
     const symbol = info.symbol ?? '';
     const hasRealSymbol = symbol !== '' && symbol !== code;
     const sign = showSign && amount > 0 ? '+' : '';
     const abs = Math.abs(amount).toLocaleString(undefined, {minimumFractionDigits: minFraction, maximumFractionDigits: maxFraction});
-    const formatted = `${sign}${amount < 0 ? '-' : ''}${abs}`;
+    // D8: the sign stays outside the mask on purpose. See `maskable` for what it costs.
+    const formatted = `${sign}${amount < 0 ? '-' : ''}${maskable(abs, sensitivity)}`;
     const flag = info.flag_emoji && info.flag_emoji !== '🏳️' ? info.flag_emoji : '';
     const parts = [formatted];
     if (hasRealSymbol) parts.push(symbol);
@@ -49,13 +53,14 @@ export function formatCurrencyAmountPlain(amount: number, code: string, opts: Cu
  * @returns HTML string ready for HtmlCell rendering
  */
 export function formatCurrencyAmountHtml(amount: number, code: string, opts: CurrencyAmountFormatOptions = {}): string {
-    const {showSign = false, minFraction = 2, maxFraction = 2} = opts;
+    const {showSign = false, minFraction = 2, maxFraction = 2, sensitivity} = opts;
     const info = getCurrencyInfo(code);
     const symbol = info.symbol ?? '';
     const hasRealSymbol = symbol !== '' && symbol !== code;
     const sign = showSign && amount > 0 ? '+' : '';
     const abs = Math.abs(amount).toLocaleString(undefined, {minimumFractionDigits: minFraction, maximumFractionDigits: maxFraction});
-    const formatted = `${sign}${amount < 0 ? '-' : ''}${abs}`;
+    // D8: the sign stays outside the mask on purpose. See `maskable` for what it costs.
+    const formatted = `${sign}${amount < 0 ? '-' : ''}${maskable(abs, sensitivity)}`;
     const flagHtml = info.flag_emoji && info.flag_emoji !== '🏳️' ? `<span class="emoji-flag">${info.flag_emoji}</span>` : '';
     const codeHtml = `<span class="currency-code">${escapeHtml(code)}</span>`;
     let suffixHtml: string;

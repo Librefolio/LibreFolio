@@ -137,7 +137,7 @@ async def update_user_settings(user_id: int, updates: UserSettingsUpdate, sessio
             settings.base_currency = updates.base_currency
         if updates.theme is not None:
             settings.theme = updates.theme
-        if updates.avatar_url is not None:
+        if "avatar_url" in updates.model_fields_set:
             settings.avatar_url = updates.avatar_url
         settings.updated_at = utcnow()
 
