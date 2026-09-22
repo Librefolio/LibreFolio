@@ -94,7 +94,7 @@ Tre voci **misurate**, non stimate: ciascuna riporta il comando che la riproduce
 |---|------|------------------------|-----------|
 | P4-9 | **Conversione dei 12 test specchio** di `frontend/src/lib/components/charts/chartCoreHelpers.test.ts` da lettura del testo sorgente a esecuzione delle funzioni | Rossi **noti e nominati**, non silenziosi. 5 descrivono comportamenti rimossi su richiesta (residui da cancellare), 7 pinnano proprietà ancora vere in helper rinominati o rimodellati | M |
 | P4-10 | **Sei siti di Risk** che rendono denaro fuori dal canale di mascheratura: 3 `not-money`, 3 che delegano a una funzione mascherata | Non registrabili nel gate per ragioni strutturali (sotto); vanno decisi come classe, non uno per uno | S |
-| P4-11 | **Copertura del gate privacy**: aggancia 1 degli 8 consumatori di `fmtCurrency` in `GrowthChart.svelte` | Lo scanner esige **due** token nello stesso template literal (uno valuta, uno numerico): quattro righe che rendono denaro cadono lì, e l'unico hit sopravvive per i nomi delle variabili accanto | M |
+| P4-11 | **Copertura del gate privacy**: aggancia 1 degli 8 **consumatori** di `fmtCurrency` in `GrowthChart.svelte` | Lo scanner esige **due** token nello stesso template literal (uno valuta, uno numerico): quattro righe che rendono denaro cadono lì. L'unico consumatore visto sopravvive per i nomi delle variabili accanto, e un rename porta il gate al rosso sbagliato | M |
 
 ### P4-9 — le due trappole già pagate
 
@@ -119,6 +119,11 @@ atteso: 12 failed | 150 passed (162)
 Rinvio deciso dal developer con la sua causa: *«è imperativo riallineare la baseline,
 tanto i test bisognerà rigirarli tutti»*. Un debito senza causa si eredita; con causa si
 ri-discute.
+
+> 🔗 **P4-9 e P4-11 condividono un meccanismo, non solo un'area.** In entrambi i casi la
+> riparazione che il rosso *suggerisce* è quella che distrugge la copertura: là cancellare
+> i test residui, qui cancellare la voce di registro. Vanno letti insieme, o il secondo
+> sembra risolvibile allentando una regex.
 
 ### P4-10 — perché non bastava registrarli
 
@@ -157,15 +162,38 @@ Lo scanner esige **due** token distinti nello stesso literal: uno che somigli a 
 sensato — senza, un nome di classe CSS farebbe scattare il gate — ma su queste quattro righe
 gli unici altri token sono `color`, `label`, `signColor`, e il denaro esce lo stesso.
 
-🔑 **L'unico hit sopravvive per i nomi delle variabili accanto.** `:1899` passa perché
-`pnlColor` e `totalPnlVal` contengono `pnl` e `total`. Se quella variabile si chiamasse
-`tp`, la copertura del gate su questo file sarebbe **0 su 8** — e nulla nel verde lo direbbe.
-Un rename innocuo può spegnere un controllo di sicurezza.
+🔑 **L'unico consumatore visto sopravvive per i nomi delle variabili accanto.** `:1899`
+passa perché `pnlColor` e `totalPnlVal` contengono `pnl` e `total`. Rinominando quella
+variabile in `tpVal` gli hit del file passano da 2 a 1 — misurato replicando `scan()`:
+
+```
+PRIMA  [{line: 1834, form: B}, {line: 1899, form: B}]
+DOPO   [{line: 1834, form: B}]
+```
+
+🔴 **E il gate non tace: diventa rosso. Che è peggio.** La voce registrata per `:1899`
+smette di essere prodotta, quindi il test di marcio spara. Ma **nomina il colpevole
+sbagliato** — punta alla voce di registro, non alla perdita di visibilità — e delle due
+riparazioni ovvie:
+
+| azione | esito |
+|---|---|
+| aggiornare lo snippet al testo nuovo | **ancora rosso**: quel testo non è più un hit |
+| **cancellare la voce** | **verde**, consumatori visti a 0, nessuna traccia |
+
+**L'unica risoluzione che il gate accetta è quella dannosa.** Chi segue il rosso in buona
+fede arriva alla cancellazione perché è l'unica cosa che funziona. Per questo P4-11 non si
+ripara allentando la regex: la soglia si sposterebbe e il meccanismo resterebbe.
+
+> ⚠️ Il file produce **2** hit, non 1: `:1834`, la definizione, è essa stessa un hit ed è la
+> prima voce del registro. «1 su 8» parla dei **consumatori** e va detto con quel sostantivo,
+> o il prossimo lettore troverà due numeri veri che non tornano.
 
 Le opzioni sono due, e vanno decise insieme: allentare la co-occorrenza accettando i falsi
 positivi che ne derivano, oppure mascherare `fmtCurrency` **alla definizione** — una riga
 sola a `:1834`, che coprirebbe tutti e otto i siti indipendentemente da come il gate li vede.
-La seconda è già registrata come `residual` nel gate.
+Dopo la misura sopra non è la migliore delle due: **è l'unica che sopravvive a un rename.**
+È già registrata come `residual` nel gate.
 
 ### Contromisure di misura adottate nel round
 
