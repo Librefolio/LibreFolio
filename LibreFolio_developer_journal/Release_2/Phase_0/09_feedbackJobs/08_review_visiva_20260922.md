@@ -29,8 +29,8 @@ Severità: 🔴 blocca o falsa un dato · 🟠 rompe un flusso · 🟡 attrito �
 |---|---|---|---|---|---|
 | R1 | i18n / risk | `lastedDays` MALFORMED_ARGUMENT ×11 | 🔴 | **A** | ✅ **esatta** |
 | R2 | Versione | Versione corrente sbagliata nell'update check | 🔴 | **coordinator** | ✅ **esatta** |
-| R3 | Versione | Modale nuova versione sotto quella corrente (z-index) | 🟠 | da assegnare | ⚠️ superficie |
-| R4 | Versione | Nessun banner "sei aggiornato" a schermo | 🟠 | da assegnare | ⚠️ superficie |
+| R3 | Versione | Modale nuova versione sotto quella corrente (z-index) | 🟠 | **J** | ⚠️ superficie |
+| R4 | Versione | Nessun banner "sei aggiornato" a schermo | 🟠 | **J** | ⚠️ superficie |
 | R5 | Privacy | Asse Y in **Abs** mostra valori assoluti | 🔴 | **J** + **I** | ✅ P4-11 |
 | R6 | Privacy | Asse Y in **P&L** stesso problema | 🔴 | **J** + **I** | ✅ P4-11 |
 | R7 | Privacy | Infobox mostra valori assoluti | 🔴 | **J** | ⚠️ superficie |
@@ -39,12 +39,12 @@ Severità: 🔴 blocca o falsa un dato · 🟠 rompe un flusso · 🟡 attrito �
 | R10 | Grafici | Income: barre troppo sottili | 🟠 | **I** | ❓ riprodurre |
 | R11 | Grafici | Income: manca il valore di acquisto nello stack | 🟠 | **I** | 📐 progetto |
 | R12 | Allocazione | Torta a 1 livello, non 2 come concordato | 🟠 | **Risk** | ❓ riprodurre |
-| R13 | Select | "CSV" non trova "Generic CSV" | 🟠 | da assegnare | 🔴 **non è optionFilter** |
-| R14 | Select | Tipo transazione: evolvere a `SearchSelect` | 💡 | da assegnare | ✅ superficie |
-| R15 | Select | Tipo transazione: 2 livelli come pannello segnali | 🟠 | da assegnare | 📐 progetto |
-| R16 | Select | ETF: manca la seconda icona sovrapposta | 🟠 | **Risk** | 📐 nei piani risk |
-| R17 | Tipologie | Aggiungere crowdfunding immobiliare | 💡 | da assegnare | 📐 progetto |
-| R18 | Import | Doppia modale ISIN (race condition) | 🔴 | da assegnare | ⚠️ superficie |
+| R13 | Select | "CSV" non trova "Generic CSV" | 🟠 | **K** | 🔴 **non è optionFilter** |
+| R14 | Select | Tipo **asset**: evolvere a `SearchSelect` | 💡 | **K** | ✅ superficie |
+| R15 | Select | Tipo **asset**: 2 livelli come pannello segnali | 🟠 | **K** | 📐 progetto |
+| R16 | Select | ETF: manca la seconda icona sovrapposta | 🟠 | **K** (era Risk) | 📐 nei piani risk |
+| R17 | Tipologie | Aggiungere crowdfunding immobiliare | 💡 | **K** | 📐 progetto |
+| R18 | Import | Doppia modale ISIN (race condition) | 🔴 | **K** | ⚠️ superficie |
 | R19 | Onboarding | Testo "l'import ha una sua guida" da togliere | 🟡 | **J** | ✅ superficie |
 | R20 | Privacy | Broker global: si nascondono ma non si riscoprono | 🔴 | **J** | ⚠️ superficie |
 | R21 | Dashboard | Crescita e Allocazione non ricordano la vista scelta | 🟡 | **I** | ✅ **pattern esistente** |
@@ -619,3 +619,95 @@ let semanticMode = $state(normalizeSemanticMode(loadPref(STORAGE_KEY_SEMANTIC, '
 
 **Owner: I** (possiede entrambi i grafici). Costo: basso — è un'applicazione del pattern, non
 un progetto.
+
+---
+
+## 9 · Terzo passaggio — 22/09/2026, 18:20 · nasce il workstream K
+
+Le otto voci senza owner sono state risolte **guardando i file, non i numeri**. Il risultato
+non è una lista sola: sono tre famiglie con tre proprietari diversi.
+
+### 9.1 Chi ha generato la tassonomia
+
+`git log -S "is_benchmark" -- backend/app/db/models.py` dà un solo commit:
+
+```
+00d8c735b 2026-09-18  feat(assets): add benchmark flag and risk taxonomy
+   entrato con → 25d2d138b  merge(risk): taxonomy (B)
+   ramo        → e-alfy-legendary-succotash
+```
+
+La sessione si presentava come *«il mandato **B — Tassonomia degli asset e catalogo dei
+benchmark** della ripianificazione del sottosistema di rischio»*. Quindi R14–R17 discendono da
+una commessa **della famiglia risk, ma chiusa**. Risk-attuale non è il suo erede naturale: ha
+già davanti la review puntuale componente per componente, concordata col developer nella sua
+chat, e caricarla di backlog UI la ritarda.
+
+### 9.2 Le tre famiglie, per file
+
+| famiglia | voci | file che si tocca | owner |
+|---|---|---|---|
+| Versione | R3 R4 | `onboarding/DeferredAppPopups.svelte`, `auth/UpdateAvailableModal.svelte` | **J** |
+| Tassonomia | R14 R15 R16 R17 | `utils/assetTypes.ts` — *una sola funzione* | **K** |
+| Select / Import | R13 R18 | `ui/select/optionFilter.ts`, `ImportWizardModal.svelte` | **K** |
+
+**R3/R4 non erano orfane.** `DeferredAppPopups.svelte` nasce da `8a8e686f0 feat(onboarding):
+add modular guide foundation` — è J che l'ha scritto, ed è *esattamente* il componente che
+conta `data-modal-scroll-lock-count` per non accavallare i popup. Ha fallito il compito per
+cui esiste. Darlo a un agente nuovo significa metterlo a correggere codice vivo di J.
+
+**R16 si sposta da Risk a K.** Non per tema, per riga: `getAssetTypeIconUrl()` e
+`buildAssetTypeOptions()` sono nello stesso file, adiacenti, e R14/R15 le riscrivono. Due
+owner sullo stesso file è la collisione che il protocollo vieta per prima.
+
+### 9.3 Tre rettifiche emerse verificando
+
+> ⚠️ **R14 era un equivoco di superficie.** `TransactionTypeSearchSelect.svelte` **esiste già**
+> ed è un `SearchSelect` (lo usano `TransactionFormModal`, `TransactionBulkModal`,
+> `FixFlaggedStep`). Il select piatto osservato è quello dei **tipi asset** — ETF e
+> crowdfunding sono asset, non transazioni. La voce si restringe a quel select.
+
+> 🔴 **R15 non è una dimenticanza: è una decisione scritta e motivata.** In
+> `frontend/src/lib/utils/assetTypes.ts` il docstring di `buildAssetTypeOptions()` argomenta
+> la scelta opposta — header di sezione non selezionabile invece dell'albero, perché
+> *«costs no new machinery … leaves the generic ETF a perfectly ordinary, selectable option
+> rather than a group that has to pretend to be a leaf»*. Chi riapre la voce deve **rispondere
+> a quell'argomento**, non ignorarlo: è il disegno di B, non una svista.
+
+> ✅ **R17 non richiede una migrazione.** `assets.asset_type` è un `VARCHAR` **senza CHECK
+> constraint**: l'enum vive in Python e allargarlo è un cambio di codice. Non tocca il divieto
+> di nuove migrazioni dato ai figli.
+
+### 9.4 Larghezze di colonna — deciso e applicato dal coordinator
+
+Verificando R17 è emerso che `assets.asset_type` era dichiarata `VARCHAR(14)` mentre
+`ETF_REAL_ESTATE` è **15**: la dichiarazione era già sfondata. Misurate allora *tutte* le 27
+colonne con larghezza dichiarata contro il massimo che i rispettivi enum possono produrre:
+
+| colonna | dichiarata | massimo possibile | esito |
+|---|---|---|---|
+| `assets.asset_type` | 14 | **15** `ETF_REAL_ESTATE` | 🔴 sfondata |
+| `transactions.type` | 14 | 13 `FX_CONVERSION` | 🟠 un carattere di margine |
+| `alembic_version.version_num` | 32 | 24 `004_release_1_2_0_schema` | 🟠 tetto ai nomi futuri |
+| le altre 24 | — | — | ✅ ampie |
+
+Entrambe portate a **32** nel DDL di `001_initial.py`, su decisione del developer. 32 e non 24
+perché è lo stesso numero che Alembic usa per sé, e perché `CROWDFUND_REAL_ESTATE` (R17) è 21.
+
+**Nessuna ricostruzione di tabella sugli installati.** Provato che su SQLite la larghezza è
+avvisoria — 30 caratteri accettati in una `VARCHAR(14)` — quindi rifare `assets` e
+`transactions` su ogni installazione rilasciata costerebbe un rischio reale per zero effetto.
+La divergenza che resta (installati a 14, nuovi a 32) è invisibile su SQLite e sparisce il
+giorno in cui lo schema viene costruito su un motore che applica il vincolo, perché quel
+giorno lo costruiscono queste migrazioni.
+
+Il docstring della 004 **argomentava il contrario** ed è stato riscritto: era la stessa classe
+di difetto — una doc che resta indietro — che questo round ha già pagato una volta.
+
+Aggiunto infine alla regola di naming (`backend-db.instructions.md`) il tetto mancante: un
+revision id deve stare in **32 caratteri**, perché `alembic_version.version_num` è
+`VARCHAR(32)` e su Postgres il vincolo è applicato davvero.
+
+**Gate:** `db_schema_validate.py` **17/17 verdi** su DB di test ricreato dalla catena, con
+`VARCHAR(32)` su entrambe le colonne; DB già installato (`VARCHAR(14)`) portato a head senza
+DDL, `integrity_check ok`, 15 asset intatti.
