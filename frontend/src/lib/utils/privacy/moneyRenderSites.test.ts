@@ -63,8 +63,22 @@ interface Site {
 
 const SRC = resolve(process.cwd(), 'src');
 
-/** Already routed through the masking channel: not a false negative by construction. */
-const SAFE_CALL = /formatCurrencyAmountPlain|formatCurrencyAmountHtml|formatCurrencyCodeHtml|formatCurrencyCode\b|riskHelpers\.formatCurrencyAmount|maskable\(/;
+/**
+ * Already routed through the masking channel: not a false negative by construction.
+ *
+ * An entry here is a promise that whatever leaves the named function is masked, so
+ * membership has a price: the function must be a module export pinned by a unit test
+ * that would break if the masking were removed. A local closure cannot be pinned, so
+ * adding one would be a promise nobody can break loudly — the gate would go quiet on
+ * that channel forever, including the day someone unmasks it.
+ *
+ * Names are anchored with `\b` because a bare prefix absolves every longer name that
+ * starts the same way: `formatCurrencyAmount` without it would also cover
+ * `formatCurrencyAmountPlain` and `…Html`, which are listed here on their own merits.
+ * The redundancy would be worse than noise — deleting one of those entries to expose
+ * it to the gate again would then have no effect at all.
+ */
+const SAFE_CALL = /formatCurrencyAmountPlain|formatCurrencyAmountHtml|formatCurrencyCodeHtml|formatCurrencyCode\b|formatScopedCurrencyAmount\b|formatCurrencyAmount\b|maskable\(/;
 const FORM_A = /style\s*:\s*['"]currency['"]/;
 const TEMPLATE_LITERAL = /`[^`]*`/g;
 const INTERPOLATION = /\$\{([^}]*)\}/g;
@@ -165,13 +179,13 @@ const REGISTRY: Site[] = [
         file: 'lib/components/dashboard/GrowthChart.svelte',
         snippet: '`${baseCurrency} ${v.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`',
         status: 'residual',
-        why: 'fmtCurrency, analysis §1.8 #3. Out of scope while workstream I rewrites this file; one line to mask once it returns.',
+        why: 'fmtCurrency, analysis §1.8 #3. Workstream I has since merged, so the reason is no longer "wait for the rewrite": this belongs to the chart round, one line to mask at the definition.',
     },
     {
         file: 'lib/components/dashboard/GrowthChart.svelte',
-        snippet: "`<div style=\"display:flex;justify-content:space-between;gap:16px;color:${pnlColor}\"><span><b>${$_('dashboard.totalPnl')}</b></span><b>${totalPnlVal >= 0 ? '+' : '−'}${fmtCurrency(Math.abs(totalPnlVal))}</b></div>`",
+        snippet: "`<div style=\"display:flex;justify-content:space-between;gap:16px;color:${pnlColor}\"><span><b>${$_('dashboard.totalPnl')}</b></span><b>${totalPnlVal === 0 ? '' : totalPnlVal > 0 ? '+' : '−'}${fmtCurrency(Math.abs(totalPnlVal))}</b></div>`",
         status: 'residual',
-        why: 'A consumer of fmtCurrency in the same file, which §1.8 did not list. Covered by masking fmtCurrency; registered so the residual is one decision and not two.',
+        why: "A consumer of fmtCurrency in the same file, which §1.8 did not list. Covered by masking fmtCurrency; registered so the residual is one decision and not two. The sign ternary was rewritten at I's merge to stop rendering a zero as a positive, which brings it into the D8 convention in currencyFormat.ts — the verdict is unchanged and the reason was re-checked against that file, not assumed.",
     },
     {
         file: 'lib/components/dashboard/PerformanceChart.svelte',
@@ -190,18 +204,6 @@ const REGISTRY: Site[] = [
         snippet: '`${amt.toFixed(2)} ${assetCurrency}`',
         status: 'unmasked',
         why: 'The success toast for a created event. §1.8 listed line 73 of this file as an input value (excluded by D7) and stopped there; this is a different line in the same file, and it renders.',
-    },
-    {
-        file: 'lib/features/tools/pac-allocator/PacResultPanel.svelte',
-        snippet: '`${formatDecimalForDisplay(fact.value.amount, {maxFrac: 12})} ${fact.value.currency}`',
-        status: 'unmasked',
-        why: 'moneyText, the ideal allocation column. Owned by the Tool/PAC workstream; registered here, to be masked by whoever owns the file.',
-    },
-    {
-        file: 'lib/features/tools/pac-allocator/RebalancerResultPanel.svelte',
-        snippet: '`${formatDecimalForDisplay(fact.value.amount, {maxFrac: 12})} ${fact.value.currency}`',
-        status: 'unmasked',
-        why: 'The rebalancer twin of the site above, same shape and same owner.',
     },
     {
         file: 'lib/components/transactions/events/AssetEventPicker.svelte',
@@ -268,13 +270,7 @@ describe('money rendered outside the masking channel (analysis §1.8 gate)', () 
         // fail here and force the list to be updated, so the round's partial
         // conformance cannot quietly become complete.
         expect(listOf('residual')).toEqual(['lib/components/dashboard/GrowthChart.svelte', 'lib/components/dashboard/GrowthChart.svelte']);
-        expect(listOf('unmasked')).toEqual([
-            'lib/components/dashboard/PerformanceChart.svelte',
-            'lib/components/dashboard/PerformanceChart.svelte',
-            'lib/components/transactions/events/EventCreateMiniModal.svelte',
-            'lib/features/tools/pac-allocator/PacResultPanel.svelte',
-            'lib/features/tools/pac-allocator/RebalancerResultPanel.svelte',
-        ]);
+        expect(listOf('unmasked')).toEqual(['lib/components/dashboard/PerformanceChart.svelte', 'lib/components/dashboard/PerformanceChart.svelte', 'lib/components/transactions/events/EventCreateMiniModal.svelte']);
     });
 
     it('sees both branches of a two-branch money line', () => {
