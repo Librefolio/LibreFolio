@@ -533,6 +533,103 @@ invocati **da ECharts**, fuori da ogni contesto reattivo: producono la stringa g
 
 ---
 
+### Passo 7 — Gate anti-regressione §1.8 — **Stato: ✅ fatto** — 2026-09-21 — *autorizzato dal developer*
+
+Approvato nella forma delle tre righe: **enumera** i siti del sorgente che rendono denaro,
+fallisce quando ne compare uno fuori dall'insieme registrato, **non giudica**.
+File: `frontend/src/lib/utils/privacy/moneyRenderSites.test.ts` — 5 test, verdi.
+
+> **Note implementazione**: due forme osservabili, misurate e non supposte.
+> **Forma A** — `Intl.NumberFormat` con `style: 'currency'`: esatta, 3 occorrenze.
+> **Forma B** — un template literal che interpola una valuta accanto a un token numerico:
+> euristica, e il suo costo è stato pagato per intero in fase di taratura.
+> Rumore misurato su tre versioni successive dello scanner: **62 → 24 → 8** candidati.
+> La terza forma possibile — `toLocaleString(… currency …)` — **oggi non esiste**: zero occorrenze,
+> verificato, e registrato come assenza misurata e non come forma dimenticata.
+
+> **Note implementazione**: il registro è indicizzato **per contenuto**, non per `file:riga`.
+> Una riga cambia quando qualcuno modifica il codice sopra di essa, e un gate che diventa rosso
+> per una ragione che non riguarda il suo oggetto insegna ad aggiornare il registro **senza leggerlo** —
+> che è lo stesso guasto del rumore, ottenuto con un altro meccanismo.
+> Chiave = path + testo trovato a spazi normalizzati.
+
+> **Note implementazione**: **il gate è stato dimostrato fallire.** Un gate mai fallito non è
+> un gate verificato, è un gate non provato. Aggiunto un file mutante con entrambe le forme,
+> eseguito, verificato l'errore — che nomina path, riga e forma per ciascuna —, rimosso il file,
+> verificato il ritorno a 5/5. Le due righe del mutante sono state **entrambe** intercettate.
+
+> **Note implementazione**: il gate porta il proprio **controllo positivo**.
+> «Nessun sito non registrato» è vero anche quando lo scanner legge la directory sbagliata o
+> quando le regex non corrispondono a nulla: l'asserzione che protegge la proprietà è esattamente
+> quella il cui fallimento è silenzioso. Il test `finds the sites it is supposed to find`
+> pretende che entrambe le forme trovino qualcosa, che il totale non scenda sotto il registro,
+> e che un file canonico sia presente.
+
+> **Note implementazione**: `GrowthChart.svelte:692` è registrato come **residuo noto** con la sua
+> ragione, come richiesto: il gate non fallisce su di esso e non tace su di esso. Il file **non è
+> stato aperto in scrittura** — I ci sta lavorando. Registrato per path e riga, leggendolo soltanto.
+
+> **Note implementazione**: fuori dal gate **per scelta dichiarata** — `MeasurePanel:257` e
+> `AssetEventPicker:179`, denaro senza marcatore di valuta. Intercettarli significa inseguire
+> `toFixed` su numeri arbitrari, e *un gate che scatta su numeri arbitrari è un gate che qualcuno
+> spegne*. L'esclusione è scritta nel file, non lasciata al silenzio.
+
+> **Note implementazione**: nota aggiunta a `.github/skills/devpy-tools/testing-frontend/SKILL.md`,
+> sezione `## Conventions` — path **verificato prima di scrivere**, non dedotto. Dice ciò che il
+> developer ha chiesto: quando la regola cresce, le forme enumerate devono crescere con essa,
+> perché un gate le cui forme sono in ritardo sulla regola **riporta verde su una domanda che ha
+> smesso di fare**. Dopo il fix del punto cieco è stato aggiunto un secondo capoverso —
+> *un'euristica a token è sconfitta da un sinonimo* — con la misura del rumore (`symbol` 1,
+> `sign` 29) e la frase che spiega il guasto a chi non c'era: **la copertura era un a-capo,
+> non un aggancio.** 538 → 548 righe, intestazioni invariate (10 `##`, 14 `###`, 2 `####`).
+
+> **Note implementazione — 🔴 il punto cieco trovato dal coordinatore, e chiuso dentro lo stesso commit.**
+> Il coordinatore ha chiesto perché `axisTickAmount` (`PerformanceChart:170`, rende a `:174`) non
+> fosse nell'elenco. Risposta misurata: **la forma B ha rifiutato correttamente** — nessun token di
+> valuta, cioè l'esclusione dichiarata. Ma la domanda ha scoperto altro:
+>
+> ```js
+> :167  return symbol ? `${sign}${symbol}${compact}` : `${sign}${compact} ${currency}`;
+>                       └─ PRIMARIO: nessun token di valuta ─┘  └─ RIPIEGO: agganciato ─┘
+> ```
+>
+> Il gate aveva preso `PerformanceChart` **dal ramo di ripiego** — quello usato solo quando il
+> simbolo non è noto. Il ramo primario, che rende per dollaro ed euro, non era mai stato agganciato:
+> il sito risultava coperto **solo perché i due rami condividono la riga**.
+> *Una copertura che dipende da dove il sorgente è andato a capo non è una copertura.*
+>
+> Rimedio: `CURRENCY_TOKEN` estratto in costante e allargato a `/currency|symbol/i`.
+> Misurato prima di applicarlo: `symbol` ⇒ **1 hit nuovo, zero rumore**; aggiungere `sign` ⇒ **29**,
+> quasi tutti percentuali (`formatSignedPercent`) e nomi di classe CSS (`signedToneClass` ×8).
+> `sign` **escluso per misura**, non per intuizione.
+
+> **Note implementazione — le cinque misure della dimostrazione**, nell'ordine in cui provano cose diverse:
+>
+> | | stato | atteso | esito |
+> |---|---|---|---|
+> | **A** | mutante col **solo** ramo primario, regex vecchia | verde = il cieco esiste | **5/5 verde** |
+> | **B** | stessa mutante, regex nuova | rosso su mutante **e** sito reale | rosso su entrambi |
+> | **C** | sito reale registrato, mutante ancora lì | rosso **solo** sulla mutante | esatto |
+> | **D** | mutante rimossa | verde | **6/6** |
+> | **E** | regex ri-ristretta a `/currency/i` | il test nuovo rosso | rosso, nominando il ramo mancante |
+>
+> **A e E sono le due che contano.** A prova che il difetto c'era: senza di essa, «1 hit nuovo»
+> dimostrerebbe che la regex aggancia *qualcosa*, non che aggancia *quel ramo*. E prova che il test
+> nuovo non è vacuo. Le altre tre confermano la meccanica.
+>
+> Ripristino dopo E **per copia di byte, non `git checkout`**: il file era già stagiato nella versione
+> *pre-fix*, quindi Git avrebbe restituito il difetto spacciandolo per ripristino. md5 identico.
+
+> **Note implementazione**: aggiunto il sesto test, `sees both branches of a two-branch money line`.
+> È una regressione **sul gate**, non sul prodotto: pretende che entrambi i rami della riga 167
+> compaiano fra gli hit, così che restringere di nuovo `CURRENCY_TOKEN` fallisca invece di tacere.
+
+> **🔴 Limite dichiarato, e la dichiarazione precedente era incompleta.** L'esclusione «denaro senza
+> marcatore di valuta» l'avevo giustificata **sul costo** — inseguire `toFixed` su numeri arbitrari.
+> Regge, ma taceva la conseguenza: **una funzione il cui nome stesso dice che rende un importo
+> (`axisTickAmount`), a nove righe da una che il gate prende, nello stesso file, è invisibile.**
+> Il costo era l'argomento giusto; la dichiarazione era la metà comoda di esso.
+
 ## §2 — Verifica
 
 | gate | comando | soglia |
@@ -540,6 +637,7 @@ invocati **da ECharts**, fuori da ogni contesto reattivo: producono la stringa g
 | tipi | `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py front check` | pavimento **`3 errors and 41 warnings in 4 files`** — **meno di 3 è rosso** |
 | build | `… dev.py front build` | verde |
 | unit | via `test-author`, dopo ogni passo completo | ogni negativa con positiva |
+| **gate §1.8** | `… npm run test:unit -- src/lib/utils/privacy/moneyRenderSites.test.ts` | 6/6 — **e dimostrato cieco prima del fix, rosso dopo**, non solo verde |
 
 **Vietati**: E2E, suite lunghe, `dev.py mkdocs serve`, porta ≠ 6158, `--force`, staging, commit.
 
@@ -725,6 +823,67 @@ confine.
 
 ---
 
+### Fuori pista 11 — 🔴 I falsi negativi di §1.8 non erano sei: erano dieci
+
+Il gate si è giustificato **prima di girare**. Costruendo l'elenco da uno scanner invece che dalla
+lista di §1.8, sono emersi **quattro siti che rendono denaro e che l'analisi non aveva contato**:
+
+| sito | perché §1.8 non l'aveva visto |
+|---|---|
+| `PerformanceChart.svelte:167` (`shortMoney`, reso da `:234`) | **non chiama mai `Intl` con `style:'currency'`** — §1.8 era ancorata a quell'API, quindi era *strutturalmente cieca* a questa forma. E usa `notation:'compact'`: rivela la magnitudine, cioè esattamente ciò che il segnaposto esiste per nascondere |
+| `EventCreateMiniModal.svelte:157` | §1.8 aveva elencato la **riga 73 dello stesso file** come valore d'ingresso, escluso da D7, e si era fermata lì. La riga 157 rende |
+| `PacResultPanel.svelte:38` | **proprietà del workstream D (Tool/PAC)** — registrato, non corretto |
+| `RebalancerResultPanel.svelte:30` | idem |
+
+E il residuo noto non è un sito ma **due**: `GrowthChart.svelte:741` è un consumatore di
+`fmtCurrency` nello stesso file, accanto a `:692`.
+
+> **Il meccanismo è quello che conta, non il conteggio.** §1.8 aveva cercato *una forma* — la
+> chiamata a `Intl` con `style:'currency'` — e aveva trovato tutti i siti che la usano. La lista
+> non era incompleta per disattenzione: era **completa rispetto alla domanda che era stata posta**,
+> e la domanda era più stretta della proprietà. Un elenco compilato cercando una forma non dice
+> nulla sui siti che ne usano un'altra, **e ha esattamente lo stesso aspetto di un elenco esaustivo.**
+
+Ed è la ragione per cui la nota nella skill dice che le forme sono un pavimento e non una prova:
+lo scanner di oggi conosce due forme perché oggi ne esistono due, non perché due sia il numero
+delle forme in cui si può rendere una cifra.
+
+### Fuori pista 12 — L'elenco della suite ricostruito a memoria, e l'aritmetica che l'ha smentito
+
+Eseguita «la suite privacy completa, cinque file»: **47 test**. La volta prima erano **111**.
+Avevo ricostruito l'elenco dei file a memoria e sostituito `riskAnalysisHelpers.test.ts` (69 test,
+quello del passo 3) con il gate nuovo (5). Il totale tornava — 11+13+2+16+5 = 47 — quindi la
+somma *interna* era coerente: nulla nell'esito segnalava la sostituzione.
+
+> A trovarlo è stato **il numero della volta prima**, non il numero di questa volta. Un risultato
+> coerente con sé stesso non dice nulla sul proprio perimetro; solo il confronto con una misura
+> precedente rivela che il perimetro è cambiato. È lo stesso di `porcelain`: un output plausibile
+> che non dichiara su cosa è stato calcolato.
+
+Eseguiti tutti e sei: **116 = 111 + 5**, esatto.
+
+### Fuori pista 13 — 🔴 Il controllo positivo non vede una forma che aggancia **meno** del dovuto
+
+Il gate era stato consegnato con un controllo positivo costruito apposta contro l'asserzione
+negativa: pretende `hits >= registro`, forma A ≠ ∅, forma B ≠ ∅, e un file canonico presente.
+
+**Tutte e quattro reggevano mentre la forma B mancava il ramo primario di `shortMoney`.**
+
+> «Entrambe le forme trovano qualcosa» è vero anche quando una ne trova **meno del dovuto**.
+> Il controllo verifica che lo scanner *stia guardando*; non può verificare che stia *vedendo tutto*,
+> e le due proprietà hanno **lo stesso esito osservabile**. Un conteggio non nullo ha la stessa
+> forma di un conteggio corretto.
+
+È l'undicesimo contenitore della serie — `0`, la riga-directory di `porcelain`, il `.svelte.ts`
+senza `$state` — e stavolta è **dentro la cosa costruita per accorgersene**. La contromisura non è
+un controllo positivo migliore: è che un controllo di presenza non può sostituire un caso noto.
+Il sesto test fissa **due snippet nominati**, non un conteggio.
+
+E il difetto non l'ha trovato una misura: l'ha trovato una **domanda su un altro sito**. Il
+coordinatore chiedeva di `axisTickAmount`, che si è rivelato un'esclusione corretta; la risposta
+ha attraversato `shortMoney` e lì c'era il guasto. *Una verifica che non trova ciò che cercava può
+trovare ciò che nessuno cercava, e solo se la si esegue davvero invece di argomentarla.*
+
 ## §4 — Test
 
 ### Unit test — 2026-09-21 — via `test-author`
@@ -734,12 +893,19 @@ confine.
 | `frontend/src/lib/utils/privacy/maskable.test.ts` | 11 |
 | `frontend/src/lib/stores/app/privacyStore.test.ts` | 13 |
 | `frontend/src/lib/stores/app/privacyStoreSsr.test.ts` | 2 |
-| `frontend/src/lib/utils/currency/currencyFormat.test.ts` | 14 |
+| `frontend/src/lib/utils/currency/currencyFormat.test.ts` | 14 → **16** *(riparati per D8)* |
 | `frontend/src/lib/components/risk/riskAnalysisHelpers.test.ts` | 62 → **69** |
+| `frontend/src/lib/utils/privacy/moneyRenderSites.test.ts` | **6** *(gate §1.8, passo 7)* |
 
-`cd frontend && npm run test:unit -- <i cinque file>` ⇒ **109 passed**, 1,05 s. `front check` dopo
+`cd frontend && npm run test:unit -- <i sei file>` ⇒ **117 passed**. `front check` dopo
 l'aggiunta: **`3 errors and 41 warnings in 4 files`**, il pavimento — i file di test non
 introducono errori di tipo.
+
+> 🔴 **Questa tabella è stata trovata stantia al passo 7**, e va detto come: diceva `14` e
+> `109 passed`, cioè i numeri di *prima* della riparazione D8 — che era stata fatta, registrata al
+> passo 2, e mai riportata qui. Il record non si era rotto: **si era fermato**, e una tabella ferma
+> ha la stessa forma di una tabella aggiornata. È lo stesso guasto dell'elenco-suite di Fuori
+> pista 12, un piano più in là: ciò che non viene ricontato resta scritto.
 
 **La prova che il verde è reale non è il conteggio.** `test-author` ha mutato l'implementazione
 undici volte e verificato che ogni proprietà diventasse rossa, ripristinando poi i sorgenti
@@ -761,6 +927,7 @@ passa fra test.
 | invalidazione dei `formatter` ECharts (§3.4) | stessa ragione, ed è il limite già dichiarato al passo 6 |
 | `PrivacyToggle.svelte` | componente, non coperto da questo giro |
 | cifre raggruppate per locale | l'atteso è costruito con la stessa `toLocaleString`, quindi il test fissa composizione e ordine, **non** il raggruppamento: un letterale `1,234.50` diventerebbe rosso su un runner `de-DE`. Gli attesi *mascherati* sono letterali esatti, perché un segnaposto non ha locale |
+| **il gate stesso** — che intercetti una forma che non conosce | per costruzione: lo scanner enumera **due** forme misurate. Un sito che compone l'importo su più istruzioni, o che lo rende senza marcatore di valuta, non è visto. Dichiarato nel file e nella skill, **non** lasciato implicito |
 
 ---
 
