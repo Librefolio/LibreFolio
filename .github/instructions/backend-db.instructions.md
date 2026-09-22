@@ -63,6 +63,50 @@ that has never shipped.
 `./dev.py db create-clean` still rebuilds a DB from scratch for **fresh installs and test runs**, but is
 **no longer** the way to evolve an existing schema.
 
+### Naming: `00N_<target release or scope>`
+
+`./dev.py db migrate` generates a random hex revision id and a slugified filename. **Rename both**
+before committing, while the migration is still unreleased:
+
+```
+001_initial.py                  002_identifier_other_json_list.py
+003_scheduler_timezone.py       004_release_1_2_0_schema.py
+```
+
+- **Zero-padded sequential prefix** (`00N_`) so the chain reads in order on disk.
+- After the prefix, either the **target release version** it ships in
+  (`004_release_1_2_0_schema` → v1.2.0) or the **functional scope** when the migration is a
+  single self-contained change (`003_scheduler_timezone`).
+- The `revision` string inside the file equals the filename without `.py`.
+
+⚠️ **The revision id is the contract; the filename is not.** Alembic resolves revisions by id,
+never by path, so a file can be renamed freely — this is *verified*: renaming
+`5b1333fa6b07_scheduler_times_use_configured_timezone.py` to `003_scheduler_timezone.py` left
+databases stamped `5b1333fa6b07` upgrading to head with a schema identical to a from-scratch
+build. The **id**, once it appears in a published tag, is in users' `alembic_version` tables
+and can never change or disappear. Before removing or consolidating any revision:
+
+```bash
+git cat-file -e <tag>:backend/alembic/versions/<file>   # is it inside a released tag?
+```
+
+Anything inside a released tag stays in the chain. Anything not released may be consolidated.
+
+### One head, always — never `alembic merge`
+
+Two migrations authored in parallel that declare the same `down_revision` produce **no Git
+conflict** and a fork that only bites on a fresh install. Resolve it by re-parenting one onto
+the other, not with a merge node.
+
+This is not a style preference. `main.py:_alembic_head_revision()` calls
+`ScriptDirectory.get_current_head()` (singular), which **raises `CommandError` on multiple
+heads**; the caller swallows it and returns `None`, so the pending-migration check at startup
+silently evaluates to false and **the server boots without migrating** — the exact failure the
+check exists to prevent. A fork therefore disables auto-upgrade for every install while
+leaving only a warning in the log.
+
+`db_schema_validate.py` enforces `len(ScriptDirectory.get_heads()) == 1`.
+
 ### Standard Commands
 
 ```bash
