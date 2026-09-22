@@ -1185,6 +1185,13 @@
       "partialResult": "Ce signal n'est que partiellement disponible avec les données actuelles.",
       "unavailable": "Ce signal ne peut pas être calculé avec les données disponibles.",
       "partialContiguousSegment": "Signal calculé sur le segment contigu complet {start}–{end}. {excluded} points chargés ont été exclus car des dates ou champs requis étaient incomplets. Entrée complète : {available}/{requested} ({coverage} %, préchauffage inclus). Plus longue séquence manquante : {consecutive} points."
+    },
+    "axes": {
+      "exchangeRate": "Axe du taux de change ({pair})",
+      "percentage": "Axe des pourcentages",
+      "price": "Axe des prix ({currency})",
+      "signal": "Axe {name}",
+      "volume": "Axe des volumes"
     }
   },
   "common": {
@@ -1470,7 +1477,15 @@
     "yieldOnCostValue": "Rendement sur coût",
     "yieldOnCostPeriod": "Période",
     "yieldOnCostFxRateDate": "taux du",
-    "yieldOnCostNoIncomeTitle": "Aucun revenu enregistré"
+    "yieldOnCostNoIncomeTitle": "Aucun revenu enregistré",
+    "pnl": "P&L",
+    "pnlSubmodeLine": "Ligne",
+    "pnlSubmodeIncome": "Revenus",
+    "pnlSubmodeCandles": "Bougies",
+    "pnlCandlesHypothetical": "Synthétique — les plus hauts/bas cross-actifs sont hypothétiques et non simultanés, pas une véritable série intrajournalière.",
+    "pnlCandlesHypotheticalShort": "Synthétique — les plus hauts/bas cross-actifs sont hypothétiques et non simultanés",
+    "pnlAcqNewCapital": "Nouveau capital",
+    "pnlAcqReinvested": "Réinvesti"
   },
   "dataQuality": {
     "headerInfoOnly": "Note de qualité des données",

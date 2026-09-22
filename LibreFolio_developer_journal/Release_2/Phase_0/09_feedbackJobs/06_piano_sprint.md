@@ -849,6 +849,38 @@ dopo.
 
 **Lezione trasversale delle ultime due settimane, valida oltre questi sprint:** **sei difetti in sette stage** su D sono passati indenni sotto ruff, black, `py_compile` e suite unitarie tutte verdi — un `NameError` garantito da un import sotto `TYPE_CHECKING` in un modulo che istanzia a runtime; un modello SCIP che usava importi esatti dove il ledger posta importi arrotondati HALF_UP, potando via l'ottimo vero; un attributo inesistente **dentro un percorso di `raise`**, cioe nel codice che nessun test felice esercita; una costante di tolleranza calibrata sotto la `feastol` del solver, che SCIP avrebbe semplicemente assorbito; un campo del contratto wire letto in modo troncato; e un modello di soluzione costruito prima di decidere la forma, che esplodeva proprio sullo scenario il cui ottimo e non fare nulla. Tutti visibili solo a un controllo **dinamico** contro una verita indipendente. Da qui le regole: dove esiste un oracolo esaustivo, l'accordo con l'oracolo e un gate permanente e parametrizzato, mai uno script usa-e-getta; ogni percorso di `raise` va provato per il **tipo** di eccezione che dichiara, mai con `pytest.raises(Exception)`; e la verifica statica va trattata come pavimento, mai come prova.
 
+### Aggiornamento 2026-09-21 — lo stato vive nel README, non qui
+
+**Questa sezione 10 non è più una fonte di stato.** Le due tabelle sopra (`2026-09-11` e
+`2026-09-18`) restano come storico e vanno lette con la loro data. Lo stato corrente,
+rimisurato contro il codice e con evidenza per riga, è in
+[README.md § Stato esecutivo riconciliato](README.md).
+
+**Perché questa regola esiste.** Il 21/09 il coordinatore ha riportato al developer che `G3`
+era «non iniziato». Era **fatto**: backend nel target dal 10/09 (`d4b3deb2f`) e UI Asset
+committata sul ramo I. Anche `B1` risultava «bloccato in attesa di un export eToro reale»
+mentre il codice importava le fee dal 10/09 (`ebba209c5`).
+
+La causa non è la freschezza del dato, ed è il motivo per cui aggiornare le date non basta:
+
+> **La riga corretta c'era, in entrambe le tabelle, e diceva `I60 implementato e validato sul
+> branch I`.** Chi cercava `G3` non l'ha trovata, perché quel task ha due nomi e nessun
+> documento dichiarava che fossero lo stesso. *Un alias non dichiarato è un falso negativo
+> garantito per chiunque cerchi il nome che non è stato usato* — e a differenza di un dato
+> vecchio, non c'è data che lo segnali.
+
+Secondo difetto, indipendente dal primo: nel trasferimento l'etichetta è stata **degradata**.
+La fonte diceva `parziale` e `aperto`; il report diceva `non iniziato`. «Aperto» significa
+*non chiuso*, «non iniziato» significa *zero lavoro*: la qualificazione cade nel passaggio e
+resta l'affermazione più forte, che è anche quella falsa.
+
+Da qui le due regole per ogni tabella di stato di questa cartella:
+
+1. **Ogni riga porta l'evidenza** — SHA o `file:riga` — così è falsificabile in un comando
+   invece che da credere. Una riga senza evidenza scrive `NON VERIFICATO`.
+2. **Gli alias si dichiarano in testa al documento**, non si lasciano dedurre dal contesto.
+   Il glossario è nel README.
+
 ## 11. Gate, dipendenze e gestione dei conflitti
 
 | Gate | Da chiudere prima di | Esito richiesto |

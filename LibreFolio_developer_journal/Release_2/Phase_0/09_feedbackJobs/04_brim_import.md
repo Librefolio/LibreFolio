@@ -12,11 +12,22 @@ Skill di riferimento per chi esegue: `brim-plugin`.
 
 ---
 
-## 🔍 eToro — "Withdraw Fee" / "Conversion Fee" scartate invece di importate come FEE
+## 🔍 eToro — "Withdraw Fee" / "Conversion Fee" — ✅ RISOLTO NEL TARGET (10/09/2026)
+
+> ✅ **Stato al 21/09/2026: chiuso, nel target.** Il codice **non scarta più** le fee:
+> `broker_etoro.py:70` definisce
+> `FEE_TYPES = ("withdraw fee", "withdrawal conversion fee", "conversion fee")`, mentre
+> `SKIP_TYPES` contiene ora solo `overnight fee`, `overnight refund`, `sdrt`.
+> Commit `ebba209c5` *«feat(brim): refine CA and eToro imports»*. Il gate G-ETORO chiedeva un
+> export reale con una fee non-zero: **è arrivato**.
+>
+> Tutto ciò che segue è la **storia del problema**, conservata per il ragionamento sul doppio
+> conteggio. Non è più una descrizione del codice: la frase «il codice le mette tra i tipi
+> scartati» era vera fino al 09/09 e oggi è falsa.
 
 **Complessità**: S–M · **Tipo**: bug sospetto · **Origine**: verifica 18/07/2026 (bug BRIM FEE/TAX)
 
-### Contesto
+### Contesto (storico — superato)
 `backend/app/services/brim_providers/broker_etoro.py` — la docstring (riga ~20) dice
 *"Withdraw Fee / Conversion Fee → FEE"* ma il codice (righe 72-78, `SKIP_TYPES`) le mette tra
 i tipi **scartati a monte**: queste righe non diventano una transazione `FEE`.

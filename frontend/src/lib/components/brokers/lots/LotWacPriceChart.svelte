@@ -21,6 +21,7 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {translateOr} from '$lib/utils/core/translateOr';
     import {formatAxisDate} from '$lib/utils/core/formatAxisDate';
+    import {buildResponsiveXAxisPolicy} from '$lib/components/charts/responsiveXAxis';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {safeDecimal, safeNumber, safeScalar, safeString} from '$lib/types';
     import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
@@ -223,8 +224,19 @@
     let wrapperEl: HTMLDivElement | undefined = $state(undefined);
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | undefined = undefined;
+    let responsiveXAxisCompact = false;
     const resizeWatcher = createResizeWatcher(() => {
         chartInstance?.resize();
+        if (chartInstance) {
+            const policy = buildLotXAxisPolicy();
+            const wasCompact = responsiveXAxisCompact;
+            responsiveXAxisCompact = policy.compact;
+            if (policy.axisLabel) {
+                chartInstance.setOption({xAxis: {splitNumber: policy.splitNumber, axisLabel: policy.axisLabel}}, {lazyUpdate: true});
+            } else if (wasCompact) {
+                renderChart();
+            }
+        }
         scheduleResolutionSync();
     });
     let darkModeObserver: MutationObserver | null = null;
@@ -1471,8 +1483,10 @@
         const rawXBounds = getXAxisBounds();
         // Derive the multi-year flag from the *raw* bounds so the horizontal bubble padding below can't
         // nudge an edge across a year boundary and spuriously flip the axis to the year-labelled format.
-        const multiYearAxis = !!rawXBounds && new Date(rawXBounds.min).getFullYear() !== new Date(rawXBounds.max).getFullYear();
         const xAxisBounds = padXBoundsForBubbles(rawXBounds);
+        const xAxisPolicy = buildLotXAxisPolicy(rawXBounds);
+        responsiveXAxisCompact = xAxisPolicy.compact;
+        const multiYearAxis = !!rawXBounds && new Date(rawXBounds.min).getFullYear() !== new Date(rawXBounds.max).getFullYear();
         const autoYBounds = computeAutoYAxisBounds(displayMode === 'absolute' ? 'absolute' : 'percent');
         const yAxisMin = displayMode === 'percentage' ? (autoYBounds ? Math.min(0, autoYBounds.min) : (value: {min: number}) => Math.min(0, value.min)) : absYFromZero ? 0 : ((autoYBounds?.min ?? null) as unknown as number);
         const yAxisMax = displayMode === 'percentage' ? (autoYBounds ? Math.max(0, autoYBounds.max) : (value: {max: number}) => Math.max(0, value.max)) : ((autoYBounds?.max ?? null) as unknown as number);
@@ -1542,6 +1556,7 @@
             xAxis: {
                 type: 'time',
                 ...(xAxisBounds ? {min: xAxisBounds.min, max: xAxisBounds.max} : {}),
+                ...(xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber} : {}),
                 axisLine: {
                     lineStyle: {color: gridColors.gridColor},
                 },
@@ -1551,6 +1566,7 @@
                     color: gridColors.textColor,
                     hideOverlap: true,
                     formatter: (value: number) => formatAxisDate($currentLanguage, value, multiYearAxis),
+                    ...(xAxisPolicy.axisLabel ?? {}),
                 },
             },
             yAxis: {
@@ -1580,6 +1596,16 @@
             // x-axis in sync; setOption does not re-emit a 'dataZoom' event, so no ping-pong.
             dataZoom: applySharedZoomWindow(buildDataZoom([0])),
         };
+    }
+
+    function buildLotXAxisPolicy(range: {min: number | string; max: number | string} | null = getXAxisBounds()): ReturnType<typeof buildResponsiveXAxisPolicy> {
+        return buildResponsiveXAxisPolicy({
+            width: chartContainer?.clientWidth ?? 0,
+            values: range ? [range.min, range.max] : [],
+            locale: $currentLanguage,
+            axisType: 'time',
+            horizontalPadding: 42,
+        });
     }
 
     function applySharedZoomWindow<T extends {start?: number; end?: number}>(zooms: T[]): T[] {
@@ -1652,7 +1678,10 @@
             (option as {animation?: boolean}).animation = false;
             (option as {animationDurationUpdate?: number}).animationDurationUpdate = 0;
         }
-        chartInstance.setOption(option, CHART_SET_OPTION_OPTS);
+        chartInstance.setOption(option, {
+            ...CHART_SET_OPTION_OPTS,
+            replaceMerge: [...CHART_SET_OPTION_OPTS.replaceMerge, 'xAxis'],
+        });
         if (needsInitialLayoutStabilityPass) {
             needsInitialLayoutStabilityPass = false;
             scheduleFirstRenderStabilityFix(chartInstance, chartContainer);
