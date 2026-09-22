@@ -1185,6 +1185,13 @@
       "partialResult": "Questo segnale è disponibile solo parzialmente con i dati attuali.",
       "unavailable": "Questo segnale non può essere calcolato con i dati disponibili.",
       "partialContiguousSegment": "Segnale calcolato sul segmento contiguo completo {start}–{end}. Esclusi {excluded} punti caricati perché date o campi richiesti erano incompleti. Input completo: {available}/{requested} ({coverage}%, warm-up incluso). Sequenza massima mancante: {consecutive} punti."
+    },
+    "axes": {
+      "exchangeRate": "Asse del cambio ({pair})",
+      "percentage": "Asse delle percentuali",
+      "price": "Asse dei prezzi ({currency})",
+      "signal": "Asse {name}",
+      "volume": "Asse dei volumi"
     }
   },
   "common": {
@@ -1470,7 +1477,15 @@
     "yieldOnCostValue": "Rendimento sul costo",
     "yieldOnCostPeriod": "Periodo",
     "yieldOnCostFxRateDate": "tasso del",
-    "yieldOnCostNoIncomeTitle": "Nessun reddito registrato"
+    "yieldOnCostNoIncomeTitle": "Nessun reddito registrato",
+    "pnl": "P&L",
+    "pnlSubmodeLine": "Linea",
+    "pnlSubmodeIncome": "Proventi",
+    "pnlSubmodeCandles": "Candele",
+    "pnlCandlesHypothetical": "Sintetico — i massimi/minimi cross-asset sono ipotetici e non simultanei, non una serie intraday reale.",
+    "pnlCandlesHypotheticalShort": "Sintetico — i massimi/minimi cross-asset sono ipotetici e non simultanei",
+    "pnlAcqNewCapital": "Nuovo capitale",
+    "pnlAcqReinvested": "Reinvestito"
   },
   "dataQuality": {
     "headerInfoOnly": "Note sulla qualità dei dati",

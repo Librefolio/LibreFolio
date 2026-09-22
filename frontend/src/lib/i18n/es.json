@@ -1185,6 +1185,13 @@
       "partialResult": "Esta señal solo está disponible parcialmente con los datos actuales.",
       "unavailable": "Esta señal no se puede calcular con los datos disponibles.",
       "partialContiguousSegment": "Señal calculada sobre el segmento contiguo completo {start}–{end}. Se excluyeron {excluded} puntos cargados porque faltaban fechas o campos obligatorios. Entrada completa: {available}/{requested} ({coverage}%, calentamiento incluido). Racha máxima ausente: {consecutive} puntos."
+    },
+    "axes": {
+      "exchangeRate": "Eje del tipo de cambio ({pair})",
+      "percentage": "Eje de porcentajes",
+      "price": "Eje de precios ({currency})",
+      "signal": "Eje {name}",
+      "volume": "Eje de volúmenes"
     }
   },
   "common": {
@@ -1470,7 +1477,15 @@
     "yieldOnCostValue": "Rendimiento sobre coste",
     "yieldOnCostPeriod": "Periodo",
     "yieldOnCostFxRateDate": "tipo del",
-    "yieldOnCostNoIncomeTitle": "Sin ingresos registrados"
+    "yieldOnCostNoIncomeTitle": "Sin ingresos registrados",
+    "pnl": "P&L",
+    "pnlSubmodeLine": "Línea",
+    "pnlSubmodeIncome": "Ingresos",
+    "pnlSubmodeCandles": "Velas",
+    "pnlCandlesHypothetical": "Sintético — los máximos/mínimos entre activos son hipotéticos y no simultáneos, no una serie intradía real.",
+    "pnlCandlesHypotheticalShort": "Sintético — los máximos/mínimos entre activos son hipotéticos y no simultáneos",
+    "pnlAcqNewCapital": "Nuevo capital",
+    "pnlAcqReinvested": "Reinvertido"
   },
   "dataQuality": {
     "headerInfoOnly": "Nota de calidad de datos",

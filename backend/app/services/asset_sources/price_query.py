@@ -643,23 +643,20 @@ class PriceQueryOperations:
                 event_conversion_complete = not target or all(event.value.code == target for event in result.events)
                 if not currency_coherent:
                     currencies = ", ".join(sorted(price_currencies))
-                    result.errors.append("Technical signal computation skipped because the price " f"series contains mixed currencies: {currencies}")
-                neutral_prices = (
-                    [
-                        SignalPricePoint(
-                            date=point.date,
-                            open=point.open,
-                            high=point.high,
-                            low=point.low,
-                            close=point.close,
-                            volume=point.volume,
-                            backward_fill_info=point.backward_fill_info,
-                        )
-                        for point in result.prices
-                    ]
-                    if currency_coherent
-                    else []
-                )
+                    result.errors.append("Technical signal computation excluded unconverted price dates because the series contains mixed currencies: " f"{currencies}")
+                signal_price_points = result.prices if currency_coherent else [point for point in result.prices if target and point.currency == target]
+                neutral_prices = [
+                    SignalPricePoint(
+                        date=point.date,
+                        open=point.open,
+                        high=point.high,
+                        low=point.low,
+                        close=point.close,
+                        volume=point.volume,
+                        backward_fill_info=point.backward_fill_info,
+                    )
+                    for point in signal_price_points
+                ]
                 neutral_events = (
                     [
                         SignalEventPoint(

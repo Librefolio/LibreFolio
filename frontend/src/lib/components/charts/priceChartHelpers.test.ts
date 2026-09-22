@@ -12,8 +12,10 @@
  */
 import {describe, expect, it} from 'vitest';
 
+import {backendSignalSchemas} from '$lib/charts/signals/backendTypes';
 import type {LineDataPoint} from './LineChart.svelte';
 import type {EventMarker} from './PriceChartFull.svelte';
+import {CALENDAR_RETURN_PRESETS, DEFAULT_CALENDAR_RETURN_WINDOW, calendarReturnRangeDays, calendarReturnWindowDays, sanitizeCalendarReturnWindow, type CalendarReturnWindowSelection, type CalendarReturnWindowUnit} from './calendarReturnWindow';
 import {
     buildDeltaHtml,
     buildEventScatterGroups,
@@ -21,6 +23,8 @@ import {
     computeGhostSeries,
     computeZoomWindow,
     countBuckets,
+    extractCalendarReturnView,
+    extractCalendarReturnViewsByAsset,
     formatMonthLabel,
     formatTruncatedGhostLabel,
     getBucketInfo,
@@ -43,6 +47,658 @@ function pt(date: string, value: number, overrides: Partial<LineDataPoint> = {})
 function dailyRun(dates: string[]): LineDataPoint[] {
     return dates.map((date, index) => pt(date, index + 1));
 }
+
+const CALENDAR_INSTANCE_ID = 'asset-calendar-return';
+const CALENDAR_SIGNAL_CODE = 'ASSET_CALENDAR_ROLLING_RETURN';
+
+function calendarProvenance(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+        status: 'available',
+        reference_target_date: '2026-01-02',
+        current_price_date: '2026-02-01',
+        current_price_days_back: 0,
+        reference_price_date: '2026-01-02',
+        reference_price_days_back: 0,
+        current_fx_date: null,
+        current_fx_days_back: null,
+        reference_fx_date: null,
+        reference_fx_days_back: null,
+        ...overrides,
+    };
+}
+
+function calendarPoint(date: string, value: number | null, provenance: Record<string, unknown> = {}): Record<string, unknown> {
+    return {date, value, provenance: calendarProvenance(provenance)};
+}
+
+function nestedCalendarResult(points: unknown[], overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+        instance_id: CALENDAR_INSTANCE_ID,
+        signal_code: CALENDAR_SIGNAL_CODE,
+        status: 'ok',
+        series: [{key: 'calendar_return', points}],
+        ...overrides,
+    };
+}
+
+function calendarInputCoverage(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+        requested_points: 4,
+        available_points: 0,
+        contiguous_points: 0,
+        observed_points: 0,
+        backfilled_points: 0,
+        missing_points: 4,
+        max_consecutive_missing_points: 4,
+        internal_gap_count: 0,
+        coverage_ratio: 0,
+        field_coverage: {close: 0},
+        ...overrides,
+    };
+}
+
+function typedUnavailableCalendarResult(message: string): Record<string, unknown> {
+    return nestedCalendarResult([], {
+        status: 'unavailable',
+        series: [],
+        availability: {
+            domain_compatible: true,
+            can_compute: false,
+            input_coverage: calendarInputCoverage(),
+            required_points: 7,
+            warmup_complete: true,
+            partial_coverage_used: false,
+            reason_code: 'undefined_metric',
+        },
+        warmup: {
+            requirement: {
+                minimum_points: 1,
+                stabilization_points: 6,
+                total_points: 7,
+            },
+            loaded_points: 11,
+            used_points: 7,
+            complete: true,
+        },
+        warnings: [
+            {
+                code: 'undefined_metric_window',
+                message,
+                details: {
+                    unavailable_points: 4,
+                    reasons: {invalid_current_price: 4},
+                },
+            },
+        ],
+        error: null,
+    });
+}
+
+function typedFailedCalendarResult(message: string): Record<string, unknown> {
+    return nestedCalendarResult([], {
+        status: 'failed',
+        series: [],
+        availability: {
+            domain_compatible: true,
+            can_compute: false,
+            input_coverage: calendarInputCoverage({
+                requested_points: 3,
+                missing_points: 3,
+                max_consecutive_missing_points: 3,
+            }),
+            required_points: 7,
+            warmup_complete: false,
+            partial_coverage_used: false,
+            reason_code: null,
+        },
+        warmup: {
+            requirement: {
+                minimum_points: 1,
+                stabilization_points: 6,
+                total_points: 7,
+            },
+            loaded_points: 3,
+            used_points: 0,
+            complete: false,
+        },
+        warnings: [],
+        error: {
+            code: 'compute_error',
+            message,
+            details: {stage: 'calendar_return'},
+            retryable: false,
+        },
+    });
+}
+
+describe('calendarReturnWindow', () => {
+    it.each([
+        ['1w', 7],
+        ['1m', 30],
+        ['3m', 90],
+        ['1y', 365],
+    ] as const)('maps the %s preset to exactly %i calendar days', (preset, expectedDays) => {
+        const selection: CalendarReturnWindowSelection = {
+            ...DEFAULT_CALENDAR_RETURN_WINDOW,
+            kind: 'preset',
+            preset,
+        };
+
+        expect(calendarReturnWindowDays(selection)).toBe(expectedDays);
+        expect(CALENDAR_RETURN_PRESETS.find((candidate) => candidate.key === preset)?.windowDays).toBe(expectedDays);
+    });
+
+    it('measures availability by elapsed end-start days rather than an inclusive date count', () => {
+        expect(calendarReturnRangeDays('2026-01-01', '2026-01-08')).toBe(7);
+        expect(calendarReturnRangeDays('2026-01-08', '2026-01-08')).toBe(0);
+    });
+
+    it('keeps every preset as an exact positive request window even when it exceeds the visible span', () => {
+        const span = calendarReturnRangeDays('2026-01-01', '2026-03-31');
+
+        expect(span).toBe(89);
+        expect(CALENDAR_RETURN_PRESETS.map(({key, windowDays}) => [key, windowDays])).toEqual([
+            ['1w', 7],
+            ['1m', 30],
+            ['3m', 90],
+            ['1y', 365],
+        ]);
+        expect(CALENDAR_RETURN_PRESETS.every(({windowDays}) => Number.isSafeInteger(windowDays) && windowDays > 0)).toBe(true);
+        expect(CALENDAR_RETURN_PRESETS.find(({key}) => key === '1y')?.windowDays).toBeGreaterThan(span);
+    });
+
+    it.each([
+        ['weeks', 7],
+        ['months', 30],
+        ['years', 365],
+    ] as const)('converts a custom %s amount to an exact positive request window', (customUnit, multiplier) => {
+        const selection: CalendarReturnWindowSelection = {
+            ...DEFAULT_CALENDAR_RETURN_WINDOW,
+            kind: 'custom',
+            customAmount: 3,
+            customUnit,
+        };
+        const convertedDays = 3 * multiplier;
+
+        expect(calendarReturnWindowDays(selection)).toBe(convertedDays);
+    });
+
+    it('starts on 1M while remembering an independently valid 3Y custom request', () => {
+        expect(DEFAULT_CALENDAR_RETURN_WINDOW).toEqual({
+            kind: 'preset',
+            preset: '1m',
+            customAmount: 3,
+            customUnit: 'years',
+        });
+        expect(calendarReturnWindowDays(DEFAULT_CALENDAR_RETURN_WINDOW)).toBe(30);
+        const rememberedCustom: CalendarReturnWindowSelection = {
+            ...DEFAULT_CALENDAR_RETURN_WINDOW,
+            kind: 'custom',
+        };
+        expect(calendarReturnWindowDays(rememberedCustom)).toBe(1095);
+    });
+
+    it('keeps a positive custom N when the visible span is shorter than N', () => {
+        const selection: CalendarReturnWindowSelection = {
+            ...DEFAULT_CALENDAR_RETURN_WINDOW,
+            kind: 'custom',
+            customAmount: 2,
+            customUnit: 'months',
+        };
+        const span = calendarReturnRangeDays('2026-01-01', '2026-03-01');
+        const requestWindowDays = calendarReturnWindowDays(selection);
+
+        expect(calendarReturnWindowDays(selection)).toBe(60);
+        expect(span).toBe(59);
+        expect(requestWindowDays).toBe(60);
+        expect(requestWindowDays).toBeGreaterThan(span);
+    });
+
+    it('does not rewrite a valid stored selection after the visible range shrinks', () => {
+        const previousSelection: CalendarReturnWindowSelection = {
+            kind: 'custom',
+            preset: '1y',
+            customAmount: 3,
+            customUnit: 'months',
+        };
+        const shrunkenSpan = calendarReturnRangeDays('2026-01-01', '2026-02-15');
+
+        const persistedSelection = sanitizeCalendarReturnWindow(previousSelection);
+        expect(shrunkenSpan).toBe(45);
+        expect(calendarReturnWindowDays(persistedSelection)).toBe(90);
+        expect(calendarReturnWindowDays(persistedSelection)).toBeGreaterThan(shrunkenSpan);
+        expect(persistedSelection).toEqual({
+            kind: 'custom',
+            preset: '1y',
+            customAmount: 3,
+            customUnit: 'months',
+        });
+    });
+
+    it('keeps Calendar mode requestable when the elapsed span is under seven days', () => {
+        const span = calendarReturnRangeDays('2026-02-01', '2026-02-07');
+        const requestedWindow = calendarReturnWindowDays({
+            ...DEFAULT_CALENDAR_RETURN_WINDOW,
+            kind: 'preset',
+            preset: '1w',
+        });
+
+        expect(span).toBe(6);
+        expect(requestedWindow).toBe(7);
+        expect(requestedWindow).toBeGreaterThan(span);
+    });
+
+    it('preserves a valid stored selection and its inactive custom memory', () => {
+        expect(
+            sanitizeCalendarReturnWindow({
+                kind: 'preset',
+                preset: '1y',
+                customAmount: 8,
+                customUnit: 'months',
+            }),
+        ).toEqual({
+            kind: 'preset',
+            preset: '1y',
+            customAmount: 8,
+            customUnit: 'months',
+        });
+    });
+
+    it('sanitizes malformed fields independently to their defaults', () => {
+        expect(
+            sanitizeCalendarReturnWindow({
+                kind: 'custom',
+                preset: '3m',
+                customAmount: 0,
+                customUnit: 'weeks',
+            }),
+        ).toEqual({
+            kind: 'custom',
+            preset: '3m',
+            customAmount: 3,
+            customUnit: 'weeks',
+        });
+        expect(
+            sanitizeCalendarReturnWindow({
+                kind: 'unexpected',
+                preset: '2y',
+                customAmount: 8,
+                customUnit: 'days',
+            }),
+        ).toEqual({
+            kind: 'preset',
+            preset: '1m',
+            customAmount: 8,
+            customUnit: 'years',
+        });
+        expect(sanitizeCalendarReturnWindow(null)).toEqual(DEFAULT_CALENDAR_RETURN_WINDOW);
+        expect(sanitizeCalendarReturnWindow([])).toEqual(DEFAULT_CALENDAR_RETURN_WINDOW);
+    });
+
+    it('falls back to the complete default when a stored custom product overflows', () => {
+        expect(
+            sanitizeCalendarReturnWindow({
+                kind: 'custom',
+                preset: '1y',
+                customAmount: Number.MAX_SAFE_INTEGER,
+                customUnit: 'years',
+            }),
+        ).toEqual(DEFAULT_CALENDAR_RETURN_WINDOW);
+    });
+
+    it.each([
+        ['zero', 0, 'weeks'],
+        ['negative', -1, 'months'],
+        ['fractional', 1.5, 'years'],
+        ['not finite', Number.POSITIVE_INFINITY, 'weeks'],
+        ['unsafe amount', Number.MAX_SAFE_INTEGER + 1, 'months'],
+        ['safe amount with unsafe product', Math.floor(Number.MAX_SAFE_INTEGER / 365) + 1, 'years'],
+    ] as const)('returns no request value for a %s custom amount', (_label, customAmount, customUnit) => {
+        const selection: CalendarReturnWindowSelection = {
+            ...DEFAULT_CALENDAR_RETURN_WINDOW,
+            kind: 'custom',
+            customAmount,
+            customUnit: customUnit as CalendarReturnWindowUnit,
+        };
+
+        expect(calendarReturnWindowDays(selection)).toBeNull();
+    });
+
+    it('returns no request value for unknown preset and unit variants', () => {
+        const invalidPreset = {
+            ...DEFAULT_CALENDAR_RETURN_WINDOW,
+            kind: 'preset',
+            preset: '2y',
+        } as unknown as CalendarReturnWindowSelection;
+        const invalidUnit = {
+            ...DEFAULT_CALENDAR_RETURN_WINDOW,
+            kind: 'custom',
+            customUnit: 'days',
+        } as unknown as CalendarReturnWindowSelection;
+
+        expect(calendarReturnWindowDays(invalidPreset)).toBeNull();
+        expect(calendarReturnWindowDays(invalidUnit)).toBeNull();
+    });
+});
+
+describe('extractCalendarReturnView', () => {
+    it('maps a runtime-flat ready result without rebasing its percentage values', () => {
+        const view = extractCalendarReturnView(
+            [
+                {
+                    instance_id: CALENDAR_INSTANCE_ID,
+                    signal_code: CALENDAR_SIGNAL_CODE,
+                    status: 'ok',
+                    key: 'calendar_return',
+                    points: [calendarPoint('2026-02-01', 12.5)],
+                },
+            ],
+            CALENDAR_INSTANCE_ID,
+        );
+
+        expect(view.state).toBe('ready');
+        expect(view.points.find((point) => point.date === '2026-02-01')).toMatchObject({
+            date: '2026-02-01',
+            value: 12.5,
+        });
+        expect(view.contextByDate.has('2026-02-01')).toBe(true);
+    });
+
+    it('accepts generated one-level series/points nesting and selects the requested instance, code, and series key', () => {
+        const requested = nestedCalendarResult([calendarPoint('2026-02-02', -3.75)], {
+            series: [
+                {key: 'other_series', points: [calendarPoint('2026-02-02', 999)]},
+                {key: 'calendar_return', points: [calendarPoint('2026-02-02', -3.75)]},
+                {key: 'another_series', points: [calendarPoint('2026-02-02', -999)]},
+            ],
+        });
+        const view = extractCalendarReturnView([{...requested, instance_id: 'another-instance'}, requested, {...requested, signal_code: 'RISK_ROLLING_RETURN'}], CALENDAR_INSTANCE_ID);
+
+        expect(view.state).toBe('ready');
+        expect(view.points.find((point) => point.date === '2026-02-02')).toMatchObject({
+            date: '2026-02-02',
+            value: -3.75,
+        });
+        expect(view.points.some((point) => point.value === 999)).toBe(false);
+        expect(view.points.some((point) => point.value === -999)).toBe(false);
+    });
+
+    it('preserves every date and turns null values into explicit missing chart gaps', () => {
+        const view = extractCalendarReturnView(
+            [
+                nestedCalendarResult([
+                    calendarPoint('2026-02-01', null, {
+                        status: 'missing_reference',
+                        reference_target_date: '2026-01-02',
+                        reference_price_date: null,
+                        reference_price_days_back: null,
+                    }),
+                    calendarPoint('2026-02-02', 1.25, {
+                        reference_target_date: '2026-01-03',
+                        current_price_date: '2026-02-02',
+                        reference_price_date: '2026-01-03',
+                    }),
+                ]),
+            ],
+            CALENDAR_INSTANCE_ID,
+        );
+
+        expect(view.points.map((point) => point.date)).toEqual(['2026-02-01', '2026-02-02']);
+        expect(view.points.find((point) => point.date === '2026-02-01')).toMatchObject({
+            value: 0,
+            missing: true,
+        });
+        expect(view.points.find((point) => point.date === '2026-02-02')).toMatchObject({
+            value: 1.25,
+        });
+        expect(view.points.find((point) => point.date === '2026-02-02')?.missing).not.toBe(true);
+    });
+
+    it('uses maximum price/FX staleness overall and keeps the FX-only maximum separate', () => {
+        const view = extractCalendarReturnView(
+            [
+                nestedCalendarResult([
+                    calendarPoint('2026-02-10', 4.5, {
+                        reference_target_date: '2026-01-11',
+                        current_price_date: '2026-02-08',
+                        current_price_days_back: 2,
+                        reference_price_date: '2026-01-05',
+                        reference_price_days_back: 6,
+                        current_fx_date: '2026-02-06',
+                        current_fx_days_back: 4,
+                        reference_fx_date: '2026-01-02',
+                        reference_fx_days_back: 9,
+                    }),
+                ]),
+            ],
+            CALENDAR_INSTANCE_ID,
+        );
+
+        expect(view.points.find((point) => point.date === '2026-02-10')).toMatchObject({
+            staleDays: 9,
+            fxStaleDays: 9,
+        });
+        expect(view.contextByDate.get('2026-02-10')).toMatchObject({
+            referenceTargetDate: '2026-01-11',
+            currentPriceDate: '2026-02-08',
+            referencePriceDate: '2026-01-05',
+            currentFxDate: '2026-02-06',
+            referenceFxDate: '2026-01-02',
+        });
+    });
+
+    it('keeps usable points and reports a partial backend result as partial', () => {
+        const view = extractCalendarReturnView([nestedCalendarResult([calendarPoint('2026-02-01', 2.5)], {status: 'partial'})], CALENDAR_INSTANCE_ID);
+
+        expect(view.state).toBe('partial');
+        expect(view.points.find((point) => point.date === '2026-02-01')).toMatchObject({
+            value: 2.5,
+        });
+    });
+
+    it('preserves an unavailable reason and warning detail without fabricating primary values', () => {
+        const warning = 'Every selected Calendar output is undefined.';
+        const typedUnavailable = typedUnavailableCalendarResult(warning);
+        expect(backendSignalSchemas.result.safeParse(typedUnavailable).success).toBe(true);
+        const view = extractCalendarReturnView([typedUnavailable], CALENDAR_INSTANCE_ID);
+
+        expect(view).toMatchObject({
+            state: 'unavailable',
+            points: [],
+            contextByDate: new Map(),
+            problem: {
+                code: 'undefined_metric',
+                status: 'unavailable',
+                message: warning,
+                requestedPoints: 4,
+                availablePoints: 0,
+                minimumPoints: 1,
+                warmupUsedPoints: 7,
+                warmupRequiredPoints: 7,
+                missingPoints: 4,
+                maxConsecutiveMissingPoints: 4,
+                coverageRatio: 0,
+                coveragePercent: 0,
+            },
+        });
+    });
+
+    it('preserves a failed result and its typed backend error detail', () => {
+        const detail = 'Calendar calculation rejected for the selected fingerprint.';
+        const view = extractCalendarReturnView([typedFailedCalendarResult(detail)], CALENDAR_INSTANCE_ID);
+
+        expect(view).toMatchObject({
+            state: 'error',
+            points: [],
+            contextByDate: new Map(),
+            problem: {
+                code: 'calculation_failed',
+                status: 'failed',
+                message: detail,
+                requestedPoints: 3,
+                availablePoints: 0,
+                minimumPoints: 1,
+                warmupUsedPoints: 0,
+                warmupRequiredPoints: 7,
+                missingPoints: 3,
+                maxConsecutiveMissingPoints: 3,
+                coverageRatio: 0,
+                coveragePercent: null,
+            },
+        });
+    });
+
+    it.each([
+        {label: 'null results', rawResults: null},
+        {
+            label: 'missing calendar series',
+            rawResults: [nestedCalendarResult([], {series: [{key: 'another_series', points: [calendarPoint('2026-02-01', 1)]}]})],
+        },
+        {
+            label: 'non-array points',
+            rawResults: [nestedCalendarResult([], {series: [{key: 'calendar_return', points: {date: '2026-02-01', value: 1}}]})],
+        },
+    ])('returns error for malformed $label payloads', ({rawResults}) => {
+        expect(extractCalendarReturnView(rawResults, CALENDAR_INSTANCE_ID)).toEqual({
+            state: 'error',
+            points: [],
+            contextByDate: new Map(),
+            problem: null,
+        });
+    });
+});
+
+describe('extractCalendarReturnViewsByAsset', () => {
+    it('rejects malformed string unavailable by owned asset id', () => {
+        const malformedUnavailable = nestedCalendarResult([], {status: 'unavailable'});
+        expect(backendSignalSchemas.result.safeParse(malformedUnavailable).success).toBe(false);
+
+        const views = extractCalendarReturnViewsByAsset([{asset_id: 105, signals: [malformedUnavailable]}], [105], CALENDAR_INSTANCE_ID);
+        expect(views.get(105)).toEqual({
+            state: 'error',
+            points: [],
+            contextByDate: new Map(),
+            problem: null,
+        });
+    });
+
+    it('keeps independently sparse I60G Calendar subsets joined by asset id', () => {
+        const views = extractCalendarReturnViewsByAsset(
+            [
+                {
+                    asset_id: 104,
+                    signals: [typedUnavailableCalendarResult('Every selected I60G Calendar output is undefined.')],
+                },
+                {
+                    asset_id: 102,
+                    signals: [
+                        nestedCalendarResult(
+                            [
+                                calendarPoint('2026-04-13', 32, {
+                                    reference_target_date: '2026-04-06',
+                                    current_price_date: '2026-04-13',
+                                    reference_price_date: '2026-04-06',
+                                }),
+                                calendarPoint('2026-04-11', 31, {
+                                    reference_target_date: '2026-04-04',
+                                    current_price_date: '2026-04-11',
+                                    reference_price_date: '2026-04-04',
+                                }),
+                            ],
+                            {status: 'partial'},
+                        ),
+                    ],
+                },
+                {
+                    asset_id: 101,
+                    signals: [
+                        nestedCalendarResult(
+                            [
+                                calendarPoint('2026-04-05', 7.4, {
+                                    reference_target_date: '2026-03-29',
+                                    current_price_date: '2026-04-05',
+                                    reference_price_date: '2026-03-29',
+                                }),
+                                calendarPoint('2026-04-01', 7, {
+                                    reference_target_date: '2026-03-25',
+                                    current_price_date: '2026-04-01',
+                                    reference_price_date: '2026-03-25',
+                                }),
+                            ],
+                            {status: 'partial'},
+                        ),
+                    ],
+                },
+                {
+                    asset_id: 103,
+                    signals: [
+                        nestedCalendarResult(
+                            [
+                                calendarPoint('2026-04-01', 21, {
+                                    reference_target_date: '2026-03-25',
+                                    current_price_date: '2026-04-01',
+                                    reference_price_date: '2026-03-25',
+                                    current_fx_date: '2026-04-01',
+                                    current_fx_days_back: 0,
+                                    reference_fx_date: '2026-03-25',
+                                    reference_fx_days_back: 0,
+                                }),
+                                calendarPoint('2026-04-10', null, {
+                                    status: 'missing_reference',
+                                    reference_target_date: '2026-04-03',
+                                    current_price_date: '2026-04-10',
+                                    reference_price_date: '2026-04-03',
+                                    reference_price_days_back: 0,
+                                    current_fx_date: '2026-04-10',
+                                    current_fx_days_back: 0,
+                                    reference_fx_date: null,
+                                    reference_fx_days_back: null,
+                                }),
+                            ],
+                            {status: 'partial'},
+                        ),
+                    ],
+                },
+            ],
+            [101, 102, 103, 104],
+            CALENDAR_INSTANCE_ID,
+        );
+
+        expect(views.get(101)?.state).toBe('partial');
+        expect(views.get(101)?.points.map((point) => point.date)).toEqual(['2026-04-01', '2026-04-05']);
+        expect(views.get(101)?.contextByDate.get('2026-04-01')).toMatchObject({
+            referenceTargetDate: '2026-03-25',
+            referencePriceDate: '2026-03-25',
+        });
+
+        expect(views.get(102)?.state).toBe('partial');
+        expect(views.get(102)?.points.map((point) => point.date)).toEqual(['2026-04-11', '2026-04-13']);
+
+        expect(views.get(103)?.state).toBe('partial');
+        expect(views.get(103)?.points.map((point) => point.date)).toEqual(['2026-04-01', '2026-04-10']);
+        expect(views.get(103)?.points.find((point) => point.date === '2026-04-10')).toMatchObject({
+            value: 0,
+            missing: true,
+        });
+        expect(views.get(103)?.contextByDate.get('2026-04-10')).toMatchObject({
+            status: 'missing_reference',
+            referenceTargetDate: '2026-04-03',
+            referencePriceDate: '2026-04-03',
+            currentFxDate: '2026-04-10',
+            referenceFxDate: null,
+        });
+
+        expect(views.get(104)).toMatchObject({
+            state: 'unavailable',
+            points: [],
+            contextByDate: new Map(),
+            problem: {
+                code: 'undefined_metric',
+                status: 'unavailable',
+            },
+        });
+    });
+});
 
 describe('formatMonthLabel', () => {
     it('formats a mid-month date as "Month YYYY" in the given locale', () => {

@@ -25,8 +25,11 @@
     import {signalLabelToHtml, type SignalLabelInfo} from '$lib/charts/signalLabel';
     import {truncateName} from '$lib/utils/text';
     import {clearTimer} from '$lib/utils/core/clearTimer';
+    import type {AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {ChartLine, ChartCandlestick} from 'lucide-svelte';
     import {aggregateLineSeries, aggregateOHLCV, cascadeResolution, chooseInitialResolution, downsampleRenderedSignal, type ChartResolution} from './timeSeriesAggregation';
+    import {currentLanguage} from '$lib/stores/app/language';
+    import {buildResponsiveXAxisPolicy} from './responsiveXAxis';
     import {
         buildDeltaHtml,
         buildEventScatterGroups,
@@ -44,6 +47,7 @@
         toAbsoluteValue,
         toDisplaySeries,
         type BucketInfo,
+        type CalendarReturnPointContext,
         type LogicalVisibleRange,
     } from './priceChartHelpers';
 
@@ -105,6 +109,8 @@
         yAxisMode?: 'auto' | 'include0' | 'custom';
         yAxisMin?: number;
         yAxisMax?: number;
+        /** Stable semantic settings for active non-primary axes. */
+        secondaryAxisScales?: Record<string, AxisScaleSettings>;
         /** Measure mode: enables click-to-place measurement points */
         measureMode?: boolean;
         onMeasureClick?: (date: string, value: number) => void;
@@ -144,6 +150,14 @@
         mainCurrencyFlag?: string;
         /** Disable the candlestick toggle (e.g. for FX charts without OHLCV data) */
         disableCandlestick?: boolean;
+        /** Unit of already-normalized primary data. Percentage data is never rebased. */
+        valueUnit?: 'price' | 'percentage';
+        /** Hide the Abs/% control while the parent owns a non-price primary mode. */
+        hideViewModeToggle?: boolean;
+        /** Show the main-series delta from the first visible point in the tooltip. */
+        showMainDelta?: boolean;
+        /** Optional resolved provenance for the primary point shown in the tooltip. */
+        mainPointContext?: ReadonlyMap<string, CalendarReturnPointContext>;
         /** Callback when chart type changes (for external state sync) */
         onChartTypeChange?: (type: ChartType) => void;
         /** Callback when view mode changes (for parent-owned signal/measure state) */
@@ -166,6 +180,7 @@
         yAxisMode = 'auto',
         yAxisMin,
         yAxisMax,
+        secondaryAxisScales = {},
         measureMode = false,
         onMeasureClick,
         onMeasureHover,
@@ -186,6 +201,10 @@
         mainCurrency: mainCurrencyProp,
         mainCurrencyFlag: mainCurrencyFlagProp,
         disableCandlestick = false,
+        valueUnit = 'price',
+        hideViewModeToggle = false,
+        showMainDelta = true,
+        mainPointContext,
         onChartTypeChange: onChartTypeChangeProp,
         onViewModeChange: onViewModeChangeProp,
     }: Props = $props();
@@ -209,6 +228,8 @@
     let lastRawDataRef: LineDataPoint[] | null = null;
     let lastDisplayDataRef: LineDataPoint[] | null = null;
     let lastRenderedResolution: ChartResolution | null = null;
+    let lastRenderedDates: string[] = [];
+    let responsiveXAxisCompact = false;
 
     $effect(() => {
         chartType = externalChartType ?? initialChartType;
@@ -221,7 +242,7 @@
     // Derived data
     // =========================================================================
 
-    let displayData = $derived(toDisplaySeries(data, viewMode));
+    let displayData = $derived(valueUnit === 'percentage' ? data : toDisplaySeries(data, viewMode));
 
     // =========================================================================
     // Lifecycle
@@ -271,11 +292,13 @@
             void yAxisMode;
             void yAxisMin;
             void yAxisMax;
+            void secondaryAxisScales;
             void mainSeriesLabel;
             void eventMarkers;
             void overlaySignalInfoMap;
             void mainIconUrl;
             void mainAssetType;
+            void $currentLanguage;
             tick().then(renderChart);
         }
     });
@@ -423,6 +446,21 @@
                 if (chartOptionSet) {
                     try {
                         chartInstance?.resize();
+                        if (chartInstance && lastRenderedDates.length > 0) {
+                            const policy = buildResponsiveXAxisPolicy({
+                                width: chartContainer?.clientWidth ?? 0,
+                                values: lastRenderedDates,
+                                locale: $currentLanguage,
+                                axisType: 'category',
+                            });
+                            const wasCompact = responsiveXAxisCompact;
+                            responsiveXAxisCompact = policy.compact;
+                            if (policy.axisLabel) {
+                                chartInstance.setOption({xAxis: {axisLabel: policy.axisLabel}}, {lazyUpdate: true});
+                            } else if (wasCompact) {
+                                renderChart();
+                            }
+                        }
                         if (chartInstance) updateArrowRotations(chartInstance);
                         // Bugfix: resizing the container (e.g. rotating a device, or
                         // shrinking a browser window to a narrow/mobile width) changes
@@ -642,7 +680,7 @@
         }
 
         const isDark = document.documentElement.classList.contains('dark');
-        const isPercentage = viewMode === 'percentage';
+        const isPercentage = valueUnit === 'percentage' || viewMode === 'percentage';
         const baseColor = isDark ? COLORS.lineDark : COLORS.lineLight;
         const greenColor = isDark ? COLORS.greenDark : COLORS.greenLight;
         const redColor = isDark ? COLORS.redDark : COLORS.redLight;
@@ -659,17 +697,18 @@
 
         const {lineData: resolvedLineData} = getResolvedSeries(activeResolution);
         const dates = resolvedLineData.map((point) => point.date);
+        lastRenderedDates = dates;
         const bucketInfoByDate = new Map(dates.map((date, index) => [date, getBucketInfo(resolvedLineData[index], activeResolution)]));
         const useBaselineColoring = colorByBaseline;
         const baselineValue = isPercentage ? 0 : (resolvedLineData[0]?.value ?? 0);
         const staleDaysArr = resolvedLineData.map((point) => point.staleDays ?? 0);
         const mainSeriesName = mainSeriesLabel || currency || 'Value';
         const series: any[] = [];
-        const values = resolvedLineData.map((point) => point.value);
+        const values = resolvedLineData.map((point) => (point.missing ? null : point.value));
         const mainSeriesList = buildMainSeries(values, staleDaysArr, baseColor, greenColor, redColor, isDark, areaFill, 2, mainSeriesName, useBaselineColoring, baselineValue, showGradient);
         series.push(...mainSeriesList);
 
-        const ghostSeriesData = computeGhostSeries(data, isPercentage, activeResolution, mainSeriesLabel);
+        const ghostSeriesData = valueUnit === 'price' ? computeGhostSeries(data, isPercentage, activeResolution, mainSeriesLabel) : null;
         const hasOriginalValues = ghostSeriesData !== null;
         const ghostLabel = ghostSeriesData?.label ?? '';
         if (ghostSeriesData) {
@@ -829,7 +868,7 @@
             }
         }
 
-        const {axes: secondaryAxes, extraAxesCount} = buildSecondaryYAxes(resolvedOverlaySignals, isDark, 0);
+        const {axes: secondaryAxes, extraAxesCount} = buildSecondaryYAxes(resolvedOverlaySignals, isDark, 0, true, secondaryAxisScales);
         const colors = getChartColors(isDark);
         const staleLookup = new Map<string, number>();
         const fxStaleLookup = new Map<string, number>();
@@ -838,6 +877,13 @@
             if (point.fxStaleDays && point.fxStaleDays > 0) fxStaleLookup.set(point.date, point.fxStaleDays);
         }
         const zoomWindow = computeZoomWindow(resolvedLineData, activeResolution, logicalRange);
+        const xAxisPolicy = buildResponsiveXAxisPolicy({
+            width: rect.width,
+            values: dates,
+            locale: $currentLanguage,
+            axisType: 'category',
+        });
+        responsiveXAxisCompact = xAxisPolicy.compact;
 
         const option: echarts.EChartsOption = {
             animation: false,
@@ -848,7 +894,11 @@
                     data: dates,
                     gridIndex: 0,
                     axisLine: {lineStyle: {color: isDark ? '#475569' : '#d1d5db'}},
-                    axisLabel: {color: isDark ? '#94a3b8' : '#6b7280', fontSize: 14},
+                    axisLabel: {
+                        color: isDark ? '#94a3b8' : '#6b7280',
+                        fontSize: 14,
+                        ...(xAxisPolicy.axisLabel ?? {}),
+                    },
                     splitLine: {show: false},
                 },
             ],
@@ -883,7 +933,7 @@
                         }
                     }
                     const shownNames = new Set<string>();
-                    const firstValue = resolvedLineData.length > 0 ? resolvedLineData[0].value : null;
+                    const firstValue = resolvedLineData.find((point) => !point.missing)?.value ?? null;
                     const conversionActive = hasOriginalValues && displayCurrencyProp && displayCurrencyFlag;
                     for (const p of items) {
                         if (p.seriesName === 'Pending' || p.seriesName === '__baseline__' || p.seriesName === '__overview__' || p.seriesType === 'scatter' || String(p.seriesName).startsWith('Events: ')) continue;
@@ -943,6 +993,19 @@
                             }
                         }
                         let rowHtml = `${labelHtml}: ${Number(value).toFixed(4)}${valueSuffix}${axisNote}`;
+                        if (p.seriesName === mainSeriesName) {
+                            const context = mainPointContext?.get(date);
+                            if (context) {
+                                const referenceObservation = context.referencePriceDate && context.referencePriceDate !== context.referenceTargetDate ? ` · ${$t('chart.tooltip.valueAt', {values: {date: context.referencePriceDate}})}` : '';
+                                rowHtml += `<br/><span style="font-size:10px;color:#94a3b8">↩ ${context.referenceTargetDate}${referenceObservation}</span>`;
+                                if (context.currentPriceDate !== date) {
+                                    rowHtml += `<br/><span style="font-size:10px;color:#94a3b8">📅 ${$t('chart.tooltip.valueAt', {values: {date: context.currentPriceDate}})}</span>`;
+                                }
+                                if (context.currentFxDate || context.referenceFxDate) {
+                                    rowHtml += `<br/><span style="font-size:10px;color:#94a3b8">💱 ${context.currentFxDate ?? '—'} / ${context.referenceFxDate ?? '—'}</span>`;
+                                }
+                            }
+                        }
                         const representativePoint = overlayPointMeta.get(`${p.seriesName}|${date}`);
                         if (representativePoint?.representativeDate && representativePoint.representativeDate !== date) {
                             rowHtml += ` <span style="font-size:10px;color:#94a3b8">(${$t('chart.tooltip.valueAt', {values: {date: representativePoint.representativeDate}})})</span>`;
@@ -952,7 +1015,7 @@
                         }
                         html += `<br/>${rowHtml}`;
                         // Show delta from first visible point for the main axis (yAxisIndex 0)
-                        if (axisIdx === 0 && firstValue !== null && !isGhost) {
+                        if (showMainDelta && axisIdx === 0 && firstValue !== null && !isGhost) {
                             html += buildDeltaHtml(Number(value), firstValue, isPercentage);
                         }
                     }
@@ -1013,7 +1076,7 @@
                     >
                 </div>
             {/if}
-            {#if hideToolbar}
+            {#if hideToolbar && !hideViewModeToggle}
                 <div class="flex rounded-lg border border-gray-200/70 dark:border-slate-600/70 overflow-hidden shadow-sm opacity-75 hover:opacity-100 transition-opacity" data-testid="chart-view-mode-toggle">
                     <button
                         class="px-2.5 py-1 text-xs font-medium transition-colors {viewMode === 'absolute' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
@@ -1058,6 +1121,7 @@
                 {yAxisMode}
                 {yAxisMin}
                 {yAxisMax}
+                {secondaryAxisScales}
             />
         {/if}
     </div>

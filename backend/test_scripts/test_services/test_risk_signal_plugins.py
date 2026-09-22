@@ -24,6 +24,7 @@ from backend.app.schemas.signals import (
     SignalAvailabilityReason,
     SignalCalendarReturnPointStatus,
     SignalDomain,
+    SignalErrorCode,
     SignalExecutionContext,
     SignalPricePoint,
     SignalRequest,
@@ -40,6 +41,7 @@ from backend.app.services.risk.metrics import (
     sample_variance,
     underwater_drawdown,
 )
+from backend.app.services.signal_plugins.base import SignalUnavailableError
 from backend.app.services.signal_plugins.calendar_rolling_return import (
     CalendarRollingReturnParams,
     CalendarRollingReturnPlugin,
@@ -418,15 +420,15 @@ def test_prepare_plan_marks_full_history_when_any_computation_declares_it():
 # =============================================================================
 # I10 — ASSET_CALENDAR_ROLLING_RETURN: calendar days, not observations
 #
-# The plugin is pure: it consumes the already-resolved, already-converted dense
-# daily series the Asset adapter hands it and looks the reference price up by
-# EXACT calendar date (t - N days). Everything below is hand-derived from the
-# fixture prices; nothing here fetches, converts or resolves anything.
+# The plugin is pure: it consumes the already-resolved, already-converted dates
+# the Asset adapter hands it and looks the reference price up by EXACT calendar
+# date (t - N days). Loaded dates may precede the selected range; emitted dates
+# may not. Everything below is hand-derived from fixture prices.
 # =============================================================================
 
 CALENDAR_SIGNAL_CODE = "ASSET_CALENDAR_ROLLING_RETURN"
 CALENDAR_SERIES_KEY = "calendar_return"
-CALENDAR_ALLOWED_WINDOWS = (7, 30, 90, 365)
+CALENDAR_REPRESENTATIVE_WINDOWS = (1, 7, 14, 30, 60, 90, 365, 1095)
 CALENDAR_START = date(2026, 1, 1)  # a Thursday — the weekend fixtures rely on it
 
 
@@ -495,9 +497,23 @@ def _calendar_context(dates: list[date], visible_start_index: int) -> SignalExec
     )
 
 
-def _calendar_compute(points: list[SignalPricePoint], window_days: int | None = None):
+def _calendar_compute(
+    points: list[SignalPricePoint],
+    window_days: int | None = None,
+    *,
+    visible_start: date | None = None,
+):
     params = CalendarRollingReturnPlugin.validate_params({} if window_days is None else {"window_days": window_days})
-    context = _calendar_context([point.date for point in points], 0)
+    dates = [point.date for point in points]
+    context = SignalExecutionContext(
+        domain=SignalDomain.ASSET,
+        requested_range=DateRangeModel(
+            start=visible_start or min(dates),
+            end=max(dates),
+        ),
+        source_reference="calendar-fixture",
+        target_currency="EUR",
+    )
     return CalendarRollingReturnPlugin().compute(points, [], params, context)
 
 
@@ -567,25 +583,74 @@ def test_calendar_window_counts_days_not_observations():
     assert point.provenance.current_price_days_back == 1
 
 
-@pytest.mark.parametrize("window_days", CALENDAR_ALLOWED_WINDOWS)
-def test_calendar_return_is_exact_for_every_allowed_window(window_days):
-    points = _daily_points(CALENDAR_START, [100 + offset for offset in range(400)])
-    series = _calendar_series(_calendar_compute(points, window_days=window_days))
+@pytest.mark.parametrize("window_days", CALENDAR_REPRESENTATIVE_WINDOWS)
+def test_calendar_return_starts_at_first_resolvable_source_plus_window(
+    window_days,
+):
+    source_start = CALENDAR_START + timedelta(days=3)
+    point_count = window_days + 3
+    source_end = source_start + timedelta(days=point_count - 1)
+    points = _daily_points(
+        source_start,
+        [100 + offset for offset in range(point_count)],
+    )
+    context = SignalExecutionContext(
+        domain=SignalDomain.ASSET,
+        requested_range=DateRangeModel(
+            start=CALENDAR_START,
+            end=source_end,
+        ),
+        source_reference="late-calendar-source",
+        target_currency="EUR",
+    )
+    params = CalendarRollingReturnPlugin.validate_params({"window_days": window_days})
 
-    assert [point.date for point in series.points] == [point.date for point in points]
-    for point, price_point in zip(series.points, points, strict=True):
-        offset = (price_point.date - CALENDAR_START).days
-        assert point.provenance.reference_target_date == price_point.date - timedelta(days=window_days)
-        if offset < window_days:
-            assert point.value is None
-            assert point.provenance.status == SignalCalendarReturnPointStatus.MISSING_REFERENCE
-            assert point.provenance.reference_price_date is None
-        else:
-            assert point.value == pytest.approx(((100.0 + offset) / (100.0 + offset - window_days) - 1) * 100)
-            assert point.provenance.status == SignalCalendarReturnPointStatus.AVAILABLE
+    CalendarRollingReturnPlugin.validate_input(points, [], params, context)
+    computation = CalendarRollingReturnPlugin().compute(
+        points,
+        [],
+        params,
+        context,
+    )
+    series = _calendar_series(computation)
 
-    last = _point_on(series, CALENDAR_START + timedelta(days=399))
-    assert last.value == pytest.approx((499.0 / (499.0 - window_days) - 1) * 100)
+    assert [point.date for point in series.points] == [source_start + timedelta(days=window_days + offset) for offset in range(3)]
+    for point in series.points:
+        offset = (point.date - source_start).days
+        assert point.provenance.reference_target_date == point.date - timedelta(days=window_days)
+        assert point.value == pytest.approx(((100.0 + offset) / (100.0 + offset - window_days) - 1) * 100)
+        assert point.provenance.status == SignalCalendarReturnPointStatus.AVAILABLE
+
+    last_offset = point_count - 1
+    last = _point_on(series, source_start + timedelta(days=last_offset))
+    assert last.value == pytest.approx(((100.0 + last_offset) / (100.0 + last_offset - window_days) - 1) * 100)
+
+
+def test_calendar_return_uses_pre_range_reference_and_slices_selected_range():
+    window_days = 7
+    selected_start = CALENDAR_START + timedelta(days=window_days)
+    selected_end = selected_start + timedelta(days=2)
+    points = _daily_points(
+        CALENDAR_START,
+        [10 + offset for offset in range(window_days + 3)],
+    )
+    computation = _calendar_compute(
+        points,
+        window_days=window_days,
+        visible_start=selected_start,
+    )
+    series = _calendar_series(computation)
+
+    assert any(point.date < selected_start for point in points)
+    assert [point.date for point in series.points] == [selected_start + timedelta(days=offset) for offset in range(3)]
+    boundary = _point_on(series, selected_start)
+    assert boundary.value == pytest.approx((17.0 / 10.0 - 1) * 100)
+    assert boundary.provenance.status == SignalCalendarReturnPointStatus.AVAILABLE
+    assert boundary.provenance.reference_target_date == CALENDAR_START
+    assert boundary.provenance.reference_price_date == CALENDAR_START
+    assert all(selected_start <= point.date <= selected_end for point in series.points)
+    assert [point.date for point in series.points] == sorted({point.date for point in series.points})
+    assert computation.warnings == []
 
 
 def test_calendar_default_window_is_thirty_days():
@@ -593,6 +658,9 @@ def test_calendar_default_window_is_thirty_days():
     default_series = _calendar_series(_calendar_compute(points))
     explicit_series = _calendar_series(_calendar_compute(points, window_days=30))
 
+    assert CalendarRollingReturnPlugin.implementation_version == "1.3.0"
+    assert CalendarRollingReturnPlugin.allows_sparse_input_dates is True
+    assert CalendarRollingReturnPlugin.allows_sparse_output_dates is True
     assert CalendarRollingReturnParams().window_days == 30
     assert [(point.date, point.value) for point in default_series.points] == [(point.date, point.value) for point in explicit_series.points]
 
@@ -601,22 +669,39 @@ def test_calendar_default_window_is_thirty_days():
     assert probe.value == pytest.approx((160.0 / 130.0 - 1) * 100)
 
 
-def test_missing_reference_dates_are_null_with_a_typed_reason():
-    points = _daily_points(CALENDAR_START, [100 + offset for offset in range(40)])
-    computation = _calendar_compute(points, window_days=30)
+def test_missing_reference_inside_selected_range_is_null_with_typed_reason():
+    missing_reference = CALENDAR_START + timedelta(days=5)
+    affected_current = CALENDAR_START + timedelta(days=35)
+    points = [
+        point
+        for point in _daily_points(
+            CALENDAR_START,
+            [100 + offset for offset in range(40)],
+        )
+        if point.date != missing_reference
+    ]
+    computation = _calendar_compute(
+        points,
+        window_days=30,
+        visible_start=CALENDAR_START + timedelta(days=30),
+    )
     series = _calendar_series(computation)
 
-    first = _point_on(series, CALENDAR_START)
-    last_missing = _point_on(series, CALENDAR_START + timedelta(days=29))
     first_available = _point_on(series, CALENDAR_START + timedelta(days=30))
+    missing = _point_on(series, affected_current)
+    warning = next(item for item in computation.warnings if item.code == SignalWarningCode.UNDEFINED_METRIC_WINDOW)
 
-    assert first.value is None
-    assert first.provenance.status == SignalCalendarReturnPointStatus.MISSING_REFERENCE
-    assert first.provenance.reference_target_date == date(2025, 12, 2)
-    assert last_missing.value is None
-    assert last_missing.provenance.status == SignalCalendarReturnPointStatus.MISSING_REFERENCE
     assert first_available.value == pytest.approx((130.0 / 100.0 - 1) * 100)
-    assert any(warning.code == SignalWarningCode.UNDEFINED_METRIC_WINDOW for warning in computation.warnings)
+    assert missing.value is None
+    assert missing.provenance.status == SignalCalendarReturnPointStatus.MISSING_REFERENCE
+    assert missing.provenance.reference_target_date == missing_reference
+    assert missing.provenance.reference_price_date is None
+    assert warning.details == {
+        "unavailable_points": 1,
+        "reasons": {
+            SignalCalendarReturnPointStatus.MISSING_REFERENCE.value: 1,
+        },
+    }
 
 
 def test_invalid_current_and_reference_prices_carry_distinct_statuses():
@@ -624,7 +709,11 @@ def test_invalid_current_and_reference_prices_carry_distinct_statuses():
     closes[35] = 0.0
     closes[50] = -5.0
     points = _daily_points(CALENDAR_START, closes)
-    computation = _calendar_compute(points, window_days=30)
+    computation = _calendar_compute(
+        points,
+        window_days=30,
+        visible_start=CALENDAR_START + timedelta(days=30),
+    )
     series = _calendar_series(computation)
 
     invalid_current = _point_on(series, CALENDAR_START + timedelta(days=35))
@@ -744,19 +833,26 @@ def test_calendar_return_does_not_invent_a_staleness_threshold():
     assert point.provenance.reference_price_days_back == 120
 
 
-@pytest.mark.parametrize("window_days", CALENDAR_ALLOWED_WINDOWS)
-def test_calendar_warmup_asks_for_the_whole_window_in_calendar_days(window_days):
-    dates = [CALENDAR_START + timedelta(days=offset) for offset in range(400)]
-    context = _calendar_context(dates, 380)
+@pytest.mark.parametrize("window_days", CALENDAR_REPRESENTATIVE_WINDOWS)
+def test_calendar_window_requests_exact_pre_visible_calendar_day_warmup(
+    window_days,
+):
+    dates = [
+        CALENDAR_START,
+        CALENDAR_START + timedelta(days=window_days),
+    ]
+    context = _calendar_context(dates, 0)
     params = CalendarRollingReturnPlugin.validate_params({"window_days": window_days})
 
     requirement = CalendarRollingReturnPlugin.warmup_requirement(params, context)
 
-    # N pre-visible CALENDAR DAYS are the minimum that can reach t - N; asking
-    # for more is allowed, asking for fewer silently truncates the first
-    # visible points to null.
-    assert requirement.total_points >= window_days
-    assert requirement.full_history is False
+    assert requirement.model_dump(mode="python") == {
+        "minimum_points": 1,
+        "stabilization_points": window_days - 1,
+        "total_points": window_days,
+        "normalized_tolerance": 1e-6,
+        "full_history": False,
+    }
 
     plan = SignalService().prepare_plan(
         [
@@ -768,38 +864,207 @@ def test_calendar_warmup_asks_for_the_whole_window_in_calendar_days(window_days)
         ],
         context,
     )
-    # asset_source turns exactly this number into pre-visible CALENDAR DAYS.
-    assert plan.max_history_points_before_visible >= window_days
+    # AssetSource turns this count into pre-visible calendar days.
+    assert plan.max_history_points_before_visible == window_days
     assert plan.requires_full_history is False
     assert plan.max_prepared_history_points_before_visible == 0
 
 
 @pytest.mark.asyncio
-async def test_service_returns_one_calendar_point_per_visible_date():
-    points = _daily_points(CALENDAR_START, [100 + offset for offset in range(120)])
+async def test_one_day_calendar_window_uses_pre_range_reference_and_warmup():
+    points = _daily_points(CALENDAR_START, [100.0, 102.0])
     dates = [point.date for point in points]
-    context = _calendar_context(dates, 90)
+    context = _calendar_context(dates, 1)
 
-    result = await _calendar_result(points, context, 30)
+    result = await _calendar_result(points, context, 1)
+
+    assert result.status == SignalStatus.OK
+    assert result.normalized_params == {"window_days": 1}
+    assert result.availability.reason_code is None
+    assert result.availability.required_points == 1
+    assert result.warmup.requirement.model_dump(mode="python") == {
+        "minimum_points": 1,
+        "stabilization_points": 0,
+        "total_points": 1,
+        "normalized_tolerance": 1e-6,
+        "full_history": False,
+    }
+    assert result.warmup.loaded_points == 2
+    assert result.warmup.used_points == 1
+    assert result.warmup.complete is True
+    assert result.warnings == []
+    series = next(item for item in result.series if item.key == CALENDAR_SERIES_KEY)
+    assert [point.date for point in series.points] == [
+        CALENDAR_START + timedelta(days=1),
+    ]
+    boundary = _point_on(series, CALENDAR_START + timedelta(days=1))
+    assert boundary.value == pytest.approx((102.0 / 100.0 - 1) * 100)
+    assert boundary.provenance.status == SignalCalendarReturnPointStatus.AVAILABLE
+    assert boundary.provenance.reference_target_date == CALENDAR_START
+    assert boundary.provenance.reference_price_date == CALENDAR_START
+
+
+@pytest.mark.asyncio
+async def test_invalid_calendar_windows_are_typed_preflight_failures():
+    invalid_params = {
+        "zero": {"window_days": 0},
+        "negative": {"window_days": -1},
+        "fractional": {"window_days": 14.5},
+        "string": {"window_days": "14"},
+        "malformed": {"window_days": {"days": 14}},
+    }
+    points = _daily_points(CALENDAR_START, [100.0, 101.0])
+    context = _calendar_context([point.date for point in points], 1)
+
+    results = await SignalService().compute(
+        [
+            SignalRequest(
+                instance_id=instance_id,
+                signal_code=CALENDAR_SIGNAL_CODE,
+                params=params,
+            )
+            for instance_id, params in invalid_params.items()
+        ],
+        points,
+        context,
+    )
+    results_by_id = {result.instance_id: result for result in results}
+
+    assert set(results_by_id) == set(invalid_params)
+    for instance_id, params in invalid_params.items():
+        result = results_by_id[instance_id]
+        assert result.status == SignalStatus.FAILED
+        assert result.normalized_params == params
+        assert result.error is not None
+        assert result.error.code == SignalErrorCode.INVALID_PARAMS
+        assert result.series == []
+
+
+@pytest.mark.asyncio
+async def test_calendar_window_beyond_date_domain_is_typed_unavailable():
+    huge_window = (CALENDAR_START - date.min).days + 1
+    points = _daily_points(CALENDAR_START, [100.0, 101.0])
+    context = _calendar_context([point.date for point in points], 0)
+    params = CalendarRollingReturnPlugin.validate_params({"window_days": huge_window})
+
+    requirement = CalendarRollingReturnPlugin.warmup_requirement(params, context)
+
+    assert requirement.model_dump(mode="python") == {
+        "minimum_points": 1,
+        "stabilization_points": huge_window - 1,
+        "total_points": huge_window,
+        "normalized_tolerance": 1e-6,
+        "full_history": False,
+    }
+
+    plan = SignalService().prepare_plan(
+        [
+            SignalRequest(
+                instance_id="calendar",
+                signal_code=CALENDAR_SIGNAL_CODE,
+                params={"window_days": huge_window},
+            )
+        ],
+        context,
+    )
+    assert plan.max_history_points_before_visible == huge_window
+    assert plan.requires_full_history is False
+    assert plan.max_prepared_history_points_before_visible == 0
+
+    with pytest.raises(SignalUnavailableError) as exc_info:
+        CalendarRollingReturnPlugin.validate_input(points, [], params, context)
+
+    assert exc_info.value.reason_code == SignalAvailabilityReason.INSUFFICIENT_HISTORY
+    assert exc_info.value.details == {
+        "window_days": huge_window,
+        "requested_start": CALENDAR_START.isoformat(),
+        "requested_end": (CALENDAR_START + timedelta(days=1)).isoformat(),
+    }
+
+    result = await _calendar_result(points, context, huge_window)
+
+    assert result.status == SignalStatus.UNAVAILABLE
+    assert result.availability.reason_code == SignalAvailabilityReason.INSUFFICIENT_HISTORY
+    assert result.normalized_params == {"window_days": huge_window}
+    assert result.warmup.requirement.total_points == huge_window
+    assert result.warmup.complete is False
+    assert result.error is None
+    assert result.series == []
+
+
+@pytest.mark.asyncio
+async def test_service_uses_pre_range_history_for_every_selected_date():
+    window_days = 30
+    selected_start = CALENDAR_START + timedelta(days=window_days)
+    points = _daily_points(
+        CALENDAR_START,
+        [100 + offset for offset in range(window_days + 3)],
+    )
+    dates = [point.date for point in points]
+    context = _calendar_context(dates, window_days)
+
+    result = await _calendar_result(points, context, window_days)
 
     assert result.status == SignalStatus.OK
     assert result.availability.reason_code is None
+    assert result.availability.required_points == window_days
+    assert result.warmup.requirement.total_points == window_days
+    assert result.warmup.loaded_points == window_days + 3
     assert result.warmup.complete is True
+    assert result.warmup.used_points == window_days
+    assert result.warnings == []
     series = next(item for item in result.series if item.key == CALENDAR_SERIES_KEY)
-    assert [point.date for point in series.points] == dates[90:]
-    assert len(series.points) == 30
-    for point in series.points:
-        offset = (point.date - CALENDAR_START).days
-        assert point.value == pytest.approx(((100.0 + offset) / (70.0 + offset) - 1) * 100)
-        # Provenance must survive output normalization AND visible slicing.
-        assert point.provenance.status == SignalCalendarReturnPointStatus.AVAILABLE
-        assert point.provenance.reference_target_date == point.date - timedelta(days=30)
+    assert [point.date for point in series.points] == [selected_start + timedelta(days=offset) for offset in range(3)]
+    boundary = _point_on(series, selected_start)
+    assert boundary.value == pytest.approx((130.0 / 100.0 - 1) * 100)
+    # Provenance must survive output normalization AND visible slicing.
+    assert boundary.provenance.status == SignalCalendarReturnPointStatus.AVAILABLE
+    assert boundary.provenance.reference_target_date == CALENDAR_START
+    assert boundary.provenance.reference_price_date == CALENDAR_START
+
+
+@pytest.mark.asyncio
+async def test_first_undefined_calendar_window_with_later_factual_output_is_partial():
+    window_days = 7
+    selected_start = CALENDAR_START + timedelta(days=window_days)
+    closes = [100.0 + offset for offset in range(10)]
+    closes[0] = 0.0
+    points = _daily_points(CALENDAR_START, closes)
+    context = _calendar_context([point.date for point in points], window_days)
+
+    result = await _calendar_result(points, context, window_days)
+
+    assert result.status == SignalStatus.PARTIAL
+    assert result.availability.reason_code == SignalAvailabilityReason.PARTIAL_UNDEFINED_METRIC
+    assert result.error is None
+    series = _calendar_series(result)
+    assert [point.date for point in series.points] == [
+        selected_start + timedelta(days=1),
+        selected_start + timedelta(days=2),
+    ]
+    assert all(point.value is not None and math.isfinite(point.value) for point in series.points)
+    assert [point.value for point in series.points] == pytest.approx(
+        [
+            (108.0 / 101.0 - 1) * 100,
+            (109.0 / 102.0 - 1) * 100,
+        ]
+    )
+    assert [warning.code for warning in result.warnings] == [
+        SignalWarningCode.UNDEFINED_METRIC_WINDOW,
+    ]
+    warning = next(item for item in result.warnings if item.code == SignalWarningCode.UNDEFINED_METRIC_WINDOW)
+    assert warning.details == {
+        "unavailable_points": 1,
+        "reasons": {
+            SignalCalendarReturnPointStatus.INVALID_REFERENCE_PRICE.value: 1,
+        },
+    }
 
 
 @pytest.mark.asyncio
 async def test_one_unusable_reference_makes_the_visible_result_partial():
-    closes = [100.0 + offset for offset in range(120)]
-    closes[65] = 0.0  # warm-up date: only the visible point at +95 loses its reference
+    closes = [100.0 + offset for offset in range(160)]
+    closes[65] = 0.0  # pre-range date: only selected point +95 loses its reference
     points = _daily_points(CALENDAR_START, closes)
     context = _calendar_context([point.date for point in points], 90)
 
@@ -818,29 +1083,62 @@ async def test_one_unusable_reference_makes_the_visible_result_partial():
 
 @pytest.mark.asyncio
 async def test_every_visible_reference_unusable_is_unavailable_not_failed():
-    closes = [100.0 + offset for offset in range(20)]
-    for offset in range(8, 13):
+    closes = [100.0 + offset for offset in range(22)]
+    for offset in range(7, 15):
         closes[offset] = 0.0
     points = _daily_points(CALENDAR_START, closes)
-    context = _calendar_context([point.date for point in points], 15)
+    context = _calendar_context([point.date for point in points], 7)
 
     result = await _calendar_result(points, context, 7)
 
     assert result.status == SignalStatus.UNAVAILABLE
     assert result.availability.reason_code == SignalAvailabilityReason.UNDEFINED_METRIC
+    assert result.error is None
+    assert result.availability.required_points == 7
+    assert result.warmup.requirement.total_points == 7
+    assert result.warmup.used_points == 7
     assert result.warmup.complete is True
     assert result.series == []
 
 
 @pytest.mark.asyncio
 async def test_visible_range_without_enough_calendar_history_is_unavailable():
+    window_days = 90
     points = _daily_points(CALENDAR_START, [100 + offset for offset in range(40)])
     context = _calendar_context([point.date for point in points], 35)
+    params = CalendarRollingReturnPlugin.validate_params({"window_days": window_days})
 
-    result = await _calendar_result(points, context, 90)
+    requirement = CalendarRollingReturnPlugin.warmup_requirement(params, context)
+    assert requirement.model_dump(mode="python") == {
+        "minimum_points": 1,
+        "stabilization_points": window_days - 1,
+        "total_points": window_days,
+        "normalized_tolerance": 1e-6,
+        "full_history": False,
+    }
+
+    plan = SignalService().prepare_plan(
+        [
+            SignalRequest(
+                instance_id="calendar",
+                signal_code=CALENDAR_SIGNAL_CODE,
+                params={"window_days": window_days},
+            )
+        ],
+        context,
+    )
+    assert plan.max_history_points_before_visible == window_days
+    assert plan.requires_full_history is False
+    assert plan.max_prepared_history_points_before_visible == 0
+
+    result = await _calendar_result(points, context, window_days)
 
     assert result.status == SignalStatus.UNAVAILABLE
     assert result.availability.reason_code == SignalAvailabilityReason.INSUFFICIENT_HISTORY
+    assert result.availability.required_points == window_days
+    assert result.availability.warmup_complete is False
+    assert result.warmup.requirement == requirement
+    assert result.warmup.used_points == 35
     assert result.warmup.complete is False
     assert result.series == []
 
@@ -856,6 +1154,11 @@ def test_legacy_rolling_return_defaults_and_contract_are_untouched():
     assert RollingReturnPlugin.catalog_visible is True
     assert RollingReturnPlugin.semantic_id == "rolling_compounded_return"
     assert [spec.key for spec in RollingReturnPlugin.output_specs] == ["rolling_return"]
+    window_schema = RollingReturnParams.model_json_schema()["properties"]["window"]
+    assert window_schema["default"] == 30
+    assert window_schema["minimum"] == 1
+    assert window_schema["maximum"] == 500
+    assert window_schema["type"] == "integer"
 
     requirement = RollingReturnPlugin.warmup_requirement(RollingReturnParams(), context)
     assert requirement.minimum_points == 31
@@ -866,25 +1169,55 @@ def test_legacy_rolling_return_defaults_and_contract_are_untouched():
 
 
 @pytest.mark.asyncio
-async def test_calendar_sibling_does_not_disturb_the_legacy_rolling_return():
-    dates = _dates(7)
-    prices = [100.0, 110.0, 99.0, 118.8, 112.86, 129.789, 119.40588]
+async def test_partial_and_unavailable_calendar_siblings_do_not_hide_legacy_result():
+    dates = _dates(160)
+    prices = [100.0 + offset for offset in range(len(dates))]
+    history_start = min(dates)
+    history_end = max(dates)
+    missing_reference_date = history_start + timedelta(days=65)
+    selected_start = history_start + timedelta(days=90)
+    affected_date = history_start + timedelta(days=95)
     bundle = SignalPreparedSeriesBundle(
         primary_asset_id=1,
         series_sets={None: _prepared_set(_prepared_series(1, dates, prices))},
     )
-    price_points = _price_points(dates, prices)
-    context = _context(dates)
-    legacy_request = SignalRequest(instance_id="return", signal_code="RISK_ROLLING_RETURN", params={"window": 2})
-    calendar_request = SignalRequest(
-        instance_id="calendar",
+    # Calendar input is independently sparse before the selected range. The
+    # prepared legacy series remains complete and factual.
+    price_points = [point for point in _price_points(dates, prices) if point.date != missing_reference_date]
+    context = SignalExecutionContext(
+        domain=SignalDomain.ASSET,
+        requested_range=DateRangeModel(start=selected_start, end=history_end),
+        source_reference="calendar-sibling-fixture",
+        target_currency="EUR",
+    )
+    legacy_request = SignalRequest(
+        instance_id="return",
+        signal_code="RISK_ROLLING_RETURN",
+        params={"window": 2},
+    )
+    partial_calendar_request = SignalRequest(
+        instance_id="calendar-partial",
         signal_code=CALENDAR_SIGNAL_CODE,
-        params={"window_days": 7},
+        params={"window_days": 30},
+    )
+    unavailable_calendar_request = SignalRequest(
+        instance_id="calendar-unavailable",
+        signal_code=CALENDAR_SIGNAL_CODE,
+        params={"window_days": 200},
     )
 
-    solo = await SignalService().compute([legacy_request], price_points, context, prepared_series_bundle=bundle)
+    solo = await SignalService().compute(
+        [legacy_request],
+        price_points,
+        context,
+        prepared_series_bundle=bundle,
+    )
     mixed = await SignalService().compute(
-        [legacy_request, calendar_request],
+        [
+            legacy_request,
+            partial_calendar_request,
+            unavailable_calendar_request,
+        ],
         price_points,
         context,
         prepared_series_bundle=bundle,
@@ -892,7 +1225,8 @@ async def test_calendar_sibling_does_not_disturb_the_legacy_rolling_return():
 
     solo_return = next(result for result in solo if result.instance_id == "return")
     mixed_return = next(result for result in mixed if result.instance_id == "return")
-    mixed_calendar = next(result for result in mixed if result.instance_id == "calendar")
+    partial_calendar = next(result for result in mixed if result.instance_id == "calendar-partial")
+    unavailable_calendar = next(result for result in mixed if result.instance_id == "calendar-unavailable")
 
     solo_payload = solo_return.model_dump(mode="json")
     mixed_payload = mixed_return.model_dump(mode="json")
@@ -901,9 +1235,22 @@ async def test_calendar_sibling_does_not_disturb_the_legacy_rolling_return():
     assert mixed_payload == solo_payload
     assert mixed_return.status == SignalStatus.OK
     legacy_series = next(item for item in mixed_return.series if item.key == "rolling_return")
-    assert len(legacy_series.points) == 4
-    assert _point_on(legacy_series, dates[-1]).value == pytest.approx(5.8)
-    # The hidden sibling is planned and executed; it simply has no 7-day history.
-    assert mixed_calendar.signal_code == CALENDAR_SIGNAL_CODE
-    assert mixed_calendar.status == SignalStatus.UNAVAILABLE
-    assert mixed_calendar.availability.reason_code == SignalAvailabilityReason.INSUFFICIENT_HISTORY
+    assert _point_on(legacy_series, history_end).value == pytest.approx(((259.0 / 258.0) * (258.0 / 257.0) - 1) * 100)
+
+    assert partial_calendar.status == SignalStatus.PARTIAL
+    assert partial_calendar.availability.reason_code == SignalAvailabilityReason.PARTIAL_UNDEFINED_METRIC
+    assert SignalWarningCode.DATA_GAP in {warning.code for warning in partial_calendar.warnings}
+    assert SignalWarningCode.UNDEFINED_METRIC_WINDOW in {warning.code for warning in partial_calendar.warnings}
+    missing_reference = _point_on(
+        _calendar_series(partial_calendar),
+        affected_date,
+    )
+    assert missing_reference.value is None
+    assert missing_reference.provenance.status == SignalCalendarReturnPointStatus.MISSING_REFERENCE
+    assert missing_reference.provenance.reference_target_date == missing_reference_date
+
+    assert unavailable_calendar.signal_code == CALENDAR_SIGNAL_CODE
+    assert unavailable_calendar.status == SignalStatus.UNAVAILABLE
+    assert unavailable_calendar.availability.reason_code == SignalAvailabilityReason.INSUFFICIENT_HISTORY
+    assert unavailable_calendar.error is None
+    assert unavailable_calendar.series == []

@@ -11,6 +11,7 @@
  * formatCurrencyAmount is asserted with an explicit locale ('en-US') so the
  * expected string is deterministic regardless of the host process locale.
  */
+import {readFileSync} from 'node:fs';
 import {describe, expect, it} from 'vitest';
 
 import type {RiskDataQualityReport} from '$lib/risk/riskTypes';
@@ -18,6 +19,9 @@ import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 import {addDays, buildBaseAnalytics, formatCurrencyAmount, formatRatio, formatScopedCurrencyAmount, localizedScenarioText, normalizeQualityIssue, numberRecord, presentStressBuckets, resultByCode, scalarString, stressImpactDimension, type BaseAnalyticsContext} from './riskAnalysisHelpers';
 
 type Issue = NonNullable<RiskDataQualityReport['issues']>[number];
+
+const riskAnalysisPanelSource = readFileSync(new URL('./RiskAnalysisPanel.svelte', import.meta.url), 'utf8');
+const assetRiskScenariosViewSource = readFileSync(new URL('./AssetRiskScenariosView.svelte', import.meta.url), 'utf8');
 
 /** A result whose only field the code under test reads is `analytic_code`. */
 function result(code: string): RiskAnalyticResult {
@@ -439,5 +443,32 @@ describe('buildBaseAnalytics', () => {
             ['correlation', 'historical'],
             ['historical_var', 'historical'],
         ]);
+    });
+});
+
+describe('sync completion source contracts', () => {
+    it('forwards PageSyncModal completion detail through RiskAnalysisPanel unchanged', () => {
+        const modalTag = riskAnalysisPanelSource.match(/<PageSyncModal\b[\s\S]*?\/>/)?.at(0) ?? '';
+        expect(modalTag).not.toBe('');
+        expect(modalTag).toMatch(/\bonsynced\s*=\s*\{handleSynced\}/);
+
+        const handlerMatch = riskAnalysisPanelSource.match(/async\s+function\s+handleSynced\(\s*detail\s*:\s*\{\s*accepted\s*:\s*boolean\s*\}\s*\)\s*:\s*Promise<void>\s*\{([\s\S]*?)\n\s{4}\}/);
+        expect(handlerMatch).not.toBeNull();
+        const handlerBody = handlerMatch?.at(1)?.replace(/\s+/g, ' ').trim() ?? '';
+        expect(handlerBody).toMatch(/\bawait\s+onsynced\?\.\(\s*detail\s*\)\s*;/);
+        expect(handlerBody).not.toMatch(/\bonsynced\?\.\(\s*\)/);
+        expect(handlerBody).not.toMatch(/\bonsynced\?\.\(\s*\{/);
+    });
+
+    it('types and forwards AssetRiskScenariosView completion callbacks unchanged', () => {
+        expect(assetRiskScenariosViewSource).toMatch(/\bonsynced\?\s*:\s*\(\s*detail\s*:\s*\{\s*accepted\s*:\s*boolean\s*\}\s*\)\s*=>\s*void\s*\|\s*Promise<void>\s*;/);
+
+        const propsBinding = assetRiskScenariosViewSource.match(/let\s*\{([\s\S]*?)\}\s*:\s*Props\s*=\s*\$props\(\)\s*;/)?.at(1) ?? '';
+        expect(propsBinding).toMatch(/(?:^|,)\s*onsynced\s*(?:,|$)/);
+
+        const riskPanelTag = assetRiskScenariosViewSource.match(/<RiskAnalysisPanel\b[\s\S]*?\/>/)?.at(0) ?? '';
+        expect(riskPanelTag).not.toBe('');
+        expect(riskPanelTag).toContain('{onsynced}');
+        expect(riskPanelTag).not.toMatch(/\bonsynced\s*=/);
     });
 });

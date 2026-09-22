@@ -47,7 +47,7 @@
         refreshVersion?: number;
         showHeaderActions?: boolean;
         showBetaBanner?: boolean;
-        onsynced?: () => void | Promise<void>;
+        onsynced?: (detail: {accepted: boolean}) => void | Promise<void>;
     }
 
     let {scope, dateStart, dateEnd, targetCurrency, assetIds = [], title = '', subtitle = '', internalSubset = false, assetClass = null, sectorExposure = null, geographyExposure = null, refreshVersion = 0, showHeaderActions = true, showBetaBanner = true, onsynced}: Props = $props();
@@ -55,7 +55,7 @@
     // Every fetch, generation guard and invalidation rule lives in the controller;
     // this component owns only what the user can see and touch. The aliases below
     // are read-only views, so the markup keeps reading the names it always read.
-    const controller = createRiskPanelController(() => ({scope, dateStart, dateEnd, targetCurrency, appliedRiskFreePercent, refreshVersion}), {onsynced: () => onsynced?.(), scenarioCatalogLoaded: initializeScenarioEditors});
+    const controller = createRiskPanelController(() => ({scope, dateStart, dateEnd, targetCurrency, appliedRiskFreePercent, refreshVersion}), {scenarioCatalogLoaded: initializeScenarioEditors});
 
     let catalog = $derived(controller.catalog);
     let scenarioCatalog = $derived(controller.scenarioCatalog);
@@ -516,8 +516,13 @@
         }));
     }
 
-    async function handleSynced(): Promise<void> {
+    // The detail reaches the parent from here, not from the controller hook: the
+    // controller's `onsynced` carries no argument, so leaving both wired would
+    // have called the parent twice — once bare, once with the detail — and the
+    // source contract in riskAnalysisHelpers.test.ts only reads this body.
+    async function handleSynced(detail: {accepted: boolean}): Promise<void> {
         await controller.handleSynced();
+        await onsynced?.(detail);
     }
 
     function handleQualityAction(action: string, target: string | null): void {

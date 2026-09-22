@@ -96,13 +96,6 @@ PAC_PLANNER_REPORT_TEST_PATH = "backend/test_scripts/test_services/test_pac_plan
 PAC_PLANNER_SERVICE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_planner.py"
 
 
-def services_pac_analyze(verbose: bool = False, test_names: list = None) -> bool:
-    """Test pure initial-state PAC normalization, valuation and row scores."""
-    print_section("Services: PAC Initial-State Analyze")
-    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_pac_analyze.py", test_names)
-    return run_command(cmd, "PAC initial-state analysis tests", verbose=verbose)
-
-
 def services_pac_planner_core(verbose: bool = False, test_names: list = None) -> bool:
     """Test exact PAC/Rebalancer primitives, models, and normalization."""
     print_section("Services: PAC/Rebalancer Exact Core")
@@ -910,7 +903,6 @@ Note: No backend server required.
         prereq="Database created",
         exclusive_because="its assertions are about the oldest and newest EUR/USD row in the whole fx_rates table (backward fill, missing-rate boundary), and the service under test queries that table without a source filter, so a neighbour inserting any EUR/USD rate moves the boundary this unit measures",
     )
-    add_test(cat, "pac-analyze", services_pac_analyze, name="PAC Initial-State Analyze", desc="Exact initial quantities, native cash, reference FX, per-row target metrics and partial data", isolation="pure")
     add_test(
         cat,
         "pac-planner-core",
