@@ -121,7 +121,25 @@
         '6M': 'months',
         '1Y': 'years',
     };
-    const candleWidthLabel = (w: CandleWidth) => `${w.slice(0, -1)}${$_(`datePicker.granularity.${CANDLE_WIDTH_UNIT[w]}Short`)}`;
+    /**
+     * Unit letter for a rung, resolved through four LITERAL translation calls.
+     *
+     * A key assembled from a template literal works at runtime and is invisible to the
+     * project's own i18n sweep, which extracts literal arguments and
+     * then checks that every referenced key resolves in all four locales. A key built at
+     * runtime is never extracted, so it is never checked: the four keys happened to exist
+     * everywhere, but nothing would have said so if one had not.
+     *
+     * Verbose on purpose. The guarantee is worth more than the four lines.
+     */
+    function candleWidthUnit(w: CandleWidth): string {
+        const unit = CANDLE_WIDTH_UNIT[w];
+        if (unit === 'days') return $_('datePicker.granularity.daysShort');
+        if (unit === 'weeks') return $_('datePicker.granularity.weeksShort');
+        if (unit === 'months') return $_('datePicker.granularity.monthsShort');
+        return $_('datePicker.granularity.yearsShort');
+    }
+    const candleWidthLabel = (w: CandleWidth) => `${w.slice(0, -1)}${candleWidthUnit(w)}`;
     /** Income bars start one rung up: a single day of personal cash flow is almost always empty. */
     const INCOME_MIN_WIDTH: CandleWidth = '1W';
     /**

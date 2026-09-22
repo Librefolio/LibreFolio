@@ -144,6 +144,20 @@ import GrowthChart from './GrowthChart.svelte';
 // =============================================================================
 
 const DAY_COUNT = 40;
+/**
+ * Days that one Income bar covers, and how many bars that leaves.
+ *
+ * The Income submode is driven by the candle-width ladder: a bar is a SUM over its
+ * bucket, not one day. `1W` is the ladder's floor for Income — a single day of personal
+ * cash flow is almost always empty — and it is what the component opens on here, because
+ * jsdom reports no plot width so every rung stays offered and the lowest is taken.
+ *
+ * Derived rather than written down: hard-coding 6 would pin today's arithmetic and say
+ * nothing about where it came from, so a change of floor would leave a number that is
+ * wrong without being obviously wrong.
+ */
+const INCOME_BUCKET_DAYS = 7;
+const INCOME_BUCKET_COUNT = Math.ceil(DAY_COUNT / INCOME_BUCKET_DAYS);
 
 const DATES: string[] = Array.from({length: DAY_COUNT}, (_, index) => new Date(Date.UTC(2026, 0, 1 + index)).toISOString().slice(0, 10));
 
@@ -308,7 +322,8 @@ const LAZY_INPUTS: LazyInputCase[] = [
         submode: 'income',
         seriesWhileAbsent: 6,
         arrival: {incomeHistory: INCOME_HISTORY},
-        expectedRealValues: 2 * DAY_COUNT,
+        // Two series (dividend, interest), each one bar per bucket.
+        expectedRealValues: 2 * INCOME_BUCKET_COUNT,
         // Slots 0 and 1 of the income submode's fixed 6-slot order: dividend, interest.
         countRealValues: (series) => nonZeroPoints(series[0]) + nonZeroPoints(series[1]),
     },
@@ -317,7 +332,7 @@ const LAZY_INPUTS: LazyInputCase[] = [
         submode: 'income',
         seriesWhileAbsent: 6,
         arrival: {costHistory: COST_HISTORY},
-        expectedRealValues: DAY_COUNT,
+        expectedRealValues: INCOME_BUCKET_COUNT,
         // Slot 2: costs (FEE+TAX, signed negative).
         countRealValues: (series) => nonZeroPoints(series[2]),
     },
@@ -326,7 +341,7 @@ const LAZY_INPUTS: LazyInputCase[] = [
         submode: 'income',
         seriesWhileAbsent: 6,
         arrival: {depositHistory: DEPOSIT_HISTORY},
-        expectedRealValues: DAY_COUNT,
+        expectedRealValues: INCOME_BUCKET_COUNT,
         // Slot 3: deposit size.
         countRealValues: (series) => nonZeroPoints(series[3]),
     },
@@ -335,7 +350,8 @@ const LAZY_INPUTS: LazyInputCase[] = [
         submode: 'income',
         seriesWhileAbsent: 6,
         arrival: {acquisitionFunding: ACQUISITION_FUNDING},
-        expectedRealValues: 2 * DAY_COUNT,
+        // Two series (new capital, reinvested), each one bar per bucket.
+        expectedRealValues: 2 * INCOME_BUCKET_COUNT,
         // Slots 4 and 5: the new-capital / reinvested funding split.
         countRealValues: (series) => nonZeroPoints(series[4]) + nonZeroPoints(series[5]),
     },

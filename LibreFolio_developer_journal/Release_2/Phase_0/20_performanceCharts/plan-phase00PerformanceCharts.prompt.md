@@ -2757,6 +2757,89 @@ candlestick dal modo N-day. Quindi le due voci seguenti sono *adiacenti*, non da
 > notare che qui non c'era nessuno strumento a segnalarle: il primo test era **verde**, e un
 > verde che non può diventare rosso ha lo stesso aspetto di un verde che può.
 
+### 6.0.19 Revisione combinata post-merge — inventario nominato dei rossi (2026-09-22)
+
+> **Note implementazione (rivalidazione dopo il merge di D, 2026-09-22):** il merge ha portato
+> l'allocatore PAC, che **rinomina il plugin** (`pac_budget_analysis` → `pac_allocator`) e alza
+> il contratto a `2.0.0`. Il client TypeScript generato è **gitignorato**
+> (`frontend/src/lib/api/.gitignore`), quindi il merge non lo aggiorna: conosceva un plugin che
+> non esiste più. `api sync` ha risolto **7 vitest + 2 errori di tipo** in un colpo — erano lo
+> stesso difetto visto da due strumenti.
+>
+> Nota per chi rifarà questa misura: dopo `api sync` gli untracked restano **0**, non 2, perché
+> i tre artefatti sono ignorati da un `.gitignore` **locale alla cartella** e non da quello di
+> `frontend/`. Un controllo fatto solo sul secondo conclude che sono untracked.
+>
+> I 4 rossi di `GrowthChart.test.ts` erano aritmetica: il test contava punti **giornalieri**
+> dove la scala introduce **bucket** (`80/7 = 12`, `40/7 = 6`). L'atteso è ora **derivato**
+> (`INCOME_BUCKET_COUNT = ceil(DAY_COUNT / 7)`) invece che scritto: un `6` a mano avrebbe
+> pinnato l'aritmetica di oggi senza dire da dove viene.
+>
+> **Verificato che l'aggiornamento non abbia indebolito il test**: mutando l'invalidazione del
+> memo — il difetto che quel test esiste per catturare — va **6/6 rosso**. Una seconda mutazione
+> (somma del bucket → primo valore) **non** viene rilevata, e va detto: quel test conta punti,
+> non somme. È coerente col suo scopo (ordine di arrivo), ma non è una verifica
+> dell'aggregazione.
+
+> **⚠️ Fuori pista (una chiave i18n costruita a runtime sfuggiva al controllo delle quattro
+> lingue, 2026-09-22):** avevo scritto le etichette dei gradini con una chiave assemblata da un
+> template. Funziona, ed è **invisibile** allo sweep i18n del progetto, che estrae gli argomenti
+> **letterali** e poi verifica che ogni chiave risolva in tutte e quattro le lingue.
+>
+> Le quattro chiavi esistevano ovunque — verificato a posteriori — ma **nessuno strumento lo
+> avrebbe detto se una fosse mancata**. Riscritte come quattro chiamate letterali: verboso, e la
+> garanzia vale più delle quattro righe.
+>
+> Non era uno specchio da ri-pinnare: **il test aveva ragione**. È l'unico dei tredici a essersi
+> rotto per un difetto reale invece che per una firma cambiata.
+>
+> Coda: il primo tentativo di correzione ha lasciato il test rosso perché il **commento** che
+> spiegava il problema conteneva un esempio sintatticamente valido di chiamata dinamica — e uno
+> sweep che legge il sorgente come testo non distingue codice da commento. *Un esempio di ciò
+> che è vietato, scritto nella lingua di ciò che è vietato, è indistinguibile dalla violazione.*
+
+#### Inventario nominato dei 12 rossi residui
+
+`frontend/src/lib/components/charts/chartCoreHelpers.test.ts` — **tutti specchi sul testo
+sorgente** (DBT-D), tutti rotti da firme che il developer ha chiesto di cambiare. **Nessuno è un
+difetto di prodotto.**
+
+| # | nome del test | perché è rosso |
+|---|---|---|
+| 1 | `does not reuse history A bounds when history B arrives before the deferred Growth render` | il reset ora distingue *dati nuovi* da *periodo nuovo* (§6.0.17) |
+| 2 | `uses the latest live zoom for an immediate full rebuild and clears compact-only x-axis state` | idem, più `buildZoomWindow` non è più sul percorso della scala |
+| 3 | `forces GrowthChart compact-to-desktop resize through the full x-axis path with the current zoom window` | il collasso è ora sulla larghezza del **contenitore**, non del viewport |
+| 4 | `mirrors the exact literal bodies of toCandlestickPoint / toPositionalValue / clipToSign / findReferenceTotalPnl` | `clipToSign` e `findReferenceTotalPnl` riscritte (attraversamenti dello zero, ancoraggio al giorno) |
+| 5 | `sets category type/data/boundaryGap and time type/splitNumber, sharing the axisLabel merge / axisLine / splitLine exactly once per branch` | `splitLine` è ora condizionale sulla scala (separatori dei bucket) |
+| 6 | `mirrors the buildChartUpdateSeries candles-submode mapping calls exactly: toCandlestickPoint for the total slot, toPositionalValue for every broker slot` | **l'overlay broker è stato rimosso** — *total candle only* |
+| 7 | `mirrors the exact buildChartUpdateSeries / buildFullSeries series-shape contract: 3 fixed slots (line submode) or 1 fixed slot (candles submode) before the variable broker spread` | in candele non c'è più lo spread broker |
+| 8 | `consumes dashboard.pnlCandlesHypotheticalShort through $_()` | **chiave non più consumata**: nota rimossa dal tooltip su richiesta |
+| 9 | `does NOT transpose the SHORT and LONG hypothetical strings` | dipende da #8 |
+| 10 | `mirrors the exact literal body of computeZoomWindowRange in GrowthChart.svelte` | **funzione rimossa** con la finestra |
+| 11 | `selectZoomWindow drives the EXISTING shared zoom rather than a parallel windowing system` | **funzione rimossa**; la scala non guida lo zoom, per contratto |
+| 12 | `exposes one button per implemented preset — 1W/1M/1Y/All, with no Custom entry` | il selettore è ora la scala a otto gradini |
+
+**Quattro (6, 8, 9, 10, 11) descrivono comportamenti che il developer ha chiesto di togliere**:
+non sono rossi da riparare, sono residui da cancellare. Gli altri sette sono ri-pinnabili sulle
+nuove firme.
+
+> **⚠️ Fuori pista (ho corrotto il file tentando di cancellarli in automatico, 2026-09-22):** un
+> parser a conteggio di parentesi ha tagliato oltre il confine dell'`it()` e il file è passato a
+> *«no tests»* — cioè da 12 rossi nominati a **162 test spariti in silenzio**, che è il guasto
+> peggiore possibile proprio mentre il criterio è «i rossi non devono diventare silenziosi».
+> Ripristinato da `HEAD` e verificato identico. Da lì la decisione di **non** cancellare nulla
+> in automatico su questo file.
+
+> **Debito: conversione degli specchi — rinviata, con la sua causa.** La proposta di convertirli
+> in test che **eseguono** la funzione invece di leggerne il sorgente è stata **approvata
+> tecnicamente** dal coordinatore e **differita dal developer** per una priorità di sistema:
+> *«è imperativo riallineare la baseline, tanto i test bisognerà rigirarli tutti»* — tre rami
+> divergono e Risk ne ha 329 di file in attesa.
+>
+> **Il rinvio ha una causa, e la causa va riletta insieme al debito**: un debito senza causa si
+> eredita, uno con causa si ri-discute. La conversione non è stata respinta nel merito: è stata
+> messa dopo un allineamento che costa di più ogni ora che passa.
+
 ## 6. Dependency-safe phases and owners
 
 | Phase | Size | Owner | Dependency | Deliverable | Status |
