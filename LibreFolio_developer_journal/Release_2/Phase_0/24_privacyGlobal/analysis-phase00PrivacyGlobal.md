@@ -5,8 +5,9 @@
 > classificherebbe come «non completato» per sempre.
 >
 > **Cosa non è.** Non contiene codice di prodotto, test, migrazioni, chiavi i18n né viste ASCII del
-> gate UX. Il piano d'implementazione sarà `plan-phase00PrivacyGlobalRound1-….prompt.md` in questa
-> stessa cartella, con cross-link in entrambe le direzioni.
+> gate UX. Il piano d'implementazione è
+> [`plan-phase00PrivacyGlobalRound1-MaskingCore.prompt.md`](./plan-phase00PrivacyGlobalRound1-MaskingCore.prompt.md),
+> in questa stessa cartella, con cross-link in entrambe le direzioni.
 
 | | |
 |---|---|
@@ -441,10 +442,10 @@ Quando la privacy è attiva, il valore reale **non deve esistere**:
 
 1. ✅ il valore reale **non viene renderizzato**: viene **sostituito prima** di entrare nel markup,
    non coperto dopo;
-2. ✅ il segnaposto ha **forma stabile** — per esempio `••••` — e **non** dipende dal valore reale:
-   nessuna randomizzazione di cifre reali, nessuna lunghezza proporzionale all'importo. *Un
-   segnaposto la cui larghezza varia col valore è un canale laterale a bassa risoluzione, ed è
-   peggio di un segnaposto onesto perché sembra sicuro;*
+2. ✅ il segnaposto ha **forma stabile** — `•••` — e **non rivela la magnitudine** dell'importo:
+   nessuna randomizzazione di cifre reali, nessuna lunghezza proporzionale, nessun suffisso
+   compatto (`K`/`M`) superstite. *Un segnaposto la cui larghezza varia col valore è un canale
+   laterale a bassa risoluzione, ed è peggio di un segnaposto onesto perché sembra sicuro;*
 3. ✅ **l'identità della valuta resta visibile** — `$ 🇺🇸 USD` non è un valore sensibile
    (§1.1), ed è ciò che rende la tabella ancora leggibile;
 4. ✅ **la struttura del layout non cambia**: righe, colonne e altezze restano, per non segnalare
@@ -452,6 +453,19 @@ Quando la privacy è attiva, il valore reale **non deve esistere**:
 5. ✅ **è reversibile senza ricaricare**: il toggle agisce sul rendering corrente, inclusi tooltip
    già aperti (`dispatchAction`, §1.5) e portali già montati;
 6. ✅ **si applica prima del primo paint utile**, garanzia già fornita dal gate esistente (§5.3).
+7. ⚠️ **il segno resta visibile** — `+•••` / `-•••` / `•••` (**D8**, 2026-09-21, decisione del
+   developer con l'obiezione di sicurezza sul tavolo).
+
+> La clausola 7 **non è un'eccezione alla 2**, ed è scritta separata apposta: *una proprietà con
+> un'eccezione accanto è una proprietà che nessuno verificherà più.* Sono due clausole distinte —
+> la magnitudine non esce (2), `sign(importo)` esce (7) — e vanno verificate da due test diversi.
+>
+> Il costo, misurato e non stimato: `sign` ha **tre** valori, non due. Sei siti passano
+> `showSign: value !== 0`
+> (`UnifiedLotsTable:192`, `ExposureTable:136`, `ContributionTable:171`,
+> `OtherPeriodEffectsTable:95`, `LotGanttChart:255`, `LotCustodyModal:84`), quindi lì il prefisso è
+> presente **se e solo se** l'importo è diverso da zero. Su una colonna di contributi per periodo,
+> una tabella tutta mascherata continua a mostrare **in quali periodi c'è stata attività**.
 
 ### 2.3 — Verificabilità del contratto
 
@@ -464,6 +478,7 @@ piano d'implementazione le trasformerà in test, tramite `test-author`):
 | 2.1.3 | il nome accessibile calcolato non contiene il valore |
 | 2.1.6 | asserzione sul `document.body`, non sul sottoalbero del componente |
 | 2.2.2 | due valori di ordini di grandezza diversi producono **lo stesso** segnaposto |
+| 2.2.7 | il prefisso di segno sopravvive al mascheramento — **controllo positivo obbligatorio**: verificare anche che la magnitudine *non* sopravviva nella stessa chiamata, altrimenti il test è verde anche quando il mascheramento non è avvenuto affatto |
 | 2.2.5 | toggle con un tooltip aperto: il contenuto cambia senza rimontare il grafico |
 
 > ⚠️ **Attenzione alle asserzioni negative.** «Il valore non compare» è vera quando il mascheramento
@@ -1014,8 +1029,8 @@ L'interfaccia deve dire questo confine, e il piano d'implementazione deve indica
 - Backlog strutturale: [`09_feedbackJobs/00_backlog_strutturale_P4.md`](../09_feedbackJobs/00_backlog_strutturale_P4.md)
 - UX dashboard (origine di U2): [`09_feedbackJobs/01_ux_dashboard.md`](../09_feedbackJobs/01_ux_dashboard.md)
 - Workstream J, lavoro precedente (SP11/U8): [`21_onboarding/`](../21_onboarding/)
-- Piano d'implementazione: **da creare**, `plan-phase00PrivacyGlobalRound1-….prompt.md` in questa
-  cartella — dovrà cross-linkare questo documento.
+- Piano d'implementazione (passi 1-5 di §7.2):
+  [`plan-phase00PrivacyGlobalRound1-MaskingCore.prompt.md`](./plan-phase00PrivacyGlobalRound1-MaskingCore.prompt.md)
 
 ---
 

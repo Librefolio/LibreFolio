@@ -5,9 +5,18 @@
  * only be exercised end-to-end. Everything here is the part that runs *before*
  * any of that: it normalises the shapes the risk API returns (scalars that may
  * arrive as arrays, per-language text, bucket→shock maps), decides which stress
- * buckets and base analytics to request, and formats the leaf values. None of it
- * touches a store, a canvas, or the DOM, so every branch is unit-testable here —
- * which is exactly where an off-by-one in a fallback chain would otherwise hide.
+ * buckets and base analytics to request, and formats the leaf values.
+ *
+ * One deliberate exception to the "no store" rule: `formatCurrencyAmount` reads
+ * the global privacy flag. It is the only currency formatter in the codebase
+ * living outside `utils/currency/currencyFormat.ts`, so masking it at its caller
+ * instead would place the decision at the *site* rather than in the channel —
+ * and the whole point of deciding in a formatter is that it is decided once.
+ * Every branch here stays unit-testable: the flag defaults to off, and the
+ * masked branch is reached by turning it on.
+ *
+ * Nothing else touches a store, a canvas, or the DOM — which is exactly where an
+ * off-by-one in a fallback chain would otherwise hide.
  *
  * Anything that needs a translation ($t) or an emoji/flag lookup stays in the
  * component: those are presentation, and asserting on translated output is
@@ -16,6 +25,7 @@
  */
 import {buildRiskAnalyticRequest, type RiskAnalyticParameters, type RiskAnalyticRequest, type RiskMode, type RiskScenarioDimension} from '$lib/risk/riskRequest';
 import {singleValue, type RiskDataQualityReport} from '$lib/risk/riskTypes';
+import {PRIVACY_PLACEHOLDER, shouldMaskAmount} from '$lib/utils/privacy/maskable';
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
 
@@ -126,12 +136,17 @@ export function formatRatio(value: number | null | undefined): string {
  * value may arrive as a string or an array of them (`singleValue` narrows it).
  * `locale` is optional so callers get the process default in the app but tests
  * can pin it — `Intl.NumberFormat` output otherwise depends on the host locale.
+ *
+ * The privacy check sits *after* the absence checks on purpose: an absent value
+ * keeps its em-dash. Masking it would turn "there is no figure here" into "there
+ * is a figure here and you may not see it", which is a different statement.
  */
 export function formatCurrencyAmount(value: string | readonly (string | null)[] | null | undefined, currency: string, locale?: string): string {
     const scalar = singleValue(value);
     if (scalar == null) return '—';
     const amount = Number(scalar);
     if (!Number.isFinite(amount)) return '—';
+    if (shouldMaskAmount()) return PRIVACY_PLACEHOLDER;
     return new Intl.NumberFormat(locale, {style: 'currency', currency, maximumFractionDigits: 2}).format(amount);
 }
 

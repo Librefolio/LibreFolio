@@ -385,6 +385,11 @@
                 sortable: true,
                 hiddenByDefault: true,
                 getValue: (row) => row.price ?? 0,
+                // Deliberately NOT `sensitivity: 'public'`, although it is the same
+                // kind of market quote that AssetTable publishes. Here the row also
+                // carries `quantity` (visible by D5) and `value` (masked), and
+                // quantity × price reconstructs value. The quote is public; showing
+                // it *next to these neighbours* is not.
                 cell: (row) => (row.price == null ? '—' : formatCurrencyAmountPlain(row.price, displayCurrency)),
             },
             {
