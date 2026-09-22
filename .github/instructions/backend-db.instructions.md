@@ -97,6 +97,11 @@ before committing, while the migration is still unreleased:
   (`004_release_1_2_0_schema` → v1.2.0) or the **functional scope** when the migration is a
   single self-contained change (`003_scheduler_timezone`).
 - The `revision` string inside the file equals the filename without `.py`.
+- ⚠️ **Keep the id at 32 characters or fewer.** Alembic's own `alembic_version.version_num`
+  is `VARCHAR(32)`, and on an engine that enforces length a longer id fails to stamp.
+  `004_release_1_2_0_schema` is 24 — comfortable, but `005_release_1_3_0_taxonomy_rework`
+  would be 33 and would not fit. Count before committing:
+  `python -c "print(len('005_your_revision_id'))"`.
 
 ⚠️ **The revision id is the contract; the filename is not.** Alembic resolves revisions by id,
 never by path, so a file can be renamed freely — this is *verified*: renaming

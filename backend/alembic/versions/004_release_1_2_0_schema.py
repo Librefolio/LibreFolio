@@ -50,25 +50,36 @@ is untouched, because the id is the contract and the filename is not.
    meaning: every current value survives unaltered, and plain ``ETF`` remains
    valid as the residual for mixed or unstated content.
 
-   NOTE — the ``VARCHAR(14)`` on ``assets.asset_type`` is now too narrow to
-   describe the enum, and we are leaving it that way **on purpose**.
+   NOTE — ``assets.asset_type`` and ``transactions.type`` were declared
+   ``VARCHAR(14)``. Since 22/09/2026 the declaration in 001_initial reads
+   ``VARCHAR(32)``; released SQLite databases keep their original 14 and that is
+   deliberate.
 
-       ``ETF_REAL_ESTATE`` is 15 characters. The 14 is a fossil: the enum once
-       contained ``CROWDFUND_LOAN`` — exactly fourteen characters — which was
-       later shortened to ``CROWDFUND`` while the column declaration stayed
-       behind. It has therefore been describing a value that no longer exists
-       for some time.
+       The 14 was a fossil twice over. ``ETF_REAL_ESTATE`` is 15 characters, so
+       the asset column had been describing less than the enum could produce;
+       and the number itself came from ``CROWDFUND_LOAN`` — exactly fourteen —
+       which was later shortened to ``CROWDFUND``. On the transaction side
+       ``FX_CONVERSION`` is 13: one character of margin, which the next type
+       name would have consumed in silence.
 
-       On SQLite the length is advisory: type affinity ignores it and nothing is
-       truncated or rejected, which is the same reasoning migration 002 recorded
-       for ``identifier_other``. Rebuilding ``assets`` on released installations
-       to correct a number that has no runtime effect would trade a real risk
-       for a cosmetic gain, and shortening the enum names to fit would bend the
-       taxonomy around a phantom constraint.
+       Widening the declaration is free where it is read — a fresh build, on any
+       engine — and costly where it is not. On SQLite the length is advisory:
+       measured 22/09/2026 by storing a 30-character value in a ``VARCHAR(14)``
+       column, which was accepted unchanged. Rebuilding ``assets`` and
+       ``transactions`` on every released installation to correct a number the
+       engine ignores would trade a real risk for no effect, so this migration
+       performs no DDL for it. The same reasoning migration 002 recorded for
+       ``identifier_other``.
 
-       On a future Postgres port this column must be widened explicitly (or
-       changed to ``TEXT``), because there the length **is** enforced and
-       ``ETF_REAL_ESTATE`` would be rejected.
+       The divergence that remains is therefore: installations created before
+       this date declare 14, those created after declare 32, and on SQLite the
+       two behave identically. It stops being harmless the day the schema is
+       built on an engine that enforces the length — and on that day the schema
+       is built from these migrations, which now say 32.
+
+       32 rather than 24: it is what Alembic itself uses for ``version_num``, it
+       leaves room for a composite such as ``CROWDFUND_REAL_ESTATE`` (21), and
+       the declaration costs the same either way.
 
 3. Versioned per-user onboarding progress. Existing users are not taught an
    application they already use. Welcome is grandfathered as completed because
