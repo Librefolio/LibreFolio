@@ -4,6 +4,7 @@
     import {Menu, Coffee} from 'lucide-svelte';
     import LanguageSelector from '$lib/components/layout/LanguageSelector.svelte';
     import ThemeToggle from '$lib/components/ui/ThemeToggle.svelte';
+    import PrivacyToggle from '$lib/components/ui/PrivacyToggle.svelte';
     import HelpMenu from '$lib/components/layout/HelpMenu.svelte';
     import {getDocumentScrollY} from '$lib/utils/layout/headerScroll';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
@@ -231,6 +232,7 @@
                 <span class="hidden sm:inline text-sm font-medium leading-5">{$_('help.buyMeACoffee')}</span>
                 <Coffee size={20} class="flex-shrink-0" />
             </a>
+            <PrivacyToggle />
             <ThemeToggle />
             <LanguageSelector onOpenChange={handleLanguageOpenChange} />
             <HelpMenu onOpenChange={handleHelpMenuOpenChange} />

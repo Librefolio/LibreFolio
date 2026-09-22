@@ -10,14 +10,24 @@
  *
  * formatCurrencyAmount is asserted with an explicit locale ('en-US') so the
  * expected string is deterministic regardless of the host process locale.
+ *
+ * It is also the one function here that reads a store — the global privacy flag
+ * — so this file resets that flag around every test. The reset is not optional:
+ * the store is module level and shared with every other suite in the run, and a
+ * leftover `true` would turn each `'$1,234.50'` below into a placeholder.
  */
-import {describe, expect, it} from 'vitest';
+import {afterEach, beforeEach, describe, expect, it} from 'vitest';
 
 import type {RiskDataQualityReport} from '$lib/risk/riskTypes';
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
+import {setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
+import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
 import {addDays, buildBaseAnalytics, formatCurrencyAmount, formatRatio, localizedScenarioText, normalizeQualityIssue, numberRecord, presentStressBuckets, resultByCode, scalarString, stressImpactDimension, type BaseAnalyticsContext} from './riskAnalysisHelpers';
 
 type Issue = NonNullable<RiskDataQualityReport['issues']>[number];
+
+beforeEach(() => setPrivacyEnabled(false));
+afterEach(() => setPrivacyEnabled(false));
 
 /** A result whose only field the code under test reads is `analytic_code`. */
 function result(code: string): RiskAnalyticResult {
@@ -303,6 +313,95 @@ describe('formatCurrencyAmount', () => {
 
     it('respects the currency argument', () => {
         expect(formatCurrencyAmount('1000', 'EUR', 'en-US')).toBe('€1,000.00');
+    });
+
+    describe('with global privacy on', () => {
+        it('replaces a formattable amount with the placeholder', () => {
+            // Control: the same call, one line earlier in time, with the flag
+            // off. It is what makes the next assertion a substitution rather
+            // than a function that has always returned a placeholder.
+            expect(formatCurrencyAmount('1234.5', 'USD', 'en-US')).toBe('$1,234.50');
+
+            setPrivacyEnabled(true);
+            expect(formatCurrencyAmount('1234.5', 'USD', 'en-US')).toBe(PRIVACY_PLACEHOLDER);
+            expect(formatCurrencyAmount(['1234.5', '99'], 'USD', 'en-US')).toBe(PRIVACY_PLACEHOLDER);
+        });
+
+        it('still says em-dash for an absent value', () => {
+            setPrivacyEnabled(true);
+
+            // Masking an absence would promote "there is no figure here" into
+            // "there is a figure here and you may not see it" — a number the
+            // portfolio does not have.
+            expect(formatCurrencyAmount(null, 'USD', 'en-US')).toBe('—');
+            expect(formatCurrencyAmount(undefined, 'USD', 'en-US')).toBe('—');
+            expect(formatCurrencyAmount([null], 'USD', 'en-US')).toBe('—');
+            expect(formatCurrencyAmount([], 'USD', 'en-US')).toBe('—');
+
+            // Positive control for the flag: in this exact state a *present*
+            // value comes back masked. Without it every line above would also
+            // hold on a run where privacy never turned on, which is the one way
+            // this test could pass while testing nothing.
+            expect(formatCurrencyAmount('0', 'USD', 'en-US')).toBe(PRIVACY_PLACEHOLDER);
+        });
+
+        it('still says em-dash for a value that is not a finite number', () => {
+            setPrivacyEnabled(true);
+
+            expect(formatCurrencyAmount('not-a-number', 'USD', 'en-US')).toBe('—');
+            expect(formatCurrencyAmount('Infinity', 'USD', 'en-US')).toBe('—');
+            // Control: a parseable neighbour of the same shape is masked, so the
+            // two em-dashes above are the absence check and not a masked branch
+            // that happens to look like one.
+            expect(formatCurrencyAmount('12', 'USD', 'en-US')).toBe(PRIVACY_PLACEHOLDER);
+        });
+
+        it('gives two very different magnitudes the identical placeholder', () => {
+            // Control: unmasked they differ, and by length.
+            const small = formatCurrencyAmount('1000', 'USD', 'en-US');
+            const large = formatCurrencyAmount('9999999', 'USD', 'en-US');
+            expect(small).not.toBe(large);
+            expect(small.length).not.toBe(large.length);
+
+            setPrivacyEnabled(true);
+            const maskedSmall = formatCurrencyAmount('1000', 'USD', 'en-US');
+            const maskedLarge = formatCurrencyAmount('9999999', 'USD', 'en-US');
+
+            expect(maskedSmall).toBe(maskedLarge);
+            expect(maskedSmall).toBe(PRIVACY_PLACEHOLDER);
+            expect(maskedSmall).not.toMatch(/\d/);
+        });
+
+        it('hides the sign of a loss', () => {
+            expect(formatCurrencyAmount('-1234.5', 'USD', 'en-US')).toBe('-$1,234.50');
+
+            setPrivacyEnabled(true);
+            expect(formatCurrencyAmount('-1234.5', 'USD', 'en-US')).toBe(formatCurrencyAmount('1234.5', 'USD', 'en-US'));
+            expect(formatCurrencyAmount('-1234.5', 'USD', 'en-US')).not.toContain('-');
+        });
+
+        it('drops the currency marker too, unlike the shared currency formatter', () => {
+            // Control: the currency is visible in the clear.
+            expect(formatCurrencyAmount('1000', 'USD', 'en-US')).toContain('$');
+            expect(formatCurrencyAmount('1000', 'EUR', 'en-US')).toContain('€');
+
+            setPrivacyEnabled(true);
+            // A deliberate asymmetry, pinned rather than judged: this formatter
+            // returns the bare placeholder, where formatCurrencyAmountPlain keeps
+            // `••• $ 🇺🇸 USD`. Here the currency labels the column, not the cell.
+            expect(formatCurrencyAmount('1000', 'USD', 'en-US')).toBe(formatCurrencyAmount('1000', 'EUR', 'en-US'));
+            expect(formatCurrencyAmount('1000', 'USD', 'en-US')).toBe(PRIVACY_PLACEHOLDER);
+        });
+
+        it('comes back unmasked as soon as the flag goes off', () => {
+            setPrivacyEnabled(true);
+            expect(formatCurrencyAmount('1234.5', 'USD', 'en-US')).toBe(PRIVACY_PLACEHOLDER);
+
+            setPrivacyEnabled(false);
+            // The formatter reads the flag per call: nothing is memoised, so a
+            // toggle is visible on the next render without an invalidation.
+            expect(formatCurrencyAmount('1234.5', 'USD', 'en-US')).toBe('$1,234.50');
+        });
     });
 });
 

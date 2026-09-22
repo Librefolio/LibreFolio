@@ -43,6 +43,7 @@
         tooltipXValue,
         type BucketInfo,
     } from './lotComparisonChartHelpers';
+    import {PRIVACY_PLACEHOLDER, shouldMaskAmount} from '$lib/utils/privacy/maskable';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type LotValueHistoryPoint = z.infer<typeof schemas.LotValueHistoryPoint>;
@@ -244,6 +245,10 @@
 
     function formatAxisCurrency(value: number): string {
         const normalized = normalizeZero(value);
+        // Checked at the function boundary, not at the `Intl` call: the `catch`
+        // fallback below renders money too, so masking one exit would leave the
+        // other in the clear precisely when the locale API is unavailable.
+        if (shouldMaskAmount()) return PRIVACY_PLACEHOLDER;
         try {
             return new Intl.NumberFormat(undefined, {
                 style: 'currency',
