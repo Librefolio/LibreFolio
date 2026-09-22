@@ -106,8 +106,29 @@ After modifying backend API endpoints or Pydantic schemas, regenerate the TypeSc
 ```
 
 ### What `api sync` does
-1. Starts a temporary server instance
-2. Fetches `/openapi.json`
-3. Writes `frontend/src/lib/api/openapi.json`
-4. Runs the Zodios code generator → `frontend/src/lib/api/generated.ts`
-5. Stops the temporary server
+1. `api schema` runs `scripts/list_api_endpoints.py`, which imports the FastAPI app
+   **in-process** and calls `app.openapi()`
+2. Writes `frontend/src/lib/api/openapi.json` and
+   `frontend/src/lib/api/tool-contracts.openapi.json`
+3. `api client` runs `npm run generate-api`, feeding the **local** `openapi.json`
+   to `openapi-zod-client` → `frontend/src/lib/api/generated.ts`
+4. That same script chains `npm run generate-tools` →
+   `frontend/src/lib/api/generated-tools.ts`
+
+**No server is started and no port is bound.** `api sync` is therefore safe to run in
+any worktree lane, concurrently with other lanes, without coordination.
+
+### Regenerate before you trust a measurement
+
+The five generated client files are git-ignored, so a merge never refreshes them: they
+stay at whatever age the last build left them, and keep answering.
+
+| Command | Regenerates the client? |
+|---------|------------------------|
+| `./dev.py api sync` | yes — both `generated.ts` and `generated-tools.ts`, no compile, no port |
+| `./dev.py front build` | yes — it calls `api sync` first, then pays for a full compile |
+| `./dev.py front check` | **no** — `svelte-check` only reads |
+
+Running `front check` against a stale client reports type errors in the files that
+*consume* the contract, never in the artifact that is wrong. Run `api sync` first, or
+the number describes a contract that no longer exists.

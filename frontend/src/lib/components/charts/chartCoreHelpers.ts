@@ -7,6 +7,7 @@
  */
 
 import type {RenderedSignal} from '$lib/charts/signals';
+import type {AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
 import type {ECharts} from 'echarts';
 import {buildBandSeries, buildBarSeries, buildSignalReferencePrimitives, COLORS, hexToRgba} from './lineChartHelpers';
 
@@ -27,6 +28,14 @@ export interface YAxisConfig {
     min?: number;
     max?: number;
     isPercentage?: boolean;
+}
+
+export interface ConfigurableAxisDescriptor {
+    key: string;
+    label: string;
+    unit?: RenderedSignal['unit'];
+    defaultMin?: number;
+    defaultMax?: number;
 }
 
 // =============================================================================
@@ -126,13 +135,90 @@ export function assignOverlaySignalAxes(overlaySignals: RenderedSignal[]): Rende
     });
 }
 
+export function secondaryAxisSettingsKey(signal: RenderedSignal): string | null {
+    if (signal.axisKey && (signal.axisRole === 'independent' || signal.axisRole === 'volume')) {
+        return `${signal.axisRole}:${signal.axisKey}`;
+    }
+    const index = signal.yAxisIndex ?? 0;
+    return index > 0 ? `legacy:${index}` : null;
+}
+
+export function collectConfigurableSecondaryAxes(overlaySignals: RenderedSignal[]): ConfigurableAxisDescriptor[] {
+    const assigned = assignOverlaySignalAxes(overlaySignals);
+    const descriptors = new Map<string, ConfigurableAxisDescriptor>();
+    for (const signal of assigned) {
+        if (signal.data.length === 0) continue;
+        const key = secondaryAxisSettingsKey(signal);
+        if (!key || descriptors.has(key)) continue;
+        descriptors.set(key, {
+            key,
+            label: signal.axisLabel ?? signal.label,
+            unit: signal.unit,
+            defaultMin: signal.axisMinimum,
+            defaultMax: signal.axisMaximum,
+        });
+    }
+    return [...descriptors.values()];
+}
+
+function resolveSecondaryAxisScale(signals: RenderedSignal[], settings: AxisScaleSettings | undefined): {min?: number; max?: number; scale: boolean} {
+    const mode = settings?.mode ?? 'auto';
+    if (mode === 'custom') {
+        let min = settings?.min;
+        let max = settings?.max;
+        if (min !== undefined && max !== undefined && min > max) {
+            [min, max] = [max, min];
+        }
+        return {
+            min,
+            max,
+            scale: true,
+        };
+    }
+    let dataMin: number | undefined;
+    let dataMax: number | undefined;
+    for (const signal of signals) {
+        for (const point of signal.data) {
+            if (point.missing || !Number.isFinite(point.value)) continue;
+            dataMin = dataMin === undefined ? point.value : Math.min(dataMin, point.value);
+            dataMax = dataMax === undefined ? point.value : Math.max(dataMax, point.value);
+        }
+    }
+    if (mode === 'include0') {
+        return {
+            min: dataMin === undefined ? undefined : Math.min(dataMin, 0),
+            max: dataMax === undefined ? undefined : Math.max(dataMax, 0),
+            scale: false,
+        };
+    }
+    return {
+        min: dataMin,
+        max: dataMax,
+        scale: true,
+    };
+}
+
 /** Build all active non-price Y-axes from canonical axis metadata. */
-export function buildSecondaryYAxes(overlaySignals: RenderedSignal[], dark: boolean, gridIndex: number = 0, showAxes: boolean = true): {axes: any[]; hasSecondary: boolean; hasTertiary: boolean; extraAxesCount: number; nextAxisIndex: number} {
+export function buildSecondaryYAxes(
+    overlaySignals: RenderedSignal[],
+    dark: boolean,
+    gridIndex: number = 0,
+    showAxes: boolean = true,
+    axisSettings: Record<string, AxisScaleSettings> = {},
+): {
+    axes: any[];
+    hasSecondary: boolean;
+    hasTertiary: boolean;
+    extraAxesCount: number;
+    nextAxisIndex: number;
+} {
     const signalByIndex = new Map<number, RenderedSignal>();
+    const signalsByIndex = new Map<number, RenderedSignal[]>();
     for (const signal of overlaySignals) {
         const index = signal.yAxisIndex ?? 0;
-        if (index > 0 && signal.data.length > 0 && !signalByIndex.has(index)) {
-            signalByIndex.set(index, signal);
+        if (index > 0 && signal.data.length > 0) {
+            if (!signalByIndex.has(index)) signalByIndex.set(index, signal);
+            signalsByIndex.set(index, [...(signalsByIndex.get(index) ?? []), signal]);
         }
     }
 
@@ -145,6 +231,8 @@ export function buildSecondaryYAxes(overlaySignals: RenderedSignal[], dark: bool
         const active = signal !== undefined;
         const color = signal?.color ?? (dark ? '#64748b' : '#9ca3af');
         const label = signal?.axisLabel ?? (index === 1 ? 'RSI' : index === 2 ? 'MACD' : `AXIS ${index}`);
+        const settingsKey = signal ? secondaryAxisSettingsKey(signal) : null;
+        const scale = signal ? resolveSecondaryAxisScale(signalsByIndex.get(index) ?? [signal], settingsKey ? axisSettings[settingsKey] : undefined) : {min: 0, max: 1, scale: false};
 
         axes.push({
             type: 'value',
@@ -161,8 +249,8 @@ export function buildSecondaryYAxes(overlaySignals: RenderedSignal[], dark: bool
             show: active && showAxes,
             position: 'right' as const,
             offset: (index - 1) * 55,
-            min: active ? signal.axisMinimum : 0,
-            max: active ? signal.axisMaximum : 1,
+            min: active ? scale.min : 0,
+            max: active ? scale.max : 1,
             axisLine: {
                 show: active && showAxes,
                 lineStyle: {color},
@@ -179,7 +267,7 @@ export function buildSecondaryYAxes(overlaySignals: RenderedSignal[], dark: bool
                 },
             },
             splitLine: {show: false},
-            scale: signal?.axisMinimum === undefined && signal?.axisMaximum === undefined,
+            scale: scale.scale,
         });
     }
 
@@ -214,7 +302,7 @@ export function buildOverlaySignalSeries(overlaySignals: RenderedSignal[], dates
         if (!signal.data.length) continue;
 
         const sType = signal.seriesType ?? 'line';
-        const signalLookup = new Map(signal.data.map((d) => [d.date, d.value]));
+        const signalLookup = new Map(signal.data.map((point) => [point.date, point.missing ? null : point.value]));
         const signalSeriesData: any[] = dates.map((date) => signalLookup.get(date) ?? null);
 
         if (sType === 'band' && signal.bandData) {
@@ -238,7 +326,7 @@ export function buildOverlaySignalSeries(overlaySignals: RenderedSignal[], dates
             type: 'line',
             name: signal.label,
             data: signalSeriesData,
-            connectNulls: true,
+            connectNulls: signal.connectNulls ?? true,
             smooth: false,
             symbol: 'none',
             showSymbol: false,

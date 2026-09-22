@@ -16,7 +16,7 @@ from backend.app.schemas.risk import (
 from backend.app.services.provider_registry import RiskAnalyticRegistry, register_plugin
 from backend.app.services.risk.analytic_helpers import prepared_asset_returns
 from backend.app.services.risk.base import RiskAnalytic, RiskComputation
-from backend.app.services.risk.metrics import pairwise_correlation
+from backend.app.services.risk.metrics import pairwise_correlation_matrix
 
 
 class CorrelationParams(BaseModel):
@@ -63,17 +63,19 @@ class CorrelationAnalytic(RiskAnalytic):
         asset_ids = context.scope_asset_ids
         series = {asset_id: prepared_asset_returns(context, asset_id)[1] for asset_id in asset_ids}
         expected = context.prepared_series.n_observations if context.prepared_series else 0
+        matrix, observations, coverage = pairwise_correlation_matrix(
+            [series[asset_id] for asset_id in asset_ids],
+            expected_observations=expected,
+        )
         cells: list[RiskMatrixCell] = []
         insufficient = False
         undefined = False
-        low_coverage = False
-        for row_asset_id in asset_ids:
-            for column_asset_id in asset_ids:
-                value, observations, coverage = pairwise_correlation(
-                    series[row_asset_id],
-                    series[column_asset_id],
-                    expected_observations=expected,
-                )
+        # Guarded exactly as the old loop body was: with an empty scope there are no pairs
+        # to judge, and an empty set reports a coverage of 0.0 that must not be read as low.
+        low_coverage = bool(asset_ids) and coverage < params.min_coverage
+        for row_index, row_asset_id in enumerate(asset_ids):
+            for column_index, column_asset_id in enumerate(asset_ids):
+                value = matrix[row_index][column_index]
                 if observations < params.min_observations:
                     status = RiskValueStatus.INSUFFICIENT
                     value = None
@@ -83,7 +85,6 @@ class CorrelationAnalytic(RiskAnalytic):
                     undefined = True
                 else:
                     status = RiskValueStatus.OK
-                low_coverage = low_coverage or coverage < params.min_coverage
                 cells.append(
                     RiskMatrixCell(
                         row_asset_id=row_asset_id,

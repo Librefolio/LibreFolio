@@ -211,9 +211,13 @@ def test_cascade_stage_structure_follows_view_ordinals(build_scenario: Callable[
 
 def test_solver_evidence_reports_engine_settings_and_real_tolerances() -> None:
     """The wire-evidence block is the engine name, a non-empty version, the
-    settings actually applied (always `limits/time`), and the tolerances read
-    back from SCIP itself (`feasibility == 1e-6`, `integrality == 1e-9` by
-    default), not values this module made up.
+    settings that survive the whole run plus the overall `time_budget`, and
+    the tolerances read back from SCIP itself (`feasibility == 1e-6`,
+    `integrality == 1e-9` by default), not values this module made up.
+
+    `limits/time` is deliberately *not* among them: it is re-armed before
+    every stage with that stage's remaining slice, so a single top-level
+    value would report a configuration no stage ever ran with.
     """
     _view, result = _run(_two_asset_pac_scenario())
 
@@ -221,8 +225,10 @@ def test_solver_evidence_reports_engine_settings_and_real_tolerances() -> None:
     assert result.version  # non-empty engine version string
 
     setting_by_name = {setting.name: setting.value for setting in result.settings}
-    assert "limits/time" in setting_by_name
-    assert setting_by_name["limits/time"] == f"{DEFAULT_SOLVER_TIME_BUDGET_SECONDS:g}"
+    assert setting_by_name.get("time_budget") == f"{DEFAULT_SOLVER_TIME_BUDGET_SECONDS:g}"
+    # Re-adding a top-level `limits/time` would resurrect the false witness:
+    # no stage ever runs with the total budget, only with its own slice.
+    assert "limits/time" not in setting_by_name
     assert "limits/nodes" not in setting_by_name  # no node limit was requested
 
     assert result.tolerances.feasibility == 1e-6
@@ -231,13 +237,13 @@ def test_solver_evidence_reports_engine_settings_and_real_tolerances() -> None:
 
 def test_solver_node_limit_is_reported_in_settings() -> None:
     """Passing `node_limit` applies `limits/nodes` and records it as evidence
-    alongside `limits/time`.
+    alongside the overall `time_budget`.
     """
     _view, result = _run(_two_asset_pac_scenario(), node_limit=1)
 
     setting_by_name = {setting.name: setting.value for setting in result.settings}
     assert setting_by_name.get("limits/nodes") == "1"
-    assert "limits/time" in setting_by_name
+    assert setting_by_name.get("time_budget") == f"{DEFAULT_SOLVER_TIME_BUDGET_SECONDS:g}"
 
 
 # --------------------------------------------------------------------------

@@ -26,12 +26,11 @@ from backend.app.schemas.signals import (
     SignalWarmupRequirement,
 )
 from backend.app.services.provider_registry import SignalPluginRegistry, register_plugin
-from backend.app.services.risk.metrics import beta
 from backend.app.services.risk.signal_helpers import (
     build_line_computation,
     prepared_comparison_returns,
     prepared_primary_returns,
-    rolling_pair_values,
+    rolling_beta_values,
     undefined_window_warnings,
 )
 from backend.app.services.signal_plugins.base import (
@@ -143,11 +142,10 @@ class RollingBetaPlugin(SignalPlugin):
         del event_points
         primary_returns = prepared_primary_returns(context, price_points)
         comparison_returns = prepared_comparison_returns(context, price_points)
-        values, undefined_windows = rolling_pair_values(
+        values, undefined_windows = rolling_beta_values(
             primary_returns,
             comparison_returns,
             params.window,
-            beta,
         )
         if undefined_windows and all(value is None for value in values):
             raise SignalUnavailableError(

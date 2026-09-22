@@ -32,7 +32,10 @@
     import {downsampleRenderedSignal, type ChartResolution} from './timeSeriesAggregation';
     import {formatMonthLabel, getBucketInfo} from './priceChartHelpers';
     import {buildCandleSeriesData, computePercentageBase, formatCandlePrice, formatVolume, hasRenderableVolume, isBullishBar, parseCandleTooltipValue} from './candlestickChartHelpers';
+    import type {AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {truncateName} from '$lib/utils/text';
+    import {currentLanguage} from '$lib/stores/app/language';
+    import {buildResponsiveXAxisPolicy} from './responsiveXAxis';
 
     // =========================================================================
     // Props
@@ -83,6 +86,8 @@
         yAxisMin?: number;
         /** Y-axis maximum (when yAxisMode='custom') */
         yAxisMax?: number;
+        /** Stable semantic settings for active non-primary axes. */
+        secondaryAxisScales?: Record<string, AxisScaleSettings>;
         /** Shared chart resolution decided by PriceChartFull */
         resolution?: ChartResolution;
     }
@@ -111,6 +116,7 @@
         yAxisMode = 'auto',
         yAxisMin,
         yAxisMax,
+        secondaryAxisScales = {},
     }: Props = $props();
 
     // =========================================================================
@@ -124,6 +130,8 @@
     let chartOptionSet = false;
     let needsInitialLayoutStabilityPass = false;
     let lastRenderedResolution: ChartResolution | null = null;
+    let lastRenderedDates: string[] = [];
+    let responsiveXAxisCompact = false;
 
     // =========================================================================
     // Lifecycle
@@ -154,6 +162,8 @@
             void yAxisMode;
             void yAxisMin;
             void yAxisMax;
+            void secondaryAxisScales;
+            void $currentLanguage;
             tick().then(renderChart);
         }
     });
@@ -163,8 +173,12 @@
         resizeObserver = null;
         chartOptionSet = false;
         lastRenderedResolution = null;
+        lastRenderedDates = [];
         dataZoomTouchPanHandle?.dispose();
         dataZoomTouchPanHandle = null;
+        if (chartContainer) {
+            delete (chartContainer as unknown as Record<string, unknown>).__lfChart;
+        }
         chartInstance?.dispose();
         chartInstance = null;
     }
@@ -196,6 +210,21 @@
                 if (chartOptionSet) {
                     try {
                         chartInstance?.resize();
+                        if (chartInstance && lastRenderedDates.length > 0) {
+                            const policy = buildResponsiveXAxisPolicy({
+                                width: chartContainer.clientWidth,
+                                values: lastRenderedDates,
+                                locale: $currentLanguage,
+                                axisType: 'category',
+                            });
+                            const wasCompact = responsiveXAxisCompact;
+                            responsiveXAxisCompact = policy.compact;
+                            if (policy.axisLabel) {
+                                chartInstance.setOption({xAxis: {axisLabel: policy.axisLabel}}, {lazyUpdate: true});
+                            } else if (wasCompact) {
+                                renderChart();
+                            }
+                        }
                         if (chartInstance) updateArrowRotations(chartInstance);
                     } catch (_) {
                         /* ignore coord errors during resize */
@@ -212,6 +241,7 @@
 
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            (chartContainer as unknown as Record<string, unknown>).__lfChart = chartInstance;
             attachChartReady(chartInstance, chartContainer, 'candlestick');
             needsInitialLayoutStabilityPass = true;
             dataZoomTouchPanHandle = attachDataZoomTouchPan(chartInstance, chartContainer);
@@ -288,6 +318,7 @@
         const labelColor = dark ? '#94a3b8' : '#6b7280';
 
         const dates = data.map((d) => d.date);
+        lastRenderedDates = dates;
         const bucketInfoByDate = new Map(dates.map((date, index) => [date, getBucketInfo(data[index], resolution)]));
 
         // ── Percentage mode: transform prices relative to first data point ──
@@ -313,7 +344,7 @@
         // ── Overlay signals ──
         const downsampledOverlaySignals = resolution === 'daily' ? overlaySignals : overlaySignals.map((signal) => downsampleRenderedSignal(signal, resolution, data)).filter((signal) => signal.data.length > 0);
         const resolvedOverlaySignals = assignOverlaySignalAxes(downsampledOverlaySignals);
-        const {axes: secondaryAxes, extraAxesCount, nextAxisIndex: volumeYAxisIndex} = buildSecondaryYAxes(resolvedOverlaySignals, dark, 0);
+        const {axes: secondaryAxes, extraAxesCount, nextAxisIndex: volumeYAxisIndex} = buildSecondaryYAxes(resolvedOverlaySignals, dark, 0, true, secondaryAxisScales);
 
         const series: any[] = [];
 
@@ -374,12 +405,23 @@
         }
 
         // ── X-axes ──
+        const xAxisPolicy = buildResponsiveXAxisPolicy({
+            width: rect.width,
+            values: dates,
+            locale: $currentLanguage,
+            axisType: 'category',
+        });
+        responsiveXAxisCompact = xAxisPolicy.compact;
         const xAxisBase = {
             type: 'category' as const,
             data: dates,
             boundaryGap: true,
             axisLine: {lineStyle: {color: axisColor}},
-            axisLabel: {color: labelColor, fontSize: 14},
+            axisLabel: {
+                color: labelColor,
+                fontSize: 14,
+                ...(xAxisPolicy.axisLabel ?? {}),
+            },
             splitLine: {show: false},
         };
 
@@ -503,6 +545,20 @@
             series,
         };
 
+        let savedZoom: {start: number; end: number} | null = null;
+        if (chartOptionSet && chartInstance) {
+            const currentOption = chartInstance.getOption() as {
+                dataZoom?: Array<{start?: unknown; end?: unknown}>;
+            };
+            const currentZoom = currentOption.dataZoom?.[0];
+            if (typeof currentZoom?.start === 'number' && typeof currentZoom.end === 'number') {
+                savedZoom = {
+                    start: currentZoom.start,
+                    end: currentZoom.end,
+                };
+            }
+        }
+
         // Resolution switch: same ECharts tooltip-crash risk as PriceChartFull's line view
         // (full rebuild via setOption(option,true) while an axis-trigger tooltip + mousewheel
         // dataZoom are active) — hide the tooltip first when resolution actually changed.
@@ -513,6 +569,13 @@
         chartInstance.setOption(option, true);
         chartOptionSet = true;
         lastRenderedResolution = resolution;
+        if (savedZoom) {
+            chartInstance.dispatchAction({
+                type: 'dataZoom',
+                start: savedZoom.start,
+                end: savedZoom.end,
+            });
+        }
         updateArrowRotations(chartInstance);
         if (needsInitialLayoutStabilityPass) {
             needsInitialLayoutStabilityPass = false;

@@ -165,6 +165,225 @@ SciPy production.
 
 ---
 
+## 📉 Risk Analysis — Tracking Error / Information Ratio con benchmark selezionabile
+
+**Data aggiunta**: 16 Settembre 2026
+**Status**: 📋 FUTURO — tagliato dalla riorganizzazione Risk
+**Priorità**: 🔽 BASSA
+
+### Contesto
+
+`ComparisonAnalytic` (`backend/app/services/risk_plugins/comparison.py`) calcola già
+active return, tracking error, information ratio, correlazione e beta contro un asset
+reale di confronto. Nella riorganizzazione della UI Risk, **beta e active return
+restano**; **tracking error e information ratio vengono rimossi dalla UI**.
+
+Motivo: TE e IR nascono per valutare un gestore attivo contro un **mandato dichiarato**.
+Un investitore privato non ha né mandato né benchmark ufficiale, quindi i due numeri
+non sono interpretabili e occupano spazio accanto a metriche che decidono.
+Il backend non viene toccato: il calcolo resta disponibile via API.
+
+### Azione futura
+
+Riabilitarli **solo dopo** aver introdotto una vera selezione di benchmark:
+
+- scelta del benchmark fra gli asset già presenti in DB (non un ticker libero);
+- possibilità di dichiarare un benchmark **persistente** per portafoglio/broker,
+  non scelto al volo a ogni esecuzione;
+- avviso esplicito quando il benchmark ha valuta o storico non allineati allo scope;
+- wording che chiarisca che TE/IR misurano **scostamento dal benchmark**, non qualità.
+
+Senza benchmark persistente e dichiarato, riesporli riproduce il problema attuale.
+
+### Riferimenti
+
+- `backend/app/services/risk_plugins/comparison.py`
+- `frontend/src/lib/components/risk/RiskAnalysisPanel.svelte` (sezione comparison)
+
+---
+
+## 🧮 Risk Analysis — Portfolio optimization / frontiera efficiente (Riskfolio)
+
+**Data aggiunta**: 16 Settembre 2026
+**Status**: 📋 FUTURO LONTANO — rinviato a tempo indeterminato
+**Priorità**: 🔽 MOLTO BASSA
+
+### Contesto
+
+`PortfolioOptimizationAnalytic` (`backend/app/services/risk_plugins/portfolio_optimization.py`)
+è implementato e testato (Riskfolio-Lib 7.0.1 + CVXPY, solver CLARABEL/SCS, strategie
+min-variance / max-Sharpe / ERC, covarianze historical / Ledoit-Wolf / OAS) ma **non ha
+alcuna UI**: oggi è raggiungibile solo via API ed è quindi costo puro per ogni
+installazione.
+
+### Perché è rinviato — il motivo vero
+
+Non è la potenza di calcolo: il benchmark misurato dà **0,0159 s warm**. Non è nemmeno
+l'ampiezza del paniere in sé. Il problema è che l'ottimizzatore media-varianza produce
+un **output prescrittivo** ("i pesi giusti sono questi") che lo strumento non è in grado
+di giustificare onestamente:
+
+- è un *error maximizer*: preferisce gli asset il cui rendimento atteso è stato
+  sovrastimato dal campione;
+- i pesi sono instabili — cambia la finestra di stima e l'allocazione si ribalta;
+- più asset significa **più parametri da stimare** (N medie + N(N+1)/2 covarianze) e
+  quindi più errore, non meno — motivo per cui esistono gli shrinkage estimator;
+- LibreFolio è un tracker, non un consulente: è un confine di prodotto, non tecnico.
+
+### Precondizioni per riprenderlo
+
+1. provider dati esteso (verosimilmente a pagamento) con universo ampio e storia lunga,
+   pulita e sovrapposta;
+2. una semantica di presentazione non prescrittiva: output come **confronto** con
+   l'allocazione attuale, mai come "allocazione consigliata";
+3. esclusione di max-Sharpe in-sample; ammesse solo min-variance ed ERC/risk parity,
+   che non usano i rendimenti attesi;
+4. documentazione utente che spieghi instabilità e limiti prima di mostrare i pesi.
+
+### Decisione pendente sulle dipendenze
+
+Finché resta non esposto, va deciso se **rimuovere** Riskfolio-Lib, CVXPY, CLARABEL e
+SCS (più il pool `optimization`) dall'immagine, misurando prima quanto pesano davvero
+sui 2.781.625.742 byte totali dell'immagine. Il pool `simulation` (QuantLib) resta
+comunque necessario.
+
+Nota: la variante onesta e a basso costo — **ERC come diagnostica**, non come consiglio
+("se ogni asset contribuisse allo stesso rischio i pesi sarebbero questi, i tuoi sono
+questi") — è un complemento naturale di `risk_contribution` e **non richiede Riskfolio**:
+è risolvibile in poche decine di righe di NumPy.
+
+### Riferimenti
+
+- `backend/app/services/risk_plugins/portfolio_optimization.py`
+- `backend/app/services/risk/quant/optimization_engine.py`
+- `LibreFolio_devWiki/wiki/problems/riskfolio-numpy-vectorbt-dependency-trap.md`
+
+---
+
+## 🎲 Risk Analysis — Monte Carlo avanzato: regimi calibrati e volatilità stocastica
+
+**Data aggiunta**: 16 Settembre 2026
+**Status**: 📋 FUTURO — livelli **2, 4 e 5** della scaletta simulazione
+**Priorità**: 🔽 BASSA
+
+### Contesto
+
+La riorganizzazione Risk prevede di rilavorare la simulazione ai **livelli 1 e 3**
+della scaletta seguente, e di rinviare i livelli 2, 4 e 5:
+
+| # | Approccio | Stato |
+|---|---|---|
+| 1 | Block bootstrap (rimescolo a blocchi della storia reale) | ✅ in scope |
+| 2 | GJR-GARCH (cluster di volatilità + effetto leva) | 📋 **rinviato — non calibrabile da QuantLib** (D88) |
+| 3 | Preset di regime **prescritti** (ipotesi dichiarate, non stimate) | ✅ in scope |
+| 4 | Markov-switching / HMM **calibrato** | 📋 rinviato — questo TODO |
+| 5 | Heston / Bates / Merton (volatilità stocastica, salti) | 📋 rinviato — questo TODO |
+
+### Livello 2 — GJR-GARCH: perché è uscito dalla v1
+
+**Data**: 17 Settembre 2026 · misurato su QuantLib 1.43, non dedotto.
+
+Il piano dava per scontato che il GJR-GARCH fosse «nativo QuantLib, calibrabile
+dalla sola serie prezzi». **È falso.** Misura eseguita sul runtime reale:
+
+```text
+hasattr(ql, 'Garch11')                              -> False
+GJRGARCHModel.calibrate(self, CalibrationHelperVector, OptimizationMethod, ...)
+issubclass(GJRGARCHProcess, ql.StochasticProcess1D) -> False    factors() -> 2
+```
+
+Due fatti, entrambi bloccanti:
+
+1. `ql.GJRGARCHModel` è un modello di **pricing di opzioni**: il suo
+   `calibrate()` accetta `CalibrationHelperVector`, cioè quotazioni di opzioni —
+   la stessa identica API di `HestonModel`. `GJRGARCHProcess` **pretende**
+   `v0, omega, alpha, beta, gamma, lambda` già stimati. L'obiezione con cui
+   questo stesso documento rinvia il livello 5 («richiede una superficie di
+   volatilità implicita da opzioni») si applica **identica** al livello 2.
+2. `ql.Garch11` — l'unica classe QuantLib che calibra per massima verosimiglianza
+   da una serie di **rendimenti** — non è esposta nei binding Python SWIG.
+   Esiste in C++, non nel nostro runtime.
+3. Anche avendo i parametri, `GJRGARCHProcess` non entra nell'architettura
+   attuale: non è un `StochasticProcess1D` e ha due fattori, mentre il motore
+   costruisce `StochasticProcessArray`, che accetta **solo** componenti 1-D.
+
+### La strada, quando si riaprirà
+
+La libreria `arch` fa esattamente ciò che serve: un GJR-GARCH(1,1,1) su 1 250
+osservazioni si stima in **22 ms**. È già presente nell'ambiente come
+**dipendenza transitiva** di `riskfolio-lib` (`arch>=7.0`), ma **non è dichiarata
+nel `Pipfile`**.
+
+Nessuna delle due scorciatoie è accettabile:
+
+- **appoggiarsi alla transitiva** significa che il giorno in cui `riskfolio-lib`
+  smette di dipendere da `arch`, il nostro GARCH sparisce **senza che nulla
+  fallisca** in modo visibile;
+- **promuoverla al volo** tocca l'ambiente Python condiviso da tutte le lane di
+  sviluppo attive, e va fatto dal developer a lane congelate.
+
+Precondizione per riprendere il livello 2: `arch` promossa a dipendenza diretta
+in `Pipfile` con lock rigenerato. Da lì il lavoro è contenuto — univariato
+sull'aggregato di portafoglio, innestato sul campionatore esistente.
+
+
+### Preset di crisi — la forma preferita per il seguito
+
+Il preset «crisi prolungata» consegnato in v1 usa un **pavimento scalare**:
+oscillazioni ×2,5 e deriva −20% annuo applicate ai blocchi ricampionati. È
+onesto — l'ipotesi è dichiarata a schermo con i suoi numeri — ma i numeri sono
+**prescritti**, non osservati.
+
+La forma preferita, quando si riaprirà, è il **ricampionamento condizionato**:
+estrarre i blocchi **solo** dalle finestre del decile peggiore della storia
+reale del portafoglio. Il vantaggio non è di precisione, è di natura:
+
+- l'ipotesi a schermo non conterrebbe **nessun numero dichiarato** — direbbe
+  «ricampionati i tuoi periodi peggiori», e sarebbe verificabile dall'utente;
+- la correlazione salirebbe **perché è salita davvero** nelle crisi vissute da
+  quel portafoglio, invece di restare invariata come impone una trasformazione
+  scalare (vedi la nota su `resampling.py`: su un ricampionamento congiunto
+  scalare e traslare lasciano la correlazione di Pearson matematicamente
+  invariata).
+
+Condizione vincolante, da rispettare il giorno in cui si implementa: se la
+storia disponibile **non contiene** un periodo abbastanza severo, il risultato
+**si dichiara**, non si fabbrica. Un decile peggiore calcolato su tre anni di
+mercato toro non è una crisi, ed è esattamente il tipo di numero che questa
+campagna esiste per non produrre.
+
+### Livello 4 — Markov-switching calibrato
+
+Concettualmente è la risposta esatta a «simula i cambi di fase di mercato»: due o tre
+regimi (calma / stress / crisi), ciascuno con media, volatilità e matrice di
+correlazione proprie, più una matrice di probabilità di transizione stimata dai dati.
+
+Rinviato perché con la storia tipicamente disponibile a un privato (3-5 anni) la stima
+EM **overfitta**: i regimi trovati esistono solo nel campione e cambiano se sposti la
+finestra. Richiederebbe inoltre `hmmlearn` o `statsmodels` (QuantLib non lo supporta
+nativamente).
+
+Precondizioni per riprenderlo: storia lunga e verificata, diagnostica di stabilità dei
+regimi fra finestre diverse, e una presentazione che dichiari l'incertezza della stima
+invece di nasconderla.
+
+### Livello 5 — Heston / Bates / Merton
+
+QuantLib li supporta nativamente (`HestonProcess`, `BatesProcess`, `Merton76Process`),
+ma la loro calibrazione richiede una **superficie di volatilità implicita da opzioni**,
+dato che LibreFolio non ha e non prevede di avere. Usarli con parametri inventati
+produce sofisticazione apparente senza contenuto informativo.
+
+Da riprendere **solo** se in futuro esistesse una fonte dati di opzioni; altrimenti
+resta fuori scope in modo permanente.
+
+### Riferimenti
+
+- `backend/app/services/risk/quant/quantlib_worker.py`
+- `backend/app/services/risk_plugins/simulation.py`
+
+---
+
 ## 📈 Gestione Stock Splits nel Calcolo FIFO
 
 **Data aggiunta**: 10 Giugno 2026
@@ -375,6 +594,30 @@ atomico e riceve sempre uno snapshot completo.
 - Tax-loss harvesting e minimizzazione del realizzo fiscale.
 - Bucket di minusvalenze per categoria, compensabilità e scadenza.
 
+#### PAC `min_fragmentation` — differita (decisione developer, 21/09/2026)
+
+**Status**: 📋 DIFFERITA — non entra nella prima versione operativa.
+
+Quarta policy dichiarata nel contratto (`PlannerPolicy`,
+`backend/app/services/pac_allocator/models.py`) e **già specificata**: la sua
+cascata obiettivo esiste ed è scorata in aritmetica esatta
+(`evaluator.py`, ordine `fixed_l2 → shortfall → split_asset_count →
+active_order_rows → route_priority → explicit_cost`). Oggi è risolvibile
+**provatamente** dall'oracolo esaustivo sui domini piccoli; manca solo la
+compilazione dello stage `split_asset_count` verso SCIP, quindi
+`compiler._require_supported_scope` la rifiuta.
+
+**Perché è differita e non "da progettare"**: la funzione obiettivo non è una
+domanda aperta — è scritta e testata. Il rinvio è di priorità: la decisione
+developer del 21/09 mette il **Rebalancer completo** davanti a tutto, perché il
+PAC ne è il caso particolare a distribuzione iniziale nulla.
+
+**Se si volesse ridiscutere l'obiettivo**: `split_asset_count` minimizza il
+numero di Asset spezzati fra più route. Un'alternativa sensata sarebbe pesare la
+frammentazione per valore anziché per conteggio, così che spezzare un Asset da
+10 € non costi quanto spezzarne uno da 10 000 €. È una proposta, non una
+raccomandazione: richiede una decisione di prodotto.
+
 ### Modello Operativo Futuro
 
 - Fee, limiti e tempi di settlement dei trasferimenti.
@@ -430,6 +673,150 @@ Creare un assistente AI basato su MCP server chiamato "QuarkAI".
 - Raccolta automatizzata notizie mercati azionari
 - Notifiche su Telegram (o simili) quando rileva eventi che richiedono attenzione
 - Recap giornaliero (es. alle 20:00) con sommario eventi rilevanti
+
+---
+
+## 🔎 Gate sui campi di contratto senza consumatore
+
+**Data aggiunta**: 21 Settembre 2026
+**Status**: 📋 DIFFERITO — decisione developer del 21/09/2026
+**Priorità**: Media
+
+Oggi un campo aggiunto al contratto backend e **mai consumato dal frontend** non
+produce alcun errore: né a compile time, né a `svelte-check`, né in esecuzione.
+Il contratto cresce, il consumatore resta indietro, e nulla lo dice.
+
+**Il caso che l'ha reso visibile** (21/09/2026): `memory` in `ToolItemMetrics`,
+introdotto da `4a38b9061`, mai letto da `ToolExecutionMetrics.svelte`. È stato
+trovato **per caso**: è inciampato in `duration()`, un helper tipizzato
+genericamente su `ToolItemMetrics[keyof ToolItemMetrics]`, che si è allargato da
+solo al nuovo campo e si è ritrovato un oggetto dentro una funzione che formatta
+millisecondi.
+
+> Il punto che rende il debito reale: **se quell'helper fosse stato tipizzato in
+> modo specifico, il campo sarebbe passato in silenzio.** Non esiste un gate —
+> esiste un inciampo fortuito. Un controllo che funziona per effetto collaterale
+> dice quanto era vistoso il difetto, non quanto siamo attenti.
+
+**Precedente con esito** (21/09/2026): `monetary_step`, campo del contratto P1
+compilato a mano dall'utente e **mai letto dalla matematica** — zero occorrenze
+in `constraints`/`objectives`/`solver`/`compiler`/`evaluator`, e scartato
+nell'unpack di `models.py`. È stato **rimosso** nella cancellazione di P1, e la
+sua unità minima di valuta è ora derivata da Babel (`minor_unit`), che è nel
+contratto v2 e che il motore legge davvero. È il primo campo che la regola
+condanna, ed è quello che l'ha generata.
+
+**Secondo precedente, con il segno invertito** (21/09/2026): `ToolDocumentation.path`
+nel descrittore di un Tool. Il modello ne valida **la forma** — relativo, niente
+`..` — e **non l'esistenza**. Il frontend lo consuma davvero (`ToolAboutPanel`,
+`ToolDiagnosticsPanel`, `presentation.ts`) e ci porta l'utente con un pulsante.
+Quindi un path verso una pagina cancellata **supera ogni gate**.
+
+> **Aggiornamento del 21/09, sera — la conseguenza è ora misurata, e c'è un gate
+> che avrebbe dovuto coprirlo.** `dev.py mkdocs check-links` esiste e verifica i
+> link fra codice e documentazione, ma per costruzione non vede questo:
+> `dev.py:1073-1195` cerca stringhe letterali `/mkdocs/` nei `.ts`/`.svelte` del
+> frontend (Scope 1) e `docs_url` nei soli `fx_providers` /
+> `asset_source_providers` (Scope 2). Il path dei Tool non sta in nessuno dei
+> due — vive in `ToolDocumentation(path=…)` sotto `tool_plugins/` ed è letto a
+> runtime. Misurato: `grep -rl 'user/tools' frontend/src` → **0**,
+> `grep -c 'tool_plugins' dev.py` → **0**.
+>
+> Quindi cancellando o rinominando la pagina PAC, `check-links` sarebbe rimasto
+> **verde** mentre il pulsante *Documentation* del prodotto dava 404. Non è
+> l'assenza di un gate: è **un gate che esiste e il cui perimetro esclude
+> precisamente il riferimento che nessuno verifica** — la forma più difficile da
+> vedere, perché la sua esistenza è essa stessa una rassicurazione. Verificato a
+> mano che il path risolva in tutte e quattro le lingue del sito buildato: a
+> mano, perché non c'è altro modo.
+
+> Vale la pena tenerli accoppiati, perché insieme dicono una cosa che nessuno
+> dei due dice da solo: `monetary_step` era **dichiarato e mai consumato**,
+> `ToolDocumentation.path` è **consumato e mai verificato**. Il difetto non sta
+> in una direzione particolare — sta nel **non controllare l'estremo**. Una
+> regola con due casi opposti è più forte di una con un caso solo, perché il
+> lettore capisce dov'è il buco invece di imparare un esempio.
+
+**Terzo precedente, con la prova accanto** (21/09/2026): `RebalancerPolicy`,
+`type RebalancerPolicy = Literal["invest_only", "invest_and_sell"]` in
+`services/pac_allocator/models.py`. Zero consumatori in tutto il repository, e i
+suoi due valori sono **interamente contenuti** in `PlannerPolicy`, che è il tipo
+davvero usato (campo `policy` in due dataclass).
+
+L'argomento che lo ha condannato non è il conteggio, che si poteva leggere come
+«predisposizione per il lavoro che viene»: è che il disegno del Rebalancer v2 —
+`plan-phase00PacRebalancerArchitecture.prompt.md`, **1226 righe** — non lo nomina
+mai. `RebalancerPolicy` 0 occorrenze, `PlannerPolicy` 0 occorrenze,
+`invest_and_sell` 1 sola occorrenza in §12.4 e come nome di un *programma
+ristretto del solver*, cioè un concetto diverso da un valore di policy.
+
+> Registrato **con la misura, non con la conclusione**: chi lo rileggerà saprà
+> che è stato deciso su una prova e non su una preferenza. Se il Rebalancer avrà
+> bisogno di un tipo ristretto, nascerà con il disegno in mano — un tipo
+> ereditato da un'epoca precedente arriva con le sue assunzioni e nessuno che le
+> ricordi.
+
+**Quarto precedente, nel runner** (21/09/2026): `pac-analyze` registrato **due
+volte** — `_backend_services.py` e `_backend_schemas.py` — contro file di test
+cancellati nello stesso commit che li rimuoveva. Chiunque avesse eseguito quelle
+due azioni avrebbe avuto un rosso da un pytest su un percorso inesistente.
+
+`dev.py test check-orphans` era **verde**, e correttamente: verifica
+*registrazione → raggiungibilità da un `all`*. Nessuno verifica *azione → il file
+esiste*. Sweep manuale dei 211 percorsi citati da `scripts/test_runner/`: zero
+mancanti dopo la rimozione, due falsi positivi (un commento d'esempio e un glob).
+
+> I quattro insieme coprono le quattro caselle, ed è il motivo per cui vale la
+> pena tenerli tutti: `monetary_step` dichiarato-e-mai-consumato,
+> `ToolDocumentation.path` consumato-e-mai-verificato con un gate che lo esclude,
+> `RebalancerPolicy` dichiarato-e-superato, `pac-analyze` registrato-e-morto con
+> un gate che guarda la direzione opposta. **Due dei quattro hanno un gate che
+> passa**: non basta chiedersi se un controllo esiste, bisogna chiedersi da che
+> parte guarda.
+
+**Perché è differito e non dimenticato**: decisione developer del 21/09 —
+*«buona idea, ma da fare solo alla fine, quando il sistema è funzionante e si
+passa alla fase di condensazione e potenziamento»*. Costruire il gate adesso
+irrigidirebbe contratti che cambiano ogni giorno e produrrebbe rumore su campi
+legittimamente non ancora consumati. Ha senso quando la superficie si
+stabilizza: a quel punto «dichiarato e non usato» smette di essere una fase
+normale dello sviluppo e torna a essere il segnale che è.
+
+**Collocazione**: debito trasversale fra contratto backend e consumatori
+frontend. Non appartiene a PAC/Rebalancer né alla piattaforma Tool: il caso che
+l'ha rivelato viene da lì, ma la lacuna riguarda qualunque coppia
+contratto/consumatore.
+
+---
+
+## ⚖️ Asimmetria della piattaforma Tool sull'assenza
+
+**Data aggiunta**: 21 Settembre 2026
+**Status**: 📋 OSSERVAZIONE — nessuna delle due scelte è sbagliata
+**Priorità**: Bassa
+
+La piattaforma Tool modella l'assenza in **due modi opposti** ai suoi due
+estremi, e la differenza ha conseguenze UX visibili:
+
+| lato | meccanismo | effetto dell'assenza |
+|---|---|---|
+| backend | `ToolDescriptor.operations` ha `min_length=1` | un servizio **senza operazioni è irrappresentabile**: va rimosso del tutto, e il tool sparisce dal catalogo |
+| frontend | `ToolRendererUnavailableCode = 'renderer_missing'` | un tool **senza UI è rappresentato**, con messaggio tradotto in quattro lingue e la precisazione che nessun calcolo è partito |
+
+**Il backend vieta l'assenza, il frontend la descrive.**
+
+La conseguenza concreta, osservata il 21/09/2026 alla rimozione di P1: il
+**Rebalancer sparisce** dal catalogo (nessuna operazione v2 ancora) mentre il
+**PAC resta visibile e si spiega** (`operation="plan"` esiste, la UI no). Due
+tool nella stessa condizione logica — «backend pronto a metà, frontend assente»
+— hanno due destini UX diversi **per un dettaglio di modellazione**, non per una
+decisione di prodotto.
+
+Non è un difetto: entrambe le scelte sono difendibili. Ma se un giorno si vorrà
+uniformare — per esempio rappresentare anche il servizio senza operazioni, così
+che un tool in costruzione resti elencato e si spieghi invece di sparire — è qui
+che va guardato. Vale anche il contrario: rendere irrappresentabile il renderer
+mancante, obbligando a spedire UI e backend insieme.
 
 ---
 
@@ -866,3 +1253,598 @@ Possibilità di integrare queste informazioni nella UI e nei calcoli backend, ma
 
 ## Come per la valuta di esposizione, studiare come fare per aggiungere anche la distribuzione delle aziende, ma capendo come garantire di non avere Apple e apple SRL che sembrano diverse, ma in realtà sono la stessa.
 Possibile approccio: normalizzazione dei nomi, utilizzo di identificatori univoci (es. ISIN per le aziende quotate), e gestione dei casi ambigui tramite regole di matching o intervento manuale.
+
+## Stimatori robusti di covarianza per la matrice di correlazione (Riskfolio)
+**Priorità:** 🔽 bassa — dopo che la pagina correlazioni avrà una direzione chiara.
+
+`riskfolio.src.ParamsEstimation.covar_matrix` espone quindici stimatori oltre a quello
+storico: `ledoit`, `oas`, `shrunk`, `gl`, `jlogo`, `gerber1/2`, `ewma1/2`, `semi`, più
+tre metodi di denoising. Servono quando gli asset sono molti e le osservazioni poche —
+con cento asset e 750 giorni si stimano 5 050 parametri da 75 000 osservazioni, e la
+matrice campionaria diventa instabile: piccole variazioni nei dati muovono molto il
+risultato.
+
+**Perché non ora:** è un miglioramento di *qualità della stima*, non di prestazioni.
+Misurato: Ledoit-Wolf 25,4 ms contro 0,2 ms di `np.cov`, scarto massimo 1,2e-05.
+La migrazione M3 (vedi `02_riskfolioIntegration/06`) è deliberatamente a comportamento
+invariato: cambia il tempo, non i numeri mostrati. Mescolare le due cose renderebbe
+impossibile dire quale delle due ha causato una differenza.
+
+**Gate:** decidere prima se la pagina correlazioni serve la domanda L2 («sono
+diversificato come credo?») o una domanda di ottimizzazione. Se resta descrittiva, lo
+stimatore storico è quello onesto da mostrare. Se diventa prescrittiva, uno stimatore
+restretto è obbligatorio, e va dichiarato in UI con link alla wiki.
+
+## 🔄 Rivalutare le otto misure reimplementate da N contro riskfolio-lib
+
+**Posizione dello sviluppatore, 18 Set 2026** — da riprendere nel prossimo sprint:
+
+> *« Anche se è un wrapper di NumPy, è meglio usare una libreria collaudata, anche perché
+> nel tempo, se arrivano migliorie, le abbiamo **for free**. »*
+
+**Stato attuale**: `backend/app/services/risk/acquired.py` reimplementa otto misure
+(`worst_realization`, `maximum_drawdown`, `drawdown_at_risk`, `conditional_drawdown_at_risk`,
+`ulcer_index`, `effective_number_of_assets`, `diversification_ratio`) che **esistono già nel
+catalogo di riskfolio**.
+
+**La ragione data da N**: riskfolio è importabile **solo dentro il worker spawnato**
+(`risk/quant/riskfolio_worker.py`, decisione devWiki `risk-quant-engine-process-boundary`),
+mentre le analitiche che consumano queste misure implementano `RiskAnalytic.compute()`
+**sincrono**. Non si può chiamare un processo separato da lì.
+
+**La domanda vera da porsi, quindi, non è «reimplementare o delegare» ma**:
+
+1. Il confine processo/worker è ancora quello giusto, o si può allargare?
+2. Quanto costa davvero l'import (~340 MB nativi) in un processo che già carica NumPy/SciPy?
+3. Le due convenzioni piegate da N — **segno** (perdite negative) e **baseline** (la serie
+   underwater porta un elemento pre-rendimento che `MDD`/`UCI` consumano e `DaR`/`CDaR` no) —
+   sono esprimibili come adattatore sottile sopra la libreria, invece che come reimplementazione?
+
+⚠️ **Da non perdere nella rivalutazione**: `test_risk_metrics_oracle.py` **già confronta** le
+nostre implementazioni con riskfolio. **La rete per fare il passaggio in sicurezza esiste già** —
+è lo stesso oracolo, usato in direzione opposta.
+
+🔴 **E un divieto che resta valido comunque** (D130/D244): `riskfolio.SemiDeviation` **non** è la
+nostra deviazione di ribasso. Misura lo scarto dalla **propria media**, non da un MAR fisso: su
+un portafoglio che perde lo 0,5 % ogni giorno vale **esattamente zero**. **Quella sostituzione
+resta vietata indipendentemente dall'esito di questa rivalutazione.**
+
+**Priorità**: media. **Non blocca il rilascio** — è un lavoro di miglioramento.
+
+## 🔢 Separatore decimale — l'helper esiste, ma è legato alla lingua sbagliata
+
+**Verificato il 18 Set 2026**, su richiesta dello sviluppatore (*«credo ci sia già un helper in
+tal senso, se non esiste mettilo in TODO_FUTURI altrimenti usiamolo»*).
+
+**Il sintomo**: con l'app in italiano, la stessa riga mostra due separatori.
+
+```
+−1.3%        ← punto     (formatPercent → toFixed)
+−175,91 €    ← virgola   (currencyFormat → toLocaleString)
+```
+
+Non è un difetto del sottosistema rischio: la **panoramica** della dashboard fa lo stesso
+(`-9.47%` accanto a `-392,75 €`). È un difetto di progetto, preesistente.
+
+### 🔴 Perché «usiamo l'helper esistente» non basta
+
+`utils/currency/currencyFormat.ts:36,57` chiama:
+
+```ts
+Math.abs(amount).toLocaleString(undefined, {…})
+                 ^^^^^^^^^
+```
+
+**`undefined` significa «la lingua del BROWSER»**, non quella scelta nell'app.
+
+### Quando divergono — non è un caso limite, **è l'uso normale del selettore di lingua**
+
+`frontend/src/lib/i18n/index.ts:65-84` risolve la lingua in quest'ordine:
+
+```
+1.  localStorage 'librefolio-locale'   ← la scelta esplicita dell'utente   (vince)
+2.  getLocaleFromNavigator()           ← il browser, solo come RIPIEGO
+3.  DEFAULT_LOCALE
+```
+
+> 🔑 **Il browser è il ripiego, non la fonte.** Appena l'utente tocca il selettore di lingua,
+> `librefolio-locale` viene scritto e **la lingua dell'app si stacca da quella del browser**.
+> `toLocaleString(undefined)` continua però a leggere **solo** il browser: le due si separano
+> **per costruzione**, non per incidente.
+
+### 🔴 Divergenza RIPRODOTTA dal vivo, 18 Set 2026
+
+Selettore di lingua → *English*, su un browser `it-IT`:
+
+```
+app_lang      "en"            ← scelta dell'utente, onorata
+browser       "it-IT"
+interfaccia   "How much can it hurt?"      ✅ inglese, corretto
+denaro        "−175,91 €"                  🔴 formato ITALIANO sotto interfaccia inglese
+```
+
+**Non è un'ipotesi: è uno screenshot.** E funziona in entrambi i versi — un utente italiano con
+il sistema operativo in inglese (caso comunissimo) che sceglie 🇮🇹 ottiene **interfaccia italiana
+e numeri inglesi**.
+
+**Adottare questo helper in `formatPercent` propagherebbe un secondo difetto invece di
+chiuderne uno.**
+
+### Il lavoro vero, in tre passi
+
+1. **Decidere la fonte della lingua**: il locale dell'app (`librefolio-locale`), non quello
+   del browser. Serve un accessor unico che entrambi i formattatori consumano.
+2. Legare **`currencyFormat`** e **`formatPercent`** a quell'accessor.
+3. Aggiornare le asserzioni che oggi fissano il punto: **2** negli unitari di `formatPercent`,
+   **~23 negli E2E** (di cui 20 in `risk-analysis.spec.ts`).
+
+📌 **Raggio piccolo sul lato chiamanti** — `formatPercent` ha **5** consumatori — **ma il
+cambio è osservabile ovunque**, perché il formattatore del denaro è usato in tutta l'app.
+
+### 21 Set 2026 — misurato il perimetro vero, e il rischio è il 16 %
+
+Il pacchetto `T4` del round 2 non è mai partito. Prima di aprirlo ho contato i siti:
+
+```
+frontend/src/lib/components/risk/     26  toFixed
+tutto il resto dell'app              139  toFixed
+                                    ─────
+                                     165
+```
+
+> 🔑 **Il sottosistema rischio è un sesto del difetto.** Ripararlo lì dentro
+> produrrebbe l'unica pagina dell'app con il separatore giusto — cioè
+> **renderebbe la divergenza più visibile, non meno**: l'utente passerebbe da
+> «tutta l'app sbaglia allo stesso modo» a «questa pagina dice `−1,3 %` e quella
+> accanto `−1.3%`». Un difetto uniforme si legge come una convenzione; **un
+> difetto a chiazze si legge come un bug.**
+
+✅ **Decisione dello sviluppatore, 21 Set 2026**: *«mettiamo in TODO e facciamo tutto
+in futuro»*. `T4` esce dal round 2 **per intero** — non il rischio prima e il resto
+poi. Diventa una campagna sua, con i suoi tre passi qui sopra.
+
+⚠️ **E il passo 1 resta il vero lavoro**: i 165 `toFixed` sono meccanici, **la scelta
+della fonte della lingua no**. Chi riaprirà questa voce cominci da lì, o sostituirà
+165 chiamate legate al browser con 165 chiamate legate al browser.
+
+**Priorità**: media. **Non blocca il rischio**, e va fatto come lavoro di progetto con la sua
+verifica, non infilato dentro un pacchetto di superficie.
+
+---
+
+## Il generatore di dati di prova non onora i bersagli `end_price`, e lo scarto è sistematico
+
+**Misurato da N il 18 Set**, corsia 6151, finestra dichiarata.
+
+| asset | bersaglio | ottenuto | scarto |
+|---|---:|---:|---:|
+| Apple | 185,00 | 264,57 | **+43,0 %** |
+| Bitcoin | 45 000 | 25 889,81 | **−42,5 %** |
+| Ethereum | 2 650 | 1 290,41 | **−51,3 %** |
+| RE Loan Roma | 5 000 | 5 010,52 | +0,2 % |
+
+### 🔴 La causa — e l'etichetta che le avevo dato era sbagliata
+
+> **Correzione del 18 Set, di N.** Questa voce diceva *«deriva di Jensen: `uniform(−a,+a)`
+> applicato moltiplicativamente ha media logaritmica negativa `≈ −σ²/2`»*. **Non è Jensen**,
+> e l'etichetta manderebbe chi apre il lavoro a cercare un bias che non c'è.
+
+**I segni sono discordi**, e Jensen spingerebbe tutti dalla stessa parte:
+
+| asset | bersaglio | consegnato | scarto |
+|---|---:|---:|---:|
+| Apple | 185,00 | 264,57 | **+43,0 %** |
+| Microsoft | 390,00 | 322,03 | **−17,4 %** |
+| Bitcoin | 45 000 | 25 889,81 | **−42,5 %** |
+
+Le ampiezze sono **esattamente quelle che la volatilità configurata prevede**: rumore
+uniforme su ±2σ dà deviazione `2σ/√3` al giorno, che su 267 giorni fa **≈ 30 %** per le
+azioni e **≈ 91 %** per la cripto su 373. **Tutti e tre cadono entro ~1,2 σ.**
+
+> 🔑 **Non è un difetto di calcolo: `end_price` è un'attesa, non un bersaglio.**
+> `drift_per_day = (end/start)^(1/n) − 1` centra il valore **in media sulle realizzazioni**, e
+> ogni popolamento ne pesca **una sola**. Il commento nel codice dice *«so the final price
+> arrives near end_price»*, e su una cripto «near» significa **±91 %**.
+
+### E la forma vera, che è più interessante del difetto
+
+Gli **indici centrano il bersaglio** (`6399,99999999994`, `3949,99999999998`) perché
+`_populate_benchmark_indices` **normalizza**. Gli altri no, perché **nessuno li normalizza**.
+
+> **Due metà dello stesso generatore trattano la stessa configurazione in due modi diversi**
+> — una la onora esattamente, l'altra solo in media — **e la struttura dati non distingue i
+> due casi.** È la stessa famiglia delle due convenzioni coerenti ciascuna con sé e
+> incoerenti a vista dentro lo stesso oggetto.
+
+**Il lavoro vero**, quindi, non è «correggere una deriva»: è **decidere se `end_price` è un
+contratto o un'aspettativa, e renderlo esplicito nella struttura dati** — oppure normalizzare
+anche le serie non-indice, come già si fa per gli indici.
+
+### ⛔ Perché non è stato riparato subito
+
+Ripararlo porterebbe Apple da **264,57 a 185,00** e Bitcoin da **25 890 a 45 000**. Al momento
+della scoperta, **cinque superfici stavano misurando e pubblicando numeri su quelle serie**:
+ogni misura presa quel giorno sarebbe stata invalidata **senza che nessuno sapesse perché**.
+
+📌 È lo stesso criterio per cui non si infila uno spostamento grande di numeri già pubblicati
+dentro un passo che ha un'altra proprietà definente.
+
+### Quando farlo, e con cosa
+
+**Dopo la fase 2**, come lavoro suo, con il raffronto ante/post su tutte le superfici che
+leggono quelle serie. La correzione naturale è compensare la deriva logaritmica nel
+`drift_per_day` (aggiungere `+σ²/2`), oppure applicare il rumore in forma additiva sui
+log-rendimenti invece che moltiplicativa sui prezzi.
+
+**Priorità**: media. **Non blocca nulla oggi** — i dati sono plausibili, semplicemente non
+sono quelli dichiarati.
+
+---
+
+## Un commento di test è un'asserzione senza cancello
+
+`frontend/e2e/gallery.spec.ts:710-716` motiva la scelta di non usare `.first()` così:
+
+> *«"RE Loan Milano" … has exactly ONE PriceHistory row ever (see populate_mock_data.py
+> populate_price_history() `loan_price_points`) so its WAC/Market chart renders empty»*
+
+Dopo F1 quell'asset ha **267 righe di prezzo**, e `loan_price_points` **non esiste più in quella
+forma**. Il test **non fallisce** — punta ad Apple per nome — ma **la ragione scritta è falsa e
+cita un simbolo che non c'è**.
+
+🔑 **Il fatto generale**: un commento che spiega *perché* un test è scritto in un certo modo
+**è un'asserzione che nessuno esegue**, quindi nessuno la vede scadere. È il secondo caso nella
+campagna in cui una modifica ai dati di prova invalida in silenzio un presupposto scritto
+altrove.
+
+**Priorità**: bassa come riparazione, **alta come avvertimento**. Da sistemare quando si tocca
+`gallery.spec.ts`.
+
+---
+
+## Avanzamento della simulazione Monte Carlo — si può fare, e si sa già dove è difficile
+
+**Misurato da S4 il 18 Set.** Non è più *«forse si può»*: la domanda binaria è chiusa.
+
+### ✅ Il worker sa a che punto è, su tutti e tre i rami
+
+```
+resampling.py:172        for start in range(0, path_count, chunk_size)   ← BLOCK BOOTSTRAP (default)
+quantlib_worker.py:143   for path_index in range(request.path_count)     ← GBM / MC
+quantlib_worker.py:199   for path_index in range(request.path_count)     ← GBM / QMC
+```
+
+**Nessuno è una scala finta**: il contatore *è* l'unità di lavoro reale. `path_index / path_count`
+è esatto e monotono — niente «finzione a scalini».
+
+### 🔑 E il ramo predefinito ha l'aggancio di forma migliore
+
+```python
+chunk_size = max(1, _CELL_BUDGET // max(1, horizon_days * asset_count))
+```
+
+Il bootstrap è **già affettato**, con blocchi derivati dalla taglia del problema. Una callback sul
+confine del chunk costa **una chiamata per chunk**, e **il numero di tick si autoregola**:
+problema grande → più chunk → più avanzamenti.
+
+> ⚠️ Ribalta la previsione ragionevole — il ramo *nuovo* è il comodo, i due GBM (per-cammino)
+> richiederebbero una soglia. E la ragione non c'entra con l'avanzamento: il chunking esiste per
+> il **budget di memoria** (`:169`), e `:116` dichiara che *«la riproducibilità non deve dipendere
+> da come il lavoro è affettato»*. **Un aggancio lì riusa una garanzia già difesa invece di
+> introdurne una nuova.**
+
+### ⚠️ Il criterio di accettazione, da rispettare o non farlo
+
+Il sorteggio degli inizi di blocco (`resampling.py:148-155`) è **fuori dal ciclo**, vettorizzato;
+nel GBM stanno fuori `_validated_covariance` e `_build_process`. Una barra guidata dal solo
+contatore **resta a 0 % per tutta quella fase, poi parte**.
+
+> **Una barra ferma a 0 % è peggio di nessuna barra: l'utente conclude che è bloccata.**
+
+✅ **Il numero per deciderlo esiste già nel payload** — `rng_seconds`,
+`process_evolution_seconds`, `generation_evolution_seconds`, `path_aggregation_seconds`: il worker
+**già misura dove è finito il tempo**. Se le fasi fuori ciclo pesano, la strumentazione giusta è
+**un avanzamento a fasi, non a cammini**.
+
+### 🔴 Il costo vero non è il worker
+
+Il salto worker→web ha tre soluzioni (multi-frame sul pipe · canale laterale · contatore
+condiviso). ⚠️ Ma `SpawnWorkerPool` è generico e ha **due utenti** — simulazione **e
+ottimizzazione**: toccare il protocollo tocca anche l'ottimizzazione.
+
+**Il salto web→client non ha un appiglio.** `query_risk` è **sincrona, richiesta/risposta**, e
+**non esiste un id di lavoro**: non c'è nulla da interrogare né a cui abbonarsi. SSE, websocket e
+polling **richiedono tutti e tre lo stesso prerequisito che oggi manca**. E la richiesta è
+**bulk**: «la simulazione» è *una* analitica dentro un lotto, quindi una percentuale della
+richiesta non è la percentuale della simulazione.
+
+**Il lavoro vero è invertire l'API in «invia → segui», o trasmettere dentro la stessa risposta
+HTTP.** È architetturale.
+
+**Priorità**: media-bassa. **Prerequisito**: leggere i quattro tempi di fase da un payload reale
+prima di scegliere la forma della barra.
+
+---
+
+## 🔴 La simulazione risponde alla finestra, non al portafoglio — e non si annuncia
+
+**Misurato il 21 Set da S4, su corsia pulita** (rilevatore v2: arco `0,1 s`), intercettando la
+`SimulationEngineRequest` vera invece di ricostruirla.
+
+### Il fatto
+
+**Stesso asset, stesso orizzonte, stesso giorno, stesso motore. Cambia solo la finestra:**
+
+| finestra | mediana a 365 giorni | probabilità di perdita |
+|---|---:|---:|
+| **95 giorni** | **+1 400,4 %** | **0,01 %** |
+| **365 giorni** | **−39,1 %** | **70,74 %** |
+
+> **Da +1 400 % a −39 %, e da «non puoi perdere» a «perdi sette volte su dieci», per una
+> tendina che l'utente legge come «quanta storia guardo».**
+>
+> **E nessuno dei due numeri, preso da solo, si annuncia come sbagliato.**
+
+### ✅ Non è matematica rotta, e non sono i dati finti
+
+**Il motore estrapola fedelmente.** Confronto fra la mediana simulata e l'estrapolazione
+ingenua `(1 + r_finestra)^(365/n)` su **sei** finestre:
+
+| finestra | ripetizioni | ingenua | mediana | rapporto |
+|---|---:|---:|---:|---:|
+| 95 g | **3,92×** | +31,57 % | +33,22 % | **1,013** |
+| 140 g | 2,64× | +8,54 % | +10,28 % | 1,016 |
+| 190 g | 1,94× | +1,97 % | +2,92 % | 1,009 |
+| 250 g | 1,47× | +8,21 % | +9,49 % | 1,012 |
+| 365 g | 1,01× | +8,76 % | +9,93 % | 1,011 |
+
+**Le ripetizioni variano di quattro volte, il rapporto resta fra 1,009 e 1,016.** Il motore
+aggiunge l'1 %, sempre lo stesso.
+
+🔑 **La causa è il rapporto, non la lunghezza**: il bootstrap **ripesca ogni osservazione
+`orizzonte / n_osservazioni` volte per cammino**. Con 93 osservazioni su 365 giorni sono
+**3,92 ripetizioni** — cioè si assume che quel trimestre duri quattro volte tanto.
+
+⚠️ **E morde un utente vero**: il portafoglio di prova lo nasconde perché è **per metà
+liquido**, ma sullo scope asset no. **Chi tiene crypto e clicca «3M» riceve questo.**
+
+### ⚠️ Il denominatore è gonfiato e saturabile — da sapere PRIMA di scrivere la soglia
+
+```
+finestra 540 giorni  →  n_osservazioni 360   ← identico alla finestra da 365
+series_preparation.py riporta i prezzi in avanti  →  93 dove la borsa ha 66 giorni
+```
+
+**Chiedere più storia restituisce in silenzio la stessa storia**, e il riporto in avanti
+inserisce rendimenti nulli che **abbassano la σ per giorno e gonfiano il conteggio**.
+`n_observations` conta **giorni di calendario, non osservazioni indipendenti**, ed è il
+denominatore di qualunque guardia a rapporto.
+
+### Il lavoro, e cosa NON è
+
+**Non è** «aggiusta il calcolo»: l'aritmetica è corretta.
+**Non è** «rifai i dati»: si riproduce su dati puliti con volatilità realistiche
+(BTC `4,58 %`/giorno, che è il valore vero).
+
+**È** decidere cosa fare quando `orizzonte ≫ finestra`: **rifiutare**, **avvisare**, o
+**lasciar fare e dichiarare l'incertezza**. ⚠️ **Nessuna soglia ovvia esiste**: a ripetizione
+`1,00×` Bitcoin dà comunque **+100 %**. **La monotonia è il dato, la soglia è una scelta.**
+
+📌 **Parzialmente mitigato nel round 2**: l'incertezza di stima della deriva viene resa accanto
+alla banda — su un asset volatile a finestra corta vale **×/÷ 29,9** contro una banda di
+**×11,4**, quindi **si dichiara inutile da sola**. **Resta da decidere se serve anche la
+guardia.**
+
+**Priorità**: media-alta. **Non blocca il rilascio** — la funzione è dietro banner beta — ma è
+il difetto di prodotto più grande trovato nella review della fase 2.
+
+---
+
+## 🔴 L'audit i18n non può dire «inutilizzata» su un terzo del catalogo
+
+**Misurato da S4 il 21 Set**, interrogando **la funzione dell'audit** invece di leggerne la regex.
+
+### La causa, in una riga
+
+```js
+RiskResultFrame.svelte:27     const key = `risk.${prefix}.${code}`
+                                           ↑ l'interpolazione è al PRIMO segmento
+```
+
+L'audit estrae come prefisso tutto ciò che precede la prima `${`, cioè `risk.`, toglie il punto
+→ **`risk`**. E `is_key_potentially_used` fa `key.startswith(prefix)`.
+
+> **Nessuna chiave `risk.*` può comparire nell'elenco degli inutilizzati. Mai. Per costruzione.**
+
+### La taglia
+
+⚠️ **Cifre corrette il 21 Set da C**, su un catalogo nel frattempo cresciuto. Le misure di S4
+restano vere alla loro data; quelle qui sotto sono le attuali.
+
+```
+prefissi radice NUDI: 14     →     1 016 chiavi su 3 363     =     30,2 % del catalogo
+                       ↑ ma 4 sono spazzatura di regex: `0`, `axios`, `msg`, `test`
+```
+
+🔑 **E la cifra che conta è più piccola e più precisa**: delle 1 016 schermate, **819 hanno un
+riscontro letterale indipendente**. Le chiavi **senza altra prova che il cancello cieco** sono
+**197 — il 5,9 %**.
+
+> ⚠️ **Il 5,9 % non consola**, ed è C stesso a mostrare perché: quei riscontri indipendenti
+> possono essere **accidentali**. Le 14 `risk.errors.*` si salvano solo perché un *secondo* sito
+> (`levelHelpers.ts:210`) scrive il segmento **fisso**. Se domani quella riga usasse
+> `translatedCode('errors', …)` come il suo gemello, **cadrebbero tutte e quattordici in
+> silenzio**. Un riscontro accidentale è una prova che può sparire con un refactor innocuo.
+
+🔴 **E `risk.warnings` non esiste come stringa da nessuna parte nel sorgente**: l'unione
+tipizzata è **l'unica prova che quel prefisso esista**. Leggerla non è un modo più preciso di
+indovinare — è l'unico posto dove l'informazione c'è.
+
+| namespace | chiavi rese non verificabili |
+|---|---:|
+| `risk` | **332** |
+| `importWizard` | 273 |
+| `signals` | 148 |
+| `common` | 120 |
+| `chartSettings` | 102 |
+| `providerErrors` · `sectors` · `fileStatus` | 29 |
+
+⚠️ **Il `complete · 0 incomplete` riportato più volte in questa campagna era vero
+come uscita del comando, e su quei namespace non misurava niente.**
+
+### 🔑 Perché è peggio del cancello dei link
+
+`dev.py:1238` salta i `path={espressione}` e **tace**. Questo **risponde «usata»**.
+
+> **Non un silenzio letto come assoluzione: un'assoluzione esplicita.**
+
+### La riparazione è nella stessa riga che causa il difetto
+
+```ts
+function translatedCode(prefix: 'errors' | 'warnings', …)
+```
+
+**L'insieme esatto dei prefissi è già scritto nel codice, come unione tipizzata.** L'audit lo
+butta via e ripiega sul troncamento alla prima interpolazione.
+
+> **La cecità non è fondamentale: è una rinuncia.**
+
+Il lavoro è insegnare all'audit a leggere le unioni tipizzate dove ci sono, e a **dichiarare
+"non verificabile"** dove non ci sono — invece di dire «usata».
+
+### 🔴 21 Set — la trappola era nel MIO testo, e C l'ha disinnescata prima di raccoglierla
+
+Avevo scritto: *«la regola ancorata al punto (`risk.` invece di `risk`) dà 63 chiavi orfane»*.
+**Falso, e in modo pericoloso.** C ha girato **cinque varianti** invece di dichiarare il numero
+irriproducibile:
+
+| regola | orfane `risk.*` |
+|---|---:|
+| il cancello com'è oggi | 0 |
+| **«ancorata al punto»** ← *la mia etichetta* | 🔴 **0 — inerte** |
+| togliere il prefisso nudo `risk` | 47 |
+| + scartare il credito di `find_used_keys_in_backend()` | **60** ← *era questa la mia misura* |
+| solo riscontri letterali | 115 |
+
+`'risk.simulation.regimeTruncated'.startswith('risk.')` è **ancora `True`**: ancorare al punto
+ferma `riskFoo`, **mai `risk.qualunque.cosa`**. La regola che avevo girato non ancorava al punto:
+**buttava via il credito del backend.**
+
+> 🔑 **«Chi raccoglie questo testo e implementa alla lettera ciò che c'è scritto ottiene zero
+> orfane e un cancello che si dichiara riparato.»**
+>
+> È **la stessa forma del difetto che la voce descrive**, applicata alla voce che lo descrive:
+> un'istruzione che sembra prescrivere una misura e ne prescrive una **inerte**.
+
+### 🎯 Il numero da raggiungere è **4**, non 63 e non 47
+
+Triage delle 47 (*leaf* presente in `src` **oppure** codice snake emesso da `backend/app`):
+**43 vive · 4 morte.**
+
+| chiave | prova |
+|---|---|
+| `risk.simulation.regimeTruncated` | codice `regime_truncated` emesso da **0** file di backend |
+| `risk.levels.l3.{beta,sharpe,sortino}Help` | leaf assente e **nessun template `${…}Help` esiste** |
+
+I 7 `risk.warnings.*` che emergono sono **tutti emessi dal backend** → vivi. Le 14
+`risk.errors.*` pure.
+
+> **63 = rotto · 47 = a metà · 4 = riparato.** Il cancello di accettazione è un **diff
+> prima/dopo** in cui l'unico delta ammesso sono quelle quattro.
+
+**Priorità**: media. **Non blocca nulla**, ma ogni misura i18n fatta finora su quei namespace
+va riletta come «non verificata» invece che come «pulita».
+
+---
+
+## 🔴 I 110 `raise ValueError` del motore di rischio — il metodo per separarli, non il risultato
+
+**Aperto da B, round 3, 21 Set 2026.** Il pacchetto «errori come codici» ha chiuso B1/B2/B4;
+resta l'enumerazione, e **quello che non va rideriso è il metodo**.
+
+### Il perimetro, misurato due volte
+
+`grep -r "raise ValueError(" services/risk services/risk_plugins` e un parser AST indipendente
+danno **entrambi 172**, quindi la taglia non è un artefatto del pattern. ⚠️ **Ma `172` conta una
+forma sintattica, non una categoria**: `RiskUnavailableError` e `RiskScopeNotFoundError` sono
+**sottoclassi di `ValueError`**, e quel grep **non vede i 41 siti già instradati a un codice**.
+
+Ripartiti per **confine di conversione** (verificato per modulo, non stimato):
+
+| confine | come si verifica | n |
+|---|---|---:|
+| registrazione plugin = import time | `provider_registry.py:322,365` → `validate_definition()` | 9 |
+| avvio / YAML dell'operatore | `load_risk_scenario_catalog()` singleton | 8 |
+| costruzione del pool worker | `SpawnWorkerPool.__init__` | 5 |
+| `validate_params()` → `ValidationError` | **eseguendolo** | 28 |
+| richiesta motore dentro il `try` | `portfolio_optimization.py:170→221` | 8 |
+| sottoprocesso worker | `SpawnWorkerRemoteError` → `_remote_error_code` | 4 |
+| **il catch-all di `service.py`** | il resto | **110** |
+
+**9+8+5+28+8+4+110 = 172.** I 110 sono il lavoro che resta.
+
+### 🔑 Il criterio — e la scorciatoia che sembra giusta e non lo è
+
+Il primo tentativo è stato *«confronta il guard interno con i vincoli `Field(...)` del modello
+params: se `Field` non copre il predicato, c'è un buco»*. Applicato a `path_count`
+(`ge=256, le=100_000`, **nessun vincolo di potenza di due**) contro *«QMC paths must be a power
+of two»* dava un buco netto.
+
+🔴 **È falso, e l'ha ucciso un probe:** `SimulationParams.model_validate({sampling_method:'qmc',
+path_count:1000})` solleva già `ValidationError`. **Il contratto esterno non è `Field(...)`: è
+`validate_params()` per intero, `model_validator` compresi** — e quei validatori chiamano metodi
+helper che un classificatore statico marca come «non in un validatore».
+
+> **Leggere `Field(...)` risponde a una domanda diversa da «questo payload viene accettato?».**
+> L'unico modo di saperlo è **chiamare `validate_params`**.
+
+**Il criterio corretto è strutturale.** `validate_params()` è funzione **pura dei parametri**:
+non vede storia, portafoglio, calendario.
+
+| classe | predicato | `validate_params` può decidere? | verdetto |
+|---|---|---|---|
+| **C1** | soli parametri | sì — **ma va eseguito per sapere se lo fa** | se accetta → causabile |
+| **C2** | **parametro × dato di runtime** | 🔴 **no, strutturalmente** | **causabile per costruzione** |
+| **C3** | soli argomenti interni | no, e non deve | invariante → deve esplodere |
+
+⚠️ *«Sta in un plugin»* non distingue niente. *«Il validatore dei parametri non può vederne
+metà»* sì.
+
+### Il banco, per enumerare i 110
+
+1. per ogni analitica, **chiamare `validate_params`** su payload ai bordi dichiarati;
+2. eseguire sotto `sys.settrace` con evento `exception`, filtrato su `app/services/risk`:
+   registra **ogni `raise`, con file e riga, anche se poi viene catturato**;
+3. correlare ogni riga colpita con il `RiskErrorCode` che esce.
+
+**Riga colpita = causabile, provato per costruzione.** Riga mai colpita = **«non provata
+raggiungibile»**, mai «irraggiungibile»: un banco che non colpisce dice che *non ha colpito*.
+
+> 🔑 **E c'è una ragione per farlo DOPO B1(b), non prima**: da B1(b) quei 110 siti **loggano**.
+> Il banco traccia ciò che una sonda riesce a raggiungere; **il log registra ciò che gli utenti
+> colpiscono davvero**. Chi lo farà partirà da occorrenze reali con stack veri.
+
+### ⚠️ Ogni guardia C2 va accompagnata dal suo controllo
+
+Una prova di rifiuto **senza** una prova di accettazione non dimostra che la causa sia quella
+dichiarata. Nel primo giro di B entrambi i rami morivano su `historical_digest` e il probe
+**non discriminava niente**: sembrava una prova, e non lo era.
+
+### 📌 Due conseguenze già prodotte da B1(b), da non «riparare» per sbaglio
+
+**①** `risk.errors.undefined_metric` **non ha più un emettitore di produzione.** Era emesso da
+una sola riga — il catch-all — e quella riga era il difetto. **La chiave va tenuta in tutte e
+quattro le lingue**: `UNDEFINED_METRIC` resta il punto di dichiarazione per un plugin che
+sappia che la metrica è indefinita, la strada è coperta da un test, e un test di parità
+enum↔catalogo la tiene viva.
+
+> ⚠️ **Questo contraddice la riga più in alto in questo file** — *«le 14 `risk.errors.*` sono
+> tutte emesse dal backend → vive»* — che era **vera quando è stata scritta**. Un audit che
+> rileggesse `undefined_metric` come orfana e ne cancellasse la chiave **riaprirebbe esattamente
+> il difetto che B1(b) ha chiuso**: il fallback silenzioso.
+
+**②** `portfolio_optimization.py:221` ha **lo stesso difetto latente** che B2 ha corretto in
+`simulation.py`: un `except ValueError → INVALID_PARAMETERS` che avvolge **l'intera**
+costruzione della richiesta, quindi converte anche le violazioni di invariante del motore in
+«parametri non validi». **Un `try` allargato è un `except` che presume.** Fuori dal perimetro di
+B, non riparato, misurato.

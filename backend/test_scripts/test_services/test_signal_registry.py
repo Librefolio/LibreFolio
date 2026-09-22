@@ -10,7 +10,7 @@ from importlib.machinery import ModuleSpec
 from uuid import uuid4
 
 import pytest
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from backend.app.config import DEFAULT_TEST_DATA_DIR
 from backend.app.schemas.common import DateRangeModel
@@ -46,7 +46,7 @@ from backend.app.services.signal_plugins.base import SignalPlugin
 # (asset_source/SignalService go through get_plugin), while every public
 # catalog surface is built from list_definitions() and must not see it.
 CALENDAR_SIGNAL_CODE = "ASSET_CALENDAR_ROLLING_RETURN"
-CALENDAR_ALLOWED_WINDOWS = (7, 30, 90, 365)
+CALENDAR_REPRESENTATIVE_WINDOWS = (1, 7, 14, 30, 60, 90, 365, 1095)
 BASELINE_PUBLIC_SIGNAL_COUNT = 22
 
 
@@ -739,11 +739,13 @@ def test_calendar_window_days_defaults_to_thirty():
     assert plugin_class.params_model().window_days == 30
     window_schema = plugin_class.params_model.model_json_schema()["properties"]["window_days"]
     assert window_schema["default"] == 30
-    assert window_schema["enum"] == list(CALENDAR_ALLOWED_WINDOWS)
+    assert window_schema["type"] == "integer"
+    assert window_schema["exclusiveMinimum"] == 0
+    assert "enum" not in window_schema
 
 
-@pytest.mark.parametrize("window_days", CALENDAR_ALLOWED_WINDOWS)
-def test_calendar_window_days_accepts_every_allowed_value(window_days):
+@pytest.mark.parametrize("window_days", CALENDAR_REPRESENTATIVE_WINDOWS)
+def test_calendar_window_days_accepts_arbitrary_positive_integers(window_days):
     plugin_class = SignalPluginRegistry.get_plugin(CALENDAR_SIGNAL_CODE)
 
     assert plugin_class is not None
@@ -752,13 +754,16 @@ def test_calendar_window_days_accepts_every_allowed_value(window_days):
 
 @pytest.mark.parametrize(
     "window_days",
-    [0, -30, 1, 6, 8, 29, 31, 45, 180, 364, 366, 730],
+    [0, -1, 14.5, "14", {"days": 14}],
+    ids=["zero", "negative", "fractional", "string", "malformed"],
 )
-def test_calendar_window_days_rejects_values_outside_allowed_enum(window_days):
+def test_calendar_window_days_rejects_non_positive_or_non_integer_values(window_days):
     plugin_class = SignalPluginRegistry.get_plugin(CALENDAR_SIGNAL_CODE)
 
     assert plugin_class is not None
-    with pytest.raises(ValueError):
+    with pytest.raises(ValidationError):
+        plugin_class.params_model.model_validate({"window_days": window_days})
+    with pytest.raises(ValidationError):
         plugin_class.validate_params({"window_days": window_days})
 
 

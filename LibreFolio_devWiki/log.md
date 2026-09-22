@@ -2092,3 +2092,31 @@ Updated: [[decisions/brim-broker-scoped]], [[decisions/brim-fake-asset-id]],
 [[features/F-083]], [[decisions/import-wizard-v5-paradigm]], and
 [[features/F-011]], [[features/F-013]], [[concepts/import-todo-signals]],
 [[domains/transactions]], and [[features/registry]].
+
+## [2026-09-05] file | Asset Global laboratory — the no-money rule and three verified traps
+
+Mandate F of the Risk Analysis replan rewrote the Asset Global correlation surface.
+`wiki-search` found **zero** prior pages on Asset Global, correlation or the heatmap,
+so the session's findings had no home to be added to.
+
+Filed the governing invariant — no position, exposure or portfolio impact in money on
+a page whose subject has no weights — together with the reason its obvious test is
+worthless: the euro there is *latent, not present*, so "assert no `€` on screen" passes
+because the backend sends no numbers and would keep passing with every guard deleted.
+The guard is a net that stubs money **in**.
+
+Also filed three traps verified against code, not inherited from the plan: `front check`
+is blind to `e2e/**` and born red without `api sync`; the generated client's TS type for
+`RiskMatrixCell.value` contradicts its own Zod validator; and the ASSET_SET scope has no
+primary series, which cancelled a planned KPI-column deliverable rather than faking it.
+
+Filed: [[decisions/asset-global-page-shows-no-money]],
+[[problems/front-check-does-not-check-what-you-think]],
+[[problems/generated-client-widens-nullable-scalar]],
+[[problems/asset-set-scope-has-no-primary-series]].
+
+## [2026-09-18] file | Risk request ordering and test-id grep false negatives
+Mandate F's E2E round produced two failures whose causes were both *the observer*, not the code: a
+correlation stub indexed by chip order while `riskRequest.ts` canonicalises `asset_ids` ascending, and a
+`grep -c` on a composed test id reported a selector deleted when the primitive still emits it.
+Filed: [[problems/risk-request-sorts-asset-ids]], [[problems/testid-grep-false-negative]].

@@ -50,6 +50,11 @@ I18N_DIR = Path(__file__).parent.parent / "src" / "lib" / "i18n"
 LANGUAGES = ["en", "it", "fr", "es"]  # Order matters for display
 BACKEND_DIR = Path(__file__).parent.parent.parent / "backend" / "app"
 
+# The three-verdict classifier lives in scripts/ so it can be imported and
+# interrogated by a test; this file stays the CLI surface.
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+import scripts.i18n_usage as _usage  # noqa: E402
+
 
 def flatten_dict(d: dict, parent_key: str = "", sep: str = ".") -> dict[str, Any]:
     """
@@ -369,55 +374,60 @@ def generate_unused_keys_report(
     ) -> tuple[str, list[str]]:
     """
     Generate a report of translation keys that exist but are not used in the codebase.
-    Splits keys into "Potentially Dynamic" (prefix match) and "Likely Unused" categories.
+    Splits keys into "Not Verified" (the family exists, the final segment is
+    produced at runtime) and "Likely Unused" (no evidence anywhere).
+
+    The classification is delegated to ``scripts.i18n_usage``: a prefix truncated
+    at the first ``${`` degenerates to the bare namespace root when the
+    interpolation sits at the first segment, and a bare root absolves everything
+    beneath it. See that module for why "not verified" and "dead" must stay apart.
 
     Returns:
         Tuple of (report string, list of unused keys)
     """
-    unused_keys = [
-        key for key in all_keys
-        if not is_key_potentially_used(key, exact_keys, prefix_patterns)
-        ]
+    usage = _usage.collect_from_source(I18N_DIR.parent.parent)
+    usage.exact |= exact_keys
+    usage.vocabulary = _usage.harvest_vocabulary(BACKEND_DIR)
 
-    if len(unused_keys) == 0:
+    verdicts = {key: _usage.classify(key, usage, prefix_patterns) for key in all_keys}
+    unused_keys = [k for k in all_keys if verdicts[k] == _usage.DEAD]
+    likely_dynamic = [k for k in all_keys if verdicts[k] == _usage.UNVERIFIED]
+    likely_unused = unused_keys
+
+    if len(unused_keys) == 0 and not likely_dynamic:
         return "\n## ✅ No Unused Translation Keys\n\nAll translation keys are used in the codebase.\n", []
-
-    # Split unused keys: those whose prefix (up to penultimate segment) matches a dynamic pattern
-    likely_dynamic = []
-    likely_unused = []
-    for key in unused_keys:
-        parts = key.split(".")
-        is_dynamic = False
-        # Check if any parent prefix (1 level, 2 levels, ...) matches a dynamic pattern
-        for i in range(1, len(parts)):
-            parent = ".".join(parts[:i])
-            if parent in prefix_patterns:
-                is_dynamic = True
-                break
-        if is_dynamic:
-            likely_dynamic.append(key)
-        else:
-            likely_unused.append(key)
 
     lines = [
         f"\n## ⚠️ Potentially Unused Translation Keys ({len(unused_keys)})\n",
         "The following keys exist in translation files but were not found in source code.\n",
-        "\n**Note:** This analysis cannot detect:\n",
-        "- Keys passed as variables computed from unrecognized expressions\n",
-        "- Keys used in computed expressions not matching a known dynamic pattern\n\n",
-        "Backend-driven keys (e.g. `message_i18n_key=\"ns.key\"` or signal `label_key=\"ns.key\"` metadata, "
-        "consumed dynamically by frontend components) and camelCase-continuation dynamic templates (e.g. "
-        "`` $t(`prefix.historyDays${day}`) ``) ARE detected automatically and excluded below.\n\n",
+        "\n**Note:** a key gets one of three verdicts, and the middle one matters:\n",
+        "- **used** — a literal reference, or a dynamic code found in the producer's vocabulary\n",
+        "- **not verified** — the family is real but its final segment is built at runtime\n",
+        "- **dead** — no evidence anywhere\n\n",
+        "Collapsing *not verified* into *used* absolves a whole namespace; collapsing it into "
+        "*dead* condemns live keys. Only the **dead** list below is actionable.\n\n",
+        "Backend-driven keys (e.g. `message_i18n_key=\"ns.key\"` or signal `label_key=\"ns.key\"` metadata), "
+        "camelCase-continuation templates, constant namespaces (`` $t(`${NS}.leaf`) ``), ternary "
+        "arguments (`` $t(c ? 'a.b' : 'a.c') ``) and typed-union expansions "
+        "(`` `risk.${prefix}.${code}` `` where ``prefix: 'errors' | 'warnings'``) ARE detected and excluded.\n\n",
         ]
 
     if prefix_patterns:
         lines.append(f"**Dynamic prefixes detected:** `{', '.join(sorted(prefix_patterns))}`\n")
         lines.append("Keys under these prefixes are marked as potentially used.\n\n")
+    if usage.suppressed_roots:
+        lines.append(
+            f"**Bare roots superseded by expansion:** `{', '.join(sorted(usage.suppressed_roots))}` — "
+            "these no longer absolve their whole namespace.\n\n"
+        )
 
-    # Section 1: Likely dynamic (probably false positives)
+    # Section 1: not verified — real family, runtime-built leaf. NOT actionable.
     if likely_dynamic:
-        lines.append(f"\n### 🔄 Potentially Dynamic ({len(likely_dynamic)} keys)\n")
-        lines.append("These keys are under a detected dynamic prefix — likely used via `$t(\\`prefix.${var}\\`)`.\n")
+        lines.append(f"\n### 🔵 Not Verified ({len(likely_dynamic)} keys)\n")
+        lines.append(
+            "These sit under a resolved dynamic family, but their final segment is produced at "
+            "runtime and was not found in the producer's vocabulary. **Not evidence of death.**\n"
+        )
         sections_dyn: dict[str, list[str]] = {}
         for key in likely_dynamic:
             section = extract_section(key)
@@ -428,10 +438,10 @@ def generate_unused_keys_report(
                 lines.append(f"- `{key}`")
             lines.append("")
 
-    # Section 2: Likely unused (probably dead code)
+    # Section 2: dead — no evidence anywhere. The only actionable list.
     if likely_unused:
         lines.append(f"\n### ❌ Likely Unused ({len(likely_unused)} keys)\n")
-        lines.append("These keys have no source code reference and no dynamic prefix match.\n")
+        lines.append("These keys have no literal reference, no resolved family and no producer code.\n")
         sections_dead: dict[str, list[str]] = {}
         for key in likely_unused:
             section = extract_section(key)
