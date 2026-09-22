@@ -714,12 +714,24 @@ class SignalService:
             requirements.price_fields,
             coverage_context,
         )
-        selected_points = select_signal_computation_points(
-            price_points,
-            valid_flags,
-            coverage_context.cadence,
-            requirements.data_policy,
-            planned.requirement.minimum_points,
+        selected_points = (
+            [
+                point
+                for point, valid in zip(
+                    price_points,
+                    valid_flags,
+                    strict=True,
+                )
+                if valid
+            ]
+            if plugin_class.allows_sparse_input_dates
+            else select_signal_computation_points(
+                price_points,
+                valid_flags,
+                coverage_context.cadence,
+                requirements.data_policy,
+                planned.requirement.minimum_points,
+            )
         )
         selected_events = select_signal_events(
             event_points,
@@ -883,11 +895,10 @@ class SignalService:
                         None,
                     )
                 raise SignalOutputValidationError("visible output has no finite value for every series")
-            if visible_has_missing and warmup.complete and not availability.partial_coverage_used:
-                if has_undefined_window:
-                    availability = self._partial_metric_availability(availability)
-                else:
-                    raise SignalOutputValidationError("complete visible output contains missing values")
+            if has_undefined_window:
+                availability = self._partial_metric_availability(availability)
+            elif visible_has_missing and warmup.complete and not availability.partial_coverage_used:
+                raise SignalOutputValidationError("complete visible output contains missing values")
             sliced_series = slice_signal_series(
                 computation.series,
                 context,
@@ -1250,9 +1261,13 @@ class SignalService:
 
         if selected_points and plugin_class.input_requirements.price_fields:
             expected_dates = [point.date for point in selected_points]
+            expected_date_set = set(expected_dates)
             for series in computation.series:
                 actual_dates = [point.date for point in series.points]
-                if actual_dates != expected_dates:
+                if plugin_class.allows_sparse_output_dates:
+                    if actual_dates != sorted(set(actual_dates)) or any(date not in expected_date_set for date in actual_dates):
+                        raise SignalOutputContractError(f"series '{series.key}' sparse dates must be a sorted unique input subset")
+                elif actual_dates != expected_dates:
                     raise SignalOutputContractError(f"series '{series.key}' dates/cardinality do not match input")
 
 

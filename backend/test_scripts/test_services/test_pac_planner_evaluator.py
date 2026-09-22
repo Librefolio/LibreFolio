@@ -32,8 +32,6 @@ from backend.app.services.pac_allocator.evaluator import (
     _fx_debit_key,
     build_exact_policy_view,
     evaluate_exact_candidate,
-    evaluate_pac_budget,
-    evaluate_rebalancing,
     exact_decision_id,
     exact_scenario_fingerprint,
 )
@@ -78,11 +76,6 @@ from backend.app.services.pac_allocator.models import (
     ExactUnit,
     ExactWithholding,
     LedgerPostingFamily,
-    PacNormalizationResult,
-    ParsedContributionVector,
-    ParsedMoneyVector,
-    ParsedValue,
-    RebalanceNormalizationResult,
 )
 from backend.app.services.pac_allocator.normalize import normalize_planner_request
 from backend.app.services.pac_allocator.numeric import ExactRatio
@@ -1125,6 +1118,8 @@ class _ObserveIn:
 
 
 def test_exact_error_taxonomies_and_public_entry_points_are_stable() -> None:
+    # The P1 prototype entry points (evaluate_pac_budget, evaluate_rebalancing)
+    # were dropped in b82e59ffa; the surviving set below is planner v2 only.
     assert issubclass(ExactScenarioContractError, ExactEvaluatorError)
     assert issubclass(ExactPolicyContractError, ExactEvaluatorError)
     assert issubclass(DuplicatePostingError, ExactLedgerError)
@@ -1133,47 +1128,9 @@ def test_exact_error_taxonomies_and_public_entry_points_are_stable() -> None:
     assert callable(exact_scenario_fingerprint)
     assert callable(build_exact_policy_view)
     assert callable(evaluate_exact_candidate)
-    assert callable(evaluate_pac_budget)
-    assert callable(evaluate_rebalancing)
     assert callable(exact_flow_posting)
     assert callable(rounded_money_posting)
     assert callable(reconcile_broker_ledgers)
-
-
-def test_p1_evaluators_remain_callable_with_empty_normalized_state() -> None:
-    shared = {
-        "report_currency": ParsedValue("EUR"),
-        "as_of_date": AS_OF,
-        "targets": (),
-        "cash": ParsedMoneyVector(entries=(), reason=None),
-        "contributions": ParsedContributionVector(entries=(), reason=None),
-        "rates": (),
-        "currencies": ("EUR",),
-        "currency_domain_valid": True,
-        "target_identity_valid": True,
-        "target_total": ParsedValue(None, "input_missing"),
-        "targets_valid": False,
-        "issues": (),
-        "normalized": None,
-    }
-    pac = evaluate_pac_budget(
-        PacNormalizationResult(
-            **shared,
-            assets=(),
-            asset_identity_valid=True,
-        )
-    )
-    rebalancing = evaluate_rebalancing(
-        RebalanceNormalizationResult(
-            **shared,
-            holdings=(),
-            row_identity_valid=True,
-        )
-    )
-
-    assert pac.allocations == ()
-    assert rebalancing.holdings == ()
-    assert rebalancing.instruments == ()
 
 
 @pytest.mark.parametrize(

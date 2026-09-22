@@ -20,11 +20,14 @@
     import {attachChartReady} from '$lib/utils/chartReady';
     import {t} from '$lib/i18n';
     import type {RenderedSignal} from '$lib/charts/signals';
+    import type {AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {buildBandSeries, buildBarSeries, buildMainSeries, buildSignalReferencePrimitives, COLORS, hexToRgba, updateArrowRotations} from './lineChartHelpers';
     import {assignOverlaySignalAxes, buildSecondaryYAxes, computeRightMargin} from './chartCoreHelpers';
     import {scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
     import {aggregateLineSeries, computeDensity, downsampleRenderedSignal, mapDateToBucket, type ChartResolution} from './timeSeriesAggregation';
     import {truncateName} from '$lib/utils/text';
+    import {currentLanguage} from '$lib/stores/app/language';
+    import {buildResponsiveXAxisPolicy} from './responsiveXAxis';
 
     // =========================================================================
     // Types
@@ -95,6 +98,8 @@
         yAxisMax?: number;
         /** Overlay signals to render as additional line series */
         overlaySignals?: RenderedSignal[];
+        /** Stable semantic settings for active non-primary axes. */
+        secondaryAxisScales?: Record<string, AxisScaleSettings>;
     }
 
     let {
@@ -117,6 +122,7 @@
         yAxisMin,
         yAxisMax,
         overlaySignals = [],
+        secondaryAxisScales = {},
     }: Props = $props();
 
     // Default colors — imported from lineChartHelpers
@@ -138,6 +144,7 @@
     let chartOptionSet = false;
     let needsInitialLayoutStabilityPass = false;
     let currentRenderedData: LineDataPoint[] = [];
+    let responsiveXAxisCompact = false;
 
     const COMPACT_DENSITY_THRESHOLD = 1.3;
     const COMPACT_RESIZE_EPSILON_PX = 4;
@@ -186,6 +193,8 @@
             void yAxisMode;
             void yAxisMin;
             void yAxisMax;
+            void secondaryAxisScales;
+            void $currentLanguage;
             tick().then(renderChart);
         }
     });
@@ -252,6 +261,21 @@
     function resizeChartOnly() {
         try {
             chartInstance?.resize();
+            if (chartInstance && !compact && currentRenderedData.length > 0) {
+                const policy = buildResponsiveXAxisPolicy({
+                    width: chartContainer.clientWidth,
+                    values: currentRenderedData.map((point) => point.date),
+                    locale: $currentLanguage,
+                    axisType: 'category',
+                });
+                const wasCompact = responsiveXAxisCompact;
+                responsiveXAxisCompact = policy.compact;
+                if (policy.axisLabel) {
+                    chartInstance.setOption({xAxis: {axisLabel: policy.axisLabel}}, {lazyUpdate: true});
+                } else if (wasCompact) {
+                    renderChart();
+                }
+            }
             if (chartInstance) updateArrowRotations(chartInstance);
         } catch (_) {
             /* ignore coord errors during resize */
@@ -559,7 +583,7 @@
 
         // Grid configuration
         const showYAxis = !compact || showMiniAxis;
-        const {axes: secondaryAxes, extraAxesCount} = buildSecondaryYAxes(activeOverlaySignals, isDark, 0, !compact);
+        const {axes: secondaryAxes, extraAxesCount} = buildSecondaryYAxes(activeOverlaySignals, isDark, 0, !compact, secondaryAxisScales);
 
         const gridConfig = compact
             ? {
@@ -582,6 +606,13 @@
         for (const d of renderedData) {
             if (d.staleDays && d.staleDays > 0) staleLookup.set(d.date, d.staleDays);
         }
+        const xAxisPolicy = buildResponsiveXAxisPolicy({
+            width: rect.width,
+            values: dates,
+            locale: $currentLanguage,
+            axisType: 'category',
+        });
+        responsiveXAxisCompact = xAxisPolicy.compact;
 
         const option: echarts.EChartsOption = {
             animation: false,
@@ -602,7 +633,11 @@
                 data: dates,
                 show: !compact,
                 axisLine: {lineStyle: {color: isDark ? '#475569' : '#d1d5db'}},
-                axisLabel: {color: isDark ? '#94a3b8' : '#6b7280', fontSize: 11},
+                axisLabel: {
+                    color: isDark ? '#94a3b8' : '#6b7280',
+                    fontSize: 11,
+                    ...(xAxisPolicy.axisLabel ?? {}),
+                },
                 splitLine: {show: false},
             },
             yAxis: [

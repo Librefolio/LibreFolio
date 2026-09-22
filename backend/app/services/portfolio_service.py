@@ -40,17 +40,29 @@ from backend.app.db.models import (
 )
 from backend.app.schemas.common import Currency, FxBackwardFillInfo
 from backend.app.schemas.portfolio import (
+    AcquisitionFundingPoint,
+    AcquisitionFundingSeries,
     AllocationHistoryDimensions,
     AllocationHistoryPoint,
     AllocationItem,
     AssetPeriodContribution,
     BrokerBreakdown,
+    BrokerPnlHistory,
+    BrokerPnlHistoryPoint,
+    CostHistoryPoint,
+    CostHistorySeries,
     DataQualityIssue,
+    DepositHistoryPoint,
+    DepositHistorySeries,
+    IncomeHistoryPoint,
+    IncomeHistorySeries,
     IssueCode,
     IssueDomain,
     IssueSeverity,
     MissingPriceAsset,
     OtherPeriodEffect,
+    PnlCandlePoint,
+    PnlCandleSeries,
     PortfolioAllocationSource,
     PortfolioHistoryPoint,
     PortfolioHolding,
@@ -802,7 +814,10 @@ class PortfolioService:
                             _total_withdrawn += abs(amount_base_signed) * share
 
                 if in_period and tx.type in _INCOME_TYPES:
-                    _income_accum += abs(amount_base_signed) * share
+                    # Signed: a legacy negative DIVIDEND/INTEREST correction must reduce
+                    # period_income, not be folded into the "Other" reconciliation residual
+                    # via abs() (plan §4.4 — Signed income foundation).
+                    _income_accum += amount_base_signed * share
                 if in_period and tx.type in _FEE_TAX_TYPES:
                     _fees_taxes_accum += abs(amount_base_signed) * share
                     if tx.type == TransactionType.FEE:
@@ -814,7 +829,7 @@ class PortfolioService:
                 # spans the full life of the position (first transaction -> valuation).
                 if tx.asset_id is not None:
                     if tx.type in _INCOME_TYPES:
-                        income_by_pos[(broker_id, tx.asset_id)] += abs(amount_base_signed) * share
+                        income_by_pos[(broker_id, tx.asset_id)] += amount_base_signed * share
                     elif tx.type in _FEE_TAX_TYPES:
                         fees_taxes_by_pos[(broker_id, tx.asset_id)] += abs(amount_base_signed) * share
 
@@ -1438,6 +1453,294 @@ class PortfolioService:
 
         return history_points
 
+    async def get_broker_pnl_history(
+        self,
+        user_id: int,
+        broker_ids: list[int] | None = None,
+        date_from: date_type | None = None,
+        date_to: date_type | None = None,
+        target_currency_override: str | None = None,
+        _precomputed_engine_result=None,
+    ) -> list[BrokerPnlHistory]:
+        """Per-broker additive P&L history for the GrowthChart P&L broker overlay (G1a).
+
+        Each broker's points sum to the scope-aggregate PortfolioHistoryPoint.total_pnl
+        for every date, by construction (see DailyStateBuilder §4.2 / BrokerDailyContribution).
+
+        _precomputed_engine_result: if provided by get_report(), skip engine re-run.
+        """
+        from backend.app.services.portfolio_engine import (  # noqa: PLC0415
+            DerivedViewsBuilder,
+            PortfolioCalculationEngine,
+        )
+
+        base_currency = target_currency_override or await self._get_base_currency(user_id)
+        if _precomputed_engine_result is not None:
+            result = _precomputed_engine_result
+        else:
+            engine = PortfolioCalculationEngine(self.db)
+            result = await engine.calculate(
+                user_id=user_id,
+                broker_ids=broker_ids,
+                date_from=None,  # Always compute from t=0 for correct cumulative values
+                date_to=date_to,
+                target_currency=base_currency,
+            )
+
+        if not result.daily_states:
+            return []
+
+        views = DerivedViewsBuilder(result.daily_states, base_currency)
+        by_broker = views.build_broker_pnl_history()
+
+        broker_pnl_history: list[BrokerPnlHistory] = []
+        for broker_id, points in by_broker.items():
+            broker = await self._get_broker(broker_id)
+            broker_name = broker.name if broker else f"Broker {broker_id}"
+            sliced_points = [BrokerPnlHistoryPoint(date=p["date"], total_pnl=p["total_pnl"]) for p in points if (date_from is None or p["date"] >= date_from) and (date_to is None or p["date"] <= date_to)]
+            broker_pnl_history.append(BrokerPnlHistory(broker_id=broker_id, broker_name=broker_name, points=sliced_points))
+
+        return broker_pnl_history
+
+    async def get_pnl_candles(
+        self,
+        user_id: int,
+        broker_ids: list[int] | None = None,
+        date_from: date_type | None = None,
+        date_to: date_type | None = None,
+        target_currency_override: str | None = None,
+        _precomputed_engine_result=None,
+    ) -> PnlCandleSeries:
+        """Synthetic total-P&L candle series for the GrowthChart P&L candles submode (G1b).
+
+        Requires the engine run itself to have been computed with include_candles=True —
+        when called standalone (no _precomputed_engine_result) this runs its own engine pass
+        with that flag; when called from get_report() the shared engine result must already
+        have been computed with query.include_pnl_candles, or every day comes back with no
+        candle (silently empty, not wrong — the L1/L2 cache keys both include the flag so a
+        cache hit can never silently return the wrong shape here).
+        """
+        from backend.app.services.portfolio_engine import (  # noqa: PLC0415
+            DerivedViewsBuilder,
+            PortfolioCalculationEngine,
+        )
+
+        base_currency = target_currency_override or await self._get_base_currency(user_id)
+        if _precomputed_engine_result is not None:
+            result = _precomputed_engine_result
+        else:
+            engine = PortfolioCalculationEngine(self.db)
+            result = await engine.calculate(
+                user_id=user_id,
+                broker_ids=broker_ids,
+                date_from=None,  # Always compute from t=0 for correct cumulative values
+                date_to=date_to,
+                target_currency=base_currency,
+                include_candles=True,
+            )
+
+        if not result.daily_states:
+            return PnlCandleSeries(points=[])
+
+        views = DerivedViewsBuilder(result.daily_states, base_currency)
+        raw_points = views.build_pnl_candles()
+        sliced_points = [PnlCandlePoint(date=p["date"], open=p["open"], high=p["high"], low=p["low"], close=p["close"]) for p in raw_points if (date_from is None or p["date"] >= date_from) and (date_to is None or p["date"] <= date_to)]
+        return PnlCandleSeries(points=sliced_points)
+
+    async def _signed_transaction_sums_by_date(
+        self,
+        accesses: list,
+        tx_types: set[TransactionType],
+        base_currency: str,
+        date_from: date_type | None,
+        date_to: date_type | None,
+    ) -> tuple[dict[date_type, dict[TransactionType, Decimal]], set[str]]:
+        """Shared signed transaction-sum-by-date scan, extracted from the original
+        get_income_history (G1c). Pure transaction scan, no engine run — same
+        (date_from, date_to] boundary + F2 OWNER-share scaling + FX-missing tracking
+        used by get_income_history/get_cost_history/get_deposit_history (batch 2),
+        differing only in which tx_types they scan and how the caller combines the
+        per-type sums afterward (income keeps DIVIDEND/INTEREST separate; costs sums
+        FEE+TAX together; deposit reads DEPOSIT alone).
+        """
+        sums_by_date: dict[date_type, dict[TransactionType, Decimal]] = defaultdict(lambda: defaultdict(Decimal))
+        missing_fx_pairs: set[str] = set()
+
+        for access in accesses:
+            broker_id = access.broker_id
+            # F2 — ownership scaling: an OWNER's share scales the broker's contribution
+            # (0% is valid and contributes nothing); EDITOR/VIEWER always see full data.
+            share = (access.share_percentage if access.share_percentage is not None else Decimal("1")) if access.role == UserRole.OWNER else Decimal("1")
+            broker_txns = await self._get_transactions(broker_id, tx_types=tx_types, date_to=date_to)
+            for tx in broker_txns:
+                if tx.amount is None or tx.amount == 0 or tx.currency is None:
+                    continue
+                # Canonical (date_from, date_to] boundary — exclusive start, inclusive end
+                # (matches every other period-gated accumulation in this file; the DB-level
+                # date_to filter above is inclusive already, date_from is applied here since
+                # _get_transactions' own date_from filter is inclusive-start, not exclusive).
+                after_start = date_from is None or tx.date > date_from
+                if not after_start:
+                    continue
+
+                if tx.currency == base_currency:
+                    amount_signed: Decimal | None = tx.amount
+                else:
+                    cf_results, _ = await convert_bulk(self.db, [(Currency(code=tx.currency, amount=tx.amount), base_currency, tx.date)], raise_on_error=False)
+                    amount_signed = cf_results[0][0].amount if cf_results and cf_results[0] is not None else None
+
+                if amount_signed is None:
+                    # Missing FX: exclude this transaction from the sums rather than
+                    # silently reporting a wrong/zeroed day (plan §3.4 — "must not become
+                    # a known zero"); report the pair via the existing data-quality contract.
+                    missing_fx_pairs.add(f"{tx.currency}/{base_currency}")
+                    continue
+
+                sums_by_date[tx.date][tx.type] += amount_signed * share
+
+        return sums_by_date, missing_fx_pairs
+
+    async def get_income_history(
+        self,
+        user_id: int,
+        broker_ids: list[int] | None = None,
+        date_from: date_type | None = None,
+        date_to: date_type | None = None,
+        target_currency_override: str | None = None,
+    ) -> IncomeHistorySeries:
+        """Signed daily DIVIDEND/INTEREST income history for the GrowthChart P&L income
+        submode (G1c, plan §3.4/§4.4).
+
+        Pure transaction scan — no PortfolioCalculationEngine run needed (income is a
+        direct sum of committed Transaction rows, not a resolved valuation). Mirrors
+        get_summary()'s _income_accum signed-conversion pattern exactly (same
+        (date_from, date_to] boundary, same F2 role-aware share applied once) so
+        sum(dividend)+sum(interest) reproduces PortfolioSummary.period_income exactly
+        for the same scope/window, by construction.
+        """
+        base_currency = target_currency_override or await self._get_base_currency(user_id)
+        accesses = await self._get_user_broker_access(user_id, broker_ids)
+        if not accesses:
+            return IncomeHistorySeries(points=[])
+
+        sums_by_date, missing_fx_pairs = await self._signed_transaction_sums_by_date(accesses, {TransactionType.DIVIDEND, TransactionType.INTEREST}, base_currency, date_from, date_to)
+
+        # Sparse series: only dates with actual DIVIDEND/INTEREST activity, never a
+        # dense day-by-day zero-filled series (plan §3.4 — "sparse economic flows").
+        points = [
+            IncomeHistoryPoint(
+                date=d,
+                dividend=Currency(code=base_currency, amount=type_sums.get(TransactionType.DIVIDEND, Decimal("0"))),
+                interest=Currency(code=base_currency, amount=type_sums.get(TransactionType.INTEREST, Decimal("0"))),
+            )
+            for d, type_sums in sorted(sums_by_date.items())
+        ]
+        return IncomeHistorySeries(points=points, missing_fx_pairs=sorted(missing_fx_pairs))
+
+    async def get_cost_history(
+        self,
+        user_id: int,
+        broker_ids: list[int] | None = None,
+        date_from: date_type | None = None,
+        date_to: date_type | None = None,
+        target_currency_override: str | None = None,
+    ) -> CostHistorySeries:
+        """Signed daily FEE+TAX cost history for the GrowthChart P&L income submode's
+        costs dimension (batch 2). Same pure-transaction-scan pattern as
+        get_income_history (see _signed_transaction_sums_by_date). FEE and TAX are
+        summed together into one "cost" figure — matching the dashboard's existing
+        "Fees & taxes" KPI grouping — preserving the raw (negative) Transaction.amount
+        sign rather than flipping to a positive magnitude, same signed-fidelity policy
+        as income.
+        """
+        base_currency = target_currency_override or await self._get_base_currency(user_id)
+        accesses = await self._get_user_broker_access(user_id, broker_ids)
+        if not accesses:
+            return CostHistorySeries(points=[])
+
+        sums_by_date, missing_fx_pairs = await self._signed_transaction_sums_by_date(accesses, {TransactionType.FEE, TransactionType.TAX}, base_currency, date_from, date_to)
+
+        points = [CostHistoryPoint(date=d, cost=Currency(code=base_currency, amount=sum(type_sums.values(), Decimal("0")))) for d, type_sums in sorted(sums_by_date.items())]
+        return CostHistorySeries(points=points, missing_fx_pairs=sorted(missing_fx_pairs))
+
+    async def get_deposit_history(
+        self,
+        user_id: int,
+        broker_ids: list[int] | None = None,
+        date_from: date_type | None = None,
+        date_to: date_type | None = None,
+        target_currency_override: str | None = None,
+    ) -> DepositHistorySeries:
+        """Daily DEPOSIT history for the GrowthChart P&L income submode's deposit-size
+        dimension (batch 2). Same pure-transaction-scan pattern as get_income_history
+        (see _signed_transaction_sums_by_date).
+        """
+        base_currency = target_currency_override or await self._get_base_currency(user_id)
+        accesses = await self._get_user_broker_access(user_id, broker_ids)
+        if not accesses:
+            return DepositHistorySeries(points=[])
+
+        sums_by_date, missing_fx_pairs = await self._signed_transaction_sums_by_date(accesses, {TransactionType.DEPOSIT}, base_currency, date_from, date_to)
+
+        points = [DepositHistoryPoint(date=d, deposit=Currency(code=base_currency, amount=type_sums.get(TransactionType.DEPOSIT, Decimal("0")))) for d, type_sums in sorted(sums_by_date.items())]
+        return DepositHistorySeries(points=points, missing_fx_pairs=sorted(missing_fx_pairs))
+
+    async def get_acquisition_funding_history(
+        self,
+        user_id: int,
+        broker_ids: list[int] | None = None,
+        date_from: date_type | None = None,
+        date_to: date_type | None = None,
+        target_currency_override: str | None = None,
+        _precomputed_engine_result=None,
+    ) -> AcquisitionFundingSeries:
+        """New-vs-reinvested BUY funding split for the GrowthChart P&L income submode's
+        acquisition-size dimension (batch 2, plan §5.2).
+
+        Unlike cost/deposit/income (pure transaction scans), this REQUIRES an engine
+        run: the new-vs-reinvested split depends on the running capital/returns pool
+        state built up over the ENTIRE prior transaction history, not just the day's
+        own transactions in isolation — mirrors get_pnl_candles()'s
+        include_candles=True requirement exactly (same
+        _precomputed_engine_result/standalone dual-mode, same "flag must be set on
+        the shared engine run or every day comes back empty" caveat).
+        """
+        from backend.app.services.portfolio_engine import (  # noqa: PLC0415
+            DerivedViewsBuilder,
+            PortfolioCalculationEngine,
+        )
+
+        base_currency = target_currency_override or await self._get_base_currency(user_id)
+        if _precomputed_engine_result is not None:
+            result = _precomputed_engine_result
+        else:
+            engine = PortfolioCalculationEngine(self.db)
+            result = await engine.calculate(
+                user_id=user_id,
+                broker_ids=broker_ids,
+                date_from=None,  # Always compute from t=0 for correct cumulative pool state
+                date_to=date_to,
+                target_currency=base_currency,
+                include_acquisition_funding=True,
+            )
+
+        if not result.daily_states:
+            return AcquisitionFundingSeries(points=[])
+
+        views = DerivedViewsBuilder(result.daily_states, base_currency)
+        raw_points = views.build_acquisition_funding()
+        # Canonical (date_from, date_to] boundary — exclusive start, inclusive end.
+        # NOTE the deliberate difference from get_pnl_candles/get_broker_pnl_history,
+        # whose engine-backed slicing this method otherwise mirrors: those two are
+        # LEVEL series (a cumulative P&L value per day), so the period's opening day
+        # must be shown as the baseline. This one is a FLOW series (that day's own BUY
+        # split), so a BUY dated exactly on date_from belongs to the PREVIOUS period —
+        # the same rule already applied to its five co-rendered Income-submode
+        # siblings (income/cost/deposit). Using >= here would make a BUY on date_from
+        # draw a bar while a DIVIDEND on that very same date draws none.
+        sliced_points = [AcquisitionFundingPoint(date=p["date"], from_new_capital=p["from_new_capital"], from_reinvested=p["from_reinvested"]) for p in raw_points if (date_from is None or p["date"] > date_from) and (date_to is None or p["date"] <= date_to)]
+        return AcquisitionFundingSeries(points=sliced_points)
+
     async def get_positions_contribution(  # noqa: C901 — TODO(P2-refactor): nested broker/asset/tx accumulation with FX conversion branches
         self,
         user_id: int,
@@ -1522,10 +1825,11 @@ class PortfolioService:
                     continue
 
                 if tx.type in _INCOME_TYPES:
+                    # Signed: preserve legacy negative DIVIDEND/INTEREST corrections (plan §4.4).
                     if tx.asset_id is not None:
-                        per_income[(broker_id, tx.asset_id)] += abs(amount_base) * share
+                        per_income[(broker_id, tx.asset_id)] += amount_base * share
                     else:
-                        unalloc_income[broker_id] += abs(amount_base) * share
+                        unalloc_income[broker_id] += amount_base * share
 
                 if tx.type in _FEE_TAX_TYPES:
                     if tx.asset_id is not None:
@@ -1775,7 +2079,9 @@ class PortfolioService:
                 broker = await self._get_broker(bid)
                 income = per_income.get((bid, aid), Decimal("0"))
                 fees = per_fees_taxes.get((bid, aid), Decimal("0"))
-                if income <= 0 and fees <= 0:
+                # Nonzero, not positive-only: a legacy negative income correction must
+                # still surface here, never silently dropped (plan §4.4).
+                if income == 0 and fees == 0:
                     continue
                 pnl = income - fees
                 contributions.append(
@@ -1786,7 +2092,7 @@ class PortfolioService:
                         asset_type=asset.asset_type.value if asset and asset.asset_type else "Unknown",
                         broker_id=bid,
                         broker_name=broker.name if broker else f"Broker {bid}",
-                        period_income=income if income > 0 else None,
+                        period_income=income if income else None,
                         period_fees_taxes=fees if fees > 0 else None,
                         period_pnl=pnl,
                         start_value=Decimal("0"),
@@ -1802,18 +2108,21 @@ class PortfolioService:
         for bid in set(unalloc_income.keys()) | set(unalloc_fees.keys()):
             inc = unalloc_income.get(bid)
             fee = unalloc_fees.get(bid)
-            if (inc and inc > 0) or (fee and fee > 0):
+            # inc: nonzero check (legacy negative corrections must stay visible, plan §4.4).
+            # fee: unchanged positive-only check — fee/tax signed corrections are out of
+            # this plan's scope.
+            if inc or (fee and fee > 0):
                 broker = await self._get_broker(bid)
                 broker_name = broker.name if broker else f"Broker {bid}"
                 unallocated.append(
                     UnallocatedContribution(
                         broker_id=bid,
                         broker_name=broker_name,
-                        unallocated_income=inc if inc and inc > 0 else None,
+                        unallocated_income=inc if inc else None,
                         unallocated_fees_taxes=fee if fee and fee > 0 else None,
                     )
                 )
-                if inc and inc > 0:
+                if inc:
                     other_effects.append(
                         OtherPeriodEffect(
                             description="Unallocated income",
@@ -2063,6 +2372,12 @@ class PortfolioService:
                 query.include_allocation_history,
                 query.include_breakdown,
                 query.include_positions_contribution,
+                query.include_broker_pnl_history,
+                query.include_pnl_candles,
+                query.include_income_history,
+                query.include_cost_history,
+                query.include_deposit_history,
+                query.include_acquisition_funding,
                 str(allocation_source_date),
                 allocation_cash_broker_ids,
                 tx_fp,
@@ -2113,6 +2428,8 @@ class PortfolioService:
             date_from=None,  # always from t=0 for correct cumulative values
             date_to=effective_date_to,
             target_currency=base_currency,
+            include_candles=query.include_pnl_candles,
+            include_acquisition_funding=query.include_acquisition_funding,
         )
 
         views = DerivedViewsBuilder(engine_result.daily_states, base_currency)
@@ -2219,6 +2536,84 @@ class PortfolioService:
                 _precomputed_engine_result=engine_result,
             )
 
+        # ── 4c. Broker P&L history (additive per-broker overlay for GrowthChart P&L mode) ──
+        broker_pnl_history: list[BrokerPnlHistory] | None = None
+        if query.include_broker_pnl_history:
+            included.append("broker_pnl_history")
+            broker_pnl_history = await self.get_broker_pnl_history(
+                user_id=user_id,
+                broker_ids=query.broker_ids,
+                date_from=date_from,
+                date_to=effective_date_to,
+                target_currency_override=base_currency,
+                _precomputed_engine_result=engine_result,
+            )
+
+        # ── 4d. Synthetic total-P&L candle series (GrowthChart P&L candles submode, G1b) ──
+        pnl_candles: PnlCandleSeries | None = None
+        if query.include_pnl_candles:
+            included.append("pnl_candles")
+            pnl_candles = await self.get_pnl_candles(
+                user_id=user_id,
+                broker_ids=query.broker_ids,
+                date_from=date_from,
+                date_to=effective_date_to,
+                target_currency_override=base_currency,
+                _precomputed_engine_result=engine_result,
+            )
+
+        # ── 4e. Signed personal income history (GrowthChart P&L income submode, G1c) ──
+        income_history: IncomeHistorySeries | None = None
+        if query.include_income_history:
+            included.append("income_history")
+            income_history = await self.get_income_history(
+                user_id=user_id,
+                broker_ids=query.broker_ids,
+                date_from=date_from,
+                date_to=effective_date_to,
+                target_currency_override=base_currency,
+            )
+
+        # ── 4f. Signed FEE+TAX cost history (batch 2 — Income submode's costs dimension) ──
+        cost_history: CostHistorySeries | None = None
+        if query.include_cost_history:
+            included.append("cost_history")
+            cost_history = await self.get_cost_history(
+                user_id=user_id,
+                broker_ids=query.broker_ids,
+                date_from=date_from,
+                date_to=effective_date_to,
+                target_currency_override=base_currency,
+            )
+
+        # ── 4g. DEPOSIT history (batch 2 — Income submode's deposit-size dimension) ──
+        deposit_history: DepositHistorySeries | None = None
+        if query.include_deposit_history:
+            included.append("deposit_history")
+            deposit_history = await self.get_deposit_history(
+                user_id=user_id,
+                broker_ids=query.broker_ids,
+                date_from=date_from,
+                date_to=effective_date_to,
+                target_currency_override=base_currency,
+            )
+
+        # ── 4h. New-vs-reinvested BUY funding split (batch 2 — Income submode's
+        # acquisition-size dimension). Requires the shared engine run to have been
+        # computed with include_acquisition_funding=True (see above), mirroring
+        # pnl_candles's own shared-engine-result requirement.
+        acquisition_funding: AcquisitionFundingSeries | None = None
+        if query.include_acquisition_funding:
+            included.append("acquisition_funding")
+            acquisition_funding = await self.get_acquisition_funding_history(
+                user_id=user_id,
+                broker_ids=query.broker_ids,
+                date_from=date_from,
+                date_to=effective_date_to,
+                target_currency_override=base_currency,
+                _precomputed_engine_result=engine_result,
+            )
+
         # ── 5. Data quality from engine (already computed if summary was built) ──
         if summary:
             data_quality = summary.data_quality
@@ -2265,6 +2660,12 @@ class PortfolioService:
             allocation_history=alloc_history,
             data_quality=data_quality,
             positions_contribution=positions_contribution,
+            broker_pnl_history=broker_pnl_history,
+            pnl_candles=pnl_candles,
+            income_history=income_history,
+            cost_history=cost_history,
+            deposit_history=deposit_history,
+            acquisition_funding=acquisition_funding,
             allocation_source=allocation_source,
         )
 

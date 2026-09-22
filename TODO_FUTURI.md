@@ -594,6 +594,30 @@ atomico e riceve sempre uno snapshot completo.
 - Tax-loss harvesting e minimizzazione del realizzo fiscale.
 - Bucket di minusvalenze per categoria, compensabilità e scadenza.
 
+#### PAC `min_fragmentation` — differita (decisione developer, 21/09/2026)
+
+**Status**: 📋 DIFFERITA — non entra nella prima versione operativa.
+
+Quarta policy dichiarata nel contratto (`PlannerPolicy`,
+`backend/app/services/pac_allocator/models.py`) e **già specificata**: la sua
+cascata obiettivo esiste ed è scorata in aritmetica esatta
+(`evaluator.py`, ordine `fixed_l2 → shortfall → split_asset_count →
+active_order_rows → route_priority → explicit_cost`). Oggi è risolvibile
+**provatamente** dall'oracolo esaustivo sui domini piccoli; manca solo la
+compilazione dello stage `split_asset_count` verso SCIP, quindi
+`compiler._require_supported_scope` la rifiuta.
+
+**Perché è differita e non "da progettare"**: la funzione obiettivo non è una
+domanda aperta — è scritta e testata. Il rinvio è di priorità: la decisione
+developer del 21/09 mette il **Rebalancer completo** davanti a tutto, perché il
+PAC ne è il caso particolare a distribuzione iniziale nulla.
+
+**Se si volesse ridiscutere l'obiettivo**: `split_asset_count` minimizza il
+numero di Asset spezzati fra più route. Un'alternativa sensata sarebbe pesare la
+frammentazione per valore anziché per conteggio, così che spezzare un Asset da
+10 € non costi quanto spezzarne uno da 10 000 €. È una proposta, non una
+raccomandazione: richiede una decisione di prodotto.
+
 ### Modello Operativo Futuro
 
 - Fee, limiti e tempi di settlement dei trasferimenti.
@@ -649,6 +673,150 @@ Creare un assistente AI basato su MCP server chiamato "QuarkAI".
 - Raccolta automatizzata notizie mercati azionari
 - Notifiche su Telegram (o simili) quando rileva eventi che richiedono attenzione
 - Recap giornaliero (es. alle 20:00) con sommario eventi rilevanti
+
+---
+
+## 🔎 Gate sui campi di contratto senza consumatore
+
+**Data aggiunta**: 21 Settembre 2026
+**Status**: 📋 DIFFERITO — decisione developer del 21/09/2026
+**Priorità**: Media
+
+Oggi un campo aggiunto al contratto backend e **mai consumato dal frontend** non
+produce alcun errore: né a compile time, né a `svelte-check`, né in esecuzione.
+Il contratto cresce, il consumatore resta indietro, e nulla lo dice.
+
+**Il caso che l'ha reso visibile** (21/09/2026): `memory` in `ToolItemMetrics`,
+introdotto da `4a38b9061`, mai letto da `ToolExecutionMetrics.svelte`. È stato
+trovato **per caso**: è inciampato in `duration()`, un helper tipizzato
+genericamente su `ToolItemMetrics[keyof ToolItemMetrics]`, che si è allargato da
+solo al nuovo campo e si è ritrovato un oggetto dentro una funzione che formatta
+millisecondi.
+
+> Il punto che rende il debito reale: **se quell'helper fosse stato tipizzato in
+> modo specifico, il campo sarebbe passato in silenzio.** Non esiste un gate —
+> esiste un inciampo fortuito. Un controllo che funziona per effetto collaterale
+> dice quanto era vistoso il difetto, non quanto siamo attenti.
+
+**Precedente con esito** (21/09/2026): `monetary_step`, campo del contratto P1
+compilato a mano dall'utente e **mai letto dalla matematica** — zero occorrenze
+in `constraints`/`objectives`/`solver`/`compiler`/`evaluator`, e scartato
+nell'unpack di `models.py`. È stato **rimosso** nella cancellazione di P1, e la
+sua unità minima di valuta è ora derivata da Babel (`minor_unit`), che è nel
+contratto v2 e che il motore legge davvero. È il primo campo che la regola
+condanna, ed è quello che l'ha generata.
+
+**Secondo precedente, con il segno invertito** (21/09/2026): `ToolDocumentation.path`
+nel descrittore di un Tool. Il modello ne valida **la forma** — relativo, niente
+`..` — e **non l'esistenza**. Il frontend lo consuma davvero (`ToolAboutPanel`,
+`ToolDiagnosticsPanel`, `presentation.ts`) e ci porta l'utente con un pulsante.
+Quindi un path verso una pagina cancellata **supera ogni gate**.
+
+> **Aggiornamento del 21/09, sera — la conseguenza è ora misurata, e c'è un gate
+> che avrebbe dovuto coprirlo.** `dev.py mkdocs check-links` esiste e verifica i
+> link fra codice e documentazione, ma per costruzione non vede questo:
+> `dev.py:1073-1195` cerca stringhe letterali `/mkdocs/` nei `.ts`/`.svelte` del
+> frontend (Scope 1) e `docs_url` nei soli `fx_providers` /
+> `asset_source_providers` (Scope 2). Il path dei Tool non sta in nessuno dei
+> due — vive in `ToolDocumentation(path=…)` sotto `tool_plugins/` ed è letto a
+> runtime. Misurato: `grep -rl 'user/tools' frontend/src` → **0**,
+> `grep -c 'tool_plugins' dev.py` → **0**.
+>
+> Quindi cancellando o rinominando la pagina PAC, `check-links` sarebbe rimasto
+> **verde** mentre il pulsante *Documentation* del prodotto dava 404. Non è
+> l'assenza di un gate: è **un gate che esiste e il cui perimetro esclude
+> precisamente il riferimento che nessuno verifica** — la forma più difficile da
+> vedere, perché la sua esistenza è essa stessa una rassicurazione. Verificato a
+> mano che il path risolva in tutte e quattro le lingue del sito buildato: a
+> mano, perché non c'è altro modo.
+
+> Vale la pena tenerli accoppiati, perché insieme dicono una cosa che nessuno
+> dei due dice da solo: `monetary_step` era **dichiarato e mai consumato**,
+> `ToolDocumentation.path` è **consumato e mai verificato**. Il difetto non sta
+> in una direzione particolare — sta nel **non controllare l'estremo**. Una
+> regola con due casi opposti è più forte di una con un caso solo, perché il
+> lettore capisce dov'è il buco invece di imparare un esempio.
+
+**Terzo precedente, con la prova accanto** (21/09/2026): `RebalancerPolicy`,
+`type RebalancerPolicy = Literal["invest_only", "invest_and_sell"]` in
+`services/pac_allocator/models.py`. Zero consumatori in tutto il repository, e i
+suoi due valori sono **interamente contenuti** in `PlannerPolicy`, che è il tipo
+davvero usato (campo `policy` in due dataclass).
+
+L'argomento che lo ha condannato non è il conteggio, che si poteva leggere come
+«predisposizione per il lavoro che viene»: è che il disegno del Rebalancer v2 —
+`plan-phase00PacRebalancerArchitecture.prompt.md`, **1226 righe** — non lo nomina
+mai. `RebalancerPolicy` 0 occorrenze, `PlannerPolicy` 0 occorrenze,
+`invest_and_sell` 1 sola occorrenza in §12.4 e come nome di un *programma
+ristretto del solver*, cioè un concetto diverso da un valore di policy.
+
+> Registrato **con la misura, non con la conclusione**: chi lo rileggerà saprà
+> che è stato deciso su una prova e non su una preferenza. Se il Rebalancer avrà
+> bisogno di un tipo ristretto, nascerà con il disegno in mano — un tipo
+> ereditato da un'epoca precedente arriva con le sue assunzioni e nessuno che le
+> ricordi.
+
+**Quarto precedente, nel runner** (21/09/2026): `pac-analyze` registrato **due
+volte** — `_backend_services.py` e `_backend_schemas.py` — contro file di test
+cancellati nello stesso commit che li rimuoveva. Chiunque avesse eseguito quelle
+due azioni avrebbe avuto un rosso da un pytest su un percorso inesistente.
+
+`dev.py test check-orphans` era **verde**, e correttamente: verifica
+*registrazione → raggiungibilità da un `all`*. Nessuno verifica *azione → il file
+esiste*. Sweep manuale dei 211 percorsi citati da `scripts/test_runner/`: zero
+mancanti dopo la rimozione, due falsi positivi (un commento d'esempio e un glob).
+
+> I quattro insieme coprono le quattro caselle, ed è il motivo per cui vale la
+> pena tenerli tutti: `monetary_step` dichiarato-e-mai-consumato,
+> `ToolDocumentation.path` consumato-e-mai-verificato con un gate che lo esclude,
+> `RebalancerPolicy` dichiarato-e-superato, `pac-analyze` registrato-e-morto con
+> un gate che guarda la direzione opposta. **Due dei quattro hanno un gate che
+> passa**: non basta chiedersi se un controllo esiste, bisogna chiedersi da che
+> parte guarda.
+
+**Perché è differito e non dimenticato**: decisione developer del 21/09 —
+*«buona idea, ma da fare solo alla fine, quando il sistema è funzionante e si
+passa alla fase di condensazione e potenziamento»*. Costruire il gate adesso
+irrigidirebbe contratti che cambiano ogni giorno e produrrebbe rumore su campi
+legittimamente non ancora consumati. Ha senso quando la superficie si
+stabilizza: a quel punto «dichiarato e non usato» smette di essere una fase
+normale dello sviluppo e torna a essere il segnale che è.
+
+**Collocazione**: debito trasversale fra contratto backend e consumatori
+frontend. Non appartiene a PAC/Rebalancer né alla piattaforma Tool: il caso che
+l'ha rivelato viene da lì, ma la lacuna riguarda qualunque coppia
+contratto/consumatore.
+
+---
+
+## ⚖️ Asimmetria della piattaforma Tool sull'assenza
+
+**Data aggiunta**: 21 Settembre 2026
+**Status**: 📋 OSSERVAZIONE — nessuna delle due scelte è sbagliata
+**Priorità**: Bassa
+
+La piattaforma Tool modella l'assenza in **due modi opposti** ai suoi due
+estremi, e la differenza ha conseguenze UX visibili:
+
+| lato | meccanismo | effetto dell'assenza |
+|---|---|---|
+| backend | `ToolDescriptor.operations` ha `min_length=1` | un servizio **senza operazioni è irrappresentabile**: va rimosso del tutto, e il tool sparisce dal catalogo |
+| frontend | `ToolRendererUnavailableCode = 'renderer_missing'` | un tool **senza UI è rappresentato**, con messaggio tradotto in quattro lingue e la precisazione che nessun calcolo è partito |
+
+**Il backend vieta l'assenza, il frontend la descrive.**
+
+La conseguenza concreta, osservata il 21/09/2026 alla rimozione di P1: il
+**Rebalancer sparisce** dal catalogo (nessuna operazione v2 ancora) mentre il
+**PAC resta visibile e si spiega** (`operation="plan"` esiste, la UI no). Due
+tool nella stessa condizione logica — «backend pronto a metà, frontend assente»
+— hanno due destini UX diversi **per un dettaglio di modellazione**, non per una
+decisione di prodotto.
+
+Non è un difetto: entrambe le scelte sono difendibili. Ma se un giorno si vorrà
+uniformare — per esempio rappresentare anche il servizio senza operazioni, così
+che un tool in costruzione resti elencato e si spieghi invece di sparire — è qui
+che va guardato. Vale anche il contrario: rendere irrappresentabile il renderer
+mancante, obbligando a spedire UI e backend insieme.
 
 ---
 

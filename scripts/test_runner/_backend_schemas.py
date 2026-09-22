@@ -88,13 +88,6 @@ def schemas_risk(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Risk schemas tests", verbose=verbose)
 
 
-def schemas_pac_analyze(verbose: bool = False, test_names: list = None) -> bool:
-    """Test the actual strict PAC P1 input/output codecs."""
-    print_section("Schemas: PAC Initial-State Analyze")
-    cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_pac_analyze_schemas.py", test_names)
-    return run_command(cmd, "PAC analyze schema tests", verbose=verbose)
-
-
 def schemas_pac_planner(verbose: bool = False, test_names: list = None) -> bool:
     """Test the strict PAC/Rebalancer v2 planner wire contract."""
     print_section("Schemas: PAC/Rebalancer Planner")
@@ -160,7 +153,6 @@ Tests for Pydantic/SQLModel schema validation:
     add_test(cat, "fx-routes", schemas_fx_routes, name="FX Route Schemas", desc="Request validation and response-only chain/provider membership metadata")
     add_test(cat, "signals", schemas_signals, name="Signal Schemas", desc="Plugin, catalog, canonical output, status and availability contracts")
     add_test(cat, "risk", schemas_risk, name="Risk Schemas", desc="Canonical valuations, returns, metadata and data-quality contracts")
-    add_test(cat, "pac-analyze", schemas_pac_analyze, name="PAC Analyze Schemas", desc="Strict P1 draft/result codecs, availability, exact string facts and wire bounds", isolation="pure")
     add_test(
         cat,
         "pac-planner",

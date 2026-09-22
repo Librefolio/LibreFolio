@@ -1,4 +1,5 @@
 import type {SignalInputField} from './ChartSignal';
+import type {BackendSignalResult} from './backendTypes';
 import type {SignalInstanceResult, SignalInstanceStatus} from './resultMapper';
 import {finiteNumber} from '$lib/utils/core/finiteNumber';
 
@@ -11,6 +12,9 @@ export type SignalProblemCode =
     | 'insufficient_input_coverage'
     | 'insufficient_event_coverage'
     | 'insufficient_history'
+    | 'fx_conversion_unavailable'
+    | 'undefined_metric'
+    | 'partial_undefined_metric'
     | 'incomplete_warmup'
     | 'partial_input_coverage'
     | 'partial_event_coverage'
@@ -99,7 +103,7 @@ function fieldCoverage(value: unknown): Partial<Record<SignalInputField, number>
     );
 }
 
-function normalizeProblemCode(value: unknown, fallback: SignalProblemCode): SignalProblemCode {
+function recognizedProblemCode(value: unknown): SignalProblemCode | null {
     const code = firstString(value);
     switch (code) {
         case 'incompatible_domain':
@@ -108,17 +112,24 @@ function normalizeProblemCode(value: unknown, fallback: SignalProblemCode): Sign
         case 'insufficient_input_coverage':
         case 'insufficient_event_coverage':
         case 'insufficient_history':
+        case 'fx_conversion_unavailable':
+        case 'undefined_metric':
+        case 'partial_undefined_metric':
         case 'incomplete_warmup':
         case 'partial_input_coverage':
         case 'partial_event_coverage':
         case 'data_gap':
             return code;
         default:
-            return fallback;
+            return null;
     }
 }
 
-export function getSignalProblem(item: SignalInstanceResult | undefined): SignalProblem | null {
+type SignalProblemInput = Pick<SignalInstanceResult, 'status' | 'result' | 'error'> & {
+    source?: SignalInstanceResult['source'];
+};
+
+function resolveSignalProblem(item: SignalProblemInput | undefined): SignalProblem | null {
     if (!item || item.status === 'local' || item.status === 'ok') return null;
 
     if (item.status === 'missing' || !item.result) {
@@ -190,9 +201,13 @@ export function getSignalProblem(item: SignalInstanceResult | undefined): Signal
 
     const coverageRatio = finiteNumber(coverage?.coverage_ratio);
     const fallback = item.status === 'partial' ? 'partial' : 'unavailable';
+    const nonCoverageWarningCode = recognizedProblemCode(nonCoverageWarning?.code);
+    const warningCode = recognizedProblemCode(warning?.code);
+    const availabilityCode = recognizedProblemCode(availability?.reason_code);
+    const problemCode = item.status === 'unavailable' ? (availabilityCode ?? nonCoverageWarningCode ?? warningCode ?? fallback) : (nonCoverageWarningCode ?? availabilityCode ?? warningCode ?? fallback);
 
     return {
-        code: normalizeProblemCode(nonCoverageWarning?.code ?? availability?.reason_code ?? warning?.code, fallback),
+        code: problemCode,
         status: item.status,
         missingPriceFields: inputFieldList(availability?.missing_price_fields),
         missingEventTypes: stringList(availability?.missing_event_types),
@@ -211,4 +226,18 @@ export function getSignalProblem(item: SignalInstanceResult | undefined): Signal
         excludedPoints: finiteNumber(coverageWarningDetails?.excluded_points),
         message: firstString(nonCoverageWarning?.message) ?? firstString(coverageWarning?.message) ?? firstString(warning?.message) ?? item.error,
     };
+}
+
+export function getSignalProblem(item: SignalInstanceResult | undefined): SignalProblem | null {
+    return resolveSignalProblem(item);
+}
+
+export function getBackendSignalProblem(result: BackendSignalResult): SignalProblem | null {
+    const resultError = Array.isArray(result.error) ? result.error.find((error) => error !== null)?.message : result.error?.message;
+    return resolveSignalProblem({
+        source: 'backend',
+        status: result.status,
+        result,
+        error: resultError ?? null,
+    });
 }

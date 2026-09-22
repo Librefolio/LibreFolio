@@ -1185,6 +1185,13 @@
       "partialResult": "This signal is only partially available with the current data.",
       "unavailable": "This signal cannot be calculated with the available data.",
       "partialContiguousSegment": "Signal calculated on the complete contiguous segment {start}–{end}. {excluded} loaded points were excluded because required dates or fields were incomplete. Complete input: {available}/{requested} ({coverage}%, including warm-up). Longest missing streak: {consecutive} points."
+    },
+    "axes": {
+      "exchangeRate": "Exchange-rate axis ({pair})",
+      "percentage": "Percentage axis",
+      "price": "Price axis ({currency})",
+      "signal": "{name} axis",
+      "volume": "Volume axis"
     }
   },
   "common": {
@@ -1470,7 +1477,15 @@
     "yieldOnCostValue": "Yield on Cost",
     "yieldOnCostPeriod": "Period",
     "yieldOnCostFxRateDate": "rate from",
-    "yieldOnCostNoIncomeTitle": "No income recorded"
+    "yieldOnCostNoIncomeTitle": "No income recorded",
+    "pnl": "P&L",
+    "pnlSubmodeLine": "Line",
+    "pnlSubmodeCandles": "Candles",
+    "pnlSubmodeIncome": "Income",
+    "pnlCandlesHypothetical": "Synthetic — cross-asset high/low are hypothetical and non-simultaneous, not a real intraday series.",
+    "pnlCandlesHypotheticalShort": "Synthetic — cross-asset high/low are hypothetical and non-simultaneous",
+    "pnlAcqNewCapital": "New capital",
+    "pnlAcqReinvested": "Reinvested"
   },
   "dataQuality": {
     "headerInfoOnly": "Data quality note",

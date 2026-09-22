@@ -13,11 +13,26 @@
 
 import {browser} from '$app/environment';
 import type {SignalConfig} from '$lib/charts/signals';
+import {DEFAULT_CALENDAR_RETURN_WINDOW, sanitizeCalendarReturnWindow, type CalendarReturnWindowSelection} from '$lib/components/charts/calendarReturnWindow';
 import {getClientSessionUserId, registerClientSessionReset} from '$lib/stores/app/clientSession';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Types
 // ═══════════════════════════════════════════════════════════════════════════════
+
+export type AxisScaleMode = 'auto' | 'include0' | 'custom';
+
+export interface AxisScaleSettings {
+    mode: AxisScaleMode;
+    min?: number;
+    max?: number;
+}
+
+export interface ChartAxisSettings {
+    absolute: AxisScaleSettings;
+    percentage: AxisScaleSettings;
+    secondary: Record<string, AxisScaleSettings>;
+}
 
 export interface ChartSettings {
     /** Color line by baseline: green above, red below (in % mode) */
@@ -28,24 +43,33 @@ export interface ChartSettings {
     gridLines: boolean;
     /** Show stale-data gradient (per-point opacity for backward-filled data) */
     staleGradient: boolean;
-    /** Y-axis mode: 'auto' fits to data range, 'include0' always shows 0, 'custom' uses yAxisMin/Max */
-    yAxisMode: 'auto' | 'include0' | 'custom';
-    /** Custom Y-axis minimum (only used when yAxisMode === 'custom') */
-    yAxisMin?: number;
-    /** Custom Y-axis maximum (only used when yAxisMode === 'custom') */
-    yAxisMax?: number;
+    /** Unit-aware primary axes plus stable semantic secondary-axis settings. */
+    axisScales: ChartAxisSettings;
+    /** Last Calendar Return window for this asset. Ignored by non-asset charts. */
+    calendarReturnWindow: CalendarReturnWindowSelection;
     /** Overlay signal configurations */
     signals: SignalConfig[];
 }
+
+export const DEFAULT_AXIS_SCALE: AxisScaleSettings = {
+    mode: 'auto',
+};
+
+export const DEFAULT_PERCENTAGE_AXIS_SCALE: AxisScaleSettings = {
+    mode: 'include0',
+};
 
 export const DEFAULT_CHART_SETTINGS: ChartSettings = {
     colorByBaseline: true,
     areaFill: true,
     gridLines: true,
     staleGradient: true,
-    yAxisMode: 'auto',
-    yAxisMin: undefined,
-    yAxisMax: undefined,
+    axisScales: {
+        absolute: {...DEFAULT_AXIS_SCALE},
+        percentage: {...DEFAULT_PERCENTAGE_AXIS_SCALE},
+        secondary: {},
+    },
+    calendarReturnWindow: {...DEFAULT_CALENDAR_RETURN_WINDOW},
     signals: [],
 };
 
@@ -58,12 +82,12 @@ function deepClone<T>(obj: T): T {
     return JSON.parse(JSON.stringify(obj));
 }
 
-const STORAGE_VERSION = 1;
+const STORAGE_VERSION = 2;
 const STORAGE_BASE_KEY = 'chartSettingsStore';
 const STORAGE_WRITE_DELAY_MS = 250;
 
 interface PersistedChartSettings {
-    version: typeof STORAGE_VERSION;
+    version: 1 | typeof STORAGE_VERSION;
     globalSettings: ChartSettings;
     pairOverrides: Array<[string, ChartSettings]>;
 }
@@ -76,42 +100,113 @@ function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function isSignalConfig(value: unknown): value is SignalConfig {
+    return isRecord(value) && typeof value.id === 'string' && typeof value.signalType === 'string' && isRecord(value.params) && isRecord(value.style);
+}
+
+function finiteNumber(value: unknown): number | undefined {
+    return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+export function normalizeAxisScaleSettings(value: unknown, fallback: AxisScaleSettings): AxisScaleSettings {
+    if (!isRecord(value)) return {...fallback};
+    const mode: AxisScaleMode = value.mode === 'include0' || value.mode === 'custom' ? value.mode : 'auto';
+    const min = finiteNumber(value.min);
+    const max = finiteNumber(value.max);
+    if (mode !== 'custom') return {mode};
+    if (min !== undefined && max !== undefined && min > max) {
+        return {mode, min: max, max: min};
+    }
+    return {mode, min, max};
+}
+
+function legacyAxisScale(value: Record<string, unknown>): AxisScaleSettings {
+    return normalizeAxisScaleSettings(
+        {
+            mode: value.yAxisMode,
+            min: value.yAxisMin,
+            max: value.yAxisMax,
+        },
+        DEFAULT_AXIS_SCALE,
+    );
+}
+
+function sanitizeAxisSettings(value: Record<string, unknown>): ChartAxisSettings {
+    const legacy = legacyAxisScale(value);
+    if (!isRecord(value.axisScales)) {
+        const hasLegacyAxis = 'yAxisMode' in value || 'yAxisMin' in value || 'yAxisMax' in value;
+        return {
+            absolute: hasLegacyAxis ? {...legacy} : {...DEFAULT_AXIS_SCALE},
+            percentage: hasLegacyAxis ? {...legacy} : {...DEFAULT_PERCENTAGE_AXIS_SCALE},
+            secondary: {},
+        };
+    }
+
+    const secondary: Record<string, AxisScaleSettings> = {};
+    if (isRecord(value.axisScales.secondary)) {
+        for (const [key, scale] of Object.entries(value.axisScales.secondary)) {
+            if (!key.trim()) continue;
+            secondary[key] = normalizeAxisScaleSettings(scale, DEFAULT_AXIS_SCALE);
+        }
+    }
+    return {
+        absolute: normalizeAxisScaleSettings(value.axisScales.absolute, DEFAULT_AXIS_SCALE),
+        percentage: normalizeAxisScaleSettings(value.axisScales.percentage, DEFAULT_PERCENTAGE_AXIS_SCALE),
+        secondary,
+    };
+}
+
 function sanitizeSettings(value: unknown): ChartSettings {
     if (!isRecord(value)) return deepClone(DEFAULT_CHART_SETTINGS);
-
-    const yAxisMode = value.yAxisMode === 'include0' || value.yAxisMode === 'custom' ? value.yAxisMode : 'auto';
-    const yAxisMin = typeof value.yAxisMin === 'number' && Number.isFinite(value.yAxisMin) ? value.yAxisMin : undefined;
-    const yAxisMax = typeof value.yAxisMax === 'number' && Number.isFinite(value.yAxisMax) ? value.yAxisMax : undefined;
 
     return {
         colorByBaseline: typeof value.colorByBaseline === 'boolean' ? value.colorByBaseline : DEFAULT_CHART_SETTINGS.colorByBaseline,
         areaFill: typeof value.areaFill === 'boolean' ? value.areaFill : DEFAULT_CHART_SETTINGS.areaFill,
         gridLines: typeof value.gridLines === 'boolean' ? value.gridLines : DEFAULT_CHART_SETTINGS.gridLines,
         staleGradient: typeof value.staleGradient === 'boolean' ? value.staleGradient : DEFAULT_CHART_SETTINGS.staleGradient,
-        yAxisMode,
-        yAxisMin,
-        yAxisMax,
-        signals: Array.isArray(value.signals) ? deepClone(value.signals) : [],
+        axisScales: sanitizeAxisSettings(value),
+        calendarReturnWindow: sanitizeCalendarReturnWindow(value.calendarReturnWindow),
+        signals: normalizeSignalConfigs(value.signals),
     };
+}
+
+function normalizeSignalConfigs(value: unknown): SignalConfig[] {
+    if (!Array.isArray(value)) return [];
+    return value.flatMap((item) => {
+        if (!isSignalConfig(item)) return [];
+        return [deepClone(item)];
+    });
+}
+
+function sanitizeStoredSettings(value: unknown): ChartSettings {
+    const sanitized = sanitizeSettings(value);
+    sanitized.signals = sanitized.signals.map((signal) => {
+        const {_resolvedData: _discarded, ...serializableParams} = signal.params;
+        return {
+            ...signal,
+            params: serializableParams,
+        };
+    });
+    return sanitized;
 }
 
 function parsePersistedSettings(raw: string | null): PersistedChartSettings | null {
     if (!raw) return null;
     try {
         const parsed: unknown = JSON.parse(raw);
-        if (!isRecord(parsed) || parsed.version !== STORAGE_VERSION) return null;
+        if (!isRecord(parsed) || (parsed.version !== 1 && parsed.version !== STORAGE_VERSION)) return null;
 
         const overrides = new Map<string, ChartSettings>();
         if (Array.isArray(parsed.pairOverrides)) {
             for (const entry of parsed.pairOverrides) {
                 if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string') continue;
-                overrides.set(entry[0], sanitizeSettings(entry[1]));
+                overrides.set(entry[0], sanitizeStoredSettings(entry[1]));
             }
         }
 
         return {
             version: STORAGE_VERSION,
-            globalSettings: sanitizeSettings(parsed.globalSettings),
+            globalSettings: sanitizeStoredSettings(parsed.globalSettings),
             pairOverrides: [...overrides.entries()],
         };
     } catch {
@@ -152,6 +247,16 @@ function loadFromStorage(): void {
     globalSettings = persisted ? deepClone(persisted.globalSettings) : deepClone(DEFAULT_CHART_SETTINGS);
     pairOverrides = new Map(persisted?.pairOverrides ?? []);
     hydratedStorageKey = storageKey;
+    if (persisted) {
+        const sanitizedRaw = JSON.stringify(persisted);
+        if (raw !== sanitizedRaw) {
+            try {
+                localStorage.setItem(storageKey, sanitizedRaw);
+            } catch {
+                // Keep the sanitized in-memory state when storage is unavailable.
+            }
+        }
+    }
 }
 
 function persistNow(): void {
@@ -160,8 +265,8 @@ function persistNow(): void {
     const storageKey = getStorageKey();
     const payload: PersistedChartSettings = {
         version: STORAGE_VERSION,
-        globalSettings: deepClone(globalSettings),
-        pairOverrides: [...pairOverrides.entries()].map(([key, settings]) => [key, deepClone(settings)] as [string, ChartSettings]),
+        globalSettings: sanitizeStoredSettings(globalSettings),
+        pairOverrides: [...pairOverrides.entries()].map(([key, settings]) => [key, sanitizeStoredSettings(settings)] as [string, ChartSettings]),
     };
 
     try {
@@ -240,8 +345,9 @@ export function getSettingsVersion(): number {
  */
 export function setGlobalSettings(settings: ChartSettings, scope?: string): void {
     loadFromStorage();
+    const sanitized = sanitizeSettings(settings);
     if (scope) {
-        pairOverrides.set(`__global_${scope}__`, deepClone(settings));
+        pairOverrides.set(`__global_${scope}__`, deepClone(sanitized));
         // Clear per-item overrides for this scope only
         for (const key of [...pairOverrides.keys()]) {
             if (key.startsWith('__global_')) continue; // Don't clear scoped globals
@@ -252,7 +358,7 @@ export function setGlobalSettings(settings: ChartSettings, scope?: string): void
             }
         }
     } else {
-        globalSettings = deepClone(settings);
+        globalSettings = deepClone(sanitized);
         pairOverrides.clear();
     }
     bump();
@@ -265,7 +371,7 @@ export function setGlobalSettings(settings: ChartSettings, scope?: string): void
  */
 export function setPairSettings(slug: string, settings: ChartSettings): void {
     loadFromStorage();
-    pairOverrides.set(slug, deepClone(settings));
+    pairOverrides.set(slug, deepClone(sanitizeSettings(settings)));
     bump();
     schedulePersist();
 }

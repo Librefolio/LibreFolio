@@ -63,6 +63,11 @@ class PartialLinePlugin(LineFixturePlugin):
     )
 
 
+class SparseInputLinePlugin(PartialLinePlugin):
+    signal_code = "TEST_SPARSE_INPUT_LINE"
+    allows_sparse_input_dates = True
+
+
 class HighStrictPlugin(LineFixturePlugin):
     signal_code = "TEST_HIGH_STRICT"
     input_requirements = SignalInputRequirements(
@@ -192,6 +197,51 @@ class WrongDatesPlugin(LineFixturePlugin):
             .model_dump(mode="python")
         )
         output["series"][0]["points"] = output["series"][0]["points"][1:]
+        return output
+
+
+class SparseSubsetDatesPlugin(LineFixturePlugin):
+    signal_code = "TEST_SPARSE_SUBSET_DATES"
+    allows_sparse_output_dates = True
+    output_indexes = (0, 2, 4)
+
+    def compute(self, price_points, event_points, params, context):
+        output = (
+            super()
+            .compute(
+                price_points,
+                event_points,
+                params,
+                context,
+            )
+            .model_dump(mode="python")
+        )
+        points = output["series"][0]["points"]
+        output["series"][0]["points"] = [points[index] for index in self.output_indexes]
+        return output
+
+
+class SparseDuplicateDatesPlugin(SparseSubsetDatesPlugin):
+    signal_code = "TEST_SPARSE_DUPLICATE_DATES"
+    output_indexes = (0, 0, 2)
+
+
+class SparseUnsortedDatesPlugin(SparseSubsetDatesPlugin):
+    signal_code = "TEST_SPARSE_UNSORTED_DATES"
+    output_indexes = (2, 0)
+
+
+class SparseForeignDatePlugin(SparseSubsetDatesPlugin):
+    signal_code = "TEST_SPARSE_FOREIGN_DATE"
+
+    def compute(self, price_points, event_points, params, context):
+        output = super().compute(
+            price_points,
+            event_points,
+            params,
+            context,
+        )
+        output["series"][0]["points"][-1]["date"] = price_points[-1].date + timedelta(days=1)
         return output
 
 
@@ -598,6 +648,54 @@ async def test_partial_policy_uses_contiguous_suffix_and_warns():
 
 
 @pytest.mark.asyncio
+async def test_sparse_input_opt_in_keeps_all_valid_dates_without_compacting_sibling():
+    service = make_service(
+        PartialLinePlugin,
+        SparseInputLinePlugin,
+    )
+    points = without_dates(2)
+
+    results = await service.compute(
+        [
+            request(
+                "contiguous",
+                "TEST_PARTIAL_LINE",
+                {"length": 2},
+            ),
+            request(
+                "sparse",
+                "TEST_SPARSE_INPUT_LINE",
+                {"length": 2},
+            ),
+        ],
+        points,
+        make_context(start=date(2026, 1, 1)),
+    )
+    results_by_id = {result.instance_id: result for result in results}
+    contiguous = results_by_id["contiguous"]
+    sparse = results_by_id["sparse"]
+
+    assert PartialLinePlugin.allows_sparse_input_dates is False
+    assert SparseInputLinePlugin.allows_sparse_input_dates is True
+    assert contiguous.status == SignalStatus.PARTIAL
+    assert sparse.status == SignalStatus.PARTIAL
+    assert contiguous.availability.reason_code == SignalAvailabilityReason.DATA_GAP
+    assert sparse.availability.reason_code == SignalAvailabilityReason.DATA_GAP
+    assert [point.date for point in contiguous.series[0].points] == [
+        date(2026, 1, 4),
+        date(2026, 1, 5),
+        date(2026, 1, 6),
+    ]
+    assert [point.date for point in sparse.series[0].points] == [
+        date(2026, 1, 1),
+        date(2026, 1, 2),
+        date(2026, 1, 4),
+        date(2026, 1, 5),
+        date(2026, 1, 6),
+    ]
+
+
+@pytest.mark.asyncio
 async def test_partial_policy_falls_back_to_longest_sufficient_segment():
     service = make_service(PartialLinePlugin)
     result = (
@@ -998,7 +1096,6 @@ async def test_infinity_is_failed_as_invalid_output():
             WrongSemanticMetadataPlugin,
             "TEST_WRONG_SEMANTIC_METADATA",
         ),
-        (WrongDatesPlugin, "TEST_WRONG_DATES"),
     ],
 )
 async def test_output_contract_violations_are_failed(plugin, code):
@@ -1006,6 +1103,113 @@ async def test_output_contract_violations_are_failed(plugin, code):
     result = (
         await service.compute(
             [request("invalid", code, {"length": 2})],
+            make_signal_price_points(),
+            make_context(),
+        )
+    )[0]
+
+    assert result.status == SignalStatus.FAILED
+    assert result.error.code == SignalErrorCode.CONTRACT_VIOLATION
+
+
+@pytest.mark.asyncio
+async def test_dense_default_rejects_output_missing_selected_date():
+    service = make_service(WrongDatesPlugin)
+    result = (
+        await service.compute(
+            [request("dense-missing", "TEST_WRONG_DATES", {"length": 2})],
+            make_signal_price_points(),
+            make_context(),
+        )
+    )[0]
+
+    assert WrongDatesPlugin.allows_sparse_output_dates is False
+    assert result.status == SignalStatus.FAILED
+    assert result.error.code == SignalErrorCode.CONTRACT_VIOLATION
+
+
+@pytest.mark.asyncio
+async def test_sparse_output_accepts_sorted_unique_selected_date_subset():
+    service = make_service(SparseSubsetDatesPlugin)
+    result = (
+        await service.compute(
+            [
+                request(
+                    "sparse-subset",
+                    "TEST_SPARSE_SUBSET_DATES",
+                    {"length": 2},
+                )
+            ],
+            make_signal_price_points(),
+            make_context(),
+        )
+    )[0]
+
+    assert result.status == SignalStatus.OK
+    assert result.error is None
+    assert [point.date for point in result.series[0].points] == [
+        date(2026, 1, 3),
+        date(2026, 1, 5),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_sparse_output_rejects_duplicate_dates():
+    service = make_service(SparseDuplicateDatesPlugin)
+    result = (
+        await service.compute(
+            [
+                request(
+                    "sparse-duplicate",
+                    "TEST_SPARSE_DUPLICATE_DATES",
+                    {"length": 2},
+                )
+            ],
+            make_signal_price_points(),
+            make_context(),
+        )
+    )[0]
+
+    assert result.status == SignalStatus.FAILED
+    # Series-level date uniqueness is validated before the service can compare
+    # the sparse subset with its selected input dates.
+    assert result.error.code == SignalErrorCode.INVALID_OUTPUT
+
+
+@pytest.mark.asyncio
+async def test_sparse_output_rejects_unsorted_dates():
+    service = make_service(SparseUnsortedDatesPlugin)
+    result = (
+        await service.compute(
+            [
+                request(
+                    "sparse-unsorted",
+                    "TEST_SPARSE_UNSORTED_DATES",
+                    {"length": 2},
+                )
+            ],
+            make_signal_price_points(),
+            make_context(),
+        )
+    )[0]
+
+    assert result.status == SignalStatus.FAILED
+    # Series-level ordering is validated before the cross-input date contract.
+    assert result.error.code == SignalErrorCode.INVALID_OUTPUT
+
+
+@pytest.mark.asyncio
+async def test_sparse_output_rejects_foreign_date():
+    service = make_service(SparseForeignDatePlugin)
+    result = (
+        await service.compute(
+            [
+                request(
+                    "sparse-foreign",
+                    "TEST_SPARSE_FOREIGN_DATE",
+                    {"length": 2},
+                )
+            ],
             make_signal_price_points(),
             make_context(),
         )

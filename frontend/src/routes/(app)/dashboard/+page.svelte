@@ -25,7 +25,21 @@
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
 
-    import {fetchReport, invalidate, type PortfolioReport, type PortfolioSummary, type PortfolioHistoryPoint, type AllocationHistoryDimensions, type PositionsContribution} from '$lib/stores/portfolio/portfolioStore.svelte';
+    import {
+        fetchReport,
+        invalidate,
+        type PortfolioReport,
+        type PortfolioSummary,
+        type PortfolioHistoryPoint,
+        type AllocationHistoryDimensions,
+        type PositionsContribution,
+        type PortfolioBrokerPnlHistory,
+        type PortfolioPnlCandleSeries,
+        type PortfolioIncomeHistorySeries,
+        type PortfolioCostHistorySeries,
+        type PortfolioDepositHistorySeries,
+        type PortfolioAcquisitionFundingSeries,
+    } from '$lib/stores/portfolio/portfolioStore.svelte';
     import {ensureBrokersLoaded, getOwnedBrokers} from '$lib/stores/reference/brokerStore';
     import {ensureAssetsLoaded, getAssetInfo, assetStoreVersion} from '$lib/stores/reference/assetStore';
     import {getAssetPanelAssetId, buildAssetPanelUrl} from '$lib/utils/broker/assetPanelUrl';
@@ -68,6 +82,13 @@
 
     let summary = $state<PortfolioSummary | null>(null);
     let history = $state<PortfolioHistoryPoint[]>([]);
+    let brokerPnlHistory = $state<PortfolioBrokerPnlHistory[]>([]);
+    let pnlCandles = $state<PortfolioPnlCandleSeries | null>(null);
+    let pnlCandlesLoading = $state(false);
+    let incomeHistory = $state<PortfolioIncomeHistorySeries | undefined>(undefined);
+    let costHistory = $state<PortfolioCostHistorySeries | undefined>(undefined);
+    let depositHistory = $state<PortfolioDepositHistorySeries | undefined>(undefined);
+    let acquisitionFunding = $state<PortfolioAcquisitionFundingSeries | undefined>(undefined);
     let allocationHistoryFromReport = $state<AllocationHistoryDimensions | null>(null);
     let positionsContribution = $state<PositionsContribution | null>(null);
     let contributionLoading = $state(false);
@@ -185,6 +206,12 @@
     /** Which broker IDs to pass to the API — always the explicit owned set, so the
      *  backend never falls back to "every accessible broker" for the dashboard. */
     const activeBrokerIds = $derived(!allBrokersSelected && selectedBrokerIds.length > 0 ? selectedBrokerIds : ownedBrokerIds.length > 0 ? ownedBrokerIds : undefined);
+
+    /** GrowthChart P&L broker overlay (G1a) caller policy per plan §4.1: request
+     *  broker_pnl_history only when the effective scope has ≥2 brokers — a single
+     *  broker's line would be identical to the total and the payload is unneeded. */
+    const effectiveBrokerCount = $derived((activeBrokerIds ?? ownedBrokerIds).length);
+    const wantsBrokerPnlHistory = $derived(effectiveBrokerCount >= 2);
 
     /** AI export state — dropdown open/position handled internally by AiExportMenu. */
     let aiExportCompatibility = $state<AiExportCatalogCompatibilityResult>(DISABLED_AI_EXPORT_COMPATIBILITY);
@@ -376,12 +403,30 @@
         reportLoading = true;
         const requested = targetCurrency;
         try {
-            const report = await fetchReport(activeBrokerIds, dateRangeCtl.start || undefined, dateRangeCtl.end || undefined, requested, force);
+            const report = await fetchReport(activeBrokerIds, dateRangeCtl.start || undefined, dateRangeCtl.end || undefined, requested, force, undefined, undefined, undefined, undefined, {
+                includeBrokerPnlHistory: wantsBrokerPnlHistory,
+                includeIncomeHistory: true,
+                includeCostHistory: true,
+                includeDepositHistory: true,
+                includeAcquisitionFunding: true,
+            });
             if (!current()) return;
             if (!report && propagateError) throw new Error($_('common.error'));
             // Cast from the Zodios union types to the concrete types the dashboard expects
             summary = (report?.summary as PortfolioSummary | null | undefined) ?? null;
             history = (report?.history as PortfolioHistoryPoint[] | null | undefined) ?? [];
+            brokerPnlHistory = (report?.broker_pnl_history as PortfolioBrokerPnlHistory[] | null | undefined) ?? [];
+            // Always reassigned (defaulting to null since loadAll() never requests candles):
+            // this is also what invalidates a stale candle series from a prior broker/date-range
+            // scope. loadPnlCandles() re-fetches lazily once GrowthChart notices pnlCandles==null
+            // again while still in the candles submode.
+            pnlCandles = (report?.pnl_candles as PortfolioPnlCandleSeries | null | undefined) ?? null;
+            // Eager (unlike pnlCandles): requested on every ordinary load per plan §4.1's
+            // sparse-payload policy, so this is always fresh — no separate lazy loader needed.
+            incomeHistory = (report?.income_history as PortfolioIncomeHistorySeries | null | undefined) ?? undefined;
+            costHistory = (report?.cost_history as PortfolioCostHistorySeries | null | undefined) ?? undefined;
+            depositHistory = (report?.deposit_history as PortfolioDepositHistorySeries | null | undefined) ?? undefined;
+            acquisitionFunding = (report?.acquisition_funding as PortfolioAcquisitionFundingSeries | null | undefined) ?? undefined;
             allocationHistoryFromReport = (report?.allocation_history as AllocationHistoryDimensions | null | undefined) ?? null;
             // Contribution data comes from the same report when requested
             positionsContribution = (report?.positions_contribution as PositionsContribution | null | undefined) ?? null;
@@ -417,6 +462,23 @@
             appliedCurrency = requested;
         } finally {
             contributionLoading = false;
+        }
+    }
+
+    /** Lazy-load the synthetic P&L candle series (G1b — called by GrowthChart's
+     *  onRequestPnlCandles when the user first activates the candles submode; caller
+     *  policy per plan §4.1: "expensive OHLC work stays off ordinary reports"). */
+    async function loadPnlCandles() {
+        if (pnlCandles || pnlCandlesLoading) return;
+        pnlCandlesLoading = true;
+        const requested = targetCurrency;
+        try {
+            // includeHistory/includeAllocationHistory/includeContribution/includeBreakdown=false:
+            // only pnl_candles is read below.
+            const report = await fetchReport(activeBrokerIds, dateRangeCtl.start || undefined, dateRangeCtl.end || undefined, requested, false, false, false, false, false, {includePnlCandles: true});
+            pnlCandles = (report?.pnl_candles as PortfolioPnlCandleSeries | null | undefined) ?? null;
+        } finally {
+            pnlCandlesLoading = false;
         }
     }
 
@@ -736,7 +798,7 @@
             <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
                 <!-- Growth Chart — 3/5 -->
                 <div class="lg:col-span-3">
-                    <GrowthChart {history} loading={historyLoading} baseCurrency={appliedCurrency} />
+                    <GrowthChart {history} {brokerPnlHistory} {pnlCandles} onRequestPnlCandles={loadPnlCandles} {incomeHistory} {costHistory} {depositHistory} {acquisitionFunding} loading={historyLoading} baseCurrency={appliedCurrency} />
                 </div>
 
                 <!-- Allocation Panel — 2/5 -->

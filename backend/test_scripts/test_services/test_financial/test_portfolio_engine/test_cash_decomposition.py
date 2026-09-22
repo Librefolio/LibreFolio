@@ -164,7 +164,7 @@ class TestExampleA:
             _ctxn(_tx(id=1, dt="2025-01-01", type="DEPOSIT", amount="1000")),
             _ctxn(_tx(id=2, dt="2025-01-01", type="BUY", amount="-1000", quantity="10", asset_id=100)),
         ]
-        ecfs = [(date(2025, 1, 1), Decimal("1000"), "EUR")]
+        ecfs = [(date(2025, 1, 1), 10, Decimal("1000"), "EUR")]
         # WAC: BUY 10 units at 100 → WAC = 100 per unit
 
         state = _last_state(txs, ecfs, price_map=_PRICE_MAP_100)
@@ -192,7 +192,7 @@ class TestExampleB:
             _ctxn(_tx(id=2, dt="2025-01-01", type="BUY", amount="-1000", quantity="10", asset_id=100)),
             _ctxn(_tx(id=3, dt="2025-01-01", type="INTEREST", amount="100")),
         ]
-        ecfs = [(date(2025, 1, 1), Decimal("1000"), "EUR")]
+        ecfs = [(date(2025, 1, 1), 10, Decimal("1000"), "EUR")]
 
         state = _last_state(txs, ecfs, price_map=_PRICE_MAP_100)
 
@@ -222,7 +222,7 @@ class TestExampleC:
             _ctxn(_tx(id=2, dt="2025-01-01", type="BUY", amount="-1000", quantity="10", asset_id=100)),
             _ctxn(_tx(id=3, dt="2025-01-01", type="SELL", amount="120", quantity="-1", asset_id=100)),
         ]
-        ecfs = [(date(2025, 1, 1), Decimal("1000"), "EUR")]
+        ecfs = [(date(2025, 1, 1), 10, Decimal("1000"), "EUR")]
         # After BUY 10 at 100, then SELL 1: WAC still 100, qty=9 → cost_basis=900
 
         state = _last_state(txs, ecfs, price_map=_PRICE_MAP_100)
@@ -255,7 +255,7 @@ class TestExampleD:
             _ctxn(_tx(id=2, dt="2025-01-01", type="BUY", amount="-1000", quantity="10", asset_id=100)),
             _ctxn(_tx(id=3, dt="2025-01-01", type="SELL", amount="80", quantity="-1", asset_id=100)),
         ]
-        ecfs = [(date(2025, 1, 1), Decimal("1000"), "EUR")]
+        ecfs = [(date(2025, 1, 1), 10, Decimal("1000"), "EUR")]
 
         state = _last_state(txs, ecfs, price_map=_PRICE_MAP_100)
 
@@ -289,7 +289,7 @@ class TestExampleE:
             _ctxn(_tx(id=3, dt="2025-01-01", type="SELL", amount="100", quantity="-1", asset_id=100)),
             _ctxn(_tx(id=4, dt="2025-01-01", type="INTEREST", amount="10")),
         ]
-        ecfs = [(date(2025, 1, 1), Decimal("1000"), "EUR")]
+        ecfs = [(date(2025, 1, 1), 10, Decimal("1000"), "EUR")]
 
         state = _last_state(txs, ecfs, price_map=_PRICE_MAP_100)
 
@@ -328,8 +328,8 @@ class TestExampleF:
         ]
         # ECF: +1000 (deposit) -100 (withdrawal) = 900 net
         ecfs = [
-            (date(2025, 1, 1), Decimal("1000"), "EUR"),
-            (date(2025, 1, 1), Decimal("-100"), "EUR"),
+            (date(2025, 1, 1), 10, Decimal("1000"), "EUR"),
+            (date(2025, 1, 1), 10, Decimal("-100"), "EUR"),
         ]
 
         state = _last_state(txs, ecfs, price_map=_PRICE_MAP_100)
@@ -360,7 +360,7 @@ class TestEdgeCases:
         txs = [
             _ctxn(_tx(id=1, dt="2025-01-01", type="DEPOSIT", amount="5000")),
         ]
-        ecfs = [(date(2025, 1, 1), Decimal("5000"), "EUR")]
+        ecfs = [(date(2025, 1, 1), 10, Decimal("5000"), "EUR")]
 
         state = _last_state(txs, ecfs)
 
@@ -381,7 +381,7 @@ class TestEdgeCases:
             _ctxn(_tx(id=3, dt="2025-01-01", type="INTEREST", amount="50")),
             _ctxn(_tx(id=4, dt="2025-01-01", type="FEE", amount="-10")),
         ]
-        ecfs = [(date(2025, 1, 1), Decimal("1000"), "EUR")]
+        ecfs = [(date(2025, 1, 1), 10, Decimal("1000"), "EUR")]
 
         state = _last_state(txs, ecfs, price_map=_PRICE_MAP_100)
 

@@ -1362,6 +1362,50 @@ class TestPortfolioReportEndpoint:
         assert total_positions + total_other == Decimal(report["summary"]["period_pnl"]["amount"])
         print_success("Date-aware report contribution OK")
 
+    async def test_report_income_history_flag_gates_section_and_reconciles_with_summary(self, test_server):
+        """G1c wiring, exercised through the real HTTP endpoint (not the service
+        method directly): include_income_history=false (the default) omits the
+        section entirely; =true adds signed per-day DIVIDEND/INTEREST points whose
+        sum reconciles exactly with summary.period_income for the same window."""
+        print_section("Portfolio Report: income history flag + reconciliation")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_broker(client)
+            asset_id = await create_asset(client)  # DIVIDEND requires asset_id at the schema layer; INTEREST does not
+
+            await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker_id, "type": "DEPOSIT", "date": "2025-07-01", "quantity": "0", "cash": {"code": "EUR", "amount": "1000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "DIVIDEND", "date": "2025-07-10", "quantity": "0", "cash": {"code": "EUR", "amount": "40"}},
+                    {"broker_id": broker_id, "type": "INTEREST", "date": "2025-07-20", "quantity": "0", "cash": {"code": "EUR", "amount": "5"}},
+                ],
+            )
+
+            off_resp = await post_portfolio_report(client, {"include_income_history": False, "date_range": {"start": "2025-07-01", "end": "2025-07-31"}})
+            assert off_resp.status_code == 200
+            off_report = off_resp.json()
+            assert off_report.get("income_history") is None
+            assert "income_history" not in off_report["metadata"]["included_features"]
+
+            on_resp = await post_portfolio_report(client, {"include_income_history": True, "date_range": {"start": "2025-07-01", "end": "2025-07-31"}})
+            assert on_resp.status_code == 200
+            on_report = on_resp.json()
+
+        assert "income_history" in on_report["metadata"]["included_features"]
+        points = on_report["income_history"]["points"]
+        assert [p["date"] for p in points] == ["2025-07-10", "2025-07-20"]
+        by_date = {p["date"]: p for p in points}
+        assert Decimal(by_date["2025-07-10"]["dividend"]["amount"]) == Decimal("40")
+        assert Decimal(by_date["2025-07-10"]["interest"]["amount"]) == Decimal("0")
+        assert Decimal(by_date["2025-07-20"]["interest"]["amount"]) == Decimal("5")
+        assert on_report["income_history"]["missing_fx_pairs"] == []
+
+        total = sum((Decimal(p["dividend"]["amount"]) + Decimal(p["interest"]["amount"]) for p in points), Decimal("0"))
+        assert total == Decimal("45"), f"40 + 5 = 45, got {total}"
+        assert Decimal(on_report["summary"]["period_income"]["amount"]) == Decimal("45"), "must reconcile exactly with income_history's own sum"
+        print_success("income_history flag + reconciliation OK")
+
 
 @pytest.mark.asyncio
 class TestLotsAnalysisEndpoint:

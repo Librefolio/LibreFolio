@@ -21,7 +21,9 @@
     import LineChart from './LineChart.svelte';
     import ChartAestheticsSection from './ChartAestheticsSection.svelte';
     import ChartSignalsSection from './ChartSignalsSection.svelte';
-    import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
+    import {DEFAULT_AXIS_SCALE, DEFAULT_CHART_SETTINGS, DEFAULT_PERCENTAGE_AXIS_SCALE, normalizeAxisScaleSettings, type AxisScaleSettings, type ChartAxisSettings, type ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
+    import {collectConfigurableSecondaryAxes} from './chartCoreHelpers';
+    import {exchangeRateAxisLabel, percentageAxisLabel, priceAxisLabel, secondaryAxisLabel} from './axisLabelHelpers';
     import {getRegisteredSignalTypes, resolveSignalPreview, type RenderedSignal, type SignalConfig, type SignalDefinition, signalFromConfig} from '$lib/charts/signals';
     import {SineSignal} from '$lib/charts/signals/SineSignal';
     import {normalizeToPercentage} from '$lib/utils/chartUtils';
@@ -36,6 +38,10 @@
         settings: ChartSettings;
         /** 'global' = filter bar, 'pair' = per-card/detail */
         mode?: 'global' | 'pair';
+        /** Selects the semantic primary-axis label used by the shared preview. */
+        axisDomain?: 'asset' | 'fx';
+        /** Currency or displayed FX pair used to contextualize the primary axis. */
+        axisContext?: string;
         /** Available FX pairs for FxPairSignal dynamic options (slug format: 'EUR-GBP') */
         availablePairs?: string[];
         /** Available assets for AssetComparisonSignal dynamic options */
@@ -75,6 +81,8 @@
         open = false,
         settings,
         mode = 'global',
+        axisDomain = 'asset',
+        axisContext = '',
         availablePairs = [],
         availableAssets = [],
         signalDefinitions,
@@ -99,9 +107,7 @@
     let areaFill = $state(true);
     let gridLines = $state(true);
     let staleGradient = $state(true);
-    let yAxisMode: 'auto' | 'include0' | 'custom' = $state('auto');
-    let yAxisMin: number | undefined = $state(undefined);
-    let yAxisMax: number | undefined = $state(undefined);
+    let axisScales: ChartAxisSettings = $state(deepClone(DEFAULT_CHART_SETTINGS.axisScales));
     let signals: SignalConfig[] = $state([]);
 
     // Reset local state when modal opens
@@ -111,9 +117,7 @@
             areaFill = settings.areaFill;
             gridLines = settings.gridLines;
             staleGradient = settings.staleGradient;
-            yAxisMode = settings.yAxisMode ?? 'auto';
-            yAxisMin = settings.yAxisMin;
-            yAxisMax = settings.yAxisMax;
+            axisScales = deepClone(settings.axisScales);
             signals = JSON.parse(JSON.stringify(settings.signals));
         }
     });
@@ -132,31 +136,42 @@
         if (areaFill !== settings.areaFill) return true;
         if (gridLines !== settings.gridLines) return true;
         if (staleGradient !== settings.staleGradient) return true;
-        if (yAxisMode !== (settings.yAxisMode ?? 'auto')) return true;
-        if (yAxisMin !== settings.yAxisMin) return true;
-        if (yAxisMax !== settings.yAxisMax) return true;
+        if (JSON.stringify(axisScales) !== JSON.stringify(settings.axisScales)) return true;
         if (JSON.stringify(signals) !== JSON.stringify(settings.signals)) return true;
         return false;
     }
 
     let confirmCloseOpen = $state(false);
 
-    function handleSave() {
-        let savedMin = yAxisMode === 'custom' ? yAxisMin : undefined;
-        let savedMax = yAxisMode === 'custom' ? yAxisMax : undefined;
-        if (savedMin !== undefined && savedMax !== undefined && savedMin > savedMax) {
-            [savedMin, savedMax] = [savedMax, savedMin];
-            yAxisMin = savedMin;
-            yAxisMax = savedMax;
+    function normalizedAxisScales(): ChartAxisSettings {
+        return {
+            absolute: normalizeAxisScaleSettings(axisScales.absolute, DEFAULT_AXIS_SCALE),
+            percentage: normalizeAxisScaleSettings(axisScales.percentage, DEFAULT_PERCENTAGE_AXIS_SCALE),
+            secondary: Object.fromEntries(Object.entries(axisScales.secondary).map(([key, scale]) => [key, normalizeAxisScaleSettings(scale, DEFAULT_AXIS_SCALE)])),
+        };
+    }
+
+    function handleAxisChange(key: string, scale: AxisScaleSettings): void {
+        if (key === 'primary:absolute') {
+            axisScales = {...axisScales, absolute: {...scale}};
+        } else if (key === 'primary:percentage') {
+            axisScales = {...axisScales, percentage: {...scale}};
+        } else {
+            axisScales = {
+                ...axisScales,
+                secondary: {...axisScales.secondary, [key]: {...scale}},
+            };
         }
+    }
+
+    function handleSave() {
         const result: ChartSettings = {
             colorByBaseline,
             areaFill,
             gridLines,
             staleGradient,
-            yAxisMode,
-            yAxisMin: savedMin,
-            yAxisMax: savedMax,
+            axisScales: normalizedAxisScales(),
+            calendarReturnWindow: deepClone(settings.calendarReturnWindow),
             signals: deepClone(signals),
         };
         onsave?.(result);
@@ -299,6 +314,25 @@
         });
     });
     let previewSignals = $derived(previewResolution.signals);
+    let previewPrimaryScale = $derived(previewViewMode === 'percentage' ? axisScales.percentage : axisScales.absolute);
+    let previewPrimaryLabel = $derived.by(() => {
+        const translate = (key: string, values?: Record<string, string>) => $t(key, {values});
+        if (previewViewMode === 'percentage') return percentageAxisLabel(translate);
+        const context = axisContext || $t('common.preview');
+        return axisDomain === 'fx' ? exchangeRateAxisLabel(translate, context) : priceAxisLabel(translate, context);
+    });
+    let previewAxisRows = $derived([
+        {
+            key: `primary:${previewViewMode}`,
+            label: previewPrimaryLabel,
+            settings: previewPrimaryScale,
+        },
+        ...collectConfigurableSecondaryAxes(previewSignals).map((axis) => ({
+            key: axis.key,
+            label: secondaryAxisLabel((key, values) => $t(key, {values}), axis),
+            settings: axisScales.secondary[axis.key] ?? DEFAULT_AXIS_SCALE,
+        })),
+    ]);
 
     let backendPreviewMessageKey = $derived(
         previewResolution.backendState === 'real-target-required'
@@ -336,7 +370,7 @@
             {/if}
 
             <!-- Aesthetics Section (extracted component) -->
-            <ChartAestheticsSection bind:areaFill bind:colorByBaseline bind:gridLines bind:staleGradient bind:yAxisMax bind:yAxisMin bind:yAxisMode />
+            <ChartAestheticsSection bind:areaFill bind:colorByBaseline bind:gridLines bind:staleGradient axisRows={previewAxisRows} onaxischange={handleAxisChange} />
 
             <!-- Preview Chart -->
             <div>
@@ -370,9 +404,10 @@
                         showGridLines={gridLines}
                         showMiniAxis={false}
                         viewMode={previewViewMode}
-                        {yAxisMax}
-                        {yAxisMin}
-                        {yAxisMode}
+                        yAxisMode={previewPrimaryScale.mode}
+                        yAxisMin={previewPrimaryScale.min}
+                        yAxisMax={previewPrimaryScale.max}
+                        secondaryAxisScales={axisScales.secondary}
                     />
                 </div>
                 <p class="text-[10px] text-gray-400 dark:text-gray-500 mt-1 italic">

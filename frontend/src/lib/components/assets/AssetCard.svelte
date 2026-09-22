@@ -242,7 +242,18 @@
     <!-- Mini Chart -->
     <div class="px-4">
         {#if displayData.length > 0}
-            <PriceChartCompact data={displayData} height="80px" viewMode={cardViewMode} areaFill={chartSettings?.areaFill ?? true} colorByBaseline={chartSettings?.colorByBaseline} showGridLines={chartSettings?.gridLines} showGradient={chartSettings?.staleGradient ?? true} {overlaySignals} />
+            <PriceChartCompact
+                axisScale={chartSettings?.axisScales[cardViewMode]}
+                data={displayData}
+                height="80px"
+                viewMode={cardViewMode}
+                areaFill={chartSettings?.areaFill ?? true}
+                colorByBaseline={chartSettings?.colorByBaseline}
+                showGridLines={chartSettings?.gridLines}
+                showGradient={chartSettings?.staleGradient ?? true}
+                {overlaySignals}
+                secondaryAxisScales={chartSettings?.axisScales.secondary}
+            />
         {:else if loading}
             <div class="h-20 flex items-center justify-center">
                 <div class="animate-pulse bg-gray-100 dark:bg-slate-700 rounded w-full h-12"></div>

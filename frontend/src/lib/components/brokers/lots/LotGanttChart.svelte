@@ -18,6 +18,7 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {translateOr} from '$lib/utils/core/translateOr';
     import {formatAxisDate, parseDisplayDate} from '$lib/utils/core/formatAxisDate';
+    import {buildResponsiveXAxisPolicy} from '$lib/components/charts/responsiveXAxis';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {safeDecimal, safeNumber, safeString} from '$lib/types';
     import {resolveBrokerName, withAlpha} from './lotChartShared';
@@ -195,11 +196,24 @@
     let axisContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | undefined = undefined;
     let axisInstance: echarts.ECharts | undefined = undefined;
+    let responsiveXAxisCompact = false;
     const resizeWatcher = createResizeWatcher(() => {
         syncAxisViewport();
         chartInstance?.resize();
     });
-    const axisResizeWatcher = createResizeWatcher(() => axisInstance?.resize());
+    const axisResizeWatcher = createResizeWatcher(() => {
+        axisInstance?.resize();
+        if (axisInstance) {
+            const policy = buildLotXAxisPolicy();
+            const wasCompact = responsiveXAxisCompact;
+            responsiveXAxisCompact = policy.compact;
+            if (policy.axisLabel) {
+                axisInstance.setOption({xAxis: {splitNumber: policy.splitNumber, axisLabel: policy.axisLabel}}, {lazyUpdate: true});
+            } else if (wasCompact) {
+                axisInstance.setOption(buildAxisOption(isDark), true);
+            }
+        }
+    });
     let darkModeObserver: MutationObserver | null = null;
     let tooltipCleanup: (() => void) | null = null;
     let activeTooltipDataIndex: number | null = null;
@@ -1041,6 +1055,8 @@
         const gridColors = buildGridColors(themeDark);
         const minMs = axisRangeMs?.minMs ?? Date.now() - DAY_MS;
         const maxMs = axisRangeMs?.maxMs ?? Date.now();
+        const xAxisPolicy = buildLotXAxisPolicy({min: xAxisRange?.min ?? minMs, max: xAxisRange?.max ?? maxMs});
+        responsiveXAxisCompact = xAxisPolicy.compact;
         const multiYearAxis = new Date(xAxisRange?.min ?? minMs).getFullYear() !== new Date(xAxisRange?.max ?? maxMs).getFullYear();
         return {
             ...CHART_ANIMATION_CONFIG,
@@ -1055,6 +1071,7 @@
                 type: 'time',
                 min: xAxisRange?.min ?? minMs,
                 max: xAxisRange?.max ?? maxMs,
+                ...(xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber} : {}),
                 axisLine: {lineStyle: {color: gridColors.gridColor}},
                 axisTick: {show: true, lineStyle: {color: gridColors.gridColor}},
                 splitLine: {show: false},
@@ -1062,6 +1079,7 @@
                     color: gridColors.textColor,
                     hideOverlap: true,
                     formatter: (value: number) => formatAxisDate($currentLanguage, value, multiYearAxis),
+                    ...(xAxisPolicy.axisLabel ?? {}),
                 },
             },
             yAxis: {
@@ -1076,6 +1094,16 @@
             series: [],
             dataZoom: ganttDataZoom(),
         };
+    }
+
+    function buildLotXAxisPolicy(range: {min: number | string; max: number | string} | null = xAxisRange): ReturnType<typeof buildResponsiveXAxisPolicy> {
+        return buildResponsiveXAxisPolicy({
+            width: axisContainer?.clientWidth ?? chartContainer?.clientWidth ?? 0,
+            values: range ? [range.min, range.max] : [],
+            locale: $currentLanguage,
+            axisType: 'time',
+            horizontalPadding: GRID_LEFT_PX + GRID_RIGHT_PX,
+        });
     }
 
     function setupResizeObserver() {

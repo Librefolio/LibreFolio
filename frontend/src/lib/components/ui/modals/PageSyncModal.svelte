@@ -24,6 +24,10 @@
         provider_code?: string | null;
     }
 
+    interface PageSyncCompletion {
+        accepted: boolean;
+    }
+
     interface Props {
         open: boolean;
         dateStart: string;
@@ -33,52 +37,77 @@
         /** FX pair slugs to sync (only configured ones) */
         fxPairs: string[];
         /** Called after all syncs complete */
-        onsynced: () => void;
+        onsynced: (detail: PageSyncCompletion) => void;
         onclose: () => void;
     }
 
     let {open = $bindable(), dateStart, dateEnd, assets, fxPairs, onsynced, onclose}: Props = $props();
 
     let syncModalBase: SyncModalBase | undefined = $state(undefined);
+    let acceptedInCurrentRun = false;
+    let openGeneration = 0;
+    let wasOpen = false;
 
     // Build asset lookup for rendering
     let assetMap = $derived(new Map(assets.map((a) => [a.id.toString(), a])));
 
     // Ensure provider icons are cached
     $effect(() => {
+        if (open !== wasOpen) {
+            openGeneration += 1;
+            acceptedInCurrentRun = false;
+            wasOpen = open;
+        }
         if (open) {
             ensureAssetProvidersCached();
             getCurrencyGraph();
         }
     });
 
+    function recordAccepted(results: SyncResult[], generation: number): SyncResult[] {
+        if (open && generation === openGeneration && results.some((result) => result.status === 'ok' || result.status === 'partial')) {
+            acceptedInCurrentRun = true;
+        }
+        return results;
+    }
+
+    function handleSynced() {
+        const accepted = acceptedInCurrentRun;
+        acceptedInCurrentRun = false;
+        onsynced({accepted});
+    }
+
     // =========================================================================
     // Asset sync function
     // =========================================================================
 
     async function doAssetSync(targetIds: string[]): Promise<SyncResult[]> {
+        const generation = openGeneration;
         const items = targetIds.map((id) => ({
             asset_id: parseInt(id),
             date_range: {start: dateStart, end: dateEnd},
         }));
         const response = await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post(items, {timeout: 120_000});
         const r = response as any;
-        return (r.results ?? []).map(
-            (ar: any) =>
-                ({
-                    id: ar.asset_id.toString(),
-                    status: ar.status,
-                    points_fetched: ar.points_fetched ?? 0,
-                    points_changed: ar.points_changed ?? 0,
-                    provider_used: ar.provider_used,
-                    message: ar.message,
-                    errors: ar.errors ?? [],
-                    elapsed_ms: ar.elapsed_ms,
-                    inserted_count: ar.inserted_count,
-                    updated_count: ar.updated_count,
-                    events_fetched: ar.events_fetched,
-                    events_changed: ar.events_changed,
-                }) satisfies SyncResult,
+        return recordAccepted(
+            (r.results ?? []).map(
+                (ar: any) =>
+                    ({
+                        id: ar.asset_id.toString(),
+                        status: ar.status,
+                        points_fetched: ar.points_fetched ?? 0,
+                        points_changed: ar.points_changed ?? 0,
+                        provider_used: ar.provider_used,
+                        message: ar.message,
+                        errors: ar.errors ?? [],
+                        elapsed_ms: ar.elapsed_ms,
+                        inserted_count: ar.inserted_count,
+                        updated_count: ar.updated_count,
+                        events_fetched: ar.events_fetched,
+                        events_changed: ar.events_changed,
+                    }) satisfies SyncResult,
+            ),
+            generation,
         );
     }
 
@@ -87,21 +116,25 @@
     // =========================================================================
 
     async function doFxSync(targetIds: string[]): Promise<SyncResult[]> {
+        const generation = openGeneration;
         const response = await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({pairs: targetIds, start: dateStart, end: dateEnd}, {timeout: 120_000});
         const r = response as any;
-        return (r.results ?? []).map(
-            (pr: any) =>
-                ({
-                    id: pr.pair,
-                    status: pr.status,
-                    points_fetched: pr.points_fetched ?? 0,
-                    points_changed: pr.points_changed ?? 0,
-                    provider_used: pr.provider_used,
-                    message: pr.message,
-                    errors: pr.errors ?? [],
-                    elapsed_ms: pr.elapsed_ms,
-                    detail: pr.detail,
-                }) satisfies SyncResult,
+        return recordAccepted(
+            (r.results ?? []).map(
+                (pr: any) =>
+                    ({
+                        id: pr.pair,
+                        status: pr.status,
+                        points_fetched: pr.points_fetched ?? 0,
+                        points_changed: pr.points_changed ?? 0,
+                        provider_used: pr.provider_used,
+                        message: pr.message,
+                        errors: pr.errors ?? [],
+                        elapsed_ms: pr.elapsed_ms,
+                        detail: pr.detail,
+                    }) satisfies SyncResult,
+            ),
+            generation,
         );
     }
 
@@ -131,7 +164,8 @@
     ]);
 </script>
 
-<SyncModalBase bind:open bind:this={syncModalBase} {dateEnd} {dateStart} description={$t('assetDetail.pageSyncDescription') ?? 'Synchronize asset prices and FX rates for this page.'} {onclose} {onsynced} {sections} testId="page-sync-modal" title={$t('common.sync') ?? 'Sync'}></SyncModalBase>
+<SyncModalBase bind:open bind:this={syncModalBase} {dateEnd} {dateStart} description={$t('assetDetail.pageSyncDescription') ?? 'Synchronize asset prices and FX rates for this page.'} {onclose} onsynced={handleSynced} {sections} testId="page-sync-modal" title={$t('common.sync') ?? 'Sync'}
+></SyncModalBase>
 
 <!-- Asset result row snippet -->
 {#snippet assetResultRow(pr: SyncResult, syncing: boolean)}
