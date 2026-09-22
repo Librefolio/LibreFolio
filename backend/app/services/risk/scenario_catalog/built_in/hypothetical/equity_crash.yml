@@ -18,9 +18,23 @@ defaults:
   bucket_shocks:
     STOCK: -0.35
     ETF: -0.25
+    BOND: -0.02
+    CRYPTO: -0.40
     FUND: -0.25
+    CROWDFUND: -0.10
+    HOLD: 0.0
+    COMMODITY: -0.10
+    REAL_ESTATE: -0.20
     INDEX: -0.35
     OTHER: 0.0
+    # An ETF is shocked as what it holds, so each subtype mirrors its content type.
+    # The generic ETF above keeps a blended shock because its content is unstated.
+    ETF_STOCK: -0.35
+    ETF_BOND: -0.02
+    ETF_COMMODITY: -0.10
+    ETF_REAL_ESTATE: -0.20
+    ETF_CRYPTO: -0.40
+    ETF_MONETARY: 0.0
 editable:
   dimension: false
   bucket_shocks: true

@@ -43,7 +43,7 @@ Il max drawdown è il valore minimo (più negativo) di $DD_t$ nell'intero period
 
 ---
 
-## ⏱️ Tempo di Recupero
+## ⏱️ Tempo di Recupero {: #recovery-time }
 
 Una metrica altrettanto importante è il **tempo di recupero** — quanto tempo occorre per recuperare dal drawdown e raggiungere un nuovo picco:
 

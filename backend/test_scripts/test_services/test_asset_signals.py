@@ -9,6 +9,7 @@ from decimal import Decimal
 from uuid import uuid4
 
 import pytest
+import pytest_asyncio
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,6 +27,7 @@ from backend.app.db.session import get_async_engine  # noqa: E402
 from backend.app.schemas.common import DateRangeModel  # noqa: E402
 from backend.app.schemas.prices import FAPriceQueryItem  # noqa: E402
 from backend.app.schemas.signals import (  # noqa: E402
+    SignalAvailabilityReason,
     SignalCalendarReturnPointStatus,
     SignalPriceValueSource,
     SignalRequest,
@@ -470,10 +472,12 @@ async def test_target_currency_conversion_precedes_signal_compute(
 
 
 @pytest.mark.asyncio
-async def test_partial_target_currency_conversion_never_computes_mixed_signals(
+async def test_partial_target_currency_conversion_passes_calendar_its_valid_subset(
     asset_signal_data,
 ):
+    asset_id = asset_signal_data["asset_ids"][2]
     requested_range = visible_range(asset_signal_data)
+    window_days = 7
     first_convertible_date = requested_range.start + timedelta(days=10)
     async with AsyncSession(
         get_async_engine(),
@@ -489,30 +493,55 @@ async def test_partial_target_currency_conversion_never_computes_mixed_signals(
             )
         )
         await session.flush()
-        result = (
-            await AssetSourceManager.get_prices_bulk(
-                [
-                    FAPriceQueryItem(
-                        asset_id=asset_signal_data["asset_ids"][2],
-                        date_range=requested_range,
-                        target_currency="XTS",
-                        signals=[
-                            SignalRequest(
-                                instance_id="ema",
-                                signal_code="EMA",
-                                params={"period": 14},
-                            )
-                        ],
-                    )
-                ],
-                session,
-            )
-        )[0]
+        results = await AssetSourceManager.get_prices_bulk(
+            [
+                FAPriceQueryItem(
+                    asset_id=asset_id,
+                    date_range=requested_range,
+                    target_currency="XTS",
+                    signals=[
+                        SignalRequest(
+                            instance_id="calendar",
+                            signal_code=CALENDAR_SIGNAL_CODE,
+                            params={"window_days": window_days},
+                        ),
+                        SignalRequest(
+                            instance_id="ema",
+                            signal_code="EMA",
+                            params={"period": 14},
+                        ),
+                    ],
+                )
+            ],
+            session,
+        )
+        result = next(item for item in results if item.asset_id == asset_id)
 
     assert {point.currency for point in result.prices} == {"CAD", "XTS"}
     assert any("mixed currencies" in error for error in result.errors)
-    assert result.signals[0].status == SignalStatus.UNAVAILABLE
-    assert result.signals[0].series == []
+    signals_by_id = {signal.instance_id: signal for signal in result.signals}
+    calendar = signals_by_id["calendar"]
+    ema = signals_by_id["ema"]
+
+    assert calendar.status == SignalStatus.PARTIAL
+    assert calendar.availability.reason_code == SignalAvailabilityReason.PARTIAL_UNDEFINED_METRIC
+    assert calendar.error is None
+    calendar_dates = [point.date for point in calendar_series(calendar).points]
+    expected_first = first_convertible_date + timedelta(days=window_days)
+    assert calendar_dates == [expected_first + timedelta(days=offset) for offset in range((requested_range.end - expected_first).days + 1)]
+    assert calendar_dates == sorted(set(calendar_dates))
+    assert all(requested_range.start <= point_date <= requested_range.end for point_date in calendar_dates)
+    first = point_on(calendar_series(calendar), expected_first)
+    current_offset = (expected_first - asset_signal_data["start"]).days
+    reference_offset = (first_convertible_date - asset_signal_data["start"]).days
+    assert first.value == pytest.approx(((300.0 + current_offset) / (300.0 + reference_offset) - 1) * 100)
+    assert first.provenance.reference_target_date == first_convertible_date
+
+    # Dense legacy plugins keep their own contract: the Calendar opt-in does
+    # not compact or otherwise change a sibling's input policy.
+    assert ema.status == SignalStatus.UNAVAILABLE
+    assert ema.availability.reason_code == SignalAvailabilityReason.INSUFFICIENT_INPUT_COVERAGE
+    assert ema.series == []
 
 
 @pytest.mark.asyncio
@@ -728,9 +757,9 @@ async def test_duplicate_asset_items_use_seed_for_each_load_range():
 # =============================================================================
 # I10 — ASSET_CALENDAR_ROLLING_RETURN through the Asset adapter
 #
-# The plugin itself is pure. Everything it depends on — dense daily resolution,
-# target-currency conversion, and enough PRE-VISIBLE CALENDAR DAYS to reach
-# t - N — is the adapter's job, so it can only be verified here.
+# The plugin itself is pure. Loading N pre-visible calendar days, resolving
+# source observations, and target-currency conversion are the adapter's job.
+# Signal output is still sliced to the selected range.
 #
 # Per-test rows are flushed and rolled back; the shared module fixture removes
 # its committed assets, prices, and FX rate after the module.
@@ -757,14 +786,13 @@ def result_for_asset(results, asset_id: int):
 
 
 @pytest.mark.asyncio
-async def test_calendar_return_warmup_loads_pre_visible_calendar_days(
+async def test_calendar_return_warmup_loads_pre_range_calendar_days(
     asset_signal_data,
 ):
-    """The visible range is 30 days and the window is 30 days, so EVERY visible
-    point needs a price from before the visible range. A points-derived warm-up
-    that stopped short would leave the early visible points null and still look
-    like a plausible result."""
+    """Every selected point resolves its exact t-N reference from factual
+    pre-range history loaded by the adapter."""
     asset_id = asset_signal_data["primary_asset_id"]
+    window_days = 30
     requested_range = visible_range(asset_signal_data)
     async with AsyncSession(
         get_async_engine(),
@@ -779,7 +807,7 @@ async def test_calendar_return_warmup_loads_pre_visible_calendar_days(
                         SignalRequest(
                             instance_id="calendar",
                             signal_code=CALENDAR_SIGNAL_CODE,
-                            params={"window_days": 30},
+                            params={"window_days": window_days},
                         )
                     ],
                 )
@@ -788,18 +816,31 @@ async def test_calendar_return_warmup_loads_pre_visible_calendar_days(
         )
     result = result_for_asset(results, asset_id)
 
+    assert [point.date for point in result.prices] == [requested_range.start + timedelta(days=offset) for offset in range(30)]
     signal = next(item for item in result.signals if item.instance_id == "calendar")
     assert signal.status == SignalStatus.OK
+    assert signal.availability.reason_code is None
+    assert signal.availability.required_points == window_days
+    assert signal.warmup.requirement.model_dump(mode="python") == {
+        "minimum_points": 1,
+        "stabilization_points": window_days - 1,
+        "total_points": window_days,
+        "normalized_tolerance": 1e-6,
+        "full_history": False,
+    }
+    assert signal.warmup.loaded_points == window_days + 30
     assert signal.warmup.complete is True
-    assert SignalWarningCode.UNDEFINED_METRIC_WINDOW not in {warning.code for warning in signal.warnings}
+    assert signal.warmup.used_points == window_days
+    assert signal.warnings == []
     series = calendar_series(signal)
     assert [point.date for point in series.points] == [requested_range.start + timedelta(days=offset) for offset in range(30)]
     for point in series.points:
-        offset = (point.date - asset_signal_data["start"]).days
-        # Fixture close for this asset is 100 + offset, one row per calendar day.
-        assert point.value == pytest.approx(((100.0 + offset) / (70.0 + offset) - 1) * 100)
+        current_offset = (point.date - asset_signal_data["start"]).days
+        reference_offset = current_offset - window_days
+        # Fixture close is 100 + offset, one row per calendar day.
+        assert point.value == pytest.approx(((100.0 + current_offset) / (100.0 + reference_offset) - 1) * 100)
         assert point.provenance.status == SignalCalendarReturnPointStatus.AVAILABLE
-        assert point.provenance.reference_target_date == point.date - timedelta(days=30)
+        assert point.provenance.reference_target_date == point.date - timedelta(days=window_days)
         assert point.provenance.current_price_date == point.date
         assert point.provenance.current_price_days_back == 0
 
@@ -809,7 +850,8 @@ async def test_calendar_return_consumes_target_currency_converted_points():
     """Conversion happens BEFORE the plugin runs, so a rate that changes inside
     the loaded window changes the calendar return. With a constant rate the
     ratio would be identical to the native one and this would prove nothing —
-    hence two rates, and an explicit assertion against the native value."""
+    hence two rates, a non-legacy 14-day window, and an explicit assertion
+    against the native value."""
     marker = uuid4()
     start = date(1900, 1, 1) + timedelta(days=marker.int % 45_000)
     current_date = start + timedelta(days=99)
@@ -817,8 +859,8 @@ async def test_calendar_return_consumes_target_currency_converted_points():
         start=current_date - timedelta(days=59),
         end=current_date,
     )
-    late_rate_date = current_date - timedelta(days=19)
-    reference_date = current_date - timedelta(days=30)
+    late_rate_date = current_date - timedelta(days=7)
+    reference_date = current_date - timedelta(days=14)
     async with AsyncSession(
         get_async_engine(),
         expire_on_commit=False,
@@ -872,7 +914,7 @@ async def test_calendar_return_consumes_target_currency_converted_points():
                         SignalRequest(
                             instance_id="calendar",
                             signal_code=CALENDAR_SIGNAL_CODE,
-                            params={"window_days": 30},
+                            params={"window_days": 14},
                         )
                     ],
                 )
@@ -886,6 +928,7 @@ async def test_calendar_return_consumes_target_currency_converted_points():
     assert {point.currency for point in result.prices} == {"XTS"}
     signal = next(item for item in result.signals if item.instance_id == "calendar")
     assert signal.status == SignalStatus.OK
+    assert signal.normalized_params == {"window_days": 14}
 
     converted_current = float(price_on(result.prices, current_date).close)
     converted_reference = float(price_on(result.prices, reference_date).close)
@@ -898,7 +941,7 @@ async def test_calendar_return_consumes_target_currency_converted_points():
     # The reference sits before the rate change and keeps its own FX provenance.
     assert point.provenance.status == SignalCalendarReturnPointStatus.AVAILABLE
     assert point.provenance.current_fx_date == late_rate_date
-    assert point.provenance.current_fx_days_back == 19
+    assert point.provenance.current_fx_days_back == 7
     assert point.provenance.reference_fx_date == start
     assert point.provenance.reference_fx_days_back == (reference_date - start).days
     assert point.provenance.reference_price_date == reference_date
@@ -906,10 +949,100 @@ async def test_calendar_return_consumes_target_currency_converted_points():
 
 
 @pytest.mark.asyncio
+async def test_calendar_interior_fx_gap_is_sparse_with_typed_reference_cause():
+    window_days = 7
+    marker = uuid4()
+    load_start = date(1800, 1, 1) + timedelta(days=marker.int % 20_000)
+    selected_start = load_start + timedelta(days=window_days)
+    selected_end = selected_start + timedelta(days=10)
+    missing_fx_date = selected_start + timedelta(days=2)
+    affected_reference_date = missing_fx_date + timedelta(days=window_days)
+    requested_range = DateRangeModel(
+        start=selected_start,
+        end=selected_end,
+    )
+
+    async with AsyncSession(
+        get_async_engine(),
+        expire_on_commit=False,
+    ) as session:
+        asset = Asset(
+            display_name=f"Calendar Interior FX {marker.hex}",
+            currency="CAD",
+            asset_type=AssetType.STOCK,
+            active=True,
+        )
+        session.add(asset)
+        await session.flush()
+        session.add_all(
+            [
+                PriceHistory(
+                    asset_id=asset.id,
+                    date=load_start + timedelta(days=offset),
+                    close=Decimal(str(100 + offset)),
+                    currency=("BMD" if load_start + timedelta(days=offset) == missing_fx_date else "CAD"),
+                    source_plugin_key="signal_test",
+                )
+                for offset in range((selected_end - load_start).days + 1)
+            ]
+        )
+        session.add(
+            FxRate(
+                base="CAD",
+                quote="XTS",
+                date=load_start,
+                rate=Decimal("2"),
+                source="MANUAL",
+            )
+        )
+        await session.flush()
+        results = await AssetSourceManager.get_prices_bulk(
+            [
+                FAPriceQueryItem(
+                    asset_id=asset.id,
+                    date_range=requested_range,
+                    target_currency="XTS",
+                    signals=[
+                        SignalRequest(
+                            instance_id="calendar",
+                            signal_code=CALENDAR_SIGNAL_CODE,
+                            params={"window_days": window_days},
+                        )
+                    ],
+                )
+            ],
+            session,
+        )
+        result = next(item for item in results if item.asset_id == asset.id)
+        await session.rollback()
+
+    assert {point.currency for point in result.prices} == {"BMD", "XTS"}
+    assert any("mixed currencies" in error for error in result.errors)
+    calendar = next(signal for signal in result.signals if signal.instance_id == "calendar")
+    assert calendar.status == SignalStatus.PARTIAL
+    assert calendar.availability.reason_code == SignalAvailabilityReason.PARTIAL_UNDEFINED_METRIC
+    assert calendar.error is None
+    assert SignalWarningCode.DATA_GAP in {warning.code for warning in calendar.warnings}
+    assert SignalWarningCode.UNDEFINED_METRIC_WINDOW in {warning.code for warning in calendar.warnings}
+
+    series = calendar_series(calendar)
+    expected_dates = [selected_start + timedelta(days=offset) for offset in range((selected_end - selected_start).days + 1) if selected_start + timedelta(days=offset) != missing_fx_date]
+    assert [point.date for point in series.points] == expected_dates
+    assert [point.date for point in series.points] == sorted({point.date for point in series.points})
+    assert all(selected_start <= point.date <= selected_end for point in series.points)
+    assert all(point.value is not None for point in series.points if point.date != affected_reference_date)
+    affected = point_on(series, affected_reference_date)
+    assert affected.value is None
+    assert affected.provenance.status == SignalCalendarReturnPointStatus.MISSING_REFERENCE
+    assert affected.provenance.reference_target_date == missing_fx_date
+    assert affected.provenance.reference_price_date is None
+
+
+@pytest.mark.asyncio
 async def test_calendar_reference_reports_the_backward_resolved_observation():
     """The reference date itself has no stored price: the adapter carries the
-    last observation forward, and the point must say so instead of pretending
-    it priced 2026-04-07."""
+    factual pre-range observation forward, and the point must say so instead
+    of pretending the target date was observed."""
     start = date(2026, 3, 1)
     hole = {start + timedelta(days=offset) for offset in (35, 36, 37)}
     requested_range = DateRangeModel(
@@ -989,6 +1122,8 @@ async def test_calendar_signal_only_response_stays_valid(
     asset_signal_data,
 ):
     asset_id = asset_signal_data["primary_asset_id"]
+    window_days = 90
+    requested_range = visible_range(asset_signal_data)
     async with AsyncSession(
         get_async_engine(),
         expire_on_commit=False,
@@ -997,13 +1132,13 @@ async def test_calendar_signal_only_response_stays_valid(
             [
                 FAPriceQueryItem(
                     asset_id=asset_id,
-                    date_range=visible_range(asset_signal_data),
+                    date_range=requested_range,
                     include_price=False,
                     signals=[
                         SignalRequest(
                             instance_id="calendar",
                             signal_code=CALENDAR_SIGNAL_CODE,
-                            params={"window_days": 90},
+                            params={"window_days": window_days},
                         )
                     ],
                 )
@@ -1015,9 +1150,198 @@ async def test_calendar_signal_only_response_stays_valid(
     assert result.prices == []
     signal = next(item for item in result.signals if item.instance_id == "calendar")
     assert signal.status == SignalStatus.OK
+    assert signal.warnings == []
+    assert signal.availability.required_points == window_days
+    assert signal.warmup.requirement.total_points == window_days
+    assert signal.warmup.used_points == window_days
+    assert signal.warmup.complete is True
     series = calendar_series(signal)
-    assert len(series.points) == 30
+    assert [point.date for point in series.points] == [requested_range.start + timedelta(days=offset) for offset in range(30)]
     probe = point_on(series, asset_signal_data["end"])
     offset = (asset_signal_data["end"] - asset_signal_data["start"]).days
-    assert probe.value == pytest.approx(((100.0 + offset) / (10.0 + offset) - 1) * 100)
-    assert probe.provenance.reference_target_date == asset_signal_data["end"] - timedelta(days=90)
+    assert probe.value == pytest.approx(((100.0 + offset) / (100.0 + offset - window_days) - 1) * 100)
+    assert probe.provenance.reference_target_date == asset_signal_data["end"] - timedelta(days=window_days)
+
+
+# =============================================================================
+# I60G — primary and peer Calendar histories are independently factual
+# =============================================================================
+
+
+@pytest_asyncio.fixture
+async def asset_signal_rollback_session():
+    async with AsyncSession(
+        get_async_engine(),
+        expire_on_commit=False,
+    ) as session:
+        try:
+            yield session
+        finally:
+            await session.rollback()
+
+
+@pytest_asyncio.fixture
+async def calendar_sibling_assets(
+    asset_signal_rollback_session,
+):
+    window_days = 7
+    selected_start = date(2026, 4, 1)
+    selected_end = selected_start + timedelta(days=14)
+    warmup_start = selected_start - timedelta(days=window_days)
+    partial_start = selected_start + timedelta(days=2)
+    unavailable_start = selected_end - timedelta(days=3)
+    marker = uuid4().hex
+    primary = Asset(
+        display_name=f"I60G Calendar Primary {marker}",
+        currency="EUR",
+        asset_type=AssetType.STOCK,
+        active=True,
+    )
+    partial_peer = Asset(
+        display_name=f"I60G Calendar Partial Peer {marker}",
+        currency="EUR",
+        asset_type=AssetType.STOCK,
+        active=True,
+    )
+    unavailable_peer = Asset(
+        display_name=f"I60G Calendar Unavailable Peer {marker}",
+        currency="EUR",
+        asset_type=AssetType.STOCK,
+        active=True,
+    )
+    asset_signal_rollback_session.add_all(
+        [
+            primary,
+            partial_peer,
+            unavailable_peer,
+        ]
+    )
+    await asset_signal_rollback_session.flush()
+
+    primary_base = Decimal("1000")
+    partial_base = Decimal("200")
+    rows = []
+    for offset in range((selected_end - warmup_start).days + 1):
+        point_date = warmup_start + timedelta(days=offset)
+        rows.append(
+            PriceHistory(
+                asset_id=primary.id,
+                date=point_date,
+                close=primary_base + offset,
+                currency="EUR",
+                source_plugin_key="signal_test",
+            )
+        )
+    for offset in range((selected_end - partial_start).days + 1):
+        rows.append(
+            PriceHistory(
+                asset_id=partial_peer.id,
+                date=partial_start + timedelta(days=offset),
+                close=partial_base + offset,
+                currency="EUR",
+                source_plugin_key="signal_test",
+            )
+        )
+    for offset in range((selected_end - unavailable_start).days + 1):
+        rows.append(
+            PriceHistory(
+                asset_id=unavailable_peer.id,
+                date=unavailable_start + timedelta(days=offset),
+                close=Decimal("500") + offset,
+                currency="EUR",
+                source_plugin_key="signal_test",
+            )
+        )
+    asset_signal_rollback_session.add_all(rows)
+    await asset_signal_rollback_session.flush()
+
+    return {
+        "window_days": window_days,
+        "selected_start": selected_start,
+        "selected_end": selected_end,
+        "warmup_start": warmup_start,
+        "partial_start": partial_start,
+        "primary_base": primary_base,
+        "partial_base": partial_base,
+        "primary_asset_id": primary.id,
+        "partial_asset_id": partial_peer.id,
+        "unavailable_asset_id": unavailable_peer.id,
+    }
+
+
+@pytest.mark.asyncio
+async def test_calendar_assets_keep_independent_ok_partial_and_unavailable_subsets(
+    asset_signal_rollback_session,
+    calendar_sibling_assets,
+):
+    """A late or unavailable peer cannot suppress the factual primary line."""
+    window_days = calendar_sibling_assets["window_days"]
+    selected_range = DateRangeModel(
+        start=calendar_sibling_assets["selected_start"],
+        end=calendar_sibling_assets["selected_end"],
+    )
+    asset_ids = [
+        calendar_sibling_assets["primary_asset_id"],
+        calendar_sibling_assets["partial_asset_id"],
+        calendar_sibling_assets["unavailable_asset_id"],
+    ]
+
+    results = await AssetSourceManager.get_prices_bulk(
+        [
+            FAPriceQueryItem(
+                asset_id=asset_id,
+                date_range=selected_range,
+                include_price=(asset_id == calendar_sibling_assets["primary_asset_id"]),
+                include_events=False,
+                target_currency="EUR",
+                signals=[
+                    SignalRequest(
+                        instance_id="calendar",
+                        signal_code=CALENDAR_SIGNAL_CODE,
+                        params={"window_days": window_days},
+                    )
+                ],
+            )
+            for asset_id in asset_ids
+        ],
+        asset_signal_rollback_session,
+    )
+    results_by_asset = {result.asset_id: result for result in results}
+    primary_result = results_by_asset[calendar_sibling_assets["primary_asset_id"]]
+    partial_result = results_by_asset[calendar_sibling_assets["partial_asset_id"]]
+    unavailable_result = results_by_asset[calendar_sibling_assets["unavailable_asset_id"]]
+
+    assert primary_result.errors == []
+    assert partial_result.errors == []
+    assert unavailable_result.errors == []
+    assert partial_result.prices == []
+    assert unavailable_result.prices == []
+    signals_by_asset = {asset_id: next(signal for signal in results_by_asset[asset_id].signals if signal.instance_id == "calendar") for asset_id in asset_ids}
+    primary = signals_by_asset[calendar_sibling_assets["primary_asset_id"]]
+    partial = signals_by_asset[calendar_sibling_assets["partial_asset_id"]]
+    unavailable = signals_by_asset[calendar_sibling_assets["unavailable_asset_id"]]
+
+    assert primary.status == SignalStatus.OK
+    assert primary.availability.reason_code is None
+    primary_series = calendar_series(primary)
+    primary_dates = [selected_range.start + timedelta(days=offset) for offset in range((selected_range.end - selected_range.start).days + 1)]
+    assert [point.date for point in primary_series.points] == primary_dates
+    primary_first = point_on(primary_series, selected_range.start)
+    assert primary_first.value == pytest.approx(((float(calendar_sibling_assets["primary_base"]) + window_days) / float(calendar_sibling_assets["primary_base"]) - 1) * 100)
+    assert primary_first.provenance.reference_target_date == calendar_sibling_assets["warmup_start"]
+
+    assert partial.status == SignalStatus.PARTIAL
+    assert partial.availability.reason_code == SignalAvailabilityReason.PARTIAL_UNDEFINED_METRIC
+    partial_series = calendar_series(partial)
+    first_partial_date = calendar_sibling_assets["partial_start"] + timedelta(days=window_days)
+    partial_dates = [first_partial_date + timedelta(days=offset) for offset in range((selected_range.end - first_partial_date).days + 1)]
+    assert [point.date for point in partial_series.points] == partial_dates
+    assert [point.date for point in partial_series.points] == sorted({point.date for point in partial_series.points})
+    partial_first = point_on(partial_series, first_partial_date)
+    assert partial_first.value == pytest.approx(((float(calendar_sibling_assets["partial_base"]) + window_days) / float(calendar_sibling_assets["partial_base"]) - 1) * 100)
+    assert partial_first.provenance.reference_target_date == calendar_sibling_assets["partial_start"]
+
+    assert unavailable.status == SignalStatus.UNAVAILABLE
+    assert unavailable.availability.reason_code == SignalAvailabilityReason.INSUFFICIENT_HISTORY
+    assert unavailable.error is None
+    assert unavailable.series == []

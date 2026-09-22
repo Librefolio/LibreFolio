@@ -637,4 +637,79 @@ test.describe('NR — Sync on create with provider (Bug K)', () => {
         await page.getByTestId('confirm-modal-confirm').click();
         await expect(page.getByTestId('asset-modal-form')).not.toBeVisible({timeout: 10_000});
     });
+
+    // ========================================================================
+    // Mandate B: the benchmark switch. `assets.is_benchmark` is a new column,
+    // and the only thing that makes it real for a user is that the switch they
+    // flipped is still flipped the next time they open the asset.
+    //
+    // The two directions are asserted separately on purpose. "The flag reached
+    // the database" and "the flag came back into the form" are different
+    // failures with different fixes, and a single end-to-end assertion cannot
+    // tell them apart — it would just say "the toggle is off" and leave the
+    // reader to guess which half broke.
+    //
+    // The switch is a role="switch" with aria-checked, so its state is readable
+    // without touching a CSS class or a translated label, and toHaveAttribute
+    // retries — no probe, no sleep.
+    // ========================================================================
+    test('the benchmark toggle reaches the backend and comes back', async ({page}) => {
+        const name = `E2E Benchmark ${uniqueToken(6)}`;
+        let assetId: number | null = null;
+
+        try {
+            // ---- create through the modal, with the switch on -------------
+            await goToAssetsPage(page);
+            await openCreateAssetModal(page);
+            const nameInput = page.getByTestId('asset-modal-display-name');
+            await nameInput.fill(name);
+            await expect(nameInput).toHaveValue(name);
+
+            const toggle = page.getByTestId('asset-benchmark-toggle');
+            // Assert the starting state instead of assuming it: on a toggle, a
+            // blind click is only a *change*, and if a create ever opened with
+            // the flag already on, the click below would be turning it off and
+            // everything after it would be testing the opposite claim.
+            await expect(toggle, 'a create must start from "not a benchmark"').toHaveAttribute('aria-checked', 'false');
+            await toggle.click();
+            await expect(toggle).toHaveAttribute('aria-checked', 'true');
+
+            const saveBtn = page.getByTestId('asset-modal-save');
+            await expect(saveBtn).toBeEnabled();
+            await saveBtn.click();
+            await expect(page.getByTestId('asset-modal-form')).not.toBeVisible({timeout: 15_000});
+
+            // ---- half one: the flag reached the database ------------------
+            // Found by the unique name this test owns, never by position: the
+            // query is a shared surface and a neighbour may have written to it
+            // between the save and this read.
+            const res = await page.request.get(`/api/v1/assets/query?search=${encodeURIComponent(name)}`);
+            expect(res.ok(), `the asset query must answer: ${res.status()} ${await res.text()}`).toBeTruthy();
+            const row = ((await res.json()) as Array<{id: number; display_name: string; is_benchmark?: boolean}>).find((a) => a.display_name === name);
+            expect(row, 'the asset the modal just created must be queryable by its unique name').toBeTruthy();
+            assetId = row!.id;
+            expect(row!.is_benchmark, 'the create payload must carry is_benchmark all the way to the database').toBe(true);
+
+            // ---- half two: …and comes back on a fresh load ----------------
+            // goToAssetDetailPage() is a real page.goto(), so nothing survives
+            // from the create above except what the backend stored.
+            await goToAssetDetailPage(page, String(assetId));
+            await openEditAssetModal(page);
+            await expect(
+                page.getByTestId('asset-benchmark-toggle'),
+                'the edit form must reopen with the stored flag. AssetModal.loadAssetData() already reads `data.is_benchmark`, so an "off" here means the CALLER never put the field into editData — neither buildEditData() in routes/(app)/assets/[id]/+page.svelte nor loadAssetEditData() in lib/components/assets/assetEditData.ts copies it. That is not cosmetic: saveEdit() sends `is_benchmark: isBenchmark` on every PATCH, so editing anything at all about a benchmark asset silently un-benchmarks it.',
+            ).toHaveAttribute('aria-checked', 'true');
+        } finally {
+            // The id is only known once half one has read it back, so a failure
+            // before that point would otherwise leave the row behind. Resolve it
+            // by the unique name instead — still scoped to what this test wrote.
+            if (assetId === null) {
+                assetId = await page.request
+                    .get(`/api/v1/assets/query?search=${encodeURIComponent(name)}`)
+                    .then(async (r) => (r.ok() ? (((await r.json()) as Array<{id: number; display_name: string}>).find((a) => a.display_name === name)?.id ?? null) : null))
+                    .catch(() => null);
+            }
+            if (assetId !== null) await page.request.delete(`/api/v1/assets?asset_ids=${assetId}`).catch(() => {});
+        }
+    });
 });

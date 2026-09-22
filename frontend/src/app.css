@@ -65,6 +65,18 @@ body {
     textarea:not(.zoom-guard-exempt) {
         font-size: 16px !important;
     }
+
+    input.lf-compact-number-input {
+        line-height: 1.25rem;
+    }
+}
+
+.lf-compact-number-input {
+    font-family: inherit;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: normal;
 }
 
 /* Disable double-tap zoom on interactive elements */

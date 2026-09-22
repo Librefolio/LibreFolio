@@ -137,11 +137,24 @@
       "CRYPTO": "Cripto",
       "FUND": "Fondo",
       "CROWDFUND": "Crowdfunding",
-      "HOLD": "Liquidez",
+      "HOLD": "Bien en posesión",
+      "COMMODITY": "Materia prima",
+      "REAL_ESTATE": "Inmobiliario",
       "OTHER": "Otro",
       "INDEX": "Índice",
+      "ETF_STOCK": "ETF de renta variable",
+      "ETF_BOND": "ETF de renta fija",
+      "ETF_COMMODITY": "ETF de materias primas",
+      "ETF_REAL_ESTATE": "ETF inmobiliario",
+      "ETF_CRYPTO": "ETF de criptomonedas",
+      "ETF_MONETARY": "ETF monetario",
       "LIQUIDITY": "Liquidez"
     },
+    "typeSections": {
+      "ETF": "ETF"
+    },
+    "benchmarkSection": "Referencias",
+    "otherAssetsSection": "Otros activos",
     "modal": {
       "title": "Agregar Activo",
       "titleEdit": "Editar Activo",
@@ -186,6 +199,8 @@
       "quoteBaseTooltip": "Especifica a cuántas acciones o participaciones se refiere el precio de mercado. Para ETF o acciones suele ser 1; los bonos suelen cotizarse sobre una base de 100.",
       "bondQuoteBaseHint": "Los bonos suelen cotizarse por cada 100 de nominal (p. ej. BTP): verifica este valor — normalmente es 100.",
       "activeTooltip": "Si está activo, el activo se actualizará automáticamente por el programador y seguirá visible en los selectores. Desactívelo para ocultarlo cuando ya no lo posea y no quiera seguir descargando precios.",
+      "benchmark": "Referencia",
+      "benchmarkTooltip": "Hace que este activo esté disponible como referencia de comparación. Las referencias aparecen primero en los selectores de análisis de riesgo; no cambia nada sobre cómo se valora o se cuenta el activo en la cartera.",
       "quoteBaseMin": "Debe ser al menos 1",
       "quoteBaseInteger": "Solo números enteros",
       "currencyHelp": "Divisa en la que se guardan los precios de este activo.",
@@ -1170,6 +1185,13 @@
       "partialResult": "Esta señal solo está disponible parcialmente con los datos actuales.",
       "unavailable": "Esta señal no se puede calcular con los datos disponibles.",
       "partialContiguousSegment": "Señal calculada sobre el segmento contiguo completo {start}–{end}. Se excluyeron {excluded} puntos cargados porque faltaban fechas o campos obligatorios. Entrada completa: {available}/{requested} ({coverage}%, calentamiento incluido). Racha máxima ausente: {consecutive} puntos."
+    },
+    "axes": {
+      "exchangeRate": "Eje del tipo de cambio ({pair})",
+      "percentage": "Eje de porcentajes",
+      "price": "Eje de precios ({currency})",
+      "signal": "Eje {name}",
+      "volume": "Eje de volúmenes"
     }
   },
   "common": {
@@ -1455,7 +1477,15 @@
     "yieldOnCostValue": "Rendimiento sobre coste",
     "yieldOnCostPeriod": "Periodo",
     "yieldOnCostFxRateDate": "tipo del",
-    "yieldOnCostNoIncomeTitle": "Sin ingresos registrados"
+    "yieldOnCostNoIncomeTitle": "Sin ingresos registrados",
+    "pnl": "P&L",
+    "pnlSubmodeLine": "Línea",
+    "pnlSubmodeIncome": "Ingresos",
+    "pnlSubmodeCandles": "Velas",
+    "pnlCandlesHypothetical": "Sintético — los máximos/mínimos entre activos son hipotéticos y no simultáneos, no una serie intradía real.",
+    "pnlCandlesHypotheticalShort": "Sintético — los máximos/mínimos entre activos son hipotéticos y no simultáneos",
+    "pnlAcqNewCapital": "Nuevo capital",
+    "pnlAcqReinvested": "Reinvertido"
   },
   "dataQuality": {
     "headerInfoOnly": "Nota de calidad de datos",
@@ -2910,6 +2940,10 @@
         "name": "Contribución al riesgo",
         "description": "Contribuciones de cada activo a la volatilidad de la composición actual."
       },
+      "assetRiskReturn": {
+        "name": "Riesgo y rentabilidad por activo",
+        "description": "Volatilidad y rentabilidad anualizada esperada de cada activo y de la cartera, sobre la composición actual."
+      },
       "stress": {
         "name": "Prueba de estrés",
         "description": "Aplica shocks hipotéticos o reproduce un período histórico."
@@ -2925,6 +2959,26 @@
       "drawdownSummary": {
         "name": "Resumen de caídas",
         "description": "Episodios de caída actual y máxima respecto al pico, fechados y con estado de recuperación, a partir de los rendimientos canónicos del ámbito seleccionado."
+      },
+      "assetSetKpi": {
+        "name": "Indicadores de riesgo por activo",
+        "description": "Volatilidad, peor caída y ratios ajustados al riesgo, medidos para cada activo seleccionado sobre una misma ventana."
+      },
+      "assetSetVar": {
+        "name": "Riesgo de cola por activo",
+        "description": "La pérdida que alcanzó cada activo seleccionado en sus peores resultados, estimada sobre su propio historial."
+      },
+      "assetSetDrawdown": {
+        "name": "Caídas por activo",
+        "description": "Cuánto cayó cada activo seleccionado desde su máximo, cuánto duró y si se ha recuperado."
+      },
+      "assetSetRiskReturn": {
+        "name": "Riesgo y rentabilidad por activo",
+        "description": "Volatilidad anualizada frente a rentabilidad esperada, un punto por activo seleccionado."
+      },
+      "assetSetComparison": {
+        "name": "Comparación por activo",
+        "description": "Cómo se movió cada activo seleccionado respecto al índice de referencia elegido."
       }
     },
     "params": {
@@ -2974,7 +3028,8 @@
     },
     "returnBasis": {
       "price_only": "Solo precio",
-      "twrr": "TWRR de la cartera"
+      "twrr": "TWRR de la cartera",
+      "current_composition_backtest": "Backtest de la composición actual"
     },
     "valueStatus": {
       "ok": "Disponible",
@@ -2993,7 +3048,65 @@
       "assetsTab": "Activos",
       "correlationTab": "Correlación",
       "addAsset": "Añadir activo a la matriz",
-      "maxAssets": "Se alcanzó el límite de la API de 100 activos."
+      "maxAssets": "Se alcanzó el límite de la API de 100 activos.",
+      "presetBroker": "Precargar los activos de…",
+      "presetNone": "Elige un bróker…",
+      "panelTitle": "Relaciones y escenarios",
+      "selectedCount": "{selected} seleccionados de {total}",
+      "nearIdentical": "casi idénticos",
+      "bulk": {
+        "selectAll": "Seleccionar todo",
+        "selectNone": "Deseleccionar todo",
+        "invert": "Invertir",
+        "mine": "Mis activos"
+      },
+      "filters": {
+        "type": "Tipo",
+        "currency": "Moneda",
+        "clear": "Borrar los filtros"
+      },
+      "band": {
+        "high": "se mueven juntos",
+        "moderate": "se mueven juntos en parte",
+        "low": "se mueven de forma independiente",
+        "inverse": "se mueven en direcciones opuestas"
+      },
+      "ordering": {
+        "label": "Orden de la matriz",
+        "similarity": "Por similitud",
+        "original": "Por nombre"
+      },
+      "pairs": {
+        "correlatedTitle": "Los más parecidos",
+        "correlatedHint": "Pares que se mueven juntos: tener ambos añade poco.",
+        "offsettingTitle": "Los que se compensan",
+        "offsettingHint": "Pares que se mueven en direcciones opuestas: uno amortigua al otro.",
+        "noneCorrelated": "Ningún par se mueve claramente junto.",
+        "noneOffsetting": "Ningún par compensa a otro: aquí nada amortigua nada."
+      },
+      "levels": {
+        "asset": "Activo",
+        "blankNote": "Un guion significa que la medición no fue posible para ese activo en esta ventana — no significa cero.",
+        "l1": {
+          "title": "¿Cuánto dolió cada uno?",
+          "description": "La misma escala de daño, preguntada a cada activo seleccionado. Solo porcentajes: un conjunto de activos no tiene pesos, así que no hay importe que mostrar.",
+          "lastedDays": "duró {{days}} d",
+          "columns": {
+            "badDay": "Mal día",
+            "badMonth": "Mal mes",
+            "worstFall": "Peor caída",
+            "currentFall": "Bajo el máximo",
+            "toPeak": "Subida al máximo"
+          }
+        },
+        "l3": {
+          "title": "¿Cuánto pagó cada uno por su riesgo?",
+          "description": "Riesgo frente a rentabilidad, un punto por activo. No se traza ninguna recta: una selección no tiene un todo, así que no hay nada por encima o por debajo.",
+          "expectedReturn": "Rentabilidad esperada",
+          "correlation": "Correlación",
+          "noBenchmark": "Elige un índice de referencia en el Panel para añadir beta y correlación. Un índice que ya está en la selección no puede servirse de medida a sí mismo."
+        }
+      }
     },
     "metrics": {
       "volatility": "Volatilidad",
@@ -3002,7 +3115,7 @@
       "sharpe": "Sharpe",
       "sortino": "Sortino",
       "portfolioVolatility": "Volatilidad de la cartera",
-      "cashWeight": "Peso del efectivo",
+      "cashWeight": "Efectivo y no cubierto",
       "var": "Valor en riesgo",
       "cvar": "VaR condicional",
       "activeReturn": "Rendimiento activo",
@@ -3062,7 +3175,35 @@
       "terminalDistribution": "Distribución final",
       "p05": "P5 final",
       "p50": "P50 final",
-      "p95": "P95 final"
+      "p95": "P95 final",
+      "mode": {
+        "label": "Modo de simulación",
+        "recommended": "Recomendado",
+        "advanced": "Avanzado",
+        "block_bootstrap": {
+          "label": "Historial remezclado",
+          "hypothesis": "Tus rendimientos reales, reordenados por bloques. Sin hipótesis añadidas."
+        },
+        "calm": {
+          "label": "Mercado tranquilo",
+          "hypothesis": "Hipótesis: tus oscilaciones reales, reducidas un 30 %. Las correlaciones y la dirección siguen siendo las de tu historial."
+        },
+        "prolonged_crisis": {
+          "label": "Crisis prolongada",
+          "hypothesis": "Hipótesis: oscilaciones ×2,5 y rendimiento −20 % anual durante 14 meses. Las correlaciones siguen siendo las de tu historial."
+        },
+        "shock_recovery": {
+          "label": "Shock y recuperación",
+          "hypothesis": "Hipótesis: una caída del 35 % aplicada a tu historial en 2 meses, y luego tu historial real continúa."
+        },
+        "gbm": {
+          "label": "Curva normal (MBG)",
+          "hypothesis": "Modelo clásico: supone oscilaciones regulares y subestima las colas."
+        }
+      },
+      "regimeTruncated": "Esta hipótesis dura {declared} días; tu horizonte solo cubre {applied}.",
+      "driftUncertainty": "La deriva proviene de {count} observaciones: solo por eso esta mediana está entre {low} y {high}.",
+      "driftUncertaintyWide": "La deriva proviene de apenas {count} observaciones: solo por eso esta mediana está entre {low} y {high} — más ancha que la banda de arriba."
     },
     "errors": {
       "analytic_not_found": "Analítica no disponible.",
@@ -3072,7 +3213,13 @@
       "insufficient_history": "Historial insuficiente para este cálculo.",
       "undefined_metric": "La métrica no está definida para estos datos.",
       "data_unavailable": "Los datos de origen necesarios no están disponibles.",
-      "execution_failed": "El cálculo del backend falló."
+      "execution_failed": "El cálculo del backend falló.",
+      "invalid_covariance": "No se pudieron calcular las relaciones entre estos activos.",
+      "resource_limit": "Este cálculo es demasiado grande para ejecutarse.",
+      "worker_busy": "El servicio de cálculo está ocupado. Vuelve a intentarlo en breve.",
+      "execution_timeout": "El cálculo tardó demasiado y se detuvo.",
+      "optimization_infeasible": "Ninguna asignación cumple las restricciones solicitadas.",
+      "unknown": "Esta medición no devolvió ningún resultado."
     },
     "warnings": {
       "sharpe_undefined": "Sharpe no está definido porque la volatilidad es cero.",
@@ -3122,7 +3269,164 @@
     },
     "betaBanner": {
       "title": "El análisis de riesgos está en beta.",
-      "description": "Los cálculos, los resultados y la interfaz pueden cambiar antes de la versión estable."
+      "description": "Los cálculos, los resultados y la interfaz pueden cambiar antes de la versión estable.",
+      "simulation": {
+        "title": "La simulación sigue en beta.",
+        "description": "Su resultado depende en gran medida de cuánto historial se solicita en relación con el horizonte: una ventana corta con un horizonte largo puede producir cifras inverosímiles. Todos los demás niveles del análisis de riesgos han salido de la beta."
+      }
+    },
+    "levels": {
+      "l1": {
+        "title": "¿Cuánto puede doler?",
+        "rows": {
+          "day": "Un mal día (peor 5%)",
+          "month": "Un mal mes (peor 5%)",
+          "worst": "La peor caída (vivida de verdad)"
+        },
+        "technical": {
+          "day": "CVaR · 1 día",
+          "month": "CVaR · 1 mes",
+          "worst": "Caída máxima",
+          "current": "Caída actual"
+        },
+        "durationDays": "duró {days} días",
+        "requiredRecovery": "recuperación necesaria {percent}",
+        "currentDrawdown": "Actualmente por debajo del máximo",
+        "sincePeak": "desde el {date}",
+        "tails": {
+          "worstRealization": "El peor día realmente visto",
+          "worstRealizationOn": "el {date}",
+          "drawdownAtRisk": "Caída en riesgo ({confidence})",
+          "conditionalDrawdownAtRisk": "Media más allá de ese umbral",
+          "ulcerIndex": "Índice de Ulcer {value}",
+          "ulcerIndexHint": "profundidad cuadrática media bajo el pico: cuanto más bajo, más tranquilo"
+        },
+        "underwater": {
+          "title": "Tiempo bajo el pico",
+          "empty": "No hay curva bajo el pico para este periodo."
+        },
+        "histogram": {
+          "title": "Distribución de los rendimientos diarios",
+          "observations": "{count} días observados",
+          "cut": "Umbral VaR en {value}",
+          "noCut": "No se ha publicado ningún umbral para esta ventana.",
+          "empty": "No hay distribución de rendimientos para este periodo."
+        }
+      },
+      "l2": {
+        "title": "¿Estoy tan diversificado como creo?",
+        "weight": "peso",
+        "contribution": "contribución al riesgo",
+        "lead": "{name} pesa {weight} pero produce {contribution} del riesgo",
+        "showAll": "Mostrar todos",
+        "showLess": "Mostrar menos",
+        "effectiveAssets": {
+          "label": "¿Cuántas apuestas independientes tengo realmente?",
+          "aboveCount": "Por encima de las {positions} posiciones medidas: el exceso es liquidez, y no dice nada de los pesos",
+          "belowCount": "Por debajo de las {positions} posiciones medidas: los pesos están desequilibrados, y unas pocas sostienen la cartera",
+          "evenCount": "Igual a las {positions} posiciones medidas: pesos uniformes y ninguna liquidez"
+        },
+        "diversificationRatio": {
+          "label": "¿Repartir el dinero ha servido de algo?",
+          "caption": "1,00 significa que las posiciones se mueven al unísono; más alto, más se compensan"
+        },
+        "uncovered": {
+          "label": "¿Cuánto de mí no se mide aquí?",
+          "caption": "Liquidez, más toda posición sin una serie de precios utilizable",
+          "residual": "Las filas de abajo describen el resto de la cartera; {share} no está entre ellas"
+        },
+        "rowsCaption": "La barra muestra la diferencia entre peso y riesgo: a la derecha más riesgo que peso, a la izquierda menos. Los pesos son cuotas de la cartera entera.",
+        "correlation": {
+          "title": "¿Cuáles de estas son la misma apuesta?",
+          "basis": "Medida sobre la ventana histórica; los pesos de arriba son los de hoy.",
+          "noRedundancy": "Ninguna pareja de este conjunto alcanza el umbral de redundancia."
+        }
+      },
+      "l3": {
+        "title": "¿Me están pagando por este riesgo?",
+        "sortino": "Sortino",
+        "sharpe": "Sharpe",
+        "volatility": "Volatilidad",
+        "beta": "Beta",
+        "sortinoHelp": "Rendimiento por unidad de riesgo a la baja. A diferencia del Sharpe, no penaliza las subidas violentas.",
+        "sharpeHelp": "Rendimiento por unidad de volatilidad total: penaliza las subidas igual que las bajadas.",
+        "betaHelp": "Cuánto se mueve respecto al índice de referencia.",
+        "benchmark": "Comparado con",
+        "perimeter": {
+          "current_composition": "sobre la composición actual",
+          "historical": "sobre el histórico real"
+        },
+        "scatter": {
+          "title": "Riesgo frente a rentabilidad, activo por activo",
+          "portfolio": "Cartera",
+          "axisVolatility": "Volatilidad anualizada",
+          "axisReturn": "Rentabilidad anualizada esperada",
+          "line": "Recta riesgo-rentabilidad",
+          "note": "Por encima de la recta significa mejor pagado por el riesgo asumido. Los puntos muestran la rentabilidad esperada en media-varianza, la magnitud en la que la pendiente de la recta es el ratio de Sharpe: en un activo muy volátil la rentabilidad realmente vivida es menor, porque la volatilidad erosiona la capitalización.",
+          "cash": "La liquidez ({share} del patrimonio) no es un punto: en el modelo rinde exactamente cero, y dibujarla la convertiría en una medición."
+        }
+      },
+      "l4": {
+        "title": "¿Qué pasa si…?",
+        "replay": "Repetición histórica",
+        "replayHint": "Rendimientos reales de un periodo real.",
+        "shock": "Choque hipotético",
+        "shockHint": "Determinista, sobre una hipótesis que tú declaras.",
+        "simulation": "Simulación",
+        "simulationHint": "Un modelo probabilístico, sobre los supuestos del modelo.",
+        "modelWarning": "Es el único escalón que es un modelo y no una medición. Léelo como un abanico de posibilidades, no como un pronóstico.",
+        "provenance": {
+          "title": "Qué supuso esta simulación",
+          "hint": "Leído del propio resultado, no supuesto por esta pantalla.",
+          "labels": {
+            "process": "Proceso estocástico",
+            "sampling": "Estrategia de muestreo",
+            "driftEstimator": "Estimador de deriva",
+            "covarianceEstimator": "Estimador de covarianza",
+            "aggregation": "Política de composición",
+            "regime": "Régimen",
+            "blockLength": "Longitud de bloque",
+            "seed": "Semilla"
+          },
+          "values": {
+            "block_bootstrap": "Bootstrap por bloques móviles",
+            "gbm": "Movimiento browniano geométrico",
+            "mc": "Monte Carlo",
+            "qmc": "Cuasi-Monte Carlo",
+            "historical_log_mle": "MLE sobre log-rendimientos históricos",
+            "empirical_resampled": "Empírica, a partir de rendimientos remuestreados",
+            "sample_log_returns": "Covarianza muestral de log-rendimientos",
+            "not_estimated_joint_resampling": "No estimada: remuestreo conjunto",
+            "current_buy_and_hold": "Composición actual, mantenida",
+            "calm": "Mercado tranquilo",
+            "prolonged_crisis": "Crisis prolongada",
+            "shock_recovery": "Shock y recuperación"
+          },
+          "days": "{count} días",
+          "regimeValue": "{regime}, declarado sobre {days} días",
+          "includes": "Incluido en el cono",
+          "excludes": "Fuera del cono",
+          "effects": {
+            "costs": "costes",
+            "cashFlows": "flujos de caja",
+            "inflation": "inflación",
+            "rebalancing": "reequilibrio"
+          },
+          "truncation": "Declarado sobre {declared} días, aplicado sobre {applied}: el cono responde a la pregunta más corta."
+        },
+        "replayExcluded": "Excluidos:",
+        "replayNeedsChoice": "{name} no tiene histórico utilizable en este periodo. Exclúyelo, o dale un sustituto — un sustituto es una opinión sobre cómo habría ido.",
+        "replayProxyUnusable": "El sustituto elegido para {name} tampoco tiene histórico utilizable. Elige otro.",
+        "replayExcludeAndRetry": "Excluir y reintentar",
+        "replayTotal": "Esta composición habría cerrado el periodo en {percent} {amount}",
+        "replayAudit": "Sustitutos: {proxies} · Excluidos: {excluded} ({weight} del ámbito, con rendimiento cero)",
+        "replayAuditOmitted": "Sustitutos: {proxies} · Excluidos: {excluded} (omitidos de la repetición: las cifras hablan por el resto)",
+        "shockShowDetail": "Mostrar el choque por bucket",
+        "shockHideDetail": "Ocultar el choque por bucket",
+        "shockTotal": "Este escenario movería el ámbito un {percent} {amount}",
+        "shockCoverage": "Solo se pudo clasificar el {percent} del ámbito: el total habla solo de esa parte."
+      },
+      "backtestNotice": "Con un subconjunto activo, estas cifras se reconstruyen sobre la composición de hoy: dicen cómo *habría* ido, no cómo fue en realidad."
     }
   },
   "updateCheck": {

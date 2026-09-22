@@ -522,7 +522,7 @@ class TestExternalCashFlow:
         txs = [_ctxn(_tx(dt="2025-01-01", type="DEPOSIT", amount="1000"))]
         builder = _builder(
             classified_txs=txs,
-            external_cash_flows=[(date(2025, 1, 1), Decimal("1000"), "EUR")],
+            external_cash_flows=[(date(2025, 1, 1), 10, Decimal("1000"), "EUR")],
             date_from=date(2025, 1, 1),
             date_to=date(2025, 1, 2),
         )

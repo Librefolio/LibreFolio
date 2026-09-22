@@ -849,6 +849,38 @@ dopo.
 
 **Lezione trasversale delle ultime due settimane, valida oltre questi sprint:** **sei difetti in sette stage** su D sono passati indenni sotto ruff, black, `py_compile` e suite unitarie tutte verdi — un `NameError` garantito da un import sotto `TYPE_CHECKING` in un modulo che istanzia a runtime; un modello SCIP che usava importi esatti dove il ledger posta importi arrotondati HALF_UP, potando via l'ottimo vero; un attributo inesistente **dentro un percorso di `raise`**, cioe nel codice che nessun test felice esercita; una costante di tolleranza calibrata sotto la `feastol` del solver, che SCIP avrebbe semplicemente assorbito; un campo del contratto wire letto in modo troncato; e un modello di soluzione costruito prima di decidere la forma, che esplodeva proprio sullo scenario il cui ottimo e non fare nulla. Tutti visibili solo a un controllo **dinamico** contro una verita indipendente. Da qui le regole: dove esiste un oracolo esaustivo, l'accordo con l'oracolo e un gate permanente e parametrizzato, mai uno script usa-e-getta; ogni percorso di `raise` va provato per il **tipo** di eccezione che dichiara, mai con `pytest.raises(Exception)`; e la verifica statica va trattata come pavimento, mai come prova.
 
+### Aggiornamento 2026-09-21 — lo stato vive nel README, non qui
+
+**Questa sezione 10 non è più una fonte di stato.** Le due tabelle sopra (`2026-09-11` e
+`2026-09-18`) restano come storico e vanno lette con la loro data. Lo stato corrente,
+rimisurato contro il codice e con evidenza per riga, è in
+[README.md § Stato esecutivo riconciliato](README.md).
+
+**Perché questa regola esiste.** Il 21/09 il coordinatore ha riportato al developer che `G3`
+era «non iniziato». Era **fatto**: backend nel target dal 10/09 (`d4b3deb2f`) e UI Asset
+committata sul ramo I. Anche `B1` risultava «bloccato in attesa di un export eToro reale»
+mentre il codice importava le fee dal 10/09 (`ebba209c5`).
+
+La causa non è la freschezza del dato, ed è il motivo per cui aggiornare le date non basta:
+
+> **La riga corretta c'era, in entrambe le tabelle, e diceva `I60 implementato e validato sul
+> branch I`.** Chi cercava `G3` non l'ha trovata, perché quel task ha due nomi e nessun
+> documento dichiarava che fossero lo stesso. *Un alias non dichiarato è un falso negativo
+> garantito per chiunque cerchi il nome che non è stato usato* — e a differenza di un dato
+> vecchio, non c'è data che lo segnali.
+
+Secondo difetto, indipendente dal primo: nel trasferimento l'etichetta è stata **degradata**.
+La fonte diceva `parziale` e `aperto`; il report diceva `non iniziato`. «Aperto» significa
+*non chiuso*, «non iniziato» significa *zero lavoro*: la qualificazione cade nel passaggio e
+resta l'affermazione più forte, che è anche quella falsa.
+
+Da qui le due regole per ogni tabella di stato di questa cartella:
+
+1. **Ogni riga porta l'evidenza** — SHA o `file:riga` — così è falsificabile in un comando
+   invece che da credere. Una riga senza evidenza scrive `NON VERIFICATO`.
+2. **Gli alias si dichiarano in testa al documento**, non si lasciano dedurre dal contesto.
+   Il glossario è nel README.
+
 ## 11. Gate, dipendenze e gestione dei conflitti
 
 | Gate | Da chiudere prima di | Esito richiesto |
@@ -1254,6 +1286,62 @@ da proteggere abbia gia ricevuto una delle due.
 **Gate di chiusura**: `./dev.py db check` deve riportare **un solo head**, l'unione
 deve salire e scendere su un DB popolato, e le suite che toccano onboarding e
 tassonomia devono passare sul risultato combinato, non sui due rami separati.
+
+### 14.8 Audit i18n globale di fine round: lo strumento va corretto prima di usarlo
+
+Il developer ha deciso il 2026-09-21 di rimandare la pulizia dei cataloghi i18n a un
+**audit globale di fine round**, invece di farla a pezzi dentro i singoli workstream.
+La decisione immediata che la origina: le ~259 chiavi `tools.pacAllocator.*`,
+`tools.allocation.*` e `tools.portfolioRebalancer.*` restano nei cataloghi dopo la
+rimozione delle UI P1, perche' descrivono concetti che la UI v2 riusera' e perche'
+`dev.py i18n add` pretende tutte e quattro le lingue a mano: rimuoverle costa circa
+**1036 stringhe da riscrivere** quando la UI arrivera'.
+
+**Prerequisito non negoziabile di quell'audit**: `dev.py i18n audit` **non e' affidabile
+come criterio di cancellazione**. Misurato sul target a `38d44b717`:
+
+```
+Total keys: 3187      Unused: 236
+  di cui PAC/allocation/rebalancer:   79
+  di cui aiExport.* e altri:         157      <- falsi positivi
+```
+
+I 157 non sono orfani. Sono chiavi usate **per indirezione**: il catalogo AI Export le
+passa come dato, non come chiamata.
+
+```
+frontend/src/lib/features/ai-export/catalog/shared.ts:133
+    displayI18nKey: 'aiExport.analysis.portfolio.pac_planning.display'
+```
+
+L'audit cerca `$t('chiave')` e vede una stringa letterale assegnata a un campo, quindi
+non la conta. **Due terzi del contatore `Unused` sono falsi positivi**, e chi eseguisse
+la pulizia fidandosi di quel numero cancellerebbe chiavi vive dell'AI Export in quattro
+lingue, con un guasto che si manifesta a runtime e lontano dalla causa.
+
+E' la stessa forma dei difetti raccolti in questo round: **un controllo che funziona per
+una proprieta' del caso** — qui la forma sintattica `$t('...')` — e **fallisce in
+silenzio** su un'altra forma d'uso legittima. Un audit che non sa vedere l'indirezione
+non misura l'uso: misura una convenzione di scrittura.
+
+**Gate dell'audit globale**, nell'ordine:
+
+1. insegnare all'audit a riconoscere l'indirezione (`*I18nKey:` e affini), oppure
+   produrre una lista di esclusione esplicita e motivata;
+2. verificare che il contatore scenda a un numero **spiegabile riga per riga**;
+3. solo allora decidere le rimozioni, con `dev.py i18n remove --dry-run` prima di ogni
+   cancellazione reale;
+4. le 4 chiavi `monetary_step` (`tools.pacAllocator.cash.monetaryStep`,
+   `.monetaryStepHint`, `tools.allocation.issues.nonpositiveMonetaryStep`,
+   `.contributionStep`) sono **sicure per misura** — il campo e' morto con il
+   normalizer P1 — ma vanno rimosse **dopo** il rientro del ramo PAC, perche' finche'
+   le UI P1 sono sul target quelle chiavi hanno 9 consumatori reali.
+
+Il punto 4 e' esso stesso un caso: la misura "zero riferimenti" era stata presa nel
+worktree dove le UI erano gia' cancellate. Lo stesso comando, eseguito sul target,
+rispondeva 9. **Un conteggio di riferimenti non e' una proprieta' del codice: e' una
+proprieta' del checkout in cui lo esegui**, e l'unico che conta e' quello in cui la
+rimozione atterra.
 
 ## Appendice A - I 25 marker attuali, senza allargare il backlog
 

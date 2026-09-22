@@ -70,11 +70,13 @@ RISK_SERVICE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_quantlib_smoke.py",
     "backend/test_scripts/test_services/test_series_preparation.py",
     "backend/test_scripts/test_services/test_risk_metrics.py",
+    "backend/test_scripts/test_services/test_risk_metrics_oracle.py",
     "backend/test_scripts/test_services/test_risk_registry.py",
     "backend/test_scripts/test_services/test_risk_signal_plugins.py",
     "backend/test_scripts/test_services/test_risk_service.py",
     "backend/test_scripts/test_services/test_risk_scenario_catalog.py",
     "backend/test_scripts/test_services/test_risk_analytics.py",
+    "backend/test_scripts/test_services/test_risk_asset_set.py",
     "backend/test_scripts/test_services/test_risk_simulation.py",
     "backend/test_scripts/test_services/test_risk_optimization.py",
     "backend/test_scripts/test_services/test_risk_spawn_worker.py",
@@ -92,13 +94,6 @@ PAC_PLANNER_PROOF_TEST_PATH = "backend/test_scripts/test_services/test_pac_plann
 PAC_PLANNER_WIRE_NUMBERS_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_wire_numbers.py"
 PAC_PLANNER_REPORT_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_report.py"
 PAC_PLANNER_SERVICE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_planner.py"
-
-
-def services_pac_analyze(verbose: bool = False, test_names: list = None) -> bool:
-    """Test pure initial-state PAC normalization, valuation and row scores."""
-    print_section("Services: PAC Initial-State Analyze")
-    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_pac_analyze.py", test_names)
-    return run_command(cmd, "PAC initial-state analysis tests", verbose=verbose)
 
 
 def services_pac_planner_core(verbose: bool = False, test_names: list = None) -> bool:
@@ -224,6 +219,17 @@ def services_risk_simulation(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Risk simulation tests", verbose=verbose)
 
 
+def services_risk_asset_set(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the weightless ASSET_SET analytic family and the shapes that keep an aggregate inexpressible."""
+    print_section("Services: Risk Asset Set")
+    print_info("Testing: five per-asset analytics, one preparation per request, refused set-level aggregate")
+    cmd = _build_pytest_cmd(
+        "backend/test_scripts/test_services/test_risk_asset_set.py",
+        test_names,
+    )
+    return run_command(cmd, "Risk asset-set tests", verbose=verbose)
+
+
 def services_risk_optimization(verbose: bool = False, test_names: list = None) -> bool:
     """Test Riskfolio strategies, estimators, constraints and cache."""
     print_section("Services: Risk Optimization")
@@ -244,6 +250,16 @@ def services_risk_workers(verbose: bool = False, test_names: list = None) -> boo
         test_names,
     )
     return run_command(cmd, "Risk worker tests", verbose=verbose)
+
+
+def services_risk_oracle(verbose: bool = False, test_names: list = None) -> bool:
+    """Pin hand-written risk mathematics against riskfolio, NumPy and SciPy."""
+    print_section("Services: Risk Metrics Oracle")
+    print_info("Testing: metrics.py and signal_helpers.py against independent references")
+    print_info("Guards: the four name traps, undefined-window semantics, matrix/scalar consistency")
+    print_info("Note: riskfolio is imported here and only here — never in the web process")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_risk_metrics_oracle.py", test_names)
+    return run_command(cmd, "Risk metrics oracle tests", verbose=verbose)
 
 
 def services_risk_all(verbose: bool = False, test_names: list = None) -> bool:
@@ -887,7 +903,6 @@ Note: No backend server required.
         prereq="Database created",
         exclusive_because="its assertions are about the oldest and newest EUR/USD row in the whole fx_rates table (backward fill, missing-rate boundary), and the service under test queries that table without a source filter, so a neighbour inserting any EUR/USD rate moves the boundary this unit measures",
     )
-    add_test(cat, "pac-analyze", services_pac_analyze, name="PAC Initial-State Analyze", desc="Exact initial quantities, native cash, reference FX, per-row target metrics and partial data", isolation="pure")
     add_test(
         cat,
         "pac-planner-core",
@@ -965,8 +980,16 @@ Note: No backend server required.
     add_test(cat, "provider-registry", services_provider_registry, name="Provider Registry", desc="Registration, lookup, priority, fallback")
     add_test(cat, "quantlib-runtime", services_quantlib_runtime, name="QuantLib Runtime", desc="Pinned version, required APIs and seeded path reproducibility")
     add_test(cat, "risk-simulation", services_risk_simulation, name="Risk Simulation", desc="Serializable contracts, sampling, moments, chunking and cache")
+    add_test(
+        cat,
+        "risk-asset-set",
+        services_risk_asset_set,
+        name="Risk Asset Set",
+        desc="Five per-asset analytics for a weightless selection: one preparation per request whatever the number of codes, a set-level aggregate that the payload cannot express rather than one it declines to fill, and a required items list so an empty result and an absent key cannot read the same",
+    )
     add_test(cat, "risk-optimization", services_risk_optimization, name="Risk Optimization", desc="Riskfolio objectives, estimators, constraints, frontier and cache")
     add_test(cat, "risk-workers", services_risk_workers, name="Risk Workers", desc="Spawn lifecycle, queue bounds, timeout, recycle and cancellation")
+    add_test(cat, "risk-oracle", services_risk_oracle, name="Risk Metrics Oracle", desc="riskfolio/NumPy/SciPy reference pins, name traps, undefined windows and matrix consistency", isolation="pure")
     add_test(cat, "risk-all", services_risk_all, name="Risk Analysis", desc="Complete canonical-series, analytic, QuantLib, Riskfolio and worker suite")
     add_test(cat, "series-preparation", services_series_preparation, name="Canonical Series", desc="Converted valuations, joint calendar, returns, annualization and FX fingerprint")
     add_test(cat, "signal-registry", services_signal_registry, name="Signal Registry", desc="SignalPlugin contract, strict discovery and duplicate rejection")
@@ -1118,10 +1141,7 @@ Note: No backend server required.
         services_tools_lifecycle,
         name="Tool Lifecycle",
         desc="Owned spawn workers, quotas, ready/ACK, cancellation, PID identity and full-tree cleanup",
-        exclusive_because=(
-            "owns native POSIX process groups and exercises forceful teardown and executor quarantine; "
-            "requires an explicitly leased lifecycle run rather than concurrent shared-backend manual review"
-        ),
+        exclusive_because=("owns native POSIX process groups and exercises forceful teardown and executor quarantine; " "requires an explicitly leased lifecycle run rather than concurrent shared-backend manual review"),
     )
     add_test(cat, "all", services_all, test_names=False, name="All Services Tests", desc="Run all service tests")
     registry["services"] = cat

@@ -232,11 +232,7 @@ def test_lane_health(
 ) -> JSONResponse:
     """Confirm readiness only for the test process tree that owns this server."""
     expected = os.environ.get("LIBREFOLIO_TEST_LANE_ID")
-    if (
-        not is_test_mode()
-        or not expected
-        or not secrets.compare_digest(token, expected)
-    ):
+    if not is_test_mode() or not expected or not secrets.compare_digest(token, expected):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     return JSONResponse(
         content={"status": "ok"},

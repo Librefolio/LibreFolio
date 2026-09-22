@@ -24,7 +24,8 @@
     import {CHART_ANIMATION_CONFIG} from '$lib/components/charts/echartsAnimationConfig';
     import {scheduleFirstRenderStabilityFix, tooltipPositionAboveFinger} from '$lib/components/charts/echartsTooltipHelpers';
     import {_ as t} from '$lib/i18n';
-    import {sectorI18nKey, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+    import {sectorI18nKey, getAssetTypeIconUrl, primaryAssetType} from '$lib/utils/assetTypes';
+    import {buildAllocationHierarchy} from '$lib/components/charts/allocationHierarchy';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 
     // =========================================================================
@@ -147,6 +148,11 @@
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
             attachChartReady(chartInstance, chartContainer, 'allocation-pie');
+            // ECharts draws to a canvas, so a colour has no DOM an E2E could read.
+            // Exposing the instance is the only way a test can assert that the
+            // hierarchy actually reached the option — same hook, same name, as
+            // PriceChartFull.svelte.
+            (chartContainer as unknown as Record<string, unknown>).__lfChart = chartInstance;
             needsInitialLayoutStabilityPass = true;
         }
 
@@ -158,25 +164,45 @@
         if (entries.length === 0) return; // Keep old chart visible, don't clear
 
         // Build chart data with name for ECharts diffing
-        const chartData = entries
-            .map((entry) => {
-                let displayName: string;
-                if (mode === 'sector') {
-                    const i18nKey = `sectors.${sectorI18nKey(entry.name)}`;
-                    const translated = tr(i18nKey) !== i18nKey ? tr(i18nKey) : entry.name.replace(/_/g, ' ');
-                    const emoji = entry.emoji ?? '';
-                    displayName = emoji ? `${emoji} ${translated}` : translated;
-                } else {
-                    // Bugfix: namespace is plural "assets.types.X" (matches en.json) — the
-                    // singular "asset.types.X" key does not exist, so this translation was
-                    // silently failing and falling back to the raw untranslated type string.
-                    const typeKey = `assets.types.${entry.name.toUpperCase()}`;
-                    const translated = tr(typeKey);
-                    displayName = translated !== typeKey ? translated : entry.name;
-                }
-                return {name: displayName, value: entry.value, amount: entry.amount, rawName: entry.name, emoji: entry.emoji ?? ''};
-            })
-            .sort((a, b) => b.value - a.value);
+        const mappedEntries = entries.map((entry) => {
+            let displayName: string;
+            if (mode === 'sector') {
+                const i18nKey = `sectors.${sectorI18nKey(entry.name)}`;
+                const translated = tr(i18nKey) !== i18nKey ? tr(i18nKey) : entry.name.replace(/_/g, ' ');
+                const emoji = entry.emoji ?? '';
+                displayName = emoji ? `${emoji} ${translated}` : translated;
+            } else {
+                // Bugfix: namespace is plural "assets.types.X" (matches en.json) — the
+                // singular "asset.types.X" key does not exist, so this translation was
+                // silently failing and falling back to the raw untranslated type string.
+                const typeKey = `assets.types.${entry.name.toUpperCase()}`;
+                const translated = tr(typeKey);
+                displayName = translated !== typeKey ? translated : entry.name;
+            }
+            return {name: displayName, value: entry.value, amount: entry.amount, rawName: entry.name, emoji: entry.emoji ?? ''};
+        });
+
+        // Asset-type subtypes read as shades inside the mass of their primary, and
+        // sit adjacent to it — ordering and colour are one change, because two
+        // similar colours on opposite sides of the circle read as an accident.
+        //
+        // 'type' only, deliberately: the sector dimension has no taxonomy to fold,
+        // and this same component draws the Asset Detail sector pie, which is out
+        // of scope. With no subtypes present every group is a singleton, so the
+        // order and the colours are identical to the plain value sort below.
+        const chartData =
+            mode === 'type'
+                ? buildAllocationHierarchy(
+                      mappedEntries.map((item) => ({key: item.rawName, weight: item.value, item})),
+                      {resolvePrimary: primaryAssetType, palette},
+                  ).map(({item, color, primary, groupSize, primaryTotal}) => ({
+                      ...item,
+                      itemStyle: {color},
+                      primaryKey: primary,
+                      groupSize,
+                      primaryTotal,
+                  }))
+                : mappedEntries.sort((a, b) => b.value - a.value);
 
         // Data-only update when chart is already initialized, dark mode hasn't changed,
         // AND (mode='type' only) no new asset type has appeared since the last full
@@ -326,7 +352,20 @@
                 const rawKey = (rawSource as string).toUpperCase().replace(/[^A-Z_]/g, '');
                 const translated = tr(`assets.types.${rawKey}`) || params.name;
                 const iconUrl = getAssetTypeIconUrl(rawKey);
-                return `<img src="${iconUrl}" style="width:14px;height:14px;vertical-align:middle;margin-right:5px;">${translated}: ${params.value}%${amountLine}`;
+                // The shading says "this belongs to that mass"; this line says how big
+                // the mass is. Only when there is actually a sibling — otherwise it
+                // would restate the slice's own number.
+                const groupSize: number = params.data?.groupSize ?? 1;
+                const primaryKey: string | undefined = params.data?.primaryKey;
+                let parentLine = '';
+                if (groupSize > 1 && primaryKey) {
+                    const parentI18nKey = `assets.types.${primaryKey}`;
+                    const parentTranslated = tr(parentI18nKey);
+                    const parentLabel = parentTranslated !== parentI18nKey ? parentTranslated : primaryKey;
+                    const parentTotal = Math.round((params.data?.primaryTotal ?? 0) * 10) / 10;
+                    parentLine = `<br/><span style="font-size:11px;opacity:0.7">↳ ${parentLabel} ${parentTotal}%</span>`;
+                }
+                return `<img src="${iconUrl}" style="width:14px;height:14px;vertical-align:middle;margin-right:5px;">${translated}: ${params.value}%${amountLine}${parentLine}`;
             }
             // Sector: display name already contains the emoji prefix
             return `${params.name}: ${params.value}%${amountLine}`;

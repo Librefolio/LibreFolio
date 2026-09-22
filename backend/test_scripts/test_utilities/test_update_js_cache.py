@@ -121,3 +121,73 @@ class TestExitCode:
         monkeypatch.setattr(js_cache, "update_all_libraries", lambda force=False: 0)
 
         assert js_cache.run_from_args(SimpleNamespace(force=False)) == 0
+
+
+class TestConsumerScopedFailure:
+    """Which build a missing resource actually breaks.
+
+    I1 made every resource fatal to every build. That was right about silence
+    and wrong about scope: MathJax lands in ``mkdocs_src/`` and is referenced
+    nowhere under ``frontend/``, yet a failure to fetch it aborted the frontend
+    build — on a fresh worktree, before any test could run. Meanwhile an older
+    worktree with a warm cache went green, so the two lanes differed in *age*,
+    not in health.
+
+    Both halves are exercised below, because a gate proven only where it fires
+    is not proven: the half that grants permission is the one that matters.
+    """
+
+    @pytest.fixture
+    def only_docs_asset_missing(self, monkeypatch):
+        def fake_update_all(force=False):
+            js_cache._hard_fail("mathjax", "download failed, no cached version")
+
+        monkeypatch.setattr(js_cache, "update_all_libraries", fake_update_all)
+
+    @pytest.fixture
+    def only_frontend_asset_missing(self, monkeypatch):
+        def fake_update_all(force=False):
+            js_cache._hard_fail("noto-color-emoji", "CSS download failed, no cached version")
+
+        monkeypatch.setattr(js_cache, "update_all_libraries", fake_update_all)
+
+    def test_a_docs_only_asset_no_longer_aborts_the_frontend_build(self, only_docs_asset_missing):
+        args = SimpleNamespace(force=False, required_for=["frontend"])
+        assert js_cache.run_from_args(args) == 0
+
+    def test_but_it_is_still_reported_rather_than_swallowed(self, only_docs_asset_missing, capsys):
+        js_cache.run_from_args(SimpleNamespace(force=False, required_for=["frontend"]))
+        out = capsys.readouterr().out
+        assert "mathjax" in out
+        assert "mkdocs" in out, "the consumer that still needs it must be named"
+
+    def test_a_frontend_asset_still_aborts_the_frontend_build(self, only_frontend_asset_missing):
+        # The acceptance control: without this, the fix is a gate turned off
+        # rather than a gate corrected.
+        args = SimpleNamespace(force=False, required_for=["frontend"])
+        assert js_cache.run_from_args(args) == 1
+
+    def test_a_docs_only_asset_still_aborts_the_docs_build(self, only_docs_asset_missing):
+        args = SimpleNamespace(force=False, required_for=["mkdocs"])
+        assert js_cache.run_from_args(args) == 1
+
+    def test_an_unnarrowed_call_keeps_every_resource_fatal(self, only_docs_asset_missing):
+        # Docker ships mkdocs_src/site/ next to the bundle, so it must not narrow.
+        assert js_cache.run_from_args(SimpleNamespace(force=False, required_for=None)) == 1
+
+    def test_attribution_comes_from_vendor_dir_key_not_from_a_name_list(self):
+        # A hand-written exemption list rots exactly the way a hand-written
+        # directory list does; the mapping must be derived from configuration.
+        for name, config in js_cache.LIBRARIES.items():
+            js_cache._HARD_FAILURES.clear()
+            js_cache._hard_fail(name, "x")
+            expected = js_cache.CONSUMERS[config["vendor_dir_key"]]
+            assert js_cache._HARD_FAILURES[0].consumer == expected
+
+    @pytest.mark.parametrize("required_for", [["frontend"], ["mkdocs"], None])
+    def test_an_unattributed_resource_stays_fatal_for_every_consumer(self, required_for):
+        # Narrowing may only excuse a consumer we positively know does not ship
+        # the resource. An unregistered name is not such a case, and letting it
+        # fall through would turn "I don't know" into "it doesn't matter".
+        js_cache._hard_fail("mystery", "download failed")
+        assert js_cache.run_from_args(SimpleNamespace(force=False, required_for=required_for)) == 1

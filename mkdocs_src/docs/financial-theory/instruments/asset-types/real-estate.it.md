@@ -1,4 +1,4 @@
-# ![](../../../static/icons/asset-types/crowdfunding.png){: width="32" style="vertical-align: middle;" } P2P / Crowdfunding
+# ![](../../../static/icons/asset-types/real-estate.png){: width="32" style="vertical-align: middle;" } P2P / Crowdfunding
 
 Le piattaforme **P2P / Crowdfunding** consentono agli investitori di partecipare a progetti immobiliari o prestiti al consumo/alle imprese con importi relativamente piccoli. Questi strumenti offrono tipicamente pagamenti di interessi fissi o variabili e hanno una data di scadenza definita.
 

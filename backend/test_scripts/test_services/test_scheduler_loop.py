@@ -114,7 +114,6 @@ class TestStateRoundtrip:
         """SLO-003: Save SchedulerState with all fields, reload and verify all fields match."""
         print_section("SLO-003: State serialization roundtrip")
 
-
         monkeypatch.setattr(state_mod, "get_data_dir", lambda: str(tmp_path))
 
         now_iso = datetime(2026, 6, 8, 10, 0, 0, tzinfo=TZ).isoformat()
@@ -161,7 +160,6 @@ class TestStateRoundtrip:
     def test_state_json_structure(self, tmp_path, monkeypatch):
         """SLO-003b: JSON file has correct top-level keys: current_price, history_sync."""
         print_section("SLO-003b: JSON structure verification")
-
 
         monkeypatch.setattr(state_mod, "get_data_dir", lambda: str(tmp_path))
 

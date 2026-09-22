@@ -10,7 +10,7 @@
 import {describe, expect, it} from 'vitest';
 
 import type {LineDataPoint} from './LineChart.svelte';
-import {buildCandleSeriesData, computePercentageBase, formatCandlePrice, formatVolume, hasRenderableVolume, isBullishBar, parseCandleTooltipValue, toPercent} from './candlestickChartHelpers';
+import {buildCandleSeriesData, buildOhlcQuad, computePercentageBase, formatCandlePrice, formatVolume, hasRenderableVolume, isBullishBar, parseCandleTooltipValue, toPercent} from './candlestickChartHelpers';
 
 function pt(overrides: Partial<LineDataPoint> & {date?: string; value?: number} = {}): LineDataPoint {
     return {date: '2024-01-01', value: 0, ...overrides};
@@ -50,6 +50,32 @@ describe('toPercent', () => {
     });
 });
 
+describe('buildOhlcQuad', () => {
+    // Generalized out of buildCandleSeriesData (G1b, for GrowthChart.svelte's P&L
+    // candles) — these tests exercise it directly, as its own unit, rather than only
+    // indirectly through buildCandleSeriesData below.
+    it('orders the quad as [open, close, low, high] — NOT open/high/low/close — using four distinct values so a swapped pair would be caught', () => {
+        // high (115) and close (110) are close but distinct, and low (95) sits before
+        // both open/close numerically: a low<->high or close<->high transposition
+        // mistake would change this exact result.
+        expect(buildOhlcQuad(100, 110, 95, 115, false, 1)).toEqual([100, 110, 95, 115]);
+    });
+
+    it('applies the percentage transform to each of the four legs independently, against the same base', () => {
+        // base = 100: open +10%, close +20%, low -10%, high +30% — four different signs/
+        // magnitudes so a mixed-up leg would produce a visibly wrong percentage.
+        expect(buildOhlcQuad(110, 120, 90, 130, true, 100)).toEqual([10, 20, -10, 30]);
+    });
+
+    it('passes all four legs through unchanged when percentage mode is off, regardless of baseValue', () => {
+        expect(buildOhlcQuad(100, 110, 95, 115, false, 999)).toEqual([100, 110, 95, 115]);
+    });
+
+    it('passes all four legs through unchanged when the base is zero, even in percentage mode (no divide-by-zero)', () => {
+        expect(buildOhlcQuad(100, 110, 95, 115, true, 0)).toEqual([100, 110, 95, 115]);
+    });
+});
+
 describe('buildCandleSeriesData', () => {
     it('emits [open, close, low, high] quads, synthesizing missing fields (absolute mode)', () => {
         const out = buildCandleSeriesData([pt({date: 'd0', value: 10}), pt({date: 'd1', value: 12}), pt({date: 'd2', value: 8})], false, 1);
@@ -68,6 +94,24 @@ describe('buildCandleSeriesData', () => {
         const out = buildCandleSeriesData([pt({value: 100}), pt({value: 110})], true, 100);
         expect(out[0]).toEqual([0, 0, 0, 0]);
         expect(out[1]).toEqual([0, 10, 0, 10]);
+    });
+
+    it('applies the percentage transform to explicit OHLC fields too, not just synthesized ones', () => {
+        // Neither existing percentage test exercises the explicit-fields branch, so a
+        // regression that special-cased synthesis-vs-explicit under percentage mode
+        // would slip through both. base = 100: open +5%, close +11%, low +3%, high +20%.
+        const out = buildCandleSeriesData([pt({value: 111, open: 105, high: 120, low: 103, close: 111})], true, 100);
+        expect(out[0]).toEqual([5, 11, 3, 20]);
+    });
+
+    it('delegates its per-point quad construction to buildOhlcQuad rather than re-deriving the [open, close, low, high] order independently (pure-refactor regression guard)', () => {
+        // Synthesized case (second point borrows the first's close as its open).
+        const synthesized = buildCandleSeriesData([pt({date: 'd0', value: 10}), pt({date: 'd1', value: 12})], false, 1);
+        expect(synthesized[1]).toEqual(buildOhlcQuad(10, 12, 10, 12, false, 1));
+
+        // Explicit-fields + percentage case.
+        const explicit = buildCandleSeriesData([pt({value: 111, open: 105, high: 120, low: 103, close: 111})], true, 100);
+        expect(explicit[0]).toEqual(buildOhlcQuad(105, 111, 103, 120, true, 100));
     });
 
     it('yields a null slot (a gap) when a point has no usable close', () => {

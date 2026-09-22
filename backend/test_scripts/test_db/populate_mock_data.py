@@ -93,7 +93,13 @@ engine = create_engine(
 _ANNUAL_VOL = {
     "STOCK": 0.25,
     "CRYPTO": 0.65,
-    "CROWDFUND": 0.00,
+    # A crowdfunding loan barely moves, but it must not be *perfectly* flat: a zero
+    # volatility with a flat drift yields an identical return every day, hence zero
+    # return variance, a singular covariance matrix and undefined beta/correlation.
+    # Risk analytics would then answer "undefined" on a held asset — the very state
+    # this dataset exists to avoid.
+    "CROWDFUND": 0.04,
+    "INDEX": 0.15,
 }
 _DEFAULT_VOL = 0.25
 _INITIAL_DEPOSIT_DATE = date(2025, 9, 30)
@@ -936,6 +942,12 @@ def populate_assets(session: Session):
 
     for asset_data in assets:
         asset = Asset(**asset_data)
+        # Mirror migration 003, which seeds is_benchmark from asset_type == INDEX.
+        # That UPDATE runs at migration time, against a database these rows do not yet
+        # exist in, so a freshly populated dataset would otherwise carry zero benchmarks
+        # and leave the comparison analytic with nothing to compare against.
+        if asset.asset_type == AssetType.INDEX:
+            asset.is_benchmark = True
         session.add(asset)
         print(f"  ✅ {asset.display_name} ({asset.currency})")
 
@@ -2141,6 +2153,48 @@ def populate_wac_test_transactions(session: Session):
     print(f"  📈 WAC test ADJ #{tx_wac_transfer.id}: -3 override=$160 (day -20)")
 
 
+def _daily_variation(
+    asset_id: int,
+    price_date: date,
+    variation_raw: float,
+    noise_range: float,
+    correlation_plan: dict[int, tuple[int, float]],
+    guide_ids: set[int],
+    guide_noise: dict[int, dict[date, float]],
+) -> Decimal:
+    """Own the whole per-day noise policy for one asset.
+
+    Records the day's normalized noise when this asset guides another, and blends it
+    with its guide's when this asset follows one:
+
+        u_dep = c * u_guide + sqrt(1 - c^2) * u_idio    ->    corr(u_dep, u_guide) = c
+
+    The coefficient is the target correlation itself, and the variance is preserved
+    exactly (c^2/3 + (1-c^2)/3 = 1/3), so the dependent's volatility does not move.
+    The one-factor form sqrt(c)*u_guide + sqrt(1-c)*u_idio yields sqrt(c) instead,
+    because here the guide is an asset rather than a latent factor: both preserve
+    variance, only one hits the target.
+
+    An asset with no role gets back the exact expression it had. Normalizing and
+    rescaling a float is not the identity, and a 1-ULP drift would become a different
+    decimal string, hence a different price and a different transaction amount.
+    """
+    if asset_id in guide_ids:
+        guide_noise.setdefault(asset_id, {})[price_date] = variation_raw / noise_range
+
+    plan = correlation_plan.get(asset_id)
+    if plan is None:
+        return Decimal(str(variation_raw))
+
+    guide_id, rho = plan
+    guide_u = guide_noise.get(guide_id, {}).get(price_date)
+    if guide_u is None:
+        return Decimal(str(variation_raw))
+
+    blended_u = rho * guide_u + math.sqrt(1.0 - rho * rho) * (variation_raw / noise_range)
+    return Decimal(str(blended_u * noise_range))
+
+
 def populate_price_history(session: Session):
     """Create price history for market-priced assets.
 
@@ -2165,6 +2219,8 @@ def populate_price_history(session: Session):
     eth = session.exec(select(Asset).where(Asset.display_name == "Ethereum")).first()
     loan1 = session.exec(select(Asset).where(Asset.display_name == "RE Loan Milano")).first()
     loan2 = session.exec(select(Asset).where(Asset.display_name == "RE Loan Roma")).first()
+    sp500 = session.exec(select(Asset).where(Asset.display_name == "S&P 500")).first()
+    msci = session.exec(select(Asset).where(Asset.display_name == "MSCI World Index")).first()
 
     today = date.today()
 
@@ -2173,6 +2229,41 @@ def populate_price_history(session: Session):
 
     print(f"  📅 Coverage: {start_date} → {today} ({total_calendar_days} calendar days)")
 
+    # Daily growth factors of the equity assets, keyed by date. The benchmark indices
+    # are derived from these instead of being drawn independently: an index that does
+    # not track the market it indexes yields a beta near zero against every portfolio,
+    # which is a number on screen that means nothing.
+    equity_factors: dict[date, list[float]] = {}
+
+    # Correlation injection between held assets. With every asset drawing independent
+    # noise, no pair of the portfolio clears 0.14: the correlation matrix is 49 nearly
+    # white cells, and the panel that exists to reveal "these two are the same product
+    # bought twice" has nothing to reveal. Each dependent below reuses its guide's
+    # normalized daily noise:
+    #
+    #     u_dep = c * u_guide + sqrt(1 - c^2) * u_idio     ->   corr(u_dep, u_guide) = c
+    #
+    # The coefficient is the target correlation itself. The one-factor form
+    # sqrt(c)*u_guide + sqrt(1-c)*u_idio yields sqrt(c) instead, because here the guide
+    # is an asset rather than a latent factor: both preserve variance, only one hits
+    # the target. Pairs are chosen for contrast, not coverage — a matrix where
+    # everything correlates with everything is empty in the opposite way.
+    #
+    # Only the dependent's series changes. Guides and unrelated assets keep the exact
+    # expression they had, so their prices stay byte-identical: normalizing and
+    # rescaling a float is not the identity.
+    correlation_plan: dict[int, tuple[int, float]] = {}
+    if loan1 and loan2:
+        # Two real-estate loans from the same originator: above the redundancy
+        # threshold, the case the heatmap exists to surface.
+        correlation_plan[loan2.id] = (loan1.id, 0.93)
+    if btc and eth:
+        # Two crypto assets: visibly linked, deliberately below the redundancy
+        # threshold, so the matrix shows a gradient instead of a binary.
+        correlation_plan[eth.id] = (btc.id, 0.70)
+    guide_ids = {guide_id for guide_id, _ in correlation_plan.values()}
+    guide_noise: dict[int, dict[date, float]] = {}
+
     # Format: (asset, currency, start_price, end_price, asset_type_key, source, skip_weekends)
     price_configs = [
         (apple, "USD", Decimal("175.00"), Decimal("185.00"), "STOCK", "yfinance", True),
@@ -2180,6 +2271,16 @@ def populate_price_history(session: Session):
         (tesla, "USD", Decimal("220.00"), Decimal("245.00"), "STOCK", "yfinance", True),
         (btc, "USD", Decimal("42000.00"), Decimal("45000.00"), "CRYPTO", "yfinance", False),
         (eth, "USD", Decimal("2400.00"), Decimal("2650.00"), "CRYPTO", "yfinance", False),
+        # Crowdfunding loans. Held assets, so risk analytics intersect their calendar
+        # with everyone else's: a single nominal point used to clamp the joint window
+        # to its own date, leaving every analytic below its minimum observation count.
+        # The series ends at the nominal value the single point used to carry.
+        (loan1, "EUR", Decimal("9600.00"), Decimal("10000.00"), "CROWDFUND", "manual_seed", True),
+        (loan2, "EUR", Decimal("4800.00"), Decimal("5000.00"), "CROWDFUND", "manual_seed", True),
+        # Benchmarks. An asset flagged is_benchmark without a price series is an offer
+        # the app cannot honour: the comparison analytic would still refuse to produce
+        # a beta. The flag and the series have to ship together. Built in a second pass
+        # below, because an index has to track the market it indexes.
     ]
 
     for asset, currency, start_price, end_price, asset_type_key, source, skip_weekends in price_configs:
@@ -2206,9 +2307,20 @@ def populate_price_history(session: Session):
             random.seed(_stable_seed("price", asset.id, price_date.isoformat()))
             # Uniform ≈ ±2σ noise (simple, deterministic-friendly)
             noise_range = 2.0 * daily_vol
-            variation = Decimal(str(random.uniform(-noise_range, noise_range)))
+            variation_raw = random.uniform(-noise_range, noise_range)
+            variation = _daily_variation(
+                asset.id,
+                price_date,
+                variation_raw,
+                noise_range,
+                correlation_plan,
+                guide_ids,
+                guide_noise,
+            )
             daily_factor = Decimal(str(1.0 + drift_per_day)) + variation
             price = max(price * daily_factor, Decimal("0.01"))  # never go negative
+            if asset_type_key == "STOCK":
+                equity_factors.setdefault(price_date, []).append(float(daily_factor))
 
             ph = PriceHistory(
                 asset_id=asset.id,
@@ -2227,32 +2339,77 @@ def populate_price_history(session: Session):
 
         print(f"  ✅ {asset.display_name}: {count} price points ({start_date} → {today})")
 
-    loan_price_points = [
-        (loan1, Decimal("10000.00"), today - timedelta(days=20)),
-        (loan2, Decimal("5000.00"), today - timedelta(days=15)),
+    _populate_benchmark_indices(session, [sp500, msci], equity_factors)
+
+    session.commit()
+
+
+def _populate_benchmark_indices(
+    session: Session,
+    indices: list,
+    equity_factors: dict,
+):
+    """Create price series for the benchmark indices.
+
+    Each index is a blend of the equity assets' own daily growth factors plus a small
+    idiosyncratic tracking noise, so the series is genuinely correlated with the
+    portfolio that holds those equities. Drawing it independently instead yields a
+    beta near zero against every portfolio — a number on screen that means nothing.
+
+    An asset flagged is_benchmark without a price series is an offer the app cannot
+    honour: the comparison analytic refuses to produce a beta. Flag and series ship
+    together.
+    """
+    # (asset, start_price, end_price, annual tracking vol)
+    index_configs = [
+        (indices[0], Decimal("5800.00"), Decimal("6400.00"), 0.03),
+        (indices[1], Decimal("3600.00"), Decimal("3950.00"), 0.02),
     ]
-    for asset, nominal_price, first_buy_date in loan_price_points:
+
+    for asset, start_price, end_price, tracking_vol in index_configs:
         if not asset:
             continue
 
-        price_date = max(first_buy_date, start_date)
-        session.add(
-            PriceHistory(
+        trading_days = sorted(d for d in equity_factors if d.weekday() < 5)
+        n = len(trading_days)
+        if n == 0:
+            continue
+
+        daily_tracking = tracking_vol / math.sqrt(252)
+
+        # Raw path from the averaged equity factors, then tilted so it lands on
+        # end_price. The tilt is a constant per-day multiplier: it moves the level,
+        # not the shape, so the co-movement with the constituents survives intact.
+        raw = [1.0]
+        for price_date in trading_days:
+            random.seed(_stable_seed("index", asset.id, price_date.isoformat()))
+            factors = equity_factors[price_date]
+            blended = sum(factors) / len(factors)
+            blended += random.uniform(-daily_tracking, daily_tracking)
+            raw.append(raw[-1] * max(blended, 0.5))
+
+        tilt = (float(end_price / start_price) / raw[-1]) ** (1.0 / n)
+
+        count = 0
+        for i, price_date in enumerate(trading_days, start=1):
+            random.seed(_stable_seed("index_vol", asset.id, price_date.isoformat()))
+            price = max(start_price * Decimal(str(raw[i] * tilt**i)), Decimal("0.01"))
+            ph = PriceHistory(
                 asset_id=asset.id,
                 date=price_date,
-                open=nominal_price,
-                high=nominal_price,
-                low=nominal_price,
-                close=nominal_price,
-                volume=Decimal("1"),
-                adjusted_close=nominal_price,
-                currency="EUR",
-                source_plugin_key="manual_seed",
+                open=price * Decimal("0.998"),
+                high=price * Decimal("1.01"),
+                low=price * Decimal("0.99"),
+                close=price,
+                volume=Decimal(str(random.randint(1_000_000, 10_000_000))),
+                adjusted_close=price,
+                currency="USD",
+                source_plugin_key="yfinance",
             )
-        )
-        print(f"  ✅ {asset.display_name}: 1 nominal price point ({price_date})")
+            session.add(ph)
+            count += 1
 
-    session.commit()
+        print(f"  ✅ {asset.display_name}: {count} price points ({trading_days[0]} → {trading_days[-1]})")
 
 
 def populate_asset_events(session: Session):

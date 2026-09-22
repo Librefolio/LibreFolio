@@ -26,12 +26,11 @@ from backend.app.schemas.signals import (
     SignalWarmupRequirement,
 )
 from backend.app.services.provider_registry import SignalPluginRegistry, register_plugin
-from backend.app.services.risk.metrics import annualized_sharpe
 from backend.app.services.risk.signal_helpers import (
     build_line_computation,
     observed_annualization_factor,
     prepared_primary_returns,
-    rolling_single_values,
+    rolling_annualized_sharpe_values,
     undefined_window_warnings,
 )
 from backend.app.services.signal_plugins.base import (
@@ -138,14 +137,11 @@ class RollingSharpePlugin(SignalPlugin):
         del event_points
         annualization_factor = observed_annualization_factor(context)
         returns = prepared_primary_returns(context, price_points)
-        values, undefined_windows = rolling_single_values(
+        values, undefined_windows = rolling_annualized_sharpe_values(
             returns,
             params.window,
-            lambda window: annualized_sharpe(
-                window,
-                annualization_factor,
-                annual_risk_free_rate=params.risk_free_annual_rate,
-            ),
+            annualization_factor,
+            annual_risk_free_rate=params.risk_free_annual_rate,
         )
         if undefined_windows and all(value is None for value in values):
             raise SignalUnavailableError(

@@ -79,12 +79,21 @@ class PriceObservation:
     ``unit_price`` is expressed in ``currency`` (the observation's *native* currency) on the
     market ×quote_base_quantity scale. The resolver keeps the native price and its currency; the
     consuming engine converts to the reporting currency at the valuation date.
+
+    ``open``/``high``/``low`` (G1b — synthetic P&L candles, plan §4.3) are optional and populated
+    only for a MARKET observation whose source ``price_history`` row carries a full OHLC triple;
+    ``None`` for a TRADE observation (a trade has one unit price, no intraday range) or a MARKET
+    row missing any of the three (partial OHLC is treated as no-OHLC, never guessed). All three
+    are on the same market ×quote_base_quantity scale as ``unit_price``/close.
     """
 
     date: date_type
     unit_price: Decimal
     currency: str
     kind: ObservationKind
+    open: Optional[Decimal] = None
+    high: Optional[Decimal] = None
+    low: Optional[Decimal] = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,6 +111,11 @@ class ResolvedMark:
       carried forward (LOCF). Drives the frontend "fade with age" rendering.
     * ``estimated`` — ``True`` when the value is not a real asset-system quote (TRADE-origin),
       regardless of freshness. A real quote carried forward is stale but **not** estimated.
+    * ``open``/``high``/``low`` — G1b optional intraday range, same scale as ``unit_price``
+      (the resolved close). Always ``None`` on a CARRIED day (no intraday variance is known for
+      a day nothing traded on — the consuming engine's flat fallback is: open=high=low=close=
+      ``unit_price``, per plan §3.3, never the frozen range of a prior day) and on a TRADE_AVG
+      day (a trade has no OHLC). Populated only on an exact MARKET day with a full source triple.
     """
 
     unit_price: Decimal
@@ -110,6 +124,9 @@ class ResolvedMark:
     as_of_date: Optional[date_type]
     price_backward_fill: Optional[BackwardFillInfo]
     estimated: bool
+    open: Optional[Decimal] = None
+    high: Optional[Decimal] = None
+    low: Optional[Decimal] = None
 
     @property
     def is_missing(self) -> bool:
@@ -135,11 +152,12 @@ class AssetPriceSeries:
     LOCF, else MISSING). O(log n) per query via ``bisect``.
     """
 
-    __slots__ = ("_dates", "_values", "_is_market", "_currencies")
+    __slots__ = ("_dates", "_values", "_is_market", "_currencies", "_ohlc")
 
     def __init__(self, observations: Sequence[PriceObservation]) -> None:
         market_by_day: dict[date_type, Decimal] = {}
         market_ccy_by_day: dict[date_type, str] = {}
+        market_ohlc_by_day: dict[date_type, Optional[tuple[Decimal, Decimal, Decimal]]] = {}
         trades_by_day: dict[date_type, list[Decimal]] = {}
         trade_ccy_by_day: dict[date_type, str] = {}
         for obs in observations:
@@ -148,6 +166,9 @@ class AssetPriceSeries:
                 # but be defensive against duplicates).
                 market_by_day[obs.date] = obs.unit_price
                 market_ccy_by_day[obs.date] = obs.currency
+                # G1b: a partial OHLC triple (some but not all of open/high/low present) is
+                # treated as no-OHLC for that day — never guess a missing extremum.
+                market_ohlc_by_day[obs.date] = (obs.open, obs.high, obs.low) if obs.open is not None and obs.high is not None and obs.low is not None else None
             else:
                 trades_by_day.setdefault(obs.date, []).append(obs.unit_price)
                 # An asset's trades share a currency in practice; the first one on the day labels it.
@@ -166,6 +187,8 @@ class AssetPriceSeries:
         self._values: list[Decimal] = [collapsed[day][0] for day in self._dates]
         self._is_market: list[bool] = [collapsed[day][1] for day in self._dates]
         self._currencies: list[str] = [collapsed[day][2] for day in self._dates]
+        # G1b: OHLC only ever exists for an exact MARKET day (None for TRADE_AVG/CARRIED days).
+        self._ohlc: list[Optional[tuple[Decimal, Decimal, Decimal]]] = [market_ohlc_by_day.get(day) if collapsed[day][1] else None for day in self._dates]
 
     @property
     def has_observations(self) -> bool:
@@ -185,8 +208,12 @@ class AssetPriceSeries:
         estimated = not is_market
         if obs_date == query_date:
             source = MarkSource.MARKET if is_market else MarkSource.TRADE_AVG
-            return ResolvedMark(unit_price=value, currency=currency, source=source, as_of_date=obs_date, price_backward_fill=None, estimated=estimated)
+            ohlc = self._ohlc[idx]
+            open_, high_, low_ = ohlc if ohlc else (None, None, None)
+            return ResolvedMark(unit_price=value, currency=currency, source=source, as_of_date=obs_date, price_backward_fill=None, estimated=estimated, open=open_, high=high_, low=low_)
         days_back = (query_date - obs_date).days
+        # CARRIED is always flat/no-OHLC (open=high=low=None): nothing traded today, so there is
+        # no intraday range to report — the consuming engine's flat fallback uses unit_price alone.
         return ResolvedMark(
             unit_price=value,
             currency=currency,
@@ -214,6 +241,7 @@ def build_asset_price_series(
     split_linked_tx_ids: set[int],
     asset_currency: str,
     quote_base_quantity: int,
+    ohlc_by_date: Optional[dict[date_type, tuple[Optional[Decimal], Optional[Decimal], Optional[Decimal]]]] = None,
 ) -> AssetPriceSeries:
     """Normalize asset-system prices + observed transactions into an :class:`AssetPriceSeries`.
 
@@ -228,6 +256,12 @@ def build_asset_price_series(
       which are per-unit and therefore multiplied by ``quote_base_quantity`` to reach the market
       scale. Split-linked rows and pure quantity adjustments carry no price and are skipped.
 
+    ``ohlc_by_date`` (G1b, optional, additive — deliberately NOT a new element in ``price_rows``
+    itself, so the existing 3-tuple shape stays untouched for every other caller, e.g.
+    ``lots_analysis_service.py``) maps a MARKET day already present in ``price_rows`` to its
+    ``(open, high, low)`` triple, same scale as ``close``. Omit or leave a day out to report no
+    intraday range for it — never guessed, never required.
+
     Mirrors the historical ``_build_market_price_map`` / ``_build_trade_price_points`` math so
     adoption is behaviour-preserving; the added value here is the unified series + staleness.
     """
@@ -237,7 +271,9 @@ def build_asset_price_series(
     for price_date, close, currency in price_rows:
         if close is None:
             continue
-        observations.append(PriceObservation(date=price_date, unit_price=close, currency=currency or asset_currency, kind=ObservationKind.MARKET))
+        ohlc = ohlc_by_date.get(price_date) if ohlc_by_date else None
+        open_, high_, low_ = ohlc if ohlc else (None, None, None)
+        observations.append(PriceObservation(date=price_date, unit_price=close, currency=currency or asset_currency, kind=ObservationKind.MARKET, open=open_, high=high_, low=low_))
 
     for tx in transactions:
         if tx.id in split_linked_tx_ids:

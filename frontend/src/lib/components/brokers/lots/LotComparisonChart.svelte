@@ -18,6 +18,7 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {translateOr} from '$lib/utils/core/translateOr';
     import {formatAxisDate, parseDisplayDate} from '$lib/utils/core/formatAxisDate';
+    import {buildResponsiveXAxisPolicy} from '$lib/components/charts/responsiveXAxis';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {safeDecimal} from '$lib/types';
     import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
@@ -176,6 +177,7 @@
     let currentResolution: ChartResolution = $state('daily');
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | undefined = undefined;
+    let responsiveXAxisCompact = false;
     let resizeAnimationFrame: number | null = null;
     let lastObservedChartSize: {width: number; height: number} | null = null;
     // The one caller that reads the entry: it thresholds sub-pixel jitter off the
@@ -197,6 +199,14 @@
             resizeAnimationFrame = null;
             if (!chartInstance || !lastObservedChartSize) return;
             chartInstance.resize(lastObservedChartSize);
+            const policy = buildLotXAxisPolicy();
+            const wasCompact = responsiveXAxisCompact;
+            responsiveXAxisCompact = policy.compact;
+            if (policy.axisLabel) {
+                chartInstance.setOption({xAxis: {splitNumber: policy.splitNumber, axisLabel: policy.axisLabel}}, {lazyUpdate: true});
+            } else if (wasCompact) {
+                renderChart();
+            }
             scheduleResolutionSync();
         });
     });
@@ -1154,6 +1164,8 @@
         const legendData = baseSeries.map((item) => (item as {name?: unknown}).name).filter((name): name is string => typeof name === 'string' && name !== AXIS_TRIGGER_ANCHOR_ID && name !== PER_LOT_HOVER_DOTS_ID && name !== LOT_INCOME_MARKER_SERIES_ID);
         const axisFallbackRange = seriesDataDateRange(baseSeries);
         const axisDateRange = xAxisRange ?? (axisFallbackRange ? {min: axisFallbackRange[0], max: axisFallbackRange[1]} : null);
+        const xAxisPolicy = buildLotXAxisPolicy(axisDateRange);
+        responsiveXAxisCompact = xAxisPolicy.compact;
         const multiYearAxis = !!axisDateRange && new Date(axisDateRange.min).getFullYear() !== new Date(axisDateRange.max).getFullYear();
         return {
             ...CHART_ANIMATION_CONFIG,
@@ -1201,6 +1213,7 @@
             xAxis: {
                 type: 'time',
                 ...(xAxisRange ? {min: xAxisRange.min, max: xAxisRange.max} : {}),
+                ...(xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber} : {}),
                 axisLine: {lineStyle: {color: gridColors.gridColor}},
                 axisTick: {show: false},
                 splitLine: {show: false},
@@ -1208,6 +1221,7 @@
                     color: gridColors.textColor,
                     hideOverlap: true,
                     formatter: (value: number) => formatAxisDate($currentLanguage, value, multiYearAxis),
+                    ...(xAxisPolicy.axisLabel ?? {}),
                 },
             },
             yAxis: {
@@ -1230,6 +1244,16 @@
             series: [...baseSeries, emptyHoverDotsSeries()],
             dataZoom: buildDataZoom([0]).map((zoom) => (zoomWindow ? {...zoom, start: zoomWindow.start, end: zoomWindow.end} : zoom)),
         };
+    }
+
+    function buildLotXAxisPolicy(range: {min: number | string; max: number | string} | null = xAxisRange): ReturnType<typeof buildResponsiveXAxisPolicy> {
+        return buildResponsiveXAxisPolicy({
+            width: chartContainer?.clientWidth ?? 0,
+            values: range ? [range.min, range.max] : [],
+            locale: $currentLanguage,
+            axisType: 'time',
+            horizontalPadding: 42,
+        });
     }
 
     function resetResizeObserverState() {

@@ -66,6 +66,7 @@
         icon_url?: string | null;
         quote_base_quantity?: number | null;
         active?: boolean;
+        is_benchmark?: boolean;
         classification_params?: {
             short_description?: string | null;
             sector_area?: {distribution: Record<string, number>} | null;
@@ -198,6 +199,7 @@
     // (default 100) never overrides an explicit choice.
     let quoteBaseQuantityTouched = $state(false);
     let active = $state(true);
+    let isBenchmark = $state(false);
 
     // Identifiers — dynamic rows instead of fixed fields
     interface IdentifierRow {
@@ -438,6 +440,7 @@
             iconUrl,
             quoteBaseQuantity,
             active,
+            isBenchmark,
             providerUserUrl,
             JSON.stringify(identifierRows.map((r) => [r.type, r.value])),
             shortDescription,
@@ -617,6 +620,7 @@
         quoteBaseQuantity = data.quote_base_quantity && data.quote_base_quantity > 0 ? data.quote_base_quantity : 1;
         quoteBaseQuantityTouched = false;
         active = data.active !== false;
+        isBenchmark = data.is_benchmark === true;
         identifierRows = columnsToIdentifierRows(data);
         // Classification
         const cp = data.classification_params;
@@ -663,6 +667,7 @@
         quoteBaseQuantity = 1;
         quoteBaseQuantityTouched = false;
         active = true;
+        isBenchmark = false;
         identifierRows = [];
         prefilledIdentifiers = new Set();
         shortDescription = '';
@@ -1341,6 +1346,7 @@
                 icon_url: iconUrl || undefined,
                 quote_base_quantity: normalizedQuoteBaseQuantity,
                 active: active,
+                is_benchmark: isBenchmark,
                 user_url: providerUserUrl || undefined,
                 classification_params: classificationParams,
                 ...identifierRowsToColumns(identifierRows),
@@ -1478,6 +1484,7 @@
             icon_url: iconUrl,
             quote_base_quantity: normalizedQuoteBaseQuantity,
             active: active,
+            is_benchmark: isBenchmark,
             user_url: providerUserUrl || null,
             ...(classificationPatch !== undefined ? {classification_params: classificationPatch} : {}),
             identifier_isin: idCols.identifier_isin || null,
@@ -2155,6 +2162,27 @@
                 class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {active ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
             >
                 <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform {active ? 'translate-x-6' : 'translate-x-1'}"></span>
+            </button>
+
+            <span class="mx-1 h-5 w-px bg-gray-200 dark:bg-slate-700"></span>
+
+            <Tooltip text={$t('assets.modal.benchmarkTooltip')} position="top" maxWidth="320px">
+                <Info size={14} class="text-gray-400 cursor-help shrink-0" />
+            </Tooltip>
+            <span id="asset-benchmark-label" class="text-sm font-medium text-gray-700 dark:text-gray-200">
+                {$t('assets.modal.benchmark')}
+            </span>
+            <button
+                type="button"
+                role="switch"
+                aria-checked={isBenchmark}
+                aria-labelledby="asset-benchmark-label"
+                data-testid="asset-benchmark-toggle"
+                disabled={saving}
+                onclick={() => (isBenchmark = !isBenchmark)}
+                class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {isBenchmark ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
+            >
+                <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform {isBenchmark ? 'translate-x-6' : 'translate-x-1'}"></span>
             </button>
         </div>
 
