@@ -130,11 +130,18 @@ class PacAllocatorTool(ToolPlugin):
             #
             # The reserve covers what runs *after* the solver returns: the exact
             # replay of the candidate plus report construction. Measured at
-            # ~1 ms on the current test scenarios, but it grows with the domain
-            # while the solver's share does not, so the reserve is sized for a
-            # scenario much larger than any we can build today. There are
+            # 0.7-1.0 ms, and — corrected on 2026-09-22 — **flat in the size of
+            # the domain**: the replay evaluates one candidate, and a candidate
+            # has as many components as there are decisions, not as many as
+            # there are possible candidates. Across 16, 585 and 4 008 004
+            # candidates (2, 3 and 4 decisions) the replay does not move above
+            # noise. The earlier claim that it "grows with the domain" was
+            # wrong, not merely stale.
+            #
+            # 2 000 ms is therefore a deliberate over-reserve against a decision
+            # count far beyond anything measured, not a projection. There are
             # 14 000 ms between the effective engine (30 000) and soft (44 000)
-            # timeouts, so a 2 000 ms reserve leaves the window intact.
+            # timeouts, so it leaves the window intact.
             window = context.claim_engine_window(post_engine_reserve_ms=_POST_ENGINE_RESERVE_MS)
             return plan_pac_allocation(
                 parameters,
