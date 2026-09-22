@@ -293,6 +293,51 @@ Two caveats when reading it:
 - **Never assert on translated text**: assert the toast *variant* (`toast-success`) or the event, never the message
 - **Never let a probe decide whether to act**: a short-timeout `isVisible().catch(() => false)` turns *slow* into *absent* and skips the spec's own setup in silence
 - **Verify the precondition, do not infer it**: filtering to the right *kind* of row is not the same as finding one that can still do what you need
+- **An enumerating gate is deterministic about its forms, never about the world**: see below — when you add a rule, extend the forms with it
+
+### ⚠️ A gate that enumerates source sites: extend the forms with the rule
+
+Some tests do not exercise behaviour — they assert that a *premise* still holds. The privacy gate
+(`frontend/src/lib/utils/privacy/moneyRenderSites.test.ts`) is the reference: global value masking
+works only while every monetary amount is rendered through a known set of formatters, so the gate
+scans the source for the observable forms of money rendering and fails when one appears that is not
+in its registry.
+
+If you write another gate of this shape, three properties are what make it survive:
+
+- **It enumerates, it does not judge.** A gate that decides whether a new site is *safe* has to be
+  right about intent. One that is wrong in an annoying direction gets switched off, and then it
+  protects nothing at all. Registering a site is a human decision, recorded once, with its reason —
+  an entry without a reason is indistinguishable from an oversight.
+- **Key entries by content, not by `file:line`.** An unrelated edit above a site shifts its line and
+  turns the gate red for reasons that have nothing to do with the subject. That is the same failure
+  as noise: it trains people to update the registry without reading it.
+- **It needs a positive control.** *"No unregistered site"* is also true when the scanner reads the
+  wrong directory or the regexes match nothing — the assertion that guards the property is exactly
+  the one whose failure is silent. Assert that the scan still finds the sites you know about, and
+  prove the gate fails by adding a violating file once and watching it go red.
+
+🔴 **The forms are a floor, not a proof.** The privacy gate knows two: `Intl.NumberFormat` with
+`style: 'currency'`, and a template literal interpolating a currency identifier **or a rendered
+symbol** beside a numeric token. It cannot see an amount assembled across several statements, nor
+one rendered with no currency marker at all. So **when the rule the gate protects grows, the
+enumerated forms must grow with it** — a gate whose forms lag its rule reports green about a
+question it stopped asking. Write the new form into the scanner in the same change that introduces
+the new rule, not afterwards.
+
+🔴 **A token heuristic is defeated by a synonym, and the damage is silent.** That gate first
+required the token `currency`, and so never matched `` `${sign}${symbol}${compact}` `` — the branch
+of `shortMoney` that renders every currency with a known symbol. The site looked covered only
+because its other branch, the fallback naming `currency`, happened to sit on the same source line:
+**its coverage was a line wrap, not a match.** Reformat that ternary across two lines and the
+gate stays green while the money walks out. When you widen a token, measure the noise first —
+adding `symbol` cost one new hit, adding `sign` would have cost 29, nearly all of them percentages
+and CSS class names.
+
+> The sites a gate like this finds on the day you write it are not the point; they are already in
+> front of you. Its value is failing on the day of the next one — which is also why its registry
+> must refuse entries for code that no longer exists: a list nobody trusts makes the next real
+> entry look like more of the same.
 
 ### ⚠️ Parallelism is the default; serialisation is opted out of
 
