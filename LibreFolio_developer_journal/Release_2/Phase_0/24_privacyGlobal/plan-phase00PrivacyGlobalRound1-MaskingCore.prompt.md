@@ -630,6 +630,34 @@ File: `frontend/src/lib/utils/privacy/moneyRenderSites.test.ts` — 5 test, verd
 > (`axisTickAmount`), a nove righe da una che il gate prende, nello stesso file, è invisibile.**
 > Il costo era l'argomento giusto; la dichiarazione era la metà comoda di esso.
 
+### Passo 8 — Merge del target e coda post-merge — **Stato: ✅ fatto** — 2026-09-21
+
+Merge `d59051977` (`9a6dd2015` + `7fd660846`: D allocatore PAC, I grafici performance, Risk asset
+global). Un solo conflitto, `riskAnalysisHelpers.test.ts:19–44`, risolto **additivamente** — il
+blocco conteneva solo import e setup di modulo, quindi nessun comportamento da arbitrare. Verificato
+per aritmetica (base 62 + 7 miei + 9 di Risk = **78 misurati**) e per sopravvivenza dei simboli.
+
+> **Note implementazione.** Dopo il merge il gate è andato **rosso a 3**, tutti e tre previsti e
+> tutti e tre *veri*: due voci PAC diventate stantie perché D ha mascherato quei pannelli, e lo
+> snippet `totalPnl` di `GrowthChart` riscritto da I. La coda eseguita in un commit separato dal
+> merge, perché **un merge commit che modifica anche il gate non è bisecabile**.
+
+| voce | esito |
+|---|---|
+| voci PAC | rimosse dal `REGISTRY` **e** dalla lista letterale di `listOf('unmasked')` |
+| snippet `totalPnl` | aggiornato **in loco** al nuovo ternario di I |
+| `why` della prima voce `GrowthChart` | riscritto: la condizione «mentre I riscrive il file» è finita |
+| `SAFE_CALL` | de-qualificato e **ancorato**; aggiunta `formatScopedCurrencyAmount` |
+| siti di Risk | **non registrabili** — vedi fuori pista 14 |
+| copertura `fmtCurrency` | **1 su 8** — vedi fuori pista 15 |
+
+Esito: `REGISTRY` **10**, hit **10**, gate **6/6**; suite privacy **126/126** su `Test Files 6`.
+
+> **⚠️ Fuori pista.** Il coordinatore aveva previsto `12 − 2 + 1 = 11` voci. Sono **10**: la voce
+> stantia di `GrowthChart` e il sito non registrato *sono lo stesso sito con il testo cambiato*, un
+> aggiornamento in loco e non una rimozione più un'aggiunta. A 11 il controllo positivo
+> (`hits.length >= REGISTRY.length`) sarebbe fallito, e il gate avrebbe segnalato **la riparazione**.
+
 ## §2 — Verifica
 
 | gate | comando | soglia |
@@ -883,6 +911,62 @@ E il difetto non l'ha trovato una misura: l'ha trovato una **domanda su un altro
 coordinatore chiedeva di `axisTickAmount`, che si è rivelato un'esclusione corretta; la risposta
 ha attraversato `shortMoney` e lì c'era il guasto. *Una verifica che non trova ciò che cercava può
 trovare ciò che nessuno cercava, e solo se la si esegue davvero invece di argomentarla.*
+
+### Fuori pista 14 — 🔴 Il registro non può contenere un sito che lo scanner non vede
+
+La voce 3 della coda chiedeva di registrare sei siti di Risk più `formatScopedCurrencyAmount`.
+**Non è eseguibile**, e non per una scelta: per la struttura del test di marcio.
+
+```ts
+const stale = REGISTRY.filter((s) => !found.has(key(s)));   // found è costruito da hits
+```
+
+Una voce che lo scanner non produce è **immediatamente stantia**. Misurato con una sonda
+temporanea su `L4Replay.svelte`: **2 rossi** — il marcio *e* il controllo positivo, perché le voci
+diventano 11 contro 10 hit. File ripristinato per copia di byte, md5 identico, gate di nuovo 6/6.
+
+> **Il registro è indicizzato sul contenuto, ma popolato dallo scanner.** Può ospitare solo ciò che
+> il gate già vede — quindi serve a impedire che un sito *noto* cambi in silenzio, **non** a
+> ricordare un sito invisibile. I due lavori si assomigliano e hanno bisogno di due posti diversi:
+> il secondo è questo piano.
+
+Siti di Risk, triati con la domanda **quale parte è cambiata, e la ragione parla di quella parte?**
+
+| sito | verdetto | perché non è un hit |
+|---|---|---|
+| tre di `l4/` | `not-money` | rendono conteggi e percentuali, non importi |
+| tre condizionali | coperti | delegano a `formatCurrencyAmount`, mascherata a `:160` |
+| `formatScopedCurrencyAmount` | coperto | delega alla stessa, dopo due guardie che rendono `—` |
+
+Le ultime quattro righe sono ora **in `SAFE_CALL`**, che è il posto giusto: dichiarano una promessa
+verificabile, invece di chiedere al registro di ricordare un'assenza.
+
+### Fuori pista 15 — 🔴 Il gate vede **1** degli **8** consumatori di `fmtCurrency`
+
+Misurato su `GrowthChart.svelte` fuso (2246 righe): definizione `:1834`, consumatori a
+`:1893, :1895, :1896, :1899, :1915, :1927, :1943, :1958`. **Il gate ne aggancia uno solo**, `:1899`,
+l'unico che sia una forma B completa. Gli altri sette compongono l'importo senza marcatore di valuta
+sulla stessa riga.
+
+> **Un rosso piccolo su un file che contiene otto siti di denaro è più allarmante di uno grande.**
+> La dimensione del rosso misura quanto il gate *vede*, non quanto il file *espone*, e le due
+> quantità divergono esattamente dove il file è peggiore. Un file con un solo sito visibile e sette
+> invisibili produce lo stesso segnale di un file quasi pulito.
+
+La voce residua resta una riga sola da mascherare — la definizione — ma il numero che la accompagna
+nel registro non va letto come copertura.
+
+### Fuori pista 16 — Due difetti di misura miei, entrambi presi da una contromisura e non da un sospetto
+
+**Path fantasma.** `chartCoreHelpers.test.ts` l'ho cercato sotto `utils/charts/`; sta sotto
+`components/charts/`. `vitest` non ha stampato né `Test Files` né `Tests`, e la regola «N path
+dentro ⇒ `Test Files` dice N» l'ha preso al primo colpo. Con un path valido accanto sarebbe
+**sparito in silenzio, exit 0**.
+
+**Stato altrui scaduto.** Ho riportato l'indice del merge come «211 M · 199 A · 30 R · 26 D» mentre
+il developer aveva già creato `d59051977`, che l'aveva consumato. Ero FROZEN e non avevo mosso
+nulla — ed è il punto: *l'immobilità garantisce che non cambi io, non che non cambi il mondo*.
+Uno stato altrui va **riletto all'uso**, non trasportato dal momento in cui lo si è osservato.
 
 ## §4 — Test
 
