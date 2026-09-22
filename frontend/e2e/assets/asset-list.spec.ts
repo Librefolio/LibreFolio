@@ -9,11 +9,83 @@
  */
 
 import {expect, test} from '../fixtures/playwright';
-import {login} from '../fixtures/auth-helpers';
+import type {Page} from '../fixtures/playwright';
+import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {waitForSettled} from '../fixtures/app-events';
 import {goToAssetsPage} from './assets-helpers';
 import {uniqueToken} from '../fixtures/unique';
+import {t} from '../fixtures/i18n-data';
+
+type SyntheticAsset = {
+    id: number;
+    display_name: string;
+    currency: string;
+    asset_type: 'STOCK';
+    active: boolean;
+    has_metadata: boolean;
+    provider_code: null;
+    tx_count: number;
+    tx_count_own: number;
+};
+
+type SyntheticAssetOptions = {
+    displayName?: string;
+    active?: boolean;
+};
+
+function syntheticAsset(id: number, txCount = 0, txCountOwn = 0, options: SyntheticAssetOptions = {}): SyntheticAsset {
+    return {
+        id,
+        display_name: options.displayName ?? `Synthetic asset ${id}`,
+        currency: 'EUR',
+        asset_type: 'STOCK',
+        active: options.active ?? true,
+        has_metadata: false,
+        provider_code: null,
+        tx_count: txCount,
+        tx_count_own: txCountOwn,
+    };
+}
+
+async function mockAssets(page: Page, assets: SyntheticAsset[]) {
+    await page.route('**/api/v1/assets/query*', async (route) => {
+        await route.fulfill({json: assets});
+    });
+    await page.route('**/api/v1/assets/prices/query', async (route) => {
+        const requested = (route.request().postDataJSON() as Array<{asset_id: number}> | null) ?? [];
+        await route.fulfill({
+            json: {
+                items: requested.map(({asset_id}) => ({
+                    asset_id,
+                    prices: [],
+                    events: [],
+                    errors: [],
+                    signals: [],
+                })),
+            },
+        });
+    });
+    await page.route('**/api/v1/assets/prices/current', async (route) => {
+        await route.fulfill({json: {results: [], success_count: 0, errors: []}});
+    });
+}
+
+async function goToMockedAssets(page: Page, assets: SyntheticAsset[]) {
+    await mockAssets(page, assets);
+    // Irrelevant source-page filters are deliberate: result actions must build
+    // a fresh transaction URL rather than inheriting them.
+    await navigateTo(page, '/assets?broker_id=88001&date_start=1999-01-01');
+    await expect(page.getByTestId('assets-page')).toHaveAttribute('data-busy', 'false', {timeout: 20_000});
+}
+
+async function openSingleDelete(page: Page, assetId: number) {
+    await page.getByTestId('view-mode-list').click();
+    await waitForSettled(page.getByTestId('assets-page'), 20_000);
+    await page.getByTestId(`row-actions-${assetId}`).click();
+    await page.getByTestId('context-menu-action-delete').click();
+    await expect(page.getByTestId('confirm-modal-confirm')).toBeVisible();
+}
 
 test.describe('Asset List Page', () => {
     test.beforeEach(async ({page}) => {
@@ -119,6 +191,68 @@ test.describe('Asset List Page', () => {
         await page.getByTestId('view-mode-grid').click();
         await expect(page.locator('[data-testid^="asset-card-"]').filter({hasText: /Apple/i}).first()).toBeVisible();
         await expect(page.locator('[data-testid="dt-select-all"]')).toHaveCount(0);
+    });
+
+    test('global Abs/% controls update every rendered AssetCard data-view-mode', async ({page}) => {
+        await goToAssetsPage(page);
+        await page.getByTestId('view-mode-grid').click();
+        await waitForSettled(page.getByTestId('assets-page'), 20_000);
+        const cards = page.locator('[data-testid^="asset-card-"][data-view-mode]');
+        await expect.poll(() => cards.count(), {timeout: 10_000}).toBeGreaterThan(0);
+
+        const everyCardUses = async (mode: 'absolute' | 'percentage') => cards.evaluateAll((nodes, expected) => nodes.length > 0 && nodes.every((node) => (node as HTMLElement).dataset.viewMode === expected), mode);
+
+        await page.getByTestId('assets-global-view-absolute').click();
+        await expect.poll(() => everyCardUses('absolute'), {timeout: 5_000}).toBe(true);
+
+        await page.getByTestId('assets-global-view-percentage').click();
+        await expect.poll(() => everyCardUses('percentage'), {timeout: 5_000}).toBe(true);
+    });
+
+    test('one AssetCard can override Abs/% until a later global change', async ({page}) => {
+        await goToAssetsPage(page);
+        await page.getByTestId('view-mode-grid').click();
+        await waitForSettled(page.getByTestId('assets-page'), 20_000);
+
+        const cards = page.getByTestId(/^asset-card-\d+$/);
+        const chosenCard = cards.filter({hasText: 'Apple Inc.'});
+        await expect(chosenCard).toHaveCount(1);
+        await expect(chosenCard).toHaveAttribute('data-testid', /^asset-card-\d+$/);
+        const chosenCardTestId = await chosenCard.getAttribute('data-testid');
+        if (!chosenCardTestId) throw new Error('Seeded Apple Inc. card must expose its data-testid.');
+
+        const everyOtherCardUses = async (mode: 'absolute' | 'percentage') =>
+            cards.evaluateAll(
+                (nodes, expected) => {
+                    let foundOtherCard = false;
+                    const allOtherCardsUseMode = nodes.every((node) => {
+                        if (node.getAttribute('data-testid') === expected.chosenCardTestId) return true;
+                        foundOtherCard = true;
+                        return (node as HTMLElement).dataset.viewMode === expected.mode;
+                    });
+                    return foundOtherCard && allOtherCardsUseMode;
+                },
+                {chosenCardTestId, mode},
+            );
+        const expectEveryCardToUse = async (mode: 'absolute' | 'percentage') => {
+            await expect(chosenCard).toHaveAttribute('data-view-mode', mode);
+            await expect.poll(() => everyOtherCardUses(mode), {timeout: 5_000}).toBe(true);
+        };
+
+        await page.getByTestId('assets-global-view-absolute').click();
+        await expectEveryCardToUse('absolute');
+
+        await chosenCard.getByTestId('asset-card-view-toggle').click();
+        await expect(chosenCard).toHaveAttribute('data-view-mode', 'percentage');
+        await expect.poll(() => everyOtherCardUses('absolute'), {timeout: 5_000}).toBe(true);
+
+        await page.getByTestId('assets-global-view-percentage').click();
+        await expectEveryCardToUse('percentage');
+
+        // Changing again proves the local override was cleared, not merely
+        // hidden because it happened to match the first new global mode.
+        await page.getByTestId('assets-global-view-absolute').click();
+        await expectEveryCardToUse('absolute');
     });
 
     // ========================================================================
@@ -245,23 +379,126 @@ test.describe('Asset List Page', () => {
     });
 
     // ========================================================================
-    // Test 13: Active/All toggle changes badge count
+    // Test 13: Active and inactive toggles implement all four lifecycle states.
     // ========================================================================
-    test('active/all toggle changes displayed count', async ({page}) => {
-        await goToAssetsPage(page);
-        const badge = page.getByTestId('assets-count-badge');
-        const activeBadge = await badge.textContent();
+    test('lifecycle toggles cover active, inactive, union, and unfiltered states', async ({page}) => {
+        const active = syntheticAsset(910_021, 0, 0, {displayName: 'Lifecycle active'});
+        const inactive = syntheticAsset(910_022, 0, 0, {
+            displayName: 'Lifecycle inactive',
+            active: false,
+        });
+        await goToMockedAssets(page, [active, inactive]);
+        await page.getByTestId('view-mode-grid').click();
 
-        // Toggle to show all (including inactive)
-        const toggle = page.getByTestId('assets-active-toggle');
-        await toggle.click();
-        // aria-pressed is the toggle telling us it flipped. Comparing the badges
-        // before that is comparing a number with itself.
-        await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+        const activeToggle = page.getByTestId('assets-active-toggle');
+        const inactiveToggle = page.getByTestId('assets-inactive-toggle');
+        const activeCard = page.getByTestId(`asset-card-${active.id}`);
+        const inactiveCard = page.getByTestId(`asset-card-${inactive.id}`);
 
-        const allBadge = await badge.textContent();
-        // Count should be same or greater (all >= active)
-        expect(parseInt(allBadge || '0')).toBeGreaterThanOrEqual(parseInt(activeBadge || '0'));
+        // Default: active only.
+        await expect(activeToggle).toHaveAttribute('aria-pressed', 'true');
+        await expect(inactiveToggle).toHaveAttribute('aria-pressed', 'false');
+        await expect(activeCard).toBeVisible();
+        await expect(inactiveCard).toHaveCount(0);
+
+        // Both selected: the two sets form a union.
+        await inactiveToggle.click();
+        await expect(inactiveToggle).toHaveAttribute('aria-pressed', 'true');
+        await expect(activeCard).toBeVisible();
+        await expect(inactiveCard).toBeVisible();
+
+        // Inactive only.
+        await activeToggle.click();
+        await expect(activeToggle).toHaveAttribute('aria-pressed', 'false');
+        await expect(inactiveCard).toBeVisible();
+        await expect(activeCard).toHaveCount(0);
+
+        // Neither selected: no lifecycle filter, so both return.
+        await inactiveToggle.click();
+        await expect(inactiveToggle).toHaveAttribute('aria-pressed', 'false');
+        await expect(activeCard).toBeVisible();
+        await expect(inactiveCard).toBeVisible();
+    });
+
+    test('lifecycle ordering and visual markers apply in every usage panel', async ({page}) => {
+        const panels = [
+            {
+                id: 'own',
+                active: syntheticAsset(910_101, 4, 2, {displayName: 'Own active'}),
+                inactive: syntheticAsset(910_102, 5, 3, {
+                    displayName: 'Own inactive',
+                    active: false,
+                }),
+            },
+            {
+                id: 'others',
+                active: syntheticAsset(910_103, 4, 0, {displayName: 'Others active'}),
+                inactive: syntheticAsset(910_104, 5, 0, {
+                    displayName: 'Others inactive',
+                    active: false,
+                }),
+            },
+            {
+                id: 'analysis',
+                active: syntheticAsset(910_105, 0, 0, {displayName: 'Analysis active'}),
+                inactive: syntheticAsset(910_106, 0, 0, {
+                    displayName: 'Analysis inactive',
+                    active: false,
+                }),
+            },
+        ] as const;
+
+        // Each inactive asset precedes its active peer in the intercepted payload.
+        // The UI must reorder by lifecycle without relying on database ordering.
+        await goToMockedAssets(
+            page,
+            panels.flatMap((panel) => [panel.inactive, panel.active]),
+        );
+        await page.getByTestId('assets-inactive-toggle').click();
+        await expect(page.getByTestId('assets-inactive-toggle')).toHaveAttribute('aria-pressed', 'true');
+        await page.getByTestId('view-mode-grid').click();
+
+        for (const panel of panels) {
+            const section = page.getByTestId(`assets-panel-${panel.id}`);
+            const cards = section.locator('[data-testid^="asset-card-"][data-lifecycle]');
+            await expect(section).toBeVisible();
+            await expect(cards).toHaveCount(2);
+            await expect
+                .poll(() => cards.evaluateAll((items) => items.map((item) => item.getAttribute('data-testid'))), {
+                    timeout: 5_000,
+                })
+                .toEqual([`asset-card-${panel.active.id}`, `asset-card-${panel.inactive.id}`]);
+
+            const activeCard = page.getByTestId(`asset-card-${panel.active.id}`);
+            const inactiveCard = page.getByTestId(`asset-card-${panel.inactive.id}`);
+            await expect(activeCard).toHaveAttribute('data-lifecycle', 'active');
+            await expect(activeCard).toHaveClass(/(^|\s)bg-white(\s|$)/);
+            await expect(activeCard).toHaveClass(/(^|\s)dark:bg-slate-800(\s|$)/);
+            await expect(activeCard).not.toHaveClass(/(^|\s)bg-amber-50(\s|$)/);
+            await expect(inactiveCard).toHaveAttribute('data-lifecycle', 'inactive');
+            await expect(inactiveCard).toHaveClass(/(^|\s)bg-amber-50(\s|$)/);
+            await expect(inactiveCard).toHaveClass(/(^|\s)dark:bg-amber-950\/30(\s|$)/);
+        }
+
+        await page.getByTestId('view-mode-list').click();
+        await waitForSettled(page.getByTestId('assets-page'), 20_000);
+
+        for (const panel of panels) {
+            const section = page.getByTestId(`assets-table-panel-${panel.id}`);
+            const rows = section.locator('tbody tr[data-row-id]');
+            await expect(section).toBeVisible();
+            await expect(rows).toHaveCount(2);
+            await expect
+                .poll(() => rows.evaluateAll((items) => items.map((item) => item.getAttribute('data-row-id'))), {
+                    timeout: 5_000,
+                })
+                .toEqual([String(panel.active.id), String(panel.inactive.id)]);
+
+            const activeRow = section.locator(`tbody tr[data-row-id="${panel.active.id}"]`);
+            const inactiveRow = section.locator(`tbody tr[data-row-id="${panel.inactive.id}"]`);
+            await expect(activeRow).not.toHaveClass(/asset-row-inactive/);
+            await expect(inactiveRow).toHaveClass(/asset-row-inactive/);
+        }
     });
 
     test('loads all asset cards through exactly one bulk price request', async ({page}) => {
@@ -359,6 +596,165 @@ test.describe('Asset List Page', () => {
                 await page.request.delete(`/api/v1/assets?asset_ids=${id}`).catch(() => {});
             }
         }
+    });
+
+    test('blocked single delete stays open with the returned global count and a clean transaction link', async ({page}) => {
+        const asset = syntheticAsset(910_031);
+        await goToMockedAssets(page, [asset]);
+        await page.route('**/api/v1/assets?*', async (route) => {
+            await route.fulfill({
+                json: {
+                    results: [
+                        {
+                            success: false,
+                            deleted_count: 0,
+                            asset_id: asset.id,
+                            display_name: asset.display_name,
+                            error_code: 'HAS_TRANSACTIONS',
+                            transaction_count: 17,
+                            message: '<a href="/backend-link">backend-supplied link</a>',
+                        },
+                    ],
+                    success_count: 0,
+                    errors: [],
+                },
+            });
+        });
+
+        await openSingleDelete(page, asset.id);
+        await page.getByTestId('confirm-modal-confirm').click();
+
+        const link = page.getByTestId('asset-delete-transactions-link');
+        await expect(link).toBeVisible();
+        await expect(link).toHaveAttribute('href', `/transactions?asset_id=${asset.id}`);
+        await expect(page.getByTestId('asset-delete-transactions-link-detail')).toContainText('(17)');
+        // The link's own label must be the real transactions.title catalogue entry —
+        // never the missing `nav.transactions` key, and never a raw key at all
+        // (svelte-i18n renders a missing key as the literal key string, so this
+        // check catches that regression by construction rather than by name).
+        await expect(link).toHaveText(t('en', 'transactions.title'));
+        await expect(link).not.toContainText('nav.transactions');
+        await expect(link).not.toContainText('transactions.title');
+        await expect(page.getByTestId('confirm-modal-close')).toBeVisible();
+    });
+
+    test('successful single delete closes its confirmation', async ({page}) => {
+        const asset = syntheticAsset(910_032);
+        await goToMockedAssets(page, [asset]);
+        await page.route('**/api/v1/assets?*', async (route) => {
+            await route.fulfill({
+                json: {
+                    results: [
+                        {
+                            success: true,
+                            deleted_count: 1,
+                            asset_id: asset.id,
+                            display_name: asset.display_name,
+                            error_code: null,
+                            transaction_count: null,
+                            message: null,
+                        },
+                    ],
+                    success_count: 1,
+                    errors: [],
+                },
+            });
+        });
+
+        await openSingleDelete(page, asset.id);
+        await page.getByTestId('confirm-modal-confirm').click();
+
+        await expect(page.getByTestId('confirm-modal-confirm')).toHaveCount(0);
+        await expect(page.getByTestId(`dt-row-checkbox-${asset.id}`)).toHaveCount(0);
+    });
+
+    test('bulk blocked results keep each returned global count with its own clean transaction link', async ({page}) => {
+        const blocked = [
+            {asset: syntheticAsset(910_041), count: 23},
+            {asset: syntheticAsset(910_042), count: 41},
+        ];
+        const assets = blocked.map(({asset}) => asset);
+        await goToMockedAssets(page, assets);
+        await page.route('**/api/v1/assets?*', async (route) => {
+            await route.fulfill({
+                json: {
+                    results: blocked.map(({asset, count}) => ({
+                        success: false,
+                        deleted_count: 0,
+                        asset_id: asset.id,
+                        display_name: asset.display_name,
+                        error_code: 'HAS_TRANSACTIONS',
+                        transaction_count: count,
+                        message: null,
+                    })),
+                    success_count: 0,
+                    errors: [],
+                },
+            });
+        });
+
+        await page.getByTestId('view-mode-list').click();
+        await waitForSettled(page.getByTestId('assets-page'), 20_000);
+        for (const asset of assets) {
+            await page.getByTestId(`dt-row-checkbox-${asset.id}`).click();
+        }
+        await expect(page.getByTestId('selection-toolbar')).toHaveAttribute('data-selected-count', String(assets.length));
+        await page.getByTestId('toolbar-action-delete').click();
+        await page.getByTestId('confirm-modal-confirm').click();
+
+        for (const {asset, count} of blocked) {
+            const testId = `asset-bulk-delete-transactions-${asset.id}`;
+            const link = page.getByTestId(testId);
+            await expect(link).toHaveAttribute('href', `/transactions?asset_id=${asset.id}`);
+            await expect(page.getByTestId(`${testId}-detail`)).toContainText(`(${count})`);
+            // Same catalogue-key contract as the single-delete case, checked once
+            // per row so a per-asset action never falls back to a raw key either.
+            await expect(link).toHaveText(t('en', 'transactions.title'));
+            await expect(link).not.toContainText('transactions.title');
+        }
+        await expect(page.getByTestId('confirm-modal-close')).toBeVisible();
+    });
+
+    test('bulk delete failure without HAS_TRANSACTIONS omits the transaction link and count', async ({page}) => {
+        // B3/F16: a failure that is NOT the HAS_TRANSACTIONS contract (a generic
+        // DB error, a permissions error, whatever else the backend may return)
+        // must not be dressed up with a transaction link or a "(N)" count it never
+        // received — that action and that number are only truthful when error_code
+        // really is HAS_TRANSACTIONS.
+        const asset = syntheticAsset(910_051);
+        await goToMockedAssets(page, [asset]);
+        await page.route('**/api/v1/assets?*', async (route) => {
+            await route.fulfill({
+                json: {
+                    results: [
+                        {
+                            success: false,
+                            deleted_count: 0,
+                            asset_id: asset.id,
+                            display_name: asset.display_name,
+                            error_code: null,
+                            transaction_count: null,
+                            message: 'Deletion refused by a non-transaction constraint',
+                        },
+                    ],
+                    success_count: 0,
+                    errors: [],
+                },
+            });
+        });
+
+        await page.getByTestId('view-mode-list').click();
+        await waitForSettled(page.getByTestId('assets-page'), 20_000);
+        await page.getByTestId(`dt-row-checkbox-${asset.id}`).click();
+        await expect(page.getByTestId('selection-toolbar')).toHaveAttribute('data-selected-count', '1');
+        await page.getByTestId('toolbar-action-delete').click();
+        await page.getByTestId('confirm-modal-confirm').click();
+
+        await expect(page.getByTestId('confirm-modal-close')).toBeVisible();
+        await expect(page.getByTestId(`asset-bulk-delete-transactions-${asset.id}`)).toHaveCount(0);
+        // The raw backend message is shown as-is (no synthesized count suffix).
+        await expect(page.getByText('Deletion refused by a non-transaction constraint')).toBeVisible();
+        await expect(page.getByText('Deletion refused by a non-transaction constraint (', {exact: false})).toHaveCount(0);
     });
 
     // ========================================================================
@@ -462,5 +858,139 @@ test.describe('Asset List Page', () => {
 
         // Same placement rule as the table: Apple is used on a broker TEST_USER owns.
         await expect(page.getByTestId('assets-panel-own').locator('[data-testid^="asset-card-"]').filter({hasText: /Apple/i}).first()).toBeVisible();
+    });
+
+    // ========================================================================
+    // Test 19 (Mandate B): the taxonomy grew from 9 to 17 values, and every
+    // table keyed on it fails *silently* when it misses an entry — a missing
+    // PNG_MAP entry draws other.png, a missing filter entry makes the type
+    // un-filterable, and nothing throws anywhere. `assetTypeTables.test.ts`
+    // proves the tables agree with the Python enum as text; this proves the
+    // same thing at runtime and through the backend: a new-taxonomy asset is
+    // accepted, comes back with its type intact, draws its own icon, and is
+    // offered in the page's type filter.
+    //
+    // It seeds its own assets first, and that is not a convenience: the filter
+    // only lists types the user actually owns (`availableTypes` keeps the ones
+    // with typeCounts > 0, in +page.svelte), so a spec that asserted on the
+    // dropdown without seeding it would be asserting on whatever the shared
+    // database happened to be holding that minute.
+    // ========================================================================
+    test('new taxonomy types survive the round trip: API, card icon and type filter', async ({page}) => {
+        const token = uniqueToken(6);
+        const prefix = `E2E Taxonomy ${token}`;
+        // COMMODITY and REAL_ESTATE are new *primary* types and each owns an
+        // icon file — note the hyphen in real-estate.png against the underscore
+        // in the enum value, which is precisely the kind of mismatch that ends
+        // in a silent other.png. ETF_STOCK is a subtype and shares etf.png by
+        // design, so what it proves here is the enum round trip and the filter
+        // entry, not a distinct picture.
+        const seeds = [
+            {type: 'COMMODITY', icon: 'commodity.png'},
+            {type: 'REAL_ESTATE', icon: 'real-estate.png'},
+            {type: 'ETF_STOCK', icon: 'etf.png'},
+            // The control, and the reason there is one: "the type filter really
+            // filtered" needs something of this test's own that must DISAPPEAR
+            // when COMMODITY is selected. Without it the only proof available
+            // would be a count over rows this test does not own.
+            {type: 'STOCK', icon: 'stock.png'},
+        ] as const;
+        const nameFor = (type: string) => `${prefix} ${type}`;
+        /** Filled from the create response; every later step identifies rows through it. */
+        const seeded: Array<{type: string; icon: string; id: number}> = [];
+        /** Everything the backend actually created, asserted or not — this is what `finally` removes. */
+        const createdIds: number[] = [];
+        const idOf = (type: string) => seeded.find((s) => s.type === type)!.id;
+
+        try {
+            // ---- 1. the backend accepts the new enum values at all --------
+            // A 422 here is the whole mandate failing at its first step, and it
+            // is worth separating from every UI assertion below.
+            const createRes = await page.request.post('/api/v1/assets', {
+                data: seeds.map(({type}) => ({display_name: nameFor(type), currency: 'EUR', asset_type: type})),
+            });
+            expect(createRes.ok(), `creating one asset per taxonomy value must succeed: ${await createRes.text()}`).toBeTruthy();
+            const created = ((await createRes.json()) as {results: Array<{asset_id: number | null; success: boolean; message: string; display_name: string}>}).results;
+            // Register what exists BEFORE asserting anything about it: creates
+            // are per-item and partial success is allowed, so a value the enum
+            // rejects still leaves its predecessors in a shared database, and
+            // the first failing expect below would otherwise leak them.
+            for (const row of created) if (row.asset_id != null) createdIds.push(row.asset_id);
+
+            // Keyed on display_name, not on the position in `results`: the two
+            // happen to agree today, and relying on that would be exactly the
+            // assumption this suite does not make.
+            for (const {type, icon} of seeds) {
+                const row = created.find((r) => r.display_name === nameFor(type));
+                expect(row, `${type}: the create response must carry a result for "${nameFor(type)}"`).toBeTruthy();
+                expect(row!.success, `${type} must be a value the backend enum accepts: ${row!.message}`).toBe(true);
+                seeded.push({type, icon, id: row!.asset_id!});
+            }
+
+            // ---- 2. …and hands each value back unchanged ------------------
+            const listed = (await (await page.request.get(`/api/v1/assets/query?search=${encodeURIComponent(prefix)}`)).json()) as Array<{id: number; asset_type: string | null}>;
+            for (const {type, id} of seeded) {
+                const row = listed.find((a) => a.id === id);
+                expect(row, `${type}: the asset this test created must come back from /assets/query`).toBeTruthy();
+                expect(row!.asset_type, `${type} must not be silently degraded on the way back`).toBe(type);
+            }
+
+            // ---- 3. the grid draws each one with its own icon -------------
+            await goToAssetsPage(page);
+            // Grid is the default view, but ViewModeToggle remembers the last
+            // choice per user in localStorage — drive to the end state.
+            await page.getByTestId('view-mode-grid').click();
+            await page.getByTestId('assets-search-input').fill(prefix);
+            await waitForSettled(page.getByTestId('assets-page'), 20_000);
+
+            for (const {type, icon, id} of seeded) {
+                const card = page.getByTestId(`asset-card-${id}`);
+                // Presence barrier for the negative that follows: a card that
+                // has not mounted yet satisfies any absence assertion, so "it
+                // does not show other.png" only means something once the card
+                // and its icon are demonstrably on screen. The search box is
+                // debounced and `data-busy` does not cover the debounce, which
+                // is why this is a retrying assertion and not a count().
+                await expect(card, `${type}: the seeded card must reach the grid`).toBeVisible({timeout: 15_000});
+                // `.first()` on an already-filtered locator: a card legitimately
+                // paints this src twice (the round avatar and the type badge),
+                // and which one arrives first is not this test's business.
+                await expect(card.locator(`img[src="/icons/asset-types/${icon}"]`).first(), `${type} must resolve to ${icon}`).toBeVisible();
+                // The failure this whole workstream exists to prevent: an enum
+                // value PNG_MAP has never heard of is drawn as other.png and
+                // nothing complains. `toHaveCount(0)` is the honest matcher here
+                // — the fallback is never *hidden* when it happens, it is simply
+                // the src that got rendered.
+                await expect(card.locator('img[src="/icons/asset-types/other.png"]'), `${type} fell through to the silent other.png fallback`).toHaveCount(0);
+            }
+
+            // ---- 4. the page's own type filter offers the new values ------
+            // The dropdown used to carry a private nine-entry TYPE_ICON_MAP, so
+            // the icon inside the option row is a regression guard in its own
+            // right, not decoration.
+            await page.getByTestId('assets-type-filter').click();
+            for (const {type, icon} of seeded) {
+                const option = page.getByTestId(`assets-type-filter-option-${type}`);
+                await expect(option, `${type} must be offered in the type filter — this test owns one, so its count is > 0`).toBeVisible();
+                await expect(option.locator(`img[src="/icons/asset-types/${icon}"]`), `${type}'s filter row must draw through the shared icon map`).toHaveCount(1);
+            }
+
+            // ---- 5. …and selecting one really narrows the list ------------
+            await page.getByTestId('assets-type-filter-option-COMMODITY').click();
+            // Selecting does not close the fixed-position panel; close it on its
+            // own trigger and end on the post-condition rather than leaving an
+            // overlay over the grid the next assertions read.
+            await page.getByTestId('assets-type-filter').click();
+            await expect(page.getByTestId('assets-type-filter-option-COMMODITY')).toHaveCount(0);
+
+            await expect(page.getByTestId(`asset-card-${idOf('COMMODITY')}`), 'the COMMODITY asset must survive its own type filter').toBeVisible();
+            await expect(page.getByTestId(`asset-card-${idOf('STOCK')}`), 'the STOCK control must be filtered out — otherwise the type filter is not filtering').toHaveCount(0);
+        } finally {
+            // Scoped to what this test created: the ids come from its own create
+            // response, so nothing here can reach a neighbour's row.
+            for (const id of createdIds) {
+                await page.request.delete(`/api/v1/assets?asset_ids=${id}`).catch(() => {});
+            }
+        }
     });
 });

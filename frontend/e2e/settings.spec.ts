@@ -1,6 +1,177 @@
-import {expect, test} from './fixtures/playwright';
+import {expect, type Page, type Request, test} from './fixtures/playwright';
 import {login, navigateTo} from './fixtures/auth-helpers';
 import {TEST_ADMIN, TEST_USER} from './fixtures/test-users';
+import {eventSeq, waitForEvent} from './fixtures/app-events';
+import {optionsClosed} from './fixtures/probe';
+import {uniqueSuffix} from './fixtures/unique';
+
+test.describe('Runes parity', () => {
+    // The preference case owns its account; the admin case changes only a local
+    // draft. Neither case writes instance-wide settings or repairs shared data.
+    test.setTimeout(45_000);
+
+    async function openPreferences(page: Page) {
+        await navigateTo(page, '/settings');
+        await page.getByTestId('settings-tab-preferences').click();
+        await expect(page.getByTestId('preference-currency').getByRole('combobox')).toBeEnabled({timeout: 10_000});
+    }
+
+    test('preferences save a real value across reload; Reset and Undo only stage changes', async ({page, request}) => {
+        const suffix = uniqueSuffix();
+        const user = {username: `runes_prefs_${suffix}`, email: `runes_prefs_${suffix}@example.com`, password: `Runes9!_${suffix}`};
+        const registered = await request.post('/api/v1/auth/register', {data: user});
+        expect(registered.status(), 'Disposable-account registration must be enabled; do not change global settings to repair it').toBe(201);
+        const {user: created} = (await registered.json()) as {user: {id: number}};
+
+        const puts: unknown[] = [];
+        const recordPut = (req: Request) => {
+            if (req.method() === 'PUT' && new URL(req.url()).pathname === '/api/v1/settings/user') puts.push(req.postDataJSON());
+        };
+        try {
+            await login(page, user);
+            const me = await page.request.get('/api/v1/auth/me');
+            expect(me.ok()).toBe(true);
+            expect((await me.json()).user.id).toBe(created.id);
+
+            const globals = await page.request.get('/api/v1/settings/global');
+            expect(globals.ok()).toBe(true);
+            const {items} = (await globals.json()) as {items: {key: string; value: string}[]};
+            const defaultCurrency = items.find((item) => item.key === 'default_currency')?.value;
+            expect(defaultCurrency, 'The test must read the real default, not assume EUR').toMatch(/^[A-Z]{3}$/);
+            if (!defaultCurrency) throw new Error('default_currency was absent from settings/global');
+            const savedCurrency = defaultCurrency === 'USD' ? 'EUR' : 'USD';
+
+            // Only this disposable account is seeded, before observing UI writes.
+            const seeded = await page.request.put('/api/v1/settings/user', {data: {base_currency: defaultCurrency}});
+            expect(seeded.ok()).toBe(true);
+            await openPreferences(page);
+            const row = page.getByTestId('preference-currency');
+            const select = row.getByRole('combobox');
+            await expect(select).toContainText(defaultCurrency);
+            page.on('request', recordPut);
+
+            await select.click();
+            await page.getByTestId(`search-select-option-${savedCurrency}`).click();
+            await optionsClosed(page);
+            await expect(select).toContainText(savedCurrency);
+            const since = await eventSeq(page);
+            const response = page.waitForResponse((res) => res.request().method() === 'PUT' && new URL(res.url()).pathname === '/api/v1/settings/user');
+            await row.getByTestId('setting-save').click();
+            const saved = await response;
+            expect(saved.request().postDataJSON()).toEqual({base_currency: savedCurrency});
+            expect(saved.ok()).toBe(true);
+            expect((await waitForEvent(page, 'settings.preferences.saved', {since})).detail).toMatchObject({field: 'default_currency', value: savedCurrency});
+            await expect(row.getByTestId('setting-save')).toBeHidden();
+
+            // A new document/mount must display the persisted value, not just a tab.
+            await openPreferences(page);
+            await expect(select).toContainText(savedCurrency);
+            await row.getByTestId('setting-reset').click();
+            await expect(select).toContainText(defaultCurrency);
+            await expect(row.getByTestId('setting-save')).toBeVisible();
+            const afterReset = await page.request.get('/api/v1/settings/user');
+            expect(afterReset.ok()).toBe(true);
+            expect((await afterReset.json()).base_currency).toBe(savedCurrency);
+
+            await row.getByTestId('setting-undo').click();
+            await expect(select).toContainText(savedCurrency);
+            await expect(row.getByTestId('setting-save')).toBeHidden();
+            await openPreferences(page);
+            await expect(select).toContainText(savedCurrency);
+            expect(puts).toEqual([{base_currency: savedCurrency}]);
+        } finally {
+            page.off('request', recordPut);
+            // The isolated API context does not depend on the browser surviving
+            // the assertion. Verify identity before the self-delete endpoint.
+            const loggedIn = await request.post('/api/v1/auth/login', {data: {username: user.username, password: user.password}});
+            expect(loggedIn.ok()).toBe(true);
+            expect((await loggedIn.json()).user.id).toBe(created.id);
+            const removed = await request.delete('/api/v1/auth/users/me');
+            expect(removed.ok()).toBe(true);
+        }
+    });
+
+    test('global lock rejects then accepts discarding a local draft without persisting it', async ({page}) => {
+        await login(page, TEST_ADMIN);
+        await navigateTo(page, '/settings');
+        await page.getByTestId('settings-tab-admin').click();
+        const tab = page.getByTestId('global-settings-tab');
+        await expect(tab).toHaveAttribute('data-busy', 'false', {timeout: 10_000});
+        const field = tab.getByTestId('global-setting-session_ttl_hours').getByRole('spinbutton');
+        await expect(field).toBeDisabled();
+        const baseline = await field.inputValue();
+        expect(baseline).toMatch(/^\d+$/);
+        const draft = String(Number(baseline) + 1);
+        const writes: string[] = [];
+        const nativeDialogs: string[] = [];
+        // Negative sentinel only: none of the tested interactions uses a native
+        // dialog. Dismiss unexpected ones so a regression fails, rather than hangs.
+        page.on('dialog', async (dialog) => {
+            nativeDialogs.push(dialog.type());
+            await dialog.dismiss();
+        });
+        const recordWrite = (req: Request) => {
+            if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method()) && new URL(req.url()).pathname.startsWith('/api/v1/settings/global')) writes.push(req.url());
+        };
+        page.on('request', recordWrite);
+        try {
+            await tab.getByTestId('settings-lock-toggle').click();
+            await expect(field).toBeEnabled();
+            await field.fill(draft);
+            await expect(tab.getByTestId('settings-save-all')).toBeVisible();
+
+            const header = page.getByTestId('global-settings-discard-confirm');
+            const discard = page.getByRole('dialog').filter({has: header});
+            for (const action of ['cancel', 'escape', 'dismiss', 'backdrop'] as const) {
+                await test.step(`keep local draft on modal ${action}`, async () => {
+                    await tab.getByTestId('settings-lock-toggle').click();
+                    await expect(header).toBeVisible();
+                    const confirm = discard.getByTestId('confirm-modal-confirm');
+                    await expect(confirm).toBeEnabled();
+                    // Approved feature assertion, never a class-based selector.
+                    await expect(confirm).toHaveClass(/\bbtn-warning\b/);
+                    await expect(confirm).not.toHaveClass(/\bbtn-danger\b/);
+                    await expect(field).toHaveValue(draft);
+                    if (action === 'cancel') {
+                        await discard.getByTestId('confirm-modal-cancel').click();
+                    } else if (action === 'escape') {
+                        await discard.press('Escape');
+                    } else if (action === 'dismiss') {
+                        await header.getByRole('button').click();
+                    } else {
+                        // ModalBase's padded viewport corner is outside the content.
+                        await discard.click({position: {x: 1, y: 1}});
+                    }
+                    await expect(header).toBeHidden();
+                    await expect(field).toBeEnabled();
+                    await expect(field).toHaveValue(draft);
+                    await expect(tab.getByTestId('settings-save-all')).toBeVisible();
+                    expect(nativeDialogs).toEqual([]);
+                    expect(writes).toEqual([]);
+                });
+            }
+
+            await tab.getByTestId('settings-lock-toggle').click();
+            await expect(header).toBeVisible();
+            await discard.getByTestId('confirm-modal-confirm').click();
+            await expect(header).toBeHidden();
+            await expect(field).toBeDisabled();
+            await expect(field).toHaveValue(baseline);
+            await expect(tab.getByTestId('settings-save-all')).toBeHidden();
+            expect(nativeDialogs).toEqual([]);
+
+            await navigateTo(page, '/settings');
+            await page.getByTestId('settings-tab-admin').click();
+            await expect(tab).toHaveAttribute('data-busy', 'false', {timeout: 10_000});
+            await expect(field).toBeDisabled();
+            await expect(field).toHaveValue(baseline);
+            expect(nativeDialogs).toEqual([]);
+            expect(writes).toEqual([]);
+        } finally {
+            page.off('request', recordWrite);
+        }
+    });
+});
 
 test.describe('Settings', () => {
     test.describe('Settings Page Access', () => {
@@ -501,5 +672,183 @@ test.describe('Settings', () => {
             // Verify the preferences are visible
             await expect(page.getByTestId('preference-language')).toBeVisible();
         });
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Onboarding replay controls (Preferences tab → OnboardingReplaySection)
+// ---------------------------------------------------------------------------
+//
+// TEST_USER is canonical and grandfathered `completed` on every flow (see
+// populate_mock_data's `_grandfather_onboarding_for_test_users`). "Replay" exists
+// precisely for this account shape: a user who already finished onboarding but
+// wants to see it again. Arming it writes only a client-side sessionStorage flag
+// (`onboardingGuide`/`onboarding.svelte.ts`'s `startReplay`) — it never calls a
+// `/settings/onboarding/*` transition endpoint, so it can never regress a
+// completed flow back to pending, and it is scoped per browser context, so two
+// tests sharing TEST_USER in parallel never see each other's armed replay.
+//
+// The Welcome case exercises replay Exit, which only clears this context's replay
+// token. None of these tests submits replay Continue: doing so on the shared
+// canonical account would overwrite its persisted language/currency settings for
+// every other test running against it concurrently. Verifying that explicit
+// preference write therefore requires a disposable terminal account, not this
+// otherwise cheap replay-control block.
+const ONBOARDING_FLOW_IDS = [
+    'welcome',
+    'intro_tour',
+    'transactions_page_guide',
+    'transaction_create_guide',
+    'transaction_bulk_guide',
+    'import_guide',
+    'broker_page_guide',
+    'broker_guide',
+    'broker_detail_guide',
+    'fx_page_guide',
+    'fx_guide',
+    'fx_detail_guide',
+    'asset_page_guide',
+    'asset_guide',
+    'asset_detail_guide',
+] as const;
+const ONBOARDING_STEP_IDS = {
+    transaction_bulk_guide: ['transaction.bulk.workspace', 'transaction.bulk.validation', 'transaction.bulk.selection', 'transaction.bulk.save'],
+    import_guide: ['import.upload', 'import.select', 'import.analyze', 'import.assets', 'import.fix', 'import.duplicates', 'import.review', 'import.bulk'],
+} as const;
+
+test.describe('Onboarding replay controls', () => {
+    async function openOnboardingSection(page: Page) {
+        await navigateTo(page, '/settings');
+        await page.getByTestId('settings-tab-preferences').click();
+        const section = page.getByTestId('onboarding-replay-section');
+        await expect(section).toBeVisible({timeout: 10_000});
+        await expect(page.getByTestId('onboarding-flow-welcome')).toBeVisible({timeout: 10_000});
+        for (const group of ['transactions', 'broker', 'fx', 'asset'] as const) {
+            await section.getByTestId(`onboarding-group-${group}`).evaluate((element) => {
+                (element as HTMLDetailsElement).open = true;
+            });
+        }
+        return section;
+    }
+
+    function trackOnboardingRequests(page: Page): {requests: string[]; stop: () => void} {
+        const requests: string[] = [];
+        const record = (req: Request) => {
+            const path = new URL(req.url()).pathname;
+            if (/^\/api\/v1\/settings\/onboarding(?:\/|$)/.test(path)) requests.push(`${req.method()} ${path}`);
+        };
+        page.on('request', record);
+        return {requests, stop: () => page.off('request', record)};
+    }
+
+    test('shows all 15 terminal onboarding flows and the Import/Bulk step detail', async ({page}) => {
+        await login(page, TEST_USER);
+        await openOnboardingSection(page);
+
+        for (const flow of ONBOARDING_FLOW_IDS) {
+            const row = page.getByTestId(`onboarding-flow-${flow}`);
+            await expect(row).toBeVisible();
+            await expect(row).toHaveAttribute('data-status', 'completed');
+            await expect(row).toHaveAttribute('data-version', /^\d+$/);
+            await expect(row).toHaveAttribute('data-current-version', /^\d+$/);
+            // Grandfathered at the current content version: nothing to update, and
+            // this fresh browser context has armed no replay yet.
+            const [version, currentVersion] = await Promise.all([row.getAttribute('data-version'), row.getAttribute('data-current-version')]);
+            expect(version).toBe(currentVersion);
+            await expect(page.getByTestId(`onboarding-flow-${flow}-update`)).toHaveCount(0);
+            await expect(page.getByTestId(`onboarding-flow-${flow}-armed`)).toHaveCount(0);
+        }
+        for (const [flow, stepIds] of Object.entries(ONBOARDING_STEP_IDS)) {
+            const details = page.getByTestId(`onboarding-flow-${flow}-steps`);
+            await details.evaluate((element) => {
+                (element as HTMLDetailsElement).open = true;
+            });
+            for (const stepId of stepIds) {
+                await expect(page.getByTestId(`onboarding-step-${flow}-${stepId}`)).toBeVisible();
+            }
+        }
+        await expect(page.getByTestId('onboarding-flow-transaction_bulk_validation_guide')).toHaveCount(0);
+        await expect(page.getByTestId('onboarding-flow-transaction_bulk_selection_guide')).toHaveCount(0);
+        await expect(page.getByTestId('onboarding-flow-transaction_bulk_save_guide')).toHaveCount(0);
+    });
+
+    test('replay welcome Exit clears client-side state and returns without a terminal mutation', async ({page}) => {
+        await login(page, TEST_USER);
+        await openOnboardingSection(page);
+        const tracker = trackOnboardingRequests(page);
+
+        try {
+            await page.getByTestId('onboarding-replay-welcome').click();
+            await expect(page).toHaveURL(/\/welcome/, {timeout: 10_000});
+            await expect(page.getByTestId('welcome-shell')).toBeVisible();
+            // The real, pre-filled form — never the "completed"/"skipped" outcome
+            // banner — because this account was never actually re-submitted.
+            await expect(page.getByTestId('welcome-page')).toHaveAttribute('data-outcome', 'pending');
+            await expect(page.getByTestId('welcome-form')).toBeVisible({timeout: 10_000});
+
+            await page.getByTestId('welcome-skip').click();
+            await expect(page).toHaveURL(/\/dashboard(?:[/?#]|$)/, {timeout: 10_000});
+            await expect(page.getByTestId('dashboard-page')).toBeVisible({timeout: 10_000});
+        } finally {
+            tracker.stop();
+        }
+        expect(tracker.requests, 'Arming and exiting a Welcome replay must call no onboarding endpoint').toEqual([]);
+
+        const section = await openOnboardingSection(page);
+        const welcome = section.getByTestId('onboarding-flow-welcome');
+        await expect(welcome).toHaveAttribute('data-status', 'completed');
+        await expect(page.getByTestId('onboarding-flow-welcome-armed')).toHaveCount(0);
+    });
+
+    test('replay import arms the next import without navigating or mutating anything', async ({page}) => {
+        await login(page, TEST_USER);
+        await openOnboardingSection(page);
+        const tracker = trackOnboardingRequests(page);
+
+        try {
+            await expect(page.getByTestId('onboarding-flow-import_guide-armed')).toHaveCount(0);
+            await page.getByTestId('onboarding-replay-import_guide').click();
+            await expect(page.getByTestId('onboarding-flow-import_guide-armed')).toBeVisible({timeout: 5_000});
+            // Unlike welcome, arming the import guide never navigates: it only
+            // takes effect the next time an Import Wizard is opened.
+            await expect(page).toHaveURL(/\/settings/);
+            await expect(page.getByTestId('onboarding-flow-welcome-armed')).toHaveCount(0);
+            await expect(page.getByTestId('onboarding-flow-intro_tour-armed')).toHaveCount(0);
+        } finally {
+            expect(tracker.requests, 'Arming a replay must never call an onboarding endpoint').toEqual([]);
+            tracker.stop();
+        }
+    });
+
+    test('Replay all starts from a clean 15-flow state and routes to /welcome without a terminal mutation', async ({page}) => {
+        // Seam, stated rather than faked: this proves the button arms *something*
+        // (the observable, safe-to-verify effect — routing to /welcome without a
+        // terminal call) and that all per-flow "-armed" badges are absent
+        // beforehand. Once armed, `resolveDestination` keeps redirecting any route
+        // back to /welcome for as long as the replay stays armed, so there is no
+        // way to return to Settings from inside *this* test and read the
+        // intro_tour/import_guide badges without either (a) actually completing or
+        // skipping welcome — which would overwrite TEST_USER's persisted language/
+        // currency for every other concurrent test — or (b) reaching past the
+        // testid surface into sessionStorage directly, which this suite's rules
+        // treat as fabrication. The component test verifies every armReplay call
+        // and its source order; this browser case verifies the real navigation
+        // and no-terminal-write boundary.
+        await login(page, TEST_USER);
+        await openOnboardingSection(page);
+        for (const flow of ONBOARDING_FLOW_IDS) {
+            await expect(page.getByTestId(`onboarding-flow-${flow}-armed`)).toHaveCount(0);
+        }
+        const tracker = trackOnboardingRequests(page);
+
+        try {
+            await expect(page.getByTestId('onboarding-replay-all')).toBeEnabled();
+            await page.getByTestId('onboarding-replay-all').click();
+            await expect(page).toHaveURL(/\/welcome/, {timeout: 10_000});
+            await expect(page.getByTestId('welcome-page')).toHaveAttribute('data-outcome', 'pending');
+        } finally {
+            expect(tracker.requests, 'Arming every replay must never call an onboarding endpoint').toEqual([]);
+            tracker.stop();
+        }
     });
 });

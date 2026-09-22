@@ -126,6 +126,14 @@ def api_ai_export(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "AI Export API tests", verbose=verbose)
 
 
+def api_tools(verbose: bool = False, test_names: list = None) -> bool:
+    """Run Tool platform API tests."""
+    print_section("Tools API Tests")
+    print_info("Testing authenticated catalog, compute, diagnostics, and transport contracts")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_tools_api.py", test_names)
+    return run_command(cmd, "Tools API tests", verbose=verbose)
+
+
 def api_risk(verbose: bool = False, test_names: list = None) -> bool:
     """Run deterministic risk catalog, query, and populated-DB tests."""
     print_section("Risk Analysis API Tests")
@@ -668,6 +676,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "signal-request-validation", api_signal_request_validation, name="Signal Request Validation", desc="Asset/FX signal request validation contracts")
     add_test(api, "signal-preview", api_signal_preview, name="Signal Preview", desc="Backend indicator compute on synthetic points (global chart preview)")
     add_test(api, "ai-export", api_ai_export, name="AI Export API", desc="Catalog, snapshots, authorization, and typed problems")
+    add_test(api, "tools", api_tools, name="Tools API", desc="Catalog, bulk compute, diagnostics, and authorization")
     add_test(api, "risk", api_risk, name="Risk Analysis API", desc="Catalog, bulk query, isolation, and populated-DB analytics")
     add_test(api, "assets-provider", api_assets_provider, name="Assets Provider API", desc="Provider assignment endpoints")
     add_test(

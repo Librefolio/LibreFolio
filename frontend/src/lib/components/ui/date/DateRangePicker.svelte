@@ -22,13 +22,12 @@
     import {_} from '$lib/i18n';
     import type {CalendarHighlights} from './CalendarMonth.svelte';
     import CalendarMonth from './CalendarMonth.svelte';
-    import {SimpleSelect} from '$lib/components/ui/select';
+    import CompactDurationBadge from './CompactDurationBadge.svelte';
     import {attachLayoutDebugExtra, type LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
     import {parseTypedDate} from '$lib/utils/core/parseTypedDate';
     import {isOutsideClick} from '$lib/utils/core/clickOutside';
     import {dateArrowStep, resetDateArrowHold} from '$lib/utils/core/dateArrowStep';
 
-    import {numericArrows} from '$lib/actions/numericArrows';
     import {portal} from '$lib/actions/portal';
     // =========================================================================
     // Types
@@ -875,33 +874,6 @@
         onchange?.(newStart, newEnd);
     }
 
-    function toggleCustomEdit(e?: MouseEvent) {
-        e?.stopPropagation();
-        customEditing = !customEditing;
-        // Apply immediately when opening (so the initial values take effect)
-        if (customEditing) {
-            handleCustomApply();
-        }
-    }
-
-    // Auto-apply custom window when amount or granularity ACTUALLY change (not on every render).
-    // We use a plain object (not $state) to track previous values — avoids infinite loops.
-    const _prev = {amt: 3, gran: 'years' as Granularity};
-    $effect(() => {
-        const amt = customAmount;
-        const gran = customGranularity;
-        if (customEditing && amt > 0 && (amt !== _prev.amt || gran !== _prev.gran)) {
-            _prev.amt = amt;
-            _prev.gran = gran;
-            // Break synchronous effect chain to avoid re-entrance
-            queueMicrotask(() => handleCustomApply());
-        }
-    });
-
-    function handleGranularityChange(v: string) {
-        customGranularity = v as Granularity;
-    }
-
     // =========================================================================
     // Typed date fields
     //
@@ -1192,39 +1164,21 @@
 
 {#snippet customWindowArea()}
     {#if showCustomWindow}
-        {#if customEditing}
-            <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-            <div
-                bind:this={customEditRef}
-                class="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-amber-500/10 dark:bg-amber-500/20 rounded-lg border border-amber-400/40 drp-trigger"
-                role="group"
-                onclick={(e) => e.stopPropagation()}
-                onkeydown={(e) => {
-                    if (e.key === 'Escape') customEditing = false;
-                }}
-            >
-                <input
-                    type="number"
-                    use:numericArrows
-                    bind:value={customAmount}
-                    data-testid="date-range-custom-amount"
-                    min="1"
-                    max="999"
-                    class="zoom-guard-exempt w-8 px-0.5 py-0.5 text-xs text-center border-none bg-transparent text-amber-700 dark:text-amber-300 focus:ring-0 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                />
-                <SimpleSelect value={customGranularity} options={granularitySelectOptions} onchange={handleGranularityChange} class="inline-block w-auto" dropdownPosition="auto" compact showChevron={false} />
-            </div>
-        {:else}
-            <button
-                type="button"
-                bind:this={customPlainBtnRef}
-                data-testid="date-preset-custom"
-                data-active={effectivePreset === 'custom' ? 'true' : 'false'}
-                class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
-                    {effectivePreset === 'custom' ? 'bg-amber-500 text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
-                onclick={(e) => toggleCustomEdit(e)}>{effectivePreset === 'custom' ? `${customAmount}${$_(granularityOptions.find((o) => o.value === customGranularity)?.shortKey ?? 'common.custom').toUpperCase()}` : $_('common.custom')}</button
-            >
-        {/if}
+        <CompactDurationBadge
+            bind:amount={customAmount}
+            bind:unit={customGranularity}
+            bind:editing={customEditing}
+            bind:buttonElement={customPlainBtnRef}
+            bind:editorElement={customEditRef}
+            active={effectivePreset === 'custom'}
+            options={granularitySelectOptions}
+            customLabel={$_('common.custom')}
+            min={1}
+            max={999}
+            buttonTestId="date-preset-custom"
+            amountTestId="date-range-custom-amount"
+            onapply={handleCustomApply}
+        />
     {/if}
 {/snippet}
 

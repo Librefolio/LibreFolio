@@ -7,6 +7,7 @@ import os
 import re
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 from scripts.cli_base import auto_build_frontend, pipenv_prefix
 
@@ -51,11 +52,7 @@ def _ensure_frontend_build() -> bool:
     regenerates them first. ``auto_build_frontend`` still only rebuilds when the
     sources actually changed.
     """
-    import os
-    from pathlib import Path
-    from types import SimpleNamespace
-
-    from dev import cmd_fe_build
+    from dev import cmd_fe_build  # noqa: PLC0415 — avoid dev.py import cycle
 
     if "build" in _SETUP_DONE:
         return True
@@ -117,11 +114,7 @@ def _ensure_frontend_build() -> bool:
             # plugin's `apply()` excludes it from `vite build` unless forced, so
             # the log said "instrumented" and the bundle was plain.
             if not _bundle_is_instrumented():
-                print_error(
-                    "The frontend build is not instrumented despite COVERAGE_INSTRUMENT=1. "
-                    "JS coverage would come back empty without failing, so the run stops here. "
-                    "Check the vite-plugin-istanbul options in frontend/vite.config.ts."
-                )
+                print_error("The frontend build is not instrumented despite COVERAGE_INSTRUMENT=1. " "JS coverage would come back empty without failing, so the run stops here. " "Check the vite-plugin-istanbul options in frontend/vite.config.ts.")
                 marker.unlink(missing_ok=True)
                 return False
             marker.write_text("this build is istanbul-instrumented; do not ship it\n")
@@ -142,8 +135,6 @@ def _bundle_is_instrumented() -> bool:
     the Playwright fixture will look for at runtime, so this asks the same
     question the collection asks.
     """
-    from pathlib import Path
-
     app_dir = Path("frontend/build/_app/immutable")
     if not app_dir.is_dir():
         return False
@@ -198,21 +189,13 @@ def _ensure_test_users() -> bool:
     ]
 
     for username, email, password in users:
-        result = subprocess.run(
-            ["python", "scripts/user_cli.py", "--test-db", "create-superuser",
-             username, email, password],
-            capture_output=True,
-            text=True
-        )
+        result = subprocess.run(["python", "scripts/user_cli.py", "--test-db", "create-superuser", username, email, password], capture_output=True, text=True)
         if result.returncode != 0 and "already exists" not in result.stderr.lower():
             print_error(f"Failed to create user {username}: {result.stderr}")
             return False
 
     # Promote admin
-    subprocess.run(
-        ["python", "scripts/user_cli.py", "--test-db", "promote", "e2e_test_admin"],
-        capture_output=True
-    )
+    subprocess.run(["python", "scripts/user_cli.py", "--test-db", "promote", "e2e_test_admin"], capture_output=True)
 
     _SETUP_DONE.add("users")
     # Both halves of what globalSetup would redo are now in place, so it can skip
@@ -310,7 +293,7 @@ def _run_playwright_body(  # noqa: C901 — flat command/env assembly + error ha
     if extra_args:
         cmd.extend(["--"] + extra_args)
 
-    spec_label = ', '.join(spec_files) if spec_files else 'all tests'
+    spec_label = ", ".join(spec_files) if spec_files else "all tests"
     print(f"\n{Colors.BLUE}Running: Playwright {spec_label}{Colors.NC}")
     if test_names:
         print(f"{Colors.YELLOW}Filter: {' | '.join(test_names)}{Colors.NC}")
@@ -334,15 +317,15 @@ def _run_playwright_body(  # noqa: C901 — flat command/env assembly + error ha
             if env is None:
                 env = os.environ.copy()
             if cov_py:
-                env['COVERAGE_BACKEND'] = '1'
+                env["COVERAGE_BACKEND"] = "1"
                 # Playwright merges this env into its webServer (`dev.py server
                 # --coverage`), whose spawn workers then measure themselves —
                 # see _common.apply_subprocess_coverage_env.
                 _common.apply_subprocess_coverage_env(env)
             if cov_js:
-                env['COVERAGE_JS'] = '1'
+                env["COVERAGE_JS"] = "1"
             else:
-                env.pop('COVERAGE_JS', None)
+                env.pop("COVERAGE_JS", None)
 
         result = subprocess.run(cmd, cwd=PROJECT_ROOT / "frontend", text=True, env=env)
 
@@ -363,33 +346,32 @@ def _list_front_tests(category: str, action: str = None) -> bool:  # noqa: C901 
     List available test names from spec files for a front-* category.
     Parses .spec.ts files looking for test.describe() and test() calls.
     """
-    from ._registry import TEST_REGISTRY
+    from ._registry import TEST_REGISTRY  # noqa: PLC0415 — avoid registry import cycle
 
-    spec_map = {}
+    spec_entries = []
     if category in TEST_REGISTRY:
         for act, info in TEST_REGISTRY[category].items():
             if act == "_meta" or act == "all":
                 continue
-            tests_file = info.get("tests", "")
-            if tests_file.endswith(".spec.ts"):
-                spec_map[act] = tests_file
+            tests = info.get("tests", ())
+            paths = (tests,) if isinstance(tests, str) else tuple(tests or ())
+            spec_entries.extend((act, str(path)) for path in paths if str(path).endswith(".spec.ts"))
 
     if action and action != "all":
-        if action in spec_map:
-            spec_map = {action: spec_map[action]}
-        else:
+        spec_entries = [(act, spec_file) for act, spec_file in spec_entries if act == action]
+        if not spec_entries:
             print_error(f"No spec file found for action '{action}'")
             return True
 
-    if not spec_map:
+    if not spec_entries:
         print_warning(f"No spec files found for category '{category}'")
         return True
 
     e2e_dir = PROJECT_ROOT / "frontend" / "e2e"
     print(f"\n{Colors.CYAN}🧪 Available Tests ({category}{' / ' + action if action and action != 'all' else ''}):{Colors.NC}")
-    print(f"  Use {Colors.YELLOW}./dev.py test {category} <action> \"<test name>\"{Colors.NC} to run a specific test\n")
+    print(f'  Use {Colors.YELLOW}./dev.py test {category} <action> "<test name>"{Colors.NC} to run a specific test\n')
 
-    for act, spec_file in spec_map.items():
+    for _act, spec_file in spec_entries:
         full_path = e2e_dir / spec_file
         if not full_path.exists():
             print(f"  {Colors.RED}✘ {spec_file} (file not found){Colors.NC}")
@@ -443,7 +425,7 @@ BACKEND_TEST_PATHS = {
 
 def _list_pytest_tests(category: str, action: str = None) -> bool:  # noqa: C901 — flat collect-output report printing, no nested logic
     """List available pytest test names for a backend category."""
-    from ._registry import TEST_REGISTRY
+    from ._registry import TEST_REGISTRY  # noqa: PLC0415 — avoid registry import cycle
 
     test_path = None
 
@@ -476,7 +458,7 @@ def _list_pytest_tests(category: str, action: str = None) -> bool:  # noqa: C901
         return True
 
     print(f"\n{Colors.CYAN}🧪 Available Tests ({category}{' / ' + action if action and action != 'all' else ''}):{Colors.NC}")
-    print(f"  Use {Colors.YELLOW}./dev.py test {category} <action> \"<test name>\"{Colors.NC} to run a specific test\n")
+    print(f'  Use {Colors.YELLOW}./dev.py test {category} <action> "<test name>"{Colors.NC} to run a specific test\n')
 
     try:
         cmd = [*pipenv_prefix(), "python", "-m", "pytest", str(test_path), "--collect-only", "-q"]
@@ -492,9 +474,9 @@ def _list_pytest_tests(category: str, action: str = None) -> bool:  # noqa: C901
         if not output:
             print(f"  {Colors.YELLOW}(no tests collected){Colors.NC}")
             if result.stderr:
-                err_lines = [l for l in result.stderr.strip().splitlines() if 'ERROR' in l or 'error' in l.lower()]
-                for l in err_lines[:5]:
-                    print(f"  {Colors.RED}{l}{Colors.NC}")
+                err_lines = [line for line in result.stderr.strip().splitlines() if "ERROR" in line or "error" in line.lower()]
+                for line in err_lines[:5]:
+                    print(f"  {Colors.RED}{line}{Colors.NC}")
             print()
             return True
 
@@ -503,10 +485,10 @@ def _list_pytest_tests(category: str, action: str = None) -> bool:  # noqa: C901
         test_count = 0
 
         for line in output.splitlines():
-            if '::' not in line or line.startswith('='):
+            if "::" not in line or line.startswith("="):
                 continue
 
-            parts = line.strip().split('::')
+            parts = line.strip().split("::")
             file_path = parts[0] if len(parts) >= 1 else ""
 
             if file_path != current_file:
@@ -540,4 +522,3 @@ def _list_pytest_tests(category: str, action: str = None) -> bool:  # noqa: C901
 
     print()
     return True
-

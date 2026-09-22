@@ -21,7 +21,7 @@ from backend.app.schemas.provider import FAProviderAssignmentItem
 from backend.app.schemas.refresh import FARefreshItem, SyncDateRangeModel, SyncStatus
 from backend.app.services.asset_source import AssetHistoryStartDate, AssetSourceManager
 from backend.app.services.asset_source_providers.mockprov import MockProvider
-from backend.app.services.provider_registry import AssetProviderRegistry
+from backend.app.services.asset_sources.refresh import AssetProviderRegistry
 
 
 def _unique(prefix: str) -> str:

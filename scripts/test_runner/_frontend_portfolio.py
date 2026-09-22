@@ -53,6 +53,25 @@ def front_portfolio_store_unit(verbose: bool = False, ui: bool = False, headed: 
     return False
 
 
+
+def front_portfolio_risk_benchmark_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run Risk benchmark store unit tests."""
+    print(f"\n{Colors.BLUE}Running: Risk benchmark store Vitest unit tests{Colors.NC}")
+    result = subprocess.run(
+        ["npx", "vitest", "run", "src/lib/stores/risk/riskBenchmarkStore.test.ts"],
+        cwd="frontend",
+        capture_output=not verbose,
+    )
+    if result.returncode == 0:
+        print_success("Risk benchmark store Vitest unit tests - PASSED")
+        return True
+
+    print_error(f"Risk benchmark store Vitest unit tests - FAILED (exit code: {result.returncode})")
+    if not verbose:
+        print(result.stdout.decode() if result.stdout else "")
+    return False
+
+
 def front_portfolio_risk_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run Risk store unit tests."""
     print(f"\n{Colors.BLUE}Running: Risk store Vitest unit tests{Colors.NC}")
@@ -72,13 +91,132 @@ def front_portfolio_risk_unit(verbose: bool = False, ui: bool = False, headed: b
     return False
 
 
+def front_portfolio_risk_request_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run Risk request-builder unit tests."""
+    print(f"\n{Colors.BLUE}Running: Risk request builder Vitest unit tests{Colors.NC}")
+    result = subprocess.run(
+        ["npx", "vitest", "run", "src/lib/risk/simulationParameters.test.ts"],
+        cwd="frontend",
+        capture_output=not verbose,
+    )
+    if result.returncode == 0:
+        print_success("Risk request builder Vitest unit tests - PASSED")
+        return True
+
+    print_error(f"Risk request builder Vitest unit tests - FAILED (exit code: {result.returncode})")
+    if not verbose:
+        print(result.stdout.decode() if result.stdout else "")
+        print(result.stderr.decode() if result.stderr else "")
+    return False
+
+
+def front_portfolio_allocation_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run allocation chart colour-hierarchy unit tests (Vitest)."""
+    print(f"\n{Colors.BLUE}Running: Allocation colour hierarchy Vitest unit tests{Colors.NC}")
+    result = subprocess.run(
+        ["npx", "vitest", "run", "src/lib/utils/__tests__/colors.test.ts", "src/lib/components/charts/__tests__/allocationHierarchy.test.ts"],
+        cwd="frontend",
+        capture_output=not verbose,
+    )
+    if result.returncode == 0:
+        print_success("Allocation colour hierarchy Vitest unit tests - PASSED")
+        return True
+
+    print_error(f"Allocation colour hierarchy Vitest unit tests - FAILED (exit code: {result.returncode})")
+    if not verbose:
+        print(result.stdout.decode() if result.stdout else "")
+        print(result.stderr.decode() if result.stderr else "")
+    return False
+
+
+def front_portfolio_risk_levels_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the four-level risk UI pure-logic unit tests."""
+    print(f"\n{Colors.BLUE}Running: Risk levels Vitest unit tests{Colors.NC}")
+    result = subprocess.run(
+        ["npx", "vitest", "run", "src/lib/components/risk/levels/levelHelpers.test.ts", "src/lib/components/risk/levels/levelMetadata.test.ts", "src/lib/components/risk/levels/l1/l1Helpers.test.ts", "src/lib/components/risk/levels/l3Helpers.test.ts", "src/lib/components/risk/levels/simulationProvenance.test.ts", "src/lib/components/risk/levels/l4/simulationModes.test.ts", "src/lib/components/risk/levels/l4/driftUncertainty.test.ts", "src/lib/components/risk/levels/l4/scenarioHelpers.test.ts"],
+        cwd="frontend",
+        capture_output=not verbose,
+    )
+    if result.returncode == 0:
+        print_success("Risk levels Vitest unit tests - PASSED")
+        return True
+
+    print_error(f"Risk levels Vitest unit tests - FAILED (exit code: {result.returncode})")
+    if not verbose:
+        print(result.stdout.decode() if result.stdout else "")
+        print(result.stderr.decode() if result.stderr else "")
+    return False
+
+
+def front_portfolio_risk_levels_component(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the four-level risk UI component tests (Vitest + jsdom mount)."""
+    print(f"\n{Colors.BLUE}Running: Risk levels component Vitest tests{Colors.NC}")
+    result = subprocess.run(
+        ["npx", "vitest", "run", "src/lib/components/risk/levels/l4/L4Replay.test.ts"],
+        cwd="frontend",
+        capture_output=not verbose,
+    )
+    if result.returncode == 0:
+        print_success("Risk levels component Vitest tests - PASSED")
+        return True
+
+    print_error(f"Risk levels component Vitest tests - FAILED (exit code: {result.returncode})")
+    if not verbose:
+        print(result.stdout.decode() if result.stdout else "")
+        print(result.stderr.decode() if result.stderr else "")
+    return False
+
+
+def front_portfolio_risk_controller_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run Risk panel controller unit tests."""
+    print(f"\n{Colors.BLUE}Running: Risk panel controller Vitest unit tests{Colors.NC}")
+    result = subprocess.run(
+        ["npx", "vitest", "run", "src/lib/stores/risk/riskPanelController.test.ts"],
+        cwd="frontend",
+        capture_output=not verbose,
+    )
+    if result.returncode == 0:
+        print_success("Risk panel controller Vitest unit tests - PASSED")
+        return True
+
+    print_error(f"Risk panel controller Vitest unit tests - FAILED (exit code: {result.returncode})")
+    if not verbose:
+        print(result.stdout.decode() if result.stdout else "")
+        print(result.stderr.decode() if result.stderr else "")
+    return False
+
+
 def front_portfolio_risk(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
-    """Run Risk analysis functional E2E tests."""
+    """Run portfolio-level Risk analysis E2E tests (Dashboard + Broker Detail)."""
     print_section("Frontend Risk Analysis Tests")
     if not _ensure_frontend_build(): return False
     if not _ensure_db_populated(): return False
     if not _ensure_test_users(): return False
     return _run_playwright("portfolio/risk-analysis.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_portfolio_risk_lab(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run Asset Global risk laboratory E2E tests."""
+    print_section("Frontend Asset Global Risk Lab Tests")
+    if not _ensure_frontend_build(): return False
+    if not _ensure_db_populated(): return False
+    if not _ensure_test_users(): return False
+    return _run_playwright("portfolio/risk-lab.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_portfolio_risk_asset_detail(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """
+    Run the Asset Detail risk net.
+
+    Asset Detail is parked and must survive the risk redesign unchanged: these
+    two tests are what proves it. A red here means the page moved — investigate
+    the page, never the assertion.
+    """
+    print_section("Frontend Risk Asset Detail Tests")
+    if not _ensure_frontend_build(): return False
+    if not _ensure_db_populated(): return False
+    if not _ensure_test_users(): return False
+    return _run_playwright("portfolio/risk-asset-detail.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_portfolio_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -107,7 +245,15 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "broker-icons", front_portfolio_broker_icons, name="Broker Icon Tests", desc="Dashboard positions broker fallback chain", tests="portfolio/broker-icons.spec.ts")
     add_test(cat, "dashboard", front_portfolio_dashboard, name="Dashboard Chart Tests", desc="PositionsPanel 2x2 view matrix (treemap + perf chart), toggle persistence, AllocationPanel now/history, loading state", tests="portfolio/dashboard.spec.ts")
     add_test(cat, "risk-unit", front_portfolio_risk_unit, test_names=False, name="Risk Store Unit Tests", desc="Request-key cache, account isolation, invalidation and capability checks", tests="src/lib/stores/risk/riskStore.test.ts")
+    add_test(cat, "risk-request-unit", front_portfolio_risk_request_unit, test_names=False, name="Risk Request Builder Unit Tests", desc="What the request actually carries: the simulation process is chosen by the caller rather than hard-coded, each mode carries its own seed field and forbids the other one, and the legacy aliases keep their documented geometric-Brownian default", tests="src/lib/risk/simulationParameters.test.ts")
+    add_test(cat, "risk-benchmark-unit", front_portfolio_risk_benchmark_unit, test_names=False, name="Risk Benchmark Store Unit Tests", desc="One benchmark shared by every scope: user scoping, reload survival, corrupt-value rejection", tests="src/lib/stores/risk/riskBenchmarkStore.test.ts")
+    add_test(cat, "risk-controller-unit", front_portfolio_risk_controller_unit, test_names=False, name="Risk Panel Controller Unit Tests", desc="Signature invalidation with in-flight preservation, generation guards, catalog error vs pending", tests="src/lib/stores/risk/riskPanelController.test.ts")
+    add_test(cat, "risk-levels-component", front_portfolio_risk_levels_component, test_names=False, name="Risk Levels Component Tests", desc="L4 historical replay mounted in jsdom over a real panel controller: the composition total is withheld rather than degraded to a dash when the scope carries no aggregate return (and is still stated when a weighted replay came out flat at 0.0), and the audit sentence names the treatment the payload actually carries — the omitted-from-replay wording as soon as one exclusion was omitted, the carried-at-zero-return wording when every exclusion was a zero-return residual, when nothing was excluded, and when the payload carries no excluded list at all. Which of the two keys was selected is proved by resolving both from the shipped catalogue instead of pinning a translated sentence", tests="src/lib/components/risk/levels/l4/L4Replay.test.ts")
+    add_test(cat, "risk-levels-unit", front_portfolio_risk_levels_unit, test_names=False, name="Risk Levels Unit Tests", desc="Four-level pure logic: L1 scale of harm (CVaR leads, omission never zero-fill, required-recovery asymmetry), L1 tail readings (underwater curve pre-scaled to percent because the chart converts nothing, VaR cut located by half-open inequality and kept when it is exactly zero, worst-realization null honoured as a refusal rather than zero-filled), L2 weight-vs-contribution divergence ordering with negative contributions, L3 figure collection plus the perimeter choice (current composition preferred, historical fallback, perimeter read from the payload even when it contradicts the wave) and the risk/return points (portfolio sized as the whole, assets by un-renormalized weight, cash never plotted), L4 simulation modes with the seed each one carries, L4 drift uncertainty applied to the median and the band it is compared against, L4 simulation provenance read from the payload instead of asserted in a translation string, L4 scenario presets and tornado ordering by signed damage, level provenance collapsed by agreement so a disagreement about the window splits instead of being represented by one analytic, and catalogue values degraded to the backend token rather than to a printed i18n key", tests="src/lib/components/risk/levels/levelHelpers.test.ts, src/lib/components/risk/levels/levelMetadata.test.ts, src/lib/components/risk/levels/l1/l1Helpers.test.ts, src/lib/components/risk/levels/l3Helpers.test.ts, src/lib/components/risk/levels/simulationProvenance.test.ts, src/lib/components/risk/levels/l4/simulationModes.test.ts, src/lib/components/risk/levels/l4/driftUncertainty.test.ts, src/lib/components/risk/levels/l4/scenarioHelpers.test.ts")
     add_test(cat, "store-unit", front_portfolio_store_unit, test_names=False, name="Portfolio Store Unit Tests", desc="portfolioStore + portfolioMutation vitest units", tests="src/lib/stores/portfolio/portfolioStore.test.ts")
-    add_test(cat, "risk", front_portfolio_risk, name="Risk Analysis Tests", desc="Asset, asset-set and portfolio Risk UI integration", tests="portfolio/risk-analysis.spec.ts")
+    add_test(cat, "allocation-unit", front_portfolio_allocation_unit, test_names=False, name="Allocation Colour Hierarchy Unit Tests", desc="hexToHsl round-trip on the real palettes, subtype grouping/ordering, measured shade contrast, legacy ordering pin", tests="src/lib/components/charts/__tests__/allocationHierarchy.test.ts")
+    add_test(cat, "risk", front_portfolio_risk, name="Risk Analysis Tests", desc="Portfolio-level risk on Dashboard and Broker Detail", tests="portfolio/risk-analysis.spec.ts")
+    add_test(cat, "risk-lab", front_portfolio_risk_lab, name="Asset Global Risk Lab Tests", desc="Asset-set laboratory: the no-money rule asserted by stubbing money in, D19 opening selection by branch rather than by size, bulk actions against filtered candidates, filters that keep their own option clickable, correlation pairs keyed by asset id and matrix ordering", tests="portfolio/risk-lab.spec.ts")
+    add_test(cat, "risk-asset-detail", front_portfolio_risk_asset_detail, name="Risk Asset Detail Net", desc="Asset Detail is parked and must stay identical — these two tests are the proof, not a maintenance chore", tests="portfolio/risk-asset-detail.spec.ts")
     add_test(cat, "all", front_portfolio_all, test_names=False, name="All Portfolio Tests", desc="Run all Portfolio frontend tests")
     registry["front-portfolio"] = cat

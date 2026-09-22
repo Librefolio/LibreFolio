@@ -22,6 +22,7 @@
 
     // Props
     export let open: boolean = false;
+    export let zIndex: number = 50;
     export let title: string = '';
     /** Filter to only show images in the existing tab */
     export let filterImages: boolean = true;
@@ -222,7 +223,7 @@
     }
 </script>
 
-<ModalBase maxWidth="600px" onRequestClose={close} {open} zIndex={50}>
+<ModalBase maxWidth="600px" onRequestClose={close} {open} {zIndex}>
     <div aria-modal="true" class="picker-modal-inner" data-testid="asset-picker-modal" role="dialog" tabindex="-1">
         <!-- Header -->
         <div class="picker-header">

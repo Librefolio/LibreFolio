@@ -24,8 +24,12 @@
  * component by making the same mistake.
  */
 import {beforeAll, describe, expect, it, vi} from 'vitest';
+import type {ComponentProps} from 'svelte';
 import {tick} from 'svelte';
-import {fireEvent, render, screen, waitFor} from '$test/component';
+import {createSubscriber} from 'svelte/reactivity';
+import {fireEvent, render, screen, waitFor, within} from '$test/component';
+import type {SelectOption} from '$lib/components/ui/select/types';
+import CompactDurationBadge from './CompactDurationBadge.svelte';
 import DateRangePicker from './DateRangePicker.svelte';
 
 /** A date safely in the past, so no cell is disabled by the future guard. */
@@ -65,6 +69,124 @@ function setup(overrides: Record<string, unknown> = {}) {
         endInput: screen.getByTestId('date-range-input-end') as HTMLInputElement,
         root: screen.getByTestId('date-range-picker-root'),
     };
+}
+
+const DURATION_CASES = [
+    {unit: 'days', label: 'D'},
+    {unit: 'weeks', label: 'W'},
+    {unit: 'months', label: 'M'},
+    {unit: 'years', label: 'Y'},
+] as const;
+
+const DURATION_OPTIONS: SelectOption[] = DURATION_CASES.map(({unit, label}) => ({
+    value: unit,
+    label,
+}));
+
+type DurationUnit = (typeof DURATION_CASES)[number]['unit'];
+
+/**
+ * A tiny reactive cell for props passed through Testing Library's direct-render
+ * harness. Accessor props are the parent-side half of `bind:`; the subscriber
+ * makes their setters invalidate the child exactly as a real Svelte parent would.
+ */
+function boundState<T>(initial: T) {
+    let current = initial;
+    let update = () => {};
+    const subscribe = createSubscriber((notify) => {
+        update = notify;
+        return () => {
+            update = () => {};
+        };
+    });
+    return {
+        get value(): T {
+            subscribe();
+            return current;
+        },
+        set value(next: T) {
+            if (Object.is(current, next)) return;
+            current = next;
+            update();
+        },
+    };
+}
+
+function setupCompactDurationBadge(overrides: Partial<ComponentProps<typeof CompactDurationBadge>> = {}) {
+    const onapply = vi.fn();
+    const boundAmount = boundState(overrides.amount ?? 3);
+    const boundUnit = boundState<DurationUnit>(overrides.unit ?? 'years');
+    const boundEditing = boundState(overrides.editing ?? false);
+    const props: ComponentProps<typeof CompactDurationBadge> & {amount: number; unit: DurationUnit; editing: boolean} = {
+        options: DURATION_OPTIONS,
+        customLabel: 'Test custom',
+        buttonTestId: 'compact-duration',
+        amountTestId: 'compact-duration-amount',
+        unitTestId: 'compact-duration-unit',
+        ...overrides,
+        onapply,
+        get amount() {
+            return boundAmount.value;
+        },
+        set amount(next: number) {
+            boundAmount.value = next;
+        },
+        get unit() {
+            return boundUnit.value;
+        },
+        set unit(next: DurationUnit) {
+            boundUnit.value = next;
+        },
+        get editing() {
+            return boundEditing.value;
+        },
+        set editing(next: boolean) {
+            boundEditing.value = next;
+        },
+    };
+    const utils = render(CompactDurationBadge, props);
+    const state = {
+        get amount() {
+            return boundAmount.value;
+        },
+        get unit() {
+            return boundUnit.value;
+        },
+        get editing() {
+            return boundEditing.value;
+        },
+    };
+    return {onapply, state, ...utils};
+}
+
+/** Enters the invalid zero draft without publishing it to the bound state. */
+async function enterInvalidZeroDurationDraft(): Promise<HTMLInputElement> {
+    const amount = screen.getByTestId('compact-duration-amount') as HTMLInputElement;
+    await fireEvent.input(amount, {target: {value: '0'}});
+    await tick();
+
+    expect(amount).toHaveAttribute('aria-invalid', 'true');
+    return amount;
+}
+
+async function selectYearsDurationDraft(): Promise<void> {
+    const unit = screen.getByTestId('compact-duration-unit-button');
+    await fireEvent.click(unit);
+    expect(unit).toHaveAttribute('aria-expanded', 'true');
+
+    await fireEvent.keyDown(unit, {key: 'End'});
+    expect(unit.getAttribute('aria-activedescendant')).toMatch(/-option-years$/);
+
+    await fireEvent.keyDown(unit, {key: 'Enter'});
+    expect(unit).toHaveAttribute('aria-expanded', 'false');
+}
+
+function addOutsideDurationTarget(container: HTMLElement): HTMLElement {
+    const outside = document.createElement('button');
+    outside.type = 'button';
+    outside.dataset.testid = 'compact-duration-outside';
+    container.append(outside);
+    return screen.getByTestId('compact-duration-outside');
 }
 
 /** Types into a field without committing — commit is blur, Enter or an arrow, deliberately. */
@@ -434,6 +556,30 @@ describe('DateRangePicker — a range that matches a preset window lights it up'
 // ---------------------------------------------------------------------------
 
 describe('DateRangePicker — the custom "N units back" window', () => {
+    it('keeps the custom trigger and amount selectors stable across editor mode', async () => {
+        setup();
+        const trigger = screen.getByTestId('date-preset-custom');
+
+        await fireEvent.click(trigger);
+
+        expect(screen.queryByTestId('date-preset-custom')).toBeNull();
+        expect(screen.getByTestId('date-range-custom-amount')).toBeInTheDocument();
+    });
+
+    it('applies the initial 3-year window as soon as the editor opens', async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date(2024, 5, 14, 12));
+        try {
+            const {onchange} = setup();
+
+            await fireEvent.click(screen.getByTestId('date-preset-custom'));
+
+            expect(onchange).toHaveBeenCalledExactlyOnceWith('2021-06-14', '2024-06-14');
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
     it('opening the custom window publishes a range that ends today and starts in the past', async () => {
         const {onchange} = setup();
         await fireEvent.click(screen.getByTestId('date-preset-custom'));
@@ -461,6 +607,36 @@ describe('DateRangePicker — the custom "N units back" window', () => {
         expect(screen.getByTestId('date-range-custom-amount')).toBeInTheDocument(); // still editing
     });
 
+    it('accepts 999 as the maximum and refuses a larger amount', async () => {
+        const {onchange} = setup();
+        await fireEvent.click(screen.getByTestId('date-preset-custom'));
+        onchange.mockClear();
+        const amount = screen.getByTestId('date-range-custom-amount');
+
+        expect(amount).toHaveAttribute('min', '1');
+        expect(amount).toHaveAttribute('max', '999');
+
+        await fireEvent.input(amount, {target: {value: '1000'}});
+        await tick();
+        expect(amount).toHaveAttribute('aria-invalid', 'true');
+        expect(onchange).not.toHaveBeenCalled();
+
+        await fireEvent.input(amount, {target: {value: '999'}});
+        await waitFor(() => expect(onchange).toHaveBeenCalled());
+        expect(amount).toHaveAttribute('aria-invalid', 'false');
+    });
+
+    it('clicking outside leaves the custom editor and restores its trigger', async () => {
+        setup();
+        await fireEvent.click(screen.getByTestId('date-preset-custom'));
+
+        await fireEvent.click(document.body);
+        await tick();
+
+        expect(screen.queryByTestId('date-range-custom-amount')).toBeNull();
+        expect(screen.getByTestId('date-preset-custom')).toBeInTheDocument();
+    });
+
     it('Escape leaves the custom editor and restores the plain button', async () => {
         setup();
         await fireEvent.click(screen.getByTestId('date-preset-custom'));
@@ -468,6 +644,141 @@ describe('DateRangePicker — the custom "N units back" window', () => {
         await tick();
         expect(screen.queryByTestId('date-range-custom-amount')).toBeNull();
         expect(screen.getByTestId('date-preset-custom')).toBeInTheDocument();
+    });
+});
+
+describe('CompactDurationBadge', () => {
+    it.each(DURATION_CASES)('applies positive integer amounts in $label units', async ({unit, label}) => {
+        const {onapply} = setupCompactDurationBadge({amount: 2, unit});
+
+        await fireEvent.click(screen.getByTestId('compact-duration'));
+
+        expect(onapply).toHaveBeenCalledExactlyOnceWith(2, unit);
+        expect(screen.getByTestId('compact-duration-unit-button')).toHaveTextContent(label);
+    });
+
+    it('renders only the configured allowed unit subset', async () => {
+        const allowed = DURATION_OPTIONS.filter((option) => option.value !== 'days');
+        setupCompactDurationBadge({options: allowed});
+        await fireEvent.click(screen.getByTestId('compact-duration'));
+
+        await fireEvent.click(screen.getByTestId('compact-duration-unit-button'));
+        const dropdown = screen.getByTestId('compact-duration-unit-dropdown');
+
+        expect(within(dropdown).queryByRole('option', {name: 'D'})).toBeNull();
+        for (const label of ['W', 'M', 'Y']) {
+            expect(within(dropdown).getByRole('option', {name: label})).toBeInTheDocument();
+        }
+    });
+
+    it('has no implicit maximum when the caller does not provide one', async () => {
+        const {onapply} = setupCompactDurationBadge({amount: 1000});
+
+        await fireEvent.click(screen.getByTestId('compact-duration'));
+
+        const amount = screen.getByTestId('compact-duration-amount');
+        expect(amount).not.toHaveAttribute('max');
+        expect(amount).toHaveAttribute('aria-invalid', 'false');
+        expect(onapply).toHaveBeenCalledExactlyOnceWith(1000, 'years');
+    });
+
+    it('applies only positive safe integers', async () => {
+        const {onapply} = setupCompactDurationBadge({editing: true});
+        const amount = screen.getByTestId('compact-duration-amount');
+
+        for (const invalid of ['0', '-2', '1.5', String(Number.MAX_SAFE_INTEGER + 1)]) {
+            await fireEvent.input(amount, {target: {value: invalid}});
+            await tick();
+            expect(amount).toHaveAttribute('aria-invalid', 'true');
+            expect(onapply).not.toHaveBeenCalled();
+        }
+
+        await fireEvent.input(amount, {target: {value: '2'}});
+        await waitFor(() => expect(onapply).toHaveBeenCalledExactlyOnceWith(2, 'years'));
+        expect(amount).toHaveAttribute('aria-invalid', 'false');
+    });
+
+    it('keeps the committed amount and unit when draft zero is invalid', async () => {
+        const {onapply, state} = setupCompactDurationBadge({amount: 8, unit: 'months', editing: true});
+
+        await enterInvalidZeroDurationDraft();
+        await selectYearsDurationDraft();
+
+        expect(state.amount).toBe(8);
+        expect(state.unit).toBe('months');
+        expect(state.editing).toBe(true);
+        expect(onapply).not.toHaveBeenCalled();
+    });
+
+    it('lets the caller reject a safe amount whose converted product overflows without committing it', async () => {
+        const overflowAmount = Math.floor(Number.MAX_SAFE_INTEGER / 12) + 1;
+        const isAllowed = vi.fn((amount: number, unit: DurationUnit) => unit !== 'years' || Number.isSafeInteger(amount * 12));
+        const {onapply, state} = setupCompactDurationBadge({amount: 8, unit: 'months', editing: true, isAllowed});
+        const amount = screen.getByTestId('compact-duration-amount');
+
+        expect(Number.isSafeInteger(overflowAmount)).toBe(true);
+        expect(Number.isSafeInteger(overflowAmount * 12)).toBe(false);
+        expect(amount).not.toHaveAttribute('max');
+
+        await enterInvalidZeroDurationDraft();
+        await selectYearsDurationDraft();
+        await fireEvent.input(amount, {target: {value: String(overflowAmount)}});
+        await tick();
+
+        expect(amount).toHaveAttribute('aria-invalid', 'true');
+        expect(isAllowed).toHaveBeenLastCalledWith(overflowAmount, 'years');
+        expect(state.amount).toBe(8);
+        expect(state.unit).toBe('months');
+        expect(state.editing).toBe(true);
+        expect(onapply).not.toHaveBeenCalled();
+    });
+
+    it('Escape restores the last committed compact label and bound state after an invalid draft', async () => {
+        const {onapply, state} = setupCompactDurationBadge({active: true, amount: 8, unit: 'months'});
+        await fireEvent.click(screen.getByTestId('compact-duration'));
+        onapply.mockClear();
+        const amount = await enterInvalidZeroDurationDraft();
+        await selectYearsDurationDraft();
+
+        await fireEvent.keyDown(amount, {key: 'Escape'});
+        await tick();
+
+        expect(screen.queryByTestId('compact-duration-amount')).toBeNull();
+        const trigger = screen.getByTestId('compact-duration');
+        expect(trigger).toHaveAttribute('data-active', 'true');
+        expect(trigger).toHaveTextContent('8M');
+        expect(state.amount).toBe(8);
+        expect(state.unit).toBe('months');
+        expect(state.editing).toBe(false);
+        expect(onapply).not.toHaveBeenCalled();
+    });
+
+    it('an outside click restores the last committed compact label and bound state after an invalid draft', async () => {
+        const {container, onapply, state} = setupCompactDurationBadge({active: true, amount: 8, unit: 'months'});
+        await fireEvent.click(screen.getByTestId('compact-duration'));
+        onapply.mockClear();
+        await enterInvalidZeroDurationDraft();
+        await selectYearsDurationDraft();
+
+        await fireEvent.click(addOutsideDurationTarget(container));
+        await tick();
+
+        expect(screen.queryByTestId('compact-duration-amount')).toBeNull();
+        const trigger = screen.getByTestId('compact-duration');
+        expect(trigger).toHaveAttribute('data-active', 'true');
+        expect(trigger).toHaveTextContent('8M');
+        expect(state.amount).toBe(8);
+        expect(state.unit).toBe('months');
+        expect(state.editing).toBe(false);
+        expect(onapply).not.toHaveBeenCalled();
+    });
+
+    it('shows the compact amount and caller-provided unit label when active', () => {
+        setupCompactDurationBadge({active: true, amount: 12, unit: 'weeks'});
+
+        const trigger = screen.getByTestId('compact-duration');
+        expect(trigger).toHaveAttribute('data-active', 'true');
+        expect(trigger).toHaveTextContent('12W');
     });
 });
 

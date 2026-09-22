@@ -6,6 +6,10 @@
     import {AppWindow, Check, ChevronDown, Container, Copy, ExternalLink, Github, Globe, HardDrive, Heart, Info, Languages, Layers, Maximize2, Monitor, Scale, SunMoon, Tag} from 'lucide-svelte';
     import LoadingSpinner from '$lib/components/ui/feedback/LoadingSpinner.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
+    import SupportActions from '$lib/components/support/SupportActions.svelte';
+    import SocialShareModal from '$lib/components/support/SocialShareModal.svelte';
+    import type {SocialPlatform} from '$lib/components/support/supportLinks';
+    import ToolAboutPanel from '$lib/features/tools/ToolAboutPanel.svelte';
     import {mapBackendSignalDefinition} from '$lib/charts/signals/catalogMapper';
     import {getRegisteredSignalTypes} from '$lib/charts/signals/registry';
     import type {BackendSignalCatalogResponse, SignalDefinition} from '$lib/charts/signals';
@@ -13,9 +17,9 @@
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import ChangelogModal from '$lib/components/layout/ChangelogModal.svelte';
-    import {APP_VERSION} from '$lib/version';
 
     let changelogOpen = false;
+    let toolPanelOpen = false;
 
     const githubUrl = 'https://github.com/Librefolio/LibreFolio';
     const websiteUrl = 'https://librefolio.github.io/LibreFolio/';
@@ -76,6 +80,7 @@
     let importPlugins: ProviderInfo[] = [];
     let pluginDiscoveryFailures: PluginDiscoveryFailureInfo[] = [];
     let installedSignals: SignalDefinition[] = [];
+    let sharePlatform: SocialPlatform | null = null;
 
     /** Provider icons that failed to load (CDN blocks, dead URLs) — fall back to the letter tile. */
     let failedIconUrls: Set<string> = new Set();
@@ -186,6 +191,14 @@
         return pluginDiscoveryFailures.filter((failure) => failure.system === system);
     }
 
+    function openSocialShare(platform: SocialPlatform) {
+        sharePlatform = platform;
+    }
+
+    function closeSocialShare() {
+        sharePlatform = null;
+    }
+
     async function copySystemInfo() {
         if (!systemInfo) return;
 
@@ -243,7 +256,7 @@ Generated: ${new Date().toISOString()}
         </div>
     </div>
 
-    <ChangelogModal open={changelogOpen} onClose={() => (changelogOpen = false)} currentVersion={APP_VERSION} />
+    <ChangelogModal open={changelogOpen} onClose={() => (changelogOpen = false)} currentVersion={systemInfo?.app_version ?? ''} />
 
     <!-- Description -->
     <div class="space-y-2">
@@ -289,6 +302,15 @@ Generated: ${new Date().toISOString()}
                 <p class="text-sm text-gray-500">GNU Affero General Public License v3.0 (AGPL-3.0)</p>
             </div>
         </a>
+    </div>
+
+    <!-- Support -->
+    <div class="rounded-xl border border-gray-200 bg-gray-50 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/60" data-testid="about-support-card">
+        <div class="mb-4 space-y-1">
+            <h4 class="text-md font-semibold text-gray-800 dark:text-slate-100">{$_('support.title')}</h4>
+            <p class="text-sm leading-relaxed text-gray-600 dark:text-slate-300">{$_('support.description')}</p>
+        </div>
+        <SupportActions onShare={openSocialShare} />
     </div>
 
     <!-- System Info with Copy Button -->
@@ -529,7 +551,7 @@ Generated: ${new Date().toISOString()}
             </details>
 
             <!-- Plugin Diagnostics -->
-            <details class="mb-3 group" data-testid="about-plugin-diagnostics">
+            <details bind:open={toolPanelOpen} class="mb-3 group" data-testid="about-plugin-diagnostics">
                 <summary class="flex items-center justify-between cursor-pointer select-none p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                     <span class="text-sm font-medium text-gray-700">{$_('settings.pluginDiagnostics')}</span>
                     <ChevronDown size={16} class="text-gray-400 transition-transform group-open:rotate-180" />
@@ -556,9 +578,12 @@ Generated: ${new Date().toISOString()}
                         </div>
                     {/each}
                 </div>
+                <ToolAboutPanel active={toolPanelOpen} />
             </details>
         </div>
     {/if}
+
+    <SocialShareModal open={sharePlatform !== null} platform={sharePlatform ?? 'x'} onClose={closeSocialShare} />
 
     <!-- Credits with foldable dependencies -->
     <div class="pt-6 border-t border-gray-200">

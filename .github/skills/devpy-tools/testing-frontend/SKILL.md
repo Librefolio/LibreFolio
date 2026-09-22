@@ -62,6 +62,9 @@ frontend/
 ./dev.py test --coverage py front-transaction all    # backend Python only
 ./dev.py test --coverage js front-transaction all    # frontend JS/Svelte only
 
+# Dedicated lane for a concurrent worktree
+./dev.py test --test-port 6152 --data-dir /tmp/librefolio-r2-c front-asset all
+
 # Gallery screenshots
 ./dev.py mkdocs gallery
 ./dev.py mkdocs gallery --desktop-only
@@ -91,17 +94,24 @@ what the 8 categories are verified against (629 Playwright + 687 vitest passing)
     specs. If a run starts dying again, lower that constant; do **not** raise
     `--max-old-space-size`, which only postpones the crash.
 
-!!! warning "Never run two Playwright invocations at once"
-    Consolidation reduces the number of invocations; it does not make them concurrent. They share one
-    backend, one database and one set of E2E users, so a second simultaneous invocation corrupts
-    both. Frontend parallelism lives **inside** Playwright (`fullyParallel`), never above it.
+!!! warning "Never run two Playwright invocations in one lane"
+    Consolidation reduces the number of invocations; it does not make them concurrent. Within a lane
+    they share one backend, one database and one set of E2E users, so a second invocation corrupts
+    both. Separate worktrees may run concurrently only with unique `--test-port` **and**
+    `--data-dir` values. Frontend parallelism inside one lane lives in Playwright (`fullyParallel`).
+
+!!! info "App-managed worktrees reuse the main Pipenv"
+    Prefix the runner with
+    `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py`.
+    Otherwise Pipenv may create an empty environment keyed to the worktree path.
 
 ## Playwright Config
 
 - **2 projects**: `desktop` (1280×720, Chrome) + `mobile` (iPhone 14 Pro Max viewport, Chromium)
 - **Workers**: 1 (sequential — shared DB state)
 - **Timeout**: 15s per test (localhost — fast responses expected)
-- **Web Server auto-start**: `./dev.py server --test --force` (port 6041)
+- **Web Server**: owned by `./dev.py test`, started without `--force` on the
+  lane `TEST_PORT` (default 6041); an occupied lane fails closed
 - **Retry**: 0 local, 2 in CI
 
 ## Fixtures
@@ -283,6 +293,51 @@ Two caveats when reading it:
 - **Never assert on translated text**: assert the toast *variant* (`toast-success`) or the event, never the message
 - **Never let a probe decide whether to act**: a short-timeout `isVisible().catch(() => false)` turns *slow* into *absent* and skips the spec's own setup in silence
 - **Verify the precondition, do not infer it**: filtering to the right *kind* of row is not the same as finding one that can still do what you need
+- **An enumerating gate is deterministic about its forms, never about the world**: see below — when you add a rule, extend the forms with it
+
+### ⚠️ A gate that enumerates source sites: extend the forms with the rule
+
+Some tests do not exercise behaviour — they assert that a *premise* still holds. The privacy gate
+(`frontend/src/lib/utils/privacy/moneyRenderSites.test.ts`) is the reference: global value masking
+works only while every monetary amount is rendered through a known set of formatters, so the gate
+scans the source for the observable forms of money rendering and fails when one appears that is not
+in its registry.
+
+If you write another gate of this shape, three properties are what make it survive:
+
+- **It enumerates, it does not judge.** A gate that decides whether a new site is *safe* has to be
+  right about intent. One that is wrong in an annoying direction gets switched off, and then it
+  protects nothing at all. Registering a site is a human decision, recorded once, with its reason —
+  an entry without a reason is indistinguishable from an oversight.
+- **Key entries by content, not by `file:line`.** An unrelated edit above a site shifts its line and
+  turns the gate red for reasons that have nothing to do with the subject. That is the same failure
+  as noise: it trains people to update the registry without reading it.
+- **It needs a positive control.** *"No unregistered site"* is also true when the scanner reads the
+  wrong directory or the regexes match nothing — the assertion that guards the property is exactly
+  the one whose failure is silent. Assert that the scan still finds the sites you know about, and
+  prove the gate fails by adding a violating file once and watching it go red.
+
+🔴 **The forms are a floor, not a proof.** The privacy gate knows two: `Intl.NumberFormat` with
+`style: 'currency'`, and a template literal interpolating a currency identifier **or a rendered
+symbol** beside a numeric token. It cannot see an amount assembled across several statements, nor
+one rendered with no currency marker at all. So **when the rule the gate protects grows, the
+enumerated forms must grow with it** — a gate whose forms lag its rule reports green about a
+question it stopped asking. Write the new form into the scanner in the same change that introduces
+the new rule, not afterwards.
+
+🔴 **A token heuristic is defeated by a synonym, and the damage is silent.** That gate first
+required the token `currency`, and so never matched `` `${sign}${symbol}${compact}` `` — the branch
+of `shortMoney` that renders every currency with a known symbol. The site looked covered only
+because its other branch, the fallback naming `currency`, happened to sit on the same source line:
+**its coverage was a line wrap, not a match.** Reformat that ternary across two lines and the
+gate stays green while the money walks out. When you widen a token, measure the noise first —
+adding `symbol` cost one new hit, adding `sign` would have cost 29, nearly all of them percentages
+and CSS class names.
+
+> The sites a gate like this finds on the day you write it are not the point; they are already in
+> front of you. Its value is failing on the day of the next one — which is also why its registry
+> must refuse entries for code that no longer exists: a list nobody trusts makes the next real
+> entry look like more of the same.
 
 ### ⚠️ Parallelism is the default; serialisation is opted out of
 
@@ -491,5 +546,3 @@ can exist. (It used to: six registered actions worth ~259 tests were never execu
 | `add_test(cat, action, func, ...)` | `_common.py` | Registers a test entry in a category dict |
 | `make_category(help, desc)` | `_common.py` | Creates the `_meta` entry for a new category |
 | `_run_test_suite(tests, ...)` | `_common.py` | Runs tests sequentially with summary report |
-
-

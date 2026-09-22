@@ -1,6 +1,6 @@
 import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
-import {expectChartCanvas} from '../fixtures/charts';
+import {expectChartCanvas, showChartTooltip} from '../fixtures/charts';
 import {TEST_USER} from '../fixtures/test-users';
 import {appears} from '../fixtures/probe';
 
@@ -567,5 +567,196 @@ test.describe('Broker Detail Page', () => {
             await expect(aggregateToggle).toHaveAttribute('aria-pressed', 'false');
             await expectChartCanvas(page, 'lot-comparison-echart');
         });
+    });
+});
+
+/**
+ * GrowthChart P&L mode on a broker page (phase I70).
+ *
+ * The regression this block exists for: the broker page mounted `<GrowthChart>`
+ * **without** `onRequestPnlCandles`, so activating the candles submode fired no
+ * request at all and every candle was a gap sentinel. The plot still had a
+ * canvas of exactly the right size, so anything asserting presence stayed green
+ * through the whole defect. Every assertion below is therefore on the *data*:
+ * the report body the click causes, the points that come back, and the rows the
+ * chart's own tooltip formatter reads out of what it drew.
+ *
+ * Why `Interactive Brokers` and not "a broker": the seeded set has eight, and
+ * only this one carries enough transactions to produce a history. The rest
+ * render "no data available" — picking by position would have tested the empty
+ * state and called it a pass. `goToBrokerWithHoldings()` already encodes that,
+ * and the broker id is then read back from the URL rather than assumed, so the
+ * scoping assertion compares against the page the test is genuinely on.
+ *
+ * Plan §3.3 — "one broker or Broker detail: total candle only" — is the second
+ * half: this mount deliberately omits `brokerPnlHistory`, and the absence of a
+ * per-broker overlay is asserted against the presence of the total candle, so
+ * "nothing is there" cannot pass for "the overlay is gone".
+ */
+
+type BrokerPnlSubmode = 'line' | 'candles' | 'income';
+
+/** `EUR 1,234.56` / `EUR -12.30` — an unsigned tooltip amount (the OHLC rows). */
+const BROKER_PLAIN_AMOUNT = /^[A-Z]{3}\s-?[\d.,]+$/;
+/** `+EUR 359.04` / `−EUR 12.00` — a signed tooltip amount (P&L rows; U+2212). */
+const BROKER_SIGNED_AMOUNT = /^[+\u2212][A-Z]{3}\s[\d.,]+$/;
+
+interface BrokerReportCall {
+    body: Record<string, unknown> & {broker_ids?: number[]};
+    json: Record<string, any> | null;
+}
+
+/** Record every portfolio report the page issues, request body *and* response. */
+async function recordBrokerReports(page: Page): Promise<BrokerReportCall[]> {
+    const calls: BrokerReportCall[] = [];
+    await page.route(/\/api\/v1\/portfolio\/report(\?.*)?$/, async (route) => {
+        const body = route.request().postDataJSON();
+        const response = await route.fetch();
+        const json = await response.json().catch(() => null);
+        calls.push({body, json});
+        await route.fulfill({response});
+    });
+    return calls;
+}
+
+/** The element GrowthChart publishes `data-chart-ready`/`data-chart-renders` on. */
+function brokerGrowthHost(chart: Locator): Locator {
+    return chart.locator('[data-chart-ready]');
+}
+
+async function brokerChartRenders(host: Locator): Promise<number> {
+    return Number((await host.getAttribute('data-chart-renders')) ?? '0');
+}
+
+/**
+ * Open Interactive Brokers' overview and wait until its GrowthChart has drawn.
+ *
+ * This page publishes no `data-busy`, but `renderChart` refuses to run while
+ * `history` is empty — so `data-chart-ready="true"` is the app stating that the
+ * report landed *and* ECharts painted it. Returns the chart and the broker id
+ * the URL resolved to.
+ */
+async function openBrokerGrowthChart(page: Page): Promise<{chart: Locator; brokerId: number}> {
+    await goToBrokerWithHoldings(page);
+
+    const brokerId = Number(new URL(page.url()).pathname.split('/').filter(Boolean).pop());
+    expect(Number.isFinite(brokerId), 'the detail URL carries the broker id').toBe(true);
+
+    const chart = page.getByTestId('growth-chart');
+    await expect(chart).toBeVisible({timeout: 15_000});
+    await expect(brokerGrowthHost(chart)).toHaveAttribute('data-chart-ready', 'true', {timeout: 30_000});
+    return {chart, brokerId};
+}
+
+/** Select a P&L submode and wait for the redraw it causes (counter read first). */
+async function selectBrokerSubmode(chart: Locator, submode: BrokerPnlSubmode): Promise<void> {
+    const button = chart.getByTestId(`growth-pnl-submode-${submode}`);
+    await expect(button).toBeVisible({timeout: 10_000});
+
+    if ((await button.getAttribute('aria-pressed')) !== 'true') {
+        const host = brokerGrowthHost(chart);
+        const before = await brokerChartRenders(host);
+        await button.click();
+        await expect.poll(() => brokerChartRenders(host), {timeout: 15_000}).toBeGreaterThan(before);
+    }
+    await expect(button).toHaveAttribute('aria-pressed', 'true');
+}
+
+test.describe('Broker detail — GrowthChart P&L mode', () => {
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('activating candles fetches a candle report scoped to this broker', async ({page}) => {
+        test.setTimeout(60_000);
+        const reports = await recordBrokerReports(page);
+        const {chart, brokerId} = await openBrokerGrowthChart(page);
+
+        // The defect this pins produced *zero* candle requests, so the opening
+        // state matters as much as the closing one.
+        expect(reports.length, 'the overview loads at least one report').toBeGreaterThan(0);
+        expect(
+            reports.filter((call) => call.body.include_pnl_candles === true),
+            'candles stay off the ordinary overview load',
+        ).toHaveLength(0);
+
+        await chart.getByTestId('growth-toggle-pnl').click();
+        await selectBrokerSubmode(chart, 'candles');
+
+        await expect.poll(() => reports.filter((call) => call.body.include_pnl_candles === true).length, {timeout: 20_000}).toBeGreaterThan(0);
+        const candleCall = reports.find((call) => call.body.include_pnl_candles === true);
+
+        // Scoped to *this* broker: the dashboard's own loader would have answered
+        // with whole-portfolio OHLC under a single broker's heading — a wrong
+        // number, which is worse than the empty plot it replaced.
+        expect(candleCall?.body.broker_ids, 'the candle report is scoped to the broker whose page this is').toEqual([brokerId]);
+
+        const series = candleCall?.json?.pnl_candles;
+        expect(series?.hypothetical).toBe(true);
+        const points: Array<Record<string, {amount: string} | undefined>> = series?.points ?? [];
+        expect(points.length, `${BROKER_WITH_HOLDINGS} has the transactions to produce candles — check populate_mock_data.py`).toBeGreaterThan(0);
+
+        const amount = (value?: {amount: string}) => Number(value?.amount);
+        const holed = points.filter((point) => ['open', 'high', 'low', 'close'].some((key) => !Number.isFinite(amount(point[key]))));
+        expect(holed, 'every candle carries four real numbers — the gap sentinels the defect produced are exactly what must not come back').toHaveLength(0);
+        expect(
+            points.some((point) => amount(point.close) !== 0),
+            'this broker moves somewhere in the window',
+        ).toBe(true);
+
+        await expect(chart.getByTestId('growth-pnl-candles-hypothetical-label')).toBeVisible();
+    });
+
+    test('line and income submodes render this broker own figures', async ({page}) => {
+        test.setTimeout(60_000);
+        const reports = await recordBrokerReports(page);
+        const {chart, brokerId} = await openBrokerGrowthChart(page);
+
+        // The income submode plots four sparse sections this page has to ask for
+        // eagerly. A submode wired to props nobody fetched would still draw axes
+        // and still look fine, so the request is checked before the picture.
+        const overview = reports.find((call) => call.body.include_income_history === true);
+        expect(overview, 'the broker overview requests the sparse income family on its ordinary load').toBeTruthy();
+        expect({
+            income: overview?.body.include_income_history,
+            cost: overview?.body.include_cost_history,
+            deposit: overview?.body.include_deposit_history,
+            acquisition: overview?.body.include_acquisition_funding,
+        }).toEqual({income: true, cost: true, deposit: true, acquisition: true});
+        expect(overview?.body.broker_ids, 'and scoped to this broker, not to the whole portfolio').toEqual([brokerId]);
+
+        await chart.getByTestId('growth-toggle-pnl').click();
+
+        // Line: the total P&L row, and nothing but it — this mount has no
+        // per-broker overlay to add a second row (plan §3.3).
+        await selectBrokerSubmode(chart, 'line');
+        await showChartTooltip(page, chart, chart.getByText(BROKER_SIGNED_AMOUNT), 10_000, 1);
+        await expect(chart.getByText(BROKER_SIGNED_AMOUNT)).toHaveCount(1);
+
+        // Income: dividend, interest and their total — three signed rows at the
+        // floor, which a submode that never bound its income series could not
+        // produce. Not an exact count: the batch-2 rows (costs, deposit,
+        // acquisition) are sparse and only join on a day that had that activity,
+        // so an equality would pin which day the pointer happened to land on.
+        await selectBrokerSubmode(chart, 'income');
+        await showChartTooltip(page, chart, chart.getByText(BROKER_SIGNED_AMOUNT), 10_000, 3);
+        await expect(chart.getByText(BROKER_SIGNED_AMOUNT).first()).toBeVisible();
+    });
+
+    test('the candles submode shows the total candle only, with no per-broker overlay', async ({page}) => {
+        test.setTimeout(60_000);
+        const {chart} = await openBrokerGrowthChart(page);
+        await chart.getByTestId('growth-toggle-pnl').click();
+        await selectBrokerSubmode(chart, 'candles');
+
+        // The barrier first: a full OHLC quad on screen means the total candle is
+        // drawn and its tooltip is up. Without it, "no overlay" would also be true
+        // of a chart that had rendered nothing at all.
+        await showChartTooltip(page, chart, chart.getByText(BROKER_PLAIN_AMOUNT), 20_000, 4);
+        await expect(chart.getByText(BROKER_PLAIN_AMOUNT), 'open, close, high and low — the total candle in full').toHaveCount(4);
+
+        // An overlay line would add a signed row per broker, named after it.
+        await expect(chart.getByText(BROKER_SIGNED_AMOUNT), 'no per-broker P&L row belongs on a single-broker page').toHaveCount(0);
+        await expect(chart.getByText(BROKER_WITH_HOLDINGS, {exact: true}), 'the broker name would only appear here as an overlay legend row').toHaveCount(0);
     });
 });

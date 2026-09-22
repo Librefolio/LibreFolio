@@ -66,6 +66,7 @@ export interface AssetResolution {
     extractedName: string | null;
     candidates: Array<{asset_id: number; symbol?: string | null; isin?: string | null; name: string; match_confidence: string}>;
     resolvedAssetId: number | null;
+    selectionOrigin?: 'automatic' | 'manual';
     txCount: number;
     sourceFiles: string[];
     notices: Array<{kind: string; reason: string}>;
