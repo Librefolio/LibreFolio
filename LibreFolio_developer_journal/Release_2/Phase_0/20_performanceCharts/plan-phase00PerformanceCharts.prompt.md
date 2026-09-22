@@ -2403,6 +2403,360 @@ candlestick dal modo N-day. Quindi le due voci seguenti sono *adiacenti*, non da
 > low per asset) è teoria finanziaria che oggi non ha una casa propria. Se developer o
 > coordinatore la vogliono in `financial-theory/`, è una voce a sé — **non** un residuo di I80.
 
+### 6.0.15 Review del developer — cinque correzioni e il quarto modo di guasto (2026-09-21)
+
+> **⚠️ Fuori pista (il selettore non era una finestra: era la larghezza della candela,
+> 2026-09-21):** la richiesta originale del developer diceva *«devono essere solo in candele e
+> non rappresentano il tempo da mostrare, ma la larghezza in giorni, che una candela copre»*.
+> È stato implementato come **finestra di visualizzazione** ed **esteso a tutti e tre i
+> submode**, raccontando l'estensione come un miglioramento.
+>
+> Il difetto peggiore non è l'implementazione: è il **rinominio**. Il controllo è stato
+> ribattezzato `zoom*` e il rinominio è stato argomentato come allineamento al vocabolario
+> esistente (`buildZoomWindow`) — cioè un nome che descriveva l'interpretazione sbagliata è
+> stato fatto ratificare **come coerenza terminologica**. *Un rinominio motivato bene è più
+> difficile da smontare di un'implementazione sbagliata, perché la motivazione sembra il
+> controllo che è già stato fatto.*
+>
+> Aggravante: che quel controllo fosse una **scala di larghezza** era già stato detto a inizio
+> round. Poi la scala è stata rinviata (②) e nel frattempo la semantica sbagliata si è
+> consolidata nel nome. **Un rinvio non congela il malinteso: gli lascia il tempo di
+> attecchire.**
+
+> **⚠️ Fuori pista (il quarto modo: l'approssimazione documentata, 2026-09-21):** tre difetti
+> su sette hanno la stessa forma — **il commento contiene già l'informazione che smentisce
+> l'uso**:
+>
+> | luogo | il commento diceva |
+> |---|---|
+> | `findReferenceTotalPnl` | *«at (or just after)»* — e «just after» sotto bucket mensile è fino a un mese di deriva |
+> | `clipToSign` | *«instead of a variable number of sign-crossing segments»* — cioè: i segmenti di attraversamento mancano |
+> | `grid.left` / overlay | *«one number, two uses, agreeing by construction»* — falso: con `containLabel: true` la costante è il bordo **esterno** e le etichette stanno **dentro** |
+>
+> > **Un'approssimazione documentata smette di essere vista, perché la nota la trasforma da
+> > difetto in scelta — e una scelta non si rimette in discussione.**
+>
+> Non sono commenti *imprecisi*: i primi due sono **esatti**, ed è l'esattezza ad averli resi
+> invisibili — chi rilegge vede una giustificazione e la legge come un controllo già
+> effettuato. Il terzo è peggio: afferma un **meccanismo falso** con sicurezza, e la sicurezza
+> ha sostituito la verifica.
+>
+> Sta accanto a *vero e incompleto* di §6.0.12 (i due `false` portanti): là la **verifica
+> riuscita** autorizzava il refactor sbagliato, qui la **giustificazione scritta** autorizza a
+> non guardare.
+
+> **Note implementazione (voci 2-6, 2026-09-21):**
+>
+> **2. Pillbox sul bordo del plot.** L'overlay usava già `left: CHART_PLOT_LEFT_PX`, ma con
+> `containLabel: true` quei 52 px sono il bordo **esterno** della griglia e ECharts disegna le
+> etichette **dentro** — quindi il pillbox ci finiva sopra (il developer leggeva `1k` e `900`
+> dietro «Linea»). Non risolto spegnendo `containLabel`: il formatter arriva a `-100.0%`
+> (~56 px a 14 px di font) e i 52 px taglierebbero. Introdotta `syncPlotGeometry()`, che
+> **rilegge il rettangolo della griglia da ECharts** dopo ogni `setOption` e a ogni resize e
+> pubblica `plotLeftPx`/`plotWidthPxMeasured`. *Misurare batte calcolare*: il gutter dipende da
+> formatter, font, locale e dati, e nessuno dei quattro cambia questo file.
+>
+> **3. Collasso sulla larghezza del contenitore.** Era una media query `sm:` sul **viewport**,
+> quindi un grafico stretto in una finestra larga teneva le etichette. Ora `containerWidthPx`
+> è misurata dal `ResizeObserver` già presente e `controlsCompact` ne deriva. *Ciò che decide
+> se un'etichetta ci sta è la larghezza della scatola in cui sta, non quella della finestra.*
+>
+> **4. Sola candela totale.** Overlay broker rimosso dalle candele in **entrambi** i percorsi
+> (build completo e update parziale) e su **entrambe** le pagine — non solo su Broker detail
+> come diceva §3.3. Una candela porta già quattro numeri per posizione; sovrapporle linee
+> rendeva la serie che va letta con precisione la più difficile da vedere.
+>
+> **5. Linea di riferimento ancorata al giorno.** `findReferenceTotalPnl` cercava il primo
+> bucket con `bucketEnd >= referenceDate`, cioè *«al più presto dopo»*. Ora legge il valore
+> **giornaliero** al giorno esatto, con fallback al giorno **precedente** e mai a uno
+> successivo: *il valore di un giorno che non è ancora accaduto non è una baseline*. Effetto
+> collaterale voluto: l'ancoraggio diventa **indipendente dalla larghezza del bucket**, quindi
+> resterà corretto quando arriverà la scala.
+>
+> **6. Area chiusa sugli attraversamenti dello zero.** `clipToSign` è una mappa **punto a
+> punto**: può annullare un valore, non aggiungerne uno. Fra `+430` e `−50` la serie positiva
+> aveva `[+430, null]` e la negativa `[null, −50]`, e con `connectNulls: false` **nessuna delle
+> due copriva l'intervallo**. Aggiunta `splitBySign`, che interpola l'attraversamento e lo
+> inserisce in **entrambe** le metà. Il vincolo del merge parziale è rispettato per
+> costruzione: cambia il numero di **punti**, non quello delle **serie**.
+
+> **⚠️ Fuori pista (un `Number()` su una stringa, preso dal type checker, 2026-09-21):** la
+> prima stesura di `splitBySign` interpolava con `Number(points[i].value[0])`. Ma `value[0]` è
+> una **data in stringa**: `Number('2026-06-18')` è `NaN`, la guardia `Number.isFinite` sarebbe
+> fallita e l'attraversamento **non sarebbe mai stato inserito** — un fix che compila, gira,
+> non fa nulla e non segnala niente. `svelte-check` l'ha preso come *«Type 'number' is not
+> assignable to type 'string'»*.
+>
+> Il pavimento ha fatto il suo lavoro: **4 errori contro i 3 attesi**, e la regola «più di 3 è
+> mio» ha isolato il colpevole senza doverlo cercare. Un pavimento numerico dichiarato vale
+> quanto il difetto che intercetta — e qui ha intercettato un silenzio.
+
+### 6.0.16 La scala di larghezza candele — otto gradini e due regole asimmetriche (2026-09-21)
+
+> **Note implementazione (voci 1 e 7, 2026-09-21):** il selettore è stato riscritto da
+> **finestra di visualizzazione** a **larghezza del corpo**. L'asse mostra sempre tutto lo
+> storico disponibile; cambia solo quanti corpi lo coprono.
+>
+> **Gradini: `1D · 3D · 1W · 2W · 1M · 3M · 6M · 1Y`**, scelti dal developer *conoscendo* i
+> conteggi (3M → 4 corpi, 6M → 2, 1Y → 1): la scarsità ai livelli alti non è un argomento
+> contro la scala, è ciò che la regola del massimo deve gestire.
+>
+> **Le larghezze sono conteggi di giorni, non bucket di calendario.** `3D`, `2W`, `3M` e `6M`
+> non hanno analogo di calendario, quindi trattare `1W` come settimana ISO mentre `2W` è
+> quattordici giorni renderebbe la scala incoerente a metà salita. Conseguenza tecnica: i
+> riduttori condivisi (`aggregateLineSeries`, `aggregateSumSeries`, `aggregateOHLCV`)
+> **non sono riusabili** — non esiste modo di chiedere loro un bucket di tre giorni.
+>
+> **Due regole, deliberatamente asimmetriche:**
+>
+> ```
+> (1) DENSITÀ    px_per_corpo >= LADDER_MIN_BODY_PX     vale per TUTTI, 1D incluso
+> (2) SCARSITÀ   corpi >= 3                             1D è ESENTE
+> ```
+>
+> `1D` non sparisce mai per **pochi** corpi (*«deve sempre essere possibile, anche se ci fosse
+> solo 1 punto»*) ma **può** sparire per **troppi**, ed è il primo a farlo perché è il più
+> denso. Le due regole agiscono su lati opposti e l'eccezione ne copre uno solo.
+
+> **⚠️ Fuori pista (una premessa mia, confermata dal coordinatore, era falsa, 2026-09-21):**
+> avevo scritto — e mi era stato confermato — che *«la scala sostituisce la cascata automatica
+> per candele e proventi»*. Falso. Il developer: *«con una logica di densità di px, **come
+> fatto appunto per i grafici a linee**»*. La logica non viene rimpiazzata: **cambia di
+> ruolo**.
+>
+> | | prima | ora |
+> |---|---|---|
+> | la densità | **decideva** quale risoluzione disegnare, e l'etichetta diceva altro | **decide quali gradini esistono**, e la scelta resta all'utente |
+>
+> È la stessa trasformazione del fix `70e87ac3a` — *aggregare in silenzio* → *rimuovere
+> l'opzione* — estesa a tutta la scala. **Un controllo che aggrega dietro la propria didascalia
+> è un controllo che mente; uno che rimuove l'opzione che non può onorare no.**
+>
+> Riuso effettivo: `computeDensity` e `CANDLE_MIN_SLOT_PX` sono **importati** dal modulo
+> condiviso, non ridichiarati — la soglia vive in un posto solo, già marcata provvisoria con
+> la sua motivazione. In una giornata in cui sono stati trovati **tre** numeri di geometria
+> scritti a mano in questo file, questo non è il quarto.
+>
+> Ciò che invece è locale è il **bucketing**, per l'impossibilità tecnica sopra. Una pipeline,
+> due costruttori di bucket, stesso tipo in uscita (`AggregatedResolutionData`) — non una
+> seconda pipeline.
+
+> **Note implementazione (scelte di rischio, 2026-09-21):** non potendo eseguire suite (vincolo
+> esplicito del developer), **il percorso a cascata non è stato riscritto**. Sarebbe stato più
+> elegante unificare i riduttori su intervalli di indici e servire entrambi i rami, ma avrebbe
+> messo a rischio Valore e % — che la scala non tocca — senza alcuna rete di regressione per
+> accorgersene. *Quando non puoi misurare una regressione, il raggio d'azione è il solo
+> controllo che ti resta.*
+>
+> Costanti e stato: `LADDER_MIN_BODIES = 3`, selezione iniziale = **gradino più basso
+> offerto** (stessa convenzione dei grafici a linee, per non insegnare due abitudini diverse),
+> salita **di un gradino** quando la scelta diventa indisegnabile (il salto minimo conserva
+> l'intenzione), lista **mai vuota** con `1D` come fondo. `ResolutionBadge` nascosto sotto la
+> scala: lì la larghezza è scelta dall'utente e il selettore la dichiara già — una seconda
+> didascalia potrebbe solo essere in disaccordo.
+
+> **Verifica misurata (storico 93 giorni, plot ~527 px):**
+>
+> | gradino | corpi | px/corpo | esito atteso | offerto |
+> |---|---:|---:|---|---|
+> | 1D | 93 | 5,7 | via (densità) | no ✓ |
+> | 3D | 31 | 17,0 | offerto | sì ✓ |
+> | 1W | 14 | 37,6 | offerto | sì ✓ |
+> | 2W | 7 | 75 | offerto | sì ✓ |
+> | 1M | 4 | 131 | offerto | sì ✓ |
+> | 3M | 2 | — | via (scarsità) | no ✓ |
+> | 6M / 1Y | 1 | — | via (scarsità) | no ✓ |
+>
+> Linea: **nessun selettore**. Proventi: parte da `1W` (fondo). Selezione iniziale a freddo:
+> `3D` a 1440 **e** a 520 px, cioè il gradino più basso offerto in entrambi i casi.
+>
+> **Osservazione non specificata**: restringendo *durante* la sessione la scelta sale (3D → 1W)
+> e **non ridiscende** quando i gradini riappaiono. È conforme alla regola data — *«si sale»*,
+> e *«le opzioni riappaiono»*, non la selezione — ma significa che uno stato stretto transitorio
+> lascia la vista più grossolana. Segnalato, non deciso.
+
+> **⚠️ Fuori pista (il fix del pillbox non reggeva in candele, 2026-09-21):** `syncPlotGeometry()`
+> era chiamata solo dopo il build completo. Il cambio submode passa dal percorso **parziale**,
+> che rifà comunque il layout della griglia — e cambiando tipo d'asse cambia il gutter delle
+> etichette. Misurato: `plotLeft` **88 px in linea, 52 in candele** — cioè il valore di
+> *fallback*, non una misura. Aggiunta la chiamata anche sul percorso parziale; ora 88 in
+> entrambi e a entrambe le larghezze.
+>
+> Il difetto si è mostrato solo perché la misura è stata rifatta **a freddo su due viewport**
+> invece che continuando dalla sessione precedente. Una misura ripetuta nello stesso stato
+> conferma lo stato, non la correzione.
+
+### 6.0.17 Review round 2 — otto voci e un difetto di finestra (2026-09-22)
+
+> **⚠️ Fuori pista (una finestra che non si espande mai, 2026-09-22):** cambiando periodo
+> dalla dashboard il grafico restava allo zoom precedente — *«non ha un'animazione di
+> espansione [...] sono io che devo andare e scrollare con il mouse»* — e la linea tratteggiata
+> di riferimento restava ancorata al vecchio primo giorno visibile.
+>
+> La causa non era la cache del report, che pure restituisce lo stesso oggetto per un range già
+> visto (`portfolioStore:259` — `if (cached) return cached`). Era una riga sola:
+>
+> ```js
+> const preservedRange = getLogicalRangeFromChart();   // sempre
+> ```
+>
+> `clampGrowthLogicalRange` **restringe al nuovo dominio ma non allarga mai**. Passando da 3M a
+> 1Y, la finestra di tre mesi sopravviveva dentro un dominio di un anno: nessuna espansione, e
+> il resto dei propri dati andava cercato a mano. La linea di riferimento seguiva lo stesso
+> `startDate` stantio.
+>
+> **Preservare la finestra è una cortesia quando i dati si aggiornano e un difetto quando
+> cambia il periodo.** Le due cose erano indistinguibili perché il codice guardava solo se
+> l'array `history` fosse un oggetto nuovo. Ora traccia anche il **dominio**
+> (`primo|ultimo` giorno): identità dell'array → *questi sono altri dati*; dominio → *questo è
+> un altro periodo*. La finestra si preserva solo nel primo caso.
+>
+> Verificato verde → rosso → verde, finestra visibile campionata via tooltip:
+>
+> | | 3M | 1Y | 3M (cache hit) |
+> |---|---|---|---|
+> | pre-fix | `2026-07-01 → 2026-09-20` | **identica** | identica |
+> | post-fix | `2026-07-01 → 2026-09-20` | `2025-11-04 → 2026-08-27` | torna a Jul→Sep |
+>
+> `shasum` del file identico prima e dopo la reintroduzione temporanea.
+
+> **Note implementazione (round 2, 2026-09-22):**
+>
+> **Densità.** Il developer si aspettava `1D` ancora disponibile su un range di 6 mesi; appariva
+> solo da ~1M. Calcolo: 180 giorni su plot ~527 px danno **2,93 px/corpo**, contro una soglia di
+> 8. Introdotta `LADDER_MIN_BODY_PX = 2.5` **separata** da `CANDLE_MIN_SLOT_PX`, e la
+> separazione è il punto: quella governa l'aggregazione **silenziosa**, dove un corpo illeggibile
+> è un inganno perché il grafico ha cambiato bucket senza dirlo; questa governa la
+> **disponibilità di un'opzione** che l'utente sceglie su un controllo etichettato e di cui vede
+> l'esito — lì una densità alta è una scelta legittima, non una bugia. Misurato a 6M: `1D · 3D ·
+> 1W · 2W · 1M · 3M`.
+>
+> **Header del tooltip.** Diceva `Week` per **ogni** bucket più largo di un giorno, falso su un
+> gradino da tre o quattordici giorni: nominava un'unità di calendario che la scala non usa.
+> Ora `3D  2026-08-30 → 2026-09-01`. `1D` resta la data semplice.
+>
+> **`Value at` rimosso dall'Income.** Non richiesto, ma era un'affermazione falsa: le barre
+> income sono **somme** sul bucket, e «valore al giorno X» descrive un livello di chiusura.
+> Resta dove è vero (candele, linea).
+>
+> **Nota Synthetic.** Rimossa dal tooltip: è già nella didascalia sotto il grafico, e ripeterla
+> a ogni hover è rumore su un'informazione che l'utente ha già letto.
+>
+> **Zero neutro.** `v >= 0` dipingeva di verde ogni zero, cioè un guadagno che non c'è stato — e
+> nell'Income la maggior parte dei bucket è legittimamente vuota, quindi il tooltip era verde per
+> settimane in cui non si era guadagnato nulla. Ora `signedValueColor()` restituisce il colore di
+> testo a zero, e il segno `+` viene omesso. Misurato: `rgb(30,41,59)`.
+>
+> **Geometria.** Entrambi gli overlay portati al bordo superiore del plot; la scala allineata a
+> destra. Misurato: `toggleRight` e `ladderRight` **entrambi 929 px** — stesso pixel, non «circa».
+>
+> **Separatori dei bucket.** `splitLine` verticali tratteggiate al 50% di opacità. Su asse
+> `category` con `boundaryGap` cadono **fra** le categorie, cioè esattamente sui confini dei
+> bucket — che è ciò che rende un corpo largo leggibile come un bucket invece che come una forma
+> sospesa nel bianco.
+
+> **⚠️ Fuori pista (una chiave sovrascritta in silenzio — e l'avevo dichiarata «verificata
+> staticamente», 2026-09-22):** la prima stesura metteva i separatori dell'asse `time` con uno
+> spread condizionale:
+>
+> ```js
+> ...(ladderActive ? {splitLine: {show: true, ...}} : {}),   // :1978
+> axisLine: {...},
+> splitLine: {show: false},                                   // :1987  ← vince
+> ```
+>
+> In un object literal **l'ultima chiave vince**. La configurazione era presente, compilava,
+> e non disegnava nulla: **zero separatori in Income**, che è proprio la submode per cui il
+> developer li aveva chiesti (*«con tutto questo bianco, non è molto facile distinguere le
+> cose»*). Le candele funzionavano, perché stanno sull'asse `category`, dove non c'era una
+> seconda chiave a sovrascrivere.
+>
+> Misurato per colore esatto della griglia (`#f1f5f9`), colonne con tratteggio verticale su
+> almeno un quarto dell'altezza del plot:
+>
+> | submode | prima | dopo | atteso |
+> |---|---:|---:|---|
+> | Line | 0 | 0 | nessuno (la scala non è attiva) |
+> | Candele | 9 | 9 | presenti, passo regolare ~61 px |
+> | **Income** | **0** | **14** | presenti |
+>
+> **La lezione non è la regola di JavaScript: è che avevo dichiarato questa voce
+> «verificata staticamente».** Quella dichiarazione era *vera* — la configurazione c'era — e
+> *inutile*, perché una verifica statica su un valore che un'altra riga sovrascrive conferma
+> la presenza del codice e non il suo effetto. È la stessa forma del `Number()` su una stringa
+> data di §6.0.15: un fix che compila, gira, non fa nulla e non segnala niente. Lì l'ha preso
+> il type checker; qui niente poteva prenderlo, perché entrambe le chiavi erano valide.
+>
+> Trovato **prima** che il developer riaprisse, perché era l'unica voce del round senza misura
+> e il server era già acceso. *Un'affermazione dichiarata non verificata è un debito che scade
+> al primo sguardo di qualcun altro.*
+
+### 6.0.18 Review round 3 — rifiniture e un difetto nella regola di salita (2026-09-22)
+
+> **⚠️ Fuori pista (un cambio di periodo riportava la scala al gradino più basso,
+> 2026-09-22):** il developer: *«se metto 3D e poi cambio il periodo a uno minore in cui
+> compare 1D, il bucket cambia a 1D [...] va cambiato solo se il selezionato precedentemente
+> scompare dalle scelte»*.
+>
+> Causa: `resetResolutionState()` rimetteva `candleWidthPending = true`, e quel flag esiste per
+> la **prima** selezione assoluta — il gradino più basso disegnabile al primo render. Ma un
+> cambio di periodo passa dallo stesso reset, quindi ogni cambio si comportava come un primo
+> render e scartava la scelta dell'utente.
+>
+> **La scelta di un default e la scelta di un utente si assomigliano nello stato e non nel
+> significato.** Il codice trattava entrambe come «la selezione corrente», quindi non poteva
+> proteggerne una sola. Rimossa una riga: il pending resta vero solo al mount.
+>
+> Verificato con una scelta **discriminante** — il primo test usava `1D`, che è anche il
+> gradino più basso offerto, quindi sarebbe passato in entrambi i mondi:
+>
+> ```
+> scelgo 2W esplicitamente          -> 2W
+> cambio periodo a 1M (2W offerto)  -> 2W   resta          ✓
+> cambio a 1W (2W sparisce)         -> 3D   sale           ✓
+> ```
+
+> **Note implementazione (round 3, 2026-09-22):**
+>
+> **Etichette localizzate.** `1W` è abbreviazione inglese: in francese si scrive `1S`
+> (semaine). Il progetto pubblica già quelle lettere in `datePicker.granularity.*Short`, usate
+> dall'editor di durata personalizzata del date picker; riusarle tiene **un** vocabolario per
+> «settimana» invece di due che coincidono solo in inglese. Misurato con locale `fr`: gradini
+> `1J 3J 1S 2S 1M`, header `2S - 2026-08-03 → 2026-08-16`.
+>
+> **Allineamento verticale.** Gli overlay partivano dal bordo del canvas: adiacenti in
+> aritmetica, disallineati all'occhio, perché la prima etichetta dell'asse sta a `grid.top` e
+> non a zero. Ora `syncPlotGeometry()` pubblica anche `rect.y` e i due overlay sono centrati su
+> quello con `translateY(-50%)`. Misurato: centro pillbox e centro scala **entrambi a 10 px**,
+> cioè esattamente `grid.top`. *Il numero non è stato scelto: è stato letto.*
+>
+> **Separatori più marcati.** `gridColor` (`#f1f5f9` / `#1e293b`) è tarato per le linee di
+> valore **orizzontali**, che attraversano tutta la larghezza e si leggono anche tenui; un
+> separatore verticale è un tratto corto che compete con le barre accanto, e allo stesso tono
+> spariva — in dark del tutto, perché `#1e293b` è quasi il fondo su cui è disegnato. Colore
+> dedicato `#cbd5e1` / `#64748b`.
+>
+> **Trattino nell'header.** `2S - 2026-08-03 → 2026-08-16`.
+
+> **⚠️ Fuori pista (due misure mie sbagliate nello stesso giro, 2026-09-22):**
+>
+> **(1) Ho misurato il colore dichiarato invece del colore reso.** Lo strumento cercava
+> `#cbd5e1` esatto mentre il codice disegnava con `opacity: 0.85`, quindi il pixel finale è una
+> **fusione** con lo sfondo e non è mai quel colore. Risultato: `0` separatori su un grafico che
+> ne aveva. Rimossa l'opacity — ridondante, perché il colore porta già la sua intensità — così
+> il pixel reso è quello dichiarato e la misura torna possibile. *Un parametro che rende
+> invisibile il proprio effetto a uno strumento non è solo scomodo: rende la verifica una
+> congettura.*
+>
+> **(2) Il primo test della selezione non discriminava.** Usava `1D`, che è anche il gradino
+> più basso offerto: sia «la scelta è stata mantenuta» sia «la scelta è stata riportata al
+> default» producono `1D`. **Un test che dà lo stesso esito nei due mondi non sta testando.**
+> Rifatto con `2W`, che nessun default sceglierebbe.
+>
+> Entrambe sono la forma già catalogata — *l'evidenza non apparteneva alla tesi* — ma vale
+> notare che qui non c'era nessuno strumento a segnalarle: il primo test era **verde**, e un
+> verde che non può diventare rosso ha lo stesso aspetto di un verde che può.
+
 ## 6. Dependency-safe phases and owners
 
 | Phase | Size | Owner | Dependency | Deliverable | Status |
