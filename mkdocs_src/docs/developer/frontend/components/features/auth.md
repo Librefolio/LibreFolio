@@ -206,7 +206,16 @@ The same guide engine later drives the
 
 !!! note "Existing accounts are grandfathered, not migrated silently"
 
-    Migration `003_user_onboarding_progress` (`backend/alembic/versions/`) inserts a `completed`
-    row for `welcome`, `intro_tour`, and `import_guide` for every user that already existed when
-    the flows were introduced. Accounts created afterwards get `pending` rows lazily, from
-    `ensure_onboarding_progress`, the first time their progress is read.
+    Migration `004_release_1_2_0_schema` (`backend/alembic/versions/`) seeds all fifteen registered
+    flows for every user that already existed when the flows were introduced, but only `welcome`
+    is stored as `completed` — their settings are demonstrably configured. The other fourteen,
+    `intro_tour` and every page/detail guide included, are stored as `skipped`, alongside twelve
+    `skipped` rows in `user_onboarding_step_progress`.
+
+    That split is deliberate. `skipped` suppresses the trigger exactly like `completed`, while
+    staying truthful that the flow was never shown to that user — which keeps the door open to
+    offering it retroactively. Marking those flows `completed` would erase the difference between
+    "was never shown this" and "went through it", and claim a walkthrough that never happened.
+
+    Accounts created afterwards receive no rows from the migration. They get `pending` rows
+    lazily, from `ensure_onboarding_progress`, the first time their progress is read.

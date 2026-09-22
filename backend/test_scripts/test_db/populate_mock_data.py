@@ -342,7 +342,7 @@ def populate_brokers(session: Session):
 def _grandfather_onboarding_for_test_users(session: Session, users: list[User]) -> None:
     """Ensure every canonical E2E user is terminal (completed) on all onboarding flows.
 
-    Alembic revision 003_user_onboarding_progress grandfathers *existing* users out
+    Alembic revision 004_release_1_2_0_schema grandfathers *existing* users out
     of onboarding entirely: `welcome` is seeded completed, and every guide and step
     is seeded skipped, on the assumption that onboarding is only for genuinely new
     signups. On a fresh test DB the migration runs before this script
