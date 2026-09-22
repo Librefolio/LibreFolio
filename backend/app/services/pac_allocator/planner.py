@@ -122,12 +122,24 @@ class _Search:
     oracle_result: object | None
 
 
-def plan_pac_allocation(request: PacPlannerRequest, *, checkpoint: Checkpoint | None = None) -> PacPlannerResult:
+def plan_pac_allocation(
+    request: PacPlannerRequest,
+    *,
+    checkpoint: Checkpoint | None = None,
+    solver_time_budget_seconds: float | None = None,
+) -> PacPlannerResult:
     """Plan a PAC allocation and return a wire result.
 
     Never raises on a planning outcome: an infeasible scenario, an exhausted
     budget and a candidate that fails replay are all *results*, each with its
     own ``result_state``. Only a genuine contract violation propagates.
+
+    ``solver_time_budget_seconds`` is the engine window the caller has already
+    claimed. It matters more than it looks: the lexicographic cascade is what
+    makes the answer unique, so a budget that truncates it at a different stage
+    on a slower machine yields a *different plan for the same input*. Leaving it
+    ``None`` keeps ``solver.py``'s own default, which is only correct for a
+    caller that has no window to claim — every Tool caller has one.
     """
     check_budget(checkpoint)
     normalized = normalize_pac_plan(request)
@@ -140,7 +152,7 @@ def plan_pac_allocation(request: PacPlannerRequest, *, checkpoint: Checkpoint | 
     view = build_exact_policy_view(scenario, purpose="primary")
     check_budget(checkpoint)
 
-    search = _search(scenario, view, checkpoint=checkpoint)
+    search = _search(scenario, view, checkpoint=checkpoint, solver_time_budget_seconds=solver_time_budget_seconds)
     issues = list(normalized.issues)
 
     if search.candidate is None:
@@ -159,7 +171,13 @@ def plan_pac_allocation(request: PacPlannerRequest, *, checkpoint: Checkpoint | 
     return _ready_result(scenario, view, search, evaluation, conclusion, issues)
 
 
-def _search(scenario: ExactPlannerScenario, view: ExactPolicyView, *, checkpoint: Checkpoint | None) -> _Search:
+def _search(
+    scenario: ExactPlannerScenario,
+    view: ExactPolicyView,
+    *,
+    checkpoint: Checkpoint | None,
+    solver_time_budget_seconds: float | None = None,
+) -> _Search:
     """Try the exhaustive oracle first; fall back to the solver.
 
     The oracle is not merely another search: on a domain it can enumerate it
@@ -198,7 +216,11 @@ def _search(scenario: ExactPlannerScenario, view: ExactPolicyView, *, checkpoint
             return _Search(candidate=oracle_result.best_candidate, solver=None, oracle_enumerated=True, oracle_result=oracle_result)
 
     program = compile_policy_program(scenario, view)
-    solver = solve_policy_program(program, checkpoint=checkpoint)
+    solver = solve_policy_program(
+        program,
+        checkpoint=checkpoint,
+        **({} if solver_time_budget_seconds is None else {"time_budget_seconds": solver_time_budget_seconds}),
+    )
     return _Search(candidate=solver.candidate, solver=solver, oracle_enumerated=False, oracle_result=None)
 
 

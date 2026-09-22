@@ -58,6 +58,15 @@ from backend.app.services.tools.registry import ToolPluginRegistry
 
 _PLAN_RESULT_BYTES = 512 * 1024
 
+# Time reserved *after* the solver returns, for the exact replay and the report.
+# See the comment in `compute()` for how it was sized — and note that this is a
+# *provisional* number pending the scale benchmark: it is registered as one of
+# the two values that work must re-measure, in
+# `13_pacAllocator/implementation/plan-phase00Step3PacRebalancerSolverPolicies.prompt.md`,
+# checklist item 13. Listed there rather than only here, because an accurate
+# comment ages without announcing it.
+_POST_ENGINE_RESERVE_MS = 2_000
+
 _PLAN_POLICY = (
     ToolOperationPolicy(
         operation="plan",
@@ -115,8 +124,21 @@ class PacAllocatorTool(ToolPlugin):
         # Dispatch on tool_code *and* the declared operation, never on the
         # shape of the parameters.
         if tool_code == "pac_allocator" and isinstance(parameters, PacPlannerRequest) and parameters.operation == "plan":
+            # The engine window is the product decision this module's header
+            # calls the only one: claiming it is what makes `engine_timeout_ms`
+            # reach SCIP instead of leaving the solver on its own 3.5 s default.
+            #
+            # The reserve covers what runs *after* the solver returns: the exact
+            # replay of the candidate plus report construction. Measured at
+            # ~1 ms on the current test scenarios, but it grows with the domain
+            # while the solver's share does not, so the reserve is sized for a
+            # scenario much larger than any we can build today. There are
+            # 14 000 ms between the effective engine (30 000) and soft (44 000)
+            # timeouts, so a 2 000 ms reserve leaves the window intact.
+            window = context.claim_engine_window(post_engine_reserve_ms=_POST_ENGINE_RESERVE_MS)
             return plan_pac_allocation(
                 parameters,
                 checkpoint=context.checkpoint,
+                solver_time_budget_seconds=window.timeout_ms / 1000,
             )
         raise ToolExecutionError("invalid_parameters")

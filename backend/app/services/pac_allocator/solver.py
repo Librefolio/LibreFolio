@@ -70,11 +70,19 @@ __all__ = [
 
 ENGINE_NAME = "SCIP"
 
-# Step3 §16.4 risk 2, from the 2026-09-16 probe: a 4s solver budget produced a
-# ~4.05-4.08s wall, leaving too little room under a 5s hard deadline once
-# serialize/replay/report/cleanup are added; at 3.5s the observed margin rose
-# to ~1.44s. This is the *search* budget only — the Tool-level
-# ``ToolOperationPolicy`` envelope is D-main/integration's lease, not ours.
+# Fallback budget for a caller with no engine window to claim — tests, probes,
+# and the exhaustive-oracle path that never reaches here. **Not** the product
+# budget: the Tool passes `engine_timeout_ms` (30 000 ms as of 2026-09-21) via
+# `plan_pac_allocation(solver_time_budget_seconds=…)`, and that is the number
+# that governs a user-facing plan.
+#
+# Historical note, because the value looks arbitrary and its old justification
+# was exact but obsolete: 3.5 was tuned by the 2026-09-16 probe inside a **4 s**
+# Tool envelope, where a 4 s budget produced a ~4.05-4.08 s wall and left too
+# little room under a 5 s hard deadline once serialize/replay/report/cleanup
+# were added. That envelope no longer exists — planner v2 raised it to 30 000 ms
+# — so the number survives only as a conservative fallback, not as a measured
+# optimum for today's system.
 DEFAULT_SOLVER_TIME_BUDGET_SECONDS = 3.5
 
 # Not an economic or policy epsilon. Its only job is to stop a stage pin from
@@ -275,7 +283,14 @@ def _unfinished_report(stage: ObjectiveStage, ordinal: int, scope: Literal["glob
 
 
 def _apply_engine_settings(model: Model, time_budget_seconds: float, node_limit: int | None) -> list[SolverSetting]:
-    settings = [SolverSetting(name="limits/time", value=f"{time_budget_seconds:g}")]
+    """Apply the settings that survive the whole run, and report only those.
+
+    ``limits/time`` is deliberately **not** listed here: it is re-armed before
+    every stage with that stage's remaining slice (`_solve_stages`), so a single
+    value reported at the top would describe a configuration that was never
+    executed. The overall budget is reported separately as ``time_budget``.
+    """
+    settings = [SolverSetting(name="time_budget", value=f"{time_budget_seconds:g}")]
     if node_limit is not None:
         model.setParam("limits/nodes", node_limit)
         settings.append(SolverSetting(name="limits/nodes", value=str(node_limit)))

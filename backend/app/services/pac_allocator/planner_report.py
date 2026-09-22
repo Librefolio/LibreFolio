@@ -841,6 +841,28 @@ def build_stop_reason(result: SolverRunResult) -> str:
     mapping is the one below. Recorded here so the next reader does not have
     to re-derive it from the validator. Which *limit* stopped a run is read
     from the stage that actually stopped, never assumed to be the clock.
+
+    **This field is also the plan's reproducibility statement**, which is worth
+    stating because nothing in its name says so. SCIP's search is deterministic
+    here — ``randomseedshift``/``permutationseed``/``lpseed`` are all 0 and no
+    concurrent solve is enabled — so what varies between runs is *how much of
+    the lexicographic cascade completes*: each stage gets a wall-clock slice of
+    the remaining budget (``solver.py``), and the cascade is what makes the
+    answer unique. Therefore:
+
+    - ``completed`` — every stage finished, the total order was fully applied,
+      and the same input yields the same plan on any machine.
+    - ``time_limit`` / ``node_limit`` — the cascade was truncated, and *where*
+      it truncated depends on machine speed. The plan is valid and replayed in
+      exact arithmetic, but **it is not guaranteed to be reproducible**.
+
+    Measured 2026-09-21 at the real 30 000 ms engine budget: both reference
+    scenarios complete their cascade using 0.016% and 0.009% of it, 8 runs each,
+    one distinct candidate. The truncated regime needed budgets around 3 ms to
+    reproduce at all — so on current inputs this is a guarantee, not a hope.
+    That is a statement about today's inputs, not a theorem: it is exactly what
+    the deferred `benchmark capacity` work (Step 3 checklist item 13) is meant
+    to probe at scale.
     """
     unfinished = [stage for stage in result.stages if stage.status == "unfinished"]
     if not unfinished:
