@@ -9,6 +9,7 @@ from backend.app.schemas.risk import (
     RiskMode,
     RiskOutputKind,
     RiskScopeKind,
+    RiskVarCvarBin,
     RiskVarCvarOutput,
 )
 from backend.app.services.provider_registry import RiskAnalyticRegistry, register_plugin
@@ -18,7 +19,7 @@ from backend.app.services.risk.base import (
     RiskComputation,
     RiskUnavailableError,
 )
-from backend.app.services.risk.metrics import historical_var_cvar
+from backend.app.services.risk.metrics import historical_var_cvar, return_distribution_histogram
 
 
 class HistoricalVarParams(BaseModel):
@@ -50,7 +51,10 @@ class HistoricalVarParams(BaseModel):
 @register_plugin(RiskAnalyticRegistry)
 class HistoricalVarAnalytic(RiskAnalytic):
     analytic_code = "historical_var"
-    algorithm_version = "1.0.0"
+    # 2.0.0 — M2: coherent Acerbi-Tasche tail estimator (published VaR/CVaR move) plus
+    # the return histogram of K1. 1.x published the plug-in estimator, which understated
+    # CVaR by a measured 0.27 %.
+    algorithm_version = "2.0.0"
     name_i18n_key = "risk.analytics.historicalVar.name"
     description_i18n_key = "risk.analytics.historicalVar.description"
     output_kind = RiskOutputKind.VAR_CVAR
@@ -79,6 +83,11 @@ class HistoricalVarAnalytic(RiskAnalytic):
             confidence_level=params.confidence_level,
             horizon_days=params.horizon_days,
         )
+        # The bins live in signed-return space while value_at_risk is a positive loss
+        # magnitude, so the cut is negated to cross between the two conventions.
+        var_bin_edge = -summary.value_at_risk
+        histogram = return_distribution_histogram(summary.horizon_returns, pinned_edge=var_bin_edge)
+        return_bins = [RiskVarCvarBin(lower_bound=lower, upper_bound=upper, count=count) for lower, upper, count in zip(histogram.edges[:-1], histogram.edges[1:], histogram.counts, strict=True)]
         return RiskComputation(
             output=RiskVarCvarOutput(
                 confidence_level=params.confidence_level,
@@ -86,6 +95,8 @@ class HistoricalVarAnalytic(RiskAnalytic):
                 observations=len(summary.horizon_returns),
                 value_at_risk=summary.value_at_risk,
                 conditional_value_at_risk=summary.conditional_value_at_risk,
+                return_bins=return_bins,
+                var_bin_edge=var_bin_edge,
             ),
-            method="historical_simulation_higher_quantile",
+            method="historical_simulation_acerbi_tasche",
         )

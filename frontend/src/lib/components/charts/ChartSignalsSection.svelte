@@ -23,6 +23,7 @@
     import SignalTreeSelect, {type SignalTreeGroup} from './SignalTreeSelect.svelte';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {createSignalConfig, getRegisteredSignalTypes, getSignalProblemSeverity, type SignalConfig, type SignalDefinition, type SignalIndicatorGroup, type SignalInputField, type SignalParamDescriptor, type SignalProblem, type SignalProblemSeverity, type SignalStyle} from '$lib/charts/signals';
+    import {clearComparisonAssetRuntimeParams} from '$lib/charts/loadComparisonData';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {humanizeKey} from '$lib/utils/text';
     import {INPUT_FIELD_ORDER, formatSignalProblem, getParamNumber, getParamString} from './chartSignalsHelpers';
@@ -37,6 +38,7 @@
         eventCounts: Record<string, number>;
         firstDate: string | null;
         problem?: SignalProblem;
+        comparisonStatusAuthoritative?: boolean;
     }
 
     // =========================================================================
@@ -48,6 +50,8 @@
         signals?: SignalConfig[];
         /** Definitions available in the current Asset/FX domain. */
         definitions?: SignalDefinition[];
+        /** Optional subset shown/editable in this rendering context. */
+        allowedSignalTypes?: string[];
         /** Explicit catalog/request error shown without hiding local signals. */
         backendError?: string | null;
         /** Retry callback for backend signal loading. */
@@ -71,6 +75,8 @@
         ondetailpair?: (slug: string) => void;
         /** Called when user clicks Sync on an AssetComparison signal */
         onsyncasset?: (assetId: number) => void;
+        /** Page-owned comparison Asset sync state, preserved across panel remounts. */
+        syncingAssetIds?: ReadonlySet<number>;
         /** Called when user clicks Detail on an AssetComparison signal */
         ondetailasset?: (assetId: number) => void;
         /** Data summaries per signal id (point count, event counts, first date) */
@@ -90,6 +96,7 @@
     let {
         signals = $bindable([]),
         definitions,
+        allowedSignalTypes,
         backendError = null,
         onretrybackend,
         signalsLoading = false,
@@ -100,6 +107,7 @@
         onsyncpair,
         ondetailpair,
         onsyncasset,
+        syncingAssetIds = new Set<number>(),
         ondetailasset,
         signalSummaries = new Map(),
         dateStart = '',
@@ -113,7 +121,9 @@
     // Signal types from registry
     // =========================================================================
 
-    let signalTypes = $derived(definitions ?? getRegisteredSignalTypes());
+    let allowedSignalTypeSet = $derived(allowedSignalTypes ? new Set(allowedSignalTypes) : null);
+    let signalTypes = $derived((definitions ?? getRegisteredSignalTypes()).filter((definition) => allowedSignalTypeSet === null || allowedSignalTypeSet.has(definition.type)));
+    let visibleSignals = $derived(signals.filter((signal) => allowedSignalTypeSet === null || allowedSignalTypeSet.has(signal.signalType)));
 
     function getSignalName(definition: SignalDefinition): string {
         if (!definition.displayNameKey) return definition.displayName;
@@ -169,6 +179,7 @@
     interface SignalIssue {
         message: string;
         severity: SignalProblemSeverity;
+        code?: SignalProblem['code'];
     }
 
     function getSignalIssue(signal: SignalConfig): SignalIssue | null {
@@ -181,9 +192,10 @@
             return {
                 message: formatSignalProblem(summary.problem, translateProblem, signalFieldLabel),
                 severity: getSignalProblemSeverity(summary.problem),
+                code: summary.problem.code,
             };
         }
-        if (signal.signalType === 'asset-comparison' && signal.params._conversionFailed) {
+        if (signal.signalType === 'asset-comparison' && signal.params._conversionFailed && !summary?.comparisonStatusAuthoritative) {
             return {
                 message: signal.params._conversionError ? String(signal.params._conversionError) : $t('chartSettings.conversionFailed'),
                 severity: 'error',
@@ -306,12 +318,26 @@
     }
 
     function handleSignalReorder(newSignals: SignalConfig[]) {
-        signals = newSignals;
+        if (allowedSignalTypeSet === null) {
+            signals = newSignals;
+        } else {
+            const reordered = [...newSignals];
+            signals = signals.map((signal) => (allowedSignalTypeSet.has(signal.signalType) ? reordered.shift()! : signal));
+            signals = [...signals, ...reordered];
+        }
         emitChange();
     }
 
     function updateSignalParam(id: string, key: string, value: unknown) {
-        signals = signals.map((s) => (s.id === id ? {...s, params: {...s.params, [key]: value}} : s));
+        signals = signals.map((signal) => {
+            if (signal.id !== id) return signal;
+            const params = {...signal.params};
+            if (key === 'assetId' && String(params.assetId ?? '') !== String(value ?? '')) {
+                clearComparisonAssetRuntimeParams(params);
+            }
+            params[key] = value;
+            return {...signal, params};
+        });
         emitChange();
     }
 
@@ -378,16 +404,9 @@
         }
     }
 
-    /** Set of asset IDs currently syncing (for rotating icon) */
-    let syncingAssets = $state<Set<number>>(new Set());
-
     async function handleSyncAssetWithSpin(assetId: number) {
-        syncingAssets = new Set([...syncingAssets, assetId]);
-        try {
-            await onsyncasset?.(assetId);
-        } finally {
-            syncingAssets = new Set([...syncingAssets].filter((id) => id !== assetId));
-        }
+        if (syncingAssetIds.has(assetId)) return;
+        await onsyncasset?.(assetId);
     }
 
     /** Set of pair slugs already used by other FxPair signals */
@@ -492,12 +511,12 @@
         </div>
     </div>
 
-    {#if signals.length === 0}
+    {#if visibleSignals.length === 0}
         <p class="text-xs text-gray-400 dark:text-gray-500 italic mb-3">
             {$t('chartSettings.noSignals')}
         </p>
     {:else}
-        <OrderableList items={signals} keyFn={(s) => s.id} onReorder={handleSignalReorder} responsiveGrid minItemWidth="32rem" itemTone={getSignalCardTone}>
+        <OrderableList items={visibleSignals} keyFn={(s) => s.id} onReorder={handleSignalReorder} responsiveGrid minItemWidth="32rem" itemTone={getSignalCardTone}>
             {#snippet children({item: signal})}
                 {#if true}
                     {@const typeInfo = getSignalTypeInfo(signal.signalType)}
@@ -507,7 +526,7 @@
                     {@const summary = signalSummaries.get(signal.id)}
                     {@const issue = getSignalIssue(signal)}
                     {@const conversionFailed = signal.signalType === 'asset-comparison' && Boolean(signal.params._conversionFailed)}
-                    <div class="space-y-2">
+                    <div class="space-y-2" data-testid={`signal-card-${signal.id}`} data-signal-type={signal.signalType}>
                         <!-- Signal header -->
                         <div class="flex items-center justify-between gap-1">
                             <div class="flex items-center gap-1.5 min-w-0">
@@ -526,11 +545,11 @@
                                 {:else if issue}
                                     <Tooltip text={issue.message} position="top" maxWidth="min(34rem, calc(100vw - 16px))">
                                         {#if issue.severity === 'notice'}
-                                            <span class="-my-2 flex h-9 w-9 shrink-0 items-center justify-center text-gray-400 sm:my-0 sm:h-4 sm:w-4" data-testid="signal-issue" data-severity="notice">
+                                            <span class="-my-2 flex h-9 w-9 shrink-0 items-center justify-center text-gray-400 sm:my-0 sm:h-4 sm:w-4" data-testid="signal-issue" data-severity="notice" data-problem-code={issue.code}>
                                                 <Info size={14} class="cursor-help" />
                                             </span>
                                         {:else}
-                                            <span class="-my-2 flex h-9 w-9 shrink-0 items-center justify-center sm:my-0 sm:h-4 sm:w-4 {issue.severity === 'error' ? 'text-red-500' : 'text-amber-500'}" data-testid="signal-issue" data-severity={issue.severity}>
+                                            <span class="-my-2 flex h-9 w-9 shrink-0 items-center justify-center sm:my-0 sm:h-4 sm:w-4 {issue.severity === 'error' ? 'text-red-500' : 'text-amber-500'}" data-testid="signal-issue" data-severity={issue.severity} data-problem-code={issue.code}>
                                                 <AlertTriangle size={14} class="cursor-help" />
                                             </span>
                                         {/if}
@@ -555,7 +574,7 @@
                                         </Tooltip>
                                     {/each}
                                 {/if}
-                                <button type="button" class="p-1 rounded text-gray-400 hover:text-red-500 transition-colors" title={$t('chartSettings.removeSignal')} onclick={() => removeSignal(signal.id)}>
+                                <button type="button" data-testid={`signal-remove-${signal.id}`} class="p-1 rounded text-gray-400 hover:text-red-500 transition-colors" title={$t('chartSettings.removeSignal')} onclick={() => removeSignal(signal.id)}>
                                     <Trash2 size={14} />
                                 </button>
                             </div>
@@ -568,7 +587,7 @@
                                     {#if typeInfo.source === 'backend'}
                                         <SignalParamControl descriptor={desc} value={signal.params[desc.key]} affectsLabel={signalParamAffectsLabel(typeInfo, desc)} onchange={(value) => updateSignalParam(signal.id, desc.key, value)} />
                                     {:else}
-                                        <div class="flex items-center gap-1.5">
+                                        <div class="flex items-center gap-1.5" data-testid={`signal-param-${signal.id}-${desc.key}`}>
                                             <span class="text-[10px] text-gray-500 dark:text-gray-400 uppercase">
                                                 {$t(`chartSettings.params.${desc.key}`) !== `chartSettings.params.${desc.key}` ? $t(`chartSettings.params.${desc.key}`) : desc.label}
                                             </span>
@@ -599,6 +618,7 @@
                                                     <div class="flex items-center gap-1">
                                                         <div class="w-44">
                                                             <SearchSelect
+                                                                testId={`signal-param-${signal.id}-${desc.key}-select`}
                                                                 value={currentPairSlug}
                                                                 options={resolveDynamicOptions('configuredFxPairs').map((o) => {
                                                                     const parts = o.value.split('-');
@@ -662,6 +682,7 @@
                                                     <div class="flex items-center gap-1">
                                                         <div class="w-48">
                                                             <SearchSelect
+                                                                testId={`signal-param-${signal.id}-${desc.key}-select`}
                                                                 value={assetIdStr}
                                                                 options={resolveDynamicOptions('configuredAssets').map((o) => {
                                                                     const aid = Number(o.value);
@@ -710,11 +731,12 @@
                                                             <button
                                                                 type="button"
                                                                 class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-blue-500 transition-colors"
+                                                                data-testid={`signal-sync-asset-${signal.id}`}
                                                                 title={$t('common.sync')}
-                                                                disabled={syncingAssets.has(aid)}
+                                                                disabled={syncingAssetIds.has(aid)}
                                                                 onclick={() => handleSyncAssetWithSpin(aid)}
                                                             >
-                                                                <RotateCw size={12} class={syncingAssets.has(aid) ? 'animate-spin' : ''} />
+                                                                <RotateCw size={12} class={syncingAssetIds.has(aid) ? 'animate-spin' : ''} />
                                                             </button>
                                                         {/if}
                                                         {#if ondetailasset && assetIdStr}
@@ -730,25 +752,37 @@
                                                                     {currencyInfo.currency}
                                                                 </span>
                                                                 <!-- FX pair controls for comparison signal -->
-                                                                {#if displayCurrency && currencyInfo.currency !== displayCurrency}
+                                                                {#if displayCurrency && currencyInfo.currency !== displayCurrency && !summary?.comparisonStatusAuthoritative}
                                                                     {@const fxBase = currencyInfo.currency < displayCurrency ? currencyInfo.currency : displayCurrency}
                                                                     {@const fxQuote = currencyInfo.currency < displayCurrency ? displayCurrency : currencyInfo.currency}
                                                                     {@const fxSlug = `${fxBase}-${fxQuote}`}
                                                                     {@const fxExists = configuredFxSlugs.includes(fxSlug)}
                                                                     {#if !fxExists && oncreatefxpair}
-                                                                        <Tooltip text={$t('assetDetail.fxPairMissing', {values: {base: fxBase, quote: fxQuote}})} position="top">
-                                                                            <button type="button" class="p-0.5 rounded text-amber-500 hover:text-amber-600 transition-colors" onclick={() => oncreatefxpair?.(fxSlug)}>
+                                                                        <Tooltip text={$t('assetDetail.fxPairMissing', {values: {base: fxBase, quote: fxQuote}})} position="top" interactiveChild>
+                                                                            <button
+                                                                                type="button"
+                                                                                data-testid={`signal-fx-create-${signal.id}`}
+                                                                                aria-label={`${$t('common.create')}: ${$t('assetDetail.fxPairMissing', {values: {base: fxBase, quote: fxQuote}})}`}
+                                                                                class="p-0.5 rounded text-amber-500 hover:text-amber-600 transition-colors"
+                                                                                onclick={() => oncreatefxpair?.(fxSlug)}
+                                                                            >
                                                                                 <AlertTriangle size={12} />
                                                                             </button>
                                                                         </Tooltip>
                                                                     {:else if fxExists && conversionFailed && onsyncfxpair}
-                                                                        <Tooltip text={$t('chartSettings.conversionFailed')} position="top">
-                                                                            <button type="button" class="p-0.5 rounded text-amber-500 hover:text-amber-600 transition-colors" onclick={() => onsyncfxpair?.(fxSlug)}>
+                                                                        <Tooltip text={$t('chartSettings.conversionFailed')} position="top" interactiveChild>
+                                                                            <button
+                                                                                type="button"
+                                                                                data-testid={`signal-fx-sync-${signal.id}`}
+                                                                                aria-label={`${$t('common.sync')}: ${fxSlug.replace('-', '/')}`}
+                                                                                class="p-0.5 rounded text-amber-500 hover:text-amber-600 transition-colors"
+                                                                                onclick={() => onsyncfxpair?.(fxSlug)}
+                                                                            >
                                                                                 <RotateCw size={11} />
                                                                             </button>
                                                                         </Tooltip>
                                                                     {:else if fxExists}
-                                                                        <a href="/fx/{fxSlug}" class="p-0.5 rounded text-gray-400 hover:text-libre-green transition-colors" title="FX {fxSlug.replace('-', '/')}">
+                                                                        <a href="/fx/{fxSlug}" data-testid={`signal-fx-detail-${signal.id}`} class="p-0.5 rounded text-gray-400 hover:text-libre-green transition-colors" title="FX {fxSlug.replace('-', '/')}">
                                                                             <Coins size={11} />
                                                                         </a>
                                                                     {/if}
@@ -788,14 +822,14 @@
 
                         <!-- Local signal style strip. Backend components own their individual editors above. -->
                         {#if typeInfo?.source !== 'backend' && signal.signalType !== 'macd'}
-                            <div class="pt-1.5 border-t border-gray-100 dark:border-slate-700">
+                            <div class="pt-1.5 border-t border-gray-100 dark:border-slate-700" data-testid={`signal-style-${signal.id}`}>
                                 <SignalStyleEditor style={signal.style} onstylechange={(key, value) => updateSignalStyle(signal.id, key, value)} hideLineType={typeInfo?.source === 'local' && signal.signalType === 'rsi'} />
                             </div>
                         {/if}
 
                         <!-- MACD: simplified single color+line style (full MACD popover stays in modal for now) -->
                         {#if typeInfo?.source === 'local' && signal.signalType === 'macd'}
-                            <div class="flex items-center gap-1.5 pt-1.5 border-t border-gray-100 dark:border-slate-700">
+                            <div class="flex items-center gap-1.5 pt-1.5 border-t border-gray-100 dark:border-slate-700" data-testid={`signal-style-${signal.id}`}>
                                 <input type="color" value={signal.style.color} class="w-6 h-6 p-0 border border-gray-200 dark:border-slate-600 rounded cursor-pointer shrink-0" title={$t('chartSettings.macdLineColor')} oninput={(e) => updateSignalStyle(signal.id, 'color', e.currentTarget.value)} />
                                 <span class="text-[10px] text-gray-400 dark:text-gray-500">MACD</span>
                                 <SignalStyleEditor style={signal.style} onstylechange={(key, value) => updateSignalStyle(signal.id, key, value)} />

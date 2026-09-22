@@ -878,7 +878,7 @@ class TestPreloadFxRates:
         fx_map = await PortfolioCalculationEngine(db)._preload_fx_rates(
             classified_txs=txs,
             in_transit_intervals=intervals,
-            external_cash_flows=[(date(2025, 1, 3), Decimal("50"), "GBP")],
+            external_cash_flows=[(date(2025, 1, 3), 1, Decimal("50"), "GBP")],
             price_map={
                 1: [(date(2025, 1, 1), Decimal("10"), "USD")],
                 2: [(date(2025, 1, 1), Decimal("20"), "CHF")],

@@ -77,6 +77,9 @@ class SignalPlugin(ABC):
     compatible_domains: ClassVar[tuple[SignalDomain, ...]]
     annotation_capabilities: ClassVar[tuple[str, ...]] = ()
     ai_export_temporal_rules: ClassVar[tuple[SignalAiExportTemporalRule, ...]] = ()
+    catalog_visible: ClassVar[bool] = True
+    allows_sparse_output_dates: ClassVar[bool] = False
+    allows_sparse_input_dates: ClassVar[bool] = False
 
     @classmethod
     def validate_params(cls, params: Mapping[str, object] | BaseModel) -> BaseModel:

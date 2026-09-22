@@ -24,7 +24,7 @@
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import {RefreshCw, Loader2, X as XIcon, Plus, Scale, Trash2} from 'lucide-svelte';
+    import {RefreshCw, Loader2, X as XIcon, Plus, Scale, Trash2, Upload} from 'lucide-svelte';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import type {ColumnDef, RowAction} from '$lib/components/table/types';
@@ -36,6 +36,8 @@
     import {ensureSectorsLoaded, getSectorEmoji} from '$lib/stores/reference/sectorStore';
     import {CountrySearchSelect, SectorSearchSelect} from '$lib/components/ui/select';
     import {generateUUID} from '$lib/utils/core/uuid';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import DistributionDataImportModal from '$lib/components/assets/DistributionDataImportModal.svelte';
 
     // =========================================================================
     // Types
@@ -61,9 +63,10 @@
         hasProvider?: boolean;
         askingProvider?: boolean;
         onAskProvider?: () => void;
+        zIndex?: number;
     }
 
-    let {kind, value = $bindable({}), readonly: isReadonly = false, disabled = false, onchange, hasProvider = false, askingProvider = false, onAskProvider}: Props = $props();
+    let {kind, value = $bindable({}), readonly: isReadonly = false, disabled = false, onchange, hasProvider = false, askingProvider = false, onAskProvider, zIndex = 80}: Props = $props();
 
     // =========================================================================
     // State
@@ -76,6 +79,7 @@
     let selectedIds: string[] = $state([]);
     let showDeleteConfirm = $state(false);
     let pendingDeleteIds: string[] = $state([]);
+    let showImportModal = $state(false);
 
     // Sync from prop value → internal entries (only on external changes)
     $effect(() => {
@@ -133,13 +137,50 @@
     let validBarClass = $derived(isValid ? 'bg-libre-green' : isExcess ? 'bg-red-400' : 'bg-amber-400');
 
     /** Sector select options (all keys, with i18n labels) */
-    let allSectorOptions = $derived(getSectorKeysList().map((k) => ({value: k, label: `${getSectorEmoji(k)} ${$t(`sectors.${sectorI18nKey(k)}`) || k}`.trim()})));
+    let allSectorOptions = $derived(
+        getSectorKeysList().map((key) => {
+            const i18nKey = `sectors.${sectorI18nKey(key)}`;
+            const localized = $t(i18nKey);
+            return {
+                value: key,
+                label: `${getSectorEmoji(key)} ${localized === i18nKey ? key : localized}`.trim(),
+            };
+        }),
+    );
 
     /** Country select options (all countries, including 'Other' from backend) */
     let allCountryOptions = $derived(countries.map((c) => ({value: c.iso3, label: `${c.flag_emoji || ''} ${c.iso3} — ${c.name}`.trim()})));
 
     /** Already-used keys for exclusion in "Add" logic */
     let usedKeys = $derived(new Set(entries.map((e) => e.key)));
+
+    function normalizedLookup(items: Array<[string, string]>): Map<string, string> {
+        return new Map(items.map(([input, canonical]) => [input.trim().toLocaleLowerCase(), canonical]));
+    }
+
+    let importNameLookup = $derived.by(() => {
+        if (kind === 'geographic') {
+            return normalizedLookup(
+                countries.flatMap((country) => [
+                    [country.iso2, country.iso3],
+                    [country.iso3, country.iso3],
+                    [country.name, country.iso3],
+                ]),
+            );
+        }
+        return normalizedLookup(
+            getSectorKeysList().flatMap((key) => {
+                const i18nKey = `sectors.${sectorI18nKey(key)}`;
+                const localized = $t(i18nKey);
+                return localized === i18nKey
+                    ? [[key, key]]
+                    : [
+                          [key, key],
+                          [localized, key],
+                      ];
+            }),
+        );
+    });
 
     // =========================================================================
     // Actions
@@ -153,6 +194,15 @@
         skipNextSync = true;
         value = result;
         onchange?.(result);
+    }
+
+    function importDistribution(distribution: Record<string, number>) {
+        skipNextSync = true;
+        value = distribution;
+        entries = Object.entries(distribution)
+            .map(([key, weight]) => ({id: generateUUID(), key, weight: weight * 100}))
+            .sort((a, b) => b.weight - a.weight);
+        onchange?.(distribution);
     }
 
     function updateWeight(id: string, newVal: number) {
@@ -314,7 +364,7 @@
             type: 'custom',
             cell: (row) => ({
                 type: 'html' as const,
-                html: `<div class="h-3 bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden"><div class="h-full rounded-full transition-all ${validBarClass}" style="width: ${Math.min(100, (row.weight / maxWeight) * 100)}%"></div></div>`,
+                html: `<div data-testid="distribution-entry-${kind}-${escapeHtml(row.key)}" data-weight="${row.weight}" class="h-3 bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden"><div class="h-full rounded-full transition-all ${validBarClass}" style="width: ${Math.min(100, (row.weight / maxWeight) * 100)}%"></div></div>`,
             }),
             sortable: false,
             filterable: false,
@@ -403,6 +453,16 @@
             {#if !isReadonly && !disabled}
                 <button
                     type="button"
+                    onclick={() => (showImportModal = true)}
+                    data-testid="distribution-import-{kind}"
+                    class="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                    title={$t('dataEditor.importCsv')}
+                >
+                    <Upload size={10} />
+                    <span class="hidden sm:inline">{$t('dataEditor.importCsv')}</span>
+                </button>
+                <button
+                    type="button"
                     onclick={addEntry}
                     disabled={addingEntry}
                     data-busy={addingEntry}
@@ -419,6 +479,7 @@
                     type="button"
                     onclick={onAskProvider}
                     disabled={!hasProvider || askingProvider}
+                    data-testid="distribution-ask-provider-{kind}"
                     class="flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded
                                text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200
                                disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
@@ -491,5 +552,7 @@
         showDeleteConfirm = false;
         pendingDeleteIds = [];
     }}
-    zIndex={80}
+    {zIndex}
 />
+
+<DistributionDataImportModal bind:open={showImportModal} title="{kind === 'sector' ? $t('common.sectorDistribution') : $t('common.geoDistribution')} — {$t('dataEditor.importCsv')}" resolveName={(raw) => importNameLookup.get(raw.trim().toLocaleLowerCase()) ?? null} onimport={importDistribution} />

@@ -92,7 +92,7 @@ class TestPerformanceInputsInKind:
         # NO cash. Plus a tiny 100 EUR cash deposit.
         adj = _tx(id=1, type="ADJUSTMENT", dt="2025-01-01", quantity="100", asset_id=100, cost_basis_override="100", cost_basis_currency="EUR")
         dep = _tx(id=2, type="DEPOSIT", dt="2025-01-01", amount="100", currency="EUR")
-        states = _build_states([_ctxn(adj), _ctxn(dep)], [(date(2025, 1, 1), Decimal("100"), "EUR")], date(2025, 1, 1), date(2025, 1, 1))
+        states = _build_states([_ctxn(adj), _ctxn(dep)], [(date(2025, 1, 1), 10, Decimal("100"), "EUR")], date(2025, 1, 1), date(2025, 1, 1))
 
         _navs, cash_flows = DerivedViewsBuilder(states, "EUR").build_performance_inputs()
 
@@ -104,7 +104,7 @@ class TestPerformanceInputsInKind:
     def test_inkind_seed_does_not_explode_roi(self):
         adj = _tx(id=1, type="ADJUSTMENT", dt="2025-01-01", quantity="100", asset_id=100, cost_basis_override="100", cost_basis_currency="EUR")
         dep = _tx(id=2, type="DEPOSIT", dt="2025-01-01", amount="100", currency="EUR")
-        states = _build_states([_ctxn(adj), _ctxn(dep)], [(date(2025, 1, 1), Decimal("100"), "EUR")], date(2025, 1, 1), date(2025, 1, 1))
+        states = _build_states([_ctxn(adj), _ctxn(dep)], [(date(2025, 1, 1), 10, Decimal("100"), "EUR")], date(2025, 1, 1), date(2025, 1, 1))
 
         navs, cash_flows = DerivedViewsBuilder(states, "EUR").build_performance_inputs()
         roi_series = calculate_simple_roi_series(navs, cash_flows)
@@ -129,7 +129,7 @@ class TestPerformanceInputsInKind:
         builder = DailyStateBuilder(
             classified_txs=classified,
             in_transit_intervals=[],
-            external_cash_flows=[(date(2025, 1, 1), Decimal("10000"), "EUR")],
+            external_cash_flows=[(date(2025, 1, 1), 10, Decimal("10000"), "EUR")],
             price_map=price_map,
             quote_base_map={},
             fx_rate_map={},

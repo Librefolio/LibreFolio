@@ -35,6 +35,18 @@ export function toPercent(v: number, isPercentage: boolean, baseValue: number): 
 }
 
 /**
+ * A single ECharts candlestick quad `[open, close, low, high]` (note the
+ * ordering — NOT open/high/low/close), with the percentage transform applied to
+ * each leg. Generalized out of `buildCandleSeriesData` so any already-complete
+ * OHLC source (no synthesis needed) can reuse the exact, tested quad-ordering
+ * convention instead of re-deriving it — see GrowthChart.svelte's P&L candles
+ * (G1b), which always has a full quad or nothing (never a lone close).
+ */
+export function buildOhlcQuad(open: number, close: number, low: number, high: number, isPercentage: boolean, baseValue: number): number[] {
+    return [toPercent(open, isPercentage, baseValue), toPercent(close, isPercentage, baseValue), toPercent(low, isPercentage, baseValue), toPercent(high, isPercentage, baseValue)];
+}
+
+/**
  * ECharts candlestick data: one `[open, close, low, high]` quad per point, with
  * the percentage transform applied. DB values win; missing fields are
  * synthesized (open borrows the previous close — the first point opens at its own
@@ -49,7 +61,7 @@ export function buildCandleSeriesData(data: LineDataPoint[], isPercentage: boole
         const o = d.open ?? prevClose;
         const h = d.high ?? Math.max(o, c);
         const l = d.low ?? Math.min(o, c);
-        return [toPercent(o, isPercentage, baseValue), toPercent(c, isPercentage, baseValue), toPercent(l, isPercentage, baseValue), toPercent(h, isPercentage, baseValue)];
+        return buildOhlcQuad(o, c, l, h, isPercentage, baseValue);
     });
 }
 

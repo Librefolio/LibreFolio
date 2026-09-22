@@ -15,7 +15,7 @@
     import {ensureCurrenciesLoaded, getCurrencyInfo, currencyStoreVersion} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import {assetProviderBadgeHtml, assetProvidersVersion, ensureAssetProvidersCached} from '$lib/utils/providerHelpers';
-    import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+    import {assetTypeBadgeClass, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {formatCurrencyAmountHtml} from '$lib/utils/currency/currencyFormat';
     import type {LivePriceDirection} from '$lib/services/livePriceService';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
@@ -118,17 +118,9 @@
     function typeBadgeHtml(type: string | null | undefined): string {
         if (!type) return '<span class="text-gray-400">—</span>';
         const imgSrc = getAssetTypeIconUrl(type);
-        const colors: Record<string, string> = {
-            STOCK: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
-            ETF: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400',
-            BOND: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
-            CRYPTO: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400',
-            FUND: 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400',
-            HOLD: 'bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-400',
-            CROWDFUND: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400',
-            INDEX: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400',
-        };
-        const cls = colors[type] ?? 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400';
+        // Badge colour follows the *content*, icon and label follow the *wrapper*.
+        // The map is shared with AssetCard — see assetTypeBadgeClass().
+        const cls = assetTypeBadgeClass(type);
         const label = $t(`assets.types.${type}`) || type;
         return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded ${cls}"><img src="${imgSrc}" alt="" class="w-3.5 h-3.5 object-contain" onerror="this.style.display='none'" />${label}</span>`;
     }
@@ -178,7 +170,13 @@
                 header: () => $t('common.type'),
                 cell: (row) => ({type: 'html', html: typeBadgeHtml(row.asset_type)}),
                 type: 'enum',
-                enumOptions: ['STOCK', 'ETF', 'BOND', 'CRYPTO', 'FUND', 'HOLD', 'CROWDFUND', 'OTHER'].map((v) => ({value: v, label: $t(`assets.types.${v}`) || v})),
+                // Hand-written on purpose, and guarded by the enum gate test rather than
+                // derived from schemas.AssetType.options: `generated.ts` is gitignored and
+                // only exists after `./dev.py api sync`, so a derived list would quietly
+                // come up short on any checkout where the client has not been regenerated —
+                // green test, missing filter values. A literal list works with no client at
+                // all, and the gate makes forgetting one a red.
+                enumOptions: ['STOCK', 'ETF', 'BOND', 'CRYPTO', 'FUND', 'CROWDFUND', 'HOLD', 'COMMODITY', 'REAL_ESTATE', 'INDEX', 'OTHER', 'ETF_STOCK', 'ETF_BOND', 'ETF_COMMODITY', 'ETF_REAL_ESTATE', 'ETF_CRYPTO', 'ETF_MONETARY'].map((v) => ({value: v, label: $t(`assets.types.${v}`) || v})),
                 getValue: (row) => row.asset_type ?? '',
                 filterable: false,
                 width: 70,
@@ -207,7 +205,10 @@
                     if (price == null) return '—';
                     const dir = live?.direction ?? 'neutral';
                     const colorCls = dir === 'up' ? 'text-emerald-600 dark:text-emerald-400' : dir === 'down' ? 'text-red-500 dark:text-red-400' : '';
-                    const inner = formatCurrencyAmountHtml(price, row.currency);
+                    // A market quote is the same figure for every user and reveals
+                    // nothing about this one's holdings. No masked amount shares the
+                    // row, so nothing can be reconstructed from it here.
+                    const inner = formatCurrencyAmountHtml(price, row.currency, {sensitivity: 'public'});
                     return {
                         type: 'html',
                         html: `<span class="font-mono transition-colors duration-300 ${colorCls}">${inner}</span>`,
@@ -299,6 +300,7 @@
         isLoading={loading}
         onRowClick={(row) => goto(`/assets/${row.id}${dateStart && dateEnd ? `?start=${dateStart}&end=${dateEnd}` : ''}`)}
         getRowHref={(row) => `/assets/${row.id}${dateStart && dateEnd ? `?start=${dateStart}&end=${dateEnd}` : ''}`}
+        getRowClass={(row) => (row.active ? '' : 'asset-row-inactive')}
         onSelectionChange={(ids) => onselectionchange?.(data.filter((row) => ids.includes(String(row.id))))}
         rowActions={[
             {
@@ -353,3 +355,21 @@
         {onColumnResize}
     />
 </div>
+
+<style>
+    :global(tr.asset-row-inactive:not(.selected):not(.highlighted)) {
+        background-color: #fffbeb !important;
+    }
+
+    :global(tr.asset-row-inactive:not(.selected):not(.highlighted):hover) {
+        background-color: #fef3c7 !important;
+    }
+
+    :global(.dark) :global(tr.asset-row-inactive:not(.selected):not(.highlighted)) {
+        background-color: rgb(120 53 15 / 0.24) !important;
+    }
+
+    :global(.dark) :global(tr.asset-row-inactive:not(.selected):not(.highlighted):hover) {
+        background-color: rgb(120 53 15 / 0.36) !important;
+    }
+</style>

@@ -10,13 +10,17 @@ Schemas for the /api/v1/portfolio/ endpoints:
 - Allocation history (time series by type/sector/geography)
 """
 
+from __future__ import annotations
+
 from datetime import date as date_type
+from datetime import datetime
+from decimal import Decimal
 from enum import StrEnum
-from typing import Any, Dict, List, Literal, Optional
+from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel, Field, computed_field, field_validator
+from pydantic import BaseModel, BeforeValidator, Field, computed_field, field_validator, model_validator
 
-from backend.app.schemas.common import Currency, OpenDateRangeModel, SafeDecimal, StrictModel
+from backend.app.schemas.common import Currency, CurrencyCode, OpenDateRangeModel, SafeDecimal, StrictModel
 from backend.app.schemas.wac import WACMissingPairInfo
 
 # =============================================================================
@@ -254,6 +258,104 @@ class AllocationHistoryPoint(StrictModel):
     components: List[AllocationItem]
 
 
+class YieldOnCostStatus(StrEnum):
+    """Availability state for a holding's trailing-365-day Yield on Cost."""
+
+    AVAILABLE = "available"
+    NO_INCOME = "no_income"
+    UNAVAILABLE = "unavailable"
+
+
+class YieldOnCostUnavailableReason(StrEnum):
+    """Why a holding's Yield on Cost cannot be computed."""
+
+    INSUFFICIENT_HISTORY = "insufficient_history"
+    INCOME_WITHOUT_ELIGIBLE_QUANTITY = "income_without_eligible_quantity"
+    REPLAY_INCONSISTENT = "replay_inconsistent"
+    INVALID_SPLIT = "invalid_split"
+    MISSING_FX = "missing_fx"
+    MISSING_WAC = "missing_wac"
+    NON_POSITIVE_WAC = "non_positive_wac"
+
+
+class YieldOnCostFxProvenance(StrictModel):
+    """One historical FX observation used by the Yield on Cost calculation."""
+
+    purpose: Literal["income", "wac"]
+    requested_date: date_type
+    rate_date: date_type
+    from_currency: str
+    to_currency: str
+    days_back: int = Field(..., ge=0)
+
+    @field_validator("from_currency", "to_currency")
+    @classmethod
+    def validate_currency(cls, value: str) -> str:
+        return Currency.validate_code(value)
+
+
+class YieldOnCostProvenance(StrictModel):
+    """Auditable source and window metadata for one holding's Yield on Cost."""
+
+    source: Literal["transactions"] = "transactions"
+    window_start: date_type
+    window_end: date_type
+    first_pair_transaction_date: Optional[date_type] = None
+    gross_income_transaction_count: int = Field(0, ge=0)
+    gross_income_per_unit: Optional[Currency] = None
+    net_zero: bool = False
+    fx: List[YieldOnCostFxProvenance] = Field(default_factory=list)
+    issue_date: Optional[date_type] = None
+    issue_pair: Optional[str] = None
+
+
+class YieldOnCostResult(StrictModel):
+    """Trailing-365-day gross income per unit divided by residual unit WAC."""
+
+    status: YieldOnCostStatus
+    value: Optional[SafeDecimal] = Field(None, description="Yield on Cost as a fraction; 0.04 means 4%.")
+    reason: Optional[YieldOnCostUnavailableReason] = None
+    provenance: YieldOnCostProvenance
+
+    @model_validator(mode="after")
+    def validate_status_contract(self) -> YieldOnCostResult:
+        if self.status == YieldOnCostStatus.AVAILABLE:
+            self._validate_available()
+        elif self.status == YieldOnCostStatus.NO_INCOME:
+            self._validate_no_income()
+        elif self.status == YieldOnCostStatus.UNAVAILABLE:
+            self._validate_unavailable()
+
+        return self
+
+    def _validate_available(self) -> None:
+        if self.value is None or self.value < 0 or self.reason is not None:
+            raise ValueError("available Yield on Cost requires a non-negative value and forbids reason")
+        if self.provenance.gross_income_transaction_count == 0:
+            raise ValueError("available Yield on Cost requires at least one income transaction")
+        if self.provenance.gross_income_per_unit is None or self.provenance.gross_income_per_unit.amount < 0:
+            raise ValueError("available Yield on Cost requires non-negative gross income per unit")
+
+    def _validate_no_income(self) -> None:
+        if self.value != Decimal("0") or self.reason is not None:
+            raise ValueError("no_income Yield on Cost requires value=0 and forbids reason")
+        if self.provenance.gross_income_transaction_count != 0:
+            raise ValueError("no_income Yield on Cost cannot contain income transactions")
+        if self.provenance.gross_income_per_unit is None or self.provenance.gross_income_per_unit.amount != Decimal("0"):
+            raise ValueError("no_income Yield on Cost requires zero gross income per unit")
+
+    def _validate_unavailable(self) -> None:
+        if self.value is not None or self.reason is None:
+            raise ValueError("unavailable Yield on Cost requires reason and forbids value")
+
+    @model_validator(mode="after")
+    def validate_net_zero_contract(self) -> YieldOnCostResult:
+        expected = self.status == YieldOnCostStatus.AVAILABLE and self.value == Decimal("0")
+        if self.provenance.net_zero != expected:
+            raise ValueError("net_zero must identify an available zero with recorded income")
+        return self
+
+
 class PortfolioHolding(StrictModel):
     """Single open holding snapshot at report end date."""
 
@@ -289,6 +391,9 @@ class PortfolioHolding(StrictModel):
     allocation_percent: Optional[SafeDecimal] = Field(None, description="Weight vs total market value (excludes cash)")
     nav_weight_percent: Optional[SafeDecimal] = Field(None, description="Weight vs NAV at report end date (includes cash): current_value / NAV * 100")
     oldest_open_lot_date: Optional[date_type] = Field(None, description="Opening date of the oldest FIFO lot still open at report end for this (asset, broker); None if fully closed")
+    yield_on_cost: YieldOnCostResult = Field(
+        description="Trailing-365-day gross recorded income per eligible unit divided by residual unit WAC.",
+    )
 
 
 class AssetPeriodContribution(BaseModel):
@@ -384,7 +489,7 @@ class PortfolioSummary(StrictModel):
     period_unrealized_gain_loss_end: Optional[Currency] = Field(None, description="Unrealized G/L at end of period (snapshot)")
     period_unrealized_gain_loss_delta: Optional[Currency] = Field(None, description="Change in unrealized G/L over the period")
     period_realized_gain_loss: Optional[Currency] = Field(None, description="Realized G/L from sales in period (WAC-based)")
-    period_income: Optional[Currency] = Field(None, description="DIVIDEND + INTEREST in period (positive)")
+    period_income: Optional[Currency] = Field(None, description="DIVIDEND + INTEREST in period, signed — a legacy negative correction reduces this value rather than being folded into the reconciliation residual")
     period_fees_taxes: Optional[Currency] = Field(None, description="FEE + TAX in period (positive value, shown negative in UI)")
     period_fees: Optional[Currency] = Field(None, description="FEE only in period (commissions)")
     period_taxes: Optional[Currency] = Field(None, description="TAX only in period")
@@ -435,6 +540,172 @@ class PortfolioHistoryPoint(BaseModel):
     mwrr_annualized: Optional[SafeDecimal] = Field(None, description="Annualized MWRR at this point")
     mwrr_cumulative: Optional[SafeDecimal] = Field(None, description="Cumulative MWRR at this point: (1+r_ann)^(days/365)-1")
     roi: Optional[SafeDecimal] = Field(None, description="Simple ROI series point")
+
+
+class BrokerPnlHistoryPoint(BaseModel):
+    """Single day's additive P&L contribution for one broker (G1a)."""
+
+    date: date_type
+    total_pnl: Currency = Field(..., description="This broker's slice of the scope total_pnl for this day")
+
+
+class BrokerPnlHistory(StrictModel):
+    """One broker's full additive P&L history (G1a — GrowthChart P&L broker overlay).
+
+    Points are built from the same Decimal components as the scope-aggregate
+    PortfolioHistoryPoint.total_pnl at each date, so for every date, summing
+    total_pnl across all BrokerPnlHistory entries reproduces the aggregate
+    PortfolioHistoryPoint.total_pnl exactly (see DailyStateBuilder §4.2).
+    """
+
+    broker_id: int
+    broker_name: str
+    points: List[BrokerPnlHistoryPoint] = Field(default_factory=list)
+
+
+class PnlCandlePoint(BaseModel):
+    """One day's synthetic total-P&L candle (G1b, plan §4.3).
+
+    ``close`` always equals the canonical ``PortfolioHistoryPoint.total_pnl`` for the
+    same date exactly (built by construction from the same Decimal components, not a
+    residual check). Days whose candle is unavailable (a held asset's valuation was
+    MISSING that day) are omitted from the series entirely — a genuine gap, never a
+    guessed or zeroed candle.
+    """
+
+    date: date_type
+    open: Currency
+    high: Currency
+    low: Currency
+    close: Currency
+
+
+class PnlCandleSeries(StrictModel):
+    """The full synthetic P&L candle series (G1b — GrowthChart P&L candles submode).
+
+    Cross-asset high/low are explicitly synthetic and potentially non-simultaneous
+    (plan §3.3) — ``hypothetical`` is always ``True`` at this series-metadata level so
+    the frontend can render the required always-visible label; there is no per-point
+    variant since every point in this series carries the same caveat. No volume field
+    by design (plan §3.3).
+    """
+
+    hypothetical: bool = Field(True, description="Always true: cross-asset high/low are synthetic/non-simultaneous, never a real intraday series")
+    points: List[PnlCandlePoint] = Field(default_factory=list)
+
+
+class IncomeHistoryPoint(BaseModel):
+    """One day's signed personal income (G1c, plan §3.4/§4.4).
+
+    Source is every scoped, committed DIVIDEND/INTEREST Transaction — asset-linked
+    and broker-level (``asset_id=None``) rows alike, never a global AssetEvent
+    declaration. Signed: a legacy negative correction reduces the bucket, it is
+    never abs()'d away. Days with no DIVIDEND/INTEREST activity are omitted from
+    the series entirely (a sparse economic-flow series, not a dense one with
+    false zeros) — this point type itself never carries a "no data" sentinel.
+    """
+
+    date: date_type
+    dividend: Currency = Field(..., description="Signed sum of DIVIDEND transactions for this date")
+    interest: Currency = Field(..., description="Signed sum of INTEREST transactions for this date")
+
+
+class IncomeHistorySeries(StrictModel):
+    """The full signed personal income history (G1c — GrowthChart P&L income submode).
+
+    ``sum(dividend) + sum(interest)`` across every point reproduces the canonical
+    signed ``PortfolioSummary.period_income`` exactly for the same scope/date
+    range (plan §3.4) — same signed-conversion pattern as the summary's own
+    income accumulator, not a residual reconciliation. ``missing_fx_pairs``
+    reuses the existing portfolio data-quality contract: a day whose income
+    transaction could not be converted is omitted from the sums (never a
+    silently-wrong zero) and its currency pair is reported here instead.
+    """
+
+    points: List[IncomeHistoryPoint] = Field(default_factory=list)
+    missing_fx_pairs: List[str] = Field(default_factory=list, description="'FROM/TO' pairs that could not be converted — affected days are excluded from the sums, not zeroed")
+
+
+class CostHistoryPoint(BaseModel):
+    """One day's signed cost total (batch 2 — FEE + TAX combined, matching the
+    dashboard's existing "Fees & taxes" KPI grouping).
+
+    Source is every scoped, committed FEE/TAX Transaction — asset-linked and
+    broker-level (``asset_id=None``) rows alike. Signed: preserves the raw
+    Transaction.amount sign (negative, per the FEE/TAX convention) rather than
+    flipping to a positive "magnitude" — same signed-fidelity policy as
+    IncomeHistoryPoint. Days with no FEE/TAX activity are omitted entirely
+    (sparse, not a dense zero-filled series).
+    """
+
+    date: date_type
+    cost: Currency = Field(..., description="Signed sum of FEE+TAX transactions for this date (negative, per the DB convention)")
+
+
+class CostHistorySeries(StrictModel):
+    """The full signed cost history (batch 2 — GrowthChart Income submode's costs dimension)."""
+
+    points: List[CostHistoryPoint] = Field(default_factory=list)
+    missing_fx_pairs: List[str] = Field(default_factory=list, description="'FROM/TO' pairs that could not be converted — affected days are excluded from the sums, not zeroed")
+
+
+class DepositHistoryPoint(BaseModel):
+    """One day's deposit total (batch 2 — fresh external cash contributed).
+
+    Source is every scoped, committed DEPOSIT Transaction. Always non-negative
+    per the DEPOSIT type's own sign convention (Transaction.amount > 0). Days
+    with no DEPOSIT activity are omitted entirely (sparse, not a dense
+    zero-filled series).
+    """
+
+    date: date_type
+    deposit: Currency = Field(..., description="Sum of DEPOSIT transactions for this date")
+
+
+class DepositHistorySeries(StrictModel):
+    """The full deposit history (batch 2 — GrowthChart Income submode's deposit-size dimension)."""
+
+    points: List[DepositHistoryPoint] = Field(default_factory=list)
+    missing_fx_pairs: List[str] = Field(default_factory=list, description="'FROM/TO' pairs that could not be converted — affected days are excluded from the sums, not zeroed")
+
+
+class AcquisitionFundingPoint(BaseModel):
+    """One day's BUY funding split between fresh capital and reinvested returns
+    (batch 2 — "new vs reinvested liquidity", plan §5.2).
+
+    Not independently computed: surfaces the engine's own existing per-BUY K/R
+    pool draw (see AcquisitionFundingContribution) — the same value already
+    used internally to update the running capital/returns pool balances, now
+    also exposed as an output. ``from_new_capital + from_reinvested`` equals
+    that day's total BUY cash outflow exactly, by construction (not a
+    residual). Days with no BUY activity are omitted entirely (a genuine gap,
+    not a zeroed row).
+    """
+
+    date: date_type
+    from_new_capital: Currency = Field(..., description="Portion of that day's BUY(s) funded from fresh external capital (K pool)")
+    from_reinvested: Currency = Field(..., description="Portion of that day's BUY(s) funded from reinvested prior returns (R pool)")
+
+
+class AcquisitionFundingSeries(StrictModel):
+    """The full new-vs-reinvested BUY funding history (batch 2 — GrowthChart Income
+    submode's acquisition-size dimension, rendered as a 2-zone stacked bar).
+
+    KNOWN LIMITATION — no ``missing_fx_pairs`` channel, unlike its co-rendered
+    Income-submode siblings (income/cost/deposit). A BUY whose currency has no FX
+    route on its date is skipped by the engine's own pre-existing
+    ``amount_target is None -> continue`` guard before it ever reaches the funding
+    split, so it silently contributes nothing and no data-quality signal surfaces
+    in THIS dimension. That guard is pre-existing engine behaviour (it equally
+    affects the 3-pool/cash-decomposition accounting, not just this series) and the
+    engine's ``missing_fx_pairs`` set is populated only from valuation paths, never
+    from transaction-amount conversion failures — so closing this properly means
+    giving the engine a transaction-level FX-failure output channel, not patching
+    this schema. Documented rather than silently implied complete; same omission as
+    PnlCandleSeries, which shipped with it.
+    """
+
+    points: List[AcquisitionFundingPoint] = Field(default_factory=list)
 
 
 # =============================================================================
@@ -835,6 +1106,512 @@ class PortfolioReportMetadata(StrictModel):
     included_features: List[str] = Field(default_factory=list)
 
 
+class PortfolioAllocationSourceRequest(StrictModel):
+    """Opt-in Asset catalog and OWNER full-custody source for allocation editors."""
+
+    as_of_date: date_type = Field(..., description="Inclusive custody and saved-price snapshot date.")
+    selected_cash_broker_ids: List[Annotated[int, Field(strict=True, gt=0)]] = Field(
+        default_factory=list,
+        description="OWNER broker ids whose native cash balances must be aggregated.",
+    )
+
+    @field_validator("selected_cash_broker_ids")
+    @classmethod
+    def validate_selected_cash_broker_ids(cls, broker_ids: List[int]) -> List[int]:
+        if len(broker_ids) != len(set(broker_ids)):
+            raise ValueError("selected_cash_broker_ids must not contain duplicates")
+        return broker_ids
+
+
+class PortfolioAllocationSourceQuote(StrictModel):
+    """Latest saved native quote at or before the requested date."""
+
+    raw_price: Optional[SafeDecimal] = None
+    currency: str = Field(..., description="Native asset/quote currency.")
+    quote_base_quantity: int = Field(..., ge=1, description="Asset units represented by raw_price.")
+    reference_date: Optional[date_type] = None
+    source: Optional[str] = Field(None, description="Saved price source plugin key.")
+    days_before_requested: Optional[int] = Field(None, ge=0)
+
+
+class PortfolioAllocationSourceContext(StrictModel):
+    """One OWNER custody position for a canonical asset."""
+
+    context_key: str
+    broker_id: int
+    broker_name: str
+    broker_icon_url: Optional[str] = None
+    broker_portal_url: Optional[str] = None
+    broker_default_import_plugin: Optional[str] = None
+    ownership_share_percent: SafeDecimal = Field(..., description="Display metadata only; custody_quantity is not share-scaled.")
+    custody_quantity: SafeDecimal
+
+
+class PortfolioAllocationSourceAsset(StrictModel):
+    """Canonical Asset candidate with any current OWNER custody contexts."""
+
+    asset_id: int
+    instrument_key: str
+    candidate_key: str
+    name: str
+    ticker: Optional[str] = None
+    asset_type: str
+    icon_url: Optional[str] = None
+    active: bool
+    usage_scope: Literal["owned", "other_users", "observed"]
+    quote: PortfolioAllocationSourceQuote
+    contexts: List[PortfolioAllocationSourceContext] = Field(default_factory=list)
+
+
+class PortfolioAllocationSourceCashBalance(StrictModel):
+    """One exact native-currency cash balance."""
+
+    currency: str
+    amount: SafeDecimal
+
+    @field_validator("currency")
+    @classmethod
+    def validate_currency(cls, currency: str) -> str:
+        return Currency.validate_code(currency)
+
+
+class PortfolioAllocationSourceCashSource(StrictModel):
+    """One OWNER broker and its full-custody native cash balances."""
+
+    broker_id: int
+    broker_name: str
+    broker_icon_url: Optional[str] = None
+    broker_portal_url: Optional[str] = None
+    broker_default_import_plugin: Optional[str] = None
+    ownership_share_percent: SafeDecimal = Field(..., description="Display metadata only; balances are not share-scaled.")
+    balances: List[PortfolioAllocationSourceCashBalance] = Field(default_factory=list)
+
+
+class PortfolioAllocationSource(StrictModel):
+    """Read-only facts copied by allocation editors; never targets or advice."""
+
+    generated_at: datetime
+    as_of_date: date_type
+    assets: List[PortfolioAllocationSourceAsset] = Field(default_factory=list)
+    cash_sources: List[PortfolioAllocationSourceCashSource] = Field(default_factory=list)
+    selected_cash_balances: List[PortfolioAllocationSourceCashBalance] = Field(default_factory=list)
+
+
+# =============================================================================
+# PORTFOLIO PLANNER SOURCE — authenticated, uncached domain-copy snapshot
+# =============================================================================
+
+
+class PlannerSourceSection(StrEnum):
+    ASSETS = "assets"
+    BROKERS = "brokers"
+    HOLDINGS = "holdings"
+    CASH_BALANCES = "cash_balances"
+    PRICES = "prices"
+    CLASSIFICATIONS = "classifications"
+    WAC_CONTEXTS = "wac_contexts"
+    FX_QUOTES = "fx_quotes"
+
+
+PlannerSourceResponseSection = Literal[
+    "currency_specs",
+    "provenance",
+    "assets",
+    "brokers",
+    "holdings",
+    "cash_balances",
+    "prices",
+    "classifications",
+    "wac_contexts",
+    "fx_quotes",
+    "issues",
+]
+PlannerSourceEntityKind = Literal[
+    "asset",
+    "broker",
+    "holding",
+    "cash_balance",
+    "price",
+    "classification",
+    "wac_context",
+    "fx_quote",
+    "currency_spec",
+]
+PlannerSourceEntityId = Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[!-~]+$")]
+PlannerSourceProvenanceId = Annotated[str, Field(min_length=1, max_length=128, pattern=r"^[!-~]+$")]
+PlannerSourceRef = Annotated[str, Field(min_length=1, max_length=256, pattern=r"^[!-~]+$")]
+PlannerSourcePositiveInt = Annotated[int, Field(strict=True, gt=0)]
+
+
+def _validate_canonical_fx_pair(value: str) -> str:
+    """Normalize/validate one direct unordered FX pair, e.g. 'usd/eur' -> 'EUR/USD'."""
+    if not isinstance(value, str):
+        raise ValueError(f"FX pair must be a string, got {type(value)}")
+    first_raw, separator, second_raw = value.partition("/")
+    if separator != "/":
+        raise ValueError("FX pair must have the form 'AAA/BBB'")
+    first = Currency.validate_code(first_raw)
+    second = Currency.validate_code(second_raw)
+    if first >= second:
+        raise ValueError("FX pair must name two distinct currencies in ascending alphabetical order")
+    return f"{first}/{second}"
+
+
+PortfolioPlannerSourceFxPair = Annotated[str, BeforeValidator(_validate_canonical_fx_pair)]
+
+
+class PortfolioPlannerSourceRequest(StrictModel):
+    """Select a read-only planner snapshot for an explicit OWNER Broker scope."""
+
+    as_of: date_type
+    target_currency: CurrencyCode
+    requested_sections: List[PlannerSourceSection] = Field(..., min_length=1)
+    broker_ids: List[PlannerSourcePositiveInt] = Field(..., min_length=1)
+    asset_ids: Optional[List[PlannerSourcePositiveInt]]
+    fx_pairs: List[PortfolioPlannerSourceFxPair]
+
+    @field_validator("requested_sections")
+    @classmethod
+    def validate_requested_sections(cls, sections: List[PlannerSourceSection]) -> List[PlannerSourceSection]:
+        if len(sections) != len(set(sections)):
+            raise ValueError("requested_sections must not contain duplicates")
+        return sections
+
+    @field_validator("broker_ids")
+    @classmethod
+    def validate_broker_ids(cls, broker_ids: List[int]) -> List[int]:
+        if len(broker_ids) != len(set(broker_ids)):
+            raise ValueError("broker_ids must not contain duplicates")
+        return broker_ids
+
+    @field_validator("asset_ids")
+    @classmethod
+    def validate_asset_ids(cls, asset_ids: Optional[List[int]]) -> Optional[List[int]]:
+        if asset_ids is not None and len(asset_ids) != len(set(asset_ids)):
+            raise ValueError("asset_ids must not contain duplicates")
+        return asset_ids
+
+    @field_validator("fx_pairs")
+    @classmethod
+    def validate_fx_pairs(
+        cls,
+        pairs: List[str],
+    ) -> List[str]:
+        if len(pairs) != len(set(pairs)):
+            raise ValueError("fx_pairs must not contain duplicate pairs")
+        return pairs
+
+
+class PortfolioPlannerSourceSnapshot(StrictModel):
+    """Request-bound metadata for one immutable domain-copy response."""
+
+    as_of: date_type
+    target_currency: CurrencyCode
+    generated_at: datetime
+    requested_sections: List[PlannerSourceSection]
+    source_revision: Literal["2.0.0"]
+
+    @field_validator("generated_at")
+    @classmethod
+    def validate_generated_at(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("generated_at must be timezone-aware")
+        return value
+
+
+class PortfolioPlannerSourceCurrencySpec(StrictModel):
+    """Backend-derived ISO currency quantum used by exact planner arithmetic."""
+
+    currency: CurrencyCode
+    minor_unit: SafeDecimal = Field(..., gt=0)
+
+
+class PortfolioPlannerSourceProvenance(StrictModel):
+    """Stable non-financial provenance record referenced by source rows."""
+
+    provenance_id: PlannerSourceProvenanceId
+    kind: Literal["domain_copy"]
+    domain: Literal["portfolio", "market_data", "broker", "fx", "wac"]
+    source_ref: PlannerSourceRef
+    source_label: Optional[Annotated[str, Field(min_length=1, max_length=128)]]
+    captured_at: datetime
+
+    @field_validator("source_label")
+    @classmethod
+    def validate_source_label(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None and any(0xD800 <= ord(character) <= 0xDFFF for character in value):
+            raise ValueError("source_label must contain Unicode scalar values")
+        return value
+
+    @field_validator("captured_at")
+    @classmethod
+    def validate_captured_at(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("captured_at must be timezone-aware")
+        return value
+
+
+class PortfolioPlannerSourceAsset(StrictModel):
+    """Persisted Asset identity copied without planner policy."""
+
+    asset_id: PlannerSourceEntityId
+    source_asset_id: int
+    name: str
+    ticker: Optional[str]
+    asset_class: str
+    icon_url: Optional[str]
+    active: bool
+    provenance_id: PlannerSourceProvenanceId
+
+
+class PortfolioPlannerSourceBroker(StrictModel):
+    """Authorized OWNER Broker identity plus known account facts."""
+
+    broker_id: PlannerSourceEntityId
+    source_broker_id: int
+    name: str
+    icon_url: Optional[str]
+    portal_url: Optional[str]
+    default_import_plugin: Optional[str]
+    access_role: Literal["OWNER"]
+    ownership_share: SafeDecimal = Field(..., ge=0, le=1)
+    observed_currencies: List[CurrencyCode]
+    active: bool
+    allow_cash_overdraft: bool
+    allow_asset_shorting: bool
+    execution_profile_status: Literal["not_available"]
+    provenance_id: PlannerSourceProvenanceId
+
+
+class PortfolioPlannerSourceHolding(StrictModel):
+    """One exact Asset×Broker custody row and its personal economic share."""
+
+    holding_id: PlannerSourceEntityId
+    asset_id: PlannerSourceEntityId
+    broker_id: PlannerSourceEntityId
+    custody_quantity: SafeDecimal
+    ownership_share: SafeDecimal = Field(..., ge=0, le=1)
+    economic_quantity: SafeDecimal
+    quantity_unit: Literal["asset_unit"]
+    provenance_id: PlannerSourceProvenanceId
+
+
+class PortfolioPlannerSourceCashBalance(StrictModel):
+    """One native Broker×currency ledger balance and its economic share."""
+
+    cash_id: PlannerSourceEntityId
+    broker_id: PlannerSourceEntityId
+    currency: CurrencyCode
+    custody_amount: SafeDecimal
+    ownership_share: SafeDecimal = Field(..., ge=0, le=1)
+    economic_amount: SafeDecimal
+    provenance_id: PlannerSourceProvenanceId
+
+
+class PortfolioPlannerSourcePrice(StrictModel):
+    """Latest saved raw Asset quote at or before the snapshot date."""
+
+    price_id: PlannerSourceEntityId
+    asset_id: PlannerSourceEntityId
+    amount: Optional[SafeDecimal]
+    currency: Optional[CurrencyCode]
+    quote_base_quantity: Optional[SafeDecimal] = Field(..., gt=0)
+    reference_date: Optional[date_type]
+    source: Optional[str]
+    days_before_requested: Optional[int] = Field(..., ge=0)
+    provenance_id: PlannerSourceProvenanceId
+
+
+class PortfolioPlannerSourceClassification(StrictModel):
+    """One exact saved Asset classification row."""
+
+    classification_id: PlannerSourceEntityId
+    asset_id: PlannerSourceEntityId
+    dimension: Literal["asset_type", "sector", "geography"]
+    category_id: Optional[str]
+    label: Optional[str]
+    weight: Optional[SafeDecimal] = Field(..., ge=0, le=1)
+    provenance_id: PlannerSourceProvenanceId
+
+
+class PortfolioPlannerSourceWacFxEvidence(StrictModel):
+    """Saved FX observation used by the canonical runtime WAC calculation."""
+
+    source_currency: CurrencyCode
+    destination_currency: CurrencyCode
+    rate: Optional[SafeDecimal] = Field(..., gt=0)
+    reference_date: Optional[date_type]
+    source: Optional[str]
+    inverted: bool
+    status: Literal["available", "missing"]
+
+
+class PortfolioPlannerWacContext(StrictModel):
+    """Canonical per-holding WAC projected into the requested calculation currency."""
+
+    wac_id: PlannerSourceEntityId
+    holding_id: PlannerSourceEntityId
+    asset_id: PlannerSourceEntityId
+    broker_id: PlannerSourceEntityId
+    method: Literal["runtime_wac"]
+    unit_cost: Optional[SafeDecimal]
+    fiscal_currency: Optional[CurrencyCode]
+    target_currency: CurrencyCode
+    as_of: date_type
+    fx_evidence: List[PortfolioPlannerSourceWacFxEvidence]
+    provenance_id: PlannerSourceProvenanceId
+
+
+class PortfolioPlannerSourceFxQuote(StrictModel):
+    """One canonical FX pair prefill row: the most recent saved rate LibreFolio holds for that pair, if any."""
+
+    fx_quote_id: PlannerSourceEntityId
+    pair: PortfolioPlannerSourceFxPair
+    rate: Optional[SafeDecimal] = Field(..., gt=0)
+    reference_date: Optional[date_type]
+    source: Optional[str]
+    days_before_requested: Optional[int] = Field(..., ge=0)
+    provenance_id: PlannerSourceProvenanceId
+
+
+class PortfolioPlannerSourceRootPath(StrictModel):
+    kind: Literal["root"] = Field(json_schema_extra={"enum": ["root"]})
+
+
+class PortfolioPlannerSourceSectionPath(StrictModel):
+    kind: Literal["section"] = Field(json_schema_extra={"enum": ["section"]})
+    section: PlannerSourceResponseSection
+
+
+class PortfolioPlannerSourceEntityPath(StrictModel):
+    kind: Literal["entity"] = Field(json_schema_extra={"enum": ["entity"]})
+    section: PlannerSourceResponseSection
+    entity_kind: PlannerSourceEntityKind
+    entity_id: PlannerSourceEntityId
+
+
+class PortfolioPlannerSourceFieldPath(StrictModel):
+    kind: Literal["field"] = Field(json_schema_extra={"enum": ["field"]})
+    section: PlannerSourceResponseSection
+    entity_kind: PlannerSourceEntityKind
+    entity_id: PlannerSourceEntityId
+    field: Annotated[str, Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_.-]+$")]
+
+
+PortfolioPlannerSourceIssuePath = Annotated[
+    Union[
+        PortfolioPlannerSourceRootPath,
+        PortfolioPlannerSourceSectionPath,
+        PortfolioPlannerSourceEntityPath,
+        PortfolioPlannerSourceFieldPath,
+    ],
+    Field(discriminator="kind"),
+]
+
+
+class PortfolioPlannerSourceTextParam(StrictModel):
+    kind: Literal["text"] = Field(json_schema_extra={"enum": ["text"]})
+    name: Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.-]+$")]
+    value: Annotated[str, Field(max_length=256)]
+
+
+class PortfolioPlannerSourceIntegerParam(StrictModel):
+    kind: Literal["integer"] = Field(json_schema_extra={"enum": ["integer"]})
+    name: Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.-]+$")]
+    value: int
+
+
+class PortfolioPlannerSourceMoneyParam(StrictModel):
+    kind: Literal["money"] = Field(json_schema_extra={"enum": ["money"]})
+    name: Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.-]+$")]
+    amount: SafeDecimal
+    currency: CurrencyCode
+
+
+class PortfolioPlannerSourceDateParam(StrictModel):
+    kind: Literal["date"] = Field(json_schema_extra={"enum": ["date"]})
+    name: Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.-]+$")]
+    value: date_type
+
+
+class PortfolioPlannerSourceEntityRefParam(StrictModel):
+    kind: Literal["entity_ref"] = Field(json_schema_extra={"enum": ["entity_ref"]})
+    name: Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.-]+$")]
+    entity_kind: PlannerSourceEntityKind
+    entity_id: PlannerSourceEntityId
+
+
+PortfolioPlannerSourceIssueParam = Annotated[
+    Union[
+        PortfolioPlannerSourceTextParam,
+        PortfolioPlannerSourceIntegerParam,
+        PortfolioPlannerSourceMoneyParam,
+        PortfolioPlannerSourceDateParam,
+        PortfolioPlannerSourceEntityRefParam,
+    ],
+    Field(discriminator="kind"),
+]
+PortfolioPlannerSourceIssueCode = Literal[
+    "allocation.currency_spec_missing",
+    "allocation.price_missing",
+    "allocation.price_date_missing",
+    "allocation.quote_base_quantity_missing",
+    "allocation.asset_type_missing",
+    "allocation.classification_sector_missing",
+    "allocation.classification_geography_missing",
+    "allocation.classification_invalid",
+    "allocation.wac_missing",
+    "allocation.wac_fx_missing",
+    "allocation.fiscal_currency_missing",
+    "allocation.saved_fx_missing",
+    "allocation.saved_fx_invalid",
+    "allocation.negative_inventory_unsupported",
+    "allocation.negative_cash_unsupported",
+    "allocation.broker_execution_profile_unsupported",
+    "allocation.broker_inactive",
+    "allocation.asset_inactive_not_buyable",
+]
+
+
+class PortfolioPlannerSourceIssue(StrictModel):
+    """Typed source defect without raw personal financial values."""
+
+    code: PortfolioPlannerSourceIssueCode
+    kind: Literal["missing", "invalid", "unsupported", "info"]
+    severity: Literal["error", "warning", "info"]
+    path: PortfolioPlannerSourceIssuePath
+    message_key: Annotated[str, Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_.-]+$")]
+    params: List[PortfolioPlannerSourceIssueParam] = Field(..., max_length=8)
+
+    @field_validator("params")
+    @classmethod
+    def validate_param_names(
+        cls,
+        params: List[PortfolioPlannerSourceIssueParam],
+    ) -> List[PortfolioPlannerSourceIssueParam]:
+        names = [param.name for param in params]
+        if len(names) != len(set(names)):
+            raise ValueError("issue params must use unique names")
+        return params
+
+
+class PortfolioPlannerSourceResponse(StrictModel):
+    """Independent, read-only domain facts for explicit planner copy actions."""
+
+    snapshot: PortfolioPlannerSourceSnapshot
+    currency_specs: List[PortfolioPlannerSourceCurrencySpec]
+    provenance: List[PortfolioPlannerSourceProvenance] = Field(..., min_length=1)
+    assets: List[PortfolioPlannerSourceAsset]
+    brokers: List[PortfolioPlannerSourceBroker]
+    holdings: List[PortfolioPlannerSourceHolding]
+    cash_balances: List[PortfolioPlannerSourceCashBalance]
+    prices: List[PortfolioPlannerSourcePrice]
+    classifications: List[PortfolioPlannerSourceClassification]
+    wac_contexts: List[PortfolioPlannerWacContext]
+    fx_quotes: List[PortfolioPlannerSourceFxQuote]
+    issues: List[PortfolioPlannerSourceIssue]
+
+
 class PortfolioReportQuery(StrictModel):
     """Request body for POST /portfolio/report.
 
@@ -849,6 +1626,13 @@ class PortfolioReportQuery(StrictModel):
     include_allocation_history: bool = Field(True, description="Include allocation history by all dimensions.")
     include_breakdown: bool = Field(False, description="Include per-broker breakdown in summary.")
     include_positions_contribution: bool = Field(False, description="Include per-asset period P&L contribution.")
+    include_broker_pnl_history: bool = Field(False, description="Include per-broker additive P&L history (G1a). Caller sets true only when effective scope has ≥2 brokers.")
+    include_pnl_candles: bool = Field(False, description="Include the synthetic total-P&L candle series (G1b). Lazy: caller sets true only on first candle-submode activation — expensive OHLC work stays off ordinary reports.")
+    include_income_history: bool = Field(False, description="Include the signed personal DIVIDEND/INTEREST income history (G1c). Caller policy: Dashboard/Broker overview set true eagerly — a sparse, cheap payload, unlike include_pnl_candles.")
+    include_cost_history: bool = Field(False, description="Include the signed FEE+TAX cost history (batch 2). Same sparse/eager caller policy as include_income_history.")
+    include_deposit_history: bool = Field(False, description="Include the DEPOSIT history (batch 2). Same sparse/eager caller policy as include_income_history.")
+    include_acquisition_funding: bool = Field(False, description="Include the new-vs-reinvested BUY funding split (batch 2). Same sparse/eager caller policy as include_income_history.")
+    allocation_source: Optional[PortfolioAllocationSourceRequest] = Field(None, description="Opt-in Asset catalog and OWNER full-custody allocation-editor source.")
 
 
 class PortfolioReportResponse(StrictModel):
@@ -864,3 +1648,10 @@ class PortfolioReportResponse(StrictModel):
     allocation_history: Optional[AllocationHistoryDimensions] = None
     data_quality: Optional[DataQualityReport] = None
     positions_contribution: Optional[PositionsContribution] = Field(None, description="Per-asset period P&L contribution. Only when include_positions_contribution=True.")
+    broker_pnl_history: Optional[List[BrokerPnlHistory]] = Field(None, description="Per-broker additive P&L history (G1a). Only when include_broker_pnl_history=True.")
+    pnl_candles: Optional[PnlCandleSeries] = Field(None, description="Synthetic total-P&L candle series (G1b). Only when include_pnl_candles=True.")
+    income_history: Optional[IncomeHistorySeries] = Field(None, description="Signed personal DIVIDEND/INTEREST income history (G1c). Only when include_income_history=True.")
+    cost_history: Optional[CostHistorySeries] = Field(None, description="Signed FEE+TAX cost history (batch 2). Only when include_cost_history=True.")
+    deposit_history: Optional[DepositHistorySeries] = Field(None, description="DEPOSIT history (batch 2). Only when include_deposit_history=True.")
+    acquisition_funding: Optional[AcquisitionFundingSeries] = Field(None, description="New-vs-reinvested BUY funding split (batch 2). Only when include_acquisition_funding=True.")
+    allocation_source: Optional[PortfolioAllocationSource] = Field(None, description="Asset catalog and OWNER full-custody source facts when requested.")

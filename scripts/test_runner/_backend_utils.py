@@ -59,6 +59,17 @@ def utils_version(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Version utility tests", verbose=verbose)
 
 
+def utils_container_registry(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the GHCR manifest/token flow without DB, server, or network."""
+    print_section("Utils: Container Registry")
+    print_info("Testing: trusted GHCR challenge parsing, token flow, status mapping, endpoint guards")
+    cmd = _build_pytest_cmd(
+        "backend/test_scripts/test_services/test_container_registry.py",
+        test_names,
+    )
+    return run_command(cmd, "Container registry tests", verbose=verbose)
+
+
 def utils_coverage_js_adapter(verbose: bool = False, test_names: list = None) -> bool:
     """Test the JS/Svelte coverage adapter that feeds coverage_analysis."""
     print_section("Utils: JS Coverage Adapter")
@@ -140,6 +151,51 @@ def utils_js_cache_fail_loud(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "JS cache fail-loud tests", verbose=verbose)
 
 
+def utils_gate_docs_links(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the cross-boundary docs link gate (const resolution, plugin discovery, three verdicts)."""
+    print_section("Utils: Docs Link Gate")
+    print_info("Testing: scripts/docs_links.py")
+    print_info("Tests: const resolution vs deletion, plugin/provider glob, unverifiable bucket")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_docs_links_gate.py", test_names)
+    return run_command(cmd, "Docs link discovery tests", verbose=verbose)
+
+
+def utils_gate_i18n_usage(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the i18n three-verdict classifier (used / not verified / dead)."""
+    print_section("Utils: i18n Usage Gate")
+    print_info("Testing: scripts/i18n_usage.py")
+    print_info("Tests: typed-union expansion, producer vocabulary, ternary arguments, bare-root suppression")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_i18n_usage_gate.py", test_names)
+    return run_command(cmd, "i18n three-verdict classifier tests", verbose=verbose)
+
+
+def utils_tools_wire(verbose: bool = False, test_names: list = None) -> bool:
+    """Test bounded Tool JSON encoding and sanitized validation errors."""
+    print_section("Utils: Tool Wire")
+    print_info("Testing: Unicode scalars, JSON limits, raw values and error redaction")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_tools_wire.py", test_names)
+    return run_command(cmd, "Tool wire tests", verbose=verbose)
+
+
+def utils_runtime_isolation(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the runtime-isolation contract (test-mode data-dir override + CLI shapes)."""
+    print_section("Utils: Runtime Isolation")
+    print_info("Testing: runtime paths, CLI propagation, lane readiness and process ownership")
+    print_info("Tests: prod guards, dotenv/Pipenv boundaries, port collisions, symlink escapes, server/test parser shapes")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_runtime_isolation.py", test_names)
+    return run_command(cmd, "Runtime isolation tests", verbose=verbose)
+
+
+def utils_test_runner_cli(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the test-runner CLI's own command-building contract."""
+    print_section("Utils: Test Runner CLI")
+    print_info("Testing: scripts/test_runner/_backend_utils.py, _cli.py (registry dispatch)")
+    print_info("Tests: test_names → pytest -k semantics, registry forwarding, coverage_js_adapter link")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_test_runner_cli.py", test_names)
+    return run_command(cmd, "Test runner CLI contract tests", verbose=verbose)
+
+
 def utils_all(verbose: bool = False) -> bool:
     """Run all utility tests."""
     if _common.nothing_left_to_run("utils"):
@@ -165,6 +221,7 @@ Tests for utility modules and helper functions:
   • Geographic area normalization, Sector normalization
   • Currency utilities, Cache utilities
   • Provider core cache & thread isolation
+  • Test-runner CLI contract (coverage-js-adapter command building, registry dispatch)
 """,
         # These are functions over values. The three the static classifier could
         # not prove pure only touch a database because they import a helper that
@@ -190,6 +247,14 @@ Tests for utility modules and helper functions:
     add_test(cat, "sector-normalization", utils_sector_normalization, name="Sector Normalization", desc="FinancialSector enum, aliases")
     add_test(cat, "currency-utils", utils_currency_utils, name="Currency Utils", desc="Currency listing, flag mapping")
     add_test(cat, "cache-utils", utils_cache_utils, name="Cache Utils", desc="NamedCache, TTL, registry, stats")
+    add_test(
+        cat,
+        "container-registry",
+        utils_container_registry,
+        name="Container Registry",
+        desc="Trusted GHCR challenge/token flow, result mapping, endpoint guards, secret redaction",
+        isolation="pure",
+    )
     add_test(cat, "provider-core-cache", utils_provider_core_cache, name="Provider Core Cache", desc="Thread isolation, timeout, caches")
     add_test(cat, "roi-utils", utils_roi_utils, name="ROI Utils", desc="annualized_to_cumulative, calculate_mwrr/_series")
     add_test(cat, "translation-utils", utils_translation_utils, name="Translation Utils", desc="get_babel_locale + English fallback")
@@ -199,8 +264,52 @@ Tests for utility modules and helper functions:
         "js-cache-fail-loud",
         utils_js_cache_fail_loud,
         name="JS Cache Fail-Loud (I1)",
-        desc="update_js_cache: undownloadable+uncached resource or partial font subsets → hard failure → exit 1; cached copy → exit 0",
+        desc="update_js_cache: undownloadable+uncached resource or partial font subsets → hard failure → exit 1; cached copy → exit 0; consumer-scoped narrowing (a docs-only asset does not fail a frontend build, an unknown attribution still does)",
         # tmp_path + monkeypatched network only: no DB, no server, no repo writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "gate-docs-links",
+        utils_gate_docs_links,
+        name="Docs Link Gate",
+        desc="Cross-boundary link discovery: a resolved const confirms a link but an unresolved interpolation may never condemn one, plugin/provider folders are found by glob rather than by a hand-written list, and what cannot be decided is reported as unverifiable instead of dropped",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "gate-i18n-usage",
+        utils_gate_i18n_usage,
+        name="i18n Usage Gate",
+        desc="Three verdicts where the audit had two: typed unions are expanded from the code that declares them, a bare namespace root no longer absolves everything beneath it, ternary arguments are seen, and 'not verified' stays apart from 'dead' so neither absolution nor condemnation is a default",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "tools-wire",
+        utils_tools_wire,
+        name="Tool Wire",
+        desc="Strict UTF-8 JSON, byte/depth boundaries and sanitized validation issues",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "runtime-isolation",
+        utils_runtime_isolation,
+        name="Runtime Isolation",
+        desc="Per-lane port/data propagation, production guards, readiness identity and process ownership",
+        # Only monkeypatches os.environ/sys.argv and builds argparse parsers;
+        # no DB, no server, no filesystem writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "test-runner-cli",
+        utils_test_runner_cli,
+        name="Test Runner CLI Contract",
+        desc="test_names → pytest -k semantics on the real coverage-js-adapter action, registry dispatch forwarding, coverage_js.py compile check",
+        # Monkeypatches run_command/subprocess.run and reads source text only;
+        # no DB, no server, no network, no repo writes.
         isolation="pure",
     )
     add_test(cat, "all", utils_all, test_names=False, name="All Utils Tests", desc="Run all utility tests")

@@ -38,9 +38,66 @@ After registering, you'll be redirected to the login page. Enter your credential
 
 ---
 
-## 🏦 3. Import Your First Statement (Create Broker & Assets On-the-Fly)
+## 🎉 3. Welcome Setup & Quick Tour {: #welcome-setup }
 
-When you first log in, you will be greeted by an empty dashboard with no data.
+When the Welcome flow is due, LibreFolio takes you to a dedicated **Welcome** page before the
+dashboard.
+
+On this page you can:
+
+- 🌍 **Confirm your language and base currency** — pre-filled from your administrator's
+  instance-wide defaults.
+- 🖼️ **Add a profile picture if you want** — your initials remain in place when you do not
+  choose one.
+- ✅ Select **Continue** to save the visible choices, or **Skip setup permanently** to keep the
+  existing settings and move on.
+- 🚪 Use the dedicated **Log out** action in the page header whenever you need to leave safely.
+
+An onboarding refresh or bootstrap failure can fall back to the Dashboard with an inline
+**Retry** banner only when LibreFolio already has a cached terminal Welcome state
+(**Completed** or **Skipped**) for your signed-in account. Without that cache — including on the
+first load or while Welcome is **Pending** — startup stays blocked and offers **Retry** and
+**Log out** rather than showing the Dashboard. A user-settings failure also blocks startup.
+
+Right after Welcome, the intro cycles through three short phrases over **8 seconds**. Three
+progress marks show which phrase is active; there is no visible countdown. Select **Start tour**
+to begin immediately, or let the intro start it automatically.
+
+The core tour is deliberately short and stays focused on navigation:
+
+**Sidebar or mobile navigation control** → **Dashboard** → **Transactions** → **Brokers** →
+**FX** → **Assets** → **Tools** → **Settings**.
+
+It points out the main destinations without opening forms or creating data.
+
+### 🧭 Contextual guides
+
+Short guides then appear where their controls are real and useful:
+
+| Area | Contextual guides |
+|---|---|
+| **Transactions** | Page overview, Add Transaction form, bulk workspace, and Import Wizard |
+| **Brokers** | Brokers page, Add Broker form, and broker details |
+| **FX** | FX page, Add Pair form, and pair details |
+| **Assets** | Assets page, Add Asset form, and asset details |
+
+These guides observe the interface; they never synthesize a click, upload, edit, or save. An
+informational area pulses, while a real action is marked with a translucent cursor. Clicking
+that real action performs the normal app action and advances the guide.
+
+The message panel becomes translucent after **3 seconds** so the underlying interface is easier
+to see, then returns to full strength when you hover it or move focus inside it. When LibreFolio
+scrolls to a target, the panel follows the moving target without flashing back to a waiting
+message.
+
+You can manually replay any flow from
+**[Settings → Preferences → Onboarding and guides](settings/preferences.md#onboarding-and-guides)**.
+
+---
+
+## 🏦 4. Import Your First Statement (Create Broker & Assets On-the-Fly)
+
+When you first log in, you will be greeted by an empty dashboard with no data — whether you land there directly or after the welcome screens above.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="dashboard" data-name="empty-state" alt="Empty Dashboard" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -75,11 +132,20 @@ In LibreFolio, the fastest way to get started is by importing your transaction h
 
     Reports you uploaded in earlier sessions are already listed in the wizard's **Select Files** step — just tick them again. You can also preview or delete stored reports from the **[Files & Uploads](files/index.md#broker-reports)** page.
 
+!!! info "Guided first import"
+
+    The first time you open the Import Wizard, a contextual guide follows the **N/M** steps your
+    files actually trigger. It never uploads, clicks, edits, or saves on your behalf. Its last
+    stop highlights the real **Save All** action; the guide advances when you click it, while the
+    write still comes from your explicit click. **X** skips only the current Import guide step.
+    See
+    **[How to Import Transactions](transactions/import/how-to.md#guided-first-import)** for details.
+
 For the full walkthrough see **[How to Import Transactions](transactions/import/how-to.md)**; for the supported brokers and file formats see **[Import from Broker](transactions/import/index.md)**.
 
 ---
 
-## 📈 4. Back to the Dashboard
+## 📈 5. Back to the Dashboard
 
 After successfully importing your statement, return to the **Dashboard**. 
 
@@ -91,10 +157,11 @@ LibreFolio calculates your portfolio metrics, asset allocation (by type, sector,
 
 ---
 
-## 🔮 5. What's Next?
+## 🔮 6. What's Next?
 
 Now that your portfolio is populated, you can:
 
 - 🤝 **[Share your broker](brokers/sharing.md)** — Give access to family members or advisors.
 - 💱 **[Set up FX rates](fx/index.md)** — Configure currency conversion for multi-currency portfolios.
 - ⚙️ **[Customize settings](../admin/settings.md)** — Adjust language, theme, and system preferences.
+- 🧭 **[Replay the welcome setup or guided tours](settings/preferences.md#onboarding-and-guides)** — Revisit the welcome screen, quick tour, or import guide any time from Settings → Preferences.

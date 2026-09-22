@@ -25,8 +25,11 @@
     import {buildTooltipTheme, buildTooltipHeader, buildTooltipByThreshold, buildTooltipTopN, tooltipPositionSide, setupTooltipAutoHide, scheduleFirstRenderStabilityFix} from '$lib/components/charts/echartsTooltipHelpers';
     import {getCountryInfo, ensureCountriesLoaded} from '$lib/stores/reference/countryStore';
     import {getSectorEmoji, ensureSectorsLoaded} from '$lib/stores/reference/sectorStore';
-    import {sectorI18nKey} from '$lib/utils/assetTypes';
+    import {sectorI18nKey, primaryAssetType} from '$lib/utils/assetTypes';
+    import {buildAllocationHierarchy} from '$lib/components/charts/allocationHierarchy';
     import {currentLanguage} from '$lib/stores/app/language';
+    import {debug} from '$lib/debug';
+    import {buildResponsiveXAxisPolicy} from '$lib/components/charts/responsiveXAxis';
 
     interface AllocationComponent {
         name: string;
@@ -78,12 +81,13 @@
     // conflict that collapses the visible window to empty (blank chart). Replacing
     // 'dataZoom' wholesale avoids that merge conflict.
     // https://github.com/apache/echarts/issues/8230
-    const CHART_SERIES_UPDATE_OPTS: {notMerge: boolean; replaceMerge: string[]} = {notMerge: false, replaceMerge: ['series', 'dataZoom']};
+    const CHART_SERIES_UPDATE_OPTS: {notMerge: boolean; replaceMerge: string[]} = {notMerge: false, replaceMerge: ['series', 'dataZoom', 'xAxis']};
 
     let {data = [], height = '100%', loading = false, dimension = 'type'}: Props = $props();
 
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | undefined = undefined;
+    let responsiveXAxisCompact = false;
     let dataZoomTouchPanHandle: DataZoomTouchPanHandle | null = null;
     let resizeObserver: ResizeObserver | null = null;
     let darkModeObserver: MutationObserver | null = null;
@@ -104,9 +108,50 @@
     let suppressDataZoomHandling = false;
     let needsInitialLayoutStabilityPass = false;
 
-    // Distinct colors for allocation categories (up to 12)
-    const PALETTE_LIGHT = ['#1a4031', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#84cc16', '#ec4899', '#f97316', '#14b8a6', '#6366f1', '#a3a3a3'];
-    const PALETTE_DARK = ['#4ade80', '#60a5fa', '#fbbf24', '#f87171', '#a78bfa', '#22d3ee', '#a3e635', '#f472b6', '#fb923c', '#2dd4bf', '#818cf8', '#d4d4d4'];
+    // Distinct colors for allocation categories — 14 slots, which is enough for
+    // the `type` dimension and NOT enough for `sector`. Read the next paragraph
+    // before assuming the count closes.
+    //
+    // The two palettes are paired slot by slot — slot 0 is green in both themes,
+    // slot 1 blue, slot 2 amber … — so a category keeps its identity when the
+    // theme is toggled. Any addition must preserve that pairing.
+    //
+    // Grown from 12 to 14. That closes ONE of the two dimensions this palette
+    // serves:
+    //
+    //   type   — 13 keys: 12 from the codomain of primaryAssetType, plus the
+    //            synthetic "Liquidity" bucket that portfolio_engine.py:1041
+    //            injects outside the enum. 13 <= 14, so no category is ever
+    //            handed another's colour. (At 12 slots it was, and the 13th took
+    //            the colour of the 1st — the largest slice on screen.)
+    //
+    //   sector — 15 keys: the 14 of SECTOR_KEYS_FALLBACK, plus the same
+    //            "Liquidity", which that same backend line injects into
+    //            `by_sector` as well. 15 > 14, so ONE collision SURVIVES here:
+    //            `palette[i % 14]` hands the 15th category the colour of the 1st.
+    //            The names are sorted by weight, so that is the smallest slice
+    //            wearing the largest slice's colour.
+    //
+    // That surviving case is hard to notice by design: the i18n label still
+    // resolves (the `.toUpperCase()` normalisation further down is independent of
+    // the palette), so the slice reads with the right name and the wrong colour —
+    // which looks like a design choice, not a bug. It needs a portfolio holding
+    // >=15 distinct sector buckets at once, so no fixture has ever produced it.
+    //
+    // Growing the palette again would NOT close it. getSectorKeysList() returns
+    // getSectorKeys() from the API store and falls back to the 14 above only when
+    // that store is empty: the real cardinality is backend data, not a constant,
+    // so no number is provably sufficient. The mechanism is the defect — the
+    // index WRAPS instead of SIGNALLING. Until that is cured (by deriving a shade
+    // for the wrapped slot, so a collision becomes visible instead of silent),
+    // the wrap is at least announced: see the debug.warn where `styling` is built.
+    //
+    // The two new slots were measured, not chosen: fuchsia (~295°) is the widest
+    // hue gap left in BOTH palettes, and purple-700/400 follows it while keeping
+    // the cross-theme pairing. The first 12 entries are untouched, so every chart
+    // with 12 categories or fewer renders exactly as before.
+    const PALETTE_LIGHT = ['#1a4031', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#84cc16', '#ec4899', '#f97316', '#14b8a6', '#6366f1', '#a3a3a3', '#a21caf', '#7e22ce'];
+    const PALETTE_DARK = ['#4ade80', '#60a5fa', '#fbbf24', '#f87171', '#a78bfa', '#22d3ee', '#a3e635', '#f472b6', '#fb923c', '#2dd4bf', '#818cf8', '#d4d4d4', '#e879f9', '#c084fc'];
 
     /** Get an emoji/icon label for a category. */
     function getCategoryEmoji(rawName: string): string {
@@ -120,7 +165,12 @@
                 STOCK: '📈',
                 ETF: '📊',
                 BOND: '🏛️',
-                CRYPTO: '₿',
+                // Bitcoin sign (₿, U+20BF) is a currency symbol, not an emoji — it
+                // renders as a thin system-font glyph (no color-emoji font coverage),
+                // making it nearly invisible against the chart's pale area fill,
+                // unlike every other category here. 🪙 is a genuine color emoji with
+                // the same bold visual weight as the rest.
+                CRYPTO: '🪙',
                 FUND: '💼',
                 HOLD: '⏸️',
                 CROWDFUND: '🤝',
@@ -166,6 +216,22 @@
                 if (!resizeObserver && chartContainer) {
                     resizeObserver = new ResizeObserver(() => {
                         chartInstance?.resize();
+                        if (chartInstance && chartContainer) {
+                            const dataset = getResolutionDataset(currentResolution);
+                            const policy = buildResponsiveXAxisPolicy({
+                                width: chartContainer.clientWidth,
+                                values: dataset.dates,
+                                locale: $currentLanguage,
+                                axisType: 'time',
+                            });
+                            const wasCompact = responsiveXAxisCompact;
+                            responsiveXAxisCompact = policy.compact;
+                            if (policy.axisLabel) {
+                                chartInstance.setOption({xAxis: {splitNumber: policy.splitNumber, axisLabel: policy.axisLabel}}, {lazyUpdate: true});
+                            } else if (wasCompact) {
+                                renderChart();
+                            }
+                        }
                         scheduleResolutionCheck();
                     });
                     resizeObserver.observe(chartContainer);
@@ -515,8 +581,41 @@
         const gridColor = isDark ? '#1e293b' : '#f1f5f9';
         const tooltipBg = isDark ? '#1e293b' : '#ffffff';
         const tooltipBorder = isDark ? '#334155' : '#e2e8f0';
+        const xAxisPolicy = buildResponsiveXAxisPolicy({
+            width: chartContainer?.clientWidth ?? 0,
+            values: dataset.dates,
+            locale: $currentLanguage,
+            axisType: 'time',
+        });
+        responsiveXAxisCompact = xAxisPolicy.compact;
 
-        const series: echarts.SeriesOption[] = dataset.sortedNames.map((name, index) => {
+        // Order and colour are decided together, once, and consumed by both the
+        // series and the tooltip — they must not drift apart.
+        //
+        // With `stack: 'allocation'` the series order IS the vertical stacking
+        // order, so on this chart shading a subtype without reordering would be
+        // worse than not shading at all: the geometry would actively contradict
+        // the parentage the colour claims.
+        //
+        // Deliberately not cached on the dataset: the dataset survives theme
+        // changes, the palette does not.
+        // The index wraps silently when there are more categories than slots: the
+        // wrapped one wears an earlier category's colour, with its own name still
+        // correct. Live today for `sector` — announce it rather than let it pass.
+        // (The `type` branch reports its own wrap from inside the helper.)
+        if (dimension !== 'type' && dataset.sortedNames.length > palette.length) {
+            debug.warn('AllocationHistoryChart', `palette exhausted: ${dataset.sortedNames.length} "${dimension}" categories for ${palette.length} colours — ` + `${dataset.sortedNames.length - palette.length} will repeat an earlier colour`);
+        }
+
+        const styling: Array<{name: string; color: string}> =
+            dimension === 'type'
+                ? buildAllocationHierarchy(
+                      dataset.sortedNames.map((name) => ({key: name, weight: dataset.avgWeights[name] ?? 0, item: name})),
+                      {resolvePrimary: primaryAssetType, palette},
+                  ).map(({item, color}) => ({name: item, color}))
+                : dataset.sortedNames.map((name, index) => ({name, color: palette[index % palette.length]}));
+
+        const series: echarts.SeriesOption[] = styling.map(({name, color}) => {
             const emoji = getCategoryEmoji(name);
             const showLabel = dataset.avgWeights[name] >= 3 && emoji;
 
@@ -528,9 +627,9 @@
                 data: dataset.seriesDataByName[name],
                 smooth: false,
                 symbol: 'none',
-                lineStyle: {color: palette[index % palette.length], width: 1, opacity: 0.7},
-                areaStyle: {color: palette[index % palette.length] + '88'},
-                itemStyle: {color: palette[index % palette.length]},
+                lineStyle: {color, width: 1, opacity: 0.7},
+                areaStyle: {color: color + '88'},
+                itemStyle: {color},
                 emphasis: {focus: 'series'},
                 label: showLabel
                     ? {
@@ -578,11 +677,11 @@
                     if (!row) return '';
 
                     const theme = buildTooltipTheme(isDark);
-                    const allItems = dataset.sortedNames
-                        .map((name, seriesIndex) => ({
+                    const allItems = styling
+                        .map(({name, color}) => ({
                             name: getDisplayName(name),
                             value: dataset.rawDataByName[name]?.[idx] ?? 0,
-                            color: palette[seriesIndex % palette.length],
+                            color,
                         }))
                         .filter((item) => item.value > 0.01);
 
@@ -612,7 +711,8 @@
             dataZoom: buildDataZoomOption(dataset, logicalRange),
             xAxis: {
                 type: 'time',
-                axisLabel: {color: textColor, fontSize: 14, rotate: 0},
+                ...(xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber} : {}),
+                axisLabel: {color: textColor, fontSize: 14, rotate: 0, ...(xAxisPolicy.axisLabel ?? {})},
                 axisLine: {lineStyle: {color: gridColor}},
                 splitLine: {show: false},
             },
@@ -679,6 +779,11 @@
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
             attachChartReady(chartInstance, chartContainer, 'allocation-history');
+            // ECharts draws to a canvas, so a colour has no DOM an E2E could read.
+            // Exposing the instance is the only way a test can assert that the
+            // hierarchy actually reached the option — same hook, same name, as
+            // PriceChartFull.svelte.
+            (chartContainer as unknown as Record<string, unknown>).__lfChart = chartInstance;
             needsInitialLayoutStabilityPass = true;
             tooltipCleanup?.();
             tooltipCleanup = setupTooltipAutoHide(chartContainer, () => chartInstance);

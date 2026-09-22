@@ -48,21 +48,23 @@ function createUserSettingsStore() {
         /**
          * Load settings from backend
          */
-        async load(): Promise<void> {
+        async load(): Promise<boolean> {
             const sessionGeneration = getClientSessionGeneration();
             try {
                 // Zodios returns UserSettingsRead directly
                 const settings = await zodiosApi.get_user_settings_endpoint_api_v1_settings_user_get();
-                if (!isClientSessionCurrent(sessionGeneration)) return;
+                if (!isClientSessionCurrent(sessionGeneration)) return false;
                 set(settings);
 
                 // Cache in localStorage
                 persist(settings);
+                return true;
             } catch (e) {
-                if (!isClientSessionCurrent(sessionGeneration)) return;
+                if (!isClientSessionCurrent(sessionGeneration)) return false;
                 console.error('Failed to load user settings:', e);
                 // Use defaults if not authenticated or error
                 set(defaultSettings);
+                return false;
             }
         },
 

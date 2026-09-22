@@ -27,9 +27,19 @@
     export let onCancelProbe: ((hasChangesWhenCancelFired: boolean) => void) | undefined = undefined;
 
     let hasChanges = false;
+    let readOnly = false;
+
+    /**
+     * Change only the named child prop, as a compiled app host would. Testing
+     * Library's direct rerender replaces one raw props object and invalidates
+     * every property read, including an unchanged brokerId.
+     */
+    export function setReadOnly(value: boolean) {
+        readOnly = value;
+    }
 </script>
 
-<BrokerSharingPanel {brokerId} {onChanged} onCancel={() => onCancelProbe?.(hasChanges)} bind:hasChanges />
+<BrokerSharingPanel {brokerId} {readOnly} {onChanged} onCancel={() => onCancelProbe?.(hasChanges)} bind:hasChanges />
 
 <!-- Continuous read-out of the bound value: the parent-side half of `bind:`. -->
 <span data-testid="harness-has-changes" data-value={hasChanges}></span>

@@ -24,12 +24,11 @@ from backend.app.schemas.signals import (
     SignalWarmupRequirement,
 )
 from backend.app.services.provider_registry import SignalPluginRegistry, register_plugin
-from backend.app.services.risk.metrics import annualized_volatility
 from backend.app.services.risk.signal_helpers import (
     build_line_computation,
     observed_annualization_factor,
     prepared_primary_returns,
-    rolling_single_values,
+    rolling_annualized_volatility_values,
 )
 from backend.app.services.signal_plugins.base import SignalPlugin
 
@@ -113,14 +112,11 @@ class RollingVolatilityPlugin(SignalPlugin):
         del event_points
         annualization_factor = observed_annualization_factor(context)
         returns = prepared_primary_returns(context, price_points)
-        values, _ = rolling_single_values(
+        values, _ = rolling_annualized_volatility_values(
             returns,
             params.window,
-            lambda window: annualized_volatility(
-                window,
-                annualization_factor,
-            )
-            * 100,
+            annualization_factor,
+            scale=100.0,
         )
         return build_line_computation(self.output_specs[0], price_points, values)
 

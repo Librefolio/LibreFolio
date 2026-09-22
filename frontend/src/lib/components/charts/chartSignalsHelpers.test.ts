@@ -132,6 +132,45 @@ describe('formatSignalProblem', () => {
         expect(t.calls.at(-1)).toEqual({key: 'chartSettings.signalProblems.insufficientHistory', values: {available: '5', required: '?'}});
     });
 
+    it('insufficient_history: keeps an ordinary positive requirement translated and count-based', () => {
+        const t = recordingTranslate();
+        const out = formatSignalProblem(problem({code: 'insufficient_history', availablePoints: 5, minimumPoints: 8, message: 'backend detail'}), t.fn, echoFieldLabel);
+
+        expect(out).toBe('chartSettings.signalProblems.insufficientHistory');
+        expect(t.calls).toEqual([{key: 'chartSettings.signalProblems.insufficientHistory', values: {available: '5', required: '8'}}]);
+    });
+
+    it('insufficient_history: returns the backend reason when zero is not a real point requirement', () => {
+        const t = recordingTranslate();
+        const backendReason = 'No overlapping history remains after alignment';
+        const out = formatSignalProblem(problem({code: 'insufficient_history', availablePoints: 0, minimumPoints: 0, message: backendReason}), t.fn, echoFieldLabel);
+
+        expect(out).toBe(backendReason);
+        expect(t.calls).toEqual([]);
+    });
+
+    it('undefined_metric: uses the backend warning message, else the unavailable fallback', () => {
+        const t = recordingTranslate();
+        const backendMessage = 'backend undefined-metric warning';
+        expect(formatSignalProblem(problem({code: 'undefined_metric', message: backendMessage}), t.fn, echoFieldLabel)).toBe(backendMessage);
+        expect(t.calls).toEqual([]);
+
+        const fallback = recordingTranslate();
+        expect(formatSignalProblem(problem({code: 'undefined_metric', message: null}), fallback.fn, echoFieldLabel)).toBe('chartSettings.signalProblems.unavailable');
+        expect(fallback.calls).toEqual([{key: 'chartSettings.signalProblems.unavailable', values: undefined}]);
+    });
+
+    it('partial_undefined_metric: uses the backend warning message, else the partial-result fallback', () => {
+        const t = recordingTranslate();
+        const backendMessage = 'backend partial undefined-metric warning';
+        expect(formatSignalProblem(problem({code: 'partial_undefined_metric', message: backendMessage}), t.fn, echoFieldLabel)).toBe(backendMessage);
+        expect(t.calls).toEqual([]);
+
+        const fallback = recordingTranslate();
+        expect(formatSignalProblem(problem({code: 'partial_undefined_metric', message: null}), fallback.fn, echoFieldLabel)).toBe('chartSettings.signalProblems.partialResult');
+        expect(fallback.calls).toEqual([{key: 'chartSettings.signalProblems.partialResult', values: undefined}]);
+    });
+
     it('incomplete_warmup: renders used/required counts', () => {
         const t = recordingTranslate();
         formatSignalProblem(problem({code: 'incomplete_warmup', warmupUsedPoints: 3, warmupRequiredPoints: 10}), t.fn, echoFieldLabel);

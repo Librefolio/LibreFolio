@@ -20,6 +20,7 @@
     import type {LivePriceDirection} from '$lib/services/livePriceService';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
+    import {assetTypeBadgeClass, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
 
     // =========================================================================
     // Props
@@ -131,9 +132,11 @@
             case 'down':
                 return 'border-red-300 dark:border-red-600';
             default:
-                return 'border-gray-100 dark:border-slate-700';
+                return asset.active ? 'border-gray-100 dark:border-slate-700' : 'border-amber-200 dark:border-amber-800';
         }
     });
+
+    let cardSurfaceClass = $derived(asset.active ? 'bg-white hover:bg-libre-green/5 dark:bg-slate-800 dark:hover:bg-slate-700' : 'bg-amber-50 hover:bg-amber-100/80 dark:bg-amber-950/30 dark:hover:bg-amber-900/40');
 
     // =========================================================================
     // Helpers
@@ -155,45 +158,18 @@
     }
 
     function typeBadgeClass(type: string | null | undefined): string {
-        switch (type) {
-            case 'STOCK':
-                return 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400';
-            case 'ETF':
-                return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400';
-            case 'BOND':
-                return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400';
-            case 'CRYPTO':
-                return 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400';
-            case 'FUND':
-                return 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400';
-            case 'HOLD':
-                return 'bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-400';
-            case 'CROWDFUND':
-                return 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400';
-            default:
-                return 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400';
-        }
+        return assetTypeBadgeClass(type);
     }
-
-    const ASSET_TYPE_ICON_MAP: Record<string, string> = {
-        STOCK: 'stock',
-        ETF: 'etf',
-        BOND: 'bond',
-        CRYPTO: 'crypto',
-        FUND: 'fund',
-        HOLD: 'hold',
-        CROWDFUND: 'crowdfunding',
-        INDEX: 'index',
-        OTHER: 'other',
-    };
 </script>
 
 <div
-    class="w-full text-left bg-white dark:bg-slate-800 rounded-xl shadow-sm border overflow-hidden cursor-pointer
-       transition-all duration-300 hover:shadow-lg hover:border-libre-green/30 hover:bg-libre-green/5 dark:hover:bg-slate-700
+    class="w-full text-left rounded-xl shadow-sm border overflow-hidden cursor-pointer
+       transition-all duration-300 hover:shadow-lg hover:border-libre-green/30
        focus:outline-none focus:ring-2 focus:ring-libre-green focus:ring-offset-2
-       {cardBorderClass}"
+       {cardSurfaceClass} {cardBorderClass}"
     data-testid="asset-card-{asset.id}"
+    data-lifecycle={asset.active ? 'active' : 'inactive'}
+    data-view-mode={cardViewMode}
     onclick={handleCardClick}
     onkeydown={(e) => e.key === 'Enter' && handleCardClick()}
     role="button"
@@ -209,7 +185,7 @@
             <div class="flex items-center gap-1.5 shrink-0">
                 {#if asset.asset_type}
                     <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded {typeBadgeClass(asset.asset_type)}">
-                        <img src="/icons/asset-types/{ASSET_TYPE_ICON_MAP[asset.asset_type] ?? 'other'}.png" alt="" class="w-3.5 h-3.5 object-contain" />
+                        <img src={getAssetTypeIconUrl(asset.asset_type)} alt="" class="w-3.5 h-3.5 object-contain" />
                         {$t(`assets.types.${asset.asset_type}`) || asset.asset_type}
                     </span>
                 {/if}
@@ -218,6 +194,7 @@
                 {/if}
                 <button
                     class="p-1 rounded-md transition-colors {cardViewMode === 'percentage' ? 'bg-libre-green/10 text-libre-green dark:bg-libre-green/20 dark:text-green-400' : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-600 dark:hover:text-gray-300'}"
+                    data-testid="asset-card-view-toggle"
                     onclick={(e) => {
                         stop(e);
                         localViewModeOverride = cardViewMode === 'absolute' ? 'percentage' : 'absolute';
@@ -265,7 +242,18 @@
     <!-- Mini Chart -->
     <div class="px-4">
         {#if displayData.length > 0}
-            <PriceChartCompact data={displayData} height="80px" viewMode={cardViewMode} areaFill={chartSettings?.areaFill ?? true} colorByBaseline={chartSettings?.colorByBaseline} showGridLines={chartSettings?.gridLines} showGradient={chartSettings?.staleGradient ?? true} {overlaySignals} />
+            <PriceChartCompact
+                axisScale={chartSettings?.axisScales[cardViewMode]}
+                data={displayData}
+                height="80px"
+                viewMode={cardViewMode}
+                areaFill={chartSettings?.areaFill ?? true}
+                colorByBaseline={chartSettings?.colorByBaseline}
+                showGridLines={chartSettings?.gridLines}
+                showGradient={chartSettings?.staleGradient ?? true}
+                {overlaySignals}
+                secondaryAxisScales={chartSettings?.axisScales.secondary}
+            />
         {:else if loading}
             <div class="h-20 flex items-center justify-center">
                 <div class="animate-pulse bg-gray-100 dark:bg-slate-700 rounded w-full h-12"></div>

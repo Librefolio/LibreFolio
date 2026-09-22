@@ -9,6 +9,7 @@
      * URL Deep-Linking:
      * - ?tab=static|brim - Active tab
      * - ?filename=... - Text filter on filename
+     * - ?uploader=... - Uploader filter
      * - ?broker=1,2,3 - Filter by broker IDs (BRIM only)
      * - ?status=uploaded,parsed - Filter by status (BRIM only)
      * - ?size=min-max - Size range filter
@@ -38,12 +39,13 @@
     import FilePreviewModal from '$lib/components/files/FilePreviewModal.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import SelectionBar from '$lib/components/table/SelectionBar.svelte';
+    import {matchesColumnFilter} from '$lib/components/table/dataTableLogic';
     import FileGrid from '$lib/components/files/FileGrid.svelte';
     import TabBar from '$lib/components/ui/tabs/TabBar.svelte';
     import {buildUrlFilters, parseUrlFilters, type UrlFilterConfig} from '$lib/utils/urlFilters';
     import {fetchFilePreview, getFilePreviewError} from '$lib/utils/files/filePreview';
     import type {BrimFile, BrokerInfo, FilePreviewResponse, UploadedFile} from '$lib/types';
-    import type {FilterValue} from '$lib/components/table/types';
+    import type {ColumnDef, FilterValue} from '$lib/components/table/types';
 
     type Tab = 'static' | 'brim';
     type PreviewTarget = {source: 'static'; file: UploadedFile} | {source: 'brim'; file: BrimFile};
@@ -51,6 +53,7 @@
     // URL filter configuration - defines which columns can be filtered via URL
     const urlFilterColumns: UrlFilterConfig[] = [
         {urlKey: 'filename', type: 'text'},
+        {urlKey: 'uploader', type: 'enum'},
         {urlKey: 'broker', type: 'enum'},
         {urlKey: 'status', type: 'enum'},
         {urlKey: 'size', type: 'size'},
@@ -106,6 +109,7 @@
 
     // URL filter state
     let initialFilters: Record<string, FilterValue> = {};
+    let currentFilters: Record<string, FilterValue> = {};
     let urlInitialized = false; // Prevent URL update on initial load
 
     // FilesTable refs for column visibility toggle
@@ -174,6 +178,7 @@
             if (urlFilters.size > 0) {
                 initialFilters = Object.fromEntries(urlFilters);
             }
+            currentFilters = initialFilters;
         } else {
             activeTab = loadActiveTab();
         }
@@ -191,6 +196,7 @@
      * Handle filter changes from FilesTable - update URL
      */
     function handleFiltersChange(filters: Record<string, FilterValue>) {
+        currentFilters = filters;
         if (!browser || !urlInitialized) return;
 
         // Build URL params from filters
@@ -203,6 +209,56 @@
         // Update URL without navigation (preserves focus on input fields)
         const newUrl = `/files?${params.toString()}`;
         history.replaceState(history.state, '', newUrl);
+    }
+
+    function getStaticUploaderKey(file: UploadedFile): string {
+        const rawUploader = file.uploaded_by_user_id;
+        return rawUploader == null ? '__none__' : String(rawUploader);
+    }
+
+    const staticGridColumns: ColumnDef<UploadedFile>[] = [
+        {
+            id: 'filename',
+            header: '',
+            cell: (row) => row.original_name,
+            type: 'text',
+            getValue: (row) => row.original_name,
+        },
+        {
+            id: 'uploader',
+            header: '',
+            cell: (row) => getStaticUploaderKey(row),
+            type: 'enum',
+            getValue: (row) => getStaticUploaderKey(row),
+        },
+        {
+            id: 'size',
+            header: '',
+            cell: (row) => row.size_bytes,
+            type: 'size',
+            getValue: (row) => row.size_bytes,
+        },
+        {
+            id: 'date',
+            header: '',
+            cell: (row) => row.uploaded_at,
+            type: 'date',
+            getValue: (row) => row.uploaded_at,
+        },
+    ];
+
+    function applyStaticGridFilters(files: UploadedFile[], filters: Record<string, FilterValue>): UploadedFile[] {
+        const activeFilters = Object.entries(filters).filter(([, filter]) => filter != null);
+        if (activeFilters.length === 0) return files;
+
+        return files.filter((file) => {
+            for (const [columnId, filterValue] of activeFilters) {
+                const column = staticGridColumns.find((candidate) => candidate.id === columnId);
+                if (!column) continue;
+                if (!matchesColumnFilter(column, file, filterValue)) return false;
+            }
+            return true;
+        });
     }
 
     /**
@@ -729,7 +785,7 @@
                     <p>{$t('uploads.noFiles')}</p>
                 </div>
             {:else if viewMode === 'grid'}
-                <FileGrid files={staticFiles} mode="browse" cardSize="full" showSearch={true} showActions={true} ondelete={(e) => deleteFile(e.id, false)} onpreview={(e) => openStaticPreview(e.file)} />
+                <FileGrid files={applyStaticGridFilters(staticFiles, currentFilters)} mode="browse" cardSize="full" showSearch={true} showActions={true} ondelete={(e) => deleteFile(e.id, false)} onpreview={(e) => openStaticPreview(e.file)} />
             {:else}
                 <!-- List View with New DataTable -->
                 <FilesTable
@@ -738,7 +794,7 @@
                     type="static"
                     onDelete={(id) => deleteFile(id, false)}
                     onPreview={(file) => openStaticPreview(file as UploadedFile)}
-                    {initialFilters}
+                    initialFilters={currentFilters}
                     onFiltersChange={handleFiltersChange}
                     onSelectionChange={(ids) => (selectedFileIds = ids)}
                 />
@@ -759,7 +815,7 @@
                     onDelete={(id) => deleteFile(id, true)}
                     onPreview={(file) => openBrimPreview(file as BrimFile)}
                     brokers={brokerMap}
-                    {initialFilters}
+                    initialFilters={currentFilters}
                     onFiltersChange={handleFiltersChange}
                     onSelectionChange={(ids) => (selectedFileIds = ids)}
                 />
