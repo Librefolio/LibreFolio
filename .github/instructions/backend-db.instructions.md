@@ -10,29 +10,48 @@ All models are in `backend/app/db/models.py`. Session management in `session.py`
 
 ### Models
 
+Verified against the real schema on 2026-09-22 (`backend/data/prod`, revision
+`004_release_1_2_0_schema`): 14 tables, columns/indexes/FK matching SQLModel metadata
+exactly. **Table names are plural** — a lookup for `asset` or `transaction` finds nothing.
+
 | Model | Table | Key Fields |
 |-------|-------|------------|
-| `User` | `user` | username, email, hashed_password, role, is_active |
-| `UserSettings` | `user_settings` | user_id (FK), settings JSON |
-| `GlobalSetting` | `global_setting` | key, value, type |
-| `Broker` | `broker` | name, description, icon_url, owner_id |
-| `BrokerUserAccess` | `broker_user_access` | broker_id, user_id, role (owner/editor/viewer) |
-| `Asset` | `asset` | display_name, currency, asset_type, classification_params (JSON) |
-| `Transaction` | `transaction` | asset_id, broker_id, type, date, quantity, price, fees, currency |
-| `PriceHistory` | `price_history` | asset_id, date, open, high, low, close, volume |
-| `AssetEvent` | `asset_event` | asset_id, event_type, event_date, details |
-| `FxRate` | `fx_rate` | base, quote, date, rate, provider_code |
-| `FxConversionRoute` | `fx_conversion_route` | base, quote, provider assignments + priority |
-| `AssetProviderAssignment` | `asset_provider_assignment` | asset_id, provider_code, identifier, identifier_type, provider_params |
+| `User` | `users` | username, email, hashed_password, **is_superuser**, is_active, login_count, donation_popup_last_shown_at, donation_popup_logins_since_shown |
+| `UserSettings` | `user_settings` | user_id (FK), base_currency, language, theme, avatar_url |
+| `UserOnboardingProgress` | `user_onboarding_progress` | user_id, flow, status, version, completed_at, skipped_at |
+| `UserOnboardingStepProgress` | `user_onboarding_step_progress` | user_id, flow, step_id, status, version, completed_at, skipped_at |
+| `GlobalSetting` | `global_settings` | key, value, value_type, description, updated_by_user_id |
+| `Broker` | `brokers` | name, description, portal_url, icon_url, default_import_plugin, allow_cash_overdraft, allow_asset_shorting, is_active, opened_at |
+| `BrokerUserAccess` | `broker_user_access` | broker_id, user_id, role, share_percentage |
+| `Asset` | `assets` | display_name, currency, asset_type, **is_benchmark**, classification_params (JSON), quote_base_quantity, active, user_url, identifier_* (one column per `IdentifierType`) |
+| `Transaction` | `transactions` | broker_id, asset_id, type, date, quantity, **amount**, currency, related_transaction_id, tags, cost_basis_override, cost_basis_currency, asset_event_id |
+| `PriceHistory` | `price_history` | asset_id, date, open, high, low, close, volume, adjusted_close, currency, source_plugin_key, fetched_at |
+| `AssetEvent` | `asset_events` | asset_id, date, type, value, currency, provider_assignment_id, notes |
+| `FxRate` | `fx_rates` | base, quote, date, rate, **source** |
+| `FxConversionRoute` | `fx_conversion_routes` | base, quote, priority, chain_steps |
+| `AssetProviderAssignment` | `asset_provider_assignments` | asset_id, provider_code, identifier, identifier_type, provider_params, last_fetch_at |
+
+Two traps this table used to set: a transaction carries a signed **`amount`**, not
+`price` + `fees` (unified transactions), and a user's role is the boolean
+`is_superuser` — `UserRole` is a *different* thing (per-broker access).
 
 ### Enums
 
 | Enum | Values |
 |------|--------|
-| `AssetType` | STOCK, ETF, BOND, CRYPTO, COMMODITY, FUND, FOREX, OPTION, FUTURE, REAL_ESTATE, SCHEDULED_YIELD, OTHER |
-| `TransactionType` | BUY, SELL, DIVIDEND, INTEREST, FEE, TAX, TRANSFER_IN, TRANSFER_OUT, SPLIT, OTHER |
-| `IdentifierType` | TICKER, ISIN, CUSIP, SEDOL, FIGI, UUID, OTHER |
-| `UserRole` | admin, user |
+| `AssetType` | base: STOCK, ETF, BOND, CRYPTO, FUND, CROWDFUND, HOLD, COMMODITY, REAL_ESTATE, INDEX, OTHER<br>ETF subtypes: ETF_STOCK, ETF_BOND, ETF_COMMODITY, ETF_REAL_ESTATE, ETF_CRYPTO, ETF_MONETARY |
+| `TransactionType` | BUY, SELL, DIVIDEND, INTEREST, DEPOSIT, WITHDRAWAL, FEE, TAX, ADJUSTMENT, TRANSFER, FX_CONVERSION, CASH_TRANSFER |
+| `AssetEventType` | DIVIDEND, INTEREST, PRICE_ADJUSTMENT, SPLIT, MATURITY_SETTLEMENT |
+| `IdentifierType` | ISIN, TICKER, CUSIP, SEDOL, FIGI, UUID, OTHER — each one owns an `identifier_*` column in `assets` |
+| `UserRole` | OWNER, EDITOR, VIEWER — **per-broker access**, not the global user role |
+| `OnboardingFlow` | 15 values: welcome, intro_tour, then the page/entity guides for transactions, brokers, FX and assets |
+| `OnboardingStatus` | pending, completed, skipped |
+
+An ETF subtype answers *which base type does this ETF hold?*, so the second level is the
+set of base types, not a parallel taxonomy. `INDEX` forbids transactions; every other
+value is behaviourally inert in the backend. `AssetType` also feeds the `asset_class`
+buckets of stress scenarios, where **a type missing from `bucket_shocks` is shocked by
+zero silently** — hence the dedicated coverage test.
 
 ### Conventions
 
