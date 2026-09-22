@@ -841,6 +841,68 @@ def build_stop_reason(result: SolverRunResult) -> str:
     mapping is the one below. Recorded here so the next reader does not have
     to re-derive it from the validator. Which *limit* stopped a run is read
     from the stage that actually stopped, never assumed to be the clock.
+
+    **This field is also the plan's reproducibility statement**, which is worth
+    stating because nothing in its name says so. SCIP's search is deterministic
+    here — ``randomseedshift``/``permutationseed``/``lpseed`` are all 0 and no
+    concurrent solve is enabled — so what varies between runs is *how much of
+    the lexicographic cascade completes*: each stage gets a wall-clock slice of
+    the remaining budget (``solver.py``), and the cascade is what makes the
+    answer unique. Therefore:
+
+    - ``completed`` — every stage finished, the total order was fully applied,
+      and the same input yields the same plan on any machine.
+    - ``time_limit`` / ``node_limit`` — the cascade was truncated, and *where*
+      it truncated depends on machine speed. The plan is valid and replayed in
+      exact arithmetic, but **it is not guaranteed to be reproducible**.
+
+    Measured 2026-09-22 at the real 30 000 ms engine budget, **on scenarios that
+    actually reach the solver**. ``planner.py`` routes any view with
+    ``estimate_oracle_domain_size(view) <= 200 000`` to the exhaustive oracle and
+    never calls the solver at all, so a measurement taken on a 16-candidate
+    scenario describes a branch production does not execute.
+
+    The cost driver is **the number of decisions, not the size of the domain**.
+    Holding decisions fixed at 4 while growing the domain from 256 to
+    584 968 183 800 candidates leaves the solve at ~6-11 ms and a single node;
+    growing decisions from 2 to 16 at a fixed cap makes it climb linearly. A
+    single node means the continuous relaxation already lands on the integer
+    optimum, which is a property of how few decisions there are — not of how
+    large the domain is.
+
+    The search tree does open, and where matters:
+
+    ```
+    50 decisions     243 ms    0.8% of budget     1 node
+    60 decisions     760 ms    2.5%              19 nodes
+    80 decisions   7 128 ms   23.8%              82 nodes
+    ```
+
+    The knee is therefore **between 50 and 60 decisions** — measured at both
+    ends, not interpolated, and worth re-probing at finer steps if anyone
+    re-runs this grid.
+
+    In portfolio terms that is **not** a fixed number of assets, because one
+    asset costs between 1 and 4 decisions:
+
+    ```
+    1 currency, 1 cash source        1.0/asset     knee at ~55 assets
+    multiple funding sources         1.5/asset     knee at ~36 assets
+    multi-currency (buy+fund+fx)     3.0/asset     knee at ~18 assets   <- ordinary
+    2 routes + 2 funding sources     4.0/asset     knee at ~14 assets
+    ```
+
+    **Read the 3.0 row, not the range.** An asset priced in a currency the cash
+    is not held in costs three decisions — `buy_quantum` + `funding_transfer` +
+    `fx_debit` — so a European investor holding EUR and buying USD-denominated
+    ETFs is in that row by construction, not by misfortune. It is the ordinary
+    case, and ~18 assets is an ordinary PAC. The extremes above and below are
+    there to show the ratio is not fixed, not to suggest the midpoint.
+
+    Reproducibility survives the knee: at 80 decisions, 3 runs give 85/85 stages
+    and one distinct candidate, at 7.6-8.1 s. The cascade still completes, so
+    ``completed`` still means what it says — it just costs a quarter of the
+    budget instead of a thousandth.
     """
     unfinished = [stage for stage in result.stages if stage.status == "unfinished"]
     if not unfinished:

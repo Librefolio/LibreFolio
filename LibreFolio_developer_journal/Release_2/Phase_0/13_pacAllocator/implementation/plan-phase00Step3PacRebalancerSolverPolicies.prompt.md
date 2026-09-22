@@ -311,6 +311,24 @@ services pac-planner-capacity
 - [ ] 11. Implementare SELL verifier.
 - [ ] 12. Implementare cancel/cleanup.
 - [ ] 13. Confrontare oracle e benchmark capacity.
+      **Due numeri di produzione dipendono da questo lavoro e vanno rimisurati qui**
+      (aggiunti il 2026-09-21, con il budget engine propagato):
+      - `_POST_ENGINE_RESERVE_MS = 2_000` in `tool_plugins/pac_allocator.py` — la
+        riserva post-solver per replay esatto e report. Misurata **~1 ms** sugli
+        scenari di test attuali, ma cresce col dominio mentre la quota del solver
+        no: il valore è dimensionato per uno scenario più grande di quanto oggi
+        si sappia costruire, cioè è una stima in attesa di questo benchmark.
+      - `limits/nodes` — **mai passato in produzione**. È la sola manopola di
+        troncamento deterministica (`limits/dettime` non esiste in SCIP 10.0,
+        sondato), quindi il valore va scelto qui e non prima. Finché resta
+        assente, `stop_reason: "node_limit"` (`schemas/pac_allocator.py:2406,2469`,
+        prodotto da `planner_report.py:848`) è un valore di contratto dichiarato e
+        **non producibile**.
+      > Sono elencati qui, e non solo nei rispettivi commenti, perché un commento
+      > esatto invecchia senza farsi notare: `DEFAULT_SOLVER_TIME_BUDGET_SECONDS`
+      > ha documentato fedelmente per cinque giorni una probe tarata su un
+      > envelope che non esisteva più. Chi eseguirà questo punto deve trovare la
+      > lista, non ricostruirla.
 - [ ] 14. Review matematica e resource lifecycle.
 
 ## 14. Stop conditions
