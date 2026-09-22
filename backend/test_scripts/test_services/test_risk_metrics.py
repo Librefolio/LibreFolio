@@ -8,8 +8,12 @@ from datetime import date, timedelta
 import pytest
 
 from backend.app.services.risk.metrics import (
+    annualized_expected_return,
+    annualized_sharpe,
     annualized_sortino,
+    annualized_volatility,
     comparison_summary,
+    compounded_return,
     correlation_matrix,
     covariance_matrix,
     current_buy_and_hold_returns,
@@ -40,6 +44,77 @@ def test_period_returns_and_drawdown_are_derived_from_exact_wealth():
     assert summary.drawdowns == pytest.approx((0.0, 0.0, -0.2, -0.12, 0.0))
     assert summary.max_drawdown == pytest.approx(-0.2)
     assert summary.max_duration == 3
+
+
+def test_annualized_expected_return_makes_the_line_through_the_intercept_the_sharpe_ratio():
+    """The identity the arithmetic convention exists for.
+
+    ``(mean * f) / (stdev * sqrt(f))`` is ``(mean / stdev) * sqrt(f)``, which is
+    exactly what :func:`annualized_sharpe` returns at a zero risk-free rate. So a
+    Capital Market Line drawn from the intercept through ``(volatility, expected
+    return)`` has the Sharpe ratio as its slope, and "above the line" means "better
+    paid for the risk taken". A compounded annualization keeps the point and tilts
+    the line, which is a chart that stays plausible and stops being true.
+
+    The factor is varied because the identity is what survives the choice of one:
+    it holds because ``f / sqrt(f) == sqrt(f)``, not because 365 is special.
+    """
+    returns = [round(0.006 * math.sin(index * 0.7) + 0.0015, 12) for index in range(24)]
+    mean = math.fsum(returns) / len(returns)
+
+    for annualization in (12.0, 252.0, 365.0):
+        expected = annualized_expected_return(returns, annualization)
+        volatility = annualized_volatility(returns, annualization)
+        sharpe = annualized_sharpe(returns, annualization, annual_risk_free_rate=0.0)
+
+        assert sharpe is not None
+        assert expected == pytest.approx(mean * annualization, rel=1e-12)
+        assert expected / volatility == pytest.approx(sharpe, rel=1e-12)
+
+
+def test_annualized_expected_return_is_arithmetic_and_leaves_the_volatility_drag_visible():
+    """Zero expected return, guaranteed loss — the gap the label must respect.
+
+    A ±10% alternation has an arithmetic mean of exactly zero, so this function
+    reports exactly zero, while compounding the same days loses 1% per pair. Both
+    answer their own question correctly; only one of them is "what it returned".
+    The gap is the volatility drag, and it is zero exactly when the dispersion is.
+    """
+    alternating = [0.10, -0.10] * 10
+    annualization = float(len(alternating))  # the window is exactly one year long
+
+    assert annualized_expected_return(alternating, annualization) == pytest.approx(0.0, abs=1e-15)
+    assert compounded_return(alternating) == pytest.approx(0.99**10 - 1, rel=1e-12)
+
+    geometric_mean = (1.0 + compounded_return(alternating)) ** (1 / len(alternating)) - 1.0
+    assert geometric_mean < 0.0
+    # Same series, same factor: the arithmetic figure sits ten points above the
+    # compounded one, which is why substituting either for the other moves a chart.
+    assert annualized_expected_return(alternating, annualization) - geometric_mean * annualization > 0.09
+
+    flat = [0.002] * 20
+    flat_geometric = (1.0 + compounded_return(flat)) ** (1 / len(flat)) - 1.0
+    assert annualized_expected_return(flat, 20.0) == pytest.approx(flat_geometric * 20.0, rel=1e-12)
+
+
+def test_annualized_expected_return_refuses_input_no_mean_can_be_taken_of():
+    with pytest.raises(ValueError, match="at least one observation"):
+        annualized_expected_return([], 365.0)
+    with pytest.raises(ValueError, match="returns must be finite"):
+        annualized_expected_return([0.01, math.nan], 365.0)
+    with pytest.raises(ValueError, match="returns must be finite"):
+        annualized_expected_return([0.01, math.inf], 365.0)
+    with pytest.raises(ValueError, match="annualization_factor must be finite and positive"):
+        annualized_expected_return([0.01, 0.02], 0.0)
+    with pytest.raises(ValueError, match="annualization_factor must be finite and positive"):
+        annualized_expected_return([0.01, 0.02], -365.0)
+
+    # One observation is a mean; it is not a dispersion. The asymmetry is the
+    # reason `asset_risk_return` drops single-point assets instead of pairing a
+    # defined return with a volatility it never measured.
+    assert annualized_expected_return([0.01], 365.0) == pytest.approx(3.65)
+    with pytest.raises(ValueError, match="at least two observations"):
+        annualized_volatility([0.01], 365.0)
 
 
 def test_sortino_uses_population_downside_deviation_against_explicit_mar():
@@ -140,12 +215,20 @@ def test_comparison_identity_has_zero_te_ir_and_unit_beta():
 
 
 def test_historical_var_cvar_uses_positive_observed_loss_magnitudes():
+    """Coherent (Acerbi-Tasche) tail risk on loss magnitudes — see M2.
+
+    The nominal tail is ``m = (1 - confidence) * T`` observations; the boundary
+    observation counts for the fraction of it that falls inside the tail. Values
+    updated from the pre-M2 plug-in estimator, which counted it whole and understated
+    CVaR by a measured 0.27 %.
+    """
     tail = historical_var_cvar(
         [-0.1, -0.05, 0.0, 0.02, 0.03],
         confidence_level=0.8,
     )
-    assert tail.value_at_risk == pytest.approx(0.05)
-    assert tail.conditional_value_at_risk == pytest.approx(0.075)
+    # m = 0.2 * 5 = 1 exactly: the tail is the single worst loss, so VaR == CVaR.
+    assert tail.value_at_risk == pytest.approx(0.10)
+    assert tail.conditional_value_at_risk == pytest.approx(0.10)
     assert tail.conditional_value_at_risk >= tail.value_at_risk >= 0
 
     two_day = historical_var_cvar(
@@ -153,9 +236,10 @@ def test_historical_var_cvar_uses_positive_observed_loss_magnitudes():
         confidence_level=0.5,
         horizon_days=2,
     )
+    # m = 0.5 * 2 = 1: again the single worst two-day loss.
     assert two_day.horizon_returns == pytest.approx((-0.1, -0.2))
-    assert two_day.value_at_risk == pytest.approx(0.1)
-    assert two_day.conditional_value_at_risk == pytest.approx(0.15)
+    assert two_day.value_at_risk == pytest.approx(0.2)
+    assert two_day.conditional_value_at_risk == pytest.approx(0.2)
 
 
 def test_drawdown_episodes_report_no_drawdown_for_monotonic_growth():

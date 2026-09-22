@@ -38,11 +38,45 @@ CACHE_CHECK_INTERVAL_HOURS = 24  # Skip check if checked within this time
 # the emoji font for months — flags rendered as letters on Windows). Hard
 # failures are collected here and turn into a non-zero exit code so
 # `dev.py front build` / `docker build` stop instead of shipping a broken build.
-_HARD_FAILURES: list[str] = []
+#
+# 21/09: I1 was right about *silence* and wrong about *scope*. It made every
+# resource fatal to every build, so an asset that only the documentation ships
+# — MathJax lands in `mkdocs_src/`, and `grep -rn mathjax frontend/` finds
+# nothing — aborted the build of the application. On a fresh worktree that is
+# fatal before any test can run, while an older worktree with a warm cache goes
+# green: the two lanes differ in age, not in health, and the green one means
+# nothing.
+#
+# So a failure is now attributed to the build that actually consumes it. The
+# missing verdict was never "present" or "fail" — it was **"absent, and not
+# needed for what you are building"**. The attribution is derived from
+# `vendor_dir_key`, never from a resource name: a hand-written exemption list
+# would rot exactly the way a hand-written directory list does.
+_HARD_FAILURES: list["_Failure"] = []
+
+
+class _Failure(str):
+    """A hard-failure message that remembers which build consumes the resource.
+
+    Subclasses ``str`` on purpose: the collected messages are printed and
+    substring-matched by callers and tests, and that contract predates the
+    attribution. The consumer rides along as an attribute instead of changing
+    the element type.
+    """
+
+    consumer: str | None
+    """Which build ships this resource, or ``None`` when the attribution is unknown."""
+
+    def __new__(cls, text: str, consumer: str | None) -> "_Failure":
+        failure = super().__new__(cls, text)
+        failure.consumer = consumer
+        return failure
 
 
 def _hard_fail(name: str, reason: str) -> None:
-    _HARD_FAILURES.append(f"{name}: {reason}")
+    vendor_key = LIBRARIES.get(name, {}).get("vendor_dir_key")
+    consumer = CONSUMERS.get(vendor_key) if vendor_key else None
+    _HARD_FAILURES.append(_Failure(f"{name}: {reason}", consumer))
 
 # Libraries to cache
 # type="js"   → single file download
@@ -67,6 +101,13 @@ LIBRARIES = {
 VENDOR_DIRS = {
     "mkdocs": Path(__file__).parent.parent / "mkdocs_src" / "docs" / "javascripts" / "vendor",
     "fonts": Path(__file__).parent.parent / "frontend" / "static" / "fonts" / "noto-color-emoji",
+}
+
+#: Which build ships each vendor directory. ``docker`` consumes both, because
+#: the image copies ``mkdocs_src/site/`` alongside the frontend bundle.
+CONSUMERS = {
+    "mkdocs": "mkdocs",
+    "fonts": "frontend",
 }
 
 # Backward compat alias
@@ -432,17 +473,39 @@ def add_arguments(parser) -> None:
     """Add arguments to a parser (reusable for both standalone and subparser)."""
     parser.add_argument("--force", "-f", action="store_true",
                         help="Force re-download even if cached")
+    parser.add_argument("--required-for", action="append", choices=sorted(set(CONSUMERS.values())),
+                        metavar="CONSUMER",
+                        help="Only fail for resources this build ships (repeatable). "
+                             "Default: every consumer, so a standalone cache refresh "
+                             "still reports everything.")
 
 
 def run_from_args(args) -> int:
     """Execute the command from parsed args."""
     try:
         update_all_libraries(force=getattr(args, 'force', False))
-        if _HARD_FAILURES:
+        required = set(getattr(args, "required_for", None) or CONSUMERS.values())
+        fatal, deferred = [], []
+        for failure in _HARD_FAILURES:
+            # An unattributed resource stays fatal everywhere: narrowing may
+            # only ever excuse a consumer we positively know does not ship it.
+            consumer = getattr(failure, "consumer", None)
+            bucket = fatal if consumer is None or consumer in required else deferred
+            bucket.append(failure)
+
+        if deferred:
+            # Not this build's problem, but never silent: the resource is still
+            # missing, and the build that ships it will still stop.
+            print("-" * 60)
+            print("⚠️  Missing resources that this build does not ship:")
+            for failure in deferred:
+                print(f"   - {failure}  (needed by: {failure.consumer})")
+
+        if fatal:
             # I1: a build missing a resource it cannot cache is a broken build.
             print("-" * 60)
             print("❌ Resource cache incomplete — the build would ship without these:")
-            for failure in _HARD_FAILURES:
+            for failure in fatal:
                 print(f"   - {failure}")
             return 1
         return 0

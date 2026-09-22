@@ -7,7 +7,19 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 
-_ZERO_TOLERANCE = 1e-15
+import numpy as np
+
+ZERO_TOLERANCE = 1e-15
+"""Absolute tolerance below which a dispersion statistic counts as exactly zero.
+
+Public because the vectorised rolling helpers in :mod:`backend.app.services.risk.signal_helpers`
+must test the *same* threshold on the *same* statistic. A metric is undefined when its
+denominator vanishes, and the scalar and vectorised paths have to agree on where that
+boundary lies — otherwise one of them emits a number where the other emits ``None``,
+and the ``undefined_windows`` warning silently changes meaning.
+"""
+
+_MAX_HISTOGRAM_BINS = 200
 
 DRAWDOWN_RECOVERY_NO_DRAWDOWN = "no_drawdown"
 DRAWDOWN_RECOVERY_RECOVERED = "recovered"
@@ -28,6 +40,11 @@ class DrawdownEpisodeReport:
 
     All magnitudes are decimal ratios (``-0.1`` means a 10% peak-relative
     decline); the presentation layer owns any percentage formatting.
+
+    ``drawdowns`` is the full underwater curve on the wealth grid, so it spans
+    ``(baseline_date, *dates)`` and has ``len(returns) + 1`` entries. Its first
+    entry is the baseline and is always ``0.0`` by construction, which is why a
+    caller rendering a dated series normally drops it.
     """
 
     current_drawdown: float
@@ -44,6 +61,7 @@ class DrawdownEpisodeReport:
     available_start: date
     available_end: date
     n_observations: int
+    drawdowns: tuple[float, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,6 +90,21 @@ class HistoricalTailRisk:
     value_at_risk: float
     conditional_value_at_risk: float
     horizon_returns: tuple[float, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ReturnHistogram:
+    """Uniform-width histogram of a signed return series with one edge pinned.
+
+    ``edges`` has one more entry than ``counts`` and is strictly ascending, so bin
+    ``i`` spans ``[edges[i], edges[i + 1])`` — the last bin also includes its upper
+    edge. ``pinned_edge`` is guaranteed to appear in ``edges`` exactly, which is what
+    lets a renderer shade the tail as a whole number of bars.
+    """
+
+    edges: tuple[float, ...]
+    counts: tuple[int, ...]
+    pinned_edge: float
 
 
 def _finite_values(
@@ -137,11 +170,56 @@ def annualized_volatility(
     return sample_standard_deviation(returns) * math.sqrt(_positive_annualization_factor(annualization_factor))
 
 
-def daily_risk_free_rate(annual_rate: float) -> float:
-    """Convert an effective annual risk-free rate to an effective daily rate."""
+def annualized_expected_return(
+    returns: Sequence[float],
+    annualization_factor: float,
+) -> float:
+    """Annualize the **mean** period return, not the compounded one.
+
+    ⚠️ ARITHMETIC ON PURPOSE, AND IT IS NOT INTERCHANGEABLE WITH THE GEOMETRIC ONE.
+    This is the expected-return convention the rest of the risk stack already speaks:
+    ``riskfolio_worker`` scales the optimizer's expected return the same way
+    (``expected_period_return * annualization_factor``), and
+    :func:`annualized_sharpe` divides an arithmetic ``excess_mean`` by volatility.
+
+    The reason it matters beyond consistency is an identity, and an identity does not
+    depend on any dataset. Pair this with :func:`annualized_volatility` on the same
+    series and, at a zero risk-free rate::
+
+        (mean * f) / (stdev * sqrt(f)) == (mean / stdev) * sqrt(f) == Sharpe
+
+    So a line drawn from the risk-free intercept through ``(volatility, expected
+    return)`` has **exactly** the Sharpe ratio as its slope — which is what makes
+    "above the line" mean "better paid for the risk taken". Substituting a geometric
+    annualization keeps the point and tilts the line: the chart stays plausible and
+    stops being true, which is the failure mode nobody sees.
+
+    The two also differ in level, by the volatility drag, and the gap widens with
+    volatility — on a very volatile holding it is large enough to change the sign of a
+    reader's conclusion. Neither is wrong; they answer different questions. But it does
+    mean this value must never be labelled "what it returned".
+    """
+    values = _finite_values(returns, name="returns")
+    if not values:
+        raise ValueError("expected return requires at least one observation")
+    return math.fsum(values) / len(values) * _positive_annualization_factor(annualization_factor)
+
+
+def daily_risk_free_rate(annual_rate: float, periods_per_year: float) -> float:
+    """Convert an effective annual risk-free rate into an effective per-observation rate.
+
+    ``periods_per_year`` must be the same annualization factor the caller uses to scale
+    volatility. The numerator and the denominator of a Sharpe or Sortino ratio have to
+    speak of the same period: charging a calendar-day rate against a series annualized
+    over trading days understates the charge by about 28%, which flatters every ratio
+    computed with a non-zero rate and leaves the rate-free case untouched.
+
+    The parameter is deliberately required. A default would let a caller silently
+    reintroduce the mismatch this signature exists to make unrepresentable.
+    """
     if not math.isfinite(annual_rate) or annual_rate <= -1.0:
         raise ValueError("annual risk-free rate must be finite and greater than -1")
-    return math.expm1(math.log1p(annual_rate) / 365.0)
+    return math.expm1(math.log1p(annual_rate) / _positive_annualization_factor(periods_per_year))
 
 
 def annualized_sharpe(
@@ -153,9 +231,10 @@ def annualized_sharpe(
     """Return annualized Sharpe, or None when sample volatility is zero."""
     annualization_factor = _positive_annualization_factor(annualization_factor)
     volatility = sample_standard_deviation(returns)
-    if math.isclose(volatility, 0.0, rel_tol=0.0, abs_tol=_ZERO_TOLERANCE):
+    if math.isclose(volatility, 0.0, rel_tol=0.0, abs_tol=ZERO_TOLERANCE):
         return None
-    excess_mean = math.fsum(value - daily_risk_free_rate(annual_risk_free_rate) for value in returns) / len(returns)
+    period_risk_free_rate = daily_risk_free_rate(annual_risk_free_rate, annualization_factor)
+    excess_mean = math.fsum(value - period_risk_free_rate for value in returns) / len(returns)
     return excess_mean / volatility * math.sqrt(annualization_factor)
 
 
@@ -170,10 +249,10 @@ def annualized_sortino(
     if len(values) < 2:
         raise ValueError("Sortino requires at least two observations")
     annualization_factor = _positive_annualization_factor(annualization_factor)
-    target_daily = daily_risk_free_rate(annual_target_return)
+    target_daily = daily_risk_free_rate(annual_target_return, annualization_factor)
     downside_variance = math.fsum(min(value - target_daily, 0.0) ** 2 for value in values) / len(values)
     downside_deviation = math.sqrt(downside_variance)
-    if math.isclose(downside_deviation, 0.0, rel_tol=0.0, abs_tol=_ZERO_TOLERANCE):
+    if math.isclose(downside_deviation, 0.0, rel_tol=0.0, abs_tol=ZERO_TOLERANCE):
         return None
     excess_mean = math.fsum(value - target_daily for value in values) / len(values)
     return excess_mean / downside_deviation * math.sqrt(annualization_factor)
@@ -185,7 +264,7 @@ def beta(
 ) -> float | None:
     """Return sample beta, or None when comparison variance is zero."""
     comparison_variance = sample_variance(comparison_returns)
-    if math.isclose(comparison_variance, 0.0, rel_tol=0.0, abs_tol=_ZERO_TOLERANCE):
+    if math.isclose(comparison_variance, 0.0, rel_tol=0.0, abs_tol=ZERO_TOLERANCE):
         return None
     return sample_covariance(primary_returns, comparison_returns) / comparison_variance
 
@@ -207,12 +286,10 @@ def underwater_drawdown(values: Sequence[float]) -> list[float]:
 
 def wealth_index(returns: Sequence[float]) -> list[float]:
     """Return a unit wealth index including the pre-return baseline."""
-    result = [1.0]
-    for value in _finite_values(returns, name="returns"):
-        if value < -1.0:
-            raise ValueError("simple returns must be greater than or equal to -1")
-        result.append(result[-1] * (1.0 + value))
-    return result
+    array = np.asarray(_finite_values(returns, name="returns"), dtype=float)
+    if np.any(array < -1.0):
+        raise ValueError("simple returns must be greater than or equal to -1")
+    return [1.0, *np.cumprod(1.0 + array).tolist()]
 
 
 def summarize_drawdown(
@@ -309,7 +386,7 @@ def drawdown_episodes(  # noqa: C901 — TODO(P2-refactor): episode state machin
         episodes.append((open_peak_index, open_trough_index, None))
 
     current_drawdown = min(0.0, underwater[last])
-    current_underwater = current_drawdown < -_ZERO_TOLERANCE
+    current_underwater = current_drawdown < -ZERO_TOLERANCE
     current_peak_date = grid_dates[peak_index]
     current_drawdown_duration_days = (grid_dates[last] - grid_dates[peak_index]).days if current_underwater else 0
     remaining_to_peak_ratio = max(0.0, -current_drawdown / (1.0 + current_drawdown)) if current_underwater else 0.0
@@ -318,7 +395,7 @@ def drawdown_episodes(  # noqa: C901 — TODO(P2-refactor): episode state machin
     best_depth = 0.0
     for episode in episodes:
         depth = underwater[episode[1]]
-        if depth < -_ZERO_TOLERANCE and depth < best_depth:
+        if depth < -ZERO_TOLERANCE and depth < best_depth:
             best = episode
             best_depth = depth
 
@@ -338,6 +415,7 @@ def drawdown_episodes(  # noqa: C901 — TODO(P2-refactor): episode state machin
             available_start=observation_dates[0],
             available_end=observation_dates[-1],
             n_observations=len(normalized),
+            drawdowns=tuple(underwater),
         )
 
     max_peak_index, max_trough_index, max_recovery_index = best
@@ -347,7 +425,7 @@ def drawdown_episodes(  # noqa: C901 — TODO(P2-refactor): episode state machin
     recovered = max_recovery_index is not None
     reference_index = max_recovery_index if recovered else last
     denominator = peak_wealth - trough_wealth
-    if denominator > _ZERO_TOLERANCE:
+    if denominator > ZERO_TOLERANCE:
         recovered_ratio = (wealth[reference_index] - trough_wealth) / denominator
         recovered_ratio = max(0.0, min(1.0, recovered_ratio))
     else:
@@ -376,6 +454,7 @@ def drawdown_episodes(  # noqa: C901 — TODO(P2-refactor): episode state machin
         available_start=observation_dates[0],
         available_end=observation_dates[-1],
         n_observations=len(normalized),
+        drawdowns=tuple(underwater),
     )
 
 
@@ -396,7 +475,7 @@ def pearson_correlation(
     """Return Pearson correlation, or None when either sample is flat."""
     left_std = sample_standard_deviation(left)
     right_std = sample_standard_deviation(right)
-    if math.isclose(left_std, 0.0, rel_tol=0.0, abs_tol=_ZERO_TOLERANCE) or math.isclose(right_std, 0.0, rel_tol=0.0, abs_tol=_ZERO_TOLERANCE):
+    if math.isclose(left_std, 0.0, rel_tol=0.0, abs_tol=ZERO_TOLERANCE) or math.isclose(right_std, 0.0, rel_tol=0.0, abs_tol=ZERO_TOLERANCE):
         return None
     value = sample_covariance(left, right) / (left_std * right_std)
     return max(-1.0, min(1.0, value))
@@ -434,7 +513,8 @@ def covariance_matrix(series: Sequence[Sequence[float]]) -> list[list[float]]:
         raise ValueError("covariance matrix requires at least two observations")
     if any(len(row) != observations for row in rows):
         raise ValueError("all return series must share one common calendar")
-    return [[sample_covariance(left, right) for right in rows] for left in rows]
+    matrix = np.cov(np.asarray(rows, dtype="float64"), ddof=1)
+    return np.atleast_2d(matrix).tolist()
 
 
 def correlation_matrix(series: Sequence[Sequence[float]]) -> list[list[float | None]]:
@@ -447,7 +527,63 @@ def correlation_matrix(series: Sequence[Sequence[float]]) -> list[list[float | N
         raise ValueError("correlation matrix requires at least two observations")
     if any(len(row) != observations for row in rows):
         raise ValueError("all return series must share one common calendar")
-    return [[pearson_correlation(left, right) for right in rows] for left in rows]
+    return _vectorised_pearson_matrix(np.asarray(rows, dtype="float64"))
+
+
+def _vectorised_pearson_matrix(sample: np.ndarray) -> list[list[float | None]]:
+    """Pearson matrix from one dense ``(assets, observations)`` block.
+
+    The undefined test is made on the DENOMINATOR — the per-asset sample standard
+    deviations against :data:`ZERO_TOLERANCE` — and never by reading ``nan`` back out of
+    ``np.corrcoef``. The distinction is not academic. On an exactly flat series the two
+    readings happen to agree, because ``0/0`` is ``nan``; on a series whose dispersion is
+    merely NEGLIGIBLE, around ``1e-17``, ``np.corrcoef`` divides two denormal quantities
+    and returns a finite, entirely plausible, entirely meaningless number — measured at
+    ``-0.0201`` on one probe — where the scalar path returns ``None``. A ``nan`` reading
+    would publish that number as a correlation.
+
+    A flat asset does not contaminate its neighbours: ``corrcoef`` normalises each pair by
+    its own two variances, so the ``nan`` stays confined to that asset's row and column.
+    Verified: introducing a flat asset moved every other cell by exactly ``0.0``.
+    """
+    stds = sample.std(axis=1, ddof=1)
+    flat = np.abs(stds) <= ZERO_TOLERANCE
+    with np.errstate(invalid="ignore", divide="ignore"):
+        correlations = np.clip(np.atleast_2d(np.corrcoef(sample)), -1.0, 1.0)
+    return [[None if flat[row] or flat[column] else float(correlations[row, column]) for column in range(sample.shape[0])] for row in range(sample.shape[0])]
+
+
+def pairwise_correlation_matrix(
+    series: Sequence[Sequence[float]],
+    *,
+    expected_observations: int,
+) -> tuple[list[list[float | None]], int, float]:
+    """Return the full Pearson matrix plus the observation count and coverage it shares.
+
+    The vectorised counterpart of an ``N x N`` loop over :func:`pairwise_correlation`, for
+    the case where every series is already dense on one common calendar. That case is not
+    an optimistic assumption: ``PreparedAssetSeriesSet`` enforces it, rejecting any set
+    whose members disagree with "every asset series must use the same joint calendar and
+    target currency".
+
+    Because the block is dense and rectangular, every pair sees the same observations and
+    therefore the same coverage, so both are returned ONCE rather than per cell — the
+    uniformity is arithmetic here, not a guess. Ragged or sparse input is refused rather
+    than quietly averaged over a different calendar per pair; use
+    :func:`pairwise_correlation` for that.
+    """
+    if expected_observations < 0:
+        raise ValueError("expected_observations cannot be negative")
+    rows = [tuple(_finite_values(values, name="return series")) for values in series]
+    if not rows:
+        return [], 0, 0.0
+    observations = len(rows[0])
+    if any(len(row) != observations for row in rows):
+        raise ValueError("all return series must share one common calendar")
+    coverage = observations / expected_observations if expected_observations else 0.0
+    if observations < 2:
+        return [[None] * len(rows) for _ in rows], observations, coverage
+    return _vectorised_pearson_matrix(np.asarray(rows, dtype="float64")), observations, coverage
 
 
 def risk_contributions_from_covariance(
@@ -471,10 +607,10 @@ def risk_contributions_from_covariance(
     annual_matrix = [[value * annualization_factor for value in row] for row in matrix]
     sigma_weights = [math.fsum(annual_matrix[i][j] * normalized_weights[j] for j in range(size)) for i in range(size)]
     variance = math.fsum(normalized_weights[i] * sigma_weights[i] for i in range(size))
-    if variance < -_ZERO_TOLERANCE:
+    if variance < -ZERO_TOLERANCE:
         raise ValueError("covariance matrix produced negative portfolio variance")
     portfolio_volatility = math.sqrt(max(variance, 0.0))
-    if math.isclose(portfolio_volatility, 0.0, rel_tol=0.0, abs_tol=_ZERO_TOLERANCE):
+    if math.isclose(portfolio_volatility, 0.0, rel_tol=0.0, abs_tol=ZERO_TOLERANCE):
         zeros = tuple(0.0 for _ in range(size))
         return ContributionSummary(
             portfolio_volatility=0.0,
@@ -572,7 +708,7 @@ def comparison_summary(
     active_std = sample_standard_deviation(active)
     tracking_error = active_std * math.sqrt(annualization_factor)
     information_ratio = None
-    if not math.isclose(active_std, 0.0, rel_tol=0.0, abs_tol=_ZERO_TOLERANCE):
+    if not math.isclose(active_std, 0.0, rel_tol=0.0, abs_tol=ZERO_TOLERANCE):
         information_ratio = (math.fsum(active) / len(active)) / active_std * math.sqrt(annualization_factor)
 
     primary_wealth = wealth_index(primary)
@@ -611,18 +747,68 @@ def historical_var_cvar(
     confidence_level: float,
     horizon_days: int = 1,
 ) -> HistoricalTailRisk:
-    """Return empirical VaR/CVaR using the auditable higher observed quantile."""
+    """Return empirical VaR and the *coherent* CVaR (Acerbi-Tasche / Rockafellar-Uryasev).
+
+    With losses sorted **descending** (worst first), ``T`` observations and a nominal
+    tail of ``m = (1 - confidence_level) * T`` observations:
+
+    ``VaR = L_(ceil(m))``  and  ``CVaR = (1/m) * [ sum(L_(1..k)) + (m - k) * L_(k+1) ]``
+    with ``k = floor(m)``.
+
+    The boundary observation is counted for the **fraction** of it that falls inside
+    the tail, instead of being counted whole. Counting it whole is what the previous
+    plug-in estimator did, and since that observation is the *smallest* of the tail
+    losses it dragged the average down: measured bias **-0.27 %, on 2000 samples out
+    of 2000**. Understating is the worst direction for a risk measure.
+
+    The same change removes an off-by-one that appeared only when ``m`` was an exact
+    integer, where the old index picked the ``m+1``-th worst loss instead of the
+    ``m``-th and so **doubled** the error in the cases that look easiest.
+
+    ⚠️ The zero floor on losses is **kept, deliberately**. It is not part of the
+    defect above: it is load-bearing for the published contract, because
+    ``RiskVarCvarOutput`` declares both fields ``ge=0``. Removing it would let a
+    series of pure gains report a negative VaR that Pydantic would then reject at the
+    API boundary. For the usual confidence levels the floor never binds on the tail
+    anyway — it only rewrites observations that are gains, which enter the average
+    solely when the tail is wider than the number of real losses.
+    """
     confidence_level = float(confidence_level)
     if not 0 < confidence_level < 1 or not math.isfinite(confidence_level):
         raise ValueError("confidence_level must be finite and between 0 and 1")
     horizon_returns = horizon_compounded_returns(returns, horizon_days)
     if not horizon_returns:
         raise ValueError("insufficient returns for the requested horizon")
-    losses = sorted(max(-value, 0.0) for value in horizon_returns)
-    quantile_index = max(0, math.ceil(confidence_level * len(losses)) - 1)
-    value_at_risk = losses[quantile_index]
-    tail = [loss for loss in losses if loss >= value_at_risk]
-    conditional_value_at_risk = math.fsum(tail) / len(tail)
+
+    losses = np.sort(np.maximum(-np.asarray(horizon_returns, dtype=float), 0.0))[::-1]
+    observations = int(losses.size)
+    nominal_tail = (1.0 - confidence_level) * observations
+    # ``1.0 - 0.95`` is 0.050000000000000044, so at T = 740 the nominal tail comes out
+    # as 37.00000000000003 and ``ceil`` climbs to 38 -- reinstating, through floating
+    # point alone, exactly the off-by-one this function exists to remove. VaR is a step
+    # function of that index, so the artefact costs a whole order statistic; snap the
+    # count back onto the integer it is trying to be.
+    snapped = round(nominal_tail)
+    if math.isclose(nominal_tail, snapped, rel_tol=1e-12, abs_tol=1e-9):
+        nominal_tail = float(snapped)
+
+    value_at_risk = float(losses[min(max(math.ceil(nominal_tail) - 1, 0), observations - 1)])
+
+    whole = min(math.floor(nominal_tail), observations - 1)
+    if nominal_tail <= 0.0:
+        conditional_value_at_risk = value_at_risk
+    else:
+        # fsum keeps the head exactly rounded; the slice is only the tail, so this is
+        # not the hot path and M6 must NOT swap it for ``ndarray.sum``, which would
+        # move published numbers under the guise of a vectorization.
+        head = math.fsum(losses[:whole].tolist())
+        conditional_value_at_risk = (head + (nominal_tail - whole) * float(losses[whole])) / nominal_tail
+
+    # CVaR >= VaR holds by construction (every averaged loss is at least the quantile),
+    # but a tail of equal losses can round a ulp below it, and RiskVarCvarOutput
+    # rejects that. Clamp to the mathematical truth rather than publish the artefact.
+    conditional_value_at_risk = max(conditional_value_at_risk, value_at_risk)
+
     return HistoricalTailRisk(
         value_at_risk=value_at_risk,
         conditional_value_at_risk=conditional_value_at_risk,
@@ -630,11 +816,93 @@ def historical_var_cvar(
     )
 
 
+def return_distribution_histogram(
+    returns: Sequence[float],
+    *,
+    pinned_edge: float,
+) -> ReturnHistogram:
+    """Return a Freedman-Diaconis histogram whose grid is shifted onto ``pinned_edge``.
+
+    ``returns`` are **signed** returns, so losses sit on the left. The bin width comes
+    from :func:`numpy.histogram_bin_edges` with ``bins='fd'`` — the interquartile rule
+    is robust to outliers, which matters because the tail is the thing being drawn and
+    a width chosen *from* the tail would beg the question.
+
+    The grid is then translated so that one edge falls exactly on ``pinned_edge``
+    (normally the negated VaR). Bin widths stay uniform, so the histogram remains an
+    honest density picture, while the tail becomes a whole number of bars instead of a
+    bar cut somewhere through its middle.
+
+    ⚠️ When the VaR zero floor bites — a series whose tail quantile is still a gain —
+    the caller's ``pinned_edge`` is ``0.0``, so the pinned edge lands on zero rather
+    than on a quantile of the data. That is a true picture of what is being reported,
+    not a defect of this function.
+    """
+    pinned = float(pinned_edge)
+    if not math.isfinite(pinned):
+        raise ValueError("pinned_edge must be finite")
+
+    values = _finite_values(returns, name="returns")
+    if not values:
+        return ReturnHistogram(edges=(), counts=(), pinned_edge=pinned)
+
+    sample = np.asarray(values, dtype=float)
+    lowest = float(sample.min())
+    highest = float(sample.max())
+
+    if highest > lowest:
+        width = float(np.diff(np.histogram_bin_edges(sample, bins="fd")).max(initial=0.0))
+    else:
+        # A zero-range sample has no interquartile range for Freedman-Diaconis to work
+        # from, and NumPy pads such a sample by ±0.5 before binning it. Asking NumPy
+        # anyway would therefore hand back a width of 1.0 — a single bar a hundred
+        # percentage points wide for a series of decimal returns.
+        width = 0.0
+    if not math.isfinite(width) or width <= 0.0:
+        width = max(abs(highest), abs(pinned), 1.0) * 1e-3
+
+    # The grid must reach the pinned edge even when it sits outside the observed
+    # range — which is exactly what the VaR zero floor does to a series that only
+    # ever gained. Widening here also keeps that case from exploding into empty bins.
+    span_low = min(lowest, pinned)
+    span_high = max(highest, pinned)
+    span = span_high - span_low
+    # The grid is aligned to the pin rather than to the span, so both ends can be
+    # rounded outward — costing up to two bins beyond ``span / width``. Clamping
+    # against ``_MAX_HISTOGRAM_BINS - 2`` is what makes the constant a true ceiling.
+    clamp_divisor = _MAX_HISTOGRAM_BINS - 2
+    if span > 0 and span / width > clamp_divisor:
+        width = span / clamp_divisor
+
+    # Every edge is ``pinned + k * width``, which is what puts one of them on the VaR.
+    first_index = math.floor((span_low - pinned) / width)
+    last_index = math.ceil((span_high - pinned) / width)
+    # Extend along the lattice rather than nudging an endpoint: moving an edge would
+    # break the uniform width, and could move the pinned edge itself.
+    while pinned + first_index * width > span_low:
+        first_index -= 1
+    while pinned + last_index * width < span_high:
+        last_index += 1
+    if last_index <= first_index:
+        last_index = first_index + 1
+    edges = [pinned + index * width for index in range(first_index, last_index + 1)]
+
+    counts, _ = np.histogram(sample, bins=np.asarray(edges, dtype=float))
+    return ReturnHistogram(
+        edges=tuple(float(edge) for edge in edges),
+        counts=tuple(int(count) for count in counts),
+        pinned_edge=pinned,
+    )
+
+
 __all__ = [
+    "ZERO_TOLERANCE",
     "ComparisonSummary",
     "ContributionSummary",
     "DrawdownSummary",
     "HistoricalTailRisk",
+    "ReturnHistogram",
+    "annualized_expected_return",
     "annualized_sharpe",
     "annualized_sortino",
     "annualized_volatility",
@@ -649,8 +917,10 @@ __all__ = [
     "horizon_compounded_returns",
     "hypothetical_stress_return",
     "pairwise_correlation",
+    "pairwise_correlation_matrix",
     "pearson_correlation",
     "period_returns_from_cumulative",
+    "return_distribution_histogram",
     "risk_contributions_from_covariance",
     "sample_covariance",
     "sample_standard_deviation",

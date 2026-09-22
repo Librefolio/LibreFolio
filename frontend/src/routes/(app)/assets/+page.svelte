@@ -63,6 +63,7 @@
     import {matchesAssetLifecycle, orderAssetsByLifecycle} from '$lib/components/assets/assetLifecycle';
     import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
     import {buildTransactionsFiltersUrl} from '../transactions/filterState';
+    import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
 
     // =========================================================================
     // Types
@@ -220,19 +221,10 @@
     // Grid delta display mode: absolute or percentage (E3)
     let globalViewMode = $state<'percentage' | 'absolute'>('percentage');
 
-    // Asset type → icon PNG filename mapping (used in type filter dropdown)
-    const TYPE_ICON_MAP: Record<string, string> = {
-        STOCK: 'stock',
-        ETF: 'etf',
-        BOND: 'bond',
-        CRYPTO: 'crypto',
-        FUND: 'fund',
-        HOLD: 'hold',
-        CROWDFUND: 'crowdfunding',
-        INDEX: 'index',
-        OTHER: 'other',
-    };
-    const ALL_ASSET_TYPES = ['STOCK', 'ETF', 'BOND', 'CRYPTO', 'FUND', 'HOLD', 'CROWDFUND', 'INDEX', 'OTHER'] as const;
+    // Asset type → icon: getAssetTypeIconUrl() is the single source. The local
+    // TYPE_ICON_MAP that used to live here knew nine types, so every value added to
+    // ALL_ASSET_TYPES below would have been drawn as other.png in this very dropdown.
+    const ALL_ASSET_TYPES = ['STOCK', 'ETF', 'BOND', 'CRYPTO', 'FUND', 'CROWDFUND', 'HOLD', 'COMMODITY', 'REAL_ESTATE', 'INDEX', 'OTHER', 'ETF_STOCK', 'ETF_BOND', 'ETF_COMMODITY', 'ETF_REAL_ESTATE', 'ETF_CRYPTO', 'ETF_MONETARY'] as const;
 
     // Count assets per type (for E5b badge in type filter dropdown)
     let typeCounts = $derived(
@@ -1401,8 +1393,13 @@
                                 <!-- Option list -->
                                 <div class="max-h-52 overflow-y-auto border border-gray-100 dark:border-slate-700 mx-2.5 my-2 rounded-md">
                                     {#each availableTypes as typeVal}
+                                        <!-- The per-type testid is the only handle a test has on these rows: the
+                                             row carries a shared icon (the six ETF subtypes all draw etf.png by
+                                             design) and a translated label, so neither identifies a type. Same
+                                             convention as column-visibility-item-{id} and provider-option-{code}. -->
                                         <button
                                             type="button"
+                                            data-testid="assets-type-filter-option-{typeVal}"
                                             class="flex items-center gap-2 w-full px-2 py-1.5 text-left text-[13px] text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors cursor-pointer"
                                             onclick={() => {
                                                 const next = new Set(filterTypes);
@@ -1419,7 +1416,7 @@
                                                     <Check size={12} />
                                                 {/if}
                                             </span>
-                                            <img src="/icons/asset-types/{TYPE_ICON_MAP[typeVal] ?? 'other'}.png" alt="" class="w-4 h-4 object-contain shrink-0" />
+                                            <img src={getAssetTypeIconUrl(typeVal)} alt="" class="w-4 h-4 object-contain shrink-0" />
                                             <span class="flex-1">{$t(`assets.types.${typeVal}`) || typeVal}</span>
                                             <span class="text-[10px] font-mono text-gray-400 dark:text-gray-500 tabular-nums">{typeCounts[typeVal] ?? 0}</span>
                                         </button>
@@ -1510,17 +1507,7 @@
                 <p class="text-red-600 dark:text-red-400">{error}</p>
             </div>
         {:else}
-            <AssetSetRiskPanel
-                {assets}
-                {dateStart}
-                {dateEnd}
-                targetCurrency={$globalSettings.default_currency || 'EUR'}
-                onsynced={async () => {
-                    for (const asset of assets) invalidateAssetPriceStore(asset.id);
-                    rearmMaxPendingBeforeReload();
-                    await fetchAllPriceData();
-                }}
-            />
+            <AssetSetRiskPanel {assets} {dateStart} {dateEnd} targetCurrency={$globalSettings.default_currency || 'EUR'} />
         {/if}
     {:else if loading}
         <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-12 text-center border border-gray-100 dark:border-slate-700">
@@ -1645,6 +1632,8 @@
 
 <!-- Chart Settings Modal (D4) -->
 <ChartSettingsModal
+    axisContext={settingsTargetId ? (assets.find((asset) => asset.id === Number(settingsTargetId))?.currency ?? '—') : $t('common.preview')}
+    axisDomain="asset"
     open={settingsModalOpen}
     mode={settingsTargetId ? 'pair' : 'global'}
     {signalDefinitions}

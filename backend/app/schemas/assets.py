@@ -625,6 +625,7 @@ class FAAssetCreateItem(StrictModel):
     icon_url: Optional[str] = Field(None, description="URL to asset icon (local or remote)")
     quote_base_quantity: Optional[int] = Field(1, description="How many units the raw market quote refers to")
     active: bool = Field(True, description="Whether asset is active")
+    is_benchmark: bool = Field(False, description="Offer this asset as a comparison benchmark in risk and chart selectors")
     user_url: Optional[str] = Field(None, description="User-defined URL (notes, external dashboard, etc.)")
 
     # Classification metadata (optional)
@@ -709,6 +710,7 @@ class FAAinfoFiltersRequest(StrictModel):
     currency: Optional[str] = Field(None, description="Filter by currency (ISO 4217)")
     asset_type: Optional[AssetType] = Field(None, description="Filter by asset type enum")
     active: Optional[bool] = Field(None, description="Tri-state filter: True = only active, False = only inactive, None (default) = no filter (return both)")
+    is_benchmark: Optional[bool] = Field(None, description="Tri-state filter: True = only benchmarks, False = only non-benchmarks, None (default) = no filter")
 
     # Search in display_name (partial match)
     search: Optional[str] = Field(None, description="Search in display_name (partial match)")
@@ -762,6 +764,7 @@ class FAinfoResponse(StrictModel):
     asset_type: Optional[str] = Field(None, description="Asset type")
     quote_base_quantity: Optional[int] = Field(1, description="How many units the raw market quote refers to")
     active: bool = Field(..., description="Whether asset is active")
+    is_benchmark: bool = Field(False, description="Asset is offered as a comparison benchmark")
     user_url: Optional[str] = Field(None, description="User-defined URL (notes, external dashboard, etc.)")
     provider_code: Optional[str] = Field(None, description="Provider code if assigned (e.g. 'yfinance')")
     has_metadata: bool = Field(..., description="Whether asset has classification metadata")
@@ -838,6 +841,7 @@ class FAAssetPatchItem(StrictModel):
     quote_base_quantity: Optional[int] = Field(None, description="Update quote base quantity")
     classification_params: Optional[FAClassificationParams] = Field(None, description="Update classification (None = clear)")
     active: Optional[bool] = Field(None, description="Update active status")
+    is_benchmark: Optional[bool] = Field(None, description="Update benchmark availability")
     user_url: Optional[str] = Field(None, description="Update user-defined URL (None = clear)")
 
     # Identifier fields (one per IdentifierType)

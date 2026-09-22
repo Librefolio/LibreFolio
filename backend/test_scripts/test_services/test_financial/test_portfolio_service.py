@@ -519,6 +519,35 @@ class TestRoleAwareShareScaling:
         assert row.period_income == Decimal("30"), f"30%-owner income must be 30, got {row.period_income}"
         assert row.end_value == Decimal("330"), f"30%-owner end value must be 330 (3 × 110), got {row.end_value}"
 
+    @pytest.mark.asyncio
+    async def test_income_history_scales_by_owner_share_not_by_role(self, session, test_user):
+        """G1c — get_income_history() must apply the SAME F2 rule as get_summary()/
+        get_positions_contribution() (reuses this class's _make_broker_with_role,
+        the existing multi-share fixture pattern, rather than inventing a new one):
+        a 30%-OWNER broker's DIVIDEND is scaled by its share exactly once, while an
+        EDITOR broker's INTEREST is shown in full despite share_percentage=0 (the
+        schema-mandated value for non-owner roles must never be read as "0% of
+        the data").
+        """
+        owner_broker = await self._make_broker_with_role(session, test_user, "OWNER", Decimal("0.3"))
+        editor_broker = await self._make_broker_with_role(session, test_user, "EDITOR", Decimal("0"))
+        session.add_all(
+            [
+                Transaction(broker_id=owner_broker.id, type=TransactionType.DIVIDEND, date=date(2025, 4, 10), amount=Decimal("100"), currency="EUR"),
+                Transaction(broker_id=editor_broker.id, type=TransactionType.INTEREST, date=date(2025, 4, 10), amount=Decimal("40"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        history = await service.get_income_history(user_id=test_user.id, date_from=None, date_to=date(2025, 4, 30))
+
+        assert [p.date for p in history.points] == [date(2025, 4, 10)], "both brokers' income lands on the same date -> one grouped point"
+        point = history.points[0]
+        assert point.dividend.amount == Decimal("30"), f"30%-owner dividend must be scaled to 30 (applied once, not skipped/doubled), got {point.dividend.amount}"
+        assert point.interest.amount == Decimal("40"), f"EDITOR interest must be full despite share_percentage=0, got {point.interest.amount}"
+        assert history.missing_fx_pairs == []
+
 
 class TestPortfolioYieldOnCost:
     @pytest.mark.asyncio
@@ -2071,7 +2100,6 @@ class TestPortfolioServiceGetReport:
         assert report.history is None
         assert report.allocation_history is None
         assert report.positions_contribution is None
-        assert report.allocation_source is None
         assert report.data_quality is not None
         assert report.metadata.broker_ids == [broker.id]
         assert report.metadata.included_features == []
@@ -2533,6 +2561,637 @@ class TestPortfolioServiceGetReport:
         # Day-over-day delta (mirrors the frontend KPI calc: history[-1] - history[-2])
         # must reflect day3 vs day2 (real data), not two identical phantom future days.
         assert narrow.history[-1].nav_value.amount - narrow.history[-2].nav_value.amount == Decimal("50")
+
+    @pytest.mark.asyncio
+    async def test_get_report_income_history_flag_gates_section_and_busts_l2_cache(self, session, test_user, broker_with_access):
+        """G1c wiring: PortfolioReportQuery.include_income_history gates
+        PortfolioReportResponse.income_history and metadata.included_features, and
+        the flag is part of the L2 cache key (_portfolio_l2_cache) — flipping ONLY
+        this flag between two otherwise-identical calls must never return the
+        first call's cached (flag=False) report for the second (flag=True) call.
+        """
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=date(2025, 8, 1), amount=Decimal("1000"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2025, 8, 5), amount=Decimal("40"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+        _portfolio_l2_cache.clear()
+
+        service = PortfolioService(session)
+        base_kwargs = {
+            "broker_ids": [broker.id],
+            "include_summary": True,
+            "include_history": False,
+            "include_allocation_history": False,
+            "date_range": {"start": "2025-08-01", "end": "2025-08-31"},
+        }
+
+        off = await service.get_report(user_id=test_user.id, query=PortfolioReportQuery(**base_kwargs, include_income_history=False))
+        assert off.income_history is None
+        assert "income_history" not in off.metadata.included_features
+
+        on = await service.get_report(user_id=test_user.id, query=PortfolioReportQuery(**base_kwargs, include_income_history=True))
+        assert on.income_history is not None, "must recompute, not reuse the flag=False L2 cache entry"
+        assert "income_history" in on.metadata.included_features
+        assert [p.date for p in on.income_history.points] == [date(2025, 8, 5)]
+        assert on.income_history.points[0].dividend.amount == Decimal("40")
+        assert on.income_history.points[0].interest.amount == Decimal("0")
+        # Reconciles with summary.period_income for the identical (date_from, date_to] window.
+        assert on.summary.period_income.amount == Decimal("40")
+
+
+# =============================================================================
+# G1c — SIGNED PERSONAL INCOME HISTORY (get_income_history + reconciliation)
+# =============================================================================
+
+
+class TestGetIncomeHistory:
+    """PortfolioService.get_income_history() — a pure transaction scan (no engine
+    run) over DIVIDEND/INTEREST transactions, signed (plan §4.4): a legacy
+    negative correction reduces its bucket instead of being abs()'d into it.
+
+    ``sum(dividend) + sum(interest)`` across every point must reproduce
+    ``PortfolioSummary.period_income`` exactly for the same scope/window — the
+    two are independently computed (a pure tx scan vs. an engine-result-derived
+    accumulator) so this reconciliation is a real cross-check, not a tautology.
+    """
+
+    @pytest.mark.asyncio
+    async def test_golden_scenario_reconciles_with_summary_period_income(self, session, test_user, broker_with_access):
+        """DEPOSIT 1000 (day1, not income); DIVIDEND 50 (day10); DIVIDEND -20 (day15,
+        a legacy correction); INTEREST 5 (day20) — all broker-level (asset_id=None).
+
+        Expected points: 3 sparse entries (day1 is a DEPOSIT, never a point).
+        sum(dividend)+sum(interest) = 50 + (-20) + 5 = 35, and this MUST equal
+        get_summary()'s period_income for the identical (date_from=None,
+        date_to=2025-01-31] window.
+        """
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=date(2025, 1, 1), amount=Decimal("1000"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2025, 1, 10), amount=Decimal("50"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2025, 1, 15), amount=Decimal("-20"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.INTEREST, date=date(2025, 1, 20), amount=Decimal("5"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        history = await service.get_income_history(user_id=test_user.id, date_from=None, date_to=date(2025, 1, 31))
+
+        assert [p.date for p in history.points] == [date(2025, 1, 10), date(2025, 1, 15), date(2025, 1, 20)], "sparse: no point for the DEPOSIT-only day1"
+        by_date = {p.date: p for p in history.points}
+        assert by_date[date(2025, 1, 10)].dividend.amount == Decimal("50")
+        assert by_date[date(2025, 1, 10)].interest.amount == Decimal("0")
+        assert by_date[date(2025, 1, 15)].dividend.amount == Decimal("-20"), "legacy negative correction must be signed, never abs()'d"
+        assert by_date[date(2025, 1, 15)].interest.amount == Decimal("0")
+        assert by_date[date(2025, 1, 20)].dividend.amount == Decimal("0")
+        assert by_date[date(2025, 1, 20)].interest.amount == Decimal("5")
+        assert history.missing_fx_pairs == []
+
+        total = sum((p.dividend.amount + p.interest.amount for p in history.points), Decimal("0"))
+        assert total == Decimal("35"), f"50 + (-20) + 5 = 35, got {total}"
+
+        summary = await service.get_summary(user_id=test_user.id, date_from=None, date_to=date(2025, 1, 31))
+        assert summary.period_income is not None
+        assert summary.period_income.amount == Decimal("35"), f"get_summary().period_income must reconcile exactly with the income-history sum, got {summary.period_income.amount}"
+
+        # Third independent cross-check: get_positions_contribution() must also
+        # surface this -20 correction (never silently drop it) via its
+        # UnallocatedContribution row — all three transactions are broker-level
+        # (asset_id=None) and net to the same signed total.
+        contribution = await service.get_positions_contribution(user_id=test_user.id, date_from=None, date_to=date(2025, 1, 31))
+        unalloc_matches = [u for u in contribution.unallocated if u.broker_id == broker.id]
+        assert len(unalloc_matches) == 1, f"expected exactly one unallocated row for this test's broker, got {len(unalloc_matches)}"
+        assert unalloc_matches[0].unallocated_income == Decimal("35"), f"get_positions_contribution()'s unallocated_income must also reconcile to 35 (50-20+5), got {unalloc_matches[0].unallocated_income}"
+
+    @pytest.mark.asyncio
+    async def test_pure_positive_regression_matches_hand_arithmetic(self, session, test_user, broker_with_access):
+        """No correction anywhere — locks in that the ordinary path is numerically
+        unaffected, and that same-date DIVIDEND rows from independent transactions
+        are grouped/summed into one point (plan: "groups by (date, type)")."""
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2025, 2, 1), amount=Decimal("30"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2025, 2, 1), amount=Decimal("45"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.INTEREST, date=date(2025, 2, 15), amount=Decimal("12"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        history = await service.get_income_history(user_id=test_user.id, date_from=None, date_to=date(2025, 2, 28))
+
+        assert [p.date for p in history.points] == [date(2025, 2, 1), date(2025, 2, 15)]
+        by_date = {p.date: p for p in history.points}
+        assert by_date[date(2025, 2, 1)].dividend.amount == Decimal("75"), "30 + 45 = 75, two same-date DIVIDEND rows grouped into one point"
+        assert by_date[date(2025, 2, 15)].interest.amount == Decimal("12")
+        assert history.missing_fx_pairs == []
+
+    @pytest.mark.asyncio
+    async def test_date_from_boundary_is_exclusive_start_inclusive_end(self, session, test_user, broker_with_access):
+        """Canonical (date_from, date_to] boundary: a transaction dated exactly on
+        date_from is excluded; one dated on date_to is included."""
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2025, 3, 5), amount=Decimal("11"), currency="EUR"),  # == date_from -> excluded
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2025, 3, 6), amount=Decimal("22"), currency="EUR"),  # inside window
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2025, 3, 10), amount=Decimal("33"), currency="EUR"),  # == date_to -> included
+            ]
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        history = await service.get_income_history(user_id=test_user.id, date_from=date(2025, 3, 5), date_to=date(2025, 3, 10))
+
+        assert [p.date for p in history.points] == [date(2025, 3, 6), date(2025, 3, 10)], "date_from itself excluded, date_to included"
+
+    @pytest.mark.asyncio
+    async def test_missing_fx_pair_excluded_from_sums_never_zeroed(self, session, test_user, broker_with_access):
+        """A DIVIDEND/INTEREST in a currency with no configured FX rate/route must be
+        excluded from the sums (not silently substituted with 0) and its pair
+        reported in missing_fx_pairs — while OTHER same-date/other-date transactions
+        still contribute normally.
+
+        PGK (Papua New Guinea Kina) is used deliberately: not one of this codebase's
+        configured mock FX pairs (EUR/USD, GBP/EUR, USD/CHF — see populate_mock_data.py
+        and TestPortfolioFxCacheIdentity's own choice of obscure pairs for the same
+        reason), so "this conversion genuinely has no rate" is true by construction.
+        """
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2025, 5, 1), amount=Decimal("100"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2025, 5, 1), amount=Decimal("500"), currency="PGK"),
+                Transaction(broker_id=broker.id, type=TransactionType.INTEREST, date=date(2025, 5, 10), amount=Decimal("200"), currency="PGK"),
+            ]
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        history = await service.get_income_history(user_id=test_user.id, date_from=None, date_to=date(2025, 5, 31))
+
+        assert history.missing_fx_pairs == ["PGK/EUR"], "deduplicated despite 2 failed PGK conversions"
+        # day 1: the EUR dividend still contributes; the PGK one is excluded, not zeroed into it.
+        # day 10: its ONLY transaction failed conversion -> the whole date is omitted (sparse), not a zero point.
+        assert [p.date for p in history.points] == [date(2025, 5, 1)]
+        assert history.points[0].dividend.amount == Decimal("100")
+        assert history.points[0].interest.amount == Decimal("0")
+
+
+# =============================================================================
+# G1c — get_positions_contribution(): signed accumulation + positive-only filter fixes
+# =============================================================================
+
+
+class TestPositionsContributionSignedIncome:
+    """The 3 independent per-plan filter fixes in get_positions_contribution()
+    (plan §4.4): a legacy negative-only DIVIDEND/INTEREST correction must still
+    surface — never be silently dropped by a stale `> 0` / `<= 0` gate that
+    predates signed income. FEE/TAX `> 0` gates are explicitly unchanged
+    (out of scope) and are not touched by these tests.
+    """
+
+    @pytest.mark.asyncio
+    async def test_asset_linked_negative_net_income_surfaces_as_position_row(self, session, test_user, test_asset, broker_with_access):
+        """Asset with DIVIDEND activity only (no BUY/SELL ever) netting to a
+        NEGATIVE income total. Regression lock for two of the five fixes:
+        - `if income == 0 and fees == 0: continue` (was `<= 0`): income=-40 would
+          have been wrongly dropped by the old `<= 0` gate (income<=0 AND fees<=0
+          both true for a pure negative correction).
+        - `period_income=income if income else None` (was `income if income > 0
+          else None`): -40 would have rendered as None (no income at all) instead
+          of a visible negative correction.
+        """
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, asset_id=test_asset.id, type=TransactionType.DIVIDEND, date=date(2025, 2, 1), amount=Decimal("10"), currency="EUR"),
+                Transaction(broker_id=broker.id, asset_id=test_asset.id, type=TransactionType.DIVIDEND, date=date(2025, 2, 5), amount=Decimal("-50"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        contribution = await service.get_positions_contribution(user_id=test_user.id, date_from=date(2025, 1, 31), date_to=date(2025, 2, 28))
+
+        matches = [p for p in contribution.positions if p.broker_id == broker.id and p.asset_id == test_asset.id]
+        assert len(matches) == 1, f"expected exactly one position row for this test's (broker, asset), got {len(matches)}"
+        row = matches[0]
+        assert row.period_income == Decimal("-40"), f"10 + (-50) = -40, got {row.period_income}"
+        assert row.period_pnl == Decimal("-40"), "income(-40) - fees(0) = -40"
+        assert row.is_fully_sold is True
+        assert not any(u.broker_id == broker.id for u in contribution.unallocated), "asset-linked income must never leak into UnallocatedContribution"
+
+    @pytest.mark.asyncio
+    async def test_unallocated_negative_net_income_surfaces_not_dropped(self, session, test_user, broker_with_access):
+        """Broker-level (asset_id=None) DIVIDEND activity netting to a NEGATIVE
+        total. Regression lock for the remaining three of the five fixes:
+        - `if inc or (fee and fee > 0):` (was `if (inc and inc > 0) or (fee and fee > 0):`)
+        - `unallocated_income=inc if inc else None` (was `inc if inc and inc > 0 else None`)
+        - the "Unallocated income" other_effects entry's `if inc:` (was `if inc and inc > 0:`)
+        A pure `inc=-40, fee=0` broker would have been excluded from `unallocated`
+        (and its `other_effects` row) entirely under the old all-positive gates.
+        """
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2025, 3, 1), amount=Decimal("10"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2025, 3, 5), amount=Decimal("-50"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        contribution = await service.get_positions_contribution(user_id=test_user.id, date_from=date(2025, 2, 28), date_to=date(2025, 3, 31))
+
+        unalloc_matches = [u for u in contribution.unallocated if u.broker_id == broker.id]
+        assert len(unalloc_matches) == 1, f"expected exactly one unallocated row for this test's broker, got {len(unalloc_matches)}"
+        unalloc = unalloc_matches[0]
+        assert unalloc.unallocated_income == Decimal("-40"), f"10 + (-50) = -40, got {unalloc.unallocated_income}"
+        assert unalloc.unallocated_fees_taxes is None
+
+        income_effects = [e for e in contribution.other_effects if e.broker_id == broker.id and e.category == "Income"]
+        assert len(income_effects) == 1, f"expected exactly one 'Unallocated income' other_effects row for this test's broker, got {len(income_effects)}"
+        assert income_effects[0].period_pnl == Decimal("-40")
+        assert income_effects[0].description == "Unallocated income"
+
+    @pytest.mark.asyncio
+    async def test_fee_only_positive_gates_are_unchanged(self, session, test_user, broker_with_access):
+        """Guard against scope creep: FEE/TAX `> 0` comparisons were deliberately
+        left untouched by this plan. A broker with FEE only (no income at all)
+        must behave exactly as before — fees are always accumulated via abs(), so
+        they can never be negative, and the row must still surface normally."""
+        broker, _ = broker_with_access
+        session.add(
+            Transaction(broker_id=broker.id, type=TransactionType.FEE, date=date(2025, 6, 1), amount=Decimal("-15"), currency="EUR"),
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        contribution = await service.get_positions_contribution(user_id=test_user.id, date_from=date(2025, 5, 31), date_to=date(2025, 6, 30))
+
+        unalloc_matches = [u for u in contribution.unallocated if u.broker_id == broker.id]
+        assert len(unalloc_matches) == 1
+        assert unalloc_matches[0].unallocated_fees_taxes == Decimal("15"), "FEE is reported as a positive magnitude, unaffected by the signed-income fix"
+        assert unalloc_matches[0].unallocated_income is None
+        cost_effects = [e for e in contribution.other_effects if e.broker_id == broker.id and e.category == "Cost"]
+        assert len(cost_effects) == 1
+        assert cost_effects[0].period_pnl == Decimal("-15")
+
+
+# =============================================================================
+# BATCH 2 — SHARED SIGNED TRANSACTION SCAN (_signed_transaction_sums_by_date)
+# =============================================================================
+#
+# get_income_history's original body was extracted into the private
+# _signed_transaction_sums_by_date and is now shared by three public methods that
+# differ only in which tx_types they scan and how they combine the per-type sums:
+#
+#   get_income_history   DIVIDEND/INTEREST kept separate
+#   get_cost_history     FEE+TAX summed into ONE signed "cost"
+#   get_deposit_history  DEPOSIT alone
+#
+# The three behaviours that live IN the shared scan — FX-missing tracking, F2
+# OWNER-share scaling, and the canonical (date_from, date_to] boundary — are
+# therefore worth exercising through the NEW callers rather than through the
+# private helper directly: the helper is an implementation detail, while "a FEE in
+# an unconvertible currency must not silently become a zero cost" is the contract a
+# consumer actually depends on. get_income_history's own coverage of the same three
+# (TestGetIncomeHistory above) is left untouched and must keep passing verbatim —
+# that IS the refactor's regression gate.
+
+
+async def _make_scan_broker(session, user: User, role: str, share: Decimal | None) -> Broker:
+    """One broker with one access row of the given role/share, no transactions.
+
+    Mirrors TestRoleAwareShareScaling._make_broker_with_role, minus its DEPOSIT (which
+    would land inside get_deposit_history's own subject matter and confuse the numbers).
+    """
+    broker = Broker(name=f"PfBroker_Scan_{role}_{share}_{utcnow().timestamp()}")
+    session.add(broker)
+    await session.flush()
+    session.add(BrokerUserAccess(broker_id=broker.id, user_id=user.id, role=role, share_percentage=share))
+    await session.flush()
+    return broker
+
+
+class TestGetCostHistory:
+    """PortfolioService.get_cost_history() — signed FEE+TAX, combined per date."""
+
+    @pytest.mark.asyncio
+    async def test_fee_and_tax_are_summed_into_one_signed_cost_per_date(self, session, test_user, broker_with_access):
+        """The dimension is "Fees & taxes", one figure — a FEE and a TAX on the same
+        date collapse into a single point, not two. And the sign is the RAW
+        Transaction.amount sign: costs stay negative, they are never flipped to a
+        positive magnitude (unlike get_positions_contribution's unallocated_fees_taxes,
+        which reports a magnitude by design — the two conventions coexist deliberately).
+        """
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.FEE, date=date(2026, 1, 10), amount=Decimal("-12"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.TAX, date=date(2026, 1, 10), amount=Decimal("-30"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.FEE, date=date(2026, 1, 20), amount=Decimal("-5"), currency="EUR"),
+                # A DIVIDEND on a cost date must not leak in — the scan is tx_type-filtered.
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2026, 1, 20), amount=Decimal("99"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        history = await PortfolioService(session).get_cost_history(user_id=test_user.id, date_from=None, date_to=date(2026, 1, 31))
+
+        assert [p.date for p in history.points] == [date(2026, 1, 10), date(2026, 1, 20)], "one point per date, FEE+TAX merged"
+        by_date = {p.date: p for p in history.points}
+        assert by_date[date(2026, 1, 10)].cost.amount == Decimal("-42"), f"-12 (FEE) + -30 (TAX) = -42, got {by_date[date(2026, 1, 10)].cost.amount}"
+        assert by_date[date(2026, 1, 20)].cost.amount == Decimal("-5"), "the same-date DIVIDEND must not contribute"
+        assert history.missing_fx_pairs == []
+
+    @pytest.mark.asyncio
+    async def test_positive_fee_correction_keeps_its_sign(self, session, test_user, broker_with_access):
+        """Signed fidelity runs both ways: a legacy positive FEE row (a refund/correction)
+        must be reported as positive and net against the same date's negative rows, never
+        abs()'d into another -N."""
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.FEE, date=date(2026, 2, 5), amount=Decimal("-40"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.FEE, date=date(2026, 2, 5), amount=Decimal("15"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        history = await PortfolioService(session).get_cost_history(user_id=test_user.id, date_from=None, date_to=date(2026, 2, 28))
+
+        assert [p.date for p in history.points] == [date(2026, 2, 5)]
+        assert history.points[0].cost.amount == Decimal("-25"), "-40 + 15 = -25; an abs()-based scan would have produced -55"
+
+    @pytest.mark.asyncio
+    async def test_date_boundary_is_exclusive_start_inclusive_end(self, session, test_user, broker_with_access):
+        """The canonical (date_from, date_to] window, inherited from the shared scan."""
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.FEE, date=date(2026, 3, 5), amount=Decimal("-11"), currency="EUR"),  # == date_from -> excluded
+                Transaction(broker_id=broker.id, type=TransactionType.TAX, date=date(2026, 3, 6), amount=Decimal("-22"), currency="EUR"),  # inside
+                Transaction(broker_id=broker.id, type=TransactionType.FEE, date=date(2026, 3, 10), amount=Decimal("-33"), currency="EUR"),  # == date_to -> included
+                Transaction(broker_id=broker.id, type=TransactionType.FEE, date=date(2026, 3, 11), amount=Decimal("-44"), currency="EUR"),  # after date_to -> excluded
+            ]
+        )
+        await session.flush()
+
+        history = await PortfolioService(session).get_cost_history(user_id=test_user.id, date_from=date(2026, 3, 5), date_to=date(2026, 3, 10))
+
+        assert [p.date for p in history.points] == [date(2026, 3, 6), date(2026, 3, 10)], "date_from itself excluded, date_to included"
+        assert sum(p.cost.amount for p in history.points) == Decimal("-55")
+
+    @pytest.mark.asyncio
+    async def test_missing_fx_pair_excluded_from_sums_never_zeroed(self, session, test_user, broker_with_access):
+        """Same contract as income: an unconvertible cost is EXCLUDED and its pair
+        reported, rather than silently contributing 0 — a zeroed cost would read as
+        "this day was free", which is a different and wrong statement.
+
+        PGK (Papua New Guinea Kina) is deliberately not one of this codebase's configured
+        mock FX pairs, same choice and same reason as TestGetIncomeHistory's own FX test.
+        """
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.FEE, date=date(2026, 4, 1), amount=Decimal("-10"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.TAX, date=date(2026, 4, 1), amount=Decimal("-500"), currency="PGK"),
+                Transaction(broker_id=broker.id, type=TransactionType.FEE, date=date(2026, 4, 10), amount=Decimal("-200"), currency="PGK"),
+            ]
+        )
+        await session.flush()
+
+        history = await PortfolioService(session).get_cost_history(user_id=test_user.id, date_from=None, date_to=date(2026, 4, 30))
+
+        assert history.missing_fx_pairs == ["PGK/EUR"], "deduplicated despite 2 failed PGK conversions"
+        assert [p.date for p in history.points] == [date(2026, 4, 1)], "04-10's only row failed conversion -> the whole date is omitted, not zeroed"
+        assert history.points[0].cost.amount == Decimal("-10"), "the EUR fee still contributes in full"
+
+    @pytest.mark.asyncio
+    async def test_scales_by_owner_share_and_never_by_role(self, session, test_user):
+        """F2, inherited from the shared scan: a 30%-OWNER broker's costs are scaled
+        exactly once, while an EDITOR broker's costs are full despite the schema-mandated
+        share_percentage=0 that its role carries."""
+        owner_broker = await _make_scan_broker(session, test_user, "OWNER", Decimal("0.3"))
+        editor_broker = await _make_scan_broker(session, test_user, "EDITOR", Decimal("0"))
+        session.add_all(
+            [
+                Transaction(broker_id=owner_broker.id, type=TransactionType.FEE, date=date(2026, 5, 10), amount=Decimal("-100"), currency="EUR"),
+                Transaction(broker_id=editor_broker.id, type=TransactionType.TAX, date=date(2026, 5, 10), amount=Decimal("-40"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        history = await PortfolioService(session).get_cost_history(user_id=test_user.id, date_from=None, date_to=date(2026, 5, 31))
+
+        assert [p.date for p in history.points] == [date(2026, 5, 10)], "both brokers' costs land on one date -> one grouped point"
+        assert history.points[0].cost.amount == Decimal("-70"), f"-30 (30% of -100) + -40 (full EDITOR) = -70, got {history.points[0].cost.amount}"
+
+    @pytest.mark.asyncio
+    async def test_zero_share_owner_contributes_nothing_but_the_date_still_reports(self, session, test_user):
+        """A 0%-OWNER is a valid configuration (F2), and 0 * -100 = 0 is a genuine
+        zero, not a missing value. The scan writes the date key either way, so the point
+        exists with amount 0 — distinguishable from the FX-missing case above, which
+        omits the date entirely."""
+        broker = await _make_scan_broker(session, test_user, "OWNER", Decimal("0"))
+        session.add(Transaction(broker_id=broker.id, type=TransactionType.FEE, date=date(2026, 6, 1), amount=Decimal("-100"), currency="EUR"))
+        await session.flush()
+
+        history = await PortfolioService(session).get_cost_history(user_id=test_user.id, broker_ids=[broker.id], date_from=None, date_to=date(2026, 6, 30))
+
+        assert [p.date for p in history.points] == [date(2026, 6, 1)]
+        assert history.points[0].cost.amount == Decimal("0")
+
+    @pytest.mark.asyncio
+    async def test_user_with_no_broker_access_gets_an_empty_series(self, session, test_user):
+        """The early return before the scan even runs."""
+        history = await PortfolioService(session).get_cost_history(user_id=test_user.id, broker_ids=[999999])
+
+        assert history.points == []
+        assert history.missing_fx_pairs == []
+
+
+class TestGetDepositHistory:
+    """PortfolioService.get_deposit_history() — the third caller of the shared scan."""
+
+    @pytest.mark.asyncio
+    async def test_same_date_deposits_are_grouped_and_other_types_excluded(self, session, test_user, broker_with_access):
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=date(2026, 7, 1), amount=Decimal("1000"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=date(2026, 7, 1), amount=Decimal("250"), currency="EUR"),
+                # Neither of these is a DEPOSIT: a withdrawal is not a negative deposit here,
+                # and the dimension is deliberately "money put in", not net external flow.
+                Transaction(broker_id=broker.id, type=TransactionType.WITHDRAWAL, date=date(2026, 7, 1), amount=Decimal("-400"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=date(2026, 7, 15), amount=Decimal("75"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        history = await PortfolioService(session).get_deposit_history(user_id=test_user.id, date_from=None, date_to=date(2026, 7, 31))
+
+        assert [p.date for p in history.points] == [date(2026, 7, 1), date(2026, 7, 15)]
+        by_date = {p.date: p for p in history.points}
+        assert by_date[date(2026, 7, 1)].deposit.amount == Decimal("1250"), "1000 + 250; the same-date WITHDRAWAL must not net against it"
+        assert by_date[date(2026, 7, 15)].deposit.amount == Decimal("75")
+        assert history.missing_fx_pairs == []
+
+    @pytest.mark.asyncio
+    async def test_date_boundary_is_exclusive_start_inclusive_end(self, session, test_user, broker_with_access):
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=date(2026, 8, 5), amount=Decimal("11"), currency="EUR"),  # == date_from -> excluded
+                Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=date(2026, 8, 6), amount=Decimal("22"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=date(2026, 8, 10), amount=Decimal("33"), currency="EUR"),  # == date_to -> included
+            ]
+        )
+        await session.flush()
+
+        history = await PortfolioService(session).get_deposit_history(user_id=test_user.id, date_from=date(2026, 8, 5), date_to=date(2026, 8, 10))
+
+        assert [p.date for p in history.points] == [date(2026, 8, 6), date(2026, 8, 10)]
+
+    @pytest.mark.asyncio
+    async def test_missing_fx_pair_excluded_from_sums_never_zeroed(self, session, test_user, broker_with_access):
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=date(2026, 9, 1), amount=Decimal("100"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=date(2026, 9, 1), amount=Decimal("900"), currency="PGK"),
+            ]
+        )
+        await session.flush()
+
+        history = await PortfolioService(session).get_deposit_history(user_id=test_user.id, date_from=None, date_to=date(2026, 9, 30))
+
+        assert history.missing_fx_pairs == ["PGK/EUR"]
+        assert [p.date for p in history.points] == [date(2026, 9, 1)]
+        assert history.points[0].deposit.amount == Decimal("100"), "the PGK deposit is excluded, never added as 0 or at a 1:1 fallback rate"
+
+    @pytest.mark.asyncio
+    async def test_scales_by_owner_share_and_never_by_role(self, session, test_user):
+        owner_broker = await _make_scan_broker(session, test_user, "OWNER", Decimal("0.3"))
+        editor_broker = await _make_scan_broker(session, test_user, "EDITOR", Decimal("0"))
+        session.add_all(
+            [
+                Transaction(broker_id=owner_broker.id, type=TransactionType.DEPOSIT, date=date(2026, 10, 10), amount=Decimal("1000"), currency="EUR"),
+                Transaction(broker_id=editor_broker.id, type=TransactionType.DEPOSIT, date=date(2026, 10, 10), amount=Decimal("40"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        history = await PortfolioService(session).get_deposit_history(user_id=test_user.id, date_from=None, date_to=date(2026, 10, 31))
+
+        assert [p.date for p in history.points] == [date(2026, 10, 10)]
+        assert history.points[0].deposit.amount == Decimal("340"), f"300 (30% of 1000) + 40 (full EDITOR) = 340, got {history.points[0].deposit.amount}"
+
+    @pytest.mark.asyncio
+    async def test_user_with_no_broker_access_gets_an_empty_series(self, session, test_user):
+        history = await PortfolioService(session).get_deposit_history(user_id=test_user.id, broker_ids=[999999])
+
+        assert history.points == []
+
+
+class TestSharedScanCallersAreIndependent:
+    """The three callers pass different tx_types into one shared scan. A regression that
+    widened or leaked a type set would be invisible in any single-caller test, so this
+    checks the partition on ONE dataset containing every relevant type at once.
+    """
+
+    @pytest.mark.asyncio
+    async def test_one_dataset_partitions_cleanly_across_income_cost_and_deposit(self, session, test_user, broker_with_access):
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=date(2026, 11, 2), amount=Decimal("500"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2026, 11, 2), amount=Decimal("60"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.INTEREST, date=date(2026, 11, 2), amount=Decimal("7"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.FEE, date=date(2026, 11, 2), amount=Decimal("-3"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.TAX, date=date(2026, 11, 2), amount=Decimal("-9"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.WITHDRAWAL, date=date(2026, 11, 2), amount=Decimal("-50"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        kwargs = {"user_id": test_user.id, "broker_ids": [broker.id], "date_from": None, "date_to": date(2026, 11, 30)}
+        income = await service.get_income_history(**kwargs)
+        cost = await service.get_cost_history(**kwargs)
+        deposit = await service.get_deposit_history(**kwargs)
+
+        assert income.points[0].dividend.amount == Decimal("60")
+        assert income.points[0].interest.amount == Decimal("7"), "INTEREST must not be swallowed by the FEE/TAX caller"
+        assert cost.points[0].cost.amount == Decimal("-12"), "-3 + -9; no DIVIDEND/INTEREST/DEPOSIT leakage"
+        assert deposit.points[0].deposit.amount == Decimal("500"), "DEPOSIT alone; the WITHDRAWAL is in none of the three"
+
+
+class TestGetIncomeHistoryRefactorRegression:
+    """The refactor's one genuine behavioural surface, not already pinned by
+    TestGetIncomeHistory above.
+
+    The ORIGINAL built its date list from ``set(dividend_by_date) | set(interest_by_date)``
+    — two defaultdicts written by ``+=``, so a date whose bucket NETS to exactly zero
+    still had a key and still produced a point. The refactor collects dates from a single
+    ``sums_by_date`` mapping instead. That is equivalent only because the inner
+    accumulation is likewise unconditional; a future "skip zero sums" micro-optimisation
+    in the shared scan would silently start dropping these days, and every existing income
+    test would stay green because none of them nets a bucket to zero.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_date_whose_bucket_nets_to_zero_still_emits_a_point(self, session, test_user, broker_with_access):
+        """+50 and -50 DIVIDEND on the same date: the day HAPPENED (two real corrections
+        cancelling out) and must be reported as a zero, which is a different statement
+        from the date being absent (which means "no income activity at all")."""
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2026, 12, 3), amount=Decimal("50"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2026, 12, 3), amount=Decimal("-50"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.INTEREST, date=date(2026, 12, 4), amount=Decimal("8"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        history = await PortfolioService(session).get_income_history(user_id=test_user.id, broker_ids=[broker.id], date_from=None, date_to=date(2026, 12, 31))
+
+        assert [p.date for p in history.points] == [date(2026, 12, 3), date(2026, 12, 4)], "the net-zero date must still be a point"
+        by_date = {p.date: p for p in history.points}
+        assert by_date[date(2026, 12, 3)].dividend.amount == Decimal("0")
+        assert by_date[date(2026, 12, 3)].interest.amount == Decimal("0")
+        assert by_date[date(2026, 12, 4)].interest.amount == Decimal("8")
+
+    @pytest.mark.asyncio
+    async def test_points_stay_sorted_by_date(self, session, test_user, broker_with_access):
+        """The original sorted a set of dates; the refactor sorts ``sums_by_date.items()``
+        (tuples). Both are date-ordered because keys are unique — but the tuple form would
+        attempt to compare the dict values on a tie, so this pins that dates, inserted out
+        of order, still come back ascending."""
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2027, 1, 20), amount=Decimal("3"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.INTEREST, date=date(2027, 1, 2), amount=Decimal("1"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2027, 1, 11), amount=Decimal("2"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        history = await PortfolioService(session).get_income_history(user_id=test_user.id, broker_ids=[broker.id], date_from=None, date_to=date(2027, 1, 31))
+
+        dates = [p.date for p in history.points]
+        assert dates == sorted(dates) == [date(2027, 1, 2), date(2027, 1, 11), date(2027, 1, 20)]
 
 
 class TestPortfolioAllocationSource:
@@ -3112,6 +3771,12 @@ class TestPortfolioAllocationSource:
             "allocation_history",
             "data_quality",
             "positions_contribution",
+            "broker_pnl_history",
+            "pnl_candles",
+            "income_history",
+            "cost_history",
+            "deposit_history",
+            "acquisition_funding",
             "allocation_source",
         }
         assert set(report.metadata.model_dump()) == {

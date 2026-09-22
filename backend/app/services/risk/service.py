@@ -95,6 +95,7 @@ class _ScopeInputs:
     composition_error: Optional[str] = None
     broker_ids: tuple[int, ...] = ()
     composition_as_of: Optional[date] = None
+    slice_asset_ids: tuple[int, ...] = ()
 
 
 class RiskService:
@@ -255,16 +256,36 @@ class RiskService:
                     data_quality=self._data_quality(plan, plan_context),
                 )
                 continue
-            except (ValueError, ArithmeticError) as exc:
-                results[index] = self._unavailable(
-                    plan.request,
-                    RiskErrorCode.UNDEFINED_METRIC,
-                    str(exc),
-                    metadata=self._metadata(plan, plan_context),
-                    data_quality=self._data_quality(plan, plan_context),
-                )
-                continue
-            except Exception as exc:  # pragma: no cover - defensive isolation boundary
+            except Exception as exc:
+                # Every failure that a plugin did not DECLARE lands here, and it is
+                # reported as ours rather than as a property of the user's data.
+                #
+                # This branch used to be preceded by `except (ValueError,
+                # ArithmeticError)`, which answered the same class of event with
+                # `UNDEFINED_METRIC` -- "The metric is undefined for these data." --
+                # and, unlike this one, WITHOUT logging. Two consequences made that
+                # the wrong pairing, and neither is a matter of taste:
+                #
+                #  * a violated internal invariant was delivered to the user as a
+                #    verdict about their portfolio. Nobody reports a bug they have
+                #    been told is a limitation of their own data, so the defect was
+                #    both invisible to us (no log) and un-actionable for them;
+                #  * an over-reported fault gets investigated and then narrowed into
+                #    an explicit code; an under-reported one stays silent forever.
+                #    The two errors are not symmetric, so the safe default is the
+                #    one that says "we failed" rather than "your data cannot".
+                #
+                # A metric that is genuinely undefined for well-formed data is NOT
+                # expressed by raising: it is a per-value `RiskValueStatus.UNDEFINED`
+                # (see `correlation.py`), which keeps the rest of the result usable.
+                # So an exception arriving here never meant "undefined metric" in the
+                # first place. `UNDEFINED_METRIC` stays in the enum for a plugin that
+                # declares it through `RiskUnavailableError`, caught above.
+                #
+                # `str(exc)` is deliberately NOT propagated: internal English prose
+                # would reach the payload while the client renders only the code. The
+                # detail belongs in the log, where it is actionable; the code is what
+                # crosses the wire.
                 logger.exception(
                     "Risk analytic execution failed",
                     analytic_code=plan.request.analytic_code,
@@ -359,12 +380,32 @@ class RiskService:
             raise RuntimeError("Portfolio report omitted required summary")
 
         requested_asset_ids = tuple(sorted({holding.asset_id for holding in summary.holdings}))
+        warnings: list[RiskWarning] = []
+        slice_asset_ids: tuple[int, ...] = ()
+        if scope.asset_ids:
+            held_asset_ids = set(requested_asset_ids)
+            slice_asset_ids = tuple(asset_id for asset_id in scope.asset_ids if asset_id in held_asset_ids)
+            if not slice_asset_ids:
+                raise RiskScopeNotFoundError(f"No requested asset is held in the selected portfolio scope: {sorted(scope.asset_ids)}")
+            unheld_asset_ids = tuple(asset_id for asset_id in scope.asset_ids if asset_id not in held_asset_ids)
+            if unheld_asset_ids:
+                warnings.append(
+                    RiskWarning(
+                        code="slice_assets_not_held",
+                        message="Some requested assets are not held in the selected portfolio scope and were ignored.",
+                        details={"asset_ids": list(unheld_asset_ids)},
+                    )
+                )
+            requested_asset_ids = slice_asset_ids
+
         asset_values: dict[int, Decimal] = {asset_id: Decimal("0") for asset_id in requested_asset_ids}
         for holding in summary.holdings:
-            if holding.current_value is not None:
+            if holding.asset_id in asset_values and holding.current_value is not None:
                 asset_values[holding.asset_id] += holding.current_value
 
-        scope_value = summary.net_worth.amount
+        # A slice is renormalized to 100% of itself (D59): its denominator is the slice
+        # value, not net worth, so monetary outputs stay coherent with its weights.
+        scope_value = sum(asset_values.values(), Decimal("0")) if slice_asset_ids else summary.net_worth.amount
         weights: dict[int, float] = {}
         composition_error: Optional[str] = None
         if scope_value > 0:
@@ -372,7 +413,7 @@ class RiskService:
             if any(value < 0 for value in asset_values.values()):
                 composition_error = "Negative asset values are outside the current-composition contract"
         elif requested_asset_ids:
-            composition_error = "Current composition requires positive scope NAV"
+            composition_error = "Current composition requires positive slice value" if slice_asset_ids else "Current composition requires positive scope NAV"
 
         asset_weight = sum(weights.values())
         if asset_weight > 1 + 1e-9:
@@ -381,9 +422,10 @@ class RiskService:
         else:
             cash_weight = max(0.0, 1.0 - asset_weight)
 
-        warnings: list[RiskWarning] = []
+        # A slice carries no cash residual, so the in-transit comparison below — which
+        # only describes the zero-return residual of a whole scope — does not apply.
         explicit_cash_weight = float(summary.cash_total.amount / scope_value) if scope_value > 0 else 0.0
-        if summary.in_transit_market_value is not None and summary.in_transit_market_value.amount != 0 and not abs(cash_weight - explicit_cash_weight) < 1e-9:
+        if not slice_asset_ids and summary.in_transit_market_value is not None and summary.in_transit_market_value.amount != 0 and not abs(cash_weight - explicit_cash_weight) < 1e-9:
             warnings.append(
                 RiskWarning(
                     code="zero_risk_residual_includes_in_transit",
@@ -403,6 +445,7 @@ class RiskService:
             composition_error=composition_error,
             broker_ids=effective_broker_ids,
             composition_as_of=date_end,
+            slice_asset_ids=slice_asset_ids,
         )
 
     async def _accessible_broker_ids(self, user_id: int) -> tuple[int, ...]:
@@ -595,7 +638,11 @@ class RiskService:
         calendar_days = prepared.calendar_days
         coverage = prepared.calendar_coverage
 
-        if request.scope.kind == RiskScopeKind.PORTFOLIO and request.mode == RiskMode.HISTORICAL:
+        # Q-C1: a portfolio TWRR series cannot be sliced — the portfolio report filters by
+        # broker only. A sliced scope therefore takes the weighted-composition branch even
+        # in historical mode, which answers a different question and says so through
+        # return_basis: not "what the portfolio did" but "what today's slice would have done".
+        if request.scope.kind == RiskScopeKind.PORTFOLIO and request.mode == RiskMode.HISTORICAL and not scope_inputs.slice_asset_ids:
             (
                 primary_baseline_date,
                 primary_return_dates,
@@ -622,6 +669,11 @@ class RiskService:
                 )
                 primary_return_dates = tuple(prepared.joint_return_dates)
                 primary_baseline_date = prepared.baseline_date
+                # The series is today's weights replayed over past asset returns, which is
+                # neither a plain price series nor what the portfolio actually did. It is
+                # declared as its own basis so the UI can say "backtest" as a fact read from
+                # the result instead of inferring it from the request.
+                primary_return_basis = RiskReturnBasis.CURRENT_COMPOSITION_BACKTEST
         elif isinstance(request.scope, AssetRiskScope):
             item = prepared_by_asset.get(request.scope.asset_id)
             if item is not None:
@@ -636,6 +688,7 @@ class RiskService:
             scope_reference=_scope_reference(
                 request,
                 broker_ids=scope_inputs.broker_ids,
+                slice_asset_ids=scope_inputs.slice_asset_ids,
             ),
             requested_range=request.date_range,
             target_currency=request.target_currency,
@@ -662,6 +715,7 @@ class RiskService:
             scope_value=scope_inputs.scope_value,
             broker_ids=scope_inputs.broker_ids,
             composition_as_of=scope_inputs.composition_as_of,
+            sliced_asset_ids=scope_inputs.slice_asset_ids,
         )
 
     @staticmethod
@@ -674,6 +728,19 @@ class RiskService:
         if plan.request.analytic_code in {
             "risk_contribution",
             "portfolio_optimization",
+            # The weightless multi-asset family. A scope with no weights has no
+            # aggregate series, so `context.n_observations` — which counts the
+            # scope's own primary returns — is zero for it. Left on that branch
+            # these analytics are refused for insufficient history before their
+            # compute() is ever called, whatever their declared minimum: the
+            # gate would be measuring the absence of a series they never asked
+            # for. What they consume is the prepared set, so that is what is
+            # counted, exactly as it already is for the two analytics above.
+            "asset_set_kpi",
+            "asset_set_var",
+            "asset_set_drawdown",
+            "asset_set_risk_return",
+            "asset_set_comparison",
         }:
             return context.prepared_series.n_observations if context.prepared_series is not None else 0
         if plan.request.analytic_code == "stress":
@@ -806,6 +873,7 @@ class RiskService:
             scope=context.scope_kind,
             scope_reference=context.scope_reference,
             broker_ids=(list(context.broker_ids) if context.scope_kind == RiskScopeKind.PORTFOLIO else None),
+            sliced_asset_ids=(list(context.sliced_asset_ids) if context.scope_kind == RiskScopeKind.PORTFOLIO and context.sliced_asset_ids else None),
             composition_as_of=(context.composition_as_of if context.scope_kind == RiskScopeKind.PORTFOLIO else None),
             method=computation.method if computation is not None else None,
             params=plan.params.model_dump(mode="json", exclude_none=True),
@@ -821,6 +889,7 @@ class RiskService:
             path_count=computation.path_count if computation is not None else None,
             random_seed=(computation.random_seed if computation is not None else None),
             sobol_start_index=(computation.sobol_start_index if computation is not None else None),
+            bootstrap_seed=(computation.bootstrap_seed if computation is not None else None),
             historical_replay_audit=(computation.historical_replay_audit if computation is not None else None),
         )
 
@@ -884,6 +953,7 @@ def _scope_reference(
     request: RiskQueryRequest,
     *,
     broker_ids: tuple[int, ...] = (),
+    slice_asset_ids: tuple[int, ...] = (),
 ) -> str:
     scope = request.scope
     if isinstance(scope, AssetRiskScope):
@@ -891,7 +961,10 @@ def _scope_reference(
     if isinstance(scope, AssetSetRiskScope):
         return "asset_set:" + ",".join(str(asset_id) for asset_id in scope.asset_ids)
     suffix = ",".join(str(broker_id) for broker_id in broker_ids) or "none"
-    return f"portfolio:{suffix}"
+    reference = f"portfolio:{suffix}"
+    if slice_asset_ids:
+        reference += "/assets:" + ",".join(str(asset_id) for asset_id in sorted(slice_asset_ids))
+    return reference
 
 
 def _context_analyzed_range(

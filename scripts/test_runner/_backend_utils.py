@@ -151,6 +151,24 @@ def utils_js_cache_fail_loud(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "JS cache fail-loud tests", verbose=verbose)
 
 
+def utils_gate_docs_links(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the cross-boundary docs link gate (const resolution, plugin discovery, three verdicts)."""
+    print_section("Utils: Docs Link Gate")
+    print_info("Testing: scripts/docs_links.py")
+    print_info("Tests: const resolution vs deletion, plugin/provider glob, unverifiable bucket")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_docs_links_gate.py", test_names)
+    return run_command(cmd, "Docs link discovery tests", verbose=verbose)
+
+
+def utils_gate_i18n_usage(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the i18n three-verdict classifier (used / not verified / dead)."""
+    print_section("Utils: i18n Usage Gate")
+    print_info("Testing: scripts/i18n_usage.py")
+    print_info("Tests: typed-union expansion, producer vocabulary, ternary arguments, bare-root suppression")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_i18n_usage_gate.py", test_names)
+    return run_command(cmd, "i18n three-verdict classifier tests", verbose=verbose)
+
+
 def utils_tools_wire(verbose: bool = False, test_names: list = None) -> bool:
     """Test bounded Tool JSON encoding and sanitized validation errors."""
     print_section("Utils: Tool Wire")
@@ -246,8 +264,24 @@ Tests for utility modules and helper functions:
         "js-cache-fail-loud",
         utils_js_cache_fail_loud,
         name="JS Cache Fail-Loud (I1)",
-        desc="update_js_cache: undownloadable+uncached resource or partial font subsets → hard failure → exit 1; cached copy → exit 0",
+        desc="update_js_cache: undownloadable+uncached resource or partial font subsets → hard failure → exit 1; cached copy → exit 0; consumer-scoped narrowing (a docs-only asset does not fail a frontend build, an unknown attribution still does)",
         # tmp_path + monkeypatched network only: no DB, no server, no repo writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "gate-docs-links",
+        utils_gate_docs_links,
+        name="Docs Link Gate",
+        desc="Cross-boundary link discovery: a resolved const confirms a link but an unresolved interpolation may never condemn one, plugin/provider folders are found by glob rather than by a hand-written list, and what cannot be decided is reported as unverifiable instead of dropped",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "gate-i18n-usage",
+        utils_gate_i18n_usage,
+        name="i18n Usage Gate",
+        desc="Three verdicts where the audit had two: typed unions are expanded from the code that declares them, a bare namespace root no longer absolves everything beneath it, ternary arguments are seen, and 'not verified' stays apart from 'dead' so neither absolution nor condemnation is a default",
         isolation="pure",
     )
     add_test(

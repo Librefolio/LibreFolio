@@ -7,7 +7,7 @@ description: Atomic Tool contracts, multi-service packages, transactional discov
 
 Tools package an **atomic calculation** behind a typed, versioned contract. The caller supplies a complete scenario; the backend computes a result without obtaining portfolio data or authority on the caller's behalf.
 
-This capability is experimental, but its boundaries are integrated in current source: transport models, multi-service discovery, schema export and generated codecs, authenticated API routes, a per-process executor, worker/process-tree ownership, catalogue cards, per-service frontend routes, and compiled custom renderers. The bundled `PacAllocatorTool` currently exposes the `pac_allocator` and `portfolio_rebalancer` services. Source integration still does **not** replace runtime evidence for every cancellation race or kernel-level descendant-cleanup scenario.
+This capability is experimental, but its boundaries are integrated in current source: transport models, multi-service discovery, schema export and generated codecs, authenticated API routes, a per-process executor, worker/process-tree ownership, catalogue cards, per-service frontend routes, and compiled custom renderers. The bundled `PacAllocatorTool` currently exposes a single service, `pac_allocator`. Source integration still does **not** replace runtime evidence for every cancellation race or kernel-level descendant-cleanup scenario.
 
 ## 🎯 Scope and authority
 
@@ -38,7 +38,7 @@ Paths below are relative to the repository root.
 | `backend/app/services/tools/executor.py` | Per-process admission, item tickets, lane scheduling, absolute deadlines, handshake, cancellation, and cleanup ownership. |
 | `backend/app/services/tools/worker.py` | Child handshake, version-pin checks, validation, computation, and result frames. |
 | `backend/app/services/tools/process_tree.py` | Owned process identities, descendant tracking, and termination checks. |
-| `backend/app/services/tool_plugins/pac_allocator.py` | Current packaged plugin with two complete public services and code-based compute dispatch. |
+| `backend/app/services/tool_plugins/pac_allocator.py` | Current packaged plugin with one complete public service and code-based compute dispatch. |
 | `backend/app/api/v1/tools.py` | Bounded transport handlers, authentication dependencies, and disconnect handling. |
 | `backend/app/api/v1/router.py` | Inclusion of the Tool router in the API v1 router. |
 | `backend/app/api/v1/auth.py` | `get_current_user`, the authentication dependency used by all Tool routes. |
@@ -79,7 +79,7 @@ The packaged plugin and its public services are distinct contract levels. `ToolP
 
 One package may therefore expose multiple complete service definitions and tool codes. The registry expands them independently; the catalogue publishes one descriptor per service; the frontend renders one catalogue card and `/tools/<tool_code>` route per descriptor; and compute resolves the submitted `tool_code` to that service's adapters and policy. These identities share the generic `/api/v1/tools/*` transport routes, not a service-specific backend endpoint.
 
-The current `PacAllocatorTool` demonstrates the model: one packaged class declares `pac_allocator` and `portfolio_rebalancer`, each with its own name, description, category/icon, policies, input/output models, UI descriptor, and documentation descriptor. Its synchronous dispatcher accepts the service code so it cannot confuse the two model pairs.
+The current `PacAllocatorTool` declares one service, `pac_allocator`, with its own name, description, category/icon, policies, input/output models, UI descriptor, and documentation descriptor. Its synchronous dispatcher resolves on the service code **and** the declared operation rather than on the shape of the submitted parameters, so a second service added later cannot make it confuse two model pairs.
 
 A `component_key` is an identifier for a source-owned compiled renderer, not a module URL. The descriptor alone does not prove that the current frontend bundle contains a compatible registration.
 
@@ -284,7 +284,7 @@ Frontend compatibility first resolves the exact service code and contract versio
 
 `registry.ts` accepts only source-owned literal component imports. A registration repeats the service code, contract version, component key, and UI SemVer and must agree with the generated contract before it can bind a catalogue descriptor. Duplicate code/version registrations, cross-tool component-key collisions, missing registrations, and mismatches stay unavailable. A server descriptor never becomes an arbitrary module URL, and incompatibility never falls back to a generic generated financial form.
 
-The current compiled registry binds separate components for `pac_allocator` and `portfolio_rebalancer`, matching the two services exposed by the same backend package. Each custom component owns domain-specific input and result presentation while the backend owns the calculation. A future descriptor and schema still do not make a new service usable until its generated contract and compiled renderer registration are present and compatible.
+The current compiled registry binds no components at all: the prototype interfaces were removed, so `pac_allocator` resolves as unavailable with `renderer_missing` while its backend service stays listed in the catalogue. When a custom component exists, it owns domain-specific input and result presentation while the backend owns the calculation. A descriptor and schema still do not make a service usable until its generated contract and compiled renderer registration are present and compatible.
 
 Tool catalogue cards and the opened Tool host expose only the compatibility pair
 `Backend/API <contract_version> · UI <ui.version>`. Keep `implementation_version` in
