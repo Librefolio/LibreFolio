@@ -500,7 +500,7 @@ commento a `RiskAnalysisPanel:519-522` sul doppio invio già evitato una volta).
 | b | P4-11: **due** punti, non uno (il nono canale è l'asse Y) | ✅ *«andrà revisionato e toccherà anche gli assi Y dei grafici che mostrano il patrimonio (non percentuali o indicatori)»* → e la review l'ha poi **visto a schermo** ([08](08_review_visiva_20260922.md) R5/R6) |
 | c | **Un prezzo di mercato è patrimonio?** 3 dei 9 render scoperti sono quotazioni | ✅ **NO.** *«Il patrimonio entra in gioco quando da quel numero si riesce a risalire a quanto possiede l'utente, e generalmente quindi ha a che fare con le transazioni e le quantità possedute»* |
 | d | I 21 siti FX — stessa domanda, superficie diversa | ✅ **Niente da nascondere.** Verificato nel codice: `fx/[pair]/+page.svelte:795` chiede sempre `from_amount: {amount: '1'}` — la pagina espone **tassi**, non importi dell'utente |
-| e | La descrizione i18n del tool PAC: coordinator o workstream? | ⏳ **aperta.** La review ha confermato che la card mostra ancora la descrizione del prototipo ([08](08_review_visiva_20260922.md) §3.1) |
+| e | La descrizione i18n del tool PAC: coordinator o workstream? | ✅ **D** *(chiusa dal coordinator il 23/09)*: owner del tool, aggiorna il testo della chiave nelle quattro lingue via `dev.py i18n`, senza cancellare chiavi. La review aveva confermato a schermo la descrizione del prototipo ([08](08_review_visiva_20260922.md) §3.1) |
 | f | Voce di backlog sulle sonde che sbagliano verso il verde (§3.2, §3.6)? | ✅ *«Non importa, quando faremo i test di non regressione sono certo che i problemi salteranno fuori»* → **niente controlli positivi dedicati** |
 
 **Corollari applicati** (dal criterio di `c`):
@@ -570,6 +570,33 @@ J           6158
 
 Alle **12:47** verificate libere: `6040 6041 6042 · 6150–6159 · 5173`. Nessun processo
 `dev.py`/`uvicorn` residuo.
+
+### 8.1 Dal 23/09 — gli agenti lavorano su una copia di prod
+
+Decisione del developer: gli agenti **non** lavorano più su un DB di test, ma su una copia
+del DB di produzione, così le review avvengono su dati che lui riconosce. Il runner però
+**distrugge per disegno** la data-dir su cui gira (`_backend_api.py:592` e
+`_frontend_common.py:163` → `db_populate(force=True)`; `_backend_services.py:819` →
+`db_create()`), quindi ogni workstream ha due coppie:
+
+| | suite (runner, sacrificale) | copia di prod (lavoro + review) |
+|---|---|---|
+| regola | la porta e la cartella storiche della lane | porta + 10, cartella + `-prodcopy` |
+| esempio D | `6151` + `/tmp/librefolio-r2-d` | `6161` + `/tmp/librefolio-r2-d-prodcopy` |
+
+La coppia sacrificale tiene i nomi storici **apposta**: il comando che un agente ricorda
+colpisce l'area del runner, non i dati del developer. Tre reperti misurati nel
+predisporla:
+
+- `backend/app/config.py:237` rifiuta ogni data-dir di test che contenga
+  `.librefolio-production-data`: un `cp -R prod/.` porta con sé il marcatore e il server
+  di test non parte. La procedura copia per sottocartella e verifica l'assenza.
+- Il `sqlite3` di macOS lascia un `app.db-wal` **vuoto** anche a chi ha solo letto: il
+  controllo «nessun frame pendente» è `-s`, non «esiste».
+- `/tmp` si svuota al reboot (07:15 del 23/09): nessuna lane è persistente.
+
+Procedura, tabella completa e messaggi inviati: artefatto del coordinator
+`10_messaggi_agenti_20260922.md` (§0, §9).
 
 ---
 

@@ -643,6 +643,12 @@ una commessa **della famiglia risk, ma chiusa**. Risk-attuale non è il suo ered
 già davanti la review puntuale componente per componente, concordata col developer nella sua
 chat, e caricarla di backlog UI la ritarda.
 
+> ⚠️ **Rettifica del 23/09.** «Commessa chiusa della famiglia risk» era incompleto: il
+> kickoff di B dice *«Il coordinatore della campagna, che gira sul branch
+> `e-alfy-risk-management-replan` nel worktree `e-alfy-ideal-eureka`»* — cioè **Risk**. È
+> Risk che ha deciso il passo 10 di B (vedi R15 sotto). La scelta di K resta valida per le
+> ragioni dette, ma K **riapre una decisione di Risk**, e Risk ne è stato informato.
+
 ### 9.2 Le tre famiglie, per file
 
 | famiglia | voci | file che si tocca | owner |
@@ -667,12 +673,28 @@ owner sullo stesso file è la collisione che il protocollo vieta per prima.
 > `FixFlaggedStep`). Il select piatto osservato è quello dei **tipi asset** — ETF e
 > crowdfunding sono asset, non transazioni. La voce si restringe a quel select.
 
-> 🔴 **R15 non è una dimenticanza: è una decisione scritta e motivata.** In
-> `frontend/src/lib/utils/assetTypes.ts` il docstring di `buildAssetTypeOptions()` argomenta
-> la scelta opposta — header di sezione non selezionabile invece dell'albero, perché
-> *«costs no new machinery … leaves the generic ETF a perfectly ordinary, selectable option
-> rather than a group that has to pretend to be a leaf»*. Chi riapre la voce deve **rispondere
-> a quell'argomento**, non ignorarlo: è il disegno di B, non una svista.
+> 🔴 **R15 riapre una decisione, e il registro non la conosce.** *(rettificato il 23/09 — il
+> 22/09 questa voce diceva «è il disegno di B, non una svista», ed era incompleto.)* Tre
+> documenti, tre versioni:
+>
+> - `Phase_0/02_riskfolioIntegration/04-decisioni-e-questioni-aperte.md`, **D62** (17/09):
+>   l'albero a due livelli è `SignalTreeSelect`, da generalizzare in `ui/select/`. Nel
+>   registro è **ancora vigente**.
+> - `Phase_0/02_riskfolioIntegration/implementation/progress/B-esecuzione.md`, passo 10: il
+>   coordinatore di B (**Risk**) ha respinto la promozione dopo F27 — le due forme divergono
+>   su tre assi — e B ha scelto le sezioni piatte su `SimpleSelect`. Il docstring di
+>   `buildAssetTypeOptions()` è quella scelta. La correzione di D62 **non è mai stata
+>   scritta nel registro**.
+> - La review del 22/09 chiede l'albero «come il selettore degli indici nel pannello
+>   segnali»: cioè D62 com'era.
+>
+> Rivalutazione: **K**, con le opzioni al developer prima del codice. Risk annota D62.
+
+> 🔴 **R16: la pastiglia di D52 non è mai stata consegnata.** *(misurato il 23/09)* D52
+> prescrive icona grande del contenitore + icona piccola sovrapposta del tipo base, con una
+> costante accanto a `PNG_MAP`: in `assetTypes.ts` non c'è, e nessun componente la rende.
+> `B-esecuzione.md` la dà per presente perché usa «pastiglia» per due cose diverse: la
+> classe colore del badge (`assetTypeBadgeClass`, consegnata) e l'icona sovrapposta (mai).
 
 > ✅ **R17 non richiede una migrazione.** `assets.asset_type` è un `VARCHAR` **senza CHECK
 > constraint**: l'enum vive in Python e allargarlo è un cambio di codice. Non tocca il divieto
