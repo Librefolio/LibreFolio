@@ -393,7 +393,7 @@ def test_transactions_has_asset_event_fk_restrict():
 
 
 # ============================================================================
-# ONBOARDING MIGRATION TESTS (Workstream J foundation, 003_user_onboarding_progress)
+# ONBOARDING MIGRATION TESTS (Workstream J foundation, 004_release_1_2_0_schema)
 # ============================================================================
 #
 # These run the REAL Alembic upgrade/downgrade chain against a private,
@@ -408,24 +408,29 @@ def test_transactions_has_asset_event_fk_restrict():
 _ALEMBIC_INI = PROJECT_ROOT / "backend" / "alembic.ini"
 _ALEMBIC_SCRIPT_LOCATION = PROJECT_ROOT / "backend" / "alembic"
 _PRE_ONBOARDING_REVISION = "5b1333fa6b07"
-_ONBOARDING_REVISION = "003_user_onboarding_progress"
+_ONBOARDING_REVISION = "004_release_1_2_0_schema"
+# The backfill grandfathers welcome as completed and every other flow as skipped:
+# skipped suppresses the trigger exactly like completed while keeping "was never
+# shown this" distinct from "went through it", so a flow can still be offered
+# retroactively. Pending here would re-trigger every guide for existing users.
 _ONBOARDING_MIGRATION_FLOW_STATUSES = {
     "welcome": "completed",
-    "intro_tour": "pending",
-    "transactions_page_guide": "pending",
-    "transaction_create_guide": "pending",
-    "transaction_bulk_guide": "pending",
-    "import_guide": "pending",
-    "broker_page_guide": "pending",
-    "broker_guide": "pending",
-    "broker_detail_guide": "pending",
-    "fx_page_guide": "pending",
-    "fx_guide": "pending",
-    "fx_detail_guide": "pending",
-    "asset_page_guide": "pending",
-    "asset_guide": "pending",
-    "asset_detail_guide": "pending",
+    "intro_tour": "skipped",
+    "transactions_page_guide": "skipped",
+    "transaction_create_guide": "skipped",
+    "transaction_bulk_guide": "skipped",
+    "import_guide": "skipped",
+    "broker_page_guide": "skipped",
+    "broker_guide": "skipped",
+    "broker_detail_guide": "skipped",
+    "fx_page_guide": "skipped",
+    "fx_guide": "skipped",
+    "fx_detail_guide": "skipped",
+    "asset_page_guide": "skipped",
+    "asset_guide": "skipped",
+    "asset_detail_guide": "skipped",
 }
+_ONBOARDING_MIGRATION_STEP_STATUS = "skipped"
 _REMOVED_ONBOARDING_DRAFT_FLOWS = {
     "transaction_bulk_validation_guide",
     "transaction_bulk_selection_guide",
@@ -518,31 +523,36 @@ def _fetch_onboarding_migration_step_rows(db_path, user_id: int):
 
 @pytest.fixture()
 def onboarding_migration_db(tmp_path):
-    """A fresh private SQLite file migrated up to (but not including) 003."""
+    """A fresh private SQLite file migrated up to (but not including) 004."""
     db_path = tmp_path / "onboarding_migration.db"
     cfg = _onboarding_migration_config(db_path)
     command.upgrade(cfg, _PRE_ONBOARDING_REVISION)
     return db_path, cfg
 
 
-def test_onboarding_migration_003_is_the_only_round5_revision(tmp_path):
-    """Round 5 extends unreleased migration 003 in place and must not add 004."""
+def test_onboarding_migration_chain_has_exactly_one_head_at_004(tmp_path):
+    """The migration chain is linear and ends at a single head, 004_release_1_2_0_schema.
+
+    The single-head assertion is the point of this test. The chain once forked
+    into two sibling 003 revisions and needed an empty merge node to become
+    upgradable again; a fork is cheap to see here and expensive to see on an
+    install, where Alembic simply refuses to upgrade.
+    """
     from alembic.script import ScriptDirectory  # noqa: PLC0415 — test-only migration inspection
 
     cfg = _onboarding_migration_config(tmp_path / "onboarding_revision_contract.db")
     scripts = ScriptDirectory.from_config(cfg)
+    heads = scripts.get_heads()
     revision = scripts.get_revision(_ONBOARDING_REVISION)
-    version_dir = _ALEMBIC_SCRIPT_LOCATION / "versions"
-    unexpected_004_files = sorted(path.name for path in version_dir.glob("004*.py"))
 
-    assert scripts.get_current_head() == _ONBOARDING_REVISION
+    assert len(heads) == 1, f"Migration chain must not fork; found {len(heads)} heads: {heads}"
+    assert heads[0] == _ONBOARDING_REVISION, f"Expected head {_ONBOARDING_REVISION}, got {heads[0]}"
     assert revision is not None
     assert revision.down_revision == _PRE_ONBOARDING_REVISION
-    assert not unexpected_004_files, f"Round 5 must amend migration 003; found forbidden migration files: {unexpected_004_files}"
 
 
 def test_onboarding_migration_backfills_existing_users_by_flow_and_step_policy(onboarding_migration_db):
-    """Existing users get 15 flows and all Import/Bulk steps at v1."""
+    """Existing users get 15 flows (welcome completed, the rest skipped) and all Import/Bulk steps at v1."""
     db_path, cfg = onboarding_migration_db
     user_a = _insert_migration_test_user(db_path, "mig_backfill_user_a")
     user_b = _insert_migration_test_user(db_path, "mig_backfill_user_b")
@@ -560,11 +570,12 @@ def test_onboarding_migration_backfills_existing_users_by_flow_and_step_policy(o
             expected_status = _ONBOARDING_MIGRATION_FLOW_STATUSES[flow]
             assert status == expected_status, f"{flow}: expected {expected_status}, got {status}"
             assert version == 1
-            if flow == "welcome":
+            if expected_status == "completed":
                 assert completed_at is not None
+                assert skipped_at is None
             else:
                 assert completed_at is None
-            assert skipped_at is None
+                assert skipped_at is not None, f"{flow}: skipped rows must carry skipped_at"
 
         step_rows = _fetch_onboarding_migration_step_rows(db_path, user_id)
         actual_steps = {(flow, step_id) for flow, step_id, _status, _version, _completed_at, _skipped_at in step_rows}
@@ -574,16 +585,16 @@ def test_onboarding_migration_backfills_existing_users_by_flow_and_step_policy(o
         assert actual_steps == expected_steps
         for flow, step_id, status, version, completed_at, skipped_at in step_rows:
             assert step_id in _ONBOARDING_MIGRATION_STEPS[flow]
-            assert status == "pending"
+            assert status == _ONBOARDING_MIGRATION_STEP_STATUS
             assert version == 1
             assert completed_at is None
-            assert skipped_at is None
+            assert skipped_at is not None, f"{flow}/{step_id}: skipped rows must carry skipped_at"
 
     print("✅ Onboarding migration backfilled 15 flows and 12 step rows at v1")
 
 
 def test_onboarding_migration_step_table_schema_contract(onboarding_migration_db):
-    """Migration 003 owns the complete step table contract, including cascade and uniqueness."""
+    """Migration 004 owns the complete step table contract, including cascade and uniqueness."""
     db_path, cfg = onboarding_migration_db
     command.upgrade(cfg, _ONBOARDING_REVISION)
 
@@ -621,7 +632,7 @@ def test_onboarding_migration_step_table_schema_contract(onboarding_migration_db
 
 
 def test_onboarding_migration_backfill_is_idempotent_at_insert_level(onboarding_migration_db):
-    """Replaying the 003 backfill values through INSERT OR IGNORE must not
+    """Replaying the 004 backfill values through INSERT OR IGNORE must not
     duplicate or overwrite any existing (user_id, flow) row."""
     db_path, cfg = onboarding_migration_db
     user_id = _insert_migration_test_user(db_path, "mig_idempotent_user")
@@ -637,23 +648,25 @@ def test_onboarding_migration_backfill_is_idempotent_at_insert_level(onboarding_
     conn = sqlite3.connect(db_path)
     try:
         # Replay the same source-of-truth rows through INSERT OR IGNORE. Existing
-        # terminal/pending rows must win over every attempted duplicate.
+        # terminal rows must win over every attempted duplicate.
         conn.executemany(
             """
             INSERT OR IGNORE INTO user_onboarding_progress
-                (user_id, flow, status, version, created_at, updated_at, completed_at)
+                (user_id, flow, status, version, created_at, updated_at, completed_at, skipped_at)
             VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
-                    CASE WHEN ? = 'completed' THEN CURRENT_TIMESTAMP ELSE NULL END)
+                    CASE WHEN ? = 'completed' THEN CURRENT_TIMESTAMP ELSE NULL END,
+                    CASE WHEN ? = 'skipped' THEN CURRENT_TIMESTAMP ELSE NULL END)
             """,
-            [(user_id, flow, status, status) for flow, status in _ONBOARDING_MIGRATION_FLOW_STATUSES.items()],
+            [(user_id, flow, status, status, status) for flow, status in _ONBOARDING_MIGRATION_FLOW_STATUSES.items()],
         )
         conn.executemany(
             """
             INSERT OR IGNORE INTO user_onboarding_step_progress
-                (user_id, flow, step_id, status, version, created_at, updated_at)
-            VALUES (?, ?, ?, 'pending', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                (user_id, flow, step_id, status, version, created_at, updated_at, skipped_at)
+            VALUES (?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
+                    CASE WHEN ? = 'skipped' THEN CURRENT_TIMESTAMP ELSE NULL END)
             """,
-            [(user_id, flow, step_id) for flow, step_ids in _ONBOARDING_MIGRATION_STEPS.items() for step_id in step_ids],
+            [(user_id, flow, step_id, _ONBOARDING_MIGRATION_STEP_STATUS, _ONBOARDING_MIGRATION_STEP_STATUS) for flow, step_ids in _ONBOARDING_MIGRATION_STEPS.items() for step_id in step_ids],
         )
         conn.commit()
     finally:

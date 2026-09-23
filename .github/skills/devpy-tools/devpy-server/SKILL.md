@@ -71,6 +71,12 @@ Playwright `webServer` command line.
 - Edit `backend/alembic/versions/001_initial.py` only for brand-new never-shipped tables
 - `./dev.py db create-clean` only for fresh installs / test DBs, not to evolve an existing schema
 - Every migration needs working `upgrade()` + `downgrade()`, tested on a populated DB
+- **Name it `00N_<target release or scope>`** — `db migrate` emits a random hex id, so rename
+  file *and* `revision` before committing: `004_release_1_2_0_schema` (target version) or
+  `003_scheduler_timezone` (self-contained scope). Safe only while unreleased: once an id is
+  inside a published tag it lives in users' `alembic_version` and must never change.
+- **Never `alembic merge`.** Two heads make startup skip migrations entirely and boot anyway
+  (see `.github/instructions/backend-db.instructions.md`). Re-parent instead.
 - Test DB and prod DB are completely isolated (`backend/data/test/` by default,
   or a lane-specific `--data-dir`, vs `backend/data/prod/`)
 
