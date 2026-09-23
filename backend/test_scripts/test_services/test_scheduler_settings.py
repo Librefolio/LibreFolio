@@ -6,7 +6,6 @@ Tests CSV parsing, validation, fallback behavior, and timezone storage semantics
 Test IDs: SC-001..SC-011
 """
 
-import importlib.util
 import sys
 from datetime import time
 
@@ -183,14 +182,35 @@ class TestLoadSchedulerSettings:
 # Alembic data migration helper
 # ============================================================================
 
+_SCHEDULER_TIMEZONE_REVISION = "5b1333fa6b07"
+
 
 def _load_scheduler_timezone_migration():
-    migration_path = PROJECT_ROOT / "backend" / "alembic" / "versions" / "5b1333fa6b07_scheduler_times_use_configured_timezone.py"
-    spec = importlib.util.spec_from_file_location("scheduler_timezone_migration", migration_path)
-    assert spec is not None
-    assert spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    """Load the scheduler-timezone migration module by revision id, not by filename.
+
+    The revision id is the stable contract — it was shipped in v1.1.0 and is
+    printed in every existing install's `alembic_version` — while the file name
+    is not: this migration was already renamed once (from
+    `5b1333fa6b07_scheduler_times_use_configured_timezone.py` to
+    `003_scheduler_timezone.py`) and a path-based lookup broke silently.
+    """
+    import argparse  # noqa: PLC0415 — test-only migration lookup
+
+    from alembic.config import Config  # noqa: PLC0415 — test-only migration lookup
+    from alembic.script import ScriptDirectory  # noqa: PLC0415 — test-only migration lookup
+
+    alembic_root = PROJECT_ROOT / "backend" / "alembic"
+    cfg = Config(str(PROJECT_ROOT / "backend" / "alembic.ini"))
+    cfg.set_main_option("script_location", str(alembic_root))
+    # env.py is never executed by ScriptDirectory, but Config may still expand
+    # `-x` options; keep it empty so no ambient DATABASE_URL is consulted.
+    cfg.cmd_opts = argparse.Namespace(x=[])
+
+    revision = ScriptDirectory.from_config(cfg).get_revision(_SCHEDULER_TIMEZONE_REVISION)
+    assert revision is not None, f"Revision {_SCHEDULER_TIMEZONE_REVISION} missing from the migration chain"
+
+    module = revision.module
+    assert hasattr(module, "_convert_time_csv"), f"Revision {_SCHEDULER_TIMEZONE_REVISION} no longer exposes _convert_time_csv"
     return module
 
 
