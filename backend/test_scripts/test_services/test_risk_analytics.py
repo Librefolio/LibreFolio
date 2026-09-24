@@ -1063,8 +1063,9 @@ def replay_context(
     manual: tuple[int, ...] = (),
     auto: dict[int, RiskHistoricalReplayExclusionReason] | None = None,
     unusable: dict[int, DataQualityExclusionReason] | None = None,
+    suggested: tuple[DateRangeModel, tuple[int, ...]] | None = None,
 ) -> RiskExecutionContext:
-    """A replay context shaped the way the service builds it."""
+    """A replay context shaped the way the service builds it, with an optional verified proposal."""
     auto = dict(auto or {})
     context = make_context(
         returns_by_asset,
@@ -1082,6 +1083,8 @@ def replay_context(
             excluded_asset_ids=tuple(sorted(manual)),
             data_quality=DataQualityReport(unusable_assets=[DataQualityExcludedAsset(asset_id=asset_id, reason=reason) for asset_id, reason in sorted((unusable or {}).items())]),
             auto_excluded_assets=auto,
+            suggested_range=suggested[0] if suggested else None,
+            suggested_range_recovers=suggested[1] if suggested else (),
         ),
     )
 
@@ -1190,13 +1193,19 @@ def test_historical_replay_audits_manual_and_automatic_exclusions_with_one_warni
     # Only asset 1 moves: 0.3 × 10%, everything excluded sits at zero next to the cash.
     assert computation.output.portfolio_return == pytest.approx(0.03)
 
-    # One warning per reason, never one per asset, in the enum's order, each with its own sentence;
-    # only the two stale reasons say how many days, and it is the project's threshold.
+    # Past half of the value excluded, the result first says it describes a minority of the
+    # portfolio: 40% covered here, cash included, since cash is replayed at its zero return.
+    mostly, *per_reason = computation.warnings
+    assert (mostly.code, mostly.message_i18n_key, mostly.message_params) == ("historical_replay_mostly_excluded", "risk.warnings.historical_replay_mostly_excluded", {"covered": 0.4})
+    assert mostly.details == {"excluded_weight_total": pytest.approx(0.6), "threshold": 0.5}
+
+    # Then one warning per reason, never one per asset, in the enum's order, each with its own
+    # sentence; only the two stale reasons say how many days, and it is the project's threshold.
     zero_cash = {"treatment": "zero_return_residual"}
     stale = {**zero_cash, "days": STALE_PRICE_THRESHOLD_DAYS}
-    assert {warning.code for warning in computation.warnings} == {"historical_replay_assets_excluded"}
-    assert [warning.details["reason"] for warning in computation.warnings] == [reason.value for reason in Reason]
-    assert [(warning.message_i18n_key, warning.details["asset_ids"], warning.message_params) for warning in computation.warnings] == [
+    assert {warning.code for warning in per_reason} == {"historical_replay_assets_excluded"}
+    assert [warning.details["reason"] for warning in per_reason] == [reason.value for reason in Reason]
+    assert [(warning.message_i18n_key, warning.details["asset_ids"], warning.message_params) for warning in per_reason] == [
         ("risk.warnings.historical_replay_excluded_manual", [2], zero_cash),
         ("risk.warnings.historical_replay_excluded_no_prices", [7, 8], zero_cash),
         ("risk.warnings.historical_replay_excluded_starts_late", [6], zero_cash),
@@ -1302,6 +1311,139 @@ def test_historical_replay_unusable_proxy_stays_a_parameter_error_beside_automat
     # A proxy is the user's explicit choice: never swept into the automatic exclusions.
     assert exc_info.value.code == RiskErrorCode.INVALID_PARAMETERS
     assert exc_info.value.details == {"asset_id": 1, "return_source_asset_id": 3, "reason": "missing_fx"}
+
+
+# The replay says so when most of the portfolio is excluded (developer's decision of 24/09/2026):
+# the excluded share counts as idle cash, so past half of the value the loss replayed is the loss of
+# a minority of the portfolio.
+
+
+@pytest.mark.parametrize(
+    ("weights", "expected_covered"),
+    [
+        pytest.param({1: 0.2, 2: 0.3, 3: 0.25}, 0.45, id="above-half-excluded"),
+        pytest.param({1: 0.25, 2: 0.25, 3: 0.25}, None, id="exactly-half-excluded"),
+        pytest.param({1: 0.35, 2: 0.2, 3: 0.2}, None, id="below-half-excluded"),
+    ],
+)
+def test_historical_replay_warns_when_more_than_half_of_the_value_is_excluded(weights, expected_covered):
+    computation = replay(
+        replay_context(
+            {1: [0.1] + [0.0] * 19},
+            scope_kind=RiskScopeKind.PORTFOLIO,
+            scope_asset_ids=(1, 2, 3),
+            weights=weights,
+            cash_weight=0.25,
+            auto={2: Reason.STARTS_AFTER_WINDOW_START, 3: Reason.STALE_AT_WINDOW_END},
+        )
+    )
+
+    excluded = weights[2] + weights[3]
+    assert computation.historical_replay_audit.excluded_weight_total == pytest.approx(excluded)
+    mostly = [warning for warning in computation.warnings if warning.code == "historical_replay_mostly_excluded"]
+    if expected_covered is None:
+        assert mostly == []
+    else:
+        (warning,) = mostly
+        assert warning.message_i18n_key == "risk.warnings.historical_replay_mostly_excluded"
+        assert warning.message_params == {"covered": expected_covered}
+        assert warning.details == {"excluded_weight_total": pytest.approx(excluded), "threshold": 0.5}
+        assert warning.message_params["covered"] == round(1 - excluded, 4)
+    # The per-reason warnings are there either way.
+    assert [warning.details["reason"] for warning in computation.warnings if warning.code == "historical_replay_assets_excluded"] == ["starts_after_window_start", "stale_at_window_end"]
+
+
+def test_historical_replay_mostly_excluded_warning_follows_the_proxies_and_precedes_the_reasons():
+    context = replay_context(
+        {9: [0.1] + [0.0] * 19},
+        scope_kind=RiskScopeKind.PORTFOLIO,
+        scope_asset_ids=(1, 2, 3),
+        weights={1: 0.2, 2: 0.3, 3: 0.25},
+        cash_weight=0.25,
+        auto={2: Reason.STARTS_AFTER_WINDOW_START, 3: Reason.STALE_AT_WINDOW_END},
+    )
+    # Asset 1 replays through proxy 9.
+    context = replace(context, historical_replay=replace(context.historical_replay, source_asset_ids={1: 9}))
+
+    computation = replay(context, proxy_assets=[{"asset_id": 1, "proxy_asset_id": 9}])
+
+    assert [warning.code for warning in computation.warnings] == [
+        "historical_replay_proxies_used",
+        "historical_replay_mostly_excluded",
+        "historical_replay_assets_excluded",
+        "historical_replay_assets_excluded",
+    ]
+
+
+def test_historical_replay_of_an_asset_set_never_warns_about_the_excluded_weight():
+    computation = replay(
+        replay_context(
+            {1: [0.1] + [0.0] * 19},
+            scope_kind=RiskScopeKind.ASSET_SET,
+            scope_asset_ids=(1, 2, 3),
+            auto={2: Reason.STARTS_AFTER_WINDOW_START, 3: Reason.STALE_AT_WINDOW_END},
+        )
+    )
+
+    # Two of three assets omitted, but an asset set has no weights to speak of.
+    assert computation.historical_replay_audit.excluded_weight_total == 0
+    assert "historical_replay_mostly_excluded" not in {warning.code for warning in computation.warnings}
+
+
+# A replay proposal found and verified by the service reaches the result: in the audit when the
+# replay runs, in the error when nothing is left to replay.
+
+PROPOSED = DateRangeModel(start=date(2026, 1, 9), end=date(2026, 1, 21))
+
+
+def test_historical_replay_audit_carries_the_verified_proposal_of_the_context():
+    computation = replay(
+        replay_context(
+            {1: [0.1] + [0.0] * 19},
+            scope_kind=RiskScopeKind.ASSET_SET,
+            scope_asset_ids=(1, 2, 3),
+            auto={3: Reason.STALE_AT_WINDOW_START, 2: Reason.STARTS_AFTER_WINDOW_START},
+            suggested=(PROPOSED, (2, 3)),
+        )
+    )
+
+    audit = computation.historical_replay_audit
+    assert (audit.suggested_range, audit.suggested_range_recovers) == (PROPOSED, [2, 3])
+    assert RiskHistoricalReplayAudit.model_validate(audit.model_dump()) == audit
+
+
+def test_historical_replay_audit_has_no_proposal_when_the_context_has_none():
+    audit = replay(replay_context({1: [0.1] + [0.0] * 19}, scope_kind=RiskScopeKind.ASSET_SET, scope_asset_ids=(1, 2), auto={2: Reason.STARTS_AFTER_WINDOW_START})).historical_replay_audit
+
+    assert (audit.suggested_range, audit.suggested_range_recovers) == (None, [])
+
+
+@pytest.mark.parametrize(
+    ("suggested", "expected_details"),
+    [
+        pytest.param(
+            (PROPOSED, (2,)),
+            {"excluded_asset_ids": [1, 2], "suggested_range": {"start": "2026-01-09", "end": "2026-01-21"}, "suggested_range_recovers": [2]},
+            id="with-a-verified-proposal",
+        ),
+        pytest.param(None, {"excluded_asset_ids": [1, 2]}, id="without-one"),
+    ],
+)
+def test_nothing_left_to_replay_carries_the_proposal_in_the_error(suggested, expected_details):
+    context = replay_context(
+        {1: [0.1] + [0.0] * 19},
+        scope_kind=RiskScopeKind.ASSET_SET,
+        scope_asset_ids=(1, 2),
+        manual=(1,),
+        auto={2: Reason.STARTS_AFTER_WINDOW_START},
+        suggested=suggested,
+    )
+
+    with pytest.raises(RiskUnavailableError) as exc_info:
+        replay(context, excluded_assets=[1])
+
+    assert exc_info.value.code == RiskErrorCode.INSUFFICIENT_HISTORY
+    assert exc_info.value.details == expected_details
 
 
 def test_historical_replay_params_are_canonical_and_disjoint():

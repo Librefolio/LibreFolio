@@ -1,19 +1,23 @@
-"""One source for the data-quality thresholds (developer's decision of 24/09/2026).
+"""One source for the data-quality thresholds (developer's decisions of 24/09/2026).
 
-The portfolio's data-quality banner, the risk engine and the eligibility check must agree on when
-source data stops being ordinary, so the three numbers live in `data_quality_thresholds` and every
-consumer imports them. Changing one there has to change it everywhere: no module may keep its own
-copy, and no statistical analytic may keep the literal floor it had before.
+The portfolio's data-quality banner, the risk engine, the eligibility check and the asset list must
+agree on when source data stops being ordinary, so these numbers live in `data_quality_thresholds`
+and every consumer imports them. Changing one there has to change it everywhere: no module may keep
+its own copy, and no statistical analytic may keep the literal floor it had before.
 """
 
 from __future__ import annotations
 
 import ast
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 import pytest
 
+from backend.app.services import portfolio_service
 from backend.app.services.data_quality_thresholds import (
+    QUANTITY_DUST_THRESHOLD,
+    REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE,
     RISK_MIN_OBSERVATIONS,
     STALE_PRICE_THRESHOLD_DAYS,
     TRANSACTION_IMPLIED_GRACE_DAYS,
@@ -33,7 +37,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 APP_ROOT = REPO_ROOT / "backend" / "app"
 THRESHOLDS_MODULE = APP_ROOT / "services" / "data_quality_thresholds.py"
 THRESHOLDS_IMPORT = "backend.app.services.data_quality_thresholds"
-THRESHOLD_NAMES = frozenset({"STALE_PRICE_THRESHOLD_DAYS", "TRANSACTION_IMPLIED_GRACE_DAYS", "RISK_MIN_OBSERVATIONS"})
+THRESHOLD_NAMES = frozenset({"STALE_PRICE_THRESHOLD_DAYS", "TRANSACTION_IMPLIED_GRACE_DAYS", "RISK_MIN_OBSERVATIONS", "REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE", "QUANTITY_DUST_THRESHOLD"})
 
 # The analytics whose floor was a literal 20 before the thresholds were shared.
 FLOOR_ANALYTICS = [
@@ -51,12 +55,16 @@ FLOOR_ANALYTICS = [
 # Who reads which threshold, and must read it from the shared module.
 CONSUMERS = {
     "backend/app/services/portfolio_engine.py": {"STALE_PRICE_THRESHOLD_DAYS"},
-    "backend/app/services/portfolio_service.py": {"TRANSACTION_IMPLIED_GRACE_DAYS"},
+    # The holdings read positions through the dust threshold...
+    "backend/app/services/portfolio_service.py": {"TRANSACTION_IMPLIED_GRACE_DAYS", "QUANTITY_DUST_THRESHOLD"},
+    # ...and so do the asset list's held-now flags.
+    "backend/app/services/asset_sources/crud.py": {"QUANTITY_DUST_THRESHOLD"},
     "backend/app/services/series_preparation.py": {"STALE_PRICE_THRESHOLD_DAYS"},
     "backend/app/services/risk/eligibility.py": {"RISK_MIN_OBSERVATIONS", "STALE_PRICE_THRESHOLD_DAYS"},
     "backend/app/services/risk/service.py": {"RISK_MIN_OBSERVATIONS", "STALE_PRICE_THRESHOLD_DAYS"},
-    # The two stale replay exclusions state the threshold in their sentence.
-    "backend/app/services/risk_plugins/stress.py": {"STALE_PRICE_THRESHOLD_DAYS"},
+    # The two stale replay exclusions state the threshold in their sentence; the replay warns past
+    # the excluded share.
+    "backend/app/services/risk_plugins/stress.py": {"STALE_PRICE_THRESHOLD_DAYS", "REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE"},
     **{f"backend/app/services/risk_plugins/{name}.py": {"RISK_MIN_OBSERVATIONS"} for name in ("asset_risk_return", "asset_set_comparison", "asset_set_kpi", "asset_set_risk_return", "asset_set_var", "comparison", "correlation", "historical_kpi", "historical_var", "risk_contribution")},
 }
 
@@ -110,10 +118,34 @@ def _imported_from_thresholds(tree: ast.Module) -> set[str]:
     return {alias.name for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.module == THRESHOLDS_IMPORT for alias in node.names}
 
 
+def _dust_literals(tree: ast.Module) -> list[int]:
+    """A literal worth the dust threshold, in any spelling: `Decimal("0.00001")`, `1e-05`, `0.00001`."""
+    lines = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and type(node.value) is float and node.value == float(QUANTITY_DUST_THRESHOLD):
+            lines.append(node.lineno)
+        elif isinstance(node, ast.Call) and getattr(node.func, "id", getattr(node.func, "attr", None)) == "Decimal" and len(node.args) == 1 and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
+            try:
+                if Decimal(node.args[0].value) == QUANTITY_DUST_THRESHOLD:
+                    lines.append(node.lineno)
+            except InvalidOperation:
+                continue
+    return lines
+
+
 def test_the_thresholds_hold_the_values_the_developer_decided():
     assert STALE_PRICE_THRESHOLD_DAYS == 7
     assert TRANSACTION_IMPLIED_GRACE_DAYS == 14
     assert RISK_MIN_OBSERVATIONS == 20
+    assert REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE == 0.5
+    # An exact Decimal, the type the portfolio compares open quantities with.
+    assert isinstance(QUANTITY_DUST_THRESHOLD, Decimal)
+    assert QUANTITY_DUST_THRESHOLD == Decimal("0.00001")
+
+
+def test_the_portfolio_reads_the_shared_dust_threshold_under_its_old_name():
+    # Kept as an alias so the portfolio's many readers need not change; an alias, not a copy.
+    assert portfolio_service._QUANTITY_DUST_THRESHOLD is QUANTITY_DUST_THRESHOLD
 
 
 @pytest.mark.parametrize("analytic", FLOOR_ANALYTICS, ids=lambda analytic: analytic.analytic_code)
@@ -148,6 +180,10 @@ def test_the_source_detectors_see_what_they_look_for():
     assert sorted(_literal_floors(literal_floors)) == [2, 5, 8]
     unrelated = ast.parse("class D:\n    min_observations = 30\n\nclass E:\n    horizon_days = 20\n\nclass F:\n    min_observations = RISK_MIN_OBSERVATIONS\n")
     assert _literal_floors(unrelated) == []
+    # The dust detector sees every spelling of the value, and nothing else.
+    assert len(_dust_literals(_parse(THRESHOLDS_MODULE))) == 1
+    dust = ast.parse('A = Decimal("0.00001")\nB = decimal.Decimal("1E-5")\nC = 1e-05\nD = 0.00001\nE = Decimal("0.0001")\nF = 1e-9\nG = Decimal("dust")\n')
+    assert sorted(_dust_literals(dust)) == [1, 2, 3, 4]
 
 
 def test_no_module_keeps_its_own_threshold_or_a_literal_floor_of_twenty():
@@ -156,14 +192,19 @@ def test_no_module_keeps_its_own_threshold_or_a_literal_floor_of_twenty():
 
     redefinitions: list[str] = []
     literal_floors: list[str] = []
+    dust_copies: list[str] = []
     for path in modules:
         tree = _parse(path)
         where = path.relative_to(REPO_ROOT)
         redefinitions.extend(f"{where}:{line} {name}" for name, line in _threshold_definitions(tree))
         literal_floors.extend(f"{where}:{line}" for line in _literal_floors(tree))
+        dust_copies.extend(f"{where}:{line}" for line in _dust_literals(tree))
 
     assert redefinitions == [], "threshold defined outside data_quality_thresholds.py"
     assert literal_floors == [], "literal observation floor instead of RISK_MIN_OBSERVATIONS"
+    # A copy under another name (`_QUANTITY_DUST_THRESHOLD = Decimal("0.00001")`) escapes the name
+    # scan above; its value does not.
+    assert dust_copies == [], "dust threshold written as a literal instead of QUANTITY_DUST_THRESHOLD"
 
 
 @pytest.mark.parametrize(("module", "names"), sorted(CONSUMERS.items()))

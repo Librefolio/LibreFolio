@@ -772,11 +772,17 @@ async def test_asset_eligibility_judges_each_asset_on_its_own_quotes_in_request_
         "stale": ("EUR", quote_days(start, end - timedelta(days=10))),
         # A currency with no rate to the target anywhere in the suite.
         "no_fx": ("KES", quote_days(start, end)),
+        # An asset with no price at all.
+        "never": ("EUR", []),
     }
     assert len(specs["eligible"][1]) == RISK_MIN_OBSERVATIONS
     assert len(specs["too_few"][1]) == RISK_MIN_OBSERVATIONS - 1
 
     ids = await store_quoted_assets(specs, uuid4().hex)
+    # An id no asset has: verified absent, not assumed.
+    unknown = max(ids.values()) + 1_000_000
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        assert (await session.execute(select(Asset.id).where(Asset.id == unknown))).scalar_one_or_none() is None
     app = FastAPI()
     app.include_router(router, prefix="/api/v1")
 
@@ -784,7 +790,7 @@ async def test_asset_eligibility_judges_each_asset_on_its_own_quotes_in_request_
         return SimpleNamespace(id=USER_ID)
 
     app.dependency_overrides[get_current_user] = current_user
-    requested = [ids["stale"], ids["eligible"], ids["no_fx"], ids["eligible"], ids["late"], ids["too_few"], ids["no_prices"], ids["stale"]]
+    requested = [ids["stale"], ids["eligible"], ids["no_fx"], ids["eligible"], ids["late"], ids["too_few"], ids["no_prices"], ids["never"], unknown, ids["stale"]]
     try:
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             response = await client.post(f"{API_BASE}/eligibility", json=eligibility_payload(requested))
@@ -796,9 +802,9 @@ async def test_asset_eligibility_judges_each_asset_on_its_own_quotes_in_request_
     assert body["min_quotes"] == RISK_MIN_OBSERVATIONS == 20
     assert body["stale_days"] == STALE_PRICE_THRESHOLD_DAYS == 7
     # Request order, first occurrence kept, duplicates dropped.
-    assert [item["asset_id"] for item in body["items"]] == [ids["stale"], ids["eligible"], ids["no_fx"], ids["late"], ids["too_few"], ids["no_prices"]]
+    assert [item["asset_id"] for item in body["items"]] == [ids["stale"], ids["eligible"], ids["no_fx"], ids["late"], ids["too_few"], ids["no_prices"], ids["never"], unknown]
 
-    by_key = {key: next(item for item in body["items"] if item["asset_id"] == asset_id) for key, asset_id in ids.items()}
+    by_key = {key: next(item for item in body["items"] if item["asset_id"] == asset_id) for key, asset_id in [*ids.items(), ("unknown", unknown)]}
     assert {key: (item["level"], item["reasons"]) for key, item in by_key.items()} == {
         "eligible": ("eligible", []),
         "too_few": ("ineligible", ["too_few_quotes"]),
@@ -806,9 +812,44 @@ async def test_asset_eligibility_judges_each_asset_on_its_own_quotes_in_request_
         "no_fx": ("ineligible", ["missing_fx"]),
         "late": ("warning", ["starts_late"]),
         "stale": ("warning", ["stale_at_end"]),
+        # Never priced, and an id no asset has, are told apart from no price in the period.
+        "never": ("ineligible", ["no_price_history"]),
+        "unknown": ("ineligible", ["no_price_history"]),
     }
     # The facts behind each verdict travel with it.
     assert (by_key["eligible"]["quotes_in_period"], by_key["eligible"]["first_quote"], by_key["eligible"]["last_quote"]) == (20, start.isoformat(), (start + timedelta(days=76)).isoformat())
     assert (by_key["no_prices"]["quotes_in_period"], by_key["no_prices"]["first_quote"], by_key["no_prices"]["last_quote"]) == (0, (start - timedelta(days=30)).isoformat(), (start - timedelta(days=10)).isoformat())
     assert by_key["late"]["first_quote"] == (start + timedelta(days=10)).isoformat()
     assert by_key["stale"]["last_quote"] == (end - timedelta(days=10)).isoformat()
+    # The quoted histories do not overlap (one ends before another begins): both fields present, null.
+    assert (body["common_range"], body["suggested_range"]) == (None, None)
+
+
+@pytest.mark.asyncio
+async def test_asset_eligibility_carries_the_common_span_and_the_proposal_it_verified():
+    set_test_mode(True)
+    specs = {
+        "full": ("EUR", quote_days(date(2012, 12, 1), date(2013, 6, 30))),
+        # First quote 25 days into the period: eligible with a warning.
+        "late": ("EUR", quote_days(date(2013, 2, 1), date(2013, 6, 30))),
+    }
+    ids = await store_quoted_assets(specs, uuid4().hex)
+    app = FastAPI()
+    app.include_router(router, prefix="/api/v1")
+
+    async def current_user():
+        return SimpleNamespace(id=USER_ID)
+
+    app.dependency_overrides[get_current_user] = current_user
+    try:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(f"{API_BASE}/eligibility", json=eligibility_payload([ids["full"], ids["late"]]))
+    finally:
+        await delete_quoted_assets(list(ids.values()))
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert [(item["asset_id"], item["level"], item["reasons"]) for item in body["items"]] == [(ids["full"], "eligible", []), (ids["late"], "warning", ["starts_late"])]
+    assert body["common_range"] == {"start": "2013-02-01", "end": "2013-06-30"}
+    # The period trimmed to the common span, from the day after the late asset's first quote.
+    assert body["suggested_range"] == {"start": "2013-02-02", "end": ELIGIBILITY_END.isoformat()}
