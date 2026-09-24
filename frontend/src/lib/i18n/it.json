@@ -3074,7 +3074,8 @@
       "ordering": {
         "label": "Ordine della matrice",
         "similarity": "Per somiglianza",
-        "original": "Per nome"
+        "original": "Per nome",
+        "name": "Per nome"
       },
       "pairs": {
         "correlatedTitle": "I più simili",

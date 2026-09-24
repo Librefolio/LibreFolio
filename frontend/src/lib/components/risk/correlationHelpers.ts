@@ -204,6 +204,32 @@ export function clusterOrder(assetIds: readonly number[], lookup: CorrelationLoo
     return members.filter((cluster): cluster is number[] => cluster !== null).flat();
 }
 
+/**
+ * Asset ids in the order of the names the reader sees, ties broken by id.
+ *
+ * The matrix's "by name" button used to keep the payload order. That stopped being
+ * alphabetical the day request ids were canonicalised ascending so the cache key
+ * would be stable, and from then on the button said one thing and did another —
+ * it ordered by id. Sorting here keeps the promise the label makes, whatever order
+ * the API returns. `locale` is optional so tests can pin it; the app passes none.
+ *
+ * Emoji are ignored: display names are user data, and flags or markers typed into
+ * them (`🇪🇺👑 Amundi…`, `Btp… 🇮🇹`) sort before every letter, so every decorated
+ * name filed ahead of every plain one.
+ */
+export function nameOrder(assetIds: readonly number[], nameOf: (assetId: number) => string, locale?: string): number[] {
+    const collator = new Intl.Collator(locale, {sensitivity: 'base', numeric: true});
+    return [...assetIds].sort((left, right) => collator.compare(sortableName(nameOf(left)), sortableName(nameOf(right))) || left - right);
+}
+
+/** Emoji and the invisible characters that glue them together (flags, skin tones, keycaps, ZWJ sequences). */
+const NAME_DECORATION = /[\p{Extended_Pictographic}\p{Regional_Indicator}\p{Emoji_Modifier}\p{Variation_Selector}\u200D\u20E3\u{E0020}-\u{E007F}]/gu;
+
+/** The name without its emoji; a name made of emoji alone is kept whole rather than sorted as empty. */
+function sortableName(name: string): string {
+    return name.replace(NAME_DECORATION, '').replace(/\s+/g, ' ').trim() || name;
+}
+
 /** One entry of the pair list. */
 export interface CorrelationPair {
     rowAssetId: number;
