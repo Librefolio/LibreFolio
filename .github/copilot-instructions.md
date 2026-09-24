@@ -69,6 +69,7 @@ LibreFolio/
     <command> > /tmp/libreFolio_<descr>.log 2>&1; head -n 40 /tmp/libreFolio_<descr>.log
     <command> 2>&1 | tee /tmp/libreFolio_<descr>.log | { head -n 40; cat >/dev/null; }
     ```
+- ⚠️ **Never `npx` for frontend tools.** Without a local `node_modules/.bin`, npx (npm 11) queries the registry: plain `npx` installs a missing package into the user cache without asking (no TTY), and even `npx --no-install` silently runs a cached copy when it is the latest published version — in both cases not the version pinned by the lock. Call the locked binary explicitly, `frontend/node_modules/.bin/<tool>`, or an `npm run <script>` from `package.json`: a missing binary then fails with "No such file". The test runner and some `dev.py` commands still call `npx` internally, so in a **fresh worktree** run the approved `npm ci` before any `dev.py test front-*`, `front build` or `front check`.
 - **Rationale**: avoid re-running expensive commands (tests, builds, db operations) just to see output that was truncated earlier.
 
 ## Async I/O Rule (Event Loop Safety)

@@ -29,21 +29,25 @@ Ignored files listed in `frontend/.prettierignore`.
 ./dev.py front check
 
 # === Direct commands (for single file or advanced use) ===
+# Always call the locked local binary, never `npx`: without a local binary, npx
+# installs a missing tool into the user cache, or (even with `--no-install`) runs
+# a cached copy of another version. If `./node_modules/.bin/<tool>` is missing,
+# run the approved `npm ci` first.
 
 # Format single file
-cd frontend && npx prettier --write src/lib/stores/auth.ts
+cd frontend && ./node_modules/.bin/prettier --write src/lib/stores/auth.ts
 
 # Check single file
-cd frontend && npx prettier --check src/lib/stores/auth.ts
+cd frontend && ./node_modules/.bin/prettier --check src/lib/stores/auth.ts
 
 # Format all e2e tests
-cd frontend && npx prettier --write 'e2e/**/*.ts'
+cd frontend && ./node_modules/.bin/prettier --write 'e2e/**/*.ts'
 ```
 
 ### Output to file (for large codebases)
 
 ```bash
-cd frontend && npx prettier --check 'src/**/*.{ts,svelte,js,css,html}' 'e2e/**/*.ts' > /tmp/prettier_out.txt 2>&1; cat /tmp/prettier_out.txt
+cd frontend && ./node_modules/.bin/prettier --check 'src/**/*.{ts,svelte,js,css,html}' 'e2e/**/*.ts' > /tmp/prettier_out.txt 2>&1; cat /tmp/prettier_out.txt
 ```
 
 ## Scope
@@ -86,7 +90,7 @@ components nobody renders, or npm packages nobody uses. That is **knip**'s job.
 
 # Direct, with knip's own reporters
 cd frontend && npm run lint:dead
-cd frontend && npx knip --reporter json
+cd frontend && ./node_modules/.bin/knip --reporter json
 ```
 
 ### What it reports
@@ -118,8 +122,8 @@ cd frontend && npx knip --reporter json
    contract (e.g. re-exported for consumers) before removing it.
 
 
-1. **Format the file**: `cd frontend && npx prettier --write path/to/file.ts`
-2. **Verify**: `cd frontend && npx prettier --check path/to/file.ts`
+1. **Format the file**: `cd frontend && ./node_modules/.bin/prettier --write path/to/file.ts`
+2. **Verify**: `cd frontend && ./node_modules/.bin/prettier --check path/to/file.ts`
 3. **Type check** (if `.svelte`): `./dev.py front check`
 
 ## Workflow: Full Codebase Format
