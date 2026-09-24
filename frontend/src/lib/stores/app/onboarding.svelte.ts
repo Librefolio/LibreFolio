@@ -1,5 +1,16 @@
-import {getClientSessionGeneration, getClientSessionUserId, isClientSessionCurrent, registerClientSessionReset} from '$lib/stores/app/clientSession';
+import {getClientSessionGeneration, getClientSessionUserId, isClientSessionCurrent, registerClientSessionReset, type ClientSessionResetter} from '$lib/stores/app/clientSession';
 import type {OnboardingApi, OnboardingFlow, OnboardingLoadState, OnboardingProgressItem, OnboardingProgressResponse, OnboardingReplayState, OnboardingStepProgressItem, OnboardingWelcomeCompleteRequest} from '$lib/types/onboarding';
+
+/**
+ * Guide positions (automatic or armed replay) persist in `localStorage`, keyed
+ * `lf_{userId}_onboarding_replay_{flow}_v{version}`: they survive a closed tab and
+ * a browser restart, stay per account, and a version bump drops the old key on the
+ * next read or write. Logging out or switching account deletes the previous
+ * account's keys. When another tab deletes the key of this tab's replay, the
+ * in-memory copy is dropped, so this tab cannot write it back; the guide module
+ * wires that `storage` listener and closes its active step.
+ */
+const REPLAY_STORAGE_UNAVAILABLE = 'Browser storage is unavailable';
 
 interface RequestTicket {
     userId: string;
@@ -14,12 +25,17 @@ interface OnboardingControllerDependencies {
     getUserId?: () => string | null;
     getGeneration?: () => number;
     isCurrent?: (generation: number) => boolean;
-    getSessionStorage?: () => Storage | null;
+    getReplayStorage?: () => Storage | null;
     now?: () => number;
 }
 
-function defaultSessionStorage(): Storage | null {
-    return typeof window === 'undefined' ? null : window.sessionStorage;
+function defaultReplayStorage(): Storage | null {
+    if (typeof window === 'undefined') return null;
+    try {
+        return window.localStorage;
+    } catch {
+        return null;
+    }
 }
 
 function errorMessage(error: unknown): string {
@@ -46,7 +62,7 @@ export function createOnboardingController(dependencies: OnboardingControllerDep
     const getUserId = dependencies.getUserId ?? getClientSessionUserId;
     const getGeneration = dependencies.getGeneration ?? getClientSessionGeneration;
     const isCurrent = dependencies.isCurrent ?? isClientSessionCurrent;
-    const getSessionStorage = dependencies.getSessionStorage ?? defaultSessionStorage;
+    const getReplayStorage = dependencies.getReplayStorage ?? defaultReplayStorage;
     const now = dependencies.now ?? Date.now;
 
     let state = $state<OnboardingLoadState>('idle');
@@ -99,9 +115,9 @@ export function createOnboardingController(dependencies: OnboardingControllerDep
 
     function writeReplay(nextReplay: OnboardingReplayState): boolean {
         const userId = getUserId();
-        const storage = getSessionStorage();
+        const storage = getReplayStorage();
         if (!userId || !storage) {
-            replayStorageError = 'Session storage is unavailable';
+            replayStorageError = REPLAY_STORAGE_UNAVAILABLE;
             return false;
         }
         try {
@@ -233,9 +249,9 @@ export function createOnboardingController(dependencies: OnboardingControllerDep
 
     function resumeReplay(flow: OnboardingFlow, version: number, validStepIds: readonly string[], fallbackStepId: string): OnboardingReplayState | null {
         const userId = getUserId();
-        const storage = getSessionStorage();
+        const storage = getReplayStorage();
         if (!userId || !storage) {
-            replayStorageError = 'Session storage is unavailable';
+            replayStorageError = REPLAY_STORAGE_UNAVAILABLE;
             return null;
         }
         try {
@@ -278,7 +294,7 @@ export function createOnboardingController(dependencies: OnboardingControllerDep
 
     function hasReplay(flow: OnboardingFlow, version: number): boolean {
         const userId = getUserId();
-        const storage = getSessionStorage();
+        const storage = getReplayStorage();
         if (!userId || !storage) return false;
         try {
             removeReplayVersions(storage, userId, flow, version);
@@ -303,9 +319,9 @@ export function createOnboardingController(dependencies: OnboardingControllerDep
 
     function clearReplay(flow: OnboardingFlow, version: number): void {
         const userId = getUserId();
-        const storage = getSessionStorage();
+        const storage = getReplayStorage();
         if (!userId || !storage) {
-            replayStorageError = 'Session storage is unavailable';
+            replayStorageError = REPLAY_STORAGE_UNAVAILABLE;
             return;
         }
         try {
@@ -315,6 +331,32 @@ export function createOnboardingController(dependencies: OnboardingControllerDep
         } catch (storageError) {
             replayStorageError = errorMessage(storageError);
         }
+    }
+
+    function clearAccountReplays(userId: string): void {
+        const storage = getReplayStorage();
+        if (!storage) return;
+        const prefix = `lf_${userId}_onboarding_replay_`;
+        try {
+            const keysToRemove: string[] = [];
+            for (let index = 0; index < storage.length; index += 1) {
+                const key = storage.key(index);
+                if (key?.startsWith(prefix)) keysToRemove.push(key);
+            }
+            for (const key of keysToRemove) storage.removeItem(key);
+        } catch {
+            // Storage that cannot be read holds nothing this account could resume.
+        }
+    }
+
+    function handleExternalReplayChange(key: string | null, newValue: string | null): boolean {
+        if (!replay || newValue !== null) return false;
+        const userId = getUserId();
+        if (key === null || (userId !== null && key === replayKey(userId, replay.flow, replay.version))) {
+            replay = null;
+            return true;
+        }
+        return false;
     }
 
     function reset(): void {
@@ -362,10 +404,30 @@ export function createOnboardingController(dependencies: OnboardingControllerDep
         hasReplay,
         updateReplayStep,
         clearReplay,
+        clearAccountReplays,
+        handleExternalReplayChange,
         reset,
+    };
+}
+
+type OnboardingController = ReturnType<typeof createOnboardingController>;
+
+/** Session resetter: forget the previous account's stored guide positions, then the in-memory state. */
+export function createOnboardingSessionResetter(controller: Pick<OnboardingController, 'clearAccountReplays' | 'reset'>): ClientSessionResetter {
+    return ({previousUserId}) => {
+        if (previousUserId) controller.clearAccountReplays(previousUserId);
+        controller.reset();
+    };
+}
+
+/** `storage` event handler: react only to `localStorage` changes made by another tab; `onDropped` runs when this tab's replay was removed there. */
+export function createReplayStorageListener(controller: Pick<OnboardingController, 'handleExternalReplayChange'>, getStorage: () => Storage | null = defaultReplayStorage, onDropped?: () => void): (event: StorageEvent) => void {
+    return (event) => {
+        if (event.storageArea !== null && event.storageArea !== getStorage()) return;
+        if (controller.handleExternalReplayChange(event.key, event.newValue)) onDropped?.();
     };
 }
 
 export const onboarding = createOnboardingController();
 
-registerClientSessionReset('onboarding', () => onboarding.reset());
+registerClientSessionReset('onboarding', createOnboardingSessionResetter(onboarding));

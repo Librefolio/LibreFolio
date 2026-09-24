@@ -141,15 +141,220 @@ del round).
 > `OnboardingOverlayHost.svelte:74`. Nessun test automatico nuovo, per la regola sul testo
 > tradotto: la verifica è la review manuale.
 
-### Step 5 — OB-8 — **Stato: ⏳**
+### Step 5 — OB-8 — **Stato: ✅ completato il 2026-09-24** — *C4*
 
 Replay in `localStorage` per Q5, cancellato da `registerClientSessionReset` a logout e cambio
 account; il bump di versione continua a invalidarlo; nota in `OnboardingReplaySection`.
 
-### Step 6 — OB-9 — **Stato: ⏳**
+> **Note implementazione — codice.** In `stores/app/onboarding.svelte.ts`:
+>
+> - dipendenza rinominata `getSessionStorage` → `getReplayStorage`, default `window.localStorage`
+>   (dentro `try`: un browser che nega lo storage dà `null`, non un'eccezione); il messaggio
+>   d'errore diventa `Browser storage is unavailable`;
+> - chiave invariata `lf_{userId}_onboarding_replay_{flow}_v{version}`, quindi per account e per
+>   versione come prima; il bump di versione la invalida alla prima lettura o scrittura
+>   (`removeReplayVersions`, invariato);
+> - `clearAccountReplays(userId)` e il resetter di sessione `createOnboardingSessionResetter`: su
+>   ogni transizione da un account (logout, sessione scaduta, cambio account) cancella le chiavi
+>   dell'account precedente, poi azzera lo stato in memoria;
+> - `handleExternalReplayChange` più il listener `storage` (`createReplayStorageListener`): se
+>   un'altra scheda cancella la chiave della replay attiva, questa scheda lascia cadere la copia in
+>   memoria e non può più riscriverla. Senza, la replay finita in una scheda poteva **tornare in
+>   vita** al primo passo fatto nell'altra: è una conseguenza nuova di `localStorage`, che
+>   `sessionStorage` non aveva.
+>
+> **⚠️ Fuori pista — trovato dal `test-author`, riprodotto su copia.** Lasciar cadere solo la copia
+> in memoria bloccava la guida **automatica** nell'altra scheda: `ownsActivation`
+> (`onboardingGuide.svelte.ts`) esige che `controller.replay` coincida con lo step attivo, quindi
+> dopo la cancellazione `finish()` e `skip()` scrivevano sul server e poi **non chiudevano** lo
+> step. Innesco realistico: due schede sulla stessa pagina con la stessa guida pendente, che ora
+> condividono una chiave; oppure un logout in un'altra scheda. Peggio: premere *Esci* in quella
+> scheda portava un flow già `completed` a `skipped`. **Decisione presa (da confermare dal
+> developer):** quando un'altra scheda cancella la chiave, **questa scheda chiude il suo step**.
+> Il listener vive ora nel modulo della guida (`onDropped` → `dismissHost()`), ed è **uno solo**:
+> con due listener il primo lascerebbe cadere la replay e il secondo non chiuderebbe niente.
+>
+> **Note implementazione — test unitari** (via `test-author`, vitest locale, nessuna lane):
+>
+> | cosa | esito |
+> |---|---|
+> | `onboarding.test.ts` + `OnboardingReplaySection.test.ts`, prima del ritocco dei test | `Test Files 1 failed \| 1 passed (2)`, `56 failed \| 79 passed (135)`: tutti per l'iniezione `getSessionStorage`, ora ignorata. È il controllo positivo che il rinomino è effettivo |
+> | dopo | **`Test Files 2 passed (2)`, `169 passed (169)`** (+34 test: persistenza fra runtime, bump di versione, `clearAccountReplays` col confine `lf_1_`/`lf_12_`, resetter su logout/cambio account/prima identità, rimozione da un'altra scheda con valore di ritorno, listener con `onDropped`, chiusura della guida automatica e di quella in replay, Finish in volo che si risolve o fallisce dopo la rimozione, e OB-9 al livello della guida: ripresa al 3° step dopo `dismissHost()`, ritorno al 1° con `restartAtFirst`) |
+> | controlli negativi, solo su copie | `handleExternalReplayChange` no-op → 3 rossi; `onDropped` mai chiamato → 5; sempre chiamato → 5; filtro `storageArea` tolto → 2; esito sempre `false` → 7; host con `restartAtFirst` → solo il test di ripresa rosso. sha256 dei file di produzione identici prima e dopo |
+> | `prettier --check`, `svelte-check` sulle due spec | puliti; nel progetto restano i 3 errori noti, in file non miei |
+>
+> **⚠️ Fuori pista — un mock che non vedeva la nuova esportazione.** `OnboardingReplaySection.test.ts`
+> sostituisce il modulo `onboarding.svelte` e carica il modulo vero della guida, che ora chiama
+> `createReplayStorageListener` all'import: il file moriva prima di eseguire i suoi 16 test, e il
+> riepilogo mostrava `1 failed` accanto a `Tests 145 passed` — un rosso facile da leggere come
+> verde. Una riga nel mock. `svelte-check` non poteva vederlo: fallisce solo a runtime.
+>
+> **i18n** (`dev.py i18n update`, 2 chiavi × 4 lingue, solo il valore): `armedAtNextTrigger` e
+> `armedToast` dicevano «in questa scheda … chiudendo la scheda si annulla», promessa vera con
+> `sessionStorage` e falsa ora. Diventano «in questo browser … uscendo dall'account si annulla».
+>
+> **⚠️ Fuori pista — scelta di parola, da confermare dal developer.** Q5 diceva «vale su questo
+> dispositivo». Ho scritto **browser**: `localStorage` vale per il profilo del browser, e un secondo
+> browser sullo stesso dispositivo non vede la replay. È lo stesso criterio del Round 7 (D7):
+> dire all'utente il confine vero, che sa riconoscere. Se il developer preferisce «dispositivo», è
+> un `dev.py i18n update` per chiave.
+>
+> **Conseguenze dichiarate.** (1) «Uscire» comprende anche la sessione scaduta: `checkAuth` fallito
+> porta a `transitionClientSession(null)`, come il logout; coerente con il testo, ma una replay
+> armata non sopravvive a una scadenza, mentre con `sessionStorage` sopravviveva nella stessa
+> scheda. (2) Se il browser si chiude senza logout ed entra un altro account, la prima identità
+> non viene vista come transizione: le chiavi del primo account restano, sotto il suo id, finché
+> quell'account non rientra ed esce. Non sono visibili ad altri account.
+
+### Step 5b — IWR-006, rosso preesistente di K — **Stato: ✅ completato il 2026-09-24**
+
+Assegnato dal coordinator (12:16): `tx-import-resolution` IWR-006 fallisce sempre, il coachmark
+`import.review` intercetta il click sull'opzione.
+
+> **Note implementazione — la misura, prima del fix.** Ipotesi a confronto: H1 riga di versione
+> vecchia nel DB di una lane; H3 guida armata per un utente terminale. Il runner rifà il populate
+> a ogni lancio di questa categoria, quindi H1 cade per costruzione. Lettura del DB della mia lane
+> dopo il run rosso (6158, populate fresco): `TEST_USER` aveva il flow `import_guide` **pending**,
+> gli step Import 2 `completed`, 5 `pending`, 1 `skipped`, e gli step Bulk 4 `pending`; il populate
+> aveva seminato 165 righe di flow e **0** di step.
+>
+> **Causa.** `_grandfather_onboarding_for_test_users` (mia, `8a8e686f0`) semina solo le righe dei
+> flow: le righe di step sono arrivate col Round 5 e non l'ho estesa. Al primo
+> `GET /settings/onboarding` il backend crea gli step mancanti come `pending`; le guide Import e
+> Bulk sono guidate dagli step, non dal flow, e partono per un utente che il flow dà `completed`.
+> Le spec che condividono `TEST_USER` completavano e saltavano i suoi step senza saperlo, e
+> l'aggregato riportava il flow a `pending`: esito dipendente dall'ordine dei test. Il pattern
+> di `tx-import-flow` (`installTerminalOnboardingProgress`, risposta terminale finta) aggirava
+> proprio questo.
+>
+> **Fix alla radice** in `populate_mock_data.py` (+38/−4, solo quella funzione e un import):
+> semina e ripara anche le righe di step, `completed` alla versione corrente. La spec non si tocca.
+>
+> | comando (lane 6158) | esito |
+> |---|---|
+> | `dev.py test … front-transaction tx-import-resolution`, prima | exit 1 · `1 failed`, `11 passed (2.1m)`; IWR-006 in timeout, `onboarding-coachmark-panel … data-step-id="import.review" … intercepts pointer events` |
+> | idem, dopo | exit 0 · **`12 passed (42.0s)`**; populate: `165 row(s) inserted …; 132 step row(s) inserted` |
+> | DB dopo il run | flow `import_guide` e `transaction_bulk_guide` `completed`; step 8 + 4 tutti `completed` |
+> | `ruff check`, `black --check` sul file | puliti (black ha solo riunito la mia `print`) |
+> | `dev.py test … db referential-integrity` (test via `test-author`, +132/−6) | **`17 passed`** (prima 15): step seminati `completed` alla versione corrente, idempotenza degli step, riparazione di uno step `pending` e di uno `skipped` in un passaggio, con ripristino in `finally`; utente nuovo con step `pending` dopo l'ensure |
+> | controllo negativo (solo copia del file di test) | `4 failed, 13 passed`, tre asserzioni rovesciate più la chiamata di riparazione tolta; file ripristinato, sha256 identico |
+
+### Step 6 — OB-9 — **Stato: ✅ completato il 2026-09-24** — *C4*
 
 Ripresa dallo step lasciato per Q6. E2E dei 9 flow mai provati (modale e dettaglio Broker, FX,
 Asset), desktop e mobile, lane 6158, via `test-author`.
+
+> **Note implementazione — codice.** Una riga: `OnboardingOverlayHost.svelte`, sul disallineamento
+> di rotta, `dismissHost()` invece di `dismissHost({restartAtFirst: true})`. La posizione salvata
+> resta, e la pagina che al ritorno chiama `maybeStartContextual` riprende da lì (lo fa già via
+> `resumeReplay`). La chiusura **delle modali** resta com'era: `restartAtFirst` a
+> `TransactionFormModal`, `TransactionBulkModal`, e alle chiusure delle modali di Broker, FX,
+> Asset; una modale riaperta ha un form nuovo, e la sua guida riparte dall'inizio.
+> `ImportWizardModal:178` (file di K) **non si tocca**: `import_guide` è gestito per step, e lì
+> `restartAtFirst` non ha effetto già oggi.
+>
+> **Note implementazione — E2E T11, OB-9 e OB-8** (via `test-author`, lane 6158). Spec nuova
+> `frontend/e2e/onboarding-guides.spec.ts` (+584) con helper nuovi in
+> `e2e/fixtures/onboarding-accounts.ts` (+155), registrata in `_frontend_utility.py` (+19,
+> `front-utility onboarding-guides`, `project=""`: desktop **e** mobile). 12 test × 2 progetti:
+> i 9 flow percorsi step per step su pagine vere (ordine del catalogo, `anchored`, `stable`,
+> un solo target descritto e proprio quello dell'àncora, unica scrittura il `complete` del flow,
+> nessun `/sync`); OB-9 pagina (3° step), dettaglio (2° step) e contrasto della modale (riparte);
+> OB-8 replay in una scheda nuova aperta **dopo** aver chiuso quella che l'ha armata, logout che la
+> cancella, chiusura nell'altra scheda senza toccarla. Un marcatore su `window` prova che la
+> navigazione di OB-9 è restata lato client: un ricaricamento completo salterebbe il ramo sotto
+> prova e passerebbe anche col vecchio codice. Ogni test ha il suo account usa-e-getta.
+>
+> | comando (lane 6158) | esito |
+> |---|---|
+> | `front-utility onboarding-guides`, due giri | `24 passed (1.5m)`, `24 passed (1.4m)` — 12 desktop + 12 mobile |
+> | idem con `--workers 4` (mio) | exit 0 · `24 passed (46.7s)` |
+> | `front-utility onboarding-tour` (regressione) | `10 passed (48.9s)` |
+> | `check-orphans` del runner | 81 spec registrate, tutte raggiungibili |
+>
+> Letto dal `test-author`, non difetti di comportamento: le pagine asset interrogano
+> `POST /assets/prices/current`, che chiama provider veri e scrive il prezzo del giorno su asset
+> condivisi (la spec risponde con un risultato vuoto, come le altre spec asset); i pulsanti di
+> chiusura di `FxPairAddModal` e l'X in testa ad `AssetModal` non hanno `data-testid`.
+
+### Step 6c — `settings.spec` «Runes parity», rosso preesistente — **Stato: ✅ completato il 2026-09-24**
+
+> **Trovato dalla mia regressione, non da C4.** `front-utility settings`: `1 failed | 44 passed`.
+> Il test registra un account nuovo e va in `/settings`; un account nuovo ha `welcome` pendente e
+> il bootstrap lo rimanda a `/welcome` (istantanea: «Welcome to LibreFolio»): timeout a 45 s. Il
+> test è del 2026-09-10 (`74bfd9cf0`), il gating del benvenuto del 2026-09-11 (`8a8e686f0`, mio):
+> rosso da allora, a ogni giro. **Fix nella spec** (via `test-author`, +16): dopo il login salta
+> via API ogni flow ancora dovuto di quell'account (`skipDueFlowsExcept`, che **salta** il
+> benvenuto invece di completarlo: completarlo scriverebbe lingua e valuta, cioè l'oggetto del
+> test), poi entra da `/welcome?returnTo=/settings` e aspetta che l'app lo inoltri. Controlli
+> negativi: senza il setup torna il timeout su `/welcome`; senza lo skip resta su `/welcome`;
+> saltare **solo** il benvenuto non basta, perché l'intro rende inerte la shell.
+>
+> | comando | esito |
+> |---|---|
+> | `front-utility settings`, dopo | exit 0 · **`45 passed (1.1m)`** |
+>
+> **⚠️ Reperto, non corretto — possibile difetto di prodotto.** Con il benvenuto pendente, aprendo
+> `/settings` direttamente la **shell completa** si vede per un attimo, poi l'app va a `/welcome`
+> (controllo negativo B del `test-author`). Lettura statica: `(app)/+layout.svelte` è in modalità
+> legacy (zero rune) e calcola `onboardingRouteReady` con istruzioni `$:` che leggono
+> `appBootstrap.ready`, uno stato runes dentro un modulo: la stessa famiglia di R20. Quando
+> `ready` diventa vero il template esce dal caricamento, ma `onboardingRouteReady` resta al valore
+> vecchio, quindi il segnaposto `onboarding-redirecting` non compare e la pagina richiesta si
+> disegna finché il redirect asincrono non arriva. Con una replay del benvenuto armata, la pagina
+> lampeggiata è quella con i dati dell'utente. Da misurare dal vivo e da decidere: il file è il
+> layout condiviso dell'app.
+
+### Verifica di C4 — lane 6158, 2026-09-24
+
+| comando | esito |
+|---|---|
+| `front-utility core-unit` | exit 0 · `Test Files 94 passed (94)`, `Tests 2513 passed (2513)` (C3: 2479; +34 di OB-8/OB-9) |
+| `front-utility onboarding-component-unit` | exit 0 · `13 passed`, `400 passed` |
+| `front-utility component-unit` | exit 0 · `76 passed`, `2010 passed` |
+| `front-utility onboarding-guides --workers 4` | exit 0 · `24 passed` |
+| `front-utility auth` | exit 0 · `24 passed` |
+| `front-utility settings` | exit 0 dopo lo step 6c · `45 passed` |
+| `front-utility header-scroll` | exit 0 · `4 passed` |
+| `front-transaction tx-import-flow` | exit 0 · `10 passed` |
+| `front-transaction tx-import-resolution` | exit 0 · `12 passed` (step 5b) |
+| `db referential-integrity` | exit 0 · `17 passed` (step 5b) |
+| `dev.py front check` (client `generated.ts` `a085da1c8dac`) | `3 errors and 41 warnings in 4 files` = il pavimento noto, nessuno nel delta |
+| `prettier --check` sui file frontend di C4 | pulito (prettier ha solo spezzato la mia riga del listener) |
+| `git diff --check` | pulito |
+
+Non eseguiti: la suite unitaria intera per categoria diversa da quelle sopra; `chartCoreHelpers.test.ts`
+dà `12 failed | 150 passed` sui test che rispecchiano il sorgente di `GrowthChart.svelte` (file di I;
+questo ramo non tocca `charts/`).
+
+### Step 6b — Documentazione OB-8/OB-9 — **Stato: ✅ completato il 2026-09-24** — *via `docs-writer`*
+
+> **Note implementazione.** Utente (`.en.md`): `user/settings/preferences.en.md` (ambito della
+> replay: questo browser e questo account, sopravvive a schede e riavvii, annullata da logout,
+> anche per sessione scaduta mentre l'app è aperta, e da cambio account, chiusa nelle altre schede
+> quando finisce; OB-9: uscire da una pagina riprende allo stesso step, chiudere un form Aggiungi
+> lo fa ripartire) e `user/transactions/import/how-to.en.md` (una frase). Sviluppatore (`.md`, solo
+> inglese): `developer/frontend/components/features/{settings,import-wizard,auth}.md`, +61/−42:
+> `localStorage`, ciclo di vita della chiave, listener fra schede, OB-9 esatto.
+>
+> | comando | esito |
+> |---|---|
+> | `dev.py mkdocs build` (strict) | exit 0, nessun WARNING/ERROR |
+> | `dev.py mkdocs check-links` | exit 0, `80 valid link(s)` |
+> | `dev.py mkdocs translate-validate` sulle due pagine utente | exit 1, **stesso debito di prima** (15 errori, 9 avvisi): le versioni it/fr/es **non hanno affatto** le sezioni onboarding. Niente da correggere frase per frase: servono le sezioni intere, su richiesta del developer (pipeline Aphra). Nessun `translate-stamp` |
+>
+> **⚠️ Fuori pista — due correzioni oltre il mandato, entrambe legate.** (1) Il mio brief chiedeva
+> solo `.en.md`, ma le pagine sviluppatore sono `.md` e dicevano ancora `sessionStorage`: corrette
+> in un secondo giro. (2) Le stesse frasi descrivevano pulsanti che non esistono più
+> dall'`8a8e686f0` («Skip permanently», «Exit replay», X che chiama `suspend()`): oggi c'è solo
+> **X**, che chiama `exit()` = `skip()`. La frase su OB-9 non poteva essere vera senza correggerle,
+> quindi il `docs-writer` le ha corrette **solo** nei paragrafi toccati.
+>
+> **Errori più vecchi, lasciati e passati al coordinator:** `settings.md` dice 3 flow (sono 15),
+> descrive la replay solo per quei 3 e un avvio automatico dell'intro di 10 s (sono 8,
+> `OnboardingIntroScene.svelte:18`); `auth.md` cita step dell'intro che non esistono in
+> `CORE_TOUR_STEP_IDS`; `import-wizard.md` dice «uno dei tre flow», che `setStep` gira a ogni
+> cambio di step, e che la guida chiama l'endpoint di flow (chiama quelli per step).
 
 ### Step 7 — Review manuale e FROZEN — **Stato: ⏳**
 
@@ -161,7 +366,10 @@ Asset), desktop e mobile, lane 6158, via `test-author`.
 | `ChangelogModal`, `UpdateAvailableModal`, `updateCheckStore` | nessun owner attivo | ultimo tocco 2026-09-09 |
 | cataloghi i18n | condivisi | un valore, via `dev.py`, elencato nell'handoff |
 | `ImportWizardModal`, `TransactionBulkModal` | K | vincolo girato dal coordinator: 7 ancore `import.action.*` (`:4586–4770`), 5 del Bulk, step-sync `:164–178` e `:1279`. Secondo K, R18 si ripara in `AssetModal`; rieseguire l'E2E onboarding dopo il merge di K |
-| `onboardingRouteSettlement.ts` | co-autore `e38a521f0` | toccato solo se OB-9 lo richiede |
+| `onboardingRouteSettlement.ts` | co-autore `e38a521f0` | toccato solo se OB-9 lo richiede — **non richiesto**: OB-9 è una riga dell'host |
+| `backend/test_scripts/test_db/populate_mock_data.py` | condiviso | solo `_grandfather_onboarding_for_test_users` (mia) e un import: semina degli step (IWR-006). Effetto su **tutte** le lane dopo l'integrazione: `TEST_USER` davvero terminale, niente coachmark Import/Bulk nelle spec che non parlano di onboarding |
+| `frontend/e2e/settings.spec.ts` | condiviso | solo il commento del blocco replay (`sessionStorage` → `localStorage`), via `test-author` |
+| cataloghi i18n, OB-8 | condivisi | 2 valori (`onboarding.settings.armedAtNextTrigger`, `armedToast`) × 4 lingue, via `dev.py`, nessuna chiave nuova né rimossa |
 | `features/tools/ToolsHub.svelte` | **D** (assegnato dal coordinator, 2026-09-24) | contiene l'àncora `use:guideAnchor={'tools.hub'}` a `:146`, fissata da `ToolsHub.test.ts:99`: D la preserva. Misurato: **nessuna guida la consuma** (controllo positivo: `nav.tools` consumata a `OnboardingOverlayHost.svelte:109`). Candidata naturale per una guida Strumenti quando esisterà la UI del PAC v2 |
 
 ## Test list — approvata con il piano
@@ -183,6 +391,10 @@ R19 non ha test automatico: niente asserzioni su testo tradotto. Review manuale.
 | tour intro, passo Transazioni | testo | cita ancora la guida di import |
 | guida qualunque, cambio di pagina a metà e ritorno | step | riparte dallo step 1 |
 | replay da Impostazioni, poi scheda nuova | guida | il replay è perso |
+| replay armata, poi logout e nuovo login | Impostazioni | la replay è ancora armata |
+| due schede sulla stessa pagina con la stessa guida; Fine in una | l'altra scheda | il coachmark resta aperto |
+| Aggiungi Broker a metà guida, chiudi, riapri | guida della modale | riprende dallo step lasciato invece di ripartire |
+| Impostazioni → replay: testo «in questo browser … uscendo dall'account si annulla» (4 lingue) | testo | dice ancora «scheda» |
 
 ## Definition of done
 
@@ -196,5 +408,6 @@ R19 non ha test automatico: niente asserzioni su testo tradotto. Review manuale.
 
 - 🐛 Aggiornamenti: il controllo manuale mostra sempre l'esito, e la nuova versione compare subito.
 - 🐛 Onboarding: rimosso dal tour un rimando superfluo alla guida di importazione.
-- ✨ Onboarding: il replay di una guida sopravvive alla chiusura della scheda; una guida
-  interrotta cambiando pagina riprende da dove era rimasta.
+- ✨ Onboarding: le guide ricordano a che punto sei in questo browser, anche chiudendo la scheda o
+  riavviando; uscendo da una pagina a metà guida, al ritorno riprende dallo stesso passo. Una guida
+  finita in una scheda si chiude anche nelle altre; uscire dall'account annulla le replay armate.

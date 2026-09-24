@@ -398,6 +398,16 @@ def front_onboarding_tour(verbose: bool = False, ui: bool = False, headed: bool 
     return _run_playwright("onboarding-tour.spec.ts", ui=ui, headed=headed, debug=debug, project="", test_names=test_names, coverage=coverage)
 
 
+def front_onboarding_guides(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the contextual onboarding guide walks on desktop and mobile."""
+    print_section("Frontend Onboarding Guides Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("onboarding-guides.spec.ts", ui=ui, headed=headed, debug=debug, project="", test_names=test_names, coverage=coverage)
+
+
 def front_tooltip(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run shared Tooltip component E2E tests (pinned hover/click model)."""
     print_section("Frontend Tooltip Component Tests")
@@ -494,6 +504,15 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "image-crop", front_image_crop, name="Image Crop & Media Tests", desc="ImageEditModal, AssetPicker, FileGrid, avatar", prereq="Login working", tests="image-crop.spec.ts")
     add_test(cat, "utilities", front_utilities, name="Utilities API E2E", desc="Currencies, countries, sectors API", prereq="Login working", tests="utilities.spec.ts")
     add_test(cat, "onboarding-tour", front_onboarding_tour, name="Onboarding Tour Tests", desc="Welcome handoff, semantic intro tour and contextual import guide on desktop/mobile", prereq="Test users created", tests="onboarding-tour.spec.ts")
+    add_test(
+        cat,
+        "onboarding-guides",
+        front_onboarding_guides,
+        name="Onboarding Guides Tests",
+        desc="The nine broker/FX/asset contextual guides walked step by step against their real pages (anchored, stable, one described target, completed on the server), pause-on-leave/resume-on-return with the Add-modal restart contrast, and replay persistence across tabs, logout and cross-tab close on desktop/mobile",
+        prereq="Test users created",
+        tests="onboarding-guides.spec.ts",
+    )
     add_test(cat, "tooltip", front_tooltip, name="Tooltip Component Tests", desc="Pinned hover/click model: hover-only, click-to-pin, grace dismiss, click-outside", prereq="Login working", tests="tooltip-component.spec.ts")
     add_test(cat, "scheduler", front_scheduler, name="Scheduler Settings E2E", desc="ConfigModal, LogModal, status row, fetch_interval regression", prereq="Admin user + populated DB", tests="settings/scheduler.spec.ts")
     add_test(cat, "all", front_utility_all, test_names=False, name="All Frontend Utility Tests", desc="Run all utility/component E2E tests")

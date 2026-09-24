@@ -15,7 +15,7 @@ import {
     type ImportGuideStepId,
 } from '$lib/features/onboarding/onboardingGuideCatalog';
 import {registerClientSessionReset} from '$lib/stores/app/clientSession';
-import {onboarding} from '$lib/stores/app/onboarding.svelte';
+import {createReplayStorageListener, onboarding} from '$lib/stores/app/onboarding.svelte';
 import {isOnboardingProgressDue, isOnboardingStepProgressDue, type OnboardingApi, type OnboardingProgressItem} from '$lib/types/onboarding';
 
 export {ASSET_GUIDE_STEP_IDS, BROKER_GUIDE_STEP_IDS, CORE_TOUR_STEP_IDS, FX_GUIDE_STEP_IDS, IMPORT_GUIDE_STEP_IDS};
@@ -463,3 +463,12 @@ export function createOnboardingGuide(dependencies: OnboardingGuideDependencies 
 export const onboardingGuide = createOnboardingGuide();
 
 registerClientSessionReset('onboardingGuide', () => onboardingGuide.reset());
+
+// A guide finished, skipped or logged out in another tab removes the shared key:
+// close this tab's step too, instead of leaving a step whose Finish/Exit no longer owns it.
+if (typeof window !== 'undefined') {
+    window.addEventListener(
+        'storage',
+        createReplayStorageListener(onboarding, undefined, () => onboardingGuide.dismissHost()),
+    );
+}

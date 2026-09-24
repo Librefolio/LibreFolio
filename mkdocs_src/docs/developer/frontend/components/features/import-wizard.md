@@ -292,8 +292,10 @@ state to the guide and renders anchors for it to point at:
   first time the modal opens, then `onboardingGuide.setStep(...)` on every subsequent step change
   — but only while `onboardingGuide.active?.flow === 'import_guide'` and a local `guideHandedOff`
   flag is `false`. Closing the modal while the guide is still attached calls
-  `onboardingGuide.suspend({resetImport: true})`, which resets the replay cursor to
-  `import.upload`.
+  `onboardingGuide.dismissHost({restartAtFirst: true})`, but `import_guide` is step-managed and
+  `dismissHost` ignores `restartAtFirst` for such flows, so nothing is rewound: the next open's
+  `startImportAt(...)` shows the guide at the wizard's current step only if that step is still
+  due (automatic) or still among the replay's remaining steps (replay).
 - Anchors are registered with the `guideAnchor` action against `createGuideAnchorRegistry()`
   (`lib/features/onboarding/guideAnchors.svelte.ts`), a plain `Map<string, HTMLElement>` keyed by
   string id and read back by `OnboardingOverlayHost.svelte`, which owns the single
@@ -320,9 +322,9 @@ state to the guide and renders anchors for it to point at:
   coachmark's **Next** button for **Finish guide** only on this step (and on the tour's last
   step); pressing it calls `onboardingGuide.finish()`. In automatic pending mode, that is the
   *only* guide path that POSTs `/api/v1/settings/onboarding/import_guide/complete`. In replay
-  mode, the same button only clears the session replay token and never calls the endpoint. The
-  guide never calls `Save All` itself — finishing the guide and saving the batch are two
-  independent user actions.
+  mode, the same button only removes `import.bulk` from the stored replay (deleting the key once
+  no step remains) and never calls the endpoint. The guide never calls `Save All` itself —
+  finishing the guide and saving the batch are two independent user actions.
 
 **The coachmark remains observational.** For `import.upload` through `import.review`,
 `OnboardingOverlayHost` does not render its own **Back** or **Next** controls; the user's actions
@@ -330,24 +332,35 @@ in the real wizard drive `currentStepId`, and the guide follows. It never clicks
 control, uploads a file, or reconstructs an earlier wizard draft. Only after the user invokes
 **Import N transactions** does the explicit `import.bulk` handoff highlight **Save All**.
 
-In automatic pending mode, the coachmark's top row contains **Skip permanently** and **X**; in
-replay mode it contains **Exit replay** and **X**. Replay **Finish guide** and **Exit replay**
-only clear the session replay token, so neither calls a complete/skip endpoint nor changes the
-backend onboarding status. **X** calls `suspend({resetImport: true})`, exactly like closing the
-wizard before handoff: the next guide entry is `import.upload`, the active in-memory guide is
-cleared, and the session replay remains armed. No complete/skip endpoint is called, and there is
-no automatic wizard-draft restoration.
+The coachmark's top row holds only **X** (`showSkip={false}`), whose accessible label is *Skip
+this tour* in automatic pending mode and *Exit tour* in replay mode. **X** calls
+`onboardingGuide.exit()`, which is `skip()`: in automatic pending mode it skips the current step
+on the server (`skipStep`); in replay mode, **X** and **Finish guide** only remove the current
+step from the stored replay (deleting the key once no step remains), so neither calls a
+complete/skip endpoint nor changes the backend onboarding status. Closing the wizard before
+handoff is not an exit: `dismissHost({restartAtFirst: true})` rewinds nothing for this
+step-managed flow, the active in-memory guide is cleared, and the stored position (an armed
+replay included) is kept. No complete/skip endpoint is called, and there is no automatic
+wizard-draft restoration.
 
-!!! note "Session-scoped replay vs. server-terminal status"
+!!! note "Browser-stored replay vs. server-terminal status"
 
     `onboarding.startReplay`/`updateReplayStep` (`lib/stores/app/onboarding.svelte.ts`) persist
-    the in-progress step under a `sessionStorage` key scoped to the flow, its content version,
-    and the current user id (`lf_{userId}_onboarding_replay_{flow}_v{version}`). None of this
-    touches the server's `pending` / `completed` / `skipped` status. Only an **automatic pending**
-    guide uses **Finish guide** to complete or **Skip permanently** to skip the server flow;
-    terminal replays are strictly non-destructive. A page refresh or account switch clears the
-    in-memory guide (`registerClientSessionReset('onboardingGuide', ...)`) without touching that
-    server state.
+    the in-progress step under a `localStorage` key scoped to the flow, its content version,
+    and the current user id (`lf_{userId}_onboarding_replay_{flow}_v{version}`), so it survives a
+    closed tab or a browser restart; a newer content version drops the older key on the next read
+    or write. None of this touches the server's `pending` / `completed` / `skipped` status. Only an
+    **automatic pending** guide calls the server, completing or skipping the current step
+    (`completeStep`/`skipStep`); terminal replays are strictly non-destructive. Logging out or
+    switching account deletes the previous account's keys (`createOnboardingSessionResetter`) and
+    clears the in-memory guide (`registerClientSessionReset('onboardingGuide', ...)`); a page
+    refresh loses only the in-memory guide, and the next trigger resumes from the stored key. All
+    tabs of the browser share the key: when another tab removes it (for example because the guide
+    ended there, or that tab logged out), the `storage` listener registered at the bottom of
+    `lib/features/onboarding/onboardingGuide.svelte.ts`
+    (`createReplayStorageListener(onboarding, undefined, () => onboardingGuide.dismissHost())`)
+    drops this tab's in-memory replay and closes its step, so the stale step cannot write the key
+    back.
 
 ---
 

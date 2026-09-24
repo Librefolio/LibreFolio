@@ -59,8 +59,10 @@ them.
 
 For **Welcome setup** and **Quick tour**, **Replay** starts immediately. Contextual flows use
 **Replay at next trigger**: open the matching page, Add form, detail page, Import Wizard, or bulk
-workspace to begin. You can cancel an armed replay before its trigger. **Replay all** arms every
-flow and opens Welcome first.
+workspace to begin. If you leave a page or detail page mid-guide, its guide resumes at the same
+step when you return; closing an Add form mid-guide restarts that form's guide from its first
+step. You can cancel an armed replay before its trigger. **Replay all** arms every flow and opens
+Welcome first.
 
 !!! info "Step-managed guides"
 
@@ -68,12 +70,16 @@ flow and opens Welcome first.
     does not mark the remaining steps skipped. The next due step starts when its real screen or
     milestone is encountered.
 
-    In replay mode, exiting a step removes it only from the current browser-session replay. It
-    does not change the saved **Completed** or **Skipped** status.
+    In replay mode, exiting a step removes it only from the replay stored in this browser for
+    your account. It does not change the saved **Completed** or **Skipped** status.
 
 !!! note "Replay is non-destructive"
 
-    Replays are scoped to your current browser session and account. Guides point at real controls
+    Replays are saved in this browser for your account: an armed or unfinished replay carries over
+    to other tabs and survives closing the tab or restarting the browser, but it is not shared with
+    other browsers or devices. Logging out cancels it, including when LibreFolio signs you out
+    because your session expired, and so does switching account; when it ends in one tab, it also
+    closes in your other open tabs. Guides point at real controls
     but do not click or write for you. A Welcome replay has one explicit exception:
     **Continue** saves the language, base currency, and avatar you selected while preserving the
     Welcome flow's onboarding status.
