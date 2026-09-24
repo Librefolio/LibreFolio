@@ -37,7 +37,7 @@ from backend.app.schemas.risk_scenarios import (
     RiskScenarioDimension,
     RiskScenarioMissingHistoryPolicy,
 )
-from backend.app.services.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
+from backend.app.services.data_quality_thresholds import REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE, STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.provider_registry import RiskAnalyticRegistry, register_plugin
 from backend.app.services.risk.base import (
     RiskAnalytic,
@@ -522,10 +522,16 @@ class StressAnalytic(RiskAnalytic):
 
         all_excluded = excluded_asset_ids | set(auto_excluded)
         if not selected:
+            details: dict = {"excluded_asset_ids": sorted(all_excluded)}
+            if replay.suggested_range is not None:
+                # With nothing left there is no audit to carry it, and this is when the proposal
+                # matters most: a scope made only of assets the window's edges exclude.
+                details["suggested_range"] = {"start": replay.suggested_range.start.isoformat(), "end": (replay.suggested_range.end or replay.suggested_range.start).isoformat()}
+                details["suggested_range_recovers"] = list(replay.suggested_range_recovers)
             raise RiskUnavailableError(
                 "No asset in the replay scope covers the replay window",
                 code=RiskErrorCode.INSUFFICIENT_HISTORY,
-                details={"excluded_asset_ids": sorted(all_excluded)},
+                details=details,
             )
         if replay.prepared_series.n_observations == 0:
             raise RiskUnavailableError(
@@ -566,6 +572,8 @@ class StressAnalytic(RiskAnalytic):
             excluded_weight_total=excluded_weight_total,
             missing_history_policy=params.missing_history_policy,
             composition_policy=context.composition_policy or RiskCompositionPolicy.CURRENT_BUY_AND_HOLD,
+            suggested_range=replay.suggested_range,
+            suggested_range_recovers=list(replay.suggested_range_recovers),
         )
         warnings: list[RiskWarning] = []
         if params.proxy_assets:
@@ -575,6 +583,19 @@ class StressAnalytic(RiskAnalytic):
                     message="Historical replay used one or more manually selected proxy return series.",
                     details={"asset_ids": [item.asset_id for item in params.proxy_assets]},
                     message_i18n_key="risk.warnings.historical_replay_proxies_used",
+                )
+            )
+        if weighted_scope and excluded_weight_total > REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE:
+            # The excluded share counts as idle cash: past the threshold the replayed loss is the
+            # loss of a minority of the portfolio, and the result must say so first.
+            covered = max(0.0, 1.0 - excluded_weight_total)
+            warnings.append(
+                RiskWarning(
+                    code="historical_replay_mostly_excluded",
+                    message=f"Historical replay describes only {covered:.0%} of the portfolio: the rest is excluded.",
+                    details={"excluded_weight_total": excluded_weight_total, "threshold": REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE},
+                    message_i18n_key="risk.warnings.historical_replay_mostly_excluded",
+                    message_params={"covered": round(covered, 4)},
                 )
             )
         for reason in RiskHistoricalReplayExclusionReason:
