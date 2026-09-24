@@ -31,10 +31,14 @@
      * section borrows all three rather than growing a fifth copy — and inherits
      * every future repair to them for free.
      */
-    import {schemas} from '$lib/api';
+    import {schemas, zodiosApi} from '$lib/api';
     import {_ as t} from '$lib/i18n';
     import {riskOutput} from '$lib/risk/riskTypes';
+    import {currentLanguage} from '$lib/stores/app/language';
+    import {ensureCountriesLoaded} from '$lib/stores/reference/countryStore';
     import {createRiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
+    import {safeScalar} from '$lib/types/common';
+    import {normalizeDistribution, type Distribution} from '$lib/components/assets/assetPayload';
     import CorrelationHeatmap from './CorrelationHeatmap.svelte';
     import {degradedResults, levelMetadata, resultReasons} from './levels/levelHelpers';
     import RiskLevelSection from './levels/RiskLevelSection.svelte';
@@ -45,6 +49,8 @@
         assetIds: number[];
         /** Axis names the page already holds. Missing ids degrade to `#id`. */
         assetLabels: ReadonlyMap<number, string>;
+        /** Asset types by id, for the matrix's "by type" ordering. */
+        assetTypes?: ReadonlyMap<number, string | null | undefined>;
         dateStart: string;
         dateEnd: string;
         targetCurrency: string;
@@ -52,7 +58,7 @@
         refreshVersion?: number;
     }
 
-    let {assetIds, assetLabels, dateStart, dateEnd, targetCurrency, refreshVersion = 0}: Props = $props();
+    let {assetIds, assetLabels, assetTypes, dateStart, dateEnd, targetCurrency, refreshVersion = 0}: Props = $props();
     const controller = createRiskPanelController(() => ({
         scope: {kind: 'asset_set', asset_ids: assetIds},
         dateStart,
@@ -86,9 +92,63 @@
      * one string forever, and a value that cannot vary is not provenance.
      */
     let metadata = $derived(levelMetadata([result]));
+
+    /**
+     * Sector and country distributions of the selection, for the matrix's two
+     * exposure orderings (F-3b). The page's asset list does not carry them, so
+     * they come from one bulk read of the asset metadata. It is a GET: it cannot
+     * trigger `notifyPortfolioMutation`, so it cannot discard the correlation
+     * answer in flight. An asset without a usable distribution maps to `null`;
+     * a failed read leaves both maps empty, and the two buttons simply do not
+     * appear.
+     */
+    let sectorsById = $state<ReadonlyMap<number, Distribution | null>>(new Map());
+    let regionsById = $state<ReadonlyMap<number, Distribution | null>>(new Map());
+    let exposureRequest = 0;
+    /** Compared by value: a new array with the same ids must not re-read the metadata (the F-2d lesson). */
+    let exposureIdsKey = $derived([...assetIds].sort((left, right) => left - right).join(','));
+
+    function distributionOf(area: unknown): Distribution | null {
+        const scalar = safeScalar(area as {distribution?: Record<string, string | number>} | null);
+        if (!scalar?.distribution) return null;
+        try {
+            const distribution = normalizeDistribution(scalar.distribution);
+            return Object.keys(distribution).length > 0 ? distribution : null;
+        } catch {
+            return null;
+        }
+    }
+
+    $effect(() => {
+        const ids = exposureIdsKey ? exposureIdsKey.split(',').map(Number) : [];
+        const language = $currentLanguage;
+        const request = ++exposureRequest;
+        if (ids.length === 0) return;
+        void (async () => {
+            try {
+                // Country names come from the store: load it first, so the groups never flash as ISO codes.
+                await ensureCountriesLoaded(language);
+                const rows = await zodiosApi.read_assets_bulk_api_v1_assets_get({queries: {asset_ids: ids}});
+                if (request !== exposureRequest) return;
+                const sectors = new Map<number, Distribution | null>();
+                const regions = new Map<number, Distribution | null>();
+                for (const row of rows) {
+                    const classification = safeScalar(row.classification_params);
+                    sectors.set(row.asset_id, distributionOf(classification?.sector_area));
+                    regions.set(row.asset_id, distributionOf(classification?.geographic_area));
+                }
+                sectorsById = sectors;
+                regionsById = regions;
+            } catch {
+                if (request !== exposureRequest) return;
+                sectorsById = new Map();
+                regionsById = new Map();
+            }
+        })();
+    });
 </script>
 
-<RiskLevelSection title={$t('risk.analytics.correlation.name')} level={2} testId="risk-correlation-section" {health} {reasons} {metadata}>
+<RiskLevelSection title={$t('risk.analytics.correlation.name')} level={2} testId="risk-correlation-section" docsPath="financial-theory/technical-analysis/risk-metrics/correlation/" docsLabel={$t('risk.analytics.correlation.help')} {health} {reasons} {metadata}>
     <!-- `data-catalog` is published here because every section on this page is
          gated on the capability catalogue, so an absent section means
          "unsupported" *or* "not loaded yet" and a test cannot tell which. The
@@ -100,7 +160,7 @@
         {#if controller.loadError}
             <p class="py-6 text-center text-sm text-red-600 dark:text-red-400" data-testid="risk-correlation-error">{$t('risk.states.loadFailed')}</p>
         {:else if output}
-            <CorrelationHeatmap {output} {assetLabels} />
+            <CorrelationHeatmap {output} {assetLabels} {assetTypes} assetSectors={sectorsById} assetRegions={regionsById} />
         {:else if controller.initialLoading}
             <div class="h-48 animate-pulse rounded-lg bg-gray-100 dark:bg-slate-700" data-testid="risk-correlation-loading"></div>
         {:else if controller.loadDiscarded}
