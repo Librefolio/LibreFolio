@@ -24,12 +24,12 @@ una parte della fetta *Azione*, non una categoria a sé.
 - codice: `charts/AllocationPieChart.svelte` (`mode='type'`) + `charts/allocationRings.ts`;
   colori D71 da `charts/allocationHierarchy.ts`; roll-up `primaryAssetType` in `utils/assetTypes.ts`
 
-**Numeri che conosci** (payload della copia, 23/09): ETF 49,79 % · Crowdfunding 30,55 % ·
-Obbligazioni 16,13 % · **ETF azionario ≈ 3,5 % ≈ ≈ X €** · Liquidità 0,01 %.
-Il tuo ETF azionario vale davvero circa ≈ X €? È il controllo più diretto.
+**Numeri che conosci** (payload della copia, 23/09): ETF <quota> · Crowdfunding <quota> ·
+Obbligazioni <quota> · **ETF azionario ≈ <quota> ≈ X €** · Liquidità <quota>.
+Il tuo ETF azionario vale davvero circa X €? È il controllo più diretto. *(I valori veri stanno nella chat, non nei file versionati.)*
 
-⚠️ **Da riguardare dal vivo**: nelle mie letture del 23/09 il payload diceva `3.53` e il tooltip
-`3.52%`. Il tooltip mostra il valore del backend arrotondato a due decimali
+⚠️ **Da riguardare dal vivo**: nelle mie letture del 23/09 il payload e il tooltip differivano di un
+centesimo di punto. Il tooltip mostra il valore del backend arrotondato a due decimali
 (`weightOf: (item) => item.value` → `roundedPercent`), quindi non dovrebbero divergere; ma le due
 letture erano in momenti diversi e sulla copia gira lo scheduler dei prezzi. **Probabile** un
 aggiornamento fra le due, **non dimostrato**: lo rileggiamo payload e tooltip nello stesso istante.
@@ -41,7 +41,7 @@ aggiornamento fra le due, **non dimostrato**: lo rileggiamo payload e tooltip ne
 | R12a | niente spazio di 1° fra le fette in modalità anelli | `padAngle` toglie un grado **per arco**; i due anelli hanno archi diversi → con lo spazio scivolerebbero |
 | R12b | legenda non cliccabile in modalità anelli | spegnere una voce toglierebbe un arco da un anello solo |
 | R12c | famiglia piccola (3,5 %): una sola icona visibile | `hideOverlap` toglie quella della banda interna |
-| R12d | tooltip: membro `3.52%`, famiglia `Azione 3.5%` | due arrotondamenti diversi sulla stessa riga |
+| R12d | tooltip: membro a due decimali, famiglia a uno (`a,bc%` accanto a `Azione a,b%`) | due arrotondamenti diversi sulla stessa riga |
 | R12e | 8 dei tuoi 15 asset sono `ETF` generico | **dato, non codice**: più ne classifichi, più il secondo anello racconta |
 | R12f | la stessa famiglia ha lo stesso colore qui e nel grafico storico? | D71 assegna il colore per rango: la torta ordina per peso **di oggi**, lo storico per peso **medio del periodo** (`AllocationHistoryChart.svelte`, `weight: dataset.avgWeights[name]`) → se i ranghi differiscono, i colori differiscono |
 
@@ -75,7 +75,7 @@ sono di calendario, f ≈ 365.** Un giorno è un giorno di calendario ovunque.
 borsa»: l'avevo preso da una frase della doc (`observed-annualization.en.md:94-95`) senza leggere il
 codice. Corretto alle 17:4x, dopo il reperto del docs-writer di F sul riporto in avanti.*
 
-**F2 — il crowdfunding (≈ 30,5 %) non ha una serie di prezzi.** Cosa succede dipende dal
+**F2 — il crowdfunding (≈ <quota> del portafoglio) non ha una serie di prezzi.** Cosa succede dipende dal
 perimetro:
 - **perimetri pesati** (portafoglio, fetta, Broker Detail): gli asset senza serie vengono
   **esclusi** e il loro peso diventa liquidità, `usable_cash_weight = 1 − Σ pesi utilizzabili`
@@ -180,7 +180,7 @@ dice quanto rischio la correlazione ti toglie rispetto a sommare i rischi.
   `concentration.en.md:86-89`: N_eff = n/s², con s = parte investita). Con F2 hai s ≈ 0,7 → **N_eff
   circa raddoppiato**. È coerente con la teoria scritta, ma su di te dice «sei diversificato il
   doppio» per una ragione — un terzo non quotato — che è l'opposto di una diversificazione.
-- ✅ la card «scoperto» mostra `cash_weight`: dal vivo deve leggere ≈ 30,5 %. È la prova di F2.
+- ✅ la card «scoperto» mostra `cash_weight`: dal vivo deve leggere la quota del crowdfunding. È la prova di F2.
 
 ### 2b · L2 contributo al rischio
 **Mini-lezione**: il **PCTR** dice *quale fetta del rischio totale viene da ciascun asset*. Un asset
@@ -295,7 +295,7 @@ Il GBM è l'alternativa «da manuale», più liscia, che sottostima le code.
 
 | # | sev | cosa | dove si prova | owner |
 |---|---|---|---|---|
-| F2 | 🔴 | crowdfunding = contante nei perimetri pesati (su Asset Global: solo escluso) | card «scoperto» ≈ 30,5 % · banner · replay | Risk (presentazione) · tu (modello) |
+| F2 | 🔴 | crowdfunding = contante nei perimetri pesati (su Asset Global: solo escluso) | card «scoperto» = quota del crowdfunding · banner · replay | Risk (presentazione) · tu (modello) |
 | F5.1 | 🔴 | la baseline conta fra i punti riportati → sezioni `partial` senza ragione | intervallo che parte di lunedì col BOND dentro | Risk (una riga + test) |
 | C2 | 🟡 | orizzonte del bootstrap in osservazioni — **latente**, non sui tuoi dati (f ≈ 365); fix solo in `simulation.py` | perimetro senza quotazioni nel weekend | Risk |
 | C3 | 🟠 | «mese storto» = 3 settimane (ovunque sui tuoi dati) · «giornata storta» diluita dai weekend — **misurato: −8/−13 % al giorno, −9/−19 % al mese; la volatilità no (1,00)** | colonna sullo zero nell'istogramma | Risk |

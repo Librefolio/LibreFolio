@@ -271,7 +271,7 @@ Un anello su canvas non si asserisce in un E2E: i test legano la costruzione, no
 | R12a | niente spazio di 1° fra le fette in modalità anelli | `padAngle` toglie un grado per arco e i due anelli hanno archi diversi: con lo spazio scivolerebbero |
 | R12b | legenda non cliccabile in modalità anelli | spegnere una voce toglierebbe un arco da un anello solo — cambio di comportamento |
 | R12c | famiglia piccola (3,5 %): si vede **una** icona sola | `hideOverlap` toglie quella della banda interna |
-| R12d | tooltip: membro `3.52%`, famiglia `Azione 3.5%` | due arrotondamenti diversi sulla stessa riga |
+| R12d | tooltip: membro a due decimali, famiglia a uno (`a,bc%` accanto a `Azione a,b%`) | due arrotondamenti diversi sulla stessa riga |
 | R12e | 8 dei tuoi 15 asset sono `ETF` generico | **dato, non codice**: più ne classifichi, più il secondo anello racconta |
 
 **Dashboard (i tuoi dati, in €)**
@@ -381,7 +381,7 @@ la tocca: lo verifichi lì).
 > `6162`, DB verificato dal log (`/private/tmp/librefolio-r2-risk-prodcopy/sqlite/app.db`), login
 > `alfy`. Asset del developer: `ETF 8 · CROWDFUND 4 · ETF_STOCK 1 · ETF_BOND 1 · BOND 1`.
 > Payload reale di `allocation_by_type`:
-> `ETF 49.79 · CROWDFUND 30.55 · BOND 16.13 · ETF_STOCK 3.53 · Liquidity 0.01`.
+> `ETF <quota> · CROWDFUND <quota> · BOND <quota> · ETF_STOCK <quota> · Liquidity <quota>`.
 > **Diagnosi confermata**: `ETF_STOCK` è l'unico membro della famiglia Azioni → singoletto →
 > colore puro, nessun «↳». E `ETF_BOND` non compare: nessuna posizione aperta, quindi anche
 > Obbligazioni è un singoletto. Screenshot prima/dopo in `session-state/files/r12-*.png`.
@@ -399,7 +399,7 @@ la tocca: lo verifichi lì).
 >
 > ```
 > archi base vs somma dei membri   Δ 0.0000° su tutte e cinque le famiglie
-> tooltip dell'arco esterno        «ETF azionario: 3.52% · ≈ X € EUR · ↳ Azione 3.5%»
+> tooltip dell'arco esterno        «ETF azionario: <quota>% · ≈ X € EUR · ↳ Azione <quota>%» (membro a due decimali, famiglia a uno)
 > transizione nella stessa istanza anelli → uno → anelli: 3 → 1 → 3 serie, nessuna orfana
 > errori di pagina                 nessuno
 > front check                      gli stessi 3 ereditati, zero nei file toccati
@@ -709,7 +709,7 @@ copia byte-identica alla snapshot al momento dell'avvio.
 > 3. **il tooltip cambia con la banda** (interna = famiglia, esterna = sottotipo), ma le bande non si
 >    vedono, quindi sembra casuale.
 >
-> Confermato anche R12d dal suo screenshot: `ETF azionario: 3.48%` accanto a `↳ Azione 3.5%`, due
+> Confermato anche R12d dal suo screenshot: il membro a due decimali accanto a `↳ Azione` a uno, due
 > arrotondamenti della stessa quantità (la famiglia è fatta solo di quel membro).
 >
 > **Decisione aperta, prima di toccare il codice**: *quale famiglia per l'ETF azionario?*
@@ -719,9 +719,9 @@ copia byte-identica alla snapshot al momento dell'avvio.
 > esterno più sottile e **didascalie invece delle icone** sul sottile: nel piano di sessione,
 > `files/r12-proposte-A-B.png` (+ `.html`), non versionati.
 >
-> **⚠️ Fuori pista — i numeri si muovono sulla copia**: ieri il tooltip leggeva `3.52% · ≈ X €`,
-> oggi `3.48% · ≈ X €` sulla copia rinfrescata. Lo scheduler dei prezzi gira anche sul server di
-> review e la torta è alla data finale. Spiega anche lo scarto `3.53`/`3.52` di ieri fra payload e
+> **⚠️ Fuori pista — i numeri si muovono sulla copia**: ieri il tooltip leggeva `<quota> · ≈ X €`,
+> oggi `<quota'> · ≈ Y €` sulla copia rinfrescata. Lo scheduler dei prezzi gira anche sul server di
+> review e la torta è alla data finale. Spiega anche lo scarto di un centesimo di punto di ieri fra payload e
 > tooltip: letture in momenti diversi, non un difetto di arrotondamento.
 >
 > **Decisione del developer (24/09, 10:29)**: *«la proposta B è quello che mi aspettavo»* → **per veicolo**.
@@ -742,9 +742,9 @@ copia byte-identica alla snapshot al momento dell'avvio.
 >
 > ```
 > sui dati del developer (copia di prod, 6162)
->   interno   ETF 53.05 · Crowdfunding 30.77 · Obbligazione 16.18 · Liquidità 0.01
->   esterno   ETF generico 49.56 + ETF azionario 3.49 = 53.05, riempitivi senza tooltip
->   tooltip   «ETF azionario: 3.49% · ≈ X € · ↳ ETF 53.05%»
+>   interno   ETF <quota> · Crowdfunding <quota> · Obbligazione <quota> · Liquidità <quota>
+>   esterno   ETF generico <quota> + ETF azionario <quota> = la quota interna dell'ETF, riempitivi senza tooltip
+>   tooltip   «ETF azionario: <quota>% · ≈ X € · ↳ ETF <quota>%», stessa precisione
 >   legenda   clic su «ETF» → spariscono insieme l'arco interno e i due esterni; anelli allineati
 >   errori di pagina: nessuno · front check: gli stessi 3 ereditati, zero nei miei file · prettier pulito
 > test      85/86: rosso solo il contratto sul sorgente del percorso veloce, che cercava tre id (ora due)
@@ -805,3 +805,69 @@ copia byte-identica alla snapshot al momento dell'avvio.
 > la indovino. Riavviato sulla stessa copia (i dati del developer + i prezzi di oggi scritti dallo
 > scheduler); all'avvio `dev.py server` ha ricostruito il frontend perché i due file di test erano più
 > recenti del bundle. Verificata di nuovo la torta: due serie, tooltip corretti, nessun errore.
+
+### R12 — dopo il checkpoint `5135efffc` → `086af5172` → `cdf89f1b3` (24/09)
+
+> **Note implementazione — l'icona del tooltip si adatta alla composita di K**: con la D-K2 di K,
+> `getAssetTypeIconUrl('ETF_STOCK')` restituirà una **composita statica** (ETF con l'azione già
+> sovrapposta); sovrapporci di nuovo il contenuto lo mostrerebbe due volte (reperto del coordinator).
+> Regola in `allocationTypeIcons`: se l'icona del tipo è diversa da quella del suo contenitore
+> (`allocationFamily`) è già la composita → nessuna sovrapposizione; altrimenti si sovrappone il contenuto.
+> Oggi il comportamento è identico (46/46 test invariati); dopo K niente doppio contenuto, senza
+> modifiche all'integrazione. ⚠️ Dipende dallo scambio `allocationFamily` → `assetTypeFamily`: senza, un
+> futuro `CROWDFUND_REAL_ESTATE` avrebbe per contenitore se stesso. I due punti stanno insieme nella lista
+> d'integrazione del coordinator.
+>
+> **Coordinamento**: l'icona del manuale in `RiskLevelSection` la scrive **F** (prop facoltativa); io la
+> collego ai miei punti di chiamata dopo aver fuso il ramo di F. Se il developer approva la frase unica
+> al posto di «Parziale», toccherò il blocco di stato di `RiskLevelSection` solo dopo F.
+>
+> **Da proporre al developer**: un test che simula la composita di K (`vi.mock` di `getAssetTypeIconUrl`)
+> e verifica che il tooltip mostri solo quella; mutante: senza il confronto col contenitore → rosso.
+
+### Dati personali nei file versionati — 24/09/2026
+
+> **⚠️ Fuori pista — pesi e importi reali del developer nel journal**: nelle note di R12 e nelle schede
+> del tempo ② avevo trascritto le quote reali del suo portafoglio per tipo e alcuni importi in euro letti
+> dalla copia di prod; nel test della torta le fixture riproducevano le stesse quote. Insieme permettevano
+> di risalire al patrimonio. Trovato dal coordinator dopo il checkpoint `cdf89f1b3` (il controllo del
+> tempo ① cercava la password, non i valori finanziari). La regola dell'agente di lane lo vietava già
+> («financial values … identifying user data»).
+>
+> **Decisione del developer**: dalla storia locale si tolgono **solo gli importi in euro** (6 righe, in
+> `de55b5346` e `cdf89f1b3`; la riscrittura la prepara il coordinator su un clone in `/tmp`, la lancia il
+> developer); le **percentuali possono restare**. Nel working tree ho comunque messo segnaposto
+> (`<quota>`, `≈ X €`) su pesi e importi — innocui, e riscritte le osservazioni che se ne servivano
+> (per R12d: «membro a due decimali, famiglia a uno») — e test-author ha rifatto le fixture di
+> `allocationRings.test.ts` con valori **sintetici** della stessa forma (4 file · 114 test; il mutante
+> del totale a un decimale ora fa rosso su entrambi i test d'arrotondamento). L'importo rimasto nel test
+> è sintetico (`value * 1000`, un portafoglio fittizio da centomila).
+> **Regola tenuta**: i valori veri del developer stanno solo nella chat e nei file di sessione, mai nei
+> file versionati; nei file si scrivono segnaposto o grandezze relative senza valore.
+>
+> **Da segnalare, non mio**: `REGISTRO.md:235` (R2-03, `da303e211`, 18/09) contiene un importo, già su
+> `origin`: lo porta il coordinator al developer.
+>
+> **⚠️ Fuori pista — `npx --no-install` non protegge**: l'avevo passato a test-author come cautela; il
+> coordinator ha verificato che interroga comunque il registry. Da ora solo `node_modules/.bin/…` o
+> `npm run`. I miei `npx prettier/vitest/tsc` di oggi usavano binari locali: nessun download mio.
+
+### R12 — il test dell'icona composita (punto 5 del developer) · ✅ 24/09/2026
+
+> **Note implementazione**: test-author ha aggiunto a `allocationFamily.test.ts` un blocco che simula le
+> icone composite di K (D-K2): `getAssetTypeIconUrl('ETF_STOCK')` restituisce una composita, tutto il
+> resto è il codice vero di K. Asserisce che la composita si mostra **da sola** (mai il contenuto due
+> volte) e, nello stesso mondo simulato, che un sottotipo ancora sull'icona del contenitore
+> (`ETF_BOND`) tiene la sovrapposizione e che `STOCK` resta un'icona sola.
+>
+> ```
+> vitest, 4 file (rings + family + hierarchy + colors)      Test Files 4 · Tests 116
+> mutante (f) — via il ritorno anticipato «già composita»   rosso solo il test D-K2 (1/14), rifatto da me
+> mutante (e) — contenuto sempre presente                   5/14
+> ```
+>
+> **⚠️ Fuori pista — una corsa nel mock, trovata da test-author**: la prima versione importava i due moduli
+> con `Promise.all`; con il blocco eseguito per primo il test vedeva le icone simulate e
+> `allocationFamily.ts` quelle vere. I mock manuali di vitest non reggono import concorrenti (lo dice il suo
+> sorgente). Rimedio: il blocco ha un caricatore che importa in sequenza, e una barriera verifica che
+> `allocationFamily.ts` veda davvero la composita. Provato anche col blocco spostato in testa, 4 volte.
