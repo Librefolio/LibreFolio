@@ -774,6 +774,10 @@ class FAinfoResponse(StrictModel):
     # transactions in brokers the current user OWNs with a positive share.
     tx_count: int = Field(0, description="Total transactions referencing this asset (any broker)")
     tx_count_own: int = Field(0, description="Transactions in brokers the current user owns (share > 0)")
+    # Positions open now (quantity > 0), which a transaction count cannot tell: an asset sold in
+    # full still has transactions. "My assets" means held now, not traded once.
+    held_by_me: bool = Field(False, description="A positive quantity is held now in a broker the current user owns (share > 0)")
+    held_by_others: bool = Field(False, description="A positive quantity is held now in a broker the current user does not own")
 
     # Identifier columns (one per IdentifierType)
     identifier_isin: Optional[str] = Field(None, description="ISIN code")
