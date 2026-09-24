@@ -27,7 +27,7 @@
  */
 import {describe, expect, it} from 'vitest';
 
-import {NEAR_IDENTICAL, PAIR_LIST_THRESHOLD, buildLookup, clusterOrder, correlationBand, correlationDistance, lowerTrianglePoints, topPairs, type CorrelationCell, type CorrelationLookup, type CorrelationPair, type HeatmapPoint} from './correlationHelpers';
+import {NEAR_IDENTICAL, PAIR_LIST_THRESHOLD, buildLookup, clusterOrder, correlationBand, correlationDistance, lowerTrianglePoints, nameOrder, topPairs, type CorrelationCell, type CorrelationLookup, type CorrelationPair, type HeatmapPoint} from './correlationHelpers';
 
 /** One matrix cell. `ok` is the only status that carries a usable number. */
 function cell(row: number, column: number, value: number | null, status: string | null = 'ok'): CorrelationCell {
@@ -338,6 +338,59 @@ describe('clusterOrder', () => {
         const cells = ids.flatMap((row) => ids.map((column) => cell(row, column, null, 'insufficient')));
         const order = clusterOrder(ids, buildLookup(cells));
         expect(byId(order)).toEqual(byId(ids));
+    });
+});
+
+describe('nameOrder', () => {
+    // The locale is pinned in every case: `Intl.Collator` otherwise follows the
+    // host, and a collation test that passes on one machine's locale and not on
+    // another's is testing the machine.
+    const LOCALE = 'en';
+
+    /** Names as the heatmap's `nameOf` resolves them: the label, or `#id` when there is none. */
+    function namesOf(table: Record<number, string>): (assetId: number) => string {
+        return (assetId) => table[assetId] ?? `#${assetId}`;
+    }
+
+    it('orders by the name the reader sees, not by id', () => {
+        // Ids ascend while the names do not, so the two orders disagree here —
+        // which is the only kind of fixture that can tell them apart.
+        expect(nameOrder([1, 2, 3], namesOf({1: 'Tesla', 2: 'Apple', 3: 'Microsoft'}), LOCALE)).toEqual([2, 3, 1]);
+    });
+
+    it('files names regardless of case and accents, as the reader does', () => {
+        // A code-point sort would put every capital first and `É` after `z`
+        // ([4, 3, 1, 2] here); base sensitivity reads the letters.
+        expect(nameOrder([1, 2, 3, 4], namesOf({1: 'zeta', 2: 'Éclair', 3: 'apple', 4: 'Delta'}), LOCALE)).toEqual([3, 4, 2, 1]);
+    });
+
+    it('treats names that differ only in case or accent as equal, and settles them by id', () => {
+        expect(nameOrder([9, 4, 7], namesOf({9: 'Été', 4: 'ete', 7: 'ETE'}), LOCALE)).toEqual([4, 7, 9]);
+    });
+
+    it('reads the numbers inside a name as numbers', () => {
+        // "ETF 2" before "ETF 10": a plain string sort reverses them.
+        expect(nameOrder([1, 2, 3], namesOf({1: 'ETF 10', 2: 'ETF 2', 3: 'ETF 1'}), LOCALE)).toEqual([3, 2, 1]);
+    });
+
+    it('breaks a tie between equal names by id, so the order is stable across renders', () => {
+        expect(nameOrder([30, 10, 20], namesOf({30: 'Same', 10: 'Same', 20: 'Same'}), LOCALE)).toEqual([10, 20, 30]);
+    });
+
+    it('sorts the `#id` fallback of an unnamed asset like any other name', () => {
+        // `#3` before `#12` numerically, and both before a letter.
+        expect(nameOrder([12, 5, 3], namesOf({5: 'Bond'}), LOCALE)).toEqual([3, 12, 5]);
+    });
+
+    it('returns a new array and leaves the one it was given alone', () => {
+        // The heatmap hands over the payload's own `asset_ids`, which the similarity
+        // ordering reads too: sorting it in place would change that input behind
+        // its back.
+        const ids = [3, 1, 2];
+        const result = nameOrder(ids, namesOf({1: 'C', 2: 'B', 3: 'A'}), LOCALE);
+        expect(result).toEqual([3, 2, 1]);
+        expect(ids).toEqual([3, 1, 2]);
+        expect(result).not.toBe(ids);
     });
 });
 
