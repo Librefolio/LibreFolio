@@ -11,7 +11,7 @@
  * (`priorityIds`, `manualChoice`, `selections`) so they can be unit-tested directly; the
  * component keeps thin wrappers that inject its reactive `$state`.
  */
-import {normalizeDedupDescription} from './importDedup';
+import {hasFirmOutsideCollision, normalizeDedupDescription} from './importDedup';
 import type {DuplicateGroup, MergedTx} from './importTypes';
 
 export interface GroupPartition {
@@ -23,8 +23,9 @@ export interface GroupPartition {
 /**
  * Partition a duplicate group by normalized description. Each partition is a set of rows
  * that share the numeric/fixed key AND the (whitespace-insensitive) description. The primary
- * is the partition member from the highest-priority file (`priorityIds` order); the rest are
- * exact cross-file twins.
+ * is the partition member from the highest-priority file (`priorityIds` order) among those
+ * that do not collide firmly with the database or the bulk editor; when every member does,
+ * it is the highest-priority member, for display only. The rest are exact cross-file twins.
  */
 export function groupPartitions(group: DuplicateGroup, txArr: MergedTx[], priorityIds: string[]): GroupPartition[] {
     const members = group.memberIndices.map((idx) => txArr.find((mt) => mt.index === idx)).filter((mt): mt is MergedTx => mt !== undefined);
@@ -39,7 +40,9 @@ export function groupPartitions(group: DuplicateGroup, txArr: MergedTx[], priori
         byDesc.set(d, arr);
     }
     return [...byDesc.values()].map((part) => {
-        const primary = part.reduce((best, mt) => (rank(mt) < rank(best) ? mt : best), part[0]);
+        const eligible = part.filter((mt) => !hasFirmOutsideCollision(mt));
+        const pool = eligible.length > 0 ? eligible : part;
+        const primary = pool.reduce((best, mt) => (rank(mt) < rank(best) ? mt : best), pool[0]);
         const files = new Set(part.map((mt) => mt.sourceFileId));
         return {primaryIndex: primary.index, memberIndices: part.map((mt) => mt.index), crossFile: files.size >= 2};
     });
@@ -48,10 +51,18 @@ export function groupPartitions(group: DuplicateGroup, txArr: MergedTx[], priori
 /**
  * Keep exactly one primary per description-partition (highest file priority). A cross-file
  * duplicate keeps a single copy; genuinely-distinct rows that only share the numeric key
- * (different descriptions) are each their own partition primary, so all are kept.
+ * (different descriptions) are each their own partition primary, so all are kept. A partition
+ * whose every copy already exists — in the database or in the bulk editor — keeps none.
  */
 export function defaultKeeperIndices(group: DuplicateGroup, txArr: MergedTx[], priorityIds: string[]): Set<number> {
-    return new Set(groupPartitions(group, txArr, priorityIds).map((p) => p.primaryIndex));
+    const byIndex = new Map(txArr.map((mt) => [mt.index, mt] as const));
+    const primaries = groupPartitions(group, txArr, priorityIds).map((p) => p.primaryIndex);
+    return new Set(
+        primaries.filter((idx) => {
+            const row = byIndex.get(idx);
+            return row !== undefined && !hasFirmOutsideCollision(row);
+        }),
+    );
 }
 
 /**

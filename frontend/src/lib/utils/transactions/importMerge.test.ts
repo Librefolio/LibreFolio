@@ -291,3 +291,50 @@ describe('buildMergedTransactions — todos, sparse rows and mapping edges', () 
         ]);
     });
 });
+
+describe('U6: buildMergedTransactions — the database verdict, kept apart from duplicateStatus', () => {
+    // `duplicateStatus` is rewritten later by the in-batch pass on every cross-file secondary;
+    // `dbDuplicateStatus` is the copy of the database's own verdict that the resolver reads.
+    const buy = (asset_id: number) => ({type: 'BUY', date: '2024-05-01', quantity: 1, asset_id});
+
+    it('records likely, possible, or nothing, as the parse report says', () => {
+        const results = [
+            src('f', 1, {
+                transactions: [buy(1), buy(2), buy(3)],
+                duplicates: {
+                    tx_likely_duplicates: [{tx_row_index: 0, tx_existing_matches: [{existing_tx_id: 500}]}],
+                    tx_possible_duplicates: [{tx_row_index: 1, tx_existing_matches: [{existing_tx_id: 501}]}],
+                },
+            }),
+        ];
+        const {txArr} = buildMergedTransactions(results, [{id: 1}], []);
+        expect(txArr.map((t) => t.duplicateStatus)).toEqual(['likely', 'possible', 'unique']);
+        expect(txArr[0].dbDuplicateStatus).toBe('likely');
+        expect(txArr[1].dbDuplicateStatus).toBe('possible');
+        expect(txArr[2].dbDuplicateStatus).toBeUndefined();
+    });
+
+    it('records nothing for a row whose only database matches are all pending deletion', () => {
+        const results = [
+            src('f', 1, {
+                transactions: [buy(1), buy(2), buy(3)],
+                duplicates: {
+                    tx_likely_duplicates: [
+                        {tx_row_index: 0, tx_existing_matches: [{existing_tx_id: 700}, {existing_tx_id: 701}]},
+                        {tx_row_index: 2, tx_existing_matches: [{existing_tx_id: 702}, {existing_tx_id: 703}]},
+                    ],
+                    tx_possible_duplicates: [{tx_row_index: 1, tx_existing_matches: [{existing_tx_id: 704}]}],
+                },
+            }),
+        ];
+        // Rows 0 and 1 lose every match to the bulk editor's deletions; row 2 keeps one.
+        const {txArr} = buildMergedTransactions(results, [{id: 1}], [700, 701, 702, 704]);
+        expect(txArr[0].duplicateStatus).toBe('unique');
+        expect(txArr[0].dbDuplicateStatus).toBeUndefined();
+        expect(txArr[1].duplicateStatus).toBe('unique');
+        expect(txArr[1].dbDuplicateStatus).toBeUndefined();
+        // Contrast: one surviving match keeps the verdict.
+        expect(txArr[2].dbDuplicateStatus).toBe('likely');
+        expect(txArr[2].dupMatches.map((m) => m.existing_tx_id)).toEqual([703]);
+    });
+});
