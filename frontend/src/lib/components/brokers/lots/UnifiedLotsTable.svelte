@@ -14,7 +14,7 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {safeDecimal, safeNumber} from '$lib/types';
     import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
-    import {filterStates, findBroker, formatLotQuantity as formatQuantity, primaryState, ratioOrNull, sameIdSet, secondaryStates, sumNumeric, weightedAverage} from './unifiedLotsTableHelpers';
+    import {filterStates, findBroker, formatLotQuantityCell, formatLotQuantityMasked, primaryState, ratioOrNull, sameIdSet, secondaryStates, sumNumeric, weightedAverage} from './unifiedLotsTableHelpers';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type LotCustodySummarySchema = z.infer<typeof schemas.LotCustodySummarySchema>;
@@ -161,7 +161,7 @@
 
     function quantityCell(row: DisplayRow): HtmlCell | string {
         if (row.primaryState === 'CLOSED') return '—';
-        const content = row.primaryState === 'PARTIALLY_CLOSED' ? `${formatQuantity(row.quantityOpen)} / ${formatQuantity(row.quantityOriginal)}` : formatQuantity(row.quantityOpen);
+        const content = formatLotQuantityCell(row.quantityOpen, row.quantityOriginal, row.primaryState === 'PARTIALLY_CLOSED');
         return {
             type: 'html',
             html: `<span class="font-medium tabular-nums text-gray-700 dark:text-gray-200">${escapeHtml(content)}</span>`,
@@ -172,7 +172,7 @@
         if (value == null) return '—';
         return {
             type: 'html',
-            html: `<span class="font-medium tabular-nums text-gray-700 dark:text-gray-200">${escapeHtml(formatQuantity(value))}</span>`,
+            html: `<span class="font-medium tabular-nums text-gray-700 dark:text-gray-200">${escapeHtml(formatLotQuantityMasked(value))}</span>`,
         };
     }
 
@@ -181,6 +181,20 @@
         return {
             type: 'html',
             html: `<span class="font-medium tabular-nums text-gray-700 dark:text-gray-200">${escapeHtml(formatCurrencyAmountPlain(value, currency))}</span>`,
+        };
+    }
+
+    /**
+     * A price per unit. Public: the product owner ruled that a price is not patrimony and that
+     * a purchase price is admissible (2026-09-22). It used to be masked with the other amounts
+     * while the open quantity beside it was visible, since quantity × price rebuilds the value;
+     * the quantity is masked now (D5′), so the price has nothing left to reveal.
+     */
+    function unitPriceCell(value: number | null): HtmlCell | string {
+        if (value == null) return '—';
+        return {
+            type: 'html',
+            html: `<span class="font-medium tabular-nums text-gray-700 dark:text-gray-200">${escapeHtml(formatCurrencyAmountPlain(value, currency, {sensitivity: 'public'}))}</span>`,
         };
     }
 
@@ -223,7 +237,7 @@
         const lines = row.custodySlices.map((slice) => {
             const brokerId = safeNumber(slice.broker_id);
             const name = slice.custody_type === 'IN_TRANSIT' && brokerId == null ? label('brokers.lots.inTransit', 'In transit') : getBrokerName(brokerId);
-            return `<div class="flex items-center justify-between gap-3"><span>${escapeHtml(name)}</span><span class="font-medium tabular-nums">${escapeHtml(formatQuantity(safeDecimal(slice.quantity)))}</span></div>`;
+            return `<div class="flex items-center justify-between gap-3"><span>${escapeHtml(name)}</span><span class="font-medium tabular-nums">${escapeHtml(formatLotQuantityMasked(safeDecimal(slice.quantity)))}</span></div>`;
         });
         return `<div class="space-y-1"><div class="font-semibold">${escapeHtml(label('brokers.lots.custody', 'Custody'))}</div>${lines.join('')}</div>`;
     }
@@ -402,7 +416,7 @@
             'net-total-return': signedPercentCell(netTotalReturn),
             'current-value': currencyCell(sumNumeric(footerRows, (row) => row.currentValue)),
             'open-quantity': quantityValueCell(sumNumeric(footerRows, (row) => row.quantityOpen)),
-            'opening-price': currencyCell(
+            'opening-price': unitPriceCell(
                 weightedAverage(
                     footerRows,
                     (row) => row.openingUnitPrice,
@@ -584,7 +598,7 @@
         {
             id: 'opening-price',
             header: () => label('brokers.lots.openingPriceReference', 'Opening price'),
-            cell: (row) => currencyCell(row.openingUnitPrice),
+            cell: (row) => unitPriceCell(row.openingUnitPrice),
             type: 'number',
             align: 'right',
             width: 150,

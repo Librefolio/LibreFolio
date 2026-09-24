@@ -85,6 +85,7 @@ Già falsificate: `scrollOnOverflow` (sta sul nome, `:107`); cache nel formatter
 | Q4 | AI Export fuori perimetro per D4 («export grezzi») | default approvato |
 | Q7 | il formatter del rischio mascherato mostra il **segno**, come D8 | default approvato |
 | Q8 | cella lotto «aperta / originale» sotto privacy → `••• (60 %)` | default approvato |
+| D5′-c | **prezzi unitari visibili, totali nascosti** — pubblici: prezzo, `pmc`/WAC, prezzi di apertura, chiusura e unitari, serie WAC e di mercato; mascherati: valore, proventi, commissioni, tasse, P&L | developer, 2026-09-24 11:5x, come corollario di D5′ (verbatim: *«Prezzi unitari visibili, totali nascosti»*) |
 
 ⚠️ **Residuo accettato da D5′**: in Transazioni quantità × prezzo resta ricostruibile. È una
 scelta del developer, non una svista.
@@ -311,7 +312,7 @@ con il controllo di `brokers/[id]`. Il fix si decide dopo la misura, non prima.
 >
 > | scenario | esito |
 > |---|---|
-> | `/brokers`, privacy **spenta** al caricamento | `aria-pressed` commuta, **le cifre restano in chiaro** (`<importo>`, `<importo>`, …) |
+> | `/brokers`, privacy **spenta** al caricamento | `aria-pressed` commuta, **le cifre restano in chiaro** |
 > | `/brokers`, privacy **accesa** al caricamento | `aria-pressed` commuta, **`•••` resta** |
 > | `/brokers/2`, importo della pagina (controllo) | `0.00` fisso in entrambi gli stati |
 >
@@ -376,7 +377,7 @@ con il controllo di `brokers/[id]`. Il fix si decide dopo la misura, non prima.
 > congelato, e né il gate né un test di formatter lo vedrebbero. Va detto nella skill e nella doc
 > sviluppatore (passo 10).
 
-### Passo 7 — Quantità D5′ — **Stato: ⏳** — *i 5 file assegnati a J dal coordinator, 2026-09-24*
+### Passo 7 — Quantità D5′ — **Stato: ✅ fatto** — 2026-09-24 — *C3 · una domanda aperta al developer (quantità 1)*
 
 La classe di una quantità dipende ora dal **contesto**: la stessa `formatQuantity` va mascherata
 in un lotto e resta visibile in una transazione. La regola sta quindi al sito di chiamata.
@@ -392,12 +393,137 @@ in un lotto e resta visibile in una transazione. La regola sta quindi al sito di
    dell'`option` al toggle. Le grafiche restano, lunghezza delle barre inclusa.
 4. Nota in testa a D5 nell'analisi, senza cancellare il testo originale.
 
-### Passo 8 — Review del diff privacy di I — **Stato: ⏳**
+> **Note implementazione — inventario (Q-1).** Ricerca per contenuto su tutto `src` fuori dalle
+> transazioni: righe che rendono un'interpolazione con un identificatore di quantità **e** una
+> chiamata di formattazione → 21 righe in 11 file, triate a mano: 14 da mascherare, in esattamente
+> i 5 file assegnati; il resto sono percentuali, pesi di distribuzione, byte dell'AI export e il
+> reddito per unità (già mascherato come denaro). Controllo positivo: i due siti noti in partenza
+> (`ExposureTable:374`, la cella di `UnifiedLotsTable`) compaiono. Secondo passaggio per le rese
+> **senza** formattazione nelle aree di posizioni e lotti: nessun sito nuovo.
+>
+> Tre forme diverse per lo stesso dato: la `formatQuantity` condivisa di `lotGanttChartHelpers`,
+> `formatLotQuantity` dei helper della tabella, e **due copie locali omonime** (`LotCustodyModal`,
+> `ExposureTable`); il grafico WAC ne ha una quarta, `formatQuantityValue`, per 12 siti.
+>
+> **Primitiva (Q-2)**: `maskableQuantity(formatted)` in `maskable.ts`, che delega a
+> `maskFormattedNumber` (segno tenuto come l'ha scritto la locale: una posizione corta conserva
+> la direzione). Nome distinto perché la distinzione resti cercabile: la classe la decide il
+> contesto, non il formattatore.
+>
+> **Applicazione (Q-3)**:
+>
+> | file | cosa |
+> |---|---|
+> | `unifiedLotsTableHelpers.ts` | `formatLotQuantityMasked` (assenza sempre `—`) e `formatLotQuantityCell`: Q8, lotto parziale mascherato → `••• (60%)` |
+> | `UnifiedLotsTable.svelte` | cella quantità, colonna quantità, tooltip di custodia |
+> | `LotCustodyModal.svelte` | la `formatQuantity` locale: numero mascherato, segno e unità fuori |
+> | `LotWacPriceChart.svelte` | `formatQuantityValue`, cioè i 12 siti in un punto |
+> | `LotGanttChart.svelte` | etichetta sulla barra e tooltip; `void isPrivacyEnabled()` nell'effect, perché l'etichetta nasce in `renderItem` |
+> | `ExposureTable.svelte` | la `formatQuantity` locale |
+>
+> **⚠️ Fuori pista — D5′ capovolge le compensazioni di D5.** Il commento di `ExposureTable` sul
+> prezzo — scritto da me nel Round 1 — diceva: mascherato *di proposito*, perché la riga porta la
+> `quantity` (visibile per D5) e quantità × prezzo ricostruisce il valore. Con la quantità
+> mascherata la ragione non c'è più, e resta una **sovra-mascheratura**, che il runbook approvato
+> elenca come difetto (*«prezzi … mascherati = sovra-mascheratura»*). Stessa forma, senza commento,
+> altrove: prezzi unitari resi pubblici con le decisioni del 22/09 (un prezzo non è patrimonio,
+> il WAC è ammissibile):
+>
+> | file | prezzi unitari resi pubblici | totali che restano mascherati |
+> |---|---|---|
+> | `ExposureTable` | prezzo, `pmc` (WAC) | valore |
+> | `UnifiedLotsTable` | prezzo d'apertura (colonna e media a piè di tabella) | valore, proventi, commissioni, tasse |
+> | `LotCustodyModal` | prezzo d'apertura, di chiusura, unitario d'apertura | valore d'apertura e corrente, proventi, commissioni, tasse |
+> | `LotWacPriceChart` | prezzo unitario, di vendita, precedente e successivo; le serie WAC e mercato nel tooltip | valore d'apertura, proventi, P&L realizzato, bolle, reddito |
+>
+> Nel grafico WAC l'incoerenza era già visibile: l'asse mostrava i prezzi in chiaro, il tooltip
+> delle stesse linee li mascherava. **Nessun test esistente proteggeva nessuna di queste colonne**:
+> i 282 test delle superfici toccate sono rimasti verdi dopo il cambio, prezzo compreso.
+>
+> 📌 La regola che ne esce: *una compensazione scritta per una decisione va riesaminata quando la
+> decisione cambia*. Il commento che nominava D5 ha reso questa trovabile; le altre no.
+>
+> **Decisione del developer, 2026-09-24 11:5x**, dopo la mia segnalazione prima dell'handoff:
+> *«Prezzi unitari visibili, totali nascosti»* — registrata come corollario di D5′ (D5′-c nella
+> tabella delle decisioni). Confermato l'elenco della tabella sopra; chiesti i test che mancavano.
+
+> **Note implementazione — test e verifica.**
+>
+> | comando | esito |
+> |---|---|
+> | test via `test-author`: `maskable` 27 → 33, `unifiedLotsTableHelpers` 40 → 48, `ExposureTable` 9 → 11 | 4 file · `98 passed` (da 82) |
+> | controllo negativo 1: `maskableQuantity` che restituisce l'input | 10 rossi nominati (5 primitiva, 3 helper, 2 componente) |
+> | controllo negativo 2: tolto `{sensitivity: 'public'}` dal prezzo | 2 rossi, **gate verde**: la marcatura `public` la protegge **solo** il test di componente |
+> | set di 8 file (privacy + helper dei lotti) | `8 passed (8)` · `378 passed` |
+> | `core-unit` · `component-unit` dal runner | 94 / **2479** = 2465 + 6 + 8 · 76 / **2010** = 2008 + 2 |
+> | `dev.py front check` (client `a085da1c8dac`) | pavimento invariato, nessuna segnalazione nei miei file |
+>
+> **Dal vivo**, copia prod **rinfrescata dalla snapshot**, server `--test` su 6168 con la build di
+> C3; tre stati, spenta → accesa → spenta, senza navigare. Nessun importo reale è riportato qui:
+>
+> | superficie | spenta | accesa | spenta |
+> |---|---|---|---|
+> | posizioni: quantità | cifre `📈` | `••• 📈` | cifre |
+> | posizioni: prezzo, `pmc` (colonne rivelate) | cifre + valuta | **cifre + valuta** | cifre + valuta |
+> | posizioni: valore (controllo) | cifre | `••• € 🇪🇺 EUR` | cifre |
+> | lotti: quantità aperta | cifre | `•••` | cifre |
+> | lotti: prezzo d'apertura (colonna rivelata) | cifre | **cifre** | cifre |
+> | asse del confronto lotti, hash dei pixel | `ac7c29a8` | `59b49564` | **`ac7c29a8`** |
+> | canvas del Gantt, hash dei pixel | `ab36408f` | `ad657519` | **`ab36408f`** |
+>
+> Le ultime due righe chiudono la domanda della review di I: i miei grafici lotti si ridisegnano al
+> toggle **in entrambi i versi**, e tornano identici al pixel. Pixel letti con `getImageData` sul
+> canvas, perché il testo di ECharts non è nel DOM.
+>
+> **⚠️ Fuori pista — errori miei nella sonda, tutti prima della misura.** (1) Ho cercato il
+> pannello posizioni su `/dashboard` e non c'era: la dashboard ha le schede, le posizioni stanno in
+> `?tab=posizioni`. (2) Ho indovinato la forma della risposta di `/api/v1/auth/me` (`{id}`) invece di
+> leggerla (`{user: {id}}`), e il primo giro ha rivelato colonne per un utente `None`. Entrambi
+> hanno prodotto un'**assenza** (nessuna riga, colonna non visibile), non un valore sbagliato;
+> corretti leggendo il codice, non riprovando a caso.
+>
+> **⚠️ Fuori pista — ho scritto importi reali nel journal.** Nella nota di R20 (passo 6) avevo
+> riportato due cifre lette dalla copia dei dati del developer, ed è entrato nel commit C2
+> (`29d1f7b30`). Le regole vietano di committare valori finanziari. Rimossi qui; la storia già
+> committata non posso riscriverla io: segnalato al coordinator. Gli esiti delle sonde in `/tmp`,
+> che li contenevano, sono cancellati.
+>
+> **❓ Domanda aperta al developer — la quantità 1.** Nei dati del developer esistono posizioni
+> detenute **in un solo pezzo**. Lì il prezzo unitario visibile **è** il valore mascherato: per
+> quel bene, D5′-c lo rivela. Opzioni: (a) accettarlo come residuo, perché serve sapere che la
+> quantità è 1; (b) mascherare il prezzo unitario per i **tipi** di asset tipicamente in un pezzo
+> (immobili, crowdfunding, private) — per tipo, non per quantità, così la maschera non rivela a sua
+> volta la quantità; (c) mascherarlo quando la quantità è 1, rivelando però che è 1.
+
+### Passo 8 — Review del diff privacy di I — **Stato: ✅ fatto** — 2026-09-24 — *verdetto: approvato*
 
 Via coordinator, prima del checkpoint di I: `fmtCurrency` maschera il numero e tiene
 `${baseCurrency}`; asse per Q3, `compact` dentro la maschera; `isPrivacyEnabled()` letto nello
 scope reattivo che costruisce l'`option` — le etichette d'asse non si ridipingono da sole
 (limite §3.4 del Round 1). J non tocca le righe di I nel registro.
+
+> **Note implementazione.** Lettura **in sola lettura** della worktree di I
+> (`git -C …/e-alfy-crispy-pancake diff`, HEAD `2a5927c48`, solo `GrowthChart.svelte`,
+> `PerformanceChart.svelte`, `moneyRenderSites.test.ts`): **eccezione esplicita del coordinator**
+> alla regola del mio agente (*«never read another child's worktree»*), per un compito del piano
+> approvato; nessuna scrittura, copia del diff in `/tmp` rimossa dopo la lettura. Per ciò che il
+> diff non mostra ho letto i due grafici nel **mio** albero, identici alla base di I.
+>
+> **Verdetto: approvato.** `fmtCurrency` → `EUR -•••`; asse Y non-% → `-•••` con `k`/`M` dentro la
+> maschera, `%` intatto; `shortMoney` → `+€•••` / `-••• CHF`; `axisTickAmount` zero compreso;
+> ridisegno con `void shouldMaskAmount()` e `lastRenderedMasked`, che forza la ricostruzione
+> completa quando il percorso «solo dati» di Growth non ripasserebbe l'asse; `markLine` con
+> etichetta spenta. Chiesti: una parola nella `why` di D13 (*the **definition** line*, non *that
+> line*); in S10, test via `__lfChart` che fissino tacche senza cifre né suffisso, modo `%` **non**
+> mascherato e zero mascherato; in S6, il ridisegno dal vivo **in entrambi i versi**, soprattutto da
+> spenta ad accesa. Lo zero come `—` nel tooltip Abs: accettato, stessa classe del costo di D8.
+> Non bloccante: il segno ASCII fa perdere U+2212 in `sv-SE`; quando I avrà C1,
+> `maskFormattedNumber` lo chiude.
+>
+> **⚠️ Fuori pista — la review ha rivolto una domanda a me.** I ha trovato che ECharts mette in
+> cache le etichette d'asse: al toggle serve una ricostruzione completa. I miei grafici lotti (C1,
+> C3) ridisegnano con il solo `void isPrivacyEnabled()`. Passano l'`option` completa a ogni render,
+> ma **non l'ho misurato dal vivo**: va nella verifica di C3.
 
 ### Passo 9 — E2E privacy — **Stato: ⏳**
 
