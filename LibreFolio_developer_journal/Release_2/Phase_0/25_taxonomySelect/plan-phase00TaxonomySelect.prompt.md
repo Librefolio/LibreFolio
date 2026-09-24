@@ -341,7 +341,7 @@
   >   Nessuno dei tre rossi tocca un file o un comportamento di K (posizione della prima riga
   >   invariata dal ranking; `optionsClosed` e coachmark indipendenti). Segnalati al coordinator.
 
-- [ ] **8. Review sulla copia prod e handoff** — ⏳ server di review acceso, in attesa del developer
+- [x] **8. Review sulla copia prod e handoff** — ✅ 2026-09-24
   - copia rinfrescata dallo snapshot, server `6165`, test list manuale col developer;
   - poi spegnimento, `lsof -nP -iTCP:6155 -sTCP:LISTEN` e `…:6165…` vuoti, `FROZEN`, handoff
     (delta, esclusioni, evidenze, conflitti, CHANGELOG proposto, messaggio di commit).
@@ -368,6 +368,42 @@
   > - Ultimo giro dei test di K dopo le ultime modifiche (vitest diretto): 10 file, **276/276 verdi**.
   > **Da fare**: la test list manuale col developer (sotto); poi spegnimento, porte provate libere,
   > `FROZEN`.
+  >
+  > **Note implementazione** (2026-09-24, 14:37–14:55): il developer ha fatto la review manuale sulla
+  > copia, 6 test su 6 ✅.
+  > - R13: «successo totale».
+  > - R14/R15: perfetto. La pastiglia piccola «va bene così» e la ricerca da tastiera funziona.
+  > - R17: ok, i filtri del tipo si aggiornano con l'icona giusta. La torta aspetta R12 di Risk.
+  > - R18: ok, «è comparsa solo la modale del provider».
+  > - Il pannello segnali è invariato.
+  > - Per rifare R18 il developer ha cancellato dalla copia il BTP Più con le sue transazioni. La copia
+  >   non è più pulita: va rinfrescata dallo snapshot prima di usarla di nuovo.
+  > - Server fermato col via del coordinator (`stop_bash k-review-server`): PID 46948 terminato,
+  >   `lsof -nP -iTCP:6165 -sTCP:LISTEN` e `lsof -nP -iTCP:6155 -sTCP:LISTEN` vuoti.
+  >
+  > **Fuori pista**: la review ha fatto emergere due difetti **preesistenti** dell'import wizard. Il
+  > developer li ha assegnati a K in questo round; il piano è a parte:
+  > [`plan-phase00TaxonomySelectStep9ImportDuplicates.prompt.md`](plan-phase00TaxonomySelectStep9ImportDuplicates.prompt.md),
+  > approvato il 24/09 alle 15:00, senza hotfix.
+  > 1. Dopo «crea asset» allo step 6, «Importa» riporta allo step 5.
+  >    - Causa: `handleImport` rifà il controllo dei duplicati, `refreshDuplicateReport` azzera le
+  >      scelte fatte allo step 5, e basta un qualunque gruppo fra file per riaprire lo step.
+  >    - Origine: `ef722b552` (09/09), che non è in `main`.
+  > 2. Il custode di un gruppo fra file viene preselezionato anche quando collide col DB, e il clic
+  >    sul badge «⚠ Probabile dup» apre il confronto fra file invece di quello col DB.
+  >    - Origine: `62516170c` e `81853ae81` (agosto), presenti in `v1.1.0`.
+  >    - Provato sui dati: la Tassa Xtrackers del 03/08 dello screenshot è la transazione #2, già
+  >      nel DB.
+  >
+  > Evidenze: il log della console del developer (4 giri di `asset-candidates` e 1 di `duplicates`) e
+  > query in sola lettura sulla copia. Nella copia non era stata creata nessuna transazione.
+  >
+  > **Fuori pista**: la causa di IWR-006, il coachmark `import.review`, l'ha trovata J. Il popolatore
+  > rende terminali i flow di onboarding di `TEST_USER` ma non i loro step. J lo corregge nel suo C4.
+  >
+  > **Fuori pista**: il developer ha chiesto se il lavoro sui segnali in numpy fosse sopravvissuto ai
+  > merge. Verificato: M1–M6 del workstream A di Risk (18/09) sono in `dev_release2` tramite
+  > `50d33b146`, e i plugin rolling non sono più cambiati da allora. Nessun messaggio a Risk.
 
 ---
 
