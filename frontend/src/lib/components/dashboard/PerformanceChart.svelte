@@ -21,6 +21,7 @@
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {buildGridColors, buildTooltipDivider, buildTooltipHeader, buildTooltipRow, buildTooltipTheme, setupTooltipAutoHide, scheduleFirstRenderStabilityFix} from '$lib/components/charts/echartsTooltipHelpers';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
+    import {maskable, shouldMaskAmount} from '$lib/utils/privacy/maskable';
     import {truncateName} from '$lib/utils/text';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {translateOr} from '$lib/utils/core/translateOr';
@@ -164,14 +165,16 @@
         const abs = Math.abs(amount);
         const compact = abs >= 1000 ? new Intl.NumberFormat(undefined, {notation: 'compact', maximumFractionDigits: 1}).format(abs) : abs.toLocaleString(undefined, {minimumFractionDigits: abs % 1 === 0 ? 0 : 2, maximumFractionDigits: 2});
         const sign = showSign && amount > 0 ? '+' : amount < 0 ? '-' : '';
-        return symbol ? `${sign}${symbol}${compact}` : `${sign}${compact} ${currency}`;
+        // D8: sign, symbol and currency stay readable. The compact suffix goes inside the
+        // mask: `€•••K` would still disclose the order of magnitude.
+        return symbol ? `${sign}${symbol}${maskable(compact)}` : `${sign}${maskable(compact)} ${currency}`;
     }
 
     function axisTickAmount(amount: number): string {
-        if (amount === 0) return '0';
+        if (amount === 0) return maskable('0');
         const abs = Math.abs(amount);
         const compact = new Intl.NumberFormat(undefined, {notation: 'compact', maximumFractionDigits: abs < 10 ? 2 : abs < 100 ? 1 : 0}).format(abs);
-        return `${amount < 0 ? '-' : ''}${compact}`;
+        return `${amount < 0 ? '-' : ''}${maskable(compact)}`;
     }
 
     function formatSignedPercent(value: number): string {
@@ -1120,6 +1123,9 @@
         void axisBound;
         void labels;
         void $currentLanguage;
+        // Read here, not in renderChart: the render runs inside `tick().then`, where a read
+        // registers no dependency, so the privacy toggle would not redraw the labels.
+        void shouldMaskAmount();
 
         if (!chartContainer) return;
 

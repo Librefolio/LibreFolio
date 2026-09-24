@@ -197,27 +197,9 @@ const REGISTRY: Site[] = [
     },
     {
         file: 'lib/components/dashboard/GrowthChart.svelte',
-        snippet: '`${baseCurrency} ${v.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`',
-        status: 'residual',
-        why: 'fmtCurrency, analysis §1.8 #3. Workstream I has since merged, so the reason is no longer "wait for the rewrite": this belongs to the chart round, one line to mask at the definition.',
-    },
-    {
-        file: 'lib/components/dashboard/GrowthChart.svelte',
         snippet: "`<div style=\"display:flex;justify-content:space-between;gap:16px;color:${pnlColor}\"><span><b>${$_('dashboard.totalPnl')}</b></span><b>${totalPnlVal === 0 ? '' : totalPnlVal > 0 ? '+' : '−'}${fmtCurrency(Math.abs(totalPnlVal))}</b></div>`",
-        status: 'residual',
-        why: "A consumer of fmtCurrency in the same file, which §1.8 did not list. Covered by masking fmtCurrency; registered so the residual is one decision and not two. The sign ternary was rewritten at I's merge to stop rendering a zero as a positive, which brings it into the D8 convention in currencyFormat.ts — the verdict is unchanged and the reason was re-checked against that file, not assumed.",
-    },
-    {
-        file: 'lib/components/dashboard/PerformanceChart.svelte',
-        snippet: '`${sign}${compact} ${currency}`',
-        status: 'unmasked',
-        why: 'shortMoney: a money formatter that never calls Intl with style currency, so §1.8 — which anchored on that API — did not see it. Compact notation, so it discloses the magnitude it is meant to hide. This is the fallback branch, used when no symbol is known.',
-    },
-    {
-        file: 'lib/components/dashboard/PerformanceChart.svelte',
-        snippet: '`${sign}${symbol}${compact}`',
-        status: 'unmasked',
-        why: 'shortMoney again, the primary branch — the one that renders for every currency with a known symbol. It carries no currency identifier, only a rendered symbol, so the gate saw this site at first only through the fallback branch sharing its line: coverage of the more important path was an accident of where the source wrapped. CURRENCY_TOKEN was widened to close it.',
+        status: 'masked',
+        why: 'The P&L-total row of the Abs tooltip, a consumer of fmtCurrency that §1.8 did not list. fmtCurrency is masked at its definition in the same function (the digits only, D8); the gate cannot follow a call into a local closure, so this row still matches through its totalPnlVal/pnlColor tokens. Unmasking the definition would bring the definition line back as an unregistered hit: the boundary is guarded by this gate, as for LotComparisonChart.formatAxisCurrency.',
     },
     {
         file: 'lib/components/transactions/events/EventCreateMiniModal.svelte',
@@ -292,13 +274,9 @@ describe('money rendered outside the masking channel (analysis §1.8 gate)', () 
         // conformance cannot quietly become complete.
         expect(listOf('residual')).toEqual([
             // one element per line: parallel removals must not touch the same line
-            'lib/components/dashboard/GrowthChart.svelte',
-            'lib/components/dashboard/GrowthChart.svelte',
         ]);
         expect(listOf('unmasked')).toEqual([
             // one element per line: parallel removals must not touch the same line
-            'lib/components/dashboard/PerformanceChart.svelte',
-            'lib/components/dashboard/PerformanceChart.svelte',
         ]);
         // Sites in the clear by rule are asserted by content too, so that reclassifying
         // one is a visible decision rather than a quiet edit to the registry.
