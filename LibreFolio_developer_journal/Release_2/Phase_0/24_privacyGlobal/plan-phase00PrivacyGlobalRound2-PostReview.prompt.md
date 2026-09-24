@@ -298,11 +298,83 @@ privacy di F su `risk-lab` dipende da questo output.
 > rischio e i lotti *«da non armonizzare»*: la regola del developer l'ha armonizzata, e il
 > commento l'ha trovato il `test-author`.
 
-### Passo 6 — R20 — **Stato: ⏳**
+### Passo 6 — R20 — **Stato: ✅ fatto** — 2026-09-24 — *C2*
 
 Prima un test di componente su `BrokerCard` (off→on→off, e montaggio con privacy attiva poi off):
 è insieme la sonda che separa H1 da H2 e la regressione. Poi la riproduzione sulla copia prod,
 con il controllo di `brokers/[id]`. Il fix si decide dopo la misura, non prima.
+
+> **Note implementazione — la misura, prima del fix.**
+>
+> **Dal vivo**, copia prod su 6168 (`v1.1.0-230-g176f19707`), sonda Playwright usa-e-getta, login
+> `alfy`, letture del DOM a 400 ms e 2 s da ogni click:
+>
+> | scenario | esito |
+> |---|---|
+> | `/brokers`, privacy **spenta** al caricamento | `aria-pressed` commuta, **le cifre restano in chiaro** (`<importo>`, `<importo>`, …) |
+> | `/brokers`, privacy **accesa** al caricamento | `aria-pressed` commuta, **`•••` resta** |
+> | `/brokers/2`, importo della pagina (controllo) | `0.00` fisso in entrambi gli stati |
+>
+> 🔴 **Più grave di come è stato riportato.** Le card non reagiscono **mai**: decide lo stato al
+> montaggio. *«Si nascondono ma non si riscoprono»* era il percorso di chi arriva con la privacy già
+> accesa; nel verso opposto — accendere la privacy sulla pagina — **i dati restano visibili**. E il
+> «controllo» non era un controllo: anche gli importi propri della pagina di dettaglio (`:606`
+> saldi, `:777` totale) sono congelati; il developer ha visto funzionare le **tabelle figlie**, che
+> sono componenti runes.
+>
+> **In jsdom**, `BrokerCard.test.ts` via `test-author`, tre test: **3 rossi**, tutti nel componente,
+> con i controlli positivi verdi (`isPrivacyEnabled()` e una chiamata fresca del formatter seguivano il
+> flag). Il `test-author` ha trovato il meccanismo **compilando** il componente con `svelte/compiler`
+> 5.48.0: in modalità legacy una chiamata dentro un'espressione del template diventa
+> `$.untrack(() => formatCurrencyAmountHtml(…))`, e si tracciano solo i valori nominati
+> (`$.deep_read_state(summary())`). Il flag letto dentro `maskable` non viene mai tracciato.
+>
+> **Perimetro misurato**: fra i componenti che chiamano un formatter mascherato, classificati per uso
+> reale delle rune e non per `export let`, i legacy sono **esattamente due** — `BrokerCard.svelte`
+> (3 siti) e `brokers/[id]/+page.svelte` (2 siti). Nessun `runes: true` a livello di compilatore.
+>
+> **Fix**: `ui/display/CurrencyAmount.svelte`, componente runes di una riga di template che rende
+> l'importo con `formatCurrencyAmountHtml`; i 5 siti legacy lo usano. Migrare a runes una pagina di
+> 830 righe con 12 `$:` per due importi sarebbe stato sproporzionato. **`BrokerCard.test.ts`,
+> invariato, passa da 3 rossi a 3/3.**
+
+> **Note implementazione — evidenza dopo il fix.**
+>
+> **Dal vivo, stessa sonda e stessa copia**, server riavviato con la build delle 11:24
+> (`v1.1.0-230-g176f19707-dirty`, cioè con C2):
+>
+> | scenario | prima | dopo |
+> |---|---|---|
+> | `/brokers`, privacy spenta al caricamento, tre click | cifre sempre in chiaro | `•••` → cifre → `•••` |
+> | `/brokers`, privacy accesa al caricamento, tre click | `•••` sempre | cifre → `•••` → cifre |
+> | `/brokers/2`, importo della pagina | `0.00` fisso | `•••` → `0.00` → `•••` |
+>
+> Ogni lettura a 400 ms dal click. `+•••` sul guadagno: il segno resta fuori per D8.
+>
+> **Test** (via `test-author`, rieseguiti da me): `BrokerCard.test.ts` 3; `CurrencyAmount.test.ts` 6,
+> montato **dentro un genitore legacy** (`__tests__/harness/CurrencyAmountLegacyHost.svelte`, legacy
+> per costruzione: il compilatore rifiuta `export let` in modalità runes), che rende anche la vecchia
+> chiamata inline come controllo congelato. Controllo negativo: `untrack(…)` dentro `CurrencyAmount`
+> → 8 rossi nominati, ripristino con sha identico.
+>
+> | comando | esito |
+> |---|---|
+> | set di 7 file (i 6 di C2 + gate) | `Test Files 7 passed (7)` · `Tests 85 passed (85)` |
+> | `check-orphans`, lane 6158 | 245/245 registrati e raggiungibili da `all` |
+> | `front-utility component-unit` | exit 0 · `76 passed (76)` · `2008 passed` |
+> | `front-utility onboarding-component-unit` | exit 0 · `13 passed (13)` · `400 passed` |
+> | `front-utility core-unit` | exit 0 · `94 passed (94)` · `2465 passed`, invariato da C1 |
+> | `dev.py front check` (client `a085da1c8dac`) | `3 errors and 41 warnings in 4 files`, gli stessi 4 file; **nessuno** nel mio delta |
+>
+> Runner: `BrokerCard.test.ts` e `CurrencyAmount.test.ts` in `component-unit`,
+> `DeferredAppPopups.test.ts` in `onboarding-component-unit` (lista della funzione e tupla di
+> `add_test`); 0 percorsi fantasma, 0 duplicati.
+>
+> 📌 **La regola che ne esce, per chi scrive dopo**: in un componente **legacy**, una funzione che
+> legge uno stato runes dentro un'espressione del template **non viene tracciata**. Vale per ogni
+> formatter mascherato. Oggi i legacy del canale sono zero; un sesto sito legacy nascerebbe
+> congelato, e né il gate né un test di formatter lo vedrebbero. Va detto nella skill e nella doc
+> sviluppatore (passo 10).
 
 ### Passo 7 — Quantità D5′ — **Stato: ⏳** — *i 5 file assegnati a J dal coordinator, 2026-09-24*
 

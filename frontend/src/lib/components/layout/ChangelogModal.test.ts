@@ -505,8 +505,10 @@ describe('ChangelogModal — search hits (round 5)', () => {
 // The button runs the same `checkForUpdates()` contract as the login flow
 // (mocked here — jsdom never reaches GitHub) and reports the result through
 // notify. There is no persistent result panel. A newer release still opens the
-// F14 UpdateAvailableModal for admins (`updateAvailable.show`) or the
-// `ask-admin-modal` listing administrators fetched from the users search.
+// F14 UpdateAvailableModal for admins — as a requested prompt,
+// `updateAvailable.show(release, {requested: true})`, shown at once above the
+// changelog instead of after it closes — or the `ask-admin-modal` listing
+// administrators fetched from the users search.
 // Every test ends on the state the click produced — never on a timer.
 
 describe('ChangelogModal — manual update check (round 5)', () => {
@@ -552,7 +554,7 @@ describe('ChangelogModal — manual update check (round 5)', () => {
 
         await fireEvent.click(checkBtn());
 
-        await waitFor(() => expect(updateAvailableMock.show).toHaveBeenCalledWith(RELEASE));
+        await waitFor(() => expect(updateAvailableMock.show).toHaveBeenCalledWith(RELEASE, {requested: true}));
         expect(api[GET_INFO]).toHaveBeenCalledTimes(1);
         expect(checkForUpdatesMock).toHaveBeenCalledTimes(1);
         expect(checkForUpdatesMock).toHaveBeenCalledWith('1.2.3', {force: true, ignoreDismissed: true});
@@ -661,7 +663,7 @@ describe('ChangelogModal — manual update check (round 5)', () => {
 
         await fireEvent.click(checkBtn());
 
-        await waitFor(() => expect(updateAvailableMock.show).toHaveBeenCalledWith(RELEASE));
+        await waitFor(() => expect(updateAvailableMock.show).toHaveBeenCalledWith(RELEASE, {requested: true}));
         expect(notifyMock).toHaveBeenCalledWith(
             expect.objectContaining({
                 name: 'app.update.checked',

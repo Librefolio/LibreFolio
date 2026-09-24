@@ -4031,7 +4031,7 @@
         },
         "transactionsNav": {
           "title": "Empieza por tus transacciones",
-          "description": "Transacciones contiene las entradas manuales y el historial de la cartera. Importar tiene su propia guía contextual."
+          "description": "Transacciones contiene las entradas manuales y el historial de la cartera."
         },
         "brokersAdd": {
           "title": "Añade un bróker",

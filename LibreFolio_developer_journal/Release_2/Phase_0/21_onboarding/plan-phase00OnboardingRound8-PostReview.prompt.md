@@ -77,12 +77,30 @@ Questo file, il gemello privacy, cross-link `→ Follow-up` dal Round 7.
 > **Note implementazione:** scritti questo piano e il gemello privacy Round 2; `→ Follow-up` in
 > testa al Round 7 e nel §5 del Round 1 privacy. Ogni link relativo risolve, 0 rotti.
 
-### Step 2 — R4, ri-verifica — **Stato: ⏳**
+### Step 2 — R4, ri-verifica — **Stato: ✅ completato il 2026-09-24. R4 non si riproduce.**
 
 Sulla copia prod, versione `v1.1.0-228-gf1047f766`: Sidebar → versione → «Verifica
 aggiornamenti». Registrare: toast visibile o no, stato di `deferred-app-popups`. Solo dopo, il fix.
 
-### Step 3 — R3/R4, fix — **Stato: ⏳**
+> **Note implementazione:** copia prod dalla snapshot (`004_release_1_2_0_schema`, senza
+> marcatore), build frontend fresca, server `--test` su 6168: `app_version`
+> **`v1.1.0-230-g176f19707`**, cioè il `HEAD` di questo ramo (R2 è davvero riparata). Sonda
+> Playwright usa-e-getta, login `alfy`, Sidebar → `sidebar-version` → `changelog-check-update`,
+> attesa **sull'evento** e non sull'orologio. Letto da `window.__lf.events`:
+> `app.update.checked` con `status: up-to-date`, `remoteVersion: 1.1.0`, `currentVersion:
+> v1.1.0-230-g176f19707`; un `toast-success` visibile. `compareVersions` confronta solo la versione
+> base, e `1.1.0` contro `1.1.0` è `up-to-date`.
+>
+> **R4 era una conseguenza di R2**: con la versione sbagliata l'esito era `update-available`, che
+> per costruzione non emette il toast «aggiornato». Nessuna correzione: la riga di stato inline che
+> avevo proposto per Q2 serviva a R4, e **non la implemento** senza un difetto da riparare.
+>
+> **R3 confermato dal DOM**: col changelog aperto, `deferred-app-popups` ha
+> `data-active-popup="none"` e `data-modal-depth="1"`. Un esito `update-available` sarebbe quindi
+> rinviato alla chiusura del changelog — ciò che il developer ha visto. Non riproducibile dal vivo
+> oggi (non c'è una release più nuova): si prova con i test di componente dello step 3.
+
+### Step 3 — R3/R4, fix — **Stato: ✅ completato il 2026-09-24 (solo R3; R4 non si riproduce).** — *C2*
 
 Per Q2: `updateCheckStore` distingue la richiesta manuale; `DeferredAppPopups` continua a
 rinviare i popup non chiesti (contratto invariato) e mostra subito quella chiesta;
@@ -90,11 +108,38 @@ rinviare i popup non chiesti (contratto invariato) e mostra subito quella chiest
 `up-to-date`, `no-release`, `image-pending`, `error`, `newer`. Toast e `notify` invariati: sono il
 contratto su cui asseriscono i test.
 
-### Step 4 — R19 — **Stato: ⏳**
+> **Note implementazione:** solo R3; R4 non si riproduce (step 2), quindi niente riga di stato
+> inline. `updateCheckStore`: `show(r, {requested})` e getter `requested`, azzerato da `close()` e
+> `skipVersion()`. `DeferredAppPopups`: in testa all'effect, una richiesta manuale mostra subito la
+> modale — anche con una modale aperta o una guida attiva, perché è la risposta a una domanda appena
+> fatta; i popup non chiesti conservano esattamente le regole di prima. `UpdateAvailableModal`:
+> `zIndex` 60 quando richiesta, perché il changelog vive nel contesto di impilamento della sidebar a
+> 50. `ChangelogModal`: il percorso admin chiama `show(latest, {requested: true})`. Rossi attesi e
+> misurati: **2**, in `ChangelogModal.test.ts`, entrambi sull'asserzione `show` chiamata con
+> `(RELEASE)` e basta; gli altri 92 test delle superfici toccate restano verdi.
+>
+> Test via `test-author`, rieseguiti da me: `DeferredAppPopups.test.ts` nuovo, 5 test (popup
+> automatico trattenuto con una modale aperta e con una guida attiva; richiesta manuale mostrata
+> subito in entrambi i casi; `close()` torna a `none`, azzera `requested`, e un popup automatico
+> successivo è di nuovo trattenuto). `UpdateAvailableModal.test.ts` +1 (`z-index` 60 richiesta, 50
+> automatica). `ChangelogModal.test.ts`: le due asserzioni ora attendono `(RELEASE, {requested:
+> true})`. Controllo negativo: tolto il ramo della richiesta → i 3 test della richiesta rossi, i 2
+> automatici verdi; ripristino con sha identico. `onboarding-component-unit` dal runner: 13 file,
+> 400 test, exit 0.
+>
+> Non riproducibile dal vivo finché non esiste una release più nuova della corrente: la prova di R3
+> è la combinazione della misura del DOM allo step 2 e di questi test.
+
+### Step 4 — R19 — **Stato: ✅ completato il 2026-09-24.**
 
 `dev.py i18n update onboarding.tour.steps.transactionsNav.description` nelle quattro lingue:
 cade solo la seconda frase. La chiave resta (nessuna chiave si dichiara morta prima della fine
 del round).
+
+> **Note implementazione:** eseguito, exit 0. Diff dei cataloghi: **una riga per lingua**, 4+/4−,
+> nessun riordino né riformattazione. Nessun test o E2E cita la frase o la chiave: la usa solo
+> `OnboardingOverlayHost.svelte:74`. Nessun test automatico nuovo, per la regola sul testo
+> tradotto: la verifica è la review manuale.
 
 ### Step 5 — OB-8 — **Stato: ⏳**
 
