@@ -205,7 +205,7 @@ solo per sottrazione.
 | `risk.assetSet.panelTitle` orfano | **F**, a fine round (l'ha introdotta F, `f2ad97dd4`) | — |
 | sync FX su Asset Global mai ri-alloggiato (R2-128, `REGISTRO.md:360`) | **F**, proprietario del guscio | — |
 | `CorrelationHeatmap` | **F** (la monta anche `L2Diversification`) | **non la modifico** |
-| i 12 testid di `risk-lab` composti da `RiskLevelSection` | — | **non li rinomino senza avvisare** |
+| gli 11 testid di `risk-lab` composti dai miei componenti — 10 da `RiskLevelSection`, 1 da `TornadoChart` (`{testId}-…`) — più 3 radici il cui valore sceglie chi li monta (`risk-asset-set-loss`, `risk-asset-set-paid`, `risk-replay-section`) | — | **non li rinomino senza avvisare** (corretto il 24/09: erano scritti «12», misurato per testid esatto sulla prop davvero passata) |
 | `riskAnalysisHelpers.ts:155-161` + `…test.ts:387` — `formatCurrencyAmount` che sotto privacy perde la valuta | **J** | **non tocco quelle righe** |
 | emoji mancanti in `AllocationHistoryChart` | **I** | — |
 | le due righe di `CROWDFUND_REAL_ESTATE` in `equity_crash.yml` e `global_risk_off.yml` | **K**, nello stesso commit dell'enum | **non tocco quei due YAML finché R17 non è integrato** |
@@ -324,7 +324,7 @@ la tocca: lo verifichi lì).
 | ③ · registro (D62, D71/D72, REGISTRO, _comune) | ✅ 23/09/2026 |
 | ④ · cancello i18n sul prefisso condizionale | ✅ 23/09/2026 · 17 → 24 test, HEAD rosso su 6 dei 7 nuovi |
 | ⑤ · deriva dei commenti | ✅ 23/09/2026 |
-| ⑥ · test del filtro broker fuori da `risk-analysis` | ⏸️ in attesa del via del coordinator (F aggiunge per primo) |
+| ⑥ · test del filtro broker fuori da `risk-analysis` | ✅ 24/09/2026 · 13 passed nella `6152` |
 | handoff `FROZEN` del tempo ① | ✅ 23/09/2026 · ⑥ escluso, in attesa del via |
 | tempo ② · review col developer | ⏳ |
 
@@ -493,7 +493,7 @@ la tocca: lo verifichi lì).
 > lasciato un'affermazione con l'aria di essere stata verificata. Regge: `scopeKind !==
 > 'portfolio'` nel file di J, `scopeKind === 'portfolio'` nei due consumatori.
 
-### Passo ⑥ — test del filtro broker · ⏸️ in attesa del via
+### Passo ⑥ — test del filtro broker · ✅ 24/09/2026
 
 > **Ordine confermato dal coordinator (23/09)**: ① F aggiunge il test in `risk-lab.spec.ts`, lo fa
 > girare verde nella sua lane di suite e manda al coordinator il **nome esatto**; ② il coordinator
@@ -502,7 +502,41 @@ la tocca: lo verifichi lì).
 > **Integrazione**: il ramo di F con il test entra nel target *non dopo* il mio — lo tiene il
 > coordinator.
 >
-> Misurato in sola lettura: nel worktree di F `risk-lab.spec.ts` **non** contiene ancora il test.
+> ~~Misurato in sola lettura: nel worktree di F `risk-lab.spec.ts` **non** contiene ancora il test.~~
+> **Falso, e la misura non provava nulla**: vedi il Fuori pista sotto.
+>
+> **Note implementazione**: via del coordinator il 24/09 alle 09:31, dopo il commit del checkpoint
+> (`a5f6776aa` … `de55b5346`) e con la condizione di F soddisfatta — il suo test
+> *«broker preset: loads exactly that broker's holdings and lets no amount through, its empty option
+> keeps the selection, and a chip removed by hand comes back through the picker»*
+> (`risk-lab.spec.ts:2478`) verde nella sua lane, 16/16. Il suo test contiene il mio: stessi controlli
+> su pannello, banner, heatmap, rimozione e ritorno di un chip; sul filtro broker verifica **esattamente**
+> le posizioni di quel broker, dove il mio chiedeva almeno una. Rimosso **per titolo**, non per numero
+> di riga, con uno script che rifiuta di scrivere se un'ancora non è unica.
+>
+> ```
+> risk-analysis.spec.ts    −96 righe, 0 aggiunte: il test (62) + i due helper locali che usava solo
+>                          lui (brokerWithHoldings, selectedAssetIds: 34, non esportati)
+> test nello spec          14 → 13 (più il describe) · :1397, tab broker su Broker Detail, resta
+> desc= del runner         invariata: «Portfolio-level risk on Dashboard and Broker Detail» non cita
+>                          Asset Global, non c'è niente da sottrarre
+> tsc -p tsconfig.e2e      4 errori, identici su HEAD, nessuno in e2e/portfolio
+> prettier                 pulito
+> suite risk, lane 6152    13 passed (26.5s), exit 0 · 6152 libera prima e dopo · il log conferma
+>                          porta 6152 e dati /private/tmp/librefolio-r2-risk, nessuna traccia di 6041
+> ```
+>
+> **⚠️ Fuori pista — la misura del 23/09 cercava il nome vecchio**: alle 16:1x ho cercato
+> `broker holdings` nello spec di F e ho ottenuto zero, ma F ha scritto il test con un titolo nuovo
+> (*«that broker's holdings»*, con l'apostrofo, fra virgolette doppie). Zero su una ricerca per il nome
+> sbagliato non dice che il test manca: dice che la sonda non poteva trovarlo. Me ne sono accorto
+> leggendo i test nuovi dello spec invece di rifare la stessa ricerca, e l'ho corretto col coordinator
+> alle 17:00. Quando il test sia arrivato non lo so.
+>
+> **⚠️ Fuori pista — i due helper**: il perimetro di ⑥ era «il test e nient'altro». Ho rimosso anche
+> `brokerWithHoldings` e `selectedAssetIds` perché, tolto il test, restavano codice morto creato dalla
+> mia modifica, nello stesso file. Non ho toccato le copie **esportate** con gli stessi nomi in
+> `risk-mocks.ts` (modulo condiviso, `70a11dfc7`): oggi non le importa nessuno, ma non è il mio passo.
 
 ### Catalogo del runner e orfani — 23/09/2026
 
