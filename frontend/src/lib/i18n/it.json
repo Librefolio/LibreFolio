@@ -1485,7 +1485,8 @@
     "pnlCandlesHypothetical": "Sintetico — i massimi/minimi cross-asset sono ipotetici e non simultanei, non una serie intraday reale.",
     "pnlCandlesHypotheticalShort": "Sintetico — i massimi/minimi cross-asset sono ipotetici e non simultanei",
     "pnlAcqNewCapital": "Nuovo capitale",
-    "pnlAcqReinvested": "Reinvestito"
+    "pnlAcqReinvested": "Reinvestito",
+    "allocationGeneric": "{type} generico"
   },
   "dataQuality": {
     "headerInfoOnly": "Note sulla qualità dei dati",

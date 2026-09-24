@@ -2,30 +2,31 @@
  * Allocation rings — the two-level reading of an asset-type pie (decision D72).
  *
  * `buildAllocationHierarchy` (D71) shows a subtype as a *shade* inside the mass of
- * its primary type. That works while the pure member sits next to it, and fails in
- * the most common case of an ETF investor: an `ETF_STOCK` with no direct `STOCK` is
- * a group of one, and a group of one is never shaded — so it is drawn as a pure,
- * unrelated colour, with nothing saying it is equity (review R12, 22/09/2026). A
- * shade says "related to" only when the relative is on screen.
+ * its family. That works while a sibling sits next to it, and fails in the most
+ * common case of an ETF investor: a lone subtype is a group of one, and a group of
+ * one is never shaded — so it is drawn as a pure, unrelated colour (review R12,
+ * 22/09/2026). A shade says "related to" only when the relative is on screen.
  *
  * So the relation gets its own geometry instead of a colour:
  *
- * - the **base** ring holds one arc per primary type — the answer to "what do I
- *   own", summed over the whole family;
+ * - the **base** (inner) ring holds one arc per family — summed over its members;
  * - the **outer** ring splits the families that contain a subtype into their
- *   members — the answer to "through what";
+ *   members;
  * - a family with no subtype is not split: it gets a **filler** on the outer ring,
- *   which the caller draws invisibly so the slice reads as one piece at full
- *   thickness (developer's decision, 23/09/2026).
+ *   which the caller draws invisibly (developer's decision, 23/09/2026).
+ *
+ * *Which* family a type belongs to is the caller's resolver, upstream in the
+ * hierarchy. Since 24/09/2026 the pie uses the **vehicle** (`allocationFamily`): an
+ * ETF subtype sits in the ETF family and the outer ring says what kind of ETF it is
+ * (review of R12, option B). Nothing here depends on that choice.
  *
  * Every family owns exactly one base arc and a run of outer arcs that sum to it, so
  * the two rings stay aligned by construction — provided the caller draws them with
  * the same angular padding, which is why this layout exists as data and not as a
  * rendering detail.
  *
- * Families are not assumed to have two members. A primary can gain several
- * subtypes (a `CROWDFUND_REAL_ESTATE` rolling up into `REAL_ESTATE` next to
- * `ETF_REAL_ESTATE` makes three), so each subtype gets its own shade step.
+ * Families are not assumed to have two members. A family can gain several subtypes,
+ * so each subtype gets its own shade step.
  *
  * Pure, no runes, and `resolvePrimary` stays upstream in the hierarchy it consumes:
  * nothing here imports the generated client.
@@ -121,4 +122,68 @@ export function buildAllocationRings<T>(hierarchy: readonly AllocationHierarchyR
     }
 
     return {rings: base.some((arc) => arc.split), base, outer};
+}
+
+/** One arc as the pie draws it: everything the chart needs, nothing chart-library specific. */
+export interface AllocationRingDatum {
+    /**
+     * Legend identity — the **family** label on every arc of both rings. A legend click then
+     * hides a family's inner arc and all of its outer arcs together, which is what keeps the
+     * two rings summing to the same total after the click.
+     */
+    name: string;
+    /** What the arc says about itself: the tooltip title and the outer ring's caption. */
+    caption: string;
+    /** Percent, rounded by the caller's rule. */
+    value: number;
+    /** The family total, rounded by the **same** rule, so a member and its family never disagree in precision. */
+    primaryTotal: number;
+    /** Raw key: the family for base arcs and fillers, the member's own type for members. */
+    rawName: string;
+    /** The family key, as resolved by the hierarchy. */
+    primaryKey: string;
+    groupSize: number;
+    ringRole: AllocationRingRole;
+    color: string;
+    amount: number;
+    /** An invisible spacer on the outer ring: no caption, no tooltip, no hover. */
+    filler: boolean;
+}
+
+export interface AllocationRingDataOptions<T> {
+    /** Translated label of a family key. */
+    familyLabel: (primary: string) => string;
+    /** Translated label of a member. */
+    memberLabel: (item: T) => string;
+    /**
+     * Caption of the unspecialised member of a split family, given the family label. On the
+     * outer ring the plain `ETF` next to "ETF azionario" must not read as the family itself.
+     */
+    genericCaption: (familyLabel: string) => string;
+    amountOf: (item: T) => number;
+    /** Percent rounding, shared by every arc and every family total. */
+    round: (value: number) => number;
+}
+
+/** Turn a ring layout into the arcs the pie draws, with the naming rules the legend and tooltip rely on. */
+export function buildAllocationRingData<T>(layout: AllocationRingsLayout<T>, opts: AllocationRingDataOptions<T>): {base: AllocationRingDatum[]; outer: AllocationRingDatum[]} {
+    const {familyLabel, memberLabel, genericCaption, amountOf, round} = opts;
+    const toDatum = (arc: AllocationRingItem<T>): AllocationRingDatum => {
+        const family = familyLabel(arc.primary);
+        const caption = arc.role !== 'member' ? family : arc.pure ? genericCaption(family) : memberLabel(arc.items[0]);
+        return {
+            name: family,
+            caption,
+            value: round(arc.weight),
+            primaryTotal: round(arc.primaryTotal),
+            rawName: arc.key,
+            primaryKey: arc.primary,
+            groupSize: arc.memberCount,
+            ringRole: arc.role,
+            color: arc.color,
+            amount: arc.items.reduce((sum, item) => sum + amountOf(item), 0),
+            filler: arc.role === 'filler',
+        };
+    };
+    return {base: layout.base.map(toDatum), outer: layout.outer.map(toDatum)};
 }

@@ -1485,7 +1485,8 @@
     "pnlCandlesHypothetical": "Synthetic — cross-asset high/low are hypothetical and non-simultaneous, not a real intraday series.",
     "pnlCandlesHypotheticalShort": "Synthetic — cross-asset high/low are hypothetical and non-simultaneous",
     "pnlAcqNewCapital": "New capital",
-    "pnlAcqReinvested": "Reinvested"
+    "pnlAcqReinvested": "Reinvested",
+    "allocationGeneric": "Generic {type}"
   },
   "dataQuality": {
     "headerInfoOnly": "Data quality note",

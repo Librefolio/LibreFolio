@@ -24,9 +24,10 @@
     import {CHART_ANIMATION_CONFIG} from '$lib/components/charts/echartsAnimationConfig';
     import {scheduleFirstRenderStabilityFix, tooltipPositionAboveFinger} from '$lib/components/charts/echartsTooltipHelpers';
     import {_ as t} from '$lib/i18n';
-    import {sectorI18nKey, getAssetTypeIconUrl, primaryAssetType} from '$lib/utils/assetTypes';
+    import {sectorI18nKey, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {buildAllocationHierarchy} from '$lib/components/charts/allocationHierarchy';
-    import {buildAllocationRings, type AllocationRingItem} from '$lib/components/charts/allocationRings';
+    import {allocationFamily, allocationTypeIcons} from '$lib/components/charts/allocationFamily';
+    import {buildAllocationRingData, buildAllocationRings, type AllocationRingDatum} from '$lib/components/charts/allocationRings';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 
     // =========================================================================
@@ -188,9 +189,10 @@
             return {name: displayName, value: entry.value, amount: entry.amount, rawName: entry.name, emoji: entry.emoji ?? ''};
         });
 
-        // Asset-type subtypes read as shades inside the mass of their primary, and
-        // sit adjacent to it — ordering and colour are one change, because two
-        // similar colours on opposite sides of the circle read as an accident.
+        // Asset-type subtypes sit inside their family, adjacent to it — ordering and
+        // colour are one change, because two similar colours on opposite sides of the
+        // circle read as an accident. The family is the **vehicle** (developer's
+        // decision of 24/09/2026, R12 option B): every ETF subtype belongs to ETF.
         //
         // 'type' only, deliberately: the sector dimension has no taxonomy to fold,
         // and this same component draws the Asset Detail sector pie, which is out
@@ -200,7 +202,7 @@
             mode === 'type'
                 ? buildAllocationHierarchy(
                       mappedEntries.map((item) => ({key: item.rawName, weight: item.value, item})),
-                      {resolvePrimary: primaryAssetType, palette},
+                      {resolvePrimary: allocationFamily, palette},
                   )
                 : [];
         const chartData =
@@ -215,9 +217,9 @@
                 : mappedEntries.sort((a, b) => b.value - a.value);
 
         // D72: as soon as one family contains a subtype, the relation is drawn as a
-        // second ring instead of a shade — a lone `ETF_STOCK` is otherwise a pure,
-        // unrelated colour (R12). With no subtype on screen the layout says so, and
-        // the single legacy ring below is drawn untouched.
+        // second ring, separate from the first, instead of a shade (R12). With no
+        // subtype on screen the layout says so, and the single legacy ring below is
+        // drawn untouched.
         const layout = mode === 'type' ? buildAllocationRings(hierarchy, {weightOf: (item) => item.value}) : null;
         const rings = layout?.rings === true;
 
@@ -226,27 +228,24 @@
             const translated = tr(i18nKey);
             return translated !== i18nKey ? translated : key;
         };
-        // Percentages arrive with two decimals; a family's sum must not surface as 3.5299999%.
+        // Percentages arrive with two decimals; a family's sum must not surface as
+        // 3.5299999%, and a member and its family are always shown at the same precision.
         const roundedPercent = (value: number) => Math.round(value * 100) / 100;
-        const ringItem = (arc: AllocationRingItem<(typeof mappedEntries)[number]>) => ({
-            name: arc.role === 'member' ? arc.items[0].name : typeLabel(arc.key),
-            value: roundedPercent(arc.weight),
-            amount: arc.items.reduce((sum, item) => sum + (item.amount ?? 0), 0),
-            rawName: arc.key,
-            primaryKey: arc.primary,
-            groupSize: arc.memberCount,
-            primaryTotal: roundedPercent(arc.primaryTotal),
-            ringRole: arc.role,
-            itemStyle: {color: arc.color},
-        });
-        // Invisible, silent-looking arcs keep both rings angularly aligned. A filler has
-        // no border, or the family would show a seam and read as two levels.
+        const ringData = rings
+            ? buildAllocationRingData(layout!, {
+                  familyLabel: typeLabel,
+                  memberLabel: (item) => item.name,
+                  genericCaption: (family) => tr('dashboard.allocationGeneric', {values: {type: family}}),
+                  amountOf: (item) => item.amount ?? 0,
+                  round: roundedPercent,
+              })
+            : null;
+        const ringItem = ({color, ...datum}: AllocationRingDatum) => ({...datum, itemStyle: {color}});
+        // An outer filler is empty space: invisible, silent, and without a border, or the
+        // family it spans would show a seam and read as split.
         const transparentStyle = {color: 'transparent', borderWidth: 0};
-        const baseRingData = rings ? layout!.base.map((arc) => ({...ringItem(arc), label: {show: !arc.split}})) : [];
-        const outerRingData = rings ? layout!.outer.map((arc) => (arc.role === 'filler' ? {...ringItem(arc), itemStyle: transparentStyle, label: {show: false}, emphasis: {disabled: true}} : {...ringItem(arc), label: {show: !arc.pure}})) : [];
-        // The base icon of a split family is drawn on the inner band only, where the
-        // outer ring cannot cover it.
-        const baseLabelData = rings ? layout!.base.map((arc) => ({...ringItem(arc), itemStyle: transparentStyle, label: {show: arc.split}})) : [];
+        const baseRingData = ringData ? ringData.base.map(ringItem) : [];
+        const outerRingData = ringData ? ringData.outer.map((datum) => (datum.filler ? {...ringItem(datum), itemStyle: transparentStyle, label: {show: false}, labelLine: {show: false}, emphasis: {disabled: true}, tooltip: {show: false}} : ringItem(datum))) : [];
 
         // Data-only update when chart is already initialized, dark mode hasn't changed,
         // AND (mode='type' only) no new asset type has appeared since the last full
@@ -268,7 +267,6 @@
                     ? [
                           {id: 'alloc-base', data: baseRingData},
                           {id: 'alloc-outer', data: outerRingData},
-                          {id: 'alloc-base-labels', data: baseLabelData},
                       ]
                     : [{data: chartData}],
             });
@@ -314,19 +312,6 @@
         const legendBaseTextStyle: any = {color: isDark ? '#94a3b8' : '#64748b', fontSize: 11};
         const legendTextStyle = mode === 'type' ? {...legendBaseTextStyle, rich: richStyles} : legendBaseTextStyle;
 
-        // Two rings: each family, then its subtypes, so the legend reads as the hierarchy
-        // it describes. The pure member and the fillers are not listed — they would
-        // repeat the family's own name.
-        const ringLegendNames: string[] = [];
-        if (rings) {
-            for (const family of layout!.base) {
-                ringLegendNames.push(typeLabel(family.key));
-                for (const arc of layout!.outer) {
-                    if (arc.primary === family.primary && arc.role === 'member' && !arc.pure) ringLegendNames.push(arc.items[0].name);
-                }
-            }
-        }
-
         const legendTypeExtras =
             mode === 'type'
                 ? {
@@ -340,10 +325,9 @@
                           const translated = tr(`assets.types.${rawKey}`) || name;
                           return `{${safeKey}|} ${translated}`;
                       },
-                      // Not selectable with two rings: hiding an arc from one ring and not
-                      // from the other breaks "a parent's arc is the sum of its children",
-                      // which is the only reason the two rings line up.
-                      ...(rings ? {data: ringLegendNames, selectedMode: false} : {}),
+                      // With two rings the legend lists families only, and stays clickable:
+                      // every arc of a family — inner and outer — carries the family's name,
+                      // so a click hides all of them at once and the rings still sum alike.
                   }
                 : {};
 
@@ -431,16 +415,23 @@
                 // rather than re-deriving from the already-translated params.name.
                 const rawSource = params.data?.rawName ?? params.name;
                 const rawKey = (rawSource as string).toUpperCase().replace(/[^A-Z_]/g, '');
-                const translated = tr(`assets.types.${rawKey}`) || params.name;
-                const iconUrl = getAssetTypeIconUrl(rawKey);
+                // On the rings the arc carries its own caption: "ETF azionario", or the
+                // generic member of a split family, which must not read as the family.
+                const translated = params.data?.caption ?? (tr(`assets.types.${rawKey}`) || params.name);
+                // A subtype names its vehicle and its content: the main icon, with the content's
+                // small and slightly overlapping, ringed in the tooltip's own background (R16's
+                // composite, asked for in the review of R12 on 24/09/2026).
+                const icons = allocationTypeIcons(rawKey);
+                const iconHtml = icons.content
+                    ? `<span style="position:relative;display:inline-block;width:19px;height:16px;vertical-align:middle;margin-right:5px;"><img src="${icons.main}" style="position:absolute;left:0;top:0;width:14px;height:14px;"><img src="${icons.content}" style="position:absolute;right:0;bottom:-1px;width:10px;height:10px;border-radius:50%;background:${isDark ? '#1e293b' : '#fff'};box-shadow:0 0 0 1px ${isDark ? '#1e293b' : '#fff'};"></span>`
+                    : `<img src="${icons.main}" style="width:14px;height:14px;vertical-align:middle;margin-right:5px;">`;
                 // The shading says "this belongs to that mass"; this line says how big
                 // the mass is. Only when there is actually a sibling — otherwise it
                 // would restate the slice's own number.
                 const groupSize: number = params.data?.groupSize ?? 1;
                 const primaryKey: string | undefined = params.data?.primaryKey;
-                // On the outer ring the family is the whole point — a lone `ETF_STOCK`
-                // is exactly the arc that needs "↳ Stock", even as a family of one. On the
-                // base ring it would restate the arc's own number, so it is left out there.
+                // On the outer ring the family is the whole point, even as a family of
+                // one. On the inner ring it would restate the arc's own number.
                 const onOuterRing = params.data?.ringRole === 'member';
                 const showParent = rings ? onOuterRing : groupSize > 1;
                 let parentLine = '';
@@ -448,10 +439,12 @@
                     const parentI18nKey = `assets.types.${primaryKey}`;
                     const parentTranslated = tr(parentI18nKey);
                     const parentLabel = parentTranslated !== parentI18nKey ? parentTranslated : primaryKey;
-                    const parentTotal = Math.round((params.data?.primaryTotal ?? 0) * 10) / 10;
+                    // Same precision as the member's own figure: "3.48%" next to "3.5%" read
+                    // as two different quantities (review of R12, 24/09/2026).
+                    const parentTotal = roundedPercent(params.data?.primaryTotal ?? 0);
                     parentLine = `<br/><span style="font-size:11px;opacity:0.7">↳ ${parentLabel} ${parentTotal}%</span>`;
                 }
-                return `<img src="${iconUrl}" style="width:14px;height:14px;vertical-align:middle;margin-right:5px;">${translated}: ${params.value}%${amountLine}${parentLine}`;
+                return `${iconHtml}${translated}: ${params.value}%${amountLine}${parentLine}`;
             }
             // Sector: display name already contains the emoji prefix
             return `${params.name}: ${params.value}%${amountLine}`;
@@ -497,35 +490,39 @@
                   ],
         };
 
-        // The two rings of D72, drawn as three series:
+        // The two rings of D72, as the developer chose them on 24/09/2026 (R12, option B):
         //
-        // - `alloc-base` spans the full thickness, one arc per family. A family that is
-        //   not split therefore reads as one piece — no seam, because nothing is drawn
-        //   across it.
-        // - `alloc-outer` overlays the outer band with the members of the split families
-        //   and an invisible filler for every other family.
-        // - `alloc-base-labels` carries the base icon of a split family on the inner band,
-        //   where the outer overlay cannot cover it. It is silent: no tooltip, no hover.
+        // - `alloc-base`, the inner ring: one arc per family, with the family's icon;
+        // - `alloc-outer`, a thinner ring **separated** from it by a visible gap: the
+        //   members of the split families, each with a caption outside, and an invisible
+        //   filler under every other family. A first version drew the outer band glued
+        //   to the inner one to avoid a seam; from outside it read as one ring, and on a
+        //   small slice the member's icon covered the band — rejected in review.
         //
-        // No angular padding on any of them: `padAngle` removes one pad per arc, and the
-        // rings do not have the same number of arcs — padded, they would drift apart.
+        // No angular padding on either ring: `padAngle` removes one pad per arc, and the
+        // rings do not have the same number of arcs — padded, they would drift apart. The
+        // white border separates the slices instead, identically on both rings.
         function ringSeries(): echarts.PieSeriesOption[] {
-            const [innerRadius, outerRadius] = pieRadius.map((value) => Number.parseFloat(value));
-            const splitRadius = `${innerRadius + (outerRadius - innerRadius) * 0.55}%`;
-            const shared = {
-                type: 'pie' as const,
-                center: pieCenter,
-                avoidLabelOverlap: true,
-                padAngle: 0,
-                label: labelConfig,
-                labelLayout: {hideOverlap: true},
-                labelLine: {show: false},
-            };
+            const [start, end] = pieRadius.map((value) => Number.parseFloat(value));
+            const span = end - start;
+            const innerEnd = `${start + span * 0.67}%`;
+            const outerStart = `${start + span * 0.8}%`;
             const border = {borderRadius: 4, borderColor: isDark ? '#293548' : '#ffffff', borderWidth: 2};
+            const shared = {type: 'pie' as const, center: pieCenter, avoidLabelOverlap: true, padAngle: 0, itemStyle: border, labelLayout: {hideOverlap: true}};
+            const captionConfig = {
+                show: true,
+                position: 'outside' as const,
+                formatter: (params: any) => `${params.data?.caption ?? params.name}\n${params.value}%`,
+                fontSize: 11,
+                lineHeight: 14,
+                color: isDark ? '#cbd5e1' : '#374151',
+            };
             return [
-                {...shared, id: 'alloc-base', radius: pieRadius, itemStyle: border, emphasis: {label: {show: false}, scaleSize: 5}, data: baseRingData},
-                {...shared, id: 'alloc-outer', radius: [splitRadius, pieRadius[1]], itemStyle: border, emphasis: {label: {show: false}, scaleSize: 3}, data: outerRingData},
-                {...shared, id: 'alloc-base-labels', radius: [pieRadius[0], splitRadius], silent: true, itemStyle: transparentStyle, tooltip: {show: false}, emphasis: {disabled: true}, data: baseLabelData},
+                // Family icons only where they fit: a 0.01% "Liquidity" arc would otherwise
+                // wear an icon wider than itself, drawn across its neighbours. 18° is 5% of
+                // the circle, the threshold of the mockup the developer approved.
+                {...shared, id: 'alloc-base', radius: [pieRadius[0], innerEnd], label: labelConfig, labelLine: {show: false}, minShowLabelAngle: 18, emphasis: {label: {show: false}, scaleSize: 5}, data: baseRingData},
+                {...shared, id: 'alloc-outer', radius: [outerStart, pieRadius[1]], label: captionConfig, labelLine: {show: true, length: 8, length2: 8}, emphasis: {scaleSize: 3}, data: outerRingData},
             ];
         }
 
