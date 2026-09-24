@@ -41,6 +41,7 @@ from backend.app.schemas.common import (
     OldNew,
 )
 from backend.app.services.asset_sources.core import AssetSourceError, AssetSourceProvider
+from backend.app.services.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
 from backend.app.utils.identifier_utils import merge_other_identifiers
 
 logger = structlog.get_logger(__name__)
@@ -265,8 +266,8 @@ class AssetCRUDService:
             tx_own_by_asset = {asset_id: count for asset_id, count in (await session.execute(own_stmt)).all() if asset_id is not None}
 
         # Open positions now: the signed quantities summed per broker and asset, the same reading
-        # as the broker balances. A small tolerance keeps a position sold in full closed despite
-        # floating-point residue.
+        # as the broker balances, through the portfolio's dust threshold, so a position closed but
+        # for a redemption residue is not "held".
         held_own: set[int] = set()
         held_others: set[int] = set()
         if rows:
@@ -279,7 +280,7 @@ class AssetCRUDService:
                 )
                 own_broker_ids = set((await session.execute(own_brokers_stmt)).scalars().all())
             quantity = func.sum(Transaction.quantity)
-            holdings_stmt = select(Transaction.broker_id, Transaction.asset_id).where(Transaction.asset_id.is_not(None)).group_by(Transaction.broker_id, Transaction.asset_id).having(quantity > 1e-9)
+            holdings_stmt = select(Transaction.broker_id, Transaction.asset_id).where(Transaction.asset_id.is_not(None)).group_by(Transaction.broker_id, Transaction.asset_id).having(quantity > float(QUANTITY_DUST_THRESHOLD))
             for broker_id, asset_id in (await session.execute(holdings_stmt)).all():
                 (held_own if broker_id in own_broker_ids else held_others).add(asset_id)
 

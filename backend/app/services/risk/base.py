@@ -64,6 +64,10 @@ class RiskHistoricalReplayContext:
     # Assets the engine excluded because their quotes do not cover the replay window, with the
     # reason. Disjoint from the manual `excluded_asset_ids`.
     auto_excluded_assets: Mapping[int, RiskHistoricalReplayExclusionReason] = field(default_factory=dict)
+    # A part of the window, already verified, that brings back the assets its edges exclude, and
+    # those assets: a proposal for the user, never applied by the engine.
+    suggested_range: Optional[DateRangeModel] = None
+    suggested_range_recovers: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

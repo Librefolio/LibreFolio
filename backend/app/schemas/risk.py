@@ -278,6 +278,11 @@ class RiskHistoricalReplayAudit(StrictModel):
     missing_history_policy: RiskScenarioMissingHistoryPolicy
     composition_policy: RiskCompositionPolicy
     proxy_series_usage: Literal["returns_only"] = "returns_only"
+    suggested_range: Optional[DateRangeModel] = Field(
+        None,
+        description="Part of the replay window in which every asset excluded by the window's edges is priced; offered only when replaying it brings them back without losing any other asset",
+    )
+    suggested_range_recovers: List[PositiveInt] = Field(default_factory=list, description="Assets the suggested range brings back, ordered by asset")
 
     @model_validator(mode="after")
     def validate_audit(self) -> RiskHistoricalReplayAudit:
@@ -303,6 +308,18 @@ class RiskHistoricalReplayAudit(StrictModel):
             abs_tol=1e-12,
         ):
             raise ValueError("excluded_weight_total must match excluded asset weights")
+        return self
+
+    @model_validator(mode="after")
+    def validate_suggested_range(self) -> RiskHistoricalReplayAudit:
+        recovered = self.suggested_range_recovers
+        if recovered != sorted(set(recovered)):
+            raise ValueError("suggested_range_recovers must be unique and ordered by asset")
+        if (self.suggested_range is None) != (not recovered):
+            raise ValueError("suggested_range and suggested_range_recovers must be set together")
+        automatic = {item.asset_id for item in self.excluded_assets if item.reason != RiskHistoricalReplayExclusionReason.MANUAL_EXCLUSION}
+        if not set(recovered) <= automatic:
+            raise ValueError("a suggested range can only recover automatically excluded assets")
         return self
 
 
@@ -1627,8 +1644,13 @@ class RiskEligibilityLevel(StrEnum):
 
 
 class RiskEligibilityReason(StrEnum):
-    """Why an asset is ineligible (the first three) or eligible with a warning (the last two)."""
+    """Why an asset is ineligible (the first four) or eligible with a warning (the last two).
 
+    `no_price_history` (never quoted) is told apart from `no_prices` (no quote in the period, some
+    elsewhere), because only the second can be mended by choosing another period.
+    """
+
+    NO_PRICE_HISTORY = "no_price_history"
     NO_PRICES = "no_prices"
     TOO_FEW_QUOTES = "too_few_quotes"
     MISSING_FX = "missing_fx"
@@ -1660,6 +1682,17 @@ class RiskEligibilityResponse(StrictModel):
     items: List[RiskAssetEligibility]
     min_quotes: int = Field(..., ge=1, description="Fewest quotes in the period an eligible asset needs")
     stale_days: int = Field(..., ge=1, description="Calendar days after which a start or an end counts as late")
+    common_range: Optional[DateRangeModel] = Field(
+        None,
+        description="Span in which every requested asset with quotes is quoted, from the latest first quote to the earliest last quote; null when the spans do not overlap",
+    )
+    suggested_range: Optional[DateRangeModel] = Field(
+        None,
+        description=(
+            "Period that makes every quoted asset eligible without warnings, offered only when the requested period starts before, ends after or misses the common span; "
+            "it starts the day after the latest first quote, so that quote is the starting price. The requested period trimmed to the common span, or the common span itself"
+        ),
+    )
 
 
 __all__ = [
