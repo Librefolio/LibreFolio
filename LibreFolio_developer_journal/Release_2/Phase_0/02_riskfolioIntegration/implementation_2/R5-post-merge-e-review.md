@@ -325,7 +325,7 @@ la tocca: lo verifichi lì).
 | ④ · cancello i18n sul prefisso condizionale | ✅ 23/09/2026 · 17 → 24 test, HEAD rosso su 6 dei 7 nuovi |
 | ⑤ · deriva dei commenti | ✅ 23/09/2026 |
 | ⑥ · test del filtro broker fuori da `risk-analysis` | ✅ 24/09/2026 · 13 passed nella `6152` |
-| handoff `FROZEN` del tempo ① | ✅ 23/09/2026 · checkpoint `de55b5346` + `551edffdc` (⑥) |
+| handoff `FROZEN` del tempo ① | ✅ 23/09/2026 · checkpoint `393a3d118` + `7d6c9a60c` (⑥) |
 | tempo ② · review col developer | 🔵 aperta il 24/09/2026 · R12 in discussione |
 
 ### Passo 0 — il piano nel journal · ✅ 23/09/2026
@@ -506,7 +506,7 @@ la tocca: lo verifichi lì).
 > **Falso, e la misura non provava nulla**: vedi il Fuori pista sotto.
 >
 > **Note implementazione**: via del coordinator il 24/09 alle 09:31, dopo il commit del checkpoint
-> (`a5f6776aa` … `de55b5346`) e con la condizione di F soddisfatta — il suo test
+> (`a5f6776aa` … `393a3d118`) e con la condizione di F soddisfatta — il suo test
 > *«broker preset: loads exactly that broker's holdings and lets no amount through, its empty option
 > keeps the selection, and a chip removed by hand comes back through the picker»*
 > (`risk-lab.spec.ts:2478`) verde nella sua lane, 16/16. Il suo test contiene il mio: stessi controlli
@@ -806,7 +806,7 @@ copia byte-identica alla snapshot al momento dell'avvio.
 > scheduler); all'avvio `dev.py server` ha ricostruito il frontend perché i due file di test erano più
 > recenti del bundle. Verificata di nuovo la torta: due serie, tooltip corretti, nessun errore.
 
-### R12 — dopo il checkpoint `5135efffc` → `086af5172` → `cdf89f1b3` (24/09)
+### R12 — dopo il checkpoint `0a22b2ab3` → `8afe5b31c` → `3a90c6dcc` (24/09)
 
 > **Note implementazione — l'icona del tooltip si adatta alla composita di K**: con la D-K2 di K,
 > `getAssetTypeIconUrl('ETF_STOCK')` restituirà una **composita statica** (ETF con l'azione già
@@ -830,12 +830,12 @@ copia byte-identica alla snapshot al momento dell'avvio.
 > **⚠️ Fuori pista — pesi e importi reali del developer nel journal**: nelle note di R12 e nelle schede
 > del tempo ② avevo trascritto le quote reali del suo portafoglio per tipo e alcuni importi in euro letti
 > dalla copia di prod; nel test della torta le fixture riproducevano le stesse quote. Insieme permettevano
-> di risalire al patrimonio. Trovato dal coordinator dopo il checkpoint `cdf89f1b3` (il controllo del
+> di risalire al patrimonio. Trovato dal coordinator dopo il checkpoint `3a90c6dcc` (il controllo del
 > tempo ① cercava la password, non i valori finanziari). La regola dell'agente di lane lo vietava già
 > («financial values … identifying user data»).
 >
 > **Decisione del developer**: dalla storia locale si tolgono **solo gli importi in euro** (6 righe, in
-> `de55b5346` e `cdf89f1b3`; la riscrittura la prepara il coordinator su un clone in `/tmp`, la lancia il
+> `393a3d118` e `3a90c6dcc` — prima della riscrittura `de55b5346` e `cdf89f1b3`; la riscrittura la prepara il coordinator su un clone in `/tmp`, la lancia il
 > developer); le **percentuali possono restare**. Nel working tree ho comunque messo segnaposto
 > (`<quota>`, `≈ X €`) su pesi e importi — innocui, e riscritte le osservazioni che se ne servivano
 > (per R12d: «membro a due decimali, famiglia a uno») — e test-author ha rifatto le fixture di
@@ -871,3 +871,286 @@ copia byte-identica alla snapshot al momento dell'avvio.
 > `allocationFamily.ts` quelle vere. I mock manuali di vitest non reggono import concorrenti (lo dice il suo
 > sorgente). Rimedio: il blocco ha un caricatore che importa in sequenza, e una barriera verifica che
 > `allocationFamily.ts` veda davvero la composita. Provato anche col blocco spostato in testa, 4 volte.
+
+### Riscrittura della storia locale — 24/09/2026
+
+> Checkpoint `580fa8053` → `3c1589943` → `03c1f52e7` (icona composita, fixture sintetiche, journal senza
+> cifre), poi la riscrittura preparata dal coordinator e lanciata dal developer: via i 6 importi in euro
+> dai commit da `393a3d118` in poi (`a5f6776aa..8757c7e3a` invariati). Verificato da me dopo: HEAD
+> `03c1f52e7`, albero pulito, `refs/original` assente, **0** occorrenze delle stringhe nella storia del ramo.
+>
+> | prima | dopo |
+> |---|---|
+> | `de55b5346` | `393a3d118` |
+> | `551edffdc` | `7d6c9a60c` |
+> | `5135efffc` | `0a22b2ab3` |
+> | `086af5172` | `8afe5b31c` |
+> | `cdf89f1b3` | `3a90c6dcc` |
+>
+> **⚠️ Fuori pista — avevo previsto conflitti che non ci sono stati**: avevo avvisato il coordinator che
+> rigiocando i commit ripuliti ci sarebbero stati conflitti col commit dei segnaposto. La riscrittura usa
+> `filter-branch --tree-filter`, che trasforma l'albero di ogni commit da solo senza rigiocare diff; e il
+> commit 13 aveva già i segnaposto, quindi la punta nuova è identica alla vecchia. Avevo ragionato come
+> per un rebase.
+
+---
+
+## Tempo ② — piano del checkpoint backend (approvato dal developer il 24/09)
+
+Decisioni del developer: nessun periodo nell'intestazione (è quello della barra in alto) · avvisi in i18n
+con nomi e parametri dal backend · una sola notifica di parzialità in cima, con «parziale» ridefinito sulla
+soglia di progetto · requisiti minimi di ammissibilità per periodo · «i miei asset» = quantità > 0 ·
+replay che esclude da sé gli asset che non coprono la finestra della crisi. Divisione confermata dal
+coordinator: servizio, benchmark, replay e campi della lista asset = Risk; selettore e pagina di Asset
+Global = F. Il backend va in un checkpoint suo, prima del frontend.
+
+| # | passo | file | stato |
+|---|---|---|---|
+| B1 | un modulo per le soglie: `STALE_PRICE_THRESHOLD_DAYS = 7`, `TRANSACTION_IMPLIED_GRACE_DAYS = 14`, `RISK_MIN_OBSERVATIONS = 20`; motore del portafoglio e analisi di rischio li leggono da lì | `services/data_quality_thresholds.py` (nuovo), `portfolio_engine.py`, `portfolio_service.py`, i dieci plugin a 20, `price_store.py` (il commento citi il simbolo) | ✅ 24/09 · test ✅ |
+| B2 | «parziale» ridefinito: un punto riportato degrada solo oltre i 7 giorni, e la baseline non conta mai | `series_preparation.py` | ✅ 24/09 · test ✅ |
+| B3 | avvisi con chiave i18n e parametri (nomi degli asset, giorni) | `schemas/risk.py` (`RiskWarning`), `risk/service.py`, `risk_plugins/stress.py`, cataloghi i18n | ✅ 24/09 · test ✅ |
+| B4 | replay: esclusione automatica di chi non copre la finestra (nessun prezzo, parte oltre 7 gg dopo l'inizio, finisce oltre 7 gg prima della fine, cambio mancante); motivo nell'audit | `risk/eligibility.py` (nuovo, regole pure), `risk/service.py`, `risk_plugins/stress.py`, `schemas/risk.py` | ✅ 24/09 · test ✅ |
+| B5 | ammissibilità per periodo: non ammesso (nessun prezzo, cambio mancante, < 20 quotazioni) · ammesso con avviso (parte tardi, ultimo prezzo > 7 gg) | `risk/eligibility.py`, `api/v1/risk.py`, `schemas/risk.py` | ✅ 24/09 · test ✅ |
+| B6 | lista asset: «posseduto ora da me» e «posseduto ora da altri» (quantità > 0) | `schemas/assets.py`, `asset_sources/crud.py` | ✅ 24/09 · test ✅ |
+| B7 | test (test-author), registrazione nel runner, `api sync`, journal | 8 file di test (3 nuovi), `_backend_services.py`, `_backend_api.py` | ✅ 24/09 |
+| B8 | motivi del replay che non dicono il falso: all'inizio «prima quotazione dopo l'inizio» ≠ «nessun prezzo nei 7 giorni prima» (buco o NAV mensile); alla fine un motivo neutro | `schemas/risk.py`, `risk/eligibility.py`, `risk_plugins/stress.py`, cataloghi i18n | ✅ 24/09 · test ✅ |
+
+**Test previsti** (lista da mostrare al developer): 7 gg riportati non degradano, 8 sì · la baseline
+riportata mai · portafoglio, rischio e ammissibilità leggono le stesse costanti · gli avvisi portano chiave e
+parametri · ammissibilità ai bordi (19/20 quotazioni, 7/8 giorni) e per ogni motivo · replay: ogni motivo
+di esclusione, tolleranza dei 7 giorni, esclusione manuale ancora valida, tutto escluso → non parte, peso
+escluso come liquidità sul portafoglio e omesso su Asset Global, e **la finestra comune non viene più
+accorciata** da chi parte tardi · lista asset: posizione chiusa → non «mio», posizione altrui aperta →
+«di altri».
+
+> **⚠️ Fuori pista — un difetto nascosto del replay, trovato leggendo il codice**: il replay prepara una
+> serie *congiunta* per tutti gli asset; se uno comincia a quotare a metà crisi, la baseline comune si
+> sposta alla sua prima data e **il replay di tutti gli altri copre solo la seconda metà della crisi**,
+> senza dirlo (resta solo l'avviso generico `short_history`). L'esclusione automatica di B4 lo chiude per
+> costruzione.
+
+### Checkpoint backend B1–B6 — note implementazione · 24/09/2026
+
+> - **B1**: `services/data_quality_thresholds.py` con le tre soglie; `portfolio_engine.py` importa la soglia
+>   dei prezzi vecchi, `portfolio_service.py` il periodo di grazia; i dieci plugin a 20 e il default di
+>   `CorrelationParams` leggono `RISK_MIN_OBSERVATIONS`; il commento di `price_store.py` cita
+>   `PortfolioCalculationEngine._compute_price_fingerprint()` invece di una riga sbagliata dalla nascita.
+> - **B2**: in `series_preparation.py` un punto riportato conta solo oltre i 7 giorni, prezzo e cambio
+>   separatamente, e la baseline mai. Il contatore pubblicato cambia quindi significato («riportato oltre
+>   la soglia»): lo leggono anche i segnali, che vedranno meno punti riportati — voluto, è la stessa regola.
+> - **B3**: `RiskWarning` ha `message_i18n_key` e `message_params`; i 19 punti che costruiscono un avviso
+>   scrivono la chiave per intero (l'audit i18n legge le chiavi del backend dalle assegnazioni letterali);
+>   un avviso per motivo di esclusione e uno per causa di degrado; i nomi degli asset li aggiunge il
+>   servizio con una sola query per risposta. **32 chiavi** in `risk.warnings.*`, nella convenzione già
+>   usata dal namespace (`<codice>[_<variante>]`, 7 riusate), 4 lingue via `dev.py i18n`, tutte provate
+>   con `intl-messageformat` e i loro parametri. Corrette le due frasi «alcune coppie» della correlazione.
+> - **B4**: `risk/eligibility.py` (regole pure + un caricatore: una query aggregata e una prova di cambio
+>   per valuta); esclusione automatica nel replay prima della serie congiunta; motivo nell'audit; un
+>   proxy inutilizzabile resta un errore dei parametri; niente da riprodurre → errore, non più «0 %».
+> - **B5**: `POST /api/v1/risk/eligibility`.
+> - **B6**: `held_by_me` / `held_by_others` sulla lista asset (somma delle quantità per broker e asset,
+>   la stessa lettura dei saldi del broker).
+> - `api sync`: i file generati sono ignorati da git.
+>
+> **Misurato sulla copia di prod** (valori nella chat, non qui):
+>
+> ```
+> L1, L2                    parziali solo per i crowdfunding senza prezzi, ora nominati; i weekend del
+>                           BTP non degradano più nulla
+> replay Covid 2020         parte (prima si bloccava): 3 esclusi in automatico, tutti no_prices_in_window
+> replay 2008               parte: 8 esclusi — tutti gli ETF nati dopo il 2009 — con <quota> alta del
+>                           portafoglio come liquidità: il risultato dice poco, il pannello deve dirlo
+> replay 2022               parte: 3 esclusi
+> ammissibilità 12 mesi     11 ammessi, i 4 crowdfunding non ammessi (no_prices)
+> ```
+>
+> **Test**: `services risk-all` 450 ✓ / 4 ✗ — tutti attesi: fissavano il comportamento vecchio (un riporto
+> di 1–2 giorni contato come degrado, il replay che si blocca) o costruivano il servizio su un DB finto che
+> le chiamate nuove ora toccano. `schemas risk` 26 ✓, `schemas assets` 70 ✓, `api assets-crud` 32 ✓,
+> `api risk` 11 ✓. test-author ripara i 4 e scrive i test nuovi (T1–T10).
+>
+> **⚠️ Fuori pista — tre rossi di `api risk` che non erano del codice**: il run precedente di `services`
+> cancella il DB della corsia di suite, e i test API vogliono il portafoglio finto. Con `test db populate
+> --force` nella mia data-dir di suite: 11 ✓. Stesso artefatto d'invocazione già visto nei round precedenti.
+>
+> **⚠️ Fuori pista — le chiavi i18n rinominate a metà**: le avevo scritte in camelCase; il namespace
+> `risk.warnings` aveva già 7 chiavi col nome del codice, usate da `RiskResultFrame`. Rinominate tutte in
+> snake_case e riusate le 7 esistenti, invece di duplicarle.
+
+### B7 — i test del backend · ✅ 24/09/2026
+
+> **Note implementazione**: test-author ha riparato i 4 test che fissavano il comportamento vecchio
+> (uno rinominato, perché il nome diceva il contrario di quello che ora verifica) e scritto T1–T10: tre
+> file nuovi (`test_data_quality_thresholds.py`, `test_risk_warnings_i18n.py`, `test_risk_eligibility.py`)
+> e cinque estesi, registrati in `RISK_SERVICE_TEST_PATHS` e nelle descrizioni del runner. I due
+> scanner di sorgente (soglie, chiavi i18n) hanno ciascuno un autotest del rilevatore. 18 mutanti, su
+> copie caricate con un hook di import: tutti presi da almeno un test mirato; i sorgenti veri hanno lo
+> stesso SHA-256 prima e dopo.
+>
+> **Verifica mia, nella corsia di suite 6152**: `services risk-all` 551 ✓ · `signal-service` 50 ✓ ·
+> `asset-signals` 20 ✓ · `portfolio-engine` 42 ✓ · `roi-fifo-utils` 507 ✓ · `schemas risk` 26 ✓ ·
+> `schemas assets` 70 ✓ · `db populate --force` ✓ · `api risk` 13 ✓ · `api assets-crud` 34 ✓ ·
+> `check-orphans`: backend tutto registrato; i 5 orfani frontend sono i file privacy di `b66e93003`,
+> non nostri. Ruff pulito; black segnalava due righe vuote mie in `schemas/risk.py`, sistemate.
+> Scansione dei valori reali e delle password sui file toccati: nulla.
+>
+> **⚠️ Fuori pista — un motivo che poteva dire il falso**: test-author ha notato che un asset quotato da
+> anni ma con un buco a cavallo dell'inizio della crisi (un fondo con NAV mensile) finiva escluso come
+> «ha iniziato a quotare dopo l'inizio», che per lui è falso; e alla fine, per un asset che ha ancora
+> prezzi oggi, «ha smesso di quotare» è quasi sempre un buco. Sui dati del developer non succede (prova
+> in sola lettura su una copia del DB: gli esclusi sono tutti nati *dopo* la finestra, o senza prezzi) →
+> passo B8.
+
+### B8 — motivi del replay che non dicono il falso · ✅ 24/09/2026
+
+Il developer ha chiesto prima se l'esclusione fosse giusta. Risposta, con le controindicazioni della sua
+idea di spostare le date di confine:
+
+- **Sì, è giusta.** Il replay somma i movimenti di ogni asset *sullo stesso intervallo*; il pezzo di
+  finestra di un asset nato a metà crisi è un altro scenario (Covid 19/02→23/03/2020: S&P 500 −34 %,
+  dal 16/03 solo −6 %). La quota esclusa conta come liquidità ferma: il numero dice quanto perde la
+  parte misurata, non stima il tutto.
+- **Accorciare** al periodo comune è coerente ma cambia scenario: le crisi del catalogo vanno dal massimo
+  al minimo, quindi ogni finestra più corta lì dentro mostra una caduta più piccola → ottimista. Spesso
+  il periodo comune non esiste; si sposta a ogni acquisto; era il vecchio comportamento, solo silenzioso.
+- **Allargare** non aiuta chi non esisteva; per un buco al bordo la cura è accettare, per quell'asset
+  solo, un prezzo più vecchio quando è il suo ritmo di quotazione (idea per dopo).
+- La cura vera per gli asset giovani è il **sostituto** (già nel backend, UI assente, già in `TODO_FUTURI`).
+
+Frase scelta (opzione A): all'inizio due motivi, alla fine uno neutro; «finestra del replay» al posto di
+«crisi», perché il replay gira anche sul periodo personalizzato.
+
+> **Note implementazione**: `RiskHistoricalReplayExclusionReason` guadagna `stale_at_window_start`, e
+> `ends_before_window_end` diventa `stale_at_window_end` (mai rilasciato: il nome ora dice quello che i
+> dati sanno). In `replay_coverage`, senza un prezzo nei 7 giorni prima dell'inizio, un asset quotato
+> già prima della finestra è `stale_at_window_start`; solo una quotazione nuova ha la tolleranza dopo
+> l'inizio. Gli avvisi dei due motivi «stale» portano `days` dal modulo delle soglie. Le 6 frasi del
+> replay riscritte nelle 4 lingue via `dev.py i18n` (`ends_early` rimossa, due aggiunte): niente accordo
+> di numero, così valgono per uno o per molti; 33 chiavi del backend × 4 lingue provate con
+> `intl-messageformat`; audit i18n: 0 chiavi del backend mancanti.
+>
+> **Test** (test-author, secondo giro): T5 a 17 casi (buco al bordo esatto → coperto, NAV mensile →
+> «stale» all'inizio e non «nato dopo», quotazione nuova esattamente a 7 giorni → coperta, a 8 → esclusa,
+> cambio mancante prima del buco); T6 con cinque motivi automatici più quello manuale, in ordine di enum e
+> con `days` solo sui due «stale»; un caso su righe vere (buco a cavallo dell'inizio → `stale_at_window_start`
+> accanto a un `starts_after_window_start`, che fissa `first_quote` = prima quotazione di sempre);
+> `stress.py` nella mappa dei consumatori delle soglie. Mutanti M13–M17 tutti presi (etichetta sbagliata al
+> buco, `days` tolto all'inizio e alla fine, un buco «salvato» da una quotazione dopo l'inizio, tolleranza
+> della quotazione nuova resa stretta, caricatore che legge la prima quotazione nella finestra).
+
+### Decisioni del developer per il giro frontend · 24/09/2026
+
+- **Avviso forte nel replay** quando l'escluso supera **metà** del portafoglio: «il risultato descrive
+  solo il N % del tuo portafoglio». La soglia va nel modulo delle soglie.
+- **Pulsante «adatta al periodo comune (dal X al Y)»** in due posti:
+  - in alto, nella zona dove si scelgono gli asset (Asset Global): cambia il periodo della barra in alto;
+    compare solo se il periodo scelto crea un problema a qualche asset. La zona è di F: chi mette il
+    pulsante lo decide il coordinator; il calcolo è mio, nel backend;
+  - nel replay: cambia solo le date del replay; compare solo se qualcuno è escluso per i bordi; nelle
+    crisi del catalogo con la nota «è solo una parte della crisi: la perdita misurata tende a essere più
+    piccola».
+- **Replay con il `DateRangePicker`** della barra in alto al posto dei due `SingleDatePicker`, senza i
+  pulsanti rapidi riferiti a oggi; se le date di una crisi cambiano, lo dice accanto al nome.
+- **Piano frontend e lista dei test approvati** (avvisi tradotti, un solo avviso di parzialità in cima,
+  replay senza blocco, benchmark filtrato, test delle palette, E2E aggiornati).
+
+> **⚠️ Fuori pista — due messaggi al developer in inglese**: il riepilogo del backend e l'analisi del
+> replay gli sono arrivati in inglese, e ha dovuto chiedere di rifarli. Regola: con il developer sempre
+> in italiano, anche nei messaggi lunghi.
+>
+> **⚠️ Fuori pista — una chiave viva che l'audit crede morta**: `dashboard.allocationGeneric` (R12-B) è
+> chiamata come `tr('dashboard.allocationGeneric', …)`, con `tr` alias di `$t`; l'audit riconosce `$t(`,
+> `$_(`, `t(` e `_(`, non `tr(`, e una chiave a due segmenti sfugge anche alla rete generica. Una pulizia
+> futura la cancellerebbe e la ciambella mostrerebbe la chiave grezza. Da correggere nel giro frontend
+> (chiamata diretta a `$t(`), oppure estendendo l'audit, con il via del coordinator.
+
+## Tempo ② — piano dopo il checkpoint backend (approvato dal developer il 24/09)
+
+Ordine: checkpoint backend B1–B8 → **checkpoint C** (backend: periodo comune e avviso forte) →
+frontend F1–F8 → checkpoint frontend. Il calcolo resta nel backend (regola di progetto): il frontend
+mostra, non decide.
+
+| # | passo | file | stato |
+|---|---|---|---|
+| C1 | periodo comune per l'analisi: sugli asset scelti, la finestra del periodo corrente dove tutti hanno prezzi (dall'ultima prima quotazione alla prima ultima), proposta solo se cambia qualcosa e se basta a tutti (≥ 20 quotazioni); con gli asset che la limitano; «nessun periodo comune» quando non esiste | `risk/eligibility.py`, `schemas/risk.py`, `api/v1/risk.py` | ⏳ |
+| C2 | periodo comune nel replay: dentro la finestra, per gli esclusi a causa dei bordi; verificato con una seconda lettura dei fatti prima di proporlo; nell'audit | `risk/eligibility.py` (prima quotazione nella finestra), `risk/service.py`, `risk_plugins/stress.py`, `schemas/risk.py` | ⏳ |
+| C3 | avviso forte quando l'escluso supera metà portafoglio: `historical_replay_mostly_excluded` con la quota coperta; soglia `REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE = 0.5` nel modulo delle soglie | `data_quality_thresholds.py`, `risk_plugins/stress.py`, cataloghi i18n | ⏳ |
+| C4 | test (test-author), runner, `api sync`, journal | — | ⏳ |
+| F1 | avvisi tradotti: chiave e parametri del backend; se manca la traduzione, il testo originale — mai una chiave grezza | `levels/levelHelpers.ts`, `RiskResultFrame.svelte` | ⏳ |
+| F2 | un solo avviso di parzialità in cima al pannello, ogni causa una volta; sotto i livelli solo gli errori | `levels/RiskLevelsPanel.svelte` (non `RiskLevelSection`, che è di F) | ⏳ |
+| F3 | replay: via il blocco «escludi e riprova»; esclusi per motivo con nomi e peso; avviso forte (C3); «niente da simulare»; `DateRangePicker` senza pulsanti rapidi; pulsante del periodo comune (C2), con la nota «solo una parte della crisi» nelle crisi del catalogo | `levels/l4/L4Replay.svelte`, `levels/l4/scenarioHelpers.ts` | ⏳ |
+| F4 | benchmark: non ammissibili grigi con il motivo, con avviso selezionabili e segnalati; cambia col periodo | `levels/L3Benchmark.svelte`, chiavi `risk.eligibility.*` | ⏳ |
+| F5 | test delle palette che leggono i colori dai grafici veri; puntatori per contenuto, non per riga | test di `AllocationPieChart` / `AllocationHistoryChart` (solo lettura dei `.svelte`) | ⏳ |
+| F6 | `dashboard.allocationGeneric` chiamata con `$t(`, così l'audit la vede | `AllocationPieChart.svelte` | ✅ 24/09 · anticipato nel checkpoint B |
+| F7 | E2E: riscritto quello del replay bloccato; aggiornati quelli che si aspettavano «Parziale» sotto i livelli | `frontend/e2e/portfolio/risk-analysis.spec.ts` | ⏳ |
+| F8 | screenshot per il developer: icona composita (D-K2), avviso unico, replay, benchmark | — | ⏳ |
+
+Pulsante del periodo comune in alto (zona asset di Asset Global): la zona è di F; chi lo mette (F con il
+mio endpoint, oppure io dopo l'integrazione di F) lo decide il coordinator. All'integrazione, inoltre:
+collegare `docsPath`/`docsLabel` di F nella Dashboard, togliere `height` da `L2Diversification`,
+sostituire `allocationFamily` con `assetTypeFamily` di K.
+
+### Incarico nuovo — l'icona della documentazione su tutti i pannelli · ⏳ (deciso dal developer il 24/09, 13:1x)
+
+Parole del developer, riportate dal coordinator: *«l'icona, solo lei, allineata a destra … in tutti i
+pannelli di tutte le pagine, con annessa pagina di documentazione (specifica o in comune) che la
+documenta»*. Non si comincia adesso.
+
+- **Forma** (fissata con F): solo l'icona del libro (`DocsLink`, cioè `Tooltip.svelte`) sul bordo destro
+  dell'intestazione; il tooltip spiega il pannello in poche frasi, il click apre la sua pagina di doc. Il
+  pezzo generico c'è già: `docsPath` / `docsLabel` in `RiskLevelSection`; `check-links` valida ogni
+  `docsPath` scritto per intero.
+- **Sequenza**: F finisce la riprogettazione del laboratorio con il developer e mette l'icona sui pannelli
+  del laboratorio → il developer fonde il ramo di F nel mio → da lì proseguo io: review e rifinitura dei
+  componenti successivi, e l'icona su tutti i pannelli di tutte le pagine.
+- **Dopo la fusione** sono l'owner d'integrazione del ramo combinato F + Risk (il vincolo «F entra prima di
+  Risk» si soddisfa da sé). Le parti di F nella divisione del tempo ② (selettore che consuma
+  l'ammissibilità, «i miei asset» = quantità > 0, declassamento nei pannelli) restano di F solo se il mio
+  backend arriva prima del suo checkpoint finale; altrimenti passano a me con la fusione. → **Il
+  checkpoint backend B va chiuso presto**; il pulsante del periodo comune in alto dipende da C, quindi con
+  ogni probabilità sarà mio dopo la fusione.
+
+| # | passo | stato |
+|---|---|---|
+| Doc0 | fusione di F nel mio ramo (la fa il developer): verifica dei genitori, conflitti risolti in modo additivo, cancelli di entrambe le parti sul combinato | ⏳ |
+| Doc1 | **analisi prima del codice**: inventario dei pannelli pagina per pagina e, per ciascuno, la sua pagina di doc — esistente o da scrivere con `docs-writer`, solo EN; le pagine di altri owner del round (Dashboard di I e J, Broker di J, Asset di K, PAC di D) le mette in sequenza il coordinator | ⏳ |
+| Doc2 | l'icona su tutti i pannelli, dopo l'approvazione dell'analisi | ⏳ |
+| Doc3 | pagine di doc mancanti (`docs-writer`), `mkdocs build` e `check-links` | ⏳ |
+
+### F6 — la chiave che l'audit credeva morta · ✅ 24/09/2026 (anticipato nel checkpoint B)
+
+> **Note implementazione**: il coordinator ha dato la cura minima a me, subito, e ha messo in backlog quella
+> generale (la regex di `i18n-audit.py:99`), perché cambierebbe la base «likely unused» su cui misurano
+> altre corsie. `AllocationPieChart.svelte` chiama `$t('dashboard.allocationGeneric', …)` invece di
+> `tr(…)`, con una riga di commento sul perché. Audit: la chiave non è più tra le inutilizzate (419 → 418).
+> Verifica: `vitest` dei grafici 181 ✓, prettier pulito, `svelte-check` nulla sul componente (i suoi 3
+> errori sono in `TransactionFormModal.test.ts`, non toccato da noi).
+
+### Checkpoint backend B1–B8 + F6 — handoff `FROZEN` · 24/09/2026
+
+Base `03c1f52e7`, 39 percorsi, 7 commit (script con i controlli di HEAD, stage vuoto, percorsi esatti e
+impronta del contenuto): lista asset (3) → backend del rischio (21) → i18n (4) → test (7) → runner (2)
+→ chiave dell'audit (1) → journal (1).
+
+> **Verifica finale, corsia 6152**: `services risk-all` 560 ✓ · `signal-service` 50 ✓ · `asset-signals`
+> 20 ✓ · `portfolio-engine` 42 ✓ · `roi-fifo-utils` 507 ✓ · `schemas risk` 26 ✓ · `schemas assets` 70 ✓ ·
+> `db populate --force` ✓ · `api risk` 13 ✓ · `api assets-crud` 34 ✓ · `check-orphans`: backend tutto
+> registrato (i 5 orfani frontend sono di `b66e93003`) · ruff e black puliti sui 33 file Python · `vitest`
+> dei grafici 181 ✓ · audit i18n: 0 chiavi del backend mancanti · `api sync` rifatto (file ignorati da
+> git) · nessun importo reale e nessuna password nei file e nei messaggi.
+>
+> **File condivisi toccati**: catalogo del runner (3 percorsi aggiunti a `RISK_SERVICE_TEST_PATHS`, due
+> descrizioni estese in coda), cataloghi i18n (26 chiavi nuove e 2 riscritte, tutte in `risk.warnings.*`),
+> `schemas/assets.py` + `crud.py` (due campi nuovi, li consuma F), `portfolio_engine.py` /
+> `portfolio_service.py` (solo l'import delle costanti).
+>
+> **Effetti per l'integrazione**: chi fonde rigenera il client (`api sync`); le pagine di teoria di F e la
+> pagina utente di A che dicono «i riportati rendono parziale» diventano inesatte (ora solo oltre 7
+> giorni); i segnali vedono meno punti riportati (stessa regola); A e F vedranno meno «parziale» sui dati
+> veri.
+>
+> **Voci di CHANGELOG proposte** (non scritte: il file lo tiene chi rilascia), in `### 🧪 Beta`:
+> «Le analisi di rischio non segnano più come parziali i risultati per i weekend e le festività: un prezzo
+> riportato conta solo dopo 7 giorni, la stessa soglia del banner dei prezzi vecchi» · «Il replay storico
+> parte anche quando alcuni asset non esistevano durante la crisi: li esclude da sé e dice quali e
+> perché». Le altre (avvisi tradotti, ammissibilità nei selettori) quando arriva il frontend.
