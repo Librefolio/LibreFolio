@@ -93,6 +93,98 @@ retain, it shows its own **Retry** button.
 
 ---
 
+## 🙈 Privacy mode {: #privacy-mode }
+
+Privacy mode hides how much you own while someone else can see your screen — a colleague walking
+past, a shared screen, a projector. It is not a field of this tab: it is the **eye button** in the
+page header, at the top right next to the theme and language buttons.
+
+- :material-eye-outline: **Hide amounts** — amounts are visible; click to hide them.
+- :material-eye-off-outline: **Show amounts** — privacy mode is on; click to show the amounts again.
+
+The change applies at once to the page you are on, in both directions, without a reload. Privacy
+mode then stays on as you move between pages and after a reload, until you switch it off.
+
+!!! tip "Two different eye icons"
+
+    The eye icon in a **table toolbar** is a different control: it shows or hides table columns.
+
+### 🔒 What is hidden
+
+Privacy mode replaces the **number** of an amount with `•••`. The currency always stays, and so
+does the sign, so a gain still reads as a gain and a loss as a loss:
+
+| Normally | With privacy mode |
+|---|---|
+| `1,234.56 € 🇪🇺 EUR` | `••• € 🇪🇺 EUR` |
+| `-1,234.56 € 🇪🇺 EUR` | `-••• € 🇪🇺 EUR` |
+| `€1,234.56` or `1.234,56 €` | `€•••` or `••• €` |
+| `—` (no value) | `—` |
+
+`•••` is always the same three dots, whatever the size of the amount — even the **K** or **M** of
+a shortened figure disappears — so it does not give away the order of magnitude. Where it
+applies:
+
+- **Dashboard** — every amount in the KPI cards and in Cash Balances, and the amounts in the
+  Allocation panel's tooltips.
+- **[Positions](../dashboard/positions.md)** — in the Holdings table and map and in the
+  Performance table, every amount except the prices per unit (**Value**, **Unrealized P&L**,
+  **Δ1** and the others), and the **Qty** column of the Holdings table.
+- **[FIFO Lots Analysis](../dashboard/positions.md#fifo-lots-analysis)** — in the lots table and
+  the Lot Detail modal: values, P&L, income, proceeds, fees and taxes, and the open and original
+  quantity of each lot. A partially closed lot shows its open share instead, for example
+  `••• (60%)`. In the charts: the axis of the Value / Return comparison whenever it shows money,
+  the quantity on the Lot Life & Custody bars, and the amounts and quantities in the tooltips.
+- **Brokers** — the value, gain or loss, and every cash balance on the broker cards and on the
+  broker detail page; the panels the detail page shares with the dashboard behave as they do
+  there.
+- **Risk panels** — the amounts.
+- **Transactions** — the cash amount of every transaction.
+
+### 👀 What stays visible
+
+Privacy mode hides what would tell someone **how much you own**. Numbers that do not reveal it
+stay readable, so you can keep working:
+
+- the **currency** next to every hidden amount;
+- **percentages** — returns, P&L %, weights, allocation shares, yield on cost;
+- **prices per unit** — market prices, the **Price** and **Avg. Cost** (WAC) columns of Positions,
+  the opening and closing prices of lots, and the price lines of the WAC / Market Price chart;
+- **FX rates**;
+- **counts, dates and names** — for example the number of transactions of an asset;
+- **asset events**, such as a dividend or a split, on the asset pages: they describe the asset
+  itself, not your portfolio;
+- the **quantities in the Transactions list** — a deliberate choice: there, a quantity multiplied
+  by the asset's public price still gives an idea of a trade's size;
+- the numbers inside **edit fields**, for example while you add or edit a transaction: a field
+  you cannot read is a field you cannot edit.
+
+### 🌐 Where the setting is kept
+
+Privacy mode belongs to **this browser**, not to your account: it describes the screen someone may
+be looking at, not who is signed in.
+
+- It is off until you first turn it on, and it stays as you left it when you come back in this
+  browser.
+- Logging out or signing in with another account does not change it: whoever uses this browser
+  finds it as you left it.
+- It does not follow you to another browser or device, and it is not saved on the server.
+- Other LibreFolio tabs already open in this browser pick up the change when you reload them.
+- If the browser refuses to store the setting (for example when site storage is blocked), privacy
+  mode still works in this tab, but may be off again after a reload.
+
+!!! warning "What privacy mode does not cover"
+
+    - **[AI Export](../ai-export/index.md)** copies the real figures to the clipboard even while
+      privacy mode is on. Review the text before you share it.
+    - **Downloads and exported files** contain the real figures.
+    - It hides what is **drawn on the screen**. The figures still reach your browser, so it is not
+      protection against someone who can use your device or its developer tools.
+    - Some figures can still be **worked out**: the sign tells a gain from a loss, and when you hold
+      a single unit of an asset, its visible price is its value.
+
+---
+
 ## 🔗 Related
 
 - 👤 **[Profile](profile.md)** — Username, email, avatar, password, delete account

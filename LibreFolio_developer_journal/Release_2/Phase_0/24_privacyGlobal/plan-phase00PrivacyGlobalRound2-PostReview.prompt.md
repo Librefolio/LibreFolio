@@ -21,7 +21,7 @@ Fonti:
 | **Lane copia prod** | porta `6168`, `/tmp/librefolio-r2-j-onboarding-prodcopy`, **solo dalla snapshot** `/tmp/librefolio-r2-prod-snapshot` |
 | **Lane suite** | porta `6158`, `/tmp/librefolio-r2-j-onboarding` — **solo** `dev.py test …` |
 | **Coordinator** | `c8328a01-f208-4ade-a352-0486d1f14de2` |
-| **Checkpoint** | C0 `2a5927c48` · C1 `176f19707` · C2 `64d78e244` · C3 `59cb80103` — C2 e C3 con la storia locale riscritta il 2026-09-24 (passo 7, *Fuori pista*) |
+| **Checkpoint** | C0 `2a5927c48` · C1 `176f19707` · C2 `64d78e244` · C3 `59cb80103` · C4 `5e7ae336e` (onboarding) — C2 e C3 con la storia locale riscritta il 2026-09-24 (passo 7, *Fuori pista*) |
 
 **Autorizzazione developer verbatim, 2026-09-23:** `Plan approved! Exited plan mode.`
 
@@ -544,22 +544,101 @@ scope reattivo che costruisce l'`option` — le etichette d'asse non si ridiping
 > C3) ridisegnano con il solo `void isPrivacyEnabled()`. Passano l'`option` completa a ogni render,
 > ma **non l'ho misurato dal vivo**: va nella verifica di C3.
 
-### Passo 9 — E2E privacy — **Stato: ⏳**
+### Passo 9 — E2E privacy — **Stato: ✅ completato il 2026-09-24**
 
 Spec nuovo: ogni rotta, toggle nei due versi, navigazione con privacy attiva; importi con valuta
 visibile; quantità mascherate in posizioni e lotti e visibili in transazioni. Registrazione nel
 runner a carico del coordinator. Nessun E2E oggi nomina la privacy.
 
-### Passo 10 — Documentazione — **Stato: ⏳**
+> **Note implementazione.** Via `test-author`: spec nuova `frontend/e2e/portfolio/privacy-masking.spec.ts`
+> (+662; in `portfolio/` perché ogni cartella E2E corrisponde a una categoria del runner), registrata in
+> `_frontend_portfolio.py` (+20, additiva: `front-portfolio privacy-masking`, `project=""`, desktop **e**
+> mobile, perché il pulsante dell'header è raggiungibile anche su mobile). Legge i dati di `TEST_USER` via
+> API, mai per posizione di riga, e non scrive nulla: la privacy è solo nel browser. 9 test per progetto:
+> riepilogo della dashboard; posizioni (valore, P&L e **quantità** nascosti, prezzo, WAC e peso leggibili);
+> lista broker e dettaglio broker **nei due versi, sul posto** (R20); posizioni e lotti del broker (quantità e
+> totali nascosti, prezzi leggibili, lotto parziale `••• (NN%)`); modale di custodia montata con la privacy
+> attiva; transazioni (importi nascosti con valuta e segno, **quantità leggibili**, `—` e conteggio
+> invariati); navigazione con privacy attiva su ogni rotta; ricaricamento che conserva la preferenza, con una
+> card montata mascherata che torna in chiaro sul posto (R20). Ogni cella mascherata deve tenere il codice
+> ISO e il segno; simbolo e bandiera possono mancare (vedi sotto).
+>
+> | comando (lane 6158) | esito |
+> |---|---|
+> | `front-portfolio privacy-masking`, del `test-author` | primo giro `14 passed, 4 failed` (tutti della spec, corretti), poi `18 passed (34.8s)` e `18 passed (33.9s)` — 9 desktop + 9 mobile |
+> | idem con `--workers 4` | `18 passed (21.3s)` |
+> | idem, lanciato da me dopo il rimedio del layout | exit 0 · `18 passed (33.1s)` |
+>
+> **Non coperti, dichiarati:** i grafici (canvas: i loro formatter hanno test unitari), il totale della
+> scheda Info del broker (**ramo morto**: `total_value_base_currency` è dichiarato in
+> `backend/app/schemas/brokers.py` ma nessun codice lo valorizza), i prezzi di mercato di `/assets`
+> (aprire la pagina chiama i provider veri e scrive prezzi: vietato; e la marcatura `public` di
+> `AssetTable` non ha nemmeno un test unitario privacy: **oggi non è protetta da niente**), i tassi FX
+> (non passano dai formatter mascherati), gli eventi asset, la vista Performance e le schede transazioni
+> dentro dashboard e broker.
+>
+> **Reperto, cosmetico:** una cella disegnata prima che il catalogo delle valute sia caricato mostra solo il
+> codice finché qualcosa non la ridisegna (`<n> EUR` in chiaro, poi `••• € 🇪🇺 EUR` dopo il toggle).
+> `ExposureTable`, la tabella dei lotti e i KPI non osservano `currencyStoreVersion`; `TransactionsTable`,
+> `AssetTable` e `YieldOnCostCell` sì. Per questo la spec accetta simbolo e bandiera assenti, mai il codice.
+
+### Passo 10 — Documentazione — **Stato: ✅ completato il 2026-09-24**
 
 Via `docs-writer`: cosa nasconde la privacy (numero e quantità in posizioni/lotti) e cosa no
 (valuta, percentuali, prezzi, WAC, conteggi, eventi asset, tassi). Sezione in una pagina
 esistente. Contratto per i renderer dei tool (D: denaro solo via primitive D8) nella guida
 sviluppatore.
 
-### Passo 11 — Review manuale e FROZEN — **Stato: ⏳**
+> **Note implementazione.** Via `docs-writer`, nessuna pagina nuova, nessuna modifica alla nav:
+>
+> - **utente** — `user/settings/preferences.en.md`, sezione nuova `🙈 Privacy mode` (+92): il
+>   pulsante nell'header, cosa si nasconde (numero, mai valuta né segno; `•••` costante, anche
+>   `K`/`M`) e dove, cosa resta visibile (percentuali, prezzi unitari, WAC, tassi, conteggi,
+>   eventi asset, quantità in Transazioni, campi di modifica), dove vive l'impostazione (questo
+>   browser, non l'account; niente sincronizzazione fra schede aperte), e un avviso su cosa non
+>   copre (AI Export, download, strumenti del browser, il residuo della quantità 1 deciso in (a));
+> - **sviluppatore** — `developer/frontend/state/app-state.md`, sezione `🙈 Privacy masking`
+>   (+202): lo store, il canale di mascheratura con le firme verificate, il gate e i suoi tre
+>   punti ciechi, la regola legacy di R20 (verificata compilando con Svelte 5.48.0: legacy dà
+>   `$.untrack(() => formatCurrencyAmountHtml(…))`), la regola ECharts, e il contratto per i
+>   renderer dei tool (l'adapter PAC di D è descritto come **pianificato**: non esiste ancora);
+> - **guida dei tool** — `developer/architecture/patterns/tool_plugins.en.md` (+2), un rimando
+>   al contratto (pagina solo inglese);
+> - **istruzioni e skill (mie):** `frontend.instructions.md` (sezione *Privacy masking*), skill
+>   `testing-frontend` (i punti ciechi del gate, misurati) e skill `tool-plugin` (il contratto).
+>
+> | comando | esito |
+> |---|---|
+> | `dev.py mkdocs build` (strict) | exit 0 — il primo giro falliva: la pagina sviluppatore si costruisce anche in it/fr/es, dove `preferences.md#privacy-mode` punta a una traduzione senza àncora; ora il link è alla pagina, e torna all'àncora quando le traduzioni l'avranno |
+> | `dev.py mkdocs check-links` | exit 0, `80 valid link(s)` |
+> | `translate-validate` su `preferences` | exit 1: debito reale (sezione nuova, più la sezione onboarding mai tradotta). Nessuno stamp |
+>
+> **⚠️ Fuori pista — Growth e Performance non sono citati.** In questo albero i loro assi e
+> tooltip sono ancora in chiaro: la correzione è il commit di I (`804bc9903`), non ancora nel
+> target. La sezione utente non ne parla, così non afferma nulla di falso; quando entra, due voci
+> da aggiungere (asse e tooltip di Crescita tranne il modo %, etichette e asse di Performance).
+>
+> **Reperti del `docs-writer`, verificati da me nel codice, non corretti (fuori perimetro):**
+> **sovra-mascheratura** contro le regole del developer in `TransactionsTable.svelte`
+> (`eventTooltipText`: il valore di un evento asset collegato passa per
+> `formatCurrencyAmountPlain` senza `sensitivity`, quindi mascherato — gli eventi sono pubblici) e in
+> `transactions/wac/WacPreviewSection.svelte` (costo unitario e WAC progressivo mascherati: sono
+> prezzi unitari, pubblici per D5′-c); **etichette non tradotte** di `PrivacyToggle.svelte:13`
+> («Hide amounts» / «Show amounts», mie, `b66e93003`), la stessa forma di `ThemeToggle` e di altri
+> controlli dell'header; `isPrivacyPersisted()` non letto da nessun componente, quindi nessun
+> avviso se il browser rifiuta di salvare; due frasi false nelle doc (`developer/frontend/index.md`:
+> «fully embraces runes», ma tre file sono legacy; `user/dashboard/index.en.md`: tre schede, sono
+> quattro).
+
+### Passo 11 — Review manuale e FROZEN — **Stato: ⏳ pronto per il developer**
 
 Runbook sotto, sulla copia prod rinfrescata dalla snapshot.
+
+> **Stato 2026-09-24.** Tutto ciò che il runbook chiede e che un test può leggere è coperto dal passo 9
+> (E2E, desktop e mobile) e dai test unitari; restano per l'occhio del developer i grafici (Crescita e
+> Performance dopo l'integrazione del commit di I, lotti, Gantt, WAC), `/assets` e `/fx`, e la
+> sovra-mascheratura segnalata al passo 10 (`TransactionsTable`, `WacPreviewSection`). La `6168` si
+> riaccende su richiesta, con la copia rinfrescata dalla snapshot.
 
 ## Previsione conflitti
 

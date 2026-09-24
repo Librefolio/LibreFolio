@@ -34,6 +34,18 @@ def front_portfolio_dashboard(verbose: bool = False, ui: bool = False, headed: b
     return _run_playwright("portfolio/dashboard.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_portfolio_privacy_masking(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the privacy-masking E2E tests on desktop and mobile — the header toggle exists on both."""
+    print_section("Frontend Portfolio Privacy Masking Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("portfolio/privacy-masking.spec.ts", ui=ui, headed=headed, debug=debug, project="", test_names=test_names, coverage=coverage)
+
+
 def front_portfolio_store_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run Portfolio store unit tests (Vitest)."""
     print(f"\n{Colors.BLUE}Running: Portfolio store Vitest unit tests{Colors.NC}")
@@ -244,6 +256,14 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "banners", front_portfolio_banners, name="DataQualityBanner Tests", desc="Banner component: dashboard grouped, asset/FX flat mode", tests="portfolio/data-quality-banners.spec.ts")
     add_test(cat, "broker-icons", front_portfolio_broker_icons, name="Broker Icon Tests", desc="Dashboard positions broker fallback chain", tests="portfolio/broker-icons.spec.ts")
     add_test(cat, "dashboard", front_portfolio_dashboard, name="Dashboard Chart Tests", desc="PositionsPanel 2x2 view matrix (treemap + perf chart), toggle persistence, AllocationPanel now/history, loading state", tests="portfolio/dashboard.spec.ts")
+    add_test(
+        cat,
+        "privacy-masking",
+        front_portfolio_privacy_masking,
+        name="Privacy Masking Tests",
+        desc="Header privacy toggle, in place both ways, desktop and mobile: dashboard KPIs, cash and positions, broker cards (R20), broker detail balances, positions and FIFO lots (partial lot ••• (NN%)), lot custody modal and transactions hide the number and keep currency and sign; held quantities hide in positions and lots, while unit prices, WAC, opening prices, percentages, counts, absent values and transaction quantities stay readable; a route mounted with privacy on is masked and the preference survives a reload",
+        tests="portfolio/privacy-masking.spec.ts",
+    )
     add_test(cat, "risk-unit", front_portfolio_risk_unit, test_names=False, name="Risk Store Unit Tests", desc="Request-key cache, account isolation, invalidation and capability checks", tests="src/lib/stores/risk/riskStore.test.ts")
     add_test(cat, "risk-request-unit", front_portfolio_risk_request_unit, test_names=False, name="Risk Request Builder Unit Tests", desc="What the request actually carries: the simulation process is chosen by the caller rather than hard-coded, each mode carries its own seed field and forbids the other one, and the legacy aliases keep their documented geometric-Brownian default", tests="src/lib/risk/simulationParameters.test.ts")
     add_test(cat, "risk-benchmark-unit", front_portfolio_risk_benchmark_unit, test_names=False, name="Risk Benchmark Store Unit Tests", desc="One benchmark shared by every scope: user scoping, reload survival, corrupt-value rejection", tests="src/lib/stores/risk/riskBenchmarkStore.test.ts")
