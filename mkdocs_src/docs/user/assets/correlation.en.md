@@ -87,7 +87,7 @@ Beside the matrix, two lists put the answer into words:
 
 With more than 20 assets the matrix becomes too dense to read: on wide screens the lists move ahead of it, and they show up to eight pairs instead of five.
 
-The matrix needs at least two assets to show a pair. When a square has no coefficient, its tooltip says why: **Insufficient history** when the selection shares fewer than 20 observations, or **Undefined** when an asset's price did not move at all over the window. See [Correlation](../../financial-theory/technical-analysis/risk-metrics/correlation.md) for how the coefficient is computed and what it cannot see.
+The matrix needs at least two assets to show a pair. When a square has no coefficient, its tooltip says why: **Insufficient history** when the window holds fewer than 20 observations, or **Undefined** when an asset's price did not move at all over the window. See [Correlation](../../financial-theory/technical-analysis/risk-metrics/correlation.md) for how the coefficient is computed and what it cannot see.
 
 ### 📉 How Much Did Each of These Hurt? {: #how-much-did-each-hurt }
 
@@ -96,7 +96,7 @@ The second section, **How much did each of these hurt?**, puts every selected as
 | Column | What it tells you |
 |---|---|
 | **Bad day** | The average loss on the worst 5% of days (CVaR 95%, one day) |
-| **Bad month** | The same over rolling windows of about a month, compounded from real returns — not scaled up from the bad day |
+| **Bad month** | The same over every run of 21 consecutive observations, compounded from real returns — not scaled up from the bad day. How long 21 observations last depends on the dates the tab counts: about a month when it counts market days only, three weeks when it counts every day — as it does when one of the selected assets comes from a source that records prices at weekends too (see [One Shared Window](#one-shared-window)) |
 | **Worst fall** | The deepest drop from a peak to a later low within the window. The line under it, *lasted N d*, counts the calendar days from that peak until the asset was back at it — or until the end of the window, if it has not recovered |
 | **Below peak now** | How far the asset stands, at the end of the window, below the highest level it reached within the window |
 | **Rise to peak** | The gain it still needs to get back to that peak |
@@ -135,7 +135,7 @@ The last section, **What if…?**, starts closed: click its title to open it. On
 2. Press **Run replay**: the replay runs only when you ask for it.
 3. Read one bar per asset — what that asset actually returned over the period, worst first: losses to the left in red, gains to the right in green. There is no total, because a selection has no composition to add up.
 
-Like the other sections, the replay measures every asset over the dates they all share, within the chosen period. If an asset has no usable history in that period, the replay stops and names it; the way forward offered on this tab is **Leave it out and run again**. Left-out assets are listed after **Left out:** — click one to bring it back, then run the replay again.
+Like the other sections, the replay follows the rules of [One Shared Window](#one-shared-window), applied to its own period: an asset whose prices begin partway through the period moves the start of the replay for every asset, and an asset whose prices stopped before the period enters with its last price throughout, so its price never moves. If an asset cannot be valued at all over the period — no price up to its last day, or no exchange rate into the tab's currency — the replay stops and names it; the way forward offered on this tab is **Leave it out and run again**. Left-out assets are listed after **Left out:** — click one to bring it back, then run the replay again.
 
 Changing the selection or the page's date range clears a finished replay: run it again for the new answer. See [Historical Replay](../../financial-theory/technical-analysis/risk-metrics/historical-replay.md) for the method.
 
@@ -147,15 +147,22 @@ A few properties of this tab are easy to misread. Each one is deliberate, not a 
 
 ### 📅 One Shared Window {: #one-shared-window }
 
-Every figure is measured over **the dates that all the selected assets share**. The window starts from the page's date range — the date picker in the toolbar, the same one the Assets tab uses (the replay uses its own period, as described above) — and keeps only the dates on which every selected asset can be valued. That is what makes the rows comparable: two assets side by side fell, rose and moved over exactly the same days.
+Every figure is measured over **one window, the same for every selected asset**. It is built from the page's date range — the date picker in the toolbar, the same one the Assets tab uses (the replay uses its own period, as described above) — by three rules:
+
+1. **It starts on the first day on which every selected asset can be valued** — has a price, and an exchange rate into the tab's currency if it is quoted in another. When they all can be valued from before the date range, the window simply starts with the range; an asset whose history begins later moves the start for all of them.
+2. **From there, every date on which at least one selected asset is quoted counts** — quoted meaning that a price was recorded for that very day. Some sources record prices at weekends too, and those weekends then count for the whole selection.
+3. **An asset that is not quoted on one of those dates enters with its last price**, so its price does not move that day: its return is zero — or, for an asset quoted in another currency, only the exchange rate's move. When that happens, every section measured over the window says so: its measurements are marked **Partial**, and its notes include *Risk result uses incomplete or carried-forward source data.*
+
+A date on which one of the assets cannot be valued even so is left out for all of them. That is what makes the rows comparable: two assets side by side fell, rose and moved over exactly the same days.
 
 The price of that fairness is shared too:
 
 - **Adding an asset with a shorter history narrows the window for all of them, and their figures change.** Removing it widens the window again. This is expected, not an error.
-- **A benchmark, when one applies, joins the window** of *How much did each of these hurt?* and *What did each of these pay for its risk?*, because it is measured together with the selection there: a benchmark with a shorter history narrows those two sections as well. The correlation matrix is computed without it and keeps the selection's own window.
-- **An asset that cannot be valued at all** over the window — no prices, or no exchange rate into the tab's currency — narrows nothing: it is left out of the calculation. It disappears from the matrix, keeps a row of dashes in the tables, and the sections say that an asset was excluded.
+- **Adding an asset quoted on days the others are not adds those days for all of them** — a day its market is open and theirs is closed, or a weekend, when its source records prices then. On those days the others enter with their last price, so their figures change as well.
+- **A benchmark, when one applies, joins the window** of *How much did each of these hurt?* and *What did each of these pay for its risk?*, because it is measured together with the selection there: a benchmark with a shorter history narrows those two sections as well, and the days on which it is quoted count there too. The correlation matrix is computed without it and keeps the selection's own window.
+- **An asset that cannot be valued at all** over the window — no price up to its last day, or no exchange rate into the tab's currency — narrows nothing: it is left out of the calculation. It disappears from the matrix, keeps a row of dashes in the tables, and the sections say that an asset was excluded.
 
-To see what a section was measured over, open **Calculation details** at its bottom. It shows the number of **Observations** behind the figures, together with the coverage, the annualization factor and the return basis. It gives a count rather than dates: if the count drops after you add an asset, the window has narrowed.
+To see what a section was measured over, open **Calculation details** at its bottom. It shows the number of **Observations** behind the figures, together with the **Coverage**, the annualization factor and the return basis. It gives figures rather than dates, and the observations can move either way when you add an asset: down if its history is shorter, up if it is quoted on days the others are not. **Coverage** looks at every date in the date range on which at least one asset is quoted, and gives the share the window keeps: below 100%, the window starts later than the range, or skips days on which an asset could not be valued.
 
 ### 💱 One Currency {: #one-currency }
 
@@ -167,7 +174,7 @@ A dash (—) means *this could not be measured for that asset over this window*.
 
 ### 🧩 Each Section Speaks for Itself {: #each-section-speaks-for-itself }
 
-The sections do not stand or fall together. The drawdown columns need very little history; the other figures need at least 20 shared observations, and the bad month more still. So on a short window, **Worst fall**, **Below peak now** and **Rise to peak** can be filled in while the bad day, the bad month and the whole risk/return section cannot.
+The sections do not stand or fall together. The drawdown columns need very little history; the other figures need at least 20 observations, and the bad month more still. So on a short window, **Worst fall**, **Below peak now** and **Rise to peak** can be filled in while the bad day, the bad month and the whole risk/return section cannot.
 
 Rather than going blank, each section states its own condition in amber above its content:
 
@@ -179,7 +186,7 @@ A **Partial** section still shows its figures: the notes say what they are missi
 
 ### 🔀 Same Asset, Another Figure Elsewhere {: #same-asset-another-figure }
 
-The same asset can show a different volatility here than on another page — or here, with another selection. Each page prepares its own window: this tab uses the dates the whole selection shares, while other pages measure over their own period and their own series. Compare two figures only when they were measured over the same window; **Calculation details** is where you check.
+The same asset can show a different volatility here than on another page — or here, with another selection. Each page prepares its own window: this tab measures each asset over the window of the whole selection, including the days on which only the other assets are quoted; other pages measure over their own period and their own series. Compare two figures only when they were measured over the same window; **Calculation details** is where you check.
 
 ---
 
