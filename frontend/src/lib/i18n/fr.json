@@ -1485,7 +1485,8 @@
     "pnlCandlesHypothetical": "Synthétique — les plus hauts/bas cross-actifs sont hypothétiques et non simultanés, pas une véritable série intrajournalière.",
     "pnlCandlesHypotheticalShort": "Synthétique — les plus hauts/bas cross-actifs sont hypothétiques et non simultanés",
     "pnlAcqNewCapital": "Nouveau capital",
-    "pnlAcqReinvested": "Réinvesti"
+    "pnlAcqReinvested": "Réinvesti",
+    "allocationGeneric": "{type} générique"
   },
   "dataQuality": {
     "headerInfoOnly": "Note de qualité des données",
