@@ -508,7 +508,8 @@
         const emoji = getEventTypeEmoji(ev.type);
         const typeName = $t(`assetDetail.eventType.${ev.type}`) || ev.type;
         const amount = Number(ev.value);
-        const currText = Number.isFinite(amount) ? formatCurrencyAmountPlain(amount, ev.currency) : `${ev.value} ${ev.currency}`;
+        // An asset event describes the asset, not this portfolio: its value is public (D5′-c).
+        const currText = Number.isFinite(amount) ? formatCurrencyAmountPlain(amount, ev.currency, {sensitivity: 'public'}) : `${ev.value} ${ev.currency}`;
         // Line 1: emoji + translated type name + date
         const line1 = `${emoji} ${typeName} · ${ev.date}`;
         // Line 2: formatted amount
