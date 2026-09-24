@@ -3,6 +3,7 @@
     import {ChevronDown} from 'lucide-svelte';
 
     import {_ as t} from '$lib/i18n';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
 
     import type {ResultHealth, ResultReason} from './levelHelpers';
     import type {LevelMetadataRow} from './levelHelpers';
@@ -83,9 +84,19 @@
          * distinction lives here so no level has to remember it.
          */
         onfirstopen?: () => void;
+        /**
+         * The manual page for this question, relative to `/mkdocs/`, shown as a book
+         * icon right after the title. Named `docsPath` so the cross-boundary link
+         * check (`dev.py mkdocs check-links`) finds the literal a caller writes and
+         * validates it. Optional and without default: a caller that passes nothing
+         * renders exactly as before (agreed with Risk, F-3b V7).
+         */
+        docsPath?: string;
+        /** The icon's tooltip: what the card shows and how to read it, in a few sentences. */
+        docsLabel?: string;
     }
 
-    let {title, lead = '', level, collapsible = false, testId, health = [], reasons = [], errorCodes = [], metadata = [], children, onfirstopen}: Props = $props();
+    let {title, lead = '', level, collapsible = false, testId, health = [], reasons = [], errorCodes = [], metadata = [], children, onfirstopen, docsPath, docsLabel}: Props = $props();
 
     /**
      * The failure sentences, recomputed on every locale change.
@@ -227,7 +238,15 @@
 
 {#snippet header()}
     <div class="min-w-0">
-        <h3 class="text-base font-semibold text-gray-800 dark:text-gray-100" data-testid="{testId}-title">{title}</h3>
+        <!-- The title on the left, the manual's icon alone on the right edge of the card (the developer). -->
+        <div class="flex items-start justify-between gap-2">
+            <h3 class="text-base font-semibold text-gray-800 dark:text-gray-100" data-testid="{testId}-title">{title}</h3>
+            {#if docsPath && !collapsible}
+                <!-- Not inside the collapsible toggle: a link inside a `<button>` is invalid HTML.
+                     A collapsible level that wants the icon needs it beside the toggle — Risk's call. -->
+                <DocsLink path={docsPath} label={docsLabel ?? title} icon="book" size={16} testId="{testId}-docs" />
+            {/if}
+        </div>
         {#if lead}
             <!-- The sentence precedes the chart: the chart then demonstrates it,
                  instead of leaving the reader to infer the question from a shape. -->
