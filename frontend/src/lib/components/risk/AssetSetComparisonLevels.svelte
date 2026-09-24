@@ -72,9 +72,11 @@
          * a component that answered it twice could answer it differently.
          */
         benchmarkId: number | null;
+        /** Bumped by the panel after an accepted sync (R2-128). Default: never. */
+        refreshVersion?: number;
     }
 
-    let {assetIds, assetLabels, dateStart, dateEnd, targetCurrency, benchmarkId}: Props = $props();
+    let {assetIds, assetLabels, dateStart, dateEnd, targetCurrency, benchmarkId, refreshVersion = 0}: Props = $props();
 
     const controller = createRiskPanelController(
         () => ({
@@ -87,7 +89,7 @@
             // control to set one — and inventing a rate the reader never chose
             // would put a number in the denominator of every ratio on screen.
             appliedRiskFreePercent: 0,
-            refreshVersion: 0,
+            refreshVersion,
             assetSetBenchmarkId: benchmarkId,
         }),
         {includeAssetSetLevels: true},

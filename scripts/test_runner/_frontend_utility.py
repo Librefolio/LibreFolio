@@ -71,6 +71,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/components/risk/correlationHelpers.test.ts",
             "src/lib/components/risk/assetSetSelection.test.ts",
             "src/lib/components/risk/assetSetLevels.test.ts",
+            "src/lib/components/risk/syncTargets.test.ts",
             "src/lib/components/assets/providerProbe.test.ts",
             "src/lib/components/assets/resolveProviderError.test.ts",
             "src/lib/components/assets/assetIdentifiers.test.ts",
