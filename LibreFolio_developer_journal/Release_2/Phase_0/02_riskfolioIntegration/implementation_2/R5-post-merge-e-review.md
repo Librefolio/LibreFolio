@@ -325,8 +325,8 @@ la tocca: lo verifichi lì).
 | ④ · cancello i18n sul prefisso condizionale | ✅ 23/09/2026 · 17 → 24 test, HEAD rosso su 6 dei 7 nuovi |
 | ⑤ · deriva dei commenti | ✅ 23/09/2026 |
 | ⑥ · test del filtro broker fuori da `risk-analysis` | ✅ 24/09/2026 · 13 passed nella `6152` |
-| handoff `FROZEN` del tempo ① | ✅ 23/09/2026 · ⑥ escluso, in attesa del via |
-| tempo ② · review col developer | ⏳ |
+| handoff `FROZEN` del tempo ① | ✅ 23/09/2026 · checkpoint `de55b5346` + `551edffdc` (⑥) |
+| tempo ② · review col developer | 🔵 aperta il 24/09/2026 · R12 in discussione |
 
 ### Passo 0 — il piano nel journal · ✅ 23/09/2026
 
@@ -657,3 +657,151 @@ la tocca: lo verifichi lì).
 >
 > **Resta aperto**: ⑥ (via del coordinator dopo F) · i 5 test di privacy non registrati (di J) ·
 > il tempo ②.
+
+---
+
+## Fuori pista rimasti fuori dal checkpoint del tempo ① — 23–24/09/2026
+
+Il journal era dentro il checkpoint e quindi `FROZEN`: questi li porto qui all'apertura del tempo ②.
+
+> **⚠️ Credenziali in file versionati** (23/09): avevo trascritto utente e password del developer in
+> `_comune.md` e in questo piano, copiandole dal piano di sessione. Il coordinator ha bloccato il
+> checkpoint; sostituite con «fornite dal developer, non trascritte in file versionati» e un segnaposto
+> nel `reset`; `grep` sui 16 percorsi → zero. Segnalati due fatti fuori perimetro: i ref di checkpoint
+> dell'app (solo locali, 0 sul remote) e una stringa quasi identica già pubblica su `origin/main` dal
+> 31/07 → rimedio del developer: cambiare la password.
+>
+> **⚠️ F2 e C2 generalizzati oltre la misura** (23/09): avevo scritto al coordinator che valevano anche
+> per A/F. A ha misurato il contrario: su `asset_set` l'asset senza prezzi è escluso, non convertito in
+> liquidità, e la simulazione non è offerta. Avevo esteso a un perimetro la conclusione letta nel ramo
+> dei perimetri pesati.
+>
+> **⚠️ La premessa della griglia presa dalla doc** (23/09): avevo scritto che, col BOND dentro, la
+> griglia congiunta fosse di giorni di borsa, fidandomi di `observed-annualization.en.md:94-95`
+> («intersected»). Il codice fa l'**unione** delle date fresche (`series_preparation.py:236-289`) e
+> justETF scrive i weekend come righe fresche → f ≈ 365. C2 è sceso a 🟡 latente; C3 è diventato
+> «3 settimane ovunque sui tuoi dati», tranne il BOND da solo (misura del coordinator).
+>
+> **⚠️ Un fatto vero altrove scritto come vero qui** (24/09): il messaggio del commit 7 diceva
+> «risk-lab.spec.ts now owns…», falso a quel commit nel mio ramo (il test di F è sul ramo di F). Il
+> coordinator ha corretto corpo e oggetto; la mia proposta di oggetto («…risk-lab covers») ripeteva lo
+> stesso errore. Regola tenuta: in un messaggio di commit, ogni affermazione su un altro file o ramo
+> va nel corpo con la sua condizione, mai nell'oggetto.
+
+---
+
+## Tempo ② — review col developer · 🔵 aperta il 24/09/2026
+
+Schede: [`R5-tempo2-schede.md`](R5-tempo2-schede.md). Server di review sulla copia di prod, `6162`,
+copia byte-identica alla snapshot al momento dell'avvio.
+
+### R12 — la ciambella a due anelli · ❌ bocciata così com'è, decisione aperta
+
+> **Esito della review (24/09, due screenshot del developer)**: *«è ancora una torta unica e c'è solo
+> un'icona per quell'asset e anzi, in base a dove tocco nel tooltip mi si apre o azione o etf, direi
+> che non è quello che volevo»*.
+>
+> **Diagnosi** — i due anelli ci sono, ma tre scelte mie nascondono proprio il secondo livello:
+> 1. **nessuno stacco fra gli anelli** (anello base a tutto spessore + sovrapposizione sulla banda
+>    esterna, scelto per evitare la «cucitura bianca»): da fuori è una fetta sola;
+> 2. **l'icona del membro copre la banda esterna** sulla fetta piccola (3,5 %): si legge una fetta
+>    «Azione» con sopra l'icona di un ETF;
+> 3. **il tooltip cambia con la banda** (interna = famiglia, esterna = sottotipo), ma le bande non si
+>    vedono, quindi sembra casuale.
+>
+> Confermato anche R12d dal suo screenshot: `ETF azionario: 3.48%` accanto a `↳ Azione 3.5%`, due
+> arrotondamenti della stessa quantità (la famiglia è fatta solo di quel membro).
+>
+> **Decisione aperta, prima di toccare il codice**: *quale famiglia per l'ETF azionario?*
+> **A — per contenuto** (dentro «Azione»: è ciò che è implementato, dal principio del modello e dalla
+> nota del coordinator «non a ETF») oppure **B — per veicolo** («ETF» famiglia, dentro i sottotipi,
+> come l'albero del selettore di K). Mockup delle due, sui suoi numeri, con **anelli staccati**, anello
+> esterno più sottile e **didascalie invece delle icone** sul sottile: nel piano di sessione,
+> `files/r12-proposte-A-B.png` (+ `.html`), non versionati.
+>
+> **⚠️ Fuori pista — i numeri si muovono sulla copia**: ieri il tooltip leggeva `3.52% · ≈ X €`,
+> oggi `3.48% · ≈ X €` sulla copia rinfrescata. Lo scheduler dei prezzi gira anche sul server di
+> review e la torta è alla data finale. Spiega anche lo scarto `3.53`/`3.52` di ieri fra payload e
+> tooltip: letture in momenti diversi, non un difetto di arrotondamento.
+>
+> **Decisione del developer (24/09, 10:29)**: *«la proposta B è quello che mi aspettavo»* → **per veicolo**.
+>
+> **Note implementazione (24/09)** — la torta di B, in codice:
+> - `charts/allocationFamily.ts` (nuovo): la famiglia è il veicolo, `isEtfSubtype(t) ? 'ETF' : t`. Consuma
+>   l'elenco di **K** (`ETF_SUBTYPES`/`isEtfSubtype`, già esportati, nessuna modifica nel ramo di K):
+>   nessuna seconda mappa. `primaryAssetType` (contratto K2, per contenuto) **non** è toccato.
+> - `charts/allocationRings.ts`: docstring riallineata; nuova funzione pura `buildAllocationRingData`, che
+>   fissa le regole su cui legenda e tooltip si appoggiano: **ogni arco porta il nome della famiglia**
+>   (un clic in legenda nasconde la famiglia su entrambi gli anelli), la **didascalia** dice che cosa è
+>   l'arco (il membro generico diventa «ETF generico», nuova chiave `dashboard.allocationGeneric` nelle 4
+>   lingue via `dev.py i18n`), **un solo arrotondamento** per membro e famiglia.
+> - `AllocationPieChart.svelte`: due serie invece di tre; anelli **staccati** (interno 25–45 %, esterno
+>   49–55 % sulla stessa estensione di prima), esterno con didascalie fuori e linee guida, bordo bianco al
+>   posto di `padAngle`, icone di famiglia solo su fette ≥ 5 % (`minShowLabelAngle: 18`), legenda di nuovo
+>   cliccabile, tooltip col genitore a due decimali.
+>
+> ```
+> sui dati del developer (copia di prod, 6162)
+>   interno   ETF 53.05 · Crowdfunding 30.77 · Obbligazione 16.18 · Liquidità 0.01
+>   esterno   ETF generico 49.56 + ETF azionario 3.49 = 53.05, riempitivi senza tooltip
+>   tooltip   «ETF azionario: 3.49% · ≈ X € · ↳ ETF 53.05%»
+>   legenda   clic su «ETF» → spariscono insieme l'arco interno e i due esterni; anelli allineati
+>   errori di pagina: nessuno · front check: gli stessi 3 ereditati, zero nei miei file · prettier pulito
+> test      85/86: rosso solo il contratto sul sorgente del percorso veloce, che cercava tre id (ora due)
+> ```
+>
+> **⚠️ Fuori pista — un'icona di troppo**: alla prima prova l'icona della Liquidità (0,01 %) veniva
+> disegnata a cavallo delle fette vicine. Soglia del 5 % presa dal mockup approvato.
+>
+> **In attesa**: approvazione della **lista dei test** da parte del developer, poi test-author.
+> **Da comunicare al coordinator**: il grafico storico di I raggruppa ancora per contenuto; il futuro
+> `CROWDFUND_REAL_ESTATE` di K avrà bisogno di un genitore-veicolo esposto da K.
+>
+> **Review del developer sul risultato (24/09, 10:45)**: *«mi piace tutto quello che hai fatto»* — tutto
+> **approvato, lista dei test compresa**, con una richiesta: nel tooltip dell'ETF azionario c'era solo
+> l'icona ETF, *«mi aspettavo le 2 icone come le abbiamo descritte, o almeno le 2 affiancate»*.
+>
+> **Note implementazione — l'icona doppia nel tooltip**: la descrizione è quella di R16 (*«la seconda
+> icona piccola, leggermente sovrapposta alla principale»*), passata a **K**, che non l'ha ancora
+> realizzata; il mio piano fissava già che K **non** cambia `getAssetTypeIconUrl()` e che la seconda icona
+> arriva con una funzione nuova. Per non far aspettare il developer e senza una seconda mappa, la compongo
+> da due export **già esistenti** di K: `getAssetTypeIconUrl()` (veicolo) + `primaryAssetType()` (contenuto
+> → sua icona). Funzione pura `allocationTypeIcons()` in `charts/allocationFamily.ts`: `ETF_STOCK` → icona
+> ETF + icona azione; quando il contenuto ripeterebbe l'icona principale (`ETF`, `ETF_MONETARY`, i tipi
+> base) una sola. Resa come R16: la principale 14 px, quella del contenuto 10 px in basso a destra,
+> leggermente sovrapposta, con un alone nel colore di sfondo del tooltip (chiaro e scuro). Verificata con
+> uno zoom sullo screenshot della copia: etichetta ETF + edificio col $.
+> **Quando R16 consegnerà l'icona composita di K, il tooltip dovrà consumare quella.**
+>
+> **Coordinamento (24/09)**: K conferma `assetTypeFamily()` nel suo ramo (sottotipi ETF → `ETF`,
+> `CROWDFUND_REAL_ESTATE` → `CROWDFUND`, stabile per il round). All'integrazione `allocationFamily` diventa
+> `assetTypeFamily(type)`: una riga. La normalizzazione è la stessa (maiuscolo, vuoto → `OTHER`), quindi
+> `'Liquidity'` → `'LIQUIDITY'` prima e dopo; l'unico `===` su chiavi di famiglia confronta due uscite del
+> resolver. Caso `'Liquidity'` esplicito nei test, come chiesto dal coordinator.
+>
+> 🔵 **test-author** scrive i test della lista approvata (+ icone del tooltip, + `'Liquidity'`).
+>
+> **Test (24/09)** — test-author sulla lista approvata (+ `'Liquidity'` esplicito, + icone del tooltip):
+>
+> ```
+> allocationRings.test.ts aggiornato · allocationFamily.test.ts nuovo · solo questi due file toccati
+> vitest (da frontend/): rings + family + hierarchy + colors      Test Files 4 · Tests 114
+> runner allocation-unit, lane 6152 (libera prima e dopo)         Test Files 4 · Tests 114
+> mutanti del test-author   a nome proprio sugli archi esterni 8/34 · b didascalia generica 1/34 ·
+>                           c totale a un decimale 1/34 · d raggruppamento per contenuto 5/46 ·
+>                           e icona di contenuto sempre presente 4/12 — tutti rossi
+> mutante (a) rifatto da me, indipendente dal suo harness: 8 falliti / 26 su 34, esattamente i test della legenda
+> check-orphans             5, gli stessi di J; allocationFamily.test.ts registrato in allocation-unit
+> ```
+>
+> Fuori lista, tenuti: il controllo che lo stub del veicolo coincida con `allocationFamily`, il vecchio
+> test «ombra per rango» (il dato del developer ha un ETF generico, senza il test l'affermazione
+> resterebbe scoperta), un secondo test d'arrotondamento. Da proporre: un test che `amount` sia la somma
+> degli importi dei membri (il tooltip ci conta). Quando `CROWDFUND_REAL_ESTATE` entrerà nell'enum (R17
+> di K), due test diventeranno rossi **apposta**: è il segnale per passare ad `assetTypeFamily`.
+>
+> **⚠️ Fuori pista — il server di review è morto da solo**: alle 11:11 l'ultima riga (lo scheduler dei
+> prezzi), poi nessun messaggio di chiusura. Processo terminato di colpo, causa non scritta nel log: non
+> la indovino. Riavviato sulla stessa copia (i dati del developer + i prezzi di oggi scritti dallo
+> scheduler); all'avvio `dev.py server` ha ricostruito il frontend perché i due file di test erano più
+> recenti del bundle. Verificata di nuovo la torta: due serie, tooltip corretti, nessun errore.
