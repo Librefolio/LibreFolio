@@ -640,6 +640,124 @@ Runbook sotto, sulla copia prod rinfrescata dalla snapshot.
 > sovra-mascheratura segnalata al passo 10 (`TransactionsTable`, `WacPreviewSection`). La `6168` si
 > riaccende su richiesta, con la copia rinfrescata dalla snapshot.
 
+## Round 2b — checkpoint C6 (assegnato dal coordinator, 2026-09-24 16:07)
+
+Base: C5 committato, A `cc20b8288` e B `503351f0f`. Perimetro verificato dal coordinator: J unico
+scrittore di `ui/PrivacyToggle.svelte`, `ui/ThemeToggle.svelte`, `transactions/TransactionsTable.svelte`,
+`transactions/wac/WacPreviewSection.svelte` e dei test nuovi; `AssetTable.svelte` **non** si tocca
+(K lo modifica nel suo ramo). Dopo C6 viene il passo 11.
+
+### Passo 12 — Etichette dei pulsanti dell'header in i18n — **Stato: ✅ completato il 2026-09-24**
+
+> **Note implementazione.** Nessuna chiave dell'header esisteva da riusare (cercate per valore e per
+> nome: solo `settings.theme*`, che dicono «Chiaro/Scuro», non l'azione). Namespace nuovo `header`,
+> 6 chiavi × 4 lingue via `dev.py i18n add`: `header.privacy.hide|show`,
+> `header.theme.switchToDark|switchToLight|dark|light`. L'inglese resta **identico** a prima
+> («Hide amounts», «Switch to dark mode», …: riportato con `i18n update` dopo una prima stesura che
+> diceva *theme*), così nulla cambia per chi legge in inglese; le traduzioni seguono il lessico di
+> `settings.theme*` («tema scuro», «thème sombre», «tema oscuro»). `PrivacyToggle` (runes) e
+> `ThemeToggle` (legacy) leggono `$_()`: **compilato** `ThemeToggle`, le due etichette sono thunk
+> tracciati (`$.get(theme)` e `$_()`), quindi seguono sia il tema sia la lingua. `ThemeToggle` sta
+> anche nella pagina di login, che usava già `$_`. Nessun test o E2E legge quei testi (cercati i
+> quattro letterali): i test passano da `data-testid`. `Header.test.ts` (ThemeToggle vero): `22 passed`.
+>
+> **Test** (via `test-author`, nuovo `ui/HeaderToggles.i18n.test.ts`, +253, registrato in `component-unit`):
+> ogni etichetta attesa è **letta dal catalogo** (`en.json`, `it.json`), mai scritta nel test; lingua
+> cambiata sul posto con `currentLanguage.set`, come fa l'app; `PrivacyToggle` segue lo store nei due versi
+> e `aria-pressed` lo segue; `ThemeToggle` (legacy) alterna le due chiavi al click e segue il cambio di
+> lingua sul posto. `7 passed`. **Controllo negativo:** puntato alle versioni di HEAD (inglese fisso),
+> `4 failed | 3 passed` — ogni passo in italiano rosso, per esempio *expected 'Show amounts' to be 'Mostra
+> importi'*.
+
+### Passo 13 — Sovra-mascheratura in Transazioni e anteprima WAC — **Stato: ✅ completato il 2026-09-24**
+
+Regola del developer (D5′-c): un valore **unitario** (prezzo, WAC, costo unitario) è `public`, un
+**totale** è `personal`; gli **eventi asset** descrivono l'asset, non il portafoglio (`public`); un campo
+di modifica resta leggibile (D7).
+
+| sito | valore | classe | stato |
+|---|---|---|---|
+| `TransactionsTable.eventTooltipText` | valore dell'evento asset collegato (tooltip e `aria-label` del puntino) | **public** (evento) | oggi `personal` per default → da correggere |
+| idem, ramo non finito `${ev.value} ${ev.currency}` | stesso valore | public | già in chiaro, invariato |
+| `TransactionsTable.linkedPairTooltip.fmtCash` | importo di cassa del movimento collegato | personal (totale) | invariato |
+| cella *importo* di `TransactionsTable` | importo di cassa della transazione | personal | invariato |
+| `WacPreviewSection`, colonna quantità | quantità della transazione | visibile (D5′: transazioni) | invariato |
+| `WacPreviewSection`, costo unitario originale → convertito | unitario | **public** | oggi mascherato → da correggere |
+| `WacPreviewSection`, costo unitario | unitario | **public** | oggi mascherato → da correggere |
+| `WacPreviewSection`, WAC progressivo | unitario (costo medio per quota) | **public** | oggi mascherato → da correggere |
+| `WacPreviewSection`, rami `toFixed` senza valuta | unitario | public | già in chiaro, invariato |
+| `WacPreviewSection`, campo `CompactCashCell` (totale o per unità) | campo di modifica | visibile (D7) | invariato |
+
+> **Note implementazione.** Test prima del fix, via `test-author`: `transactions/wac/WacPreviewSection.test.ts`
+> (+279) e `transactions/TransactionsTable.privacy.test.ts` (+309), registrati da me in `component-unit`
+> (+2 righe nel runner). Commutano la privacy **sul posto, nei due versi**, e montano anche con la privacy
+> già attiva. **Rossi prima:** `Test Files 2 failed (2)`, `Tests 4 failed (4)`, e ognuno solo sul valore in
+> esame (costo unitario e WAC di una riga in EUR e di una USD→EUR resi `••• € 🇪🇺 EUR`; valore dell'evento
+> reso `••• $ 🇺🇸 USD`), con **controlli verdi nello stesso passo**: la cella di cassa della stessa riga si
+> maschera e torna (prova che la tabella si ridisegna davvero sul posto), le quantità restano, il tooltip
+> della coppia collegata resta mascherato. **Fix:** `{sensitivity: 'public'}` su una chiamata di
+> `TransactionsTable` e su quattro di `WacPreviewSection`, con un commento che cita D5′-c; formato invariato.
+> **Dopo:** `Test Files 2 passed (2)`, `Tests 4 passed (4)`; i passi *on → off* sono raggiunti (provato con
+> una sentinella su copie dei test). **Controllo negativo sulla correzione vera**, su copie in una cartella che
+> gate e copertura saltano: tolto `public` da `WacPreviewSection` → rossi solo i suoi 2 test, sui costi
+> unitari e sul WAC; tolto da `TransactionsTable` → rossi solo i suoi 2, sul valore dell'evento; i controlli
+> (cassa mascherata, coppia collegata mascherata, quantità e data visibili) verdi in entrambi. Tolto un sito
+> alla volta, ciascuna copia maschera **esattamente** il proprio importo e nessun altro. sha256 dei componenti e
+> dei test identici prima e dopo; copie cancellate.
+
+### Passo 14 — Test della marcatura `public` di `AssetTable` — **Stato: ✅ completato il 2026-09-24**
+
+Solo il file di test: `AssetTable.svelte` non si tocca. Il prezzo di mercato è `public`, e oggi nessun
+test lo protegge (il gate non riesamina una marcatura `public`).
+
+> **Note implementazione.** Via `test-author`, nuovo `assets/AssetTable.privacy.test.ts` (+197, registrato in
+> `component-unit`): la quotazione dell'ultimo prezzo tiene cifre, simbolo, bandiera e codice montata con la
+> privacy attiva e poi spenta e riaccesa sul posto, e viceversa; prima di ogni passo il test verifica che lo
+> store sia davvero cambiato e che un importo `personal` passato dallo stesso formatter si mascheri.
+> `AssetTable.svelte` non è stato toccato (sha256 identico prima e dopo, nessuna differenza da HEAD).
+> **Controllo negativo:** su una copia con la riga della quotazione senza `{sensitivity: 'public'}`, servita da
+> una configurazione temporanea con alias (una copia identica, per lo stesso alias, passa `2/2`), `2 failed`,
+> anche il passo *off → on* sul posto: prova che il toggle raggiunge la tabella.
+
+### Passo 15 — Frase «fully embraces runes» (facoltativo) — **Stato: ✅ completato il 2026-09-24**
+
+> **Note implementazione.** Misurato compilando ogni componente con Svelte 5.48.0 (`metadata.runes`): **34 su
+> 253** componenti di `frontend/src` (esclusi `__tests__`) sono in modalità legacy, fra cui il layout
+> `(app)`, `BrokerCard`, il dettaglio broker e `ThemeToggle`. Il `docs-writer` ha riscritto
+> `developer/frontend/index.md`: i componenti nuovi usano le rune, una minoranza dei vecchi no, e l'unica
+> conseguenza da sapere (la chiamata dentro un'espressione del template compila in `$.untrack`, R20), con
+> il rimando a `app-state.md#privacy-legacy-freeze`. Il numero esatto non è nella pagina: invecchierebbe
+> alla prossima migrazione.
+
+### Verifica di C6 — lane 6158, 2026-09-24
+
+| comando | esito |
+|---|---|
+| `front-utility core-unit` | `94 passed`, `2513 passed` |
+| `front-utility component-unit` (con i 4 test nuovi) | `80 passed`, `2023 passed` |
+| `front-utility onboarding-component-unit` (coachmark) | `14 passed`, `408 passed` |
+| `front-utility onboarding-tour` · `onboarding-guides` | `10 passed` · `24 passed` |
+| `front-utility auth` · `settings` · `header-scroll` | `24` · `45` · `4 passed` |
+| `front-portfolio privacy-masking` | `18 passed` |
+| `front-transaction tx-import-flow` · `tx-asset-identity` · `tx-import-resolution` | `10` · `9` · `12 passed` |
+| `front-transaction transactions-table` · `tx-tooltips` | `25` · `2 passed` |
+| `front-transaction tx-wac` · `tx-wac-fx` · `tx-wac-mode` | `7` · `9` · `5 passed` |
+| `front-transaction tx-wac-bulk` | **rosso preesistente, non di C6** (sotto) |
+| `dev.py front check` (client `a085da1c8dac`) | `3 errors and 41 warnings in 4 files`, il pavimento noto |
+| `prettier --check`, `git diff --check`, `ruff` sul runner | puliti |
+
+> **⚠️ Fuori pista — `tx-wac-bulk` rosso, e non per C6 (test-triage).** Tre giri, esiti diversi sullo stesso
+> codice: nel giro completo `2 failed | 8 passed` (WB3, WB10); da solo `5 failed | 5 passed` (WB2, WB3, WB8,
+> WB9, WB10); da solo con `WacPreviewSection.svelte` **di HEAD** (ripristinato poi, sha256 identico)
+> `3 failed | 7 passed` (WB2, WB3, WB8). Sempre lo stesso modo: nella modale il blocco del costo di carico non
+> c'è (`tx-form-cost-basis-input-amount`, `…-toggle-auto`, `…-show-qualifying` *not found*), o un click va
+> in timeout. **Perché non può essere C6:** `sensitivity` entra solo in `maskable(abs, sensitivity)`
+> (`currencyFormat.ts`), e con la privacy spenta — come in queste E2E — `public` e `personal` producono la
+> stessa stringa per la stessa via; in più la tabella che ho toccato si disegna solo dopo il click su
+> *show-qualifying*, che è proprio l'elemento che manca. Causa **non** indagata (la spec è del 14–27/08, fuori
+> dal mio perimetro): girata al coordinator. Ogni categoria ripopola il DB all'avvio (`_ensure_db_populated`,
+> un processo per categoria), quindi non è sporcizia lasciata dalle spec lanciate prima.
+
 ## Previsione conflitti
 
 | file | owner | intervento J | stato |
