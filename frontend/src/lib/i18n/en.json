@@ -3090,7 +3090,7 @@
         "l1": {
           "title": "How much did each of these hurt?",
           "description": "The same scale of harm, asked of every selected asset. Percentages only: a set of assets has no weights, so there is no amount to put beside them.",
-          "lastedDays": "lasted {{days}} d",
+          "lastedDays": "lasted {days} d",
           "columns": {
             "badDay": "Bad day",
             "badMonth": "Bad month",
@@ -3104,7 +3104,8 @@
           "description": "Risk against reward, one point per asset. No line is drawn through them: a selection has no whole, so there is nothing to be above or below.",
           "expectedReturn": "Expected return",
           "correlation": "Correlation",
-          "noBenchmark": "Choose a benchmark on the Dashboard to add beta and correlation. A benchmark that is itself in the selection cannot be used as its own yardstick."
+          "noBenchmark": "Choose a benchmark on the Dashboard to add beta and correlation. A benchmark that is itself in the selection cannot be used as its own yardstick.",
+          "scatterNote": "The dots show the mean-variance expected return: on a very volatile asset the return actually lived through is lower, because volatility erodes compounding."
         }
       }
     },

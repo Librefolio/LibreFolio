@@ -3090,7 +3090,7 @@
         "l1": {
           "title": "Combien chacun a-t-il fait mal ?",
           "description": "La même échelle de perte, posée à chaque actif sélectionné. Uniquement des pourcentages : un ensemble d'actifs n'a pas de pondérations, donc aucun montant à afficher.",
-          "lastedDays": "durée {{days}} j",
+          "lastedDays": "durée {days} j",
           "columns": {
             "badDay": "Mauvaise journée",
             "badMonth": "Mauvais mois",
@@ -3104,7 +3104,8 @@
           "description": "Risque contre rendement, un point par actif. Aucune droite ne les traverse : une sélection n'a pas de tout, donc rien au-dessus ou en dessous de quoi se situer.",
           "expectedReturn": "Rendement attendu",
           "correlation": "Corrélation",
-          "noBenchmark": "Choisissez une référence dans le tableau de bord pour ajouter le bêta et la corrélation. Une référence déjà présente dans la sélection ne peut pas servir de mesure à elle-même."
+          "noBenchmark": "Choisissez une référence dans le tableau de bord pour ajouter le bêta et la corrélation. Une référence déjà présente dans la sélection ne peut pas servir de mesure à elle-même.",
+          "scatterNote": "Les points montrent le rendement attendu en moyenne-variance : sur un actif très volatil, le rendement réellement vécu est plus faible, car la volatilité érode la capitalisation."
         }
       }
     },

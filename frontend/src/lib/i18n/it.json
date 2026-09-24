@@ -3090,7 +3090,7 @@
         "l1": {
           "title": "Quanto ha fatto male ciascuno?",
           "description": "La stessa scala del danno, chiesta a ogni asset selezionato. Solo percentuali: un insieme di asset non ha pesi, quindi non c'è un importo da affiancare.",
-          "lastedDays": "durata {{days}} g",
+          "lastedDays": "durata {days} g",
           "columns": {
             "badDay": "Giornata storta",
             "badMonth": "Mese storto",
@@ -3104,7 +3104,8 @@
           "description": "Rischio contro rendimento, un punto per asset. Non ci passa nessuna retta: una selezione non ha un tutto, quindi non c'è niente sopra o sotto cui stare.",
           "expectedReturn": "Rendimento atteso",
           "correlation": "Correlazione",
-          "noBenchmark": "Scegli un benchmark nella Dashboard per aggiungere beta e correlazione. Un benchmark che è già nella selezione non può fare da metro a sé stesso."
+          "noBenchmark": "Scegli un benchmark nella Dashboard per aggiungere beta e correlazione. Un benchmark che è già nella selezione non può fare da metro a sé stesso.",
+          "scatterNote": "I punti mostrano il rendimento atteso in media-varianza: su un asset molto volatile il rendimento realmente vissuto è più basso, perché la volatilità erode il composto."
         }
       }
     },
