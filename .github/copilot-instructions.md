@@ -64,6 +64,11 @@ LibreFolio/
     <command> 2>&1 | tee /tmp/libreFolio_<descr>.log | tail -n 100
     ```
     Then, if more context is needed, read `/tmp/libreFolio_<descr>.log` instead of re-executing the command.
+- ⚠️ **`tee` followed by `head` or `grep -m` truncates the log itself.** `head` and `grep -m` close the pipe early, `tee` dies with SIGPIPE, and the `/tmp` log silently loses everything it had not written yet — with exit code 0 (measured: 14–22 thousand of 200 000 lines). Only a consumer that reads to the end, like `tail`, is safe after `tee`. For `head` or `grep -m`, write the file first, or drain the pipe:
+    ```bash
+    <command> > /tmp/libreFolio_<descr>.log 2>&1; head -n 40 /tmp/libreFolio_<descr>.log
+    <command> 2>&1 | tee /tmp/libreFolio_<descr>.log | { head -n 40; cat >/dev/null; }
+    ```
 - **Rationale**: avoid re-running expensive commands (tests, builds, db operations) just to see output that was truncated earlier.
 
 ## Async I/O Rule (Event Loop Safety)
