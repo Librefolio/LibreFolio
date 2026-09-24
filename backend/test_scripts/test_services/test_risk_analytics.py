@@ -27,6 +27,10 @@ from backend.app.schemas.risk import (
     RiskCompositionPolicy,
     RiskDrawdownRecoveryStatus,
     RiskErrorCode,
+    RiskExcludedAsset,
+    RiskHistoricalReplayAudit,
+    RiskHistoricalReplayExclusionReason,
+    RiskHistoricalReplayExclusionTreatment,
     RiskKpiOutput,
     RiskMode,
     RiskReturnBasis,
@@ -37,6 +41,7 @@ from backend.app.schemas.risk import (
     RiskValueStatus,
 )
 from backend.app.schemas.risk_scenarios import RiskScenarioDimension
+from backend.app.services.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.provider_registry import RiskAnalyticRegistry
 from backend.app.services.risk import acquired
 from backend.app.services.risk.base import (
@@ -903,7 +908,14 @@ def test_historical_replay_exclusion_preserves_zero_return_residual_weight():
     assert audit.excluded_assets[0].treatment.value == "zero_return_residual"
 
 
-def test_historical_replay_requires_proxy_or_exclusion_for_missing_original():
+def test_historical_replay_auto_excludes_a_missing_original_instead_of_blocking():
+    """Repaired to the contract of 24/09/2026; it used to pin the blocking raise.
+
+    Formerly `test_historical_replay_requires_proxy_or_exclusion_for_missing_original`: an asset
+    with no replay series and no proxy made the whole replay fail with "requires a manual proxy or
+    explicit exclusion". The engine now excludes it on its own and replays the rest; only a scope
+    with nothing left to replay is unavailable.
+    """
     context = make_context(
         {1: [0.01] * 20},
         scope_kind=RiskScopeKind.ASSET_SET,
@@ -911,21 +923,44 @@ def test_historical_replay_requires_proxy_or_exclusion_for_missing_original():
         scope_asset_ids=(1, 2),
     )
 
+    computation = StressAnalytic().compute(
+        StressParams(
+            method=RiskStressMethod.HISTORICAL_REPLAY,
+            replay_range=context.requested_range,
+        ),
+        context,
+    )
+
+    # Asset 2 arrives without returns and no unusable reason says why: no prices in the window.
+    assert [impact.asset_id for impact in computation.output.impacts] == [1]
+    assert computation.output.impacts[0].shock_return == pytest.approx(1.01**20 - 1)
+    assert [(item.asset_id, item.reason, item.weight, item.treatment) for item in computation.historical_replay_audit.excluded_assets] == [
+        (2, RiskHistoricalReplayExclusionReason.NO_PRICES_IN_WINDOW, None, RiskHistoricalReplayExclusionTreatment.OMITTED_FROM_REPLAY),
+    ]
+    assert [(warning.code, warning.message_i18n_key, warning.details["asset_ids"]) for warning in computation.warnings] == [
+        ("historical_replay_assets_excluded", "risk.warnings.historical_replay_excluded_no_prices", [2]),
+    ]
+    assert computation.excluded_assets == (RiskExcludedAsset(asset_id=2, reason="historical_replay_no_prices_in_window"),)
+
+    # Alone in its scope, the same asset leaves nothing to replay — that, not a missing proxy, blocks.
+    alone = make_context(
+        {1: [0.01] * 20},
+        scope_kind=RiskScopeKind.ASSET_SET,
+        mode=RiskMode.CURRENT_COMPOSITION,
+        scope_asset_ids=(2,),
+    )
     with pytest.raises(RiskUnavailableError) as exc_info:
         StressAnalytic().compute(
             StressParams(
                 method=RiskStressMethod.HISTORICAL_REPLAY,
-                replay_range=context.requested_range,
+                replay_range=alone.requested_range,
             ),
-            context,
+            alone,
         )
 
-    assert exc_info.value.code.value == "insufficient_history"
-    assert exc_info.value.details == {
-        "asset_id": 2,
-        "return_source_asset_id": 2,
-        "reason": "insufficient_history",
-    }
+    assert exc_info.value.code == RiskErrorCode.INSUFFICIENT_HISTORY
+    assert str(exc_info.value) == "No asset in the replay scope covers the replay window"
+    assert exc_info.value.details == {"excluded_asset_ids": [2]}
 
 
 def test_historical_replay_rejects_existing_proxy_without_usable_series():
@@ -1007,6 +1042,266 @@ def test_historical_replay_asset_set_exclusion_is_omitted_not_zero_weighted():
     assert computation.output.portfolio_return is None
     assert [impact.asset_id for impact in computation.output.impacts] == [1]
     assert computation.historical_replay_audit.excluded_assets[0].treatment.value == "omitted_from_replay"
+
+
+# Automatic replay exclusion (developer's decision of 24/09/2026). The service decides which assets
+# do not cover the crisis window before it prepares the joint series, and hands the reasons over in
+# `auto_excluded_assets`; an excluded asset therefore has no return source, exactly as below.
+
+REPLAY_RANGE = DateRangeModel(start=date(2026, 1, 2), end=date(2026, 1, 21))
+Reason = RiskHistoricalReplayExclusionReason
+Treatment = RiskHistoricalReplayExclusionTreatment
+
+
+def replay_context(
+    returns_by_asset: dict[int, list[float]],
+    *,
+    scope_kind: RiskScopeKind,
+    scope_asset_ids: tuple[int, ...],
+    weights: dict[int, float] | None = None,
+    cash_weight: float = 0.0,
+    manual: tuple[int, ...] = (),
+    auto: dict[int, RiskHistoricalReplayExclusionReason] | None = None,
+    unusable: dict[int, DataQualityExclusionReason] | None = None,
+) -> RiskExecutionContext:
+    """A replay context shaped the way the service builds it."""
+    auto = dict(auto or {})
+    context = make_context(
+        returns_by_asset,
+        scope_kind=scope_kind,
+        mode=RiskMode.CURRENT_COMPOSITION,
+        scope_asset_ids=scope_asset_ids,
+    )
+    return replace(
+        context,
+        weights=context.weights if weights is None else weights,
+        cash_weight=context.cash_weight if weights is None else cash_weight,
+        historical_replay=replace(
+            context.historical_replay,
+            source_asset_ids={asset_id: asset_id for asset_id in scope_asset_ids if asset_id not in manual and asset_id not in auto},
+            excluded_asset_ids=tuple(sorted(manual)),
+            data_quality=DataQualityReport(unusable_assets=[DataQualityExcludedAsset(asset_id=asset_id, reason=reason) for asset_id, reason in sorted((unusable or {}).items())]),
+            auto_excluded_assets=auto,
+        ),
+    )
+
+
+def replay(context: RiskExecutionContext, **params):
+    return StressAnalytic().compute(
+        StressParams(method=RiskStressMethod.HISTORICAL_REPLAY, replay_range=REPLAY_RANGE, **params),
+        context,
+    )
+
+
+def test_historical_replay_auto_exclusion_keeps_the_weight_as_zero_return_cash():
+    returns = {1: [0.1] + [0.0] * 19}
+    common = {"scope_kind": RiskScopeKind.PORTFOLIO, "scope_asset_ids": (1, 2), "weights": {1: 0.5, 2: 0.25}, "cash_weight": 0.25}
+    automatic = replay(replay_context(returns, **common, auto={2: Reason.STARTS_AFTER_WINDOW_START}))
+    manual = replay(replay_context(returns, **common, manual=(2,)), excluded_assets=[2])
+
+    # Half the scope gains 10%; the excluded quarter joins the cash quarter at zero return and the
+    # rest is not renormalized: 5%, the same figure a manual exclusion gives.
+    assert automatic.output.portfolio_return == pytest.approx(0.05)
+    assert automatic.output.portfolio_return == pytest.approx(manual.output.portfolio_return)
+    audit = automatic.historical_replay_audit
+    assert audit.excluded_weight_total == pytest.approx(0.25)
+    assert [(item.asset_id, item.reason, item.weight, item.treatment) for item in audit.excluded_assets] == [
+        (2, Reason.STARTS_AFTER_WINDOW_START, 0.25, Treatment.ZERO_RETURN_RESIDUAL),
+    ]
+    impacts = {impact.asset_id: impact for impact in automatic.output.impacts}
+    assert set(impacts) == {1, 2}
+    assert impacts[1].contribution_return == pytest.approx(0.05)
+    assert (impacts[2].shock_return, impacts[2].contribution_return) == (0.0, 0.0)
+    (warning,) = automatic.warnings
+    assert warning.code == "historical_replay_assets_excluded"
+    assert warning.message_i18n_key == "risk.warnings.historical_replay_excluded_starts_late"
+    assert warning.details == {"asset_ids": [2], "treatment": "zero_return_residual", "reason": "starts_after_window_start"}
+    assert warning.message_params == {"treatment": "zero_return_residual"}
+    assert automatic.excluded_assets == (RiskExcludedAsset(asset_id=2, reason="historical_replay_starts_after_window_start"),)
+
+    # The manual exclusion keeps its own reason and sentence.
+    assert manual.historical_replay_audit.excluded_assets[0].reason == Reason.MANUAL_EXCLUSION
+    assert [warning.message_i18n_key for warning in manual.warnings] == ["risk.warnings.historical_replay_excluded_manual"]
+    assert manual.excluded_assets == (RiskExcludedAsset(asset_id=2, reason="manual_historical_replay_exclusion"),)
+
+
+def test_historical_replay_auto_exclusion_omits_the_asset_from_an_asset_set():
+    computation = replay(
+        replay_context(
+            {1: [0.1] + [0.0] * 19},
+            scope_kind=RiskScopeKind.ASSET_SET,
+            scope_asset_ids=(1, 2),
+            auto={2: Reason.NO_PRICES_IN_WINDOW},
+        )
+    )
+
+    assert computation.output.portfolio_return is None
+    assert [impact.asset_id for impact in computation.output.impacts] == [1]
+    assert computation.output.impacts[0].shock_return == pytest.approx(0.1)
+    audit = computation.historical_replay_audit
+    assert audit.excluded_weight_total == 0
+    assert [(item.asset_id, item.reason, item.weight, item.treatment) for item in audit.excluded_assets] == [
+        (2, Reason.NO_PRICES_IN_WINDOW, None, Treatment.OMITTED_FROM_REPLAY),
+    ]
+    (warning,) = computation.warnings
+    assert warning.message_i18n_key == "risk.warnings.historical_replay_excluded_no_prices"
+    assert warning.details == {"asset_ids": [2], "treatment": "omitted_from_replay", "reason": "no_prices_in_window"}
+    assert warning.message_params == {"treatment": "omitted_from_replay"}
+
+
+def test_historical_replay_audits_manual_and_automatic_exclusions_with_one_warning_per_reason():
+    # Asset ids run against the enum on purpose, so the warnings' order can only be the enum's.
+    weights = {1: 0.3, 2: 0.1, 3: 0.1, 4: 0.1, 5: 0.1, 6: 0.1, 7: 0.05, 8: 0.05}
+    context = replay_context(
+        {1: [0.1] + [0.0] * 19},
+        scope_kind=RiskScopeKind.PORTFOLIO,
+        scope_asset_ids=(1, 2, 3, 4, 5, 6, 7, 8),
+        weights=weights,
+        cash_weight=0.1,
+        manual=(2,),
+        auto={
+            8: Reason.NO_PRICES_IN_WINDOW,
+            7: Reason.NO_PRICES_IN_WINDOW,
+            6: Reason.STARTS_AFTER_WINDOW_START,
+            5: Reason.STALE_AT_WINDOW_START,
+            4: Reason.STALE_AT_WINDOW_END,
+            3: Reason.MISSING_FX,
+        },
+    )
+
+    computation = replay(context, excluded_assets=[2])
+
+    audit = computation.historical_replay_audit
+    assert [(item.asset_id, item.reason) for item in audit.excluded_assets] == [
+        (2, Reason.MANUAL_EXCLUSION),
+        (3, Reason.MISSING_FX),
+        (4, Reason.STALE_AT_WINDOW_END),
+        (5, Reason.STALE_AT_WINDOW_START),
+        (6, Reason.STARTS_AFTER_WINDOW_START),
+        (7, Reason.NO_PRICES_IN_WINDOW),
+        (8, Reason.NO_PRICES_IN_WINDOW),
+    ]
+    assert {item.treatment for item in audit.excluded_assets} == {Treatment.ZERO_RETURN_RESIDUAL}
+    assert [item.weight for item in audit.excluded_assets] == [weights[asset_id] for asset_id in range(2, 9)]
+    assert audit.excluded_count == len(audit.excluded_assets)
+    assert audit.excluded_weight_total == pytest.approx(0.6)
+    # The audit re-validates as it is: sorted, counted and weighed consistently.
+    assert RiskHistoricalReplayAudit.model_validate(audit.model_dump()) == audit
+    # Only asset 1 moves: 0.3 × 10%, everything excluded sits at zero next to the cash.
+    assert computation.output.portfolio_return == pytest.approx(0.03)
+
+    # One warning per reason, never one per asset, in the enum's order, each with its own sentence;
+    # only the two stale reasons say how many days, and it is the project's threshold.
+    zero_cash = {"treatment": "zero_return_residual"}
+    stale = {**zero_cash, "days": STALE_PRICE_THRESHOLD_DAYS}
+    assert {warning.code for warning in computation.warnings} == {"historical_replay_assets_excluded"}
+    assert [warning.details["reason"] for warning in computation.warnings] == [reason.value for reason in Reason]
+    assert [(warning.message_i18n_key, warning.details["asset_ids"], warning.message_params) for warning in computation.warnings] == [
+        ("risk.warnings.historical_replay_excluded_manual", [2], zero_cash),
+        ("risk.warnings.historical_replay_excluded_no_prices", [7, 8], zero_cash),
+        ("risk.warnings.historical_replay_excluded_starts_late", [6], zero_cash),
+        ("risk.warnings.historical_replay_excluded_stale_at_start", [5], stale),
+        ("risk.warnings.historical_replay_excluded_stale_at_end", [4], stale),
+        ("risk.warnings.historical_replay_excluded_missing_fx", [3], zero_cash),
+    ]
+    assert [(item.asset_id, item.reason) for item in computation.excluded_assets] == [
+        (2, "manual_historical_replay_exclusion"),
+        (3, "historical_replay_missing_fx"),
+        (4, "historical_replay_stale_at_window_end"),
+        (5, "historical_replay_stale_at_window_start"),
+        (6, "historical_replay_starts_after_window_start"),
+        (7, "historical_replay_no_prices_in_window"),
+        (8, "historical_replay_no_prices_in_window"),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("reason", "key"),
+    [
+        pytest.param(Reason.STALE_AT_WINDOW_START, "risk.warnings.historical_replay_excluded_stale_at_start", id="stale-at-start"),
+        pytest.param(Reason.STALE_AT_WINDOW_END, "risk.warnings.historical_replay_excluded_stale_at_end", id="stale-at-end"),
+    ],
+)
+def test_historical_replay_stale_exclusions_state_the_threshold_in_an_asset_set(reason, key):
+    computation = replay(
+        replay_context(
+            {1: [0.1] + [0.0] * 19},
+            scope_kind=RiskScopeKind.ASSET_SET,
+            scope_asset_ids=(1, 2),
+            auto={2: reason},
+        )
+    )
+
+    (warning,) = computation.warnings
+    assert warning.message_i18n_key == key
+    assert warning.details == {"asset_ids": [2], "treatment": "omitted_from_replay", "reason": reason.value}
+    assert warning.message_params == {"treatment": "omitted_from_replay", "days": STALE_PRICE_THRESHOLD_DAYS}
+    assert computation.excluded_assets == (RiskExcludedAsset(asset_id=2, reason=f"historical_replay_{reason.value}"),)
+
+
+def test_historical_replay_excludes_an_asset_arriving_without_returns_by_its_unusable_reason():
+    computation = replay(
+        replay_context(
+            {1: [0.1] + [0.0] * 19},
+            scope_kind=RiskScopeKind.ASSET_SET,
+            scope_asset_ids=(1, 2, 3),
+            unusable={
+                2: DataQualityExclusionReason.MISSING_FX,
+                3: DataQualityExclusionReason.MISSING_PRICE,
+            },
+        )
+    )
+
+    assert [(item.asset_id, item.reason) for item in computation.historical_replay_audit.excluded_assets] == [
+        (2, Reason.MISSING_FX),
+        (3, Reason.NO_PRICES_IN_WINDOW),
+    ]
+    assert [(warning.message_i18n_key, warning.details["asset_ids"]) for warning in computation.warnings] == [
+        ("risk.warnings.historical_replay_excluded_no_prices", [3]),
+        ("risk.warnings.historical_replay_excluded_missing_fx", [2]),
+    ]
+
+
+@pytest.mark.parametrize("scope_kind", [RiskScopeKind.PORTFOLIO, RiskScopeKind.ASSET_SET])
+def test_historical_replay_with_nothing_left_to_replay_is_unavailable(scope_kind):
+    # A portfolio whose assets are all excluded used to "replay" to a flat 0.0 of pure cash.
+    context = replay_context(
+        {1: [0.1] + [0.0] * 19},
+        scope_kind=scope_kind,
+        scope_asset_ids=(1, 2),
+        weights={1: 0.5, 2: 0.25},
+        cash_weight=0.25,
+        manual=(1,),
+        auto={2: Reason.STALE_AT_WINDOW_END},
+    )
+
+    with pytest.raises(RiskUnavailableError) as exc_info:
+        replay(context, excluded_assets=[1])
+
+    assert exc_info.value.code == RiskErrorCode.INSUFFICIENT_HISTORY
+    assert str(exc_info.value) == "No asset in the replay scope covers the replay window"
+    assert exc_info.value.details == {"excluded_asset_ids": [1, 2]}
+
+
+def test_historical_replay_unusable_proxy_stays_a_parameter_error_beside_automatic_exclusions():
+    context = replay_context(
+        {1: [0.1] + [0.0] * 19},
+        scope_kind=RiskScopeKind.PORTFOLIO,
+        scope_asset_ids=(1, 2),
+        weights={1: 0.5, 2: 0.25},
+        cash_weight=0.25,
+        auto={2: Reason.STARTS_AFTER_WINDOW_START},
+        unusable={3: DataQualityExclusionReason.MISSING_FX},
+    )
+    # Asset 1 replays through proxy 3, whose series is unusable.
+    context = replace(context, historical_replay=replace(context.historical_replay, source_asset_ids={1: 3}))
+
+    with pytest.raises(RiskUnavailableError) as exc_info:
+        replay(context, proxy_assets=[{"asset_id": 1, "proxy_asset_id": 3}])
+
+    # A proxy is the user's explicit choice: never swept into the automatic exclusions.
+    assert exc_info.value.code == RiskErrorCode.INVALID_PARAMETERS
+    assert exc_info.value.details == {"asset_id": 1, "return_source_asset_id": 3, "reason": "missing_fx"}
 
 
 def test_historical_replay_params_are_canonical_and_disjoint():

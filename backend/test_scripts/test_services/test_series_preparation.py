@@ -1,6 +1,6 @@
 """Mathematical tests for canonical converted-price and return preparation."""
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
@@ -17,6 +17,7 @@ from backend.app.schemas.prices import (
     FAPriceQueryResult,
 )
 from backend.app.services.asset_source import AssetSourceManager
+from backend.app.services.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.series_preparation import (
     observed_annualization,
     prepare_asset_series_set,
@@ -172,11 +173,20 @@ def test_joint_calendar_converts_before_returns_and_tracks_carry():
     assert prepared.annualization_factor == pytest.approx(365.0)
     assert prepared.calendar_coverage == pytest.approx(1.0)
     assert prepared.fresh_quote_coverage == pytest.approx(4 / 6)
-    assert prepared.data_quality.data_quality_status == DataQualityStatus.CARRIED_FORWARD
-    assert prepared.data_quality.carried_forward_price_points == 2
-    assert prepared.data_quality.carried_forward_fx_points == 2
-    assert prepared.data_quality.carried_forward_price_asset_ids == [1]
-    assert prepared.data_quality.carried_forward_fx_pairs == ["USD/EUR"]
+
+    # Every carry is still tracked point by point: the equity price is one and two days old on
+    # the second and third date, its rate one day old on the last two...
+    equity_points = prepared.series[0].valuations.points
+    assert [point.is_price_carried_forward for point in equity_points] == [False, True, True, False]
+    assert [point.effective_price_date for point in equity_points] == [date(2026, 1, 2), date(2026, 1, 2), date(2026, 1, 2), date(2026, 1, 5)]
+    assert [point.is_fx_carried_forward for point in equity_points] == [False, False, True, True]
+    # ...but none is older than the staleness threshold, so none degrades the report: a carry of a
+    # day or two is a weekend or a holiday (developer's decision of 24/09/2026).
+    assert prepared.data_quality.data_quality_status == DataQualityStatus.OK
+    assert prepared.data_quality.carried_forward_price_points == 0
+    assert prepared.data_quality.carried_forward_fx_points == 0
+    assert prepared.data_quality.carried_forward_price_asset_ids == []
+    assert prepared.data_quality.carried_forward_fx_pairs == []
 
     equity = prepared.series[0]
     assert equity.valuations.points[0].price_source == "equity"
@@ -185,6 +195,143 @@ def test_joint_calendar_converts_before_returns_and_tracks_carry():
     assert equity.returns.points[1].value == 0.0
     assert equity.valuations.points[-1].is_price_carried_forward is False
     assert equity.valuations.points[-1].is_fx_carried_forward is True
+
+
+# A carried price or rate degrades the report only once it is older than the staleness
+# threshold, and the baseline never does (developer's decision of 24/09/2026). Asset 1 carries;
+# asset 2 is quoted fresh every day, which is what puts each date on the joint calendar.
+
+CARRY_BASELINE = date(2026, 3, 2)
+
+
+def _day(offset: int) -> date:
+    return CARRY_BASELINE + timedelta(days=offset)
+
+
+def _prepare_with_reference(carried: FAPriceQueryResult, days: int):
+    reference = FAPriceQueryResult(
+        asset_id=2,
+        prices=[native_point(_day(offset), str(200 + offset)) for offset in range(days + 1)],
+    )
+    return prepare_asset_series_set(
+        [carried, reference],
+        requested_range=DateRangeModel(start=_day(1), end=_day(days)),
+        target_currency="EUR",
+    )
+
+
+def _price_carried_for(days: int) -> FAPriceQueryResult:
+    """Quoted on the baseline, then that price is carried forward for `days` days."""
+    return FAPriceQueryResult(
+        asset_id=1,
+        prices=[
+            native_point(CARRY_BASELINE, "100"),
+            *(native_point(_day(offset), "100", effective_price_date=CARRY_BASELINE) for offset in range(1, days + 1)),
+        ],
+    )
+
+
+def _fx_carried_for(days: int) -> FAPriceQueryResult:
+    """Quoted fresh every day in USD, converted with the baseline's rate for `days` days."""
+    return FAPriceQueryResult(
+        asset_id=1,
+        prices=[
+            converted_point(CARRY_BASELINE, native_close="100", target_close="90"),
+            *(
+                converted_point(
+                    _day(offset),
+                    native_close=str(100 + offset),
+                    target_close=str(Decimal(100 + offset) * Decimal("0.9")),
+                    fx_rate_date=CARRY_BASELINE,
+                )
+                for offset in range(1, days + 1)
+            ),
+        ],
+    )
+
+
+CARRY_BOUNDARIES = [
+    pytest.param(STALE_PRICE_THRESHOLD_DAYS, 0, id="exactly-the-threshold-is-ordinary"),
+    pytest.param(STALE_PRICE_THRESHOLD_DAYS + 1, 1, id="one-day-past-it-the-last-point-is-stale"),
+    pytest.param(STALE_PRICE_THRESHOLD_DAYS + 2, 2, id="each-point-past-it-counts"),
+]
+
+
+@pytest.mark.parametrize(("carry_days", "expected_points"), CARRY_BOUNDARIES)
+def test_carried_price_degrades_only_beyond_the_stale_threshold(carry_days, expected_points):
+    prepared = _prepare_with_reference(_price_carried_for(carry_days), carry_days)
+
+    # The calendar does not depend on the verdict: every day is a joint date.
+    assert prepared.baseline_date == CARRY_BASELINE
+    assert prepared.n_observations == carry_days
+    points = prepared.series[0].valuations.points
+    assert [(point.valuation_date - point.effective_price_date).days for point in points] == list(range(carry_days + 1))
+
+    data_quality = prepared.data_quality
+    assert data_quality.carried_forward_price_points == expected_points
+    assert data_quality.carried_forward_price_asset_ids == ([1] if expected_points else [])
+    assert data_quality.carried_forward_fx_points == 0
+    assert data_quality.data_quality_status == (DataQualityStatus.CARRIED_FORWARD if expected_points else DataQualityStatus.OK)
+    # Freshness is a separate question: a carried price is never a fresh quote, however young.
+    assert prepared.fresh_quote_coverage == pytest.approx(carry_days / (2 * carry_days))
+
+
+@pytest.mark.parametrize(("carry_days", "expected_points"), CARRY_BOUNDARIES)
+def test_carried_fx_rate_degrades_only_beyond_the_stale_threshold(carry_days, expected_points):
+    prepared = _prepare_with_reference(_fx_carried_for(carry_days), carry_days)
+
+    points = prepared.series[0].valuations.points
+    assert [(point.valuation_date - point.fx_rate_date).days for point in points] == list(range(carry_days + 1))
+    assert not any(point.is_price_carried_forward for point in points)
+
+    data_quality = prepared.data_quality
+    assert data_quality.carried_forward_fx_points == expected_points
+    assert data_quality.carried_forward_fx_pairs == (["USD/EUR"] if expected_points else [])
+    assert data_quality.carried_forward_price_points == 0
+    assert data_quality.data_quality_status == (DataQualityStatus.CARRIED_FORWARD if expected_points else DataQualityStatus.OK)
+    # Every price is a fresh quote, so the age of the rate leaves freshness alone.
+    assert prepared.fresh_quote_coverage == pytest.approx(1.0)
+
+
+def test_a_carried_baseline_never_degrades_even_when_older_than_the_threshold():
+    stale_since = CARRY_BASELINE - timedelta(days=30)
+    fresh_after = [converted_point(_day(offset), native_close="100", target_close="90") for offset in range(2, 6)]
+
+    def stale(offset: int) -> FAPricePoint:
+        return converted_point(_day(offset), native_close="100", target_close="90", effective_price_date=stale_since, fx_rate_date=stale_since)
+
+    # Quoted a month before the baseline, and again from the first date after it.
+    resumes_after_baseline = FAPriceQueryResult(
+        asset_id=1,
+        prices=[stale(0), converted_point(_day(1), native_close="100", target_close="90"), *fresh_after],
+    )
+    prepared = _prepare_with_reference(resumes_after_baseline, 5)
+
+    baseline = prepared.series[0].valuations.points[0]
+    assert prepared.baseline_date == CARRY_BASELINE == baseline.valuation_date
+    # The provenance still says how old the reference is...
+    assert baseline.is_price_carried_forward is True
+    assert baseline.effective_price_date == stale_since
+    assert baseline.is_fx_carried_forward is True
+    assert baseline.fx_rate_date == stale_since
+    # ...but the baseline is a reference, not an observation: it never counts.
+    assert prepared.data_quality.carried_forward_price_points == 0
+    assert prepared.data_quality.carried_forward_fx_points == 0
+    assert prepared.data_quality.data_quality_status == DataQualityStatus.OK
+    assert prepared.fresh_quote_coverage == pytest.approx(1.0)
+
+    # Control: quotes resume one date later, so the same stale price and rate are also the first
+    # observation — and that one counts.
+    resumes_one_date_later = FAPriceQueryResult(asset_id=1, prices=[stale(0), stale(1), *fresh_after])
+    control = _prepare_with_reference(resumes_one_date_later, 5)
+
+    assert control.baseline_date == CARRY_BASELINE
+    assert control.data_quality.carried_forward_price_points == 1
+    assert control.data_quality.carried_forward_fx_points == 1
+    assert control.data_quality.carried_forward_price_asset_ids == [1]
+    assert control.data_quality.carried_forward_fx_pairs == ["USD/EUR"]
+    assert control.data_quality.data_quality_status == DataQualityStatus.CARRIED_FORWARD
+    assert control.fresh_quote_coverage == pytest.approx(9 / 10)
 
 
 def test_missing_fx_date_is_excluded_without_filling_returns():

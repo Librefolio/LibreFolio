@@ -10,11 +10,16 @@ from pydantic import BaseModel, ConfigDict
 
 from backend.app.schemas.common import Currency, DateRangeModel
 from backend.app.schemas.portfolio import (
+    DataQualityExcludedAsset,
+    DataQualityExclusionReason,
     DataQualityReport,
+    DataQualityStatus,
+    MissingPriceAsset,
     PortfolioHistoryPoint,
     PortfolioHolding,
     PortfolioReportResponse,
     PortfolioSummary,
+    StalePriceAsset,
 )
 from backend.app.schemas.risk import (
     AssetReturnPoint,
@@ -24,7 +29,10 @@ from backend.app.schemas.risk import (
     PreparedAssetSeries,
     PreparedAssetSeriesSet,
     RiskAnalyticRequest,
+    RiskAnalyticResult,
+    RiskError,
     RiskErrorCode,
+    RiskExcludedAsset,
     RiskKpiOutput,
     RiskMode,
     RiskOutputKind,
@@ -32,9 +40,13 @@ from backend.app.schemas.risk import (
     RiskResultStatus,
     RiskReturnBasis,
     RiskScopeKind,
+    RiskWarning,
 )
+from backend.app.schemas.wac import WACMissingPairInfo
+from backend.app.services.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.portfolio_service import PortfolioService
 from backend.app.services.provider_registry import RiskAnalyticRegistry
+from backend.app.services.risk import service as risk_service_module
 from backend.app.services.risk.base import (
     RiskAnalytic,
     RiskAssetClassification,
@@ -45,10 +57,38 @@ from backend.app.services.risk.service import (
     RiskScopeAccessError,
     RiskScopeNotFoundError,
     RiskService,
+    _assets_excluded_warnings,
+    _data_quality_warnings,
     _portfolio_twrr_returns,
     _scope_reference,
     _ScopeInputs,
 )
+
+
+class NamesDb:
+    """Stands in for the session where the only query is the warning-name lookup.
+
+    `_with_warning_asset_names` reads `(Asset.id, Asset.display_name)` for the ids its warnings
+    name; this answers from a dict and records the ids of every lookup, so a test can say how many
+    queries were issued and for which assets.
+    """
+
+    def __init__(self, names: dict[int, str]) -> None:
+        self.names = names
+        self.lookups: list[list[int]] = []
+
+    async def execute(self, statement):
+        (requested,) = statement.compile().params.values()
+        self.lookups.append(list(requested))
+        return _Rows([(asset_id, self.names[asset_id]) for asset_id in requested if asset_id in self.names])
+
+
+class _Rows:
+    def __init__(self, rows: list[tuple[int, str]]) -> None:
+        self._rows = rows
+
+    def all(self) -> list[tuple[int, str]]:
+        return list(self._rows)
 
 
 def make_prepared_set(
@@ -312,7 +352,8 @@ async def test_runtime_failure_does_not_abort_other_analytics(monkeypatch):
 async def test_historical_replay_uses_dedicated_period_and_proxy_series(
     monkeypatch,
 ):
-    service = RiskService(db=object())
+    names_db = NamesDb({1: "Original asset", 3: "Proxy asset"})
+    service = RiskService(db=names_db)
     main_prepared = PreparedAssetSeriesSet(
         requested_range=DateRangeModel(
             start=date(2026, 1, 2),
@@ -352,9 +393,19 @@ async def test_historical_replay_uses_dedicated_period_and_proxy_series(
             return replay_prepared
         return main_prepared
 
+    coverage_probes = []
+
+    async def fake_window_facts(session, **kwargs):
+        # The automatic exclusion reads each asset's own quotes over the replay window. A proxied
+        # asset replays through its proxy, which the user chose explicitly: it is never probed.
+        assert session is names_db
+        coverage_probes.append(kwargs)
+        return {}
+
     monkeypatch.setattr(service, "_load_scope_inputs", fake_scope)
     monkeypatch.setattr(service, "_existing_asset_ids", fake_assets)
     monkeypatch.setattr(service, "_prepare_asset_series", fake_prepare)
+    monkeypatch.setattr(risk_service_module, "load_price_window_facts", fake_window_facts)
 
     response = await service.execute(
         user_id=7,
@@ -404,6 +455,22 @@ async def test_historical_replay_uses_dedicated_period_and_proxy_series(
         2026,
         2020,
     ]
+    # The coverage probe runs over the replay window, not the analysis period, and leaves the
+    # proxied asset out; nothing is excluded automatically.
+    assert coverage_probes == [
+        {
+            "asset_ids": [],
+            "window_start": date(2020, 2, 2),
+            "window_end": date(2020, 2, 21),
+            "target_currency": "EUR",
+        }
+    ]
+    assert result.metadata.historical_replay_audit.excluded_assets == []
+    # The proxy warning names the asset it stands in for, from one lookup for the whole response.
+    (proxy_warning,) = [warning for warning in result.warnings if warning.code == "historical_replay_proxies_used"]
+    assert proxy_warning.message_i18n_key == "risk.warnings.historical_replay_proxies_used"
+    assert proxy_warning.message_params == {"names": "Original asset", "count": 1}
+    assert names_db.lookups == [[1]]
 
 
 @pytest.mark.asyncio
@@ -473,7 +540,8 @@ async def test_historical_replay_rejects_missing_proxy_explicitly(monkeypatch):
 async def test_hypothetical_stress_uses_classification_context_without_partial_status(
     monkeypatch,
 ):
-    service = RiskService(db=object())
+    names_db = NamesDb({1: "Unclassified asset"})
+    service = RiskService(db=names_db)
     prepared = make_prepared_set({1: [0.0] * 20})
 
     async def fake_scope(**_kwargs):
@@ -542,6 +610,10 @@ async def test_hypothetical_stress_uses_classification_context_without_partial_s
     assert result.metadata.n_observations == 0
     assert result.warnings[0].code == "hypothetical_metadata_other_fallback"
     assert result.warnings[0].degrades_result is False
+    # The fallback names its asset (a single `details.asset_id`) next to the dimension it lacked.
+    assert result.warnings[0].message_i18n_key == "risk.warnings.hypothetical_metadata_other_fallback"
+    assert result.warnings[0].message_params == {"dimension": "sector", "names": "Unclassified asset", "count": 1}
+    assert names_db.lookups == [[1]]
 
 
 @pytest.mark.asyncio
@@ -1351,3 +1423,181 @@ async def test_undeclared_value_error_is_reported_as_ours_while_a_declared_one_s
 
     # And neither failure aborts the query for its neighbours.
     assert fine.status == RiskResultStatus.OK
+
+
+# Translatable warnings (developer's decision of 24/09/2026): one sentence per exclusion reason and
+# per data-quality cause, each with a key the frontend renders and the names of the assets it lists.
+
+
+def test_excluded_assets_get_one_warning_per_reason_with_its_own_key():
+    warnings = _assets_excluded_warnings(
+        (
+            RiskExcludedAsset(asset_id=3, reason="missing_price"),
+            RiskExcludedAsset(asset_id=2, reason="missing_fx"),
+            RiskExcludedAsset(asset_id=1, reason="missing_price"),
+            RiskExcludedAsset(asset_id=5, reason="invalid_currency"),
+            RiskExcludedAsset(asset_id=4, reason="insufficient_history"),
+        )
+    )
+
+    assert {warning.code for warning in warnings} == {"assets_excluded"}
+    by_reason = {warning.details["reason"]: warning for warning in warnings}
+    # One warning per reason, never one per asset.
+    assert len(warnings) == len(by_reason)
+    assert {reason: (warning.message_i18n_key, sorted(warning.details["asset_ids"])) for reason, warning in by_reason.items()} == {
+        "missing_price": ("risk.warnings.assets_excluded_missing_price", [1, 3]),
+        "missing_fx": ("risk.warnings.assets_excluded_missing_fx", [2]),
+        "invalid_currency": ("risk.warnings.assets_excluded_invalid_currency", [5]),
+        "insufficient_history": ("risk.warnings.assets_excluded_insufficient_history", [4]),
+    }
+    assert _assets_excluded_warnings(()) == []
+
+
+def test_an_unrecognised_exclusion_reason_reads_as_insufficient_history():
+    (warning,) = _assets_excluded_warnings((RiskExcludedAsset(asset_id=9, reason="not_a_known_reason"),))
+
+    assert warning.message_i18n_key == "risk.warnings.assets_excluded_insufficient_history"
+    assert warning.details == {"asset_ids": [9], "reason": "not_a_known_reason"}
+
+
+def _stale_price(asset_id: int) -> StalePriceAsset:
+    return StalePriceAsset(asset_id=asset_id, name=f"Stale {asset_id}", last_price_date=date(2026, 1, 2), stale_days=30)
+
+
+def _missing_price(asset_id: int) -> MissingPriceAsset:
+    return MissingPriceAsset(asset_id=asset_id, name=f"Missing {asset_id}", broker_id=1, broker_name="Fixture broker", quantity=Decimal("1"), currency="EUR")
+
+
+@pytest.mark.parametrize(
+    ("fields", "cause", "key"),
+    [
+        pytest.param({"stale_prices": [_stale_price(7)]}, "stale_prices", "risk.warnings.data_quality_stale_prices", id="stale-price"),
+        pytest.param({"carried_forward_price_points": 2, "carried_forward_price_asset_ids": [8]}, "stale_prices", "risk.warnings.data_quality_stale_prices", id="carried-price"),
+        pytest.param({"carried_forward_fx_points": 1, "carried_forward_fx_pairs": ["USD/EUR"]}, "stale_fx_rates", "risk.warnings.data_quality_stale_fx_rates", id="carried-fx"),
+        pytest.param({"missing_price_assets": [_missing_price(9)]}, "missing_prices", "risk.warnings.data_quality_missing_prices", id="missing-price"),
+        pytest.param({"unresolved_fx_pairs": ["GBP/EUR"]}, "missing_fx_rates", "risk.warnings.data_quality_missing_fx_rates", id="unresolved-fx"),
+        pytest.param({"missing_fx_pairs": [WACMissingPairInfo(pair="CHF/EUR")]}, "missing_fx_rates", "risk.warnings.data_quality_missing_fx_rates", id="missing-fx"),
+        pytest.param({"incomplete_nav_dates": [date(2026, 1, 5)]}, "incomplete_dates", "risk.warnings.data_quality_incomplete_dates", id="incomplete-nav"),
+        pytest.param({"incomplete_book_value_dates": [date(2026, 1, 5)]}, "incomplete_dates", "risk.warnings.data_quality_incomplete_dates", id="incomplete-book-value"),
+        pytest.param({"incomplete_allocation_dates": [date(2026, 1, 5)]}, "incomplete_dates", "risk.warnings.data_quality_incomplete_dates", id="incomplete-allocation"),
+        pytest.param({"incomplete_valuation_dates": [date(2026, 1, 5)]}, "incomplete_dates", "risk.warnings.data_quality_incomplete_dates", id="incomplete-valuation"),
+    ],
+)
+def test_each_data_quality_cause_alone_gets_exactly_its_own_warning(fields, cause, key):
+    report = DataQualityReport(**fields)
+    assert report.data_quality_status != DataQualityStatus.OK
+
+    (warning,) = _data_quality_warnings(report)
+
+    assert warning.code == "data_quality_degraded"
+    assert warning.message_i18n_key == key
+    assert warning.details["cause"] == cause
+    assert warning.details["status"] == report.data_quality_status.value
+
+
+def test_every_data_quality_cause_together_gets_one_warning_each_and_no_generic_one():
+    report = DataQualityReport(
+        stale_prices=[_stale_price(7)],
+        carried_forward_price_points=2,
+        carried_forward_price_asset_ids=[8, 7],
+        carried_forward_fx_points=1,
+        carried_forward_fx_pairs=["USD/EUR"],
+        missing_price_assets=[_missing_price(9)],
+        unresolved_fx_pairs=["GBP/EUR"],
+        missing_fx_pairs=[WACMissingPairInfo(pair="CHF/EUR", dates=[date(2026, 1, 5)])],
+        incomplete_nav_dates=[date(2026, 1, 5), date(2026, 1, 6)],
+        incomplete_valuation_dates=[date(2026, 1, 6), date(2026, 1, 7)],
+    )
+
+    warnings = _data_quality_warnings(report)
+
+    by_cause = {warning.details["cause"]: warning for warning in warnings}
+    assert len(warnings) == len(by_cause)
+    assert set(by_cause) == {"stale_prices", "stale_fx_rates", "missing_prices", "missing_fx_rates", "incomplete_dates"}
+    assert all(warning.details["status"] == "partial" for warning in warnings)
+    # Stale and carried prices are one cause: each asset named once.
+    assert by_cause["stale_prices"].details["asset_ids"] == [7, 8]
+    assert by_cause["stale_prices"].message_params == {"days": STALE_PRICE_THRESHOLD_DAYS}
+    assert by_cause["stale_fx_rates"].details["pairs"] == ["USD/EUR"]
+    assert by_cause["stale_fx_rates"].message_params == {"days": STALE_PRICE_THRESHOLD_DAYS, "pairs": "USD/EUR"}
+    assert by_cause["missing_prices"].details["asset_ids"] == [9]
+    # Unresolved and missing pairs are one cause too.
+    assert by_cause["missing_fx_rates"].details["pairs"] == ["CHF/EUR", "GBP/EUR"]
+    assert by_cause["missing_fx_rates"].message_params == {"pairs": "CHF/EUR, GBP/EUR"}
+    # Dates are counted once across the four lists, not summed.
+    assert by_cause["incomplete_dates"].message_params == {"count": 3}
+
+
+def test_the_generic_data_quality_warning_appears_only_when_no_cause_applies():
+    # A carried count with no asset to name: degraded, and nothing more specific to say.
+    unnamed = DataQualityReport(carried_forward_price_points=3)
+    assert unnamed.data_quality_status == DataQualityStatus.CARRIED_FORWARD
+
+    (warning,) = _data_quality_warnings(unnamed)
+
+    assert warning.code == "data_quality_degraded"
+    assert warning.message_i18n_key == "risk.warnings.data_quality_degraded"
+    assert warning.details == {"status": "carried_forward"}
+    assert warning.message_params == {}
+
+    # Unusable assets alone: `assets_excluded` already names them, so nothing is added here.
+    only_unusable = DataQualityReport(unusable_assets=[DataQualityExcludedAsset(asset_id=4, reason=DataQualityExclusionReason.MISSING_PRICE)])
+    assert only_unusable.data_quality_status == DataQualityStatus.PARTIAL
+    assert _data_quality_warnings(only_unusable) == []
+
+
+def _unavailable_with(*warnings: RiskWarning, instance_id: str) -> RiskAnalyticResult:
+    return RiskAnalyticResult(
+        instance_id=instance_id,
+        analytic_code="stress",
+        status=RiskResultStatus.UNAVAILABLE,
+        error=RiskError(code=RiskErrorCode.INSUFFICIENT_HISTORY, message="fixture"),
+        warnings=list(warnings),
+    )
+
+
+@pytest.mark.asyncio
+async def test_warning_names_come_from_one_lookup_for_the_whole_response():
+    names_db = NamesDb({1: "Alpha", 2: "Beta", 3: "Gamma", 5: "Delta"})
+    listed = RiskWarning(code="assets_excluded", message="fallback", details={"asset_ids": [2, 1]}, message_i18n_key="risk.warnings.assets_excluded_missing_fx", message_params={"kept": "yes"})
+    unkeyed = RiskWarning(code="legacy_code", message="fallback", details={"asset_ids": [5]})
+    single = RiskWarning(code="hypothetical_metadata_other_fallback", message="fallback", details={"asset_id": 3}, message_i18n_key="risk.warnings.hypothetical_metadata_other_fallback", message_params={"dimension": "sector"})
+    unknown = RiskWarning(code="assets_excluded", message="fallback", details={"asset_ids": [4]}, message_i18n_key="risk.warnings.assets_excluded_missing_price")
+    about_no_asset = RiskWarning(code="flat_series", message="fallback", message_i18n_key="risk.warnings.flat_series")
+    items = [
+        _unavailable_with(listed, unkeyed, instance_id="first"),
+        _unavailable_with(single, unknown, about_no_asset, instance_id="second"),
+    ]
+
+    first, second = await RiskService(db=names_db)._with_warning_asset_names(items)
+
+    # Names in the warning's own order, next to the params it already had.
+    assert first.warnings[0].message_params == {"kept": "yes", "names": "Beta, Alpha", "count": 2}
+    # Without a key the English message is the fallback: left exactly as it was.
+    assert first.warnings[1] == unkeyed
+    # A single `details.asset_id` is named as well.
+    assert second.warnings[0].message_params == {"dimension": "sector", "names": "Gamma", "count": 1}
+    # An asset the lookup does not know still reads as something.
+    assert second.warnings[1].message_params == {"names": "#4", "count": 1}
+    # A keyed warning about no asset in particular gains nothing.
+    assert second.warnings[2] == about_no_asset
+    # One lookup for the whole response, for the assets of the keyed warnings only.
+    assert names_db.lookups == [[1, 2, 3, 4]]
+    assert [item.instance_id for item in (first, second)] == ["first", "second"]
+
+
+@pytest.mark.asyncio
+async def test_warning_names_issue_no_query_when_no_warning_needs_them():
+    names_db = NamesDb({1: "Alpha"})
+    items = [
+        _unavailable_with(
+            RiskWarning(code="legacy_code", message="fallback", details={"asset_ids": [1]}),
+            RiskWarning(code="flat_series", message="fallback", message_i18n_key="risk.warnings.flat_series"),
+            instance_id="only",
+        )
+    ]
+
+    enriched = await RiskService(db=names_db)._with_warning_asset_names(items)
+
+    assert enriched == items
+    assert names_db.lookups == []
