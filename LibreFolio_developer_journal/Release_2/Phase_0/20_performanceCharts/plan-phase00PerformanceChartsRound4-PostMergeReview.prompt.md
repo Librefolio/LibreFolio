@@ -1,10 +1,13 @@
 # Performance charts — round 4: review d'uso post-merge (R5–R11, R21, §2.5, P4-11, emoji K) + prosecuzione
 
-**Stato:** IN ESECUZIONE — piano v3 presentato il 2026-09-23, approvato il 2026-09-24. S2 (privacy) 🔒 in attesa del gate-prep di J.
+**Stato:** IN ESECUZIONE — piano v3 presentato il 2026-09-23, approvato il 2026-09-24. C1 committato il 2026-09-24
+alle 14:18: 8 commit per slice, `cb7ae3476`…`804bc9903`. Aspettano il developer: D4, D16, D17 e D18 (S7, S7b, S8) e
+l'OK sulla test list (S10).
 **Workstream:** I (grafici performance) · ramo `e-alfy-performance-charts-plan` · coordinatore
 `c8328a01-f208-4ade-a352-0486d1f14de2`.
 **Baseline:** `dev_release2` = `f1047f766` (fast-forward), albero pulito, rimisurata il 2026-09-23 prima di ogni
-versione del piano e il 2026-09-24 dopo l'approvazione.
+versione del piano e il 2026-09-24 dopo l'approvazione. Poi, sul ramo: C0 di J (`2a5927c48`, fast-forward, 11:16) e
+C1 (`804bc9903`, 14:18).
 **Lane:** copia di prod `6167` + `/tmp/librefolio-r2-i-charts-prodcopy` (server, verifica visiva, review) · suite
 `6157` + `/tmp/librefolio-r2-i-charts` (solo `dev.py test …`). **Mai** `dev.py test` sulla copia.
 Preambolo: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py …`.
@@ -33,13 +36,14 @@ Indicatore di lettura rapida: va riletto **a ogni consegna**, non a ogni sospett
 | S3 | §2.5: omissione = annullamento | S1 | ✅ 2026-09-24 |
 | S4 | R21 Allocazione | S1 | ✅ 2026-09-24 (verifica live in S6) |
 | S4b | Emoji per ogni tipo asset | S4 | ✅ 2026-09-24 (❓ per Unknown: decisione del developer, 10:28) |
-| S5 | R21 Crescita | S1b | ✅ 2026-09-24 (verifica live in S6; fix gallery in test list, da consegnare con C1) |
+| S5 | R21 Crescita | S1b | ✅ 2026-09-24 (verifica live in S6). Fix della gallery: commit a sé dopo C1 (opzione B), riga G |
 | S6 | Riproduzione R8/R10 sulla copia | S5 | ✅ 2026-09-24 12:05: R8 = 3 cause + 1, R10 = il moncone di coda; R21, S9 e privacy verificati dal vivo; reperto nuovo (tacche Y doppie → D18) |
-| C1 | Checkpoint unico (D14): S0–S6 + S9 + S2 | S2c, S6 | ✅ pronto 2026-09-24 12:21 (registro «Checkpoint C1»), consegnato al coordinator; `FROZEN` |
+| C1 | Checkpoint unico (D14): S0–S6 + S9 + S2 | S2c, S6 | ✅ pronto 2026-09-24 12:21 · ✅ **committato 14:18**: 8 commit per slice, `cb7ae3476`…`804bc9903` (registro «C1 committato») |
+| G | Gallery: Abs esplicito prima dello scatto `main` | C1 (opzione B) | ✅ 2026-09-24: hunk scritto e verificato staticamente (registro «G»); commit a sé nel checkpoint C2 |
 | S7 | Asse dei bucket (R8 dopo D4, R10) | S6 | ⏳ aspetta **D4, D16, D17** (e D18 se entra nel round): storyboard v2 in §2 |
-| S8 | R11 valore di acquisto | S7 | ⏳ |
+| S8 | R11 valore di acquisto | S7 | ⏳ legge soltanto il motore (risposta al coordinator, 12:25): prima di iniziare rimisuro per simbolo |
 | S9 | R9 didascalia | S1 | ✅ 2026-09-24 (scorrimento a 375 px: verifica live in S6) |
-| S10 | Debiti e test residui | S1 | ⏳ (D8 ✅ 2026-09-24) |
+| S10 | Debiti e test residui | S1 | ⏳ aspetta l'OK del developer sulla test list (D8 ✅ 2026-09-24). E7: prima di toccare `asset-detail.spec.ts` lo annuncio al coordinator |
 | S11 | Docs (docs-writer) | S2b, S3, S4b, S8, S9 | ⏳ |
 | S12 | Handoff | S10, S11, S2c | ⏳ |
 
@@ -390,7 +394,7 @@ Regole: niente posizione/conteggi globali/clock/testo tradotto; solo `data-testi
 | S7b | `GrowthChart.test.ts` + `PerformanceChart.test.ts` | **Solo se D18 = sì.** Formatter Y a privacy OFF:<br>• tacche 5000…8000 a passo 500 → 7 etichette distinte<br>• 1000…2500 a passo 500 → 4 distinte (oggi `1k, 2k, 2k, 3k`)<br>• i valori interi restano senza decimali (`2k`, non `2,0k`)<br>**Privacy ON**: invariato, nessuna cifra (`•••`, `-•••`) |
 | S8 | `GrowthChart.test.ts` | nome e stack condivisi; legenda una volta; 900 + 300 → riga totale 1,200.00; identità di somma |
 | S9 | `GrowthChart.test.ts` + `dashboard.spec.ts` | **jsdom**: la didascalia c'è solo in candele, porta la classe `overflow-scroll-marquee` e la chiave corta. Il `ResizeObserver` inerte di `$test/component` basta: l'overflow qui non si prova.<br>**E2E a 375 px**: `data-overflowing="true"` sulla didascalia. L'attributo lo mette l'azione, quindi non serve nessuna attesa a tempo.<br>`dev.py i18n audit` pulito. Gli specchi rotti da S9 sono già convertiti (registro S9) |
-| S10 | `chartCoreHelpers.test.ts` / `dashboard.spec.ts` / `brokers-detail.spec.ts` | **Cancellazioni** a mano, per nome, una alla volta, contando prima e dopo (−N esatto):<br>• C6, C9, C10, C11 → −4 su 159. **C8 non si cancella più**: è guarito in S9, perché la didascalia consuma di nuovo la chiave corta. La causa di C9 è cambiata: la coppia corta/lunga non esiste più (registro S9)<br>• E1–E3, un solo `for` → −3 su 15; con loro vanno gli helper rimasti senza chiamanti<br>**Ri-pin**, ognuno col suo perché scritto:<br>• i 7 specchi<br>• E4 sulla scala: in linea nessuna scala e nessun badge; in candele la scala c'è e il gradino premuto non è `1d`<br>• E5/E6 con un'àncora a segno opzionale, soglia 3 (Dividend, Interest, Total: righe sempre rese)<br>• **E7** (trovato in S3): le date delle fixture derivate dalla stessa `end` della richiesta, non scritte a mano (vedi registro S3)<br>**Copertura mancante**: nessun E2E sulla scala `growth-candle-width-*`. Proposta: la scala è offerta in candele e in income e non in linea; un clic sposta `aria-pressed` e ridisegna (`data-chart-renders` +1)<br>**Registro (D13, deciso da J):** quando esiste il test privacy di GrowthChart (S2a), aggiorno la `why` della riga P&L totale del tooltip perché lo citi. Oggi la `why` non lo cita, perché il test non c'è<br>**Seguito non bloccante (J, S2c):** a privacy OFF `sv-SE` perde il meno U+2212 (reperto 11). J l'ha risolto con `maskFormattedNumber`, identico byte per byte da smascherato, nel suo C1 `176f19707`. **Solo quando** quel C1 è nel target e la mia base è aggiornata: `fmtCurrency`, `yAxisFormatter`, `shortMoney` e `axisTickAmount` passano su quella primitiva. Prima no: non è nel mio albero |
+| S10 | `chartCoreHelpers.test.ts` / `dashboard.spec.ts` / `brokers-detail.spec.ts` | **Cancellazioni** a mano, per nome, una alla volta, contando prima e dopo (−N esatto):<br>• C6, C9, C10, C11 → −4 su 159. **C8 non si cancella più**: è guarito in S9, perché la didascalia consuma di nuovo la chiave corta. La causa di C9 è cambiata: la coppia corta/lunga non esiste più (registro S9)<br>• E1–E3, un solo `for` → −3 su 15; con loro vanno gli helper rimasti senza chiamanti<br>**Ri-pin**, ognuno col suo perché scritto:<br>• i 7 specchi<br>• E4 sulla scala: in linea nessuna scala e nessun badge; in candele la scala c'è e il gradino premuto non è `1d`<br>• E5/E6 con un'àncora a segno opzionale, soglia 3 (Dividend, Interest, Total: righe sempre rese)<br>• **E7** (trovato in S3; rimedio raffinato il 2026-09-24, registro «C1 committato»): la data dell'evento del peer, **solo per MAX**, ricavata dal range accettato invece che cercata nella fixture fissa (`:1970`). `successorReadyEvents` (`:769`) resta com'è, perché lo leggono anche il mock condiviso (`:2157`, `:2165`) e sezioni dello stesso test oggi verdi, a range assoluto (`:6088`, `:6241`). La correzione riaccende 61 `expect(` e 3 `expect.poll(` fermi dal 18/09: un rosso che ne esce va attribuito, non è per forza E7. Prima dell'edit lo annuncio al coordinator<br>**Copertura mancante**: nessun E2E sulla scala `growth-candle-width-*`. Proposta: la scala è offerta in candele e in income e non in linea; un clic sposta `aria-pressed` e ridisegna (`data-chart-renders` +1)<br>**Registro (D13, deciso da J):** quando esiste il test privacy di GrowthChart (S2a), aggiorno la `why` della riga P&L totale del tooltip perché lo citi. Oggi la `why` non lo cita, perché il test non c'è<br>**Seguito non bloccante (J, S2c):** a privacy OFF `sv-SE` perde il meno U+2212 (reperto 11). J l'ha risolto con `maskFormattedNumber`, identico byte per byte da smascherato, nel suo C1 `176f19707`. **Solo quando** quel C1 è nel target e la mia base è aggiornata: `fmtCurrency`, `yAxisFormatter`, `shortMoney` e `axisTickAmount` passano su quella primitiva. Prima no: non è nel mio albero |
 
 ---
 
@@ -521,6 +525,8 @@ rifatta con `git merge-tree` contro il target **al momento** di ogni checkpoint.
 - **Girato a Risk** (coordinator, 2026-09-24 11:09): il reperto sulle copie delle palette in `colors.test.ts` e `allocationHierarchy.test.ts`. Le garanzie scritte nelle intestazioni non sono imposte da niente, e i puntatori «line 124/125» sono stantii. Nell'handoff resta solo come nota: nessun edit mio, il mio file verrebbe solo letto.
 - **CHANGELOG (proposte)**: 🐛 privacy: assi, etichette e tooltip di Crescita e Performance nascondono gli importi · 🐛 separatori/etichette candele allineati ai bucket · 🐛 l'ultima candela chiude sempre sull'ultima data, il bucket parziale è marcato (D16) · 🐛 barre Income piene dal primo render · ✨ Income mostra il valore di acquisto con la quota reinvestita in cima · 🔄 didascalia candele breve, scorre se non entra · ✨ Crescita e Allocazione ricordano la vista · 🐛 Allocazione storica: emoji corrette per materie prime, immobiliare e tipo ignoto · 🐛 tacche dell'asse Y sempre distinte (se D18).
 - **Commit proposti**, in ordine indicativo (li esegue il developer). I commit di privacy vengono dopo il merge del gate-prep:
+  - ⏭️ **Superata per C1** (2026-09-24): C1 è entrato come 8 commit per slice (registro «C1 committato»). Restano da
+    fare il 7, il 7b, l'11, il 13 e il 14, più il commit della gallery (riga G) e quelli del registro.
   1. `docs(journal): plan round-4 chart review`
   2. `chore(charts): expose growth and performance chart instances`
   3. `fix(assets): read missing sync detail as cancel`
@@ -691,6 +697,8 @@ esatti ed evidenza. Poi si aggiorna la tabella «Stato di esecuzione» in testa.
   test non controlla, trattato come una costante.
 - **Previsione di conflitto per S10**: `asset-detail.spec.ts` è uno spec condiviso (A ci lavora sui livelli di confronto
   per-asset). Prima di toccarlo lo annuncio al coordinator.
+- ⏭️ **Rimedio raffinato (2026-09-24):** derivare da `end` la fixture condivisa romperebbe sezioni oggi verdi. Il
+  rimedio nuovo e la coda di asserzioni che E7 nasconde sono nel registro «C1 committato», voce E7.
 
 > **⚠️ Fuori pista (per assolvere S3 ho rimesso temporaneamente il codice di `HEAD`):** per sapere se E7 dipendesse da S3 ho
 > seguito questa procedura:
@@ -825,6 +833,8 @@ esatti ed evidenza. Poi si aggiorna la tabella «Stato di esecuzione» in testa.
 > - **Rimedio**: un clic esplicito su `growth-toggle-eur` prima dello scatto `main`. Aggiunto alla test list (§4, riga
 >   S5) come obbligatorio e **da consegnare nello stesso checkpoint di S5**, così il target non ha mai una finestra con la
 >   gallery rotta.
+>   - ⏭️ **Superato dalla decisione (B) del coordinator (2026-09-24):** il hunk arriva in un commit a sé dopo C1, e il
+>     ramo di I entra nel target solo con quel hunk (riga G, registro «G»).
 > - `gallery.spec.ts` è un file condiviso: lo annuncio al coordinator.
 > - Il ciclo dell'allocazione (`:605-667`) invece clicca già ogni stato prima di scattare, quindi S4 non lo tocca.
 >
@@ -1342,3 +1352,169 @@ esatti ed evidenza. Poi si aggiorna la tabella «Stato di esecuzione» in testa.
 > la prossima rigenerazione della gallery, che per costruzione è un'operazione del developer. Glielo dico nel
 > checkpoint, insieme alla finestra dell'opzione (B): esiste solo se la gallery viene rigenerata prima che il hunk
 > entri.
+
+### Checkpoint C1 — committato ✅ 2026-09-24 14:18
+
+> **Decisioni del coordinator su C1** (arrivate dopo la consegna delle 12:21):
+> - **Gallery: (B).** C1 si committa subito e il hunk della gallery arriva nel commit successivo (riga G). La finestra
+>   non tocca il target: il mio ramo non entra prima che il hunk ci sia, e dal mio ramo nessuno rigenera la gallery.
+>   Nella lista d'integrazione del coordinator: *il ramo di I entra solo con il hunk della gallery*.
+> - **Commit: (1), per slice.** Patch in `/tmp`, verificate fuori dal repository, e uno script con guardie: HEAD
+>   `2a5927c48` e stage vuoto; i percorsi esatti, con `LC_ALL=C` da entrambi i lati; un digest del contenuto; `git
+>   status` vuoto alla fine. Messaggi a 72 colonne, niente attribuzioni AI, nessun dato del developer. Il coordinator
+>   rivede lo script prima di darlo al developer.
+> - D4, D16, D17, D18 e l'OK sulla test list sono del developer. Non bloccano il checkpoint.
+> - Il CHANGELOG lo scrive il coordinator all'integrazione, sotto `#### 📈 Dashboard charts`.
+> - E7 va in S10, ed è mio.
+>
+> **Note implementazione:**
+> - Dopo l'unica correzione autorizzata (§5, npx, 13:02) l'albero è rimasto fermo: il digest lo fotografa. Da lì il
+>   bundle è stato costruito senza scrivere nel repository:
+>   - gli stati di confine 0…8, generati dal `git diff -U0` di HEAD con una tabella esplicita blocco → commit (24
+>     blocchi in `GrowthChart.svelte`, 8 in `PerformanceChart.svelte`; il primo blocco di GrowthChart diviso per riga).
+>     Asserito: confine 0 = HEAD, confine 8 = albero di lavoro;
+>   - le 8 patch, prodotte da un indice e da un object store temporanei sotto `/tmp`;
+>   - lo script `run_commits.sh`, che il developer lancia due volte: `--dry-run`, poi senza opzioni.
+> - **Le guardie dello script, nell'ordine:** posizione e toplevel; nessuna variabile `GIT_*` che reindirizzi il
+>   repository; ramo e HEAD completo; nessun merge, rebase, cherry-pick, revert, bisect o `index.lock` in corso; stage
+>   vuoto; i 14 percorsi esatti (porcelain v1); il digest; sha256 di patch e messaggi, e i subject; identità presente,
+>   `core.hooksPath` non impostato, nessun hook attivo; una simulazione completa in un indice e un object store
+>   temporanei (8 alberi, più `add -A` = albero 8). Per ogni commit: stage vuoto → `apply --cached` → `write-tree` =
+>   atteso → `commit -F` → albero di HEAD = atteso → un solo genitore → messaggio identico byte per byte. Alla fine:
+>   status vuoto, esattamente 8 commit, albero finale = albero 8.
+>
+> | verifica | come | esito |
+> |---|---|---|
+> | A — patch semplici | `git apply` in sequenza su una copia di HEAD, fuori da ogni repository; poi `cmp` con l'albero di lavoro | 14/14 identici, nessun file in più |
+> | B — patch in stage | `git apply --cached` in un indice temporaneo, `write-tree` dopo ogni patch | gli 8 alberi attesi; l'albero di lavoro messo in stage con `add -A` dà l'albero 8 |
+> | ogni confine 0…8, misurato su `2a5927c48` | copia scratch di `frontend/`; svelte-check, vitest intero, prettier sui file cambiati | svelte-check: **le stesse 44 diagnostiche** (3 errori, 41 warning) a ogni confine, confrontate per tipo, file e messaggio; nessuna in un mio file · vitest: confini 0–6, **gli stessi 12 nomi**; confini 7–8, 11 nomi, un sottoinsieme (0 nuovi, 1 guarito: *«consumes dashboard.pnlCandlesHypotheticalShort through $_()»*); `chartCoreHelpers` passa da 162 a 159 test al confine 7, come nel registro di S9 · prettier pulito a tutti e 9 |
+> | digest del contenuto | `git diff --binary --full-index` con le opzioni fissate, su una **copia** dell'indice; poi i file nuovi in ordine, path e contenuto separati da NUL | `beb2b947…a446`, identico con git 2.53, 2.54 e 2.55 e con bash 3.2 e 5.3 |
+> | dry-run sul repository reale | `run_commits.sh --dry-run` | rc 0 in tutte e 7 le prove: git 2.53, 2.54 e 2.55; bash 3.2 e 5.3; anche in `env -i` e dalla copia di backup. Byte e mtime dell'indice, oggetti, HEAD, refs e worktree invariati |
+> | commit veri, in un clone usa-e-getta | `git clone --shared` sotto `/tmp`; lo script con due sole righe cambiate (worktree e bundle) | 8 commit lineari; alberi e messaggi byte per byte; i 14 file finali identici all'albero di lavoro. Le guardie scattano davvero: file manomesso → digest; path in più → lista; argomento sconosciuto → rc 2; secondo lancio → HEAD, e restano 8 commit; patch o messaggio manomessi in una copia del bundle → guardia del bundle. Clone cancellato |
+> | messaggi | `awk 'length > 72'` e un controllo in Python | nessuna riga oltre 72; subject da 35 a 49 caratteri, corpo ≤ 70; solo ASCII; nessuna attribuzione AI; nessun dato del developer |
+>
+> - **Il coordinator ha rifatto le verifiche da sé** (13:37): sha256 dello script, HEAD, i 14 percorsi, stage vuoto,
+>   subject e colonne, e il dry-run (rc 0). Dopo il dry-run HEAD, stage e albero erano invariati.
+> - **Il developer ha committato alle 14:18.** La mia verifica dopo il commit, in sola lettura: ogni albero è quello
+>   atteso, ogni messaggio è identico byte per byte al suo file, ogni commit ha un solo genitore; 0 merge; `git status`
+>   vuoto.
+>
+> | # | commit | subject | albero |
+> |---|---|---|---|
+> | 1 | `cb7ae3476` | `docs(journal): plan round-4 chart review` | `828e3e25c076` |
+> | 2 | `a1df69f21` | `chore(charts): expose growth/perf chart instances` | `8f1119869916` |
+> | 3 | `ff9038487` | `fix(assets): read missing sync detail as cancel` | `ae601b522cc3` |
+> | 4 | `08e9625d2` | `feat(dashboard): remember allocation view` | `38143947c8e9` |
+> | 5 | `58101f08f` | `fix(dashboard): map every asset type to an emoji` | `2b74f1070d93` |
+> | 6 | `4d8900a24` | `feat(dashboard): remember growth chart view` | `d760c573aab9` |
+> | 7 | `99f7d15ec` | `fix(charts): shorten candle caption` | `3d8ab0d300ea` |
+> | 8 | `804bc9903` | `fix(privacy): mask growth and performance amounts` | `f57579354549` |
+>
+> Il bundle resta in `/tmp/libreFolio_i_c1_commits/`, con una copia nella cartella di sessione di I: non è versionato,
+> e si cancella in S12.
+
+> **⚠️ Fuori pista (il mio ambiente non è quello del developer):** la shell dell'agente imposta
+> `GIT_OPTIONAL_LOCKS=0`, un `GIT_EXEC_PATH` e un `GIT_CONFIG_SYSTEM` che puntano al git incorporato (2.53), e spegne
+> `core.fsmonitor` con `GIT_CONFIG_*`. Nel repository invece `core.fsmonitor=true`, e il daemon sorveglia già questo
+> worktree.
+> - Le prime prove di sola lettura descrivevano quindi il mio ambiente, non il terminale del developer.
+> - Rifatte in `env -i`, con i soli `HOME`, `PATH`, `USER`, `TERM`, `LANG` e `TMPDIR`: tre dry-run (git 2.55 di
+>   Homebrew, git 2.54 di Apple, e la bash 5.3 di Homebrew) e i commit veri nel clone (git 2.55, bash 3.2). Tutto
+>   verde, e il repository reale è rimasto invariato.
+> - Lo script non dipende da quella variabile: passa `--no-optional-locks` in modo esplicito e calcola il digest su una
+>   copia dell'indice. Il motivo della copia l'ho misurato in un repo di prova: `git diff` aveva riscritto la cache
+>   degli stat dell'indice anche con `--no-optional-locks`.
+
+> **⚠️ Fuori pista (messaggio 02 corretto dopo la prima consegna):** il corpo diceva che i commit 06 e 08 «si
+> appoggiano» all'hook `__lfChart`. Non lo usano: lo useranno i test di S10. Il testo nuovo dice che lo leggeranno i
+> test previsti. Dopo la correzione ho aggiornato gli hash nello script e rifatto tutte le verifiche della tabella.
+
+> **⚠️ Fuori pista (npx: la correzione è arrivata prima dell'avviso che correggeva):** la correzione del coordinator
+> («`--no-install` non protegge») mi è arrivata alle 12:14:56, l'avviso originale («usa `npx --no-install`») alle
+> 12:30:26. Gli orari sono quelli degli eventi `user.message` della mia sessione.
+> - **Il meccanismo, letto nel codice di npm 11.19.1 e non eseguito:** `npx-cli.js:82-83` traduce `--no-install` in
+>   `--yes=false`; `libnpmexec/lib/index.js:292-295` si ferma con `npx canceled due to missing packages` quando
+>   servirebbe un'installazione; `:298-300`: senza TTY, un `npx` semplice installa e scrive solo un avviso.
+> - **Le date di nascita in `~/.npm/_npx`:** vitest 5.0.1 installata il 2026-09-18 alle 12:01; tsx 4.23.15 il
+>   2026-09-24 alle 11:58; prettier 3.9.6 il 2026-09-10 alle 20:32. Il lock ha vitest 4.1.11 e prettier 3.8.3.
+> - **La mia lane:** le 29 esecuzioni `npx` del round 4 partono tutte da `frontend/`, quindi hanno usato il binario
+>   locale. Nei round 1–2, tre `npx prettier --check` di sub-agent erano partiti dalla radice del worktree e avevano
+>   usato il prettier 3.9.6 della cache; i controlli successivi, con il prettier del lock, li hanno superati.
+> - **Esito:** il coordinator ha mandato a tutte le lane un messaggio definitivo e ha corretto istruzioni e skill (non
+>   sono file miei). La regola nuova sulle correzioni: vanno mandate con la stessa modalità di consegna, oppure devono
+>   dire che valgono «anche se il vecchio arriva dopo». La mia §5 è stata corretta alle 13:02, ed è nel commit
+>   `cb7ae3476`.
+
+> **S8 — la domanda del coordinator delle 12:25, in sola lettura:** S8 **legge soltanto** il motore.
+> - Il dato è `AcquisitionFundingContribution` (`from_new_capital`, `from_reinvested`; `portfolio_engine.py:497-508`
+>   quel giorno), esposto dallo schema `AcquisitionFundingPoint` (`schemas/portfolio.py:686-687`) e già consumato da
+>   GrowthChart. Nessuna modifica a backend, schema o API. Nessuna delle slice che restano (S7, S7b, S8, S10, S11)
+>   modifica il motore.
+> - Risk aggiunge 2 righe di import al motore nel tempo ②: prima di S8 rimisuro **per simbolo**, non per riga.
+> - Nel controllo ho trovato due puntatori a riga stantii nel codice:
+>   - `AllocationHistoryChart.svelte` (oggi `:124`) cita `portfolio_engine.py:1041` per il bucket sintetico
+>     «Liquidity». Alla nascita (`420b90ebd`) puntava all'iniezione giusta: `:1040` il tipo, `:1041` (la riga citata)
+>     il settore. Il commento è nato sul ramo di Risk, parallelo al mio. Poi il merge di Risk `7fd660846` ha portato i
+>     miei commit del round 3 `8ed7a0f0d` e `d5e834de4`, che sopra quel punto aggiungono 213 righe e ne tolgono 17: 196
+>     di scarto, senza toccare il commento. L'iniezione oggi è a `:1236-1237`. Lo riscrive il commit d'integrazione di
+>     D15, che tocca quel commento;
+>   - `asset_sources/price_store.py:206` cita `portfolio_engine.py:2182` per `_compute_price_fingerprint`: era
+>     sbagliato già alla nascita (`3c85866dd`, dove la funzione stava a `:2225`). Oggi sta a `:2550`. Non è mio: l'ho
+>     solo segnalato.
+> - Il rimedio è citare il simbolo e non la riga. Tutti gli altri puntatori a riga verso il motore stanno nel journal
+>   (nel devWiki nessuno), dove sono misure datate, cioè storia.
+
+> **E7 — confermato da K (12:48), e la coda che nasconde:** K l'ha trovato da solo con test-triage: stesso messaggio,
+> stesso range `2026-08-10..2026-09-24`. È l'E7 già registrato in S3 e nella riga S10. Misurato in più:
+> - il test va da `:486` a `:7795` e si ferma a `:7636`: l'`await` della promessa creata a `:7612`, mentre il guard
+>   lancia a `:1972`;
+> - **61 `expect(` e 3 `expect.poll(` fra `:7636` e `:7795` non girano in nessuna lane dal 2026-09-18**: la parte
+>   finale del FX-sync standalone su MAX e la sezione MAX corta da 6 giorni. Gli 8 `expect(` fra `:7612` e `:7635`
+>   girano ancora. Quando E7 sarà corretto, quella coda girerà per la prima volta dopo una settimana di modifiche di più
+>   lane ad Asset detail: un rosso che ne esce va attribuito, non è per forza E7 né mio;
+> - **nessuna seconda bomba a orologeria**: tutti gli altri range del test sono letterali assoluti (`:804-866`).
+>   L'unica finestra relativa a oggi è MAX (`resolvedMaxSpanDays = 45`, `:7201-7202`);
+> - **il rimedio scritto in S3 era impreciso.** Derivare da `end` la fixture condivisa `successorReadyEvents` (`:769`)
+>   porterebbe gli eventi fuori dai range assoluti che leggono il mock condiviso (`:2157`, `:2165`) e sezioni dello
+>   stesso test che oggi girano verdi (`:6088`, `:6241`). Il punto fragile è più stretto: il guard (`:1970`) cerca
+>   nella fixture fissa una data dentro il range MAX accettato. Da quella data dipendono la data di mezzo
+>   (`:1974-1978`: la data dell'evento, oppure `start + 1` se coincide con un estremo) e la risposta sintetica, che già
+>   sposta prezzi ed eventi dentro il range (`:2145-2150`, `:2159-2164`). Candidato: ricavare quella data dal range
+>   accettato stesso, **solo per MAX**. Da progettare in S10 con test-author;
+> - lo spec è condiviso: prima dell'edit lo annuncio al coordinator, che l'ha chiesto di nuovo alle 14:18.
+
+> **Residui di Git, non miei:** `git count-objects -v` segnala la cartella vuota
+> `.git/worktrees/e-alfy-crispy-pancake/refs` (2026-09-10) e `.git/objects/pack/tmp_pack_liULRD` (2026-09-17).
+> Allo script non danno fastidio. Il coordinator li ha girati al developer.
+
+### G — Gallery: Abs esplicito prima dello scatto `main` ✅ 2026-09-24
+
+> **Perché:** con S5, GrowthChart ricorda l'ultimo modo per utente (`dashboard-growth-mode`). Il test della gallery
+> «main dashboard - all languages and themes» gira le 8 combinazioni di lingua e tema nella stessa pagina, e a ogni giro
+> clicca % per lo scatto `main-pct`. Dal secondo giro in poi, quindi, lo scatto `main` sarebbe uscito in %. Per
+> l'opzione (B) il hunk è un commit a sé dopo C1, e il mio ramo entra nel target solo con questo hunk.
+>
+> **Note implementazione:**
+> - Scritto da test-author, che ha toccato solo `frontend/e2e/gallery.spec.ts`: un hunk, +9/−1. Prima dello scatto
+>   `main` clicca `growth-toggle-eur`, aspetta `aria-pressed="true"` e lascia 500 ms di ridisegno, come fa già il
+>   toggle % subito sotto. Un commento dice perché. Se il modo è già Abs, il clic non cambia niente.
+> - La guardia `isVisible(...).catch(() => false)` è quella che il file usa già per `kpiRow`, `growthChart` e
+>   `pctToggle`.
+> - Le verifiche sono solo statiche, perché la gallery non si lancia da questo ramo (vedi il Fuori pista
+>   dell'opzione (A) in «Checkpoint C1»):
+>
+> | verifica | comando (da `frontend/`) | esito |
+> |---|---|---|
+> | prettier 3.8.3, quella del lock | `node_modules/.bin/prettier --check e2e/gallery.spec.ts` | pulito, prima e dopo il hunk |
+> | svelte-check (il `tsconfig` include `e2e/**/*`) | `node_modules/.bin/svelte-check --tsconfig ./tsconfig.json --output machine` | 3 errori, 41 warning, 4 file: le stesse diagnostiche del confine 8 di C1, per tipo, file e messaggio; nessuna in `gallery.spec.ts` |
+> | spazi | `git diff --check` | pulito |
+>
+> - **Consegna:** checkpoint C2, fatto di due commit: prima la gallery, poi questo registro. L'evidenza del bundle va
+>   nel registro dopo il commit, come per C1.
+
+> **⚠️ Fuori pista (rischio residuo, segnalato da test-author):** `locator.isVisible()` ignora l'opzione `timeout` e
+> guarda solo l'istante. La guardia nuova salta quindi solo quando salta anche quella di `growth-chart` subito sopra,
+> cioè se il grafico non è ancora disegnato. In quel caso `main` può ancora uscire in %, senza errore: è la stessa
+> debolezza del toggle % che c'era già. La versione rigida (`expect(eurToggle).toBeVisible()` senza `if`) andrebbe
+> contro lo stile del file, e irrobustire va fatto per tutte le guardie insieme. Resta fuori dal round: lo segnalo
+> nell'handoff di S12.
