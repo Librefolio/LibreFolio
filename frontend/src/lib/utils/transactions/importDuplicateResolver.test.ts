@@ -113,6 +113,171 @@ describe('resolverSelectionFor', () => {
     });
 });
 
+// ---------------------------------------------------------------------------
+// Keeper precedence against database / bulk-editor collisions
+// ---------------------------------------------------------------------------
+
+/**
+ * The two verdicts a row carries *besides* its in-batch role: against the database
+ * (`dbDuplicateStatus`) and against the bulk editor's unsaved rows (`pendingMatchStatus`).
+ * The in-batch pass rewrites `duplicateStatus` to `pending_duplicate` on every secondary, so
+ * that field cannot say whether a row really collides with something outside the batch;
+ * these two are never rewritten by it. Declared here as well so the fixtures type-check
+ * whether or not `MergedTx` already carries the same optional fields.
+ */
+type CollisionVerdicts = {
+    dbDuplicateStatus?: 'likely' | 'possible';
+    pendingMatchStatus?: 'pending_duplicate' | 'pending_possible_duplicate';
+};
+
+/** A database match as `/parse` or `/import/duplicates` reports it. The resolver never reads it. */
+function dbMatch(existingTxId: number, description: string, verdict: 'likely' | 'possible'): MergedTx['dupMatches'][number] {
+    return {
+        existing_tx_id: existingTxId,
+        tx_date: '2024-01-03',
+        tx_type: 'BUY',
+        tx_quantity: '3',
+        tx_cash_amount: '-30',
+        tx_cash_currency: 'EUR',
+        tx_description: description,
+        match_level: verdict === 'likely' ? 'likely_with_asset' : 'possible_with_asset',
+    };
+}
+
+/**
+ * A row as the wizard holds it once its collision verdicts are known: the status, the
+ * evidence (DB match or matched editor row) and the auto-selection they imply. A firm verdict
+ * (`likely`, `pending_duplicate`) arrives deselected; a weak one stays selected.
+ */
+function twin(index: number, sourceFileId: string, description: string, verdicts: CollisionVerdicts = {}): MergedTx {
+    const row: MergedTx & CollisionVerdicts = {...mt(index, sourceFileId, description), ...verdicts};
+    if (verdicts.dbDuplicateStatus) {
+        row.duplicateStatus = verdicts.dbDuplicateStatus;
+        row.dupMatches = [dbMatch(900 + index, description, verdicts.dbDuplicateStatus)];
+    }
+    if (verdicts.pendingMatchStatus) {
+        row.duplicateStatus = verdicts.pendingMatchStatus;
+        row.dupPendingMatch = {description} as MergedTx['tx'];
+    }
+    row.selected = verdicts.dbDuplicateStatus !== 'likely' && verdicts.pendingMatchStatus !== 'pending_duplicate';
+    return row;
+}
+
+describe('keeper precedence: a twin that collides firmly (DB likely / editor pending_duplicate) is never the default keeper', () => {
+    const priority = ['fA', 'fB'];
+    const g = group('k', [0, 1]);
+
+    describe('U1: only the higher-priority twin collides firmly with the database', () => {
+        const a = twin(0, 'fA', 'Twin', {dbDuplicateStatus: 'likely'});
+        const b = twin(1, 'fB', 'Twin');
+        const tx = [a, b];
+
+        it('groupPartitions elects the non-colliding lower-priority twin as partition primary', () => {
+            const parts = groupPartitions(g, tx, priority);
+            expect(parts).toHaveLength(1);
+            expect(parts[0].primaryIndex).toBe(b.index);
+        });
+
+        it('defaultKeeperIndices keeps the non-colliding twin, not the colliding higher-priority one', () => {
+            expect(defaultKeeperIndices(g, tx, priority)).toEqual(new Set([b.index]));
+        });
+
+        it('resolverSelectionFor without a manual choice deselects the colliding twin and selects its twin', () => {
+            expect(resolverSelectionFor(g, a.index, tx, priority, false, {})).toBe(false);
+            expect(resolverSelectionFor(g, b.index, tx, priority, false, {})).toBe(true);
+        });
+
+        it('re-applying after a priority reorder reads the verdict fields, not the in-batch pending_duplicate marker', () => {
+            // State after a first pass over three copies with priority [fA, fB, fC]: A (in the DB)
+            // lost the keeper role to B, and the pass rewrote `duplicateStatus` on both secondaries
+            // (A and C) to its in-batch marker. A still collides; C collides with nothing.
+            const a3: MergedTx = {...twin(0, 'fA', 'Twin', {dbDuplicateStatus: 'likely'}), duplicateStatus: 'pending_duplicate', isDupKeeper: false, dupKeeperIndex: 1};
+            const b3: MergedTx = {...twin(1, 'fB', 'Twin'), isDupKeeper: true};
+            const c3: MergedTx = {...twin(2, 'fC', 'Twin'), duplicateStatus: 'pending_duplicate', selected: false, isDupKeeper: false, dupKeeperIndex: 1};
+            const g3 = group('k3', [0, 1, 2]);
+            // The user then drags fC above fB.
+            const reordered = ['fA', 'fC', 'fB'];
+            expect(groupPartitions(g3, [a3, b3, c3], reordered)[0].primaryIndex).toBe(c3.index);
+            expect(defaultKeeperIndices(g3, [a3, b3, c3], reordered)).toEqual(new Set([c3.index]));
+        });
+    });
+
+    describe('U2: every twin collides firmly', () => {
+        const variants: Array<{name: string; b: CollisionVerdicts}> = [
+            {name: '(i) both twins are already in the database', b: {dbDuplicateStatus: 'likely'}},
+            {name: '(ii) one twin is in the database, the other is pending in the bulk editor', b: {pendingMatchStatus: 'pending_duplicate'}},
+        ];
+
+        for (const variant of variants) {
+            describe(variant.name, () => {
+                const a = twin(0, 'fA', 'Twin', {dbDuplicateStatus: 'likely'});
+                const b = twin(1, 'fB', 'Twin', variant.b);
+                const tx = [a, b];
+
+                it('defaultKeeperIndices keeps no copy at all', () => {
+                    expect(defaultKeeperIndices(g, tx, priority)).toEqual(new Set());
+                });
+
+                it('resolverSelectionFor without a manual choice selects neither copy', () => {
+                    expect(resolverSelectionFor(g, a.index, tx, priority, false, {})).toBe(false);
+                    expect(resolverSelectionFor(g, b.index, tx, priority, false, {})).toBe(false);
+                });
+
+                it('the partition primary (display only) stays the highest-priority twin', () => {
+                    expect(groupPartitions(g, tx, priority)[0].primaryIndex).toBe(a.index);
+                });
+            });
+        }
+    });
+
+    describe('U3: controls — what must NOT move the keeper', () => {
+        it('(a) with no collision at all the highest-priority twin is the keeper', () => {
+            const tx = [twin(0, 'fA', 'Twin'), twin(1, 'fB', 'Twin')];
+            expect(groupPartitions(g, tx, priority)[0].primaryIndex).toBe(0);
+            expect(defaultKeeperIndices(g, tx, priority)).toEqual(new Set([0]));
+            expect(resolverSelectionFor(g, 0, tx, priority, false, {})).toBe(true);
+            expect(resolverSelectionFor(g, 1, tx, priority, false, {})).toBe(false);
+        });
+
+        it('(b) a weak database verdict ("possible") does not block the higher-priority twin', () => {
+            const tx = [twin(0, 'fA', 'Twin', {dbDuplicateStatus: 'possible'}), twin(1, 'fB', 'Twin')];
+            expect(groupPartitions(g, tx, priority)[0].primaryIndex).toBe(0);
+            expect(defaultKeeperIndices(g, tx, priority)).toEqual(new Set([0]));
+            expect(resolverSelectionFor(g, 0, tx, priority, false, {})).toBe(true);
+            expect(resolverSelectionFor(g, 1, tx, priority, false, {})).toBe(false);
+        });
+
+        it('(c) a weak editor verdict ("pending_possible_duplicate") does not block the higher-priority twin', () => {
+            const tx = [twin(0, 'fA', 'Twin', {pendingMatchStatus: 'pending_possible_duplicate'}), twin(1, 'fB', 'Twin')];
+            expect(groupPartitions(g, tx, priority)[0].primaryIndex).toBe(0);
+            expect(defaultKeeperIndices(g, tx, priority)).toEqual(new Set([0]));
+            expect(resolverSelectionFor(g, 0, tx, priority, false, {})).toBe(true);
+            expect(resolverSelectionFor(g, 1, tx, priority, false, {})).toBe(false);
+        });
+
+        it('(d) an explicit manual choice is respected even for a firmly colliding twin', () => {
+            const tx = [twin(0, 'fA', 'Twin', {dbDuplicateStatus: 'likely'}), twin(1, 'fB', 'Twin')];
+            const selections = {0: true, 1: false};
+            expect(resolverSelectionFor(g, 0, tx, priority, true, selections)).toBe(true);
+            expect(resolverSelectionFor(g, 1, tx, priority, true, selections)).toBe(false);
+        });
+
+        it("(e) a firm collision in one description-partition leaves the other partition's keeper alone", () => {
+            // One key, two descriptions: the 'Twin' pair collides with the DB on its fA copy, the
+            // 'Other' pair collides with nothing and keeps its highest-priority copy.
+            const tx = [twin(0, 'fA', 'Twin', {dbDuplicateStatus: 'likely'}), twin(1, 'fB', 'Twin'), twin(2, 'fA', 'Other'), twin(3, 'fB', 'Other')];
+            const g4 = group('k4', [0, 1, 2, 3]);
+            const other = groupPartitions(g4, tx, priority).find((p) => p.memberIndices.includes(2));
+            expect(other?.primaryIndex).toBe(2);
+            const keepers = defaultKeeperIndices(g4, tx, priority);
+            expect(keepers.has(2)).toBe(true);
+            expect(keepers.has(3)).toBe(false);
+            expect(resolverSelectionFor(g4, 2, tx, priority, false, {})).toBe(true);
+            expect(resolverSelectionFor(g4, 3, tx, priority, false, {})).toBe(false);
+        });
+    });
+});
+
 describe('outlierIndexSet', () => {
     const keyOf = (m: MergedTx) => String(m.tx.description ?? '');
 

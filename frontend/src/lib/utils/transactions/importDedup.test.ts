@@ -5,17 +5,20 @@ import type {AssetResolution, DedupKey, MergedTx} from './importTypes';
 import {
     buildDedupKey,
     buildDuplicateGroups,
+    compareTargetFor,
     dedupKeysMatch,
     describeDedupKey,
     duplicateStatusAllowsAutoSelect,
     duplicateStatusIsSelectedWarning,
     getDedupCash,
     getDedupCurrency,
+    hasFirmOutsideCollision,
     isResolvedAwayDuplicate,
     normalizeAssetToken,
     normalizeDedupDescription,
     pendingDuplicateStatusFor,
     resolveDedupAssetIdentity,
+    rowAfterRecheck,
 } from './importDedup';
 
 const FAKE = FAKE_ASSET_ID_BASE; // placeholder ids sit at/just below 2^31
@@ -252,5 +255,189 @@ describe('isResolvedAwayDuplicate', () => {
         expect(isResolvedAwayDuplicate(mt(0, 'f', {}, {dupGroupKey: 'k', isDupKeeper: true, selected: false}))).toBe(false);
         expect(isResolvedAwayDuplicate(mt(0, 'f', {}, {dupGroupKey: 'k', isDupKeeper: false, selected: true}))).toBe(false);
         expect(isResolvedAwayDuplicate(mt(0, 'f', {}, {isDupKeeper: false, selected: false}))).toBe(false);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// U4: what a review badge compares with, and which copies collide outside the batch
+// ---------------------------------------------------------------------------
+
+describe('U4: compareTargetFor / hasFirmOutsideCollision', () => {
+    /** A database match as the parse report carries it; the dispatch only counts them. */
+    const dbMatch = (existingTxId: number): MergedTx['dupMatches'][number] => ({existing_tx_id: existingTxId}) as MergedTx['dupMatches'][number];
+    /** The unsaved bulk-editor row a pending duplicate was matched against. */
+    const editorRow = tx({type: 'BUY', description: 'shared buy'});
+
+    describe('compareTargetFor — the comparison the badge claims', () => {
+        it('opens nothing for a unique row, even one that belongs to a cross-file group', () => {
+            expect(compareTargetFor(mt(0, 'fA', {}, {duplicateStatus: 'unique', dupGroupKey: 'k', isDupKeeper: true}))).toBeNull();
+        });
+
+        it('compares a likely or possible duplicate with its database row', () => {
+            expect(compareTargetFor(mt(0, 'fA', {}, {duplicateStatus: 'likely', dbDuplicateStatus: 'likely', dupMatches: [dbMatch(500)]}))).toBe('db');
+            expect(compareTargetFor(mt(0, 'fA', {}, {duplicateStatus: 'possible', dbDuplicateStatus: 'possible', dupMatches: [dbMatch(501)]}))).toBe('db');
+        });
+
+        it('opens nothing for a database verdict that carries no match to compare with', () => {
+            // A backend `possible` entry may arrive without `tx_existing_matches`; there is no row to fetch.
+            expect(compareTargetFor(mt(0, 'fA', {}, {duplicateStatus: 'likely', dbDuplicateStatus: 'likely', dupMatches: []}))).toBeNull();
+            expect(compareTargetFor(mt(0, 'fA', {}, {duplicateStatus: 'possible', dbDuplicateStatus: 'possible', dupMatches: []}))).toBeNull();
+        });
+
+        it('compares a likely duplicate that is also a cross-file group member with the database, not with the lot', () => {
+            // The fixed bug: the group keeper of two overlapping exports, already in the database,
+            // shows "likely duplicate" — and its badge used to open the file-vs-file comparison.
+            const keeper = mt(0, 'fA', {}, {duplicateStatus: 'likely', dbDuplicateStatus: 'likely', dupMatches: [dbMatch(500)], dupGroupKey: 'k', dupTier: 'sure', isDupKeeper: true});
+            expect(compareTargetFor(keeper)).toBe('db');
+        });
+
+        it('compares a firm or weak bulk-editor duplicate with the editor row', () => {
+            expect(compareTargetFor(mt(0, 'fA', {}, {duplicateStatus: 'pending_duplicate', pendingMatchStatus: 'pending_duplicate', dupPendingMatch: editorRow}))).toBe('pending');
+            expect(compareTargetFor(mt(0, 'fA', {}, {duplicateStatus: 'pending_possible_duplicate', pendingMatchStatus: 'pending_possible_duplicate', dupPendingMatch: editorRow}))).toBe('pending');
+        });
+
+        it('compares an in-batch secondary, which matches no editor row, with its lot', () => {
+            const secondary = mt(1, 'fB', {}, {duplicateStatus: 'pending_duplicate', dupGroupKey: 'k', dupTier: 'sure', isDupKeeper: false, dupKeeperIndex: 0});
+            expect(compareTargetFor(secondary)).toBe('lot');
+        });
+
+        it('prefers the editor row over the lot for a copy that is both a group member and an editor duplicate', () => {
+            const both = mt(1, 'fB', {}, {duplicateStatus: 'pending_duplicate', pendingMatchStatus: 'pending_duplicate', dupPendingMatch: editorRow, dupGroupKey: 'k', dupTier: 'sure', isDupKeeper: false});
+            expect(compareTargetFor(both)).toBe('pending');
+        });
+
+        it('opens nothing for a pending verdict with neither an editor row nor a group behind it', () => {
+            expect(compareTargetFor(mt(0, 'fA', {}, {duplicateStatus: 'pending_duplicate'}))).toBeNull();
+        });
+    });
+
+    describe('hasFirmOutsideCollision — reads the two verdict fields only', () => {
+        it('is true for a likely database twin and false for a possible one', () => {
+            expect(hasFirmOutsideCollision(mt(0, 'fA', {}, {dbDuplicateStatus: 'likely'}))).toBe(true);
+            expect(hasFirmOutsideCollision(mt(0, 'fA', {}, {dbDuplicateStatus: 'possible'}))).toBe(false);
+        });
+
+        it('is true for a firm bulk-editor duplicate and false for a weak one', () => {
+            expect(hasFirmOutsideCollision(mt(0, 'fA', {}, {pendingMatchStatus: 'pending_duplicate'}))).toBe(true);
+            expect(hasFirmOutsideCollision(mt(0, 'fA', {}, {pendingMatchStatus: 'pending_possible_duplicate'}))).toBe(false);
+        });
+
+        it('is false for a row with no verdict at all', () => {
+            expect(hasFirmOutsideCollision(mt(0, 'fA', {}))).toBe(false);
+        });
+
+        it('ignores duplicateStatus, which the in-batch pass rewrites on every secondary', () => {
+            // A secondary marked pending_duplicate by the in-batch pass collides with nothing outside.
+            expect(hasFirmOutsideCollision(mt(1, 'fB', {}, {duplicateStatus: 'pending_duplicate', dupGroupKey: 'k', isDupKeeper: false}))).toBe(false);
+            // A secondary whose database verdict was overwritten by that marker still collides.
+            expect(hasFirmOutsideCollision(mt(1, 'fB', {}, {duplicateStatus: 'pending_duplicate', dbDuplicateStatus: 'likely', dupGroupKey: 'k', isDupKeeper: false}))).toBe(true);
+        });
+    });
+});
+
+// ---------------------------------------------------------------------------
+// U7: the row a database recheck leaves behind, before the in-batch passes run again
+// ---------------------------------------------------------------------------
+
+describe('U7: rowAfterRecheck', () => {
+    type Verdict = Parameters<typeof rowAfterRecheck>[1];
+    /** A database match as the recheck report carries it; the rebuild only passes it through. */
+    const dbMatch = (existingTxId: number): MergedTx['dupMatches'][number] => ({existing_tx_id: existingTxId}) as MergedTx['dupMatches'][number];
+    /** Every answer the recheck can give a row: none, a weak twin, a firm twin. */
+    const verdicts: Verdict[] = [undefined, {status: 'possible', matches: [dbMatch(501)]}, {status: 'likely', matches: [dbMatch(500)]}];
+    const verdictLabel = (verdict: Verdict): string => verdict?.status ?? 'no verdict';
+    /** Dated after the broker's opening, selection recomputed from scratch: the verdict alone decides. */
+    const fresh = {beforeOpening: false, preserveSelection: false};
+    /** The in-batch and editor markers, which the passes after the recheck rebuild from nothing. */
+    const markers = ['pendingMatchStatus', 'dupPendingMatch', 'dupGroupKey', 'dupTier', 'dupKeeperIndex', 'dupKeeperFileName', 'isDupKeeper'] as const;
+    /** A row carrying everything the earlier passes can leave on it: a database twin, a kept group secondary, an editor match. */
+    const markedRow = (): MergedTx =>
+        mt(
+            3,
+            'fileB',
+            {type: 'BUY', date: '2024-05-01', quantity: 2, asset_id: 5, description: 'buy 2'},
+            {
+                selected: true,
+                duplicateStatus: 'pending_duplicate',
+                dbDuplicateStatus: 'likely',
+                dupMatches: [dbMatch(500)],
+                todos: [{field: 'quantity', severity: 'warning', reasonCode: 'A', message: 'm1'}],
+                pendingMatchStatus: 'pending_duplicate',
+                dupPendingMatch: tx({type: 'BUY', date: '2024-05-01', quantity: 2, description: 'buy 2'}),
+                dupGroupKey: 'k',
+                dupTier: 'sure',
+                dupKeeperIndex: 0,
+                dupKeeperFileName: 'fileA.csv',
+                isDupKeeper: false,
+            },
+        );
+
+    it('records a likely verdict as the database verdict and deselects the firm twin', () => {
+        const m1 = dbMatch(500);
+        const out = rowAfterRecheck(mt(0, 'fA', {}, {selected: true}), {status: 'likely', matches: [m1]}, fresh);
+        expect(out.duplicateStatus).toBe('likely');
+        expect(out.dbDuplicateStatus).toBe('likely');
+        expect(out.dupMatches).toEqual([m1]);
+        expect(out.selected).toBe(false);
+    });
+
+    it('records a possible verdict and re-selects the weak twin', () => {
+        const out = rowAfterRecheck(mt(0, 'fA', {}, {selected: false}), {status: 'possible', matches: [dbMatch(501)]}, fresh);
+        expect(out.duplicateStatus).toBe('possible');
+        expect(out.dbDuplicateStatus).toBe('possible');
+        expect(out.selected).toBe(true);
+    });
+
+    it('drops the stale database verdict from the parse when the recheck returns none', () => {
+        // The regression the extraction pins: the parse said likely, a correction cleared the
+        // twin, and a verdict carried over by the spread would keep the row out of the keepers.
+        const parsed = mt(0, 'fA', {}, {duplicateStatus: 'likely', dbDuplicateStatus: 'likely', dupMatches: [dbMatch(500)]});
+        const out = rowAfterRecheck(parsed, undefined, fresh);
+        expect(out.duplicateStatus).toBe('unique');
+        expect(out.dbDuplicateStatus).toBeUndefined();
+        expect(out.dupMatches).toEqual([]);
+    });
+
+    it('clears every in-batch and editor marker, whatever the verdict', () => {
+        for (const verdict of verdicts) {
+            const row = markedRow();
+            // Every marker is set on the way in, so an undefined on the way out is the rebuild's doing.
+            for (const field of markers) expect(row[field], `input ${field}`).toBeDefined();
+            const out = rowAfterRecheck(row, verdict, fresh);
+            for (const field of markers) expect(out[field], `${field} after ${verdictLabel(verdict)}`).toBeUndefined();
+        }
+    });
+
+    it('keeps a deselected unique row deselected only when the selection is preserved', () => {
+        const deselected = mt(0, 'fA', {}, {selected: false});
+        expect(rowAfterRecheck(deselected, undefined, {beforeOpening: false, preserveSelection: true}).selected).toBe(false);
+        expect(rowAfterRecheck(deselected, undefined, {beforeOpening: false, preserveSelection: false}).selected).toBe(true);
+        // Preserving is not deselecting: a row the user kept stays kept.
+        expect(rowAfterRecheck(mt(0, 'fA', {}, {selected: true}), undefined, {beforeOpening: false, preserveSelection: true}).selected).toBe(true);
+    });
+
+    it("never selects a row predating the broker's opening, whatever the verdict or the previous selection", () => {
+        for (const verdict of verdicts) {
+            for (const selected of [true, false]) {
+                for (const preserveSelection of [true, false]) {
+                    const out = rowAfterRecheck(mt(0, 'fA', {}, {selected}), verdict, {beforeOpening: true, preserveSelection});
+                    expect(out.selected, `${verdictLabel(verdict)}, selected=${selected}, preserveSelection=${preserveSelection}`).toBe(false);
+                }
+            }
+        }
+        // Control: the same selected unique row, dated after the opening, stays selected — the date is what deselects.
+        expect(rowAfterRecheck(mt(0, 'fA', {}, {selected: true}), undefined, {beforeOpening: false, preserveSelection: true}).selected).toBe(true);
+    });
+
+    it('returns a new row: the input is untouched and the unrelated fields carry over', () => {
+        const row = markedRow();
+        const before = structuredClone(row);
+        const out = rowAfterRecheck(row, undefined, fresh);
+        expect(out).not.toBe(row);
+        expect(row).toStrictEqual(before);
+        expect(out.index).toBe(3);
+        expect(out.sourceFileId).toBe('fileB');
+        expect(out.tx).toBe(row.tx);
+        expect(out.todos).toBe(row.todos);
     });
 });
