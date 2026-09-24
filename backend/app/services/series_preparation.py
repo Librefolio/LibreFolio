@@ -25,6 +25,7 @@ from backend.app.schemas.risk import (
     PreparedAssetSeries,
     PreparedAssetSeriesSet,
 )
+from backend.app.services.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 
 
 def date_is_within_range(
@@ -308,14 +309,21 @@ def prepare_asset_series_set(  # noqa: C901 — sequential pipeline stages with 
                 strict=False,
             )
         ]
+        # A carried-forward price or rate is a data-quality problem only once it is older than
+        # the project's staleness threshold: weekends, holidays and an instrument quoted on its
+        # own market calendar are ordinary and must not degrade a result on their own
+        # (developer's decision of 24/09/2026). The baseline is a reference, not an
+        # observation, so it never counts — the same rule `fresh_quote_points` applies.
         for index, point in enumerate(valuation_points):
-            if point.is_price_carried_forward:
+            if index == 0:
+                continue
+            if point.is_price_carried_forward and (point.valuation_date - point.effective_price_date).days > STALE_PRICE_THRESHOLD_DAYS:
                 carried_price_points += 1
                 carried_price_asset_ids.add(item.asset_id)
-            if point.is_fx_carried_forward:
+            if point.is_fx_carried_forward and point.fx_rate_date is not None and (point.valuation_date - point.fx_rate_date).days > STALE_PRICE_THRESHOLD_DAYS:
                 carried_fx_points += 1
                 carried_fx_pairs.add(f"{point.native_currency}/{point.target_currency}")
-            if index > 0 and not point.is_price_carried_forward:
+            if not point.is_price_carried_forward:
                 fresh_quote_points += 1
         prepared_series.append(
             PreparedAssetSeries(

@@ -199,3 +199,75 @@ class TestNoiseRejection:
         usage = collect_from_source(_tree(tmp_path / "src", {"N.svelte": self.SOURCE}))
         assert usage.families == {}
         assert usage.suppressed_roots == set()
+
+
+class TestConditionalPrefix:
+    """`${keyPrefix}.title` where the prefix is chosen between two literals.
+
+    Unlike ``TestTernaryArgument``, the conditional is not the argument of the call
+    but the *head* of a template: neither branch is a key on its own, each one has
+    to be expanded through the template.
+    """
+
+    # RiskBetaBanner.svelte, reduced. The template opens on the interpolation, so it
+    # has no literal head at all: the two branches are the only place its keys exist.
+    SOURCE = """
+    <script lang="ts">
+        let {scope = 'subsystem'}: Props = $props();
+        let keyPrefix = $derived(scope === 'simulation' ? 'ns.banner.simulation' : 'ns.banner');
+    </script>
+    <span>{$t(`${keyPrefix}.title`)}</span>
+    """
+
+    # The same shape with one branch unknown, beside a literal pair as the control.
+    HALF_KNOWN_SOURCE = """
+    <script>
+        let p = $derived(flag ? 'ns.a' : someVariable);
+        let q = $derived(flag ? 'ns.c' : 'ns.d');
+    </script>
+    <span>{$t(`${p}.x`)}</span>
+    <span>{$t(`${q}.x`)}</span>
+    """
+
+    @pytest.fixture
+    def usage(self, tmp_path):
+        return collect_from_source(_tree(tmp_path / "src", {"Banner.svelte": self.SOURCE}))
+
+    @pytest.mark.parametrize("key", ["ns.banner.title", "ns.banner.simulation.title"])
+    def test_both_branches_are_evidence(self, usage, key):
+        # Neither was, before: only a `const` or a typed union could resolve a name, and
+        # with no literal head the template had nothing else to go on — both keys were
+        # reported dead while being rendered.
+        assert classify(key, usage, set()) == USED
+
+    def test_a_key_under_neither_branch_stays_dead(self, usage):
+        # Barrier first: the conditional did resolve, so the verdict below cannot be
+        # the scan simply having seen nothing.
+        assert classify("ns.banner.title", usage, set()) == USED
+        # Two branches are two prefixes, not the namespace they share: a bare root
+        # absolving everything beneath it is the very failure this gate exists to stop.
+        assert classify("ns.other.title", usage, set()) == DEAD
+
+    @pytest.mark.parametrize("key", ["ns.a.x", "ns.b.x"])
+    def test_a_const_conditional_resolves_too(self, tmp_path, key):
+        # Not only Svelte's `let x = $derived(...)`: a plain `const` in a .ts module.
+        src = _tree(tmp_path / "src", {"keys.ts": "const p = flag ? 'ns.a' : 'ns.b';\nexport const label = t(`${p}.x`);\n"})
+        assert classify(key, collect_from_source(src), set()) == USED
+
+    def test_a_non_literal_branch_is_not_guessed(self, tmp_path):
+        usage = collect_from_source(_tree(tmp_path / "src", {"Half.svelte": self.HALF_KNOWN_SOURCE}))
+        # Control: the literal pair in the same file resolves, so the file was scanned
+        # and the shape recognised — the verdict below is down to the unknown branch.
+        assert classify("ns.c.x", usage, set()) == USED
+        # One known branch of an unknown pair is not a finite set, so it is not
+        # expanded: the contract is "not USED". DEAD is precisely where it lands, as
+        # for a wholly unknown `${a}.${b}`: left unresolved, the template has no
+        # literal head to hang even an unverified prefix on, so nothing is recorded.
+        assert classify("ns.a.x", usage, set()) == DEAD
+
+    def test_a_single_const_still_resolves(self, tmp_path):
+        # The name table now maps each name to a *list* of values. A bare string
+        # slipping back in would be expanded one character at a time by `list(...)`
+        # — `n.leaf`, `s.leaf`, `..leaf` — and this key would quietly turn dead.
+        src = _tree(tmp_path / "src", {"P.svelte": "<script>\n    const NS = 'ns.prov';\n    const a = $t(`${NS}.leaf`);\n</script>\n"})
+        assert classify("ns.prov.leaf", collect_from_source(src), set()) == USED
