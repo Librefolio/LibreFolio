@@ -8,6 +8,10 @@ The chart section sits below the KPI cards and gives you a **historical and stru
 
 The growth chart shows how your portfolio evolved over the selected period. Use the **Abs / % / P&L** toggle in the top-right corner to switch between the three views: absolute values, rates of return, and the money actually earned.
 
+LibreFolio remembers the view you last picked — **Abs**, **%**, or **P&L**, and within P&L the **Line**, **Candles**, or **Income** submode — in this browser, separately for each user. The Dashboard and a broker's detail page share that memory, so the view you leave in one is the view you find in the other. Until you pick one, the chart opens on **Abs**, and P&L opens on **Line**.
+
+If you left the chart on **%** but there is no rate-of-return data to draw, the **%** button is disabled and the chart shows **Abs** for now. Your choice is kept: **%** comes back the next time you open the chart with rate-of-return data to show.
+
 <div class="lf-screenshot-carousel" data-carousel="carousel-growth" data-carousel-interval="5000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
   <div class="lf-screenshot-carousel-item is-active chart-crop-container" data-title="📈 Absolute Mode" alt="Growth Chart — Absolute Mode">
      <img class="gallery-img" data-category="dashboard" data-name="main" alt="Growth Chart — Absolute Mode">
@@ -16,6 +20,18 @@ The growth chart shows how your portfolio evolved over the selected period. Use 
      <img class="gallery-img" data-category="dashboard" data-name="main-pct" alt="Growth Chart — Percentage Mode">
   </div>
 </div>
+
+!!! tip "Hiding the amounts"
+
+    The eye button in the top bar, labelled **Hide amounts** (or **Show amounts** once they are hidden), hides your amounts. This chart follows it straight away, in both directions, without reloading the page:
+
+    - On the vertical axis of **Abs** and **P&L**, each value becomes `•••` or `-•••`: the sign stays, while the `k` or `M` suffix is hidden along with the digits, so not even the order of magnitude shows.
+    - In the tooltips, every amount keeps its currency code and its sign; only the digits turn into `•••`. In the **Abs** tooltip, **Asset Cost**, **Returns**, and **Capital** show `—` when they are zero, whether the amounts are hidden or not.
+    - The **%** view shows rates of return, not money, so nothing is hidden there.
+
+    The lines, candles, bars, and their colors stay as they are — green and red still tell a gain from a loss. Only the amounts are hidden.
+
+    The setting belongs to this browser, not to your account: switching to another account in the same browser keeps the amounts hidden.
 
 ### ABS mode — absolute values
 
@@ -110,9 +126,11 @@ The high and the low are a different matter, and this is the one thing to unders
 
     The chart says so permanently, in the caption under the plot:
 
-    > *Synthetic — cross-asset high/low are hypothetical and non-simultaneous, not a real intraday series.*
+    > *Synthetic — cross-asset high/low are hypothetical and non-simultaneous*
 
-    A shorter form of the same warning is repeated inside the tooltip. Treat the extremes as an indication of how much the portfolio *could* have swung, never as a measured intraday series.
+    The caption stays on a single line: when the chart is too narrow to show it whole, it scrolls slowly to reveal the rest (unless your system is set to reduce motion, in which case it stays still).
+
+    Treat the extremes as an indication of how much the portfolio *could* have swung, never as a measured intraday series.
 
 Three further things to expect:
 
@@ -122,9 +140,7 @@ Three further things to expect:
 
 When the chart groups days into weeks or months, the candle opens at the **first day's open**, closes at the **last day's close**, and takes the **highest high** and **lowest low** of the days in between.
 
-Broker lines behave as in the Line submode: with two or more brokers in scope, each broker's closing P&L is overlaid as a dashed line on top of the candles.
-
-The tooltip lists **Open, Close, High, Low** for the period, followed by the broker rows when present.
+Only the total is drawn as candles, with no broker lines laid over them. The tooltip lists **Open, Close, High, Low** for the period and, when two or more brokers are in scope, each broker's P&L at the close of the period.
 
 #### Income — the cash that actually moved {: #pnl-income }
 
@@ -206,6 +222,8 @@ The allocation panel shows how your portfolio is distributed at the current poin
 
 - **Now** — Donut chart of current allocation at `date_to`. Hover any slice to see the exact percentage and absolute value.
 - **History** — 100% stacked area chart showing how allocation shifted over time. Useful for visualizing portfolio rebalancing across months or years.
+
+LibreFolio remembers whether you left the panel on **Now** or **History**, and which dimension you were viewing (Type, Sector, or Geography) — in this browser, separately for each user. The Dashboard and a broker's detail page share that memory. If you left it on **History**, it opens on History and loads its data straight away, just as if you had clicked it.
 
 ### Cash as Liquidity
 
