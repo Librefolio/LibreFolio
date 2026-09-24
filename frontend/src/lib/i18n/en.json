@@ -3255,7 +3255,8 @@
       "historical_replay_excluded_starts_late": "First quote after the replay window began: {names} — {treatment, select, zero_return_residual {weight counted as cash at zero return} other {left out of the replay}}.",
       "historical_replay_excluded_missing_fx": "No exchange rate to your currency over the replay window: {names} — {treatment, select, zero_return_residual {weight counted as cash at zero return} other {left out of the replay}}.",
       "historical_replay_excluded_stale_at_start": "No price in the {days} days before the replay window began: {names} — {treatment, select, zero_return_residual {weight counted as cash at zero return} other {left out of the replay}}.",
-      "historical_replay_excluded_stale_at_end": "No price in the last {days} days of the replay window: {names} — {treatment, select, zero_return_residual {weight counted as cash at zero return} other {left out of the replay}}."
+      "historical_replay_excluded_stale_at_end": "No price in the last {days} days of the replay window: {names} — {treatment, select, zero_return_residual {weight counted as cash at zero return} other {left out of the replay}}.",
+      "historical_replay_mostly_excluded": "The result describes only part of your portfolio ({covered, number, percent}): the rest is left out of the replay."
     },
     "assetDetail": {
       "overviewTab": "Overview",
