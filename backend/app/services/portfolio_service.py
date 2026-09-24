@@ -74,6 +74,7 @@ from backend.app.schemas.portfolio import (
     UnallocatedContribution,
 )
 from backend.app.schemas.wac import WACMissingPairInfo, WACPreviewResultItem, WACQualifyingTX
+from backend.app.services.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
 from backend.app.services.fx import convert_bulk
 from backend.app.services.portfolio_allocation_source import build_portfolio_allocation_source
 from backend.app.services.settings_service import get_effective_base_currency
@@ -435,7 +436,8 @@ def _oldest_open_lot_date(txns: list[Transaction]) -> Optional[date_type]:
 # 8×(-0.031102) + (-0.751182) against a +1 buy leaves a +0.000002 residual). This
 # is not Decimal arithmetic error — it's an artifact of the recorded transaction
 # quantities themselves — so treat anything at or below this threshold as closed.
-_QUANTITY_DUST_THRESHOLD = Decimal("0.00001")
+# The value lives in data_quality_thresholds, shared with the asset list's held-now flags.
+_QUANTITY_DUST_THRESHOLD = QUANTITY_DUST_THRESHOLD
 
 
 def _closed_position_window(txns: list[Transaction]) -> tuple[Optional[date_type], Optional[date_type]]:

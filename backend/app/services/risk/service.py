@@ -31,11 +31,13 @@ from backend.app.schemas.risk import (
     RiskAnalyticRequest,
     RiskAnalyticResult,
     RiskAssetEligibility,
+    RiskEligibilityLevel,
     RiskEligibilityRequest,
     RiskEligibilityResponse,
     RiskError,
     RiskErrorCode,
     RiskExcludedAsset,
+    RiskHistoricalReplayExclusionReason,
     RiskMode,
     RiskQueryRequest,
     RiskQueryResponse,
@@ -58,7 +60,16 @@ from backend.app.services.risk.base import (
     RiskHistoricalReplayContext,
     RiskUnavailableError,
 )
-from backend.app.services.risk.eligibility import analysis_eligibility, load_price_window_facts, replay_coverage
+from backend.app.services.risk.eligibility import (
+    PriceWindowFacts,
+    analysis_eligibility,
+    common_quoted_range,
+    load_price_window_facts,
+    period_limits_coverage,
+    replay_coverage,
+    suggested_analysis_ranges,
+    suggested_replay_range,
+)
 from backend.app.services.risk.metrics import (
     current_buy_and_hold_returns,
     period_returns_from_cumulative,
@@ -342,7 +353,30 @@ class RiskService:
                     quotes_in_period=fact.quotes_in_window,
                 )
             )
-        return RiskEligibilityResponse(items=items, min_quotes=RISK_MIN_OBSERVATIONS, stale_days=STALE_PRICE_THRESHOLD_DAYS)
+        # A common period is proposed only when the chosen period is what troubles a quoted asset —
+        # it starts late, stops early or is quoted only outside the period (developer's decision of
+        # 24/09/2026); an asset without any quote cannot be helped by any period.
+        quoted_ids = [asset_id for asset_id in asset_ids if facts[asset_id].first_quote_ever is not None]
+        common = common_quoted_range(facts[asset_id] for asset_id in quoted_ids)
+        suggested = None
+        if any(period_limits_coverage(facts[asset_id], start, end) for asset_id in quoted_ids):
+            for candidate in suggested_analysis_ranges(common, start, end):
+                if await self._every_asset_eligible(quoted_ids, candidate, request.target_currency):
+                    suggested = candidate
+                    break
+        return RiskEligibilityResponse(
+            items=items,
+            min_quotes=RISK_MIN_OBSERVATIONS,
+            stale_days=STALE_PRICE_THRESHOLD_DAYS,
+            common_range=DateRangeModel(start=common[0], end=common[1]) if common else None,
+            suggested_range=DateRangeModel(start=suggested[0], end=suggested[1]) if suggested else None,
+        )
+
+    async def _every_asset_eligible(self, asset_ids: list[int], window: tuple[date, date], target_currency: str) -> bool:
+        """Whether every asset is eligible, without warnings, for an analysis of `window`."""
+        start, end = window
+        facts = await load_price_window_facts(self.db, asset_ids=asset_ids, window_start=start, window_end=end, target_currency=target_currency)
+        return all(analysis_eligibility(facts[asset_id], start, end)[0] == RiskEligibilityLevel.ELIGIBLE for asset_id in asset_ids)
 
     async def _with_warning_asset_names(self, items: list[RiskAnalyticResult]) -> list[RiskAnalyticResult]:
         """Name the assets a warning is about, so its translated sentence can list them.
@@ -645,6 +679,13 @@ class RiskService:
             target_currency=target_currency,
         )
         auto_excluded = {asset_id: reason for asset_id in own_ids if (reason := replay_coverage(window_facts[asset_id], replay_range.start, replay_end)) is not None}
+        suggested_range, recovers = await self._verified_replay_range(
+            facts=window_facts,
+            auto_excluded=auto_excluded,
+            own_ids=own_ids,
+            window=(replay_range.start, replay_end),
+            target_currency=target_currency,
+        )
         source_asset_ids = {asset_id: proxy_by_asset.get(asset_id, asset_id) for asset_id in candidate_ids if asset_id not in auto_excluded}
         prepared = await self._prepare_asset_series(
             asset_ids=tuple(sorted(set(source_asset_ids.values()))),
@@ -668,8 +709,35 @@ class RiskService:
                 excluded_asset_ids=tuple(sorted(excluded_asset_ids)),
                 data_quality=replay_data_quality,
                 auto_excluded_assets=auto_excluded,
+                suggested_range=suggested_range,
+                suggested_range_recovers=recovers,
             ),
         )
+
+    async def _verified_replay_range(
+        self,
+        *,
+        facts: dict[int, PriceWindowFacts],
+        auto_excluded: dict[int, RiskHistoricalReplayExclusionReason],
+        own_ids: list[int],
+        window: tuple[date, date],
+        target_currency: str,
+    ) -> tuple[Optional[DateRangeModel], tuple[int, ...]]:
+        """A part of the replay window that brings back the assets its edges exclude.
+
+        Proposed only when a second reading of the facts confirms it: every asset it recovers, and
+        every asset already covered, is priced at both of its ends. Assets excluded for other reasons
+        stay out of the check, since no shorter window brings them back.
+        """
+        proposal = suggested_replay_range(facts, auto_excluded, window[0], window[1])
+        if proposal is None:
+            return None, ()
+        (start, end), recovers = proposal
+        kept = [asset_id for asset_id in own_ids if asset_id not in auto_excluded or asset_id in recovers]
+        check = await load_price_window_facts(self.db, asset_ids=kept, window_start=start, window_end=end, target_currency=target_currency)
+        if any(replay_coverage(check[asset_id], start, end) is not None for asset_id in kept):
+            return None, ()
+        return DateRangeModel(start=start, end=end), recovers
 
     def _build_context(
         self,
