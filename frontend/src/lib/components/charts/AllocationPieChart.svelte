@@ -235,7 +235,8 @@
             ? buildAllocationRingData(layout!, {
                   familyLabel: typeLabel,
                   memberLabel: (item) => item.name,
-                  genericCaption: (family) => tr('dashboard.allocationGeneric', {values: {type: family}}),
+                  // $t, not the tr alias: the i18n audit only sees $t( and t( call sites.
+                  genericCaption: (family) => $t('dashboard.allocationGeneric', {values: {type: family}}),
                   amountOf: (item) => item.amount ?? 0,
                   round: roundedPercent,
               })
