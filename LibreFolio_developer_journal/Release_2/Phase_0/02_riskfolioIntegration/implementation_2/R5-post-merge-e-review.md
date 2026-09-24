@@ -1076,7 +1076,7 @@ mostra, non decide.
 | C2 | periodo comune nel replay: dentro la finestra, per gli esclusi a causa dei bordi; verificato con una seconda lettura dei fatti prima di proporlo; nell'audit | `risk/eligibility.py` (prima quotazione nella finestra), `risk/service.py`, `risk_plugins/stress.py`, `schemas/risk.py` | ✅ 24/09 · test ✅ |
 | C3 | avviso forte quando l'escluso supera metà portafoglio: `historical_replay_mostly_excluded` con la quota coperta; soglia `REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE = 0.5` nel modulo delle soglie | `data_quality_thresholds.py`, `risk_plugins/stress.py`, cataloghi i18n | ✅ 24/09 · test ✅ |
 | C4 | test (test-author), runner, `api sync`, journal | 6 file di test (nessuno nuovo, runner invariato) | ✅ 24/09 |
-| F1 | avvisi tradotti: chiave e parametri del backend; se manca la traduzione, il testo originale — mai una chiave grezza | `levels/levelHelpers.ts`, `RiskResultFrame.svelte` | ⏳ |
+| F1 | avvisi tradotti: chiave e parametri del backend; se manca la traduzione, il testo originale — mai una chiave grezza | `levels/warningSentence.ts` (nuovo), `levels/levelHelpers.ts`, `RiskResultFrame.svelte`, `levels/RiskLevelsPanel.svelte` | ✅ 24/09 |
 | F2 | un solo avviso di parzialità in cima al pannello, ogni causa una volta; sotto i livelli solo gli errori | `levels/RiskLevelsPanel.svelte` (non `RiskLevelSection`, che è di F) | ⏳ |
 | F3 | replay: via il blocco «escludi e riprova»; esclusi per motivo con nomi e peso; avviso forte (C3); «niente da simulare»; `DateRangePicker` senza pulsanti rapidi; pulsante del periodo comune (C2), con la nota «solo una parte della crisi» nelle crisi del catalogo | `levels/l4/L4Replay.svelte`, `levels/l4/scenarioHelpers.ts` | ⏳ |
 | F4 | benchmark: non ammissibili grigi con il motivo, con avviso selezionabili e segnalati; cambia col periodo — **dopo la fusione F → Risk**, con le chiavi `risk.eligibility.*` di F (proposta al coordinator) | `levels/L3Benchmark.svelte` | ⏳ |
@@ -1278,6 +1278,7 @@ owner d'integrazione del ramo combinato.
 | K5 | avviso nuovo `historical_replay_mostly_excluded` (+ chiave i18n) | `risk_plugins/stress.py`, cataloghi | nessuno, se F mostra gli avvisi con la chiave del backend |
 | K6 | `held_by_me` / `held_by_others`: soglia di polvere del portafoglio (0,00001) invece di 1e-9 | `asset_sources/crud.py`, `data_quality_thresholds.py` | nessuno oggi (F non li usa); il coordinator lo avvisa |
 | K7 | (frontend, F9) stato «scartata» per le analisi a richiesta | `riskPanelController.svelte.ts` | se F legge il controller, vede un campo in più |
+| K8 | (frontend, F1) `resultReasons(results, translate?)` e `warningSentence(...)`: le frasi dalla chiave e dai parametri del backend; senza traduttore l'uscita resta identica | `levels/levelHelpers.ts`, `RiskResultFrame.svelte` | le sezioni di Asset Global di F (`AssetSetCorrelationSection`, `AssetSetReplaySection`, `AssetSetComparisonLevels`) chiamano con un argomento: a F → Risk passo loro `$t`; e la doc delle prop `reasons` di `RiskLevelSection` (che F ha modificato: non la tocco prima) dice ancora «verbatim» → da riscrivere lì |
 
 ### C — i test del checkpoint · ✅ 24/09/2026
 
@@ -1320,3 +1321,57 @@ impronta del contenuto): backend (8) → i18n (4) → test (6) → journal (1).
 > **File condivisi toccati**: cataloghi i18n (1 chiave nuova in `risk.warnings`); `portfolio_service.py`
 > (solo `:77` e `:439-440`, valore della soglia invariato; I tocca `:2404`); `data_quality_thresholds.py` (due
 > costanti nuove). Cambiamenti di contratto dopo `14c334d85`: K1–K6 nella tabella sopra.
+
+### Checkpoint C — committato · 24/09/2026
+
+> `3ba802b42` → `fbb4773d2` → `d7d6fb293` → `96931b7f4`, su `14c334d85`: 8 + 4 + 6 + 1 = 19 file, albero
+> pulito, letti e verificati da me. Da qui anche questi sono storia condivisa: mai riscriverli.
+
+## Tempo ② — giro frontend · 🔵 aperto il 24/09/2026
+
+Ordine concordato col coordinator: **F1 per primo**, in un commit suo, con i test **rossi prima della cura**;
+poi F9, F2, F3, F5, F7, F8; F4 dopo F → Risk.
+
+### F1 — avvisi tradotti con i loro parametri · ✅ 24/09/2026
+
+> **Note implementazione**: F non ha toccato `levelHelpers.ts`, `RiskResultFrame.svelte` e
+> `RiskLevelsPanel.svelte` (controllato sul suo ramo); le sezioni di Asset Global che chiamano
+> `resultReasons` sono sue → il traduttore è un secondo argomento opzionale, e senza di esso l'uscita resta
+> identica (K8). test-author nuovo, dedicato al frontend, scrive i test contro il contratto e si ferma sul
+> rosso; poi la cura, poi il verde e i mutanti.
+>
+> **Il coordinator sulla regressione** (verifica di C): meccanismo confermato (le tre chiavi non esistevano a
+> `f1047f766`; `translatedCode` chiama `$t` senza valori). Portata: oltre al mio, solo il ramo di F contiene
+> `14c334d85` — K, I, J, A, D e `dev_release2` no → a K non va detto niente; F lo avvisa lui. **Cancello
+> d'integrazione**: il ramo combinato F/Risk non entra in `dev_release2` senza F1. Due aggiunte ai test,
+> girate a test-author: coprire anche `historical_replay_mostly_excluded` (argomento ICU numerico), e la
+> proprietà generale — per ogni chiave `risk.warnings.*` con argomenti ICU, il testo mostrato non contiene mai
+> una graffa né la chiave, e con parametri vuoti ricade sul `message` del backend.
+
+> **Rosso prima della cura** (test-author): `levelHelpers.test.ts` esteso e `RiskResultFrame.test.ts` nuovo, con un
+> aiuto condiviso (`src/__tests__/riskWarningCatalogue.ts`) che ricava dal catalogo **ogni** chiave
+> `risk.warnings.*` con argomenti ICU (24 oggi) e costruisce i valori dall'AST della frase. Sul codice di
+> prima: 38 rossi in `risk-levels-unit` (la funzione non esiste ancora; il traduttore ignorato) e 8 in
+> `risk-frame-component` (il testo ICU grezzo, con le graffe; la frase generica al posto di quella vera),
+> tutti per il motivo giusto; verdi la guardia di regressione senza traduttore e il ramo degli errori.
+>
+> **Cura**: `warningSentence` in un modulo suo (`levels/warningSentence.ts`, perché `levelHelpers.ts` dichiara
+> di essere al limite di dimensione — stesso precedente di `levelMetadata.ts`), riesportato da `levelHelpers`;
+> chiave e parametri del backend, ripiego sul `message` inglese se la chiave manca o se la formattazione
+> fallisce (una graffa rimasta) — mai una chiave, mai un segnaposto. `resultReasons(results, translate?)` la usa
+> (senza traduttore: uscita identica); `RiskResultFrame` mostra così gli avvisi (gli errori restano sui codici);
+> `RiskLevelsPanel` passa `$t` alle quattro chiamate. Prova locale dei due file: 125 ✓; `svelte-check`: nulla
+> sui file toccati (restano i 3 errori già noti altrove); prettier pulito.
+
+> **Verde e mutanti** (test-author): `risk-levels-unit` 228 ✓ · `risk-frame-component` 13 ✓ ·
+> `risk-levels-component` 9 ✓ · `risk-controller-unit` 16 ✓ · `risk-unit` 17 ✓. Otto mutanti più uno in
+> aggiunta, applicati sul posto con copia di riserva, ripristino e controllo SHA-256 a ogni passo: tutti presi.
+> Uno era sopravvissuto («liste non unite»): il backend unisce già i nomi, quindi nessun test mandava una lista
+> → aggiunti due test (una lista si legge come la stringa già unita; un valore che non è uno scalare resta
+> fuori invece di stamparsi come `[object Object]`). Su suo suggerimento `translatedCode` accetta ora solo
+> `'errors'`: nessuno può più riaprire la strada che mostrava le graffe.
+>
+> **Verifica mia, corsia 6152**: le cinque categorie sopra più `allocation-unit` 116 ✓; `check-orphans`:
+> `RiskResultFrame.test.ts` registrato, restano i 5 orfani di privacy già noti; prettier pulito sui 7 file;
+> `svelte-check` nulla sui file toccati (restano i 3 errori già noti altrove); il file del runner ha lo stesso
+> debito di ruff e black di `HEAD` (19 e da riformattare), nessuno nuovo; nessun importo reale, nessuna password.
