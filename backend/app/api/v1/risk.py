@@ -8,6 +8,8 @@ from backend.app.db.models import User
 from backend.app.db.session import get_session_generator
 from backend.app.schemas.risk import (
     RiskCatalogResponse,
+    RiskEligibilityRequest,
+    RiskEligibilityResponse,
     RiskQueryRequest,
     RiskQueryResponse,
 )
@@ -92,3 +94,16 @@ async def query_risk(
             status_code=404,
             detail=str(exc),
         ) from exc
+
+
+@router.post(
+    "/eligibility",
+    response_model=RiskEligibilityResponse,
+    summary="Whether assets can take part in a risk analysis of a period",
+)
+async def asset_eligibility(
+    body: RiskEligibilityRequest,
+    service: RiskService = Depends(get_risk_service),
+    _current_user: User = Depends(get_current_user),
+) -> RiskEligibilityResponse:
+    return await service.asset_eligibility(body)

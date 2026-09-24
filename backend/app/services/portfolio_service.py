@@ -691,8 +691,8 @@ class PortfolioService:
 
         _precomputed_engine_result: if provided by get_report(), skip engine re-run.
         """
+        from backend.app.services.data_quality_thresholds import TRANSACTION_IMPLIED_GRACE_DAYS  # noqa: PLC0415
         from backend.app.services.portfolio_engine import (  # noqa: PLC0415
-            TRANSACTION_IMPLIED_GRACE_DAYS,
             DerivedViewsBuilder,
             PortfolioCalculationEngine,
         )

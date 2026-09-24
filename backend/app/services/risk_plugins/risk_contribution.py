@@ -12,6 +12,7 @@ from backend.app.schemas.risk import (
     RiskOutputKind,
     RiskScopeKind,
 )
+from backend.app.services.data_quality_thresholds import RISK_MIN_OBSERVATIONS
 from backend.app.services.provider_registry import RiskAnalyticRegistry, register_plugin
 from backend.app.services.risk.acquired import (
     diversification_ratio,
@@ -46,7 +47,7 @@ class RiskContributionAnalytic(RiskAnalytic):
     supported_scopes = (RiskScopeKind.PORTFOLIO,)
     supported_modes = (RiskMode.CURRENT_COMPOSITION,)
     params_model = RiskContributionParams
-    min_observations = 20
+    min_observations = RISK_MIN_OBSERVATIONS
 
     def compute(self, params, context):
         del params
