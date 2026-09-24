@@ -36,6 +36,7 @@ from backend.app.schemas.risk import (
     RiskErrorCode,
     RiskHistoricalReplayAudit,
     RiskHistoricalReplayExcludedAsset,
+    RiskHistoricalReplayExclusionReason,
     RiskHistoricalReplayExclusionTreatment,
     RiskHistoricalReplayProxyAsset,
     RiskKpiOutput,
@@ -300,6 +301,9 @@ def test_historical_replay_audit_is_strict_and_serializable():
         "missing_history_policy": "manual_proxy_or_exclude",
         "composition_policy": "current_buy_and_hold",
         "proxy_series_usage": "returns_only",
+        # No proposal (K3): both fields present, empty.
+        "suggested_range": None,
+        "suggested_range_recovers": [],
     }
 
     with pytest.raises(ValidationError, match="proxy_count"):
@@ -314,6 +318,100 @@ def test_historical_replay_audit_is_strict_and_serializable():
             asset_id=7,
             proxy_asset_id=7,
         )
+
+
+def test_historical_replay_audit_with_a_proposal_round_trips_through_json():
+    # K3: the part of the replay window that brings back an asset the window's start excluded.
+    audit = RiskHistoricalReplayAudit(
+        proxy_count=0,
+        excluded_count=1,
+        excluded_assets=[
+            RiskHistoricalReplayExcludedAsset(
+                asset_id=12,
+                reason=RiskHistoricalReplayExclusionReason.STARTS_AFTER_WINDOW_START,
+                weight=0.3,
+                treatment=RiskHistoricalReplayExclusionTreatment.ZERO_RETURN_RESIDUAL,
+            )
+        ],
+        excluded_weight_total=0.3,
+        missing_history_policy=RiskScenarioMissingHistoryPolicy.MANUAL_PROXY_OR_EXCLUDE,
+        composition_policy=RiskCompositionPolicy.CURRENT_BUY_AND_HOLD,
+        suggested_range=DateRangeModel(start=date(2020, 3, 10), end=date(2020, 4, 30)),
+        suggested_range_recovers=[12],
+    )
+
+    dumped = audit.model_dump(mode="json")
+    assert dumped == {
+        "proxy_count": 0,
+        "proxy_assets": [],
+        "excluded_count": 1,
+        "excluded_assets": [
+            {
+                "asset_id": 12,
+                "reason": "starts_after_window_start",
+                "weight": 0.3,
+                "treatment": "zero_return_residual",
+            }
+        ],
+        "excluded_weight_total": 0.3,
+        "missing_history_policy": "manual_proxy_or_exclude",
+        "composition_policy": "current_buy_and_hold",
+        "proxy_series_usage": "returns_only",
+        "suggested_range": {"start": "2020-03-10", "end": "2020-04-30"},
+        "suggested_range_recovers": [12],
+    }
+    # Through JSON text and back: the ISO dates parse into the same range and nothing moves.
+    restored = RiskHistoricalReplayAudit.model_validate(json.loads(json.dumps(dumped)))
+    assert restored == audit
+    assert restored.model_dump(mode="json") == dumped
+
+
+# The rules of `validate_suggested_range`. Moved here from test_risk_analytics.py (follow-up 6):
+# they exercise the schema alone, next to `validate_audit` above.
+
+AUDIT_PROPOSED = DateRangeModel(start=date(2026, 1, 9), end=date(2026, 1, 21))
+
+
+def audit_payload(**overrides) -> dict:
+    """A valid audit: one manual exclusion (2) and two automatic ones (3, 4) that a range recovers."""
+    return {
+        "proxy_count": 0,
+        "excluded_count": 3,
+        "excluded_assets": [
+            {"asset_id": 2, "reason": "manual_exclusion", "treatment": "omitted_from_replay"},
+            {"asset_id": 3, "reason": "starts_after_window_start", "treatment": "omitted_from_replay"},
+            {"asset_id": 4, "reason": "stale_at_window_end", "treatment": "omitted_from_replay"},
+        ],
+        "excluded_weight_total": 0,
+        "missing_history_policy": "manual_proxy_or_exclude",
+        "composition_policy": "current_buy_and_hold",
+        "suggested_range": {"start": "2026-01-09", "end": "2026-01-21"},
+        "suggested_range_recovers": [3, 4],
+        **overrides,
+    }
+
+
+def test_historical_replay_audit_accepts_a_consistent_proposal():
+    audit = RiskHistoricalReplayAudit.model_validate(audit_payload())
+
+    assert (audit.suggested_range, audit.suggested_range_recovers) == (AUDIT_PROPOSED, [3, 4])
+    assert RiskHistoricalReplayAudit.model_validate(audit_payload(suggested_range=None, suggested_range_recovers=[])).suggested_range is None
+
+
+@pytest.mark.parametrize(
+    ("overrides", "message"),
+    [
+        pytest.param({"suggested_range_recovers": [4, 3]}, "must be unique and ordered by asset", id="recovers-out-of-order"),
+        pytest.param({"suggested_range_recovers": [3, 3]}, "must be unique and ordered by asset", id="recovers-repeated"),
+        pytest.param({"suggested_range_recovers": []}, "must be set together", id="range-without-recovers"),
+        pytest.param({"suggested_range": None}, "must be set together", id="recovers-without-range"),
+        pytest.param({"suggested_range_recovers": [2, 3]}, "can only recover automatically excluded assets", id="recovers-a-manual-exclusion"),
+        pytest.param({"suggested_range_recovers": [3, 5]}, "can only recover automatically excluded assets", id="recovers-an-asset-not-excluded"),
+    ],
+)
+def test_historical_replay_audit_rejects_an_inconsistent_proposal(overrides, message):
+    with pytest.raises(ValueError, match=message):
+        RiskHistoricalReplayAudit.model_validate(audit_payload(**overrides))
 
 
 def test_risk_query_uses_strict_discriminated_scopes_and_mode_policy():

@@ -36,17 +36,25 @@ from backend.app.schemas.portfolio import DataQualityStatus  # noqa: E402
 from backend.app.schemas.risk import (  # noqa: E402
     RiskEligibilityLevel,
     RiskEligibilityReason,
+    RiskEligibilityRequest,
+    RiskEligibilityResponse,
+    RiskErrorCode,
     RiskHistoricalReplayExclusionReason,
     RiskHistoricalReplayExclusionTreatment,
     RiskQueryRequest,
     RiskResultStatus,
 )
 from backend.app.services.data_quality_thresholds import RISK_MIN_OBSERVATIONS, STALE_PRICE_THRESHOLD_DAYS  # noqa: E402
+from backend.app.services.risk import service as risk_service_module  # noqa: E402
 from backend.app.services.risk.eligibility import (  # noqa: E402
     PriceWindowFacts,
     analysis_eligibility,
+    common_quoted_range,
     load_price_window_facts,
+    period_limits_coverage,
     replay_coverage,
+    suggested_analysis_ranges,
+    suggested_replay_range,
 )
 from backend.app.services.risk.service import RiskService  # noqa: E402
 
@@ -64,6 +72,9 @@ def days(count: int) -> timedelta:
     return timedelta(days=count)
 
 
+SAME_AS_WINDOW = object()
+
+
 def facts(
     *,
     first: date | None = START,
@@ -71,9 +82,25 @@ def facts(
     before: date | None = None,
     quotes: int = FLOOR,
     fx: bool = True,
+    first_in: date | None = None,
+    first_ever: object = SAME_AS_WINDOW,
+    last_ever: object = SAME_AS_WINDOW,
 ) -> PriceWindowFacts:
-    """Facts of an asset quoted from the start to the end of the window, unless told otherwise."""
-    return PriceWindowFacts(first_quote=first, last_quote=last, last_quote_before_start=before, quotes_in_window=quotes, fx_available=fx)
+    """Facts of an asset quoted from the start to the end of the window, unless told otherwise.
+
+    The whole history defaults to the one seen up to the window end, as the loader would read it
+    for an asset with no quote after the window.
+    """
+    return PriceWindowFacts(
+        first_quote=first,
+        last_quote=last,
+        last_quote_before_start=before,
+        quotes_in_window=quotes,
+        fx_available=fx,
+        first_quote_in_window=first_in,
+        first_quote_ever=first if first_ever is SAME_AS_WINDOW else first_ever,
+        last_quote_ever=last if last_ever is SAME_AS_WINDOW else last_ever,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -84,13 +111,20 @@ def facts(
 @pytest.mark.parametrize(
     ("window_facts", "expected"),
     [
-        pytest.param(facts(first=None, last=None, quotes=0), (Level.INELIGIBLE, (Why.NO_PRICES,)), id="no-quote-at-all"),
+        # Never quoted is told apart from not quoted in the period: only the second a period can mend.
+        pytest.param(facts(first=None, last=None, quotes=0), (Level.INELIGIBLE, (Why.NO_PRICE_HISTORY,)), id="never-quoted"),
+        pytest.param(facts(first=None, last=None, quotes=0, fx=False), (Level.INELIGIBLE, (Why.NO_PRICE_HISTORY, Why.MISSING_FX)), id="never-quoted-with-missing-fx"),
         pytest.param(facts(first=START - days(90), last=START - days(30), before=START - days(30), quotes=0), (Level.INELIGIBLE, (Why.NO_PRICES,)), id="quoted-only-before-the-period"),
+        pytest.param(
+            facts(first=START - days(90), last=START - days(30), before=START - days(30), quotes=0, fx=False),
+            (Level.INELIGIBLE, (Why.NO_PRICES, Why.MISSING_FX)),
+            id="quoted-only-before-with-missing-fx",
+        ),
+        pytest.param(facts(first=None, last=None, quotes=0, first_ever=END + days(10), last_ever=END + days(40)), (Level.INELIGIBLE, (Why.NO_PRICES,)), id="quoted-only-after-the-period"),
         pytest.param(facts(quotes=FLOOR - 1), (Level.INELIGIBLE, (Why.TOO_FEW_QUOTES,)), id="one-quote-short-of-the-floor"),
         pytest.param(facts(quotes=FLOOR), (Level.ELIGIBLE, ()), id="exactly-the-floor"),
         pytest.param(facts(fx=False), (Level.INELIGIBLE, (Why.MISSING_FX,)), id="missing-fx-alone"),
         pytest.param(facts(quotes=FLOOR - 1, fx=False), (Level.INELIGIBLE, (Why.TOO_FEW_QUOTES, Why.MISSING_FX)), id="missing-fx-with-too-few-quotes"),
-        pytest.param(facts(first=None, last=None, quotes=0, fx=False), (Level.INELIGIBLE, (Why.NO_PRICES, Why.MISSING_FX)), id="missing-fx-with-no-prices"),
         pytest.param(facts(first=START + days(STALE)), (Level.ELIGIBLE, ()), id="first-quote-at-the-threshold-after-start"),
         pytest.param(facts(first=START + days(STALE + 1)), (Level.WARNING, (Why.STARTS_LATE,)), id="first-quote-one-day-later"),
         pytest.param(facts(last=END - days(STALE)), (Level.ELIGIBLE, ()), id="last-quote-at-the-threshold-before-end"),
@@ -102,6 +136,33 @@ def facts(
 )
 def test_analysis_eligibility_at_the_boundaries_of_each_rule(window_facts, expected):
     assert analysis_eligibility(window_facts, START, END) == expected
+
+
+# Whether the chosen period, not the asset's own history, leaves the asset short (developer's
+# decision of 24/09/2026): read from the facts, because a blocking reason hides the warnings.
+
+
+@pytest.mark.parametrize(
+    ("window_facts", "limited", "reported"),
+    [
+        pytest.param(facts(first=None, last=None, quotes=0), False, (Why.NO_PRICE_HISTORY,), id="never-quoted"),
+        pytest.param(facts(first=START - days(90), last=START - days(30), before=START - days(30), quotes=0), True, (Why.NO_PRICES,), id="quoted-only-before"),
+        pytest.param(facts(first=None, last=None, quotes=0, first_ever=END + days(10), last_ever=END + days(40)), True, (Why.NO_PRICES,), id="quoted-only-after"),
+        pytest.param(facts(first=START + days(STALE)), False, (), id="first-quote-at-the-threshold"),
+        pytest.param(facts(first=START + days(STALE + 1)), True, (Why.STARTS_LATE,), id="first-quote-one-day-later"),
+        pytest.param(facts(last=END - days(STALE)), False, (), id="last-quote-at-the-threshold"),
+        pytest.param(facts(last=END - days(STALE + 1)), True, (Why.STALE_AT_END,), id="last-quote-one-day-earlier"),
+        # A blocking reason reports no warning, yet the late start is still there to mend.
+        pytest.param(facts(first=START + days(STALE + 1), quotes=FLOOR - 1), True, (Why.TOO_FEW_QUOTES,), id="too-few-quotes-hiding-a-late-start"),
+        pytest.param(facts(last=END - days(STALE + 1), quotes=FLOOR - 1), True, (Why.TOO_FEW_QUOTES,), id="too-few-quotes-hiding-a-stale-end"),
+        pytest.param(facts(first=START + days(STALE + 1), fx=False), True, (Why.MISSING_FX,), id="missing-fx-hiding-a-late-start"),
+        # Too few quotes over the whole period, fresh at both ends: no period mends that.
+        pytest.param(facts(first=START - days(400), before=START - days(3), last=END - days(2), quotes=FLOOR - 5), False, (Why.TOO_FEW_QUOTES,), id="sparse-throughout-not-late-fresh-at-the-end"),
+    ],
+)
+def test_period_limits_coverage_reads_the_facts_not_the_reasons(window_facts, limited, reported):
+    assert period_limits_coverage(window_facts, START, END) is limited
+    assert analysis_eligibility(window_facts, START, END)[1] == reported
 
 
 # ---------------------------------------------------------------------------
@@ -158,6 +219,112 @@ def test_replay_coverage_at_the_boundaries_of_each_rule(window_facts, expected):
     assert replay_coverage(window_facts, START, END) == expected
 
 
+# ---------------------------------------------------------------------------
+# Common periods: proposals that bring back what the chosen window excludes
+# (developer's decisions of 24/09/2026). Pure and unverified here; the service
+# verifies each one on a second reading of the facts.
+# ---------------------------------------------------------------------------
+
+
+def history(first: date | None, last: date | None) -> PriceWindowFacts:
+    """An asset's whole history, the only facts a common span reads."""
+    return PriceWindowFacts(first_quote=None, last_quote=None, last_quote_before_start=None, quotes_in_window=0, first_quote_ever=first, last_quote_ever=last)
+
+
+@pytest.mark.parametrize(
+    ("histories", "expected"),
+    [
+        pytest.param([history(START, END + days(100)), history(START + days(10), END + days(90)), history(START - days(5), END + days(120))], (START + days(10), END + days(90)), id="latest-first-to-earliest-last"),
+        pytest.param([history(START, END), history(None, None)], (START, END), id="an-asset-never-quoted-is-left-out"),
+        pytest.param([history(START, START + days(10)), history(START + days(20), START + days(30))], None, id="disjoint-spans"),
+        pytest.param([history(START, START + days(10)), history(START + days(10), START + days(20))], None, id="spans-touching-on-one-day"),
+        pytest.param([history(None, None)], None, id="nothing-quoted"),
+        pytest.param([], None, id="no-asset"),
+    ],
+)
+def test_common_quoted_range(histories, expected):
+    assert common_quoted_range(histories) == expected
+
+
+@pytest.mark.parametrize(
+    ("common", "expected"),
+    [
+        # The span starts the day after the latest first quote, so that quote is the starting price.
+        pytest.param((START + days(10), END + days(50)), ((START + days(11), END), (START + days(11), END + days(50))), id="trim-the-start-then-fall-back-to-the-span"),
+        pytest.param((START, END + days(50)), ((START + days(1), END), (START + days(1), END + days(50))), id="a-first-quote-on-the-start-day-still-starts-the-day-after"),
+        pytest.param((START - days(50), END - days(10)), ((START, END - days(10)), (START - days(49), END - days(10))), id="trim-the-end-then-fall-back-to-the-span"),
+        pytest.param((START + days(10), END - days(10)), ((START + days(11), END - days(10)),), id="trimmed-at-both-ends-is-the-span"),
+        pytest.param((END + days(10), END + days(100)), ((END + days(11), END + days(100)),), id="disjoint-after-shifts-to-the-span"),
+        pytest.param((START - days(100), START - days(10)), ((START - days(99), START - days(10)),), id="disjoint-before-shifts-to-the-span"),
+        pytest.param((END - days(1), END + days(30)), ((END, END + days(30)),), id="a-one-day-overlap-is-empty-and-shifts"),
+        # The period already lies inside the span: its trouble is a gap no span mends.
+        pytest.param((START - days(50), END + days(50)), (), id="period-inside-the-span"),
+        pytest.param((START - days(1), END + days(50)), (), id="period-starting-the-day-after-the-common-start"),
+        pytest.param((START, START + days(1)), (), id="a-span-of-one-day-after-the-first-quote-is-empty"),
+        pytest.param(None, (), id="no-common-span"),
+    ],
+)
+def test_suggested_analysis_ranges(common, expected):
+    assert suggested_analysis_ranges(common, START, END) == expected
+
+
+LISTED = START + days(10)
+
+
+@pytest.mark.parametrize(
+    ("window_facts", "auto", "expected"),
+    [
+        # A late start begins the day after the first quote inside the window.
+        pytest.param({1: facts(first=LISTED, first_in=LISTED)}, {1: Excluded.STARTS_AFTER_WINDOW_START}, ((LISTED + days(1), END), (1,)), id="late-listing"),
+        pytest.param(
+            {1: facts(first=START - days(30), before=START - days(STALE + 3), first_in=START + days(2))},
+            {1: Excluded.STALE_AT_WINDOW_START},
+            ((START + days(3), END), (1,)),
+            id="gap-at-the-start-recovers",
+        ),
+        pytest.param({1: facts(last=END - days(10))}, {1: Excluded.STALE_AT_WINDOW_END}, ((START, END - days(10)), (1,)), id="stale-end"),
+        pytest.param({1: facts(first=LISTED, first_in=LISTED, last=END - days(10))}, {1: Excluded.STARTS_AFTER_WINDOW_START}, ((LISTED + days(1), END - days(10)), (1,)), id="both-edges-on-one-asset"),
+        pytest.param({1: facts(first=LISTED, first_in=LISTED, last=END - days(STALE))}, {1: Excluded.STARTS_AFTER_WINDOW_START}, ((LISTED + days(1), END), (1,)), id="a-recent-last-quote-keeps-the-end"),
+        pytest.param(
+            {
+                4: facts(first=LISTED, first_in=LISTED),
+                2: facts(first=START - days(30), before=START - days(20), first_in=START + days(20)),
+                3: facts(last=END - days(10)),
+                1: facts(last=END - days(20)),
+            },
+            {4: Excluded.STARTS_AFTER_WINDOW_START, 2: Excluded.STALE_AT_WINDOW_START, 3: Excluded.STALE_AT_WINDOW_END, 1: Excluded.STALE_AT_WINDOW_END},
+            ((START + days(21), END - days(20)), (1, 2, 3, 4)),
+            id="latest-start-earliest-end-and-sorted-recovers",
+        ),
+        pytest.param(
+            {1: facts(first=LISTED, first_in=LISTED), 2: facts(first=None, last=None, quotes=0), 3: facts(fx=False)},
+            {1: Excluded.STARTS_AFTER_WINDOW_START, 2: Excluded.NO_PRICES_IN_WINDOW, 3: Excluded.MISSING_FX},
+            ((LISTED + days(1), END), (1,)),
+            id="no-prices-and-missing-fx-are-not-recovered",
+        ),
+        pytest.param(
+            {2: facts(first=None, last=None, quotes=0), 3: facts(fx=False)},
+            {2: Excluded.NO_PRICES_IN_WINDOW, 3: Excluded.MISSING_FX},
+            None,
+            id="only-no-prices-and-missing-fx",
+        ),
+        pytest.param({}, {}, None, id="nothing-excluded"),
+        pytest.param({1: facts(first=END - days(2), first_in=END - days(2))}, {1: Excluded.STARTS_AFTER_WINDOW_START}, ((END - days(1), END), (1,)), id="the-day-after-still-before-the-end"),
+        pytest.param({1: facts(first=END - days(1), first_in=END - days(1))}, {1: Excluded.STARTS_AFTER_WINDOW_START}, None, id="the-day-after-reaching-the-end"),
+        pytest.param(
+            {1: facts(first=START + days(50), first_in=START + days(50)), 2: facts(last=START + days(40))},
+            {1: Excluded.STARTS_AFTER_WINDOW_START, 2: Excluded.STALE_AT_WINDOW_END},
+            None,
+            id="a-start-after-another-assets-end",
+        ),
+        pytest.param({1: facts(first=LISTED, first_in=None)}, {1: Excluded.STARTS_AFTER_WINDOW_START}, None, id="late-start-without-a-first-quote-in-the-window"),
+        pytest.param({1: facts(last=None)}, {1: Excluded.STALE_AT_WINDOW_END}, None, id="edge-asset-without-a-last-quote"),
+    ],
+)
+def test_suggested_replay_range(window_facts, auto, expected):
+    assert suggested_replay_range(window_facts, auto, START, END) == expected
+
+
 @pytest.mark.asyncio
 async def test_price_window_facts_of_no_asset_touch_no_database():
     class Untouchable:
@@ -188,10 +355,27 @@ PRICE_ORIGIN = date(2011, 1, 1)
 # Currencies nothing else in the suite stores a rate for.
 NO_RATE_CURRENCY = "KES"
 PROBED_CURRENCY = "EGP"
+ANALYSIS_FX_CURRENCY = "NGN"
+
+# Analysis proposals (C1): a quarter of 2014 inside a history running from December to December.
+ANALYSIS_START = date(2014, 3, 3)
+ANALYSIS_END = date(2014, 6, 30)
+HISTORY_FIRST = date(2013, 12, 1)
+HISTORY_LAST = date(2014, 12, 31)
+ANALYSIS_LATE_FIRST = date(2014, 4, 1)
+ANALYSIS_ENDS = date(2014, 6, 10)
+ANALYSIS_AFTER_FIRST = date(2014, 8, 1)
+# A second period, for a candidate that misses an FX rate at its start.
+FX_PERIOD_START = date(2014, 9, 1)
+FX_PERIOD_END = date(2014, 11, 30)
 
 
 def every_day(first: date, last: date) -> list[date]:
     return [first + days(offset) for offset in range((last - first).days + 1)]
+
+
+def every_week(first: date, last: date) -> list[date]:
+    return [first + days(offset) for offset in range(0, (last - first).days + 1, 7)]
 
 
 def weekdays(first: date, last: date, *, skip: frozenset[date] = frozenset()) -> list[date]:
@@ -199,17 +383,37 @@ def weekdays(first: date, last: date, *, skip: frozenset[date] = frozenset()) ->
 
 
 ASSETS: dict[str, tuple[str, Decimal, list[date]]] = {
-    # Loader: quotes around the window, one past its end.
+    # Loader: quotes around the window, one past its end; one asset quoted only after it.
     "full": ("EUR", Decimal("1"), [LOADER_START - days(10), LOADER_START - days(3), *every_day(LOADER_START, LOADER_END - days(2)), LOADER_END + days(5)]),
     "empty": ("EUR", Decimal("1"), []),
     "no_rate": (NO_RATE_CURRENCY, Decimal("1"), every_day(LOADER_START, LOADER_END)),
     "probed": (PROBED_CURRENCY, Decimal("1"), every_day(LOADER_START, LOADER_END)),
-    # Replay: two assets quoted through the crisis, one that starts in the middle of it, and one
-    # quoted long before it whose quotes pause across its start.
+    "after_only": ("EUR", Decimal("1"), every_day(LOADER_END + days(10), LOADER_END + days(20))),
+    # Replay: two assets quoted through the crisis, one that starts in the middle of it, one
+    # quoted long before it whose quotes pause across its start, and a sparse one priced at both
+    # ends of the crisis but three weeks apart inside it.
     "early": ("EUR", Decimal("0.5"), weekdays(CRISIS_START - days(14), CRISIS_END)),
     "holiday": ("EUR", Decimal("0.25"), weekdays(CRISIS_START - days(14), CRISIS_END, skip=HOLIDAYS)),
     "late": ("EUR", Decimal("1"), weekdays(LATE_FIRST_QUOTE, CRISIS_END)),
     "gapped": ("EUR", Decimal("0.75"), [*weekdays(GAP_FIRST_QUOTE, GAP_LAST_QUOTE_BEFORE), *weekdays(GAP_RESUMES, CRISIS_END)]),
+    "sparse": ("EUR", Decimal("1"), [CRISIS_START - days(3), date(2011, 3, 25), date(2011, 4, 15), date(2011, 4, 25)]),
+    # Analysis proposals: one shape per eligibility reason.
+    "a_full": ("EUR", Decimal("1"), every_day(HISTORY_FIRST, HISTORY_LAST)),
+    "a_late": ("EUR", Decimal("1"), every_day(ANALYSIS_LATE_FIRST, HISTORY_LAST)),
+    "a_ends": ("EUR", Decimal("1"), every_day(HISTORY_FIRST, ANALYSIS_ENDS)),
+    "a_after": ("EUR", Decimal("1"), every_day(ANALYSIS_AFTER_FIRST, HISTORY_LAST)),
+    "a_starts3": ("EUR", Decimal("1"), every_day(ANALYSIS_START + days(3), HISTORY_LAST)),
+    "a_weekly": ("EUR", Decimal("1"), every_week(HISTORY_FIRST, HISTORY_LAST)),
+    "a_kes": (NO_RATE_CURRENCY, Decimal("1"), every_day(HISTORY_FIRST, HISTORY_LAST)),
+    "a_never": ("EUR", Decimal("1"), []),
+    "a_gap_end": ("EUR", Decimal("1"), [*every_day(HISTORY_FIRST, date(2014, 6, 14)), *every_day(date(2014, 7, 1), HISTORY_LAST)]),
+    "a_thin_after": ("EUR", Decimal("1"), [*every_day(HISTORY_FIRST, date(2014, 3, 31)), *every_week(date(2014, 4, 7), date(2014, 12, 29))]),
+    "a_late_short": ("EUR", Decimal("1"), every_day(date(2014, 6, 1), date(2014, 7, 10))),
+    # Late listings with too few quotes in the period, quoted for months after it.
+    "a_late_thin": ("EUR", Decimal("1"), every_day(date(2014, 6, 20), HISTORY_LAST)),
+    "a_late_last_day": ("EUR", Decimal("1"), every_day(ANALYSIS_END - days(1), HISTORY_LAST)),
+    "a_before": ("EUR", Decimal("1"), every_day(date(2014, 1, 5), date(2014, 6, 30))),
+    "a_ngn": (ANALYSIS_FX_CURRENCY, Decimal("1"), every_day(date(2014, 1, 1), HISTORY_LAST)),
 }
 
 
@@ -259,22 +463,36 @@ async def test_price_window_facts_read_each_assets_own_quotes(window_assets):
     async with session() as db:
         facts_by_asset = await load_price_window_facts(
             db,
-            asset_ids=[ids["full"], ids["empty"], ids["full"]],
+            asset_ids=[ids["full"], ids["empty"], ids["after_only"], ids["full"]],
             window_start=LOADER_START,
             window_end=LOADER_END,
             target_currency="EUR",
         )
 
-    assert set(facts_by_asset) == {ids["full"], ids["empty"]}
-    # The quote past the end is not "the last quote on or before the end".
+    assert set(facts_by_asset) == {ids["full"], ids["empty"], ids["after_only"]}
+    # The quote past the end is not "the last quote on or before the end", but it is the last ever.
     assert facts_by_asset[ids["full"]] == PriceWindowFacts(
         first_quote=LOADER_START - days(10),
         last_quote=LOADER_END - days(2),
         last_quote_before_start=LOADER_START - days(3),
         quotes_in_window=len(every_day(LOADER_START, LOADER_END - days(2))),
         fx_available=True,
+        first_quote_in_window=LOADER_START,
+        first_quote_ever=LOADER_START - days(10),
+        last_quote_ever=LOADER_END + days(5),
     )
     assert facts_by_asset[ids["empty"]] == PriceWindowFacts(first_quote=None, last_quote=None, last_quote_before_start=None, quotes_in_window=0, fx_available=True)
+    # Quoted only after the window: nothing in or before it, but a history all the same.
+    assert facts_by_asset[ids["after_only"]] == PriceWindowFacts(
+        first_quote=None,
+        last_quote=None,
+        last_quote_before_start=None,
+        quotes_in_window=0,
+        fx_available=True,
+        first_quote_in_window=None,
+        first_quote_ever=LOADER_END + days(10),
+        last_quote_ever=LOADER_END + days(20),
+    )
 
 
 @pytest.mark.asyncio
@@ -342,8 +560,8 @@ async def test_holiday_carries_in_stored_prices_do_not_degrade_the_series(window
     assert prepared.data_quality.data_quality_status == DataQualityStatus.OK
 
 
-def crisis_replay_request(asset_ids: list[int]) -> RiskQueryRequest:
-    """A historical replay of the crisis for an asset set, analysed over its last month."""
+def crisis_replay_request(asset_ids: list[int], replay_range: tuple[date, date] = (CRISIS_START, CRISIS_END)) -> RiskQueryRequest:
+    """A historical replay of the crisis (or of a part of it) for an asset set, analysed over its last month."""
     return RiskQueryRequest.model_validate(
         {
             "scope": {"kind": "asset_set", "asset_ids": asset_ids},
@@ -357,7 +575,7 @@ def crisis_replay_request(asset_ids: list[int]) -> RiskQueryRequest:
                     "analytic_code": "stress",
                     "parameters": {
                         "method": "historical_replay",
-                        "replay_range": {"start": CRISIS_START.isoformat(), "end": CRISIS_END.isoformat()},
+                        "replay_range": {"start": replay_range[0].isoformat(), "end": replay_range[1].isoformat()},
                     },
                 }
             ],
@@ -434,3 +652,338 @@ async def test_a_gap_across_the_replay_start_is_stale_at_the_start_not_a_late_st
     late = by_reason["starts_after_window_start"]
     assert late.message_i18n_key == "risk.warnings.historical_replay_excluded_starts_late"
     assert late.message_params == {"treatment": "omitted_from_replay", "names": names["late"], "count": 1}
+
+
+# ---------------------------------------------------------------------------
+# Proposals through the service, on stored rows. A spy on the loader counts the readings: each
+# proposal is verified on a second reading of the facts before it is offered, and no reading is
+# spent when there is nothing to verify.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def loader_calls(monkeypatch):
+    calls: list[dict] = []
+    real_loader = risk_service_module.load_price_window_facts
+
+    async def spy(db, **kwargs):
+        calls.append({"asset_ids": set(kwargs["asset_ids"]), "window": (kwargs["window_start"], kwargs["window_end"])})
+        return await real_loader(db, **kwargs)
+
+    monkeypatch.setattr(risk_service_module, "load_price_window_facts", spy)
+    return calls
+
+
+async def eligibility(asset_ids: list[int], start: date = ANALYSIS_START, end: date = ANALYSIS_END) -> RiskEligibilityResponse:
+    async with session() as db:
+        return await RiskService(db).asset_eligibility(RiskEligibilityRequest(asset_ids=asset_ids, date_range=DateRangeModel(start=start, end=end), target_currency="EUR"))
+
+
+def verdicts(response: RiskEligibilityResponse, ids: dict[str, int], *keys: str) -> dict[str, tuple[str, list[str]]]:
+    by_id = {item.asset_id: item for item in response.items}
+    return {key: (by_id[ids[key]].level.value, [reason.value for reason in by_id[ids[key]].reasons]) for key in keys}
+
+
+def as_range(start: date, end: date) -> DateRangeModel:
+    return DateRangeModel(start=start, end=end)
+
+
+@pytest.mark.parametrize(
+    ("troubled", "verdict", "common", "suggested"),
+    [
+        # The period trimmed to the common span, starting the day after the latest first quote.
+        pytest.param("a_late", ("warning", ["starts_late"]), (ANALYSIS_LATE_FIRST, HISTORY_LAST), (ANALYSIS_LATE_FIRST + days(1), ANALYSIS_END), id="trim-the-start"),
+        pytest.param("a_ends", ("warning", ["stale_at_end"]), (HISTORY_FIRST, ANALYSIS_ENDS), (ANALYSIS_START, ANALYSIS_ENDS), id="trim-the-end"),
+        # A period that misses the common span is shifted onto it.
+        pytest.param("a_after", ("ineligible", ["no_prices"]), (ANALYSIS_AFTER_FIRST, HISTORY_LAST), (ANALYSIS_AFTER_FIRST + days(1), HISTORY_LAST), id="shift-a-disjoint-period"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_a_period_reason_of_a_quoted_asset_gets_a_verified_common_period(window_assets, loader_calls, troubled, verdict, common, suggested):
+    ids = window_assets.ids
+
+    response = await eligibility([ids["a_full"], ids[troubled]])
+
+    assert verdicts(response, ids, "a_full", troubled) == {"a_full": ("eligible", []), troubled: verdict}
+    assert response.common_range == as_range(*common)
+    assert response.suggested_range == as_range(*suggested)
+    # One reading for the period, one to verify the proposal.
+    assert [call["window"] for call in loader_calls] == [(ANALYSIS_START, ANALYSIS_END), suggested]
+
+
+@pytest.mark.asyncio
+async def test_a_trimmed_period_too_short_for_the_quote_floor_falls_back_to_the_common_span(window_assets, loader_calls):
+    ids = window_assets.ids
+
+    response = await eligibility([ids["a_thin_after"], ids["a_late"]])
+
+    # Daily in March, weekly after: eligible in the period, 13 quotes once trimmed, 39 in the span.
+    assert verdicts(response, ids, "a_thin_after", "a_late") == {"a_thin_after": ("eligible", []), "a_late": ("warning", ["starts_late"])}
+    span = (ANALYSIS_LATE_FIRST + days(1), date(2014, 12, 29))
+    assert response.common_range == as_range(ANALYSIS_LATE_FIRST, date(2014, 12, 29))
+    assert response.suggested_range == as_range(*span)
+    assert [call["window"] for call in loader_calls] == [(ANALYSIS_START, ANALYSIS_END), (span[0], ANALYSIS_END), span]
+
+
+@pytest.mark.parametrize(
+    ("listing", "first_quote", "candidates"),
+    [
+        # Eleven quotes in the period: the trimmed period holds even fewer, so it is read in vain
+        # before the span.
+        pytest.param("a_late_thin", date(2014, 6, 20), ((date(2014, 6, 21), ANALYSIS_END), (date(2014, 6, 21), HISTORY_LAST)), id="eleven-quotes-in-the-period"),
+        # Two quotes, from the day before the end: the trimmed period is empty, the span is read at once.
+        pytest.param("a_late_last_day", ANALYSIS_END - days(1), ((ANALYSIS_END, HISTORY_LAST),), id="two-quotes-from-the-day-before-the-end"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_a_late_listing_short_of_the_quote_floor_gets_the_common_span(window_assets, loader_calls, listing, first_quote, candidates):
+    ids = window_assets.ids
+
+    response = await eligibility([ids["a_full"], ids[listing]])
+
+    # Blocked by too few quotes, the listing reports no late start...
+    assert verdicts(response, ids, "a_full", listing) == {"a_full": ("eligible", []), listing: ("ineligible", ["too_few_quotes"])}
+    # ...yet the period is what leaves it short: the span from the day after its first quote mends it.
+    assert response.common_range == as_range(first_quote, HISTORY_LAST)
+    assert response.suggested_range == as_range(first_quote + days(1), HISTORY_LAST)
+    assert [call["window"] for call in loader_calls] == [(ANALYSIS_START, ANALYSIS_END), *candidates]
+
+
+@pytest.mark.asyncio
+async def test_no_proposal_when_no_candidate_meets_the_quote_floor(window_assets, loader_calls):
+    ids = window_assets.ids
+
+    response = await eligibility([ids["a_weekly"], ids["a_late_short"]])
+
+    assert verdicts(response, ids, "a_weekly", "a_late_short") == {"a_weekly": ("ineligible", ["too_few_quotes"]), "a_late_short": ("warning", ["starts_late"])}
+    common = (date(2014, 6, 1), date(2014, 7, 10))
+    assert response.common_range == as_range(*common)
+    # Both candidates were read and both leave the weekly asset under the floor (4 and 5 quotes).
+    candidates = suggested_analysis_ranges(common, ANALYSIS_START, ANALYSIS_END)
+    assert candidates == ((date(2014, 6, 2), ANALYSIS_END), (date(2014, 6, 2), date(2014, 7, 10)))
+    assert [call["window"] for call in loader_calls] == [(ANALYSIS_START, ANALYSIS_END), *candidates]
+    assert response.suggested_range is None
+
+
+@pytest.mark.asyncio
+async def test_no_proposal_while_fx_is_missing_at_an_end_of_the_candidate(window_assets, loader_calls):
+    ids = window_assets.ids
+    span = (date(2014, 1, 6), date(2014, 6, 30))
+    rate_ids: list[int] = []
+
+    async def store_rate(day: date) -> None:
+        async with session() as db:
+            rate = FxRate(base="EUR", quote=ANALYSIS_FX_CURRENCY, date=day, rate=Decimal("400"), source="MANUAL")
+            db.add(rate)
+            await db.commit()
+            rate_ids.append(rate.id)
+
+    try:
+        # A rate from August converts the autumn period, not the earlier common span.
+        await store_rate(date(2014, 8, 1))
+        response = await eligibility([ids["a_before"], ids["a_ngn"]], FX_PERIOD_START, FX_PERIOD_END)
+
+        assert verdicts(response, ids, "a_before", "a_ngn") == {"a_before": ("ineligible", ["no_prices"]), "a_ngn": ("eligible", [])}
+        assert response.common_range == as_range(date(2014, 1, 5), date(2014, 6, 30))
+        assert [call["window"] for call in loader_calls] == [(FX_PERIOD_START, FX_PERIOD_END), span]
+        assert response.suggested_range is None
+
+        # Control: with a rate from before the span, the very same candidate is offered.
+        await store_rate(date(2013, 12, 31))
+        assert (await eligibility([ids["a_before"], ids["a_ngn"]], FX_PERIOD_START, FX_PERIOD_END)).suggested_range == as_range(*span)
+    finally:
+        # Whoever writes, cleans up: only the rates this test stored.
+        async with session() as db:
+            await db.execute(delete(FxRate).where(FxRate.id.in_(rate_ids)))
+            await db.commit()
+
+
+@pytest.mark.parametrize(
+    ("assets", "verdict", "common"),
+    [
+        pytest.param(("a_full", "a_starts3"), {"a_full": ("eligible", []), "a_starts3": ("eligible", [])}, (ANALYSIS_START + days(3), HISTORY_LAST), id="every-asset-eligible"),
+        pytest.param(("a_full", "a_never"), {"a_full": ("eligible", []), "a_never": ("ineligible", ["no_price_history"])}, (HISTORY_FIRST, HISTORY_LAST), id="only-an-asset-never-quoted"),
+        # Inside the common span, a stale end is a gap in the asset's quotes: no span mends it.
+        pytest.param(("a_full", "a_gap_end"), {"a_full": ("eligible", []), "a_gap_end": ("warning", ["stale_at_end"])}, (HISTORY_FIRST, HISTORY_LAST), id="period-inside-the-span-with-a-gap"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_no_proposal_is_computed_when_no_period_helps(window_assets, loader_calls, assets, verdict, common):
+    ids = window_assets.ids
+
+    response = await eligibility([ids[key] for key in assets])
+
+    assert verdicts(response, ids, *assets) == verdict
+    # The common span is still reported, the proposal is not, and no second reading is spent.
+    assert response.common_range == as_range(*common)
+    assert response.suggested_range is None
+    assert len(loader_calls) == 1
+
+
+@pytest.mark.parametrize(
+    ("troubled", "reason"),
+    [
+        pytest.param("a_weekly", "too_few_quotes", id="too-few-quotes-alone"),
+        pytest.param("a_kes", "missing_fx", id="missing-fx-alone"),
+        pytest.param("a_never", "no_price_history", id="no-price-history-alone"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_reasons_a_period_cannot_mend_never_trigger_a_proposal(window_assets, loader_calls, troubled, reason):
+    ids = window_assets.ids
+    scope = [ids[troubled], ids["a_starts3"]]
+
+    # The premise, read from the facts rather than the reasons: each asset is either never quoted or
+    # quoted from (at most three days after) the start of the period to its end, so the period
+    # leaves none of them short.
+    async with session() as db:
+        window_facts = await load_price_window_facts(db, asset_ids=scope, window_start=ANALYSIS_START, window_end=ANALYSIS_END, target_currency="EUR")
+    assert not any(period_limits_coverage(item, ANALYSIS_START, ANALYSIS_END) for item in window_facts.values())
+
+    response = await eligibility(scope)
+
+    assert verdicts(response, ids, troubled, "a_starts3") == {troubled: ("ineligible", [reason]), "a_starts3": ("eligible", [])}
+    # Candidates exist — the asset quoted from three days in makes the period differ from the span —
+    # so what stops the proposal is the premise above, not the absence of a candidate.
+    common = (response.common_range.start, response.common_range.end)
+    assert suggested_analysis_ranges(common, ANALYSIS_START, ANALYSIS_END) != ()
+    assert response.suggested_range is None
+    assert len(loader_calls) == 1
+
+
+def replay_audit(response):
+    (result,) = response.items
+    assert result.output is not None, result.error
+    return result, result.metadata.historical_replay_audit
+
+
+async def replay(asset_ids: list[int], replay_range: tuple[date, date] = (CRISIS_START, CRISIS_END)):
+    async with session() as db:
+        return await RiskService(db).execute(user_id=1, request=crisis_replay_request(asset_ids, replay_range))
+
+
+@pytest.mark.asyncio
+async def test_a_replay_proposal_is_offered_once_a_second_reading_confirms_it(window_assets, loader_calls):
+    ids = window_assets.ids
+    proposed = (LATE_FIRST_QUOTE + days(1), CRISIS_END)
+
+    _result, audit = replay_audit(await replay([ids["early"], ids["holiday"], ids["late"], ids["empty"]]))
+
+    assert {(item.asset_id, item.reason) for item in audit.excluded_assets} == {(ids["late"], Excluded.STARTS_AFTER_WINDOW_START), (ids["empty"], Excluded.NO_PRICES_IN_WINDOW)}
+    assert audit.suggested_range == as_range(*proposed)
+    assert audit.suggested_range_recovers == [ids["late"]]
+    # The second reading covers the proposed window, for the covered assets and the recovered one;
+    # the asset with no prices is not in it, since no shorter window brings it back.
+    assert loader_calls[1:] == [{"asset_ids": {ids["early"], ids["holiday"], ids["late"]}, "window": proposed}]
+
+
+@pytest.mark.asyncio
+async def test_a_replay_proposal_is_dropped_when_a_covered_sparse_asset_would_lose_its_start_price(window_assets, loader_calls):
+    ids = window_assets.ids
+    proposed = (LATE_FIRST_QUOTE + days(1), CRISIS_END)
+
+    _result, audit = replay_audit(await replay([ids["early"], ids["sparse"], ids["late"]]))
+
+    # Priced three days before the crisis, the sparse asset is covered by it...
+    assert [(item.asset_id, item.reason) for item in audit.excluded_assets] == [(ids["late"], Excluded.STARTS_AFTER_WINDOW_START)]
+    # ...but not by the proposal, which would start 19 days after that price: checked, then dropped.
+    assert [call["window"] for call in loader_calls] == [(CRISIS_START, CRISIS_END), proposed]
+    assert audit.suggested_range is None
+    assert audit.suggested_range_recovers == []
+
+
+@pytest.mark.asyncio
+async def test_replay_proposal_recovers_are_ordered_by_asset(window_assets):
+    ids = window_assets.ids
+
+    _result, audit = replay_audit(await replay([ids["gapped"], ids["late"], ids["early"]]))
+
+    # The listing sets the start; by then the gapped asset quotes again, so both come back.
+    assert audit.suggested_range == as_range(LATE_FIRST_QUOTE + days(1), CRISIS_END)
+    assert audit.suggested_range_recovers == sorted([ids["gapped"], ids["late"]])
+
+
+@pytest.mark.parametrize("keys", [pytest.param(("early", "holiday"), id="nothing-excluded"), pytest.param(("early", "empty"), id="only-a-no-prices-exclusion")])
+@pytest.mark.asyncio
+async def test_a_replay_without_edge_exclusions_reads_the_window_facts_once(window_assets, loader_calls, keys):
+    ids = window_assets.ids
+
+    _result, audit = replay_audit(await replay([ids[key] for key in keys]))
+
+    assert audit.suggested_range is None
+    assert len(loader_calls) == 1
+
+
+@pytest.mark.parametrize(
+    ("key", "first_in_window"),
+    [pytest.param("late", LATE_FIRST_QUOTE, id="listing"), pytest.param("gapped", GAP_RESUMES, id="gap-at-the-start")],
+)
+@pytest.mark.asyncio
+async def test_replaying_the_proposed_range_brings_the_recovered_asset_back(window_assets, key, first_in_window):
+    ids = window_assets.ids
+    scope = [ids["early"], ids[key]]
+    proposed = (first_in_window + days(1), CRISIS_END)
+
+    _result, audit = replay_audit(await replay(scope))
+    assert [item.asset_id for item in audit.excluded_assets] == [ids[key]]
+    assert audit.suggested_range is not None
+    assert audit.suggested_range_recovers == [ids[key]]
+    offered = (audit.suggested_range.start, audit.suggested_range.end)
+
+    # Replay whatever was offered: the asset is back, the other one kept, nothing excluded...
+    result, audit = replay_audit(await replay(scope, offered))
+    assert audit.excluded_assets == []
+    assert (audit.suggested_range, audit.suggested_range_recovers) == (None, [])
+    assert {impact.asset_id for impact in result.output.impacts} == set(scope)
+    # ...and the first quote in the window is the starting price: the baseline precedes the range.
+    unwanted = {"baseline_inside_requested_range", f"short_history:{ids[key]}"}
+    assert unwanted.isdisjoint(result.data_quality.warnings)
+    # The offer is the day after the first quote in the window.
+    assert offered == proposed
+    async with session() as db:
+        prepared = await RiskService(db)._prepare_asset_series(asset_ids=tuple(scope), date_range=as_range(*proposed), target_currency="EUR")
+        on_first_quote = await RiskService(db)._prepare_asset_series(asset_ids=tuple(scope), date_range=as_range(first_in_window, CRISIS_END), target_currency="EUR")
+        facts_on_first_quote = await load_price_window_facts(db, asset_ids=[ids[key]], window_start=first_in_window, window_end=CRISIS_END, target_currency="EUR")
+    assert prepared.baseline_date == first_in_window
+    assert unwanted.isdisjoint(prepared.warnings)
+
+    # Control — starting ON the first quote instead: a listing gets a baseline inside the range, a
+    # gapped asset has no recent price before it and is excluded again.
+    if key == "late":
+        assert unwanted <= set(on_first_quote.warnings)
+    else:
+        assert replay_coverage(facts_on_first_quote[ids[key]], first_in_window, CRISIS_END) == Excluded.STALE_AT_WINDOW_START
+
+
+@pytest.mark.parametrize(
+    ("key", "proposed"),
+    [
+        pytest.param("late", (LATE_FIRST_QUOTE + days(1), CRISIS_END), id="listing"),
+        pytest.param("gapped", (GAP_RESUMES + days(1), CRISIS_END), id="gap-at-the-start"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_a_replay_left_empty_by_its_edges_is_unavailable_with_the_proposal(window_assets, key, proposed):
+    ids = window_assets.ids
+
+    (result,) = (await replay([ids[key]])).items
+
+    # No audit to carry the proposal: the error does, since this is when it matters most.
+    assert result.status == RiskResultStatus.UNAVAILABLE
+    assert result.error.code == RiskErrorCode.INSUFFICIENT_HISTORY
+    assert result.error.details == {
+        "excluded_asset_ids": [ids[key]],
+        "suggested_range": {"start": proposed[0].isoformat(), "end": proposed[1].isoformat()},
+        "suggested_range_recovers": [ids[key]],
+    }
+
+
+@pytest.mark.asyncio
+async def test_a_replay_of_assets_never_priced_in_the_window_is_unavailable_without_a_proposal(window_assets):
+    ids = window_assets.ids
+
+    (result,) = (await replay([ids["empty"], ids["after_only"]])).items
+
+    assert result.status == RiskResultStatus.UNAVAILABLE
+    assert result.error.code == RiskErrorCode.INSUFFICIENT_HISTORY
+    assert result.error.details == {"excluded_asset_ids": sorted([ids["empty"], ids["after_only"]])}
