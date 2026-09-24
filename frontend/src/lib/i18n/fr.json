@@ -4403,5 +4403,17 @@
         }
       }
     }
+  },
+  "header": {
+    "privacy": {
+      "hide": "Masquer les montants",
+      "show": "Afficher les montants"
+    },
+    "theme": {
+      "switchToDark": "Passer au thème sombre",
+      "switchToLight": "Passer au thème clair",
+      "dark": "Thème sombre",
+      "light": "Thème clair"
+    }
   }
 }
