@@ -300,8 +300,11 @@ state to the guide and renders anchors for it to point at:
   (`lib/features/onboarding/guideAnchors.svelte.ts`), a plain `Map<string, HTMLElement>` keyed by
   string id and read back by `OnboardingOverlayHost.svelte`, which owns the single
   `OnboardingCoachmark` instance and the per-step copy/anchor table (`steps: Record<GuideStepId,
-  StepPresentation>`). The wizard only calls `use:guideAnchor={importGuideStep(currentStepId)}`
-  on its stepper root — it has no coachmark-specific markup of its own.
+  StepPresentation>`). The wizard has no coachmark-specific markup of its own: each step's forward
+  button, rendered only in that step's footer branch, carries a fixed id
+  (`use:guideAnchor={'import.action.upload'}`, `'import.action.select'`, …), which the table maps
+  to the matching `import.*` step. When a registered anchor counts as present is covered in
+  [Anchor presence and stalls](#guide-anchor-stall).
 - **Nested-modal suspension** is generic, not wizard-specific: `OnboardingOverlayHost` tracks
   `document.body.dataset.modalScrollLockCount` (bumped by every open modal, including
   `ParseDetailModal`, the N-way compare modal, and the asset editor) and derives `suspended =
@@ -327,8 +330,9 @@ state to the guide and renders anchors for it to point at:
   finishing the guide and saving the batch are two independent user actions.
 
 **The coachmark remains observational.** For `import.upload` through `import.review`,
-`OnboardingOverlayHost` does not render its own **Back** or **Next** controls; the user's actions
-in the real wizard drive `currentStepId`, and the guide follows. It never clicks a wizard
+`OnboardingOverlayHost` does not render its own **Back** or **Next** controls (the one exception
+is **Continue anyway** on a [stalled step](#guide-anchor-stall)); the user's actions in the real
+wizard drive `currentStepId`, and the guide follows. It never clicks a wizard
 control, uploads a file, or reconstructs an earlier wizard draft. Only after the user invokes
 **Import N transactions** does the explicit `import.bulk` handoff highlight **Save All**.
 
@@ -361,6 +365,39 @@ wizard-draft restoration.
     (`createReplayStorageListener(onboarding, undefined, () => onboardingGuide.dismissHost())`)
     drops this tab's in-memory replay and closes its step, so the stale step cannot write the key
     back.
+
+### ⏳ Anchor presence and stalls {: #guide-anchor-stall }
+
+These rules apply to every coachmark step of every guide, not only to the import steps.
+`OnboardingCoachmark.svelte` measures the anchor in `refreshPosition()` and, through
+`isRendered()`, treats it as **absent** — exactly like an anchor that was never registered — when
+it is not mounted, when its box is 0×0 (`display:none`, a box-less wrapper), or when
+`checkVisibility({visibilityProperty: true})` is available and returns `false`
+(`visibility:hidden`, which keeps its box). Opacity is deliberately not a criterion:
+hover-revealed controls start transparent and are real targets.
+
+An absent anchor keeps the step `waiting`: the panel is centred, without highlight or pointer, and
+reads *Waiting for this area to become available…*. After `GUIDE_STALL_MS` (3,000 ms) the step
+turns `stalled`: the panel reads *This part of the page didn't load in time. You can continue with
+the guide.*, and `OnboardingOverlayHost` shows **Continue anyway** as the primary button — for
+`import.upload` through `import.review`, the only forward control their coachmark ever shows. In
+a step-managed flow (`import_guide`, `transaction_bulk_guide`) it calls `onboardingGuide.skip()`:
+an automatic guide persists the step as `skipped` (`skipStep`), never `completed`, because the
+step was never actually shown (the Round 7 stall rule), and a replay only drops the step from the
+stored replay. Every other flow keeps its usual **Next**/**Finish** behaviour under the new label.
+The countdown does not run while the panel shows a controller error or a nested modal suspends
+the step. Once the anchor is rendered, the step anchors normally, the stall clears (`onstallend`)
+and **Continue anyway** is withdrawn; an anchored target that later collapses to 0×0 (its
+`ResizeObserver` fires) sends the step back to `waiting`, from where it can stall again.
+
+**Page-author rule.** Bind `use:guideAnchor` only to the element that is actually visible for that
+step. When a view hides a region — a tab, a collapsed panel — unmount it or leave the anchor off;
+never hide a registered anchor. The registry keeps a single element per id, the last one
+registered, so a hidden duplicate can shadow the visible one and stall the step. The broker-detail
+guide shows the pattern: its tab steps anchor the `TabBar` buttons (the `guideAnchor` of each
+`TabItem`), never the panels, which are `{#if activeTab === …}` branches. The guide observes the
+page: it may scroll a target into view, and the intro tour requests its own route and sidebar, but
+it never switches a tab or clicks a control for the user.
 
 ---
 
