@@ -4403,5 +4403,17 @@
         }
       }
     }
+  },
+  "header": {
+    "privacy": {
+      "hide": "Ocultar importes",
+      "show": "Mostrar importes"
+    },
+    "theme": {
+      "switchToDark": "Cambiar al tema oscuro",
+      "switchToLight": "Cambiar al tema claro",
+      "dark": "Tema oscuro",
+      "light": "Tema claro"
+    }
   }
 }
