@@ -1998,7 +1998,8 @@
   "sharedResource": {
     "syncAll": "Sinc. Tutto",
     "refreshAll": "Ricarica Tutto",
-    "settings": "Impostazioni"
+    "settings": "Impostazioni",
+    "syncSelection": "Sinc. selezione"
   },
   "table": {
     "columns": "Colonne",
@@ -2926,7 +2927,8 @@
       },
       "correlation": {
         "name": "Correlazione",
-        "description": "Matrice di correlazione Pearson sui rendimenti in valuta target."
+        "description": "Matrice di correlazione Pearson sui rendimenti in valuta target.",
+        "help": "In questo pannello si analizzano le correlazioni a due a due di tutti gli asset presi in esame, calcolate sul periodo scelto e tenendo conto degli eventuali cambi valuta. Un valore alto, vicino a +1, dice che due asset si muovono insieme e si diversificano poco; vicino a 0, che si muovono per conto loro; negativo, che uno attutisce l’altro. Clicca l’icona per la guida."
       },
       "historicalVar": {
         "name": "VaR / CVaR storico",
@@ -3049,8 +3051,6 @@
       "correlationTab": "Correlazione",
       "addAsset": "Aggiungi asset alla matrice",
       "maxAssets": "Raggiunto il limite API di 100 asset.",
-      "presetBroker": "Precarica gli asset di…",
-      "presetNone": "Scegli un broker…",
       "panelTitle": "Relazioni e scenari",
       "selectedCount": "{selected} selezionati su {total}",
       "nearIdentical": "quasi identici",
@@ -3075,15 +3075,21 @@
         "label": "Ordine della matrice",
         "similarity": "Per somiglianza",
         "original": "Per nome",
-        "name": "Per nome"
+        "name": "Per nome",
+        "type": "Per tipo",
+        "sector": "Per settore",
+        "region": "Per area"
       },
       "pairs": {
         "correlatedTitle": "I più simili",
-        "correlatedHint": "Coppie che si muovono insieme: tenerle entrambe aggiunge poco.",
+        "correlatedHint": "Coppie con ρ > 0.70: si muovono insieme, tenerle entrambe aggiunge poco.",
         "offsettingTitle": "Quelli che si compensano",
-        "offsettingHint": "Coppie che si muovono in direzioni opposte: una attutisce l’altra.",
+        "offsettingHint": "Coppie con ρ ≤ −0.30: si muovono in direzioni opposte, una attutisce l’altra.",
         "noneCorrelated": "Nessuna coppia si muove chiaramente insieme.",
-        "noneOffsetting": "Nessuna coppia ne compensa un’altra: qui niente attutisce niente."
+        "noneOffsetting": "Nessuna coppia ne compensa un’altra: qui niente attutisce niente.",
+        "tagSimilar": "molto simili",
+        "tagOffsetting": "si compensano",
+        "tagOpposite": "opposti"
       },
       "levels": {
         "asset": "Asset",
@@ -3107,6 +3113,34 @@
           "correlation": "Correlazione",
           "noBenchmark": "Scegli un benchmark nella Dashboard per aggiungere beta e correlazione. Un benchmark che è già nella selezione non può fare da metro a sé stesso."
         }
+      },
+      "legend": {
+        "negative": "Inversa",
+        "none": "Nulla",
+        "positive": "Concorde"
+      },
+      "group": {
+        "diversified": "Diversificato",
+        "unclassified": "Non classificato"
+      },
+      "exposure": {
+        "sector": "Settore",
+        "region": "Area"
+      },
+      "syncSelectionHint": "Sincronizza i prezzi degli asset selezionati e i cambi che li convertono",
+      "reloadHint": "Ricarica tutte le analisi della selezione",
+      "preset": {
+        "allMine": "Tutti i miei",
+        "byBroker": "Per broker",
+        "hint": "Sostituisce la selezione con gli asset posseduti nell'ultimo giorno del periodo.",
+        "noneHeld": "Lì non è posseduto nulla nell'ultimo giorno del periodo: la selezione non cambia."
+      },
+      "picker": {
+        "selectVisible": "Seleziona visibili",
+        "deselectVisible": "Deseleziona visibili",
+        "confirm": "Aggiungi {count}",
+        "allSelected": "Tutti gli asset sono già nella selezione.",
+        "filtersOn": "Sono elencati solo gli asset che passano i filtri."
       }
     },
     "metrics": {

@@ -1998,7 +1998,8 @@
   "sharedResource": {
     "syncAll": "Sync. Tout",
     "refreshAll": "Recharger Tout",
-    "settings": "Paramètres"
+    "settings": "Paramètres",
+    "syncSelection": "Sync. sélection"
   },
   "table": {
     "columns": "Colonnes",
@@ -2926,7 +2927,8 @@
       },
       "correlation": {
         "name": "Corrélation",
-        "description": "Matrice de corrélation de Pearson des rendements dans la devise cible."
+        "description": "Matrice de corrélation de Pearson des rendements dans la devise cible.",
+        "help": "Ce panneau analyse les corrélations deux à deux de tous les actifs examinés, calculées sur la période choisie en tenant compte des éventuelles conversions de devises. Une valeur élevée, proche de +1, signifie que deux actifs évoluent ensemble et se diversifient peu ; proche de 0, qu’ils évoluent chacun de leur côté ; négative, que l’un amortit l’autre. Cliquez sur l’icône pour le guide."
       },
       "historicalVar": {
         "name": "VaR / CVaR historique",
@@ -3049,8 +3051,6 @@
       "correlationTab": "Corrélation",
       "addAsset": "Ajouter un actif à la matrice",
       "maxAssets": "La limite API de 100 actifs est atteinte.",
-      "presetBroker": "Précharger les actifs de…",
-      "presetNone": "Choisir un courtier…",
       "panelTitle": "Relations et scénarios",
       "selectedCount": "{selected} sélectionnés sur {total}",
       "nearIdentical": "quasi identiques",
@@ -3075,15 +3075,21 @@
         "label": "Ordre de la matrice",
         "similarity": "Par similarité",
         "original": "Par nom",
-        "name": "Par nom"
+        "name": "Par nom",
+        "type": "Par type",
+        "sector": "Par secteur",
+        "region": "Par zone"
       },
       "pairs": {
         "correlatedTitle": "Les plus semblables",
-        "correlatedHint": "Paires qui évoluent ensemble : les détenir toutes deux ajoute peu.",
+        "correlatedHint": "Paires avec ρ > 0.70 : elles évoluent ensemble, les détenir toutes deux ajoute peu.",
         "offsettingTitle": "Ceux qui se compensent",
-        "offsettingHint": "Paires qui évoluent en sens opposé : l’une amortit l’autre.",
+        "offsettingHint": "Paires avec ρ ≤ −0.30 : elles évoluent en sens opposé, l’une amortit l’autre.",
         "noneCorrelated": "Aucune paire n’évolue clairement ensemble.",
-        "noneOffsetting": "Aucune paire n’en compense une autre : ici rien n’amortit rien."
+        "noneOffsetting": "Aucune paire n’en compense une autre : ici rien n’amortit rien.",
+        "tagSimilar": "très similaires",
+        "tagOffsetting": "se compensent",
+        "tagOpposite": "opposés"
       },
       "levels": {
         "asset": "Actif",
@@ -3107,6 +3113,34 @@
           "correlation": "Corrélation",
           "noBenchmark": "Choisissez une référence dans le tableau de bord pour ajouter le bêta et la corrélation. Une référence déjà présente dans la sélection ne peut pas servir de mesure à elle-même."
         }
+      },
+      "legend": {
+        "negative": "Négative",
+        "none": "Nulle",
+        "positive": "Positive"
+      },
+      "group": {
+        "diversified": "Diversifié",
+        "unclassified": "Non classé"
+      },
+      "exposure": {
+        "sector": "Secteur",
+        "region": "Zone"
+      },
+      "syncSelectionHint": "Synchronise les prix des actifs sélectionnés et les taux de change qui les convertissent",
+      "reloadHint": "Recharge toutes les analyses de la sélection",
+      "preset": {
+        "allMine": "Toutes mes positions",
+        "byBroker": "Par courtier",
+        "hint": "Remplace la sélection par les actifs détenus le dernier jour de la période.",
+        "noneHeld": "Rien n'y est détenu le dernier jour de la période : la sélection ne change pas."
+      },
+      "picker": {
+        "selectVisible": "Sélectionner les visibles",
+        "deselectVisible": "Désélectionner les visibles",
+        "confirm": "Ajouter {count}",
+        "allSelected": "Tous les actifs sont déjà dans la sélection.",
+        "filtersOn": "Seuls les actifs qui passent les filtres sont listés."
       }
     },
     "metrics": {

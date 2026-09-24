@@ -1998,7 +1998,8 @@
   "sharedResource": {
     "syncAll": "Sinc. Todo",
     "refreshAll": "Recargar Todo",
-    "settings": "Ajustes"
+    "settings": "Ajustes",
+    "syncSelection": "Sinc. selección"
   },
   "table": {
     "columns": "Columnas",
@@ -2926,7 +2927,8 @@
       },
       "correlation": {
         "name": "Correlación",
-        "description": "Matriz de correlación de Pearson sobre rendimientos en la divisa objetivo."
+        "description": "Matriz de correlación de Pearson sobre rendimientos en la divisa objetivo.",
+        "help": "Este panel analiza las correlaciones de dos en dos de todos los activos examinados, calculadas en el periodo elegido y teniendo en cuenta los posibles cambios de divisa. Un valor alto, cercano a +1, indica que dos activos se mueven juntos y se diversifican poco; cercano a 0, que se mueven por su cuenta; negativo, que uno amortigua al otro. Haz clic en el icono para ver la guía."
       },
       "historicalVar": {
         "name": "VaR / CVaR histórico",
@@ -3049,8 +3051,6 @@
       "correlationTab": "Correlación",
       "addAsset": "Añadir activo a la matriz",
       "maxAssets": "Se alcanzó el límite de la API de 100 activos.",
-      "presetBroker": "Precargar los activos de…",
-      "presetNone": "Elige un bróker…",
       "panelTitle": "Relaciones y escenarios",
       "selectedCount": "{selected} seleccionados de {total}",
       "nearIdentical": "casi idénticos",
@@ -3075,15 +3075,21 @@
         "label": "Orden de la matriz",
         "similarity": "Por similitud",
         "original": "Por nombre",
-        "name": "Por nombre"
+        "name": "Por nombre",
+        "type": "Por tipo",
+        "sector": "Por sector",
+        "region": "Por zona"
       },
       "pairs": {
         "correlatedTitle": "Los más parecidos",
-        "correlatedHint": "Pares que se mueven juntos: tener ambos añade poco.",
+        "correlatedHint": "Pares con ρ > 0.70: se mueven juntos, tener ambos añade poco.",
         "offsettingTitle": "Los que se compensan",
-        "offsettingHint": "Pares que se mueven en direcciones opuestas: uno amortigua al otro.",
+        "offsettingHint": "Pares con ρ ≤ −0.30: se mueven en direcciones opuestas, uno amortigua al otro.",
         "noneCorrelated": "Ningún par se mueve claramente junto.",
-        "noneOffsetting": "Ningún par compensa a otro: aquí nada amortigua nada."
+        "noneOffsetting": "Ningún par compensa a otro: aquí nada amortigua nada.",
+        "tagSimilar": "muy similares",
+        "tagOffsetting": "se compensan",
+        "tagOpposite": "opuestos"
       },
       "levels": {
         "asset": "Activo",
@@ -3107,6 +3113,34 @@
           "correlation": "Correlación",
           "noBenchmark": "Elige un índice de referencia en el Panel para añadir beta y correlación. Un índice que ya está en la selección no puede servirse de medida a sí mismo."
         }
+      },
+      "legend": {
+        "negative": "Negativa",
+        "none": "Nula",
+        "positive": "Positiva"
+      },
+      "group": {
+        "diversified": "Diversificado",
+        "unclassified": "Sin clasificar"
+      },
+      "exposure": {
+        "sector": "Sector",
+        "region": "Zona"
+      },
+      "syncSelectionHint": "Sincroniza los precios de los activos seleccionados y los tipos de cambio que los convierten",
+      "reloadHint": "Recarga todos los análisis de la selección",
+      "preset": {
+        "allMine": "Todas mis posiciones",
+        "byBroker": "Por bróker",
+        "hint": "Sustituye la selección por los activos que se poseen el último día del período.",
+        "noneHeld": "Allí no se posee nada el último día del período: la selección no cambia."
+      },
+      "picker": {
+        "selectVisible": "Seleccionar visibles",
+        "deselectVisible": "Deseleccionar visibles",
+        "confirm": "Añadir {count}",
+        "allSelected": "Todos los activos ya están en la selección.",
+        "filtersOn": "Solo se listan los activos que pasan los filtros."
       }
     },
     "metrics": {
