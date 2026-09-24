@@ -4031,7 +4031,7 @@
         },
         "transactionsNav": {
           "title": "Commencez par vos transactions",
-          "description": "Transactions contient les saisies manuelles et l’historique du portefeuille. Importer dispose de son propre guide contextuel."
+          "description": "Transactions contient les saisies manuelles et l’historique du portefeuille."
         },
         "brokersAdd": {
           "title": "Ajouter un courtier",

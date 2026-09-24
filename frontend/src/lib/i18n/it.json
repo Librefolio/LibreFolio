@@ -4031,7 +4031,7 @@
         },
         "transactionsNav": {
           "title": "Inizia dalle transazioni",
-          "description": "Transazioni contiene gli inserimenti manuali e la cronologia del portafoglio. Importa ha una guida contestuale dedicata."
+          "description": "Transazioni contiene gli inserimenti manuali e la cronologia del portafoglio."
         },
         "brokersAdd": {
           "title": "Aggiungi un broker",
