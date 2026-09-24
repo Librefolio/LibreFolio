@@ -62,7 +62,12 @@ impostazioni grafico senza grafici montati.
 > Su una pagina la cui tesi è «qui è sempre percentuale», un bottone `Abs` cliccabile
 > non è inerte: è un'affermazione contraria alla regola della pagina. (F)
 
-### 1.3 🔴 Dual View asimmetrica
+### 1.3 ~~🔴 Dual View asimmetrica~~ → ❌ **NON È UN DIFETTO** *(ritirata da J il 23/09, verificato)*
+
+> `AssetTable.svelte:211` passa `{sensitivity: 'public'}`: le «2 chiamate mascherate»
+> contavano la riga di `import`. Con la decisione (c) — un prezzo di mercato non è
+> patrimonio — entrambe le viste mostrano giustamente il prezzo. Lasciata in chiaro perché
+> nessuno la «ripari».
 
 `AssetTable.svelte` 2 chiamate mascherate · `AssetCard.svelte` **0**.
 Stessa pagina, stesso dato, un `localStorage` decide se la privacy esiste.
@@ -79,7 +84,21 @@ Nessun test lo dichiara.
 `snapshotDataRenderer.ts` fa passare ogni numero per `scalar()` → `formatPromptNumber()`:
 l'anteprima del prompt è **l'intero portafoglio in chiaro**.
 
-### 1.5 🔴 I 9 render di denaro scoperti — composizione, non totale
+### 1.5 ~~🔴 I 9 render di denaro scoperti~~ → ❌ **0 DIFETTI SU 9** *(riclassificati da J il 23/09, verificato)*
+
+> Con i criteri del developer, **tutte e 9** cambiano classe, e il totale resta 9:
+>
+> | quanti | siti | classe | perché |
+> |---|---|---|---|
+> | 3 | `AssetCard:223`, `AssetPriceSummary:96`, `providerProbe:115` | quotazioni | decisione (c): un prezzo non è patrimonio |
+> | 2 | `WacPreviewSection:565,586` | fallback WAC | decisione ②: il WAC è ammesso |
+> | 2 | `CompactCashCell:76,101` | `<input value={amountStr}>` | D7 (Round 1 di J): un campo in cui l'utente scrive non si maschera |
+> | 2 | `AssetEventPicker:451`, `TransactionBulkModal:1871` | eventi dell'asset | rendono `ev.amount`; `models.py:895` — *«Events are NOT transactions — they describe what happens to the asset globally»* |
+>
+> I due difetti veri della famiglia sono altrove: `riskAnalysisHelpers.ts:160` e
+> `LotComparisonChart.svelte:261` mascherano **anche la valuta** (§9.8) → **J**.
+
+**Testo originale del 22/09:**
 
 ```
 4 patrimonio · 3 quotazioni · 2 fallback condizionali
@@ -92,7 +111,11 @@ l'anteprima del prompt è **l'intero portafoglio in chiaro**.
 ⚠️ Il totale `9` è passato da `9` a `9` attraverso **due correzioni opposte**
 (−2 guardia di blur, +2 fallback). Vedi §3.3.
 
-### 1.6 ~~🔴 Gate che passa misurando nulla (Asset Global)~~ → ⚠️ **RIDIMENSIONATO (§9.2)**
+### 1.6 🔴 Gate che passa misurando nulla (Asset Global) → ⚠️ ridimensionato (§9.2) → 🔴 **RIPRISTINATO il 23/09 (§9.8)**
+
+> 🔴 **La rettifica qui sotto misura il formatter sbagliato** — vedi §9.8. Vale per
+> `currencyFormat.ts`; i livelli di rischio usano quello di `riskAnalysisHelpers`, che sotto
+> privacy restituisce `•••` da solo. Su quelle pagine le tre asserzioni sono cieche tutte.
 
 > ⚠️ **L'affermazione qui sotto è falsa per due terzi.** La maschera avvolge **solo il
 > numero**: simbolo, bandiera e codice valuta sono concatenati **dopo**
@@ -142,11 +165,38 @@ NON «il template comincia con `${`».
 
 ## 2. Debito strutturale
 
-### 2.1 `front-portfolio risk-lab` mai eseguito
+### 2.1 ~~`front-portfolio risk-lab` mai eseguito~~ → **eseguito sul ramo di A, mai sull'albero integrato** *(rettificato il 23/09)*
+
+> ❌ **«Nessuno l'ha mai eseguito» era falso**, e il developer l'ha accettato come premessa
+> (08 §8.8). Lo dice il repo, misura di A verificata dal coordinator:
+>
+> ```
+> daa03c0f2  21/09 19:23   implementation_2/progress/A-esecuzione.md:488   ✅ 6/6
+> 032b86959  21/09 21:57   implementation_2/progress/A-esecuzione.md:622   ✅ 11/11 (erano 6)
+> 032b86959 → f1047f766    risk-lab.spec.ts   byte-identico (diff vuoto, 2057 = 2057)
+> ```
+>
+> **Vero è solo che non è mai girato sull'albero integrato**, dove il codice applicativo è
+> cambiato con i merge di D/I/Risk/J. La distanza **statica** è zero su tre assi (misura di
+> F: 50 testid → 0 irraggiungibili; `tsc` sul progetto e2e 0 errori; 4/4 rotte
+> nell'OpenAPI). Resta non misurata solo quella **di comportamento**: i payload simulati
+> sono tipizzati a mano, e lo zero di `tsc` non ne copre la forma. Owner: **F**. Primo passo:
+> un'esecuzione, senza toccare lo spec.
+>
+> Errore a carico del coordinator: la frase è passata da questo foglio a 08 §8.8 e al
+> messaggio di F senza che nessuno cercasse un'esecuzione registrata. Un'**assenza** si
+> dimostra cercando la presenza, non ripetendola.
+>
+> ✅ **Misurato il 23/09, 16:15 (F-1)**: `front-portfolio risk-lab` **11/11 verdi sull'albero
+> integrato** `f1047f766`, con lo spec intatto e la porta `6154` libera dopo la corsa. Il rosso di
+> partenza non esiste. Quello che manca è la **copertura** del sistema nuovo, non un test
+> rotto. Nota del runner nella stessa corsa: *«Shared backend ignored SIGTERM for 5s — killing
+> its process group»*. Dopo non restano processi e la porta è libera. È comportamento del
+> runner, da tenere d'occhio nelle corse con `--coverage`, dove la catena SIGTERM porta i dati.
 
 Passato da **bloccato** (due nodi `risk-correlation-heatmap` ambigui) a **eseguibile**
 quando A ha smontato il legacy. Cresciuto **817 → 2057 righe**, con le asserzioni di
-**due mandati**. **Nessuno l'ha mai eseguito**: richiede una lane, e il round la vietava.
+**due mandati** (11 test: 6 di F, 5 di A; il test del denaro è al 73% di A).
 
 ### 2.2 P4-11 — terza rettifica, il nono canale
 
@@ -473,6 +523,12 @@ Contromisura adottata: mandare sempre **lo stato atteso accanto al comando**.
 
 ### 3.15 ✅ L'unica conferma del round che non sia una rimisura
 
+> ⚠️ **Perimetro, chiarito il 23/09.** Questa conferma riguarda il **cablaggio**: nella pagina
+> di dettaglio `onsynced` non viene inviato due volte. **Non** dice che la capacità è
+> raggiungibile: nel laboratorio di Asset Global il sync FX **non ha nessun punto d'accesso**
+> (R2-128 → F). Il 22/09 F aveva scritto «`onsynced` chiuso» rispondendo alla prima domanda
+> invece che alla seconda. È la forma di R2-132, un giorno dopo la sua registrazione.
+
 Risk aveva risolto il conflitto `onsynced` (*«controller creato senza `onsynced`, chiamata
 singola, verificato da A»*). I, **senza averlo letto**, ha descritto la stessa
 configurazione partendo dal **perché** (`PageSyncModal:27,40` → … → `+page:2174`, e il
@@ -511,7 +567,10 @@ commento a `RiskAnalysisPanel:519-522` sul doppio invio già evitato una volta).
 - **numero di movimenti in Asset** → si mostra. È una **cardinalità**, non una quantità: dice
   quanto *spesso* hai agito, non quanto *hai*, e non è moltiplicabile per un prezzo.
 - **la maschera copre il numero, non la valuta** → *«il privacy deve nascondere il numero,
-  non la valuta, quindi se lo fa è un errore»*. Già il comportamento del codice (§9.2).
+  non la valuta, quindi se lo fa è un errore»*. ~~Già il comportamento del codice (§9.2).~~
+  🔴 **Vero solo per `currencyFormat.ts`** *(rettificato il 23/09, §9.8)*: in
+  `riskAnalysisHelpers.ts:160` la maschera sostituisce l'intera stringa, valuta compresa —
+  è il difetto che questo criterio condanna. **Owner J.**
 - **Tools** → oggi niente da nascondere, perché l'unico strumento non ha UI. ⚠️ **Ma il PAC
   prende `quanta liquidità investibile ho` e produce `quanto metto su ciascun ETF`: entrambi
   patrimonio puro.** Se il perimetro si chiude adesso, la sua UI nascerà fuori.
@@ -643,6 +702,9 @@ perché `maskable()` avvolge solo l'importo e la valuta resta fuori.
 passerebbe misurando nulla» senza eseguirla sull'output del formatter. È il §3.5 del mio
 stesso registro, commesso dopo averlo scritto.
 
+> 🔴 **E questa rettifica ha ripetuto l'errore che dichiarava** — vedi §9.8. L'ho eseguita,
+> sì, ma sull'output del formatter **sbagliato**: quello che la pagina non usa.
+
 ### 9.3 I «61 file orfani» in `custom-uploads` — rovesciato
 
 Avevo segnalato 61 file sopravvissuti al `create-clean`. Sono gli **avatar di default**,
@@ -719,3 +781,39 @@ l'estrazione, e questa lo era.
 giuste, una ridimensionata e **una sbagliata in pieno** — quella che richiedeva di premere un
 bottone e cambiare pagina. Non è un buon tasso né un cattivo tasso: è la **firma del metodo**.
 La rilettura trova ciò che è scritto; l'uso trova ciò che accade.
+
+### 9.8 🔴 §9.2 ha misurato il formatter sbagliato — 23/09 *(trovato da A, confermato da F)*
+
+La §9.2 declassava il gate di §1.6 perché «la maschera avvolge solo il numero»: vero per
+`currencyFormat.ts:41-47`, dove sotto privacy l'output è `••• € 🇪🇺 EUR`. Ma **il denaro dei
+livelli di rischio non passa di lì**:
+
+```
+L1HowMuchItHurts · L4Replay · L4Shock   →  riskAnalysisHelpers.formatCurrencyAmount
+riskAnalysisHelpers.ts:160   if (shouldMaskAmount()) return PRIVACY_PLACEHOLDER;   ← b66e93003, J, 22/09
+riskAnalysisHelpers.test.ts:387   'drops the currency marker too, unlike the shared currency formatter'
+```
+
+Sotto privacy l'intera stringa diventa `•••`. Eseguito da F (`vitest -t "with global privacy
+on"`: 1 file, 7 test, `.toBe(PRIVACY_PLACEHOLDER)` esatto). Quindi su Asset Global:
+
+| asserzione | privacy OFF | privacy ON |
+|---|:---:|:---:|
+| `MONEY_PATTERN` | ✅ | 🔴 cieca |
+| `'€'` | ✅ | 🔴 cieca |
+| `.currency-symbol` | 🔴 **sempre** (solo `formatCurrencyAmountHtml` la emette) | 🔴 |
+
+**Su queste pagine la §1.6 originale era giusta, e la rettifica no.** Oggi regge solo perché
+l'E2E gira con privacy spenta per default.
+
+Due conseguenze, entrambe assegnate:
+
+1. 🔴 **Il formatter viola la regola del developer** (*«il privacy deve nascondere il numero,
+   non la valuta, quindi se lo fa è un errore»*). Il test lo pinna **apposta**. → **J**,
+   unico scrittore di `riskAnalysisHelpers.ts:155-161` e del test; Risk non tocca quelle righe.
+2. Il pin privacy di `risk-lab` → **F**, con la tabella sopra come input: variante OFF subito,
+   variante ON **dopo** la riparazione di J, contro il comportamento riparato.
+
+> 📌 **La lezione, per la seconda volta in questo foglio**: eseguire non basta, bisogna
+> eseguire **ciò che la pagina chiama**. Una misura fatta sul componente sbagliato ha la stessa
+> forma, lo stesso tono e lo stesso livello di confidenza di una misura giusta.
