@@ -13,6 +13,7 @@ from backend.app.schemas.risk import (
     RiskValueStatus,
     RiskWarning,
 )
+from backend.app.services.data_quality_thresholds import RISK_MIN_OBSERVATIONS
 from backend.app.services.provider_registry import RiskAnalyticRegistry, register_plugin
 from backend.app.services.risk.analytic_helpers import prepared_asset_returns
 from backend.app.services.risk.base import RiskAnalytic, RiskComputation
@@ -23,7 +24,7 @@ class CorrelationParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     min_observations: int = Field(
-        20,
+        RISK_MIN_OBSERVATIONS,
         ge=2,
         le=5000,
         json_schema_extra={
@@ -101,6 +102,8 @@ class CorrelationAnalytic(RiskAnalytic):
             warnings.append(
                 RiskWarning(
                     code="insufficient_pair_history",
+                    message_i18n_key="risk.warnings.insufficient_pair_history",
+                    message_params={"minObservations": params.min_observations},
                     message="One or more correlation cells have insufficient common observations.",
                     details={"min_observations": params.min_observations},
                 )
@@ -109,6 +112,7 @@ class CorrelationAnalytic(RiskAnalytic):
             warnings.append(
                 RiskWarning(
                     code="flat_series",
+                    message_i18n_key="risk.warnings.flat_series",
                     message="One or more correlation cells are undefined because a series has zero variance.",
                 )
             )
@@ -116,6 +120,8 @@ class CorrelationAnalytic(RiskAnalytic):
             warnings.append(
                 RiskWarning(
                     code="low_pair_coverage",
+                    message_i18n_key="risk.warnings.low_pair_coverage",
+                    message_params={"minCoverage": round(params.min_coverage * 100)},
                     message="One or more correlation cells are below the requested coverage threshold.",
                     details={"min_coverage": params.min_coverage},
                 )
