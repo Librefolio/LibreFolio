@@ -19,7 +19,7 @@
     import {updateAvailable} from '$lib/features/update-check/updateCheckStore.svelte';
     import {checkForNewerRelease} from '$lib/features/update-check/updateCheck';
     import {zodiosApi} from '$lib/api';
-    import {get} from 'svelte/store';
+    import {get, toStore} from 'svelte/store';
     import OnboardingBootstrapBlock from '$lib/components/onboarding/OnboardingBootstrapBlock.svelte';
     import OnboardingBootstrapBanner from '$lib/components/onboarding/OnboardingBootstrapBanner.svelte';
     import OnboardingOverlayHost from '$lib/components/onboarding/OnboardingOverlayHost.svelte';
@@ -133,10 +133,15 @@
         goto('/');
     }
 
+    // This layout is a legacy component: its `$:` statements do not track runes state such as
+    // `appBootstrap.ready`. Through a store, the route gate re-runs when the bootstrap settles,
+    // so a due redirect shows `onboarding-redirecting` instead of painting the requested page.
+    const bootstrapReady = toStore(() => appBootstrap.ready);
+
     $: isWelcomeRoute = $page.route.id === '/(app)/welcome';
     $: requestedPath = $page.url.pathname + $page.url.search;
-    $: onboardingDestination = appBootstrap.ready && isWelcomeRoute && onboardingGuide.active?.flow === 'intro_tour' ? '/dashboard' : appBootstrap.ready ? appBootstrap.resolveDestination(requestedPath) : requestedPath;
-    $: onboardingRouteReady = isWelcomeRoute || !appBootstrap.ready || onboardingDestination === requestedPath;
+    $: onboardingDestination = $bootstrapReady && isWelcomeRoute && onboardingGuide.active?.flow === 'intro_tour' ? '/dashboard' : $bootstrapReady ? appBootstrap.resolveDestination(requestedPath) : requestedPath;
+    $: onboardingRouteReady = isWelcomeRoute || !$bootstrapReady || onboardingDestination === requestedPath;
     $: if (
         browser &&
         $isAuthenticated &&
