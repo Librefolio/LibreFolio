@@ -3255,7 +3255,8 @@
       "historical_replay_excluded_starts_late": "Prima quotazione dopo l'inizio della finestra del replay: {names} — {treatment, select, zero_return_residual {peso contato come liquidità a rendimento zero} other {fuori dal replay}}.",
       "historical_replay_excluded_missing_fx": "Nessun cambio verso la tua valuta nella finestra del replay: {names} — {treatment, select, zero_return_residual {peso contato come liquidità a rendimento zero} other {fuori dal replay}}.",
       "historical_replay_excluded_stale_at_start": "Nessun prezzo nei {days} giorni prima dell'inizio della finestra del replay: {names} — {treatment, select, zero_return_residual {peso contato come liquidità a rendimento zero} other {fuori dal replay}}.",
-      "historical_replay_excluded_stale_at_end": "Nessun prezzo negli ultimi {days} giorni della finestra del replay: {names} — {treatment, select, zero_return_residual {peso contato come liquidità a rendimento zero} other {fuori dal replay}}."
+      "historical_replay_excluded_stale_at_end": "Nessun prezzo negli ultimi {days} giorni della finestra del replay: {names} — {treatment, select, zero_return_residual {peso contato come liquidità a rendimento zero} other {fuori dal replay}}.",
+      "historical_replay_mostly_excluded": "Il risultato descrive solo una parte del tuo portafoglio ({covered, number, percent}): il resto è escluso dal replay."
     },
     "assetDetail": {
       "overviewTab": "Panoramica",
