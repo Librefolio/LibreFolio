@@ -68,3 +68,69 @@ export function shouldMaskAmount(sensitivity?: AmountSensitivity): boolean {
 export function maskable(formatted: string, sensitivity?: AmountSensitivity): string {
     return shouldMaskAmount(sensitivity) ? PRIVACY_PLACEHOLDER : formatted;
 }
+
+/** The parts of a number formatted by `Intl.NumberFormat` that carry its magnitude. */
+const MAGNITUDE_PARTS: ReadonlySet<string> = new Set(['integer', 'group', 'decimal', 'fraction', 'compact', 'exponentSeparator', 'exponentMinusSign', 'exponentInteger', 'nan', 'infinity']);
+
+/**
+ * Mask the number inside an `Intl.NumberFormat#formatToParts` result, keeping the currency.
+ *
+ * `maskable` replaces a whole string, which is right for the D8 formatters: they append the
+ * currency themselves, *after* masking. A formatter that lets `Intl` place the currency cannot
+ * do that — the symbol sits inside the string, before or after the digits depending on the
+ * locale — and masking its whole output hides the currency too. The product owner ruled that
+ * out on 2026-09-22: privacy hides the number, not the currency.
+ *
+ * So this works on the parts. The run from the first to the last magnitude part — digits,
+ * grouping and decimal separators, the compact suffix, and any literal between them — becomes
+ * one placeholder; the currency, the sign and the literals around the number stay. `compact` is
+ * inside the run on purpose: `€•••K` would disclose the order of magnitude the placeholder
+ * exists to hide. The sign stays outside, as in D8 (see `maskable`).
+ *
+ * Unmasked, the result is the parts joined, which is exactly what `format` would return.
+ */
+export function maskCurrencyParts(parts: readonly Intl.NumberFormatPart[], sensitivity?: AmountSensitivity): string {
+    const joined = parts.map((part) => part.value).join('');
+    if (!shouldMaskAmount(sensitivity)) return joined;
+
+    let first = -1;
+    let last = -1;
+    parts.forEach((part, index) => {
+        if (!MAGNITUDE_PARTS.has(part.type)) return;
+        if (first < 0) first = index;
+        last = index;
+    });
+    if (first < 0) return joined;
+
+    let result = '';
+    parts.forEach((part, index) => {
+        if (index < first || index > last) {
+            result += part.value;
+            return;
+        }
+        if (index === first) result += PRIVACY_PLACEHOLDER;
+        // A currency placed inside the number by some locale is still the currency.
+        if (part.type === 'currency') result += part.value;
+    });
+    return result;
+}
+
+/** A sign at the start of a formatted number, with the invisible bidi marks some locales write around it. */
+const LEADING_SIGN = /^[\p{Cf}+\-\u2212]*/u;
+
+/**
+ * Mask an already formatted number, keeping its sign.
+ *
+ * For numbers that carry no currency and are not formatted through `Intl` parts — an axis tick
+ * built by a shared helper, for instance. Everything after the leading sign is the magnitude,
+ * compact suffix included, and becomes the placeholder. The sign stays outside, as in D8, and
+ * is kept exactly as the locale wrote it (U+2212 in Swedish, a bidi mark before the hyphen in
+ * Arabic): rebuilding it as an ASCII hyphen would change the unmasked output too.
+ *
+ * Absence is the caller's job, as with `maskable`: an em-dash handed in comes back masked, so
+ * check for a missing value before calling (see `formatCurrencyAmount` in the risk helpers).
+ */
+export function maskFormattedNumber(formatted: string, sensitivity?: AmountSensitivity): string {
+    if (!shouldMaskAmount(sensitivity)) return formatted;
+    return `${LEADING_SIGN.exec(formatted)?.[0] ?? ''}${PRIVACY_PLACEHOLDER}`;
+}
