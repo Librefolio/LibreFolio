@@ -36,13 +36,22 @@
  * those icons are distinct from each other and from the fallback, so no equality below can hold by
  * coincidence.
  *
+ * The overlay stands in for K's own composite icons (decision D-K2). Once
+ * `getAssetTypeIconUrl('ETF_STOCK')` returns a static composite, the content is already drawn in
+ * it, and overlaying it again would show it twice — so the function draws the overlay only while a
+ * type still wears its container's icon. K has not landed, so the last block **simulates** that
+ * world: `$lib/utils/assetTypes` is mocked for that block alone, with a composite for `ETF_STOCK`
+ * only, and both sides of the switch are checked in it.
+ *
  * ## Why the import is dynamic
  *
  * `allocationFamily.ts` imports K's `assetTypes.ts`, which reads the generated Zodios schemas
  * (`$lib/api/generated`, gitignored, written by `./dev.py api sync`) at module load. As in
  * `assetTypeTables.test.ts`, the modules are imported inside the tests, after asserting that the
  * generated file exists: a missing file is reported, never skipped — in a summary line a skipped
- * check and a satisfied one are the same absence of red.
+ * check and a satisfied one are the same absence of red. The same choice is what lets the last
+ * block swap K for a simulated one without touching the others: a hoisted `vi.mock` would apply to
+ * the whole file.
  *
  * No DOM, no store, no server: this stays in the default `node` environment.
  *
@@ -50,7 +59,7 @@
  */
 import {existsSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
-import {describe, expect, it} from 'vitest';
+import {afterAll, beforeAll, describe, expect, it, vi} from 'vitest';
 
 /** `__tests__` → `charts` → `components` → `lib`, then `api/generated.ts`. */
 const GENERATED_TS = fileURLToPath(new URL('../../../api/generated.ts', import.meta.url));
@@ -163,5 +172,74 @@ describe('allocationTypeIcons — the tooltip names the vehicle, and the content
         distinctIcons(getAssetTypeIconUrl);
 
         expect(allocationTypeIcons(type)).toEqual({main: getAssetTypeIconUrl(type), content: null});
+    });
+});
+
+// =============================================================================
+// allocationTypeIcons — once K's composite icons land (D-K2), simulated
+// =============================================================================
+
+describe("allocationTypeIcons — once K's composite icons land (D-K2, simulated)", () => {
+    /** A static composite for ETF_STOCK, as D-K2 describes it: a URL that is not the ETF container's icon. */
+    const SIMULATED_COMPOSITE = '/icons/asset-types/simulated-composite-etf-stock.png';
+
+    // Local to this block: the registry is reset so that `allocationFamily` is evaluated again
+    // against the simulated K, and reset once more afterwards so nothing outside ever sees it.
+    beforeAll(() => {
+        vi.resetModules();
+        vi.doMock('$lib/utils/assetTypes', async (importOriginal) => {
+            const real = await importOriginal<typeof import('$lib/utils/assetTypes')>();
+            return {
+                ...real,
+                getAssetTypeIconUrl: (type: string | null | undefined) => ((type ?? '').trim().toUpperCase() === 'ETF_STOCK' ? SIMULATED_COMPOSITE : real.getAssetTypeIconUrl(type)),
+            };
+        });
+    });
+
+    afterAll(() => {
+        vi.doUnmock('$lib/utils/assetTypes');
+        vi.resetModules();
+    });
+
+    /**
+     * The modules, imported **one after the other** inside the simulated world — not through
+     * `importModules`. A manual mock tracks its import callstack in one shared slot, so with two
+     * imports in flight at once (the `Promise.all` there) the module under test can be taken for the
+     * factory's own `importOriginal` and handed the *original* K; vitest's source says as much ("this
+     * will not work if user does Promise.all(import(), import())"). It happened here: with this block
+     * run first, this file saw the simulated icons and `allocationFamily.ts` the real ones.
+     *
+     * Fails unless the module under test sees the simulated K.
+     */
+    async function importSimulated() {
+        expect(existsSync(GENERATED_TS), 'src/lib/api/generated.ts is absent, so assetTypes.ts — and allocationFamily.ts with it — cannot be imported. Run `./dev.py api sync`.').toBe(true);
+        const assetTypes = await import('$lib/utils/assetTypes');
+        const family = await import('../allocationFamily');
+        const {getAssetTypeIconUrl} = assetTypes;
+        const {allocationTypeIcons} = family;
+        // Barrier: the composite exists and is not its container's icon, and it reached the module
+        // under test through its own import — otherwise every assertion below would be about today.
+        expect(getAssetTypeIconUrl('ETF_STOCK')).toBe(SIMULATED_COMPOSITE);
+        expect(getAssetTypeIconUrl('ETF')).not.toBe(SIMULATED_COMPOSITE);
+        expect(allocationTypeIcons('ETF_STOCK').main, 'allocationFamily.ts does not see the simulated K').toBe(SIMULATED_COMPOSITE);
+        return {allocationTypeIcons, getAssetTypeIconUrl};
+    }
+
+    it('shows the composite of ETF_STOCK alone — it already carries its content, never overlaid twice', async () => {
+        const {allocationTypeIcons} = await importSimulated();
+
+        expect(allocationTypeIcons('ETF_STOCK')).toEqual({main: SIMULATED_COMPOSITE, content: null});
+    });
+
+    it('control, in the same world: ETF_BOND, still on its container icon, keeps the overlay, and STOCK stays a single icon', async () => {
+        const {allocationTypeIcons, getAssetTypeIconUrl} = await importSimulated();
+        const etf = getAssetTypeIconUrl('ETF');
+        const stock = getAssetTypeIconUrl('STOCK');
+        const bond = getAssetTypeIconUrl('BOND');
+        // Barrier: four different pictures, so neither equality below can hold by coincidence.
+        expect(new Set([etf, stock, bond, SIMULATED_COMPOSITE]).size, `icons not distinct: ${JSON.stringify({etf, stock, bond})}`).toBe(4);
+
+        expect(allocationTypeIcons('ETF_BOND')).toEqual({main: etf, content: bond});
+        expect(allocationTypeIcons('STOCK')).toEqual({main: stock, content: null});
     });
 });

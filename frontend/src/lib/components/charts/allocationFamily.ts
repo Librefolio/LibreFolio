@@ -35,11 +35,17 @@ export interface AllocationTypeIcons {
  * with the content one small beside it.
  *
  * Composed from what K already exports, so there is no second map: `getAssetTypeIconUrl` for
- * the vehicle and `primaryAssetType` (contract K2) for the content. When R16 delivers K's own
- * composite icon, the tooltip should consume that instead.
+ * the type and its container, `primaryAssetType` (contract K2) for the content.
+ *
+ * It adapts to K's own composite (decision D-K2): once `getAssetTypeIconUrl('ETF_STOCK')` returns
+ * a static composite instead of the container's icon, that icon already carries the content, and
+ * overlaying it again would show the content twice. So the overlay is drawn only while a type's
+ * icon is still its container's — before K lands — and never after, with no edit at integration.
  */
 export function allocationTypeIcons(type: string | null | undefined): AllocationTypeIcons {
     const main = getAssetTypeIconUrl(type);
+    const container = getAssetTypeIconUrl(allocationFamily(type));
+    if (main !== container) return {main, content: null};
     const content = getAssetTypeIconUrl(primaryAssetType(type));
     return {main, content: content === main ? null : content};
 }

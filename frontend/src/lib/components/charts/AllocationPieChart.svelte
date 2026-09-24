@@ -439,7 +439,7 @@
                     const parentI18nKey = `assets.types.${primaryKey}`;
                     const parentTranslated = tr(parentI18nKey);
                     const parentLabel = parentTranslated !== parentI18nKey ? parentTranslated : primaryKey;
-                    // Same precision as the member's own figure: "3.48%" next to "3.5%" read
+                    // Same precision as the member's own figure: two decimals beside one read
                     // as two different quantities (review of R12, 24/09/2026).
                     const parentTotal = roundedPercent(params.data?.primaryTotal ?? 0);
                     parentLine = `<br/><span style="font-size:11px;opacity:0.7">↳ ${parentLabel} ${parentTotal}%</span>`;
