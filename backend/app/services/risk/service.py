@@ -30,6 +30,9 @@ from backend.app.schemas.risk import (
     PreparedAssetSeriesSet,
     RiskAnalyticRequest,
     RiskAnalyticResult,
+    RiskAssetEligibility,
+    RiskEligibilityRequest,
+    RiskEligibilityResponse,
     RiskError,
     RiskErrorCode,
     RiskExcludedAsset,
@@ -44,6 +47,7 @@ from backend.app.schemas.risk import (
     RiskWarning,
 )
 from backend.app.services.asset_source import AssetSourceManager
+from backend.app.services.data_quality_thresholds import RISK_MIN_OBSERVATIONS, STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.portfolio_service import PortfolioService
 from backend.app.services.provider_registry import RiskAnalyticRegistry
 from backend.app.services.risk.base import (
@@ -54,6 +58,7 @@ from backend.app.services.risk.base import (
     RiskHistoricalReplayContext,
     RiskUnavailableError,
 )
+from backend.app.services.risk.eligibility import analysis_eligibility, load_price_window_facts, replay_coverage
 from backend.app.services.risk.metrics import (
     current_buy_and_hold_returns,
     period_returns_from_cumulative,
@@ -310,7 +315,57 @@ class RiskService:
                 computation=computation,
             )
 
-        return RiskQueryResponse(items=[results[index] for index in range(len(request.analytics))])
+        items = [results[index] for index in range(len(request.analytics))]
+        return RiskQueryResponse(items=await self._with_warning_asset_names(items))
+
+    async def asset_eligibility(self, request: RiskEligibilityRequest) -> RiskEligibilityResponse:
+        """Whether each asset can take part in a risk analysis of the requested period.
+
+        Read from the asset's own quotes, not from a joint calendar, so the answer for one asset does
+        not depend on what else is selected. An unknown asset has no quotes and is ineligible.
+        """
+        start = request.date_range.start
+        end = request.date_range.end or start
+        asset_ids = list(dict.fromkeys(request.asset_ids))
+        facts = await load_price_window_facts(self.db, asset_ids=asset_ids, window_start=start, window_end=end, target_currency=request.target_currency)
+        items: list[RiskAssetEligibility] = []
+        for asset_id in asset_ids:
+            fact = facts[asset_id]
+            level, reasons = analysis_eligibility(fact, start, end)
+            items.append(
+                RiskAssetEligibility(
+                    asset_id=asset_id,
+                    level=level,
+                    reasons=list(reasons),
+                    first_quote=fact.first_quote,
+                    last_quote=fact.last_quote,
+                    quotes_in_period=fact.quotes_in_window,
+                )
+            )
+        return RiskEligibilityResponse(items=items, min_quotes=RISK_MIN_OBSERVATIONS, stale_days=STALE_PRICE_THRESHOLD_DAYS)
+
+    async def _with_warning_asset_names(self, items: list[RiskAnalyticResult]) -> list[RiskAnalyticResult]:
+        """Name the assets a warning is about, so its translated sentence can list them.
+
+        Warnings carry asset ids in `details.asset_ids` (or a single `details.asset_id`); the display
+        names are read once for the whole response and added to `message_params` as `names`
+        (comma-separated) and `count`.
+        """
+        ids = sorted({asset_id for item in items for warning in item.warnings if warning.message_i18n_key for asset_id in _warning_asset_ids(warning)})
+        if not ids:
+            return items
+        names = dict((await self.db.execute(select(Asset.id, Asset.display_name).where(Asset.id.in_(ids)))).all())
+        enriched: list[RiskAnalyticResult] = []
+        for item in items:
+            warnings = []
+            for warning in item.warnings:
+                asset_ids = _warning_asset_ids(warning)
+                if warning.message_i18n_key and asset_ids:
+                    params = {**warning.message_params, "names": ", ".join(names.get(asset_id, f"#{asset_id}") for asset_id in asset_ids), "count": len(asset_ids)}
+                    warning = warning.model_copy(update={"message_params": params})
+                warnings.append(warning)
+            enriched.append(item.model_copy(update={"warnings": warnings}))
+        return enriched
 
     async def _load_scope_inputs(  # noqa: C901 — scope-variant dispatch + sequential composition validation
         self,
@@ -394,6 +449,7 @@ class RiskService:
                         code="slice_assets_not_held",
                         message="Some requested assets are not held in the selected portfolio scope and were ignored.",
                         details={"asset_ids": list(unheld_asset_ids)},
+                        message_i18n_key="risk.warnings.slice_assets_not_held",
                     )
                 )
             requested_asset_ids = slice_asset_ids
@@ -430,6 +486,7 @@ class RiskService:
                 RiskWarning(
                     code="zero_risk_residual_includes_in_transit",
                     message="The zero-return residual includes in-transit value not represented by an asset return series.",
+                    message_i18n_key="risk.warnings.zero_risk_residual_includes_in_transit",
                 )
             )
 
@@ -573,7 +630,22 @@ class RiskService:
             )
 
         excluded_set = set(excluded_asset_ids)
-        source_asset_ids = {asset_id: proxy_by_asset.get(asset_id, asset_id) for asset_id in scope_inputs.requested_asset_ids if asset_id not in excluded_set}
+        candidate_ids = [asset_id for asset_id in scope_inputs.requested_asset_ids if asset_id not in excluded_set]
+        # Automatic exclusion (developer's decision of 24/09/2026): an asset the user did not proxy,
+        # whose own quotes do not cover the replay window at both ends, takes no part in the replay
+        # instead of blocking it. It must be left out before the joint series is prepared: kept
+        # in, a late starter moves the joint baseline and shortens the replay of every other asset.
+        replay_end = replay_range.end or replay_range.start
+        own_ids = [asset_id for asset_id in candidate_ids if asset_id not in proxy_by_asset]
+        window_facts = await load_price_window_facts(
+            self.db,
+            asset_ids=own_ids,
+            window_start=replay_range.start,
+            window_end=replay_end,
+            target_currency=target_currency,
+        )
+        auto_excluded = {asset_id: reason for asset_id in own_ids if (reason := replay_coverage(window_facts[asset_id], replay_range.start, replay_end)) is not None}
+        source_asset_ids = {asset_id: proxy_by_asset.get(asset_id, asset_id) for asset_id in candidate_ids if asset_id not in auto_excluded}
         prepared = await self._prepare_asset_series(
             asset_ids=tuple(sorted(set(source_asset_ids.values()))),
             date_range=replay_range,
@@ -595,6 +667,7 @@ class RiskService:
                 source_asset_ids=source_asset_ids,
                 excluded_asset_ids=tuple(sorted(excluded_asset_ids)),
                 data_quality=replay_data_quality,
+                auto_excluded_assets=auto_excluded,
             ),
         )
 
@@ -621,14 +694,7 @@ class RiskService:
             prepared.data_quality,
         )
         execution_warnings = list(scope_inputs.warnings)
-        if excluded_assets:
-            execution_warnings.append(
-                RiskWarning(
-                    code="assets_excluded",
-                    message="One or more scope assets were excluded from risk calculations.",
-                    details={"asset_ids": [item.asset_id for item in excluded_assets]},
-                )
-            )
+        execution_warnings.extend(_assets_excluded_warnings(excluded_assets))
 
         primary_baseline_date: Optional[date] = None
         primary_return_dates: tuple[date, ...] = ()
@@ -790,16 +856,7 @@ class RiskService:
             )
         )
         if data_quality.data_quality_status != DataQualityStatus.OK:
-            warnings = _dedupe_warnings(
-                (
-                    *warnings,
-                    RiskWarning(
-                        code="data_quality_degraded",
-                        message="Risk result uses incomplete or carried-forward source data.",
-                        details={"status": data_quality.data_quality_status.value},
-                    ),
-                )
-            )
+            warnings = _dedupe_warnings((*warnings, *_data_quality_warnings(data_quality)))
         status = RiskResultStatus.PARTIAL if any(warning.degrades_result for warning in warnings) or context_exclusions or computation.excluded_assets or data_quality.data_quality_status != DataQualityStatus.OK else RiskResultStatus.OK
         return RiskAnalyticResult(
             instance_id=plan.request.instance_id,
@@ -990,6 +1047,69 @@ def _is_hypothetical_plan(plan: _AnalyticPlan) -> bool:
 
 def _is_geography_hypothetical_plan(plan: _AnalyticPlan) -> bool:
     return _is_hypothetical_plan(plan) and getattr(getattr(plan, "params", None), "dimension", None).value == "geography"
+
+
+def _warning_asset_ids(warning: RiskWarning) -> list[int]:
+    """The assets a warning is about, from `details.asset_ids` or a single `details.asset_id`."""
+    raw = warning.details.get("asset_ids")
+    if raw is None and "asset_id" in warning.details:
+        raw = [warning.details["asset_id"]]
+    return [asset_id for asset_id in (raw or []) if isinstance(asset_id, int) and not isinstance(asset_id, bool)]
+
+
+def _assets_excluded_warnings(excluded_assets: tuple[RiskExcludedAsset, ...]) -> list[RiskWarning]:
+    """One `assets_excluded` warning per reason, so the sentence can say why the assets are missing.
+
+    Keys are written out branch by branch: the i18n audit reads backend keys from their literal
+    assignments, and one built at runtime would look unused.
+    """
+    by_reason: dict[str, list[int]] = {}
+    for item in excluded_assets:
+        by_reason.setdefault(item.reason, []).append(item.asset_id)
+    code = "assets_excluded"
+    message = "One or more scope assets were excluded from risk calculations."
+    warnings: list[RiskWarning] = []
+    for reason, asset_ids in sorted(by_reason.items()):
+        details: dict = {"asset_ids": asset_ids, "reason": reason}
+        if reason == "missing_price":
+            warnings.append(RiskWarning(code=code, message=message, details=details, message_i18n_key="risk.warnings.assets_excluded_missing_price"))
+        elif reason == "missing_fx":
+            warnings.append(RiskWarning(code=code, message=message, details=details, message_i18n_key="risk.warnings.assets_excluded_missing_fx"))
+        elif reason == "invalid_currency":
+            warnings.append(RiskWarning(code=code, message=message, details=details, message_i18n_key="risk.warnings.assets_excluded_invalid_currency"))
+        else:
+            warnings.append(RiskWarning(code=code, message=message, details=details, message_i18n_key="risk.warnings.assets_excluded_insufficient_history"))
+    return warnings
+
+
+def _data_quality_warnings(data_quality: DataQualityReport) -> list[RiskWarning]:
+    """One `data_quality_degraded` warning per cause, each naming what is affected.
+
+    Excluded assets are not repeated here: `assets_excluded` already names them. A degraded report
+    with none of the causes below still says so, in a generic sentence.
+    """
+    code = "data_quality_degraded"
+    message = "Risk result uses incomplete or carried-forward source data."
+    status = data_quality.data_quality_status.value
+    warnings: list[RiskWarning] = []
+    stale_ids = sorted({item.asset_id for item in data_quality.stale_prices} | set(data_quality.carried_forward_price_asset_ids))
+    if stale_ids:
+        warnings.append(RiskWarning(code=code, message=message, details={"status": status, "cause": "stale_prices", "asset_ids": stale_ids}, message_i18n_key="risk.warnings.data_quality_stale_prices", message_params={"days": STALE_PRICE_THRESHOLD_DAYS}))
+    if data_quality.carried_forward_fx_pairs:
+        pairs = sorted(data_quality.carried_forward_fx_pairs)
+        warnings.append(RiskWarning(code=code, message=message, details={"status": status, "cause": "stale_fx_rates", "pairs": pairs}, message_i18n_key="risk.warnings.data_quality_stale_fx_rates", message_params={"days": STALE_PRICE_THRESHOLD_DAYS, "pairs": ", ".join(pairs)}))
+    missing_ids = sorted({item.asset_id for item in data_quality.missing_price_assets})
+    if missing_ids:
+        warnings.append(RiskWarning(code=code, message=message, details={"status": status, "cause": "missing_prices", "asset_ids": missing_ids}, message_i18n_key="risk.warnings.data_quality_missing_prices"))
+    fx_pairs = sorted(set(data_quality.unresolved_fx_pairs) | {item.pair for item in data_quality.missing_fx_pairs})
+    if fx_pairs:
+        warnings.append(RiskWarning(code=code, message=message, details={"status": status, "cause": "missing_fx_rates", "pairs": fx_pairs}, message_i18n_key="risk.warnings.data_quality_missing_fx_rates", message_params={"pairs": ", ".join(fx_pairs)}))
+    incomplete_dates = set(data_quality.incomplete_nav_dates) | set(data_quality.incomplete_book_value_dates) | set(data_quality.incomplete_allocation_dates) | set(data_quality.incomplete_valuation_dates)
+    if incomplete_dates:
+        warnings.append(RiskWarning(code=code, message=message, details={"status": status, "cause": "incomplete_dates", "count": len(incomplete_dates)}, message_i18n_key="risk.warnings.data_quality_incomplete_dates", message_params={"count": len(incomplete_dates)}))
+    if not warnings and not data_quality.unusable_assets:
+        warnings.append(RiskWarning(code=code, message=message, details={"status": status}, message_i18n_key="risk.warnings.data_quality_degraded"))
+    return warnings
 
 
 def _dedupe_warnings(
