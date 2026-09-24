@@ -21,6 +21,7 @@
 | 5 | D3 guida review numeri (qui) + D1 doc utente (`docs-writer`) | ✅ 23/09 |
 | 6 | copia di prod dalla snapshot → server `6163` per il developer | ✅ 23/09 — **acceso, in attesa della review** |
 | 7 | handoff, `FROZEN` su albero e processi, dichiarati separati | ✅ 23/09 — albero `FROZEN` · server `6163` **acceso di proposito** per la review |
+| 8 | correzione post-commit: la regola della finestra (pagina + piano), un solo commit | ✅ 24/09 |
 
 > **Note implementazione (passo 1)**: il piano approvato è riportato sotto senza modifiche di
 > sostanza; le decisioni arrivate durante la pianificazione (snapshot, perimetro F/J, R2-128 a F)
@@ -123,7 +124,7 @@ male ciascuno?»* · *«Quanto ha pagato ciascuno per il suo rischio?»* · repl
 | # | cosa fare | cosa devi vedere | 🔴 è un difetto se… |
 |---:|---|---|---|
 | 0 | **R1**: guarda la colonna *Peggior discesa* | sotto ogni cifra, «durata **N** g» con un numero | compare `{days}`, `{{days}}` o la sola «durata  g» · la console mostra `MALFORMED_ARGUMENT` |
-| 1 | scegli 2-3 asset **quotati** di lunga storia e apri i **dettagli di calcolo** della sezione — mostrano le **osservazioni**, non le date. Poi aggiungi un asset **quotato** con storia più corta | le osservazioni **scendono** e le cifre degli **altri** cambiano | le cifre cambiano **ma le osservazioni no** |
+| 1 | scegli 2-3 asset **quotati** di lunga storia e apri i **dettagli di calcolo** della sezione — mostrano **osservazioni** e **copertura**, non le date. Poi aggiungi un asset **quotato** con storia più corta | le osservazioni **cambiano** e con loro le cifre degli **altri**: di norma **scendono**, perché la finestra comincia più tardi (e la copertura scende sotto il 100 %); possono **salire** se il nuovo asset ha prezzi anche nel weekend e gli altri no — il calendario diventa giornaliero e il risultato «parziale» (riga 9) | le cifre degli altri cambiano **ma osservazioni e copertura no** |
 | 1b | aggiungi un **crowdfunding** (asset senza prezzi) | viene **escluso**: riga di trattini, la sezione dichiara che un asset è stato escluso, **le osservazioni non cambiano** e nemmeno le cifre degli altri | le cifre degli altri cambiano · l'asset sparisce senza avviso |
 | 2 | *Risalita al massimo* contro *Sotto il massimo*, stessa riga | vale `\|x\| / (1 − \|x\|)`: −20 % → +25 %, −50 % → +100 %, **a meno dell'arrotondamento a un decimale** | l'identità non torna — è vera **per costruzione** (`backend/app/services/risk/metrics.py:392`, entrambe dallo stesso `current_drawdown`) |
 | 3 | volatilità in tabella contro il punto sullo scatter (tooltip) | lo stesso numero | differiscono — la tabella legge la cifra dello scatter |
@@ -132,19 +133,32 @@ male ciascuno?»* · *«Quanto ha pagato ciascuno per il suo rischio?»* · repl
 | 6 | restringi il periodo a **~2 settimane** | la peggior discesa resta misurata (le bastano 2 osservazioni); *Giornata storta*, *Mese storto* e tutta la sezione rischio/rendimento **dichiarano** perché mancano (ne servono 20) | le sezioni restano vuote **senza** dire perché |
 | 7 | tutta la pagina | nessun euro, nessuna classifica, nessun colore che distingua un asset dall'altro, **nessuna retta** sullo scatter — e la nota sotto lo scatter **non parla di una retta** | uno qualunque dei cinque |
 | 8 | la volatilità dello stesso asset qui e nello scatter della Dashboard | **può differire** | ❌ **non è un difetto**: tre pagine, tre preparazioni (Ⓔ). Confronta le **osservazioni** nei dettagli: differiscono anche quelle. ⚠️ Confronta solo cifre **per asset**: le cifre di **portafoglio** della Dashboard sono sotto la riserva **F2** (sotto) |
-| 9 | le sezioni, sui tuoi dati | alcune selezioni rispondono **«parziale»** con un avviso di qualità dei dati, e la sezione lo dichiara | una sezione parziale **senza** dire perché |
+| 9 | le sezioni, sui tuoi dati | alcune selezioni rispondono **«parziale»**: la sezione mostra in ambra lo stato (*«Parziale»*) e la nota del backend *«Risk result uses incomplete or carried-forward source data.»* — **in inglese in ogni lingua**, perché è testo del backend mostrato così com'è. **Due meccanismi**, entrambi via `CARRIED_FORWARD` (`backend/app/schemas/portfolio.py:244-245`) → `partial` (`backend/app/services/risk/service.py:803`): ① un asset **non quotato** in un giorno in cui un altro lo è (es. il BTP nei weekend, accanto a un ETF justETF) entra col suo ultimo prezzo; ② il **punto di partenza** stesso è riportato — se il giorno prima dell'intervallo un asset non ha quotazione (es. un intervallo che comincia di lunedì), perché la baseline si conta fra i punti riportati (`series_preparation.py:311-313`). ⚠️ **I dettagli di calcolo non mostrano i punti riportati**: solo osservazioni, copertura, fattore di annualizzazione e base di rendimento | una sezione parziale **senza** stato né nota |
 
-🔑 **La riga 1 è quella che produrrà il primo dubbio.** Il calendario congiunto è
-un'**intersezione** (`backend/app/services/series_preparation.py:237-239`): ogni cifra è misurata
-sulle date che **tutti** gli asset selezionati condividono. È il prezzo della clausola ⓪ (punti
-confrontabili sullo stesso grafico) e non ha un rimedio che non rompa quella. Una cifra che cambia
-quando aggiungi un asset **è corretta se le osservazioni sono cambiate**, ed è per questo che la
-guida chiede di guardare le osservazioni **prima** della cifra.
-➕ **Con un benchmark attivo** anche il benchmark entra nell'intersezione delle due sezioni di
-confronto (`backend/app/services/risk/service.py:171`, `comparison_dependency_asset_ids`): un
-benchmark con storia più corta restringe *«Quanto ha fatto male ciascuno?»* e *«Quanto ha pagato
-ciascuno?»*, **non** la matrice né il replay. Quindi le osservazioni delle due sezioni di confronto
-possono essere **meno** di quelle della matrice sopra: non è un difetto.
+🔑 **La riga 1 è quella che produrrà il primo dubbio.** La finestra comune segue **tre regole**
+(`backend/app/services/series_preparation.py`):
+1. **comincia** il primo giorno in cui **ogni** asset selezionato può essere **valutato** nella valuta
+   del tab — prezzo **e** cambio: un cambio mancante ritarda l'inizio come un prezzo mancante. È
+   l'**unico** uso dell'intersezione di `:237-239`, che lavora su prezzi già convertiti. Se tutti
+   hanno storia prima dell'intervallo, è il **giorno prima** dell'intervallo (i prezzi si caricano da
+   lì: `backend/app/services/risk/service.py:514-517`);
+2. da lì conta **ogni data in cui almeno un asset è quotato** — l'**unione** delle quotazioni fresche
+   (`:236`; fresca = `backward_fill_info.days_back == 0`, `_price_is_fresh`, `:123-125`);
+3. un asset **non quotato** quel giorno entra col suo **ultimo prezzo** (`:287` tiene le date in cui
+   ogni asset ha un valore, anche riportato). Il suo rendimento quel giorno è **zero se è nella valuta
+   del tab**; se è in un'altra valuta è la **variazione del cambio**, perché il prezzo riportato viene
+   convertito al cambio del suo giorno (`backend/app/services/asset_sources/price_query.py:403-407`) —
+   zero solo se è riportato anche il cambio, come nel weekend. Il risultato diventa `partial` (riga 9).
+
+Per questo aggiungere un asset con storia più corta cambia le cifre degli altri: la finestra comincia
+più tardi. È il prezzo della clausola ⓪ (punti confrontabili sullo stesso grafico) e non ha un rimedio
+che non rompa quella. Una cifra che cambia quando aggiungi un asset **è corretta se le osservazioni
+sono cambiate**, ed è per questo che la guida chiede di guardare le osservazioni **prima** della cifra.
+➕ **Con un benchmark attivo** il benchmark entra nella finestra delle due sezioni di confronto
+(`backend/app/services/risk/service.py:171`, `comparison_dependency_asset_ids`): un benchmark con
+storia più corta ne sposta l'inizio per *«Quanto ha fatto male ciascuno?»* e *«Quanto ha pagato
+ciascuno?»*, **non** per la matrice né per il replay. Quindi le osservazioni delle due sezioni di
+confronto possono essere **meno** di quelle della matrice sopra: non è un difetto.
 
 ### Riserve aperte — owner **Risk**, candidati e non verdetti
 
@@ -163,14 +177,40 @@ possono essere **meno** di quelle della matrice sopra: non è un difetto.
 `horizon_observations = observations − horizon_days + 1`). È l'intento dichiarato anche per il L1 di
 portafoglio (`MONTHLY_VAR_HORIZON_DAYS`, *«Horizon, in observations»*): su una griglia di giorni di
 borsa 21 osservazioni sono circa un mese di calendario. **Quanti giorni di calendario siano davvero
-dipende dalla griglia, cioè dalla selezione.** Non ne traggo un verdetto: è la stessa domanda di
-unità di C2 e resta aperta con lui.
+dipende dalla griglia, cioè dalla selezione** — e dal 24/09 è **misurabile**:
+- **con un ETF justETF nella selezione** la griglia è **giornaliera di calendario** — justETF registra
+  sabato e domenica con la chiusura del venerdì (misura del coordinator sulla snapshot: 14 448 righe,
+  il 100 %), e quelle righe contano fresche (regola 2) — quindi *Mese storto* = **21 giorni di
+  calendario = 3 settimane**;
+- l'asset `8` (BTP, `borsa_italiana`, nessuna riga nel weekend) **da solo** gira su giorni di borsa,
+  ≈ 1 mese — **e solo se** non c'è un benchmark justETF, perché l'insieme preparato include gli asset di
+  confronto (`backend/app/services/risk/service.py:170-171`);
+- il *Mese storto* **di portafoglio** (Dashboard, Broker Detail) resta 3 settimane **in ogni caso**:
+  legge la TWRR della storia del report (`backend/app/services/risk/service.py:932-941`), che ha **un
+  punto per ogni giorno di calendario** — `portfolio_engine.py:870-871` (`while current <= self.date_to`,
+  uno stato per giorno; i giorni fermi riusano lo stato precedente, `:874-911`) e
+  `portfolio_service.py:1305-1425` (`get_history`, *«Return daily portfolio value series»*, taglia
+  sull'intervallo senza campionare).
+
+Quindi l'etichetta dipende **anche dall'unità dell'orizzonte** (osservazioni o giorni), non solo da come
+si contano le righe del weekend. **Nessun verdetto**: è la domanda di C2, owner Risk, tempo ②.
+L'etichetta non si cambia finché quella non è risolta.
+➕ **La stessa domanda tocca anche *Giornata storta* e la volatilità**: su una griglia giornaliera il
+5 % peggiore dei giorni e la dispersione includono i giorni **riportati a rendimento zero** (regola 3).
+Stessa riserva, stesso owner, nessun verdetto.
 
 > 📌 **Misura datata, istantanea e non costante** (Ⓕ): 23/09/2026, copia di prod su `6163`, finestra
-> `2024-01-01 → 2026-09-22`, selezione `[1, 3, 8]` → **574 osservazioni** su 995 giorni di calendario.
+> **richiesta** `2024-01-01 → 2026-09-22` (995 giorni). Selezione `[1, 3, 8]` → **574 osservazioni** su
+> uno span **osservato** di **574 giorni**, dalla baseline `2025-02-25` (prima quotazione del BTP): **una
+> osservazione per giorno di calendario**, f = 365,0. La copertura 574/995 = 0,577 **non** ha per
+> denominatore lo span richiesto per definizione: è `osservazioni / date dell'intervallo con almeno una
+> quotazione fresca, esclusa la baseline` (`series_preparation.py:344-345`), che qui vale 995 solo perché
+> un ETF justETF quota ogni giorno di calendario.
 > Con `[1, 3, 8, 12]` (12 = crowdfunding senza prezzi) → **574**, `12` escluso con `missing_price`,
-> avviso `assets_excluded`. La selezione `[1, 3, 8]` risponde `partial` con `data_quality_degraded`;
-> la selezione `[1, 2, 3, 4]` rispondeva `ok`. **Nessuna causa attribuita**: non l'ho isolata.
+> avviso `assets_excluded`.
+> **Causa del `partial` su `[1, 3, 8]`**: il BTP non ha righe nel weekend e viene riportato in avanti
+> (176 volte, misura del coordinator sulla snapshot) → `CARRIED_FORWARD` → `partial` (riga 9). La
+> selezione `[1, 2, 3, 4]`, tutti justETF, risponde `ok`. Non è un difetto di A: owner Risk, tempo ②.
 
 > **⚠️ Fuori pista (mio, nella guida stessa)**: la prima stesura della riga 6 diceva *«restringi a
 > ~1 mese»*. Un mese sono ~21 sedute, cioè **più** delle 20 osservazioni minime dei quattro
@@ -196,6 +236,10 @@ unità di C2 e resta aperta con lui.
 >   Correlazione: selezione, le quattro sezioni coi titoli reali, e la parte *«leggere i numeri»*
 >   (finestra per intersezione, trattini, stato misto, preparazioni diverse fra pagine). Nessuna
 >   cifra dipendente dalla finestra, nessuno screenshot (la gallery non è rigenerata).
+>   ⚠️ **Rettificato 24/09**: «finestra per intersezione» era la mia premessa sbagliata — l'intersezione
+>   fissa solo l'**inizio** della finestra; le date misurate sono l'**unione** delle quotazioni fresche,
+>   con gli asset non quotati riportati al loro ultimo prezzo. La pagina è corretta nel commit successivo
+>   (passo 8).
 > - `user/assets/index.en.md` — la frase di F (§9.1) sul controllo Abs/%, **riformulata da me**
 >   perché la proposta ometteva un fatto misurato: il controllo è visibile e premibile **anche sul
 >   tab Correlazione** (`+page.svelte:1439-1443`, la guardia è `viewMode`, non il tab) e **non è
@@ -208,10 +252,13 @@ unità di C2 e resta aperta con lui.
 
 > **🔴 Fuori pista — quattro premesse del mio briefing allo specialista erano false.**
 > 1. *«la finestra è mostrata nei dettagli di ogni sezione»* — mostrano **osservazioni**, non date.
-> 2. *«tutte le cifre usano le date che condividono gli asset selezionati»* — **incompleto**: quando
->    si applica un benchmark, `service.py:171` lo **prepara insieme** alla selezione
+> 2. *«tutte le cifre usano le date che condividono gli asset selezionati»* — **incompleto per due
+>    motivi**. ① Quando si applica un benchmark, `service.py:171` lo **prepara insieme** alla selezione
 >    (`comparison_dependency_asset_ids`), quindi un benchmark giovane **restringe anche** la finestra
->    dei miei due livelli; matrice e replay non lo includono. **Questo smentisce il docstring che ho
+>    dei miei due livelli; matrice e replay non lo includono. ② *(aggiunto 24/09, trovato da Risk)* le
+>    date misurate **non sono condivise**: sono l'**unione** delle quotazioni fresche
+>    (`series_preparation.py:236`), e chi quel giorno non è quotato entra col suo ultimo prezzo (`:287`);
+>    l'intersezione (`:237-239`) fissa solo l'inizio. **Il motivo ① smentisce il docstring che ho
 >    scritto io** in `AssetSetComparisonLevels.svelte:19-27` (*«un punto di quest'onda e una cella
 >    della matrice sono misurati sulle stesse date»*). Vero senza benchmark, falso con.
 >    → Il file è **congelato per me** finché R2-128 è aperto (F ci scrive una riga). **Non lo tocco:
@@ -451,9 +498,14 @@ correzione del coordinator risponde a una coppia che non ho citato. Le mie due v
 
 ## 4. D3 — cosa il developer vedrà sui **suoi** dati, e come leggerlo
 
-🔑 **Il calendario congiunto è un'intersezione** (`series_preparation.py:237-239`): ogni cifra
-per-asset è misurata sulle date che **tutti** gli asset selezionati condividono. È il prezzo della
-clausola ⓪ (punti commensurabili). Conseguenze visibili:
+🔑 **La finestra comune comincia dove tutti gli asset hanno un prezzo** — l'intersezione di
+`series_preparation.py:237-239` fissa solo questo inizio — **e da lì conta ogni data in cui almeno un
+asset è quotato** (unione delle quotazioni fresche, `:236`); chi quel giorno non è quotato entra col
+suo ultimo prezzo (`:287`). È il prezzo della clausola ⓪ (punti commensurabili).
+⚠️ **Rettificato 24/09**: la stesura approvata diceva *«il calendario congiunto è un'intersezione: ogni
+cifra è misurata sulle date che tutti condividono»* — premessa mia, sbagliata, trovata da Risk. La
+guida operativa è la **D3** sopra; questa tabella resta come testo del piano approvato. Conseguenze
+visibili:
 
 | osservazione | difetto? |
 |---|---|
@@ -587,3 +639,54 @@ N giorni» della peggior discesa non veniva resa (sintassi di traduzione errata)
 > **la riga 1 dipendeva da F2** (un crowdfunding non restringe niente) ed è stata spezzata in 1/1b;
 > la riga 8 porta ora l'avvertenza di confrontare solo cifre per asset. Nessun'altra riga trae
 > conclusioni da C2 o F2.
+
+---
+
+## Passo 8 — correzione post-commit: la regola della finestra · ✅ 24/09/2026
+
+> **Baseline**: `f7bf5a85d` (checkpoint committato: `e0364c535` → `e2327e9a3` → `f7bf5a85d`, 9+3+2
+> file), albero pulito. Scongelato **solo** per questo commit: la pagina utente e questo piano.
+
+> **Note implementazione**:
+> - **La premessa corretta**: *«ogni cifra è misurata sulle date che tutti gli asset condividono
+>   (intersezione)»* — mia, sbagliata, trovata da Risk. Le tre regole vere sono nella guida D3
+>   (paragrafo 🔑). Corretti: la guida (righe 1 e 9, regole), il blocco *Mese storto* con la misura
+>   datata, le note storiche del passo 5 (marcate *«Rettificato 24/09»*, non cancellate) e il §4 del
+>   piano approvato.
+> - **La serie di portafoglio**: al posto dell'etichetta «misura del coordinator», citazioni di codice
+>   verificate da me — `portfolio_engine.py:870-871` (uno stato per giorno di calendario), `:874-911`
+>   (giorno fermo che riusa lo stato, chiuso da `continue` a `:911`), `portfolio_service.py:1305-1425`
+>   (`get_history`, *«Return daily portfolio value series»*), `risk/service.py:932-941`.
+> - **Pagina** `correlation.en.md`, con `docs-writer`, solo EN: le tre regole nella sezione *One Shared
+>   Window* (titolo e ancora invariati; tenuto il vero di `:287`), e le frasi che le contraddicevano a
+>   `:90`, `:99`, `:138`, `:150-156`, `:161-165`, `:177`, `:189`. *Bad month* non afferma più un mese: 21
+>   osservazioni consecutive, circa un mese di giorni di borsa, tre settimane quando il calendario conta
+>   ogni giorno — senza verdetto. `mkdocs build` strict ✅ · `check-links` 80 validi ✅ · nessuno stamp.
+> - **Precisata anche la copertura** nella misura datata: il denominatore non è lo span richiesto ma le
+>   date dell'intervallo con almeno una quotazione fresca, esclusa la baseline (`series_preparation.py:344-345`);
+>   coincide con i 995 giorni solo perché un ETF justETF quota ogni giorno.
+> - **Rilanciati da me**, non riportati: `mkdocs build` strict → exit 0, zero righe `WARNING`/`ERROR`;
+>   `check-links` → exit 0, **80** validi (+3 ancore già in eccezione, non su questa pagina).
+
+> **🔴 Fuori pista — la regola che ho passato allo specialista era di nuovo imprecisa, in due punti.**
+> Venuta dal coordinator e riletta da me senza verificarla fino in fondo:
+> 1. *«il punto riportato compare nei dettagli»* — **non su questo tab**: i dettagli di calcolo mostrano
+>    solo osservazioni, copertura, fattore di annualizzazione e base (`RiskLevelSection.svelte:183-211`).
+>    I conteggi dei punti riportati li mostra solo il pannello legacy.
+> 2. *«rendimento zero»* — **solo per gli asset nella valuta del tab**: il prezzo riportato viene
+>    convertito al cambio del suo giorno (`price_query.py:403-407`), quindi per un asset in altra valuta
+>    il rendimento del giorno riportato è la variazione del cambio.
+> E una precisazione alla regola 1: *«ha un prezzo»* è *«può essere valutato»* (conta anche il cambio),
+> e con storia precedente l'inizio è il giorno prima dell'intervallo (`risk/service.py:514-517`).
+> **Tutte e tre verificate nel codice da me** prima di correggere la guida, che le conteneva già.
+
+> **📌 Reperti dello specialista, da girare (fuori dal mio perimetro)**:
+> - 🔴 **«Parziale» anche quando tutti gli asset sono quotati negli stessi giorni**: la baseline si conta
+>   fra i punti riportati (`series_preparation.py:311-313`, senza la guardia `index > 0` che c'è per le
+>   quotazioni fresche), quindi un intervallo il cui giorno precedente non ha quotazioni — per esempio
+>   uno che comincia di lunedì — rende parziale ogni sezione. → Risk.
+> - un **inizio tardivo** non si vede a schermo: gli avvisi `baseline_inside_requested_range` e
+>   `short_history:<id>` (`:281-284`) non hanno consumatore frontend; lo tradisce solo la copertura. → Risk.
+> - la pagina di teoria `financial-theory/…/data-quality.en.md:52,60` descrive ancora l'intersezione
+>   («one holding with a gap shortens the window for everyone»). → owner della teoria.
+> - il docstring di `AssetSetComparisonLevels.svelte:19-26` (già registrato, file congelato per R2-128).
