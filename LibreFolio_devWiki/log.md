@@ -2120,3 +2120,21 @@ Mandate F's E2E round produced two failures whose causes were both *the observer
 correlation stub indexed by chip order while `riskRequest.ts` canonicalises `asset_ids` ascending, and a
 `grep -c` on a composed test id reported a selector deleted when the primitive still emits it.
 Filed: [[problems/risk-request-sorts-asset-ids]], [[problems/testid-grep-false-negative]].
+
+## [2026-09-23] file | Workstream F — the R2-101 debt, and three pages the code had overtaken
+Workstream F (Asset Global laboratory) paid the devWiki debt S5 declared in R2-101 — three pages
+deferred on 18/09 rather than reopen a frozen tree — and updated three pages that the code had
+overtaken. Sources: `REGISTRO.md` (R2-62, R2-66, R2-96, R2-98, R2-100, R2-101, R2-112), S5's and F's
+plans, the 22/09 sheets 08 §8.8 and 09 §1.6/§3.11/§3.12/§9.1/§9.2; every claim re-checked against
+`f1047f766`.
+Filed: [[problems/discarded-risk-answer-read-as-empty]] (R2-101's boot identity–query race: the
+three-outcome defect and its fix hold; the recorded boot trigger — "the `(app)` layout has no auth
+guard" — is contradicted by the layout, so the page says so), [[concepts/span-as-a-detector]],
+[[problems/tab-writes-after-the-look]].
+Updated: [[decisions/asset-global-page-shows-no-money]] (frontend guards since 18–21/09; the net is
+blind under global privacy and is pinned off until J repairs the risk formatter),
+[[problems/asset-set-scope-has-no-primary-series]] (per-asset analytics delivered 21/09 by `d3afb92b6`
+and `032b86959`; open → resolved), [[problems/testid-grep-false-negative]] (recurrence on 23/09;
+resolved → recurs).
+Graph: the graphify `--update` is **deferred** — `graphify-out/graph.json` and `.graphify_python` do not
+exist in this worktree. `check_source_paths.py`: 0 missing paths on the six pages.
