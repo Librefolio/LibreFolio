@@ -15,10 +15,13 @@
  *
  * Two properties of this file worth knowing before editing it:
  *
- * - **It writes nothing to the database.** Every risk call is stubbed, and the
- *   only state it mutates is the selection, which lives in this browser
- *   context's `localStorage` and dies with it. There is nothing to clean up, and
- *   nothing here can disturb a neighbouring spec's rows.
+ * - **It writes nothing to the database.** Every risk call is stubbed, and so is
+ *   every sync the page's modal can start — a real run would write prices and
+ *   reach external providers. The page's live-price poll is held unanswered for
+ *   the same reason, since every answered poll writes today's prices (see
+ *   `holdLivePricePoll`). The only state it mutates is the selection, which
+ *   lives in this browser context's `localStorage` and dies with it. There is
+ *   nothing to clean up, and nothing here can disturb a neighbouring spec's rows.
  * - **No selector is positional.** Pair testids are keyed by asset-id pair,
  *   because the matrix reorders itself by similarity; chips and filters are
  *   found by what they are, not by where they sit.
@@ -77,6 +80,19 @@ const MONEY_AMOUNT = '12345.67';
 const MONEY_PATTERN = /12[.,\u00a0\u202f\u2009 ]?345[.,]67/;
 
 /**
+ * Any figure shaped like money in the four shipped locales: at least one
+ * thousands group, then two decimals — `12,345.67`, `12.345,67`, `12 345,67`.
+ *
+ * {@link MONEY_PATTERN} knows the bait, and the bait rides only the replay. The
+ * broker preset brings a different payload in — the portfolio report — whose
+ * amounts are real and whatever the seed makes them, so the net for that path
+ * has to recognise the *shape* of an amount rather than one magnitude. The group
+ * plus the two decimals is what keeps it off every legitimate number on this
+ * page: percentages and coefficients carry no group, counts carry no decimals.
+ */
+const GROUPED_AMOUNT_PATTERN = /\d{1,3}(?:[.,\u00a0\u202f\u2009 ]\d{3})+[.,]\d{2}(?!\d)/;
+
+/**
  * The composition return the stubbed replay claims.
  *
  * Chosen so no rendered percentage can collide with {@link MONEY_PATTERN}: the
@@ -117,8 +133,15 @@ const MATRIX_LIMIT = 8;
 /** The API's ceiling on an asset-set scope (`assetSetSelection.ts`): a limit, never a default. */
 const API_ASSET_CEILING = 100;
 
-/** Written by `assetSetSelection.ts`; cleared where a test needs "first visit" to be a fact. */
-const SELECTION_STORAGE_KEY = 'assetGlobal.riskSelection.v1';
+/**
+ * The base of the key the selection is remembered under — not the key itself.
+ *
+ * Since F-2 the memory is per user (`lf_<id>_` + this, see `selectionStorageKey`),
+ * and this string on its own is only the pre-scoping key, which the module
+ * removes on every read and never adopts. Clearing it alone clears nothing the
+ * page reads.
+ */
+const SELECTION_STORAGE_BASE_KEY = 'assetGlobal.riskSelection.v1';
 
 /** The one scope this page ever asks about, spelled once. */
 const ASSET_SET_SCOPE = 'asset_set';
@@ -866,9 +889,47 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
     };
 }
 
-/** Stub the three risk endpoints and hand back the requests the page actually made. */
+/**
+ * Hold the page's live-price poll, unanswered, for the whole test.
+ *
+ * When the window ends today, `+page.svelte` polls `POST /assets/prices/current`:
+ * on load, again whenever its asset list is reassigned, and every 30 s after. Each
+ * answered call is a portfolio mutation twice over. The backend writes today's
+ * prices into the shared database, and `zodios-client`'s response interceptor
+ * calls `notifyPortfolioMutation`, which drops the report and risk caches and
+ * discards every answer still in flight. It is a background actor these tests do
+ * not control, racing the very requests they measure.
+ *
+ * Held, never answered, because nothing else is inert: a stubbed answer, even an
+ * empty one, still passes through that interceptor and still invalidates. An
+ * unanswered call does nothing at all. `fetchLivePrices` awaits it; after axios's
+ * 30 s timeout it catches the error and logs one non-critical warning, with no
+ * toast and no busy flag. The handler calls no route method, so nothing can
+ * throw when the context closes, and Playwright waits for a running handler only
+ * when explicitly told to (`unrouteAll({behavior: 'wait'})`, which nothing here
+ * calls).
+ *
+ * 🔴 This isolates the tests; it fixes nothing. The race exposed two product
+ * defects, and this hold repairs neither: a discarded report read as "no
+ * holdings" by the broker preset (repaired separately, in the panel), and a
+ * discarded replay read as "no answer" by `runGuarded` (still open). Outside this
+ * file the poll still writes on every visit. All this does is stop these tests
+ * from depending on a race nobody controls.
+ */
+async function holdLivePricePoll(page: Page): Promise<void> {
+    await page.route(/\/api\/v1\/assets\/prices\/current(?:\?|$)/, () => {
+        // Deliberately neither fulfilled nor continued: see above.
+    });
+}
+
+/**
+ * Stub the three risk endpoints, hold the live-price poll, and hand back the
+ * requests the page actually made.
+ */
 async function installRiskMocks(page: Page, options: RiskStubOptions = {}): Promise<RiskRequest[]> {
     const requests: RiskRequest[] = [];
+
+    await holdLivePricePoll(page);
 
     await page.route('**/api/v1/risk/catalog', async (route) => {
         await route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify(CATALOG)});
@@ -996,6 +1057,35 @@ async function openAssetGlobalRisk(page: Page): Promise<void> {
             message: 'the panel opened on an empty selection — it needs at least one seeded asset to analyse',
         })
         .toBeGreaterThan(0);
+}
+
+/**
+ * Pin global privacy off through the control a user has, and prove it took.
+ *
+ * The no-money net only has teeth while values are shown. `L4Replay` formats
+ * every amount it may print with `formatCurrencyAmount` (`riskAnalysisHelpers.ts`),
+ * which under privacy returns `•••` in place of the *whole* string — no digits,
+ * no `€`, no `.currency-symbol` — so with privacy on, a scope-violating euro
+ * would pass all three money assertions. (`.currency-symbol` never guarded that
+ * formatter anyway: only the HTML formatters of `currencyFormat.ts` emit it.)
+ *
+ * Off is today's default only by implication: the key is absent in a fresh
+ * browser context, and absent means off (`privacyStore.svelte.ts`, D3). Pinning
+ * it makes that dependency explicit, so the net cannot lose its teeth in silence
+ * the day the default changes.
+ *
+ * Driven through the header button, whose `aria-pressed` is its public state —
+ * never through the storage key, which is the store's own business. The one-shot
+ * read cannot be early: the store hydrates synchronously at module init, so the
+ * button is born with its final state. The closing assertion is unconditional
+ * because it is the positive control that the pin took effect, whichever branch
+ * ran.
+ */
+async function pinPrivacyOff(page: Page): Promise<void> {
+    const toggle = page.getByTestId('privacy-toggle');
+    await expect(toggle).toBeVisible({timeout: 10_000});
+    if ((await toggle.getAttribute('aria-pressed')) === 'true') await toggle.click();
+    await expect(toggle, 'global privacy must be off, or the no-money net cannot see an amount').toHaveAttribute('aria-pressed', 'false');
 }
 
 /**
@@ -1154,6 +1244,18 @@ function benchmarkStorageKey(userId: number | 'anon'): string {
 }
 
 /**
+ * The key one user's Asset Global selection is remembered under.
+ *
+ * Reproduced from `storageKey()` in `assetSetSelection.ts`, the way
+ * `benchmarkStorageKey` reproduces the benchmark store's: the same `lf_<id>_`
+ * shape. There is no `anon` spelling to go with it, because without an identity
+ * the module keeps no memory at all.
+ */
+function selectionStorageKey(userId: number): string {
+    return `lf_${userId}_${SELECTION_STORAGE_BASE_KEY}`;
+}
+
+/**
  * An asset the picker offers but the selection does not hold.
  *
  * Both halves are required of an L3° benchmark: it has to be a real asset, and
@@ -1190,6 +1292,297 @@ async function pickUnselectedAssetId(page: Page): Promise<number> {
     return assetId;
 }
 
+/**
+ * A broker the user can see that holds something now, and what it holds.
+ *
+ * Replicated from `risk-analysis.spec.ts` rather than imported: a spec does not
+ * reach into another spec's helpers. Read through `page.request`, which
+ * `page.route` does not intercept, so this probe never lands among the reports
+ * `captureReports` records for the page.
+ */
+async function brokerWithHoldings(page: Page): Promise<{brokerId: number; assetIds: number[]}> {
+    const brokersResponse = await page.request.get('/api/v1/brokers');
+    expect(brokersResponse.ok(), 'the preset offers the brokers this user can see, so the test must be able to list them').toBe(true);
+    const brokersPayload = (await brokersResponse.json()) as {items?: Array<{id: number}>};
+
+    for (const broker of brokersPayload.items ?? []) {
+        const reportResponse = await page.request.post('/api/v1/portfolio/report', {
+            data: {
+                broker_ids: [broker.id],
+                include_summary: true,
+                include_history: false,
+                include_allocation_history: false,
+                include_breakdown: false,
+                include_positions_contribution: false,
+            },
+        });
+        if (!reportResponse.ok()) continue;
+        const report = (await reportResponse.json()) as {summary?: {holdings?: Array<{asset_id: number}>} | null};
+        const assetIds = [...new Set((report.summary?.holdings ?? []).map((holding) => holding.asset_id))].sort((left, right) => left - right);
+        if (assetIds.length > 0) return {brokerId: broker.id, assetIds};
+    }
+
+    throw new Error('No broker this user can see holds anything. Check populate_mock_data.py.');
+}
+
+/** One `/portfolio/report` answer, reduced to what the preset reads and what it must not show. */
+interface CapturedReport {
+    brokerIds: number[] | null;
+    holdings: Array<{asset_id: number; current_value?: string | null}>;
+}
+
+/** Reduce one report answer the way the panel reads it (`singleValue(report?.summary)`). */
+function capturedReport(brokerIds: number[] | null, answer: {summary?: unknown}): CapturedReport {
+    const summary = (Array.isArray(answer.summary) ? answer.summary[0] : answer.summary) as {holdings?: CapturedReport['holdings']} | null | undefined;
+    return {brokerIds, holdings: summary?.holdings ?? []};
+}
+
+/** What the preset loads from one answer: its holdings' ids, deduplicated, ascending, capped. */
+function presetIdsOf(report: CapturedReport): number[] {
+    return [...new Set(report.holdings.map((holding) => holding.asset_id))].sort((left, right) => left - right).slice(0, API_ASSET_CEILING);
+}
+
+/**
+ * Let `/portfolio/report` reach the real backend, and keep what the page was told.
+ *
+ * The preset's oracle is the page's **own** answer rather than a probe taken
+ * before the page loaded: a neighbour writing to the shared broker in between
+ * would make the two disagree, and no timeout fixes a comparison against data the
+ * page never saw. Recorded as a state, read at leisure — not an edge that has to
+ * be armed before the click.
+ */
+async function captureReports(page: Page): Promise<CapturedReport[]> {
+    const captured: CapturedReport[] = [];
+    await page.route('**/api/v1/portfolio/report', async (route) => {
+        if (route.request().method() !== 'POST') return route.continue();
+        const sent = (route.request().postDataJSON() ?? {}) as {broker_ids?: number[]};
+        const response = await route.fetch();
+        const answer = (response.ok() ? await response.json() : {}) as {summary?: unknown};
+        captured.push(capturedReport(sent.broker_ids ?? null, answer));
+        await route.fulfill({response});
+    });
+    return captured;
+}
+
+/** One `/portfolio/report` the page sent, held until the test lets it through. */
+interface HeldReport {
+    brokerIds: number[] | null;
+    /** Send it to the backend and hand the answer to the page. Idempotent. */
+    release(): Promise<CapturedReport>;
+}
+
+/**
+ * Hold every `/portfolio/report` the page sends until the test lets it through.
+ *
+ * A discard is a comparison across time: `fetchReport` reads the report cache's
+ * generation when it *sends*, and compares it when the answer *lands*. Holding
+ * the answer is what lets a test put a portfolio mutation, and the page's proof
+ * that it processed it, strictly in between. The handler returns without
+ * handling the route, so the request stays paused until `release`, and each
+ * entry is one request in the order the page sent them.
+ *
+ * `release` insists on a 2xx. `fetchReport` turns a *throw* into `null` too
+ * (`promise.catch(() => null)`), so a re-ask after a failed answer would look
+ * exactly like a re-ask after a discarded one. Only a successful answer makes the
+ * `null` attributable to the discard.
+ */
+async function gateReports(page: Page): Promise<HeldReport[]> {
+    const held: HeldReport[] = [];
+    await page.route('**/api/v1/portfolio/report', async (route) => {
+        if (route.request().method() !== 'POST') return route.continue();
+        const brokerIds = ((route.request().postDataJSON() ?? {}) as {broker_ids?: number[]}).broker_ids ?? null;
+        let released: Promise<CapturedReport> | undefined;
+        held.push({
+            brokerIds,
+            release: () =>
+                (released ??= (async () => {
+                    const response = await route.fetch();
+                    expect(response.ok(), 'a held report must be answered by the backend, or a null would be an error rather than a discard').toBe(true);
+                    const answer = (await response.json()) as {summary?: unknown};
+                    await route.fulfill({response});
+                    return capturedReport(brokerIds, answer);
+                })()),
+        });
+    });
+    return held;
+}
+
+/** Open the broker preset and choose one of its options, ending with the list closed. */
+async function chooseBrokerPreset(page: Page, optionTestId: string): Promise<void> {
+    await page.getByTestId('risk-broker-filter-button').click();
+    const option = page.getByTestId(optionTestId);
+    await expect(option).toBeVisible();
+    await option.click();
+    await expect(page.getByTestId('risk-broker-filter-dropdown')).toHaveCount(0);
+}
+
+/**
+ * Run the page-sync modal to completion and close it: a portfolio mutation whose
+ * end the page publishes.
+ *
+ * Both sync POSTs are portfolio mutations (`isPortfolioAffectingMutation`), so
+ * `zodios-client`'s interceptor drops the report cache the moment each answer
+ * lands. That happens before `doSyncFn` returns, and so before the modal can merge
+ * a single row. The modal's end state is therefore proof, not a guess about time,
+ * that the invalidation has run: results on screen and a body that is no longer
+ * busy mean every section's answer has passed through the interceptor. This is
+ * the barrier the live-price poll cannot offer, since nothing on this tab renders
+ * what the poll returns.
+ */
+async function runSyncToCompletion(page: Page): Promise<void> {
+    const modal = page.getByTestId('page-sync-modal');
+    await page.getByTestId('risk-asset-set-controls').getByTestId('risk-sync-button').click();
+    await expect(modal).toBeVisible();
+    await modal.getByTestId('sync-modal-start').click();
+    const results = modal.getByTestId('sync-modal-results');
+    await expect(results).toBeVisible({timeout: 15_000});
+    await expect(modal.getByTestId('sync-modal-body'), 'every section must have answered, not only the first one to merge').toHaveAttribute('data-busy', 'false');
+    await expect(results, 'every stubbed item answers ok').toHaveAttribute('data-failed', '0');
+    await modal.getByTestId('sync-modal-close').click();
+    await expect(modal).toBeHidden();
+}
+
+/** What the page-sync modal asked the two sync endpoints for, call by call. */
+interface SyncCalls {
+    assets: number[][];
+    fxPairs: string[][];
+}
+
+/**
+ * Answer both endpoints the page-sync modal calls, and record what it asked.
+ *
+ * 🔴 Neither may get through. `PageSyncModal` posts prices to
+ * `/assets/prices/sync` and rates to `/fx/currencies/sync`; for real, both reach
+ * external providers and write to the shared database. Matched by regular
+ * expression, so a query string cannot slip a call past the stub.
+ *
+ * Every item answers `ok`, which is what makes a run *accepted*
+ * (`PageSyncModal.recordAccepted`: any `ok` or `partial`). The bodies go through
+ * the generated schemas before they leave, because the client validates every
+ * response (`validate: 'response'`): a stub that drifted from the contract would
+ * otherwise surface as a failed sync with nothing pointing here.
+ */
+async function installSyncMocks(page: Page): Promise<SyncCalls> {
+    const calls: SyncCalls = {assets: [], fxPairs: []};
+
+    await page.route(/\/api\/v1\/assets\/prices\/sync(?:\?|$)/, async (route) => {
+        const items = (route.request().postDataJSON() ?? []) as Array<{asset_id: number; date_range?: {start: string; end: string}}>;
+        calls.assets.push(items.map((item) => item.asset_id));
+        const body = schemas.FABulkRefreshResponse.parse({
+            results: items.map((item) => ({asset_id: item.asset_id, status: 'ok', provider_used: 'E2E_MOCK', points_fetched: 1, points_changed: 0})),
+            success_count: items.length,
+            date_range: items[0]?.date_range ?? null,
+        });
+        await route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify(body)});
+    });
+
+    await page.route(/\/api\/v1\/fx\/currencies\/sync(?:\?|$)/, async (route) => {
+        const sent = (route.request().postDataJSON() ?? {}) as {pairs?: string[]; start?: string; end?: string};
+        const pairs = sent.pairs ?? [];
+        calls.fxPairs.push([...pairs]);
+        const body = schemas.FXSyncBulkResponse.parse({
+            results: pairs.map((pair) => ({pair, status: 'ok', provider_used: 'E2E_MOCK', points_fetched: 1, points_changed: 0})),
+            success_count: pairs.length,
+            date_range: {start: sent.start ?? '', end: sent.end ?? ''},
+        });
+        await route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify(body)});
+    });
+
+    return calls;
+}
+
+/** An asset as the sync rule reads it: the currency it is quoted in, and whether a provider prices it. */
+interface CatalogueAsset {
+    currency: string;
+    priced: boolean;
+}
+
+/**
+ * The asset list the page and the asset store are both built from.
+ *
+ * The same endpoint with the same empty query that `+page.svelte` and
+ * `assetStore` send, so "quoted in" and "has a provider" are read from the source
+ * the modal's targets are derived from rather than assumed about the seed.
+ * Flattened the way `assetStore.normalize` flattens, since the generated union
+ * types let a scalar arrive wrapped.
+ */
+async function assetCatalogue(page: Page): Promise<Map<number, CatalogueAsset>> {
+    const response = await page.request.get('/api/v1/assets/query');
+    expect(response.ok(), 'the asset list the page is built from must be readable').toBe(true);
+    const items = (await response.json()) as Array<Record<string, unknown>>;
+    const flat = (value: unknown): unknown => (Array.isArray(value) ? value[0] : value);
+    return new Map(items.map((item) => [Number(item.id), {currency: String(flat(item.currency) ?? ''), priced: Boolean(flat(item.provider_code))}]));
+}
+
+/** `EUR-USD`, never `USD-EUR`: a pair is named by its sorted slug, as `createPairSlug` builds it. */
+function pairSlug(left: string, right: string): string {
+    return [left.toUpperCase(), right.toUpperCase()].sort().join('-');
+}
+
+/**
+ * The pair slugs the backend holds a route for — "configured", in the sync rule's sense.
+ *
+ * Read from `/fx/providers/routes`, the endpoint `fxRoutesStore` loads, so the
+ * expectation stands on the same truth the modal is supposed to be built on.
+ */
+async function configuredPairSlugs(page: Page): Promise<Set<string>> {
+    const response = await page.request.get('/api/v1/fx/providers/routes');
+    expect(response.ok(), 'the configured exchange-rate routes must be readable').toBe(true);
+    const payload = (await response.json()) as {items?: Array<{base?: string | null; quote?: string | null}>};
+    return new Set((payload.items ?? []).filter((item) => item.base && item.quote).map((item) => pairSlug(item.base as string, item.quote as string)));
+}
+
+/** The one currency every section of this page answers in, read off the page's own requests. */
+async function answerCurrency(requests: readonly RiskRequest[]): Promise<string> {
+    await expect.poll(() => assetSetHistoricalRequests(requests).length, {timeout: 15_000, message: 'the page must have asked its first question'}).toBeGreaterThan(0);
+    const currencies = [...new Set(assetSetHistoricalRequests(requests).map((request) => request.target_currency))];
+    expect(currencies, 'one page, one target currency').toHaveLength(1);
+    return currencies[0];
+}
+
+/**
+ * Make sure the selection holds at least one asset `wanted` accepts, adding one
+ * through the picker when it does not.
+ *
+ * A precondition checked and satisfied, never inherited from the seed: an
+ * assertion about "the pairs the modal lists" is an assertion about an empty list
+ * when nothing selected is quoted elsewhere. Candidates are read off the picker
+ * itself, which offers exactly the page's assets not yet selected.
+ */
+async function ensureSelectedWhere(page: Page, wanted: (assetId: number) => boolean, what: string): Promise<void> {
+    if ((await chipIds(page)).some(wanted)) return;
+    const picker = page.getByTestId('risk-asset-add-select');
+    const options = picker.locator('[data-testid^="search-select-option-"]');
+    await picker.getByTestId('risk-asset-add-select-trigger').click();
+    await expect(options.first()).toBeVisible({timeout: 10_000});
+    const offered = (await options.evaluateAll((nodes) => nodes.map((node) => Number(node.getAttribute('data-testid')?.replace('search-select-option-', ''))))).filter((assetId) => Number.isInteger(assetId));
+    const candidate = offered.find(wanted);
+    if (candidate === undefined) throw new Error(`The selection holds no ${what}, and the picker offers none to add. Check populate_mock_data.py.`);
+    await picker.getByTestId(`search-select-option-${candidate}`).click();
+    await expect(page.getByTestId(`risk-selected-asset-${candidate}`)).toBeVisible();
+    // A shared `search-select-option-*` namespace: the next picker must not read this one's leftovers.
+    await expect(options).toHaveCount(0);
+}
+
+/**
+ * Open the L4 rung and run the replay, ending on its answer being on screen.
+ *
+ * The rung is `collapsible` and born closed, so it is opened only if it is not
+ * already open — asked, never clicked blind — and the helper ends on the
+ * post-condition it promises: the bars and the total of an answer.
+ */
+async function openAndRunReplay(page: Page): Promise<void> {
+    const section = page.getByTestId('risk-replay-section');
+    await expect(section).toBeVisible({timeout: 15_000});
+    if ((await section.getAttribute('data-open')) !== 'true') await page.getByTestId('risk-replay-section-toggle').click();
+    await expect(section).toHaveAttribute('data-open', 'true');
+    const run = page.getByTestId('risk-replay-run');
+    await expect(run).toBeEnabled();
+    await run.click();
+    await expect(page.getByTestId('risk-l4-replay').getByTestId('risk-replay-tornado-row').first()).toBeVisible({timeout: 20_000});
+    await expect(page.getByTestId('risk-replay-total')).toBeVisible();
+}
+
 /** Two sets compared as sets, so declaration order can never be the subject. */
 function sameMembers(left: readonly string[], right: readonly string[]): boolean {
     if (left.length !== right.length) return false;
@@ -1218,6 +1611,11 @@ test.describe('Asset Global risk laboratory', () => {
         test.setTimeout(45_000);
         const requests = await installRiskMocks(page);
         await openAssetGlobalRisk(page);
+        // Before anything money-bearing renders: under global privacy the three
+        // money assertions at the end of this test are blind (see `pinPrivacyOff`).
+        // No privacy-ON variant yet, on purpose: it must be written against the risk
+        // formatter once its masking is repaired (hide the number, not the currency).
+        await pinPrivacyOff(page);
         // L3° draws its scatter only from two dots up: one point is a fact without
         // a comparison. Made a precondition rather than inherited from the seed, so
         // the chart assertion below cannot be quietly skipped by a small fixture.
@@ -1364,16 +1762,21 @@ test.describe('Asset Global risk laboratory', () => {
 
         // D19 is a statement about the *first* visit, so the absence of a stored
         // preference is made a fact of this test rather than an assumption about
-        // how the fixture isolates contexts.
+        // how the fixture isolates contexts. The per-user key is the one that
+        // matters: since F-2 it is the only one the page reads. The bare legacy key
+        // goes too, harmlessly — the module never adopts it, it only removes it.
+        const userId = await currentUserId(page);
         await page.addInitScript(
-            ([key]) => {
-                try {
-                    window.localStorage.removeItem(key);
-                } catch {
-                    /* storage disabled — there is nothing to clear */
+            (keys) => {
+                for (const key of keys) {
+                    try {
+                        window.localStorage.removeItem(key);
+                    } catch {
+                        /* storage disabled — there is nothing to clear */
+                    }
                 }
             },
-            [SELECTION_STORAGE_KEY],
+            [selectionStorageKey(userId), SELECTION_STORAGE_BASE_KEY],
         );
 
         await openAssetGlobalRisk(page);
@@ -1579,7 +1982,7 @@ test.describe('Asset Global risk laboratory', () => {
 
         const heatmap = page.getByTestId('risk-correlation-heatmap');
         const similarity = page.getByTestId('risk-correlation-ordering-similarity');
-        const original = page.getByTestId('risk-correlation-ordering-original');
+        const byName = page.getByTestId('risk-correlation-ordering-name');
 
         /** The order the chart is actually built from, not the order of the chips. */
         const drawnOrder = async (): Promise<number[]> => {
@@ -1601,22 +2004,39 @@ test.describe('Asset Global risk laboratory', () => {
         // against a toggle wired to nothing.
         const clustered = await drawnOrder();
         expect(clustered, 'similarity must not simply echo the payload order').not.toEqual(matrix);
+        expect(adjacentInOrder(matrix, twins), 'the twins are deliberately apart in the payload').toBe(false);
         expect(adjacentInOrder(clustered, twins), 'similarity must put the twin beside its partner').toBe(true);
 
-        await original.click();
-        await expect(original).toHaveAttribute('aria-pressed', 'true');
+        // "By name" promises the order of the names on screen, so the expectation is
+        // built from what the page shows. Each chip carries the display name the
+        // heatmap labels the same asset with — both read the page's asset list — and
+        // they are collated as the product promises (letters regardless of case and
+        // accent, numbers as numbers, ties by id) in the page's own locale.
+        const shownNames = new Map<number, string>();
+        for (const assetId of matrix) shownNames.set(assetId, (await page.getByTestId(`risk-selected-asset-${assetId}`).innerText()).trim());
+        const pageLocale = await page.evaluate(() => new Intl.Collator().resolvedOptions().locale);
+        const collator = new Intl.Collator(pageLocale, {sensitivity: 'base', numeric: true});
+        const alphabetical = [...matrix].sort((left, right) => collator.compare(shownNames.get(left) ?? '', shownNames.get(right) ?? '') || left - right);
+        // 🔴 The precondition that gives the assertion below its teeth. The button
+        // used to order by id — the canonical payload order — while saying "by name".
+        // A selection whose names happen to be alphabetical in id order draws the
+        // same matrix both ways, and this test would stay green through the very
+        // defect it exists to catch.
+        expect(alphabetical, `the names on screen must not already be in id order, or by-name and by-id are the same picture: ${matrix.map((assetId) => `${assetId}=${shownNames.get(assetId)}`).join(', ')}`).not.toEqual(matrix);
+
+        await byName.click();
+        await expect(byName).toHaveAttribute('aria-pressed', 'true');
         await expect(similarity).toHaveAttribute('aria-pressed', 'false');
-        const payload = await drawnOrder();
-        expect(payload, 'the original ordering is the payload order, ascending by id').toEqual(matrix);
-        expect(adjacentInOrder(payload, twins), 'the twins are deliberately apart on input').toBe(false);
+        const named = await drawnOrder();
+        expect(named, 'by name must order the matrix by the names on screen, not by id').toEqual(alphabetical);
         // Reordering is a view choice: it may move rows, never invent or drop one.
-        expect([...payload].sort((left, right) => left - right)).toEqual([...clustered].sort((left, right) => left - right));
+        expect([...named].sort((left, right) => left - right)).toEqual([...clustered].sort((left, right) => left - right));
         for (const testId of findings) await expect(page.getByTestId(testId)).toBeVisible();
         await expectChartCanvas(page, 'risk-correlation-heatmap', 20_000);
 
         await similarity.click();
         await expect(similarity).toHaveAttribute('aria-pressed', 'true');
-        await expect(original).toHaveAttribute('aria-pressed', 'false');
+        await expect(byName).toHaveAttribute('aria-pressed', 'false');
         expect(await drawnOrder(), 'going back must restore the clustered order, not a third one').toEqual(clustered);
         for (const testId of findings) await expect(page.getByTestId(testId)).toBeVisible();
         await expectChartCanvas(page, 'risk-correlation-heatmap', 20_000);
@@ -2053,5 +2473,401 @@ test.describe('Asset Global risk laboratory', () => {
         // Nothing to restore: the benchmark and the selection both live in this
         // context's `localStorage`, which dies with the context, and no database
         // row was touched by any of the above.
+    });
+
+    test("broker preset: loads exactly that broker's holdings and lets no amount through, its empty option keeps the selection, and a chip removed by hand comes back through the picker", async ({page}) => {
+        // The preset asks `fetchReport` with its defaults — history and allocation
+        // history included — so its round trip is the heaviest this file waits on.
+        // The budget pays for that work; every wait below is still a barrier on a
+        // published state, so a genuinely slow page fails with its own message.
+        test.setTimeout(60_000);
+        const requests = await installRiskMocks(page);
+        const reports = await captureReports(page);
+        const broker = await brokerWithHoldings(page);
+
+        await openAssetGlobalRisk(page);
+        // The preset is the one path by which a money-bearing payload enters this
+        // page, and the net at (c) only has teeth while values are shown.
+        await pinPrivacyOff(page);
+        await ensureSelectionAtLeast(page, 2);
+        await waitForRiskCatalog(page);
+
+        // ── (e) the two side assertions this test inherits ───────────────────────
+        // The canvas first, because it is the presence barrier that gives the zero
+        // after it a meaning. Asset Global carries no beta notice at all:
+        // `AssetSetReplaySection` hands `L4WhatIf` the replay rung alone, and the
+        // banner lives in the simulation branch — structural, not a convention.
+        await expectChartCanvas(page, 'risk-correlation-heatmap', 20_000);
+        await expect(page.getByTestId('risk-beta-banner')).toHaveCount(0);
+
+        // ── (a) a chip removed by hand, and added back through the picker ───────
+        const counter = selectionCounter(page);
+        const opening = await chipIds(page);
+        await expect(counter).toHaveAttribute('data-selected', String(opening.length));
+        // Any chip will do: the round trip puts back whichever it took.
+        const removedId = opening[0];
+        const remaining = opening.filter((assetId) => assetId !== removedId);
+        await page.getByTestId(`risk-remove-asset-${removedId}`).click();
+        await expect(page.getByTestId(`risk-selected-asset-${removedId}`)).toHaveCount(0);
+        await expect(counter).toHaveAttribute('data-selected', String(remaining.length));
+        // Not cosmetic: the analysis follows the chips. Read off the table rather
+        // than the wire, because this scope may already sit in `queryRisk`'s cache,
+        // and a cached answer sends nothing to wait for.
+        await expect(lossTable(page)).toHaveAttribute('data-row-count', String(remaining.length), {timeout: 15_000});
+        await expect(lossTable(page).locator(`tr[data-asset-id="${removedId}"]`)).toHaveCount(0);
+
+        const picker = page.getByTestId('risk-asset-add-select');
+        await picker.getByTestId('risk-asset-add-select-trigger').click();
+        const offeredBack = picker.getByTestId(`search-select-option-${removedId}`);
+        await expect(offeredBack, 'a removed asset must be offered back by the picker').toBeVisible({timeout: 10_000});
+        await offeredBack.click();
+        await expect(page.getByTestId(`risk-selected-asset-${removedId}`)).toBeVisible();
+        await expect(counter).toHaveAttribute('data-selected', String(opening.length));
+        await expect(lossTable(page)).toHaveAttribute('data-row-count', String(opening.length), {timeout: 15_000});
+        await optionsClosed(page);
+
+        // ── (b) the preset loads exactly that broker's holdings ────────────────
+        // Started from an empty selection, so the set the preset loads cannot
+        // coincide with the one already on screen: a broker holding exactly the
+        // user's own assets would otherwise make "the preset loaded them" and "the
+        // preset did nothing" the same picture.
+        await page.getByTestId('risk-bulk-none').click();
+        await expect(counter).toHaveAttribute('data-selected', '0');
+        await expect(page.getByTestId('risk-asset-set-empty')).toBeVisible();
+
+        const brokerButton = page.getByTestId('risk-broker-filter-button');
+        const brokerOption = page.getByTestId(`risk-broker-option-${broker.brokerId}`);
+        await brokerButton.click();
+        await expect(brokerOption, 'the preset must offer every broker the user can see').toBeVisible();
+        await brokerOption.click();
+
+        // EXACT: the page's own answer is the oracle. The request names exactly
+        // this broker, and the selection is exactly the holdings that answer
+        // listed — deduplicated, ascending and capped, as the panel reads them.
+        const forBroker = () => reports.filter((report) => sameMembers((report.brokerIds ?? []).map(String), [String(broker.brokerId)]));
+        await expect.poll(() => forBroker().length, {timeout: 20_000, message: 'the preset must ask the portfolio report about exactly that broker'}).toBeGreaterThan(0);
+        const [report] = forBroker();
+        const expected = [...new Set(report.holdings.map((holding) => holding.asset_id))].sort((left, right) => left - right).slice(0, API_ASSET_CEILING);
+        expect(expected.length, 'the broker held something when probed, so the report the page read must list it too').toBeGreaterThan(0);
+
+        await expect(counter).toHaveAttribute('data-selected', String(expected.length), {timeout: 15_000});
+        await expect.poll(async () => scopeKey(await chipIds(page)), {timeout: 15_000, message: 'the chips must be exactly the holdings the page was told about'}).toBe(scopeKey(expected));
+        await expect
+            .poll(() => requests.some((request) => request.scope.kind === ASSET_SET_SCOPE && scopeKey(request.scope.asset_ids) === scopeKey(expected)), {
+                timeout: 15_000,
+                message: 'the analysis must be asked about exactly the set the preset loaded',
+            })
+            .toBe(true);
+        await expect(page.getByTestId('risk-broker-filter-error')).toHaveCount(0);
+
+        // TOLERANT, and for a reason: the probe was taken through the API before the
+        // page loaded, and `Transaction` has no user_id — a neighbour writing to this
+        // shared broker in between moves one side only, so equality with the probe
+        // is not assertable. A non-empty overlap survives that drift and still fails
+        // if the preset loaded some other broker's assets.
+        expect(
+            expected.some((assetId) => broker.assetIds.includes(assetId)),
+            `the preset must load broker ${broker.brokerId}'s holdings: page saw [${expected.join(', ')}], probe saw [${broker.assetIds.join(', ')}]`,
+        ).toBe(true);
+
+        // ── (c) no amount crosses ─────────────────────────────────────────────
+        // Two controls first, or the absence below would prove nothing: the payload
+        // the preset read really carried money, and the net really recognises money
+        // as each shipped locale prints it.
+        const valued = report.holdings.filter((holding) => {
+            const value = Number(holding.current_value);
+            return Number.isFinite(value) && value !== 0;
+        });
+        expect(valued.length, 'the report the preset read must carry position values, or "no amount crossed" would hold of a payload with nothing to carry').toBeGreaterThan(0);
+        for (const locale of ['en-US', 'it-IT', 'fr-FR', 'es-ES']) {
+            expect(new Intl.NumberFormat(locale, {style: 'currency', currency: 'EUR'}).format(12345.67), `the amount net must recognise money as ${locale} prints it`).toMatch(GROUPED_AMOUNT_PATTERN);
+        }
+        // And a presence barrier: the scan must cross a populated analysis of the
+        // loaded set, not an empty frame between two renders.
+        await waitForLossTable(page);
+        await expect(lossTable(page).locator('[data-testid="risk-asset-set-l1-badDay"][data-measured="true"]'), 'L1° must be showing figures for the loaded set').toHaveCount(expected.length);
+
+        const panel = page.getByTestId('asset-global-risk-panel');
+        const rendered = await panel.innerText();
+        expect(rendered, `the panel printed an amount after the broker preset. Panel text was:\n${rendered}`).not.toMatch(GROUPED_AMOUNT_PATTERN);
+        expect(rendered, `the panel printed the stubbed monetary magnitude. Panel text was:\n${rendered}`).not.toMatch(MONEY_PATTERN);
+        expect(rendered, 'the panel printed a euro glyph — no amount of money belongs on an unweighted asset set').not.toContain('€');
+        await expect(panel.locator('.currency-symbol')).toHaveCount(0);
+
+        // ── (d) the empty option keeps the selection ──────────────────────────
+        // The control's null state is not an instruction: it used to reset the
+        // selection to the first hundred assets.
+        const reportsAsked = reports.length;
+        await brokerButton.click();
+        await page.getByTestId('risk-broker-option-all').click();
+        // Barrier: the control really holds its null state before its effect is
+        // judged. `aria-selected` is the value, published where a test can read it.
+        await brokerButton.click();
+        await expect(page.getByTestId('risk-broker-option-all')).toHaveAttribute('aria-selected', 'true');
+        await expect(brokerOption).toHaveAttribute('aria-selected', 'false');
+        await brokerButton.click();
+        await expect(page.getByTestId('risk-broker-filter-dropdown')).toHaveCount(0);
+        expect(scopeKey(await chipIds(page)), 'choosing the empty preset must not reset the selection').toBe(scopeKey(expected));
+        await expect(counter).toHaveAttribute('data-selected', String(expected.length));
+        expect(reports.length, 'the null state asks the report nothing').toBe(reportsAsked);
+    });
+
+    test('broker preset: a report discarded by a portfolio mutation in flight is asked for once more, and that answer is the one applied', async ({page}) => {
+        // Two presets and two sync runs, each a barrier on a published state; the
+        // budget pays for the work, never for a wait on the clock.
+        test.setTimeout(60_000);
+        await installRiskMocks(page);
+        await installSyncMocks(page);
+        const reports = await gateReports(page);
+        const broker = await brokerWithHoldings(page);
+
+        await openAssetGlobalRisk(page);
+        await waitForRiskCatalog(page);
+        const catalogue = await assetCatalogue(page);
+        const priced = (assetId: number) => catalogue.get(assetId)?.priced === true;
+        // The mutation below is a sync run, and a run needs an item to answer about.
+        await ensureSelectedWhere(page, priced, 'asset a provider prices');
+
+        const counter = selectionCounter(page);
+        const forBroker = () => reports.filter((report) => sameMembers((report.brokerIds ?? []).map(String), [String(broker.brokerId)]));
+
+        // ── The control: nothing moves the cache, so the preset asks once ────────
+        await chooseBrokerPreset(page, `risk-broker-option-${broker.brokerId}`);
+        await expect.poll(() => forBroker().length, {timeout: 15_000, message: 'the preset must ask for the report'}).toBe(1);
+        const undisturbed = presetIdsOf(await forBroker()[0].release());
+        expect(undisturbed.length, 'the broker held something when probed, so the report the page read must list it too').toBeGreaterThan(0);
+        await expect(counter).toHaveAttribute('data-selected', String(undisturbed.length), {timeout: 15_000});
+        // Applied, therefore never re-asked: the re-ask replaces the apply, it cannot follow it.
+        expect(forBroker(), 'an answer nothing discarded is applied as it is, after one request').toHaveLength(1);
+
+        // Back to the null state, and a sync to empty the report cache: the next
+        // preset must reach the wire, or there is no answer in flight to discard.
+        await chooseBrokerPreset(page, 'risk-broker-option-all');
+        await ensureSelectedWhere(page, priced, 'asset a provider prices');
+        await runSyncToCompletion(page);
+
+        // ── The race, made deterministic ────────────────────────────────────
+        await chooseBrokerPreset(page, `risk-broker-option-${broker.brokerId}`);
+        await expect.poll(() => forBroker().length, {timeout: 15_000, message: 'with the cache emptied, the preset must ask again'}).toBe(2);
+        // The request is out, so the page has read the cache generation; its answer
+        // is held. Now the mutation, run to its published end…
+        await runSyncToCompletion(page);
+        // …and only then the answer, which therefore lands after the invalidation.
+        // This is ordering by causality: the answer does not exist until released.
+        await forBroker()[1].release();
+        await expect.poll(() => forBroker().length, {timeout: 15_000, message: 'a discarded answer must be asked for once more'}).toBe(3);
+        const expected = presetIdsOf(await forBroker()[2].release());
+
+        await expect(counter).toHaveAttribute('data-selected', String(expected.length), {timeout: 15_000});
+        await expect.poll(async () => scopeKey(await chipIds(page)), {timeout: 15_000, message: 'the selection must be exactly the holdings of the answer that was applied'}).toBe(scopeKey(expected));
+        await expect(page.getByTestId('risk-broker-filter-loading')).toHaveCount(0);
+        await expect(page.getByTestId('risk-broker-filter-error'), 'one discard is recovered, not reported').toHaveCount(0);
+        expect(forBroker(), 'one discard costs one re-ask, and the applied answer ends the preset').toHaveLength(3);
+    });
+
+    test('broker preset: when the re-asked report is discarded too, the control reports the failure and the selection stays as it was', async ({page}) => {
+        test.setTimeout(60_000);
+        await installRiskMocks(page);
+        await installSyncMocks(page);
+        const reports = await gateReports(page);
+        const broker = await brokerWithHoldings(page);
+
+        await openAssetGlobalRisk(page);
+        await waitForRiskCatalog(page);
+        const catalogue = await assetCatalogue(page);
+        await ensureSelectedWhere(page, (assetId) => catalogue.get(assetId)?.priced === true, 'asset a provider prices');
+
+        // Recorded before the preset: the failure must leave exactly this behind.
+        const counter = selectionCounter(page);
+        const before = await chipIds(page);
+        await expect(counter).toHaveAttribute('data-selected', String(before.length));
+        const forBroker = () => reports.filter((report) => sameMembers((report.brokerIds ?? []).map(String), [String(broker.brokerId)]));
+
+        await chooseBrokerPreset(page, `risk-broker-option-${broker.brokerId}`);
+        await expect.poll(() => forBroker().length, {timeout: 15_000, message: 'the preset must ask for the report'}).toBe(1);
+        // First discard: the mutation completes while the first answer is held.
+        await runSyncToCompletion(page);
+        await forBroker()[0].release();
+        await expect.poll(() => forBroker().length, {timeout: 15_000, message: 'the first discard must be asked for once more'}).toBe(2);
+        // Second discard: the re-ask is out and held, and a second mutation lands first.
+        await runSyncToCompletion(page);
+        await forBroker()[1].release();
+
+        await expect(page.getByTestId('risk-broker-filter-error'), 'two discarded answers must end in a visible failure, not in a silent empty selection').toBeVisible({timeout: 15_000});
+        await expect(page.getByTestId('risk-broker-filter-loading')).toHaveCount(0);
+        expect(scopeKey(await chipIds(page)), 'a failed preset must leave the selection exactly as it found it').toBe(scopeKey(before));
+        await expect(counter).toHaveAttribute('data-selected', String(before.length));
+        // Read after the failure is on screen, and the failure is the end of the
+        // path: `applyBrokerPreset` returns after the second null without asking.
+        expect(forBroker(), 'the second discard is the last word: no third report request').toHaveLength(2);
+    });
+
+    test("the controls' sync targets the selection's priced assets and every configured pair that converts them into the target currency", async ({page}) => {
+        test.setTimeout(45_000);
+        const requests = await installRiskMocks(page);
+        const syncCalls = await installSyncMocks(page);
+        await openAssetGlobalRisk(page);
+        await waitForRiskCatalog(page);
+
+        const syncButton = page.getByTestId('risk-asset-set-controls').getByTestId('risk-sync-button');
+        await expect(syncButton, 'the price and exchange-rate sync lives in the controls row (R2-128)').toBeVisible();
+        // Exactly one on the page: a second would mean the legacy panel came back with its own.
+        await expect(page.getByTestId('risk-sync-button')).toHaveCount(1);
+
+        // The expectation is derived, not assumed: currencies and providers from the
+        // list the page is built from, configured pairs from the backend's routes,
+        // the target from the page's own requests.
+        const catalogue = await assetCatalogue(page);
+        const configured = await configuredPairSlugs(page);
+        const target = await answerCurrency(requests);
+        const priced = (assetId: number) => catalogue.get(assetId)?.priced === true;
+        const pairFor = (assetId: number): string | null => {
+            const asset = catalogue.get(assetId);
+            return asset === undefined || asset.currency === target ? null : pairSlug(asset.currency, target);
+        };
+        const convertible = (assetId: number) => {
+            const pair = pairFor(assetId);
+            return pair !== null && configured.has(pair);
+        };
+
+        // Both halves must have something to list, or their assertions are about empty lists.
+        await ensureSelectedWhere(page, convertible, `asset quoted outside ${target} whose pair to it is configured`);
+        await ensureSelectedWhere(page, priced, 'asset a provider prices');
+
+        const selection = await chipIds(page);
+        expect(
+            selection.filter((assetId) => !catalogue.has(assetId)),
+            'every selected asset must be in the list the sync targets are derived from',
+        ).toEqual([]);
+        const expectedAssets = selection.filter(priced).sort((left, right) => left - right);
+        const expectedPairs = [...new Set(selection.filter(convertible).map((assetId) => pairFor(assetId) as string))].sort();
+        const expectedCount = expectedAssets.length + expectedPairs.length;
+        const expectation = `assets [${expectedAssets.join(', ')}] and pairs [${expectedPairs.join(', ')}] for target ${target}`;
+
+        await expect(syncButton).toBeEnabled();
+        await syncButton.click();
+        const modal = page.getByTestId('page-sync-modal');
+        await expect(modal).toBeVisible();
+
+        // Before a run the modal lists nothing item by item — only its tally, which
+        // it republishes as numbers because the sentence around them is translated.
+        const tally = modal.getByTestId('sync-modal-count');
+        await expect(tally, `the modal must target ${expectation}`).toHaveAttribute('data-item-count', String(expectedCount));
+        await expect(tally, 'prices and exchange rates are two sections').toHaveAttribute('data-section-count', '2');
+
+        await modal.getByTestId('sync-modal-start').click();
+        const results = modal.getByTestId('sync-modal-results');
+        await expect(results).toBeVisible({timeout: 15_000});
+        await expect(results).toHaveAttribute('data-total', String(expectedCount));
+        await expect(results).toHaveAttribute('data-success', String(expectedCount));
+
+        // The lists, exactly, where they are exact: in what the modal asked for, and
+        // in the row it keeps for every item it asked about.
+        expect(
+            syncCalls.assets.flat().sort((left, right) => left - right),
+            `the price sync must be asked about ${expectation}`,
+        ).toEqual(expectedAssets);
+        expect(syncCalls.fxPairs.flat().sort(), `the rate sync must be asked about ${expectation}`).toEqual(expectedPairs);
+        for (const assetId of expectedAssets) {
+            await expect(modal.locator(`[data-testid="sync-section"][data-section-id="assets"] [data-testid="sync-result-row"][data-row-id="${assetId}"]`)).toHaveAttribute('data-status', 'ok');
+        }
+        for (const pair of expectedPairs) {
+            await expect(modal.locator(`[data-testid="sync-section"][data-section-id="fx"] [data-testid="sync-result-row"][data-row-id="${pair}"]`)).toHaveAttribute('data-status', 'ok');
+        }
+
+        await modal.getByTestId('sync-modal-close').click();
+        await expect(modal).toBeHidden();
+
+        // Enabled by a selection, not always: with nothing selected there is nothing to sync.
+        await page.getByTestId('risk-bulk-none').click();
+        await expect(selectionCounter(page)).toHaveAttribute('data-selected', '0');
+        await expect(syncButton).toBeDisabled();
+    });
+
+    test('an accepted sync makes every section re-read its base and the replay forget its answer, while a sync closed without running changes nothing', async ({page}) => {
+        // Two modal cycles, one replay and one refresh wave: the budget pays for the
+        // work, and every wait below is still a barrier on a published state.
+        test.setTimeout(60_000);
+        const requests = await installRiskMocks(page);
+        const syncCalls = await installSyncMocks(page);
+        await openAssetGlobalRisk(page);
+        await waitForRiskCatalog(page);
+
+        // An accepted run needs one item to answer `ok`; a priced asset is the one
+        // the page can always offer, whatever the exchange-rate routes say.
+        const catalogue = await assetCatalogue(page);
+        await ensureSelectedWhere(page, (assetId) => catalogue.get(assetId)?.priced === true, 'asset a provider prices');
+        const selection = await chipIds(page);
+        const scope = scopeKey(selection);
+        await waitForLossTable(page);
+        await expect(lossTable(page)).toHaveAttribute('data-row-count', String(selection.length));
+        await openAndRunReplay(page);
+        const replayAnswer = page.getByTestId('risk-l4-replay').getByTestId('risk-replay-tornado-row');
+
+        // Each section's own question about this scope, told apart by its shape and
+        // counted among this test's captured requests only. The correlation section
+        // and the replay section build identical `[correlation]` waves, which
+        // `queryRisk` serves from one flight — so that count speaks for both, and the
+        // replay's own part of a refresh is its answer, asserted further down.
+        const correlationWaves = () => assetSetHistoricalRequests(requests).filter((request) => request.scope.kind === ASSET_SET_SCOPE && scopeKey(request.scope.asset_ids) === scope && sameMembers([...codesOf(request)], ['correlation'])).length;
+        const levelWaves = () => levelRequestsFor(requests, selection).length;
+        const replayRuns = () => requests.filter((request) => request.scope.kind === ASSET_SET_SCOPE && scopeKey(request.scope.asset_ids) === scope && request.analytics.some((analytic) => isHistoricalReplay(analytic))).length;
+        // Sampled once both base waves are in, so the baseline is not a snapshot of
+        // a page still loading.
+        await expect.poll(correlationWaves, {timeout: 15_000, message: 'the correlation wave must have been asked'}).toBeGreaterThan(0);
+        await expect.poll(levelWaves, {timeout: 15_000, message: 'the comparison levels must have been asked'}).toBeGreaterThan(0);
+        const before = {correlation: correlationWaves(), levels: levelWaves(), replay: replayRuns()};
+        expect(before.replay, 'the replay above must have reached the wire').toBeGreaterThan(0);
+
+        const syncButton = page.getByTestId('risk-asset-set-controls').getByTestId('risk-sync-button');
+        const modal = page.getByTestId('page-sync-modal');
+
+        // ── closed without running ───────────────────────────────────────────
+        await syncButton.click();
+        await expect(modal).toBeVisible();
+        await modal.getByTestId('sync-modal-close').click();
+        await expect(modal).toBeHidden();
+        // The barrier that makes the absence below readable, and it is a
+        // deterministic one: an accepted sync bumps the panel's generation and the
+        // replay section forgets its answer in that same flush, before the modal's
+        // fade has even started. An answer still on screen once the modal is gone
+        // is therefore proof that no refresh was triggered — not a guess about time.
+        await expect(replayAnswer.first()).toBeVisible();
+        expect(syncCalls.assets.length + syncCalls.fxPairs.length, 'closing the modal must ask no provider for anything').toBe(0);
+        expect({correlation: correlationWaves(), levels: levelWaves(), replay: replayRuns()}, 'a sync that never ran must re-read nothing').toEqual(before);
+
+        // ── an accepted run ──────────────────────────────────────────────────
+        await syncButton.click();
+        await expect(modal).toBeVisible();
+        await modal.getByTestId('sync-modal-start').click();
+        const results = modal.getByTestId('sync-modal-results');
+        await expect(results).toBeVisible({timeout: 15_000});
+        await expect(results, 'every stubbed item answers ok, so the run is accepted').toHaveAttribute('data-failed', '0');
+        expect(syncCalls.assets.flat().length, 'the accepted run must have gone through the price-sync stub').toBeGreaterThan(0);
+
+        // Every base is re-read, section by section. `>`, not `=== before + 1`: how
+        // many flights one refresh costs is the store's business — the two stubbed
+        // sync POSTs are themselves portfolio mutations (`zodios-client` →
+        // `notifyPortfolioMutation` → `invalidateRisk`), in-flight sharing merges
+        // identical waves, a discarded answer is re-asked once — and not this test's
+        // subject. That each section re-read its base is.
+        await expect.poll(correlationWaves, {timeout: 15_000, message: 'the correlation section must re-read its base after an accepted sync'}).toBeGreaterThan(before.correlation);
+        await expect.poll(levelWaves, {timeout: 15_000, message: 'the comparison levels must re-read their base after an accepted sync'}).toBeGreaterThan(before.levels);
+        // The replay was computed on the prices just replaced, so it is forgotten —
+        // the rung stays, only the answer goes…
+        await expect(replayAnswer, 'the replay on screen was computed on the prices the sync replaced').toHaveCount(0);
+        await expect(page.getByTestId('risk-replay-total')).toHaveCount(0);
+        await expect(page.getByTestId('risk-replay-run')).toBeVisible();
+        // …and nothing re-ran it for the reader. Read after the base waves on
+        // purpose: a relaunch would be issued in the flush that reset the answer,
+        // before the catalogue round trip those waves wait behind.
+        expect(replayRuns(), 'the replay is the reader’s to re-run, not the sync’s').toBe(before.replay);
+
+        await modal.getByTestId('sync-modal-close').click();
+        await expect(modal).toBeHidden();
+        // Still a working page: the re-read landed rather than failed.
+        await waitForLossTable(page);
+        await expect(lossTable(page)).toHaveAttribute('data-row-count', String(selection.length));
+        await expect(page.getByTestId('risk-correlation-error')).toHaveCount(0);
     });
 });
