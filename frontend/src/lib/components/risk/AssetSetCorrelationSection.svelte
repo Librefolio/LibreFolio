@@ -48,10 +48,11 @@
         dateStart: string;
         dateEnd: string;
         targetCurrency: string;
+        /** Bumped by the panel after an accepted sync: forces a fresh base read. */
+        refreshVersion?: number;
     }
 
-    let {assetIds, assetLabels, dateStart, dateEnd, targetCurrency}: Props = $props();
-
+    let {assetIds, assetLabels, dateStart, dateEnd, targetCurrency, refreshVersion = 0}: Props = $props();
     const controller = createRiskPanelController(() => ({
         scope: {kind: 'asset_set', asset_ids: assetIds},
         dateStart,
@@ -61,7 +62,7 @@
         // needs, and passing a live one here would re-ask the question on every
         // keystroke in a control this section does not read.
         appliedRiskFreePercent: 0,
-        refreshVersion: 0,
+        refreshVersion,
     }));
 
     let result = $derived(resultByCode(controller.historicalResults, 'correlation'));
@@ -80,8 +81,8 @@
      *
      * ⚠️ One field does not survive the lift: `levelMetadata` drops `method` on
      * purpose. That costs this section nothing, and for a sharper reason than
-     * the one it gives — `correlation.py:128` is the *only* assignment of
-     * `method` in the plugin, `"pearson_post_fx"`. The field can print exactly
+     * the one it gives — the correlation plugin (`risk_plugins/correlation.py`)
+     * assigns `method` exactly once, `"pearson_post_fx"`. The field can print exactly
      * one string forever, and a value that cannot vary is not provenance.
      */
     let metadata = $derived(levelMetadata([result]));
