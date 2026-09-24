@@ -4031,7 +4031,7 @@
         },
         "transactionsNav": {
           "title": "Start with your transactions",
-          "description": "Transactions contains manual entries and portfolio history. Import has its own contextual guide."
+          "description": "Transactions contains manual entries and portfolio history."
         },
         "brokersAdd": {
           "title": "Add a broker",
