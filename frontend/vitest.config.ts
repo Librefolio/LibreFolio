@@ -53,6 +53,7 @@ export default defineConfig({
             $test: path.resolve(__dirname, 'src/__tests__'),
             '$app/navigation': path.resolve(__dirname, 'src/__mocks__/$app/navigation.ts'),
             '$app/environment': path.resolve(__dirname, 'src/__mocks__/$app/environment.ts'),
+            '$app/stores': path.resolve(__dirname, 'src/__mocks__/$app/stores.ts'),
         },
     },
 });
