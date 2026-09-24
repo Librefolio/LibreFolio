@@ -4403,5 +4403,17 @@
         }
       }
     }
+  },
+  "header": {
+    "privacy": {
+      "hide": "Hide amounts",
+      "show": "Show amounts"
+    },
+    "theme": {
+      "switchToDark": "Switch to dark mode",
+      "switchToLight": "Switch to light mode",
+      "dark": "Dark mode",
+      "light": "Light mode"
+    }
   }
 }
