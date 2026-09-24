@@ -12,12 +12,12 @@
      * - the opening set is **remembered**, then **owned**, then **small** — see
      *   `resolveInitialSelection`; the hundred survives only as the API's
      *   ceiling;
-     * - four mass actions and two filters make a large set reachable *and*
-     *   escapable;
+     * - three quick actions, a holdings command and two filters make a large set
+     *   reachable *and* escapable, and a "+" adds any number of assets in one go;
      * - the broker control stopped pretending to be a filter. It was never one:
-     *   it replaced the selection wholesale. It is now labelled as what it
-     *   does — a preset that loads a broker's assets — and choosing its empty
-     *   option no longer wipes the selection.
+     *   it replaced the selection wholesale. It is now a command beside the quick
+     *   actions — "All mine", or one broker — that loads what is held and then
+     *   leaves the selection to the user (see `loadHoldings`).
      *
      * **No amount of money appears anywhere on this page.** Not in this panel,
      * not in the levels mounted below it. An asset set has no weights, so any
@@ -57,26 +57,33 @@
      * rounds nothing here could refresh the rates a converted series stands on.
      * It was not a defect, it was a loss — the first reading of this docstring
      * checked whether the removed code left anything *orphaned* and missed that a
-     * *capability* had become unreachable. The sync is back in the controls below,
-     * scoped to the selection: after an accepted run every section re-reads its
-     * base, and the replay forgets an answer computed on the prices just replaced.
+     * *capability* had become unreachable. The sync is back, scoped to the
+     * selection: after an accepted run every section re-reads its base, and the
+     * replay forgets an answer computed on the prices just replaced. Since F-3b its
+     * button is the page toolbar's — one sync per page, where the grid tab keeps its
+     * own — and it reaches this panel's modal through `openSync`, with `canSync`
+     * telling the page when there is nothing to sync.
      */
     import {untrack} from 'svelte';
-    import {CheckCheck, FlipHorizontal, RefreshCw, RotateCw, Square, Undo2, X} from 'lucide-svelte';
+    import {Briefcase, CheckCheck, ChevronDown, Coins, FlipHorizontal, Landmark, Layers, RefreshCw, Square, Wallet, X} from 'lucide-svelte';
 
     import {_ as t} from '$lib/i18n';
-    import AssetSelect from '$lib/components/ui/select/AssetSelect.svelte';
-    import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
     import {singleValue} from '$lib/risk/riskTypes';
+    import {currentLanguage} from '$lib/stores/app/language';
     import {fetchReport} from '$lib/stores/portfolio/portfolioStore.svelte';
     import {assetStoreVersion, ensureAssetsLoaded, getAssetInfo} from '$lib/stores/reference/assetStore';
     import {brokerStoreVersion, ensureBrokersLoaded, getAccessibleBrokers} from '$lib/stores/reference/brokerStore';
+    import {currencyStoreVersion, ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {ensureFxRoutesLoaded, fxRoutesVersion, getConfiguredPairSlugs} from '$lib/stores/reference/fxRoutesStore';
     import {invalidateRisk} from '$lib/stores/risk/riskStore.svelte';
+    import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import AssetSetCorrelationSection from './AssetSetCorrelationSection.svelte';
     import AssetSetComparisonLevels from './AssetSetComparisonLevels.svelte';
     import AssetSetReplaySection from './AssetSetReplaySection.svelte';
+    import LabAssetPicker from './LabAssetPicker.svelte';
+    import LabCheckMenu, {type CheckMenuItem} from './LabCheckMenu.svelte';
+    import LabPopover from './LabPopover.svelte';
     import {riskBenchmark} from '$lib/stores/risk/riskBenchmarkStore.svelte';
     import {applyBulkAction, applyFilters, MAX_SELECTED_ASSETS, readPersistedSelection, resolveInitialSelectionWithSource, writePersistedSelection, type BulkAction, type SelectionFilters, type SelectionSource} from './assetSetSelection';
     import {buildSyncTargets} from './syncTargets';
@@ -104,19 +111,26 @@
          * acceptance: a run the user did not start refreshes nothing.
          */
         onsynced?: () => void | Promise<void>;
+        /**
+         * Whether the selection has anything to sync, mirrored for the page: the sync
+         * button lives in the page's toolbar (one sync per page, V1) and must not offer
+         * a run over an empty selection.
+         */
+        canSync?: boolean;
     }
 
-    let {assets, dateStart, dateEnd, targetCurrency, onsynced}: Props = $props();
+    let {assets, dateStart, dateEnd, targetCurrency, onsynced, canSync = $bindable(false)}: Props = $props();
 
     let selectedAssetIds = $state<number[]>([]);
-    let brokerPreset = $state('');
     let filters = $state<SelectionFilters>({types: [], currencies: []});
     let brokerAssetsLoading = $state(false);
     let brokerLoadFailed = $state(false);
+    /** The last holdings command found nothing held, and left the selection alone. */
+    let brokerLoadEmpty = $state(false);
+    let presetOpen = $state(false);
     let seedInitialized = false;
     let selectionSource = $state<SelectionSource | null>(null);
     let brokerRequestGeneration = 0;
-    let lastBrokerSignature = '';
 
     /**
      * R2-128 — the price and exchange-rate sync, scoped to the selection.
@@ -170,11 +184,29 @@
         }
     }
 
+    $effect(() => {
+        canSync = syncTargets.assets.length > 0 || syncTargets.fxPairs.length > 0;
+    });
+
+    /** The page toolbar's sync, on this tab: the selection's prices and rates, through this panel's modal. */
+    export function openSync(): void {
+        if (canSync) syncOpen = true;
+    }
+
+    /**
+     * The page toolbar's reload, on this tab: every section asks its base again.
+     * Nothing was synced, so the page's own series are left alone — this is the
+     * refresh half of `handleSynced`, without the sync it follows.
+     */
+    export function reload(): void {
+        invalidateRisk();
+        syncGeneration += 1;
+    }
+
     let brokers = $derived.by(() => {
         void $brokerStoreVersion;
         return getAccessibleBrokers();
     });
-    let brokerOptions = $derived([{value: '', label: $t('risk.assetSet.presetNone')}, ...brokers.map((broker) => ({value: String(broker.id), label: broker.name}))]);
     let selectedAssets = $derived(selectedAssetIds.map((assetId) => assets.find((asset) => asset.id === assetId)).filter((asset): asset is AssetOption => Boolean(asset)));
 
     /**
@@ -189,14 +221,33 @@
     let filtersActive = $derived(filters.types.length > 0 || filters.currencies.length > 0);
     let atCapacity = $derived(selectedAssetIds.length >= MAX_SELECTED_ASSETS);
 
+    /** How many assets carry each value, over the whole catalogue like the options themselves. */
+    function countBy(read: (asset: AssetOption) => string): Map<string, number> {
+        const counts = new Map<string, number>();
+        for (const asset of assets) counts.set(read(asset), (counts.get(read(asset)) ?? 0) + 1);
+        return counts;
+    }
+
+    let typeItems = $derived.by((): CheckMenuItem[] => {
+        const counts = countBy((asset) => asset.asset_type || 'OTHER');
+        return typeOptions.map((type) => ({value: type, label: $t(`assets.types.${type}`) || type, iconUrl: getAssetTypeIconUrl(type), count: counts.get(type) ?? 0})).sort((left, right) => left.label.localeCompare(right.label));
+    });
+
+    let currencyItems = $derived.by((): CheckMenuItem[] => {
+        void $currencyStoreVersion;
+        const counts = countBy((asset) => asset.currency);
+        return currencyOptions.map((currency) => ({value: currency, label: currency, glyph: getCurrencyInfo(currency).flag_emoji, count: counts.get(currency) ?? 0}));
+    });
+
     /**
-     * `AssetSelect` is backed by the global asset cache, while this panel is
-     * driven by the page's own list. Restricting the picker to ids the page
-     * knows keeps the two in step: an asset chosen from the wider cache would
-     * enter `selectedAssetIds`, reach the API, and then fail to resolve into a
-     * chip here — present in the analysis, invisible in the controls.
+     * The "+" picker lists `candidates`, which come from the page's own list and
+     * never from the global asset cache. That is what keeps the two in step: the
+     * old picker was backed by the cache and had to be restricted by hand, because
+     * an asset chosen from the wider cache entered `selectedAssetIds`, reached the
+     * API, and then failed to resolve into a chip here — present in the analysis,
+     * invisible in the controls.
      */
-    let pageAssetIds = $derived(new Set(assets.map((asset) => asset.id)));
+    let room = $derived(Math.max(0, MAX_SELECTED_ASSETS - selectedAssetIds.length));
 
     /**
      * Names for the matrix's axes.
@@ -222,6 +273,17 @@
         return labels;
     });
 
+    /** Same sources, same order of preference as the labels: the matrix's "by type" ordering reads it. */
+    let selectionTypes = $derived.by(() => {
+        void $assetStoreVersion;
+        const types = new Map<number, string | null | undefined>();
+        for (const asset of selectedAssets) types.set(asset.id, asset.asset_type);
+        for (const assetId of selectedAssetIds) {
+            if (!types.has(assetId)) types.set(assetId, getAssetInfo(assetId)?.asset_type);
+        }
+        return types;
+    });
+
     $effect(() => {
         untrack(() => void ensureBrokersLoaded());
     });
@@ -232,13 +294,19 @@
      * borrowed from a neighbour. On `/assets` nothing else loads the routes — the
      * page fetches the same list into a variable of its own — so without this call
      * the pair set stays empty and the sync silently shrinks back to prices only,
-     * which is the loss R2-128 recorded. The asset cache happens to be warmed by
-     * the add-asset picker, and that is exactly the kind of accident this call
+     * which is the loss R2-128 recorded. The asset cache used to be warmed by the
+     * old add-asset select, and that is exactly the kind of accident this call
      * stops relying on. Both loaders are idempotent; `RiskAnalysisPanel` does the
      * same.
      */
     $effect(() => {
         untrack(() => void Promise.all([ensureAssetsLoaded(), ensureFxRoutesLoaded()]));
+    });
+
+    /** The currency filter shows flags, which live in the currency cache. */
+    $effect(() => {
+        const language = $currentLanguage;
+        untrack(() => void ensureCurrenciesLoaded(language));
     });
 
     $effect(() => {
@@ -256,29 +324,27 @@
         untrack(() => writePersistedSelection(ids));
     });
 
-    $effect(() => {
-        const signature = `${brokerPreset}|${dateStart}|${dateEnd}|${targetCurrency}`;
-        if (signature === lastBrokerSignature) return;
-        lastBrokerSignature = signature;
-        untrack(() => void applyBrokerPreset());
-    });
-
     /**
-     * Load a broker's holdings into the selection.
+     * Replace the selection with what is held on the period's last day: in one
+     * broker, or — `null` — in every broker the user can see ("All mine").
      *
-     * The empty option is the control's *null state*, not an instruction: it
-     * used to reset the selection to the first hundred assets, which meant the
-     * only way to clear a broker preset was to trigger the very behaviour this
-     * panel was rewritten to remove.
+     * A **command**, like the three quick actions beside it, and no longer a
+     * select with a standing value. The select re-applied itself whenever the
+     * period or the currency changed, so an asset added by hand after choosing a
+     * broker vanished at the next change of dates, with nothing on screen saying
+     * why. A command runs once, when it is pressed, and then the selection is
+     * the user's again.
      *
-     * `fetchReport` is a portfolio route, but only the holdings' `asset_id`s are
-     * read from it — no amount, no weight, no valuation crosses into this page.
+     * "Held" is what the report's holdings mean: an open position, quantity above
+     * the dust threshold, on `dateEnd`. `fetchReport` is a portfolio route, but
+     * only the holdings' `asset_id`s are read from it — no amount, no weight, no
+     * valuation crosses into this page.
      */
-    async function applyBrokerPreset(): Promise<void> {
+    async function loadHoldings(brokerId: number | null): Promise<void> {
         const generation = ++brokerRequestGeneration;
+        const brokerIds = brokerId === null ? undefined : [brokerId];
         brokerLoadFailed = false;
-        if (!brokerPreset) return;
-
+        brokerLoadEmpty = false;
         brokerAssetsLoading = true;
         try {
             // `fetchReport` answers with a report or with `null`, and `null` covers two
@@ -292,10 +358,10 @@
             // more — the policy `loadBase` adopted for the same guard, and the right answer
             // to a transient failure too — and if the second answer is null as well, the
             // control says it failed and the selection is left exactly as it was.
-            let report = await fetchReport([Number(brokerPreset)], dateStart, dateEnd, targetCurrency);
+            let report = await fetchReport(brokerIds, dateStart, dateEnd, targetCurrency);
             if (generation !== brokerRequestGeneration) return;
             if (report == null) {
-                report = await fetchReport([Number(brokerPreset)], dateStart, dateEnd, targetCurrency);
+                report = await fetchReport(brokerIds, dateStart, dateEnd, targetCurrency);
                 if (generation !== brokerRequestGeneration) return;
             }
             if (report == null) {
@@ -303,7 +369,14 @@
                 return;
             }
             const summary = singleValue(report.summary);
-            selectedAssetIds = [...new Set((summary?.holdings ?? []).map((holding) => holding.asset_id))].sort((left, right) => left - right).slice(0, MAX_SELECTED_ASSETS);
+            const held = [...new Set((summary?.holdings ?? []).map((holding) => holding.asset_id))].sort((left, right) => left - right).slice(0, MAX_SELECTED_ASSETS);
+            // Nothing held is an answer, not an instruction to empty the table: the
+            // command says so and the selection stays as it was.
+            if (held.length === 0) {
+                brokerLoadEmpty = true;
+                return;
+            }
+            selectedAssetIds = held;
         } catch (error) {
             console.error('[Risk] Failed to resolve broker asset set:', error);
             if (generation === brokerRequestGeneration) brokerLoadFailed = true;
@@ -363,122 +436,151 @@
         filters = {types: [], currencies: []};
     }
 
-    function addAsset(assetId: number | null): void {
-        if (assetId === null || selectedAssetIds.includes(assetId) || atCapacity) return;
-        selectedAssetIds = [...selectedAssetIds, assetId].sort((left, right) => left - right);
+    function addAssets(assetIds: readonly number[]): void {
+        const current = new Set(selectedAssetIds);
+        const added = assetIds.filter((id) => !current.has(id)).slice(0, room);
+        if (added.length === 0) return;
+        selectedAssetIds = [...selectedAssetIds, ...added].sort((left, right) => left - right);
     }
 
     function removeAsset(assetId: number): void {
         selectedAssetIds = selectedAssetIds.filter((id) => id !== assetId);
     }
 
+    function choosePreset(brokerId: number | null): void {
+        presetOpen = false;
+        void loadHoldings(brokerId);
+    }
+
+    function hideBrokenIcon(event: Event): void {
+        (event.currentTarget as HTMLImageElement).style.visibility = 'hidden';
+    }
+
+    /**
+     * "My assets" left this row: it read `tx_count_own`, any transaction ever made
+     * in the user's brokers, so it also brought back positions sold years ago. Its
+     * place is the holdings command beside these three, which reads what is held.
+     */
     const BULK_ACTIONS: {action: BulkAction; icon: typeof CheckCheck; key: string}[] = [
         {action: 'all', icon: CheckCheck, key: 'selectAll'},
         {action: 'none', icon: Square, key: 'selectNone'},
         {action: 'invert', icon: FlipHorizontal, key: 'invert'},
-        {action: 'mine', icon: Undo2, key: 'mine'},
     ];
+
+    const QUICK_BUTTON = 'inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 dark:border-slate-600 dark:text-gray-300 dark:hover:bg-slate-700';
 </script>
 
 <div class="space-y-4" data-testid="asset-global-risk-panel">
     <section class="rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 p-4" data-testid="risk-asset-set-controls" data-selection-source={selectionSource}>
-        <div class="flex flex-wrap items-end gap-3">
-            <label class="text-xs text-gray-500 dark:text-gray-400">
-                {$t('risk.assetSet.presetBroker')}
-                <div class="mt-1 w-56">
-                    <SimpleSelect value={brokerPreset} options={brokerOptions} compact testId="risk-broker-filter" optionTestId={(option) => `risk-broker-option-${option.value || 'all'}`} onchange={(value) => (brokerPreset = value)} />
-                </div>
-            </label>
-            <label class="text-xs text-gray-500 dark:text-gray-400">
-                {$t('risk.assetSet.addAsset')}
-                <div class="mt-1 w-72 max-w-full">
-                    <AssetSelect value={null} compact testid="risk-asset-add-select" disabled={atCapacity} filter={(asset) => pageAssetIds.has(asset.id) && !selectedAssetIds.includes(asset.id)} placeholder={$t('risk.assetSet.addAsset')} onchange={addAsset} />
-                </div>
-            </label>
-            {#if brokerAssetsLoading}
-                <RefreshCw size={16} class="animate-spin text-libre-green" data-testid="risk-broker-filter-loading" />
-            {/if}
-            <button
-                type="button"
-                class="ml-auto flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 disabled:opacity-50"
-                onclick={() => (syncOpen = true)}
-                disabled={syncTargets.assets.length === 0 && syncTargets.fxPairs.length === 0}
-                data-testid="risk-sync-button"
-            >
-                <RotateCw size={14} />
-                {$t('common.sync')}
-            </button>
-        </div>
+        <!-- Row 1 — what goes on the table: three quick actions and the holdings command,
+             then the two filters they act through, then how many are in. The filters sit
+             beside the actions on purpose: "Select all" selects what the filters let
+             through, and the "+" below lists the same assets. -->
+        <div class="flex flex-wrap items-center gap-2">
+            <div class="flex flex-wrap items-center gap-2" data-testid="risk-asset-set-bulk-actions">
+                {#each BULK_ACTIONS as { action, icon: Icon, key } (action)}
+                    <button type="button" class={QUICK_BUTTON} onclick={() => runBulkAction(action)} disabled={assets.length === 0 || (action === 'all' && atCapacity)} data-testid="risk-bulk-{action}">
+                        <Icon size={13} />
+                        {$t(`risk.assetSet.bulk.${key}`)}
+                    </button>
+                {/each}
 
-        {#if brokerLoadFailed}
-            <p class="mt-2 text-xs text-red-600 dark:text-red-400" data-testid="risk-broker-filter-error">{$t('risk.states.loadFailed')}</p>
-        {/if}
+                <LabPopover bind:open={presetOpen} testId="risk-broker-filter-dropdown" panelClass="w-64">
+                    {#snippet trigger({open, toggle})}
+                        <button type="button" class={QUICK_BUTTON} aria-expanded={open} onclick={toggle} disabled={brokerAssetsLoading} data-testid="risk-broker-filter-button">
+                            {#if brokerAssetsLoading}
+                                <RefreshCw size={13} class="animate-spin text-libre-green" data-testid="risk-broker-filter-loading" />
+                            {:else}
+                                <Briefcase size={13} />
+                            {/if}
+                            {$t('risk.assetSet.bulk.mine')}
+                            <ChevronDown size={12} class="transition-transform {open ? 'rotate-180' : ''}" />
+                        </button>
+                    {/snippet}
+                    {#snippet children()}
+                        <p class="border-b border-gray-100 px-3 py-2 text-[11px] leading-snug text-gray-500 dark:border-slate-700 dark:text-gray-400">{$t('risk.assetSet.preset.hint')}</p>
+                        <div class="p-1">
+                            <button type="button" class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-slate-700" onclick={() => choosePreset(null)} data-testid="risk-broker-option-mine">
+                                <Wallet size={14} class="shrink-0 text-libre-green" />
+                                {$t('risk.assetSet.preset.allMine')}
+                            </button>
+                        </div>
+                        {#if brokers.length > 0}
+                            <p class="border-t border-gray-100 px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:border-slate-700 dark:text-gray-500">{$t('risk.assetSet.preset.byBroker')}</p>
+                            <div class="max-h-60 overflow-y-auto p-1 pt-0">
+                                {#each brokers as broker (broker.id)}
+                                    <button
+                                        type="button"
+                                        class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-slate-700"
+                                        onclick={() => choosePreset(broker.id)}
+                                        data-testid="risk-broker-option-{broker.id}"
+                                    >
+                                        <Landmark size={14} class="shrink-0 text-gray-400" />
+                                        <span class="min-w-0 flex-1 truncate">{broker.name}</span>
+                                    </button>
+                                {/each}
+                            </div>
+                        {/if}
+                    {/snippet}
+                </LabPopover>
+            </div>
 
-        <div class="mt-4 flex flex-wrap items-center gap-2" data-testid="risk-asset-set-bulk-actions">
-            {#each BULK_ACTIONS as { action, icon: Icon, key } (action)}
-                <button
-                    type="button"
-                    class="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 dark:border-slate-600 dark:text-gray-300 dark:hover:bg-slate-700"
-                    onclick={() => runBulkAction(action)}
-                    disabled={assets.length === 0 || (action === 'all' && atCapacity)}
-                    data-testid="risk-bulk-{action}"
-                >
-                    <Icon size={13} />
-                    {$t(`risk.assetSet.bulk.${key}`)}
-                </button>
-            {/each}
+            <span class="mx-1 hidden h-5 w-px bg-gray-200 sm:block dark:bg-slate-600" aria-hidden="true"></span>
+
+            <div class="flex flex-wrap items-center gap-2" data-testid="risk-asset-set-filters">
+                <LabCheckMenu
+                    label={$t('risk.assetSet.filters.type')}
+                    icon={Layers}
+                    items={typeItems}
+                    selected={filters.types}
+                    ontoggle={(value) => toggleFilter('types', value)}
+                    onclear={() => (filters = {...filters, types: []})}
+                    clearLabel={$t('risk.assetSet.filters.clear')}
+                    testId="risk-filter-type"
+                    optionTestId={(value) => `risk-filter-type-${value}`}
+                />
+                <LabCheckMenu
+                    label={$t('risk.assetSet.filters.currency')}
+                    icon={Coins}
+                    items={currencyItems}
+                    selected={filters.currencies}
+                    ontoggle={(value) => toggleFilter('currencies', value)}
+                    onclear={() => (filters = {...filters, currencies: []})}
+                    clearLabel={$t('risk.assetSet.filters.clear')}
+                    testId="risk-filter-currency"
+                    optionTestId={(value) => `risk-filter-currency-${value}`}
+                />
+                {#if filtersActive}
+                    <button type="button" class="inline-flex items-center gap-1 text-xs text-libre-green hover:underline" onclick={clearFilters} data-testid="risk-filters-clear">
+                        <X size={12} />
+                        {$t('risk.assetSet.filters.clear')}
+                    </button>
+                {/if}
+            </div>
+
             <span class="ml-auto text-xs text-gray-500 dark:text-gray-400" data-testid="risk-selected-count" data-selected={selectedAssetIds.length} data-total={candidates.length}>
                 {$t('risk.assetSet.selectedCount', {values: {selected: selectedAssetIds.length, total: candidates.length}})}
             </span>
         </div>
 
-        <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2" data-testid="risk-asset-set-filters">
-            <div class="flex flex-wrap items-center gap-1.5">
-                <span class="text-xs text-gray-500 dark:text-gray-400">{$t('risk.assetSet.filters.type')}</span>
-                {#each typeOptions as type (type)}
-                    <button
-                        type="button"
-                        class="rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors {filters.types.includes(type)
-                            ? 'border-libre-green bg-libre-green/10 text-libre-green'
-                            : 'border-gray-200 text-gray-500 hover:bg-gray-50 dark:border-slate-600 dark:text-gray-400 dark:hover:bg-slate-700'}"
-                        aria-pressed={filters.types.includes(type)}
-                        onclick={() => toggleFilter('types', type)}
-                        data-testid="risk-filter-type-{type}"
-                    >
-                        {$t(`assets.types.${type}`) || type}
-                    </button>
-                {/each}
-            </div>
-            <div class="flex flex-wrap items-center gap-1.5">
-                <span class="text-xs text-gray-500 dark:text-gray-400">{$t('risk.assetSet.filters.currency')}</span>
-                {#each currencyOptions as currency (currency)}
-                    <button
-                        type="button"
-                        class="rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors {filters.currencies.includes(currency)
-                            ? 'border-libre-green bg-libre-green/10 text-libre-green'
-                            : 'border-gray-200 text-gray-500 hover:bg-gray-50 dark:border-slate-600 dark:text-gray-400 dark:hover:bg-slate-700'}"
-                        aria-pressed={filters.currencies.includes(currency)}
-                        onclick={() => toggleFilter('currencies', currency)}
-                        data-testid="risk-filter-currency-{currency}"
-                    >
-                        {currency}
-                    </button>
-                {/each}
-            </div>
-            {#if filtersActive}
-                <button type="button" class="text-xs text-libre-green hover:underline" onclick={clearFilters} data-testid="risk-filters-clear">{$t('risk.assetSet.filters.clear')}</button>
-            {/if}
-        </div>
+        {#if brokerLoadFailed}
+            <p class="mt-2 text-xs text-red-600 dark:text-red-400" data-testid="risk-broker-filter-error">{$t('risk.states.loadFailed')}</p>
+        {:else if brokerLoadEmpty}
+            <p class="mt-2 text-xs text-amber-600 dark:text-amber-400" data-testid="risk-broker-filter-empty">{$t('risk.assetSet.preset.noneHeld')}</p>
+        {/if}
 
-        <div class="mt-3 flex flex-wrap gap-2" data-testid="risk-selected-assets">
+        <!-- Row 2 — what is on the table, and the "+" that adds to it. -->
+        <div class="mt-3 flex flex-wrap items-center gap-2" data-testid="risk-selected-assets">
             {#each selectedAssets as asset (asset.id)}
-                <span class="inline-flex items-center gap-1 rounded-full bg-gray-100 dark:bg-slate-700 px-2 py-1 text-xs text-gray-600 dark:text-gray-300" data-testid="risk-selected-asset-{asset.id}">
+                <span class="inline-flex h-7 items-center gap-1.5 rounded-full bg-gray-100 py-1 pl-1.5 pr-1 text-xs text-gray-600 dark:bg-slate-700 dark:text-gray-300" data-testid="risk-selected-asset-{asset.id}">
+                    <img src={asset.icon_url || getAssetTypeIconUrl(asset.asset_type)} alt="" class="h-4 w-4 shrink-0 object-contain" onerror={hideBrokenIcon} />
                     {asset.display_name}
-                    <button class="rounded-full p-0.5 hover:bg-gray-200 dark:hover:bg-slate-600" onclick={() => removeAsset(asset.id)} title={$t('common.remove')} data-testid="risk-remove-asset-{asset.id}">
+                    <button class="rounded-full p-0.5 hover:bg-gray-200 dark:hover:bg-slate-600" onclick={() => removeAsset(asset.id)} aria-label={$t('common.remove')} data-testid="risk-remove-asset-{asset.id}">
                         <X size={11} />
                     </button>
                 </span>
             {/each}
+            <LabAssetPicker {candidates} selected={selectedAssetIds} {room} {filtersActive} onclearfilters={clearFilters} onadd={addAssets} />
         </div>
         {#if atCapacity}
             <p class="mt-2 text-xs text-amber-600 dark:text-amber-400">{$t('risk.assetSet.maxAssets')}</p>
@@ -486,7 +588,7 @@
     </section>
 
     {#if selectedAssetIds.length > 0}
-        <AssetSetCorrelationSection assetIds={selectedAssetIds} assetLabels={selectionLabels} {dateStart} {dateEnd} {targetCurrency} refreshVersion={syncGeneration} />
+        <AssetSetCorrelationSection assetIds={selectedAssetIds} assetLabels={selectionLabels} assetTypes={selectionTypes} {dateStart} {dateEnd} {targetCurrency} refreshVersion={syncGeneration} />
         <AssetSetComparisonLevels assetIds={selectedAssetIds} assetLabels={selectionLabels} {dateStart} {dateEnd} {targetCurrency} {benchmarkId} refreshVersion={syncGeneration} />
         <AssetSetReplaySection assetIds={selectedAssetIds} assetLabels={selectionLabels} {dateStart} {dateEnd} {targetCurrency} refreshVersion={syncGeneration} />
     {:else}
