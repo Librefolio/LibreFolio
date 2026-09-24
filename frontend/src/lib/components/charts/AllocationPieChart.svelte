@@ -26,6 +26,7 @@
     import {_ as t} from '$lib/i18n';
     import {sectorI18nKey, getAssetTypeIconUrl, primaryAssetType} from '$lib/utils/assetTypes';
     import {buildAllocationHierarchy} from '$lib/components/charts/allocationHierarchy';
+    import {buildAllocationRings, type AllocationRingItem} from '$lib/components/charts/allocationRings';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 
     // =========================================================================
@@ -93,6 +94,11 @@
     // icon (and, previously, its translation via a since-removed name-based fallback)
     // would never be registered until some unrelated full rebuild (dark mode/resize).
     let lastRawTypeKeys = '';
+    // Whether the last full build drew the two rings (D72). Switching layout changes the
+    // number of series, and `setOption` merges series by index: going from three series
+    // back to one would leave the two ring series of the old option on screen. Only that
+    // transition asks ECharts to replace the series; every other rebuild merges as before.
+    let lastRings = false;
     let needsInitialLayoutStabilityPass = false;
 
     // Diversified color palette — high chromatic distance
@@ -190,12 +196,16 @@
         // and this same component draws the Asset Detail sector pie, which is out
         // of scope. With no subtypes present every group is a singleton, so the
         // order and the colours are identical to the plain value sort below.
-        const chartData =
+        const hierarchy =
             mode === 'type'
                 ? buildAllocationHierarchy(
                       mappedEntries.map((item) => ({key: item.rawName, weight: item.value, item})),
                       {resolvePrimary: primaryAssetType, palette},
-                  ).map(({item, color, primary, groupSize, primaryTotal}) => ({
+                  )
+                : [];
+        const chartData =
+            mode === 'type'
+                ? hierarchy.map(({item, color, primary, groupSize, primaryTotal}) => ({
                       ...item,
                       itemStyle: {color},
                       primaryKey: primary,
@@ -204,19 +214,63 @@
                   }))
                 : mappedEntries.sort((a, b) => b.value - a.value);
 
+        // D72: as soon as one family contains a subtype, the relation is drawn as a
+        // second ring instead of a shade — a lone `ETF_STOCK` is otherwise a pure,
+        // unrelated colour (R12). With no subtype on screen the layout says so, and
+        // the single legacy ring below is drawn untouched.
+        const layout = mode === 'type' ? buildAllocationRings(hierarchy, {weightOf: (item) => item.value}) : null;
+        const rings = layout?.rings === true;
+
+        const typeLabel = (key: string) => {
+            const i18nKey = `assets.types.${key.toUpperCase()}`;
+            const translated = tr(i18nKey);
+            return translated !== i18nKey ? translated : key;
+        };
+        // Percentages arrive with two decimals; a family's sum must not surface as 3.5299999%.
+        const roundedPercent = (value: number) => Math.round(value * 100) / 100;
+        const ringItem = (arc: AllocationRingItem<(typeof mappedEntries)[number]>) => ({
+            name: arc.role === 'member' ? arc.items[0].name : typeLabel(arc.key),
+            value: roundedPercent(arc.weight),
+            amount: arc.items.reduce((sum, item) => sum + (item.amount ?? 0), 0),
+            rawName: arc.key,
+            primaryKey: arc.primary,
+            groupSize: arc.memberCount,
+            primaryTotal: roundedPercent(arc.primaryTotal),
+            ringRole: arc.role,
+            itemStyle: {color: arc.color},
+        });
+        // Invisible, silent-looking arcs keep both rings angularly aligned. A filler has
+        // no border, or the family would show a seam and read as two levels.
+        const transparentStyle = {color: 'transparent', borderWidth: 0};
+        const baseRingData = rings ? layout!.base.map((arc) => ({...ringItem(arc), label: {show: !arc.split}})) : [];
+        const outerRingData = rings ? layout!.outer.map((arc) => (arc.role === 'filler' ? {...ringItem(arc), itemStyle: transparentStyle, label: {show: false}, emphasis: {disabled: true}} : {...ringItem(arc), label: {show: !arc.pure}})) : [];
+        // The base icon of a split family is drawn on the inner band only, where the
+        // outer ring cannot cover it.
+        const baseLabelData = rings ? layout!.base.map((arc) => ({...ringItem(arc), itemStyle: transparentStyle, label: {show: arc.split}})) : [];
+
         // Data-only update when chart is already initialized, dark mode hasn't changed,
         // AND (mode='type' only) no new asset type has appeared since the last full
         // build — a new type needs richStyles/legend/label formatters rebuilt so its
         // icon actually registers (see lastRawTypeKeys declaration above for why).
-        const currentRawTypeKeys = mode === 'type' ? [...new Set(chartData.map((d) => d.rawName.toUpperCase()))].sort().join(',') : '';
+        const currentRawTypeKeys = mode === 'type' ? [...new Set(chartData.map((d) => d.rawName.toUpperCase()))].sort().join(',') + (rings ? '|rings' : '') : '';
         const sameTypeSet = mode !== 'type' || currentRawTypeKeys === lastRawTypeKeys;
         if (chartFullyInitialized && lastDark === isDark && sameTypeSet) {
             // Bugfix: preserve the FULL data item (not just {name, value}) — formatters
             // (tooltip especially) read params.data.rawName/amount, and stripping them
             // here silently broke the fallback path for any type whose translated name
             // does not equal its raw enum after uppercasing (e.g. IT/FR/ES "Crowdfunding" != "CROWDFUND").
+            //
+            // With two rings every series has to be refreshed, not the first one: a
+            // `[{data}]` here would update the base ring and leave the outer one on the
+            // previous numbers — stale arcs, no error, no symptom.
             chartInstance.setOption({
-                series: [{data: chartData}],
+                series: rings
+                    ? [
+                          {id: 'alloc-base', data: baseRingData},
+                          {id: 'alloc-outer', data: outerRingData},
+                          {id: 'alloc-base-labels', data: baseLabelData},
+                      ]
+                    : [{data: chartData}],
             });
             return;
         }
@@ -242,6 +296,13 @@
                 };
                 rawKeyByName[name] = rawName.toUpperCase().replace(/[^A-Z_]/g, '');
             }
+            // A family's base arc may name a type that is not in the data at all — a
+            // lone `ETF_STOCK` is drawn under "Stock" — so its icon is registered too.
+            for (const {name, rawName} of [...baseRingData, ...outerRingData]) {
+                const rawKey = rawName.toUpperCase().replace(/[^A-Z_]/g, '');
+                richStyles[`img_${rawKey}`] ??= {backgroundColor: {image: getAssetTypeIconUrl(rawName)}, width: 16, height: 16, align: 'center'};
+                rawKeyByName[name] ??= rawKey;
+            }
         }
 
         // Responsive: narrow containers → legend below the pie
@@ -252,6 +313,19 @@
         // Legend — always scrollable to avoid 4+ unwrapped rows
         const legendBaseTextStyle: any = {color: isDark ? '#94a3b8' : '#64748b', fontSize: 11};
         const legendTextStyle = mode === 'type' ? {...legendBaseTextStyle, rich: richStyles} : legendBaseTextStyle;
+
+        // Two rings: each family, then its subtypes, so the legend reads as the hierarchy
+        // it describes. The pure member and the fillers are not listed — they would
+        // repeat the family's own name.
+        const ringLegendNames: string[] = [];
+        if (rings) {
+            for (const family of layout!.base) {
+                ringLegendNames.push(typeLabel(family.key));
+                for (const arc of layout!.outer) {
+                    if (arc.primary === family.primary && arc.role === 'member' && !arc.pure) ringLegendNames.push(arc.items[0].name);
+                }
+            }
+        }
 
         const legendTypeExtras =
             mode === 'type'
@@ -266,6 +340,10 @@
                           const translated = tr(`assets.types.${rawKey}`) || name;
                           return `{${safeKey}|} ${translated}`;
                       },
+                      // Not selectable with two rings: hiding an arc from one ring and not
+                      // from the other breaks "a parent's arc is the sum of its children",
+                      // which is the only reason the two rings line up.
+                      ...(rings ? {data: ringLegendNames, selectedMode: false} : {}),
                   }
                 : {};
 
@@ -343,7 +421,10 @@
 
         // Tooltip — emoji + translated label + percentage + absolute amount (on new line)
         const tooltipFormatter = (params: any) => {
-            const absAmount = amountByName[params.name];
+            // The data item carries its own amount. With two rings a family and its pure
+            // member share a display name ("Bonds") but not an amount, so a lookup by
+            // name would give the family's arc the member's figure or vice versa.
+            const absAmount = typeof params.data?.amount === 'number' ? params.data.amount : amountByName[params.name];
             const amountLine = absAmount != null && absAmount > 0 ? `<br/><span style="font-size:11px;opacity:0.8">${formatCurrencyAmountPlain(absAmount, currency, {showSign: false})}</span>` : '';
             if (mode === 'type') {
                 // Bugfix: same as above — use the raw backend type from the data item
@@ -357,8 +438,13 @@
                 // would restate the slice's own number.
                 const groupSize: number = params.data?.groupSize ?? 1;
                 const primaryKey: string | undefined = params.data?.primaryKey;
+                // On the outer ring the family is the whole point — a lone `ETF_STOCK`
+                // is exactly the arc that needs "↳ Stock", even as a family of one. On the
+                // base ring it would restate the arc's own number, so it is left out there.
+                const onOuterRing = params.data?.ringRole === 'member';
+                const showParent = rings ? onOuterRing : groupSize > 1;
                 let parentLine = '';
-                if (groupSize > 1 && primaryKey) {
+                if (showParent && primaryKey) {
                     const parentI18nKey = `assets.types.${primaryKey}`;
                     const parentTranslated = tr(parentI18nKey);
                     const parentLabel = parentTranslated !== parentI18nKey ? parentTranslated : primaryKey;
@@ -384,32 +470,70 @@
                 textStyle: {color: isDark ? '#e2e8f0' : '#1e293b', fontSize: 12},
             },
             legend: legendConfig,
-            series: [
-                {
-                    type: 'pie',
-                    radius: pieRadius,
-                    center: pieCenter,
-                    avoidLabelOverlap: true,
-                    padAngle: 1,
-                    itemStyle: {
-                        borderRadius: 4,
-                        borderColor: isDark ? '#293548' : '#ffffff',
-                        borderWidth: 2,
-                    },
-                    label: labelConfig,
-                    labelLayout: {hideOverlap: true},
-                    emphasis: {
-                        // Tooltip is sufficient on hover — hide inner label instead of replacing it with text
-                        label: {show: false},
-                        scaleSize: 5,
-                    },
-                    labelLine: {show: false},
-                    data: chartData,
-                },
-            ],
+            series: rings
+                ? ringSeries()
+                : [
+                      {
+                          type: 'pie',
+                          radius: pieRadius,
+                          center: pieCenter,
+                          avoidLabelOverlap: true,
+                          padAngle: 1,
+                          itemStyle: {
+                              borderRadius: 4,
+                              borderColor: isDark ? '#293548' : '#ffffff',
+                              borderWidth: 2,
+                          },
+                          label: labelConfig,
+                          labelLayout: {hideOverlap: true},
+                          emphasis: {
+                              // Tooltip is sufficient on hover — hide inner label instead of replacing it with text
+                              label: {show: false},
+                              scaleSize: 5,
+                          },
+                          labelLine: {show: false},
+                          data: chartData,
+                      },
+                  ],
         };
 
-        chartInstance.setOption(option, {notMerge: false});
+        // The two rings of D72, drawn as three series:
+        //
+        // - `alloc-base` spans the full thickness, one arc per family. A family that is
+        //   not split therefore reads as one piece — no seam, because nothing is drawn
+        //   across it.
+        // - `alloc-outer` overlays the outer band with the members of the split families
+        //   and an invisible filler for every other family.
+        // - `alloc-base-labels` carries the base icon of a split family on the inner band,
+        //   where the outer overlay cannot cover it. It is silent: no tooltip, no hover.
+        //
+        // No angular padding on any of them: `padAngle` removes one pad per arc, and the
+        // rings do not have the same number of arcs — padded, they would drift apart.
+        function ringSeries(): echarts.PieSeriesOption[] {
+            const [innerRadius, outerRadius] = pieRadius.map((value) => Number.parseFloat(value));
+            const splitRadius = `${innerRadius + (outerRadius - innerRadius) * 0.55}%`;
+            const shared = {
+                type: 'pie' as const,
+                center: pieCenter,
+                avoidLabelOverlap: true,
+                padAngle: 0,
+                label: labelConfig,
+                labelLayout: {hideOverlap: true},
+                labelLine: {show: false},
+            };
+            const border = {borderRadius: 4, borderColor: isDark ? '#293548' : '#ffffff', borderWidth: 2};
+            return [
+                {...shared, id: 'alloc-base', radius: pieRadius, itemStyle: border, emphasis: {label: {show: false}, scaleSize: 5}, data: baseRingData},
+                {...shared, id: 'alloc-outer', radius: [splitRadius, pieRadius[1]], itemStyle: border, emphasis: {label: {show: false}, scaleSize: 3}, data: outerRingData},
+                {...shared, id: 'alloc-base-labels', radius: [pieRadius[0], splitRadius], silent: true, itemStyle: transparentStyle, tooltip: {show: false}, emphasis: {disabled: true}, data: baseLabelData},
+            ];
+        }
+
+        // Replace the series only when the layout switches between one ring and two:
+        // merged by index, the old ring series would otherwise stay on screen.
+        const layoutSwitched = mode === 'type' && rings !== lastRings;
+        chartInstance.setOption(option, layoutSwitched ? {notMerge: false, replaceMerge: ['series']} : {notMerge: false});
+        lastRings = mode === 'type' ? rings : false;
         chartFullyInitialized = true;
         lastDark = isDark;
         if (needsInitialLayoutStabilityPass) {
