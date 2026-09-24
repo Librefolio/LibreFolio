@@ -3090,7 +3090,7 @@
         "l1": {
           "title": "¿Cuánto dolió cada uno?",
           "description": "La misma escala de daño, preguntada a cada activo seleccionado. Solo porcentajes: un conjunto de activos no tiene pesos, así que no hay importe que mostrar.",
-          "lastedDays": "duró {{days}} d",
+          "lastedDays": "duró {days} d",
           "columns": {
             "badDay": "Mal día",
             "badMonth": "Mal mes",
@@ -3104,7 +3104,8 @@
           "description": "Riesgo frente a rentabilidad, un punto por activo. No se traza ninguna recta: una selección no tiene un todo, así que no hay nada por encima o por debajo.",
           "expectedReturn": "Rentabilidad esperada",
           "correlation": "Correlación",
-          "noBenchmark": "Elige un índice de referencia en el Panel para añadir beta y correlación. Un índice que ya está en la selección no puede servirse de medida a sí mismo."
+          "noBenchmark": "Elige un índice de referencia en el Panel para añadir beta y correlación. Un índice que ya está en la selección no puede servirse de medida a sí mismo.",
+          "scatterNote": "Los puntos muestran la rentabilidad esperada en media-varianza: en un activo muy volátil la rentabilidad realmente vivida es menor, porque la volatilidad erosiona la capitalización."
         }
       }
     },

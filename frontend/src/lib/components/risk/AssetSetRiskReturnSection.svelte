@@ -32,6 +32,7 @@
      */
     import {_ as t} from '$lib/i18n';
     import ScatterChart from '$lib/components/charts/ScatterChart.svelte';
+    import {assetStoreVersion, getAssetInfo} from '$lib/stores/reference/assetStore';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 
@@ -53,7 +54,18 @@
 
     let rows = $derived(buildAssetSetPaidRows(assetIds, assetLabels, riskReturn, kpi, comparison));
     let assetPoints = $derived(buildAssetSetScatterPoints(rows));
-    let benchmarkPoint = $derived(buildAssetSetBenchmarkPoint(comparison, assetLabels));
+    /**
+     * The reference's name comes from the asset store, as the portfolio L3 names its
+     * own benchmark (`RiskLevelsPanel`, `benchmarkName`). `assetLabels` is the
+     * selection's map, and the reference is never in the selection — the payload
+     * validator forbids it — so reading the name from there labelled the diamond
+     * `#id` on every chart. `$assetStoreVersion` is read so a name that arrives after
+     * the first render replaces the fallback.
+     */
+    let benchmarkPoint = $derived.by(() => {
+        void $assetStoreVersion;
+        return buildAssetSetBenchmarkPoint(comparison, assetLabels, (assetId) => getAssetInfo(assetId)?.display_name);
+    });
 
     /**
      * The dots, with the benchmark last so it draws over the cloud.
@@ -109,8 +121,15 @@
                      holding the expected return and the one actually lived through
                      differ by tens of percentage points, and a reader seeing "−11%"
                      beside a coin that halved will not guess that "expected" was the
-                     warning. -->
-                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400" data-testid="risk-asset-set-l3-scatter-note">{$t('risk.levels.l3.scatter.note')}</p>
+                     warning.
+
+                     A key of this page's own, and not the portfolio L3's note. That
+                     one opens with "above the line means better paid for the risk",
+                     which is true where the line is drawn — and was borrowed here,
+                     under a chart that by construction has no line, putting back in
+                     words the one verdict the payload's shape makes impossible.
+                     `assetSetI18n.test.ts` now fails if this note names a line. -->
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400" data-testid="risk-asset-set-l3-scatter-note">{$t('risk.assetSet.levels.l3.scatterNote')}</p>
             </div>
         {/if}
 
