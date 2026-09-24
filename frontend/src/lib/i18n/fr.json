@@ -148,10 +148,12 @@
       "ETF_REAL_ESTATE": "ETF immobilier",
       "ETF_CRYPTO": "ETF crypto",
       "ETF_MONETARY": "ETF monétaire",
-      "LIQUIDITY": "Liquidité"
+      "LIQUIDITY": "Liquidité",
+      "CROWDFUND_REAL_ESTATE": "Crowdfunding immobilier"
     },
     "typeSections": {
-      "ETF": "ETF"
+      "ETF": "ETF",
+      "CROWDFUND": "Crowdfunding"
     },
     "benchmarkSection": "Références",
     "otherAssetsSection": "Autres actifs",
@@ -371,6 +373,14 @@
           "platform": "Plateforme de négociation (ex. TLX pour EuroTLX). Remplie automatiquement depuis la recherche; requise par certains marchés pour résoudre la page de l'instrument."
         }
       }
+    },
+    "typeHints": {
+      "ETF": "Contenu mixte ou non précisé",
+      "CROWDFUND": "Prêts P2P et aux entreprises"
+    },
+    "typeSelect": {
+      "searchPlaceholder": "Rechercher un type",
+      "noMatches": "Aucun type correspondant"
     }
   },
   "auth": {
