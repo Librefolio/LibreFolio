@@ -24,11 +24,12 @@
      * euro figure would be an arithmetic claim about a portfolio the user never
      * described. Percentages and coefficients only.
      *
-     * WHY THE LEGACY PANEL IS NO LONGER MOUNTED HERE, and why removing it took
-     * nothing away. `RiskAnalysisPanel` gates each of its eight sections on a
-     * capability the backend advertises for the scope (`:124-130`), and on
+     * WHY THE LEGACY PANEL IS NO LONGER MOUNTED HERE, and the one thing its
+     * removal did take away. `RiskAnalysisPanel` gates each of its eight sections on a
+     * capability the backend advertises for the scope (its `supports*`
+     * derivations, each a `hasRiskCapability(catalog, code, scope.kind, mode)`), and on
      * `asset_set` the backend advertises **two** analytics: `correlation` and
-     * `stress`. So on this page the legacy contributed exactly two things, and
+     * `stress`. So on this page the legacy contributed exactly two analytics, and
      * both were defects:
      *
      *   - a **second** correlation matrix, identical to the one above it, which
@@ -39,30 +40,46 @@
      *     shape and calls the result a scenario.
      *
      * Its historical replay — the one rung this page *is* allowed to show — was
-     * unreachable from here anyway: `:874` is `{#if scope.kind === 'asset'}`,
-     * nested inside `{#if supportsStress}`. The page showed the forbidden rung
-     * and hid the permitted one, which is what `AssetSetReplaySection` now
-     * corrects.
+     * unreachable from here anyway: the block holding `risk-replay-controls`
+     * sits behind `{#if scope.kind === 'asset'}`, inside `{#if supportsStress}`.
+     * It is named by the testid it contains, not by its guard, because the same
+     * guard text also wraps the stress controls just above it. The page showed
+     * the forbidden rung and hid the permitted one, which is what
+     * `AssetSetReplaySection` now corrects.
      *
-     * 🔴 The component itself is **not** deleted: `AssetRiskScenariosView:89`
+     * 🔴 The component itself is **not** deleted: `AssetRiskScenariosView`
      * still mounts it for Asset Detail, which `03` parks in beta and keeps out
      * of this redesign. What left is one mount, not the code.
+     *
+     * 🔴 **What the removal did take away (R2-128)**: the legacy also carried this
+     * page's only *price and exchange-rate* sync (`risk-sync-button` opening a
+     * `PageSyncModal`). The page's own sync refreshes prices only, so for two
+     * rounds nothing here could refresh the rates a converted series stands on.
+     * It was not a defect, it was a loss — the first reading of this docstring
+     * checked whether the removed code left anything *orphaned* and missed that a
+     * *capability* had become unreachable. The sync is back in the controls below,
+     * scoped to the selection: after an accepted run every section re-reads its
+     * base, and the replay forgets an answer computed on the prices just replaced.
      */
     import {untrack} from 'svelte';
-    import {CheckCheck, FlipHorizontal, RefreshCw, Square, Undo2, X} from 'lucide-svelte';
+    import {CheckCheck, FlipHorizontal, RefreshCw, RotateCw, Square, Undo2, X} from 'lucide-svelte';
 
     import {_ as t} from '$lib/i18n';
     import AssetSelect from '$lib/components/ui/select/AssetSelect.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
+    import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
     import {singleValue} from '$lib/risk/riskTypes';
     import {fetchReport} from '$lib/stores/portfolio/portfolioStore.svelte';
-    import {assetStoreVersion, getAssetInfo} from '$lib/stores/reference/assetStore';
+    import {assetStoreVersion, ensureAssetsLoaded, getAssetInfo} from '$lib/stores/reference/assetStore';
     import {brokerStoreVersion, ensureBrokersLoaded, getAccessibleBrokers} from '$lib/stores/reference/brokerStore';
+    import {ensureFxRoutesLoaded, fxRoutesVersion, getConfiguredPairSlugs} from '$lib/stores/reference/fxRoutesStore';
+    import {invalidateRisk} from '$lib/stores/risk/riskStore.svelte';
     import AssetSetCorrelationSection from './AssetSetCorrelationSection.svelte';
     import AssetSetComparisonLevels from './AssetSetComparisonLevels.svelte';
     import AssetSetReplaySection from './AssetSetReplaySection.svelte';
     import {riskBenchmark} from '$lib/stores/risk/riskBenchmarkStore.svelte';
     import {applyBulkAction, applyFilters, MAX_SELECTED_ASSETS, readPersistedSelection, resolveInitialSelectionWithSource, writePersistedSelection, type BulkAction, type SelectionFilters, type SelectionSource} from './assetSetSelection';
+    import {buildSyncTargets} from './syncTargets';
 
     interface AssetOption {
         id: number;
@@ -81,9 +98,15 @@
         dateStart: string;
         dateEnd: string;
         targetCurrency: string;
+        /**
+         * Called after an **accepted** sync, so the page can refresh what it holds
+         * outside this panel (the grid's price series). An omission is never read as
+         * acceptance: a run the user did not start refreshes nothing.
+         */
+        onsynced?: () => void | Promise<void>;
     }
 
-    let {assets, dateStart, dateEnd, targetCurrency}: Props = $props();
+    let {assets, dateStart, dateEnd, targetCurrency, onsynced}: Props = $props();
 
     let selectedAssetIds = $state<number[]>([]);
     let brokerPreset = $state('');
@@ -94,6 +117,58 @@
     let selectionSource = $state<SelectionSource | null>(null);
     let brokerRequestGeneration = 0;
     let lastBrokerSignature = '';
+
+    /**
+     * R2-128 — the price and exchange-rate sync, scoped to the selection.
+     *
+     * The same rule `RiskPanelHeader` applies on the single-scope pages, through
+     * the shared `buildSyncTargets`: the selection's prices, plus every configured
+     * pair that converts one of them into the target currency.
+     */
+    let syncOpen = $state(false);
+    let syncGeneration = $state(0);
+    let syncTargets = $derived.by(() => {
+        void $assetStoreVersion;
+        void $fxRoutesVersion;
+        return buildSyncTargets(selectedAssetIds, targetCurrency, getAssetInfo, getConfiguredPairSlugs());
+    });
+
+    /**
+     * This page has three controllers, one per section, so there is no single
+     * `handleSynced` to call. What they need is the generation, handed to every
+     * section as its `refreshVersion`: each re-reads its base, and the replay also
+     * forgets its answer (see `AssetSetReplaySection`). No controller listens to
+     * the risk cache itself, so dropping the cache alone would leave every section
+     * on its pre-sync answer.
+     *
+     * The cache is already gone by the time this runs: the sync requests are
+     * portfolio mutations (`isPortfolioAffectingMutation`), and `riskStore`
+     * registers `invalidateRisk` as their listener. The explicit call mirrors the
+     * controller's own `handleSynced`, so this refresh does not depend on how those
+     * URLs happen to be classified.
+     *
+     * 🔴 **The page refreshes first, the sections after.** The page's `onsynced`
+     * re-reads its price series, which reassigns its `assets` list several times.
+     * Its live-price poll used to re-run on every one of those reassignments — each
+     * run a write (`POST /assets/prices/current`) and so a portfolio mutation that
+     * drops every risk answer in flight — until it was keyed on the set of ids
+     * (`liveAssetIdsKey` in `assets/+page.svelte`). The order outlived the reason it
+     * was introduced for, and is kept on purpose: it costs nothing, and it keeps the
+     * sections clear of whatever that refresh sets off if the poll ever regresses,
+     * since `loadBase` asks again only once. `finally`, so a page refresh that fails
+     * still leaves the sections re-asked on the new data.
+     *
+     * A run that was not accepted changed nothing, so it refreshes nothing.
+     */
+    async function handleSynced(detail: {accepted: boolean}): Promise<void> {
+        if (detail?.accepted !== true) return;
+        try {
+            await onsynced?.();
+        } finally {
+            invalidateRisk();
+            syncGeneration += 1;
+        }
+    }
 
     let brokers = $derived.by(() => {
         void $brokerStoreVersion;
@@ -151,6 +226,21 @@
         untrack(() => void ensureBrokersLoaded());
     });
 
+    /**
+     * The sync reads two caches it must load itself: the asset cache (for the
+     * modal's rows) and the configured FX routes (for the pairs). Neither may be
+     * borrowed from a neighbour. On `/assets` nothing else loads the routes — the
+     * page fetches the same list into a variable of its own — so without this call
+     * the pair set stays empty and the sync silently shrinks back to prices only,
+     * which is the loss R2-128 recorded. The asset cache happens to be warmed by
+     * the add-asset picker, and that is exactly the kind of accident this call
+     * stops relying on. Both loaders are idempotent; `RiskAnalysisPanel` does the
+     * same.
+     */
+    $effect(() => {
+        untrack(() => void Promise.all([ensureAssetsLoaded(), ensureFxRoutesLoaded()]));
+    });
+
     $effect(() => {
         if (seedInitialized || assets.length === 0) return;
         seedInitialized = true;
@@ -191,9 +281,28 @@
 
         brokerAssetsLoading = true;
         try {
-            const report = await fetchReport([Number(brokerPreset)], dateStart, dateEnd, targetCurrency);
+            // `fetchReport` answers with a report or with `null`, and `null` covers two
+            // different facts: a *discard* (the client session or the report cache moved
+            // while the request was in flight) and a *failure* (it turns every error into
+            // `null` — nothing is ever thrown at this caller). On this page the cache moves
+            // on its own: the live-price poll writes today's prices
+            // (`POST /assets/prices/current`), that is a portfolio mutation, and
+            // `portfolioStore`'s mutation listener drops every report in flight. Read as
+            // "no holdings", a null used to wipe the selection in silence. It is asked once
+            // more — the policy `loadBase` adopted for the same guard, and the right answer
+            // to a transient failure too — and if the second answer is null as well, the
+            // control says it failed and the selection is left exactly as it was.
+            let report = await fetchReport([Number(brokerPreset)], dateStart, dateEnd, targetCurrency);
             if (generation !== brokerRequestGeneration) return;
-            const summary = singleValue(report?.summary);
+            if (report == null) {
+                report = await fetchReport([Number(brokerPreset)], dateStart, dateEnd, targetCurrency);
+                if (generation !== brokerRequestGeneration) return;
+            }
+            if (report == null) {
+                brokerLoadFailed = true;
+                return;
+            }
+            const summary = singleValue(report.summary);
             selectedAssetIds = [...new Set((summary?.holdings ?? []).map((holding) => holding.asset_id))].sort((left, right) => left - right).slice(0, MAX_SELECTED_ASSETS);
         } catch (error) {
             console.error('[Risk] Failed to resolve broker asset set:', error);
@@ -289,6 +398,16 @@
             {#if brokerAssetsLoading}
                 <RefreshCw size={16} class="animate-spin text-libre-green" data-testid="risk-broker-filter-loading" />
             {/if}
+            <button
+                type="button"
+                class="ml-auto flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 disabled:opacity-50"
+                onclick={() => (syncOpen = true)}
+                disabled={syncTargets.assets.length === 0 && syncTargets.fxPairs.length === 0}
+                data-testid="risk-sync-button"
+            >
+                <RotateCw size={14} />
+                {$t('common.sync')}
+            </button>
         </div>
 
         {#if brokerLoadFailed}
@@ -367,12 +486,14 @@
     </section>
 
     {#if selectedAssetIds.length > 0}
-        <AssetSetCorrelationSection assetIds={selectedAssetIds} assetLabels={selectionLabels} {dateStart} {dateEnd} {targetCurrency} />
-        <AssetSetComparisonLevels assetIds={selectedAssetIds} assetLabels={selectionLabels} {dateStart} {dateEnd} {targetCurrency} {benchmarkId} />
-        <AssetSetReplaySection assetIds={selectedAssetIds} assetLabels={selectionLabels} {dateStart} {dateEnd} {targetCurrency} />
+        <AssetSetCorrelationSection assetIds={selectedAssetIds} assetLabels={selectionLabels} {dateStart} {dateEnd} {targetCurrency} refreshVersion={syncGeneration} />
+        <AssetSetComparisonLevels assetIds={selectedAssetIds} assetLabels={selectionLabels} {dateStart} {dateEnd} {targetCurrency} {benchmarkId} refreshVersion={syncGeneration} />
+        <AssetSetReplaySection assetIds={selectedAssetIds} assetLabels={selectionLabels} {dateStart} {dateEnd} {targetCurrency} refreshVersion={syncGeneration} />
     {:else}
         <div class="rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 p-8 text-center text-sm text-gray-400 dark:text-gray-500" data-testid="risk-asset-set-empty">
             {$t('risk.states.noAssets')}
         </div>
     {/if}
 </div>
+
+<PageSyncModal bind:open={syncOpen} {dateStart} {dateEnd} assets={syncTargets.assets} fxPairs={syncTargets.fxPairs} onsynced={handleSynced} onclose={() => (syncOpen = false)} />
