@@ -395,6 +395,46 @@ prima di toccare `(app)/+layout.svelte`, che è condiviso.
 > | `front-utility header-scroll` | `4 passed` |
 > | `dev.py front check` (client `a085da1c8dac`) | `3 errors and 41 warnings in 4 files`, il pavimento noto |
 
+### Step 6e — Ancora montata ma non disegnata — **Stato: ✅ completato il 2026-09-24** — *C6*
+
+Nato dal rischio segnalato da F (tab Correlazione di `/assets`). **Letto nel codice:** lo stallo del
+Round 7 copre un'ancora che non si monta mai o non si ferma mai; un'ancora **montata con
+`display:none`** ha un rettangolo 0×0 identico da un frame all'altro, e dopo 2 frame la guida la dà
+`stable` e `anchored` a (0,0): niente stallo, niente *Continua comunque* (non è un vicolo cieco, perché
+il passo ha *Avanti*, ma la geometria è sbagliata). Il caso di F oggi non si presenta: la sua barra sta
+dentro `{#if activeTab !== 'correlation'}`, cioè è smontata (verificato dal coordinator a `2c02ff070`).
+**Irrobustimento approvato:** un'ancora conta come assente se il suo rettangolo è 0×0 oppure se
+`checkVisibility({visibilityProperty: true})` esiste e dà falso; l'opacità **no** (i controlli rivelati
+al passaggio del mouse partono a opacità 0). Regola per chi scrive le pagine: `use:guideAnchor` solo
+sull'elemento visibile.
+
+> **Note implementazione.** Test prima del fix, via `test-author`, in `OnboardingCoachmark.test.ts`
+> (+261, blocco *mounted but not rendered anchor*): ancora 0×0 montata; ancora che `checkVisibility`
+> dà nascosta con un rettangolo vero; ripresa quando l'ancora riceve un rettangolo; controlli: senza
+> `checkVisibility` (jsdom) e con sola opacità 0 l'ancora si aggancia. **Rossi prima:** `3 failed | 171
+> passed (174)` — ricevuto `data-guide-state="anchored"` dove si attende `waiting`, e `anchored` al
+> posto di `stalled` a +3 000 ms. Il `test-author` ha anche notato il rumore `scrollBy` di jsdom:
+> l'effetto di scorrimento partiva sul rettangolo 0×0, cioè il difetto stesso. **Fix** in
+> `OnboardingCoachmark.svelte` (+11/−2): `isRendered(element, rect)` e, in `refreshPosition`, un'ancora
+> non disegnata passa dallo stesso ramo di un'ancora smontata (`anchorRect` nullo, `waiting` dal primo
+> frame, così la scadenza dello stallo resta esattamente a 3 000 ms). Dopo: `174 passed`.
+>
+> **Controllo negativo sulla correzione vera** (copia fuori dal repo, `isRendered` → sempre vero, servita con
+> un `vi.mock` temporaneo): `4 failed | 171 passed (175)` — i tre casi nuovi e il caso aggiunto dopo il fix
+> (*un passo agganciato il cui target smette di essere disegnato torna a `waiting` e va in stallo 3 000 ms
+> dopo*; in jsdom serve un evento `resize` sintetico, perché lo stub del `ResizeObserver` non scatta mai).
+> Con la correzione: `175 passed`; il rumore `scrollBy` di jsdom sparisce (tornava col controllo negativo:
+> seguiva il difetto). sha256 del componente identico prima e dopo.
+>
+> **Doc** (via `docs-writer`, solo inglese): in `developer/frontend/components/features/import-wizard.md` la
+> sezione nuova *Anchor presence and stalls* (`#guide-anchor-stall`): quando un'ancora conta come assente, lo
+> stallo e *Continue anyway*, lo `skipped` dei flow per step, e la **regola per chi scrive le pagine**
+> (`use:guideAnchor` solo sull'elemento visibile; smontare, mai nascondere un'ancora registrata: il registro
+> tiene un solo elemento per id, l'ultimo registrato, e un doppione nascosto può oscurare quello visibile).
+> Corretta anche, perché accanto, la frase che attribuiva al wizard un'ancora sul contenitore degli step:
+> oggi ogni pulsante di avanzamento porta un id fisso `import.action.*`. `mkdocs build` strict e
+> `check-links` exit 0.
+
 ### Verifica di C4 — lane 6158, 2026-09-24
 
 | comando | esito |
