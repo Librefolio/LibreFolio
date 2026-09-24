@@ -134,3 +134,23 @@ export function maskFormattedNumber(formatted: string, sensitivity?: AmountSensi
     if (!shouldMaskAmount(sensitivity)) return formatted;
     return `${LEADING_SIGN.exec(formatted)?.[0] ?? ''}${PRIVACY_PLACEHOLDER}`;
 }
+
+/**
+ * Mask a quantity the user holds, formatted, where it sits next to a price (decision D5′).
+ *
+ * D5 left quantities visible: they were the reading key of a lot row, and masking the value
+ * while showing the quantity was an accepted residual. On 2026-09-23 the product owner
+ * revised it: a quantity is masked **where it sits next to a price** — positions and lots —
+ * because quantity × public price rebuilds what the user owns, and it stays visible in
+ * transactions. So the class of a quantity is decided by its context, not by its formatter:
+ * the same number is masked in a lot and shown in a transaction. That is why this is a
+ * separate name called at the site, and not a flag inside a shared quantity formatter.
+ *
+ * Behaves like `maskFormattedNumber` — the leading sign, written as the locale wrote it,
+ * stays outside the placeholder — so a short position keeps its direction. Units and
+ * tickers belong outside the argument, as the currency does for money. Absence is the
+ * caller's job: pass a number, not an em-dash.
+ */
+export function maskableQuantity(formatted: string): string {
+    return maskFormattedNumber(formatted);
+}

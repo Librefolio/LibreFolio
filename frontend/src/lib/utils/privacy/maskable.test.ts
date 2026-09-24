@@ -25,7 +25,7 @@ import {afterEach, beforeEach, describe, expect, it} from 'vitest';
 
 import {isPrivacyEnabled, setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
 
-import {maskable, maskCurrencyParts, maskFormattedNumber, PRIVACY_PLACEHOLDER, shouldMaskAmount, type AmountSensitivity} from './maskable';
+import {maskable, maskableQuantity, maskCurrencyParts, maskFormattedNumber, PRIVACY_PLACEHOLDER, shouldMaskAmount, type AmountSensitivity} from './maskable';
 
 /** A formatted amount as a currency formatter would hand it over. */
 const SMALL = '1,000.00';
@@ -437,5 +437,76 @@ describe('maskFormattedNumber', () => {
             expect(masked).not.toMatch(ANY_DIGIT);
             expect(masked.endsWith(PRIVACY_PLACEHOLDER)).toBe(true);
         }
+    });
+});
+
+/**
+ * maskableQuantity — a quantity the user holds, where it sits next to a price.
+ *
+ * Decision D5′ of the product owner, 2026-09-23: a quantity is masked in
+ * positions and lots, because quantity × public price rebuilds what the user
+ * owns, and stays visible in transactions. The class of a quantity is decided by
+ * its context, not by its formatter, so this function has no sensitivity
+ * parameter at all: a site that must show a quantity simply does not call it.
+ *
+ * It masks like `maskFormattedNumber` — the leading sign, as the locale wrote
+ * it, stays outside the placeholder — so a short position keeps its direction.
+ */
+describe('maskableQuantity', () => {
+    const svSE = new Intl.NumberFormat('sv-SE').format(-1234);
+
+    it('returns the formatted quantity unchanged while privacy is off', () => {
+        for (const formatted of ['12.5', '-3', '1,000.5', svSE]) {
+            expect(maskableQuantity(formatted)).toBe(formatted);
+        }
+    });
+
+    it('masks a quantity to the bare placeholder', () => {
+        // Control: the same call in the clear, so the line below is a
+        // substitution and not a function that always returns a placeholder.
+        expect(maskableQuantity('12.5')).toBe('12.5');
+
+        setPrivacyEnabled(true);
+        expect(maskableQuantity('12.5')).toBe('•••');
+    });
+
+    it('keeps the sign, so a short position keeps its direction', () => {
+        setPrivacyEnabled(true);
+
+        expect(maskableQuantity('-3')).toBe('-•••');
+        expect(maskableQuantity('-3')).not.toBe(maskableQuantity('3'));
+    });
+
+    it('keeps the U+2212 minus that sv-SE writes', () => {
+        // Precondition, measured rather than assumed: sv-SE starts with U+2212
+        // MINUS SIGN, so the expectation below can tell it from a hyphen.
+        expect(svSE.startsWith('\u2212')).toBe(true);
+
+        setPrivacyEnabled(true);
+        expect(maskableQuantity(svSE)).toBe('\u2212•••');
+    });
+
+    it('leaves no digit behind', () => {
+        const inputs = ['12.5', '-3', '1,000.5', svSE];
+        // Control: every input carries a digit the check can see.
+        for (const formatted of inputs) {
+            expect(formatted).toMatch(/\d/);
+        }
+
+        setPrivacyEnabled(true);
+        for (const formatted of inputs) {
+            expect(maskableQuantity(formatted)).not.toMatch(/\d/);
+        }
+    });
+
+    it('has no notion of public: the call site decides, and under privacy it always masks', () => {
+        // Arity 1: there is no second parameter to pass a classification through.
+        expect(maskableQuantity.length).toBe(1);
+
+        setPrivacyEnabled(true);
+        // The general number mask can be told a figure is public; a quantity
+        // beside a price cannot, so the same input comes back masked here.
+        expect(maskFormattedNumber('12.5', 'public')).toBe('12.5');
+        expect(maskableQuantity('12.5')).toBe('•••');
     });
 });
