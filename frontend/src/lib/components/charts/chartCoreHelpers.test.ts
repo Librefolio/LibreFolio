@@ -2690,9 +2690,10 @@ describe('canonical overlay axis and reference helpers', () => {
                 expect(missing).toEqual([]);
             });
 
-            // The seven keys batch 2's i18n pass wired, each asserted by NAME rather than
-            // by its English text, so a retranslation never turns this red.
-            const WIRED_KEYS = ['dashboard.pnlSubmodeLine', 'dashboard.pnlSubmodeCandles', 'dashboard.pnlSubmodeIncome', 'dashboard.pnlCandlesHypothetical', 'dashboard.pnlCandlesHypotheticalShort', 'dashboard.pnlAcqNewCapital', 'dashboard.pnlAcqReinvested'] as const;
+            // The keys batch 2's i18n pass wired, each asserted by NAME rather than by its
+            // English text, so a retranslation never turns this red. The long caption key
+            // left in round 4 (R9): the caption now uses the short register.
+            const WIRED_KEYS = ['dashboard.pnlSubmodeLine', 'dashboard.pnlSubmodeCandles', 'dashboard.pnlSubmodeIncome', 'dashboard.pnlCandlesHypotheticalShort', 'dashboard.pnlAcqNewCapital', 'dashboard.pnlAcqReinvested'] as const;
 
             it.each(WIRED_KEYS)('consumes %s through $_() — a key that exists but is never wired is exactly the bug that shipped', (key) => {
                 const source = growthChartSource();
@@ -2786,20 +2787,6 @@ describe('canonical overlay axis and reference helpers', () => {
                 // Each form is used exactly once, so neither can be doing both jobs.
                 expect(source.split(SHORT_CALL)).toHaveLength(2);
                 expect(source.split(LONG_CALL).length - 1).toBe(1);
-            });
-
-            it('keeps the LONG value a strict extension of the SHORT one in every locale — the pair must stay two registers of one sentence', () => {
-                for (const locale of LOCALES) {
-                    const bundle = localeBundle(locale);
-                    const short = resolveKey(bundle, 'dashboard.pnlCandlesHypotheticalShort') as string;
-                    const long = resolveKey(bundle, 'dashboard.pnlCandlesHypothetical') as string;
-
-                    expect(typeof short).toBe('string');
-                    expect(typeof long).toBe('string');
-                    expect(long.length, `${locale}: the long form must be the longer of the two`).toBeGreaterThan(short.length);
-                    expect(short.endsWith('.'), `${locale}: the compact footnote must not end in a period`).toBe(false);
-                    expect(long.endsWith('.'), `${locale}: the full caption must end in a period`).toBe(true);
-                }
             });
         });
 

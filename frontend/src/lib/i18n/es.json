@@ -1482,7 +1482,6 @@
     "pnlSubmodeLine": "Línea",
     "pnlSubmodeIncome": "Ingresos",
     "pnlSubmodeCandles": "Velas",
-    "pnlCandlesHypothetical": "Sintético — los máximos/mínimos entre activos son hipotéticos y no simultáneos, no una serie intradía real.",
     "pnlCandlesHypotheticalShort": "Sintético — los máximos/mínimos entre activos son hipotéticos y no simultáneos",
     "pnlAcqNewCapital": "Nuevo capital",
     "pnlAcqReinvested": "Reinvertido"

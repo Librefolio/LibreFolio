@@ -23,6 +23,8 @@
     import {attachChartReady} from '$lib/utils/chartReady';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
+    import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
+    import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS, namedPoint} from '$lib/components/charts/echartsAnimationConfig';
     import {_, locale} from '$lib/i18n';
     import {buildResponsiveXAxisPolicy} from '$lib/components/charts/responsiveXAxis';
@@ -1982,9 +1984,8 @@
                         } else {
                             html += `<div style="color:${mutedColor}">${$_('common.noData')}</div>`;
                         }
-                        // Compact form for the tooltip; the always-visible caption below
-                        // the chart carries the full sentence (…HypotheticalShort vs
-                        // …Hypothetical — two distinct keys, not a truncation).
+                        // No synthetic-candle footnote in the tooltip: the caption under the
+                        // chart is the single disclosure.
                         activeChartData?.pnl.brokers.forEach((broker, index) => {
                             const v = broker.metric.values[idx];
                             if (v == null) return;
@@ -2296,7 +2297,8 @@
         </p>
     {/if}
     {#if !loading && viewMode === 'pnl' && pnlSubmode === 'candles'}
-        <!-- Mandatory always-visible synthetic-candle disclosure (plan §3.3). -->
-        <p class="text-center text-xs text-gray-400 dark:text-gray-500 italic mt-1" data-testid="growth-pnl-candles-hypothetical-label">{$_('dashboard.pnlCandlesHypothetical')}</p>
+        <!-- Mandatory always-visible synthetic-candle disclosure (plan §3.3): one line in the short
+             register, scrolling instead of wrapping where it does not fit (R9). -->
+        <p use:scrollOnOverflow class="{overflowScrollTextClass} text-center text-xs text-gray-400 dark:text-gray-500 italic mt-1" data-testid="growth-pnl-candles-hypothetical-label">{$_('dashboard.pnlCandlesHypotheticalShort')}</p>
     {/if}
 </div>
