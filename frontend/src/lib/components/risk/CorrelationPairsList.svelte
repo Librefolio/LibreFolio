@@ -24,18 +24,27 @@
      * stated rather than hidden behind a collapsed section.
      */
     import {_ as t} from '$lib/i18n';
+    import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import type {RiskCorrelationOutput} from '$lib/risk/riskTypes';
-    import {buildLookup, topPairs, type CorrelationPair} from './correlationHelpers';
+    import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
+    import {buildLookup, pairKey, topPairs, type CorrelationPair} from './correlationHelpers';
 
     interface Props {
         output: RiskCorrelationOutput;
         assetLabels?: ReadonlyMap<number, string>;
         limit?: number;
+        /** `pairKey` of the pair shown in the matrix, if any. */
+        selectedKey?: string | null;
+        /** A click on a ranking entry: the matrix highlights the cell and opens its tooltip. */
+        onselect?: (pair: CorrelationPair) => void;
     }
 
-    let {output, assetLabels = new Map(), limit = 5}: Props = $props();
+    let {output, assetLabels = new Map(), limit = 5, selectedKey = null, onselect}: Props = $props();
 
     let pairs = $derived(topPairs(output.asset_ids, buildLookup(output.cells), limit));
+
+    /** Below this a pair offsets strongly enough to be called opposite, not merely offsetting. */
+    const OPPOSITE = -0.7;
 
     function nameOf(assetId: number): string {
         return assetLabels.get(assetId) ?? `#${assetId}`;
@@ -51,11 +60,52 @@
      * views together.
      */
     function toneClass(pair: CorrelationPair): string {
-        if (pair.value < 0) return 'text-red-700 dark:text-red-300';
-        if (pair.band === 'high') return 'text-blue-700 dark:text-blue-300';
-        return 'text-slate-700 dark:text-slate-300';
+        return pair.value < 0 ? 'text-red-700 dark:text-red-300' : 'text-blue-700 dark:text-blue-300';
+    }
+
+    /** The short verdict next to the value: the names are on the line below, and the cell in the matrix. */
+    function tag(pair: CorrelationPair): string {
+        if (pair.value < 0) return $t(pair.value <= OPPOSITE ? 'risk.assetSet.pairs.tagOpposite' : 'risk.assetSet.pairs.tagOffsetting');
+        return $t(pair.nearIdentical ? 'risk.assetSet.nearIdentical' : 'risk.assetSet.pairs.tagSimilar');
+    }
+
+    function tagClass(pair: CorrelationPair): string {
+        return pair.value < 0 ? 'bg-red-50 text-red-800 dark:bg-red-900/40 dark:text-red-200' : 'bg-blue-50 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200';
     }
 </script>
+
+{#snippet ranking(entries: CorrelationPair[])}
+    <ol class="mt-2 space-y-1">
+        {#each entries as pair, index (pairKey(pair.rowAssetId, pair.columnAssetId))}
+            {@const key = pairKey(pair.rowAssetId, pair.columnAssetId)}
+            <li>
+                <button
+                    type="button"
+                    class="w-full rounded-lg border px-2 py-1.5 text-left transition-colors {selectedKey === key ? 'border-slate-300 bg-slate-100 dark:border-slate-500 dark:bg-slate-700' : 'border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/60'}"
+                    aria-pressed={selectedKey === key}
+                    onclick={() => onselect?.(pair)}
+                    data-testid="risk-correlation-pair-{pair.rowAssetId}-{pair.columnAssetId}"
+                >
+                    <span class="flex items-center gap-2">
+                        <span class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300">{index + 1}</span>
+                        <span class="w-11 shrink-0 font-mono text-sm font-semibold tabular-nums {toneClass(pair)}">{pair.value.toFixed(2)}</span>
+                        <span class="rounded px-1.5 py-0.5 text-[11px] font-medium {tagClass(pair)}" data-testid={pair.nearIdentical ? `risk-correlation-pair-near-identical-${pair.rowAssetId}-${pair.columnAssetId}` : undefined}>
+                            {tag(pair)}
+                        </span>
+                    </span>
+                    <!-- The names scroll when they do not fit, as they do across the app's tables
+                         (`scrollOnOverflow`). No `title`: a native box that pops up when the mouse
+                         rests covered the next entries, and the full pair is in the matrix tooltip. -->
+                    <span class="mt-0.5 flex min-w-0 items-baseline gap-1 pl-7 text-xs text-slate-500 dark:text-slate-400">
+                        <span use:scrollOnOverflow class="{overflowScrollTextClass} flex-1">{nameOf(pair.rowAssetId)}</span>
+                        <span class="shrink-0 text-slate-400">↔</span>
+                        <span use:scrollOnOverflow class="{overflowScrollTextClass} flex-1">{nameOf(pair.columnAssetId)}</span>
+                    </span>
+                </button>
+            </li>
+        {/each}
+    </ol>
+{/snippet}
 
 <div class="space-y-4" data-testid="risk-correlation-pairs">
     <section data-testid="risk-correlation-pairs-correlated">
@@ -64,24 +114,7 @@
         {#if pairs.correlated.length === 0}
             <p class="mt-2 text-xs text-slate-500 dark:text-slate-400" data-testid="risk-correlation-pairs-correlated-empty">{$t('risk.assetSet.pairs.noneCorrelated')}</p>
         {:else}
-            <ul class="mt-2 space-y-1">
-                {#each pairs.correlated as pair (`${pair.rowAssetId}-${pair.columnAssetId}`)}
-                    <li class="flex items-baseline justify-between gap-3 rounded px-2 py-1 text-sm odd:bg-slate-50 dark:odd:bg-slate-800/40" data-testid="risk-correlation-pair-{pair.rowAssetId}-{pair.columnAssetId}">
-                        <span class="min-w-0 truncate text-slate-700 dark:text-slate-200">
-                            {nameOf(pair.rowAssetId)} <span class="text-slate-400">↔</span>
-                            {nameOf(pair.columnAssetId)}
-                        </span>
-                        <span class="flex shrink-0 items-baseline gap-2">
-                            {#if pair.nearIdentical}
-                                <span class="rounded bg-blue-100 px-1.5 py-0.5 text-[11px] font-medium text-blue-800 dark:bg-blue-900/40 dark:text-blue-200" data-testid="risk-correlation-pair-near-identical-{pair.rowAssetId}-{pair.columnAssetId}">
-                                    {$t('risk.assetSet.nearIdentical')}
-                                </span>
-                            {/if}
-                            <span class="font-mono tabular-nums {toneClass(pair)}">{pair.value.toFixed(2)}</span>
-                        </span>
-                    </li>
-                {/each}
-            </ul>
+            {@render ranking(pairs.correlated)}
         {/if}
     </section>
 
@@ -91,17 +124,7 @@
         {#if pairs.offsetting.length === 0}
             <p class="mt-2 text-xs text-slate-500 dark:text-slate-400" data-testid="risk-correlation-pairs-offsetting-empty">{$t('risk.assetSet.pairs.noneOffsetting')}</p>
         {:else}
-            <ul class="mt-2 space-y-1">
-                {#each pairs.offsetting as pair (`${pair.rowAssetId}-${pair.columnAssetId}`)}
-                    <li class="flex items-baseline justify-between gap-3 rounded px-2 py-1 text-sm odd:bg-slate-50 dark:odd:bg-slate-800/40" data-testid="risk-correlation-pair-{pair.rowAssetId}-{pair.columnAssetId}">
-                        <span class="min-w-0 truncate text-slate-700 dark:text-slate-200">
-                            {nameOf(pair.rowAssetId)} <span class="text-slate-400">↔</span>
-                            {nameOf(pair.columnAssetId)}
-                        </span>
-                        <span class="shrink-0 font-mono tabular-nums {toneClass(pair)}">{pair.value.toFixed(2)}</span>
-                    </li>
-                {/each}
-            </ul>
+            {@render ranking(pairs.offsetting)}
         {/if}
     </section>
 </div>
