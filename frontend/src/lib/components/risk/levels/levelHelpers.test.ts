@@ -1,5 +1,10 @@
-import {describe, expect, it} from 'vitest';
+import {beforeAll, describe, expect, it, vi} from 'vitest';
+import {get} from 'svelte/store';
 
+import {setupI18n} from '$test/component';
+import {CODE_EQUAL_ICU_WARNING_KEYS, icuWarningKeys, plausibleParams, type WarningParams} from '$test/riskWarningCatalogue';
+import {_} from '$lib/i18n';
+import en from '$lib/i18n/en.json';
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 
 import {DAILY_VAR_INSTANCE, MONTHLY_VAR_INSTANCE} from '../riskAnalysisHelpers';
@@ -20,6 +25,7 @@ import {
     lossMagnitude,
     requiredRecovery,
     uncoveredWeight,
+    warningSentence,
 } from './levelHelpers';
 
 /** A successful result carrying `output`, shaped like the API's. */
@@ -470,6 +476,320 @@ describe('resultReasons', () => {
     it('leaves an outright failure out of the verbatim list', () => {
         const failed = {analytic_code: 'correlation', instance_id: 'a', status: 'failed', error: {code: 'incompatible_scope', message: 'Not supported.'}} as unknown as RiskAnalyticResult;
         expect(resultReasons([failed])).toEqual([]);
+    });
+});
+
+/* ------------------------------------------------- keyed warning sentences --- */
+
+/**
+ * A warning now travels in two forms: the backend's English `message`, and the
+ * same sentence as a catalogue key (`message_i18n_key`) with the values it needs
+ * (`message_params`: names, counts, days). `warningSentence` chooses between the
+ * two, and `resultReasons` lists what it chose.
+ *
+ * **How a worded sentence is asserted without writing one down.** Every expected
+ * sentence is resolved from the *shipped catalogue* through the same `$_`
+ * formatter the components hand in, with the same values — the pattern of
+ * `L4Replay.test.ts`. No English is pinned, so rewording `en.json` moves both
+ * sides together. That makes each comparison only as honest as the lookup behind
+ * it, so the first case guards the two ways it could go vacuous: a key missing
+ * from the catalogue (svelte-i18n echoes the id back, and a helper echoing it too
+ * would "agree"), and a sentence that never received its values (svelte-i18n then
+ * returns the raw ICU source, braces included).
+ *
+ * The named cases below pin one sentence each; the block after them states the
+ * same rule over *every* `risk.warnings` sentence that takes arguments, with the
+ * list and plausible values read off `en.json` at test time by
+ * `$test/riskWarningCatalogue` — the same list `RiskResultFrame.test.ts` renders.
+ */
+type Warning = NonNullable<RiskAnalyticResult['warnings']>[number];
+
+interface KeyedCase {
+    code: string;
+    key: string;
+    params: WarningParams;
+    /** The backend's English sentence for this code, as `message` carries it. */
+    message: string;
+    /** What the worded sentence must visibly carry: the names, and any count, days or share. */
+    carries: string[];
+}
+
+const HOLDING_A = 'Synthetic Holding A';
+const HOLDING_B = 'Synthetic Holding B';
+const HOLDING_C = 'Synthetic Holding C';
+
+/** Emitted once per asset, with the same English sentence for every one of them. */
+const FALLBACK_CASE: KeyedCase = {
+    code: 'hypothetical_metadata_other_fallback',
+    key: 'risk.warnings.hypothetical_metadata_other_fallback',
+    params: {names: HOLDING_A, dimension: 'sector', count: 1},
+    message: 'Sector or geography metadata was unavailable; the asset was treated as Other at 100%.',
+    carries: [HOLDING_A],
+};
+const SLICE_CASE: KeyedCase = {
+    code: 'slice_assets_not_held',
+    key: 'risk.warnings.slice_assets_not_held',
+    params: {count: 2, names: `${HOLDING_A}, ${HOLDING_B}`},
+    message: 'Some requested assets are not held in the selected portfolio scope and were ignored.',
+    carries: [`${HOLDING_A}, ${HOLDING_B}`, '2'],
+};
+/** The code says only `assets_excluded`: the reason lives in the key alone. */
+const EXCLUDED_CASE: KeyedCase = {
+    code: 'assets_excluded',
+    key: 'risk.warnings.assets_excluded_missing_price',
+    params: {count: 3, names: `${HOLDING_A}, ${HOLDING_B}, ${HOLDING_C}`},
+    message: 'One or more scope assets were excluded from risk calculations.',
+    carries: [`${HOLDING_A}, ${HOLDING_B}, ${HOLDING_C}`, '3'],
+};
+const STALE_CASE: KeyedCase = {
+    code: 'historical_replay_assets_excluded',
+    key: 'risk.warnings.historical_replay_excluded_stale_at_start',
+    params: {names: HOLDING_C, treatment: 'omitted_from_replay', days: 37, count: 1},
+    message: 'Historical replay excluded assets quoted before the replay window but with no price in the 37 days before it begins.',
+    carries: [HOLDING_C, '37'],
+};
+/** The one argument formatted as a number (`{covered, number, percent}`), not interpolated as text. */
+const MOSTLY_EXCLUDED_CASE: KeyedCase = {
+    code: 'historical_replay_mostly_excluded',
+    key: 'risk.warnings.historical_replay_mostly_excluded',
+    params: {covered: 0.37},
+    message: 'Historical replay describes only 37% of the portfolio: the rest is excluded.',
+    carries: ['37'],
+};
+const KEYED_CASES: KeyedCase[] = [FALLBACK_CASE, SLICE_CASE, EXCLUDED_CASE, STALE_CASE, MOSTLY_EXCLUDED_CASE];
+
+/** A key no catalogue ships: svelte-i18n answers it with the id itself. */
+const ABSENT_KEY = 'risk.warnings.synthetic_key_added_after_this_build';
+const UNKEYED_CODE = 'synthetic_unkeyed_notice';
+const UNKEYED_MESSAGE = 'A synthetic notice the backend sent without a key.';
+
+function warning(code: string, message: string, key?: string | null, params?: WarningParams): Warning {
+    return {code, message, ...(key === undefined ? {} : {message_i18n_key: key}), ...(params === undefined ? {} : {message_params: params})};
+}
+
+function keyedWarning({code, message, key, params}: KeyedCase, overrides: WarningParams = {}): Warning {
+    return warning(code, message, key, {...params, ...overrides});
+}
+
+/** A catalogue sentence formatted exactly as a component formats it: `$_` with the warning's values. */
+function resolve(key: string, values: WarningParams): string {
+    return get(_)(key, {values});
+}
+
+/** The catalogue leaf behind a dotted key, read from `en.json` on disk. */
+function enLeaf(key: string): unknown {
+    return key.split('.').reduce<unknown>((node, part) => (node !== null && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), en);
+}
+
+describe('warningSentence', () => {
+    beforeAll(async () => {
+        await setupI18n();
+    });
+
+    it('is pinned against keys that exist, resolve, and leak ICU braces when formatted without values', () => {
+        for (const {key, params} of KEYED_CASES) {
+            expect(typeof enLeaf(key), `${key} is missing from en.json`).toBe('string');
+            // On disk is not the same as loaded: a catalogue that never finished
+            // loading echoes every id back, and so would the helper.
+            expect(get(_)(key), `${key} does not resolve through svelte-i18n: the catalogue is not loaded`).not.toBe(key);
+            // The defect's premise, and why these keys were chosen: called without
+            // values, svelte-i18n hands back the raw ICU source.
+            expect(get(_)(key), `${key} has no ICU argument: a raw sentence could not be told from a formatted one`).toContain('{');
+            expect(resolve(key, params), `${key} still carries braces once formatted with its values`).not.toContain('{');
+        }
+        expect(get(_)(ABSENT_KEY), `${ABSENT_KEY} exists after all: the fallback cases below would not be exercised`).toBe(ABSENT_KEY);
+    });
+
+    // `%s` and not `$key`: an object attribute in the title is cut at 40 characters.
+    it.each(KEYED_CASES.map((keyed) => [keyed.key, keyed] as const))('words %s with the names, counts and days the warning carries', (_key, keyed) => {
+        const expected = resolve(keyed.key, keyed.params);
+        for (const value of keyed.carries) {
+            expect(expected, `the ${keyed.key} sentence does not show "${value}": its values never reached the formatter`).toContain(value);
+        }
+        expect(expected, `${keyed.key} formats to the backend sentence itself: nothing here could tell the two branches apart`).not.toBe(keyed.message);
+
+        expect(warningSentence(keyedWarning(keyed), get(_))).toBe(expected);
+    });
+
+    it('falls back to the backend sentence for a key this build does not ship, never to the key', () => {
+        const sentence = warningSentence(warning('synthetic_code_added_later', 'A synthetic sentence only the backend knows.', ABSENT_KEY, {names: HOLDING_A, count: 1}), get(_));
+        expect(sentence).toBe('A synthetic sentence only the backend knows.');
+        expect(sentence).not.toContain('risk.warnings.');
+    });
+
+    it('falls back to the backend sentence, not to raw ICU, when a value the sentence needs is missing', () => {
+        const incomplete: WarningParams = {count: 2}; // `names` is missing
+        // svelte-i18n logs the failed format: the log is the premise, not the subject.
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+            // What the fallback rests on: a missing value does not throw, it hands
+            // back the raw ICU source — which is what would reach the screen.
+            expect(get(_)(EXCLUDED_CASE.key, {values: incomplete}), 'svelte-i18n no longer returns the raw source on a missing value: re-read the fallback rule').toContain('{');
+
+            const sentence = warningSentence(warning(EXCLUDED_CASE.code, EXCLUDED_CASE.message, EXCLUDED_CASE.key, incomplete), get(_));
+            expect(sentence).toBe(EXCLUDED_CASE.message);
+            expect(sentence).not.toContain('{');
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
+    // The backend joins its own lists (`", ".join(...)`) before they reach the wire.
+    // One it did not join must read exactly like one it did, not vanish into the
+    // fallback because the formatter found no value.
+    it('joins a list the backend did not join, exactly as the backend joins its own', () => {
+        const listed: Warning = {code: EXCLUDED_CASE.code, message: EXCLUDED_CASE.message, message_i18n_key: EXCLUDED_CASE.key, message_params: {count: 2, names: [HOLDING_A, HOLDING_B]}};
+        expect(warningSentence(listed, get(_))).toBe(resolve(EXCLUDED_CASE.key, {count: 2, names: `${HOLDING_A}, ${HOLDING_B}`}));
+    });
+
+    it('leaves out a value that is neither a scalar nor a list, so the sentence falls back instead of printing it', () => {
+        const nested: Warning = {code: EXCLUDED_CASE.code, message: EXCLUDED_CASE.message, message_i18n_key: EXCLUDED_CASE.key, message_params: {count: 2, names: {first: HOLDING_A}}};
+        // The value is left out, so svelte-i18n logs a failed format: the premise again.
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+            const sentence = warningSentence(nested, get(_));
+            expect(sentence).toBe(EXCLUDED_CASE.message);
+            expect(sentence).not.toContain('[object');
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
+    it('shows the backend sentence, trimmed, for a warning that carries no key', () => {
+        for (const key of [undefined, null, '']) {
+            expect(warningSentence(warning(UNKEYED_CODE, `  ${UNKEYED_MESSAGE}  `, key), get(_)), `message_i18n_key: ${JSON.stringify(key)}`).toBe(UNKEYED_MESSAGE);
+        }
+    });
+
+    it('keeps the backend sentence when no translator is handed in', () => {
+        for (const keyed of KEYED_CASES) {
+            expect(warningSentence(keyedWarning(keyed)), keyed.key).toBe(keyed.message);
+        }
+    });
+
+    it('says nothing for a warning that is not there', () => {
+        expect(warningSentence(null, get(_))).toBe('');
+        expect(warningSentence(undefined, get(_))).toBe('');
+        expect(warningSentence(null)).toBe('');
+    });
+
+    it('says nothing, rather than the key, when there is neither a translation nor a sentence', () => {
+        expect(warningSentence(warning(UNKEYED_CODE, '   '), get(_))).toBe('');
+        expect(warningSentence(warning(UNKEYED_CODE, '   '))).toBe('');
+        expect(warningSentence(warning(UNKEYED_CODE, '   ', ABSENT_KEY), get(_))).toBe('');
+    });
+});
+
+describe('warningSentence — every sentence with arguments in the catalogue', () => {
+    /** Stands in for the English `message`; no catalogue sentence reads like it. */
+    const BACKEND_SENTENCE = 'A synthetic backend sentence standing in for the English message.';
+
+    beforeAll(async () => {
+        await setupI18n();
+    });
+
+    // The case below is what stops the list from passing vacuously: `it.each([])`
+    // collects no test at all, and a property over nothing is green by definition.
+    it('reads its list off the catalogue: never empty, every sentence with braces, the code-equal keys', () => {
+        const keys = icuWarningKeys();
+        expect(keys.length, 'no risk.warnings sentence with arguments was found: the scan reads the wrong node').toBeGreaterThan(0);
+        for (const key of [...CODE_EQUAL_ICU_WARNING_KEYS, ...KEYED_CASES.map((keyed) => keyed.key)]) {
+            expect(keys, `${key} is missing from the scanned list`).toContain(key);
+        }
+        // Completeness: a sentence carrying a brace that the parse found no argument
+        // in would otherwise drop out of the property in silence.
+        for (const [leaf, text] of Object.entries(en.risk.warnings as Record<string, unknown>)) {
+            if (typeof text === 'string' && text.includes('{')) {
+                expect(keys, `risk.warnings.${leaf} has braces but the scan found no argument in it`).toContain(`risk.warnings.${leaf}`);
+            }
+        }
+    });
+
+    // Collected when the file loads, so the list is the catalogue's own on every run
+    // and a key added tomorrow gets its own case without anyone writing one.
+    it.each(icuWarningKeys())('%s is worded with its values, and falls back to the backend sentence without them — never a brace, never a key', (key) => {
+        const params = plausibleParams(key);
+        const expected = resolve(key, params);
+        // The harness first: values that do not complete the sentence would send the
+        // helper to its fallback, and the red would belong to this file, not to it.
+        expect(expected, `the values built for ${key} do not complete its sentence: ${JSON.stringify(params)}`).not.toContain('{');
+        expect(expected, `${key} does not resolve through svelte-i18n`).not.toBe(key);
+
+        const worded = warningSentence(warning('synthetic_code', BACKEND_SENTENCE, key, params), get(_));
+        expect(worded, 'with its values').toBe(expected);
+        expect(worded, 'with its values').not.toContain('{');
+        expect(worded, 'with its values').not.toContain('risk.warnings.');
+
+        const missing: (WarningParams | undefined)[] = [{}, undefined];
+        // svelte-i18n logs every failed format: the log is the premise, not the subject.
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+            for (const params of missing) {
+                const label = `without values (message_params ${JSON.stringify(params)})`;
+                const fallback = warningSentence(warning('synthetic_code', BACKEND_SENTENCE, key, params), get(_));
+                expect(fallback, label).toBe(BACKEND_SENTENCE);
+                expect(fallback, label).not.toContain('{');
+                expect(fallback, label).not.toContain('risk.warnings.');
+            }
+        } finally {
+            warn.mockRestore();
+        }
+    });
+});
+
+describe('resultReasons — keyed warnings', () => {
+    beforeAll(async () => {
+        await setupI18n();
+    });
+
+    function stressResult(instanceId: string, warnings: Warning[]): RiskAnalyticResult {
+        return {analytic_code: 'stress', instance_id: instanceId, status: 'partial', warnings, output: {kind: 'stress', method: 'hypothetical'}} as unknown as RiskAnalyticResult;
+    }
+
+    it('words each keyed warning through the catalogue and keeps the backend sentence for the rest', () => {
+        const fallback = resolve(FALLBACK_CASE.key, FALLBACK_CASE.params);
+        const excluded = resolve(EXCLUDED_CASE.key, EXCLUDED_CASE.params);
+        const reasons = resultReasons([stressResult('a', [keyedWarning(FALLBACK_CASE), warning(UNKEYED_CODE, UNKEYED_MESSAGE)]), stressResult('b', [keyedWarning(EXCLUDED_CASE)])], get(_));
+        expect(reasons).toStrictEqual([
+            {key: `${FALLBACK_CASE.code}:${fallback}`, message: fallback, occurrences: 1},
+            {key: `${UNKEYED_CODE}:${UNKEYED_MESSAGE}`, message: UNKEYED_MESSAGE, occurrences: 1},
+            {key: `${EXCLUDED_CASE.code}:${excluded}`, message: excluded, occurrences: 1},
+        ]);
+    });
+
+    it('says one worded sentence once, and counts the results that carried it', () => {
+        const slice = resolve(SLICE_CASE.key, SLICE_CASE.params);
+        const reasons = resultReasons([stressResult('a', [keyedWarning(SLICE_CASE)]), stressResult('b', [keyedWarning(SLICE_CASE)])], get(_));
+        expect(reasons).toStrictEqual([{key: `${SLICE_CASE.code}:${slice}`, message: slice, occurrences: 2}]);
+    });
+
+    // The backend emits one fallback warning per asset, each carrying the same
+    // English sentence. Deduplicated verbatim they collapse into a single line and
+    // the reader loses *which* assets were treated as "Other"; worded, the names
+    // differ, so the lines must differ too.
+    it('keeps two assets apart when one key names each of them under the same backend sentence', () => {
+        const first = resolve(FALLBACK_CASE.key, {...FALLBACK_CASE.params, names: HOLDING_A});
+        const second = resolve(FALLBACK_CASE.key, {...FALLBACK_CASE.params, names: HOLDING_B});
+        expect(first, 'the two names format alike: the split asserted below would prove nothing').not.toBe(second);
+
+        const reasons = resultReasons([stressResult('a', [keyedWarning(FALLBACK_CASE, {names: HOLDING_A}), keyedWarning(FALLBACK_CASE, {names: HOLDING_B})])], get(_));
+        expect(reasons).toStrictEqual([
+            {key: `${FALLBACK_CASE.code}:${first}`, message: first, occurrences: 1},
+            {key: `${FALLBACK_CASE.code}:${second}`, message: second, occurrences: 1},
+        ]);
+    });
+
+    // The Asset Global callers still pass one argument until a later integration.
+    // The catalogue is loaded here on purpose — a helper that reached for the store
+    // by itself would be caught — and their output must not move by a byte:
+    // verbatim, trimmed, deduplicated by the English sentence, keyed `code:message`.
+    it('without a translator, returns exactly the verbatim reasons the one-argument callers get today', () => {
+        const reasons = resultReasons([stressResult('a', [keyedWarning(FALLBACK_CASE, {names: HOLDING_A}), keyedWarning(FALLBACK_CASE, {names: HOLDING_B}), warning(UNKEYED_CODE, `  ${UNKEYED_MESSAGE}  `)]), stressResult('b', [keyedWarning(EXCLUDED_CASE), keyedWarning(EXCLUDED_CASE)])]);
+        expect(reasons).toStrictEqual([
+            {key: `${FALLBACK_CASE.code}:${FALLBACK_CASE.message}`, message: FALLBACK_CASE.message, occurrences: 2},
+            {key: `${UNKEYED_CODE}:${UNKEYED_MESSAGE}`, message: UNKEYED_MESSAGE, occurrences: 1},
+            {key: `${EXCLUDED_CASE.code}:${EXCLUDED_CASE.message}`, message: EXCLUDED_CASE.message, occurrences: 2},
+        ]);
     });
 });
 
