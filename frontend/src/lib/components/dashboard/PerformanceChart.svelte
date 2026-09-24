@@ -1040,6 +1040,7 @@
         if (chartInstance && chartInstance.getDom() !== chartContainer) {
             tooltipCleanup?.();
             resizeWatcher.disconnect();
+            delete (chartInstance.getDom() as unknown as Record<string, unknown>).__lfChart;
             chartInstance.dispose();
             chartInstance = undefined;
         }
@@ -1047,6 +1048,10 @@
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
             attachChartReady(chartInstance, chartContainer, 'performance');
+            // ECharts draws to a canvas, so an axis label or a bar has no DOM a test could
+            // read. Exposing the instance is the only way to assert what reached the option
+            // — same hook, same name, as PriceChartFull.svelte.
+            (chartContainer as unknown as Record<string, unknown>).__lfChart = chartInstance;
             needsInitialLayoutStabilityPass = true;
             setupResizeObserver();
             tooltipCleanup?.();
@@ -1100,6 +1105,7 @@
             tooltipCleanup?.();
             darkModeObserver?.disconnect();
             resizeWatcher.disconnect();
+            if (chartInstance) delete (chartInstance.getDom() as unknown as Record<string, unknown>).__lfChart;
             chartInstance?.dispose();
         };
     });
