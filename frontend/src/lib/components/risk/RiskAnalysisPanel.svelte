@@ -16,7 +16,7 @@
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
     import TabBar from '$lib/components/ui/tabs/TabBar.svelte';
-    import {buildHistoricalReplayParameters, buildHypotheticalShockParameters, buildSimulationParameters, type RiskScenarioDimension, type SimulationView} from '$lib/risk/riskRequest';
+    import {buildHistoricalReplayParameters, buildHypotheticalShockParameters, buildSimulationParameters, STRESS_ASSET_CLASSES, uniformAssetClassShocks, type RiskScenarioDimension, type SimulationView} from '$lib/risk/riskRequest';
     import {assetStoreVersion, ensureAssetsLoaded, getAssetInfo} from '$lib/stores/reference/assetStore';
     import {ensureCountriesLoaded, getAllCountries, getCountryInfo} from '$lib/stores/reference/countryStore';
     import {ensureFxRoutesLoaded, fxRoutesVersion, getConfiguredPairSlugs} from '$lib/stores/reference/fxRoutesStore';
@@ -112,7 +112,6 @@
         {value: 'qmc', label: 'QMC'},
     ];
     const pathOptions = [1024, 2048, 4096, 8192, 16384].map((value) => ({value: String(value), label: value.toLocaleString()}));
-    const stressAssetClasses = ['STOCK', 'ETF', 'BOND', 'CRYPTO', 'FUND', 'CROWDFUND', 'HOLD', 'INDEX', 'OTHER'] as const;
     const simulationTabs = $derived([
         {id: 'evolution', label: $t('risk.simulation.evolution'), testId: 'risk-simulation-view-evolution'},
         {id: 'terminal_distribution', label: $t('risk.simulation.terminalDistribution'), testId: 'risk-simulation-view-terminal'},
@@ -170,7 +169,7 @@
     let stressAllBuckets = $derived.by(() => {
         void referenceLabelsVersion;
         const buckets = new Set([...stressPresentBuckets, ...Object.keys(stressBucketShocks)]);
-        if (stressDimension === 'asset_class') stressAssetClasses.forEach((bucket) => buckets.add(bucket));
+        if (stressDimension === 'asset_class') STRESS_ASSET_CLASSES.forEach((bucket) => buckets.add(bucket));
         if (stressDimension === 'sector') getSectorKeys().forEach((bucket) => buckets.add(bucket));
         if (stressDimension === 'geography') {
             getAllCountries().forEach((country) => buckets.add(country.iso3));
@@ -469,7 +468,7 @@
                         ? buildHypotheticalShockParameters({dimension: stressDimension, bucketShocks: assetBucketShocks})
                         : buildHypotheticalShockParameters({
                               dimension: 'asset_class',
-                              bucketShocks: Object.fromEntries(stressAssetClasses.map((assetType) => [assetType, stressPercent / 100])),
+                              bucketShocks: uniformAssetClassShocks(stressPercent / 100),
                           }),
             };
         });
