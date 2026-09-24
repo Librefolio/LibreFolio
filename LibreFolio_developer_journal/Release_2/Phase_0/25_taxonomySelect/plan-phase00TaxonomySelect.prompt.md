@@ -72,6 +72,30 @@
   > `dev.py:1845`). Quindi `dev.py` va lanciato su strumenti frontend solo dopo aver verificato che
   > `frontend/node_modules/.bin/<strumento>` esista. Segnalato al coordinator: il runner è una
   > superficie condivisa e non spetta a K correggerlo.
+  > **Correzione della correzione** (2026-09-24 12:50, messaggio definitivo del coordinator): la
+  > «Correzione» delle 12:15 qui sopra è sbagliata, ed era giusta la lettura originale del Fuori pista.
+  > vitest 5.0.1 era **già in cache** in `~/.npm/_npx` dal 18/09 (installata alle 12:01 di quel giorno;
+  > le date di nascita le ha verificate il coordinator). Alle 09:58 `npx --no-install vitest --version`
+  > l'ha solo eseguita, senza scaricarla. Come si comporta npx con npm 11.19.1 (il workstream I l'ha
+  > letto nel codice di npm):
+  > 1. cerca prima `node_modules/.bin`, risalendo dalla cartella corrente;
+  > 2. se non lo trova interroga il registry. Se in cache c'è una copia che è l'ultima versione
+  >    pubblicata, la esegue senza dire niente, con o senza `--no-install`. Altrimenti un `npx`
+  >    semplice la installa, mentre `--no-install` si ferma con `npx canceled`;
+  > 3. in nessuno dei due casi è la versione del lock.
+  >
+  > Nella nota delle 12:15 sono false due frasi. La prima è «non era già in cache: l'ha scaricata
+  > proprio quel comando». La seconda è «installano nella cache utente»: per `--no-install` non vale,
+  > e per `npm exec --no` il comportamento non è stato riverificato a parte. Il resto di quella nota
+  > resta vero:
+  > - senza binario in `node_modules/.bin` il registry viene interrogato anche con `--no-install`;
+  > - le misure di K girano sui binari locali del lock. È il punto 1: `node_modules/.bin` c'è dalle
+  >   10:47:49, e i 9 log stampano `RUN v4.1.11`;
+  > - la regola resta **mai `npx`**;
+  > - il runner e `dev.py` lanciano `npx` senza controllare `node_modules`. Senza `node_modules`, un
+  >   `npx` semplice eseguirebbe o installerebbe l'ultima versione pubblicata (punto 2), non quella
+  >   del lock.
+  >
   > **Note implementazione** (2026-09-24, 10:48): via libera del coordinator → `cd frontend && npm ci`
   > (exit 0, solo dal lock, log `/tmp/libreFolio_k_npm_ci.log`; `package*.json` intatti); poi
   > `dev.py api sync` (exit 0; scrive solo `openapi.json`, `generated.ts`, `generated-tools.ts`,
