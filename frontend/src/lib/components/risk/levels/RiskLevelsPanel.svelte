@@ -128,14 +128,20 @@
     // identical slices as the health above: a cause disclosed under a question
     // that never consulted the measurement is not transparency, it is an
     // accusation the reader has no way to check.
-    let l1Reasons = $derived(resultReasons(historicalResults.filter((result) => L1_CODES.includes(result.analytic_code))));
-    let l2Reasons = $derived(resultReasons([contributionResult, correlationResult]));
-    let l3Reasons = $derived(resultReasons([controller.comparisonResult, ...historicalResults.filter((result) => L3_CODES.includes(result.analytic_code))]));
+    let l1Reasons = $derived(
+        resultReasons(
+            historicalResults.filter((result) => L1_CODES.includes(result.analytic_code)),
+            $t,
+        ),
+    );
+    let l2Reasons = $derived(resultReasons([contributionResult, correlationResult], $t));
+    let l3Reasons = $derived(resultReasons([controller.comparisonResult, ...historicalResults.filter((result) => L3_CODES.includes(result.analytic_code))], $t));
 
     // The *codes* of what did not come back at all, from those same slices.
     //
-    // Deliberately not folded into `l*Reasons`: those carry backend prose shown
-    // verbatim, these carry identifiers the section words itself. A level with
+    // Deliberately not folded into `l*Reasons`: those carry finished sentences
+    // (translated from the backend's key, or its own words), these carry
+    // identifiers the section words itself. A level with
     // no rows looks identical whether the analytic is out of scope, short of
     // history, or still in flight — and says "unavailable for the selected
     // data", blaming the reader's portfolio for a limit of the analytic.
@@ -168,7 +174,7 @@
      */
     let l4Results = $derived([controller.stressResult, controller.replayResult, controller.simulationResult]);
     let l4Health = $derived(degradedResults(l4Results));
-    let l4Reasons = $derived(resultReasons(l4Results));
+    let l4Reasons = $derived(resultReasons(l4Results, $t));
     let l4Errors = $derived(resultErrorCodes(l4Results));
     let l4Metadata = $derived(levelMetadata(l4Results));
 
