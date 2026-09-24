@@ -13,19 +13,30 @@
  *
  * Two deliberate choices in the fixtures:
  *
- *  - **Storage is always injected.** `readPersistedSelection` and
- *    `writePersistedSelection` take a storage object as their last parameter;
- *    the tests pass a `Map`-backed stand-in and never touch a global
+ *  - **Storage and user are always injected.** `readPersistedSelection` and
+ *    `writePersistedSelection` take a storage object and then a user id, both
+ *    defaulting to the live page (its `localStorage`, its session); the tests
+ *    pass a `Map`-backed stand-in and an explicit id, and never touch a global
  *    `localStorage`, so no case can leave state behind for the next one and the
- *    file is order-independent by construction.
+ *    file is order-independent by construction. (An explicit `undefined` reaches
+ *    those defaults on purpose; here there is neither a `localStorage` nor a
+ *    logged-in session — except inside the one describe that logs a user in to
+ *    prove the default follows them, and logs them out again after every case.)
+ *    Forgetting the user is the omission that hides: with no
+ *    identity the module keeps no memory — it returns before reading or writing
+ *    a selection — so such a case stays green without exercising what its name
+ *    claims. Three once did.
  *  - **The storage key is learned, not retyped.** The module does not export
- *    it; the tests discover it by writing through the module's own writer, so a
- *    version bump of the key does not turn into a test that asserts a string
- *    the product no longer uses.
+ *    it, and it now depends on the user; the tests discover each user's key by
+ *    writing through the module's own writer (`keyUsed()`), so a version bump
+ *    of the key does not turn into a test that asserts a string the product no
+ *    longer uses. The one key typed out is the legacy one, on purpose: it is a
+ *    shipped historical fact the tests must name, not a current choice.
  */
-import {describe, expect, it} from 'vitest';
+import {afterEach, describe, expect, it} from 'vitest';
 
-import {EMPTY_FILTERS, FALLBACK_SELECTION_SIZE, MAX_SELECTED_ASSETS, applyBulkAction, applyFilters, ownedAssetIds, readPersistedSelection, resolveInitialSelection, writePersistedSelection, type BulkAction, type SelectableAsset} from './assetSetSelection';
+import {getClientSessionUserId, transitionClientSession} from '$lib/stores/app/clientSession';
+import {EMPTY_FILTERS, FALLBACK_SELECTION_SIZE, MAX_SELECTED_ASSETS, applyBulkAction, applyFilters, ownedAssetIds, readPersistedSelection, resolveInitialSelection, resolveInitialSelectionWithSource, writePersistedSelection, type BulkAction, type SelectableAsset} from './assetSetSelection';
 
 /** An asset carrying only the fields this module reads. Not owned by default. */
 function asset(id: number, overrides: Partial<SelectableAsset> = {}): SelectableAsset {
@@ -45,18 +56,34 @@ function catalogue(size: number, make: (id: number) => SelectableAsset = asset):
 const ids = (assets: readonly SelectableAsset[]): number[] => assets.map((entry) => entry.id);
 const ascending = (values: readonly number[]): number[] => [...values].sort((left, right) => left - right);
 
+/** Two accounts whose ids share no digit, so a key that carries one cannot carry the other by accident. */
+const USER_A = '7';
+const USER_B = '8';
+
+/** Retyped on purpose, unlike every other key here: the pre-scoping key is a shipped historical fact the tests must name. */
+const LEGACY_STORAGE_KEY = 'assetGlobal.riskSelection.v1';
+
 interface FakeStorage {
     getItem(key: string): string | null;
     setItem(key: string, value: string): void;
+    /** Present only on request — see `fakeStorage`. */
+    removeItem?(key: string): void;
     /** What is currently held, for the assertions the module's API cannot express. */
     readonly entries: Map<string, string>;
     /** The key the module chose, learned from the module itself. */
     keyUsed(): string;
 }
 
-function fakeStorage(): FakeStorage {
+/**
+ * A `Map`-backed stand-in for `localStorage`.
+ *
+ * `removeItem` is opt-in because the module declares it optional: leaving it
+ * out by default means every case that does not ask for it also proves that a
+ * minimal stand-in still reads and writes.
+ */
+function fakeStorage({removable = false}: {removable?: boolean} = {}): FakeStorage {
     const entries = new Map<string, string>();
-    return {
+    const storage: FakeStorage = {
         entries,
         getItem: (key: string) => entries.get(key) ?? null,
         setItem: (key: string, value: string) => {
@@ -68,23 +95,45 @@ function fakeStorage(): FakeStorage {
             return keys[0];
         },
     };
+    if (removable) {
+        storage.removeItem = (key: string) => {
+            entries.delete(key);
+        };
+    }
+    return storage;
 }
 
-/** A storage already holding `raw` under whatever key the module writes to. */
-function storageHolding(raw: string): FakeStorage {
+/** A storage already holding `raw` under whatever key the module writes to for `user`. */
+function storageHolding(raw: string, user: string): FakeStorage {
     const storage = fakeStorage();
-    writePersistedSelection([1], storage);
+    writePersistedSelection([1], storage, user);
     storage.entries.set(storage.keyUsed(), raw);
     return storage;
 }
 
-/** The browser that says no: a locked-down profile, or a full quota. */
-function refusingStorage(): Pick<Storage, 'getItem' | 'setItem'> {
+interface RefusingStorage extends Pick<Storage, 'getItem' | 'setItem'> {
+    /** How many times each call was attempted. */
+    readonly asked: {getItem: number; setItem: number};
+}
+
+/**
+ * The browser that says no: a locked-down profile, or a full quota.
+ *
+ * It counts what it is asked, because a refusal the module never reached is
+ * not one it survived: without an identity the module returns before it reads
+ * or writes a selection, and both refusal cases once stayed green for that
+ * reason alone.
+ */
+function refusingStorage(): RefusingStorage {
+    const asked = {getItem: 0, setItem: 0};
     return {
+        asked,
         getItem: () => {
+            asked.getItem += 1;
             throw new Error('storage access denied');
         },
         setItem: () => {
+            asked.setItem += 1;
             throw new Error('quota exceeded');
         },
     };
@@ -109,72 +158,213 @@ describe('ownedAssetIds', () => {
 describe('readPersistedSelection', () => {
     it('reads back exactly what the writer stored', () => {
         const storage = fakeStorage();
-        writePersistedSelection([7, 3, 5], storage);
-        expect(readPersistedSelection(storage)).toEqual([7, 3, 5]);
+        writePersistedSelection([7, 3, 5], storage, USER_A);
+        expect(readPersistedSelection(storage, USER_A)).toEqual([7, 3, 5]);
     });
 
     it('has no memory when nothing was ever stored', () => {
-        expect(readPersistedSelection(fakeStorage())).toBeNull();
-        expect(readPersistedSelection(storageHolding(''))).toBeNull();
+        expect(readPersistedSelection(fakeStorage(), USER_A)).toBeNull();
+        expect(readPersistedSelection(storageHolding('', USER_A), USER_A)).toBeNull();
     });
 
     it('has no memory when storage itself is unavailable', () => {
-        expect(readPersistedSelection(null)).toBeNull();
-        expect(readPersistedSelection(undefined)).toBeNull();
+        expect(readPersistedSelection(null, USER_A)).toBeNull();
+        expect(readPersistedSelection(undefined, USER_A)).toBeNull();
     });
 
     it('has no memory when reading throws, instead of breaking the page', () => {
-        expect(readPersistedSelection(refusingStorage())).toBeNull();
+        const storage = refusingStorage();
+        expect(readPersistedSelection(storage, USER_A)).toBeNull();
+        // Refused, not bypassed: the read really reached the call that throws.
+        expect(storage.asked.getItem).toBeGreaterThan(0);
     });
 
     it('has no memory for malformed JSON', () => {
-        expect(readPersistedSelection(storageHolding('{not json'))).toBeNull();
+        expect(readPersistedSelection(storageHolding('{not json', USER_A), USER_A)).toBeNull();
     });
 
     it('has no memory for a payload that is not an array', () => {
-        expect(readPersistedSelection(storageHolding('{"ids":[1,2]}'))).toBeNull();
-        expect(readPersistedSelection(storageHolding('"5"'))).toBeNull();
-        expect(readPersistedSelection(storageHolding('5'))).toBeNull();
-        expect(readPersistedSelection(storageHolding('null'))).toBeNull();
+        expect(readPersistedSelection(storageHolding('{"ids":[1,2]}', USER_A), USER_A)).toBeNull();
+        expect(readPersistedSelection(storageHolding('"5"', USER_A), USER_A)).toBeNull();
+        expect(readPersistedSelection(storageHolding('5', USER_A), USER_A)).toBeNull();
+        expect(readPersistedSelection(storageHolding('null', USER_A), USER_A)).toBeNull();
     });
 
     it('drops the entries that are not asset ids', () => {
-        expect(readPersistedSelection(storageHolding('[1,"2",3.5,null,true,4]'))).toEqual([1, 4]);
+        expect(readPersistedSelection(storageHolding('[1,"2",3.5,null,true,4]', USER_A), USER_A)).toEqual([1, 4]);
     });
 
     it('has no memory when every entry was dropped', () => {
-        expect(readPersistedSelection(storageHolding('["a","b"]'))).toBeNull();
+        expect(readPersistedSelection(storageHolding('["a","b"]', USER_A), USER_A)).toBeNull();
     });
 
     it('has no memory for an empty array', () => {
         // "Nothing selected" is not a preference worth restoring.
-        expect(readPersistedSelection(storageHolding('[]'))).toBeNull();
+        expect(readPersistedSelection(storageHolding('[]', USER_A), USER_A)).toBeNull();
     });
 });
 
 describe('writePersistedSelection', () => {
     it('keeps one stable key, overwritten on each save', () => {
         const storage = fakeStorage();
-        writePersistedSelection([1, 2], storage);
-        writePersistedSelection([3], storage);
+        writePersistedSelection([1, 2], storage, USER_A);
+        writePersistedSelection([3], storage, USER_A);
         expect(storage.entries.size).toBe(1);
-        expect(readPersistedSelection(storage)).toEqual([3]);
+        expect(readPersistedSelection(storage, USER_A)).toEqual([3]);
     });
 
     it('never throws when storage refuses the write', () => {
-        expect(() => writePersistedSelection([1, 2], refusingStorage())).not.toThrow();
+        const storage = refusingStorage();
+        expect(() => writePersistedSelection([1, 2], storage, USER_A)).not.toThrow();
+        // Refused, not bypassed: the write really reached the call that throws.
+        expect(storage.asked.setItem).toBeGreaterThan(0);
     });
 
     it('does nothing, quietly, when storage is unavailable', () => {
-        expect(() => writePersistedSelection([1, 2], null)).not.toThrow();
-        expect(() => writePersistedSelection([1, 2], undefined)).not.toThrow();
+        expect(() => writePersistedSelection([1, 2], null, USER_A)).not.toThrow();
+        expect(() => writePersistedSelection([1, 2], undefined, USER_A)).not.toThrow();
     });
 
     it('stores an empty selection, which reads back as no memory', () => {
         const storage = fakeStorage();
-        writePersistedSelection([1, 2], storage);
-        writePersistedSelection([], storage);
+        writePersistedSelection([1, 2], storage, USER_A);
+        // Control: the earlier selection is really there, so the null below is the
+        // empty one replacing it — not a write that never happened.
+        expect(readPersistedSelection(storage, USER_A)).toEqual([1, 2]);
+        writePersistedSelection([], storage, USER_A);
+        expect(JSON.parse(storage.entries.get(storage.keyUsed()) ?? 'null')).toEqual([]);
+        expect(readPersistedSelection(storage, USER_A)).toBeNull();
+    });
+});
+
+describe('per-user memory (TL-A)', () => {
+    /**
+     * Every way of having no identity. `undefined` is not one a caller can
+     * inject: a default parameter replaces it with the session's user, so it
+     * means "nobody" only while this process has no session — which each case
+     * checks rather than assumes.
+     */
+    const NOBODY = [null, undefined, ''] as const;
+
+    it('gives each user a key of their own, and neither is the legacy key', () => {
+        const storageA = fakeStorage();
+        const storageB = fakeStorage();
+        writePersistedSelection([1], storageA, USER_A);
+        writePersistedSelection([1], storageB, USER_B);
+        const keyA = storageA.keyUsed();
+        const keyB = storageB.keyUsed();
+
+        expect(keyA).not.toBe(keyB);
+        // Each key names its own user and not the other one, so `toContain` is
+        // about the account rather than a digit that happens to sit in the base.
+        expect(keyA).toContain(USER_A);
+        expect(keyA).not.toContain(USER_B);
+        expect(keyB).toContain(USER_B);
+        expect(keyB).not.toContain(USER_A);
+        expect([keyA, keyB]).not.toContain(LEGACY_STORAGE_KEY);
+    });
+
+    it("never hands one user's selection to another", () => {
+        const storage = fakeStorage();
+        writePersistedSelection([1, 2], storage, USER_A);
+        // Control: the memory exists, for the user who made it.
+        expect(readPersistedSelection(storage, USER_A)).toEqual([1, 2]);
+        expect(readPersistedSelection(storage, USER_B)).toBeNull();
+    });
+
+    it("opens a second user on their own assets, not on the first user's selection", () => {
+        const storage = fakeStorage();
+        writePersistedSelection([1, 2], storage, USER_A);
+        const assets = [asset(1), asset(2), ownedAsset(3)];
+        // Control: in its owner's hands that selection survives the intersection
+        // and wins the ladder — so it would win for B as well, were B handed it.
+        expect(resolveInitialSelectionWithSource(assets, readPersistedSelection(storage, USER_A))).toEqual({ids: [1, 2], source: 'persisted'});
+        expect(resolveInitialSelectionWithSource(assets, readPersistedSelection(storage, USER_B))).toEqual({ids: [3], source: 'mine'});
+    });
+
+    it('never adopts the legacy key, whoever reads', () => {
+        const shipped = JSON.stringify([1, 2, 3]);
+        for (const user of [USER_A, USER_B]) {
+            // Control: the payload is a valid selection — under the user's own key it reads back.
+            expect(readPersistedSelection(storageHolding(shipped, user), user)).toEqual([1, 2, 3]);
+
+            // A stand-in that cannot remove, on purpose. The module drops the legacy
+            // key before it reads, so with `removeItem` available this null would be
+            // owed to the cleanup alone — and would hold even for a key shared by
+            // every user. Here the legacy value is still there after the read, so the
+            // null can only mean it was never read.
+            const storage = fakeStorage();
+            storage.entries.set(LEGACY_STORAGE_KEY, shipped);
+            expect(readPersistedSelection(storage, user)).toBeNull();
+            expect(storage.entries.get(LEGACY_STORAGE_KEY)).toBe(shipped);
+        }
+    });
+
+    it('removes the legacy key on the way, and nothing else', () => {
+        const storage = fakeStorage({removable: true});
+        writePersistedSelection([4, 5], storage, USER_A);
+        storage.entries.set(LEGACY_STORAGE_KEY, JSON.stringify([1, 2, 3]));
+
+        // The read that does the cleanup still finds the user's own selection: the
+        // cleanup took the legacy key, and only that one.
+        expect(readPersistedSelection(storage, USER_A)).toEqual([4, 5]);
+        expect(storage.entries.has(LEGACY_STORAGE_KEY)).toBe(false);
+    });
+
+    it('keeps no memory without an identity, even when another user has one', () => {
+        const storage = storageHolding(JSON.stringify([1, 2]), USER_A);
+        // Control: there is a memory to leak, and its owner reads it.
+        expect(readPersistedSelection(storage, USER_A)).toEqual([1, 2]);
+
+        expect(getClientSessionUserId(), 'an explicit undefined defers to the session, which must have no user here').toBeNull();
+        for (const nobody of NOBODY) {
+            expect(readPersistedSelection(storage, nobody)).toBeNull();
+        }
+    });
+
+    it('writes nothing without an identity', () => {
+        const storage = storageHolding(JSON.stringify([1, 2]), USER_A);
+        const before = new Map(storage.entries);
+
+        expect(getClientSessionUserId(), 'an explicit undefined defers to the session, which must have no user here').toBeNull();
+        for (const nobody of NOBODY) {
+            writePersistedSelection([9], storage, nobody);
+        }
+        expect(storage.entries).toEqual(before);
+
+        // Control: the same write, with an identity, does land.
+        writePersistedSelection([9], storage, USER_B);
+        expect(storage.entries).not.toEqual(before);
+    });
+});
+
+describe('the session default', () => {
+    // The session is a module singleton: a user left logged in here would be
+    // inherited by every later case — and would turn TL-A4's "no session in this
+    // process" guard red for a reason that has nothing to do with the module.
+    afterEach(() => {
+        transitionClientSession(null);
+    });
+
+    it('reads and writes as the session user when the caller names none', () => {
+        // Production call sites pass no user at all, so this default is the path
+        // the page actually takes; every other persistence case here injects one.
+        const storage = fakeStorage();
+        transitionClientSession(USER_A);
+        writePersistedSelection([4, 2], storage);
+        // Landed under the session user's own key…
+        expect(readPersistedSelection(storage, USER_A)).toEqual([4, 2]);
+        // …and read back through the same default.
+        expect(readPersistedSelection(storage)).toEqual([4, 2]);
+        // An explicit `undefined` is the same omission, not an identity of its own.
+        expect(readPersistedSelection(storage, undefined)).toEqual([4, 2]);
+
+        // It follows the session, not the first user it happened to see.
+        transitionClientSession(USER_B);
         expect(readPersistedSelection(storage)).toBeNull();
+        writePersistedSelection([9], storage);
+        expect(readPersistedSelection(storage, USER_B)).toEqual([9]);
+        expect(readPersistedSelection(storage, USER_A)).toEqual([4, 2]);
     });
 });
 
