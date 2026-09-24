@@ -41,10 +41,18 @@
         return assetLabels.get(assetId) ?? `#${assetId}`;
     }
 
-    /** Red for redundancy, blue for offset — the same axis as the heatmap's scale, so the two views cannot contradict each other. */
+    /**
+     * The heatmap's own polarity — blue for a positive pair (`#1d4ed8` at +1), red
+     * for an offsetting one (`#b91c1c` at −1) — so the list and the matrix cannot
+     * contradict each other. This docstring used to promise exactly that while the
+     * list did the opposite (red for redundancy), so the same pair was red here and
+     * dark blue in the matrix. The polarity is the heatmap's, not a verdict: flipping
+     * it is one line in `CorrelationHeatmap`'s `visualMap`, and it has to move both
+     * views together.
+     */
     function toneClass(pair: CorrelationPair): string {
-        if (pair.value < 0) return 'text-blue-700 dark:text-blue-300';
-        if (pair.band === 'high') return 'text-red-700 dark:text-red-300';
+        if (pair.value < 0) return 'text-red-700 dark:text-red-300';
+        if (pair.band === 'high') return 'text-blue-700 dark:text-blue-300';
         return 'text-slate-700 dark:text-slate-300';
     }
 </script>
@@ -65,7 +73,7 @@
                         </span>
                         <span class="flex shrink-0 items-baseline gap-2">
                             {#if pair.nearIdentical}
-                                <span class="rounded bg-red-100 px-1.5 py-0.5 text-[11px] font-medium text-red-800 dark:bg-red-900/40 dark:text-red-200" data-testid="risk-correlation-pair-near-identical-{pair.rowAssetId}-{pair.columnAssetId}">
+                                <span class="rounded bg-blue-100 px-1.5 py-0.5 text-[11px] font-medium text-blue-800 dark:bg-blue-900/40 dark:text-blue-200" data-testid="risk-correlation-pair-near-identical-{pair.rowAssetId}-{pair.columnAssetId}">
                                     {$t('risk.assetSet.nearIdentical')}
                                 </span>
                             {/if}

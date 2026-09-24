@@ -38,19 +38,19 @@
     import {_ as t} from '$lib/i18n';
     import type {RiskCorrelationOutput} from '$lib/risk/riskTypes';
     import CorrelationPairsList from './CorrelationPairsList.svelte';
-    import {buildLookup, clusterOrder, correlationBand, lowerTrianglePoints, NEAR_IDENTICAL, PAIR_LIST_THRESHOLD} from './correlationHelpers';
+    import {buildLookup, clusterOrder, correlationBand, lowerTrianglePoints, nameOrder, NEAR_IDENTICAL, PAIR_LIST_THRESHOLD} from './correlationHelpers';
 
     interface Props {
         output: RiskCorrelationOutput;
         assetLabels?: ReadonlyMap<number, string>;
         height?: string;
-        /** `similarity` groups assets that move together; `original` keeps the payload order. */
-        initialOrdering?: 'similarity' | 'original';
+        /** `similarity` groups assets that move together; `name` sorts by the label the reader sees. */
+        initialOrdering?: 'similarity' | 'name';
     }
 
     let {output, assetLabels = new Map(), height = '420px', initialOrdering = 'similarity'}: Props = $props();
     /** `null` means "the caller's choice still stands"; any click pins it locally. */
-    let orderingOverride = $state<'similarity' | 'original' | null>(null);
+    let orderingOverride = $state<'similarity' | 'name' | null>(null);
     let ordering = $derived(orderingOverride ?? initialOrdering);
     let container: HTMLDivElement | undefined = $state(undefined);
     let chart: echarts.ECharts | null = null;
@@ -63,7 +63,7 @@
     const X_LABEL_ROTATION = 45;
 
     let lookup = $derived(buildLookup(output.cells));
-    let order = $derived(ordering === 'similarity' ? clusterOrder(output.asset_ids, lookup) : [...output.asset_ids]);
+    let order = $derived(ordering === 'similarity' ? clusterOrder(output.asset_ids, lookup) : nameOrder(output.asset_ids, nameOf));
 
     function nameOf(assetId: number): string {
         return assetLabels.get(assetId) ?? `#${assetId}`;
@@ -203,7 +203,7 @@
 <div class="space-y-3">
     <div class="flex items-center justify-end">
         <div class="inline-flex overflow-hidden rounded-lg border border-gray-200 dark:border-slate-600" role="group" aria-label={$t('risk.assetSet.ordering.label')}>
-            {#each ['similarity', 'original'] as const as mode}
+            {#each ['similarity', 'name'] as const as mode}
                 <button
                     type="button"
                     class="px-2.5 py-1 text-xs font-medium transition-colors {ordering === mode ? 'bg-libre-green text-white' : 'bg-white text-gray-600 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-300 dark:hover:bg-slate-700'}"
