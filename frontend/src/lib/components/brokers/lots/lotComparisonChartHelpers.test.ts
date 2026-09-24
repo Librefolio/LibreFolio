@@ -4,11 +4,18 @@
  * ECharts, no canvas), and the assertions pin exact values so a regression in
  * the arithmetic or the guard order fails loudly rather than silently.
  *
+ * The two money axes, formatAxisCurrency and formatAxisAmount, read the global
+ * privacy flag, so their blocks reset it on both sides of each test: the store
+ * is module level, so a flag left on by one test would still be on in the
+ * next, and would mask its clear-text controls.
+ *
  * @vitest-environment node
  */
 
-import {describe, it, expect} from 'vitest';
+import {afterEach, beforeEach, describe, it, expect} from 'vitest';
 import {mapDateToBucket} from '$lib/components/charts/timeSeriesAggregation';
+import {setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
+import {formatAxisNumber} from './lotChartShared';
 import {
     safeValueSource,
     parseRequiredNumber,
@@ -16,6 +23,8 @@ import {
     lotColor,
     incomeEventColor,
     formatAxisPercent,
+    formatAxisCurrency,
+    formatAxisAmount,
     lotIdFromSeriesId,
     isInternalSeriesId,
     seriesValue,
@@ -111,6 +120,114 @@ describe('formatAxisPercent', () => {
     it('normalizes negative zero to 0%', () => {
         expect(formatAxisPercent(-0, 'en-US')).toBe('0%');
         expect(formatAxisPercent(0, 'en-US')).toBe('0%');
+    });
+});
+
+describe('formatAxisCurrency', () => {
+    // The absolute-return axis: money with its currency marker, so the §1.8 gate sees its Intl exit — unlike the value-mode axis (formatAxisAmount), which carries none.
+    beforeEach(() => setPrivacyEnabled(false));
+    afterEach(() => setPrivacyEnabled(false));
+
+    it('renders compact money with the narrow symbol while privacy is off', () => {
+        // Measured with node (ICU 78.3) against Intl with the same options.
+        expect(formatAxisCurrency(1234, 'USD', 'en-US')).toBe('$1.2K');
+        expect(formatAxisCurrency(-1234, 'USD', 'en-US')).toBe('-$1.2K');
+    });
+
+    it('masks the number and keeps the symbol and the sign under privacy', () => {
+        // Control: the same tick in the clear, so the lines below are a substitution.
+        expect(formatAxisCurrency(1234, 'USD', 'en-US')).toBe('$1.2K');
+
+        setPrivacyEnabled(true);
+        // The compact suffix goes inside the placeholder: `$•••K` would still say "thousands".
+        expect(formatAxisCurrency(1234, 'USD', 'en-US')).toBe('$•••');
+        expect(formatAxisCurrency(-1234, 'USD', 'en-US')).toBe('-$•••');
+    });
+
+    it('falls back to the axis number and the code when Intl rejects the currency', () => {
+        // Precondition, verified rather than assumed: a four-letter code is not a well-formed
+        // currency, so Intl throws and the catch exit is the one under test.
+        expect(() => new Intl.NumberFormat('en-US', {style: 'currency', currency: 'EURO'})).toThrow(RangeError);
+
+        expect(formatAxisCurrency(1234, 'EURO', 'en-US')).toBe(`${formatAxisNumber(1234, 'en-US')} EURO`);
+        expect(formatAxisCurrency(-1234, 'EURO', 'en-US')).toBe(`${formatAxisNumber(-1234, 'en-US')} EURO`);
+    });
+
+    it('masks the fallback exit too, keeping the code and the sign', () => {
+        setPrivacyEnabled(true);
+
+        expect(formatAxisCurrency(1234, 'EURO', 'en-US')).toBe('••• EURO');
+        expect(formatAxisCurrency(-1234, 'EURO', 'en-US')).toBe('-••• EURO');
+    });
+
+    it('keeps the U+2212 minus sv-SE writes on the fallback exit, in both states', () => {
+        // Precondition, measured: sv-SE writes U+2212 MINUS SIGN, so the equality below can tell it from an ASCII hyphen.
+        expect(formatAxisNumber(-1234, 'sv-SE').startsWith('\u2212')).toBe(true);
+
+        // The same four-letter code as above, so the same catch exit. The ASCII hyphen this exit used to
+        // rebuild the sign with broke this equality; pinned so it cannot come back.
+        expect(formatAxisCurrency(-1234, 'EURO', 'sv-SE')).toBe(`${formatAxisNumber(-1234, 'sv-SE')} EURO`);
+
+        setPrivacyEnabled(true);
+        expect(formatAxisCurrency(-1234, 'EURO', 'sv-SE')).toBe('\u2212••• EURO');
+    });
+
+    it('renders -0 without a sign, on both exits and in both states', () => {
+        // Intl exit. These lines depend on this function's normalizeZero: Intl alone prints -0 as `-$0`,
+        // and its parts would carry the minus into the masked form as `-$•••`.
+        expect(formatAxisCurrency(-0, 'USD', 'en-US')).toBe('$0');
+        setPrivacyEnabled(true);
+        expect(formatAxisCurrency(-0, 'USD', 'en-US')).toBe('$•••');
+        setPrivacyEnabled(false);
+
+        // Fallback exit. These lines do not: formatAxisNumber collapses -0 by itself, so they would pass
+        // without this function's normalizeZero — they pin the output, not the layer that removes the sign.
+        expect(formatAxisCurrency(-0, 'EURO', 'en-US')).toBe(`${formatAxisNumber(0, 'en-US')} EURO`);
+        setPrivacyEnabled(true);
+        expect(formatAxisCurrency(-0, 'EURO', 'en-US')).toBe('••• EURO');
+    });
+});
+
+describe('formatAxisAmount', () => {
+    // The value-mode axis is money with no currency marker on the tick, which is why neither the classification rule nor the §1.8 gate could see it.
+    beforeEach(() => setPrivacyEnabled(false));
+    afterEach(() => setPrivacyEnabled(false));
+
+    it('renders the compact axis number while privacy is off', () => {
+        expect(formatAxisAmount(1234, 'en-US')).toBe(formatAxisNumber(1234, 'en-US'));
+        expect(formatAxisAmount(-1234, 'en-US')).toBe(formatAxisNumber(-1234, 'en-US'));
+    });
+
+    it('masks the number and keeps the sign under privacy', () => {
+        // Control: the same tick in the clear, so the lines below are a substitution.
+        expect(formatAxisAmount(1234, 'en-US')).toBe(formatAxisNumber(1234, 'en-US'));
+
+        setPrivacyEnabled(true);
+        expect(formatAxisAmount(1234, 'en-US')).toBe('•••');
+        expect(formatAxisAmount(-1234, 'en-US')).toBe('-•••');
+        // Zero is a value like any other: masked, with no sign to keep.
+        expect(formatAxisAmount(0, 'en-US')).toBe('•••');
+    });
+
+    it('keeps the U+2212 minus sv-SE writes, in both states', () => {
+        // Precondition, measured: sv-SE writes U+2212 MINUS SIGN, so the equality below can tell it from an ASCII hyphen.
+        expect(formatAxisNumber(-1234, 'sv-SE').startsWith('\u2212')).toBe(true);
+
+        // This is the regression the ASCII hyphen introduced — a tick rebuilt as `-` + the absolute value,
+        // where the shared formatter writes U+2212 — pinned so it cannot come back.
+        expect(formatAxisAmount(-1234, 'sv-SE')).toBe(formatAxisNumber(-1234, 'sv-SE'));
+
+        setPrivacyEnabled(true);
+        expect(formatAxisAmount(-1234, 'sv-SE')).toBe('\u2212•••');
+    });
+
+    it('renders -0 without a sign, in both states', () => {
+        // This does not depend on formatAxisAmount's own normalizeZero: formatAxisNumber collapses -0 by
+        // itself, so the check pins the output, not the layer that removes the sign.
+        expect(formatAxisAmount(-0, 'en-US')).toBe(formatAxisNumber(0, 'en-US'));
+
+        setPrivacyEnabled(true);
+        expect(formatAxisAmount(-0, 'en-US')).toBe('•••');
     });
 });
 
