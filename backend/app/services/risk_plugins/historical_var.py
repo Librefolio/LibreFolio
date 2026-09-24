@@ -12,6 +12,7 @@ from backend.app.schemas.risk import (
     RiskVarCvarBin,
     RiskVarCvarOutput,
 )
+from backend.app.services.data_quality_thresholds import RISK_MIN_OBSERVATIONS
 from backend.app.services.provider_registry import RiskAnalyticRegistry, register_plugin
 from backend.app.services.risk.analytic_helpers import require_primary_returns
 from backend.app.services.risk.base import (
@@ -64,7 +65,7 @@ class HistoricalVarAnalytic(RiskAnalytic):
     )
     supported_modes = (RiskMode.HISTORICAL, RiskMode.CURRENT_COMPOSITION)
     params_model = HistoricalVarParams
-    min_observations = 20
+    min_observations = RISK_MIN_OBSERVATIONS
 
     def compute(self, params, context):
         _dates, returns = require_primary_returns(context)

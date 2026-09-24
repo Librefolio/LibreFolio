@@ -13,6 +13,7 @@ from backend.app.schemas.risk import (
     RiskScopeKind,
     RiskWarning,
 )
+from backend.app.services.data_quality_thresholds import RISK_MIN_OBSERVATIONS
 from backend.app.services.provider_registry import RiskAnalyticRegistry, register_plugin
 from backend.app.services.risk.analytic_helpers import (
     prepared_asset_returns,
@@ -87,7 +88,7 @@ class AssetSetComparisonAnalytic(RiskAnalytic):
     supported_scopes = (RiskScopeKind.ASSET_SET,)
     supported_modes = (RiskMode.HISTORICAL,)
     params_model = AssetSetComparisonParams
-    min_observations = 20
+    min_observations = RISK_MIN_OBSERVATIONS
 
     def compute(self, params: AssetSetComparisonParams, context: RiskExecutionContext) -> RiskComputation:
         series = prepared_scope_series(context)
@@ -144,6 +145,7 @@ class AssetSetComparisonAnalytic(RiskAnalytic):
             warnings.append(
                 RiskWarning(
                     code="comparison_beta_undefined",
+                    message_i18n_key="risk.warnings.comparison_beta_undefined_assets",
                     message="Beta is undefined for one or more assets because the comparison asset has zero variance.",
                     details={"asset_ids": undefined_beta},
                 )
@@ -152,6 +154,7 @@ class AssetSetComparisonAnalytic(RiskAnalytic):
             warnings.append(
                 RiskWarning(
                     code="comparison_correlation_undefined",
+                    message_i18n_key="risk.warnings.comparison_correlation_undefined_assets",
                     message="Correlation is undefined for one or more assets because at least one series has zero variance.",
                     details={"asset_ids": undefined_correlation},
                 )

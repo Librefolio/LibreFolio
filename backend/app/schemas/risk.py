@@ -141,10 +141,27 @@ class RiskStressApplicationRule(StrEnum):
 
 
 class RiskHistoricalReplayExclusionTreatment(StrEnum):
-    """Effective handling of one manually excluded replay asset."""
+    """Effective handling of one excluded replay asset."""
 
     OMITTED_FROM_REPLAY = "omitted_from_replay"
     ZERO_RETURN_RESIDUAL = "zero_return_residual"
+
+
+class RiskHistoricalReplayExclusionReason(StrEnum):
+    """Why one asset takes no part in a historical replay.
+
+    The user excludes an asset by hand; the engine excludes, on its own, every asset whose quotes do
+    not cover the replay window at both ends within the project's staleness threshold. At the start
+    a late listing and a gap in an older history are told apart, because the sentence differs; at
+    the end they are not, because the facts stop at the window end.
+    """
+
+    MANUAL_EXCLUSION = "manual_exclusion"
+    NO_PRICES_IN_WINDOW = "no_prices_in_window"
+    STARTS_AFTER_WINDOW_START = "starts_after_window_start"
+    STALE_AT_WINDOW_START = "stale_at_window_start"
+    STALE_AT_WINDOW_END = "stale_at_window_end"
+    MISSING_FX = "missing_fx"
 
 
 class RiskSimulationProcess(StrEnum):
@@ -242,10 +259,10 @@ class RiskHistoricalReplayProxyAsset(StrictModel):
 
 
 class RiskHistoricalReplayExcludedAsset(StrictModel):
-    """Auditable outcome of one explicit replay exclusion."""
+    """Auditable outcome of one replay exclusion, manual or automatic."""
 
     asset_id: PositiveInt
-    reason: Literal["manual_exclusion"] = "manual_exclusion"
+    reason: RiskHistoricalReplayExclusionReason = RiskHistoricalReplayExclusionReason.MANUAL_EXCLUSION
     weight: Optional[FiniteFloat] = Field(None, ge=0, le=1)
     treatment: RiskHistoricalReplayExclusionTreatment
 
@@ -1550,6 +1567,11 @@ class RiskWarning(StrictModel):
     message: str = Field(..., min_length=1)
     details: Dict[str, JsonValue] = Field(default_factory=dict)
     degrades_result: bool = True
+    # The translatable form of `message`, rendered by the frontend with `message_params`, the same
+    # contract as `DataQualityIssue`. `message` stays the English fallback for a warning without a
+    # key, so a code added later is shown verbatim instead of as a raw key.
+    message_i18n_key: Optional[str] = Field(None, min_length=1, max_length=160, pattern=r"^risk\.warnings\.[A-Za-z0-9_.]+$")
+    message_params: Dict[str, JsonValue] = Field(default_factory=dict)
 
 
 class RiskError(StrictModel):
@@ -1591,6 +1613,55 @@ class RiskQueryResponse(StrictModel):
     items: List[RiskAnalyticResult] = Field(default_factory=list)
 
 
+# =============================================================================
+# ASSET ELIGIBILITY — whether an asset can take part in an analysis of a period
+# =============================================================================
+
+
+class RiskEligibilityLevel(StrEnum):
+    """Whether an asset can be selected for a risk analysis of a period."""
+
+    ELIGIBLE = "eligible"
+    WARNING = "warning"
+    INELIGIBLE = "ineligible"
+
+
+class RiskEligibilityReason(StrEnum):
+    """Why an asset is ineligible (the first three) or eligible with a warning (the last two)."""
+
+    NO_PRICES = "no_prices"
+    TOO_FEW_QUOTES = "too_few_quotes"
+    MISSING_FX = "missing_fx"
+    STARTS_LATE = "starts_late"
+    STALE_AT_END = "stale_at_end"
+
+
+class RiskEligibilityRequest(StrictModel):
+    asset_ids: List[PositiveInt] = Field(..., min_length=1, max_length=500)
+    date_range: DateRangeModel
+    target_currency: str
+
+    @field_validator("target_currency")
+    @classmethod
+    def validate_target_currency(cls, value: str) -> str:
+        return Currency.validate_code(value)
+
+
+class RiskAssetEligibility(StrictModel):
+    asset_id: PositiveInt
+    level: RiskEligibilityLevel
+    reasons: List[RiskEligibilityReason] = Field(default_factory=list)
+    first_quote: Optional[date] = Field(None, description="Earliest quote in the asset's history, up to the period end")
+    last_quote: Optional[date] = Field(None, description="Latest quote on or before the period end")
+    quotes_in_period: int = Field(..., ge=0)
+
+
+class RiskEligibilityResponse(StrictModel):
+    items: List[RiskAssetEligibility]
+    min_quotes: int = Field(..., ge=1, description="Fewest quotes in the period an eligible asset needs")
+    stale_days: int = Field(..., ge=1, description="Calendar days after which a start or an end counts as late")
+
+
 __all__ = [
     "AssetReturnPoint",
     "AssetReturnSeries",
@@ -1604,6 +1675,7 @@ __all__ = [
     "RiskAnalyticOutput",
     "RiskAnalyticRequest",
     "RiskAnalyticResult",
+    "RiskAssetEligibility",
     "RiskCatalogDefinition",
     "RiskCatalogResponse",
     "RiskComparisonOutput",
@@ -1616,12 +1688,17 @@ __all__ = [
     "RiskDrawdownOutput",
     "RiskDrawdownPoint",
     "RiskDrawdownRecoveryStatus",
+    "RiskEligibilityLevel",
+    "RiskEligibilityReason",
+    "RiskEligibilityRequest",
+    "RiskEligibilityResponse",
     "RiskError",
     "RiskErrorCode",
     "RiskExcludedAsset",
     "RiskFreeReference",
     "RiskHistoricalReplayAudit",
     "RiskHistoricalReplayExcludedAsset",
+    "RiskHistoricalReplayExclusionReason",
     "RiskHistoricalReplayExclusionTreatment",
     "RiskHistoricalReplayProxyAsset",
     "RiskKpiOutput",

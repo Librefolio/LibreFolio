@@ -12,6 +12,7 @@ from backend.app.schemas.risk import (
     RiskReturnOutput,
     RiskScopeKind,
 )
+from backend.app.services.data_quality_thresholds import RISK_MIN_OBSERVATIONS
 from backend.app.services.provider_registry import RiskAnalyticRegistry, register_plugin
 from backend.app.services.risk.analytic_helpers import (
     prepared_asset_returns,
@@ -66,7 +67,7 @@ class AssetRiskReturnAnalytic(RiskAnalytic):
     supported_scopes = (RiskScopeKind.PORTFOLIO,)
     supported_modes = (RiskMode.CURRENT_COMPOSITION,)
     params_model = AssetRiskReturnParams
-    min_observations = 20
+    min_observations = RISK_MIN_OBSERVATIONS
 
     def compute(self, params, context):
         del params

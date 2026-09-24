@@ -26,6 +26,7 @@ from backend.app.schemas.risk import (
     RiskExcludedAsset,
     RiskFreeReference,
     RiskHistoricalReplayAudit,
+    RiskHistoricalReplayExclusionReason,
     RiskMode,
     RiskOutputKind,
     RiskReturnBasis,
@@ -60,6 +61,9 @@ class RiskHistoricalReplayContext:
     source_asset_ids: Mapping[int, int]
     excluded_asset_ids: tuple[int, ...]
     data_quality: DataQualityReport
+    # Assets the engine excluded because their quotes do not cover the replay window, with the
+    # reason. Disjoint from the manual `excluded_asset_ids`.
+    auto_excluded_assets: Mapping[int, RiskHistoricalReplayExclusionReason] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)

@@ -12,6 +12,7 @@ from backend.app.schemas.risk import (
     RiskOutputKind,
     RiskScopeKind,
 )
+from backend.app.services.data_quality_thresholds import RISK_MIN_OBSERVATIONS
 from backend.app.services.provider_registry import RiskAnalyticRegistry, register_plugin
 from backend.app.services.risk.analytic_helpers import prepared_scope_series
 from backend.app.services.risk.base import (
@@ -74,7 +75,7 @@ class AssetSetVarAnalytic(RiskAnalytic):
     supported_scopes = (RiskScopeKind.ASSET_SET,)
     supported_modes = (RiskMode.HISTORICAL,)
     params_model = AssetSetVarParams
-    min_observations = 20
+    min_observations = RISK_MIN_OBSERVATIONS
 
     def compute(self, params: AssetSetVarParams, context: RiskExecutionContext) -> RiskComputation:
         series = prepared_scope_series(context)
