@@ -21,6 +21,7 @@
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
     import {attachChartReady} from '$lib/utils/chartReady';
+    import {getUserStorage, setUserStorage} from '$lib/utils/storage';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS, namedPoint} from '$lib/components/charts/echartsAnimationConfig';
     import {_, locale} from '$lib/i18n';
@@ -78,11 +79,44 @@
 
     // coreMode = value|return|pnl (plan §5.1); kept as the existing 'eur'/'pct'/'pnl'
     // literal union for minimal churn on the 14 existing branches, not a rename.
-    let viewMode: 'eur' | 'pct' | 'pnl' = $state('eur');
+    type GrowthMode = 'eur' | 'pct' | 'pnl';
+    type PnlSubmode = 'line' | 'candles' | 'income';
+
+    // The mode and the P&L submode persist per user, with one key shared by Dashboard and
+    // Broker detail (AllocationPanel and PositionsPanel do the same). The candle width is
+    // deliberately NOT persisted: every entry into the ladder applies its opening rule.
+    const MODE_STORAGE_KEY = 'dashboard-growth-mode';
+    const SUBMODE_STORAGE_KEY = 'dashboard-growth-pnl-submode';
+
+    function readStoredMode(): GrowthMode {
+        const stored = getUserStorage(MODE_STORAGE_KEY, 'eur');
+        return stored === 'pct' || stored === 'pnl' ? stored : 'eur';
+    }
+
+    function readStoredSubmode(): PnlSubmode {
+        const stored = getUserStorage(SUBMODE_STORAGE_KEY, 'line');
+        return stored === 'candles' || stored === 'income' ? stored : 'line';
+    }
+
+    const restoredMode = readStoredMode();
+    let viewMode: GrowthMode = $state(restoredMode);
     // pnlSubmode = line|candles|income (plan §5.1). All three submodes are live and the
     // picker is rendered (data-testid growth-pnl-submode-*); 'candles' is where the
     // synthetic OHLC series is shown.
-    let pnlSubmode: 'line' | 'candles' | 'income' = $state('line');
+    let pnlSubmode: PnlSubmode = $state(readStoredSubmode());
+    /** A restored % view still has to be checked against the loaded history (see below). */
+    let restoredPctUnchecked = restoredMode === 'pct';
+
+    function selectMode(mode: GrowthMode) {
+        viewMode = mode;
+        restoredPctUnchecked = false;
+        setUserStorage(MODE_STORAGE_KEY, mode);
+    }
+
+    function selectSubmode(submode: PnlSubmode) {
+        pnlSubmode = submode;
+        setUserStorage(SUBMODE_STORAGE_KEY, submode);
+    }
     // Named for the zoom it drives, NOT for a submode: it began life income-only, but
     // the mechanism was always the shared visible range. Deliberately "zoom" and not
     // "window" alone, to keep it distinct from the candle-WIDTH ladder (DBT-7), which
@@ -643,6 +677,15 @@
 
     const hasPctData = $derived(history.some((pt) => pt.mwrr_cumulative != null || pt.twrr != null || pt.roi != null));
     const hasNonZeroPctData = $derived(history.some((pt) => Number(pt.mwrr_cumulative ?? 0) !== 0 || Number(pt.twrr ?? 0) !== 0 || Number(pt.roi ?? 0) !== 0));
+
+    // The % button is disabled without % data, so a restored % view must not outlive the
+    // first completed load that has none. It falls back to Abs for display only: the stored
+    // choice is kept, and comes back once the history can draw it.
+    $effect(() => {
+        if (!restoredPctUnchecked || loading) return;
+        restoredPctUnchecked = false;
+        if (!hasPctData) viewMode = 'eur';
+    });
 
     function resetResolutionState(preservedRange: GrowthLogicalRange | null = null) {
         resolutionCache.clear();
@@ -2109,23 +2152,30 @@
 
         <!-- Abs / % / P&L segmented toggle -->
         <div class="flex rounded-lg overflow-hidden border border-gray-200 dark:border-slate-600 text-xs font-medium">
-            <button class="px-3 py-1 transition-colors {viewMode === 'eur' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}" onclick={() => (viewMode = 'eur')} data-testid="growth-toggle-eur">
+            <button
+                class="px-3 py-1 transition-colors {viewMode === 'eur' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                onclick={() => selectMode('eur')}
+                aria-pressed={viewMode === 'eur'}
+                data-testid="growth-toggle-eur"
+            >
                 {$_('dashboard.abs')}
             </button>
             <button
                 class="px-3 py-1 transition-colors border-l border-gray-200 dark:border-slate-600 {viewMode === 'pct' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'} {!hasPctData
                     ? 'opacity-50 cursor-not-allowed'
                     : ''}"
-                onclick={() => hasPctData && (viewMode = 'pct')}
+                onclick={() => hasPctData && selectMode('pct')}
                 disabled={!hasPctData}
                 title={!hasPctData ? $_('common.noData') : ''}
+                aria-pressed={viewMode === 'pct'}
                 data-testid="growth-toggle-pct"
             >
                 {$_('dashboard.pct')}
             </button>
             <button
                 class="px-3 py-1 transition-colors border-l border-gray-200 dark:border-slate-600 {viewMode === 'pnl' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                onclick={() => (viewMode = 'pnl')}
+                onclick={() => selectMode('pnl')}
+                aria-pressed={viewMode === 'pnl'}
                 data-testid="growth-toggle-pnl"
             >
                 {$_('dashboard.pnl')}
@@ -2154,7 +2204,7 @@
                 <div class="flex rounded-lg border border-gray-200/70 dark:border-slate-600/70 overflow-hidden shadow-sm opacity-75 hover:opacity-100 transition-opacity text-xs font-medium">
                     <button
                         class="{controlsCompact ? 'px-2' : 'px-3'} py-1 transition-colors inline-flex items-center gap-1.5 {pnlSubmode === 'line' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                        onclick={() => (pnlSubmode = 'line')}
+                        onclick={() => selectSubmode('line')}
                         title={$_('dashboard.pnlSubmodeLine')}
                         aria-label={$_('dashboard.pnlSubmodeLine')}
                         aria-pressed={pnlSubmode === 'line'}
@@ -2167,7 +2217,7 @@
                         class="{controlsCompact ? 'px-2' : 'px-3'} py-1 transition-colors inline-flex items-center gap-1.5 border-l border-gray-200/70 dark:border-slate-600/70 {pnlSubmode === 'candles'
                             ? 'bg-libre-green text-white'
                             : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                        onclick={() => (pnlSubmode = 'candles')}
+                        onclick={() => selectSubmode('candles')}
                         title={$_('dashboard.pnlSubmodeCandles')}
                         aria-label={$_('dashboard.pnlSubmodeCandles')}
                         aria-pressed={pnlSubmode === 'candles'}
@@ -2180,7 +2230,7 @@
                         class="{controlsCompact ? 'px-2' : 'px-3'} py-1 transition-colors inline-flex items-center gap-1.5 border-l border-gray-200/70 dark:border-slate-600/70 {pnlSubmode === 'income'
                             ? 'bg-libre-green text-white'
                             : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                        onclick={() => (pnlSubmode = 'income')}
+                        onclick={() => selectSubmode('income')}
                         title={$_('dashboard.pnlSubmodeIncome')}
                         aria-label={$_('dashboard.pnlSubmodeIncome')}
                         aria-pressed={pnlSubmode === 'income'}
