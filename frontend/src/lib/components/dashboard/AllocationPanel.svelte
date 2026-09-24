@@ -3,8 +3,12 @@
 
   Extracted from dashboard/+page.svelte as behavior-preserving refactor.
   Keep markup/data-testid/i18n/classes/colors identical for safe reuse.
+
+  The selected view (now/history) and dimension tab persist per user; Dashboard and
+  Broker detail share the same keys, like PositionsPanel.
 -->
 <script lang="ts">
+    import {onMount} from 'svelte';
     import {_} from '$lib/i18n';
     import {PieChart, AreaChart} from 'lucide-svelte';
 
@@ -12,8 +16,10 @@
     import AllocationPieChart from '$lib/components/charts/AllocationPieChart.svelte';
     import GeographyMap from '$lib/components/charts/GeographyMap.svelte';
     import AllocationHistoryChart from '$lib/components/dashboard/AllocationHistoryChart.svelte';
+    import {getUserStorage, setUserStorage} from '$lib/utils/storage';
 
     type AllocationTab = 'type' | 'sector' | 'geo';
+    type AllocationView = 'now' | 'history';
     type AllocEntry = {name: string; value: number; amount: number; emoji?: string | null};
 
     interface Props {
@@ -28,13 +34,28 @@
 
     let {summary, loading, displayCurrency, brokerIds, currentLanguage, allocationHistory, onRequestAllocationHistory}: Props = $props();
 
-    let allocationTab = $state<AllocationTab>('type');
-    let allocationView = $state<'now' | 'history'>('now');
     const allocationTabs = [
         ['type', 'dashboard.typeAllocation'],
         ['sector', 'dashboard.sectorAllocation'],
         ['geo', 'dashboard.geoAllocation'],
     ] as const satisfies readonly [AllocationTab, string][];
+
+    const VIEW_STORAGE_KEY = 'dashboard-allocation-view';
+    const TAB_STORAGE_KEY = 'dashboard-allocation-tab';
+
+    // A stored value this version does not know (garbage, or a renamed option) falls
+    // back to the default instead of leaving the panel without a selected button.
+    function readStoredView(): AllocationView {
+        return getUserStorage(VIEW_STORAGE_KEY, 'now') === 'history' ? 'history' : 'now';
+    }
+
+    function readStoredTab(): AllocationTab {
+        const stored = getUserStorage(TAB_STORAGE_KEY, 'type');
+        return allocationTabs.find(([tab]) => tab === stored)?.[0] ?? 'type';
+    }
+
+    let allocationTab = $state<AllocationTab>(readStoredTab());
+    let allocationView = $state<AllocationView>(readStoredView());
 
     function toAllocEntries(items: any[] | null | undefined): AllocEntry[] {
         if (!items) return [];
@@ -48,6 +69,23 @@
     async function loadAllocationHistory(dimension: AllocationTab) {
         await onRequestAllocationHistory?.(dimension, brokerIds);
     }
+
+    function selectView(view: AllocationView) {
+        allocationView = view;
+        setUserStorage(VIEW_STORAGE_KEY, view);
+        if (view === 'history') loadAllocationHistory(allocationTab);
+    }
+
+    function selectTab(tab: AllocationTab) {
+        allocationTab = tab;
+        setUserStorage(TAB_STORAGE_KEY, tab);
+        if (allocationView === 'history') loadAllocationHistory(tab);
+    }
+
+    // A restored History view must request its data exactly as the click does.
+    onMount(() => {
+        if (allocationView === 'history') loadAllocationHistory(allocationTab);
+    });
 
     const allocationHistoryLoading = $derived(loading && !allocationHistory);
     const allocationByType = $derived(toAllocEntries(summary?.allocation_by_type as any));
@@ -69,16 +107,15 @@
         <div class="flex rounded-lg overflow-hidden border border-gray-200 dark:border-slate-600 text-xs font-medium">
             <button
                 class="px-2.5 py-1.5 transition-colors {allocationView === 'now' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                onclick={() => (allocationView = 'now')}
+                onclick={() => selectView('now')}
+                aria-pressed={allocationView === 'now'}
                 data-testid="allocation-view-now"
                 title={$_('dashboard.now')}><PieChart size={14} /></button
             >
             <button
                 class="px-2.5 py-1.5 transition-colors border-l border-gray-200 dark:border-slate-600 {allocationView === 'history' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                onclick={() => {
-                    allocationView = 'history';
-                    loadAllocationHistory(allocationTab);
-                }}
+                onclick={() => selectView('history')}
+                aria-pressed={allocationView === 'history'}
                 data-testid="allocation-view-history"
                 title={$_('dashboard.history')}><AreaChart size={14} /></button
             >
@@ -89,10 +126,8 @@
         {#each allocationTabs as [tab, labelKey]}
             <button
                 class="px-3 py-1 transition-colors {allocationTab === tab ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'} {tab !== 'type' ? 'border-l border-gray-200 dark:border-slate-600' : ''}"
-                onclick={() => {
-                    allocationTab = tab;
-                    if (allocationView === 'history') loadAllocationHistory(tab);
-                }}
+                onclick={() => selectTab(tab)}
+                aria-pressed={allocationTab === tab}
                 data-testid="allocation-tab-{tab}"
             >
                 {$_(labelKey)}
