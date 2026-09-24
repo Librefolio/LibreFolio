@@ -13,6 +13,7 @@ from backend.app.schemas.risk import (
     RiskScopeKind,
     RiskWarning,
 )
+from backend.app.services.data_quality_thresholds import RISK_MIN_OBSERVATIONS
 from backend.app.services.provider_registry import RiskAnalyticRegistry, register_plugin
 from backend.app.services.risk.acquired import (
     conditional_drawdown_at_risk,
@@ -103,7 +104,7 @@ class AssetSetKpiAnalytic(RiskAnalytic):
     supported_scopes = (RiskScopeKind.ASSET_SET,)
     supported_modes = (RiskMode.HISTORICAL,)
     params_model = AssetSetKpiParams
-    min_observations = 20
+    min_observations = RISK_MIN_OBSERVATIONS
 
     def compute(self, params: AssetSetKpiParams, context: RiskExecutionContext) -> RiskComputation:
         annualization = require_annualization_factor(context)
@@ -168,6 +169,7 @@ class AssetSetKpiAnalytic(RiskAnalytic):
             warnings.append(
                 RiskWarning(
                     code="sharpe_undefined",
+                    message_i18n_key="risk.warnings.sharpe_undefined_assets",
                     message="Sharpe is undefined for one or more assets because sample volatility is zero.",
                     details={"asset_ids": undefined_sharpe},
                 )
@@ -176,6 +178,7 @@ class AssetSetKpiAnalytic(RiskAnalytic):
             warnings.append(
                 RiskWarning(
                     code="sortino_undefined",
+                    message_i18n_key="risk.warnings.sortino_undefined_assets",
                     message="Sortino is undefined for one or more assets because downside deviation is zero.",
                     details={"asset_ids": undefined_sortino},
                 )
@@ -184,6 +187,7 @@ class AssetSetKpiAnalytic(RiskAnalytic):
             warnings.append(
                 RiskWarning(
                     code="worst_realization_undefined",
+                    message_i18n_key="risk.warnings.worst_realization_undefined_assets",
                     message="One or more assets had no losing observation in the selected window.",
                     details={"asset_ids": no_losing_observation},
                 )

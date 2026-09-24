@@ -18,6 +18,7 @@ from backend.app.schemas.risk import (
     RiskExcludedAsset,
     RiskHistoricalReplayAudit,
     RiskHistoricalReplayExcludedAsset,
+    RiskHistoricalReplayExclusionReason,
     RiskHistoricalReplayExclusionTreatment,
     RiskHistoricalReplayProxyAsset,
     RiskMode,
@@ -36,6 +37,7 @@ from backend.app.schemas.risk_scenarios import (
     RiskScenarioDimension,
     RiskScenarioMissingHistoryPolicy,
 )
+from backend.app.services.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.provider_registry import RiskAnalyticRegistry, register_plugin
 from backend.app.services.risk.base import (
     RiskAnalytic,
@@ -128,6 +130,44 @@ class StressParams(BaseModel):
             if overlap:
                 raise ValueError(f"historical replay assets cannot be both proxied and excluded: {sorted(overlap)}")
         return self
+
+
+def _replay_exclusion_warning(
+    reason: RiskHistoricalReplayExclusionReason,
+    asset_ids: list[int],
+    treatment: RiskHistoricalReplayExclusionTreatment,
+) -> RiskWarning:
+    """One warning per exclusion reason, so the sentence can say why the assets are missing.
+
+    The keys are written out literally, branch by branch: the i18n audit reads backend keys from
+    their assignments, and a key built at runtime would look unused.
+    """
+    details: dict = {"asset_ids": asset_ids, "treatment": treatment.value, "reason": reason.value}
+    params: dict = {"treatment": treatment.value}
+    code = "historical_replay_assets_excluded"
+    if reason == RiskHistoricalReplayExclusionReason.MANUAL_EXCLUSION:
+        return RiskWarning(code=code, message="Historical replay omitted one or more assets using the declared exclusion policy.", details=details, message_i18n_key="risk.warnings.historical_replay_excluded_manual", message_params=params)
+    if reason == RiskHistoricalReplayExclusionReason.NO_PRICES_IN_WINDOW:
+        return RiskWarning(code=code, message="Historical replay excluded assets with no prices in the replay window.", details=details, message_i18n_key="risk.warnings.historical_replay_excluded_no_prices", message_params=params)
+    if reason == RiskHistoricalReplayExclusionReason.STARTS_AFTER_WINDOW_START:
+        return RiskWarning(code=code, message="Historical replay excluded assets that start quoting after the replay window begins.", details=details, message_i18n_key="risk.warnings.historical_replay_excluded_starts_late", message_params=params)
+    if reason == RiskHistoricalReplayExclusionReason.STALE_AT_WINDOW_START:
+        return RiskWarning(
+            code=code,
+            message=f"Historical replay excluded assets quoted before the replay window but with no price in the {STALE_PRICE_THRESHOLD_DAYS} days before it begins.",
+            details=details,
+            message_i18n_key="risk.warnings.historical_replay_excluded_stale_at_start",
+            message_params={**params, "days": STALE_PRICE_THRESHOLD_DAYS},
+        )
+    if reason == RiskHistoricalReplayExclusionReason.STALE_AT_WINDOW_END:
+        return RiskWarning(
+            code=code,
+            message=f"Historical replay excluded assets with no price in the last {STALE_PRICE_THRESHOLD_DAYS} days of the replay window.",
+            details=details,
+            message_i18n_key="risk.warnings.historical_replay_excluded_stale_at_end",
+            message_params={**params, "days": STALE_PRICE_THRESHOLD_DAYS},
+        )
+    return RiskWarning(code=code, message="Historical replay excluded assets whose currency cannot be converted over the replay window.", details=details, message_i18n_key="risk.warnings.historical_replay_excluded_missing_fx", message_params=params)
 
 
 def _amount(value: Optional[Decimal], return_value: float) -> Optional[Decimal]:
@@ -332,6 +372,8 @@ class StressAnalytic(RiskAnalytic):
                 warnings.append(
                     RiskWarning(
                         code="hypothetical_metadata_other_fallback",
+                        message_i18n_key="risk.warnings.hypothetical_metadata_other_fallback",
+                        message_params={"dimension": params.dimension.value},
                         message=("Sector or geography metadata was unavailable; " "the asset was treated as Other at 100%."),
                         details={
                             "asset_id": asset_id,
@@ -445,32 +487,47 @@ class StressAnalytic(RiskAnalytic):
 
         scope_asset_ids = context.requested_scope_asset_ids or context.scope_asset_ids
         excluded_asset_ids = set(replay.excluded_asset_ids)
+        # The engine's own exclusions (window not covered), decided before the joint series was
+        # prepared; an asset that still arrives without returns is excluded here the same way.
+        auto_excluded = dict(replay.auto_excluded_assets)
         prepared_by_source = {item.returns.asset_id: item for item in replay.prepared_series.series}
         unusable_reasons = {item.asset_id: item.reason.value for item in replay.data_quality.unusable_assets}
         selected: dict[int, tuple[int, list[date], list[float]]] = {}
         for asset_id in scope_asset_ids:
-            if asset_id in excluded_asset_ids:
+            if asset_id in excluded_asset_ids or asset_id in auto_excluded:
                 continue
             source_asset_id = replay.source_asset_ids[asset_id]
             prepared = prepared_by_source.get(source_asset_id)
             if prepared is None or not prepared.returns.points:
-                is_proxy = source_asset_id != asset_id
-                raise RiskUnavailableError(
-                    (f"Historical replay proxy {source_asset_id} has insufficient usable history" if is_proxy else f"Asset {asset_id} requires a manual proxy or explicit exclusion"),
-                    code=(RiskErrorCode.INVALID_PARAMETERS if is_proxy else RiskErrorCode.INSUFFICIENT_HISTORY),
-                    details={
-                        "asset_id": asset_id,
-                        "return_source_asset_id": source_asset_id,
-                        "reason": unusable_reasons.get(source_asset_id, "insufficient_history"),
-                    },
-                )
+                if source_asset_id != asset_id:
+                    # A proxy is the user's explicit choice: an unusable one is a parameter error,
+                    # never a silent exclusion.
+                    raise RiskUnavailableError(
+                        f"Historical replay proxy {source_asset_id} has insufficient usable history",
+                        code=RiskErrorCode.INVALID_PARAMETERS,
+                        details={
+                            "asset_id": asset_id,
+                            "return_source_asset_id": source_asset_id,
+                            "reason": unusable_reasons.get(source_asset_id, "insufficient_history"),
+                        },
+                    )
+                missing_fx = unusable_reasons.get(source_asset_id) == "missing_fx"
+                auto_excluded[asset_id] = RiskHistoricalReplayExclusionReason.MISSING_FX if missing_fx else RiskHistoricalReplayExclusionReason.NO_PRICES_IN_WINDOW
+                continue
             selected[asset_id] = (
                 source_asset_id,
                 [point.date for point in prepared.returns.points],
                 [float(point.value) for point in prepared.returns.points],
             )
 
-        if selected and replay.prepared_series.n_observations == 0:
+        all_excluded = excluded_asset_ids | set(auto_excluded)
+        if not selected:
+            raise RiskUnavailableError(
+                "No asset in the replay scope covers the replay window",
+                code=RiskErrorCode.INSUFFICIENT_HISTORY,
+                details={"excluded_asset_ids": sorted(all_excluded)},
+            )
+        if replay.prepared_series.n_observations == 0:
             raise RiskUnavailableError(
                 "Historical replay has no observations in the requested range",
                 code=RiskErrorCode.INSUFFICIENT_HISTORY,
@@ -479,28 +536,27 @@ class StressAnalytic(RiskAnalytic):
         asset_returns = {asset_id: compounded_return(values) for asset_id, (_source_asset_id, _dates, values) in selected.items()}
         weighted_scope = context.scope_kind == RiskScopeKind.PORTFOLIO
         portfolio_return: Optional[float] = None
-        excluded_weight_total = sum(context.weights.get(asset_id, 0.0) for asset_id in excluded_asset_ids) if weighted_scope else 0.0
+        excluded_weight_total = sum(context.weights.get(asset_id, 0.0) for asset_id in all_excluded) if weighted_scope else 0.0
         if weighted_scope:
-            if selected:
-                portfolio_returns = current_buy_and_hold_returns(
-                    {asset_id: values for asset_id, (_source_asset_id, _dates, values) in selected.items()},
-                    {asset_id: context.weights[asset_id] for asset_id in selected},
-                    cash_weight=context.cash_weight + excluded_weight_total,
-                )
-                portfolio_return = compounded_return(portfolio_returns)
-            else:
-                portfolio_return = 0.0
+            portfolio_returns = current_buy_and_hold_returns(
+                {asset_id: values for asset_id, (_source_asset_id, _dates, values) in selected.items()},
+                {asset_id: context.weights[asset_id] for asset_id in selected},
+                cash_weight=context.cash_weight + excluded_weight_total,
+            )
+            portfolio_return = compounded_return(portfolio_returns)
         elif context.scope_kind == RiskScopeKind.ASSET and asset_returns:
             portfolio_return = asset_returns[scope_asset_ids[0]]
 
         exclusion_treatment = RiskHistoricalReplayExclusionTreatment.ZERO_RETURN_RESIDUAL if weighted_scope else RiskHistoricalReplayExclusionTreatment.OMITTED_FROM_REPLAY
+        exclusion_reasons = {asset_id: auto_excluded.get(asset_id, RiskHistoricalReplayExclusionReason.MANUAL_EXCLUSION) for asset_id in all_excluded}
         excluded_audit = [
             RiskHistoricalReplayExcludedAsset(
                 asset_id=asset_id,
+                reason=exclusion_reasons[asset_id],
                 weight=context.weights.get(asset_id) if weighted_scope else None,
                 treatment=exclusion_treatment,
             )
-            for asset_id in sorted(excluded_asset_ids)
+            for asset_id in sorted(all_excluded)
         ]
         audit = RiskHistoricalReplayAudit(
             proxy_count=len(params.proxy_assets),
@@ -518,19 +574,13 @@ class StressAnalytic(RiskAnalytic):
                     code="historical_replay_proxies_used",
                     message="Historical replay used one or more manually selected proxy return series.",
                     details={"asset_ids": [item.asset_id for item in params.proxy_assets]},
+                    message_i18n_key="risk.warnings.historical_replay_proxies_used",
                 )
             )
-        if excluded_audit:
-            warnings.append(
-                RiskWarning(
-                    code="historical_replay_assets_excluded",
-                    message="Historical replay omitted one or more assets using the declared exclusion policy.",
-                    details={
-                        "asset_ids": [item.asset_id for item in excluded_audit],
-                        "treatment": exclusion_treatment.value,
-                    },
-                )
-            )
+        for reason in RiskHistoricalReplayExclusionReason:
+            ids = [item.asset_id for item in excluded_audit if item.reason == reason]
+            if ids:
+                warnings.append(_replay_exclusion_warning(reason, ids, exclusion_treatment))
 
         impacts = [
             RiskStressImpact(
@@ -552,7 +602,7 @@ class StressAnalytic(RiskAnalytic):
                     contribution_return=0.0,
                     impact_amount=_amount(context.asset_values.get(asset_id), 0.0),
                 )
-                for asset_id in sorted(excluded_asset_ids)
+                for asset_id in sorted(all_excluded)
             )
 
         prepared = replay.prepared_series
@@ -570,9 +620,9 @@ class StressAnalytic(RiskAnalytic):
             excluded_assets=tuple(
                 RiskExcludedAsset(
                     asset_id=asset_id,
-                    reason="manual_historical_replay_exclusion",
+                    reason=("manual_historical_replay_exclusion" if exclusion_reasons[asset_id] == RiskHistoricalReplayExclusionReason.MANUAL_EXCLUSION else f"historical_replay_{exclusion_reasons[asset_id].value}"),
                 )
-                for asset_id in sorted(excluded_asset_ids)
+                for asset_id in sorted(all_excluded)
             ),
             analyzed_range=analyzed_range,
             n_observations=prepared.n_observations,

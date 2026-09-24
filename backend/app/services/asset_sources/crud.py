@@ -264,6 +264,25 @@ class AssetCRUDService:
             own_stmt = select(Transaction.asset_id, func.count()).where(Transaction.broker_id.in_(own_brokers_sq)).group_by(Transaction.asset_id)
             tx_own_by_asset = {asset_id: count for asset_id, count in (await session.execute(own_stmt)).all() if asset_id is not None}
 
+        # Open positions now: the signed quantities summed per broker and asset, the same reading
+        # as the broker balances. A small tolerance keeps a position sold in full closed despite
+        # floating-point residue.
+        held_own: set[int] = set()
+        held_others: set[int] = set()
+        if rows:
+            own_broker_ids: set[int] = set()
+            if user_id is not None:
+                own_brokers_stmt = select(BrokerUserAccess.broker_id).where(
+                    BrokerUserAccess.user_id == user_id,
+                    BrokerUserAccess.role == UserRole.OWNER,
+                    or_(BrokerUserAccess.share_percentage.is_(None), BrokerUserAccess.share_percentage > 0),
+                )
+                own_broker_ids = set((await session.execute(own_brokers_stmt)).scalars().all())
+            quantity = func.sum(Transaction.quantity)
+            holdings_stmt = select(Transaction.broker_id, Transaction.asset_id).where(Transaction.asset_id.is_not(None)).group_by(Transaction.broker_id, Transaction.asset_id).having(quantity > 1e-9)
+            for broker_id, asset_id in (await session.execute(holdings_stmt)).all():
+                (held_own if broker_id in own_broker_ids else held_others).add(asset_id)
+
         # Build response with identifier info
         assets = []
         for row in rows:
@@ -288,6 +307,8 @@ class AssetCRUDService:
                     has_metadata=asset.classification_params is not None,
                     tx_count=tx_total_by_asset.get(asset.id, 0),
                     tx_count_own=tx_own_by_asset.get(asset.id, 0),
+                    held_by_me=asset.id in held_own,
+                    held_by_others=asset.id in held_others,
                     # Identifier columns from Asset
                     identifier_isin=asset.identifier_isin,
                     identifier_ticker=asset.identifier_ticker,
