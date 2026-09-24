@@ -1998,7 +1998,8 @@
   "sharedResource": {
     "syncAll": "Sync All",
     "refreshAll": "Reload All",
-    "settings": "Settings"
+    "settings": "Settings",
+    "syncSelection": "Sync selection"
   },
   "table": {
     "columns": "Columns",
@@ -2926,7 +2927,8 @@
       },
       "correlation": {
         "name": "Correlation",
-        "description": "Pearson correlation matrix on target-currency returns."
+        "description": "Pearson correlation matrix on target-currency returns.",
+        "help": "This panel analyses the pairwise correlations of all the assets under review, computed over the chosen period and taking any currency conversions into account. A high value, close to +1, means two assets move together and diversify each other little; close to 0, that they move independently; negative, that one cushions the other. Click the icon for the guide."
       },
       "historicalVar": {
         "name": "Historical VaR / CVaR",
@@ -3049,8 +3051,6 @@
       "correlationTab": "Correlation",
       "addAsset": "Add asset to matrix",
       "maxAssets": "The API limit of 100 assets has been reached.",
-      "presetBroker": "Preload the assets of…",
-      "presetNone": "Choose a broker…",
       "panelTitle": "Relationships and scenarios",
       "selectedCount": "{selected} selected of {total}",
       "nearIdentical": "near-identical",
@@ -3075,15 +3075,21 @@
         "label": "Matrix order",
         "similarity": "By similarity",
         "original": "By name",
-        "name": "By name"
+        "name": "By name",
+        "type": "By type",
+        "sector": "By sector",
+        "region": "By region"
       },
       "pairs": {
         "correlatedTitle": "The most alike",
-        "correlatedHint": "Pairs that move together: holding both adds little.",
+        "correlatedHint": "Pairs with ρ > 0.70: they move together, holding both adds little.",
         "offsettingTitle": "The ones that offset",
-        "offsettingHint": "Pairs that move in opposite directions: one cushions the other.",
+        "offsettingHint": "Pairs with ρ ≤ −0.30: they move in opposite directions, one cushions the other.",
         "noneCorrelated": "No pair moves clearly together.",
-        "noneOffsetting": "No pair offsets another: nothing here cushions anything else."
+        "noneOffsetting": "No pair offsets another: nothing here cushions anything else.",
+        "tagSimilar": "very similar",
+        "tagOffsetting": "offsetting",
+        "tagOpposite": "opposite"
       },
       "levels": {
         "asset": "Asset",
@@ -3107,6 +3113,34 @@
           "correlation": "Correlation",
           "noBenchmark": "Choose a benchmark on the Dashboard to add beta and correlation. A benchmark that is itself in the selection cannot be used as its own yardstick."
         }
+      },
+      "legend": {
+        "negative": "Negative",
+        "none": "None",
+        "positive": "Positive"
+      },
+      "group": {
+        "diversified": "Diversified",
+        "unclassified": "Unclassified"
+      },
+      "exposure": {
+        "sector": "Sector",
+        "region": "Region"
+      },
+      "syncSelectionHint": "Sync the prices of the selected assets and the exchange rates that convert them",
+      "reloadHint": "Reload every analysis of the selection",
+      "preset": {
+        "allMine": "All my holdings",
+        "byBroker": "By broker",
+        "hint": "Replaces the selection with the assets held on the last day of the period.",
+        "noneHeld": "Nothing is held there on the last day of the period: the selection is unchanged."
+      },
+      "picker": {
+        "selectVisible": "Select visible",
+        "deselectVisible": "Deselect visible",
+        "confirm": "Add {count}",
+        "allSelected": "Every asset is already in the selection.",
+        "filtersOn": "Only the assets that pass the filters are listed."
       }
     },
     "metrics": {
