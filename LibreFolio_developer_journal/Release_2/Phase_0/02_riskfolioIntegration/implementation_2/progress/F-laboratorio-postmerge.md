@@ -1020,3 +1020,486 @@ vitest, 7 path ⇒ Test Files 7 passed (7) · 260 test
 > è già costata una volta.
 > **Stato**: `FROZEN` fino al commit. Server di review spento, `6164` e `6154` libere. Dopo il commit: copia di prod
 > rinfrescata, server rialzato, e si riparte da V5-A.
+
+### Checkpoint committato — 2026-09-24, 11:49 (dal developer, con lo script con guardie del coordinatore)
+
+> `025b30222` → `7f06df51d` → `6e6061c33` → `553a20991` → `7227898d2` → `46ee7258c` → `c10e75f14` → `dc29a3089`
+> su `f1047f766` · `git diff --shortstat f1047f766..HEAD` = **32 file, +3236/−159**, come atteso · albero pulito.
+>
+> **⚠️ Fuori pista, tutti presi prima del commit**:
+> - **Di F, preso dal coordinatore**: i miei comandi `git add` non avevano `-C`. Lanciati dal checkout principale, dove
+>   il developer ha il terminale, avrebbero committato **sul target**. Lo script del coordinatore usa
+>   `git -C <worktree>` e si ferma se HEAD, stage o percorsi non tornano.
+> - **Di F, preso dal coordinatore**: nei corpi dei messaggi c'erano righe da 73 a 75 colonne; avevo misurato solo i
+>   soggetti (≤ 50). Il coordinatore li ha riavvolti a 72, e io ho verificato che le parole siano le stesse.
+> - **Del coordinatore, preso da F**: la guardia sui 32 percorsi confrontava una lista in ordine C con un `sort` che
+>   segue la lingua del terminale (`2.3-Apple`). Con `it_IT.UTF-8` ed `en_US.UTF-8` si sarebbe fermata su percorsi
+>   giusti; con `C` e `C.UTF-8`, cioè le shell degli agenti, passava. Corretto con `export LC_ALL=C`, provato su tre lingue.
+>
+> Tre sviste in due direzioni, e nessuna vista da chi l'aveva scritta. Una lista di comandi da far eseguire a un altro
+> va provata **nel suo ambiente**: cartella, lingua e larghezza di riga.
+
+### Ripresa dopo il checkpoint — 2026-09-24, 11:51
+
+> - Copia di prod rinfrescata dalla snapshot (23/09 10:52): `004_release_1_2_0_schema`, marcatore assente, nessun file
+>   laterale prima né dopo la lettura `immutable=1`. La precedente è in `.prev-20260924-115121`.
+> - Server su `6164`: PID 37059, `cwd` = questo worktree, `db_path` = la copia, versione `v1.1.0-236-gdc29a3089`, **pulita**,
+>   senza `-dirty`. Bundle: costruito = servito = `cddd783650b0d142`, nessun sorgente più nuovo.
+>   `generated.ts a085da1c8dac55f9`. Log: `files/F3b_server.log`, scritto con `| tee file` senza `head`.
+> - **API della select dei tipi di K** (dal coordinatore, alle 11:47; per ora solo nel ramo di K). Nel ramo di F si
+>   progetta sulla select di oggi.
+>   - `TreeSelect` è **a scelta singola**, e la multipla non è prevista. Per il filtro «Tipo» del laboratorio: una lista
+>     di caselle propria, alimentata da `buildAssetTypeTree()`, oppure un filtro per famiglia con `assetTypeFamily()`.
+>   - `buildAssetTypeOptions()` non esiste più nel ramo di K: nessun consumatore nuovo.
+>   - Dettaglio completo: `files/K_treeselect_api_20260924.md`.
+
+### F-3b · V5-A — la matrice, sistemata dentro ECharts · 2026-09-24, 11:55–12:15 (in attesa dell'occhio del developer)
+
+> **Note implementazione** (`CorrelationHeatmap.svelte`, `correlationHelpers.ts`):
+> - **Nomi**: sugli assi i nomi sono senza emoji (`plainName`, lo stesso filtro dell'ordine per nome, ora esportato);
+>   il tooltip e le liste le conservano. Le righe vanno a capo su due linee oltre i 200 px (`overflow: 'break'`); le
+>   colonne, oblique a 45°, si tagliano con i puntini oltre i 150 px. `interval: 0` impedisce a ECharts di nascondere
+>   etichette di sua iniziativa.
+> - **Misure**: i margini vengono dalle etichette **misurate** (canvas 2D, stesso font esplicito dell'asse, `12px
+>   sans-serif`), non più dal numero di caratteri. In ECharts 6 `grid.outerBoundsMode: 'none'`: altrimenti il
+>   default `auto` restringe il disegno da solo quando un'etichetta sfora.
+> - **Geometria** (`heatmapLayout`, puro): celle fra 44×34 e 88×52 px. Se la card è stretta il grafico diventa più
+>   largo della card e la card **scorre in orizzontale**, con una sfumatura sul bordo destro. Se è larga, le celle si
+>   fermano al massimo. L'altezza segue le righe; la prop `height` è ignorata, ma resta perché `L2Diversification` la
+>   passa e deve compilare.
+> - **Triangolo**: via la prima riga e l'ultima colonna, che erano vuote. Asse y invertito, così la riga piena
+>   poggia sui nomi delle colonne. Via le bande grigie di sfondo; le celle hanno un bordo del colore della card.
+> - **Legenda** in HTML sotto il grafico (−1 · 0 · +1, con le parole delle bande), così resta visibile quando la card
+>   scorre. Valori nelle celle sempre visibili, bianchi sulle celle sature.
+> - **Larghezza**: la colonna della griglia sotto `lg` è `grid-cols-1` (`minmax(0, 1fr)`). La larghezza disponibile è
+>   quella del box che scorre, osservato con `ResizeObserver`, non più del grafico.
+>
+> **Prova sui numeri** (sonda del solo helper puro):
+> - 7 asset, triangolo 6×6: in una card da 729 px → grafico 728×448, celle 84×52, **entra**; in 1100 px → celle al
+>   massimo, 752 px; in 420 px → celle al minimo, **scorre**;
+> - 15 asset, calcolato a mano: 14 colonne da 44 px → 840 px, **scorre**.
+>
+> ```
+> front check: 3 errori + 41 avvisi negli stessi 4 file del pavimento, 0 nei miei · prettier pulito
+> vitest correlationHelpers.test.ts → Test Files 1 passed (1) · 64 test
+> front build → servito = costruito = 4728d8aaaf3b0759 · 1 chunk con il codice nuovo · nessun sorgente più nuovo
+> ```
+> **⚠️ Fuori pista**:
+> - Per la sonda ho lanciato `npx tsx`, credendolo presente. npx l'ha **scaricato da solo** (`tsx@4.23.15`) nella sua
+>   cache utente (`~/.npm/_npx/fd45a72a545557e9/`). Nel progetto non è cambiato niente: manifest intatti, nessun
+>   `tsx` in `node_modules`. È un'installazione non autorizzata, anche se involontaria, ed è segnalata al coordinatore.
+>   D'ora in poi le sonde TypeScript passano da vitest, che c'è già.
+> - L'ultima riga della stessa sonda l'ha tagliata un mio `| head -6`, contato prima degli avvisi. Il caso da 15 asset
+>   l'ho quindi ricalcolato a mano invece di rilanciare.
+>
+> **Per V8**, visto qui: il tooltip dice *«si muovono in direzioni opposte»* anche a ρ = −0,08, perché
+> `correlationBand` dà `inverse` a qualunque negativo. È lo stesso difetto delle liste; si ripara con le soglie di V8.
+>
+> **Test per il lotto TL-R**:
+> - R4 `heatmapLayout`: minimo e massimo delle celle, scorrimento solo sotto il minimo, `bottom` = (w + h)·sin 45°;
+> - R5 `plainName`: stessi casi di R1–R2.
+
+### F-3b · V5-B e V8 — i ritocchi del developer sulla matrice, e la graduatoria · 2026-09-24, 12:20–12:45
+
+> **Il developer, sulla V5-A** (*«hai fatto un lavoro fighissimo!»*), con due schermate:
+> 1. la barra dei colori va **allineata alla matrice**: oggi è fuori asse, e quando la card è stretta resta **fuori**
+>    dallo scorrimento. Etichette su due righe: sopra numero e parola breve (*«concorde/indipendente/inversa, o
+>    sinonimi migliori»*), sotto la spiegazione;
+> 2. «I più simili»: *«il problema sono i nomi… così diversi… mandano in vacca il sistema»*. Proposta: una
+>    **graduatoria 1°, 2°…** con tag e valore, e al click l'evidenza del riquadro nella matrice o il suo tooltip;
+> 3. un terzo ordine **per tipo**; un quarto e un quinto per **settore** e **area**, ma sono distribuzioni:
+>    *«hai qualche idea? se no dillo chiaramente e scartiamo l'idea»*.
+>
+> **Note implementazione**:
+> - **Legenda**: ora è **dentro** il box che scorre, con margine sinistro = `grid.left` e larghezza = quella delle
+>   celle (minimo 280 px), quindi parte dove parte la prima colonna e scorre con la matrice. Due righe per estremo:
+>   `−1 · Inversa` / `0 · Nulla` / `+1 · Concorde` in grassetto, sotto le spiegazioni già esistenti (`band.*`).
+>   *«Nulla»* e non *«indipendente»*: una correlazione zero non è indipendenza, e la pagina di teoria lo dice.
+> - **Bande simmetriche** (`correlationBand`): `inverse` solo per ρ ≤ −0,3, e fra −0,3 e +0,3 `low` qualunque sia il
+>   segno. Il tooltip non dice più *«direzioni opposte»* a −0,08.
+> - **Graduatoria** (`CorrelationPairsList`):
+>   - su una riga il rango (cerchietto numerato), il valore e un'etichetta: *quasi identici* da 0,9, *molto simili*
+>     sopra 0,7, *si compensano* da −0,3, *opposti* da −0,7;
+>   - sulla riga sotto i due nomi, in piccolo, ciascuno troncato per conto suo, completi nel `title`;
+>   - entrano **solo** le coppie oltre le soglie (`topPairs`: `high` e `inverse`), e i suggerimenti lo dicono
+>     (*«Coppie con ρ > 0.70…»*, *«…ρ ≤ −0.30…»*).
+> - **Collegamento nei due sensi**: il click su una voce evidenzia la cella (`highlight`), ne apre il tooltip
+>   (`showTip`) e la porta in vista, anche scorrendo di lato. Un secondo click chiude. Il click su una cella seleziona
+>   la sua voce, se è in graduatoria. Dopo ogni ridisegno la selezione si ripunta, o cade se la coppia non c'è più.
+> - **Ordine «Per tipo»** (`typeOrder`, puro): segue `ASSET_TYPE_MENU_ORDER`, i tipi sconosciuti vanno in fondo, e
+>   dentro il tipo si ordina per nome senza emoji. Il pulsante compare solo se chi monta la heatmap passa i tipi: il
+>   laboratorio sì (`selectionTypes`, dalle stesse fonti delle etichette), la Dashboard no, finché Risk non lo decide.
+> - **i18n** (`dev.py i18n`): 7 chiavi nuove e 2 aggiornate, +13/−4 per catalogo; 3411 chiavi in ognuna delle 4
+>   lingue, stesso insieme.
+>
+> ```
+> front check: pavimento invariato, 0 nei miei file · prettier: 1 file riformattato (una riga riunita), poi pulito
+> vitest correlationHelpers.test.ts: 5 rossi attesi (fissavano «ogni negativo compensa») → riallineo a test-author
+> front build → servito = costruito = 63e24115192c1491 · 1 chunk con il codice nuovo
+> ```
+> **Settore e area: la mia valutazione, da decidere col developer.**
+> - **I dati ci sono**: distribuzioni con pesi che sommano a 1 (`classification_params.sector_area` e
+>   `.geographic_area`), lette in una sola richiesta (`GET /api/v1/assets?asset_ids=…`). Sui suoi 15 asset ce le hanno
+>   10 per il settore e 9 per l'area.
+> - **Regola proposta, «prevalente»**:
+>   - gruppo = il peso più grande se ≥ 50% (es. *Tecnologia 95%*), altrimenti **Diversificato**;
+>   - non classificati in fondo;
+>   - nel gruppo, per peso decrescente e poi per nome;
+>   - il gruppo compare nel tooltip.
+> - **Scartata**: la «somiglianza di esposizione» (coseno fra le distribuzioni), opaca e confondibile con
+>   «Per somiglianza», che è sui rendimenti.
+>
+> **⚠️ Fuori pista**: l'avviso del coordinatore su `npx`: nemmeno `--no-install` impedisce il download. Da qui in
+> poi solo binari locali (`frontend/node_modules/.bin/vitest`, `…/prettier`) o `npm run`. I miei `npx vitest` e
+> `npx prettier` di stamattina hanno trovato lo strumento in locale, ma senza garanzia.
+
+### F-3b · V5-C — ordini «Per settore» e «Per area», regola «prevalente» (scelta del developer, 24/09 ~12:50)
+
+> **Note implementazione**:
+> - **Dati**: `AssetSetCorrelationSection` legge le distribuzioni della selezione con **una** richiesta
+>   (`read_assets_bulk_api_v1_assets_get`, `GET /api/v1/assets?asset_ids=…`). La lettura riusa `safeScalar` e
+>   `normalizeDistribution` del modulo `assets`, invece di copiarli.
+>   - **Verificato nel codice**: una GET non passa da `notifyPortfolioMutation` (`isPortfolioAffectingMutation`
+>     considera solo POST, PUT, PATCH e DELETE), quindi non può scartare la risposta di correlazione in volo.
+>   - La chiave dell'effetto sono gli id ordinati, confrontati per valore (la lezione di F-2d).
+>   - I nomi dei paesi arrivano da `countryStore`, caricato **prima** di pubblicare i gruppi, così non compaiono
+>     mai come codici ISO.
+> - **Regola** (`dominantExposure`, `exposureOrder`, puri):
+>   - gruppo = la voce di peso massimo se ≥ 50%, altrimenti *Diversificato*; senza distribuzione *Non classificato*;
+>   - a parità di peso massimo vince la chiave che viene prima nell'ordinamento;
+>   - i gruppi con nome sono ordinati per etichetta; dentro il gruppo chi è più concentrato va prima, poi il nome;
+>   - poi i diversificati e infine i non classificati, entrambi per nome.
+> - **Etichette**: settori con `sectors.<sectorI18nKey>`, ripiego sulla chiave grezza, mai `sectors.…` a schermo;
+>   paesi con `getCountryInfo(iso3).name`; `Other` → `common.other`. Icona del settore o bandiera del paese solo in HTML.
+> - **Lettura**: una fila di etichette sopra la matrice con i gruppi nell'ordine della matrice e il loro numero
+>   (`risk-correlation-groups`); nel tooltip, sotto ogni nome, il gruppo con la quota (*Tecnologia 95%*). I due
+>   pulsanti compaiono solo se almeno un asset ha la distribuzione. La barra degli ordini ora scorre invece di
+>   uscire dalla card.
+> - **i18n** (`dev.py i18n`): altre 4 chiavi (`ordering.sector/region`, `group.diversified/unclassified`). Cumulativo
+>   F-3b: +19/−4 per catalogo, 3415 chiavi, stesso insieme nelle 4 lingue.
+>
+> ```
+> front check: pavimento invariato, 0 nei miei file · prettier: 1 riga riunita, poi pulito
+> front build → servito = costruito = d767b2866e6fdad3 · 1 chunk con la fila dei gruppi
+> ```
+> **Test**: `dominantExposure` ed `exposureOrder` sono in coda a `test-author` (TL-R), insieme al riallineamento delle
+> soglie. Come prima: solo test sui calcoli, niente E2E.
+
+### Nuovo perimetro da Risk, tempo ② (dal coordinatore, 24/09 ~12:40) — **registrato, non iniziato**
+
+> Tre funzioni approvate dal developer nel tempo ② di Risk; la divisione del lavoro è confermata dal coordinatore.
+> 1. **Idoneità degli asset nel periodo**:
+>    - **non selezionabile**, con il motivo: nessun prezzo, cambio assente, meno di 20 quotazioni;
+>    - **selezionabile con un avviso**: l'asset parte dopo l'inizio del periodo, oppure l'ultimo prezzo ha più di 7 giorni.
+> 2. **«I miei asset» = quantità > 0**, non più `tx_count_own > 0`. Chi li ha avuti in passato scende fra «di altri
+>    utenti» se qualcuno li detiene adesso, altrimenti fra «in analisi».
+> 3. **Il replay esclude da solo** gli asset che non coprono la finestra; il blocco «escludi e riprova» sparisce.
+>
+> **Di F**:
+> - il selettore di Asset Global consuma `POST /api/v1/risk/eligibility`; `SearchSelect` supporta già `disabled`, e il
+>   motivo va in un tooltip;
+> - «I miei asset» per quantità nel preset;
+> - il declassamento nei tre pannelli della pagina (`assetScope`).
+>
+> **Di Risk**: il servizio di idoneità, i campi nuovi della lista asset («posseduti ora da me / da altri»), il picker
+> del benchmark, e il replay con esclusione automatica; il wrapper di F passa l'esito così com'è.
+> **Dipendenza**: il backend esiste solo nel ramo di Risk. Checkpoint di Risk, poi un merge fra i rami o l'attesa
+> dell'integrazione, da decidere col developer. Fino ad allora F progetta sul contratto: per ogni asset uno stato
+> *ammesso / avviso / motivo*.
+> **Collocazione nel piano**: dentro V3, il selettore «+» con i filtri, che si progetta direttamente con questi stati
+> (voci disabilitate con il motivo), e V2 per il preset «I miei asset».
+
+### F-3b · V5-D e V7 — tooltip, nomi che scorrono, icona del manuale · 2026-09-24, 12:40–13:15
+
+> **Il developer** (12:38): le due informazioni per settore e area *«mi piacciono entrambe, ma le metterei
+> sempre, non solo in base al selettore, e nel tooltip non solo il dominante ma tutte le opzioni»*; la graduatoria
+> *«ora è mooolto meglio»*, e se i nomi non ci stanno devono *«scorrere come già facciamo altrove»*; *«a volte la
+> cella cliccata viene nascosta sotto l'infobox»*; *«leverei il tooltip se il mouse resta fisso»*; e ancora manca
+> l'icona del manuale con `Tooltip.svelte`.
+>
+> **Note implementazione**:
+> - **Tooltip della matrice**:
+>   - prima la lettura (ρ e banda) e le osservazioni, poi i due asset, ciascuno con **tutto** il settore e **tutta**
+>     l'area, sempre, qualunque ordine sia scelto;
+>   - le voci sotto l'1% non sono elencate ma contate (*«+N altri»*), perché un fondo mondiale ha decine di paesi
+>     sotto l'1%;
+>   - la posizione è `tooltipBesideCell`: sopra la cella, o sotto se sopra non c'è spazio, e mai sopra la cella. La
+>     cella si ricava dal layout, non da ECharts, così il tooltip aperto dalla graduatoria (senza mouse) va nello
+>     stesso posto;
+>   - `appendTo: 'body'`: il tooltip esce dal box che scorre invece di esserne tagliato o spinto sopra la cella.
+> - **Graduatoria**: i nomi scorrono con `use:scrollOnOverflow` e `overflowScrollTextClass`, gli stessi delle tabelle
+>   di asset e broker. Via il `title` nativo: era il riquadro che compariva col mouse fermo e copriva le voci sotto.
+> - **Icona del manuale (V7)** in `RiskLevelSection`, concordata con Risk tramite il coordinatore:
+>   - due prop facoltative senza default, `docsPath` e `docsLabel`, e un `DocsLink` (icona libro, `Tooltip.svelte`)
+>     subito dopo il titolo, nella sola zona del titolo;
+>   - niente icona nei livelli richiudibili, perché un link dentro il `<button>` di apertura non è HTML valido. Lì
+>     decide Risk;
+>   - `docsPath` si chiama così perché `check-links` lo trova come letterale: **81** link validati (erano 80);
+>   - destinazione: la pagina di teoria della correlazione, che esiste in questo ramo; all'integrazione si passa a
+>     quella utente di A, `user/assets/correlation/`;
+>   - testo del tooltip: `risk.analytics.correlation.help`, nuova chiave nel namespace di Risk, così la Dashboard può
+>     riusarla.
+> - **Correzioni di mio codice trovate da `test-author`**:
+>   - `plainName` toglieva anche `®`, `©` e `™`, perché `Extended_Pictographic` li comprende: «SPDR® S&P 500®»
+>     perdeva le ® sull'asse. Ora toglie solo le emoji *come emoji* (presentazione emoji, pittogrammi con VS16,
+>     bandiere, toni, ZWJ, keycap, tag). Provato su 11 nomi: le ® restano, 👑 🇪🇺 ❤️ spariscono;
+>   - `exposureOrder` confrontava i gruppi per verità delle chiavi: una chiave `''` stava fra i gruppi con nome ma
+>     saltava il confronto, e l'ordine dipendeva dall'ingresso. Ora si confronta per livello, e `dominantExposure`
+>     ignora le chiavi vuote.
+>
+> ```
+> test-author: correlationHelpers.test.ts 5 rossi riallineati + 43 test nuovi → 107/107 (poi 107/107 anche sulle due correzioni)
+> front check: pavimento invariato, 0 nei miei file · prettier pulito (2 file con righe riunite)
+> check-links: exit 0 · 81 valid (+1: …/risk-metrics/correlation) · 3 known-broken
+> i18n: +26/−5 per catalogo, cumulativo F-3b · 3419 chiavi, stesso insieme nelle 4 lingue
+> front build → servito = costruito = e94da319475c3a49
+> ```
+> **⚠️ Fuori pista**: la prova positiva del marquee nel chunk della graduatoria dava 0. Non era un difetto: la classe
+> e l'azione stanno in un chunk condiviso (`C0z5aG4O.js`) che quel chunk importa. Verificato seguendo l'import,
+> invece di ripetere la ricerca nel posto sbagliato.
+> **Riportati, non corretti** (da `test-author`): lo spareggio di `topPairs` dipende dall'ordine del payload
+> (preesistente, innocuo finché gli id arrivano crescenti); `heatmapLayout` con 0 colonne; il ripiego di `plainName`
+> su un nome di sole emoji non è ripulito dagli spazi.
+
+### F-3b · V5-E — «Altro» mai criterio, tooltip su una riga, badge sempre, «Per nome» in fondo · 2026-09-24, 13:15–13:40
+
+> **Il developer**:
+> - *«mi piace tutto»*, ma nel tooltip una lista lunga diventa grande: **una sola riga**, il resto nascosto in
+>   «Altro», e l'«Altro» dei dati **in fondo** anche quando è la quota maggiore;
+> - nell'ordinamento *«altro non deve essere un parametro di ordinamento, se non come fallback finale»*;
+> - l'icona del manuale *«solo lei, allineata a destra»*, e dovrà esserci *«in tutti i pannelli di tutte le pagine,
+>   con annessa pagina di documentazione»* (girato al coordinatore);
+> - rimettere la visualizzazione a badge, cioè le file dei gruppi che comparivano solo con «Per settore» e «Per area»;
+> - *«metti l'ordinamento per nome alla fine»*.
+>
+> **Note implementazione**:
+> - **Regola** (`dominantExposure`): `Other` (`OTHER_EXPOSURE`, la stessa chiave nei settori e nei paesi) è escluso
+>   sia dai candidati sia dal totale. La soglia del 50% vale sulla sola parte classificata: *Altro 65 · Finanza 25 ·
+>   Servizi 10* va in *Finanza*, al 71% del classificato. Un asset con il solo `Other` diventa il gruppo di ripiego.
+>   Quattro livelli (`exposureOrder`): gruppi con nome, diversificati, solo-«Altro», non classificati.
+> - **Tooltip**: una riga per dimensione, con le tre voci con nome più grandi e poi un solo «Altro» con tutto il resto,
+>   compreso l'`Other` dei dati, sempre ultimo. La riga non va a capo e finisce con i puntini se proprio non ci sta.
+>   La chiave `risk.assetSet.exposure.others`, ora inutile, è rimossa con `dev.py i18n remove`: nessuna chiave morta.
+> - **Badge sempre**: due file, «Settore» e «Area», qualunque ordine sia scelto. Ogni gruppo compare una volta con il
+>   numero dei suoi asset, nell'ordine di `exposureOrder`, quindi coincide con la matrice raggruppata. È sottolineata la
+>   dimensione per cui la matrice è ordinata.
+> - **Ordini**: somiglianza · tipo · settore · area · **nome** (ultimo).
+> - **Icona**: `justify-between` nell'intestazione, così sta sola sul bordo destro.
+>
+> ```
+> front check: pavimento invariato, 0 nei miei file · prettier pulito
+> vitest correlationHelpers.test.ts: 4 rossi attesi (fissavano «Altro» come gruppo e la quota assoluta) → riallineo a test-author
+> i18n: 3418 chiavi, stesso insieme nelle 4 lingue (una rimossa)
+> front build → servito = costruito = fea7d5c451e3c1da
+> ```
+
+### Correzioni in avanti e decisione del developer sul seguito (dal coordinatore, 24/09 ~13:45)
+
+> **⚠️ N5 (§2) era vera solo a metà**, e l'ha trovato J. `_grandfather_onboarding_for_test_users`
+> (`populate_mock_data.py`) rende terminali gli utenti E2E per i **flow**, ma non semina le righe degli **step**,
+> arrivate con il Round 5. Al primo `GET /settings/onboarding` il backend le crea `pending`, e le guide Import e Bulk
+> seguono gli step: il coachmark parte per `TEST_USER` in ogni wizard di import, e l'esito dipende dall'ordine delle
+> spec. J lo corregge alla radice nel suo C4, seminando gli step `completed`. **Fino all'ingresso di C4**, un
+> coachmark Import o Bulk in un E2E di F con `TEST_USER` viene da qui, non dal lavoro di F. La mia N5 aveva letto la
+> funzione, non l'insieme delle righe che l'onboarding crea davvero.
+>
+> **Decisione del developer sul seguito**:
+> 1. F mette l'icona del manuale su **tutti i pannelli del laboratorio**, a fine riprogettazione.
+> 2. Poi F prepara il **checkpoint finale**, e il developer fa il merge del ramo di F in quello di Risk.
+> 3. Da lì prosegue **Risk**: review e rifinitura dei componenti successivi, l'icona su tutti i pannelli di tutte le
+>    pagine, le pagine di documentazione.
+>
+> **Conseguenze**:
+> - il vincolo «F prima di Risk» si soddisfa da sé, perché il ramo combinato lo porta Risk;
+> - idoneità, «i miei asset» per quantità e declassamento restano di F **solo** se il backend di Risk arriva prima
+>   del checkpoint finale; altrimenti passano a Risk col merge. Non si aspettano;
+> - il link dell'icona verso `user/assets/correlation/` lo sposta chi integra, dopo l'ingresso di A.
+
+### F-3b · V5-F — badge anche nel tooltip, file che non vanno a capo, spiegazione del pannello · 2026-09-24, 13:45–14:05
+
+> **Il developer**: l'icona è nella posizione giusta. La spiegazione però deve descrivere il **pannello**
+> (*«In questo pannello si vanno ad analizzare le correlazioni 2 a 2…»*). Il tooltip della matrice va bene, ma
+> *«mi aspettavo i badge anche qui»*. I badge in cima non devono andare a capo: *«se capita farei foldare le label e
+> lascerei icona e numero»*, con emoji anche per *Diversificato* e *Non classificato*.
+>
+> **Note implementazione**:
+> - `risk.analytics.correlation.help` riscritta sul modello del developer (4 lingue): pannello, coppie, periodo, cambi,
+>   lettura dei valori, guida.
+> - **Tooltip**: le voci di settore e di area sono badge in HTML, stile inline perché il tooltip vive nel `body`. Tre
+>   con nome, poi «Altro» in fondo, su una riga che non va a capo.
+> - **File in cima**: `flex-nowrap`. Un'azione (`foldWhenNarrow`) confronta una copia invisibile della fila con tutti i
+>   nomi (`w-max`) con la larghezza disponibile; se non ci sta, i badge si riducono a icona e numero, con il nome in un
+>   `Tooltip.svelte` al passaggio. La decisione dipende solo dalla copia, non dalla fila visibile, quindi non oscilla.
+> - **Emoji dei gruppi senza nome**: 🧩 *Diversificato*, ❔ *Non classificato*, 🌐 *Altro* per le aree; l'«Altro» dei
+>   settori ha già 📦.
+> - **Test**: `test-author` ha riallineato 4 test e ne ha aggiunti 3 per la regola «Altro»: **114/114**.
+>
+> ```
+> front check: pavimento invariato, 0 nei miei file · prettier pulito · vitest correlationHelpers.test.ts 114/114
+> front build → servito = costruito = 4eda94b83625944e · prove positive: copia di misura, 🧩, testo nuovo
+> ```
+
+### F-3b · V5-G — la cella scelta si riconosce · 2026-09-24, 14:05–14:10 — **matrice chiusa col developer**
+
+> **Il developer**: *«tutto perfetto»*. Ultima richiesta: la cella scelta, dalla graduatoria o col mouse, deve avere
+> un bordo acceso che risalti, altrimenti non si capisce a quale cella appartiene il tooltip. *«Tooltip, estetica,
+> badge ed il resto mi piace un sacco!»*
+>
+> **Note implementazione**:
+> - lo stato `emphasis` della serie è lo stesso per il passaggio del mouse e per l'`highlight` lanciato dalla
+>   graduatoria; ora dà un bordo ambra da 3 px con alone. L'ambra non è nessuno dei due estremi della scala rosso–blu;
+> - ECharts alza la cella evidenziata sopra le vicine (`Z2_EMPHASIS_LIFT = 10`, letto in `echarts/lib/util/states.js`),
+>   quindi i bordi delle tessere accanto non coprono il suo.
+>
+> ```
+> front check: pavimento invariato, 0 nei miei file · prettier pulito
+> front build → servito = costruito = 1a0a0b623eb7056e · prova positiva: l'alone ambra è nel bundle
+> ```
+> **Stato di F-3b**: matrice (V5), graduatoria (V8), ordini (V6, tipo, settore, area), badge, tooltip e icona del
+> manuale (V7) sono **approvati dal developer**. Restano:
+> - V4, stato e motivi (Risk, tempo ②);
+> - V1–V3, il guscio di selezione e il sync unico;
+> - le sezioni ancora da guardare: i confronti di A e il replay;
+> - l'icona del manuale su tutti i pannelli del laboratorio;
+> - il checkpoint finale verso il ramo di Risk.
+
+### F-3b · V5-H e apertura di V1–V3 · 2026-09-24, 14:10–14:25
+
+> **V5-H**: l'ambra del bordo spariva sulle celle rosse (il developer). Ora è **verde** (`#22c55e`, alone
+> `rgba(34,197,94,0.65)`), il complementare del rosso e lontano dal blu. Bundle servito `6b5fe6d053b5a890`; prova
+> positiva: il verde c'è, l'ambra non c'è più.
+>
+> **Prossimo passo, scelto dal developer**: il blocco di selezione e il sync unico. Il developer chiede anche di
+> domandare al coordinatore se nel frattempo sono arrivati altri compiti su questi due temi, per farli insieme.
+> Domanda inviata alle 14:15.
+>
+> **Stato attuale, letto dal codice** (`AssetSetRiskPanel.svelte`):
+> 1. riga 1: precarica per broker (`SimpleSelect`), «Aggiungi asset» (`AssetSelect` fissa, limitata agli asset della
+>    pagina non ancora scelti) e, a destra, il «Sincronizza» del guscio;
+> 2. riga 2: i quattro pulsanti rapidi (tutti, nessuno, inverti, i miei), con il conteggio a destra;
+> 3. riga 3: le etichette dei filtri per tipo e per valuta, con «Azzera i filtri»;
+> 4. riga 4: gli asset scelti, con la ×.
+>
+> I filtri restringono i **candidati** su cui agiscono i pulsanti rapidi; il broker **sostituisce** la selezione.
+>
+> **Pezzi riusabili, verificati**: `SearchSelect` è a scelta singola, con `disabled` per voce, sezioni, icone e
+> ricerca; `AssetSelect` è costruito su di essa. Un «+» con **filtri** e **scelta multipla** richiede un componente
+> nuovo, e lo stato *ammesso / avviso / motivo* dell'idoneità di Risk ci entra come voce disabilitata con il motivo.
+> **Sync**: la barra della pagina (`PageToolbar`) è la stessa per i due tab. Sul tab Correlazione, «Sinc. Tutto»
+> aggiorna i prezzi di tutti gli asset della pagina, mentre il guscio aggiorna la selezione con i cambi. Anche Abs/% e
+> le impostazioni del grafico lì non agiscono.
+
+### F-3b · V1–V3 — scheda di selezione e sync unico ✅ 2026-09-24, 14:30–15:20 (in attesa dell'occhio del developer)
+
+**Decisioni del developer** (14:25–14:30): sul tab Correlazione la barra perde ricerca, valuta e tipo (attivi/inattivi
+resta, «per ora non ci pensare»); via Abs/% e impostazioni; «Sinc.» della barra apre **il nostro** `PageSyncModal`
+(prezzi + cambi della selezione) e il pulsante del guscio sparisce; il broker diventa un comando rapido accanto a
+Tutti/Nessuno/Inverti, al posto di «I miei asset», con una prima voce «Tutti i miei»; la scheda tiene i filtri e
+riceve un «+» con ricerca e scelta multipla.
+
+> **Note implementazione**
+> - **Barra (`assets/+page.svelte`)**: ricerca e riga valuta/tipo sotto `{#if activeTab !== 'correlation'}`; lo
+>   snippet `actions` ha un ramo per il tab Correlazione con due pulsanti soli: **Sinc. selezione**
+>   (`risk-sync-button`, apre il modal del laboratorio via `labPanel.openSync()`, spento finché `labCanSync` è falso)
+>   e **Ricarica tutto** (`risk-reload-button`, `labPanel.reload()`: `invalidateRisk` + `syncGeneration`, niente
+>   serie della griglia). Entrambi con `Tooltip.svelte`. Il ramo del tab Asset è quello di prima, re-indentato:
+>   `git diff -w` sulla pagina = **+51/−2**.
+> - **Pannello**: `openSync()` e `reload()` esportati, `canSync` `$bindable` (effetto su `syncTargets`); la regola
+>   `{accepted}` resta in `handleSynced`, invariata. Via `SimpleSelect`, `AssetSelect`, il pulsante sync, «I miei
+>   asset» e `pageAssetIds` (il «+» legge i `candidates`, che vengono dalla lista della pagina: la restrizione vale
+>   per costruzione).
+> - **Comando «I miei asset ▾»** (`loadHoldings(brokerId | null)`): «Tutti i miei» = `fetchReport` **senza** broker,
+>   poi un broker per voce. Legge le *holdings* del report = posizioni aperte con quantità sopra la soglia di polvere
+>   al `dateEnd` (verificato: `portfolio_service.py`, `end_positions … ps.quantity > _QUANTITY_DUST_THRESHOLD`), cioè
+>   già il «quantità > 0» che Risk definirà nel tempo ②. Riusa la doppia domanda sul `null`. **Nuovo**: se non c'è
+>   niente di posseduto la selezione **non** si svuota e compare un avviso (`risk-broker-filter-empty`).
+> - **Filtri**: due menu compatti (`LabCheckMenu`: Tipo con le icone dei tipi, Valuta con le bandiere), con il
+>   conteggio degli asset per voce e il numero di voci attive sul pulsante. Stessi testid per voce di prima
+>   (`risk-filter-type-*`, `risk-filter-currency-*`, `risk-filters-clear`).
+> - **Asset scelti**: chip con l'icona dell'asset (o del tipo), alti come il «+»; la × senza `title` nativo.
+> - **«+» (`LabAssetPicker`)**: ricerca per parole, senza accenti (`foldForSearch`, `pickerRows`), elenco in ordine
+>   per nome senza emoji (`nameOrder`), caselle, «Seleziona/Deseleziona visibili» (`toggleVisibleRows`), «Aggiungi N»,
+>   rispetto del tetto dei 100. Elenca gli stessi candidati su cui agisce «Seleziona tutti»; con un filtro attivo lo
+>   dice, con «Azzera i filtri». Nessun importo: nome, tipo, valuta.
+> - **Guscio comune `LabPopover`**: il pulsante sta nella stessa radice del pannello, così premerlo di nuovo chiude
+>   invece di riaprire (il difetto di un ascoltatore esterno che conosce solo il pannello); chiude su pressione fuori
+>   ed Esc; si sposta sul bordo destro se uscirebbe dallo schermo.
+> - **i18n ×4 via `dev.py i18n`**: +12 (`sharedResource.syncSelection`, `risk.assetSet.{syncSelectionHint,reloadHint}`,
+>   `risk.assetSet.preset.{allMine,byBroker,hint,noneHeld}`, `risk.assetSet.picker.{selectVisible,deselectVisible,
+>   confirm,allSelected,filtersOn}`), −2 (`risk.assetSet.presetBroker`, `presetNone`, ora senza chiamanti). 3428
+>   chiavi per catalogo, insiemi identici.
+> - **`applyFilters` generica** (`<T extends SelectableAsset>`): il tipo dei candidati ora arriva intatto al «+».
+>
+> **Prove**: `dev.py front check` → `svelte-check found 3 errors and 41 warnings in 4 files`, gli stessi quattro del
+> pavimento, **0** in `risk/` e nella pagina (log `/tmp/libreFolio_f3b/frontcheck_v1v3b.log`); prettier `--write` sui 5
+> file toccati; `dev.py front build` exit 0; prove positive nel bundle: `risk-asset-add-button`,
+> `risk-broker-option-mine`, `risk-reload-button`, «Sinc. selezione». vitest `assetSetSelection` + `correlationHelpers` +
+> `syncTargets`: 3 percorsi ⇒ **3 file, 194 test verdi**.
+>
+> ⚠️ **Fuori pista**: `Tooltip.svelte` con `interactiveChild` fissa il suggerimento al click per **30 s**
+> (`PINNED_LEAVE_GRACE_MS`): sul «Sinc. selezione» sarebbe rimasto sopra il modal appena aperto. I tre pulsanti
+> avvolti (sync, ricarica, «+») fermano il click prima del wrapper (`stopPropagation`): il suggerimento resta al
+> passaggio del mouse. Ricostruito: bundle servito = costruito = `0fab55b6cffa9c4a`.
+>
+> ⚠️ **Fuori pista (atteso, per F-6)**: la E2E `risk-lab` userà selettori spariti — `risk-sync-button` dentro la
+> scheda, `risk-asset-add-select`, `risk-bulk-mine`, le chip dei filtri visibili senza aprire il menu. Non è stata
+> rilanciata: la politica della riprogettazione è niente E2E nuovi; il riallineamento è F-6.
+>
+> **Aperti**: D11 (fermare il polling live sul tab Correlazione) da chiedere al developer; il segnaposto del pulsante
+> «adatta al periodo comune» di Risk (tempo ②, collegato da Risk dopo il merge F → Risk) solo se il developer vuole
+> vederne la posizione; test di basso livello per `foldForSearch`, `pickerRows`, `toggleVisibleRows`,
+> `visibleRowsAllChecked` via test-author.
+
+### F-3b · feedback delle 15:27 sulla scheda di selezione, poi checkpoint 2 · 2026-09-24, 15:27–15:43
+
+**Le nove osservazioni del developer (15:27)**, con lo stato di ognuna al checkpoint:
+
+1. **Barra in alto sul tab Correlazione: via anche attivi/inattivi.** ✅ Tutto il blocco `asset-page-filters`
+   (ricerca, attivi/inattivi, valuta, tipo, azzera) è sotto `{#if activeTab !== 'correlation'}`, e i due `{#if}`
+   interni di V1 sono tolti (`git diff -w`: solo la condizione esterna). Verificato che non resta un filtro nascosto:
+   `loadAssets` chiama `/assets/query` con `queries: {}`, quindi attivi/inattivi agisce solo su `filteredAssets`, che il
+   laboratorio non legge.
+2. **Icona del broker nel comando per broker.** ⏳ Dopo il merge: `BrokerIcon` con `size="sm"`, come in
+   `BrokerSearchSelect`.
+3. **«Seleziona tutti» e «Deseleziona tutti» non funzionavano subito.** ⏳ Ipotesi da riverificare col developer: agiscono
+   sui candidati filtrati da Tipo e Valuta, quindi con un filtro attivo sembrano non fare niente. Con i filtri dentro il
+   «+» agiranno su tutto il catalogo analizzabile.
+4. **«15 selezionati su 15» non dice su cosa.** ⏳ Diventa «N in analisi su M analizzabili», con un tooltip: M è il
+   catalogo intero, non solo gli asset del developer.
+5. **All'apertura, «Tutti i miei».** Decisione (`ask_user`): **si riparte dall'ultima selezione; se non c'è, da «Tutti
+   i miei»** (le holdings al `dateEnd`, non più `tx_count_own`), poi il piccolo insieme di ripiego. ⏳ Dopo il merge.
+6. **Filtri Tipo e Valuta dentro il «+».** ⏳ Dopo il merge; `LabCheckMenu` allora sparisce.
+7. **I 4 asset proposti come selezionabili.** Il developer: «il punto non è il tipo crowdfunding, ma che quei asset
+   hanno 0 prezzi registrati», e la cosa «si dovrebbe ricollegare all'engine di ammissibilità». Verificato in sola
+   lettura sulla copia (`sqlite/app.db` con `immutable=1`, solo id, tipo e conteggi): gli asset 12–15 hanno **0 righe**
+   in `price_history`, tutti gli altri arrivano al 2026-09-24. Nessuna regola nel frontend: domanda sul contratto inviata
+   a Risk (sessione «Risk management analysis»), coordinatore in copia. **Decisione del developer, relayata dal
+   coordinatore**: il backend di Risk si collega adesso nel ramo di F. Quindi checkpoint, merge Risk → F a `14c334d85`,
+   e solo dopo il collegamento del «+» agli stati di idoneità.
+8. **Colore della cella scelta: il verde si confonde col blu.** Decisione (`ask_user`): **contorno neutro**. ✅ Nero
+   `#0f172a` con alone bianco sul tema chiaro, bianco con alone `rgba(2,6,23,0.95)` sul tema scuro
+   (`CorrelationHeatmap.svelte`, `emphasis.itemStyle`).
+9. **D11**: il polling live **resta** (c'è comunque lo scheduler del backend ogni 10 minuti). **«Adatta al periodo
+   comune»**: nessun segnaposto, il developer lo vedrà quando esisterà.
+
+> ⚠️ **Fuori pista**
+> - Una modifica a metà del modulo di selezione (tipi di ammissibilità e rimozione di `ownedAssetIds`) è stata
+>   **annullata** prima del checkpoint. Da sola rompeva la compilazione, e la forma dei tipi va presa dal contratto vero
+>   di Risk, dopo il merge. Il modulo differisce da `dc29a3089` solo per le aggiunte di V1–V3.
+> - Guida di onboarding: l'anchor `asset.page.filters` non esiste sul tab Correlazione. Se la guida della pagina asset
+>   parte da lì, quel passo va in stallo (`OnboardingOverlayHost`, `stalledStepId`). Rischio residuo, da segnalare nel
+>   passaggio di consegne.
+
+**Checkpoint 2, cancelli sulla revisione esatta** (uno per volta):
+```
+front check        · svelte-check 3 errori + 41 avvisi negli stessi 4 file del pavimento · 0 in risk/ e assets/
+prettier --check   · 16 file del frontend → pulito
+vitest             · gli stessi 14 path del checkpoint 1 ⇒ Test Files 14 passed (14) · 502 test (erano 452, +50 correlationHelpers)
+check-orphans      · exit 1 · 5 orfani, lista identica al checkpoint 1, tutti di J
+mkdocs check-links · exit 0 · 81 validi · 3 known-broken
+git diff --check   · pulito · i18n +26/−2 per catalogo, 3428 chiavi, insiemi identici
+server             · 6164 fermato (stop_bash f3bserver) · lsof 6154 e 6164 → exit 1 · PID 37059 assente
+```
+**Non girati**: E2E `risk-lab` (selettori cambiati: il riallineamento è F-6; dopo il merge il coordinatore la chiede nella
+6154) e `front build` (l'ultimo bundle, `0fab55b6cffa9c4a`, precede il blocco filtri intero e il contorno neutro).
+Log in `/tmp/libreFolio_f3b/ckpt2_*.log`.
