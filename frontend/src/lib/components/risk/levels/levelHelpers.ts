@@ -10,12 +10,15 @@ import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 import {singleValue} from '$lib/risk/riskTypes';
 
 import {DAILY_VAR_INSTANCE, MONTHLY_VAR_INSTANCE, resultByCode, resultByInstance} from '../riskAnalysisHelpers';
+import {warningSentence, type WarningTranslator} from './warningSentence';
 
 // Provenance lives in its own module — this file is at its size ceiling and the
 // subject is a separate one — but consumers keep a single door onto the level
 // helpers, so it is re-exported rather than imported from two places.
 export type {LevelMetadataRow} from './levelMetadata';
 export {levelMetadata, translateOrRaw} from './levelMetadata';
+export type {RiskResultWarning, WarningTranslator} from './warningSentence';
+export {warningSentence} from './warningSentence';
 
 /**
  * View a value as a plain record without discarding anything.
@@ -103,11 +106,12 @@ export function degradedResults(results: ReadonlyArray<RiskAnalyticResult | null
     return health;
 }
 
-/** One reason a wave did not come back whole, in the backend's own words. */
+/** One reason a wave did not come back whole, as a finished sentence. */
 export interface ResultReason {
     /** Stable identity for keying; the message may repeat across analytics. */
     key: string;
-    /** The backend's sentence, rendered verbatim. */
+    /** The warning's sentence: from the backend's key and values when a translator is given,
+     *  otherwise the backend's own words. */
     message: string;
     /** How many results carried this same sentence. */
     occurrences: number;
@@ -129,20 +133,23 @@ export interface ResultReason {
  * degraded — the *meaning* of a sector shock computed that way is. Hiding it
  * would withhold exactly the sentence that explains the shape on screen.
  *
- * **Nothing is translated.** These are backend strings. Mapping them onto i18n
- * keys built at runtime is the defect already found at `RiskResultFrame:108`,
- * where an unseen value printed its own key on screen. Verbatim, or nothing.
+ * **Translated only through the backend's own key.** With a translator, each
+ * sentence comes from the warning's `message_i18n_key` and `message_params` (see
+ * `warningSentence`); without one, or when the key does not resolve, it is the
+ * backend's English sentence, verbatim. No key is ever built here from a code:
+ * that was the defect of the legacy frame, where an unseen value printed its own
+ * key on screen — and where a code-named key with arguments showed its braces.
  *
  * Note that a `partial` with **no** warnings at all is ordinary, not a bug:
  * `service.py:736` also turns a wave partial for context exclusions, excluded
  * assets, or data quality — each disclosed by its own surface.
  */
-export function resultReasons(results: ReadonlyArray<RiskAnalyticResult | null | undefined>): ResultReason[] {
+export function resultReasons(results: ReadonlyArray<RiskAnalyticResult | null | undefined>, translate?: WarningTranslator): ResultReason[] {
     const byMessage = new Map<string, ResultReason>();
     for (const result of results) {
         if (!result) continue;
         for (const warning of result.warnings ?? []) {
-            const message = typeof warning?.message === 'string' ? warning.message.trim() : '';
+            const message = warningSentence(warning, translate);
             if (!message) continue;
             const existing = byMessage.get(message);
             // Deduplicated by the sentence rather than by `code`, because the
@@ -159,12 +166,12 @@ export function resultReasons(results: ReadonlyArray<RiskAnalyticResult | null |
 /**
  * The error codes of results that failed outright, deduplicated, in arrival order.
  *
- * **Codes, never sentences, and never translations.** `resultReasons` above
- * carries backend prose verbatim, and mixing a translated string into that list
- * would make the list's own contract unreadable: a caller could no longer tell
- * which entries it may show to a user in another language. So the two travel
- * separately, and this one carries the *identifier* while the rendering layer
- * owns the wording.
+ * **Codes, never sentences.** `resultReasons` above carries finished
+ * sentences — translated from the backend's key, or the backend's own words —
+ * and mixing identifiers into that list would make its contract unreadable: a
+ * caller could no longer tell which entries it may show as they are. So the two
+ * travel separately, and this one carries the *identifier* while the rendering
+ * layer owns the wording.
  *
  * ⚠️ Read through `singleValue`, exactly as `RiskResultFrame:23` does. The field
  * is typed as a value *or a list* by the generated client, so `result.error.code`
