@@ -3,6 +3,9 @@
 ← Previous:
 [Onboarding Round 6 — final UX](plan-phase00OnboardingRound6-FinalUX.prompt.md)
 
+→ Follow-up:
+[Onboarding Round 8 — correzioni dalla review d'uso e prosecuzione concordata](plan-phase00OnboardingRound8-PostReview.prompt.md)
+
 Contesto di review:
 [Dossier di review onboarding](onboarding-review-dossier.md)
 

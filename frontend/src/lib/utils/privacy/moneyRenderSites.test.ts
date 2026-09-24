@@ -85,7 +85,7 @@ const SRC = resolve(process.cwd(), 'src');
  * The redundancy would be worse than noise — deleting one of those entries to expose
  * it to the gate again would then have no effect at all.
  */
-const SAFE_CALL = /formatCurrencyAmountPlain|formatCurrencyAmountHtml|formatCurrencyCodeHtml|formatCurrencyCode\b|formatScopedCurrencyAmount\b|formatCurrencyAmount\b|maskable\(/;
+const SAFE_CALL = /formatCurrencyAmountPlain|formatCurrencyAmountHtml|formatCurrencyCodeHtml|formatCurrencyCode\b|formatScopedCurrencyAmount\b|formatCurrencyAmount\b|maskable\(|maskFormattedNumber\(/;
 const FORM_A = /style\s*:\s*['"]currency['"]/;
 const TEMPLATE_LITERAL = /`[^`]*`/g;
 const INTERPOLATION = /\$\{([^}]*)\}/g;
@@ -173,21 +173,15 @@ function scan(): Hit[] {
 const REGISTRY: Site[] = [
     {
         file: 'lib/components/risk/riskAnalysisHelpers.ts',
-        snippet: "return new Intl.NumberFormat(locale, {style: 'currency', currency, maximumFractionDigits: 2}).format(amount);",
+        snippet: "return maskCurrencyParts(new Intl.NumberFormat(locale, {style: 'currency', currency, maximumFractionDigits: 2}).formatToParts(amount));",
         status: 'masked',
-        why: 'The fifth currency formatter. Masked one line above, after the two em-dash absence checks.',
+        why: 'The fifth currency formatter. Masked in the same expression by maskCurrencyParts, which hides the digits and keeps the currency and the sign; the two em-dash absence checks run before it.',
     },
     {
-        file: 'lib/components/brokers/lots/LotComparisonChart.svelte',
+        file: 'lib/components/brokers/lots/lotComparisonChartHelpers.ts',
         snippet: "style: 'currency',",
         status: 'masked',
-        why: 'formatAxisCurrency: masked at the function boundary, which covers this exit and the catch fallback below.',
-    },
-    {
-        file: 'lib/components/brokers/lots/LotComparisonChart.svelte',
-        snippet: '`${formatAxisNumber(normalized)} ${currency}`',
-        status: 'masked',
-        why: 'The catch fallback of formatAxisCurrency — the second money-rendering exit of the same function, covered by the same boundary check.',
+        why: 'formatAxisCurrency, the absolute-return axis of the lot comparison chart, extracted from the component. Its Intl exit goes through maskCurrencyParts; its fallback exit masks with maskFormattedNumber( and so is not a hit at all.',
     },
     {
         file: 'lib/features/ai-export/templates/snapshotDataRenderer.ts',
