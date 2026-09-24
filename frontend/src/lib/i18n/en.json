@@ -148,10 +148,12 @@
       "ETF_REAL_ESTATE": "Real estate ETF",
       "ETF_CRYPTO": "Crypto ETF",
       "ETF_MONETARY": "Money market ETF",
-      "LIQUIDITY": "Liquidity"
+      "LIQUIDITY": "Liquidity",
+      "CROWDFUND_REAL_ESTATE": "Real estate crowdfunding"
     },
     "typeSections": {
-      "ETF": "ETF"
+      "ETF": "ETF",
+      "CROWDFUND": "Crowdfunding"
     },
     "benchmarkSection": "Benchmarks",
     "otherAssetsSection": "Other assets",
@@ -371,6 +373,14 @@
           "platform": "Trading platform (e.g. TLX for EuroTLX). Auto-filled from the search result; required by some markets to resolve the instrument page."
         }
       }
+    },
+    "typeHints": {
+      "ETF": "Mixed or unstated content",
+      "CROWDFUND": "P2P and business lending"
+    },
+    "typeSelect": {
+      "searchPlaceholder": "Search types",
+      "noMatches": "No matching types"
     }
   },
   "auth": {
