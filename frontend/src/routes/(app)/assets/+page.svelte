@@ -13,7 +13,7 @@
      *
      * Svelte 5 runes throughout.
      */
-    import {onDestroy, onMount, tick} from 'svelte';
+    import {onDestroy, onMount, tick, untrack} from 'svelte';
     import {goto} from '$app/navigation';
     import {page} from '$app/stores';
     import {_ as t} from '$lib/i18n';
@@ -391,13 +391,43 @@
         onboardingGuide.maybeStartContextual('asset_page_guide');
     });
 
+    /**
+     * The set of assets the live poll asks about, as a stable key.
+     *
+     * The poll's effect used to read `assets` itself — directly, and through the
+     * synchronous head of `fetchLivePrices` — so it re-ran on every reassignment of
+     * the list. `fetchAllPriceData` reassigns it up to four times per refresh, and
+     * every re-run fired an immediate `POST /assets/prices/current`: a write of
+     * today's prices, and a portfolio mutation that drops every report and risk
+     * answer in flight (`portfolioMutation.ts`). A string compares by value, so this
+     * stays put while the ids do, and the effect re-runs only when the set of assets
+     * really changes.
+     */
+    let liveAssetIdsKey = $derived(
+        assets
+            .map((asset) => asset.id)
+            .sort((left, right) => left - right)
+            .join(','),
+    );
+
+    /**
+     * One live poll, now — for the refreshes a user asks for. The poll used to
+     * re-fire on those as a side effect of the reassignments above; keeping that
+     * immediacy is deliberate, and it costs one write per click instead of four.
+     */
+    function refreshLivePricesNow(): void {
+        if (isHeadToday && liveAssetIdsKey !== '') void fetchLivePrices();
+    }
+
     // Live price polling — only active when dateEnd includes today
     $effect(() => {
-        if (!isHeadToday || assets.length === 0) {
+        if (!isHeadToday || liveAssetIdsKey === '') {
             livePriceMap = new Map();
             return;
         }
-        fetchLivePrices();
+        // Untracked: its synchronous head reads `assets`, which would subscribe this
+        // effect to the whole list again (see `liveAssetIdsKey`).
+        untrack(() => void fetchLivePrices());
         const id = setInterval(fetchLivePrices, 30_000);
         return () => clearInterval(id);
     });
@@ -1488,6 +1518,7 @@
                     for (const a of assets) invalidateAssetPriceStore(a.id);
                     rearmMaxPendingBeforeReload();
                     fetchAllPriceData();
+                    refreshLivePricesNow();
                 }}
             >
                 <RefreshCw class={refreshing ? 'animate-spin' : ''} size={14} />
@@ -1507,7 +1538,17 @@
                 <p class="text-red-600 dark:text-red-400">{error}</p>
             </div>
         {:else}
-            <AssetSetRiskPanel {assets} {dateStart} {dateEnd} targetCurrency={$globalSettings.default_currency || 'EUR'} />
+            <AssetSetRiskPanel
+                {assets}
+                {dateStart}
+                {dateEnd}
+                targetCurrency={$globalSettings.default_currency || 'EUR'}
+                onsynced={async () => {
+                    for (const asset of assets) invalidateAssetPriceStore(asset.id);
+                    rearmMaxPendingBeforeReload();
+                    await fetchAllPriceData();
+                }}
+            />
         {/if}
     {:else if loading}
         <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-12 text-center border border-gray-100 dark:border-slate-700">
@@ -1698,6 +1739,7 @@
         for (const a of assets) invalidateAssetPriceStore(a.id);
         rearmMaxPendingBeforeReload();
         fetchAllPriceData();
+        refreshLivePricesNow();
     }}
 />
 
