@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import httpx
 import pytest
 from fastapi import FastAPI, HTTPException
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1.auth import get_current_user
@@ -19,7 +21,7 @@ from backend.app.api.v1.risk import (
     router,
 )
 from backend.app.config import set_test_mode
-from backend.app.db.models import User
+from backend.app.db.models import Asset, AssetType, PriceHistory, User
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.risk import (
     RiskAnalyticResult,
@@ -28,6 +30,7 @@ from backend.app.schemas.risk import (
     RiskQueryResponse,
     RiskResultStatus,
 )
+from backend.app.services.data_quality_thresholds import RISK_MIN_OBSERVATIONS, STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.risk.quant.workers import (
     shutdown_quant_worker_pools,
 )
@@ -690,3 +693,122 @@ async def test_portfolio_optimization_supports_all_scopes_and_strategies():
     invalid_item = invalid.json()["items"][0]
     assert invalid_item["status"] == "unavailable"
     assert invalid_item["error"]["code"] == "invalid_parameters"
+
+
+# ---------------------------------------------------------------------------
+# POST /risk/eligibility — whether each asset can take part in an analysis of a period
+# (developer's decision of 24/09/2026)
+# ---------------------------------------------------------------------------
+
+ELIGIBILITY_START = date(2013, 1, 7)
+ELIGIBILITY_END = date(2013, 3, 29)
+
+
+def quote_days(first: date, last: date, *, step: int = 1) -> list[date]:
+    return [first + timedelta(days=offset) for offset in range(0, (last - first).days + 1, step)]
+
+
+def eligibility_payload(asset_ids: list[int], **overrides) -> dict[str, object]:
+    return {
+        "asset_ids": asset_ids,
+        "date_range": {"start": ELIGIBILITY_START.isoformat(), "end": ELIGIBILITY_END.isoformat()},
+        "target_currency": "EUR",
+        **overrides,
+    }
+
+
+async def store_quoted_assets(specs: dict[str, tuple[str, list[date]]], marker: str) -> dict[str, int]:
+    """Commit one asset per spec, with a price row on each of its days."""
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        assets = {key: Asset(display_name=f"Eligibility {key} {marker}", currency=currency, asset_type=AssetType.STOCK) for key, (currency, _days) in specs.items()}
+        session.add_all(assets.values())
+        await session.flush()
+        session.add_all(PriceHistory(asset_id=assets[key].id, date=day, close=Decimal("100") + offset, currency=currency, source_plugin_key="eligibility_api_test") for key, (currency, days) in specs.items() for offset, day in enumerate(days))
+        await session.commit()
+        return {key: asset.id for key, asset in assets.items()}
+
+
+async def delete_quoted_assets(asset_ids: list[int]) -> None:
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        await session.execute(delete(PriceHistory).where(PriceHistory.asset_id.in_(asset_ids)))
+        await session.execute(delete(Asset).where(Asset.id.in_(asset_ids)))
+        await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_asset_eligibility_requires_auth_and_rejects_an_invalid_request_before_the_service():
+    service = AsyncMock(spec=RiskService)
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app_with_service(service, authenticated=False)),
+        base_url="http://test",
+    ) as client:
+        unauthenticated = await client.post(f"{API_BASE}/eligibility", json=eligibility_payload([1]))
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app_with_service(service, authenticated=True)),
+        base_url="http://test",
+    ) as client:
+        no_asset = await client.post(f"{API_BASE}/eligibility", json=eligibility_payload([]))
+        bad_currency = await client.post(f"{API_BASE}/eligibility", json=eligibility_payload([1], target_currency="ZZZ"))
+
+    assert unauthenticated.status_code == 401
+    assert no_asset.status_code == 422
+    assert bad_currency.status_code == 422
+    service.asset_eligibility.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_asset_eligibility_judges_each_asset_on_its_own_quotes_in_request_order():
+    set_test_mode(True)
+    start, end = ELIGIBILITY_START, ELIGIBILITY_END
+    specs = {
+        # Exactly the floor, spread over the whole period.
+        "eligible": ("EUR", quote_days(start, start + timedelta(days=76), step=4)),
+        "too_few": ("EUR", quote_days(start, start + timedelta(days=72), step=4)),
+        # Quoted, but only before the period.
+        "no_prices": ("EUR", quote_days(start - timedelta(days=30), start - timedelta(days=10))),
+        "late": ("EUR", quote_days(start + timedelta(days=10), end)),
+        "stale": ("EUR", quote_days(start, end - timedelta(days=10))),
+        # A currency with no rate to the target anywhere in the suite.
+        "no_fx": ("KES", quote_days(start, end)),
+    }
+    assert len(specs["eligible"][1]) == RISK_MIN_OBSERVATIONS
+    assert len(specs["too_few"][1]) == RISK_MIN_OBSERVATIONS - 1
+
+    ids = await store_quoted_assets(specs, uuid4().hex)
+    app = FastAPI()
+    app.include_router(router, prefix="/api/v1")
+
+    async def current_user():
+        return SimpleNamespace(id=USER_ID)
+
+    app.dependency_overrides[get_current_user] = current_user
+    requested = [ids["stale"], ids["eligible"], ids["no_fx"], ids["eligible"], ids["late"], ids["too_few"], ids["no_prices"], ids["stale"]]
+    try:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(f"{API_BASE}/eligibility", json=eligibility_payload(requested))
+    finally:
+        await delete_quoted_assets(list(ids.values()))
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["min_quotes"] == RISK_MIN_OBSERVATIONS == 20
+    assert body["stale_days"] == STALE_PRICE_THRESHOLD_DAYS == 7
+    # Request order, first occurrence kept, duplicates dropped.
+    assert [item["asset_id"] for item in body["items"]] == [ids["stale"], ids["eligible"], ids["no_fx"], ids["late"], ids["too_few"], ids["no_prices"]]
+
+    by_key = {key: next(item for item in body["items"] if item["asset_id"] == asset_id) for key, asset_id in ids.items()}
+    assert {key: (item["level"], item["reasons"]) for key, item in by_key.items()} == {
+        "eligible": ("eligible", []),
+        "too_few": ("ineligible", ["too_few_quotes"]),
+        "no_prices": ("ineligible", ["no_prices"]),
+        "no_fx": ("ineligible", ["missing_fx"]),
+        "late": ("warning", ["starts_late"]),
+        "stale": ("warning", ["stale_at_end"]),
+    }
+    # The facts behind each verdict travel with it.
+    assert (by_key["eligible"]["quotes_in_period"], by_key["eligible"]["first_quote"], by_key["eligible"]["last_quote"]) == (20, start.isoformat(), (start + timedelta(days=76)).isoformat())
+    assert (by_key["no_prices"]["quotes_in_period"], by_key["no_prices"]["first_quote"], by_key["no_prices"]["last_quote"]) == (0, (start - timedelta(days=30)).isoformat(), (start - timedelta(days=10)).isoformat())
+    assert by_key["late"]["first_quote"] == (start + timedelta(days=10)).isoformat()
+    assert by_key["stale"]["last_quote"] == (end - timedelta(days=10)).isoformat()
