@@ -14,6 +14,8 @@
  * The hundred stays as a **limit** (the API's), never as a starting point.
  */
 
+import {getClientSessionUserId} from '$lib/stores/app/clientSession';
+
 /** The fields of an asset this module reads. */
 export interface SelectableAsset {
     id: number;
@@ -35,7 +37,33 @@ export type SelectionSource = 'persisted' | 'mine' | 'fallback';
 /** How many assets to fall back to when the user owns none. */
 export const FALLBACK_SELECTION_SIZE = 6;
 
-const STORAGE_KEY = 'assetGlobal.riskSelection.v1';
+const STORAGE_BASE_KEY = 'assetGlobal.riskSelection.v1';
+
+/**
+ * Where the selection lived before it was scoped to the user. It is only ever
+ * removed, never read back: adopting it would hand one account's selection to
+ * whichever account opened the page first on that browser — the leak the
+ * scoping exists to close. Losing a remembered selection once is the price.
+ */
+const LEGACY_STORAGE_KEY = STORAGE_BASE_KEY;
+
+/** Storage as this module uses it. `removeItem` is optional so minimal stand-ins still fit. */
+type SelectionStorage = Pick<Storage, 'getItem' | 'setItem'> & Partial<Pick<Storage, 'removeItem'>>;
+
+/**
+ * The key for one account's selection, or `null` when there is no account.
+ *
+ * Per user, because the selection is the user's *work* — which assets they are
+ * studying — not a property of the screen. (`privacyStore` keeps its key bare
+ * for the opposite reason: privacy describes the screen being watched.) Same
+ * `lf_<id>_` shape as `riskBenchmarkStore`, which sits on this page too.
+ *
+ * No identity means no memory. An `anon` bucket would be shared by every session
+ * that has not identified itself yet: the same leak, in a smaller room.
+ */
+function storageKey(userId: string | null | undefined): string | null {
+    return userId ? `lf_${userId}_${STORAGE_BASE_KEY}` : null;
+}
 
 /** Assets the user actually owns — what "my assets" means on this page. */
 export function ownedAssetIds(assets: readonly SelectableAsset[]): number[] {
@@ -43,16 +71,19 @@ export function ownedAssetIds(assets: readonly SelectableAsset[]): number[] {
 }
 
 /**
- * Read the last selection the user made.
+ * Read the last selection this user made.
  *
  * Storage is best-effort on purpose: a browser with storage disabled, a quota
  * error or a value left over from an older shape must degrade to "no memory",
- * never to a broken page.
+ * never to a broken page. The pre-scoping key is removed on the way, unread.
  */
-export function readPersistedSelection(storage: Pick<Storage, 'getItem' | 'setItem'> | null | undefined = safeStorage()): number[] | null {
+export function readPersistedSelection(storage: SelectionStorage | null | undefined = safeStorage(), userId: string | null | undefined = getClientSessionUserId()): number[] | null {
     if (!storage) return null;
     try {
-        const raw = storage.getItem(STORAGE_KEY);
+        storage.removeItem?.(LEGACY_STORAGE_KEY);
+        const key = storageKey(userId);
+        if (!key) return null;
+        const raw = storage.getItem(key);
         if (!raw) return null;
         const parsed: unknown = JSON.parse(raw);
         if (!Array.isArray(parsed)) return null;
@@ -63,17 +94,19 @@ export function readPersistedSelection(storage: Pick<Storage, 'getItem' | 'setIt
     }
 }
 
-/** Persist the current selection. Failure is silent: it is a convenience, not a contract. */
-export function writePersistedSelection(assetIds: readonly number[], storage: Pick<Storage, 'getItem' | 'setItem'> | null | undefined = safeStorage()): void {
+/** Persist this user's current selection. Failure is silent: it is a convenience, not a contract. */
+export function writePersistedSelection(assetIds: readonly number[], storage: SelectionStorage | null | undefined = safeStorage(), userId: string | null | undefined = getClientSessionUserId()): void {
     if (!storage) return;
+    const key = storageKey(userId);
+    if (!key) return;
     try {
-        storage.setItem(STORAGE_KEY, JSON.stringify([...assetIds]));
+        storage.setItem(key, JSON.stringify([...assetIds]));
     } catch {
         /* storage full or disabled — the page works without memory */
     }
 }
 
-function safeStorage(): Pick<Storage, 'getItem' | 'setItem'> | null {
+function safeStorage(): SelectionStorage | null {
     try {
         return typeof localStorage === 'undefined' ? null : localStorage;
     } catch {
