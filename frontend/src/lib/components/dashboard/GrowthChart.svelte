@@ -1641,6 +1641,7 @@
             resizeWatcher.disconnect();
             dataZoomTouchPanHandle?.dispose();
             dataZoomTouchPanHandle = null;
+            if (chartInstance) delete (chartInstance.getDom() as unknown as Record<string, unknown>).__lfChart;
             chartInstance?.dispose();
         };
     });
@@ -1727,6 +1728,7 @@
             dataZoomCleanup?.();
             dataZoomTouchPanHandle?.dispose();
             dataZoomTouchPanHandle = null;
+            delete (chartInstance.getDom() as unknown as Record<string, unknown>).__lfChart;
             chartInstance.dispose();
             chartInstance = undefined;
             lastRenderedMode = null;
@@ -1736,6 +1738,10 @@
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
             attachChartReady(chartInstance, chartContainer, 'growth');
+            // ECharts draws to a canvas, so an axis label or a bar has no DOM a test could
+            // read. Exposing the instance is the only way to assert what reached the option
+            // — same hook, same name, as PriceChartFull.svelte.
+            (chartContainer as unknown as Record<string, unknown>).__lfChart = chartInstance;
             needsInitialLayoutStabilityPass = true;
             // Setup mobile tooltip auto-hide
             tooltipCleanup?.();
