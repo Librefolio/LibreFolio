@@ -572,6 +572,6 @@ punto. `generated.ts` e `openapi.json` sono ignorati da git: rigenerarli non è 
 | `utils/assetTypes.ts` | **K** | consuma, non scrive |
 | `equity_crash.yml`, `global_risk_off.yml` (le righe di R17) | **K**, nel commit dell'enum | fuori da quei file finché R17 non è integrato |
 | `CorrelationHeatmap.svelte` | **F** | non la modifica |
-| i 12 testid di `risk-lab` composti da `RiskLevelSection` | — | non li rinomina senza avvisare |
+| gli 11 testid di `risk-lab` composti da `RiskLevelSection` (10) e `TornadoChart` (1), più 3 radici scelte da chi li monta | — | non li rinomina senza avvisare (corretto il 24/09: erano scritti «12» e solo `RiskLevelSection`) |
 | `AllocationPanel.svelte`, `AllocationHistoryChart.svelte`, `allocationHierarchy.ts` | **I** | solo aggiunte in file nuovi |
 | `risk-lab.spec.ts` | **F** | non lo tocca |
