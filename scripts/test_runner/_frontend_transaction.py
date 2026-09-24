@@ -398,6 +398,18 @@ def front_tx_import_matching(verbose: bool = False, ui: bool = False, headed: bo
     return _run_playwright("transactions/tx-import-matching.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_import_duplicate_precedence(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run cross-file duplicate keeper vs DB/editor collision regressions."""
+    print_section("Frontend TX Import Duplicate Precedence Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-import-duplicate-precedence.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_bulk_diagnostics(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run balance contributor and chronological workspace regressions."""
     print_section("Frontend TX Bulk Diagnostics Tests")
@@ -494,6 +506,14 @@ def populate_registry(registry: dict) -> None:
     )
     add_test(cat, "tx-fx-completeness", front_tx_fx_completeness, name="TX FX Completeness Tests", desc="Broker-before-type readiness, precise local FX drafts, independent leg dates, funded commit and insufficient-funds rejection", tests="transactions/tx-fx-completeness.spec.ts")
     add_test(cat, "tx-import-matching", front_tx_import_matching, name="TX Import Matching Tests", desc="Independent primary/alternate identifier, inactive-asset, ambiguity and catalog refresh contract checks", tests="transactions/tx-import-matching.spec.ts")
+    add_test(
+        cat,
+        "tx-import-duplicate-precedence",
+        front_tx_import_duplicate_precedence,
+        name="TX Import Duplicate Precedence Tests",
+        desc="Cross-file duplicate keeper vs DB/editor collisions, badge compare target, resolver choices across the final recheck",
+        tests="transactions/tx-import-duplicate-precedence.spec.ts",
+    )
     add_test(cat, "tx-bulk-diagnostics", front_tx_bulk_diagnostics, name="TX Bulk Diagnostics Tests", desc="Complete balance-group rows, chronological display-only sorting, and stable payload identity", tests="transactions/tx-bulk-diagnostics.spec.ts")
     add_test(cat, "tx-import-file-selection", front_tx_import_file_selection, name="TX Import File Selection Tests", desc="Owned broker files: five-row pagination, cross-page selection and upload-only panel expansion", tests="transactions/tx-import-file-selection.spec.ts")
     add_test(cat, "tx-import-flow", front_tx_import_flow, name="TX Import Flow Tests", desc="Analyze step (detail modal, view-all, re-parse), step navigation, review selection toolbar + discard guard", tests="transactions/tx-import-flow.spec.ts")

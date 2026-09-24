@@ -38,6 +38,14 @@ export interface MergedTx {
     isDupKeeper?: boolean;
     /** For a bulk-modal pending duplicate: the matched unsaved transaction (for side-by-side compare). */
     dupPendingMatch?: TransactionCreateItem;
+    /**
+     * The database's verdict on this row, kept apart from `duplicateStatus`, which the in-batch
+     * pass rewrites on the secondaries of a cross-file group. The resolver reads this one, so a
+     * copy already in the database is never the copy it keeps by default.
+     */
+    dbDuplicateStatus?: 'likely' | 'possible';
+    /** The verdict against the bulk editor's unsaved rows, kept apart for the same reason. */
+    pendingMatchStatus?: 'pending_duplicate' | 'pending_possible_duplicate';
 }
 
 /** A cluster of cross-file duplicate rows the resolver step presents together. */

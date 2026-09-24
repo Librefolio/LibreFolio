@@ -69,7 +69,7 @@
     import {buildDuplicateRecheckPayload} from '$lib/utils/transactions/duplicateRecheckPayload';
     import {isFixStepTodo, rowStaysInFixStep, todosAfterSettle, todosAfterReopen} from '$lib/utils/transactions/fixRowLifecycle';
     import {CONF_ORDER, type DuplicateStatus, type DuplicateTier, type DedupKey, type DuplicateGroup, type MergedTx, type AssetResolution} from '$lib/utils/transactions/importTypes';
-    import {buildDedupKey, buildDuplicateGroups, dedupKeysMatch, duplicateStatusAllowsAutoSelect, duplicateStatusIsSelectedWarning, isResolvedAwayDuplicate, pendingDuplicateStatusFor} from '$lib/utils/transactions/importDedup';
+    import {buildDedupKey, buildDuplicateGroups, compareTargetFor, dedupKeysMatch, duplicateStatusIsSelectedWarning, isResolvedAwayDuplicate, pendingDuplicateStatusFor, rowAfterRecheck} from '$lib/utils/transactions/importDedup';
     import {buildMergedTransactions, mergeCandidates, uniqueCandidateId} from '$lib/utils/transactions/importMerge';
     import {cmpSourceFromTx, cmpSourceFromExisting, compareTypeCellHtml, type CmpSource} from '$lib/utils/transactions/importCompare';
     import {createNamesFor, createOtherFor, duplicateCandidates, resolutionLabel as resolutionLabelPure} from '$lib/utils/transactions/importResolutionHelpers';
@@ -435,19 +435,35 @@
         }
     }
 
-    function markPendingBulkDuplicates(txArr: MergedTx[], assetMap: Map<number, AssetResolution>) {
+    /**
+     * Record which rows match one of the bulk editor's unsaved rows. Runs before the cross-file
+     * resolver, which must know that verdict: a copy the editor already holds is never the one a
+     * group keeps by default. `markPendingBulkDuplicates` then shows the verdict on the row.
+     */
+    function detectPendingBulkDuplicates(txArr: MergedTx[], assetMap: Map<number, AssetResolution>) {
         const pending = pendingCreateTransactions.map((tx) => ({tx, key: buildDedupKey(tx, assetMap)})).filter((entry): entry is {tx: TransactionCreateItem; key: DedupKey} => entry.key !== null);
         for (const mt of txArr) {
             const key = buildDedupKey(mt.tx, assetMap);
             if (!key) continue;
             const match = pending.find((entry) => dedupKeysMatch(key, entry.key));
             if (!match) continue;
-            mt.duplicateStatus = pendingDuplicateStatusFor(mt.tx, match.tx);
+            mt.pendingMatchStatus = pendingDuplicateStatusFor(mt.tx, match.tx);
+            mt.dupPendingMatch = match.tx;
+        }
+    }
+
+    function markPendingBulkDuplicates(txArr: MergedTx[]) {
+        for (const mt of txArr) {
+            if (!mt.pendingMatchStatus || !mt.dupPendingMatch) continue;
+            mt.duplicateStatus = mt.pendingMatchStatus;
+            mt.dupKeeperFileName = $t('importWizard.resolver.pendingEditor');
+            // Inside a cross-file group the resolver has already chosen knowing this verdict: a
+            // firm match was never kept, and the copy it shows stays listed, as with a database
+            // twin. Only the badge changes here, so a first pass and a re-apply agree.
+            if (mt.dupGroupKey != null) continue;
             mt.selected = mt.duplicateStatus === 'pending_possible_duplicate';
             mt.isDupKeeper = false;
             mt.dupKeeperIndex = undefined;
-            mt.dupKeeperFileName = $t('importWizard.resolver.pendingEditor');
-            mt.dupPendingMatch = match.tx;
         }
     }
 
@@ -809,6 +825,8 @@
     /** Union of two candidate lists, keeping the strongest confidence seen for each asset. */
     /** Turns a per-row duplicate verdict into resolver groups and folds the panel sensibly. */
     function rebuildDuplicateGroups(txArr: MergedTx[], assetMap: Map<number, AssetResolution>) {
+        // The editor verdict first: the resolver below reads it to choose the keepers.
+        detectPendingBulkDuplicates(txArr, assetMap);
         const groups = buildDuplicateGroups(txArr, assetMap);
         duplicateGroups = groups;
         // Nothing partial to arbitrate ⇒ every group is a total overlap, which the resolver
@@ -818,7 +836,7 @@
         duplicateResolverCollapsed = !groups.some((g) => g.tier === 'probable');
         expandedDuplicateTiers = new Set<DuplicateTier>();
         applyPendingDuplicateGroups(txArr, groups);
-        markPendingBulkDuplicates(txArr, assetMap);
+        markPendingBulkDuplicates(txArr);
     }
 
     /**
@@ -898,25 +916,10 @@
 
         const assetMap = new Map<number, AssetResolution>(assetResolutions.map((r) => [r.fakeAssetId, r]));
         const txArr = mergedTransactions.map((m) => {
-            const v = verdict.get(m.index);
-            const status: DuplicateStatus = v?.status ?? 'unique';
-            // Recomputed, not carried over: a correction can clear a false duplicate, and the
-            // row must then become selectable again. Rows predating the broker's opening date
-            // stay out either way.
+            // Rows predating the broker's opening date stay out either way.
             const openedAt = brokers.find((b) => b.id === parseResults.find((r) => r.fileId === m.sourceFileId)?.brokerId)?.opened_at ?? null;
             const beforeOpening = openedAt != null && String(m.tx.date ?? '') !== '' && String(m.tx.date ?? '') < openedAt;
-            return {
-                ...m,
-                duplicateStatus: status,
-                dupMatches: v?.matches ?? [],
-                dupGroupKey: undefined,
-                dupTier: undefined,
-                dupKeeperIndex: undefined,
-                dupKeeperFileName: undefined,
-                isDupKeeper: undefined,
-                dupPendingMatch: undefined,
-                selected: (!preserveSelection || m.selected) && !beforeOpening && duplicateStatusAllowsAutoSelect(status),
-            } as MergedTx;
+            return rowAfterRecheck(m, verdict.get(m.index), {beforeOpening, preserveSelection});
         });
 
         duplicateResolverTouchedKeys = new Set();
@@ -1652,20 +1655,21 @@
         nwCompareOpen = true;
     }
 
-    /** Dispatch a step-4 status-badge click to the right comparison view. */
+    /** Dispatch a step-4 status-badge click to the comparison the badge claims. */
     function openBadgeCompare(mt: MergedTx) {
-        if (mt.dupGroupKey != null) {
-            const group = duplicateGroups.find((g) => g.key === mt.dupGroupKey);
-            if (group) {
-                openLotCompare(group);
-                return;
-            }
+        const target = compareTargetFor(mt);
+        if (target === 'db') {
+            void openDbCompare(mt);
+            return;
         }
-        if (mt.dupPendingMatch) {
+        if (target === 'pending') {
             openPendingCompare(mt);
             return;
         }
-        void openDbCompare(mt);
+        if (target === 'lot') {
+            const group = duplicateGroups.find((g) => g.key === mt.dupGroupKey);
+            if (group) openLotCompare(group);
+        }
     }
 
     async function openBrokerOpeningEdit(mt: MergedTx) {
