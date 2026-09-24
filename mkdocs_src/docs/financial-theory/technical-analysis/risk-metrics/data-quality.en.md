@@ -12,7 +12,7 @@ Source data is classified on three levels:
 |---|---|
 | `ok` | Nothing missing, nothing held over. The series is what it claims to be. |
 | `carried_forward` | The series is complete only because prices or exchange rates were held over from an earlier date — stale quotes, carried-forward price points, carried-forward FX points. |
-| `partial` | Something is missing outright: prices, FX pairs, dates on which not every holding could be valued, unresolved currency pairs, or assets that could not participate at all. |
+| `partial` | Something is missing outright: prices, FX pairs, dates inside the analysed window on which not every holding could be valued, unresolved currency pairs, or assets that could not participate at all. |
 
 Two properties of this ladder matter more than the labels.
 
@@ -37,7 +37,7 @@ The report is an inventory, not a score:
 | Unusable assets | Assets excluded before any metric was attempted, each with a reason |
 | Warnings | Free-form notes attached by the producing stage |
 
-Each entry names the object it concerns — the asset, the currency pair, the date. A reader can always ask *which* holding degraded the figure, not merely *whether* one did.
+Each entry names the object it concerns — the asset, the currency pair, the date. A reader can ask *which* asset, currency pair or date degraded the figure, not merely *whether* something did.
 
 ---
 
@@ -45,11 +45,11 @@ Each entry names the object it concerns — the asset, the currency pair, the da
 
 When an analysis spans several holdings — a correlation matrix, a risk-contribution breakdown — it is computed on a **single shared calendar**, and building that calendar is where missing data turns into a visible cost.
 
-1. A date is a candidate if at least one holding had a fresh quote on it.
-2. A candidate date enters the analysis only if **every** holding could be valued on it. Dates that fail this test are dropped for all holdings and recorded as incomplete valuation dates.
-3. The baseline is the last date before the requested start on which all holdings were valuable; if there is none, the analysis starts inside the requested window instead, and the holdings responsible for the late start are named.
+1. A date is a candidate if at least one holding had a fresh quote on it: the candidates are the union of the holdings' quote calendars over the requested window.
+2. A candidate date enters the analysis only if **every** holding could be valued on it. Here *valued* includes a price or an exchange rate carried forward from an earlier date, with no age limit, so in practice the test fails only before a holding's first usable price, or where its conversion into the target currency could not be resolved. Dates that fail this test are dropped for all holdings, but they are recorded as incomplete valuation dates only once the calendar has started — that is, after the baseline.
+3. The baseline is the last date before the requested start on which all holdings were valuable; if there is none, the analysis starts inside the requested window instead, on the first date on which every holding can be valued, and the holdings responsible for the late start are named.
 
-The consequence is worth stating plainly: **one holding with a gap shortens the window for everyone**. Nothing is silently interpolated to keep a date alive, and a holding is never partially included in a joint computation — either the date works for all of them or it is not an observation. Because those dropped dates land in the report, the result that used the shortened calendar is marked `partial`.
+The consequence is worth stating plainly: **one holding that starts late shortens the window for everyone**. A gap inside a history shortens nothing, because the missing price or exchange rate is held over. Nothing is interpolated: a held-over price or rate is the last one known, and it is counted as a carried-forward point — a matter for the `carried_forward` status, not for the length of the window. A holding is never partially included in a joint computation — either the date works for all of them or it is not an observation. A late start alone does not make the result `partial`: the dates it costs are not listed as incomplete, the report names the holdings responsible in its `short_history` entries, and the loss shows in the observation count and in the shared calendar's coverage below. A date lost after the calendar has started is different: it is listed as incomplete, and it makes the result `partial`.
 
 ---
 
@@ -57,15 +57,15 @@ The consequence is worth stating plainly: **one holding with a gap shortens the 
 
 Coverage is normally the density companion of the status: it answers *how much of what could have been observed actually was*. Several different ratios go by that name. They share no denominator, and they do not all measure the same kind of thing: two of them count observations, a third counts holdings and contains no observation at all.
 
-**How much did the shared calendar cost?** Of the dates on which at least one holding had a fresh quote, this is the share that survived the requirement that every holding be valuable. A figure well below 1 means the intersection discarded a large part of the available dates.
+**How much did the shared calendar cost?** Of the dates on which at least one holding had a fresh quote, this is the share that survived the requirement that every holding be valuable. A figure well below 1 means that on many of the dates on which some holding was quoted, another could not be valued — and since gaps are carried forward, that usually points to a holding whose history begins well after the requested start, or to conversions that could not be resolved, rather than to gaps.
 
-**How much of the data is genuinely fresh?** Across the grid of holdings × observations, this is the share of points whose price was quoted on that date rather than held over from an earlier one. It is the numeric counterpart of the `carried_forward` status — and it counts prices only: a quote that is fresh but had to be converted with a carried-forward exchange rate still counts as fresh, because carried-forward conversions are tracked as their own separate signal.
+**How much of the data is genuinely fresh?** Across the grid of holdings × observations, this is the share of points whose price was quoted on that date rather than held over from an earlier one. It measures the same kind of imperfection as the `carried_forward` status, but over the observations only, and it counts prices only: a quote that is fresh but had to be converted with a carried-forward exchange rate still counts as fresh, because carried-forward conversions are tracked as their own separate signal. So a share of 100% does not by itself rule out `carried_forward` — nor, therefore, a `partial` result.
 
 **How much of the portfolio could be classified?** Of the holdings in scope, this is the share whose sector or geography metadata was available, rather than missing and sending the holding to the catch-all `Other` bucket at 100%. This one is a statement about metadata: no price, no date and no observation enters it. A [hypothetical shock](hypothetical-shock.md) reports this ratio.
 
 !!! warning "One shared name, two kinds of quantity"
 
-    When the figure is a density measure, its denominator depends on the path: for an analysis built from instrument quotes it is the candidate quote dates, while for a portfolio series it is the calendar days actually spanned. On a portfolio series that figure is high by construction — the engine emits a point for every calendar day whether or not anything was quoted, carrying the last known value forward when nothing was — so it certifies nothing about the prices behind it, and a lower figure on an instrument grid is simply the shape of a market that is closed part of the time.
+    When the figure is a density measure, its denominator depends on the path: for an analysis built from instrument quotes it is the candidate quote dates, while for a portfolio series it is the calendar days actually spanned. On a portfolio series that figure is high by construction — the engine emits a point for every calendar day whether or not anything was quoted, carrying the last known value forward when nothing was — so it certifies nothing about the prices behind it. On an instrument grid a lower figure points to dates the shared calendar actually lost — a late start, or a conversion that could not be resolved — never to a closed market: a date on which nothing was quoted is not a candidate, and on a date on which only some holdings were quoted the others are carried forward and still valued, so the closure shows in the freshness measure instead.
 
     The question *were these prices quoted, or carried forward?* does have an answer in the system, but it is the freshness measure above, not the one a result carries under the name *coverage*. Which measure reaches any given screen is outside what this page describes.
 
@@ -93,8 +93,8 @@ Every analytic result carries a status of its own, distinct from the source-data
 
 | Result status | Meaning |
 |---|---|
-| `ok` | Computed on complete source data, with nothing excluded and no degrading warning |
-| `partial` | Computed, but on less than what was asked |
+| `ok` | Computed with nothing missing or held over in the source data, nothing excluded and no degrading warning |
+| `partial` | Computed, but with source data missing or held over, something excluded, or a degrading warning |
 | `unavailable` | Not computed; a stable reason code explains why (insufficient history, data unavailable, undefined metric, incompatible scope or mode, …) |
 | `failed` | The computation itself did not complete |
 
@@ -102,9 +102,9 @@ A result is `partial` when **any** of these holds: a warning that degrades the r
 
 !!! info "How to read a partial result"
 
-    `partial` does not mean *wrong*. It means the figure answers a slightly different question than the one asked — over a shorter window, or over fewer holdings. The figure and the reason travel together in the same payload, and they are meant to be read together: a drawdown measured with two holdings excluded is a fact about the remaining holdings, not about the portfolio.
+    `partial` does not mean *wrong*. It means the figure carries a known imperfection: it may rest on prices or exchange rates held over from earlier dates — same window, same holdings — or answer a slightly different question than the one asked, over a calendar with incomplete dates or over fewer holdings. The figure and the reason travel together in the same payload, and they are meant to be read together: a drawdown measured with two holdings excluded is a fact about the remaining holdings, not about the portfolio.
 
-Analytics also refuse to answer rather than answer badly. Each one declares the minimum number of observations it needs, and below that floor it is not computed at all: the result comes back `unavailable` with an `insufficient_history` reason carrying both the observations available and the number required. Risk contribution and comparison against a benchmark, for instance, both need at least 20. Correlation is the exception that proves the rule: the matrix as a whole runs on very little, but the floor is applied **cell by cell**, so a single pair with too short a shared history is marked insufficient while the rest of the matrix is still computed.
+Analytics also refuse to answer rather than answer badly. Each one declares the minimum number of observations it needs, and below that floor it is not computed at all: the result comes back `unavailable` with an `insufficient_history` reason carrying both the observations available and the number required. Risk contribution and comparison against a benchmark, for instance, both need at least 20. [Correlation](correlation.md#how-each-cell-is-computed) is an exception: it is never refused for short history. Its floor — an adjustable parameter of the analysis, 20 observations by default — applies to the matrix as a whole: every series shares one calendar, so every pair has the same number of observations, and below the floor every cell comes back `insufficient` with no coefficient, in a result marked `partial` rather than `unavailable`.
 
 ---
 
@@ -116,11 +116,11 @@ Analytics also refuse to answer rather than answer badly. Each one declares the 
 
 !!! warning "Carried-forward data flatters a risk figure"
 
-    A price held over from the previous date produces a period return of exactly zero. Those zeros enter the sample like any other observation, so a series rich in carried-forward points reports **less** movement than the instrument actually had. The `carried_forward` status is the warning that a calm-looking figure may be calm for the wrong reason.
+    A price held over from the previous date produces a period return of exactly zero in the instrument's own currency; after conversion into the target currency, only the exchange rate moves it. Those returns enter the sample like any other observation, so a series rich in carried-forward points reports **less** movement than the instrument actually had. The `carried_forward` status is the warning that a calm-looking figure may be calm for the wrong reason.
 
-!!! warning "No threshold is defined"
+!!! warning "No quality threshold discards a figure"
 
-    Nothing in the system declares a coverage, an observation count or a carried-forward share beyond which a figure must be discarded. That absence is deliberate — the honest number is the one that comes with its own provenance — but it means the final judgement is yours, and it cannot be delegated to the status label.
+    Apart from the minimum observation counts described above, below which an analytic is not computed at all or every correlation cell comes back `insufficient`, nothing in the system declares a coverage or a carried-forward share beyond which a figure must be discarded. That absence is deliberate — the honest number is the one that comes with its own provenance — but it means the final judgement is yours, and it cannot be delegated to the status label.
 
 ---
 
