@@ -1072,18 +1072,19 @@ mostra, non decide.
 
 | # | passo | file | stato |
 |---|---|---|---|
-| C1 | periodo comune per l'analisi: sugli asset scelti, la finestra del periodo corrente dove tutti hanno prezzi (dall'ultima prima quotazione alla prima ultima), proposta solo se cambia qualcosa e se basta a tutti (≥ 20 quotazioni); con gli asset che la limitano; «nessun periodo comune» quando non esiste | `risk/eligibility.py`, `schemas/risk.py`, `api/v1/risk.py` | ⏳ |
-| C2 | periodo comune nel replay: dentro la finestra, per gli esclusi a causa dei bordi; verificato con una seconda lettura dei fatti prima di proporlo; nell'audit | `risk/eligibility.py` (prima quotazione nella finestra), `risk/service.py`, `risk_plugins/stress.py`, `schemas/risk.py` | ⏳ |
-| C3 | avviso forte quando l'escluso supera metà portafoglio: `historical_replay_mostly_excluded` con la quota coperta; soglia `REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE = 0.5` nel modulo delle soglie | `data_quality_thresholds.py`, `risk_plugins/stress.py`, cataloghi i18n | ⏳ |
-| C4 | test (test-author), runner, `api sync`, journal | — | ⏳ |
+| C1 | periodo comune per l'analisi: sugli asset scelti, la finestra del periodo corrente dove tutti hanno prezzi (dall'ultima prima quotazione alla prima ultima), proposta solo se cambia qualcosa e se basta a tutti (≥ 20 quotazioni); con gli asset che la limitano; «nessun periodo comune» quando non esiste | `risk/eligibility.py`, `schemas/risk.py`, `api/v1/risk.py` | ✅ 24/09 · test ✅ |
+| C2 | periodo comune nel replay: dentro la finestra, per gli esclusi a causa dei bordi; verificato con una seconda lettura dei fatti prima di proporlo; nell'audit | `risk/eligibility.py` (prima quotazione nella finestra), `risk/service.py`, `risk_plugins/stress.py`, `schemas/risk.py` | ✅ 24/09 · test ✅ |
+| C3 | avviso forte quando l'escluso supera metà portafoglio: `historical_replay_mostly_excluded` con la quota coperta; soglia `REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE = 0.5` nel modulo delle soglie | `data_quality_thresholds.py`, `risk_plugins/stress.py`, cataloghi i18n | ✅ 24/09 · test ✅ |
+| C4 | test (test-author), runner, `api sync`, journal | 6 file di test (nessuno nuovo, runner invariato) | ✅ 24/09 |
 | F1 | avvisi tradotti: chiave e parametri del backend; se manca la traduzione, il testo originale — mai una chiave grezza | `levels/levelHelpers.ts`, `RiskResultFrame.svelte` | ⏳ |
 | F2 | un solo avviso di parzialità in cima al pannello, ogni causa una volta; sotto i livelli solo gli errori | `levels/RiskLevelsPanel.svelte` (non `RiskLevelSection`, che è di F) | ⏳ |
 | F3 | replay: via il blocco «escludi e riprova»; esclusi per motivo con nomi e peso; avviso forte (C3); «niente da simulare»; `DateRangePicker` senza pulsanti rapidi; pulsante del periodo comune (C2), con la nota «solo una parte della crisi» nelle crisi del catalogo | `levels/l4/L4Replay.svelte`, `levels/l4/scenarioHelpers.ts` | ⏳ |
-| F4 | benchmark: non ammissibili grigi con il motivo, con avviso selezionabili e segnalati; cambia col periodo | `levels/L3Benchmark.svelte`, chiavi `risk.eligibility.*` | ⏳ |
+| F4 | benchmark: non ammissibili grigi con il motivo, con avviso selezionabili e segnalati; cambia col periodo — **dopo la fusione F → Risk**, con le chiavi `risk.eligibility.*` di F (proposta al coordinator) | `levels/L3Benchmark.svelte` | ⏳ |
 | F5 | test delle palette che leggono i colori dai grafici veri; puntatori per contenuto, non per riga | test di `AllocationPieChart` / `AllocationHistoryChart` (solo lettura dei `.svelte`) | ⏳ |
 | F6 | `dashboard.allocationGeneric` chiamata con `$t(`, così l'audit la vede | `AllocationPieChart.svelte` | ✅ 24/09 · anticipato nel checkpoint B |
 | F7 | E2E: riscritto quello del replay bloccato; aggiornati quelli che si aspettavano «Parziale» sotto i livelli | `frontend/e2e/portfolio/risk-analysis.spec.ts` | ⏳ |
 | F8 | screenshot per il developer: icona composita (D-K2), avviso unico, replay, benchmark | — | ⏳ |
+| F9 | `runGuarded`: una risposta arrivata e scartata (il `null` di `queryRisk`) non diventa più «nessun risultato» muto — richiesta una volta sotto la nuova generazione, poi uno stato «scartata» per analisi, mostrato dalla sezione; test deterministici sul controller, **scritti da test-author e rossi prima della cura**, sui tre casi (`null` poi risposta → risposta; `null` due volte → scartata; generazione superata → nessuna nuova richiesta); la frase nel mio namespace `risk.*`, non in `risk.eligibility.*` (**obbligatorio**: il polling della Correlazione resta, decisione D11 del developer; confermato dal coordinator) | `stores/risk/riskPanelController.svelte.ts`, sezioni L4 | ⏳ |
 
 Pulsante del periodo comune in alto (zona asset di Asset Global): la zona è di F; chi lo mette (F con il
 mio endpoint, oppure io dopo l'integrazione di F) lo decide il coordinator. All'integrazione, inoltre:
@@ -1154,3 +1155,168 @@ impronta del contenuto): lista asset (3) → backend del rischio (21) → i18n (
 > riportato conta solo dopo 7 giorni, la stessa soglia del banner dei prezzi vecchi» · «Il replay storico
 > parte anche quando alcuni asset non esistevano durante la crisi: li esclude da sé e dice quali e
 > perché». Le altre (avvisi tradotti, ammissibilità nei selettori) quando arriva il frontend.
+
+### Checkpoint backend B — committato · 24/09/2026
+
+> `b20f926fb` → `a766a9d5d` → `708187d8f` → `81499e0a8` → `c4135c1d1` → `a983808ad` → `14c334d85`, su
+> `03c1f52e7`: 3 + 21 + 4 + 7 + 2 + 1 + 1 = 39 file, albero pulito, letti e verificati da me.
+
+### C1–C3 — periodo comune e avviso forte · 🔵 codice ✅ 24/09/2026
+
+> **Note implementazione**:
+> - `PriceWindowFacts` guadagna la prima quotazione nella finestra e la prima e l'ultima di sempre; il
+>   caricatore resta una query sola, senza più il filtro sulla fine della finestra (i campi di prima si
+>   ottengono con `CASE`).
+> - Tre regole pure in `risk/eligibility.py`: `common_quoted_range` (dall'ultima prima quotazione alla
+>   prima ultima, sugli asset quotati), `suggested_analysis_range` (il periodo tagliato sul comune, oppure
+>   il comune stesso se non si toccano), `suggested_replay_range` (dentro la finestra, solo per gli esclusi
+>   a causa dei bordi).
+> - Nel servizio ogni proposta passa una **seconda lettura dei fatti**: per l'analisi, ogni asset quotato
+>   deve essere ammesso senza avvisi nel periodo proposto; per il replay, chi è coperto resta coperto e chi
+>   è recuperato lo diventa. Nessuna proposta se l'unico problema è un asset senza nessuna quotazione.
+> - `RiskEligibilityResponse` porta `common_range` e `suggested_range`; l'audit del replay
+>   `suggested_range` e `suggested_range_recovers`, con un secondo validatore (ordinati, insieme, solo
+>   esclusi automatici). Il validatore dell'audit è diviso in due per restare sotto la complessità di ruff.
+> - Avviso `historical_replay_mostly_excluded` quando l'escluso supera metà del portafoglio
+>   (`REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE = 0.5`), con la quota coperta in parametro; frase nelle 4
+>   lingue con la percentuale nel formato della lingua.
+>
+> **Misurato su una copia del DB della copia di prod** (in sola lettura, poi cancellata; nomi e valori nella
+> chat):
+>
+> ```
+> BTP + 3 ETF, 5 anni        il BTP parte tardi → proposto il periodo dalla sua prima quotazione a oggi
+> 3 ETF, 1 anno              nessun problema, nessuna proposta
+> BTP + ETF, 2018–2020       il BTP non esiste ancora → proposto il periodo comune (spostamento)
+> replay Covid, 2022         3 esclusi, poco meno di metà del peso: nessun avviso forte
+> replay 2008                8 esclusi, circa nove decimi del peso → avviso forte
+> replay 2023–2025 (libero)  il BTP parte dentro la finestra → proposto il pezzo che lo recupera, verificato
+> ```
+>
+> **Test**: `services risk-all` 558 ✓ / 2 ✗, entrambi attesi (i fatti hanno tre campi nuovi; un replay
+> con più di metà escluso ora ha l'avviso forte). test-author li ripara e scrive i test di C.
+>
+> **⚠️ Fuori pista — il mio script di misura mandava un parametro che il replay non conosce**
+> (`scenario_id`): la validazione rifiuta i campi in più, e tutte e quattro le finestre tornavano
+> `invalid_parameters`. Tolto il campo, le misure sopra. Il frontend non lo manda.
+
+> **⚠️ Fuori pista — un ramo morto nella proposta del replay, trovato da test-author prima di scrivere i
+> test**: per un asset con un buco prima dell'inizio (o un NAV mensile) la proposta partiva dalla sua prima
+> quotazione nella finestra; lì il suo ultimo prezzo *prima* dell'inizio è ancora quello vecchio, quindi la
+> seconda lettura lo escludeva di nuovo e buttava la proposta intera. Sicuro (mai una promessa falsa), ma
+> muto. Letto il codice della serie: il replay parte dall'ultimo giorno completo **prima** del primo giorno
+> (`series_preparation.py:243-248`, caricato da inizio − 1). → la proposta parte **il giorno dopo** la prima
+> quotazione, per il buco *e* per la quotazione nuova: così quel prezzo fresco fa da partenza, e la baseline
+> non cade dentro la finestra (niente `short_history`). Stessa regola per la proposta dell'analisi.
+
+> **Note implementazione — decisioni di C dopo lo stop** (24/09):
+> - analisi: candidati in ordine — il periodo tagliato sul comune, poi il periodo comune stesso (per un
+>   periodo che lo manca o lo tocca troppo poco); si tiene il primo che la seconda lettura conferma; nessuna
+>   proposta se il periodo sta già dentro il comune (il guaio è un buco, nessuno spostamento lo risolve);
+>   proposta solo per `no_prices`, `starts_late`, `stale_at_end` di un asset quotato;
+> - motivo nuovo `no_price_history` (mai quotato), distinto da `no_prices` (nessun prezzo nel periodo, ma
+>   altrove sì): solo il secondo si ripara cambiando periodo. Stesso principio di B8: il motivo non deve
+>   suggerire il rimedio sbagliato;
+> - replay senza più nulla da riprodurre: la proposta viaggia nei dettagli dell'errore (il caso dell'asset
+>   singolo, dove serve di più);
+> - soglia di polvere unica: `QUANTITY_DUST_THRESHOLD` passa nel modulo delle soglie; il portafoglio la
+>   importa (valore invariato), i flag «posseduto ora» la usano al posto di 1e-9, così «posseduto ora» e
+>   «holding a oggi» coincidono anche con i residui dei rimborsi.
+>
+> **Misurato su una copia del DB** (sola lettura, poi cancellata): proposta dell'analisi dal giorno dopo la
+> prima quotazione del BTP; periodo disgiunto → spostato sul comune; replay libero 2023–2025 → proposta
+> verificata, e il replay del periodo proposto **riporta dentro il BTP** senza avvisi di storia corta (restano
+> fuori solo i crowdfunding mai quotati); il solo BTP → «non disponibile» con la proposta nell'errore; i
+> crowdfunding → `no_price_history`.
+>
+> **Coordinamento**: la decisione del developer porta il mio backend `14c334d85` nel ramo di F subito (lo
+> fonde il developer); C e F1–F9 restano nel mio ramo. Risposto a F sul contratto di `14c334d85` (forma,
+> motivi, «nessun prezzo» = nel periodo, 500 per chiamata, `held_by_*` = oggi e non `dateEnd`); proposto al
+> coordinator che `risk.eligibility.*` sia di F, primo consumatore. Il polling della Correlazione resta
+> (D11) → la cura di `runGuarded` diventa obbligatoria: F9.
+>
+> **Risposta di F** (24/09, 16:0x): usa il contratto di `14c334d85` così com'è ed è `FROZEN` fino alla fusione
+> Risk → F. Crea lui `risk.eligibility.reasons.<codice>` (con i testi proposti, `min_quotes` e `stale_days`
+> come parametri) e prepara già `no_price_history`; lookup con ripiego generico, codici sconosciuti
+> tollerati, test su `data-*`. Il developer ha deciso: **nessun segnaposto** per «adatta al periodo comune»
+> nel ramo di F — posizione e collegamento miei dopo la fusione F → Risk. «Tutti i miei» resta «posseduti
+> l'ultimo giorno del periodo» (`dateEnd`), con un'etichetta distinta da «posseduto ora»; **`held_by_me` /
+> `held_by_others` per ora non li usa** → da riprendere all'integrazione (il declassamento «posseduto in
+> passato» li userebbe; senza consumatori restano campi senza lettore). Chiamata unica per il catalogo,
+> debounce, risposte superate scartate; `ineligible` in sola lettura e fuori da «Seleziona tutti» e
+> «Inverti», `warning` selezionabile con l'avviso.
+
+### Storia condivisa e contratto dopo `14c334d85` · 24/09/2026
+
+Decisione del developer, comunicata dal coordinator: F ha committato il suo checkpoint 2 (`b97360b32`) e il
+developer fonde `14c334d85` nel ramo di F (fusione simulata dal coordinator: pulita, `backend/` identico a
+`14c334d85`, cataloghi i18n unione esatta di 3455 chiavi). La direzione finale resta **F → Risk**, con me
+owner d'integrazione del ramo combinato.
+
+- **`14c334d85` e tutti i suoi antenati sono storia condivisa: mai riscriverli.**
+- Quello che committo dopo (C, F1–F9) arriva nel codice di F solo con F → Risk, salvo una seconda fusione
+  Risk → F decisa dal developer.
+- I miei file restano miei anche nel ramo di F: F li consuma, non li modifica. Unica eccezione concordata:
+  l'area del titolo di `RiskLevelSection`, che non tocco prima di F → Risk.
+- `risk.eligibility.*` è di F fino a F → Risk (le 5 chiavi di `14c334d85`, 4 lingue, dai miei testi EN/IT);
+  dopo passa a me, e F4 lo riusa. **`no_price_history` ha un solo scrittore**: chi per primo ha nello stesso
+  ramo il valore dell'enum e la mappatura di F — oggi io, a F → Risk. Il coordinator chiede a F una
+  mappatura esaustiva sul tipo generato, così `front check` segnala la chiave mancante invece di una chiave
+  grezza a schermo. Le frasi del replay (`risk.warnings.historical_replay_excluded_*`) restano mie: nessun
+  riuso fra i due namespace.
+- `portfolio_service.py`: I ha una correzione di una riga approvata a `:2404` (`needs_engine`, S10); le mie
+  modifiche restano a `:77` e `:438`.
+
+**Cambiamenti di contratto dopo `14c334d85`** — da adattare nel codice di F a F → Risk (lista viva):
+
+| # | cambiamento | dove | effetto su F |
+|---|---|---|---|
+| K1 | motivo nuovo `no_price_history` (mai quotato), prima in `RiskEligibilityReason` | `schemas/risk.py`, `risk/eligibility.py` | la mappatura dei motivi guadagna un codice; chiave i18n scritta da me a F → Risk |
+| K2 | `common_range` e `suggested_range` sulla risposta di `/risk/eligibility` | `schemas/risk.py`, `risk/service.py` | campi opzionali nuovi; il pulsante in Asset Global lo collego io |
+| K3 | `suggested_range` e `suggested_range_recovers` nell'audit del replay | `schemas/risk.py`, `risk_plugins/stress.py` | nessuno (lo legge il mio `L4Replay`) |
+| K4 | dettagli dell'errore del replay senza nulla da riprodurre: `suggested_range`, `suggested_range_recovers` | `risk_plugins/stress.py` | nessuno (idem) |
+| K5 | avviso nuovo `historical_replay_mostly_excluded` (+ chiave i18n) | `risk_plugins/stress.py`, cataloghi | nessuno, se F mostra gli avvisi con la chiave del backend |
+| K6 | `held_by_me` / `held_by_others`: soglia di polvere del portafoglio (0,00001) invece di 1e-9 | `asset_sources/crud.py`, `data_quality_thresholds.py` | nessuno oggi (F non li usa); il coordinator lo avvisa |
+| K7 | (frontend, F9) stato «scartata» per le analisi a richiesta | `riskPanelController.svelte.ts` | se F legge il controller, vede un campo in più |
+
+### C — i test del checkpoint · ✅ 24/09/2026
+
+> **Note implementazione**: test-author ha riparato i due rossi attesi e scritto i test di C1–C3 (regole pure
+> ai bordi, servizio con una spia che conta le letture, round trip sul DB per una quotazione nuova *e* per un
+> buco, con un controllo che mostra gli avvisi se si parte sulla prima quotazione stessa, dettagli dell'errore,
+> validatore dell'audit, avviso forte, `no_price_history`, soglia di polvere nella lista asset, costanti).
+> `services risk-all` 633 ✓ · `api risk` 14 ✓ · `api assets-crud` 35 ✓. 14 mutanti nuovi (M18–M31), tutti
+> presi.
+>
+> **⚠️ Fuori pista — la proposta dell'analisi non scattava per una quotazione nuova con poche quotazioni**
+> (domanda di test-author): con meno di 20 quotazioni nel periodo il motivo bloccante `too_few_quotes`
+> nasconde gli avvisi, quindi `starts_late` non compariva e il mio innesco, letto dai motivi, taceva — proprio
+> nel caso in cui la proposta serve di più. Non era una decisione nuova: la regola approvata dice «inizia
+> tardi». → l'innesco ora si legge dai **fatti** (`period_limits_coverage`: quotato ma non nel periodo, parte
+> oltre 7 giorni dopo l'inizio, si ferma oltre 7 giorni prima della fine), non dai motivi; i motivi nella
+> risposta restano quelli di `14c334d85`. test-author aggiunge i casi.
+
+> **Chiusura dei test di C** (test-author, ultimi due giri): l'innesco dai fatti ha 11 casi puri (ognuno
+> dichiara anche cosa riporta `analysis_eligibility`, così la distanza fra fatti e motivi si vede nel test),
+> e il caso di servizio in due forme: 11 quotazioni nel periodo → il periodo tagliato fallisce e il comune
+> arriva dopo **due** letture in più; quotazione nuova il giorno prima della fine → il comune in **una**.
+> Mutanti M32–M34 presi. Poi un rosso che i suoi run non vedevano, in `schemas risk` (non era nella lista
+> che gli avevo dato: mia la svista): il test che fissa il JSON dell'audit ora ha i due campi nuovi, e un test
+> fratello porta un audit con proposta attraverso JSON e ritorno; i 7 casi del validatore della proposta sono
+> stati **spostati** nel file degli schemi, non copiati.
+
+### Checkpoint C — handoff `FROZEN` · 24/09/2026
+
+Base `14c334d85`, 19 percorsi, 4 commit (script con i controlli di HEAD, stage vuoto, percorsi esatti e
+impronta del contenuto): backend (8) → i18n (4) → test (6) → journal (1).
+
+> **Verifica finale, corsia 6152**: `services risk-all` 639 ✓ · `signal-service` 50 ✓ · `asset-signals`
+> 20 ✓ · `portfolio-engine` 42 ✓ · `roi-fifo-utils` 507 ✓ · `schemas risk` 34 ✓ · `schemas assets` 70 ✓ ·
+> `db populate --force` ✓ · `api risk` 14 ✓ · `api assets-crud` 35 ✓ · `check-orphans`: backend tutto
+> registrato (i 5 orfani frontend sono di `b66e93003`) · ruff e black puliti sui 14 file Python · 34 chiavi
+> del backend × 4 lingue formattate · audit i18n: 0 mancanti, parità 3431 chiavi · `api sync` rifatto (file
+> ignorati) · nessun importo reale, nessuna password.
+>
+> **File condivisi toccati**: cataloghi i18n (1 chiave nuova in `risk.warnings`); `portfolio_service.py`
+> (solo `:77` e `:439-440`, valore della soglia invariato; I tocca `:2404`); `data_quality_thresholds.py` (due
+> costanti nuove). Cambiamenti di contratto dopo `14c334d85`: K1–K6 nella tabella sopra.
