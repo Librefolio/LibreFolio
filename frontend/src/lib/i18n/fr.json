@@ -4121,10 +4121,10 @@
         "fx": "FX",
         "asset": "Actifs"
       },
-      "armedToast": "{flow} est prêt dans cet onglet. Ouvrez la fonctionnalité pour commencer.",
+      "armedToast": "{flow} est prêt dans ce navigateur. Ouvrez la fonctionnalité pour commencer.",
       "cancelArmed": "Annuler l’activation",
       "groupProgress": "{completed}/{total} guides terminés",
-      "armedAtNextTrigger": "Prêt dans cet onglet : {flow} démarrera à la prochaine activation. Fermer l'onglet l'annule.",
+      "armedAtNextTrigger": "Prêt dans ce navigateur : {flow} démarrera à la prochaine activation. La déconnexion l'annule.",
       "replayNextTrigger": "Relancer à la prochaine activation"
     },
     "importGuide": {

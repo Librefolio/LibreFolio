@@ -4121,10 +4121,10 @@
         "fx": "FX",
         "asset": "Activos"
       },
-      "armedToast": "{flow} está listo en esta pestaña. Abre la función para empezar.",
+      "armedToast": "{flow} está listo en este navegador. Abre la función para empezar.",
       "cancelArmed": "Cancelar activación",
       "groupProgress": "{completed}/{total} guías completadas",
-      "armedAtNextTrigger": "Listo en esta pestaña: {flow} se iniciará en la próxima activación. Cerrar la pestaña lo cancela.",
+      "armedAtNextTrigger": "Listo en este navegador: {flow} se iniciará en la próxima activación. Cerrar sesión lo cancela.",
       "replayNextTrigger": "Repetir en la próxima activación"
     },
     "importGuide": {

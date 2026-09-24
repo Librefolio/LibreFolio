@@ -21,6 +21,7 @@ Fonti:
 | **Lane copia prod** | porta `6168`, `/tmp/librefolio-r2-j-onboarding-prodcopy`, **solo dalla snapshot** `/tmp/librefolio-r2-prod-snapshot` |
 | **Lane suite** | porta `6158`, `/tmp/librefolio-r2-j-onboarding` — **solo** `dev.py test …` |
 | **Coordinator** | `c8328a01-f208-4ade-a352-0486d1f14de2` |
+| **Checkpoint** | C0 `2a5927c48` · C1 `176f19707` · C2 `64d78e244` · C3 `59cb80103` — C2 e C3 con la storia locale riscritta il 2026-09-24 (passo 7, *Fuori pista*) |
 
 **Autorizzazione developer verbatim, 2026-09-23:** `Plan approved! Exited plan mode.`
 
@@ -154,6 +155,16 @@ non è più un hit) e le due liste letterali `residual` / `unmasked`.
 > | controllo negativo su **copia** con `CURRENCY_TOKEN = /currency/i` | 3 rossi: i due rami, controllo positivo, marcio. Copia rimossa, file vero con sha invariato |
 > | `dev.py test --test-port 6158 --data-dir /tmp/librefolio-r2-j-onboarding front-utility core-unit "money rendered outside the masking channel"` | exit 0 · `Test Files 1 passed \| 93 skipped (94)` · `Tests 6 passed \| 2433 skipped (2439)` |
 > | `npx prettier --check`, `git diff --check` sui due file di C0 | puliti, exit 0 |
+>
+> *Nota del 2026-09-24:* i due `npx` della tabella sono registrazioni vere, lanciati da `frontend/`,
+> dove npx trova il binario locale in `node_modules/.bin`. **Non vanno ripetuti così**: se il binario
+> locale manca (per esempio lanciando da un'altra cartella), npx interroga il registry ed esegue,
+> oppure installa, l'ultima versione pubblicata, non quella del lock; `--no-install` non basta,
+> perché una copia già in cache viene eseguita lo stesso. Si usa
+> `frontend/node_modules/.bin/<strumento>` oppure `npm run <script>`: se il binario manca, il comando
+> fallisce invece di scaricare. *Fuori pista, mio:* controllando la cache di npx ho letto la data di
+> modifica delle cartelle (`find -newermt`) come data d'installazione, ma anche una semplice
+> esecuzione la aggiorna; la data di nascita, su macOS, si legge con `stat -f %SB`.
 >
 > Il controllo negativo mostra anche una cosa da tenere a mente: oggi il restringimento fa cadere
 > **tre** test perché la riga vera di `PerformanceChart` è ancora sul disco. Quando I la maschera,
@@ -377,7 +388,7 @@ con il controllo di `brokers/[id]`. Il fix si decide dopo la misura, non prima.
 > congelato, e né il gate né un test di formatter lo vedrebbero. Va detto nella skill e nella doc
 > sviluppatore (passo 10).
 
-### Passo 7 — Quantità D5′ — **Stato: ✅ fatto** — 2026-09-24 — *C3 · una domanda aperta al developer (quantità 1)*
+### Passo 7 — Quantità D5′ — **Stato: ✅ fatto** — 2026-09-24 — *C3 · quantità 1: decisa dal developer, (a)*
 
 La classe di una quantità dipende ora dal **contesto**: la stessa `formatQuantity` va mascherata
 in un lotto e resta visibile in una transazione. La regola sta quindi al sito di chiamata.
@@ -483,17 +494,25 @@ in un lotto e resta visibile in una transazione. La regola sta quindi al sito di
 > corretti leggendo il codice, non riprovando a caso.
 >
 > **⚠️ Fuori pista — ho scritto importi reali nel journal.** Nella nota di R20 (passo 6) avevo
-> riportato due cifre lette dalla copia dei dati del developer, ed è entrato nel commit C2
-> (`29d1f7b30`). Le regole vietano di committare valori finanziari. Rimossi qui; la storia già
-> committata non posso riscriverla io: segnalato al coordinator. Gli esiti delle sonde in `/tmp`,
-> che li contenevano, sono cancellati.
+> riportato due cifre lette dalla copia dei dati del developer, e sono entrate nel commit C2. Le
+> regole vietano di committare valori finanziari. Le ho tolte in C3; poi la storia locale del ramo
+> è stata riscritta il 24/09, prima di ogni push, con uno script del coordinator lanciato dal
+> developer, e oggi nessun commit del ramo le contiene. Gli esiti delle sonde in `/tmp`, che le
+> contenevano, sono cancellati. Seconda prova, mia: 0 occorrenze nella storia, negli alberi dei
+> commit del round e nel working tree, con controllo positivo sull'oggetto del vecchio commit. Resta
+> un residuo locale: quell'oggetto è ancora raggiungibile dai ref di checkpoint dell'app Copilot
+> della mia sessione, che nessun push ordinario invia; la decisione è del developer.
+> *Regola che ne esce:* in una nota di verifica dal vivo si scrive la **forma** del valore
+> (`#.###,## €`, «cifre in chiaro»), mai la cifra.
 >
-> **❓ Domanda aperta al developer — la quantità 1.** Nei dati del developer esistono posizioni
-> detenute **in un solo pezzo**. Lì il prezzo unitario visibile **è** il valore mascherato: per
-> quel bene, D5′-c lo rivela. Opzioni: (a) accettarlo come residuo, perché serve sapere che la
-> quantità è 1; (b) mascherare il prezzo unitario per i **tipi** di asset tipicamente in un pezzo
+> **✅ Decisione del developer, 2026-09-24 — quantità 1: (a).** La domanda: una posizione può essere
+> detenuta **in un solo pezzo**, e lì il prezzo unitario visibile **è** il valore mascherato; per
+> quel bene, D5′-c lo rivela. Le opzioni erano: (a) accettarlo come residuo, perché serve sapere che
+> la quantità è 1; (b) mascherare il prezzo unitario per i **tipi** di asset tipicamente in un pezzo
 > (immobili, crowdfunding, private) — per tipo, non per quantità, così la maschera non rivela a sua
-> volta la quantità; (c) mascherarlo quando la quantità è 1, rivelando però che è 1.
+> volta la quantità; (c) mascherarlo quando la quantità è 1, rivelando però che è 1. **Scelta (a)**:
+> il residuo è accettato, perché per ricavare il valore bisogna sapere che la quantità è 1, e la
+> quantità resta mascherata. Il codice di C3 resta com'è.
 
 ### Passo 8 — Review del diff privacy di I — **Stato: ✅ fatto** — 2026-09-24 — *verdetto: approvato*
 

@@ -4121,10 +4121,10 @@
         "fx": "FX",
         "asset": "Assets"
       },
-      "armedToast": "{flow} is ready in this tab. Open its feature to start.",
+      "armedToast": "{flow} is ready in this browser. Open its feature to start.",
       "cancelArmed": "Cancel activation",
       "groupProgress": "{completed}/{total} guides completed",
-      "armedAtNextTrigger": "Ready in this tab: {flow} starts at its next trigger. Closing the tab cancels it.",
+      "armedAtNextTrigger": "Ready in this browser: {flow} starts at its next trigger. Logging out cancels it.",
       "replayNextTrigger": "Replay at next trigger"
     },
     "importGuide": {

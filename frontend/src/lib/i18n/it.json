@@ -4121,10 +4121,10 @@
         "fx": "FX",
         "asset": "Asset"
       },
-      "armedToast": "{flow}: avvio pronto in questa scheda. Apri la funzionalità per iniziare.",
+      "armedToast": "{flow}: avvio pronto in questo browser. Apri la funzionalità per iniziare.",
       "cancelArmed": "Annulla attivazione",
       "groupProgress": "{completed}/{total} guide completate",
-      "armedAtNextTrigger": "Pronta in questa scheda: {flow} parte al prossimo ingresso. Chiudendo la scheda si annulla.",
+      "armedAtNextTrigger": "Pronta in questo browser: {flow} parte al prossimo ingresso. Uscendo dall'account si annulla.",
       "replayNextTrigger": "Ripeti al prossimo ingresso"
     },
     "importGuide": {
