@@ -22,6 +22,7 @@
     import * as echarts from 'echarts';
     import {attachChartReady} from '$lib/utils/chartReady';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
+    import {maskable, shouldMaskAmount} from '$lib/utils/privacy/maskable';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
@@ -208,6 +209,9 @@
      *  (`{name, data}` only, see CHART_SERIES_UPDATE_OPTS) cannot express. */
     let lastRenderedMode: string | null = null;
     let lastRenderedDark: boolean | null = null;
+    /** Privacy state the axis labels were last drawn with. ECharts caches axis labels, so a
+     *  toggle needs a full rebuild; the tooltip formatter reads the state on every hover. */
+    let lastRenderedMasked: boolean | null = null;
     let lastHistoryRef: PortfolioHistoryPoint[] | null = null;
     /**
      * First|last day of the data currently on screen.
@@ -1719,6 +1723,9 @@
         void depositHistory;
         void acquisitionFunding;
         void $locale;
+        // Read here, not in renderChart: the render runs inside `tick().then`, where a read
+        // registers no dependency, so the privacy toggle would not redraw the axis.
+        void shouldMaskAmount();
 
         if (history !== lastHistoryRef) {
             // Keeping the visible window across a data refresh is a courtesy; keeping it
@@ -1778,6 +1785,7 @@
             chartInstance = undefined;
             lastRenderedMode = null;
             lastRenderedDark = null;
+            lastRenderedMasked = null;
         }
 
         if (!chartInstance) {
@@ -1824,7 +1832,8 @@
 
         // Determine if this is a data-only update (same mode+submode, same dark) or full re-init
         const renderedModeKey = viewMode === 'pnl' ? `pnl:${pnlSubmode}` : viewMode;
-        const needsFullInit = forceFullXAxisRebuild || lastRenderedMode !== renderedModeKey || lastRenderedDark !== isDark;
+        const masked = shouldMaskAmount();
+        const needsFullInit = forceFullXAxisRebuild || lastRenderedMode !== renderedModeKey || lastRenderedDark !== isDark || lastRenderedMasked !== masked;
         const seriesData = buildChartUpdateSeries(isDark, activeData, logicalRange.startDate);
 
         if (needsFullInit) {
@@ -1835,6 +1844,7 @@
 
         lastRenderedMode = renderedModeKey;
         lastRenderedDark = isDark;
+        lastRenderedMasked = masked;
     }
 
     function applyFullOption(isDark: boolean, series: echarts.SeriesOption[], zoomWindow: {start: number; end: number}) {
@@ -1867,9 +1877,11 @@
             viewMode === 'pct'
                 ? (v: number) => `${v.toFixed(1)}%`
                 : (v: number) => {
-                      if (Math.abs(v) >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
-                      if (Math.abs(v) >= 1_000) return `${(v / 1_000).toFixed(0)}k`;
-                      return String(v);
+                      // D8: the sign stays outside the mask. The k/M suffix goes inside:
+                      // `•••k` would still disclose the order of magnitude.
+                      const abs = Math.abs(v);
+                      const compact = abs >= 1_000_000 ? `${(abs / 1_000_000).toFixed(1)}M` : abs >= 1_000 ? `${(abs / 1_000).toFixed(0)}k` : String(abs);
+                      return `${v < 0 ? '-' : ''}${maskable(compact)}`;
                   };
 
         /**
@@ -1881,8 +1893,11 @@
          */
         const signedValueColor = (v: number, dark: boolean, neutral: string) => (v === 0 ? neutral : v > 0 ? (dark ? '#4ade80' : '#16a34a') : dark ? '#f87171' : '#dc2626');
 
-        /** Format a number as currency — same pattern as the dashboard formatMoney helper. */
-        const fmtCurrency = (v: number | null | undefined) => (v != null ? `${baseCurrency} ${v.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '—');
+        /**
+         * Format a number as currency. As in `formatCurrencyAmountPlain`, only the digits go
+         * through `maskable`; the currency and the sign stay readable (D8).
+         */
+        const fmtCurrency = (v: number | null | undefined) => (v != null ? `${baseCurrency} ${v < 0 ? '-' : ''}${maskable(Math.abs(v).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}))}` : '—');
 
         const option: echarts.EChartsOption = {
             ...CHART_ANIMATION_CONFIG,
