@@ -14,6 +14,8 @@ Fonti:
 
 **Baseline:** `f1047f766`, verificata 2026-09-23 10:33, albero pulito.
 
+**Checkpoint:** C2 `64d78e244` (R3, R19) · C4 `5e7ae336e` (OB-8, OB-9, IWR-006, `settings.spec`), committato 2026-09-24.
+
 **Branch:** `e-alfy-onboarding-foundation`.
 
 **Lane copia prod:** porta `6168`, `/tmp/librefolio-r2-j-onboarding-prodcopy`, solo dalla snapshot
@@ -304,6 +306,94 @@ Asset), desktop e mobile, lane 6158, via `test-author`.
 > disegna finché il redirect asincrono non arriva. Con una replay del benvenuto armata, la pagina
 > lampeggiata è quella con i dati dell'utente. Da misurare dal vivo e da decidere: il file è il
 > layout condiviso dell'app.
+
+### Step 6d — Lampo della shell col benvenuto pendente — **Stato: ✅ completato il 2026-09-24**
+
+Assegnato dal coordinator (14:25) dopo C4: misurarlo dal vivo sulla copia rinfrescata, e avvisare
+prima di toccare `(app)/+layout.svelte`, che è condiviso.
+
+> **Note implementazione — la misura.** Copia rinfrescata dalla snapshot (`004_release_1_2_0_schema`),
+> server `--test` su 6168, sonda Playwright usa-e-getta (`requestAnimationFrame`: a ogni frame
+> registra quali segnaposto e shell sono montati e visibili, il percorso, e **quanti** importi
+> compaiono nel testo, mai quali). Credenziali solo da variabili d'ambiente; nessun importo scritto.
+>
+> | scenario (5 + 3 ripetizioni) | pagina richiesta → finale | frame `onboarding-redirecting` | **lampo**: frame con la shell della pagina richiesta | importi visibili nel lampo |
+> |---|---|---|---|---|
+> | A · account nuovo, benvenuto pendente | `/settings` → `/welcome` | **0** | 2–3 frame, 3–4 ms | 0 |
+> | B · idem | `/dashboard` → `/welcome` | **0** | 3–5 frame, 18–36 ms | 0, **tranne 1 giro su 8: 9** (gli zeri di un portafoglio vuoto) |
+> | C · proprietario, replay del benvenuto armata | `/dashboard` → `/welcome` | **0** | 2–3 frame, 11–16 ms | 0 (8 giri) |
+> | D · idem | `/brokers` → `/welcome` | **0** | 1–2 frame, 0–1 ms | 0 (8 giri) |
+> | E · controllo: proprietario senza replay | `/dashboard` → `/dashboard` | 0 | **0** | — (shell sulla pagina finale: 250–264 frame) |
+>
+> **Lettura.** Il segnaposto `onboarding-redirecting` non si monta **mai** (0 frame su 40 giri
+> di A–D): il ramo del template è morto per un caricamento diretto, come diceva la lettura
+> statica (istruzioni `$:` legacy su `appBootstrap.ready`, stato runes non tracciato). La pagina
+> richiesta si disegna per 1–5 frame prima del redirect. Nessun importo del proprietario è
+> comparso in 16 giri, ma il giro di B con 9 importi prova che **il contenuto della pagina può
+> arrivare dentro la finestra**: con dati in cache o un redirect più lento, gli importi veri
+> lampeggerebbero. Account usa-e-getta rimosso (`HTTP 200`); server fermato, 6168 libera.
+>
+> **Rimedio, approvato dal coordinator (15:1x) nel perimetro proposto; J unico scrittore del layout
+> in questo round.** `routes/(app)/+layout.svelte` (+8/−3): `toStore(() => appBootstrap.ready)` e
+> `$bootstrapReady` nelle due istruzioni `$:` di `onboardingDestination` e `onboardingRouteReady`.
+> Il componente resta legacy.
+>
+> **Reperti residui, lasciati com'erano per decisione:** il blocco `$: if (… claimReactive …)`
+> (rigira quando cambiano le due variabili, ma `claimReactive` è protetto da proprietario attivo e
+> firma già gestita) e la lettura di `onboardingGuide.active?.flow` nella stessa `$:`, della stessa
+> famiglia, senza difetto misurato.
+>
+> **Test di regressione, senza tempi** (via `test-author`, poi verificato da me): `src/routes/(app)/layout.gate.test.ts`
+> + harness `__tests__/harness/AppLayoutGateHarness.svelte`, registrato in `onboarding-component-unit`
+> (+1 riga nel runner). Monta il layout con un `appBootstrap` finto (getter enumerabili sopra `$state`),
+> passa `ready` a vero e fa `tick()`: con un redirect dovuto deve comparire `onboarding-redirecting` e **non**
+> `app-shell`; il controllo, con la stessa destinazione, mostra la pagina e prova che il gate ha rigirato.
+>
+> **⚠️ Fuori pista — serviva un file condiviso.** Vite risolve gli import mentre compila, prima di ogni
+> `vi.mock`: senza alias nessun test poteva caricare un componente che importa `$app/stores` (13 sorgenti,
+> fra cui Sidebar e le pagine). Ok del coordinator (15:26), J unico scrittore nel round: **+1 riga d'alias**
+> in `frontend/vitest.config.ts` e il mock nuovo `src/__mocks__/$app/stores.ts`, con un docstring su cosa
+> **non** simula (routing e navigazione). La fragilità del finto `appBootstrap` è scritta nel test, dove si
+> costruisce. **Verificata compilando il layout:** la condizione di ogni `{#if}` sta dentro `$.untrack(…)`, e
+> il template traccia `appBootstrap` **solo** con `$.deep_read_state(appBootstrap)`, un `for…in` sui getter
+> enumerabili: se `appBootstrap` diventasse un'istanza di classe (getter sul prototipo, non enumerabili),
+> non solo il finto, ma **il layout vero** resterebbe fermo sul caricamento. È un vincolo di produzione, non
+> solo del test.
+>
+> | prova | esito |
+> |---|---|
+> | le tre categorie unit, prima e dopo l'alias, confronto per nome (multiinsieme, vitest diretto, nessuna lane) | `core-unit` 2513 = 2513; `component-unit` 2010 = 2010 (8 titoli ripetuti, identici prima e dopo); `onboarding-component-unit` 400 → **402**: gli unici nomi nuovi sono i 2 test del gate; 0 persi, 0 cambi di stato |
+> | controllo negativo, rifatto da me sui file finali: copia del layout con le due `$:` pre-fix | `2 failed`: *«the requested page shell painted while a redirect is due»*, e il controllo non vede mai `resolveDestination('/dashboard')` |
+> | test vero | `2 passed`; sha256 del layout di produzione identico prima e dopo; nessun residuo |
+> | `prettier --check` sui file nuovi e toccati | pulito |
+>
+> **Misura «dopo»**, stessa sonda, copia rinfrescata di nuovo dalla snapshot, build del frontend
+> che contiene il rimedio (sorgente modificato alle 15:01, `build/index.html` delle 15:31). Alla
+> sonda ho aggiunto un `MutationObserver`: il campionamento per frame vede ciò che viene
+> **disegnato**, e un nodo inserito e tolto nello stesso frame gli sfugge; l'osservatore vede ogni
+> **montaggio**.
+>
+> | scenario (5 giri) | lampo: frame della shell sulla pagina richiesta | shell **montata** sulla pagina richiesta | `onboarding-redirecting` montato | … e disegnato |
+> |---|---|---|---|---|
+> | A · benvenuto pendente, `/settings` | **0** (prima 2–3) | **0/5** | **5/5** (prima 0) | 4/5 |
+> | B · idem, `/dashboard` | **0** (prima 3–5) | **0/5** | **5/5** | 4/5 |
+> | C · replay del benvenuto armata, `/dashboard` | **0** (prima 2–3) | **0/5** | **5/5** | 1/5 |
+> | D · idem, `/brokers` | **0** (prima 1–2) | **0/5** | **5/5** | 3/5 |
+> | E · controllo, senza replay | 0 | 0/5 | 0/5 | 0/5 — shell sulla pagina finale 258–265 frame, come prima |
+>
+> Il segnaposto si monta sempre; quando il redirect arriva nello stesso frame non fa in tempo a
+> essere disegnato, ed è il comportamento giusto: nessun frame mostra la pagina richiesta. Account
+> usa-e-getta rimosso; server fermato, 6168 libera.
+>
+> | E2E di regressione del layout (lane 6158) | esito |
+> |---|---|
+> | `front-utility onboarding-component-unit` (con il test nuovo) | `14 passed`, `402 passed` |
+> | `front-utility auth` | `24 passed` |
+> | `front-utility onboarding-tour` | `10 passed` |
+> | `front-utility onboarding-guides` | `24 passed` |
+> | `front-utility settings` | `45 passed` |
+> | `front-utility header-scroll` | `4 passed` |
+> | `dev.py front check` (client `a085da1c8dac`) | `3 errors and 41 warnings in 4 files`, il pavimento noto |
 
 ### Verifica di C4 — lane 6158, 2026-09-24
 

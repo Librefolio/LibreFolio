@@ -266,6 +266,7 @@ def front_onboarding_component_unit(
             "src/lib/components/onboarding/WelcomePage.test.ts",
             "src/lib/components/onboarding/DeferredAppPopups.test.ts",
             "src/lib/features/onboarding/onboardingRouteSettlement.test.ts",
+            "src/routes/(app)/layout.gate.test.ts",
             "src/lib/components/assets/AssetModal.test.ts",
             "src/lib/components/brokers/BrokerModal.test.ts",
             "src/lib/components/fx/FxPairAddModal.test.ts",
