@@ -19,9 +19,10 @@
  * developer reviewed it on 24/09 and chose option B, **by vehicle**: every ETF subtype belongs
  * to the ETF family, and a thinner, separate outer ring says what kind of ETF it is — "ETF
  * generico" + "ETF azionario". The resolver is `allocationFamily`, pinned in
- * `allocationFamily.test.ts`. The first block below replays the developer's measured numbers
- * through the real one, after proving that on the same numbers the content grouping draws the
- * picture the review turned down.
+ * `allocationFamily.test.ts`. The first block below replays the **review case** through the
+ * real one — synthetic numbers with the shape of the portfolio the review was made on — after
+ * proving that on the same numbers the content grouping draws the picture the review turned
+ * down.
  *
  * The builder itself takes families as given — nothing in it depends on that choice — so the
  * builder tests run on a **stub** of the vehicle resolver: the real one imports K's
@@ -51,8 +52,12 @@
  *    label for a subtype, and a *generic* caption for the unspecialised member of a split
  *    family — never the bare family label, which beside "ETF azionario" would read as the
  *    whole family.
- * 6. **One rounding for a member and its family.** R12d: "ETF azionario 3.48%" beside
- *    "↳ Azione 3.5%" were two roundings of one quantity.
+ * 6. **One rounding for a member and its family.** R12d: a member and its family were printed
+ *    at two different precisions — two roundings of one quantity, read as two quantities.
+ *
+ * No fixture holds a real portfolio figure: every weight and amount below is synthetic (rule of
+ * 24/09 — no real financial value of the developer in a versioned file). The review case keeps
+ * only the *shape* of the portfolio the review was made on.
  *
  * The labels are this file's own (`TYPE_LABELS`), shaped like the developer's Italian screen.
  * The product catalogue is never loaded, so asserting on them asserts the naming rules, not a
@@ -169,20 +174,24 @@ function entry(key: string, value: number): Entry {
 }
 
 /**
- * The developer's `by_type` as measured on 24/09/2026, in percent, with the backend's keys and
- * casing. On screen: inner ETF 53.05 · Crowdfunding 30.77 · Obbligazione 16.18 · Liquidità
- * 0.01; outer ETF generico 49.56 + ETF azionario 3.49 = 53.05.
+ * The review case of R12 (24/09/2026): a large generic ETF, a small equity ETF — the lone subtype
+ * of the ETF family — a mid crowdfunding slice, a mid bond slice and a tiny cash bucket, with the
+ * backend's keys and casing, in percent, summing to 100.
+ *
+ * The values are **synthetic**: only the shape comes from the review — which families there are,
+ * which one is split, and how their sizes rank (generic ETF > CROWDFUND > BOND > ETF_STOCK >
+ * Liquidity > 0, so the content grouping of K2 would rank the equity ETF's family fourth).
  */
-const DEVELOPER_ENTRIES = [entry('ETF', 49.56), entry('CROWDFUND', 30.77), entry('BOND', 16.18), entry('ETF_STOCK', 3.49), entry('Liquidity', 0.01)];
+const REVIEW_CASE_ENTRIES = [entry('ETF', 56.4), entry('CROWDFUND', 23.7), entry('BOND', 13.9), entry('ETF_STOCK', 5.2), entry('Liquidity', 0.8)];
 
-/** The same portfolio without its generic ETF: the ETF family is then a lone subtype. */
-const LONE_SUBTYPE_ENTRIES = [entry('CROWDFUND', 30.77), entry('BOND', 16.18), entry('ETF_STOCK', 3.49), entry('Liquidity', 0.01)];
+/** The same case without its generic ETF: the ETF family is then a lone subtype. */
+const LONE_SUBTYPE_ENTRIES = [entry('CROWDFUND', 23.7), entry('BOND', 13.9), entry('ETF_STOCK', 5.2), entry('Liquidity', 0.8)];
 
 /** A full family: the subtype outweighs the generic member and is listed first. */
-const FULL_FAMILY_ENTRIES = [entry('ETF_STOCK', 70), entry('BOND', 50), entry('ETF', 30)];
+const FULL_FAMILY_ENTRIES = [entry('ETF_STOCK', 70), entry('BOND', 45), entry('ETF', 30)];
 
 /** A family of five, beside two of the base types its subtypes contain, and four unsplit families. */
-const EVERY_SHAPE_ENTRIES = [entry('ETF', 24.1), entry('CROWDFUND', 15.35), entry('BOND', 12.4), entry('ETF_BOND', 7.25), entry('ETF_STOCK', 9.8), entry('REAL_ESTATE', 6.5), entry('ETF_REAL_ESTATE', 4.05), entry('ETF_MONETARY', 2.2), entry('Liquidity', 0.05)];
+const EVERY_SHAPE_ENTRIES = [entry('ETF', 24.1), entry('CROWDFUND', 15.35), entry('BOND', 12.4), entry('ETF_BOND', 7.25), entry('ETF_STOCK', 9.8), entry('REAL_ESTATE', 6.5), entry('ETF_REAL_ESTATE', 4.05), entry('ETF_MONETARY', 2.2), entry('Liquidity', 0.6)];
 
 /**
  * A family of three under `resolveByContent`, through the fictitious key. Input order and weight
@@ -325,32 +334,32 @@ async function importRealResolvers() {
 }
 
 // =============================================================================
-// R12, option B — the developer's numbers, grouped by vehicle
+// R12, option B — the review case, grouped by vehicle
 // =============================================================================
 
-describe("the pie groups by vehicle — the developer's numbers (R12, option B)", () => {
+describe('the pie groups by vehicle — the review case (R12, option B)', () => {
     it.each(PIE_PALETTES)('splits the ETF family alone, into ETF generico + ETF azionario, on %s', async (_name, palette) => {
         const {allocationFamily, primaryAssetType} = await importRealResolvers();
 
         // Barrier: this is the input on which the two groupings disagree. By content — K2, the
         // pie's until 24/09 and still the history chart's — the same numbers put the equity ETF in
         // a family of its own, "Azione", apart from the generic ETF: the picture the review turned down.
-        const byContent = ringsFor(DEVELOPER_ENTRIES, {palette, resolve: primaryAssetType}).layout;
+        const byContent = ringsFor(REVIEW_CASE_ENTRIES, {palette, resolve: primaryAssetType}).layout;
         expect(byContent.base.map((arc) => arc.primary)).toEqual(['ETF', 'CROWDFUND', 'BOND', 'STOCK', 'LIQUIDITY']);
         expect(baseArcOf(byContent, 'ETF').split).toBe(false);
         expect(outerArcsOf(byContent, 'STOCK').map((arc) => arc.key)).toEqual(['ETF_STOCK']);
 
-        const {layout} = ringsFor(DEVELOPER_ENTRIES, {palette, resolve: allocationFamily});
+        const {layout} = ringsFor(REVIEW_CASE_ENTRIES, {palette, resolve: allocationFamily});
         expect(layout.rings).toBe(true);
         expect(layout.base.map((arc) => arc.primary)).toEqual(['ETF', 'CROWDFUND', 'BOND', 'LIQUIDITY']);
 
-        // One family for both ETFs, weighing their sum: 49.56 + 3.49, the 53.05 of the inner ring.
+        // One family for both ETFs, weighing their sum: 56.4 + 5.2.
         const family = baseArcOf(layout, 'ETF');
         expect(family.key).toBe('ETF');
         expect(family.role).toBe('base');
         expect(family.split).toBe(true);
         expect(family.memberCount).toBe(2);
-        expect(family.weight).toBeCloseTo(53.05, 9);
+        expect(family.weight).toBeCloseTo(61.6, 9);
         expect(family.color).toBe(palette[0]);
         expect(family.items.map((item) => item.id)).toEqual(['item-ETF', 'item-ETF_STOCK']);
 
@@ -360,8 +369,8 @@ describe("the pie groups by vehicle — the developer's numbers (R12, option B)"
         expect(members.map((arc) => arc.key)).toEqual(['ETF', 'ETF_STOCK']);
         expect(members.map((arc) => arc.pure)).toEqual([true, false]);
         const [generic, equity] = members;
-        expect(generic.weight).toBeCloseTo(49.56, 9);
-        expect(equity.weight).toBeCloseTo(3.49, 9);
+        expect(generic.weight).toBeCloseTo(56.4, 9);
+        expect(equity.weight).toBeCloseTo(5.2, 9);
 
         // ETF generico wears the family colour verbatim; ETF azionario the family's first shade — at
         // a distance the eye can use, on the same hue, so it still reads as an ETF.
@@ -419,7 +428,7 @@ describe('buildAllocationRings — split families', () => {
         expect(family.role).toBe('base');
         expect(family.split).toBe(true);
         expect(family.memberCount).toBe(1);
-        expect(family.weight).toBeCloseTo(3.49, 9);
+        expect(family.weight).toBeCloseTo(5.2, 9);
         expect(family.color).toBe(palette[2]);
         expect(family.items.map((item) => item.id)).toEqual(['item-ETF_STOCK']);
 
@@ -429,7 +438,7 @@ describe('buildAllocationRings — split families', () => {
         expect(lone.role).toBe('member');
         expect(lone.key).toBe('ETF_STOCK');
         expect(lone.pure).toBe(false);
-        expect(lone.weight).toBeCloseTo(3.49, 9);
+        expect(lone.weight).toBeCloseTo(5.2, 9);
 
         // The fix, stated three ways. A colour other than the family's — under D71 it was the
         // same one …
@@ -523,7 +532,7 @@ describe('buildAllocationRings — unsplit families', () => {
     it('gives a family without subtypes one filler, with its base weight and colour', () => {
         const bond = entry('BOND', 40);
         // A split family beside it, so the outer ring is really drawn.
-        const {layout} = ringsFor([entry('ETF', 50), entry('ETF_STOCK', 25), bond]);
+        const {layout} = ringsFor([entry('ETF', 55), entry('ETF_STOCK', 25), bond]);
         expect(layout.rings).toBe(true);
 
         const family = baseArcOf(layout, 'BOND');
@@ -547,7 +556,7 @@ describe('buildAllocationRings — unsplit families', () => {
 
     it('keeps the synthetic "Liquidity" bucket as its own family, drawn as a filler', () => {
         const liquidity = entry('Liquidity', 30);
-        const {layout} = ringsFor([entry('ETF', 50), entry('ETF_STOCK', 20), liquidity]);
+        const {layout} = ringsFor([entry('ETF', 55), entry('ETF_STOCK', 20), liquidity]);
 
         expect(layout.rings).toBe(true);
         expect(layout.base.map((arc) => arc.primary)).toEqual(['ETF', 'LIQUIDITY']);
@@ -604,7 +613,7 @@ describe('buildAllocationRings — unsplit families', () => {
 // =============================================================================
 
 const ALIGNMENT_SCENARIOS: ReadonlyArray<readonly [string, readonly Entry[], Resolver]> = [
-    ["the developer's numbers (24/09)", DEVELOPER_ENTRIES, resolveByVehicle],
+    ['the review case', REVIEW_CASE_ENTRIES, resolveByVehicle],
     ['a lone subtype, its generic member absent', LONE_SUBTYPE_ENTRIES, resolveByVehicle],
     ['a full family', FULL_FAMILY_ENTRIES, resolveByVehicle],
     ['a family of five, beside the base types it holds', EVERY_SHAPE_ENTRIES, resolveByVehicle],
@@ -653,7 +662,7 @@ describe('buildAllocationRings — when to draw two rings', () => {
     it('reports rings === false when no family holds a subtype, and true as soon as one does', () => {
         // Realistic, and deliberately tempting: a Title Case bucket, the generic ETF and a base
         // type with an underscore — none of which is a subtype.
-        const plain = [entry('STOCK', 40), entry('BOND', 25), entry('ETF', 20), entry('CROWDFUND', 9.99), entry('REAL_ESTATE', 5), entry('Liquidity', 0.01)];
+        const plain = [entry('STOCK', 40), entry('BOND', 25), entry('ETF', 20), entry('CROWDFUND', 9.4), entry('REAL_ESTATE', 5), entry('Liquidity', 0.6)];
         const {layout} = ringsFor(plain);
 
         // Barrier: a non-empty layout, so "nothing is split" is not vacuous.
@@ -700,7 +709,7 @@ describe('buildAllocationRings — short palette', () => {
 // =============================================================================
 
 const LEGEND_SCENARIOS: ReadonlyArray<readonly [string, readonly Entry[], Resolver]> = [
-    ["the developer's numbers (24/09)", DEVELOPER_ENTRIES, resolveByVehicle],
+    ['the review case', REVIEW_CASE_ENTRIES, resolveByVehicle],
     ['a lone subtype, its generic member absent', LONE_SUBTYPE_ENTRIES, resolveByVehicle],
     ['a family of five', EVERY_SHAPE_ENTRIES, resolveByVehicle],
     ['a family of three, by content', FAMILY_OF_THREE_ENTRIES, resolveByContent],
@@ -753,8 +762,8 @@ describe('buildAllocationRingData — a legend click hides a family on both ring
 // =============================================================================
 
 describe('buildAllocationRingData — captions', () => {
-    it("captions the developer's arcs: the family on base arcs and fillers, ETF generico and ETF azionario on the outer ring", () => {
-        const {data} = ringDataFor(DEVELOPER_ENTRIES);
+    it('captions the review case: the family on base arcs and fillers, ETF generico and ETF azionario on the outer ring', () => {
+        const {data} = ringDataFor(REVIEW_CASE_ENTRIES);
 
         // Base ring: every arc is a family, and says so.
         expect(data.base.map((datum) => [datum.rawName, datum.caption])).toEqual([
@@ -784,7 +793,7 @@ describe('buildAllocationRingData — captions', () => {
         expect(generic.caption).toBe(genericCaption(typeLabel('ETF')));
         expect(generic.caption).not.toBe(typeLabel('ETF'));
 
-        // In the developer's words — with this file's labels, not the product catalogue.
+        // In the review's words — with this file's labels, not the product catalogue.
         expect(data.outer.filter((datum) => !datum.filler).map((datum) => datum.caption)).toEqual(['ETF generico', 'ETF azionario']);
     });
 
@@ -805,27 +814,40 @@ describe('buildAllocationRingData — captions', () => {
 // The arcs the pie draws — one rounding for a member and its family
 // =============================================================================
 
-/** The developer's portfolio at four decimals: ETF azionario 3.4912, in a family of 53.0488. */
-const UNROUNDED_ENTRIES = [entry('ETF', 49.5576), entry('CROWDFUND', 30.77), entry('BOND', 16.18), entry('ETF_STOCK', 3.4912), entry('Liquidity', 0.01)];
+/**
+ * The review case at four decimals — synthetic, like every weight in this file: ETF azionario
+ * 5.2137 in a family of 61.5863, summing to 100 with the other slices. Chosen so that two
+ * decimals and one decimal print both the member and the family differently.
+ */
+const UNROUNDED_ENTRIES = [entry('ETF', 56.3726), entry('CROWDFUND', 23.7), entry('BOND', 13.9), entry('ETF_STOCK', 5.2137), entry('Liquidity', 0.8137)];
+
+/** The rule the review turned down for a family beside its member: one decimal. */
+const roundTo1Decimal = (value: number): number => Math.round(value * 10) / 10;
 
 describe('buildAllocationRingData — rounding', () => {
-    it('rounds ETF azionario to 3.49 and its family to 53.05 under a two-decimal rule — never 3.5 beside 53.0', () => {
+    it('rounds ETF azionario to 5.21 and its family to 61.59 under a two-decimal rule — never 5.2 beside 61.6', () => {
         const {layout, data} = ringDataFor(UNROUNDED_ENTRIES, {round: roundTo2Decimals});
 
-        // Barrier: the raw family total really needs rounding.
-        expect(baseArcOf(layout, 'ETF').weight).toBeCloseTo(53.0488, 9);
+        // Barrier: the raw figures really need rounding, and one decimal would print the member and
+        // the family differently from two — otherwise a one-decimal total would pass unseen.
+        const rawFamily = baseArcOf(layout, 'ETF').weight;
+        const rawMember = outerArcsOf(layout, 'ETF').find((arc) => arc.key === 'ETF_STOCK')!.weight;
+        expect(rawFamily).toBeCloseTo(61.5863, 9);
+        expect(rawMember).toBeCloseTo(5.2137, 9);
+        expect(roundTo1Decimal(rawFamily)).not.toBe(roundTo2Decimals(rawFamily));
+        expect(roundTo1Decimal(rawMember)).not.toBe(roundTo2Decimals(rawMember));
 
         const equity = outerDatumOf(data, 'ETF_STOCK');
-        expect(equity.value).toBe(3.49);
-        expect(equity.primaryTotal).toBe(53.05);
+        expect(equity.value).toBe(5.21);
+        expect(equity.primaryTotal).toBe(61.59);
 
         const generic = outerDatumOf(data, 'ETF');
-        expect(generic.value).toBe(49.56);
-        expect(generic.primaryTotal).toBe(53.05);
+        expect(generic.value).toBe(56.37);
+        expect(generic.primaryTotal).toBe(61.59);
 
         const family = baseDatumOf(data, 'ETF');
-        expect(family.value).toBe(53.05);
-        expect(family.primaryTotal).toBe(53.05);
+        expect(family.value).toBe(61.59);
+        expect(family.primaryTotal).toBe(61.59);
 
         // Every arc of both rings quotes its family's total exactly as the family's own arc shows it.
         const disagreeing = [...data.base, ...data.outer].filter((datum) => datum.primaryTotal !== baseDatumOf(data, datum.primaryKey).value).map((datum) => `${datum.ringRole} ${datum.rawName}: ${datum.primaryTotal} vs ${baseDatumOf(data, datum.primaryKey).value}`);
@@ -837,9 +859,9 @@ describe('buildAllocationRingData — rounding', () => {
         const {data} = ringDataFor(UNROUNDED_ENTRIES, {round: Math.round});
 
         const equity = outerDatumOf(data, 'ETF_STOCK');
-        expect(equity.value).toBe(3);
-        expect(equity.primaryTotal).toBe(53);
-        expect(baseDatumOf(data, 'ETF').value).toBe(53);
+        expect(equity.value).toBe(5);
+        expect(equity.primaryTotal).toBe(62);
+        expect(baseDatumOf(data, 'ETF').value).toBe(62);
     });
 });
 
