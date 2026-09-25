@@ -180,16 +180,182 @@
   > **Fuori pista**: il primo giro di gate ha usato nomi d'azione sbagliati (`tx-import-ca-contract`,
   > `tx-import-asset-identity`). I nomi del runner sono `tx-ca-contract` e `tx-asset-identity`; li ho
   > rilanciati.
-- [ ] **9.3 C2**
+- [x] **9.3 C2** — ✅ 2026-09-25
   - Rosso prima: E3.
   - Codice: `carryResolverChoices`, `refreshDuplicateReport`, `handleImport`, i18n ×4.
   - Test: poi U5 ed E4.
   - DoD: U5, E3 ed E4 verdi, mutazioni rosse, E4-05 verde senza ritocchi.
-- [ ] **9.4 Gate e handoff**
+  > **Note implementazione** (2026-09-24, rossi prima del codice, HEAD `78d324873`): test-author ha
+  > scritto U5, E3 ed E4 contro il codice attuale.
+  > - U5 (`importDuplicateResolver.test.ts`), 11 casi: **11 falliti, 33 passati**. Tutti falliscono con
+  >   `TypeError: carryResolverChoices is not a function`; i test che c'erano già passano.
+  > - `tx-import-duplicate-precedence`: **5 test, 3 ✓ e 2 ✘**, risultato identico su due run (log
+  >   `/tmp/libreFolio_k_iw_c2_red.log` e `…_run1.log`).
+  >   - E1, E2 ed E5 ✓.
+  >   - E3 ✘ solo su «the wizard went back to the duplicates step». Nello screenshot lo step 5 ha
+  >     «All auto-resolved»: la scelta «tieni entrambe» è sparita.
+  >   - E4 ✘ solo sulle due asserzioni soft: nessun `toast-warning` e nessun evento
+  >     `tx.import.duplicates.changed`. Il resto del percorso passa già oggi: ritorno, revisione, e una
+  >     sola copia messa in stage.
+  >
+  > **Fuori pista**: leggendo `brim_provider.py:1480-1630` è emerso un caso che il piano non copriva.
+  > - Il backend restringe il confronto col DB all'asset solo quando l'asset è risolto
+  >   (`asset_id == reale OR NULL`); una riga non risolta si confronta con tutti gli asset.
+  > - Quindi, se nella revisione l'utente lega di nuovo un gruppo a un altro asset, una copia unica
+  >   può diventare un duplicato fermo del DB. Una scelta manuale riportata così com'è la farebbe
+  >   importare.
+  > - Regola aggiunta: un gruppo già deciso a mano, in cui una copia ha cambiato
+  >   `hasFirmOutsideCollision` in un senso o nell'altro, conta come `changed`. Le sue scelte cadono e
+  >   si torna allo step 5.
+  > - I gruppi non toccati ricalcolano i default, e resta a guardia l'avviso «selezione cambiata».
+  > - API: quarto argomento opzionale `{previousRows, nextRows}`, così U5 resta valido.
+  > - Testo del toast: «new or changed duplicates».
+  > - Da coprire con casi U5 in più e con E6: rilegatura nella revisione, toast ed evento.
+  >
+  > **Note implementazione** (2026-09-24 sera, codice C2):
+  > - `importDuplicateResolver.ts`: `ResolverChoices`, `CarriedResolverChoices`, `carryResolverChoices`.
+  >   È puro: firma dei membri ordinata, e la regola sui verdetti con il quarto argomento opzionale.
+  > - `ImportWizardModal.svelte`:
+  >   - `rebuildDuplicateGroups(txArr, assetMap, previous?)` riporta le scelte *prima* di
+  >     `applyPendingDuplicateGroups`, che le legge, e restituisce i gruppi `changed`;
+  >   - `refreshDuplicateReport` non azzera più le scelte: fotografa gruppi, righe e scelte, poi
+  >     ricostruisce e restituisce `changed`, oppure `[]` se il ricontrollo non si completa;
+  >   - `handleImport` torna allo step dei duplicati solo con `changed` non vuoto, e lo dice con
+  >     `notify` (`tx.import.duplicates.changed`, detail `groups: [{key, memberIndices}]`) e un
+  >     toast warning. Poi c'è la guardia «selezione cambiata», intatta.
+  > - i18n: `importWizard.duplicatesChangedReview` ×4 con `dev.py i18n add`, +2 −1 per catalogo.
+  > - Evidenze:
+  >   - vitest su `utils/transactions`: 15 file, **308/308**;
+  >   - `dev.py front build` exit 0; svelte-check dà 3 errori, gli stessi della baseline, in nessun
+  >     file di K;
+  >   - `tx-import-duplicate-precedence`: **5/5 ✓**, E3 ed E4 compresi (log
+  >     `/tmp/libreFolio_k_iw_c2_green.log`).
+  > - Documentazione (docs-writer, solo EN, nessuno stamp):
+  >   - pagina developer `import-wizard.md`, solo le sezioni Duplicate detection, Batch Duplicate
+  >     Resolver e N-way Compare Modal;
+  >   - pagina utente `how-to.en.md`, solo la nota Duplicates e «Duplicates Against Your Database»;
+  >   - riletta contro il codice finale: nomi, testo del toast e regola corrispondono. La sezione
+  >     della guida di J non è toccata.
+  >   - Debito di traduzione su `how-to` it/fr/es: la nota Duplicates (due punti) e una frase di
+  >     «Duplicates Against Your Database».
+  >
+  > **Note implementazione** (2026-09-24 sera, test aggiunti dopo il codice e prove):
+  > - Test-author ha aggiunto:
+  >   - **U5b**, 10 casi sulla regola dei verdetti: `likely` che compare o sparisce, `pending_duplicate`,
+  >     verdetti deboli, gruppo non toccato, senza `rows`, riga mancante, due gruppi. Con U5:
+  >     **54/54**.
+  >   - **E6**, la rilegatura nella revisione. T è legato a P al parse ed è unico, mentre il suo gemello
+  >     è committato su Q. Allo step 5 si tengono entrambe le copie; nella revisione si rilega a Q e si
+  >     risponde «skip» al prompt dell'identificativo. Importa: ritorno allo step 5 con toast ed evento,
+  >     il default ora non tiene nessuna copia, e dopo Importa va in stage solo il DEPOSIT.
+  >   - `tx-import-duplicate-precedence`: **6/6 ✓** (log `/tmp/libreFolio_k_iw_c2_e6.log`).
+  > - **Mutazioni** (script `/tmp/libreFolio_k_iw_mutations_c2.py`, ogni file ripristinato identico e
+  >   verificato con SHA-256): tutte e otto **rosse**.
+  >   - M9, gruppi riconosciuti per chiave → 15 test U5 rossi;
+  >   - M10, riportati anche i gruppi non toccati → 3;
+  >   - M11, regola dei verdetti spenta → 4;
+  >   - M12, gruppi nuovi non segnati come `changed` → 5;
+  >   - M13, ritorno allo step 5 con un gruppo qualsiasi → E3;
+  >   - M14, ricostruzione senza riporto → E4 ed E6. E3 sopravvive: la chiave del suo gruppo non
+  >     cambia, quindi lo stato vecchio vale ancora per chiave. Per E3 fa fede il rosso su HEAD;
+  >   - M15, regola dei verdetti non collegata nel componente → E6;
+  >   - M16, evento rinominato → E4 ed E6.
+  > - **Baseline** (`/tmp/libreFolio_k_iw_baseline_c2.sh`): i due file di prodotto riportati a HEAD
+  >   `78d324873`, build, run, ripristino identico. Risultato: E1, E2 ed E5 ✓; E3 ✘ per il ritorno allo
+  >   step 5; E4 ✘ su toast ed evento; E6 ✘ su «going back is announced with a warning toast».
+  > - **Gate** nella lane 6155 (`/tmp/libreFolio_k_iw_gates_c2.sh`), **interrotti alle 18:40 dalla
+  >   PAUSA** chiesta dal coordinator:
+  >   - build exit 0; svelte-check 3 errori, gli stessi della baseline;
+  >   - `tx-import-duplicate-precedence` 6/6 ✓;
+  >   - `tx-import-matching` 6/6 ✓, E4-05 compreso, senza ritocchi;
+  >   - `tx-import-resolution` 11/12, con IWR-006 ✘ già noto;
+  >   - `tx-import-flow` 10/10 ✓;
+  >   - `tx-brim-import` interrotto a metà.
+  >
+  > **Stato alla PAUSA** (2026-09-24 18:45):
+  > - HEAD `78d324873`, stage vuoto, 11 percorsi modificati, nessun file nuovo.
+  > - Porte 6155 e 6165 libere, nessun processo della lane acceso.
+  > - Mancano, in ordine:
+  >   1. i gate restanti, uno alla volta con `dev.py test --test-port 6155 --data-dir
+  >      /tmp/librefolio-r2-k`: `front-transaction tx-brim-import`, `tx-ca-contract`,
+  >      `tx-asset-identity`, `tx-import-asset-inspector`, poi `front-utility core-unit` e
+  >      `front-transaction tx-unit`. Prima serve un `dev.py front build`, se il build non è più
+  >      aggiornato;
+  >   2. la validazione della documentazione: `dev.py mkdocs build` (strict), poi `git status` per
+  >      vedere se `copy_docs_assets()` ha riscritto icone, favicon o `sw.js` tracciati (nel caso, esclusi
+  >      e segnalati), poi `dev.py mkdocs check-links` e `dev.py mkdocs translate-validate`;
+  >   3. gli statici: prettier sui file toccati e knip;
+  >   4. il passo 9.4: nota finale del piano, messaggi di commit (codice, docs, journal) e **CHECKPOINT
+  >      READY C2**. Il checkpoint porta il testo sostitutivo per il punto «duplicate-recheck bounce»
+  >      nella sezione della guida (di J), la voce di CHANGELOG e la nota sulla galleria
+  >      `import-wizard-duplicates-step`.
+  > - Se nel frattempo il Mac si riavvia, `/tmp` si svuota: script e log spariscono, e anche la data-dir
+  >   della lane. I numeri sono già scritti qui, e i comandi sopra bastano a rifare tutto.
+  >
+  > **In coda dopo C2**: **C3**, la raffica di `GET /api/v1/brokers/{id}` dalla pagina Transazioni
+  > (40–60 richieste al secondo, anche in `v1.1.0`), assegnata dal coordinator. Prima analisi, poi codice.
+  > Avrà un piano suo.
+  >
+  > **Note implementazione** (2026-09-25, ripresa dopo la PAUSA e il riavvio del Mac alle 08:58):
+  > - `/tmp/librefolio-r2-k` era sparita: l'ha ricreata il runner. Non ho fatto nessuna copia di prod,
+  >   per C2 non serve, quindi la correzione della snapshot delle 09:15 non mi riguarda.
+  > - Gate restanti (`/tmp/libreFolio_k_iw_gates_c2b.sh`, lane 6155, uno alla volta):
+  >
+  >   | selettore | esito |
+  >   |---|---|
+  >   | build | exit 0; svelte-check 3 errori, gli stessi della baseline |
+  >   | `tx-asset-identity` | 9/9 ✓ |
+  >   | `front-utility core-unit` | 90 file, 2493 ✓ |
+  >   | `front-transaction tx-unit` | 8 file, 369 ✓ |
+  >   | `tx-brim-import` | T1 ✘ |
+  >   | `tx-ca-contract` | 10/12, CAC-011 e CAC-012 ✘ |
+  >   | `tx-import-asset-inspector` | 4/5, E2-001 ✘ |
+  >
+  > - Confronto con HEAD `78d324873` (`/tmp/libreFolio_k_iw_baseline_c2b.sh`): i due file di prodotto
+  >   di C2 riportati a HEAD, build, run, ripristino identico verificato con SHA-256, poi di nuovo
+  >   l'inspector sul codice C2.
+  >   - **T1, CAC-011, CAC-012 ed E2-001 falliscono anche su HEAD, e negli stessi punti**:
+  >     - T1: `tx-brim-import.spec.ts:113`, `import-wizard-step4` mai visibile;
+  >     - CAC-011 e CAC-012: `tx-import-ca-contract.spec.ts:150`, idem;
+  >     - E2-001: `tx-import-asset-inspector.spec.ts:476`, listbox della valuta.
+  >   - E2-001 ✘ anche nel secondo run su C2. Il modo di fallire è quello già documentato in
+  >     `B-esecuzione.md` (`optionsClosed()` soddisfatto da una tendina aperta ma vuota) e nel piano K,
+  >     step 7.
+  >   - Nessuno di questi rossi viene da C2. Non li correggo: li attribuisce il coordinator sul target.
+  > - Documentazione:
+  >   - `dev.py mkdocs build` (strict): exit 0, 0 righe `WARNING`; c'è solo il banner di Material su
+  >     MkDocs 2.0;
+  >   - `git status` identico prima e dopo la build: `copy_docs_assets()` non ha riscritto nessun
+  >     file tracciato;
+  >   - `dev.py mkdocs check-links`: 80 link validi ✅;
+  >   - `dev.py mkdocs translate-validate`: exit 1 con 486 errori su tutto il sito, debito
+  >     preesistente. Delta di K: su `how-to.en.md` i bullet passano da 28 a 29, mentre titoli (12) e
+  >     link (7) non cambiano. Quindi il WARN `list-bullet-count` sale di uno per lingua; gli ERROR
+  >     `heading-count` e `link-missing` (sezione Guided First Import) c'erano già. `import-wizard.md`
+  >     è una pagina developer solo EN, senza traduzioni.
+  > - Statici:
+  >   - prettier pulito sugli 8 file frontend;
+  >   - `npm run lint:dead` (knip, binario locale): nessun reperto nei file di K; restano solo reperti
+  >     preesistenti in altri file.
+  > - Gallery: `import-wizard-duplicates-step` arriva allo step dal flusso «Correzioni → Continua», non
+  >   dal ritorno di Importa: C2 non ne rompe il percorso. Lo screenshot può cambiare per C1, se la sua
+  >   fixture ha collisioni col DB.
+
+- [x] **9.4 Gate e handoff** — ✅ 2026-09-25
   - Regressione `tx-import-*` e `front-utility core-unit`.
   - `dev.py front check`, lint e dead-code.
   - Nota sulla galleria `import-wizard-duplicates-step`.
   - **CHECKPOINT C2**.
+  > **Note implementazione**:
+  > - Gate e statici: sopra, in 9.2 e 9.3.
+  > - Messaggi di commit per C2 in `/tmp/libreFolio_commits/`: `k-6-c2-recheck.txt` (codice),
+  >   `k-7-docs-duplicates.txt` (docs, C1 + C2), `k-8-journal-c2.txt` (journal).
+  > - Testo sostitutivo per il punto «The duplicate-recheck bounce» della sezione guida (di J) in
+  >   `developer/frontend/components/features/import-wizard.md`: consegnato al coordinator. Lo applica
+  >   all'integrazione chi fra J e K entra per secondo.
+  > - CHANGELOG proposto (🐛 Fixed): due voci, una per C1 e una per C2, nel messaggio di handoff.
+  > - Debito di traduzione dichiarato: `how-to` it/fr/es, cioè la nota Duplicates (due punti) e una
+  >   frase di «Duplicates Against Your Database».
 
 ## Test list
 
@@ -205,6 +371,11 @@
 | E3 | E2E | un gruppo fuori dal DB più una riga con asset ambiguo; allo step 5 «Tutte»; allo step 6 scelta a mano dell'asset; Importa → editor senza passare dallo step 5, con **entrambe** le copie nel payload | 🔴 |
 | E4 | E2E, negativo di E3 | la risoluzione cambia i membri di un gruppo: Importa → step 5 con toast ed evento `tx.import.duplicates.changed` | 🔴 sull'avviso |
 | R | regressione | `tx-import-matching` (E4-05), `tx-import-resolution`, `tx-import-flow`, `tx-brim-import`, `tx-import-ca-contract`, `tx-import-asset-identity`, `tx-import-asset-inspector`, `front-utility core-unit` | — |
+| U5b | unit, in corso d'opera | regola dei verdetti di `carryResolverChoices`: un gruppo toccato che guadagna o perde una collisione ferma è `changed`; verdetti deboli, gruppo non toccato, senza `rows`, riga mancante → riportato o ignorato | — |
+| U6 | unit, in corso d'opera | `buildMergedTransactions` scrive `dbDuplicateStatus` (`likely`/`possible`/nessuno, anche con match tutti da cancellare) | — |
+| U7 | unit, in corso d'opera | `rowAfterRecheck`: il verdetto DB vecchio non sopravvive, i marcatori di lotto ed editor si azzerano, la selezione si ricalcola | — |
+| E5 | E2E, in corso d'opera | reimport dall'editor in sospeso: nessuna copia tenuta né preselezionata; la copia mostrata è elencata e deselezionata, il badge apre il confronto con l'editor, anche dopo «ricalcola default» | — |
+| E6 | E2E, in corso d'opera | rilegatura nella revisione a un asset che ha il gemello nel DB: Importa → step 5 con toast ed evento, il default non tiene nessuna copia, va in stage solo il DEPOSIT | 🔴 su HEAD, su toast ed evento |
 
 - Gli E2E stanno in una spec **nuova**, `e2e/transactions/tx-import-duplicate-precedence.spec.ts`.
 - È write-safe come le E4: broker, asset, file CSV Generic e transazioni sono tutti del test, e il test
