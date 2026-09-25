@@ -21,6 +21,7 @@
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import {makePositionKey} from '$lib/utils/core/positionKey';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
+    import {maskableQuantity} from '$lib/utils/privacy/maskable';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {attachOverflowMarqueeToDescendants} from '$lib/actions/scrollOnOverflow';
@@ -147,8 +148,9 @@
         };
     }
 
+    /** A position quantity; masked under privacy (D5′), an em dash when absent. */
     function formatQuantity(value: number | null): string {
-        return value == null ? '—' : value.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 6});
+        return value == null ? '—' : maskableQuantity(value.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 6}));
     }
 
     function label(key: string, fallback: string): string {
@@ -385,12 +387,11 @@
                 sortable: true,
                 hiddenByDefault: true,
                 getValue: (row) => row.price ?? 0,
-                // Deliberately NOT `sensitivity: 'public'`, although it is the same
-                // kind of market quote that AssetTable publishes. Here the row also
-                // carries `quantity` (visible by D5) and `value` (masked), and
-                // quantity × price reconstructs value. The quote is public; showing
-                // it *next to these neighbours* is not.
-                cell: (row) => (row.price == null ? '—' : formatCurrencyAmountPlain(row.price, displayCurrency)),
+                // Public, like the same quote in AssetTable. Until 2026-09-23 it was masked
+                // on purpose: the row also carried `quantity`, visible by D5, and
+                // quantity × price reconstructs `value`. D5′ masks the quantity beside it,
+                // so the reason is gone, and a market price is not patrimony.
+                cell: (row) => (row.price == null ? '—' : formatCurrencyAmountPlain(row.price, displayCurrency, {sensitivity: 'public'})),
             },
             {
                 id: 'pmc',
@@ -405,7 +406,8 @@
                 sortable: true,
                 hiddenByDefault: true,
                 getValue: (row) => row.wacPerUnit ?? 0,
-                cell: (row) => (row.wacPerUnit == null ? '—' : formatCurrencyAmountPlain(row.wacPerUnit, displayCurrency)),
+                // The WAC per unit is admissible (product owner, 2026-09-22); masked only while the quantity was visible.
+                cell: (row) => (row.wacPerUnit == null ? '—' : formatCurrencyAmountPlain(row.wacPerUnit, displayCurrency, {sensitivity: 'public'})),
             },
             {
                 id: 'oldest-open-lot',
