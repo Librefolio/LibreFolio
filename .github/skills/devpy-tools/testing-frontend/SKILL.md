@@ -334,6 +334,15 @@ gate stays green while the money walks out. When you widen a token, measure the 
 adding `symbol` cost one new hit, adding `sign` would have cost 29, nearly all of them percentages
 and CSS class names.
 
+🔴 **What that gate cannot see, measured in its second round.** (1) A *legacy* (non-runes)
+component that calls a formatter inside its template: the call compiles into `$.untrack`, the
+privacy flag is never tracked, and the output freezes at mount — the site is registered, masked
+and green, and still does not react to the toggle (R20, the Brokers page). Neither the gate nor a
+formatter unit test can catch this; only a component test that **toggles privacy in place, in both
+directions** does (`BrokerCard.test.ts`, `CurrencyAmount.test.ts` with its legacy host harness).
+(2) Axes and labels with no currency token. (3) A `public` marking: once a site is marked public,
+nothing re-examines it — only the tests of that site protect the decision.
+
 > The sites a gate like this finds on the day you write it are not the point; they are already in
 > front of you. Its value is failing on the day of the next one — which is also why its registry
 > must refuse entries for code that no longer exists: a list nobody trusts makes the next real

@@ -357,8 +357,8 @@ separate flow for every wizard screen.
   write any data for you.
 - **It saves progress one step at a time.** In automatic mode, **X** skips only the current
   guide step; later steps remain due and start when the wizard reaches them. In replay mode,
-  exiting affects only that browser-session replay and never changes the saved onboarding
-  status.
+  exiting affects only the replay stored in this browser for your account and never changes the
+  saved onboarding status.
 
 You can also re-arm the guide on demand from
 **[Settings → Preferences → Onboarding and guides](../../settings/preferences.md#onboarding-and-guides)**,

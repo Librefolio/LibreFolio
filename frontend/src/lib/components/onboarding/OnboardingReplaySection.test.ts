@@ -89,6 +89,8 @@ vi.mock('$lib/stores/app/onboarding.svelte', () => ({
         complete: (...args: unknown[]) => onboardingMocks.complete(...args),
         skip: (...args: unknown[]) => onboardingMocks.skip(...args),
     },
+    // The real guide module (importOriginal below) wires its `storage` listener at import.
+    createReplayStorageListener: () => () => undefined,
 }));
 
 vi.mock('$lib/features/onboarding/onboardingGuide.svelte', async (importOriginal) => {

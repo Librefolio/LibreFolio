@@ -71,10 +71,11 @@ from backend.app.db import (
     UserRole,
     UserSettings,
 )
+from backend.app.db.models import UserOnboardingStepProgress
 from backend.app.services.auth_service import hash_password
 from backend.app.services.brim_provider import save_uploaded_file
 from backend.app.services.fx_providers.manual import MANUAL_PRIORITY
-from backend.app.services.onboarding_service import ONBOARDING_FLOW_VERSIONS
+from backend.app.services.onboarding_service import ONBOARDING_FLOW_STEPS, ONBOARDING_FLOW_VERSIONS
 from backend.app.services.portfolio_service import PortfolioService
 from backend.app.services.static_uploads import get_uploads_dir, save_upload, seed_default_avatars
 from backend.app.services.transaction_service import BalanceValidationError, TransactionService
@@ -361,15 +362,24 @@ def _grandfather_onboarding_for_test_users(session: Session, users: list[User]) 
     touches rows for a user_id outside `users`, so a genuinely new user created later
     by an onboarding spec is left alone and still starts pending, exactly like a real
     signup.
+
+    Step-managed flows (Import, Bulk) get the same treatment for every registered
+    step. Their guides are driven by step rows, not by the flow row: without seeded
+    step rows the runtime ensure inserts them pending, the Import guide then starts
+    for a canonical user whose flow row says completed, and its coachmark covers the
+    wizard of specs that are not about onboarding.
     """
     user_ids = [u.id for u in users if u.id is not None]
     if not user_ids:
         return
 
     existing_rows = {(row.user_id, row.flow): row for row in session.exec(select(UserOnboardingProgress).where(UserOnboardingProgress.user_id.in_(user_ids))).all()}  # type: ignore[union-attr]
+    existing_steps = {(row.user_id, row.flow, row.step_id): row for row in session.exec(select(UserOnboardingStepProgress).where(UserOnboardingStepProgress.user_id.in_(user_ids))).all()}  # type: ignore[union-attr]
 
     inserted = 0
     repaired = 0
+    steps_inserted = 0
+    steps_repaired = 0
     for user_id in user_ids:
         for flow, current_version in ONBOARDING_FLOW_VERSIONS.items():
             row = existing_rows.get((user_id, flow))
@@ -395,10 +405,34 @@ def _grandfather_onboarding_for_test_users(session: Session, users: list[User]) 
                 row.skipped_at = None
                 session.add(row)
                 repaired += 1
+            for step_id in ONBOARDING_FLOW_STEPS.get(flow, ()):
+                step = existing_steps.get((user_id, flow, step_id))
+                if step is None:
+                    session.add(
+                        UserOnboardingStepProgress(
+                            user_id=user_id,
+                            flow=flow,
+                            step_id=step_id,
+                            status=OnboardingStatus.COMPLETED,
+                            version=current_version,
+                            created_at=now,
+                            updated_at=now,
+                            completed_at=now,
+                        )
+                    )
+                    steps_inserted += 1
+                elif step.status != OnboardingStatus.COMPLETED or step.version != current_version:
+                    step.status = OnboardingStatus.COMPLETED
+                    step.version = current_version
+                    step.updated_at = now
+                    step.completed_at = now
+                    step.skipped_at = None
+                    session.add(step)
+                    steps_repaired += 1
 
-    if inserted or repaired:
+    if inserted or repaired or steps_inserted or steps_repaired:
         session.commit()
-    print(f"  ✅ Onboarding grandfathered for {len(user_ids)} canonical test user(s): " f"{inserted} row(s) inserted, {repaired} row(s) repaired")
+    print(f"  ✅ Onboarding grandfathered for {len(user_ids)} canonical test user(s): " f"{inserted} row(s) inserted, {repaired} row(s) repaired; " f"{steps_inserted} step row(s) inserted, {steps_repaired} step row(s) repaired")
 
 
 def populate_broker_user_access(session: Session):  # noqa: C901 — sequential fixture seeding steps
