@@ -3455,7 +3455,11 @@
         "shockTotal": "Este escenario movería el ámbito un {percent} {amount}",
         "shockCoverage": "Solo se pudo clasificar el {percent} del ámbito: el total habla solo de esa parte."
       },
-      "backtestNotice": "Con un subconjunto activo, estas cifras se reconstruyen sobre la composición de hoy: dicen cómo *habría* ido, no cómo fue en realidad."
+      "backtestNotice": "Con un subconjunto activo, estas cifras se reconstruyen sobre la composición de hoy: dicen cómo *habría* ido, no cómo fue en realidad.",
+      "notice": {
+        "partialTitle": "Algunos resultados son parciales",
+        "notesTitle": "Conviene saber sobre estos resultados"
+      }
     }
   },
   "updateCheck": {

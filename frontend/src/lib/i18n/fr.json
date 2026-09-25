@@ -3455,7 +3455,11 @@
         "shockTotal": "Ce scénario déplacerait le périmètre de {percent} {amount}",
         "shockCoverage": "Seuls {percent} du périmètre ont pu être classés : le total ne parle que de cette part."
       },
-      "backtestNotice": "Avec un sous-ensemble actif, ces chiffres sont reconstruits à partir de la composition actuelle : ils disent ce qui *se serait* passé, pas ce qui s’est réellement passé."
+      "backtestNotice": "Avec un sous-ensemble actif, ces chiffres sont reconstruits à partir de la composition actuelle : ils disent ce qui *se serait* passé, pas ce qui s’est réellement passé.",
+      "notice": {
+        "partialTitle": "Certains résultats sont partiels",
+        "notesTitle": "À savoir sur ces résultats"
+      }
     }
   },
   "updateCheck": {

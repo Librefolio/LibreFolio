@@ -3455,7 +3455,11 @@
         "shockTotal": "Questo scenario muoverebbe la fetta di {percent} {amount}",
         "shockCoverage": "Solo il {percent} della fetta è stato classificato: il totale parla solo per quella parte."
       },
-      "backtestNotice": "Con una fetta attiva, questi numeri sono ricostruiti sulla composizione di oggi: dicono come *sarebbe* andata, non come è andata davvero."
+      "backtestNotice": "Con una fetta attiva, questi numeri sono ricostruiti sulla composizione di oggi: dicono come *sarebbe* andata, non come è andata davvero.",
+      "notice": {
+        "partialTitle": "Alcuni risultati sono parziali",
+        "notesTitle": "Da sapere su questi risultati"
+      }
     }
   },
   "updateCheck": {
