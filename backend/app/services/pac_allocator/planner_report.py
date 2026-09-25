@@ -216,8 +216,9 @@ def _money(value: ExactRatio, currency: str) -> ExactMoney:
 def _declared_weight(asset: ExactAsset, dimension: str) -> ExactRatio:
     """Total exposure weight this asset declares in one dimension.
 
-    ``normalize.py`` validates each exposure's range and the uniqueness of
-    ``(dimension, category)`` but never requires a per-asset dimension to
+    ``normalize.py`` validates each exposure's range, the uniqueness of
+    ``(dimension, category)`` and that a dimension never totals more than one
+    (``allocation.exposure_total_exceeds_one``), but never requires it to
     close, so this legitimately returns less than one — an asset declaring 60%
     Tech and nothing else contributes the remaining 40% to the residual.
     """

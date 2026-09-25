@@ -461,12 +461,6 @@ def _planner_request_with_whole_step(
             },
             "as_of": "2026-09-16",
             "valuation_currency": "EUR",
-            "currency_specs": [
-                {
-                    "currency": "EUR",
-                    "minor_unit": "0.01",
-                }
-            ],
             "provenance": [
                 {
                     "kind": "manual",
