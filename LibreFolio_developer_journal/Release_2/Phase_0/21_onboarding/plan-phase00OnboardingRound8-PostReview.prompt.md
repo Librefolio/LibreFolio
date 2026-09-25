@@ -207,6 +207,10 @@ account; il bump di versione continua a invalidarlo; nota in `OnboardingReplaySe
 > scheda. (2) Se il browser si chiude senza logout ed entra un altro account, la prima identità
 > non viene vista come transizione: le chiavi del primo account restano, sotto il suo id, finché
 > quell'account non rientra ed esce. Non sono visibili ad altri account.
+>
+> *Superato il 2026-09-24 dalla decisione del developer (step 7, punto 14; corretto in C7, step 8): la
+> replay sopravvive a logout, scadenza e nuovo accesso sullo stesso browser, e nessuna transizione di
+> sessione cancella più le chiavi.*
 
 ### Step 5b — IWR-006, rosso preesistente di K — **Stato: ✅ completato il 2026-09-24**
 
@@ -486,7 +490,159 @@ questo ramo non tocca `charts/`).
 > `CORE_TOUR_STEP_IDS`; `import-wizard.md` dice «uno dei tre flow», che `setStep` gira a ogni
 > cambio di step, e che la guida chiama l'endpoint di flow (chiama quelli per step).
 
-### Step 7 — Review manuale e FROZEN — **Stato: ⏳**
+### Step 7 — Review manuale e FROZEN — **Stato: ✅ review fatta il 2026-09-24; correzioni in C7**
+
+> **Esito della review del developer, 2026-09-24 17:38** (copia rinfrescata, server `6168`, C6 nel working tree;
+> punti della test list; i punti 1–10 di privacy sono nel piano gemello, passo 11):
+>
+> | # | cosa | esito |
+> |---|---|---|
+> | 11 | «Verifica aggiornamenti» dal changelog (R3/R4) | ✅ *«ora funziona»* |
+> | 12 | R19, testo del tour | ❌ in Transazioni tolto, ma nel passo **Broker** resta *«Una breve guida si avvia quando scegli Aggiungi broker»*; il developer chiede di applicare il principio **a tutti i testi**, senza doverlo ricordare → **C7** |
+> | 13 | OB-8, replay in una scheda nuova | ✅ |
+> | 14 | OB-8, logout | ❌ **fraintendimento, decisione del developer:** armata una replay, dopo logout e nuovo accesso sullo stesso browser e nello stesso account deve essere **ancora armata** → **C7** |
+> | 15 | chiusura fra schede | ✅ *«era più di quello che avevo chiesto, teniamola»*; domanda: vale per tutte le guide o serve qualcosa per le nuove? → risposta sotto, e skill per chi scrive guide → **C7** |
+> | 16 | OB-9, ripresa dallo step e ripartenza della modale | ✅ *«mi piace moltissimo»* |
+> | 17 | lampo del benvenuto (C5) | ✅ *«il redirect funziona bene»* |
+>
+> **Le tre decisioni lasciate aperte in C4:** (1) «in questo browser» al posto di «su questo dispositivo»: non
+> contestata (punto 13 confermato con quel testo); (2) chiusura fra schede: **tenuta**; (3) una sessione che
+> finisce annulla le replay armate: **rovesciata** — la replay sopravvive a logout e nuovo accesso.
+>
+> **Risposta al punto 15.** La chiusura fra schede sta nel controller condiviso: il listener `storage` del modulo
+> `onboardingGuide.svelte.ts` e `handleExternalReplayChange`, sulla chiave della replay. Vale da sola per ogni
+> guida, presente o futura, che passa dalle API standard (`maybeStartContextual`, `armReplay`, `finish`, `skip`):
+> per una guida nuova non serve niente di speciale. Limite dichiarato: nei flow per step (Import, Bulk) finire uno
+> step quando altri restano **aggiorna** la chiave invece di toglierla, e l'altra scheda tiene aperto il suo step.
+
+### Step 8 — Correzioni dalla review (C7) — **Stato: ✅ completato — 2026-09-25** (riaperto il 2026-09-24 per le condizioni del coordinator delle 18:16)
+
+1. **Punto 12 — il principio, scritto:** *un testo di tour o di guida descrive la sezione; non annuncia che
+   un'altra guida partirà*. Audit di tutte le chiavi **usate** dal codice: 5 violazioni, tutte con la stessa forma
+   (seconda frase che annuncia una guida): `onboarding.tour.steps.brokersNav.description` e l'ultimo passo
+   «Aggiungi» di `transactionsPageGuide`, `brokerPageGuide`, `fxPageGuide`, `assetPageGuide`. Corrette tenendo
+   la prima frase, 4 lingue via `dev.py i18n update`, nessuna chiave rimossa. **Tenute, e perché:**
+   `tour.steps.settingsNav` (*«…permettono di ripetere qualsiasi guida quando serve»*: descrive che cosa fa la
+   sezione Impostazioni, non annuncia una guida), `transactionsPageGuide.steps.add` prima frase (*«modulo
+   guidato»* descrive il modulo). **Chiavi morte** del vecchio tour (`tour.steps.transactionsImport`, `brokers`,
+   `assets`, `tools`, `settings`, `brokersAdd`, …, non lette da nessun file; `settings` cita ancora la guida di
+   import): da togliere a fine round, quando le rimozioni sono ammesse.
+2. **Punto 14:** `createOnboardingSessionResetter` azzera solo lo stato in memoria; tolta `clearAccountReplays`
+   (non ha più chiamanti). Le chiavi sono già per account, quindi un altro account sullo stesso browser non le
+   legge. Testo `armedAtNextTrigger` senza più la frase sul logout, 4 lingue. Test unitari e l'E2E OB-8 (b)
+   invertiti via `test-author`; doc via `docs-writer`.
+3. **Punto 15:** skill per chi scrive una guida nuova, `.github/skills/onboarding-tools/onboarding-guide/SKILL.md`
+   (nuova, additiva): che cosa fa già il controller per ogni guida (persistenza, chiusura fra schede, pausa e
+   ripresa, stalli) e la lista da seguire a mano (registrazione backend e frontend, presentazione, ancore, trigger,
+   gruppi delle Impostazioni scritti a mano, regola dei testi, versioning, test ed elenchi di flow nelle E2E, doc).
+   Aggiunta dichiarata: una guida **nuova** parte in sospeso anche per gli utenti esistenti; se non deve, serve una
+   decisione del developer e una migrazione che li esenti.
+
+> **Note implementazione e verifica.**
+>
+> - **Testi (punto 12):** 5 chiavi × 4 lingue, tenuta solo la prima frase (`dev.py i18n update`, script con il
+>   controllo «esattamente due frasi», nessun segnaposto perso). `dev.py i18n audit`: 3409 chiavi per lingua,
+>   nessuna traduzione mancante. Nessuna pagina di doc citava le frasi tolte.
+> - **Logout (punto 14):** `onboarding.svelte.ts` +10/−27. Test via `test-author`: in `onboarding.test.ts` tolti i 4
+>   test di `clearAccountReplays` e riscritti i test del resetter come **test di regressione della decisione**
+>   (logout: chiavi identiche byte per byte, stato in memoria azzerato, nuovo accesso che riprende la replay allo
+>   stesso passo; cambio account: le chiavi di entrambi restano, il secondo non legge quelle del primo; nessun'altra
+>   proprietà del controller toccata): `151 passed`. Controllo negativo con lo store di HEAD: `4 failed`. E2E OB-8
+>   (b) invertito: *«…survives logging out and back in through the UI in the same browser, then starts at
+>   broker.page.overview»*, con controllo negativo (chiavi cancellate a mano dopo il logout → rosso sui due
+>   progetti). Doc via `docs-writer`: `preferences.en.md` (la replay sopravvive a logout e nuovo accesso, finisce
+>   quando la finisci, la chiudi, la annulli o arriva una versione nuova) e `import-wizard.md`; corretto anche il
+>   commento del listener in `onboardingGuide.svelte.ts`, che parlava ancora di logout.
+>
+> | comando (lane 6158) | esito |
+> |---|---|
+> | `front-utility core-unit` · `component-unit` · `onboarding-component-unit` | `94/2511` · `80/2023` · `14/408` passed |
+> | `front-utility onboarding-tour` · `onboarding-guides` | `10` · `24 passed` (del `test-author` anche `24` con `--workers 4`) |
+> | `front-utility settings` · `auth` · `header-scroll` | `45` · `24` · `4 passed` |
+> | `front-transaction tx-import-flow` | `10 passed` |
+> | `dev.py front check` (client `a085da1c8dac`) | `3 errors and 41 warnings in 4 files`, il pavimento noto |
+> | `prettier`, `git diff --check`, `mkdocs build` strict, `check-links` | puliti, exit 0 |
+>
+> **⚠️ Fuori pista — handoff incrociato.** Il coordinator (18:16) ha posto tre condizioni mentre il primo
+> handoff di C7 era in viaggio; C7 è stato riaperto prima di ogni stage. (1) **L'E2E OB-8 (b) invertito rosso
+> sul codice vero di HEAD**, non solo sulla simulazione: lo store di C6 rimesso al suo posto
+> (`clearAccountReplays` presente), `front-utility onboarding-guides "survives logging out"` → `2 failed`
+> (desktop e mobile), *«Logging out and back in must keep the replay armed for this account»* sul
+> distintivo `onboarding-flow-broker_page_guide-armed`; store di C7 ripristinato (sha256 identico) →
+> `2 passed`. (2) Per il punto 12, un **gate dei testi delle guide** rosso prima (via `test-author`, in
+> corso). (3) La **skill riscritta nello stile di `asset-plugin`**: che cos'è una guida, le regole
+> obbligatorie (osserva e non agisce; ancora solo su un elemento disegnato; nessun testo annuncia
+> un'altra guida; tutto passa dal controller standard, che dà anche la chiusura fra schede; stato salvato
+> per account; contenuto cambiato = versione nuova), la forma del lavoro e i rimandi alla doc, senza i
+> dettagli tecnici che invecchiano.
+>
+> **⏸️ PAUSA — 2026-09-24 18:3x, su richiesta del developer (via coordinator).** Stato esatto del C7 riaperto:
+>
+> | punto | stato |
+> |---|---|
+> | 1 · OB-8 (b) invertito rosso sul codice vero di HEAD | ✅ fatto (sopra) |
+> | 2 · gate dei testi delle guide, rosso prima | ⏳ **quasi fatto**: `frontend/src/lib/features/onboarding/guideCopy.test.ts` (nuovo, 7 test, del `test-author`), rosso su HEAD con 23 violazioni — le 5 chiavi corrette × 4 lingue, più `transactionsPageGuide.steps.import.description` in en/fr/es — e guardia sulle eccezioni stantie provata. Oggi `1 failed | 6 passed`: resta **solo** quella chiave, dove *guides / guide / guía* è un **verbo** («Import … guides their review through to the bulk editor»), mentre l'italiano dice già «accompagna». **Decisione alla ripartenza:** (A) registrarla come eccezione motivata, o (B) riformulare en/fr/es come l'italiano («walks / accompagne / acompaña»). Raccomando **(B)**: toglie l'ambiguità (la frase si può leggere come l'annuncio della guida di import, che è proprio R19) e tiene il registro con la sola `settingsNav`. Poi registrarlo in `core-unit` |
+> | 3 · skill nello stile di `asset-plugin` | ✅ fatto (`.github/skills/onboarding-tools/onboarding-guide/SKILL.md`, riscritta) |
+> | 4 · titolo della pagina Files che resta dopo averla lasciata | ⏳ **non iniziato**, solo analisi. Causa confermata: `<title>` in `<svelte:head>` scrive `document.title` e non lo ripristina; lo impostano solo `files/+page.svelte`, `tools/+page.svelte`, `tools/[tool_code]/+page.svelte`; titolo di default `LibreFolio` in `app.html:13`. Piano: in `(app)/+layout.svelte` un `onNavigate` che rimette `LibreFolio` quando `route.id` cambia (non `beforeNavigate`, che scatta anche per le navigazioni poi annullate; non `afterNavigate`, che sovrascriverebbe il titolo della pagina nuova); il mock di `$app/navigation` in `layout.gate.test.ts` va esteso con `onNavigate`. Test via `test-author` rosso prima. **Scelta:** commit a sé dentro C7 |
+>
+> **Alla ripartenza, primo passo:** leggere il rapporto del `test-author` del gate e completarlo (rosso su HEAD, verde ora, guardia sulle eccezioni stantie), registrarlo in `core-unit`; poi il punto 4; poi la verifica completa e il nuovo handoff di C7. Porte 6158 e 6168 libere, nessuno stage.
+>
+> **▶️ RIPRESA — 2026-09-25 09:09, «RIPRENDI» del coordinator.** HEAD `8347f8d6c`, stage vuoto, delta intatto
+> (12 modificati + 2 nuovi), porte 6158/6168 libere.
+>
+> - **Punto 2 ✅ — 2026-09-25.** Il coordinator ha approvato **(B)** (regola del developer: il principio vale
+>   per tutti i testi). `dev.py i18n update onboarding.transactionsPageGuide.steps.import.description` solo per
+>   en/fr/es, sul verbo dell'italiano: en «Import reads broker reports and walks you through their review, up to
+>   the bulk editor.», fr «… et accompagne leur vérification jusqu’à l’éditeur groupé.», es «… y acompaña su
+>   revisión hasta el editor masivo.»; l'italiano resta com'era. Nessuna pagina di doc citava la frase. Gate:
+>   `vitest run src/lib/features/onboarding/guideCopy.test.ts` → **`7 passed (7)`**, registro con la sola
+>   `settingsNav`. Registrato in `front-utility core-unit` (`_frontend_utility.py`, lista di `front_utility_unit`
+>   e descrizione della categoria, solo aggiunte).
+> - **Punto 4 ✅ — 2026-09-25.** Test via un `test-author` nuovo (`400555d0…`), rossi prima della cura:
+>   - (A) unitario, `layout.gate.test.ts` (+108/−6): mock di `$app/navigation` esteso con uno spy `onNavigate`;
+>     da `/files` a `/dashboard` il titolo torna quello letto da `src/app.html`, da `/files` a `/files?tab=brim`
+>     (`type: 'goto'`, come fa davvero la barra dei tab) resta. Ognuno controlla prima che il layout abbia
+>     registrato **una** callback, così nessuno passa a vuoto. Rosso: `2 failed | 2 passed` — *«the mounted
+>     layout must register exactly one onNavigate callback: … got 0 times»*; i due test del gate verdi.
+>   - (B) E2E nuovo `e2e/layout/document-title.spec.ts` (159 righe), **aggiunta dichiarata**: è l'unico test che
+>     vede l'ordine reale di SvelteKit. Navigazione solo client-side dalla sidebar (burger su mobile), con un
+>     marcatore su `window` che prova che l'hop non ha ricaricato la pagina; precondizione letta via API: nessun
+>     flow di onboarding dovuto. Casi: Files → Dashboard (rosso prima); Files → `?tab=brim` (controllo); Tools →
+>     Files → Tools, dove Tools rimette il suo titolo (controllo dell'ordine: un reset in `afterNavigate` lo
+>     farebbe fallire). Rosso: caso 1 `Expected: "LibreFolio"` / `Received: "Files - LibreFolio"` su desktop e
+>     mobile; controlli verdi. Registrato come `front-utility document-title`.
+>   - **Cura**, `(app)/+layout.svelte` +10/−1: `onNavigate` importato e una callback che rimette
+>     `DEFAULT_DOCUMENT_TITLE = 'LibreFolio'` (il `<title>` di `app.html`) quando `from.route.id !== to.route.id`.
+>     Ordine verificato nel codice di kit 2.50.1 (`client.js`: le callback `onNavigate` girano dopo il load e prima
+>     di `root.$set`). Verde: unitario `4 passed`; E2E `6 passed` a 1 worker e `6 passed` con `--workers 4`.
+>   - `black --check` e `ruff check` sul runner puliti (la descrizione della categoria nuova accorciata perché
+>     black la spezzava oltre i 300 caratteri); `prettier --check` pulito sui tre file.
+>
+> **Verifica completa del C7 riaperto — 2026-09-25, lane 6158** (`/tmp/libreFolio_j_c7_verify.sh`, un comando alla
+> volta; il DB della lane ricreato e ripopolato dal runner dopo il riavvio):
+>
+> | comando | esito |
+> |---|---|
+> | `front-utility core-unit` | `95` file, **`2518 passed`** (prima della riapertura `94/2511`: +1 file, +7 test del gate) |
+> | `front-utility component-unit` | `80` file, `2023 passed` (invariato) |
+> | `front-utility onboarding-component-unit` | `14` file, **`410 passed`** (+2 test del titolo) |
+> | `front-utility document-title` (nuovo) | `6 passed`, anche con `--workers 4` |
+> | `front-utility onboarding-tour` · `onboarding-guides` | `10` · `24 passed` |
+> | `front-utility settings` · `auth` · `header-scroll` · `files` | `45` · `24` · `4` · `20 passed` |
+> | `front-transaction tx-import-flow` | `10 passed` |
+> | `dev.py i18n audit` | `3409` chiavi per lingua, complete; nessuna chiave aggiunta né tolta |
+> | `dev.py front check` | `3 errors and 41 warnings in 4 files`: il pavimento noto (`TransactionFormModal.test.ts` ×2, `ToolExecutionMetrics.svelte`, avvisi in `BrokerSharingPanel` e `GlobalSettingsTab`), nessuno nei file di J |
+> | `prettier --check` (12 file frontend toccati) · `black`/`ruff` (runner) · `git diff --check` | puliti |
+> | `mkdocs build` strict · `mkdocs check-links` | exit 0 · `80` link validi, `3` ancore note in attesa di traduzione |
+> | scansione delle righe aggiunte | `0` importi, `0` password (unico numero decimale: la versione di kit) |
+>
+> Porta 6158 libera a fine corsa; 6168 mai accesa.
+>
+> **⚠️ Fuori pista — riavvio del Mac alle 08:58.** `/tmp` svuotato: la cartella della lane
+> `/tmp/librefolio-r2-j-onboarding` non c'è più (la ricrea il runner al primo run) e nemmeno `-prodcopy`.
+> Il `test-author` del gate (`da2f13e7…`) non esiste più: per il punto 4 ne è partito uno nuovo. La snapshot
+> delle 09:05, poi rifatta dal coordinator alle 09:15 (`app.db` sha `5c0a681bc4e4b59c`): **nessuna copia fatta
+> da me**, la 6168 resta spenta finché il coordinator non la chiede.
 
 ## Previsione conflitti
 
@@ -501,6 +657,8 @@ questo ramo non tocca `charts/`).
 | `frontend/e2e/settings.spec.ts` | condiviso | solo il commento del blocco replay (`sessionStorage` → `localStorage`), via `test-author` |
 | cataloghi i18n, OB-8 | condivisi | 2 valori (`onboarding.settings.armedAtNextTrigger`, `armedToast`) × 4 lingue, via `dev.py`, nessuna chiave nuova né rimossa |
 | `features/tools/ToolsHub.svelte` | **D** (assegnato dal coordinator, 2026-09-24) | contiene l'àncora `use:guideAnchor={'tools.hub'}` a `:146`, fissata da `ToolsHub.test.ts:99`: D la preserva. Misurato: **nessuna guida la consuma** (controllo positivo: `nav.tools` consumata a `OnboardingOverlayHost.svelte:109`). Candidata naturale per una guida Strumenti quando esisterà la UI del PAC v2 |
+| `scripts/test_runner/_frontend_utility.py` | condiviso (runner) | C7: una riga nella lista di `front_utility_unit` (`guideCopy.test.ts`) con la sua descrizione, e la categoria nuova `document-title` (funzione + `add_test` accanto a `header-scroll`). Solo aggiunte |
+| `frontend/src/routes/(app)/+layout.svelte`, `layout.gate.test.ts` | J (verificato dal coordinator: nessun altro worktree li tocca) | C7 punto 4: un `onNavigate` e il suo import; il test estende il mock di `$app/navigation` |
 
 ## Test list — approvata con il piano
 
@@ -508,7 +666,7 @@ questo ramo non tocca `charts/`).
 |---|---|---|
 | T8 | componente | `DeferredAppPopups`: i popup automatici restano rinviati con `modalDepth > 0`; la richiesta manuale si mostra subito |
 | T9 | componente | `ChangelogModal`: stato inline per ogni esito; percorso non-admin invariato |
-| T10 | componente | OB-8: il replay sopravvive a una nuova scheda; cancellato a logout e cambio account; il bump di versione lo invalida |
+| T10 | componente | OB-8: il replay sopravvive a una nuova scheda **e a logout e nuovo accesso**; un altro account sullo stesso browser non lo legge; il bump di versione lo invalida. *(Aggiornato 2026-09-25 — decisione del developer, step 7 punto 14; fino al 2026-09-24 diceva «cancellato a logout e cambio account».)* |
 | T11 | E2E | OB-9: 9 flow, desktop e mobile |
 
 R19 non ha test automatico: niente asserzioni su testo tradotto. Review manuale.
@@ -521,10 +679,12 @@ R19 non ha test automatico: niente asserzioni su testo tradotto. Review manuale.
 | tour intro, passo Transazioni | testo | cita ancora la guida di import |
 | guida qualunque, cambio di pagina a metà e ritorno | step | riparte dallo step 1 |
 | replay da Impostazioni, poi scheda nuova | guida | il replay è perso |
-| replay armata, poi logout e nuovo login | Impostazioni | la replay è ancora armata |
+| replay armata, poi logout e nuovo login | Impostazioni | la replay **non** è più armata *(aggiornato 2026-09-25, decisione del developer, punto 14: prima il difetto era il contrario)* |
 | due schede sulla stessa pagina con la stessa guida; Fine in una | l'altra scheda | il coachmark resta aperto |
 | Aggiungi Broker a metà guida, chiudi, riapri | guida della modale | riprende dallo step lasciato invece di ripartire |
-| Impostazioni → replay: testo «in questo browser … uscendo dall'account si annulla» (4 lingue) | testo | dice ancora «scheda» |
+| Impostazioni → replay: testo «in questo browser» (4 lingue) | testo | dice ancora «scheda», o che uscire dall'account annulla la replay |
+| tour intro e guide delle pagine Transazioni, Broker, FX, Asset (C7, punto 12) | testi dei passi | un passo annuncia un'altra guida («una breve guida parte quando…») |
+| Files, poi un'altra pagina dalla sidebar (C7, punto 4) | titolo della finestra | resta «Files»; e da Files a Strumenti il titolo non è quello di Strumenti |
 
 ## Definition of done
 
@@ -540,4 +700,7 @@ R19 non ha test automatico: niente asserzioni su testo tradotto. Review manuale.
 - 🐛 Onboarding: rimosso dal tour un rimando superfluo alla guida di importazione.
 - ✨ Onboarding: le guide ricordano a che punto sei in questo browser, anche chiudendo la scheda o
   riavviando; uscendo da una pagina a metà guida, al ritorno riprende dallo stesso passo. Una guida
-  finita in una scheda si chiude anche nelle altre; uscire dall'account annulla le replay armate.
+  finita in una scheda si chiude anche nelle altre; una replay armata resta armata anche dopo
+  logout e nuovo accesso sullo stesso browser *(aggiornato 2026-09-25, decisione del developer, punto 14)*.
+- 🐛 Onboarding: i passi del tour e delle guide descrivono la sezione e non annunciano più altre guide.
+- 🐛 Il titolo della finestra non resta più «Files» dopo aver lasciato la pagina dei file.

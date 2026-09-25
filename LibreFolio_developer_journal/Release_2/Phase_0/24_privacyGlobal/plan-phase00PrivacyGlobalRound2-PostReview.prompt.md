@@ -630,7 +630,7 @@ sviluppatore.
 > «fully embraces runes», ma tre file sono legacy; `user/dashboard/index.en.md`: tre schede, sono
 > quattro).
 
-### Passo 11 — Review manuale e FROZEN — **Stato: ⏳ pronto per il developer**
+### Passo 11 — Review manuale e FROZEN — **Stato: ✅ completato il 2026-09-24** — *review del developer sulla copia, C6 incluso*
 
 Runbook sotto, sulla copia prod rinfrescata dalla snapshot.
 
@@ -639,6 +639,25 @@ Runbook sotto, sulla copia prod rinfrescata dalla snapshot.
 > Performance dopo l'integrazione del commit di I, lotti, Gantt, WAC), `/assets` e `/fx`, e la
 > sovra-mascheratura segnalata al passo 10 (`TransactionsTable`, `WacPreviewSection`). La `6168` si
 > riaccende su richiesta, con la copia rinfrescata dalla snapshot.
+>
+> **Esito della review del developer, 2026-09-24 17:38** (copia rinfrescata dalla snapshot, server `6168`,
+> versione `v1.1.0-235-g503351f0f-dirty`, cioè C6 nel working tree; punti della test list):
+>
+> | # | cosa | esito |
+> |---|---|---|
+> | 1 | etichette dei pulsanti dell'header nelle 4 lingue (C6) | ✅ *«risolto, ben fatto»* |
+> | 2 | dashboard: KPI, liquidità, allocazione | ✅ KPI; il grafico Crescita è ancora in chiaro → **I** (atteso: il suo commit non è in questa base) |
+> | 3 | posizioni (portafoglio e periodo) e analisi lotti | ✅ anche l'asse Y dell'ultimo grafico dei lotti nascosto, e tutto torna col secondo click |
+> | 4 | lista broker nei due versi (R20) | ✅ |
+> | 5 | dettaglio broker | ✅ come in dashboard; manca solo il grafico di *Portfolio growth* → **I** |
+> | 6 | pannelli rischio | ✅ |
+> | 7 | transazioni (importi, quantità, tooltip evento) | ✅ |
+> | 8 | anteprima WAC | ✅; e **decisione del developer (D7 confermato)**: il campo di inserimento del costo (totale o per unità) resta in chiaro, *«se non vuole che si veda basta che non la scriva»* |
+> | 9 | controlli negativi (asset, FX) | ✅ *«tutto si mostra sempre, come mi aspetto»* |
+> | 10 | navigazione e ricarica con privacy attiva | ✅ |
+>
+> I punti 11–17 (aggiornamenti e onboarding) sono registrati nel piano gemello, Round 8, step 7. Nessun
+> difetto di privacy aperto in questo round; resta l'integrazione di Crescita e Performance (commit di I).
 
 ## Round 2b — checkpoint C6 (assegnato dal coordinator, 2026-09-24 16:07)
 
