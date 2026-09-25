@@ -132,20 +132,32 @@ describe('compiled tool renderer registry', () => {
         });
     });
 
-    it('reports renderer_missing for a compatible tool the compiled registry does not render', () => {
-        // The compiled registry ships no renderer until the pac_allocator v2 UI exists.
-        // Asserting the descriptor is the barrier: it proves the catalog entry was found
-        // and judged compatible, so this is a missing renderer, not a missing tool.
+    it('resolves the compiled pac_allocator 2.0.0 planner renderer', () => {
+        // The shipped registry must bind the v2 planner UI: a missing entry would put the
+        // tool back in the renderer_missing state the developer saw after the P1 removal.
         const resolution = resolveToolRenderer(catalog, 'pac_allocator');
+
+        expect(resolution).toMatchObject({
+            status: 'ready',
+            binding: {
+                descriptor: {
+                    tool_code: 'pac_allocator',
+                    contract_version: '2.0.0',
+                    ui: {kind: 'custom', component_key: 'pac-allocator', version: '2.0.0'},
+                },
+            },
+        });
+    });
+
+    it('reports renderer_missing for a compatible tool a registry does not render', () => {
+        // The descriptor is the barrier: the catalog entry was found and judged
+        // compatible, so this is a missing renderer, not a missing tool.
+        const resolution = createToolRendererRegistry([]).resolve(catalog, 'pac_allocator');
 
         expect(resolution).toMatchObject({
             status: 'unavailable',
             reason: 'renderer_missing',
-            descriptor: {
-                tool_code: 'pac_allocator',
-                contract_version: '2.0.0',
-                ui: {kind: 'custom', component_key: 'pac-allocator', version: '2.0.0'},
-            },
+            descriptor: {tool_code: 'pac_allocator', contract_version: '2.0.0'},
         });
     });
 
