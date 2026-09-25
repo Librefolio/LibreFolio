@@ -1,6 +1,15 @@
 # Step 5 — shell frontend, PAC/Rebalancer e review umana
 
 **Stato:** PENDING CONTRACT, SOURCE COPY AND GENERATED CLIENT.
+> ⚠️ **Stato al 2026-09-24 (`f1047f766`).** I tre prerequisiti dell'header esistono:
+> - contratto `pac_allocator` `2.0.0` / `plan` ([handoff §0](../../16_toolPlatform/handoff-pac-D.md));
+> - copia di dominio `POST /portfolio/allocation-source`;
+> - client generato.
+>
+> La UI v2 non esiste ancora: la UI P1 è stata rimossa il 2026-09-21 in `b82e59ffa`. La
+> costruzione riparte nel [piano Round 5](plan-phase00PacRound5PostMerge.prompt.md), Passo C.
+> Da lì prevalgono §10 e §12 riallineate qui sotto.
+
 **Dipende da:** Step 1 contract, Step 4 copy, ExactQuantityInput, integrazione client.
 **Hard gate:** nessun E2E completo prima dell'approvazione umana.
 
@@ -336,6 +345,9 @@ PAC:
 - funding/contributi;
 - BUY-only;
 - `proportional` e `min_fragmentation`;
+  > 2026-09-24 (Round5, Q-C0-4): in 2.0.0 solo `proportional` è sul wire; le card della strategia
+  > nascono dalle opzioni del contratto generato, quindi `min_fragmentation` riappare da sola quando
+  > il backend la riammette (`plan-phase00PacRound5PostMerge.prompt.md`, C3).
 - target e risultato focalizzati sul nuovo capitale.
 
 Rebalancer:
@@ -405,8 +417,18 @@ Tutte le viste approvate:
 - no incumbent;
 - infeasible proven.
 
-Status, issue e label restano leggibili in privacy mode. Valori, quantità,
-percentuali e grafici vengono oscurati coerentemente.
+Status, issue e label restano leggibili in privacy mode.
+
+In privacy mode si oscura il patrimonio (decisione (c) del developer, 2026-09-22):
+- importi;
+- quantità detenute e da acquistare, per default, da confermare nella review;
+- valori degli ordini.
+
+Restano visibili percentuali, pesi e grafici in percentuale; prezzi di mercato e tassi FX
+passano con `sensitivity: 'public'`. Ogni importo passa da `formatCurrencyAmountPlain` o da
+`formatCurrencyAmountHtml`. Dettaglio in UiTarget §20.20.
+> Testo originale, superato il 2026-09-24: «Valori, quantità, percentuali e grafici vengono
+> oscurati coerentemente.»
 
 ## 11. Test prima della review umana
 
@@ -431,6 +453,22 @@ Non consentiti come gate:
 - il vecchio E2E P1 come acceptance della UI nuova.
 
 ## 12. Runbook review umana
+
+> ⚠️ **Ambiente superato il 2026-09-24.** Per decisione del developer, gli agenti lavorano
+> e fanno review su una **copia del DB di produzione**, così il developer riconosce i
+> propri dati e può giudicare un risultato. Una fixture sintetica non permette questo
+> giudizio.
+>
+> Vale:
+> - server `--test --port 6161 --data-dir /tmp/librefolio-r2-d-prodcopy`, ricavato dalla
+>   snapshot condivisa e rinfrescato prima di ogni review;
+> - suite automatiche solo in `6151` + `/tmp/librefolio-r2-d`, mai sulla copia di prod.
+>
+> Le lane per workstream sono separate, quindi gli altri workstream non devono più
+> sospendersi. Restano fuori da repo, log e screenshot docs tutti i dati reali.
+>
+> Runbook eseguibile: [piano Round 5](plan-phase00PacRound5PostMerge.prompt.md), Passo E.
+> Il testo storico segue invariato.
 
 Ambiente:
 

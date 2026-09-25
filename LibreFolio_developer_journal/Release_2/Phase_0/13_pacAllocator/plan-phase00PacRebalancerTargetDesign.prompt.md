@@ -184,6 +184,12 @@ PAC/Rebalancer.
 | 8 | Strategia | `proportional` / `min_fragmentation` | `invest_only` / `invest_and_sell` |
 | 9 | Rivedi | snapshot completo e immutabile | snapshot completo e immutabile |
 
+> **2026-09-24 (Round5, decisione Q-C0-4 del developer)**: in 2.0.0 il Passo 8 del PAC offre solo
+> `proportional`. `min_fragmentation` esce dal wire finché non esiste la sua cascata SCIP, e la UI
+> costruisce le card leggendo le opzioni dal contratto generato: «semplicemente non mettiamola, la ui
+> in questo deve essere dinamica». Dettaglio in
+> `implementation/plan-phase00PacRound5PostMerge.prompt.md`, C0b.2 e C3.
+
 Il risultato è fuori dallo stepper.
 
 ### 3.3 Shell desktop

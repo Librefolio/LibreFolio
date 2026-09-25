@@ -10,6 +10,17 @@ checkpoint planning `888f99a6c8641e063c979b4b315eb65367de7e4a`.
 **Dependency checkpoint:** `941834237696f32bbabfde62a08e070e4b23758e`
 (`build(deps): add PySCIPOpt solver`).
 
+> ⚠️ **Nota 2026-09-24 (round 5).** Lane, selector e simboli P1 citati in questo piano
+> descrivono la fase in cui è stato scritto. Lo stato corrente è altrove:
+> - lane `6153` → oggi `6151` (suite) e `6161` (copia di prod);
+> - `pac-analyze`, `pac-tool` e `pac-planner-capacity` non esistono: i selector reali
+>   sono in [handoff §0.4](../../16_toolPlatform/handoff-pac-D.md);
+> - P1 `analyze` rimosso il 2026-09-21 (`b82e59ffa`).
+>
+> L'avanzamento è nella tabella del [README](README.md) e nel
+> [piano Round 5](plan-phase00PacRound5PostMerge.prompt.md). Le note datate qui sotto
+> restano come evidenza storica. Lo **Stato** in testa non è stato rimisurato.
+
 ← Design: [PAC & Rebalancer target](../plan-phase00PacRebalancerTargetDesign.prompt.md)
 
 Subpiani:
@@ -176,6 +187,9 @@ Pipeline normative:
 | PAC `proportional` | `L2_fixed -> U -> route priority -> cost -> rows -> tie` |
 | PAC `min_fragmentation` | `L2_fixed -> U -> split Assets -> rows -> route priority -> cost -> tie` |
 | Rebalancer | `L2_fixed -> U -> turnover -> cost -> rows/splits -> tie` |
+
+> 2026-09-24 (Round5, Q-C0-4): la riga `min_fragmentation` resta la norma della policy, ma in 2.0.0
+> la policy non è sul wire (`plan-phase00PacRound5PostMerge.prompt.md`, C0b.2).
 
 Variante per entrambi:
 

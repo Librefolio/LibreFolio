@@ -1,6 +1,17 @@
 # Step 6 — integrazione Tool, test finali, docs e handoff
 
 **Stato:** PENDING SOLVER, DOMAIN, CLIENT AND HUMAN UI APPROVAL.
+> ⚠️ **Stato al 2026-09-24 (`f1047f766`).** Esistono:
+> - solver e dominio;
+> - client generato;
+> - plugin `pac_allocator` `2.0.0` / `plan`.
+>
+> Il Rebalancer non ha ancora un servizio. Il renderer PAC v2 e la review umana sono il
+> [piano Round 5](plan-phase00PacRound5PostMerge.prompt.md). La porta `6153` citata in
+> §12, §14 e §15 è superata: valgono `6151` (suite) e `6161` (copia di prod), e a ogni
+> `FROZEN` vanno provate libere **entrambe**. I selector di §6 sono riallineati nella nota
+> dentro §6.
+
 **Dipende da:** Step 1–5 secondo i gate dichiarati.
 
 ← Master: [piano implementativo](plan-phase00PacRebalancerImplementation.prompt.md)
@@ -105,6 +116,21 @@ Vincoli:
 Nessun edit manuale del generated client.
 
 ## 6. Runner
+
+> ⚠️ **Nomi riallineati il 2026-09-24.** L'elenco sotto era una previsione. I selector
+> realmente registrati al `f1047f766` sono:
+> - `schemas pac-planner`;
+> - `services pac-planner-{core,evaluator,oracle,policies,solver,proof,wire-numbers,report,service}`;
+> - `services portfolio-allocation-source`;
+> - `front-utility core-unit`;
+> - `front-utility component-unit`.
+>
+> Fonti: [handoff §0.4](../../16_toolPlatform/handoff-pac-D.md).
+>
+> Non esistono né `services pac-planner-capacity`, né `api pac-tool`, né `front-utility pac-tool`,
+> né `front-utility rebalancer-tool`. Il test API del planner è pianificato nel Round 5
+> (TB1), con un nome nuovo da registrare: `api pac-planner-tool`. Il test del Rebalancer
+> aspetta il suo servizio.
 
 Prima del primo selector, il runner owner registra:
 
