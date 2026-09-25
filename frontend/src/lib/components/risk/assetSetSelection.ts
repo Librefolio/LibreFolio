@@ -24,8 +24,6 @@ export interface SelectableAsset {
     currency: string;
     /** Transactions across every broker the user can see. */
     tx_count?: number;
-    /** F15 usage counter: transactions in brokers the current user owns. */
-    tx_count_own?: number;
 }
 
 /** The API's ceiling on an asset-set scope. A limit, not a default. */
@@ -34,7 +32,7 @@ export const MAX_SELECTED_ASSETS = 100;
 /** Which rung of the D19 ladder produced the opening selection. */
 export type SelectionSource = 'persisted' | 'mine' | 'fallback';
 
-/** How many assets to fall back to when the user owns none. */
+/** How many assets to fall back to when the user holds none. */
 export const FALLBACK_SELECTION_SIZE = 6;
 
 const STORAGE_BASE_KEY = 'assetGlobal.riskSelection.v1';
@@ -63,11 +61,6 @@ type SelectionStorage = Pick<Storage, 'getItem' | 'setItem'> & Partial<Pick<Stor
  */
 function storageKey(userId: string | null | undefined): string | null {
     return userId ? `lf_${userId}_${STORAGE_BASE_KEY}` : null;
-}
-
-/** Assets the user actually owns — what "my assets" means on this page. */
-export function ownedAssetIds(assets: readonly SelectableAsset[]): number[] {
-    return assets.filter((asset) => (asset.tx_count_own ?? 0) > 0).map((asset) => asset.id);
 }
 
 /**
@@ -115,51 +108,49 @@ function safeStorage(): SelectionStorage | null {
 }
 
 /**
- * D19 — the initial selection, in order of preference:
+ * D19 — the initial selection, in order of preference, and the rung it stopped on:
  *
  *  1. the user's last selection, intersected with what still exists;
- *  2. the assets they own;
+ *  2. what they hold on the last day of the period (`held`, from the portfolio
+ *     report — the caller fetches it, because it is asynchronous);
  *  3. a small readable handful.
  *
  * Step 1 intersects rather than trusting the stored list: an asset can be
  * deleted or merged between two visits, and asking the API for an id that no
  * longer resolves turns a stale preference into an error the user cannot
- * explain.
+ * explain. Step 2 intersects too, for the same reason: a holding outside the
+ * page's list would reach the analysis with no chip to remove it by.
+ *
+ * Step 2 used to read `tx_count_own > 0` — any transaction ever made in the
+ * user's brokers — which also brought back positions sold years ago. Since the
+ * developer's decision of 24/09, "mine" means held: quantity above the dust
+ * threshold on the period's last day, the report's own holdings.
+ *
+ * The rung is reported because the selection alone cannot distinguish a
+ * deliberate choice from a coincidence: a test that only counts the opening
+ * selection would pass just as happily under the old "first hundred from the
+ * array" behaviour, which never consulted ownership at all.
  *
  * Every branch is capped, so no path can reproduce the hundred-asset opening.
  */
-export function resolveInitialSelection(assets: readonly SelectableAsset[], persisted: readonly number[] | null = readPersistedSelection()): number[] {
-    return resolveInitialSelectionWithSource(assets, persisted).ids;
-}
-
-/**
- * The same ladder, but it also says which rung it stopped on.
- *
- * The branch is worth reporting because the selection alone cannot distinguish
- * a deliberate choice from a coincidence: a test that only counts the opening
- * selection would pass just as happily under the old "first hundred from the
- * array" behaviour, which never consulted ownership at all. Surfacing the
- * branch is what lets that regression be caught rather than merely be unlikely.
- *
- * `resolveInitialSelection` stays the thin wrapper so there is exactly one
- * implementation of the ladder to keep correct.
- */
-export function resolveInitialSelectionWithSource(assets: readonly SelectableAsset[], persisted: readonly number[] | null = readPersistedSelection()): {ids: number[]; source: SelectionSource} {
+export function resolveInitialSelectionWithSource(assets: readonly SelectableAsset[], persisted: readonly number[] | null = readPersistedSelection(), held: readonly number[] = []): {ids: number[]; source: SelectionSource} {
     const available = new Set(assets.map((asset) => asset.id));
 
     if (persisted) {
-        const surviving = persisted.filter((id) => available.has(id));
+        // Deduped: the asset-set scope rejects a repeated id, and a duplicate that reached storage would
+        // otherwise be read back and written again on every visit.
+        const surviving = dedupe(persisted.filter((id) => available.has(id)));
         if (surviving.length > 0) return {ids: surviving.slice(0, MAX_SELECTED_ASSETS), source: 'persisted'};
     }
 
-    const owned = ownedAssetIds(assets);
-    if (owned.length > 0) return {ids: owned.slice(0, MAX_SELECTED_ASSETS), source: 'mine'};
+    const mine = dedupe(held.filter((id) => available.has(id)));
+    if (mine.length > 0) return {ids: mine.slice(0, MAX_SELECTED_ASSETS), source: 'mine'};
 
     return {ids: fallbackSelection(assets), source: 'fallback'};
 }
 
 /**
- * The last resort: a user who owns nothing and has no history here.
+ * The last resort: a user who holds nothing and has no history here.
  *
  * Ranked by how much the instrument has actually been transacted, not by where
  * it happens to sit in the API's array. D19's point is that the system should
@@ -185,8 +176,6 @@ export interface SelectionFilters {
     currencies: readonly string[];
 }
 
-export const EMPTY_FILTERS: SelectionFilters = {types: [], currencies: []};
-
 /**
  * Apply the filter row.
  *
@@ -206,21 +195,31 @@ export function applyFilters<T extends SelectableAsset>(assets: readonly T[], fi
 }
 
 /** Which mass action was pressed. */
-export type BulkAction = 'all' | 'none' | 'invert' | 'mine';
+export type BulkAction = 'all' | 'none' | 'invert';
 
 /**
- * Resolve a mass action against the **currently filtered** candidates.
+ * Resolve a mass action.
  *
- * "All" and "invert" deliberately act on what the user can see rather than on
- * the whole catalogue: a button that silently reaches past the active filter
- * would undo the filter without saying so. "Mine" is the exception — it is a
- * *reset* to the user's own holdings, so it ignores the filter by design.
+ * `candidates` are the assets the action may bring in: the page's catalogue
+ * without the ones Risk's engine rules out for the period. The filters no
+ * longer narrow them — they moved into the "+", where they narrow a list, not
+ * a button — so "all" really means all, and nothing can be selected past a
+ * filter the user forgot was on.
+ *
+ * - `all` adds every candidate;
+ * - `none` empties the selection, the ruled-out assets parked in it included:
+ *   "deselect all" leaving chips behind would be a button that lies;
+ * - `invert` swaps the candidates in and out, and leaves the parked ones where
+ *   they are, since they were never candidates.
+ *
+ * "Mine" left this row: holdings are a period-dependent report, so they are a
+ * command of their own (the panel's holdings menu), not a pure function.
  *
  * Everything is capped at the API limit, and `all` on a catalogue larger than
  * the cap truncates rather than failing: this is the one place where the
  * hundred is legitimate, because the user asked for it explicitly.
  */
-export function applyBulkAction(action: BulkAction, selected: readonly number[], candidates: readonly SelectableAsset[], allAssets: readonly SelectableAsset[]): number[] {
+export function applyBulkAction(action: BulkAction, selected: readonly number[], candidates: readonly SelectableAsset[]): number[] {
     const visible = candidates.map((asset) => asset.id);
     const current = new Set(selected);
 
@@ -228,15 +227,12 @@ export function applyBulkAction(action: BulkAction, selected: readonly number[],
         case 'all':
             return dedupe([...selected, ...visible]).slice(0, MAX_SELECTED_ASSETS);
         case 'none':
-            // Only what is visible is cleared, mirroring `all`.
-            return selected.filter((id) => !visible.includes(id));
+            return [];
         case 'invert': {
             const kept = selected.filter((id) => !visible.includes(id));
             const added = visible.filter((id) => !current.has(id));
             return dedupe([...kept, ...added]).slice(0, MAX_SELECTED_ASSETS);
         }
-        case 'mine':
-            return ownedAssetIds(allAssets).slice(0, MAX_SELECTED_ASSETS);
     }
 }
 
