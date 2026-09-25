@@ -8,6 +8,36 @@ four commits are `0088748a8`, `75309672e`, `9229085e9`, `c25c1e874`.
 > **Read §2 and §6 first.** §2 says which of the merged work is mine, and §6 says
 > where the model is narrower than reality. Everything else is detail.
 
+> ⚠️ **Update 2026-09-25: this note overrides the text below wherever the two conflict.**
+> It records the developer decisions D-X1 (24/09) and QX1-b (25/09), executed in Passo F of the
+> [Round-5 plan](../implementation/plan-phase00PacRound5PostMerge.prompt.md) (§2).
+>
+> - **Production runs SCIP only, and its status is trusted (D-X1).**
+>   - `optimal` on every cascade stage → `optimal_proven`, source `solver_status`.
+>   - `infeasible` on the first stage → `infeasibility_proven`, source `solver_status`.
+>   - A limit → `not_proven`.
+>
+>   The oracle leaves production code. It lives in the test tree as the agreement gate on small
+>   domains. §5.5's "the oracle is tried first" and "a solver result is never promoted" no longer
+>   hold.
+>
+>   Why (X1, found by the 24/09 smoke): the oracle ran first on every domain up to 200 000
+>   candidates, and nothing but the job deadline stopped it. At ≈ 3.3 ms per candidate, every
+>   domain between ≈ 13 000 and 200 000 candidates died with `execution_limit`.
+> - **Fee fidelity (X2, QX1-a).** §6.4 is wrong on one point. A fee *minimum* above
+>   `rate × notional_upper` made the model infeasible, even with the order off (X2). Passo F fixes
+>   that bound and also models the cap exactly (QX1-a, decided 24/09). §6.4 and §6.8 point 4 then
+>   no longer apply.
+> - **Rounding beyond the cash (QX1-b).** At exact HALF_UP ties on debits the model stays
+>   permissive.
+>   - Suppose the replay puts the plan above a cash cell by at most `N` minor units, one per
+>     rounded posting in the cell. The plan is published, and the result states the amount to add.
+>   - Beyond that bound, or with any other violation, it is a model error.
+>
+>   §5.6's "a candidate that fails replay produces `ready_no_incumbent`" no longer holds.
+> - **Debt register.** Passo F closes DBT-5: a SCIP `infeasible` becomes `ready_infeasible` with
+>   `completed`. DBT-4 and DBT-6 stay open.
+
 ---
 
 ## 1. The arc
@@ -233,6 +263,9 @@ really be deployed.
 
 ### 5.5 How it is solved, and what happens when it cannot be
 
+> ⚠️ **Superseded 2026-09-25 (D-X1):** production runs SCIP only, and the oracle moves into the
+> tests. See the update at the top.
+
 Two engines, and **the oracle is tried first**:
 
 - **Exhaustive oracle** (`oracle.py`) — when the discrete domain is small enough
@@ -330,6 +363,10 @@ Tax fields exist in the domain (`broker_withheld_tax`, `self_reserved_tax`,
 to SELL. A PAC plan never computes tax.
 
 ### 6.4 Fees: one known approximation
+
+> ⚠️ **Corrected 2026-09-25 (X2, QX1-a).** The "never false infeasibility" claim below is wrong: a
+> fee minimum can make the model infeasible. Passo F models both minimum and cap exactly. See the
+> update at the top.
 
 The fee epigraph ignores the fee **cap** in its internal upper-bound estimate.
 Consequence: on a route with a binding maximum fee, the solver may *believe* a

@@ -512,6 +512,9 @@ Questo confine non è nuovo — va solo rispettato meccanicamente in
 
 ### 16.3 Dove si innesta proof/oracle (e dove resta separato)
 
+> ⚠️ **2026-09-25:** superato da D-X1, per cui in produzione gira solo SCIP e l'oracolo resta nei
+> test ([Round 5, §2 e Passo F](plan-phase00PacRound5PostMerge.prompt.md)).
+
 - Le 3 dimensioni indipendenti restano quelle di Proof Semantics A:
   validazione incumbent (`decimal_verified`), evidenza solver (status/bound/
   gap floating, mai promossa da sola), prova (conclusione matematica sul
@@ -1396,6 +1399,10 @@ singolo per un percorso che non si aspetta venga mai preso.
 > del debito che cancella i propri errori è un registro non verificabile.
 
 ### Difetto A — `plan_pac_allocation` sollevava su un input legittimo
+
+> ⚠️ **2026-09-25:** la cura (SCIP fuori dal percorso quando decide l'oracolo) è superata da
+> D-X1, per cui l'infeasible di SCIP diventa uno stato completato
+> ([Round 5, Passo F1](plan-phase00PacRound5PostMerge.prompt.md)).
 
 Fixture + `required_minimum = 1 unità` (€5 di cassa contro €10 di prezzo
 unitario) faceva **sollevare** `ValidationError: Completed stops require

@@ -21,6 +21,28 @@ controesempi; rilievi della review indipendente incorporati il 2026-09-16.
 > Le formule economiche e le unità sono definite nel nucleo matematico. Qui
 > vengono composte in policy.
 
+> **⚠️ Aggiornamento del 2026-09-25: prevale sul testo sotto dove i due sono in conflitto.**
+> Decisioni del developer D-X1 (24/09) e QX1-b (25/09). Si eseguono nel Passo F del
+> [piano Round5](implementation/plan-phase00PacRound5PostMerge.prompt.md), che le riporta al §2.
+>
+> - **In produzione gira solo SCIP, e il suo esito fa fede (D-X1).**
+>   - `optimal` su tutti gli stage della cascata → `optimal_proven`, fonte `solver_status`.
+>   - `infeasible` sul primo stage → `infeasibility_proven`, fonte `solver_status`.
+>   - Un limite (tempo, nodi, cancel) → `not_proven`, con il miglior piano verificato o senza piano.
+>
+>   L'oracolo esaustivo resta solo nei test. Il replay Decimal resta la contabilità esatta del
+>   piano pubblicato.
+> - **Arrotondamenti oltre la cassa (QX1-b).** Ai pareggi esatti HALF_UP dei debiti il modello
+>   compilato resta permissivo.
+>   - Può capitare che il piano, contato dal replay, superi il saldo di una cassa (Broker × valuta).
+>     Se lo supera di al più `N` unità minime della sua valuta, esce lo stesso, con l'importo da
+>     aggiungere a quella cassa.
+>   - `N` conta gli importi arrotondati registrati nella cassa.
+>   - Oltre la soglia, o con qualunque altra violazione, è un errore del modello.
+>
+> Sezioni toccate: §12.7, §12.8, §13.1 e §13.2. Anche i gate SELL che chiedono «conflict witness o
+> oracle» accettano lo status di SCIP.
+
 ---
 
 ## 1. Tre categorie da non confondere
@@ -832,6 +854,9 @@ ricostruisce il modello controfattuale.
 
 ### 12.7 “Il solver dice infeasible”
 
+> **⚠️ Superata il 2026-09-25 (D-X1).** SCIP `infeasible` sul primo stage vale
+> `infeasible_proven`, fonte `solver_status`. Vedi la nota in testa.
+
 Lo status floating può dipendere da:
 
 - tolleranza;
@@ -844,6 +869,9 @@ Senza conflict witness Decimal o oracle completo, il prodotto dice
 `no_incumbent/not_proven`, non `infeasible_proven`.
 
 ### 12.8 “Il solver dice optimal”
+
+> **⚠️ Superata il 2026-09-25 (D-X1).** SCIP `optimal` su tutti gli stage vale `optimal_proven`,
+> fonte `solver_status`. Il candidato resta `decimal_verified` dal replay. Vedi la nota in testa.
 
 Uno status `optimal` floating non prova:
 
