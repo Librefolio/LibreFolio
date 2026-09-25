@@ -1202,7 +1202,8 @@ la specifica corrente completa è la suite con
    > produzione gira solo SCIP e il suo esito fa fede: `optimal_proven` quando SCIP chiude
    > `optimal` tutti gli stage, `infeasible_proven` quando chiude `infeasible` il primo,
    > altrimenti tempo scaduto. Il replay sui ledger Decimal resta come contabilità esatta del
-   > piano pubblicato; l'oracolo esaustivo resta solo nei test.
+   > piano pubblicato; se gli arrotondamenti portano il costo sopra una cassa di al più N unità
+   > minime, il piano esce con l'importo da aggiungere; l'oracolo esaustivo resta solo nei test.
 
 Il testo sotto resta come analisi storica della variante “solve unico”; non è più
 la specifica corrente.
