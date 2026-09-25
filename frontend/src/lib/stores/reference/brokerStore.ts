@@ -114,6 +114,13 @@ const store = createEntityStore<BrokerInfo, number>({
 });
 
 const iconFieldLoaders = new Map<number, Promise<void>>();
+/**
+ * Brokers already asked for their icon fields in this cache generation. The first answer settles the
+ * id, success or error: a broker without icon, portal or plugin is a valid state, not missing data,
+ * and asking again would only get the same answer. Emptied by the session reset and
+ * `refreshAllBrokers`; `invalidateBroker` releases its ids.
+ */
+const settledIconFieldIds = new Set<number>();
 
 function hasBrokerIconFields(info: BrokerInfo | null | undefined): boolean {
     if (!info) return false;
@@ -144,6 +151,7 @@ export const ensureBrokersLoaded = async (): Promise<void> => {
 /** Force reload — discards the cache and re-fetches.
  *  Also kicks off plugin icon cache loading (fire-and-forget). */
 export const refreshAllBrokers = async (): Promise<void> => {
+    settledIconFieldIds.clear();
     await store.refreshAll();
     ensurePluginIconsLoaded(); // fire-and-forget — keeps plugin icon cache fresh
 };
@@ -151,6 +159,7 @@ export const refreshAllBrokers = async (): Promise<void> => {
 /** Clear user-scoped broker data without starting another request. */
 export const resetBrokerStore = (): void => {
     iconFieldLoaders.clear();
+    settledIconFieldIds.clear();
     store.reset();
 };
 
@@ -165,10 +174,15 @@ export const getAllBrokers = store.getAll;
 /**
  * Hydrate icon-relevant fields for a broker when a consumer only has a partial
  * `{id, name}` shape. Shared de-duplication prevents N identical requests.
+ *
+ * At most one request per broker per cache generation: the first answer settles the id, so an icon
+ * effect that re-runs on every cache change cannot turn a broker without icon fields into a request
+ * loop. `invalidateBroker`, `refreshAllBrokers` and the session reset open the id again.
  */
 export async function ensureBrokerIconFieldsLoaded(brokerId: number | null | undefined): Promise<void> {
     if (brokerId == null) return;
     if (hasBrokerIconFields(store.get(brokerId))) return;
+    if (settledIconFieldIds.has(brokerId)) return;
     const inFlight = iconFieldLoaders.get(brokerId);
     if (inFlight) return inFlight;
 
@@ -179,9 +193,13 @@ export async function ensureBrokerIconFieldsLoaded(brokerId: number | null | und
                 params: {broker_id: brokerId},
             } as never)) as Record<string, unknown>;
             if (!isClientSessionCurrent(sessionGeneration)) return;
+            // Settled before the merge: the merge bumps the version and re-runs every icon effect,
+            // which must already find this broker answered.
+            settledIconFieldIds.add(brokerId);
             store.merge([broker]);
         } catch (e) {
             if (!isClientSessionCurrent(sessionGeneration)) return;
+            settledIconFieldIds.add(brokerId);
             // eslint-disable-next-line no-console
             console.error('[brokerStore] Failed to hydrate broker icon fields:', e);
         } finally {
@@ -203,9 +221,13 @@ export const mergeBrokers = store.merge;
  * Centralized eviction utility.
  * Call this from EVERY broker mutation callsite (BrokerModal save / delete).
  * Removes the entry **and resets `loaded=false`** so the next
- * `ensureBrokersLoaded()` re-fetches.
+ * `ensureBrokersLoaded()` re-fetches. The icon fields of those brokers may be asked for again.
  */
-export const invalidateBroker = store.invalidate;
+export const invalidateBroker = (idOrIds: number | ReadonlyArray<number>): void => {
+    const ids: ReadonlyArray<number> = typeof idOrIds === 'number' ? [idOrIds] : idOrIds;
+    for (const id of ids) settledIconFieldIds.delete(id);
+    store.invalidate(idOrIds);
+};
 
 // ============================================================================
 // ROLE / ACCESS HELPERS
