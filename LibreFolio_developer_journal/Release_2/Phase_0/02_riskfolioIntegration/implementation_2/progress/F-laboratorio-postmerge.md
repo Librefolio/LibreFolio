@@ -1503,3 +1503,571 @@ server             · 6164 fermato (stop_bash f3bserver) · lsof 6154 e 6164 →
 **Non girati**: E2E `risk-lab` (selettori cambiati: il riallineamento è F-6; dopo il merge il coordinatore la chiede nella
 6154) e `front build` (l'ultimo bundle, `0fab55b6cffa9c4a`, precede il blocco filtri intero e il contorno neutro).
 Log in `/tmp/libreFolio_f3b/ckpt2_*.log`.
+
+### Checkpoint 2 committato e merge Risk → F · 2026-09-24, 15:47–16:01
+
+> Il developer ha committato i 7 gruppi con lo script del coordinatore (`/tmp/libreFolio_commit_f_ckpt2.sh`):
+> `947e01994` → `10e14bc90` → `a7b0fd1e4` → `a01a39337` → `abcf21860` → `d5457d89b` → `b97360b32`. Poi il merge
+> **`2c02ff070`** (genitori `b97360b32` + `14c334d85`, albero `2415bf854`, identico alla simulazione del coordinatore):
+> nessun conflitto, Git ha fuso da sé i 4 cataloghi e `_frontend_portfolio.py`, voci diverse. Verificato qui:
+> HEAD = `2c02ff070`, albero pulito, `backend/` identico byte per byte a `14c334d85`.
+>
+> **Contratto dell'engine di idoneità**, dalla sessione di Risk (15:48), salvato fuori dal repo in
+> `files/Risk_eligibility_contract_20260924.md`: `POST /api/v1/risk/eligibility`, `asset_ids` da 1 a 500 (mai vuoto),
+> `date_range {start, end}`, `target_currency`; per asset `level` `eligible` / `warning` / `ineligible`, `reasons`,
+> `first_quote`, `last_quote`, `quotes_in_period`; soglie `min_quotes` e `stale_days` nella risposta. «Nessun prezzo» =
+> nessuna quotazione datata **nel periodo**.
+>
+> **Regole del coordinatore (16:01)**: i file di Risk restano di Risk anche qui (backend, `L4Replay`, `L4Shock`,
+> `RiskAnalysisPanel`, `riskRequest.ts`, `AllocationPieChart` e `allocation*`, `risk-analysis.spec.ts`,
+> `scripts/i18n_usage.py`, journal di Risk); `risk.eligibility.*` è di F fino a F → Risk, 5 chiavi (`no_prices`,
+> `too_few_quotes`, `missing_fx`, `starts_late`, `stale_at_end`), mappatura con chiavi scritte per intero che copra ogni
+> valore di `RiskEligibilityReason`; **`no_price_history` non lo aggiunge F** (arriva col checkpoint C di Risk); «Tutti i
+> miei» = posizioni aperte a `dateEnd`, non `held_by_me`. Il caso «preset broker» di `risk-lab` è ora l'unica copertura
+> rimasta (Risk ha tolto il vecchio test in `551edffdc`): F-6 deve tenerlo.
+
+### Validazione della revisione combinata `2c02ff070` · 2026-09-24, dalle 16:05 (una suite alla volta)
+
+| # | Cancello | Esito |
+|---|---|---|
+| 1 | `api sync` | ✅ exit 0 · nessun file tracciato cambiato · `generated.ts` `9b612ad20ccd0dc2` con `asset_eligibility_api_v1_risk_eligibility_post` e `RiskEligibilityReason` = 5 codici |
+| 2 | `front check` (pavimento 4 file, 0 in `risk/`, `assets/`, `charts/`) | ✅ 3 errori + 41 avvisi negli stessi 4 file · 0 in `risk/`, `assets/`, `charts/` · formato pulito |
+| 3 | vitest: 14 percorsi di F + `risk-unit`, `risk-request-unit`, `risk-benchmark-unit`, `allocation-unit` | ✅ 14 file / 502 · 1 / 17 · 2 / 26 · 1 / 8 · 4 / 116 |
+| 4 | backend: `services risk-all`, poi `api risk` (6154) | ✅ `services risk-all` 560 passati (gli 8 di `test_risk_warnings_i18n` PASSED) · `api risk` prima 10 + 3 falliti in preparazione (DB vuoto, vedi sotto), poi, col via del coordinatore, `db populate --force` (16:08, 11 utenti e2e, 17 asset) e **13 passati** (16:08:42–16:09:01) |
+| 5 | `check-orphans` (solo i 5 di J) | ✅ exit 1 · lista identica al checkpoint 1: i 5 di J |
+| 6 | `i18n audit` (0 mancanti) | ✅ exit 0 · «No Missing Translations» · 3455 chiavi · fra le 418 «forse inutilizzate» del laboratorio solo `risk.assetSet.panelTitle`, già annotata |
+| 7 | E2E `front-portfolio risk` (6154) | ✅ 13 passati su 13 dichiarati (Risk ha ampliato `risk-analysis.spec.ts` da 3 a 13), 27,7 s |
+| 8 | E2E `front-portfolio risk-lab` (rosso atteso sui selettori, F-6) | 🟡 8 passati, 8 falliti, **tutti sui pezzi tolti dalla riprogettazione**: 2 sul filtro Tipo a etichette (la regex ora trova `risk-filter-type-button`), 2 su `risk-asset-add-select`, 1 su `risk-broker-option-all`, 3 su `risk-sync-button` dentro la scheda. I due del preset broker (`:2615`, `:2668`) sono l'unica copertura rimasta: F-6 li riallinea, non li toglie |
+| 9 | copia rinfrescata, 6164 rialzata, replay del laboratorio dal vivo | ✅ copia dalla snapshot (vecchia in `.prev-20260924-161807`, `chmod -R u+w`, Alembic `004_release_1_2_0_schema`, 15 asset, 0 utenti `e2e_*`) · server PID 57685, cwd nel worktree, `db_path` della copia, `/health` 200, `index.html` servito = costruito `37a1f65d93a01e3a`, `/risk/eligibility` senza login → 401 · ⏳ **replay dal vivo**: serve il login del developer (credenziali non trascritte), si verifica nella sua review |
+
+> ⚠️ **Fuori pista — `api risk` rosso per infrastruttura, non per il prodotto (16:05–16:07)**
+> - Comando: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6154 --data-dir
+>   /tmp/librefolio-r2-f api risk` → exit 1, `3 failed, 10 passed`. I tre (`test_risk_query_runs_all_analytics_against_populated_test_database`,
+>   `test_risk_query_simulates_with_canonical_names_and_no_seed`, `test_portfolio_optimization_supports_all_scopes_and_strategies`)
+>   si fermano nella precondizione `fixture_user_id()`: «Test database is not populated: user 'e2e_test_user' is missing».
+> - Causa, dal log: il runner di `services` apre con «Creating clean test database for services tests…», **rimuove**
+>   `/private/tmp/librefolio-r2-f/sqlite/app.db` e svuota `broker_reports` (112 file) e `custom-uploads` (61). `api risk`,
+>   lanciato subito dopo come da ordine, trova un DB vuoto: in sola lettura, 0 utenti e 0 asset, file riscritto alle
+>   16:06:34 dallo schema del backend condiviso. Toccati solo DB e file della mia corsia; server della 6154 spento a fine
+>   comando (`lsof` exit 1).
+> - Anche le E2E `risk` e `risk-lab` (passi 7 e 8) hanno bisogno del DB popolato.
+> - **Fermo**, come chiesto dal coordinatore sul primo rosso. Proposta: `test db populate --force` nella corsia
+>   (`/tmp/librefolio-r2-f`), poi di nuovo `api risk`, poi i passi 5–9.
+> - **Chiuso (16:08)**: il coordinatore conferma che l'errore era nell'ordine (`services` ricrea il DB della corsia) e
+>   dà il via al `populate`; `api risk` → 13/13.
+
+> **Esito della validazione**: tutto come atteso. Il rosso di `risk-lab` è quello previsto e si chiude in F-6. Il replay
+> dal vivo resta alla review del developer. Si passa ai 5 pezzi, come da regola del coordinatore; l'esito va nel prossimo
+> checkpoint.
+
+### F-3b · i 5 pezzi dopo il merge, più gli stati di idoneità · 2026-09-24, dalle 16:25
+
+**Disegno** (fatto e poi chiesto, come da metodo della riprogettazione):
+1. **Idoneità**: un modulo nuovo, `risk/eligibility.ts`, che chiede e traduce e non calcola niente.
+   - Una chiamata a `POST /api/v1/risk/eligibility` per tutto il catalogo della pagina, a lotti di 500, mai con la lista
+     vuota; debounce di 300 ms e scarto delle risposte superate.
+   - Se la chiamata fallisce non arriva nessun verdetto, quindi tutto resta selezionabile, con un avviso.
+   - I 5 motivi hanno chiavi `risk.eligibility.reasons.*` scritte per intero dentro chiamate `t(...)`, in uno `switch`
+     esaustivo sul tipo generato: un motivo nuovo fa fallire `front check` invece di arrivare grezzo sullo schermo.
+   - Due etichette di livello (`risk.eligibility.levels.*`) fanno da ripiego, così a schermo non compare mai una chiave.
+2. **Nel «+»**: i filtri Tipo e Valuta come etichette dentro il pannello; `LabCheckMenu` sparisce.
+   - Righe `ineligible` in sola lettura, in una sezione a parte, con i motivi.
+   - Righe `warning` selezionabili, con ⚠ e i motivi.
+3. **Asset già scelti ma non ammessi**: **restano nella selezione come chip spente**, con il motivo, e **non vanno
+   all'analisi** (`analysedIds`). Il sync li comprende ancora: un asset senza prezzi a volte va solo sincronizzato.
+   - Perché «parcheggiati» e non tolti: se si cambia periodo, compreso il futuro «adatta al periodo comune» di Risk,
+     tornano da soli.
+   - L'alternativa è toglierli, con una nota; va chiesto al developer.
+4. **Azioni rapide** su tutto il catalogo ammesso. «Deseleziona tutti» svuota tutto, anche le chip spente.
+5. **Conteggio**: «N in analisi su M analizzabili», con un tooltip.
+6. **Apertura**: ultima selezione → «Tutti i miei» (holdings al `dateEnd`, asincrono, con stato di caricamento) → piccolo
+   insieme di ripiego. Un'azione dell'utente durante il caricamento vince sul seme.
+7. **Icona del broker** (`BrokerIcon`, `size="sm"`) nel comando per broker.
+
+> **Note implementazione (16:25–16:40)**
+> - **`risk/eligibility.ts`** (nuovo, puro): tipi dal client generato (`RiskEligibilityLevel`, `RiskEligibilityReason`,
+>   `RiskAssetEligibility`), più `isSelectable`, `eligibilityBatches` (500), `mergeEligibilityAnswers`, `dayFormatter`
+>   (giorno ISO letto in UTC), `reasonText` e `describeEligibility`.
+>   - `reasonText` è uno `switch` esaustivo con le 5 chiavi scritte per intero dentro `t(...)`: l'audit le vede, e un
+>     codice nuovo fa fallire `front check`.
+>   - Ripiego: se `t` restituisce la chiave, compare l'etichetta del livello e mai la chiave grezza.
+>   - Il ramo `default` restituisce `null` e non il codice: la prima stesura restituiva il codice, che sarebbe finito a
+>     schermo, ed è stata corretta prima di qualsiasi prova.
+> - **Pannello**:
+>   - `verdicts` chiesti in un `$effect` sulla chiave del catalogo (id ordinati), sul periodo e sulla valuta, con debounce
+>     di 300 ms e scarto delle risposte superate; con lista vuota o periodo senza inizio, nessuna chiamata;
+>   - se la chiamata fallisce, niente verdetti e l'avviso `risk-eligibility-failed`;
+>   - `candidates` = catalogo senza i non ammessi; `analysedIds` = selezione senza i non ammessi, ed è quello che ricevono
+>     le tre sezioni;
+>   - chip spente per i parcheggiati (tratteggio, testo barrato, ⚠ con i motivi nel tooltip; `data-level`,
+>     `data-reasons`), più la nota `risk-parked-note`, col plurale ICU;
+>   - conteggio «N in analisi su M analizzabili» (`data-selected` = `analysedIds`, `data-total` = `candidates`,
+>     `data-parked`) con un tooltip che dice «tutti, non solo i tuoi»;
+>   - `BrokerIcon` in ogni voce del comando per broker;
+>   - scala d'apertura: `persisted` subito, altrimenti `seedFromHoldings()` (holdings al `dateEnd`, stato
+>     `risk-asset-set-seeding`); un'azione dell'utente (`selectionTouched`) o un preset nel frattempo scartano il seme;
+>     durante il caricamento non si scrive la memoria.
+>   - `heldAssetIds()` è condiviso fra seme e preset: doppia domanda sul `null`, filtro sugli id della pagina.
+>   - Il benchmark è escluso se sta fra gli `analysedIds`, non fra i selezionati.
+> - **`assetSetSelection.ts`**: la scala prende `held` (niente più `tx_count_own`); `applyBulkAction` ha 3 parametri,
+>   `none` svuota tutto e `invert` lascia i parcheggiati; tolti `ownedAssetIds` e `'mine'`.
+> - **«+»**: etichette Tipo e Valuta nel pannello (`risk-filter-type-*`, `risk-filter-currency-*`, `risk-filters-clear`),
+>   che restano fra un'apertura e l'altra; righe ammesse o con ⚠, poi la sezione «Non analizzabili nel periodo»
+>   (`risk-asset-add-blocked`) con 🔒 e i motivi; `data-level` e `data-reasons` su ogni riga.
+> - **Tolto** `LabCheckMenu.svelte` (non ha più chiamanti).
+> - **Registrato** `eligibility.test.ts` in `scripts/test_runner/_frontend_utility.py`: riga additiva accanto a
+>   `assetSetSelection.test.ts`, come per `syncTargets.test.ts` in `7f06df51d`. È un file condiviso: va segnalato.
+> - **i18n ×4 via `dev.py i18n`**:
+>   - +11: `risk.eligibility.reasons.{no_prices,too_few_quotes,missing_fx,starts_late,stale_at_end}`,
+>     `risk.eligibility.levels.{ineligible,warning}`, `risk.assetSet.picker.notAnalysable`,
+>     `risk.assetSet.selectedCountHint`, `risk.assetSet.parkedNote`, `risk.assetSet.eligibilityFailed`;
+>   - aggiornata `risk.assetSet.selectedCount`; tolta `risk.assetSet.picker.filtersOn`;
+>   - 3465 chiavi per catalogo, insiemi identici. `no_price_history` **non** aggiunto (regola del coordinatore).
+> - **Prove parziali**: `front check` coi sorgenti puliti, a parte un avviso a11y (`aria-disabled` su `<li>`, tolto). I 23
+>   errori rimasti sono tutti in `assetSetSelection.test.ts`, dovuti alle API cambiate apposta, e li riallinea test-author.
+>   Prettier pulito sui 4 file. `front build` exit 0, bundle servito = costruito = `b84f90b42647f256`, con i testid
+>   nuovi e `/api/v1/risk/eligibility` presenti.
+>
+> ⚠️ **Fuori pista**: un `prettier --check` lanciato dalla radice del repo non trova `prettier-plugin-svelte` e non
+> formatta niente. Va lanciato da `frontend/`: rifatto da lì, pulito.
+
+### F-3b · feedback delle 16:46 sulla scheda con l'idoneità · 2026-09-24, 16:46–17:00
+
+**Il developer**:
+- ✅ il contorno neutro della cella scelta si vede sia sul tema chiaro sia sullo scuro;
+- ✅ gli asset non ammessi che arrivano dai preset restano in sola lettura, barrati, e il «+» non li lascia aggiungere:
+  «è chiaro e coerente». Le chip spente restano la scelta.
+
+**Correzioni fatte**:
+1. **Tooltip del conteggio**: era poco chiaro, serviva una spiegazione discorsiva. Nuovo testo, nelle 4 lingue via
+   `dev.py i18n update`: «Il primo numero conta gli asset che il laboratorio sta analizzando adesso. Il secondo conta
+   quanti ne potrebbe analizzare nel periodo scelto: tutti gli asset presenti in LibreFolio, non solo quelli che
+   possiedi, purché abbiano abbastanza prezzi in quel periodo. Quelli che non li hanno li trovi comunque nel «+», in sola
+   lettura, con il motivo.» `maxWidth` passa a 360px.
+2. **Chip con un verdetto**: il tooltip sta su tutta la chip (passaggio del mouse o click ovunque), e il triangolo è
+   tolto. Le chip con avviso hanno un bordo ambra. La × ferma il click (`stopPropagation`), così togliere un asset non
+   fissa il tooltip. La chip è ora uno snippet `chip(asset, verdict)`, con o senza `Tooltip`.
+3. **Filtri nel «+»**: il developer voleva i selettori di prima, con i loro pannelli, dentro il «+». Tornano i due menu
+   `LabCheckMenu` (Tipo ▾ e Valuta ▾, stessi testid), dentro l'intestazione del «+»; il file è ripristinato da `HEAD`
+   con `git show`. I **conteggi** contano solo gli asset **ancora da aggiungere** (non selezionati e non esclusi dal
+   periodo); le voci vengono dal catalogo intero, quindi una voce a 0 resta.
+4. **Attesa di «Tutti i miei»**: la causa, verificata, è che `fetchReport` veniva chiamato con i default, cioè
+   `include_history` e `include_allocation_history` a `true`: tutta la storia giornaliera del periodo, solo per leggere le
+   holdings. Ora chiede il report leggero (`…, false, false, false, false, false`), che ha una sua voce di cache
+   (`|nohist|noalloc`). Tempi non misurati: il log del server non li riporta.
+
+**Domanda del developer**: il filtro fra asset posseduti ora e non più posseduti, cioè il «declassamento» nei tre
+pannelli della griglia (`assetScope`, oggi su `tx_count_own`). Nel perimetro registrato alle 12:40 è **di F**, se il
+backend di Risk arriva prima del checkpoint finale: è arrivato col merge (`held_by_me` e `held_by_others` su
+`FAinfoResponse`). **Non ancora fatto.** Limite noto: in `14c334d85` `held_by_me` usa la soglia 1e-9, quindi un residuo
+di rimborso conta come posseduto; la soglia 1e-5 arriva col checkpoint C di Risk.
+
+**Prove**: prettier pulito su `risk/`; `front check` con i sorgenti puliti (restano il pavimento e i 23 errori di
+`assetSetSelection.test.ts`, che riallinea test-author); `front build` exit 0; bundle servito = costruito =
+`3166ce974e060822`; nel bundle ci sono «Il primo numero conta» e i prefissi `risk-filter-type` e `risk-filter-currency`,
+e non c'è più `risk-selected-asset-verdict`.
+
+### F-3b · declassamento nei pannelli della griglia (`held_by_me`, `held_by_others`) · 2026-09-24, 16:55–17:10
+
+**Decisione del developer (ask_user)**: «Fallo adesso, dopo questi ritocchi».
+
+> **Note implementazione** (`assets/+page.svelte`, di cui F è l'unico scrittore in questo giro):
+> - `AssetInfo` porta `held_by_me` e `held_by_others`, mappati in `loadAssets` da `FAinfoResponse` (Risk, `14c334d85`).
+> - `assetScope`: `held_by_me` → `own`; altrimenti `held_by_others` → `others`; altrimenti `analysis`. È la regola del
+>   tempo ② di Risk: chi non possiede più un asset scende fra «degli altri utenti» se qualcuno lo detiene adesso,
+>   altrimenti fra «osservati». `tx_count_own` non decide più.
+> - Frasi sotto i titoli dei pannelli, nelle 4 lingue via `dev.py i18n update` (`assets.panels.{own,others,analysis}Hint`):
+>   «Posseduti ora in broker di cui sei owner», «Posseduti ora solo da altri utenti», «Oggi non li possiede nessuno — mai
+>   acquistati o già venduti, tenuti d'occhio».
+> - Limite noto: in `14c334d85` `held_by_me` usa la soglia 1e-9, quindi un residuo di rimborso conta come posseduto; la
+>   soglia 1e-5 arriva col checkpoint C di Risk, al merge F → Risk.
+>
+> **Prova mirata** (6154, 16:59–17:01):
+> `dev.py test … front-asset asset-list` con i 4 test dei pannelli → 3 passati, 1 fallito.
+> - Passano «list view buckets…», «bulk selection from different panels…» e «grid view renders the three usage
+>   panels…». Quindi coi dati di prova, anche con la regola nuova, i tre pannelli si riempiono, Apple sta in «I tuoi» e un
+>   asset nuovo sta in «osservati».
+> - Cade «lifecycle ordering and visual markers apply in every usage panel» (`:423`): i suoi asset sintetici
+>   (`syntheticAsset`, `:37`) portano solo `tx_count` e `tx_count_own`, quindi finiscono tutti in «osservati» e
+>   `assets-panel-own` non compare.
+> - **Riallineamento**: `syntheticAsset` deve portare anche `held_by_me` e `held_by_others`, due righe. Va in **F-6**
+>   insieme a `risk-lab`, perché è un E2E in un file condiviso con B e la politica della riprogettazione esclude il lavoro
+>   E2E adesso. Da segnalare nel checkpoint.
+
+### test-author: `assetSetSelection.test.ts` riallineato, `eligibility.test.ts` nuovo · 2026-09-24, 16:40–17:05
+
+> `vitest run` sui 2 file → **2 file, 111 test verdi** (88 + 23); prima 15 falliti su 70, più 23 errori di tipo. Il
+> test di default di `localStorage` usa lo stub del motivo Node 26, e prova davvero una scrittura e una lettura.
+>
+> **Tre difetti veri trovati da test-author, corretti nel sorgente**:
+> 1. La memoria della selezione non toglieva i duplicati, mentre le holdings sì. Il backend rifiuta gli id ripetuti
+>    (`asset_ids must be unique`), quindi un duplicato finito nello storage avrebbe fatto fallire ogni sezione, visita
+>    dopo visita. Ora c'è `dedupe(...)` prima del tetto.
+> 2. `dayFormatter` trasformava un giorno impossibile in un altro vero («2024-02-30» → 1 marzo). Ora c'è un controllo di
+>    andata e ritorno, e il giorno torna com'era arrivato.
+> 3. `eligibilityBatches` con dimensione ≤ 0 non avanzava mai. Ora il passo è `Math.max(1, Math.floor(size))`.
+>
+> I casi di regressione per tutti e tre sono chiesti a test-author.
+
+> **Chiusura dei difetti di test-author** (17:05–17:15): i tre casi di regressione chiesti sono aggiunti, più un quarto
+> buco trovato da test-author nella mia correzione. `Math.max(1, NaN)` vale `NaN`, quindi una dimensione non numerica dava
+> un lotto vuoto: il passo ora è `Math.max(1, Math.floor(size) || 1)`, con il suo caso. `vitest` sui 2 file → **115
+> verdi**.
+>
+> **Cancelli sulla revisione di lavoro** (dopo `2c02ff070`), uno per volta:
+> ```
+> front check    · svelte-check 3 errori + 41 avvisi negli stessi 4 file del pavimento · 0 in risk/ e assets/ · formato pulito
+> vitest         · 15 percorsi (i 14 del checkpoint + eligibility.test.ts) ⇒ Test Files 15 passed (15) · 547 test
+> check-orphans  · exit 1 · lista identica: i 5 di J (eligibility.test.ts è registrato)
+> prettier       · pulito sui file del frontend nel delta
+> front build    · exit 0 · bundle servito = costruito = 1422e9e197abf24e
+> E2E mirata     · asset-list, 4 test dei pannelli: 3 passati, 1 da riallineare in F-6 (vedi sopra)
+> ```
+> Delta attuale: 13 percorsi (11 modificati e 2 nuovi). `LabCheckMenu.svelte` è identico a `HEAD`.
+
+> **Aggiunta del coordinatore al passo 7 (17:12)**: E2E `front-portfolio risk-asset-detail` (la rete di Asset Detail,
+> dove ora arrivano le modifiche di Risk a `RiskAnalysisPanel`) → **exit 0, 2 passati su 2 dichiarati** (17:12:56–17:14:38,
+> 6154 libera alla fine).
+>
+> Il coordinatore segnala una regressione nota, non di F, entrata col merge: tre chiavi `risk.warnings.*` con argomenti
+> ICU appaiono grezze nel vecchio `RiskAnalysisPanel` di Asset Detail. Sono `hypothetical_metadata_other_fallback`,
+> `slice_assets_not_held` e `historical_replay_proxies_used`. Il laboratorio non le monta; la cura (F1) è di Risk, a
+> F → Risk. **Non toccata.**
+
+### F-3b · review delle 17:21 e verso il checkpoint finale · 2026-09-24
+
+**Il developer**: ✅ declassamento; ✅ icone dei broker; ✅ «Seleziona tutti» e «Deseleziona tutti» rispondono.
+
+**Replay: rinviato al prossimo sprint** (decisione del developer). I difetti visti sulla 6164:
+1. Non usa `DateRangePicker` (`ui/date/DateRangePicker.svelte`).
+2. Una data preistorica (1019-06-10) non produce niente: nessun avviso, nessun restringimento.
+3. Il menu dei preset si apre verso il basso anche a fondo pagina.
+
+Proprietari, verificati nel codice: i campi data e i preset stanno in `levels/l4/L4Replay.svelte`, **file di Risk** (la
+`SimpleSelect` dei preset è a `:155`); `AssetSetReplaySection.svelte` è di F. Va instradato dal coordinatore.
+
+**Il developer vuole fare il merge con Risk e poi il punto della situazione**, se non manca niente. Restano aperti:
+- l'icona del manuale su tutti i pannelli del laboratorio, decisa per la fine della riprogettazione:
+  - fatta solo sulla correlazione;
+  - L1 e L3 stanno in `AssetSetComparisonLevels.svelte`, file di A;
+  - L4 (replay) è `collapsible`, e `RiskLevelSection` oggi non mostra l'icona nella testata richiudibile;
+- F-6, il riallineamento E2E: `risk-lab` (8 rossi, preset broker compreso) e `asset-list` `:423`;
+- la pulizia di fine giro: chiave morta `risk.assetSet.panelTitle`, lezioni nel devWiki, proposta di voci CHANGELOG.
+
+**Decisioni del developer (ask_user, 17:25)**: prima del merge F → Risk si fanno **(1) le icone del manuale su tutti i
+pannelli del laboratorio** e **(2) F-6**, perché Risk non erediti test rossi.
+
+> **Note implementazione (17:25–17:35)**
+> - Chiesti al coordinatore tre via:
+>   - (a) il file di A `AssetSetComparisonLevels.svelte`: `docsPath` e `docsLabel` su L1 e L3;
+>   - (b) `RiskLevelSection` di Risk: l'icona nella testata richiudibile, accanto al pulsante e non dentro, perché un link
+>     dentro un `<button>` è HTML non valido;
+>   - (c) `asset-list.spec.ts`, condiviso con B: `syntheticAsset` con `held_by_me` e `held_by_others`.
+> - Pagine proposte: L1 → `value-at-risk`, L3 → `sharpe-ratio`, L4 → `historical-replay`; `check-links` atteso da 81 a
+>   84. Le descrizioni di L1 e L3 compaiono già nelle sezioni, quindi i tooltip avranno testi di aiuto propri, sul modello
+>   della correlazione («In questo pannello si…»).
+> - F-6 su `risk-lab.spec.ts` affidato a un nuovo test-author (`f6-risklab-realign`), con la corsia 6154 **in
+>   esclusiva** e il contratto completo della nuova interfaccia. Senza toccare `risk-mocks.ts` (di E): l'idoneità si
+>   simula dentro lo spec. Finché lavora, io non lancio niente nella corsia.
+> - Pulizia: tolte via `dev.py i18n remove` le chiavi morte `risk.assetSet.panelTitle` e `risk.assetSet.ordering.original`
+>   (`Ordering` non contiene più `'original'`). 3463 chiavi per catalogo, insiemi identici.
+
+### F-3b · icone del manuale sui pannelli del laboratorio · 2026-09-24, 17:43–17:55
+
+**Via del coordinatore (17:43)**, con i suoi vincoli:
+- (a) nel file di A si aggiungono solo le props alle due chiamate, e **niente `docsLabel`**: vale il default, il titolo;
+- (b) nella testata richiudibile l'icona sta accanto al pulsante, il suo click non apre né chiude la sezione, e l'ordine
+  del focus resta sensato;
+- (c) `asset-list.spec.ts` con aggiunte minime, senza toccare `:864-898` (lo ha modificato K).
+- Pagine: L1 `…/risk-metrics/#how-much-can-it-hurt`, L3 `…/risk-metrics/#am-i-paid-for-the-risk`, L4
+  `…/risk-metrics/historical-replay/`.
+- Da confermare nel prossimo passaggio di consegne: `assetScope` usa `held_by_*` per «posseduto ora», e «Tutti i miei»
+  parte dalle posizioni a `dateEnd`. **Sì, entrambe.**
+
+> **Note implementazione**
+> - `RiskLevelSection.svelte`, zona del titolo: nella testata richiudibile ora c'è `<div flex>` con il pulsante
+>   `{testId}-toggle` (`flex-1`, stesso testid) e, **accanto**, `DocsLink` (`{testId}-docs`).
+>   - Il click sull'icona apre la pagina (`window.open`) e non arriva al pulsante: sono fratelli, non annidati.
+>   - Ordine del focus: prima il pulsante, poi l'icona.
+>   - Aggiornati il commento sulla testata non richiudibile («Risk's call» tolto) e la documentazione di `docsPath` e
+>     `docsLabel`.
+> - `AssetSetComparisonLevels.svelte` (file di A): solo `docsPath` su `:143` e `:147`.
+> - `AssetSetReplaySection.svelte` (di F): `docsPath` per `historical-replay`.
+> - Accodato allo stesso test-author di F-6 il compito su `asset-list.spec.ts`, con i vincoli del coordinatore.
+>
+> ⚠️ **Fuori pista — `check-links` rosso sulle due ancore dell'indice**
+> - `dev.py mkdocs check-links` esce 1: 82 validi (+1, il replay), 3 known-broken, **2 rotti**:
+>   `#how-much-can-it-hurt` e `#am-i-paid-for-the-risk`, «resolves in English but is missing in: it, fr, es».
+> - Causa: `index.en.md` è stato riscritto il 18/09 (`b35a8581e`) con le quattro domande e i loro id; `index.{it,fr,es}.md`
+>   hanno ancora i titoli vecchi, quindi è debito di traduzione.
+> - `MKDOCS_ANCHOR_EXCEPTIONS` «può solo accorciarsi», e la traduzione parte solo su richiesta del developer.
+> - Proposto al coordinatore: l'indice senza ancora (valido in 4 lingue, 83 validi, 0 rotti), oppure la traduzione
+>   dell'indice su richiesta del developer. **In attesa della scelta.**
+> - **Chiuso (17:46)**: il coordinatore approva la proposta. L1 e L3 puntano a `financial-theory/technical-analysis/risk-metrics/`,
+>   senza ancora; L4 resta sul replay. `dev.py mkdocs check-links` esce **0**: **83 validi**, 3 known-broken, 0 rotti. Le
+>   ancore arriveranno con la traduzione dell'indice, che il coordinatore mette nella lista per il developer.
+
+### F-6 · riallineamento E2E fatto (test-author `f6-risklab-realign`) · 2026-09-24, 17:00–17:55
+
+> - **`risk-lab.spec.ts`: 16 dichiarati ⇒ 16 passati** (29,1 s, 1 worker, 0 retry), log `/tmp/libreFolio_f6_full_final.log`.
+>   - La linea di partenza reale era 6 verdi e 10 rossi, non 8 e 8: lo spec non simulava `/risk/eligibility` e
+>     raggiungeva il motore vero della corsia (9 ammessi, 1 parcheggiato). Cinque verdi lo erano per tempismo.
+>   - Ora `installRiskMocks` risponde `eligible` per ogni id richiesto. Una barriera d'apertura aspetta che nessuna chip
+>     sia `unknown` e che `risk-eligibility-failed` sia assente; con una risposta 500 simulata la barriera diventa rossa
+>     come deve.
+>   - Aggiunti aiutanti per il «+».
+>   - I due test di ri-domanda del preset broker restano, con gli stessi conteggi (1/2/3 e 1/2).
+>   - I test del preset e del sync hanno nomi nuovi.
+>   - `risk-mocks.ts` non toccato.
+> - **`asset-list.spec.ts`: 28 dichiarati ⇒ 28 passati** (45,1 s).
+>   - `SyntheticAsset` e `syntheticAsset()` hanno `held_by_me` e `held_by_others`, falsi di default, tramite `options`;
+>     valori espliciti solo nel test di `:423`.
+>   - La zona di K (`:864-898` in HEAD, ora `:872-906`) è identica byte per byte.
+> - Porta 6154 libera alla fine di ogni esecuzione.
+>
+> **Segnalato da test-author, non ancora deciso**:
+> 1. **Difetto minore di `LabPopover`**: se il menu Tipo aperto esce dalla finestra e la pagina è scorsa, una pressione
+>    su Valuta chiude il pannello (`pointerdown`), la pagina salta, e il `pointerup` cade sulla ricerca: il click su
+>    Valuta si perde. Prova in `/tmp/libreFolio_f6_diag_menu_switch_evidence.log`.
+> 2. La descrizione del runner per `risk-lab` in `scripts/test_runner/_frontend_portfolio.py` dice ancora «sync
+>    re-housed in the controls» (file condiviso: proposta, non applicata).
+> 3. `risk-reload-button` non ha copertura E2E.
+
+## ⏸️ PAUSA chiesta dal coordinatore per conto del developer · 2026-09-24, 18:36
+
+**Stato esatto**
+- HEAD `2c02ff070` (merge Risk → F). Stage vuoto.
+- **18 percorsi**:
+  - **16 modificati**: il piano, `asset-list.spec.ts`, `risk-lab.spec.ts`, `AssetSetComparisonLevels.svelte`,
+    `AssetSetReplaySection.svelte`, `AssetSetRiskPanel.svelte`, `LabAssetPicker.svelte`, `assetSetSelection.test.ts`,
+    `assetSetSelection.ts`, `levels/RiskLevelSection.svelte`, i 4 cataloghi, `routes/(app)/assets/+page.svelte`,
+    `scripts/test_runner/_frontend_utility.py`;
+  - **2 nuovi**: `eligibility.ts` e `eligibility.test.ts`.
+- **Fatto dopo il merge**:
+  - i 5 pezzi: filtri nel «+», conteggio, «Tutti i miei» all'apertura, icone dei broker, idoneità con chip spente;
+  - il feedback delle 16:46: tooltip discorsivo, tooltip su tutta la chip, menu nel «+» con i conteggi degli asset da
+    aggiungere, report leggero;
+  - il declassamento;
+  - le icone del manuale (a) e (b), con i link senza ancora approvati dal coordinatore (83 validi, 0 rotti);
+  - (c) `asset-list.spec.ts`;
+  - F-6;
+  - pulizia delle chiavi morte.
+- **Ultimi cancelli verdi**:
+  - `front check` al pavimento, 0 nei miei file (dopo le icone);
+  - vitest sui 15 percorsi, 547 test (prima delle icone; le icone non toccano i moduli testati);
+  - `check-links` 83 validi;
+  - `risk-lab` 16/16 e `asset-list` 28/28.
+- **A metà**: niente di codice. Il bundle servito sulla 6164 era `1422e9e197abf24e`, **precedente alle icone**; la 6164
+  è spenta.
+- **Porte**: 6164 spenta (`stop_bash f3bserver2`, PID 57685 assente), 6154 e 6164 libere (`lsof` exit 1).
+
+**Primo passo alla ripartenza**: decidere col coordinatore i tre punti segnalati da test-author (`LabPopover`,
+descrizione del runner, copertura di `risk-reload-button`). Poi i cancelli completi sulla revisione finale:
+- `front check`, prettier, vitest sui 15 percorsi;
+- `check-orphans`, `check-links`, `i18n audit`;
+- E2E `risk` (è cambiata la testata di `RiskLevelSection`), `risk-asset-detail`, `risk-lab`, `asset-list`.
+
+**Manca, prima del checkpoint che precede F → Risk**:
+- `front build`, poi la 6164 rialzata sulla copia per l'ultimo sguardo del developer alle icone;
+- le lezioni nel devWiki;
+- `CHECKPOINT READY`, con i gruppi, i messaggi, la proposta per il CHANGELOG, i conflitti previsti per F → Risk, la
+  nota sul replay per Risk e le due conferme chieste: `assetScope` usa `held_by_*` per «posseduto ora», e «Tutti i miei»
+  parte dalle posizioni a `dateEnd`.
+
+## ▶️ Ripresa · 2026-09-25, 09:09 (dal coordinatore)
+
+> - Il Mac si è riavviato alle 08:58 e `/tmp` è stato svuotato: non ci sono più `/tmp/librefolio-r2-f`, `-prodcopy` e i
+>   log `/tmp/libreFolio_f3b/*` e `/tmp/libreFolio_f6_*`. La snapshot è tornata in `/tmp/librefolio-r2-prod-snapshot`,
+>   identica a quella del 23/09.
+> - Verificato qui: 6154 e 6164 libere (`lsof` exit 1), HEAD `2c02ff070`, 18 percorsi, stage vuoto, `node_modules` e la
+>   cache mathjax presenti.
+> - La corsia 6154 riparte da una cartella vuota: il runner popola da sé quando serve.
+> - **Decisioni del coordinatore sui tre reperti di test-author, tutti prima del checkpoint**:
+>   1. correggere il click perso di `LabPopover`, con il test scritto da test-author e visto rosso prima;
+>   2. aggiornare la `desc` di `risk-lab` in `_frontend_portfolio.py`;
+>   3. aggiungere la copertura E2E di `risk-reload-button` in `risk-lab.spec.ts`.
+> - **Replay**: le correzioni vengono **dopo** F → Risk, e poi decide Risk chi le fa. Non toccato.
+> - Ordine: i tre reperti → i cancelli sulla revisione finale → `front build`, copia nuova e 6164 → devWiki →
+>   `CHECKPOINT READY`.
+
+### I tre reperti di test-author · 2026-09-25, dalle 09:15
+
+> - L'agente di F-6 è sparso col riavvio (`No agent found`): i due test li scrive un test-author nuovo
+>   (`f6b-popover-reload`), con il contesto completo e la corsia 6154 in esclusiva.
+> - **Reperto 2 fatto**: la `desc` di `risk-lab` in `scripts/test_runner/_frontend_portfolio.py:256` ora parla di azioni
+>   rapide sui candidati ammessi con i non ammessi parcheggiati, dei menu filtro del «+», del comando delle holdings, e di
+>   sync e reload nella barra della pagina. 1 riga, sintassi Python verificata con `ast.parse`.
+> - **Reperto 1, diagnosi**: `LabPopover` chiude su `pointerdown` fuori. Il pannello sparisce prima del `pointerup`, la
+>   pagina si accorcia e salta, e il `pointerup` cade su un altro elemento, così non nasce nessun click sul pulsante
+>   premuto.
+>   - Correzione preparata, da applicare solo **dopo** il rosso di test-author: chiudere sul `click` completato (in
+>     fase di cattura), e ignorare un click la cui pressione era cominciata dentro il pannello, per esempio una selezione
+>     di testo trascinata fuori.
+> - **Reperto 3**: la copertura di `risk-reload-button` la scrive test-author, nello stesso spec.
+> - **Snapshot (correzione del coordinatore, 09:15)**: la snapshot delle 09:05 era sbagliata (marcatore di produzione,
+>   `logs/`, file `-shm`/`-wal`). Quella rifatta alle 09:15 contiene solo `sqlite/app.db` (sha `5c0a681bc4e4b59c`),
+>   `broker_reports/`, `custom-uploads/` e `scheduler_state.json`. F non aveva ancora fatto nessuna copia dopo il riavvio:
+>   la copia per la 6164 si fa da quella nuova, con verifica dello sha.
+
+### devWiki · 2026-09-25, 09:20–09:40 (skill `wiki-file`)
+
+> - **Nuove**: `decisions/lab-eligibility-from-risk-engine`, `decisions/heatmap-emphasis-is-hue-free`,
+>   `problems/echarts-canvas-mismeasures-emoji-labels`, `problems/tooltip-click-pins-over-modal`.
+> - **Aggiornate**:
+>   - `concepts/mkdocs-suffix-i18n`: le ancore dei link dall'app devono esistere in 4 lingue;
+>   - `concepts/portfolio-report-unified`: il report leggero per chi legge solo le holdings;
+>   - `concepts/test-isolation-classes`: un'azione `api` singola dopo `services` trova la corsia vuota;
+>   - `decisions/asset-global-page-shows-no-money`: la scheda riprogettata rispetta la regola.
+> - `index.md` (+4 righe) e `log.md` (una voce).
+> - `check_source_paths.py`: **0** percorsi mancanti sulle 8 pagine (i 60 mancanti stanno in 56 pagine preesistenti).
+> - `graphify --update` rinviato: `graph.json` e `.graphify_python` non esistono in questo worktree.
+> - **Manca**: la pagina sul click perso di `LabPopover`, che si scrive dopo il rosso → correzione → verde.
+
+### Reperti 1 e 3 · test prima, poi la correzione · 2026-09-25, 09:20–09:50
+
+> - **test-author (`f6b-popover-reload`)** ha aggiunto due test a `risk-lab.spec.ts`, che ora ne dichiara 18:
+>   - `:2306`, «one press on the currency menu opens it, even with the type menu hanging below the fold and the page
+>     scrolled into it». Finestra 1280×480, Type aperto e traboccante, pagina scorsa dentro il menu, **un** `click()`
+>     reale su Valuta. Prima della pressione verifica che lo scenario sia davvero quello. **Rosso** sul prodotto di
+>     prima, due volte: «mousedown on risk-filter-currency-button at scrollY 134 → mouseup on risk-asset-set-controls →
+>     click on risk-asset-set-controls». Il rilascio cade sulla scheda, non sulla ricerca: il salto era di 136 px, ma il
+>     difetto è lo stesso.
+>   - `:3372`, «the toolbar's reload makes every section re-read its base, and neither syncs, refreshes the page's prices
+>     nor opens the sync modal»: **verde**, due volte. Con la pressione tolta diventa rosso, quindi il verde viene
+>     dalla pressione. I sync si riconoscono con `/api/v1/(assets|fx)/…sync`, i prezzi della pagina con
+>     `prices/query` invariato.
+> - **Correzione di `LabPopover.svelte`**: niente più chiusura su `pointerdown`.
+>   - `onpointerdowncapture` registra se la pressione è cominciata dentro il popover; `onclickcapture` chiude al click
+>     completato fuori, tranne quando la pressione era cominciata dentro (selezione di testo trascinata fuori).
+>   - Un click da tastiera (`detail` 0) ignora quel segnale.
+>   - La fase di cattura fa sì che uno `stopPropagation` del pulsante premuto non nasconda il click ai menu aperti.
+>   - Docblock aggiornato. `front check` al pavimento, prettier pulito.
+> - Il reload azzera anche la risposta del replay a schermo: è voluto («chiedi di nuovo a ogni sezione»), non asserito.
+> - Ora test-author rilancia `:2306`, che deve essere verde, poi tutto lo spec.
+> - **Verde dopo la correzione** (test-author): `:2306` da solo **1 ⇒ 1**; tutto lo spec **18 dichiarati ⇒ 18 passati**
+>   (36,1 s, 1 worker, 0 retry). Log `/tmp/libreFolio_f6b_whole_spec_after_fix.log`.
+> - ⚠️ **Fuori pista, spiegato**: test-author ha visto `frontend/build/` riscritto alle 09:40:41, durante la sua
+>   esecuzione, e lo ha attribuito a un'altra sessione. Non è così. Il bundle l'ha ricostruito il server della corsia
+>   stessa: `dev.py server` ricostruisce da solo se i sorgenti sono più nuovi (`dev.py:216`, `auto_build_frontend`), e la
+>   mia correzione (09:38:03) lo era. Il mio `front check` era finito alle 09:38:49 e non costruisce (`svelte-kit sync &&
+>   svelte-check`). Resta un difetto del runner: `_ensure_frontend_build` aveva appena scritto «up to date». Il verde è
+>   valido, perché è girato sul bundle con la correzione.
+> - Chiesti a test-author gli ultimi due punti: togliere dagli aiutanti `openFilterMenu` / `closeFilterMenu` il vecchio
+>   aggiramento, che il commento descriveva ancora come difetto aperto; un'esecuzione con `--workers 4`.
+>
+> **Cancelli fuori corsia sulla revisione finale** (09:50–10:00):
+> ```
+> vitest         · 15 percorsi ⇒ Test Files 15 passed (15) · 547 test
+> check-links    · exit 0 · 83 validi · 3 known-broken · 0 rotti
+> i18n audit     · exit 0 · No Missing Translations · 3463 chiavi · nessuna chiave del laboratorio fra le 417 «forse inutilizzate»
+> front check    · dopo la correzione: pavimento (3 errori + 41 avvisi, stessi 4 file), 0 nei miei file
+> ```
+> devWiki: aggiunta `problems/popover-pointerdown-swallows-click` (indice e registro aggiornati). `check_source_paths.py`:
+> 0 percorsi mancanti sulle 9 pagine.
+
+### Cancelli sulla revisione finale e 6164 per il developer · 2026-09-25, 09:50–10:05
+
+> **test-author, ultimo giro**: tolto l'aggiramento dagli aiutanti (`openFilterMenu` apre con una sola pressione e
+> verifica che l'altro menu si chiuda da solo; `closeFilterMenu` eliminato); commenti al passato. `risk-lab` **18 ⇒ 18**
+> con 1 worker (42,9 s) e **18 ⇒ 18** con `--workers 4` (30,0 s), 0 retry. test-author ha ritirato l'attribuzione
+> della ricostruzione a «un'altra sessione».
+>
+> **Cancelli** (corsia 6154, uno per volta; porta libera prima e dopo ciascuno):
+> ```
+> front check           · pavimento: 3 errori + 41 avvisi negli stessi 4 file · 0 nei miei (dopo l'ultima modifica ai sorgenti, LabPopover 09:38)
+> prettier --check      · pulito su tutti i file del frontend nel delta · git diff --check pulito
+> vitest                · 15 percorsi ⇒ 15 file · 547 test
+> check-orphans         · exit 1 · i 5 di J, lista invariata
+> mkdocs check-links    · exit 0 · 83 validi · 3 known-broken · 0 rotti
+> i18n audit            · exit 0 · 0 mancanti · 3463 chiavi
+> services risk-all     · 560 passati (gli 8 di test_risk_warnings_i18n PASSED, dopo i cambi ai cataloghi)
+> E2E risk              · 13 ⇒ 13 (09:54:52–09:55:51)
+> E2E risk-asset-detail · 2 ⇒ 2 (09:55:58–09:56:32)
+> E2E asset-list        · 28 ⇒ 28 (09:56:39–09:57:56)
+> E2E risk-lab          · 18 ⇒ 18 con 1 worker e con 4 (test-author)
+> ```
+> **6164**:
+> - `front build` exit 0;
+> - copia nuova dalla snapshot corretta (4 voci, `app.db` sha `5c0a681bc4e4b59c`, Alembic `004_release_1_2_0_schema`,
+>   15 asset, 0 utenti `e2e_*`);
+> - server PID 45601, cwd nel worktree, `db_path` della copia, `/health` 200, `/risk/eligibility` senza login → 401;
+> - il server ha ricostruito il bundle all'avvio (`auto_build_frontend`, `dev.py:216`): servito = costruito =
+>   `c66640e278c03145`, nessun sorgente più nuovo del bundle;
+> - prove positive: i percorsi delle pagine `historical-replay/` e l'indice `…/risk-metrics/`, `risk-asset-add-blocked`,
+>   «Il primo numero conta».
+
+**Review delle 10:11**: ✅ icone del manuale su tutti i pannelli.
+
+> **Icona del tipo nel «+»** («ETF obbligazionario» mostra `etf.png`). Il developer pensava che l'icona giusta fosse di
+> Risk. Verificato nella storia committata: l'icona composta dei sottotipi (`etf-bond.png`, `etf-stock.png`, …,
+> generate da `scripts/compose_asset_type_icons.py`) sta nel ramo di **K** (`e-alfy-k-tassonomia-e-select`, `822cdba3e`).
+> Lì `PNG_MAP` mappa `ETF_BOND` → `etf-bond`. K **non** è in `14c334d85` di Risk. Il laboratorio usa sempre
+> `getAssetTypeIconUrl`, quindi prende l'icona composta da solo all'integrazione di K: nessuna modifica nel ramo di F.
+
+> ⚠️ **Fuori pista — la 6164 spenta durante la review (10:10:12)**
+> - Il developer (10:37): punti 1–4 ok, poi «Tutti i miei» si blocca e al refresh la pagina è bianca.
+> - Log del server (`files/F3b_server_final.log`): nessuna eccezione. Dopo un `POST /assets/prices/current` riuscito c'è
+>   uno **spegnimento ordinato** («Shutting down», poi «Scheduler loop stopped», alle 08:10:12Z).
+> - Nello stesso momento il registro delle shell dello strumento si è azzerato (`list_bash` mostra solo i comandi nuovi):
+>   il processo agganciato alla sessione è stato chiuso dal riavvio dello strumento, non da un difetto del prodotto.
+> - I punti 1–4 hanno funzionato perché la pagina era già caricata e girano nel browser; «Tutti i miei» chiede un report
+>   al server, che non c'era più.
+> - Riacceso alle 10:38 (`f3bserver4`, PID 66448) sulla stessa copia: `/health` 200, `db_path` della copia, servito =
+>   costruito = `c66640e278c03145`.
+
+### Principio del developer e nuovo assetto · 2026-09-25, 12:02–12:15
+
+> **Dal coordinatore**:
+> - **principio del developer** per tutte le lane: il prodotto va bene così; i test provano il prodotto di oggi; test
+>   vecchi e codice rimasto senza uso, dentro il perimetro, si tolgono, dopo averli attribuiti con la test-triage; le
+>   domande al developer si fanno in italiano;
+> - **Risk è il coordinatore di F per il giro UI rischio**: il checkpoint va a Risk e al coordinatore; i file fuori dalla
+>   famiglia rischio restano sotto l'arbitrato del coordinatore;
+> - **ordine**: checkpoint → dopo il commit, merge di `dev_release2` nel ramo di F (con J e A; simulazione e script del
+>   coordinatore, lancio del developer, conflitti risolti da F sommando, poi validazione nella 6154) → F → Risk. Fino al
+>   merge, nessuno sviluppo nuovo oltre il checkpoint.
+>
+> **Ricerca di codice senza uso nel perimetro** (knip `--no-progress`, più grep):
+> - knip non segnala nessun file di F.
+> - Tolti tre resti senza uso nel prodotto:
+>   - `tx_count_own` in `assets/+page.svelte` (campo e mappatura): dopo il declassamento non lo legge più nessuno;
+>   - il wrapper `resolveInitialSelection` in `assetSetSelection.ts`, usato solo dai test (il prodotto usa
+>     `resolveInitialSelectionWithSource`); il suo docblock D19 passa sulla funzione rimasta;
+>   - `EMPTY_FILTERS`, usato solo dai test.
+> - I test di `assetSetSelection.test.ts` li aggiorna test-author, con lo stesso conteggio.
+> - **Non toccati, da segnalare a Risk**:
+>   - la prop `height` di `CorrelationHeatmap` è ignorata dal redesign, ma `levels/L2Diversification.svelte:342` (di
+>     Risk) passa ancora `height="360px"`: tolta quella chiamata, la prop si può togliere;
+>   - la matrice riprogettata vale anche per la L2 di Dashboard e Broker: senza le mappe di tipo, settore e area mostra
+>     solo gli ordini «similarità» e «nome», perché le modalità dipendono dai dati;
+>   - `risk-mocks.ts` (di E) ha 4 export che knip segnala come inutilizzati (`openDashboardRisk`, `openFirstBrokerRisk`,
+>     `brokerWithHoldings`, `selectedAssetIds`); `risk-lab` non importava quel file nemmeno in HEAD, quindi non vengono da
+>     F-6;
+>   - `asset-list.spec.ts` (condiviso con B): `syntheticAsset` porta ancora `tx_count_own`, che il prodotto non legge più;
+>     il vincolo «aggiunte minime» del coordinatore lo lascia stare.
+
+> **Pulizia chiusa (12:15–12:25)**:
+> - test-author ha aggiornato `assetSetSelection.test.ts` senza il wrapper e senza `EMPTY_FILTERS`: 2 file, **115** test
+>   (89 + 26), lo stesso conteggio;
+> - il caso che sarebbe diventato tautologico (`f(x).ids` contro `f(x).ids`) ora verifica il gradino raggiunto da ogni
+>   ingresso;
+> - corretti i due riferimenti rimasti nei commenti (`AssetSetRiskPanel.svelte:13`, `risk-lab.spec.ts:2106`).
+>
+> **Cancelli dopo la pulizia**: `front check` al pavimento; vitest 15 file, 547 test; `risk-lab` **18 ⇒ 18**
+> (12:17:56–12:20:11); `asset-list` **28 ⇒ 28** (12:20:20–12:21:35); prettier pulito. 6164 spenta (`stop_bash
+> f3bserver4`, PID 66448 terminato con spegnimento ordinato), 6154 e 6164 libere.
+
+## Checkpoint 3 — prima di `dev_release2` → F e di F → Risk · 2026-09-25, 12:30
+
+> - **Base**: HEAD `2c02ff070` (merge Risk → F), stage vuoto.
+> - **Delta: 31 percorsi**, cioè 24 modificati e 7 nuovi. Gruppi disgiunti C1–C8 in
+>   `/tmp/libreFolio_commits/f-ckpt3-groups.txt` (31 = 31), messaggi in `f-ckpt3-C1..C8.txt` (oggetto ≤ 50, righe ≤ 72).
+> - **i18n**: +11 −3 ~4 per catalogo, 3463 chiavi, insiemi identici. Tre delle chiavi riformulate sono **fuori da
+>   `risk.*`** (`assets.panels.{own,others,analysis}Hint`, le frasi del declassamento), quindi le arbitra il coordinatore.
+> - **Nessun segreto** nelle righe aggiunte né nei file nuovi; nessun DB, log o CSV nel delta.
+> - **Conflitti previsti con `dev_release2`** (`f45f0fb4d`, merge-base `f1047f766`), sovrapposizione di file:
+>   - i 4 cataloghi: `dev_release2` tocca 17 chiavi, F 76, **nessuna in comune**; possibile solo un conflitto di righe
+>     vicine (`dev_release2` tocca 2 chiavi `risk.assetSet`), da risolvere sommando;
+>   - `_frontend_portfolio.py`: `dev_release2` aggiunge `privacy-masking` (funzione e registrazione) vicino alla `desc`
+>     di `risk-lab`: si sommano;
+>   - `_frontend_utility.py`: da verificare nella simulazione del coordinatore.
