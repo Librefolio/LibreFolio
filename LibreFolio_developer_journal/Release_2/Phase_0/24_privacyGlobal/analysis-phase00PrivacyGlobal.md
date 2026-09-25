@@ -43,6 +43,21 @@ collegato — non una proprietà dell'utente.
 
 ### D5 — Tre classi, non due. E la classe segue il formattatore
 
+> ⚠️ **Rivista il 2026-09-23 (D5′).** Decisione del developer, verbatim: *«Mascherate solo dove si
+> affiancano a un prezzo (posizioni, lotti), visibili nelle transazioni»*. Due conseguenze, scritte
+> qui perché questo testo resta com'era (vedi `plan-phase00PrivacyGlobalRound2-PostReview.prompt.md`,
+> passo 7):
+>
+> 1. **La classe non segue più il formattatore, segue il contesto**: la stessa quantità è mascherata
+>    in un lotto e visibile in una transazione. Primitiva dedicata `maskableQuantity`, chiamata al
+>    sito. La chiave di lettura della riga, ragione di D5, sopravvive come quota aperta: `••• (60%)` (Q8).
+> 2. **Le compensazioni di D5 si capovolgono.** Alcuni prezzi unitari erano mascherati *solo perché*
+>    la quantità accanto era visibile (quantità × prezzo = valore): il prezzo in `ExposureTable` lo
+>    diceva per iscritto. Con la quantità mascherata tornano pubblici, come vogliono le decisioni
+>    del 22/09 (un prezzo non è patrimonio; il WAC è ammissibile).
+>
+> Il testo che segue è quello originale, conservato.
+
 Il piano di sprint elencava le quantità fra i valori sensibili. **Il piano ha perso**, e la ragione
 è la stessa che questa analisi aveva sollevato come Q3: `UnifiedLotsTable.svelte:162` usa la
 quantità come **chiave di lettura della riga** (`open / original`, `PARTIALLY_CLOSED`). Mascherarla
