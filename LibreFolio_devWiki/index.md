@@ -146,6 +146,8 @@
 | [[decisions/wac-target-currency-last-acquisition]] | WAC target currency is the last acquisition's currency, chosen because it is deterministic | 2026-06-03 | transactions, wac, currency, cost-basis, backend |
 | [[decisions/blur-detection-format-string-comparison]] | Blur detection compares `formatDecimalForDisplay()` output, not numbers within a tolerance — the user's question is "did the displayed value change" | 2026-06-04 | frontend, transactions, wac, ux, precision |
 | [[decisions/fxsyncmodal-parent-ownership]] | The parent owns `FxSyncModal`; the child asks via an `onOpenFxSync` prop instead of mounting its own | 2026-06-04 | frontend, transactions, fx, modal, architecture |
+| [[decisions/heatmap-emphasis-is-hue-free]] | On a red↔blue diverging heatmap the chosen cell gets a neutral border (black on light, white on dark) with an opposite halo: amber vanished on red, green read as blue | 2026-09-24 | frontend, charts, echarts, heatmap, colour |
+| [[decisions/lab-eligibility-from-risk-engine]] | Asset Global asks Risk's `/risk/eligibility` and never computes it; no verdict = selectable; an ineligible selected asset is parked (greyed chip, out of the analysis); "All mine" = holdings at `dateEnd`, `held_by_*` = held now | 2026-09-25 | frontend, risk, asset-global, eligibility, i18n |
 
 ## Concepts
 
@@ -289,6 +291,9 @@
 | [[problems/coverage-mode-stale-import]] | The same bug on the same day for `--coverage`: it never reached the Playwright runs | resolved | testing, test-runner, coverage, python, infra |
 | [[problems/coverage-report-category-dest-collision]] | `coverage-report --category` reused the parent subcommand's argparse `dest` and silently overwrote it | resolved | testing, coverage, cli, argparse, python, infra |
 | [[problems/brlistresponse-contract-drift]] | `GET /brokers` changed shape from a bare list to `BRListResponse{items, inaccessible}` without the consumers moving with it | resolved | backend, frontend, api-contract, testing, brokers |
+| [[problems/echarts-canvas-mismeasures-emoji-labels]] | ECharts' canvas under-measures emoji, so axis names overflow; plus `outerBoundsMode: 'auto'` shrinks the grid — emoji-free labels (`plainName`) and `'none'` | resolved | frontend, charts, echarts, emoji |
+| [[problems/tooltip-click-pins-over-modal]] | A click on a button wrapped in `Tooltip` (`interactiveChild`) pins the hint for 30 s — over the modal the button opens; stop propagation in the handler | resolved | frontend, tooltip, modal |
+| [[problems/popover-pointerdown-swallows-click]] | Closing a popover on `pointerdown` shrinks the page between press and release, so the pressed button never gets its click — close on the completed click (capture), ignore presses begun inside | resolved | frontend, svelte, popover, events |
 
 ## Entities
 
