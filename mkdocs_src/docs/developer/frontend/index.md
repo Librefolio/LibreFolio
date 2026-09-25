@@ -58,7 +58,13 @@ frontend/src/
 
 ## ⚡ Svelte 5 Runes
 
-LibreFolio fully embraces Svelte 5's **Runes** for reactivity, replacing the legacy `let` and `$` syntax.
+New components use Svelte 5's **Runes** for reactivity, but a minority of older components use no
+rune at all, so Svelte compiles them in **legacy** mode (`export let` props, `$:` statements). The
+one consequence to know: in a legacy component, a function call inside a template expression
+compiles into `$.untrack(…)`, so runes state read inside that function is not tracked — that is
+why the Brokers page stopped following the privacy toggle (R20). Render such a value through a
+runes child (e.g. `lib/components/ui/display/CurrencyAmount.svelte`) or migrate the component; see
+[Legacy components freeze masked output](state/app-state.md#privacy-legacy-freeze).
 
 ### 🔑 Key Runes Used
 

@@ -7,10 +7,11 @@
      * would arrive after the moment it exists for.
      */
     import {Eye, EyeOff} from 'lucide-svelte';
+    import {_} from '$lib/i18n';
     import {isPrivacyEnabled, togglePrivacy} from '$lib/stores/app/privacyStore.svelte';
 
     const hidden = $derived(isPrivacyEnabled());
-    const label = $derived(hidden ? 'Show amounts' : 'Hide amounts');
+    const label = $derived(hidden ? $_('header.privacy.show') : $_('header.privacy.hide'));
 </script>
 
 <button

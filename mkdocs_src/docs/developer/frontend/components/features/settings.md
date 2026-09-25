@@ -67,22 +67,29 @@ Replaying branches on the flow, because only `welcome` and `intro_tour` can star
   Completing Welcome applies the selected locale before `maybeStartIntro()` renders the narrative
   scene. In a Welcome replay, that completion uses the existing user-settings PUT for the
   explicitly selected language/currency/avatar while preserving the Welcome progress status;
-  **Exit replay** saves nothing. If any replay arm fails (e.g. `sessionStorage` unavailable), the
+  **Exit tour** saves nothing. If any replay arm fails (e.g. `localStorage` unavailable), the
   section unwinds the flows it already armed via `onboarding.clearReplay` before surfacing the
   error.
 
-An automatic pending intro/import coachmark shows **Skip permanently** plus **X**; replay mode
-shows **Exit replay** plus **X**. The intro footer uses **Back**, **Next**, and **Finish** on the
-final Settings stop. Automatic **Finish**/**Skip permanently** perform the corresponding backend
-transition, while replay **Finish**/**Exit replay** only clear session replay state and never
-call complete/skip. **X** suspends without ending the replay: it retains the intro cursor, while
-the import guide resets the next entry to `import.upload`. There is no Pause action. Replaying
-does not restore wizard draft state or automate wizard clicks, uploads, or **Save All**.
+The coachmark's only top-row control is **X** (`showSkip={false}`), whose accessible label is
+*Skip this tour* in automatic mode and *Exit tour* in replay mode. The intro footer uses
+**Back**, **Next**, and **Finish** on the final Settings stop. **X** calls
+`onboardingGuide.exit()`, which is `skip()`: automatic **Finish**/**X** perform the corresponding
+backend complete/skip transition (one step at a time for the step-managed Import and bulk flows),
+while replay **Finish**/**X** only update the stored replay state (clearing it, or dropping just
+the current step of a step-managed replay) and never call complete/skip. Leaving a guide's host
+does not end it: when the path stops matching the step's `hostRoute` (every flow except the intro
+tour, whose steps declare a `route` the host navigates back to), `OnboardingOverlayHost` calls
+`dismissHost()`, which leaves the stored position untouched, so the flow's next trigger resumes
+it instead of restarting. Closing an Add modal calls `dismissHost({restartAtFirst: true})`, which
+rewinds that modal's linear guide to its first step; step-managed flows ignore `restartAtFirst`,
+so closing the Import Wizard rewinds nothing. There is no Pause action. Replaying does not
+restore wizard draft state or automate wizard clicks, uploads, or **Save All**.
 
-Replay state lives in `sessionStorage`, not on the server — see
+Replay state lives in the browser's `localStorage`, per account, not on the server — see
 **[Onboarding: the contextual import guide](import-wizard.md#import-guide-wiring)**
-for the storage key format. A replay of a terminal (`completed`/`skipped`) flow is strictly
-non-destructive to that status from start through exit.
+for the storage key format and its lifecycle. A replay of a terminal (`completed`/`skipped`) flow
+is strictly non-destructive to that status from start through exit.
 
 ### 👤 ProfileTab
 
