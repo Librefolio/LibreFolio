@@ -80,7 +80,10 @@
         active: boolean;
         quote_base_quantity?: number | null;
         tx_count?: number;
-        tx_count_own?: number;
+        /** A positive quantity is held **now** in a broker the user owns (Risk, `FAinfoResponse`). */
+        held_by_me?: boolean;
+        /** A positive quantity is held **now** in a broker the user does not own. */
+        held_by_others?: boolean;
     }
 
     interface AssetState extends AssetInfo {
@@ -333,15 +336,20 @@
     );
 
     // =========================================================================
-    // F15 — usage panels: "yours" (tx in brokers you own), "other users'"
-    // (tx only outside your ownership), "under analysis" (never used). This
-    // grouping is unrelated to the active/inactive lifecycle flags above.
+    // F15 — usage panels: "yours", "other users'", "watched". This grouping is
+    // unrelated to the active/inactive lifecycle flags above.
+    //
+    // Since the developer's decision of 24/09 (Risk, time ②) the panels read what
+    // is held **now**, not who ever traded: `tx_count_own > 0` kept a position sold
+    // years ago among "yours". An asset you no longer hold moves to "other users'"
+    // when someone else holds it now, and to "watched" otherwise. The flags come
+    // from the asset list (`held_by_me`, `held_by_others`).
     // =========================================================================
     type AssetScope = 'own' | 'others' | 'analysis';
 
-    function assetScope(a: {tx_count?: number; tx_count_own?: number}): AssetScope {
-        if ((a.tx_count_own ?? 0) > 0) return 'own';
-        if ((a.tx_count ?? 0) > 0) return 'others';
+    function assetScope(a: {held_by_me?: boolean; held_by_others?: boolean}): AssetScope {
+        if (a.held_by_me) return 'own';
+        if (a.held_by_others) return 'others';
         return 'analysis';
     }
 
@@ -522,7 +530,8 @@
                 provider_code: item.provider_code ?? null,
                 active: item.active ?? true,
                 tx_count: item.tx_count ?? 0,
-                tx_count_own: item.tx_count_own ?? 0,
+                held_by_me: item.held_by_me ?? false,
+                held_by_others: item.held_by_others ?? false,
                 lastPrice: null,
                 deltaAbs: null,
                 deltaPercent: null,

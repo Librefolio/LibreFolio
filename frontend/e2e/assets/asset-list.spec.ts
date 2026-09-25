@@ -27,11 +27,15 @@ type SyntheticAsset = {
     provider_code: null;
     tx_count: number;
     tx_count_own: number;
+    held_by_me: boolean;
+    held_by_others: boolean;
 };
 
 type SyntheticAssetOptions = {
     displayName?: string;
     active?: boolean;
+    heldByMe?: boolean;
+    heldByOthers?: boolean;
 };
 
 function syntheticAsset(id: number, txCount = 0, txCountOwn = 0, options: SyntheticAssetOptions = {}): SyntheticAsset {
@@ -45,6 +49,8 @@ function syntheticAsset(id: number, txCount = 0, txCountOwn = 0, options: Synthe
         provider_code: null,
         tx_count: txCount,
         tx_count_own: txCountOwn,
+        held_by_me: options.heldByMe ?? false,
+        held_by_others: options.heldByOthers ?? false,
     };
 }
 
@@ -424,18 +430,20 @@ test.describe('Asset List Page', () => {
         const panels = [
             {
                 id: 'own',
-                active: syntheticAsset(910_101, 4, 2, {displayName: 'Own active'}),
+                active: syntheticAsset(910_101, 4, 2, {displayName: 'Own active', heldByMe: true}),
                 inactive: syntheticAsset(910_102, 5, 3, {
                     displayName: 'Own inactive',
                     active: false,
+                    heldByMe: true,
                 }),
             },
             {
                 id: 'others',
-                active: syntheticAsset(910_103, 4, 0, {displayName: 'Others active'}),
+                active: syntheticAsset(910_103, 4, 0, {displayName: 'Others active', heldByOthers: true}),
                 inactive: syntheticAsset(910_104, 5, 0, {
                     displayName: 'Others inactive',
                     active: false,
+                    heldByOthers: true,
                 }),
             },
             {
