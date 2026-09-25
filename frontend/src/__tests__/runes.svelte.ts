@@ -44,6 +44,33 @@ export function reactiveBox<T extends object>(initial: T): T {
 }
 
 /**
+ * Every value `read` returns, recorded from inside an effect.
+ *
+ * A getter that answers correctly when polled can still be invisible to a
+ * component: a plain object behind it passes every direct read and never re-runs
+ * an effect, so the surface that should re-render on it simply does not. Recording
+ * from an effect is what separates "correct" from "reactive".
+ *
+ * A read that throws is recorded as its error instead of escaping the scheduler,
+ * so a missing getter fails the assertion that inspects `values` rather than the
+ * flush that happened to run it.
+ */
+export function recordReads<T>(read: () => T): {values: Array<T | Error>; stop: () => void} {
+    const values: Array<T | Error> = [];
+    const stop = $effect.root(() => {
+        $effect(() => {
+            try {
+                values.push(read());
+            } catch (error) {
+                values.push(error instanceof Error ? error : new Error(String(error)));
+            }
+        });
+    });
+    flushSync();
+    return {values, stop};
+}
+
+/**
  * Fails loudly if the current vitest environment cannot run effects.
  *
  * Call it once per spec, before the first assertion that depends on reactivity.
