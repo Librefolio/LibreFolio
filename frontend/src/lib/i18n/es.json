@@ -741,7 +741,8 @@
       "title": "Activos para crear manualmente",
       "body": "Vincula un activo existente o créalo manualmente. Las próximas importaciones reconocerán su identificador guardado si la coincidencia es única."
     },
-    "selectionChangedReview": "La comprobación final de duplicados ha cambiado la selección. Revísala antes de importar."
+    "selectionChangedReview": "La comprobación final de duplicados ha cambiado la selección. Revísala antes de importar.",
+    "duplicatesChangedReview": "La comprobación final de duplicados ha encontrado duplicados nuevos o modificados entre tus archivos. Revísalos antes de importar."
   },
   "brokers": {
     "title": "Brókeres",
