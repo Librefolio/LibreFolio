@@ -15,6 +15,8 @@
     import RiskLevelSection from './RiskLevelSection.svelte';
     import RiskPanelHeader from './RiskPanelHeader.svelte';
     import {leadDivergence, buildDivergenceRows, degradedResults, resultReasons, resultErrorCodes, levelMetadata, backtestDeclared, comparedAssetId} from './levelHelpers';
+    import {levelErrorHealth, partialNotice} from './partialNotice';
+    import RiskPartialNotice from './RiskPartialNotice.svelte';
     import {resultByCode, DAILY_VAR_INSTANCE, MONTHLY_VAR_INSTANCE} from '../riskAnalysisHelpers';
 
     /**
@@ -124,22 +126,17 @@
     let l2Health = $derived(degradedResults([contributionResult, correlationResult]));
     let l3Health = $derived(degradedResults([controller.comparisonResult, ...historicalResults.filter((result) => L3_CODES.includes(result.analytic_code))]));
 
-    // The *reasons*, from the same results each level renders. Derived from the
-    // identical slices as the health above: a cause disclosed under a question
-    // that never consulted the measurement is not transparency, it is an
-    // accusation the reader has no way to check.
-    let l1Reasons = $derived(
-        resultReasons(
-            historicalResults.filter((result) => L1_CODES.includes(result.analytic_code)),
-            $t,
-        ),
-    );
-    let l2Reasons = $derived(resultReasons([contributionResult, correlationResult], $t));
-    let l3Reasons = $derived(resultReasons([controller.comparisonResult, ...historicalResults.filter((result) => L3_CODES.includes(result.analytic_code))], $t));
+    // What is partial, and why, said once above the levels (developer's decision of
+    // 24/09/2026): the same carried-over price or excluded asset used to be repeated
+    // under each level that consulted it, and read as four problems. The notice reads
+    // the same slices the levels render — never the whole wave, so an analytic no level
+    // shows is not reported — and each level keeps only what did not come back at all,
+    // named where it is missing. L4, asked on demand, keeps its own disclosure.
+    let notice = $derived(partialNotice([...historicalResults.filter((result) => L1_CODES.includes(result.analytic_code)), contributionResult, correlationResult, controller.comparisonResult, ...historicalResults.filter((result) => L3_CODES.includes(result.analytic_code))], $t, L1_LABELS));
 
     // The *codes* of what did not come back at all, from those same slices.
     //
-    // Deliberately not folded into `l*Reasons`: those carry finished sentences
+    // Deliberately not folded into the reasons: those carry finished sentences
     // (translated from the backend's key, or its own words), these carry
     // identifiers the section words itself. A level with
     // no rows looks identical whether the analytic is out of scope, short of
@@ -244,15 +241,17 @@
     {/if}
 
     {#if !loadError}
-        <RiskLevelSection level={1} title={$t('risk.levels.l1.title')} testId="risk-level-1" health={l1Health} reasons={l1Reasons} errorCodes={l1Errors} metadata={l1Metadata}>
+        <RiskPartialNotice partial={notice.partial} reasons={notice.reasons} />
+
+        <RiskLevelSection level={1} title={$t('risk.levels.l1.title')} testId="risk-level-1" health={levelErrorHealth(l1Health)} errorCodes={l1Errors} metadata={l1Metadata}>
             <L1HowMuchItHurts {historicalResults} {scopeValue} currency={targetCurrency} loading={initialLoading} />
         </RiskLevelSection>
 
-        <RiskLevelSection level={2} title={$t('risk.levels.l2.title')} lead={l2Lead} testId="risk-level-2" health={l2Health} reasons={l2Reasons} errorCodes={l2Errors} metadata={l2Metadata}>
+        <RiskLevelSection level={2} title={$t('risk.levels.l2.title')} lead={l2Lead} testId="risk-level-2" health={levelErrorHealth(l2Health)} errorCodes={l2Errors} metadata={l2Metadata}>
             <L2Diversification {contributionResult} {correlationResult} {assetNames} loading={initialLoading} />
         </RiskLevelSection>
 
-        <RiskLevelSection level={3} title={$t('risk.levels.l3.title')} testId="risk-level-3" health={l3Health} reasons={l3Reasons} errorCodes={l3Errors} metadata={l3Metadata}>
+        <RiskLevelSection level={3} title={$t('risk.levels.l3.title')} testId="risk-level-3" health={levelErrorHealth(l3Health)} errorCodes={l3Errors} metadata={l3Metadata}>
             <L3Benchmark {controller} excludeAssetIds={assetIds} />
             <L3RiskAdjusted {historicalResults} {currentResults} {assetNames} {appliedRiskFreePercent} comparisonResult={controller.comparisonResult} {benchmarkName} loading={initialLoading} />
         </RiskLevelSection>
