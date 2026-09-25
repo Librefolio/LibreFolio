@@ -350,11 +350,11 @@
     "lastPrice": "Ultimo Prezzo",
     "panels": {
       "own": "I tuoi asset",
-      "ownHint": "Con transazioni in broker di cui sei owner",
+      "ownHint": "Posseduti ora in broker di cui sei owner",
       "others": "Asset degli altri utenti",
-      "othersHint": "Con transazioni non tue",
+      "othersHint": "Posseduti ora solo da altri utenti",
       "analysis": "Osservati",
-      "analysisHint": "Salvati ma senza transazioni — tenuti d'occhio"
+      "analysisHint": "Oggi non li possiede nessuno — mai acquistati o già venduti, tenuti d'occhio"
     },
     "providerParams": {
       "borsa_italiana": {
@@ -3052,8 +3052,7 @@
       "correlationTab": "Correlazione",
       "addAsset": "Aggiungi asset alla matrice",
       "maxAssets": "Raggiunto il limite API di 100 asset.",
-      "panelTitle": "Relazioni e scenari",
-      "selectedCount": "{selected} selezionati su {total}",
+      "selectedCount": "{selected} in analisi su {total} analizzabili",
       "nearIdentical": "quasi identici",
       "bulk": {
         "selectAll": "Seleziona tutti",
@@ -3075,7 +3074,6 @@
       "ordering": {
         "label": "Ordine della matrice",
         "similarity": "Per somiglianza",
-        "original": "Per nome",
         "name": "Per nome",
         "type": "Per tipo",
         "sector": "Per settore",
@@ -3141,8 +3139,11 @@
         "deselectVisible": "Deseleziona visibili",
         "confirm": "Aggiungi {count}",
         "allSelected": "Tutti gli asset sono già nella selezione.",
-        "filtersOn": "Sono elencati solo gli asset che passano i filtri."
-      }
+        "notAnalysable": "Non analizzabili nel periodo"
+      },
+      "selectedCountHint": "Il primo numero conta gli asset che il laboratorio sta analizzando adesso. Il secondo conta quanti ne potrebbe analizzare nel periodo scelto: tutti gli asset presenti in LibreFolio, non solo quelli che possiedi, purché abbiano abbastanza prezzi in quel periodo. Quelli che non li hanno li trovi comunque nel «+», in sola lettura, con il motivo.",
+      "parkedNote": "{count, plural, one {# asset scelto non è analizzabile nel periodo e resta fuori dall'analisi.} other {# asset scelti non sono analizzabili nel periodo e restano fuori dall'analisi.}}",
+      "eligibilityFailed": "Non è stato possibile verificare l'idoneità: tutti gli asset restano selezionabili."
     },
     "metrics": {
       "volatility": "Volatilità",
@@ -3489,6 +3490,19 @@
         "shockCoverage": "Solo il {percent} della fetta è stato classificato: il totale parla solo per quella parte."
       },
       "backtestNotice": "Con una fetta attiva, questi numeri sono ricostruiti sulla composizione di oggi: dicono come *sarebbe* andata, non come è andata davvero."
+    },
+    "eligibility": {
+      "reasons": {
+        "no_prices": "Nessun prezzo nel periodo",
+        "too_few_quotes": "Meno di {minQuotes} quotazioni nel periodo ({count})",
+        "missing_fx": "Manca il cambio verso {currency} all'inizio o alla fine del periodo",
+        "starts_late": "Prima quotazione il {date}, dopo l'inizio del periodo",
+        "stale_at_end": "Ultimo prezzo il {date}, più di {days} giorni prima della fine"
+      },
+      "levels": {
+        "ineligible": "Non analizzabile nel periodo",
+        "warning": "Analizzabile, con un avviso"
+      }
     }
   },
   "updateCheck": {
