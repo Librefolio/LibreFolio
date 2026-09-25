@@ -350,11 +350,11 @@
     "lastPrice": "Last Price",
     "panels": {
       "own": "Your assets",
-      "ownHint": "With transactions in brokers you own",
+      "ownHint": "Held now in brokers you own",
       "others": "Other users' assets",
-      "othersHint": "With transactions you do not own",
+      "othersHint": "Held now only by other users",
       "analysis": "Watched",
-      "analysisHint": "Saved but with no transactions — kept on the radar"
+      "analysisHint": "Held by no one now — never bought or already sold, kept on the radar"
     },
     "providerParams": {
       "borsa_italiana": {
@@ -3052,8 +3052,7 @@
       "correlationTab": "Correlation",
       "addAsset": "Add asset to matrix",
       "maxAssets": "The API limit of 100 assets has been reached.",
-      "panelTitle": "Relationships and scenarios",
-      "selectedCount": "{selected} selected of {total}",
+      "selectedCount": "{selected} in the analysis, of {total} that can be analysed",
       "nearIdentical": "near-identical",
       "bulk": {
         "selectAll": "Select all",
@@ -3075,7 +3074,6 @@
       "ordering": {
         "label": "Matrix order",
         "similarity": "By similarity",
-        "original": "By name",
         "name": "By name",
         "type": "By type",
         "sector": "By sector",
@@ -3141,8 +3139,11 @@
         "deselectVisible": "Deselect visible",
         "confirm": "Add {count}",
         "allSelected": "Every asset is already in the selection.",
-        "filtersOn": "Only the assets that pass the filters are listed."
-      }
+        "notAnalysable": "Cannot be analysed in the period"
+      },
+      "selectedCountHint": "The first number counts the assets the laboratory is analysing right now. The second counts how many it could analyse in the chosen period: every asset in LibreFolio, not only the ones you hold, as long as it has enough prices in that period. The assets that do not are still listed in the “+”, read-only, with the reason.",
+      "parkedNote": "{count, plural, one {# selected asset cannot be analysed in the period and stays out of the analysis.} other {# selected assets cannot be analysed in the period and stay out of the analysis.}}",
+      "eligibilityFailed": "Eligibility could not be checked: every asset stays selectable."
     },
     "metrics": {
       "volatility": "Volatility",
@@ -3489,6 +3490,19 @@
         "shockCoverage": "Only {percent} of the scope could be classified, so the total speaks for that part alone."
       },
       "backtestNotice": "With a slice active, these figures are rebuilt from today’s composition: they say how it *would* have gone, not how it actually went."
+    },
+    "eligibility": {
+      "reasons": {
+        "no_prices": "No prices in the period",
+        "too_few_quotes": "Fewer than {minQuotes} quotes in the period ({count})",
+        "missing_fx": "No exchange rate to {currency} at the start or end of the period",
+        "starts_late": "First quote on {date}, after the start of the period",
+        "stale_at_end": "Last price on {date}, more than {days} days before the end"
+      },
+      "levels": {
+        "ineligible": "Cannot be analysed in the period",
+        "warning": "Can be analysed, with a warning"
+      }
     }
   },
   "updateCheck": {
