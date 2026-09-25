@@ -1078,13 +1078,13 @@ mostra, non decide.
 | C4 | test (test-author), runner, `api sync`, journal | 6 file di test (nessuno nuovo, runner invariato) | ✅ 24/09 |
 | F1 | avvisi tradotti: chiave e parametri del backend; se manca la traduzione, il testo originale — mai una chiave grezza | `levels/warningSentence.ts` (nuovo), `levels/levelHelpers.ts`, `RiskResultFrame.svelte`, `levels/RiskLevelsPanel.svelte` | ✅ 24/09 |
 | F2 | un solo avviso di parzialità in cima al pannello, ogni causa una volta; sotto i livelli solo gli errori | `levels/RiskLevelsPanel.svelte` (non `RiskLevelSection`, che è di F) | ⏳ |
-| F3 | replay: via il blocco «escludi e riprova»; esclusi per motivo con nomi e peso; avviso forte (C3); «niente da simulare»; `DateRangePicker` senza pulsanti rapidi; pulsante del periodo comune (C2), con la nota «solo una parte della crisi» nelle crisi del catalogo | `levels/l4/L4Replay.svelte`, `levels/l4/scenarioHelpers.ts` | ⏳ |
+| F3 | replay: via il blocco «escludi e riprova»; esclusi per motivo con nomi e peso; avviso forte (C3); «niente da simulare»; `DateRangePicker` senza pulsanti rapidi; pulsante del periodo comune (C2), con la nota «solo una parte della crisi» nelle crisi del catalogo | `levels/l4/L4Replay.svelte`, `levels/l4/scenarioHelpers.ts` | ⏳ **dopo F → Risk** (decisione del developer, 25/09) |
 | F4 | benchmark: non ammissibili grigi con il motivo, con avviso selezionabili e segnalati; cambia col periodo — **dopo la fusione F → Risk**, con le chiavi `risk.eligibility.*` di F (proposta al coordinator) | `levels/L3Benchmark.svelte` | ⏳ |
 | F5 | test delle palette che leggono i colori dai grafici veri; puntatori per contenuto, non per riga | test di `AllocationPieChart` / `AllocationHistoryChart` (solo lettura dei `.svelte`) | ⏳ |
 | F6 | `dashboard.allocationGeneric` chiamata con `$t(`, così l'audit la vede | `AllocationPieChart.svelte` | ✅ 24/09 · anticipato nel checkpoint B |
-| F7 | E2E: riscritto quello del replay bloccato; aggiornati quelli che si aspettavano «Parziale» sotto i livelli | `frontend/e2e/portfolio/risk-analysis.spec.ts` | ⏳ |
-| F8 | screenshot per il developer: icona composita (D-K2), avviso unico, replay, benchmark | — | ⏳ |
-| F9 | `runGuarded`: una risposta arrivata e scartata (il `null` di `queryRisk`) non diventa più «nessun risultato» muto — richiesta una volta sotto la nuova generazione, poi uno stato «scartata» per analisi, mostrato dalla sezione; test deterministici sul controller, **scritti da test-author e rossi prima della cura**, sui tre casi (`null` poi risposta → risposta; `null` due volte → scartata; generazione superata → nessuna nuova richiesta); la frase nel mio namespace `risk.*`, non in `risk.eligibility.*` (**obbligatorio**: il polling della Correlazione resta, decisione D11 del developer; confermato dal coordinator) | `stores/risk/riskPanelController.svelte.ts`, sezioni L4 | ⏳ |
+| F7 | E2E: riscritto quello del replay bloccato; aggiornati quelli che si aspettavano «Parziale» sotto i livelli | `frontend/e2e/portfolio/risk-analysis.spec.ts` | ⏳ prima di F → Risk solo la parte non-replay; il replay dopo |
+| F8 | screenshot per il developer: icona composita (D-K2), avviso unico, replay, benchmark | — | ⏳ per le parti pronte; il replay dopo F → Risk |
+| F9 | `runGuarded`: una risposta arrivata e scartata (il `null` di `queryRisk`) non diventa più «nessun risultato» muto — richiesta una volta sotto la nuova generazione, poi uno stato «scartata» per analisi, mostrato dalla sezione; test deterministici sul controller, **scritti da test-author e rossi prima della cura**, sui tre casi (`null` poi risposta → risposta; `null` due volte → scartata; generazione superata → nessuna nuova richiesta); la frase nel mio namespace `risk.*`, non in `risk.eligibility.*` (**obbligatorio**: il polling della Correlazione resta, decisione D11 del developer; confermato dal coordinator) | `stores/risk/riskPanelController.svelte.ts`, sezioni L4 | ✅ 25/09 |
 
 Pulsante del periodo comune in alto (zona asset di Asset Global): la zona è di F; chi lo mette (F con il
 mio endpoint, oppure io dopo l'integrazione di F) lo decide il coordinator. All'integrazione, inoltre:
@@ -1277,7 +1277,7 @@ owner d'integrazione del ramo combinato.
 | K4 | dettagli dell'errore del replay senza nulla da riprodurre: `suggested_range`, `suggested_range_recovers` | `risk_plugins/stress.py` | nessuno (idem) |
 | K5 | avviso nuovo `historical_replay_mostly_excluded` (+ chiave i18n) | `risk_plugins/stress.py`, cataloghi | nessuno, se F mostra gli avvisi con la chiave del backend |
 | K6 | `held_by_me` / `held_by_others`: soglia di polvere del portafoglio (0,00001) invece di 1e-9 | `asset_sources/crud.py`, `data_quality_thresholds.py` | nessuno oggi (F non li usa); il coordinator lo avvisa |
-| K7 | (frontend, F9) stato «scartata» per le analisi a richiesta | `riskPanelController.svelte.ts` | se F legge il controller, vede un campo in più |
+| K7 | (frontend, F9) risposta scartata: nuova richiesta una volta, poi `controller.discarded[analisi]`; `discardedErrorCodes(...)` e `ANSWER_DISCARDED_CODE`; frase `risk.errors.answer_discarded` | `riskPanelController.svelte.ts`, `levels/RiskLevelsPanel.svelte`, cataloghi | **`AssetSetReplaySection` di F** (la pagina del polling D11) monta `L4Replay` con un controller suo e passa al suo `RiskLevelSection` nessun `errorCodes`: senza, un replay scartato due volte lì sparisce ancora → a F → Risk aggiungo `errorCodes={discardedErrorCodes(controller.discarded, ['replay'])}` |
 | K8 | (frontend, F1) `resultReasons(results, translate?)` e `warningSentence(...)`: le frasi dalla chiave e dai parametri del backend; senza traduttore l'uscita resta identica | `levels/levelHelpers.ts`, `RiskResultFrame.svelte` | le sezioni di Asset Global di F (`AssetSetCorrelationSection`, `AssetSetReplaySection`, `AssetSetComparisonLevels`) chiamano con un argomento: a F → Risk passo loro `$t`; e la doc delle prop `reasons` di `RiskLevelSection` (che F ha modificato: non la tocco prima) dice ancora «verbatim» → da riscrivere lì |
 
 ### C — i test del checkpoint · ✅ 24/09/2026
@@ -1375,3 +1375,92 @@ poi F9, F2, F3, F5, F7, F8; F4 dopo F → Risk.
 > `RiskResultFrame.test.ts` registrato, restano i 5 orfani di privacy già noti; prettier pulito sui 7 file;
 > `svelte-check` nulla sui file toccati (restano i 3 errori già noti altrove); il file del runner ha lo stesso
 > debito di ruff e black di `HEAD` (19 e da riformattare), nessuno nuovo; nessun importo reale, nessuna password.
+
+### F1 — committato · 24/09/2026
+
+> `4b563f225` → `8bac06955` → `0a86af69b` → `0fb96a163`, su `96931b7f4`: 4 + 3 + 1 + 1 = 9 file, albero
+> pulito, letti da me. Storia condivisa da qui: mai riscriverla.
+
+### ⏸ Pausa chiesta dal developer · 24/09/2026, 18:3x
+
+Stato esatto alla pausa (nessun comando in corso, nessuno specialista al lavoro, 6152 e 6162 libere — il
+server della copia di prod è stato spento):
+
+- **F9 non è cominciato.** Analisi fatta: `runSingle` trasforma il `null` di `queryRisk` (risposta arrivata e
+  scartata) in «nessun risultato», e replay, stress e simulazione spariscono in silenzio; `loadBase` ha già la
+  cura (una nuova richiesta, poi `loadDiscarded`). Cura prevista: stesso schema per ogni analisi a richiesta —
+  distinguere «scartata» da «non supportata», richiedere una volta sotto la nuova generazione, poi uno stato
+  «scartata» per analisi, mostrato dalla sezione con una frase nel namespace `risk.*`. **Primo passo alla
+  ripresa**: brief a test-author per i test rossi prima della cura, sui tre casi (`null` poi risposta →
+  risposta; `null` due volte → scartata; generazione superata → nessuna nuova richiesta), sul modello di
+  `riskPanelController.test.ts`.
+- **Da fare dopo**: F2 (un solo avviso di parzialità in cima), F5 (palette dai grafici veri), F7 (E2E), F8
+  (screenshot); F4 dopo F → Risk; l'icona della doc su tutti i pannelli dopo F → Risk.
+- **Replay rinviato dal developer al prossimo sprint** (messaggio del coordinator): F3 va in backlog insieme ai
+  tre difetti trovati nella review di F in `L4Replay.svelte` — le date non usano `DateRangePicker`; una data di
+  inizio preistorica (1019-06-10) non dà né un avviso né un restringimento (verificarlo prima con C, che il ramo
+  di F non ha); il menu dei preset (`SimpleSelect`, `:155`) si apre in basso anche in fondo alla pagina (se la
+  causa è nel `SimpleSelect` condiviso, prima il coordinator). Da confermare alla ripresa se il rinvio copre
+  tutto F3, e quindi anche la parte replay di F7.
+- **Ancore dell'icona della doc** (correzione del coordinator): finché l'indice `risk-metrics` non è tradotto,
+  L1–L3 → `financial-theory/technical-analysis/risk-metrics/` senza ancora; un pannello con una sola analisi →
+  la sua pagina (il replay → `…/risk-metrics/historical-replay/`); gli altri → l'indice. Le ancore
+  (`#how-much-can-it-hurt`, `#am-i-diversified`, `#am-i-paid-for-the-risk`, `#what-if`) solo dopo la traduzione.
+- **Messaggi arrivati fuori ordine**: «F1 committato, vai con F9» mi è arrivato *dopo* la pausa, che viaggiava
+  con priorità; ho seguito la pausa, la più prudente, e aspetto il coordinator prima di cominciare F9.
+
+### ▶ Ripresa · 25/09/2026, 09:1x
+
+> Il Mac si è riavviato durante la pausa (08:58): `/tmp` cancellato, quindi le mie dir di corsia non ci sono
+> più (il runner ricrea quella di test) e la copia di prod va rifatta dalla snapshot solo se serve la review;
+> il coordinator ha ripristinato `/tmp/libreFolio_commits`. 6152 e 6162 libere, HEAD `0fb96a163`.
+>
+> **Risposta del developer sul replay**: le correzioni del replay vengono **dopo F → Risk**, e allora decido io
+> chi le fa — tutto F3, la parte replay di F7 e i tre difetti della review di F. **Prima di F → Risk**: F9 →
+> F2 → F5 → F7 senza il replay → F8 per le parti pronte; F4 resta dopo la fusione.
+
+### F9 — le risposte scartate non spariscono più · ✅ 25/09/2026
+
+> **Rosso prima della cura** (test-author nuovo: quello di ieri non esiste più dopo il riavvio): 37 test nuovi in
+> `riskPanelController.test.ts`, tutti rossi per il motivo giusto sul codice di `0fb96a163` (il primo `null`
+> memorizzato come «nessun risultato», nessuna nuova richiesta, il getter e la funzione che mancano, la chiave
+> che manca); i 16 esistenti verdi. Più un aiuto `recordReads` in `src/__tests__/runes.svelte.ts`, per provare
+> che `discarded` è reattivo (solo un `$effect` può dirlo). Ha provato il contratto su una copia in `/tmp` e sei
+> cure sbagliate: tutte prese.
+>
+> **Cura**: `runSingle` distingue tre esiti (risposta, analisi non supportata, risposta scartata); `runGuarded`
+> richiede una volta finché la sua generazione è quella corrente, poi — solo se lo è ancora — memorizza il
+> risultato e alza `discarded[analisi]` se è stata scartata di nuovo; i flag si azzerano con una nuova esecuzione,
+> con `resetAnalysis` e quando cambia la domanda. `RiskLevelsPanel` mostra il codice `answer_discarded` sotto L3
+> (confronto) e sotto L4 (stress, replay, simulazione), con la frase nuova `risk.errors.answer_discarded` (4
+> lingue via `dev.py i18n`, senza graffe: `translateErrorCode` la chiama senza valori). Prova locale: 53 ✓;
+> `svelte-check` nulla sui file toccati.
+>
+> **Da sapere** (dal rapporto di test-author): il polling di D11 è `POST /assets/prices/current`, che conta come
+> modifica del portafoglio → `invalidateRisk()` → le risposte in volo tornano `null` senza spostare le
+> generazioni: finisce proprio nel ramo della nuova richiesta. Anche Asset Detail (pagina ferma) fa lo stesso
+> polling e usa lo stesso controller: guadagna la nuova richiesta ma nessuna frase (il pannello vecchio non la
+> mostra) → rifaccio il suo E2E. Un'analisi che dura ~30 s o più su una pagina col polling viene scartata
+> entrambe le volte: il flag lo rende visibile, non lo cura. Un solo codice per livello: L4 non dice quale dei
+> tre passi ha perso la risposta (accettato: il rimedio è lo stesso).
+>
+> **Verde, E2E e mutanti** (test-author): `risk-controller-unit` 53 ✓ · `risk-levels-unit` 228 ✓ ·
+> `risk-frame-component` 13 ✓ · `risk-levels-component` 9 ✓ · `risk-unit` 17 ✓ · E2E `risk-asset-detail` 2 ✓ e
+> `risk` 13 ✓ (verificato che il bundle servito conteneva la cura). 14 mutanti presi; **uno sopravvissuto**: il
+> collegamento nel pannello (confronto sotto L3, gli altri tre sotto L4), che nessun test vede — nessun test
+> vitest monta `RiskLevelsPanel` e nessun E2E provoca uno scarto. → estratta la mappa
+> `LEVEL_ON_DEMAND_ANALYSES` accanto a `discardedErrorCodes` (ogni analisi in un solo livello), letta dal
+> pannello; test-author aggiunge il test della mappa (disgiunta, unione = tutte le analisi). Resta scoperto solo
+> lo scambio di `.l3`/`.l4` nel pannello: accettato, i nomi sono espliciti. Nota di UX: L4 chiusa nasconde la
+> frase finché non la si apre (le analisi a richiesta si lanciano da dentro L4, quindi capita solo chiudendola
+> mentre un'analisi è in volo).
+
+>
+> **Chiusura** (test-author): il test della mappa (nessuna analisi in due livelli né in nessuno, il confronto
+> sotto L3, i tre passi sotto L4) prende entrambi i mutanti del collegamento; `risk-controller-unit` 54 ✓,
+> `risk-levels-unit` 228 ✓, E2E `risk` 13 ✓ ricostruito dai sorgenti ripristinati. **Verifica mia, corsia 6152**:
+> `risk-controller-unit` 54 ✓ · `risk-levels-unit` 228 ✓ · `risk-frame-component` 13 ✓ ·
+> `risk-levels-component` 9 ✓ · `risk-unit` 17 ✓ · `check-orphans`: solo i 5 orfani di privacy già noti ·
+> prettier pulito sugli 8 file · `svelte-check` nulla sui file toccati · audit i18n: 3432 chiavi, 0 incomplete,
+> `risk.errors.answer_discarded` non figura fra le inutilizzate (`risk.errors` è un prefisso dinamico) · nessun
+> importo reale, nessuna password.
