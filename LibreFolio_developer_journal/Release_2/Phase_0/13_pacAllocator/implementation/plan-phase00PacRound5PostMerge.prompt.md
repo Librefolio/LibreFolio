@@ -1237,6 +1237,8 @@ E2E Playwright: **dopo** l'approvazione umana, come da hard gate di Step 5 (Step
 > - ✅ QX1-b deciso: il piano esce con la nota di quanto aggiungere per gli arrotondamenti, entro
 >   `N` unità minime per cassa (§2). X3 respinta. Il lavoro diventa il passo **F2c**, ed è un
 >   commit in più.
+> - ✅ commit 1 (F0) e 2 (X2) committati alle 11:25: `856c2193f` → `f92e5560b` (§8). Si prosegue
+>   con QX1-a.
 >
 > **Condizioni del coordinator** (24/09 alle 18:35, ribadite il 25/09 alle 09:09):
 > - X1 e X2 sono **gate d'integrazione**: la UI v2 li espone, quindi il ramo non entra in
@@ -1302,6 +1304,13 @@ Ordine, con i documenti prima del codice (regola del developer):
   >   dell'Architecture, coerente con la sua §14 («Tool error, non result success-shaped»).
   > - **Master condivisi:** il testo del mattino e l'aggiunta su QX1-b sono al coordinator, che
   >   li applica.
+  >   - I tre testi su D-X1 sono applicati e committati su `dev_release2`. Verificato in sola
+  >     lettura, con `git show`, a `3aa33ff78`: 05:249, 06:750, guida:1201. Il link del 05 a
+  >     questo piano resta sospeso finché il ramo non è integrato: sta nel journal, che MkDocs non
+  >     costruisce, e il coordinator lo accetta.
+  >   - Le aggiunte su QX1-b per gli stessi tre punti il coordinator le ha salvate parola per
+  >     parola. Entrano nel suo prossimo commit su `dev_release2`, dopo il fast-forward sul ramo di
+  >     J; lo SHA va scritto qui quando arriva.
   > - Evidenza: `git diff --check` pulito; 9 file di documenti, nessun file di codice.
   >
   > **⚠️ Fuori pista**:
@@ -1324,8 +1333,67 @@ Ordine, con i documenti prima del codice (regola del developer):
     ✅ 2026-09-25
   - QX1-a (commit 3): il tetto esatto con una binaria `capped` per ogni route che ha un tetto, con
     Big-M derivato dai limiti della route. Solo allora il limite diventa
-    `max(floor, min(rate · notional_upper, cap))`.
-  - `test_fee_epigraph_cap_oblivious_regression` si inverte al commit 3.
+    `max(floor, min(rate · notional_upper, cap))`. ✅ 2026-09-25
+  - `test_fee_epigraph_cap_oblivious_regression` si inverte al commit 3. ✅ 2026-09-25 (ora
+    `test_fee_epigraph_cap_exact`)
+
+  > **Note implementazione** (2026-09-25, QX1-a):
+  > - **Cura** (`constraints.py`):
+  >   - un solo predicato, `_fee_cap_excess`, restituisce `rate · notional_upper − cap` se il
+  >     tetto può mordere dentro la route, altrimenti `None`;
+  >   - lo usano entrambe le metà, così non possono divergere:
+  >     - `add_fee_epigraph_constraints` aggiunge la binaria `fee_capped` e le righe
+  >       `fee_capped_active` (`capped ≤ active`) e `fee_cap` (`fee ≥ (fixed + cap) · capped`);
+  >       inoltre, sulla riga `fee_linear`, toglie `cap_excess · capped`;
+  >     - `_fee_clamp_upper` abbassa il limite al tetto, e `_fee_variable_upper` lo segue.
+  > - **Perché è esatta.**
+  >   - Con `capped = 0` la fee sta in `[fixed + max(floor, rate · N), fixed + cap]`: l'intervallo
+  >     non è vuoto solo se `rate · N ≤ cap`.
+  >   - Con `capped = 1` la fee vale esattamente `fixed + cap`.
+  >   - A ordine spento tutte le righe basse sono ≤ 0.
+  >   - Il minimo fra i due rami è `calculate_fee` per ogni nozionale.
+  >   - Gli stadi prima di `explicit_cost` (`fixed_l2`, `shortfall`, `route_priority`) non
+  >     guadagnano mai da una fee più alta, quindi il margine sopra il minimo è innocuo.
+  > - **Docstring riscritti:** il modulo `constraints.py` (paragrafi Fee e Fee bound, con X2 e
+  >   QX1-a), `_fee_clamp_upper`, `add_fee_epigraph_constraints` (le righe e la dimostrazione) e
+  >   il `compiler.py` (da «limitazione nota» a «fedeltà della fee», con i tre test che la
+  >   bloccano; l'ultima frase sull'escalation resta).
+  > - **Test rossi** (test-author), provati rossi sul codice di prima per il motivo giusto:
+  >   - `test_fee_epigraph_cap_boundary`, in `test_pac_planner_policies.py`, 3 forme: tetto
+  >     1,50 €; minimo 1,20 € + tetto; 0,50 € fisso + tetto. Rosso a `:666`, il pin di 9 quote a
+  >     `fixed + cap`: `'infeasible' == 'optimal'`;
+  >   - `test_fee_epigraph_cap_exact`, che sostituisce la vecchia regressione: rosso a `:692`,
+  >     `10.0 == 2.0`;
+  >   - quattro fixture nel gate SCIP↔oracolo (`test_pac_planner_solver.py`), tutte in centesimi
+  >     interi, quindi senza pareggi:
+  >     - `fee_cap_binds`, rosso 8 contro 9;
+  >     - `fee_fixed_floor_cap`, rosso 8 contro 9;
+  >     - `fee_cap_binds_qx1a_example` (50 050 €), rosso 499 contro 500;
+  >     - il controllo `fee_cap_never_binds`, verde anche prima.
+  >   - I docstring del modulo di test del solver e di `_proportional_fee_no_cap_scenario` non
+  >     escludono più dal gate i tetti che mordono.
+  > - **Verde dopo la cura** (lane 6151, `/tmp/librefolio-r2-d`), un comando alla volta:
+  >   - `pac-planner-policies` 40, `-solver` 19;
+  >   - `-core` 152, `-evaluator` 139, `-oracle` 20, `-proof` 33, `-wire-numbers` 39,
+  >     `-report` 16, `-service` 33: tutti passed, 491 in tutto.
+  > - **Sonda di mutazione** (usa-e-getta, `files/qx1a-probes/cure_mutations.py`, nella cartella
+  >   di sessione). Si rompe un pezzo alla volta:
+  >   - M1, senza la riga `fee_cap`: il ramo del tetto diventa ottimista, e il test di confine è
+  >     rosso a `:662` e `:668`;
+  >   - M2, senza lo sgravio sulla riga lineare: è la lezione di X2. Il confine è rosso a `:666`,
+  >     `cap_exact` a `:689`, e il gate compra 1 quota contro 9, e 94 contro 500;
+  >   - M3, limite senza tetto, e M4, senza `capped ≤ active`: tutto verde, come previsto.
+  >     Stringono il modello, ma non cambiano il comportamento:
+  >     - M3 rafforza il rilassamento e restringe il limite delle unità della fee registrata;
+  >     - M4 è già implicata quando `fixed + cap > 0`.
+  > - `ruff check` e `black --check` sui 4 file: puliti. `git diff --check`: pulito.
+  >
+  > **⚠️ Fuori pista**:
+  > - **La binaria solo dove il tetto può mordere, non su ogni route che ha un tetto** (il piano
+  >   diceva «per ogni route che ha un tetto»). Dove `rate · notional_upper ≤ cap`, la riga lineare
+  >   è già esatta: una binaria in più non cambierebbe niente, e costerebbe un ramo al solver.
+  > - **La binaria vive solo nel modello**, come le unità di `_posted_units_term`, e non entra in
+  >   `CompiledVariables`: nessun obiettivo, nessuna soluzione iniettata e nessun test la legge.
 
   > **Note implementazione** (2026-09-25, X2):
   > - **Cura.** Un solo helper, `_fee_clamp_upper` (`constraints.py`), calcola
@@ -1380,11 +1448,14 @@ Ordine, con i documenti prima del codice (regola del developer):
   - Un test strutturale verifica che nessun modulo di produzione lo importi.
 - **F4 — test backend** (test-author, lane 6151).
   - Accordo SCIP↔oracolo allargato alle forme di commissione: fissa, minimo sopra
-    `rate · notional_upper`, tetto che morde, tetto piccolo per titolo.
+    `rate · notional_upper`, tetto che morde, tetto piccolo per titolo. ✅ 2026-09-25, con le
+    fixture del gate nei commit 2 (X2: tre) e 3 (QX1-a: tre, più un controllo).
   - Regressione X1 (100 € su due ETF: veloce) e X2 (minimo 1,50 €: 9 quote); 5 € contro minimo
     d'ordine 10 € → `ready_infeasible` da SCIP.
   - F2c (QX1-b):
-    - `3 × 33,335` su 100,00 € → 3 quote, e 0,01 € da aggiungere;
+    - `3 × 33,335` su 100,00 € → 3 quote, e 0,01 € da aggiungere. Condizione del coordinator
+      (25/09 alle 11:05): l'esito si verifica **sul risultato pubblicato**, cioè 3 quote e la nota
+      di 0,01 € per la cassa broker/EUR, non sulla strada interna (incumbent SCIP o replay);
     - un deficit oltre `N` unità minime → errore;
     - un'altra violazione delle regole esatte → errore, anche se il deficit sta sotto la soglia;
     - una valuta a 0 decimali (JPY) e una a 3 (BHD), per l'unità minima.
@@ -1537,6 +1608,17 @@ Ogni tema matematico si guarda **sulla schermata della UI che lo espone**, sui d
   >
   > Vanno committati in quest'ordine, e il commit 2 prima che cominci QX1-a: i due toccano entrambi
   > `constraints.py`, e il coordinator mette in stage per percorso.
+  >
+  > **25/09 alle 11:25 — committati** dal developer con lo script guardato del coordinator
+  > (`/tmp/libreFolio_commit_d_f12.sh`), in fila su `0210f9848`:
+  > - `856c2193f` (8 file) → `f92e5560b` (5);
+  > - 13 file, +570/−45, albero pulito;
+  > - il coordinator ha verificato liste e messaggi, come per il checkpoint.
+  >
+  > **25/09 — Passo F, commit 3** (handoff al coordinator; messaggio e lista in
+  > `/tmp/libreFolio_commits/d-f3-*`, copia in `files/passo-f-commits/` della sessione):
+  > 3. `fix(pac): model the solver fee cap exactly` — QX1-a: `constraints.py`, `compiler.py`, i
+  >    due file di test e questo piano (5 file), sopra `f92e5560b`.
 - CHANGELOG `[Unreleased]` (**superato il 25/09**, vedi la nota sotto):
   - `✨ Added` — «PAC allocator: interactive planner in Tools»;
   - `✨ Added` — «PAC allocator: copy the current portfolio distribution as the starting target»;

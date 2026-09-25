@@ -23,11 +23,11 @@ Scope, as everywhere else in this package: PAC `proportional` policy,
 `primary` purpose only. Every fixture is small enough for the oracle to
 enumerate in a fraction of a second (the coarse funding/FX case, which is the
 fixture that caught the Step3 §16.11 HALF_UP ledger defect, has 585
-candidates; the rest are in the tens). Fixtures with a *binding* fee cap are
-deliberately excluded from the agreement gate: the fee epigraph is documented
-cap-oblivious (`compiler.py`), so a capped route could legitimately bias which
-candidate the solver prefers -- that is a known modelling limitation, not a
-disagreement the gate should police.
+candidates, the QX1-a example 501; the rest are in the tens). Fixtures with a
+*binding* fee cap are no longer excluded from the agreement gate: since QX1-a
+(found 2026-09-24) the fee epigraph models the cap exactly (`constraints.py`),
+so a capped route that makes the solver prefer another candidate is a
+disagreement like any other, and the gate polices it.
 
 These are pure in-process tests (`isolation="pure"`): no server, no database,
 no clock assertions, no network. Two ready-made scenario fixtures are imported
@@ -105,9 +105,10 @@ def _single_buy_scenario() -> ExactPlannerScenario:
 
 
 def _proportional_fee_no_cap_scenario() -> ExactPlannerScenario:
-    """A proportional fee with a floor but *no* cap, so the fee epigraph is
-    exact (the cap-oblivious bias cannot apply) and `explicit_cost` genuinely
-    discriminates between candidates.
+    """A proportional fee with a floor but *no* cap, so only the floor and
+    linear rows of the fee epigraph are in play (the capped shapes are the
+    QX1-a fixtures below) and `explicit_cost` genuinely discriminates between
+    candidates.
     """
     return _pac_scenario(price=R(10), fee_rate=R(1, 10), fee_floor=R(5), fee_cap=None, route_cap=R(6), cash=R(1000))
 
@@ -144,6 +145,43 @@ def _flat_minimum_fee_scenario() -> ExactPlannerScenario:
     return _pac_scenario(price=R(10), cash=R(100), fee_floor=R(2), route_cap=R(100))
 
 
+def _fee_cap_binds_scenario() -> ExactPlannerScenario:
+    """QX1-a (found 2026-09-24): 10% capped at EUR1 on EUR95 of cash. The
+    exact replay buys 9 units (EUR90 + EUR1); the fee epigraph ignored the
+    cap and priced them at the linear EUR9, EUR99 against EUR95, so the
+    solver stopped at 8.
+    """
+    return _pac_scenario(price=R(10), cash=R(95), fee_rate=R(1, 10), fee_cap=R(1), route_cap=R(100))
+
+
+def _fee_fixed_floor_cap_scenario() -> ExactPlannerScenario:
+    """QX1-a with every term of the fee in play: EUR0.50 fixed plus 10% with a
+    EUR0.50 minimum, capped at EUR1.50, on EUR97 of cash. The replay buys 9
+    units (EUR90 + EUR2); the model priced them at EUR0.50 + EUR9, EUR99.50
+    against EUR97, and stopped at 8.
+    """
+    return _pac_scenario(price=R(10), cash=R(97), fixed_fee=R(1, 2), fee_rate=R(1, 10), fee_floor=R(1, 2), fee_cap=R(3, 2), route_cap=R(100))
+
+
+def _fee_cap_binds_qx1a_example_scenario() -> ExactPlannerScenario:
+    """The QX1-a example the developer approved: EUR50,050 at EUR100 a unit,
+    0.19% capped at EUR18. The replay buys 500 units (EUR50,000 + EUR18); the
+    model priced them at the linear EUR95, EUR50,095 against EUR50,050, and
+    stopped at 499. 501 candidates, still a fraction of a second for the
+    oracle.
+    """
+    return _pac_scenario(price=R(100), cash=R(50050), fee_rate=R(19, 10000), fee_cap=R(18), route_cap=R(1000))
+
+
+def _fee_cap_never_binds_scenario() -> ExactPlannerScenario:
+    """Control for the QX1-a fixtures: the EUR95 and the 10% of
+    `fee_cap_binds`, but a EUR50 cap the route never reaches (the linear fee
+    tops out at EUR9 on 9 units). Model and replay agree on 8 units (EUR80 +
+    EUR8) whether the cap is modelled or not.
+    """
+    return _pac_scenario(price=R(10), cash=R(95), fee_rate=R(1, 10), fee_cap=R(50), route_cap=R(100))
+
+
 _ORACLE_AGREEMENT_FIXTURES = [
     pytest.param(_two_asset_pac_scenario, id="two_asset_pac"),
     pytest.param(_coarse_funding_fx_scenario, id="coarse_funding_fx"),  # the fixture that caught the Step3 §16.11 defect
@@ -154,6 +192,11 @@ _ORACLE_AGREEMENT_FIXTURES = [
     pytest.param(_fee_floor_above_linear_upper_scenario, id="fee_floor_above_linear_upper"),
     pytest.param(_small_route_cap_fee_floor_scenario, id="small_route_cap_fee_floor"),
     pytest.param(_flat_minimum_fee_scenario, id="flat_minimum_fee"),
+    # QX1-a: a fee cap that binds inside the route's range. Every amount is whole cents, so no HALF_UP tie is reachable.
+    pytest.param(_fee_cap_binds_scenario, id="fee_cap_binds"),
+    pytest.param(_fee_fixed_floor_cap_scenario, id="fee_fixed_floor_cap"),
+    pytest.param(_fee_cap_binds_qx1a_example_scenario, id="fee_cap_binds_qx1a_example"),
+    pytest.param(_fee_cap_never_binds_scenario, id="fee_cap_never_binds"),  # control: a cap the route never reaches
 ]
 
 
