@@ -37,6 +37,27 @@ export type OnDemandAnalysis = 'comparison' | 'stress' | 'replay' | 'simulation'
 
 export const ON_DEMAND_ANALYSES: readonly OnDemandAnalysis[] = ['comparison', 'stress', 'replay', 'simulation'];
 
+/** The error code a level shows when one of its on-demand answers was discarded twice running;
+ *  worded as `risk.errors.answer_discarded`, like every other error code a level shows. */
+export const ANSWER_DISCARDED_CODE = 'answer_discarded';
+
+/**
+ * The discarded-answer code for a level whose analyses include a discarded one, once however many.
+ *
+ * A level cannot say which of its steps lost its answer, and does not need to: the cure is the same
+ * — run it again — and one sentence says so.
+ */
+export function discardedErrorCodes(discarded: Readonly<Record<OnDemandAnalysis, boolean>>, analyses: readonly OnDemandAnalysis[]): string[] {
+    return analyses.some((analysis) => discarded[analysis]) ? [ANSWER_DISCARDED_CODE] : [];
+}
+
+/**
+ * Which level discloses each on-demand analysis: the benchmark comparison under L3, the three
+ * what-if steps under L4. Every analysis belongs to exactly one level, so a discarded answer is
+ * never disclosed twice, nor nowhere.
+ */
+export const LEVEL_ON_DEMAND_ANALYSES = {l3: ['comparison'], l4: ['stress', 'replay', 'simulation']} as const satisfies Record<'l3' | 'l4', readonly OnDemandAnalysis[]>;
+
 /** The reactive inputs a host component feeds in; read through a getter so the
  *  controller tracks them instead of capturing a snapshot at construction. */
 export interface RiskControllerInputs {
@@ -122,6 +143,8 @@ export function baseSignature(inputs: RiskControllerInputs): string {
     });
 }
 
+type SingleOutcome = {kind: 'answered'; result: RiskAnalyticResult | null} | {kind: 'unsupported'} | {kind: 'discarded'};
+
 export function createRiskPanelController(inputs: () => RiskControllerInputs, options: RiskControllerOptions = {}) {
     let catalog = $state<RiskCatalogResponse | null>(null);
     let scenarioCatalog = $state<RiskScenarioCatalogResponse | null>(null);
@@ -152,6 +175,9 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
 
     let requestGeneration = 0;
     const generations: Record<OnDemandAnalysis, number> = {comparison: 0, stress: 0, replay: 0, simulation: 0};
+    /** On-demand answers that arrived and were discarded twice running — the same fact
+     *  `loadDiscarded` states for the base wave, kept per analysis. */
+    const discarded = $state<Record<OnDemandAnalysis, boolean>>({comparison: false, stress: false, replay: false, simulation: false});
     let lastBaseSignature = '';
     /**
      * Counts how many times the base signature actually moved.
@@ -211,6 +237,7 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
             generations[analysis] += 1;
             setResult(analysis, null);
             setLoading(analysis, false);
+            discarded[analysis] = false;
         }
         return inFlight;
     }
@@ -305,9 +332,16 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
         }
     }
 
-    async function runSingle(code: string, mode: RiskMode, parameters: RiskAnalyticParameters): Promise<RiskAnalyticResult | null> {
+    /**
+     * One on-demand question, answered in one of three ways — kept apart because `queryRisk`
+     * answers in three: a response, a throw, and a *discard* (`null`, when the client session or
+     * the cache generation moved while the request was in flight). Folding the discard into "no
+     * result" made an analysis vanish without a word, which the live price polling of Asset Global
+     * (decision D11) turns from an accident into a routine: it invalidates the cache every 30 s.
+     */
+    async function runSingle(code: string, mode: RiskMode, parameters: RiskAnalyticParameters): Promise<SingleOutcome> {
         const {scope, dateStart, dateEnd, targetCurrency} = inputs();
-        if (!hasRiskCapability(catalog, code, scope.kind, mode)) return null;
+        if (!hasRiskCapability(catalog, code, scope.kind, mode)) return {kind: 'unsupported'};
         const response = await queryRisk(
             buildRiskQueryRequest({
                 scope,
@@ -319,7 +353,8 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
                 analytics: [buildRiskAnalyticRequest(`single-${code}`, code, parameters)],
             }),
         );
-        return response?.items?.[0] ?? null;
+        if (response === null) return {kind: 'discarded'};
+        return {kind: 'answered', result: response?.items?.[0] ?? null};
     }
 
     /**
@@ -331,10 +366,18 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
         const request = build();
         if (!request) return;
         const generation = ++generations[analysis];
+        discarded[analysis] = false;
         setLoading(analysis, true);
         try {
-            const result = await runSingle(request.code, request.mode, request.parameters);
-            if (generation === generations[analysis]) setResult(analysis, result);
+            let outcome = await runSingle(request.code, request.mode, request.parameters);
+            // Re-ask once, as `loadBase` does, while this run is still the current question; a
+            // superseded run leaves everything to the one that replaced it.
+            if (outcome.kind === 'discarded' && generation === generations[analysis]) {
+                outcome = await runSingle(request.code, request.mode, request.parameters);
+            }
+            if (generation !== generations[analysis]) return;
+            setResult(analysis, outcome.kind === 'answered' ? outcome.result : null);
+            discarded[analysis] = outcome.kind === 'discarded';
         } catch (error) {
             console.error(`[Risk] ${analysis} failed:`, error);
             if (generation === generations[analysis]) setResult(analysis, null);
@@ -498,6 +541,12 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
         get loadDiscarded() {
             return loadDiscarded;
         },
+        /** Per on-demand analysis: its answer was discarded twice running. The same fact as
+         *  `loadDiscarded`, and the same cure: ask again. Cleared by a new run of that analysis,
+         *  by `resetAnalysis` and whenever the question changes. */
+        get discarded(): Readonly<Record<OnDemandAnalysis, boolean>> {
+            return discarded;
+        },
         /** `ready` | `error` | `pending` — the attribute that separates "slow" from
          *  "failed", which a single `pending` could not say. */
         get catalogState(): 'ready' | 'error' | 'pending' {
@@ -531,6 +580,7 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
             generations[analysis] += 1;
             setResult(analysis, null);
             setLoading(analysis, false);
+            discarded[analysis] = false;
         },
         bumpGeneration: (analysis: OnDemandAnalysis) => {
             generations[analysis] += 1;
