@@ -95,7 +95,7 @@ class PacAllocatorTool(ToolPlugin):
         ToolService(
             tool_code="pac_allocator",
             name="PAC allocator",
-            description="Plan whole-unit purchases that bring an allocation as close as possible to its target.",
+            description="Plan the purchases that bring a new investment as close as possible to its target allocation, in whole units or amounts, without placing orders.",
             name_i18n_key="tools.pacAllocator.name",
             description_i18n_key="tools.pacAllocator.description",
             category="allocation",

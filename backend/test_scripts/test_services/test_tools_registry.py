@@ -1178,3 +1178,42 @@ def test_one_invalid_effective_policy_does_not_hide_healthy_tools_or_poison_snap
     assert not next_catalog.unavailable
     assert discovery.registry.get_snapshot() is snapshot
     assert not snapshot.failures
+
+
+# ---------------------------------------------------------------------------
+# The application's own PAC service (read-only). This is the one test in this
+# file that reads the real registry: discovery goes through the normal imports
+# of backend/app/services/tool_plugins/ — the snapshot the app publishes at
+# startup and GET /tools/catalog serves. Private registries created by the
+# other tests reset their own state in __init_subclass__, so the order of the
+# two never matters.
+# ---------------------------------------------------------------------------
+
+# Wording of the P1 prototype card ("Distribute investable liquidity across
+# selected Assets by target percentage."), removed with the P1 services.
+P1_PROTOTYPE_WORDING = ("investable liquidity", "target percentage")
+
+
+def test_registered_pac_allocator_service_is_the_v2_planner_card():
+    definition = ToolPluginRegistry.get_definition("pac_allocator")
+    assert definition is not None, "pac_allocator is not published by the application registry"
+    descriptor = definition.descriptor
+
+    # The i18n key is the card's contract: the frontend catalogues own the text.
+    assert descriptor.name_i18n_key == "tools.pacAllocator.name"
+    assert descriptor.description_i18n_key == "tools.pacAllocator.description"
+    assert descriptor.ui.model_dump(mode="json") == {"kind": "custom", "component_key": "pac-allocator", "version": "2.0.0"}
+    assert (descriptor.contract_version, descriptor.implementation_version) == ("2.0.0", "2.0.0")
+    assert [policy.operation for policy in descriptor.operations] == ["plan"]
+
+    # The English fallback is shown whenever a catalogue misses the key: it must
+    # describe the planner, not the deleted prototype.
+    fallback = descriptor.description.casefold()
+    assert fallback.strip()
+    assert [wording for wording in P1_PROTOTYPE_WORDING if wording in fallback] == []
+
+    # What the catalog serves is that same descriptor, not a stale copy.
+    catalog = get_tool_catalog(ToolPlatformPolicy())
+    served = next(item for item in catalog.items if item.tool_code == "pac_allocator")
+    assert (served.description, served.description_i18n_key, served.ui) == (descriptor.description, descriptor.description_i18n_key, descriptor.ui)
+    assert "pac_allocator" not in {item.tool_code for item in catalog.unavailable}
