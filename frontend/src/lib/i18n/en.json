@@ -3632,7 +3632,7 @@
     },
     "pacAllocator": {
       "name": "PAC allocator",
-      "description": "Distribute investable liquidity across selected Assets by target percentage.",
+      "description": "Plan the purchases that bring a new investment as close as possible to its target allocation, in whole units or amounts, without placing orders.",
       "scenario": "Scenario",
       "reportCurrency": "Reporting currency",
       "asOfDate": "As-of date (optional)",
@@ -3824,7 +3824,873 @@
       "units": "units",
       "valuationSettings": "Valuation settings",
       "valuationSettingsHint": "Reporting currency values assets, cash, and contributions. The date is the inclusive cutoff for saved facts.",
-      "valuationSettingsInfo": "These settings define one comparison unit and fact cutoff. They do not move cash or execute trades."
+      "valuationSettingsInfo": "These settings define one comparison unit and fact cutoff. They do not move cash or execute trades.",
+      "planner": {
+        "actions": {
+          "editConfiguration": "Edit configuration",
+          "goTo": "Go to {step}",
+          "show": "Show"
+        },
+        "add": "Add",
+        "age": {
+          "after": "After the scenario date {date}",
+          "daysBefore": "{count, plural, one {# day} other {# days}} before {date}",
+          "manual": "Entered by hand",
+          "sameDay": "Of the day",
+          "unknown": "Date unknown"
+        },
+        "applyToDraft": "Apply to the draft",
+        "assetCopy": {
+          "empty": "No Asset of the database is in the draft: nothing to copy.",
+          "manual": "manual, not copied"
+        },
+        "assetEditor": {
+          "categoryId": "Category ID",
+          "categoryLabel": "Label",
+          "class": "Class",
+          "classHint": "(lowercase code)",
+          "dimension": "Dimension",
+          "exposureAdd": "Add exposure row",
+          "exposures": "Exposures (optional)",
+          "idDuplicate": "This ID is already in the draft: edit that Asset instead of adding it twice.",
+          "idMissing": "The instrument ID is required.",
+          "idTooLong": "The instrument ID is too long.",
+          "identity": "Identity",
+          "manualId": "Instrument ID",
+          "manualIdPlaceholder": "ISIN or a unique ID of the scenario",
+          "manualTitle": "Manual Asset",
+          "neverByName": "Never merge Assets by name: the same ID reuses the same identity in the draft.",
+          "overHundred": "A dimension summing over 100%: the backend rejects it as invalid input.",
+          "price": "Price",
+          "priceAdd": "Enter a price",
+          "priceAmount": "Price",
+          "priceClear": "No price: the calculation will ask for it",
+          "priceCurrency": "Currency",
+          "priceDate": "Date",
+          "quoteBasis": "Units per price",
+          "quoteBasisHint": "'Units per price' says how many units the source price represents; it is not an order step.",
+          "ticker": "Ticker",
+          "title": "Configure {name} · scenario data (the Asset is not changed)",
+          "unclassified": "The share not declared goes to the backend 'Uncategorised' row."
+        },
+        "assets": {
+          "addManual": "Manual Asset",
+          "copyClassifications": "Copy classifications",
+          "copyPrices": "Copy prices",
+          "empty": "Search an Asset of the database or add a manual one: the Tool works without any Asset in the database.",
+          "noAutoPrice": "Adding an Asset copies its identity only. Prices and classifications arrive with an explicit copy; no provider is called.",
+          "noExposures": "No exposure: the backend counts it as Uncategorised.",
+          "priceLine": "{price} / {units} {count, plural, one {unit} other {units}}",
+          "priceMissing": "Price missing: it stays in the draft, the calculation will ask for it.",
+          "priceMissingShort": "Price missing",
+          "search": "Search Asset"
+        },
+        "brokerCopy": {
+          "apply": "{count, plural, one {Copy # Broker} other {Copy # Brokers}}",
+          "currencies": "Currencies seen: {currencies}",
+          "noCurrencies": "No currency seen yet: one mode in the valuation currency is proposed.",
+          "noOwner": "You own no Broker to copy. Add a manual Broker instead.",
+          "rule": "Only the Broker identity is copied. Order modes, fees and funding are scenario data you set here; the Broker itself is not changed.",
+          "title": "Choose existing Brokers"
+        },
+        "brokerEditor": {
+          "addCurrency": "Add currency",
+          "fee": "BUY fee (in the mode currency)",
+          "feeCap": "max (empty = none)",
+          "feeFixed": "fixed",
+          "feeFloor": "min",
+          "feeRate": "rate %",
+          "feeRule": "Fee = 0 when the amount is 0, otherwise fixed + clamp(rate × amount, min, max).",
+          "funding": "Funding allowed to {name}",
+          "fundingCap": "Transfer cap",
+          "fundingCapHint": "Empty = the whole amount of the source.",
+          "kind": "In the Broker you enter",
+          "localCash": "Local cash {name} {currency} · no transfer",
+          "modes": "Order modes (one per currency)",
+          "noFunding": "No liquidity can reach this Broker yet: add cash or a contribution in the Liquidity step.",
+          "notIn200": "Not in 2.0.0: FX handling per currency, tax regime, losses, SELL fees.",
+          "origin": "Origin",
+          "restore": "Restore the copied values",
+          "sourceAmount": "source {amount}",
+          "step": "Step",
+          "stepRule": "The step currency of an amount mode is the mode currency, locked. A fee has the currency of the price.",
+          "title": "Configure {name} · scenario data (the Broker is not changed)"
+        },
+        "brokers": {
+          "addManual": "Manual Broker",
+          "conversions": "Conversions: global rate + spread (FX step)",
+          "copy": "Choose existing Broker",
+          "fee": "BUY fee {fixed} + {rate}% · min {floor} · max {cap}",
+          "feeZero": "BUY fee 0",
+          "funding": "Funding: {sources}",
+          "fundingOnly": "funding only",
+          "fundingOnlyHint": "No order: it funds other Brokers through routes. Edit it in the Liquidity step.",
+          "localCash": "local cash {currency}",
+          "manualName": "Manual Broker {count}",
+          "noFunding": "none yet",
+          "stepAmount": "step {step}",
+          "stepUnits": "step {step} units"
+        },
+        "busy": {
+          "locked": "The configuration is locked while this request is active.",
+          "searching": "Validating and searching for the operational plan…",
+          "snapshot": "Snapshot rev. {revision} · {assets, plural, one {# Asset} other {# Assets}} · {brokers, plural, one {# operative Broker} other {# operative Brokers}} · {routes, plural, one {# BUY route} other {# BUY routes}} · {pairs, plural, one {# FX pair} other {# FX pairs}}",
+          "stop": "Stop waiting",
+          "stopHint": "Stopping only stops the wait: the server may finish anyway, and that answer is discarded.",
+          "title": "Calculation in progress"
+        },
+        "cash": {
+          "custody": "Available (custody) {amount}",
+          "fundingOnly": "Funding only: it does not buy. It needs a funding route in the Broker step.",
+          "manualTitle": "{name} · manual account {currency}",
+          "noPrefill": "No prefill: you write the amount.",
+          "selected": "Amount to use",
+          "share": "share {share} · yours {amount}",
+          "title": "{name} · cash {currency}"
+        },
+        "classificationsCopy": {
+          "source": "Source: the Asset classifications (type, sector, geography) stored in LibreFolio.",
+          "title": "Copy classifications"
+        },
+        "conflict": {
+          "cashIncoming": "Balance from the system · {date}",
+          "cashPrevious": "Balance copied in the draft · {date}",
+          "cashSelected": "Amount to use (yours) · does not change",
+          "exposuresIncoming": "Classification from the system · {date}",
+          "exposuresPrevious": "Classification copied · {date}",
+          "exposuresYours": "your rows do not change",
+          "fxCurrent": "Rate in the draft (yours) · does not change",
+          "fxIncoming": "Rate from the system · {date}",
+          "fxPrevious": "Rate copied in the draft · {date}",
+          "intro": "You asked to copy again. These facts are different now:",
+          "keep": "Keep previous copy",
+          "priceCurrent": "Price in the draft (yours) · does not change",
+          "priceIncoming": "Price from the system · {date}",
+          "priceLine": "{price} per {units} · {date}",
+          "pricePrevious": "Price copied in the draft · {date}",
+          "rule": "Updating changes only the copied fact and its date. Your fields stay as they are.",
+          "titleMany": "{count} copied facts changed since the last copy",
+          "titleOne": "{name} changed since the last copy",
+          "update": "Update copied fact"
+        },
+        "continueBlocked": "{count, plural, one {# problem to fix before continuing:} other {# problems to fix before continuing:}}",
+        "contribution": {
+          "destination": "Destination: a funding route in the Broker step.",
+          "kind": "contribution",
+          "label": "Label",
+          "untitled": "New contribution"
+        },
+        "copy": {
+          "alreadyInDraft": "Already in the draft: copying again updates it",
+          "apply": "{count, plural, one {Copy # item} other {Copy # items}}",
+          "needsCurrency": "Choose the valuation currency in the Scenario step to copy from the system.",
+          "noOwner": "Copying needs at least one Broker you own. Enter the values by hand instead.",
+          "ownerScope": "The Portfolio API reads through the Brokers you own; these values do not depend on the Broker.",
+          "reading": "Reading the snapshot…",
+          "rule": "Nothing is live: a copy is a snapshot you can edit. Copying again updates only what you have not changed and lists the rest.",
+          "scopeError": "The Broker list could not be loaded. Nothing was copied.",
+          "sourcePortfolio": "Source: Portfolio API (allocation-source) · as of {date} · only Brokers you own.",
+          "stop": "Stop"
+        },
+        "copyNotice": {
+          "conflicts": "{count, plural, one {# fact changed since the previous copy: you decide in the dialog.} other {# facts changed since the previous copy: you decide in the dialog.}}",
+          "missing": {
+            "brokers": "Nothing copied for: {names}.",
+            "classifications": "No complete classification for: {names}.",
+            "distribution": "Nothing copied for: {names}.",
+            "fx": "No rate published for: {names}.",
+            "liquidity": "Nothing copied for: {names}.",
+            "prices": "No price published for: {names}. They stay in the draft; the calculation will ask for them."
+          },
+          "summary": "Copy done: {applied} added or updated, {unchanged} unchanged.",
+          "when": "Snapshot at {date}, read {time}. Nothing stays linked to the source."
+        },
+        "dimensions": {
+          "asset_type": "Asset type",
+          "geography": "Geography",
+          "sector": "Sector"
+        },
+        "distribution": {
+          "apply": "Use as target",
+          "brokers": "Brokers (OWNER only)",
+          "change": "{asset}: {from} → {to}",
+          "confirmMessage": "These targets change:",
+          "confirmTitle": "Replace the targets you set?",
+          "denominator": "Denominator: the Assets of the scenario; cash does not enter.",
+          "differs": "If the scenario does not include all your Assets, the weights differ from the page.",
+          "incomplete": "An Asset you hold has no price or rate: no weight is published and no target changes.",
+          "lastTrade": "last trade price {date}",
+          "manual": "manual · not in the portfolio",
+          "marketPrice": "market price {date}",
+          "missing": "no price or rate: no weight",
+          "noHoldings": "You hold none of these Assets: no weight, no target changes.",
+          "notHeld": "not held",
+          "quantum": "Weights to {quantum} points; the exact sum comes from the backend.",
+          "rule": "Weights only, no portfolio value. A base to edit, not advice. A target you changed is not overwritten without confirmation.",
+          "source": "Source: portfolio engine (the values of the Allocation page) · as of {date}",
+          "title": "Copy current distribution",
+          "valuation": "Valuation",
+          "weight": "Weight"
+        },
+        "fx": {
+          "addFrom": "Pair: first currency",
+          "addTo": "second currency",
+          "copy": "Copy FX rates",
+          "intro": "The backend decides whether and how much to convert. You provide the rates.",
+          "none": "No conversion needed: every currency in play is the valuation currency.",
+          "notInVersion": "Not in 2.0.0: FX per Broker, safety margin, conversion fee, multi-hop.",
+          "pairsHint": "Pairs are proposed from the currencies of Assets, cash and order modes; a key only comes from the pair selector, in canonical order.",
+          "remove": "Remove pair (no longer in play)",
+          "spread": "Conversion spread *",
+          "spreadHint": "One per scenario, applied once to every conversion; the valuation uses the official rate."
+        },
+        "fxCopy": {
+          "empty": "No currency pair is needed yet.",
+          "source": "Source: FX rates stored in LibreFolio, the last one on or before {date}. No provider is called.",
+          "title": "Copy FX rates"
+        },
+        "issues": {
+          "allocation": {
+            "asset_inactive_not_buyable": "The Asset is inactive: it cannot be bought.",
+            "asset_type_missing": "The Asset type is missing.",
+            "broker_execution_profile_unsupported": "This Broker's execution profile is not supported by the Tool.",
+            "broker_inactive": "The Broker is inactive.",
+            "capacity_unsupported": "The scenario exceeds the size the Tool supports.",
+            "cash_selection_invalid": "The amount to use is not valid for this cash row.",
+            "classification_geography_missing": "The geography classification is missing.",
+            "classification_invalid": "The classification is not valid.",
+            "classification_sector_missing": "The sector classification is missing.",
+            "coefficient_envelope_unsupported": "The numbers are too large or too precise for the Tool to handle exactly.",
+            "currency_mismatch": "The currencies do not match.",
+            "currency_spec_missing": "The currency is not known to the application.",
+            "deployment_omitted": "The deployment view was not calculated.",
+            "duplicate_id": "The same identifier is used twice.",
+            "dynamic_fee_unsupported": "This fee schedule is not supported.",
+            "economic_share_out_of_range": "The economic share must be between 0 and 100%.",
+            "execution_margin_missing": "The execution margin is missing.",
+            "execution_margin_rate_out_of_range": "The execution margin is out of range.",
+            "exposure_total_exceeds_one": "The exposures of one dimension sum to more than 100%.",
+            "exposure_weight_out_of_range": "An exposure weight is out of range.",
+            "fee_floor_exceeds_cap": "The minimum fee is higher than the maximum fee.",
+            "fee_rate_out_of_range": "The fee rate is out of range.",
+            "fee_schedule_missing": "The fee schedule is missing.",
+            "fiscal_currency_missing": "The fiscal currency is missing.",
+            "funding_cap_negative": "The funding limit cannot be negative.",
+            "fx_rate_missing": "An exchange rate is missing.",
+            "fx_spread_rate_out_of_range": "The FX spread is out of range.",
+            "identity_fx_rate_not_allowed": "An exchange rate between the same currency is not allowed.",
+            "invalid_quote_basis": "The price basis is not valid.",
+            "negative_cash_unsupported": "A negative cash balance is not supported.",
+            "negative_contribution": "A contribution cannot be negative.",
+            "negative_fee_amount": "A fee cannot be negative.",
+            "negative_inventory_unsupported": "A negative holding is not supported.",
+            "no_additional_buy_feasible": "No further purchase is possible with the available liquidity.",
+            "no_positive_order_fundable": "The liquidity cannot pay for any order.",
+            "no_selected_funding": "No liquidity is selected.",
+            "nonpositive_fx_rate": "An exchange rate must be greater than zero.",
+            "nonpositive_order_amount_step": "The amount step must be greater than zero.",
+            "nonpositive_price": "The price must be greater than zero.",
+            "nonpositive_quantity_step": "The quantity step must be greater than zero.",
+            "order_amount_step_missing": "The amount step is missing.",
+            "order_cap_nonpositive": "The order limit must be greater than zero.",
+            "order_minimum_exceeds_cap": "The order minimum is higher than the order limit.",
+            "order_minimum_negative": "The order minimum cannot be negative.",
+            "planning_quantity_negative": "The quantity cannot be negative.",
+            "price_date_missing": "The price date is missing.",
+            "price_missing": "The price is missing.",
+            "price_order_invalid": "The prices are not in a valid order.",
+            "provenance_not_found": "A data source reference was not found.",
+            "provenance_stale_confirmed": "The data is older than the accepted age and was confirmed anyway.",
+            "quote_base_quantity_missing": "The quantity the price refers to is missing.",
+            "reference_not_found": "A reference points to a row that does not exist.",
+            "required_buy_sell_conflict": "The same Asset is required to be both bought and sold.",
+            "required_min_notional_unfunded": "The required minimum orders cost more than the available liquidity.",
+            "route_priority_negative": "The route priority cannot be negative.",
+            "saved_fx_invalid": "The saved exchange rate is not valid.",
+            "saved_fx_missing": "The saved exchange rate is missing.",
+            "solver_limit_no_incumbent": "The solver hit its limit before finding a plan.",
+            "stale_age_negative": "The accepted age cannot be negative.",
+            "stale_observation_not_accepted": "The data is older than the accepted age.",
+            "target_total_not_one": "The targets do not sum to 100%.",
+            "target_weight_missing": "A target is missing.",
+            "target_weight_out_of_range": "A target must be between 0 and 100%.",
+            "tax_netting_unsupported": "Tax netting is not supported.",
+            "valuation_currency_missing": "The valuation currency is missing.",
+            "wac_fx_missing": "The exchange rate needed for the average cost is missing.",
+            "wac_missing": "The average cost is missing.",
+            "zero_selected_funding": "The selected liquidity is zero."
+          },
+          "pac_allocator": {
+            "initial_holding_forbidden": "This Tool does not accept existing holdings.",
+            "sell_forbidden": "This Tool does not sell."
+          },
+          "portfolio_rebalancer": {
+            "baseline_incumbent_missing": "The starting plan for the comparison is missing.",
+            "carried_loss_negative": "The carried loss cannot be negative.",
+            "cost_basis_negative": "The cost basis cannot be negative.",
+            "holdings_missing": "The holdings are missing.",
+            "nonpositive_current_portfolio": "The current portfolio has no value.",
+            "sell_fee_missing": "The sale fee is missing.",
+            "sell_inventory_exceeded": "The sale exceeds the quantity held.",
+            "sell_irreducibility_unresolved": "It was not established that no sale can be removed.",
+            "sell_to_idle_forbidden": "Selling only to leave the proceeds idle is not allowed.",
+            "tax_rate_missing": "The tax rate is missing.",
+            "tax_rate_out_of_range": "The tax rate is out of range.",
+            "withholding_missing": "The tax withholding is missing."
+          }
+        },
+        "leave": {
+          "confirm": "Leave and discard",
+          "message": "The current configuration is not saved. Leaving, you will lose {assets, plural, one {# Asset} other {# Assets}} and {sources, plural, one {# liquidity source} other {# liquidity sources}}.",
+          "title": "Leave the PAC allocator?"
+        },
+        "liquidity": {
+          "addContribution": "Contribution",
+          "addManual": "Manual account",
+          "copy": "Copy liquidity from Brokers",
+          "empty": "No liquidity yet. Copy it from your Brokers, add a contribution or a manual account.",
+          "noConversion": "No converted equivalent: FX happens only in the backend."
+        },
+        "liquidityCopy": {
+          "allYours": "100% yours",
+          "apply": "{count, plural, one {Copy # row} other {Copy # rows}}",
+          "custody": "custody {amount}",
+          "noCash": "No cash balance on this date.",
+          "noOwner": "You own no Broker to copy from. Add a manual account instead: the Tool works without any Broker in the database.",
+          "rule": "Every Broker × currency becomes one row. 'Amount to use' stays empty: you write it. A 403/404 from the API shows here in plain words; no Broker is dropped in silence.",
+          "title": "Copy liquidity from Brokers",
+          "yourShare": "your share {amount}"
+        },
+        "manualAccount": {
+          "add": "Add source",
+          "declared": "Declared liquidity",
+          "declaredHint": "A limit, not a proposal.",
+          "fundingOnly": "In the scenario the account becomes a 'funding only' Broker: no order starts here; it needs a funding route to a Broker.",
+          "incomplete": "Fill in every field marked *.",
+          "name": "Account name",
+          "quantum": "The minimum step of the currency comes from the backend (CLDR).",
+          "selectedHint": "At most the declared liquidity.",
+          "title": "Add manual account"
+        },
+        "modeKinds": {
+          "monetary_amount": "Amount",
+          "whole_quantity": "Number of units"
+        },
+        "nav": {
+          "current": "current step",
+          "label": "Configuration progress",
+          "pending": "not visited",
+          "position": "{index}/{total} {step}",
+          "problem": "to complete",
+          "steps": "Steps",
+          "visited": "visited"
+        },
+        "objectives": {
+          "active_order_rows": "Number of orders",
+          "explicit_cost": "Explicit costs (fees, spread, margin)",
+          "fixed_l2": "L2 distance from the fixed targets",
+          "incremental_cost": "Incremental costs",
+          "incremental_order_rows": "Additional orders",
+          "route_priority": "Route priority",
+          "shortfall": "Uninvested liquidity (U)",
+          "split_asset_count": "Assets split across Brokers",
+          "turnover": "Turnover"
+        },
+        "origin": {
+          "copied": "Copied",
+          "manual": "Manual",
+          "modified": "Modified"
+        },
+        "policies": {
+          "proportional": "Proportional"
+        },
+        "pricesCopy": {
+          "source": "Source: prices stored in LibreFolio, the last one on or before {date}. No provider is called.",
+          "title": "Copy prices"
+        },
+        "problems": {
+          "asOfMissing": "The reference date is missing.",
+          "assetClassInvalid": "The Asset class must be a lowercase code of at least 3 characters.",
+          "assetNameMissing": "The Asset name is empty.",
+          "brokerNameMissing": "The Broker name is empty.",
+          "brokerNoMode": "The Broker has no order mode.",
+          "contributionAmountMissing": "The contribution amount is empty or not a number.",
+          "contributionLabelMissing": "The contribution label is empty.",
+          "declaredMissing": "'Declared liquidity' is empty or not a number.",
+          "exposureIdTooLong": "An exposure category identifier is too long.",
+          "exposureIncomplete": "An exposure row is incomplete.",
+          "feeFieldMissing": "A fee field is empty or not a number.",
+          "fundingCapInvalid": "The transfer cap is not a number.",
+          "fundingPriorityInvalid": "Funding priority must be a whole number from 0.",
+          "fundingSourceMissing": "A funding route points to a source that no longer exists.",
+          "fxRateInvalid": "The rate is not a number.",
+          "fxSpreadInvalid": "The conversion spread is empty or not a number.",
+          "identifierTooLong": "An identifier is too long for the planner.",
+          "modeDuplicateCurrency": "Two order modes use the same currency.",
+          "modeStepMissing": "The order step is empty or not a number.",
+          "modeStepNotWhole": "Whole-unit mode: the step must be a whole number of units.",
+          "noAssets": "Add at least one Asset.",
+          "noEnabledRoute": "No order route is enabled.",
+          "noLiquidity": "Add at least one cash row or contribution.",
+          "noOperativeBroker": "Add at least one Broker on which orders can be proposed.",
+          "policyMissing": "Choose a strategy.",
+          "priceCurrencyMissing": "The price currency is missing.",
+          "priceDateAfterReference": "The price date is after the reference date.",
+          "priceDateMissing": "The price date is missing.",
+          "priceInvalid": "The price is empty or not a number.",
+          "provenanceUnavailable": "A copied fact lost its source record: copy it again.",
+          "quoteBasisInvalid": "'Units per price' is empty or not a number.",
+          "routeCapInvalid": "The route cap is not a number.",
+          "routeCapMissing": "The route cap is required.",
+          "routeMarginInvalid": "The execution margin is empty or not a number.",
+          "routeMinimumInvalid": "A route minimum is not a number.",
+          "routeNoMode": "The Broker has no order mode in the price currency of this Asset.",
+          "routePriorityInvalid": "Route priority must be a whole number from 0.",
+          "selectedExceedsAvailable": "'Amount to use' exceeds the available amount in the same currency.",
+          "selectedInvalid": "'Amount to use' is not a number.",
+          "selectedMissing": "'Amount to use' is empty.",
+          "structureInvalid": "A field does not match the planner contract: {path}.",
+          "targetInvalid": "The target is not a number from 0.",
+          "targetTotalNotHundred": "The target total is {total}%, it must be 100% (control).",
+          "valuationCurrencyMissing": "The valuation currency is missing."
+        },
+        "removal": {
+          "cash": "Cash row {broker} · {currency}",
+          "funding": "Funding route {source} → {broker}",
+          "itemsLabel": "Also removed from the draft",
+          "message": "It leaves the draft only; nothing changes in the system.",
+          "route": "Order route {asset} · {broker}",
+          "target": "Its target percentage",
+          "title": "Remove {name}?"
+        },
+        "restoreCopied": "Restore the copied value",
+        "result": {
+          "allocationHint": "Backend weights only (target and after). No 'before': in a pure PAC it is 0 by construction.",
+          "assets": {
+            "asset": "Asset",
+            "buyMid": "Purchase (mid)",
+            "final": "After",
+            "finalValue": "Value after",
+            "residual": "Residual",
+            "residualHint": "Residual = the backend residual (after − target). The interface subtracts nothing.",
+            "target": "Target",
+            "targetValue": "Target value",
+            "totals": "Totals (accounting)"
+          },
+          "badges": {
+            "decimalVerified": "Verified in Decimal",
+            "gapBounded": "Bounded gap",
+            "infeasibilityProven": "Infeasibility proven",
+            "infeasible": "Infeasible with these constraints",
+            "noIncumbent": "No plan within the limits",
+            "noOperation": "No operation",
+            "notProven": "Optimality not proven",
+            "optimalProven": "Proven optimal",
+            "planAvailable": "Plan available"
+          },
+          "collapseAll": "Collapse all",
+          "detail": {
+            "cashDebit": "Cash debit",
+            "chargePrice": "Charge price",
+            "chargeWithMargin": "{price} · margin {margin}",
+            "conversion": "Conversion",
+            "conversionAction": "action {sequence} · {source} → {destination} · 1 {source} = {rate} {destination} effective",
+            "economicQuantity": "Economic quantity",
+            "fee": "Fee",
+            "hideProvenance": "Hide provenance",
+            "instruction": "Instruction",
+            "marginCost": "Margin cost",
+            "midPrice": "Mid price",
+            "midValue": "Mid value",
+            "minimumFacts": "if active {ifActive} · required {required}",
+            "minimums": "Minimums",
+            "priceDate": "Price date",
+            "quantityEstimated": "{quantity} units (estimated)",
+            "quantityExact": "{quantity} units (exact)",
+            "route": "Route",
+            "routeFacts": "priority {priority} · cap {cap}",
+            "showProvenance": "Show provenance ({count})",
+            "sourcePrice": "Source price",
+            "spreadLoss": "Spread loss",
+            "staleQuote": "{count, plural, one {# day} other {# days}} old · accepted",
+            "title": "Order {sequence} · {asset} · {broker} · {currency}"
+          },
+          "domains": {
+            "broker": "Broker",
+            "fx": "FX rates",
+            "market_data": "Market data",
+            "portfolio": "Portfolio",
+            "wac": "Average cost (WAC)"
+          },
+          "expandAll": "Expand all",
+          "exposures": {
+            "nothingDeclared": "No classification declared · 100% uncategorised",
+            "public": "Public weights: identical with privacy on.",
+            "uncategorised": "Uncategorised",
+            "uncategorisedHint": "“Uncategorised” is the share with no declared classification."
+          },
+          "failure": {
+            "hideDetails": "Hide details",
+            "notes": {
+              "invalid": "Messages translated by the interface; amounts masked when privacy is on. The backend code is under Details.",
+              "needs_input": "Draft intact. No Asset was removed silently: add the missing fact or remove the Asset yourself.",
+              "unsupported": "Not an error in your data: this version of the Tool does not handle the case. No calculation was run."
+            },
+            "nothingCalculated": "the backend calculated nothing",
+            "showDetails": "Details",
+            "titles": {
+              "invalid": "Input not valid",
+              "needs_input": "More data needed",
+              "unsupported": "Scenario not supported"
+            }
+          },
+          "header": {
+            "basis": "Scenario {date} · Currency {currency} · draft rev. {revision} · Backend/API {version}",
+            "calculateNew": "Calculate new plan",
+            "l2": "L2 distance {value}",
+            "notes": "{count, plural, =0 {no notes} one {# note} other {# notes}}",
+            "shortfall": "Not invested {value}",
+            "title": "Calculated plan"
+          },
+          "kpi": {
+            "explicitCost": "Explicit costs",
+            "finalInvested": "Invested after",
+            "fixedReference": "Fixed reference",
+            "funding": "Funding selected {selected} · reachable {reachable} · trapped {trapped}",
+            "orders": "Orders",
+            "shortfall": "Not invested (U)",
+            "shortfallParts": "U = free cash {free} + economic losses {losses} + rounding {rounding}",
+            "source": "Every figure comes from the backend accounting; the interface adds nothing up.",
+            "title": "Key figures"
+          },
+          "ledger": {
+            "fields": {
+              "broker_withheld_tax": "Tax withheld by the Broker",
+              "buy_debit": "Purchases",
+              "buy_fees": "BUY fees",
+              "final_physical": "Final physical",
+              "final_spendable": "Final spendable",
+              "funding_in": "Funding in",
+              "funding_out": "Funding out",
+              "fx_credit": "FX credit",
+              "fx_debit": "FX debit",
+              "gross_sell_credit": "Sales",
+              "initial_selected": "Initial selected",
+              "rounding_delta": "Rounding",
+              "self_reserved_tax": "Tax reserved by you",
+              "sell_fees": "SELL fees"
+            },
+            "freeCash": "Free cash (accounting): {amount}",
+            "hideZero": "Hide the zero rows",
+            "item": "Item",
+            "showZero": "Show {count, plural, one {# zero row} other {# zero rows}}",
+            "zeroHint": "Sales, SELL fees, withheld and reserved taxes: always 0 in PAC 2.0.0."
+          },
+          "notes": "Notes from the backend",
+          "outcomes": {
+            "incumbent_found": "Plan found",
+            "infeasible_proven": "Infeasible",
+            "no_incumbent": "No plan found",
+            "no_op": "No operation"
+          },
+          "plan": {
+            "cashDebit": "Cash debit",
+            "detail": "Detail",
+            "fee": "Fee",
+            "funding": "Funding",
+            "fundingDetail": "funding route · priority {priority} · {reason}",
+            "fx": "FX",
+            "fxAmounts": "debit {debit} → credit {credit}",
+            "fxRates": "1 {source} = {spot} {destination} spot · {effective} effective · spread loss {loss}",
+            "fxTitle": "{broker} · {source} → {destination} · for the route of {asset}",
+            "instruction": "Instruction",
+            "midPrice": "Mid price",
+            "ordersAt": "Orders · {broker}",
+            "privacyHint": "Market prices are public; quantities, amounts and charged fees are wealth (privacy).",
+            "sequence": "Seq",
+            "sequenceHint": "In the backend sequence order: the interface recalculates nothing."
+          },
+          "platform": {
+            "draftIntact": "The draft is intact.",
+            "retry": "Retry",
+            "title": "Calculation failed · Tool platform error"
+          },
+          "proof": {
+            "absoluteGap": "Abs. gap",
+            "conflictWitness": "Conflicting rules: {codes}",
+            "decimalVerified": "plan verified in exact Decimal by the backend",
+            "dual": "Dual",
+            "exactObjectives": "Exact objective values (backend, Decimal)",
+            "floatingFinished": "The solver finished, but it reports floating numbers: optimality is not certified.",
+            "floatingUnfinished": "The solver stopped before closing every stage: this is the best plan found, not a proven one.",
+            "gapBounded": "Bounded gap",
+            "infeasible": "Infeasibility proven",
+            "latticeWitness": "{count, plural, one {# stage} other {# stages}} closed",
+            "notCertified": "Optimality is not certified.",
+            "notProven": "Not proven",
+            "objective": "Objective",
+            "optimal": "Proven optimal",
+            "oracleInfeasibleWitness": "{enumerated, plural, one {# candidate} other {# candidates}} enumerated · none feasible",
+            "oracleWitness": "{enumerated, plural, one {# candidate} other {# candidates}} enumerated · {feasible} feasible · {objectives, plural, one {# objective} other {# objectives}} of the cascade verified",
+            "ordinal": "Ord",
+            "outcome": "Outcome",
+            "primal": "Primal",
+            "proof": "Proof",
+            "reasons": {
+              "allocation": {
+                "exact_proof_not_established": "an exact proof was not established",
+                "solver_not_required": "not required: the domain was enumerated exactly"
+              },
+              "portfolio_rebalancer": {
+                "sell_irreducibility_unresolved": "it was not established that no sale can be removed"
+              }
+            },
+            "relativeGap": "Rel. gap",
+            "reportedFloating": "reported in floating point",
+            "scope": "Scope",
+            "scopes": {
+              "global": "global scope",
+              "incumbent_face": "incumbent face"
+            },
+            "solverNotRun": "Solver not run",
+            "solverStages": "Solver stages",
+            "sources": {
+              "deterministic_conflict": "deterministic conflict",
+              "exhaustive_oracle": "exhaustive oracle",
+              "score_lattice_closure": "score lattice closure"
+            },
+            "status": "Status",
+            "statuses": {
+              "finished": "finished",
+              "unfinished": "unfinished"
+            },
+            "stop": "Stop",
+            "tieBreak": "Final tie-break: {code}.",
+            "tieBreakClosed": "tie-break closed"
+          },
+          "reasons": {
+            "allocation": {
+              "fund_declared_orders": "to pay for the orders of the plan"
+            }
+          },
+          "sections": {
+            "allocation": "Allocation per Asset · % of the invested value",
+            "assets": "Assets · values in the valuation currency",
+            "exposures": "Exposures · public weights",
+            "ledger": "Balances per Broker and currency",
+            "plan": "Operational plan · in the backend sequence order",
+            "proof": "Proof and solver"
+          },
+          "stale": {
+            "body": "You changed the configuration after this calculation. The values and orders below can still be consulted, but they no longer describe the current draft.",
+            "discard": "Discard the previous result",
+            "review": "Back to Review",
+            "revisions": "Result snapshot rev. {result} · Current draft rev. {draft}",
+            "title": "Result not up to date"
+          },
+          "states": {
+            "infeasible": {
+              "body": "Proven: no combination meets every hard constraint together.",
+              "constraints": "Hard constraints involved (from the request; caps and minimums masked with privacy on):",
+              "funding": "Liquidity reachable: {amount}",
+              "minimum": "{asset} · {broker}: required minimum {minimum}",
+              "note": "The interface does not choose which constraint to relax: it lists them. No partial plan is shown as valid.",
+              "title": "Infeasible with these constraints"
+            },
+            "limit": {
+              "complete": "The result below stays complete and can be consulted.",
+              "node": "The solver stopped at the node limit with a valid plan. A better one may exist.",
+              "stages": "Stages: {finished} finished · {unfinished} unfinished · no certified gap.",
+              "time": "The solver stopped at the time limit with a valid plan. A better one may exist."
+            },
+            "noIncumbent": {
+              "body": "The solver found no plan before the limit. This is not a proof that no plan exists.",
+              "tips": "To reduce the search: fewer Assets or routes, tighter caps, larger steps.",
+              "title": "No plan within the limits"
+            },
+            "noOp": {
+              "body": "With {amount} no purchase meets the constraints: the plan is to do nothing.",
+              "empty": "No order, no FX, no funding.",
+              "title": "No operation"
+            }
+          },
+          "stop": {
+            "completed": "Completed",
+            "node_limit": "Node limit",
+            "time_limit": "Time limit"
+          },
+          "text": {
+            "buyAmount": "buy for {amount}",
+            "buyUnits": "buy {quantity} units",
+            "none": "none",
+            "pricePer": "{price} per {quantity} units",
+            "stepAmount": "step {step}",
+            "stepUnits": "step {step} units",
+            "units": "{quantity} units"
+          },
+          "title": "Calculation result",
+          "unavailable": {
+            "dependency_unavailable": "not available",
+            "not_applicable": "not applicable",
+            "zero_current_invested": "not defined: nothing invested before",
+            "zero_final_invested": "not defined: nothing invested after"
+          },
+          "weights": {
+            "finalShort": "A",
+            "targetShort": "T"
+          }
+        },
+        "review": {
+          "assets": "{count} · prices {priced}/{count} · {stale} not of the day",
+          "brokers": "{operative} operative · {fundingOnly} funding only",
+          "calculate": "Calculate plan",
+          "edit": "Edit",
+          "exposureRows": "{count, plural, one {# exposure} other {# exposures}}",
+          "factEntity": "Fact",
+          "factOrigin": "Origin",
+          "factStep": "Step",
+          "factValue": "Value",
+          "factsAll": "Full snapshot",
+          "factsChanged": "Only modified / not of the day",
+          "factsEmpty": "No fact in this view.",
+          "factsLabel": "Facts of the snapshot",
+          "fx": "{count, plural, one {# pair} other {# pairs}} · {stale} not of the day",
+          "intro": "The backend will receive this complete copy, and only this.",
+          "noFx": "no conversion rate",
+          "noOrders": "No order will be sent to the Broker. The calculation uses only this payload.",
+          "price": "{price} / {units} {count, plural, one {unit} other {units}}",
+          "problems": "Complete these fields before calculating:",
+          "routes": "{count, plural, one {# BUY route} other {# BUY routes}}",
+          "selectedOf": "{selected} of {available}",
+          "showResult": "See the last result",
+          "sources": "{count, plural, one {# source} other {# sources}}",
+          "targets": "{count, plural, one {# Asset} other {# Assets}}"
+        },
+        "route": {
+          "cap": "Cap",
+          "capHint": "High default, editable",
+          "fee": "BUY {currency} of {broker} · fixed {fixed} + {rate}%",
+          "margin": "Execution margin",
+          "minimumIfActive": "Minimum if you operate",
+          "noPrice": "No price yet: the mode follows the price currency.",
+          "none": "None",
+          "priority": "Priority",
+          "priorityHint": "0 = preferred",
+          "ready": "ready",
+          "requiredMinimum": "Required minimum"
+        },
+        "routing": {
+          "asset": "Asset",
+          "capRule": "The high cap does not widen the search: the real limit of every order is the lowest of cap and resources.",
+          "fundingOnly": "{name} · funding only, not selectable",
+          "next": "Next Asset",
+          "previous": "Previous Asset",
+          "unitRule": "Minimum and cap follow the mode: units for 'number of units', an amount for 'amount'. No free choice."
+        },
+        "scenario": {
+          "asOf": "Reference date",
+          "currency": "Valuation currency",
+          "intro": "PAC allocator · initial quantities zero (pure PAC).",
+          "noValues": "No financial value in this step."
+        },
+        "scope": {
+          "inactive": "Inactive",
+          "none": "No Broker you can read.",
+          "notSelectable": "Not selectable: {role} access, not read",
+          "share": "share {share}"
+        },
+        "source": {
+          "errors": {
+            "assetNotFound": "The Portfolio API did not find an Asset (404). Nothing was copied.",
+            "brokerForbidden": "The Portfolio API refused a Broker (403): only Brokers you own can be copied."
+          }
+        },
+        "steps": {
+          "assets": "Assets",
+          "brokers": "Brokers",
+          "fx": "FX",
+          "liquidity": "Liquidity",
+          "review": "Review",
+          "routing": "Routing",
+          "scenario": "Scenario",
+          "strategy": "Strategy",
+          "targets": "Targets"
+        },
+        "stopped": {
+          "body": "You stopped waiting. If the server finishes, its answer is discarded. The configuration is intact.",
+          "previous": "You stopped waiting: the plan below is the previous one.",
+          "title": "Calculation stopped"
+        },
+        "strategy": {
+          "cascade": "Order of the objectives, most important first:",
+          "fromContract": "Strategies come from the backend contract.",
+          "intro": "Every constraint of the previous steps stays hard.",
+          "noParameters": "Additional parameters: none.",
+          "none": "The backend contract offers no strategy: the plan cannot be calculated."
+        },
+        "summary": {
+          "assets": "Assets",
+          "assetsWithRoute": "Assets with a route",
+          "brokers": "Brokers",
+          "cash": "Cash rows",
+          "contributions": "Contributions",
+          "copied": "Copied facts",
+          "currencies": "Currencies",
+          "currency": "Currency",
+          "date": "Date",
+          "exposures": "Exposures",
+          "fundingOnly": "Funding only",
+          "fundingRoutes": "Funding routes",
+          "manual": "Manual",
+          "modes": "Order modes",
+          "modified": "Modified",
+          "noFuture": "No future value calculated.",
+          "pairs": "Pairs",
+          "prices": "Prices",
+          "revision": "Draft rev.",
+          "routes": "BUY routes",
+          "snapshot": "Snapshot",
+          "sources": "Sources",
+          "spread": "Spread",
+          "stale": "Not of the day",
+          "strategy": "Strategy",
+          "title": "Summary",
+          "toggle": "Summary",
+          "total": "Total (control)",
+          "versions": "Backend/API {api} · UI {ui}"
+        },
+        "targets": {
+          "control": "(informative control)",
+          "copyDistribution": "Copy current distribution",
+          "intro": "How to distribute the liquidity. Not a preview of the plan.",
+          "remaining": "Remaining {value}",
+          "shape": "Distribution",
+          "target": "Target %",
+          "total": "Total {value}",
+          "wire": "Weights in percent; they go to the backend as decimals."
+        },
+        "toolErrors": {
+          "cleanup_failed": "The calculation finished, but the platform could not clean up after it.",
+          "execution_failed": "The calculation failed inside the tool.",
+          "execution_limit": "The calculation hit a resource limit of the tool platform.",
+          "execution_timeout": "The calculation exceeded the execution time limit.",
+          "input_limit_exceeded": "The scenario is larger than the tool accepts. Remove Assets, routes or rows.",
+          "invalid_output": "The tool produced an output that does not match its contract. It was discarded.",
+          "invalid_parameters": "The backend rejected the request structure. No calculation was run.",
+          "memory_limit": "The calculation exceeded the memory limit.",
+          "output_limit_exceeded": "The result is larger than the platform accepts.",
+          "queue_full": "Too many calculations are waiting. Try again in a moment.",
+          "queue_timeout": "The calculation waited too long in the queue and was not started.",
+          "service_unavailable": "The tool service is unavailable.",
+          "tool_unavailable": "The tool is unavailable on the backend right now.",
+          "unknown_tool": "The backend does not know this tool.",
+          "version_mismatch": "The tool version changed on the backend. Reload the page to get the new interface.",
+          "worker_crashed": "The calculation process stopped unexpectedly."
+        },
+        "units": {
+          "shares": "units"
+        }
+      }
     },
     "version": "Version",
     "allocation": {
