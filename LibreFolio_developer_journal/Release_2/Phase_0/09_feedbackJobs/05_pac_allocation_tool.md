@@ -253,7 +253,9 @@ dal modello numerico e dagli adapter di copia autorizzati.
 > dimostrato; `infeasible` sul primo stage vale impossibile dimostrato; un limite vale tempo
 > scaduto, con il miglior piano trovato o senza piano. L'oracolo esaustivo esce dal codice di
 > produzione e resta nei test, come gate di accordo sui casi piccoli. Ogni piano pubblicato
-> resta verificato dal replay Decimal. SCIP è installato (SCIP 10.0, PySCIPOpt 6.2.1).
+> resta verificato dal replay Decimal. Se dopo gli arrotondamenti HALF_UP supera una cassa di al
+> più N unità minime (1 per importo arrotondato), esce con l'importo da aggiungere (QX1-b, 25/09).
+> SCIP è installato (SCIP 10.0, PySCIPOpt 6.2.1).
 > Motivo: con l'oracolo davanti a SCIP, PAC comuni fra circa 13 000 e 200 000 candidati
 > finivano in `execution_limit` (difetto X1). Esecuzione: Passo F di
 > [`plan-phase00PacRound5PostMerge`](../13_pacAllocator/implementation/plan-phase00PacRound5PostMerge.prompt.md).
