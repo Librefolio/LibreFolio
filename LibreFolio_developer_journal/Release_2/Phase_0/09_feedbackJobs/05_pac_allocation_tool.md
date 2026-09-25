@@ -245,6 +245,18 @@ dal modello numerico e dagli adapter di copia autorizzati.
 > conflict witness. SCIP è candidato additivo approvato, non ancora installato o
 > provato. Restano aperti capacità e payload object-only sotto 262144 byte;
 > implementazione ancora FROZEN.
+>
+> **Aggiornamento 2026-09-25 (D-X1, decisione del developer del 24/09):** sostituisce la
+> «proof pubblica conservativa» qui sopra. In produzione gira solo SCIP, e il suo esito fa
+> fede: «in prod deve girare solo l'ottimizzatore con l'assunzione che l'output che dà sarà
+> corretto o andrà in timeout». SCIP `optimal` su tutti gli stage della cascata vale ottimo
+> dimostrato; `infeasible` sul primo stage vale impossibile dimostrato; un limite vale tempo
+> scaduto, con il miglior piano trovato o senza piano. L'oracolo esaustivo esce dal codice di
+> produzione e resta nei test, come gate di accordo sui casi piccoli. Ogni piano pubblicato
+> resta verificato dal replay Decimal. SCIP è installato (SCIP 10.0, PySCIPOpt 6.2.1).
+> Motivo: con l'oracolo davanti a SCIP, PAC comuni fra circa 13 000 e 200 000 candidati
+> finivano in `execution_limit` (difetto X1). Esecuzione: Passo F di
+> [`plan-phase00PacRound5PostMerge`](../13_pacAllocator/implementation/plan-phase00PacRound5PostMerge.prompt.md).
 
 DoD, esempi numerici, superfici file:riga, rischi e oracoli indipendenti sono nel
 [piano sprint](06_piano_sprint.md). Nessun server MCP o cambiamento dei motori FIFO/WAC
