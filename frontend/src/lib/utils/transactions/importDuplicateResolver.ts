@@ -75,6 +75,71 @@ export function resolverSelectionFor(group: DuplicateGroup, rowIndex: number, tx
     return defaultKeeperIndices(group, txArr, priorityIds).has(rowIndex);
 }
 
+/** The user's explicit choices in the resolver: the groups they touched, and the keep flag per row. */
+export interface ResolverChoices {
+    touchedKeys: Set<string>;
+    selections: Record<number, boolean>;
+}
+
+/** Choices carried onto a new duplicate report, plus the groups the user has not seen in their current form. */
+export interface CarriedResolverChoices extends ResolverChoices {
+    /** New or changed groups of the new report, in its order. Their choices are not carried. */
+    changed: DuplicateGroup[];
+}
+
+/** The identity of a group across two reports: its members, whatever their order. */
+function memberSignature(group: DuplicateGroup): string {
+    return [...group.memberIndices].sort((a, b) => a - b).join(',');
+}
+
+/**
+ * Carry the resolver's explicit choices from one duplicate report to the next.
+ *
+ * A group is recognised by its members, not by its key: the key embeds the asset identity, which
+ * turns from an extracted code into a database id when the user binds an unresolved asset — the
+ * very change that triggers a recheck — while the members stay the same. A touched group found
+ * again keeps its choices under its new key; an untouched one keeps nothing and recomputes its
+ * defaults. A group with no same-member predecessor is `changed`: the user never arbitrated it in
+ * this form.
+ *
+ * With the rows of both reports, a touched group is also `changed` when one of its copies started
+ * or stopped colliding firmly with the database or the bulk editor. The database match narrows to
+ * the bound asset only once the asset is resolved, so binding a group to another asset can turn a
+ * unique copy into a stored duplicate — and a choice made before that would import it.
+ */
+export function carryResolverChoices(previousGroups: DuplicateGroup[], previous: ResolverChoices, nextGroups: DuplicateGroup[], rows?: {previousRows: MergedTx[]; nextRows: MergedTx[]}): CarriedResolverChoices {
+    const previousBySignature = new Map(previousGroups.map((group) => [memberSignature(group), group] as const));
+    const before = new Map((rows?.previousRows ?? []).map((row) => [row.index, row] as const));
+    const after = new Map((rows?.nextRows ?? []).map((row) => [row.index, row] as const));
+    const verdictChanged = (index: number): boolean => {
+        const was = before.get(index);
+        const now = after.get(index);
+        return was !== undefined && now !== undefined && hasFirmOutsideCollision(was) !== hasFirmOutsideCollision(now);
+    };
+
+    const touchedKeys = new Set<string>();
+    const selections: Record<number, boolean> = {};
+    const changed: DuplicateGroup[] = [];
+    for (const group of nextGroups) {
+        const predecessor = previousBySignature.get(memberSignature(group));
+        if (!predecessor) {
+            changed.push(group);
+            continue;
+        }
+        if (!previous.touchedKeys.has(predecessor.key)) continue;
+        if (group.memberIndices.some(verdictChanged)) {
+            changed.push(group);
+            continue;
+        }
+        touchedKeys.add(group.key);
+        for (const index of group.memberIndices) {
+            const kept = previous.selections[index];
+            if (kept !== undefined) selections[index] = kept;
+        }
+    }
+    return {touchedKeys, selections, changed};
+}
+
 /** Indices of members whose `keyOf` value is NOT the majority within the group (empty if all equal). */
 export function outlierIndexSet(members: MergedTx[], keyOf: (mt: MergedTx) => string): Set<number> {
     const counts = new Map<string, number>();

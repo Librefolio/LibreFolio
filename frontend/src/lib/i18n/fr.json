@@ -741,7 +741,8 @@
       "title": "Actifs à créer manuellement",
       "body": "Associez un actif existant ou créez-le manuellement. Les prochains imports reconnaîtront son identifiant enregistré si la correspondance est unique."
     },
-    "selectionChangedReview": "Le dernier contrôle des doublons a modifié la sélection. Vérifiez-la avant l'import."
+    "selectionChangedReview": "Le dernier contrôle des doublons a modifié la sélection. Vérifiez-la avant l'import.",
+    "duplicatesChangedReview": "Le dernier contrôle des doublons a trouvé des doublons nouveaux ou modifiés entre vos fichiers. Vérifiez-les avant l'import."
   },
   "brokers": {
     "title": "Courtiers",

@@ -74,7 +74,7 @@
     import {cmpSourceFromTx, cmpSourceFromExisting, compareTypeCellHtml, type CmpSource} from '$lib/utils/transactions/importCompare';
     import {createNamesFor, createOtherFor, duplicateCandidates, resolutionLabel as resolutionLabelPure} from '$lib/utils/transactions/importResolutionHelpers';
     import {brokerIdForTx, beforeOpeningInfo, isBeforeOpening as isBeforeOpeningPure, isRowAssetResolved as isRowAssetResolvedPure, shouldAutoSelectOnRecheck} from '$lib/utils/transactions/importRowState';
-    import {groupPartitions as groupPartitionsPure, defaultKeeperIndices as defaultKeeperIndicesPure, resolverSelectionFor as resolverSelectionForPure, outlierIndexSet} from '$lib/utils/transactions/importDuplicateResolver';
+    import {groupPartitions as groupPartitionsPure, defaultKeeperIndices as defaultKeeperIndicesPure, resolverSelectionFor as resolverSelectionForPure, outlierIndexSet, carryResolverChoices, type ResolverChoices} from '$lib/utils/transactions/importDuplicateResolver';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import {onboardingGuide, type ImportGuideStepId} from '$lib/features/onboarding/onboardingGuide.svelte';
 
@@ -823,12 +823,25 @@
     }
 
     /** Union of two candidate lists, keeping the strongest confidence seen for each asset. */
-    /** Turns a per-row duplicate verdict into resolver groups and folds the panel sensibly. */
-    function rebuildDuplicateGroups(txArr: MergedTx[], assetMap: Map<number, AssetResolution>) {
+    /**
+     * Turns a per-row duplicate verdict into resolver groups and folds the panel sensibly.
+     *
+     * With the previous report, the user's resolver choices are carried over to the groups they
+     * already arbitrated in the same form; the groups they have not are returned as changed.
+     */
+    function rebuildDuplicateGroups(txArr: MergedTx[], assetMap: Map<number, AssetResolution>, previous?: {groups: DuplicateGroup[]; rows: MergedTx[]; choices: ResolverChoices}): DuplicateGroup[] {
         // The editor verdict first: the resolver below reads it to choose the keepers.
         detectPendingBulkDuplicates(txArr, assetMap);
         const groups = buildDuplicateGroups(txArr, assetMap);
         duplicateGroups = groups;
+        let changed: DuplicateGroup[] = [];
+        if (previous) {
+            // Before the resolver runs below: it reads these choices for every group member.
+            const carried = carryResolverChoices(previous.groups, previous.choices, groups, {previousRows: previous.rows, nextRows: txArr});
+            duplicateResolverTouchedKeys = carried.touchedKeys;
+            duplicateResolverSelections = carried.selections;
+            changed = carried.changed;
+        }
         // Nothing partial to arbitrate ⇒ every group is a total overlap, which the resolver
         // already keeps one copy of. The panel stays available but folded, with a badge that
         // says so — showing an open resolver full of decisions that need no decision buries
@@ -837,6 +850,7 @@
         expandedDuplicateTiers = new Set<DuplicateTier>();
         applyPendingDuplicateGroups(txArr, groups);
         markPendingBulkDuplicates(txArr);
+        return changed;
     }
 
     /**
@@ -846,8 +860,12 @@
      * The report returned by `/parse` answers the question "does the plugin's raw reading of
      * this file already exist?". After the user fixes a row that the plugin misread, that is
      * no longer the question being asked, so the answer is re-requested rather than reused.
+     *
+     * The resolver choices survive the recheck on the groups the user already arbitrated in
+     * the same form. Returns the groups they have not — new, or changed — which is empty when
+     * the recheck did not complete.
      */
-    async function refreshDuplicateReport(preserveSelection = false): Promise<void> {
+    async function refreshDuplicateReport(preserveSelection = false): Promise<DuplicateGroup[]> {
         const request = ++duplicateRequestEpoch;
         const context = wizardDataEpoch;
         const session = getClientSessionGeneration();
@@ -856,7 +874,7 @@
         duplicateRecheckError = null;
         if (mergedTransactions.length === 0) {
             duplicateGroups = [];
-            return;
+            return [];
         }
 
         // Duplicate detection is scoped to one broker, and an import can span several.
@@ -868,7 +886,7 @@
             list.push(m);
             byBroker.set(brokerId, list);
         }
-        if (byBroker.size === 0) return;
+        if (byBroker.size === 0) return [];
 
         const resolvedByFakeId = new Map<number, number>();
         for (const res of assetResolutions) {
@@ -887,7 +905,7 @@
                     broker_id: brokerId,
                     transactions: asked.map(({clone}) => clone) as never,
                 });
-                if (!current()) return;
+                if (!current()) return [];
                 const pendingDeleteSet = new Set(pendingDeleteTxIds);
                 const record = (entries: unknown[], status: DuplicateStatus) => {
                     for (const raw of entries as Array<{tx_row_index: number; tx_existing_matches?: BrimDuplicateMatch[]}>) {
@@ -903,16 +921,16 @@
                 record(report.tx_possible_duplicates ?? [], 'possible');
             }
         } catch (e) {
-            if (!current()) return;
+            if (!current()) return [];
             // A failed re-check must not silently fall back to the stale verdict: say so and
             // keep what we have, so the user can still arbitrate manually.
             duplicateRecheckError = extractErrorMessage(e);
             duplicateRecheckRunning = false;
-            return;
+            return [];
         } finally {
             if (request === duplicateRequestEpoch) duplicateRecheckRunning = false;
         }
-        if (!current()) return;
+        if (!current()) return [];
 
         const assetMap = new Map<number, AssetResolution>(assetResolutions.map((r) => [r.fakeAssetId, r]));
         const txArr = mergedTransactions.map((m) => {
@@ -922,12 +940,12 @@
             return rowAfterRecheck(m, verdict.get(m.index), {beforeOpening, preserveSelection});
         });
 
-        duplicateResolverTouchedKeys = new Set();
-        duplicateResolverSelections = {};
+        const previous = {groups: duplicateGroups, rows: mergedTransactions, choices: {touchedKeys: duplicateResolverTouchedKeys, selections: duplicateResolverSelections}};
         expandedDuplicateGroupKeys = new Set();
-        rebuildDuplicateGroups(txArr, assetMap);
+        const changed = rebuildDuplicateGroups(txArr, assetMap, previous);
         mergedTransactions = txArr;
         duplicateRecheckDone = true;
+        return changed;
     }
 
     function resolveAsset(fakeAssetId: number, realAssetId: number) {
@@ -1257,9 +1275,16 @@
             if (!duplicateRecheckDone) {
                 const context = wizardDataEpoch;
                 const previousSelection = new Set(mergedTransactions.filter((row) => row.selected && !beforeOpeningIndices.has(row.index)).map((row) => row.index));
-                await refreshDuplicateReport(true);
+                const changedGroups = await refreshDuplicateReport(true);
                 if (!open || context !== wizardDataEpoch || !isClientSessionCurrent(session) || duplicateRecheckError || !duplicateRecheckDone) return;
-                if (stepIsActive('duplicates')) {
+                // The groups already arbitrated kept their choices through the recheck: only one the
+                // user has not seen in its current form is a reason to go back to that step.
+                if (changedGroups.length > 0) {
+                    notify({
+                        name: 'tx.import.duplicates.changed',
+                        detail: {groups: changedGroups.map((group) => ({key: group.key, memberIndices: [...group.memberIndices].sort((a, b) => a - b)}))},
+                        toast: {variant: 'warning', message: $t('importWizard.duplicatesChangedReview')},
+                    });
                     currentStepId = 'duplicates';
                     return;
                 }

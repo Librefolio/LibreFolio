@@ -741,7 +741,8 @@
       "title": "Asset da creare a mano",
       "body": "Collega un asset esistente o crealo a mano. Nei prossimi import verrà riconosciuto dall'identificativo salvato, se univoco."
     },
-    "selectionChangedReview": "Il controllo finale dei duplicati ha cambiato la selezione. Rivedila prima di importare."
+    "selectionChangedReview": "Il controllo finale dei duplicati ha cambiato la selezione. Rivedila prima di importare.",
+    "duplicatesChangedReview": "Il controllo finale dei duplicati ha trovato duplicati nuovi o cambiati fra i tuoi file. Rivedili prima di importare."
   },
   "brokers": {
     "title": "Broker",
