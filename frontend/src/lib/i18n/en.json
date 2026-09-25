@@ -741,7 +741,8 @@
       "title": "Assets to create manually",
       "body": "Link an existing asset or create it manually. Future imports will recognize its saved identifier when the match is unique."
     },
-    "selectionChangedReview": "The final duplicate check changed the selection. Review it before importing."
+    "selectionChangedReview": "The final duplicate check changed the selection. Review it before importing.",
+    "duplicatesChangedReview": "The final duplicate check found new or changed duplicates between your files. Review them before importing."
   },
   "brokers": {
     "title": "Brokers",
