@@ -3220,7 +3220,8 @@
       "worker_busy": "Le service de calcul est occupé. Réessayez dans un instant.",
       "execution_timeout": "Le calcul a pris trop de temps et a été interrompu.",
       "optimization_infeasible": "Aucune allocation ne satisfait les contraintes demandées.",
-      "unknown": "Cette mesure n'a pas renvoyé de résultat."
+      "unknown": "Cette mesure n'a pas renvoyé de résultat.",
+      "answer_discarded": "La réponse a été écartée parce que les données ont changé pendant son arrivée. Relancez l'analyse."
     },
     "warnings": {
       "sharpe_undefined": "Sharpe est indéfini car la volatilité est nulle.",
