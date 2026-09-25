@@ -5,6 +5,17 @@ G5 OPEN.
 **Dipende da:** planning checkpoint, autorizzazione prodotto, handshake gruppo C.
 **Blocca:** core, shell frontend, solver e client generato.
 
+> ⚠️ **Nota 2026-09-24 (round 5).** Lane, selector e simboli P1 citati in questo piano
+> descrivono la fase in cui è stato scritto. Lo stato corrente è altrove:
+> - lane `6153` → oggi `6151` (suite) e `6161` (copia di prod);
+> - `pac-analyze`, `pac-tool` e `pac-planner-capacity` non esistono: i selector reali
+>   sono in [handoff §0.4](../../16_toolPlatform/handoff-pac-D.md);
+> - P1 `analyze` rimosso il 2026-09-21 (`b82e59ffa`).
+>
+> L'avanzamento è nella tabella del [README](README.md) e nel
+> [piano Round 5](plan-phase00PacRound5PostMerge.prompt.md). Le note datate qui sotto
+> restano come evidenza storica. Lo **Stato** in testa non è stato rimisurato.
+
 ← Master: [piano implementativo](plan-phase00PacRebalancerImplementation.prompt.md)
 ← Autorità: [target](../plan-phase00PacRebalancerTargetDesign.prompt.md) ·
 [architettura](../plan-phase00PacRebalancerArchitecture.prompt.md)
@@ -135,6 +146,15 @@ Ogni request include `currency_specs[]`. Ogni `CurrencySpec` contiene codice e
 dominio risolve il codice tramite utility valuta backend estesa con Babel CLDR
 `get_currency_precision`; uno scenario manuale invia il codice ma non inventa
 la precisione. Metadata irrisolvibile produce `needs_input`/`unsupported`.
+
+> **Superato il 2026-09-24 (Round5, decisione Q-C0-1 del developer)**: «cambiamo la api
+> semplicemente, tanto le valute sono standard e vincolate ad essere quelle di babel».
+> `currency_specs[]` esce dalla request dei tre planner e dalla risposta della sorgente di
+> copia: il backend ricava `minor_unit = 10^-cifre` da `babel.get_currency_precision` per ogni
+> codice dello scenario, già vincolato a ISO 4217 da `CurrencyCode`. `CurrencySpec` resta come
+> riga dei cataloghi in output. Il principio sopra — quantum backend-derived, mai scritto
+> dall'utente — non cambia; cambia solo chi lo porta. Dettaglio in
+> `plan-phase00PacRound5PostMerge.prompt.md`, C0b.1.
 
 Numeri input: stringhe fixed-point finite. Numeri derivati che possono essere
 non terminanti usano una union oggetto nominata e discriminata:

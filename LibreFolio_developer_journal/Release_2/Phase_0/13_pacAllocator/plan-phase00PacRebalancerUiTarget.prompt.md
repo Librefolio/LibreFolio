@@ -16,7 +16,23 @@
 > **Correzione dati 2026-09-16:** layout approvato invariato; PAC e Rebalancer
 > mostrano un primario globale `L2_fixed` e una variante margine BUY-only che
 > congela il primario. D∞/D1 e percentuali finali sono diagnostici.
-
+>
+> ⚠️ **Erratum 2026-09-24 (round 5, workstream D).**
+>
+> 1. **Versioni.** Le stringhe `Backend/API 1.0.0 · UI 1.0.0` e `schema 1.0.0` negli ASCII
+>    (§4.1, Nota CTA, §8.1, B16, C1, C14) sono illustrative e anteriori al congelamento del
+>    wire. Il contratto vivo è `pac_allocator` `2.0.0`, operazione `plan`
+>    ([handoff §0](../16_toolPlatform/handoff-pac-D.md)).
+> 2. **Delta.** Quanto di questo target la 2.0.0 può mostrare sta nel
+>    [piano Round 5](implementation/plan-phase00PacRound5PostMerge.prompt.md), Passo C0:
+>    - solo il modo proporzionale;
+>    - nessuna variante margine;
+>    - deployment non calcolato;
+>    - i tipi di prova realmente prodotti.
+>
+>    Il layout approvato non cambia.
+> 3. **Privacy.** La §20.20 è riallineata alla decisione (c) del developer del 2026-09-22.
+> 4. **Decisioni del 2026-09-24.** Il delta C0 approvato prevale su alcune viste: elenco in §22.
 ## Come leggere l'artifact
 
 Le Review A/B/C/D e la configurazione finale sono state approvate dal developer.
@@ -2333,7 +2349,23 @@ non dalla tolerance floating del solver.
 
 ## 20.20 Privacy e provenance
 
-- Privacy mode oscura importi, quantità, costi, percentuali e valori grafici.
+- Privacy mode oscura il **patrimonio**, cioè ciò da cui si risale a quanto possiede l'utente
+  (decisione (c) del developer, 2026-09-22, `09_feedbackJobs/09_reperti_analisi_statica_20260922.md` §4):
+  - importi: liquidità, contributi, costi, valori degli ordini e controvalori;
+  - quantità detenute e da acquistare. Per queste la maschera è proposta per default, da
+    confermare nella review di dettaglio.
+
+  Restano visibili:
+  - percentuali, pesi obiettivo e scostamenti in punti percentuali;
+  - prezzi di mercato e tassi FX, formattati con `sensitivity: 'public'`;
+  - la valuta, anche sotto la maschera.
+
+  I grafici mostrano solo percentuali. La maschera è quella di `utils/privacy/maskable.ts`,
+  applicata dai formatter di `utils/currency/currencyFormat.ts`: il Tool non ne scrive una
+  propria.
+  > Testo approvato il 2026-09-16 e sostituito il 2026-09-24: «Privacy mode oscura importi,
+  > quantità, costi, percentuali e valori grafici.» Le percentuali e i valori grafici in
+  > percentuale non sono patrimonio secondo il criterio (c).
 - Status, issue, label campo e completezza restano leggibili.
 - Nessun payload in log browser, URL, analytics o error message.
 - Nessun dato reale nell'artifact, fixture o screenshot docs.
@@ -2571,3 +2603,4 @@ Tools Hub
 | C — risultati | **Approvata dal developer** | Matrix, nastri verticali/mappe, DataTable, piano operativo unico |
 | D — mobile/stati | **Approvata dal developer** | Stesso modello dati, card mobile, matrice outcome/proof/stop |
 | Finale | **Approvata dal developer** | Configurazione UI completa congelata come fonte Round 6 |
+| Round 5 · delta C0 (2026-09-24) | **Approvato dal developer** (Q-C0-F) | Prevale il [delta C0](implementation/plan-phase00PacRound5-C0UiDelta.prompt.md), §8.1.1: un prezzo o un tasso non del giorno mostra l'età e non chiede conferma (B7, B13: `[ Conferma dato stale ]` e «tasso stale confermato» non si implementano); il passo minimo della valuta lo ricava il backend; il target PAC (B11) riceve «Copia distribuzione corrente», come il B12; il tetto delle route parte alto e modificabile; le card della strategia nascono dal contratto. Le citazioni `UiTarget:NNN` del delta valgono su questo file così com'è: le note dopo il 24/09 si aggiungono solo in fondo o al posto di una riga vuota. |

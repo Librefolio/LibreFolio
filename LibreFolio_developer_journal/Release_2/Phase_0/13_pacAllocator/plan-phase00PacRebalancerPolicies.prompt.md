@@ -370,6 +370,11 @@ Rows è spareggio operativo.
 
 ## 7. PAC `min_fragmentation`
 
+> **Stato al 2026-09-24**: il disegno di questa sezione resta valido, ma la policy è fuori dal wire di
+> 2.0.0 (decisione Q-C0-4 del developer, `implementation/plan-phase00PacRound5PostMerge.prompt.md`
+> C0b.2). Torna quando esiste la sua cascata SCIP (Remediation, Fase 3), riallargando il `Literal` di
+> `PacPlannerRequest.policy` e `PacScenarioBasis.policy`.
+
 Pipeline:
 
 ```text
