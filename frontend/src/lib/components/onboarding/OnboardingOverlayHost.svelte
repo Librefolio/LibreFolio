@@ -638,7 +638,9 @@
             return;
         }
         if (current && presentation?.hostRoute && !matchesHostRoute(presentation.hostRoute, currentPath)) {
-            onboardingGuide.dismissHost({restartAtFirst: true});
+            // Leaving the host route suspends the guide on its current step: the stored
+            // position survives, and returning to the route resumes there (OB-9).
+            onboardingGuide.dismissHost();
             queueMicrotask(() => onboardingGuide.maybeStartQueued());
             return;
         }

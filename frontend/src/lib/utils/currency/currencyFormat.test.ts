@@ -19,10 +19,16 @@
  *     whether a signed amount is zero" below;
  *  4. `formatCurrencyCodeHtml` has no amount to hide and is untouched.
  *
- * Note the deliberate asymmetry with `riskAnalysisHelpers.formatCurrencyAmount`
- * and `LotComparisonChart.formatAxisCurrency`, which replace the whole `Intl`
- * string and so return a bare `•••` with no prefix. D8 governs this module, not
- * those; the difference is documented at both ends and is not to be harmonised.
+ * The two currency formatters that let `Intl` place the symbol now follow the
+ * same rules: `riskAnalysisHelpers.formatCurrencyAmount`, and the lot
+ * comparison axis, which moved from `LotComparisonChart` to
+ * `lotComparisonChartHelpers.formatAxisCurrency`. Both used to return a bare
+ * `•••`, currency and sign included. The product owner ruled on 2026-09-22 that
+ * privacy hides the number, not the currency, so both now keep the currency —
+ * through `maskCurrencyParts`, which masks only the digits of the `Intl` parts
+ * (the lot axis's fallback, for a code `Intl` rejects, appends the code after
+ * `maskFormattedNumber`) — and keep the sign outside the mask, as D8 does here.
+ * There is no asymmetry left to preserve.
  *
  * Because the sign is now outside the substitution, an assertion that the
  * prefix is present is no longer evidence that anything was masked —

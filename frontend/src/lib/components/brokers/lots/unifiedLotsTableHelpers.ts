@@ -11,10 +11,17 @@
  * the component: their output is styling, not logic, and asserting on it would
  * couple the tests to the theme.
  *
+ * Two formatters are not pure: `formatLotQuantityMasked` and `formatLotQuantityCell`
+ * read the privacy flag (decision D5′), so their output follows the toggle. They are
+ * here anyway, because the rule they carry — partial lots keep their open share under
+ * privacy — is logic worth a unit test.
+ *
  * @module brokers/lots/unifiedLotsTableHelpers
  */
 
 import type {BrokerLike} from '$lib/utils/broker/brokerColors';
+import {formatPercent} from '$lib/utils/core/formatPercent';
+import {maskableQuantity, PRIVACY_PLACEHOLDER, shouldMaskAmount} from '$lib/utils/privacy/maskable';
 
 /** Every state a FIFO lot can carry. */
 export type LotState = 'OPEN' | 'PARTIALLY_CLOSED' | 'CLOSED' | 'DISTRIBUTED' | 'IN_TRANSIT' | 'DEGRADED';
@@ -54,6 +61,31 @@ export function filterStates(stateList: readonly string[]): LotState[] {
  */
 export function formatLotQuantity(value: number | null, locale?: string): string {
     return value == null ? '—' : value.toLocaleString(locale, {minimumFractionDigits: 0, maximumFractionDigits: 6});
+}
+
+/**
+ * A lot quantity as the table renders it: masked under privacy (decision D5′ — a quantity
+ * next to a price is what the user owns), and still an em dash when absent, because masking
+ * an absence would claim a quantity the lot does not have.
+ */
+export function formatLotQuantityMasked(value: number | null, locale?: string): string {
+    return value == null ? '—' : maskableQuantity(formatLotQuantity(value, locale));
+}
+
+/**
+ * The quantity cell of a lot row: the open quantity, or `open / original` for a partially
+ * closed lot.
+ *
+ * Under privacy a partially closed lot keeps its reading key as the open share — `••• (60%)`
+ * (decision Q8). Telling a partial lot from a whole one was the reason D5 kept quantities
+ * visible; the share discloses no quantity, and percentages stay visible by D6. Without an
+ * original to divide by, the cell is the placeholder alone.
+ */
+export function formatLotQuantityCell(open: number | null, original: number | null, partial: boolean, locale?: string): string {
+    if (!partial) return formatLotQuantityMasked(open, locale);
+    if (!shouldMaskAmount()) return `${formatLotQuantity(open, locale)} / ${formatLotQuantity(original, locale)}`;
+    const share = ratioOrNull(open, original);
+    return share == null ? PRIVACY_PLACEHOLDER : `${PRIVACY_PLACEHOLDER} (${formatPercent(share, {scale: 100, signed: false, digits: 0})})`;
 }
 
 /** Find a broker by id, or `null` when the id is absent or not in the list. */

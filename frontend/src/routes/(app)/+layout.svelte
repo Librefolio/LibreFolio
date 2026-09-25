@@ -2,7 +2,7 @@
     import {onMount} from 'svelte';
     import {browser} from '$app/environment';
     import {page} from '$app/stores';
-    import {afterNavigate, goto, preloadCode} from '$app/navigation';
+    import {afterNavigate, goto, onNavigate, preloadCode} from '$app/navigation';
     import {_, i18nLoading, initI18n} from '$lib/i18n';
     import {trackNavigation} from '$lib/stores/app/navigationStore';
     import {seedFromUrl} from '$lib/stores/dateRangeStore.svelte';
@@ -19,7 +19,7 @@
     import {updateAvailable} from '$lib/features/update-check/updateCheckStore.svelte';
     import {checkForNewerRelease} from '$lib/features/update-check/updateCheck';
     import {zodiosApi} from '$lib/api';
-    import {get} from 'svelte/store';
+    import {get, toStore} from 'svelte/store';
     import OnboardingBootstrapBlock from '$lib/components/onboarding/OnboardingBootstrapBlock.svelte';
     import OnboardingBootstrapBanner from '$lib/components/onboarding/OnboardingBootstrapBanner.svelte';
     import OnboardingOverlayHost from '$lib/components/onboarding/OnboardingOverlayHost.svelte';
@@ -52,6 +52,15 @@
         if (nav.type === 'enter' && url) {
             seedFromUrl(url.searchParams);
         }
+    });
+
+    // A page's `<svelte:head><title>` sets `document.title` and Svelte leaves it behind when the page
+    // unmounts, so every page without a title of its own kept the last one set (e.g. Files). Reset it
+    // here: `onNavigate` runs before the next page mounts, so a page with its own title sets it again,
+    // while a same-route navigation (a query change, another tool) keeps it.
+    const DEFAULT_DOCUMENT_TITLE = 'LibreFolio'; // the <title> of src/app.html
+    onNavigate(({from, to}) => {
+        if (from?.route.id !== to?.route.id) document.title = DEFAULT_DOCUMENT_TITLE;
     });
 
     onMount(async () => {
@@ -133,10 +142,15 @@
         goto('/');
     }
 
+    // This layout is a legacy component: its `$:` statements do not track runes state such as
+    // `appBootstrap.ready`. Through a store, the route gate re-runs when the bootstrap settles,
+    // so a due redirect shows `onboarding-redirecting` instead of painting the requested page.
+    const bootstrapReady = toStore(() => appBootstrap.ready);
+
     $: isWelcomeRoute = $page.route.id === '/(app)/welcome';
     $: requestedPath = $page.url.pathname + $page.url.search;
-    $: onboardingDestination = appBootstrap.ready && isWelcomeRoute && onboardingGuide.active?.flow === 'intro_tour' ? '/dashboard' : appBootstrap.ready ? appBootstrap.resolveDestination(requestedPath) : requestedPath;
-    $: onboardingRouteReady = isWelcomeRoute || !appBootstrap.ready || onboardingDestination === requestedPath;
+    $: onboardingDestination = $bootstrapReady && isWelcomeRoute && onboardingGuide.active?.flow === 'intro_tour' ? '/dashboard' : $bootstrapReady ? appBootstrap.resolveDestination(requestedPath) : requestedPath;
+    $: onboardingRouteReady = isWelcomeRoute || !$bootstrapReady || onboardingDestination === requestedPath;
     $: if (
         browser &&
         $isAuthenticated &&

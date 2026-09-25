@@ -8,10 +8,16 @@
  *
  * Numbers are formatted with an explicit `'en-US'` locale so assertions are
  * deterministic regardless of the machine running them.
+ *
+ * Two helpers are not pure: `formatLotQuantityMasked` and `formatLotQuantityCell`
+ * read the global privacy flag (decision D5′), so their blocks reset it on both
+ * sides of each test — the store is module level, and a flag left on by one test
+ * would mask the next one's clear-text controls.
  */
-import {describe, it, expect} from 'vitest';
+import {afterEach, beforeEach, describe, it, expect} from 'vitest';
 import type {BrokerLike} from '$lib/utils/broker/brokerColors';
-import {primaryState, secondaryStates, filterStates, formatLotQuantity, findBroker, sameIdSet, sumNumeric, weightedAverage, ratioOrNull} from './unifiedLotsTableHelpers';
+import {setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
+import {primaryState, secondaryStates, filterStates, formatLotQuantity, formatLotQuantityMasked, formatLotQuantityCell, findBroker, sameIdSet, sumNumeric, weightedAverage, ratioOrNull} from './unifiedLotsTableHelpers';
 
 describe('primaryState', () => {
     it('prefers PARTIALLY_CLOSED over everything else (first if true)', () => {
@@ -77,6 +83,89 @@ describe('formatLotQuantity', () => {
     it('accepts the default (machine) locale when none is passed', () => {
         // Exercises the optional-locale call path; only assert it is a non-empty numeric string.
         expect(formatLotQuantity(42)).toMatch(/42/);
+    });
+});
+
+describe('formatLotQuantityMasked', () => {
+    // A lot quantity sits next to a price, and quantity × price rebuilds what the user owns: masked under privacy (D5′).
+    beforeEach(() => setPrivacyEnabled(false));
+    afterEach(() => setPrivacyEnabled(false));
+
+    it('formats exactly like formatLotQuantity while privacy is off', () => {
+        expect(formatLotQuantityMasked(1000.5, 'en-US')).toBe(formatLotQuantity(1000.5, 'en-US'));
+        expect(formatLotQuantityMasked(-2.5, 'en-US')).toBe('-2.5');
+    });
+
+    it('masks a present quantity under privacy, keeping the sign of a short one', () => {
+        setPrivacyEnabled(true);
+
+        expect(formatLotQuantityMasked(1000.5, 'en-US')).toBe('•••');
+        expect(formatLotQuantityMasked(-2.5, 'en-US')).toBe('-•••');
+    });
+
+    it('keeps the em dash for an absent quantity in both states', () => {
+        expect(formatLotQuantityMasked(null, 'en-US')).toBe('—');
+
+        setPrivacyEnabled(true);
+        // Masking an absence would claim a quantity the lot does not have.
+        expect(formatLotQuantityMasked(null, 'en-US')).toBe('—');
+        // Positive control: in this exact state a present quantity is masked, so
+        // the em dash above is the absence check and not a flag that stayed off.
+        expect(formatLotQuantityMasked(6, 'en-US')).toBe('•••');
+    });
+});
+
+describe('formatLotQuantityCell', () => {
+    // A partially closed lot keeps its reading key under privacy as the open share (Q8); percentages stay visible (D6).
+    beforeEach(() => setPrivacyEnabled(false));
+    afterEach(() => setPrivacyEnabled(false));
+
+    it('shows open / original for a partially closed lot while privacy is off', () => {
+        expect(formatLotQuantityCell(6, 10, true, 'en-US')).toBe('6 / 10');
+    });
+
+    it('shows the open share instead of the two quantities under privacy', () => {
+        setPrivacyEnabled(true);
+
+        expect(formatLotQuantityCell(6, 10, true, 'en-US')).toBe('••• (60%)');
+    });
+
+    it('falls back to the placeholder alone when there is no share to compute', () => {
+        setPrivacyEnabled(true);
+
+        expect(formatLotQuantityCell(6, 0, true, 'en-US')).toBe('•••');
+        expect(formatLotQuantityCell(6, null, true, 'en-US')).toBe('•••');
+        expect(formatLotQuantityCell(null, 10, true, 'en-US')).toBe('•••');
+        // Positive control: same flag, and a lot with an original to divide by shows its share.
+        expect(formatLotQuantityCell(6, 10, true, 'en-US')).toBe('••• (60%)');
+    });
+
+    it('renders a lot that is not partial through formatLotQuantityMasked', () => {
+        expect(formatLotQuantityCell(6, 10, false, 'en-US')).toBe('6');
+        expect(formatLotQuantityCell(null, 10, false, 'en-US')).toBe('—');
+
+        setPrivacyEnabled(true);
+        expect(formatLotQuantityCell(6, 10, false, 'en-US')).toBe('•••');
+        expect(formatLotQuantityCell(-2.5, 10, false, 'en-US')).toBe('-•••');
+        expect(formatLotQuantityCell(null, 10, false, 'en-US')).toBe('—');
+    });
+
+    it('never shows a quantity through the share: the only digits left are the percentage', () => {
+        // Control: in the clear the partial cell carries both quantities, so the
+        // absence checks below are able to see them.
+        expect(formatLotQuantityCell(1234.5, 5000, true, 'en-US')).toBe('1,234.5 / 5,000');
+
+        setPrivacyEnabled(true);
+        const masked = formatLotQuantityCell(1234.5, 5000, true, 'en-US');
+        expect(masked).toBe('••• (25%)');
+        // Exactly one digit group, and it is the share (24.69%, rounded), not a quantity.
+        expect(masked.match(/\d+/g)).toEqual([String(Math.round((1234.5 / 5000) * 100))]);
+        expect(masked).not.toContain('1,234.5');
+        expect(masked).not.toContain('5,000');
+
+        const third = formatLotQuantityCell(1, 3, true, 'en-US');
+        expect(third).toBe('••• (33%)');
+        expect(third.match(/\d+/g)).toEqual(['33']);
     });
 });
 

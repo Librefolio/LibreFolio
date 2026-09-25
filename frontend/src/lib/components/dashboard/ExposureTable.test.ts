@@ -6,6 +6,8 @@
  * - F9 analyzed-row highlight.
  * - Yield on Cost default column, status cells, sorting, tooltips and persisted
  *   visibility override.
+ * - Privacy (decision D5′): the quantity beside a price is masked, while the
+ *   price and the PMC it used to protect become public.
  *
  * Rows are addressed by `data-row-id` (`makePositionKey(assetId, brokerId)`),
  * never by position: the table sorts by value descending.
@@ -14,7 +16,7 @@
  * row behavior depends only on props, while tooltip formatting still exercises
  * the real currency/date helpers.
  */
-import {beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 
 vi.mock('$lib/api', () => ({
     zodiosApi: new Proxy(
@@ -47,6 +49,10 @@ vi.stubGlobal('localStorage', {
 });
 
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+import {flushSync, tick} from 'svelte';
+import {isPrivacyEnabled, setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
+import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
+import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 import {getUserStorageKey} from '$lib/utils/storage';
 import ExposureTable from './ExposureTable.svelte';
 
@@ -504,5 +510,153 @@ describe('ExposureTable — Yield on Cost', () => {
         await waitFor(() => expect(screen.getByTestId('dt-header-annualized-return')).toBeInTheDocument());
         expect(screen.queryByTestId('dt-header-yield-on-cost')).not.toBeInTheDocument();
         expect(JSON.parse(storage.get(visibilityKey) ?? '{}')).toEqual({'yield-on-cost': false});
+    });
+});
+
+/**
+ * Privacy, decision D5′ of the product owner (2026-09-23): a quantity is masked
+ * where it sits next to a price, because quantity × price rebuilds what the user
+ * owns. The price and the PMC were masked only to stop that reconstruction while
+ * the quantity was visible; with the quantity masked they are public again, as
+ * the product owner ruled that prices and WAC are not patrimony (2026-09-22).
+ *
+ * The row renders no per-cell handle, so a cell is found by its column: the
+ * header's `dt-header-<id>` gives the index, and the row's data cells (DataTable's
+ * structural `td-data`, the hook DataTable.test.ts also uses) follow the same
+ * visible-column order. Price and PMC are `hiddenByDefault`, so they are revealed
+ * through the user-scoped visibility override the test above already exercises.
+ *
+ * Unmasked expectations come from the same formatting calls the component makes,
+ * with privacy off — the host locale decides their separators — and are checked
+ * once against the digits put in. Masked ones are literals: a placeholder has no
+ * locale. Every step checks the flag and a fresh formatter call before the table,
+ * so a red names its layer. `browser: false` in the shared `$app/environment`
+ * mock keeps `setPrivacyEnabled` in memory.
+ */
+describe('ExposureTable — privacy (D5′)', () => {
+    const QUANTITY = 7.25;
+    const PRICE = 123.45;
+    const WAC = 98.76;
+    /** `holding(11, …)` values the position at 11 × 1000. */
+    const VALUE = 11000;
+
+    let quantityClear = '';
+    let priceClear = '';
+    let pmcClear = '';
+    let valueClear = '';
+
+    /** One position carrying every column under test. */
+    function position() {
+        return {...holding(11, 1, {yieldOnCost: noIncomeYieldOnCost()}), quantity: String(QUANTITY), current_price: String(PRICE), wac_per_unit: String(WAC)};
+    }
+
+    function mount(): void {
+        render(ExposureTable, {holdings: [position()], navAmount: VALUE, displayCurrency: 'EUR'});
+    }
+
+    /** Barrier: the row is rendered and the stored override has revealed price and PMC. */
+    async function mounted(): Promise<void> {
+        await waitFor(() => expect(rowEl(11, 1)).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByTestId('dt-header-price')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByTestId('dt-header-pmc')).toBeInTheDocument());
+    }
+
+    /** The trimmed text of the cell of `columnId` in the row of asset 11. */
+    function cellText(columnId: string): string {
+        const headers = [...document.querySelectorAll<HTMLElement>('thead th[data-testid^="dt-header-"]')];
+        const index = headers.findIndex((header) => header.dataset.testid === `dt-header-${columnId}`);
+        if (index < 0) throw new Error(`column ${columnId} not rendered`);
+        const cells = [...rowEl(11, 1).querySelectorAll<HTMLElement>('td.td-data')];
+        if (cells.length !== headers.length) throw new Error(`${cells.length} data cells for ${headers.length} headers`);
+        return (cells[index].textContent ?? '').trim();
+    }
+
+    /** Set the flag, then flush: synchronously, and once more through the microtask the app itself waits on. */
+    async function setPrivacy(value: boolean): Promise<void> {
+        setPrivacyEnabled(value);
+        flushSync();
+        await tick();
+    }
+
+    function expectClear(step: string): void {
+        expect(isPrivacyEnabled(), `${step} — control: the flag`).toBe(false);
+        expect(formatCurrencyAmountPlain(VALUE, 'EUR'), `${step} — control: a fresh formatter call`).toBe(valueClear);
+
+        expect(cellText('value'), `${step} — value`).toBe(valueClear);
+        expect(cellText('quantity'), `${step} — quantity shows its digits`).toBe(quantityClear);
+        expect(cellText('price'), `${step} — price`).toBe(priceClear);
+        expect(cellText('pmc'), `${step} — PMC`).toBe(pmcClear);
+    }
+
+    function expectMasked(step: string): void {
+        expect(isPrivacyEnabled(), `${step} — control: the flag`).toBe(true);
+        expect(formatCurrencyAmountPlain(VALUE, 'EUR'), `${step} — control: a fresh formatter call`).toBe('••• € 🇪🇺 EUR');
+
+        // Positive control in the table itself: the value is personal money, masked.
+        const value = cellText('value');
+        expect(value, `${step} — value masked`).toBe('••• € 🇪🇺 EUR');
+        expect(value, `${step} — value shows no digit`).not.toMatch(/\d/);
+
+        const quantity = cellText('quantity');
+        expect(quantity, `${step} — quantity masked, marker kept`).toBe('••• 📈');
+        expect(quantity, `${step} — quantity shows no digit`).not.toMatch(/\d/);
+        expect(quantity, `${step} — quantity keeps its 📈 marker`).toContain('📈');
+
+        for (const [columnId, clear] of [
+            ['price', priceClear],
+            ['pmc', pmcClear],
+        ]) {
+            const text = cellText(columnId);
+            expect(text, `${step} — ${columnId} stays public`).toBe(clear);
+            expect(text, `${step} — ${columnId} shows its digits`).toMatch(/\d/);
+            expect(text, `${step} — ${columnId} shows its currency`).toContain('€ 🇪🇺 EUR');
+        }
+    }
+
+    beforeAll(async () => {
+        await ensureCurrenciesLoaded('en');
+        // Control: the catalogue is loaded, so every money cell carries the real symbol and flag.
+        expect(getCurrencyInfo('EUR').symbol).toBe('€');
+
+        setPrivacyEnabled(false);
+        quantityClear = `${QUANTITY.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 6})} 📈`;
+        priceClear = formatCurrencyAmountPlain(PRICE, 'EUR', {sensitivity: 'public'});
+        pmcClear = formatCurrencyAmountPlain(WAC, 'EUR', {sensitivity: 'public'});
+        valueClear = formatCurrencyAmountPlain(VALUE, 'EUR');
+        // The clear expectations are the formatters' own output: check once that they carry
+        // the digits put in, or "shows its digits" would compare a placeholder with itself.
+        expect(quantityClear.replace(/\D/g, '')).toBe('725');
+        expect(priceClear.replace(/\D/g, '')).toBe('12345');
+        expect(pmcClear.replace(/\D/g, '')).toBe('9876');
+        expect(valueClear.replace(/\D/g, '')).toBe('1100000');
+    });
+
+    beforeEach(() => {
+        storage.set(getUserStorageKey('dataTable_dashboard-holdings-v5_columnVisibilityOverrides'), JSON.stringify({price: true, pmc: true}));
+    });
+
+    afterEach(() => {
+        // Module-level flag: a leftover `true` would mount the next table masked.
+        setPrivacyEnabled(false);
+    });
+
+    it('mounted with privacy on: masks the quantity and keeps its 📈 marker, while price and PMC stay public', async () => {
+        await setPrivacy(true);
+        mount();
+        await mounted();
+
+        expectMasked('mount, privacy on');
+    });
+
+    it('follows the flag both ways once mounted: off → on → off', async () => {
+        mount();
+        await mounted();
+        expectClear('mount, privacy off');
+
+        await setPrivacy(true);
+        expectMasked('off → on');
+
+        await setPrivacy(false);
+        expectClear('on → off');
     });
 });

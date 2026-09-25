@@ -747,6 +747,19 @@ massimo `gap_bounded/not_proven`; prova esatta solo da oracle esaustivo, chiusur
 score-lattice coefficient-safe o conflict witness Decimal, secondo l’esito. La
 semantica non è lasciata alla libreria solver.
 
+> **Aggiornamento 2026-09-25 (D-X1, decisione del developer del 24/09):** gli stati restano
+> distinti, cambia chi li prova. In produzione gira solo SCIP e il suo esito fa fede: `optimal`
+> su tutti gli stage vale ottimo provato, `infeasible` sul primo stage vale infeasible provato,
+> un limite vale tempo scaduto, con il miglior piano Decimal-validato (non provato) o senza
+> piano. Sono superati «lo status floating resta al massimo `gap_bounded/not_proven`», la prova
+> solo da oracle, chiusura score-lattice o conflict witness, e «la semantica non è lasciata alla
+> libreria solver». L'oracolo esaustivo resta solo nei test.
+> Condizione: il modello compilato non esclude piani validi; i due scarti noti, il minimo di
+> commissione (X2) e il tetto (QX1-a), si chiudono nel Passo F del piano Round5 di D. Ai pareggi
+> esatti HALF_UP il modello resta permissivo per scelta del developer (25/09, QX1-b): un piano che
+> dopo gli arrotondamenti supera una cassa di al più N unità minime della sua valuta (1 per importo
+> arrotondato) esce con l'importo da aggiungere; oltre quella soglia è un errore.
+
 ### T2 - Snapshot dal portafoglio e UI custom
 
 **Stato corrente, 2026-09-15:** copie P1 esistenti ma prodotto operativo non

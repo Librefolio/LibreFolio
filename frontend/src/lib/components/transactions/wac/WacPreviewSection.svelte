@@ -512,7 +512,7 @@
         </div>
     {/if}
 
-    <!-- Qualifying TXs table (expandable) -->
+    <!-- Qualifying TXs table (expandable). Unit cost and running WAC are unit values: public (D5′-c). -->
     {#if !hideTable && showQualifying && previewResult?.qualifying_txs?.length}
         <div class="mt-1 max-h-40 w-0 min-w-full overflow-x-auto overflow-y-auto border border-gray-200 dark:border-slate-700 rounded text-[10px] scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-slate-600" data-testid="{testid}-qualifying-table">
             <table class="w-max min-w-full">
@@ -555,14 +555,16 @@
                                 {#if qtx.original_unit_cost && qtx.original_currency && qtx.currency && qtx.original_currency !== qtx.currency}
                                     <Tooltip html={buildFxTooltipHtml(qtx)} position="bottom">
                                         <span class="cursor-help">
-                                            {formatCurrencyAmountPlain(parseFloat(qtx.original_unit_cost), qtx.original_currency, {maxFraction: 2})} → {qtx.unit_cost && qtx.currency ? formatCurrencyAmountPlain(parseFloat(qtx.unit_cost), qtx.currency, {maxFraction: 2}) : '?'}
+                                            {formatCurrencyAmountPlain(parseFloat(qtx.original_unit_cost), qtx.original_currency, {maxFraction: 2, sensitivity: 'public'})} → {qtx.unit_cost && qtx.currency
+                                                ? formatCurrencyAmountPlain(parseFloat(qtx.unit_cost), qtx.currency, {maxFraction: 2, sensitivity: 'public'})
+                                                : '?'}
                                             {#if qtx.fx_info && (qtx.fx_info.fx_days_back ?? 0) > 5}
                                                 <span class="text-amber-500 ml-0.5">⚠️</span>
                                             {/if}
                                         </span>
                                     </Tooltip>
                                 {:else}
-                                    {qtx.unit_cost && qtx.currency ? formatCurrencyAmountPlain(parseFloat(qtx.unit_cost), qtx.currency, {maxFraction: 2}) : qtx.unit_cost ? parseFloat(qtx.unit_cost).toFixed(2) : '—'}
+                                    {qtx.unit_cost && qtx.currency ? formatCurrencyAmountPlain(parseFloat(qtx.unit_cost), qtx.currency, {maxFraction: 2, sensitivity: 'public'}) : qtx.unit_cost ? parseFloat(qtx.unit_cost).toFixed(2) : '—'}
                                 {/if}
                             </td>
                             <td class="px-2 py-0.5 text-right">
@@ -583,7 +585,7 @@
                                             : ($t('transactions.wacPreview.effect.addZeroCost') ?? 'Dilution')}</span
                                 >
                             </td>
-                            <td class="px-2 py-0.5 text-left font-mono">{qtx.running_wac && qtx.currency ? formatCurrencyAmountPlain(parseFloat(qtx.running_wac), qtx.currency, {maxFraction: 4}) : qtx.running_wac ? parseFloat(qtx.running_wac).toFixed(4) : '—'}</td>
+                            <td class="px-2 py-0.5 text-left font-mono">{qtx.running_wac && qtx.currency ? formatCurrencyAmountPlain(parseFloat(qtx.running_wac), qtx.currency, {maxFraction: 4, sensitivity: 'public'}) : qtx.running_wac ? parseFloat(qtx.running_wac).toFixed(4) : '—'}</td>
                         </tr>
                     {/each}
                 </tbody>

@@ -216,7 +216,7 @@ export function buildAssetSetScatterPoints(rowsIn: readonly AssetSetPaidRow[]): 
  * a different observation count under the same reported window, and the dot
  * would land where no measurement puts it — on a chart that still looks right.
  */
-export function buildAssetSetBenchmarkPoint(comparison: RiskAnalyticResult | null, names: ReadonlyMap<number, string>): AssetSetBenchmarkPoint | null {
+export function buildAssetSetBenchmarkPoint(comparison: RiskAnalyticResult | null, names: ReadonlyMap<number, string>, resolveName?: (assetId: number) => string | undefined): AssetSetBenchmarkPoint | null {
     const output = riskOutput(comparison, schemas.RiskAssetSetComparisonOutput);
     if (!output) return null;
     const volatility = num(output.comparison_volatility);
@@ -224,5 +224,11 @@ export function buildAssetSetBenchmarkPoint(comparison: RiskAnalyticResult | nul
     // Both coordinates or no dot: a benchmark plotted on one axis would sit at a
     // position half of which nobody measured.
     if (volatility === null || expectedReturn === null) return null;
-    return {assetId: output.comparison_asset_id, name: label(output.comparison_asset_id, names), volatility, expectedReturn};
+    // 🔴 The selection's label map can never name the reference: the payload
+    // validator rejects a reference that is also among the compared, so by
+    // construction it is not in the selection. Without `resolveName` the dot is
+    // `#id` on every chart — which is how it shipped.
+    const assetId = output.comparison_asset_id;
+    const name = names.get(assetId) ?? resolveName?.(assetId) ?? label(assetId, names);
+    return {assetId, name, volatility, expectedReturn};
 }
