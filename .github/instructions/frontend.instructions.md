@@ -69,6 +69,23 @@ frontend/
 
 **Pattern**: `.svelte.ts` = Svelte 5 runes; `.ts` = Svelte 4 writable or plain class.
 
+## Privacy masking
+
+Privacy hides the **number**, never the currency or the sign (`€•••`, `-••• CHF`); an absent `—`
+stays `—`. Render money only through `lib/utils/currency/currencyFormat.ts` with an explicit
+`sensitivity` (`personal` = wealth; `public` = prices, WAC, rates, percentages) or the primitives
+in `lib/utils/privacy/maskable.ts`; mask held quantities with `maskableQuantity()` **at the call
+site** (positions and lots masked, transactions visible).
+
+- A **legacy** (non-runes) component that calls a formatter inside its template freezes that
+  output at mount: the call compiles into `$.untrack`, so the privacy flag is never tracked.
+  Render through `ui/display/CurrencyAmount.svelte` instead.
+- ECharts formatters run outside effect tracking: the render `$effect` must read
+  `isPrivacyEnabled()`, or the chart keeps the state it was drawn with.
+- The gate `utils/privacy/moneyRenderSites.test.ts` sees only source lines with a currency
+  token: axes without one, a `public` marking and legacy freezing need their own tests (a
+  component test that toggles privacy in place, both ways).
+
 ## Telling the user (and the machine) that something happened
 
 Use `notify()` from `$lib/stores/app/notify.svelte.ts`. It always records a

@@ -1848,3 +1848,11 @@ enum↔catalogo la tiene viva.
 costruzione della richiesta, quindi converte anche le violazioni di invariante del motore in
 «parametri non validi». **Un `try` allargato è un `except` che presume.** Fuori dal perimetro di
 B, non riparato, misurato.
+
+
+# Idea interessante presa da un utente:
+3. L'effetto del cambio sul rendimento (FX Impact)
+"Related to my previous feature is how much FX rates change the balance, again not really that import but just interesting to see."
+
+Gli piacerebbe vedere (anche solo per curiosità) quanto del suo guadagno/perdita dipende dal titolo in sé e quanto dalle fluttuazioni del tasso di cambio (il classico spacchettamento tra capital gain e impatto valutario). Ma ribadisce che non è prioritario.
+Discorso originale qui: https://github.com/Librefolio/LibreFolio/discussions/24#discussioncomment-18584139
