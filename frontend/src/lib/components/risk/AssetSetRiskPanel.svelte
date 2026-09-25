@@ -10,14 +10,18 @@
      * What changed:
      *
      * - the opening set is **remembered**, then **owned**, then **small** — see
-     *   `resolveInitialSelection`; the hundred survives only as the API's
+     *   `resolveInitialSelectionWithSource`; the hundred survives only as the API's
      *   ceiling;
-     * - three quick actions, a holdings command and two filters make a large set
-     *   reachable *and* escapable, and a "+" adds any number of assets in one go;
+     * - three quick actions and a holdings command make a large set reachable
+     *   *and* escapable, and a "+" — with its own search and type and currency
+     *   filters — adds any number of assets in one go;
+     * - Risk's eligibility engine decides which selected assets the analysis can
+     *   use in the period; the others stay in the selection as greyed chips, with
+     *   the engine's reason, and are left out of the requests (`analysedIds`);
      * - the broker control stopped pretending to be a filter. It was never one:
      *   it replaced the selection wholesale. It is now a command beside the quick
      *   actions — "All mine", or one broker — that loads what is held and then
-     *   leaves the selection to the user (see `loadHoldings`).
+     *   leaves the selection to the user (see `runHoldingsPreset`).
      *
      * **No amount of money appears anywhere on this page.** Not in this panel,
      * not in the levels mounted below it. An asset set has no weights, so any
@@ -65,16 +69,18 @@
      * telling the page when there is nothing to sync.
      */
     import {untrack} from 'svelte';
-    import {Briefcase, CheckCheck, ChevronDown, Coins, FlipHorizontal, Landmark, Layers, RefreshCw, Square, Wallet, X} from 'lucide-svelte';
+    import {Briefcase, CheckCheck, ChevronDown, FlipHorizontal, RefreshCw, Square, Wallet, X} from 'lucide-svelte';
 
     import {_ as t} from '$lib/i18n';
+    import {zodiosApi} from '$lib/api';
+    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
     import {singleValue} from '$lib/risk/riskTypes';
     import {currentLanguage} from '$lib/stores/app/language';
     import {fetchReport} from '$lib/stores/portfolio/portfolioStore.svelte';
     import {assetStoreVersion, ensureAssetsLoaded, getAssetInfo} from '$lib/stores/reference/assetStore';
     import {brokerStoreVersion, ensureBrokersLoaded, getAccessibleBrokers} from '$lib/stores/reference/brokerStore';
-    import {currencyStoreVersion, ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {ensureFxRoutesLoaded, fxRoutesVersion, getConfiguredPairSlugs} from '$lib/stores/reference/fxRoutesStore';
     import {invalidateRisk} from '$lib/stores/risk/riskStore.svelte';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
@@ -82,10 +88,10 @@
     import AssetSetComparisonLevels from './AssetSetComparisonLevels.svelte';
     import AssetSetReplaySection from './AssetSetReplaySection.svelte';
     import LabAssetPicker from './LabAssetPicker.svelte';
-    import LabCheckMenu, {type CheckMenuItem} from './LabCheckMenu.svelte';
     import LabPopover from './LabPopover.svelte';
     import {riskBenchmark} from '$lib/stores/risk/riskBenchmarkStore.svelte';
-    import {applyBulkAction, applyFilters, MAX_SELECTED_ASSETS, readPersistedSelection, resolveInitialSelectionWithSource, writePersistedSelection, type BulkAction, type SelectionFilters, type SelectionSource} from './assetSetSelection';
+    import {applyBulkAction, MAX_SELECTED_ASSETS, readPersistedSelection, resolveInitialSelectionWithSource, writePersistedSelection, type BulkAction, type SelectionSource} from './assetSetSelection';
+    import {dayFormatter, describeEligibility, eligibilityBatches, EMPTY_VERDICTS, isSelectable, mergeEligibilityAnswers, type EligibilityView, type EligibilityVerdicts} from './eligibility';
     import {buildSyncTargets} from './syncTargets';
 
     interface AssetOption {
@@ -96,8 +102,8 @@
         asset_type?: string | null;
         provider_code?: string | null;
         active?: boolean;
-        /** Transactions in brokers the user owns — what "my assets" means here. */
-        tx_count_own?: number;
+        /** Transactions across every broker the user can see: the fallback's ranking. */
+        tx_count?: number;
     }
 
     interface Props {
@@ -122,13 +128,16 @@
     let {assets, dateStart, dateEnd, targetCurrency, onsynced, canSync = $bindable(false)}: Props = $props();
 
     let selectedAssetIds = $state<number[]>([]);
-    let filters = $state<SelectionFilters>({types: [], currencies: []});
     let brokerAssetsLoading = $state(false);
     let brokerLoadFailed = $state(false);
     /** The last holdings command found nothing held, and left the selection alone. */
     let brokerLoadEmpty = $state(false);
     let presetOpen = $state(false);
     let seedInitialized = false;
+    /** The opening selection is waiting for the holdings report (rung 2 of the ladder). */
+    let seeding = $state(false);
+    /** The user changed the selection by hand: a late opening seed must not overwrite that. */
+    let selectionTouched = false;
     let selectionSource = $state<SelectionSource | null>(null);
     let brokerRequestGeneration = 0;
 
@@ -210,42 +219,80 @@
     let selectedAssets = $derived(selectedAssetIds.map((assetId) => assets.find((asset) => asset.id === assetId)).filter((asset): asset is AssetOption => Boolean(asset)));
 
     /**
-     * Filter options come from the **whole** catalogue, never from the filtered
-     * result. Deriving them from what survives the filter is how a selected
-     * option disappears the moment it is applied, leaving a filter the user
-     * cannot switch off (`problems/datatable-filter-options-disappear`).
+     * Risk's verdict on every asset of the catalogue for the period
+     * (`POST /api/v1/risk/eligibility`, see `eligibility.ts`). Asked once for the
+     * whole list, again when the list, the period or the currency changes — after a
+     * short pause, so a date being typed asks once — and a superseded answer is
+     * dropped. A failed call leaves no verdict, and no verdict means selectable:
+     * the engine can make the lab stricter, never emptier.
      */
-    let typeOptions = $derived([...new Set(assets.map((asset) => asset.asset_type || 'OTHER'))].sort());
-    let currencyOptions = $derived([...new Set(assets.map((asset) => asset.currency))].sort());
-    let candidates = $derived(applyFilters(assets, filters));
-    let filtersActive = $derived(filters.types.length > 0 || filters.currencies.length > 0);
-    let atCapacity = $derived(selectedAssetIds.length >= MAX_SELECTED_ASSETS);
+    let verdicts = $state<EligibilityVerdicts>(EMPTY_VERDICTS);
+    let eligibilityFailed = $state(false);
+    let eligibilityGeneration = 0;
+    const ELIGIBILITY_DEBOUNCE_MS = 300;
+    let catalogueKey = $derived(
+        assets
+            .map((asset) => asset.id)
+            .sort((left, right) => left - right)
+            .join(','),
+    );
 
-    /** How many assets carry each value, over the whole catalogue like the options themselves. */
-    function countBy(read: (asset: AssetOption) => string): Map<string, number> {
-        const counts = new Map<string, number>();
-        for (const asset of assets) counts.set(read(asset), (counts.get(read(asset)) ?? 0) + 1);
-        return counts;
+    $effect(() => {
+        const ids = catalogueKey ? catalogueKey.split(',').map(Number) : [];
+        const period = {start: dateStart, end: dateEnd};
+        const currency = targetCurrency;
+        const generation = ++eligibilityGeneration;
+        if (ids.length === 0 || !period.start) {
+            verdicts = EMPTY_VERDICTS;
+            return;
+        }
+        const timer = setTimeout(() => void loadEligibility(generation, ids, period, currency), ELIGIBILITY_DEBOUNCE_MS);
+        return () => clearTimeout(timer);
+    });
+
+    async function loadEligibility(generation: number, ids: number[], period: {start: string; end: string}, currency: string): Promise<void> {
+        try {
+            const answers = await Promise.all(eligibilityBatches(ids).map((batch) => zodiosApi.asset_eligibility_api_v1_risk_eligibility_post({asset_ids: batch, date_range: {start: period.start, end: period.end || null}, target_currency: currency})));
+            if (generation !== eligibilityGeneration) return;
+            verdicts = mergeEligibilityAnswers(answers);
+            eligibilityFailed = false;
+        } catch (error) {
+            if (generation !== eligibilityGeneration) return;
+            console.error('[Risk] Eligibility engine unavailable:', error);
+            verdicts = EMPTY_VERDICTS;
+            eligibilityFailed = true;
+        }
     }
 
-    let typeItems = $derived.by((): CheckMenuItem[] => {
-        const counts = countBy((asset) => asset.asset_type || 'OTHER');
-        return typeOptions.map((type) => ({value: type, label: $t(`assets.types.${type}`) || type, iconUrl: getAssetTypeIconUrl(type), count: counts.get(type) ?? 0})).sort((left, right) => left.label.localeCompare(right.label));
+    /** The verdicts in the reader's language, for the "+" and the chips. */
+    let eligibilityView = $derived.by(() => {
+        const formatDay = dayFormatter($currentLanguage);
+        const view = new Map<number, EligibilityView>();
+        for (const [assetId, item] of verdicts.items) view.set(assetId, describeEligibility(item, verdicts, targetCurrency, $t, formatDay));
+        return view;
     });
 
-    let currencyItems = $derived.by((): CheckMenuItem[] => {
-        void $currencyStoreVersion;
-        const counts = countBy((asset) => asset.currency);
-        return currencyOptions.map((currency) => ({value: currency, label: currency, glyph: getCurrencyInfo(currency).flag_emoji, count: counts.get(currency) ?? 0}));
-    });
+    /** What the quick actions may bring in: the catalogue without what the engine rules out. */
+    let candidates = $derived(assets.filter((asset) => isSelectable(verdicts, asset.id)));
 
     /**
-     * The "+" picker lists `candidates`, which come from the page's own list and
-     * never from the global asset cache. That is what keeps the two in step: the
-     * old picker was backed by the cache and had to be restricted by hand, because
-     * an asset chosen from the wider cache entered `selectedAssetIds`, reached the
-     * API, and then failed to resolve into a chip here — present in the analysis,
-     * invisible in the controls.
+     * What the sections analyse: the selection without the assets ruled out for the
+     * period. Those stay **in the selection**, as greyed chips with the reason, and
+     * are only left out of the requests: changing the period — by hand, or through
+     * Risk's coming "fit to the common period" — brings them back without anyone
+     * having to find them again. The sync still covers them, because an asset with no
+     * prices is sometimes an asset that was never synced.
+     */
+    let analysedIds = $derived(selectedAssetIds.filter((assetId) => isSelectable(verdicts, assetId)));
+    let parkedCount = $derived(selectedAssetIds.length - analysedIds.length);
+    let atCapacity = $derived(selectedAssetIds.length >= MAX_SELECTED_ASSETS);
+
+    /**
+     * The "+" lists the page's own list and never the global asset cache. That is
+     * what keeps the two in step: the old picker was backed by the cache and had to
+     * be restricted by hand, because an asset chosen from the wider cache entered
+     * `selectedAssetIds`, reached the API, and then failed to resolve into a chip
+     * here — present in the analysis, invisible in the controls.
      */
     let room = $derived(Math.max(0, MAX_SELECTED_ASSETS - selectedAssetIds.length));
 
@@ -303,26 +350,87 @@
         untrack(() => void Promise.all([ensureAssetsLoaded(), ensureFxRoutesLoaded()]));
     });
 
-    /** The currency filter shows flags, which live in the currency cache. */
-    $effect(() => {
-        const language = $currentLanguage;
-        untrack(() => void ensureCurrenciesLoaded(language));
-    });
-
+    /**
+     * The opening selection — the D19 ladder, `resolveInitialSelectionWithSource`.
+     *
+     * Rung 1, the last selection, is known at once. Rung 2, what is held on the
+     * period's last day, is a portfolio report and arrives later: until it does the
+     * card says it is loading rather than "no assets". Anything the user does in
+     * the meantime wins, and the late seed is dropped.
+     */
     $effect(() => {
         if (seedInitialized || assets.length === 0) return;
         seedInitialized = true;
-        const seed = resolveInitialSelectionWithSource(assets, readPersistedSelection());
-        selectedAssetIds = seed.ids;
-        selectionSource = seed.source;
+        const first = resolveInitialSelectionWithSource(assets, readPersistedSelection());
+        if (first.source === 'persisted') {
+            selectedAssetIds = first.ids;
+            selectionSource = first.source;
+            return;
+        }
+        untrack(() => void seedFromHoldings());
     });
+
+    async function seedFromHoldings(): Promise<void> {
+        seeding = true;
+        const generation = ++brokerRequestGeneration;
+        try {
+            const held = await heldAssetIds(null, generation);
+            if (generation !== brokerRequestGeneration || selectionTouched) return;
+            const seed = resolveInitialSelectionWithSource(assets, null, held ?? []);
+            selectedAssetIds = seed.ids;
+            selectionSource = seed.source;
+        } finally {
+            seeding = false;
+        }
+    }
 
     /** Remember the set, so the next visit starts where this one ended. */
     $effect(() => {
         const ids = selectedAssetIds;
-        if (!seedInitialized) return;
+        if (!seedInitialized || seeding) return;
         untrack(() => writePersistedSelection(ids));
     });
+
+    /**
+     * The ids held on the period's last day — in one broker, or in every broker the
+     * user can see when `brokerId` is `null` — restricted to the page's own list.
+     * `null` when the report could not be read; `undefined` when a newer request
+     * superseded this one.
+     *
+     * "Held" is what the report's holdings mean: an open position, quantity above
+     * the dust threshold, on `dateEnd`. It is **not** the asset list's `held_by_me`,
+     * which means "held today": the two agree only when the period ends today, and
+     * the labels keep them apart. `fetchReport` is a portfolio route, but only the
+     * holdings' `asset_id`s are read from it — no amount, no weight, no valuation
+     * crosses into this page.
+     */
+    async function heldAssetIds(brokerId: number | null, generation: number): Promise<number[] | null | undefined> {
+        const brokerIds = brokerId === null ? undefined : [brokerId];
+        // `fetchReport` answers with a report or with `null`, and `null` covers two
+        // different facts: a *discard* (the client session or the report cache moved
+        // while the request was in flight) and a *failure* (it turns every error into
+        // `null` — nothing is ever thrown at this caller). On this page the cache moves
+        // on its own: the live-price poll writes today's prices
+        // (`POST /assets/prices/current`), that is a portfolio mutation, and
+        // `portfolioStore`'s mutation listener drops every report in flight. Read as
+        // "no holdings", a null used to wipe the selection in silence. It is asked once
+        // more — the policy `loadBase` adopted for the same guard, and the right answer
+        // to a transient failure too — and a second null is reported as a failure.
+        // Only the holdings are read, so the report is asked without its daily history and
+        // allocation history: those two series are what made "All mine" wait, and nothing here
+        // reads them. The lighter report is cached under its own key (`|nohist|noalloc`).
+        const light = () => fetchReport(brokerIds, dateStart, dateEnd, targetCurrency, false, false, false, false, false);
+        let report = await light();
+        if (generation !== brokerRequestGeneration) return undefined;
+        if (report == null) {
+            report = await light();
+            if (generation !== brokerRequestGeneration) return undefined;
+        }
+        if (report == null) return null;
+        const onPage = new Set(assets.map((asset) => asset.id));
+        const summary = singleValue(report.summary);
+        return [...new Set((summary?.holdings ?? []).map((holding) => holding.asset_id))].filter((assetId) => onPage.has(assetId)).sort((left, right) => left - right);
+    }
 
     /**
      * Replace the selection with what is held on the period's last day: in one
@@ -333,50 +441,30 @@
      * period or the currency changed, so an asset added by hand after choosing a
      * broker vanished at the next change of dates, with nothing on screen saying
      * why. A command runs once, when it is pressed, and then the selection is
-     * the user's again.
+     * the user's again. Nothing held is an answer, not an instruction to empty the
+     * table: the command says so and the selection stays as it was.
      *
-     * "Held" is what the report's holdings mean: an open position, quantity above
-     * the dust threshold, on `dateEnd`. `fetchReport` is a portfolio route, but
-     * only the holdings' `asset_id`s are read from it — no amount, no weight, no
-     * valuation crosses into this page.
+     * Held assets the engine rules out for the period enter the selection too, as
+     * greyed chips (see `analysedIds`): "all mine" means all of them.
      */
-    async function loadHoldings(brokerId: number | null): Promise<void> {
+    async function runHoldingsPreset(brokerId: number | null): Promise<void> {
+        selectionTouched = true;
         const generation = ++brokerRequestGeneration;
-        const brokerIds = brokerId === null ? undefined : [brokerId];
         brokerLoadFailed = false;
         brokerLoadEmpty = false;
         brokerAssetsLoading = true;
         try {
-            // `fetchReport` answers with a report or with `null`, and `null` covers two
-            // different facts: a *discard* (the client session or the report cache moved
-            // while the request was in flight) and a *failure* (it turns every error into
-            // `null` — nothing is ever thrown at this caller). On this page the cache moves
-            // on its own: the live-price poll writes today's prices
-            // (`POST /assets/prices/current`), that is a portfolio mutation, and
-            // `portfolioStore`'s mutation listener drops every report in flight. Read as
-            // "no holdings", a null used to wipe the selection in silence. It is asked once
-            // more — the policy `loadBase` adopted for the same guard, and the right answer
-            // to a transient failure too — and if the second answer is null as well, the
-            // control says it failed and the selection is left exactly as it was.
-            let report = await fetchReport(brokerIds, dateStart, dateEnd, targetCurrency);
-            if (generation !== brokerRequestGeneration) return;
-            if (report == null) {
-                report = await fetchReport(brokerIds, dateStart, dateEnd, targetCurrency);
-                if (generation !== brokerRequestGeneration) return;
-            }
-            if (report == null) {
+            const held = await heldAssetIds(brokerId, generation);
+            if (held === undefined) return;
+            if (held === null) {
                 brokerLoadFailed = true;
                 return;
             }
-            const summary = singleValue(report.summary);
-            const held = [...new Set((summary?.holdings ?? []).map((holding) => holding.asset_id))].sort((left, right) => left - right).slice(0, MAX_SELECTED_ASSETS);
-            // Nothing held is an answer, not an instruction to empty the table: the
-            // command says so and the selection stays as it was.
             if (held.length === 0) {
                 brokerLoadEmpty = true;
                 return;
             }
-            selectedAssetIds = held;
+            selectedAssetIds = held.slice(0, MAX_SELECTED_ASSETS);
         } catch (error) {
             console.error('[Risk] Failed to resolve broker asset set:', error);
             if (generation === brokerRequestGeneration) brokerLoadFailed = true;
@@ -420,23 +508,15 @@
      * a validation error the reader has no way to act on, so the request simply
      * does not carry it and L3° says the columns are unavailable.
      */
-    let benchmarkId = $derived(benchmarkChoice !== null && !selectedAssetIds.includes(benchmarkChoice) ? benchmarkChoice : null);
+    let benchmarkId = $derived(benchmarkChoice !== null && !analysedIds.includes(benchmarkChoice) ? benchmarkChoice : null);
 
     function runBulkAction(action: BulkAction): void {
-        selectedAssetIds = applyBulkAction(action, selectedAssetIds, candidates, assets).sort((left, right) => left - right);
-    }
-
-    function toggleFilter(kind: 'types' | 'currencies', value: string): void {
-        const current = filters[kind];
-        const next = current.includes(value) ? current.filter((entry) => entry !== value) : [...current, value];
-        filters = {...filters, [kind]: next};
-    }
-
-    function clearFilters(): void {
-        filters = {types: [], currencies: []};
+        selectionTouched = true;
+        selectedAssetIds = applyBulkAction(action, selectedAssetIds, candidates).sort((left, right) => left - right);
     }
 
     function addAssets(assetIds: readonly number[]): void {
+        selectionTouched = true;
         const current = new Set(selectedAssetIds);
         const added = assetIds.filter((id) => !current.has(id)).slice(0, room);
         if (added.length === 0) return;
@@ -444,12 +524,13 @@
     }
 
     function removeAsset(assetId: number): void {
+        selectionTouched = true;
         selectedAssetIds = selectedAssetIds.filter((id) => id !== assetId);
     }
 
     function choosePreset(brokerId: number | null): void {
         presetOpen = false;
-        void loadHoldings(brokerId);
+        void runHoldingsPreset(brokerId);
     }
 
     function hideBrokenIcon(event: Event): void {
@@ -470,16 +551,46 @@
     const QUICK_BUTTON = 'inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 dark:border-slate-600 dark:text-gray-300 dark:hover:bg-slate-700';
 </script>
 
+{#snippet chip(asset: AssetOption, verdict: EligibilityView | undefined)}
+    {@const parked = verdict?.level === 'ineligible'}
+    {@const warned = verdict?.level === 'warning'}
+    <span
+        class="inline-flex h-7 items-center gap-1.5 rounded-full py-1 pl-1.5 pr-1 text-xs {parked
+            ? 'cursor-help border border-dashed border-gray-300 text-gray-400 dark:border-slate-600 dark:text-gray-500'
+            : warned
+              ? 'cursor-help border border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-600 dark:bg-amber-900/20 dark:text-amber-300'
+              : 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-gray-300'}"
+        data-testid="risk-selected-asset-{asset.id}"
+        data-level={verdict?.level ?? 'unknown'}
+        data-reasons={verdict?.codes.join(' ') ?? ''}
+    >
+        <img src={asset.icon_url || getAssetTypeIconUrl(asset.asset_type)} alt="" class="h-4 w-4 shrink-0 object-contain {parked ? 'opacity-50' : ''}" onerror={hideBrokenIcon} />
+        <span class={parked ? 'line-through decoration-gray-300 dark:decoration-slate-600' : ''}>{asset.display_name}</span>
+        <button
+            class="rounded-full p-0.5 hover:bg-gray-200 dark:hover:bg-slate-600"
+            onclick={(event) => {
+                // Removing is not asking why: the click must not also pin the chip's tooltip.
+                event.stopPropagation();
+                removeAsset(asset.id);
+            }}
+            aria-label={$t('common.remove')}
+            data-testid="risk-remove-asset-{asset.id}"
+        >
+            <X size={11} />
+        </button>
+    </span>
+{/snippet}
+
 <div class="space-y-4" data-testid="asset-global-risk-panel">
     <section class="rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 p-4" data-testid="risk-asset-set-controls" data-selection-source={selectionSource}>
-        <!-- Row 1 — what goes on the table: three quick actions and the holdings command,
-             then the two filters they act through, then how many are in. The filters sit
-             beside the actions on purpose: "Select all" selects what the filters let
-             through, and the "+" below lists the same assets. -->
+        <!-- Row 1 — what goes on the table: three quick actions and the holdings command, then
+             how many assets are in the analysis. The type and currency filters live in the "+":
+             beside these buttons they also narrowed them, so "select all" meant "select what the
+             filter you forgot about lets through". -->
         <div class="flex flex-wrap items-center gap-2">
             <div class="flex flex-wrap items-center gap-2" data-testid="risk-asset-set-bulk-actions">
                 {#each BULK_ACTIONS as { action, icon: Icon, key } (action)}
-                    <button type="button" class={QUICK_BUTTON} onclick={() => runBulkAction(action)} disabled={assets.length === 0 || (action === 'all' && atCapacity)} data-testid="risk-bulk-{action}">
+                    <button type="button" class={QUICK_BUTTON} onclick={() => runBulkAction(action)} disabled={assets.length === 0 || (action === 'all' && atCapacity) || (action === 'none' && selectedAssetIds.length === 0)} data-testid="risk-bulk-{action}">
                         <Icon size={13} />
                         {$t(`risk.assetSet.bulk.${key}`)}
                     </button>
@@ -501,7 +612,7 @@
                         <p class="border-b border-gray-100 px-3 py-2 text-[11px] leading-snug text-gray-500 dark:border-slate-700 dark:text-gray-400">{$t('risk.assetSet.preset.hint')}</p>
                         <div class="p-1">
                             <button type="button" class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-slate-700" onclick={() => choosePreset(null)} data-testid="risk-broker-option-mine">
-                                <Wallet size={14} class="shrink-0 text-libre-green" />
+                                <span class="flex h-6 w-6 shrink-0 items-center justify-center"><Wallet size={15} class="text-libre-green" /></span>
                                 {$t('risk.assetSet.preset.allMine')}
                             </button>
                         </div>
@@ -515,7 +626,7 @@
                                         onclick={() => choosePreset(broker.id)}
                                         data-testid="risk-broker-option-{broker.id}"
                                     >
-                                        <Landmark size={14} class="shrink-0 text-gray-400" />
+                                        <BrokerIcon brokerId={broker.id} iconUrl={broker.icon_url ?? null} portalUrl={broker.portal_url ?? null} pluginCode={broker.default_import_plugin ?? null} altText={broker.name} size="sm" />
                                         <span class="min-w-0 flex-1 truncate">{broker.name}</span>
                                     </button>
                                 {/each}
@@ -525,42 +636,11 @@
                 </LabPopover>
             </div>
 
-            <span class="mx-1 hidden h-5 w-px bg-gray-200 sm:block dark:bg-slate-600" aria-hidden="true"></span>
-
-            <div class="flex flex-wrap items-center gap-2" data-testid="risk-asset-set-filters">
-                <LabCheckMenu
-                    label={$t('risk.assetSet.filters.type')}
-                    icon={Layers}
-                    items={typeItems}
-                    selected={filters.types}
-                    ontoggle={(value) => toggleFilter('types', value)}
-                    onclear={() => (filters = {...filters, types: []})}
-                    clearLabel={$t('risk.assetSet.filters.clear')}
-                    testId="risk-filter-type"
-                    optionTestId={(value) => `risk-filter-type-${value}`}
-                />
-                <LabCheckMenu
-                    label={$t('risk.assetSet.filters.currency')}
-                    icon={Coins}
-                    items={currencyItems}
-                    selected={filters.currencies}
-                    ontoggle={(value) => toggleFilter('currencies', value)}
-                    onclear={() => (filters = {...filters, currencies: []})}
-                    clearLabel={$t('risk.assetSet.filters.clear')}
-                    testId="risk-filter-currency"
-                    optionTestId={(value) => `risk-filter-currency-${value}`}
-                />
-                {#if filtersActive}
-                    <button type="button" class="inline-flex items-center gap-1 text-xs text-libre-green hover:underline" onclick={clearFilters} data-testid="risk-filters-clear">
-                        <X size={12} />
-                        {$t('risk.assetSet.filters.clear')}
-                    </button>
-                {/if}
-            </div>
-
-            <span class="ml-auto text-xs text-gray-500 dark:text-gray-400" data-testid="risk-selected-count" data-selected={selectedAssetIds.length} data-total={candidates.length}>
-                {$t('risk.assetSet.selectedCount', {values: {selected: selectedAssetIds.length, total: candidates.length}})}
-            </span>
+            <Tooltip text={$t('risk.assetSet.selectedCountHint')} position="bottom" maxWidth="360px" wrapperClass="ml-auto">
+                <span class="cursor-help text-xs text-gray-500 underline decoration-dotted underline-offset-2 dark:text-gray-400" data-testid="risk-selected-count" data-selected={analysedIds.length} data-total={candidates.length} data-parked={parkedCount}>
+                    {$t('risk.assetSet.selectedCount', {values: {selected: analysedIds.length, total: candidates.length}})}
+                </span>
+            </Tooltip>
         </div>
 
         {#if brokerLoadFailed}
@@ -568,29 +648,44 @@
         {:else if brokerLoadEmpty}
             <p class="mt-2 text-xs text-amber-600 dark:text-amber-400" data-testid="risk-broker-filter-empty">{$t('risk.assetSet.preset.noneHeld')}</p>
         {/if}
+        {#if eligibilityFailed}
+            <p class="mt-2 text-xs text-amber-600 dark:text-amber-400" data-testid="risk-eligibility-failed">{$t('risk.assetSet.eligibilityFailed')}</p>
+        {/if}
 
-        <!-- Row 2 — what is on the table, and the "+" that adds to it. -->
+        <!-- Row 2 — what is on the table, and the "+" that adds to it. An asset the engine rules
+             out for the period stays here, greyed, with the reason: it is left out of the
+             analysis, not out of the selection. -->
         <div class="mt-3 flex flex-wrap items-center gap-2" data-testid="risk-selected-assets">
             {#each selectedAssets as asset (asset.id)}
-                <span class="inline-flex h-7 items-center gap-1.5 rounded-full bg-gray-100 py-1 pl-1.5 pr-1 text-xs text-gray-600 dark:bg-slate-700 dark:text-gray-300" data-testid="risk-selected-asset-{asset.id}">
-                    <img src={asset.icon_url || getAssetTypeIconUrl(asset.asset_type)} alt="" class="h-4 w-4 shrink-0 object-contain" onerror={hideBrokenIcon} />
-                    {asset.display_name}
-                    <button class="rounded-full p-0.5 hover:bg-gray-200 dark:hover:bg-slate-600" onclick={() => removeAsset(asset.id)} aria-label={$t('common.remove')} data-testid="risk-remove-asset-{asset.id}">
-                        <X size={11} />
-                    </button>
-                </span>
+                {@const verdict = eligibilityView.get(asset.id)}
+                {#if verdict && verdict.level !== 'eligible'}
+                    <!-- The engine's reason on the whole chip, on hover or on a click anywhere on it
+                         (the developer: a small triangle was too small a target). -->
+                    <Tooltip text={verdict.texts.join(' · ')} position="top" maxWidth="320px" interactiveChild>
+                        {@render chip(asset, verdict)}
+                    </Tooltip>
+                {:else}
+                    {@render chip(asset, verdict)}
+                {/if}
             {/each}
-            <LabAssetPicker {candidates} selected={selectedAssetIds} {room} {filtersActive} onclearfilters={clearFilters} onadd={addAssets} />
+            <LabAssetPicker {assets} selected={selectedAssetIds} {room} eligibility={eligibilityView} onadd={addAssets} />
         </div>
+        {#if parkedCount > 0}
+            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400" data-testid="risk-parked-note">{$t('risk.assetSet.parkedNote', {values: {count: parkedCount}})}</p>
+        {/if}
         {#if atCapacity}
             <p class="mt-2 text-xs text-amber-600 dark:text-amber-400">{$t('risk.assetSet.maxAssets')}</p>
         {/if}
     </section>
 
-    {#if selectedAssetIds.length > 0}
-        <AssetSetCorrelationSection assetIds={selectedAssetIds} assetLabels={selectionLabels} assetTypes={selectionTypes} {dateStart} {dateEnd} {targetCurrency} refreshVersion={syncGeneration} />
-        <AssetSetComparisonLevels assetIds={selectedAssetIds} assetLabels={selectionLabels} {dateStart} {dateEnd} {targetCurrency} {benchmarkId} refreshVersion={syncGeneration} />
-        <AssetSetReplaySection assetIds={selectedAssetIds} assetLabels={selectionLabels} {dateStart} {dateEnd} {targetCurrency} refreshVersion={syncGeneration} />
+    {#if analysedIds.length > 0}
+        <AssetSetCorrelationSection assetIds={analysedIds} assetLabels={selectionLabels} assetTypes={selectionTypes} {dateStart} {dateEnd} {targetCurrency} refreshVersion={syncGeneration} />
+        <AssetSetComparisonLevels assetIds={analysedIds} assetLabels={selectionLabels} {dateStart} {dateEnd} {targetCurrency} {benchmarkId} refreshVersion={syncGeneration} />
+        <AssetSetReplaySection assetIds={analysedIds} assetLabels={selectionLabels} {dateStart} {dateEnd} {targetCurrency} refreshVersion={syncGeneration} />
+    {:else if seeding}
+        <div class="rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 p-8 text-center" data-testid="risk-asset-set-seeding">
+            <RefreshCw size={20} class="mx-auto animate-spin text-libre-green" />
+        </div>
     {:else}
         <div class="rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 p-8 text-center text-sm text-gray-400 dark:text-gray-500" data-testid="risk-asset-set-empty">
             {$t('risk.states.noAssets')}

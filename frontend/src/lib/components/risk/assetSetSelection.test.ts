@@ -7,21 +7,23 @@
  * `assets.filter(active).slice(0, 100)`, which drew a 100×100 matrix nobody
  * asked for and gave no way back. Every rule it now enforces is a decision
  * taken before a component renders — which assets are on the table, what the
- * filter row means when it is empty, what a mass action does to a selection the
- * filter is currently hiding — so all of it is asserted here rather than
- * through a page.
+ * filter row means when it is empty, what a mass action does to the ruled-out
+ * assets parked in the selection, which rows the "+" picker offers — so all of
+ * it is asserted here rather than through a page.
  *
  * Two deliberate choices in the fixtures:
  *
- *  - **Storage and user are always injected.** `readPersistedSelection` and
- *    `writePersistedSelection` take a storage object and then a user id, both
- *    defaulting to the live page (its `localStorage`, its session); the tests
- *    pass a `Map`-backed stand-in and an explicit id, and never touch a global
- *    `localStorage`, so no case can leave state behind for the next one and the
- *    file is order-independent by construction. (An explicit `undefined` reaches
- *    those defaults on purpose; here there is neither a `localStorage` nor a
- *    logged-in session — except inside the one describe that logs a user in to
- *    prove the default follows them, and logs them out again after every case.)
+ *  - **Storage and user are injected, except where the defaults are the
+ *    subject.** `readPersistedSelection` and `writePersistedSelection` take a
+ *    storage object and then a user id, both defaulting to the live page (its
+ *    `localStorage`, its session). Everywhere else the tests pass a `Map`-backed
+ *    stand-in and an explicit id, so no case can leave state behind for the next
+ *    one. The two describes about the defaults set them up and undo them after
+ *    every case: one logs a user in; the other also puts a stand-in in the
+ *    page's place with `vi.stubGlobal`. A case that merely *relies* on the
+ *    default storage tests whichever Node runs it — Node 26's own `localStorage`
+ *    answers `undefined` without `--localstorage-file` — and "no storage" then
+ *    passes for "no memory".
  *    Forgetting the user is the omission that hides: with no
  *    identity the module keeps no memory — it returns before reading or writing
  *    a selection — so such a case stays green without exercising what its name
@@ -33,19 +35,39 @@
  *    longer uses. The one key typed out is the legacy one, on purpose: it is a
  *    shipped historical fact the tests must name, not a current choice.
  */
-import {afterEach, describe, expect, it} from 'vitest';
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 
 import {getClientSessionUserId, transitionClientSession} from '$lib/stores/app/clientSession';
-import {EMPTY_FILTERS, FALLBACK_SELECTION_SIZE, MAX_SELECTED_ASSETS, applyBulkAction, applyFilters, ownedAssetIds, readPersistedSelection, resolveInitialSelection, resolveInitialSelectionWithSource, writePersistedSelection, type BulkAction, type SelectableAsset} from './assetSetSelection';
+import {
+    FALLBACK_SELECTION_SIZE,
+    MAX_SELECTED_ASSETS,
+    applyBulkAction,
+    applyFilters,
+    foldForSearch,
+    pickerRows,
+    readPersistedSelection,
+    resolveInitialSelectionWithSource,
+    toggleVisibleRows,
+    visibleRowsAllChecked,
+    writePersistedSelection,
+    type BulkAction,
+    type SelectableAsset,
+    type SelectionFilters,
+    type SelectionSource,
+} from './assetSetSelection';
 
-/** An asset carrying only the fields this module reads. Not owned by default. */
+/** An asset carrying only the fields this module reads. */
 function asset(id: number, overrides: Partial<SelectableAsset> = {}): SelectableAsset {
-    return {id, active: true, asset_type: 'ETF', currency: 'EUR', tx_count_own: 0, ...overrides};
+    return {id, active: true, asset_type: 'ETF', currency: 'EUR', ...overrides};
 }
 
-/** An asset the user has transacted on — what "mine" means on this page. */
-function ownedAsset(id: number, overrides: Partial<SelectableAsset> = {}): SelectableAsset {
-    return asset(id, {tx_count_own: 4, ...overrides});
+/**
+ * An asset as the page still receives it: `assetStore` copies the F15
+ * `tx_count_own` onto every asset, a field this module stopped reading on 24/09
+ * and no longer declares.
+ */
+function withOwnCount(entry: SelectableAsset, txCountOwn: number): SelectableAsset {
+    return Object.assign({}, entry, {tx_count_own: txCountOwn});
 }
 
 /** A catalogue of `size` assets with ids 1..size. */
@@ -139,22 +161,6 @@ function refusingStorage(): RefusingStorage {
     };
 }
 
-describe('ownedAssetIds', () => {
-    it('keeps the assets the user has actually transacted on', () => {
-        const assets = [asset(1), ownedAsset(2), asset(3), ownedAsset(4)];
-        expect(ownedAssetIds(assets)).toEqual([2, 4]);
-    });
-
-    it('treats an absent or zero counter as not owned', () => {
-        const assets = [asset(1, {tx_count_own: 0}), {id: 2, currency: 'EUR'} as SelectableAsset, ownedAsset(3, {tx_count_own: 1})];
-        expect(ownedAssetIds(assets)).toEqual([3]);
-    });
-
-    it('owns nothing in an empty catalogue', () => {
-        expect(ownedAssetIds([])).toEqual([]);
-    });
-});
-
 describe('readPersistedSelection', () => {
     it('reads back exactly what the writer stored', () => {
         const storage = fakeStorage();
@@ -168,8 +174,8 @@ describe('readPersistedSelection', () => {
     });
 
     it('has no memory when storage itself is unavailable', () => {
+        // Not `undefined`: that would ask for the page's own storage — see the describe on the defaults.
         expect(readPersistedSelection(null, USER_A)).toBeNull();
-        expect(readPersistedSelection(undefined, USER_A)).toBeNull();
     });
 
     it('has no memory when reading throws, instead of breaking the page', () => {
@@ -222,7 +228,6 @@ describe('writePersistedSelection', () => {
 
     it('does nothing, quietly, when storage is unavailable', () => {
         expect(() => writePersistedSelection([1, 2], null, USER_A)).not.toThrow();
-        expect(() => writePersistedSelection([1, 2], undefined, USER_A)).not.toThrow();
     });
 
     it('stores an empty selection, which reads back as no memory', () => {
@@ -272,14 +277,16 @@ describe('per-user memory (TL-A)', () => {
         expect(readPersistedSelection(storage, USER_B)).toBeNull();
     });
 
-    it("opens a second user on their own assets, not on the first user's selection", () => {
+    it("opens a second user on what they hold, not on the first user's selection", () => {
         const storage = fakeStorage();
         writePersistedSelection([1, 2], storage, USER_A);
-        const assets = [asset(1), asset(2), ownedAsset(3)];
+        const assets = [asset(1), asset(2), asset(3)];
+        const held = [3];
         // Control: in its owner's hands that selection survives the intersection
-        // and wins the ladder — so it would win for B as well, were B handed it.
-        expect(resolveInitialSelectionWithSource(assets, readPersistedSelection(storage, USER_A))).toEqual({ids: [1, 2], source: 'persisted'});
-        expect(resolveInitialSelectionWithSource(assets, readPersistedSelection(storage, USER_B))).toEqual({ids: [3], source: 'mine'});
+        // and wins the ladder over the same holdings — so it would win for B as
+        // well, were B handed it.
+        expect(resolveInitialSelectionWithSource(assets, readPersistedSelection(storage, USER_A), held)).toEqual({ids: [1, 2], source: 'persisted'});
+        expect(resolveInitialSelectionWithSource(assets, readPersistedSelection(storage, USER_B), held)).toEqual({ids: [3], source: 'mine'});
     });
 
     it('never adopts the legacy key, whoever reads', () => {
@@ -368,15 +375,85 @@ describe('the session default', () => {
     });
 });
 
-describe('resolveInitialSelection (D19)', () => {
+describe("the page's localStorage, as the default storage", () => {
+    // What the production call sites use: no storage and no user passed. Node 26
+    // has a `localStorage` of its own — a getter answering `undefined` without
+    // `--localstorage-file` — so the page's storage is put in place in every case
+    // here, never inherited. Both defaults are undone after every case.
+    beforeEach(() => {
+        transitionClientSession(USER_A);
+    });
+
+    afterEach(() => {
+        vi.unstubAllGlobals();
+        transitionClientSession(null);
+    });
+
+    it('writes to and reads from the page storage when the caller passes none', () => {
+        const page = fakeStorage();
+        vi.stubGlobal('localStorage', page);
+        writePersistedSelection([5, 3]);
+        // It really landed there, under the session user's own key…
+        expect(page.keyUsed()).toContain(USER_A);
+        expect(readPersistedSelection(page, USER_A)).toEqual([5, 3]);
+        // …and it reads back through the same default. An explicit `undefined` is the same omission.
+        expect(readPersistedSelection()).toEqual([5, 3]);
+        expect(readPersistedSelection(undefined, USER_A)).toEqual([5, 3]);
+    });
+
+    it('opens on the remembered selection when the ladder reads the storage itself', () => {
+        // Called without a memory, the ladder reads the page storage. The id that no
+        // longer resolves is dropped there too, and the stored order is kept.
+        const page = fakeStorage();
+        vi.stubGlobal('localStorage', page);
+        writePersistedSelection([13, 404, 11], page, USER_A);
+        const assets = [asset(11), asset(12), asset(13)];
+        expect(resolveInitialSelectionWithSource(assets)).toEqual({ids: [13, 11], source: 'persisted'});
+    });
+
+    it('has no memory, and never throws, when the page has no storage', () => {
+        vi.stubGlobal('localStorage', undefined);
+        expect(readPersistedSelection()).toBeNull();
+        expect(() => writePersistedSelection([1, 2])).not.toThrow();
+        expect(resolveInitialSelectionWithSource([asset(1), asset(2)])).toEqual({ids: [1, 2], source: 'fallback'});
+
+        // Control: the same calls, once the page has a storage, do remember.
+        vi.stubGlobal('localStorage', fakeStorage());
+        writePersistedSelection([1, 2]);
+        expect(readPersistedSelection()).toEqual([1, 2]);
+    });
+
+    it('has no memory, and never throws, when merely touching the page storage throws', () => {
+        // A browser that blocks storage — cookies off, a sandboxed frame — throws on
+        // the access itself, before any method is called. `stubGlobal` goes first
+        // only to record the original, so `unstubAllGlobals` restores it.
+        let touched = 0;
+        vi.stubGlobal('localStorage', undefined);
+        Object.defineProperty(globalThis, 'localStorage', {
+            configurable: true,
+            get() {
+                touched += 1;
+                throw new DOMException('The operation is insecure.', 'SecurityError');
+            },
+        });
+        expect(readPersistedSelection()).toBeNull();
+        const afterRead = touched;
+        expect(() => writePersistedSelection([1, 2])).not.toThrow();
+        // Refused, not bypassed: each call really reached for the page storage.
+        expect(afterRead).toBeGreaterThan(0);
+        expect(touched).toBeGreaterThan(afterRead);
+    });
+});
+
+describe('resolveInitialSelectionWithSource (D19)', () => {
     it('opens on the selection the user left behind', () => {
-        const assets = [asset(1), asset(2), ownedAsset(3)];
-        expect(resolveInitialSelection(assets, [1, 2])).toEqual([1, 2]);
+        const assets = [asset(1), asset(2), asset(3)];
+        expect(resolveInitialSelectionWithSource(assets, [1, 2])).toEqual({ids: [1, 2], source: 'persisted'});
     });
 
     it('keeps the persisted order rather than the catalogue order', () => {
         const assets = [asset(3), asset(5), asset(7)];
-        expect(resolveInitialSelection(assets, [7, 3, 5])).toEqual([7, 3, 5]);
+        expect(resolveInitialSelectionWithSource(assets, [7, 3, 5]).ids).toEqual([7, 3, 5]);
     });
 
     it('drops a persisted id whose asset no longer exists', () => {
@@ -384,44 +461,90 @@ describe('resolveInitialSelection (D19)', () => {
         // for an id that no longer resolves turns a stale preference into an
         // error the user has no way to explain.
         const assets = [asset(1), asset(3)];
-        expect(resolveInitialSelection(assets, [1, 2, 3, 99])).toEqual([1, 3]);
+        expect(resolveInitialSelectionWithSource(assets, [1, 2, 3, 99]).ids).toEqual([1, 3]);
     });
 
-    it('falls through to the owned assets when no persisted id survives', () => {
-        const assets = [asset(1), ownedAsset(2), ownedAsset(3)];
-        expect(resolveInitialSelection(assets, [404, 405])).toEqual([2, 3]);
+    it('opens on a remembered asset once, where it was first remembered', () => {
+        // A duplicate that reached storage would reach the analysis twice — a scope
+        // the backend refuses ("asset_ids must be unique") — and be written back on
+        // every visit. The held rung has always deduplicated; this one now does too.
+        expect(resolveInitialSelectionWithSource([asset(1), asset(2)], [2, 2, 1])).toEqual({ids: [2, 1], source: 'persisted'});
+        // Before the cap, not after: stored twice each, 150 assets still fill the hundred.
+        const assets = catalogue(150);
+        const twice = ids(assets).flatMap((id) => [id, id]);
+        expect(resolveInitialSelectionWithSource(assets, twice).ids).toEqual(ids(assets).slice(0, MAX_SELECTED_ASSETS));
     });
 
-    it('falls through to the owned assets when there is no memory at all', () => {
-        const assets = [asset(1), ownedAsset(2)];
-        expect(resolveInitialSelection(assets, null)).toEqual([2]);
+    it('prefers the remembered selection to what is held', () => {
+        expect(resolveInitialSelectionWithSource(catalogue(4), [1], [2, 3])).toEqual({ids: [1], source: 'persisted'});
+    });
+
+    it('falls through to what is held when no persisted id survives', () => {
+        expect(resolveInitialSelectionWithSource(catalogue(3), [404, 405], [2, 3])).toEqual({ids: [2, 3], source: 'mine'});
+    });
+
+    it('falls through to what is held when there is no memory at all', () => {
+        expect(resolveInitialSelectionWithSource(catalogue(2), null, [2])).toEqual({ids: [2], source: 'mine'});
     });
 
     it('treats an empty persisted list as no memory', () => {
-        const assets = [asset(1), ownedAsset(2)];
-        expect(resolveInitialSelection(assets, [])).toEqual([2]);
+        expect(resolveInitialSelectionWithSource(catalogue(2), [], [2])).toEqual({ids: [2], source: 'mine'});
     });
 
-    it('falls back to a small readable handful when the user owns nothing', () => {
-        const assets = catalogue(30);
-        expect(resolveInitialSelection(assets, null)).toHaveLength(FALLBACK_SELECTION_SIZE);
+    it('drops a held id that is not on the page, and falls back when none is', () => {
+        // A holding outside the page's list would reach the analysis with no chip
+        // to remove it by. Nothing held on the page is nothing held.
+        expect(resolveInitialSelectionWithSource(catalogue(3), null, [404, 2, 405, 3])).toEqual({ids: [2, 3], source: 'mine'});
+        expect(resolveInitialSelectionWithSource(catalogue(3), null, [404, 405])).toEqual({ids: [1, 2, 3], source: 'fallback'});
+    });
+
+    it('selects an asset held twice once, where it was first held', () => {
+        // An asset held in two brokers can come back twice. The held order is kept, not the catalogue's.
+        expect(resolveInitialSelectionWithSource(catalogue(3), null, [3, 1, 3, 2, 1])).toEqual({ids: [3, 1, 2], source: 'mine'});
+    });
+
+    it('spends the hundred on assets, not on entries, when every asset is held twice', () => {
+        // Capping before deduplicating would stop at fifty.
+        const assets = catalogue(150);
+        const twice = ids(assets).flatMap((id) => [id, id]);
+        expect(resolveInitialSelectionWithSource(assets, null, twice).ids).toEqual(ids(assets).slice(0, MAX_SELECTED_ASSETS));
+    });
+
+    it('falls back when nothing is held, whether the list is empty or not passed at all', () => {
+        const assets = [asset(1, {tx_count: 2}), asset(2, {tx_count: 9})];
+        expect(resolveInitialSelectionWithSource(assets, null, [])).toEqual({ids: [2, 1], source: 'fallback'});
+        expect(resolveInitialSelectionWithSource(assets, null)).toEqual({ids: [2, 1], source: 'fallback'});
+    });
+
+    it('reads nothing into tx_count_own: an asset once traded is not an asset held', () => {
+        // The old rung 2 opened on every `tx_count_own > 0`, positions sold years
+        // ago included — [1, 3] here. Only `held` counts now, and the fallback ranks
+        // by `tx_count` alone: by `tx_count_own` it would read [1, 3, 2].
+        const assets = [withOwnCount(asset(1, {tx_count: 1}), 99), withOwnCount(asset(2, {tx_count: 50}), 0), withOwnCount(asset(3, {tx_count: 20}), 7)];
+        expect(resolveInitialSelectionWithSource(assets, null)).toEqual({ids: [2, 3, 1], source: 'fallback'});
+    });
+
+    it('falls back to a small readable handful when the user holds nothing', () => {
+        const result = resolveInitialSelectionWithSource(catalogue(30), null, []);
+        expect(result.source).toBe('fallback');
+        expect(result.ids).toHaveLength(FALLBACK_SELECTION_SIZE);
     });
 
     it('ranks the fallback by how much the instrument has been transacted', () => {
         // Not by where the asset sits in the API's array: choosing by position
         // is still choosing, it just hides the arbitrariness behind an index.
         const assets = [asset(1, {tx_count: 2}), asset(2, {tx_count: 90}), asset(3, {tx_count: 40}), asset(4, {tx_count: 7})];
-        expect(resolveInitialSelection(assets, null)).toEqual([2, 3, 4, 1]);
+        expect(resolveInitialSelectionWithSource(assets, null).ids).toEqual([2, 3, 4, 1]);
     });
 
     it('breaks a fallback tie on id, so the handful is stable across reloads', () => {
         const assets = [asset(30, {tx_count: 5}), asset(10, {tx_count: 5}), asset(20, {tx_count: 5})];
-        expect(resolveInitialSelection(assets, null)).toEqual([10, 20, 30]);
+        expect(resolveInitialSelectionWithSource(assets, null).ids).toEqual([10, 20, 30]);
     });
 
     it('ranks an asset with no transaction count as one with none', () => {
         const assets = [asset(1), asset(2, {tx_count: 3}), asset(3, {tx_count: 0})];
-        expect(resolveInitialSelection(assets, null)).toEqual([2, 1, 3]);
+        expect(resolveInitialSelectionWithSource(assets, null).ids).toEqual([2, 1, 3]);
     });
 
     it('takes the most transacted out of a large catalogue, not the first six', () => {
@@ -429,7 +552,7 @@ describe('resolveInitialSelection (D19)', () => {
         // and position point in opposite directions: a positional pick would
         // return 1..6 and fail here.
         const assets = catalogue(500, (id) => asset(id, {tx_count: id}));
-        const result = resolveInitialSelection(assets, null);
+        const result = resolveInitialSelectionWithSource(assets, null).ids;
         expect(result).toHaveLength(FALLBACK_SELECTION_SIZE);
         expect(result).toEqual([500, 499, 498, 497, 496, 495]);
     });
@@ -439,68 +562,72 @@ describe('resolveInitialSelection (D19)', () => {
         // caller's list — the same array the filter row and the table read.
         const assets = [asset(1, {tx_count: 1}), asset(2, {tx_count: 99}), asset(3, {tx_count: 50})];
         const original = ids(assets);
-        resolveInitialSelection(assets, null);
+        resolveInitialSelectionWithSource(assets, null);
         expect(ids(assets)).toEqual(original);
     });
 
     it('excludes inactive assets from that fallback, however transacted they are', () => {
         const assets = [asset(1, {active: false, tx_count: 9999}), asset(2, {tx_count: 3}), asset(3, {active: false}), asset(4, {tx_count: 1})];
-        expect(resolveInitialSelection(assets, null)).toEqual([2, 4]);
+        expect(resolveInitialSelectionWithSource(assets, null).ids).toEqual([2, 4]);
     });
 
     it('treats an asset with no active flag as active', () => {
         const assets = [{id: 1, currency: 'EUR'} as SelectableAsset, asset(2)];
-        expect(resolveInitialSelection(assets, null)).toEqual([1, 2]);
+        expect(resolveInitialSelectionWithSource(assets, null).ids).toEqual([1, 2]);
     });
 
-    it('still selects an owned asset that has been deactivated', () => {
+    it('still selects a held asset that has been deactivated', () => {
         // The activity filter belongs to the fallback only: an asset the user
         // holds is on the table whether or not it still trades.
-        const assets = [asset(1), ownedAsset(2, {active: false})];
-        expect(resolveInitialSelection(assets, null)).toEqual([2]);
+        const assets = [asset(1), asset(2, {active: false})];
+        expect(resolveInitialSelectionWithSource(assets, null, [2])).toEqual({ids: [2], source: 'mine'});
     });
 
     it('still selects a persisted asset that has been deactivated', () => {
         const assets = [asset(1, {active: false}), asset(2)];
-        expect(resolveInitialSelection(assets, [1])).toEqual([1]);
+        expect(resolveInitialSelectionWithSource(assets, [1]).ids).toEqual([1]);
     });
 
     it('never opens on a hundred assets: five hundred in the catalogue, a handful on screen', () => {
         // The defect this module exists to prevent, asserted directly.
-        const result = resolveInitialSelection(catalogue(500), null);
+        const result = resolveInitialSelectionWithSource(catalogue(500), null).ids;
         expect(result).toHaveLength(FALLBACK_SELECTION_SIZE);
         expect(result.length).toBeLessThan(MAX_SELECTED_ASSETS);
     });
 
-    it('caps a large owned set at the API limit', () => {
-        const allOwned = catalogue(500, (id) => ownedAsset(id));
-        expect(resolveInitialSelection(allOwned, null)).toHaveLength(MAX_SELECTED_ASSETS);
+    it('caps a large held set at the API limit', () => {
+        const assets = catalogue(500);
+        expect(resolveInitialSelectionWithSource(assets, null, ids(assets))).toEqual({ids: ids(assets).slice(0, MAX_SELECTED_ASSETS), source: 'mine'});
     });
 
     it('caps a large persisted selection at the API limit', () => {
         const assets = catalogue(500);
-        expect(resolveInitialSelection(assets, ids(assets))).toHaveLength(MAX_SELECTED_ASSETS);
+        expect(resolveInitialSelectionWithSource(assets, ids(assets)).ids).toHaveLength(MAX_SELECTED_ASSETS);
     });
 
     it('selects nothing from an empty catalogue', () => {
-        expect(resolveInitialSelection([], [1, 2])).toEqual([]);
-        expect(resolveInitialSelection([], null)).toEqual([]);
+        expect(resolveInitialSelectionWithSource([], [1, 2]).ids).toEqual([]);
+        expect(resolveInitialSelectionWithSource([], null, [1, 2]).ids).toEqual([]);
+        expect(resolveInitialSelectionWithSource([], null).ids).toEqual([]);
     });
 
-    it('never returns an id that is not in the catalogue, even when it reads storage itself', () => {
-        // Called without the second argument, the module reaches for its own
-        // storage seam. Whatever that seam finds — a real memory, nothing, or a
-        // refusal — the result stays inside what exists and inside the cap.
-        const assets = [asset(11), ownedAsset(12), asset(13)];
-        const available = new Set(ids(assets));
-        const result = resolveInitialSelection(assets);
-        expect(result.every((id) => available.has(id))).toBe(true);
-        expect(result.length).toBeLessThanOrEqual(MAX_SELECTED_ASSETS);
-        expect(result.length).toBeGreaterThan(0);
+    it('answers each rung its own input, held included', () => {
+        // One input per rung, each held to the rung it must reach: a ladder that dropped `held` would open the second on the fallback.
+        const assets = catalogue(5);
+        const inputs: ReadonlyArray<readonly [readonly number[] | null, readonly number[], {ids: number[]; source: SelectionSource}]> = [
+            [[4, 2], [1], {ids: [4, 2], source: 'persisted'}],
+            [null, [3, 5], {ids: [3, 5], source: 'mine'}],
+            [null, [], {ids: [1, 2, 3, 4, 5], source: 'fallback'}],
+        ];
+        for (const [persisted, held, expected] of inputs) {
+            expect(resolveInitialSelectionWithSource(assets, persisted, held)).toEqual(expected);
+        }
     });
 });
 
 describe('applyFilters', () => {
+    /** The filter row with no criterion set, as it opens. */
+    const EMPTY_FILTERS: SelectionFilters = {types: [], currencies: []};
     const assets = [asset(1, {asset_type: 'ETF', currency: 'EUR'}), asset(2, {asset_type: 'STOCK', currency: 'USD'}), asset(3, {asset_type: 'ETF', currency: 'USD'}), asset(4, {asset_type: null, currency: 'EUR'})];
 
     it('shows everything when no criterion is set', () => {
@@ -553,98 +680,210 @@ describe('applyFilters', () => {
 });
 
 describe('applyBulkAction', () => {
+    // The candidates are what an action may bring in: the page's catalogue without
+    // the assets Risk's engine rules out for the period. A ruled-out asset already
+    // in the selection is *parked* there, as a greyed chip — selected, and never a
+    // candidate. Here that is 9.
     const assets = catalogue(9);
-    const visible = (...wanted: number[]): SelectableAsset[] => assets.filter((entry) => wanted.includes(entry.id));
+    const candidates = (...wanted: number[]): SelectableAsset[] => assets.filter((entry) => wanted.includes(entry.id));
 
-    it('"all" adds every visible candidate to what was already selected', () => {
-        expect(applyBulkAction('all', [1], visible(2, 3), assets)).toEqual([1, 2, 3]);
+    it('"all" adds every candidate to what was already selected', () => {
+        expect(applyBulkAction('all', [1], candidates(2, 3))).toEqual([1, 2, 3]);
     });
 
-    it('"all" keeps a selection made outside the current filter', () => {
-        expect(applyBulkAction('all', [9], visible(1, 2), assets)).toContain(9);
+    it('"all" keeps a parked asset where it is', () => {
+        expect(applyBulkAction('all', [9], candidates(1, 2))).toEqual([9, 1, 2]);
     });
 
     it('"all" never selects the same asset twice', () => {
-        const result = applyBulkAction('all', [1, 2], visible(1, 2, 3), assets);
+        const result = applyBulkAction('all', [1, 2], candidates(1, 2, 3));
         expect(result).toEqual([1, 2, 3]);
         expect(new Set(result).size).toBe(result.length);
     });
 
-    it('"all" with nothing visible leaves the selection as it was', () => {
-        expect(applyBulkAction('all', [4, 5], [], assets)).toEqual([4, 5]);
+    it('"all" with no candidate leaves the selection as it was', () => {
+        expect(applyBulkAction('all', [4, 5], [])).toEqual([4, 5]);
     });
 
     it('"all" truncates at the API limit rather than failing', () => {
         // The one place the hundred is legitimate: the user asked for it.
         const huge = catalogue(150);
-        const result = applyBulkAction('all', [], huge, huge);
+        const result = applyBulkAction('all', [], huge);
         expect(result).toHaveLength(MAX_SELECTED_ASSETS);
         expect(result).toEqual(ids(huge).slice(0, MAX_SELECTED_ASSETS));
     });
 
-    it('"none" clears only what the filter is showing', () => {
-        // The mirror of "all": a button that reached past the active filter
-        // would undo the filter without saying so.
-        expect(applyBulkAction('none', [1, 2, 5], visible(1, 2), assets)).toEqual([5]);
+    it('"none" empties the selection, the parked assets included', () => {
+        // "Deselect all" leaving chips behind would be a button that lies.
+        expect(applyBulkAction('none', [1, 2, 9], candidates(1, 2))).toEqual([]);
     });
 
-    it('"none" with nothing visible leaves the selection untouched', () => {
-        expect(applyBulkAction('none', [1, 2], [], assets)).toEqual([1, 2]);
+    it('"none" empties the selection even when nothing is a candidate', () => {
+        // Not one of these is a candidate, and they still go: "none" is about the
+        // selection, not about the list. It used to leave this selection untouched.
+        expect(applyBulkAction('none', [1, 2], [])).toEqual([]);
     });
 
-    it('"none" on an unfiltered catalogue clears everything', () => {
-        expect(applyBulkAction('none', [1, 2, 5], assets, assets)).toEqual([]);
-    });
-
-    it('"invert" keeps the off-filter selection, drops the visible selected and adds the visible unselected', () => {
-        const result = applyBulkAction('invert', [1, 9], visible(1, 2, 3), assets);
+    it('"invert" keeps the parked assets, drops the selected candidates and adds the others', () => {
+        const result = applyBulkAction('invert', [1, 9], candidates(1, 2, 3));
         expect(result).toContain(9);
         expect(result).not.toContain(1);
         expect(ascending(result)).toEqual([2, 3, 9]);
     });
 
     it('"invert" never selects the same asset twice', () => {
-        const duplicated = [...visible(2), ...visible(2)];
-        expect(applyBulkAction('invert', [], duplicated, assets)).toEqual([2]);
+        const duplicated = [...candidates(2), ...candidates(2)];
+        expect(applyBulkAction('invert', [], duplicated)).toEqual([2]);
     });
 
-    it('"invert" truncates at the API limit', () => {
-        const huge = catalogue(250);
-        const selected = ids(huge).slice(0, MAX_SELECTED_ASSETS);
-        const result = applyBulkAction('invert', selected, huge.slice(MAX_SELECTED_ASSETS), huge);
-        expect(result).toHaveLength(MAX_SELECTED_ASSETS);
-    });
-
-    it('"mine" ignores the filter and returns the owned set', () => {
-        const mixed = [asset(1), ownedAsset(2), asset(3), ownedAsset(4)];
-        expect(applyBulkAction('mine', [], [mixed[0]], mixed)).toEqual([2, 4]);
-    });
-
-    it('"mine" is a reset: it discards a selection outside the user holdings', () => {
-        const mixed = [asset(1), ownedAsset(2)];
-        expect(applyBulkAction('mine', [1, 7], mixed, mixed)).toEqual([2]);
-    });
-
-    it('"mine" truncates at the API limit', () => {
-        const huge = catalogue(500, (id) => ownedAsset(id));
-        expect(applyBulkAction('mine', [], [], huge)).toHaveLength(MAX_SELECTED_ASSETS);
+    it('"all" and "invert" keep every parked asset at the API limit, and truncate what they add', () => {
+        // Five parked assets and 150 candidates: the cap cuts into the candidates
+        // brought in, never into what was parked.
+        const parked = [201, 202, 203, 204, 205];
+        const huge = catalogue(150);
+        const expected = [...parked, ...ids(huge).slice(0, MAX_SELECTED_ASSETS - parked.length)];
+        for (const action of ['all', 'invert'] as const) {
+            expect(applyBulkAction(action, parked, huge), action).toEqual(expected);
+        }
     });
 
     it('no action can hand back more than the API limit', () => {
-        const huge = catalogue(300, (id) => ownedAsset(id));
+        const huge = catalogue(300);
         const selected = ids(huge).slice(0, MAX_SELECTED_ASSETS);
-        const actions: BulkAction[] = ['all', 'none', 'invert', 'mine'];
+        const actions: BulkAction[] = ['all', 'none', 'invert'];
         for (const action of actions) {
-            expect(applyBulkAction(action, selected, huge, huge).length).toBeLessThanOrEqual(MAX_SELECTED_ASSETS);
+            expect(applyBulkAction(action, selected, huge).length).toBeLessThanOrEqual(MAX_SELECTED_ASSETS);
         }
     });
 
     it('hands back a new array rather than the selection it was given', () => {
         const selected = [1, 2];
-        const actions: BulkAction[] = ['all', 'none', 'invert', 'mine'];
+        const actions: BulkAction[] = ['all', 'none', 'invert'];
         for (const action of actions) {
-            expect(applyBulkAction(action, selected, visible(2, 3), assets)).not.toBe(selected);
+            expect(applyBulkAction(action, selected, candidates(2, 3))).not.toBe(selected);
         }
         expect(selected).toEqual([1, 2]);
+    });
+});
+
+describe('foldForSearch', () => {
+    it('drops accents and case, so "societe" finds "Société"', () => {
+        expect(foldForSearch('Société Générale')).toBe('societe generale');
+        expect(foldForSearch('ÉCLAIR À LA CRÈME')).toBe('eclair a la creme');
+    });
+
+    it('folds an accent typed as a separate mark exactly like a precomposed one', () => {
+        // "é" arrives as one code point or as "e" + COMBINING ACUTE ACCENT, depending on where the text came from.
+        expect(foldForSearch('Soci\u00E9t\u00E9')).toBe('societe');
+        expect(foldForSearch('Socie\u0301te\u0301')).toBe('societe');
+    });
+
+    it('leaves digits, spaces and punctuation as they are', () => {
+        expect(foldForSearch('S&P 500 — ETF (Acc)')).toBe('s&p 500 — etf (acc)');
+    });
+});
+
+describe('pickerRows', () => {
+    interface Row {
+        id: number;
+        name: string;
+        currency: string;
+    }
+
+    // Not in id order, so "the order the caller passed" cannot pass for "sorted".
+    const rows: Row[] = [
+        {id: 4, name: 'iShares Core MSCI World', currency: 'USD'},
+        {id: 2, name: 'Société Générale', currency: 'EUR'},
+        {id: 7, name: 'Vanguard FTSE All-World ETF', currency: 'USD'},
+        {id: 1, name: 'Amundi MSCI World ETF', currency: 'EUR'},
+    ];
+    const found = (selected: readonly number[], query: string): number[] => pickerRows(rows, selected, query, (row) => `${row.name} ${row.currency}`).map((row) => row.id);
+
+    it('lists every candidate, in the order given, when the query is empty or blank', () => {
+        expect(found([], '')).toEqual([4, 2, 7, 1]);
+        expect(found([], '   ')).toEqual([4, 2, 7, 1]);
+    });
+
+    it('leaves out the assets already selected, even when they match', () => {
+        expect(found([2, 7], '')).toEqual([4, 1]);
+        expect(found([7], 'vanguard')).toEqual([]);
+    });
+
+    it('keeps a row only when every word of the query is in its text, in any order', () => {
+        // "etf usd" finds the ETF quoted in dollars whichever way its name is written;
+        // either word alone also brings the euro ETF, or the dollar fund that is no ETF.
+        expect(found([], 'etf usd')).toEqual([7]);
+        expect(found([], 'usd etf')).toEqual([7]);
+        expect(found([], 'etf')).toEqual([7, 1]);
+        expect(found([], 'usd')).toEqual([4, 7]);
+        expect(found([], 'msci crypto')).toEqual([]);
+    });
+
+    it('matches regardless of accents and case, on either side', () => {
+        expect(found([], 'SOCIETE')).toEqual([2]);
+        expect(found([], 'générale')).toEqual([2]);
+    });
+});
+
+describe('toggleVisibleRows and visibleRowsAllChecked', () => {
+    // `room` is how many assets the selection can still take; the rows checked in
+    // the picker, shown or not, spend it.
+
+    it('checks the visible rows not checked yet, in the order shown', () => {
+        expect(visibleRowsAllChecked([], [3, 1, 2], 10)).toBe(false);
+        expect(toggleVisibleRows([], [3, 1, 2], 10)).toEqual([3, 1, 2]);
+    });
+
+    it('checks no more rows than the selection has room for', () => {
+        const checked = toggleVisibleRows([], [1, 2, 3, 4, 5], 3);
+        expect(checked).toEqual([1, 2, 3]);
+        // Nothing left it could check: the switch now offers to uncheck.
+        expect(visibleRowsAllChecked(checked, [1, 2, 3, 4, 5], 3)).toBe(true);
+    });
+
+    it('counts a row checked under another query against the room, and keeps it', () => {
+        // 9 was checked under an earlier search: it is not shown, and it takes a place.
+        expect(toggleVisibleRows([9], [1, 2, 3], 3)).toEqual([9, 1, 2]);
+    });
+
+    it('unchecks the visible rows once every one is checked, and only those', () => {
+        expect(visibleRowsAllChecked([9, 1, 2], [1, 2], 10)).toBe(true);
+        expect(toggleVisibleRows([9, 1, 2], [1, 2], 10)).toEqual([9]);
+    });
+
+    it('unchecks instead of checking when no room is left', () => {
+        // One visible row checked, two not, and no room for them: the switch clears the one.
+        expect(visibleRowsAllChecked([9, 1], [1, 2, 3], 2)).toBe(true);
+        expect(toggleVisibleRows([9, 1], [1, 2, 3], 2)).toEqual([9]);
+        // With no room at all and nothing checked it has nothing to do — the picker disables it then.
+        expect(visibleRowsAllChecked([], [1, 2, 3], 0)).toBe(true);
+        expect(toggleVisibleRows([], [1, 2, 3], 0)).toEqual([]);
+    });
+
+    it('offers nothing to uncheck when no row is visible', () => {
+        expect(visibleRowsAllChecked([9], [], 10)).toBe(false);
+        expect(toggleVisibleRows([9], [], 10)).toEqual([9]);
+    });
+
+    it('says it would uncheck exactly when the switch unchecks, in every state', () => {
+        // `visibleRowsAllChecked` is the label and `toggleVisibleRows` the action:
+        // if they ever disagreed, the switch would say one thing and do another.
+        const visible = [1, 2, 3];
+        const states = [[], [1], [1, 2], [1, 2, 3], [9], [9, 1], [9, 1, 2, 3]];
+        for (const checked of states) {
+            for (const room of [0, 1, 2, 3, 4, 10]) {
+                const unchecks = !toggleVisibleRows(checked, visible, room).some((id) => visible.includes(id));
+                expect(visibleRowsAllChecked(checked, visible, room), `checked [${checked.join(', ')}], room ${room}`).toBe(unchecks);
+            }
+        }
+    });
+
+    it('hands back a new list and leaves the one it was given alone', () => {
+        // The picker assigns the result to its state: a list changed in place would not re-render.
+        const checked = [9, 1];
+        for (const room of [10, 2]) {
+            expect(toggleVisibleRows(checked, [1, 2, 3], room), `room ${room}`).not.toBe(checked);
+        }
+        expect(checked).toEqual([9, 1]);
     });
 });
