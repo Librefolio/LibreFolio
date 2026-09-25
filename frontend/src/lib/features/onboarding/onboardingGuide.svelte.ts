@@ -464,7 +464,7 @@ export const onboardingGuide = createOnboardingGuide();
 
 registerClientSessionReset('onboardingGuide', () => onboardingGuide.reset());
 
-// A guide finished, skipped or logged out in another tab removes the shared key:
+// A guide finished, skipped or cancelled in another tab removes the shared key:
 // close this tab's step too, instead of leaving a step whose Finish/Exit no longer owns it.
 if (typeof window !== 'undefined') {
     window.addEventListener(
