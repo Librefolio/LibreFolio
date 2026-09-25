@@ -86,13 +86,18 @@
         onfirstopen?: () => void;
         /**
          * The manual page for this question, relative to `/mkdocs/`, shown as a book
-         * icon right after the title. Named `docsPath` so the cross-boundary link
+         * icon on the right edge of the header — beside the toggle when the level is
+         * collapsible, never inside it. Named `docsPath` so the cross-boundary link
          * check (`dev.py mkdocs check-links`) finds the literal a caller writes and
          * validates it. Optional and without default: a caller that passes nothing
          * renders exactly as before (agreed with Risk, F-3b V7).
          */
         docsPath?: string;
-        /** The icon's tooltip: what the card shows and how to read it, in a few sentences. */
+        /**
+         * The icon's tooltip and accessible name. Defaults to the level's title. A caller
+         * may pass a short explanation of the card instead — the correlation panel does,
+         * at the developer's request (F-3b V7).
+         */
         docsLabel?: string;
     }
 
@@ -132,10 +137,18 @@
 
 <section class="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm" data-testid={testId} data-level={level} data-open={open}>
     {#if collapsible}
-        <button type="button" class="w-full flex items-start justify-between gap-3 p-4 text-left" onclick={toggle} data-testid="{testId}-toggle" aria-expanded={open}>
-            {@render header()}
-            <ChevronDown size={18} class="shrink-0 text-gray-400 transition-transform {open ? 'rotate-180' : ''}" />
-        </button>
+        <!-- The toggle and the manual's icon side by side, never nested: a link inside a
+             `<button>` is invalid HTML, and a click on the icon must open the manual, not fold
+             the level. Tab order follows the reading order: the toggle first, then the icon. -->
+        <div class="flex items-start gap-2 p-4">
+            <button type="button" class="flex min-w-0 flex-1 items-start justify-between gap-3 text-left" onclick={toggle} data-testid="{testId}-toggle" aria-expanded={open}>
+                {@render header()}
+                <ChevronDown size={18} class="shrink-0 text-gray-400 transition-transform {open ? 'rotate-180' : ''}" />
+            </button>
+            {#if docsPath}
+                <DocsLink path={docsPath} label={docsLabel ?? title} icon="book" size={16} testId="{testId}-docs" />
+            {/if}
+        </div>
     {:else}
         <div class="p-4 pb-0">
             {@render header()}
@@ -242,8 +255,8 @@
         <div class="flex items-start justify-between gap-2">
             <h3 class="text-base font-semibold text-gray-800 dark:text-gray-100" data-testid="{testId}-title">{title}</h3>
             {#if docsPath && !collapsible}
-                <!-- Not inside the collapsible toggle: a link inside a `<button>` is invalid HTML.
-                     A collapsible level that wants the icon needs it beside the toggle — Risk's call. -->
+                <!-- A collapsible level shows the icon beside its toggle instead (see the
+                     section's head): inside the toggle it would be a link inside a `<button>`. -->
                 <DocsLink path={docsPath} label={docsLabel ?? title} icon="book" size={16} testId="{testId}-docs" />
             {/if}
         </div>
