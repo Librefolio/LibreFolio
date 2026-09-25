@@ -144,6 +144,17 @@ A scope-violating euro printed through `L4Replay` with privacy on would pass all
   `formatCurrencyCodeHtml` — a currency code with no amount, which this decision explicitly
   allows. Left for the closure of `risk-lab` (F-6).
 
+### 24–25/09 — the redesigned selection card keeps the rule
+
+The F-3b redesign added three surfaces, and none carries an amount:
+- the "+" picker's rows show a name, a type and a currency code;
+- the holdings command ("All mine" / one broker) reads only `summary.holdings[].asset_id` from the light report;
+- the chips show a name and, for an asset Risk's engine rules out, the engine's reason.
+
+The net — *prints no money, even when the API hands it some* — passes on the realigned spec (F-6, 16/16), which now
+stubs the eligibility engine and waits for every chip's verdict before asserting
+([[decisions/lab-eligibility-from-risk-engine]]).
+
 ## Source files
 
 | Role | Path |
