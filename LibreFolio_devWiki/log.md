@@ -2138,3 +2138,15 @@ and `032b86959`; open → resolved), [[problems/testid-grep-false-negative]] (re
 resolved → recurs).
 Graph: the graphify `--update` is **deferred** — `graphify-out/graph.json` and `.graphify_python` do not
 exist in this worktree. `check_source_paths.py`: 0 missing paths on the six pages.
+
+## [2026-09-25] file | Workstream F — the lab redesign (F-3b): eligibility, heatmap emphasis, three gotchas
+Lessons from the four-hands redesign of the Asset Global laboratory and the Risk → F merge (`2c02ff070`).
+Filed: [[decisions/lab-eligibility-from-risk-engine]] (the verdict is Risk's; parked chips; the two meanings of
+"mine"), [[decisions/heatmap-emphasis-is-hue-free]], [[problems/echarts-canvas-mismeasures-emoji-labels]],
+[[problems/tooltip-click-pins-over-modal]], [[problems/popover-pointerdown-swallows-click]] (red first, then fixed).
+Updated: [[concepts/mkdocs-suffix-i18n]] (an app link's anchor must exist in all four languages; the risk-metrics
+index anchors exist in English only), [[concepts/portfolio-report-unified]] (holdings-only callers ask for the light
+report), [[concepts/test-isolation-classes]] (a single `api` action after `services` finds the lane empty),
+[[decisions/asset-global-page-shows-no-money]] (the redesigned card keeps the rule).
+Graph: the graphify `--update` is **deferred** — `graphify-out/graph.json` and `.graphify_python` do not exist in this
+worktree. `check_source_paths.py`: 0 missing paths on these nine pages (60 pre-existing elsewhere).
