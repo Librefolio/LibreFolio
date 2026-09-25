@@ -14,6 +14,18 @@ autorizzata da questi file.
 > Il lavoro in corso è il [piano Round 5](plan-phase00PacRound5PostMerge.prompt.md):
 > documenti allineati, UI PAC 2.0.0 nella build, STOP per la review di dettaglio.
 > L'ordine completo è nella tabella «Piani successivi all'integrazione», sotto «Piani di esecuzione».
+>
+> ⚠️ **Aggiornamento del 2026-09-25 (`0210f9848`).** Il Round 5 è committato. Prima dello STOP
+> entra il suo Passo F, con le decisioni del developer registrate al §2 del piano:
+> - **D-X1:** in produzione gira solo SCIP, e il suo esito fa fede. L'oracolo esaustivo resta
+>   solo nei test, come gate d'accordo su domini piccoli.
+> - **X2 e QX1-a:** il minimo e il tetto delle commissioni si modellano in modo esatto.
+> - **QX1-b:** un piano che dopo gli arrotondamenti supera una cassa di al più `N` unità minime
+>   esce con l'importo da aggiungere.
+>
+> I cinque design autorevoli hanno in testa una nota con la stessa data. Nel grafo sotto, «exact
+> core → exhaustive oracle» resta vero per lo Step 2, ma l'oracolo non è più una fonte di prova in
+> produzione.
 
 Questo bundle traduce la suite target PAC/Rebalancer in workstream eseguibili,
 con dipendenze, ownership, gate, selector e Definition of Done. Non ridefinisce

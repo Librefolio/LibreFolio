@@ -33,6 +33,25 @@
 >    Il layout approvato non cambia.
 > 3. **Privacy.** La §20.20 è riallineata alla decisione (c) del developer del 2026-09-22.
 > 4. **Decisioni del 2026-09-24.** Il delta C0 approvato prevale su alcune viste: elenco in §22.
+>
+> ⚠️ **Aggiornamento 2026-09-25 (D-X1 e QX1-b, decisioni del developer).** Prevale sul testo sotto
+> dove i due sono in conflitto. Esecuzione nel Passo F del
+> [piano Round 5](implementation/plan-phase00PacRound5PostMerge.prompt.md), che le riporta al §2.
+>
+> 1. **Prova.** In produzione gira solo SCIP, e il suo esito fa fede.
+>    - `optimal` su tutti gli stage → badge «ottimo» (`optimal_proven`, fonte `solver_status`).
+>    - `infeasible` sul primo stage → `infeasible_proven`, fonte `solver_status`.
+>    - Un limite → `not_proven`.
+>
+>    Il testimone dell'oracolo («N candidati enumerati») sparisce dalla UI e lo sostituisce il
+>    testimone del solver. Le frasi «lo status floating `optimal` non diventa `optimal_proven`» e
+>    «uno status floating `infeasible` usa `no_incumbent/not_proven`» non valgono più: §19.2,
+>    §19.14, §20.13 e §20.18.
+> 2. **Arrotondamenti oltre la cassa.** Un piano che dopo gli arrotondamenti HALF_UP supera una
+>    cassa di al più `N` unità minime della sua valuta esce lo stesso. Per ogni cassa in deficit la
+>    UI mostra una nota con l'importo da aggiungere, per esempio «per eseguire il piano servono
+>    0,01 € in più su Broker X (EUR), per gli arrotondamenti all'unità minima». L'importo è un
+>    valore personale: passa dalla maschera della privacy.
 ## Come leggere l'artifact
 
 Le Review A/B/C/D e la configurazione finale sono state approvate dal developer.
@@ -2277,6 +2296,10 @@ Comportamento:
 - nuovo mount parte dalla nuova account generation.
 
 ## 20.18 Matrice status backend → UI
+
+> **⚠️ Superata in parte il 2026-09-25 (D-X1).** Per `optimal_proven` e `infeasibility_proven` la
+> fonte è anche `solver_status`, e l'oracolo non è più una fonte di produzione. La riga «floating
+> infeasible → `no_incumbent`» non vale più. Vedi l'aggiornamento in testa.
 
 | Availability | Outcome | Proof | Evidence | Presentazione |
 |---|---|---|---|---|
