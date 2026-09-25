@@ -111,7 +111,7 @@
 
 <!-- Closed by default and loading its catalogue on first open only: reopening a
      drawer is not a change of question, so it must not start the work over. -->
-<RiskLevelSection title={$t('risk.levels.l4.title')} level={4} collapsible testId="risk-replay-section" {health} {reasons} {metadata} onfirstopen={() => controller.loadScenarioCatalog()}>
+<RiskLevelSection title={$t('risk.levels.l4.title')} level={4} collapsible testId="risk-replay-section" {health} {reasons} {metadata} onfirstopen={() => controller.loadScenarioCatalog()} docsPath="financial-theory/technical-analysis/risk-metrics/historical-replay/">
     <L4WhatIf>
         {#snippet replay()}
             <L4Replay {controller} {assetNames} currency={targetCurrency} {dateStart} {dateEnd} showMoney={false} />
