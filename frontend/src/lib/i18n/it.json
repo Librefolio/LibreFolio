@@ -4032,7 +4032,7 @@
         },
         "transactionsNav": {
           "title": "Inizia dalle transazioni",
-          "description": "Transazioni contiene gli inserimenti manuali e la cronologia del portafoglio. Importa ha una guida contestuale dedicata."
+          "description": "Transazioni contiene gli inserimenti manuali e la cronologia del portafoglio."
         },
         "brokersAdd": {
           "title": "Aggiungi un broker",
@@ -4060,7 +4060,7 @@
         },
         "brokersNav": {
           "title": "Broker",
-          "description": "Apri Broker per configurare i tuoi conti. Una breve guida si avvia quando scegli Aggiungi broker."
+          "description": "Apri Broker per configurare i tuoi conti."
         },
         "fxNav": {
           "title": "Tassi di cambio",
@@ -4122,10 +4122,10 @@
         "fx": "FX",
         "asset": "Asset"
       },
-      "armedToast": "{flow}: avvio pronto in questa scheda. Apri la funzionalità per iniziare.",
+      "armedToast": "{flow}: avvio pronto in questo browser. Apri la funzionalità per iniziare.",
       "cancelArmed": "Annulla attivazione",
       "groupProgress": "{completed}/{total} guide completate",
-      "armedAtNextTrigger": "Pronta in questa scheda: {flow} parte al prossimo ingresso. Chiudendo la scheda si annulla.",
+      "armedAtNextTrigger": "Pronta in questo browser: {flow} parte al prossimo ingresso.",
       "replayNextTrigger": "Ripeti al prossimo ingresso"
     },
     "importGuide": {
@@ -4224,7 +4224,7 @@
         },
         "add": {
           "title": "Aggiungi una transazione",
-          "description": "Aggiungi apre il modulo guidato per una singola operazione. La guida dedicata parte al primo utilizzo."
+          "description": "Aggiungi apre il modulo guidato per una singola operazione."
         },
         "import": {
           "title": "Importa più operazioni",
@@ -4292,7 +4292,7 @@
         },
         "add": {
           "title": "Aggiungi un broker",
-          "description": "Crea il conto che riceverà transazioni e importazioni. Una guida dedicata segue il modulo."
+          "description": "Crea il conto che riceverà transazioni e importazioni."
         }
       }
     },
@@ -4336,7 +4336,7 @@
         },
         "add": {
           "title": "Aggiungi una coppia FX",
-          "description": "Definisci una nuova direzione di conversione. Una guida dedicata spiega valute e provider."
+          "description": "Definisci una nuova direzione di conversione."
         }
       }
     },
@@ -4376,7 +4376,7 @@
         },
         "add": {
           "title": "Aggiungi un asset",
-          "description": "Cerca o definisci un nuovo strumento. Una guida dedicata spiega identità, valuta e provider."
+          "description": "Cerca o definisci un nuovo strumento."
         }
       }
     },
@@ -4403,6 +4403,18 @@
           "description": "Apri Rischio per esaminare misure storiche, scenari di stress, simulazioni e contesto di portafoglio."
         }
       }
+    }
+  },
+  "header": {
+    "privacy": {
+      "hide": "Nascondi importi",
+      "show": "Mostra importi"
+    },
+    "theme": {
+      "switchToDark": "Passa al tema scuro",
+      "switchToLight": "Passa al tema chiaro",
+      "dark": "Tema scuro",
+      "light": "Tema chiaro"
     }
   }
 }

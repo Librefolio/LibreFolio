@@ -10,6 +10,7 @@
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
+    import {maskableQuantity} from '$lib/utils/privacy/maskable';
     import {safeDecimal} from '$lib/types';
     import {ArrowRightLeft, Info, Minus, Plus, X} from 'lucide-svelte';
     import type {z} from 'zod';
@@ -66,17 +67,28 @@
         return date.toLocaleDateString($currentLanguage || undefined, kind === 'short' ? {day: '2-digit', month: '2-digit'} : {year: 'numeric', month: 'long', day: 'numeric'});
     }
 
+    /** A lot quantity; masked under privacy (D5′), with the sign and the unit left outside. */
     function formatQuantity(value: string | number | null | undefined, opts: {signed?: boolean} = {}): string {
         const parsed = parseNumber(value);
         if (parsed == null) return '—';
         const abs = Math.abs(parsed);
         const sign = opts.signed ? (parsed > 0 ? '+' : parsed < 0 ? '-' : '') : '';
-        return `${sign}${formatDecimalForDisplay(abs, {minFrac: 0, maxFrac: 8})}${assetUnitLabel ? ` ${assetUnitLabel}` : ''}`;
+        return `${sign}${maskableQuantity(formatDecimalForDisplay(abs, {minFrac: 0, maxFrac: 8}))}${assetUnitLabel ? ` ${assetUnitLabel}` : ''}`;
     }
 
     function formatPrice(value: string | number | null | undefined): string {
         const parsed = parseNumber(value);
         return parsed == null ? '—' : formatCurrencyAmountPlain(parsed, currency);
+    }
+
+    /**
+     * A price per unit — opening, closing. Public: a price is not patrimony and a purchase
+     * price is admissible (product owner, 2026-09-22), and with the quantity masked (D5′)
+     * price × quantity rebuilds nothing. Totals keep `formatPrice`, which masks.
+     */
+    function formatUnitPrice(value: string | number | null | undefined): string {
+        const parsed = parseNumber(value);
+        return parsed == null ? '—' : formatCurrencyAmountPlain(parsed, currency, {sensitivity: 'public'});
     }
 
     function formatSignedCurrency(value: string | number | null | undefined): string {
@@ -153,7 +165,7 @@
     function eventDetailItems(event: LotTimelineEventSchema): EventDetailItem[] {
         if (event.kind === 'BUY' || event.kind === 'ADJUSTMENT_IN') {
             const openingPrice = parseNumber(event.open_unit_price ?? event.unit_price);
-            return openingPrice == null ? [] : [{label: $_('brokers.lots.modal.historyDetail.openPrice'), value: formatPrice(openingPrice)}];
+            return openingPrice == null ? [] : [{label: $_('brokers.lots.modal.historyDetail.openPrice'), value: formatUnitPrice(openingPrice)}];
         }
 
         if (event.kind === 'SELL' || event.kind === 'ADJUSTMENT_OUT') {
@@ -162,7 +174,7 @@
             const proceeds = parseNumber(event.proceeds);
             const realizedPnl = parseNumber(event.realized_pnl);
             if (closePrice != null) {
-                items.push({label: $_('brokers.lots.modal.historyDetail.closePrice'), value: formatPrice(closePrice)});
+                items.push({label: $_('brokers.lots.modal.historyDetail.closePrice'), value: formatUnitPrice(closePrice)});
             }
             if (proceeds != null) {
                 items.push({label: $_('brokers.lots.modal.historyDetail.proceeds'), value: formatSignedCurrency(proceeds), tone: proceeds >= 0 ? 'positive' : 'negative'});
@@ -292,7 +304,7 @@
                     </div>
                     <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
                         <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.openingPrice')}</dt>
-                        <dd class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{formatPrice(lot.opening_unit_price)}</dd>
+                        <dd class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{formatUnitPrice(lot.opening_unit_price)}</dd>
                     </div>
                     <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
                         <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.openingValue')}</dt>

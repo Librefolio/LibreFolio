@@ -215,6 +215,15 @@
         return Math.abs(first.left - second.left) < 0.5 && Math.abs(first.top - second.top) < 0.5 && Math.abs(first.width - second.width) < 0.5 && Math.abs(first.height - second.height) < 0.5;
     }
 
+    // A mounted anchor that is not rendered counts as absent, so it stalls like a missing one
+    // instead of anchoring the guide at (0,0): `display:none` or a box-less wrapper measure 0×0,
+    // and `visibility:hidden` keeps a box that `checkVisibility` reports. Opacity is deliberately
+    // ignored: hover-revealed controls start transparent and are real targets.
+    function isRendered(element: HTMLElement, rect: AnchorRect): boolean {
+        if (rect.width === 0 && rect.height === 0) return false;
+        return typeof element.checkVisibility !== 'function' || element.checkVisibility({visibilityProperty: true});
+    }
+
     function guideScrollRoot(element: HTMLElement): HTMLElement | null {
         const explicit = element.closest<HTMLElement>('[data-guide-scroll-root]');
         if (explicit) return explicit;
@@ -232,7 +241,8 @@
         viewportWidth = window.innerWidth;
         viewportHeight = window.innerHeight;
         mobile = window.matchMedia('(max-width: 640px)').matches;
-        if (!anchor?.isConnected) {
+        const measured = anchor?.isConnected ? toAnchorRect(anchor.getBoundingClientRect()) : null;
+        if (!anchor || !measured || !isRendered(anchor, measured)) {
             anchorRect = null;
             candidateRect = null;
             stableFrames = 0;
@@ -240,7 +250,6 @@
             geometryState = 'waiting';
             return;
         }
-        const measured = toAnchorRect(anchor.getBoundingClientRect());
         if (commitTransient && anchorRect) {
             anchorRect = measured;
             candidateRect = measured;
