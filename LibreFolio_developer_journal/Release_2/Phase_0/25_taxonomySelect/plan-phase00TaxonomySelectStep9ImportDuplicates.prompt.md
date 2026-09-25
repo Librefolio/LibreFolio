@@ -294,7 +294,9 @@
   >
   > **In coda dopo C2**: **C3**, la raffica di `GET /api/v1/brokers/{id}` dalla pagina Transazioni
   > (40–60 richieste al secondo, anche in `v1.1.0`), assegnata dal coordinator. Prima analisi, poi codice.
-  > Avrà un piano suo.
+  > Piano:
+  > [`plan-phase00TaxonomySelectStep10BrokerRequestBurst.prompt.md`](plan-phase00TaxonomySelectStep10BrokerRequestBurst.prompt.md),
+  > approvato dal developer il 25/09.
   >
   > **Note implementazione** (2026-09-25, ripresa dopo la PAUSA e il riavvio del Mac alle 08:58):
   > - `/tmp/librefolio-r2-k` era sparita: l'ha ricreata il runner. Non ho fatto nessuna copia di prod,
