@@ -1020,3 +1020,5 @@ passa fra test.
 - **Analisi**: [`analysis-phase00PrivacyGlobal.md`](./analysis-phase00PrivacyGlobal.md) — contratto §2,
   primitive §3, store §4, trappole §5, domande aperte §6, ordine §7.2, falsi negativi §1.8
 - **Fonte**: [`../09_feedbackJobs/06_piano_sprint.md`](../09_feedbackJobs/06_piano_sprint.md) §5 U2 (riga 311)
+- **→ Follow-up**: [`plan-phase00PrivacyGlobalRound2-PostReview.prompt.md`](./plan-phase00PrivacyGlobalRound2-PostReview.prompt.md)
+  — correzioni dalla review d'uso del 22/09 (valuta sotto maschera, R20, assi, quantità D5′)

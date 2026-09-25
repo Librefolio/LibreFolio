@@ -53,7 +53,7 @@
     import type {BrokerSummary} from '$lib/types';
     import {parseCurrencyAmount, safeCurrency, safeString} from '$lib/types';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
-    import {formatCurrencyAmountHtml} from '$lib/utils/currency/currencyFormat';
+    import CurrencyAmount from '$lib/components/ui/display/CurrencyAmount.svelte';
     import AiExportMenu from '$lib/features/ai-export/AiExportMenu.svelte';
     import {prepareAiExport, type PreparedAiExport} from '$lib/features/ai-export/aiExportClipboard';
     import type {AiExportOptionsSelection} from '$lib/features/ai-export/aiExportOptions';
@@ -603,7 +603,7 @@
                         <div class="flex flex-wrap gap-2">
                             {#each [...broker.cash_balances].sort((a, b) => parseCurrencyAmount(b.amount) - parseCurrencyAmount(a.amount)) as balance}
                                 <span class="inline-flex items-center px-3 py-1.5 bg-gray-50 dark:bg-slate-700 rounded-lg text-sm font-medium text-gray-800 dark:text-gray-100">
-                                    {@html formatCurrencyAmountHtml(parseCurrencyAmount(balance.amount), balance.code)}
+                                    <CurrencyAmount amount={parseCurrencyAmount(balance.amount)} code={balance.code} />
                                 </span>
                             {/each}
                         </div>
@@ -774,7 +774,7 @@
                             <div class="mt-4 pt-4 border-t border-gray-100 dark:border-slate-700">
                                 <div class="text-sm text-gray-500 dark:text-gray-400">{$_('common.totalValue')}</div>
                                 <div class="text-2xl font-bold text-libre-green">
-                                    {@html formatCurrencyAmountHtml(parseCurrencyAmount(totalValue.amount), totalValue.code)}
+                                    <CurrencyAmount amount={parseCurrencyAmount(totalValue.amount)} code={totalValue.code} />
                                 </div>
                             </div>
                         {/if}

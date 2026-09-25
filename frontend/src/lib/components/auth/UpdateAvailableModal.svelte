@@ -30,7 +30,9 @@
     }
 </script>
 
-<ModalBase open={release !== null} onRequestClose={() => updateAvailable.close()} maxWidth="md" testId="update-available-modal">
+<!-- A requested prompt opens from inside the changelog modal, which lives in the sidebar's
+     stacking context at the default modal z-index: above it, not beside it. -->
+<ModalBase open={release !== null} onRequestClose={() => updateAvailable.close()} maxWidth="md" testId="update-available-modal" zIndex={updateAvailable.requested ? 60 : 50}>
     {#if release}
         <div class="px-6 py-6 flex flex-col gap-3 bg-libre-beige dark:bg-slate-800">
             <div class="flex items-center gap-3">

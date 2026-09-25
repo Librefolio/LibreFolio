@@ -238,8 +238,8 @@
                 return;
             }
             if (isAdmin) {
-                // Admin: the real modal takes over from here.
-                updateAvailable.show(result.latest);
+                // Admin: the real modal takes over from here, at once and above this one.
+                updateAvailable.show(result.latest, {requested: true});
                 checkState = 'newer';
             } else {
                 // Non-admin: open the ask-admin modal listing the administrators.

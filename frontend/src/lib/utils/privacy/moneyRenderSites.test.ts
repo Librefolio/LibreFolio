@@ -48,6 +48,13 @@ type Status =
     | 'masked'
     /** Matches a form but renders no amount — registered so it stops being rediscovered. */
     | 'not-money'
+    /**
+     * Real money shown in the clear *by rule*: market prices, asset-level events, FX rates,
+     * WAC. The rule is the product owner's criterion of 2026-09-22 — a number is personal
+     * when it lets you infer what the user owns, and these do not. Mirrors
+     * `AmountSensitivity = 'public'` in `frontend/src/lib/utils/privacy/maskable.ts`.
+     */
+    | 'public'
     /** Real money outside the channel, deliberately not fixed yet. Named, not forgotten. */
     | 'residual'
     /** Real money outside the channel, found by this gate, not yet triaged. */
@@ -78,7 +85,7 @@ const SRC = resolve(process.cwd(), 'src');
  * The redundancy would be worse than noise — deleting one of those entries to expose
  * it to the gate again would then have no effect at all.
  */
-const SAFE_CALL = /formatCurrencyAmountPlain|formatCurrencyAmountHtml|formatCurrencyCodeHtml|formatCurrencyCode\b|formatScopedCurrencyAmount\b|formatCurrencyAmount\b|maskable\(/;
+const SAFE_CALL = /formatCurrencyAmountPlain|formatCurrencyAmountHtml|formatCurrencyCodeHtml|formatCurrencyCode\b|formatScopedCurrencyAmount\b|formatCurrencyAmount\b|maskable\(|maskFormattedNumber\(/;
 const FORM_A = /style\s*:\s*['"]currency['"]/;
 const TEMPLATE_LITERAL = /`[^`]*`/g;
 const INTERPOLATION = /\$\{([^}]*)\}/g;
@@ -123,6 +130,29 @@ interface Hit {
     form: 'A' | 'B';
 }
 
+/**
+ * The hits of one source line, in the order `scan` reports them.
+ *
+ * A function of its own so that a synthetic line goes through exactly the code a real
+ * file goes through: a regression test of the gate that ran on a copy of this logic
+ * would test the copy.
+ */
+function scanLine(file: string, line: string, index: number): Hit[] {
+    const hits: Hit[] = [];
+    if (FORM_A.test(line)) {
+        hits.push({file, line: index + 1, snippet: collapse(line), form: 'A'});
+    }
+    if (SAFE_CALL.test(line)) return hits;
+    for (const literal of line.match(TEMPLATE_LITERAL) ?? []) {
+        const tokens = [...literal.matchAll(INTERPOLATION)].map((m) => m[1].trim());
+        if (!tokens.some((t) => CURRENCY_TOKEN.test(t))) continue;
+        const others = tokens.filter((t) => !CURRENCY_TOKEN.test(t) && !I18N_CALL.test(t));
+        if (!others.some((t) => NUMERIC_TOKEN.test(t))) continue;
+        hits.push({file, line: index + 1, snippet: collapse(literal), form: 'B'});
+    }
+    return hits;
+}
+
 function scan(): Hit[] {
     const hits: Hit[] = [];
     for (const full of sourceFiles(SRC)) {
@@ -130,17 +160,7 @@ function scan(): Hit[] {
         readFileSync(full, 'utf8')
             .split('\n')
             .forEach((line, index) => {
-                if (FORM_A.test(line)) {
-                    hits.push({file, line: index + 1, snippet: collapse(line), form: 'A'});
-                }
-                if (SAFE_CALL.test(line)) return;
-                for (const literal of line.match(TEMPLATE_LITERAL) ?? []) {
-                    const tokens = [...literal.matchAll(INTERPOLATION)].map((m) => m[1].trim());
-                    if (!tokens.some((t) => CURRENCY_TOKEN.test(t))) continue;
-                    const others = tokens.filter((t) => !CURRENCY_TOKEN.test(t) && !I18N_CALL.test(t));
-                    if (!others.some((t) => NUMERIC_TOKEN.test(t))) continue;
-                    hits.push({file, line: index + 1, snippet: collapse(literal), form: 'B'});
-                }
+                hits.push(...scanLine(file, line, index));
             });
     }
     return hits;
@@ -153,21 +173,15 @@ function scan(): Hit[] {
 const REGISTRY: Site[] = [
     {
         file: 'lib/components/risk/riskAnalysisHelpers.ts',
-        snippet: "return new Intl.NumberFormat(locale, {style: 'currency', currency, maximumFractionDigits: 2}).format(amount);",
+        snippet: "return maskCurrencyParts(new Intl.NumberFormat(locale, {style: 'currency', currency, maximumFractionDigits: 2}).formatToParts(amount));",
         status: 'masked',
-        why: 'The fifth currency formatter. Masked one line above, after the two em-dash absence checks.',
+        why: 'The fifth currency formatter. Masked in the same expression by maskCurrencyParts, which hides the digits and keeps the currency and the sign; the two em-dash absence checks run before it.',
     },
     {
-        file: 'lib/components/brokers/lots/LotComparisonChart.svelte',
+        file: 'lib/components/brokers/lots/lotComparisonChartHelpers.ts',
         snippet: "style: 'currency',",
         status: 'masked',
-        why: 'formatAxisCurrency: masked at the function boundary, which covers this exit and the catch fallback below.',
-    },
-    {
-        file: 'lib/components/brokers/lots/LotComparisonChart.svelte',
-        snippet: '`${formatAxisNumber(normalized)} ${currency}`',
-        status: 'masked',
-        why: 'The catch fallback of formatAxisCurrency — the second money-rendering exit of the same function, covered by the same boundary check.',
+        why: 'formatAxisCurrency, the absolute-return axis of the lot comparison chart, extracted from the component. Its Intl exit goes through maskCurrencyParts; its fallback exit masks with maskFormattedNumber( and so is not a hit at all.',
     },
     {
         file: 'lib/features/ai-export/templates/snapshotDataRenderer.ts',
@@ -202,8 +216,8 @@ const REGISTRY: Site[] = [
     {
         file: 'lib/components/transactions/events/EventCreateMiniModal.svelte',
         snippet: '`${amt.toFixed(2)} ${assetCurrency}`',
-        status: 'unmasked',
-        why: 'The success toast for a created event. §1.8 listed line 73 of this file as an input value (excluded by D7) and stopped there; this is a different line in the same file, and it renders.',
+        status: 'public',
+        why: "The success toast for a created asset event. Asset events are asset-level, not the user's (backend/app/db/models.py, class AssetEvent: «Events are NOT transactions — they describe what happens to the asset globally, not what happens in a user's portfolio»), so the amount is public under the 2026-09-22 rule. It was registered as unmasked until that rule existed.",
     },
     {
         file: 'lib/components/transactions/events/AssetEventPicker.svelte',
@@ -248,6 +262,7 @@ describe('money rendered outside the masking channel (analysis §1.8 gate)', () 
                       'Route it through `maskable()` (see utils/privacy/maskable.ts), then add it',
                       'here with status "masked". If it renders no amount, add it as "not-money"',
                       'with the reason — an unexplained entry is indistinguishable from an oversight.',
+                      'If it renders money that is public by rule (a market price, an asset-level event, a rate), register it as "public" with the reason.',
                       '',
                       unregistered.join('\n  '),
                       '',
@@ -269,8 +284,22 @@ describe('money rendered outside the masking channel (analysis §1.8 gate)', () 
         // Asserted by exact content rather than by count: masking one of these must
         // fail here and force the list to be updated, so the round's partial
         // conformance cannot quietly become complete.
-        expect(listOf('residual')).toEqual(['lib/components/dashboard/GrowthChart.svelte', 'lib/components/dashboard/GrowthChart.svelte']);
-        expect(listOf('unmasked')).toEqual(['lib/components/dashboard/PerformanceChart.svelte', 'lib/components/dashboard/PerformanceChart.svelte', 'lib/components/transactions/events/EventCreateMiniModal.svelte']);
+        expect(listOf('residual')).toEqual([
+            // one element per line: parallel removals must not touch the same line
+            'lib/components/dashboard/GrowthChart.svelte',
+            'lib/components/dashboard/GrowthChart.svelte',
+        ]);
+        expect(listOf('unmasked')).toEqual([
+            // one element per line: parallel removals must not touch the same line
+            'lib/components/dashboard/PerformanceChart.svelte',
+            'lib/components/dashboard/PerformanceChart.svelte',
+        ]);
+        // Sites in the clear by rule are asserted by content too, so that reclassifying
+        // one is a visible decision rather than a quiet edit to the registry.
+        expect(listOf('public')).toEqual([
+            // one element per line: parallel removals must not touch the same line
+            'lib/components/transactions/events/EventCreateMiniModal.svelte',
+        ]);
     });
 
     it('sees both branches of a two-branch money line', () => {
@@ -283,11 +312,20 @@ describe('money rendered outside the masking channel (analysis §1.8 gate)', () 
         // because both branches sat on the same line, so the gate's coverage of
         // its most important site would have been lost to a line wrap, in silence.
         //
+        // The fixture reproduces `PerformanceChart.shortMoney` as of `f1047f766`, so the
+        // test no longer depends on a file owned by another workstream: masking that site
+        // with `maskable(` puts the real line under SAFE_CALL, out of the scanner's reach,
+        // and a positive control whose subject can disappear is not a control. The fixture
+        // goes through the same `scanLine` as every real file, which is what makes this a
+        // test of the gate and not of a copy of it.
+        //
         // Narrowing CURRENCY_TOKEN back must fail here rather than go quiet.
-        const branches = hits.filter((h) => h.file === 'lib/components/dashboard/PerformanceChart.svelte' && h.form === 'B').map((h) => h.snippet);
+        const shortMoneyLine = 'return symbol ? `${sign}${symbol}${compact}` : `${sign}${compact} ${currency}`;';
+        const branches = scanLine('fixture', shortMoneyLine, 0)
+            .filter((h) => h.form === 'B')
+            .map((h) => h.snippet);
 
-        expect(branches).toContain('`${sign}${symbol}${compact}`');
-        expect(branches).toContain('`${sign}${compact} ${currency}`');
+        expect(branches).toEqual(['`${sign}${symbol}${compact}`', '`${sign}${compact} ${currency}`']);
     });
 
     it('gives every registered site a reason', () => {

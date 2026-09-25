@@ -3091,7 +3091,7 @@
         "l1": {
           "title": "Combien chacun a-t-il fait mal ?",
           "description": "La même échelle de perte, posée à chaque actif sélectionné. Uniquement des pourcentages : un ensemble d'actifs n'a pas de pondérations, donc aucun montant à afficher.",
-          "lastedDays": "durée {{days}} j",
+          "lastedDays": "durée {days} j",
           "columns": {
             "badDay": "Mauvaise journée",
             "badMonth": "Mauvais mois",
@@ -3105,7 +3105,8 @@
           "description": "Risque contre rendement, un point par actif. Aucune droite ne les traverse : une sélection n'a pas de tout, donc rien au-dessus ou en dessous de quoi se situer.",
           "expectedReturn": "Rendement attendu",
           "correlation": "Corrélation",
-          "noBenchmark": "Choisissez une référence dans le tableau de bord pour ajouter le bêta et la corrélation. Une référence déjà présente dans la sélection ne peut pas servir de mesure à elle-même."
+          "noBenchmark": "Choisissez une référence dans le tableau de bord pour ajouter le bêta et la corrélation. Une référence déjà présente dans la sélection ne peut pas servir de mesure à elle-même.",
+          "scatterNote": "Les points montrent le rendement attendu en moyenne-variance : sur un actif très volatil, le rendement réellement vécu est plus faible, car la volatilité érode la capitalisation."
         }
       }
     },
@@ -4064,7 +4065,7 @@
         },
         "transactionsNav": {
           "title": "Commencez par vos transactions",
-          "description": "Transactions contient les saisies manuelles et l’historique du portefeuille. Importer dispose de son propre guide contextuel."
+          "description": "Transactions contient les saisies manuelles et l’historique du portefeuille."
         },
         "brokersAdd": {
           "title": "Ajouter un courtier",
@@ -4092,7 +4093,7 @@
         },
         "brokersNav": {
           "title": "Courtiers",
-          "description": "Ouvrez Courtiers pour configurer vos comptes. Un court guide démarre lorsque vous choisissez Ajouter un courtier."
+          "description": "Ouvrez Courtiers pour configurer vos comptes."
         },
         "fxNav": {
           "title": "Taux de change",
@@ -4154,10 +4155,10 @@
         "fx": "FX",
         "asset": "Actifs"
       },
-      "armedToast": "{flow} est prêt dans cet onglet. Ouvrez la fonctionnalité pour commencer.",
+      "armedToast": "{flow} est prêt dans ce navigateur. Ouvrez la fonctionnalité pour commencer.",
       "cancelArmed": "Annuler l’activation",
       "groupProgress": "{completed}/{total} guides terminés",
-      "armedAtNextTrigger": "Prêt dans cet onglet : {flow} démarrera à la prochaine activation. Fermer l'onglet l'annule.",
+      "armedAtNextTrigger": "Prêt dans ce navigateur : {flow} démarrera à la prochaine activation.",
       "replayNextTrigger": "Relancer à la prochaine activation"
     },
     "importGuide": {
@@ -4256,11 +4257,11 @@
         },
         "add": {
           "title": "Ajouter une transaction",
-          "description": "Ajouter ouvre le formulaire guidé d’une seule opération. Son guide dédié démarre lors de la première utilisation."
+          "description": "Ajouter ouvre le formulaire guidé d’une seule opération."
         },
         "import": {
           "title": "Importer plusieurs opérations",
-          "description": "Importer lit les rapports de courtier et guide leur vérification jusqu’à l’éditeur groupé."
+          "description": "Importer lit les rapports de courtier et accompagne leur vérification jusqu’à l’éditeur groupé."
         },
         "columns": {
           "title": "Filtrer et organiser",
@@ -4324,7 +4325,7 @@
         },
         "add": {
           "title": "Ajouter un courtier",
-          "description": "Créez le compte qui recevra les transactions et les importations. Un guide dédié accompagne le formulaire."
+          "description": "Créez le compte qui recevra les transactions et les importations."
         }
       }
     },
@@ -4368,7 +4369,7 @@
         },
         "add": {
           "title": "Ajouter une paire de devises",
-          "description": "Définissez une nouvelle direction de conversion. Un guide dédié explique les devises et les fournisseurs."
+          "description": "Définissez une nouvelle direction de conversion."
         }
       }
     },
@@ -4408,7 +4409,7 @@
         },
         "add": {
           "title": "Ajouter un actif",
-          "description": "Recherchez ou définissez un nouvel instrument. Un guide dédié explique son identité, sa devise et son fournisseur."
+          "description": "Recherchez ou définissez un nouvel instrument."
         }
       }
     },
@@ -4435,6 +4436,18 @@
           "description": "Ouvrez Risque pour examiner les mesures historiques, les scénarios de stress, les simulations et le contexte du portefeuille."
         }
       }
+    }
+  },
+  "header": {
+    "privacy": {
+      "hide": "Masquer les montants",
+      "show": "Afficher les montants"
+    },
+    "theme": {
+      "switchToDark": "Passer au thème sombre",
+      "switchToLight": "Passer au thème clair",
+      "dark": "Thème sombre",
+      "light": "Thème clair"
     }
   }
 }

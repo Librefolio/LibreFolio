@@ -1767,6 +1767,351 @@ describe('OnboardingCoachmark — stall end protocol', () => {
     });
 });
 
+/**
+ * OnboardingCoachmark — mounted but not rendered anchor (workstream J, C6).
+ *
+ * `refreshPosition` asked the anchor a single question: is it in the document?
+ * A target that is mounted but not rendered — `display: none` behind a
+ * breakpoint, inside a collapsed section — answers yes, and measures a 0×0 box
+ * at the origin, the same box on every frame. Two identical frames are exactly
+ * what the measurement loop calls stable, so the step settled on nothing:
+ * `anchored`, geometry `stable`, highlight and pointer drawn in the top-left
+ * corner. Settling is also what disarms the stall deadline, so the user never
+ * got the stalled message, nor the host's "continue anyway" control that hangs
+ * off `onstall` — on `import_guide` that left no forward control at all.
+ *
+ * The rule pinned here: an anchor is *absent* when its box is 0×0 (width and
+ * height both zero), or when `checkVisibility({visibilityProperty: true})`
+ * exists and answers false; and absent is treated exactly like missing —
+ * `waiting`, `stalled` at the same 3,000ms, an ordinary recovery once the
+ * target has a box — whether it was never rendered or stops being rendered
+ * under a step that had already anchored. Opacity is deliberately not part of
+ * the rule: hover-revealed controls sit at `opacity: 0` and are still real
+ * targets.
+ *
+ * jsdom has no layout, so every box below is the stub the component reads;
+ * `rect(0, 0, 0, 0)` *is* what `display: none` measures, in browsers and in
+ * jsdom alike. jsdom ships no `checkVisibility` either, so where a test needs
+ * one it is defined on that single anchor and answers the way a browser
+ * answers for the CSS state the test names.
+ *
+ * The healthy control — a real box anchors and never stalls — is not repeated
+ * here: it is `anchor stall › never stalls a settled step, which still dims at
+ * its own 3,000ms`. The last two tests are the other side of the new rule:
+ * each is a way it could misfire on a target that is really there.
+ */
+describe('OnboardingCoachmark — mounted but not rendered anchor', () => {
+    const UNRENDERED_PROPS = {
+        open: true,
+        stepId: 'unrendered-step-1',
+        title: 'Title',
+        description: 'Description',
+        highlight: 'pulse',
+        pointer: 'cursor',
+    } as const;
+
+    /** What a `display: none` target measures: no area, at the origin. */
+    const NO_BOX = rect(0, 0, 0, 0);
+
+    /** An ordinary rendered target, centred on (156, 118). */
+    const REAL_BOX = rect(96, 96, 120, 44);
+
+    /**
+     * Gives this one anchor the `checkVisibility` jsdom lacks, answering the way
+     * a browser answers for the CSS state `hiddenBy` names:
+     *
+     * - `'visibility'` — `visibility: hidden`. The box is kept, and a bare
+     *   `checkVisibility()` still answers true: only `visibilityProperty` (its
+     *   legacy alias `checkVisibilityCSS`) reports the element hidden. So the
+     *   option the rule passes is load-bearing, not decoration.
+     * - `'opacity'` — `opacity: 0`. Only `opacityProperty` (alias
+     *   `checkOpacity`) reports it hidden.
+     */
+    function stubCheckVisibility(anchor: HTMLElement, hiddenBy: 'visibility' | 'opacity'): void {
+        const checkVisibility = (options?: CheckVisibilityOptions): boolean => (hiddenBy === 'visibility' ? !(options?.visibilityProperty || options?.checkVisibilityCSS) : !(options?.opacityProperty || options?.checkOpacity));
+        Object.defineProperty(anchor, 'checkVisibility', {configurable: true, value: checkVisibility});
+    }
+
+    /**
+     * Advances one frame at a time until an anchored panel stops reporting
+     * itself anchored, and returns that instant on the fake clock: the moment
+     * the step becomes unsettled, which is when its stall deadline is armed.
+     *
+     * The mirror of `advanceToRecoveryInstant`, for the same reason — a 2,999ms
+     * boundary can only be named from the transition itself, not from a frame
+     * budget that overshot it. A panel that never leaves `anchored` fails on the
+     * attribute, so the red reads as the defect it is.
+     */
+    async function advanceToUnanchorInstant(maxFrames = 6): Promise<number> {
+        const root = screen.getByTestId('onboarding-coachmark');
+        expect(root).toHaveAttribute('data-guide-state', 'anchored');
+        for (let frame = 0; frame < maxFrames; frame += 1) {
+            vi.advanceTimersToNextFrame();
+            await tick();
+            if (root.getAttribute('data-guide-state') !== 'anchored') return Date.now();
+        }
+        expect(root).toHaveAttribute('data-guide-state', 'waiting');
+        throw new Error(`coachmark still anchored after ${maxFrames} frames`);
+    }
+
+    it('never anchors a mounted anchor with a 0×0 box, and stalls it at 3,000ms exactly like a missing one', async () => {
+        vi.useFakeTimers();
+        try {
+            const onstall = vi.fn();
+            const openedAt = Date.now();
+            const anchor = makeAnchor(NO_BOX);
+            render(OnboardingCoachmark, {props: {...UNRENDERED_PROPS, stepId: 'unrendered-no-box', anchor, onstall}});
+            const root = screen.getByTestId('onboarding-coachmark');
+
+            // The precondition, verified: this is not the missing-anchor case in
+            // disguise. The element really is in the document, so the
+            // connectivity check the component relied on finds nothing wrong.
+            expect(document.body.contains(anchor)).toBe(true);
+
+            // Three times the two identical frames that settle a real target:
+            // this is where the defect anchored, on a box at the origin. The
+            // panel keeps the unanchored layout a missing anchor gets instead of
+            // sitting beside a box nobody can see, and neither the highlight nor
+            // the pointer is drawn — the recovery test below is the presence
+            // barrier for both, drawing them from these same props.
+            await advanceCoachmarkFrames();
+            expect(root).toHaveAttribute('data-guide-state', 'waiting');
+            expect(root).toHaveAttribute('data-geometry-state', 'waiting');
+            expect(root).toHaveAttribute('data-target-stable', 'false');
+            expect(root).toHaveAttribute('data-placement', 'center');
+            expect(screen.queryByTestId('onboarding-coachmark-highlight')).toBeNull();
+            expect(screen.queryByTestId('onboarding-coachmark-pointer')).toBeNull();
+
+            // Same deadline, same instant as a missing anchor. Nothing about an
+            // unrendered target may re-arm it: a re-arm would mean the step had
+            // briefly counted as settled, which is the defect itself.
+            await advanceFakeClockTo(openedAt + 2_999);
+            expect(root).toHaveAttribute('data-guide-state', 'waiting');
+            expect(onstall).not.toHaveBeenCalled();
+
+            await advanceFakeClockTo(openedAt + 3_000);
+            expect(root).toHaveAttribute('data-guide-state', 'stalled');
+            expect(root).toHaveAttribute('data-target-stable', 'false');
+            expect(onstall).toHaveBeenCalledTimes(1);
+
+            // Hundreds of identical 0×0 frames later it is still not a target.
+            // "The same box on every frame" is precisely what stability means to
+            // the measurement loop, so this is the half of the claim the defect
+            // broke, not a formality.
+            await advanceFakeClockTo(openedAt + 12_000);
+            expect(root).toHaveAttribute('data-guide-state', 'stalled');
+            expect(onstall).toHaveBeenCalledTimes(1);
+        } finally {
+            cleanup();
+            vi.useRealTimers();
+        }
+    });
+
+    it('never anchors an anchor checkVisibility reports hidden, even with a real box, and stalls it at 3,000ms', async () => {
+        vi.useFakeTimers();
+        try {
+            const onstall = vi.fn();
+            const openedAt = Date.now();
+            // `visibility: hidden` keeps its box, so geometry alone would call
+            // this a perfectly good target: the browser's answer is the only
+            // evidence there is. Same box as the jsdom control below, which
+            // anchors — the stub is the one thing that differs.
+            const anchor = makeAnchor(REAL_BOX);
+            stubCheckVisibility(anchor, 'visibility');
+            render(OnboardingCoachmark, {props: {...UNRENDERED_PROPS, stepId: 'unrendered-invisible', anchor, onstall}});
+            const root = screen.getByTestId('onboarding-coachmark');
+            expect(document.body.contains(anchor)).toBe(true);
+
+            await advanceCoachmarkFrames();
+            expect(root).toHaveAttribute('data-guide-state', 'waiting');
+            expect(root).toHaveAttribute('data-geometry-state', 'waiting');
+            expect(root).toHaveAttribute('data-target-stable', 'false');
+            expect(root).toHaveAttribute('data-placement', 'center');
+            expect(screen.queryByTestId('onboarding-coachmark-highlight')).toBeNull();
+            expect(screen.queryByTestId('onboarding-coachmark-pointer')).toBeNull();
+
+            await advanceFakeClockTo(openedAt + 2_999);
+            expect(root).toHaveAttribute('data-guide-state', 'waiting');
+            expect(onstall).not.toHaveBeenCalled();
+
+            await advanceFakeClockTo(openedAt + 3_000);
+            expect(root).toHaveAttribute('data-guide-state', 'stalled');
+            expect(root).toHaveAttribute('data-target-stable', 'false');
+            expect(onstall).toHaveBeenCalledTimes(1);
+
+            await advanceFakeClockTo(openedAt + 12_000);
+            expect(root).toHaveAttribute('data-guide-state', 'stalled');
+            expect(onstall).toHaveBeenCalledTimes(1);
+        } finally {
+            cleanup();
+            vi.useRealTimers();
+        }
+    });
+
+    it('recovers when the unrendered anchor gets a box: anchors on the real rect and reports the stall end once', async () => {
+        vi.useFakeTimers();
+        try {
+            const onstall = vi.fn();
+            const onstallend = vi.fn();
+            const openedAt = Date.now();
+            const anchor = makeAnchor(NO_BOX);
+            render(OnboardingCoachmark, {props: {...UNRENDERED_PROPS, stepId: 'unrendered-recovery', anchor, onstall, onstallend}});
+            const root = screen.getByTestId('onboarding-coachmark');
+
+            await advanceFakeClockTo(openedAt + 3_000);
+            expect(root).toHaveAttribute('data-guide-state', 'stalled');
+            expect(onstall).toHaveBeenCalledTimes(1);
+            expect(onstallend).not.toHaveBeenCalled();
+            expect(screen.queryByTestId('onboarding-coachmark-highlight')).toBeNull();
+            expect(screen.queryByTestId('onboarding-coachmark-pointer')).toBeNull();
+
+            // The target is shown. Same element, same props, no event: it simply
+            // measures a real box now. An absent anchor never settled, so the
+            // measurement loop never stopped and picks the box up on its own —
+            // the same path that heals an anchor mounted late.
+            vi.spyOn(anchor, 'getBoundingClientRect').mockReturnValue(REAL_BOX);
+            await settleCoachmarkGeometry();
+
+            // Anchored on the real box — its centre, not the origin the stub
+            // reported a moment ago — with the highlight and the pointer the
+            // stall withheld drawn again from the same props: the presence
+            // barrier for every "not drawn" assertion in this block.
+            expect(root).toHaveAttribute('data-target-center-x', '156');
+            expect(root).toHaveAttribute('data-target-center-y', '118');
+            expect(screen.getByTestId('onboarding-coachmark-highlight')).toBeVisible();
+            expect(screen.getByTestId('onboarding-coachmark-pointer')).toBeVisible();
+            expect(onstallend).toHaveBeenCalledTimes(1);
+            expect(onstall).toHaveBeenCalledTimes(1);
+
+            // Recovered for good: no second stall, and no second end.
+            const recoveredAt = Date.now();
+            await advanceFakeClockTo(recoveredAt + 12_000);
+            expect(root).toHaveAttribute('data-guide-state', 'anchored');
+            expect(onstall).toHaveBeenCalledTimes(1);
+            expect(onstallend).toHaveBeenCalledTimes(1);
+        } finally {
+            cleanup();
+            vi.useRealTimers();
+        }
+    });
+
+    it('returns an anchored step to waiting when its target stops being rendered, and stalls it 3,000ms later', async () => {
+        vi.useFakeTimers();
+        try {
+            const onstall = vi.fn();
+            const openedAt = Date.now();
+            const anchor = makeAnchor(REAL_BOX);
+            render(OnboardingCoachmark, {props: {...UNRENDERED_PROPS, stepId: 'unrendered-hidden-later', anchor, onstall}});
+            const root = await settleCoachmarkGeometry();
+            expect(root).toHaveAttribute('data-target-center-x', '156');
+            expect(screen.getByTestId('onboarding-coachmark-highlight')).toBeVisible();
+            expect(screen.getByTestId('onboarding-coachmark-pointer')).toBeVisible();
+
+            // Healthy well past its own deadline, so the stall below can only be
+            // armed by what happens next, never left over from the open.
+            await advanceFakeClockTo(openedAt + 6_000);
+            expect(root).toHaveAttribute('data-guide-state', 'anchored');
+            expect(onstall).not.toHaveBeenCalled();
+
+            // The target goes `display: none` under a step that is still on
+            // screen — a breakpoint swaps it out, a section collapses. It stays
+            // mounted and measures 0×0 from now on. In a browser the collapse
+            // fires the anchor's ResizeObserver; the harness stub is inert by
+            // design (it may never invent a callback), so the window `resize`
+            // listener, wired to the same `scheduleStableMeasurement`, stands in.
+            vi.spyOn(anchor, 'getBoundingClientRect').mockReturnValue(NO_BOX);
+            expect(document.body.contains(anchor)).toBe(true);
+            window.dispatchEvent(new Event('resize'));
+            const unanchoredAt = await advanceToUnanchorInstant();
+
+            // The defect re-anchored here after two identical 0×0 frames. Instead
+            // the step is back to the layout of a missing anchor, with nothing
+            // drawn where the target used to be.
+            expect(root).toHaveAttribute('data-guide-state', 'waiting');
+            expect(root).toHaveAttribute('data-geometry-state', 'waiting');
+            expect(root).toHaveAttribute('data-target-stable', 'false');
+            expect(root).toHaveAttribute('data-placement', 'center');
+            expect(screen.queryByTestId('onboarding-coachmark-highlight')).toBeNull();
+            expect(screen.queryByTestId('onboarding-coachmark-pointer')).toBeNull();
+
+            // A full deadline, armed by the step becoming unsettled: 2,999ms
+            // after the target vanished the panel is still waiting, and one
+            // millisecond later it is stalled.
+            await advanceFakeClockTo(unanchoredAt + 2_999);
+            expect(root).toHaveAttribute('data-guide-state', 'waiting');
+            expect(onstall).not.toHaveBeenCalled();
+
+            await advanceFakeClockTo(unanchoredAt + 3_000);
+            expect(root).toHaveAttribute('data-guide-state', 'stalled');
+            expect(onstall).toHaveBeenCalledTimes(1);
+
+            // The identical 0×0 frames that follow never re-anchor it at the origin.
+            await advanceFakeClockTo(unanchoredAt + 12_000);
+            expect(root).toHaveAttribute('data-guide-state', 'stalled');
+            expect(onstall).toHaveBeenCalledTimes(1);
+        } finally {
+            cleanup();
+            vi.useRealTimers();
+        }
+    });
+
+    it('still anchors a real box where checkVisibility does not exist, as in jsdom', async () => {
+        vi.useFakeTimers();
+        try {
+            const onstall = vi.fn();
+            const openedAt = Date.now();
+            const anchor = makeAnchor(REAL_BOX);
+            // The premise, verified rather than assumed: this environment has no
+            // `checkVisibility`, so the box is the only evidence the rule may use.
+            // A rule that reads the missing method as "hidden" — the natural slip
+            // is `!anchor.checkVisibility?.(…)`, where `undefined` negates to
+            // true — would stall every real target here, and in any browser that
+            // predates the API.
+            expect('checkVisibility' in anchor).toBe(false);
+            render(OnboardingCoachmark, {props: {...UNRENDERED_PROPS, stepId: 'unrendered-no-api', anchor, onstall}});
+
+            const root = await settleCoachmarkGeometry();
+            expect(root).toHaveAttribute('data-target-center-x', '156');
+            expect(root).toHaveAttribute('data-target-center-y', '118');
+            expect(screen.getByTestId('onboarding-coachmark-highlight')).toBeVisible();
+
+            await advanceFakeClockTo(openedAt + 12_000);
+            expect(root).toHaveAttribute('data-guide-state', 'anchored');
+            expect(onstall).not.toHaveBeenCalled();
+        } finally {
+            cleanup();
+            vi.useRealTimers();
+        }
+    });
+
+    it('still anchors a target hidden only by opacity: hover-revealed controls are real targets', async () => {
+        vi.useFakeTimers();
+        try {
+            const onstall = vi.fn();
+            const openedAt = Date.now();
+            // A control that fades in on hover sits at `opacity: 0` with a real
+            // box. The guide points at it precisely so the user can find it, so a
+            // rule that asked about opacity would stall the very steps that need
+            // the pointer most.
+            const anchor = makeAnchor(REAL_BOX);
+            stubCheckVisibility(anchor, 'opacity');
+            render(OnboardingCoachmark, {props: {...UNRENDERED_PROPS, stepId: 'unrendered-transparent', anchor, onstall}});
+
+            const root = await settleCoachmarkGeometry();
+            expect(root).toHaveAttribute('data-target-center-x', '156');
+            expect(root).toHaveAttribute('data-target-center-y', '118');
+            expect(screen.getByTestId('onboarding-coachmark-highlight')).toBeVisible();
+
+            await advanceFakeClockTo(openedAt + 12_000);
+            expect(root).toHaveAttribute('data-guide-state', 'anchored');
+            expect(onstall).not.toHaveBeenCalled();
+        } finally {
+            cleanup();
+            vi.useRealTimers();
+        }
+    });
+});
+
 describe('OnboardingCoachmark — focus policy', () => {
     it('moves focus to the panel once per step when focusOnOpen is true', async () => {
         render(OnboardingCoachmark, {
