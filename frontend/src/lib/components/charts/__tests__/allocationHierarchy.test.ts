@@ -13,7 +13,9 @@
  *    That is a measurable claim, so it is measured: the ΔL between a parent and
  *    its child is asserted as a number, for every entry of all four real
  *    palettes. A "looks related" assertion that never computes the distance
- *    would pass under a rule that makes the two indistinguishable.
+ *    would pass under a rule that makes the two indistinguishable. "Real" is
+ *    literal: the palettes are read from the components that declare them,
+ *    through `$test/sourcePalettes`, not copied — a copy agrees with itself.
  *
  * `resolvePrimary` is a **stub** on purpose. The real `primaryAssetType` lives in
  * `$lib/utils/assetTypes`, which reads the generated Zodios schemas at module
@@ -27,6 +29,8 @@
  */
 import {describe, expect, it} from 'vitest';
 
+import {PALETTE_SLOTS, paletteDefects, readSourcePalette} from '$test/sourcePalettes';
+
 import {buildAllocationHierarchy, shadeForDepth} from '../allocationHierarchy';
 import {hexToHsl} from '$lib/utils/colors';
 
@@ -34,14 +38,17 @@ import {hexToHsl} from '$lib/utils/colors';
 // Fixtures
 // =============================================================================
 
-/** `AllocationPieChart.svelte` line 99. */
-const PIE_PALETTE_LIGHT = ['#1a4031', '#2563eb', '#7c3aed', '#dc2626', '#d97706', '#0d9488', '#be185d', '#4f46e5', '#059669', '#ea580c', '#6366f1', '#0891b2', '#ca8a04', '#9333ea'];
-/** `AllocationPieChart.svelte` line 100. */
-const PIE_PALETTE_DARK = ['#4ade80', '#60a5fa', '#a78bfa', '#f87171', '#fbbf24', '#2dd4bf', '#f472b6', '#818cf8', '#34d399', '#fb923c', '#a5b4fc', '#22d3ee', '#facc15', '#c084fc'];
-/** `AllocationHistoryChart.svelte` line 124. */
-const HISTORY_PALETTE_LIGHT = ['#1a4031', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#84cc16', '#ec4899', '#f97316', '#14b8a6', '#6366f1', '#a3a3a3', '#a21caf', '#7e22ce'];
-/** `AllocationHistoryChart.svelte` line 125. */
-const HISTORY_PALETTE_DARK = ['#4ade80', '#60a5fa', '#fbbf24', '#f87171', '#a78bfa', '#22d3ee', '#a3e635', '#f472b6', '#fb923c', '#2dd4bf', '#818cf8', '#d4d4d4', '#e879f9', '#c084fc'];
+const PIE_CHART = new URL('../AllocationPieChart.svelte', import.meta.url);
+const HISTORY_CHART = new URL('../../dashboard/AllocationHistoryChart.svelte', import.meta.url);
+
+/** `PALETTE_LIGHT` in `AllocationPieChart.svelte`. */
+const PIE_PALETTE_LIGHT = readSourcePalette(PIE_CHART, 'PALETTE_LIGHT');
+/** `PALETTE_DARK` in `AllocationPieChart.svelte`. */
+const PIE_PALETTE_DARK = readSourcePalette(PIE_CHART, 'PALETTE_DARK');
+/** `PALETTE_LIGHT` in `AllocationHistoryChart.svelte`. */
+const HISTORY_PALETTE_LIGHT = readSourcePalette(HISTORY_CHART, 'PALETTE_LIGHT');
+/** `PALETTE_DARK` in `AllocationHistoryChart.svelte`. */
+const HISTORY_PALETTE_DARK = readSourcePalette(HISTORY_CHART, 'PALETTE_DARK');
 
 /** Both themes, both charts. "In both themes" means all four of these. */
 const ALL_PALETTES: ReadonlyArray<readonly [string, readonly string[]]> = [
@@ -49,6 +56,12 @@ const ALL_PALETTES: ReadonlyArray<readonly [string, readonly string[]]> = [
     ['AllocationPieChart PALETTE_DARK', PIE_PALETTE_DARK],
     ['AllocationHistoryChart PALETTE_LIGHT', HISTORY_PALETTE_LIGHT],
     ['AllocationHistoryChart PALETTE_DARK', HISTORY_PALETTE_DARK],
+];
+
+/** Each chart's two themes, paired slot by slot (the comment above the constants in `AllocationHistoryChart.svelte`). */
+const THEME_PAIRS: ReadonlyArray<readonly [string, readonly string[], readonly string[]]> = [
+    ['AllocationPieChart', PIE_PALETTE_LIGHT, PIE_PALETTE_DARK],
+    ['AllocationHistoryChart', HISTORY_PALETTE_LIGHT, HISTORY_PALETTE_DARK],
 ];
 
 /**
@@ -102,6 +115,20 @@ function hueOf(hex: string): number {
 }
 
 // =============================================================================
+// The palettes under test — what was read, so no loop below can pass on nothing
+// =============================================================================
+
+describe('the palettes under test', () => {
+    it.each(ALL_PALETTES)(`%s is ${PALETTE_SLOTS} distinct #rrggbb colours`, (_name, palette) => {
+        expect(paletteDefects(palette), `the palette the chart draws with is not ${PALETTE_SLOTS} distinct colours: two slices would share one, or a slot is missing`).toEqual([]);
+    });
+
+    it.each(THEME_PAIRS)('%s pairs its light and dark palettes slot by slot', (_name, light, dark) => {
+        expect(dark.length, 'the two themes are not the same length: a slot would change colour family when the theme changes').toBe(light.length);
+    });
+});
+
+// =============================================================================
 // The legacy pin — the guarantee that lets this ship at all
 // =============================================================================
 
@@ -134,7 +161,9 @@ describe('buildAllocationHierarchy — legacy pin (no shared primaries)', () => 
     it('spells the pinned order out, so the comparison cannot drift with the helper', () => {
         const actual = buildAllocationHierarchy(entries, {resolvePrimary, palette: PIE_PALETTE_LIGHT});
         expect(actual.map((r) => r.key)).toEqual(['STOCK', 'BOND', 'CRYPTO', 'CASH', 'COMMODITY']);
-        expect(actual.map((r) => r.color)).toEqual(['#1a4031', '#2563eb', '#7c3aed', '#dc2626', '#d97706']);
+        // Slots of the palette the chart really uses, spelled out without `legacy()`:
+        // a literal copy of their colours would go red on a palette edit, not on the builder.
+        expect(actual.map((r) => r.color)).toEqual([0, 1, 2, 3, 4].map((slot) => PIE_PALETTE_LIGHT[slot]));
     });
 
     it('breaks ties by input order, not by name — reversing the tied inputs reverses the output', () => {
@@ -289,6 +318,7 @@ describe('buildAllocationHierarchy — measured parent/child contrast', () => {
         // #6366f1 sits at L≈67 in the *light* palette. Lightening it by 20 lands
         // at L≈87, which is where a white background eats it. Darkening keeps it
         // separable. This test states the case that motivated the per-colour rule.
+        expect([...PIE_PALETTE_LIGHT, ...HISTORY_PALETTE_LIGHT], 'precondition: the motivating base is no longer in a light palette').toContain('#6366f1');
         const base = '#6366f1';
         const baseL = lightnessOf(base);
         expect(baseL).toBeGreaterThan(50);
@@ -531,7 +561,9 @@ describe('shadeForDepth', () => {
     });
 
     it('handles achromatic bases without producing NaN', () => {
-        // #a3a3a3 is a real HISTORY_PALETTE_LIGHT entry: s = 0, hue undefined.
+        // #a3a3a3 is a real HISTORY_PALETTE_LIGHT entry: s = 0, hue undefined. Checked, not
+        // assumed — the palette is read from the chart, so this can go stale only loudly.
+        expect(HISTORY_PALETTE_LIGHT, 'precondition: the achromatic base is no longer a real palette entry').toContain('#a3a3a3');
         const shaded = shadeForDepth('#a3a3a3', 1);
         expect(hexToHsl(shaded)).not.toBeNull();
         expect(Number.isNaN(lightnessOf(shaded))).toBe(false);

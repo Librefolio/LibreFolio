@@ -88,6 +88,8 @@ import {existsSync, readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {describe, expect, it} from 'vitest';
 
+import {PALETTE_SLOTS, paletteDefects, readSourcePalette} from '$test/sourcePalettes';
+
 import {buildAllocationHierarchy, shadeForDepth} from '../allocationHierarchy';
 import {buildAllocationRingData, buildAllocationRings, type AllocationRingDatum, type AllocationRingItem, type AllocationRingsLayout} from '../allocationRings';
 import {hexToHsl} from '$lib/utils/colors';
@@ -96,10 +98,13 @@ import {hexToHsl} from '$lib/utils/colors';
 // Fixtures
 // =============================================================================
 
-/** Verbatim copy of `PALETTE_LIGHT` in `AllocationPieChart.svelte` — the only chart that draws rings. */
-const PIE_PALETTE_LIGHT = ['#1a4031', '#2563eb', '#7c3aed', '#dc2626', '#d97706', '#0d9488', '#be185d', '#4f46e5', '#059669', '#ea580c', '#6366f1', '#0891b2', '#ca8a04', '#9333ea'];
-/** Verbatim copy of `PALETTE_DARK` in `AllocationPieChart.svelte`. */
-const PIE_PALETTE_DARK = ['#4ade80', '#60a5fa', '#a78bfa', '#f87171', '#fbbf24', '#2dd4bf', '#f472b6', '#818cf8', '#34d399', '#fb923c', '#a5b4fc', '#22d3ee', '#facc15', '#c084fc'];
+/** The only chart that draws rings. Its palettes are read from it, by name, not copied. */
+const PIE_CHART = new URL('../AllocationPieChart.svelte', import.meta.url);
+
+/** `PALETTE_LIGHT` in `AllocationPieChart.svelte`. */
+const PIE_PALETTE_LIGHT = readSourcePalette(PIE_CHART, 'PALETTE_LIGHT');
+/** `PALETTE_DARK` in `AllocationPieChart.svelte`. */
+const PIE_PALETTE_DARK = readSourcePalette(PIE_CHART, 'PALETTE_DARK');
 
 /** Both themes of that chart. */
 const PIE_PALETTES: ReadonlyArray<readonly [string, readonly string[]]> = [
@@ -332,6 +337,20 @@ async function importRealResolvers() {
         ETF_SUBTYPES: assetTypes.ETF_SUBTYPES,
     };
 }
+
+// =============================================================================
+// The palettes under test — what was read, so no loop below can pass on nothing
+// =============================================================================
+
+describe('the palettes under test', () => {
+    it.each(PIE_PALETTES)(`AllocationPieChart %s is ${PALETTE_SLOTS} distinct #rrggbb colours`, (_name, palette) => {
+        expect(paletteDefects(palette), `the palette the rings draw with is not ${PALETTE_SLOTS} distinct colours: two families would share one, or a slot is missing`).toEqual([]);
+    });
+
+    it('pairs the light and dark palettes slot by slot', () => {
+        expect(PIE_PALETTE_DARK.length, 'the two themes are not the same length: a family would change colour when the theme changes').toBe(PIE_PALETTE_LIGHT.length);
+    });
+});
 
 // =============================================================================
 // R12, option B — the review case, grouped by vehicle

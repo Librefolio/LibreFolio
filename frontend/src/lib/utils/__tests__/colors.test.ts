@@ -7,10 +7,12 @@
  * original string) rather than to black — a black slice is an invisible bug,
  * a `null` is a branch the caller can handle.
  *
- * The palettes below are copied **literally** from the two components that own
- * them, so a silent edit there shows up here as a failing round trip:
- *   - `AllocationPieChart.svelte`      (src/lib/components/charts/)
- *   - `AllocationHistoryChart.svelte`  (src/lib/components/dashboard/)
+ * The palettes below are **read from the two components that own them** —
+ * `PALETTE_LIGHT` and `PALETTE_DARK` in `AllocationPieChart.svelte`
+ * (src/lib/components/charts/) and in `AllocationHistoryChart.svelte`
+ * (src/lib/components/dashboard/) — by name, through `$test/sourcePalettes`. So
+ * an edit there is measured here. (They used to be copies, and a copy agrees
+ * with itself: an edited palette left this file green.)
  *
  * No runes, no DOM: this stays in the default `node` environment.
  *
@@ -18,20 +20,25 @@
  */
 import {describe, expect, it} from 'vitest';
 
+import {PALETTE_SLOTS, paletteDefects, readSourcePalette} from '$test/sourcePalettes';
+
 import {hexToHsl, hslToHex} from '../colors';
 
 // =============================================================================
-// The four real palettes — verbatim copies, do not "tidy" them
+// The four real palettes — read from the components that declare them
 // =============================================================================
 
-/** `AllocationPieChart.svelte` line 99. */
-const PIE_PALETTE_LIGHT = ['#1a4031', '#2563eb', '#7c3aed', '#dc2626', '#d97706', '#0d9488', '#be185d', '#4f46e5', '#059669', '#ea580c', '#6366f1', '#0891b2', '#ca8a04', '#9333ea'];
-/** `AllocationPieChart.svelte` line 100. */
-const PIE_PALETTE_DARK = ['#4ade80', '#60a5fa', '#a78bfa', '#f87171', '#fbbf24', '#2dd4bf', '#f472b6', '#818cf8', '#34d399', '#fb923c', '#a5b4fc', '#22d3ee', '#facc15', '#c084fc'];
-/** `AllocationHistoryChart.svelte` line 124. */
-const HISTORY_PALETTE_LIGHT = ['#1a4031', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#84cc16', '#ec4899', '#f97316', '#14b8a6', '#6366f1', '#a3a3a3', '#a21caf', '#7e22ce'];
-/** `AllocationHistoryChart.svelte` line 125. */
-const HISTORY_PALETTE_DARK = ['#4ade80', '#60a5fa', '#fbbf24', '#f87171', '#a78bfa', '#22d3ee', '#a3e635', '#f472b6', '#fb923c', '#2dd4bf', '#818cf8', '#d4d4d4', '#e879f9', '#c084fc'];
+const PIE_CHART = new URL('../../components/charts/AllocationPieChart.svelte', import.meta.url);
+const HISTORY_CHART = new URL('../../components/dashboard/AllocationHistoryChart.svelte', import.meta.url);
+
+/** `PALETTE_LIGHT` in `AllocationPieChart.svelte`. */
+const PIE_PALETTE_LIGHT = readSourcePalette(PIE_CHART, 'PALETTE_LIGHT');
+/** `PALETTE_DARK` in `AllocationPieChart.svelte`. */
+const PIE_PALETTE_DARK = readSourcePalette(PIE_CHART, 'PALETTE_DARK');
+/** `PALETTE_LIGHT` in `AllocationHistoryChart.svelte`. */
+const HISTORY_PALETTE_LIGHT = readSourcePalette(HISTORY_CHART, 'PALETTE_LIGHT');
+/** `PALETTE_DARK` in `AllocationHistoryChart.svelte`. */
+const HISTORY_PALETTE_DARK = readSourcePalette(HISTORY_CHART, 'PALETTE_DARK');
 
 const ALL_PALETTES: ReadonlyArray<readonly [string, readonly string[]]> = [
     ['AllocationPieChart PALETTE_LIGHT', PIE_PALETTE_LIGHT],
@@ -40,11 +47,31 @@ const ALL_PALETTES: ReadonlyArray<readonly [string, readonly string[]]> = [
     ['AllocationHistoryChart PALETTE_DARK', HISTORY_PALETTE_DARK],
 ];
 
+/** Each chart's two themes, paired slot by slot (the comment above the constants in `AllocationHistoryChart.svelte`). */
+const THEME_PAIRS: ReadonlyArray<readonly [string, readonly string[], readonly string[]]> = [
+    ['AllocationPieChart', PIE_PALETTE_LIGHT, PIE_PALETTE_DARK],
+    ['AllocationHistoryChart', HISTORY_PALETTE_LIGHT, HISTORY_PALETTE_DARK],
+];
+
 /** Split a `#rrggbb` (or bare `rrggbb`) into its three 0-255 channels. */
 function channels(hex: string): [number, number, number] {
     const raw = hex.replace(/^#/, '');
     return [parseInt(raw.slice(0, 2), 16), parseInt(raw.slice(2, 4), 16), parseInt(raw.slice(4, 6), 16)];
 }
+
+// =============================================================================
+// The palettes under test — what was read, so no loop below can pass on nothing
+// =============================================================================
+
+describe('the palettes under test', () => {
+    it.each(ALL_PALETTES)(`%s is ${PALETTE_SLOTS} distinct #rrggbb colours`, (_name, palette) => {
+        expect(paletteDefects(palette), `the palette the chart draws with is not ${PALETTE_SLOTS} distinct colours: two slices would share one, or a slot is missing`).toEqual([]);
+    });
+
+    it.each(THEME_PAIRS)('%s pairs its light and dark palettes slot by slot', (_name, light, dark) => {
+        expect(dark.length, 'the two themes are not the same length: a slot would change colour family when the theme changes').toBe(light.length);
+    });
+});
 
 // =============================================================================
 // Round trip — the property the whole shading feature rests on
