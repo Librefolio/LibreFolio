@@ -7,12 +7,6 @@
   },
   "as_of": "2026-09-15",
   "valuation_currency": "EUR",
-  "currency_specs": [
-    {"currency": "EUR", "minor_unit": "0"},
-    {"currency": "USD", "minor_unit": "0.01"},
-    {"currency": "GBP", "minor_unit": "0.01"},
-    {"currency": "JPY", "minor_unit": "1"}
-  ],
   "provenance": [
     {
       "kind": "manual",
@@ -135,5 +129,5 @@
     {"asset_id": "asset-15", "weight": "0.0625"},
     {"asset_id": "asset-16", "weight": "0.0625"}
   ],
-  "policy": "min_fragmentation"
+  "policy": "proportional"
 }

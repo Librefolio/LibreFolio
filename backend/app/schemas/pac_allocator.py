@@ -254,15 +254,14 @@ PlannerIssueCode = Literal[
     "allocation.classification_invalid",
     "allocation.classification_sector_missing",
     "allocation.coefficient_envelope_unsupported",
-    "allocation.currency_minor_unit_nonpositive",
     "allocation.currency_mismatch",
-    "allocation.currency_spec_missing",
     "allocation.deployment_omitted",
     "allocation.duplicate_id",
     "allocation.dynamic_fee_unsupported",
     "allocation.economic_share_out_of_range",
     "allocation.execution_margin_missing",
     "allocation.execution_margin_rate_out_of_range",
+    "allocation.exposure_total_exceeds_one",
     "allocation.exposure_weight_out_of_range",
     "allocation.fee_floor_exceeds_cap",
     "allocation.fee_rate_out_of_range",
@@ -392,7 +391,7 @@ class PlannerSnapshotInput(AllocationStrictModel):
 
 
 class CurrencySpec(AllocationStrictModel):
-    """Backend-derived currency quantum; never silently defaulted by the worker."""
+    """Published ISO 4217 minor unit, derived by the normalizer from CLDR (babel); never a request input."""
 
     currency: CurrencyCode
     minor_unit: PlannerFixedDecimal
@@ -729,7 +728,6 @@ class _PlannerRequestBase(AllocationStrictModel):
     snapshot: PlannerSnapshotInput
     as_of: ReferenceDate
     valuation_currency: CurrencyCode
-    currency_specs: list[CurrencySpec]
     provenance: list[PlannerProvenance] = Field(description="Root provenance records referenced by every copied or manually supplied fact.")
     fx_rates: dict[str, PlannerFixedDecimal] = Field(description="Canonical global FX facts; key is an alphabetically sorted uppercase currency pair naming one unit of the first currency, value is units of the second currency per one unit of the first. May be empty.")
     fx_spread_rate: PlannerFixedDecimal = Field(description="Single global adverse spread applied exactly once to every actual currency conversion; valuation always uses the official rate.")
@@ -746,16 +744,22 @@ class _PlannerRequestBase(AllocationStrictModel):
         # pattern-keyed dict, so the tool-schema codegen allow-list never sees a
         # `patternProperties` keyword; this validator reapplies the same pair
         # format/ordering constraint (regex + `_planner_canonical_fx_pair`) at runtime.
+        # Both codes are ISO-validated like every `CurrencyCode`: the normalizer
+        # derives a minor unit for each referenced currency.
         for pair in self.fx_rates:
             if not re.fullmatch(_PLANNER_FX_PAIR, pair):
                 raise ValueError(f"FX rate key {pair!r} must be an uppercase 'AAA/BBB' currency pair")
             _planner_canonical_fx_pair(pair)
+            for code in pair.split("/"):
+                Currency.validate_code(code)
         return self
 
 
 class PacPlannerRequest(_PlannerRequestBase):
     order_routes: list[PacOrderRouteInput]
-    policy: Literal["proportional", "min_fragmentation"]
+    # `min_fragmentation` is deferred (TODO_FUTURI): the exact model keeps the
+    # branch, the wire does not accept it.
+    policy: Literal["proportional"]
 
 
 class _RebalancerPlannerRequestBase(_PlannerRequestBase):
@@ -1339,7 +1343,7 @@ class PlannerScenarioCounts(AllocationStrictModel):
 class PlannerScenarioBasis(AllocationStrictModel):
     as_of: ReferenceDate
     valuation_currency: CurrencyCode
-    policy: Literal["proportional", "min_fragmentation", "invest_only", "invest_and_sell"]
+    policy: Literal["proportional", "invest_only", "invest_and_sell"]
     counts: PlannerScenarioCounts
     current_invested: ExactMoney
     selected_funding: ExactMoney
@@ -2343,7 +2347,7 @@ class PlannerResultSnapshot(AllocationStrictModel):
 
 
 class PacScenarioBasis(PlannerScenarioBasis):
-    policy: Literal["proportional", "min_fragmentation"]
+    policy: Literal["proportional"]
 
 
 class RebalancerScenarioBasis(PlannerScenarioBasis):

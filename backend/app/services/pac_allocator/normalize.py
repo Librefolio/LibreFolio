@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 
+from babel.numbers import get_currency_precision
+
 from backend.app.schemas.pac_allocator import (
     AcceptedStaleObservation,
     AmountFeeCap,
@@ -109,6 +111,15 @@ def exact_number_to_ratio(value: WireExactNumber) -> ExactRatio:
     raise TypeError(f"Unsupported exact-number branch: {type(value).__name__}")
 
 
+def currency_minor_unit(currency: str) -> ExactRatio:
+    """ISO 4217 minor unit from CLDR via babel.
+
+    Codes CLDR does not list follow its own ``DEFAULT`` rule (2 digits): that is
+    the standard's fallback, not a planner default.
+    """
+    return ExactRatio(1, 10 ** get_currency_precision(currency))
+
+
 class _PlannerV2Normalizer:
     def __init__(self, request: _PlannerV2Request, source_issues: tuple[PlannerIssue, ...]) -> None:
         self.request = request
@@ -205,20 +216,6 @@ class _PlannerV2Normalizer:
             self.issue("allocation.reference_not_found", field_path("input", "scenario", self.request.snapshot.snapshot_id, "as_of"))
         self.currency(self.request.valuation_currency, field_path("input", "scenario", self.request.snapshot.snapshot_id, "valuation_currency"))
 
-    def validate_currency_specs(self) -> None:
-        currency_ids = self.duplicates(
-            self.request.currency_specs,
-            lambda item: item.currency,
-            lambda _item, item_id: field_path("input", "currency", item_id, "currency"),
-        )
-        for item in self.request.currency_specs:
-            minor_unit_path = field_path("input", "currency", item.currency, "minor_unit")
-            if self.ratio(item.minor_unit, minor_unit_path) <= ExactRatio(0):
-                self.issue("allocation.currency_minor_unit_nonpositive", minor_unit_path)
-        for currency, _path in sorted(self.currency_references.items()):
-            if currency not in currency_ids:
-                self.issue("allocation.currency_spec_missing", field_path("input", "currency", currency, "minor_unit"))
-
     def validate_assets(self) -> None:
         self.asset_ids = self.duplicates(
             self.request.assets,
@@ -266,12 +263,21 @@ class _PlannerV2Normalizer:
                 IdIssueParam(kind="id", name="category_id", value=key[1]),
             ),
         )
+        exposure_path = field_path("assets", "asset", item.asset_id, "exposures.weight")
+        totals: dict[str, ExactRatio] = defaultdict(lambda: ExactRatio(0))
+        out_of_range_dimensions: set[str] = set()
         for exposure in item.exposures:
-            exposure_path = field_path("assets", "asset", item.asset_id, "exposures.weight")
             self.provenance(exposure.provenance_id, field_path("assets", "asset", item.asset_id, "exposures.provenance_id"))
             weight = self.ratio(exposure.weight, exposure_path)
+            totals[exposure.dimension] += weight
             if not self._ratio_in_unit_interval(weight):
+                out_of_range_dimensions.add(exposure.dimension)
                 self.issue("allocation.exposure_weight_out_of_range", exposure_path)
+        # A dimension may stay below one (the report keeps the residual); above
+        # one is contradictory. An out-of-range weight is already the root cause.
+        for dimension, total in sorted(totals.items()):
+            if dimension not in out_of_range_dimensions and total > ExactRatio(1):
+                self.issue("allocation.exposure_total_exceeds_one", exposure_path, params=(TextIssueParam(kind="text", name="dimension", value=dimension),))
 
     def validate_targets(self) -> None:
         target_ids = self.duplicates(
@@ -1040,7 +1046,7 @@ class _PlannerV2Normalizer:
             policy=self.request.policy,
             as_of_date=date.fromisoformat(self.request.as_of),
             valuation_currency=self.request.valuation_currency,
-            currency_specs=tuple(ExactCurrencySpec(currency=item.currency, minor_unit=ExactRatio.from_decimal(Decimal(item.minor_unit))) for item in sorted(self.request.currency_specs, key=lambda value: value.currency)),
+            currency_specs=tuple(ExactCurrencySpec(currency=currency, minor_unit=currency_minor_unit(currency)) for currency in sorted(self.currency_references)),
             provenance=self.build_provenance(),
             fx_rates=fx_rates,
             fx_spread_rate=ExactRatio.from_decimal(Decimal(self.request.fx_spread_rate)),
@@ -1066,7 +1072,6 @@ class _PlannerV2Normalizer:
         self.validate_targets()
         self.validate_sell_context()
         self.validate_current_portfolio()
-        self.validate_currency_specs()
         self.validate_fx_pair_closure()
         issues = canonicalize_issues(self.issues)
         availability = normalization_availability(issues)

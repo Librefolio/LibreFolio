@@ -7,12 +7,6 @@
   },
   "as_of": "2026-09-15",
   "valuation_currency": "EUR",
-  "currency_specs": [
-    {
-      "currency": "EUR",
-      "minor_unit": "0.01"
-    }
-  ],
   "provenance": [
     {
       "kind": "manual",
