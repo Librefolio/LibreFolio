@@ -1080,7 +1080,7 @@ mostra, non decide.
 | F2 | un solo avviso di parzialità in cima al pannello, ogni causa una volta; sotto i livelli solo gli errori | `levels/RiskLevelsPanel.svelte` (non `RiskLevelSection`, che è di F) | ✅ 25/09 (con la parte non-replay di F7) |
 | F3 | replay: via il blocco «escludi e riprova»; esclusi per motivo con nomi e peso; avviso forte (C3); «niente da simulare»; `DateRangePicker` senza pulsanti rapidi; pulsante del periodo comune (C2), con la nota «solo una parte della crisi» nelle crisi del catalogo | `levels/l4/L4Replay.svelte`, `levels/l4/scenarioHelpers.ts` | ⏳ **dopo F → Risk** (decisione del developer, 25/09) |
 | F4 | benchmark: non ammissibili grigi con il motivo, con avviso selezionabili e segnalati; cambia col periodo — **dopo la fusione F → Risk**, con le chiavi `risk.eligibility.*` di F (proposta al coordinator) | `levels/L3Benchmark.svelte` | ⏳ |
-| F5 | test delle palette che leggono i colori dai grafici veri; puntatori per contenuto, non per riga | test di `AllocationPieChart` / `AllocationHistoryChart` (solo lettura dei `.svelte`) | ⏳ |
+| F5 | test delle palette che leggono i colori dai grafici veri; puntatori per contenuto, non per riga | test di `AllocationPieChart` / `AllocationHistoryChart` (solo lettura dei `.svelte`) | ✅ 25/09 |
 | F6 | `dashboard.allocationGeneric` chiamata con `$t(`, così l'audit la vede | `AllocationPieChart.svelte` | ✅ 24/09 · anticipato nel checkpoint B |
 | F7 | E2E: riscritto quello del replay bloccato; aggiornati quelli che si aspettavano «Parziale» sotto i livelli | `frontend/e2e/portfolio/risk-analysis.spec.ts` | ⏳ prima di F → Risk solo la parte non-replay; il replay dopo |
 | F8 | screenshot per il developer: icona composita (D-K2), avviso unico, replay, benchmark | — | ⏳ per le parti pronte; il replay dopo F → Risk |
@@ -1515,3 +1515,39 @@ server della copia di prod è stato spento):
 > file · `svelte-check` nulla sui file toccati · audit i18n: 3434 chiavi, 0 incomplete, le due chiavi nuove non
 > figurano fra le inutilizzate · il runner cambia solo per aggiunte (ruff 19 come `HEAD`) · nessun importo reale,
 > nessuna password.
+
+### F2 — committato · 25/09/2026
+
+> `af39db8a9` → `ae37dcffe` → `17b5cbefd` → `3b4e1e356` → `3cd4524cf`, su `296a50ae9`: 3 + 4 + 3 + 1 + 1 = 12 file,
+> albero pulito, letti da me. Storia condivisa da qui.
+>
+> **Per la pianificazione** (coordinator): J è integrato in `dev_release2` (`2bbaa8db2`). Dopo F → Risk il mio
+> ramo resterà sulla vecchia base: prima dell'ingresso finale di F+Risk servirà una fusione `dev_release2` → Risk,
+> che porta nel mio ramo il lavoro di privacy di J. La pianifichiamo insieme dopo F → Risk.
+
+### F5 — le palette si leggono dai grafici veri · ✅ 25/09/2026
+
+> **Note implementazione**: il reperto di I (24/09, approvato dal developer: «sì se testabile») — tre file di test
+> (`colors.test.ts`, `allocationHierarchy.test.ts`, `allocationRings.test.ts`) dichiarano di misurare le palette
+> «reali» ma ne controllano una copia, con puntatori per numero di riga ormai sbagliati. La cura è solo nei test:
+> un aiuto condiviso legge `const PALETTE_*` dal `.svelte` **per nome**, e le copie spariscono. La palette storica
+> sta nel file di I: il test la legge soltanto. La prova che serve: una palette rotta nel componente lascia verdi i
+> test di oggi e rende rossi quelli nuovi.
+
+> **Fatto** (test-author): un aiuto nuovo `src/__tests__/sourcePalettes.ts` legge `const <nome> = [...]` dal
+> sorgente per nome e si ferma con un errore chiaro (costante assente, dichiarata due volte, non letterale, vuota,
+> una voce che non è `'#rrggbb'`), con 18 test sui suoi casi d'errore, su stringhe in linea; i tre file di test
+> leggono le palette dai due componenti invece delle copie, con i puntatori per contenuto e i guardiani (14 colori
+> distinti, chiara e scura della stessa lunghezza). Due commenti che *affermavano* che un colore sta nella palette
+> sono diventati precondizioni controllate. `allocation-unit`: 116 → 149 ✓.
+>
+> **La prova** (tre mutanti sul posto, sorgenti ripristinati identici): una palette con due colori uguali, una
+> palette scura con un colore in meno, una costante rinominata → **verdi** sui test di prima (il difetto), **rossi**
+> su quelli nuovi, l'ultimo col messaggio dell'aiuto. Il primo lo vedono solo i guardiani: nessun test di logica
+> si accorge di due colori uguali.
+>
+> **Verifica mia**: `allocation-unit` 149 ✓, `risk-levels-unit` 240 ✓, `check-orphans` (il test nuovo è
+> registrato, restano i 5 orfani di privacy), prettier pulito, `svelte-check` nulla sui file toccati, i due
+> componenti identici a `HEAD`, il runner cambia solo per aggiunte (ruff 19 come `HEAD`), nessun importo reale,
+> nessuna password. `PALETTE_SLOTS = 14` è un fissaggio voluto: far crescere una palette vorrà dire cambiare una
+> riga nell'aiuto.
