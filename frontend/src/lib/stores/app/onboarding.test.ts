@@ -1,7 +1,8 @@
 import {describe, expect, it, vi, type Mock} from 'vitest';
 
 import {createAppBootstrap} from '$lib/features/onboarding/appBootstrap.svelte';
-import {createOnboardingController} from './onboarding.svelte';
+import {createOnboardingController, createOnboardingSessionResetter, createReplayStorageListener} from './onboarding.svelte';
+import type {ClientSessionTransition} from './clientSession';
 import {createOnboardingGuide, IMPORT_GUIDE_STEP_IDS, INTRO_TOUR_STEP_IDS} from '$lib/features/onboarding/onboardingGuide.svelte';
 import {TRANSACTION_BULK_STEP_IDS, guideSteps, isCheckpointFlow, isStepManagedFlow, type ContextualOnboardingFlow} from '$lib/features/onboarding/onboardingGuideCatalog';
 import {onboardingApi} from '$lib/features/onboarding/onboardingApi';
@@ -18,6 +19,13 @@ import type {goto} from '$app/navigation';
  * spec has no business triggering. Every dependency (identity, generation,
  * storage, clock) is injected, so a "stale" or "account switch" scenario is
  * produced by moving the fake dependency, never by faking time.
+ *
+ * Replay storage is always the injected memory double (`getReplayStorage`). The
+ * production default is `window.localStorage`, which does not exist under Node:
+ * a persistence test that silently fell back to it could pass by accident, so
+ * persistence tests read the stored keys back from the double they injected.
+ * The session resetter and the `storage` event listener are exercised through
+ * their factories for the same reason as the controller.
  */
 
 /** Minimal in-memory Storage — enough surface for the controller's own usage. */
@@ -45,6 +53,16 @@ function createMemoryStorage(overrides: Partial<Storage> = {}): Storage {
         ...overrides,
     };
     return storage as unknown as Storage;
+}
+
+/** Every key/value pair of a test-owned storage: the whole state, for exact before/after comparisons. */
+function storageEntries(storage: Storage): Record<string, string> {
+    const entries: Record<string, string> = {};
+    for (let index = 0; index < storage.length; index += 1) {
+        const key = storage.key(index);
+        if (key !== null) entries[key] = storage.getItem(key) ?? '';
+    }
+    return entries;
 }
 
 function stepProgressItem(stepId: string, overrides: Partial<OnboardingStepProgressItem> = {}): OnboardingStepProgressItem {
@@ -147,16 +165,20 @@ function welcomeCompleteRequest(overrides: Partial<OnboardingWelcomeCompleteRequ
     };
 }
 
-/** Builds a controller whose identity/generation are driven by mutable test-owned refs. */
-function buildController(initial: {userId?: string | null; generation?: number} = {}) {
+/**
+ * Builds a controller whose identity/generation are driven by mutable test-owned refs.
+ * Pass `storage` to put a second controller over the same browser storage (another
+ * tab, or the same browser after a restart); otherwise each controller gets its own.
+ */
+function buildController(initial: {userId?: string | null; generation?: number; storage?: Storage} = {}) {
     let userId: string | null = initial.userId ?? 'user-1';
     let generation = initial.generation ?? 1;
-    const storage = createMemoryStorage();
+    const storage = initial.storage ?? createMemoryStorage();
     const controller = createOnboardingController({
         getUserId: () => userId,
         getGeneration: () => generation,
         isCurrent: (g: number) => g === generation,
-        getSessionStorage: () => storage,
+        getReplayStorage: () => storage,
         now: () => 1000,
     });
     return {
@@ -633,7 +655,7 @@ describe('onboarding controller — completeWelcome (atomic preferences + progre
     });
 });
 
-describe('onboarding controller — replay (session + account scoped)', () => {
+describe('onboarding controller — replay (browser storage + account scoped)', () => {
     it('starting a replay never calls the API', () => {
         const {controller} = buildController();
         // `startReplay`/`resumeReplay`/`updateReplayStep`/`clearReplay` take no `OnboardingApi`
@@ -655,8 +677,8 @@ describe('onboarding controller — replay (session + account scoped)', () => {
         const {controller, setUserId} = buildController({userId: 'user-1'});
         controller.startReplay('welcome', 2, 'step-a');
 
-        // Switch to a different account entirely — a fresh controller sharing nothing
-        // but the same in-memory storage backend represents "another account's session".
+        // Switch to a different account entirely over the same storage backend: one
+        // browser profile shared by two accounts, where only the key scoping separates them.
         setUserId('user-2');
         const resumedForOtherAccount = controller.resumeReplay('welcome', 2, ['step-a'], 'step-a');
 
@@ -802,7 +824,7 @@ describe('onboarding controller — replay (session + account scoped)', () => {
             getUserId: () => 'user-1',
             getGeneration: () => 1,
             isCurrent: () => true,
-            getSessionStorage: () => throwingStorage,
+            getReplayStorage: () => throwingStorage,
             now: () => 1000,
         });
 
@@ -810,20 +832,372 @@ describe('onboarding controller — replay (session + account scoped)', () => {
         expect(throwing.replayStorageError).toBe('quota exceeded');
     });
 
-    it('surfaces "storage unavailable" when there is no session storage at all', () => {
+    it('surfaces "storage unavailable" when there is no browser storage at all', () => {
         const controller = createOnboardingController({
             getUserId: () => 'user-1',
             getGeneration: () => 1,
             isCurrent: () => true,
-            getSessionStorage: () => null,
+            getReplayStorage: () => null,
             now: () => 1000,
         });
 
         expect(controller.startReplay('welcome', 1, 'step-1')).toBe(false);
-        expect(controller.replayStorageError).toBe('Session storage is unavailable');
+        expect(controller.replayStorageError).toBe('Browser storage is unavailable');
 
         expect(controller.resumeReplay('welcome', 1, ['step-1'], 'step-1')).toBeNull();
-        expect(controller.replayStorageError).toBe('Session storage is unavailable');
+        expect(controller.replayStorageError).toBe('Browser storage is unavailable');
+    });
+});
+
+/**
+ * Browser persistence (OB-8). A guide position lives in `localStorage`, keyed
+ * `lf_{userId}_onboarding_replay_{flow}_v{version}`: it must outlive the runtime
+ * that wrote it, stay with its account and give way to a content-version bump.
+ * Each test reads the stored keys back from the double it injected instead of
+ * trusting the controller's own answer: a controller that fell back to an
+ * unavailable storage answers `null` exactly where "nothing to resume" is also
+ * the expected result.
+ */
+describe('onboarding controller — replay persistence across runtimes and content versions', () => {
+    it('a brand-new controller over the same browser storage resumes the step another runtime saved', () => {
+        const storage = createMemoryStorage();
+        const {controller: firstRuntime} = buildController({userId: 'user-1', storage});
+        const key = replayKey('user-1', 'broker_page_guide', 1);
+        const saved = {flow: 'broker_page_guide', version: 1, stepId: 'broker.page.views', startedAt: 1000, mode: 'automatic'};
+
+        expect(firstRuntime.startReplay('broker_page_guide', 1, 'broker.page.overview', undefined, undefined, 'automatic')).toBe(true);
+        expect(firstRuntime.updateReplayStep('broker.page.views')).toBe(true);
+        expect(JSON.parse(storage.getItem(key) ?? 'null')).toEqual(saved);
+
+        // A closed tab, or the same browser after a restart: nothing survives in memory.
+        const {controller: nextRuntime} = buildController({userId: 'user-1', storage});
+        expect(nextRuntime.replay).toBeNull();
+
+        expect(nextRuntime.resumeReplay('broker_page_guide', 1, guideSteps('broker_page_guide'), 'broker.page.overview')).toEqual(saved);
+        expect(nextRuntime.replay).toEqual(saved);
+        expect(JSON.parse(storage.getItem(key) ?? 'null')).toEqual(saved);
+    });
+
+    it('resuming a bumped content version drops the stored older version of that flow, and only that', () => {
+        const {controller, storage} = buildController({userId: 'user-1'});
+        storage.setItem(replayKey('user-1', 'broker_page_guide', 1), storedReplay('broker_page_guide', 1, 'broker.page.views'));
+        const untouched = {
+            [replayKey('user-1', 'fx_page_guide', 1)]: storedReplay('fx_page_guide', 1, 'fx.page.sync'),
+            [replayKey('user-2', 'broker_page_guide', 1)]: storedReplay('broker_page_guide', 1, 'broker.page.add'),
+        };
+        for (const [key, value] of Object.entries(untouched)) storage.setItem(key, value);
+
+        expect(controller.resumeReplay('broker_page_guide', 2, guideSteps('broker_page_guide'), 'broker.page.overview')).toBeNull();
+
+        expect(controller.replay).toBeNull();
+        expect(controller.replayStorageError).toBeNull();
+        // The v1 position is gone, nothing was written for v2, and the other flow and
+        // the other account keep theirs byte for byte.
+        expect(storageEntries(storage)).toEqual(untouched);
+    });
+
+    it('writing a bumped content version replaces the stored older version of that flow', () => {
+        const {controller, storage} = buildController({userId: 'user-1'});
+        const currentKey = replayKey('user-1', 'broker_page_guide', 2);
+        expect(controller.startReplay('broker_page_guide', 1, 'broker.page.views', undefined, undefined, 'automatic')).toBe(true);
+        expect(storage.getItem(replayKey('user-1', 'broker_page_guide', 1))).not.toBeNull();
+
+        expect(controller.startReplay('broker_page_guide', 2, 'broker.page.overview', undefined, undefined, 'automatic')).toBe(true);
+
+        expect(Object.keys(storageEntries(storage))).toEqual([currentKey]);
+        expect(JSON.parse(storage.getItem(currentKey) ?? 'null')).toEqual({flow: 'broker_page_guide', version: 2, stepId: 'broker.page.overview', startedAt: 1000, mode: 'automatic'});
+    });
+});
+
+/**
+ * Session boundary (OB-8) — regression tests pinning a developer decision
+ * (2026-09-24): stored guide positions, an armed replay included, survive logging
+ * out and back in on the same browser. A session transition resets only the
+ * controller's in-memory state and deletes no stored key; the keys are per account
+ * (`lf_{userId}_onboarding_replay_{flow}_v{version}`), which is what keeps them
+ * from another account on the same browser. A resetter that deleted keys again —
+ * the behaviour this decision removed — turns these tests red.
+ *
+ * `clientSession` moves the identity first and only then runs every resetter with
+ * the transition, so each test moves the fake identity before invoking the
+ * resetter, in that same order.
+ */
+describe('createOnboardingSessionResetter — stored positions survive logout and account switch (developer decision 2026-09-24)', () => {
+    /** broker_page_guide armed in Settings (first step, replay mode), then walked to its third step. */
+    const ARMED_REPLAY = {flow: 'broker_page_guide', version: 1, stepId: 'broker.page.views', startedAt: 1000, mode: 'replay'};
+
+    function armAndAdvance(controller: ReturnType<typeof buildController>['controller']): void {
+        expect(controller.startReplay('broker_page_guide', 1, 'broker.page.overview', undefined, undefined, 'replay')).toBe(true);
+        expect(controller.updateReplayStep('broker.page.views')).toBe(true);
+        expect(controller.replay).toEqual(ARMED_REPLAY);
+    }
+
+    it('logout keeps every stored key of the account byte for byte and resets only the in-memory state; logging back in resumes the armed replay at its step', async () => {
+        const {controller, storage, setUserId, setGeneration} = buildController({userId: 'user-1', generation: 1});
+        const api = fakeApi();
+        api.getProgress.mockResolvedValue(progressResponse([progressItem({flow: 'broker_page_guide', status: 'skipped'})]));
+        await controller.load(api);
+        expect(controller.state).toBe('ready');
+        // An automatic position of another flow, left behind by an earlier browser session.
+        storage.setItem(replayKey('user-1', 'intro_tour', 1), storedReplay('intro_tour', 1, 'intro.dashboard'));
+        armAndAdvance(controller);
+        const stored = storageEntries(storage);
+        expect(Object.keys(stored).sort()).toEqual([replayKey('user-1', 'broker_page_guide', 1), replayKey('user-1', 'intro_tour', 1)]);
+        const resetSession = createOnboardingSessionResetter(controller);
+
+        setUserId(null);
+        setGeneration(2);
+        resetSession({previousUserId: 'user-1', nextUserId: null, generation: 2});
+
+        expect(storageEntries(storage)).toEqual(stored);
+        expect(controller.replay).toBeNull();
+        expect(controller.state).toBe('idle');
+        expect(controller.progress).toBeNull();
+
+        // Logging back in is the transition from no account to the same one.
+        setUserId('user-1');
+        setGeneration(3);
+        resetSession({previousUserId: null, nextUserId: 'user-1', generation: 3});
+
+        expect(storageEntries(storage)).toEqual(stored);
+        // What Settings reads for its armed badge, then what the trigger page resumes.
+        expect(controller.hasReplay('broker_page_guide', 1)).toBe(true);
+        expect(controller.resumeReplay('broker_page_guide', 1, guideSteps('broker_page_guide'), 'broker.page.overview')).toEqual(ARMED_REPLAY);
+        expect(controller.replay).toEqual(ARMED_REPLAY);
+        expect(storageEntries(storage)).toEqual(stored);
+    });
+
+    it("an account switch keeps both accounts' keys: the next account cannot read the previous account's replay, which resumes when that account returns", () => {
+        const {controller, storage, setUserId, setGeneration} = buildController({userId: 'user-1', generation: 1});
+        const resetSession = createOnboardingSessionResetter(controller);
+        armAndAdvance(controller);
+        const nextAccountReplay = storedReplay('fx_page_guide', 1, 'fx.page.sync');
+        storage.setItem(replayKey('user-2', 'fx_page_guide', 1), nextAccountReplay);
+        const stored = storageEntries(storage);
+
+        setUserId('user-2');
+        setGeneration(2);
+        resetSession({previousUserId: 'user-1', nextUserId: 'user-2', generation: 2});
+
+        expect(storageEntries(storage)).toEqual(stored);
+        expect(controller.replay).toBeNull();
+        // user-2 reaches none of user-1's replay, in storage or in memory, and keeps its own position.
+        expect(controller.hasReplay('broker_page_guide', 1)).toBe(false);
+        expect(controller.resumeReplay('broker_page_guide', 1, guideSteps('broker_page_guide'), 'broker.page.overview')).toBeNull();
+        expect(controller.replay).toBeNull();
+        expect(controller.resumeReplay('fx_page_guide', 1, guideSteps('fx_page_guide'), 'fx.page.overview')).toEqual(JSON.parse(nextAccountReplay));
+        expect(storageEntries(storage)).toEqual(stored);
+
+        setUserId('user-1');
+        setGeneration(3);
+        resetSession({previousUserId: 'user-2', nextUserId: 'user-1', generation: 3});
+
+        expect(storageEntries(storage)).toEqual(stored);
+        expect(controller.replay).toBeNull();
+        expect(controller.resumeReplay('broker_page_guide', 1, guideSteps('broker_page_guide'), 'broker.page.overview')).toEqual(ARMED_REPLAY);
+        expect(storageEntries(storage)).toEqual(stored);
+    });
+
+    it('resolving an identity with no previous account (previousUserId: null) changes nothing in storage', () => {
+        // clientSession runs no resetter for the very first identity of a runtime; this
+        // is the transition it runs when an account signs in on a runtime that had none.
+        // The fake identity is already the next account, as clientSession leaves it.
+        const {controller, storage} = buildController({userId: 'user-1', generation: 2});
+        const ownReplay = storedReplay('broker_page_guide', 1, 'broker.page.views', 'replay');
+        storage.setItem(replayKey('user-1', 'broker_page_guide', 1), ownReplay);
+        storage.setItem(replayKey('user-2', 'intro_tour', 1), storedReplay('intro_tour', 1, 'intro.dashboard'));
+        const stored = storageEntries(storage);
+
+        createOnboardingSessionResetter(controller)({previousUserId: null, nextUserId: 'user-1', generation: 2});
+
+        expect(storageEntries(storage)).toEqual(stored);
+        expect(controller.replay).toBeNull();
+        // The position an earlier browser session left behind is still there to resume.
+        expect(controller.resumeReplay('broker_page_guide', 1, guideSteps('broker_page_guide'), 'broker.page.overview')).toEqual(JSON.parse(ownReplay));
+    });
+
+    it.each<[string, ClientSessionTransition]>([
+        ['logout', {previousUserId: 'user-1', nextUserId: null, generation: 2}],
+        ['an account switch', {previousUserId: 'user-1', nextUserId: 'user-2', generation: 2}],
+        ['an identity with no previous account', {previousUserId: null, nextUserId: 'user-1', generation: 2}],
+    ])('on %s it calls controller.reset() exactly once and touches nothing else on the controller', (_label, transition) => {
+        const reset = vi.fn();
+        const touched: PropertyKey[] = [];
+        // Every property read is recorded: any other member the resetter reached for,
+        // a purge of stored keys included, would show up next to `reset`.
+        const spyController = new Proxy(
+            {reset},
+            {
+                get(target, property, receiver) {
+                    touched.push(property);
+                    return Reflect.get(target, property, receiver);
+                },
+            },
+        );
+
+        createOnboardingSessionResetter(spyController)(transition);
+
+        expect(reset).toHaveBeenCalledExactlyOnceWith();
+        expect(touched).toEqual(['reset']);
+    });
+});
+
+/**
+ * Another tab (OB-8). Every tab of the browser shares one `localStorage` and hears
+ * a `storage` event when another tab changes it. When another tab removes the key
+ * of the replay this tab holds in memory (it finished or skipped that guide), this
+ * tab must drop its copy: otherwise its next step write resurrects a finished guide.
+ * The handler answers whether it dropped the replay; the guide closes its active
+ * step on that answer, so every case below asserts it.
+ */
+describe('onboarding controller — handleExternalReplayChange (another tab changed the stored replay)', () => {
+    const activeKey = replayKey('user-1', 'broker_page_guide', 1);
+    const activeReplay = {flow: 'broker_page_guide', version: 1, stepId: 'broker.page.currency', startedAt: 1000, mode: 'automatic'};
+
+    function controllerWithActiveReplay() {
+        const built = buildController({userId: 'user-1'});
+        expect(built.controller.startReplay('broker_page_guide', 1, 'broker.page.currency', undefined, undefined, 'automatic')).toBe(true);
+        expect(JSON.parse(built.storage.getItem(activeKey) ?? 'null')).toEqual(activeReplay);
+        return built;
+    }
+
+    it('drops the in-memory replay when another tab removes its key, so this tab cannot write it back', () => {
+        const {controller, storage} = controllerWithActiveReplay();
+
+        // Another tab finishes the same guide: it deletes the shared key, and this
+        // tab is told so by the storage event.
+        storage.removeItem(activeKey);
+        expect(controller.handleExternalReplayChange(activeKey, null)).toBe(true);
+
+        expect(controller.replay).toBeNull();
+        // The zombie write: advancing the guide in this tab must not re-create the key.
+        expect(controller.updateReplayStep('broker.page.views')).toBe(false);
+        expect(storage.getItem(activeKey)).toBeNull();
+        expect(storageEntries(storage)).toEqual({});
+    });
+
+    it.each([
+        ['another flow', replayKey('user-1', 'fx_page_guide', 1)],
+        ['another version of the same flow', replayKey('user-1', 'broker_page_guide', 2)],
+        ['the same flow of another account', replayKey('user-2', 'broker_page_guide', 1)],
+    ])('keeps the replay when another tab removes the key of %s', (_label, removedKey) => {
+        const {controller, storage} = controllerWithActiveReplay();
+
+        expect(controller.handleExternalReplayChange(removedKey, null)).toBe(false);
+
+        expect(controller.replay).toEqual(activeReplay);
+        // Still live: the next step is persisted as usual.
+        expect(controller.updateReplayStep('broker.page.views')).toBe(true);
+        expect(JSON.parse(storage.getItem(activeKey) ?? 'null')).toEqual({...activeReplay, stepId: 'broker.page.views'});
+    });
+
+    it('keeps its own replay when another tab rewrites the key instead of removing it', () => {
+        const {controller, storage} = controllerWithActiveReplay();
+        const rewritten = storedReplay('broker_page_guide', 1, 'broker.page.add');
+        storage.setItem(activeKey, rewritten);
+
+        expect(controller.handleExternalReplayChange(activeKey, rewritten)).toBe(false);
+
+        expect(controller.replay).toEqual(activeReplay);
+        expect(storage.getItem(activeKey)).toBe(rewritten);
+    });
+
+    it('drops the replay when another tab clears the whole storage (key null)', () => {
+        const {controller, storage} = controllerWithActiveReplay();
+
+        storage.clear();
+        expect(controller.handleExternalReplayChange(null, null)).toBe(true);
+
+        expect(controller.replay).toBeNull();
+        expect(controller.updateReplayStep('broker.page.views')).toBe(false);
+        expect(storageEntries(storage)).toEqual({});
+    });
+
+    it('is a no-op when this tab holds no replay', () => {
+        const {controller, storage} = buildController({userId: 'user-1'});
+
+        expect(controller.handleExternalReplayChange(activeKey, null)).toBe(false);
+        expect(controller.handleExternalReplayChange(null, null)).toBe(false);
+
+        expect(controller.replay).toBeNull();
+        expect(controller.replayStorageError).toBeNull();
+        expect(storageEntries(storage)).toEqual({});
+    });
+});
+
+describe('createReplayStorageListener — which storage events reach the controller, and when onDropped runs', () => {
+    const activeKey = replayKey('user-1', 'broker_page_guide', 1);
+
+    it('forwards key and newValue of an event raised on the replay storage', () => {
+        const replayStorage = createMemoryStorage();
+        const handleExternalReplayChange = vi.fn<(key: string | null, newValue: string | null) => boolean>(() => false);
+        const onDropped = vi.fn();
+        const listener = createReplayStorageListener({handleExternalReplayChange}, () => replayStorage, onDropped);
+
+        listener(storageEvent({key: activeKey, newValue: null, storageArea: replayStorage}));
+
+        expect(handleExternalReplayChange).toHaveBeenCalledExactlyOnceWith(activeKey, null);
+        expect(onDropped).not.toHaveBeenCalled(); // the controller reported no drop
+    });
+
+    it('forwards an event that carries no storage area', () => {
+        const replayStorage = createMemoryStorage();
+        const handleExternalReplayChange = vi.fn<(key: string | null, newValue: string | null) => boolean>(() => false);
+        const listener = createReplayStorageListener({handleExternalReplayChange}, () => replayStorage);
+        const newValue = storedReplay('broker_page_guide', 1, 'broker.page.add');
+
+        listener(storageEvent({key: activeKey, newValue, storageArea: null}));
+
+        expect(handleExternalReplayChange).toHaveBeenCalledExactlyOnceWith(activeKey, newValue);
+    });
+
+    it('ignores an event raised on another storage area, even one the controller would treat as a drop', () => {
+        const replayStorage = createMemoryStorage();
+        const otherArea = createMemoryStorage(); // e.g. sessionStorage: same key names, not the shared replay storage
+        const handleExternalReplayChange = vi.fn<(key: string | null, newValue: string | null) => boolean>(() => true);
+        const onDropped = vi.fn();
+        const listener = createReplayStorageListener({handleExternalReplayChange}, () => replayStorage, onDropped);
+
+        listener(storageEvent({key: activeKey, newValue: null, storageArea: otherArea}));
+
+        expect(handleExternalReplayChange).not.toHaveBeenCalled();
+        expect(onDropped).not.toHaveBeenCalled();
+    });
+
+    it('wired to a real controller, drops the replay another tab removed and calls onDropped exactly once', () => {
+        const {controller, storage} = buildController({userId: 'user-1'});
+        const onDropped = vi.fn();
+        const listener = createReplayStorageListener(controller, () => storage, onDropped);
+        expect(controller.startReplay('broker_page_guide', 1, 'broker.page.currency')).toBe(true);
+        expect(storage.getItem(activeKey)).not.toBeNull();
+
+        storage.removeItem(activeKey);
+        listener(storageEvent({key: activeKey, newValue: null, storageArea: storage}));
+
+        expect(controller.replay).toBeNull();
+        expect(onDropped).toHaveBeenCalledOnce();
+
+        // A later event (here the other tab clearing everything) finds nothing left to drop.
+        listener(storageEvent({key: null, newValue: null, storageArea: storage}));
+        expect(onDropped).toHaveBeenCalledOnce();
+        expect(controller.updateReplayStep('broker.page.views')).toBe(false);
+        expect(storage.getItem(activeKey)).toBeNull();
+    });
+
+    it.each<[string, (storage: Storage) => StorageEvent]>([
+        ['an event raised on another storage area', () => storageEvent({key: activeKey, newValue: null, storageArea: createMemoryStorage()})],
+        ['the removal of a key that is not the active one', (storage) => storageEvent({key: replayKey('user-1', 'fx_page_guide', 1), newValue: null, storageArea: storage})],
+        ['a rewrite of the active key (non-null newValue)', (storage) => storageEvent({key: activeKey, newValue: storedReplay('broker_page_guide', 1, 'broker.page.add'), storageArea: storage})],
+    ])('wired to a real controller, does not call onDropped for %s', (_label, eventFor) => {
+        const {controller, storage} = buildController({userId: 'user-1'});
+        const onDropped = vi.fn();
+        const listener = createReplayStorageListener(controller, () => storage, onDropped);
+        expect(controller.startReplay('broker_page_guide', 1, 'broker.page.currency', undefined, undefined, 'automatic')).toBe(true);
+
+        listener(eventFor(storage));
+
+        expect(onDropped).not.toHaveBeenCalled();
+        expect(controller.replay).toEqual({flow: 'broker_page_guide', version: 1, stepId: 'broker.page.currency', startedAt: 1000, mode: 'automatic'});
     });
 });
 
@@ -1166,6 +1540,16 @@ async function buildGuide(options: {flows?: OnboardingProgressItem[]; controller
 /** Mirrors the controller's private `replayKey` so a test can read/evict storage directly. */
 function replayKey(userId: string, flow: string, version: number): string {
     return `lf_${userId}_onboarding_replay_${flow}_v${version}`;
+}
+
+/** A valid stored replay payload, as another runtime or an earlier browser session would have left it. */
+function storedReplay(flow: OnboardingFlow, version: number, stepId: string, mode: 'automatic' | 'replay' = 'automatic'): string {
+    return JSON.stringify({flow, version, stepId, startedAt: 900, mode});
+}
+
+/** A `storage` event as the browser delivers it, built as a plain object: no StorageEvent constructor needed. */
+function storageEvent(fields: {key: string | null; newValue: string | null; storageArea: Storage | null}): StorageEvent {
+    return {oldValue: null, url: 'http://localhost/brokers', ...fields} as unknown as StorageEvent;
 }
 
 const EXPECTED_INTRO_TOUR_STEP_IDS = ['intro.scene', 'intro.navigation', 'intro.dashboard', 'intro.transactions_nav', 'intro.brokers_nav', 'intro.fx_nav', 'intro.assets_nav', 'intro.tools_nav', 'intro.settings_nav'] as const;
@@ -1855,6 +2239,239 @@ describe('onboardingGuide — import guide start / suspend', () => {
     });
 });
 
+/**
+ * Leaving the host route mid-guide (OB-9). When the current path stops matching the
+ * step's host route, `OnboardingOverlayHost` calls `dismissHost()`; when the user
+ * comes back, the page calls `maybeStartContextual` again on mount. The stored
+ * position must survive that round trip. Closing a modal keeps asking for
+ * `restartAtFirst`, and the two are pinned side by side so the difference between
+ * them stays visible.
+ */
+describe('onboardingGuide — leaving the host route suspends a linear guide on its current step', () => {
+    it('automatic: returning to the route resumes at the step the user left, not at the first', async () => {
+        const {guide, controller, storage, api} = await buildGuide({flows: [progressItem({flow: 'broker_page_guide', status: 'pending'})]});
+        const [firstStep, , thirdStep] = guideSteps('broker_page_guide');
+        const key = replayKey('user-1', 'broker_page_guide', 1);
+
+        expect(guide.maybeStartContextual('broker_page_guide')).toBe(true);
+        expect(guide.active).toEqual({flow: 'broker_page_guide', version: 1, stepId: firstStep, mode: 'automatic'});
+        guide.next();
+        guide.next();
+        expect(guide.active?.stepId).toBe(thirdStep);
+
+        guide.dismissHost(); // what the host does when the user leaves /brokers mid-guide
+
+        expect(guide.active).toBeNull();
+        expect(JSON.parse(storage.getItem(key) ?? 'null')).toMatchObject({flow: 'broker_page_guide', version: 1, stepId: thirdStep, mode: 'automatic'});
+
+        // What the page does on mount when the user comes back to /brokers.
+        expect(guide.maybeStartContextual('broker_page_guide')).toBe(true);
+        expect(guide.active).toEqual({flow: 'broker_page_guide', version: 1, stepId: thirdStep, mode: 'automatic'});
+        expect(controller.replay?.stepId).toBe(thirdStep);
+        // Leaving is a suspension, never an answer: nothing was completed or skipped.
+        expect(api.completeFlow).not.toHaveBeenCalled();
+        expect(api.skipFlow).not.toHaveBeenCalled();
+    });
+
+    it('restartAtFirst (the modal-close semantics) still sends the next start back to the first step', async () => {
+        const {guide, storage, api} = await buildGuide({flows: [progressItem({flow: 'broker_page_guide', status: 'pending'})]});
+        const [firstStep, , thirdStep] = guideSteps('broker_page_guide');
+        const key = replayKey('user-1', 'broker_page_guide', 1);
+
+        expect(guide.maybeStartContextual('broker_page_guide')).toBe(true);
+        guide.next();
+        guide.next();
+        expect(guide.active?.stepId).toBe(thirdStep);
+
+        guide.dismissHost({restartAtFirst: true});
+
+        expect(guide.active).toBeNull();
+        expect(JSON.parse(storage.getItem(key) ?? 'null')).toMatchObject({stepId: firstStep, mode: 'automatic'});
+
+        expect(guide.maybeStartContextual('broker_page_guide')).toBe(true);
+        expect(guide.active).toEqual({flow: 'broker_page_guide', version: 1, stepId: firstStep, mode: 'automatic'});
+        expect(api.completeFlow).not.toHaveBeenCalled();
+        expect(api.skipFlow).not.toHaveBeenCalled();
+    });
+
+    it('explicit replay: an armed completed guide resumes where the user left it, still in replay mode', async () => {
+        const {guide, controller, storage, api} = await buildGuide({flows: [progressItem({flow: 'broker_page_guide', status: 'completed'})]});
+        const [firstStep, , thirdStep] = guideSteps('broker_page_guide');
+        const key = replayKey('user-1', 'broker_page_guide', 1);
+
+        expect(guide.armReplay('broker_page_guide')).toBe(true);
+        expect(guide.maybeStartContextual('broker_page_guide')).toBe(true);
+        expect(guide.active).toEqual({flow: 'broker_page_guide', version: 1, stepId: firstStep, mode: 'replay'});
+        guide.next();
+        guide.next();
+        expect(guide.active?.stepId).toBe(thirdStep);
+
+        guide.dismissHost(); // the host, on leaving /brokers
+
+        expect(guide.active).toBeNull();
+        expect(JSON.parse(storage.getItem(key) ?? 'null')).toMatchObject({flow: 'broker_page_guide', version: 1, stepId: thirdStep, mode: 'replay'});
+
+        expect(guide.maybeStartContextual('broker_page_guide')).toBe(true);
+        expect(guide.active).toEqual({flow: 'broker_page_guide', version: 1, stepId: thirdStep, mode: 'replay'});
+        expect(controller.findFlow('broker_page_guide')?.status).toBe('completed');
+        expect(api.completeFlow).not.toHaveBeenCalled();
+        expect(api.skipFlow).not.toHaveBeenCalled();
+    });
+
+    it('a brand-new runtime over the same browser storage resumes the suspended step too', async () => {
+        const storage = createMemoryStorage();
+        const flows = [progressItem({flow: 'broker_page_guide', status: 'pending'})];
+        const [, , thirdStep] = guideSteps('broker_page_guide');
+        const key = replayKey('user-1', 'broker_page_guide', 1);
+        const before = await buildGuide({flows, controllerInit: {storage}});
+
+        expect(before.guide.maybeStartContextual('broker_page_guide')).toBe(true);
+        before.guide.next();
+        before.guide.next();
+        before.guide.dismissHost();
+        expect(JSON.parse(storage.getItem(key) ?? 'null')).toMatchObject({stepId: thirdStep, mode: 'automatic'});
+
+        // The tab is closed and reopened later: a new controller and a new guide,
+        // sharing nothing with the first pair but the browser storage.
+        const after = await buildGuide({flows, controllerInit: {storage}});
+        expect(after.controller.replay).toBeNull();
+
+        expect(after.guide.maybeStartContextual('broker_page_guide')).toBe(true);
+        expect(after.guide.active).toEqual({flow: 'broker_page_guide', version: 1, stepId: thirdStep, mode: 'automatic'});
+    });
+});
+
+/**
+ * Another tab finished, skipped or cancelled the guide this tab is showing (logging
+ * out there removes no stored position: see the session-boundary tests). The shared
+ * key disappears, this tab's controller drops its replay and the guide closes
+ * its active step: Finish/Exit are never left on a step they no longer own, and a
+ * stale tab cannot turn a completed flow into a skipped one. Wired exactly as the
+ * guide singleton wires it: `createReplayStorageListener(controller, getStorage,
+ * () => guide.dismissHost())`, driven by dispatching the event object to it.
+ */
+describe('onboardingGuide — another tab removing the stored replay closes the active step here', () => {
+    async function guideWithStorageListener(status: OnboardingProgressItem['status']) {
+        const built = await buildGuide({flows: [progressItem({flow: 'broker_page_guide', status})]});
+        const listener = createReplayStorageListener(
+            built.controller,
+            () => built.storage,
+            () => built.guide.dismissHost(),
+        );
+        return {...built, listener, key: replayKey('user-1', 'broker_page_guide', 1)};
+    }
+
+    it('automatic: the step closes without completing or skipping anything, and Exit can no longer reach the server', async () => {
+        const {guide, controller, storage, api, listener, key} = await guideWithStorageListener('pending');
+        const [, secondStep] = guideSteps('broker_page_guide');
+        expect(guide.maybeStartContextual('broker_page_guide')).toBe(true);
+        guide.next();
+        expect(guide.active).toEqual({flow: 'broker_page_guide', version: 1, stepId: secondStep, mode: 'automatic'});
+
+        storage.removeItem(key); // the other tab finished the same guide
+        listener(storageEvent({key, newValue: null, storageArea: storage}));
+
+        expect(guide.active).toBeNull();
+        expect(guide.actionPending).toBe(false);
+        expect(guide.error).toBeNull();
+        expect(controller.replay).toBeNull();
+        expect(storage.getItem(key)).toBeNull();
+        expect(api.completeFlow).not.toHaveBeenCalled();
+        expect(api.skipFlow).not.toHaveBeenCalled();
+
+        // With no step left, a late Exit is refused locally: no skipFlow over a flow
+        // the other tab already completed.
+        expect(await guide.exit()).toBe(false);
+        expect(api.skipFlow).not.toHaveBeenCalled();
+    });
+
+    it('an in-flight Finish that completes after the removal leaves the step closed, idle and without an error', async () => {
+        const {guide, controller, storage, api, listener, key} = await guideWithStorageListener('pending');
+        const completion = deferred<OnboardingProgressItem>();
+        api.completeFlow.mockReturnValue(completion.promise);
+        expect(guide.maybeStartContextual('broker_page_guide')).toBe(true);
+        for (let index = 1; index < guideSteps('broker_page_guide').length; index += 1) guide.next();
+
+        const finishing = guide.finish();
+        expect(guide.actionPending).toBe(true);
+        expect(api.completeFlow).toHaveBeenCalledExactlyOnceWith('broker_page_guide', {expected_version: 1});
+
+        storage.removeItem(key); // the other tab finished it first
+        listener(storageEvent({key, newValue: null, storageArea: storage}));
+        expect(guide.active).toBeNull();
+
+        completion.resolve(progressItem({flow: 'broker_page_guide', status: 'completed'}));
+        await finishing;
+
+        expect(guide.active).toBeNull();
+        expect(guide.actionPending).toBe(false);
+        expect(guide.error).toBeNull();
+        expect(storage.getItem(key)).toBeNull();
+        expect(api.skipFlow).not.toHaveBeenCalled();
+        // The late answer still lands in this tab's progress, so coming back to the page
+        // does not start the finished guide again.
+        expect(controller.findFlow('broker_page_guide')?.status).toBe('completed');
+        expect(guide.maybeStartContextual('broker_page_guide')).toBe(false);
+        expect(guide.active).toBeNull();
+    });
+
+    it('an in-flight Finish that fails after the removal surfaces no error on the closed step', async () => {
+        const {guide, storage, api, listener, key} = await guideWithStorageListener('pending');
+        const completion = deferred<OnboardingProgressItem>();
+        api.completeFlow.mockReturnValue(completion.promise);
+        expect(guide.maybeStartContextual('broker_page_guide')).toBe(true);
+
+        const finishing = guide.finish();
+        expect(guide.actionPending).toBe(true);
+        storage.removeItem(key);
+        listener(storageEvent({key, newValue: null, storageArea: storage}));
+        completion.reject(new Error('late completion failed'));
+
+        expect(await finishing).toBeUndefined();
+        expect(guide.active).toBeNull();
+        expect(guide.actionPending).toBe(false);
+        expect(guide.error).toBeNull();
+    });
+
+    it('explicit replay: the step closes the same way when another tab removes the armed replay', async () => {
+        const {guide, controller, storage, api, listener, key} = await guideWithStorageListener('completed');
+        const [, secondStep] = guideSteps('broker_page_guide');
+        expect(guide.armReplay('broker_page_guide')).toBe(true);
+        expect(guide.maybeStartContextual('broker_page_guide')).toBe(true);
+        guide.next();
+        expect(guide.active).toEqual({flow: 'broker_page_guide', version: 1, stepId: secondStep, mode: 'replay'});
+
+        storage.removeItem(key); // the other tab finished or exited the same replay
+        listener(storageEvent({key, newValue: null, storageArea: storage}));
+
+        expect(guide.active).toBeNull();
+        expect(controller.replay).toBeNull();
+        expect(storage.getItem(key)).toBeNull();
+        expect(api.completeFlow).not.toHaveBeenCalled();
+        expect(api.skipFlow).not.toHaveBeenCalled();
+    });
+
+    it('the removal of an unrelated key leaves the active guide untouched', async () => {
+        const {guide, controller, storage, listener, key} = await guideWithStorageListener('pending');
+        const [, secondStep, thirdStep] = guideSteps('broker_page_guide');
+        const unrelatedKey = replayKey('user-1', 'fx_page_guide', 1);
+        storage.setItem(unrelatedKey, storedReplay('fx_page_guide', 1, 'fx.page.sync'));
+        expect(guide.maybeStartContextual('broker_page_guide')).toBe(true);
+        guide.next();
+        const activeBefore = {flow: 'broker_page_guide', version: 1, stepId: secondStep, mode: 'automatic'};
+        expect(guide.active).toEqual(activeBefore);
+
+        storage.removeItem(unrelatedKey);
+        listener(storageEvent({key: unrelatedKey, newValue: null, storageArea: storage}));
+
+        expect(guide.active).toEqual(activeBefore);
+        expect(controller.replay).toMatchObject({flow: 'broker_page_guide', stepId: secondStep});
+        // Still live: the next step is persisted as usual.
+        guide.next();
+        expect(JSON.parse(storage.getItem(key) ?? 'null')).toMatchObject({stepId: thirdStep});
+    });
+});
+
 describe('onboardingGuide — finish/skip (automatic transitions and replay-local exits)', () => {
     it('keeps a replacement Analyze activation and replay token when Select completion succeeds late', async () => {
         const initial = progressItem({flow: 'import_guide', status: 'pending'});
@@ -2311,7 +2928,7 @@ describe('onboardingGuide — finish/skip (automatic transitions and replay-loca
         expect(api.skipFlow).not.toHaveBeenCalled();
     });
 
-    it('terminal flow-managed replay Finish clears only session replay and preserves returnTo', async () => {
+    it('terminal flow-managed replay Finish clears only the stored browser replay and preserves returnTo', async () => {
         const {guide, controller, api, storage} = await buildGuide({flows: [progressItem({flow: 'intro_tour', status: 'completed'})]});
         expect(guide.startIntroReplay('/transactions/9')).toBe(true);
         const key = replayKey('user-1', 'intro_tour', 1);
@@ -2334,7 +2951,7 @@ describe('onboardingGuide — finish/skip (automatic transitions and replay-loca
         expect(api.completeWelcome).not.toHaveBeenCalled();
     });
 
-    it('terminal flow-managed replay Skip clears only session replay and preserves returnTo until exit', async () => {
+    it('terminal flow-managed replay Skip clears only the stored browser replay and preserves returnTo until exit', async () => {
         const {guide, controller, api, storage} = await buildGuide({flows: [progressItem({flow: 'intro_tour', status: 'completed'})]});
         expect(guide.startIntroReplay('/transactions/9')).toBe(true);
         const key = replayKey('user-1', 'intro_tour', 1);
