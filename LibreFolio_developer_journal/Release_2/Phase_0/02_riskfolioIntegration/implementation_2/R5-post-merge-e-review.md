@@ -1280,6 +1280,8 @@ owner d'integrazione del ramo combinato.
 | K7 | (frontend, F9) risposta scartata: nuova richiesta una volta, poi `controller.discarded[analisi]`; `discardedErrorCodes(...)` e `ANSWER_DISCARDED_CODE`; frase `risk.errors.answer_discarded` | `riskPanelController.svelte.ts`, `levels/RiskLevelsPanel.svelte`, cataloghi | **`AssetSetReplaySection` di F** (la pagina del polling D11) monta `L4Replay` con un controller suo e passa al suo `RiskLevelSection` nessun `errorCodes`: senza, un replay scartato due volte lì sparisce ancora → a F → Risk aggiungo `errorCodes={discardedErrorCodes(controller.discarded, ['replay'])}` |
 | K8 | (frontend, F1) `resultReasons(results, translate?)` e `warningSentence(...)`: le frasi dalla chiave e dai parametri del backend; senza traduttore l'uscita resta identica | `levels/levelHelpers.ts`, `RiskResultFrame.svelte` | le sezioni di Asset Global di F (`AssetSetCorrelationSection`, `AssetSetReplaySection`, `AssetSetComparisonLevels`) chiamano con un argomento: a F → Risk passo loro `$t`; e la doc delle prop `reasons` di `RiskLevelSection` (che F ha modificato: non la tocco prima) dice ancora «verbatim» → da riscrivere lì |
 | K9 | (frontend, F2) `analyticNameKey(code)` in `levels/partialNotice.ts` duplica la funzione locale `analyticName` di `RiskLevelSection` | `levels/partialNotice.ts` | a F → Risk, `RiskLevelSection` (di F) può adottarla, così le due regole non divergono |
+| K10 | (F, V5-A) la `CorrelationHeatmap` di F ignora la prop `height` | `levels/L2Diversification.svelte:342` passa ancora `height="360px"` | a F → Risk la tolgo |
+| K11 | (F) la matrice riprogettata ordina per similarità, nome, tipo, settore, area; tipo, settore e area servono le mappe dal chiamante | la L2 della Dashboard non le passa → solo «similarità» e «nome» | lo decide chi prende il blocco Dashboard (A) con il developer; nella tabella dei proprietari |
 
 ### C — i test del checkpoint · ✅ 24/09/2026
 
@@ -1551,3 +1553,84 @@ server della copia di prod è stato spento):
 > componenti identici a `HEAD`, il runner cambia solo per aggiunte (ruff 19 come `HEAD`), nessun importo reale,
 > nessuna password. `PALETTE_SLOTS = 14` è un fissaggio voluto: far crescere una palette vorrà dire cambiare una
 > riga nell'aiuto.
+
+### F5 — committato · 25/09/2026
+
+> `4dc04dd18` → `d1f607416` → `4807d2b7d`, su `3cd4524cf`: 5 + 1 + 1 = 7 file, albero pulito, letti da me.
+
+### F8 — screenshot sulla copia di prod, domande rimandate · 25/09/2026
+
+> **Note implementazione**: copia rifatta dalla snapshot delle 09:15 con la procedura (schema 004, impronta del DB
+> uguale a quella del coordinator, nessun marcatore), server di review sulla 6162 legato a `127.0.0.1` e senza
+> scheduler; la password del developer non era salvata da nessuna parte, quindi è stata resettata **solo sulla
+> copia** a una temporanea, in un file in `/tmp` leggibile solo dal proprietario. Tre screenshot (nella cartella di
+> sessione, non versionati: contengono i suoi dati): l'avviso unico in cima, L3 («sulla composizione attuale»), L4
+> dopo un replay del Covid. Sui suoi dati l'avviso nomina **tutte e sei** le misure, perché i due crowdfunding senza
+> prezzi rendono parziale ogni risultato.
+>
+> **⚠️ Fuori pista — uno screenshot sbagliato**: il primo ritaglio di L4 è venuto sull'area sbagliata; dopo lo
+> scorrimento le coordinate dell'elemento sono relative alla finestra, non alla pagina. Rifatto con lo screenshot
+> dell'elemento.
+>
+> **Decisione del developer**: le domande (L4, F2b) sono **rimandate** — «sono tutte, in qualche modo, sbagliate, ma
+> bisogna entrarci nel dettaglio». Il rischio in Dashboard e in Asset richiede un lavoro puntuale sulla UI: pensa di
+> dare un blocco ad A e uno a F, ognuno a lavorare con lui sulla grafica, e a me il coordinamento delle basi e la
+> divisione del lavoro. Proposta di baseline (al developer e al coordinator): checkpoint di F → F → Risk (integro io,
+> K1–K9) → `dev_release2` → Risk (J) → Risk → A e Risk → F; poi la divisione, con un proprietario unico per ogni
+> superficie condivisa.
+
+## Giro UI rischio — coordinamento di A + F + Risk · 🔵 aperto il 25/09/2026
+
+> **Ordine rivisto dal developer** (25/09, 12:0x): prima di riprendere lo sviluppo Risk, F e A tirano dentro il
+> `dev_release2` corrente, così nessuno si allontana troppo; quindi `dev_release2` → Risk viene **prima** di F → Risk.
+
+Decisione del developer, confermata dal coordinator: **A** lavora con il developer sul rischio in **Dashboard**, a
+partire da un miglioramento grafico; **F** sul **laboratorio** di Asset Global; **io** coordino — baseline, divisione
+dei file, proprietario unico di ogni superficie condivisa della famiglia (`RiskLevelSection`, chiavi `risk.*` e
+`risk.assetSet.*`, `levelHelpers`, `riskPanelController`, `L4Replay`, `AssetSet*`), integrazione di A e F nel mio ramo
+e validazione del combinato. Al coordinator restano `dev_release2`, l'ingresso finale, il percorso dei checkpoint (A e
+F li mandano a me per il contenuto; io li inoltro) e le superfici fuori famiglia (grafici di I, primitive di privacy di
+J, tassonomia e select di K, Asset Detail fuori dal pannello rischio, strumenti di D, runner, i18n fuori `risk.*`,
+CHANGELOG, client generato). Commit e fusioni li fa solo il developer.
+
+| passo | cosa | stato |
+|---|---|---|
+| G0 | **A**: validazione di `f45f0fb4d` (fusione `dev_release2` → A), `dev_release2` avanza in fast-forward su A, commit di CHANGELOG del coordinator → la baseline di tutti: `dev_release2` con J e A | ✅ 25/09 (`dev_release2` = `f45f0fb4d`; segue il commit di CHANGELOG del coordinator) |
+| G1 | **`dev_release2` → Risk** (simulazione e script del coordinator; conflitti additivi, solo risoluzioni) e validazione del combinato nella 6152, **con la privacy accesa e spenta** sulle quattro superfici con importi (schede di L1, importi del replay, tornado di L4, cifre di Asset Global): ciò che passa per le primitive di J segue la modalità da sé, ciò che formatta il denaro a mano no, e il cancello `moneyRenderSites.test.ts` vede solo le righe con un simbolo di valuta | ⏳ attendo lo SHA di G0 |
+| G2 | **F**: checkpoint dei 31 file, poi `dev_release2` → F allo stesso modo | ⏳ |
+| G3 | **F → Risk**, con tutti e due sulla stessa base: restano solo i conflitti fra me e F | ⏳ |
+| G4 | commit mio con gli adattamenti K1–K9 al codice di F | ⏳ |
+| G5 | validazione del ramo combinato | ⏳ |
+| G6 | A e F avanzano in fast-forward alla punta di Risk | ⏳ |
+| G7 | tabella dei proprietari, confermata col developer, al coordinator; poi il via del developer | ⏳ |
+
+> **Reperti di A per dopo la baseline** (sovrapposizioni semantiche, che Git non vede): con la regola nuova del
+> «parziale» (7 giorni) la regola 3 della sua pagina utente e una riga della guida D3 non valgono più; con
+> l'esclusione automatica del replay il paragrafo sul replay di `correlation.en.md` è falso; la pagina cita la frase
+> inglese del backend, ora tradotta. Le pagine sono sue: le corregge lui. Il docstring di `AssetSetComparisonLevels`
+> e il montaggio dei suoi livelli in `AssetSetRiskPanel` li verifica dopo la fusione.
+
+> **Principio del developer per tutte le corsie** (25/09, via coordinator): il prodotto, per ora, va bene così; i
+> test devono provare il prodotto di oggi, non i passaggi intermedi; un test vecchio che prova un comportamento che non
+> c'è più se ne va, e così il codice rimasto senza chiamanti, dentro il perimetro della corsia e con il suo test di
+> regressione dove serve — prima di togliere, attribuire con `test-triage`, per non scambiare un test vecchio per un
+> difetto; le domande al developer, in italiano.
+>
+> **Cosa ricade sotto il principio, nel mio perimetro** (da fare nel lavoro sul replay, dopo F → Risk): dal backend C
+> il replay non si blocca più su un asset senza storia — lo esclude da sé — quindi in `L4Replay` il ramo «escludi e
+> riprova» (`replayBlocker`, `replayNeedsChoice`) resta senza un chiamante reale (resta raggiungibile solo un sostituto
+> inutilizzabile, e i sostituti non hanno UI), e l'E2E «a blocked replay names the holding and the exclusion travels on
+> retry» prova un comportamento che il prodotto non ha più (regge solo perché usa un mock). Vanno via insieme, con
+> `test-triage` prima.
+
+> **Checkpoint 3 di F — contenuto rivisto da me** (25/09): 31 percorsi in 8 gruppi disgiunti che coprono l'albero,
+> messaggi puliti, cataloghi allineati (3463 chiavi; +11 in `risk.*`, −3 in `risk.assetSet.*` che nessuno usa fuori
+> dai file di F — l'unico uso dinamico, `risk.assetSet.ordering.${mode}`, nella heatmap di F non ha più `original`).
+> Su `RiskLevelSection` F resta dentro l'eccezione dell'intestazione (icona accanto al toggle, mai dentro); sul file
+> di A solo i due `docsPath`. Fuori famiglia, al coordinator: tre frasi `assets.panels.*Hint`, la pagina della lista
+> asset e il suo E2E, i file del runner, la voce di CHANGELOG. Inoltrato con il mio OK. Due voci nuove per
+> l'integrazione: K10 e K11.
+
+> **Prima di G1**: il mio albero deve essere pulito per la fusione, quindi le note del journal da F5 in poi (F8, il
+> giro UI, il principio del developer, K10–K11) vanno in un commit solo, prima della simulazione del coordinator. La
+> voce di CHANGELOG proposta da F è arrivata a me: la inoltro con l'handoff combinato a fine giro.
