@@ -1,7 +1,7 @@
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
     import type {RiskScope} from '$lib/stores/risk/riskStore.svelte';
-    import {createRiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
+    import {createRiskPanelController, discardedErrorCodes, LEVEL_ON_DEMAND_ANALYSES} from '$lib/stores/risk/riskPanelController.svelte';
     import {assetStoreVersion, getAssetInfo} from '$lib/stores/reference/assetStore';
 
     import L1HowMuchItHurts from './L1HowMuchItHurts.svelte';
@@ -147,7 +147,9 @@
     // data", blaming the reader's portfolio for a limit of the analytic.
     let l1Errors = $derived(resultErrorCodes(historicalResults.filter((result) => L1_CODES.includes(result.analytic_code))));
     let l2Errors = $derived(resultErrorCodes([contributionResult, correlationResult]));
-    let l3Errors = $derived(resultErrorCodes([controller.comparisonResult, ...historicalResults.filter((result) => L3_CODES.includes(result.analytic_code))]));
+    // An on-demand answer discarded twice running is disclosed where its figures would be: the
+    // benchmark comparison under L3, the three what-if steps under L4.
+    let l3Errors = $derived([...resultErrorCodes([controller.comparisonResult, ...historicalResults.filter((result) => L3_CODES.includes(result.analytic_code))]), ...discardedErrorCodes(controller.discarded, LEVEL_ON_DEMAND_ANALYSES.l3)]);
 
     // What each level's figures were computed over. Same slices again: a window
     // reported under a question that did not consult the measurement describes
@@ -175,7 +177,7 @@
     let l4Results = $derived([controller.stressResult, controller.replayResult, controller.simulationResult]);
     let l4Health = $derived(degradedResults(l4Results));
     let l4Reasons = $derived(resultReasons(l4Results, $t));
-    let l4Errors = $derived(resultErrorCodes(l4Results));
+    let l4Errors = $derived([...resultErrorCodes(l4Results), ...discardedErrorCodes(controller.discarded, LEVEL_ON_DEMAND_ANALYSES.l4)]);
     let l4Metadata = $derived(levelMetadata(l4Results));
 
     /**
