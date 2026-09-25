@@ -3455,7 +3455,11 @@
         "shockTotal": "This scenario would move the scope by {percent} {amount}",
         "shockCoverage": "Only {percent} of the scope could be classified, so the total speaks for that part alone."
       },
-      "backtestNotice": "With a slice active, these figures are rebuilt from today’s composition: they say how it *would* have gone, not how it actually went."
+      "backtestNotice": "With a slice active, these figures are rebuilt from today’s composition: they say how it *would* have gone, not how it actually went.",
+      "notice": {
+        "partialTitle": "Some results are partial",
+        "notesTitle": "Worth knowing about these results"
+      }
     }
   },
   "updateCheck": {
