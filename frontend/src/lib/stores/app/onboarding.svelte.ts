@@ -3,12 +3,13 @@ import type {OnboardingApi, OnboardingFlow, OnboardingLoadState, OnboardingProgr
 
 /**
  * Guide positions (automatic or armed replay) persist in `localStorage`, keyed
- * `lf_{userId}_onboarding_replay_{flow}_v{version}`: they survive a closed tab and
- * a browser restart, stay per account, and a version bump drops the old key on the
- * next read or write. Logging out or switching account deletes the previous
- * account's keys. When another tab deletes the key of this tab's replay, the
- * in-memory copy is dropped, so this tab cannot write it back; the guide module
- * wires that `storage` listener and closes its active step.
+ * `lf_{userId}_onboarding_replay_{flow}_v{version}`: they survive a closed tab, a
+ * browser restart, and logging out and back in on this browser (developer decision,
+ * 2026-09-24); they stay per account, and a version bump drops the old key on the
+ * next read or write. A session change resets only the in-memory state. When
+ * another tab deletes the key of this tab's replay, the in-memory copy is dropped,
+ * so this tab cannot write it back; the guide module wires that `storage` listener
+ * and closes its active step.
  */
 const REPLAY_STORAGE_UNAVAILABLE = 'Browser storage is unavailable';
 
@@ -333,22 +334,6 @@ export function createOnboardingController(dependencies: OnboardingControllerDep
         }
     }
 
-    function clearAccountReplays(userId: string): void {
-        const storage = getReplayStorage();
-        if (!storage) return;
-        const prefix = `lf_${userId}_onboarding_replay_`;
-        try {
-            const keysToRemove: string[] = [];
-            for (let index = 0; index < storage.length; index += 1) {
-                const key = storage.key(index);
-                if (key?.startsWith(prefix)) keysToRemove.push(key);
-            }
-            for (const key of keysToRemove) storage.removeItem(key);
-        } catch {
-            // Storage that cannot be read holds nothing this account could resume.
-        }
-    }
-
     function handleExternalReplayChange(key: string | null, newValue: string | null): boolean {
         if (!replay || newValue !== null) return false;
         const userId = getUserId();
@@ -404,7 +389,6 @@ export function createOnboardingController(dependencies: OnboardingControllerDep
         hasReplay,
         updateReplayStep,
         clearReplay,
-        clearAccountReplays,
         handleExternalReplayChange,
         reset,
     };
@@ -412,10 +396,9 @@ export function createOnboardingController(dependencies: OnboardingControllerDep
 
 type OnboardingController = ReturnType<typeof createOnboardingController>;
 
-/** Session resetter: forget the previous account's stored guide positions, then the in-memory state. */
-export function createOnboardingSessionResetter(controller: Pick<OnboardingController, 'clearAccountReplays' | 'reset'>): ClientSessionResetter {
-    return ({previousUserId}) => {
-        if (previousUserId) controller.clearAccountReplays(previousUserId);
+/** Session resetter: forget the in-memory state only. Stored positions are per account and survive logout. */
+export function createOnboardingSessionResetter(controller: Pick<OnboardingController, 'reset'>): ClientSessionResetter {
+    return () => {
         controller.reset();
     };
 }

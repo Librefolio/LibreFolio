@@ -2,6 +2,7 @@ import {describe, expect, it, vi, type Mock} from 'vitest';
 
 import {createAppBootstrap} from '$lib/features/onboarding/appBootstrap.svelte';
 import {createOnboardingController, createOnboardingSessionResetter, createReplayStorageListener} from './onboarding.svelte';
+import type {ClientSessionTransition} from './clientSession';
 import {createOnboardingGuide, IMPORT_GUIDE_STEP_IDS, INTRO_TOUR_STEP_IDS} from '$lib/features/onboarding/onboardingGuide.svelte';
 import {TRANSACTION_BULK_STEP_IDS, guideSteps, isCheckpointFlow, isStepManagedFlow, type ContextualOnboardingFlow} from '$lib/features/onboarding/onboardingGuideCatalog';
 import {onboardingApi} from '$lib/features/onboarding/onboardingApi';
@@ -908,126 +909,136 @@ describe('onboarding controller — replay persistence across runtimes and conte
     });
 });
 
-describe('onboarding controller — clearAccountReplays (every stored position of one account)', () => {
-    it('removes every flow and version of that account and keeps other accounts and unrelated keys', () => {
-        // The session resetter runs once the identity has already moved on, so the
-        // account to clear is the argument: here deliberately not the current user.
-        const {controller, storage} = buildController({userId: '2'});
-        storage.setItem(replayKey('1', 'welcome', 1), storedReplay('welcome', 1, 'step-1'));
-        storage.setItem(replayKey('1', 'welcome', 2), storedReplay('welcome', 2, 'step-1'));
-        storage.setItem(replayKey('1', 'import_guide', 3), storedReplay('import_guide', 3, 'import.review'));
-        storage.setItem(replayKey('1', 'broker_page_guide', 1), storedReplay('broker_page_guide', 1, 'broker.page.views'));
-        const kept = {
-            // Prefix boundary: account 12 is not account 1.
-            [replayKey('12', 'welcome', 1)]: storedReplay('welcome', 1, 'step-12'),
-            [replayKey('2', 'welcome', 1)]: storedReplay('welcome', 1, 'step-2'),
-            lf_1_user_settings: JSON.stringify({theme: 'dark'}),
-        };
-        for (const [key, value] of Object.entries(kept)) storage.setItem(key, value);
-
-        controller.clearAccountReplays('1');
-
-        expect(storageEntries(storage)).toEqual(kept);
-    });
-
-    it('returns silently when there is no browser storage at all', () => {
-        const controller = createOnboardingController({
-            getUserId: () => '1',
-            getGeneration: () => 1,
-            isCurrent: () => true,
-            getReplayStorage: () => null,
-            now: () => 1000,
-        });
-
-        expect(() => controller.clearAccountReplays('1')).not.toThrow();
-        expect(controller.replayStorageError).toBeNull();
-    });
-
-    it.each(['key', 'removeItem'] as const)('returns silently when storage.%s throws', (method) => {
-        const failing = vi.fn(() => {
-            throw new Error(`${method} denied`);
-        });
-        const storage = createMemoryStorage(method === 'key' ? {key: failing} : {removeItem: failing});
-        storage.setItem(replayKey('1', 'welcome', 1), storedReplay('welcome', 1, 'step-1'));
-        const {controller} = buildController({userId: '1', storage});
-
-        expect(() => controller.clearAccountReplays('1')).not.toThrow();
-        // The failing call was really reached: this exercises the catch, not an early return.
-        expect(failing).toHaveBeenCalled();
-        expect(controller.replayStorageError).toBeNull();
-    });
-});
-
 /**
- * Session boundary (OB-8). `clientSession` moves the identity first and only then
- * runs every resetter with the transition, so each test moves the fake identity
- * before invoking the resetter, in that same order.
+ * Session boundary (OB-8) — regression tests pinning a developer decision
+ * (2026-09-24): stored guide positions, an armed replay included, survive logging
+ * out and back in on the same browser. A session transition resets only the
+ * controller's in-memory state and deletes no stored key; the keys are per account
+ * (`lf_{userId}_onboarding_replay_{flow}_v{version}`), which is what keeps them
+ * from another account on the same browser. A resetter that deleted keys again —
+ * the behaviour this decision removed — turns these tests red.
+ *
+ * `clientSession` moves the identity first and only then runs every resetter with
+ * the transition, so each test moves the fake identity before invoking the
+ * resetter, in that same order.
  */
-describe('createOnboardingSessionResetter — logout and account switch forget the previous account', () => {
-    it('logout removes every stored position of the previous account and resets the controller', async () => {
+describe('createOnboardingSessionResetter — stored positions survive logout and account switch (developer decision 2026-09-24)', () => {
+    /** broker_page_guide armed in Settings (first step, replay mode), then walked to its third step. */
+    const ARMED_REPLAY = {flow: 'broker_page_guide', version: 1, stepId: 'broker.page.views', startedAt: 1000, mode: 'replay'};
+
+    function armAndAdvance(controller: ReturnType<typeof buildController>['controller']): void {
+        expect(controller.startReplay('broker_page_guide', 1, 'broker.page.overview', undefined, undefined, 'replay')).toBe(true);
+        expect(controller.updateReplayStep('broker.page.views')).toBe(true);
+        expect(controller.replay).toEqual(ARMED_REPLAY);
+    }
+
+    it('logout keeps every stored key of the account byte for byte and resets only the in-memory state; logging back in resumes the armed replay at its step', async () => {
         const {controller, storage, setUserId, setGeneration} = buildController({userId: 'user-1', generation: 1});
         const api = fakeApi();
-        api.getProgress.mockResolvedValue(progressResponse([progressItem({flow: 'broker_page_guide'})]));
+        api.getProgress.mockResolvedValue(progressResponse([progressItem({flow: 'broker_page_guide', status: 'skipped'})]));
         await controller.load(api);
-        expect(controller.startReplay('intro_tour', 1, 'intro.navigation')).toBe(true);
-        expect(controller.startReplay('broker_page_guide', 1, 'broker.page.views')).toBe(true);
-        expect(Object.keys(storageEntries(storage)).sort()).toEqual([replayKey('user-1', 'broker_page_guide', 1), replayKey('user-1', 'intro_tour', 1)]);
+        expect(controller.state).toBe('ready');
+        // An automatic position of another flow, left behind by an earlier browser session.
+        storage.setItem(replayKey('user-1', 'intro_tour', 1), storedReplay('intro_tour', 1, 'intro.dashboard'));
+        armAndAdvance(controller);
+        const stored = storageEntries(storage);
+        expect(Object.keys(stored).sort()).toEqual([replayKey('user-1', 'broker_page_guide', 1), replayKey('user-1', 'intro_tour', 1)]);
         const resetSession = createOnboardingSessionResetter(controller);
 
         setUserId(null);
         setGeneration(2);
         resetSession({previousUserId: 'user-1', nextUserId: null, generation: 2});
 
-        expect(storageEntries(storage)).toEqual({});
+        expect(storageEntries(storage)).toEqual(stored);
         expect(controller.replay).toBeNull();
         expect(controller.state).toBe('idle');
         expect(controller.progress).toBeNull();
+
+        // Logging back in is the transition from no account to the same one.
+        setUserId('user-1');
+        setGeneration(3);
+        resetSession({previousUserId: null, nextUserId: 'user-1', generation: 3});
+
+        expect(storageEntries(storage)).toEqual(stored);
+        // What Settings reads for its armed badge, then what the trigger page resumes.
+        expect(controller.hasReplay('broker_page_guide', 1)).toBe(true);
+        expect(controller.resumeReplay('broker_page_guide', 1, guideSteps('broker_page_guide'), 'broker.page.overview')).toEqual(ARMED_REPLAY);
+        expect(controller.replay).toEqual(ARMED_REPLAY);
+        expect(storageEntries(storage)).toEqual(stored);
     });
 
-    it('an account switch removes only the previous account positions, and the next account resumes its own', () => {
+    it("an account switch keeps both accounts' keys: the next account cannot read the previous account's replay, which resumes when that account returns", () => {
         const {controller, storage, setUserId, setGeneration} = buildController({userId: 'user-1', generation: 1});
-        expect(controller.startReplay('broker_page_guide', 1, 'broker.page.views')).toBe(true);
-        const nextAccountKey = replayKey('user-2', 'broker_page_guide', 1);
-        const nextAccountReplay = storedReplay('broker_page_guide', 1, 'broker.page.currency');
-        storage.setItem(nextAccountKey, nextAccountReplay);
+        const resetSession = createOnboardingSessionResetter(controller);
+        armAndAdvance(controller);
+        const nextAccountReplay = storedReplay('fx_page_guide', 1, 'fx.page.sync');
+        storage.setItem(replayKey('user-2', 'fx_page_guide', 1), nextAccountReplay);
+        const stored = storageEntries(storage);
 
         setUserId('user-2');
         setGeneration(2);
-        createOnboardingSessionResetter(controller)({previousUserId: 'user-1', nextUserId: 'user-2', generation: 2});
+        resetSession({previousUserId: 'user-1', nextUserId: 'user-2', generation: 2});
 
-        expect(storageEntries(storage)).toEqual({[nextAccountKey]: nextAccountReplay});
+        expect(storageEntries(storage)).toEqual(stored);
         expect(controller.replay).toBeNull();
-        expect(controller.resumeReplay('broker_page_guide', 1, guideSteps('broker_page_guide'), 'broker.page.overview')).toEqual(JSON.parse(nextAccountReplay));
+        // user-2 reaches none of user-1's replay, in storage or in memory, and keeps its own position.
+        expect(controller.hasReplay('broker_page_guide', 1)).toBe(false);
+        expect(controller.resumeReplay('broker_page_guide', 1, guideSteps('broker_page_guide'), 'broker.page.overview')).toBeNull();
+        expect(controller.replay).toBeNull();
+        expect(controller.resumeReplay('fx_page_guide', 1, guideSteps('fx_page_guide'), 'fx.page.overview')).toEqual(JSON.parse(nextAccountReplay));
+        expect(storageEntries(storage)).toEqual(stored);
+
+        setUserId('user-1');
+        setGeneration(3);
+        resetSession({previousUserId: 'user-2', nextUserId: 'user-1', generation: 3});
+
+        expect(storageEntries(storage)).toEqual(stored);
+        expect(controller.replay).toBeNull();
+        expect(controller.resumeReplay('broker_page_guide', 1, guideSteps('broker_page_guide'), 'broker.page.overview')).toEqual(ARMED_REPLAY);
+        expect(storageEntries(storage)).toEqual(stored);
     });
 
-    it('resolving an identity with no previous account (previousUserId null) removes nothing', () => {
+    it('resolving an identity with no previous account (previousUserId: null) changes nothing in storage', () => {
+        // clientSession runs no resetter for the very first identity of a runtime; this
+        // is the transition it runs when an account signs in on a runtime that had none.
         // The fake identity is already the next account, as clientSession leaves it.
         const {controller, storage} = buildController({userId: 'user-1', generation: 2});
-        storage.setItem(replayKey('user-1', 'broker_page_guide', 1), storedReplay('broker_page_guide', 1, 'broker.page.views'));
+        const ownReplay = storedReplay('broker_page_guide', 1, 'broker.page.views', 'replay');
+        storage.setItem(replayKey('user-1', 'broker_page_guide', 1), ownReplay);
         storage.setItem(replayKey('user-2', 'intro_tour', 1), storedReplay('intro_tour', 1, 'intro.dashboard'));
-        const before = storageEntries(storage);
+        const stored = storageEntries(storage);
 
         createOnboardingSessionResetter(controller)({previousUserId: null, nextUserId: 'user-1', generation: 2});
 
-        expect(storageEntries(storage)).toEqual(before);
+        expect(storageEntries(storage)).toEqual(stored);
+        expect(controller.replay).toBeNull();
         // The position an earlier browser session left behind is still there to resume.
-        expect(controller.resumeReplay('broker_page_guide', 1, guideSteps('broker_page_guide'), 'broker.page.overview')).toMatchObject({stepId: 'broker.page.views'});
+        expect(controller.resumeReplay('broker_page_guide', 1, guideSteps('broker_page_guide'), 'broker.page.overview')).toEqual(JSON.parse(ownReplay));
     });
 
-    it('clears the previous account before it resets the controller', () => {
-        const calls: string[] = [];
-        const resetSession = createOnboardingSessionResetter({
-            clearAccountReplays: (userId: string) => {
-                calls.push(`clearAccountReplays:${userId}`);
+    it.each<[string, ClientSessionTransition]>([
+        ['logout', {previousUserId: 'user-1', nextUserId: null, generation: 2}],
+        ['an account switch', {previousUserId: 'user-1', nextUserId: 'user-2', generation: 2}],
+        ['an identity with no previous account', {previousUserId: null, nextUserId: 'user-1', generation: 2}],
+    ])('on %s it calls controller.reset() exactly once and touches nothing else on the controller', (_label, transition) => {
+        const reset = vi.fn();
+        const touched: PropertyKey[] = [];
+        // Every property read is recorded: any other member the resetter reached for,
+        // a purge of stored keys included, would show up next to `reset`.
+        const spyController = new Proxy(
+            {reset},
+            {
+                get(target, property, receiver) {
+                    touched.push(property);
+                    return Reflect.get(target, property, receiver);
+                },
             },
-            reset: () => {
-                calls.push('reset');
-            },
-        });
+        );
 
-        resetSession({previousUserId: 'user-1', nextUserId: 'user-2', generation: 2});
+        createOnboardingSessionResetter(spyController)(transition);
 
-        expect(calls).toEqual(['clearAccountReplays:user-1', 'reset']);
+        expect(reset).toHaveBeenCalledExactlyOnceWith();
+        expect(touched).toEqual(['reset']);
     });
 });
 
@@ -2331,8 +2342,9 @@ describe('onboardingGuide — leaving the host route suspends a linear guide on 
 });
 
 /**
- * Another tab finished, skipped or logged out of the guide this tab is showing. The
- * shared key disappears, this tab's controller drops its replay and the guide closes
+ * Another tab finished, skipped or cancelled the guide this tab is showing (logging
+ * out there removes no stored position: see the session-boundary tests). The shared
+ * key disappears, this tab's controller drops its replay and the guide closes
  * its active step: Finish/Exit are never left on a step they no longer own, and a
  * stale tab cannot turn a completed flow into a skipped one. Wired exactly as the
  * guide singleton wires it: `createReplayStorageListener(controller, getStorage,

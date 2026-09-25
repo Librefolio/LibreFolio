@@ -4059,7 +4059,7 @@
         },
         "brokersNav": {
           "title": "Brókeres",
-          "description": "Abre Brókeres para configurar tus cuentas. Una breve guía comienza cuando eliges Añadir bróker."
+          "description": "Abre Brókeres para configurar tus cuentas."
         },
         "fxNav": {
           "title": "Tipos de cambio",
@@ -4124,7 +4124,7 @@
       "armedToast": "{flow} está listo en este navegador. Abre la función para empezar.",
       "cancelArmed": "Cancelar activación",
       "groupProgress": "{completed}/{total} guías completadas",
-      "armedAtNextTrigger": "Listo en este navegador: {flow} se iniciará en la próxima activación. Cerrar sesión lo cancela.",
+      "armedAtNextTrigger": "Listo en este navegador: {flow} se iniciará en la próxima activación.",
       "replayNextTrigger": "Repetir en la próxima activación"
     },
     "importGuide": {
@@ -4223,11 +4223,11 @@
         },
         "add": {
           "title": "Añade una transacción",
-          "description": "Añadir abre el formulario guiado para una sola operación. Su guía específica comienza la primera vez que se usa."
+          "description": "Añadir abre el formulario guiado para una sola operación."
         },
         "import": {
           "title": "Importa varias operaciones",
-          "description": "Importar lee los informes del bróker y guía su revisión hasta el editor masivo."
+          "description": "Importar lee los informes del bróker y acompaña su revisión hasta el editor masivo."
         },
         "columns": {
           "title": "Filtra y organiza",
@@ -4291,7 +4291,7 @@
         },
         "add": {
           "title": "Añade un bróker",
-          "description": "Crea la cuenta que recibirá transacciones e importaciones. Una guía específica acompaña el formulario."
+          "description": "Crea la cuenta que recibirá transacciones e importaciones."
         }
       }
     },
@@ -4335,7 +4335,7 @@
         },
         "add": {
           "title": "Añade un par de divisas",
-          "description": "Define una nueva dirección de conversión. Una guía específica explica las divisas y los proveedores."
+          "description": "Define una nueva dirección de conversión."
         }
       }
     },
@@ -4375,7 +4375,7 @@
         },
         "add": {
           "title": "Añade un activo",
-          "description": "Busca o define un nuevo instrumento. Una guía específica explica su identidad, divisa y proveedor."
+          "description": "Busca o define un nuevo instrumento."
         }
       }
     },

@@ -4059,7 +4059,7 @@
         },
         "brokersNav": {
           "title": "Brokers",
-          "description": "Open Brokers to configure your accounts. A short guide starts when you choose Add Broker."
+          "description": "Open Brokers to configure your accounts."
         },
         "fxNav": {
           "title": "FX rates",
@@ -4124,7 +4124,7 @@
       "armedToast": "{flow} is ready in this browser. Open its feature to start.",
       "cancelArmed": "Cancel activation",
       "groupProgress": "{completed}/{total} guides completed",
-      "armedAtNextTrigger": "Ready in this browser: {flow} starts at its next trigger. Logging out cancels it.",
+      "armedAtNextTrigger": "Ready in this browser: {flow} starts at its next trigger.",
       "replayNextTrigger": "Replay at next trigger"
     },
     "importGuide": {
@@ -4223,11 +4223,11 @@
         },
         "add": {
           "title": "Add one transaction",
-          "description": "Add opens the guided form for a single operation. Its dedicated guide starts on first use."
+          "description": "Add opens the guided form for a single operation."
         },
         "import": {
           "title": "Import multiple operations",
-          "description": "Import reads broker reports and guides their review through to the bulk editor."
+          "description": "Import reads broker reports and walks you through their review, up to the bulk editor."
         },
         "columns": {
           "title": "Filter and organize",
@@ -4291,7 +4291,7 @@
         },
         "add": {
           "title": "Add a broker",
-          "description": "Create the account that will receive transactions and imports. A dedicated guide follows the form."
+          "description": "Create the account that will receive transactions and imports."
         }
       }
     },
@@ -4335,7 +4335,7 @@
         },
         "add": {
           "title": "Add an FX pair",
-          "description": "Define a new conversion direction. A dedicated guide explains currencies and providers."
+          "description": "Define a new conversion direction."
         }
       }
     },
@@ -4375,7 +4375,7 @@
         },
         "add": {
           "title": "Add an asset",
-          "description": "Search or define a new instrument. A dedicated guide explains identity, currency, and provider."
+          "description": "Search or define a new instrument."
         }
       }
     },

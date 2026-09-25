@@ -76,10 +76,10 @@ Welcome first.
 !!! note "Replay is non-destructive"
 
     Replays are saved in this browser for your account: an armed or unfinished replay carries over
-    to other tabs and survives closing the tab or restarting the browser, but it is not shared with
-    other browsers or devices. Logging out cancels it, including when LibreFolio signs you out
-    because your session expired, and so does switching account; when it ends in one tab, it also
-    closes in your other open tabs. Guides point at real controls
+    to other tabs and survives closing the tab, restarting the browser, or logging out and back in,
+    but it is not shared with other accounts, browsers, or devices. It ends when you finish or exit
+    it, when you cancel it here, or when an update brings a newer version of that guide; when it
+    ends in one tab, it also closes in your other open tabs. Guides point at real controls
     but do not click or write for you. A Welcome replay has one explicit exception:
     **Continue** saves the language, base currency, and avatar you selected while preserving the
     Welcome flow's onboarding status.
