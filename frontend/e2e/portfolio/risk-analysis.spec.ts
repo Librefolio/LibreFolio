@@ -1282,11 +1282,10 @@ test.describe('Risk analysis functional integration', () => {
         await expect(health).toBeVisible();
         await expect(health).toHaveAttribute('data-count', '2');
 
-        // The disclosure is scoped to what the level renders, never to the whole
-        // wave: `correlation` travels in the same historical answer and comes
-        // back `partial` from this very stub, but no level shows it, so blaming
-        // L1 or L3 for it would be an accusation the reader cannot check.
-        await expect(panel.getByTestId('risk-level-3-health')).toHaveCount(0);
+        // …and its cause stays with it. Developer's decision of 24/09/2026: under
+        // L1–L3 only what did not come back at all remains, with its error. Both
+        // horizons failed for the same reason, so the level words one code, not two.
+        await expect(panel.locator('[data-testid="risk-level-1-error"][data-code="insufficient_history"]')).toHaveCount(1);
 
         // The isolation itself: every level fed by a different analytic is intact,
         // and the failure did not escalate into a whole-panel error.
@@ -1296,6 +1295,28 @@ test.describe('Risk analysis functional integration', () => {
         await expect(panel.getByTestId('risk-l1-card-current-value')).toHaveText(loss('3.2%'));
         await expect(panel.getByTestId('risk-load-error')).toHaveCount(0);
         await expect(panel).toHaveAttribute('data-catalog', 'ready');
+
+        // The same wave, seen from above. `correlation` travels in this very
+        // historical answer and comes back `partial` from the stub: it is disclosed
+        // by the one notice above the levels — named once, its warning once — and
+        // not as a level's status line. The two unavailable horizons are *not* in
+        // that notice: they did not come back partial, they did not come back, and
+        // their disclosure is L1's own, asserted above.
+        const notice = panel.getByTestId('risk-partial-notice');
+        await expect(notice).toBeVisible();
+        await expect(notice).toHaveAttribute('data-partial-count', '1');
+        await expect(notice.getByTestId('risk-partial-measurements')).toHaveAttribute('data-count', '1');
+        const correlationEntry = notice.getByTestId('risk-partial-reason').filter({hasText: 'E2E partial fixture'});
+        await expect(correlationEntry).toHaveCount(1);
+        await expect(correlationEntry).toHaveAttribute('data-occurrences', '1');
+        // An error is not a warning: the unavailable VaR's own message stays out of it.
+        await expect(notice.getByTestId('risk-partial-reason').filter({hasText: 'E2E unavailable fixture'})).toHaveCount(0);
+
+        // Barriers above — the notice and every level on screen — so these absences
+        // are about routing, not rendering. L2 renders the heatmap and L3 never
+        // consulted it; neither carries it as a status line any more.
+        await expect(panel.getByTestId('risk-level-2-health')).toHaveCount(0);
+        await expect(panel.getByTestId('risk-level-3-health')).toHaveCount(0);
     });
 
     test('broker tab sends a single-broker portfolio subset and labels it', async ({page}) => {
@@ -1886,113 +1907,116 @@ test.describe('Risk analysis functional integration', () => {
      * reasons list had shipped, had unit tests, and had never once been
      * rendered by the suite.
      */
-    test('a warning reaches the level that rendered the measurement, once per sentence', async ({page}) => {
-        // Two sentences, three warnings. Written as full prose rather than as
-        // codes because that is what the panel puts on screen: `resultReasons`
-        // renders the backend's string verbatim, so the fixture sentence *is*
-        // the contract under test. It is not translated, so asserting on it is
-        // not the mistake the no-translated-text rule is about.
+    test('a partial measurement and every warning are disclosed once, in one notice above the levels', async ({page}) => {
+        // Developer's decision of 24/09/2026: the partial-result disclosure leaves the
+        // levels. One notice at the top of the panel names what came back partial and
+        // lists every warning once; under L1–L3 only what did not come back at all
+        // stays. The fixture is the one this test always used, so what changed is
+        // where the sentences land, not what arrives.
+        //
+        // Written as full prose rather than as codes because that is what the panel
+        // puts on screen: none of these warnings carries a catalogue key, so
+        // `warningSentence` renders the backend's string verbatim and the fixture
+        // sentence *is* the contract under test. It is not translated, so asserting
+        // on it is not the mistake the no-translated-text rule is about.
         const varReason = 'Only 41 of the 60 sessions had a usable close at this horizon';
         const drawdownReason = 'Peak-to-trough window truncated at the start of available history';
+        // Shipped by the stub on `correlation`, which it always answers `partial`.
+        const correlationReason = 'E2E partial fixture';
 
         await installRiskMocks(page, {
             analyticWarnings: {
                 // Asked twice per wave — one day, one month — so this single
                 // entry arrives on two results carrying identical text.
                 historical_var: [{code: 'sparse_history', message: varReason}],
-                // Asked once, and rendered by L1 only. Deliberately not
-                // `historical_kpi`, which L1 and L3 both read: a sentence landing
-                // under two levels could not say which slice put it there.
+                // Asked once. Deliberately not `historical_kpi`, which L1 and L3 both
+                // read: that double reading is `uniqueByInstance`'s case, pinned in
+                // `partialNotice.test.ts`, and here it would blur which count is read.
                 drawdown_summary: [{code: 'truncated_window', message: drawdownReason}],
             },
         });
 
         const panel = await openDashboardRisk(page);
 
-        // The barrier, and the precondition in one. Reasons live inside L1's
-        // body, so "no reasons" is also true of a level that has not rendered —
-        // and `data-occurrences="2"` only means something if two VaR results
-        // really came back. Both rungs on screen with different figures is that
-        // proof, taken from the product rather than from the request log.
+        // The barriers, and the preconditions with them. Both VaR rungs on screen
+        // with different figures prove two VaR results really came back, which is
+        // what makes `data-occurrences="2"` below mean anything; the L2 and L3
+        // figures prove both other levels are fed by this same wave, so their empty
+        // disclosures further down are about routing, not about a panel that had not
+        // finished rendering.
         await expect(panel.getByTestId('risk-level-1')).toBeVisible();
         await expect(panel.getByTestId('risk-l1-card-day-value')).toHaveText(loss('3.1%'));
         await expect(panel.getByTestId('risk-l1-card-month-value')).toHaveText(loss('9.4%'));
+        await expect(panel.getByTestId('risk-l2-weight-1')).toHaveText('60.0%');
+        await expect(panel.getByTestId('risk-l3-sortino-value')).toHaveText('1.68');
 
-        // Every result in this wave is `ok`: nothing is degraded, so the status
-        // line is absent — and the reasons are still shown. That pair is the
-        // claim. `degrades_result` decides the status and the status decides the
-        // health row, but neither decides whether a sentence is worth reading; a
-        // reasons list gated on `health` would render nothing here while looking
-        // perfectly correct in the unavailable test above.
-        await expect(panel.getByTestId('risk-level-1-health')).toHaveCount(0);
+        // ONE notice, and above the levels: one notice per level, or one below them,
+        // would each still show every sentence — and each would be the wrong design.
+        const notice = panel.getByTestId('risk-partial-notice');
+        await expect(notice).toHaveCount(1);
+        await expect(notice).toBeVisible();
+        await expect
+            .poll(
+                () =>
+                    notice.evaluate((element) => {
+                        const firstLevel = element.closest('[data-testid="risk-levels-panel"]')?.querySelector('[data-testid="risk-level-1"]');
+                        return firstLevel ? Boolean(element.compareDocumentPosition(firstLevel) & Node.DOCUMENT_POSITION_FOLLOWING) : null;
+                    }),
+                {message: 'the notice is not above the first level'},
+            )
+            .toBe(true);
 
-        const reasons = panel.getByTestId('risk-level-1-reasons');
-        await expect(reasons).toBeVisible();
-        // Three warnings in, two entries out. The count is the deduplication
-        // stated as a number instead of inferred from the shape of the prose.
-        await expect(reasons).toHaveAttribute('data-count', '2');
-        await expect(panel.getByTestId('risk-level-1-reason')).toHaveCount(2);
+        // Only the heatmap came back `partial`: every other result in L1–L3 is `ok`,
+        // warned or not. Asserted by arity rather than by the name, which is
+        // translated: the one entry is the correlation because nothing else in this
+        // wave is partial.
+        await expect(notice).toHaveAttribute('data-partial-count', '1');
+        const measurements = notice.getByTestId('risk-partial-measurements');
+        await expect(measurements).toHaveAttribute('data-count', '1');
+        await expect(measurements, 'a catalogue key reached the screen instead of a name').not.toContainText(/risk\.[a-zA-Z]+\./);
+
+        // Four warnings on four results, three sentences out. The count is the
+        // deduplication stated as a number instead of inferred from the prose.
+        await expect(notice.getByTestId('risk-partial-reasons')).toHaveAttribute('data-count', '3');
+        const entries = notice.getByTestId('risk-partial-reason');
+        await expect(entries).toHaveCount(3);
 
         // The sentence both horizons carried: rendered once, counted twice. Two
-        // `<li>` would read to the reader as a rendering fault rather than as two
-        // affected measurements; one saying "1" would drop a horizon on the floor
-        // and look entirely plausible doing it.
-        const varEntry = panel.getByTestId('risk-level-1-reason').filter({hasText: varReason});
+        // `<li>` would read as a rendering fault rather than as two affected
+        // measurements; one saying "1" would drop a horizon on the floor and look
+        // entirely plausible doing it.
+        const varEntry = entries.filter({hasText: varReason});
         await expect(varEntry).toHaveCount(1);
         await expect(varEntry).toHaveAttribute('data-occurrences', '2');
         await expect(varEntry).toHaveText(varReason);
 
-        // …and the one that arrived alone still says "1", so the counter is read
-        // off the data and not printed from a constant that happens to be right.
-        const drawdownEntry = panel.getByTestId('risk-level-1-reason').filter({hasText: drawdownReason});
-        await expect(drawdownEntry).toHaveCount(1);
-        await expect(drawdownEntry).toHaveAttribute('data-occurrences', '1');
-        await expect(drawdownEntry).toHaveText(drawdownReason);
+        // …and the ones that arrived alone still say "1", so the counter is read off
+        // the data and not printed from a constant that happens to be right. One used
+        // to live under L1, the other under L2: both are in the same list now.
+        for (const sentence of [drawdownReason, correlationReason]) {
+            const entry = entries.filter({hasText: sentence});
+            await expect(entry).toHaveCount(1);
+            await expect(entry).toHaveAttribute('data-occurrences', '1');
+            await expect(entry).toHaveText(sentence);
+        }
 
-        // Barriers before the absences: both other levels are demonstrably fed
-        // by this same wave, so their empty reason lists are a statement about
-        // scoping rather than about a panel that had not finished rendering.
-        await expect(panel.getByTestId('risk-l2-weight-1')).toHaveText('60.0%');
-        await expect(panel.getByTestId('risk-l3-sortino-value')).toHaveText('1.68');
+        // And nowhere else. After the barriers above, these absences say the
+        // sentences moved, not that the levels had not rendered yet. A panel that
+        // added the notice but kept feeding the levels would show every sentence
+        // twice — each copy plausible, the pair a rendering fault.
+        for (const level of [1, 2, 3]) {
+            await expect(panel.getByTestId(`risk-level-${level}-reasons`)).toHaveCount(0);
+        }
+        // `partial` is no longer a level's status line: the heatmap is named once,
+        // above. L1 has nothing of its own to report — every result there is `ok`.
+        await expect(panel.getByTestId('risk-level-2-health')).toHaveCount(0);
+        await expect(panel.getByTestId('risk-level-1-health')).toHaveCount(0);
 
-        // The scoping itself, and the only place in the suite where the title's
-        // claim is actually exercised. `correlation` rides in the very same
-        // historical answer and this stub returns it `partial` with a warning of
-        // its own. L2 renders correlation, so L2 — and only L2 — carries its
-        // sentence. Until the heatmap existed no level rendered it and this
-        // assertion was a row of zeroes: true, and true for the reason that
-        // nothing could have received the warning. A vacuous green.
-        //
-        // What it now proves is the routing rule in both directions: the
-        // sentence lands under the level that rendered the measurement, and
-        // stays off the two that did not. A panel feeding every level the whole
-        // wave would put it under all three, all of them plausible, two of them
-        // an accusation the reader has no way to check.
-        await expect(panel.getByTestId('risk-level-1-reason').filter({hasText: 'E2E partial fixture'})).toHaveCount(0);
-        await expect(panel.getByTestId('risk-level-3-reasons')).toHaveCount(0);
-
-        const l2Reasons = panel.getByTestId('risk-level-2-reasons');
-        await expect(l2Reasons).toHaveAttribute('data-count', '1');
-        const correlationEntry = panel.getByTestId('risk-level-2-reason').filter({hasText: 'E2E partial fixture'});
-        await expect(correlationEntry).toHaveCount(1);
-        await expect(correlationEntry).toHaveAttribute('data-occurrences', '1');
-
-        // And the amber with it. `partial` degrades the result, so the status
-        // line that was absent from L1 — every result there being `ok` — is
-        // present here. Asserted by arity rather than by its sentence, which is
-        // translated; the point is that the level declaring a degraded heatmap
-        // says so, instead of rendering an empty grid in silence.
-        await expect(panel.getByTestId('risk-level-2-health')).toHaveAttribute('data-count', '1');
-
-        // Both L2 results are disclosed, but they arrive on different waves:
-        // contribution on the current one, correlation on the historical one.
-        // They collapse to a single provenance row because this fixture gives
-        // them the same window — which is what the tuple deduplication is for,
-        // and is the property under test here. It is not a promise that the two
-        // waves always agree in production: if they ever diverged the reader
-        // would get two rows, and that is the correct answer rather than a
-        // fault, because a heatmap and a contribution measured over different
-        // windows are two measurements and should not be shown as one.
+        // Provenance does not move with the disclosure. Both L2 results still
+        // collapse to one row because this fixture gives them the same window —
+        // which is what the tuple deduplication is for. It is not a promise that the
+        // two waves always agree: if they ever diverged the reader would get two
+        // rows, and that would be the correct answer rather than a fault.
         await expect(panel.getByTestId('risk-level-2-metadata')).toHaveAttribute('data-rows', '1');
     });
 
