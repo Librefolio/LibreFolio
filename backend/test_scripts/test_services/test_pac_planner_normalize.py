@@ -37,6 +37,7 @@ from backend.app.services.pac_allocator.issues import (
 from backend.app.services.pac_allocator.models import ExactPlannerScenario
 from backend.app.services.pac_allocator.normalize import (
     PlannerV2NormalizationResult,
+    currency_minor_unit,
     exact_number_to_ratio,
     normalize_pac_plan,
     normalize_planner_request,
@@ -360,11 +361,6 @@ def test_normalization_availability_uses_frozen_error_precedence(
     assert normalization_availability(issues) == expected
 
 
-def _mutate_currency_minor_unit(payload: JsonObject, value: str) -> None:
-    currency = _find_row(payload["currency_specs"], "currency", "EUR")
-    currency["minor_unit"] = value
-
-
 def _mutate_price(payload: JsonObject, value: str) -> None:
     asset = _find_row(payload["assets"], "asset_id", "asset-one")
     asset["quote"]["amount"] = value
@@ -433,7 +429,6 @@ def _mutate_tax_rate(payload: JsonObject, value: str) -> None:
 
 
 RANGE_MUTATORS: dict[str, Callable[[JsonObject, str], None]] = {
-    "currency-minor-unit": _mutate_currency_minor_unit,
     "price": _mutate_price,
     "quote-basis": _mutate_quote_basis,
     "exposure-weight": _mutate_exposure_weight,
@@ -459,14 +454,6 @@ def _apply_range_mutation(
 
 
 RANGE_ISSUE_CASES = (
-    pytest.param(
-        "pac",
-        "currency-minor-unit",
-        "0",
-        "allocation.currency_minor_unit_nonpositive",
-        _field_wire_path("input", "currency", "EUR", "minor_unit"),
-        id="currency-minor-unit",
-    ),
     pytest.param(
         "pac",
         "price",
@@ -963,8 +950,8 @@ def test_canonical_issue_universe_matches_schema_and_w1_map_is_explicit() -> Non
     schema_codes = tuple(get_args(PlannerIssueCode))
 
     assert schema_codes == CANONICAL_ISSUE_CODES
-    assert len(schema_codes) == 80
-    assert len(set(schema_codes)) == 80
+    assert len(schema_codes) == 79
+    assert len(set(schema_codes)) == 79
     assert set(W1_NORMALIZER_ISSUE_DEFINITIONS) < set(schema_codes)
     for code, definition in W1_NORMALIZER_ISSUE_DEFINITIONS.items():
         assert normalizer_issue_definition(code) is definition
@@ -1401,3 +1388,216 @@ def test_immutable_exact_models_reject_duplicate_semantic_identities(
 
     with pytest.raises(ValueError, match=message):
         mutation(scenario)
+
+
+# ---------------------------------------------------------------------------
+# C0b.3 — an Asset's exposures may not sum above one within a dimension.
+# ---------------------------------------------------------------------------
+
+EXPOSURE_WEIGHT_WIRE_PATH = _field_wire_path("assets", "asset", "asset-one", "exposures.weight")
+EXPOSURE_TOTAL_CODE: PlannerIssueCode = "allocation.exposure_total_exceeds_one"
+FIXTURE_EXPOSURE_CATEGORIES = (
+    ("asset_type", "equity"),
+    ("sector", "broad"),
+    ("geography", "unknown"),
+)
+
+
+def _exposure(dimension: str, category_id: str, weight: str) -> JsonObject:
+    return {
+        "dimension": dimension,
+        "category_id": category_id,
+        "label": f"{dimension} {category_id}",
+        "weight": weight,
+        "provenance_id": "prov-manual",
+    }
+
+
+def _pac_payload_with_exposures(*exposures: JsonObject) -> JsonObject:
+    payload = _fixture(PAC_FIXTURE)
+    asset = _find_row(payload["assets"], "asset_id", "asset-one")
+    asset["exposures"] = [deepcopy(exposure) for exposure in exposures]
+    return payload
+
+
+def _split_dimension(dimension: str, category_id: str, weights: tuple[str, ...]) -> list[JsonObject]:
+    return [_exposure(dimension, category_id if index == 0 else f"{category_id}-{index}", weight) for index, weight in enumerate(weights)]
+
+
+def _exposure_total_issues(result: PlannerV2NormalizationResult) -> list[PlannerIssue]:
+    return [issue for issue in result.issues if issue.code == EXPOSURE_TOTAL_CODE]
+
+
+def _dimension_params(issue: PlannerIssue) -> list[JsonObject]:
+    return [param.model_dump(mode="json") for param in issue.params]
+
+
+def test_exposure_dimension_total_above_one_is_one_typed_invalid_issue() -> None:
+    payload = _pac_payload_with_exposures(
+        _exposure("asset_type", "equity", "1"),
+        _exposure("sector", "broad", "0.7"),
+        _exposure("sector", "tech", "0.5"),
+        _exposure("geography", "unknown", "1"),
+    )
+
+    result = _normalize_payload("pac", payload)
+    issue = _single_issue(result, EXPOSURE_TOTAL_CODE)
+
+    assert result.availability == "invalid"
+    assert result.ready is False
+    assert result.normalized is None
+    assert tuple(row.code for row in result.issues) == (EXPOSURE_TOTAL_CODE,)
+    assert issue.model_dump(mode="json") == {
+        "code": EXPOSURE_TOTAL_CODE,
+        "severity": "error",
+        "kind": "invalid",
+        "path": EXPOSURE_WEIGHT_WIRE_PATH,
+        "message_key": EXPOSURE_TOTAL_CODE,
+        "params": [{"kind": "text", "name": "dimension", "value": "sector"}],
+    }
+    assert normalizer_issue_definition(EXPOSURE_TOTAL_CODE).kind == "invalid"
+
+
+@pytest.mark.parametrize(
+    "weights",
+    (
+        pytest.param(("0.5", "0.5"), id="exactly-one"),
+        pytest.param(("0.3333", "0.6667"), id="exactly-one-at-four-decimals"),
+        pytest.param(("0.3", "0.2"), id="below-one-keeps-a-residual"),
+        pytest.param(("0", "0"), id="zero"),
+    ),
+)
+def test_exposure_dimension_total_up_to_one_is_accepted(weights: tuple[str, ...]) -> None:
+    payload = _pac_payload_with_exposures(
+        _exposure("asset_type", "equity", "1"),
+        *_split_dimension("sector", "broad", weights),
+        _exposure("geography", "unknown", "1"),
+    )
+
+    result = _normalize_payload("pac", payload)
+
+    assert result.availability == "ready"
+    assert result.issues == ()
+
+
+@pytest.mark.parametrize(
+    "weights",
+    (
+        pytest.param(("1.25", "0.5"), id="above-one-weight"),
+        pytest.param(("-0.25", "1", "0.75"), id="negative-weight-with-total-above-one"),
+    ),
+)
+def test_out_of_range_exposure_weight_is_the_only_issue_for_its_dimension(weights: tuple[str, ...]) -> None:
+    payload = _pac_payload_with_exposures(
+        _exposure("asset_type", "equity", "1"),
+        *_split_dimension("sector", "broad", weights),
+        _exposure("geography", "unknown", "1"),
+    )
+
+    result = _normalize_payload("pac", payload)
+    issue = _single_issue(result, "allocation.exposure_weight_out_of_range")
+
+    assert result.availability == "invalid"
+    assert tuple(row.code for row in result.issues) == ("allocation.exposure_weight_out_of_range",)
+    assert _issue_wire_path(issue) == EXPOSURE_WEIGHT_WIRE_PATH
+    assert _exposure_total_issues(result) == []
+
+
+@pytest.mark.parametrize("over_dimension", ("asset_type", "sector", "geography"))
+def test_exposure_total_issue_names_only_the_dimension_above_one(over_dimension: str) -> None:
+    exposures: list[JsonObject] = []
+    for dimension, category_id in FIXTURE_EXPOSURE_CATEGORIES:
+        weights = ("0.7", "0.5") if dimension == over_dimension else ("0.6", "0.4")
+        exposures.extend(_split_dimension(dimension, category_id, weights))
+    payload = _pac_payload_with_exposures(*exposures)
+
+    result = _normalize_payload("pac", payload)
+    issue = _single_issue(result, EXPOSURE_TOTAL_CODE)
+
+    assert result.availability == "invalid"
+    assert tuple(row.code for row in result.issues) == (EXPOSURE_TOTAL_CODE,)
+    assert _issue_wire_path(issue) == EXPOSURE_WEIGHT_WIRE_PATH
+    assert _dimension_params(issue) == [{"kind": "text", "name": "dimension", "value": over_dimension}]
+
+
+def test_exposure_totals_are_checked_per_dimension() -> None:
+    payload = _pac_payload_with_exposures(
+        *_split_dimension("asset_type", "equity", ("0.8", "0.8")),
+        *_split_dimension("sector", "broad", ("1.5", "0.5")),
+        *_split_dimension("geography", "unknown", ("0.9", "0.2")),
+    )
+
+    result = _normalize_payload("pac", payload)
+
+    assert result.availability == "invalid"
+    # The out-of-range sector weight suppresses only the sector total.
+    _single_issue(result, "allocation.exposure_weight_out_of_range")
+    totals = _exposure_total_issues(result)
+    assert [_dimension_params(issue) for issue in totals] == [
+        [{"kind": "text", "name": "dimension", "value": "asset_type"}],
+        [{"kind": "text", "name": "dimension", "value": "geography"}],
+    ]
+    assert all(_issue_wire_path(issue) == EXPOSURE_WEIGHT_WIRE_PATH for issue in totals)
+
+
+@pytest.mark.parametrize(
+    ("weights", "expects_total_issue"),
+    (
+        pytest.param(("0.6", "0.6"), True, id="duplicates-sum-above-one"),
+        pytest.param(("0.5", "0.5"), False, id="duplicates-sum-to-one"),
+    ),
+)
+def test_duplicate_exposure_rows_still_count_toward_the_dimension_total(
+    weights: tuple[str, str],
+    expects_total_issue: bool,
+) -> None:
+    payload = _pac_payload_with_exposures(
+        _exposure("asset_type", "equity", "1"),
+        *(_exposure("sector", "broad", weight) for weight in weights),
+        _exposure("geography", "unknown", "1"),
+    )
+
+    result = _normalize_payload("pac", payload)
+
+    assert result.availability == "invalid"
+    _single_issue(result, "allocation.duplicate_id")
+    totals = _exposure_total_issues(result)
+    if expects_total_issue:
+        assert [_dimension_params(issue) for issue in totals] == [[{"kind": "text", "name": "dimension", "value": "sector"}]]
+    else:
+        assert totals == []
+
+
+# ---------------------------------------------------------------------------
+# C0b.1 — the currency quantum is CLDR's, via babel; the request carries none.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("currency", "expected"),
+    (
+        pytest.param("JPY", ExactRatio(1), id="jpy-zero-digits"),
+        pytest.param("EUR", ExactRatio(1, 100), id="eur-cldr-default-two-digits"),
+        pytest.param("USD", ExactRatio(1, 100), id="usd-two-digits"),
+        pytest.param("KWD", ExactRatio(1, 1000), id="kwd-three-digits"),
+    ),
+)
+def test_currency_minor_unit_is_the_cldr_quantum(currency: str, expected: ExactRatio) -> None:
+    assert currency_minor_unit(currency) == expected
+
+
+def test_normalized_scenario_derives_every_referenced_currency_quantum_from_babel() -> None:
+    payload = _fixture(PAC_FIXTURE)
+    assert "currency_specs" not in payload
+    payload["fx_rates"] = {"EUR/JPY": "160", "EUR/KWD": "0.33"}
+
+    result = _normalize_payload("pac", payload)
+
+    assert result.availability == "ready"
+    scenario = result.normalized
+    assert scenario is not None
+    assert tuple((spec.currency, spec.minor_unit) for spec in scenario.currency_specs) == (
+        ("EUR", ExactRatio(1, 100)),
+        ("JPY", ExactRatio(1)),
+        ("KWD", ExactRatio(1, 1000)),
+    )

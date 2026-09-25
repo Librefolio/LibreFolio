@@ -50,7 +50,7 @@
   "scenario_basis": {
     "as_of": "2026-09-15",
     "valuation_currency": "EUR",
-    "policy": "min_fragmentation",
+    "policy": "proportional",
     "counts": {
       "assets": 16,
       "brokers": 4,

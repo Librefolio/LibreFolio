@@ -956,14 +956,14 @@ def test_option_b_shape_layer_accepts_economically_invalid_but_lexically_valid_s
     model, _emitted = _strict_roundtrip(PAC_PLAN_INPUT_ADAPTER, payload)
     wire = PAC_PLAN_INPUT_ADAPTER.dump_python(model, mode="json")
 
-    euro = _find(wire["currency_specs"], "currency", "EUR")
     asset = _find(wire["assets"], "asset_id", "asset-01")
     broker = _find(wire["brokers"], "broker_id", "broker-eur")
     cash = _find(wire["existing_cash"], "cash_id", "cash-eur")
     route = _find(wire["order_routes"], "route_id", "route-01-eur")
     target = _find(wire["target_weights"], "asset_id", "asset-01")
 
-    assert euro["minor_unit"] == "0"
+    # C0b.1: the currency quantum is no longer a wire input (babel derives it).
+    assert "currency_specs" not in wire
     assert asset["quote"]["amount"] == "-10"
     assert asset["quote"]["quote_base_quantity"] == "0"
     assert _find(asset["exposures"], "dimension", "asset_type")["weight"] == "1.25"
@@ -1066,15 +1066,14 @@ EXPECTED_PLANNER_ISSUE_CODES = (
     "allocation.classification_invalid",
     "allocation.classification_sector_missing",
     "allocation.coefficient_envelope_unsupported",
-    "allocation.currency_minor_unit_nonpositive",
     "allocation.currency_mismatch",
-    "allocation.currency_spec_missing",
     "allocation.deployment_omitted",
     "allocation.duplicate_id",
     "allocation.dynamic_fee_unsupported",
     "allocation.economic_share_out_of_range",
     "allocation.execution_margin_missing",
     "allocation.execution_margin_rate_out_of_range",
+    "allocation.exposure_total_exceeds_one",
     "allocation.exposure_weight_out_of_range",
     "allocation.fee_floor_exceeds_cap",
     "allocation.fee_rate_out_of_range",
@@ -1159,6 +1158,11 @@ SUPERSEDED_PLANNER_ISSUE_CODES = (
     "allocation.nonpositive_valuation_rate",
     "allocation.saved_fx_missing",
     "allocation.wac_fx_missing",
+    # C0b.1: the quantum comes from babel, so no planner input can be missing or
+    # non-positive any more. The domain copy keeps its own
+    # allocation.currency_spec_missing in PortfolioPlannerSourceIssueCode.
+    "allocation.currency_minor_unit_nonpositive",
+    "allocation.currency_spec_missing",
 )
 
 
@@ -1174,7 +1178,7 @@ def _catalogue_issue_specimen(code: str) -> JsonObject:
 
 
 def test_planner_issue_code_catalogue_is_exact_closed_and_sorted() -> None:
-    assert len(EXPECTED_PLANNER_ISSUE_CODES) == 80
+    assert len(EXPECTED_PLANNER_ISSUE_CODES) == 79
     assert EXPECTED_PLANNER_ISSUE_CODES == tuple(sorted(EXPECTED_PLANNER_ISSUE_CODES))
     assert get_args(pac_schemas.PlannerIssueCode) == EXPECTED_PLANNER_ISSUE_CODES
     assert PLANNER_ISSUE_CODE_ADAPTER.json_schema()["enum"] == list(EXPECTED_PLANNER_ISSUE_CODES)
@@ -1586,7 +1590,6 @@ def _normalizer_issue_case(code: str, availability: str, frozen_path: JsonObject
     return pytest.param(code, availability, "error", frozen_path, id=f"{availability}-{code}")
 
 
-CURRENCY_MINOR_UNIT_ISSUE_PATH = _planner_field_path("input", "currency", "EUR", "minor_unit")
 PRICE_AMOUNT_ISSUE_PATH = _planner_field_path("assets", "asset", "asset-one", "quote.amount")
 QUOTE_BASIS_ISSUE_PATH = _planner_field_path("assets", "asset", "asset-one", "quote.quote_base_quantity")
 EXPOSURE_WEIGHT_ISSUE_PATH = _planner_field_path("assets", "asset", "asset-one", "exposures.weight")
@@ -1599,10 +1602,12 @@ TAX_RATE_ISSUE_PATH = _planner_field_path("policy", "asset", "asset-one", "tax_r
 UNFROZEN_ISSUE_PATH_SPECIMEN = {"kind": "section", "section": "input"}
 
 DOWNSTREAM_NORMALIZER_ISSUE_CASES = (
-    _normalizer_issue_case("allocation.currency_minor_unit_nonpositive", "invalid", CURRENCY_MINOR_UNIT_ISSUE_PATH),
     _normalizer_issue_case("allocation.nonpositive_price", "invalid", PRICE_AMOUNT_ISSUE_PATH),
     _normalizer_issue_case("allocation.invalid_quote_basis", "invalid", QUOTE_BASIS_ISSUE_PATH),
     _normalizer_issue_case("allocation.exposure_weight_out_of_range", "invalid", EXPOSURE_WEIGHT_ISSUE_PATH),
+    # C0b.3: same frozen path as the per-weight range issue; the real issue also
+    # names its dimension in a text param (asserted by the normalizer tests).
+    _normalizer_issue_case("allocation.exposure_total_exceeds_one", "invalid", EXPOSURE_WEIGHT_ISSUE_PATH),
     _normalizer_issue_case("allocation.target_weight_out_of_range", "invalid", TARGET_WEIGHT_ISSUE_PATH),
     _normalizer_issue_case("allocation.target_total_not_one", "invalid", TARGET_TOTAL_ISSUE_PATH),
     _normalizer_issue_case("allocation.economic_share_out_of_range", "invalid", ECONOMIC_SHARE_ISSUE_PATH),
@@ -1692,12 +1697,38 @@ def test_downstream_normalizer_issue_code_precedence_map_is_frozen(
     assert not {"outcome", "primary_solution", "deployment"} & wire_result.keys()
 
 
-@pytest.mark.parametrize("policy", ("proportional", "min_fragmentation"))
-def test_pac_policy_accepts_only_its_two_named_literals(policy: str) -> None:
+def test_pac_policy_accepts_only_proportional() -> None:
     payload = _pac_request()
-    payload["policy"] = policy
+    payload["policy"] = "proportional"
     model, _emitted = _strict_roundtrip(PAC_PLAN_INPUT_ADAPTER, payload)
-    assert PAC_PLAN_INPUT_ADAPTER.dump_python(model, mode="json")["policy"] == policy
+    assert PAC_PLAN_INPUT_ADAPTER.dump_python(model, mode="json")["policy"] == "proportional"
+
+
+def test_pac_min_fragmentation_policy_is_wire_invalid() -> None:
+    # C0b.2: min_fragmentation survives only as an internal ExactScenario branch.
+    payload = _pac_request()
+    payload["policy"] = "min_fragmentation"
+    with pytest.raises(ValidationError) as exc_info:
+        PAC_PLAN_INPUT_ADAPTER.validate_json(_wire(payload), strict=True)
+
+    errors = exc_info.value.errors(include_url=False)
+    assert [(error["type"], error["loc"][-1]) for error in errors] == [("literal_error", "policy")]
+
+
+@pytest.mark.parametrize(
+    ("adapter", "payload_factory"),
+    (
+        pytest.param(PAC_PLAN_INPUT_ADAPTER, _pac_request, id="pac"),
+        pytest.param(REBALANCER_PLAN_INPUT_ADAPTER, _rebalancer_invest_and_sell_request, id="rebalancer-invest-and-sell"),
+        pytest.param(REBALANCER_PLAN_INPUT_ADAPTER, _rebalancer_invest_only_request, id="rebalancer-invest-only"),
+    ),
+)
+def test_request_roots_reject_the_withdrawn_currency_specs_input(adapter: TypeAdapter[Any], payload_factory: Any) -> None:
+    # C0b.1: the quantum is derived from babel; the former input is now an extra field.
+    payload = payload_factory()
+    _strict_roundtrip(adapter, payload)
+    payload["currency_specs"] = [{"currency": "EUR", "minor_unit": "0.01"}]
+    _assert_extra_forbidden(adapter, payload, "currency_specs")
 
 
 def test_pac_request_excludes_holdings_sell_context_and_sell_routes() -> None:
@@ -2600,13 +2631,13 @@ PLANNER_FULL_SCHEMA_FINGERPRINT_CASES = (
     pytest.param(
         PAC_PLAN_INPUT_ADAPTER,
         PAC_PLAN_OUTPUT_ADAPTER,
-        "e2b70735f589d376d5c105416b5b9e30c3a0b927bf7713222af21dcfdb0eaa28",
+        "a4f499864b74cdea63a8411ff26b80877055a8b8fd297524d2a5197a8fc41923",
         id="pac",
     ),
     pytest.param(
         REBALANCER_PLAN_INPUT_ADAPTER,
         REBALANCER_PLAN_OUTPUT_ADAPTER,
-        "61ed6bdeaef112cf0df461468da3f536033d51f34d0abafea9ca22c645a7c12b",
+        "c4451b184aa0fd9f670a27f8be53fc1aa4e11c852cb3dc631199b3fd1d805446",
         id="rebalancer",
     ),
 )

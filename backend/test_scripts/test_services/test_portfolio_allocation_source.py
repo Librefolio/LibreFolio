@@ -20,11 +20,15 @@ from backend.app.db.models import AssetType, UserRole
 from backend.app.schemas.common import Currency, FxBackwardFillInfo
 from backend.app.schemas.portfolio import (
     PlannerSourceSection,
+    PortfolioPlannerCurrentDistribution,
+    PortfolioPlannerCurrentWeight,
     PortfolioPlannerSourceRequest,
+    PortfolioPlannerSourceResponse,
 )
 from backend.app.schemas.wac import WACPreviewResultItem, WACQualifyingTX
 from backend.app.services import portfolio_allocation_source as source
-from backend.app.services import portfolio_service
+from backend.app.services import portfolio_engine, portfolio_service
+from backend.app.services.portfolio_engine import DailyPositionState, ValuationSource
 from backend.app.utils.financial.wac_utils import WACInputTX, compute_wac_from_txlist
 
 AS_OF = date(2026, 9, 15)
@@ -217,6 +221,30 @@ def _request(**changes) -> PortfolioPlannerSourceRequest:
     payload = _request_payload()
     payload.update(changes)
     return PortfolioPlannerSourceRequest.model_validate(payload)
+
+
+def _no_holdings_distribution(asset_ids: list[int]) -> PortfolioPlannerCurrentDistribution:
+    return PortfolioPlannerCurrentDistribution(
+        status="no_holdings",
+        method="portfolio_engine_market_value",
+        rounding="largest_remainder",
+        weight_quantum="0.0001",
+        as_of=AS_OF,
+        provenance_id="source:portfolio-engine",
+        rows=[
+            PortfolioPlannerCurrentWeight(
+                weight_id=f"current:asset:{asset_id}",
+                asset_id=f"asset:{asset_id}",
+                held=False,
+                weight=None,
+                valuation_source=None,
+                valuation_reference_date=None,
+                valuation_days_before_requested=None,
+                valuation_stale=False,
+            )
+            for asset_id in asset_ids
+        ],
+    )
 
 
 @pytest.mark.parametrize(
@@ -483,11 +511,15 @@ async def test_builder_authorizes_every_broker_before_all_private_reads(
 
     async def wac(*_args, **_kwargs):
         events.append("wac")
-        return [], {"EUR"}
+        return []
 
     async def fx(*_args, **_kwargs):
         events.append("fx")
-        return [], {"EUR", "USD"}
+        return []
+
+    async def current_distribution(*_args, **kwargs):
+        events.append("current_distribution")
+        return _no_holdings_distribution(kwargs["scenario_asset_ids"])
 
     monkeypatch.setattr(source, "_load_selected_owner_accesses", authorize)
     monkeypatch.setattr(source, "_load_holding_rows", holdings)
@@ -497,6 +529,7 @@ async def test_builder_authorizes_every_broker_before_all_private_reads(
     monkeypatch.setattr(source, "_build_planner_classifications", classifications)
     monkeypatch.setattr(source, "_build_planner_wac_contexts", wac)
     monkeypatch.setattr(source, "_build_planner_fx_quotes", fx)
+    monkeypatch.setattr(source, "_build_planner_current_distribution", current_distribution)
     monkeypatch.setattr(source, "utcnow", lambda: CAPTURED_AT)
 
     await source.build_portfolio_planner_source(
@@ -518,6 +551,7 @@ async def test_builder_authorizes_every_broker_before_all_private_reads(
         "classifications",
         "wac",
         "fx",
+        "current_distribution",
     ]
 
 
@@ -537,6 +571,7 @@ async def test_mixed_allowed_and_denied_broker_scope_is_atomic(
             "_load_latest_prices",
             "_build_planner_wac_contexts",
             "_build_planner_fx_quotes",
+            "_build_planner_current_distribution",
         )
     }
     classifications = MagicMock(side_effect=AssertionError("classification read ran before auth"))
@@ -554,6 +589,8 @@ async def test_mixed_allowed_and_denied_broker_scope_is_atomic(
             user_id=41,
             request=_request(
                 broker_ids=[7, 99],
+                # current_distribution names its scenario explicitly.
+                asset_ids=[11],
                 requested_sections=[section.value for section in PlannerSourceSection],
             ),
         )
@@ -663,6 +700,7 @@ async def test_missing_explicit_asset_fails_atomically(monkeypatch):
             "_load_latest_prices",
             "_build_planner_wac_contexts",
             "_build_planner_fx_quotes",
+            "_build_planner_current_distribution",
         )
     }
     for name, spy in downstream.items():
@@ -1277,59 +1315,87 @@ def test_missing_and_invalid_saved_classifications_emit_typed_placeholders(
         assert placeholder.provenance_id == "source:market-data"
 
 
-def test_currency_specs_use_cldr_quantum_for_zero_two_and_three_decimals():
-    issues = []
-
-    rows = source._build_currency_specs(
-        {"JPY", "USD", "KWD"},
-        issues=issues,
-    )
-    dumped = {row.currency: row.model_dump(mode="json")["minor_unit"] for row in rows}
-
-    assert dumped == {
-        "JPY": "1",
-        "KWD": "0.001",
-        "USD": "0.01",
-    }
-    assert issues == []
-
-
-def test_validated_currency_with_no_cldr_precision_falls_back_to_two_decimals(
-    monkeypatch,
-):
-    monkeypatch.setattr(source, "get_currency_precision", lambda _code: None)
-    issues = []
-
-    rows = source._build_currency_specs({"EUR"}, issues=issues)
-
-    assert {row.currency: row.model_dump(mode="json")["minor_unit"] for row in rows} == {"EUR": "0.01"}
-    assert issues == []
-
-
-def test_currency_precision_failure_is_typed_and_never_user_defaulted(
-    monkeypatch,
-):
-    def fail_precision(_code):
-        raise ValueError("CLDR unavailable")
-
-    monkeypatch.setattr(source, "get_currency_precision", fail_precision)
-    issues = []
-
-    rows = source._build_currency_specs({"EUR"}, issues=issues)
-
-    assert rows == []
-    assert [(issue.code, issue.kind, issue.path.entity_id, issue.path.field) for issue in issues] == [
-        (
-            "allocation.currency_spec_missing",
-            "missing",
-            "currency:EUR",
-            "minor_unit",
-        )
-    ]
+def test_planner_source_request_rejects_a_currency_specs_input():
+    # The quantum is babel's, derived by the planner; the copy never asked for it.
     payload = _request_payload()
     payload["currency_specs"] = [{"currency": "EUR", "minor_unit": "0.01"}]
-    with pytest.raises(ValidationError):
+
+    with pytest.raises(ValidationError) as error:
         PortfolioPlannerSourceRequest.model_validate(payload)
+
+    assert [(item["type"], item["loc"]) for item in error.value.errors()] == [("extra_forbidden", ("currency_specs",))]
+
+
+@pytest.mark.asyncio
+async def test_planner_source_response_has_no_currency_specs_section(
+    monkeypatch,
+):
+    # C0b.1: the copy stopped publishing currency quanta; they come from babel.
+    session = _QueuedReadSession(
+        _Rows([(_access(7), _broker(7))]),
+        _Rows([(7, 11, Decimal("2"))]),
+        _Rows(scalar_values=[_asset(11, currency="JPY")]),
+        _Rows([(7, "KWD", Decimal("5"))]),
+    )
+    monkeypatch.setattr(source, "utcnow", lambda: CAPTURED_AT)
+
+    response = await source.build_portfolio_planner_source(
+        session,
+        user_id=41,
+        request=_request(
+            broker_ids=[7],
+            asset_ids=[11],
+            requested_sections=["assets", "holdings", "cash_balances"],
+            fx_pairs=[],
+        ),
+    )
+    dumped = response.model_dump(mode="json")
+
+    assert "currency_specs" not in PortfolioPlannerSourceResponse.model_fields
+    assert "currency_specs" not in dumped
+    assert "minor_unit" not in json.dumps(dumped)
+    assert session.pending_results == 0
+
+
+@pytest.mark.asyncio
+async def test_wac_context_of_an_asset_with_an_invalid_currency_is_a_typed_copy_issue(
+    monkeypatch,
+):
+    compute = AsyncMock(side_effect=AssertionError("An invalid Asset currency must not reach the WAC runtime"))
+    monkeypatch.setattr(portfolio_service, "compute_wac_iterative", compute)
+    issues = []
+
+    rows = await source._build_planner_wac_contexts(
+        _QueuedReadSession(),
+        holding_rows=[(7, 11, Decimal("3"))],
+        selected_asset_ids={11},
+        assets_by_id={11: _asset(11, currency="XX1")},
+        as_of=AS_OF,
+        target_currency="EUR",
+        issues=issues,
+    )
+
+    (row,) = rows
+    wac_id = "wac:asset:11:broker:7:2026-09-15:EUR"
+    assert row.wac_id == wac_id
+    assert row.unit_cost is None
+    currency_issue = next(issue for issue in issues if issue.code == "allocation.currency_spec_missing")
+    assert currency_issue.model_dump(mode="json") == {
+        "code": "allocation.currency_spec_missing",
+        "kind": "missing",
+        "severity": "error",
+        "path": {
+            "kind": "field",
+            "section": "wac_contexts",
+            "entity_kind": "wac_context",
+            "entity_id": wac_id,
+            "field": "unit_cost",
+        },
+        "message_key": "allocation.currency_spec_missing",
+        "params": [],
+    }
+    assert [issue.code for issue in issues].count("allocation.currency_spec_missing") == 1
+    compute.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -1341,7 +1407,7 @@ async def test_saved_fx_prefill_returns_the_direct_saved_rate_for_a_canonical_pa
     monkeypatch.setattr(source, "_load_latest_planner_fx_rows", loader)
     issues = []
 
-    rows, currencies = await source._build_planner_fx_quotes(
+    rows = await source._build_planner_fx_quotes(
         object(),
         request_pairs=["EUR/USD"],
         as_of=AS_OF,
@@ -1355,7 +1421,6 @@ async def test_saved_fx_prefill_returns_the_direct_saved_rate_for_a_canonical_pa
     assert dumped["reference_date"] == "2026-09-10"
     assert dumped["source"] == "MANUAL_FX"
     assert dumped["days_before_requested"] == 5
-    assert currencies == {"EUR", "USD"}
     assert issues == []
 
 
@@ -1391,7 +1456,7 @@ async def test_saved_fx_missing_invalid_and_no_chaining_are_explicit(
     )
     issues = []
 
-    rows, _currencies = await source._build_planner_fx_quotes(
+    rows = await source._build_planner_fx_quotes(
         object(),
         request_pairs=["EUR/JPY"],
         as_of=AS_OF,
@@ -1416,7 +1481,7 @@ async def test_no_fx_prefill_rows_or_database_read_when_no_pairs_requested():
     session = _QueuedReadSession()
     issues = []
 
-    rows, currencies = await source._build_planner_fx_quotes(
+    rows = await source._build_planner_fx_quotes(
         session,
         request_pairs=[],
         as_of=AS_OF,
@@ -1424,7 +1489,6 @@ async def test_no_fx_prefill_rows_or_database_read_when_no_pairs_requested():
     )
 
     assert rows == []
-    assert currencies == set()
     assert session.statements == []
     assert issues == []
 
@@ -1685,7 +1749,7 @@ async def test_wac_contexts_call_canonical_runtime_sequentially_and_keep_fiscal_
 
     monkeypatch.setattr(portfolio_service, "compute_wac_iterative", compute)
     issues = []
-    rows, currencies = await source._build_planner_wac_contexts(
+    rows = await source._build_planner_wac_contexts(
         object(),
         holding_rows=[
             (8, 20, Decimal("2")),
@@ -1736,7 +1800,6 @@ async def test_wac_contexts_call_canonical_runtime_sequentially_and_keep_fiscal_
             "fiscal_currency",
         ),
     }
-    assert currencies == {"EUR"}
 
 
 def _converted_wac_result(*, rate: str = "0.8") -> WACPreviewResultItem:
@@ -1800,7 +1863,7 @@ async def test_wac_fx_evidence_is_exact_deterministic_and_deduplicated(
     )
     issues = []
 
-    rows, currencies = await source._build_planner_wac_contexts(
+    rows = await source._build_planner_wac_contexts(
         object(),
         holding_rows=[(7, 11, Decimal("4"))],
         selected_asset_ids={11},
@@ -1827,7 +1890,6 @@ async def test_wac_fx_evidence_is_exact_deterministic_and_deduplicated(
     assert {issue.code for issue in issues} == {
         "allocation.fiscal_currency_missing",
     }
-    assert currencies == {"EUR", "USD"}
 
 
 @pytest.mark.asyncio
@@ -1900,7 +1962,7 @@ async def test_warm_wac_result_with_changed_saved_fx_fails_closed(
     )
     issues = []
 
-    rows, _currencies = await source._build_planner_wac_contexts(
+    rows = await source._build_planner_wac_contexts(
         object(),
         holding_rows=[(7, 11, Decimal("4"))],
         selected_asset_ids={11},
@@ -1996,7 +2058,6 @@ async def test_complete_saved_domain_copy_is_select_only_private_and_stable(
 
     assert set(dumped) == {
         "snapshot",
-        "currency_specs",
         "provenance",
         "assets",
         "brokers",
@@ -2006,8 +2067,11 @@ async def test_complete_saved_domain_copy_is_select_only_private_and_stable(
         "classifications",
         "wac_contexts",
         "fx_quotes",
+        "current_distribution",
         "issues",
     }
+    # Not requested, so absent as a value — the key stays, serialized as null.
+    assert dumped["current_distribution"] is None
     assert session.pending_results == 0
     assert session.write_calls == []
     assert all(getattr(statement, "is_select", False) for statement in session.statements)
@@ -2065,3 +2129,505 @@ async def test_complete_saved_domain_copy_is_select_only_private_and_stable(
         "0.125000",
     ):
         assert private_value not in private_metadata_json
+
+
+# ---------------------------------------------------------------------------
+# C0b.4 — current_distribution: portfolio-engine market-value weights over the
+# scenario Assets. The engine is replaced at its module attribute, which is where
+# the builder's lazy import resolves it; its positions are real engine rows.
+# ---------------------------------------------------------------------------
+
+CURRENT_WEIGHT_FIELDS = {
+    "weight_id",
+    "asset_id",
+    "held",
+    "weight",
+    "valuation_source",
+    "valuation_reference_date",
+    "valuation_days_before_requested",
+    "valuation_stale",
+}
+VALUED_ON = date(2026, 9, 14)
+
+
+def _position(
+    asset_id: int,
+    *,
+    broker_id: int = 7,
+    quantity: str = "1",
+    market_value: str | None = "100",
+    unit_price: str = "100",
+    valuation_source: ValuationSource = ValuationSource.MARKET_PRICE,
+    reference_date: date | None = VALUED_ON,
+    stale: bool = False,
+    missing_fx_pair: str | None = None,
+    wac: str = "90",
+    cost_basis: str = "90",
+) -> DailyPositionState:
+    value = None if market_value is None else Decimal(market_value)
+    return DailyPositionState(
+        date=AS_OF,
+        broker_id=broker_id,
+        asset_id=asset_id,
+        quantity=Decimal(quantity),
+        valuation_effective_unit_price=Decimal(unit_price),
+        valuation_effective_currency="EUR",
+        valuation_reference_date=reference_date,
+        valuation_reference_unit_price=Decimal(unit_price),
+        valuation_reference_currency="EUR",
+        valuation_source=valuation_source,
+        valuation_split_adjusted=False,
+        valuation_stale=stale,
+        missing_fx_pair=missing_fx_pair,
+        market_value=value,
+        wac=Decimal(wac),
+        wac_currency="EUR",
+        cost_basis=Decimal(cost_basis),
+        unrealized_pnl=None if value is None else value - Decimal(cost_basis),
+    )
+
+
+def _install_engine(monkeypatch, *positions: DailyPositionState) -> list[dict[str, object]]:
+    calls: list[dict[str, object]] = []
+
+    class _RecordingEngine:
+        def __init__(self, session):
+            self._session = session
+
+        async def calculate(self, **kwargs):
+            calls.append({"session": self._session, **kwargs})
+            return SimpleNamespace(position_states_end=list(positions))
+
+    monkeypatch.setattr(portfolio_engine, "PortfolioCalculationEngine", _RecordingEngine)
+    return calls
+
+
+async def _current_distribution_copy(
+    monkeypatch,
+    *,
+    assets: list,
+    positions: tuple[DailyPositionState, ...] = (),
+    broker_ids: tuple[int, ...] = (7,),
+):
+    """Build a copy that requests only current_distribution, through the public builder.
+
+    ``assets`` is the candidate order, as the explicit-scope read returns it
+    (``display_name``, then id).
+    """
+    calls = _install_engine(monkeypatch, *positions)
+    monkeypatch.setattr(source, "utcnow", lambda: CAPTURED_AT)
+    session = _QueuedReadSession(
+        _Rows([(_access(broker_id), _broker(broker_id)) for broker_id in broker_ids]),
+        *([_Rows(scalar_values=assets)] if assets else []),
+    )
+    response = await source.build_portfolio_planner_source(
+        session,
+        user_id=41,
+        request=_request(
+            broker_ids=list(broker_ids),
+            asset_ids=[asset.id for asset in assets],
+            requested_sections=["current_distribution"],
+            fx_pairs=[],
+        ),
+    )
+    assert session.pending_results == 0
+    assert session.write_calls == []
+    return response, calls, session
+
+
+def _weights(response) -> dict[str, Decimal | None]:
+    return {row.asset_id: row.weight for row in response.current_distribution.rows}
+
+
+def _current_weight_issue(asset_id: int, code: str, kind: str, params: list | None = None) -> dict[str, object]:
+    return {
+        "code": code,
+        "kind": kind,
+        "severity": "error",
+        "path": {
+            "kind": "field",
+            "section": "current_distribution",
+            "entity_kind": "current_weight",
+            "entity_id": f"current:asset:{asset_id}",
+            "field": "weight",
+        },
+        "message_key": code,
+        "params": params or [],
+    }
+
+
+@pytest.mark.parametrize(
+    "requested_sections",
+    [
+        pytest.param(["current_distribution"], id="alone"),
+        pytest.param(["assets", "current_distribution"], id="with-assets"),
+    ],
+)
+def test_current_distribution_requires_an_explicit_asset_scenario(requested_sections):
+    with pytest.raises(ValidationError, match="current_distribution requires an explicit asset_ids scenario"):
+        _request(asset_ids=None, requested_sections=requested_sections, fx_pairs=[])
+
+    assert _request(asset_ids=[], requested_sections=requested_sections, fx_pairs=[]).asset_ids == []
+
+
+@pytest.mark.asyncio
+async def test_current_distribution_splits_equal_thirds_by_largest_remainder_lowest_id_first(
+    monkeypatch,
+):
+    # Candidate order is display_name order, deliberately not id order.
+    assets = [_asset(13, name="Alpha"), _asset(11, name="Bravo"), _asset(12, name="Charlie")]
+    response, _calls, _session = await _current_distribution_copy(
+        monkeypatch,
+        assets=assets,
+        positions=(_position(11), _position(12), _position(13)),
+    )
+    dumped = response.model_dump(mode="json")
+    section = dumped["current_distribution"]
+
+    assert {key: section[key] for key in ("status", "method", "rounding", "weight_quantum", "as_of", "provenance_id")} == {
+        "status": "complete",
+        "method": "portfolio_engine_market_value",
+        "rounding": "largest_remainder",
+        "weight_quantum": "0.0001",
+        "as_of": "2026-09-15",
+        "provenance_id": "source:portfolio-engine",
+    }
+    assert [(row["asset_id"], row["weight_id"], row["weight"]) for row in section["rows"]] == [
+        ("asset:13", "current:asset:13", "0.3333"),
+        ("asset:11", "current:asset:11", "0.3334"),
+        ("asset:12", "current:asset:12", "0.3333"),
+    ]
+    assert sum(_weights(response).values(), Decimal("0")) == 1
+    engine_provenance = next(row for row in dumped["provenance"] if row["provenance_id"] == "source:portfolio-engine")
+    assert engine_provenance == {
+        "provenance_id": "source:portfolio-engine",
+        "kind": "domain_copy",
+        "domain": "portfolio",
+        "source_ref": "portfolio_engine.PortfolioCalculationEngine",
+        "source_label": None,
+        "captured_at": "2026-09-15T12:30:00Z",
+    }
+    assert dumped["issues"] == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("values", "expected"),
+    [
+        pytest.param(
+            {11: "4", 12: "2", 13: "1"},
+            # Floors 5714/2857/1428 leave one unit; the largest remainder (4/7 on
+            # asset 13) takes it even though asset 11 has the lowest id.
+            {11: "0.5714", 12: "0.2857", 13: "0.1429"},
+            id="one-two-four-sevenths",
+        ),
+        pytest.param(
+            dict.fromkeys(range(11, 18), "1"),
+            # Seven equal remainders: the four missing units go to the lowest ids.
+            {11: "0.1429", 12: "0.1429", 13: "0.1429", 14: "0.1429", 15: "0.1428", 16: "0.1428", 17: "0.1428"},
+            id="seven-equal-sevenths",
+        ),
+    ],
+)
+async def test_current_distribution_sevenths_sum_to_exactly_one(
+    monkeypatch,
+    values,
+    expected,
+):
+    response, _calls, _session = await _current_distribution_copy(
+        monkeypatch,
+        assets=[_asset(asset_id, name=f"Asset {asset_id}") for asset_id in values],
+        positions=tuple(_position(asset_id, market_value=value) for asset_id, value in values.items()),
+    )
+
+    assert response.current_distribution.status == "complete"
+    assert _weights(response) == {f"asset:{asset_id}": Decimal(weight) for asset_id, weight in expected.items()}
+    assert sum(_weights(response).values(), Decimal("0")) == 1
+
+
+@pytest.mark.asyncio
+async def test_current_distribution_sums_values_per_asset_across_owner_brokers(
+    monkeypatch,
+):
+    response, calls, session = await _current_distribution_copy(
+        monkeypatch,
+        broker_ids=(7, 9),
+        assets=[_asset(11), _asset(12)],
+        positions=(
+            _position(11, broker_id=9, market_value="10"),
+            _position(12, broker_id=9, market_value="60"),
+            _position(11, broker_id=7, market_value="30"),
+        ),
+    )
+
+    assert _weights(response) == {"asset:11": Decimal("0.4"), "asset:12": Decimal("0.6")}
+    # Same call as the portfolio summary: whole history up to as_of, request currency.
+    assert calls == [
+        {
+            "session": session,
+            "user_id": 41,
+            "broker_ids": [7, 9],
+            "date_from": None,
+            "date_to": AS_OF,
+            "target_currency": "EUR",
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_current_distribution_engine_scope_is_the_sorted_owner_broker_set(
+    monkeypatch,
+):
+    calls = _install_engine(monkeypatch, _position(11, broker_id=9))
+    session = object()
+    issues = []
+
+    distribution = await source._build_planner_current_distribution(
+        session,
+        user_id=41,
+        broker_ids=[9, 7],
+        scenario_asset_ids=[11],
+        as_of=AS_OF,
+        target_currency="USD",
+        issues=issues,
+    )
+
+    assert calls == [
+        {
+            "session": session,
+            "user_id": 41,
+            "broker_ids": [7, 9],
+            "date_from": None,
+            "date_to": AS_OF,
+            "target_currency": "USD",
+        }
+    ]
+    assert distribution.status == "complete"
+    assert issues == []
+
+
+@pytest.mark.asyncio
+async def test_current_distribution_excludes_dust_unselected_assets_and_weights_unheld_at_zero(
+    monkeypatch,
+):
+    response, _calls, _session = await _current_distribution_copy(
+        monkeypatch,
+        assets=[_asset(11), _asset(12), _asset(13)],
+        positions=(
+            _position(11, market_value="50"),
+            # At the dust threshold the summary counts the position as closed.
+            _position(12, quantity=str(portfolio_service._QUANTITY_DUST_THRESHOLD), market_value="1000"),
+            # Held but outside the scenario: never part of the denominator.
+            _position(99, market_value="5000"),
+        ),
+    )
+    rows = {row["asset_id"]: row for row in response.model_dump(mode="json")["current_distribution"]["rows"]}
+
+    assert response.current_distribution.status == "complete"
+    assert _weights(response) == {"asset:11": Decimal("1"), "asset:12": Decimal("0"), "asset:13": Decimal("0")}
+    assert set(rows) == {"asset:11", "asset:12", "asset:13"}
+    for unheld in ("asset:12", "asset:13"):
+        assert rows[unheld]["held"] is False
+        assert rows[unheld]["valuation_source"] is None
+        assert rows[unheld]["valuation_reference_date"] is None
+        assert rows[unheld]["valuation_days_before_requested"] is None
+        assert rows[unheld]["valuation_stale"] is False
+    assert rows["asset:11"]["held"] is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("unvalued", "expected_code", "expected_params"),
+    [
+        pytest.param(
+            (_position(12, market_value=None, valuation_source=ValuationSource.MISSING, reference_date=None),),
+            "allocation.price_missing",
+            [],
+            id="no-price",
+        ),
+        pytest.param(
+            (_position(12, market_value=None, valuation_source=ValuationSource.MISSING, reference_date=None, missing_fx_pair="USD/EUR"),),
+            "allocation.price_missing",
+            [],
+            id="no-price-with-a-pair-is-still-a-price-gap",
+        ),
+        pytest.param(
+            (_position(12, market_value=None, missing_fx_pair="USD/EUR"),),
+            "allocation.saved_fx_missing",
+            [{"kind": "text", "name": "pair", "value": "EUR/USD"}],
+            id="fx-gap-inverted-pair-is-canonical",
+        ),
+        pytest.param(
+            (_position(12, market_value=None, valuation_source=ValuationSource.LAST_TRADE_PRICE, missing_fx_pair="EUR/JPY"),),
+            "allocation.saved_fx_missing",
+            [{"kind": "text", "name": "pair", "value": "EUR/JPY"}],
+            id="fx-gap-on-last-trade-price",
+        ),
+        pytest.param(
+            (
+                _position(12, broker_id=7, market_value="25"),
+                _position(12, broker_id=9, market_value=None, valuation_source=ValuationSource.MISSING, reference_date=None),
+            ),
+            "allocation.price_missing",
+            [],
+            id="one-unvalued-broker-row",
+        ),
+    ],
+)
+async def test_current_distribution_unvalued_held_asset_withholds_every_weight(
+    monkeypatch,
+    unvalued,
+    expected_code,
+    expected_params,
+):
+    response, _calls, _session = await _current_distribution_copy(
+        monkeypatch,
+        broker_ids=(7, 9),
+        assets=[_asset(11), _asset(12)],
+        positions=(_position(11, market_value="75"), *unvalued),
+    )
+    dumped = response.model_dump(mode="json")
+
+    assert response.current_distribution.status == "incomplete"
+    assert _weights(response) == {"asset:11": None, "asset:12": None}
+    assert all(row["held"] is True for row in dumped["current_distribution"]["rows"])
+    assert dumped["issues"] == [_current_weight_issue(12, expected_code, "missing", expected_params)]
+
+
+@pytest.mark.asyncio
+async def test_current_distribution_negative_value_is_an_invalid_price(
+    monkeypatch,
+):
+    response, _calls, _session = await _current_distribution_copy(
+        monkeypatch,
+        assets=[_asset(11), _asset(12)],
+        positions=(_position(11, market_value="75"), _position(12, market_value="-5")),
+    )
+    dumped = response.model_dump(mode="json")
+
+    assert response.current_distribution.status == "incomplete"
+    assert _weights(response) == {"asset:11": None, "asset:12": None}
+    assert dumped["issues"] == [_current_weight_issue(12, "allocation.nonpositive_price", "invalid")]
+
+
+@pytest.mark.asyncio
+async def test_current_distribution_accepts_a_zero_valued_held_asset(
+    monkeypatch,
+):
+    response, _calls, _session = await _current_distribution_copy(
+        monkeypatch,
+        assets=[_asset(11), _asset(12)],
+        positions=(_position(11, market_value="0"), _position(12, market_value="80")),
+    )
+
+    assert response.current_distribution.status == "complete"
+    assert _weights(response) == {"asset:11": Decimal("0"), "asset:12": Decimal("1")}
+    assert [row.held for row in response.current_distribution.rows] == [True, True]
+    assert response.issues == []
+
+
+@pytest.mark.asyncio
+async def test_current_distribution_with_no_positive_value_is_no_holdings(
+    monkeypatch,
+):
+    response, _calls, _session = await _current_distribution_copy(
+        monkeypatch,
+        assets=[_asset(11), _asset(12)],
+        positions=(_position(11, market_value="0"),),
+    )
+
+    assert response.current_distribution.status == "no_holdings"
+    assert _weights(response) == {"asset:11": None, "asset:12": None}
+    assert [row.held for row in response.current_distribution.rows] == [True, False]
+    assert response.issues == []
+
+
+@pytest.mark.asyncio
+async def test_current_distribution_of_an_empty_scenario_is_no_holdings_without_rows(
+    monkeypatch,
+):
+    response, _calls, session = await _current_distribution_copy(
+        monkeypatch,
+        assets=[],
+        positions=(_position(11, market_value="500"),),
+    )
+
+    assert response.current_distribution.status == "no_holdings"
+    assert response.current_distribution.rows == []
+    assert response.issues == []
+    # Only the Broker authorization read: an empty scenario reads no Asset row.
+    assert len(session.statements) == 1
+
+
+@pytest.mark.asyncio
+async def test_current_distribution_passes_valuation_facts_through(
+    monkeypatch,
+):
+    response, _calls, _session = await _current_distribution_copy(
+        monkeypatch,
+        broker_ids=(7, 9),
+        assets=[_asset(11), _asset(12)],
+        positions=(
+            _position(11, broker_id=9, valuation_source=ValuationSource.LAST_TRADE_PRICE, reference_date=date(2026, 9, 12), stale=True),
+            _position(11, broker_id=7, valuation_source=ValuationSource.LAST_TRADE_PRICE, reference_date=date(2026, 9, 12), stale=False),
+            _position(12, broker_id=7, reference_date=AS_OF),
+        ),
+    )
+    rows = {row["asset_id"]: row for row in response.model_dump(mode="json")["current_distribution"]["rows"]}
+
+    assert {key: rows["asset:11"][key] for key in CURRENT_WEIGHT_FIELDS - {"weight"}} == {
+        "weight_id": "current:asset:11",
+        "asset_id": "asset:11",
+        "held": True,
+        "valuation_source": "LAST_TRADE_PRICE",
+        "valuation_reference_date": "2026-09-12",
+        "valuation_days_before_requested": 3,
+        # Stale when any Broker row is stale.
+        "valuation_stale": True,
+    }
+    assert {key: rows["asset:12"][key] for key in CURRENT_WEIGHT_FIELDS - {"weight"}} == {
+        "weight_id": "current:asset:12",
+        "asset_id": "asset:12",
+        "held": True,
+        "valuation_source": "MARKET_PRICE",
+        "valuation_reference_date": "2026-09-15",
+        "valuation_days_before_requested": 0,
+        "valuation_stale": False,
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "second_asset_value",
+    [
+        pytest.param("2468.135790", id="complete"),
+        pytest.param(None, id="incomplete-with-issue"),
+    ],
+)
+async def test_current_distribution_publishes_weights_never_amounts(
+    monkeypatch,
+    second_asset_value,
+):
+    crafted = {
+        "market_value": "12345.678901",
+        "quantity": "7.654321",
+        "unit_price": "1612.917373",
+        "wac": "987.654321",
+        "cost_basis": "7559.012345",
+    }
+    response, _calls, _session = await _current_distribution_copy(
+        monkeypatch,
+        assets=[_asset(11), _asset(12)],
+        positions=(
+            _position(11, **crafted),
+            _position(12, quantity="3.141593", market_value=second_asset_value, unit_price="785.643210", missing_fx_pair=None if second_asset_value else "USD/EUR"),
+        ),
+    )
+    dumped = response.model_dump(mode="json")
+    section = dumped["current_distribution"]
+
+    assert set(section) == {"status", "method", "rounding", "weight_quantum", "as_of", "provenance_id", "rows"}
+    assert all(set(row) == CURRENT_WEIGHT_FIELDS for row in section["rows"])
+    published = json.dumps({"current_distribution": section, "issues": dumped["issues"]})
+    for amount in (*crafted.values(), "4786.666556", "3.141593", "785.643210", "2468.135790"):
+        assert amount not in published

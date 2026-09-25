@@ -73,7 +73,7 @@ the planner used to call ``conclude_infeasible_from_conflicts`` and
 evaluator's *internal* conflict codes (e.g. ``ORDER_REQUIRED_MIN``), which are
 not members of the wire ``PlannerIssueCode`` enum — so it raised too. The
 planner no longer calls that path: ``DeterministicConflictWitness.issue_codes``
-is ``list[PlannerIssueCode]`` (the frozen 80-value ``allocation.*`` universe)
+is ``list[PlannerIssueCode]`` (the frozen 79-value ``allocation.*`` universe)
 while ``ExactEvaluation.conflict_codes`` carries exact-domain codes such as
 ``ORDER_REQUIRED_MIN``. Two different vocabularies, and no bridge should be
 invented: a normalization-time statement about *declared inputs* and an
@@ -494,7 +494,7 @@ def test_deterministic_conflict_is_not_emitted(noop_result, incumbent_result):
     """FIX B: ``deterministic_conflict`` is never published in phase 1.
 
     ``DeterministicConflictWitness.issue_codes`` is ``list[PlannerIssueCode]``
-    (the frozen 80-value ``allocation.*`` wire universe) while
+    (the frozen 79-value ``allocation.*`` wire universe) while
     ``ExactEvaluation.conflict_codes`` carries exact-domain codes such as
     ``ORDER_REQUIRED_MIN``. Two different vocabularies, and no bridge should be
     invented: a normalization-time statement about *declared inputs* and an
@@ -717,4 +717,67 @@ def test_solver_route_carries_reported_floating_evidence(monkeypatch, payload_bu
     assert len(evidence.stages) >= 1
     unfinished = any(stage.status == "unfinished" for stage in evidence.stages)
     assert (result.stop_reason == "completed") == (not unfinished)
+    _revalidate(result)
+
+
+# --------------------------------------------------------------------------
+# C0b.1 — currency quanta come from babel, never from the request; C0b.3 — an
+# exposure total above one is an invalid *result*. Both end to end through the
+# service (the normalizer-level cases live in test_pac_planner_normalize.py).
+# --------------------------------------------------------------------------
+def _exposure_total_above_one_payload() -> dict:
+    """The fixture Asset with its sector exposure split 0.7 + 0.5 = 1.2."""
+    payload = _pac_request()
+    asset = next(row for row in payload["assets"] if row["asset_id"] == "asset-one")
+    sector = next(row for row in asset["exposures"] if row["dimension"] == "sector")
+    sector["weight"] = "0.7"
+    asset["exposures"].append({**copy.deepcopy(sector), "category_id": "tech", "label": "Tech", "weight": "0.5"})
+    return payload
+
+
+def test_exposure_total_above_one_is_an_invalid_result_not_a_failure():
+    result = plan_pac_allocation(_validated(_exposure_total_above_one_payload()))
+
+    assert isinstance(result, PacPlannerInvalidResult)
+    assert (result.result_state, result.availability) == ("invalid", "invalid")
+    assert [issue.model_dump(mode="json") for issue in result.issues] == [
+        {
+            "code": "allocation.exposure_total_exceeds_one",
+            "severity": "error",
+            "kind": "invalid",
+            "path": {"kind": "field", "section": "assets", "entity_kind": "asset", "entity_id": "asset-one", "field": "exposures.weight"},
+            "message_key": "allocation.exposure_total_exceeds_one",
+            "params": [{"kind": "text", "name": "dimension", "value": "sector"}],
+        }
+    ]
+    _revalidate(result)
+
+
+def test_manual_only_scenario_plans_without_any_currency_input(noop_result, incumbent_result):
+    """No copy and no currency table: the quantum is derived, so both ready paths run."""
+    payload = _pac_request()
+    assert "currency_specs" not in payload
+    assert {record["kind"] for record in payload["provenance"]} == {"manual"}
+
+    for result, state in ((noop_result, "ready_no_op"), (incumbent_result, "ready_incumbent")):
+        assert result.result_state == state
+        assert result.proof.kind == "optimal_proven"
+        assert result.model_dump(mode="json")["catalogs"]["currencies"] == [{"currency": "EUR", "minor_unit": "0.01"}]
+
+
+def test_currency_catalog_publishes_the_babel_quantum_of_every_referenced_currency():
+    payload = _incumbent_payload()
+    # Rates only reference JPY and KWD: enough to put them in the scenario.
+    payload["fx_rates"] = {"EUR/JPY": "160", "EUR/KWD": "0.33"}
+
+    result = plan_pac_allocation(_validated(payload))
+
+    assert isinstance(result, PacPlannerReadyIncumbentResult)
+    assert result.proof.kind == "optimal_proven"
+    # Sorted by code; zero, two and three CLDR digits respectively.
+    assert result.model_dump(mode="json")["catalogs"]["currencies"] == [
+        {"currency": "EUR", "minor_unit": "0.01"},
+        {"currency": "JPY", "minor_unit": "1"},
+        {"currency": "KWD", "minor_unit": "0.001"},
+    ]
     _revalidate(result)
