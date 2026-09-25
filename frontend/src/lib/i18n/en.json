@@ -3220,7 +3220,8 @@
       "worker_busy": "The calculation service is busy. Try again shortly.",
       "execution_timeout": "The calculation took too long and was stopped.",
       "optimization_infeasible": "No allocation satisfies the requested constraints.",
-      "unknown": "This measurement did not return a result."
+      "unknown": "This measurement did not return a result.",
+      "answer_discarded": "The answer was set aside because the data changed while it was arriving. Run the analysis again."
     },
     "warnings": {
       "sharpe_undefined": "Sharpe is undefined because volatility is zero.",

@@ -3220,7 +3220,8 @@
       "worker_busy": "Il servizio di calcolo è occupato. Riprova tra poco.",
       "execution_timeout": "Il calcolo ha richiesto troppo tempo ed è stato interrotto.",
       "optimization_infeasible": "Nessuna allocazione soddisfa i vincoli richiesti.",
-      "unknown": "Questa misurazione non ha restituito un risultato."
+      "unknown": "Questa misurazione non ha restituito un risultato.",
+      "answer_discarded": "La risposta è stata scartata perché i dati sono cambiati mentre arrivava. Rilancia l'analisi."
     },
     "warnings": {
       "sharpe_undefined": "Sharpe non definito perché la volatilità è zero.",

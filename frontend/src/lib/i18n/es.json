@@ -3220,7 +3220,8 @@
       "worker_busy": "El servicio de cálculo está ocupado. Vuelve a intentarlo en breve.",
       "execution_timeout": "El cálculo tardó demasiado y se detuvo.",
       "optimization_infeasible": "Ninguna asignación cumple las restricciones solicitadas.",
-      "unknown": "Esta medición no devolvió ningún resultado."
+      "unknown": "Esta medición no devolvió ningún resultado.",
+      "answer_discarded": "La respuesta se descartó porque los datos cambiaron mientras llegaba. Vuelve a lanzar el análisis."
     },
     "warnings": {
       "sharpe_undefined": "Sharpe no está definido porque la volatilidad es cero.",
