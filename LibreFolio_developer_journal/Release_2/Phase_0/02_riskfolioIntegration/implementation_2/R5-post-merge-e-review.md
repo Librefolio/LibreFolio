@@ -1077,7 +1077,7 @@ mostra, non decide.
 | C3 | avviso forte quando l'escluso supera metà portafoglio: `historical_replay_mostly_excluded` con la quota coperta; soglia `REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE = 0.5` nel modulo delle soglie | `data_quality_thresholds.py`, `risk_plugins/stress.py`, cataloghi i18n | ✅ 24/09 · test ✅ |
 | C4 | test (test-author), runner, `api sync`, journal | 6 file di test (nessuno nuovo, runner invariato) | ✅ 24/09 |
 | F1 | avvisi tradotti: chiave e parametri del backend; se manca la traduzione, il testo originale — mai una chiave grezza | `levels/warningSentence.ts` (nuovo), `levels/levelHelpers.ts`, `RiskResultFrame.svelte`, `levels/RiskLevelsPanel.svelte` | ✅ 24/09 |
-| F2 | un solo avviso di parzialità in cima al pannello, ogni causa una volta; sotto i livelli solo gli errori | `levels/RiskLevelsPanel.svelte` (non `RiskLevelSection`, che è di F) | ⏳ |
+| F2 | un solo avviso di parzialità in cima al pannello, ogni causa una volta; sotto i livelli solo gli errori | `levels/RiskLevelsPanel.svelte` (non `RiskLevelSection`, che è di F) | ✅ 25/09 (con la parte non-replay di F7) |
 | F3 | replay: via il blocco «escludi e riprova»; esclusi per motivo con nomi e peso; avviso forte (C3); «niente da simulare»; `DateRangePicker` senza pulsanti rapidi; pulsante del periodo comune (C2), con la nota «solo una parte della crisi» nelle crisi del catalogo | `levels/l4/L4Replay.svelte`, `levels/l4/scenarioHelpers.ts` | ⏳ **dopo F → Risk** (decisione del developer, 25/09) |
 | F4 | benchmark: non ammissibili grigi con il motivo, con avviso selezionabili e segnalati; cambia col periodo — **dopo la fusione F → Risk**, con le chiavi `risk.eligibility.*` di F (proposta al coordinator) | `levels/L3Benchmark.svelte` | ⏳ |
 | F5 | test delle palette che leggono i colori dai grafici veri; puntatori per contenuto, non per riga | test di `AllocationPieChart` / `AllocationHistoryChart` (solo lettura dei `.svelte`) | ⏳ |
@@ -1279,6 +1279,7 @@ owner d'integrazione del ramo combinato.
 | K6 | `held_by_me` / `held_by_others`: soglia di polvere del portafoglio (0,00001) invece di 1e-9 | `asset_sources/crud.py`, `data_quality_thresholds.py` | nessuno oggi (F non li usa); il coordinator lo avvisa |
 | K7 | (frontend, F9) risposta scartata: nuova richiesta una volta, poi `controller.discarded[analisi]`; `discardedErrorCodes(...)` e `ANSWER_DISCARDED_CODE`; frase `risk.errors.answer_discarded` | `riskPanelController.svelte.ts`, `levels/RiskLevelsPanel.svelte`, cataloghi | **`AssetSetReplaySection` di F** (la pagina del polling D11) monta `L4Replay` con un controller suo e passa al suo `RiskLevelSection` nessun `errorCodes`: senza, un replay scartato due volte lì sparisce ancora → a F → Risk aggiungo `errorCodes={discardedErrorCodes(controller.discarded, ['replay'])}` |
 | K8 | (frontend, F1) `resultReasons(results, translate?)` e `warningSentence(...)`: le frasi dalla chiave e dai parametri del backend; senza traduttore l'uscita resta identica | `levels/levelHelpers.ts`, `RiskResultFrame.svelte` | le sezioni di Asset Global di F (`AssetSetCorrelationSection`, `AssetSetReplaySection`, `AssetSetComparisonLevels`) chiamano con un argomento: a F → Risk passo loro `$t`; e la doc delle prop `reasons` di `RiskLevelSection` (che F ha modificato: non la tocco prima) dice ancora «verbatim» → da riscrivere lì |
+| K9 | (frontend, F2) `analyticNameKey(code)` in `levels/partialNotice.ts` duplica la funzione locale `analyticName` di `RiskLevelSection` | `levels/partialNotice.ts` | a F → Risk, `RiskLevelSection` (di F) può adottarla, così le due regole non divergono |
 
 ### C — i test del checkpoint · ✅ 24/09/2026
 
@@ -1464,3 +1465,53 @@ server della copia di prod è stato spento):
 > prettier pulito sugli 8 file · `svelte-check` nulla sui file toccati · audit i18n: 3432 chiavi, 0 incomplete,
 > `risk.errors.answer_discarded` non figura fra le inutilizzate (`risk.errors` è un prefisso dinamico) · nessun
 > importo reale, nessuna password.
+
+### F9 — committato · 25/09/2026
+
+> `b02f49727` → `48a14ed0a` → `9e9c19c8f` → `296a50ae9`, su `0fb96a163`: 2 + 4 + 2 + 1 = 9 file, albero pulito,
+> letti da me. Storia condivisa da qui.
+
+### F2 — un solo avviso in cima (L1–L3) · ✅ 25/09/2026
+
+> **Note implementazione**: il design (preparato durante il `FROZEN` di F9) mette in cima, sotto l'avviso del
+> backtest, un riquadro unico con le misure parziali di L1–L3 (per istanza: i due VaR restano distinti) e le loro
+> ragioni, una volta per frase e contate una volta per istanza (`historical_kpi` alimenta L1 e L3); sotto i livelli
+> restano solo gli errori, col nome dell'analisi. Due titoli: «Alcuni risultati sono parziali» se qualcosa lo è,
+> altrimenti «Da sapere su questi risultati» (una nota su un risultato completo resta da leggere). L4 invariato:
+> lo mostro al developer sugli screenshot. `RiskLevelSection` (di F) non si tocca: cambia solo cosa gli passa il
+> pannello. Il test E2E che fissava le ragioni sotto ogni livello va riscritto: la regola nuova la chiede il
+> developer (decisione del 24/09, punto 3).
+
+> **Rosso prima della cura** (test-author): `partialNotice.test.ts` e `RiskPartialNotice.test.ts` nuovi (modulo e
+> componente mancanti), l'E2E riscritto — ora «a partial measurement and every warning are disclosed once, in one
+> notice above the levels» — rosso sulla prima asserzione dell'avviso dopo le barriere, e l'aggiunta al test
+> «per-analytic unavailable state remains isolated» rossa sulla parte dell'avviso; gli altri test verdi.
+> Registrati nel runner in coda alle voci esistenti. L'E2E controlla anche che l'avviso venga *prima* di L1.
+>
+> **Cura**: `levels/partialNotice.ts` (`uniqueByInstance`, `partialNotice`, `levelErrorHealth`,
+> `analyticNameKey`), `levels/RiskPartialNotice.svelte`, e in `RiskLevelsPanel` l'avviso calcolato dalle stesse
+> fette dei livelli e messo per primo; L1–L3 ricevono solo la salute degli errori e nessuna ragione; L4 invariato.
+> Due chiavi nuove (`risk.levels.notice.partialTitle`, `.notesTitle`), 4 lingue via `dev.py i18n`. Prova locale:
+> 22 ✓; `svelte-check` nulla sui file toccati.
+>
+> **⚠️ Fuori pista — una lacuna di L3 che precede F2** (trovata da test-author): la scheda di L3 preferisce il
+> `historical_kpi` della **composizione attuale** (`selectKpiWave`) e il grafico usa `asset_risk_return` della
+> stessa onda, ma né la vecchia salute di L3 né il nuovo avviso li leggono: un risultato parziale lì non viene
+> detto da nessuna parte. Le istanze hanno id distinti (`base-current_composition-…`), quindi la cura è facile, ma
+> richiede un'etichetta nuova a schermo per distinguere i due «Indicatori storici» → **F2b**, da decidere col
+> developer sugli screenshot. Altre note: una frase su un risultato *non disponibile* finirebbe in cima mentre il
+> suo stato resta sotto il livello (nessuna fixture lo produce oggi); `analyticNameKey` duplica la funzione di
+> `RiskLevelSection` → K9.
+
+> **Verde e mutanti** (test-author): `risk-levels-unit` 240 ✓ · `risk-levels-component` 19 ✓ ·
+> `risk-frame-component` 13 ✓ · `risk-controller-unit` 54 ✓ · E2E `risk` 13 ✓ (bundle servito controllato:
+> l'avviso c'è, le ragioni per livello no) · E2E `risk-asset-detail` 2 ✓. Dieci mutanti, tutti presi dal test
+> pensato per ciascuno — i tre del pannello solo dall'E2E, che è l'unico a montarlo (ricostruito dal pannello
+> mutato a ogni giro, poi dai sorgenti ripristinati). Il titolo ora ha un suo `data-testid`, e il test del
+> componente lo confronta per uguaglianza esatta.
+>
+> **Verifica mia, corsia 6152**: le cinque categorie unit/componenti sopra più `risk-unit` 17 ✓ ed E2E `risk`
+> 13 ✓ · `check-orphans`: i due test nuovi registrati, restano i 5 orfani di privacy · prettier pulito sui 10
+> file · `svelte-check` nulla sui file toccati · audit i18n: 3434 chiavi, 0 incomplete, le due chiavi nuove non
+> figurano fra le inutilizzate · il runner cambia solo per aggiunte (ruff 19 come `HEAD`) · nessun importo reale,
+> nessuna password.
