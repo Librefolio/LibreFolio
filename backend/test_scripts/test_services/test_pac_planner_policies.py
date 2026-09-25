@@ -508,11 +508,11 @@ def test_funding_activation_constraint_boundary() -> None:
 
 def test_fee_epigraph_floor_and_linear_boundary() -> None:
     """The floor/linear part of the fee epigraph (no cap in play here -- the
-    cap-oblivious Big-M regression is its own test below): at a quantity
-    where the floor binds, the fee variable cannot go below the floor; at a
-    quantity where the linear term exceeds the floor, it cannot go below the
-    linear value either. Both boundaries also match the Decimal-exact
-    replay, since neither hits the documented cap gap.
+    cap has its own tests below, `test_fee_epigraph_cap_boundary` and
+    `test_fee_epigraph_cap_exact`): at a quantity where the floor binds, the
+    fee variable cannot go below the floor; at a quantity where the linear
+    term exceeds the floor, it cannot go below the linear value either. Both
+    boundaries also match the Decimal-exact replay.
     """
     scenario = _pac_scenario(price=R(10), fee_rate=R(1, 10), fee_floor=R(5), fee_cap=None, route_cap=R(10), cash=R(1000))
     view = build_exact_policy_view(scenario)
@@ -601,16 +601,79 @@ def test_fee_epigraph_floor_above_linear_upper_boundary(fixed_fee, fee_rate, fee
     assert "NO_SHORT_OR_LEVERAGE" in over_budget_evaluation.conflict_codes
 
 
-def test_fee_epigraph_cap_oblivious_regression() -> None:
-    """Documented, deliberate modelling gap (see `constraints.py`'s module
-    docstring): the fee epigraph's own upper bound (used only for its
-    Big-M) is cap-oblivious -- `rate * notional_upper`, ignoring
-    `maximum_fee` entirely. This can never cause false infeasibility and
-    never corrupts the reported/replayed fee, but it does mean: for a BUY
-    route whose cap actually binds at the route's own notional, SCIP's own
-    `buy_fee` value (when that route's fee alone is minimized) is HIGHER
-    than the true Decimal-exact replayed fee. This test locks in exactly
-    that gap as a real regression, not merely as prose.
+@pytest.mark.parametrize(
+    ("fixed_fee", "fee_rate", "fee_floor", "fee_cap"),
+    [
+        pytest.param(ZERO, R(1, 10), ZERO, R(3, 2), id="rate-10pct-cap-1.50"),
+        pytest.param(ZERO, R(1, 10), R(6, 5), R(3, 2), id="floor-1.20-rate-10pct-cap-1.50"),
+        pytest.param(R(1, 2), R(1, 10), ZERO, R(3, 2), id="fixed-0.50-rate-10pct-cap-1.50"),
+    ],
+)
+def test_fee_epigraph_cap_boundary(fixed_fee, fee_rate, fee_floor, fee_cap) -> None:
+    """QX1-a regression (found 2026-09-24): a fee cap that binds inside the
+    route's own range, `rate * notional_upper > cap`. The epigraph ignored
+    `maximum_fee`: its linear row `fee >= fixed + rate * notional - big_m *
+    (1 - active)` was always on, so past the cap it demanded more than
+    `calculate_fee` charges -- at 9 units `fixed + EUR9` instead of `fixed +
+    cap`. The posted fee is debited in the ledger, so the model also excluded
+    plans the replay accepts. Since QX1-a the cap is modelled exactly (a
+    binary per capped route, linear branch or flat cap branch): the minimal
+    fee the model admits is `calculate_fee` at every notional, minimum and
+    cap included.
+
+    EUR100 of cash at EUR10 a unit, 10% (EUR1 of linear fee a unit) capped at
+    EUR1.50. Shapes: the cap alone; a EUR1.20 minimum under it, so the floor
+    binds at 1 unit and the cap from 2; and a EUR0.50 fixed fee, so the Big-M
+    of the cap branch must still carry `fixed`. The exact replay is checked
+    first, as ground truth; then each boundary is pinned both ways (the fee
+    reaches `calculate_fee`, and not one cent less). The red core is the q=9
+    pin at `fixed + cap`: infeasible while the cap was ignored.
+    """
+    scenario = _pac_scenario(price=R(10), cash=R(100), fixed_fee=fixed_fee, fee_rate=fee_rate, fee_floor=fee_floor, fee_cap=fee_cap, route_cap=R(100))
+    view = build_exact_policy_view(scenario)
+    route_id = "route:buy:a"
+    decision_id = exact_decision_id("buy_quantum", route_id)
+    # `calculate_fee` by hand, in exact ratios, for a nonzero order: `fixed + clamp(rate * notional, floor, cap)`.
+    expected_fee = {quanta: fixed_fee + min(max(fee_rate * R(10) * quanta, fee_floor), fee_cap) for quanta in (1, 9)}
+
+    # Preconditions, verified rather than assumed: at the route's own upper
+    # bound (10 units, EUR100) the linear fee is above the cap, so the cap can
+    # bind in this route; at 1 unit the fee is below `fixed + cap`, at 9 it is
+    # exactly `fixed + cap`.
+    access = next(d for d in view.decisions if d.decision_id == decision_id)
+    assert access.upper_quanta == 10
+    assert fee_rate * R(10) * access.upper_quanta > fee_cap
+    assert expected_fee[1] < fixed_fee + fee_cap
+    assert expected_fee[9] == fixed_fee + fee_cap
+
+    # Ground truth first: the exact replay charges `expected_fee` on both orders, and both fit the EUR100.
+    for quanta, fee in expected_fee.items():
+        candidate = _candidate(view, {decision_id: quanta}, candidate_id=f"candidate:fee-cap-boundary-{quanta}")
+        evaluation = evaluate_exact_candidate(scenario, view, candidate)
+        assert evaluation.feasible is True
+        order_evaluation = next(o for o in evaluation.orders if o.route_id == route_id)
+        assert order_evaluation.exact_fee == fee
+
+    # Order off: the fee sits at zero -- whatever the cap adds switches off with the order.
+    assert _pinned_status(scenario, view, quanta={decision_id: 0}, buy_fee={route_id: 0.0}) == "optimal"
+
+    # q=1 (EUR10): below the cap; the fee reaches `calculate_fee` and not one cent less.
+    assert _pinned_status(scenario, view, quanta={decision_id: 1}, buy_fee={route_id: as_float(expected_fee[1])}) == "optimal"
+    assert _pinned_status(scenario, view, quanta={decision_id: 1}, buy_fee={route_id: as_float(expected_fee[1] - CENT)}) == "infeasible"
+
+    # q=9 (EUR90): the cap binds; the fee reaches `fixed + cap`. The core of
+    # QX1-a -- this was infeasible, the linear row demanded `fixed + EUR9`.
+    assert _pinned_status(scenario, view, quanta={decision_id: 9}, buy_fee={route_id: as_float(expected_fee[9])}) == "optimal"
+    # ... and not one cent less: the cap branch is still a floor at `fixed + cap`.
+    assert _pinned_status(scenario, view, quanta={decision_id: 9}, buy_fee={route_id: as_float(expected_fee[9] - CENT)}) == "infeasible"
+
+
+def test_fee_epigraph_cap_exact() -> None:
+    """QX1-a regression (found 2026-09-24): the fee epigraph used to ignore
+    the cap (`maximum_fee`). With one order of EUR100 at 10% capped at EUR2,
+    minimizing that route's fee alone, SCIP said EUR10 -- the linear fee --
+    while the Decimal-exact replay charges EUR2. Now the cap is modelled
+    exactly: SCIP's minimal fee is the replay's own capped EUR2.
     """
     scenario = _pac_scenario(price=R(10), cash=R(1000), fee_rate=R(1, 10), fee_cap=R(2), route_cap=R(10))
     view = build_exact_policy_view(scenario)
@@ -625,15 +688,15 @@ def test_fee_epigraph_cap_oblivious_regression() -> None:
     program.model.optimize()
     assert program.model.getStatus() == "optimal"
 
-    # Cap-oblivious estimate: rate * notional = 0.1 * 100 = EUR10, ignoring the EUR2 cap.
-    assert program.model.getVal(fee_var) == pytest.approx(10.0)
+    # Capped: rate * notional = 0.1 * 100 = EUR10 clamps to the EUR2 cap (SCIP said EUR10 before QX1-a).
+    assert program.model.getVal(fee_var) == pytest.approx(2.0)
 
-    # The Decimal-exact replay is the true source of truth, and it DOES apply the cap.
+    # The Decimal-exact replay is the source of truth, and it charges the same capped EUR2.
     candidate = _candidate(view, {decision_id: 10}, candidate_id="candidate:fee-cap")
     evaluation = evaluate_exact_candidate(scenario, view, candidate)
     assert evaluation.feasible is True
     order_evaluation = next(o for o in evaluation.orders if o.route_id == route_id)
-    assert order_evaluation.exact_fee == R(2)  # the true, capped fee -- far below SCIP's own EUR10 estimate
+    assert order_evaluation.exact_fee == R(2)
 
 
 # --------------------------------------------------------------------------
