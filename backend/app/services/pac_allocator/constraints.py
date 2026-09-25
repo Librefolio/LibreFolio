@@ -39,20 +39,26 @@ floating incumbent survives replay. Every Big-M coefficient below is derived
 from a route's own known finite bounds (``order_step * upper_quanta``) —
 never an arbitrary constant, per Step3 §4's "Nessun Big-M arbitrario" rule.
 
-Known modelling limitation (fee cap): ``calculate_fee``'s upper clamp
-(``maximum_fee``) makes the true fee a concave, three-piece function of the
-notional (flat at the floor, linear, flat at the cap). A minimization
-epigraph can only represent the *convex* floor+linear part exactly with
-plain lower-bound rows; representing the cap exactly needs a second
-disjunctive binary per capped route. This build deliberately does not add
-that second binary: the fee upper bound used for the Big-M (``fee_upper``)
-is left cap-oblivious (``rate * notional_upper``), which only ever makes the
-solver's own fee estimate *pessimistic* (never optimistic) when a cap would
-actually bind — it can never manufacture false infeasibility, and it never
-touches the reported/replayed fee (always Decimal-exact). It can, in a
-narrow case, make the search mildly conservative about a route whose true
-(capped) fee is cheaper than the solver believes. Flagged to the coordinator
-as an open refinement, not a silent decision.
+Fee bound (``_fee_clamp_upper``): the fee variable of an active BUY route is
+bounded by ``fixed + max(floor, rate * notional_upper)``, in the epigraph's
+Big-M and in the posted-fee units alike. The minimum belongs in the bound
+(defect X2, found 2026-09-24): with ``rate * notional_upper`` alone, a
+minimum above it (a flat minimum on a zero rate, or a small route) left the
+floor row unsatisfiable, order on or off, and the whole model infeasible.
+
+Known modelling limitation (fee cap, open defect QX1-a): ``calculate_fee``'s
+upper clamp (``maximum_fee``) makes the true fee a concave, three-piece
+function of the notional (flat at the floor, linear, flat at the cap). A
+minimization epigraph can only represent the *convex* floor+linear part
+exactly with plain lower-bound rows; representing the cap exactly needs a
+second disjunctive binary per capped route, which this build does not add.
+Where the cap would bind, the linear row still demands ``fixed + rate *
+notional``: the solver's fee is *pessimistic*, and since the posted fee is
+debited in the cash ledger this is not only a preference bias — it can
+exclude plans the exact replay accepts (EUR50 050 at EUR100 a unit, 0.19%
+capped at EUR18: the replay buys 500 units, the model at most 499). It never
+touches a reported or replayed number (always Decimal-exact). The exact cap
+is scheduled in the Round 5 plan (Passo F, QX1-a).
 """
 
 from __future__ import annotations
@@ -414,13 +420,21 @@ def _require_credit_tie_free(
         )
 
 
+def _fee_clamp_upper(fee_schedule: ExactFeeSchedule, notional_upper: float) -> float:
+    """Upper bound of ``clamp(rate * notional, floor, cap)`` over the route's
+    notional range: ``max(floor, rate * notional_upper)``. The floor must be
+    in it (X2, module docstring); the cap is left out (QX1-a).
+    """
+    return max(as_float(fee_schedule.minimum_fee.amount), as_float(fee_schedule.proportional_rate) * notional_upper)
+
+
 def _fee_variable_upper(facts: ScenarioFacts, route: ExactOrderRoute, capability: ExactOrderCapability, notional_upper: float) -> float:
-    """The same cap-oblivious upper bound ``add_fee_epigraph_constraints``
-    gives the fee variable, reused so the posted-units variable is bounded by
-    the very envelope the fee itself lives in.
+    """The same upper bound ``add_fee_epigraph_constraints`` gives the fee
+    variable, reused so the posted-units variable is bounded by the very
+    envelope the fee itself lives in.
     """
     fee_schedule = facts.fee_by_key[(route.broker_id, route.fee_schedule_id)]
-    return as_float(fee_schedule.fixed_fee.amount) + as_float(fee_schedule.proportional_rate) * notional_upper
+    return as_float(fee_schedule.fixed_fee.amount) + _fee_clamp_upper(fee_schedule, notional_upper)
 
 
 def _posted_units_term(model: Model, *, name: str, exact_expr: LinearTerm, quantum: float, exact_upper: float) -> LinearTerm:
@@ -615,8 +629,9 @@ def add_fee_epigraph_constraints(model: Model, scenario: ExactPlannerScenario, f
     clamp(rate*notional, floor, cap)`` for every BUY route, gated by the same
     ``buy_active`` binary as ``add_order_activation_constraints``.
 
-    See the module docstring for the deliberate, documented cap limitation:
-    ``fee_upper`` here is cap-oblivious (pessimistic, never optimistic).
+    ``fee_upper`` is ``_fee_clamp_upper``: it carries the minimum (X2), so
+    the floor row switches off with the order, but not the cap (QX1-a, see
+    the module docstring).
     """
     for route in scenario.order_routes:
         if route.side != "buy":
@@ -636,7 +651,7 @@ def add_fee_epigraph_constraints(model: Model, scenario: ExactPlannerScenario, f
         fixed = as_float(fee_schedule.fixed_fee.amount)
         rate = as_float(fee_schedule.proportional_rate)
         floor = as_float(fee_schedule.minimum_fee.amount)
-        fee_upper = rate * notional_upper  # deliberately cap-oblivious, see module docstring
+        fee_upper = _fee_clamp_upper(fee_schedule, notional_upper)
         big_m = fixed + fee_upper
 
         model.addCons(fee <= (fixed + fee_upper) * active, name=f"fee_active_upper:{route.route_id}")
