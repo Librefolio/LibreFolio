@@ -356,11 +356,13 @@ wizard-draft restoration.
     or write. None of this touches the server's `pending` / `completed` / `skipped` status. Only an
     **automatic pending** guide calls the server, completing or skipping the current step
     (`completeStep`/`skipStep`); terminal replays are strictly non-destructive. Logging out or
-    switching account deletes the previous account's keys (`createOnboardingSessionResetter`) and
-    clears the in-memory guide (`registerClientSessionReset('onboardingGuide', ...)`); a page
+    switching account keeps every stored key and resets only the in-memory state
+    (`createOnboardingSessionResetter` for the controller,
+    `registerClientSessionReset('onboardingGuide', ...)` for the guide), so the same account
+    resumes from its own key after logging back in on this browser; a page
     refresh loses only the in-memory guide, and the next trigger resumes from the stored key. All
     tabs of the browser share the key: when another tab removes it (for example because the guide
-    ended there, or that tab logged out), the `storage` listener registered at the bottom of
+    ended or was cancelled there), the `storage` listener registered at the bottom of
     `lib/features/onboarding/onboardingGuide.svelte.ts`
     (`createReplayStorageListener(onboarding, undefined, () => onboardingGuide.dismissHost())`)
     drops this tab's in-memory replay and closes its step, so the stale step cannot write the key

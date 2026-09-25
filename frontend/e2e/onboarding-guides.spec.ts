@@ -15,8 +15,9 @@
  *      still restarts that modal's guide (`handleModalClose` →
  *      `dismissHost({restartAtFirst: true})`).
  * OB-8 Guide positions and armed replays live in localStorage, per account
- *      (onboarding.svelte.ts): an armed replay reaches a new tab, logging out
- *      deletes it, and a guide finished in one tab closes the same step in another
+ *      (onboarding.svelte.ts): an armed replay reaches a new tab, survives logging
+ *      out and back in on the same browser (developer decision, 2026-09-24), and a
+ *      guide finished in one tab closes the same step in another
  *      (onboardingGuide.svelte.ts `storage` listener → `dismissHost()`).
  *
  * Isolation: every test owns a disposable account (fixtures/onboarding-accounts.ts)
@@ -516,35 +517,40 @@ test.describe('OB-8 — guide positions and replays persist per account across t
         }
     });
 
-    test('OB-8 logging out through the UI clears the account armed replay, so it is gone after logging back in on desktop/mobile', async ({page, request}, testInfo) => {
+    test('OB-8 a replay armed in Settings survives logging out and back in through the UI in the same browser, then starts at broker.page.overview on desktop/mobile', async ({page, request}, testInfo) => {
         const mobile = testInfo.project.name === 'mobile';
         const user = await registerDisposableUser(request, accountTag('ob8l', testInfo.project.name));
         try {
+            // Every flow terminal: broker_page_guide can only come back as a replay.
             await prepareOnboardingAccount(page, user, []);
+            await expectFlowStatus(page, 'broker_page_guide', 'skipped');
             await openOnboardingGroup(page, 'broker');
             await armReplay(page, 'broker_page_guide');
-            // Positive control: after a full reload the badge still shows, so it
-            // reflects the stored replay and not component memory.
-            await openOnboardingGroup(page, 'broker');
-            await expect(page.getByTestId('onboarding-flow-broker_page_guide-armed')).toBeVisible();
 
+            // Developer decision (2026-09-24): a session change resets only the
+            // in-memory state, so the replay stored for this account is still there
+            // when the same account signs back in on this browser context.
             await logoutThroughUi(page, mobile);
             await login(page, user);
             await expect(page).toHaveURL(/\/dashboard(?:[/?#]|$)/, {timeout: 15_000});
 
             await openOnboardingGroup(page, 'broker');
             await expect(page.getByTestId('onboarding-flow-broker_page_guide')).toHaveAttribute('data-status', 'skipped');
-            await expect(page.getByTestId('onboarding-replay-broker_page_guide')).toBeEnabled();
-            await expect(page.getByTestId('onboarding-flow-broker_page_guide-armed'), 'Logging out must delete the replay stored for this account').toHaveCount(0);
+            await expect(page.getByTestId('onboarding-flow-broker_page_guide-armed'), 'Logging out and back in must keep the replay armed for this account').toBeVisible();
 
-            // The trigger agrees: /brokers settles without starting the cleared replay.
-            // Its guide starts in the same task that clears `data-busy`, so a settled
-            // page with no coachmark is a real absence, not an early look.
-            await navigateTo(page, '/brokers');
-            const brokersPage = page.getByTestId('brokers-page');
-            await expect(brokersPage).toBeVisible({timeout: 15_000});
-            await waitForSettled(brokersPage, 20_000);
-            await expect(page.getByTestId('onboarding-coachmark')).toHaveCount(0);
+            // The trigger agrees: /brokers starts the kept replay at its first step, and
+            // walking it to the end writes no onboarding progress, as a replay must not.
+            const writes = recordGuideWrites(page);
+            try {
+                await navigateTo(page, '/brokers');
+                await expect(page.getByTestId('brokers-page')).toBeVisible({timeout: 15_000});
+                await walkSteps(page, BROKER_PAGE_STEPS);
+                await finishGuide(page, 'broker_page_guide');
+            } finally {
+                writes.stop();
+            }
+            expect(writes.paths, 'A replay is client-side: walking it writes no onboarding progress').toEqual([]);
+            await expectFlowStatus(page, 'broker_page_guide', 'skipped');
         } finally {
             await deleteDisposableUser(request, user);
         }
