@@ -30,15 +30,16 @@ all (only decision *contract* validity matters — see
 ``_candidate_contract_conflicts``/``_decision_access_conflicts``), so any
 guaranteed-valid probe candidate returns the identical constants.
 
-Known search-quality limitation, stated here (not only in the plan and the
+Known modelling limitation, stated here (not only in the plan and the
 regression test) so a reader meets it where the code is: the fee epigraph
 ``constraints.add_fee_epigraph_constraints`` builds is **cap-oblivious** —
-its internal upper-bound estimate is ``rate * notional_upper``, ignoring the
-route's ``maximum_fee``. A compiled model can therefore believe a heavily
-capped BUY route costs more in fees than it truly does, which can only bias
-which candidate the solver *prefers*. It can never cause false infeasibility
-(the estimate is pessimistic, never optimistic) and never corrupts any
-reported number: every fee published or replayed comes from
+its internal upper-bound estimate is ``max(floor, rate * notional_upper)``
+(the minimum is in it since X2), ignoring the route's ``maximum_fee``. A
+compiled model can therefore believe a heavily capped BUY route costs more
+in fees than it truly does. That is not only a preference bias: the posted
+fee is debited in the cash ledger, so the model can exclude plans the exact
+replay accepts (open defect QX1-a, scheduled in the Round 5 plan). It never
+corrupts any reported number: every fee published or replayed comes from
 ``evaluate_exact_candidate``'s exact ``calculate_fee``, never from the SCIP
 variable. Locked by ``test_fee_epigraph_cap_oblivious_regression``. If a
 solve ever produces an incumbent whose SCIP-internal objective disagrees

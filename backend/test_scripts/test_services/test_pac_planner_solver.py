@@ -119,12 +119,41 @@ def _execution_margin_scenario() -> ExactPlannerScenario:
     return _pac_scenario(price=R(10), margin=R(1, 20), route_cap=R(6))
 
 
+def _fee_floor_above_linear_upper_scenario() -> ExactPlannerScenario:
+    """X2 (found 2026-09-24): 0.19% with a EUR1.50 minimum on EUR100 of cash.
+    At the route's own upper bound (10 units, EUR100) the linear fee is only
+    EUR0.19, and the fee epigraph sized its Big-M from `rate *
+    notional_upper` alone -- so the minimum made the whole model infeasible,
+    order on or off, while the exact replay buys 9 units (EUR90 + EUR1.50).
+    """
+    return _pac_scenario(price=R(10), cash=R(100), fee_rate=R(19, 10000), fee_floor=R(3, 2), route_cap=R(100))
+
+
+def _small_route_cap_fee_floor_scenario() -> ExactPlannerScenario:
+    """X2 through a small per-title cap instead of a small budget: EUR10000 of
+    cash, but a 20-unit cap keeps `notional_upper` at EUR200, and 0.19% of it
+    (EUR0.38) is still below the EUR1.50 minimum.
+    """
+    return _pac_scenario(price=R(10), cash=R(10000), fee_rate=R(19, 10000), fee_floor=R(3, 2), route_cap=R(20))
+
+
+def _flat_minimum_fee_scenario() -> ExactPlannerScenario:
+    """X2 in a common real-world shape: a flat EUR2 minimum on a zero rate,
+    so `rate * notional_upper` is zero and any minimum at all sits above it.
+    """
+    return _pac_scenario(price=R(10), cash=R(100), fee_floor=R(2), route_cap=R(100))
+
+
 _ORACLE_AGREEMENT_FIXTURES = [
     pytest.param(_two_asset_pac_scenario, id="two_asset_pac"),
     pytest.param(_coarse_funding_fx_scenario, id="coarse_funding_fx"),  # the fixture that caught the Step3 §16.11 defect
     pytest.param(_single_buy_scenario, id="single_buy"),
     pytest.param(_proportional_fee_no_cap_scenario, id="proportional_fee_no_cap"),
     pytest.param(_execution_margin_scenario, id="execution_margin"),
+    # X2: fee minimum above `rate * notional_upper`. Every amount is whole cents, so no HALF_UP tie is reachable.
+    pytest.param(_fee_floor_above_linear_upper_scenario, id="fee_floor_above_linear_upper"),
+    pytest.param(_small_route_cap_fee_floor_scenario, id="small_route_cap_fee_floor"),
+    pytest.param(_flat_minimum_fee_scenario, id="flat_minimum_fee"),
 ]
 
 

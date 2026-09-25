@@ -245,10 +245,9 @@ per la review di dettaglio di UI e matematica, fatta in questa chat.
     - La regola esatta permette 500 quote: 50 000 + 18 = 50 018 €.
     - SCIP calcola 95 € di commissione e si ferma a 499.
     - Con un minimo d'ordine obbligatorio, lo stesso scarto può produrre un falso «impossibile».
-- **QX1-b — tolleranza di SCIP e piano scartato dal controllo esatto** (⏳ **domanda non ancora
-  posta**: il developer ha chiesto di fermarsi il 24/09). Proposta da sottoporgli: un messaggio
-  esplicito «piano di SCIP scartato dal controllo esatto, non pubblicato», al posto di «nessun
-  piano».
+- **QX1-b — tolleranza di SCIP e piano che il controllo esatto non accetta.** ✅ **Deciso il 25/09
+  dal developer** (sotto la domanda, la risposta e la regola). La proposta del 24/09, un messaggio
+  esplicito «piano di SCIP scartato dal controllo esatto», è **respinta**.
   - SCIP giudica i vincoli lineari con una tolleranza **relativa**: `feastol` 1e-6 per il valore
     in gioco. Verificato nel sorgente di SCIP (`cons_linear.c:7236-7237`, `set.c:7300-7322`,
     `misc.c:11162-11176`); installato: SCIP 10.0 / PySCIPOpt 6.2.1.
@@ -256,6 +255,75 @@ per la review di dettaglio di UI e matematica, fatta in questa chat.
   - Il replay Decimal lo scarta, e oggi lo scarto diventa `ready_no_incumbent`, «nessun piano»
     (`planner.py:152-160`).
   - Il commento di `solver.py:91` chiama «absolute» quella tolleranza: da correggere.
+  - **25/09, domanda del developer:** «se i vincoli sul numero di decimali della valuta sono messi
+    correttamente, e come abbiamo detto li prendi da babel, non capisco quando mai potrebbe
+    realizzarsi un simile scenario».
+    - **Risposta:** il quantum di babel c'è, e ogni importo del modello è un numero intero di
+      centesimi. Lo scarto nasce da altre due strade.
+      - **Arrotondamento a metà centesimo.** Acquisto e commissione si registrano HALF_UP; a un
+        pareggio esatto la coppia non stretta di `_posted_units_term` ammette anche il centesimo
+        sotto. È voluto per i debiti (`constraints.py:397-401`), che il codice considera «permissive».
+      - **Tolleranza relativa di SCIP.** Vale sui grandi importi; nelle prove non è mai successo.
+    - **🔴 X3, riprodotto sul modello compilato** (`files/x1-probes/tie_probe.py`, sola lettura,
+      nessun DB o server):
+      - caso: 3 quote a 33,335 € su una cassa di 100,00 €;
+      - SCIP chiude tutti gli stage con 3 quote: conta 100,00 € al posto dei 100,01 € della regola
+        esatta (3 × 33,335 = 100,005);
+      - il replay lo scarta (`feasible=False`), mentre il piano giusto è 2 quote (66,67 €,
+        `feasible=True`);
+      - controlli: a 33,336 € SCIP sceglie 2 quote; con una cassa di 100,01 € sceglie 3 quote, e il
+        replay le accetta.
+    - Oggi su questo dominio decide l'oracolo, quindi il difetto non si vede. Con D-X1 diventa
+      «nessun piano» anche su 100 €.
+    - Il modello sui debiti resta comunque un **rilassamento** delle regole esatte: un piano di SCIP
+      che passa il replay è davvero ottimo, e uno scartato vuol dire solo che non c'è una risposta.
+    - Cura proposta (X3):
+      - per acquisti e commissioni, arrotondare in su i pareggi esatti come fa la regola, con il
+        margine esatto del reticolo dei prezzi;
+      - il margine è la metà della distanza minima dal pareggio: `quantum/(2b)`, con
+        `coefficiente/quantum = a/b`;
+      - il margine si applica solo dove sta ben sopra la tolleranza di SCIP; altrove il modello resta
+        permissivo e decide il replay.
+    - **❌ X3 respinta dal developer (25/09)**, scelta «No, niente X3: nell'esempio 3 quote e la nota
+      "servono 1 unità minima in più"». Il modello resta permissivo ai pareggi
+      (`constraints.py:397-401`), e SCIP può usare il centesimo del pareggio quando gli conviene.
+  - **La decisione del developer (25/09), parole sue:**
+    - «non credo che qui ci sia da fare messaggi espliciti o altro, serve un altra strategia,
+      potremmo anche fare che semplicemente la sol viene arrotondata all'half_up e se alla fine i
+      soldi richiesti superano il budget si specifica all'utente che servono altri soldi per via
+      degli arrotondamenti ai centesimi, oltretutto mi aspetto che per 1 che supera di pochissimo,
+      c'è un altro che sta sotto di intere unità, quindi alla fine le cose si compensano»;
+    - «riguardo la soglia dei centesimi, potresti trovarti ad avere 1 centesimo extra per ogni
+      asset, quindi la soglia è N centesimi, e nota bene, per centesimi, intendo l'unità minima in
+      quella valuta».
+  - **La regola che ne segue** (Passo F, F2c):
+    - Il replay Decimal con HALF_UP resta la contabilità del piano pubblicato: i numeri mostrati
+      sono i suoi.
+    - Il piano esce anche se, dopo gli arrotondamenti, costa più della cassa.
+      - Condizione: l'unica violazione è un saldo finale negativo in una o più casse (broker ×
+        valuta).
+      - Soglia: il deficit di ogni cassa non supera `N × unità minima` della sua valuta, con l'unità
+        minima presa da babel (1 yen per JPY, 0,001 per BHD).
+      - `N` conta gli importi arrotondati registrati in quella cassa: 1 unità minima per ciascuno.
+        Per un piano di soli acquisti vuol dire l'acquisto di ogni ordine attivo, più la sua
+        commissione quando c'è: con una commissione percentuale sono 2 per asset (detto al
+        developer il 25/09).
+      - Si contano anche i crediti FX arrotondati che entrano nella cassa: stessa regola, 1 per
+        importo.
+    - Per ogni cassa in deficit il risultato dice quanto aggiungere, per esempio «per eseguire il
+      piano servono 0,01 € in più su Broker X (EUR), per gli arrotondamenti all'unità minima».
+      Niente messaggio di scarto, niente «nessun piano».
+    - Oltre la soglia, o con qualunque altra violazione delle regole esatte, non si tratta di un
+      arrotondamento: è un errore del modello, e **resta un errore**. Non diventa «nessun piano».
+      Lo stato esatto si sceglie in F2c fra i percorsi d'errore esistenti; uno stato nuovo sul wire
+      solo se serve, e in quel caso lo si dichiara.
+    - Con D-X1, «ottimo» vuol dire ottimo per il modello compilato. Il modello resta permissivo solo
+      ai pareggi esatti, e quello che ne esce è coperto dalla nota.
+    - L'esempio `3 × 33,335` con una cassa di 100,00 € diventa: 3 quote, e la nota «servono 0,01 € in
+      più». È anche il test rosso naturale di F2c.
+    - Rischio residuo, dichiarato: uno sforamento dovuto alla tolleranza relativa di SCIP oltre la
+      soglia darebbe un errore su un input legittimo. Nelle prove (`files/x1-probes/`) non è mai
+      successo.
 
 ---
 
@@ -1154,10 +1222,21 @@ E2E Playwright: **dopo** l'approvazione umana, come da hard gate di Step 5 (Step
 >   pagina, e un resize desktop→mobile fotografa la transizione della sidebar. Non sono difetti; il
 >   flusso mobile ora parte già con il viewport mobile.
 
-### Passo F — SCIP unico motore in produzione (D-X1, X2, QX1-a) ⏳ da eseguire
+### Passo F — SCIP unico motore in produzione (D-X1, X2, QX1-a, QX1-b) ⏳ in esecuzione
 
 > Stato al 24/09 sera: la decisione, i difetti e le prove sono registrati; **nessun file di codice
 > è stato toccato**. Il developer ha chiesto di fermarsi.
+>
+> Stato al 25/09 mattina:
+> - ✅ checkpoint committato, HEAD `0210f9848` (§8);
+> - ✅ testo di correzione dei tre master inviato al coordinator. Nel 05 il passaggio superato va
+>   da `:242` a `:246`: anche «SCIP è candidato additivo approvato, non ancora installato o
+>   provato» non vale più;
+> - ✅ il developer conferma F0 → F6 e l'ordine dei commit (scelta «Confermo F0 → F6 in
+>   quest'ordine»);
+> - ✅ QX1-b deciso: il piano esce con la nota di quanto aggiungere per gli arrotondamenti, entro
+>   `N` unità minime per cassa (§2). X3 respinta. Il lavoro diventa il passo **F2c**, ed è un
+>   commit in più.
 >
 > **Condizioni del coordinator** (24/09 alle 18:35, ribadite il 25/09 alle 09:09):
 > - X1 e X2 sono **gate d'integrazione**: la UI v2 li espone, quindi il ramo non entra in
@@ -1175,22 +1254,60 @@ E2E Playwright: **dopo** l'approvazione umana, come da hard gate di Step 5 (Step
 >   coordinator, che lo applica.
 > - Prima di eseguire, il developer conferma F0 → F6 e risponde a QX1-b.
 >
-> Ordine dei commit proposto, perché ogni commit intermedio resti corretto:
-> 1. `docs(pac)`: D-X1 nei normativi (F0);
+> Ordine dei commit, perché ogni commit intermedio resti corretto:
+> 1. `docs(pac)`: D-X1 e QX1-b nei normativi (F0);
 > 2. X2, limite superiore della fee con il minimo (F2b, prima parte), con il suo test rosso;
 > 3. QX1-a, tetto esatto (F2b, seconda parte); `test_fee_epigraph_cap_oblivious_regression` si inverte;
 > 4. X1/D-X1: SCIP unico, prova del solver, oracolo nei test, testimone UI (F1-F3, F5), con il test
->    deterministico.
+>    deterministico;
+> 5. QX1-b (F2c, aggiunto il 25/09): la nota di quanto aggiungere per gli arrotondamenti. Il test
+>    rosso è `3 × 33,335` su 100,00 €: dopo il commit 4 dà «nessun piano», dopo il 5 dà 3 quote e
+>    «servono 0,01 € in più».
 
 Ordine, con i documenti prima del codice (regola del developer):
 
-- **F0 — documenti.**
+- **F0 — documenti.** ✅ 2026-09-25
   - I normativi di `13_pacAllocator` ricevono una nota datata che li sostituisce: MathematicalCore,
     TargetDesign, Architecture, Policies, UiTarget, `review/PAC_ALLOCATOR_REVIEW_DOSSIER.md`,
     `implementation/README.md`.
   - I piani storici (Step3 §16.3 e 5b) ricevono una nota in avanti di una riga.
   - Per i master condivisi (05:242-244, 06:742-748, guida:1195-1199) si manda la proposta al
     coordinatore.
+
+  > **Note implementazione** (2026-09-25):
+  > - **Note in testa.** Ognuno dei cinque design autorevoli ha una nota «Aggiornamento del
+  >   2026-09-25», che prevale sul testo dove i due sono in conflitto. Dice tre cose:
+  >   - D-X1 e le tre regole di esito;
+  >   - l'oracolo solo nei test;
+  >   - QX1-b, con la soglia `N`.
+  >
+  >   Elenca anche le sezioni toccate.
+  > - **Note in linea**, dove un lettore arriva da un link:
+  >   - MathematicalCore §6.2 (ledger, QX1-b), §19, §20, §22 (la review matematica di QX1-b va
+  >     in R3);
+  >   - TargetDesign §2 (dopo il mermaid) e §9.3;
+  >   - Policies §12.7 e §12.8;
+  >   - Architecture §2, §12 e §14;
+  >   - UiTarget §20.18. La UiTarget ha un secondo blocco di erratum in testa, accanto a quello
+  >     del 24/09, e dice anche che l'importo da aggiungere va mascherato con la privacy.
+  > - **Dossier** (in inglese): nota in testa, più una riga in §5.5 e in §6.4.
+  >   - §6.4 sosteneva «mai falsa infeasibility»: X2 lo smentisce.
+  >   - DBT-5 si chiude col Passo F.
+  > - **README di `implementation/`:** blocco del 25/09 (`0210f9848`).
+  > - **Step3:** una nota in avanti in §16.3 e in «Difetto A». Il «5b» del piano è quella cura:
+  >   SCIP fuori dal percorso quando decide l'oracolo.
+  > - **Nome della fonte di prova nuova: `solver_status`.** È scelto qui per coerenza fra i
+  >   documenti, e lo schema lo userà al passo F1.
+  > - **Errore oltre la soglia di QX1-b:** errore Tool, non un risultato. È scritto nella nota
+  >   dell'Architecture, coerente con la sua §14 («Tool error, non result success-shaped»).
+  > - **Master condivisi:** il testo del mattino e l'aggiunta su QX1-b sono al coordinator, che
+  >   li applica.
+  > - Evidenza: `git diff --check` pulito; 9 file di documenti, nessun file di codice.
+  >
+  > **⚠️ Fuori pista**:
+  > - Nel 05 il passaggio superato va da `:242` a `:246`, non fino a `:244` (detto al coordinator).
+  > - Rileggendo Difetto A: uno stage SCIP infeasible è per forza `unfinished`, mentre
+  >   `ready_infeasible` richiede `completed`. È il vincolo che F1 deve sciogliere.
 - **F1 — schema.**
   - Prova di ottimo e di impossibilità con una fonte «solver».
   - Lo stage infeasible diventa uno stato completato, così `ready_infeasible` è raggiungibile da
@@ -1202,11 +1319,62 @@ Ordine, con i documenti prima del codice (regola del developer):
   - Si corregge la mappa di stato in `solver.py` e il suo commento «absolute» (`:91`).
   - Si aggiorna la proiezione in `planner_report.py`.
 - **F2b — fedeltà delle commissioni.**
-  - X2: limite superiore `max(floor, min(rate · notional_upper, cap))` nel fee epigraph e in
-    `_fee_variable_upper`.
-  - QX1-a: il tetto esatto con una binaria `capped` per ogni route che ha un tetto, con Big-M
-    derivato dai limiti della route.
-  - `test_fee_epigraph_cap_oblivious_regression` si inverte.
+  - X2 (commit 2): limite superiore `max(floor, rate · notional_upper)` nel fee epigraph e in
+    `_fee_variable_upper`. Il tetto resta fuori fino al commit 3 (vedi il fuori pista sotto).
+    ✅ 2026-09-25
+  - QX1-a (commit 3): il tetto esatto con una binaria `capped` per ogni route che ha un tetto, con
+    Big-M derivato dai limiti della route. Solo allora il limite diventa
+    `max(floor, min(rate · notional_upper, cap))`.
+  - `test_fee_epigraph_cap_oblivious_regression` si inverte al commit 3.
+
+  > **Note implementazione** (2026-09-25, X2):
+  > - **Cura.** Un solo helper, `_fee_clamp_upper` (`constraints.py`), calcola
+  >   `max(floor, rate · notional_upper)`. Lo usano i due siti:
+  >   - il Big-M del fee epigraph;
+  >   - `_fee_variable_upper`, che limita le unità della fee registrata nel ledger.
+  > - **Docstring.** Il modulo `constraints.py` e il `compiler.py` dicevano «mai falsa
+  >   infeasibility». Adesso dicono:
+  >   - il minimo sta nel limite (X2);
+  >   - il tetto no, e dove morde può escludere piani che il replay accetta (QX1-a, aperto,
+  >     con l'esempio 50 050 € → 500 quote contro 499).
+  > - **Test rossi** (test-author), provati rossi sul codice di prima, per il motivo giusto:
+  >   - `test_fee_epigraph_floor_above_linear_upper_boundary`, in `test_pac_planner_policies.py`.
+  >     Tre forme: 0,19 % con minimo 1,50 €; minimo fisso di 2 € a tasso zero; 0,19 % con minimo
+  >     1,50 € più 1 € fisso. Rosso: `assert 'infeasible' == 'optimal'` a ordine spento (`:582`).
+  >   - tre fixture nel gate d'accordo SCIP↔oracolo (`test_pac_planner_solver.py`):
+  >     `fee_floor_above_linear_upper`, `small_route_cap_fee_floor`, `flat_minimum_fee`. Tutte in
+  >     centesimi interi, quindi senza pareggi. Rosso: `assert 'reported_infeasible' ==
+  >     'incumbent'` (`:180`).
+  > - **Verde dopo la cura** (lane 6151, `/tmp/librefolio-r2-d`), un comando alla volta:
+  >   - `…dev.py test --test-port 6151 --data-dir /tmp/librefolio-r2-d services
+  >     pac-planner-policies` → 37 passed;
+  >   - `… services pac-planner-solver` → 15 passed;
+  >   - `pac-planner-core` 152, `-evaluator` 139, `-oracle` 20, `-proof` 33, `-wire-numbers` 39,
+  >     `-report` 16, `-service` 33: tutti passed.
+  > - **Secondo sito coperto.** Una sonda usa-e-getta (`files/x2-probes/second_site_mutation.py`,
+  >   nella cartella di sessione) rimette il vecchio limite solo in `_fee_variable_upper`. Le tre
+  >   forme tornano rosse a `:585`, cioè al pin di 9 quote. Quindi il test copre entrambi i siti.
+  > - `ruff check` e `black --check` sui 4 file: puliti. `git diff --check`: pulito.
+  >
+  > **⚠️ Fuori pista**:
+  > - **La formula del piano andava divisa in due commit.** `max(floor, min(rate · N_up, cap))`
+  >   è giusta solo insieme alla binaria `capped` di QX1-a. Il motivo:
+  >   - finché resta la riga lineare `fee ≥ fixed + rate · N − big_m (1 − active)`, mettere il tetto
+  >     nel limite superiore rende infeasible ogni `N` con `rate · N > cap`;
+  >   - nell'esempio di QX1-a (0,19 % di 100 €/quota, tetto 18 €) il modello arriverebbe al
+  >     massimo a 94 quote, molto peggio delle 499 di oggi.
+  >
+  >   Quindi il commit 2 mette solo il minimo, e il tetto entra al commit 3 con la sua binaria.
+  > - Il docstring di `test_fee_epigraph_cap_oblivious_regression` dice ancora «can never cause
+  >   false infeasibility». È falso già oggi, per QX1-a. Non l'ho toccato: il test è del
+  >   test-author, e al commit 3 si inverte e si riscrive comunque.
+- **F2c — arrotondamenti oltre la cassa (QX1-b, deciso il 25/09).**
+  - Il replay classifica il rifiuto. Se l'unica violazione è un deficit di cassa entro
+    `N × unità minima` per cassa, il piano esce con l'importo da aggiungere per ogni cassa.
+    Altrimenti è un errore (§2).
+  - Schema: un campo nel risultato pronto con le casse da integrare (broker, valuta, importo, `N`).
+  - Report e UI: la nota per cassa; i18n via `dev.py i18n` nelle 4 lingue.
+  - Il deficit è un dato personale, quindi passa dalla maschera della privacy.
 - **F3 — oracolo solo nei test.**
   - `oracle.py` passa nell'albero dei test.
   - Un test strutturale verifica che nessun modulo di produzione lo importi.
@@ -1215,6 +1383,15 @@ Ordine, con i documenti prima del codice (regola del developer):
     `rate · notional_upper`, tetto che morde, tetto piccolo per titolo.
   - Regressione X1 (100 € su due ETF: veloce) e X2 (minimo 1,50 €: 9 quote); 5 € contro minimo
     d'ordine 10 € → `ready_infeasible` da SCIP.
+  - F2c (QX1-b):
+    - `3 × 33,335` su 100,00 € → 3 quote, e 0,01 € da aggiungere;
+    - un deficit oltre `N` unità minime → errore;
+    - un'altra violazione delle regole esatte → errore, anche se il deficit sta sotto la soglia;
+    - una valuta a 0 decimali (JPY) e una a 3 (BHD), per l'unità minima.
+  - Il gate d'accordo SCIP↔oracolo tiene conto di X3 respinta. Dove un pareggio è raggiungibile,
+    SCIP può fare meglio dell'oracolo esatto usando il centesimo del pareggio. Quindi:
+    - sui domini senza pareggi (`_half_up_tie_reachable` falso) gli ottimi coincidono;
+    - altrove SCIP non è mai peggiore dell'oracolo.
   - Schema e API.
   - Le prove usa-e-getta del 24/09 sono copiate nella cartella di sessione (`files/x1-probes/`),
     perché `/tmp` si svuota al riavvio.
@@ -1235,9 +1412,9 @@ Ogni tema matematico si guarda **sulla schermata della UI che lo espone**, sui d
 |---|---|---|
 | R1 | Modello di input e unità | Liquidità, broker, asset, routing: cassa per valuta, contributi separati, passo di quantità, importo, fee, provenance e staleness. Reperti N10, N13, N14, N16, N21. **Da confermare:** la lettura prudente di Q-C0-2 (nessuna somma di importi in UI) e il default del tetto delle route (`1000000000`). |
 | R2 | Normalizzazione e issue | 79 codici; `needs_input` / `invalid` / `unsupported`. N1 chiuso da Q-C0-4 (C0b.2); esposizioni oltre il 100% → `invalid` (C0b.3). Reperti N11, N12, N17, N20. |
-| R3 | Evaluator esatto e ledger | Decimal/ExactRatio; arrotondamenti (storia del difetto HALF_UP); spread FX applicato una volta sola; le fee non sono investimento; niente doppio conteggio della cassa. |
+| R3 | Evaluator esatto e ledger | Decimal/ExactRatio; arrotondamenti (storia del difetto HALF_UP); spread FX applicato una volta sola; le fee non sono investimento; niente doppio conteggio della cassa. **QX1-b (25/09)** cambia il ledger: un piano può chiudere una cassa sotto zero di al più `N` unità minime, con l'importo da aggiungere. MathematicalCore §22 chiede per questo una review matematica: si fa qui, sulla schermata della nota, insieme al conteggio di `N` (crediti FX inclusi). |
 | R4 | Cascata obiettivi | L2 fixed → U → priorità → fee → righe → tie-break; cosa significano L2 (EUR²) e U. |
-| R5 | Ricerca e prova | Oracolo fino a 200 000 = dimostrato; SCIP oltre = `not_proven`; infeasible solo dall'oracolo; determinismo = `completed`; budget di 30 s; **domanda aperta sul numero di asset** (ginocchio ≈ 18 asset multi-valuta). Le soglie crescenti per il tetto delle route (Q-C0-5) entrano nella stessa misura. **🔴 X1 (24/09):** la premessa «fino a 200 000 = dimostrato» vale solo fino a circa 13 000 candidati (≈ 3,3 ms ciascuno contro la soft deadline di 44 s); fra 13 000 e 200 000 il job muore con `execution_limit`. Opzioni: sotto-budget dell'oracolo con fallback a SCIP; tetto tarato sul tempo; funding e FX dedotti invece che enumerati; evaluator più veloce. Va deciso **prima** del resto di R5. |
+| R5 | Ricerca e prova | ~~Oracolo fino a 200 000 = dimostrato; SCIP oltre = `not_proven`; infeasible solo dall'oracolo;~~ **D-X1 (24/09):** SCIP unico; `optimal` su tutti gli stage = ottimo, `infeasible` sul primo = impossibile, limite = tempo scaduto; l'oracolo resta nei test. Determinismo = `completed`; budget di 30 s; **domanda aperta sul numero di asset** (ginocchio ≈ 18 asset multi-valuta). Le soglie crescenti per il tetto delle route (Q-C0-5) entrano nella stessa misura. **🔴 X1 (24/09):** la premessa «fino a 200 000 = dimostrato» valeva solo fino a circa 13 000 candidati (≈ 3,3 ms ciascuno contro la soft deadline di 44 s); fra 13 000 e 200 000 il job moriva con `execution_limit`. ~~Opzioni: sotto-budget dell'oracolo con fallback a SCIP; tetto tarato sul tempo; funding e FX dedotti invece che enumerati; evaluator più veloce.~~ Chiuso da D-X1, Passo F. |
 | R6 | Report e spiegazioni | `buffer = 0`, deployment omesso, `describe_conclusion` non usato, freshness non riportata: cosa mostrare. Reperti N19, N23. |
 | R7 | UI risultati e privacy | Tabella campo per campo personal/public/strutturale, **quantità incluse**; tetti e minimi delle route (default mascherati); input in chiaro durante la scrittura. Voci nuove dello smoke: «1 units» senza plurale; L2 nella locale del browser (`format.ts:185`); titolo del contributo con etichetta vuota; testimone «9,018» contro «2212»; valori floating degli stage con tutte le cifre; numero di ordini in chiaro con privacy ON (da confermare). |
 | R8 | Registro decisioni | E la prossima fetta (§4). |
@@ -1276,7 +1453,7 @@ Ogni tema matematico si guarda **sulla schermata della UI che lo espone**, sui d
 | **I** | Grafici di dashboard | nullo | Nessun import dei loro componenti. |
 | **A** | Livelli per-asset di Asset Global | nullo | Il PAC sceglie gli asset esistenti con `AssetSelect`; `AssetSearchAutocomplete` (ricerca sui provider) non gli serve. |
 | **F** | Laboratorio | nessuno | — |
-| **I / Risk** | `schemas/portfolio.py` (C0b.1 e C0b.4 toccano solo il blocco planner-source `:1205-1612`); `portfolio_allocation_source.py` (di D); `portfolio_service.py` e `portfolio_engine.py` in sola lettura (un import pigro di `_QUANTITY_DUST_THRESHOLD`, nessuna modifica) | basso: I ha aggiunto campi a `schemas/portfolio.py` in altri blocchi (`cost_history`, `pnl_candles`) | Modifiche solo nel blocco planner-source, niente riordino. Il client generato è ignorato da git: dopo ogni salto di baseline serve un `api sync` prima di misurare. |
+| **I / Risk** | `schemas/portfolio.py` (C0b.1 e C0b.4 toccano solo il blocco planner-source `:1205-1612`); `portfolio_allocation_source.py` (di D); `portfolio_service.py` e `portfolio_engine.py` in sola lettura (un import pigro di `_QUANTITY_DUST_THRESHOLD`, nessuna modifica) | basso: I ha aggiunto campi a `schemas/portfolio.py` in altri blocchi (`cost_history`, `pnl_candles`) | Modifiche solo nel blocco planner-source, niente riordino. Il client generato è ignorato da git: dopo ogni salto di baseline serve un `api sync` prima di misurare. **25/09 (coordinator):** in `test_portfolio_api.py` gli hunk di D e quelli di S10 di I stanno in zone diverse, ma dopo I + D va rilanciato `api portfolio` sulla revisione combinata: D toglie `currency_specs` e I riattiva i pin annidati di `:593`. |
 | **Condivisi** | `registry.ts` (piattaforma: solo l'array L240-251); cataloghi i18n (additivi); `_frontend_utility.py` (liste `core-unit`/`component-unit`); `_backend_api.py` (`pac-planner-tool`); `moneyRenderSites.test.ts` (una voce `not-money` per `planner/format.ts`, attraverso il coordinator); `handoff-pac-D.md` (cartella C, su assegnazione); `CHANGELOG` (solo proposte) | medio sugli i18n per volume (≈ 400 voci) | Solo `dev.py i18n`, niente riordino. Elenco completo nell'handoff. |
 
 ---
@@ -1343,6 +1520,23 @@ Ogni tema matematico si guarda **sulla schermata della UI che lo espone**, sui d
   > 3. `feat(pac): planner contract for the v2 UI` — C0b.1-C0b.4 con fixture e test (16 file);
   > 4. `test(pac): cover the planner tool API` — TB1 e la voce del runner (2 file);
   > 5. `feat(pac): planner v2 tool UI` — `planner/`, registro, i18n, voce del gate J (69 file).
+  >
+  > **25/09 alle 09:33 — committati** dal developer con lo script guardato del coordinator, in fila
+  > su `f1047f766`:
+  > - `4cd2cda56` (17 file) → `93704e3da` (2) → `f401f5e1b` (16) → `a6e2926f3` (2) → `0210f9848` (69);
+  > - 106 file, +16363/−261, albero pulito;
+  > - il coordinator ha verificato che ogni commit contiene esattamente la sua lista e che i
+  >   messaggi sono identici ai file.
+  >
+  > **25/09 — Passo F, commit 1 e 2** (handoff al coordinator; messaggi e liste in
+  > `/tmp/libreFolio_commits/d-f1-*` e `d-f2-*`, copia in `files/passo-f-commits/` della sessione):
+  > 1. `docs(pac): record D-X1 and QX1-b in the designs` — F0, 8 file del journal (i cinque
+  >    design, il dossier, il README di `implementation/` e lo Step3);
+  > 2. `fix(pac): bound the solver fee by its minimum` — X2: `constraints.py`, `compiler.py`, i due
+  >    file di test e questo piano (5 file).
+  >
+  > Vanno committati in quest'ordine, e il commit 2 prima che cominci QX1-a: i due toccano entrambi
+  > `constraints.py`, e il coordinator mette in stage per percorso.
 - CHANGELOG `[Unreleased]` (**superato il 25/09**, vedi la nota sotto):
   - `✨ Added` — «PAC allocator: interactive planner in Tools»;
   - `✨ Added` — «PAC allocator: copy the current portfolio distribution as the starting target»;

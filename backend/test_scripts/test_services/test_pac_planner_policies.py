@@ -540,6 +540,67 @@ def test_fee_epigraph_floor_and_linear_boundary() -> None:
         assert order_evaluation.exact_fee == R(expected_fee)
 
 
+@pytest.mark.parametrize(
+    ("fixed_fee", "fee_rate", "fee_floor"),
+    [
+        pytest.param(ZERO, R(19, 10000), R(3, 2), id="rate-0.19pct-min-1.50"),
+        pytest.param(ZERO, ZERO, R(2), id="flat-min-2"),
+        pytest.param(ONE, R(19, 10000), R(3, 2), id="fixed-1-rate-0.19pct-min-1.50"),
+    ],
+)
+def test_fee_epigraph_floor_above_linear_upper_boundary(fixed_fee, fee_rate, fee_floor) -> None:
+    """X2 regression (found 2026-09-24): a fee minimum above the linear fee at
+    the route's own notional upper bound, `floor > rate * notional_upper`.
+    The epigraph took its upper bound and its Big-M from `rate *
+    notional_upper` alone, so the floor row could not be switched off: with
+    the order OFF it demanded `fee >= floor - rate * notional_upper > 0`
+    against `fee <= 0`, with it ON `fee >= fixed + floor` above the upper
+    bound -- the whole model was infeasible whatever the order did. And
+    `_fee_variable_upper` hands the same bound to the posted-fee units, so a
+    fee of `fixed + floor` could not be posted either: the order-off check
+    catches the epigraph, the q=9 check needs both sites.
+
+    EUR100 of cash at EUR10 a unit is the X2 probe: 10 units at most, 9 once
+    the minimum is paid. Shapes: the probe's 0.19% with a EUR1.50 minimum; a
+    flat EUR2 minimum on a zero rate, where any minimum at all sits above the
+    linear part; and the probe plus a EUR1 fixed fee, so the Big-M must still
+    carry `fixed`. Every boundary is cross-checked against the exact replay.
+    """
+    scenario = _pac_scenario(price=R(10), cash=R(100), fixed_fee=fixed_fee, fee_rate=fee_rate, fee_floor=fee_floor, fee_cap=None, route_cap=R(100))
+    view = build_exact_policy_view(scenario)
+    route_id = "route:buy:a"
+    decision_id = exact_decision_id("buy_quantum", route_id)
+    minimum_fee = fixed_fee + fee_floor  # the fee of every order this route can place
+
+    # Precondition, verified rather than assumed: at the route's own upper
+    # bound (10 units, EUR100) the linear fee is still below the minimum.
+    access = next(d for d in view.decisions if d.decision_id == decision_id)
+    assert access.upper_quanta == 10
+    assert fee_rate * R(10) * access.upper_quanta < fee_floor
+
+    # Order off: the fee sits at zero. The core of X2 -- this was infeasible.
+    assert _pinned_status(scenario, view, quanta={decision_id: 0}, buy_fee={route_id: 0.0}) == "optimal"
+
+    # q=9 (EUR90): the minimum binds; the fee reaches `fixed + floor` ...
+    assert _pinned_status(scenario, view, quanta={decision_id: 9}, buy_fee={route_id: as_float(minimum_fee)}) == "optimal"
+    # ... and not one cent less: the floor still binds.
+    assert _pinned_status(scenario, view, quanta={decision_id: 9}, buy_fee={route_id: as_float(minimum_fee - CENT)}) == "infeasible"
+    # q=10 spends the whole EUR100 on the notional, leaving nothing for the minimum.
+    assert _pinned_status(scenario, view, quanta={decision_id: 10}) == "infeasible"
+
+    # Decimal-exact replay: 9 units are feasible at exactly the minimum fee, 10 are not.
+    candidate = _candidate(view, {decision_id: 9}, candidate_id="candidate:fee-floor-above-linear-upper")
+    evaluation = evaluate_exact_candidate(scenario, view, candidate)
+    assert evaluation.feasible is True
+    order_evaluation = next(o for o in evaluation.orders if o.route_id == route_id)
+    assert order_evaluation.exact_fee == minimum_fee
+
+    over_budget = _candidate(view, {decision_id: 10}, candidate_id="candidate:fee-floor-over-budget")
+    over_budget_evaluation = evaluate_exact_candidate(scenario, view, over_budget)
+    assert over_budget_evaluation.feasible is False
+    assert "NO_SHORT_OR_LEVERAGE" in over_budget_evaluation.conflict_codes
+
+
 def test_fee_epigraph_cap_oblivious_regression() -> None:
     """Documented, deliberate modelling gap (see `constraints.py`'s module
     docstring): the fee epigraph's own upper bound (used only for its
