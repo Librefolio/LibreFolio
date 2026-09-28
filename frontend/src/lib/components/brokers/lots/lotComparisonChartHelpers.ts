@@ -21,7 +21,8 @@
 import {safeDecimal, safeString} from '$lib/types';
 import {finiteNumber} from '$lib/utils/core/finiteNumber';
 import {mapDateToBucket, type ChartResolution} from '$lib/components/charts/timeSeriesAggregation';
-import {normalizeZero} from './lotChartShared';
+import {normalizeZero, formatAxisNumber} from './lotChartShared';
+import {maskCurrencyParts, maskFormattedNumber} from '$lib/utils/privacy/maskable';
 
 /** The two value provenances a lot's series can carry. */
 export type LotValueSource = 'MARKET_PRICE' | 'ESTIMATED_AT_COST';
@@ -101,6 +102,46 @@ export function formatAxisPercent(value: number, locale?: string): string {
     const abs = Math.abs(normalized);
     const decimals = abs < 10 && abs % 1 !== 0 ? 2 : 1;
     return `${normalized.toLocaleString(locale, {minimumFractionDigits: 0, maximumFractionDigits: decimals})}%`;
+}
+
+/**
+ * Format an axis tick of the absolute-return mode as compact money in `currency`.
+ *
+ * Two exits, each masked on its own. The `Intl` path keeps the symbol through
+ * `maskCurrencyParts`; the fallback, taken when `Intl` rejects the currency code, masks
+ * only the number and keeps the code. The Round 1 shape checked privacy once at the
+ * function boundary and returned the bare placeholder, which covered both exits but also
+ * hid the currency — ruled out on 2026-09-22 (privacy hides the number, not the currency).
+ * The sign stays outside the mask, as in D8. `locale` is exposed for deterministic tests.
+ */
+export function formatAxisCurrency(value: number, currency: string, locale?: string): string {
+    const normalized = normalizeZero(value);
+    try {
+        const formatter = new Intl.NumberFormat(locale, {
+            style: 'currency',
+            currency,
+            currencyDisplay: 'narrowSymbol',
+            notation: 'compact',
+            maximumFractionDigits: 1,
+        });
+        return maskCurrencyParts(formatter.formatToParts(normalized));
+    } catch (_) {
+        return `${maskFormattedNumber(formatAxisNumber(normalized, locale))} ${currency}`;
+    }
+}
+
+/**
+ * Format an axis tick of the value mode: the value of the selected lots, which is money
+ * with no currency on the tick.
+ *
+ * Masked under privacy: a position's value is what the user owns, and an axis is readable
+ * without hovering anything. It went unmasked through Round 1 because it carries no
+ * currency marker, so neither the classification rule nor the §1.8 gate could see it.
+ * Unmasked, the output is exactly the shared `formatAxisNumber`; masked, the locale's own
+ * sign stays outside the placeholder, as in D8.
+ */
+export function formatAxisAmount(value: number, locale?: string): string {
+    return maskFormattedNumber(formatAxisNumber(normalizeZero(value), locale));
 }
 
 /**
