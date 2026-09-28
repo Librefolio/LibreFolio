@@ -540,6 +540,28 @@ describe('buildAssetSetBenchmarkPoint', () => {
         expect(point?.name).toBe('#41');
     });
 
+    it('is handed a label map that includes the reference, because the selection one never can', () => {
+        // The reference may not also be one of the compared — the payload validator
+        // rejects that — so a map built from the *selection* has, by construction, no
+        // entry for it, and the dot shipped labelled `#41` on every chart. The other
+        // tests here used a `LABELS` that happens to contain 41: green over a state
+        // production cannot produce.
+        const selectionOnly = labels({7: 'Vanguard FTSE All-World'});
+
+        expect(buildAssetSetBenchmarkPoint(comparisonResult([comparisonItem(7)]), selectionOnly)?.name, 'a selection map cannot name the reference').toBe('#41');
+    });
+
+    it('names the reference through the resolver when the selection map cannot', () => {
+        // The contract `AssetSetRiskReturnSection` relies on: it passes the asset
+        // store's lookup, the same one the portfolio L3 uses for its benchmark name.
+        const selectionOnly = labels({7: 'Vanguard FTSE All-World'});
+        const store = (assetId: number) => (assetId === BENCHMARK_ID ? 'MSCI ACWI' : undefined);
+
+        expect(buildAssetSetBenchmarkPoint(comparisonResult([comparisonItem(7)]), selectionOnly, store)?.name).toBe('MSCI ACWI');
+        // A resolver that does not know the asset still degrades to `#id`, never to a blank.
+        expect(buildAssetSetBenchmarkPoint(comparisonResult([comparisonItem(7)]), selectionOnly, () => undefined)?.name).toBe('#41');
+    });
+
     it('has no point when the comparison did not run, was not asked for, or came back malformed', () => {
         expect(buildAssetSetBenchmarkPoint(null, LABELS)).toBeNull();
         expect(buildAssetSetBenchmarkPoint(unavailable('asset_set_comparison'), LABELS)).toBeNull();

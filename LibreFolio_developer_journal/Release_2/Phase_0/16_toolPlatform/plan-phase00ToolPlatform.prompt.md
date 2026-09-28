@@ -160,14 +160,20 @@ le traduzioni MkDocs utente IT/FR/ES non sono state avviate.
 Dipende dall'handoff D dei modelli/core/thin plugin e dal renderer PAC approvato:
 
 ```text
-PacAnalyzeInput reale
+PacPlannerRequest reale (2.0.0, plan)
   -> normalizzatore/evaluator D
   -> thin plugin D su base C
   -> catalogo + compute C
   -> worker e output validato
   -> codec generati
-  -> host C + componente P1 D
+  -> host C + renderer PAC v2 D (Round 5)
 ```
+
+> **Nota del coordinator (24/09/2026, su proposta di D)**: il diagramma citava ancora
+> `PacAnalyzeInput` e il «componente P1 D». Il prototipo P1 è stato rimosso in `b82e59ffa`
+> (21/09, *«drop P1 prototype, wire planner v2»*), per decisione del developer. Il contratto
+> reale è `PacPlannerRequest` (`backend/app/schemas/pac_allocator.py`). Questo passo si chiude
+> quando D registra il renderer PAC v2 del Round 5. La riga qui sotto resta vera.
 
 Nessuna registry vuota o demo plugin puo' chiudere questo passo.
 Il contratto esatto e i selector sono in [handoff-pac-D.md](handoff-pac-D.md).
