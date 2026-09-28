@@ -114,12 +114,25 @@ async def _tool_user() -> AsyncIterator[httpx.AsyncClient]:
 # ---------------------------------------------------------------------------
 
 
-async def _served_identity(client: httpx.AsyncClient) -> dict[str, str]:
+async def _served_descriptor(client: httpx.AsyncClient) -> dict:
     response = await client.get(f"{API_BASE}/tools/catalog", timeout=TIMEOUT)
     assert response.status_code == 200, response.text
     descriptor = next((item for item in response.json()["items"] if item["tool_code"] == TOOL_CODE), None)
     assert descriptor is not None, "pac_allocator is not served by the catalog"
+    return descriptor
+
+
+async def _served_identity(client: httpx.AsyncClient) -> dict[str, str]:
+    descriptor = await _served_descriptor(client)
     return {key: descriptor[key] for key in IDENTITY_KEYS}
+
+
+async def _served_engine_timeout_ms(client: httpx.AsyncClient, operation: str) -> int:
+    """The engine window a worker claims for ``operation``: the catalog serves the effective policy the executor enforces."""
+    policies = (await _served_descriptor(client))["operations"]
+    policy = next((policy for policy in policies if policy["operation"] == operation), None)
+    assert policy is not None, f"{TOOL_CODE} serves no {operation!r} operation"
+    return policy["engine_timeout_ms"]
 
 
 def _item(identity: dict[str, str], parameters: dict, **identity_overrides: str) -> dict:
@@ -179,6 +192,7 @@ def _other_fingerprint(fingerprint: str) -> str:
 async def test_pac_compute_plans_a_buying_scenario_to_a_proven_optimum(test_server):
     async with _tool_user() as client:
         identity = await _served_identity(client)
+        engine_timeout_ms = await _served_engine_timeout_ms(client, "plan")
         item = _item(identity, _buying_request())
         payload, results = await _compute(client, item)
 
@@ -193,8 +207,16 @@ async def test_pac_compute_plans_a_buying_scenario_to_a_proven_optimum(test_serv
     assert order["cash_debit"]["currency"] == "EUR"
     assert Decimal(order["cash_debit"]["amount"]) == 50
     assert plan["catalogs"]["currencies"] == [{"currency": "EUR", "minor_unit": "0.01"}]
-    # The worker publishes exactly what the planner computes in process.
-    in_process = plan_pac_allocation(PAC_PLAN_INPUT_ADAPTER.validate_python(_buying_request()))
+    # The served engine window is the budget the worker handed SCIP: every stage
+    # publishes it as its `time_budget` setting.
+    solver_time_budget_seconds = engine_timeout_ms / 1000
+    stages = plan["solver_evidence"]["stages"]
+    assert [setting["value"] for stage in stages for setting in stage["settings"] if setting["name"] == "time_budget"] == [f"{solver_time_budget_seconds:g}"] * len(stages)
+    # The worker publishes exactly what the planner computes in process. That
+    # budget is part of what it publishes, so the in-process call claims the same
+    # window, as tool_plugins/pac_allocator.py does, instead of solver.py's
+    # fallback for a caller with no window to claim.
+    in_process = plan_pac_allocation(PAC_PLAN_INPUT_ADAPTER.validate_python(_buying_request()), solver_time_budget_seconds=solver_time_budget_seconds)
     assert plan == PAC_PLAN_OUTPUT_ADAPTER.dump_python(in_process, mode="json", by_alias=True)
 
 

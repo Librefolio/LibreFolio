@@ -44,7 +44,7 @@ export type PacCatalogs = PacReadyResult['catalogs'];
 export type PacScenarioBasis = PacReadyResult['scenario_basis'];
 export type PacProof = PacReadyResult['proof'];
 export type PacSolverEvidence = PacReadyResult['solver_evidence'];
-export type PacSolverStage = Extract<PacSolverEvidence, {kind: 'reported_floating'}>['stages'][number];
+export type PacSolverStage = PacSolverEvidence['stages'][number];
 export type PacDeployment = PacPlanResult['deployment'];
 
 export type PacRequestAsset = PacPlannerRequest['assets'][number];

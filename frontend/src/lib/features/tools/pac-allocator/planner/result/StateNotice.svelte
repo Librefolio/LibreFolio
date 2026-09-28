@@ -20,7 +20,7 @@
 
     const KEY = 'tools.pacAllocator.planner.result.states';
     const limited = $derived(result.result_state === 'ready_incumbent' && result.stop_reason !== 'completed');
-    const stages = $derived(result.solver_evidence.kind === 'reported_floating' ? result.solver_evidence.stages : []);
+    const stages = $derived(result.solver_evidence.stages);
     const finished = $derived(stages.filter((stage) => stage.status === 'finished').length);
     const minimums = $derived(result.result_state === 'ready_infeasible' ? requiredMinimumRoutes(request) : []);
     const assetLabel = (id: string) => [names.ticker(id), names.asset(id)].filter((part) => part).join(' ');
@@ -80,6 +80,13 @@
             </ul>
         </div>
         <p class={HINT}>{$t(`${KEY}.infeasible.note`, {default: 'The interface does not choose which constraint to relax: it lists them. No partial plan is shown as valid.'})}</p>
+        <button type="button" class={BUTTON_SECONDARY} data-testid="pac-planner-state-edit" onclick={onedit}>{$t(`${PLANNER_KEY}.actions.editConfiguration`, {default: 'Edit configuration'})}</button>
+    </div>
+{:else if result.result_state === 'ready_no_incumbent' && result.stop_reason === 'completed'}
+    <!-- Every stage closed, but the exact Decimal replay rejected the solver's plan. -->
+    <div class="{NOTICE.warning} space-y-2" role="alert" data-testid="pac-planner-state" data-state="no_incumbent" data-stop={result.stop_reason}>
+        <p class="font-semibold">{$t(`${PLANNER_KEY}.result.outcomes.no_incumbent`, {default: 'No plan found'})}</p>
+        <p>{$t(`${KEY}.noIncumbent.rejected`, {default: 'The solver found a plan, but the exact Decimal check rejected it, so none is published. This is not a proof that no plan exists.'})}</p>
         <button type="button" class={BUTTON_SECONDARY} data-testid="pac-planner-state-edit" onclick={onedit}>{$t(`${PLANNER_KEY}.actions.editConfiguration`, {default: 'Edit configuration'})}</button>
     </div>
 {:else if result.result_state === 'ready_no_incumbent'}

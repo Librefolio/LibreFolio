@@ -4279,7 +4279,6 @@
           },
           "badges": {
             "decimalVerified": "Verificado en Decimal",
-            "gapBounded": "Brecha acotada",
             "infeasibilityProven": "Inviabilidad demostrada",
             "infeasible": "Inviable con estas restricciones",
             "noIncumbent": "Ningún plan dentro de los límites",
@@ -4417,29 +4416,22 @@
           },
           "proof": {
             "absoluteGap": "Brecha abs.",
-            "conflictWitness": "Reglas en conflicto: {codes}",
             "decimalVerified": "plan verificado en Decimal exacto por el backend",
             "dual": "Dual",
             "exactObjectives": "Valores exactos de los objetivos (backend, Decimal)",
-            "floatingFinished": "El solver ha terminado, pero informa números en coma flotante: la optimalidad no está certificada.",
+            "floatingFinished": "El solver cerró cada etapa, pero su plan no superó la verificación en Decimal exacto.",
             "floatingUnfinished": "El solver se detuvo antes de cerrar cada etapa: es el mejor plan encontrado, no uno demostrado.",
-            "gapBounded": "Brecha acotada",
             "infeasible": "Inviabilidad demostrada",
-            "latticeWitness": "{count, plural, one {# etapa cerrada} other {# etapas cerradas}}",
-            "notCertified": "La optimalidad no está certificada.",
             "notProven": "No demostrado",
             "objective": "Objetivo",
             "optimal": "Óptimo demostrado",
-            "oracleInfeasibleWitness": "{enumerated, plural, one {# candidato enumerado} other {# candidatos enumerados}} · ninguno viable",
-            "oracleWitness": "{enumerated, plural, one {# candidato enumerado} other {# candidatos enumerados}} · {feasible} viables · {objectives, plural, one {# objetivo de la cascada verificado} other {# objetivos de la cascada verificados}}",
             "ordinal": "Ord",
             "outcome": "Resultado",
             "primal": "Primal",
             "proof": "Prueba",
             "reasons": {
               "allocation": {
-                "exact_proof_not_established": "no se ha establecido una prueba exacta",
-                "solver_not_required": "no necesario: el dominio se ha enumerado de forma exacta"
+                "exact_proof_not_established": "no se ha establecido una prueba exacta"
               },
               "portfolio_rebalancer": {
                 "sell_irreducibility_unresolved": "no se ha establecido que ninguna venta pueda eliminarse"
@@ -4452,21 +4444,21 @@
               "global": "ámbito global",
               "incumbent_face": "cara del incumbent"
             },
-            "solverNotRun": "Solver no ejecutado",
             "solverStages": "Etapas del solver",
             "sources": {
-              "deterministic_conflict": "conflicto determinista",
-              "exhaustive_oracle": "oráculo exhaustivo",
-              "score_lattice_closure": "cierre del retículo de puntuaciones"
+              "solver_status": "estado del solver"
             },
             "status": "Estado",
             "statuses": {
               "finished": "terminada",
-              "unfinished": "sin terminar"
+              "unfinished": "sin terminar",
+              "infeasible": "inviable"
             },
             "stop": "Parada",
             "tieBreak": "Desempate final: {code}.",
-            "tieBreakClosed": "desempate cerrado"
+            "tieBreakClosed": "desempate cerrado",
+            "solverWitness": "{objectives, plural, one {# objetivo de la cascada cerrado} other {# objetivos de la cascada cerrados}} en el óptimo por el solver",
+            "solverInfeasibleWitness": "El solver cerró la primera etapa como inviable: ningún plan cumple todas las restricciones estrictas."
           },
           "reasons": {
             "allocation": {
@@ -4506,7 +4498,8 @@
             "noIncumbent": {
               "body": "El solver no encontró ningún plan antes del límite. No es una prueba de que no exista ningún plan.",
               "tips": "Para reducir la búsqueda: menos activos o rutas, topes más ajustados, pasos más grandes.",
-              "title": "Ningún plan dentro de los límites"
+              "title": "Ningún plan dentro de los límites",
+              "rejected": "El solver encontró un plan, pero la verificación en Decimal exacto lo rechazó, así que no se publica ninguno. No es una prueba de que no exista ningún plan."
             },
             "noOp": {
               "body": "Con {amount} ninguna compra cumple las restricciones: el plan es no hacer nada.",

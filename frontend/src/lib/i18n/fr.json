@@ -4279,7 +4279,6 @@
           },
           "badges": {
             "decimalVerified": "Vérifié en Decimal",
-            "gapBounded": "Écart borné",
             "infeasibilityProven": "Infaisabilité prouvée",
             "infeasible": "Infaisable avec ces contraintes",
             "noIncumbent": "Aucun plan dans les limites",
@@ -4417,29 +4416,22 @@
           },
           "proof": {
             "absoluteGap": "Écart abs.",
-            "conflictWitness": "Règles en conflit : {codes}",
             "decimalVerified": "plan vérifié en Decimal exact par le backend",
             "dual": "Dual",
             "exactObjectives": "Valeurs exactes des objectifs (backend, Decimal)",
-            "floatingFinished": "Le solveur a terminé, mais il rapporte des nombres à virgule flottante : l’optimalité n’est pas certifiée.",
+            "floatingFinished": "Le solveur a clos chaque étape, mais son plan n’a pas passé la vérification en Decimal exact.",
             "floatingUnfinished": "Le solveur s’est arrêté avant de clore chaque étape : c’est le meilleur plan trouvé, pas un plan prouvé.",
-            "gapBounded": "Écart borné",
             "infeasible": "Infaisabilité prouvée",
-            "latticeWitness": "{count, plural, one {# étape close} other {# étapes closes}}",
-            "notCertified": "L’optimalité n’est pas certifiée.",
             "notProven": "Non prouvé",
             "objective": "Objectif",
             "optimal": "Optimum prouvé",
-            "oracleInfeasibleWitness": "{enumerated, plural, one {# candidat énuméré} other {# candidats énumérés}} · aucun faisable",
-            "oracleWitness": "{enumerated, plural, one {# candidat énuméré} other {# candidats énumérés}} · {feasible} faisables · {objectives, plural, one {# objectif de la cascade vérifié} other {# objectifs de la cascade vérifiés}}",
             "ordinal": "Ord",
             "outcome": "Résultat",
             "primal": "Primal",
             "proof": "Preuve",
             "reasons": {
               "allocation": {
-                "exact_proof_not_established": "aucune preuve exacte n’a été établie",
-                "solver_not_required": "non nécessaire : le domaine a été énuméré de façon exacte"
+                "exact_proof_not_established": "aucune preuve exacte n’a été établie"
               },
               "portfolio_rebalancer": {
                 "sell_irreducibility_unresolved": "il n’a pas été établi qu’aucune vente ne peut être supprimée"
@@ -4452,21 +4444,21 @@
               "global": "portée globale",
               "incumbent_face": "face de l’incumbent"
             },
-            "solverNotRun": "Solveur non exécuté",
             "solverStages": "Étapes du solveur",
             "sources": {
-              "deterministic_conflict": "conflit déterministe",
-              "exhaustive_oracle": "oracle exhaustif",
-              "score_lattice_closure": "fermeture du treillis des scores"
+              "solver_status": "statut du solveur"
             },
             "status": "Statut",
             "statuses": {
               "finished": "terminée",
-              "unfinished": "non terminée"
+              "unfinished": "non terminée",
+              "infeasible": "infaisable"
             },
             "stop": "Arrêt",
             "tieBreak": "Départage final : {code}.",
-            "tieBreakClosed": "départage clos"
+            "tieBreakClosed": "départage clos",
+            "solverWitness": "{objectives, plural, one {# objectif de la cascade clos} other {# objectifs de la cascade clos}} à l’optimum par le solveur",
+            "solverInfeasibleWitness": "Le solveur a clos la première étape comme infaisable : aucun plan ne respecte toutes les contraintes strictes."
           },
           "reasons": {
             "allocation": {
@@ -4506,7 +4498,8 @@
             "noIncumbent": {
               "body": "Le solveur n’a trouvé aucun plan avant la limite. Ce n’est pas une preuve qu’aucun plan n’existe.",
               "tips": "Pour réduire la recherche : moins d’actifs ou de routes, des plafonds plus serrés, des pas plus grands.",
-              "title": "Aucun plan dans les limites"
+              "title": "Aucun plan dans les limites",
+              "rejected": "Le solveur a trouvé un plan, mais la vérification en Decimal exact l’a rejeté : aucun plan n’est donc publié. Ce n’est pas une preuve qu’aucun plan n’existe."
             },
             "noOp": {
               "body": "Avec {amount}, aucun achat ne respecte les contraintes : le plan consiste à ne rien faire.",

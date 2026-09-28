@@ -45,9 +45,6 @@ export function resultBadges(result: PacReadyResult): ResultBadge[] {
         case 'optimal_proven':
             badges.push({id: 'proof', key: 'tools.pacAllocator.planner.result.badges.optimalProven', fallback: 'Proven optimal', tone: 'success'});
             break;
-        case 'gap_bounded':
-            badges.push({id: 'proof', key: 'tools.pacAllocator.planner.result.badges.gapBounded', fallback: 'Bounded gap', tone: 'info'});
-            break;
         case 'not_proven':
             badges.push({id: 'proof', key: 'tools.pacAllocator.planner.result.badges.notProven', fallback: 'Optimality not proven', tone: 'warning'});
             break;

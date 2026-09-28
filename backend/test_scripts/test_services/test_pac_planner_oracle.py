@@ -1,11 +1,22 @@
 """Contract tests for the zero-SCIP-dependency exhaustive PAC/Rebalancer oracle.
 
+The module under test is a **test instrument**, not production code. Since
+D-X1 (SCIP is the only production search engine, and its own status is the
+proof) it lives in the test tree, at
+`backend/test_scripts/test_services/_pac_exhaustive_oracle.py`, where it
+stays the independent referee that the solver and proof suites cross-check
+SCIP and the Decimal evaluator against on small domains. It has no
+production role: production cannot import it, and
+`test_exhaustive_oracle_is_test_only` (planner suite) guards that. Its
+contract still matters, because a referee that enumerates the wrong domain
+or picks the wrong optimum would make every cross-check it backs vacuous.
+
 All scenarios are small, pure, in-memory witnesses built by hand (mostly by
 reusing the frozen-record fixture helpers from
 `test_pac_planner_evaluator.py`, its sibling suite). Nothing here touches
-the database, server, clock, or network, and `oracle.py` itself is treated
-as frozen: every assertion below is a read of its behaviour, never a patch
-around it.
+the database, server, clock, or network, and `_pac_exhaustive_oracle.py`
+itself is treated as frozen: every assertion below is a read of its
+behaviour, never a patch around it.
 
 `run_exhaustive_oracle` explicitly promises to never re-derive feasibility
 or objective values itself — it only replays `evaluate_exact_candidate`,
@@ -21,7 +32,7 @@ Item 1's "exhaustive equality" test in particular builds its own
 independent oracle-of-the-oracle: it collects every candidate's
 `evaluate_exact_candidate` result itself and computes the expected
 lexicographic best with its own, differently-written comparison — it does
-not import or reuse `oracle.py`'s private `_lexicographic_key`.
+not import or reuse `_pac_exhaustive_oracle.py`'s private `_lexicographic_key`.
 
 Several monetary/FX fixtures in the sibling suite (e.g. `_funding_fx_scenario`)
 use a `CENT` currency quantum and blow up combinatorially fast once funding
@@ -49,7 +60,7 @@ from backend.app.services.pac_allocator.evaluator import (
     exact_decision_id,
 )
 from backend.app.services.pac_allocator.models import DecisionAccess, ExactPlannerScenario
-from backend.app.services.pac_allocator.oracle import (
+from backend.test_scripts.test_services._pac_exhaustive_oracle import (
     MAX_EXHAUSTIVE_ORACLE_CANDIDATES,
     OracleDomainTooLargeError,
     estimate_oracle_domain_size,
@@ -190,7 +201,7 @@ def _fake_view(*decisions: DecisionAccess) -> SimpleNamespace:
     """A minimal duck-typed stand-in for `ExactPolicyView`.
 
     `estimate_oracle_domain_size` only ever reads `view.decisions` (it is
-    the only attribute it accesses; see `oracle.py`), so item 8's
+    the only attribute it accesses; see `_pac_exhaustive_oracle.py`), so item 8's
     domain-size unit tests can probe `DecisionAccess` combinations
     directly without paying for a full scenario/view build.
     """
@@ -231,7 +242,7 @@ def _unsafe_frozen_exact_access_missing_frozen_quanta() -> DecisionAccess:
     exactly this combination for any normally-constructed instance, so the
     only way to reach it is to bypass `__init__`/`__post_init__` the same
     way the sibling suite's own `_unsafe_candidate_decision` does. This
-    exists to exercise `oracle.py`'s defensive
+    exists to exercise `_pac_exhaustive_oracle.py`'s defensive
     `if access.frozen_quanta is None: raise OracleDomainTooLargeError(...)`
     branch, which is otherwise dead code reachable only through malformed
     data (see the "surprising finding" reported alongside this suite).
@@ -423,7 +434,7 @@ def test_exhaustive_equality_matches_independent_lexicographic_scan() -> None:
     `run_exhaustive_oracle`), compute the expected lexicographic best with
     a differently-written comparison, and assert the oracle agrees.
 
-    This intentionally does not import or call `oracle.py`'s private
+    This intentionally does not import or call `_pac_exhaustive_oracle.py`'s private
     `_lexicographic_key`/`_ordered_objective_refs` — the sort key below is
     a separate implementation, so a bug shared between the module and a
     naive copy of its own logic could not hide from this test.
@@ -725,11 +736,11 @@ def test_frozen_exact_decision_contributes_one_value_not_its_theoretical_range()
 
 
 def test_frozen_exact_with_missing_frozen_quanta_is_unreachable_via_valid_construction() -> None:
-    """`oracle.py`'s `_decision_value_range` defensively raises
+    """`_pac_exhaustive_oracle.py`'s `_decision_value_range` defensively raises
     `OracleDomainTooLargeError` if a `frozen_exact` decision has
     `frozen_quanta is None`. `DecisionAccess.__post_init__` already
     forbids constructing exactly that combination normally, so this
-    branch is dead code in production - reachable here only via the same
+    branch is dead code for every valid view - reachable here only via the same
     `object.__new__`/`object.__setattr__` bypass the sibling suite uses
     for its own "unsafe" fixtures. See the surprising-finding note
     reported alongside this suite.

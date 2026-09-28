@@ -20,12 +20,13 @@
     const KEY = 'tools.pacAllocator.planner.result.proof';
     const OUTCOME_FALLBACKS = {incumbent_found: 'Plan found', no_op: 'No operation', infeasible_proven: 'Infeasible', no_incumbent: 'No plan found'} as const;
     const STOP_FALLBACKS = {completed: 'Completed', time_limit: 'Time limit', node_limit: 'Node limit'} as const;
+    const STATUS_FALLBACKS = {finished: 'finished', unfinished: 'unfinished', infeasible: 'infeasible'} as const;
 
     const proof = $derived(result.proof);
     const solver = $derived(result.solver_evidence);
     const verified = $derived('primary_solution' in result && result.primary_solution.validation === 'decimal_verified');
     const objectives = $derived('primary_solution' in result ? result.primary_solution.objectives : null);
-    const stages = $derived(solver.kind === 'reported_floating' ? solver.stages : []);
+    const stages = $derived(solver.stages);
     const unfinished = $derived(stages.filter((stage) => stage.status === 'unfinished').length);
     const engines = $derived([...new Set(stages.map((stage) => [stage.engine, stage.version].join(' ')))]);
     const scopes = $derived([...new Set(stages.map((stage) => stage.scope))]);
@@ -58,80 +59,35 @@
             {#if proof.kind === 'optimal_proven'}
                 <p>
                     {$t(`${KEY}.optimal`, {default: 'Proven optimal'})} ·
-                    {proof.proof_source === 'exhaustive_oracle' ? $t(`${KEY}.sources.exhaustive_oracle`, {default: 'exhaustive oracle'}) : $t(`${KEY}.sources.score_lattice_closure`, {default: 'score lattice closure'})} ·
+                    {$t(`${KEY}.sources.solver_status`, {default: 'solver status'})} ·
                     {$t(`${KEY}.tieBreakClosed`, {default: 'tie-break closed'})}
                 </p>
-                {#if proof.witness.kind === 'exhaustive_oracle'}
-                    <p class={HINT} data-testid="pac-planner-proof-witness">
-                        {$t(`${KEY}.oracleWitness`, {
-                            default: '{enumerated, plural, one {# candidate} other {# candidates}} enumerated · {feasible} feasible · {objectives, plural, one {# objective} other {# objectives}} of the cascade verified',
-                            values: {enumerated: proof.witness.enumerated_candidates, feasible: proof.witness.feasible_candidates, objectives: proof.witness.objective_codes.length},
-                        })}
-                    </p>
-                {:else}
-                    <p class={HINT} data-testid="pac-planner-proof-witness">
-                        {$t(`${KEY}.latticeWitness`, {default: '{count, plural, one {# stage} other {# stages}} closed', values: {count: proof.witness.closed_stage_count}})}
-                    </p>
-                {/if}
-            {:else if proof.kind === 'gap_bounded'}
-                <p>{$t(`${KEY}.gapBounded`, {default: 'Bounded gap'})}</p>
-                <div class="overflow-x-auto">
-                    <table class={TABLE} data-testid="pac-planner-proof-bounds">
-                        <thead>
-                            <tr>
-                                <th scope="col" class="{TH} text-right">{$t(`${KEY}.ordinal`, {default: 'Ord'})}</th>
-                                <th scope="col" class={TH}>{$t(`${KEY}.objective`, {default: 'Objective'})}</th>
-                                <th scope="col" class="{TH} text-right">{$t(`${KEY}.primal`, {default: 'Primal'})}</th>
-                                <th scope="col" class="{TH} text-right">{$t(`${KEY}.dual`, {default: 'Dual'})}</th>
-                                <th scope="col" class="{TH} text-right">{$t(`${KEY}.absoluteGap`, {default: 'Abs. gap'})}</th>
-                                <th scope="col" class="{TH} text-right">{$t(`${KEY}.relativeGap`, {default: 'Rel. gap'})}</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-                            {#each proof.stage_bounds as bound (bound.stage)}
-                                <tr>
-                                    <td class={TD_NUM}>{bound.ordinal}</td>
-                                    <th scope="row" class="{TD} text-left font-medium">{objectiveName(bound.objective_code)}</th>
-                                    <td class={TD_NUM}>{formatSolverNumber(bound.primal, bound.unit)}</td>
-                                    <td class={TD_NUM}>{formatSolverNumber(bound.dual, bound.unit)}</td>
-                                    <td class={TD_NUM}>{formatPlannerPlainDecimal(bound.absolute_gap)}</td>
-                                    <td class={TD_NUM}>{formatPlannerPlainDecimal(bound.relative_gap)}</td>
-                                </tr>
-                            {/each}
-                        </tbody>
-                    </table>
-                </div>
+                <p class={HINT} data-testid="pac-planner-proof-witness">
+                    {$t(`${KEY}.solverWitness`, {
+                        default: '{objectives, plural, one {# objective of the cascade} other {# objectives of the cascade}} closed at the optimum by the solver',
+                        values: {objectives: proof.witness.objective_codes.length},
+                    })}
+                </p>
             {:else if proof.kind === 'not_proven'}
                 <p>
                     {$t(`${KEY}.notProven`, {default: 'Not proven'})} ·
                     {$t(`tools.pacAllocator.planner.result.proof.reasons.${proof.reason_code}`, {default: 'an exact proof was not established'})}
                 </p>
                 <p class={HINT}>
-                    {#if solver.kind === 'reported_floating' && unfinished === 0}
-                        {$t(`${KEY}.floatingFinished`, {default: 'The solver finished, but it reports floating numbers: optimality is not certified.'})}
-                    {:else if solver.kind === 'reported_floating'}
-                        {$t(`${KEY}.floatingUnfinished`, {default: 'The solver stopped before closing every stage: this is the best plan found, not a proven one.'})}
+                    {#if unfinished === 0}
+                        {$t(`${KEY}.floatingFinished`, {default: 'The solver closed every stage, but its plan did not pass the exact Decimal check.'})}
                     {:else}
-                        {$t(`${KEY}.notCertified`, {default: 'Optimality is not certified.'})}
+                        {$t(`${KEY}.floatingUnfinished`, {default: 'The solver stopped before closing every stage: this is the best plan found, not a proven one.'})}
                     {/if}
                 </p>
             {:else}
                 <p>
                     {$t(`${KEY}.infeasible`, {default: 'Infeasibility proven'})} ·
-                    {proof.proof_source === 'exhaustive_oracle' ? $t(`${KEY}.sources.exhaustive_oracle`, {default: 'exhaustive oracle'}) : $t(`${KEY}.sources.deterministic_conflict`, {default: 'deterministic conflict'})}
+                    {$t(`${KEY}.sources.solver_status`, {default: 'solver status'})}
                 </p>
-                {#if proof.witness.kind === 'exhaustive_oracle'}
-                    <p class={HINT} data-testid="pac-planner-proof-witness">
-                        {$t(`${KEY}.oracleInfeasibleWitness`, {
-                            default: '{enumerated, plural, one {# candidate} other {# candidates}} enumerated · none feasible',
-                            values: {enumerated: proof.witness.enumerated_candidates},
-                        })}
-                    </p>
-                {:else}
-                    <p class={HINT} data-testid="pac-planner-proof-witness">
-                        {$t(`${KEY}.conflictWitness`, {default: 'Conflicting rules: {codes}', values: {codes: proof.witness.issue_codes.join(', ')}})}
-                    </p>
-                {/if}
+                <p class={HINT} data-testid="pac-planner-proof-witness">
+                    {$t(`${KEY}.solverInfeasibleWitness`, {default: 'The solver closed the first stage as infeasible: no plan meets every hard constraint.'})}
+                </p>
             {/if}
         </dd>
 
@@ -140,53 +96,46 @@
     </dl>
 
     <div class="space-y-2 border-t border-gray-200 pt-3 dark:border-gray-700" data-testid="pac-planner-solver">
-        {#if solver.kind === 'not_run'}
-            <p>
-                {$t(`${KEY}.solverNotRun`, {default: 'Solver not run'})} ·
-                {$t(`tools.pacAllocator.planner.result.proof.reasons.${solver.reason}`, {default: 'not required: the domain was enumerated exactly'})}
-            </p>
-        {:else}
-            <p class="font-medium">
-                {[$t(`${KEY}.solverStages`, {default: 'Solver stages'}), $t(`${KEY}.reportedFloating`, {default: 'reported in floating point'}), ...engines, ...(scopes.length === 1 ? [scopeText(scopes[0])] : [])].join(' · ')}
-            </p>
-            <div class="overflow-x-auto">
-                <table class={TABLE} data-testid="pac-planner-solver-stages">
-                    <thead>
-                        <tr>
-                            <th scope="col" class="{TH} text-right">{$t(`${KEY}.ordinal`, {default: 'Ord'})}</th>
-                            <th scope="col" class={TH}>{$t(`${KEY}.objective`, {default: 'Objective'})}</th>
-                            <th scope="col" class={TH}>{$t(`${KEY}.status`, {default: 'Status'})}</th>
+        <p class="font-medium">
+            {[$t(`${KEY}.solverStages`, {default: 'Solver stages'}), $t(`${KEY}.reportedFloating`, {default: 'reported in floating point'}), ...engines, ...(scopes.length === 1 ? [scopeText(scopes[0])] : [])].join(' · ')}
+        </p>
+        <div class="overflow-x-auto">
+            <table class={TABLE} data-testid="pac-planner-solver-stages">
+                <thead>
+                    <tr>
+                        <th scope="col" class="{TH} text-right">{$t(`${KEY}.ordinal`, {default: 'Ord'})}</th>
+                        <th scope="col" class={TH}>{$t(`${KEY}.objective`, {default: 'Objective'})}</th>
+                        <th scope="col" class={TH}>{$t(`${KEY}.status`, {default: 'Status'})}</th>
+                        {#if scopes.length > 1}
+                            <th scope="col" class={TH}>{$t(`${KEY}.scope`, {default: 'Scope'})}</th>
+                        {/if}
+                        <th scope="col" class="{TH} text-right">{$t(`${KEY}.primal`, {default: 'Primal'})}</th>
+                        <th scope="col" class="{TH} text-right">{$t(`${KEY}.dual`, {default: 'Dual'})}</th>
+                        <th scope="col" class="{TH} text-right">{$t(`${KEY}.absoluteGap`, {default: 'Abs. gap'})}</th>
+                        <th scope="col" class="{TH} text-right">{$t(`${KEY}.relativeGap`, {default: 'Rel. gap'})}</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                    {#each stages as stage (stage.stage)}
+                        <tr data-testid="pac-planner-solver-stage" data-objective={stage.objective_code} data-status={stage.status}>
+                            <td class={TD_NUM}>{stage.ordinal}</td>
+                            <th scope="row" class="{TD} text-left font-medium">
+                                {objectiveName(stage.objective_code)}
+                                {#if unitSuffix(stage.unit)}<span class="font-normal text-gray-500 dark:text-gray-400">({unitSuffix(stage.unit)})</span>{/if}
+                            </th>
+                            <td class={TD}>{$t(`${KEY}.statuses.${stage.status}`, {default: STATUS_FALLBACKS[stage.status]})}</td>
                             {#if scopes.length > 1}
-                                <th scope="col" class={TH}>{$t(`${KEY}.scope`, {default: 'Scope'})}</th>
+                                <td class={TD}>{scopeText(stage.scope)}</td>
                             {/if}
-                            <th scope="col" class="{TH} text-right">{$t(`${KEY}.primal`, {default: 'Primal'})}</th>
-                            <th scope="col" class="{TH} text-right">{$t(`${KEY}.dual`, {default: 'Dual'})}</th>
-                            <th scope="col" class="{TH} text-right">{$t(`${KEY}.absoluteGap`, {default: 'Abs. gap'})}</th>
-                            <th scope="col" class="{TH} text-right">{$t(`${KEY}.relativeGap`, {default: 'Rel. gap'})}</th>
+                            <td class={TD_NUM}>{formatSolverNumber(stage.primal, stage.unit)}</td>
+                            <td class={TD_NUM}>{formatSolverNumber(stage.dual, stage.unit)}</td>
+                            <td class={TD_NUM}>{formatPlannerPlainDecimal(stage.absolute_gap)}</td>
+                            <td class={TD_NUM}>{formatPlannerPlainDecimal(stage.relative_gap)}</td>
                         </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-                        {#each stages as stage (stage.stage)}
-                            <tr data-testid="pac-planner-solver-stage" data-objective={stage.objective_code} data-status={stage.status}>
-                                <td class={TD_NUM}>{stage.ordinal}</td>
-                                <th scope="row" class="{TD} text-left font-medium">
-                                    {objectiveName(stage.objective_code)}
-                                    {#if unitSuffix(stage.unit)}<span class="font-normal text-gray-500 dark:text-gray-400">({unitSuffix(stage.unit)})</span>{/if}
-                                </th>
-                                <td class={TD}>{$t(`${KEY}.statuses.${stage.status}`, {default: stage.status === 'finished' ? 'finished' : 'unfinished'})}</td>
-                                {#if scopes.length > 1}
-                                    <td class={TD}>{scopeText(stage.scope)}</td>
-                                {/if}
-                                <td class={TD_NUM}>{formatSolverNumber(stage.primal, stage.unit)}</td>
-                                <td class={TD_NUM}>{formatSolverNumber(stage.dual, stage.unit)}</td>
-                                <td class={TD_NUM}>{formatPlannerPlainDecimal(stage.absolute_gap)}</td>
-                                <td class={TD_NUM}>{formatPlannerPlainDecimal(stage.relative_gap)}</td>
-                            </tr>
-                        {/each}
-                    </tbody>
-                </table>
-            </div>
-        {/if}
+                    {/each}
+                </tbody>
+            </table>
+        </div>
     </div>
 
     {#if objectives}

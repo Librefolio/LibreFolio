@@ -29,129 +29,12 @@ def _calendar_date(value: str) -> str:
     return value
 
 
-
-
 class AllocationStrictModel(StrictModel):
     model_config = ConfigDict(strict=True, frozen=True, revalidate_instances="always")
 
 
 CurrencyCode = Annotated[str, StringConstraints(strict=True, min_length=3, max_length=3, pattern=r"^[A-Z]{3}$"), AfterValidator(Currency.validate_code)]
 ReferenceDate = Annotated[str, StringConstraints(strict=True, min_length=10, max_length=10, pattern=_ISO_DATE), AfterValidator(_calendar_date)]
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 # =============================================================================
@@ -335,7 +218,6 @@ NotProvenReasonCode = Literal[
     "allocation.exact_proof_not_established",
     "portfolio_rebalancer.sell_irreducibility_unresolved",
 ]
-SolverNotRunReasonCode = Literal["allocation.solver_not_required"]
 PlannerMessageKey = Annotated[str, StringConstraints(strict=True, min_length=3, max_length=160, pattern=_PLANNER_MESSAGE_KEY)]
 PlannerLabel = Annotated[str, StringConstraints(strict=True, min_length=1, max_length=128), AfterValidator(_unicode_scalar_text)]
 PlannerLongLabel = Annotated[str, StringConstraints(strict=True, min_length=1, max_length=256), AfterValidator(_unicode_scalar_text)]
@@ -1102,13 +984,20 @@ class SolverToleranceEvidence(AllocationStrictModel):
 
 
 class SolverStageEvidence(AllocationStrictModel):
-    """Non-authoritative floating solver report; never an exact objective value."""
+    """Non-authoritative floating solver report; never an exact objective value.
+
+    ``infeasible`` is SCIP's own verdict on the first, still-global stage, and
+    it carries no observation: an infeasible solve has no primal, no dual and
+    no gap. No later stage can carry it — a face emptied by earlier pins is an
+    anomaly of the pins, not a statement about the scenario — so such a stage
+    is reported ``unfinished``.
+    """
 
     kind: Literal["reported_floating"]
     stage: PlannerId
     objective_code: ObjectiveCode
     ordinal: PlannerPositiveInteger
-    status: Literal["finished", "unfinished"]
+    status: Literal["finished", "unfinished", "infeasible"]
     scope: Literal["global", "incumbent_face"]
     sense: ObjectiveSense
     unit: NumericObjectiveUnit
@@ -1128,6 +1017,11 @@ class SolverStageEvidence(AllocationStrictModel):
         observations = (self.primal, self.dual, self.absolute_gap, self.relative_gap)
         if self.status == "finished" and any(value is None for value in observations):
             raise ValueError("Finished solver stage evidence requires finite primal, dual, and gaps")
+        if self.status == "infeasible":
+            if self.ordinal != 1 or self.scope != "global":
+                raise ValueError("Only the first, global solver stage can report infeasibility")
+            if any(value is not None for value in observations):
+                raise ValueError("An infeasible solver stage has no primal, dual, or gap")
         if self.primal is not None and self.dual is not None:
             primal = _fixed_fraction(self.primal)
             dual = _fixed_fraction(self.dual)
@@ -1138,12 +1032,9 @@ class SolverStageEvidence(AllocationStrictModel):
         return self
 
 
-class SolverNotRunEvidence(AllocationStrictModel):
-    kind: Literal["not_run"]
-    reason: SolverNotRunReasonCode
-
-
 class ReportedFloatingSolverEvidence(AllocationStrictModel):
+    """What SCIP did, stage by stage; every ready result carries it (D-X1)."""
+
     kind: Literal["reported_floating"]
     stages: Annotated[list[SolverStageEvidence], Field(min_length=1)]
 
@@ -1154,124 +1045,40 @@ class ReportedFloatingSolverEvidence(AllocationStrictModel):
         if ordinals != sorted(ordinals) or len(ordinals) != len(set(ordinals)) or len(codes) != len(set(codes)):
             raise ValueError("Solver stages must have unique codes and ascending ordinals")
         statuses = [stage.status for stage in self.stages]
+        if "infeasible" in statuses:
+            # Nothing runs after an infeasible first stage, so nothing is reported after it.
+            if len(statuses) != 1:
+                raise ValueError("An infeasible solver stage must be the only reported stage")
+            return self
         if statuses != sorted(statuses, key={"finished": 0, "unfinished": 1}.__getitem__):
             raise ValueError("Finished solver stages must precede unfinished stages")
         return self
 
 
-type PlannerSolverEvidence = Annotated[
-    Union[SolverNotRunEvidence, ReportedFloatingSolverEvidence],
-    Field(discriminator="kind"),
-]
+class SolverStatusWitness(AllocationStrictModel):
+    """SCIP's own status, which is the proof (D-X1).
 
+    Names the objective stages the solver closed — at the optimum for
+    ``optimal_proven``, as infeasible for ``infeasibility_proven``. Engine,
+    version, tolerances and gaps already live on the solver evidence, which
+    the ready result binds to this witness stage by stage.
+    """
 
-class ExhaustiveOracleWitness(AllocationStrictModel):
-    kind: Literal["exhaustive_oracle"]
-    enumerated_candidates: PlannerPositiveInteger
-    feasible_candidates: PlannerSafeInteger
-    objective_codes: list[ObjectiveCode]
-
-    @model_validator(mode="after")
-    def validate_candidate_counts(self) -> ExhaustiveOracleWitness:
-        if self.feasible_candidates > self.enumerated_candidates:
-            raise ValueError("Feasible oracle candidates cannot exceed enumerated candidates")
-        if len(self.objective_codes) != len(set(self.objective_codes)):
-            raise ValueError("Oracle objective codes must be unique")
-        return self
-
-
-class ScoreLatticeClosureWitness(AllocationStrictModel):
-    kind: Literal["score_lattice_closure"]
+    kind: Literal["solver_status"]
     objective_codes: Annotated[list[ObjectiveCode], Field(min_length=1)]
-    closed_stage_count: PlannerPositiveInteger
 
     @model_validator(mode="after")
-    def validate_closed_stages(self) -> ScoreLatticeClosureWitness:
+    def validate_objective_codes(self) -> SolverStatusWitness:
         if len(self.objective_codes) != len(set(self.objective_codes)):
-            raise ValueError("Closed objective codes must be unique")
-        if self.closed_stage_count != len(self.objective_codes):
-            raise ValueError("Closed stage count must equal the objective-code count")
+            raise ValueError("Solver-status witness objective codes must be unique")
         return self
-
-
-class DeterministicConflictWitness(AllocationStrictModel):
-    kind: Literal["deterministic_conflict"]
-    issue_codes: Annotated[list[PlannerIssueCode], Field(min_length=1)]
-    summary_code: PlannerIssueCode
-
-    @model_validator(mode="after")
-    def validate_issue_codes(self) -> DeterministicConflictWitness:
-        if len(self.issue_codes) != len(set(self.issue_codes)):
-            raise ValueError("Conflict issue codes must be unique")
-        if self.summary_code not in self.issue_codes:
-            raise ValueError("Conflict summary code must reference one listed issue")
-        return self
-
-
-type OptimalityWitness = Annotated[
-    Union[ExhaustiveOracleWitness, ScoreLatticeClosureWitness],
-    Field(discriminator="kind"),
-]
-type InfeasibilityWitness = Annotated[
-    Union[ExhaustiveOracleWitness, DeterministicConflictWitness],
-    Field(discriminator="kind"),
-]
 
 
 class OptimalProvenProof(AllocationStrictModel):
     kind: Literal["optimal_proven"]
-    proof_source: Literal["exhaustive_oracle", "score_lattice_closure"]
-    witness: OptimalityWitness
+    proof_source: Literal["solver_status"]
+    witness: SolverStatusWitness
     tie_break_closed: Literal[True]
-
-    @model_validator(mode="after")
-    def validate_source_matches_witness(self) -> OptimalProvenProof:
-        if self.proof_source != self.witness.kind:
-            raise ValueError("Proof source must match optimality witness kind")
-        if isinstance(self.witness, ExhaustiveOracleWitness):
-            if self.witness.feasible_candidates == 0:
-                raise ValueError("Optimal oracle proof must include a feasible candidate")
-            if not self.witness.objective_codes:
-                raise ValueError("Optimal oracle proof must cover an objective")
-        return self
-
-
-class BoundedObjectiveStage(AllocationStrictModel):
-    stage: PlannerId
-    objective_code: ObjectiveCode
-    ordinal: PlannerPositiveInteger
-    scope: Literal["global", "incumbent_face"]
-    sense: ObjectiveSense
-    unit: NumericObjectiveUnit
-    primal: PlannerFixedDecimal
-    dual: PlannerFixedDecimal
-    absolute_gap: PlannerNonNegativeDecimal
-    relative_gap: PlannerNonNegativeDecimal
-
-    @model_validator(mode="after")
-    def validate_objective_unit(self) -> BoundedObjectiveStage:
-        if self.unit.kind != _objective_unit_kind(self.objective_code):
-            raise ValueError("Bounded objective unit does not match objective code")
-        primal = _fixed_fraction(self.primal)
-        dual = _fixed_fraction(self.dual)
-        if (self.sense == "min" and dual > primal) or (self.sense == "max" and primal > dual):
-            raise ValueError("Bound ordering must match the objective sense")
-        if _fixed_fraction(self.absolute_gap) < abs(primal - dual):
-            raise ValueError("Absolute gap must bound the primal-dual difference")
-        return self
-
-
-class GapBoundedProof(AllocationStrictModel):
-    kind: Literal["gap_bounded"]
-    stage_bounds: Annotated[list[BoundedObjectiveStage], Field(min_length=1)]
-
-    @model_validator(mode="after")
-    def validate_stage_order(self) -> GapBoundedProof:
-        ordinals = [stage.ordinal for stage in self.stage_bounds]
-        codes = [stage.objective_code for stage in self.stage_bounds]
-        if ordinals != sorted(ordinals) or len(ordinals) != len(set(ordinals)) or len(codes) != len(set(codes)):
-            raise ValueError("Gap bounds must have unique objective codes and ascending ordinals")
-        return self
 
 
 class NotProvenProof(AllocationStrictModel):
@@ -1281,20 +1088,18 @@ class NotProvenProof(AllocationStrictModel):
 
 class InfeasibilityProvenProof(AllocationStrictModel):
     kind: Literal["infeasibility_proven"]
-    proof_source: Literal["exhaustive_oracle", "deterministic_conflict"]
-    witness: InfeasibilityWitness
+    proof_source: Literal["solver_status"]
+    witness: SolverStatusWitness
 
     @model_validator(mode="after")
-    def validate_source_matches_witness(self) -> InfeasibilityProvenProof:
-        if self.proof_source != self.witness.kind:
-            raise ValueError("Proof source must match infeasibility witness kind")
-        if isinstance(self.witness, ExhaustiveOracleWitness) and self.witness.feasible_candidates != 0:
-            raise ValueError("Infeasibility oracle proof cannot contain a feasible candidate")
+    def validate_first_stage_only(self) -> InfeasibilityProvenProof:
+        if len(self.witness.objective_codes) != 1:
+            raise ValueError("An infeasibility proof names exactly the first objective stage")
         return self
 
 
 type ReadyPlanProof = Annotated[
-    Union[OptimalProvenProof, GapBoundedProof, NotProvenProof],
+    Union[OptimalProvenProof, NotProvenProof],
     Field(discriminator="kind"),
 ]
 
@@ -2264,37 +2069,32 @@ def _validate_not_proven_issue_binding(
         raise ValueError("SELL irreducibility reason requires a matching warning proof issue")
 
 
-def _validate_gap_proof(
+def _validate_solver_status_proof(
     proof: ReadyPlanProof | InfeasibilityProvenProof | None,
-    solver_evidence: PlannerSolverEvidence,
-    solution: PacPlanSolution | RebalancerPlanSolution | None,
+    solver_evidence: ReportedFloatingSolverEvidence,
 ) -> None:
-    if not isinstance(proof, GapBoundedProof):
-        return
-    if not isinstance(solver_evidence, ReportedFloatingSolverEvidence):
-        raise ValueError("gap_bounded requires reported_floating solver evidence")
-    unfinished = [stage for stage in solver_evidence.stages if stage.status == "unfinished"]
-    if [(stage.stage, stage.objective_code, stage.ordinal, stage.scope, stage.sense, stage.unit.model_dump_json()) for stage in proof.stage_bounds] != [(stage.stage, stage.objective_code, stage.ordinal, stage.scope, stage.sense, stage.unit.model_dump_json()) for stage in unfinished]:
-        raise ValueError("gap_bounded must cover every unfinished normative solver stage in order")
-    if solution is None:
-        raise ValueError("gap_bounded requires a published primary solution")
-    objectives = {(stage.objective_code, stage.ordinal, stage.sense, stage.unit.model_dump_json()): stage for stage in solution.objectives.stages}
-    for solver_stage, bound in zip(unfinished, proof.stage_bounds, strict=True):
-        key = (bound.objective_code, bound.ordinal, bound.sense, bound.unit.model_dump_json())
-        objective = objectives.get(key)
-        if objective is None:
-            raise ValueError("Gap-bound stages must match published objective stages, senses, and units")
-        solver_values = (solver_stage.primal, solver_stage.dual, solver_stage.absolute_gap, solver_stage.relative_gap)
-        if any(value is None for value in solver_values):
-            raise ValueError("gap_bounded requires finite floating evidence for every unfinished tier")
-        bound_values = (bound.primal, bound.dual, bound.absolute_gap, bound.relative_gap)
-        if any(_fixed_fraction(solver_value) != _fixed_fraction(bound_value) for solver_value, bound_value in zip(solver_values, bound_values, strict=True) if solver_value is not None):
-            raise ValueError("Gap-bound values must match their reported floating evidence")
-        exact_objective = _exact_fraction(objective.value)
-        primal = _fixed_fraction(bound.primal)
-        dual = _fixed_fraction(bound.dual)
-        if (bound.sense == "min" and not dual <= exact_objective <= primal) or (bound.sense == "max" and not primal <= exact_objective <= dual):
-            raise ValueError("Exact incumbent objective must lie inside the sense-aware solver bounds")
+    """Bind a ``solver_status`` proof to the evidence of the solve it rests on.
+
+    The proof is SCIP's own status (D-X1), so the evidence must show that
+    status: an optimum needs every reported stage finished, on exactly the
+    witness's objectives in order; an infeasibility needs the single first
+    stage infeasible, on the witness's one objective. And conversely, an
+    infeasible stage backs nothing but an infeasibility proof.
+    """
+    codes = [stage.objective_code for stage in solver_evidence.stages]
+    infeasible = any(stage.status == "infeasible" for stage in solver_evidence.stages)
+    if isinstance(proof, OptimalProvenProof):
+        if any(stage.status != "finished" for stage in solver_evidence.stages):
+            raise ValueError("optimal_proven requires every solver stage finished")
+        if codes != proof.witness.objective_codes:
+            raise ValueError("Optimal proof witness must name exactly the finished solver stages in order")
+    elif isinstance(proof, InfeasibilityProvenProof):
+        if not infeasible:
+            raise ValueError("infeasibility_proven requires an infeasible first solver stage")
+        if codes != proof.witness.objective_codes:
+            raise ValueError("Infeasibility proof witness must name the infeasible solver stage")
+    elif infeasible:
+        raise ValueError("An infeasible solver stage requires an infeasibility proof")
 
 
 def _validate_rebalancer_policy_solution(
@@ -2310,25 +2110,21 @@ def _validate_rebalancer_policy_solution(
 
 
 def _validate_solver_units(
-    solver_evidence: PlannerSolverEvidence,
+    solver_evidence: ReportedFloatingSolverEvidence,
     valuation_currency: CurrencyCode,
 ) -> None:
-    if not isinstance(solver_evidence, ReportedFloatingSolverEvidence):
-        return
     if any(stage.unit.kind in {"valuation_money", "valuation_money_squared"} and stage.unit.currency_code != valuation_currency for stage in solver_evidence.stages):
         raise ValueError("Solver valuation units must use the scenario valuation currency")
 
 
 def _validate_stop_evidence(
     stop_reason: str,
-    solver_evidence: PlannerSolverEvidence,
+    solver_evidence: ReportedFloatingSolverEvidence,
 ) -> None:
-    if stop_reason != "completed" and not isinstance(solver_evidence, ReportedFloatingSolverEvidence):
-        raise ValueError("Solver limit stops require reported_floating stage evidence")
-    if isinstance(solver_evidence, ReportedFloatingSolverEvidence):
-        unfinished = any(stage.status == "unfinished" for stage in solver_evidence.stages)
-        if (stop_reason == "completed") == unfinished:
-            raise ValueError("Completed stops require finished stages; limit stops require an unfinished stage")
+    # An infeasible stage is a verdict, not an interruption: it ends a completed search.
+    unfinished = any(stage.status == "unfinished" for stage in solver_evidence.stages)
+    if (stop_reason == "completed") == unfinished:
+        raise ValueError("Completed stops require no unfinished stage; limit stops require an unfinished stage")
 
 
 type PacDeployment = Annotated[
@@ -2408,7 +2204,7 @@ class _PacReadyResultBase(AllocationStrictModel):
     provenance: Annotated[list[PlannerProvenance], Field(min_length=1)]
     scenario_basis: PacScenarioBasis
     stop_reason: Literal["completed", "time_limit", "node_limit"]
-    solver_evidence: PlannerSolverEvidence
+    solver_evidence: ReportedFloatingSolverEvidence
     issues: list[PlannerIssue]
 
     @model_validator(mode="after")
@@ -2423,7 +2219,7 @@ class _PacReadyResultBase(AllocationStrictModel):
         _validate_solver_units(self.solver_evidence, self.scenario_basis.valuation_currency)
         _validate_not_proven_issue_binding("PAC", self.scenario_basis.policy, proof, self.issues)
         _validate_optimal_proof_objectives(proof, solution)
-        _validate_gap_proof(proof, self.solver_evidence, solution)
+        _validate_solver_status_proof(proof, self.solver_evidence)
         if solution is not None:
             _validate_basis_solution(self.scenario_basis, solution)
             _validate_ready_solution(self.catalogs, self.provenance, self.scenario_basis.valuation_currency, solution)
@@ -2471,7 +2267,7 @@ class _RebalancerReadyResultBase(AllocationStrictModel):
     provenance: Annotated[list[PlannerProvenance], Field(min_length=1)]
     scenario_basis: RebalancerScenarioBasis
     stop_reason: Literal["completed", "time_limit", "node_limit"]
-    solver_evidence: PlannerSolverEvidence
+    solver_evidence: ReportedFloatingSolverEvidence
     issues: list[PlannerIssue]
 
     @model_validator(mode="after")
@@ -2486,7 +2282,7 @@ class _RebalancerReadyResultBase(AllocationStrictModel):
         _validate_solver_units(self.solver_evidence, self.scenario_basis.valuation_currency)
         _validate_not_proven_issue_binding("Rebalancer", self.scenario_basis.policy, proof, self.issues)
         _validate_optimal_proof_objectives(proof, solution)
-        _validate_gap_proof(proof, self.solver_evidence, solution)
+        _validate_solver_status_proof(proof, self.solver_evidence)
         if solution is not None:
             _validate_basis_solution(self.scenario_basis, solution)
             _validate_ready_solution(self.catalogs, self.provenance, self.scenario_basis.valuation_currency, solution)

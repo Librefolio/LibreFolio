@@ -11,62 +11,17 @@ from backend.app.services.pac_allocator.numeric import ExactRatio
 Checkpoint = Callable[[], None]
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def check_budget(checkpoint: Checkpoint | None) -> None:
     if checkpoint is not None:
         checkpoint()
 
 
-
-
 # Planner v2 exact domain ----------------------------------------------------
 #
 # These data-only records deliberately do not depend on a solver.  The public
-# request is normalized into these records once; the evaluator, exhaustive
-# oracle, and future solver adapter consume the same exact state.
+# request is normalized into these records once; the evaluator, the SCIP
+# compiler, and the exhaustive oracle of the test tree consume the same exact
+# state.
 
 type PlannerProduct = Literal["pac", "rebalancer"]
 type PlannerPolicy = Literal["proportional", "min_fragmentation", "invest_only", "invest_and_sell"]

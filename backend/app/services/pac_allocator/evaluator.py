@@ -4,7 +4,8 @@ Every quantity here is computed on ``ExactRatio``, never on floats: the planner
 must be able to *prove* a result, and a proof cannot rest on a representation
 that rounds. The evaluator is deliberately independent of the solver — it scores
 a candidate without knowing how that candidate was produced, which is what makes
-it usable both as the objective of the SCIP model and as the referee of the
+it usable as the formula the SCIP objectives mirror, as the referee that replays
+every SCIP incumbent, and — in the test tree — as the scorer behind the
 exhaustive oracle.
 
 The P1 ``analyze`` arithmetic that used to open this file was removed on

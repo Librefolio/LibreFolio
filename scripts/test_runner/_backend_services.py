@@ -113,7 +113,7 @@ def services_pac_planner_evaluator(verbose: bool = False, test_names: list = Non
 
 
 def services_pac_planner_oracle(verbose: bool = False, test_names: list = None) -> bool:
-    """Test the zero-SCIP-dependency exhaustive oracle over one policy view's discrete domain."""
+    """Test the exhaustive oracle, a test-only referee with zero SCIP dependency, over one policy view's discrete domain."""
     print_section("Services: PAC/Rebalancer Exhaustive Oracle")
     cmd = _build_pytest_cmd(PAC_PLANNER_ORACLE_TEST_PATH, test_names)
     return run_command(cmd, "PAC/Rebalancer exhaustive oracle tests", verbose=verbose)
@@ -134,7 +134,7 @@ def services_pac_planner_solver(verbose: bool = False, test_names: list = None) 
 
 
 def services_pac_planner_proof(verbose: bool = False, test_names: list = None) -> bool:
-    """Test that a floating solve structurally cannot express a proven outcome."""
+    """Test that a proof comes only from SCIP's own closed statuses, through a sealed witness."""
     print_section("Services: PAC/Rebalancer Proof Semantics")
     cmd = _build_pytest_cmd(PAC_PLANNER_PROOF_TEST_PATH, test_names)
     return run_command(cmd, "PAC/Rebalancer proof semantics tests", verbose=verbose)
@@ -924,7 +924,7 @@ Note: No backend server required.
         "pac-planner-oracle",
         services_pac_planner_oracle,
         name="PAC/Rebalancer Exhaustive Oracle",
-        desc="Exhaustive candidate enumeration, domain-size estimation and cap, lexicographic best-candidate selection and checkpoint cancellation",
+        desc="Test-only referee: exhaustive candidate enumeration, domain-size estimation and cap, lexicographic best-candidate selection and checkpoint cancellation",
         isolation="pure",
     )
     add_test(
@@ -940,7 +940,7 @@ Note: No backend server required.
         "pac-planner-solver",
         services_pac_planner_solver,
         name="PAC/Rebalancer Lexicographic Solver",
-        desc="Lexicographic SCIP cascade adapter: exhaustive-oracle agreement, stage scoping, evidence shape, honest limits and floating infeasibility",
+        desc="Lexicographic SCIP cascade adapter: exhaustive-oracle agreement, stage scoping, evidence shape, honest limits and the first-stage infeasible verdict",
         isolation="pure",
     )
     add_test(
@@ -948,7 +948,7 @@ Note: No backend server required.
         "pac-planner-proof",
         services_pac_planner_proof,
         name="PAC/Rebalancer Proof Semantics",
-        desc="Sealed witnesses, oracle-only promotion and the structural impossibility of a floating solve claiming a proof",
+        desc="Sealed solver-status witnesses: optimal only when every stage closed, infeasible only at the first stage, limits and anomalies never proven",
         isolation="pure",
     )
     add_test(
@@ -972,7 +972,7 @@ Note: No backend server required.
         "pac-planner-service",
         services_pac_planner_service,
         name="PAC/Rebalancer Plan Orchestration",
-        desc="plan_pac_allocation end to end: ready states, failure availabilities, oracle-settled evidence and SCIP import isolation",
+        desc="plan_pac_allocation end to end: ready states, failure availabilities, solver-status proofs, no domain enumeration, test-only oracle and SCIP import isolation",
         isolation="pure",
     )
     add_test(cat, "asset-source", services_asset_source, name="Asset Source", desc="Provider assignment, synthetic yield")
