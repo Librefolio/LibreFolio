@@ -4,6 +4,7 @@ import {TEST_ADMIN, TEST_USER} from './fixtures/test-users';
 import {eventSeq, waitForEvent} from './fixtures/app-events';
 import {optionsClosed} from './fixtures/probe';
 import {uniqueSuffix} from './fixtures/unique';
+import {skipDueFlowsExcept} from './fixtures/onboarding-accounts';
 
 test.describe('Runes parity', () => {
     // The preference case owns its account; the admin case changes only a local
@@ -32,6 +33,21 @@ test.describe('Runes parity', () => {
             const me = await page.request.get('/api/v1/auth/me');
             expect(me.ok()).toBe(true);
             expect((await me.json()).user.id).toBe(created.id);
+
+            // A fresh account is gated on /welcome, and its intro tour would then
+            // make the shell inert on any route. Skip every flow still due, for this
+            // account only, and read it back: skipping welcome, unlike completing
+            // it, writes no user settings (this test's subject). Then enter through
+            // the gate on a full load: /welcome forwards to returnTo only once the
+            // re-read progress says welcome is done, so leaving it is a positive
+            // proof. Landing on /settings directly is not: a gated account briefly
+            // renders the shell there before the bootstrap redirects it.
+            await skipDueFlowsExcept(page, []);
+            await navigateTo(page, '/welcome?returnTo=%2Fsettings');
+            await expect(page).toHaveURL((url) => url.pathname === '/settings', {timeout: 15_000});
+            const shell = page.getByTestId('app-shell');
+            await expect(shell).toBeVisible();
+            await expect(shell).toHaveAttribute('data-guide-inert', 'false');
 
             const globals = await page.request.get('/api/v1/settings/global');
             expect(globals.ok()).toBe(true);
@@ -682,11 +698,14 @@ test.describe('Settings', () => {
 // TEST_USER is canonical and grandfathered `completed` on every flow (see
 // populate_mock_data's `_grandfather_onboarding_for_test_users`). "Replay" exists
 // precisely for this account shape: a user who already finished onboarding but
-// wants to see it again. Arming it writes only a client-side sessionStorage flag
-// (`onboardingGuide`/`onboarding.svelte.ts`'s `startReplay`) — it never calls a
-// `/settings/onboarding/*` transition endpoint, so it can never regress a
-// completed flow back to pending, and it is scoped per browser context, so two
-// tests sharing TEST_USER in parallel never see each other's armed replay.
+// wants to see it again. Arming it writes only a client-side localStorage entry
+// (`onboardingGuide`/`onboarding.svelte.ts`'s `startReplay`, keyed per account) —
+// it never calls a `/settings/onboarding/*` transition endpoint, so it can never
+// regress a completed flow back to pending. localStorage is shared by the tabs of
+// one browser profile, not across Playwright browser contexts: every test gets its
+// own context, whose localStorage starts empty (no storageState is loaded) and is
+// isolated from every other context, so two tests sharing TEST_USER in parallel
+// never see each other's armed replay.
 //
 // The Welcome case exercises replay Exit, which only clears this context's replay
 // token. None of these tests submits replay Continue: doing so on the shared
@@ -830,7 +849,7 @@ test.describe('Onboarding replay controls', () => {
         // intro_tour/import_guide badges without either (a) actually completing or
         // skipping welcome — which would overwrite TEST_USER's persisted language/
         // currency for every other concurrent test — or (b) reaching past the
-        // testid surface into sessionStorage directly, which this suite's rules
+        // testid surface into localStorage directly, which this suite's rules
         // treat as fabrication. The component test verifies every armReplay call
         // and its source order; this browser case verifies the real navigation
         // and no-terminal-write boundary.

@@ -286,6 +286,8 @@ Frontend compatibility first resolves the exact service code and contract versio
 
 The current compiled registry binds no components at all: the prototype interfaces were removed, so `pac_allocator` resolves as unavailable with `renderer_missing` while its backend service stays listed in the catalogue. When a custom component exists, it owns domain-specific input and result presentation while the backend owns the calculation. A descriptor and schema still do not make a service usable until its generated contract and compiled renderer registration are present and compatible.
 
+A renderer that shows money, holdings, or rates must follow the privacy masking contract: money only through the D8 currency formatters with an explicit `sensitivity`, held quantities through `maskableQuantity`, rates and percentages explicitly `public`, and `—` for a missing value. See [Contract for Tool renderers](../../frontend/state/app-state.md#tool-renderer-privacy-contract).
+
 Tool catalogue cards and the opened Tool host expose only the compatibility pair
 `Backend/API <contract_version> · UI <ui.version>`. Keep `implementation_version` in
 **Plugin diagnostics** rather than the public compatibility label: it identifies the deployed

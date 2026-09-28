@@ -22,7 +22,6 @@ import {afterEach, beforeEach, describe, expect, it} from 'vitest';
 import type {RiskDataQualityReport} from '$lib/risk/riskTypes';
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 import {setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
-import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
 import {addDays, buildBaseAnalytics, formatCurrencyAmount, formatRatio, formatScopedCurrencyAmount, localizedScenarioText, normalizeQualityIssue, numberRecord, presentStressBuckets, resultByCode, scalarString, stressImpactDimension, type BaseAnalyticsContext} from './riskAnalysisHelpers';
 
 type Issue = NonNullable<RiskDataQualityReport['issues']>[number];
@@ -320,15 +319,15 @@ describe('formatCurrencyAmount', () => {
     });
 
     describe('with global privacy on', () => {
-        it('replaces a formattable amount with the placeholder', () => {
+        it('masks the digits of a formattable amount and keeps its currency', () => {
             // Control: the same call, one line earlier in time, with the flag
             // off. It is what makes the next assertion a substitution rather
-            // than a function that has always returned a placeholder.
+            // than a function that has always returned `$•••`.
             expect(formatCurrencyAmount('1234.5', 'USD', 'en-US')).toBe('$1,234.50');
 
             setPrivacyEnabled(true);
-            expect(formatCurrencyAmount('1234.5', 'USD', 'en-US')).toBe(PRIVACY_PLACEHOLDER);
-            expect(formatCurrencyAmount(['1234.5', '99'], 'USD', 'en-US')).toBe(PRIVACY_PLACEHOLDER);
+            expect(formatCurrencyAmount('1234.5', 'USD', 'en-US')).toBe('$•••');
+            expect(formatCurrencyAmount(['1234.5', '99'], 'USD', 'en-US')).toBe('$•••');
         });
 
         it('still says em-dash for an absent value', () => {
@@ -346,7 +345,7 @@ describe('formatCurrencyAmount', () => {
             // value comes back masked. Without it every line above would also
             // hold on a run where privacy never turned on, which is the one way
             // this test could pass while testing nothing.
-            expect(formatCurrencyAmount('0', 'USD', 'en-US')).toBe(PRIVACY_PLACEHOLDER);
+            expect(formatCurrencyAmount('0', 'USD', 'en-US')).toBe('$•••');
         });
 
         it('still says em-dash for a value that is not a finite number', () => {
@@ -357,49 +356,70 @@ describe('formatCurrencyAmount', () => {
             // Control: a parseable neighbour of the same shape is masked, so the
             // two em-dashes above are the absence check and not a masked branch
             // that happens to look like one.
-            expect(formatCurrencyAmount('12', 'USD', 'en-US')).toBe(PRIVACY_PLACEHOLDER);
+            expect(formatCurrencyAmount('12', 'USD', 'en-US')).toBe('$•••');
         });
 
         it('gives two very different magnitudes the identical placeholder', () => {
-            // Control: unmasked they differ, and by length.
+            // Control: unmasked they differ, and by length, and the digit check
+            // below is able to see a digit when there is one.
             const small = formatCurrencyAmount('1000', 'USD', 'en-US');
             const large = formatCurrencyAmount('9999999', 'USD', 'en-US');
             expect(small).not.toBe(large);
             expect(small.length).not.toBe(large.length);
+            expect(large).toMatch(/\d/);
 
             setPrivacyEnabled(true);
             const maskedSmall = formatCurrencyAmount('1000', 'USD', 'en-US');
             const maskedLarge = formatCurrencyAmount('9999999', 'USD', 'en-US');
 
             expect(maskedSmall).toBe(maskedLarge);
-            expect(maskedSmall).toBe(PRIVACY_PLACEHOLDER);
+            expect(maskedSmall).toBe('$•••');
             expect(maskedSmall).not.toMatch(/\d/);
+            // Width is the leak that survives an equality check on content in a
+            // padded formatter, so it is asserted in its own right.
+            expect(maskedSmall.length).toBe(maskedLarge.length);
         });
 
-        it('hides the sign of a loss', () => {
+        it('keeps the sign of a loss, as the shared formatters do (D8)', () => {
             expect(formatCurrencyAmount('-1234.5', 'USD', 'en-US')).toBe('-$1,234.50');
 
             setPrivacyEnabled(true);
-            expect(formatCurrencyAmount('-1234.5', 'USD', 'en-US')).toBe(formatCurrencyAmount('1234.5', 'USD', 'en-US'));
-            expect(formatCurrencyAmount('-1234.5', 'USD', 'en-US')).not.toContain('-');
+            // The sign stays outside the mask by decision D8 of the product
+            // owner, as the shared currency formatters keep it (see
+            // `maskable`). This formatter used to hide it, with no recorded
+            // reason for departing from D8.
+            expect(formatCurrencyAmount('-1234.5', 'USD', 'en-US')).toBe('-$•••');
+            expect(formatCurrencyAmount('1234.5', 'USD', 'en-US')).toBe('$•••');
+            expect(formatCurrencyAmount('-1234.5', 'USD', 'en-US')).not.toBe(formatCurrencyAmount('1234.5', 'USD', 'en-US'));
         });
 
-        it('drops the currency marker too, unlike the shared currency formatter', () => {
+        it('keeps the currency marker, like the shared currency formatter', () => {
             // Control: the currency is visible in the clear.
             expect(formatCurrencyAmount('1000', 'USD', 'en-US')).toContain('$');
             expect(formatCurrencyAmount('1000', 'EUR', 'en-US')).toContain('€');
+            expect(formatCurrencyAmount('1000', 'USD', 'en-US')).toMatch(/\d/);
 
             setPrivacyEnabled(true);
-            // A deliberate asymmetry, pinned rather than judged: this formatter
-            // returns the bare placeholder, where formatCurrencyAmountPlain keeps
-            // `••• $ 🇺🇸 USD`. Here the currency labels the column, not the cell.
-            expect(formatCurrencyAmount('1000', 'USD', 'en-US')).toBe(formatCurrencyAmount('1000', 'EUR', 'en-US'));
-            expect(formatCurrencyAmount('1000', 'USD', 'en-US')).toBe(PRIVACY_PLACEHOLDER);
+            // Product owner, 2026-09-22: privacy hides the number, not the
+            // currency. This formatter used to return the bare placeholder, on
+            // the argument that the currency labels the column rather than the
+            // cell; that argument was overruled, and it now keeps its currency
+            // as formatCurrencyAmountPlain keeps `••• $ 🇺🇸 USD`. A marker that
+            // is present proves nothing on its own — an unmasked string has it
+            // too — so each is paired with the absence of the digits.
+            const maskedUsd = formatCurrencyAmount('1000', 'USD', 'en-US');
+            const maskedEur = formatCurrencyAmount('1000', 'EUR', 'en-US');
+            expect(maskedUsd).not.toBe(maskedEur);
+            expect(maskedUsd).toContain('$');
+            expect(maskedEur).toContain('€');
+            expect(maskedUsd).not.toMatch(/\d/);
+            expect(maskedEur).not.toMatch(/\d/);
+            expect(maskedEur).toBe('€•••');
         });
 
         it('comes back unmasked as soon as the flag goes off', () => {
             setPrivacyEnabled(true);
-            expect(formatCurrencyAmount('1234.5', 'USD', 'en-US')).toBe(PRIVACY_PLACEHOLDER);
+            expect(formatCurrencyAmount('1234.5', 'USD', 'en-US')).toBe('$•••');
 
             setPrivacyEnabled(false);
             // The formatter reads the flag per call: nothing is memoised, so a

@@ -626,3 +626,16 @@ service.py:170            prepared = await self._prepare_asset_series(...)   ←
 | `i18n audit` | ✅ 3388 complete, 0 incomplete |
 | `check-orphans` | ⚠️ **1 orfano atteso**: `assetSetLevels.test.ts` — **registrazione del coordinatore** |
 | porta `6170` | libera · `git diff --check` pulito |
+
+---
+
+## ➡️ Seguito
+
+Il lavoro post-merge di Release 2 (23/09/2026, baseline `f1047f766`) prosegue in
+[`A-postmerge-esecuzione.md`](./A-postmerge-esecuzione.md): R1 (`lastedDays`), la test list
+T1/T2, la doc utente dei livelli e la guida alla review dei numeri sulla copia di prod.
+
+> 📌 **Fatti datati, non da correggere qui** (§2.7 del foglio 09): la merge revision
+> `ab290f6b6756` citata sopra **non esiste più** — le revisioni post-002 sono state consolidate
+> in `004_release_1_2_0_schema` (`22fa0aed7`). E `risk-lab.spec.ts`, il guscio del laboratorio e
+> `panelTitle` sono passati a **F** con la tabella dei workstream del 23/09.

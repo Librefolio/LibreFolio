@@ -156,8 +156,8 @@ nothing to `UserSettings`.
 
 Welcome replay deliberately takes a different path. **Continue** sends the explicitly selected
 language/currency/avatar through the existing `PUT /api/v1/settings/user`, then clears only the
-session replay token; it does not call the onboarding complete endpoint, so the existing
-completed/skipped status is preserved. **Exit replay** clears the token and saves nothing — it
+stored replay token; it does not call the onboarding complete endpoint, so the existing
+completed/skipped status is preserved. **Exit tour** clears the token and saves nothing — it
 does not call either the settings PUT or the onboarding skip endpoint.
 
 After either successful submit path, the route mirrors the submitted values into the
@@ -192,14 +192,13 @@ The Broker, FX, and Asset detail stops request registered `*.create` tour surfac
 open their real create modals with `tourPreview=true`; each modal guards its submit handler and
 removes its save/create action, so the preview cannot write.
 
-For an automatic pending tour, `OnboardingCoachmark.svelte` keeps **Skip permanently** and **X**
-in the top action row; in replay mode, it renders **Exit replay** instead of **Skip
-permanently**. **X** calls `onboardingGuide.suspend()` and retains the current intro cursor; it
-never performs a backend transition. The footer renders **Back** and **Next**, using **Finish**
-on `intro.settings`. Automatic **Finish** completes the pending flow and automatic **Skip
-permanently** skips it. Replay **Finish** and **Exit replay** are strictly non-destructive: both
-only clear the session replay token and never call complete/skip or change backend onboarding
-status. There is no Pause action.
+`OnboardingOverlayHost` passes `showSkip={false}`, so `OnboardingCoachmark.svelte` shows only
+**X** in the top action row, labelled *Skip this tour* for an automatic pending tour and *Exit
+tour* in replay mode. **X** calls `onboardingGuide.exit()`, which is `skip()`. The footer renders
+**Back** and **Next**, using **Finish** on `intro.settings`. Automatic **Finish** completes the
+pending flow and automatic **X** skips it. Replay **Finish** and **X** are strictly
+non-destructive: both only clear the stored replay token and never call complete/skip or change
+backend onboarding status. There is no Pause action.
 
 The same guide engine later drives the
 **[Import Wizard's contextual guide](import-wizard.md#import-guide-wiring)**.

@@ -3089,7 +3089,7 @@
         "l1": {
           "title": "¿Cuánto dolió cada uno?",
           "description": "La misma escala de daño, preguntada a cada activo seleccionado. Solo porcentajes: un conjunto de activos no tiene pesos, así que no hay importe que mostrar.",
-          "lastedDays": "duró {{days}} d",
+          "lastedDays": "duró {days} d",
           "columns": {
             "badDay": "Mal día",
             "badMonth": "Mal mes",
@@ -3103,7 +3103,8 @@
           "description": "Riesgo frente a rentabilidad, un punto por activo. No se traza ninguna recta: una selección no tiene un todo, así que no hay nada por encima o por debajo.",
           "expectedReturn": "Rentabilidad esperada",
           "correlation": "Correlación",
-          "noBenchmark": "Elige un índice de referencia en el Panel para añadir beta y correlación. Un índice que ya está en la selección no puede servirse de medida a sí mismo."
+          "noBenchmark": "Elige un índice de referencia en el Panel para añadir beta y correlación. Un índice que ya está en la selección no puede servirse de medida a sí mismo.",
+          "scatterNote": "Los puntos muestran la rentabilidad esperada en media-varianza: en un activo muy volátil la rentabilidad realmente vivida es menor, porque la volatilidad erosiona la capitalización."
         }
       }
     },
@@ -4030,7 +4031,7 @@
         },
         "transactionsNav": {
           "title": "Empieza por tus transacciones",
-          "description": "Transacciones contiene las entradas manuales y el historial de la cartera. Importar tiene su propia guía contextual."
+          "description": "Transacciones contiene las entradas manuales y el historial de la cartera."
         },
         "brokersAdd": {
           "title": "Añade un bróker",
@@ -4058,7 +4059,7 @@
         },
         "brokersNav": {
           "title": "Brókeres",
-          "description": "Abre Brókeres para configurar tus cuentas. Una breve guía comienza cuando eliges Añadir bróker."
+          "description": "Abre Brókeres para configurar tus cuentas."
         },
         "fxNav": {
           "title": "Tipos de cambio",
@@ -4120,10 +4121,10 @@
         "fx": "FX",
         "asset": "Activos"
       },
-      "armedToast": "{flow} está listo en esta pestaña. Abre la función para empezar.",
+      "armedToast": "{flow} está listo en este navegador. Abre la función para empezar.",
       "cancelArmed": "Cancelar activación",
       "groupProgress": "{completed}/{total} guías completadas",
-      "armedAtNextTrigger": "Listo en esta pestaña: {flow} se iniciará en la próxima activación. Cerrar la pestaña lo cancela.",
+      "armedAtNextTrigger": "Listo en este navegador: {flow} se iniciará en la próxima activación.",
       "replayNextTrigger": "Repetir en la próxima activación"
     },
     "importGuide": {
@@ -4222,11 +4223,11 @@
         },
         "add": {
           "title": "Añade una transacción",
-          "description": "Añadir abre el formulario guiado para una sola operación. Su guía específica comienza la primera vez que se usa."
+          "description": "Añadir abre el formulario guiado para una sola operación."
         },
         "import": {
           "title": "Importa varias operaciones",
-          "description": "Importar lee los informes del bróker y guía su revisión hasta el editor masivo."
+          "description": "Importar lee los informes del bróker y acompaña su revisión hasta el editor masivo."
         },
         "columns": {
           "title": "Filtra y organiza",
@@ -4290,7 +4291,7 @@
         },
         "add": {
           "title": "Añade un bróker",
-          "description": "Crea la cuenta que recibirá transacciones e importaciones. Una guía específica acompaña el formulario."
+          "description": "Crea la cuenta que recibirá transacciones e importaciones."
         }
       }
     },
@@ -4334,7 +4335,7 @@
         },
         "add": {
           "title": "Añade un par de divisas",
-          "description": "Define una nueva dirección de conversión. Una guía específica explica las divisas y los proveedores."
+          "description": "Define una nueva dirección de conversión."
         }
       }
     },
@@ -4374,7 +4375,7 @@
         },
         "add": {
           "title": "Añade un activo",
-          "description": "Busca o define un nuevo instrumento. Una guía específica explica su identidad, divisa y proveedor."
+          "description": "Busca o define un nuevo instrumento."
         }
       }
     },
@@ -4401,6 +4402,18 @@
           "description": "Abre Riesgo para examinar medidas históricas, escenarios de estrés, simulaciones y el contexto de la cartera."
         }
       }
+    }
+  },
+  "header": {
+    "privacy": {
+      "hide": "Ocultar importes",
+      "show": "Mostrar importes"
+    },
+    "theme": {
+      "switchToDark": "Cambiar al tema oscuro",
+      "switchToLight": "Cambiar al tema claro",
+      "dark": "Tema oscuro",
+      "light": "Tema claro"
     }
   }
 }
