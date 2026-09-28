@@ -3504,7 +3504,8 @@
         "too_few_quotes": "Menos de {minQuotes} cotizaciones en el período ({count})",
         "missing_fx": "Falta el tipo de cambio a {currency} al inicio o al final del período",
         "starts_late": "Primera cotización el {date}, después del inicio del período",
-        "stale_at_end": "Último precio el {date}, más de {days} días antes del final"
+        "stale_at_end": "Último precio el {date}, más de {days} días antes del final",
+        "no_price_history": "Nunca se ha registrado un precio para este activo"
       },
       "levels": {
         "ineligible": "No analizable en el período",
