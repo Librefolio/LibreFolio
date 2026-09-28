@@ -4,6 +4,7 @@
 > il 24/09. Piano approvato dal developer il 25/09 alle 10:03 («Sì, approvo il piano di K»). Viene
 > dopo lo step 9 ([`plan-phase00TaxonomySelectStep9ImportDuplicates.prompt.md`](plan-phase00TaxonomySelectStep9ImportDuplicates.prompt.md)).
 > **Niente hotfix** (D-C3-3): la correzione esce con la Release 2.
+> Seguito: step 11, [`plan-phase00TaxonomySelectStep11BulkCreationOrder.prompt.md`](plan-phase00TaxonomySelectStep11BulkCreationOrder.prompt.md).
 
 | | |
 |---|---|
