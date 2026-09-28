@@ -350,11 +350,11 @@
     "lastPrice": "Ultimo Prezzo",
     "panels": {
       "own": "I tuoi asset",
-      "ownHint": "Con transazioni in broker di cui sei owner",
+      "ownHint": "Posseduti ora in broker di cui sei owner",
       "others": "Asset degli altri utenti",
-      "othersHint": "Con transazioni non tue",
+      "othersHint": "Posseduti ora solo da altri utenti",
       "analysis": "Osservati",
-      "analysisHint": "Salvati ma senza transazioni — tenuti d'occhio"
+      "analysisHint": "Oggi non li possiede nessuno — mai acquistati o già venduti, tenuti d'occhio"
     },
     "providerParams": {
       "borsa_italiana": {
@@ -1999,7 +1999,8 @@
   "sharedResource": {
     "syncAll": "Sinc. Tutto",
     "refreshAll": "Ricarica Tutto",
-    "settings": "Impostazioni"
+    "settings": "Impostazioni",
+    "syncSelection": "Sinc. selezione"
   },
   "table": {
     "columns": "Colonne",
@@ -2927,7 +2928,8 @@
       },
       "correlation": {
         "name": "Correlazione",
-        "description": "Matrice di correlazione Pearson sui rendimenti in valuta target."
+        "description": "Matrice di correlazione Pearson sui rendimenti in valuta target.",
+        "help": "In questo pannello si analizzano le correlazioni a due a due di tutti gli asset presi in esame, calcolate sul periodo scelto e tenendo conto degli eventuali cambi valuta. Un valore alto, vicino a +1, dice che due asset si muovono insieme e si diversificano poco; vicino a 0, che si muovono per conto loro; negativo, che uno attutisce l’altro. Clicca l’icona per la guida."
       },
       "historicalVar": {
         "name": "VaR / CVaR storico",
@@ -3050,10 +3052,7 @@
       "correlationTab": "Correlazione",
       "addAsset": "Aggiungi asset alla matrice",
       "maxAssets": "Raggiunto il limite API di 100 asset.",
-      "presetBroker": "Precarica gli asset di…",
-      "presetNone": "Scegli un broker…",
-      "panelTitle": "Relazioni e scenari",
-      "selectedCount": "{selected} selezionati su {total}",
+      "selectedCount": "{selected} in analisi su {total} analizzabili",
       "nearIdentical": "quasi identici",
       "bulk": {
         "selectAll": "Seleziona tutti",
@@ -3075,15 +3074,21 @@
       "ordering": {
         "label": "Ordine della matrice",
         "similarity": "Per somiglianza",
-        "original": "Per nome"
+        "name": "Per nome",
+        "type": "Per tipo",
+        "sector": "Per settore",
+        "region": "Per area"
       },
       "pairs": {
         "correlatedTitle": "I più simili",
-        "correlatedHint": "Coppie che si muovono insieme: tenerle entrambe aggiunge poco.",
+        "correlatedHint": "Coppie con ρ > 0.70: si muovono insieme, tenerle entrambe aggiunge poco.",
         "offsettingTitle": "Quelli che si compensano",
-        "offsettingHint": "Coppie che si muovono in direzioni opposte: una attutisce l’altra.",
+        "offsettingHint": "Coppie con ρ ≤ −0.30: si muovono in direzioni opposte, una attutisce l’altra.",
         "noneCorrelated": "Nessuna coppia si muove chiaramente insieme.",
-        "noneOffsetting": "Nessuna coppia ne compensa un’altra: qui niente attutisce niente."
+        "noneOffsetting": "Nessuna coppia ne compensa un’altra: qui niente attutisce niente.",
+        "tagSimilar": "molto simili",
+        "tagOffsetting": "si compensano",
+        "tagOpposite": "opposti"
       },
       "levels": {
         "asset": "Asset",
@@ -3108,7 +3113,38 @@
           "noBenchmark": "Scegli un benchmark nella Dashboard per aggiungere beta e correlazione. Un benchmark che è già nella selezione non può fare da metro a sé stesso.",
           "scatterNote": "I punti mostrano il rendimento atteso in media-varianza: su un asset molto volatile il rendimento realmente vissuto è più basso, perché la volatilità erode il composto."
         }
-      }
+      },
+      "legend": {
+        "negative": "Inversa",
+        "none": "Nulla",
+        "positive": "Concorde"
+      },
+      "group": {
+        "diversified": "Diversificato",
+        "unclassified": "Non classificato"
+      },
+      "exposure": {
+        "sector": "Settore",
+        "region": "Area"
+      },
+      "syncSelectionHint": "Sincronizza i prezzi degli asset selezionati e i cambi che li convertono",
+      "reloadHint": "Ricarica tutte le analisi della selezione",
+      "preset": {
+        "allMine": "Tutti i miei",
+        "byBroker": "Per broker",
+        "hint": "Sostituisce la selezione con gli asset posseduti nell'ultimo giorno del periodo.",
+        "noneHeld": "Lì non è posseduto nulla nell'ultimo giorno del periodo: la selezione non cambia."
+      },
+      "picker": {
+        "selectVisible": "Seleziona visibili",
+        "deselectVisible": "Deseleziona visibili",
+        "confirm": "Aggiungi {count}",
+        "allSelected": "Tutti gli asset sono già nella selezione.",
+        "notAnalysable": "Non analizzabili nel periodo"
+      },
+      "selectedCountHint": "Il primo numero conta gli asset che il laboratorio sta analizzando adesso. Il secondo conta quanti ne potrebbe analizzare nel periodo scelto: tutti gli asset presenti in LibreFolio, non solo quelli che possiedi, purché abbiano abbastanza prezzi in quel periodo. Quelli che non li hanno li trovi comunque nel «+», in sola lettura, con il motivo.",
+      "parkedNote": "{count, plural, one {# asset scelto non è analizzabile nel periodo e resta fuori dall'analisi.} other {# asset scelti non sono analizzabili nel periodo e restano fuori dall'analisi.}}",
+      "eligibilityFailed": "Non è stato possibile verificare l'idoneità: tutti gli asset restano selezionabili."
     },
     "metrics": {
       "volatility": "Volatilità",
@@ -3460,6 +3496,19 @@
       "notice": {
         "partialTitle": "Alcuni risultati sono parziali",
         "notesTitle": "Da sapere su questi risultati"
+      }
+    },
+    "eligibility": {
+      "reasons": {
+        "no_prices": "Nessun prezzo nel periodo",
+        "too_few_quotes": "Meno di {minQuotes} quotazioni nel periodo ({count})",
+        "missing_fx": "Manca il cambio verso {currency} all'inizio o alla fine del periodo",
+        "starts_late": "Prima quotazione il {date}, dopo l'inizio del periodo",
+        "stale_at_end": "Ultimo prezzo il {date}, più di {days} giorni prima della fine"
+      },
+      "levels": {
+        "ineligible": "Non analizzabile nel periodo",
+        "warning": "Analizzabile, con un avviso"
       }
     }
   },
