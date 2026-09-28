@@ -771,6 +771,12 @@ class TestPortfolioReportEndpoint:
                     "allocation_history",
                     "data_quality",
                     "positions_contribution",
+                    "broker_pnl_history",
+                    "pnl_candles",
+                    "income_history",
+                    "cost_history",
+                    "deposit_history",
+                    "acquisition_funding",
                     "allocation_source",
                 }
                 assert report["summary"] is None
@@ -778,6 +784,12 @@ class TestPortfolioReportEndpoint:
                 assert report["allocation_history"] is None
                 assert report["data_quality"] is None
                 assert report["positions_contribution"] is None
+                assert report["broker_pnl_history"] is None
+                assert report["pnl_candles"] is None
+                assert report["income_history"] is None
+                assert report["cost_history"] is None
+                assert report["deposit_history"] is None
+                assert report["acquisition_funding"] is None
                 assert report["metadata"]["broker_ids"] == [broker_id]
                 assert report["metadata"]["included_features"] == ["allocation_source"]
 
