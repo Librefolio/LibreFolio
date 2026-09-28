@@ -2071,3 +2071,53 @@ descrizione del runner, copertura di `risk-reload-button`). Poi i cancelli compl
 >   - `_frontend_portfolio.py`: `dev_release2` aggiunge `privacy-masking` (funzione e registrazione) vicino alla `desc`
 >     di `risk-lab`: si sommano;
 >   - `_frontend_utility.py`: da verificare nella simulazione del coordinatore.
+
+## `dev_release2` → F: validazione della revisione combinata `5010fe815` · 2026-09-25, dalle 12:42
+
+> - Checkpoint 3 committato (`aa5be214d` → … → `e2794cd08`, 8 commit, 31 file, +3153/−675). Merge **`5010fe815`**:
+>   genitori `e2794cd08` + `e6187d6ab`, albero `29fff93f` identico alla simulazione, pulito.
+> - `api sync` exit 0, nessun file tracciato cambiato: `dev_release2` non tocca API né schemi.
+> - Cancelli fuori corsia:
+>   ```
+>   vitest       · 15 percorsi ⇒ 15 file · 549 test (+2 portati da dev_release2)
+>   front check  · pavimento invariato: 3 errori + 41 avvisi negli stessi 4 file (rosso noto del target)
+>   i18n audit   · exit 0 · 0 mancanti · 3470 chiavi (come la simulazione), insiemi identici
+>   check-links  · exit 0 · 83 validi · 0 rotti
+>   ```
+>
+> ⚠️ **Fuori pista — `risk-lab` rosso d'infrastruttura, prima di qualsiasi test (12:44:45–12:46:49)**
+> - Comando: `… dev.py test --test-port 6154 --data-dir /tmp/librefolio-r2-f front-portfolio risk-lab` → exit 1,
+>   «Shared backend did not answer within 120s», «shared test backend failed to start». Nessun test raccolto.
+> - Causa verificata: dopo il merge ci sono 34 sorgenti del frontend più nuovi di `frontend/build/index.html` (12:19:10)
+>   e 10 pagine mkdocs più nuove di `mkdocs_src/site/index.html` (24/09 10:39). Il backend condiviso (`dev.py server
+>   --test`) ricostruisce frontend e sito prima di rispondere (`auto_build_frontend`, `auto_build_mkdocs`), e supera i 120
+>   s del runner. È lo stesso ordine già notato: il runner avvia il backend prima del proprio controllo del build.
+> - Toccati: nessun dato oltre lo snapshot automatico del DB (`00_archive/test-db_20260925_124648.tar.xz`); nessun server
+>   rimasto acceso (6154 libera).
+> - **Fermo**, come da regola del coordinatore. Proposta: `dev.py front build` e `dev.py mkdocs build` (artefatti
+>   ignorati, nessun dato), poi di nuovo i 4 E2E.
+> - **Via del coordinatore (12:48)**, con la cautela di controllare `git status` dopo `mkdocs build`:
+>   - `dev.py front build` exit 0 (12:48:37–12:50:23);
+>   - `dev.py mkdocs build` exit 0 (12:50:30–12:51:08), 0 WARNING; `git status` invariato, cioè le icone rigenerate da
+>     `copy_docs_assets()` non cambiano file tracciati.
+> - ⚠️ **Secondo `risk-lab`, ancora «did not answer within 120s»** (12:51–12:53). Causa vera, verificata nel codice:
+>   - `dev.py server --test` costruisce il frontend in **debug** (`debug_mode = True` con `--test`);
+>   - `auto_build_frontend` ricostruisce anche quando la modalità del marcatore `frontend/build/.build-debug` è diversa;
+>   - il `front build` di produzione aveva scritto `0`, quindi il server di test ricostruiva comunque in debug all'avvio,
+>     oltre i 120 s del runner.
+>   - Stamattina lo stesso meccanismo aveva cambiato l'hash del bundle all'avvio della 6164.
+> - Rimedio, nel perimetro del via: `dev.py front build --debug` exit 0 (12:54:08–12:56:16), marcatore `1`, albero
+>   invariato.
+> - **E2E sulla revisione combinata**, uno per volta, 6154 libera prima e dopo:
+>   ```
+>   risk-lab           · 18 ⇒ 18 (fine 12:57:39)
+>   risk               · 13 ⇒ 13 (fine 12:58:27)
+>   risk-asset-detail  ·  2 ⇒ 2  (fine 12:58:58)
+>   asset-list         · 28 ⇒ 28 (fine 13:00:21)
+>   ```
+> - **Validazione di `5010fe815` completa, tutta verde** (con il `front check` al pavimento noto del target).
+>
+> ## ⏸️ PAUSA (13:01, il developer spegne la macchina)
+> - HEAD `5010fe815`. L'unico percorso sporco è questo piano, da mettere in un commit di journal (via del coordinatore).
+> - Niente è a metà: la validazione è chiusa. Nessun test-author al lavoro; 6154 e 6164 libere.
+> - **Alla ripartenza**: il commit di journal del piano (script del coordinatore), poi F → Risk con Risk.
