@@ -3504,7 +3504,8 @@
         "too_few_quotes": "Fewer than {minQuotes} quotes in the period ({count})",
         "missing_fx": "No exchange rate to {currency} at the start or end of the period",
         "starts_late": "First quote on {date}, after the start of the period",
-        "stale_at_end": "Last price on {date}, more than {days} days before the end"
+        "stale_at_end": "Last price on {date}, more than {days} days before the end",
+        "no_price_history": "No price has ever been recorded for this asset"
       },
       "levels": {
         "ineligible": "Cannot be analysed in the period",

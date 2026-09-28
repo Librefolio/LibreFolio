@@ -3504,7 +3504,8 @@
         "too_few_quotes": "Meno di {minQuotes} quotazioni nel periodo ({count})",
         "missing_fx": "Manca il cambio verso {currency} all'inizio o alla fine del periodo",
         "starts_late": "Prima quotazione il {date}, dopo l'inizio del periodo",
-        "stale_at_end": "Ultimo prezzo il {date}, più di {days} giorni prima della fine"
+        "stale_at_end": "Ultimo prezzo il {date}, più di {days} giorni prima della fine",
+        "no_price_history": "Nessun prezzo mai registrato per questo asset"
       },
       "levels": {
         "ineligible": "Non analizzabile nel periodo",

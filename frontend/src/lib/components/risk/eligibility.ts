@@ -92,6 +92,8 @@ export function reasonText(reason: EligibilityReason, item: AssetEligibilityItem
     const firstQuote = typeof item.first_quote === 'string' ? formatDay(item.first_quote) : '—';
     const lastQuote = typeof item.last_quote === 'string' ? formatDay(item.last_quote) : '—';
     switch (reason) {
+        case 'no_price_history':
+            return worded(t('risk.eligibility.reasons.no_price_history'));
         case 'no_prices':
             return worded(t('risk.eligibility.reasons.no_prices'));
         case 'too_few_quotes':
