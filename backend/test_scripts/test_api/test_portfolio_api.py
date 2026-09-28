@@ -1302,52 +1302,79 @@ class TestPortfolioReportEndpoint:
         print_success("Yield on Cost statuses serialize with independent trailing window")
 
     async def test_report_positions_contribution_is_date_aware(self, test_server):
-        """Report uses date_to snapshot for holdings and serializes performance rows + other effects."""
+        """Report uses date_to snapshot for holdings and serializes performance rows + other effects.
+        It owns and deletes its user, broker, asset, six transactions and one price, broker first:
+        its force delete removes the transactions that would otherwise block the asset delete,
+        and the asset delete removes the price by cascade."""
         print_section("Portfolio Report: date-aware holdings and contribution")
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
-            broker_id = await create_broker(client)
-            asset_id = await create_asset(client)
+            user_id = await get_current_user_id(client)
+            broker_id: int | None = None
+            asset_id: int | None = None
+            try:
+                broker_id = await create_broker(client)
+                asset_id = await create_asset(client)
 
-            await commit_batch(
-                client,
-                creates=[
-                    {"broker_id": broker_id, "type": "DEPOSIT", "date": "2025-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "1000"}},
-                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2025-01-02", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
-                    {"broker_id": broker_id, "asset_id": asset_id, "type": "SELL", "date": "2025-02-15", "quantity": "-10", "cash": {"code": "EUR", "amount": "1200"}},
-                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2025-03-10", "quantity": "5", "cash": {"code": "EUR", "amount": "-600"}},
-                    {"broker_id": broker_id, "type": "INTEREST", "date": "2025-02-20", "quantity": "0", "cash": {"code": "EUR", "amount": "20"}},
-                    {"broker_id": broker_id, "type": "FEE", "date": "2025-02-21", "quantity": "0", "cash": {"code": "EUR", "amount": "-5"}},
-                ],
-            )
+                await commit_batch(
+                    client,
+                    creates=[
+                        {"broker_id": broker_id, "type": "DEPOSIT", "date": "2025-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "1000"}},
+                        {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2025-01-02", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
+                        {"broker_id": broker_id, "asset_id": asset_id, "type": "SELL", "date": "2025-02-15", "quantity": "-10", "cash": {"code": "EUR", "amount": "1200"}},
+                        {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2025-03-10", "quantity": "5", "cash": {"code": "EUR", "amount": "-600"}},
+                        {"broker_id": broker_id, "type": "INTEREST", "date": "2025-02-20", "quantity": "0", "cash": {"code": "EUR", "amount": "20"}},
+                        {"broker_id": broker_id, "type": "FEE", "date": "2025-02-21", "quantity": "0", "cash": {"code": "EUR", "amount": "-5"}},
+                    ],
+                )
 
-            price_resp = await client.post(
-                f"{API_BASE}/assets/prices",
-                json=[
+                price_resp = await client.post(
+                    f"{API_BASE}/assets/prices",
+                    json=[
+                        {
+                            "asset_id": asset_id,
+                            "prices": [
+                                {
+                                    "date": "2025-01-31",
+                                    "close": "110.00",
+                                    "currency": "EUR",
+                                }
+                            ],
+                        }
+                    ],
+                    timeout=TIMEOUT,
+                )
+                assert price_resp.status_code == 200, f"Price upsert failed: {price_resp.status_code}: {price_resp.text}"
+
+                resp = await post_portfolio_report(
+                    client,
                     {
-                        "asset_id": asset_id,
-                        "prices": [
-                            {
-                                "date": "2025-01-31",
-                                "close": "110.00",
-                                "currency": "EUR",
-                            }
-                        ],
-                    }
-                ],
-                timeout=TIMEOUT,
-            )
-            assert price_resp.status_code == 200, f"Price upsert failed: {price_resp.status_code}: {price_resp.text}"
-
-            resp = await post_portfolio_report(
-                client,
-                {
-                    "include_history": False,
-                    "include_allocation_history": False,
-                    "include_positions_contribution": True,
-                    "date_range": {"start": "2025-01-31", "end": "2025-02-28"},
-                },
-            )
+                        "include_history": False,
+                        "include_allocation_history": False,
+                        "include_positions_contribution": True,
+                        "date_range": {"start": "2025-01-31", "end": "2025-02-28"},
+                    },
+                )
+            finally:
+                if broker_id is not None:
+                    cleanup_broker = await client.delete(
+                        f"{API_BASE}/brokers",
+                        params={"ids": [broker_id], "force": True},
+                        timeout=TIMEOUT,
+                    )
+                    assert cleanup_broker.status_code == 200, cleanup_broker.text
+                    broker_results = {item["id"]: item for item in cleanup_broker.json()["results"]}
+                    assert broker_results[broker_id]["success"] is True, cleanup_broker.text
+                if asset_id is not None:
+                    cleanup_asset = await client.delete(
+                        f"{API_BASE}/assets",
+                        params={"asset_ids": [asset_id]},
+                        timeout=TIMEOUT,
+                    )
+                    assert cleanup_asset.status_code == 200, cleanup_asset.text
+                    asset_results = {item["asset_id"]: item for item in cleanup_asset.json()["results"]}
+                    assert asset_results[asset_id]["success"] is True, cleanup_asset.text
+                await delete_current_test_user(client, user_id)
 
         assert resp.status_code == 200
         report = resp.json()
@@ -1378,31 +1405,57 @@ class TestPortfolioReportEndpoint:
         """G1c wiring, exercised through the real HTTP endpoint (not the service
         method directly): include_income_history=false (the default) omits the
         section entirely; =true adds signed per-day DIVIDEND/INTEREST points whose
-        sum reconciles exactly with summary.period_income for the same window."""
+        sum reconciles exactly with summary.period_income for the same window.
+        It owns and deletes its user, broker, asset and three transactions, broker first:
+        its force delete removes the DIVIDEND that would otherwise block the asset delete."""
         print_section("Portfolio Report: income history flag + reconciliation")
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
-            broker_id = await create_broker(client)
-            asset_id = await create_asset(client)  # DIVIDEND requires asset_id at the schema layer; INTEREST does not
+            user_id = await get_current_user_id(client)
+            broker_id: int | None = None
+            asset_id: int | None = None
+            try:
+                broker_id = await create_broker(client)
+                asset_id = await create_asset(client)  # DIVIDEND requires asset_id at the schema layer; INTEREST does not
 
-            await commit_batch(
-                client,
-                creates=[
-                    {"broker_id": broker_id, "type": "DEPOSIT", "date": "2025-07-01", "quantity": "0", "cash": {"code": "EUR", "amount": "1000"}},
-                    {"broker_id": broker_id, "asset_id": asset_id, "type": "DIVIDEND", "date": "2025-07-10", "quantity": "0", "cash": {"code": "EUR", "amount": "40"}},
-                    {"broker_id": broker_id, "type": "INTEREST", "date": "2025-07-20", "quantity": "0", "cash": {"code": "EUR", "amount": "5"}},
-                ],
-            )
+                await commit_batch(
+                    client,
+                    creates=[
+                        {"broker_id": broker_id, "type": "DEPOSIT", "date": "2025-07-01", "quantity": "0", "cash": {"code": "EUR", "amount": "1000"}},
+                        {"broker_id": broker_id, "asset_id": asset_id, "type": "DIVIDEND", "date": "2025-07-10", "quantity": "0", "cash": {"code": "EUR", "amount": "40"}},
+                        {"broker_id": broker_id, "type": "INTEREST", "date": "2025-07-20", "quantity": "0", "cash": {"code": "EUR", "amount": "5"}},
+                    ],
+                )
 
-            off_resp = await post_portfolio_report(client, {"include_income_history": False, "date_range": {"start": "2025-07-01", "end": "2025-07-31"}})
-            assert off_resp.status_code == 200
-            off_report = off_resp.json()
-            assert off_report.get("income_history") is None
-            assert "income_history" not in off_report["metadata"]["included_features"]
+                off_resp = await post_portfolio_report(client, {"include_income_history": False, "date_range": {"start": "2025-07-01", "end": "2025-07-31"}})
+                assert off_resp.status_code == 200
+                off_report = off_resp.json()
+                assert off_report.get("income_history") is None
+                assert "income_history" not in off_report["metadata"]["included_features"]
 
-            on_resp = await post_portfolio_report(client, {"include_income_history": True, "date_range": {"start": "2025-07-01", "end": "2025-07-31"}})
-            assert on_resp.status_code == 200
-            on_report = on_resp.json()
+                on_resp = await post_portfolio_report(client, {"include_income_history": True, "date_range": {"start": "2025-07-01", "end": "2025-07-31"}})
+                assert on_resp.status_code == 200
+                on_report = on_resp.json()
+            finally:
+                if broker_id is not None:
+                    cleanup_broker = await client.delete(
+                        f"{API_BASE}/brokers",
+                        params={"ids": [broker_id], "force": True},
+                        timeout=TIMEOUT,
+                    )
+                    assert cleanup_broker.status_code == 200, cleanup_broker.text
+                    broker_results = {item["id"]: item for item in cleanup_broker.json()["results"]}
+                    assert broker_results[broker_id]["success"] is True, cleanup_broker.text
+                if asset_id is not None:
+                    cleanup_asset = await client.delete(
+                        f"{API_BASE}/assets",
+                        params={"asset_ids": [asset_id]},
+                        timeout=TIMEOUT,
+                    )
+                    assert cleanup_asset.status_code == 200, cleanup_asset.text
+                    asset_results = {item["asset_id"]: item for item in cleanup_asset.json()["results"]}
+                    assert asset_results[asset_id]["success"] is True, cleanup_asset.text
+                await delete_current_test_user(client, user_id)
 
         assert "income_history" in on_report["metadata"]["included_features"]
         points = on_report["income_history"]["points"]
