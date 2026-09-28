@@ -22,32 +22,36 @@
      * the correlation section documents**: `loadBase` has no emptiness check, so
      * a controller declared at the panel's top level fires on an empty selection
      * and comes back 422. Two controllers on one scope cost no second request —
-     * `riskStore:134` returns the cached *promise*, so identical canonical
+     * `queryRisk` in `riskStore` returns the cached *promise*, so identical canonical
      * requests share one flight — and the catalogue is only fetched when the
      * drawer is first opened.
      *
      * **No money crosses this component.** A set of assets carries no weights.
      * `showMoney={false}` is passed even though `L4Replay` already derives it
-     * from `metadata.scope` — which `service.py:840` sets on every result, so
+     * from `metadata.scope` — which the risk service's `_metadata` builder sets
+     * on every result (`scope=context.scope_kind`), so
      * the derivation is genuinely fail-closed — because an explicit `false`
      * cannot drift if that payload field ever moves.
      *
      * 📌 Two sentences inside `L4Replay` used to read as though a portfolio were
      * on screen, and this docstring carried the warning until they were fixed.
      * Both are repaired, and the repairs are what this page now relies on:
-     *   - the composition total is **withheld**, not degraded. `L4Replay:207` is
-     *     `{#if output.portfolio_return != null}`, and `stress.py` leaves that
+     *   - the composition total is **withheld**, not degraded. `L4Replay` guards
+     *     it with `{#if output.portfolio_return != null}`, and `stress.py` leaves that
      *     null on an unweighted scope — so the sentence does not render at all,
      *     rather than printing a dash that reads like a number which failed to
      *     load. The per-asset bars are the whole answer here.
      *   - the audit sentence **names the treatment the payload actually
-     *     carries**: `L4Replay:238` selects `replayAuditOmitted` or
-     *     `replayAudit` from the excluded list, instead of always claiming the
+     *     carries**: `L4Replay`'s `omitted` predicate (`treatment ===
+     *     'omitted_from_replay'` on the excluded list) selects `replayAuditOmitted`
+     *     or `replayAudit`, instead of always claiming the
      *     carried-at-zero-return handling that an unweighted scope never gets.
      * Both were invisible on `portfolio` and surfaced only on this scope, which
      * had no mount until this one — which is why they are recorded here rather
      * than left to be rediscovered.
      */
+    import {untrack} from 'svelte';
+
     import {_ as t} from '$lib/i18n';
     import {createRiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
     import L4WhatIf from './levels/L4WhatIf.svelte';
@@ -63,10 +67,11 @@
         dateStart: string;
         dateEnd: string;
         targetCurrency: string;
+        /** Bumped by the panel after an accepted sync (R2-128). */
+        refreshVersion?: number;
     }
 
-    let {assetIds, assetLabels, dateStart, dateEnd, targetCurrency}: Props = $props();
-
+    let {assetIds, assetLabels, dateStart, dateEnd, targetCurrency, refreshVersion = 0}: Props = $props();
     const controller = createRiskPanelController(() => ({
         scope: {kind: 'asset_set', asset_ids: assetIds},
         dateStart,
@@ -74,8 +79,23 @@
         targetCurrency,
         // A replay compounds realised returns; no risk-free rate enters it.
         appliedRiskFreePercent: 0,
-        refreshVersion: 0,
+        refreshVersion,
     }));
+
+    /**
+     * After a sync, the replay on screen was computed on the prices that were just
+     * replaced. `refreshVersion` alone only re-reads the base — the controller keeps
+     * on-demand answers across a refresh — so this one is forgotten explicitly, the
+     * way `handleSynced` forgets every on-demand answer on the single-controller
+     * pages. The reader re-runs it on the new data; nothing is re-run for them.
+     * The first value is the mount, not a sync, and is skipped.
+     */
+    let lastRefreshVersion: number | null = null;
+    $effect(() => {
+        const version = refreshVersion;
+        if (lastRefreshVersion !== null && version !== lastRefreshVersion) untrack(() => controller.resetAnalysis('replay'));
+        lastRefreshVersion = version;
+    });
 
     /** `L4Replay` indexes by id; the page holds a Map, so the shape is adapted here. */
     let assetNames = $derived.by(() => {
@@ -91,7 +111,7 @@
 
 <!-- Closed by default and loading its catalogue on first open only: reopening a
      drawer is not a change of question, so it must not start the work over. -->
-<RiskLevelSection title={$t('risk.levels.l4.title')} level={4} collapsible testId="risk-replay-section" {health} {reasons} {metadata} onfirstopen={() => controller.loadScenarioCatalog()}>
+<RiskLevelSection title={$t('risk.levels.l4.title')} level={4} collapsible testId="risk-replay-section" {health} {reasons} {metadata} onfirstopen={() => controller.loadScenarioCatalog()} docsPath="financial-theory/technical-analysis/risk-metrics/historical-replay/">
     <L4WhatIf>
         {#snippet replay()}
             <L4Replay {controller} {assetNames} currency={targetCurrency} {dateStart} {dateEnd} showMoney={false} />

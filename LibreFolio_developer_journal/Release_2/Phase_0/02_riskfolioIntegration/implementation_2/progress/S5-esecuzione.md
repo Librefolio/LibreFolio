@@ -1,5 +1,9 @@
 # S5 — Asset Global ai livelli ridotti · piano di esecuzione
 
+> ⚠️ **23/09 — questo piano prosegue in [`F-laboratorio-postmerge.md`](F-laboratorio-postmerge.md).**
+> La tabella «Stato dei passi» qui sotto è ferma al 18/09 e non è stata riscritta (09 §2.7): il passo 4
+> è stato fatto da S5 (`6b8c69bfc`), il passo 2 da A (`daa03c0f2`), i passi 3 e 6 proseguono nel piano nuovo.
+>
 > **Mandato**: `implementation_2/S5-asset-global.md` · **Round 2, fase 2**
 > **Worktree**: `e-alfy-super-dollop` · **Branch**: `e-alfy-risk-asset-global-lab`
 > **Baseline**: `7d75a9c6c283af4bccf11f6bf380ffaa701d53eb` (verificata, `api sync` già eseguito)

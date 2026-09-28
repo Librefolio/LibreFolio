@@ -96,6 +96,11 @@ stronger than the promise.
   swings the database deliberately — `db` populates, `services` empties, `api`
   repopulates — so there is no instant at which every category's precondition
   holds at once.
+  - ⚠️ The repopulation belongs to the **category** run. A single `api` action
+    launched by hand after `services` in the same lane finds the empty database:
+    on 24/09 `api risk` gave 10 passed and 3 failed, all three in the
+    `fixture_user_id()` precondition ("user 'e2e_test_user' is missing"). Run
+    `test db populate --force` in the lane first; afterwards: 13/13.
 - Under `all` / `all-backend`, `_parallel_classes` returns **`(PURE,)` only**:
   `READ` and `WRITE_SCOPED` require naming a single category, because only then
   is the precondition stable.

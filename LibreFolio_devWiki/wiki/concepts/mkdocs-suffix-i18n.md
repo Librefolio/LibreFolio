@@ -83,6 +83,23 @@ The suffix strategy is **required** for Aphra integration:
 - **Link normalization**: translated files use `.md` (not `.it.md`) — plugin handles resolution
 - **Cache tracking**: `.translate-hashes.json` stores MD5 of `.en.md` + all `.XX.md` — skip re-translation if unchanged
 
+## Anchors in links from the app (2026-09-24)
+
+A link from the app to the docs is served in the reader's language, so its anchor must exist in **every** language.
+`dev.py mkdocs check-links` checks exactly that, and fails with "anchor … resolves in English but is missing in: it, fr,
+es — the translated heading produces a different slug".
+
+Two ways to hit it:
+- **A translated heading**: the slug comes from the heading text, which differs per language. Give the heading an
+  explicit id (`## Title {: #my-id }`) in the English source, and make sure the translations keep it.
+- **An English page rewritten and not translated yet**: the section does not exist in the other languages at all.
+  On 24/09 the risk-metrics index had the four-questions sections (`#how-much-can-it-hurt`,
+  `#am-i-paid-for-the-risk`) in English only: it had been rewritten on 18/09 (`b35a8581e`) and not translated. The
+  lab's L1/L3 icons point at the page root until the translation lands.
+
+`MKDOCS_ANCHOR_EXCEPTIONS` may only shrink: it is not the place to park a new anchor. Check an anchor in all four
+`.XX.md` files before handing it to anyone; the coordinator's own map missed it by looking at English only.
+
 ## Source files
 
 | Role | Path |
@@ -91,4 +108,5 @@ The suffix strategy is **required** for Aphra integration:
 | Translation script | `mkdocs_src/aphra-pipeline/translate_docs.py` |
 | Source KB file | `LibreFolio_developer_journal/knowledge_base/03_documentation.md` |
 | Developer doc | `mkdocs_src/docs/developer/docs/translation-pipeline.md` |
+| Cross-boundary link check, `MKDOCS_ANCHOR_EXCEPTIONS` | `dev.py` |
 | i18n plugin docs | [mkdocs-static-i18n GitHub](https://github.com/ultrabug/mkdocs-static-i18n) |

@@ -13,7 +13,7 @@
      *
      * Svelte 5 runes throughout.
      */
-    import {onDestroy, onMount, tick} from 'svelte';
+    import {onDestroy, onMount, tick, untrack} from 'svelte';
     import {goto} from '$app/navigation';
     import {page} from '$app/stores';
     import {_ as t} from '$lib/i18n';
@@ -47,6 +47,7 @@
     import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import AssetSetRiskPanel from '$lib/components/risk/AssetSetRiskPanel.svelte';
     import {getFixedDropdownPosition} from '$lib/utils/layout/dropdownPosition';
     import {gotoDateRange} from '$lib/utils/url/dateRangeUrl';
@@ -79,7 +80,10 @@
         active: boolean;
         quote_base_quantity?: number | null;
         tx_count?: number;
-        tx_count_own?: number;
+        /** A positive quantity is held **now** in a broker the user owns (Risk, `FAinfoResponse`). */
+        held_by_me?: boolean;
+        /** A positive quantity is held **now** in a broker the user does not own. */
+        held_by_others?: boolean;
     }
 
     interface AssetState extends AssetInfo {
@@ -203,6 +207,13 @@
     const ASSET_TAB_IDS = ['assets', 'correlation'] as const;
     type AssetTabId = (typeof ASSET_TAB_IDS)[number];
     let activeTab = $state<AssetTabId>('assets');
+    /**
+     * The lab, when the correlation tab mounts it. The toolbar's sync and reload act
+     * on its selection there (`openSync`, `reload`), and `labCanSync` keeps the sync
+     * off while the selection has nothing to sync.
+     */
+    let labPanel = $state<ReturnType<typeof AssetSetRiskPanel>>();
+    let labCanSync = $state(false);
     let assetTabs = $derived([
         {id: 'assets', label: $t('risk.assetSet.assetsTab'), icon: BarChart3, testId: 'assets-tab-list'},
         {id: 'correlation', label: $t('risk.assetSet.correlationTab'), icon: Network, testId: 'assets-tab-correlation'},
@@ -325,15 +336,20 @@
     );
 
     // =========================================================================
-    // F15 — usage panels: "yours" (tx in brokers you own), "other users'"
-    // (tx only outside your ownership), "under analysis" (never used). This
-    // grouping is unrelated to the active/inactive lifecycle flags above.
+    // F15 — usage panels: "yours", "other users'", "watched". This grouping is
+    // unrelated to the active/inactive lifecycle flags above.
+    //
+    // Since the developer's decision of 24/09 (Risk, time ②) the panels read what
+    // is held **now**, not who ever traded: `tx_count_own > 0` kept a position sold
+    // years ago among "yours". An asset you no longer hold moves to "other users'"
+    // when someone else holds it now, and to "watched" otherwise. The flags come
+    // from the asset list (`held_by_me`, `held_by_others`).
     // =========================================================================
     type AssetScope = 'own' | 'others' | 'analysis';
 
-    function assetScope(a: {tx_count?: number; tx_count_own?: number}): AssetScope {
-        if ((a.tx_count_own ?? 0) > 0) return 'own';
-        if ((a.tx_count ?? 0) > 0) return 'others';
+    function assetScope(a: {held_by_me?: boolean; held_by_others?: boolean}): AssetScope {
+        if (a.held_by_me) return 'own';
+        if (a.held_by_others) return 'others';
         return 'analysis';
     }
 
@@ -391,13 +407,43 @@
         onboardingGuide.maybeStartContextual('asset_page_guide');
     });
 
+    /**
+     * The set of assets the live poll asks about, as a stable key.
+     *
+     * The poll's effect used to read `assets` itself — directly, and through the
+     * synchronous head of `fetchLivePrices` — so it re-ran on every reassignment of
+     * the list. `fetchAllPriceData` reassigns it up to four times per refresh, and
+     * every re-run fired an immediate `POST /assets/prices/current`: a write of
+     * today's prices, and a portfolio mutation that drops every report and risk
+     * answer in flight (`portfolioMutation.ts`). A string compares by value, so this
+     * stays put while the ids do, and the effect re-runs only when the set of assets
+     * really changes.
+     */
+    let liveAssetIdsKey = $derived(
+        assets
+            .map((asset) => asset.id)
+            .sort((left, right) => left - right)
+            .join(','),
+    );
+
+    /**
+     * One live poll, now — for the refreshes a user asks for. The poll used to
+     * re-fire on those as a side effect of the reassignments above; keeping that
+     * immediacy is deliberate, and it costs one write per click instead of four.
+     */
+    function refreshLivePricesNow(): void {
+        if (isHeadToday && liveAssetIdsKey !== '') void fetchLivePrices();
+    }
+
     // Live price polling — only active when dateEnd includes today
     $effect(() => {
-        if (!isHeadToday || assets.length === 0) {
+        if (!isHeadToday || liveAssetIdsKey === '') {
             livePriceMap = new Map();
             return;
         }
-        fetchLivePrices();
+        // Untracked: its synchronous head reads `assets`, which would subscribe this
+        // effect to the whole list again (see `liveAssetIdsKey`).
+        untrack(() => void fetchLivePrices());
         const id = setInterval(fetchLivePrices, 30_000);
         return () => clearInterval(id);
     });
@@ -484,7 +530,8 @@
                 provider_code: item.provider_code ?? null,
                 active: item.active ?? true,
                 tx_count: item.tx_count ?? 0,
-                tx_count_own: item.tx_count_own ?? 0,
+                held_by_me: item.held_by_me ?? false,
+                held_by_others: item.held_by_others ?? false,
                 lastPrice: null,
                 deltaAbs: null,
                 deltaPercent: null,
@@ -1252,247 +1299,292 @@
                  capped to the picker's own width via pickerMaxWidth, matching the
                  dashboard/brokerDetail/fxList "giustificata" pattern). Round 13: each ROW
                  individually needs its own w-full+justify-around too — the OUTER wrapper's cap
-                 alone doesn't distribute space to children that don't ALSO stretch to it. -->
-            <div
-                class="flex gap-2 {layoutMode === 'oneRow' ? 'flex-row items-center flex-wrap' : filtersStacked ? 'flex-col items-start w-full' : 'flex-col'}"
-                style={filtersStacked && pickerMaxWidth ? `max-width: ${pickerMaxWidth}px` : ''}
-                use:guideAnchor={'asset.page.filters'}
-                data-testid="asset-page-filters"
-            >
-                <!-- Row 1: Search + Active -->
-                <div class="flex items-center gap-2 {filtersStacked ? 'w-full justify-around' : ''}">
-                    <!-- Search — Round 14: min-w bumped (was a flat w-44/176px that felt too
-                         cramped) so it stays comfortably readable even under pressure. -->
-                    <div class="relative w-44 min-w-[160px]">
-                        <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
-                        <input
-                            class="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-1 focus:ring-libre-green focus:border-libre-green"
-                            data-testid="assets-search-input"
-                            oninput={handleSearchInput}
-                            placeholder={$t('assets.searchPlaceholder')}
-                            type="text"
-                            value={searchText}
-                        />
-                    </div>
+                 alone doesn't distribute space to children that don't ALSO stretch to it.
+                 Hidden on the correlation tab (F-3b): every filter here narrows
+                 `filteredAssets`, which only the grid reads — the lab gets the whole list
+                 and keeps its own filters inside its "+". Shown there, they did nothing. -->
+            {#if activeTab !== 'correlation'}
+                <div
+                    class="flex gap-2 {layoutMode === 'oneRow' ? 'flex-row items-center flex-wrap' : filtersStacked ? 'flex-col items-start w-full' : 'flex-col'}"
+                    style={filtersStacked && pickerMaxWidth ? `max-width: ${pickerMaxWidth}px` : ''}
+                    use:guideAnchor={'asset.page.filters'}
+                    data-testid="asset-page-filters"
+                >
+                    <!-- Row 1: Search + Active -->
+                    <div class="flex items-center gap-2 {filtersStacked ? 'w-full justify-around' : ''}">
+                        <!-- Search — Round 14: min-w bumped (was a flat w-44/176px that felt too
+                             cramped) so it stays comfortably readable even under pressure. -->
+                        <div class="relative w-44 min-w-[160px]">
+                            <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+                            <input
+                                class="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-1 focus:ring-libre-green focus:border-libre-green"
+                                data-testid="assets-search-input"
+                                oninput={handleSearchInput}
+                                placeholder={$t('assets.searchPlaceholder')}
+                                type="text"
+                                value={searchText}
+                            />
+                        </div>
 
-                    <!-- Tri-state Active/Inactive segmented toggle (I-bis #20).
-                         Both pressed OR both unpressed → show all (None filter server-side,
-                         no filter client-side). Only-one pressed → filter to that state.
-                         Round 15: fixed w-44 (matches Search above and the Currency filter
-                         below, once swapped) + flex-1 buttons so the pill splits evenly and
-                         lines up as a column with Row 2 in every language. -->
-                    <div class="flex w-44 min-w-[160px] rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden" data-testid="assets-active-filter">
-                        <button
-                            type="button"
-                            class="flex-1 px-3 py-1.5 text-xs font-medium border-r border-gray-200 dark:border-slate-600 transition-colors whitespace-nowrap
-                                   {filterShowActive ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-600'}"
-                            data-testid="assets-active-toggle"
-                            aria-pressed={filterShowActive}
-                            onclick={() => (filterShowActive = !filterShowActive)}
-                        >
-                            {$t('assets.showActive')}
-                        </button>
-                        <button
-                            type="button"
-                            class="flex-1 px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap
-                                   {filterShowInactive ? 'bg-amber-500 text-white' : 'bg-white dark:bg-slate-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-600'}"
-                            data-testid="assets-inactive-toggle"
-                            aria-pressed={filterShowInactive}
-                            onclick={() => (filterShowInactive = !filterShowInactive)}
-                        >
-                            {$t('assets.showInactive')}
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Row 2: Currency dropdown + Type multi-select + Reset. Round 15: swapped
-                     order (Currency first, Type second) and both given the SAME explicit
-                     widths as their Row 1 counterparts (w-44, matching Search then Toggle
-                     above) so the two rows line up as a clean 2-column grid instead of
-                     drifting out of alignment. -->
-                <div class="flex items-center gap-2 {filtersStacked ? 'w-full justify-around' : ''}">
-                    <!-- Currency Filter (D10 — CurrencySearchSelect, adds to Set). w-44
-                         matches Search above (was w-36) so column 1 lines up across rows. -->
-                    <div class="w-44 min-w-[160px]">
-                        <CurrencySearchSelect
-                            allowedCurrencies={configuredCurrencies}
-                            includeAll={true}
-                            maxVisibleItems={6}
-                            onchange={(v) => {
-                                if (v && !filterCurrencies.has(v)) {
-                                    filterCurrencies = new Set([...filterCurrencies, v]);
-                                }
-                            }}
-                            placeholder={$t('common.allCurrencies')}
-                            value=""
-                        />
-                    </div>
-
-                    <!-- Type multi-checkbox dropdown (D9). w-44 on the wrapper matches the
-                         Active/Inactive toggle above (was content-sized min-w-0) — but a
-                         <button>'s own width:auto does NOT fill a plain block parent the way a
-                         <div> does (unlike e.g. the Search <input> above, which already needs
-                         its own explicit w-full for the same reason) — w-full here makes the
-                         VISIBLE button (border/background) actually reach the wrapper's 176px,
-                         not just the invisible wrapper box. justify-between then spreads the
-                         label/chevron across that width instead of leaving them bunched left. -->
-                    <div class="relative w-44 min-w-[160px]">
-                        <button
-                            bind:this={typeFilterTriggerEl}
-                            class="flex items-center justify-between gap-1.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors min-w-0
-                                   {filterTypes.size > 0
-                                ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700'
-                                : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'}"
-                            data-testid="assets-type-filter"
-                            onclick={toggleTypeFilterDropdown}
-                        >
-                            <span class="truncate">
-                                {#if filterTypes.size > 0}
-                                    {$t('common.type')} ({filterTypes.size})
-                                {:else}
-                                    {$t('assets.allTypes')}
-                                {/if}
-                            </span>
-                            <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
-                            </svg>
-                        </button>
-
-                        {#if typeFilterOpen}
-                            <!-- svelte-ignore a11y_interactive_supports_focus -->
-                            <div
-                                bind:this={typeFilterPanelEl}
-                                class="fixed z-50 w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden"
-                                style:left={`${typeFilterDropdownPosition.left}px`}
-                                style:top={`${typeFilterDropdownPosition.top}px`}
-                                onclick={(e) => e.stopPropagation()}
-                                onkeydown={(e) => {
-                                    if (e.key === 'Escape') typeFilterOpen = false;
-                                }}
-                                role="listbox"
-                                tabindex="0"
-                                data-type-filter-panel
+                        <!-- Tri-state Active/Inactive segmented toggle (I-bis #20).
+                             Both pressed OR both unpressed → show all (None filter server-side,
+                             no filter client-side). Only-one pressed → filter to that state.
+                             Round 15: fixed w-44 (matches Search above and the Currency filter
+                             below, once swapped) + flex-1 buttons so the pill splits evenly and
+                             lines up as a column with Row 2 in every language. -->
+                        <div class="flex w-44 min-w-[160px] rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden" data-testid="assets-active-filter">
+                            <button
+                                type="button"
+                                class="flex-1 px-3 py-1.5 text-xs font-medium border-r border-gray-200 dark:border-slate-600 transition-colors whitespace-nowrap
+                                       {filterShowActive ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-600'}"
+                                data-testid="assets-active-toggle"
+                                aria-pressed={filterShowActive}
+                                onclick={() => (filterShowActive = !filterShowActive)}
                             >
-                                <!-- Select All / Clear All buttons -->
-                                <div class="flex gap-2 px-2.5 py-2 border-b border-gray-100 dark:border-slate-700">
-                                    <button
-                                        type="button"
-                                        class="flex-1 px-2 py-1 text-[11px] font-medium border border-gray-200 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
-                                        onclick={() => {
-                                            filterTypes = new Set(availableTypes);
-                                        }}>{$t('common.selectAll')}</button
-                                    >
-                                    <button
-                                        type="button"
-                                        class="flex-1 px-2 py-1 text-[11px] font-medium border border-gray-200 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
-                                        onclick={() => {
-                                            filterTypes = new Set();
-                                        }}>{$t('common.clearAll')}</button
-                                    >
-                                </div>
-                                <!-- Option list -->
-                                <div class="max-h-52 overflow-y-auto border border-gray-100 dark:border-slate-700 mx-2.5 my-2 rounded-md">
-                                    {#each availableTypes as typeVal}
-                                        <!-- The per-type testid is the only handle a test has on these rows: the
-                                             row carries a shared icon (the six ETF subtypes all draw etf.png by
-                                             design) and a translated label, so neither identifies a type. Same
-                                             convention as column-visibility-item-{id} and provider-option-{code}. -->
+                                {$t('assets.showActive')}
+                            </button>
+                            <button
+                                type="button"
+                                class="flex-1 px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap
+                                       {filterShowInactive ? 'bg-amber-500 text-white' : 'bg-white dark:bg-slate-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-600'}"
+                                data-testid="assets-inactive-toggle"
+                                aria-pressed={filterShowInactive}
+                                onclick={() => (filterShowInactive = !filterShowInactive)}
+                            >
+                                {$t('assets.showInactive')}
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Row 2: Currency dropdown + Type multi-select + Reset. Round 15: swapped
+                         order (Currency first, Type second) and both given the SAME explicit
+                         widths as their Row 1 counterparts (w-44, matching Search then Toggle
+                         above) so the two rows line up as a clean 2-column grid instead of
+                         drifting out of alignment. -->
+                    <div class="flex items-center gap-2 {filtersStacked ? 'w-full justify-around' : ''}">
+                        <!-- Currency Filter (D10 — CurrencySearchSelect, adds to Set). w-44
+                             matches Search above (was w-36) so column 1 lines up across rows. -->
+                        <div class="w-44 min-w-[160px]">
+                            <CurrencySearchSelect
+                                allowedCurrencies={configuredCurrencies}
+                                includeAll={true}
+                                maxVisibleItems={6}
+                                onchange={(v) => {
+                                    if (v && !filterCurrencies.has(v)) {
+                                        filterCurrencies = new Set([...filterCurrencies, v]);
+                                    }
+                                }}
+                                placeholder={$t('common.allCurrencies')}
+                                value=""
+                            />
+                        </div>
+
+                        <!-- Type multi-checkbox dropdown (D9). w-44 on the wrapper matches the
+                             Active/Inactive toggle above (was content-sized min-w-0) — but a
+                             <button>'s own width:auto does NOT fill a plain block parent the way a
+                             <div> does (unlike e.g. the Search <input> above, which already needs
+                             its own explicit w-full for the same reason) — w-full here makes the
+                             VISIBLE button (border/background) actually reach the wrapper's 176px,
+                             not just the invisible wrapper box. justify-between then spreads the
+                             label/chevron across that width instead of leaving them bunched left. -->
+                        <div class="relative w-44 min-w-[160px]">
+                            <button
+                                bind:this={typeFilterTriggerEl}
+                                class="flex items-center justify-between gap-1.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors min-w-0
+                                       {filterTypes.size > 0
+                                    ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700'
+                                    : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'}"
+                                data-testid="assets-type-filter"
+                                onclick={toggleTypeFilterDropdown}
+                            >
+                                <span class="truncate">
+                                    {#if filterTypes.size > 0}
+                                        {$t('common.type')} ({filterTypes.size})
+                                    {:else}
+                                        {$t('assets.allTypes')}
+                                    {/if}
+                                </span>
+                                <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+                                </svg>
+                            </button>
+
+                            {#if typeFilterOpen}
+                                <!-- svelte-ignore a11y_interactive_supports_focus -->
+                                <div
+                                    bind:this={typeFilterPanelEl}
+                                    class="fixed z-50 w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden"
+                                    style:left={`${typeFilterDropdownPosition.left}px`}
+                                    style:top={`${typeFilterDropdownPosition.top}px`}
+                                    onclick={(e) => e.stopPropagation()}
+                                    onkeydown={(e) => {
+                                        if (e.key === 'Escape') typeFilterOpen = false;
+                                    }}
+                                    role="listbox"
+                                    tabindex="0"
+                                    data-type-filter-panel
+                                >
+                                    <!-- Select All / Clear All buttons -->
+                                    <div class="flex gap-2 px-2.5 py-2 border-b border-gray-100 dark:border-slate-700">
                                         <button
                                             type="button"
-                                            data-testid="assets-type-filter-option-{typeVal}"
-                                            class="flex items-center gap-2 w-full px-2 py-1.5 text-left text-[13px] text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                                            class="flex-1 px-2 py-1 text-[11px] font-medium border border-gray-200 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
                                             onclick={() => {
-                                                const next = new Set(filterTypes);
-                                                if (next.has(typeVal)) next.delete(typeVal);
-                                                else next.add(typeVal);
-                                                filterTypes = next;
-                                            }}
+                                                filterTypes = new Set(availableTypes);
+                                            }}>{$t('common.selectAll')}</button
                                         >
-                                            <span
-                                                class="flex items-center justify-center w-4 h-4 rounded-sm border transition-colors shrink-0
-                                                         {filterTypes.has(typeVal) ? 'bg-libre-green border-libre-green text-white dark:bg-emerald-400 dark:border-emerald-400 dark:text-slate-900' : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-500'}"
+                                        <button
+                                            type="button"
+                                            class="flex-1 px-2 py-1 text-[11px] font-medium border border-gray-200 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+                                            onclick={() => {
+                                                filterTypes = new Set();
+                                            }}>{$t('common.clearAll')}</button
+                                        >
+                                    </div>
+                                    <!-- Option list -->
+                                    <div class="max-h-52 overflow-y-auto border border-gray-100 dark:border-slate-700 mx-2.5 my-2 rounded-md">
+                                        {#each availableTypes as typeVal}
+                                            <!-- The per-type testid is the only handle a test has on these rows: the
+                                                 row carries a shared icon (the six ETF subtypes all draw etf.png by
+                                                 design) and a translated label, so neither identifies a type. Same
+                                                 convention as column-visibility-item-{id} and provider-option-{code}. -->
+                                            <button
+                                                type="button"
+                                                data-testid="assets-type-filter-option-{typeVal}"
+                                                class="flex items-center gap-2 w-full px-2 py-1.5 text-left text-[13px] text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                                                onclick={() => {
+                                                    const next = new Set(filterTypes);
+                                                    if (next.has(typeVal)) next.delete(typeVal);
+                                                    else next.add(typeVal);
+                                                    filterTypes = next;
+                                                }}
                                             >
-                                                {#if filterTypes.has(typeVal)}
-                                                    <Check size={12} />
-                                                {/if}
-                                            </span>
-                                            <img src={getAssetTypeIconUrl(typeVal)} alt="" class="w-4 h-4 object-contain shrink-0" />
-                                            <span class="flex-1">{$t(`assets.types.${typeVal}`) || typeVal}</span>
-                                            <span class="text-[10px] font-mono text-gray-400 dark:text-gray-500 tabular-nums">{typeCounts[typeVal] ?? 0}</span>
-                                        </button>
-                                    {/each}
+                                                <span
+                                                    class="flex items-center justify-center w-4 h-4 rounded-sm border transition-colors shrink-0
+                                                             {filterTypes.has(typeVal) ? 'bg-libre-green border-libre-green text-white dark:bg-emerald-400 dark:border-emerald-400 dark:text-slate-900' : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-500'}"
+                                                >
+                                                    {#if filterTypes.has(typeVal)}
+                                                        <Check size={12} />
+                                                    {/if}
+                                                </span>
+                                                <img src={getAssetTypeIconUrl(typeVal)} alt="" class="w-4 h-4 object-contain shrink-0" />
+                                                <span class="flex-1">{$t(`assets.types.${typeVal}`) || typeVal}</span>
+                                                <span class="text-[10px] font-mono text-gray-400 dark:text-gray-500 tabular-nums">{typeCounts[typeVal] ?? 0}</span>
+                                            </button>
+                                        {/each}
+                                    </div>
                                 </div>
-                            </div>
+                            {/if}
+                        </div>
+
+                        <!-- Reset filters -->
+                        {#if hasActiveFilters}
+                            <button class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400 transition-colors" onclick={clearFilters} title={$t('fx.filter.resetFilters')}>
+                                <X size={16} />
+                            </button>
                         {/if}
                     </div>
-
-                    <!-- Reset filters -->
-                    {#if hasActiveFilters}
-                        <button class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400 transition-colors" onclick={clearFilters} title={$t('fx.filter.resetFilters')}>
-                            <X size={16} />
-                        </button>
-                    {/if}
                 </div>
-            </div>
+            {/if}
         {/snippet}
 
         {#snippet actions({showActionLabels})}
-            <!-- Top-left: ColumnVisibility in table mode, Abs/% toggle in grid mode -->
-            {#if viewMode === 'list'}
-                <ColumnVisibilityToggle tableRef={assetTableRefs['own']?.getTableRef()} additionalTableRefs={[assetTableRefs['others']?.getTableRef(), assetTableRefs['analysis']?.getTableRef()].filter((r) => r != null)} showLabel={showActionLabels} />
+            {#if activeTab === 'correlation'}
+                <!-- F-3b (V1) — on the correlation tab the toolbar serves the lab. Abs/% and the
+                     chart settings drive the grid's cards, which this tab does not show, so they
+                     leave; the sync and the reload act on the lab's selection. The sync is the
+                     lab's own modal (prices and the rates that convert them), opened from here so
+                     the page has one sync button instead of two side by side. -->
+                <Tooltip text={$t('risk.assetSet.syncSelectionHint')} position="bottom" interactiveChild>
+                    <button
+                        class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors disabled:opacity-50 disabled:hover:bg-white dark:disabled:hover:bg-slate-700"
+                        onclick={(event) => {
+                            // Not up to the Tooltip wrapper: its click pins the hint for thirty
+                            // seconds, which would float over the modal this button opens.
+                            event.stopPropagation();
+                            labPanel?.openSync();
+                        }}
+                        disabled={!labPanel || !labCanSync}
+                        data-testid="risk-sync-button"
+                        use:guideAnchor={'asset.page.sync'}
+                    >
+                        <RotateCw size={14} />
+                        {#if showActionLabels}<span>{$t('sharedResource.syncSelection')}</span>{/if}
+                    </button>
+                </Tooltip>
+                <Tooltip text={$t('risk.assetSet.reloadHint')} position="bottom" interactiveChild>
+                    <button
+                        class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors disabled:opacity-50 disabled:hover:bg-white dark:disabled:hover:bg-slate-700"
+                        onclick={(event) => {
+                            event.stopPropagation();
+                            labPanel?.reload();
+                        }}
+                        disabled={!labPanel}
+                        data-testid="risk-reload-button"
+                    >
+                        <RefreshCw size={14} />
+                        {#if showActionLabels}<span>{$t('sharedResource.refreshAll')}</span>{/if}
+                    </button>
+                </Tooltip>
             {:else}
-                <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
-                    <button
-                        type="button"
-                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'absolute' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                        data-testid="assets-global-view-absolute"
-                        onclick={() => {
-                            globalViewMode = 'absolute';
-                        }}
-                        >Abs
-                    </button>
-                    <button
-                        type="button"
-                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'percentage' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                        data-testid="assets-global-view-percentage"
-                        onclick={() => {
-                            globalViewMode = 'percentage';
-                        }}
-                        >%
-                    </button>
-                </div>
+                <!-- Top-left: ColumnVisibility in table mode, Abs/% toggle in grid mode -->
+                {#if viewMode === 'list'}
+                    <ColumnVisibilityToggle tableRef={assetTableRefs['own']?.getTableRef()} additionalTableRefs={[assetTableRefs['others']?.getTableRef(), assetTableRefs['analysis']?.getTableRef()].filter((r) => r != null)} showLabel={showActionLabels} />
+                {:else}
+                    <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
+                        <button
+                            type="button"
+                            class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'absolute' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                            data-testid="assets-global-view-absolute"
+                            onclick={() => {
+                                globalViewMode = 'absolute';
+                            }}
+                            >Abs
+                        </button>
+                        <button
+                            type="button"
+                            class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'percentage' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                            data-testid="assets-global-view-percentage"
+                            onclick={() => {
+                                globalViewMode = 'percentage';
+                            }}
+                            >%
+                        </button>
+                    </div>
+                {/if}
+                <!-- Settings -->
+                <button
+                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                    onclick={handleGlobalSettings}
+                    data-testid="assets-chart-settings-button"
+                >
+                    <Settings size={14} />
+                    {#if showActionLabels}<span>{$t('sharedResource.settings')}</span>{/if}
+                </button>
+                <!-- Sync All -->
+                <button
+                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                    onclick={handleSyncAllAssets}
+                    data-testid="assets-sync-all-button"
+                    use:guideAnchor={'asset.page.sync'}
+                >
+                    <RotateCw size={14} />
+                    {#if showActionLabels}<span>{$t('sharedResource.syncAll')}</span>{/if}
+                </button>
+                <!-- Refresh All -->
+                <button
+                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                    onclick={() => {
+                        for (const a of assets) invalidateAssetPriceStore(a.id);
+                        rearmMaxPendingBeforeReload();
+                        fetchAllPriceData();
+                        refreshLivePricesNow();
+                    }}
+                >
+                    <RefreshCw class={refreshing ? 'animate-spin' : ''} size={14} />
+                    {#if showActionLabels}<span>{$t('sharedResource.refreshAll')}</span>{/if}
+                </button>
             {/if}
-            <!-- Settings -->
-            <button
-                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                onclick={handleGlobalSettings}
-                data-testid="assets-chart-settings-button"
-            >
-                <Settings size={14} />
-                {#if showActionLabels}<span>{$t('sharedResource.settings')}</span>{/if}
-            </button>
-            <!-- Sync All -->
-            <button
-                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                onclick={handleSyncAllAssets}
-                data-testid="assets-sync-all-button"
-                use:guideAnchor={'asset.page.sync'}
-            >
-                <RotateCw size={14} />
-                {#if showActionLabels}<span>{$t('sharedResource.syncAll')}</span>{/if}
-            </button>
-            <!-- Refresh All -->
-            <button
-                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                onclick={() => {
-                    for (const a of assets) invalidateAssetPriceStore(a.id);
-                    rearmMaxPendingBeforeReload();
-                    fetchAllPriceData();
-                }}
-            >
-                <RefreshCw class={refreshing ? 'animate-spin' : ''} size={14} />
-                {#if showActionLabels}<span>{$t('sharedResource.refreshAll')}</span>{/if}
-            </button>
         {/snippet}
     </PageToolbar>
 
@@ -1507,7 +1599,19 @@
                 <p class="text-red-600 dark:text-red-400">{error}</p>
             </div>
         {:else}
-            <AssetSetRiskPanel {assets} {dateStart} {dateEnd} targetCurrency={$globalSettings.default_currency || 'EUR'} />
+            <AssetSetRiskPanel
+                bind:this={labPanel}
+                bind:canSync={labCanSync}
+                {assets}
+                {dateStart}
+                {dateEnd}
+                targetCurrency={$globalSettings.default_currency || 'EUR'}
+                onsynced={async () => {
+                    for (const asset of assets) invalidateAssetPriceStore(asset.id);
+                    rearmMaxPendingBeforeReload();
+                    await fetchAllPriceData();
+                }}
+            />
         {/if}
     {:else if loading}
         <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-12 text-center border border-gray-100 dark:border-slate-700">
@@ -1698,6 +1802,7 @@
         for (const a of assets) invalidateAssetPriceStore(a.id);
         rearmMaxPendingBeforeReload();
         fetchAllPriceData();
+        refreshLivePricesNow();
     }}
 />
 
