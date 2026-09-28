@@ -905,7 +905,13 @@ describe('canonical overlay axis and reference helpers', () => {
                 }
 
                 const historyEffect = source.slice(effectStart, effectEnd);
-                const activeRangeRead = historyEffect.indexOf('const preservedRange = getLogicalRangeFromChart();');
+                // Why (re-pin, S10): since round 2 (master plan §6.0.17) the reset tells new data
+                // for the same period (live zoom kept) from a new period (zoom dropped), so the read
+                // is gated: `periodChanged ? null : getLogicalRangeFromChart()`. The pin guards the
+                // invariant, not the gate's spelling: the preserved range is the LIVE chart read or
+                // null, never a remembered A bound. The gate only adds a null path, so the ungated
+                // simulation below stays a sound model (history B already reads null there).
+                const activeRangeRead = historyEffect.search(/const preservedRange = \w+ \? null : getLogicalRangeFromChart\(\);/);
                 const directReset = historyEffect.indexOf('resetResolutionState(preservedRange);', activeRangeRead);
                 const deferredRender = historyEffect.indexOf('tick().then(() => {', directReset);
                 const render = historyEffect.indexOf('renderChart();', deferredRender);
@@ -1180,7 +1186,12 @@ describe('canonical overlay axis and reference helpers', () => {
                 const storeStart = renderChart.indexOf('visibleStartDate = liveRange.startDate;', capture);
                 const storeEnd = renderChart.indexOf('visibleEndDate = liveRange.endDate;', storeStart);
                 const ensure = renderChart.indexOf('const logicalRange = ensureLogicalRange();', storeEnd);
-                const zoomWindow = renderChart.indexOf('const zoomWindow = buildZoomWindow(currentResolution, logicalRange.startDate, logicalRange.endDate);', ensure);
+                // Why (re-pin, S10): the candle-width ladder (Candles, Income) owns its bucket
+                // width and keeps the whole history on the axis, so it no longer goes through
+                // buildZoomWindow and the statement became a ladder/cascade ternary. The pin keeps
+                // only the off-ladder operand this test simulates: the zoom handed to the full
+                // rebuild is rebuilt from the live logical range, whatever the ladder side says.
+                const zoomWindow = renderChart.search(/const zoomWindow = [^;]*\bbuildZoomWindow\(currentResolution, logicalRange\.startDate, logicalRange\.endDate\);/);
                 const fullRebuild = renderChart.indexOf('applyFullOption(isDark, buildFullSeries(isDark, seriesData), zoomWindow);', zoomWindow);
                 expect(capture).toBeGreaterThan(-1);
                 expect(storeStart).toBeGreaterThan(capture);
@@ -1556,13 +1567,21 @@ describe('canonical overlay axis and reference helpers', () => {
             const fullOption = source.slice(fullOptionStart, fullOptionEnd);
 
             expect(resizeCallback).toMatch(/const wasCompact = responsiveXAxisCompact;\s*responsiveXAxisCompact = policy\.compact;[\s\S]*?if \(policy\.axisLabel\) \{[\s\S]*?\} else if \(wasCompact\) \{\s*renderChart\(true\);\s*\}/);
-            expect(renderChart).toContain('const zoomWindow = buildZoomWindow(currentResolution, logicalRange.startDate, logicalRange.endDate);');
+            // Why (re-pin, S10): two product changes, neither to the resize path itself. The
+            // candle-width ladder keeps the whole history, so `const zoomWindow` became a
+            // ladder/cascade ternary, and the privacy mask joined the full-rebuild triggers
+            // (ECharts caches axis labels). The pins keep what this test is about: off the
+            // ladder the zoom is rebuilt from the live logical range, and `renderChart(true)`
+            // always takes the full path because forceFullXAxisRebuild is a disjunct of
+            // needsFullInit. The triggers are checked as a set, so a new one is not a failure.
+            expect(renderChart).toMatch(/const zoomWindow = [^;]*\bbuildZoomWindow\(currentResolution, logicalRange\.startDate, logicalRange\.endDate\);/);
             // G1b: needsFullInit now keys on (viewMode, pnlSubmode) via renderedModeKey, not
             // viewMode alone — a pnlSubmode change (line -> candles) changes the series TYPE
             // (line -> candlestick) while viewMode stays 'pnl', which the partial-update path
             // cannot express, so it must also force a full rebuild.
             expect(renderChart).toContain("const renderedModeKey = viewMode === 'pnl' ? `pnl:${pnlSubmode}` : viewMode;");
-            expect(renderChart).toContain('const needsFullInit = forceFullXAxisRebuild || lastRenderedMode !== renderedModeKey || lastRenderedDark !== isDark;');
+            const fullInitTriggers = renderChart.match(/const needsFullInit = ([^;]+);/)?.[1].split(' || ') ?? [];
+            expect(fullInitTriggers).toEqual(expect.arrayContaining(['forceFullXAxisRebuild', 'lastRenderedMode !== renderedModeKey', 'lastRenderedDark !== isDark']));
             expect(renderChart).toMatch(/if \(needsFullInit\) \{\s*applyFullOption\(isDark, buildFullSeries\(isDark, seriesData\), zoomWindow\);\s*\} else \{\s*updateChartData\(activeData, isDark, zoomWindow, false, logicalRange\.startDate\);\s*\}/);
             expect(source).toContain("const CHART_SERIES_UPDATE_OPTS = {notMerge: false, replaceMerge: ['dataZoom']};");
             expect(source).toContain("const CHART_FULL_UPDATE_OPTS = {...CHART_SET_OPTION_OPTS, replaceMerge: [...CHART_SET_OPTION_OPTS.replaceMerge, 'xAxis']};");
@@ -1691,23 +1710,70 @@ describe('canonical overlay axis and reference helpers', () => {
             return buildOhlcQuad(point.open, point.close, point.low, point.high, false, 1);
         }
 
-        function toPositionalValueImpl(point: FixtureSeriesPoint): number | null {
-            return point.value[1];
-        }
-
         function clipToSignImpl(point: FixtureSeriesPoint, keepPositive: boolean): FixtureSeriesPoint {
             const v = point.value[1];
             if (v == null || v >= 0 === keepPositive) return point;
             return {...point, value: [point.value[0], null]};
         }
 
-        function findReferenceTotalPnlImpl(points: FixtureSeriesPoint[], referenceDate: string | null): number | null {
-            if (points.length === 0) return null;
-            const point = (referenceDate != null && points.find((p) => p.bucketEnd >= referenceDate)) || points[0];
-            return point.value[1];
+        // Body verbatim from e7773a143, with this file's names for the two product ones it
+        // uses: clipToSignImpl for clipToSign, FixtureSeriesPoint for SeriesPoint.
+        function splitBySignImpl(points: FixtureSeriesPoint[]): {positive: FixtureSeriesPoint[]; negative: FixtureSeriesPoint[]} {
+            const positive: FixtureSeriesPoint[] = [];
+            const negative: FixtureSeriesPoint[] = [];
+
+            for (let i = 0; i < points.length; i++) {
+                const point = points[i];
+                positive.push(clipToSignImpl(point, true));
+                negative.push(clipToSignImpl(point, false));
+
+                const current = point.value[1];
+                const next = points[i + 1]?.value[1];
+                if (current == null || next == null || current === 0 || next === 0) continue;
+                if (current > 0 === next > 0) continue;
+
+                // Linear crossing between the two x positions. `value[0]` is a DATE STRING,
+                // not a number — so it is parsed to millis, interpolated, and formatted back.
+                // The crossing falls inside a day, which a `time` axis accepts as an ISO
+                // instant; this path is only ever reached from the Line submode, whose axis
+                // is `time` (the candles path uses `category`, where a fractional position
+                // would be meaningless).
+                const x0 = new Date(points[i].value[0]).getTime();
+                const x1 = new Date(points[i + 1].value[0]).getTime();
+                if (!Number.isFinite(x0) || !Number.isFinite(x1)) continue;
+                const t = Math.abs(current) / (Math.abs(current) + Math.abs(next));
+                const crossingX = new Date(x0 + (x1 - x0) * t).toISOString();
+                const crossing: FixtureSeriesPoint = {...point, value: [crossingX, 0]};
+                positive.push(crossing);
+                negative.push(crossing);
+            }
+
+            return {positive, negative};
         }
 
-        it('mirrors the exact literal bodies of toCandlestickPoint / toPositionalValue / clipToSign / findReferenceTotalPnl in GrowthChart.svelte (ties every reimplementation above to the real source)', () => {
+        // Body verbatim from e7773a143. The product reads `aggregationInputs` from the
+        // component's closure; here it is the third parameter.
+        function findReferenceTotalPnlImpl(entry: {pnl: {total: {points: FixtureSeriesPoint[]}}}, referenceDate: string | null, aggregationInputs: {dates: string[]; eurStackedData: {totalPnl: Array<number | null>}}): number | null {
+            const daily = aggregationInputs.eurStackedData.totalPnl;
+            const allDates = aggregationInputs.dates;
+            if (allDates.length === 0) return entry.pnl.total.points[0]?.value[1] ?? null;
+
+            if (referenceDate == null) return daily[0] ?? null;
+
+            // Exact day if present; otherwise the last day BEFORE it — never a later one,
+            // because the value on a day that has not happened yet is not a baseline.
+            let idx = allDates.indexOf(referenceDate);
+            if (idx < 0) {
+                idx = 0;
+                for (let i = 0; i < allDates.length; i++) {
+                    if (allDates[i] <= referenceDate) idx = i;
+                    else break;
+                }
+            }
+            return daily[idx] ?? null;
+        }
+
+        it('mirrors the exact literal bodies of toCandlestickPoint / splitBySign / clipToSign / findReferenceTotalPnl in GrowthChart.svelte (ties every reimplementation above to the real source)', () => {
             const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
             const start = source.indexOf('function toCandlestickPoint(point: CandleSeriesPoint): number[] | string {');
             const end = source.indexOf('\n    function buildChartUpdateSeries(', start);
@@ -1721,10 +1787,14 @@ describe('canonical overlay axis and reference helpers', () => {
             expect(block).toContain('if (point.open == null || point.close == null || point.low == null || point.high == null) return ECHARTS_EMPTY_VALUE;');
             expect(block).toContain('return buildOhlcQuad(point.open, point.close, point.low, point.high, false, 1);');
             // No `return null` anywhere in toCandlestickPoint SPECIFICALLY — scoped to
-            // its own body, because findReferenceTotalPnl further down this same block
-            // legitimately returns null for an empty series, and a block-wide ban would
-            // be a false positive on it.
-            const candlestickBody = block.slice(0, block.indexOf('function toPositionalValue('));
+            // its own body, because null is a legitimate result further down this same
+            // block (findReferenceTotalPnl yields it through `?? null` for an empty series
+            // or a day with no P&L), and a block-wide ban would police helpers it has no
+            // business with.
+            // Why (re-pin, S10, D21a): toPositionalValue has had no caller since e7773a143, so its
+            // literals are no longer pinned here, and this slice ends at clipToSign's definition,
+            // which the test pins below, so its scope holds whether or not that helper remains.
+            const candlestickBody = block.slice(0, block.indexOf('function clipToSign('));
             expect(candlestickBody).not.toContain('return null');
             // ...and the sentinel it returns really is ECharts' documented empty value,
             // declared once at module scope rather than inlined at the return site.
@@ -1732,19 +1802,39 @@ describe('canonical overlay axis and reference helpers', () => {
             // The widened return type is part of the contract: `number[] | null` would
             // let a null flow back in without a type error.
             expect(source).toContain('function toCandlestickPoint(point: CandleSeriesPoint): number[] | string {');
-            // toPositionalValue
-            expect(block).toContain('function toPositionalValue(point: SeriesPoint): number | null {');
-            expect(block).toContain('return point.value[1];');
             // clipToSign
             expect(block).toContain('function clipToSign(point: SeriesPoint, keepPositive: boolean): SeriesPoint {');
             expect(block).toContain('const v = point.value[1];');
             expect(block).toContain('if (v == null || v >= 0 === keepPositive) return point;');
             expect(block).toContain('return {...point, value: [point.value[0], null]};');
+            // splitBySign
+            // Why (re-pin, S10, D21b): e7773a143 splits the Total P&L with splitBySign, which the
+            // sign-crossing tests below now execute through splitBySignImpl; these literals tie
+            // that copy to the source, one per step of the rule.
+            expect(block).toContain('function splitBySign(points: SeriesPoint[]): {positive: SeriesPoint[]; negative: SeriesPoint[]} {');
+            expect(block).toContain('positive.push(clipToSign(point, true));');
+            expect(block).toContain('negative.push(clipToSign(point, false));');
+            expect(block).toContain('if (current == null || next == null || current === 0 || next === 0) continue;');
+            expect(block).toContain('if (current > 0 === next > 0) continue;');
+            expect(block).toContain('const t = Math.abs(current) / (Math.abs(current) + Math.abs(next));');
+            expect(block).toContain('const crossingX = new Date(x0 + (x1 - x0) * t).toISOString();');
+            expect(block).toContain('const crossing: SeriesPoint = {...point, value: [crossingX, 0]};');
+            expect(block).toContain('positive.push(crossing);');
+            expect(block).toContain('negative.push(crossing);');
             // findReferenceTotalPnl
+            // Why (re-pin, S10): e7773a143 rewrote it to read the DAILY series and never a later
+            // day. The old first-bucket-end lookup drifted by up to one bucket (~600 instead of 0
+            // in June). The copy above now carries the new body, these literals tie it to the
+            // source, and the negative, behind them, proves the bucket-end lookup is gone.
             expect(block).toContain('function findReferenceTotalPnl(entry: AggregatedResolutionData, referenceDate: string | null): number | null {');
-            expect(block).toContain('const points = entry.pnl.total.points;');
-            expect(block).toContain('if (points.length === 0) return null;');
-            expect(block).toContain('const point = (referenceDate != null && points.find((p) => p.bucketEnd >= referenceDate)) || points[0];');
+            expect(block).toContain('const daily = aggregationInputs.eurStackedData.totalPnl;');
+            expect(block).toContain('const allDates = aggregationInputs.dates;');
+            expect(block).toContain('if (allDates.length === 0) return entry.pnl.total.points[0]?.value[1] ?? null;');
+            expect(block).toContain('if (referenceDate == null) return daily[0] ?? null;');
+            expect(block).toContain('let idx = allDates.indexOf(referenceDate);');
+            expect(block).toContain('if (allDates[i] <= referenceDate) idx = i;');
+            expect(block).toContain('return daily[idx] ?? null;');
+            expect(block).not.toContain('p.bucketEnd >= referenceDate');
         });
 
         describe('toCandlestickPoint', () => {
@@ -1771,23 +1861,6 @@ describe('canonical overlay axis and reference helpers', () => {
 
             it('returns a quad when all four legs are present, even when one leg is exactly zero (zero is not "missing")', () => {
                 expect(toCandlestickPointImpl(candlePointRaw('2026-01-05', 0, 5, 0, 10))).toEqual([0, 5, 0, 10]);
-            });
-        });
-
-        describe('toPositionalValue', () => {
-            it('extracts the bare numeric value, discarding the date half of the [date, value] tuple', () => {
-                expect(toPositionalValueImpl(seriesPoint('2026-01-01', 123.45))).toBe(123.45);
-            });
-
-            it('preserves null (a gap) rather than coercing it to 0 or dropping the point', () => {
-                expect(toPositionalValueImpl(seriesPoint('2026-01-01', null))).toBeNull();
-            });
-
-            it('is a pure 1:1 positional map — mapping it over an array never changes length or order', () => {
-                const dates = ['2026-01-01', '2026-01-02', '2026-01-03', '2026-01-04'];
-                const values: Array<number | null> = [10, null, -5, 0];
-                const points = dates.map((d, i) => seriesPoint(d, values[i]));
-                expect(points.map(toPositionalValueImpl)).toEqual(values);
             });
         });
 
@@ -1831,30 +1904,32 @@ describe('canonical overlay axis and reference helpers', () => {
             const points = dates.map((d, i) => seriesPoint(d, values[i], d));
 
             it('returns null for an empty series (nothing to draw a reference against)', () => {
-                expect(findReferenceTotalPnlImpl([], '2026-01-12')).toBeNull();
+                expect(findReferenceTotalPnlImpl({pnl: {total: {points: []}}}, '2026-01-12', {dates: [], eurStackedData: {totalPnl: []}})).toBeNull();
             });
 
             it('falls back to the first point when referenceDate is null', () => {
-                expect(findReferenceTotalPnlImpl(points, null)).toBe(100);
+                expect(findReferenceTotalPnlImpl({pnl: {total: {points}}}, null, {dates, eurStackedData: {totalPnl: values}})).toBe(100);
             });
 
-            it('picks the first bucket whose bucketEnd reaches a referenceDate that falls strictly between two buckets', () => {
-                // 01-08 sits between bucket 1 (ends 01-05) and bucket 2 (ends 01-12): the
-                // first bucket that "closes over" it is bucket 2 (150), not bucket 1.
-                expect(findReferenceTotalPnlImpl(points, '2026-01-08')).toBe(150);
+            it('anchors a referenceDate that falls between two days on the last day BEFORE it, never on the next one', () => {
+                // Why (re-pin, S10): the product reads the DAILY series and never a later day (e7773a143), so 01-08 anchors on 01-05 (100), not on 01-12 (150).
+                expect(findReferenceTotalPnlImpl({pnl: {total: {points}}}, '2026-01-08', {dates, eurStackedData: {totalPnl: values}})).toBe(100);
             });
 
-            it('matches on an exact bucketEnd', () => {
-                expect(findReferenceTotalPnlImpl(points, '2026-01-19')).toBe(90);
+            it('matches on an exact day', () => {
+                // Why (re-pin, S10): the product reads the DAILY series and never a later day (e7773a143), so an exact date is matched on its own day, not on a bucket end.
+                expect(findReferenceTotalPnlImpl({pnl: {total: {points}}}, '2026-01-19', {dates, eurStackedData: {totalPnl: values}})).toBe(90);
             });
 
-            it('falls back to the first point when referenceDate is after every bucket', () => {
-                expect(findReferenceTotalPnlImpl(points, '2099-01-01')).toBe(100);
+            it('anchors a referenceDate after every day on the LAST day, not on the first', () => {
+                // Why (re-pin, S10): the product reads the DAILY series and never a later day (e7773a143), so a date after every day anchors on the last one, 01-26 (200), not on the first (100).
+                expect(findReferenceTotalPnlImpl({pnl: {total: {points}}}, '2099-01-01', {dates, eurStackedData: {totalPnl: values}})).toBe(200);
             });
 
-            it('can itself return null when the located bucket has no P&L value that day (a genuine gap is a valid reference, never guessed)', () => {
+            it('can itself return null when the located day has no P&L value that day (a genuine gap is a valid reference, never guessed)', () => {
+                // Why (re-pin, S10): the product reads the DAILY series and never a later day (e7773a143), so a day with no P&L yields null, never the next day's 50.
                 const withGap = [seriesPoint('2026-01-05', null), seriesPoint('2026-01-12', 50)];
-                expect(findReferenceTotalPnlImpl(withGap, '2026-01-05')).toBeNull();
+                expect(findReferenceTotalPnlImpl({pnl: {total: {points: withGap}}}, '2026-01-05', {dates: ['2026-01-05', '2026-01-12'], eurStackedData: {totalPnl: [null, 50]}})).toBeNull();
             });
         });
 
@@ -1885,7 +1960,7 @@ describe('canonical overlay axis and reference helpers', () => {
         });
 
         describe('applyFullOption completes the category-vs-time xAxis ternary on both branches', () => {
-            it('sets category type/data/boundaryGap and time type/splitNumber, sharing the axisLabel merge / axisLine / splitLine exactly once per branch', () => {
+            it('sets category type/data/boundaryGap and time type/splitNumber, sharing the axisLabel merge / axisLine and declaring splitLine exactly once per branch', () => {
                 const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
                 const fullOptionStart = source.indexOf('function applyFullOption(');
                 const fullOptionEnd = source.indexOf('\n</script>', fullOptionStart);
@@ -1914,14 +1989,20 @@ describe('canonical overlay axis and reference helpers', () => {
                 // future edit that updates one branch and forgets its sibling.
                 const axisLabelMergeCount = (xAxisBlock.match(/\.\.\.\(xAxisPolicy\.axisLabel \?\? \{\}\),/g) ?? []).length;
                 const axisLineCount = (xAxisBlock.match(/axisLine: \{lineStyle: \{color: gridColor\}\},/g) ?? []).length;
-                const splitLineCount = (xAxisBlock.match(/splitLine: \{show: false\},/g) ?? []).length;
+                // Why (re-pin, S10): splitLine is no longer shared theming. It now draws the
+                // bucket separators: always on the category branch, and on the time branch only
+                // under the ladder. So the value differs between branches, and S7 will reshape it
+                // (splitLine.interval). What survives is that each branch declares the KEY once:
+                // a second `splitLine` in the same literal silently wins, and the product comment
+                // records that this already happened. The pin counts the key, not its value.
+                const splitLineCount = (xAxisBlock.match(/^[ \t]+splitLine:/gm) ?? []).length;
                 expect(axisLabelMergeCount).toBe(2);
                 expect(axisLineCount).toBe(2);
                 expect(splitLineCount).toBe(2);
             });
         });
 
-        describe('candles-submode positional alignment: candlestick quad and broker overlay line up 1:1 with dates', () => {
+        describe('candles-submode positional alignment: candlestick quads line up 1:1 with dates', () => {
             it('mirrors getResolutionData: dates, pnl.total, pnl.candle and every pnl.brokers[].metric are all built from the exact same buckets array (never a second, independently computed one)', () => {
                 const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
                 const start = source.indexOf('function getResolutionData(resolution: ChartResolution): AggregatedResolutionData {');
@@ -1942,38 +2023,20 @@ describe('canonical overlay axis and reference helpers', () => {
                 expect(buildBucketInfosCallCount).toBe(1);
             });
 
-            it('mirrors the buildChartUpdateSeries candles-submode mapping calls exactly: toCandlestickPoint for the total slot, toPositionalValue for every broker slot', () => {
-                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
-                const functionStart = source.indexOf('function buildChartUpdateSeries(');
-                const start = source.indexOf("if (viewMode === 'pnl' && pnlSubmode === 'candles') {", functionStart);
-                const end = source.indexOf("if (viewMode === 'pnl' && pnlSubmode === 'income') {", start);
-                expect(functionStart).toBeGreaterThan(-1);
-                expect(start).toBeGreaterThan(functionStart);
-                expect(end).toBeGreaterThan(start);
-                if (functionStart < 0 || start <= functionStart || end <= start) throw new Error('GrowthChart candles-submode series contract not found');
-
-                const block = source.slice(start, end);
-                expect(block).toContain('entry.pnl.candle.points.map(toCandlestickPoint)');
-                expect(block).toContain('broker.metric.points.map(toPositionalValue)');
-            });
-
-            it('keeps candlestick quads and broker overlay values 1:1 by array position with dates — a gap at one position never shifts a later one', () => {
+            it('keeps candlestick quads 1:1 by array position with dates — a gap at one position never shifts a later one', () => {
+                // Why (re-pin, S10, D21a): the per-broker overlay was removed from the candles submode
+                // (developer review 2026-09-21: total candle only; last caller of toPositionalValue gone
+                // in e7773a143), so only the candle's positional contract is left to prove.
                 const dates = ['2026-01-01', '2026-01-02', '2026-01-03', '2026-01-04', '2026-01-05'];
-                // Distinct sentinel OHLC/values per position so any transposition/shift is
-                // caught. The candle is missing (a genuine gap) at position 2; the broker
-                // value is missing at position 1 — deliberately DIFFERENT positions, to
-                // prove the two series are independently, not jointly, null-preserving.
+                // Distinct sentinel OHLC per position so any transposition/shift is caught. The
+                // candle is missing (a genuine gap) at position 2.
                 const candles: Array<{open: number; high: number; low: number; close: number} | null> = [{open: 10, close: 11, low: 9, high: 12}, {open: 20, close: 22, low: 19, high: 23}, null, {open: 40, close: 38, low: 37, high: 41}, {open: 50, close: 55, low: 49, high: 56}];
-                const brokerValues: Array<number | null> = [100, null, 300, 400, 500];
 
                 const candlePoints = dates.map((d, i) => candlePoint(d, candles[i]));
-                const brokerPoints = dates.map((d, i) => seriesPoint(d, brokerValues[i]));
 
                 const candleSeries = candlePoints.map(toCandlestickPointImpl);
-                const brokerSeries = brokerPoints.map(toPositionalValueImpl);
 
                 expect(candleSeries).toHaveLength(dates.length);
-                expect(brokerSeries).toHaveLength(dates.length);
 
                 dates.forEach((_date, i) => {
                     const ohlc = candles[i];
@@ -1982,21 +2045,13 @@ describe('canonical overlay axis and reference helpers', () => {
                     } else {
                         expect(candleSeries[i]).toEqual(buildOhlcQuad(ohlc.open, ohlc.close, ohlc.low, ohlc.high, false, 1));
                     }
-                    expect(brokerSeries[i]).toBe(brokerValues[i]);
                 });
 
-                // The two gaps are genuinely independent, at different positions — if
-                // either mapping ever filtered instead of preserving position (the exact
-                // off-by-one risk this fix calls out), the two arrays would desync both
-                // from `dates` and from each other. Note the two series express a gap
-                // DIFFERENTLY on purpose: the candlestick needs ECharts' '-' sentinel
-                // (null crashes its init), while the broker overlay is an ordinary line
-                // series where null is the correct, documented way to break the line.
+                // The gap stays at its own position — if the mapping ever filtered instead of
+                // preserving position (the exact off-by-one risk this fix calls out), every
+                // candle after it would desync from `dates`.
                 expect(candleSeries[2]).toBe(ECHARTS_EMPTY_VALUE);
                 expect(candleSeries[1]).not.toBe(ECHARTS_EMPTY_VALUE);
-                expect(brokerSeries[1]).toBeNull();
-                expect(brokerSeries[2]).not.toBeNull();
-                expect(candleSeries).toHaveLength(brokerSeries.length);
             });
 
             // ---------------------------------------------------------------
@@ -2014,16 +2069,17 @@ describe('canonical overlay axis and reference helpers', () => {
             // load-bearing and not incidental.
             // ---------------------------------------------------------------
             describe('real ECharts: a candlestick gap on a category axis must not kill the chart instance', () => {
-                /** The candles submode's real shape: [candlestick, ...broker overlay lines]
-                 *  over a category base axis, exactly as buildFullSeries emits it. */
-                function candlesSubmodeOption(candleData: Array<number[] | string | null>, brokerData: Array<number | null>) {
+                // Why (re-pin, S10, D21a): the per-broker overlay was removed from the candles submode
+                // (developer review 2026-09-21: total candle only), so the guard drives ECharts with the
+                // candlestick alone — and the CONTROL below still proves that a null gap kills it.
+                /** The candles submode's real shape: the total candlestick alone over a category
+                 *  base axis, exactly as buildFullSeries emits it (`return [candleSeries];`, pinned
+                 *  by the series-shape contract test below). */
+                function candlesSubmodeOption(candleData: Array<number[] | string | null>) {
                     return {
                         xAxis: {type: 'category' as const, data: ['2026-01-01', '2026-01-02', '2026-01-03', '2026-01-04', '2026-01-05']},
                         yAxis: {type: 'value' as const},
-                        series: [
-                            {name: 'Total P&L', type: 'candlestick' as const, data: candleData},
-                            {name: 'Broker A', type: 'line' as const, data: brokerData},
-                        ],
+                        series: [{name: 'Total P&L', type: 'candlestick' as const, data: candleData}],
                     };
                 }
 
@@ -2041,7 +2097,6 @@ describe('canonical overlay axis and reference helpers', () => {
                 const dates = ['2026-01-01', '2026-01-02', '2026-01-03', '2026-01-04', '2026-01-05'];
                 const ohlcByPosition: Array<{open: number; high: number; low: number; close: number} | null> = [{open: 10, close: 11, low: 9, high: 12}, null, {open: 30, close: 28, low: 27, high: 31}, null, {open: 50, close: 55, low: 49, high: 56}];
                 const realCandleData = dates.map((d, i) => toCandlestickPointImpl(candlePoint(d, ohlcByPosition[i])));
-                const brokerData = [100, null, 300, 400, null];
 
                 it("uses the SAME sentinel value the real component does — closes the loop between this guard's fixture and the source", () => {
                     // This guard feeds toCandlestickPointImpl (the reimplementation), so on
@@ -2064,7 +2119,7 @@ describe('canonical overlay axis and reference helpers', () => {
                     const withNullGap = realCandleData.map((value) => (value === ECHARTS_EMPTY_VALUE ? null : value));
 
                     withSsrChart((chart) => {
-                        expect(() => chart.setOption(candlesSubmodeOption(withNullGap, brokerData))).toThrow(/Cannot read properties of null/);
+                        expect(() => chart.setOption(candlesSubmodeOption(withNullGap))).toThrow(/Cannot read properties of null/);
 
                         // The throw is only the first symptom. The real damage is that it
                         // happened before GlobalModel finished building, so the instance is
@@ -2077,14 +2132,16 @@ describe('canonical overlay axis and reference helpers', () => {
 
                 it("initialises cleanly with the helper's '-' sentinel, and the instance is left fully alive", () => {
                     withSsrChart((chart) => {
-                        expect(() => chart.setOption(candlesSubmodeOption(realCandleData, brokerData))).not.toThrow();
+                        expect(() => chart.setOption(candlesSubmodeOption(realCandleData))).not.toThrow();
 
-                        // The exact inverse of the control's `series === []`: both series
+                        // The exact inverse of the control's `series === []`: the candlestick
                         // registered and addressable BY INDEX, which is the lookup
                         // (getSeriesByIndex) that produced ~22 console errors on mouse-move.
+                        // Why (re-pin, S10, D21a): one series, not two — the fixture above now has the
+                        // candles submode's real shape, the total candle without a broker overlay.
                         const registered = chart.getOption().series as Array<{name?: string}>;
-                        expect(registered).toHaveLength(2);
-                        expect(registered.map((s) => s.name)).toEqual(['Total P&L', 'Broker A']);
+                        expect(registered).toHaveLength(1);
+                        expect(registered.map((s) => s.name)).toEqual(['Total P&L']);
                         expect(chart.convertToPixel({seriesIndex: 0}, [0, 2])).toBeDefined();
                         expect(chart.renderToSVGString().length).toBeGreaterThan(0);
                     });
@@ -2092,7 +2149,7 @@ describe('canonical overlay axis and reference helpers', () => {
 
                 it('stays alive across a SECOND setOption — the symptom the developer saw was a dead model repainting nothing', () => {
                     withSsrChart((chart) => {
-                        chart.setOption(candlesSubmodeOption(realCandleData, brokerData));
+                        chart.setOption(candlesSubmodeOption(realCandleData));
                         // A zoom/pan or submode switch issues further setOption calls; on a
                         // half-built model these are the ones that silently do nothing.
                         expect(() => chart.setOption({series: [{name: 'Total P&L', type: 'candlestick', data: realCandleData}]})).not.toThrow();
@@ -2108,7 +2165,7 @@ describe('canonical overlay axis and reference helpers', () => {
                     expect(realCandleData.filter((v) => v === ECHARTS_EMPTY_VALUE)).toHaveLength(2);
 
                     withSsrChart((chart) => {
-                        chart.setOption(candlesSubmodeOption(realCandleData, brokerData));
+                        chart.setOption(candlesSubmodeOption(realCandleData));
                         const registered = chart.getOption().series as Array<{data?: unknown[]}>;
                         expect(registered[0].data).toHaveLength(dates.length);
                     });
@@ -2146,7 +2203,7 @@ describe('canonical overlay axis and reference helpers', () => {
         });
 
         describe('line-submode fixed 3-slot P&L split (positive / negative / reference)', () => {
-            it('mirrors the exact buildChartUpdateSeries / buildFullSeries series-shape contract: 3 fixed slots (line submode) or 1 fixed slot (candles submode) before the variable broker spread', () => {
+            it('mirrors the exact buildChartUpdateSeries / buildFullSeries series-shape contract: 3 fixed slots then the variable broker spread (line submode), the total candle alone (candles submode)', () => {
                 const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
                 const updateStart = source.indexOf('function buildChartUpdateSeries(');
                 const updateEnd = source.indexOf('\n    function buildFullSeries(', updateStart);
@@ -2165,10 +2222,13 @@ describe('canonical overlay axis and reference helpers', () => {
 
                 // buildChartUpdateSeries: line submode is exactly [positive, negative,
                 // reference, ...brokers] — 3 fixed named slots, then the variable spread.
+                // Why (re-pin, S10): the two halves now come from ONE splitBySign call instead of
+                // two clipToSign maps. splitBySign adds the interpolated zero crossings, which
+                // changes the points inside the slots but not the slots. Prettier now prints the
+                // return on one line, so the pin is the ORDER of the slots, not their line breaks.
+                expect(updateSeries).toContain('const signSplit = splitBySign(entry.pnl.total.points);');
                 expect(updateSeries).toContain('const referenceValue = findReferenceTotalPnl(entry, referenceDate);');
                 expect(updateSeries).toContain('const referencePoints: SeriesPoint[] = entry.pnl.total.points.map((p) => ({...p, value: [p.value[0], referenceValue]}));');
-                expect(updateSeries).toContain('{name: pnlLabels.total, data: entry.pnl.total.points.map((p) => clipToSign(p, true))},');
-                expect(updateSeries).toContain('{name: pnlLabels.total, data: entry.pnl.total.points.map((p) => clipToSign(p, false))},');
                 // The reference series' name is a shared module-level constant, not an
                 // inline literal: three sites must agree on it (both construction sites
                 // AND applyFullOption's legend exclusion), and a magic string repeated
@@ -2176,12 +2236,18 @@ describe('canonical overlay axis and reference helpers', () => {
                 expect(updateSeries).toContain('{name: PNL_REFERENCE_SERIES_NAME, data: referencePoints},');
                 expect(source).toMatch(/const PNL_REFERENCE_SERIES_NAME = '__pnlReference__';/);
                 expect(updateSeries).not.toContain("'__pnlReference__'");
-                expect(updateSeries).toContain('...entry.pnl.brokers.map((broker) => ({name: broker.brokerName, data: broker.metric.points})),');
+                expect(updateSeries).toMatch(
+                    /return \[\s*\{name: pnlLabels\.total, data: signSplit\.positive\},\s*\{name: pnlLabels\.total, data: signSplit\.negative\},\s*\{name: PNL_REFERENCE_SERIES_NAME, data: referencePoints\},\s*\.\.\.entry\.pnl\.brokers\.map\(\(broker\) => \(\{name: broker\.brokerName, data: broker\.metric\.points\}\)\),?\s*\];/,
+                );
 
-                // buildChartUpdateSeries: candles submode is exactly [candle, ...brokers] —
-                // a single fixed slot, then the variable spread.
-                expect(updateSeries).toContain('{name: pnlLabels.total, data: entry.pnl.candle.points.map(toCandlestickPoint) as unknown as SeriesPoint[]},');
-                expect(updateSeries).toContain('...entry.pnl.brokers.map((broker) => ({name: broker.brokerName, data: broker.metric.points.map(toPositionalValue) as unknown as SeriesPoint[]}))];');
+                // buildChartUpdateSeries: candles submode is exactly [candle] — one fixed
+                // slot and nothing after it.
+                // Why (re-pin, S10): the per-broker overlay was removed from the candles submode
+                // (developer review 2026-09-21: total candle only), so there is no broker spread
+                // left to follow the candle slot. The pin proves the return holds the total
+                // candle ALONE, and the matching buildFullSeries pin below proves the same on the
+                // other side, so a spread cannot come back on one side only.
+                expect(updateSeries).toMatch(/return \[\s*\{name: pnlLabels\.total, data: entry\.pnl\.candle\.points\.map\(toCandlestickPoint\) as unknown as SeriesPoint\[\]\},?\s*\];/);
 
                 // buildFullSeries: line submode consumes seriesData[0]/[1]/[2] for
                 // positive/negative/reference, then slices from index 3 for brokers —
@@ -2193,58 +2259,106 @@ describe('canonical overlay axis and reference helpers', () => {
                 expect(fullSeries).toContain('return [positiveSeries, negativeSeries, referenceSeries, ...brokerSeries];');
 
                 // buildFullSeries: candles submode consumes seriesData[0] for the
-                // candlestick, then slices from index 1 for brokers — matching the single
-                // fixed candle slot above exactly (not slice(2) or higher).
-                expect(fullSeries).toContain('const brokerSeries: echarts.SeriesOption[] = seriesData.slice(1).map((s, index) => ({');
-                expect(fullSeries).toContain('return [candleSeries, ...brokerSeries];');
+                // candlestick and returns it alone — matching the single candle slot above
+                // (no seriesData.slice(1) broker spread any more; see the why above).
+                expect(fullSeries).toContain('return [candleSeries];');
             });
 
-            const signCrossingScenarios: Array<[string, Array<number | null>]> = [
-                ['all positive', [10, 20, 30]],
-                ['all negative', [-10, -20, -30]],
-                ['odd number of sign crossings', [5, -5, 5, -5, 5]],
-                ['even number of sign crossings', [5, -5, 5, -5]],
-                ['many crossings interleaved with gaps', [10, null, -10, 0, -5, null, 20, -20, 0]],
-                ['a single point', [42]],
+            // Why (re-pin, S10, D21b): e7773a143 splits the Total P&L with splitBySign, which
+            // inserts the interpolated zero crossing into both halves (the developer's report: the
+            // area vanished at a sign change). The old claim — each half as long as the source —
+            // described two plain clipToSign maps and is false for the product. What stays fixed
+            // is the series COUNT (pinned in the slot test above); the points inside the halves
+            // are not.
+            // D22 (developer, 2026-09-25): two rows added for the zero guard and the interpolation
+            // weight, and the reference-line assertions removed: the test built that line itself,
+            // so they could not fail. Its flatness is pinned by the slot-test literals and its
+            // value by describe('findReferenceTotalPnl').
+            //
+            // Third column: the instants at which each row must gain a crossing, in order, written
+            // by hand rather than computed with the rule under test. The dates are UTC midnights
+            // (index i is day i + 1), so a crossing between equal magnitudes sits at noon. Only two
+            // neighbours that are both non-null, non-zero and of opposite sign get one, so a pair
+            // touching a gap or a zero gets none (in the gapped row only 20 → −20 qualifies).
+            // [5, 0, −5] is there for the zero guard: every other zero sits next to a negative value
+            // or a gap, which the sign test or the gap guard already skips (0 > 0 is false), whereas
+            // 5 → 0 passes the sign test and, without the guard, would get t = 1 — a crossing at the
+            // zero's own instant. [30, −10] is there for the interpolation weight, which no
+            // equal-magnitude row can tell apart: both ends give noon there, but 30 → −10 reaches
+            // zero three quarters of the way, at 18:00, and the wrong-end weight would give 06:00.
+            const signCrossingScenarios: Array<[string, Array<number | null>, string[]]> = [
+                ['all positive', [10, 20, 30], []],
+                ['all negative', [-10, -20, -30], []],
+                ['even number of sign crossings', [5, -5, 5, -5, 5], ['2026-01-01T12:00:00.000Z', '2026-01-02T12:00:00.000Z', '2026-01-03T12:00:00.000Z', '2026-01-04T12:00:00.000Z']],
+                ['odd number of sign crossings', [5, -5, 5, -5], ['2026-01-01T12:00:00.000Z', '2026-01-02T12:00:00.000Z', '2026-01-03T12:00:00.000Z']],
+                ['many crossings interleaved with gaps', [10, null, -10, 0, -5, null, 20, -20, 0], ['2026-01-07T12:00:00.000Z']],
+                ['a zero between a positive and a negative value', [5, 0, -5], []],
+                ['a single point', [42], []],
+                ['a crossing between unequal magnitudes', [30, -10], ['2026-01-01T18:00:00.000Z']],
             ];
 
-            it.each(signCrossingScenarios)('keeps exactly 3 fixed-length series (positive/negative/reference) for %s — the slot count never varies with the number of sign crossings', (_label, values) => {
+            it.each(signCrossingScenarios)('splits %s into ONE positive and ONE negative half: every source point in exactly one half (a gap null in both), the zero crossing inserted into BOTH between opposite-sign neighbours, nothing invented at a gap or a zero', (_label, values, crossings) => {
                 const dates = values.map((_v, i) => `2026-01-${String(i + 1).padStart(2, '0')}`);
                 const points = dates.map((d, i) => seriesPoint(d, values[i]));
 
-                const positive = points.map((p) => clipToSignImpl(p, true));
-                const negative = points.map((p) => clipToSignImpl(p, false));
-                const referenceValue = findReferenceTotalPnlImpl(points, null);
-                const referencePoints = points.map((p) => ({...p, value: [p.value[0], referenceValue] as [string, number | null]}));
+                const {positive, negative} = splitBySignImpl(points);
 
-                // FIXED length: each of the 3 series has one entry per source point —
-                // exactly what keeps updateChartData's partial by-index series merge
-                // valid across zoom/pan (see clipToSign's own docstring in GrowthChart.svelte).
-                expect(positive).toHaveLength(values.length);
-                expect(negative).toHaveLength(values.length);
-                expect(referencePoints).toHaveLength(values.length);
+                // One point more per crossing, the same number in both halves.
+                expect(positive).toHaveLength(values.length + crossings.length);
+                expect(negative).toHaveLength(positive.length);
 
-                // Completeness + mutual exclusivity per point: a non-null value survives in
-                // EXACTLY one of positive/negative; a null value is preserved as null in
-                // BOTH (a genuine gap, never fabricated into a zero).
+                // A crossing is recognisable without the rule under test: every source date is a
+                // bare day, and a crossing carries an instant that is none of them.
+                const sourceDates = new Set(dates);
+                const isCrossing = (p: FixtureSeriesPoint) => !sourceDates.has(p.value[0]);
+
+                // The crossings are exactly the third column's hand-written instants, in order.
+                expect(positive.filter(isCrossing).map((p) => p.value[0])).toEqual(crossings);
+
+                const positiveSource = positive.filter((p) => !isCrossing(p));
+                const negativeSource = negative.filter((p) => !isCrossing(p));
+
+                // With the crossings taken out, each half is the plain clipToSign map, in order...
+                expect(positiveSource).toEqual(points.map((p) => clipToSignImpl(p, true)));
+                expect(negativeSource).toEqual(points.map((p) => clipToSignImpl(p, false)));
+
+                // ...so a non-null value survives in EXACTLY one half, and a null value stays null
+                // in BOTH (a genuine gap, never fabricated into a zero).
                 values.forEach((v, i) => {
                     if (v == null) {
-                        expect(positive[i].value[1]).toBeNull();
-                        expect(negative[i].value[1]).toBeNull();
+                        expect(positiveSource[i].value[1]).toBeNull();
+                        expect(negativeSource[i].value[1]).toBeNull();
                     } else if (v >= 0) {
-                        expect(positive[i].value[1]).toBe(v);
-                        expect(negative[i].value[1]).toBeNull();
+                        expect(positiveSource[i].value[1]).toBe(v);
+                        expect(negativeSource[i].value[1]).toBeNull();
                     } else {
-                        expect(positive[i].value[1]).toBeNull();
-                        expect(negative[i].value[1]).toBe(v);
+                        expect(positiveSource[i].value[1]).toBeNull();
+                        expect(negativeSource[i].value[1]).toBe(v);
                     }
                 });
 
-                // The reference line is flat: the SAME single value at every position,
-                // regardless of how many points/sign-crossings are in the series.
-                const distinctReferenceValues = new Set(referencePoints.map((p) => p.value[1]));
-                expect(distinctReferenceValues.size).toBe(1);
-                expect(referencePoints[0].value[1]).toBe(referenceValue);
+                // Each crossing: value 0; the same point at the same index in both halves; right
+                // after its left neighbour and right before its right one (never at either end,
+                // never two in a row); only between two non-null, non-zero values of opposite
+                // sign; strictly between their dates. Its exact instant is the third column's,
+                // asserted above.
+                const sourceSlots = positive.flatMap((p, k) => (isCrossing(p) ? [] : [k]));
+                positive.forEach((p, k) => {
+                    if (!isCrossing(p)) return;
+                    const left = sourceSlots.indexOf(k - 1);
+                    expect(left).toBeGreaterThanOrEqual(0);
+                    expect(sourceSlots[left + 1]).toBe(k + 1);
+
+                    expect(p.value[1]).toBe(0);
+                    expect(negative[k]).toEqual(p);
+                    expect(Math.sign(values[left] ?? 0) * Math.sign(values[left + 1] ?? 0)).toBe(-1);
+
+                    const leftMs = new Date(dates[left]).getTime();
+                    const rightMs = new Date(dates[left + 1]).getTime();
+                    const crossingMs = new Date(p.value[0]).getTime();
+                    expect(crossingMs).toBeGreaterThan(leftMs);
+                    expect(crossingMs).toBeLessThan(rightMs);
+                });
             });
         });
 
@@ -2255,9 +2369,8 @@ describe('canonical overlay axis and reference helpers', () => {
         // Same established pattern as the line/candles blocks above: the parts that are
         // pure source *shape* (which slot holds what, which stack it joins) are pinned by
         // reading GrowthChart.svelte, and the parts that are component-local *logic*
-        // (the window-preset date maths, the tooltip's conditional section) are
-        // reimplemented faithfully here for real execution and tied back to the real
-        // source text by a contract test.
+        // (the tooltip's conditional section) are reimplemented faithfully here for real
+        // execution and tied back to the real source text by a contract test.
 
         describe('income-submode fixed 6-slot order (dividend / interest / costs / deposit / acqNewCapital / acqReinvested)', () => {
             /** The income branch of one of the two builders, sliced out of the real source. */
@@ -2313,7 +2426,8 @@ describe('canonical overlay axis and reference helpers', () => {
                 expect(consumed.map(({stack}) => stack)).toEqual(EXPECTED_SLOTS.map(({stack}) => stack));
             });
 
-            it('never spreads broker overlays into the income submode — the slot count is fixed at 6, unlike line/candles', () => {
+            it('never spreads broker overlays into the income submode — the slot count is fixed at 6, unlike line', () => {
+                // Why (re-pin, S10, D21a): candles no longer spreads broker overlays either (total candle only, developer review 2026-09-21), so line is the only submode left to contrast with.
                 const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
 
                 for (const fn of ['buildChartUpdateSeries', 'buildFullSeries'] as const) {
@@ -2759,172 +2873,34 @@ describe('canonical overlay axis and reference helpers', () => {
                     }
                 }
             });
-
-            it('does NOT transpose the SHORT and LONG hypothetical strings — a demonstrated risk, not a hypothetical one', () => {
-                // These two keys differ only by a suffix and a trailing clause, and the
-                // TODO comment that preceded the wiring actively pointed at the wrong one
-                // of the pair. `pnlCandlesHypothetical` is also a strict prefix of
-                // `pnlCandlesHypotheticalShort`, so every assertion here matches the FULL
-                // call including its closing quote — a bare `toContain('…Hypothetical')`
-                // would be satisfied by the Short key and prove nothing.
-                const source = growthChartSource();
-                const LONG_CALL = "$_('dashboard.pnlCandlesHypothetical')";
-                const SHORT_CALL = "$_('dashboard.pnlCandlesHypotheticalShort')";
-
-                // The always-visible caption under the chart takes the LONG form.
-                const caption = source.match(/<p[^>]*data-testid="growth-pnl-candles-hypothetical-label"[^>]*>[\s\S]*?<\/p>/)?.[0];
-                expect(caption).toBeDefined();
-                if (!caption) throw new Error('GrowthChart hypothetical caption not found');
-                expect(caption).toContain(LONG_CALL);
-                expect(caption).not.toContain(SHORT_CALL);
-
-                // The compact candle-tooltip footnote takes the SHORT form.
-                const tooltipFootnote = source.split('\n').find((line) => line.includes('font-size:10px') && line.includes('pnlCandlesHypothetical'));
-                expect(tooltipFootnote).toBeDefined();
-                if (!tooltipFootnote) throw new Error('GrowthChart hypothetical tooltip footnote not found');
-                expect(tooltipFootnote).toContain(SHORT_CALL);
-
-                // Each form is used exactly once, so neither can be doing both jobs.
-                expect(source.split(SHORT_CALL)).toHaveLength(2);
-                expect(source.split(LONG_CALL).length - 1).toBe(1);
-            });
         });
 
-        describe('P&L zoom-window selector: selectZoomWindow date maths', () => {
-            // Faithful reimplementation of computeZoomWindowRange, pinned to the real
-            // source by the contract test at the end of this block. `dates` is the
-            // component's ascending list of available ISO dates.
-            type ZoomWindowPreset = '1W' | '1M' | '1Y' | 'all';
-
-            function computeZoomWindowRangeImpl(dates: string[], preset: ZoomWindowPreset): {startDate: string; endDate: string} | null {
-                if (dates.length === 0) return null;
-                const endDate = dates[dates.length - 1];
-                if (preset === 'all') return {startDate: dates[0], endDate};
-                const daysBack = preset === '1W' ? 7 : preset === '1M' ? 30 : 365;
-                const startMs = new Date(endDate).getTime() - daysBack * 24 * 60 * 60 * 1000;
-                const computedStart = new Date(startMs).toISOString().slice(0, 10);
-                return {startDate: computedStart < dates[0] ? dates[0] : computedStart, endDate};
-            }
-
-            /** A dense ascending ISO-date range, inclusive of both ends. */
-            function isoRange(from: string, to: string): string[] {
-                const out: string[] = [];
-                for (let ms = new Date(from).getTime(); ms <= new Date(to).getTime(); ms += 24 * 60 * 60 * 1000) {
-                    out.push(new Date(ms).toISOString().slice(0, 10));
-                }
-                return out;
-            }
-
-            // Three full years of daily dates: long enough that even 1Y clamps to nothing.
-            const threeYears = isoRange('2023-01-01', '2026-01-01');
-
-            const presetScenarios: Array<[ZoomWindowPreset, number]> = [
-                ['1W', 7],
-                ['1M', 30],
-                ['1Y', 365],
-            ];
-
-            it.each(presetScenarios)('%s counts back exactly %i days from the LAST available date, not from today', (preset, daysBack) => {
-                const range = computeZoomWindowRangeImpl(threeYears, preset);
-
-                expect(range).not.toBeNull();
-                if (!range) throw new Error('unreachable');
-                // Anchored on the data, never on the wall clock: the last available date is
-                // the end, and the start is exactly `daysBack` calendar days before it.
-                expect(range.endDate).toBe('2026-01-01');
-                expect(range.startDate).toBe(new Date(new Date('2026-01-01').getTime() - daysBack * 86_400_000).toISOString().slice(0, 10));
-                expect(isoRange(range.startDate, range.endDate)).toHaveLength(daysBack + 1);
-            });
-
-            it("'all' spans the entire available range, first date to last", () => {
-                expect(computeZoomWindowRangeImpl(threeYears, 'all')).toEqual({startDate: '2023-01-01', endDate: '2026-01-01'});
-            });
-
-            const clampScenarios: Array<[ZoomWindowPreset, string[]]> = [
-                ['1W', isoRange('2026-01-01', '2026-01-04')],
-                ['1M', isoRange('2025-12-20', '2026-01-04')],
-                ['1Y', isoRange('2025-06-01', '2026-01-04')],
-            ];
-
-            it.each(clampScenarios)('%s clamps to the earliest available date when the computed start precedes it', (preset, dates) => {
-                const range = computeZoomWindowRangeImpl(dates, preset);
-
-                expect(range).toEqual({startDate: dates[0], endDate: dates[dates.length - 1]});
-            });
-
-            it('clamping is exactly at the boundary: a start landing ON the earliest date is kept, not nudged', () => {
-                // Exactly 8 dates -> 1W's computed start (endDate - 7 days) IS dates[0].
-                const dates = isoRange('2026-01-01', '2026-01-08');
-
-                expect(computeZoomWindowRangeImpl(dates, '1W')).toEqual({startDate: '2026-01-01', endDate: '2026-01-08'});
-                // One extra day of history and the computed start is strictly inside.
-                expect(computeZoomWindowRangeImpl(isoRange('2025-12-31', '2026-01-08'), '1W')).toEqual({startDate: '2026-01-01', endDate: '2026-01-08'});
-            });
-
-            it('returns null for an empty dates array, so the caller leaves the zoom untouched', () => {
-                for (const preset of ['1W', '1M', '1Y', 'all'] as const) {
-                    expect(computeZoomWindowRangeImpl([], preset)).toBeNull();
-                }
-            });
-
-            it('does not require the computed start to be a date that exists in the series (a sparse/gapped series still gets a window)', () => {
-                // Trading-day style series: only weekdays present. The computed start may
-                // land on a weekend that is absent from `dates` — that is fine, because
-                // buildZoomWindow resolves it by bucketEnd/bucketStart comparison, not by
-                // an exact lookup.
-                const sparse = ['2025-12-01', '2025-12-08', '2025-12-15', '2025-12-22', '2025-12-29'];
-                const range = computeZoomWindowRangeImpl(sparse, '1W');
-
-                expect(range).toEqual({startDate: '2025-12-22', endDate: '2025-12-29'});
-                expect(sparse).not.toContain('2025-12-23');
-            });
-
-            it('mirrors the exact literal body of computeZoomWindowRange in GrowthChart.svelte (ties the reimplementation above to the real source)', () => {
+        describe('P&L candle-width ladder markup', () => {
+            it('renders one button per available rung of the eight-rung CANDLE_WIDTH_ORDER, with testid, selectCandleWidth handler and aria-pressed bound to the same width, and no zoom-window selector left', () => {
                 const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
-                const start = source.indexOf('function computeZoomWindowRange(preset: ZoomWindowPreset): {startDate: string; endDate: string} | null {');
-                const end = source.indexOf('\n    function formatTooltipMonth(', start);
-                expect(start).toBeGreaterThan(-1);
-                expect(end).toBeGreaterThan(start);
-                if (start < 0 || end <= start) throw new Error('GrowthChart income window contract not found');
+                // Why (re-pin, S10): round 3 removed the 1W/1M/1Y/All visible-range selector
+                // (selectZoomWindow). The control in that place is now the candle-width ladder: it
+                // picks how many days one body covers and keeps the whole history on the axis.
+                // The pins: the eight rungs in order; ONE button per rung through the `#each`,
+                // with testid, handler and aria-pressed all bound to the same loop variable; and
+                // no trace of the old selector, so it cannot come back unnoticed.
+                const order = source.match(/const CANDLE_WIDTH_ORDER: CandleWidth\[\] = \[([^\]]*)\];/)?.[1] ?? '';
+                expect([...order.matchAll(/'(\w+)'/g)].map((m) => m[1])).toEqual(['1D', '3D', '1W', '2W', '1M', '3M', '6M', '1Y']);
 
-                const block = source.slice(start, end);
-                expect(block).toContain('if (dates.length === 0) return null;');
-                expect(block).toContain('const endDate = dates[dates.length - 1];');
-                expect(block).toContain("if (preset === 'all') return {startDate: dates[0], endDate};");
-                expect(block).toContain("const daysBack = preset === '1W' ? 7 : preset === '1M' ? 30 : 365;");
-                expect(block).toContain('const startMs = new Date(endDate).getTime() - daysBack * 24 * 60 * 60 * 1000;');
-                expect(block).toContain('const computedStart = new Date(startMs).toISOString().slice(0, 10);');
-                expect(block).toContain('return {startDate: computedStart < dates[0] ? dates[0] : computedStart, endDate};');
-            });
+                const eachStart = source.indexOf('{#each availableCandleWidths as width (width)}');
+                const eachEnd = source.indexOf('{/each}', eachStart);
+                expect(eachStart).toBeGreaterThan(-1);
+                expect(eachEnd).toBeGreaterThan(eachStart);
+                if (eachStart < 0 || eachEnd <= eachStart) throw new Error('GrowthChart candle-width ladder #each not found');
 
-            it('selectZoomWindow drives the EXISTING shared zoom rather than a parallel windowing system', () => {
-                // The preset must land in the same visibleStartDate/visibleEndDate +
-                // buildZoomWindow + dataZoom path a manual drag-zoom uses, or the two would
-                // fight and a submode switch would lose the window.
-                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
-                const start = source.indexOf('function selectZoomWindow(preset: ZoomWindowPreset) {');
-                const end = source.indexOf('\n    function formatTooltipMonth(', start);
-                expect(start).toBeGreaterThan(-1);
-                expect(end).toBeGreaterThan(start);
-                if (start < 0 || end <= start) throw new Error('GrowthChart selectZoomWindow contract not found');
+                const rung = source.slice(eachStart, eachEnd);
+                expect(rung.match(/<button\b/g) ?? []).toHaveLength(1);
+                expect(rung).toContain('onclick={() => selectCandleWidth(width)}');
+                expect(rung).toContain('aria-pressed={candleWidth === width}');
+                expect(rung).toContain('data-testid="growth-candle-width-{width.toLowerCase()}"');
 
-                const block = source.slice(start, end);
-                expect(block).toContain('const range = computeZoomWindowRange(preset);');
-                expect(block).toContain('if (!range || !chartInstance) return;');
-                expect(block).toContain('visibleStartDate = range.startDate;');
-                expect(block).toContain('visibleEndDate = range.endDate;');
-                expect(block).toContain('const zoomWindow = buildZoomWindow(currentResolution, range.startDate, range.endDate);');
-                expect(block).toContain("chartInstance.setOption({dataZoom: [{type: 'inside', ...INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG, start: zoomWindow.start, end: zoomWindow.end}]}, {replaceMerge: ['dataZoom']});");
-            });
-
-            it('exposes one button per implemented preset — 1W/1M/1Y/All, with no Custom entry (a disclosed scope limitation, not a missing testid)', () => {
-                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
-                const testids = [...source.matchAll(/data-testid="growth-zoom-window-([\w]+)"/g)].map((m) => m[1]);
-
-                expect(testids).toEqual(['1w', '1m', '1y', 'all']);
-                for (const preset of ['1W', '1M', '1Y', 'all'] as const) {
-                    expect(source).toContain(`onclick={() => selectZoomWindow('${preset}')}`);
-                }
+                expect(source).not.toContain('growth-zoom-window-');
+                expect(source).not.toContain('selectZoomWindow');
             });
         });
     });
