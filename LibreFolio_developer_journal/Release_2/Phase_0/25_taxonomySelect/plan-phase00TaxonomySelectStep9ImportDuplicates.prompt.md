@@ -358,6 +358,33 @@
   > - CHANGELOG proposto (🐛 Fixed): due voci, una per C1 e una per C2, nel messaggio di handoff.
   > - Debito di traduzione dichiarato: `how-to` it/fr/es, cioè la nota Duplicates (due punti) e una
   >   frase di «Duplicates Against Your Database».
+  > - **Aggiornamento del 2026-09-28**: il testo sostitutivo per J l'ha applicato K stesso, dopo
+  >   l'allineamento a `dev_release2`, in un commit a parte (`759ba7748`).
+
+- [x] **9.5 C6 — due campi morti del custode** — ✅ 2026-09-28 (via del coordinator per il principio
+  del developer del 25/09: il codice di prodotto senza uso, dentro il perimetro, si toglie)
+  > **Attribuzione, dalla storia di git e senza nessun test rosso di mezzo**:
+  > - `MergedTx.dupKeeperIndex` e `dupKeeperFileName` li leggeva il «salta al custode» (`canJump`,
+  >   `jumpToDuplicateKeeper`, il tooltip `pendingDuplicateJump`).
+  > - `81853ae81` (03/08, «N-way dedup») l'ha sostituito con il confronto N-way (`openBadgeCompare`) e
+  >   ha lasciato le scritture: 8 scritture, 0 letture. La chiave i18n era già sparita.
+  > - È l'avanzo di una funzione tolta, non un difetto.
+  >
+  > **Note implementazione**:
+  > - Tolti i due campi da `importTypes.ts` e le scritture da `ImportWizardModal.svelte`. Da
+  >   `applyPendingDuplicateGroups` sono sparite anche la mappa `primaryOf` e la variabile
+  >   `keeperIndex`, che servivano solo a quei campi. Tolte anche le scritture in `rowAfterRecheck`
+  >   (`importDedup.ts`).
+  > - Test, via test-author, solo le fixture: U4 in `importDedup.test.ts:300`, i marcatori e la fixture
+  >   di U7, e le due fixture di U1-riordino. Nessun test aggiunto o tolto. Prima della modifica U7
+  >   falliva come previsto: il campo passava attraverso `...m`.
+  > - Comportamento invariato. Nessuna chiave i18n, nessun file del runner.
+  > - Gate nella lane 6155, dopo `front build --debug` (`/tmp/libreFolio_k_c6_gates.sh`):
+  >   - svelte-check: 3 errori, gli stessi della baseline, nessuno nei file di C6;
+  >   - `core-unit` 98 file, **2646 ✓**; `tx-unit` 8 file, **375 ✓**;
+  >   - `tx-import-duplicate-precedence` **6/6 ✓**; `tx-import-flow` **10/10 ✓**;
+  >   - knip: nessun reperto nei file di K;
+  >   - nessun riferimento ai due campi in `frontend/src` o `frontend/e2e`.
 
 ## Test list
 
