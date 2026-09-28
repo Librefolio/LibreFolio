@@ -155,25 +155,29 @@ class AssetType(StrEnum):
     - CRYPTO: Cryptocurrencies (e.g., Bitcoin, Ethereum)
     - FUND: Mutual funds or investment funds
     - HOLD: Assets without automatic market pricing (art, collectibles, unlisted companies)
-    - CROWDFUND: Peer-to-peer lending or crowdfunding loans (e.g., Recrowd, Mintos)
+    - CROWDFUND: Peer-to-peer or business crowdfunding loans (e.g., Mintos); the residual of its family
     - COMMODITY: Physical goods and their direct exposures (gold, oil, agricultural)
     - REAL_ESTATE: Property exposure (REITs, listed real estate vehicles)
     - INDEX: Market indices and benchmarks (e.g., S&P 500, MSCI World) — no transactions allowed
     - OTHER: Any other asset type not listed above
 
-    ETF subtypes answer a single question: *which base type does this ETF contain?*
+    Subtypes answer a single question: *which base type does this instrument contain?*
     The second level is therefore not a parallel taxonomy — it is the set of base types.
+    Two families have one, ETF and CROWDFUND; their plain values stay the residual for
+    mixed or unstated content.
 
     - ETF_STOCK / ETF_BOND / ETF_COMMODITY / ETF_REAL_ESTATE / ETF_CRYPTO: named after
       the base type they hold; plain ETF remains the residual for mixed content.
     - ETF_MONETARY: money-market funds. The one subtype with **no** base-type counterpart,
       because cash itself is an account balance, not an asset that is bought.
+    - CROWDFUND_REAL_ESTATE: crowdfunding loans backed by property projects (e.g., Recrowd).
+      It contains REAL_ESTATE, but it is shocked in stress scenarios as the loan it is.
 
     Impact:
     - INDEX forbids transactions (see transaction_batch_stages); every other value is
       behaviourally inert in the backend.
-    - Drives portfolio breakdown and allocation analysis, where ETF subtypes roll up to
-      the base type they contain rather than to ETF.
+    - Drives portfolio breakdown and allocation analysis, where subtypes roll up to the
+      base type they contain rather than to their family.
     - Supplies the `asset_class` buckets of stress scenarios. A type absent from a
       scenario's bucket_shocks is shocked by zero **silently**, which is why the enum and
       those tables are guarded by a dedicated coverage test.
@@ -198,6 +202,8 @@ class AssetType(StrEnum):
     ETF_REAL_ESTATE = "ETF_REAL_ESTATE"
     ETF_CRYPTO = "ETF_CRYPTO"
     ETF_MONETARY = "ETF_MONETARY"
+
+    CROWDFUND_REAL_ESTATE = "CROWDFUND_REAL_ESTATE"
 
 
 class AssetEventType(StrEnum):
