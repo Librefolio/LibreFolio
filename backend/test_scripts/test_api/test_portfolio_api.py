@@ -1406,6 +1406,96 @@ class TestPortfolioReportEndpoint:
         assert Decimal(on_report["summary"]["period_income"]["amount"]) == Decimal("45"), "must reconcile exactly with income_history's own sum"
         print_success("income_history flag + reconciliation OK")
 
+    @pytest.mark.parametrize(
+        ("flag", "section"),
+        [
+            pytest.param("include_broker_pnl_history", "broker_pnl_history", id="broker_pnl_history"),
+            pytest.param("include_pnl_candles", "pnl_candles", id="pnl_candles"),
+            pytest.param("include_income_history", "income_history", id="income_history"),
+            pytest.param("include_cost_history", "cost_history", id="cost_history"),
+            pytest.param("include_deposit_history", "deposit_history", id="deposit_history"),
+            pytest.param("include_acquisition_funding", "acquisition_funding", id="acquisition_funding"),
+        ],
+    )
+    async def test_report_allocation_source_with_one_chart_flag_includes_exactly_that_section(
+        self,
+        test_server,
+        flag,
+        section,
+    ):
+        """allocation_source plus exactly one chart-section flag returns that section too.
+
+        get_report used to answer an allocation-source request through a short branch
+        whenever none of include_summary, include_history, include_allocation_history
+        and include_positions_contribution was set: it built allocation_source alone,
+        reported included_features == ["allocation_source"] and silently ignored the six
+        chart-section flags (broker_pnl_history, pnl_candles, income_history,
+        cost_history, deposit_history, acquisition_funding), whose sections came back
+        null. Every case of this test was red before the fix.
+
+        included_features is compared as an exact list, not by membership: the request
+        turns on allocation_source and exactly one section, so a missing name means the
+        flag was dropped and any extra name means a view ran that nobody asked for.
+        """
+        print_section(f"Portfolio Report: allocation source + {flag}")
+        broker_id: int | None = None
+
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            user_id = await get_current_user_id(client)
+            try:
+                broker_id = await create_broker(client, f"Chart Flag Broker {uuid.uuid4().hex}")
+                await commit_batch(
+                    client,
+                    creates=[
+                        {"broker_id": broker_id, "type": "DEPOSIT", "date": "2025-07-01", "quantity": "0", "cash": {"code": "EUR", "amount": "1000"}},
+                        {"broker_id": broker_id, "type": "INTEREST", "date": "2025-07-20", "quantity": "0", "cash": {"code": "EUR", "amount": "5"}},
+                    ],
+                )
+
+                # Every section flag is explicit, so "exactly one chart flag on" is stated
+                # by the request itself instead of inferred from the schema defaults.
+                body = {
+                    "include_summary": False,
+                    "include_history": False,
+                    "include_allocation_history": False,
+                    "include_positions_contribution": False,
+                    "include_broker_pnl_history": False,
+                    "include_pnl_candles": False,
+                    "include_income_history": False,
+                    "include_cost_history": False,
+                    "include_deposit_history": False,
+                    "include_acquisition_funding": False,
+                    "date_range": {"start": "2025-07-01", "end": "2025-07-31"},
+                    "allocation_source": {"as_of_date": "2025-07-31"},
+                }
+                body[flag] = True
+                response = await post_portfolio_report(client, body)
+                assert response.status_code == 200, response.text
+                report = response.json()
+
+                assert report[section] is not None, f"{flag}=true was ignored: included_features={report['metadata']['included_features']}"
+                assert report["metadata"]["included_features"] == ["allocation_source", section]
+                assert report["allocation_source"] is not None
+                # data_quality is deliberately not pinned: the engine path builds it as a by-product.
+                assert report["summary"] is None
+                assert report["history"] is None
+                assert report["allocation_history"] is None
+                assert report["positions_contribution"] is None
+            finally:
+                if broker_id is not None:
+                    cleanup_broker = await client.delete(
+                        f"{API_BASE}/brokers",
+                        params={"ids": [broker_id], "force": True},
+                        timeout=TIMEOUT,
+                    )
+                    assert cleanup_broker.status_code == 200, cleanup_broker.text
+                    broker_results = {item["id"]: item for item in cleanup_broker.json()["results"]}
+                    assert broker_results[broker_id]["success"] is True, cleanup_broker.text
+                await delete_current_test_user(client, user_id)
+
+        print_success(f"{section} returned alongside allocation_source")
+
 
 @pytest.mark.asyncio
 class TestLotsAnalysisEndpoint:
