@@ -1596,7 +1596,7 @@ CHANGELOG, client generato). Commit e fusioni li fa solo il developer.
 | passo | cosa | stato |
 |---|---|---|
 | G0 | **A**: validazione di `f45f0fb4d` (fusione `dev_release2` → A), `dev_release2` avanza in fast-forward su A, commit di CHANGELOG del coordinator → la baseline di tutti: `dev_release2` con J e A | ✅ 25/09 (`dev_release2` = `f45f0fb4d`; segue il commit di CHANGELOG del coordinator) |
-| G1 | **`dev_release2` → Risk** (simulazione e script del coordinator; conflitti additivi, solo risoluzioni) e validazione del combinato nella 6152, **con la privacy accesa e spenta** sulle quattro superfici con importi (schede di L1, importi del replay, tornado di L4, cifre di Asset Global): ciò che passa per le primitive di J segue la modalità da sé, ciò che formatta il denaro a mano no, e il cancello `moneyRenderSites.test.ts` vede solo le righe con un simbolo di valuta | ⏳ attendo lo SHA di G0 |
+| G1 | **`dev_release2` → Risk** (simulazione e script del coordinator; conflitti additivi, solo risoluzioni) e validazione del combinato nella 6152, **con la privacy accesa e spenta** sulle quattro superfici con importi (schede di L1, importi del replay, tornado di L4, cifre di Asset Global): ciò che passa per le primitive di J segue la modalità da sé, ciò che formatta il denaro a mano no, e il cancello `moneyRenderSites.test.ts` vede solo le righe con un simbolo di valuta | ✅ 28/09 — fusione `81f762d11`; validazione verde dopo la riparazione del pin di `risk.errors`; privacy accesa e spenta ✅ |
 | G2 | **F**: checkpoint dei 31 file, poi `dev_release2` → F allo stesso modo | ⏳ |
 | G3 | **F → Risk**, con tutti e due sulla stessa base: restano solo i conflitti fra me e F | ⏳ |
 | G4 | commit mio con gli adattamenti K1–K9 al codice di F | ⏳ |
@@ -1634,3 +1634,69 @@ CHANGELOG, client generato). Commit e fusioni li fa solo il developer.
 > **Prima di G1**: il mio albero deve essere pulito per la fusione, quindi le note del journal da F5 in poi (F8, il
 > giro UI, il principio del developer, K10–K11) vanno in un commit solo, prima della simulazione del coordinator. La
 > voce di CHANGELOG proposta da F è arrivata a me: la inoltro con l'handoff combinato a fine giro.
+
+### ⚠️ Fuori pista — il commit del journal fatto dal coordinator, e il segnaposto mancante · 25/09/2026
+
+> Per provare a secco i controlli di `ORDER-r5-41.sh` il coordinator taglia lo script sul segnaposto `# NN ·` prima
+> del primo commit; quello script non l'aveva (gli altri sì), così la «copia dei soli controlli» era lo script intero
+> e ha creato `3625be46c`. Contenuto identico a quello congelato (impronta verificata da me); il developer lo ha tenuto.
+> **Regola da ora**: ogni script ha `# NN ·` prima di ogni blocco di commit, anche se è uno solo, e una guardia
+> `GUARDS_ONLY=1` che si ferma dopo i controlli; il coordinator taglia al primo `git … add` e rifiuta se ne resta uno.
+
+### G1 — `dev_release2` → Risk · 🔵 25/09/2026
+
+> **Fusione** `81f762d11` fatta dal developer con lo script del coordinator: pulita, albero identico alla simulazione
+> (`385b9ed7`), dentro J (privacy) e A (i suoi 4 commit). `api sync` rifatto (solo file ignorati).
+>
+> **Validazione nella 6152**: front-portfolio `risk-controller-unit` 54 · `risk-levels-unit` 240 ·
+> `risk-frame-component` 13 · `risk-levels-component` 19 · `risk-unit` 17 · `risk-request-unit` 26 ·
+> `risk-benchmark-unit` 8 · `allocation-unit` 149 · E2E `risk` 13 e `risk-asset-detail` 2 · `services risk-all` 639 ·
+> `api risk` 14 · audit i18n 3441 chiavi, 0 incomplete · `front check` al solito pavimento.
+>
+> **⚠️ Fuori pista — un rosso mio, di F9, trovato solo adesso**: `schemas risk`
+> (`test_risk_error_catalogues_agree_across_languages`) fissa «catalogo `risk.errors.*` = `RiskErrorCode` + il solo
+> ripiego `unknown`», e F9 ha aggiunto `risk.errors.answer_discarded`, un codice che emette solo il frontend. La
+> verifica di F9 non aveva `schemas risk`, e nemmeno il brief che avevo dato a test-author. Riparazione approvata dal
+> coordinator: la relazione diventa «`RiskErrorCode` + i codici del frontend, nominati» (`unknown`,
+> `answer_discarded`), in un commit a parte sopra la fusione; la frase resta in `risk.errors`. **Lezione**: una
+> chiave nuova sotto un namespace che il backend fissa (`risk.errors`, `risk.warnings`) va verificata anche coi test
+> di schema del backend, non solo coi test del frontend.
+>
+> **Altro rosso, non mio**: `check-orphans` segnala 2 test di A (`e0364c535`) non registrati già nel target; il
+> coordinator li ha registrati su `dev_release2` (commit al developer): fino alla prossima sincronizzazione sono
+> orfani noti della mia base.
+
+### ⏸ Pausa (25/09, 13:0x) e ripresa (28/09, 10:3x)
+
+> Il developer ha spento la macchina a metà della riparazione di `schemas risk`; alla ripresa (`/tmp` cancellato dal
+> riavvio) l'albero aveva solo i due file attesi, e il test di schema conteneva la riparazione finita, senza mutanti
+> (`frontend/` e `backend/app` identici a `HEAD`): `schemas risk` 34 ✓. Un test-author nuovo la prova con i mutanti.
+>
+> **Riparazione del pin** (test-author, prima della pausa): «catalogo `risk.errors` = `RiskErrorCode` + i codici del
+> frontend», con i codici del frontend nominati — `unknown` (il ripiego di `translateErrorCode`) e
+> `ANSWER_DISCARDED_CODE`, letto **per nome** dal sorgente TS di `riskPanelController`, con errori chiari se la costante
+> manca, è dichiarata due volte o non è un letterale — e un controllo che i due insiemi siano disgiunti.
+
+### G1 — privacy accesa e spenta sulla revisione combinata · ✅ 28/09/2026
+
+> Copia rifatta dalla snapshot, 6162 con `--rebuild`, password resettata solo sulla copia. Sulle superfici con
+> importi del pannello rischio: schede di L1 3 importi → 0 (`−€•••`), totale del replay 1 → 0, tornado di L4 9 → 0,
+> pannello intero 13 → 0; le percentuali restano visibili, com'è giusto. Asset Global: nessun importo anche a privacy
+> spenta, coerente con la regola «la pagina non mostra denaro» (controllo debole: non verifica quale tab fosse aperta;
+> la prova vera è nell'E2E di F). Nota estetica, non di privacy, già prima della fusione: il totale del replay scrive
+> la percentuale con il meno tipografico e l'importo con il trattino (`−X,XX% -€…`) → per il blocco Dashboard di A.
+>
+> **Da A** (sola lettura, `merge-tree`): `ea30d5ccf` (i due test di A registrati) non è né nel mio ramo né in quello di
+> F; `dev_release2` → Risk oggi è pulito; con F esce un solo conflitto additivo, nel catalogo del runner
+> (`_frontend_utility.py`, lista `front_utility_unit`), qualunque sia l'ordine: si tengono tutte e tre le righe. La
+> base di A resta un fast-forward.
+
+> **La riparazione del pin, provata** (test-author, 28/09): il pin vecchio sui cataloghi di oggi è rosso con
+> `answer_discarded` come unica chiave in più; 14 mutanti, tutti presi dal test, con il messaggio giusto per ciascuno —
+> la chiave tolta da un catalogo o da tutti, una chiave estranea, la costante rinominata, dichiarata due volte, resa un
+> modello o un'espressione, il valore cambiato senza aggiornare i cataloghi, l'insieme del frontend senza `unknown`, e
+> un codice del backend con lo stesso nome di uno del frontend (preso **solo** dal controllo di disgiunzione).
+> Nessun sopravvissuto, test invariato. `schemas risk` 34 ✓ · `services risk-all` 639 ✓ · `risk-controller-unit` 54 ✓ ·
+> ruff e black puliti; i cinque file mutati tornati identici a `HEAD`. Restano fuori dal contratto del lettore (e li
+> copre già il test vitest, che fissa il valore della costante) un'ombra `let`, un'ombra di parametro e una
+> dichiarazione vecchia lasciata in un commento a blocco.
