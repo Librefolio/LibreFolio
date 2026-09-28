@@ -12,8 +12,26 @@
  * which key it asks for, with which values, and what it shows when the answer
  * is missing. The one real formatter, `dayFormatter`, is checked against `Intl`
  * itself, in zones chosen to catch the two ways of moving a day.
+ *
+ * **The reasons are read off the generated enum, never listed.** `reasonText`'s
+ * switch is exhaustive over `RiskEligibilityReason`, which fails `front check`
+ * when the engine grows a reason — but at run time an unworded reason is simply
+ * `null`, and the level's label stands in for it. So every loop below iterates
+ * `schemas.RiskEligibilityReason.options`: a reason the engine adds is in them the
+ * day the client is regenerated, and they stay red until it is worded here, in
+ * the code and in the four catalogues. The last block reads the catalogues
+ * themselves — the one place this file does — for presence and for the arguments
+ * each sentence asks for, never for its wording.
  */
 import {afterEach, describe, expect, it, vi} from 'vitest';
+
+import {schemas} from '$lib/api';
+import {SUPPORTED_LOCALES, type SupportedLocale} from '$lib/i18n';
+import en from '$lib/i18n/en.json';
+import es from '$lib/i18n/es.json';
+import fr from '$lib/i18n/fr.json';
+import itCatalogue from '$lib/i18n/it.json';
+import {icuArguments} from '$test/riskWarningCatalogue';
 
 import {ELIGIBILITY_BATCH, EMPTY_VERDICTS, dayFormatter, describeEligibility, eligibilityBatches, isSelectable, mergeEligibilityAnswers, reasonText, type AssetEligibilityItem, type EligibilityReason, type EligibilityVerdicts} from './eligibility';
 
@@ -60,14 +78,30 @@ const VERDICTS = verdictsOf([], 60, 7);
 /** An asset whose every number and date differs from the others, so no value can stand in for another. */
 const SUBJECT = verdict(4, {level: 'warning', quotes_in_period: 12, first_quote: '2023-03-15', last_quote: '2024-11-29'});
 
-/** Every reason the generated enum knows, with its full key and the values its sentence quotes for `SUBJECT`. */
-const REASON_KEYS: ReadonlyArray<readonly [EligibilityReason, string, TranslateOptions | undefined]> = [
-    ['no_prices', 'risk.eligibility.reasons.no_prices', undefined],
-    ['too_few_quotes', 'risk.eligibility.reasons.too_few_quotes', {values: {minQuotes: 60, count: 12}}],
-    ['missing_fx', 'risk.eligibility.reasons.missing_fx', {values: {currency: 'CHF'}}],
-    ['starts_late', 'risk.eligibility.reasons.starts_late', {values: {date: 'day:2023-03-15'}}],
-    ['stale_at_end', 'risk.eligibility.reasons.stale_at_end', {values: {date: 'day:2024-11-29', days: 7}}],
-];
+/** Every reason the engine can give, read off the generated enum rather than written down here. */
+const GENERATED_REASONS: readonly EligibilityReason[] = schemas.RiskEligibilityReason.options;
+
+/**
+ * What each reason's sentence quotes for `SUBJECT`; `undefined` for one that quotes nothing.
+ *
+ * A `Record` over the generated enum, so a reason without an entry fails `front check`
+ * here too. At run time the first `reasonText` case names it instead of letting it
+ * default to "quotes nothing".
+ */
+const REASON_VALUES: Record<EligibilityReason, TranslateOptions | undefined> = {
+    no_price_history: undefined,
+    no_prices: undefined,
+    too_few_quotes: {values: {minQuotes: 60, count: 12}},
+    missing_fx: {values: {currency: 'CHF'}},
+    starts_late: {values: {date: 'day:2023-03-15'}},
+    stale_at_end: {values: {date: 'day:2024-11-29', days: 7}},
+};
+
+/** Every generated reason, with its full key and the values its sentence quotes for `SUBJECT`. */
+const REASON_KEYS: ReadonlyArray<readonly [EligibilityReason, string, TranslateOptions | undefined]> = GENERATED_REASONS.map((reason) => [reason, `risk.eligibility.reasons.${reason}`, REASON_VALUES[reason]] as const);
+
+/** A code no generated enum has: the fallback cases below play a reason newer than this client with it. */
+const NEWER_REASON = 'halted_trading';
 
 describe('isSelectable', () => {
     const verdicts = verdictsOf([verdict(1), verdict(2, {level: 'warning', reasons: ['starts_late']}), verdict(3, {level: 'ineligible', reasons: ['no_prices']})]);
@@ -240,12 +274,37 @@ describe('dayFormatter', () => {
 });
 
 describe('reasonText', () => {
+    it('knows what every reason of the generated enum quotes, and nothing the enum does not have', () => {
+        // Barrier: the list is the enum's, and it is not empty — every loop below would otherwise be about nothing.
+        expect(GENERATED_REASONS, 'the generated enum lists no reason the engine is known to give').toContain('no_prices');
+        expect(
+            GENERATED_REASONS.filter((reason) => !Object.hasOwn(REASON_VALUES, reason)),
+            'the engine gives a reason this file has no expectation for: word it in reasonText and in the four catalogues, then say here what its sentence quotes',
+        ).toEqual([]);
+        expect(
+            Object.keys(REASON_VALUES).filter((reason) => !(GENERATED_REASONS as readonly string[]).includes(reason)),
+            'an expectation for a reason the generated enum no longer has',
+        ).toEqual([]);
+        // The fallback cases play a code newer than this client: they are only about that while the enum lacks it.
+        expect(GENERATED_REASONS as readonly string[]).not.toContain(NEWER_REASON);
+    });
+
     it('asks for each reason by its full key, once, with the values its sentence quotes', () => {
         for (const [reason, key, options] of REASON_KEYS) {
             const {t, calls} = recordingT();
             expect(reasonText(reason, SUBJECT, VERDICTS, 'CHF', t, formatDay), reason).toBe(marker(key));
             expect(calls, reason).toEqual([[key, options]]);
         }
+    });
+
+    it('words an asset never quoted by a sentence of its own, not by the one for a period without quotes', () => {
+        // The engine tells the two apart because only `no_prices` is mended by choosing another
+        // period; a reader shown the same sentence for both would go looking for that period.
+        const {t, calls} = recordingT();
+        const neverQuoted = verdict(4, {level: 'ineligible', reasons: ['no_price_history'], first_quote: null, last_quote: null, quotes_in_period: 0});
+        expect(reasonText('no_price_history', neverQuoted, VERDICTS, 'CHF', t, formatDay)).toBe(marker('risk.eligibility.reasons.no_price_history'));
+        // No values: the sentence quotes nothing, since there is no date and no count to quote.
+        expect(calls).toEqual([['risk.eligibility.reasons.no_price_history', undefined]]);
     });
 
     it('quotes a dash for a date the engine does not have, without asking the formatter', () => {
@@ -303,7 +362,7 @@ describe('describeEligibility', () => {
             {why: 'no reason at all', reasons: [] as EligibilityReason[], reply: marker},
             {why: 'no reasons field', reasons: undefined, reply: marker},
             {why: 'a sentence the catalogue lacks', reasons: ['no_prices'] as EligibilityReason[], reply: labelsOnly},
-            {why: 'a code newer than this client', reasons: ['halted_trading'] as unknown as EligibilityReason[], reply: marker},
+            {why: 'a code newer than this client', reasons: [NEWER_REASON] as unknown as EligibilityReason[], reply: marker},
         ];
         for (const level of ['ineligible', 'warning'] as const) {
             for (const {why, reasons, reply} of unworded) {
@@ -315,12 +374,26 @@ describe('describeEligibility', () => {
 
     it("keeps the engine's codes as they came, the ones it cannot word included", () => {
         // One code is worded, so the level's label does not stand in for the other.
-        const reasons = ['no_prices', 'halted_trading'] as unknown as EligibilityReason[];
+        const reasons = ['no_prices', NEWER_REASON] as unknown as EligibilityReason[];
         expect(describeEligibility(verdict(4, {level: 'ineligible', reasons}), VERDICTS, 'CHF', recordingT().t, formatDay)).toEqual({
             level: 'ineligible',
-            codes: ['no_prices', 'halted_trading'],
+            codes: ['no_prices', NEWER_REASON],
             texts: [marker('risk.eligibility.reasons.no_prices')],
         });
+    });
+
+    it('tells a never-quoted asset why it is out, instead of only saying that it is', () => {
+        // What the engine sends for an asset with no quote at all (`analysis_eligibility`): no
+        // date, no count, and the one reason no period can mend.
+        const neverQuoted = verdict(4, {level: 'ineligible', reasons: ['no_price_history'], first_quote: null, last_quote: null, quotes_in_period: 0});
+        const {t, calls} = recordingT();
+        expect(describeEligibility(neverQuoted, VERDICTS, 'CHF', t, formatDay)).toEqual({
+            level: 'ineligible',
+            codes: ['no_price_history'],
+            texts: [marker('risk.eligibility.reasons.no_price_history')],
+        });
+        // The reason was worded, so the level's own label was never asked to stand in for it.
+        expect(calls.map(([key]) => key)).toEqual(['risk.eligibility.reasons.no_price_history']);
     });
 
     it('gives an eligible verdict with no reason no text, and asks for none', () => {
@@ -336,5 +409,54 @@ describe('describeEligibility', () => {
         expect(describeEligibility(verdict(4, {level: 'ineligible', reasons: ['no_prices']}), VERDICTS, 'CHF', t, formatDay).texts).toEqual([]);
         // Control: the reason and then the level's label were both asked for, and both refused.
         expect(calls.map(([key]) => key)).toEqual(['risk.eligibility.reasons.no_prices', LEVEL_KEYS.ineligible]);
+    });
+});
+
+describe('the catalogues word every reason the engine gives', () => {
+    /** Typed on the app's locale list, so a fifth locale without a catalogue here fails `front check`. */
+    const CATALOGUES: Record<SupportedLocale, unknown> = {en, it: itCatalogue, fr, es};
+
+    function at(catalogue: unknown, key: string): unknown {
+        return key.split('.').reduce<unknown>((node, part) => (node !== null && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), catalogue);
+    }
+
+    /**
+     * One line per generated reason `locale` cannot word the way `reasonText` asks for it: no
+     * sentence at all, one that does not compile, or one naming a value `reasonText` never
+     * supplies. The last is not a style point. A sentence asked for without values comes back
+     * exactly as written — svelte-i18n formats only when it is given values — and one given other
+     * values fails to format and comes back raw too: either way the brace reaches the screen.
+     */
+    function reasonAudit(locale: string, catalogue: unknown): string[] {
+        return GENERATED_REASONS.flatMap((reason) => {
+            const key = `risk.eligibility.reasons.${reason}`;
+            const sentence = at(catalogue, key);
+            if (typeof sentence !== 'string' || sentence.trim() === '') return [`${locale}: ${key} is missing`];
+            let asked: string[];
+            try {
+                asked = [...icuArguments(sentence).keys()];
+            } catch (error) {
+                return [`${locale}: ${key} does not compile (${error instanceof Error ? error.message : String(error)})`];
+            }
+            const supplied = Object.keys(REASON_VALUES[reason]?.values ?? {});
+            const unsupplied = asked.filter((name) => !supplied.includes(name)).sort();
+            return unsupplied.length === 0 ? [] : [`${locale}: ${key} asks for {${unsupplied.join(', ')}}, which reasonText never supplies`];
+        });
+    }
+
+    it('the audit names the locale and key of a missing sentence, and of one asking for a value nobody supplies', () => {
+        const worded = Object.fromEntries(GENERATED_REASONS.map((reason) => [reason, `Synthetic sentence for ${reason}`]));
+        const synthetic = {risk: {eligibility: {reasons: {...worded, no_prices: undefined, missing_fx: 'No rate to {currency} for {asset}', starts_late: 'First quote on {date}'}}}};
+        // `{currency}` and `{date}` are supplied, so only `{asset}` is reported.
+        expect(reasonAudit('xx', synthetic)).toEqual(['xx: risk.eligibility.reasons.no_prices is missing', 'xx: risk.eligibility.reasons.missing_fx asks for {asset}, which reasonText never supplies']);
+        // A catalogue without the node is every reason missing, never a clean report.
+        expect(reasonAudit('xx', {})).toHaveLength(GENERATED_REASONS.length);
+    });
+
+    it.each([...SUPPORTED_LOCALES])('%s.json words every reason, asking only for the values reasonText supplies', (locale) => {
+        const catalogue = CATALOGUES[locale];
+        // Barrier: the walk reaches the eligibility node — the level labels live beside the reasons.
+        expect(typeof at(catalogue, 'risk.eligibility.levels.ineligible'), `${locale}.json: the walk never reached risk.eligibility`).toBe('string');
+        expect(reasonAudit(locale, catalogue), `${locale}.json: a reason the engine gives would reach the screen as the level's label, a raw key or a brace`).toEqual([]);
     });
 });
