@@ -407,11 +407,6 @@
         for (const group of groups) {
             const partitions = groupPartitions(group, txArr);
             const primaryIndices = new Set(partitions.map((p) => p.primaryIndex));
-            // Back-reference each secondary to its own partition primary (its exact twin).
-            const primaryOf = new Map<number, number>();
-            for (const p of partitions) {
-                for (const idx of p.memberIndices) primaryOf.set(idx, p.primaryIndex);
-            }
             for (const idx of group.memberIndices) {
                 const mt = txArr.find((row) => row.index === idx);
                 if (!mt) continue;
@@ -420,17 +415,9 @@
                 mt.dupGroupKey = group.key;
                 mt.dupTier = group.tier;
                 mt.isDupKeeper = isPrimary;
-                if (isPrimary) {
-                    // Keep the primary's own vs-existing status; it is not an in-batch duplicate.
-                    mt.dupKeeperIndex = undefined;
-                    mt.dupKeeperFileName = undefined;
-                } else {
-                    // Every secondary shares its partition's description+key → exact in-batch duplicate.
-                    mt.duplicateStatus = 'pending_duplicate';
-                    const keeperIndex = primaryOf.get(idx) ?? idx;
-                    mt.dupKeeperIndex = keeperIndex;
-                    mt.dupKeeperFileName = getSourceFileName(txArr.find((row) => row.index === keeperIndex)?.sourceFileId ?? '');
-                }
+                // The primary keeps its own vs-existing status; every secondary shares its
+                // partition's description+key, so it is an exact in-batch duplicate.
+                if (!isPrimary) mt.duplicateStatus = 'pending_duplicate';
             }
         }
     }
@@ -456,14 +443,12 @@
         for (const mt of txArr) {
             if (!mt.pendingMatchStatus || !mt.dupPendingMatch) continue;
             mt.duplicateStatus = mt.pendingMatchStatus;
-            mt.dupKeeperFileName = $t('importWizard.resolver.pendingEditor');
             // Inside a cross-file group the resolver has already chosen knowing this verdict: a
             // firm match was never kept, and the copy it shows stays listed, as with a database
             // twin. Only the badge changes here, so a first pass and a re-apply agree.
             if (mt.dupGroupKey != null) continue;
             mt.selected = mt.duplicateStatus === 'pending_possible_duplicate';
             mt.isDupKeeper = false;
-            mt.dupKeeperIndex = undefined;
         }
     }
 

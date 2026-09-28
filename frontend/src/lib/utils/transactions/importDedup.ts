@@ -53,8 +53,6 @@ export function rowAfterRecheck(m: MergedTx, verdict: {status: DuplicateStatus; 
         dupMatches: verdict?.matches ?? [],
         dupGroupKey: undefined,
         dupTier: undefined,
-        dupKeeperIndex: undefined,
-        dupKeeperFileName: undefined,
         isDupKeeper: undefined,
         dupPendingMatch: undefined,
         selected: (!opts.preserveSelection || m.selected) && !opts.beforeOpening && duplicateStatusAllowsAutoSelect(status),

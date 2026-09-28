@@ -33,8 +33,6 @@ export interface MergedTx {
     todos: ImportTodo[];
     dupGroupKey?: string;
     dupTier?: DuplicateTier;
-    dupKeeperIndex?: number;
-    dupKeeperFileName?: string;
     isDupKeeper?: boolean;
     /** For a bulk-modal pending duplicate: the matched unsaved transaction (for side-by-side compare). */
     dupPendingMatch?: TransactionCreateItem;
