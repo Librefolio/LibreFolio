@@ -119,12 +119,12 @@
     let l3Results = $derived([riskReturn, kpi, comparison]);
 
     let l1Health = $derived(degradedResults(l1Results, VAR_LABELS));
-    let l1Reasons = $derived(resultReasons(l1Results));
+    let l1Reasons = $derived(resultReasons(l1Results, $t));
     let l1Errors = $derived(resultErrorCodes(l1Results));
     let l1Metadata = $derived(levelMetadata(l1Results));
 
     let l3Health = $derived(degradedResults(l3Results));
-    let l3Reasons = $derived(resultReasons(l3Results));
+    let l3Reasons = $derived(resultReasons(l3Results, $t));
     let l3Errors = $derived(resultErrorCodes(l3Results));
     let l3Metadata = $derived(levelMetadata(l3Results));
 

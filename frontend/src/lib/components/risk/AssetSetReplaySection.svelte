@@ -53,7 +53,7 @@
     import {untrack} from 'svelte';
 
     import {_ as t} from '$lib/i18n';
-    import {createRiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
+    import {createRiskPanelController, discardedErrorCodes} from '$lib/stores/risk/riskPanelController.svelte';
     import L4WhatIf from './levels/L4WhatIf.svelte';
     import L4Replay from './levels/l4/L4Replay.svelte';
     import {degradedResults, levelMetadata, resultReasons} from './levels/levelHelpers';
@@ -105,13 +105,16 @@
     });
 
     let health = $derived(degradedResults([controller.replayResult]));
-    let reasons = $derived(resultReasons([controller.replayResult]));
+    let reasons = $derived(resultReasons([controller.replayResult], $t));
+    // A replay answer discarded twice running (the page's live price polling invalidates the
+    // cache every 30 s) is disclosed here, as the Dashboard's L4 does, instead of vanishing.
+    let errorCodes = $derived(discardedErrorCodes(controller.discarded, ['replay']));
     let metadata = $derived(levelMetadata([controller.replayResult]));
 </script>
 
 <!-- Closed by default and loading its catalogue on first open only: reopening a
      drawer is not a change of question, so it must not start the work over. -->
-<RiskLevelSection title={$t('risk.levels.l4.title')} level={4} collapsible testId="risk-replay-section" {health} {reasons} {metadata} onfirstopen={() => controller.loadScenarioCatalog()} docsPath="financial-theory/technical-analysis/risk-metrics/historical-replay/">
+<RiskLevelSection title={$t('risk.levels.l4.title')} level={4} collapsible testId="risk-replay-section" {health} {reasons} {errorCodes} {metadata} onfirstopen={() => controller.loadScenarioCatalog()} docsPath="financial-theory/technical-analysis/risk-metrics/historical-replay/">
     <L4WhatIf>
         {#snippet replay()}
             <L4Replay {controller} {assetNames} currency={targetCurrency} {dateStart} {dateEnd} showMoney={false} />
