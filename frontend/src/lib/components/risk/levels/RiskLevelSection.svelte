@@ -8,6 +8,7 @@
     import type {ResultHealth, ResultReason} from './levelHelpers';
     import type {LevelMetadataRow} from './levelHelpers';
     import {translateErrorCode, translateOrRaw} from './levelHelpers';
+    import {analyticNameKey} from './partialNotice';
 
     /**
      * The frame around one of the four levels.
@@ -41,22 +42,23 @@
          */
         health?: ResultHealth[];
         /**
-         * Why those measurements fell short, in the backend's own words.
+         * Why those measurements fell short, as finished sentences.
          *
          * The companion to `health`, and deliberately separate: the status says a
-         * number is incomplete, the reason says what to do about it. Shown
-         * verbatim — these are backend strings, and routing them through i18n
-         * keys built at runtime is how an unseen value ends up printing its own
-         * key on screen.
+         * number is incomplete, the reason says what to do about it. Each one is
+         * worded by the caller (`resultReasons` with a translator): the backend's
+         * own key and values, or its English sentence when those do not resolve —
+         * never an i18n key built here from a code, which is how an unseen value
+         * ends up printing its own key on screen.
          */
         reasons?: ResultReason[];
         /**
          * The codes of measurements that did not come back **at all**.
          *
          * Distinct from `reasons` in both content and provenance: `reasons` are
-         * the backend's own sentences, shown verbatim; these are identifiers,
-         * worded here. Keeping them apart is what lets `reasons` stay verbatim —
-         * one list the caller may never translate, one it always must.
+         * finished sentences, worded by the caller; these are identifiers, worded
+         * here. Keeping them apart is what keeps each list's contract readable —
+         * one the section shows as it is, one it always words.
          *
          * An empty level renders the same shape whether the analytic is out of
          * scope, short of history, or still in flight, and its single sentence
@@ -115,8 +117,7 @@
 
     /** `historical_var` is `historicalVar` in the catalogue; unknown codes stay raw. */
     function analyticName(code: string): string {
-        const camel = code.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
-        return $t(`risk.analytics.${camel}.name`, {default: code});
+        return $t(analyticNameKey(code), {default: code});
     }
 
     let manuallyOpen = $state(false);
