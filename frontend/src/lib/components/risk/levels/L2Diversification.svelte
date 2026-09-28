@@ -339,7 +339,7 @@
                         {$t('risk.levels.l2.correlation.noRedundancy')}
                     </p>
                 {/if}
-                <CorrelationHeatmap output={correlation} {assetLabels} height="360px" />
+                <CorrelationHeatmap output={correlation} {assetLabels} />
             </div>
         {/if}
     {/if}

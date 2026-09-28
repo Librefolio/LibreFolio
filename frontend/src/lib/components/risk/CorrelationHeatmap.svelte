@@ -81,8 +81,6 @@
         /** Sector and country distributions by id. When given, two more orderings group the matrix by dominant exposure. */
         assetSectors?: ReadonlyMap<number, Distribution | null>;
         assetRegions?: ReadonlyMap<number, Distribution | null>;
-        /** Ignored: the height now follows the number of rows. Kept so existing callers keep compiling. */
-        height?: string;
         /** `similarity` groups assets that move together; `name` sorts by the label the reader sees. */
         initialOrdering?: 'similarity' | 'name';
     }
