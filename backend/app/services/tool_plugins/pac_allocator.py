@@ -4,8 +4,8 @@ The P1 ``analyze`` services (``pac_allocator`` and ``portfolio_rebalancer``)
 were removed on 2026-09-21 by developer decision: they were never released,
 never fully tested, and the master plan §1.2 declares compatibility with the P1
 prototype a non-goal. What replaces them is ``operation="plan"``, backed by
-``plan_pac_allocation`` — the exact-arithmetic planner with an exhaustive
-oracle and a proof layer.
+``plan_pac_allocation`` — SCIP, whose own status is the proof (D-X1), with
+every published number replayed in exact arithmetic.
 
 **The Rebalancer has no service here yet.** Its v2 policies (``invest_only``,
 ``invest_and_sell``) and the SELL verifier do not exist, so registering a

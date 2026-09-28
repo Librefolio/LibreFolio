@@ -669,7 +669,8 @@ def build_objective_results(scenario: ExactPlannerScenario, view: ExactPolicyVie
     """Project the objective cascade plus the canonical tie-break vector.
 
     Stage order comes from the view's own ascending ``ordinal``, never a
-    hardcoded list, matching ``oracle.py`` and ``objectives.py``.
+    hardcoded list, matching ``objectives.py`` and the order in which
+    ``planner.py`` hands the objectives to ``proof.conclude_with_solver``.
     """
     value_by_ref = {item.ref_id: item.value for item in evaluation.objectives}
     stages = [
@@ -840,8 +841,10 @@ def build_stop_reason(result: SolverRunResult) -> str:
     Determined, not chosen: ``_validate_stop_evidence`` requires
     ``completed`` **iff** no stage is ``unfinished``, so the only consistent
     mapping is the one below. Recorded here so the next reader does not have
-    to re-derive it from the validator. Which *limit* stopped a run is read
-    from the stage that actually stopped, never assumed to be the clock.
+    to re-derive it from the validator. An ``infeasible`` first stage is a
+    verdict, not an interruption, so it ends a ``completed`` search. Which
+    *limit* stopped a run is read from the stage that actually stopped, never
+    assumed to be the clock.
 
     **This field is also the plan's reproducibility statement**, which is worth
     stating because nothing in its name says so. SCIP's search is deterministic
@@ -857,11 +860,10 @@ def build_stop_reason(result: SolverRunResult) -> str:
       it truncated depends on machine speed. The plan is valid and replayed in
       exact arithmetic, but **it is not guaranteed to be reproducible**.
 
-    Measured 2026-09-22 at the real 30 000 ms engine budget, **on scenarios that
-    actually reach the solver**. ``planner.py`` routes any view with
-    ``estimate_oracle_domain_size(view) <= 200 000`` to the exhaustive oracle and
-    never calls the solver at all, so a measurement taken on a 16-candidate
-    scenario describes a branch production does not execute.
+    Measured 2026-09-22 at the real 30 000 ms engine budget. Since D-X1 every
+    plan reaches the solver; on that date ``planner.py`` still routed views of
+    up to 200 000 candidates to the exhaustive oracle, which is why the grid
+    below was taken on scenarios large enough to reach SCIP.
 
     The cost driver is **the number of decisions, not the size of the domain**.
     Holding decisions fixed at 4 while growing the domain from 256 to

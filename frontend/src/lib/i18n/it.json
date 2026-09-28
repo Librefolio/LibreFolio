@@ -4279,7 +4279,6 @@
           },
           "badges": {
             "decimalVerified": "Verificato in Decimal",
-            "gapBounded": "Gap limitato",
             "infeasibilityProven": "Infattibilità dimostrata",
             "infeasible": "Infattibile con questi vincoli",
             "noIncumbent": "Nessun piano entro i limiti",
@@ -4417,29 +4416,22 @@
           },
           "proof": {
             "absoluteGap": "Gap ass.",
-            "conflictWitness": "Regole in conflitto: {codes}",
             "decimalVerified": "piano verificato in Decimal esatto dal backend",
             "dual": "Duale",
             "exactObjectives": "Valori esatti degli obiettivi (backend, Decimal)",
-            "floatingFinished": "Il solver ha terminato, ma riporta numeri in virgola mobile: l’ottimalità non è certificata.",
+            "floatingFinished": "Il solver ha chiuso ogni stadio, ma il suo piano non ha superato la verifica in Decimal esatto.",
             "floatingUnfinished": "Il solver si è fermato prima di chiudere ogni stadio: questo è il miglior piano trovato, non uno dimostrato.",
-            "gapBounded": "Gap limitato",
             "infeasible": "Infattibilità dimostrata",
-            "latticeWitness": "{count, plural, one {# stadio chiuso} other {# stadi chiusi}}",
-            "notCertified": "L’ottimalità non è certificata.",
             "notProven": "Non dimostrato",
             "objective": "Obiettivo",
             "optimal": "Ottimo dimostrato",
-            "oracleInfeasibleWitness": "{enumerated, plural, one {# candidato enumerato} other {# candidati enumerati}} · nessuno fattibile",
-            "oracleWitness": "{enumerated, plural, one {# candidato enumerato} other {# candidati enumerati}} · {feasible} fattibili · {objectives, plural, one {# obiettivo della cascata verificato} other {# obiettivi della cascata verificati}}",
             "ordinal": "Ord",
             "outcome": "Esito",
             "primal": "Primale",
             "proof": "Prova",
             "reasons": {
               "allocation": {
-                "exact_proof_not_established": "non è stata stabilita una prova esatta",
-                "solver_not_required": "non necessario: il dominio è stato enumerato in modo esatto"
+                "exact_proof_not_established": "non è stata stabilita una prova esatta"
               },
               "portfolio_rebalancer": {
                 "sell_irreducibility_unresolved": "non è stato stabilito che nessuna vendita possa essere eliminata"
@@ -4452,21 +4444,21 @@
               "global": "ambito globale",
               "incumbent_face": "faccia dell’incumbent"
             },
-            "solverNotRun": "Solver non eseguito",
             "solverStages": "Stadi del solver",
             "sources": {
-              "deterministic_conflict": "conflitto deterministico",
-              "exhaustive_oracle": "oracolo esaustivo",
-              "score_lattice_closure": "chiusura del reticolo dei punteggi"
+              "solver_status": "stato del solver"
             },
             "status": "Stato",
             "statuses": {
               "finished": "terminato",
-              "unfinished": "non terminato"
+              "unfinished": "non terminato",
+              "infeasible": "infattibile"
             },
             "stop": "Arresto",
             "tieBreak": "Spareggio finale: {code}.",
-            "tieBreakClosed": "spareggio chiuso"
+            "tieBreakClosed": "spareggio chiuso",
+            "solverWitness": "{objectives, plural, one {# obiettivo della cascata chiuso} other {# obiettivi della cascata chiusi}} all’ottimo dal solver",
+            "solverInfeasibleWitness": "Il solver ha chiuso il primo stadio come infattibile: nessun piano rispetta tutti i vincoli rigidi."
           },
           "reasons": {
             "allocation": {
@@ -4506,7 +4498,8 @@
             "noIncumbent": {
               "body": "Il solver non ha trovato alcun piano prima del limite. Non è una prova che non esista un piano.",
               "tips": "Per ridurre la ricerca: meno Asset o route, tetti più stretti, passi più grandi.",
-              "title": "Nessun piano entro i limiti"
+              "title": "Nessun piano entro i limiti",
+              "rejected": "Il solver ha trovato un piano, ma la verifica in Decimal esatto lo ha respinto, quindi non ne è pubblicato nessuno. Non è una prova che non esista un piano."
             },
             "noOp": {
               "body": "Con {amount} nessun acquisto rispetta i vincoli: il piano è non fare nulla.",
