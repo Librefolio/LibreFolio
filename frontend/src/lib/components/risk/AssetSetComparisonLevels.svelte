@@ -72,9 +72,11 @@
          * a component that answered it twice could answer it differently.
          */
         benchmarkId: number | null;
+        /** Bumped by the panel after an accepted sync (R2-128). Default: never. */
+        refreshVersion?: number;
     }
 
-    let {assetIds, assetLabels, dateStart, dateEnd, targetCurrency, benchmarkId}: Props = $props();
+    let {assetIds, assetLabels, dateStart, dateEnd, targetCurrency, benchmarkId, refreshVersion = 0}: Props = $props();
 
     const controller = createRiskPanelController(
         () => ({
@@ -87,7 +89,7 @@
             // control to set one — and inventing a rate the reader never chose
             // would put a number in the denominator of every ratio on screen.
             appliedRiskFreePercent: 0,
-            refreshVersion: 0,
+            refreshVersion,
             assetSetBenchmarkId: benchmarkId,
         }),
         {includeAssetSetLevels: true},
@@ -138,10 +140,10 @@
     let benchmarkApplies = $derived(benchmarkId !== null && comparison?.status === 'ok');
 </script>
 
-<RiskLevelSection title={$t('risk.assetSet.levels.l1.title')} level={1} testId="risk-asset-set-loss" health={l1Health} reasons={l1Reasons} errorCodes={l1Errors} metadata={l1Metadata}>
+<RiskLevelSection title={$t('risk.assetSet.levels.l1.title')} level={1} testId="risk-asset-set-loss" health={l1Health} reasons={l1Reasons} errorCodes={l1Errors} metadata={l1Metadata} docsPath="financial-theory/technical-analysis/risk-metrics/">
     <AssetSetLossComparisonSection {assetIds} {assetLabels} {dailyVar} {monthlyVar} {drawdown} loading={controller.initialLoading} />
 </RiskLevelSection>
 
-<RiskLevelSection title={$t('risk.assetSet.levels.l3.title')} level={3} testId="risk-asset-set-paid" health={l3Health} reasons={l3Reasons} errorCodes={l3Errors} metadata={l3Metadata}>
+<RiskLevelSection title={$t('risk.assetSet.levels.l3.title')} level={3} testId="risk-asset-set-paid" health={l3Health} reasons={l3Reasons} errorCodes={l3Errors} metadata={l3Metadata} docsPath="financial-theory/technical-analysis/risk-metrics/">
     <AssetSetRiskReturnSection {assetIds} {assetLabels} {riskReturn} {kpi} {comparison} {benchmarkApplies} loading={controller.initialLoading} />
 </RiskLevelSection>
