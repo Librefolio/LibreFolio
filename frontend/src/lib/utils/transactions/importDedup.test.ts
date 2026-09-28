@@ -297,7 +297,7 @@ describe('U4: compareTargetFor / hasFirmOutsideCollision', () => {
         });
 
         it('compares an in-batch secondary, which matches no editor row, with its lot', () => {
-            const secondary = mt(1, 'fB', {}, {duplicateStatus: 'pending_duplicate', dupGroupKey: 'k', dupTier: 'sure', isDupKeeper: false, dupKeeperIndex: 0});
+            const secondary = mt(1, 'fB', {}, {duplicateStatus: 'pending_duplicate', dupGroupKey: 'k', dupTier: 'sure', isDupKeeper: false});
             expect(compareTargetFor(secondary)).toBe('lot');
         });
 
@@ -349,7 +349,7 @@ describe('U7: rowAfterRecheck', () => {
     /** Dated after the broker's opening, selection recomputed from scratch: the verdict alone decides. */
     const fresh = {beforeOpening: false, preserveSelection: false};
     /** The in-batch and editor markers, which the passes after the recheck rebuild from nothing. */
-    const markers = ['pendingMatchStatus', 'dupPendingMatch', 'dupGroupKey', 'dupTier', 'dupKeeperIndex', 'dupKeeperFileName', 'isDupKeeper'] as const;
+    const markers = ['pendingMatchStatus', 'dupPendingMatch', 'dupGroupKey', 'dupTier', 'isDupKeeper'] as const;
     /** A row carrying everything the earlier passes can leave on it: a database twin, a kept group secondary, an editor match. */
     const markedRow = (): MergedTx =>
         mt(
@@ -366,8 +366,6 @@ describe('U7: rowAfterRecheck', () => {
                 dupPendingMatch: tx({type: 'BUY', date: '2024-05-01', quantity: 2, description: 'buy 2'}),
                 dupGroupKey: 'k',
                 dupTier: 'sure',
-                dupKeeperIndex: 0,
-                dupKeeperFileName: 'fileA.csv',
                 isDupKeeper: false,
             },
         );

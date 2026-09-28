@@ -191,9 +191,9 @@ describe('keeper precedence: a twin that collides firmly (DB likely / editor pen
             // State after a first pass over three copies with priority [fA, fB, fC]: A (in the DB)
             // lost the keeper role to B, and the pass rewrote `duplicateStatus` on both secondaries
             // (A and C) to its in-batch marker. A still collides; C collides with nothing.
-            const a3: MergedTx = {...twin(0, 'fA', 'Twin', {dbDuplicateStatus: 'likely'}), duplicateStatus: 'pending_duplicate', isDupKeeper: false, dupKeeperIndex: 1};
+            const a3: MergedTx = {...twin(0, 'fA', 'Twin', {dbDuplicateStatus: 'likely'}), duplicateStatus: 'pending_duplicate', isDupKeeper: false};
             const b3: MergedTx = {...twin(1, 'fB', 'Twin'), isDupKeeper: true};
-            const c3: MergedTx = {...twin(2, 'fC', 'Twin'), duplicateStatus: 'pending_duplicate', selected: false, isDupKeeper: false, dupKeeperIndex: 1};
+            const c3: MergedTx = {...twin(2, 'fC', 'Twin'), duplicateStatus: 'pending_duplicate', selected: false, isDupKeeper: false};
             const g3 = group('k3', [0, 1, 2]);
             // The user then drags fC above fB.
             const reordered = ['fA', 'fC', 'fB'];
