@@ -75,7 +75,7 @@
     let output = $derived(riskOutput(result, schemas.RiskCorrelationOutput));
 
     let health = $derived(degradedResults([result]));
-    let reasons = $derived(resultReasons([result]));
+    let reasons = $derived(resultReasons([result], $t));
     /**
      * The window the figures were measured over — now rendered by the frame.
      *
