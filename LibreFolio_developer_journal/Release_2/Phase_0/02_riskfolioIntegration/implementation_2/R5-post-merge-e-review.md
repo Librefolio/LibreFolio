@@ -1597,10 +1597,10 @@ CHANGELOG, client generato). Commit e fusioni li fa solo il developer.
 |---|---|---|
 | G0 | **A**: validazione di `f45f0fb4d` (fusione `dev_release2` → A), `dev_release2` avanza in fast-forward su A, commit di CHANGELOG del coordinator → la baseline di tutti: `dev_release2` con J e A | ✅ 25/09 (`dev_release2` = `f45f0fb4d`; segue il commit di CHANGELOG del coordinator) |
 | G1 | **`dev_release2` → Risk** (simulazione e script del coordinator; conflitti additivi, solo risoluzioni) e validazione del combinato nella 6152, **con la privacy accesa e spenta** sulle quattro superfici con importi (schede di L1, importi del replay, tornado di L4, cifre di Asset Global): ciò che passa per le primitive di J segue la modalità da sé, ciò che formatta il denaro a mano no, e il cancello `moneyRenderSites.test.ts` vede solo le righe con un simbolo di valuta | ✅ 28/09 — fusione `81f762d11`; validazione verde dopo la riparazione del pin di `risk.errors`; privacy accesa e spenta ✅ |
-| G2 | **F**: checkpoint dei 31 file, poi `dev_release2` → F allo stesso modo | ⏳ |
-| G3 | **F → Risk**, con tutti e due sulla stessa base: restano solo i conflitti fra me e F | ⏳ |
-| G4 | commit mio con gli adattamenti K1–K9 al codice di F | ⏳ |
-| G5 | validazione del ramo combinato | ⏳ |
+| G2 | **F**: checkpoint dei 31 file, poi `dev_release2` → F allo stesso modo | ✅ 28/09 — `dev_release2` → F fatto da F (`5010fe815`), checkpoint di F committato |
+| G3 | **F → Risk**, con tutti e due sulla stessa base: restano solo i conflitti fra me e F | ✅ 28/09 — `d471e0b5b` (genitori `b9ee8d7be` + `533a18787`), 5 conflitti additivi risolti da me |
+| G4 | commit mio con gli adattamenti K1–K9 al codice di F | 🔵 codice ✅, test ✅ 28/09 — in consegna al coordinator come checkpoint |
+| G5 | validazione del ramo combinato | ✅ 28/09 — validazione del combinato (vedi sotto) |
 | G6 | A e F avanzano in fast-forward alla punta di Risk | ⏳ |
 | G7 | tabella dei proprietari, confermata col developer, al coordinator; poi il via del developer | ⏳ |
 
@@ -1700,3 +1700,51 @@ CHANGELOG, client generato). Commit e fusioni li fa solo il developer.
 > ruff e black puliti; i cinque file mutati tornati identici a `HEAD`. Restano fuori dal contratto del lettore (e li
 > copre già il test vitest, che fissa il valore della costante) un'ombra `let`, un'ombra di parametro e una
 > dichiarazione vecchia lasciata in un commento a blocco.
+
+### G1bis — `dev_release2` (`ea30d5ccf`) → Risk · ✅ 28/09/2026
+
+> Checkpoint del pin e del journal (`5053bf16e` → `3d3ac7c85`), poi la fusione `b9ee8d7be` (i due test di A registrati):
+> pulita, albero uguale alla simulazione del coordinator; `check-orphans` pulito (260 test unit, 83 spec).
+
+### G3 — F → Risk · ✅ 28/09/2026
+
+> **Fusione** aperta dal developer con lo script del coordinator: esattamente 5 conflitti, tutti additivi — i 4
+> cataloghi e il catalogo del runner. **Risoluzione mia**, con una procedura guardata (HEAD, MERGE_HEAD, insieme dei
+> conflitti, e gli stadi `:2:`/`:3:` uguali ai blob dei due genitori, prima di toccare qualcosa):
+> - cataloghi: fusione a tre vie **per chiave**, nell'ordine d'inserimento (i cataloghi non sono ordinati), le chiavi
+>   nuove di F dopo il loro vicino precedente; calcolata da **entrambe** le basi di fusione (`e6187d6ab`, `14c334d85`)
+>   con risultato identico: 3474 chiavi per lingua, 0 conflitti di chiave, 4 chiavi rimosse da F e non più usate;
+> - runner: le due righe aggiunte da me e da F, tenute entrambe.
+> In stage solo i 5 file; il coordinator ha verificato l'albero per conto suo (identico alla sua unione).
+> **Commit fatto dal developer** dal terminale agganciato alla mia sessione (nessun agente ha committato).
+>
+> **Validazione del combinato nella 6152**: unit rischio (8 categorie) 526 · `core-unit` 2651 · `component-unit` 2033 ·
+> `services risk-all` 639 · `schemas` 34 + 70 · `api risk` 14 · `api assets-crud` 35 · `check-orphans` 0 · audit i18n
+> 3474/0 · E2E `risk` 13, `risk-lab` 18, `risk-asset-detail` 2, `asset-list` 28 (dopo `front build --debug`). **Un
+> rosso previsto**: `front check` segnava `no_price_history` nella mappa esaustiva di F (`eligibility.ts`) — il cancello
+> che il coordinator aveva chiesto a F per K1.
+
+### G4 — K1–K11, gli adattamenti al codice di F · ✅ 28/09/2026
+
+> **Test prima della cura** (test-author): rossi per il motivo giusto, e verdi su copie usa-e-getta con le cure.
+> - **K1**: la mappa dei motivi di F dice anche `no_price_history`, con la frase nelle 4 lingue; il test legge i motivi
+>   dall'enum generato, così un codice nuovo del motore lo fa diventare rosso. `front check` torna ai soliti 3 errori.
+> - **K7**: la sezione replay del laboratorio mostra la risposta scartata due volte (il polling della pagina la rende
+>   ordinaria), come fa la L4 della Dashboard.
+> - **K8**: le sezioni del laboratorio traducono gli avvisi con chiave e parametri del backend, come la Dashboard; un
+>   controllo sui sorgenti (col parser di Svelte) impedisce che una sezione nuova torni all'inglese.
+> - **K9**: `RiskLevelSection` usa la stessa regola del nome dell'analisi dell'avviso unico (`analyticNameKey`), e la
+>   doc delle sue prop non dice più «verbatim». **K10**: via la prop `height` che la heatmap ignorava, con il suo ultimo
+>   chiamante (la L2 della Dashboard).
+> - K2–K6: nessun adattamento (campi opzionali, o superfici che F non monta). **K11**: una decisione, non codice → nella
+>   tabella dei proprietari, per A e il developer.
+>
+> **Verde e mutanti**: `core-unit` 2664 · `component-unit` 2040 · `risk-levels-unit` 240 · `risk-levels-component` 19 ·
+> `risk-frame-component` 13 · `risk-controller-unit` 54 · E2E `risk-lab` 18 e `risk` 13. Undici mutanti: dieci presi
+> subito; il sopravvissuto (la sezione che aggira la regola del nome) prende un test di `RiskLevelSection` nuovo, che
+> fissa il nome che un livello dà a una misura fallita.
+>
+> **Per dopo** (dal rapporto di test-author): la sezione replay del laboratorio non mostra i codici d'errore che la L4
+> della Dashboard mostra (`resultErrorCodes`) — un cambiamento di comportamento, quindi nel blocco replay, mio; la
+> sezione dei livelli di confronto non legge `loadDiscarded` — per F nel giro UI; i mock dell'E2E del laboratorio hanno
+> solo `message`, senza `message_i18n_key` (il backend ora le manda) — per F.
