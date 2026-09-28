@@ -46,7 +46,7 @@ def front_asset_unit(verbose: bool = False, ui: bool = False, headed: bool = Fal
 
 
 def front_growth_chart_memo(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
-    """Run the GrowthChart aggregation-memo regression (Vitest + jsdom).
+    """Run the GrowthChart component tests (Vitest + jsdom).
 
     Mounts the real dashboard GrowthChart — only the ECharts module is swapped for a
     recorder, since jsdom has no canvas and pixels are not the subject — and replays the
@@ -55,15 +55,19 @@ def front_growth_chart_memo(verbose: bool = False, ui: bool = False, headed: boo
     answered from the entry cached without it (measured before the fix: 0 real candles of
     93). Parameterised over the whole class of late-arriving inputs, not just the one that
     was reported, so a seventh such prop is covered by adding a row rather than a file.
+
+    The same file also pins the privacy masking of axis and tooltip amounts (with its
+    privacy-off parity), the persisted mode/submode restore and its fallbacks, and the
+    candle caption.
     """
     cmd = ["npx", "vitest", "run", "src/lib/components/dashboard/GrowthChart.test.ts"]
-    print(f"\n{Colors.BLUE}Running: GrowthChart aggregation-memo regression{Colors.NC}")
+    print(f"\n{Colors.BLUE}Running: GrowthChart component tests{Colors.NC}")
     result = subprocess.run(cmd, cwd="frontend", capture_output=not verbose)
     if result.returncode == 0:
-        print_success("GrowthChart aggregation-memo regression - PASSED")
+        print_success("GrowthChart component tests - PASSED")
         return True
     else:
-        print_error(f"GrowthChart aggregation-memo regression - FAILED (exit code: {result.returncode})")
+        print_error(f"GrowthChart component tests - FAILED (exit code: {result.returncode})")
         if not verbose:
             print(result.stdout.decode() if result.stdout else "")
             print(result.stderr.decode() if result.stderr else "")
@@ -156,7 +160,7 @@ def populate_registry(registry: dict) -> None:
         help_text="Frontend Asset E2E & unit tests (list, detail, modal, classification)",
         description="""Frontend Asset Tests\n\nOptions: --ui, --headed, --debug""")
     add_test(cat, "asset-unit", front_asset_unit, test_names=False, name="Asset Unit Tests (Vitest)", desc="Unit tests: price store, derived-state, chart aggregation (incl. the pre-refactor golden corpus pinning the four groupPointsByBucket consumers), local signals, worker pool, asset identity engine", tests="vitest")
-    add_test(cat, "growth-chart-memo", front_growth_chart_memo, test_names=False, name="GrowthChart Memo Regression (Vitest + jsdom)", desc="Arrival-order regression for the per-resolution aggregation memo: the component is mounted with a lazily fetched input absent, the memo is populated in that state, the input then lands, and the rebuilt series must carry real values instead of the cached gap sentinels. Parameterised over the whole late-arriving class — pnlCandles, brokerPnlHistory, incomeHistory, costHistory, depositHistory, acquisitionFunding", tests="src/lib/components/dashboard/GrowthChart.test.ts")
+    add_test(cat, "growth-chart-memo", front_growth_chart_memo, test_names=False, name="GrowthChart Component Tests (Vitest + jsdom)", desc="Mounts the real dashboard GrowthChart with ECharts swapped for a recorder. Arrival-order regression for the per-resolution aggregation memo: the component is mounted with a lazily fetched input absent, the memo is populated in that state, the input then lands, and the rebuilt series must carry real values instead of the cached gap sentinels. Parameterised over the whole late-arriving class — pnlCandles, brokerPnlHistory, incomeHistory, costHistory, depositHistory, acquisitionFunding. Also: privacy masking of axis and tooltip amounts (and privacy-off parity), the persisted mode/submode restore with its fallbacks, and the candle caption", tests="src/lib/components/dashboard/GrowthChart.test.ts")
     add_test(cat, "asset-list", front_asset_list, name="Asset List Page", desc="List page navigation, cards/table, filters", tests="assets/asset-list.spec.ts")
     add_test(cat, "asset-detail", front_asset_detail, name="Asset Detail Page", desc="Detail chart, panels, sync, edit", tests="assets/asset-detail.spec.ts")
     add_test(cat, "asset-merge", front_asset_merge, name="Asset Merge", desc="Merge duplicate assets: dry-run preview counts, confirm, ISIN inheritance", tests="assets/asset-merge.spec.ts")

@@ -41,8 +41,12 @@
  * `buildChartUpdateSeries` is the contract those tests use instead (it documents itself as
  * "Fixed 6-slot order matches buildFullSeries's matching index reads exactly"). Broker
  * series ARE matched by name, because those names are values this test supplied as props.
+ *
+ * THE REST OF THE FILE. Three smaller subjects share the same recorder: privacy masking
+ * of the axis and tooltip formatters (S2a), persistence of the mode and the P&L submode
+ * (S5), and the synthetic-candle caption (S9). Each describe states its own reasons.
  */
-import {beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 
 /**
  * The ECharts stand-in: a recorder, not a renderer.
@@ -135,9 +139,47 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
 
 vi.mock('echarts', () => echartsModule);
 
-import {fireEvent, render, setupI18n, waitFor} from '$test/component';
-import type {PortfolioAcquisitionFundingSeries, PortfolioBrokerPnlHistory, PortfolioCostHistorySeries, PortfolioDepositHistorySeries, PortfolioHistoryPoint, PortfolioIncomeHistorySeries, PortfolioPnlCandleSeries} from '$lib/stores/portfolio/portfolioStore.svelte';
+import {get} from 'svelte/store';
+import {fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
+import {OVERFLOW_MARQUEE_SELECTOR} from '$lib/actions/scrollOnOverflow';
+import {_} from '$lib/i18n';
+import {isPrivacyEnabled, setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
+import type {PortfolioAcquisitionFundingSeries, PortfolioBrokerPnlHistory, PortfolioCostHistorySeries, PortfolioDepositHistorySeries, PortfolioHistoryPoint, PortfolioIncomeHistorySeries, PortfolioPnlCandlePoint, PortfolioPnlCandleSeries} from '$lib/stores/portfolio/portfolioStore.svelte';
+import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
 import GrowthChart from './GrowthChart.svelte';
+
+/**
+ * An in-memory `localStorage`, the same shape as ExposureTable.test.ts.
+ *
+ * Without it the persistence cases would prove nothing. Node 26 leaves the global unusable
+ * unless the process runs with `--localstorage-file`, and `getUserStorage` swallows that and
+ * returns the default. The component reads the keys at mount, not at import, so installing
+ * the stub here, after the imports, is early enough.
+ *
+ * `storageWrites` is the call log. Part of the contract is WHEN a key is written (on a click,
+ * never on mount), and the final content cannot show that.
+ */
+const storage = new Map<string, string>();
+const storageWrites: Array<[key: string, value: string]> = [];
+vi.stubGlobal('localStorage', {
+    getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+        storageWrites.push([key, value]);
+        storage.set(key, value);
+    },
+    removeItem: (key: string) => void storage.delete(key),
+});
+
+/**
+ * The two keys, written out as the literals that live in users' browsers.
+ *
+ * They are deliberately NOT rebuilt through `getUserStorageKey()`. Dashboard and Broker detail
+ * share each key, and real browsers already hold values under it, so a rename would silently
+ * drop every saved preference. A test that derived the key from the same code would follow the
+ * rename and stay green. The scope is `anon` because jsdom has no logged-in user.
+ */
+const MODE_KEY = 'lf_anon_dashboard-growth-mode';
+const SUBMODE_KEY = 'lf_anon_dashboard-growth-pnl-submode';
 
 // =============================================================================
 // Fixtures
@@ -224,6 +266,46 @@ const ACQUISITION_FUNDING: PortfolioAcquisitionFundingSeries = {
     points: DATES.map((date, index) => ({date, from_new_capital: eur(90 + index), from_reinvested: eur(45 + index)})),
 };
 
+/** HISTORY with every return value removed, which the % toggle reads as "no % data". A new
+ *  array is fine here, because no case that uses it depends on the memo's identity check. */
+const NO_PCT_HISTORY: PortfolioHistoryPoint[] = HISTORY.map((point) => ({...point, twrr: null, mwrr_cumulative: null, roi: null}));
+
+/** Passed explicitly as a prop: the currency code is a value this file supplies, not UI text. */
+const BASE_CURRENCY = 'EUR';
+
+/**
+ * Three days for the privacy cases.
+ *
+ * Every amount has two decimals, and none of them could appear inside a date header
+ * (`2026-01-01`), so the header can neither satisfy nor defeat a check that a formatted amount
+ * is ABSENT. Day 0 is a gain and day 1 a loss, so the P&L-total row carries a sign on both
+ * sides of zero. Day 0's NAV, 1234.56, needs both a grouping separator and two decimals. The
+ * figures agree with each other (NAV = cash + market value, cash = the two pools,
+ * P&L = NAV − baseline), so no amount looks like a special case.
+ */
+const MONEY_HISTORY: PortfolioHistoryPoint[] = [
+    {date: DATES[0], cash_value: eur(358.02), market_value: eur(876.54), nav_value: eur(1_234.56), capital_baseline: eur(1_000.25), book_asset_like: eur(876.54), cash_from_contributed_capital: eur(210.87), cash_from_generated_returns: eur(147.15), total_pnl: eur(234.31)},
+    {date: DATES[1], cash_value: eur(346.91), market_value: eur(1_998.76), nav_value: eur(2_345.67), capital_baseline: eur(3_702.91), book_asset_like: eur(1_998.76), cash_from_contributed_capital: eur(246.8), cash_from_generated_returns: eur(100.11), total_pnl: eur(-1_357.24)},
+    {date: DATES[2], cash_value: eur(412.33), market_value: eur(2_087.45), nav_value: eur(2_499.78), capital_baseline: eur(3_702.91), book_asset_like: eur(2_087.45), cash_from_contributed_capital: eur(246.8), cash_from_generated_returns: eur(165.53), total_pnl: eur(-1_203.13)},
+];
+
+/**
+ * Candles for the same three days. Day 1 opens and peaks above zero, then closes and bottoms
+ * below it.
+ *
+ * Day 0 opens at `-0.00`. That is a real serialisation: a Decimal that rounds a tiny loss to
+ * zero keeps its sign. It is written as a literal because `eur(-0)` would print `'0.00'`
+ * (`toFixed` drops the sign of a negative zero).
+ */
+const MONEY_CANDLES: PortfolioPnlCandleSeries = {
+    hypothetical: true,
+    points: [
+        {date: DATES[0], open: {code: 'EUR', amount: '-0.00'}, high: eur(250.75), low: eur(-10.5), close: eur(234.31)},
+        {date: DATES[1], open: eur(123.45), high: eur(234.56), low: eur(-98.76), close: eur(-12.34)},
+        {date: DATES[2], open: eur(-12.34), high: eur(60.02), low: eur(-20.48), close: eur(56.78)},
+    ],
+};
+
 // =============================================================================
 // Reading what GrowthChart decided to draw
 // =============================================================================
@@ -275,6 +357,139 @@ function realCandleQuads(series: SeriesUpdate | undefined): number {
 
 function brokerSeries(series: SeriesUpdate[]): SeriesUpdate[] {
     return series.filter((entry) => (BROKER_NAMES as readonly string[]).includes(entry.name));
+}
+
+// =============================================================================
+// Reading the full option: the formatters, and what they print
+// =============================================================================
+
+type AxisFormatter = (value: number) => string;
+type TooltipFormatter = (params: Array<{dataIndex: number}>) => string;
+
+/** The part of a full rebuild that the privacy, persistence and caption cases read. */
+interface FullOption {
+    yAxis: {axisLabel: {formatter: AxisFormatter}};
+    tooltip: {formatter: TooltipFormatter};
+    series: Array<{type?: string}>;
+}
+
+/**
+ * The full rebuilds recorded from call `since` onwards.
+ *
+ * `applyFullOption` issues the only `setOption` that carries both `yAxis` and `tooltip`. The
+ * partial data update sends `{name, data}` series, and the resize path sends `xAxis` alone.
+ * The full rebuild is also where the formatters live. Read them from the call log, never from
+ * `getOption()`: the fake merges shallowly, so the merged view cannot tell which call installed
+ * what.
+ */
+function fullOptionsSince(since: number): FullOption[] {
+    expect(chartInstances).toHaveLength(1);
+    return chartInstances[0].setOptionCalls
+        .slice(since)
+        .map((call) => call.option)
+        .filter((option) => option.yAxis != null && option.tooltip != null) as unknown as FullOption[];
+}
+
+function latestFullOption(): FullOption {
+    const options = fullOptionsSince(0);
+    if (options.length === 0) throw new Error('GrowthChart never handed a full option to ECharts');
+    return options[options.length - 1];
+}
+
+function seriesTypes(option: FullOption): Array<string | undefined> {
+    return option.series.map((entry) => entry.type);
+}
+
+/**
+ * What each view draws on a full rebuild, listed by series type. The shape tells the views
+ * apart without reading a translated series name. No fixture used with these carries a broker
+ * overlay, so the P&L line is its three fixed slots.
+ */
+const FRAME = {
+    abs: ['line', 'line', 'line', 'line', 'line'],
+    pnlLine: ['line', 'line', 'line'],
+    candles: ['candlestick'],
+    income: ['bar', 'bar', 'bar', 'bar', 'bar', 'bar'],
+};
+
+/** Waits until the latest full rebuild draws `frame`, and returns it. */
+async function waitForFrame(frame: string[]): Promise<FullOption> {
+    await waitFor(() => expect(seriesTypes(latestFullOption())).toEqual(frame), {timeout: 5_000});
+    return latestFullOption();
+}
+
+/** Waits for a full rebuild recorded after call `since`, and returns the latest one. */
+async function fullOptionAfter(since: number): Promise<FullOption> {
+    await waitFor(() => expect(fullOptionsSince(since).length).toBeGreaterThan(0), {timeout: 5_000});
+    const options = fullOptionsSince(since);
+    return options[options.length - 1];
+}
+
+/** The tooltip's number format, produced by the same call `fmtCurrency` makes. The expected
+ *  string therefore follows this machine's locale instead of hard-coding one. */
+const formatAmount = (value: number) => value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+interface TooltipRow {
+    label: string;
+    value: string;
+}
+
+/** Text as a user reads it. The component interpolates `$_()` output into HTML, so an
+ *  expected label goes through the same parser as the tooltip it is compared with. */
+function htmlText(html: string): string {
+    const host = document.createElement('div');
+    host.innerHTML = html;
+    return host.textContent ?? '';
+}
+
+/**
+ * The label/value rows of a tooltip.
+ *
+ * Every amount row GrowthChart emits has the shape `<div><span>label</span><b>value</b></div>`,
+ * whether it comes from `buildTooltipRow` or from the inline P&L rows. The header, the formula
+ * hint and the dividers do not have that shape. Parsing rows instead of matching substrings
+ * stops a check on one row from being satisfied by another.
+ */
+function tooltipRows(html: string): TooltipRow[] {
+    const host = document.createElement('div');
+    host.innerHTML = html;
+    return Array.from(host.children).flatMap((row) => {
+        const [label, value] = Array.from(row.children);
+        return row.children.length === 2 && label.tagName === 'SPAN' && value.tagName === 'B' ? [{label: label.textContent ?? '', value: value.textContent ?? ''}] : [];
+    });
+}
+
+/** The value of the one row labelled by `labelKey`, with the label resolved through i18n as the component resolves it. */
+function rowValue(rows: TooltipRow[], labelKey: string): string {
+    const label = htmlText(get(_)(labelKey));
+    const matching = rows.filter((row) => row.label === label);
+    expect(matching, `exactly one tooltip row labelled ${labelKey}`).toHaveLength(1);
+    return matching[0].value;
+}
+
+/** The Abs tooltip rows that print a bare amount, by label key. The P&L-total row also
+ *  carries a sign, so it is checked separately. */
+const ABS_PLAIN_ROWS = ['dashboard.navValue', 'dashboard.capitalBaselineTooltip', 'dashboard.assetsAtCostTooltip', 'dashboard.cashFromGeneratedReturns', 'dashboard.cashFromContributedCapital'];
+
+/** Every amount the Abs tooltip prints for a day, parsed as the component parses it. */
+const absAmounts = (point: PortfolioHistoryPoint) => [point.nav_value, point.capital_baseline, point.total_pnl, point.book_asset_like, point.cash_from_generated_returns, point.cash_from_contributed_capital].map((money) => Number(money.amount));
+
+/** Every amount the candle tooltip prints for a bucket. */
+const candleAmounts = (point: PortfolioPnlCandlePoint) => [point.open, point.close, point.high, point.low].map((money) => Number(money.amount));
+
+const MODE_TOGGLES = ['growth-toggle-eur', 'growth-toggle-pct', 'growth-toggle-pnl'];
+const SUBMODE_TOGGLES = ['growth-pnl-submode-line', 'growth-pnl-submode-candles', 'growth-pnl-submode-income'];
+
+/** Which buttons of a segmented toggle are pressed. Read from `aria-pressed` (the state a
+ *  screen reader announces), never from the active colour class. Returning a list instead of
+ *  a boolean makes "exactly this one" a single assertion. */
+function pressedAmong(testIds: string[]): string[] {
+    return testIds.filter((id) => screen.getByTestId(id).getAttribute('aria-pressed') === 'true');
+}
+
+/** The writes made to the two persisted keys, in order. */
+function persistedWrites(): Array<[string, string]> {
+    return storageWrites.filter(([key]) => key === MODE_KEY || key === SUBMODE_KEY);
 }
 
 // =============================================================================
@@ -365,6 +580,10 @@ beforeAll(async () => {
 
 beforeEach(() => {
     chartInstances.length = 0;
+    // Every mount starts from the defaults by construction. The memo cases click the toggles
+    // too, and every click is now a real write.
+    storage.clear();
+    storageWrites.length = 0;
 });
 
 describe('GrowthChart aggregation memo', () => {
@@ -403,5 +622,310 @@ describe('GrowthChart aggregation memo', () => {
         // with no data must ask for it exactly once, which is also what makes step 2 above
         // a faithful reproduction of the user's path into the bug.
         if (prop === 'pnlCandles') expect(onRequestPnlCandles).toHaveBeenCalled();
+    });
+});
+
+// =============================================================================
+// S2a — privacy masking of the axis and tooltip formatters
+// =============================================================================
+
+/**
+ * The formatters are closures inside the option builder. The only way to reach them is
+ * through the option GrowthChart hands to ECharts, and that is also exactly what ECharts calls
+ * when it paints an axis label or a tooltip.
+ *
+ * They read the privacy flag when CALLED, not when built. So "this formatter masks" does not
+ * show that the chart redraws on a toggle. The toggle case checks instead that a NEW full
+ * option arrives, because ECharts only re-runs a formatter when it is handed an option.
+ */
+describe('GrowthChart privacy masking (S2a)', () => {
+    // The flag is module state shared by every case in the file. Whoever switches it on
+    // switches it off, whatever the outcome of the case.
+    afterEach(() => setPrivacyEnabled(false));
+
+    const MASKED_AMOUNT = `${BASE_CURRENCY} ${PRIVACY_PLACEHOLDER}`;
+    const MASKED_NEGATIVE = `${BASE_CURRENCY} -${PRIVACY_PLACEHOLDER}`;
+
+    /** What every money axis label must print with privacy on. */
+    function expectMaskedMoneyAxis(format: AxisFormatter) {
+        expect(format(20_000)).toBe(PRIVACY_PLACEHOLDER);
+        expect(format(-5_000)).toBe(`-${PRIVACY_PLACEHOLDER}`);
+        expect(format(0)).toBe(PRIVACY_PLACEHOLDER);
+        // The property itself, whatever the placeholder looks like: no digit and no k/M
+        // suffix, because `•••k` would still reveal the order of magnitude (D8).
+        for (const value of [20_000, -5_000, 0]) expect(format(value)).not.toMatch(/[0-9kM]/);
+    }
+
+    it('masks the money axis labels in Abs and P&L line: no digit, no k/M suffix, the minus kept outside', async () => {
+        // WHY: with privacy on, the axis ticks are the one place a masked chart would still
+        // print the scale of the portfolio (20k, 1.3M). Catches `maskable` being dropped
+        // from the compact label, or the suffix moving outside it (`maskable(n) + 'k'`).
+        setPrivacyEnabled(true);
+        const {getByTestId} = render(GrowthChart, {props: {history: HISTORY}});
+
+        const absOption = await waitForFrame(FRAME.abs);
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-eur']);
+        expectMaskedMoneyAxis(absOption.yAxis.axisLabel.formatter);
+
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        const pnlOption = await waitForFrame(FRAME.pnlLine);
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-pnl']);
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-line']);
+        expectMaskedMoneyAxis(pnlOption.yAxis.axisLabel.formatter);
+    });
+
+    it('leaves the % axis labels readable: a return is not an amount', async () => {
+        // WHY: over-masking is also a defect. A masked return axis would make the % view
+        // useless under privacy without hiding anything personal. Catches `maskable`
+        // wrapped around the % branch of the axis formatter.
+        setPrivacyEnabled(true);
+        const {getByTestId} = render(GrowthChart, {props: {history: HISTORY}});
+
+        // Barrier: privacy really is on in this render, because the money axis is masked.
+        const absOption = await waitForFrame(FRAME.abs);
+        expect(absOption.yAxis.axisLabel.formatter(20_000)).toBe(PRIVACY_PLACEHOLDER);
+
+        // Precondition: HISTORY carries return series, so the % view can be reached.
+        expect(getByTestId('growth-toggle-pct')).toBeEnabled();
+        const before = setOptionCount();
+        await fireEvent.click(getByTestId('growth-toggle-pct'));
+        const pctOption = await fullOptionAfter(before);
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-pct']);
+
+        // `toFixed`, not `toLocaleString`: the % label does not depend on the locale, so a
+        // literal is the honest expectation.
+        expect(pctOption.yAxis.axisLabel.formatter(12.3)).toBe('12.3%');
+    });
+
+    it('masks every tooltip amount in the Abs, P&L-total and candle rows, keeping the currency and the sign readable', async () => {
+        // WHY: the tooltip is where the exact figures are shown. Catches `maskable` dropped
+        // from `fmtCurrency`, and any row that formats an amount by another route. The
+        // P&L-total row builds its own markup around `fmtCurrency`, which is why it is
+        // checked on its own. Decision D8 keeps the sign outside the mask, so the sign is
+        // asserted here, not merely tolerated.
+        setPrivacyEnabled(true);
+        const {getByTestId} = render(GrowthChart, {props: {history: MONEY_HISTORY, pnlCandles: MONEY_CANDLES, baseCurrency: BASE_CURRENCY}});
+
+        const absOption = await waitForFrame(FRAME.abs);
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-eur']);
+        // Day 0 is a gain and day 1 a loss. The P&L-total row shows `+` on the first and the
+        // typographic minus (U+2212) on the second.
+        for (const [index, sign] of [
+            [0, '+'],
+            [1, '\u2212'],
+        ] as const) {
+            const html = absOption.tooltip.formatter([{dataIndex: index}]);
+            const rows = tooltipRows(html);
+            expect(rowValue(rows, 'dashboard.totalPnl')).toBe(`${sign}${MASKED_AMOUNT}`);
+            for (const key of ABS_PLAIN_ROWS) expect(rowValue(rows, key), key).toBe(MASKED_AMOUNT);
+            // The check cannot be "no digit at all": the date header legitimately has digits.
+            for (const amount of absAmounts(MONEY_HISTORY[index])) expect(html).not.toContain(formatAmount(Math.abs(amount)));
+        }
+
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        await fireEvent.click(getByTestId('growth-pnl-submode-candles'));
+        const candleOption = await waitForFrame(FRAME.candles);
+        const html = candleOption.tooltip.formatter([{dataIndex: 1}]);
+        const rows = tooltipRows(html);
+        expect(rowValue(rows, 'dataEditor.col.open')).toBe(MASKED_AMOUNT);
+        expect(rowValue(rows, 'dataEditor.col.high')).toBe(MASKED_AMOUNT);
+        expect(rowValue(rows, 'dataEditor.col.close')).toBe(MASKED_NEGATIVE);
+        expect(rowValue(rows, 'dataEditor.col.low')).toBe(MASKED_NEGATIVE);
+        for (const amount of candleAmounts(MONEY_CANDLES.points[1])) expect(html).not.toContain(formatAmount(Math.abs(amount)));
+    });
+
+    it('with privacy off, prints the amounts as before: compact axis, locale tooltip, no minus on a negative zero', async () => {
+        // WHY: masking must be a pure overlay. With the flag off, not one character of
+        // today's output may change. Catches a masking change that leaks into the OFF path:
+        // a different sign test (`Object.is(v, -0)`, `1 / v < 0`) that prints `-0`, a changed
+        // compaction step, or changed `toLocaleString` options.
+        expect(isPrivacyEnabled()).toBe(false);
+        // Precondition: the fixture really carries a negative zero, as the component parses it.
+        expect(Object.is(Number(MONEY_CANDLES.points[0].open.amount), -0)).toBe(true);
+
+        const {getByTestId} = render(GrowthChart, {props: {history: MONEY_HISTORY, pnlCandles: MONEY_CANDLES, baseCurrency: BASE_CURRENCY}});
+        const absOption = await waitForFrame(FRAME.abs);
+
+        // The axis labels use `toFixed`, not `toLocaleString`, so literals are the honest
+        // expectation here.
+        const axis = absOption.yAxis.axisLabel.formatter;
+        expect([-5_000, 1_300_000, 0, -0].map((value) => axis(value))).toEqual(['-5k', '1.3M', '0', '0']);
+
+        const absRows = tooltipRows(absOption.tooltip.formatter([{dataIndex: 0}]));
+        expect(rowValue(absRows, 'dashboard.navValue')).toBe(`${BASE_CURRENCY} ${formatAmount(1_234.56)}`);
+
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        await fireEvent.click(getByTestId('growth-pnl-submode-candles'));
+        const candleOption = await waitForFrame(FRAME.candles);
+        const candleRows = tooltipRows(candleOption.tooltip.formatter([{dataIndex: 0}]));
+        expect(rowValue(candleRows, 'dataEditor.col.open')).toBe(`${BASE_CURRENCY} ${formatAmount(0)}`);
+    });
+
+    it('redraws with a new full option when privacy is toggled, in both directions', async () => {
+        // WHY: ECharts runs a formatter only while painting, and paints only when it is
+        // handed an option. A formatter that reads the flag live is not enough on its own:
+        // the labels on screen would stay as they were. Catches the render effect losing its
+        // dependency on the flag, or the full-rebuild condition losing its `masked` term. In
+        // that case the redraw would be a partial update, which carries no formatter at all.
+        render(GrowthChart, {props: {history: HISTORY}});
+        const clear = await waitForFrame(FRAME.abs);
+        expect(clear.yAxis.axisLabel.formatter(20_000)).toBe('20k');
+
+        const beforeOn = setOptionCount();
+        setPrivacyEnabled(true);
+        const masked = await fullOptionAfter(beforeOn);
+        expect(masked.yAxis.axisLabel.formatter(20_000)).toBe(PRIVACY_PLACEHOLDER);
+
+        const beforeOff = setOptionCount();
+        setPrivacyEnabled(false);
+        const unmasked = await fullOptionAfter(beforeOff);
+        expect(unmasked.yAxis.axisLabel.formatter(20_000)).toBe('20k');
+    });
+});
+
+// =============================================================================
+// S5 — persistence of the mode and the P&L submode
+// =============================================================================
+
+/**
+ * The Abs/%/P&L mode and the P&L submode survive a reload through two per-user localStorage
+ * keys. They are written when the user clicks and read once, at mount. Every case mounts from
+ * an empty stub (cleared in the file-level `beforeEach`), so the defaults are the defaults by
+ * construction, not by the order the cases happen to run in.
+ */
+describe('GrowthChart mode persistence (S5)', () => {
+    it('draws the restored P&L Income submode on the very first frame', async () => {
+        // WHY: a restore that lands after the first render shows the user a line chart that
+        // then jumps to bars. Catches a submode that starts at its default and is restored
+        // only after the first frame, or not at all.
+        storage.set(MODE_KEY, 'pnl');
+        storage.set(SUBMODE_KEY, 'income');
+        render(GrowthChart, {props: {history: HISTORY}});
+
+        await waitFor(() => expect(setOptionCount()).toBeGreaterThan(0), {timeout: 5_000});
+        const [first] = chartInstances[0].setOptionCalls;
+        // The first call is a full rebuild: it is the frame the user sees first.
+        expect(fullOptionsSince(0)[0]).toBe(first.option);
+        expect(seriesTypes(first.option as unknown as FullOption)).toEqual(FRAME.income);
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-pnl']);
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-income']);
+    });
+
+    it('falls back to Abs and to the line submode when the stored values are not recognised', async () => {
+        // WHY: the keys live in users' browsers and outlive the code that wrote them. A value
+        // from an older build, or a hand-edited one, must land on the defaults and not on a
+        // view nothing can draw. Catches the loss of the whitelist in readStoredMode or
+        // readStoredSubmode.
+        storage.set(MODE_KEY, 'garbage');
+        storage.set(SUBMODE_KEY, 'garbage');
+        const {getByTestId} = render(GrowthChart, {props: {history: HISTORY}});
+
+        // The drawn frame and the pressed button must agree: both say Abs.
+        await waitForFrame(FRAME.abs);
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-eur']);
+
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        await waitForFrame(FRAME.pnlLine);
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-line']);
+    });
+
+    it('shows Abs for a restored % view whose history has no % data, without overwriting the stored choice', async () => {
+        // WHY: the % button is disabled without % data, so a restored % view would stay
+        // selected on a disabled button, over a chart with nothing to draw. But the choice
+        // belongs to the user, and it must come back when a history with returns does.
+        // Catches the fallback being dropped, or being done through selectMode, which
+        // persists.
+        storage.set(MODE_KEY, 'pct');
+        const {getByTestId, rerender} = render(GrowthChart, {props: {history: [], loading: true}});
+        // Barrier: the stored % really was restored. Otherwise "Abs after the load" would be
+        // the default, not a fallback.
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-pct']);
+
+        // The Dashboard's own shape: `loading` clears together with the history arriving.
+        await rerender({history: NO_PCT_HISTORY, loading: false});
+        await waitForFrame(FRAME.abs);
+        // Precondition: the component itself sees no % data in this history.
+        expect(getByTestId('growth-toggle-pct')).toBeDisabled();
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-eur']);
+        expect(storage.get(MODE_KEY)).toBe('pct');
+        expect(persistedWrites()).toEqual([]);
+    });
+
+    it('keeps a mode the user clicked while loading, even when the restored % view had no data', async () => {
+        // WHY: the % fallback runs once, after the first completed load. A user who has
+        // already chosen by then must not be overruled by it. Catches selectMode no longer
+        // disarming the pending check.
+        storage.set(MODE_KEY, 'pct');
+        const {getByTestId, rerender} = render(GrowthChart, {props: {history: [], loading: true}});
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-pct']);
+
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-pnl']);
+
+        await rerender({history: NO_PCT_HISTORY, loading: false});
+        await fullOptionAfter(0);
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-pnl']);
+        expect(seriesTypes(latestFullOption())).toEqual(FRAME.pnlLine);
+    });
+
+    it('writes the per-user keys on click only, never on mount', async () => {
+        // WHY: the stored value must be the user's last explicit choice. A mount that writes
+        // would turn a default, or the display-only % fallback, into a saved preference.
+        // Catches a renamed key (which silently drops every saved preference), persistence
+        // moved into an effect (which writes on mount), or a click that no longer persists.
+        storage.set(SUBMODE_KEY, 'income');
+        const {getByTestId} = render(GrowthChart, {props: {history: HISTORY}});
+
+        await waitForFrame(FRAME.abs);
+        expect(persistedWrites()).toEqual([]);
+
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        // The restored submode is live, so the empty log above means "restored and not
+        // rewritten", not "never read".
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-income']);
+        expect(storage.get(MODE_KEY)).toBe('pnl');
+
+        await fireEvent.click(getByTestId('growth-pnl-submode-candles'));
+        expect(storage.get(SUBMODE_KEY)).toBe('candles');
+        expect(persistedWrites()).toEqual([
+            [MODE_KEY, 'pnl'],
+            [SUBMODE_KEY, 'candles'],
+        ]);
+    });
+});
+
+// =============================================================================
+// S9 — the synthetic-candle caption
+// =============================================================================
+
+describe('GrowthChart synthetic-candle caption (S9)', () => {
+    const CAPTION = 'growth-pnl-candles-hypothetical-label';
+
+    it('shows the synthetic-candle caption in the candles submode only, as a marquee line carrying the resolved disclosure', async () => {
+        // WHY: the candles are synthetic (cross-asset highs and lows are hypothetical), and
+        // this caption is their only disclosure, because the tooltip carries none. It must
+        // appear with the candles and nowhere else. It must keep the marker the marquee
+        // looks for, so that on a narrow screen it scrolls instead of being cut off. Catches
+        // the caption dropped, shown in the wrong submode, or losing the marquee marker.
+        const expected = get(_)('dashboard.pnlCandlesHypotheticalShort');
+        // An unresolved key comes back as the key itself, and two copies of it would match.
+        expect(expected).not.toBe('dashboard.pnlCandlesHypotheticalShort');
+
+        const {getByTestId, queryAllByTestId} = render(GrowthChart, {props: {history: HISTORY, pnlCandles: PNL_CANDLES}});
+        await waitForFrame(FRAME.abs);
+
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-line']);
+        expect(queryAllByTestId(CAPTION)).toHaveLength(0);
+
+        await fireEvent.click(getByTestId('growth-pnl-submode-candles'));
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-candles']);
+        const caption = getByTestId(CAPTION);
+        expect(caption.matches(OVERFLOW_MARQUEE_SELECTOR)).toBe(true);
+        expect(caption.textContent).toBe(expected);
+
+        await fireEvent.click(getByTestId('growth-pnl-submode-income'));
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-income']);
+        expect(queryAllByTestId(CAPTION)).toHaveLength(0);
     });
 });

@@ -199,7 +199,7 @@ const REGISTRY: Site[] = [
         file: 'lib/components/dashboard/GrowthChart.svelte',
         snippet: "`<div style=\"display:flex;justify-content:space-between;gap:16px;color:${pnlColor}\"><span><b>${$_('dashboard.totalPnl')}</b></span><b>${totalPnlVal === 0 ? '' : totalPnlVal > 0 ? '+' : '−'}${fmtCurrency(Math.abs(totalPnlVal))}</b></div>`",
         status: 'masked',
-        why: 'The P&L-total row of the Abs tooltip, a consumer of fmtCurrency that §1.8 did not list. fmtCurrency is masked at its definition in the same function (the digits only, D8); the gate cannot follow a call into a local closure, so this row still matches through its totalPnlVal/pnlColor tokens. Unmasking the definition would bring the definition line back as an unregistered hit: the boundary is guarded by this gate, as for LotComparisonChart.formatAxisCurrency.',
+        why: 'The P&L-total row of the Abs tooltip, a consumer of fmtCurrency that §1.8 did not list. fmtCurrency is masked at its definition in the same function (the digits only, D8); the gate cannot follow a call into a local closure, so this row still matches through its totalPnlVal/pnlColor tokens. Unmasking the definition would bring the definition line back as an unregistered hit: the boundary is guarded by this gate, as for LotComparisonChart.formatAxisCurrency. The masking of this row is pinned behaviourally by GrowthChart.test.ts «masks every tooltip amount in the Abs, P&L-total and candle rows, keeping the currency and the sign readable».',
     },
     {
         file: 'lib/components/transactions/events/EventCreateMiniModal.svelte',
