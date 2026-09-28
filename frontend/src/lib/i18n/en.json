@@ -3089,7 +3089,7 @@
         "l1": {
           "title": "How much did each of these hurt?",
           "description": "The same scale of harm, asked of every selected asset. Percentages only: a set of assets has no weights, so there is no amount to put beside them.",
-          "lastedDays": "lasted {{days}} d",
+          "lastedDays": "lasted {days} d",
           "columns": {
             "badDay": "Bad day",
             "badMonth": "Bad month",
@@ -3103,7 +3103,8 @@
           "description": "Risk against reward, one point per asset. No line is drawn through them: a selection has no whole, so there is nothing to be above or below.",
           "expectedReturn": "Expected return",
           "correlation": "Correlation",
-          "noBenchmark": "Choose a benchmark on the Dashboard to add beta and correlation. A benchmark that is itself in the selection cannot be used as its own yardstick."
+          "noBenchmark": "Choose a benchmark on the Dashboard to add beta and correlation. A benchmark that is itself in the selection cannot be used as its own yardstick.",
+          "scatterNote": "The dots show the mean-variance expected return: on a very volatile asset the return actually lived through is lower, because volatility erodes compounding."
         }
       }
     },
@@ -4030,7 +4031,7 @@
         },
         "transactionsNav": {
           "title": "Start with your transactions",
-          "description": "Transactions contains manual entries and portfolio history. Import has its own contextual guide."
+          "description": "Transactions contains manual entries and portfolio history."
         },
         "brokersAdd": {
           "title": "Add a broker",
@@ -4058,7 +4059,7 @@
         },
         "brokersNav": {
           "title": "Brokers",
-          "description": "Open Brokers to configure your accounts. A short guide starts when you choose Add Broker."
+          "description": "Open Brokers to configure your accounts."
         },
         "fxNav": {
           "title": "FX rates",
@@ -4120,10 +4121,10 @@
         "fx": "FX",
         "asset": "Assets"
       },
-      "armedToast": "{flow} is ready in this tab. Open its feature to start.",
+      "armedToast": "{flow} is ready in this browser. Open its feature to start.",
       "cancelArmed": "Cancel activation",
       "groupProgress": "{completed}/{total} guides completed",
-      "armedAtNextTrigger": "Ready in this tab: {flow} starts at its next trigger. Closing the tab cancels it.",
+      "armedAtNextTrigger": "Ready in this browser: {flow} starts at its next trigger.",
       "replayNextTrigger": "Replay at next trigger"
     },
     "importGuide": {
@@ -4222,11 +4223,11 @@
         },
         "add": {
           "title": "Add one transaction",
-          "description": "Add opens the guided form for a single operation. Its dedicated guide starts on first use."
+          "description": "Add opens the guided form for a single operation."
         },
         "import": {
           "title": "Import multiple operations",
-          "description": "Import reads broker reports and guides their review through to the bulk editor."
+          "description": "Import reads broker reports and walks you through their review, up to the bulk editor."
         },
         "columns": {
           "title": "Filter and organize",
@@ -4290,7 +4291,7 @@
         },
         "add": {
           "title": "Add a broker",
-          "description": "Create the account that will receive transactions and imports. A dedicated guide follows the form."
+          "description": "Create the account that will receive transactions and imports."
         }
       }
     },
@@ -4334,7 +4335,7 @@
         },
         "add": {
           "title": "Add an FX pair",
-          "description": "Define a new conversion direction. A dedicated guide explains currencies and providers."
+          "description": "Define a new conversion direction."
         }
       }
     },
@@ -4374,7 +4375,7 @@
         },
         "add": {
           "title": "Add an asset",
-          "description": "Search or define a new instrument. A dedicated guide explains identity, currency, and provider."
+          "description": "Search or define a new instrument."
         }
       }
     },
@@ -4401,6 +4402,18 @@
           "description": "Open Risk to examine historical measures, stress scenarios, simulations, and portfolio context."
         }
       }
+    }
+  },
+  "header": {
+    "privacy": {
+      "hide": "Hide amounts",
+      "show": "Show amounts"
+    },
+    "theme": {
+      "switchToDark": "Switch to dark mode",
+      "switchToLight": "Switch to light mode",
+      "dark": "Dark mode",
+      "light": "Light mode"
     }
   }
 }

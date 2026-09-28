@@ -22,6 +22,7 @@ import uuid
 from contextlib import suppress
 from datetime import date
 from decimal import Decimal
+from typing import Optional
 
 import pytest
 
@@ -50,9 +51,10 @@ from backend.app.db import (
     Transaction,
     TransactionType,
 )
-from backend.app.db.models import FxRate, OnboardingFlow, OnboardingStatus, User, UserOnboardingProgress
+from backend.app.db.models import FxRate, OnboardingFlow, OnboardingStatus, User, UserOnboardingProgress, UserOnboardingStepProgress
 from backend.app.db.session import get_async_engine, get_sync_engine
-from backend.app.services.onboarding_service import ONBOARDING_FLOW_VERSIONS, ensure_onboarding_progress
+from backend.app.services.onboarding_service import ONBOARDING_FLOW_STEPS, ONBOARDING_FLOW_VERSIONS, ensure_onboarding_progress
+from backend.app.utils.datetime_utils import utcnow
 
 # ============================================================================
 # FIXTURES
@@ -366,6 +368,17 @@ def _make_onboarding_test_user(session, marker: str) -> int:
     return user.id
 
 
+def _find_step_row(session, user_id: int, flow: OnboardingFlow, step_id: str) -> Optional[UserOnboardingStepProgress]:
+    """Return one user's progress row for one step, by its natural key (UNIQUE user_id, flow, step_id)."""
+    return session.exec(
+        select(UserOnboardingStepProgress).where(
+            UserOnboardingStepProgress.user_id == user_id,
+            UserOnboardingStepProgress.flow == flow.value,
+            UserOnboardingStepProgress.step_id == step_id,
+        )
+    ).first()
+
+
 def test_user_deletion_cascades_onboarding_progress():
     """Verify UserOnboardingProgress rows are CASCADE deleted when their User is deleted.
 
@@ -448,15 +461,23 @@ def test_unique_constraint_user_onboarding_progress_user_flow():
 def test_canonical_test_users_onboarding_is_grandfathered_completed_and_idempotent():
     """Canonical E2E users seeded by populate_mock_data must be terminal, not pending.
 
-    Alembic migration 003 grandfathers *existing* users into every current onboarding
-    flow as completed — but on a fresh test DB the migration runs before
+    Alembic revision ``004_release_1_2_0_schema`` grandfathers *existing* users out of
+    onboarding — welcome completed; every guide, and every step of the step-managed
+    guides, skipped — but on a fresh test DB the migration runs before
     populate_mock_data creates the canonical E2E users (this module's own
     ``populate_test_data`` fixture just did exactly that), so the migration has
     nobody to grandfather yet. ``populate_mock_data._grandfather_onboarding_for_test_users``
     closes that gap for the canonical usernames only. This pins the effect — every
-    current flow completed at that flow's current version — and that reapplying it
-    is a no-op: a second pass must never reset an already-terminal row back through
+    current flow, and every registered step of every step-managed flow, completed at
+    that flow's current version — and that reapplying it is a no-op on flow and step
+    rows alike: a second pass must never reset an already-terminal row back through
     pending.
+
+    Step rows are pinned on their own because the step-managed guides (Import, Bulk)
+    are driven by them, not by the flow row. Without seeded steps the runtime ensure
+    inserts them pending, and the Import guide starts for a canonical user whose flow
+    row says completed: its coachmark then intercepts clicks in import specs that are
+    not about onboarding.
     """
     from backend.test_scripts.test_db.populate_mock_data import (  # noqa: PLC0415 — exercises the seeding helper itself, not app code
         _grandfather_onboarding_for_test_users,
@@ -476,8 +497,21 @@ def test_canonical_test_users_onboarding_is_grandfathered_completed_and_idempote
             assert row.version == ONBOARDING_FLOW_VERSIONS[flow]
             assert row.completed_at is not None
 
+        steps_before = session.exec(select(UserOnboardingStepProgress).where(UserOnboardingStepProgress.user_id == canonical.id)).all()
+        by_step = {(OnboardingFlow(step.flow), step.step_id): step for step in steps_before}
+
+        assert ONBOARDING_FLOW_STEPS, "Setup: no step-managed flow is registered, so the step checks below would pass vacuously"
+        for flow, step_ids in ONBOARDING_FLOW_STEPS.items():
+            for step_id in step_ids:
+                step = by_step.get((flow, step_id))
+                assert step is not None, f"Canonical user must have a '{flow.value}' step row for '{step_id}'"
+                assert step.status == OnboardingStatus.COMPLETED, f"Canonical user's '{flow.value}' step '{step_id}' must be completed, not {step.status}"
+                assert step.version == ONBOARDING_FLOW_VERSIONS[flow]
+                assert step.completed_at is not None
+
         # Snapshot every field a second pass must leave untouched.
         snapshot = {row.id: (row.status, row.version, row.completed_at, row.updated_at) for row in rows_before}
+        step_snapshot = {step.id: (step.status, step.version, step.completed_at, step.updated_at) for step in steps_before}
 
         _grandfather_onboarding_for_test_users(session, [canonical])
 
@@ -490,6 +524,88 @@ def test_canonical_test_users_onboarding_is_grandfathered_completed_and_idempote
                 row.completed_at,
                 row.updated_at,
             ), "Idempotent re-run must not modify an already-terminal row"
+
+        steps_after = session.exec(select(UserOnboardingStepProgress).where(UserOnboardingStepProgress.user_id == canonical.id)).all()
+        assert {step.id for step in steps_after} == set(step_snapshot), "Idempotent re-run must not add or remove step rows"
+        for step in steps_after:
+            assert step_snapshot[step.id] == (
+                step.status,
+                step.version,
+                step.completed_at,
+                step.updated_at,
+            ), "Idempotent re-run must not modify an already-terminal step row"
+
+
+@pytest.mark.parametrize("stale_status", [OnboardingStatus.PENDING, OnboardingStatus.SKIPPED], ids=["pending", "skipped"])
+def test_canonical_test_user_stale_onboarding_step_is_repaired_by_one_grandfather_pass(stale_status):
+    """One grandfather pass restores a canonical user's non-terminal step row.
+
+    ``_grandfather_onboarding_for_test_users`` promises to repair a row "left
+    pending/skipped", so both shapes are exercised. *Pending*, with no timestamps, is
+    what the runtime ensure inserts for a step nobody seeded: the state that started
+    the Import guide over ``tx-import-resolution`` before step rows were seeded.
+    *Skipped*, with ``skipped_at`` set and no ``completed_at``, is what a skip
+    transition writes, and what revision ``004_release_1_2_0_schema`` writes for every
+    step of a user who already exists when it runs. Either way one call must leave the
+    row completed at the flow's current version, with ``completed_at`` set and
+    ``skipped_at`` cleared. A stale *version* cannot be built today: every flow is at
+    version 1 and the CHECK constraint requires ``version >= 1``.
+
+    The row belongs to the shared canonical user, so the test owns the mutation. The
+    pass under test is what restores it, asserted from a fresh session so that a repair
+    held only in the caller's session does not count. The ``finally`` then writes the
+    original row back, timestamps included, leaving the user exactly as populate seeded
+    it even when an assertion fails midway.
+    """
+    from backend.test_scripts.test_db.populate_mock_data import (  # noqa: PLC0415 — exercises the seeding helper itself, not app code
+        _grandfather_onboarding_for_test_users,
+    )
+
+    assert ONBOARDING_FLOW_STEPS, "Setup: no step-managed flow is registered, so there is no step row to repair"
+    # Every registered step goes through the same repair branch: take the first one declared.
+    flow, step_ids = next(iter(ONBOARDING_FLOW_STEPS.items()))
+    step_id = step_ids[0]
+
+    with Session(get_sync_engine()) as session:
+        canonical = session.exec(select(User).where(User.username == "e2e_test_user")).first()
+        assert canonical is not None, "Setup: populate_mock_data must have created e2e_test_user"
+        canonical_id = canonical.id
+        seeded = _find_step_row(session, canonical_id, flow, step_id)
+        assert seeded is not None, f"Setup: populate_mock_data must have seeded e2e_test_user's '{flow.value}' step '{step_id}'"
+        original = (seeded.status, seeded.version, seeded.completed_at, seeded.updated_at, seeded.skipped_at)
+
+    try:
+        # Leave the row as its real origin would: pending carries no timestamp,
+        # skipped carries skipped_at and no completed_at.
+        with Session(get_sync_engine()) as session:
+            stale = _find_step_row(session, canonical_id, flow, step_id)
+            stale.status = stale_status
+            stale.completed_at = None
+            stale.skipped_at = utcnow() if stale_status == OnboardingStatus.SKIPPED else None
+            session.add(stale)
+            session.commit()
+
+        with Session(get_sync_engine()) as session:
+            stale = _find_step_row(session, canonical_id, flow, step_id)
+            assert stale is not None and stale.status == stale_status, "Setup: the stale step row must be committed before the pass under test runs"
+
+            canonical = session.get(User, canonical_id)
+            _grandfather_onboarding_for_test_users(session, [canonical])
+
+        with Session(get_sync_engine()) as session:
+            repaired = _find_step_row(session, canonical_id, flow, step_id)
+            assert repaired is not None, f"The pass must keep e2e_test_user's '{flow.value}' step '{step_id}' row"
+            assert repaired.status == OnboardingStatus.COMPLETED, f"One pass must restore '{flow.value}' step '{step_id}' to completed, not {repaired.status}"
+            assert repaired.version == ONBOARDING_FLOW_VERSIONS[flow]
+            assert repaired.completed_at is not None
+            assert repaired.skipped_at is None
+    finally:
+        with Session(get_sync_engine()) as session:
+            row = _find_step_row(session, canonical_id, flow, step_id)
+            if row is not None:
+                row.status, row.version, row.completed_at, row.updated_at, row.skipped_at = original
+                session.add(row)
+                session.commit()
 
 
 @pytest.mark.asyncio
@@ -517,6 +633,16 @@ async def test_new_user_onboarding_stays_pending_until_runtime_ensure_runs():
         for flow, row in rows.items():
             assert row.status == OnboardingStatus.PENDING, f"A new user's '{flow.value}' flow must start pending, not {row.status}"
             assert row.completed_at is None
+
+        # --- Step rows: the same boundary for step-managed flows ---------------------
+        # ensure() inserts every registered step pending and never rewrites an existing
+        # row, so an all-pending map also proves nothing seeded this user's steps as
+        # terminal, the way populate seeds a canonical user's.
+        with Session(get_sync_engine()) as session:
+            steps = session.exec(select(UserOnboardingStepProgress).where(UserOnboardingStepProgress.user_id == user_id)).all()
+        assert {(OnboardingFlow(step.flow), step.step_id): (step.status, step.completed_at) for step in steps} == {
+            (flow, step_id): (OnboardingStatus.PENDING, None) for flow, step_ids in ONBOARDING_FLOW_STEPS.items() for step_id in step_ids
+        }, "A new user's registered steps must all start pending after ensure, never pre-seeded terminal"
     finally:
         with Session(get_sync_engine()) as session:
             user = session.get(User, user_id)
