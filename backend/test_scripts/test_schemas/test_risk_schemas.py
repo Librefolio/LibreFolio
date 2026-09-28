@@ -1,6 +1,7 @@
 """Strict schema tests for canonical risk series and metadata."""
 
 import json
+import re
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -1301,6 +1302,52 @@ def _i18n_catalogue(language: str) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+#: The controller that emits the frontend-owned on-demand error code (F9).
+_RISK_CONTROLLER_TS = "src/lib/stores/risk/riskPanelController.svelte.ts"
+
+
+def _frontend_source(relative_path: str) -> str:
+    """One frontend source file, read from disk — resolved like ``_i18n_catalogue``, and a RED when missing."""
+    path = Path(__file__).resolve().parents[3] / "frontend" / relative_path
+    assert path.is_file(), f"frontend source not found: {path}"
+    return path.read_text(encoding="utf-8")
+
+
+def _frontend_string_constant(relative_path: str, name: str) -> str:
+    """The value of ``export const <name> = '<code>';`` in a frontend source, found by NAME, never by line.
+
+    Fails loudly rather than guessing: a constant that is missing (renamed or removed),
+    declared twice, or no longer exported as one string literal is an assertion error
+    naming the file and the constant. A pin that silently read nothing would pass while
+    tracking nothing.
+    """
+    source = _frontend_source(relative_path)
+    declarations = re.findall(rf"\bconst\s+{re.escape(name)}\b\s*[:=]", source)
+    assert declarations, f"{relative_path}: no `const {name}` — renamed or removed? The risk.errors pin reads the frontend-owned code from it by name."
+    assert len(declarations) == 1, f"{relative_path}: `const {name}` is declared {len(declarations)} times — which one the panel emits cannot be told from here."
+    literal = re.search(rf"^\s*export\s+const\s+{re.escape(name)}\s*(?::[^=\n]*)?=\s*(['\"])([a-z][a-z0-9_]*)\1\s*(?:as\s+const\s*)?;", source, re.MULTILINE)
+    assert literal, f"{relative_path}: `const {name}` is not exported as one snake_case string literal, so the code it emits cannot be read."
+    return literal.group(2)
+
+
+def _frontend_risk_error_codes() -> frozenset[str]:
+    """The ``risk.errors`` keys the FRONTEND owns: the catalogues carry them, ``RiskErrorCode`` never emits them.
+
+    Named, never counted — a key the backend does not emit needs a reason to exist,
+    and each reason is the frontend line that uses it:
+
+    - ``unknown`` — the fallback ``RiskLevelSection.svelte`` words a code through when
+      that code has no sentence of its own:
+      ``translateErrorCode(code, $t, 'risk.errors.unknown')``. Without it the fallback
+      path would print its own key.
+    - ``ANSWER_DISCARDED_CODE`` in ``riskPanelController.svelte.ts`` — an on-demand
+      answer discarded twice running (F9), emitted by ``discardedErrorCodes`` and worded
+      as ``risk.errors.<code>`` like every backend code. Read from that source by name,
+      so the pin follows the constant the panel emits instead of a copy of its value.
+    """
+    return frozenset({"unknown", _frontend_string_constant(_RISK_CONTROLLER_TS, "ANSWER_DISCARDED_CODE")})
+
+
 def test_every_risk_error_code_has_a_sentence_in_every_official_language():
     """Every ``RiskErrorCode`` must be renderable, in all four languages.
 
@@ -1357,8 +1404,15 @@ def test_risk_error_catalogues_agree_across_languages():
     for language, keys in per_language.items():
         assert keys == reference, f"{language}.json risk.errors differs from {reference_language}.json: only-in-{language}={sorted(keys - reference)}, missing-from-{language}={sorted(reference - keys)}"
 
-    # Pin the relationship, not the number: the catalogues are exactly the enum
-    # plus the single fallback. Asserting a literal count would have to be
-    # edited by anyone adding a legitimate code, and an assertion people edit
-    # to make green is an assertion that stops meaning anything.
-    assert reference == {code.value for code in RiskErrorCode} | {"unknown"}
+    # Pin the relationship, not the number: the catalogues are exactly the enum plus the
+    # codes the FRONTEND owns (`_frontend_risk_error_codes`, each with the line that emits
+    # it). Asserting a literal count would have to be edited by anyone adding a legitimate
+    # code, and an assertion people edit to make green is an assertion that stops meaning
+    # anything.
+    backend_codes = {code.value for code in RiskErrorCode}
+    frontend_codes = _frontend_risk_error_codes()
+    # One key with two owners would be ambiguous — the backend emitting a code the frontend
+    # already words for its own purpose — and the union below would absorb it in silence.
+    assert frontend_codes.isdisjoint(backend_codes), f"risk.errors codes owned by both RiskErrorCode and the frontend: {sorted(frontend_codes & backend_codes)}"
+    expected = backend_codes | frontend_codes
+    assert reference == expected, f"risk.errors is not RiskErrorCode plus the frontend-owned codes: unexpected={sorted(reference - expected)}, missing={sorted(expected - reference)}"
