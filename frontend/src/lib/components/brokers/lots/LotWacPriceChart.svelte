@@ -16,6 +16,7 @@
     import {buildGridColors, buildTooltipDivider, buildTooltipHeader, buildTooltipRow, buildTooltipTheme, scheduleFirstRenderStabilityFix, setupTooltipAutoHide, tooltipPositionSide} from '$lib/components/charts/echartsTooltipHelpers';
     import {getBrokerColor, type BrokerLike} from '$lib/utils/broker/brokerColors';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
+    import {maskableQuantity} from '$lib/utils/privacy/maskable';
     import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
     import {lotDisplayState, lotStateColor, lotStateSymbol, type LotDisplayState} from './lotStateVisual';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
@@ -477,8 +478,9 @@
         return labels.eventType[kind];
     }
 
+    /** Every quantity this chart renders goes through here; masked under privacy (D5′). */
     function formatQuantityValue(value: number): string {
-        return formatDecimalForDisplay(Math.abs(value), {minFrac: 0, maxFrac: 8});
+        return maskableQuantity(formatDecimalForDisplay(Math.abs(value), {minFrac: 0, maxFrac: 8}));
     }
 
     function formatSignedQuantityValue(value: number): string {
@@ -493,6 +495,15 @@
 
     function formatMaybeMoney(value: number | null): string {
         return value == null ? '—' : formatCurrencyAmountPlain(value, currency);
+    }
+
+    /**
+     * A price per unit — WAC, market, purchase, sale. Public: a price is not patrimony and the
+     * WAC is admissible (product owner, 2026-09-22); the axis already shows these prices, and
+     * with quantities masked (D5′) price × quantity rebuilds nothing. Totals keep `formatMaybeMoney`.
+     */
+    function formatMaybePrice(value: number | null): string {
+        return value == null ? '—' : formatCurrencyAmountPlain(value, currency, {sensitivity: 'public'});
     }
 
     function eventQuantityText(event: LotTimelineEventSchema): string | null {
@@ -1390,7 +1401,7 @@
             const unitPrice = parseNumber(event.unit_price);
             const openingValue = quantity != null && unitPrice != null ? Math.abs(quantity) * unitPrice : null;
             rows.push(markerTooltipRow(labels.quantity, quantity == null ? '—' : formatQuantityValue(quantity)));
-            rows.push(markerTooltipRow(labels.unitPrice, formatMaybeMoney(unitPrice)));
+            rows.push(markerTooltipRow(labels.unitPrice, formatMaybePrice(unitPrice)));
             rows.push(markerTooltipRow(labels.openingValue, formatMaybeMoney(openingValue)));
             rows.push(markerTooltipRow(labels.broker, brokerName(safeNumber(event.broker_id))));
         } else if (event.kind === 'SELL') {
@@ -1403,7 +1414,7 @@
             if (residualQuantity != null && Math.abs(residualQuantity) > LOT_BUBBLE_ZERO_EPS) {
                 rows.push(markerTooltipRow(labels.residualQuantity, formatQuantityValue(residualQuantity)));
             }
-            rows.push(markerTooltipRow(labels.salePrice, formatMaybeMoney(salePrice)));
+            rows.push(markerTooltipRow(labels.salePrice, formatMaybePrice(salePrice)));
             rows.push(markerTooltipRow(labels.proceeds, formatMaybeMoney(proceeds)));
             rows.push(markerTooltipRow(labels.realizedPnl, formatMaybeMoney(realizedPnl)));
         } else if (event.kind === 'TRANSFER_DEPART' || event.kind === 'TRANSFER_ARRIVE') {
@@ -1427,8 +1438,8 @@
             const nextPrice = snapshot?.unitPriceAfter ?? (previousPrice != null && ratio != null && ratio !== 0 ? previousPrice / ratio : null);
             rows.push(markerTooltipRow(labels.previousQuantity, formatMaybeQuantity(previousQuantity)));
             rows.push(markerTooltipRow(labels.nextQuantity, formatMaybeQuantity(nextQuantity)));
-            rows.push(markerTooltipRow(labels.previousPrice, formatMaybeMoney(previousPrice)));
-            rows.push(markerTooltipRow(labels.nextPrice, formatMaybeMoney(nextPrice)));
+            rows.push(markerTooltipRow(labels.previousPrice, formatMaybePrice(previousPrice)));
+            rows.push(markerTooltipRow(labels.nextPrice, formatMaybePrice(nextPrice)));
             rows.push(markerTooltipRow(labels.totalCost, labels.unchanged));
         }
 
@@ -1451,7 +1462,8 @@
                 if (rawValue == null || rawValue === '') return null;
                 const value = Number(rawValue);
                 if (!Number.isFinite(value)) return null;
-                const formatted = displayMode === 'absolute' ? formatCurrencyAmountPlain(value, currency) : formatPercent(value);
+                // The line series are WAC and market price, both per unit: public, like the axis beside them.
+                const formatted = displayMode === 'absolute' ? formatCurrencyAmountPlain(value, currency, {sensitivity: 'public'}) : formatPercent(value);
                 return buildTooltipRow(escapeHtml(String(param.seriesName ?? '')), escapeHtml(formatted), typeof param.color === 'string' ? param.color : undefined);
             })
             .filter((row): row is string => row != null);

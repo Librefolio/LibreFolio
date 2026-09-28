@@ -4,6 +4,8 @@ export interface BulkDisplayRow {
     tempId: string;
     pairedWith?: string;
     txId?: number;
+    /** Order of creation in the workspace — ties rows that no date or saved id can order. */
+    createdSeq?: number;
     inaccessible?: boolean;
     fields: {date: string};
 }
@@ -55,7 +57,9 @@ function compareText(a: string, b: string): number {
     return a < b ? -1 : a > b ? 1 : 0;
 }
 
-/** A pair is one display group: earliest leg first, latest leg second, stable ID last.
+/** A pair is one display group: earliest leg first, latest leg second, then saved rows by id and
+ *  new rows in the order they were created, the stable ID last. A random ID must never decide the
+ *  order of two new rows of the same day: they would swap places from one render to the next.
  *  The comparator never changes ledger order or the From/To orientation inside a group. */
 export function createBulkDateComparator<T extends BulkDisplayRow>(rows: readonly T[]): (a: T, b: T) => number {
     const dates = new Map<string, string[]>();
@@ -74,7 +78,7 @@ export function createBulkDateComparator<T extends BulkDisplayRow>(rows: readonl
     return (a, b) => {
         const aDates = bounds.get(a.tempId) ?? ['', ''];
         const bDates = bounds.get(b.tempId) ?? ['', ''];
-        return compareText(aDates[0], bDates[0]) || compareText(aDates[1], bDates[1]) || (a.txId ?? Number.MAX_SAFE_INTEGER) - (b.txId ?? Number.MAX_SAFE_INTEGER) || compareText(a.tempId, b.tempId);
+        return compareText(aDates[0], bDates[0]) || compareText(aDates[1], bDates[1]) || (a.txId ?? Number.MAX_SAFE_INTEGER) - (b.txId ?? Number.MAX_SAFE_INTEGER) || (a.createdSeq ?? Number.MAX_SAFE_INTEGER) - (b.createdSeq ?? Number.MAX_SAFE_INTEGER) || compareText(a.tempId, b.tempId);
     };
 }
 

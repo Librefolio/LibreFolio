@@ -71,6 +71,22 @@ For Borsa Italiana funds, the visible ISIN identifies the fund when available, b
 internal Borsa fund code saved in provider configuration. Current NAV is used only when dated today;
 history contains one NAV point at its real date.
 
+## 🗂️ Choosing the Asset Type {: #choosing-the-asset-type }
+
+The **Type** field opens a searchable menu of
+[asset types](../../financial-theory/instruments/asset-types/index.md). Most types sit at the top
+level; **ETF** and **Crowdfunding** are families you open to see their members. Each family lists its
+generic member first — **ETF** (*mixed or unstated content*) and **Crowdfund** (*P2P and business
+lending*) — followed by the specific ones, such as **Equity ETF** or **Real estate crowdfunding**.
+Type a few letters to search across both levels, by name or by code (for example `etf_bond`); if the
+current type belongs to a family, that family is already open.
+
+When Smart Search finds the instrument, the type is filled in from the provider — usually a general
+one such as **ETF**. If you know what the fund holds, refine it — for example to **Equity ETF**: the
+type then records what the fund contains as well as what it is, and its badge takes the colour of
+what it holds. Specific types show their family's icon with a small circle in the corner showing
+what they hold — the same icon you will see in the asset list and elsewhere in the app.
+
 ## 🔌 Provider Assignment
 
 Each asset can have one pricing provider assigned. See [Providers](providers/index.md) for details on available providers and their configuration.

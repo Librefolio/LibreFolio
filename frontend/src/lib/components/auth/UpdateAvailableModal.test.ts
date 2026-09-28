@@ -77,4 +77,32 @@ describe('UpdateAvailableModal (F14)', () => {
         await waitFor(() => expect(screen.queryByTestId('update-available-modal')).not.toBeInTheDocument());
         expect(readCache()?.dismissedVersion).toBe('1.2.4');
     });
+
+    it('stacks a requested prompt one layer above the default modal layer, and close() clears the request', async () => {
+        render(UpdateAvailableModal, {currentVersion: '1.2.3'});
+        // ModalBase puts the testid on its backdrop, the dialog element whose inline z-index
+        // is the modal's stacking layer.
+        const backdrop = () => screen.getByTestId('update-available-modal');
+
+        // Control: an automatic prompt stays on the default layer.
+        updateAvailable.show(RELEASE);
+        await waitFor(() => expect(backdrop()).toBeInTheDocument());
+        expect(updateAvailable.requested).toBe(false);
+        expect(backdrop()).toHaveAttribute('role', 'dialog');
+        expect(backdrop().style.zIndex).toBe('50');
+
+        updateAvailable.close();
+        await waitFor(() => expect(screen.queryByTestId('update-available-modal')).not.toBeInTheDocument());
+
+        // Requested: opened from inside the changelog modal, which sits on the default layer.
+        updateAvailable.show(RELEASE, {requested: true});
+        await waitFor(() => expect(backdrop()).toBeInTheDocument());
+        expect(updateAvailable.requested).toBe(true);
+        expect(backdrop().style.zIndex).toBe('60');
+
+        updateAvailable.close();
+        expect(updateAvailable.release).toBeNull();
+        expect(updateAvailable.requested).toBe(false);
+        await waitFor(() => expect(screen.queryByTestId('update-available-modal')).not.toBeInTheDocument());
+    });
 });

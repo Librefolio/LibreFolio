@@ -120,6 +120,8 @@
      *  `link_uuid` is the shared pairing UUID for backend payloads (WAC, commit). */
     type PendingOp = ({op: 'create'} | {op: 'edit'; txId: number; markedDelete: boolean; addedViaPicker?: boolean}) & {
         tempId: string;
+        /** Stamped at creation (`nextCreatedSeq`): keeps new rows of the same day in the order they were added. */
+        createdSeq: number;
         fields: DraftFields;
         pairedWith?: string;
         link_uuid?: string | null;
@@ -205,9 +207,15 @@
         };
     }
 
+    /** Monotonic creation stamp for new rows. Their tempId is a random UUID, so it cannot order them. */
+    let createdSeqCounter = 0;
+    function nextCreatedSeq(): number {
+        return createdSeqCounter++;
+    }
+
     /** Create an empty 'create' PendingOp. */
     function createOpEmpty(): PendingOp {
-        return {op: 'create', tempId: generateUUID(), fields: defaultFields(), link_uuid: null};
+        return {op: 'create', tempId: generateUUID(), createdSeq: nextCreatedSeq(), fields: defaultFields(), link_uuid: null};
     }
 
     /** Extract display-ready DraftFields from a TXReadItem (auto-sign applied). */
@@ -253,7 +261,7 @@
     /** Create 'edit' PendingOp from DB transaction (reads txStore, zero copies). */
     function editOpFromTx(txId: number, opts?: {markedDelete?: boolean; addedViaPicker?: boolean}): PendingOp {
         const tx = txStoreGet(txId)!;
-        return {op: 'edit', tempId: generateUUID(), txId, fields: fieldsFromTx(tx), markedDelete: opts?.markedDelete ?? false, addedViaPicker: opts?.addedViaPicker};
+        return {op: 'edit', tempId: generateUUID(), createdSeq: nextCreatedSeq(), txId, fields: fieldsFromTx(tx), markedDelete: opts?.markedDelete ?? false, addedViaPicker: opts?.addedViaPicker};
     }
 
     /** Create 'create' PendingOp by cloning from a TXReadItem. */
@@ -262,7 +270,7 @@
         // T3: keep the source date — clone is the correction workflow, not "same op today".
         const rule = getTypeRule(tx.type);
         if (rule.quantityRule === 'zero') fields.quantity = '0';
-        return {op: 'create', tempId: generateUUID(), fields, link_uuid: linkUuid ?? null};
+        return {op: 'create', tempId: generateUUID(), createdSeq: nextCreatedSeq(), fields, link_uuid: linkUuid ?? null};
     }
 
     /** Get DB id from PendingOp (undefined for creates). */
@@ -531,13 +539,13 @@
     }
 
     /** Stable, comparison-friendly serialization of the drafts array (drops
-     *  the volatile `tempId` so newly seeded rows compare equal to the
-     *  original snapshot). */
+     *  the volatile `tempId` and `createdSeq` so newly seeded or reset rows
+     *  compare equal to the original snapshot). */
     function serializeOps(rows: PendingOp[]): string {
         return JSON.stringify(
             rows.map((d) => {
                 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                const {tempId: _tempId, ...rest} = d;
+                const {tempId: _tempId, createdSeq: _createdSeq, ...rest} = d;
                 return rest;
             }),
         );
@@ -685,6 +693,7 @@
                         txId: relId,
                         markedDelete: false,
                         tempId: generateUUID(),
+                        createdSeq: nextCreatedSeq(),
                         fields: {type: mainTx.type, broker_id: pBrokerId, date: mainTx.date} as any,
                         pairedWith: d.tempId,
                         link_uuid: sharedUuid,
@@ -702,6 +711,7 @@
                 txId: relId,
                 markedDelete: false,
                 tempId: generateUUID(),
+                createdSeq: nextCreatedSeq(),
                 fields: fieldsFromTx(partnerTx),
                 pairedWith: d.tempId,
                 link_uuid: sharedUuid,
@@ -866,6 +876,7 @@
         const clone: PendingOp = {
             op: 'create',
             tempId: generateUUID(),
+            createdSeq: nextCreatedSeq(),
             fields: {...src.fields},
             link_uuid: getTypeRule(src.fields.type as TransactionTypeCode)?.requiresPair ? generateUUID() : null,
         };
@@ -875,6 +886,7 @@
             const partnerClone: PendingOp = {
                 op: 'create',
                 tempId: generateUUID(),
+                createdSeq: nextCreatedSeq(),
                 fields: {...srcPartner.fields},
                 link_uuid: clone.link_uuid, // share link_uuid
                 pairedWith: clone.tempId,
@@ -2236,6 +2248,7 @@
         return {
             op: 'create',
             tempId: generateUUID(),
+            createdSeq: nextCreatedSeq(),
             link_uuid: linkUuid,
             fields: {
                 broker_id: tx.broker_id,

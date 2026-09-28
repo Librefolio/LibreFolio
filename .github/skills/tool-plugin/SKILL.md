@@ -123,6 +123,13 @@ Use the existing `DocsLink` component so links follow the frontend language.
 Keep all financial calculations in the backend. Guard result application by account
 generation, component identity, request sequence and draft revision.
 
+Money in a custom renderer goes only through the D8 primitives
+(`frontend/src/lib/utils/currency/currencyFormat.ts`) with an explicit `sensitivity`:
+`personal` for wealth, `public` for prices, rates and percentages. Held quantities go through
+`maskableQuantity()`; empty, non-finite or unavailable values render `—` and are never masked.
+A renderer that formats money by hand is caught by the privacy gate only when the line carries a
+currency token; any other form breaks privacy mode without a red test.
+
 ## Completion evidence
 
 - New or repaired tests go through `test-author`; follow actual runner ownership.

@@ -11,6 +11,7 @@
 import {expect, test} from '../fixtures/playwright';
 import {login} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {waitForSettled} from '../fixtures/app-events';
 import {goToAssetDetailPage, goToAssetsPage, openCreateAssetModal, openEditAssetModal} from './assets-helpers';
 import {uniqueToken} from '../fixtures/unique';
 
@@ -703,6 +704,109 @@ test.describe('NR — Sync on create with provider (Bug K)', () => {
             // The id is only known once half one has read it back, so a failure
             // before that point would otherwise leave the row behind. Resolve it
             // by the unique name instead — still scoped to what this test wrote.
+            if (assetId === null) {
+                assetId = await page.request
+                    .get(`/api/v1/assets/query?search=${encodeURIComponent(name)}`)
+                    .then(async (r) => (r.ok() ? (((await r.json()) as Array<{id: number; display_name: string}>).find((a) => a.display_name === name)?.id ?? null) : null))
+                    .catch(() => null);
+            }
+            if (assetId !== null) await page.request.delete(`/api/v1/assets?asset_ids=${assetId}`).catch(() => {});
+        }
+    });
+});
+
+// ============================================================================
+// R14–R16: the type field is a two-level searchable select (TreeSelect). A
+// subtype is chosen inside its family, stored as itself, and drawn everywhere
+// with its composite icon — the ETF tag with the stock pastille — which is what
+// the select previewed. `AssetTypeSelect.test.ts` pins the component; this is
+// the path a user takes, through the dialog, the API and the grid.
+//
+// Everything is read from test ids, ARIA state and image `src`: no label of the
+// select is ever read, so the locale of the run does not matter.
+// ============================================================================
+test.describe('Asset type select (R14–R16)', () => {
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('an ETF subtype is picked inside its family, stored as such, and drawn with its composite icon', async ({page}) => {
+        const name = `E2E Type Tree ${uniqueToken(6)}`;
+        const composite = '/icons/asset-types/etf-stock.png';
+        let assetId: number | null = null;
+
+        try {
+            await goToAssetsPage(page);
+            await openCreateAssetModal(page);
+            const nameInput = page.getByTestId('asset-modal-display-name');
+            await nameInput.fill(name);
+            await expect(nameInput).toHaveValue(name);
+
+            // ---- pick ETF_STOCK inside the ETF family ---------------------
+            // Rows are looked up inside the field: TreeSelect renders its dropdown
+            // within its own container, and `asset-type-tree-*` names a kind of row.
+            const field = page.getByTestId('asset-modal-type');
+            const trigger = page.getByTestId('asset-modal-type-button');
+            // Presence barrier for the negative below: the closed field shows *a*
+            // type's picture — and not yet the one this test is about to pick,
+            // or the post-condition would prove nothing.
+            await expect(trigger.locator('img').first()).toBeVisible();
+            await expect(trigger.locator(`img[src="${composite}"]`)).toHaveCount(0);
+
+            await trigger.click();
+            await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+            const etfFamily = field.getByTestId('asset-type-tree-group-ETF');
+            await expect(etfFamily).toBeVisible();
+            // A group row is a toggle, and it opens by itself when the value is
+            // already an ETF: ask for its state, act only if it is not there yet.
+            if ((await etfFamily.getAttribute('aria-expanded')) !== 'true') await etfFamily.click();
+            await expect(etfFamily).toHaveAttribute('aria-expanded', 'true');
+
+            const etfStock = field.getByTestId('asset-type-tree-option-ETF_STOCK');
+            await expect(etfStock.locator(`img[src="${composite}"]`), 'the row must preview the composite the rest of the app will draw').toBeVisible();
+            await etfStock.click();
+
+            // The helper-style post-condition: the dropdown is gone, and the
+            // closed field now shows the composite of the chosen subtype.
+            await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+            await expect(etfStock).toHaveCount(0);
+            await expect(trigger.locator(`img[src="${composite}"]`)).toBeVisible();
+
+            // ---- save: the create response names the row this test owns ---
+            const saveBtn = page.getByTestId('asset-modal-save');
+            await expect(saveBtn).toBeEnabled();
+            const createResponse = page.waitForResponse((r) => r.url().endsWith('/api/v1/assets') && r.request().method() === 'POST');
+            await saveBtn.click();
+            const created = (await (await createResponse).json()) as {results?: Array<{asset_id?: number | null; display_name?: string}>};
+            assetId = created.results?.find((r) => r.display_name === name)?.asset_id ?? null;
+            expect(assetId, `the create response must carry the id of "${name}"`).not.toBeNull();
+            await expect(page.getByTestId('asset-modal-form')).not.toBeVisible({timeout: 15_000});
+
+            // ---- the backend stored the subtype, not its family -----------
+            const res = await page.request.get(`/api/v1/assets/query?search=${encodeURIComponent(name)}`);
+            expect(res.ok(), `the asset query must answer: ${res.status()} ${await res.text()}`).toBeTruthy();
+            const stored = ((await res.json()) as Array<{id: number; asset_type: string | null}>).find((a) => a.id === assetId);
+            expect(stored, 'the asset the dialog just created must come back from /assets/query').toBeTruthy();
+            expect(stored!.asset_type, 'the dialog must save the subtype picked inside the family — not the family, not the default').toBe('ETF_STOCK');
+
+            // ---- the card of this very asset draws the composite ----------
+            await goToAssetsPage(page);
+            // Grid is the default view, but ViewModeToggle remembers the last
+            // choice per user in localStorage — drive to the end state.
+            await page.getByTestId('view-mode-grid').click();
+            await page.getByTestId('assets-search-input').fill(name);
+            await waitForSettled(page.getByTestId('assets-page'), 20_000);
+            const card = page.getByTestId(`asset-card-${assetId}`);
+            // Retrying on purpose: the search box is debounced and `data-busy`
+            // does not cover the debounce.
+            await expect(card, 'the asset this test created must reach the grid').toBeVisible({timeout: 15_000});
+            // `.first()` on a locator already scoped to this card: the card paints
+            // the type picture twice (round avatar and type badge).
+            await expect(card.locator(`img[src="${composite}"]`).first(), 'ETF_STOCK must be drawn with its composite, etf-stock.png').toBeVisible();
+            await expect(card.locator('img[src="/icons/asset-types/other.png"]'), 'ETF_STOCK fell through to the silent other.png fallback').toHaveCount(0);
+        } finally {
+            // Scoped to what this test wrote: by the id of its own create response,
+            // or — if the run died before reading it — by its unique name.
             if (assetId === null) {
                 assetId = await page.request
                     .get(`/api/v1/assets/query?search=${encodeURIComponent(name)}`)

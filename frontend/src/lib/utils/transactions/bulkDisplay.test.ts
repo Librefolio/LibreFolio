@@ -55,6 +55,74 @@ describe('createBulkDateComparator', () => {
         expect(rows).toEqual(rowsSnapshot);
         expect(visible).toEqual(visibleSnapshot);
     });
+
+    // C4 — creation order. New rows have no txId and a random UUID tempId, so for two new
+    // rows on the same date the tempId tie-break is a coin toss. The contract: earliest date
+    // → latest date → txId (missing = MAX) → createdSeq (missing = MAX) → tempId.
+    // `createdSeq` goes through `extra` with a cast until BulkDisplayRow declares it.
+    const seq = (createdSeq: number) => ({createdSeq}) as Partial<BulkDisplayRow>;
+    const sortVisible = (rows: readonly BulkDisplayRow[], visible: readonly BulkDisplayRow[] = rows) => [...visible].sort(createBulkDateComparator(rows)).map((row) => row.tempId);
+
+    it('U1: same-date new rows keep their creation order (createdSeq), even when their tempIds sort the other way', () => {
+        const zFirst = displayRow('z-first', '2024-05-01', seq(0));
+        const aSecond = displayRow('a-second', '2024-05-01', seq(1));
+
+        // Both input orders: the verdict must come from createdSeq, not from where a row sits.
+        expect(sortVisible([zFirst, aSecond])).toEqual(['z-first', 'a-second']);
+        expect(sortVisible([aSecond, zFirst])).toEqual(['z-first', 'a-second']);
+    });
+
+    it('U2a: on the same date a saved row (txId) still precedes a new one, whatever their createdSeq and tempId', () => {
+        const saved = displayRow('z-saved', '2024-05-01', {txId: 42, ...seq(7)});
+        const fresh = displayRow('a-new', '2024-05-01', seq(0));
+
+        expect(sortVisible([fresh, saved])).toEqual(['z-saved', 'a-new']);
+        expect(sortVisible([saved, fresh])).toEqual(['z-saved', 'a-new']);
+    });
+
+    it('U2b: rows without createdSeq fall back to tempId, and never jump ahead of rows that have one (missing = MAX)', () => {
+        const b = displayRow('b-row', '2024-05-01');
+        const a = displayRow('a-row', '2024-05-01');
+        expect(sortVisible([b, a])).toEqual(['a-row', 'b-row']);
+
+        const rows = [displayRow('d-noseq', '2024-05-01'), displayRow('b-seq1', '2024-05-01', seq(1)), displayRow('c-noseq', '2024-05-01'), displayRow('a-seq0', '2024-05-01', seq(0))];
+        expect(sortVisible(rows)).toEqual(['a-seq0', 'b-seq1', 'c-noseq', 'd-noseq']);
+    });
+
+    it("U2c: a pair is placed by its visible row's createdSeq; the hidden partner never enters the comparison", () => {
+        // The partner's createdSeq (9) would put the pair last, its visible row's (3) puts it first.
+        const pair = displayRow('a-pair', '2024-05-01', seq(3));
+        const partner = displayRow('a-pair-leg', '2024-05-01', {pairedWith: 'a-pair', ...seq(9)});
+        const single = displayRow('b-single', '2024-05-01', seq(5));
+        const rows = [single, partner, pair];
+
+        expect(sortVisible(rows, [single, pair])).toEqual(['a-pair', 'b-single']);
+        expect(sortVisible(rows, [pair, single])).toEqual(['a-pair', 'b-single']);
+    });
+
+    it('U2d: different dates sort by date whatever the createdSeq (and the tempId) says', () => {
+        const late = displayRow('a-late', '2024-05-03', seq(0));
+        const early = displayRow('z-early', '2024-05-01', seq(9));
+
+        expect(sortVisible([late, early])).toEqual(['z-early', 'a-late']);
+        expect(sortVisible([early, late])).toEqual(['z-early', 'a-late']);
+    });
+
+    it('U2e: sorting with createdSeq mutates neither the workspace rows nor the visible rows', () => {
+        const rows = [displayRow('n2', '2024-05-01', seq(2)), displayRow('saved', '2024-05-01', {txId: 5, ...seq(0)}), displayRow('n1', '2024-05-01', seq(1)), displayRow('pair', '2024-04-30', seq(3)), displayRow('pair-leg', '2024-05-02', {pairedWith: 'pair', ...seq(4)})] as const;
+        const visible = [rows[0], rows[1], rows[2], rows[3]];
+        const rowsSnapshot = JSON.parse(JSON.stringify(rows)) as typeof rows;
+        const visibleSnapshot = JSON.parse(JSON.stringify(visible)) as typeof visible;
+
+        const comparator = createBulkDateComparator(rows);
+        const first = [...visible].sort(comparator).map((row) => row.tempId);
+        const second = [...visible].sort(comparator).map((row) => row.tempId);
+
+        expect(first).toEqual(['pair', 'saved', 'n1', 'n2']);
+        expect(second).toEqual(first);
+        expect(rows).toEqual(rowsSnapshot);
+        expect(visible).toEqual(visibleSnapshot);
+    });
 });
 
 describe('buildBulkRowLabels', () => {
