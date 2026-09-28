@@ -208,6 +208,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/dashboard/KpiSection.test.ts",
             "src/lib/components/dashboard/ExposureTable.test.ts",
             "src/lib/components/dashboard/ContributionTable.test.ts",
+            "src/lib/components/dashboard/PerformanceChart.test.ts",
             "src/lib/components/table/DataTableHeaderTooltip.test.ts",
             "src/lib/components/transactions/import/FixFlaggedStep.test.ts",
             "src/lib/components/layout/ChangelogModal.test.ts",
