@@ -19,14 +19,15 @@ could plausibly "simplify" away without a failing test to stop them:
   and fails closed on an empty union naming the offending assets.**
 * **Tie stages are filtered from solver evidence** because the wire objective
   enum cannot express them — a schema consequence, not a choice.
-* **``stop_reason`` is determined by the stage statuses**, and cross-section
-  action sequences come from a single shared allocator so they are globally
-  unique *and* each section stays internally ascending.
+* **``stop_reason`` is determined by the stage statuses** (an ``infeasible``
+  first stage is SCIP's verdict, so it ends a ``completed`` search), and
+  cross-section action sequences come from a single shared allocator so they
+  are globally unique *and* each section stays internally ascending.
 
 The headline gate is a genuine end-to-end assembly: a real
-``build_exact_policy_view -> compile -> solve -> replay -> project`` run whose
-output is judged by pydantic and the validators, with an uncategorised asset
-deliberately present.
+``build_exact_policy_view -> compile -> solve -> replay -> conclude -> project``
+run whose output is judged by pydantic and the validators, with an
+uncategorised asset deliberately present.
 
 These are pure in-process tests (``isolation="pure"``): no server, no
 database, no clock, no sleeps, no network. Exact domain values compare with
@@ -45,9 +46,10 @@ import pytest
 
 from backend.app.schemas.pac_allocator import (
     DeploymentUnavailable,
-    NotProvenProof,
+    OptimalProvenProof,
     PacIncumbentSolution,
     PacPlannerReadyIncumbentResult,
+    SolverStatusWitness,
     _exact_fraction,
     _validate_weight_availability,
 )
@@ -55,9 +57,9 @@ from backend.app.services.pac_allocator import planner_report as PR
 from backend.app.services.pac_allocator.compiler import compile_policy_program
 from backend.app.services.pac_allocator.evaluator import build_exact_policy_view, evaluate_exact_candidate
 from backend.app.services.pac_allocator.models import CandidateActionVector, CandidateDecision, ExactExposure
-from backend.app.services.pac_allocator.proof import conclude_without_proof
+from backend.app.services.pac_allocator.proof import OptimalProvenConclusion, conclude_with_solver
 from backend.app.services.pac_allocator.solver import solve_policy_program
-from backend.test_scripts.test_services.test_pac_planner_evaluator import PROVENANCE_ID, R
+from backend.test_scripts.test_services.test_pac_planner_evaluator import PROVENANCE_ID, R, _pac_scenario
 from backend.test_scripts.test_services.test_pac_planner_oracle import _coarse_funding_fx_scenario, _two_asset_pac_scenario
 
 # --------------------------------------------------------------------------
@@ -506,6 +508,31 @@ def test_stop_reason_is_completed_iff_no_stage_is_unfinished() -> None:
     assert PR.build_stop_reason(time_limited) == "time_limit"
 
 
+def test_infeasible_first_stage_is_a_verdict_that_completes_the_search() -> None:
+    """When SCIP closes the first, global stage ``infeasible`` (D-X1), that is
+    a verdict, not an interruption. ``build_stop_reason`` must call the run
+    ``completed``: ``_validate_stop_evidence`` keys ``completed`` on the
+    absence of *unfinished* stages, and ``infeasible`` is not one. And
+    ``build_solver_evidence`` must carry that single stage with none of the four
+    observations filled in, because SCIP reported none.
+
+    This is a real run, not a doctored one: the route cap (10) is below the
+    required contribution (50), so no candidate can exist.
+    """
+    scenario = _pac_scenario(required=R(50), route_cap=R(10))
+    view, result = _solve(scenario)
+    assert result.outcome == "reported_infeasible"
+
+    assert PR.build_stop_reason(result) == "completed"
+
+    evidence = PR.build_solver_evidence(scenario, view, result)
+    assert evidence.kind == "reported_floating"
+    (stage,) = evidence.stages
+    first = min(view.objectives, key=lambda ref: ref.ordinal)
+    assert (stage.objective_code, stage.ordinal, stage.scope, stage.status) == (first.code, 1, "global", "infeasible")
+    assert (stage.primal, stage.dual, stage.absolute_gap, stage.relative_gap) == (None, None, None, None)
+
+
 # --------------------------------------------------------------------------
 # Cross-section sequence allocation — two properties at once
 # --------------------------------------------------------------------------
@@ -570,9 +597,13 @@ def test_full_ready_incumbent_result_validates_end_to_end_with_uncategorised_ass
     exposure residual and its provenance must survive all the way into the
     published result. The candidate is asserted feasible on replay *before*
     anything is assembled — a projection built from an infeasible replay would
-    be meaningless. The end-to-end assertions (containment, residual present,
-    tie filter, sequence uniqueness, closed accounting identity) all read
-    their counts off the live objects.
+    be meaningless. The proof is derived exactly as the product derives it —
+    SCIP's own statuses, read by ``conclude_with_solver`` for the candidate
+    SCIP returned — and wired as a ``solver_status`` proof, so the validators
+    check its witness against the real solver evidence and the published
+    objectives. The end-to-end assertions (containment, residual present, tie
+    filter, sequence uniqueness, closed accounting identity) all read their
+    counts off the live objects.
     """
     base = _two_asset_pac_scenario()
     asset_a, asset_b = base.assets
@@ -595,6 +626,18 @@ def test_full_ready_incumbent_result_validates_end_to_end_with_uncategorised_ass
     referenced = _referenced_provenance_ids(solution)
     assert referenced <= published, f"referenced provenance not published: {referenced - published}"
 
+    # SCIP closed every stage optimal on the candidate it returned: the view's
+    # objectives, in cascade order, are what that proof is about.
+    objective_codes = [ref.code for ref in sorted(view.objectives, key=lambda ref: ref.ordinal)]
+    conclusion = conclude_with_solver(result, objective_codes=objective_codes, published=result.candidate)
+    assert isinstance(conclusion, OptimalProvenConclusion)
+    proof = OptimalProvenProof(
+        kind="optimal_proven",
+        proof_source="solver_status",
+        witness=SolverStatusWitness(kind="solver_status", objective_codes=list(conclusion.witness.objective_codes)),
+        tie_break_closed=True,
+    )
+
     full = PacPlannerReadyIncumbentResult(
         operation="plan",
         availability="ready",
@@ -607,7 +650,7 @@ def test_full_ready_incumbent_result_validates_end_to_end_with_uncategorised_ass
         stop_reason=PR.build_stop_reason(result),
         solver_evidence=PR.build_solver_evidence(scenario, view, result),
         issues=[],
-        proof=NotProvenProof(kind="not_proven", reason_code=conclude_without_proof(result).reason_code),
+        proof=proof,
         primary_solution=solution,
         deployment=DeploymentUnavailable(kind="unavailable", reason_code="allocation.deployment_omitted"),
     )

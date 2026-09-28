@@ -97,6 +97,13 @@ def _reject(adapter: TypeAdapter[Any], payload: Any) -> None:
         adapter.validate_json(_wire(payload), strict=True)
 
 
+def _reject_because(adapter: TypeAdapter[Any], payload: Any, message: str) -> None:
+    """Reject ``payload`` for the stated rule, not for whatever else happens to break first."""
+    with pytest.raises(ValidationError) as exc_info:
+        adapter.validate_json(_wire(payload), strict=True)
+    assert message in str(exc_info.value), exc_info.value
+
+
 def _assert_extra_forbidden(adapter: TypeAdapter[Any], payload: Any, field_name: str) -> None:
     with pytest.raises(ValidationError) as exc_info:
         adapter.validate_json(_wire(payload), strict=True)
@@ -395,25 +402,61 @@ def _rebalancer_no_op_with_zero_asset_result() -> JsonObject:
 
 
 def _ready_infeasible_result(product: str) -> JsonObject:
+    """A ``ready_infeasible`` payload exactly as SCIP's verdict publishes it.
+
+    The only infeasibility the product emits is SCIP closing the first, global
+    stage ``infeasible`` (D-X1): one reported stage, no primal/dual/gap, and a
+    ``solver_status`` witness naming that stage's objective and nothing else.
+    """
     payload = _pac_no_op_result() if product == "PAC" else _rebalancer_incumbent_result()
     payload["result_state"] = "ready_infeasible"
     payload["outcome"] = "infeasible_proven"
     payload.pop("primary_solution")
     payload.pop("deployment")
+    payload["stop_reason"] = "completed"
+    (stage,) = _with_only_an_infeasible_first_stage(payload)["solver_evidence"]["stages"]
     payload["proof"] = {
         "kind": "infeasibility_proven",
-        "proof_source": "exhaustive_oracle",
-        "witness": {
-            "kind": "exhaustive_oracle",
-            "enumerated_candidates": 1,
-            "feasible_candidates": 0,
-            "objective_codes": ["fixed_l2"],
-        },
+        "proof_source": "solver_status",
+        "witness": {"kind": "solver_status", "objective_codes": [stage["objective_code"]]},
     }
     return payload
 
 
+SOLVER_OBSERVATIONS = ("primal", "dual", "absolute_gap", "relative_gap")
+
+
+def _infeasible_solver_stage(payload: JsonObject, objective_code: str) -> JsonObject:
+    """The payload's own stage for ``objective_code``, closed ``infeasible`` by SCIP."""
+    stage = deepcopy(_find(payload["solver_evidence"]["stages"], "objective_code", objective_code))
+    assert stage["ordinal"] == 1 and stage["scope"] == "global", stage
+    stage["status"] = "infeasible"
+    for observation in SOLVER_OBSERVATIONS:
+        stage[observation] = None
+    return stage
+
+
+def _with_only_an_infeasible_first_stage(payload: JsonObject) -> JsonObject:
+    """Replace the payload's evidence with its first stage closed ``infeasible``: nothing runs after it."""
+    first_code = _find(payload["solver_evidence"]["stages"], "ordinal", 1)["objective_code"]
+    payload["solver_evidence"] = {"kind": "reported_floating", "stages": [_infeasible_solver_stage(payload, first_code)]}
+    return payload
+
+
+def _infeasible_stage_specimen() -> JsonObject:
+    stage = _reported_solver_stage(status="infeasible")
+    for observation in SOLVER_OBSERVATIONS:
+        stage[observation] = None
+    return stage
+
+
 def _ready_no_incumbent_result(product: str) -> JsonObject:
+    """SCIP finished every stage but the exact replay rejected its plan: nothing is published.
+
+    The fixture's evidence stays as it is (every stage ``finished``) and so does
+    ``stop_reason: "completed"`` - the pair the UI keys its "replay rejected"
+    notice on.
+    """
     payload = _pac_no_op_result() if product == "PAC" else _rebalancer_incumbent_result()
     payload["result_state"] = "ready_no_incumbent"
     payload["outcome"] = "no_incumbent"
@@ -456,71 +499,20 @@ def _primary_objective_codes(payload: JsonObject) -> list[str]:
     return codes
 
 
-def _optimal_proven_proof(proof_source: str, objective_codes: list[str]) -> JsonObject:
-    if proof_source == "exhaustive_oracle":
-        witness = {
-            "kind": "exhaustive_oracle",
-            "enumerated_candidates": 1,
-            "feasible_candidates": 1,
-            "objective_codes": objective_codes,
-        }
-    elif proof_source == "score_lattice_closure":
-        witness = {
-            "kind": "score_lattice_closure",
-            "objective_codes": objective_codes,
-            "closed_stage_count": len(objective_codes),
-        }
-    else:
-        raise AssertionError(f"unhandled optimal proof source {proof_source!r}")
+def _optimal_proven_proof(objective_codes: list[str]) -> JsonObject:
+    """An optimum as the product wires it: SCIP's own status, over ``objective_codes``."""
     return {
         "kind": "optimal_proven",
-        "proof_source": proof_source,
-        "witness": witness,
+        "proof_source": "solver_status",
+        "witness": {"kind": "solver_status", "objective_codes": list(objective_codes)},
         "tie_break_closed": True,
     }
 
 
-def _gap_bounded_pac_result() -> JsonObject:
-    payload = _pac_no_op_result()
-    payload["stop_reason"] = "time_limit"
-    stage = _reported_solver_stage()
-    payload["solver_evidence"] = {"kind": "reported_floating", "stages": [stage]}
-    payload["proof"] = {
-        "kind": "gap_bounded",
-        "stage_bounds": [
-            {
-                "stage": stage["stage"],
-                "objective_code": stage["objective_code"],
-                "ordinal": stage["ordinal"],
-                "scope": stage["scope"],
-                "sense": stage["sense"],
-                "unit": deepcopy(stage["unit"]),
-                "primal": stage["primal"],
-                "dual": stage["dual"],
-                "absolute_gap": stage["absolute_gap"],
-                "relative_gap": stage["relative_gap"],
-            }
-        ],
-    }
-    return payload
-
-
-def _gap_bounded_pac_result_for_sense(sense: str, primal: str, exact_value: str, dual: str) -> JsonObject:
-    payload = _gap_bounded_pac_result()
-    objective = _find(payload["primary_solution"]["objectives"]["stages"], "objective_code", "fixed_l2")
-    solver_stage = _find(payload["solver_evidence"]["stages"], "objective_code", "fixed_l2")
-    bound = _find(payload["proof"]["stage_bounds"], "objective_code", "fixed_l2")
-    absolute_gap = Fraction(primal) - Fraction(dual)
-
-    objective["sense"] = sense
-    objective["value"] = _finite(exact_value)
-    for stage in (solver_stage, bound):
-        stage["sense"] = sense
-        stage["primal"] = primal
-        stage["dual"] = dual
-        stage["absolute_gap"] = str(abs(absolute_gap))
-        stage["relative_gap"] = "0"
-    return payload
+def _finished_evidence_codes(payload: JsonObject) -> list[str]:
+    stages = payload["solver_evidence"]["stages"]
+    assert stages and all(stage["status"] == "finished" for stage in stages), stages
+    return [stage["objective_code"] for stage in stages]
 
 
 def _distinct_deployment_pac_result() -> JsonObject:
@@ -1230,12 +1222,6 @@ NON_ISSUE_REASON_CATALOGUE_CASES = (
         ((pac_schemas.NotProvenProof, "reason_code"),),
         id="not-proven",
     ),
-    pytest.param(
-        "SolverNotRunReasonCode",
-        ("allocation.solver_not_required",),
-        ((pac_schemas.SolverNotRunEvidence, "reason"),),
-        id="solver-not-run",
-    ),
 )
 
 REASON_ONLY_CODES = (
@@ -1243,7 +1229,6 @@ REASON_ONLY_CODES = (
     "allocation.no_actions_selected",
     "allocation.primary_is_deployment",
     "allocation.exact_proof_not_established",
-    "allocation.solver_not_required",
 )
 
 
@@ -1880,6 +1865,9 @@ def test_rebalancer_ready_sell_orders_and_irreducibility_are_forbidden_only_for_
 EXACT_NUMBER_ADAPTER = TypeAdapter(ExactNumber)
 OBJECTIVE_STAGE_ADAPTER = TypeAdapter(ObjectiveStageResult)
 SOLVER_STAGE_ADAPTER = TypeAdapter(SolverStageEvidence)
+SOLVER_EVIDENCE_ADAPTER = TypeAdapter(pac_schemas.ReportedFloatingSolverEvidence)
+SOLVER_STATUS_WITNESS_ADAPTER = TypeAdapter(pac_schemas.SolverStatusWitness)
+INFEASIBILITY_PROOF_ADAPTER = TypeAdapter(pac_schemas.InfeasibilityProvenProof)
 
 VALUATION_OBJECTIVE_CASES = (
     pytest.param("fixed_l2", {"kind": "valuation_money_squared", "currency_code": "EUR"}, id="fixed-l2"),
@@ -2064,81 +2052,23 @@ def test_reported_floating_solver_evidence_uses_decimal_strings_not_exact_number
     _reject(SOLVER_STAGE_ADAPTER, exact_primal)
 
 
-@pytest.mark.parametrize("proof_kind", ("not_proven", "gap_bounded"))
-def test_ready_result_non_optimal_proof_matrix_remains_typed(proof_kind: str) -> None:
-    if proof_kind == "gap_bounded":
-        payload = _gap_bounded_pac_result()
-    else:
-        payload = _pac_no_op_result()
-    model, _emitted = _strict_roundtrip(PAC_PLAN_OUTPUT_ADAPTER, payload)
+def test_ready_result_non_optimal_proof_matrix_remains_typed() -> None:
+    """A ready result that claims no optimum says so with ``not_proven``: the ready proof union has no third member."""
+    model, _emitted = _strict_roundtrip(PAC_PLAN_OUTPUT_ADAPTER, _pac_no_op_result())
     wire = PAC_PLAN_OUTPUT_ADAPTER.dump_python(model, mode="json")
-    expected_kind = "gap_bounded" if proof_kind == "gap_bounded" else "not_proven"
-    assert wire["proof"]["kind"] == expected_kind
+    assert wire["proof"]["kind"] == "not_proven"
+
+    ready_proof_union, _discriminator = get_args(pac_schemas.ReadyPlanProof.__value__)
+    ready_proof_kinds = {get_args(member.model_fields["kind"].annotation) for member in get_args(ready_proof_union)}
+    assert ready_proof_kinds == {("optimal_proven",), ("not_proven",)}
 
 
 def test_objective_sense_schema_explicitly_preserves_min_and_max() -> None:
     expected = ("min", "max")
     assert get_args(pac_schemas.ObjectiveSense) == expected
     assert TypeAdapter(pac_schemas.ObjectiveSense).json_schema()["enum"] == list(expected)
-    for model_type in (ObjectiveStageResult, SolverStageEvidence, pac_schemas.BoundedObjectiveStage):
+    for model_type in (ObjectiveStageResult, SolverStageEvidence):
         assert get_args(model_type.model_fields["sense"].annotation) == expected
-
-
-GAP_BOUND_SENSE_CASES = (
-    pytest.param("min", "26", "25.000", "24", True, id="min-interior"),
-    pytest.param("min", "26", "24", "24", True, id="min-dual-boundary"),
-    pytest.param("min", "26", "26", "24", True, id="min-primal-boundary"),
-    pytest.param("min", "26", "27", "24", False, id="min-above-primal"),
-    pytest.param("min", "26", "23", "24", False, id="min-below-dual"),
-    pytest.param("min", "24", "25", "26", False, id="min-contradictory-order"),
-    pytest.param("max", "24", "25.000", "26", True, id="max-interior"),
-    pytest.param("max", "24", "24", "26", True, id="max-primal-boundary"),
-    pytest.param("max", "24", "26", "26", True, id="max-dual-boundary"),
-    pytest.param("max", "24", "27", "26", False, id="max-above-dual"),
-    pytest.param("max", "24", "23", "26", False, id="max-below-primal"),
-    pytest.param("max", "26", "25", "24", False, id="max-contradictory-order"),
-)
-
-
-@pytest.mark.parametrize(("sense", "primal", "exact_value", "dual", "accepted"), GAP_BOUND_SENSE_CASES)
-def test_gap_proof_bounds_contain_exact_objective_according_to_sense(
-    sense: str,
-    primal: str,
-    exact_value: str,
-    dual: str,
-    accepted: bool,
-) -> None:
-    payload = _gap_bounded_pac_result_for_sense(sense, primal, exact_value, dual)
-    if not accepted:
-        _reject(PAC_PLAN_OUTPUT_ADAPTER, payload)
-        return
-
-    model, _emitted = _strict_roundtrip(PAC_PLAN_OUTPUT_ADAPTER, payload)
-    wire = PAC_PLAN_OUTPUT_ADAPTER.dump_python(model, mode="json")
-    objective = _find(wire["primary_solution"]["objectives"]["stages"], "objective_code", "fixed_l2")
-    solver_stage = _find(wire["solver_evidence"]["stages"], "objective_code", "fixed_l2")
-    bound = _find(wire["proof"]["stage_bounds"], "objective_code", "fixed_l2")
-    exact = _exact_wire_fraction(objective["value"])
-
-    assert (bound["stage"], bound["scope"], bound["unit"]) == (solver_stage["stage"], solver_stage["scope"], solver_stage["unit"])
-    assert all(isinstance(bound[field], str) and isinstance(solver_stage[field], str) for field in ("primal", "dual", "absolute_gap", "relative_gap"))
-    if sense == "min":
-        assert Fraction(dual) <= exact <= Fraction(primal)
-    else:
-        assert Fraction(primal) <= exact <= Fraction(dual)
-
-
-@pytest.mark.parametrize("mutation", ("stage", "scope", "unit"))
-def test_gap_proof_rejects_bound_identity_mismatches_against_solver_stage(mutation: str) -> None:
-    payload = _gap_bounded_pac_result_for_sense("min", "26", "25", "24")
-    bound = _find(payload["proof"]["stage_bounds"], "objective_code", "fixed_l2")
-    if mutation == "stage":
-        bound["stage"] = "solver-other-stage"
-    elif mutation == "scope":
-        bound["scope"] = "incumbent_face"
-    else:
-        bound["unit"] = {"kind": "valuation_money_squared", "currency_code": "USD"}
-    _reject(PAC_PLAN_OUTPUT_ADAPTER, payload)
 
 
 SELL_IRREDUCIBILITY_UNRESOLVED = "portfolio_rebalancer.sell_irreducibility_unresolved"
@@ -2169,7 +2099,8 @@ def _sell_irreducibility_not_proven_result(
     }
     payload["issues"] = [] if issue_code is None else [_sell_irreducibility_issue(issue_code, kind=issue_kind, severity=issue_severity)]
     payload["stop_reason"] = stop_reason
-    payload["solver_evidence"] = {"kind": "not_run", "reason": "allocation.solver_not_required"} if stop_reason == "completed" else {"kind": "reported_floating", "stages": [_reported_solver_stage(status="unfinished")]}
+    if stop_reason != "completed":
+        payload["solver_evidence"] = {"kind": "reported_floating", "stages": [_reported_solver_stage(status="unfinished")]}
     return payload
 
 
@@ -2185,8 +2116,9 @@ def test_rebalancer_sell_irreducibility_not_proven_binding_is_orthogonal_to_vali
     assert wire["issues"][0]["kind"] == "proof"
     assert wire["issues"][0]["severity"] == "warning"
     assert wire["stop_reason"] == stop_reason
-    expected_solver_kind = "not_run" if stop_reason == "completed" else "reported_floating"
-    assert wire["solver_evidence"]["kind"] == expected_solver_kind
+    assert wire["solver_evidence"]["kind"] == "reported_floating"
+    statuses = {stage["status"] for stage in wire["solver_evidence"]["stages"]}
+    assert statuses == ({"finished"} if stop_reason == "completed" else {"unfinished"})
 
 
 SELL_IRREDUCIBILITY_BINDING_REJECTION_CASES = (
@@ -2226,10 +2158,6 @@ OPTIMAL_PROOF_PRODUCT_CASES = (
     pytest.param("PAC", PAC_PLAN_OUTPUT_ADAPTER, _pac_no_op_result, "turnover", id="pac"),
     pytest.param("Rebalancer", REBALANCER_PLAN_OUTPUT_ADAPTER, _rebalancer_incumbent_result, "route_priority", id="rebalancer"),
 )
-OPTIMAL_PROOF_SOURCE_CASES = (
-    pytest.param("exhaustive_oracle", id="exhaustive-oracle"),
-    pytest.param("score_lattice_closure", id="score-lattice-closure"),
-)
 OPTIMAL_PROOF_MUTATION_CASES = (
     pytest.param("missing", id="missing-interior-code"),
     pytest.param("subset", id="prefix-subset"),
@@ -2243,37 +2171,34 @@ OPTIMAL_PROOF_MUTATION_CASES = (
 
 
 @pytest.mark.parametrize(("product", "adapter", "factory", "_extra_code"), OPTIMAL_PROOF_PRODUCT_CASES)
-@pytest.mark.parametrize("proof_source", OPTIMAL_PROOF_SOURCE_CASES)
 def test_optimal_proven_witness_covers_every_published_objective_stage_in_exact_order(
     product: str,
     adapter: TypeAdapter[Any],
     factory: PayloadFactory,
     _extra_code: str,
-    proof_source: str,
 ) -> None:
     payload = factory()
     published_codes = _primary_objective_codes(payload)
-    payload["proof"] = _optimal_proven_proof(proof_source, published_codes)
+    assert _finished_evidence_codes(payload) == published_codes, product
+    payload["proof"] = _optimal_proven_proof(published_codes)
 
     model, _emitted = _strict_roundtrip(adapter, payload)
     wire = adapter.dump_python(model, mode="json")
     witness = wire["proof"]["witness"]
 
-    assert witness["objective_codes"] == published_codes, product
+    assert wire["proof"]["proof_source"] == "solver_status"
+    assert witness == {"kind": "solver_status", "objective_codes": published_codes}, product
+    assert witness["objective_codes"] == [stage["objective_code"] for stage in wire["solver_evidence"]["stages"]]
     assert wire["proof"]["tie_break_closed"] is True
-    if proof_source == "score_lattice_closure":
-        assert witness["closed_stage_count"] == len(published_codes)
 
 
 @pytest.mark.parametrize(("product", "adapter", "factory", "extra_code"), OPTIMAL_PROOF_PRODUCT_CASES)
-@pytest.mark.parametrize("proof_source", OPTIMAL_PROOF_SOURCE_CASES)
 @pytest.mark.parametrize("mutation", OPTIMAL_PROOF_MUTATION_CASES)
 def test_optimal_proven_witness_rejects_incomplete_or_false_objective_closure(
     product: str,
     adapter: TypeAdapter[Any],
     factory: PayloadFactory,
     extra_code: str,
-    proof_source: str,
     mutation: str,
 ) -> None:
     payload = factory()
@@ -2297,7 +2222,7 @@ def test_optimal_proven_witness_rejects_incomplete_or_false_objective_closure(
     else:
         raise AssertionError(f"unhandled objective-closure mutation {mutation!r}")
 
-    payload["proof"] = _optimal_proven_proof(proof_source, witness_codes)
+    payload["proof"] = _optimal_proven_proof(witness_codes)
     if mutation == "tie-closure-missing":
         payload["proof"].pop("tie_break_closed")
     elif mutation == "tie-closure-false":
@@ -2305,106 +2230,248 @@ def test_optimal_proven_witness_rejects_incomplete_or_false_objective_closure(
     _reject(adapter, payload)
 
 
-@pytest.mark.parametrize(("product", "adapter", "factory", "_extra_code"), OPTIMAL_PROOF_PRODUCT_CASES)
-@pytest.mark.parametrize("closed_stage_count_delta", (-1, 1), ids=("too-few", "too-many"))
-def test_score_lattice_closed_stage_count_equals_full_objective_vector_length(
-    product: str,
-    adapter: TypeAdapter[Any],
-    factory: PayloadFactory,
-    _extra_code: str,
-    closed_stage_count_delta: int,
-) -> None:
-    payload = factory()
-    published_codes = _primary_objective_codes(payload)
-    payload["proof"] = _optimal_proven_proof("score_lattice_closure", published_codes)
-    payload["proof"]["witness"]["closed_stage_count"] = len(published_codes) + closed_stage_count_delta
+READY_PRODUCT_CASES = (
+    pytest.param("PAC", PAC_PLAN_OUTPUT_ADAPTER, id="pac"),
+    pytest.param("Rebalancer", REBALANCER_PLAN_OUTPUT_ADAPTER, id="rebalancer"),
+)
 
-    assert payload["proof"]["witness"]["objective_codes"] == published_codes, product
+
+def _ready_source_result(product: str) -> JsonObject:
+    return _pac_no_op_result() if product == "PAC" else _rebalancer_incumbent_result()
+
+
+@pytest.mark.parametrize(("product", "adapter"), READY_PRODUCT_CASES)
+def test_infeasible_result_requires_a_matching_exact_infeasibility_witness(product: str, adapter: TypeAdapter[Any]) -> None:
+    model, _emitted = _strict_roundtrip(adapter, _ready_infeasible_result(product))
+    wire = adapter.dump_python(model, mode="json")
+    (stage,) = wire["solver_evidence"]["stages"]
+
+    assert wire["proof"] == {
+        "kind": "infeasibility_proven",
+        "proof_source": "solver_status",
+        "witness": {"kind": "solver_status", "objective_codes": [stage["objective_code"]]},
+    }
+    assert stage["objective_code"] == _primary_objective_codes(_ready_source_result(product))[0]
+
+
+@pytest.mark.parametrize(("product", "adapter"), READY_PRODUCT_CASES)
+def test_ready_infeasible_is_one_infeasible_first_stage_with_a_completed_stop(product: str, adapter: TypeAdapter[Any]) -> None:
+    """SCIP's verdict ends the search: one stage, first and global, nothing observed, and ``completed``."""
+    payload = _ready_infeasible_result(product)
+    model, _emitted = _strict_roundtrip(adapter, payload)
+    wire = adapter.dump_python(model, mode="json")
+
+    assert (wire["result_state"], wire["outcome"], wire["stop_reason"]) == ("ready_infeasible", "infeasible_proven", "completed")
+    assert "primary_solution" not in wire and "deployment" not in wire
+    (stage,) = wire["solver_evidence"]["stages"]
+    assert (stage["status"], stage["ordinal"], stage["scope"]) == ("infeasible", 1, "global")
+    assert {observation: stage[observation] for observation in SOLVER_OBSERVATIONS} == dict.fromkeys(SOLVER_OBSERVATIONS)
+
+    payload["stop_reason"] = "time_limit"
     _reject(adapter, payload)
 
 
-@pytest.mark.parametrize("proof_source", ("exhaustive_oracle", "deterministic_conflict"))
-def test_infeasible_result_requires_a_matching_exact_infeasibility_witness(proof_source: str) -> None:
-    payload = _ready_infeasible_result("PAC")
-    if proof_source == "deterministic_conflict":
-        payload["proof"] = {
-            "kind": "infeasibility_proven",
-            "proof_source": "deterministic_conflict",
-            "witness": {
-                "kind": "deterministic_conflict",
-                "issue_codes": [
-                    "allocation.required_min_notional_unfunded",
-                    "allocation.no_positive_order_fundable",
-                ],
-                "summary_code": "allocation.no_positive_order_fundable",
-            },
-        }
-    model, _emitted = _strict_roundtrip(PAC_PLAN_OUTPUT_ADAPTER, payload)
-    wire = PAC_PLAN_OUTPUT_ADAPTER.dump_python(model, mode="json")
-    assert wire["proof"]["proof_source"] == proof_source
-    if proof_source == "deterministic_conflict":
-        witness = wire["proof"]["witness"]
-        assert witness["summary_code"] in witness["issue_codes"]
-        assert set(witness["issue_codes"]) <= set(EXPECTED_PLANNER_ISSUE_CODES)
+def _optimal_ready_result(product: str) -> JsonObject:
+    payload = _ready_source_result(product)
+    payload["proof"] = _optimal_proven_proof(_primary_objective_codes(payload))
+    return payload
 
 
-def test_deterministic_conflict_summary_code_must_reference_a_listed_issue() -> None:
-    payload = _ready_infeasible_result("PAC")
-    payload["proof"] = {
-        "kind": "infeasibility_proven",
-        "proof_source": "deterministic_conflict",
-        "witness": {
-            "kind": "deterministic_conflict",
-            "issue_codes": ["allocation.required_min_notional_unfunded"],
-            "summary_code": "allocation.no_positive_order_fundable",
-        },
-    }
-    _reject(PAC_PLAN_OUTPUT_ADAPTER, payload)
+def _optimal_over_an_unfinished_stage(product: str) -> JsonObject:
+    payload = _optimal_ready_result(product)
+    last = max(payload["solver_evidence"]["stages"], key=lambda stage: stage["ordinal"])
+    last["status"] = "unfinished"
+    payload["stop_reason"] = "time_limit"
+    return payload
 
 
-def test_finished_floating_solver_report_does_not_become_exact_proof() -> None:
-    payload = _pac_no_op_result()
-    payload["stop_reason"] = "completed"
-    payload["solver_evidence"] = {"kind": "reported_floating", "stages": [_reported_solver_stage(status="finished")]}
-    payload["proof"] = {"kind": "not_proven", "reason_code": "allocation.exact_proof_not_established"}
+def _optimal_over_reordered_evidence(product: str) -> JsonObject:
+    payload = _optimal_ready_result(product)
+    stages = payload["solver_evidence"]["stages"]
+    second, third = _find(stages, "ordinal", 2), _find(stages, "ordinal", 3)
+    second["ordinal"], third["ordinal"] = 3, 2
+    stages.sort(key=lambda stage: stage["ordinal"])
+    return payload
 
-    model, _emitted = _strict_roundtrip(PAC_PLAN_OUTPUT_ADAPTER, payload)
-    wire = PAC_PLAN_OUTPUT_ADAPTER.dump_python(model, mode="json")
-    assert wire["solver_evidence"]["kind"] == "reported_floating"
-    assert wire["proof"]["kind"] == "not_proven"
+
+def _optimal_over_evidence_missing_a_stage(product: str) -> JsonObject:
+    payload = _optimal_ready_result(product)
+    stages = payload["solver_evidence"]["stages"]
+    stages.remove(max(stages, key=lambda stage: stage["ordinal"]))
+    return payload
+
+
+def _infeasibility_over_a_finished_stage(product: str) -> JsonObject:
+    payload = _ready_infeasible_result(product)
+    finished_first = deepcopy(_find(_ready_source_result(product)["solver_evidence"]["stages"], "ordinal", 1))
+    assert finished_first["status"] == "finished"
+    payload["solver_evidence"] = {"kind": "reported_floating", "stages": [finished_first]}
+    return payload
+
+
+def _infeasibility_naming_another_stage(product: str) -> JsonObject:
+    payload = _ready_infeasible_result(product)
+    (stage,) = payload["solver_evidence"]["stages"]
+    other = next(code for code in _primary_objective_codes(_ready_source_result(product)) if code != stage["objective_code"])
+    payload["proof"]["witness"]["objective_codes"] = [other]
+    return payload
+
+
+def _state_over_only_an_infeasible_stage(state: str) -> Callable[[str], JsonObject]:
+    def build(product: str) -> JsonObject:
+        payload = _result_payload(product, state)
+        assert payload["proof"]["kind"] == "not_proven", payload["proof"]
+        return _with_only_an_infeasible_first_stage(payload)
+
+    return build
+
+
+SOLVER_STATUS_BINDING_CASES = (
+    pytest.param(_optimal_over_an_unfinished_stage, "optimal_proven requires every solver stage finished", id="optimal-over-unfinished-stage"),
+    pytest.param(_optimal_over_reordered_evidence, "Optimal proof witness must name exactly the finished solver stages in order", id="optimal-witness-order-differs-from-evidence"),
+    pytest.param(_optimal_over_evidence_missing_a_stage, "Optimal proof witness must name exactly the finished solver stages in order", id="optimal-witness-names-an-unreported-stage"),
+    pytest.param(_infeasibility_over_a_finished_stage, "infeasibility_proven requires an infeasible first solver stage", id="infeasibility-without-infeasible-stage"),
+    pytest.param(_infeasibility_naming_another_stage, "Infeasibility proof witness must name the infeasible solver stage", id="infeasibility-witness-names-another-stage"),
+    pytest.param(_state_over_only_an_infeasible_stage("ready_no_incumbent"), "An infeasible solver stage requires an infeasibility proof", id="no-incumbent-over-infeasible-stage"),
+    pytest.param(_state_over_only_an_infeasible_stage("ready_no_op"), "An infeasible solver stage requires an infeasibility proof", id="no-op-over-infeasible-stage"),
+    pytest.param(_state_over_only_an_infeasible_stage("ready_incumbent"), "An infeasible solver stage requires an infeasibility proof", id="incumbent-over-infeasible-stage"),
+)
+
+
+@pytest.mark.parametrize(("product", "adapter"), READY_PRODUCT_CASES)
+@pytest.mark.parametrize(("build", "message"), SOLVER_STATUS_BINDING_CASES)
+def test_solver_status_proof_is_bound_to_the_solver_evidence(
+    product: str,
+    adapter: TypeAdapter[Any],
+    build: Callable[[str], JsonObject],
+    message: str,
+) -> None:
+    """The proof is SCIP's status, so the evidence must show that status - and an infeasible stage backs nothing else."""
+    _reject_because(adapter, build(product), message)
+
+
+def test_infeasible_solver_stage_is_accepted_only_as_the_first_global_stage_without_observations() -> None:
+    model, _emitted = _strict_roundtrip(SOLVER_STAGE_ADAPTER, _infeasible_stage_specimen())
+    wire = SOLVER_STAGE_ADAPTER.dump_python(model, mode="json")
+    assert (wire["status"], wire["ordinal"], wire["scope"]) == ("infeasible", 1, "global")
+    assert {observation: wire[observation] for observation in SOLVER_OBSERVATIONS} == dict.fromkeys(SOLVER_OBSERVATIONS)
+
+
+INFEASIBLE_STAGE_REJECTION_CASES = (
+    pytest.param("ordinal", 2, "Only the first, global solver stage can report infeasibility", id="second-ordinal"),
+    pytest.param("scope", "incumbent_face", "Only the first, global solver stage can report infeasibility", id="incumbent-face"),
+    pytest.param("primal", "25", "An infeasible solver stage has no primal, dual, or gap", id="primal"),
+    pytest.param("dual", "24", "An infeasible solver stage has no primal, dual, or gap", id="dual"),
+    pytest.param("absolute_gap", "1", "An infeasible solver stage has no primal, dual, or gap", id="absolute-gap"),
+    pytest.param("relative_gap", "0.04", "An infeasible solver stage has no primal, dual, or gap", id="relative-gap"),
+)
+
+
+@pytest.mark.parametrize(("field", "value", "message"), INFEASIBLE_STAGE_REJECTION_CASES)
+def test_infeasible_solver_stage_rejects_a_later_stage_a_face_or_any_observation(field: str, value: Any, message: str) -> None:
+    stage = _infeasible_stage_specimen()
+    stage[field] = value
+    _reject_because(SOLVER_STAGE_ADAPTER, stage, message)
+
+
+@pytest.mark.parametrize("other_status", ("finished", "unfinished"))
+def test_infeasible_solver_stage_must_be_the_only_reported_stage(other_status: str) -> None:
+    source = _pac_no_op_result()
+    first_code = _find(source["solver_evidence"]["stages"], "ordinal", 1)["objective_code"]
+    alone = {"kind": "reported_floating", "stages": [_infeasible_solver_stage(source, first_code)]}
+    _strict_roundtrip(SOLVER_EVIDENCE_ADAPTER, alone)
+
+    later = deepcopy(_find(source["solver_evidence"]["stages"], "ordinal", 2))
+    later["status"] = other_status
+    followed = {"kind": "reported_floating", "stages": [_infeasible_solver_stage(source, first_code), later]}
+    _reject_because(SOLVER_EVIDENCE_ADAPTER, followed, "An infeasible solver stage must be the only reported stage")
 
 
 @pytest.mark.parametrize(
-    "mutation",
+    ("objective_codes", "message"),
     (
-        "reported-floating-proof-source",
-        "mismatched-optimal-witness",
-        "zero-feasible-optimal-oracle",
-        "feasible-infeasibility-oracle",
-        "gap-without-reported-solver",
-        "gap-missing-unfinished-stage",
+        pytest.param(["fixed_l2", "fixed_l2"], "Solver-status witness objective codes must be unique", id="duplicate-codes"),
+        pytest.param([], "at least 1 item", id="empty-codes"),
     ),
 )
-def test_false_or_incomplete_exact_proof_is_rejected(mutation: str) -> None:
-    if mutation == "feasible-infeasibility-oracle":
-        payload = _ready_infeasible_result("PAC")
-        payload["proof"]["witness"]["feasible_candidates"] = 1
-    elif mutation in {"gap-without-reported-solver", "gap-missing-unfinished-stage"}:
-        payload = _gap_bounded_pac_result()
-        if mutation == "gap-without-reported-solver":
-            payload["solver_evidence"] = {"kind": "not_run", "reason": "allocation.solver_not_required"}
-            payload["stop_reason"] = "completed"
-        else:
-            payload["proof"]["stage_bounds"] = []
+def test_solver_status_witness_rejects_duplicate_or_empty_codes(objective_codes: list[str], message: str) -> None:
+    _strict_roundtrip(SOLVER_STATUS_WITNESS_ADAPTER, {"kind": "solver_status", "objective_codes": ["fixed_l2", "shortfall"]})
+    _reject_because(SOLVER_STATUS_WITNESS_ADAPTER, {"kind": "solver_status", "objective_codes": objective_codes}, message)
+
+
+def _infeasibility_proof_specimen() -> JsonObject:
+    return {"kind": "infeasibility_proven", "proof_source": "solver_status", "witness": {"kind": "solver_status", "objective_codes": ["fixed_l2"]}}
+
+
+def _optimal_proof_specimen() -> JsonObject:
+    return _optimal_proven_proof(["fixed_l2", "shortfall"])
+
+
+def test_infeasibility_proof_names_exactly_one_objective_code() -> None:
+    proof = _infeasibility_proof_specimen()
+    _strict_roundtrip(INFEASIBILITY_PROOF_ADAPTER, proof)
+    proof["witness"]["objective_codes"] = ["fixed_l2", "shortfall"]
+    _reject_because(INFEASIBILITY_PROOF_ADAPTER, proof, "An infeasibility proof names exactly the first objective stage")
+
+
+SOLVER_STATUS_PROOF_CASES = (
+    pytest.param(pac_schemas.OptimalProvenProof, _optimal_proof_specimen, id="optimal"),
+    pytest.param(pac_schemas.InfeasibilityProvenProof, _infeasibility_proof_specimen, id="infeasibility"),
+)
+
+
+@pytest.mark.parametrize(("proof_type", "factory"), SOLVER_STATUS_PROOF_CASES)
+@pytest.mark.parametrize("field", ("proof_source", "witness_kind"))
+@pytest.mark.parametrize("foreign", ("exhaustive_oracle", "deterministic_conflict", "reported_floating"))
+def test_solver_status_is_the_only_proof_source_and_witness_kind(
+    proof_type: type[BaseModel],
+    factory: PayloadFactory,
+    field: str,
+    foreign: str,
+) -> None:
+    assert get_args(proof_type.model_fields["proof_source"].annotation) == ("solver_status",)
+    assert get_args(pac_schemas.SolverStatusWitness.model_fields["kind"].annotation) == ("solver_status",)
+    adapter = TypeAdapter(proof_type)
+    proof = factory()
+    _strict_roundtrip(adapter, proof)
+
+    if field == "proof_source":
+        proof["proof_source"] = foreign
     else:
-        payload = _pac_no_op_result()
-        payload["proof"] = _optimal_proven_proof("exhaustive_oracle", _primary_objective_codes(payload))
-        if mutation == "reported-floating-proof-source":
-            payload["proof"]["proof_source"] = "reported_floating"
-        elif mutation == "mismatched-optimal-witness":
-            payload["proof"]["proof_source"] = "score_lattice_closure"
-        else:
-            payload["proof"]["witness"]["feasible_candidates"] = 0
+        proof["witness"]["kind"] = foreign
+    _reject(adapter, proof)
+
+
+EXACT_PROOF_MUTATION_CASES = (
+    pytest.param("optimal", "reported-floating-proof-source", id="reported-floating-proof-source"),
+    pytest.param("optimal", "foreign-witness-kind", id="foreign-optimal-witness-kind"),
+    pytest.param("optimal", "oracle-counts-on-witness", id="oracle-counts-on-optimal-witness"),
+    pytest.param("infeasibility", "foreign-proof-source", id="foreign-infeasibility-proof-source"),
+    pytest.param("infeasibility", "oracle-counts-on-witness", id="oracle-counts-on-infeasibility-witness"),
+    pytest.param("infeasibility", "second-code", id="infeasibility-witness-with-two-codes"),
+)
+
+
+@pytest.mark.parametrize(("proof_kind", "mutation"), EXACT_PROOF_MUTATION_CASES)
+def test_false_or_incomplete_exact_proof_is_rejected(proof_kind: str, mutation: str) -> None:
+    payload = _optimal_ready_result("PAC") if proof_kind == "optimal" else _ready_infeasible_result("PAC")
+    _strict_roundtrip(PAC_PLAN_OUTPUT_ADAPTER, payload)
+    proof = payload["proof"]
+
+    if mutation == "reported-floating-proof-source":
+        proof["proof_source"] = "reported_floating"
+    elif mutation == "foreign-proof-source":
+        proof["proof_source"] = "deterministic_conflict"
+    elif mutation == "foreign-witness-kind":
+        proof["witness"]["kind"] = "exhaustive_oracle"
+    elif mutation == "oracle-counts-on-witness":
+        proof["witness"].update({"enumerated_candidates": 1, "feasible_candidates": 1 if proof_kind == "optimal" else 0})
+        _assert_extra_forbidden(PAC_PLAN_OUTPUT_ADAPTER, payload, "feasible_candidates")
+        return
+    elif mutation == "second-code":
+        proof["witness"]["objective_codes"] = [*proof["witness"]["objective_codes"], "shortfall"]
+    else:
+        raise AssertionError(f"unhandled exact-proof mutation {mutation!r}")
     _reject(PAC_PLAN_OUTPUT_ADAPTER, payload)
 
 
@@ -2631,13 +2698,13 @@ PLANNER_FULL_SCHEMA_FINGERPRINT_CASES = (
     pytest.param(
         PAC_PLAN_INPUT_ADAPTER,
         PAC_PLAN_OUTPUT_ADAPTER,
-        "a4f499864b74cdea63a8411ff26b80877055a8b8fd297524d2a5197a8fc41923",
+        "bd52b93a79b6560c634c8c5d7b9b741fa0b5b1fac9ec81f06f8fedbae59951d3",
         id="pac",
     ),
     pytest.param(
         REBALANCER_PLAN_INPUT_ADAPTER,
         REBALANCER_PLAN_OUTPUT_ADAPTER,
-        "c4451b184aa0fd9f670a27f8be53fc1aa4e11c852cb3dc631199b3fd1d805446",
+        "fff1f966c63a9d9bbe0bc13cae5b9203c31eb1aafe795732b87828c4c3f681b1",
         id="rebalancer",
     ),
 )

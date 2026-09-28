@@ -138,8 +138,163 @@
   },
   "stop_reason": "completed",
   "solver_evidence": {
-    "kind": "not_run",
-    "reason": "allocation.solver_not_required"
+    "kind": "reported_floating",
+    "stages": [
+      {
+        "kind": "reported_floating",
+        "stage": "fixed_l2",
+        "objective_code": "fixed_l2",
+        "ordinal": 1,
+        "status": "finished",
+        "scope": "global",
+        "sense": "min",
+        "unit": {
+          "kind": "valuation_money_squared",
+          "currency_code": "EUR"
+        },
+        "primal": "0",
+        "dual": "0",
+        "absolute_gap": "0",
+        "relative_gap": "0",
+        "tolerances": {
+          "feasibility": "0.000001",
+          "integrality": "0.000000001",
+          "absolute_gap": "0",
+          "relative_gap": "0"
+        },
+        "engine": "SCIP",
+        "version": "10.0",
+        "settings": [
+          {
+            "name": "time_budget",
+            "value": "30"
+          }
+        ]
+      },
+      {
+        "kind": "reported_floating",
+        "stage": "shortfall",
+        "objective_code": "shortfall",
+        "ordinal": 2,
+        "status": "finished",
+        "scope": "incumbent_face",
+        "sense": "min",
+        "unit": {
+          "kind": "valuation_money",
+          "currency_code": "EUR"
+        },
+        "primal": "0",
+        "dual": "0",
+        "absolute_gap": "0",
+        "relative_gap": "0",
+        "tolerances": {
+          "feasibility": "0.000001",
+          "integrality": "0.000000001",
+          "absolute_gap": "0",
+          "relative_gap": "0"
+        },
+        "engine": "SCIP",
+        "version": "10.0",
+        "settings": [
+          {
+            "name": "time_budget",
+            "value": "30"
+          }
+        ]
+      },
+      {
+        "kind": "reported_floating",
+        "stage": "turnover",
+        "objective_code": "turnover",
+        "ordinal": 3,
+        "status": "finished",
+        "scope": "incumbent_face",
+        "sense": "min",
+        "unit": {
+          "kind": "valuation_money",
+          "currency_code": "EUR"
+        },
+        "primal": "110",
+        "dual": "110",
+        "absolute_gap": "0",
+        "relative_gap": "0",
+        "tolerances": {
+          "feasibility": "0.000001",
+          "integrality": "0.000000001",
+          "absolute_gap": "0",
+          "relative_gap": "0"
+        },
+        "engine": "SCIP",
+        "version": "10.0",
+        "settings": [
+          {
+            "name": "time_budget",
+            "value": "30"
+          }
+        ]
+      },
+      {
+        "kind": "reported_floating",
+        "stage": "explicit_cost",
+        "objective_code": "explicit_cost",
+        "ordinal": 4,
+        "status": "finished",
+        "scope": "incumbent_face",
+        "sense": "min",
+        "unit": {
+          "kind": "valuation_money",
+          "currency_code": "EUR"
+        },
+        "primal": "0",
+        "dual": "0",
+        "absolute_gap": "0",
+        "relative_gap": "0",
+        "tolerances": {
+          "feasibility": "0.000001",
+          "integrality": "0.000000001",
+          "absolute_gap": "0",
+          "relative_gap": "0"
+        },
+        "engine": "SCIP",
+        "version": "10.0",
+        "settings": [
+          {
+            "name": "time_budget",
+            "value": "30"
+          }
+        ]
+      },
+      {
+        "kind": "reported_floating",
+        "stage": "active_order_rows",
+        "objective_code": "active_order_rows",
+        "ordinal": 5,
+        "status": "finished",
+        "scope": "incumbent_face",
+        "sense": "min",
+        "unit": {
+          "kind": "count"
+        },
+        "primal": "4",
+        "dual": "4",
+        "absolute_gap": "0",
+        "relative_gap": "0",
+        "tolerances": {
+          "feasibility": "0.000001",
+          "integrality": "0.000000001",
+          "absolute_gap": "0",
+          "relative_gap": "0"
+        },
+        "engine": "SCIP",
+        "version": "10.0",
+        "settings": [
+          {
+            "name": "time_budget",
+            "value": "30"
+          }
+        ]
+      }
+    ]
   },
   "issues": [],
   "primary_solution": {

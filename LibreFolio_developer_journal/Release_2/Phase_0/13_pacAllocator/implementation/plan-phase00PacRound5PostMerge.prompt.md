@@ -524,6 +524,9 @@ il P1 non aveva è nuovo:
                                    +------------------------------+
   ```
 
+  > **28/09 (D-X1, commit 4):** l'anteprima resta com'era stata approvata. Nella UI la fonte della
+  > prova sta nel pannello della prova (C14), e oggi è «stato del solver», non «oracolo esaustivo».
+
   > ✅ **2026-09-24 — C0 approvato dal developer** (Q-C0-F: «hai il mio via libera, ovviamente poi
   > faremo la review»). Le decisioni Q-C0-1…7 sono in §2 e nel delta §8.1.1; il delta è stato
   > riallineato a quelle decisioni (registro delle modifiche in testa al delta).
@@ -996,7 +999,7 @@ il P1 non aveva è nuovo:
 | T2 | draft | Copie indipendenti. Nessuna sovrascrittura silenziosa. `draft_revision` monotona. Risposta vecchia scartata. `accountGeneration` cambiata → scarto. |
 | T3 | request builder | Stringhe decimali intatte (nessun passaggio da `Number`). Unità esplicite. ~~Draft vuoto → request valida che dà `needs_input`~~ **Corretto il 24/09:** un draft vuoto dà `{ok:false, problems}`, cioè problemi locali per step (D8, `request.ts:217-219`), e nessuna request. `needs_input` si prova con le fixture (T5) e via API (TB1). Nessun `currency_specs` nella request (C0b.1). `policy` letta dal contratto: con una sola opzione è `proportional` (C0b.2). Prezzo con età > 0 → `stale{age_days, accepted:true}`, del giorno → `fresh` (Q-C0-3). Tetto della route precompilato `1000000000` nell'unità della modalità (Q-C0-5). |
 | T4 | lifecycle | `data-busy`, annulla, stale (D15), cambio account (D16). |
-| T5 | stati da fixture | `needs_input`, `invalid`, `unsupported`, `ready_no_op`. `ready_incumbent` × {`optimal_proven` oracolo, `optimal_proven` lattice, `gap_bounded`, `not_proven`}. `ready_infeasible` × {oracolo, conflitto deterministico}. `ready_no_incumbent`. Per ognuno `data-state`; badge «ottimo» **solo** con `optimal_proven`. |
+| T5 | stati da fixture | `needs_input`, `invalid`, `unsupported`, `ready_no_op`. ~~`ready_incumbent` × {`optimal_proven` oracolo, `optimal_proven` lattice, `gap_bounded`, `not_proven`}. `ready_infeasible` × {oracolo, conflitto deterministico}.~~ **Corretto il 28/09 (D-X1, commit 4):** `ready_incumbent` × {`optimal_proven` da `solver_status`, `not_proven`}; `ready_infeasible` × {`infeasibility_proven` da `solver_status`}; le altre forme non esistono più sul wire. `ready_no_incumbent`, per limite e, fino al commit 5, per replay respinto. Per ognuno `data-state`; badge «ottimo» **solo** con `optimal_proven`. |
 | T6 | issue | Ogni codice del wire ha un messaggio in 4 lingue (confronto con la lista generata). Fallback. Parametri ICU. `path` → step. |
 | T7 | privacy | Privacy ON: importi, fee, residui, L2 e quantità → `•••`, con il **codice valuta visibile** (decisione c); prezzi, FX e % in chiaro; segno fuori dalla maschera (D8); tooltip e label mascherati. Privacy OFF: tutto in chiaro. Il gate di J resta verde sui file nuovi. Nessun import da `riskAnalysisHelpers`. |
 | T7b | quantità (J) | Privacy ON: istruzione e quantità economica `•••` via `maskable(…, 'personal')`; OFF in chiaro. Nessuna cella con quantità in chiaro accanto a un prezzo pubblico. Caso `≈`: un valore personale `exact_ratio` rende `≈•••`, senza cifre. Delta C0 §10.1. |
@@ -1099,16 +1102,16 @@ E2E Playwright: **dopo** l'approvazione umana, come da hard gate di Step 5 (Step
    | # | Scenario | Atteso |
    |---|---|---|
    | S1 | draft vuoto | ~~`needs_input`~~ **corretto il 24/09:** «Continua» si ferma su Liquidità con l'avviso «1 problema da correggere» (gating locale D8), senza chiamate al backend. `needs_input` non si raggiunge dalla UI: si prova in T5 e TB1 |
-   | S2 | solo manuale, senza asset DB | ~~proven oracolo~~ **corretto il 24/09:** `ready_incumbent` + `not_proven` quando il contributo passa da una route di funding di taglia reale. Il trasferimento si enumera al centesimo (`evaluator.py:694-716`), per cui 1000 € su due ETF a 100 e 50 dà 100 001 × 11 × 21 ≈ 2,3·10⁷ candidati, sopra il tetto di 200 000: decide SCIP. Nessuna copia necessaria (quantum da babel, C0b.1) |
-   | S2b | come S2, dominio minuscolo (5 € su ETF a 1 e 2) | `ready_incumbent` + `optimal_proven` dall'oracolo; il testimone riporta 501 × 6 × 3 = 9 018 candidati |
-   | S2c | PAC comune (100 € su ETF a 50 e 100) | **difetto 🔴 X1** (nota del Passo E): oggi `tool_error` `execution_limit`. Atteso dopo la correzione: `ready_incumbent`, con prova o senza, mai errore |
+   | S2 | solo manuale, senza asset DB | ~~proven oracolo~~ ~~**corretto il 24/09:** `ready_incumbent` + `not_proven` quando il contributo passa da una route di funding di taglia reale. Il trasferimento si enumera al centesimo (`evaluator.py:694-716`), per cui 1000 € su due ETF a 100 e 50 dà 100 001 × 11 × 21 ≈ 2,3·10⁷ candidati, sopra il tetto di 200 000: decide SCIP.~~ **Corretto il 28/09 (D-X1):** la taglia del dominio non conta più. SCIP chiude ogni stadio → `ready_incumbent` + `optimal_proven`, fonte «stato del solver», `completed`. Nessuna copia necessaria (quantum da babel, C0b.1) |
+   | S2b | come S2, dominio minuscolo (5 € su ETF a 1 e 2) | ~~`ready_incumbent` + `optimal_proven` dall'oracolo; il testimone riporta 501 × 6 × 3 = 9 018 candidati~~ **Corretto il 28/09 (D-X1):** `ready_incumbent` + `optimal_proven` dal solver; il testimone dice quanti obiettivi della cascata il solver ha chiuso all'ottimo, non più quanti candidati |
+   | S2c | PAC comune (100 € su ETF a 50 e 100) | **difetto 🔴 X1** (nota del Passo E): ~~oggi `tool_error` `execution_limit`.~~ Curato dal commit 4 (D-X1). Atteso: `ready_incumbent` + `optimal_proven` in pochi istanti, mai errore |
    | S3 | copie da broker OWNER | provenance e date visibili; età in giorni dei dati non del giorno, nessuna conferma (Q-C0-3) |
    | S4 | broker non OWNER | errore esplicito |
    | S5 | budget sotto la quota minima più le fee | `ready_no_op` |
    | S6 | vincolo impossibile | `infeasibility_proven` |
    | S7 | pesi non validi | `invalid`, campo evidenziato |
    | S8 | broker inattivo o altro caso unsupported | `unsupported` |
-   | S9 | dominio oltre 200 000 candidati | `not_proven`, tempi in C14; scenario testimone del delta C0 §0.1 |
+   | S9 | ~~dominio oltre 200 000 candidati~~ **corretto il 28/09 (D-X1):** ricerca troncata da un limite | ~~`not_proven`, tempi in C14; scenario testimone del delta C0 §0.1~~ `ready_incumbent` o `ready_no_incumbent` + `not_proven`, stop `time_limit`. Con 30 s di budget non si raggiunge con dati piccoli: lo provano i test (budget zero) |
    | S10 | EUR + USD con FX e spread | righe FX nel piano |
    | S11 | busy e annulla | D7 |
    | S12 | modifica dopo il risultato | stale |
@@ -1239,6 +1242,72 @@ E2E Playwright: **dopo** l'approvazione umana, come da hard gate di Step 5 (Step
 >   commit in più.
 > - ✅ commit 1 (F0) e 2 (X2) committati alle 11:25: `856c2193f` → `f92e5560b` (§8). Si prosegue
 >   con QX1-a.
+> - ✅ commit 3 (QX1-a) committato alle 11:58: `6061affd7`, 5 file, +315/−69, sopra `f92e5560b`
+>   (§8).
+> - ⏸️ **Pausa alle 12:59**: il developer spegne la macchina. **Il commit 4 (X1/D-X1) non è
+>   iniziato**: nessun file di codice o di test toccato, nessun test-author al lavoro. Porte 6151 e
+>   6161 libere. L'unico file sporco è questo piano.
+>
+>   Alla ripartenza:
+>   1. verificare HEAD `6061affd7`, che l'unico file sporco sia questo piano, lo stage vuoto e le
+>      porte libere (`lsof`). `/tmp` si svuota al riavvio; la cartella della lane
+>      `/tmp/librefolio-r2-d` la ricrea il runner;
+>   2. inventario in sola lettura di ciò che D-X1 rende obsoleto, con la test-triage prima di
+>      togliere (principio del developer, sotto):
+>      - i test del percorso «prima l'oracolo» del planner;
+>      - `ExhaustiveOracleWitness` e `SolverNotRunEvidence` nelle unioni di produzione;
+>      - i rami dell'oracolo nel report e in `ProofPanel`, e le loro chiavi i18n;
+>   3. misurare quante volte SCIP e il replay chiamano il `Checkpoint` (condizione del
+>      coordinator, sotto);
+>   4. test-author, test rossi:
+>      - il caso X1, 100 € su 2 ETF (60 006 candidati, `:1171`): il conteggio deterministico delle
+>        chiamate al `Checkpoint` prova che il planner di produzione non enumera;
+>      - SCIP infeasible → `ready_infeasible` + `completed`;
+>   5. poi F1 → F2 → F3 → F5.
+> - ▶️ **Ripresa il 28/09** (coordinator), dopo il riavvio del Mac:
+>   1. ✅ verifica (10:20): HEAD `6061affd7`, unico file sporco questo piano (+39/−3), stage vuoto,
+>      `git diff --check` pulito, porte 6151 e 6161 libere;
+>   2. ✅ inventario in sola lettura, con la test-triage: la tabella è in F4, «Inventario D-X1»;
+>   3. ✅ misura del `Checkpoint`: la tabella è in F4, «Misura del Checkpoint»;
+>   4. ✅ domanda al developer (10:58) sulle quattro forme di prova senza uso già prima di D-X1
+>      (`deterministic_conflict`, `gap_bounded`, `score_lattice_closure`, `describe_conclusion`).
+>      Risposta: «se non sono più nei piani e sono stati prodotti per un piano precedente e ormai
+>      superato è inutile lasciarli, eliminali». La condizione è verificata: le citano solo i
+>      design di prima di D-X1 (MathematicalCore §19, UiTarget, Policies, le bozze, il dossier
+>      DBT-4/6/7), e D-X1 ha tre sole regole di esito, tutte da SCIP. Quindi si tolgono nel
+>      commit 4, con UI, i18n e test;
+>   5. ✅ test rossi (test-author, 28/09), tutti in `test_pac_planner_planner.py`, ciascuno rosso
+>      per la ragione giusta sul codice di oggi (`services pac-planner-service <nome>`, «1 failed,
+>      34 deselected»):
+>      - `test_x1_planner_does_not_enumerate_a_large_domain`: prima verifica che il dominio
+>        (60 006) superi il budget di 2 000 chiamate, poi il `Checkpoint` che conta scatta a 2 001
+>        dentro `oracle.py:195 run_exhaustive_oracle` (log `/tmp/libreFolio_d_x1_red_1.log`);
+>      - `test_forced_infeasible_returns_ready_infeasible_not_raise`, riscritto sul posto: stato,
+>        esito e `completed` passano già; rosso su `proof_source` `exhaustive_oracle` ≠
+>        `solver_status` e sul testimone (`red_2.log`);
+>      - `test_exhaustive_oracle_is_test_only`, nuovo, strutturale: rosso con tre righe, il modulo
+>        risolve ancora, `planner.py:88` e `proof.py:53` lo importano (`red_3.log`).
+>
+>      Ruff e black puliti.
+>      > **⚠️ Fuori pista**: test-author, forzando la via SCIP con uno script usa e getta fuori
+>      > dal repo, ha visto che oggi l'infeasible esce `ready_no_incumbent` + `time_limit`: in
+>      > `planner_report.py:908-911` ogni stadio non finito diventa `time_limit`. È il difetto che
+>      > F1/F2 curano, dando allo stadio lo stato `infeasible`, che non è «non finito». Sulla stessa
+>      > via forzata, il caso X1 ha già tutto il resto giusto (5 stadi pubblicati finiti, una quota
+>      > per ETF, 189 chiamate). Gli stadi `tie:*` non sono nell'evidence pubblicata, quindi «ogni
+>      > stadio finito» sul filo copre i 5 obiettivi. Il test infeasible usa
+>      > `_forced_min_scenario_view()` del blocco «Item 7»: resta anche quando quel blocco si pulisce.
+>   6. ✅ F1 → F2 → F3 → F5 (28/09, note nei passi), con il lotto di test di F4 e i gate: in F4,
+>      «Lotto del commit 4». F6 viene dopo il commit.
+>
+> **Principio del developer** (25/09 alle 11:54, per tutte le lane, via coordinator):
+> - il prodotto, per ora, va bene così com'è;
+> - i test provano il prodotto di oggi, non i passi intermedi da cui è passato;
+> - un test vecchio, che prova un comportamento non più nel prodotto, si toglie. Si toglie anche il
+>   codice di prodotto rimasto senza uso, dentro il perimetro della lane, con il suo test di
+>   regressione quando serve. Prima di togliere si attribuisce con la test-triage: un test vecchio
+>   non va confuso con un difetto;
+> - le domande al developer si fanno in italiano.
 >
 > **Condizioni del coordinator** (24/09 alle 18:35, ribadite il 25/09 alle 09:09):
 > - X1 e X2 sono **gate d'integrazione**: la UI v2 li espone, quindi il ramo non entra in
@@ -1308,25 +1377,95 @@ Ordine, con i documenti prima del codice (regola del developer):
   >     lettura, con `git show`, a `3aa33ff78`: 05:249, 06:750, guida:1201. Il link del 05 a
   >     questo piano resta sospeso finché il ramo non è integrato: sta nel journal, che MkDocs non
   >     costruisce, e il coordinator lo accetta.
-  >   - Le aggiunte su QX1-b per gli stessi tre punti il coordinator le ha salvate parola per
-  >     parola. Entrano nel suo prossimo commit su `dev_release2`, dopo il fast-forward sul ramo di
-  >     J; lo SHA va scritto qui quando arriva.
+  >   - Le aggiunte su QX1-b per gli stessi tre punti sono committate dal coordinator su
+  >     `dev_release2`: `268fe835d` «docs(journal): record the QX1-b rounding rule», 25/09 alle
+  >     11:31; 3 file, +11/−5. Verificato in sola lettura con `git show --stat`.
   > - Evidenza: `git diff --check` pulito; 9 file di documenti, nessun file di codice.
   >
   > **⚠️ Fuori pista**:
   > - Nel 05 il passaggio superato va da `:242` a `:246`, non fino a `:244` (detto al coordinator).
   > - Rileggendo Difetto A: uno stage SCIP infeasible è per forza `unfinished`, mentre
   >   `ready_infeasible` richiede `completed`. È il vincolo che F1 deve sciogliere.
-- **F1 — schema.**
+- **F1 — schema.** ✅ 2026-09-28
   - Prova di ottimo e di impossibilità con una fonte «solver».
   - Lo stage infeasible diventa uno stato completato, così `ready_infeasible` è raggiungibile da
     SCIP.
   - Si rimuovono `ExhaustiveOracleWitness` e `SolverNotRunEvidence` dalle union di produzione.
-- **F2 — motore.**
+
+  > **Note implementazione** (2026-09-28, `backend/app/schemas/pac_allocator.py`):
+  > - Fonte unica `solver_status`, col testimone `SolverStatusWitness(kind="solver_status",
+  >   objective_codes)`: almeno un codice, senza doppioni. `OptimalProvenProof` lo porta con
+  >   `tie_break_closed: True`; `InfeasibilityProvenProof` lo porta con un solo codice, il primo
+  >   obiettivo. `ReadyPlanProof` è `OptimalProvenProof | NotProvenProof`.
+  > - `SolverStageEvidence.status` accetta `infeasible`, solo con ordinale 1, scope `global` e
+  >   nessuna osservazione (primal, duale e gap `None`, come misurato in F4). In
+  >   `ReportedFloatingSolverEvidence` uno stage infeasible è l'unico stage.
+  > - `_validate_solver_status_proof`, chiamato dalle due basi dei risultati pronti:
+  >   - un ottimo richiede ogni stage pubblicato `finished` e i codici uguali a quelli del
+  >     testimone;
+  >   - un'impossibilità richiede lo stage `infeasible` e il suo codice nel testimone;
+  >   - uno stage `infeasible` con qualunque altra prova è un errore.
+  > - Tolti: `SolverNotRunReasonCode`, `SolverNotRunEvidence`, l'alias `PlannerSolverEvidence`,
+  >   `ExhaustiveOracleWitness`, `ScoreLatticeClosureWitness`, `DeterministicConflictWitness`, gli
+  >   alias `OptimalityWitness` e `InfeasibilityWitness`, `BoundedObjectiveStage`,
+  >   `GapBoundedProof` e `_validate_gap_proof`.
+  > - `_validate_stop_evidence` ha un messaggio nuovo («Completed stops require no unfinished
+  >   stage; limit stops require an unfinished stage»). Nessun test confronta quel testo.
+  > - `SellIrreducibilityCheck.closure_kind` resta com'è, per R8 (inventario in F4).
+  >
+  > **⚠️ Fuori pista**: black sull'intero file ha tolto 117 righe vuote che c'erano già in HEAD,
+  > avanzate dalla rimozione di P1 (`ef321160f`). Sono solo spazi. Lo stesso in `models.py`, dove
+  > cambiava un commento: 46 righe vuote.
+- **F2 — motore.** ✅ 2026-09-28
   - `planner.py` usa solo SCIP.
   - `proof.py` promuove gli esiti di SCIP.
   - Si corregge la mappa di stato in `solver.py` e il suo commento «absolute» (`:91`).
   - Si aggiorna la proiezione in `planner_report.py`.
+
+  > **Note implementazione** (2026-09-28):
+  > - `solver.py`: se il primo stage torna `infeasible`, lo stage è `infeasible`, l'esito
+  >   `reported_infeasible` e la cascata si ferma, senza righe `not_reached`. Uno stage successivo
+  >   che torna infeasible resta un'anomalia, non terminato, come prima. Corretti il commento di
+  >   `STAGE_PIN_RELATIVE_SLACK` (la `feastol` di SCIP è relativa: sorgenti di SCIP 10 e
+  >   `files/x1-probes/scip_tol_probe*.log`), quello di `DEFAULT_SOLVER_TIME_BUDGET_SECONDS` e i
+  >   docstring.
+  > - `planner.py`: una sola via, compile → SCIP, senza soglia. `_Search(candidate, solver)`.
+  >   `_conclude` chiama `proof.conclude_with_solver`; `ready_infeasible` nasce solo da una
+  >   conclusione d'impossibilità, tutto il resto senza piano è `ready_no_incumbent` con
+  >   `not_proven`. `stop_reason` ed evidenza vengono sempre dal solver. Il docstring del modulo è
+  >   riscritto, ed è sparito il testo P1 superato che c'era ancora.
+  > - `proof.py` riscritto, senza import dell'oracolo:
+  >   - tre conclusioni, con il testimone sigillato `SolverStatusWitnessFacts`;
+  >   - `conclude_with_solver` dà l'ottimo solo se ogni stage, spareggi compresi, ha chiuso
+  >     `optimal` senza anomalia e il piano pubblicato è quello di SCIP;
+  >   - dà l'impossibilità solo con un unico stage: ordinale 1, globale, `infeasible`, niente
+  >     pubblicato;
+  >   - negli altri casi dà `not_proven`;
+  >   - alza `ProofForgeryError` se una prova nominerebbe obiettivi diversi da quelli eseguiti;
+  >   - tolti `ExhaustiveOracleWitnessFacts`, `DeterministicConflictWitnessFacts`,
+  >     `conclude_with_oracle`, `conclude_without_proof`, `conclude_infeasible_from_conflicts`,
+  >     `describe_conclusion` e `_witness_from_oracle`.
+  > - `planner_report.py`: solo docstring. `build_stop_reason` dice che uno stage infeasible
+  >   chiude una ricerca `completed`, e la misura del 22/09 è datata rispetto a D-X1.
+  > - Docstring riallineati in `tool_plugins/pac_allocator.py`, `evaluator.py`, `models.py` e
+  >   `objectives.py`.
+  > - Evidenza: ruff e black puliti sui 10 file backend. L'import di `proof`, `planner` e del
+  >   plugin passa; `find_spec` del vecchio percorso dell'oracolo dà `None`.
+  >
+  > **⚠️ Fuori pista**:
+  > - **Il rifiuto del replay resta raggiungibile fino al commit 5.** Se SCIP chiude ogni stage
+  >   `optimal` e il replay Decimal rifiuta il piano (`3 × 33,335` su 100,00 €), il risultato è
+  >   `ready_no_incumbent`, `not_proven`, `completed`, con gli stage finiti. La UI non deve
+  >   contraddirlo: F5 aggiorna `proof.floatingFinished` e aggiunge `states.noIncumbent.rejected`.
+  > - **Difetto latente, già presente prima di D-X1: proposto come R10, non curato qui.**
+  >   L'evidenza pubblicata toglie gli stage `tie:*`, ma `build_stop_reason` legge gli stage
+  >   interni. Se il budget finisce durante gli spareggi, dopo che i 5 obiettivi sono finiti, lo
+  >   stop è `time_limit` ma l'evidenza non ha stage non finiti. `_validate_stop_evidence` allora
+  >   alza, e il Tool va in errore. Serve molto tempo sugli obiettivi (ben oltre 80 decisioni,
+  >   che oggi chiudono in 7-8 s su 30), quindi la finestra è stretta. Curarlo vuol dire decidere
+  >   come mostrare sul filo uno spareggio troncato: è una scelta di design, non un fix.
+  > - Con la via unica, `_Search.candidate` ripete `solver.candidate`. L'ho lasciato per
+  >   leggibilità dei punti di chiamata.
 - **F2b — fedeltà delle commissioni.**
   - X2 (commit 2): limite superiore `max(floor, rate · notional_upper)` nel fee epigraph e in
     `_fee_variable_upper`. Il tetto resta fuori fino al commit 3 (vedi il fuori pista sotto).
@@ -1443,9 +1582,25 @@ Ordine, con i documenti prima del codice (regola del developer):
   - Schema: un campo nel risultato pronto con le casse da integrare (broker, valuta, importo, `N`).
   - Report e UI: la nota per cassa; i18n via `dev.py i18n` nelle 4 lingue.
   - Il deficit è un dato personale, quindi passa dalla maschera della privacy.
-- **F3 — oracolo solo nei test.**
+  - Dal commit 4 (28/09): il commit 5 rende irraggiungibile il rifiuto del replay per un solo
+    deficit di cassa entro `N`, quindi toglie anche il ramo che la UI gli dedica al commit 4
+    (`proof.floatingFinished` riscritto e `states.noIncumbent.rejected`), se non resta un altro
+    rifiuto che lo usi.
+- **F3 — oracolo solo nei test.** ✅ 2026-09-28
   - `oracle.py` passa nell'albero dei test.
   - Un test strutturale verifica che nessun modulo di produzione lo importi.
+
+  > **Note implementazione** (2026-09-28):
+  > - Spostato con il filesystem, non con `git mv`: ora è
+  >   `backend/test_scripts/test_services/_pac_exhaustive_oracle.py`. Il trattino basso lo tiene
+  >   fuori dalla raccolta di pytest (`pytest.ini`: `python_files = test_*.py`). Docstring: è uno
+  >   strumento di test, non costruisce più un testimone sul filo, e il tetto di sicurezza serve
+  >   solo a non bloccare un test.
+  > - Il test strutturale è `test_exhaustive_oracle_is_test_only` (passo 5 della ripresa).
+  > - Runner, file condiviso `scripts/test_runner/_backend_services.py`: cambiano solo 6 testi
+  >   delle voci PAC (docstring e `desc` di `pac-planner-oracle`, `-solver`, `-proof`,
+  >   `-service`). Chiavi e percorsi restano uguali. Lo segnalo al coordinator nell'handoff.
+  > - Gli import dei moduli di test si ricablano nel lotto del test-author (F4).
 - **F4 — test backend** (test-author, lane 6151).
   - Accordo SCIP↔oracolo allargato alle forme di commissione: fissa, minimo sopra
     `rate · notional_upper`, tetto che morde, tetto piccolo per titolo. ✅ 2026-09-25, con le
@@ -1466,10 +1621,186 @@ Ordine, con i documenti prima del codice (regola del developer):
   - Schema e API.
   - Le prove usa-e-getta del 24/09 sono copiate nella cartella di sessione (`files/x1-probes/`),
     perché `/tmp` si svuota al riavvio.
-- **F5 — frontend.**
+
+  > **Misura del Checkpoint** (2026-09-28, commit 4). Sonda pura, senza DB né server:
+  > `files/x1-probes/checkpoint_count_probe.py` e il suo `.log`, nella cartella di sessione. Il
+  > `Checkpoint` è un contatore iniettato; il tempo è solo informativo.
+  >
+  > | Caso | Dominio | SCIP | Replay | Planner, via SCIP | Planner di oggi (oracolo) |
+  > |---|---|---|---|---|---|
+  > | no-op (5 € contro minimo 10 €) | 1 | 6 | 88 | 97 | 181 |
+  > | incumbent (50 €) | 6 | 6 | 96 | 105 | 674 |
+  > | minimo forzato impossibile | 1 | 1 | — | 3 | 92 |
+  > | **X1**: 100 € su 2 ETF a 40/60 € | 60 006 | 8 | 178 | 189 | oltre 1 000: sonda interrotta |
+  >
+  > - SCIP chiama il `Checkpoint` una volta per stage. Il replay lo chiama 88-178 volte: cresce
+  >   con le decisioni e i vincoli, non con il dominio.
+  > - L'oracolo lo chiama 89-96 volte per candidato. Su X1 sarebbero circa 5,7 milioni di chiamate.
+  > - Quindi il test di X1 è deterministico con un `Checkpoint` che conta e alza un errore oltre
+  >   una soglia fissa, ben sopra 189 e molto sotto l'enumerazione. Oggi è rosso subito; dopo D-X1
+  >   il planner risponde con un piano pronto, senza alzare niente.
+  > - Via SCIP, il minimo impossibile dà oggi `ready_no_incumbent` con `stop=time_limit`: è il
+  >   difetto che F1 scioglie (lo stage infeasible conta come non terminato).
+  > - Una seconda sonda, `infeasible_stage_fields_probe.py`, conferma che uno stage 1 infeasible
+  >   non ha primal, duale né gap (tutti `None`). Lo schema F1 può quindi richiederli assenti.
+  >
+  > **Inventario D-X1** (2026-09-28, sola lettura, con la test-triage). Criterio: è obsoleto ciò
+  > che prova il percorso «prima l'oracolo», l'oracolo come prova di produzione o la regola «una
+  > soluzione floating non si promuove mai». D-X1 rovescia quella regola: è una decisione del
+  > developer, non un difetto.
+  >
+  > Codice di produzione che D-X1 rende obsoleto:
+  > - `planner.py`: il ramo dell'oracolo in `_search`, `_Search.oracle_*`, lo stop forzato a
+  >   `completed` e l'evidenza `not_run` in `_common_ready_fields`, `_wire_oracle_witness`;
+  > - `proof.py`: `ExhaustiveOracleWitnessFacts`, `conclude_with_oracle`,
+  >   `conclude_without_proof`, `_witness_from_oracle`, l'import di `OracleResult`;
+  > - schema: `ExhaustiveOracleWitness`, `SolverNotRunEvidence`, `SolverNotRunReasonCode`
+  >   (`allocation.solver_not_required`);
+  > - `oracle.py` in produzione (va nei test, F3);
+  > - UI: i rami `exhaustive_oracle` e `not_run` di `ProofPanel.svelte`, `notCertified`, e le
+  >   chiavi `oracleWitness`, `oracleInfeasibleWitness`, `sources.exhaustive_oracle`,
+  >   `solverNotRun`, `reasons.allocation.solver_not_required`.
+  >
+  > Test, con l'attribuzione:
+  >
+  > | Modulo | Obsoleti (si tolgono) | Da riscrivere | Restano |
+  > |---|---|---|---|
+  > | `test_pac_planner_planner.py` | `:370` fallback oltre il tetto, `:409` fonti e non promozione, `:529` minimo forzato → `not_proven`, `:660` e `:678` evidenza `not_run`, `:702` percorso SCIP (diventa quello di default) | `:234` fonte della prova, `:450` stati di `ready_infeasible`, `:465` infeasible da SCIP, `:493` nessun `deterministic_conflict`, `:620` evidenza, docstring e import `:118-135` | `:259`, `:278`, `:295`, `:307`, `:340`, `:560`, `:585`, `:738`, `:756`, `:768` |
+  > | `test_pac_planner_proof.py` | `:127`, `:153`, `:199`, i parametri di falsificazione del testimone dell'oracolo, `:256`, `:265`, `:272`, `:294`, `:313`, `:336`, `:356`, `:422`, `:442`, `:465`, `:481` | — | i parametri del conflitto, `:105`, `:110`, `:179`, `:192`, `:281`, `:377`, `:398`, `:460`, `:495` (da adattare al testimone nuovo) |
+  > | `test_pac_planner_solver.py` | — | `:354` infeasible: un solo stage terminale `infeasible`; import `:48` e docstring dopo lo spostamento dell'oracolo | il gate d'accordo `:209` |
+  > | `test_pac_planner_schemas.py` | `:1233-1238` catalogo `SolverNotRunReasonCode`, `:1246` voce `REASON_ONLY_CODES`, `:2360` «solver finito non diventa prova» | `:395-411`, `:459-464`, `:2172`, `:2188`, `:2230`, `:2326`, `:2380-2407` | il resto |
+  > | `test_pac_planner_report.py` | — | `:58` e `:610` (`conclude_without_proof`) | il resto |
+  > | fixture `*.v2.json` | — | `pac_plan_result.min` `:93-101`, `pac_plan_result.candidate-max` `:79-80`, `rebalancer_plan_result.medium` `:141-142`: `not_run` → stage `reported_floating` terminati | `:894`, `:902` (`closure_kind`) |
+  >
+  > `test_api/test_pac_planner_tool_api.py` non cita né l'oracolo né `not_run`: il suo
+  > `optimal_proven` (`:191`) resta vero anche con SCIP.
+  >
+  > Tolte anche per decisione del developer (28/09 alle 10:58, sopra): le forme di prova mai
+  > prodotte, pensate per i design di prima di D-X1.
+  > - `deterministic_conflict`: mancava un ponte fra i due vocabolari di codici (`planner.py:272`).
+  >   Schema `DeterministicConflictWitness`; `proof.py` `DeterministicConflictWitnessFacts` e
+  >   `conclude_infeasible_from_conflicts`;
+  > - `gap_bounded`: serviva un duale sicuro. Schema `GapBoundedProof`, `BoundedObjectiveStage` e
+  >   `_validate_gap_proof`;
+  > - `score_lattice_closure`: schema `ScoreLatticeClosureWitness`;
+  > - `describe_conclusion` (`proof.py`), usato solo nei test (N8);
+  > - UI: i rami `gap_bounded`, `latticeWitness` e `conflictWitness` di `ProofPanel.svelte`, il
+  >   badge `gap_bounded` di `model.ts`, e le chiavi `gapBounded`, `latticeWitness`,
+  >   `conflictWitness`, `sources.deterministic_conflict`, `sources.score_lattice_closure`,
+  >   `badges.gapBounded`;
+  > - i loro test in `test_pac_planner_proof.py` (i parametri del conflitto, `:105`, `:110`),
+  >   `test_pac_planner_planner.py` (`:493`) e `test_pac_planner_schemas.py`.
+  >
+  > Restano fuori dal commit 4, da portare alla review:
+  > - il Rebalancer rinviato: `SellIrreducibilityCheck.closure_kind` `"deterministic_conflict" |
+  >   "exhaustive_oracle"` (schema `:1571`), `ProofRequirement.allowed_sources` (`models.py:785`)
+  >   ed `evaluator.py:3124`. La verifica di irriducibilità delle vendite è ancora nei piani, quindi
+  >   la condizione del developer non vale. Ma con D-X1 l'oracolo non è più una fonte di
+  >   produzione: le fonti vanno riprogettate col Rebalancer, in R8;
+  > - uno stage successivo al primo che torna infeasible resta un'anomalia (non terminato), e
+  >   `build_stop_reason` lo chiama `time_limit`. Era già così: va in R5.
+
+  > **Lotto del commit 4** ✅ 2026-09-28 (test-author, lane 6151, un comando alla volta). Coperti la
+  > regressione X1, l'infeasible da SCIP, lo schema e l'API; F2c resta al commit 5. I tre test rossi
+  > del punto 5 della ripresa sono verdi (3 passed, 22 deselected). L'attribuzione è quella
+  > dell'«Inventario D-X1» qui sopra.
+  >
+  > | Modulo | Esito | Cosa cambia |
+  > |---|---|---|
+  > | `test_pac_planner_planner.py` | 25 passed | Tolti i 5 obsoleti dell'inventario (`:370`, `:409`, `:529`, `:660`, `:678`) e `:493` (decisione del developer). `:702` riscritto sul posto: ogni risultato pronto porta l'evidenza `reported_floating`. Riscritti docstring, import, `:234`, `:450`, `:465` e `:620`. Nuovi: i tre rossi e `test_exhausted_solver_budget_degrades_to_honest_not_proven` (budget zero → `not_proven`, `time_limit`) |
+  > | `test_pac_planner_proof.py` | 30 passed | Riscritto su tre esecuzioni reali di SCIP: superficie pubblica (`__all__`, una sola funzione), tabella degli esiti, falsificazioni, ogni stadio aperto (tie-break compresi), infeasible solo dal primo stadio globale, limite e anomalia, nessun trasferimento della prova, codici discordi = falsificazione. 20 test tolti, 9 nuovi, 4 restano |
+  > | `test_pac_planner_solver.py` | 19 passed | L'infeasible riporta un solo stadio, il primo, globale |
+  > | `test_pac_planner_oracle.py` | 20 passed | Solo import e docstring: l'oracolo ora è `test_services/_pac_exhaustive_oracle.py` |
+  > | `test_pac_planner_report.py` | 17 passed | L'e2e usa `conclude_with_solver`; nuovo `test_infeasible_first_stage_is_a_verdict_that_completes_the_search` |
+  > | `test_pac_planner_schemas.py` | 450 passed | Tolti conflitto, gap (2), reticolo e `:2360` (inventario); 8 nuovi su `solver_status` e sullo stadio infeasible; pin dei fingerprint aggiornati (PAC `bd52b93a…`, ribilanciatore `fff1f966…`) |
+  > | fixture `*.v2.json` (3) | — | `not_run` → stadi `reported_floating` terminati; restano `not_proven` e `completed`. Byte del sorgente (emessi): candidate-max 20 967 (18 329), min 13 671 (8 421), ribilanciatore 36 615 (21 333), sotto il tetto di 262 144 |
+  > | `test_api/test_pac_planner_tool_api.py` | 5 passed | Vedi il primo fuori pista |
+  >
+  > - Gate su 6151 dalle 12:30 alle 12:33 (`/tmp/libreFolio_d_gate_x1.sh`, riepilogo in
+  >   `/tmp/libreFolio_d_gate_x1.summary`):
+  >   - `services`: `pac-planner-core` 152, `-evaluator` 139, `-oracle` 20, `-policies` 40,
+  >     `-solver` 19, `-proof` 30, `-wire-numbers` 39, `-report` 17, `-service` 25, `tools-registry` 93;
+  >   - `schemas`: `pac-planner` 450, `tools` 271;
+  >   - `api`: `tools` 7; `pac-planner-tool` 4 passed e 1 failed, poi 5 passed dopo la correzione
+  >     (`/tmp/libreFolio_d_ta_api_pac.log`).
+  > - Statici:
+  >   - ruff e black puliti sui 18 file Python toccati; `git diff --check` pulito;
+  >   - `i18n audit`: 4088 chiavi, tutte complete, 0 chiavi backend mancanti. Le 3 chiavi PAC
+  >     «unused» (`origin.copied`, `result.sections.exposures`, `result.sections.ledger`) si leggono
+  >     per prefisso dinamico, in file che il commit 4 non tocca.
+  > - Porta 6151 libera dopo ogni comando.
+  >
+  > **⚠️ Fuori pista**:
+  > - `api pac-planner-tool` rosso su `test_pac_compute_plans_a_buying_scenario_to_a_proven_optimum`
+  >   (`:198`), che l'inventario aveva mancato.
+  >   - Attribuzione con una sonda pura (`/tmp/libreFolio_d_api_eq_probe.py`): l'unica differenza è
+  >     il setting `time_budget` di ogni stadio, 3,5 s in processo e 30 s nel worker. Due
+  >     esecuzioni a 30 s sono identiche.
+  >   - Prima di D-X1 non si vedeva, perché l'oracolo non pubblicava setting.
+  >   - Il prodotto è giusto. Il test-author fa leggere al test l'`engine_timeout_ms` dal catalogo e
+  >     lo passa alla chiamata in processo, come fa il plugin; poi verifica il `time_budget`
+  >     pubblicato. L'uguaglianza completa resta.
+  > - Il test di schema a `:2360` era già fra gli obsoleti dell'inventario: toglierlo non chiede
+  >   altre conferme.
+  > - Le 3 fixture restano `not_proven` + `completed`: sono forme del wire, e nemmeno prima erano
+  >   esiti del planner (alla baseline: `not_proven` con `not_run`). Il test-author nota che oggi,
+  >   con stadi terminati e `completed`, il planner pubblicherebbe `optimal_proven`. Portarle a
+  >   `solver_status` è un seguito possibile, da decidere.
+  > - Tolto il bytecode `pac_allocator/__pycache__/oracle.cpython-313.pyc`, ignorato da git.
+  > - Riallineati a D-X1, con note datate: il runbook (S2, S2b, S2c, S9), T5 e l'anteprima di C.
+  >   §4 punto 5 (`score_lattice_closure`) è barrato: era stato scritto prima di D-X1.
+  > - Il reperto R10 (stadi di tie-break e stop) è aggiunto alla tabella dello STOP.
+- **F5 — frontend.** ✅ 2026-09-28
   - Testimone del solver al posto di quello dell'oracolo in `ProofPanel.svelte`; tipi e
     `StateNotice`.
   - i18n via `dev.py i18n`, poi `api sync`, dichiarando l'ora del client accanto a `front check`.
+
+  > **Note implementazione** (2026-09-28):
+  > - i18n: 18 comandi `dev.py i18n` da `/tmp/libreFolio_d_i18n_x1.sh`, tutti ✅. Per ogni lingua
+  >   4095 → 4088 chiavi: 5 aggiunte, 12 tolte, 1 cambiata, stesso insieme nelle quattro lingue;
+  >   diff di 4 file, +40/−68. Tutte sotto `tools.pacAllocator.planner.result.`:
+  >   - aggiunte `proof.sources.solver_status`, `proof.statuses.infeasible`, `proof.solverWitness`,
+  >     `proof.solverInfeasibleWitness`, `states.noIncumbent.rejected`;
+  >   - cambiata `proof.floatingFinished`: ora dice che il solver ha chiuso ogni stadio ma il
+  >     replay Decimal ha respinto il piano;
+  >   - tolte `proof.oracleWitness`, `proof.oracleInfeasibleWitness`,
+  >     `proof.sources.{exhaustive_oracle,deterministic_conflict,score_lattice_closure}`,
+  >     `proof.solverNotRun`, `proof.reasons.allocation.solver_not_required`, `proof.notCertified`,
+  >     `proof.gapBounded`, `proof.latticeWitness`, `proof.conflictWitness`, `badges.gapBounded`.
+  > - `ProofPanel.svelte`: gli stadi vengono da `solver.stages`; con `optimal_proven` e con
+  >   `infeasibility_proven` la fonte è `sources.solver_status`, con il testimone del solver
+  >   (numero di obiettivi chiusi, oppure primo stadio infeasible). Resta
+  >   `data-testid="pac-planner-proof-witness"`. Il suggerimento di `not_proven` è
+  >   `floatingFinished` se nessuno stadio è aperto, altrimenti `floatingUnfinished`. Tolti i rami
+  >   `gap_bounded` (con la tabella dei limiti), `not_run` e i testimoni oracolo, reticolo e
+  >   conflitto. La colonna di stato legge `STATUS_FALLBACKS` (finished, unfinished, infeasible).
+  > - `StateNotice.svelte`: gli stadi vengono da `result.solver_evidence.stages`. Un ramo nuovo,
+  >   prima di quello generico: `ready_no_incumbent` con `stop_reason = completed` (SCIP ha chiuso
+  >   tutto, il replay ha respinto) → avviso `data-state="no_incumbent"`, corpo
+  >   `states.noIncumbent.rejected`, senza consigli, col pulsante di modifica.
+  > - `model.ts`: tolto il badge `gap_bounded`. `types.ts:47`:
+  >   `PacSolverStage = PacSolverEvidence['stages'][number]`.
+  > - `api sync` alle 11:36:48, exit 0 (`/tmp/libreFolio_d_api_sync_x1.log`). Fingerprint PAC
+  >   `a4f499864b74cdea…` (client del 24/09 alle 17:25) → `bd52b93a79b6560c…`; digest del contratto
+  >   dei tool `a8033018917dc9a2…`. La versione del Tool resta `2.0.0`. I file generati sono
+  >   ignorati da git. Una sonda di solo import (`/tmp/libreFolio_d_fp_probe.py`) conferma PAC
+  >   `bd52b93a…` e dà il ribilanciatore `c4451b184aa0fd9f…` → `fff1f966c63a9d9b…`.
+  > - `front check` dopo il sync (`/tmp/libreFolio_d_front_check_x1.log`): 3 errori e 41 warning
+  >   in 4 file, il pavimento; nessuno nel PAC (`BrokerSharingPanel`, `GlobalSettingsTab`,
+  >   `TransactionFormModal.test`, `ToolExecutionMetrics`). `prettier --check` pulito sui 4 file
+  >   e sui 4 JSON.
+  > - Nessun test Vitest o E2E tocca il pannello della prova o gli avvisi di stato; in
+  >   `frontend/src` ed `e2e` non resta alcun riferimento alle forme tolte.
+  >
+  > **⚠️ Fuori pista**:
+  > - Il pin `test_full_planner_schema_fingerprints_are_frozen`
+  >   (`test_pac_planner_schemas.py:2630-2643`) va aggiornato ai due fingerprint nuovi: è voluto,
+  >   lo schema della prova è cambiato. Va nel lotto del test-author.
+  > - Due testi da portare in R7, non corretti qui:
+  >   - con un limite, il suggerimento `floatingUnfinished` dice «miglior piano trovato» anche per
+  >     `ready_no_incumbent`, dove nessun piano è pubblicato;
+  >   - l'avviso di limite di `StateNotice` per `no_incumbent` dice «nessun piano trovato» anche
+  >     quando SCIP ne aveva uno e il replay lo ha respinto.
 - **F6 — verifica.**
   - Suite su 6151, `front check` e build.
   - Smoke S2, S2b e S2c più un caso X2 sulla copia 6161.
@@ -1486,10 +1817,11 @@ Ogni tema matematico si guarda **sulla schermata della UI che lo espone**, sui d
 | R3 | Evaluator esatto e ledger | Decimal/ExactRatio; arrotondamenti (storia del difetto HALF_UP); spread FX applicato una volta sola; le fee non sono investimento; niente doppio conteggio della cassa. **QX1-b (25/09)** cambia il ledger: un piano può chiudere una cassa sotto zero di al più `N` unità minime, con l'importo da aggiungere. MathematicalCore §22 chiede per questo una review matematica: si fa qui, sulla schermata della nota, insieme al conteggio di `N` (crediti FX inclusi). |
 | R4 | Cascata obiettivi | L2 fixed → U → priorità → fee → righe → tie-break; cosa significano L2 (EUR²) e U. |
 | R5 | Ricerca e prova | ~~Oracolo fino a 200 000 = dimostrato; SCIP oltre = `not_proven`; infeasible solo dall'oracolo;~~ **D-X1 (24/09):** SCIP unico; `optimal` su tutti gli stage = ottimo, `infeasible` sul primo = impossibile, limite = tempo scaduto; l'oracolo resta nei test. Determinismo = `completed`; budget di 30 s; **domanda aperta sul numero di asset** (ginocchio ≈ 18 asset multi-valuta). Le soglie crescenti per il tetto delle route (Q-C0-5) entrano nella stessa misura. **🔴 X1 (24/09):** la premessa «fino a 200 000 = dimostrato» valeva solo fino a circa 13 000 candidati (≈ 3,3 ms ciascuno contro la soft deadline di 44 s); fra 13 000 e 200 000 il job moriva con `execution_limit`. ~~Opzioni: sotto-budget dell'oracolo con fallback a SCIP; tetto tarato sul tempo; funding e FX dedotti invece che enumerati; evaluator più veloce.~~ Chiuso da D-X1, Passo F. |
-| R6 | Report e spiegazioni | `buffer = 0`, deployment omesso, `describe_conclusion` non usato, freshness non riportata: cosa mostrare. Reperti N19, N23. |
+| R6 | Report e spiegazioni | `buffer = 0`, deployment omesso, ~~`describe_conclusion` non usato~~ (tolto nel commit 4, decisione del developer del 28/09), freshness non riportata: cosa mostrare. Reperti N19, N23. |
 | R7 | UI risultati e privacy | Tabella campo per campo personal/public/strutturale, **quantità incluse**; tetti e minimi delle route (default mascherati); input in chiaro durante la scrittura. Voci nuove dello smoke: «1 units» senza plurale; L2 nella locale del browser (`format.ts:185`); titolo del contributo con etichetta vuota; testimone «9,018» contro «2212»; valori floating degli stage con tutte le cifre; numero di ordini in chiaro con privacy ON (da confermare). |
 | R8 | Registro decisioni | E la prossima fetta (§4). |
 | R9 | Toast di `ToolsHub` | Un `renderer_missing` atteso non merita un toast (`notify.svelte.ts:53-55`): correggerlo ora o metterlo in backlog. |
+| R10 | Stadi di tie-break e stop (latente, da prima di D-X1) | L'evidenza sul filo toglie gli stadi `tie:*` (`planner_report.py:814`), ma `build_stop_reason` li legge (`planner_report.py:910-913`). Se il budget finisce durante un tie-break, lo stop è `time_limit` mentre il filo non mostra alcuno stadio non terminato: `_validate_stop_evidence` (`schemas/pac_allocator.py:2125-2127`) alza un errore e il piano diventa un errore del tool, invece di un `not_proven` onesto. La finestra è stretta, ma con D-X1 ogni piano passa da SCIP. Opzioni: (a) un campo sul filo che dica che il tie-break è stato troncato; (b) contare lo stop solo sugli stadi pubblicati, ma allora `completed` non vorrebbe più dire «riproducibile»; (c) pubblicare anche gli stadi di tie-break, allargando `ObjectiveCode`. Da decidere; nessuna correzione nel commit 4. |
 
 ---
 
@@ -1503,7 +1835,9 @@ Ogni tema matematico si guarda **sulla schermata della UI che lo espone**, sui d
 2. Allentare `_require_supported_scope` una policy alla volta.
 3. Variante margine e `g` (il `buffer` smette di essere zero).
 4. `limits/nodes` e il gate di capacità dopo la risposta sul numero di asset.
-5. `score_lattice_closure`.
+5. ~~`score_lattice_closure`.~~ Superato da D-X1: la prova è lo stato di SCIP. La forma è stata tolta
+   nel commit 4 per decisione del developer (28/09 alle 10:58, F4 «Inventario D-X1»). Questa voce
+   era stata scritta prima di D-X1.
 6. `min_fragmentation` resta rinviata (TODO_FUTURI). Da C0b.2 non è più accettata sul wire:
    riattivarla vuol dire riallargare il Literal, e con lui il contratto.
 7. Riscrittura completa della pagina MkDocs PAC (docs-writer) e `ToolDocumentation.version`.
@@ -1619,6 +1953,20 @@ Ogni tema matematico si guarda **sulla schermata della UI che lo espone**, sui d
   > `/tmp/libreFolio_commits/d-f3-*`, copia in `files/passo-f-commits/` della sessione):
   > 3. `fix(pac): model the solver fee cap exactly` — QX1-a: `constraints.py`, `compiler.py`, i
   >    due file di test e questo piano (5 file), sopra `f92e5560b`.
+  >
+  > **25/09 alle 11:58 — committato** dal developer con lo script guardato del coordinator
+  > (`/tmp/libreFolio_commit_d_f3.sh`): `6061affd7`, 5 file, +315/−69. Lo SHA l'ho letto con
+  > `git log`. Dopo il commit l'albero è pulito, e gli sha256 dei 5 file sono quelli verificati dal
+  > coordinator.
+  >
+  > **28/09 — Passo F, commit 4** (handoff al coordinator; messaggio e lista in
+  > `/tmp/libreFolio_commits/d-f4-*`, copia in `files/passo-f-commits/` della sessione):
+  > 4. `fix(pac): make SCIP status the only proof` — D-X1, sopra `6061affd7`: 31 file, cioè 29
+  >    modificati (questo piano compreso), 1 cancellato (`oracle.py`) e 1 nuovo
+  >    (`_pac_exhaustive_oracle.py`). Backend, test e fixture, voce condivisa del runner (6 testi),
+  >    UI e i18n.
+  >    Un solo commit: schema, planner, UI, i18n e test cambiano insieme, perché lo schema della
+  >    prova è cambiato e il fingerprint lega il client.
 - CHANGELOG `[Unreleased]` (**superato il 25/09**, vedi la nota sotto):
   - `✨ Added` — «PAC allocator: interactive planner in Tools»;
   - `✨ Added` — «PAC allocator: copy the current portfolio distribution as the starting target»;

@@ -4279,7 +4279,6 @@
           },
           "badges": {
             "decimalVerified": "Verified in Decimal",
-            "gapBounded": "Bounded gap",
             "infeasibilityProven": "Infeasibility proven",
             "infeasible": "Infeasible with these constraints",
             "noIncumbent": "No plan within the limits",
@@ -4417,29 +4416,22 @@
           },
           "proof": {
             "absoluteGap": "Abs. gap",
-            "conflictWitness": "Conflicting rules: {codes}",
             "decimalVerified": "plan verified in exact Decimal by the backend",
             "dual": "Dual",
             "exactObjectives": "Exact objective values (backend, Decimal)",
-            "floatingFinished": "The solver finished, but it reports floating numbers: optimality is not certified.",
+            "floatingFinished": "The solver closed every stage, but its plan did not pass the exact Decimal check.",
             "floatingUnfinished": "The solver stopped before closing every stage: this is the best plan found, not a proven one.",
-            "gapBounded": "Bounded gap",
             "infeasible": "Infeasibility proven",
-            "latticeWitness": "{count, plural, one {# stage} other {# stages}} closed",
-            "notCertified": "Optimality is not certified.",
             "notProven": "Not proven",
             "objective": "Objective",
             "optimal": "Proven optimal",
-            "oracleInfeasibleWitness": "{enumerated, plural, one {# candidate} other {# candidates}} enumerated · none feasible",
-            "oracleWitness": "{enumerated, plural, one {# candidate} other {# candidates}} enumerated · {feasible} feasible · {objectives, plural, one {# objective} other {# objectives}} of the cascade verified",
             "ordinal": "Ord",
             "outcome": "Outcome",
             "primal": "Primal",
             "proof": "Proof",
             "reasons": {
               "allocation": {
-                "exact_proof_not_established": "an exact proof was not established",
-                "solver_not_required": "not required: the domain was enumerated exactly"
+                "exact_proof_not_established": "an exact proof was not established"
               },
               "portfolio_rebalancer": {
                 "sell_irreducibility_unresolved": "it was not established that no sale can be removed"
@@ -4452,21 +4444,21 @@
               "global": "global scope",
               "incumbent_face": "incumbent face"
             },
-            "solverNotRun": "Solver not run",
             "solverStages": "Solver stages",
             "sources": {
-              "deterministic_conflict": "deterministic conflict",
-              "exhaustive_oracle": "exhaustive oracle",
-              "score_lattice_closure": "score lattice closure"
+              "solver_status": "solver status"
             },
             "status": "Status",
             "statuses": {
               "finished": "finished",
-              "unfinished": "unfinished"
+              "unfinished": "unfinished",
+              "infeasible": "infeasible"
             },
             "stop": "Stop",
             "tieBreak": "Final tie-break: {code}.",
-            "tieBreakClosed": "tie-break closed"
+            "tieBreakClosed": "tie-break closed",
+            "solverWitness": "{objectives, plural, one {# objective of the cascade} other {# objectives of the cascade}} closed at the optimum by the solver",
+            "solverInfeasibleWitness": "The solver closed the first stage as infeasible: no plan meets every hard constraint."
           },
           "reasons": {
             "allocation": {
@@ -4506,7 +4498,8 @@
             "noIncumbent": {
               "body": "The solver found no plan before the limit. This is not a proof that no plan exists.",
               "tips": "To reduce the search: fewer Assets or routes, tighter caps, larger steps.",
-              "title": "No plan within the limits"
+              "title": "No plan within the limits",
+              "rejected": "The solver found a plan, but the exact Decimal check rejected it, so none is published. This is not a proof that no plan exists."
             },
             "noOp": {
               "body": "With {amount} no purchase meets the constraints: the plan is to do nothing.",
