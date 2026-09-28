@@ -359,10 +359,11 @@ state to the guide and renders anchors for it to point at:
   remains visible with one child dialog at depth 2 and hides if that child opens another dialog
   at depth 3. `TransactionBulkModal` is depth 1; any child dialog at depth 2 hides its coachmark.
 - **The duplicate-recheck bounce** is the wizard driving its own `currentStepId` back to
-  `'duplicates'` inside `handleImport()` when a final `refreshDuplicateReport(true)` reopens that
-  step (see `if (stepIsActive('duplicates')) { currentStepId = 'duplicates'; return; }`). The
-  guide does not special-case this: it just observes the same `currentStepId` effect firing again
-  with `'duplicates'` and follows.
+  `'duplicates'` inside `handleImport()` when the final `refreshDuplicateReport(true)` returns
+  changed groups (see `if (changedGroups.length > 0) { … currentStepId = 'duplicates'; return; }`,
+  after the `tx.import.duplicates.changed` notification; *Batch Duplicate Resolver → Final
+  recheck* above). The guide does not special-case this: it just observes the same
+  `currentStepId` effect firing again with `'duplicates'` and follows.
 - **The `bulk` handoff is one-way and explicit.** Right after `onImportBatch(...)` succeeds inside
   `handleImport()`, the wizard sets `guideHandedOff = true` and calls
   `onboardingGuide.setStep('import.bulk')` — from that point the wizard's own step-sync effect is
