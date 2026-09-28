@@ -20,9 +20,11 @@ These tests do NOT require a database connection.
 
 from __future__ import annotations
 
+import ast
 import csv
 import io
 import re
+import unicodedata
 from datetime import date
 from decimal import Decimal
 from enum import Enum
@@ -5094,6 +5096,158 @@ class TestCreditAgricoleCanonicalCharacterization:
         xlsx_out = self._parse(xlsx_path)
 
         assert _normalize_ca_xlsx_evidence_row_numbers(xlsx_out, xlsx_evidence_offset) == expected, f"{layout}: complete XLSX parse output drifted beyond its documented evidence-row offset"
+
+
+# =============================================================================
+# WINDOWS-1252 INVARIANCE — THE BYTE ENCODING MUST NOT CHANGE THE PARSE
+# =============================================================================
+
+BRIM_PLUGIN_DIR = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers"
+
+
+def _cp1252_unencodable(text: str) -> list[str]:
+    """The characters of ``text`` that Windows-1252 has no byte for, as ``"U+202F NARROW NO-BREAK SPACE"``."""
+    found: list[str] = []
+    for char in sorted(set(text)):
+        try:
+            char.encode("cp1252")
+        except UnicodeEncodeError:
+            found.append(f"U+{ord(char):04X} {unicodedata.name(char, 'UNNAMED')}")
+    return found
+
+
+def _windows_1252_cases() -> list[Any]:
+    """One ``pytest.param(sample, code, plugin)`` per non-ASCII sample and plugin that claims it.
+
+    Top-level samples only: ``malformed/`` holds deliberately broken fixtures. An
+    ASCII-only sample is left out, since its bytes are the same in both encodings
+    and it proves nothing. A sample that Windows-1252 cannot represent stays in the
+    matrix, marked skip, and the reason names the characters.
+    """
+    cases: list[Any] = []
+    for sample in sorted(SAMPLE_DIR.glob("*.csv")):
+        text = sample.read_bytes().decode("utf-8-sig")
+        if text.isascii():
+            continue
+        unencodable = _cp1252_unencodable(text)
+        marks = [pytest.mark.skip(reason=f"{sample.name} cannot be saved as Windows-1252: it contains {', '.join(unencodable)}")] if unencodable else []
+        cases.extend(pytest.param(sample, code, plugin, id=f"{sample.stem}-{code}", marks=marks) for code, plugin in _PLUGIN_PARAMS if plugin.can_parse(sample))
+    return cases
+
+
+_WINDOWS_1252_CASES = _windows_1252_cases()
+
+
+def _parse_outcome(plugin: BRIMProvider, path: Path) -> tuple[str, Any]:
+    """What ``plugin.parse`` makes of ``path``, as plain data that compares with ``==``.
+
+    ``("BRIMParseOutput", model_dump(mode="json"))`` or
+    ``("BRIMParseError", {"message": ..., "details": ...})``. Any other exception
+    propagates: it is a crash, not an outcome.
+    """
+    try:
+        return "BRIMParseOutput", plugin.parse(path, broker_id=1).model_dump(mode="json")
+    except BRIMParseError as exc:
+        return "BRIMParseError", {"message": exc.message, "details": exc.details}
+
+
+def _summary(outcome: tuple[str, Any]) -> str:
+    """One line for a failure message: the error message, or the output's size."""
+    kind, data = outcome
+    if kind == "BRIMParseError":
+        return f"BRIMParseError({data['message']!r})"
+    return f"BRIMParseOutput ({len(data['transactions'])} transactions, {len(data['warnings'])} warnings)"
+
+
+def _relocated(value: Any, old: str, new: str) -> Any:
+    """``value`` with ``old`` replaced by ``new`` in every string it holds, through dicts, lists and tuples."""
+    if isinstance(value, str):
+        return value.replace(old, new)
+    if isinstance(value, dict):
+        return {key: _relocated(item, old, new) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return type(value)(_relocated(item, old, new) for item in value)
+    return value
+
+
+def _fixed_encoding_open_lines(module: Path) -> list[int]:
+    """Lines of ``module`` with a call named ``open`` (``open``, ``io.open``, ``path.open``…) that passes ``encoding=``."""
+    lines: list[int] = []
+    for node in ast.walk(ast.parse(module.read_text(encoding="utf-8"), filename=str(module))):
+        if not isinstance(node, ast.Call):
+            continue
+        callee = node.func.id if isinstance(node.func, ast.Name) else getattr(node.func, "attr", None)
+        if callee == "open" and any(keyword.arg == "encoding" for keyword in node.keywords):
+            lines.append(node.lineno)
+    return sorted(lines)
+
+
+class TestWindows1252Invariance:
+    """A CSV export parses the same whether it was saved as UTF-8 or as Windows-1252.
+
+    The bug: 27 plugins (31 call sites) read their file with
+    ``open(file_path, encoding="utf-8-sig")``. An export saved as Windows-1252,
+    which is what Excel on Windows and many European banks write, fails on its
+    first accented byte with ``UnicodeDecodeError``, raw or wrapped in a
+    ``BRIMParseError``. Detection mostly succeeds, because ``can_parse`` usually
+    goes through ``_read_file_head``, which already falls back: the format is
+    recognised, then the import fails. Where ``can_parse`` opens the file itself
+    (generic CSV, InvestEngine, Rabobank, Trade Republic), detection fails too.
+
+    Invariance: each top-level sample with a non-ASCII character is re-saved as
+    Windows-1252 in ``tmp_path``, under the same file name. Only the bytes change:
+    the BOM, if any, is dropped and line endings are kept. For every plugin whose
+    ``can_parse`` accepts the original, ``can_parse`` must accept the copy and
+    ``parse`` must give the same outcome: an equal ``model_dump(mode="json")``,
+    or a ``BRIMParseError`` with the same message and details. Before comparing,
+    the copy's directory is written as the sample directory, the one difference
+    that is not an encoding difference. Any other exception on the copy is a
+    failure. A sample that Windows-1252 cannot represent is listed as skipped,
+    with the character.
+
+    Written red-first, before the plugins moved to ``self._open_text``. Only the
+    plugins that read through ``_brim_io.read_rows`` (Crédit Agricole, Intesa,
+    Directa) passed then. The guard test pins the fix: no plugin may open a file
+    with a fixed encoding again.
+    """
+
+    def test_windows_1252_cases_are_not_vacuous(self):
+        """At least one (sample, plugin) case really runs: an empty or all-skipped matrix proves nothing."""
+        runnable = [case.id for case in _WINDOWS_1252_CASES if not case.marks]
+        assert runnable, "No sample reaches test_sample_parses_identically_when_saved_as_windows_1252: none has a non-ASCII character that Windows-1252 can encode, or no plugin claims one"
+
+    @pytest.mark.parametrize(("sample", "code", "plugin"), _WINDOWS_1252_CASES)
+    def test_sample_parses_identically_when_saved_as_windows_1252(self, sample: Path, code: str, plugin: BRIMProvider, tmp_path: Path):
+        """The Windows-1252 copy is accepted by ``can_parse`` and parses to the original's outcome."""
+        # Same file name: plugins check the extension, and error details may carry the name.
+        copy = tmp_path / sample.name
+        copy.write_bytes(sample.read_bytes().decode("utf-8-sig").encode("cp1252"))
+
+        assert plugin.can_parse(copy), f"{code}.can_parse() accepts {sample.name} but rejects its Windows-1252 copy"
+
+        # A crash on the original would be a plugin bug unrelated to the encoding: let it surface as is.
+        expected = _parse_outcome(plugin, sample)
+        try:
+            outcome = _parse_outcome(plugin, copy)
+        except Exception as exc:
+            pytest.fail(f"{code}.parse() crashes on the Windows-1252 copy of {sample.name}: {type(exc).__name__}: {exc}")
+        actual = _relocated(outcome, str(tmp_path), str(SAMPLE_DIR))
+
+        assert actual[0] == expected[0], f"{code} on {sample.name}: the original gives {_summary(expected)}, its Windows-1252 copy gives {_summary(actual)}"
+        assert actual == expected, f"{code} on {sample.name}: the Windows-1252 copy gives a different {expected[0]} than the original"
+
+    def test_no_plugin_opens_files_with_a_fixed_encoding(self):
+        """No ``broker_*.py`` calls ``open(..., encoding=...)``: one fixed encoding cannot read every export."""
+        modules = sorted(BRIM_PLUGIN_DIR.glob("broker_*.py"))
+        assert modules, f"No broker_*.py found in {BRIM_PLUGIN_DIR}: the scan would pass on nothing"
+
+        offenders = [f"{module.relative_to(PROJECT_ROOT)}:{line}" for module in modules for line in _fixed_encoding_open_lines(module)]
+
+        assert not offenders, (
+            f"{len(offenders)} call(s) to open(..., encoding=...) in BRIM plugins. A fixed encoding cannot read an export saved as "
+            "Windows-1252 or Latin-1 (for example re-saved with Excel on Windows). Read the file with self._open_text(file_path), "
+            'or BRIMProvider._open_text(file_path, newline="") where the csv module needs the line endings verbatim:\n' + "\n".join(f"  {offender}" for offender in offenders)
+        )
 
 
 if __name__ == "__main__":
