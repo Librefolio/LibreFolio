@@ -45,6 +45,8 @@
         thicknessForQuantity,
         type EventMarkerKind,
     } from './lotGanttChartHelpers';
+    import {maskableQuantity} from '$lib/utils/privacy/maskable';
+    import {isPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type GanttSegmentSchema = z.infer<typeof schemas.GanttSegmentSchema>;
@@ -322,7 +324,7 @@
         }
 
         const brokerText = brokerName(meta.brokerId);
-        const qtyText = formatQuantity(meta.quantity);
+        const qtyText = maskableQuantity(formatQuantity(meta.quantity));
         const variants = [`${lotWordText()} ${dateText} · ${brokerText} · ${qtyText}`, `${dateText} · ${brokerText} · ${qtyText}`, `${dateText} · ${brokerText}`, dateText];
         for (const variant of variants) {
             if (estimateTextWidthPx(variant) <= availableWidthPx) return variant;
@@ -691,7 +693,9 @@
         const valueField = isClosedLot ? lotDto?.original_cost : currentValue;
         const valueLabel = isClosedLot ? translateOr($t, 'brokers.lots.tooltip.initialValue', 'Initial value') : translateOr($t, 'brokers.lots.currentValue', 'Current value');
         const assetIncome = parseUnknownNumber(lotDto?.asset_income);
-        const quantityLine = isClosedLot ? `${formatQuantity(originalQuantity)} → 0 ${translateOr($t, 'brokers.lots.tooltip.shares', 'shares')}` : `${formatQuantity(openQuantity)} ${translateOr($t, 'brokers.lots.tooltip.sharesOpenOutOf', 'shares open out of')} ${formatQuantity(originalQuantity)}`;
+        const quantityLine = isClosedLot
+            ? `${maskableQuantity(formatQuantity(originalQuantity))} → 0 ${translateOr($t, 'brokers.lots.tooltip.shares', 'shares')}`
+            : `${maskableQuantity(formatQuantity(openQuantity))} ${translateOr($t, 'brokers.lots.tooltip.sharesOpenOutOf', 'shares open out of')} ${maskableQuantity(formatQuantity(originalQuantity))}`;
         const closeDate = isClosedLot ? (latestLotEndDate(meta.lotId) ?? meta.endDate) : null;
         const footer = isClosedLot ? `${formatDateLong(openingDate)} → ${closeDate ? formatDateLong(closeDate) : '…'}` : `${translateOr($t, 'brokers.lots.tooltip.since', 'Since')} ${formatDateLong(openingDate)}`;
         let html = buildTooltipHeader(escapeHtml(lotLabel(openingDate)), theme.textColor);
@@ -1390,6 +1394,10 @@
         void axisContainer;
         void axisContentWidthPx;
         void $currentLanguage;
+        // The bar labels carry the lot quantity, masked under privacy (D5′). ECharts builds them in
+        // renderItem, outside this effect, so the flag is not tracked there: read it here, or
+        // toggling privacy leaves the labels as they were.
+        void isPrivacyEnabled();
 
         tick().then(() => {
             renderChart();

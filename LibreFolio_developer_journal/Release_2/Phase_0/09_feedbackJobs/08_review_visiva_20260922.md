@@ -160,7 +160,23 @@ quella che credevo. Corretto con `git cat-file -p HEAD:VERSION` e `git check-ign
 
 ---
 
-### R3 🟠 · R4 🟠 Modali update — z-index e banner assente
+### R3 🟠 · R4 🟠 Modali update — ~~z-index e banner assente~~ → **rinvio applicato a un'azione richiesta** *(J, 23/09)*
+
+> ⚠️ **Non è z-index**, per quanto dice il codice (lettura di J, owner di `DeferredAppPopups`):
+>
+> ```
+> admin      ChangelogModal:242 → updateAvailable.show() → DeferredAppPopups:41   modalDepth > 0 → RINVIATA
+> non-admin  ChangelogModal:325 → <AskAdminModal> annidata                        → SUBITO
+> stato 'newer'   nessuna resa inline
+> ```
+>
+> Il componente ha fatto il suo lavoro — rinviare i popup mentre un'altra modale è aperta —
+> ma su un controllo **chiesto dall'utente**, dove il rinvio è sbagliato: per questo la
+> modale è comparsa solo alla chiusura. E con R2 attiva la versione era `v1.0.1-97-…`,
+> quindi l'esito era `update-available`: **nessun «sei aggiornato» era dovuto**. R4 va
+> **ri-verificata** con R2 riparata (il server ora riporta `v1.1.0-228-gf1047f766`, cioè lo
+> stato `newer`, che oggi non ha resa inline). Discriminante nel DOM:
+> `deferred-app-popups[data-active-popup]` col changelog aperto.
 
 **Osservato.** Cliccando "verifica aggiornamenti" non compare **nessun banner** a schermo,
 benché la console mostri `probeStatus: 'success'`. La modale "nuova versione disponibile"
@@ -259,6 +275,17 @@ la torta a due livelli concordata con Risk.
 
 **Owner: Risk**, che possiede la tassonomia a due livelli e il suo disegno.
 
+> **Esito (24/09, tempo ② di Risk col developer)**: la prima torta a due anelli **non ha passato la
+> review**. Da fuori sembrava un anello solo, l'icona del membro copriva la fascia esterna e il
+> tooltip cambiava a seconda della fascia. Su due mockup costruiti coi suoi numeri, il developer ha
+> scelto **B, per veicolo**: «ETF» è la famiglia dell'anello interno, i sottotipi stanno
+> sull'anello esterno (*«la proposta B è quello che mi aspettavo»*). ~~per contenuto: `ETF_STOCK`
+> sotto «Azione»~~. Nel modello il principio non cambia: il sottotipo dice che cosa contiene.
+> Cambia il raggruppamento della torta, con un modulo nuovo di Risk (`charts/allocationFamily.ts`).
+> Registrato da Risk in `04` (D72) e `REGISTRO` (R2-158). Conseguenze: Allocazione storica (I)
+> raggruppa ancora per contenuto; per `CROWDFUND_REAL_ESTATE` il veicolo verrà dalla famiglia
+> esposta da K.
+
 ---
 
 ### R13 🟠 "CSV" non trova "Generic CSV" — **la causa NON è dove sembra**
@@ -298,6 +325,16 @@ Il filtro trova `CSV`, maiuscolo e parziale. Il componente in gioco è
 > riga c'è ma la lista non scrolla fino a lei — che a schermo è indistinguibile da "non
 > trova". Questa terza pista spiegherebbe perché `generic` (primo match in cima) funziona
 > e `CSV` no.
+
+> ✅ **Riprodotto da K il 23/09 — era la terza pista, e la mia misura era il difetto.** Ho
+> eseguito il filtro su **una** opzione; K l'ha eseguito sulle **30 reali**, nell'ordine del
+> backend: `CSV` ne trova 30, perché **29 descrizioni su 30 contengono «CSV»**. «Generic CSV»
+> è la **16ª**, se ne vedono circa 6, ed è evidenziata Avanza. Il filtro abbina bene: è
+> l'**ordinamento** che perde, perché un match sul nome vale quanto uno sulla descrizione.
+> Cura proposta da K: prima i match sul nome, poi quelli sulla descrizione, dentro le
+> sezioni. `optionFilter.ts` è condiviso da tutti i `SearchSelect`: in questo round ne è
+> **unico scrittore K**. È il campione scelto dal fenomeno di 09 §3.6, commesso da chi l'ha
+> scritto.
 
 ---
 
@@ -381,7 +418,14 @@ e si spiega da solo finché la UI v2 non esiste.
 > 2. Uno stato **atteso e voluto** produce un **toast di warning**. Un avviso per una
 >    condizione normale addestra a ignorare gli avvisi: questo sì merita una correzione.
 
-### 3.2 La privacy non nasconde la valuta — già corretto
+### 3.2 La privacy non nasconde la valuta — ~~già corretto~~ → 🔴 **falso in due siti** *(23/09)*
+
+> 🔴 **Vero solo per `currencyFormat.ts`.** Due siti aggirano le primitive D8 e restituiscono
+> `•••` al posto dell'intera stringa, valuta compresa: `riskAnalysisHelpers.ts:160` (livelli
+> di rischio L1 e L4, Asset Global) e `LotComparisonChart.svelte:261` (analisi lotti). È
+> esattamente ciò che il tuo principio chiama errore, ed è **protetto da un verde**: sette
+> asserzioni in `riskAnalysisHelpers.test.ts` fissano il `•••` nudo. → **J** (09 §9.8).
+> Il paragrafo sotto è il ragionamento giusto applicato al pezzo che non decide.
 
 Il tuo principio (*«il privacy deve nascondere il numero, non la valuta»*) **è già il
 comportamento del codice**. `currencyFormat.ts:41-47`: la maschera avvolge **solo**
@@ -554,15 +598,27 @@ non ha UI** (§3.1).
 > dei test che al termine della review va aggiornato per essere coerente con il nuovo
 > sistema.»*
 
-📌 **Registrato come task di chiusura della review**, non del round. Da affidare a
-`test-author`. Due vincoli da portargli:
+> ⚠️ **Rettifica del 23/09 — la premessa era falsa, e l'avevo data io.** `risk-lab` **è
+> stato eseguito**: ✅ 6/6 (`daa03c0f2`) e ✅ 11/11 (`032b86959`) sul ramo di A il 21/09, e da
+> allora lo spec è byte-identico. Non è mai girato **sull'albero integrato**, che è una cosa
+> diversa. E «rimasto super indietro» non trova appoggio nella misura statica: distanza zero
+> su testid, tipi e rotte (misura di F). La tua istruzione resta giusta — **farlo girare
+> prima di aggiornarlo** — ma parte da un rosso ignoto, non da un test abbandonato.
+> ✅ **Poi misurato (F-1, 23/09 16:15)**: **11/11 verdi sull'albero integrato** `f1047f766`.
+> Nessun rosso di partenza: «super indietro» significa copertura mancante del sistema nuovo.
+> Dettaglio: 09 §2.1. Owner: **F**; la test list passa da te, non da `test-author`.
+
+📌 **Registrato come task di chiusura della review**, non del round. Due vincoli per chi
+lo riprende:
 
 1. Il file è **2057 righe scritte da due mandati diversi** e mai eseguito: prima di
    aggiornarlo va **fatto girare** per sapere da che rosso si parte.
-2. Una delle sue tre asserzioni privacy (`:1356`, `.not.toMatch(MONEY_PATTERN)`) è **cieca
-   sotto maschera** — cerca il *valore*, che la privacy cancella. Le altre due cercano il
-   *canale* (`'€'`, `.currency-symbol`) e sopravvivono. Chi riscrive deve sapere quale delle
-   tre lo stava davvero proteggendo.
+2. ~~Una delle sue tre asserzioni privacy è cieca sotto maschera, le altre due sopravvivono.~~
+   🔴 **Falso su questa pagina** *(rettificato il 23/09, 09 §9.8)*: il denaro dei livelli di
+   rischio passa da `riskAnalysisHelpers.formatCurrencyAmount`, che sotto privacy restituisce
+   `•••` senza valuta, quindi le tre asserzioni sono cieche **tutte**. E `.currency-symbol`
+   lì non compare mai, nemmeno a privacy spenta. Il pin si riscrive dopo la riparazione di
+   J, contro il comportamento riparato.
 
 ### 8.9 Correzione a mio carico: i 61 file di `custom-uploads`
 
@@ -643,6 +699,12 @@ una commessa **della famiglia risk, ma chiusa**. Risk-attuale non è il suo ered
 già davanti la review puntuale componente per componente, concordata col developer nella sua
 chat, e caricarla di backlog UI la ritarda.
 
+> ⚠️ **Rettifica del 23/09.** «Commessa chiusa della famiglia risk» era incompleto: il
+> kickoff di B dice *«Il coordinatore della campagna, che gira sul branch
+> `e-alfy-risk-management-replan` nel worktree `e-alfy-ideal-eureka`»* — cioè **Risk**. È
+> Risk che ha deciso il passo 10 di B (vedi R15 sotto). La scelta di K resta valida per le
+> ragioni dette, ma K **riapre una decisione di Risk**, e Risk ne è stato informato.
+
 ### 9.2 Le tre famiglie, per file
 
 | famiglia | voci | file che si tocca | owner |
@@ -667,12 +729,29 @@ owner sullo stesso file è la collisione che il protocollo vieta per prima.
 > `FixFlaggedStep`). Il select piatto osservato è quello dei **tipi asset** — ETF e
 > crowdfunding sono asset, non transazioni. La voce si restringe a quel select.
 
-> 🔴 **R15 non è una dimenticanza: è una decisione scritta e motivata.** In
-> `frontend/src/lib/utils/assetTypes.ts` il docstring di `buildAssetTypeOptions()` argomenta
-> la scelta opposta — header di sezione non selezionabile invece dell'albero, perché
-> *«costs no new machinery … leaves the generic ETF a perfectly ordinary, selectable option
-> rather than a group that has to pretend to be a leaf»*. Chi riapre la voce deve **rispondere
-> a quell'argomento**, non ignorarlo: è il disegno di B, non una svista.
+> 🔴 **R15 riapre una decisione, e il registro non la conosce.** *(rettificato il 23/09 — il
+> 22/09 questa voce diceva «è il disegno di B, non una svista», ed era incompleto.)* Tre
+> documenti, tre versioni:
+>
+> - `Phase_0/02_riskfolioIntegration/04-decisioni-e-questioni-aperte.md`, **D62** (17/09):
+>   l'albero a due livelli è `SignalTreeSelect`, da generalizzare in `ui/select/`. Nel
+>   registro è **ancora vigente**.
+> - `Phase_0/02_riskfolioIntegration/implementation/progress/B-esecuzione.md`, passo 10: il
+>   coordinatore di B (**Risk**) ha respinto la promozione dopo F27 *(⚠️ F27 è citata e **mai
+>   scritta**: nel registro di B i Fuori pista saltano da F26 a F28 — Risk, 23/09)* — le due forme divergono
+>   su tre assi — e B ha scelto le sezioni piatte su `SimpleSelect`. Il docstring di
+>   `buildAssetTypeOptions()` è quella scelta. La correzione di D62 **non è mai stata
+>   scritta nel registro**.
+> - La review del 22/09 chiede l'albero «come il selettore degli indici nel pannello
+>   segnali»: cioè D62 com'era.
+>
+> Rivalutazione: **K**, con le opzioni al developer prima del codice. Risk annota D62.
+
+> 🔴 **R16: la pastiglia di D52 non è mai stata consegnata.** *(misurato il 23/09)* D52
+> prescrive icona grande del contenitore + icona piccola sovrapposta del tipo base, con una
+> costante accanto a `PNG_MAP`: in `assetTypes.ts` non c'è, e nessun componente la rende.
+> `B-esecuzione.md` la dà per presente perché usa «pastiglia» per due cose diverse: la
+> classe colore del badge (`assetTypeBadgeClass`, consegnata) e l'icona sovrapposta (mai).
 
 > ✅ **R17 non richiede una migrazione.** `assets.asset_type` è un `VARCHAR` **senza CHECK
 > constraint**: l'enum vive in Python e allargarlo è un cambio di codice. Non tocca il divieto
@@ -711,3 +790,92 @@ revision id deve stare in **32 caratteri**, perché `alembic_version.version_num
 **Gate:** `db_schema_validate.py` **17/17 verdi** su DB di test ricreato dalla catena, con
 `VARCHAR(32)` su entrambe le colonne; DB già installato (`VARCHAR(14)`) portato a head senza
 DDL, `integrity_check ok`, 15 asset intatti.
+
+---
+
+## 10 · Quarto passaggio — 23/09/2026, pomeriggio · le proprietà incrociate
+
+I piani dei sette workstream, letti insieme, hanno fatto emergere voci che nessun piano
+possedeva, o che due piani possedevano insieme. Decisioni del coordinator:
+
+| voce | cosa | owner | nota |
+|---|---|---|---|
+| 🔴 stress uniforme | `RiskAnalysisPanel.svelte:115` elenca 9 tipi su 17; a `:472` lo stress costruisce i secchi solo da lì → 8 tipi con shock 0.0 in silenzio | **Risk** | trovato da K, verificato |
+| 🔴 privacy e valuta | `riskAnalysisHelpers.ts:160` maschera anche la valuta (09 §9.8) | **J** | Risk non tocca quelle righe |
+| R2-128 | accesso al sync FX dal laboratorio, perso smontando il monolite (`implementation_2/REGISTRO.md:360`) | **F** | proprietario del guscio; il developer può rinviarlo |
+| §1.6 · pin privacy `risk-lab` | riparazione del gate | **F** | variante ON dopo J |
+| filtro broker | `risk-analysis.spec.ts:1335` → `risk-lab.spec.ts` | **F** aggiunge, **Risk** rimuove | **ordine**: F aggiunge e lo porta verde, poi manda il nome al coordinator, che dà il via a Risk (14 → 13); `desc=` del catalogo: F solo per aggiunta, Risk solo per sottrazione. **Integrazione**: F non dopo Risk, altrimenti nel target si apre una finestra senza copertura |
+| `panelTitle` | chiave orfana `risk.assetSet.panelTitle` | **F**, a fine round | introdotta da F (`f2ad97dd4`); non si cancella prima |
+| §2.6 | commenti `formatScopedCurrencyAmount:163` in `L4Replay:47`, `L4Shock:46` | **Risk** | file della famiglia Risk (E → S4), non di F |
+| citazioni derivate | `AssetSetRiskPanel.svelte:42` cita `:874` (ora `RiskAnalysisPanel:879`); `AssetSetReplaySection.svelte:31` cita `service.py:840` (ora `:873`) | **F** | segnalate da A, verificate; stesso rimedio di §2.6: citare il simbolo |
+| R17 · scenari | righe CROWDFUND_REAL_ESTATE in `equity_crash.yml`, `global_risk_off.yml` | **K**, nello stesso commit dell'enum | valore al developer; Risk non tocca i due YAML fino a R17 |
+| R13 · `optionFilter.ts` | ordinamento condiviso da tutti i `SearchSelect` | **K**, unico scrittore | test list con tutti i consumatori |
+| registro privacy | righe del grafico di crescita | **I**, nello stesso commit | file di J; al merge si sommano |
+| emoji `AllocationHistoryChart` | mancano COMMODITY, REAL_ESTATE, ETF_MONETARY | **I** | segnalato da K, da verificare |
+| indice `financial-theory/asset-types` | 8 tipi mancanti, HOLD etichettato «Commodities» | **K**, con R17 | EN via `docs-writer`; traduzioni su richiesta del developer |
+
+**Aggiunte del 23/09, ~16:00** (dal messaggio di J, verificate):
+
+| voce | cosa | owner | nota |
+|---|---|---|---|
+| 🔴 privacy e valuta, secondo sito | `LotComparisonChart.svelte:261` | **J** | stesso difetto di `riskAnalysisHelpers:160` |
+| `riskAnalysisHelpers.ts` + test | file interi, per tutto il round | **J**, unico scrittore | nessuna finestra: Risk non li tocca |
+| 🔴 P4-11, secondo grafico | `PerformanceChart.svelte:161` (`shortMoney`, P&L per posizione), `:170` (`axisTickAmount`, asse dei valori) — nessun riferimento alla privacy nel file | **I** | piano di I rimandato per aggiungerlo |
+| ~~D1 di I, precisato~~ → **D1 rifatto** *(J, 16:00)* | «al merge si sommano» era sbagliato: `moneyRenderSites.test.ts:276` usa PerformanceChart come esemplare del controllo positivo, e mascherarlo lo manda rosso; le 4 voci di I vanno cancellate; le liste `:272-273` le toccano sia I sia J | **J** gate-prep (checkpoint separato, solo il file del gate) → merge **J → I** → **S2 di I** | dipendenza tra workstream, gestita con un merge figlio → figlio; `compact` dentro la maschera; nessuna primitiva nuova per I |
+| ancore della guida import | `ImportWizardModal` `import.action.*` `:4586–4770`, 5 del Bulk, step-sync `:164–178`, `:1279` | **K** le preserva | per l'analisi di K R18 non tocca quel file |
+| §1.3, §1.5 di 09 | ritirate | — | barrate, non cancellate |
+| 🟡 **C2 — latente** *(era 🔴 candidato; rettifica di Risk, 17:40)* — orizzonte del bootstrap | `simulation.py:403` passa `horizon_days` senza conversione; il bootstrap conta osservazioni, il GBM converte. ~~sui dati del developer la griglia congiunta è fatta di giorni di borsa (0,69 per giorno di calendario), quindi «365 giorni» ≈ 17 mesi di mercato: cono ~+20%, deriva ~+45%, in modalità di default~~ → **premessa falsa**: la griglia è l'**unione** delle date con una quotazione fresca (`series_preparation.py:236`), poi tiene quelle in cui ogni asset ha un valore, anche riportato (`:287`). Non è l'intersezione. Con un asset justETF nel perimetro è **giornaliera di calendario**: f = 365, e «365 giorni» sono un anno. Il difetto morde solo dove nessun asset scrive i weekend | **Risk**, nel tempo ② col developer | la correzione dentro `simulation.py` resta consigliata. Premessa presa da una frase della doc (`observed-annualization.en.md:95`) invece che dal codice. Verificato dal coordinator nel codice, sulla snapshot e con la misura di A (riga «griglia di calendario» qui sotto) |
+| 🔴 **candidato F2** — asset senza prezzi = liquidità allo 0% | `service.py:608-687`, `usable_cash_weight = 1 − Σ pesi utilizzabili`. Verificato sulla snapshot: i 4 crowdfunding (id 12-15) hanno **0 righe** in `price_history` e pesano il **30,5%** | **Risk**, nel tempo ② col developer | limite del modello, non un bug; tocca correlazione, contributi, N_eff, backtest, simulazione e replay **nel perimetro di portafoglio**. ⚠️ *Rettifica del 16:58, misura di A sulla copia*: nel perimetro `asset_set` l'asset senza prezzi viene **escluso** (`missing_price`, avviso `assets_excluded`; `[1,3,8]` e `[1,3,8,12]` danno entrambi 574 osservazioni) e non convertito in liquidità. C2 non compare su Asset Global, perché lì la simulazione non è annunciata |
+| 🔴 **replay inerte** | il polling di `POST /api/v1/assets/prices/current` (Asset Global, due volte a caricamento e ogni 30 s; ogni chiamata scrive) passa da `zodios-client.ts:123` → `notifyPortfolioMutation` → `riskStore.svelte.ts:195` `invalidateRisk`; il `queryRisk` in volo torna `null` e `runGuarded` lo scrive come risultato: niente spinner, niente errore | **Risk** (`runGuarded`: richiedere una volta, poi dirlo, come `loadBase`) | trovato da F (C15 rosso), catena verificata. **R2-66 aveva la diagnosi sbagliata**: la corsa d'identità è irraggiungibile, la causa è il polling; va riscritta nel ramo di scarto di `loadBase` e nel test `riskStore.test.ts`. F ha già corretto lo stesso difetto nel suo `applyBrokerPreset`. **Portata** (misura di Risk): il polling c'è in Asset Global (`assets/+page.svelte:401`) e in Asset Detail (`assets/[id]/+page.svelte:1468`, `:2034`), non in Dashboard né in Broker Detail; `portfolioMutation.ts` conta come mutazione ogni `POST` sotto `/api/v1/assets/prices` tranne `/query`. La riparazione va comunque in `runGuarded`, per tutti. Risk verificherà da sé la nuova diagnosi di R2-66 prima di riscriverla |
+| sostituto promesso | `risk.levels.l4.replayNeedsChoice` promette «give it a stand-in», ma `L4Replay.svelte:101` scrive `proxyAssets: []` fisso | **Risk** + decisione del developer | togliere la promessa o costruire il sostituto; vale su ogni pagina con L4 |
+| `CorrelationHeatmap` condivisa | «By name» ordinava per id → ora per nome (testid `risk-correlation-ordering-name`, il vecchio era usato solo da `risk-lab.spec.ts` di F); colori della lista coppie allineati alla heatmap | **F** · Risk informato: **cambia anche la Dashboard** | la polarità dei colori è una decisione del developer (F-3): una riga nel `visualMap`, che sposta anche la Dashboard |
+| 🔴 polling di `/assets` a raffica | l'effetto legge `assets.length` e riparte a ogni riassegnazione di `assets`; `fetchAllPriceData` la riassegna fino a 4 volte → fino a 4 `POST /prices/current` per caricamento, ognuno con 14 righe scritte e un'invalidazione **globale** di report e rischio | **F** (unico scrittore di `assets/+page.svelte` in questo round) | l'effetto deve dipendere dall'elenco degli id; riduce la frequenza del replay inerte, senza sostituire la riparazione di Risk in `runGuarded` |
+| motore di correlazione (per il tempo ②) | `min_coverage` non può scattare (copertura 1,0 per costruzione, `low_pair_coverage` morto); `min_observations = 2` del plugin non si applica (agisce il parametro, default 20); riempimento in avanti senza limite di età che da solo rende `partial`; `data-quality.en.md` §Alignment falso per un asset che parte tardi; `en.json:3228` «Some correlation pairs…» per una condizione su tutte le celle | **Risk**, col developer | trovati da `docs-writer` di F eseguendo `RiskService.execute`. ~~il coordinator non li ha misurati~~ → **due verificati dal coordinator nel codice** (17:45). *`min_coverage`*: per l'avviso regge. La copertura di cella è `osservazioni / n_observations` sulla stessa griglia densa (`metrics.py:583`, `correlation.py:64-75`), quindi vale 1,0. La copertura **del risultato**, invece, è `calendar_coverage` (`correlation.py:133`) e scende sotto 1: su `[1,3,8]` dal 2024-01-01 vale 574/995 = **0,577**, sotto il default 0,6, e nessun avviso scatta. Il controesempio di Risk (asset tardivo, `series_preparation.py:344-345`) riguarda questa seconda copertura, non quella che la soglia confronta. *Riempimento in avanti*: confermato, perché `CARRIED_FORWARD` (`schemas/portfolio.py:244`) ≠ `OK` dà `partial` (`service.py:803`) |
+| ⑥ | test di F verde (16/16), nome esatto a `risk-lab.spec.ts:2478` | via a Risk **dopo** il commit del suo checkpoint | la correzione di ⑥ tocca due file del commit 6. *24/09*: tempo ① committato (`a5f6776aa`…`de55b5346`), via dato alle 09:31. ⑥ fatto: il vecchio test tolto per titolo, `risk` 13/13, checkpoint 7 pronto (3 percorsi). 🔴 Da qui l'**ordine d'integrazione è vincolante**: il ramo di F entra prima di quello di Risk, oppure nello stesso merge |
+| colori D71 tra i due grafici | lo storico (`AllocationHistoryChart`) ordina le famiglie per **peso medio del periodo**, la torta per **peso di oggi**: la stessa famiglia può uscire con colori diversi | **Risk** con il developer, nel tempo ② · **I** coinvolto | non è un difetto: si decide in review se la regola di ordinamento va condivisa |
+| 🟠 **il gate privacy non gira** | 5 test di J orfani del runner: `privacyStore`, `privacyStoreSsr`, `currencyFormat`, `maskable` (`b66e93003`) e **`moneyRenderSites`** (`9a6dd2015`), cioè il gate dei punti di resa non registrati, che non è registrato lui stesso. Nessun workflow CI lancia vitest | **J** registra, e sceglie l'azione | trovato da Risk con `check-orphans`, verificato: 0 citazioni nel catalogo. Finché non si registra, il verde esiste solo per chi lancia il gate a mano, e le verifiche del gate-prep e dell'S2-pre di I lo devono eseguire esplicitamente |
+| R2-128 · la riga in A (D9 di F) | `AssetSetComparisonLevels.svelte:90` deve ricevere il nuovo `refreshVersion` | **F** la scrive | prop opzionale con default che lascia invariato il comportamento; A non tocca il file finché R2-128 è aperto; se il developer rinvia R2-128, D9 decade |
+| R2-128 · la pagina | `routes/(app)/assets/+page.svelte:1510` (montaggio del guscio), una riga | **F** | non interagisce con §2.5 di I: quello è `assets/[id]/+page.svelte:2174`, altra pagina |
+| citazioni derivate, precisazione | `{#if scope.kind === 'asset'}` compare due volte in `RiskAnalysisPanel` (`:742`, `:879`) | **F** | «cita il simbolo» non basta: va citato per contenimento; F rende simboliche tutte e 8 le citazioni dei suoi componenti, più una terza nata sbagliata (`AssetSetReplaySection:44` → `L4Replay:238`) |
+| 🟠 **griglia di calendario sui dati del developer** *(17:45)* | justETF scrive sabato e domenica con la chiusura del venerdì. Nella snapshot ci sono **14 448** righe di weekend sui 10 asset justETF, e **il 100 %** è uguale al venerdì. Il provider le passa come arrivano, con `backward_fill_info=None` (`justetf.py:373-387`): contano come fresche (`series_preparation.py:123-125`). Il BTP (id 8, `borsa_italiana`) ha 399 righe, **nessuna** nel weekend | **Risk** con il developer, nel tempo ② | Conseguenze verificate: **(1)** con un justETF nel perimetro f = 365, e *Mese storto* (21 osservazioni, `asset_set_var.py:83`, `historical_var.py:71`) dura **3 settimane**, come sul portafoglio. Sul portafoglio lo è per costruzione: la serie TWRR del report ha un punto per ogni giorno di calendario (`service.py:932-941` la legge da `report.history`; `portfolio_engine.py:870-871` emette uno stato per giorno di calendario, e i giorni fermi riusano quello precedente; `portfolio_service.py:1305-1425` ne ricava la storia senza campionarla), quindi togliere le righe del weekend di justETF non basta a farne di nuovo un mese. Resta da decidere l'unità dell'orizzonte. Fa eccezione il BTP da solo, su giorni di borsa, dove 21 osservazioni sono circa un mese. L'insieme preparato include anche gli asset di confronto (`service.py:170-171`), quindi un benchmark justETF cambia griglia anche al BTP. **(2)** Ogni asset justETF ha un rendimento **esattamente zero** nei weekend, in ogni VaR e in ogni correlazione. *Misura di Risk del 24/09, fatta sulla copia su 3 asset justETF per 730 giorni, non riverificata dal coordinator*: la volatilità annualizzata **non** è distorta, perché il fattore osservato compensa la diluizione (rapporto 1,00). Sono sottostimati i quantili per osservazione: *Giornata storta* dell'8-13 %, *Mese storto* del 9-19 %. Vale per ogni ambito sulla griglia di calendario. **(3)** Se nel perimetro c'è un justETF, il BTP viene riportato in avanti ogni weekend, e il risultato è `partial`. È la causa del `partial` di A su `[1,3,8]`: 574 osservazioni sono 574 giorni di calendario (baseline 2025-02-25, prima quotazione del BTP) e i punti riportati sono 176. `[1,2,3,4]`, tutti justETF, danno `ok` |
+| doc · la griglia descritta come intersezione | `observed-annualization.en.md:95` («intersected across the assets in scope») e `historical-replay.en.md:95` («over the intersection of the calendars») contraddicono il codice e `data-quality.en.md:60`, che l'unione la descrive giusta. La stessa premessa, di A, è nella sua pagina utente `user/assets/correlation.en.md` (:99 «about a month», :138, :150, :182) e nel suo piano (:138-143, :197, :211, :454-455) | **Risk** per le due pagine di teoria, come unico scrittore, dopo il suo checkpoint · **A** per la sua pagina e il suo piano, in un commit **dopo** il checkpoint | Le pagine di teoria vengono da `b35a8581e`, e oggi nessun ramo le tocca. `data-quality.en.md` e la `correlation.en.md` di teoria restano di **F**. Deciso *dopo* e non *prima* (17:58): il piano va corretto comunque dopo, e scongelare adesso invaliderebbe un checkpoint già verificato. A ha già corretto il messaggio del suo commit 2, e l'ho riverificato |
+| 🟠 **E2E già rossi sul target** *(misurati da I, 24/09)* | su `f1047f766`: `front-portfolio dashboard` 5 falliti su 15 (`:577` ×3, il selettore zoom-window tolto; `:607`, legge un badge non più montato; `:534`) e `front-broker detail` 1 fallito su 28 (`:710`). Per `:534` e `:710` la causa è misurata: da `e7773a143` lo zero non ha segno, e i test cercano «≥3 importi con segno». È un'assunzione del test, non un difetto del prodotto. In più, da unit: `chartCoreHelpers.test.ts` 12 falliti su 162 (P4-9) | **I**, in S10, perché li ha rotti una sua slice | l'inventario del 22/09 misurava solo gli unit, quindi il «12» valeva per quel perimetro, non per il ramo. In questo round `dashboard.spec.ts` e `brokers-detail.spec.ts` li scrive solo I. J avvisato: confronta i risultati per nome del test |
+
+**Aggiunte del 24/09, pomeriggio**:
+
+| voce | cosa | owner | nota |
+|---|---|---|---|
+| 🟠 **lampo della shell** (privacy) | `(app)/+layout.svelte` è legacy: le sue `$:` leggevano `appBootstrap.ready`, uno stato runes che non tracciano. Quando serviva un redirect (benvenuto pendente, replay del benvenuto armata), la pagina richiesta si disegnava per 1-5 frame, e il segnaposto `onboarding-redirecting` non si montava mai (0 su 40 giri). In 1 giro su 8 dello scenario B sono comparsi 9 importi, gli zeri di un portafoglio vuoto: quindi il contenuto può arrivare dentro quella finestra | **J**, unico scrittore del layout, di `vitest.config.ts` e del mock `$app/stores` | ✅ `cc20b8288`: `toStore(() => appBootstrap.ready)`. Dopo la correzione: 0 frame, segnaposto montato 5 volte su 5 in ogni scenario. Test di regressione `layout.gate.test.ts`, rosso con le `$:` di prima (controllo negativo). Vincolo, scritto nel test: il template legacy segue `appBootstrap` solo attraverso i suoi getter enumerabili, quindi se `appBootstrap` diventasse una classe resterebbe fermo sul caricamento il layout vero |
+| `risk.eligibility.*` | chiavi dei motivi di idoneità nel «+» del laboratorio | **F** fino a F → Risk, poi **Risk** | i 5 motivi di `14c334d85`. `no_price_history` (checkpoint C di Risk) lo scrive chi per primo ha nello stesso ramo sia l'enum sia la mappatura di F: oggi Risk, a F → Risk. Nessun riuso con `risk.warnings.historical_replay_excluded_*`, che appartiene a un altro enum |
+| ordine d'integrazione F/Risk | Risk `14c334d85` fuso nel ramo di F: `2c02ff070` (24/09, 16:00), senza conflitti | — | la finestra senza copertura broker (riga ⑥) si chiude **dentro** il ramo di F. Da qui il caso «preset broker» di `risk-lab` è l'unica copertura broker, e F-6 lo deve tenere |
+| ancora della guida nascosta | la gestione degli stalli del Round 7 non copre un'ancora **montata ma non disegnata**: con `display:none` il rettangolo è 0×0 e stabile, e il coachmark si aggancia a (0,0) | **J** (C6) | nel ramo di F l'ancora `asset.page.filters` sta dentro `{#if activeTab !== 'correlation'}`: è smontata, quindi lo stallo la copre già. J estende a tutte le pagine la regola «non disegnata = assente». Per chi scrive le pagine: `use:guideAnchor` solo sull'elemento visibile |
+| sovra-mascheratura | `TransactionsTable.svelte` (`eventTooltipText`) e `transactions/wac/WacPreviewSection.svelte` (costo unitario, WAC progressivo) | **J** (C6), unico scrittore | regola D5′: un valore unitario è `public`, un totale `personal` |
+| etichette dell'header | `PrivacyToggle`, `ThemeToggle`: testo inglese fisso | **J** (C6), unico scrittore dei due file | chiavi nuove, 4 lingue via `dev.py i18n` |
+| doc della dashboard | `user/dashboard/index.en.md` dice tre schede, ma sono quattro | **I**, in S11-finale | trovato da J |
+
+> ⚠️ **Errore del coordinator nel kickoff di J**: gli ho scritto che il piano Round 4 «resta
+> valido e va cucito». È chiuso dall'11/09, e il **Round 5** (12/09) ne ha rovesciato lo
+> split Bulk — *«Import/Bulk tornano a un flow ciascuno»*. Cucirlo avrebbe reintrodotto una
+> decisione che il developer aveva annullato. La prosecuzione è OB-8 → OB-9 del piano Round 7.
+
+### Il blocco che ho creato io
+
+La procedura di copia del 23 mattina leggeva `backend/data/prod` del **main checkout**, e
+l'agente dei figli lo vieta (`coordinated-workstream.agent.md:63`, *«Never read the main
+checkout»*). A si è fermato lì, e gli altri sei si sarebbero fermati nello stesso punto.
+Decisione del developer: **una snapshot sola, in sola lettura**, `/tmp/librefolio-r2-prod-snapshot`,
+creata dal coordinator; ogni figlio copia da lì. Provata: la copia è scrivibile e accettata dal
+guardiano, la snapshot rifiuta le scritture (*«attempt to write a readonly database»*) e il prod
+resta byte-identico.
+
+> 📌 **Una regola scritta in un file che il destinatario legge non basta: va letta anche da chi
+> scrive l'ordine.** Avevo letto l'agente dei figli per il kickoff di K e non l'ho riletto
+> scrivendo la procedura.
+
+### Credenziali
+
+La password di `alfy` non era cambiata: l'avevo troncata io, leggendo il punto finale come
+punteggiatura. Verificata col login reale su una copia (200, 15 asset; senza punto 401). Il
+reset via CLI è sicuro solo così: `LIBREFOLIO_TEST_DATA_DIR=<copia> … dev.py user --test-db`,
+con `list` prima di `reset`. `dev.py user` **non ha `--data-dir`**: senza `--test-db` mira al
+prod del checkout da cui lo si lancia — dal checkout principale, sono i dati del developer.

@@ -22,6 +22,7 @@ import {expect, test, type Page, type Request} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {waitForSettled, waitForValidateRun} from '../fixtures/app-events';
 import {TEST_USER} from '../fixtures/test-users';
+import {uniqueSuffix} from '../fixtures/unique';
 
 test.setTimeout(60_000);
 
@@ -143,10 +144,30 @@ async function waitForWacResolved(page: Page) {
     await expect(autoCell).toHaveAttribute('data-state', 'ready', {timeout: 20_000});
 }
 
-/** Double-click on a row in the BulkModal grid to open FormModal for editing it. */
-async function dblClickBulkRow(page: Page, rowIndex: number) {
-    const rows = page.locator('[data-testid="tx-bulk-modal"] tbody tr[data-row-id]');
-    await rows.nth(rowIndex).dblclick();
+/**
+ * Stamp the draft in the FormModal with a description only this test knows.
+ *
+ * The BulkModal orders rows of one date by a tie-break the test does not control,
+ * so "the TRANSFER is the last row" was a coin toss (C4). The marker is identity:
+ * user-entered content, never translated, shared by both legs of a TRANSFER, and
+ * carried through every re-edit. It lives in the collapsible optional `<details>`:
+ * read its real `open` state rather than clicking blind, which would close it.
+ */
+async function fillDescription(page: Page, text: string) {
+    const details = page.locator('details:has([data-testid="tx-form-optional-toggle"])');
+    await expect(details).toBeVisible({timeout: 3_000});
+    if (!(await details.evaluate((el) => (el as HTMLDetailsElement).open))) await page.getByTestId('tx-form-optional-toggle').click();
+    await expect(details).toHaveAttribute('open', '');
+    const description = page.getByTestId('tx-form-description');
+    await description.fill(text);
+    await expect(description).toHaveValue(text);
+}
+
+/** Double-click the one BulkModal row that carries `marker` to open it in the FormModal. */
+async function dblClickBulkRow(page: Page, marker: string) {
+    const row = page.locator('[data-testid="tx-bulk-modal"] tbody tr[data-row-id]').filter({hasText: marker});
+    await expect(row).toHaveCount(1, {timeout: 5_000});
+    await row.dblclick();
     await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
 }
 
@@ -375,6 +396,7 @@ test.describe('FormModal WAC Payload Tests', () => {
     });
 
     test('FM7 — Toggle Auto→Manual on TRANSFER receiver propagates override', async ({page}) => {
+        const transferMarker = `FM7 transfer ${uniqueSuffix()}`;
         // Create BUY + TRANSFER
         await openCreateFlow(page);
         await selectType(page, 'BUY');
@@ -392,14 +414,13 @@ test.describe('FormModal WAC Payload Tests', () => {
         await pickBrokerInPanel(page, 'tx-form-dual-to', BROKER_TO);
         await pickAssetByName(page, ASSET_NAME);
         await fillQuantity(page, '5');
+        await fillDescription(page, transferMarker);
         await applyFormModal(page);
         await waitForWacResolved(page);
 
-        // Open the TRANSFER row in FormModal for editing
-        const rows = page.locator('[data-testid="tx-bulk-modal"] tbody tr[data-row-id]');
-        const lastIdx = (await rows.count()) - 1;
-        await rows.nth(lastIdx).dblclick();
-        await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
+        // Open the TRANSFER row in FormModal for editing — by its marker: BUY and
+        // TRANSFER share a date, so which of the two is "last" is not ours to assume.
+        await dblClickBulkRow(page, transferMarker);
 
         // Toggle to manual mode
         const manualToggle = page.getByTestId('tx-form-cost-basis-toggle-manual');

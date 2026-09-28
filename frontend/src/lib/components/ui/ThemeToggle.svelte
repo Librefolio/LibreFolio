@@ -6,6 +6,7 @@
      */
     import {onMount} from 'svelte';
     import {Moon, Sun} from 'lucide-svelte';
+    import {_} from '$lib/i18n';
     import {applyTheme, getCurrentResolvedTheme, getStoredThemePreference, initThemeListener} from '$lib/stores/app/themeStore';
 
     let theme: 'light' | 'dark' = 'light';
@@ -40,12 +41,12 @@
 </script>
 
 <button
-    aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+    aria-label={theme === 'light' ? $_('header.theme.switchToDark') : $_('header.theme.switchToLight')}
     class="p-2 rounded-lg transition-colors duration-200
            text-gray-600 dark:text-gray-300 hover:bg-white/20 dark:hover:bg-slate-600"
     data-testid="theme-toggle"
     on:click={toggleTheme}
-    title={theme === 'light' ? 'Dark mode' : 'Light mode'}
+    title={theme === 'light' ? $_('header.theme.dark') : $_('header.theme.light')}
 >
     {#if !mounted}
         <!-- Placeholder during SSR -->
