@@ -8,7 +8,7 @@ Les **matières premières** sont des actifs physiques — ressources brutes ou 
 
 | Propriété | Détail |
 |----------|--------|
-| **Code dans LibreFolio** | `HOLD` |
+| **Code dans LibreFolio** | `COMMODITY` |
 | **Prix** | Prix spot des bourses de matières premières, ou évaluation manuelle |
 | **Devise** | Généralement cotées en USD (or, pétrole) mais peuvent être libellées dans n'importe quelle devise |
 | **Dividendes** | Aucun — les matières premières ne génèrent pas de revenus |

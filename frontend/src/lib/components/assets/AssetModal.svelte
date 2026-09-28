@@ -19,7 +19,7 @@
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
-    import {CurrencySearchSelect, SimpleSelect} from '$lib/components/ui/select';
+    import {AssetTypeSelect, CurrencySearchSelect} from '$lib/components/ui/select';
     import AssetSearchAutocomplete from './AssetSearchAutocomplete.svelte';
     import AssetIcon from './AssetIcon.svelte';
     import ProviderAssignmentSection from './ProviderAssignmentSection.svelte';
@@ -41,7 +41,7 @@
     import {userSettings} from '$lib/stores/app/settings';
     import {get} from 'svelte/store';
     import {trySave} from '$lib/utils/trySave';
-    import {ASSET_TYPES, IDENTIFIER_TYPES, buildAssetTypeOptions} from '$lib/utils/assetTypes';
+    import {ASSET_TYPES, IDENTIFIER_TYPES} from '$lib/utils/assetTypes';
     import {generateUUID} from '$lib/utils/core/uuid';
     import {columnsToIdentifierRows, identifierRowsToColumns, nextAvailableIdentifierType, fieldToIdType} from './assetIdentifiers';
     import {isCurrencyChangeBlockedMessage, parseCurrencyChangeBlocker} from './currencyBlocker';
@@ -52,6 +52,7 @@
     import {entityDetailLinkHtml} from '$lib/utils/core/entityLink';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {createProviderProbeState, providerConfigurationKey, type ProviderConfiguration, type ProviderRequestTicket} from './providerProbeState.svelte';
+    import {decideComparison, identifierQuestion, type IdentifierQuestion} from './providerComparisonQueue';
 
     import {numericArrows} from '$lib/actions/numericArrows';
     // =========================================================================
@@ -318,6 +319,14 @@
     let comparisonDifferences: DiffItem[] = $state([]);
     let comparisonContext: ProviderRequestTicket | null = null;
     let comparisonIntent = new Map<string, number>();
+
+    // ── A search selection asks each identifier question once (R18) ─────────────────────
+    // Picking a search result can open the primary-identifier chooser at once *and* start the
+    // metadata read whose comparison asks the same ISIN again. That comparison waits while any
+    // prompt of the selection is open, and loses the rows the chooser already put to the user —
+    // whether the answer came before or after the read. `providerComparisonQueue.ts` decides.
+    let selectionQuestions: IdentifierQuestion[] = [];
+    let heldComparison: {differences: DiffItem[]; context: ProviderRequestTicket; intent: Map<string, number>} | null = null;
     const manualFieldRevisions = new Map<string, number>();
 
     function markManualField(field: string) {
@@ -331,6 +340,8 @@
         comparisonIntent.clear();
         showComparisonModal = false;
         comparisonDifferences = [];
+        heldComparison = null;
+        selectionQuestions = [];
         showSaveWithoutTestConfirm = false;
         saveConfirmContext = null;
         reuseModalOpen = false;
@@ -344,6 +355,7 @@
             comparisonDifferences = [];
             comparisonContext = null;
         }
+        if (heldComparison && !providerProbe.isMetadataCurrent(heldComparison.context)) heldComparison = null;
         if (saveConfirmContext && !providerProbe.isContextCurrent(saveConfirmContext)) {
             showSaveWithoutTestConfirm = false;
             saveConfirmContext = null;
@@ -380,6 +392,16 @@
     let reuseModalOpen = $state(false);
     let reuseExistingId: number | null = $state(null);
     let reuseExistingName = $state('');
+
+    /** A prompt of the current search selection is on screen: its comparison has to wait (R18). */
+    let selectionPromptOpen = $derived(identifierChoiceOpen || identifierChoiceDiscardOpen || reuseModalOpen);
+
+    // The last prompt of the selection just closed — confirmed, discarded or dismissed: a held
+    // comparison may now open, with what is left once the answered rows are gone.
+    $effect(() => {
+        if (selectionPromptOpen) return;
+        untrack(releaseHeldComparison);
+    });
 
     // =========================================================================
     // Derived
@@ -427,9 +449,6 @@
         }),
     );
     let title = $derived(editMode ? $t('assets.modal.titleEdit') : $t('assets.modal.title'));
-
-    /** Asset type options for SimpleSelect (with PNG icons) */
-    let assetTypeOptions = $derived(buildAssetTypeOptions($t));
 
     /** Build form snapshot for dirty tracking — single source of truth */
     function buildFormSnapshot(): string {
@@ -769,6 +788,7 @@
 
     function applySearchResult(result: any) {
         closeIdentifierPrimary();
+        let question: IdentifierQuestion | null = null;
         // Auto-fill form
         displayName = result.display_name || displayName;
         if (result.asset_type) assetType = (ASSET_TYPES as readonly string[]).includes(result.asset_type.toUpperCase()) ? result.asset_type.toUpperCase() : 'OTHER';
@@ -785,6 +805,7 @@
                 // The provider link below is established regardless — the search did its job;
                 // only the *identity* question is deferred to the chooser.
                 askIdentifierPrimary(idType, incoming, current, result.provider_code);
+                question = identifierQuestion(idType, [incoming, current]);
             } else if (existing) {
                 identifierRows = identifierRows.map((r) => (r.type === idType ? {...r, value: incoming} : r));
             } else {
@@ -806,6 +827,8 @@
         }
         providerParams = Object.keys(searchParams).length > 0 ? searchParams : null;
         resetDraftReads(result.provider_url ?? null);
+        // After the reset, which clears the previous selection's questions: these are this one's.
+        selectionQuestions = question ? [question] : [];
 
         // Expand sections
         moreInfoExpanded = true;
@@ -813,9 +836,10 @@
         searchResultSelected = true;
         formError = null;
 
-        // Auto-trigger test + metadata fetch (global ask provider)
+        // Auto-trigger test + metadata fetch (global ask provider). The read is the selection's:
+        // its comparison waits for the chooser and never re-asks what the chooser asked.
         autoTriggerProbe();
-        handleAskProvider();
+        void fetchAndCompareMetadata('all', 'selection');
 
         // Wizard create context: if the selected result's provider name matches an existing
         // asset, offer to reuse it (and add the search keys) instead of creating a duplicate.
@@ -1002,7 +1026,7 @@
      *
      * @param scope Which fields to compare. 'all' = everything, others = section-specific.
      */
-    async function fetchAndCompareMetadata(scope: 'all' | 'identifiers' | 'sector' | 'geographic') {
+    async function fetchAndCompareMetadata(scope: 'all' | 'identifiers' | 'sector' | 'geographic', origin: 'manual' | 'selection' = 'manual') {
         if (!hasProvider || saving) return;
         const request = providerProbe.beginMetadata();
         const requestIntent = new Map(manualFieldRevisions);
@@ -1010,6 +1034,7 @@
         autoFilledFields = new Set();
         showComparisonModal = false;
         comparisonContext = null;
+        heldComparison = null;
 
         try {
             const response = (await zodiosApi.probe_provider_config_api_v1_assets_provider_probe_post(providerProbe.requestPayload(request, ['metadata']))) as any;
@@ -1150,10 +1175,16 @@
             }
 
             if (differences.length > 0) {
-                comparisonDifferences = differences;
-                comparisonContext = request;
-                comparisonIntent = new Map(manualFieldRevisions);
-                showComparisonModal = true;
+                const intent = new Map(manualFieldRevisions);
+                if (origin === 'manual') {
+                    openComparison(differences, request, intent);
+                } else {
+                    // Every row answered by the chooser is a silent drop: no dialog, and no "all
+                    // match" either — the differences existed, the user has already settled them.
+                    const decision = decideComparison({differences, questions: selectionQuestions, promptOpen: selectionPromptOpen, current: true});
+                    if (decision.kind === 'open') openComparison(decision.differences, request, intent);
+                    else if (decision.kind === 'hold') heldComparison = {differences: decision.differences, context: request, intent};
+                }
             } else if (missingFields.length === 0) {
                 // Only show success if nothing was missing — never both info + success
                 toasts.success($t('assets.comparison.allMatch'));
@@ -1165,6 +1196,22 @@
         } finally {
             providerProbe.finishMetadata(request);
         }
+    }
+
+    function openComparison(differences: DiffItem[], context: ProviderRequestTicket, intent: Map<string, number>) {
+        comparisonDifferences = differences;
+        comparisonContext = context;
+        comparisonIntent = intent;
+        showComparisonModal = true;
+    }
+
+    /** Open the comparison held behind the selection's prompts, if it is still current and still asks something. */
+    function releaseHeldComparison() {
+        const held = heldComparison;
+        if (!held) return;
+        heldComparison = null;
+        const decision = decideComparison({differences: held.differences, questions: selectionQuestions, promptOpen: false, current: open && !saving && providerProbe.isMetadataCurrent(held.context)});
+        if (decision.kind === 'open') openComparison(decision.differences, held.context, held.intent);
     }
 
     /** Global "Ask Provider" — compares all fields */
@@ -1796,20 +1843,7 @@
                             <span class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                                 {$t('common.type')} *
                             </span>
-                            <SimpleSelect bind:value={assetType} options={assetTypeOptions} dropdownPosition="auto" onchange={() => markManualField('asset_type')}>
-                                {#snippet item(opt)}
-                                    <div class="flex items-center gap-2">
-                                        <img src={opt.icon} alt="" class="w-4 h-4 object-contain" />
-                                        <span>{opt.label}</span>
-                                    </div>
-                                {/snippet}
-                                {#snippet selectedItem(opt)}
-                                    <div class="flex items-center gap-2">
-                                        <img src={opt.icon} alt="" class="w-4 h-4 object-contain" />
-                                        <span>{opt.label}</span>
-                                    </div>
-                                {/snippet}
-                            </SimpleSelect>
+                            <AssetTypeSelect bind:value={assetType} testId="asset-modal-type" onchange={() => markManualField('asset_type')} />
                         </div>
                     </div>
 

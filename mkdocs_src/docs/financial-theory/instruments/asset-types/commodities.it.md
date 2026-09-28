@@ -8,7 +8,7 @@ Le **Materie Prime** (Commodities) sono asset fisici — materie prime o beni di
 
 | Proprietà | Dettaglio |
 |----------|--------|
-| **Codice in LibreFolio** | `HOLD` |
+| **Codice in LibreFolio** | `COMMODITY` |
 | **Prezzi** | Prezzi spot dalle borse delle merci, o valutazione manuale |
 | **Valuta** | Tipicamente quotate in USD (oro, petrolio) ma possono essere in qualsiasi valuta |
 | **Dividendi** | Nessuno — le materie prime non generano reddito |
