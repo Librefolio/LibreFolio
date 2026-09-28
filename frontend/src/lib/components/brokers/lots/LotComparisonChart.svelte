@@ -22,13 +22,15 @@
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {safeDecimal} from '$lib/types';
     import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
-    import {formatAxisNumber as sharedFormatAxisNumber, normalizeZero, resolveBrokerName, withAlpha} from './lotChartShared';
+    import {resolveBrokerName, withAlpha} from './lotChartShared';
     import {
         buildBucketInfos,
         buildZoomWindowForRange as sharedBuildZoomWindowForRange,
         computeAutoYAxisRange,
         computeBucketCounts as sharedComputeBucketCounts,
         findPointAtOrBefore,
+        formatAxisAmount,
+        formatAxisCurrency as sharedFormatAxisCurrency,
         formatAxisPercent,
         incomeEventColor as sharedIncomeEventColor,
         logicalRangeFromBuckets,
@@ -44,7 +46,7 @@
         tooltipXValue,
         type BucketInfo,
     } from './lotComparisonChartHelpers';
-    import {PRIVACY_PLACEHOLDER, shouldMaskAmount} from '$lib/utils/privacy/maskable';
+    import {isPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type LotValueHistoryPoint = z.infer<typeof schemas.LotValueHistoryPoint>;
@@ -249,28 +251,8 @@
     /** This chart's numbers are already percentages, hence scale 1 (the default). */
     const formatPercent = (value: number): string => sharedFormatPercent(value);
 
-    /** Machine locale for numbers (as opposed to `$currentLanguage` for words),
-     *  matching the original inline formatter. */
-    const formatAxisNumber = (value: number): string => sharedFormatAxisNumber(value);
-
-    function formatAxisCurrency(value: number): string {
-        const normalized = normalizeZero(value);
-        // Checked at the function boundary, not at the `Intl` call: the `catch`
-        // fallback below renders money too, so masking one exit would leave the
-        // other in the clear precisely when the locale API is unavailable.
-        if (shouldMaskAmount()) return PRIVACY_PLACEHOLDER;
-        try {
-            return new Intl.NumberFormat(undefined, {
-                style: 'currency',
-                currency,
-                currencyDisplay: 'narrowSymbol',
-                notation: 'compact',
-                maximumFractionDigits: 1,
-            }).format(normalized);
-        } catch (_) {
-            return `${formatAxisNumber(normalized)} ${currency}`;
-        }
-    }
+    /** Money for the absolute-return axis; masks the number under privacy, keeps the currency. */
+    const formatAxisCurrency = (value: number): string => sharedFormatAxisCurrency(value, currency);
 
     /** Wrapper: passes the reactive `isDark` to the shared deterministic lot color. */
     const lotColor = (lotId: number): string => sharedLotColor(lotId, isDark);
@@ -1238,7 +1220,7 @@
                 splitLine: {lineStyle: {color: gridColors.gridColor}},
                 axisLabel: {
                     color: gridColors.textColor,
-                    formatter: (value: number) => (mode === 'return' ? (returnUnit === 'pct' ? formatAxisPercent(value) : formatAxisCurrency(value)) : formatAxisNumber(value)),
+                    formatter: (value: number) => (mode === 'return' ? (returnUnit === 'pct' ? formatAxisPercent(value) : formatAxisCurrency(value)) : formatAxisAmount(value)),
                 },
             },
             series: [...baseSeries, emptyHoverDotsSeries()],
@@ -1371,6 +1353,9 @@
         void resolutionSourceSignature;
         void emptyMessage;
         void $currentLanguage;
+        // ECharts calls the axis formatters outside this effect, so the privacy flag they read
+        // is not tracked there: read it here, or toggling privacy leaves the axis as it was.
+        void isPrivacyEnabled();
 
         if (resolutionSourceSignature !== lastResolutionSourceSignature) {
             lastResolutionSourceSignature = resolutionSourceSignature;

@@ -25,7 +25,7 @@
  */
 import {buildRiskAnalyticRequest, type RiskAnalyticParameters, type RiskAnalyticRequest, type RiskMode, type RiskScenarioDimension} from '$lib/risk/riskRequest';
 import {singleValue, type RiskDataQualityReport} from '$lib/risk/riskTypes';
-import {PRIVACY_PLACEHOLDER, shouldMaskAmount} from '$lib/utils/privacy/maskable';
+import {maskCurrencyParts} from '$lib/utils/privacy/maskable';
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
 
@@ -148,6 +148,12 @@ export function formatRatio(value: number | null | undefined): string {
  * `locale` is optional so callers get the process default in the app but tests
  * can pin it — `Intl.NumberFormat` output otherwise depends on the host locale.
  *
+ * Under privacy the digits are masked and the currency and the sign stay, like
+ * every other money formatter (`maskCurrencyParts`): privacy hides the number,
+ * not the currency (product owner, 2026-09-22). This formatter used to return
+ * the bare placeholder on the argument that the currency labels the column; the
+ * product owner's rule replaced that argument.
+ *
  * The privacy check sits *after* the absence checks on purpose: an absent value
  * keeps its em-dash. Masking it would turn "there is no figure here" into "there
  * is a figure here and you may not see it", which is a different statement.
@@ -157,8 +163,7 @@ export function formatCurrencyAmount(value: string | readonly (string | null)[] 
     if (scalar == null) return '—';
     const amount = Number(scalar);
     if (!Number.isFinite(amount)) return '—';
-    if (shouldMaskAmount()) return PRIVACY_PLACEHOLDER;
-    return new Intl.NumberFormat(locale, {style: 'currency', currency, maximumFractionDigits: 2}).format(amount);
+    return maskCurrencyParts(new Intl.NumberFormat(locale, {style: 'currency', currency, maximumFractionDigits: 2}).formatToParts(amount));
 }
 
 /**
