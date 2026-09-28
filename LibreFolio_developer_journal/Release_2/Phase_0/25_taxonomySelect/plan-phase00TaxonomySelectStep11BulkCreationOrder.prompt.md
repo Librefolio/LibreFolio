@@ -194,6 +194,34 @@ uno di questi punti:
   > c'era già. Nessun test vecchio da togliere: FM7 e i WB sono stati riscritti per contenuto, non
   > aggiunti accanto.
 
+- [x] **11.5 Allineamento a `dev_release2`** — ✅ 2026-09-28 (deciso dal developer, dopo il commit di C4)
+  > **Note implementazione**:
+  > - Merge lanciato dal developer con lo script del coordinator: **`41f02b1ee`**, genitori
+  >   `b0f8ce97f` e `ea30d5ccf`, albero `8f680660` identico alla simulazione. K non ha toccato Git.
+  > - Commit a parte, in `import-wizard.md`, dentro la sezione della guida di J (righe 362–366): il
+  >   punto «The duplicate-recheck bounce» ora cita la condizione di C2
+  >   (`changedGroups.length > 0`, dopo `tx.import.duplicates.changed`). Messaggio:
+  >   `/tmp/libreFolio_commits/k-13-docs-guide-bounce.txt`. Verificato prima nel codice unito
+  >   (`ImportWizardModal.svelte:1282-1288`).
+  > - Gate sulla revisione combinata, nella lane 6155 (`/tmp/libreFolio_k_align_gates.sh`: prima
+  >   `api sync` e `front build --debug`, marcatore 1):
+  >
+  >   | selettore | esito |
+  >   |---|---|
+  >   | `tx-unit` | 8 file, 375 ✓ |
+  >   | `tx-import-duplicate-precedence` | 6/6 ✓ |
+  >   | `tx-bulk-row-order` | 3/3 ✓ |
+  >   | `tx-wac-bulk` | 10/10 ✓ |
+  >   | `tx-wac-formmodal` | 10/10 ✓ (**FM7 verde**) |
+  >   | `tx-import-flow` | 10/10 ✓ |
+  >   | `onboarding-guides` | 24/24 ✓ (ancore `import.action.*`) |
+  >   | `onboarding-tour` | 10/10 ✓ |
+  >   | `check-orphans` | 86 spec e 259 unit registrate, tutte raggiungibili da `all` ✓ |
+  >   | `i18n audit` | 3417 chiavi complete; 392 «possibilmente inutilizzate», nessuna di K |
+  >
+  > - svelte-check: gli stessi 3 errori della baseline, in nessun file di K.
+  > - Rossi del target registrati, non nei gate di K: `dashboard` e `brokers-detail:710`.
+
 ## Test list
 
 | # | livello | cosa prova | rosso oggi |
