@@ -30,6 +30,13 @@
     });
 
     $effect(() => {
+        // A manual check answers a question the user just asked, from inside another
+        // modal: it is shown at once, above that modal. Everything below is for popups
+        // nobody asked for, which wait until no modal and no guide is on screen.
+        if (updateAvailable.release !== null && updateAvailable.requested) {
+            activePopup = 'update';
+            return;
+        }
         if (guideActive) {
             activePopup = null;
             return;

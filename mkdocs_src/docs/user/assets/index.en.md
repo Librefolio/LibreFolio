@@ -30,6 +30,10 @@ Navigate to **Assets** in the sidebar to see all your assets. The list page prov
 - 📉 **Absolute / Percentage Delta**: In grid view, the toolbar's **Abs / %** control applies to
   every asset card. The % button on an individual card changes only that card; using the toolbar
   again clears local overrides and returns every card to the selected global mode.
+  The control is shown only in grid view, whichever tab you are on, and its setting is shared by
+  the whole page: you can switch it from the **Correlation** tab too — there are no cards there for
+  it to act on, so the change shows when you return to the grid. Unlike the layout, it is not
+  saved: leaving the page resets it to **%**.
 - 🔄 **Sync & Refresh**: Sync real-time pricing data for all configured providers or manually refresh the list.
 - 🖱️ **Context Menu**: Right-click any row in the data table layout for quick actions (**Sync**, **Refresh**, **Merge**, **Delete**). Sync is disabled for assets without a pricing provider and for archived assets; Merge folds a duplicate asset into another one — transactions, prices, and events converge on the target and the source asset is deleted.
 
@@ -50,6 +54,10 @@ transaction count reported by the deletion blocker.
 ### ➕ [Create & Edit](create-edit.md)
 
 Step-by-step guide for creating new assets, configuring providers, and editing existing assets.
+
+### 🧪 [Correlation Tab](correlation.md)
+
+Compare a selection of assets side by side — correlation matrix, losses, risk against return, and historical replay, in percentages only.
 
 ### 📊 [Asset Detail Page](detail/index.md)
 
