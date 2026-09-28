@@ -17,6 +17,7 @@ import {login, navigateTo} from '../fixtures/auth-helpers';
 import {waitForSettled} from '../fixtures/app-events';
 import {TEST_USER} from '../fixtures/test-users';
 import {appears} from '../fixtures/probe';
+import {uniqueSuffix} from '../fixtures/unique';
 
 test.setTimeout(60_000);
 
@@ -155,10 +156,30 @@ async function waitForWacResolved(page: Page) {
     await expect(autoCell).toHaveAttribute('data-state', 'ready', {timeout: 20_000});
 }
 
-/** Double-click on a row in the BulkModal grid to open FormModal for editing it. */
-async function dblClickBulkRow(page: Page, rowIndex: number) {
-    const rows = page.locator('[data-testid="tx-bulk-modal"] tbody tr[data-row-id]');
-    await rows.nth(rowIndex).dblclick();
+/**
+ * Stamp the draft in the FormModal with a description only this test knows.
+ *
+ * The BulkModal orders rows of one date by a tie-break the test does not control,
+ * so "the TRANSFER is the last row" was a coin toss (C4). The marker is identity:
+ * user-entered content, never translated, shared by both legs of a TRANSFER, and
+ * carried through every re-edit. It lives in the collapsible optional `<details>`:
+ * read its real `open` state rather than clicking blind, which would close it.
+ */
+async function fillDescription(page: Page, text: string) {
+    const details = page.locator('details:has([data-testid="tx-form-optional-toggle"])');
+    await expect(details).toBeVisible({timeout: 3_000});
+    if (!(await details.evaluate((el) => (el as HTMLDetailsElement).open))) await page.getByTestId('tx-form-optional-toggle').click();
+    await expect(details).toHaveAttribute('open', '');
+    const description = page.getByTestId('tx-form-description');
+    await description.fill(text);
+    await expect(description).toHaveValue(text);
+}
+
+/** Double-click the one BulkModal row that carries `marker` to open it in the FormModal. */
+async function dblClickBulkRow(page: Page, marker: string) {
+    const row = page.locator('[data-testid="tx-bulk-modal"] tbody tr[data-row-id]').filter({hasText: marker});
+    await expect(row).toHaveCount(1, {timeout: 5_000});
+    await row.dblclick();
     await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
 }
 
@@ -228,6 +249,7 @@ test.describe('BulkModal WAC Cell Rendering', () => {
     });
 
     test('WB2 — Manual override propagates to cell (Bug 10)', async ({page}) => {
+        const transferMarker = `WB2 transfer ${uniqueSuffix()}`;
         // Setup: same as WB1
         await openCreateFlow(page);
         await selectType(page, 'BUY');
@@ -245,14 +267,13 @@ test.describe('BulkModal WAC Cell Rendering', () => {
         await pickBrokerInPanel(page, 'tx-form-dual-to', BROKER_TO);
         await pickAssetByName(page, ASSET_NAME);
         await fillQuantity(page, '5');
+        await fillDescription(page, transferMarker);
         await applyFormModal(page);
         await waitForWacResolved(page);
 
-        // Open the TRANSFER row in FormModal (it's the last row, index 1)
-        const rows = page.locator('[data-testid="tx-bulk-modal"] tbody tr[data-row-id]');
-        const lastIdx = (await rows.count()) - 1;
-        await rows.nth(lastIdx).dblclick();
-        await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
+        // Open the TRANSFER row in FormModal — by its marker, not as "the last row":
+        // BUY and TRANSFER share a date and their order is not ours to assume.
+        await dblClickBulkRow(page, transferMarker);
 
         // Toggle to manual
         const manualToggle = page.getByTestId('tx-form-cost-basis-toggle-manual');
@@ -279,6 +300,7 @@ test.describe('BulkModal WAC Cell Rendering', () => {
     });
 
     test('WB3 — Toggle manual→auto restores calculated value (Bug 10 reverse)', async ({page}) => {
+        const transferMarker = `WB3 transfer ${uniqueSuffix()}`;
         // Setup: BUY + TRANSFER with manual override
         await openCreateFlow(page);
         await selectType(page, 'BUY');
@@ -296,14 +318,12 @@ test.describe('BulkModal WAC Cell Rendering', () => {
         await pickBrokerInPanel(page, 'tx-form-dual-to', BROKER_TO);
         await pickAssetByName(page, ASSET_NAME);
         await fillQuantity(page, '5');
+        await fillDescription(page, transferMarker);
         await applyFormModal(page);
         await waitForWacResolved(page);
 
-        // Set manual override
-        const rows = page.locator('[data-testid="tx-bulk-modal"] tbody tr[data-row-id]');
-        const lastIdx = (await rows.count()) - 1;
-        await rows.nth(lastIdx).dblclick();
-        await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
+        // Set manual override (the TRANSFER row, found by its marker)
+        await dblClickBulkRow(page, transferMarker);
 
         const manualToggle = page.getByTestId('tx-form-cost-basis-toggle-manual');
         if (await manualToggle.isVisible({timeout: 2_000}).catch(() => false)) {
@@ -315,11 +335,8 @@ test.describe('BulkModal WAC Cell Rendering', () => {
         await amountInput.fill('150');
         await applyFormModal(page);
 
-        // Now reopen and switch back to auto
-        const rows2 = page.locator('[data-testid="tx-bulk-modal"] tbody tr[data-row-id]');
-        const lastIdx2 = (await rows2.count()) - 1;
-        await rows2.nth(lastIdx2).dblclick();
-        await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
+        // Now reopen the same TRANSFER row and switch back to auto
+        await dblClickBulkRow(page, transferMarker);
 
         const autoToggle = page.getByTestId('tx-form-cost-basis-toggle-auto');
         if (await autoToggle.isVisible({timeout: 2_000}).catch(() => false)) {
@@ -522,6 +539,7 @@ test.describe('BulkModal WAC Cell Rendering', () => {
     });
 
     test('WB8 — Mode persistence: manual stays manual on re-edit', async ({page}) => {
+        const transferMarker = `WB8 transfer ${uniqueSuffix()}`;
         // Create BUY + TRANSFER pair
         await openCreateFlow(page);
         await selectType(page, 'BUY');
@@ -539,14 +557,12 @@ test.describe('BulkModal WAC Cell Rendering', () => {
         await pickBrokerInPanel(page, 'tx-form-dual-to', BROKER_TO);
         await pickAssetByName(page, ASSET_NAME);
         await fillQuantity(page, '5');
+        await fillDescription(page, transferMarker);
         await applyFormModal(page);
         await waitForWacResolved(page);
 
-        // Set manual 150
-        const rows = page.locator('[data-testid="tx-bulk-modal"] tbody tr[data-row-id]');
-        const lastIdx = (await rows.count()) - 1;
-        await rows.nth(lastIdx).dblclick();
-        await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
+        // Set manual 150 on the TRANSFER row (found by its marker)
+        await dblClickBulkRow(page, transferMarker);
 
         const manualBtn = page.getByTestId('tx-form-cost-basis-toggle-manual');
         await manualBtn.click();
@@ -556,11 +572,8 @@ test.describe('BulkModal WAC Cell Rendering', () => {
         await applyFormModal(page);
         await waitForSettled(page.getByTestId('tx-bulk-modal-root'));
 
-        // Re-edit — should still show manual
-        const rows2 = page.locator('[data-testid="tx-bulk-modal"] tbody tr[data-row-id]');
-        const lastIdx2 = (await rows2.count()) - 1;
-        await rows2.nth(lastIdx2).dblclick();
-        await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
+        // Re-edit the same TRANSFER row — should still show manual
+        await dblClickBulkRow(page, transferMarker);
 
         // Assert: manual toggle is active (has font-medium)
         const manualToggle = page.getByTestId('tx-form-cost-basis-toggle-manual');
@@ -573,6 +586,7 @@ test.describe('BulkModal WAC Cell Rendering', () => {
     });
 
     test('WB9 — Mode persistence: auto stays auto on re-edit', async ({page}) => {
+        const transferMarker = `WB9 transfer ${uniqueSuffix()}`;
         // Create BUY + TRANSFER pair (auto mode — default)
         await openCreateFlow(page);
         await selectType(page, 'BUY');
@@ -590,14 +604,12 @@ test.describe('BulkModal WAC Cell Rendering', () => {
         await pickBrokerInPanel(page, 'tx-form-dual-to', BROKER_TO);
         await pickAssetByName(page, ASSET_NAME);
         await fillQuantity(page, '5');
+        await fillDescription(page, transferMarker);
         await applyFormModal(page);
         await waitForWacResolved(page);
 
-        // Re-edit without changing mode — should still be auto
-        const rows = page.locator('[data-testid="tx-bulk-modal"] tbody tr[data-row-id]');
-        const lastIdx = (await rows.count()) - 1;
-        await rows.nth(lastIdx).dblclick();
-        await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
+        // Re-edit the TRANSFER row (found by its marker) without changing mode — should still be auto
+        await dblClickBulkRow(page, transferMarker);
 
         // Assert: auto toggle is active
         const autoToggle = page.getByTestId('tx-form-cost-basis-toggle-auto');
@@ -610,6 +622,7 @@ test.describe('BulkModal WAC Cell Rendering', () => {
     });
 
     test('WB10 — Pending indicator ● in qualifying table', async ({page}) => {
+        const transferMarker = `WB10 transfer ${uniqueSuffix()}`;
         // Create BUY (this will be a pending tx visible in qualifying table)
         await openCreateFlow(page);
         await selectType(page, 'BUY');
@@ -628,14 +641,12 @@ test.describe('BulkModal WAC Cell Rendering', () => {
         await pickBrokerInPanel(page, 'tx-form-dual-to', BROKER_TO);
         await pickAssetByName(page, ASSET_NAME);
         await fillQuantity(page, '5');
+        await fillDescription(page, transferMarker);
         await applyFormModal(page);
         await waitForWacResolved(page);
 
-        // Open the TRANSFER row
-        const rows = page.locator('[data-testid="tx-bulk-modal"] tbody tr[data-row-id]');
-        const lastIdx = (await rows.count()) - 1;
-        await rows.nth(lastIdx).dblclick();
-        await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
+        // Open the TRANSFER row (found by its marker)
+        await dblClickBulkRow(page, transferMarker);
 
         // Expand qualifying table
         const showBtn = page.getByTestId('tx-form-cost-basis-show-qualifying');

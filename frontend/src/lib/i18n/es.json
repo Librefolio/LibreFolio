@@ -148,10 +148,12 @@
       "ETF_REAL_ESTATE": "ETF inmobiliario",
       "ETF_CRYPTO": "ETF de criptomonedas",
       "ETF_MONETARY": "ETF monetario",
-      "LIQUIDITY": "Liquidez"
+      "LIQUIDITY": "Liquidez",
+      "CROWDFUND_REAL_ESTATE": "Crowdfunding inmobiliario"
     },
     "typeSections": {
-      "ETF": "ETF"
+      "ETF": "ETF",
+      "CROWDFUND": "Crowdfunding"
     },
     "benchmarkSection": "Referencias",
     "otherAssetsSection": "Otros activos",
@@ -371,6 +373,14 @@
           "platform": "Plataforma de negociación (ej. TLX para EuroTLX). Autocompletada desde la búsqueda; requerida por algunos mercados para resolver la página del instrumento."
         }
       }
+    },
+    "typeHints": {
+      "ETF": "Contenido mixto o no declarado",
+      "CROWDFUND": "Préstamos P2P y a empresas"
+    },
+    "typeSelect": {
+      "searchPlaceholder": "Buscar un tipo",
+      "noMatches": "Ningún tipo coincidente"
     }
   },
   "auth": {
@@ -731,7 +741,8 @@
       "title": "Activos para crear manualmente",
       "body": "Vincula un activo existente o créalo manualmente. Las próximas importaciones reconocerán su identificador guardado si la coincidencia es única."
     },
-    "selectionChangedReview": "La comprobación final de duplicados ha cambiado la selección. Revísala antes de importar."
+    "selectionChangedReview": "La comprobación final de duplicados ha cambiado la selección. Revísala antes de importar.",
+    "duplicatesChangedReview": "La comprobación final de duplicados ha encontrado duplicados nuevos o modificados entre tus archivos. Revísalos antes de importar."
   },
   "brokers": {
     "title": "Brókeres",

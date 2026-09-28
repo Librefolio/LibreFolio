@@ -2420,7 +2420,7 @@
     ]
   },
   "financial-theory/instruments/asset-types/commodities.en.md": {
-    "md5": "d5e137b9ba2ed8bfdae9b23f7f22b11f",
+    "md5": "9c1b07f98340868d44778c8e437c1cb6",
     "langs_done": [
       "es",
       "fr",
@@ -2430,15 +2430,15 @@
     "analysis_model": "deepseek/deepseek-v4-flash:free",
     "langs": {
       "it": {
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
+        "stamped_at": "2026-09-24T09:24:28.246834+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
+        "stamped_at": "2026-09-24T09:24:28.246834+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
+        "stamped_at": "2026-09-24T09:24:28.246834+00:00",
         "stamped_by": "translate-stamp"
       }
     },
