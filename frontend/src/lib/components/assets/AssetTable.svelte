@@ -176,7 +176,10 @@
                 // come up short on any checkout where the client has not been regenerated —
                 // green test, missing filter values. A literal list works with no client at
                 // all, and the gate makes forgetting one a red.
-                enumOptions: ['STOCK', 'ETF', 'BOND', 'CRYPTO', 'FUND', 'CROWDFUND', 'HOLD', 'COMMODITY', 'REAL_ESTATE', 'INDEX', 'OTHER', 'ETF_STOCK', 'ETF_BOND', 'ETF_COMMODITY', 'ETF_REAL_ESTATE', 'ETF_CRYPTO', 'ETF_MONETARY'].map((v) => ({value: v, label: $t(`assets.types.${v}`) || v})),
+                enumOptions: ['STOCK', 'ETF', 'BOND', 'CRYPTO', 'FUND', 'CROWDFUND', 'HOLD', 'COMMODITY', 'REAL_ESTATE', 'INDEX', 'OTHER', 'ETF_STOCK', 'ETF_BOND', 'ETF_COMMODITY', 'ETF_REAL_ESTATE', 'ETF_CRYPTO', 'ETF_MONETARY', 'CROWDFUND_REAL_ESTATE'].map((v) => ({
+                    value: v,
+                    label: $t(`assets.types.${v}`) || v,
+                })),
                 getValue: (row) => row.asset_type ?? '',
                 filterable: false,
                 width: 70,

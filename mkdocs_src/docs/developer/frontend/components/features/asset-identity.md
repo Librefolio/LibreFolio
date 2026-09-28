@@ -90,7 +90,7 @@ and is pinned by tests rather than by inspecting the UI.
 
 ## ⭐ Electing the primary identifier
 
-`components/assets/IdentifierPrimaryChooser.svelte` — one component, four triggers.
+`components/assets/IdentifierPrimaryChooser.svelte` — one component, five triggers.
 
 The rule never changes: **one value leads, the others move to `identifier_other`, nothing is
 discarded.** What changes is who is arguing.
@@ -102,6 +102,11 @@ discarded.** What changes is who is arguing.
 | A provider search returns a different code | `AssetModal.applySearchResult()` |
 | Provider enrichment disagrees on several fields | `ProviderComparisonModal` mounts **one chooser per conflicting identifier type** |
 | Two archived assets are merged | `AssetMergeModal` |
+
+The third trigger has a twin: the same search selection also starts a metadata read, whose
+comparison would ask about the same code again. That comparison **waits** while the chooser is open
+and **loses the rows the chooser already asked** — see
+[A search selection asks each question once](#a-search-selection-asks-each-question-once).
 
 **Provenance is recorded, never guessed.** `prefilledIdentifiers` registers at the source which
 values arrived from a report. A badge that gets the origin wrong is worse than no badge, because
@@ -128,6 +133,52 @@ Design points worth preserving:
   premium"; the same structure exists wherever a security is placed under a dedicated code that
   rewards holding to maturity and, precisely because it is not meant to be traded, has no market
   price. The key is `issuanceNote`, not `btpNote` — a key name is documentation too.
+
+### ⏳ A search selection asks each question once {: #a-search-selection-asks-each-question-once }
+
+Picking a provider search result in `AssetModal` used to raise the same identity question twice.
+`applySearchResult()` opens the chooser synchronously when the form already holds a different code
+of the same type, and it also starts the metadata read —
+`fetchAndCompareMetadata('all', 'selection')` — whose `ProviderComparisonModal` asks about that code
+again as an `identifier_<type>` row. Opened as they arrived, the second modal landed on top of the
+first and repeated its question (R18).
+
+The decision is a pure function, `decideComparison()` in
+`components/assets/providerComparisonQueue.ts`; the modal only reports what is open and whether its
+provider context is still current:
+
+| When the comparison is ready… | Decision |
+|---|---|
+| …its read is stale: the provider context changed, the modal closed, or a save started | `drop` |
+| …every row asks something the chooser already asked | `drop` — no comparison and no *all match* toast: the differences existed, and the user already settled them |
+| …a prompt of the selection is still open: the chooser, its discard confirmation, or the reuse-existing prompt of the import wizard's create flow | `hold` — the comparison stays loaded and waits |
+| …otherwise | `open`, without the rows the chooser already asked |
+
+"Already asked" is exact. `identifierQuestion()` records the chooser's question as the comparison
+field `identifier_<type>` plus the codes the chooser offered (trimmed, upper-cased, deduplicated),
+and `asksSameQuestion()` removes a row only when its field is that field **and** its provider value
+is one of those codes. A provider value the chooser never offered is a new question and still reaches
+the user; a name, currency or distribution row is never removed.
+
+The sequence in the modal:
+
+1. `applySearchResult()` closes any previous chooser, fills the form and, on a conflicting code,
+   opens the chooser and builds the question.
+2. `resetDraftReads()` clears the previous selection's questions and any held comparison; the new
+   question is recorded right after it.
+3. The read returns, and `decideComparison()` runs with `promptOpen` set when the chooser, its discard
+   confirmation or the reuse prompt is on screen.
+4. When the last of those prompts closes — confirmed, discarded or dismissed — an effect calls
+   `releaseHeldComparison()`, which decides again with `promptOpen: false` and the context re-checked
+   (`open && !saving && isMetadataCurrent(...)`).
+
+Because the question stays recorded until the next selection, the pruning applies just the same
+when the user answers the chooser **before** the read returns. A held comparison is discarded when
+the provider configuration changes or a new read starts.
+
+A manual **Ask provider** is unchanged: `handleAskProvider()` reads with the default origin
+`'manual'` and opens the comparison with every row. The rule is unit-tested in
+`providerComparisonQueue.test.ts`, the modal flow in `AssetModal.providerLifecycle.test.ts`.
 
 ---
 

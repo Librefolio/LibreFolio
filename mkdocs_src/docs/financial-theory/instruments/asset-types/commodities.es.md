@@ -8,7 +8,7 @@ Las **Materias Primas** son activos físicos —materias primas o bienes primari
 
 | Propiedad | Detalle |
 |----------|--------|
-| **Código en LibreFolio** | `HOLD` |
+| **Código en LibreFolio** | `COMMODITY` |
 | **Precios** | Precios spot de bolsas de materias primas, o valoración manual |
 | **Moneda** | Generalmente cotizadas en USD (oro, petróleo), pero pueden expresarse en cualquier moneda |
 | **Dividendos** | Ninguno — las materias primas no generan ingresos |
