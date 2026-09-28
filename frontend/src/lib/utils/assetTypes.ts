@@ -9,6 +9,7 @@
  */
 
 import {schemas} from '$lib/api/generated';
+import type {TreeSelectGroup, TreeSelectItem} from '$lib/components/ui/select/treeSelect';
 
 // =============================================================================
 // ASSET TYPES — derived from backend enum via Zod schema
@@ -16,7 +17,20 @@ import {schemas} from '$lib/api/generated';
 
 export const ASSET_TYPES = schemas.AssetType.options;
 
-/** Map asset type code → PNG filename in /icons/asset-types/ */
+/**
+ * Map asset type code → PNG filename in /icons/asset-types/.
+ *
+ * A subtype is drawn with a **composite**: the icon of the family it belongs to, whole, with a
+ * small pastille in the corner showing what it contains — `etf-stock` is the ETF tag with the
+ * stock pastille (decision D52, delivered as R16). The container keeps saying what the
+ * instrument *is* (a fund you buy on an exchange), so an equity ETF never looks like a share;
+ * the pastille says what it holds, which the label alone used to say.
+ *
+ * The composites are generated, never hand-drawn: `scripts/compose_asset_type_icons.py` reads
+ * this map, {@link ASSET_TYPE_FAMILY} and {@link ASSET_TYPE_CONTENT_ICON} as text and writes
+ * `{family file}-{content file}.png`. The file name of a subtype here must follow that rule; the
+ * script refuses to run otherwise, and `assetTypeTables.test.ts` checks the files exist.
+ */
 const PNG_MAP: Record<string, string> = {
     STOCK: 'stock',
     ETF: 'etf',
@@ -30,16 +44,51 @@ const PNG_MAP: Record<string, string> = {
     INDEX: 'index',
     OTHER: 'other',
     LIQUIDITY: 'liquidity',
-    // The six ETF subtypes deliberately share the ETF icon. The icon says what the
-    // instrument *is* (a fund you buy on an exchange); the label next to it says what
-    // it holds. Giving ETF_STOCK the stock icon would erase the only visual difference
-    // between holding Apple and holding an index fund that owns Apple.
-    ETF_STOCK: 'etf',
-    ETF_BOND: 'etf',
-    ETF_COMMODITY: 'etf',
-    ETF_REAL_ESTATE: 'etf',
-    ETF_CRYPTO: 'etf',
-    ETF_MONETARY: 'etf',
+    ETF_STOCK: 'etf-stock',
+    ETF_BOND: 'etf-bond',
+    ETF_COMMODITY: 'etf-commodity',
+    ETF_REAL_ESTATE: 'etf-real-estate',
+    ETF_CRYPTO: 'etf-crypto',
+    ETF_MONETARY: 'etf-liquidity',
+    CROWDFUND_REAL_ESTATE: 'crowdfunding-real-estate',
+};
+
+/**
+ * Subtype → the family (container) it specialises. Types not listed are their own family.
+ *
+ * This is the **container** view — "which kind of instrument is it?" — and it is deliberately a
+ * different relation from {@link primaryAssetType}, which is the **content** view: `ETF_STOCK`
+ * belongs to the `ETF` family and contains `STOCK`. The select groups by family; allocation
+ * charts aggregate by content. One map per question, never two maps of the same one.
+ */
+export const ASSET_TYPE_FAMILY: Readonly<Record<string, string>> = {
+    ETF_STOCK: 'ETF',
+    ETF_BOND: 'ETF',
+    ETF_COMMODITY: 'ETF',
+    ETF_REAL_ESTATE: 'ETF',
+    ETF_CRYPTO: 'ETF',
+    ETF_MONETARY: 'ETF',
+    CROWDFUND_REAL_ESTATE: 'CROWDFUND',
+};
+
+/**
+ * Subtype → PNG filename of the pastille that says what it contains — the "second constant next
+ * to `PNG_MAP`" of decision D52.
+ *
+ * The rule (D61) is mechanical: the pastille is the icon of the base type the subtype contains,
+ * i.e. `PNG_MAP[primaryAssetType(x)]`. The single exception is `ETF_MONETARY` (D67): a money
+ * market fund has no base type to roll up to, and borrows `liquidity` because it means money
+ * without being an asset type. Written out rather than derived so that the exception is visible
+ * here instead of hiding in a branch; the gate test holds it to the rule.
+ */
+const ASSET_TYPE_CONTENT_ICON: Record<string, string> = {
+    ETF_STOCK: 'stock',
+    ETF_BOND: 'bond',
+    ETF_COMMODITY: 'commodity',
+    ETF_REAL_ESTATE: 'real-estate',
+    ETF_CRYPTO: 'crypto',
+    ETF_MONETARY: 'liquidity',
+    CROWDFUND_REAL_ESTATE: 'real-estate',
 };
 
 /**
@@ -47,7 +96,7 @@ const PNG_MAP: Record<string, string> = {
  *
  * The colour follows what the asset **contains**, while the icon and the label
  * follow what it **is**: an equity ETF is blue like a share, but still shows the
- * ETF icon and reads "Equity ETF". The invariant is
+ * ETF icon (with the stock pastille) and reads "Equity ETF". The invariant is
  * `BADGE_CLASS_MAP[x] === BADGE_CLASS_MAP[primaryAssetType(x)]`, which is what
  * makes a list scannable by exposure instead of by packaging.
  *
@@ -78,6 +127,7 @@ const BADGE_CLASS_MAP: Record<string, string> = {
     ETF_CRYPTO: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400',
     // The one subtype that rolls up to itself, so it owns its colour.
     ETF_MONETARY: 'bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400',
+    CROWDFUND_REAL_ESTATE: 'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400',
 };
 
 /** Neutral grey for a type nobody mapped. The gate test exists so it never shows. */
@@ -111,6 +161,7 @@ const PRIMARY_TYPE_MAP: Record<string, string> = {
     ETF_COMMODITY: 'COMMODITY',
     ETF_REAL_ESTATE: 'REAL_ESTATE',
     ETF_CRYPTO: 'CRYPTO',
+    CROWDFUND_REAL_ESTATE: 'REAL_ESTATE',
 };
 
 /**
@@ -132,7 +183,7 @@ const PRIMARY_TYPE_MAP: Record<string, string> = {
  *
  * ## The codomain is smaller than the enum, but it is not the base types
  *
- * The 17 `AssetType` values collapse onto **12**: the 11 non-subtype values, plus
+ * The 18 `AssetType` values collapse onto **12**: the 11 non-subtype values, plus
  * `ETF_MONETARY`, which returns *itself*. A money-market fund has no base type to
  * roll up to — cash is an account balance, not an asset that gets bought — and the
  * two candidates are both wrong: `ETF` would bury it among mixed funds, and
@@ -151,6 +202,7 @@ const PRIMARY_TYPE_MAP: Record<string, string> = {
  *
  * @example primaryAssetType('ETF_STOCK')      // 'STOCK'
  * @example primaryAssetType('ETF_REAL_ESTATE')// 'REAL_ESTATE'
+ * @example primaryAssetType('CROWDFUND_REAL_ESTATE') // 'REAL_ESTATE'
  * @example primaryAssetType('ETF_MONETARY')   // 'ETF_MONETARY'  ← itself
  * @example primaryAssetType('ETF')            // 'ETF'           ← the residual stays
  * @example primaryAssetType(null)             // 'OTHER'
@@ -171,13 +223,31 @@ export function getAssetTypeIconUrl(type: string | null | undefined): string {
 }
 
 /**
+ * Resolve an asset type to the **family** it belongs to: `ETF_STOCK` → `ETF`.
+ *
+ * The container view, the counterpart of {@link primaryAssetType} (the content view). Types that
+ * specialise nothing are their own family, the generic members included (`ETF` → `ETF`). Input
+ * rules match `primaryAssetType`: case and surrounding spaces are ignored, an unknown value
+ * returns itself, and only `null`/`undefined`/empty fall back to `OTHER`.
+ *
+ * @example assetTypeFamily('ETF_STOCK')  // 'ETF'
+ * @example assetTypeFamily('ETF')        // 'ETF'
+ * @example assetTypeFamily('STOCK')      // 'STOCK'
+ */
+export function assetTypeFamily(type: string | null | undefined): string {
+    const raw = (type ?? '').trim().toUpperCase();
+    if (raw === '') return 'OTHER';
+    return ASSET_TYPE_FAMILY[raw] ?? raw;
+}
+
+/**
  * Screen order of the asset type menu, and the single place that decides it.
  *
  * ⚠️ Hand-written on purpose, and it must stay that way. `ASSET_TYPES` is derived from
  * the generated Zod schema, so mapping over it was complete *by construction*: every
  * enum value reached the menu whether anyone remembered it or not. Ordering by hand to
- * carry section titles buys that ordering at the price of completeness — an eighteenth
- * type added tomorrow would simply fail to appear in the creation dialog, in silence.
+ * group the families buys that ordering at the price of completeness — a type added
+ * tomorrow would simply fail to appear in the creation dialog, in silence.
  *
  * The price is paid back by `assetTypeTables.test.ts`, which reads this array and the
  * backend enum and asserts they hold the same values. It reads the array **textually**
@@ -185,20 +255,14 @@ export function getAssetTypeIconUrl(type: string | null | undefined): string {
  * `api sync` has not run, an importing test would compare an empty list to an empty
  * list and report success.
  *
- * The ETF family must stay contiguous — the section title is emitted before its first
- * member, so a scattered family would title the wrong rows. The gate asserts that too.
+ * The order is the enum's own, with each family kept together where its container sits:
+ * the generic member first, then what it may contain. A family must stay contiguous —
+ * {@link buildAssetTypeTree} gathers every member under its container wherever it is
+ * listed, so a scattered family would make the screen stop following this array, which
+ * is then no longer the single place that decides the order. The gate asserts that too.
  */
 export const ASSET_TYPE_MENU_ORDER: readonly string[] = [
     'STOCK',
-    'BOND',
-    'CRYPTO',
-    'FUND',
-    'CROWDFUND',
-    'HOLD',
-    'COMMODITY',
-    'REAL_ESTATE',
-    'INDEX',
-    'OTHER',
     // ── ETF family: the generic wrapper first, then what it may wrap ──
     'ETF',
     'ETF_STOCK',
@@ -207,45 +271,74 @@ export const ASSET_TYPE_MENU_ORDER: readonly string[] = [
     'ETF_REAL_ESTATE',
     'ETF_CRYPTO',
     'ETF_MONETARY',
+    'BOND',
+    'CRYPTO',
+    'FUND',
+    // ── Crowdfunding family ──
+    'CROWDFUND',
+    'CROWDFUND_REAL_ESTATE',
+    'HOLD',
+    'COMMODITY',
+    'REAL_ESTATE',
+    'INDEX',
+    'OTHER',
 ];
 
-/** True for the generic ETF and for every subtype of it. */
-function isEtfFamily(type: string): boolean {
-    return type === 'ETF' || isEtfSubtype(type);
+/** A row of the asset type select. */
+export interface AssetTypeTreeItem extends TreeSelectItem {
+    label: string;
+    icon: string;
+    /** What the generic member of a family stands for — "mixed or unstated content" under ETF. */
+    hint?: string;
+    /** The family the row sits in; rows at the root have none. */
+    family?: string;
+}
+
+/** True for a type that others specialise — a family container such as `ETF`. */
+function isFamilyContainer(type: string): boolean {
+    return Object.values(ASSET_TYPE_FAMILY).includes(type);
 }
 
 /**
- * Build the options for asset type dropdowns, with the ETF family under a section title.
+ * Build the two-level tree of the asset type select (R15, decision D-K1).
  *
- * The seven ETF rows are introduced by a non-selectable header instead of being nested
- * in a collapsible tree: `SimpleSelect` and `SearchSelect` both already skip headers on
- * the keyboard and on Enter (`optionFilter.ts`), so this costs no new machinery — and it
- * leaves the generic `ETF` a perfectly ordinary, selectable option rather than a group
- * that has to pretend to be a leaf.
+ * The types that specialise nothing sit at the root, in inline groups; each family becomes a
+ * group that opens and closes like the indicator families of the signals panel, headed by its
+ * container. The generic member stays an ordinary, selectable row — the first of its group, with
+ * a hint saying what "generic" means there — because groups are never selectable: the group row
+ * `ETF` opens the family, the row `ETF` inside it *is* the choice "an ETF of mixed or unstated
+ * content". That is the argument B made for plain section titles, and the tree keeps it.
  *
- * Headers carry `icon: ''` because the consuming snippet is only invoked for real rows;
- * the field stays required so no caller has to guard it.
+ * `searchText` holds the enum value, the label and the hint, lower-cased as `TreeSelect` expects:
+ * the value lets a code-minded user type `etf_bond`, the label is what everybody else reads.
  */
-export function buildAssetTypeOptions(t: (key: string) => string): Array<{
-    value: string;
-    label: string;
-    icon: string;
-    header?: boolean;
-}> {
-    const options: Array<{value: string; label: string; icon: string; header?: boolean}> = [];
-    let etfHeaderEmitted = false;
-    for (const at of ASSET_TYPE_MENU_ORDER) {
-        if (isEtfFamily(at) && !etfHeaderEmitted) {
-            options.push({value: '__section:ETF', label: t('assets.typeSections.ETF'), icon: '', header: true});
-            etfHeaderEmitted = true;
+export function buildAssetTypeTree(t: (key: string) => string): TreeSelectGroup<AssetTypeTreeItem>[] {
+    const groups: TreeSelectGroup<AssetTypeTreeItem>[] = [];
+    let rootRun: AssetTypeTreeItem[] = [];
+
+    const row = (type: string, family?: string): AssetTypeTreeItem => {
+        const label = t(`assets.types.${type}`) || type;
+        const hint = family === type ? t(`assets.typeHints.${type}`) : undefined;
+        return {value: type, label, icon: getAssetTypeIconUrl(type), hint, family, searchText: [type, label, hint ?? ''].join(' ').toLocaleLowerCase()};
+    };
+    const closeRootRun = () => {
+        if (rootRun.length === 0) return;
+        groups.push({key: `__root-${groups.length}`, label: '', subtitle: '', items: rootRun, inline: true});
+        rootRun = [];
+    };
+
+    for (const type of ASSET_TYPE_MENU_ORDER) {
+        if (type in ASSET_TYPE_FAMILY) continue; // listed under its container
+        if (!isFamilyContainer(type)) {
+            rootRun.push(row(type));
+            continue;
         }
-        options.push({
-            value: at,
-            label: t(`assets.types.${at}`) || at,
-            icon: getAssetTypeIconUrl(at),
-        });
+        closeRootRun();
+        const members = [type, ...ASSET_TYPE_MENU_ORDER.filter((candidate) => ASSET_TYPE_FAMILY[candidate] === type)];
+        groups.push({key: type, label: t(`assets.typeSections.${type}`) || type, subtitle: '', icon: getAssetTypeIconUrl(type), items: members.map((member) => row(member, type))});
     }
-    return options;
+    closeRootRun();
+    return groups;
 }
 
 // =============================================================================
