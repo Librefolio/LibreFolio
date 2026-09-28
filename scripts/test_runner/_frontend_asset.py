@@ -31,6 +31,7 @@ def front_asset_unit(verbose: bool = False, ui: bool = False, headed: bool = Fal
         "src/lib/utils/__tests__/assetGrouping.test.ts",
         "src/lib/utils/__tests__/assetIdentifiers.test.ts",
         "src/lib/utils/__tests__/assetTypeTables.test.ts",
+        "src/lib/components/dashboard/allocationTypeEmoji.test.ts",
     ]
     print(f"\n{Colors.BLUE}Running: Asset Vitest unit tests{Colors.NC}")
     result = subprocess.run(cmd, cwd="frontend", capture_output=not verbose)
@@ -159,7 +160,7 @@ def populate_registry(registry: dict) -> None:
     cat = make_category(
         help_text="Frontend Asset E2E & unit tests (list, detail, modal, classification)",
         description="""Frontend Asset Tests\n\nOptions: --ui, --headed, --debug""")
-    add_test(cat, "asset-unit", front_asset_unit, test_names=False, name="Asset Unit Tests (Vitest)", desc="Unit tests: price store, derived-state, chart aggregation (incl. the pre-refactor golden corpus pinning the four groupPointsByBucket consumers), local signals, worker pool, asset identity engine", tests="vitest")
+    add_test(cat, "asset-unit", front_asset_unit, test_names=False, name="Asset Unit Tests (Vitest)", desc="Unit tests: price store, derived-state, chart aggregation (incl. the pre-refactor golden corpus pinning the four groupPointsByBucket consumers), local signals, worker pool, asset identity engine, an explicit emoji for every asset type in the historical allocation chart", tests="vitest")
     add_test(cat, "growth-chart-memo", front_growth_chart_memo, test_names=False, name="GrowthChart Component Tests (Vitest + jsdom)", desc="Mounts the real dashboard GrowthChart with ECharts swapped for a recorder. Arrival-order regression for the per-resolution aggregation memo: the component is mounted with a lazily fetched input absent, the memo is populated in that state, the input then lands, and the rebuilt series must carry real values instead of the cached gap sentinels. Parameterised over the whole late-arriving class — pnlCandles, brokerPnlHistory, incomeHistory, costHistory, depositHistory, acquisitionFunding. Also: privacy masking of axis and tooltip amounts (and privacy-off parity), the persisted mode/submode restore with its fallbacks, and the candle caption", tests="src/lib/components/dashboard/GrowthChart.test.ts")
     add_test(cat, "asset-list", front_asset_list, name="Asset List Page", desc="List page navigation, cards/table, filters", tests="assets/asset-list.spec.ts")
     add_test(cat, "asset-detail", front_asset_detail, name="Asset Detail Page", desc="Detail chart, panels, sync, edit", tests="assets/asset-detail.spec.ts")
