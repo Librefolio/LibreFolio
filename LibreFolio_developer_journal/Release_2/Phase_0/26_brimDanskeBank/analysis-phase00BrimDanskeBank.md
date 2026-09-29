@@ -221,7 +221,7 @@ finché non arrivano campioni.
 - **Valuta**: dalla colonna H, riga per riga. Il **prezzo** è in una valuta non dichiarata;
   come trattarlo dipende dallo schema BRIM (da verificare). Non si ricalcola mai
   `Summa`/`Määrä` e non si converte.
-- **Asset**: chiave = `Sijoituskohde` normalizzato, ID finto negativo, info asset solo con il
+- **Asset**: chiave = `Sijoituskohde` normalizzato, ID finto (positivo alto, da `FAKE_ASSET_ID_BASE` in giù: vedi la regola 8 della skill, corretta il 2026-09-29), info asset solo con il
   nome. Il matching lo fa l'interfaccia utente.
 - **Decisioni che vedo già** (le dettaglio nel piano):
   - la scissione senza costo;

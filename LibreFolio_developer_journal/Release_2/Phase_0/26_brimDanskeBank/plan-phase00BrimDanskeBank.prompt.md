@@ -359,7 +359,15 @@ Il set rende esplicita questa realtà. Lo schema qui sotto è il contenuto che i
 >
 > **⚠️ Fuori pista**:
 > - La richiesta sulla riga del runner è arrivata dopo i commit. L'avevo applicata subito, poi l'ho ripristinata per lasciare pulito il worktree in vista del merge (anche D tocca `_backend_services.py`). È rientrata in questo checkpoint.
-> - La stessa affermazione sbagliata («negative integers») compare in `.github/instructions/backend-providers-brim.instructions.md:35`. Non è nel mio perimetro: l'ho proposta al coordinatore.
+> - La stessa affermazione sbagliata («negative integers») compare in `.github/instructions/backend-providers-brim.instructions.md:35`. Il coordinatore me l'ha assegnata e l'ho corretta nel checkpoint piccolo, gruppo 2.
+>
+> **Commit del checkpoint piccolo** (developer, 2026-09-29 10:02):
+>
+> | Commit | Oggetto | Contenuto |
+> |---|---|---|
+> | `e892e2e0e` | test(runner): describe brim-provider-base scope | 1 file |
+> | `dafff60da` | docs(brim): fake asset IDs are high positive | skill e istruzione |
+> | `c9ad3bb03` | docs(journal): record Danske step 1 commits | piano |
 
 ### 2. ⏳ Documento di design dei set
 
@@ -373,6 +381,47 @@ Il set rende esplicita questa realtà. Lo schema qui sotto è il contenuto che i
 > **⚠️ Fuori pista**:
 > - Rispetto al §2 del piano, il design consiglia l'alternativa C: corrisponde meglio a «salva sia gli originali che il combinato, ma lavora solo il combinato», e la provenienza delle righe arriva senza modificare gli schemi.
 > - Il design rovescia anche D1: le righe autonome non si escludono in base al periodo ricavato dalle righe. Il primo versamento arriva prima del primo trade, quindi la cassa partirebbe negativa. Si esclude solo per mancanza di controparte.
+>
+> **Note implementazione (2026-09-29) — design v2**. Su richiesta del developer («ripensa il piano sapendo di questo limite sulle date… anche intesa san paolo e credit agricole hanno dei limiti… un'altra questione spinosa sono le commissioni»):
+> - profondità degli export in §1 (Danske 1 anno/5 anni; CA 2 anni/molti anni; Intesa circa 1 anno più l'istantanea);
+> - nuovi concetti (copertura, finestra completa `T0…T1`, zona precedente, stato iniziale);
+> - regole S10–S16;
+> - §10 riscritto (modello, tabella per banca, continuità, bordi, commissioni);
+> - interfaccia, guida, test e fasi aggiornati, con CA e Intesa mappati;
+> - decisioni D-S13…D-S18, D-S3 e D-S10 riviste.
+>
+> La semantica delle commissioni viene dalla #25: la banca esporta il regolato con la commissione dentro (acquisto 100 + 5 → −105; vendita 100 − 5 → +95).
+>
+> **Note implementazione (2026-09-29) — design v3**. Indicazioni del developer:
+> - «l'utente, senza sapere nulla, nel tempo genera i vari export e li importa, e il sistema delle transazioni, DA SOLO, crea le transazioni ed evita di rimettere tutte le volte il salto T0»;
+> - uno step facoltativo dopo la revisione, con le transazioni «sommarie» selezionate di default e un tag per riconoscerle;
+> - lo split delle commissioni su tutti i trade con commissione non chiara;
+> - saldo e posizioni di fix solo automatici;
+> - confronto con CA e Intesa.
+>
+> Applicato nel design:
+> - punti di verità (S12);
+> - gap-fix calcolato dal core come differenza rispetto al database più la selezione (S13, §10.7, `POST /gap-fix`);
+> - `T0` sulla data valuta, spostato solo quanto serve (S14, §10.5 con esempio);
+> - tag `gap_fix`;
+> - §17 con il confronto CA e Intesa: tutte e due migrabili;
+> - decisioni D-S13…D-S21 aggiornate.
+>
+> Il principio della differenza l'ha approvato il developer (ask_user del 2026-09-29).
+>
+> **Note implementazione (2026-09-29) — design v4**. Domande del developer sul perimetro dei set e sui buchi:
+> - **D-S22 ✅** (ask_user): il set sono i file scelti in un import, nuovi e già caricati, raggruppati da soli per broker, plugin e ruolo. Più file per ruolo sono ammessi: una riga identica compare tante volte quante nel file che ne ha di più. Fra un import e l'altro la memoria è il database. Il developer chiamava «A» proprio questo; il pool globale di tutti i file è scartato.
+> - **D-S23 ✅** (ask_user): nei buchi dopo `H0` le righe autonome del CSV si importano con la loro data; la cassa di trade e dividendi del buco la riallinea il checkpoint successivo. Applicato nel nuovo §10.8, nella regola S16, in `combine(..., history_start=H0)` e in `POST /gap-fix`, che calcola i checkpoint in ordine.
+> - **D-S24**, proposta: una correzione deselezionata non si compensa nei checkpoint successivi.
+> - **D-S19 ✅** (solo verifica) e **D-S21 ⏸** (rimandata), su indicazione del developer.
+> - **Offset delle date**, domanda del developer per l'autore. Sui file reali nessuna data cade nel weekend, e tutte le righe dell'XLSX con importo trovano la loro riga nel CSV con scarto zero; con scarto di uno o due giorni, nessuna. Le date dei due file sono quasi certamente coerenti. La bozza della domanda è nella cartella di sessione: se vuole, la pubblica il developer.
+> - **D4**: la prima spiegazione non era chiara. L'ho riformulata con un esempio e con il meccanismo che esiste già: il todo bloccante su `cost_basis_override`, come nel CSV generico.
+> - **D4 ✅** (developer, 2026-09-29): rettifiche semplici, marcate dal plugin per la revisione manuale. Scartati l'evento `DEMERGER` e la modalità PMC «auto» sulla rettifica negativa.
+>
+> **⚠️ Fuori pista**:
+> - Verificando il motore (`portfolio_engine._is_capital_adjustment`): una rettifica negativa conta come uscita di capitale solo se porta un PMC, ma l'editor lo toglie sempre (`TransactionBulkModal`, `txPayloadHelpers.ts`, regola `required_qty_pos`). Quindi la linea vecchia di una scissione lascia capitale investito e guadagno sfalsati del suo costo. Il developer lo accetta come limite noto.
+> - Per lo stesso motivo un blocco sul PMC di una rettifica negativa non si può risolvere nell'editor: nel plugin Danske la linea vecchia avrà un avviso, non un blocco. Il CSV generico emette il blocco su ogni rettifica senza PMC, di qualunque segno: va verificato se ha lo stesso problema, ma è fuori dal mio perimetro e l'ho segnalato al coordinatore.
+> - Nell'[analisi](analysis-phase00BrimDanskeBank.md) ho corretto «ID finto negativo»: gli ID finti sono positivi alti (regola 8 della skill).
 
 ### 3. ⏳ Risposte dell'autore
 
@@ -384,6 +433,35 @@ Il set rende esplicita questa realtà. Lo schema qui sotto è il contenuto che i
 - Il plugin non le aspetta: i casi ignoti li gestisce in modo difensivo, con un'esclusione dichiarata.
 
 > **Note implementazione**: la risposta è stata recuperata con `gh api` in sola lettura e registrata nel journal al posto della bozza.
+
+> **✅ Risposte dell'autore — 2026-09-28 16:11 UTC** ([commento](https://github.com/Librefolio/LibreFolio/issues/26#issuecomment-5873953304)), lette il 2026-09-29.
+>
+> | Tema | Risposta | Effetto sul lavoro |
+> |---|---|---|
+> | Ruoli dei file | XLSX = titoli, CSV = cassa | conferma i due ruoli `custody` e `cash` |
+> | **Profondità** | **XLSX al massimo 1 anno, CSV fino a 5 anni** | **i periodi non possono coincidere oltre un anno**: va ripensato §10 del design (S5, D-S3). Da discutere col developer. |
+> | Filtro del periodo | per **data dell'operazione** | ai bordi si perdono controparti: i trade fatti a fine periodo si regolano dopo (la data valuta nel CSV cade oltre) |
+> | Nomi dei file | `Transactions.xlsx`; `Osakesäästötili-<IBAN>-<data>.csv` | conferma che il conto è un'OST; il nome del CSV contiene l'IBAN, quindi non va propagato nel file combinato né nei campioni |
+> | Lingua | l'interfaccia della banca è solo in finlandese | pilota solo con header finlandesi; nessuna variante EN/SV da supportare per ora |
+> | `Tila` | nessun ordine annullato visto; valori alternativi sconosciuti | resta la difesa S7 |
+> | `Tarkastus` | non sa | si ignora (come previsto) |
+> | Commissione | **inclusa in `Summa`**; non viene esportata separatamente, si vede solo nel dettaglio web | **D14 chiusa**: nessuna FEE separata (e niente ricalcolo), notice informativa |
+> | `Kurssi` | nella valuta del mercato; `Summa` in EUR | confermato; il prezzo resta solo descrittivo |
+> | `Tuotto` | dividendo in contanti; `Määrä` = azioni possedute | **D6 chiusa**: DIVIDEND con quantità 0 |
+> | `Jakautuminen` | la banca **non** indica la ripartizione del costo | **D4**: il costo delle nuove linee va chiesto all'utente (todo bloccante). Per le società quotate finlandesi, la ripartizione è pubblicata dall'Agenzia delle entrate (vero.fi) |
+> | Altri `Toimeksiantotyyppi` | «probabilmente molti che non conosco» | resta la difesa S7, con esclusione dichiarata ed evidenze |
+> | Numero di 10 cifre | riferimento del dividendo | indizio di classificazione, non chiave di abbinamento |
+> | ISIN o ticker | **nessun export li contiene** | identificazione solo per nome (Yahoo, scelta manuale della quotazione) |
+> | Mercati e prezzi | quasi tutti i mercati EU e USA; i dati della banca solo in app e web; usa **Yahoo Finance** | **nessun provider nuovo necessario** |
+> | PS | «potrebbe essere sforzo sprecato… non mi dispiace aggiungere a mano» | segnale di bassa priorità per Danske; il framework dei set resta utile per CA |
+>
+> **⚠️ Fuori pista**: l'asimmetria 1 anno / 5 anni rende incompleta la regola «stessi periodi». Il design va rivisto prima dell'approvazione su questi punti:
+> - periodo effettivo del set = copertura dell'XLSX;
+> - CSV tagliato a quel periodo;
+> - saldo iniziale della cassa ricavato dal `Saldo` del CSV;
+> - posizioni aperte da oltre un anno da inserire come posizioni iniziali (vendite senza acquisto nel file).
+>
+> Proposta applicata nella **v2 del design** (2026-09-29, §10 «Finestre temporali, stato iniziale e commissioni»), in attesa della revisione del developer.
 
 ### 4. ⏸ Framework dei set (dopo il gate 2)
 
@@ -453,17 +531,17 @@ PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test \
 | D1 | Fuori dal periodo comune: escludere **tutte** le righe (R5) o solo quelle accoppiate | ⚠️ **Superata dalla D-S3 del design**: solo le accoppiate senza controparte; i periodi servono solo a informare |
 | D2 | Raggruppamento fisico | manifest + riferimento nei file (§2.2) |
 | D3 | Obbligo dei ruoli: override possibile? | no, per il pilota Danske |
-| D4 | Costo della scissione: todo bloccante su **tutte e tre** le gambe (vecchia = costo medio, nuove = ripartizione), oppure nessun costo più un avviso | decidere dopo un test di caratterizzazione del motore sulla neutralità del capitale |
-| D5 | Data della transazione estesa | data valuta |
-| D6 | `Tuotto` come DIVIDEND con quantità 0 | sì, con conferma dell'autore |
-| D7 | Lingua | notice in finlandese; todo in inglese più `reason_code` |
+| D4 | Costo della scissione | ✅ **Deciso dal developer il 2026-09-29.** Una rettifica negativa per la linea vecchia e una positiva per ogni linea nuova, senza cassa. Il plugin le marca tutte per la revisione manuale (`field_todos`, reason `demerger`, con l'evidenza della riga): **blocco** sul PMC delle linee nuove (con rapporto 1:1, PMC nuovo = PMC vecchio × percentuale pubblicata da vero.fi) e **avviso** sulla linea vecchia. Sulla linea vecchia niente blocco: l'editor non permetterebbe di risolverlo. Niente evento `DEMERGER` e nessuna modifica al core. **Limite noto**: l'editor toglie il PMC dalle rettifiche negative (`required_qty_pos`), quindi il motore non registra l'uscita di capitale della linea vecchia; capitale investito e guadagno risultano sfalsati del costo della linea vecchia. La guida lo spiega. |
+| D5 | Data della transazione estesa | ✅ data valuta (coerente con S14 del design) |
+| D6 | `Tuotto` come DIVIDEND con quantità 0 | ✅ **confermato dall'autore** (2026-09-28): `Määrä` = azioni possedute |
+| D7 | Lingua | ✅ notice in finlandese (l'interfaccia della banca è solo in finlandese); todo in inglese più `reason_code` |
 | D8 | Pagina utente | solo EN; Aphra su richiesta |
-| D9 | Saldo iniziale | notice con il valore; nessuna transazione automatica |
+| D9 | Saldo iniziale | ⚠️ **superata**: punto di verità più gap-fix proposto dal core (design, D-S14 e D-S15) |
 | D10 | Bump di versione per il fix | nessuno |
 | D11 | Chi fa il wizard dei set | ✅ **Deciso dal coordinatore**: L, dopo il merge di K in `dev_release2` |
 | D12 | Provenienza nello schema | sorgente per riga di evidenza |
 | D13 | Motore di abbinamento | dentro Danske finché CA non diventa il secondo utilizzatore |
-| D14 | `Palkkio` diverso da 0 | notice e niente FEE fino al chiarimento |
+| D14 | `Palkkio` diverso da 0 | ⚠️ **superata dalla D-S17 del design**: la commissione è dentro `Summa` e non viene esportata a parte (#26, #25) |
 
 ## 11. Definition of done
 
