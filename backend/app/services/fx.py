@@ -6,6 +6,8 @@ Handles currency conversion and FX rate management with support for multiple pro
 import asyncio
 import time
 from abc import ABC, abstractmethod
+from bisect import bisect_right
+from collections import namedtuple
 from datetime import date
 from decimal import Decimal
 from typing import Literal
@@ -1231,6 +1233,10 @@ async def sync_pairs_bulk(  # noqa: C901 — TODO(P2-refactor): 3-phase concurre
 # ============================================================================
 
 
+# Lightweight (date, rate) record used by convert_bulk's lookup.
+_RateRow = namedtuple("_RateRow", ["date", "rate"])
+
+
 async def convert_bulk(  # noqa: C901 — per-item conversion dispatch with backward-fill search
     session,  # AsyncSession
     conversions: list[tuple[Currency, str, date]],  # [(amount_currency, to_currency, date), ...]
@@ -1313,11 +1319,13 @@ async def convert_bulk(  # noqa: C901 — per-item conversion dispatch with back
         # We'll fetch the most recent rate for each pair that satisfies all dates
         pair_key = (base, quote)
         if pair_key not in pairs_needed:
-            pairs_needed[pair_key] = {"max_date": as_of_date, "indices": []}
+            pairs_needed[pair_key] = {"min_date": as_of_date, "max_date": as_of_date, "indices": []}
         else:
-            # Track the maximum date needed for this pair
+            # Track the date window needed for this pair
             if as_of_date > pairs_needed[pair_key]["max_date"]:
                 pairs_needed[pair_key]["max_date"] = as_of_date
+            if as_of_date < pairs_needed[pair_key]["min_date"]:
+                pairs_needed[pair_key]["min_date"] = as_of_date
 
         pairs_needed[pair_key]["indices"].append(idx)
 
@@ -1327,22 +1335,35 @@ async def convert_bulk(  # noqa: C901 — per-item conversion dispatch with back
 
         conditions = []
         for (base, quote), info in pairs_needed.items():
-            # For each pair, get all rates up to the max date needed
-            conditions.append(and_(FxRate.base == base, FxRate.quote == quote, FxRate.date <= info["max_date"]))
+            # Only the window the conversions can use: from the last rate on/before the
+            # earliest requested date (the backward-fill anchor) up to the latest date.
+            # Without the lower bound every call loaded the pair's whole history, which
+            # made per-day portfolio conversions load millions of rows.
+            anchor = (
+                sql_select(func.max(FxRate.date))
+                .where(FxRate.base == base, FxRate.quote == quote, FxRate.date <= info["min_date"])
+                .scalar_subquery()
+            )
+            conditions.append(
+                and_(
+                    FxRate.base == base,
+                    FxRate.quote == quote,
+                    FxRate.date <= info["max_date"],
+                    FxRate.date >= func.coalesce(anchor, info["min_date"]),
+                )
+            )
 
-        # Single query fetching all rates needed
-        stmt = select(FxRate).where(or_(*conditions)).order_by(FxRate.base, FxRate.quote, FxRate.date.desc())
+        # Single query fetching all rates needed (plain columns: no ORM object per row)
+        stmt = sql_select(FxRate.base, FxRate.quote, FxRate.date, FxRate.rate).where(or_(*conditions)).order_by(FxRate.base, FxRate.quote, FxRate.date)
 
         result = await session.execute(stmt)
-        all_rates = result.scalars().all()
 
-        # Build lookup dictionary: {(base, quote): [rates_sorted_desc_by_date]}
+        # Build lookup: {(base, quote): ([dates ascending], [rates])} for bisect
         rates_lookup = {}
-        for rate in all_rates:
-            pair_key = (rate.base, rate.quote)
-            if pair_key not in rates_lookup:
-                rates_lookup[pair_key] = []
-            rates_lookup[pair_key].append(rate)
+        for rate_base, rate_quote, rate_date, rate_value in result.all():
+            dates, values = rates_lookup.setdefault((rate_base, rate_quote), ([], []))
+            dates.append(rate_date)
+            values.append(rate_value)
     else:
         rates_lookup = {}
 
@@ -1362,14 +1383,11 @@ async def convert_bulk(  # noqa: C901 — per-item conversion dispatch with back
 
             # Find appropriate rate for this conversion
             pair_key = (meta["base"], meta["quote"])
-            pair_rates = rates_lookup.get(pair_key, [])
+            pair_dates, pair_values = rates_lookup.get(pair_key, ([], []))
 
-            # Find first rate <= requested date (backward-fill)
-            rate_record = None
-            for rate in pair_rates:
-                if rate.date <= meta["date"]:
-                    rate_record = rate
-                    break
+            # Find the latest rate <= requested date (backward-fill)
+            pos = bisect_right(pair_dates, meta["date"])
+            rate_record = _RateRow(pair_dates[pos - 1], pair_values[pos - 1]) if pos else None
 
             if not rate_record:
                 # No rate found at all for this pair
