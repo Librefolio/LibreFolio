@@ -150,8 +150,18 @@ it ships.
 
 ## 🧬 Duplicate detection
 
-Detection runs in **two independent layers**, each producing its own status. A row can only
-carry one status; the layers are evaluated so that the stronger signal wins.
+Detection runs in **two independent layers**. Each merged row keeps the verdicts that come from
+outside the batch in fields of their own — the database verdict in `dbDuplicateStatus`
+(`likely` / `possible`), the bulk-editor verdict in `pendingMatchStatus` (`pending_duplicate` /
+`pending_possible_duplicate`) — and still **displays one status**, `duplicateStatus`: the
+database verdict (or `unique`) unless the in-batch pass or an editor match rewrote it.
+
+`duplicateStatus` alone cannot tell whether a row collides with something *outside* the batch:
+the in-batch pass rewrites it to `pending_duplicate` on the secondaries of a cross-file group.
+That pass never touches the two kept fields, so the resolver reads those
+(`hasFirmOutsideCollision`, below). Every recheck starts them afresh (`rowAfterRecheck`): the
+database verdict is replaced, never carried over, because a correction can clear a false
+duplicate and a stale `likely` would keep the row out of the keepers.
 
 ### 🗄️ Layer 1 — against the database (backend)
 
@@ -231,19 +241,46 @@ Duplicate Resolver** (the `duplicates` step) automates it.
   Surfaced to the user as the similarity label (`duplicateSimilarityLabel` →
   *Total* / *Partial*).
 - **File priority** — the user orders the source files with an **`OrderableList`** (our custom
-  component). `defaultKeeperIndices` keeps exactly one primary row per description-partition,
-  taken from the **highest-priority file**; the rest are marked non-keepers and deselected.
+  component). In each description-partition the primary (`groupPartitions`) is the
+  **highest-priority copy without a firm outside collision** — `hasFirmOutsideCollision`: a DB
+  `likely` or an editor `pending_duplicate`; `possible` and `pending_possible_duplicate` do not
+  count. `defaultKeeperIndices` keeps that primary; the rest are marked non-keepers and
+  deselected. When every copy collides, the primary is the highest-priority copy **for display
+  only** and the partition keeps none: a copy already in the database or in the unsaved editor
+  is never the default keeper. An explicit manual choice is still respected.
 - **Recalculate** — after re-ordering priority, the user can recompute the keepers, discarding
   any manual per-row choices and re-deriving them from the new priority order.
 - **Member table** — each group renders its members in a **`DataTable`** (`resolverMemberColumns`)
   with a keep checkbox, keeper/duplicate badges, and the file/description columns, so the same
   formatting and icons as the main transactions page are reused.
+- **Recheck carry-over** — a duplicate recheck (`refreshDuplicateReport`) does not reset the
+  resolver. A group counts as *changed* when it has no same-member predecessor (new or
+  reshaped), or when the user had arbitrated it and one of its copies started or stopped
+  colliding firmly (`hasFirmOutsideCollision`). `carryResolverChoices` carries the choices of
+  every arbitrated group that is not changed; every other group starts from its defaults — an
+  untouched one even when a copy's status changed. Groups are matched by **member set, not by
+  `key`**, because the key embeds the asset identity, which changes when an unresolved asset
+  gets bound. The status clause exists because the backend narrows its database match to the
+  bound asset only once the asset is resolved: re-binding a group on the review step can turn a
+  unique copy into a database duplicate, which a choice carried from before would import.
+- **Final recheck** — the recheck run by **Import N transactions** (`handleImport`) sends the
+  user back to `duplicates` only when it finds changed groups, with a warning toast ("The final
+  duplicate check found new or changed duplicates between your files. Review them before
+  importing.") and the app event `tx.import.duplicates.changed` (detail: each changed group's
+  key and member indices). Otherwise the import goes on: if the selection changed — e.g. a new
+  DB verdict moved a default keeper — the existing `tx.import.selection.changed` guard keeps the
+  user on `review` with a warning; if not, the rows go to the bulk editor.
 
 !!! tip "Why a row can still reach the review step as a duplicate"
 
-    Only the **cross-file, auto-resolved** twins are removed up front. A row whose duplicate
-    lives in the *unsaved editor* (not in another imported file) is still shown on the review step as
-    `pending_duplicate` so the user stays aware of it — it is simply deselected by default.
+    Only the **cross-file, auto-resolved** twins are removed up front: a group's secondaries,
+    unless the user kept them (`isResolvedAwayDuplicate`). Two kinds of row still reach the
+    review step flagged, so the user stays aware of them — both simply deselected by default:
+
+    - the display primary of a partition whose every copy already exists, listed with its own
+      database or editor badge, like any database twin;
+    - a row whose duplicate lives in the *unsaved editor* (not in another imported file), shown
+      as `pending_duplicate`.
 
 ---
 
@@ -263,6 +300,15 @@ field-by-field grid) and takes:
 
 Because it is *N*-way (not limited to two transactions), it can compare a whole duplicate
 group at once, or a candidate against several stored transactions.
+
+On the review step, a row's status badge opens **the comparison it claims** (`compareTargetFor`,
+dispatched by `openBadgeCompare`):
+
+- a database badge (`likely` / `possible`) → the row against the stored transaction
+  (`openDbCompare`), even when the row also belongs to a cross-file group;
+- an editor match → the row against the unsaved editor row (`openPendingCompare`);
+- an in-batch secondary → the whole group, *N*-way (`openLotCompare`);
+- `unique` → none.
 
 ---
 
@@ -313,10 +359,11 @@ state to the guide and renders anchors for it to point at:
   remains visible with one child dialog at depth 2 and hides if that child opens another dialog
   at depth 3. `TransactionBulkModal` is depth 1; any child dialog at depth 2 hides its coachmark.
 - **The duplicate-recheck bounce** is the wizard driving its own `currentStepId` back to
-  `'duplicates'` inside `handleImport()` when a final `refreshDuplicateReport(true)` reopens that
-  step (see `if (stepIsActive('duplicates')) { currentStepId = 'duplicates'; return; }`). The
-  guide does not special-case this: it just observes the same `currentStepId` effect firing again
-  with `'duplicates'` and follows.
+  `'duplicates'` inside `handleImport()` when the final `refreshDuplicateReport(true)` returns
+  changed groups (see `if (changedGroups.length > 0) { … currentStepId = 'duplicates'; return; }`,
+  after the `tx.import.duplicates.changed` notification; *Batch Duplicate Resolver → Final
+  recheck* above). The guide does not special-case this: it just observes the same
+  `currentStepId` effect firing again with `'duplicates'` and follows.
 - **The `bulk` handoff is one-way and explicit.** Right after `onImportBatch(...)` succeeds inside
   `handleImport()`, the wizard sets `guideHandedOff = true` and calls
   `onboardingGuide.setStep('import.bulk')` — from that point the wizard's own step-sync effect is

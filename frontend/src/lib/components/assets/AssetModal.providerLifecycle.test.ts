@@ -4,22 +4,25 @@
  *
  * Only AssetSearchAutocomplete is replaced, in BOTH create and edit mode. Its
  * harness invokes the real lowercase onselect callback; it owns no draft or
- * request lifecycle. Comparison/confirmation modals and the session coordinator
- * remain real. Everything asynchronous below is an explicitly planned API call,
- * apart from ready reference caches and the incidental duplicate-name listing.
+ * request lifecycle. A case may swap only the synthetic RESULT it hands over
+ * (`searchSelection`; null keeps the harness's own TICKER), never the callback.
+ * Comparison/confirmation modals and the session coordinator remain real.
+ * Everything asynchronous below is an explicitly planned API call, apart from
+ * ready reference caches and the incidental duplicate-name listing.
  *
  * Deferred responses, then Svelte tick/flushSync, are the completion boundaries.
  * No network, clock waits, mirrored controller, detached callbacks or UI events
  * behind an active modal. Request oracles are independent of UI-bound fixtures;
  * captured argument REFERENCES are checked again after edits and at teardown.
  *
- * Deliberate interface gaps: autofill provenance, provider URL and total duration
- * have no semantic testid/state here. Stale comparison/confirmation callbacks
- * cannot safely be clicked once their real dialog has closed. Those are not
- * replaced with CSS/source assertions or calls into detached elements.
+ * Deliberate interface gaps: autofill provenance, provider URL, total duration
+ * and the chooser's report/stored provenance badge have no semantic testid/state
+ * here. Stale comparison/confirmation callbacks cannot safely be clicked once
+ * their real dialog has closed. Those are not replaced with CSS/source
+ * assertions or calls into detached elements.
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
-import {flushSync, tick, type ComponentProps} from 'svelte';
+import {flushSync, tick, type Component, type ComponentProps} from 'svelte';
 import type {z} from 'zod';
 import type {schemas} from '$lib/api/generated';
 import {cleanup, fireEvent, render, screen, setupI18n, within} from '$test/component';
@@ -29,6 +32,7 @@ import {currentLanguage} from '$lib/stores/app/language';
 import {currencyStoreVersion, type CurrencyInfo} from '$lib/stores/reference/currencyStore';
 import type {CountryInfo} from '$lib/stores/reference/countryStore';
 import AssetModal from './AssetModal.svelte';
+import type AssetSearchAutocomplete from './AssetSearchAutocomplete.svelte';
 
 type ProbeRequest = z.infer<typeof schemas.FAProviderProbeRequest>;
 type ProbeResponse = z.infer<typeof schemas.FAProviderProbeResponse>;
@@ -40,6 +44,8 @@ type AssignmentResponse = z.infer<typeof schemas.FABulkAssignResponse>;
 type EditData = NonNullable<ComponentProps<typeof AssetModal>['editData']>;
 type VerificationStatus = 'not_tested' | 'testing' | 'passed' | 'failed';
 type ResultStatus = 'success' | 'error' | 'warning';
+type SearchProps = ComponentProps<typeof AssetSearchAutocomplete>;
+type SearchSelection = Parameters<NonNullable<SearchProps['onselect']>>[0];
 
 const mocks = vi.hoisted(() => ({
     // Explicit facade: even forbidden mutation/search/reference requests are
@@ -80,11 +86,25 @@ const mocks = vi.hoisted(() => ({
     assets: {mergeAssets: vi.fn(), invalidateAfterMutation: vi.fn()},
     toasts: {success: vi.fn(), info: vi.fn(), warning: vi.fn(), error: vi.fn()},
 }));
+// Kept out of `mocks`: beforeEach resets every member of that object as a spy.
+const searchSelection = vi.hoisted(() => ({result: null as SearchSelection | null}));
 
 vi.mock('$lib/api', () => ({zodiosApi: mocks.api, axiosInstance: mocks.axios}));
-vi.mock('./AssetSearchAutocomplete.svelte', async () => ({
-    default: (await import('$test/AssetSearchSelectionHarness.svelte')).default,
-}));
+vi.mock('./AssetSearchAutocomplete.svelte', async () => {
+    const Harness = (await import('$test/AssetSearchSelectionHarness.svelte')).default;
+    // The same harness and the same real onselect; only the RESULT may differ.
+    const Selection: Component<SearchProps> = (internals, props) =>
+        Harness(internals, {
+            get disabled() {
+                return props.disabled;
+            },
+            get onselect() {
+                const onselect = props.onselect;
+                return onselect && ((result: SearchSelection) => onselect(searchSelection.result ?? result));
+            },
+        });
+    return {default: Selection};
+});
 vi.mock('$lib/utils/providerHelpers', () => mocks.providers);
 vi.mock('$lib/stores/reference/assetStore', () => mocks.assets);
 vi.mock('$lib/stores/reference/countryStore', () => mocks.countries);
@@ -473,6 +493,7 @@ beforeEach(() => {
     plannedCalls = [];
     recordedCalls = [];
     unexpectedCalls = [];
+    searchSelection.result = null;
     referenceReady = Promise.resolve();
     previousSessionId = getClientSessionUserId();
     installLocalStorageFixture();
@@ -1166,6 +1187,458 @@ describe('AssetModal provider lifecycle', () => {
         expect(screen.queryByTestId('confirm-modal-confirm')).toBeNull();
         expect(view.onupdated).not.toHaveBeenCalled();
         expect(view.oncreated).not.toHaveBeenCalled();
+        assertTraffic();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// R18 — a search selection asks each identifier question once.
+//
+// Picking a result that quotes a different ISIN opens the chooser at once AND
+// starts the metadata read that feeds the comparison. Whichever lands first, that
+// selection's comparison waits for every prompt of the selection, and never
+// re-asks a code the chooser already put on the table. A later manual read is
+// not the selection's and stays unchanged.
+// ---------------------------------------------------------------------------
+
+const REPORT_ISIN = 'IT0000000001';
+const PROVIDER_ISIN = 'IT0000000002';
+const THIRD_ISIN = 'IT0000000003';
+const STORED_ISIN = 'IT0000000004';
+const REPORT_NAME = 'Report synthetic bond';
+const SELECTION_NAME = 'Offline quoted security';
+const PROVIDER_TITLE = 'Provider metadata title';
+const ACCEPTED_DESCRIPTION = 'Selection metadata accepted';
+
+type MetadataPatch = Record<string, unknown>;
+
+interface ReportPrefill {
+    display_name: string;
+    identifier_isin: string;
+    currency: string;
+}
+
+interface SelectionCase {
+    label: string;
+    patch: MetadataPatch;
+    distributions: boolean;
+    after: string[];
+}
+
+/** A fresh result per selection: it is the component's callback argument, never frozen. */
+function isinSelection(): SearchSelection {
+    return {
+        identifier: PROVIDER_ISIN,
+        identifier_type: 'ISIN',
+        display_name: SELECTION_NAME,
+        provider_code: 'lifecycle_atlas',
+        currency: 'USD',
+        asset_type: 'STOCK',
+        provider_params: {note: 'search note'},
+        provider_url: `https://atlas.provider.invalid/security/${PROVIDER_ISIN}`,
+    };
+}
+
+/** Independent oracle for both reads the ISIN selection starts; the modal adds the currency. */
+function isinRequest(operations: ProbeRequest['operations']): ProbeRequest {
+    return {
+        provider_code: 'lifecycle_atlas',
+        identifier: PROVIDER_ISIN,
+        identifier_type: 'ISIN',
+        provider_params: {note: 'search note', currency: 'USD'},
+        operations: [...operations],
+    };
+}
+
+/**
+ * Metadata agreeing with the selection except for `patch`. Its description fills
+ * the empty field on acceptance: the positive barrier before any absence claim.
+ * With `distributions` nothing is missing, so the "all match" branch is reachable
+ * and a missing success toast is evidence rather than a vacuous pass.
+ */
+function isinMetadata(patch: MetadataPatch, distributions: boolean): ProbeResponse {
+    return {
+        provider_code: 'lifecycle_atlas',
+        identifier: PROVIDER_ISIN,
+        total_execution_time_ms: 4,
+        metadata: {
+            success: true,
+            execution_time_ms: 4,
+            patch_data: {
+                display_name: SELECTION_NAME,
+                asset_type: 'STOCK',
+                currency: 'USD',
+                classification_params: {
+                    short_description: ACCEPTED_DESCRIPTION,
+                    ...(distributions ? {sector_area: {distribution: {Technology: '1'}}, geographic_area: {distribution: {USA: '1'}}} : {}),
+                },
+                ...patch,
+            },
+        },
+    };
+}
+
+/** The import wizard's create context: report codes prefilled, no provider yet, reuse prompt enabled. */
+async function renderReportCreate(prefill: ReportPrefill = {display_name: REPORT_NAME, identifier_isin: REPORT_ISIN, currency: 'EUR'}) {
+    const onReuseExisting = vi.fn();
+    const view = render(AssetModal, {open: true, initialNoProvider: true, prefillData: {...prefill}, onReuseExisting});
+    await referenceReady;
+    await flushUi();
+    expectReady();
+    expectBusy(false);
+    expect(screen.getByTestId('asset-modal-display-name')).toHaveValue(prefill.display_name);
+    expect(screen.getByTestId('asset-modal-ask-provider')).toBeDisabled();
+    return {...view, onReuseExisting};
+}
+
+/** Edit mode: the stored ISIN column differs from the quoted code the asset is priced by. */
+async function renderStoredIsinEdit() {
+    const catalog = expectCatalog('stored-ISIN edit catalog');
+    const view = render(AssetModal, {open: true, editMode: true, editData: editFixture({identifier_isin: STORED_ISIN, provider_identifier: PROVIDER_ISIN, provider_identifier_type: 'ISIN'})});
+    await flushUi();
+    await catalog.finish();
+    await referenceReady;
+    await flushUi();
+    expectReady();
+    expect(screen.getByTestId('asset-modal-form')).toHaveAttribute('data-dirty', 'false');
+    // A stored identifier row opens this section by itself.
+    expect(screen.getByTestId('asset-modal-more-info')).toHaveAttribute('data-expanded', 'true');
+    expectStatus('not_tested');
+    return view;
+}
+
+/**
+ * Pick the quoted ISIN through the real onselect. The automatic verification is
+ * incidental here and finished first, so the metadata read is the one open boundary.
+ */
+async function selectProviderIsin(patch: MetadataPatch, {catalog = true, distributions = false} = {}): Promise<PlannedCall> {
+    searchSelection.result = isinSelection();
+    const schema = catalog ? expectCatalog('ISIN selection catalog') : null;
+    const verification = plan('ISIN selection verification', routes.verification, [isinRequest(['current_price', 'history'])], {...probeResponse('41.25'), identifier: PROVIDER_ISIN, provider_url: `https://atlas.provider.invalid/probed/${PROVIDER_ISIN}`});
+    const metadata = plan('ISIN selection metadata', routes.metadata, [isinRequest(['metadata'])], isinMetadata(patch, distributions));
+    expect(screen.getByTestId('asset-search-offline-select')).toBeEnabled();
+    await fireEvent.click(screen.getByTestId('asset-search-offline-select'));
+    await flushUi();
+    // Both reads leave at selection time, before any prompt can be answered.
+    verification.assertUnchanged();
+    metadata.assertUnchanged();
+    if (schema) await schema.finish();
+    await verification.finish();
+    expectStatus('passed');
+    expectBusy(true);
+    return metadata;
+}
+
+/** The selection's chooser: precisely its two codes, `primary` elected. */
+function expectIsinChooser(current: string, primary: string) {
+    expect(screen.getByTestId('asset-modal-identifier-primary')).toBeVisible();
+    const chooser = screen.getByTestId('asset-modal-primary-chooser');
+    expect(within(chooser).getAllByRole('radio')).toHaveLength(2);
+    expect(within(chooser).getByTestId(`asset-modal-primary-chooser-option-${primary}`)).toHaveAttribute('aria-checked', 'true');
+    const other = primary === PROVIDER_ISIN ? current : PROVIDER_ISIN;
+    expect(within(chooser).getByTestId(`asset-modal-primary-chooser-option-${other}`)).not.toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByTestId('asset-modal-primary-confirm')).toBeEnabled();
+}
+
+/** Answer the chooser, electing `primary` first when given; ends with the chooser closed. */
+async function confirmChooser(primary?: string) {
+    if (primary !== undefined) {
+        await fireEvent.click(screen.getByTestId(`asset-modal-primary-chooser-option-${primary}`));
+        await flushUi();
+        expect(screen.getByTestId(`asset-modal-primary-chooser-option-${primary}`)).toHaveAttribute('aria-checked', 'true');
+    }
+    await fireEvent.click(screen.getByTestId('asset-modal-primary-confirm'));
+    await flushUi();
+    expect(screen.queryByTestId('asset-modal-identifier-primary')).toBeNull();
+}
+
+/** Ask to leave the chooser; ends with the sole generic discard confirmation over it. */
+async function requestChooserDiscard() {
+    await fireEvent.click(screen.getByTestId('asset-modal-primary-cancel'));
+    await flushUi();
+    // getByTestId also rejects an ambiguous second generic confirmation.
+    expect(screen.getByTestId('confirm-modal-message')).toBeVisible();
+    expect(screen.getByTestId('confirm-modal-confirm')).toBeEnabled();
+    expect(screen.getByTestId('asset-modal-identifier-primary')).toBeVisible();
+}
+
+/** This very response was accepted — its description landed — and yet no comparison is shown. */
+function expectAcceptedWithoutComparison() {
+    expectBusy(false);
+    expect(screen.getByTestId('asset-modal-description')).toHaveValue(ACCEPTED_DESCRIPTION);
+    expect(screen.queryByTestId('comparison-modal'), 'a selection comparison must wait while a prompt of that selection is open').toBeNull();
+}
+
+/** The comparison on screen asks exactly `fields`; with none, there is no comparison at all. */
+function expectComparison(fields: readonly string[]) {
+    if (fields.length === 0) {
+        expect(screen.queryByTestId('comparison-modal'), 'nothing is left to ask once the chooser answered').toBeNull();
+        return;
+    }
+    const modal = screen.getByTestId('comparison-modal');
+    expect(modal).toBeVisible();
+    // Every card comes from this case's synthetic response: the set is the claim.
+    const cards = within(modal).getAllByTestId('comparison-card');
+    expect(
+        cards.map((card) => card.getAttribute('data-field')),
+        'rows left once the chooser answered its own question',
+    ).toEqual([...fields]);
+    expect(within(modal).getByTestId('comparison-body')).toHaveAttribute('data-total-count', String(fields.length));
+    expect(within(modal).getByTestId('comparison-apply')).toBeEnabled();
+}
+
+/** Accepting the name proves the released comparison is live, not the shell of a stale read. */
+async function applyProviderTitle() {
+    expect(screen.getByTestId('comparison-current-display_name')).toHaveTextContent(SELECTION_NAME);
+    expect(screen.getByTestId('comparison-provider-display_name')).toHaveTextContent(PROVIDER_TITLE);
+    await fireEvent.click(screen.getByTestId('comparison-apply'));
+    await flushUi();
+    expect(screen.queryByTestId('comparison-modal')).toBeNull();
+    expect(screen.getByTestId('asset-modal-display-name')).toHaveValue(PROVIDER_TITLE);
+}
+
+/** Nothing left to ask: no dialog, and no "all match" claim (nothing was missing either). */
+function expectSilentDrop() {
+    expect(screen.queryByTestId('comparison-modal')).toBeNull();
+    expect(mocks.toasts.info).not.toHaveBeenCalled();
+    expect(mocks.toasts.success).not.toHaveBeenCalled();
+}
+
+describe('AssetModal search selection asks each identifier question once (R18)', () => {
+    it.each<SelectionCase>([
+        {label: 'a name difference remains', patch: {identifier_isin: PROVIDER_ISIN, display_name: PROVIDER_TITLE}, distributions: false, after: ['display_name']},
+        {label: 'only the chooser ISIN differs', patch: {identifier_isin: PROVIDER_ISIN}, distributions: true, after: []},
+        {label: 'a third ISIN is another question', patch: {identifier_isin: THIRD_ISIN}, distributions: false, after: ['identifier_isin']},
+    ])('holds a comparison that lands behind the open ISIN chooser, then asks only what is left ($label)', async ({patch, distributions, after}) => {
+        await renderReportCreate();
+        const metadata = await selectProviderIsin(patch, {distributions});
+        expectIsinChooser(REPORT_ISIN, PROVIDER_ISIN);
+        expect(screen.queryByTestId('comparison-modal')).toBeNull();
+
+        await metadata.finish();
+        // R18: today the comparison opens over the chooser and asks the same ISIN again.
+        expectAcceptedWithoutComparison();
+        expectIsinChooser(REPORT_ISIN, PROVIDER_ISIN);
+
+        await confirmChooser(); // the provider's quoted code is the default primary
+        expectComparison(after);
+        if (after.length === 0) expectSilentDrop();
+        else if (after.includes('identifier_isin')) expect(screen.getByTestId(`comparison-chooser-identifier_isin-option-${THIRD_ISIN}`)).toBeVisible();
+        else await applyProviderTitle();
+        assertTraffic();
+    });
+
+    it.each<SelectionCase & {landsUnder: 'chooser' | 'discard confirmation'}>([
+        {label: 'lands under the chooser; a name difference remains', landsUnder: 'chooser', patch: {identifier_isin: PROVIDER_ISIN, display_name: PROVIDER_TITLE}, distributions: false, after: ['display_name']},
+        {label: 'lands under the discard confirmation; only the discarded ISIN differs', landsUnder: 'discard confirmation', patch: {identifier_isin: PROVIDER_ISIN}, distributions: true, after: []},
+    ])('keeps the comparison waiting through the discard confirmation and never re-asks the discarded code ($label)', async ({landsUnder, patch, distributions, after}) => {
+        await renderReportCreate();
+        const metadata = await selectProviderIsin(patch, {distributions});
+        expectIsinChooser(REPORT_ISIN, PROVIDER_ISIN);
+        if (landsUnder === 'chooser') {
+            await metadata.finish();
+            // R18: today the comparison opens over the chooser.
+            expectAcceptedWithoutComparison();
+        }
+        await requestChooserDiscard();
+        if (landsUnder === 'discard confirmation') {
+            await metadata.finish();
+            // R18: today the comparison opens while the chooser and its discard confirmation are up.
+            expectAcceptedWithoutComparison();
+            expect(screen.getByTestId('confirm-modal-message')).toBeVisible();
+        }
+        expect(screen.queryByTestId('comparison-modal')).toBeNull();
+
+        // Backing out of the discard is not an answer: the chooser is still asking.
+        await fireEvent.click(screen.getByTestId('confirm-modal-cancel'));
+        await flushUi();
+        expect(screen.queryByTestId('confirm-modal-message')).toBeNull();
+        expectIsinChooser(REPORT_ISIN, PROVIDER_ISIN);
+        expect(screen.queryByTestId('comparison-modal')).toBeNull();
+
+        await requestChooserDiscard();
+        await fireEvent.click(screen.getByTestId('confirm-modal-confirm'));
+        await flushUi();
+        expect(screen.queryByTestId('confirm-modal-message')).toBeNull();
+        expect(screen.queryByTestId('asset-modal-identifier-primary')).toBeNull();
+        expectComparison(after);
+        if (after.length === 0) expectSilentDrop();
+        else await applyProviderTitle();
+        assertTraffic();
+    });
+
+    it.each<SelectionCase>([
+        {label: 'a name difference remains', patch: {identifier_isin: PROVIDER_ISIN, display_name: PROVIDER_TITLE}, distributions: false, after: ['display_name']},
+        {label: 'only the answered ISIN differs', patch: {identifier_isin: PROVIDER_ISIN}, distributions: true, after: []},
+    ])('does not re-ask the ISIN when the read lands after the report code was kept as primary ($label)', async ({patch, distributions, after}) => {
+        await renderReportCreate();
+        const metadata = await selectProviderIsin(patch, {distributions});
+        expectIsinChooser(REPORT_ISIN, PROVIDER_ISIN);
+        await confirmChooser(REPORT_ISIN);
+        expect(screen.queryByTestId('comparison-modal')).toBeNull();
+        expectBusy(true); // answered while the metadata read is still in flight
+
+        await metadata.finish();
+        expectBusy(false);
+        expect(screen.getByTestId('asset-modal-description')).toHaveValue(ACCEPTED_DESCRIPTION);
+        // R18, second half: current (report) ≠ provider, so the answered row comes back today.
+        expectComparison(after);
+        if (after.length === 0) expectSilentDrop();
+        else await applyProviderTitle();
+        assertTraffic();
+    });
+
+    it('holds the comparison behind the chooser for a stored ISIN in edit mode, then asks only the name', async () => {
+        await renderStoredIsinEdit();
+        const metadata = await selectProviderIsin({identifier_isin: PROVIDER_ISIN, display_name: PROVIDER_TITLE}, {catalog: false});
+        expectIsinChooser(STORED_ISIN, PROVIDER_ISIN);
+
+        await metadata.finish();
+        expectAcceptedWithoutComparison();
+        expectIsinChooser(STORED_ISIN, PROVIDER_ISIN);
+
+        await confirmChooser();
+        expectComparison(['display_name']);
+        await applyProviderTitle();
+        assertTraffic();
+    });
+
+    it('leaves a later manual Ask provider unchanged: it offers the identifier row again', async () => {
+        await renderReportCreate();
+        // This read proposes no identifier at all, so the case passes before and after the fix.
+        const selection = await selectProviderIsin({display_name: PROVIDER_TITLE});
+        expectIsinChooser(REPORT_ISIN, PROVIDER_ISIN);
+        await confirmChooser(REPORT_ISIN);
+        await selection.finish();
+        expectBusy(false);
+        expectComparison(['display_name']);
+        await fireEvent.click(screen.getByTestId('comparison-cancel'));
+        await flushUi();
+        expect(screen.queryByTestId('comparison-modal')).toBeNull();
+        expect(screen.getByTestId('asset-modal-display-name')).toHaveValue(SELECTION_NAME);
+
+        const manual = plan('manual Ask provider after the answered selection', routes.metadata, [isinRequest(['metadata'])], isinMetadata({identifier_isin: PROVIDER_ISIN}, false));
+        expect(screen.getByTestId('asset-modal-ask-provider')).toBeEnabled();
+        await fireEvent.click(screen.getByTestId('asset-modal-ask-provider'));
+        expectBusy(true);
+        await manual.finish();
+        expectBusy(false);
+        // Not the selection's read: the chooser's answer must not prune it.
+        expectComparison(['identifier_isin']);
+        const chooser = screen.getByTestId('comparison-chooser-identifier_isin');
+        for (const value of [PROVIDER_ISIN, REPORT_ISIN]) {
+            expect(within(chooser).getByTestId(`comparison-chooser-identifier_isin-option-${value}`)).toBeVisible();
+        }
+        assertTraffic();
+    });
+
+    it('drops a held comparison when a public draft switch replaces the provider context', async () => {
+        const view = await renderStoredIsinEdit();
+        const metadata = await selectProviderIsin({identifier_isin: PROVIDER_ISIN, display_name: PROVIDER_TITLE}, {catalog: false});
+        await metadata.finish();
+        expectAcceptedWithoutComparison();
+        expectIsinChooser(STORED_ISIN, PROVIDER_ISIN);
+
+        // Public props are the opening-context contract: nothing is clicked behind the chooser.
+        await view.rerender({editData: editFixture({id: 8102, display_name: 'Replacement draft security'})});
+        await flushUi();
+        expectReady();
+        expect(screen.getByTestId('asset-modal-display-name')).toHaveValue('Replacement draft security');
+        expectStatus('not_tested');
+        expect(screen.queryByTestId('asset-modal-identifier-primary')).toBeNull();
+        expect(screen.queryByTestId('comparison-modal')).toBeNull();
+
+        // A fresh read on the new draft opens only its own question: nothing held leaks in.
+        const fresh = expectMetadata('replacement-draft metadata', 'Replacement provider choice', '');
+        expect(screen.getByTestId('asset-modal-ask-provider')).toBeEnabled();
+        await fireEvent.click(screen.getByTestId('asset-modal-ask-provider'));
+        await fresh.finish();
+        expectComparison(['display_name']);
+        expect(screen.getByTestId('comparison-current-display_name')).toHaveTextContent('Replacement draft security');
+        expect(screen.getByTestId('comparison-provider-display_name')).toHaveTextContent('Replacement provider choice');
+        assertTraffic();
+    });
+
+    it('drops a held comparison whose session ended before the chooser was answered', async () => {
+        await renderReportCreate();
+        // Same read as the first case, where a name row survives the answer: only staleness can drop it here.
+        const metadata = await selectProviderIsin({identifier_isin: PROVIDER_ISIN, display_name: PROVIDER_TITLE});
+        await metadata.finish();
+        expectAcceptedWithoutComparison();
+
+        const generation = getClientSessionGeneration();
+        transitionClientSession('asset-modal-lifecycle-next-owner');
+        expect(isClientSessionCurrent(generation)).toBe(false);
+        await flushUi();
+        // Nothing closes the chooser on an identity change, so answering it is a real action.
+        expectIsinChooser(REPORT_ISIN, PROVIDER_ISIN);
+        await confirmChooser();
+        expect(screen.queryByTestId('comparison-modal')).toBeNull();
+        expectReady();
+        assertTraffic();
+    });
+
+    it('drops a held comparison when the modal closes, and reopens on a clean draft', async () => {
+        const view = await renderReportCreate();
+        const metadata = await selectProviderIsin({identifier_isin: PROVIDER_ISIN, display_name: PROVIDER_TITLE});
+        await metadata.finish();
+        expectAcceptedWithoutComparison();
+        expectIsinChooser(REPORT_ISIN, PROVIDER_ISIN);
+
+        await view.rerender({open: false});
+        await flushUi();
+        expect(screen.queryByTestId('asset-modal')).toBeNull();
+        expect(screen.queryByTestId('comparison-modal')).toBeNull();
+
+        // Reopening re-renders the body once with the previous draft's provider state
+        // (expanded, provider chosen) before the open effect resets it, so the section
+        // mounts for an instant and reads its catalog. That wasted read predates R18 and
+        // is real traffic: planned here so assertTraffic stays strict. If the transient
+        // mount is ever removed, this plan goes unconsumed and must be dropped with it.
+        const reopenCatalog = expectCatalog('reopen transient catalog');
+        await view.rerender({open: true});
+        await flushUi();
+        await reopenCatalog.finish();
+        expectReady();
+        expect(screen.getByTestId('asset-modal-display-name')).toHaveValue(REPORT_NAME);
+        // Clean draft: the reset folded the provider section away again and no provider is set.
+        expect(screen.getByTestId('asset-modal-provider-header')).toHaveAttribute('data-expanded', 'false');
+        expect(screen.getByTestId('asset-modal-ask-provider')).toBeDisabled();
+        expect(screen.queryByTestId('asset-modal-identifier-primary')).toBeNull();
+        expect(screen.queryByTestId('comparison-modal')).toBeNull();
+        assertTraffic();
+    });
+
+    it.each([false, true])('holds the selection comparison behind the reuse prompt too (ISIN chooser also open: %s)', async (withChooser) => {
+        const view = await renderReportCreate({display_name: REPORT_NAME, identifier_isin: withChooser ? REPORT_ISIN : PROVIDER_ISIN, currency: 'EUR'});
+        // An existing asset already carries the provider's name: that raises the reuse prompt.
+        // The incidental duplicate-name check reads the same listing; it stays incidental.
+        mocks.api.list_assets_api_v1_assets_query_get.mockImplementation((...args: unknown[]) => {
+            checkArguments('reuse-candidate listing', args, [{queries: {}}]);
+            return Promise.resolve([{id: 7001, display_name: SELECTION_NAME}]);
+        });
+        const metadata = await selectProviderIsin({identifier_isin: PROVIDER_ISIN, display_name: PROVIDER_TITLE});
+        expect(screen.getByTestId('reuse-existing-title')).toBeVisible();
+        if (withChooser) expectIsinChooser(REPORT_ISIN, PROVIDER_ISIN);
+        else expect(screen.queryByTestId('asset-modal-identifier-primary')).toBeNull();
+
+        await metadata.finish();
+        // R18: today the comparison opens over the reuse prompt as well.
+        expectAcceptedWithoutComparison();
+        expect(screen.getByTestId('reuse-existing-title')).toBeVisible();
+
+        // Same layer, later in the DOM than the chooser: the reuse prompt is the one on top.
+        await fireEvent.click(screen.getByTestId('reuse-existing-cancel'));
+        await flushUi();
+        expect(screen.queryByTestId('reuse-existing-title')).toBeNull();
+        if (withChooser) {
+            expectIsinChooser(REPORT_ISIN, PROVIDER_ISIN);
+            expect(screen.queryByTestId('comparison-modal')).toBeNull();
+            await confirmChooser();
+        }
+        expectComparison(['display_name']);
+        await applyProviderTitle();
+        expect(view.onReuseExisting).not.toHaveBeenCalled();
         assertTraffic();
     });
 });
