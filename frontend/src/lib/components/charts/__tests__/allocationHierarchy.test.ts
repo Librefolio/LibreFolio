@@ -21,12 +21,16 @@
  * `$lib/utils/assetTypes`, which reads the generated Zodios schemas at module
  * load — importing it would drag a gitignored build artifact into a unit test.
  * The module under test takes the function as an option precisely so this file
- * does not have to.
+ * does not have to. The one exception is the block that measures whole
+ * families: the family K's taxonomy makes of REAL_ESTATE is built through K2
+ * itself, imported for real, and the stub is checked against K2 there.
  *
  * No runes, no DOM: this stays in the default `node` environment.
  *
  * @module components/charts/__tests__/allocationHierarchy.test
  */
+import {existsSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
 import {describe, expect, it} from 'vitest';
 
 import {PALETTE_SLOTS, paletteDefects, readSourcePalette} from '$test/sourcePalettes';
@@ -67,16 +71,18 @@ const THEME_PAIRS: ReadonlyArray<readonly [string, readonly string[], readonly s
 /**
  * Stub for contract K2 (`primaryAssetType`), reproducing its **real** semantics.
  *
- * Five ETF subtypes fold onto their parent. Everything else — known enum member,
- * unknown key, or the synthetic `"Liquidity"` bucket — maps to **itself
- * upper-cased**, never to `OTHER`: the real implementation upper-cases *before*
- * the lookup and returns that normalised value even when the lookup misses, so
- * `"Liquidity"` comes back as `"LIQUIDITY"`. Only `null`, `undefined` and blank
- * fall back to `OTHER`.
+ * Five ETF subtypes and real-estate crowdfunding fold onto the base type they
+ * contain. Everything else — known enum member, unknown key, or the synthetic
+ * `"Liquidity"` bucket — maps to **itself upper-cased**, never to `OTHER`: the
+ * real implementation upper-cases *before* the lookup and returns that normalised
+ * value even when the lookup misses, so `"Liquidity"` comes back as `"LIQUIDITY"`.
+ * Only `null`, `undefined` and blank fall back to `OTHER`.
  *
- * Kept faithful on purpose: until B lands, this is the only **executable** record
- * of K2 in the repository, and a green test that misstates its own contract
- * misinforms with more authority than prose.
+ * K2 now ships as K's `primaryAssetType`, and the builder tests of this file stay
+ * on this stub so that they do not import the generated client. A copy can drift,
+ * so the block measuring whole families, which imports K for real, checks the
+ * stub against it on every type the history chart can receive: a green test that
+ * misstates its own contract misinforms with more authority than prose.
  */
 const SUBTYPE_PARENT: Record<string, string> = {
     ETF_STOCK: 'STOCK',
@@ -84,6 +90,7 @@ const SUBTYPE_PARENT: Record<string, string> = {
     ETF_COMMODITY: 'COMMODITY',
     ETF_REAL_ESTATE: 'REAL_ESTATE',
     ETF_CRYPTO: 'CRYPTO',
+    CROWDFUND_REAL_ESTATE: 'REAL_ESTATE',
 };
 
 const resolvePrimary = (key: string | null | undefined): string => {
@@ -326,6 +333,124 @@ describe('buildAllocationHierarchy — measured parent/child contrast', () => {
         const child = shadeForDepth(base, 1);
         expect(lightnessOf(child)).toBeLessThan(baseL);
         expect(lightnessOf(child)).toBeLessThan(80);
+    });
+});
+
+// =============================================================================
+// Measured contrast across a whole family — the families K's taxonomy makes
+// =============================================================================
+
+/** `__tests__` → `charts` → `components` → `lib`, then `api/generated.ts`. */
+const GENERATED_TS = fileURLToPath(new URL('../../../api/generated.ts', import.meta.url));
+
+describe('buildAllocationHierarchy — measured contrast across a whole family (K)', () => {
+    /**
+     * The pair rule above, stated for a whole family. A family is no longer `{pure, one subtype}`:
+     * by **content** — `primaryAssetType`, the history chart's grouping — REAL_ESTATE gathers
+     * ETF_REAL_ESTATE and CROWDFUND_REAL_ESTATE, and that family is measured here, on the palettes of
+     * the chart that draws it and nowhere else: a family no chart draws is not a claim about the
+     * product. By **vehicle** the pie's ETF family holds up to seven members, more than lightness
+     * shading can keep apart; that is the known limit recorded in `allocationHierarchy.ts` ("How many
+     * members a group holds"), and its measurement returns with the shading fix.
+     *
+     * The members are read off the enum through K2 itself, imported for real — so a subtype K adds
+     * tomorrow joins its family here without anyone touching this file — and pushed to every palette
+     * slot through the real builder, as the pair test does.
+     *
+     * `assetTypes.ts` reads the generated client at module load, so the import is dynamic, local to
+     * this block, and follows a check that the file exists: a missing client is reported with the
+     * command that fixes it, never skipped.
+     */
+    async function importTaxonomy() {
+        expect(existsSync(GENERATED_TS), "src/lib/api/generated.ts is absent, so assetTypes.ts cannot be imported and K's families cannot be built. Run `./dev.py api sync`.").toBe(true);
+        const assetTypes = await import('$lib/utils/assetTypes');
+        return {primaryAssetType: assetTypes.primaryAssetType, ASSET_TYPES: [...assetTypes.ASSET_TYPES] as string[]};
+    }
+
+    /** The history chart's two themes: the chart that groups by content. */
+    const HISTORY_PALETTES: ReadonlyArray<readonly [string, readonly string[]]> = [
+        ['AllocationHistoryChart PALETTE_LIGHT', HISTORY_PALETTE_LIGHT],
+        ['AllocationHistoryChart PALETTE_DARK', HISTORY_PALETTE_DARK],
+    ];
+
+    /** The members of `family` under `resolve`, read off the enum: its pure member first, then the others in enum order. */
+    function membersOf(types: readonly string[], resolve: (key: string) => string, family: string): string[] {
+        const members = types.filter((type) => resolve(type) === family);
+        return [...members.filter((type) => type === family), ...members.filter((type) => type !== family)];
+    }
+
+    /** Heavier singleton fillers push the family to slot `index`; its weights descend in the order given, so the depth follows it. */
+    function familyAtPaletteIndex(index: number, members: readonly string[]) {
+        const fillers = Array.from({length: index}, (_, j) => entry(`FILLER_${j}`, 1000 - j));
+        return [...fillers, ...members.map((key, rank) => entry(key, 10 * (members.length - rank)))];
+    }
+
+    /**
+     * The pair rule, applied to every pair of a family on every slot of `palette`: two members never
+     * share a colour and stay at least 15 lightness points apart — the threshold of the pair test —
+     * and every member keeps the hue of the pure member (within 1°). One line per slot that breaks
+     * it, with every member's colour and lightness, so a red says what the reader would see.
+     */
+    function familyDefects(palette: readonly string[], members: readonly string[], resolve: (key: string) => string, family: string) {
+        const defects: string[] = [];
+        let slotsChecked = 0;
+
+        for (let index = 0; index < palette.length; index++) {
+            const actual = buildAllocationHierarchy(familyAtPaletteIndex(index, members), {resolvePrimary: resolve, palette});
+            expect(actual).toHaveLength(index + members.length);
+            const rows = actual.slice(index);
+
+            // Barrier: the whole family, at this slot, in the order it was built, before anything is
+            // measured about its colours.
+            expect(rows.map((row) => row.key)).toEqual([...members]);
+            expect(rows.map((row) => row.primary)).toEqual(members.map(() => family));
+            expect(rows.map((row) => row.groupSize)).toEqual(members.map(() => members.length));
+            expect(rows.map((row) => row.depth)).toEqual(members.map((_, depth) => depth));
+            expect(rows[0].color).toBe(palette[index]);
+
+            const lightness = rows.map((row) => lightnessOf(row.color));
+            const hue = rows.map((row) => hueOf(row.color));
+            const problems: string[] = [];
+            for (let i = 0; i < rows.length; i++) {
+                for (let j = i + 1; j < rows.length; j++) {
+                    const deltaL = Math.abs(lightness[i] - lightness[j]);
+                    if (rows[i].color === rows[j].color) problems.push(`${rows[i].key} and ${rows[j].key} share ${rows[i].color}`);
+                    else if (deltaL < 15) problems.push(`${rows[i].key}/${rows[j].key} ΔL ${deltaL.toFixed(1)}`);
+                }
+            }
+            for (let depth = 1; depth < rows.length; depth++) {
+                const deltaH = Math.abs(hue[depth] - hue[0]);
+                if (deltaH > 1) problems.push(`${rows[depth].key} Δh ${deltaH.toFixed(1)}`);
+            }
+            if (problems.length > 0) defects.push(`slot ${index} ${palette[index]} → ${rows.map((row, depth) => `${row.key} ${row.color} (L ${lightness[depth].toFixed(0)})`).join(', ')}: ${problems.join('; ')}`);
+            slotsChecked++;
+        }
+
+        return {defects, slotsChecked};
+    }
+
+    it('checks the K2 stub of the tests above against primaryAssetType, on every type the history chart can receive', async () => {
+        const {primaryAssetType, ASSET_TYPES} = await importTaxonomy();
+
+        // `by_type` carries the enum values and the synthetic cash bucket, in the engine's spelling.
+        const domain = [...ASSET_TYPES, 'Liquidity'];
+        // Anti-vacuous: the enum was read, with the subtypes that move and the one K2 keeps as itself.
+        expect(domain).toEqual(expect.arrayContaining(['STOCK', 'ETF_STOCK', 'ETF_MONETARY', 'CROWDFUND_REAL_ESTATE', 'Liquidity']));
+
+        const disagreements = domain.filter((type) => resolvePrimary(type) !== primaryAssetType(type)).map((type) => `${type}: stub ${resolvePrimary(type)}, primaryAssetType ${primaryAssetType(type)}`);
+        expect(disagreements, 'the K2 stub of this file no longer mirrors primaryAssetType: the builder tests above would check a grouping no chart draws').toEqual([]);
+    });
+
+    it.each(HISTORY_PALETTES)('by content, REAL_ESTATE holds REAL_ESTATE, ETF_REAL_ESTATE and CROWDFUND_REAL_ESTATE — one separable shade each, on its hue, for every entry of %s', async (_name, palette) => {
+        const {primaryAssetType, ASSET_TYPES} = await importTaxonomy();
+        const members = membersOf(ASSET_TYPES, primaryAssetType, 'REAL_ESTATE');
+        // Anti-vacuous: K2 really makes this family, with the pure member leading.
+        expect(members).toEqual(expect.arrayContaining(['REAL_ESTATE', 'ETF_REAL_ESTATE', 'CROWDFUND_REAL_ESTATE']));
+        expect(members[0]).toBe('REAL_ESTATE');
+
+        const {defects, slotsChecked} = familyDefects(palette, members, primaryAssetType, 'REAL_ESTATE');
+        expect(slotsChecked, 'the loop ran on fewer slots than the palette holds').toBe(palette.length);
+        expect(defects, `members of the ${members.length}-member REAL_ESTATE family the history chart cannot tell apart, or that leave its hue`).toEqual([]);
     });
 });
 

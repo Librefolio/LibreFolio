@@ -24,9 +24,8 @@
     import {CHART_ANIMATION_CONFIG} from '$lib/components/charts/echartsAnimationConfig';
     import {scheduleFirstRenderStabilityFix, tooltipPositionAboveFinger} from '$lib/components/charts/echartsTooltipHelpers';
     import {_ as t} from '$lib/i18n';
-    import {sectorI18nKey, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+    import {assetTypeFamily, sectorI18nKey, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {buildAllocationHierarchy} from '$lib/components/charts/allocationHierarchy';
-    import {allocationFamily, allocationTypeIcons} from '$lib/components/charts/allocationFamily';
     import {buildAllocationRingData, buildAllocationRings, type AllocationRingDatum} from '$lib/components/charts/allocationRings';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 
@@ -192,7 +191,9 @@
         // Asset-type subtypes sit inside their family, adjacent to it — ordering and
         // colour are one change, because two similar colours on opposite sides of the
         // circle read as an accident. The family is the **vehicle** (developer's
-        // decision of 24/09/2026, R12 option B): every ETF subtype belongs to ETF.
+        // decision of 24/09/2026, R12 option B), as K's taxonomy files it
+        // (`assetTypeFamily`): every ETF subtype belongs to ETF, real-estate
+        // crowdfunding to Crowdfund.
         //
         // 'type' only, deliberately: the sector dimension has no taxonomy to fold,
         // and this same component draws the Asset Detail sector pie, which is out
@@ -202,7 +203,7 @@
             mode === 'type'
                 ? buildAllocationHierarchy(
                       mappedEntries.map((item) => ({key: item.rawName, weight: item.value, item})),
-                      {resolvePrimary: allocationFamily, palette},
+                      {resolvePrimary: assetTypeFamily, palette},
                   )
                 : [];
         const chartData =
@@ -419,13 +420,9 @@
                 // On the rings the arc carries its own caption: "ETF azionario", or the
                 // generic member of a split family, which must not read as the family.
                 const translated = params.data?.caption ?? (tr(`assets.types.${rawKey}`) || params.name);
-                // A subtype names its vehicle and its content: the main icon, with the content's
-                // small and slightly overlapping, ringed in the tooltip's own background (R16's
-                // composite, asked for in the review of R12 on 24/09/2026).
-                const icons = allocationTypeIcons(rawKey);
-                const iconHtml = icons.content
-                    ? `<span style="position:relative;display:inline-block;width:19px;height:16px;vertical-align:middle;margin-right:5px;"><img src="${icons.main}" style="position:absolute;left:0;top:0;width:14px;height:14px;"><img src="${icons.content}" style="position:absolute;right:0;bottom:-1px;width:10px;height:10px;border-radius:50%;background:${isDark ? '#1e293b' : '#fff'};box-shadow:0 0 0 1px ${isDark ? '#1e293b' : '#fff'};"></span>`
-                    : `<img src="${icons.main}" style="width:14px;height:14px;vertical-align:middle;margin-right:5px;">`;
+                // One icon, the type's own: a subtype's is K's composite, which already names
+                // its vehicle and its content (the review of R12, 24/09/2026, asked for both).
+                const iconHtml = `<img src="${getAssetTypeIconUrl(rawKey)}" style="width:14px;height:14px;vertical-align:middle;margin-right:5px;">`;
                 // The shading says "this belongs to that mass"; this line says how big
                 // the mass is. Only when there is actually a sibling — otherwise it
                 // would restate the slice's own number.

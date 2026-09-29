@@ -16,9 +16,9 @@
  *   which the caller draws invisibly (developer's decision, 23/09/2026).
  *
  * *Which* family a type belongs to is the caller's resolver, upstream in the
- * hierarchy. Since 24/09/2026 the pie uses the **vehicle** (`allocationFamily`): an
- * ETF subtype sits in the ETF family and the outer ring says what kind of ETF it is
- * (review of R12, option B). Nothing here depends on that choice.
+ * hierarchy. Since 24/09/2026 the pie uses the **vehicle**, as K's taxonomy files it
+ * (`assetTypeFamily`): an ETF subtype sits in the ETF family and the outer ring says
+ * what kind of ETF it is (review of R12, option B). Nothing here depends on that choice.
  *
  * Every family owns exactly one base arc and a run of outer arcs that sum to it, so
  * the two rings stay aligned by construction — provided the caller draws them with

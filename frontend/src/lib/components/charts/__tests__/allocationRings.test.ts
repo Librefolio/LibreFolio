@@ -18,20 +18,21 @@
  * The first two-ring donut grouped by *content* — contract K2, `ETF_STOCK` under STOCK. The
  * developer reviewed it on 24/09 and chose option B, **by vehicle**: every ETF subtype belongs
  * to the ETF family, and a thinner, separate outer ring says what kind of ETF it is — "ETF
- * generico" + "ETF azionario". The resolver is `allocationFamily`, pinned in
- * `allocationFamily.test.ts`. The first block below replays the **review case** through the
- * real one — synthetic numbers with the shape of the portfolio the review was made on — after
- * proving that on the same numbers the content grouping draws the picture the review turned
- * down.
+ * generico" + "ETF azionario". Since K's taxonomy landed, the vehicle is K's own container view,
+ * `assetTypeFamily` — which also files real-estate crowdfunding under CROWDFUND — and that the
+ * pie really draws those families is pinned on the mounted component, in
+ * `AllocationPieChart.test.ts`. The first block below replays the **review case** — synthetic
+ * numbers with the shape of the portfolio the review was made on — after proving that on the
+ * same numbers the content grouping draws the picture the review turned down.
  *
- * The builder itself takes families as given — nothing in it depends on that choice — so the
- * builder tests run on a **stub** of the vehicle resolver: the real one imports K's
- * `assetTypes.ts`, which reads the generated Zodios schemas at module load. The first block
- * also checks the stub against the real function on every type the pie can receive, so the
- * two cannot drift apart in silence. The hierarchy is always the real one, so every test goes
- * through the handoff the component performs. One test keeps the content grouping on purpose:
- * the family of three built through a fictitious key, which shows the builder does not care
- * which grouping produced its families.
+ * The builder itself takes families as given — nothing in it depends on that choice — but the
+ * tests resolve them the way the product does: K's `assetTypeFamily` for the pie's grouping and
+ * K's `primaryAssetType` (K2) for the content grouping, both called for real rather than copied,
+ * so a copy cannot drift from K in silence. The hierarchy is always the real one, so every test
+ * goes through the handoff the component performs. One test keeps the content grouping on
+ * purpose: the family of three K2 makes of REAL_ESTATE, ETF_REAL_ESTATE and
+ * CROWDFUND_REAL_ESTATE, which shows the builder does not care which grouping produced its
+ * families.
  *
  * ## The claims — each tested as a claim rather than as a snapshot
  *
@@ -41,7 +42,8 @@
  *    So a lone subtype is held to a *measured* lightness distance from its family colour, not
  *    merely to a different hex string, which a one-digit drift would satisfy.
  * 2. **A family may have N members.** By vehicle the ETF family holds the generic ETF and up to
- *    six subtypes; one scenario draws five members at once.
+ *    six subtypes, and the CROWDFUND family its generic member and real-estate crowdfunding; one
+ *    scenario draws five members at once.
  * 3. **The rings line up by construction.** Each family owns one base arc and one contiguous
  *    run of outer arcs summing to it, in the same order — checked down to the prefix sum at
  *    each family boundary, the angle at which the eye would see a misalignment.
@@ -86,7 +88,7 @@
  */
 import {existsSync, readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
-import {describe, expect, it} from 'vitest';
+import {beforeAll, describe, expect, it} from 'vitest';
 
 import {PALETTE_SLOTS, paletteDefects, readSourcePalette} from '$test/sourcePalettes';
 
@@ -114,41 +116,53 @@ const PIE_PALETTES: ReadonlyArray<readonly [string, readonly string[]]> = [
 
 type Resolver = (key: string) => string;
 
-/**
- * Stub for the pie's resolver, `allocationFamily` — by **vehicle**: the six ETF subtypes belong
- * to `ETF`, everything else to itself **upper-cased**, so the synthetic `"Liquidity"` bucket
- * comes back as `"LIQUIDITY"`, as from the real function.
- *
- * The set is a copy of K's `ETF_SUBTYPES`, and a copy can drift: the first block checks this
- * stub against the real `allocationFamily` on every type the pie can receive.
- */
-const STUB_ETF_SUBTYPES: ReadonlySet<string> = new Set(['ETF_STOCK', 'ETF_BOND', 'ETF_COMMODITY', 'ETF_REAL_ESTATE', 'ETF_CRYPTO', 'ETF_MONETARY']);
+/** `__tests__` → `charts` → `components` → `lib`, then `api/generated.ts`. */
+const GENERATED_TS = fileURLToPath(new URL('../../../api/generated.ts', import.meta.url));
 
-const resolveByVehicle: Resolver = (key) => {
-    const raw = key.trim().toUpperCase();
-    return STUB_ETF_SUBTYPES.has(raw) ? 'ETF' : raw;
-};
+/** What this file reads from K's `assetTypes.ts`. */
+interface Taxonomy {
+    assetTypeFamily: Resolver;
+    primaryAssetType: Resolver;
+}
+
+let taxonomy: Taxonomy | null = null;
 
 /**
- * Grouping by **content** — contract K2, the pie's until 24/09 — plus one **fictitious**
- * subtype, `CROWDFUND_REAL_ESTATE`, rolled into REAL_ESTATE as K recommended for K2 when D72 was
- * planned ("Immobiliare becomes a group of three"). It is mapped here and nowhere else.
+ * K's taxonomy, imported once for the whole file: every test below resolves families through it.
  *
- * Not the pie's grouping, and used by one test only: the family of three, which needs a third
- * member the enum does not have. Whether the enum ever gains it belongs to another workstream
- * (K, which gives it CROWDFUND as its *vehicle*), and that test must not change meaning with the
- * decision: the builder takes families as given.
+ * `assetTypes.ts` reads the generated Zodios schemas (`$lib/api/generated`, gitignored, written by
+ * `./dev.py api sync`) at module load. As in `assetTypeTables.test.ts` the import is dynamic and
+ * follows a check that the file exists, so a missing client fails every test with the command that
+ * fixes it rather than an unresolvable import — a missing file is reported, never skipped: in a
+ * summary line a skipped check and a satisfied one are the same absence of red.
  */
-const CONTENT_PARENT: Record<string, string> = {
-    ETF_STOCK: 'STOCK',
-    ETF_BOND: 'BOND',
-    ETF_COMMODITY: 'COMMODITY',
-    ETF_REAL_ESTATE: 'REAL_ESTATE',
-    ETF_CRYPTO: 'CRYPTO',
-    CROWDFUND_REAL_ESTATE: 'REAL_ESTATE',
-};
+beforeAll(async () => {
+    expect(existsSync(GENERATED_TS), "src/lib/api/generated.ts is absent, so K's assetTypes.ts cannot be imported and no family can be resolved the way the pie resolves it. Run `./dev.py api sync`.").toBe(true);
+    const assetTypes = await import('$lib/utils/assetTypes');
+    taxonomy = {assetTypeFamily: assetTypes.assetTypeFamily, primaryAssetType: assetTypes.primaryAssetType};
+});
 
-const resolveByContent: Resolver = (key) => CONTENT_PARENT[key.toUpperCase()] ?? key.toUpperCase();
+function loadedTaxonomy(): Taxonomy {
+    if (taxonomy === null) throw new Error("K's taxonomy was not loaded: the beforeAll of this file failed, see its message");
+    return taxonomy;
+}
+
+/**
+ * The pie's grouping, by **vehicle**: K's `assetTypeFamily`, called for real. The six ETF
+ * subtypes belong to `ETF`, real-estate crowdfunding to `CROWDFUND`, every other type to itself
+ * upper-cased — so the synthetic `"Liquidity"` bucket comes back as `"LIQUIDITY"`.
+ */
+const resolveByVehicle: Resolver = (key) => loadedTaxonomy().assetTypeFamily(key);
+
+/**
+ * Grouping by **content** — contract K2, K's `primaryAssetType`, called for real: the pie's until
+ * 24/09 and still the allocation history chart's. `ETF_STOCK` rolls up into STOCK, and REAL_ESTATE
+ * gathers ETF_REAL_ESTATE and CROWDFUND_REAL_ESTATE into a family of three.
+ *
+ * Not the pie's grouping: it is used by the review case, to show the picture the review turned
+ * down, and by the family of three, which shows that the builder takes families as given.
+ */
+const resolveByContent: Resolver = (key) => loadedTaxonomy().primaryAssetType(key);
 
 interface Payload {
     id: string;
@@ -199,9 +213,10 @@ const FULL_FAMILY_ENTRIES = [entry('ETF_STOCK', 70), entry('BOND', 45), entry('E
 const EVERY_SHAPE_ENTRIES = [entry('ETF', 24.1), entry('CROWDFUND', 15.35), entry('BOND', 12.4), entry('ETF_BOND', 7.25), entry('ETF_STOCK', 9.8), entry('REAL_ESTATE', 6.5), entry('ETF_REAL_ESTATE', 4.05), entry('ETF_MONETARY', 2.2), entry('Liquidity', 0.6)];
 
 /**
- * A family of three under `resolveByContent`, through the fictitious key. Input order and weight
- * order disagree on purpose: the pure member is neither first nor heaviest, and the subtypes are
- * listed lightest first.
+ * The family of three K2 makes of REAL_ESTATE — the property itself, ETF_REAL_ESTATE and
+ * CROWDFUND_REAL_ESTATE — under `resolveByContent`. Input order and weight order disagree on
+ * purpose: the pure member is neither first nor heaviest, and the subtypes are listed lightest
+ * first.
  */
 const FAMILY_OF_THREE_ENTRIES = [entry('ETF_REAL_ESTATE', 10), entry('STOCK', 100), entry('REAL_ESTATE', 20), entry('CROWDFUND_REAL_ESTATE', 30)];
 
@@ -314,30 +329,6 @@ function hueDistance(a: string, b: string): number {
     return Math.min(delta, 360 - delta);
 }
 
-/** `__tests__` → `charts` → `components` → `lib`, then `api/generated.ts`. */
-const GENERATED_TS = fileURLToPath(new URL('../../../api/generated.ts', import.meta.url));
-
-/**
- * The real resolvers — the pie's `allocationFamily` and K2's `primaryAssetType` — with the lists
- * of K they are read against.
- *
- * Both reach `$lib/api/generated`, which is gitignored. A static import would make every test of
- * this file depend on it, since one unresolvable import fails the whole module at collection; so,
- * as in `assetTypeTables.test.ts`, the import is dynamic and local to the block that must call the
- * real thing. A missing file is reported, not skipped: in a summary line a skipped check and a
- * satisfied one are the same absence of red.
- */
-async function importRealResolvers() {
-    expect(existsSync(GENERATED_TS), "src/lib/api/generated.ts is absent, so assetTypes.ts cannot be imported and the pie's real resolver cannot be exercised. Run `./dev.py api sync`.").toBe(true);
-    const [family, assetTypes] = await Promise.all([import('../allocationFamily'), import('$lib/utils/assetTypes')]);
-    return {
-        allocationFamily: family.allocationFamily,
-        primaryAssetType: assetTypes.primaryAssetType,
-        ASSET_TYPES: [...assetTypes.ASSET_TYPES] as string[],
-        ETF_SUBTYPES: assetTypes.ETF_SUBTYPES,
-    };
-}
-
 // =============================================================================
 // The palettes under test — what was read, so no loop below can pass on nothing
 // =============================================================================
@@ -357,18 +348,16 @@ describe('the palettes under test', () => {
 // =============================================================================
 
 describe('the pie groups by vehicle — the review case (R12, option B)', () => {
-    it.each(PIE_PALETTES)('splits the ETF family alone, into ETF generico + ETF azionario, on %s', async (_name, palette) => {
-        const {allocationFamily, primaryAssetType} = await importRealResolvers();
-
+    it.each(PIE_PALETTES)('splits the ETF family alone, into ETF generico + ETF azionario, on %s', (_name, palette) => {
         // Barrier: this is the input on which the two groupings disagree. By content — K2, the
         // pie's until 24/09 and still the history chart's — the same numbers put the equity ETF in
         // a family of its own, "Azione", apart from the generic ETF: the picture the review turned down.
-        const byContent = ringsFor(REVIEW_CASE_ENTRIES, {palette, resolve: primaryAssetType}).layout;
+        const byContent = ringsFor(REVIEW_CASE_ENTRIES, {palette, resolve: resolveByContent}).layout;
         expect(byContent.base.map((arc) => arc.primary)).toEqual(['ETF', 'CROWDFUND', 'BOND', 'STOCK', 'LIQUIDITY']);
         expect(baseArcOf(byContent, 'ETF').split).toBe(false);
         expect(outerArcsOf(byContent, 'STOCK').map((arc) => arc.key)).toEqual(['ETF_STOCK']);
 
-        const {layout} = ringsFor(REVIEW_CASE_ENTRIES, {palette, resolve: allocationFamily});
+        const {layout} = ringsFor(REVIEW_CASE_ENTRIES, {palette, resolve: resolveByVehicle});
         expect(layout.rings).toBe(true);
         expect(layout.base.map((arc) => arc.primary)).toEqual(['ETF', 'CROWDFUND', 'BOND', 'LIQUIDITY']);
 
@@ -407,18 +396,6 @@ describe('the pie groups by vehicle — the review case (R12, option B)', () => 
             expect(arcs[0].role, primary).toBe('filler');
             expect(arcs[0].weight, primary).toBe(baseArcOf(layout, primary).weight);
         }
-    });
-
-    it('checks the vehicle stub of the builder tests against allocationFamily, on every type the pie can receive', async () => {
-        const {allocationFamily, ASSET_TYPES, ETF_SUBTYPES} = await importRealResolvers();
-
-        // `by_type` carries the enum values and the synthetic cash bucket, in the engine's spelling.
-        const domain = [...new Set([...ASSET_TYPES, ...ETF_SUBTYPES, 'Liquidity'])];
-        // Anti-vacuous: the enum and K's list were read.
-        expect(domain).toEqual(expect.arrayContaining(['STOCK', 'ETF', 'ETF_STOCK', 'ETF_MONETARY', 'Liquidity']));
-
-        const disagreements = domain.filter((type) => resolveByVehicle(type) !== allocationFamily(type)).map((type) => `${type}: stub ${resolveByVehicle(type)}, allocationFamily ${allocationFamily(type)}`);
-        expect(disagreements, "resolveByVehicle no longer mirrors the pie's resolver: the builder tests below would check a grouping the pie does not draw").toEqual([]);
     });
 });
 
@@ -502,11 +479,12 @@ describe('buildAllocationRings — split families', () => {
     });
 
     it.each(PIE_PALETTES)('splits a family of three into three distinct colours, pure first then subtypes by weight, on %s', (_name, palette) => {
-        // Barrier: the family of three exists only through the injected content resolver. The pie's
-        // own grouping would scatter it: the fictitious key is a family of its own there, and
-        // ETF_REAL_ESTATE is an ETF.
-        expect(resolveByVehicle('CROWDFUND_REAL_ESTATE')).toBe('CROWDFUND_REAL_ESTATE');
+        // Barrier: the family of three exists only by content, through K2. The pie's own grouping —
+        // by vehicle — scatters it: real-estate crowdfunding is a crowdfunding, ETF_REAL_ESTATE is
+        // an ETF, and REAL_ESTATE stays on its own.
+        expect(resolveByVehicle('CROWDFUND_REAL_ESTATE')).toBe('CROWDFUND');
         expect(resolveByVehicle('ETF_REAL_ESTATE')).toBe('ETF');
+        expect(resolveByVehicle('REAL_ESTATE')).toBe('REAL_ESTATE');
         expect(resolveByContent('CROWDFUND_REAL_ESTATE')).toBe('REAL_ESTATE');
         expect(resolveByContent('ETF_REAL_ESTATE')).toBe('REAL_ESTATE');
 
