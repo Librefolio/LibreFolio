@@ -1642,6 +1642,146 @@ describe('canonical overlay axis and reference helpers', () => {
             expect(resizeAxisUpdate).toContain('axisLabel: policy.axisLabel');
         });
 
+        /**
+         * The lots charts' `axisBuilder` crash: `TypeError: Cannot read properties of undefined (reading
+         * 'axisBuilder')` from ECharts' `CartesianAxisView.render`. Each resize callback below merges a
+         * lazy `setOption({xAxis: {splitNumber, axisLabel}}, {lazyUpdate: true})` while the usable width
+         * is compact. Merged into an instance that `renderChart()` has just `init()`-ed, or `clear()`-ed
+         * because there is nothing to draw, it leaves a model with one x-axis and no grid, and ECharts'
+         * next frame throws. The fix is the house guard of LineChart, CandlestickChart and PriceChartFull:
+         * a flag that is up only while the instance holds a full option. Every init and clear lowers it,
+         * the full setOption raises it, and the resize callback writes the axis only while it is up. The
+         * compact bookkeeping stays unconditional, so the next full option starts from the right policy.
+         *
+         * brokers-detail.spec.ts ("Lots charts axisBuilder guard") reproduces the Gantt and comparison
+         * crashes in a browser. No UI path reaches the WAC chart's cleared state today (`showChart` false
+         * needs a mode with no points, and the component then falls back to absolute), so for the WAC
+         * chart this contract is the only pin.
+         */
+        const LOT_X_AXIS_PATCH_GUARDS = [
+            {
+                chart: 'LotGanttChart',
+                path: new URL('../brokers/lots/LotGanttChart.svelte', import.meta.url),
+                watcher: 'const axisResizeWatcher = createResizeWatcher(',
+                // Only the sticky axis instance is patched on resize; the lanes instance never is.
+                instance: 'axisInstance',
+                flag: 'axisOptionSet',
+                // The lazy patch and the compact→wide rebuild (`buildAxisOption(isDark), true`).
+                resizeWrites: 2,
+                // The `!chartContainer` branch and the `!chartHasData` branch.
+                minClears: 2,
+                // The axis instance is also disposed when its container is remounted.
+                lowersOnDispose: true,
+                fullSetOption: /axisInstance\??\.setOption\(buildAxisOption\(isDark\), CHART_SET_OPTION_OPTS\)/g,
+            },
+            {
+                chart: 'LotComparisonChart',
+                path: new URL('../brokers/lots/LotComparisonChart.svelte', import.meta.url),
+                watcher: 'const resizeWatcher = createResizeWatcher(',
+                instance: 'chartInstance',
+                flag: 'chartOptionSet',
+                // Only the lazy patch: compact→wide goes through renderChart(), which keeps its own books.
+                resizeWrites: 1,
+                minClears: 1,
+                lowersOnDispose: false,
+                fullSetOption: /chartInstance\.setOption\(option, /g,
+            },
+            {
+                chart: 'LotWacPriceChart',
+                path: new URL('../brokers/lots/LotWacPriceChart.svelte', import.meta.url),
+                watcher: 'const resizeWatcher = createResizeWatcher(',
+                instance: 'chartInstance',
+                flag: 'chartOptionSet',
+                resizeWrites: 1,
+                minClears: 1,
+                lowersOnDispose: false,
+                fullSetOption: /chartInstance\.setOption\(option, /g,
+            },
+        ] as const;
+
+        /** The body of the block that `opener` (ending in `{`) opens first after `anchor`, braces balanced. */
+        function blockAfter(source: string, anchor: string, opener: string): string | undefined {
+            const at = source.indexOf(anchor);
+            const open = at < 0 ? -1 : source.indexOf(opener, at + anchor.length);
+            if (open < 0) return undefined;
+            const bodyStart = open + opener.length;
+            let depth = 1;
+            for (let i = bodyStart; i < source.length; i++) {
+                if (source[i] === '{') depth++;
+                else if (source[i] === '}' && --depth === 0) return source.slice(bodyStart, i);
+            }
+            return undefined;
+        }
+
+        /** Where every match of `pattern` (a global regex) starts in `text`. */
+        function sitesOf(text: string, pattern: RegExp): number[] {
+            return [...text.matchAll(pattern)].map((match) => match.index ?? -1);
+        }
+
+        /**
+         * The first line of code after the call that starts at `callAt`: past its balanced parentheses
+         * and `;`, with blank space and line comments skipped, then an optional `skip` statement.
+         */
+        function lineAfterCall(body: string, callAt: number, skip?: RegExp): string {
+            let end = body.indexOf('(', callAt);
+            for (let depth = 0; end >= 0 && end < body.length; end++) {
+                if (body[end] === '(') depth++;
+                else if (body[end] === ')' && --depth === 0) break;
+            }
+            const gap = /^(?:\s+|\/\/[^\n]*)+/;
+            let rest = body
+                .slice(end + 1)
+                .replace(/^;/, '')
+                .replace(gap, '');
+            if (skip) rest = rest.replace(skip, '').replace(gap, '');
+            return rest.split('\n')[0].trim();
+        }
+
+        it.each(LOT_X_AXIS_PATCH_GUARDS)('$chart writes its x-axis on resize only while $flag says the instance holds a full option', ({chart, watcher, path, instance, flag, resizeWrites}) => {
+            const source = readFileSync(path, 'utf8');
+            const callback = blockAfter(source, watcher, '=> {');
+            if (!callback) throw new Error(`${chart}: resize callback not found (${watcher})`);
+
+            const write = `${instance}\\??\\.setOption\\(`;
+            // The brief's one-liner `if (flag) instance.setOption(…)` and the house block form both qualify.
+            const guardedWrite = `if \\(${flag}\\) \\{?\\s*${write}`;
+            // Positive control first: the scan still sees the writes it is about.
+            expect(sitesOf(callback, new RegExp(write, 'g')).length, `${chart}: setOption calls in the resize callback`).toBe(resizeWrites);
+            expect(sitesOf(callback, new RegExp(guardedWrite, 'g')).length, `${chart}: resize-callback setOption calls behind if (${flag})`).toBe(resizeWrites);
+
+            const lazyPatchInCompactBranch = new RegExp(`if \\(policy\\.axisLabel\\) \\{\\s*${guardedWrite}\\{xAxis:\\s*\\{splitNumber:\\s*policy\\.splitNumber,\\s*axisLabel:\\s*policy\\.axisLabel\\}\\},\\s*\\{lazyUpdate:\\s*true\\}\\);`);
+            expect(lazyPatchInCompactBranch.test(callback), `${chart}: the guarded lazy patch sits inside the existing if (policy.axisLabel) branch`).toBe(true);
+            expect(/responsiveXAxisCompact = policy\.compact;\s*if \(policy\.axisLabel\) \{/.test(callback), `${chart}: the compact bookkeeping stays unconditional, outside the guard`).toBe(true);
+        });
+
+        it.each(LOT_X_AXIS_PATCH_GUARDS)('$chart lowers $flag on every init and clear in renderChart() and raises it after the full setOption', ({chart, path, instance, flag, minClears, lowersOnDispose, fullSetOption}) => {
+            const source = readFileSync(path, 'utf8');
+            const renderChart = blockAfter(source, 'function renderChart(', ') {');
+            if (!renderChart) throw new Error(`${chart}: renderChart() not found`);
+
+            const inits = sitesOf(renderChart, new RegExp(`${instance} = echarts\\.init\\(`, 'g'));
+            const clears = sitesOf(renderChart, new RegExp(`${instance}\\??\\.clear\\(\\)`, 'g'));
+            const disposes = lowersOnDispose ? sitesOf(renderChart, new RegExp(`${instance}\\??\\.dispose\\(\\)`, 'g')) : [];
+            const fullSets = sitesOf(renderChart, fullSetOption);
+            // Positive controls: "every site is followed by …" is also true of no site at all.
+            expect(inits.length, `${chart}: ${instance} init sites in renderChart()`).toBeGreaterThanOrEqual(1);
+            expect(clears.length, `${chart}: ${instance} clear sites in renderChart()`).toBeGreaterThanOrEqual(minClears);
+            if (lowersOnDispose) expect(disposes.length, `${chart}: ${instance} dispose sites in renderChart()`).toBeGreaterThanOrEqual(1);
+            expect(fullSets.length, `${chart}: the full ${instance} setOption in renderChart()`).toBe(1);
+
+            expect(source.includes(`let ${flag} = false;`), `${chart}: declares let ${flag} = false; (no option until renderChart() sets one)`).toBe(true);
+            const lowered = new RegExp(`^${flag} = false;`);
+            for (const at of [...inits, ...clears]) {
+                expect(lineAfterCall(renderChart, at), `${chart}: ${flag} = false; right after ${renderChart.slice(at, renderChart.indexOf('(', at))}(…)`).toMatch(lowered);
+            }
+            for (const at of disposes) {
+                expect(lineAfterCall(renderChart, at, new RegExp(`^${instance} = undefined;`)), `${chart}: ${flag} = false; right after ${instance}.dispose()`).toMatch(lowered);
+            }
+            for (const at of fullSets) {
+                expect(lineAfterCall(renderChart, at), `${chart}: ${flag} = true; right after the full setOption`).toMatch(new RegExp(`^${flag} = true;`));
+            }
+        });
+
         it('keeps PerformanceChart outside the date-axis policy', () => {
             const source = readFileSync(new URL('../dashboard/PerformanceChart.svelte', import.meta.url), 'utf8');
 
