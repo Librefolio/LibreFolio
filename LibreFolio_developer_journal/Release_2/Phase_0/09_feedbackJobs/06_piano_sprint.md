@@ -778,6 +778,8 @@ editor/report/grafici.
 
 **UI proposta:** hub con card da catalogo; editor per stato iniziale, target, casse/contributi, vincoli, frizioni e policy; sezioni avanzate progressive. Pulsanti indipendenti di copia, preview dei campi sostituiti e protezione delle modifiche intervenute durante il fetch. Risultato precedente marcato stale dopo edit. Calcoli/anteprime economiche dal backend, non duplicati nel browser.
 
+**Data e rilettura, 2026-09-29 (developer):** la UI non ha un campo data. `as_of` è oggi, fissata a ogni copia e a «Calcola». Subito prima del calcolo la UI rilegge da `POST /portfolio/allocation-source` (lettura DB, nessun provider, nessuna scrittura) i prezzi, i cambi e i saldi copiati e non modificati, e li aggiorna. I valori manuali o modificati restano e partono con la data del calcolo. Una rilettura fallita blocca il calcolo e offre «Riprova» o «Calcola con i dati copiati». Non è un binding live. Backend e contratto 2.0.0 invariati.
+
 **Output completo:** summary Asset con target fisso, valore finale, residuo,
 `L2_fixed`, diagnostici percentuali/D∞/D1, costo, buffer, cash e rounding; righe
 Broker separate con identità, input normalizzati, prezzo/fonte/data/valuta,
