@@ -429,26 +429,19 @@
      *  AND the legend exclusion in applyFullOption) so the sentinel never becomes a
      *  magic string that a second site has to remember independently. */
     const PNL_REFERENCE_SERIES_NAME = '__pnlReference__';
-    /** Left inset of the plot area, in px. Used for BOTH `grid.left` and the floating
-     *  overlay cluster's `left`, so the controls clear the y-axis label gutter by
-     *  construction rather than by a coincidence that holds for today's tick labels.
-     *  Deliberately a single shared constant: with `containLabel: true` the gutter
-     *  width is computed by ECharts from the widest label, so any independently-chosen
-     *  CSS offset would silently desynchronise the moment a label grew (a different
-     *  base currency, a larger portfolio, a negative thousands value). */
     /**
-     * Fallback for the plot's left edge, used until ECharts has laid the grid out once.
+     * Fallback for the plot's left edge, used only until ECharts has laid the grid out once.
      *
-     * NOT the plot edge itself: with `containLabel: true` this is the grid's OUTER left,
-     * and ECharts draws the y tick labels INSIDE it — so the real plot starts at
-     * `CHART_PLOT_LEFT_PX + <width of the widest label>`. An overlay pinned to this
-     * constant therefore sits on top of the labels, which is what the developer saw
-     * ("1k" and "900" reading through the submode pill). The real edge is measured from
-     * the laid-out grid into `plotLeftPx` below.
+     * The grid itself does not use it: `grid.left` is `'3%'` with `containLabel: true`, so
+     * ECharts draws the y tick labels inside that inset and the real plot starts at
+     * `3% of the width + the widest label`. That edge is measured from the laid-out grid
+     * into `plotLeftPx` below, and the overlays follow the measurement. A px constant used
+     * to be the grid's `left` as well; once the overlays measured, it only left an empty
+     * gutter before the labels (developer review, on mobile).
      */
-    const CHART_PLOT_LEFT_PX = 52;
+    const PLOT_LEFT_FALLBACK_PX = 52;
     /** Measured left edge of the plotting rectangle; see syncPlotGeometry(). */
-    let plotLeftPx = $state(CHART_PLOT_LEFT_PX);
+    let plotLeftPx = $state(PLOT_LEFT_FALLBACK_PX);
     /** Measured width of the plotting rectangle; drives the candle-width availability rule. */
     let plotWidthPxMeasured = $state(0);
     /**
@@ -1909,16 +1902,15 @@
             // keeps the plot honest at small heights: the chart shrinks by exactly the
             // band it gives away, instead of silently drawing content underneath a
             // control. Only P&L mode shows those overlays, so only it pays the cost.
-            // `left` is an explicit px constant shared with the floating overlay cluster
-            // (see CHART_PLOT_LEFT_PX): the controls must clear the y-axis label gutter,
-            // and with `containLabel: true` that gutter is COMPUTED from the widest tick
-            // label — so a hardcoded Tailwind offset on the overlay would align only by
-            // coincidence and break the first time a label got wider (another currency,
-            // a larger portfolio). One number, two uses, agreeing by construction.
+            // `left: '3%'` is the OUTER inset: with `containLabel: true` ECharts draws the
+            // y tick labels inside it, so the plot edge moves with the widest label (another
+            // currency, a larger portfolio). The floating overlays never assume that edge;
+            // they read it back after layout (syncPlotGeometry → plotLeftPx). A px constant
+            // here, shared with the overlays, left an empty gutter before the labels.
             // `top` stays 10px in every mode: the toggle is an OVERLAY and must float on
             // the plot, not push it down (developer review — reserving a band shortened
             // the chart, which was never what was asked for).
-            grid: {left: CHART_PLOT_LEFT_PX, right: '4%', bottom: '30px', top: '10px', containLabel: true},
+            grid: {left: '3%', right: '4%', bottom: '30px', top: '10px', containLabel: true},
             tooltip: {
                 trigger: 'axis',
                 // Bugfix: `appendToBody` moves the tooltip DOM to `document.body`, which
