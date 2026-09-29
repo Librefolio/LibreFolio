@@ -94,6 +94,10 @@ LIBRARIES = {
         "file_prefix": "noto-color-emoji",
         "css_file": "noto-color-emoji.css",
         "vendor_dir_key": "fonts",
+        # Only the flags are served from this font — through the 'LF Flags' face of
+        # frontend/static/lf-flags.css, which points at subset 0. The other subsets would be dead
+        # weight, and one of them holds digits, '#' and '*'.
+        "keep_unicode_ranges": ["U+1f1e6-1f1ff"],
     },
 }
 
@@ -213,6 +217,19 @@ def _parse_google_fonts_css(css_text: str):
     return subsets
 
 
+def _normalise_unicode_range(unicode_range: str) -> str:
+    """Compare unicode-ranges as Google writes them or as a config does: no spaces, lowercase."""
+    return re.sub(r"\s+", "", unicode_range).lower()
+
+
+def _kept_ranges_fingerprint(config: dict) -> Optional[list[str]]:
+    """The subsets a font resource keeps, as the manifest stores them (None: every subset)."""
+    keep = config.get("keep_unicode_ranges")
+    if keep is None:
+        return None
+    return sorted({_normalise_unicode_range(r) for r in keep})
+
+
 def _download_font_resource(  # noqa: C901 — flat download/manifest pipeline, no nested logic
     vendor_dir: Path, manifest: dict, name: str, config: dict, force: bool = False
 ) -> bool:
@@ -221,11 +238,18 @@ def _download_font_resource(  # noqa: C901 — flat download/manifest pipeline, 
 
     Fetches the CSS from Google Fonts, extracts woff2 URLs, downloads each
     subset file, and writes a local CSS with relative paths.
+
+    With ``keep_unicode_ranges`` only the subsets whose unicode-range is in that list are kept,
+    numbered from 0 in the order Google serves them. The stored fingerprint of that list is part of
+    "already up-to-date", so a changed list rewrites the cache even when Google's CSS did not change.
+    Files are written only once every kept subset has downloaded; then the resource's stale
+    ``<prefix>.N.woff2`` files are removed.
     """
     print(f"🔤 Checking font {name}...")
 
     lib_data = manifest.get("libraries", {}).get(name, {})
     current_hash = lib_data.get("current_hash")
+    kept_fingerprint = _kept_ranges_fingerprint(config)
 
     target_dir = vendor_dir
     css_path = target_dir / config["css_file"]
@@ -248,7 +272,7 @@ def _download_font_resource(  # noqa: C901 — flat download/manifest pipeline, 
     css_text = css_bytes.decode("utf-8")
     css_hash = get_file_hash(css_bytes)
 
-    if current_hash == css_hash and not force and file_exists:
+    if current_hash == css_hash and not force and file_exists and lib_data.get("kept_unicode_ranges") == kept_fingerprint:
         print(f"  ✓ Already up-to-date (CSS hash: {css_hash})")
         return False
 
@@ -259,6 +283,14 @@ def _download_font_resource(  # noqa: C901 — flat download/manifest pipeline, 
         if not file_exists:
             _hard_fail(name, "no subsets parsed, no cached version")
         return False
+
+    if kept_fingerprint is not None:
+        subsets = [subset for subset in subsets if _normalise_unicode_range(subset["unicode_range"]) in kept_fingerprint]
+        if not subsets:
+            print(f"  ⚠️  No subset matches keep_unicode_ranges {kept_fingerprint}")
+            if not file_exists:
+                _hard_fail(name, "no subset matches keep_unicode_ranges, no cached version")
+            return False
 
     print(f"  📋 Found {len(subsets)} subsets")
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -278,6 +310,7 @@ def _download_font_resource(  # noqa: C901 — flat download/manifest pipeline, 
 
     total_size = 0
     failed_subsets = 0
+    downloaded: list[tuple[str, bytes]] = []
     font_family = " ".join(w.capitalize() for w in name.split("-"))
     for i, subset in enumerate(subsets):
         local_filename = f"{prefix}.{i}.woff2"
@@ -289,9 +322,7 @@ def _download_font_resource(  # noqa: C901 — flat download/manifest pipeline, 
             failed_subsets += 1
             continue
 
-        woff2_path = target_dir / local_filename
-        with open(woff2_path, "wb") as f:
-            f.write(woff2_content)
+        downloaded.append((local_filename, woff2_content))
         total_size += len(woff2_content)
 
         # Build CSS block
@@ -314,6 +345,16 @@ def _download_font_resource(  # noqa: C901 — flat download/manifest pipeline, 
         _hard_fail(name, f"{failed_subsets}/{len(subsets)} font subsets failed to download")
         return False
 
+    # Every subset is in hand: only now does the cache change.
+    for local_filename, woff2_content in downloaded:
+        with open(target_dir / local_filename, "wb") as f:
+            f.write(woff2_content)
+    kept_files = {local_filename for local_filename, _ in downloaded}
+    for stale in target_dir.glob(f"{prefix}.*.woff2"):
+        if stale.name not in kept_files:
+            stale.unlink()
+            print(f"  🗑️  Removed stale subset: {stale.name}")
+
     # Write local CSS
     css_content = "\n".join(local_css_lines) + "\n"
     with open(css_path, "w") as f:
@@ -326,6 +367,7 @@ def _download_font_resource(  # noqa: C901 — flat download/manifest pipeline, 
         manifest["libraries"][name] = {"versions": []}
 
     manifest["libraries"][name]["current_hash"] = css_hash
+    manifest["libraries"][name]["kept_unicode_ranges"] = kept_fingerprint
     manifest["libraries"][name]["url"] = config["css_url"]
     manifest["libraries"][name]["type"] = "font"
     manifest["libraries"][name]["subset_count"] = len(subsets)
