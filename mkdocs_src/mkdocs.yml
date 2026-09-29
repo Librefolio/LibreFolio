@@ -755,6 +755,7 @@ nav:
       - 📈 Assets:
           - Overview: user/assets/index.md
           - Create & Edit: user/assets/create-edit.md
+          - Correlation: user/assets/correlation.md
           - 🔎 Asset Detail:
               - Overview: user/assets/detail/index.md
               - Interactive Chart: user/assets/detail/chart.md

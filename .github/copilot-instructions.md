@@ -64,6 +64,12 @@ LibreFolio/
     <command> 2>&1 | tee /tmp/libreFolio_<descr>.log | tail -n 100
     ```
     Then, if more context is needed, read `/tmp/libreFolio_<descr>.log` instead of re-executing the command.
+- ⚠️ **`tee` followed by `head` or `grep -m` truncates the log itself.** `head` and `grep -m` close the pipe early, `tee` dies with SIGPIPE, and the `/tmp` log silently loses everything it had not written yet — with exit code 0 (measured: 14–22 thousand of 200 000 lines). Only a consumer that reads to the end, like `tail`, is safe after `tee`. For `head` or `grep -m`, write the file first, or drain the pipe:
+    ```bash
+    <command> > /tmp/libreFolio_<descr>.log 2>&1; head -n 40 /tmp/libreFolio_<descr>.log
+    <command> 2>&1 | tee /tmp/libreFolio_<descr>.log | { head -n 40; cat >/dev/null; }
+    ```
+- ⚠️ **Never `npx` for frontend tools.** Without a local `node_modules/.bin`, npx (npm 11) queries the registry: plain `npx` installs a missing package into the user cache without asking (no TTY), and even `npx --no-install` silently runs a cached copy when it is the latest published version — in both cases not the version pinned by the lock. Call the locked binary explicitly, `frontend/node_modules/.bin/<tool>`, or an `npm run <script>` from `package.json`: a missing binary then fails with "No such file". The test runner and some `dev.py` commands still call `npx` internally, so in a **fresh worktree** run the approved `npm ci` before any `dev.py test front-*`, `front build` or `front check`.
 - **Rationale**: avoid re-running expensive commands (tests, builds, db operations) just to see output that was truncated earlier.
 
 ## Async I/O Rule (Event Loop Safety)
@@ -77,7 +83,7 @@ In `async def` handlers, **every sync library doing I/O** MUST be wrapped in `aw
 - **Dark mode**: `html.dark` with Tailwind `dark:*` classes
 - **Icons**: lucide-svelte
 - **Selectors**: always use `data-testid` — never CSS classes or text (fragile with i18n)
-- **Flag emoji**: use `Noto Color Emoji` web font for Windows compatibility
+- **Flag emoji**: the `'LF Flags'` face (`static/lf-flags.css`, flags-only `unicode-range`) leads every font stack — Apple flags on Apple devices, the self-hosted Noto flags subset elsewhere, Windows included. Never name an emoji font in a `font-family`; a component with its own stack starts it with `'LF Flags'` or wraps the flag in `.emoji-flag`
 
 ## Developer Journal & Plan Methodology
 

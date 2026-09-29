@@ -39,7 +39,7 @@ Two traps this table used to set: a transaction carries a signed **`amount`**, n
 
 | Enum | Values |
 |------|--------|
-| `AssetType` | base: STOCK, ETF, BOND, CRYPTO, FUND, CROWDFUND, HOLD, COMMODITY, REAL_ESTATE, INDEX, OTHER<br>ETF subtypes: ETF_STOCK, ETF_BOND, ETF_COMMODITY, ETF_REAL_ESTATE, ETF_CRYPTO, ETF_MONETARY |
+| `AssetType` | base: STOCK, ETF, BOND, CRYPTO, FUND, CROWDFUND, HOLD, COMMODITY, REAL_ESTATE, INDEX, OTHER<br>ETF subtypes: ETF_STOCK, ETF_BOND, ETF_COMMODITY, ETF_REAL_ESTATE, ETF_CRYPTO, ETF_MONETARY<br>CROWDFUND subtypes: CROWDFUND_REAL_ESTATE |
 | `TransactionType` | BUY, SELL, DIVIDEND, INTEREST, DEPOSIT, WITHDRAWAL, FEE, TAX, ADJUSTMENT, TRANSFER, FX_CONVERSION, CASH_TRANSFER |
 | `AssetEventType` | DIVIDEND, INTEREST, PRICE_ADJUSTMENT, SPLIT, MATURITY_SETTLEMENT |
 | `IdentifierType` | ISIN, TICKER, CUSIP, SEDOL, FIGI, UUID, OTHER — each one owns an `identifier_*` column in `assets` |
@@ -47,8 +47,9 @@ Two traps this table used to set: a transaction carries a signed **`amount`**, n
 | `OnboardingFlow` | 15 values: welcome, intro_tour, then the page/entity guides for transactions, brokers, FX and assets |
 | `OnboardingStatus` | pending, completed, skipped |
 
-An ETF subtype answers *which base type does this ETF hold?*, so the second level is the
-set of base types, not a parallel taxonomy. `INDEX` forbids transactions; every other
+A subtype answers *which base type does this instrument hold?*, so the second level is the
+set of base types, not a parallel taxonomy; ETF and CROWDFUND are the two families that
+have one, and their plain values stay the residual. `INDEX` forbids transactions; every other
 value is behaviourally inert in the backend. `AssetType` also feeds the `asset_class`
 buckets of stress scenarios, where **a type missing from `bucket_shocks` is shocked by
 zero silently** — hence the dedicated coverage test.
