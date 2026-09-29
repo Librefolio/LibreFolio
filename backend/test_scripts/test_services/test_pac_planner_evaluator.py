@@ -24,6 +24,8 @@ from typing import Any
 import pytest
 
 from backend.app.schemas.pac_allocator import PacPlannerRequest
+from backend.app.services.pac_allocator import evaluator as EV
+from backend.app.services.pac_allocator import models as pac_models
 from backend.app.services.pac_allocator.evaluator import (
     ExactEvaluatorError,
     ExactPolicyContractError,
@@ -52,9 +54,12 @@ from backend.app.services.pac_allocator.models import (
     ExactAssetQuote,
     ExactAssetTax,
     ExactBroker,
+    ExactBrokerLedgerEvaluation,
+    ExactConflict,
     ExactContribution,
     ExactCostBasis,
     ExactCurrencySpec,
+    ExactEvaluation,
     ExactExistingCash,
     ExactFeeSchedule,
     ExactFreshness,
@@ -4635,3 +4640,429 @@ def test_cancellation_propagates_from_nontrivial_exact_loops(
         operation()
 
     assert checkpoint.observed is True
+
+
+# Rounding top-ups (commit 5, QX1-b). The Decimal HALF_UP replay stays
+# authoritative, but a candidate whose ONLY violation is negative final
+# spendable cash per pool (broker x currency), each pool short by
+# D <= N x minor unit -- N = the pool's postings that carry a quantum: the buy
+# debit of every order, a nonzero fee, the FX credit -- is published with one
+# top-up per negative pool. Anything else is ``ExactReplayRejectedError``.
+# The classifier and its dataclass are reached through the module objects
+# (``EV``, ``pac_models``) so this suite still collects before they exist.
+# Every case first asserts the evaluation facts it relies on (conflict codes,
+# the pool's final cash, its rounded-posting count), so a red names its layer.
+
+_TOP_UP_TOLERATED_CODES = frozenset(
+    {
+        "FX_SOURCE_CASH",
+        "NO_SHORT_OR_LEVERAGE",
+        "ROUNDING_BOUND",
+        "SPENDABLE_CASH_NONNEGATIVE",
+    }
+)
+_CASH_ONLY_CODES = ("NO_SHORT_OR_LEVERAGE", "SPENDABLE_CASH_NONNEGATIVE")
+_TIE_PRICE = R(33335, 1000)  # 3 x 33.335 = 100.005, posted HALF_UP as 100.01
+_BUY_A = exact_decision_id("buy_quantum", "route:buy:a")
+_BUY_B = exact_decision_id("buy_quantum", "route:buy:b")
+_FUND_EUR = exact_decision_id("funding_transfer", "route:funding:eur")
+_FX_EUR_TO_USD = exact_decision_id("fx_debit", _fx_debit_key("route:buy:usd", "EUR"))
+_BUY_USD = exact_decision_id("buy_quantum", "route:buy:usd")
+
+
+def _replay(
+    scenario: ExactPlannerScenario,
+    values: dict[str, int],
+    *,
+    view_id: str | None = None,
+) -> tuple[ExactPolicyView, ExactEvaluation]:
+    """The primary view and the exact replay of a hand-built candidate on it."""
+    view = build_exact_policy_view(scenario, purpose="primary")
+    return view, evaluate_exact_candidate(
+        scenario,
+        view,
+        _candidate(view, values, view_id=view_id),
+    )
+
+
+def _pool_ledger(evaluation: ExactEvaluation, broker_id: str, currency: str = "EUR") -> ExactBrokerLedgerEvaluation:
+    matches = tuple(row for row in evaluation.ledgers if (row.broker_id, row.currency) == (broker_id, currency))
+    assert len(matches) == 1, f"expected one ({broker_id}, {currency}) ledger, found {[(row.broker_id, row.currency) for row in evaluation.ledgers]}"
+    return matches[0]
+
+
+def _pool_rounded_families(evaluation: ExactEvaluation, broker_id: str, currency: str = "EUR") -> list[str]:
+    """The families of the pool's postings that carry a quantum: N is their count."""
+    return sorted(posting.family for posting in evaluation.postings if (posting.broker_id, posting.currency) == (broker_id, currency) and posting.quantum is not None)
+
+
+def _top_up(
+    broker_id: str,
+    amount: ExactRatio,
+    rounded_postings: int,
+    *,
+    currency: str = "EUR",
+    valuation_amount: ExactRatio | None = None,
+) -> pac_models.ExactRoundingTopUp:
+    return pac_models.ExactRoundingTopUp(
+        broker_id=broker_id,
+        currency=currency,
+        amount=amount,
+        rounded_postings=rounded_postings,
+        valuation_amount=amount if valuation_amount is None else valuation_amount,
+    )
+
+
+def _eur_tie() -> tuple[ExactPlannerScenario, ExactPolicyView, ExactEvaluation]:
+    """The EUR tie: 3 units at 33.335 against exactly EUR 100.00 end one cent short."""
+    scenario = _pac_scenario(price=_TIE_PRICE, cash=R(100))
+    view, evaluation = _replay(scenario, {_BUY_A: 3})
+    assert evaluation.candidate_valid is True
+    assert evaluation.conflict_codes == _CASH_ONLY_CODES
+    assert _pool_ledger(evaluation, "broker:a").final_spendable == -CENT
+    assert _pool_rounded_families(evaluation, "broker:a") == ["buy_debit"]
+    return scenario, view, evaluation
+
+
+def test_rounding_top_ups_of_a_feasible_replay_are_empty() -> None:
+    """A replay that already balances announces nothing: the classifier answers ``()``.
+
+    2 x 33.336 = 66.672 posts as 66.67 against EUR 100: every rule holds, so the
+    plan is published exactly as before commit 5, with no top-up to show.
+    """
+    scenario = _pac_scenario(price=R(33336, 1000), cash=R(100))
+    _, evaluation = _replay(scenario, {_BUY_A: 2})
+    assert evaluation.feasible is True, evaluation.conflict_codes
+
+    assert EV.rounding_top_ups(scenario, evaluation) == ()
+
+
+def test_rounding_top_up_covers_a_one_cent_half_up_deficit() -> None:
+    """The EUR tie is published with a top-up of exactly the missing cent.
+
+    100.005 posts HALF_UP as 100.01, so the pool ends at -0.01. Its one
+    quantum-carrying posting is the buy debit (the initial cash carries none, a
+    zero fee is not posted): D = 0.01 <= 1 x 0.01. Only the cash rules fail;
+    ``ROUNDING_BOUND`` holds (shortfall -0.005 against a 0.005 bound). The pool is
+    in the valuation currency, so the top-up is valued at its own amount.
+    """
+    scenario, _, evaluation = _eur_tie()
+    assert "ROUNDING_BOUND" not in evaluation.conflict_codes
+    assert (evaluation.accounting.shortfall, evaluation.accounting.rounding_bound) == (-R(1, 200), R(1, 200))
+
+    assert EV.rounding_top_ups(scenario, evaluation) == (_top_up("broker:a", CENT, 1),)
+
+
+def test_rounding_top_up_counts_a_posted_fee_as_a_second_rounded_posting() -> None:
+    """A nonzero fee is posted with its own quantum: N = 2 tolerates two cents.
+
+    The EUR 0.01 fixed fee joins the buy debit, so 100.01 + 0.01 against EUR
+    100.00 leaves -0.02 = 2 x 0.01: accepted, and the top-up reports the two
+    postings the deficit spreads over.
+    """
+    scenario = _pac_scenario(price=_TIE_PRICE, cash=R(100), fixed_fee=CENT)
+    _, evaluation = _replay(scenario, {_BUY_A: 3})
+    assert evaluation.candidate_valid is True
+    assert evaluation.conflict_codes == _CASH_ONLY_CODES
+    assert _pool_ledger(evaluation, "broker:a").final_spendable == -R(2, 100)
+    assert _pool_rounded_families(evaluation, "broker:a") == ["buy_debit", "buy_fee"]
+
+    assert EV.rounding_top_ups(scenario, evaluation) == (_top_up("broker:a", R(2, 100), 2),)
+
+
+def test_rounding_top_up_rejects_three_cents_over_two_rounded_postings() -> None:
+    """One cent past N x minor unit is no longer rounding: the replay rejects.
+
+    A EUR 0.02 fee leaves -0.03 over the same two postings: D = 0.03 > 2 x 0.01.
+    (Cash 99.99 with the 0.01 fee is not a usable variant: the view bounds the
+    route at 2 units there, so 3 units would be out of bounds, not short.)
+    """
+    scenario = _pac_scenario(price=_TIE_PRICE, cash=R(100), fixed_fee=R(2, 100))
+    _, evaluation = _replay(scenario, {_BUY_A: 3})
+    assert evaluation.candidate_valid is True
+    assert evaluation.conflict_codes == _CASH_ONLY_CODES
+    assert _pool_ledger(evaluation, "broker:a").final_spendable == -R(3, 100)
+    assert _pool_rounded_families(evaluation, "broker:a") == ["buy_debit", "buy_fee"]
+
+    with pytest.raises(EV.ExactReplayRejectedError):
+        EV.rounding_top_ups(scenario, evaluation)
+
+
+def test_rounding_top_up_rejects_a_unit_the_cash_cannot_pay() -> None:
+    """A unit the cash cannot pay leaves a real deficit, far beyond rounding.
+
+    EUR 10 buys the EUR 10 unit but not its EUR 1 fixed fee: the pool ends EUR 1
+    short over two rounded postings, fifty times N x minor unit. (The view bounds
+    whole units by cash / price, so "one unit more" of the tie is out of bounds;
+    the fee is what makes an in-bounds unit unaffordable.)
+    """
+    scenario = _pac_scenario(cash=R(10), fixed_fee=ONE)
+    _, evaluation = _replay(scenario, {_BUY_A: 1})
+    assert evaluation.candidate_valid is True
+    assert evaluation.conflict_codes == _CASH_ONLY_CODES
+    assert _pool_ledger(evaluation, "broker:a").final_spendable == -ONE
+    assert _pool_rounded_families(evaluation, "broker:a") == ["buy_debit", "buy_fee"]
+
+    with pytest.raises(EV.ExactReplayRejectedError):
+        EV.rounding_top_ups(scenario, evaluation)
+
+
+def test_rounding_top_up_does_not_excuse_another_violation() -> None:
+    """A deficit within the threshold never excuses a rule a top-up cannot repair.
+
+    The EUR tie again (-0.01, N = 1), on a route that requires 4 units once
+    active: ``ORDER_MIN_IF_ACTIVE`` fails next to the cash rules. (A route cap
+    below 3 units would make the candidate out of bounds instead: a contract
+    failure, covered by the invalid-candidate case.)
+    """
+    scenario = _pac_scenario(price=_TIE_PRICE, cash=R(100), minimum=R(4))
+    _, evaluation = _replay(scenario, {_BUY_A: 3})
+    assert evaluation.candidate_valid is True
+    assert evaluation.conflict_codes == ("NO_SHORT_OR_LEVERAGE", "ORDER_MIN_IF_ACTIVE", "SPENDABLE_CASH_NONNEGATIVE")
+    assert _pool_ledger(evaluation, "broker:a").final_spendable == -CENT
+    assert _pool_rounded_families(evaluation, "broker:a") == ["buy_debit"]
+
+    with pytest.raises(EV.ExactReplayRejectedError):
+        EV.rounding_top_ups(scenario, evaluation)
+
+
+def _two_pool_scenario(cash_a: ExactRatio, cash_b: ExactRatio) -> ExactPlannerScenario:
+    """The tie Asset bought on two brokers, each paying from its own EUR pool."""
+    capability_a = _capability("capability:a")
+    capability_b = _capability("capability:b")
+    fee_a = _fee("fee:buy:a", capability_a.capability_id, "buy")
+    fee_b = _fee("fee:buy:b", capability_b.capability_id, "buy")
+    return _scenario(
+        "scenario:two-pools",
+        product="pac",
+        policy="proportional",
+        assets=(_asset("asset:a", price=_TIE_PRICE),),
+        brokers=(
+            _broker("broker:a", (capability_a,), (fee_a,)),
+            _broker("broker:b", (capability_b,), (fee_b,)),
+        ),
+        existing_cash=(
+            _cash("cash:a", "broker:a", cash_a),
+            _cash("cash:b", "broker:b", cash_b),
+        ),
+        order_routes=(
+            _order_route(
+                "route:buy:a",
+                broker_id="broker:a",
+                asset_id="asset:a",
+                capability=capability_a,
+                fee_id=fee_a.fee_schedule_id,
+                side="buy",
+            ),
+            _order_route(
+                "route:buy:b",
+                broker_id="broker:b",
+                asset_id="asset:a",
+                capability=capability_b,
+                fee_id=fee_b.fee_schedule_id,
+                side="buy",
+            ),
+        ),
+    )
+
+
+def test_rounding_top_ups_are_one_per_negative_pool_in_ledger_order() -> None:
+    """Two pools one cent short each get two top-ups, in the evaluation's ledger order.
+
+    The threshold is per pool: each pool carries its own buy debit (N = 1) and
+    its own -0.01, and the top-up tells the user which broker needs the cent.
+    """
+    scenario = _two_pool_scenario(R(100), R(100))
+    _, evaluation = _replay(scenario, {_BUY_A: 3, _BUY_B: 3})
+    assert evaluation.candidate_valid is True
+    assert evaluation.conflict_codes == _CASH_ONLY_CODES
+    negative_pools = [(row.broker_id, row.currency) for row in evaluation.ledgers if row.final_spendable < ZERO]
+    assert negative_pools == [("broker:a", "EUR"), ("broker:b", "EUR")]
+    for broker_id, _ in negative_pools:
+        assert _pool_ledger(evaluation, broker_id).final_spendable == -CENT
+        assert _pool_rounded_families(evaluation, broker_id) == ["buy_debit"]
+
+    assert EV.rounding_top_ups(scenario, evaluation) == (
+        _top_up("broker:a", CENT, 1),
+        _top_up("broker:b", CENT, 1),
+    )
+
+
+def test_rounding_top_up_threshold_is_per_pool_not_summed() -> None:
+    """Spare threshold on one pool never covers another pool's deficit.
+
+    Pool A buys 2 units and ends positive with one rounded posting; pool B buys
+    3 units on EUR 99.99 and ends at -0.02 with one rounded posting. A summed
+    rule would accept (0.02 <= 2 x 0.01); per pool, B's 0.02 > 1 x 0.01 rejects.
+    """
+    scenario = _two_pool_scenario(R(100), R(9999, 100))
+    _, evaluation = _replay(scenario, {_BUY_A: 2, _BUY_B: 3})
+    assert evaluation.candidate_valid is True
+    assert evaluation.conflict_codes == _CASH_ONLY_CODES
+    assert _pool_ledger(evaluation, "broker:a").final_spendable == R(3333, 100)
+    assert _pool_rounded_families(evaluation, "broker:a") == ["buy_debit"]
+    assert _pool_ledger(evaluation, "broker:b").final_spendable == -R(2, 100)
+    assert _pool_rounded_families(evaluation, "broker:b") == ["buy_debit"]
+
+    with pytest.raises(EV.ExactReplayRejectedError):
+        EV.rounding_top_ups(scenario, evaluation)
+
+
+def _funding_fx_evaluation(fx_debit_cents: int) -> tuple[ExactPlannerScenario, ExactEvaluation]:
+    """Fund EUR 150 to the destination, convert ``fx_debit_cents`` to USD, buy one USD 100 unit."""
+    scenario = _funding_fx_scenario()
+    _, evaluation = _replay(
+        scenario,
+        {_FUND_EUR: 15_000, _FX_EUR_TO_USD: fx_debit_cents, _BUY_USD: 1},
+    )
+    assert evaluation.candidate_valid is True
+    assert evaluation.conflict_codes == _CASH_ONLY_CODES
+    # N counts the HALF_UP FX credit next to the buy debit; the funding transfer
+    # and the FX debit carry no quantum on this scenario (read off the postings).
+    assert _pool_rounded_families(evaluation, "broker:destination", "USD") == ["buy_debit", "fx_credit"]
+    return scenario, evaluation
+
+
+def test_rounding_top_up_counts_the_fx_credit_and_values_the_deficit_in_eur() -> None:
+    """The FX credit is a rounded posting, and the top-up is valued in EUR.
+
+    EUR 84.16 converted with the spread credits a HALF_UP-rounded USD amount that
+    leaves the USD pool at -0.02 after the USD 100 unit: two rounded postings
+    (FX credit + buy debit), so D = 0.02 <= 2 x 0.01 is accepted. The valuation
+    uses the evaluator's own conversion, pinned first against its free cash:
+    every final pool converted at the scenario's EUR/USD rate.
+    """
+    scenario, evaluation = _funding_fx_evaluation(8416)
+    usd_final = _pool_ledger(evaluation, "broker:destination", "USD").final_spendable
+    assert usd_final == -R(2, 100)
+    (rate,) = scenario.fx_rates
+    assert (rate.pair_first, rate.pair_second, scenario.valuation_currency) == ("EUR", "USD", "EUR")
+    eur_finals = sum((row.final_spendable for row in evaluation.ledgers if row.currency == "EUR"), ZERO)
+    assert evaluation.accounting.free_cash == eur_finals + usd_final / rate.rate
+
+    assert EV.rounding_top_ups(scenario, evaluation) == (
+        _top_up(
+            "broker:destination",
+            R(2, 100),
+            2,
+            currency="USD",
+            valuation_amount=R(2, 100) / rate.rate,
+        ),
+    )
+
+
+def test_rounding_top_up_rejects_three_cents_over_the_fx_pool_two_postings() -> None:
+    """One more cent of FX debit short leaves -0.03 over two rounded postings: rejected."""
+    scenario, evaluation = _funding_fx_evaluation(8415)
+    assert _pool_ledger(evaluation, "broker:destination", "USD").final_spendable == -R(3, 100)
+
+    with pytest.raises(EV.ExactReplayRejectedError):
+        EV.rounding_top_ups(scenario, evaluation)
+
+
+def test_rounding_top_ups_reject_a_contract_invalid_candidate() -> None:
+    """A candidate built for another view is not a plan at all: nothing to top up."""
+    scenario = _pac_scenario(price=_TIE_PRICE, cash=R(100))
+    _, evaluation = _replay(scenario, {_BUY_A: 3}, view_id="other")
+    assert evaluation.candidate_valid is False
+    assert evaluation.conflict_codes == ("CANDIDATE_VIEW_MISMATCH",)
+
+    with pytest.raises(EV.ExactReplayRejectedError):
+        EV.rounding_top_ups(scenario, evaluation)
+
+
+def test_rounding_top_up_accepts_a_failed_rounding_bound_the_top_up_explains() -> None:
+    """``ROUNDING_BOUND`` may fail when the top-up is exactly what it lacks.
+
+    Four EUR 25 units cost exactly EUR 100.00 (nothing rounds; the buy debit
+    still carries its quantum) against EUR 99.99: the pool and the shortfall end
+    at -0.01, beyond the 0.005 favorable bound, so ``ROUNDING_BOUND`` fails too.
+    The rounding adjustment is 0 (within the bound) and shortfall + top-up
+    valuation = 0 >= -bound: the classifier accepts the one-cent top-up.
+    """
+    scenario = _pac_scenario(price=R(25), cash=R(9999, 100))
+    _, evaluation = _replay(scenario, {_BUY_A: 4})
+    assert evaluation.candidate_valid is True
+    assert evaluation.conflict_codes == ("NO_SHORT_OR_LEVERAGE", "ROUNDING_BOUND", "SPENDABLE_CASH_NONNEGATIVE")
+    assert _pool_ledger(evaluation, "broker:a").final_spendable == -CENT
+    assert _pool_rounded_families(evaluation, "broker:a") == ["buy_debit"]
+    accounting = evaluation.accounting
+    assert (accounting.shortfall, accounting.rounding_adjustment, accounting.rounding_bound) == (-CENT, ZERO, R(1, 200))
+
+    assert EV.rounding_top_ups(scenario, evaluation) == (_top_up("broker:a", CENT, 1),)
+
+
+def test_rounding_top_ups_reject_a_negative_holding() -> None:
+    """A short position is never a rounding artefact, whatever the conflict codes say.
+
+    Fabricated on the EUR tie: the holding sells one unit it never had. The
+    conflict codes stay the tolerated cash pair (``NO_SHORT_OR_LEVERAGE`` is
+    already there), so only the classifier's own holding guard can reject it.
+    """
+    scenario, _, evaluation = _eur_tie()
+    (holding,) = evaluation.holdings
+    assert holding.initial_quantity == ZERO
+    short = replace(evaluation, holdings=(replace(holding, buy_quantity=ZERO, sell_quantity=ONE, final_quantity=-ONE),))
+    assert short.conflict_codes == _CASH_ONLY_CODES
+
+    with pytest.raises(EV.ExactReplayRejectedError):
+        EV.rounding_top_ups(scenario, short)
+
+
+def test_rounding_top_ups_reject_a_rounding_adjustment_beyond_its_bound() -> None:
+    """A failed ``ROUNDING_BOUND`` is accepted only while the adjustment is within it.
+
+    Fabricated on the EUR tie: the bound drops to 0 and ``ROUNDING_BOUND`` fails,
+    while the 0.005 rounding adjustment stays. Shortfall + top-up valuation is
+    still >= -bound, so the rejection is attributable to |adjustment| > bound.
+    """
+    scenario, view, evaluation = _eur_tie()
+    (ref,) = (row for row in view.constraints if row.code == "ROUNDING_BOUND")
+    conflicts = tuple(
+        sorted(
+            {*evaluation.conflicts, ExactConflict(code=ref.code, entity_refs=ref.entity_refs)},
+            key=lambda item: (item.code, tuple((entity.kind, entity.entity_id) for entity in item.entity_refs)),
+        )
+    )
+    fabricated = replace(
+        evaluation,
+        conflicts=conflicts,
+        conflict_codes=tuple(sorted({item.code for item in conflicts})),
+        constraints=tuple(replace(row, satisfied=False, upper_bound=ZERO) if row.ref_id == ref.ref_id else row for row in evaluation.constraints),
+        accounting=replace(evaluation.accounting, rounding_bound=ZERO),
+    )
+    accounting = fabricated.accounting
+    assert fabricated.conflict_codes == ("NO_SHORT_OR_LEVERAGE", "ROUNDING_BOUND", "SPENDABLE_CASH_NONNEGATIVE")
+    assert abs(accounting.rounding_adjustment) > accounting.rounding_bound
+    assert accounting.shortfall + CENT >= -accounting.rounding_bound
+
+    with pytest.raises(EV.ExactReplayRejectedError):
+        EV.rounding_top_ups(scenario, fabricated)
+
+
+_VALID_TOP_UP = {
+    "broker_id": "broker:a",
+    "currency": "EUR",
+    "amount": CENT,
+    "rounded_postings": 1,
+    "valuation_amount": CENT,
+}
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        pytest.param({"amount": ZERO}, id="zero-amount"),
+        pytest.param({"amount": -CENT}, id="negative-amount"),
+        pytest.param({"valuation_amount": ZERO}, id="zero-valuation"),
+        pytest.param({"valuation_amount": -CENT}, id="negative-valuation"),
+        pytest.param({"rounded_postings": 0}, id="no-rounded-posting"),
+        pytest.param({"rounded_postings": True}, id="bool-rounded-postings"),
+    ],
+)
+def test_exact_rounding_top_up_rejects_an_impossible_top_up(override: dict[str, Any]) -> None:
+    """A top-up is a positive amount, positively valued, over at least one posting."""
+    assert pac_models.ExactRoundingTopUp(**_VALID_TOP_UP).rounded_postings == 1
+
+    with pytest.raises(ValueError):
+        pac_models.ExactRoundingTopUp(**{**_VALID_TOP_UP, **override})

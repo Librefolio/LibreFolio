@@ -16,11 +16,17 @@ SCIP is the only production search engine, and its own status is the proof
 found, or with none. The exhaustive oracle is a test instrument
 (``backend/test_scripts``); production cannot reach it.
 
-``evaluate_exact_candidate`` is **always** on the path. SCIP's incumbent is a
-floating proposal that has to survive exact arithmetic before a single number
-of it is published. A candidate that fails replay does not degrade into a
-warning — it produces ``ready_no_incumbent``, because publishing an unverified
-plan is the one outcome this package exists to prevent.
+``evaluate_exact_candidate`` is **always** on the path, and its verdict is
+authoritative. SCIP's incumbent is a floating proposal that has to survive
+exact arithmetic before a single number of it is published. The one deficit
+the replay tolerates is rounding (QX1-b, developer decision of 2026-09-25): a
+plan whose HALF_UP postings leave a cash pool (broker x currency) at most N
+minor units short, N being the pool's postings that carry a quantum, is
+published with one top-up per such pool — "this broker/currency needs D more".
+``evaluator.rounding_top_ups`` decides. Any other rejection raises
+``ExactReplayRejectedError``, which the Tool reports as ``execution_failed``:
+publishing an unverified plan is the one outcome this package exists to
+prevent, and a SCIP plan the replay rejects is a defect, not a result.
 
 Only ``plan_pac_allocation`` is exported. ``plan_rebalancing`` deliberately
 does not exist: every Rebalancer policy and the SELL verifier are deferred,
@@ -73,7 +79,7 @@ from backend.app.schemas.pac_allocator import (
 )
 from backend.app.services.pac_allocator import planner_report as report
 from backend.app.services.pac_allocator.compiler import compile_policy_program
-from backend.app.services.pac_allocator.evaluator import build_exact_policy_view, evaluate_exact_candidate
+from backend.app.services.pac_allocator.evaluator import build_exact_policy_view, evaluate_exact_candidate, rounding_top_ups
 from backend.app.services.pac_allocator.models import (
     CandidateActionVector,
     CandidateDecision,
@@ -82,6 +88,7 @@ from backend.app.services.pac_allocator.models import (
     ExactObjectiveCode,
     ExactPlannerScenario,
     ExactPolicyView,
+    ExactRoundingTopUp,
     check_budget,
 )
 from backend.app.services.pac_allocator.normalize import normalize_pac_plan
@@ -122,9 +129,11 @@ def plan_pac_allocation(
 ) -> PacPlannerResult:
     """Plan a PAC allocation and return a wire result.
 
-    Never raises on a planning outcome: an infeasible scenario, an exhausted
-    budget and a candidate that fails replay are all *results*, each with its
-    own ``result_state``. Only a genuine contract violation propagates.
+    Never raises on a planning outcome: an infeasible scenario and an exhausted
+    budget are *results*, each with its own ``result_state``. A genuine
+    contract violation propagates, and so does ``ExactReplayRejectedError``: a
+    SCIP plan the exact replay rejects for more than rounding is a defect, not
+    an outcome to answer with.
 
     ``solver_time_budget_seconds`` is the engine window the caller has already
     claimed. It matters more than it looks: the lexicographic cascade is what
@@ -151,16 +160,15 @@ def plan_pac_allocation(
         return _no_incumbent_result(scenario, view, search, issues)
 
     # The single non-negotiable hop: nothing is published that exact
-    # arithmetic has not re-derived from the candidate itself.
+    # arithmetic has not re-derived from the candidate itself. Its verdict is
+    # final: a rounding deficit within the threshold comes back as top-ups,
+    # any other rejection raises.
     evaluation = evaluate_exact_candidate(scenario, view, search.candidate, checkpoint=checkpoint)
-    if not evaluation.feasible:
-        # A search proposed something the exact domain rejects. That is not a
-        # warning to attach to a published plan — there is no plan.
-        return _no_incumbent_result(scenario, view, search, issues)
+    top_ups = rounding_top_ups(scenario, evaluation)
 
     conclusion = _conclude(view, search, published=search.candidate)
     check_budget(checkpoint)
-    return _ready_result(scenario, view, search, evaluation, conclusion, issues)
+    return _ready_result(scenario, view, search, evaluation, conclusion, issues, top_ups)
 
 
 def _search(
@@ -209,10 +217,11 @@ def _ready_result(
     evaluation: ExactEvaluation,
     conclusion: PlanConclusion,
     issues: list[PlannerIssue],
+    top_ups: tuple[ExactRoundingTopUp, ...],
 ) -> PacPlannerResult:
     common = _common_ready_fields(scenario, view, search, evaluation, issues)
     proof = _wire_proof(conclusion)
-    parts = _build_solution_parts(scenario, view, evaluation)
+    parts = _build_solution_parts(scenario, view, evaluation, top_ups)
 
     # The no-op decision is made *before* choosing the solution model, not
     # after: `PacIncumbentSolution` requires at least one order row while
@@ -225,7 +234,7 @@ def _ready_result(
 
 
 def _no_incumbent_result(scenario: ExactPlannerScenario, view: ExactPolicyView, search: _Search, issues: list[PlannerIssue]) -> PacPlannerResult:
-    """No publishable plan: SCIP proved there is none, or none survived.
+    """No publishable plan: SCIP proved there is none, or found none in time.
 
     ``ready_infeasible`` needs an ``InfeasibilityProvenProof``, and only
     ``proof.conclude_with_solver`` can conclude one: SCIP closed the first,
@@ -234,7 +243,9 @@ def _no_incumbent_result(scenario: ExactPlannerScenario, view: ExactPolicyView, 
     already says so — an infeasible stage is not an unfinished one.
 
     Everything else is ``ready_no_incumbent`` with ``not_proven``: a limit that
-    left no solution, or a SCIP plan the Decimal replay rejected.
+    left no solution. A SCIP plan the Decimal replay rejects never lands here:
+    it is published with its rounding top-ups, or ``plan_pac_allocation``
+    raises ``ExactReplayRejectedError``.
     """
     evaluation = _zero_candidate_evaluation(scenario, view)
     common = _common_ready_fields(scenario, view, search, evaluation, issues)
@@ -260,7 +271,7 @@ def _common_ready_fields(scenario, view, search: _Search, evaluation: ExactEvalu
     }
 
 
-def _build_solution_parts(scenario: ExactPlannerScenario, view: ExactPolicyView, evaluation: ExactEvaluation) -> dict:
+def _build_solution_parts(scenario: ExactPlannerScenario, view: ExactPolicyView, evaluation: ExactEvaluation, top_ups: tuple[ExactRoundingTopUp, ...]) -> dict:
     """Assemble the primary solution.
 
     One ``_SequenceAllocator`` is shared across funding, FX and order rows —
@@ -278,6 +289,7 @@ def _build_solution_parts(scenario: ExactPlannerScenario, view: ExactPolicyView,
         "fx_actions": report.build_fx_actions(scenario, evaluation, sequence),
         "order_rows": report.build_order_rows(scenario, evaluation, sequence),
         "ledger_rows": report.build_ledger_rows(evaluation),
+        "rounding_top_ups": report.build_rounding_top_ups(scenario, top_ups),
         "exposure_rows": report.build_exposure_rows(scenario, evaluation),
         "accounting": report.build_accounting(scenario, evaluation),
         "costs": report.build_costs(scenario, evaluation),

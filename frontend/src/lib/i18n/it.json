@@ -4517,6 +4517,9 @@
               "body": "Con {amount} nessun acquisto rispetta i vincoli: il piano è non fare nulla.",
               "empty": "Nessun ordine, nessun FX, nessun funding.",
               "title": "Nessuna operazione"
+            },
+            "topUp": {
+              "row": "Per eseguire il piano servono {amount} in più su {broker} ({currency}), per gli arrotondamenti all'unità minima."
             }
           },
           "stop": {

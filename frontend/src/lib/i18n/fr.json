@@ -4517,6 +4517,9 @@
               "body": "Avec {amount}, aucun achat ne respecte les contraintes : le plan consiste à ne rien faire.",
               "empty": "Aucun ordre, aucun change, aucun financement.",
               "title": "Aucune opération"
+            },
+            "topUp": {
+              "row": "Pour exécuter le plan, il faut {amount} de plus sur {broker} ({currency}), en raison des arrondis à l'unité minimale."
             }
           },
           "stop": {

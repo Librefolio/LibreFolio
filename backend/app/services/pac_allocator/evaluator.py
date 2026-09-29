@@ -5,8 +5,9 @@ must be able to *prove* a result, and a proof cannot rest on a representation
 that rounds. The evaluator is deliberately independent of the solver — it scores
 a candidate without knowing how that candidate was produced, which is what makes
 it usable as the formula the SCIP objectives mirror, as the referee that replays
-every SCIP incumbent, and — in the test tree — as the scorer behind the
-exhaustive oracle.
+every SCIP incumbent (``rounding_top_ups`` then tells a HALF_UP cash deficit the
+user can top up from a rejection), and — in the test tree — as the scorer
+behind the exhaustive oracle.
 
 The P1 ``analyze`` arithmetic that used to open this file was removed on
 2026-09-21 (`b82e59ffa` and its follow-up): it was a Decimal prototype for
@@ -15,7 +16,7 @@ budgets and target gaps, never released, superseded by the exact domain below.
 
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from hashlib import sha256
@@ -64,6 +65,7 @@ from backend.app.services.pac_allocator.models import (
     ExactPlannerScenario,
     ExactPolicyPurpose,
     ExactPolicyView,
+    ExactRoundingTopUp,
     ExactUnit,
     ExactWithholding,
     LedgerPostingFamily,
@@ -104,6 +106,10 @@ class ExactScenarioContractError(ExactEvaluatorError):
 
 class ExactPolicyContractError(ExactEvaluatorError):
     """Raised when an exact policy view cannot represent the requested phase."""
+
+
+class ExactReplayRejectedError(ExactEvaluatorError):
+    """Raised when the exact replay rejects a candidate for more than rounding."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -3650,3 +3656,77 @@ def evaluate_exact_candidate(
     )
     check_budget(checkpoint)
     return result
+
+
+# The rules a pure HALF_UP deficit breaks: the pool's own cash rule, the FX
+# source cash rule (the same balance, seen from its FX debit), the global
+# no-leverage rule, and the rounding bound. A top-up repairs all four.
+_ROUNDING_DEFICIT_CODES = frozenset(
+    {
+        "FX_SOURCE_CASH",
+        "NO_SHORT_OR_LEVERAGE",
+        "ROUNDING_BOUND",
+        "SPENDABLE_CASH_NONNEGATIVE",
+    }
+)
+
+
+def _require_rounding_only_rejection(evaluation: ExactEvaluation) -> frozenset[str]:
+    """Return the replay's conflict codes once they can only be cash a rounding left short."""
+    if not evaluation.candidate_valid or evaluation.accounting is None:
+        raise ExactReplayRejectedError(f"the exact replay rejected a candidate outside the policy contract: {', '.join(evaluation.conflict_codes)}")
+    codes = frozenset(evaluation.conflict_codes)
+    if "SPENDABLE_CASH_NONNEGATIVE" not in codes or not codes <= _ROUNDING_DEFICIT_CODES:
+        raise ExactReplayRejectedError(f"the exact replay rejected rules no rounding explains: {', '.join(evaluation.conflict_codes)}")
+    if any(row.final_quantity < _EXACT_ZERO for row in evaluation.holdings):
+        raise ExactReplayRejectedError("the exact replay rejected a negative final holding")
+    return codes
+
+
+def rounding_top_ups(
+    scenario: ExactPlannerScenario,
+    evaluation: ExactEvaluation,
+) -> tuple[ExactRoundingTopUp, ...]:
+    """Classify an exact replay: the cash each pool lacks to rounding, or a rejection.
+
+    The replay stays authoritative. A feasible replay needs nothing. A replay
+    whose only violation is negative final spendable cash, each pool short by
+    ``D <= N x minor unit`` (``N`` = the pool's postings that carry a quantum:
+    the buy debit of every order, a nonzero fee, the FX credit), is a plan the
+    user can execute by adding ``D`` to each such pool: one top-up per negative
+    pool, in ledger order. A failed ``ROUNDING_BOUND`` is accepted only as the
+    top-ups repair it: the adjustment within the bound, and the shortfall within
+    the bound once the top-ups are reachable cash. Anything else raises
+    ``ExactReplayRejectedError``; the messages name rules and pools, never amounts.
+    """
+    if evaluation.feasible:
+        return ()
+    codes = _require_rounding_only_rejection(evaluation)
+    index = _build_scenario_index(scenario)
+    rounded_postings = Counter((posting.broker_id, posting.currency) for posting in evaluation.postings if posting.quantum is not None)
+    top_ups = []
+    for ledger in evaluation.ledgers:
+        if ledger.final_spendable >= _EXACT_ZERO:
+            continue
+        pool = (ledger.broker_id, ledger.currency)
+        deficit = -ledger.final_spendable
+        count = rounded_postings[pool]
+        if count == 0 or deficit > count * index.currency_quantum[ledger.currency]:
+            raise ExactReplayRejectedError(f"the exact replay left {ledger.broker_id}/{ledger.currency} short beyond its rounded postings")
+        top_ups.append(
+            ExactRoundingTopUp(
+                broker_id=ledger.broker_id,
+                currency=ledger.currency,
+                amount=deficit,
+                rounded_postings=count,
+                valuation_amount=_to_valuation(index, deficit, ledger.currency),
+            )
+        )
+    if not top_ups:
+        raise ExactReplayRejectedError("the exact replay rejected spendable cash without a negative pool")
+    if "ROUNDING_BOUND" in codes:
+        accounting = evaluation.accounting
+        topped_up = sum((item.valuation_amount for item in top_ups), _EXACT_ZERO)
+        if abs(accounting.rounding_adjustment) > accounting.rounding_bound or accounting.shortfall + topped_up < -accounting.rounding_bound:
+            raise ExactReplayRejectedError("the exact replay rejected a rounding bound the top-ups do not repair")
+    return tuple(top_ups)

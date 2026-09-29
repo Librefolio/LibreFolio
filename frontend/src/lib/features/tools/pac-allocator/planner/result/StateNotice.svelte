@@ -1,7 +1,7 @@
 <script lang="ts">
     import {t} from '$lib/i18n';
-    import {formatExactMoneyPlain, type CurrencyDigits} from '../format';
-    import type {PacPlannerRequest, PacReadyResult, PlannerStep} from '../types';
+    import {formatExactMoneyPlain, formatPlannerMoneyPlain, type CurrencyDigits} from '../format';
+    import type {PacPlannerRequest, PacReadyResult, PacRoundingTopUp, PlannerStep} from '../types';
     import {BUTTON_LINK, BUTTON_SECONDARY, HINT, NOTICE} from '../ui';
     import {requiredMinimumRoutes, type ResultNames} from './model';
     import {routeMinimumText} from './text';
@@ -23,6 +23,8 @@
     const stages = $derived(result.solver_evidence.stages);
     const finished = $derived(stages.filter((stage) => stage.status === 'finished').length);
     const minimums = $derived(result.result_state === 'ready_infeasible' ? requiredMinimumRoutes(request) : []);
+    // Cash the plan still needs per pool because of HALF_UP rounding (QX1-b): computed by the backend.
+    const topUps: PacRoundingTopUp[] = $derived('primary_solution' in result ? result.primary_solution.rounding_top_ups : []);
     const assetLabel = (id: string) => [names.ticker(id), names.asset(id)].filter((part) => part).join(' ');
     const goToLabel = (step: PlannerStep, fallback: string) => $t(`${PLANNER_KEY}.actions.goTo`, {default: 'Go to {step}', values: {step: $t(`${PLANNER_KEY}.steps.${step}`, {default: fallback})}});
 </script>
@@ -82,18 +84,24 @@
         <p class={HINT}>{$t(`${KEY}.infeasible.note`, {default: 'The interface does not choose which constraint to relax: it lists them. No partial plan is shown as valid.'})}</p>
         <button type="button" class={BUTTON_SECONDARY} data-testid="pac-planner-state-edit" onclick={onedit}>{$t(`${PLANNER_KEY}.actions.editConfiguration`, {default: 'Edit configuration'})}</button>
     </div>
-{:else if result.result_state === 'ready_no_incumbent' && result.stop_reason === 'completed'}
-    <!-- Every stage closed, but the exact Decimal replay rejected the solver's plan. -->
-    <div class="{NOTICE.warning} space-y-2" role="alert" data-testid="pac-planner-state" data-state="no_incumbent" data-stop={result.stop_reason}>
-        <p class="font-semibold">{$t(`${PLANNER_KEY}.result.outcomes.no_incumbent`, {default: 'No plan found'})}</p>
-        <p>{$t(`${KEY}.noIncumbent.rejected`, {default: 'The solver found a plan, but the exact Decimal check rejected it, so none is published. This is not a proof that no plan exists.'})}</p>
-        <button type="button" class={BUTTON_SECONDARY} data-testid="pac-planner-state-edit" onclick={onedit}>{$t(`${PLANNER_KEY}.actions.editConfiguration`, {default: 'Edit configuration'})}</button>
-    </div>
 {:else if result.result_state === 'ready_no_incumbent'}
     <div class="{NOTICE.warning} space-y-2" role="alert" data-testid="pac-planner-state" data-state="no_incumbent" data-stop={result.stop_reason}>
         <p class="font-semibold">{$t(`${KEY}.noIncumbent.title`, {default: 'No plan within the limits'})}</p>
         <p>{$t(`${KEY}.noIncumbent.body`, {default: 'The solver found no plan before the limit. This is not a proof that no plan exists.'})}</p>
         <p>{$t(`${KEY}.noIncumbent.tips`, {default: 'To reduce the search: fewer Assets or routes, tighter caps, larger steps.'})}</p>
         <button type="button" class={BUTTON_SECONDARY} data-testid="pac-planner-state-edit" onclick={onedit}>{$t(`${PLANNER_KEY}.actions.editConfiguration`, {default: 'Edit configuration'})}</button>
+    </div>
+{/if}
+
+{#if topUps.length > 0}
+    <div class="{NOTICE.warning} space-y-1" role="status" data-testid="pac-planner-top-up">
+        {#each topUps as row (`${row.broker_id}:${row.currency}`)}
+            <p data-testid="pac-planner-top-up-row" data-broker={row.broker_id} data-currency={row.currency}>
+                {$t(`${KEY}.topUp.row`, {
+                    default: 'To execute the plan you need {amount} more on {broker} ({currency}), because of rounding to the minimum unit.',
+                    values: {amount: formatPlannerMoneyPlain(row.amount, row.currency, {digits}), broker: names.broker(row.broker_id), currency: row.currency},
+                })}
+            </p>
+        {/each}
     </div>
 {/if}

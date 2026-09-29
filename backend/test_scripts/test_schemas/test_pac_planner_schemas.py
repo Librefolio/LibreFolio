@@ -11,6 +11,7 @@ import json
 import re
 from collections.abc import Callable
 from copy import deepcopy
+from decimal import Decimal
 from fractions import Fraction
 from pathlib import Path
 from typing import Any, get_args
@@ -451,11 +452,14 @@ def _infeasible_stage_specimen() -> JsonObject:
 
 
 def _ready_no_incumbent_result(product: str) -> JsonObject:
-    """SCIP finished every stage but the exact replay rejected its plan: nothing is published.
+    """SCIP stopped at a limit before holding any solution: nothing is published.
 
-    The fixture's evidence stays as it is (every stage ``finished``) and so does
-    ``stop_reason: "completed"`` - the pair the UI keys its "replay rejected"
-    notice on.
+    This is the only way to reach ``ready_no_incumbent`` since the exact replay
+    became authoritative (QX1-b): a replay rejection either publishes the plan
+    with its rounding top-ups or raises, so it never produces this state.  The
+    stop is therefore a limit (``time_limit``) and the evidence carries the
+    stage the limit interrupted (``unfinished``), as the stop-evidence rule
+    requires of every limit stop.
     """
     payload = _pac_no_op_result() if product == "PAC" else _rebalancer_incumbent_result()
     payload["result_state"] = "ready_no_incumbent"
@@ -463,6 +467,8 @@ def _ready_no_incumbent_result(product: str) -> JsonObject:
     payload.pop("primary_solution")
     payload.pop("deployment")
     payload["proof"] = {"kind": "not_proven", "reason_code": "allocation.exact_proof_not_established"}
+    payload["stop_reason"] = "time_limit"
+    payload["solver_evidence"] = {"kind": "reported_floating", "stages": [_reported_solver_stage(status="unfinished")]}
     return payload
 
 
@@ -2271,6 +2277,39 @@ def test_ready_infeasible_is_one_infeasible_first_stage_with_a_completed_stop(pr
     _reject(adapter, payload)
 
 
+def _completed_no_incumbent_result(product: str) -> JsonObject:
+    """Yesterday's replay-rejected shape: every stage ``finished``, ``completed``, and no plan."""
+    payload = _ready_no_incumbent_result(product)
+    payload["stop_reason"] = "completed"
+    payload["solver_evidence"] = deepcopy(_ready_source_result(product)["solver_evidence"])
+    assert _finished_evidence_codes(payload)
+    return payload
+
+
+@pytest.mark.parametrize(("product", "adapter"), READY_PRODUCT_CASES)
+def test_ready_no_incumbent_is_only_a_limit_stop(product: str, adapter: TypeAdapter[Any]) -> None:
+    """A search that completed always holds a plan, so "no plan" is only ever a limit stop.
+
+    Since QX1-b the exact replay no longer suppresses a plan: it publishes it
+    with its rounding top-ups or raises.  The one remaining way to publish
+    nothing is SCIP stopping at a time or node limit before holding any
+    solution, so ``completed`` must be refused by the type itself - a
+    ``literal_error`` on ``stop_reason`` - not by some later cross-field rule.
+    """
+    for stop_reason in ("time_limit", "node_limit"):
+        payload = _ready_no_incumbent_result(product)
+        payload["stop_reason"] = stop_reason
+        model, _emitted = _strict_roundtrip(adapter, payload)
+        wire = adapter.dump_python(model, mode="json")
+        assert (wire["result_state"], wire["stop_reason"]) == ("ready_no_incumbent", stop_reason)
+        assert "primary_solution" not in wire and "deployment" not in wire
+
+    with pytest.raises(ValidationError) as exc_info:
+        adapter.validate_json(_wire(_completed_no_incumbent_result(product)), strict=True)
+    errors = exc_info.value.errors(include_url=False)
+    assert any(error["type"] == "literal_error" and error["loc"][-1] == "stop_reason" for error in errors), errors
+
+
 def _optimal_ready_result(product: str) -> JsonObject:
     payload = _ready_source_result(product)
     payload["proof"] = _optimal_proven_proof(_primary_objective_codes(payload))
@@ -2332,7 +2371,11 @@ SOLVER_STATUS_BINDING_CASES = (
     pytest.param(_optimal_over_evidence_missing_a_stage, "Optimal proof witness must name exactly the finished solver stages in order", id="optimal-witness-names-an-unreported-stage"),
     pytest.param(_infeasibility_over_a_finished_stage, "infeasibility_proven requires an infeasible first solver stage", id="infeasibility-without-infeasible-stage"),
     pytest.param(_infeasibility_naming_another_stage, "Infeasibility proof witness must name the infeasible solver stage", id="infeasibility-witness-names-another-stage"),
-    pytest.param(_state_over_only_an_infeasible_stage("ready_no_incumbent"), "An infeasible solver stage requires an infeasibility proof", id="no-incumbent-over-infeasible-stage"),
+    # A no-incumbent can no longer sit on an infeasible stage at all: ``completed`` is
+    # not its stop literal, and its limit stop needs an unfinished stage, which the
+    # lone infeasible stage is not.  So the stop-evidence rule, which runs before the
+    # solver-status binding, is what rejects it.
+    pytest.param(_state_over_only_an_infeasible_stage("ready_no_incumbent"), "Completed stops require no unfinished stage; limit stops require an unfinished stage", id="no-incumbent-over-infeasible-stage"),
     pytest.param(_state_over_only_an_infeasible_stage("ready_no_op"), "An infeasible solver stage requires an infeasibility proof", id="no-op-over-infeasible-stage"),
     pytest.param(_state_over_only_an_infeasible_stage("ready_incumbent"), "An infeasible solver stage requires an infeasibility proof", id="incumbent-over-infeasible-stage"),
 )
@@ -2506,6 +2549,261 @@ def test_exact_accounting_ledger_projection_and_objective_identities_are_enforce
     else:
         _find(solution["objectives"]["stages"], "objective_code", "shortfall")["value"] = _finite("1")
     _reject(PAC_PLAN_OUTPUT_ADAPTER, payload)
+
+
+def _top_up_row(amount: str, *, rounded_postings: int = 1, valuation: JsonObject | None = None) -> JsonObject:
+    """One broker-one/EUR rounding top-up, valued at its own amount unless told otherwise."""
+    return {
+        "broker_id": "broker-one",
+        "currency": "EUR",
+        "amount": amount,
+        "rounded_postings": rounded_postings,
+        "valuation_amount": _money(amount) if valuation is None else valuation,
+    }
+
+
+def _pac_top_up_result(deficit: str = "0.01", *, rounded_postings: int = 1) -> JsonObject:
+    """The €5 PAC incumbent bought with ``deficit`` less cash, published with the top-up that covers it.
+
+    This is the shape the exact replay produces when HALF_UP posting leaves a
+    pool a few minor units short (QX1-b): the plan stands, the pool goes
+    negative, and the top-up tells the user what to add.  Every field that
+    reports the selected cash moves with it - the scenario basis and the
+    accounting (selected, reachable, fixed reference ``5 - deficit``; shortfall
+    and free cash ``-deficit``), the Asset's fixed-reference target and
+    residual, the ledger row (initial ``5 - deficit``, final balances
+    ``-deficit``) and the shortfall and fixed-L2 objectives - so the negative
+    pool is the only unusual thing in the payload, and the top-up the only
+    thing that excuses it.  The payload is derived from the JSON fixture
+    (through ``_pac_incumbent_result``), whose ``rounding_top_ups`` is ``[]``
+    because every pool there balances; the helper sets the top-up rows
+    itself, one row covering ``deficit`` over ``rounded_postings``.
+    """
+    gap = Decimal(deficit)
+    cash = str(Decimal("5") - gap)
+    payload = _pac_incumbent_result()
+    for field in ("selected_funding", "reachable_funding", "fixed_reference"):
+        payload["scenario_basis"][field] = _money(cash)
+
+    solution = payload["primary_solution"]
+    accounting = solution["accounting"]
+    for field in ("current_invested", "selected_funding", "reachable_funding", "trapped_funding", "fixed_reference"):
+        accounting[field] = deepcopy(payload["scenario_basis"][field])
+    accounting["final_invested"] = _money("5")
+    accounting["shortfall"] = _money(str(-gap))
+    accounting["free_cash"] = _money(str(-gap))
+    accounting["rounding_delta"] = _money("0")
+
+    asset = _find(solution["asset_rows"], "asset_id", "asset-one")
+    asset["target_value"] = _money(cash)
+    asset["residual"] = _money(deficit)
+
+    ledger = _find(solution["ledger_rows"], "broker_id", "broker-one")
+    ledger["initial_selected"] = cash
+    ledger["final_spendable"] = str(-gap)
+    ledger["final_physical"] = str(-gap)
+
+    _find(solution["objectives"]["stages"], "objective_code", "shortfall")["value"] = _finite(str(-gap))
+    _find(solution["objectives"]["stages"], "objective_code", "fixed_l2")["value"] = _finite(str(gap * gap))
+    solution["rounding_top_ups"] = [_top_up_row(deficit, rounded_postings=rounded_postings)]
+    return payload
+
+
+@pytest.mark.parametrize(
+    ("deficit", "rounded_postings"),
+    (
+        pytest.param("0.01", 1, id="one-cent-over-one-posting"),
+        pytest.param("0.02", 2, id="two-cents-over-two-postings"),
+    ),
+)
+def test_pac_rounding_top_up_publishes_the_negative_pool_it_covers(deficit: str, rounded_postings: int) -> None:
+    """A negative pool is publishable when a top-up names it, to the cent, within its rounded postings.
+
+    The ledger row keeps its negative balances instead of the schema refusing
+    them, and the top-up travels unchanged: the wire is a projection of what
+    the classifier decided.  The two-cent case is what the one-cent case
+    cannot tell apart from a flat one-minor-unit cap: the threshold is
+    ``rounded_postings`` minor units (an order can round twice, debit and
+    fee).
+    """
+    payload = _pac_top_up_result(deficit, rounded_postings=rounded_postings)
+    model, _emitted = _strict_roundtrip(PAC_PLAN_OUTPUT_ADAPTER, payload)
+    wire = PAC_PLAN_OUTPUT_ADAPTER.dump_python(model, mode="json")
+
+    assert type(model) is PacPlannerReadyIncumbentResult
+    solution = wire["primary_solution"]
+    (top_up,) = solution["rounding_top_ups"]
+    assert (top_up["broker_id"], top_up["currency"], top_up["rounded_postings"]) == ("broker-one", "EUR", rounded_postings)
+    assert Fraction(top_up["amount"]) == Fraction(deficit)
+    assert top_up["valuation_amount"]["currency"] == wire["scenario_basis"]["valuation_currency"]
+    assert _money_wire_fraction(top_up["valuation_amount"]) == Fraction(deficit)
+    ledger = _find(solution["ledger_rows"], "broker_id", "broker-one")
+    assert Fraction(ledger["final_spendable"]) == Fraction(ledger["final_physical"]) == -Fraction(deficit)
+    assert _money_wire_fraction(solution["accounting"]["free_cash"]) == -Fraction(deficit)
+
+
+def _negative_pool_without_top_up() -> JsonObject:
+    """The nonnegative incumbent with only its ledger pool one cent short, and no top-up for it.
+
+    Nothing else reports the deficit - the accounting stays nonnegative - so
+    the cover rule is the only one this payload breaks.
+    """
+    payload = _pac_incumbent_result()
+    ledger = _find(payload["primary_solution"]["ledger_rows"], "broker_id", "broker-one")
+    ledger.update({"initial_selected": "4.99", "final_spendable": "-0.01", "final_physical": "-0.01"})
+    payload["primary_solution"]["rounding_top_ups"] = []
+    return payload
+
+
+def _top_up_without_negative_pool() -> JsonObject:
+    payload = _pac_incumbent_result()
+    payload["primary_solution"]["rounding_top_ups"] = [_top_up_row("0.01")]
+    return payload
+
+
+def _top_up_larger_than_its_deficit() -> JsonObject:
+    # Valued at its own amount and within 2 x 0.01, so only the cover rule breaks.
+    payload = _pac_top_up_result()
+    payload["primary_solution"]["rounding_top_ups"] = [_top_up_row("0.02", rounded_postings=2)]
+    return payload
+
+
+def _duplicate_top_up_scope() -> JsonObject:
+    payload = _pac_top_up_result()
+    payload["primary_solution"]["rounding_top_ups"] = [_top_up_row("0.01"), _top_up_row("0.01")]
+    return payload
+
+
+def _more_rounded_postings_than_the_scope_carries() -> JsonObject:
+    # broker-one/EUR carries one order row (BUY debit and fee: 2) and no FX credit.
+    payload = _pac_top_up_result()
+    payload["primary_solution"]["rounding_top_ups"] = [_top_up_row("0.01", rounded_postings=3)]
+    return payload
+
+
+def _deficit_beyond_its_rounded_postings() -> JsonObject:
+    # A coherent two-cent pool, but one rounded posting only excuses one cent.
+    return _pac_top_up_result("0.02", rounded_postings=1)
+
+
+def _zero_valued_top_up() -> JsonObject:
+    # The cent is booked as rounding (inside a one-cent bound), so neither the free-cash
+    # nor the shortfall rule needs the valuation: only the valuation's own rules remain.
+    payload = _pac_top_up_result()
+    payload["primary_solution"]["rounding_top_ups"] = [_top_up_row("0.01", valuation=_money("0"))]
+    accounting = payload["primary_solution"]["accounting"]
+    accounting["free_cash"] = _money("0")
+    accounting["rounding_delta"] = _money("-0.01")
+    accounting["rounding_bound"] = _money("0.01")
+    return payload
+
+
+def _top_up_valued_off_its_own_amount() -> JsonObject:
+    payload = _pac_top_up_result()
+    payload["primary_solution"]["rounding_top_ups"] = [_top_up_row("0.01", valuation=_money("0.02"))]
+    return payload
+
+
+def _free_cash_negative_beyond_the_top_ups() -> JsonObject:
+    # Two cents of negative free cash, one reported as economic loss so the decomposition
+    # and the shortfall (-0.01 + 0.01 >= 0) still hold: one cent is left uncovered.
+    payload = _pac_top_up_result()
+    accounting = payload["primary_solution"]["accounting"]
+    accounting["free_cash"] = _money("-0.02")
+    accounting["economic_losses"] = _money("0.01")
+    return payload
+
+
+def _shortfall_beyond_the_top_ups() -> JsonObject:
+    # The shortfall and everything that reports it (fixed reference, target, residual,
+    # objective) move to -0.02 while free cash, the pool and its top-up stay at one cent.
+    # No coherent payload breaks this rule alone - free cash + top-ups >= 0, the
+    # decomposition and |rounding| <= bound together imply it - so the decomposition,
+    # checked after it as today, is the one other rule broken here.
+    payload = _pac_top_up_result()
+    for field in ("selected_funding", "reachable_funding", "fixed_reference"):
+        payload["scenario_basis"][field] = _money("4.98")
+    solution = payload["primary_solution"]
+    for field in ("selected_funding", "reachable_funding", "fixed_reference"):
+        solution["accounting"][field] = deepcopy(payload["scenario_basis"][field])
+    solution["accounting"]["shortfall"] = _money("-0.02")
+    asset = _find(solution["asset_rows"], "asset_id", "asset-one")
+    asset["target_value"] = _money("4.98")
+    asset["residual"] = _money("0.02")
+    _find(solution["objectives"]["stages"], "objective_code", "shortfall")["value"] = _finite("-0.02")
+    _find(solution["objectives"]["stages"], "objective_code", "fixed_l2")["value"] = _finite("0.0004")
+    return payload
+
+
+def _top_up_valued_in_another_currency() -> JsonObject:
+    # USD joins the catalogue so the catalogue rules pass and the valuation-currency rule speaks.
+    payload = _pac_top_up_result()
+    payload["catalogs"]["currencies"].append({"currency": "USD", "minor_unit": "0.01"})
+    payload["scenario_basis"]["counts"]["currencies"] = len(payload["catalogs"]["currencies"])
+    payload["primary_solution"]["rounding_top_ups"] = [_top_up_row("0.01", valuation=_money("0.01", "USD"))]
+    return payload
+
+
+PAC_ROUNDING_TOP_UP_REJECTION_CASES = (
+    pytest.param(_top_up_larger_than_its_deficit, "PAC rounding top-ups must cover exactly the negative ledger balances", id="amount-differs-from-the-deficit"),
+    pytest.param(_negative_pool_without_top_up, "PAC rounding top-ups must cover exactly the negative ledger balances", id="negative-pool-without-top-up"),
+    pytest.param(_top_up_without_negative_pool, "PAC rounding top-ups must cover exactly the negative ledger balances", id="top-up-without-negative-pool"),
+    pytest.param(_duplicate_top_up_scope, "PAC rounding top-up scopes must be unique", id="duplicate-scope"),
+    pytest.param(_more_rounded_postings_than_the_scope_carries, "A PAC rounding top-up cannot count more rounded postings than its ledger scope carries", id="more-postings-than-the-scope"),
+    pytest.param(_deficit_beyond_its_rounded_postings, "A PAC rounding top-up cannot exceed its rounded postings times the currency minor unit", id="beyond-postings-times-minor-unit"),
+    pytest.param(_zero_valued_top_up, "PAC rounding top-up valuations must be positive", id="zero-valuation"),
+    pytest.param(_top_up_valued_off_its_own_amount, "A PAC rounding top-up in the valuation currency must be valued at its own amount", id="valued-off-its-own-amount"),
+    pytest.param(_free_cash_negative_beyond_the_top_ups, "Free cash cannot be negative beyond the rounding top-ups", id="free-cash-beyond-top-ups"),
+    pytest.param(_shortfall_beyond_the_top_ups, "Shortfall cannot exceed the favorable rounding bound", id="shortfall-beyond-top-ups"),
+    pytest.param(_top_up_valued_in_another_currency, "Asset, accounting, and cost projections must use the valuation currency", id="valued-in-another-currency"),
+)
+
+
+@pytest.mark.parametrize(("build", "message"), PAC_ROUNDING_TOP_UP_REJECTION_CASES)
+def test_pac_rounding_top_up_rejects_a_top_up_the_ledger_does_not_justify(build: PayloadFactory, message: str) -> None:
+    """A top-up excuses exactly its own pool's rounding deficit, and nothing else.
+
+    Each payload breaks one rule (or, where no coherent payload can, the one
+    the comment names) and the test pins that rule's message, since a bare
+    rejection would also pass for whatever else breaks first.  The contract:
+    every PAC solution requires ``rounding_top_ups`` - empty when every pool
+    balances, pinned empty by ``PacNoOpSolution`` - while Rebalancer
+    solutions forbid it as an extra field.
+    """
+    _reject_because(PAC_PLAN_OUTPUT_ADAPTER, build(), message)
+
+
+def test_pac_no_op_publishes_no_rounding_top_up() -> None:
+    """A no-op posts nothing, so nothing rounds: its top-up list exists and is empty by type."""
+    payload = _pac_no_op_result()
+    payload["primary_solution"]["rounding_top_ups"] = []
+    model, _emitted = _strict_roundtrip(PAC_PLAN_OUTPUT_ADAPTER, payload)
+    assert PAC_PLAN_OUTPUT_ADAPTER.dump_python(model, mode="json")["primary_solution"]["rounding_top_ups"] == []
+
+    payload["primary_solution"]["rounding_top_ups"] = [_top_up_row("0.01")]
+    with pytest.raises(ValidationError) as exc_info:
+        PAC_PLAN_OUTPUT_ADAPTER.validate_json(_wire(payload), strict=True)
+    errors = exc_info.value.errors(include_url=False)
+    assert any(error["type"] == "too_long" and error["loc"][-1] == "rounding_top_ups" for error in errors), errors
+
+
+def test_rebalancer_ledger_cannot_go_negative_and_has_no_top_up() -> None:
+    """The Rebalancer has no rounding top-ups, so its own validator keeps refusing negative pools.
+
+    The ledger row stopped refusing negative balances by itself when the PAC
+    started publishing covered ones; the Rebalancer solution now carries that
+    rule.  The negative row is internally reconciled (a one-cent larger BUY
+    debit), so only the sign is wrong.
+    """
+    carrying = _rebalancer_incumbent_result()
+    carrying["primary_solution"]["rounding_top_ups"] = []
+    _assert_extra_forbidden(REBALANCER_PLAN_OUTPUT_ADAPTER, carrying, "rounding_top_ups")
+
+    payload = _rebalancer_incumbent_result()
+    ledger = next(row for row in payload["primary_solution"]["ledger_rows"] if (row["broker_id"], row["currency"]) == ("broker-alpha", "EUR"))
+    assert (Fraction(ledger["buy_debit"]), Fraction(ledger["final_spendable"]), Fraction(ledger["final_physical"])) == (40, 0, 0)
+    ledger.update({"buy_debit": "40.01", "final_spendable": "-0.01", "final_physical": "-0.01"})
+    _reject_because(REBALANCER_PLAN_OUTPUT_ADAPTER, payload, "Rebalancer ledger balances cannot be negative")
 
 
 def _assert_available_weight_identities(rows: list[JsonObject], weight_field: str, value_field: str, total: Fraction, zero_reason: str) -> None:
@@ -2698,13 +2996,13 @@ PLANNER_FULL_SCHEMA_FINGERPRINT_CASES = (
     pytest.param(
         PAC_PLAN_INPUT_ADAPTER,
         PAC_PLAN_OUTPUT_ADAPTER,
-        "bd52b93a79b6560c634c8c5d7b9b741fa0b5b1fac9ec81f06f8fedbae59951d3",
+        "502e8c48dbbf3cc55fbe02f2a2c43b186d5970ff3f1fe5130d35748641c8e374",
         id="pac",
     ),
     pytest.param(
         REBALANCER_PLAN_INPUT_ADAPTER,
         REBALANCER_PLAN_OUTPUT_ADAPTER,
-        "fff1f966c63a9d9bbe0bc13cae5b9203c31eb1aafe795732b87828c4c3f681b1",
+        "17d5625e8bf24e20090ef3c58e7cd98178eaadb74884aee92cbc1753d5591cc3",
         id="rebalancer",
     ),
 )

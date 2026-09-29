@@ -13,10 +13,14 @@ hand-rolled.
 
 SCIP is the only production search engine, and since D-X1 its own status is
 the proof: ``proof.conclude_with_solver`` is the only reader of it. The replay
-is unconditional: SCIP is never trusted to report its own result. A candidate
-the replay rejects is not a warning on a published plan — it yields
-``ready_no_incumbent`` and nothing is published (test_replay_failure_*). The
-locked properties, each mapped to a test:
+is unconditional and its verdict is authoritative: SCIP is never trusted to
+report its own result. A plan whose only violation is a rounding deficit
+within N minor units per cash pool (N = the pool's postings that carry a
+quantum) is published with its top-ups — one per negative pool, "this
+broker/currency needs D more" (test_rounding_tie_*). Any other rejection
+raises ``ExactReplayRejectedError``, which the Tool reports as
+``execution_failed``; it is never ``ready_no_incumbent``
+(test_replay_rejection_*). The locked properties, each mapped to a test:
 
 * **No-op is a first-class optimum, not "no exception".** The unmodified fixture
   has €5 against a €10 whole-unit price, so doing nothing *is* the proven
@@ -68,6 +72,8 @@ import os
 import subprocess
 import sys
 import textwrap
+from dataclasses import replace
+from decimal import Decimal
 from fractions import Fraction
 from pathlib import Path
 from typing import get_args
@@ -88,16 +94,15 @@ from backend.app.schemas.pac_allocator import (
     PlannerResultSnapshot,
     ReportedFloatingSolverEvidence,
 )
+from backend.app.services.pac_allocator import evaluator as EV
 from backend.app.services.pac_allocator import planner
-from backend.app.services.pac_allocator.evaluator import build_exact_policy_view
+from backend.app.services.pac_allocator.evaluator import build_exact_policy_view, evaluate_exact_candidate, exact_decision_id
 from backend.app.services.pac_allocator.normalize import normalize_pac_plan
 from backend.app.services.pac_allocator.planner import plan_pac_allocation
 from backend.test_scripts.test_schemas.test_pac_planner_schemas import _pac_request
 
 # The repository root: parents = [test_services, test_scripts, backend, <root>].
 REPO_ROOT = Path(__file__).resolve().parents[3]
-
-_ZERO_CANDIDATE_ID = "plan:zero"  # id the planner gives the do-nothing re-evaluation
 
 
 # --------------------------------------------------------------------------
@@ -329,52 +334,186 @@ def test_failure_result_mapping_is_direct(builder, availability, issue_kind, res
 
 
 # --------------------------------------------------------------------------
-# Item 5 — replay failure suppresses the plan (ready_no_incumbent, no solution).
+# Item 5 — the replay's verdict is authoritative (commit 5, QX1-b): a plan whose
+# only violation is a rounding deficit within N minor units per cash pool is
+# published with its top-ups; any other rejection raises
+# ExactReplayRejectedError, never ready_no_incumbent. Asserted on the published
+# wire result, never on the planner's internal path.
 # --------------------------------------------------------------------------
-class _InfeasibleReplay:
-    """A stand-in the planner only ever reads ``.feasible`` from.
+_BROKER_ONE_ID = "broker-one"
 
-    The replay result is discarded the moment ``.feasible`` is read (the planner
-    re-derives everything else from the do-nothing candidate), so a lightweight
-    object is enough — and honest about what the planner actually consumes.
-    """
+# The conflict codes a pure rounding deficit leaves behind; any other is a rejection.
+_TOP_UP_TOLERATED_CODES = frozenset({"FX_SOURCE_CASH", "NO_SHORT_OR_LEVERAGE", "ROUNDING_BOUND", "SPENDABLE_CASH_NONNEGATIVE"})
 
-    feasible = False
+# currency -> (tie price, cash, cash plus one minor unit). Three whole units at
+# the tie price cost exactly half a minor unit more than the cash, which the
+# HALF_UP replay posts as one whole minor unit more.
+_ROUNDING_TIES = {
+    "BHD": ("33.3335", "100.000", "100.001"),
+    "EUR": ("33.335", "100.00", "100.01"),
+    "JPY": ("333.5", "1000", "1001"),
+}
 
 
-def test_replay_failure_suppresses_the_plan(monkeypatch):
-    """A candidate that fails exact replay yields no publishable plan.
+def _tie_payload(currency: str, price: str, cash: str) -> dict:
+    """The min fixture moved to ``currency``: a zero-fee whole-unit Asset at ``price``, ``cash`` on broker-one."""
+    payload = _pac_request()
+    payload["valuation_currency"] = currency
+    asset = next(row for row in payload["assets"] if row["asset_id"] == _ASSET_ONE_ID)
+    asset["quote"]["amount"] = price
+    asset["quote"]["currency"] = currency
+    broker = next(row for row in payload["brokers"] if row["broker_id"] == _BROKER_ONE_ID)
+    for fee in broker["fee_schedules"]:
+        fee["fixed_fee"]["currency"] = currency
+        fee["variable_floor"]["currency"] = currency
+        fee["variable_cap"]["amount"]["currency"] = currency
+        fee["rate"] = "0"
+    for row in payload["existing_cash"]:
+        row["available"] = {"amount": cash, "currency": currency}
+        row["selected"] = {"amount": cash, "currency": currency}
+    return payload
 
-    The forced infeasibility is applied only to the *published* candidate; the
-    do-nothing re-evaluation inside ``_no_incumbent_result`` (id ``plan:zero``)
-    stays real so the scenario basis and report can still be built. The would-be
-    incumbent is therefore suppressed rather than degraded into a warning.
 
-    SCIP itself finished: every stage closed, so the stop is ``completed``, not a
-    limit. ``ready_no_incumbent`` with ``completed`` is exactly the state the UI's
-    "replay rejected" notice keys on — the one no-plan outcome no budget explains.
-    """
-    real_evaluate = planner.evaluate_exact_candidate
-
-    def replay(scenario, view, candidate, *, checkpoint=None):
-        if candidate.candidate_id == _ZERO_CANDIDATE_ID:
-            return real_evaluate(scenario, view, candidate, checkpoint=checkpoint)
-        return _InfeasibleReplay()
-
-    monkeypatch.setattr(planner, "evaluate_exact_candidate", replay)
-    result = plan_pac_allocation(_validated(_incumbent_payload()))
-
-    assert isinstance(result, PacPlannerReadyNoIncumbentResult)
-    assert result.result_state == "ready_no_incumbent"
-    assert result.proof.kind == "not_proven"
-    assert not hasattr(result, "primary_solution")
-
-    assert result.stop_reason == "completed"
-    wire = PAC_PLAN_OUTPUT_ADAPTER.dump_python(result, mode="json", by_alias=True)
-    stages = wire["solver_evidence"]["stages"]
-    assert stages, "the replay-rejected result must still report the stages SCIP ran"
-    assert {stage["status"] for stage in stages} == {"finished"}, stages
+def _plan_wire(payload: dict) -> dict:
+    """Plan ``payload`` in the Tool's engine window, revalidate it, return the dumped wire result."""
+    result = plan_pac_allocation(_validated(payload), solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
     _revalidate(result)
+    return PAC_PLAN_OUTPUT_ADAPTER.dump_python(result, mode="json", by_alias=True)
+
+
+def _published_minor_unit(wire: dict, currency: str) -> Decimal:
+    (row,) = [row for row in wire["catalogs"]["currencies"] if row["currency"] == currency]
+    return Decimal(row["minor_unit"])
+
+
+def _assert_three_units_bought(wire: dict) -> None:
+    order_rows = wire["primary_solution"]["order_rows"]
+    bought = {(row["asset_id"], row["route_id"]): _order_summary(row) for row in order_rows}
+    assert len(bought) == len(order_rows), f"more than one order row on one route: {order_rows}"
+    assert bought == {(_ASSET_ONE_ID, _ASSET_ONE_ROUTE_ID): ("buy", "whole_quantity", Fraction(3), "asset_unit")}
+
+
+def _broker_one_final_cash(wire: dict, currency: str) -> tuple[Decimal, Decimal]:
+    (row,) = [row for row in wire["primary_solution"]["ledger_rows"] if (row["broker_id"], row["currency"]) == (_BROKER_ONE_ID, currency)]
+    return Decimal(row["final_spendable"]), Decimal(row["final_physical"])
+
+
+@pytest.mark.parametrize("currency", sorted(_ROUNDING_TIES))
+def test_rounding_tie_is_published_with_its_top_up(currency):
+    """A HALF_UP tie is a published, proven plan with one top-up of one minor unit.
+
+    SCIP closes every stage with 3 units; the Decimal replay posts their cost one
+    minor unit above the cash, so broker-one ends one minor unit short. The
+    pool's only quantum-carrying posting is the buy debit (the initial cash has
+    none, a zero fee is not posted): N = 1 and D = one minor unit, within the
+    rule. The result is ``ready_incumbent`` / ``optimal_proven``; its one top-up
+    names the pool, the missing minor unit (read from the published currency
+    catalogue, never hard-coded), its one rounded posting and its valuation in
+    the valuation currency; the ledger shows the pool at minus one minor unit.
+    Before commit 5 the same plan was suppressed as ``ready_no_incumbent``.
+    """
+    price, cash, _ = _ROUNDING_TIES[currency]
+    wire = _plan_wire(_tie_payload(currency, price, cash))
+    minor = _published_minor_unit(wire, currency)
+    assert 3 * Decimal(price) - Decimal(cash) == minor / 2, "the scenario must be a tie: exactly half a minor unit over the cash"
+
+    assert (wire["result_state"], wire["outcome"], wire["stop_reason"]) == ("ready_incumbent", "incumbent_found", "completed")
+    assert wire["proof"]["kind"] == "optimal_proven"
+    _assert_three_units_bought(wire)
+    assert _broker_one_final_cash(wire, currency) == (-minor, -minor)
+
+    top_ups = wire["primary_solution"]["rounding_top_ups"]
+    assert [(row["broker_id"], row["currency"]) for row in top_ups] == [(_BROKER_ONE_ID, currency)]
+    (top_up,) = top_ups
+    assert Decimal(top_up["amount"]) == minor
+    assert top_up["rounded_postings"] == 1
+    valuation = top_up["valuation_amount"]
+    assert (valuation["currency"], valuation["value"]["kind"]) == (currency, "finite_decimal")
+    assert Decimal(valuation["value"]["value"]) == minor
+
+
+@pytest.mark.parametrize("currency", sorted(_ROUNDING_TIES))
+def test_rounding_tie_with_one_more_minor_unit_needs_no_top_up(currency):
+    """The counterfactual: one more minor unit of cash buys the same plan, with no top-up.
+
+    Proves the announced top-up is exactly enough: the same 3 units, the pool
+    back at zero, and ``rounding_top_ups`` published and empty.
+    """
+    price, cash, one_more = _ROUNDING_TIES[currency]
+    wire = _plan_wire(_tie_payload(currency, price, one_more))
+
+    assert (wire["result_state"], wire["outcome"], wire["stop_reason"]) == ("ready_incumbent", "incumbent_found", "completed")
+    assert wire["proof"]["kind"] == "optimal_proven"
+    _assert_three_units_bought(wire)
+    assert Decimal(one_more) - Decimal(cash) == _published_minor_unit(wire, currency)
+    assert _broker_one_final_cash(wire, currency) == (0, 0)
+
+    assert "rounding_top_ups" in wire["primary_solution"], sorted(wire["primary_solution"])
+    assert wire["primary_solution"]["rounding_top_ups"] == []
+
+
+def _threshold_breach_payload() -> dict:
+    """The EUR tie with a EUR 1 fixed fee: SCIP buys 2 units; a third leaves the pool EUR 1.01 short."""
+    price, cash, _ = _ROUNDING_TIES["EUR"]
+    payload = _tie_payload("EUR", price, cash)
+    broker = next(row for row in payload["brokers"] if row["broker_id"] == _BROKER_ONE_ID)
+    for fee in broker["fee_schedules"]:
+        fee["fixed_fee"]["amount"] = "1"
+    return payload
+
+
+def test_replay_rejection_beyond_the_rounding_threshold_raises(monkeypatch):
+    """A candidate short by more than N minor units raises; it never becomes ``ready_no_incumbent``.
+
+    Replaces ``test_replay_failure_suppresses_the_plan``, obsolete by design: it
+    pinned the behaviour the developer reversed on 25/09 (a replay rejection
+    answered ``ready_no_incumbent`` + ``completed``). Not a flake, not a defect.
+
+    Seam: ``planner.solve_policy_program`` runs the real SCIP and hands the
+    replay the same candidate (same view and candidate ids) with one more buy
+    quantum; the replay and the classifier stay real. The zero-fee tie cannot
+    host it: its view bounds the route at 3 units, so a 4th would be out of
+    bounds (a contract failure, not a threshold breach). With a EUR 1 fixed fee
+    SCIP buys 2 units, and the tampered 3rd ends broker-one EUR 1.01 short over
+    two rounded postings (buy debit and fee). The candidate is also replayed
+    directly, to prove that the cash rules are the only ones it breaks and that
+    D > N x minor unit: the raise is attributable to the threshold alone.
+    """
+    real_solve = planner.solve_policy_program
+    buy_id = exact_decision_id("buy_quantum", _ASSET_ONE_ROUTE_ID)
+    tampered = []
+
+    def solve_one_quantum_too_many(*args, **kwargs):
+        run = real_solve(*args, **kwargs)
+        assert run.candidate is not None, "SCIP must hold a candidate for the seam to tamper with"
+        candidate = replace(run.candidate, decisions=tuple(replace(item, quanta=item.quanta + 1) if item.decision_id == buy_id else item for item in run.candidate.decisions))
+        tampered.append(candidate)
+        return replace(run, candidate=candidate)
+
+    monkeypatch.setattr(planner, "solve_policy_program", solve_one_quantum_too_many)
+    request = _validated(_threshold_breach_payload())
+    try:
+        outcome = plan_pac_allocation(request, solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
+    except ValueError as error:  # ExactReplayRejectedError is an ExactEvaluatorError, a ValueError
+        outcome = error
+
+    assert len(tampered) == 1, "the planner must run SCIP exactly once and replay its candidate"
+    (candidate,) = tampered
+    assert {item.decision_id: item.quanta for item in candidate.decisions}[buy_id] == 3, "SCIP's own plan is 2 units"
+
+    scenario = normalize_pac_plan(request).normalized
+    evaluation = evaluate_exact_candidate(scenario, build_exact_policy_view(scenario, purpose="primary"), candidate)
+    assert evaluation.candidate_valid is True
+    assert "SPENDABLE_CASH_NONNEGATIVE" in evaluation.conflict_codes
+    assert set(evaluation.conflict_codes) <= _TOP_UP_TOLERATED_CODES, evaluation.conflict_codes
+    (ledger,) = [row for row in evaluation.ledgers if (row.broker_id, row.currency) == (_BROKER_ONE_ID, "EUR")]
+    rounded_postings = sum(1 for posting in evaluation.postings if (posting.broker_id, posting.currency) == (_BROKER_ONE_ID, "EUR") and posting.quantum is not None)
+    (spec,) = [row for row in scenario.currency_specs if row.currency == "EUR"]
+    assert (rounded_postings, -ledger.final_spendable) == (2, spec.minor_unit * 101)
+    assert -ledger.final_spendable > rounded_postings * spec.minor_unit
+
+    assert not isinstance(outcome, PacPlannerReadyNoIncumbentResult), f"a replay rejection must raise ExactReplayRejectedError, not answer {outcome.result_state} / {outcome.stop_reason}"
+    assert isinstance(outcome, EV.ExactReplayRejectedError), repr(outcome)
 
 
 # --------------------------------------------------------------------------
