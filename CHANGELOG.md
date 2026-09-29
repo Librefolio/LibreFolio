@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-**Preparing v1.1.1.** These fixes and refinements are in preparation; this version has not been released.
+**Preparing v1.2.0.** These features and fixes are in preparation; this version has not been released.
 
 ### ✨ Added
 
