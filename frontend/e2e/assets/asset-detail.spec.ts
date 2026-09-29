@@ -648,6 +648,32 @@ test.describe('Asset Detail Page', () => {
                 points: CalendarPointFixture[];
                 [key: string]: unknown;
             }>;
+            // Exactly what buildCalendarResult builds: buildI60GCalendarResult spreads it and its input_coverage.
+            availability: {
+                domain_compatible: boolean;
+                can_compute: boolean;
+                missing_price_fields: string[];
+                missing_event_types: string[];
+                input_coverage: {
+                    requested_points: number;
+                    available_points: number;
+                    contiguous_points: number;
+                    observed_points: number;
+                    backfilled_points: number;
+                    missing_points: number;
+                    max_consecutive_missing_points: number;
+                    internal_gap_count: number;
+                    coverage_ratio: number;
+                    field_coverage: {close: number};
+                    event_type_counts: Record<string, number>;
+                    first_available_date: string | null;
+                    last_available_date: string | null;
+                };
+                required_points: number;
+                warmup_complete: boolean;
+                partial_coverage_used: boolean;
+                reason_code: string | null;
+            };
             [key: string]: unknown;
         };
         type DeferredCalendarOutcome = 'ready' | 'partial' | 'stale-sync' | 'i60g-stale' | 'i60g-rejected' | 'i60g-primary-unavailable' | 'i60g-primary-failed' | 'i60h-query-rejected' | 'i60h-main-omitted' | 'i60h-ready-peer-omitted' | 'i60h-peer-unavailable-contract';
