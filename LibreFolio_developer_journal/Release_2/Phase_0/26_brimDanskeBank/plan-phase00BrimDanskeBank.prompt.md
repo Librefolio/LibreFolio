@@ -328,6 +328,39 @@ Il set rende esplicita questa realtà. Lo schema qui sotto è il contenuto che i
 > - Il test-author ha trovato 16 casi in cui era già `can_parse` a rifiutare il file Windows-1252: Generic CSV su 14 campioni, InvestEngine e Rabobank, più Trade Republic, il cui campione è solo ASCII. Aprivano il file in `can_parse` con `utf-8-sig`. Dopo la migrazione sono verdi.
 > - La skill, alla regola 8, parla ancora di ID finti «negativi»; il contratto reale usa ID positivi alti. È un errore preesistente e fuori tema: lo segnalo e non lo correggo.
 
+> **Commit e allineamento (2026-09-28)**
+>
+> **Commit del developer** (13:51:21), con liste e digest controllati dal coordinatore:
+>
+> | Commit | Oggetto | File |
+> |---|---|---|
+> | `6ea71ea8d` | fix(brim): fall back to cp1252 for CSV exports | 3 |
+> | `9d9c26d0d` | fix(brim): read CSV plugins via the base reader | 30 |
+> | `28eca0dde` | docs(journal): plan the Danske Bank importer | 4 |
+>
+> **Merge di allineamento** `1110f2aa7` (developer, 14:00): genitori `28eca0dde` e `7c61dd924` (`dev_release2` con K), albero `53ba0fd4`. Da K arrivano `AssetType.CROWDFUND_REAL_ESTATE`, due scenari di stress, e nel frontend la select dei tipi, le icone e il wizard d'import. Nessuna superficie BRIM toccata.
+>
+> **Gate dopo il merge** (lane `6156`, un comando per volta):
+>
+> | Verifica | Esito |
+> |---|---|
+> | `services brim-provider-base` | `34 passed` |
+> | `services brim-parse-error` | `4 passed` |
+> | `services brim-parse-pool` | `8 passed` |
+> | `services brim-parse-race` | `6 passed` |
+> | `services brim-create-transaction` | `14 passed` |
+> | `services brim-versioning` | `5 passed` |
+> | `external brim-providers` | `537 passed, 2 skipped` |
+> | `i18n audit` | rc 0: 3417 chiavi complete, 0 incomplete, 0 backend mancanti. Le 392 «unused» sono preesistenti: L non tocca l'i18n. |
+>
+> **Checkpoint piccolo** (dopo il merge, su richiesta del coordinatore):
+> - **Runner**: in `_backend_services.py`, solo la riga `brim-provider-base`, con `desc="Abstract base defaults + text-encoding fallback"`.
+> - **Skill `brim-plugin`, regola 8**: gli ID finti sono positivi alti. Partono da `FAKE_ASSET_ID_BASE = 2**31 - 1` e scendono di uno per ogni ISIN o ticker; `is_fake_asset_id` riconosce i valori da `BASE - 10000` in su. Il riferimento è `backend/app/schemas/brim.py`.
+>
+> **⚠️ Fuori pista**:
+> - La richiesta sulla riga del runner è arrivata dopo i commit. L'avevo applicata subito, poi l'ho ripristinata per lasciare pulito il worktree in vista del merge (anche D tocca `_backend_services.py`). È rientrata in questo checkpoint.
+> - La stessa affermazione sbagliata («negative integers») compare in `.github/instructions/backend-providers-brim.instructions.md:35`. Non è nel mio perimetro: l'ho proposta al coordinatore.
+
 ### 2. ⏳ Documento di design dei set
 
 - File `26_brimDanskeBank/design-phase00BrimReportSets.md`: §2 sviluppato con contratti, stati, errori, casi limite (bordi del periodo, troncamenti, righe identiche), compatibilità, test e fasi.
