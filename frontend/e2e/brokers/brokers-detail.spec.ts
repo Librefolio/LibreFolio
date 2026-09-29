@@ -600,6 +600,12 @@ type BrokerPnlSubmode = 'line' | 'candles' | 'income';
 const BROKER_PLAIN_AMOUNT = /^[A-Z]{3}\s-?[\d.,]+$/;
 /** `+EUR 359.04` / `−EUR 12.00` — a signed tooltip amount (P&L rows; U+2212). */
 const BROKER_SIGNED_AMOUNT = /^[+\u2212][A-Z]{3}\s[\d.,]+$/;
+/**
+ * `+EUR 359.04` / `−EUR 12.00` / `EUR 0.00` — a P&L or income tooltip amount,
+ * sign optional: a zero carries none, by design (a green zero read as a gain),
+ * so a signed-only pattern stops counting a row on the day its value is zero.
+ */
+const BROKER_AMOUNT = /^[+\u2212]?[A-Z]{3}\s[\d.,]+$/;
 
 interface BrokerReportCall {
     body: Record<string, unknown> & {broker_ids?: number[]};
@@ -728,19 +734,26 @@ test.describe('Broker detail — GrowthChart P&L mode', () => {
         await chart.getByTestId('growth-toggle-pnl').click();
 
         // Line: the total P&L row, and nothing but it — this mount has no
-        // per-broker overlay to add a second row (plan §3.3).
+        // per-broker overlay to add a second row (plan §3.3). Counted by ROW, not by
+        // sign: every value row of the tooltip is `<span>label</span><b>value</b>`,
+        // so "one value cell, and it is an amount" is exact whatever the total is at
+        // the pointer — a zero total prints unsigned, and an overlay row with no
+        // value that day would print `—`, which an amount count would never see.
         await selectBrokerSubmode(chart, 'line');
-        await showChartTooltip(page, chart, chart.getByText(BROKER_SIGNED_AMOUNT), 10_000, 1);
-        await expect(chart.getByText(BROKER_SIGNED_AMOUNT)).toHaveCount(1);
+        await showChartTooltip(page, chart, chart.getByText(BROKER_AMOUNT), 10_000, 1);
+        await expect(chart.locator('div > span + b'), 'exactly one value row, the total P&L — an amount, sign optional').toHaveText([BROKER_AMOUNT]);
 
-        // Income: dividend, interest and their total — three signed rows at the
-        // floor, which a submode that never bound its income series could not
-        // produce. Not an exact count: the batch-2 rows (costs, deposit,
-        // acquisition) are sparse and only join on a day that had that activity,
-        // so an equality would pin which day the pointer happened to land on.
+        // Income: dividend, interest and their total — three rows at the floor,
+        // which a submode that never bound its income series could not produce.
+        // Not an exact count: the batch-2 rows (costs, deposit, acquisition) are
+        // sparse and only join on a day that had that activity, so an equality
+        // would pin which day the pointer happened to land on. Sign optional for
+        // the same reason: the three are always written, but on a week without a
+        // dividend or an interest payment all three are zero, and a zero is unsigned.
         await selectBrokerSubmode(chart, 'income');
-        await showChartTooltip(page, chart, chart.getByText(BROKER_SIGNED_AMOUNT), 10_000, 3);
-        await expect(chart.getByText(BROKER_SIGNED_AMOUNT).first()).toBeVisible();
+        const amounts = chart.getByText(BROKER_AMOUNT);
+        await showChartTooltip(page, chart, amounts, 10_000, 3);
+        await expect.poll(() => amounts.count(), {message: 'dividend, interest and their total are always in the income tooltip, zero or not'}).toBeGreaterThanOrEqual(3);
     });
 
     test('the candles submode shows the total candle only, with no per-broker overlay', async ({page}) => {
