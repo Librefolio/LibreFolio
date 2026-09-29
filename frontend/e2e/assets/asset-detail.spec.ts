@@ -1967,16 +1967,19 @@ test.describe('Asset Detail Page', () => {
                 pendingMaxStandaloneRange !== null && priceComparisonSyncSucceeded && priceComparisonRaceOutcome !== 'stale' && priceComparisonRaceOutcome !== 'successor' && matchesPriceComparisonRequest(requests, comparisonPeerIds, pendingMaxStandaloneRange, asset.currency)
                     ? pendingMaxStandaloneRange
                     : null;
-            const acceptedCurrentMaxStandaloneEventDate = acceptedCurrentMaxStandaloneFxSyncRange === null ? null : (successorReadyEvents.find(({date}) => date >= acceptedCurrentMaxStandaloneFxSyncRange.start && date <= acceptedCurrentMaxStandaloneFxSyncRange.end)?.date ?? null);
-            if (acceptedCurrentMaxStandaloneFxSyncRange !== null && acceptedCurrentMaxStandaloneEventDate === null) {
-                throw new Error(`Accepted current MAX standalone FX-sync range ${acceptedCurrentMaxStandaloneFxSyncRange.start}..${acceptedCurrentMaxStandaloneFxSyncRange.end} contains no ready-peer event fixture`);
+            // Why derived from the window, not looked up in `successorReadyEvents`: the accepted
+            // window is relative to the request date (end - syntheticMaxResolutionSpanDays .. end)
+            // while that fixture has fixed dates, so the lookup stopped matching on 2026-09-18. The
+            // successor response relocates prices and events into the window anyway (start /
+            // interior / end), so the interior date only has to be strictly inside it; start + 1 is
+            // what the old lookup resolved to on its last green day (window 2026-08-03..2026-09-17,
+            // event on start).
+            const acceptedCurrentMaxStandaloneMiddleDate = acceptedCurrentMaxStandaloneFxSyncRange === null ? null : addDays(acceptedCurrentMaxStandaloneFxSyncRange.start, 1);
+            if (acceptedCurrentMaxStandaloneFxSyncRange !== null && acceptedCurrentMaxStandaloneMiddleDate !== null && acceptedCurrentMaxStandaloneMiddleDate >= acceptedCurrentMaxStandaloneFxSyncRange.end) {
+                throw new Error(
+                    `Accepted current MAX standalone FX-sync range ${acceptedCurrentMaxStandaloneFxSyncRange.start}..${acceptedCurrentMaxStandaloneFxSyncRange.end} (${acceptedCurrentMaxStandaloneFxSyncRange.spanDays} days) is too short to hold a strictly interior date: the successor response needs three distinct ready-peer price dates (start, interior, end)`,
+                );
             }
-            const acceptedCurrentMaxStandaloneMiddleDate =
-                acceptedCurrentMaxStandaloneFxSyncRange !== null && acceptedCurrentMaxStandaloneEventDate !== null
-                    ? acceptedCurrentMaxStandaloneEventDate === acceptedCurrentMaxStandaloneFxSyncRange.start || acceptedCurrentMaxStandaloneEventDate === acceptedCurrentMaxStandaloneFxSyncRange.end
-                        ? addDays(acceptedCurrentMaxStandaloneFxSyncRange.start, 1)
-                        : acceptedCurrentMaxStandaloneEventDate
-                    : null;
             const stalePriceComparisonGate = isStalePriceComparison ? stalePriceComparisonCandidate : null;
             if (deferredPriceOnly) {
                 deferredPriceOnlyResponse = null;
