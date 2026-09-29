@@ -176,6 +176,13 @@ progettato separatamente, senza attendere solver, copie portfolio o migrazione B
   per copiare situazione iniziale, prezzi o distribuzione corrente come base del target.
 - Snapshot modificabili con preview delle sostituzioni; niente binding live, polling o
   risposte tardive che sovrascrivono modifiche dell'utente.
+- **Data automatica e rilettura prima del calcolo (developer, 29/09):** la UI non ha un campo
+  data. `as_of` è oggi, fissata a ogni copia e a «Calcola». Subito prima del calcolo la UI
+  rilegge da `POST /portfolio/allocation-source` (lettura DB, nessun provider, nessuna
+  scrittura) i prezzi, i cambi e i saldi copiati e non modificati, e li aggiorna. I valori
+  manuali o modificati restano e partono con la data del calcolo. Una rilettura fallita
+  blocca il calcolo e offre «Riprova» o «Calcola con i dati copiati». Non è un binding live.
+  Backend e contratto 2.0.0 invariati.
 - Le copie usano i client delle API di dominio descritti sopra, senza route Tool di prefill.
 - Copia solo da broker con ruolo **OWNER**, incluso OWNER con quota 0%; percentuale
   mostrata ma quantità/cash a **custodia intera**, senza scala di possesso. Scope
