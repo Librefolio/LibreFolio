@@ -35,11 +35,19 @@
  * extreme. That guarantees `max(L, 100-L)` ≥ **50** lightness points of headroom
  * for every entry of all four palettes, where the per-theme rule guarantees 17.
  *
- * ## Why one shade level is enough
+ * ## How many members a group holds
  *
- * The five ETF subtypes have five *distinct* parents (STOCK, BOND, COMMODITY,
- * REAL_ESTATE, CRYPTO), so no group ever holds more than `{pure, one subtype}`.
- * The implementation stays generic, but the default step is tuned for that.
+ * It depends on the resolver, and the default step is tuned for small groups:
+ *
+ * - by **content** (`primaryAssetType`, the allocation history chart), a group holds
+ *   its pure type and the subtypes that contain it — up to **three** today,
+ *   `REAL_ESTATE` with `ETF_REAL_ESTATE` and `CROWDFUND_REAL_ESTATE`;
+ * - by **vehicle** (`assetTypeFamily`, the allocation pie), the ETF family holds the
+ *   generic ETF and every ETF subtype — up to **seven** — and Crowdfund holds two.
+ *
+ * Shading walks lightness in one direction, so it keeps members apart for groups of
+ * up to three or four; a group of seven clamps to black or white (known limit,
+ * recorded for the risk UI round).
  *
  * ## Scope
  *
