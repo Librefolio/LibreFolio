@@ -12,6 +12,7 @@
  */
 
 const ETF_EMOJI = '📊';
+const CROWDFUND_EMOJI = '🤝';
 
 export const ASSET_TYPE_EMOJI: Readonly<Record<string, string>> = {
     STOCK: '📈',
@@ -24,19 +25,20 @@ export const ASSET_TYPE_EMOJI: Readonly<Record<string, string>> = {
     CRYPTO: '🪙',
     FUND: '💼',
     HOLD: '⏸️',
-    CROWDFUND: '🤝',
+    CROWDFUND: CROWDFUND_EMOJI,
     COMMODITY: '🛢️',
     REAL_ESTATE: '🏠',
     INDEX: '📉',
     OTHER: '📦',
-    // The ETF subtypes share the ETF emoji, as they share the ETF icon in assetTypes.ts:
-    // the emoji says what the instrument is, the label says what it holds.
+    // A subtype shares the emoji of its family (ETF, CROWDFUND): the emoji says what the
+    // instrument is, the label says what it holds.
     ETF_STOCK: ETF_EMOJI,
     ETF_BOND: ETF_EMOJI,
     ETF_COMMODITY: ETF_EMOJI,
     ETF_REAL_ESTATE: ETF_EMOJI,
     ETF_CRYPTO: ETF_EMOJI,
     ETF_MONETARY: ETF_EMOJI,
+    CROWDFUND_REAL_ESTATE: CROWDFUND_EMOJI,
     LIQUIDITY: '💰',
     // Same glyph as an unknown sector, so "unknown" reads the same in both dimensions.
     UNKNOWN: '❓',
