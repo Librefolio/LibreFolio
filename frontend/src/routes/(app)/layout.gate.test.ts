@@ -1,9 +1,8 @@
 // @vitest-environment jsdom
 /**
- * `(app)` layout — two behaviours of workstream J: the onboarding route gate follows the bootstrap
- * when it settles, and a client-side route change restores the default window title.
+ * `(app)` layout — the onboarding route gate of workstream J follows the bootstrap when it settles.
  *
- * The gate. The layout is a legacy component, and it reads `appBootstrap` in two ways that do not react
+ * The layout is a legacy component, and it reads `appBootstrap` in two ways that do not react
  * alike. Its template tracks it: the compiler wraps each `{#if}` condition in
  * `$.deep_read_state(appBootstrap)`, which calls the object's enumerable getters inside the
  * block's effect. Its `$:` statements do not: a `$:` re-runs only on the identifiers it names,
@@ -14,20 +13,11 @@
  * landed (measured live: `onboarding-redirecting` mounted in 0 of 40 runs). The fix reads `ready`
  * through `toStore`, and `$bootstrapReady` is a dependency a `$:` does track.
  *
- * The window title (user-reported, also in v1.1.0). Svelte 5 applies a page's
- * `<svelte:head><title>` by assigning `document.title` in an effect, and never restores it when
- * the page unmounts. Only Files and Tools set a title of their own, so after Files every page
- * without one kept "Files - LibreFolio". The layout resets the title to the app.html default in
- * an `onNavigate` callback: SvelteKit runs those after load and before `root.$set` mounts the
- * next page, so a page with a title of its own sets it again on mount (a reset in `afterNavigate`
- * would clobber it). A same-route navigation — a query change, another `tool_code` — remounts
- * nothing that would set the title again, so it must reset nothing. The specs invoke the
- * registered callback the way the router does, with an `OnNavigate` object, and read the default
- * from `src/app.html` instead of importing it from the layout, so the two cannot drift apart
- * unnoticed. Bug and fix exist only on client-side navigation (a full load re-reads app.html):
- * the browser half, mount ordering included, is `e2e/layout/document-title.spec.ts`.
+ * The window-title reset this file also tested is dead code under the rule that no page changes
+ * the browser tab title (K, step 12c); that rule is guarded by `src/routes/documentTitle.guard.test.ts`
+ * and `e2e/layout/document-title.spec.ts`.
  *
- * Only the gate and the title reset are under test, so everything around them is held still:
+ * Only the gate is under test, so everything around it is held still:
  *   - `appBootstrap` is a fake with the real object's shape, enumerable getters over `$state`
  *     (`reactiveBox`), which is exactly what `deep_read_state` reads. The spec flips its state and
  *     flushes with `tick()`; `resolveDestination` is scripted per test.
@@ -36,19 +26,13 @@
  *     settlement never start, and the reactive redirect `$:` is guarded by `browser`. `goto` and
  *     the settlement are mocks too, and every gate test asserts that neither ran, so a branch
  *     change can only have come from the template gate.
- *   - `onNavigate` from `$app/navigation` is a spy that records the callback the layout registers
- *     at init. The title specs assert that exactly one was registered before they invoke it, so
- *     neither can pass because nothing ran.
  *   - every child component is a no-op, and every store or API the layout touches is a stub. None
  *     of them is the subject, and each would otherwise start network, storage or observer work.
  *
  * Assertions read `data-testid` only: the stubbed `$_` returns keys, and nothing reads text.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {readFileSync} from 'node:fs';
-import {join} from 'node:path';
 import {tick} from 'svelte';
-import type {NavigationTarget, OnNavigate} from '@sveltejs/kit';
 import type {AppBootstrapState} from '$lib/features/onboarding/appBootstrap.svelte';
 
 const mocks = await vi.hoisted(async () => {
@@ -57,8 +41,6 @@ const mocks = await vi.hoisted(async () => {
         bootstrap: reactiveBox<{state: AppBootstrapState}>({state: 'loading'}),
         resolveDestination: vi.fn<(path: string) => string>(),
         goto: vi.fn(() => Promise.resolve()),
-        // Records the callback the layout registers at init; the title specs invoke it as the router would.
-        onNavigate: vi.fn<(callback: (navigation: OnNavigate) => unknown) => void>(),
         // Never settles: were it ever started, it still could not navigate behind the assertions.
         runOwnedSettlement: vi.fn(() => new Promise<void>(() => {})),
         noopComponent: () => {},
@@ -66,7 +48,7 @@ const mocks = await vi.hoisted(async () => {
 });
 
 vi.mock('$app/environment', () => ({browser: false, dev: true, building: false, version: 'test'}));
-vi.mock('$app/navigation', () => ({goto: mocks.goto, afterNavigate: vi.fn(), onNavigate: mocks.onNavigate, preloadCode: vi.fn(() => Promise.resolve())}));
+vi.mock('$app/navigation', () => ({goto: mocks.goto, afterNavigate: vi.fn(), preloadCode: vi.fn(() => Promise.resolve())}));
 vi.mock('$app/stores', async () => {
     const {readable} = await import('svelte/store');
     return {page: readable({route: {id: '/(app)/dashboard'}, url: new URL('http://librefolio.test/dashboard')})};
@@ -165,7 +147,6 @@ beforeEach(() => {
     mocks.bootstrap.state = 'loading';
     mocks.resolveDestination.mockReset();
     mocks.goto.mockClear();
-    mocks.onNavigate.mockClear();
     mocks.runOwnedSettlement.mockClear();
 });
 
@@ -201,84 +182,5 @@ describe('(app) layout route gate — the bootstrap settling re-runs the gate (w
         // The page is let through because the gate asked and got the same path back, not because it never re-ran.
         expect(mocks.resolveDestination).toHaveBeenCalledWith(REQUESTED_PATH);
         expectNothingNavigated();
-    });
-});
-
-// ---------------------------------------------------------------------------
-// Document title — a client-side route change restores the app.html default
-// ---------------------------------------------------------------------------
-
-type OnNavigateCallback = (navigation: OnNavigate) => unknown;
-type RouteId = NonNullable<NavigationTarget['route']['id']>;
-
-/** What the Files page leaves behind: `{$t('uploads.title')} - LibreFolio`, through a key-returning i18n like the one stubbed here. */
-const FILES_LEFTOVER_TITLE = 'uploads.title - LibreFolio';
-
-/** The window title `src/app.html` ships, read from the source of truth rather than imported from the layout. */
-function readAppHtmlTitle(): string {
-    // The runner and a direct `vitest run` both start from `frontend/`.
-    const appHtmlPath = join(process.cwd(), 'src', 'app.html');
-    const title = /<title>([^<]*)<\/title>/.exec(readFileSync(appHtmlPath, 'utf8'))?.[1]?.trim();
-    if (!title) throw new Error(`No <title> in ${appHtmlPath}: the default window title has no source of truth`);
-    return title;
-}
-
-function navigationTarget(routeId: RouteId, href: string): NavigationTarget {
-    return {params: {}, route: {id: routeId}, url: new URL(href, 'http://librefolio.test')};
-}
-
-/** A sidebar link click, shaped the way the router hands it to `onNavigate`. */
-function linkNavigation(from: NavigationTarget, to: NavigationTarget): OnNavigate {
-    return {type: 'link', from, to, willUnload: false, complete: Promise.resolve(), event: new PointerEvent('click')};
-}
-
-/** A `goto()`: what the Files tab bar does to rewrite `?tab=` in place (`replaceState`). */
-function gotoNavigation(from: NavigationTarget, to: NavigationTarget): OnNavigate {
-    return {type: 'goto', from, to, willUnload: false, complete: Promise.resolve()};
-}
-
-/**
- * Mount the layout and hand back the one `onNavigate` callback it registered. Asserted before
- * anything else, so a title spec cannot pass because nothing ran. The callback is registered at
- * init whatever branch the gate picks, so the bootstrap stays in its default state.
- */
-async function mountAndCaptureOnNavigate(): Promise<OnNavigateCallback> {
-    render(AppLayoutGateHarness);
-    await tick();
-    expect(mocks.onNavigate, 'the mounted layout must register exactly one onNavigate callback').toHaveBeenCalledTimes(1);
-    return mocks.onNavigate.mock.calls[0][0];
-}
-
-describe('(app) layout document title — a client-side route change restores the app.html default (workstream J)', () => {
-    let titleBefore = '';
-
-    beforeEach(() => {
-        titleBefore = document.title;
-    });
-
-    afterEach(() => {
-        document.title = titleBefore;
-    });
-
-    it('restores the app.html title when leaving Files for a route that sets none (Files → Dashboard)', async () => {
-        const defaultTitle = readAppHtmlTitle();
-        expect(defaultTitle, 'the leftover must differ from the default, or a reset could not be observed').not.toBe(FILES_LEFTOVER_TITLE);
-        const onNavigateCallback = await mountAndCaptureOnNavigate();
-        document.title = FILES_LEFTOVER_TITLE;
-
-        // Awaited, as the router awaits every onNavigate callback before `root.$set`: what is on
-        // `document.title` now is what the next page mounts over.
-        await onNavigateCallback(linkNavigation(navigationTarget('/(app)/files', '/files'), navigationTarget('/(app)/dashboard', '/dashboard')));
-
-        expect(document.title, 'the Files title outlived the Files page').toBe(defaultTitle);
-    });
-
-    it('control: keeps the title on a same-route navigation, which remounts nothing to set it again (Files → Files?tab=brim)', async () => {
-        const onNavigateCallback = await mountAndCaptureOnNavigate();
-        document.title = FILES_LEFTOVER_TITLE;
-
-        await onNavigateCallback(gotoNavigation(navigationTarget('/(app)/files', '/files'), navigationTarget('/(app)/files', '/files?tab=brim')));
-
-        expect(document.title, 'a query change on the same page must not wipe the title that page set').toBe(FILES_LEFTOVER_TITLE);
     });
 });
