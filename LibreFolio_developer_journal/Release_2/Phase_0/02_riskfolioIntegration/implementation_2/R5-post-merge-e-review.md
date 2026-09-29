@@ -1795,3 +1795,149 @@ CHANGELOG, client generato). Commit e fusioni li fa solo il developer.
 > **Un rosso del target, fuori famiglia**: `front-asset asset-unit` ha 12 rossi in `chartCoreHelpers.test.ts`, tutti
 > test che rispecchiano il sorgente del GrowthChart di I; né il test né il grafico sono cambiati dall'inizio del giro, e
 > nessuno dei file che legge è fra quelli di questo checkpoint → al coordinator.
+
+## Giro UI rischio — il passaggio visivo del developer · 29/09/2026
+
+Base comune `ffe41c5ba` (A e F in fast-forward); tabella dei proprietari approvata dal developer, con la regola per i
+19 componenti che Dashboard e laboratorio hanno in comune: **un proprietario per componente, qualunque pagina lo monti**.
+Modello di lavoro: il developer scrive direttamente ad A e a F; io coordino e smisto ciò che tocca pezzi in comune o file
+altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata). Osservazioni, smistate:
+
+| # | dove | osservazione | a chi |
+|---|---|---|---|
+| V1 | Dashboard, rischio, in cima | l'avviso unico raggruppato piace, ma l'estetica va rifatta | A (`RiskPartialNotice`) |
+| V2 | L1 | l'istogramma dei rendimenti giornalieri non ha infobox su nessuna barra (c'è solo il `title` del browser) | A (`l1/ReturnHistogram`) |
+| V3 | L1 | le schede vanno bene nei contenuti, non nell'estetica | A (`ui/display/RiskMetricCard`, `RiskCardGrid`: li usano solo L1–L3) |
+| V4 | L2 | la matrice ordina solo per somiglianza e nome: servono anche tipo, settore e area (K11 deciso: sì) | F estrae il caricamento condiviso delle mappe, poi A lo collega |
+| V5 | L2, sopra la matrice | schede e barre usano ancora `title` invece di solo `Tooltip.svelte`; la lunghezza delle parole (testi troncati) e le barre CSS non vanno bene — da riparlarne quando ci si arriva | A (schede); le barre `ui/display/KpiDivergingFlowBar` sono anche nel pannello KPI principale della Dashboard, fuori famiglia → decisione del coordinator |
+| V6 | Dashboard, rischio | servono le stesse icone del manuale del laboratorio, nella stessa posizione, con i link verificati | A (`RiskLevelsPanel` → `docsPath`) |
+| V7 | Asset Global, Correlazione | tutto ok | — |
+| V8 | Dashboard, torta dell'allocazione | fatta bene | — |
+
+> **V5, precisazione del developer (via coordinator)**: pensava che le barre peso/rischio di L2 fossero un'implementazione
+> a sé; saputo che sono lo stesso componente del pannello KPI principale della Dashboard (`ui/display/KpiDivergingFlowBar`),
+> ha **ritirato** quelle osservazioni: il componente va rivisto più avanti, con chi avrà il pannello KPI (backlog del
+> coordinator). In questo giro nessuno lo tocca. Le schede di L2 (`RiskMetricCard`/`RiskCardGrid`, di A) restano da
+> verificare con il developer nella disamina con A, insieme alla V3.
+
+### «Parziale» dove il numero ha perso qualcosa · ✅ backend fatto (29/09/2026)
+
+> **Il reperto** (A, misurato sulla sua copia, che è la snapshot del developer): sulla Dashboard del developer **tutti**
+> i risultati del rischio erano «parziali», per **una sola causa** — due crowdfunding senza fonte di prezzo, esclusi
+> dalle serie per asset (`missing_price`). Il servizio marca parziale ogni risultato della richiesta quando c'è
+> un'esclusione. Ma nella modalità storica del portafoglio la serie principale è il TWRR, che quei due asset li contiene
+> già (valutati all'ultimo prezzo di transazione): i numeri di L1 non avevano perso niente. E nella composizione attuale
+> il loro peso finiva nella «liquidità», senza nulla che lo distinguesse dalla liquidità vera.
+>
+> **Decisioni del developer**:
+> - ① «parziale» solo dove il numero ha davvero perso qualcosa: `historical_kpi`, `historical_var`, `drawdown_summary` e
+>   `comparison`, quando leggono solo il TWRR, non ereditano le esclusioni della richiesta e si giudicano sulla qualità
+>   dei dati del portafoglio (generalizza un caso speciale che copriva solo i primi due); correlazione e misure della
+>   composizione attuale le tengono;
+> - ② gli asset senza prezzo di mercato chiamati col loro nome, separati dalla liquidità, senza cambiare i numeri:
+>   `excluded_weight` in aggiunta, sottoinsieme di `cash_weight` (che resta il residuo a rendimento zero) — non con la
+>   liquidità vera negativa: vedi il primo Fuori pista qui sotto;
+> - (b), su richiesta di A (è un calcolo, quindi nel backend): un motivo `no_price_source` (nessuna fonte configurata:
+>   permanente) distinto da `missing_price` (fonte che non ha dato prezzi: occasionale), perché l'avviso di A usi un
+>   tono informativo per le cause permanenti e ambra per quelle occasionali (decisione del developer).
+>
+> Test prima (test-author), poi il codice; A adatta l'avviso, L2 e L3 nei suoi file dopo il mio checkpoint.
+
+> **Il contratto, come l'hanno affinato i test** (test-author, due giri; rosso prima: **37 rossi** — 29 in
+> `services risk-all`, 8 in `schemas risk` — più 14 verdi da tenere, fra cui la barriera di presenza nella stessa
+> richiesta: la correlazione continua a portare l'esclusione):
+> - ① non un booleano ma un enum interno, `RiskSeriesInputs` (`services/risk/base.py`): `PRIMARY` (KPI, VaR, drawdown),
+>   `PRIMARY_AND_BENCHMARK` (confronto), `SCOPE_ASSETS` (tutte le altre, il default). Sul TWRR i primi due non ereditano
+>   le esclusioni, né l'avviso `assets_excluded`, né `zero_risk_residual_includes_in_transit` (descrive il residuo della
+>   composizione, che il TWRR non usa), né `metadata.excluded_assets`. Qualità dei dati: `PRIMARY` → quella del
+>   portafoglio; `PRIMARY_AND_BENCHMARK` → quella unita (il benchmark si prepara sul calendario congiunto del perimetro:
+>   un suo prezzo riportato oltre la soglia o una data persa lo rendono ancora parziale) **meno** le voci
+>   `unusable_assets` degli asset esclusi dal perimetro, che in quel calendario non sono mai entrati — tranne la voce del
+>   benchmark stesso quando è un asset posseduto ed escluso: il confronto è allora non disponibile, e la sua qualità dei
+>   dati dice perché.
+> - La regola segue la **base** (TWRR), non più la modalità: su una fetta (Q-C1, niente TWRR) KPI e VaR passano alla
+>   qualità dei dati delle serie per asset da cui sono ricostruiti. Prima prendevano quella del portafoglio e nascondevano
+>   l'asset perso: correzione voluta, fissata da un test.
+> - ② `excluded_weight` nel contesto e in `RiskContributionOutput`/`RiskReturnOutput` = Σ pesi degli asset del
+>   perimetro rimasti senza serie; `cash_weight` invariato; perimetri senza pesi (asset, insieme di asset) → 0 nel
+>   contesto, campo assente nei loro payload. I numeri non si muovono: valori d'oro presi su `ffe41c5ba` (tolleranza
+>   relativa 1e-12) e identici a quelli dello stesso patrimonio tenuto in liquidità.
+> - (b) `no_price_source` = **nessuna** riga in `asset_provider_assignments` **e nessuna** riga in `price_history`: mai
+>   prezzato. Una fonte che non ha dato niente, o prezzi manuali fuori dal periodo, restano `missing_price` («fuori» vuol
+>   dire dopo: i prezzi di prima vengono riportati avanti e l'asset non è escluso). Una sola istruzione per richiesta
+>   (`NOT EXISTS` su tutte e due le tabelle), emessa solo se almeno un'esclusione è `missing_price`. Chiave
+>   `risk.warnings.assets_excluded_no_price_source` nelle 4 lingue, scritta per esteso nel ramo (l'audit legge i letterali).
+>
+> **Note implementazione** (29/09): `base.py` (enum, ClassVar, `excluded_weight` nel contesto), i quattro plugin che
+> leggono il TWRR dichiarano la serie, `risk_contribution`/`asset_risk_return` passano `excluded_weight`,
+> `schemas/risk.py` (campo con `ge=0`, nessun vincolo verso `cash_weight`), `service.py` (`_reads_the_twrr_alone`,
+> `_COMPOSITION_WARNING_CODES`, `_data_quality` senza più il caso speciale codificato per nome, `_scope_exclusions` pura,
+> `_never_priced_asset_ids`, ramo letterale dell'avviso), chiave i18n via `dev.py i18n add`. `algorithm_version` in su
+> di una minore dove il payload guadagna `excluded_weight` (`risk_contribution` 1.1.0 → 1.2.0, `asset_risk_return`
+> 1.0.0 → 1.1.0), come per i due campi aggiunti prima (`drawdown_summary` 1.1.0, `risk_contribution` 1.1.0): un
+> `excluded_weight` a zero si distingue così da un server che il campo non lo conosce. Doc (docs-writer, sola EN: le due
+> pagine non hanno traduzioni): `data-quality.en.md` — quali risultati portano un'esclusione (e perché gli stress no),
+> i motivi con `no_price_source`, il peso escluso, su quale report si giudica ciascun risultato, la **soglia dei 7 giorni**
+> definita una volta (i punti riportati la contano: debito del 24/09, mio) e un limite nuovo, «un asset valutato dalle
+> sue transazioni sta fermo»; `correlation.en.md` — il motivo dell'asset senza prezzi e la soglia. Verifica nella 6152:
+> `services risk-all` **682** · `schemas risk` **43** · `api risk` 14 (dopo `front build --debug` e `db populate --force`)
+> · `services ai-export` 922 · `front check` al solito pavimento di 3 · i18n 3483/0 mancanti · `check-orphans` pulito ·
+> ruff e black puliti sui 15 file Python. **Mutanti**: 20 su 20 presi (test-author), più un test nuovo scritto apposta
+> per M9 (il benchmark posseduto ed escluso tiene la sua voce); due equivalenti dichiarati (il controllo del motivo dentro
+> `_scope_exclusions`, perché l'insieme dei mai prezzati contiene solo esclusioni `missing_price`; la guardia su
+> `portfolio_data_quality`, mai `None` su un perimetro di portafoglio). I 9 file di produzione ripristinati identici
+> (SHA-256). Il salto di versione è venuto dopo i mutanti, anche lui col rosso prima (test-author: il pin di
+> `asset_risk_return` e la versione nei metadati dei due risultati, 2 rossi → verdi); dopo, di nuovo `services risk-all`
+> 682 · `schemas risk` 43 · `api risk` 14 · `mkdocs build` (strict) e `check-links` verdi.
+>
+> **⚠️ Fuori pista**:
+> - `api risk` rilanciato subito dopo `services risk-all`: 3 rossi su 14, «utente di prova assente». Infrastruttura, non
+>   prodotto: le suite `services` ricreano il DB pulito della corsia, quindi prima di `api risk` va rifatto
+>   `db populate --force`. Rifatto → 14.
+> - Il mio primo contratto aveva un validatore `excluded_weight ≤ cash_weight` e diceva «sottoinsieme». Falso con la
+>   liquidità vera negativa (pesi 0,8 e 0,4, il secondo escluso → residuo 0,2, escluso 0,4), e comunque irraggiungibile
+>   dal servizio: la liquidità negativa accende `composition_error`, che ferma `risk_contribution` e `asset_risk_return`
+>   prima del payload. L'ha trovato test-author; validatore tolto, i due pesi dichiarati come sono.
+> - «Qualità dei dati unita, come oggi» per il confronto contraddiceva «un'esclusione da sola non lo rende parziale»:
+>   l'esclusione sta proprio in `unusable_assets`, che basta a rendere `partial` la qualità dei dati. Trovato da
+>   test-author; regola corretta come sopra.
+> - Il ClassVar booleano `reads_scope_asset_series` del primo contratto non bastava: il confronto ha una terza condizione,
+>   il benchmark. → l'enum.
+> - **Il mio brief al docs-writer conteneva due affermazioni false**, scritte senza guardare il codice: lo stress fra i
+>   risultati che ereditano le esclusioni (il replay prepara le sue serie con `excluded_assets=()`, lo shock ipotetico le
+>   toglie), e «prezzi vecchi nella storia del portafoglio → KPI, VaR e drawdown parziali» (il report del portafoglio non
+>   registra l'età dei prezzi: vedi il primo reperto qui sotto). Durante i mutanti gli avevo vietato di leggere il backend;
+>   dopo, leggendolo, le ha trovate e corrette da sé. Stessa forma delle altre volte: descrivere prima di guardare.
+>
+> **Effetto fuori famiglia** (→ coordinator): AI Export (`ai_export/components/drawdown_context.py`) chiama
+> `drawdown_summary` sul portafoglio e sul broker. Ora riporta `ok` dove prima riportava `partial` per un'esclusione
+> soltanto, e fra i suoi `warnings` non ci sono più `assets_excluded` né il residuo in transito. `services ai-export`
+> resta verde (922: i suoi test usano un servizio finto).
+>
+> **Reperti fuori perimetro** (trovati dal docs-writer, verificati da me):
+> - **Il report del portafoglio non porta mai `stale_prices`**: `build_data_quality_report` ha il parametro
+>   `stale_prices_dto`, ma nessuna delle due chiamate in `portfolio_service.py` (`:1250`, `:2624`) lo passa. Il motore
+>   calcola `stale_price_asset_ids` punto per punto con la soglia dei 7 giorni (`portfolio_engine.py` ~1101–1130), ma non
+>   arriva al report: l'avviso `STALE_PRICE` del banner della Dashboard (`dataQuality.stalePrice`) non può scattare. Fuori
+>   famiglia → coordinator. Se lo si ripara, KPI, VaR e drawdown sul TWRR diventeranno `carried_forward` quando la storia
+>   del portafoglio usa prezzi vecchi (giusto), e la frase di `data-quality.en.md` «quel report registra ciò che non si è
+>   potuto valutare, non quanto è vecchia una valutazione» andrà cambiata insieme.
+> - **`user/assets/correlation.en.md:154`** (la guida del laboratorio; scritta da A in `b67b8ba79`, superficie di F, sola
+>   EN) dice che basta un giorno di prezzo riportato per marcare **Parziale** e cita la nota inglese: falso dalla soglia
+>   dei 7 giorni del 24/09 (mia), e la nota ora è la frase tradotta dei prezzi vecchi → a F.
+>
+> **Limiti noti, non fissati**: un'esclusione `missing_fx` lascia la sua coppia in `unresolved_fx_pairs`, che non si può
+> ricondurre a un asset, quindi il confronto sul TWRR resta parziale per lei (di norma lo stesso cambio mancante rende
+> parziale anche il report del portafoglio, e con lui KPI, VaR e drawdown: non fissato da un test). Un prezzo vecchio
+> (oltre 7 giorni) di un **asset posseduto** sul calendario congiunto rende parziale il confronto sul TWRR anche se i
+> numeri del benchmark non ne dipendono: il conteggio dei punti riportati è aggregato (`carried_forward_price_points` è
+> un intero), e togliere quelli degli asset posseduti richiederebbe un conteggio per asset che `DataQualityReport` (del
+> portafoglio) non ha. Nella qualità dei dati
+> del risultato, un asset `no_price_source` resta `missing_price` in `unusable_assets` (l'enum `DataQualityExclusionReason`
+> è del portafoglio): il motivo da leggere è in `metadata.excluded_assets` e nel `details.reason` dell'avviso.
+> `asset_risk_return` riporta l'errore di composizione della liquidità negativa come `insufficient_history`:
+> comportamento esistente, fuorviante → backlog.
+>
+> **Poi A**, nei suoi file e dopo il checkpoint (e dopo `api sync`, perché il client generato non è versionato): l'avviso
+> (tono informativo per `no_price_source`, ambra per il resto), la scheda «non misurato» di L2 e la nota sotto lo
+> scatter di L3, su `excluded_weight` invece che su `cash_weight`.
