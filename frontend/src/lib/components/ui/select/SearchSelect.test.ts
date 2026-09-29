@@ -168,6 +168,115 @@ describe('SearchSelect', () => {
         });
     });
 
+    /**
+     * R13: typing "CSV" into the import-plugin picker left the highlight — the row Enter picks — on
+     * whatever it had been on, far from the one match whose *name* says CSV. A query change is a
+     * new question, so its answer starts at the top: the highlight on the first row the user can
+     * land on, and the list scrolled back to show it.
+     */
+    describe('query change', () => {
+        /**
+         * Every "… one" row matches "one" the same way — a word start in its label — so whatever the
+         * ranking does they keep this order, and the top row after typing is `alpha`: that isolates
+         * the reset from the ordering. The leading header makes "top" mean the first row the user
+         * can land on, not index 0.
+         */
+        const ROWS: SelectOption[] = [
+            {value: '__sec:all', label: 'All', header: true},
+            {value: 'alpha', label: 'Alpha one'},
+            {value: 'beta', label: 'Beta one'},
+            {value: 'gamma', label: 'Gamma one'},
+            {value: 'delta', label: 'Delta two'},
+        ];
+
+        it('moves the highlight to the top row on every query change, even off a row the pointer chose', async () => {
+            await setupI18n();
+            const {trigger} = mount({options: ROWS});
+            await open(trigger);
+            const search = screen.getByTestId('ccy-search');
+
+            await fireEvent.mouseEnter(option('gamma'));
+            expectHighlighted('gamma');
+
+            // 'one' keeps gamma at the very index the pointer left the highlight on, so nothing but
+            // a reset on the query change can take it away.
+            await fireEvent.input(search, {target: {value: 'one'}});
+            await waitFor(() => expectHighlighted('alpha'));
+            expect(option('gamma')).toHaveAttribute('data-highlighted', 'false');
+
+            // Every change, not only the first — 'on' keeps the very same rows.
+            await fireEvent.mouseEnter(option('beta'));
+            expectHighlighted('beta');
+            await fireEvent.input(search, {target: {value: 'on'}});
+            await waitFor(() => expectHighlighted('alpha'));
+        });
+
+        it('lands the highlight on the best-ranked row, so Enter picks it (R13)', async () => {
+            await setupI18n();
+            // The import picker in miniature: every description says CSV, one name does, and that
+            // one is not first in source order — which is how "CSV" + Enter used to pick Avanza.
+            const plugins: SelectOption[] = [
+                {value: 'broker_avanza', label: 'Avanza', searchText: 'Import transactions from Avanza CSV export.'},
+                {value: 'broker_bitvavo', label: 'Bitvavo', searchText: 'Import transactions from Bitvavo CSV export.'},
+                {value: 'broker_generic_csv', label: 'Generic CSV', searchText: 'Import transactions from a generic CSV file.'},
+                {value: 'broker_xtb', label: 'XTB', searchText: 'Import transactions from XTB CSV export.'},
+            ];
+            // Enter advances focus through a deferred timer that reads containerRef (see the keyboard
+            // block): fake timers let it run while the component is still mounted.
+            vi.useFakeTimers();
+            try {
+                const {onchange, trigger} = mount({options: plugins});
+                await fireEvent.click(trigger);
+                const search = screen.getByTestId('ccy-search');
+                expectHighlighted('broker_avanza');
+
+                await fireEvent.input(search, {target: {value: 'CSV'}});
+                await vi.advanceTimersByTimeAsync(30); // fake time: runs whatever the reset defers before the read
+                expectHighlighted('broker_generic_csv');
+
+                await fireEvent.keyDown(search, {key: 'Enter'});
+                expect(onchange).toHaveBeenCalledExactlyOnceWith('broker_generic_csv');
+                await vi.advanceTimersByTimeAsync(30); // drain the advance-focus timer while mounted
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+
+        it('scrolls the list back to the top when the query changes', async () => {
+            await setupI18n();
+            const {trigger} = mount({options: ROWS});
+            await open(trigger);
+
+            // jsdom has no layout, so it keeps whatever scrollTop it is given instead of clamping it —
+            // the only reason a reset is observable here at all. Proven before it is relied upon.
+            screen.getByRole('listbox').scrollTop = 120;
+            expect(screen.getByRole('listbox').scrollTop).toBe(120);
+
+            await fireEvent.input(screen.getByTestId('ccy-search'), {target: {value: 'one'}});
+
+            // Re-queried on purpose: a list re-created at the top would be as good as one scrolled back.
+            await waitFor(() => expect(screen.getByRole('listbox').scrollTop).toBe(0));
+        });
+
+        it('counts clearing the query as a change too: highlight on the top row, list at the top', async () => {
+            await setupI18n();
+            const {trigger} = mount({options: ROWS});
+            await open(trigger);
+            await fireEvent.input(screen.getByTestId('ccy-search'), {target: {value: 'one'}});
+            await fireEvent.mouseEnter(option('gamma'));
+            expectHighlighted('gamma');
+            screen.getByRole('listbox').scrollTop = 80;
+            expect(screen.getByRole('listbox').scrollTop).toBe(80);
+
+            // The clear button assigns the query without an input event: the reset must follow the
+            // query itself, not the keystrokes that usually change it.
+            await fireEvent.click(within(dropdown()).getByTestId('ccy-search-clear'));
+
+            await waitFor(() => expectHighlighted('alpha'));
+            await waitFor(() => expect(screen.getByRole('listbox').scrollTop).toBe(0));
+        });
+    });
+
     describe('keyboard', () => {
         it('opens on the keys that should open it', async () => {
             await setupI18n();
