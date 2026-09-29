@@ -3305,7 +3305,8 @@
       "historical_replay_excluded_missing_fx": "Aucun taux de change vers votre devise dans la fenêtre du rejeu : {names} — {treatment, select, zero_return_residual {poids compté comme liquidités à rendement nul} other {hors du rejeu}}.",
       "historical_replay_excluded_stale_at_start": "Aucun prix dans les {days} jours précédant le début de la fenêtre du rejeu : {names} — {treatment, select, zero_return_residual {poids compté comme liquidités à rendement nul} other {hors du rejeu}}.",
       "historical_replay_excluded_stale_at_end": "Aucun prix dans les {days} derniers jours de la fenêtre du rejeu : {names} — {treatment, select, zero_return_residual {poids compté comme liquidités à rendement nul} other {hors du rejeu}}.",
-      "historical_replay_mostly_excluded": "Le résultat ne décrit qu'une partie de votre portefeuille ({covered, number, percent}) : le reste est exclu du rejeu."
+      "historical_replay_mostly_excluded": "Le résultat ne décrit qu'une partie de votre portefeuille ({covered, number, percent}) : le reste est exclu du rejeu.",
+      "assets_excluded_no_price_source": "{count, plural, one {# actif exclu} other {# actifs exclus}} du calcul : aucune source de prix attribuée et aucun prix jamais enregistré — {names}."
     },
     "assetDetail": {
       "overviewTab": "Vue d'ensemble",
