@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -51,6 +52,7 @@ from backend.app.services.risk.base import (
     RiskAnalytic,
     RiskAssetClassification,
     RiskComputation,
+    RiskExecutionContext,
     RiskUnavailableError,
 )
 from backend.app.services.risk.service import (
@@ -1601,3 +1603,651 @@ async def test_warning_names_issue_no_query_when_no_warning_needs_them():
 
     assert enriched == items
     assert names_db.lookups == []
+
+
+# ---------------------------------------------------------------------------
+# «Partial» only where the number lost something (developer's decision of 29/09/2026)
+#
+# A holding that nothing prices is excluded from the per-asset series. In portfolio historical mode
+# the primary series is the portfolio TWRR, which already values that holding at its last trade
+# price. Each analytic declares the series it reads (`RiskAnalytic.series_inputs`):
+#   PRIMARY (KPI, VaR, drawdown) reads the TWRR alone — it inherits no exclusion of the scope and is
+#     judged on the portfolio's own data quality;
+#   PRIMARY_AND_BENCHMARK (comparison) inherits no exclusion either, but its benchmark is prepared on
+#     the joint calendar of the scope, so the per-asset data quality stays its own;
+#   SCOPE_ASSETS (correlation, the current-composition backtest, a slice…) keeps everything.
+# ---------------------------------------------------------------------------
+
+UNPRICED_ASSET_ID = 3
+BENCHMARK_ASSET_ID = 9
+OBSERVATIONS = 24
+PORTFOLIO_TWRR_RETURNS = [round(0.004 * math.sin(index * 0.8) + 0.0005, 10) for index in range(OBSERVATIONS)]
+PRICED_RETURNS = {
+    1: [round(0.009 * math.sin(index * 0.7) + 0.001, 10) for index in range(OBSERVATIONS)],
+    2: [round(0.006 * math.cos(index * 0.45) - 0.0005, 10) for index in range(OBSERVATIONS)],
+    BENCHMARK_ASSET_ID: [round(0.007 * math.sin(index * 0.55 + 1.0), 10) for index in range(OBSERVATIONS)],
+}
+# The four analytics that, in portfolio historical mode, read nothing but the TWRR (and, for
+# comparison, a benchmark that is not a scope asset).
+TWRR_READERS = {
+    "kpi": {"instance_id": "kpi", "analytic_code": "historical_kpi"},
+    "var": {"instance_id": "var", "analytic_code": "historical_var"},
+    "drawdown": {"instance_id": "drawdown", "analytic_code": "drawdown_summary"},
+    "comparison": {"instance_id": "comparison", "analytic_code": "comparison", "parameters": {"comparison_asset_id": BENCHMARK_ASSET_ID}},
+}
+PRIMARY_READERS = ("kpi", "var", "drawdown")
+CORRELATION = {"instance_id": "correlation", "analytic_code": "correlation"}
+CONTRIBUTION = {"instance_id": "contribution", "analytic_code": "risk_contribution"}
+RISK_RETURN = {"instance_id": "risk_return", "analytic_code": "asset_risk_return"}
+SPY = {"instance_id": "spy", "analytic_code": "context_spy"}
+# Two ways the per-asset preparation degrades without excluding anything: a benchmark quote carried
+# past the staleness threshold, and a date dropped from the joint calendar. Each names its own cause.
+JOINT_CALENDAR_DEGRADATIONS = [
+    pytest.param({"carried_forward_price_points": 3, "carried_forward_price_asset_ids": [BENCHMARK_ASSET_ID]}, "stale_prices", id="carried-benchmark-price"),
+    pytest.param({"incomplete_valuation_dates": [date(2026, 1, 12)]}, "incomplete_dates", id="dropped-calendar-date"),
+]
+
+
+class _NoRows:
+    """A query result without rows, whichever accessor reads it."""
+
+    def all(self) -> list:
+        return []
+
+    def fetchall(self) -> list:
+        return []
+
+    def first(self) -> None:
+        return None
+
+    def one_or_none(self) -> None:
+        return None
+
+    def scalar(self) -> None:
+        return None
+
+    def scalar_one_or_none(self) -> None:
+        return None
+
+    def scalars(self) -> _NoRows:
+        return self
+
+    def mappings(self) -> _NoRows:
+        return self
+
+    def unique(self) -> _NoRows:
+        return self
+
+    def tuples(self) -> _NoRows:
+        return self
+
+    def __iter__(self):
+        return iter(())
+
+
+class EmptyRowsDb:
+    """A session in which every query finds nothing, and which keeps what it was asked.
+
+    Scope, series and asset lookups are stubbed around it, so what reaches it is whatever else the
+    service reads: the warning names and — when an exclusion is a missing price — the one query
+    that asks, per asset, whether a provider is assigned and whether any price row exists. What
+    "no row" means for that query depends on how it is phrased, so the tests using this double
+    assert nothing that hinges on the answer: only which statements were issued, and what does not
+    depend on the reason at all.
+    """
+
+    def __init__(self) -> None:
+        self.statements: list[str] = []
+
+    async def execute(self, statement, *_args, **_kwargs) -> _NoRows:
+        self.statements.append(str(statement))
+        return _NoRows()
+
+    async def scalars(self, statement, *_args, **_kwargs) -> _NoRows:
+        self.statements.append(str(statement))
+        return _NoRows()
+
+    async def scalar(self, statement, *_args, **_kwargs) -> None:
+        self.statements.append(str(statement))
+        return None
+
+    def source_reads(self) -> list[str]:
+        """Statements that read the provider assignments or the stored prices."""
+        return [statement for statement in self.statements if "asset_provider_assignments" in statement or "price_history" in statement]
+
+
+def unpriced_holding_report(data_quality: DataQualityReport | None = None) -> PortfolioReportResponse:
+    """A portfolio worth 600: 300 and 100 in priced holdings, 100 in one nothing prices, 100 in cash."""
+    report = slice_report(
+        holdings={1: "300", 2: "100", UNPRICED_ASSET_ID: "100"},
+        cash="100",
+        twrr=twrr_history(PORTFOLIO_TWRR_RETURNS),
+    )
+    return report if data_quality is None else report.model_copy(update={"data_quality": data_quality})
+
+
+def priced_portfolio_report(**money: str) -> PortfolioReportResponse:
+    """A portfolio of priced holdings only (300 and 200), 100 in cash unless told otherwise."""
+    return slice_report(holdings={1: "300", 2: "200"}, **({"cash": "100"} | money), twrr=twrr_history(PORTFOLIO_TWRR_RETURNS))
+
+
+def prepared_with(data_quality: DataQualityReport) -> PreparedAssetSeriesSet:
+    """The priced series and the benchmark, with the per-asset data quality `data_quality`."""
+    return make_prepared_set(PRICED_RETURNS).model_copy(update={"data_quality": data_quality})
+
+
+def prepared_without(
+    asset_id: int = UNPRICED_ASSET_ID,
+    reason: DataQualityExclusionReason | None = DataQualityExclusionReason.MISSING_PRICE,
+) -> PreparedAssetSeriesSet:
+    """The priced series and the benchmark; `asset_id` is left out for `reason`, or for none recorded."""
+    if reason is None:
+        return make_prepared_set(PRICED_RETURNS)
+    return prepared_with(DataQualityReport(unusable_assets=[DataQualityExcludedAsset(asset_id=asset_id, reason=reason)]))
+
+
+async def query_unpriced_holding(
+    monkeypatch,
+    *,
+    analytics: list[dict[str, object]],
+    mode: str = "historical",
+    asset_ids: list[int] | None = None,
+    report: PortfolioReportResponse | None = None,
+    prepared: PreparedAssetSeriesSet | None = None,
+    db: EmptyRowsDb | None = None,
+) -> dict[str, RiskAnalyticResult]:
+    """Run one portfolio request over the unpriced-holding fixture; results keyed by instance."""
+    service = RiskService(db=db if db is not None else EmptyRowsDb())
+    install_portfolio_report(monkeypatch, service, report if report is not None else unpriced_holding_report())
+    install_prepared_series(monkeypatch, service, prepared if prepared is not None else prepared_without())
+    request = slice_request(
+        mode=mode,
+        asset_ids=asset_ids,
+        analytics=analytics,
+        start=date(2026, 1, 1),
+        end=date(2026, 1, 1) + timedelta(days=OBSERVATIONS),
+    )
+    response = await service.execute(user_id=7, request=request)
+    return {item.instance_id: item for item in response.items}
+
+
+def exclusion_ids(result: RiskAnalyticResult) -> list[int]:
+    return [item.asset_id for item in result.metadata.excluded_assets]
+
+
+def warning_codes(result: RiskAnalyticResult) -> list[str]:
+    return [warning.code for warning in result.warnings]
+
+
+def warning_causes(result: RiskAnalyticResult) -> list[str]:
+    return [warning.details["cause"] for warning in result.warnings if "cause" in warning.details]
+
+
+def assert_the_exclusion_is_real(correlation: RiskAnalyticResult) -> None:
+    """Presence barrier, in the same request: a SCOPE_ASSETS reader still carries the exclusion.
+
+    Without it, every absence asserted about the other results would be vacuous.
+    """
+    assert correlation.status == RiskResultStatus.PARTIAL
+    assert exclusion_ids(correlation) == [UNPRICED_ASSET_ID]
+    assert [warning.details["asset_ids"] for warning in correlation.warnings if warning.code == "assets_excluded"] == [[UNPRICED_ASSET_ID]]
+    assert UNPRICED_ASSET_ID in {item.asset_id for item in correlation.data_quality.unusable_assets}
+
+
+@pytest.mark.parametrize("instance_id", PRIMARY_READERS)
+@pytest.mark.asyncio
+async def test_a_primary_reader_on_the_portfolio_twrr_does_not_inherit_the_exclusions(monkeypatch, instance_id):
+    report = unpriced_holding_report()
+    results = await query_unpriced_holding(monkeypatch, analytics=[*TWRR_READERS.values(), CORRELATION], report=report)
+    assert_the_exclusion_is_real(results["correlation"])
+
+    result = results[instance_id]
+    assert result.output is not None, result.error
+    assert result.metadata.return_basis == RiskReturnBasis.TWRR
+    # The TWRR already values the unpriced holding at its last trade price: nothing was lost.
+    assert result.status == RiskResultStatus.OK, warning_codes(result)
+    assert "assets_excluded" not in warning_codes(result)
+    assert result.metadata.excluded_assets == []
+    # Judged on the portfolio's own report, not on per-asset data the TWRR never needed.
+    assert result.data_quality == report.data_quality
+
+
+@pytest.mark.asyncio
+async def test_comparison_on_the_portfolio_twrr_is_not_partial_for_a_scope_exclusion_alone(monkeypatch):
+    results = await query_unpriced_holding(monkeypatch, analytics=[*TWRR_READERS.values(), CORRELATION])
+    assert_the_exclusion_is_real(results["correlation"])
+
+    comparison = results["comparison"]
+    assert comparison.output is not None, comparison.error
+    assert comparison.metadata.return_basis == RiskReturnBasis.TWRR
+    assert comparison.status == RiskResultStatus.OK, warning_codes(comparison)
+    assert "assets_excluded" not in warning_codes(comparison)
+    assert comparison.metadata.excluded_assets == []
+    # Its data quality stays the per-asset one (next test), but the exclusion is not part of it: the
+    # excluded holding never entered the joint calendar the benchmark was prepared on.
+    assert comparison.data_quality.data_quality_status == DataQualityStatus.OK
+
+
+@pytest.mark.parametrize(("degradation", "cause"), JOINT_CALENDAR_DEGRADATIONS)
+@pytest.mark.asyncio
+async def test_a_degraded_joint_calendar_makes_comparison_partial_on_the_twrr(monkeypatch, degradation, cause):
+    """The benchmark is prepared on the joint calendar of the scope: what degrades it is comparison's own."""
+    results = await query_unpriced_holding(
+        monkeypatch,
+        analytics=[TWRR_READERS["comparison"]],
+        report=priced_portfolio_report(),
+        prepared=prepared_with(DataQualityReport(**degradation)),
+    )
+
+    comparison = results["comparison"]
+    assert comparison.output is not None, comparison.error
+    assert comparison.metadata.return_basis == RiskReturnBasis.TWRR
+    assert comparison.status == RiskResultStatus.PARTIAL
+    assert cause in warning_causes(comparison), warning_codes(comparison)
+
+
+@pytest.mark.parametrize(("degradation", "cause"), JOINT_CALENDAR_DEGRADATIONS)
+@pytest.mark.asyncio
+async def test_comparison_on_the_twrr_stays_partial_for_its_calendar_not_for_the_exclusion(monkeypatch, degradation, cause):
+    prepared = prepared_with(DataQualityReport(unusable_assets=[DataQualityExcludedAsset(asset_id=UNPRICED_ASSET_ID, reason=DataQualityExclusionReason.MISSING_PRICE)], **degradation))
+
+    results = await query_unpriced_holding(monkeypatch, analytics=[*TWRR_READERS.values(), CORRELATION], prepared=prepared)
+    assert_the_exclusion_is_real(results["correlation"])
+
+    comparison = results["comparison"]
+    assert comparison.output is not None, comparison.error
+    assert comparison.status == RiskResultStatus.PARTIAL
+    assert cause in warning_causes(comparison), warning_codes(comparison)
+    # Partial for the degraded calendar, not for the holding the TWRR already values.
+    assert "assets_excluded" not in warning_codes(comparison)
+    assert comparison.metadata.excluded_assets == []
+    # Neither is any of it the TWRR's: the primary readers of the same request stay whole.
+    for instance_id in PRIMARY_READERS:
+        assert results[instance_id].status == RiskResultStatus.OK, (instance_id, warning_codes(results[instance_id]))
+
+
+@pytest.mark.asyncio
+async def test_a_held_benchmark_without_a_series_keeps_its_own_entry_in_the_comparison_data_quality(monkeypatch):
+    """Benchmarked against a holding nothing prices, comparison cannot run — and its data quality says why.
+
+    The scope's exclusions leave a comparison's per-asset data quality because the excluded holdings
+    never entered the joint calendar its benchmark was prepared on. The benchmark's own entry is the
+    exception: it is the reason the comparison is unavailable. Against another benchmark, in the same
+    request, the entry is not the comparison's own and is dropped as usual.
+    """
+    held_benchmark = {"instance_id": "held_benchmark", "analytic_code": "comparison", "parameters": {"comparison_asset_id": UNPRICED_ASSET_ID}}
+
+    results = await query_unpriced_holding(monkeypatch, analytics=[held_benchmark, TWRR_READERS["comparison"], CORRELATION])
+    assert_the_exclusion_is_real(results["correlation"])
+
+    unavailable = results["held_benchmark"]
+    assert unavailable.status == RiskResultStatus.UNAVAILABLE
+    assert unavailable.error.code == RiskErrorCode.DATA_UNAVAILABLE
+    assert unavailable.error.details == {"asset_id": UNPRICED_ASSET_ID}
+    assert unavailable.metadata.return_basis == RiskReturnBasis.TWRR
+    assert UNPRICED_ASSET_ID in {item.asset_id for item in unavailable.data_quality.unusable_assets}
+
+    other = results["comparison"]
+    assert other.status == RiskResultStatus.OK, warning_codes(other)
+    assert UNPRICED_ASSET_ID not in {item.asset_id for item in other.data_quality.unusable_assets}
+
+
+@pytest.mark.asyncio
+async def test_the_twrr_readers_drop_the_residual_warning_of_the_composition(monkeypatch):
+    """The in-transit warning describes the zero-return residual of the composition, which the TWRR never uses.
+
+    Net worth 600 against 500 of holdings and 50 of cash: the other 50 is in transit, so the
+    residual (1/6) is not the cash (1/12) and the scope says so.
+    """
+    residual = "zero_risk_residual_includes_in_transit"
+    results = await query_unpriced_holding(
+        monkeypatch,
+        analytics=[*TWRR_READERS.values(), CORRELATION],
+        report=priced_portfolio_report(cash="50", in_transit="50", net_worth="600"),
+        prepared=prepared_without(reason=None),
+    )
+
+    # Presence barrier: the scope raised it, and a reader of the per-asset series keeps it.
+    assert residual in warning_codes(results["correlation"])
+    for instance_id in TWRR_READERS:
+        result = results[instance_id]
+        assert result.metadata.return_basis == RiskReturnBasis.TWRR, instance_id
+        assert residual not in warning_codes(result), instance_id
+        assert result.status == RiskResultStatus.OK, (instance_id, warning_codes(result))
+
+
+@pytest.mark.asyncio
+async def test_a_degraded_portfolio_still_makes_the_twrr_readers_partial(monkeypatch):
+    """The request's exclusion stops counting; the portfolio's own data quality does not."""
+    results = await query_unpriced_holding(
+        monkeypatch,
+        analytics=list(TWRR_READERS.values()),
+        report=unpriced_holding_report(DataQualityReport(stale_prices=[_stale_price(1)])),
+    )
+
+    assert set(results) == set(TWRR_READERS)
+    for instance_id, result in results.items():
+        assert result.output is not None, (instance_id, result.error)
+        assert result.metadata.return_basis == RiskReturnBasis.TWRR, instance_id
+        assert result.status == RiskResultStatus.PARTIAL, instance_id
+        assert result.data_quality.data_quality_status != DataQualityStatus.OK, instance_id
+        stale = [warning.details["asset_ids"] for warning in result.warnings if warning.details.get("cause") == "stale_prices"]
+        assert stale == [[1]], (instance_id, warning_codes(result))
+
+
+@pytest.mark.asyncio
+async def test_on_the_current_composition_every_result_keeps_the_exclusion(monkeypatch):
+    """The backtest replays today's weights over the per-asset series: it did lose the holding."""
+    analytics = [TWRR_READERS["kpi"], TWRR_READERS["var"], TWRR_READERS["comparison"], CORRELATION, CONTRIBUTION, RISK_RETURN]
+    results = await query_unpriced_holding(monkeypatch, mode="current_composition", analytics=analytics)
+
+    for instance_id in ("kpi", "var", "comparison"):
+        assert results[instance_id].metadata.return_basis == RiskReturnBasis.CURRENT_COMPOSITION_BACKTEST, instance_id
+    assert len(results) == len(analytics)
+    for instance_id, result in results.items():
+        assert result.output is not None, (instance_id, result.error)
+        assert result.status == RiskResultStatus.PARTIAL, instance_id
+        assert exclusion_ids(result) == [UNPRICED_ASSET_ID], instance_id
+        assert "assets_excluded" in warning_codes(result), instance_id
+
+
+@pytest.mark.asyncio
+async def test_a_sliced_portfolio_keeps_the_exclusion_in_historical_mode(monkeypatch):
+    """A slice cannot be cut out of the TWRR (K4), so historical mode replays it from the per-asset series."""
+    results = await query_unpriced_holding(monkeypatch, asset_ids=[1, UNPRICED_ASSET_ID], analytics=list(TWRR_READERS.values()))
+
+    assert set(results) == set(TWRR_READERS)
+    for instance_id, result in results.items():
+        assert result.output is not None, (instance_id, result.error)
+        assert result.metadata.return_basis == RiskReturnBasis.CURRENT_COMPOSITION_BACKTEST, instance_id
+        assert result.status == RiskResultStatus.PARTIAL, instance_id
+        assert exclusion_ids(result) == [UNPRICED_ASSET_ID], instance_id
+        assert "assets_excluded" in warning_codes(result), instance_id
+
+
+@pytest.mark.parametrize("instance_id", list(TWRR_READERS))
+@pytest.mark.asyncio
+async def test_a_sliced_historical_result_is_judged_on_the_series_it_consumed(monkeypatch, instance_id):
+    """The other half of the generalized rule: the portfolio's data quality follows the basis, not the mode.
+
+    KPI and VaR used to take the portfolio's report whenever the mode was historical, sliced or not.
+    A slice is replayed from the per-asset series, so that report alone hides the holding the replay
+    lost.
+    """
+    results = await query_unpriced_holding(monkeypatch, asset_ids=[1, UNPRICED_ASSET_ID], analytics=list(TWRR_READERS.values()))
+
+    result = results[instance_id]
+    assert result.metadata.return_basis == RiskReturnBasis.CURRENT_COMPOSITION_BACKTEST
+    assert UNPRICED_ASSET_ID in {item.asset_id for item in result.data_quality.unusable_assets}
+
+
+# `excluded_weight`: Σ weights of the scope assets left without a series. `cash_weight` keeps its
+# meaning — the zero-return residual, clamped at zero — and no other number moves. With non-negative
+# true cash the excluded part sits inside that residual; with negative true cash the two are not
+# nested, and no rule pretends they are.
+
+
+def install_context_spy(monkeypatch) -> list[RiskExecutionContext]:
+    """Serve one more analytic, which records the context the service hands it in any scope and mode."""
+    seen: list[RiskExecutionContext] = []
+
+    class ContextSpy(GoodAnalytic):
+        analytic_code = "context_spy"
+        supported_scopes = (RiskScopeKind.ASSET, RiskScopeKind.ASSET_SET, RiskScopeKind.PORTFOLIO)
+        supported_modes = (RiskMode.HISTORICAL, RiskMode.CURRENT_COMPOSITION)
+        # The history gate counts the primary series, which a weightless scope lacks. The spy
+        # measures nothing, so nothing may keep it from being called.
+        min_observations = 0
+
+        def compute(self, params, context):
+            seen.append(context)
+            return super().compute(params, context)
+
+    registered = RiskAnalyticRegistry.get_plugin
+    monkeypatch.setattr(
+        RiskAnalyticRegistry,
+        "get_plugin",
+        classmethod(lambda cls, code: ContextSpy if code == ContextSpy.analytic_code else registered(code)),
+    )
+    return seen
+
+
+@pytest.mark.parametrize("mode", ["historical", "current_composition"])
+@pytest.mark.asyncio
+async def test_the_excluded_weight_is_the_share_of_the_portfolio_left_without_a_series(monkeypatch, mode):
+    seen = install_context_spy(monkeypatch)
+    prepared = make_prepared_set(PRICED_RETURNS).model_copy(
+        update={
+            "data_quality": DataQualityReport(
+                unusable_assets=[
+                    DataQualityExcludedAsset(asset_id=3, reason=DataQualityExclusionReason.MISSING_PRICE),
+                    DataQualityExcludedAsset(asset_id=4, reason=DataQualityExclusionReason.MISSING_FX),
+                ]
+            )
+        }
+    )
+
+    await query_unpriced_holding(
+        monkeypatch,
+        mode=mode,
+        analytics=[SPY],
+        report=slice_report(holdings={1: "300", 2: "100", 3: "100", 4: "50"}, cash="50"),
+        prepared=prepared,
+    )
+
+    (context,) = seen
+    assert {item.asset_id for item in context.excluded_assets} == {3, 4}
+    # Whatever the reason: 150 of a 600 portfolio lost its series.
+    assert context.excluded_weight == pytest.approx(150 / 600, abs=1e-12)
+    # `cash_weight` keeps its meaning — the whole zero-return residual — and holds the excluded part.
+    assert context.cash_weight == pytest.approx(200 / 600, abs=1e-12)
+    assert context.cash_weight - context.excluded_weight == pytest.approx(50 / 600, abs=1e-12)
+
+
+@pytest.mark.asyncio
+async def test_a_slice_counts_its_excluded_holding_against_the_slice(monkeypatch):
+    seen = install_context_spy(monkeypatch)
+
+    await query_unpriced_holding(monkeypatch, mode="current_composition", asset_ids=[1, UNPRICED_ASSET_ID], analytics=[SPY])
+
+    (context,) = seen
+    assert [item.asset_id for item in context.excluded_assets] == [UNPRICED_ASSET_ID]
+    # The slice is 100% of itself (300 + 100) and holds no true cash: its whole residual is the
+    # excluded holding, so the two weights meet at the bound.
+    assert context.excluded_weight == pytest.approx(0.25, abs=1e-12)
+    assert context.cash_weight == pytest.approx(0.25, abs=1e-12)
+
+
+@pytest.mark.parametrize(
+    "scope",
+    [
+        pytest.param({"kind": "asset_set", "asset_ids": [1, 2, UNPRICED_ASSET_ID]}, id="asset-set"),
+        pytest.param({"kind": "asset", "asset_id": UNPRICED_ASSET_ID}, id="asset"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_a_scope_without_weights_has_no_excluded_weight(monkeypatch, scope):
+    seen = install_context_spy(monkeypatch)
+    service = RiskService(db=EmptyRowsDb())
+    install_prepared_series(monkeypatch, service, prepared_without())
+
+    await service.execute(
+        user_id=7,
+        request=RiskQueryRequest.model_validate(
+            {
+                "scope": scope,
+                "date_range": {"start": "2026-01-01", "end": "2026-01-25"},
+                "target_currency": "EUR",
+                "mode": "historical",
+                "analytics": [SPY],
+            }
+        ),
+    )
+
+    (context,) = seen
+    assert [item.asset_id for item in context.excluded_assets] == [UNPRICED_ASSET_ID]
+    assert context.excluded_weight == 0.0
+
+
+@pytest.mark.asyncio
+async def test_with_negative_true_cash_the_excluded_weight_is_not_nested_in_the_residual(monkeypatch):
+    """Net worth 500 against 600 of holdings (true cash -100); the 200 that nothing prices is excluded.
+
+    Weights 0.8 and 0.4: the residual left by the priced holding is 0.2, the excluded weight 0.4.
+    Both are stated as they are, and the result is produced.
+    """
+    seen = install_context_spy(monkeypatch)
+
+    results = await query_unpriced_holding(
+        monkeypatch,
+        mode="current_composition",
+        analytics=[SPY],
+        report=slice_report(holdings={1: "400", UNPRICED_ASSET_ID: "200"}, cash="-100"),
+    )
+
+    assert results["spy"].output is not None, results["spy"].error
+    (context,) = seen
+    assert [item.asset_id for item in context.excluded_assets] == [UNPRICED_ASSET_ID]
+    assert dict(context.weights) == pytest.approx({1: 0.8, UNPRICED_ASSET_ID: 0.4})
+    assert context.cash_weight == pytest.approx(0.2, abs=1e-12)
+    assert context.excluded_weight == pytest.approx(0.4, abs=1e-12)
+
+
+@pytest.mark.asyncio
+async def test_contribution_and_risk_return_name_the_excluded_weight_inside_cash(monkeypatch):
+    results = await query_unpriced_holding(monkeypatch, mode="current_composition", analytics=[CONTRIBUTION, RISK_RETURN])
+
+    for instance_id in ("contribution", "risk_return"):
+        result = results[instance_id]
+        assert result.output is not None, (instance_id, result.error)
+        assert exclusion_ids(result) == [UNPRICED_ASSET_ID], instance_id
+        # 100 of 600 has no series; with 100 of true cash, the zero-return residual is 200 — true
+        # cash is not negative here, so the excluded part sits inside the residual.
+        assert result.output.cash_weight == pytest.approx(2 / 6, abs=1e-12), instance_id
+        assert result.output.excluded_weight == pytest.approx(1 / 6, abs=1e-12), instance_id
+        assert result.output.excluded_weight <= result.output.cash_weight, instance_id
+
+    # The versions that publish `excluded_weight`: a zero must be told apart from a server that predates the field.
+    assert results["contribution"].metadata.algorithm_version == "1.2.0"
+    assert results["risk_return"].metadata.algorithm_version == "1.1.0"
+
+
+# Captured on `ffe41c5ba`, before `excluded_weight` existed, from exactly the current-composition
+# inputs of `query_unpriced_holding`. Publishing the split must not move any of them. The relative
+# tolerance only absorbs BLAS differences in `np.cov` between machines.
+GOLDEN_REL = 1e-12
+GOLDEN_CONTRIBUTION = {
+    "portfolio_volatility": 0.06237752322585717,
+    "cash_weight": 0.33333333333333337,
+    "effective_number_of_assets": 3.5999999999999996,
+    "diversification_ratio": 1.1846014602790187,
+    "weight": [0.5, 0.16666666666666666],
+    "marginal_contribution": [0.11643684887967204, 0.02495459271612689],
+    "component_contribution": [0.05821842443983602, 0.004159098786021148],
+    "percentage_contribution": [0.9333237587686538, 0.06667624123134612],
+}
+GOLDEN_RISK_RETURN = {
+    "portfolio_volatility": 0.06298800939876324,
+    "portfolio_expected_annual_return": 0.29920378381701246,
+    "cash_weight": 0.33333333333333337,
+    "weight": [0.5, 0.16666666666666666],
+    "volatility": [0.11952753719204096, 0.08477241903551005],
+    "expected_annual_return": [0.6995987272083334, -0.32355274133333334],
+}
+
+
+@pytest.mark.asyncio
+async def test_publishing_the_excluded_weight_moves_no_other_number(monkeypatch):
+    analytics = [CONTRIBUTION, RISK_RETURN]
+    results = await query_unpriced_holding(monkeypatch, mode="current_composition", analytics=analytics)
+    contribution = results["contribution"].output
+    risk_return = results["risk_return"].output
+
+    # One field more, none less.
+    assert set(contribution.model_dump()) - {"excluded_weight"} == {"kind", "portfolio_volatility", "cash_weight", "items", "effective_number_of_assets", "diversification_ratio"}
+    assert set(risk_return.model_dump()) - {"excluded_weight"} == {"kind", "portfolio_volatility", "portfolio_expected_annual_return", "cash_weight", "items"}
+
+    assert [item.asset_id for item in contribution.items] == [1, 2]
+    for field in ("portfolio_volatility", "cash_weight", "effective_number_of_assets", "diversification_ratio"):
+        assert getattr(contribution, field) == pytest.approx(GOLDEN_CONTRIBUTION[field], rel=GOLDEN_REL), field
+    for field in ("weight", "marginal_contribution", "component_contribution", "percentage_contribution"):
+        assert [getattr(item, field) for item in contribution.items] == pytest.approx(GOLDEN_CONTRIBUTION[field], rel=GOLDEN_REL), field
+
+    assert [item.asset_id for item in risk_return.items] == [1, 2]
+    for field in ("portfolio_volatility", "portfolio_expected_annual_return", "cash_weight"):
+        assert getattr(risk_return, field) == pytest.approx(GOLDEN_RISK_RETURN[field], rel=GOLDEN_REL), field
+    for field in ("weight", "volatility", "expected_annual_return"):
+        assert [getattr(item, field) for item in risk_return.items] == pytest.approx(GOLDEN_RISK_RETURN[field], rel=GOLDEN_REL), field
+
+    # And the reason no number may move: an excluded holding weighs exactly as the same money in
+    # cash would (G6). Same portfolio, the unpriced 100 held as cash instead, nothing excluded.
+    as_cash = await query_unpriced_holding(
+        monkeypatch,
+        mode="current_composition",
+        analytics=analytics,
+        report=slice_report(holdings={1: "300", 2: "100"}, cash="200"),
+        prepared=prepared_without(reason=None),
+    )
+    for instance_id in ("contribution", "risk_return"):
+        assert as_cash[instance_id].status == RiskResultStatus.OK, (instance_id, warning_codes(as_cash[instance_id]))
+        assert results[instance_id].output.model_dump(exclude={"excluded_weight"}) == as_cash[instance_id].output.model_dump(exclude={"excluded_weight"}), instance_id
+
+
+# `no_price_source`: an asset excluded for a missing price that has no provider assigned AND no price
+# row at all — never priced, and nothing will price it: a permanent state. A source that returned
+# nothing, or manual prices outside the period, stay `missing_price` (occasional). The two facts are
+# read in one query per request, and only when some exclusion is a missing price.
+
+
+def test_an_asset_nothing_can_price_gets_a_sentence_of_its_own():
+    warnings = _assets_excluded_warnings(
+        (
+            RiskExcludedAsset(asset_id=7, reason="no_price_source"),
+            RiskExcludedAsset(asset_id=5, reason="missing_price"),
+            RiskExcludedAsset(asset_id=8, reason="no_price_source"),
+        )
+    )
+
+    by_reason = {warning.details["reason"]: warning for warning in warnings}
+    assert len(warnings) == len(by_reason) == 2
+    permanent = by_reason["no_price_source"]
+    assert permanent.code == "assets_excluded"
+    assert permanent.message_i18n_key == "risk.warnings.assets_excluded_no_price_source"
+    assert permanent.details == {"asset_ids": [7, 8], "reason": "no_price_source"}
+    # The occasional cause keeps its own sentence.
+    assert by_reason["missing_price"].message_i18n_key == "risk.warnings.assets_excluded_missing_price"
+
+
+@pytest.mark.asyncio
+async def test_a_missing_price_is_qualified_by_one_statement_that_asks_both_facts(monkeypatch):
+    """Two analytics, one exclusion to qualify: one read for the request, asking provider and prices at once.
+
+    Which reason the empty answer leads to depends on how the query is phrased, so it is pinned on
+    stored rows (`test_risk_exclusion_reasons.py`), not here.
+    """
+    db = EmptyRowsDb()
+
+    results = await query_unpriced_holding(monkeypatch, db=db, mode="current_composition", analytics=[CORRELATION, CONTRIBUTION])
+
+    assert all(exclusion_ids(result) == [UNPRICED_ASSET_ID] for result in results.values())
+    (read,) = db.source_reads()
+    assert "asset_provider_assignments" in read and "price_history" in read, read
+
+
+@pytest.mark.parametrize(
+    ("reason", "expected"),
+    [
+        pytest.param(DataQualityExclusionReason.MISSING_FX, "missing_fx", id="missing-fx"),
+        pytest.param(DataQualityExclusionReason.INVALID_CURRENCY, "invalid_currency", id="invalid-currency"),
+        pytest.param(None, "insufficient_history", id="no-return-series"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_only_a_missing_price_can_become_a_missing_price_source(monkeypatch, reason, expected):
+    """An exclusion for any other cause keeps its reason, and gives no cause to read the price sources."""
+    db = EmptyRowsDb()
+
+    results = await query_unpriced_holding(monkeypatch, db=db, mode="current_composition", analytics=[CORRELATION], prepared=prepared_without(reason=reason))
+
+    assert [(item.asset_id, item.reason) for item in results["correlation"].metadata.excluded_assets] == [(UNPRICED_ASSET_ID, expected)]
+    assert db.source_reads() == [], db.statements

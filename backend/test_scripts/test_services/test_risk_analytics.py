@@ -6,6 +6,7 @@ import math
 from dataclasses import replace
 from datetime import date, timedelta
 from decimal import Decimal
+from enum import StrEnum
 
 import pytest
 from pydantic import TypeAdapter
@@ -44,7 +45,9 @@ from backend.app.schemas.risk_scenarios import RiskScenarioDimension
 from backend.app.services.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.provider_registry import RiskAnalyticRegistry
 from backend.app.services.risk import acquired
+from backend.app.services.risk import base as risk_base
 from backend.app.services.risk.base import (
+    RiskAnalytic,
     RiskAssetClassification,
     RiskExecutionContext,
     RiskHistoricalReplayContext,
@@ -257,6 +260,31 @@ def test_registry_discovers_all_deterministic_analytics():
     ]
 
 
+# Each analytic declares the series it reads (developer's decision of 29/09/2026). On the portfolio
+# TWRR, PRIMARY and PRIMARY_AND_BENCHMARK readers lose nothing when a scope asset has no series, so
+# the service does not hand them the scope's exclusions; comparison keeps the per-asset data quality,
+# because its benchmark is prepared on the scope's joint calendar. A new analytic reads the scope's
+# assets unless it says otherwise.
+PRIMARY_READERS = frozenset({"historical_kpi", "historical_var", "drawdown_summary"})
+PRIMARY_AND_BENCHMARK_READERS = frozenset({"comparison"})
+
+
+def test_each_analytic_declares_the_series_it_reads():
+    # Read through the module: a missing enum must fail this test, not the collection of the file.
+    inputs = risk_base.RiskSeriesInputs
+    assert issubclass(inputs, StrEnum)
+    assert {member.value for member in inputs} == {"primary", "primary_and_benchmark", "scope_assets"}
+    assert RiskAnalytic.series_inputs is inputs.SCOPE_ASSETS
+
+    declared = {code: RiskAnalyticRegistry.get_plugin(code).series_inputs for code in RiskAnalyticRegistry.list_plugin_codes()}
+
+    assert (PRIMARY_READERS | PRIMARY_AND_BENCHMARK_READERS) <= set(declared)
+    assert all(isinstance(value, inputs) for value in declared.values()), declared
+    assert declared == {code: (inputs.PRIMARY if code in PRIMARY_READERS else inputs.PRIMARY_AND_BENCHMARK if code in PRIMARY_AND_BENCHMARK_READERS else inputs.SCOPE_ASSETS) for code in declared}
+    # One declaration, not two.
+    assert not hasattr(RiskAnalytic, "reads_scope_asset_series")
+
+
 def test_historical_kpi_consumes_portfolio_twrr_and_observed_annualization():
     returns = [0.01, -0.005] * 10
     computation = HistoricalKpiAnalytic().compute(
@@ -466,7 +494,7 @@ def test_asset_risk_return_registers_canonical_capabilities():
     # invent weights — and the invented ones would be today's, which is this mode.
     assert AssetRiskReturnAnalytic.supported_modes == (RiskMode.CURRENT_COMPOSITION,)
     assert AssetRiskReturnAnalytic.min_observations == 20
-    assert AssetRiskReturnAnalytic.algorithm_version == "1.0.0"
+    assert AssetRiskReturnAnalytic.algorithm_version == "1.1.0"
     assert AssetRiskReturnAnalytic.catalog_definition().name_i18n_key == "risk.analytics.assetRiskReturn.name"
 
 
@@ -2155,3 +2183,55 @@ def test_historical_kpi_output_survives_the_discriminated_union_round_trip():
     assert restored.drawdown_at_risk == pytest.approx(output.drawdown_at_risk, abs=ORACLE_TOLERANCE)
     assert restored.conditional_drawdown_at_risk == pytest.approx(output.conditional_drawdown_at_risk, abs=ORACLE_TOLERANCE)
     assert restored.ulcer_index == pytest.approx(output.ulcer_index, abs=ORACLE_TOLERANCE)
+
+
+# ---------------------------------------------------------------------------
+# `excluded_weight` (developer's decision of 29/09/2026): Σ weights of the scope assets left without a
+# series, stated next to `cash_weight` — the zero-return residual, clamped at zero, which those
+# holdings belong to (G6). The split is the context's, stated as is: the plugin computes nothing new
+# from it, and does not require the two to be nested (with negative true cash they are not).
+# ---------------------------------------------------------------------------
+
+WEIGHTED_PLUGINS = [
+    pytest.param(RiskContributionAnalytic, RiskContributionParams, id="risk_contribution"),
+    pytest.param(AssetRiskReturnAnalytic, AssetRiskReturnParams, id="asset_risk_return"),
+]
+
+
+@pytest.mark.parametrize(("analytic", "params"), WEIGHTED_PLUGINS)
+def test_a_weighted_payload_states_the_excluded_part_of_its_cash(analytic, params):
+    base = _risk_return_context()
+    context = replace(base, excluded_weight=0.1)
+
+    output = analytic().compute(params(), context).output
+    reference = analytic().compute(params(), base).output
+
+    assert output.excluded_weight == pytest.approx(0.1, abs=1e-15)
+    # Still the whole residual.
+    assert output.cash_weight == pytest.approx(context.cash_weight, abs=1e-15)
+    # A label on the residual, not a new residual: nothing else moves.
+    assert output.model_dump(exclude={"excluded_weight"}) == reference.model_dump(exclude={"excluded_weight"})
+
+
+@pytest.mark.parametrize(("analytic", "params"), WEIGHTED_PLUGINS)
+def test_with_negative_true_cash_the_payload_states_both_weights_as_they_are(analytic, params):
+    """Net worth 500 against 600 of holdings: weights 0.8 and 0.4, the second without a series.
+
+    The residual left by the priced holding is 0.2 and the excluded weight 0.4 — not nested, and the
+    payload is produced all the same.
+    """
+    context = replace(_risk_return_context(), scope_asset_ids=(1,), weights={1: 0.8, 2: 0.4}, cash_weight=0.2, excluded_weight=0.4)
+
+    output = analytic().compute(params(), context).output
+
+    assert [item.weight for item in output.items] == pytest.approx([0.8])
+    assert output.cash_weight == pytest.approx(0.2, abs=1e-15)
+    assert output.excluded_weight == pytest.approx(0.4, abs=1e-15)
+
+
+@pytest.mark.parametrize(("analytic", "params"), WEIGHTED_PLUGINS)
+def test_a_weighted_payload_without_exclusions_states_a_zero_excluded_weight(analytic, params):
+    output = analytic().compute(params(), _risk_return_context()).output
+
+    assert output.excluded_weight == 0.0
+    assert output.cash_weight == pytest.approx(0.25, abs=1e-15)

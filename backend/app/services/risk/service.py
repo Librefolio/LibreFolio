@@ -9,14 +9,15 @@ from decimal import Decimal
 from typing import Optional
 
 from pydantic import BaseModel, ValidationError
-from sqlalchemy import select
+from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Asset, BrokerUserAccess
+from backend.app.db.models import Asset, AssetProviderAssignment, BrokerUserAccess, PriceHistory
 from backend.app.logging_config import get_logger
 from backend.app.schemas.assets import FAClassificationParams
 from backend.app.schemas.common import DateRangeModel, OpenDateRangeModel
 from backend.app.schemas.portfolio import (
+    DataQualityExclusionReason,
     DataQualityReport,
     DataQualityStatus,
     PortfolioReportQuery,
@@ -58,6 +59,7 @@ from backend.app.services.risk.base import (
     RiskComputation,
     RiskExecutionContext,
     RiskHistoricalReplayContext,
+    RiskSeriesInputs,
     RiskUnavailableError,
 )
 from backend.app.services.risk.eligibility import (
@@ -188,10 +190,14 @@ class RiskService:
             date_range=request.date_range,
             target_currency=request.target_currency,
         )
+        never_priced_asset_ids = await self._never_priced_asset_ids(
+            tuple(item.asset_id for item in _scope_exclusions(scope_inputs.requested_asset_ids, prepared) if item.reason == DataQualityExclusionReason.MISSING_PRICE),
+        )
         context = self._build_context(
             request=request,
             scope_inputs=scope_inputs,
             prepared=prepared,
+            never_priced_asset_ids=never_priced_asset_ids,
         )
         if any(_is_hypothetical_plan(plan) for plan in plans.values()):
             context = replace(
@@ -549,6 +555,20 @@ class RiskService:
         result = await self.db.execute(select(Asset.id).where(Asset.id.in_(asset_ids)))
         return set(result.scalars().all())
 
+    async def _never_priced_asset_ids(self, asset_ids: tuple[int, ...]) -> frozenset[int]:
+        """The assets among `asset_ids` that no provider is assigned to and no price was ever stored for.
+
+        Nothing will price them, so their missing price is permanent (developer's decision of
+        29/09/2026). Both facts are asked in one statement, issued only for a request that excludes
+        some asset for a missing price.
+        """
+        if not asset_ids:
+            return frozenset()
+        sourced = exists().where(AssetProviderAssignment.asset_id == Asset.id)
+        priced = exists().where(PriceHistory.asset_id == Asset.id)
+        result = await self.db.execute(select(Asset.id).where(Asset.id.in_(asset_ids), ~sourced, ~priced))
+        return frozenset(result.scalars().all())
+
     async def _load_asset_classifications(
         self,
         asset_ids: tuple[int, ...],
@@ -745,18 +765,11 @@ class RiskService:
         request: RiskQueryRequest,
         scope_inputs: _ScopeInputs,
         prepared: PreparedAssetSeriesSet,
+        never_priced_asset_ids: frozenset[int] = frozenset(),
     ) -> RiskExecutionContext:
         prepared_by_asset = {item.returns.asset_id: item for item in prepared.series if item.returns.points}
         usable_scope_asset_ids = tuple(asset_id for asset_id in scope_inputs.requested_asset_ids if asset_id in prepared_by_asset)
-        unusable_reasons = {item.asset_id: item.reason.value for item in prepared.data_quality.unusable_assets}
-        excluded_assets = tuple(
-            RiskExcludedAsset(
-                asset_id=asset_id,
-                reason=unusable_reasons.get(asset_id, "insufficient_history"),
-            )
-            for asset_id in scope_inputs.requested_asset_ids
-            if asset_id not in usable_scope_asset_ids
-        )
+        excluded_assets = _scope_exclusions(scope_inputs.requested_asset_ids, prepared, never_priced_asset_ids)
         data_quality = _merge_data_quality(
             scope_inputs.data_quality,
             prepared.data_quality,
@@ -846,6 +859,7 @@ class RiskService:
             weights=scope_inputs.weights,
             asset_values=scope_inputs.asset_values,
             cash_weight=usable_cash_weight,
+            excluded_weight=sum((scope_inputs.weights.get(item.asset_id, 0.0) for item in excluded_assets), 0.0),
             scope_value=scope_inputs.scope_value,
             broker_ids=scope_inputs.broker_ids,
             composition_as_of=scope_inputs.composition_as_of,
@@ -917,6 +931,9 @@ class RiskService:
         if _is_hypothetical_plan(plan):
             context_warnings = tuple(warning for warning in context_warnings if warning.code != "assets_excluded")
             context_exclusions = ()
+        elif _reads_the_twrr_alone(plan, context):
+            context_warnings = tuple(warning for warning in context_warnings if warning.code not in _COMPOSITION_WARNING_CODES)
+            context_exclusions = ()
         warnings = _dedupe_warnings(
             (
                 *context_warnings,
@@ -951,17 +968,21 @@ class RiskService:
             if context.scope_kind == RiskScopeKind.PORTFOLIO and context.portfolio_data_quality is not None:
                 return context.portfolio_data_quality
             return DataQualityReport()
-        if (
-            context.mode == RiskMode.HISTORICAL
-            and context.scope_kind == RiskScopeKind.PORTFOLIO
-            and plan.request.analytic_code
-            in {
-                "historical_kpi",
-                "historical_var",
-            }
-            and context.portfolio_data_quality is not None
-        ):
-            return context.portfolio_data_quality
+        if context.primary_return_basis == RiskReturnBasis.TWRR and context.portfolio_data_quality is not None:
+            # Judged on the series it consumed. The TWRR is the portfolio's own, so its report is the
+            # whole story for a PRIMARY reader. A benchmark is prepared on the scope's joint calendar,
+            # which the assets excluded from the scope never entered: their entries are not its own.
+            series_inputs = plan.analytic_class.series_inputs
+            if series_inputs == RiskSeriesInputs.PRIMARY:
+                return context.portfolio_data_quality
+            if series_inputs == RiskSeriesInputs.PRIMARY_AND_BENCHMARK and context.prepared_data_quality is not None:
+                benchmark_asset_id = getattr(plan.params, "comparison_asset_id", None)
+                foreign_asset_ids = {item.asset_id for item in context.excluded_assets} - {benchmark_asset_id}
+                prepared = context.prepared_data_quality
+                return _merge_data_quality(
+                    context.portfolio_data_quality,
+                    prepared.model_copy(update={"unusable_assets": [item for item in prepared.unusable_assets if item.asset_id not in foreign_asset_ids]}),
+                )
         return context.data_quality
 
     @staticmethod
@@ -980,7 +1001,7 @@ class RiskService:
             annualization_factor = None
 
         analyzed_range = computation.analyzed_range if computation is not None and computation.analyzed_range is not None else _context_analyzed_range(context)
-        context_exclusions = () if _is_hypothetical_plan(plan) else context.excluded_assets
+        context_exclusions = () if _is_hypothetical_plan(plan) or _reads_the_twrr_alone(plan, context) else context.excluded_assets
         computation_exclusions = computation.excluded_assets if computation is not None else ()
         exclusions = _dedupe_exclusions(
             (
@@ -1117,6 +1138,44 @@ def _is_geography_hypothetical_plan(plan: _AnalyticPlan) -> bool:
     return _is_hypothetical_plan(plan) and getattr(getattr(plan, "params", None), "dimension", None).value == "geography"
 
 
+# What the scope says about its per-asset composition: the assets left without a series, and a
+# zero-return residual that includes value in transit. Neither enters the portfolio TWRR.
+_COMPOSITION_WARNING_CODES = frozenset({"assets_excluded", "zero_risk_residual_includes_in_transit"})
+
+
+def _reads_the_twrr_alone(plan: _AnalyticPlan, context: RiskExecutionContext) -> bool:
+    """Whether the analytic reads the portfolio TWRR and no scope asset series (developer's decision of 29/09/2026).
+
+    The TWRR already values every holding, so such a result loses nothing when a scope asset has no
+    series of its own, and does not inherit the scope's exclusions.
+    """
+    return context.primary_return_basis == RiskReturnBasis.TWRR and plan.analytic_class.series_inputs != RiskSeriesInputs.SCOPE_ASSETS
+
+
+def _scope_exclusions(
+    scope_asset_ids: tuple[int, ...],
+    prepared: PreparedAssetSeriesSet,
+    never_priced_asset_ids: frozenset[int] = frozenset(),
+) -> tuple[RiskExcludedAsset, ...]:
+    """The scope assets left without a return series, each with the reason the preparation recorded.
+
+    `insufficient_history` when it recorded none: the asset has prices, but no return series came out
+    of them. A missing price is `no_price_source` for an asset nothing has ever priced — a permanent
+    state, where `missing_price` is an occasional one.
+    """
+    usable_asset_ids = {item.returns.asset_id for item in prepared.series if item.returns.points}
+    recorded = {item.asset_id: item.reason.value for item in prepared.data_quality.unusable_assets}
+    exclusions: list[RiskExcludedAsset] = []
+    for asset_id in scope_asset_ids:
+        if asset_id in usable_asset_ids:
+            continue
+        reason = recorded.get(asset_id, "insufficient_history")
+        if reason == DataQualityExclusionReason.MISSING_PRICE and asset_id in never_priced_asset_ids:
+            reason = "no_price_source"
+        exclusions.append(RiskExcludedAsset(asset_id=asset_id, reason=reason))
+    return tuple(exclusions)
+
+
 def _warning_asset_ids(warning: RiskWarning) -> list[int]:
     """The assets a warning is about, from `details.asset_ids` or a single `details.asset_id`."""
     raw = warning.details.get("asset_ids")
@@ -1141,6 +1200,8 @@ def _assets_excluded_warnings(excluded_assets: tuple[RiskExcludedAsset, ...]) ->
         details: dict = {"asset_ids": asset_ids, "reason": reason}
         if reason == "missing_price":
             warnings.append(RiskWarning(code=code, message=message, details=details, message_i18n_key="risk.warnings.assets_excluded_missing_price"))
+        elif reason == "no_price_source":
+            warnings.append(RiskWarning(code=code, message=message, details=details, message_i18n_key="risk.warnings.assets_excluded_no_price_source"))
         elif reason == "missing_fx":
             warnings.append(RiskWarning(code=code, message=message, details=details, message_i18n_key="risk.warnings.assets_excluded_missing_fx"))
         elif reason == "invalid_currency":

@@ -7,7 +7,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.portfolio import (
@@ -26,10 +26,18 @@ from backend.app.schemas.risk import (
     PortfolioRiskScope,
     PreparedAssetSeries,
     PreparedAssetSeriesSet,
+    RiskAnalyticOutput,
     RiskAnalyticRequest,
     RiskAnalyticResult,
+    RiskAssetSetComparisonOutput,
+    RiskAssetSetDrawdownOutput,
+    RiskAssetSetKpiOutput,
+    RiskAssetSetReturnItem,
+    RiskAssetSetReturnOutput,
+    RiskAssetSetVarCvarOutput,
     RiskComparisonPoint,
     RiskCompositionPolicy,
+    RiskContributionOutput,
     RiskDrawdownOutput,
     RiskDrawdownPoint,
     RiskDrawdownRecoveryStatus,
@@ -1416,3 +1424,81 @@ def test_risk_error_catalogues_agree_across_languages():
     assert frontend_codes.isdisjoint(backend_codes), f"risk.errors codes owned by both RiskErrorCode and the frontend: {sorted(frontend_codes & backend_codes)}"
     expected = backend_codes | frontend_codes
     assert reference == expected, f"risk.errors is not RiskErrorCode plus the frontend-owned codes: unexpected={sorted(reference - expected)}, missing={sorted(expected - reference)}"
+
+
+# ---------------------------------------------------------------------------
+# `excluded_weight` (developer's decision of 29/09/2026): Σ weights of the scope assets left without a
+# series. `cash_weight` is the zero-return residual, clamped at zero. With non-negative true cash the
+# first sits inside the second (up to all of it: a slice holds no true cash); with negative true cash
+# they are not nested — so no rule ties them, and only `excluded_weight >= 0` is enforced.
+# ---------------------------------------------------------------------------
+
+
+def _contribution_output(**overrides):
+    base = {
+        "portfolio_volatility": 0.06,
+        "cash_weight": 0.25,
+        "items": [
+            {"asset_id": 1, "weight": 0.5, "marginal_contribution": 0.09, "component_contribution": 0.045, "percentage_contribution": 0.75},
+            {"asset_id": 6, "weight": 0.25, "marginal_contribution": 0.06, "component_contribution": 0.015, "percentage_contribution": 0.25},
+        ],
+    }
+    base.update(overrides)
+    return base
+
+
+WEIGHTED_OUTPUTS = [
+    pytest.param(RiskContributionOutput, _contribution_output, id="contribution"),
+    pytest.param(RiskReturnOutput, _risk_return_output, id="risk_return"),
+]
+
+
+@pytest.mark.parametrize(("model", "payload"), WEIGHTED_OUTPUTS)
+def test_excluded_weight_defaults_to_zero_and_is_not_bounded_by_cash(model, payload):
+    assert model(**payload()).excluded_weight == 0
+    assert model(**payload(excluded_weight=0.1)).excluded_weight == pytest.approx(0.1)
+    assert model(**payload(excluded_weight=0.25)).excluded_weight == pytest.approx(0.25)
+    # Negative true cash: weights 0.8 and 0.4, the second excluded — a residual of 0.2 next to an
+    # excluded weight of 0.4. Both are stated as they are.
+    beyond = model(**payload(cash_weight=0.2, excluded_weight=0.4))
+    assert beyond.cash_weight == pytest.approx(0.2)
+    assert beyond.excluded_weight == pytest.approx(0.4)
+
+
+@pytest.mark.parametrize(("model", "payload"), WEIGHTED_OUTPUTS)
+@pytest.mark.parametrize(
+    ("value", "error_type"),
+    [
+        pytest.param(-0.01, "greater_than_equal", id="negative"),
+        pytest.param(float("nan"), "finite_number", id="nan"),
+    ],
+)
+def test_excluded_weight_is_a_finite_non_negative_share(model, payload, value, error_type):
+    assert model(**payload(excluded_weight=0.0)).excluded_weight == 0
+
+    with pytest.raises(ValidationError) as exc_info:
+        model(**payload(excluded_weight=value))
+
+    assert error_type in [error["type"] for error in exc_info.value.errors()]
+
+
+@pytest.mark.parametrize(("model", "payload"), WEIGHTED_OUTPUTS)
+def test_excluded_weight_survives_the_discriminated_output_union(model, payload):
+    wire = model(**payload(excluded_weight=0.1)).model_dump(mode="json")
+    assert wire["excluded_weight"] == pytest.approx(0.1)
+
+    restored = TypeAdapter(RiskAnalyticOutput).validate_python(wire)
+
+    assert isinstance(restored, model)
+    assert restored.excluded_weight == pytest.approx(0.1)
+    assert restored.cash_weight == pytest.approx(0.25)
+
+
+def test_a_weightless_asset_set_output_has_no_excluded_weight_to_state():
+    """No weights, no residual: like `cash_weight`, the excluded part is not a zero but unexpressible."""
+    set_outputs = (RiskAssetSetKpiOutput, RiskAssetSetVarCvarOutput, RiskAssetSetDrawdownOutput, RiskAssetSetReturnOutput, RiskAssetSetComparisonOutput)
+
+    assert all("excluded_weight" not in output.model_fields for output in set_outputs)
+    with pytest.raises(ValidationError) as exc_info:
+        RiskAssetSetReturnOutput(items=[RiskAssetSetReturnItem(asset_id=1, volatility=0.2, expected_annual_return=0.1)], excluded_weight=0.0)
+    assert [error["type"] for error in exc_info.value.errors()] == ["extra_forbidden"]

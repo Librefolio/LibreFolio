@@ -27,7 +27,7 @@ from backend.app.services.risk.analytic_helpers import (
     require_annualization_factor,
     require_primary_returns,
 )
-from backend.app.services.risk.base import RiskAnalytic, RiskComputation
+from backend.app.services.risk.base import RiskAnalytic, RiskComputation, RiskSeriesInputs
 from backend.app.services.risk.metrics import (
     annualized_sharpe,
     annualized_sortino,
@@ -120,6 +120,7 @@ class HistoricalKpiAnalytic(RiskAnalytic):
     supported_modes = (RiskMode.HISTORICAL, RiskMode.CURRENT_COMPOSITION)
     params_model = HistoricalKpiParams
     min_observations = RISK_MIN_OBSERVATIONS
+    series_inputs = RiskSeriesInputs.PRIMARY
 
     def compute(self, params, context):
         dates, returns = require_primary_returns(context)

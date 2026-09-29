@@ -823,6 +823,10 @@ class RiskContributionOutput(StrictModel):
     kind: Literal[RiskOutputKind.CONTRIBUTION] = Field(default=RiskOutputKind.CONTRIBUTION, json_schema_extra={"enum": ["contribution"]})
     portfolio_volatility: FiniteFloat = Field(..., ge=0)
     cash_weight: FiniteFloat = Field(0, ge=0)
+    # Σ weights of the scope assets left without a series, which weigh in `cash_weight` as cash
+    # would. Inside it while true cash is not negative; with negative true cash (weights above 1)
+    # the two are not nested, so no rule ties them.
+    excluded_weight: FiniteFloat = Field(0, ge=0)
     items: List[RiskContributionItem] = Field(default_factory=list)
     # Concentration, acquired. These two are published together on purpose: the
     # effective count is blind to correlation, so ten equally weighted holdings score
@@ -860,6 +864,8 @@ class RiskReturnOutput(StrictModel):
     # weights sum to 1 - cash_weight, so a reader who adds up the bubbles and finds
     # they miss the whole deserves the reason rather than the puzzle.
     cash_weight: FiniteFloat = Field(0, ge=0)
+    # Weight of the scope assets left without a series: see RiskContributionOutput.excluded_weight.
+    excluded_weight: FiniteFloat = Field(0, ge=0)
     items: List[RiskReturnItem] = Field(default_factory=list)
 
 

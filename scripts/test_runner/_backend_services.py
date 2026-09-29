@@ -83,6 +83,7 @@ RISK_SERVICE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_data_quality_thresholds.py",
     "backend/test_scripts/test_services/test_risk_warnings_i18n.py",
     "backend/test_scripts/test_services/test_risk_eligibility.py",
+    "backend/test_scripts/test_services/test_risk_exclusion_reasons.py",
 )
 
 PAC_PLANNER_CORE_TEST_PATHS = (
@@ -993,7 +994,7 @@ Note: No backend server required.
     add_test(cat, "risk-optimization", services_risk_optimization, name="Risk Optimization", desc="Riskfolio objectives, estimators, constraints, frontier and cache")
     add_test(cat, "risk-workers", services_risk_workers, name="Risk Workers", desc="Spawn lifecycle, queue bounds, timeout, recycle and cancellation")
     add_test(cat, "risk-oracle", services_risk_oracle, name="Risk Metrics Oracle", desc="riskfolio/NumPy/SciPy reference pins, name traps, undefined windows and matrix consistency", isolation="pure")
-    add_test(cat, "risk-all", services_risk_all, name="Risk Analysis", desc="Complete canonical-series, analytic, QuantLib, Riskfolio and worker suite, plus shared data-quality thresholds, translatable warnings and per-window asset eligibility/replay coverage")
+    add_test(cat, "risk-all", services_risk_all, name="Risk Analysis", desc="Complete canonical-series, analytic, QuantLib, Riskfolio and worker suite, plus data-quality thresholds, translatable warnings, per-window eligibility/replay coverage and exclusion reasons")
     add_test(cat, "series-preparation", services_series_preparation, name="Canonical Series", desc="Converted valuations, joint calendar, returns, annualization and FX fingerprint")
     add_test(cat, "signal-registry", services_signal_registry, name="Signal Registry", desc="SignalPlugin contract, strict discovery and duplicate rejection")
     add_test(cat, "signal-runtime", services_signal_runtime, name="Signal Runtime", desc="Composite-stack fail-fast and startup integration")
