@@ -178,6 +178,7 @@ export function buildMergedTransactions(parseResults: MergeSourceResult[], broke
                 tx: txClone,
                 selected: !beforeOpening && duplicateStatusAllowsAutoSelect(dupStatus),
                 duplicateStatus: dupStatus,
+                dbDuplicateStatus: dupStatus === 'likely' || dupStatus === 'possible' ? dupStatus : undefined,
                 dupMatches: dupMatchesMap.get(txIdx) ?? [],
                 todos: todosMap.get(txIdx) ?? [],
             });

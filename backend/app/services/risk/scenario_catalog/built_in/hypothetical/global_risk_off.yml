@@ -35,6 +35,11 @@ defaults:
     ETF_REAL_ESTATE: -0.15
     ETF_CRYPTO: -0.30
     ETF_MONETARY: 0.0
+    # Real-estate crowdfunding is shocked as the loan it is, not as the property behind it:
+    # illiquid and not marked to market, its risk is a default that arrives late — so it moves
+    # like CROWDFUND. Known limit: this understates credit risk in a prolonged property crisis,
+    # which an instantaneous shock such as this one does not model.
+    CROWDFUND_REAL_ESTATE: -0.10
 editable:
   dimension: false
   bucket_shocks: true

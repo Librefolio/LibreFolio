@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-**Preparing v1.1.1.** These fixes and refinements are in preparation; this version has not been released.
+**Preparing v1.2.0.** These features and fixes are in preparation; this version has not been released.
 
 ### ✨ Added
 
@@ -17,7 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A new authenticated **Tools** foundation provides a versioned catalogue, isolated per-item computation, read-only diagnostics and compiled custom interfaces. The hub reports missing or incompatible tools explicitly; no financial calculation or portfolio write is implied when no compatible plugin is installed.
 - **PAC allocator** is the first packaged tool in that catalogue. Its planner computes whole-unit purchase plans that bring an allocation as close as possible to its target weights, working in exact arithmetic with an explicit quantity step per asset, across multiple currencies and arbitrary quote bases. Every answer says what it is worth: proven optimal, proven infeasible, or the best found within the time budget — the three are never presented as the same thing, and missing or invalid inputs are reported rather than guessed. **Its interactive interface is not ready yet**: the catalogue card says so explicitly and starts no calculation. It does not rebalance current holdings, infer executable trades or create orders.
 - Holdings tables on the Dashboard and Broker pages now show transaction-ledger **Yield on Cost** by asset and broker. The metric compares gross recorded dividend and interest income over the last year with the average purchase price, using prior-day held quantity, linked splits and portfolio FX rates; unavailable values explain the exact missing or inconsistent input.
-- New users now get a Welcome setup, a versioned Core tour, and contextual Broker, FX, Asset and Import guides. A completed or skipped guide can be replayed from Settings, while a newer guide version becomes due automatically; Import guidance remains separate from transaction writes and Save All.
+- **Asset types**: the type picker is a searchable two-level menu, with ETF and Crowdfunding families. Specialized ETF and crowdfunding types show their content icon overlaid on the container icon wherever the type appears, and a new type, *Real estate crowdfunding*, is available.
+- New users now get a Welcome setup, a versioned Core tour, and contextual Broker, FX, Asset and Import guides. A completed or skipped guide can be replayed from Settings, while a newer guide version becomes due automatically; Import guidance remains separate from transaction writes and Save All. Guides remember where you are in this browser — across tabs, reloads and logging out — resume at the step you left when you return to a page, and a guide finished in one tab closes in the others.
+- **Privacy mode** — an eye button in the page header hides how much you own: every portfolio amount (dashboard, positions, FIFO lots, brokers, risk panels, transactions) shows `•••` with its currency and sign still visible. Held quantities are hidden in positions and lots but stay visible in the transaction list; unit prices, WAC, percentages, FX rates, asset events and edit fields stay readable. It switches instantly both ways, belongs to this browser and survives reloads; AI Export and downloads still contain the real figures.
 - **FX route metadata in the API** — route responses expose `is_chain` and a sorted, unique `providers_used` list of configured providers. Ordered `chain_steps` still preserves direction and repeated providers; request payloads remain unchanged, with no database migration required.
 
 ### 🐛 Fixed
@@ -34,19 +36,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Manual FX conversions no longer remain incomplete because of a hidden destination broker. Separate leg dates, exact decimal amounts and balance/sign validation are preserved.
 - Import matching refreshes current candidates and the asset catalog together, including assets created after parsing. A single distinct match can be selected automatically; ambiguous matches still require a choice.
 - A final duplicate check that changes the selected transactions returns to review instead of silently importing a smaller or empty batch.
-- Balance diagnostics identify all contributing workspace rows and navigate to the first affected row in the current display order. Backdated FX pairs sort with their dates without changing operation identity or submission order.
+- A movement found in two of the files being imported that already exists in the database, or in the unsaved editor, is no longer pre-selected at review; its badge opens the comparison with the existing transaction.
+- Choices made in the Duplicates step are no longer reset when you create or pick an asset on the review step; Import sends you back to that step only when the final check finds new or changed duplicates between your files, and says so.
+- The Transactions page no longer fires dozens of `GET /brokers/{id}` requests per second in the background when a broker has no icon, portal URL or import plugin.
+- Balance diagnostics identify all contributing workspace rows and navigate to the first affected row in the current display order. Backdated FX pairs sort with their dates without changing operation identity or submission order, and new rows on the same date keep the order in which you added them.
 - Non-sticky bulk-table action headers stay at the end of the table rather than covering the rightmost visible columns.
 - Page-size menus remain reachable in short, scrollable modal tables instead of clipping their first options.
+- The Transactions page clears its selection after a saved bulk edit, clone, deletion, addition or import, and after linking or unlinking a pair; cancelling keeps it.
 
 #### 🧩 Asset providers and feedback
 
 - Provider tests and metadata requests ignore stale responses after the asset or provider configuration changes. Late metadata cannot silently overwrite manual edits.
 - Equivalent distributions no longer appear different merely because their entries arrived in another order.
 - Duplicate broker-name errors include localized recovery guidance and reset when a new dialog is opened. Successful broker creation and deletion receive confirmation toasts.
-- Manual update checks refresh release metadata and compare against the running server version. Failed or unavailable checks no longer report “up to date”; a positive success message includes the version detected online.
+- Manual update checks refresh release metadata and compare against the running server version. Failed or unavailable checks no longer report “up to date”; a positive success message includes the version detected online. Checking from the changelog window always shows the outcome, and a newer version appears at once instead of after the window is closed.
+- The header theme button is labelled in every interface language.
+- Country flags render as flags on Windows everywhere, dashboard currencies included, instead of letter pairs such as “EU”. Apple devices show their own flags without downloading a flag font.
 - Docker image availability checks now complete GHCR's public authentication handshake through the LibreFolio backend, so a published release is no longer rejected because the registry first returns an authentication challenge. Invalid or untrusted challenges still fail closed.
 - Social-dialog logos retain a circular, fixed-size background even beside long translated instructions.
 - Global settings use the standard amber in-app confirmation before discarding an unsaved draft; cancel and Escape keep the draft unlocked.
+- Search in select menus ranks name matches first: typing "CSV" puts "Generic CSV" at the top.
+- Creating an asset, the provider data comparison no longer opens on top of the ISIN choice: it waits for your answer and never asks the same question twice.
 
 ### 🔄 Changed
 
@@ -56,13 +66,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The Generic CSV guide clarifies one file per broker—not one file per currency—and keeps its column reference in a single table.
 - Files show who uploaded them in a sortable column, with an avatar/name multi-select filter. Uploader filters survive switching between list and grid.
 - The header hides while scrolling down and returns while scrolling up on desktop and mobile. Focus, open menus and dialogs keep it visible.
+- The browser tab title stays “LibreFolio” on every page: the Files page no longer sets its own, so it can no longer linger after you leave it.
 - Preferences and broker-sharing forms retain staged Save/Undo/Reset, persisted values and role-based access after their Svelte 5 migration. Successful sharing saves close the list-page modal without another discard prompt; saving from the broker's Info tab keeps the inline editor open.
 - New FX-pair configuration closes immediately while automatic synchronization continues in the background. Creation and sync results use flagged, clickable pair links; linked completion feedback keeps the pair, fetched/changed counters and provider badges on one compact detail row. Asset-library creation success links point to the new asset without changing contextual import or transaction flows.
 
 #### 📉 Risk Analysis leaves beta, except the simulation
 
 - **Risk Analysis is no longer marked beta.** The beta notice used to sit above every risk surface, which said the whole subsystem was provisional. It now appears on the **simulation** step alone, where it names the reason: the outcome depends heavily on how much history is requested relative to the horizon, so a short window with a long horizon can produce implausible figures. The permanent reminder that a model is a model stays where it was, below it. Asset Detail keeps its beta notice: its risk view has not been rebuilt yet.
-- **Asset Global gains two comparison levels.** *How much can it hurt?* transposes the scale — the ruler becomes the columns, the assets become the rows — and *were you paid for the risk?* plots what each instrument risked against what it returned. Percentages only, no verdict, and an asset that could not be measured keeps its row with the reason, because a missing row reads as one that was never selected. The legacy panel is no longer mounted there.
+- **Asset Global gains two comparison levels, with a user guide.** *How much did each of these hurt?* transposes the scale — the ruler becomes the columns, the assets become the rows, and the worst fall says how long it lasted — and *What did each of these pay for its risk?* plots what each instrument risked against what it returned, beside the benchmark chosen on the Dashboard. Percentages only and no verdict — no line is drawn through the points, because a selection has no whole — and an asset that could not be measured keeps its row with the reason, because a missing row reads as one that was never selected. The legacy panel is no longer mounted there. A new user page explains the Correlation tab and how its figures are measured.
 - **The risk/return scatter now renders** on the Dashboard and on Broker pages. It had never appeared: the panel neither asked the backend for the figures nor passed them on.
 - **A failure inside a risk calculation is now reported as ours.** Every internal error used to be answered with *«the metric is undefined for these data»* — a verdict about the portfolio — and was never logged. Undeclared failures now say the calculation failed and are recorded; an analytic that genuinely has no defined value still says so.
 - **Two simulation settings now explain themselves instead of failing obscurely.** Choosing a block longer than the available history, or a quasi-random simulation too large for the number of assets and the horizon, now says which setting to change. The second is reachable by an ordinary portfolio: at the longest horizon the limit falls between five and six assets.

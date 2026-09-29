@@ -49,7 +49,8 @@ frontend/
 - **Tailwind CSS 4**: config via `@theme {}` in `app.css` (no TS config file)
 - **Brand colors**: `#1a4031` (libre-green), `#f5f4ef` (libre-beige)
 - **Full dark mode**: CSS variables in `html.dark`
-- **Font**: Inter, system-ui, sans-serif + `Noto Color Emoji` for flags
+- **Font**: `'LF Flags', Inter, system-ui, sans-serif` (`html`, `@theme --font-sans`; `--font-mono` also starts with `'LF Flags'`)
+- **Flags**: `'LF Flags'` (`static/lf-flags.css`, linked by `app.html` and `offline.html`) draws only the flags (`unicode-range: U+1F1E6-1F1FF`) — Apple flags on Apple devices, the self-hosted Noto flags subset elsewhere. Never name an emoji font in a `font-family`: emoji fonts also draw digits, `#` and `*`. A component with its own stack starts it with `'LF Flags'` or wraps the flag in `.emoji-flag`. Gate: `src/flagFont.gate.test.ts`; ECharts text is not covered yet
 - **Icons**: lucide-svelte
 
 ## Stores (`lib/stores/`)
@@ -68,6 +69,23 @@ frontend/
 | `auth`, `settings`, `language`, `globalSettings` | `.ts` | Writable | Global app state |
 
 **Pattern**: `.svelte.ts` = Svelte 5 runes; `.ts` = Svelte 4 writable or plain class.
+
+## Privacy masking
+
+Privacy hides the **number**, never the currency or the sign (`€•••`, `-••• CHF`); an absent `—`
+stays `—`. Render money only through `lib/utils/currency/currencyFormat.ts` with an explicit
+`sensitivity` (`personal` = wealth; `public` = prices, WAC, rates, percentages) or the primitives
+in `lib/utils/privacy/maskable.ts`; mask held quantities with `maskableQuantity()` **at the call
+site** (positions and lots masked, transactions visible).
+
+- A **legacy** (non-runes) component that calls a formatter inside its template freezes that
+  output at mount: the call compiles into `$.untrack`, so the privacy flag is never tracked.
+  Render through `ui/display/CurrencyAmount.svelte` instead.
+- ECharts formatters run outside effect tracking: the render `$effect` must read
+  `isPrivacyEnabled()`, or the chart keeps the state it was drawn with.
+- The gate `utils/privacy/moneyRenderSites.test.ts` sees only source lines with a currency
+  token: axes without one, a `public` marking and legacy freezing need their own tests (a
+  component test that toggles privacy in place, both ways).
 
 ## Telling the user (and the machine) that something happened
 
