@@ -8,7 +8,7 @@
 
 | Property | Detail |
 |----------|--------|
-| **Code in LibreFolio** | `HOLD` |
+| **Code in LibreFolio** | `COMMODITY` |
 | **Pricing** | Spot prices from commodity exchanges, or manual valuation |
 | **Currency** | Typically quoted in USD (gold, oil) but can be any currency |
 | **Dividends** | None — commodities do not generate income |

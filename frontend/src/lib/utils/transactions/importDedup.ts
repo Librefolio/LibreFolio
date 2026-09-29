@@ -26,6 +26,55 @@ export function duplicateStatusIsSelectedWarning(status: DuplicateStatus): boole
     return status === 'likely' || status === 'pending_duplicate' || status === 'pending_possible_duplicate';
 }
 
+/**
+ * Whether the row collides firmly with something outside the batch: a likely database twin or
+ * an identical unsaved row in the bulk editor. Such a copy is never the one a cross-file group
+ * keeps by default — keeping it would recreate what already exists. Weak verdicts (`possible`,
+ * `pending_possible_duplicate`) do not count: they stay selected for review by design.
+ */
+export function hasFirmOutsideCollision(mt: MergedTx): boolean {
+    return mt.dbDuplicateStatus === 'likely' || mt.pendingMatchStatus === 'pending_duplicate';
+}
+
+/**
+ * A row as the duplicate recheck leaves it, before the in-batch and editor passes run again.
+ * The database verdict is replaced, never carried over: a correction can clear a false
+ * duplicate, and a stale `likely` would then keep the row out of the resolver's keepers. Every
+ * in-batch and editor marker is cleared for the passes that follow, and the selection is
+ * recomputed; rows predating the broker's opening date stay out either way.
+ */
+export function rowAfterRecheck(m: MergedTx, verdict: {status: DuplicateStatus; matches: MergedTx['dupMatches']} | undefined, opts: {beforeOpening: boolean; preserveSelection: boolean}): MergedTx {
+    const status: DuplicateStatus = verdict?.status ?? 'unique';
+    return {
+        ...m,
+        duplicateStatus: status,
+        dbDuplicateStatus: status === 'likely' || status === 'possible' ? status : undefined,
+        pendingMatchStatus: undefined,
+        dupMatches: verdict?.matches ?? [],
+        dupGroupKey: undefined,
+        dupTier: undefined,
+        isDupKeeper: undefined,
+        dupPendingMatch: undefined,
+        selected: (!opts.preserveSelection || m.selected) && !opts.beforeOpening && duplicateStatusAllowsAutoSelect(status),
+    };
+}
+
+/** The comparison a review-row status badge can open. */
+export type CompareTarget = 'db' | 'pending' | 'lot';
+
+/**
+ * The comparison a row's status badge opens: always the one the badge claims. A database
+ * verdict shown on the badge compares with the database row, even when the row also belongs to
+ * a cross-file group; the in-batch comparison is for rows whose badge says "duplicate in batch".
+ */
+export function compareTargetFor(mt: MergedTx): CompareTarget | null {
+    if (mt.duplicateStatus === 'unique') return null;
+    if (mt.duplicateStatus === 'likely' || mt.duplicateStatus === 'possible') return mt.dupMatches.length > 0 ? 'db' : null;
+    if (mt.dupPendingMatch) return 'pending';
+    if (mt.dupGroupKey != null) return 'lot';
+    return null;
+}
+
 /** Trim + lowercase a code to a comparable token, or null when it carries nothing. */
 export function normalizeAssetToken(value: string | null | undefined): string | null {
     const token = String(value ?? '')

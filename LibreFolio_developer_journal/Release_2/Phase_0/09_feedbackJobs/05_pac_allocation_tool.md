@@ -176,6 +176,13 @@ progettato separatamente, senza attendere solver, copie portfolio o migrazione B
   per copiare situazione iniziale, prezzi o distribuzione corrente come base del target.
 - Snapshot modificabili con preview delle sostituzioni; niente binding live, polling o
   risposte tardive che sovrascrivono modifiche dell'utente.
+- **Data automatica e rilettura prima del calcolo (developer, 29/09):** la UI non ha un campo
+  data. `as_of` è oggi, fissata a ogni copia e a «Calcola». Subito prima del calcolo la UI
+  rilegge da `POST /portfolio/allocation-source` (lettura DB, nessun provider, nessuna
+  scrittura) i prezzi, i cambi e i saldi copiati e non modificati, e li aggiorna. I valori
+  manuali o modificati restano e partono con la data del calcolo. Una rilettura fallita
+  blocca il calcolo e offre «Riprova» o «Calcola con i dati copiati». Non è un binding live.
+  Backend e contratto 2.0.0 invariati.
 - Le copie usano i client delle API di dominio descritti sopra, senza route Tool di prefill.
 - Copia solo da broker con ruolo **OWNER**, incluso OWNER con quota 0%; percentuale
   mostrata ma quantità/cash a **custodia intera**, senza scala di possesso. Scope
@@ -245,6 +252,20 @@ dal modello numerico e dagli adapter di copia autorizzati.
 > conflict witness. SCIP è candidato additivo approvato, non ancora installato o
 > provato. Restano aperti capacità e payload object-only sotto 262144 byte;
 > implementazione ancora FROZEN.
+>
+> **Aggiornamento 2026-09-25 (D-X1, decisione del developer del 24/09):** sostituisce la
+> «proof pubblica conservativa» qui sopra. In produzione gira solo SCIP, e il suo esito fa
+> fede: «in prod deve girare solo l'ottimizzatore con l'assunzione che l'output che dà sarà
+> corretto o andrà in timeout». SCIP `optimal` su tutti gli stage della cascata vale ottimo
+> dimostrato; `infeasible` sul primo stage vale impossibile dimostrato; un limite vale tempo
+> scaduto, con il miglior piano trovato o senza piano. L'oracolo esaustivo esce dal codice di
+> produzione e resta nei test, come gate di accordo sui casi piccoli. Ogni piano pubblicato
+> resta verificato dal replay Decimal. Se dopo gli arrotondamenti HALF_UP supera una cassa di al
+> più N unità minime (1 per importo arrotondato), esce con l'importo da aggiungere (QX1-b, 25/09).
+> SCIP è installato (SCIP 10.0, PySCIPOpt 6.2.1).
+> Motivo: con l'oracolo davanti a SCIP, PAC comuni fra circa 13 000 e 200 000 candidati
+> finivano in `execution_limit` (difetto X1). Esecuzione: Passo F di
+> [`plan-phase00PacRound5PostMerge`](../13_pacAllocator/implementation/plan-phase00PacRound5PostMerge.prompt.md).
 
 DoD, esempi numerici, superfici file:riga, rischi e oracoli indipendenti sono nel
 [piano sprint](06_piano_sprint.md). Nessun server MCP o cambiamento dei motori FIFO/WAC

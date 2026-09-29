@@ -1,11 +1,12 @@
 <!--
   SearchSelect.svelte - Svelte 5
 
-  Dropdown select with fuzzy search functionality.
-  Supports keyboard navigation and custom item rendering via snippets.
+  Dropdown select with search: a substring match on value, label, searchText and emoji icon,
+  best matches first (see optionFilter.ts). Supports keyboard navigation and custom item
+  rendering via snippets.
 -->
 <script lang="ts">
-    import type {Snippet} from 'svelte';
+    import {untrack, type Snippet} from 'svelte';
     import type {SelectOption} from './types';
     import {filterOptions, firstSelectable as firstSelectableIn, isSelectable, stepSelectable} from './optionFilter';
     import {ChevronDown, Search, X, Plus} from 'lucide-svelte';
@@ -85,6 +86,7 @@
     let highlightedIndex = $state(0);
     let inputRef: HTMLInputElement | null = $state(null);
     let containerRef: HTMLDivElement | null = $state(null);
+    let listRef: HTMLDivElement | null = $state(null);
     let computedPosition: 'top' | 'bottom' = $state('bottom');
     let dynamicMaxHeight = $state(0);
     /** Timestamp when trigger received focus — used to debounce Enter after advanceFocus */
@@ -113,7 +115,7 @@
     // Calculate max height based on maxVisibleItems
     let maxDropdownHeight = $derived(maxVisibleItems * ITEM_HEIGHT);
 
-    // Filter options based on search query — see `optionFilter.ts` for the section-title rule.
+    // Filter options based on search query — see `optionFilter.ts` for the section-title and ranking rules.
     let filteredOptions = $derived(filterOptions(options, searchQuery));
 
     function firstSelectable(): number {
@@ -183,6 +185,24 @@
         if (isSelectable(filteredOptions[highlightedIndex])) return;
         const next = firstSelectable();
         if (next !== -1 && next !== highlightedIndex) highlightedIndex = next;
+    });
+
+    /*
+     * A new query is a new question, so its answer starts at the top: the highlight — the row Enter
+     * picks — goes to the best match, and the list scrolls back to show it. Without this the
+     * highlight stayed on whatever index it had, even when the pointer had put it there, and a
+     * scrolled list kept hiding the best match under the fold (R13). Keyed on the query value, not
+     * on the input event, because the clear button changes the query without typing.
+     */
+    let lastQuery = '';
+    $effect(() => {
+        const query = searchQuery;
+        if (query === lastQuery) return;
+        lastQuery = query;
+        untrack(() => {
+            highlightedIndex = Math.max(firstSelectable(), 0);
+            if (listRef) listRef.scrollTop = 0;
+        });
     });
 
     // Close on click outside
@@ -449,7 +469,7 @@
             {/if}
 
             <!-- Options List -->
-            <div class="overflow-y-auto options-list" id={listboxId} role="listbox" aria-busy={loading} style="max-height: {dynamicMaxHeight}px">
+            <div bind:this={listRef} class="overflow-y-auto options-list" id={listboxId} role="listbox" aria-busy={loading} style="max-height: {dynamicMaxHeight}px">
                 {#if loading}
                     <div class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                         {$_('common.loading')}

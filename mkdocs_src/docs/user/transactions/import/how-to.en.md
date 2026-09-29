@@ -213,13 +213,21 @@ At the end of parsing, the table displays a summary of the processing for each f
     **What you do here.**
 
     - **Order your files by priority.** Drag them into the order you trust: the copy kept for each
-      group is taken from the highest-priority file.
+      group is taken from the highest-priority file — unless that copy is already in your
+      database or in the bulk editor. Such a copy is never the one kept automatically, and when
+      every copy already exists none is kept: the review shows one of them, unchecked.
     - **Recalculate** after re-ordering, to re-derive every choice from the new priority.
     - **Override individually** in the group table: every row carries a **Keep** checkbox and shows
       which file it came from and whether it is the copy being kept. **Reset defaults** restores the
       automatic choices.
     - **Compare side by side** when two copies differ and you want to see exactly how before
       choosing — the compare modal highlights the fields that differ.
+    - **Your choices are kept.** What you decide here survives later changes on the review step,
+      such as creating or picking an asset, as long as the duplicates themselves do not change.
+      When you click **Import N transactions**, the wizard brings you back to this step only if
+      its final check finds new or changed duplicates between your files — a new group, or a
+      group where a copy now turns out to be already in your database or in the bulk editor (or
+      no longer is) — and tells you so.
 
     <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
         <img class="gallery-img" data-category="brokers" data-name="import-nway-compare" alt="N-way compare modal with per-field differences highlighted">
@@ -317,7 +325,9 @@ right here with a status badge.
 | <span style="background-color: rgba(239, 68, 68, 0.15); color: #ef4444; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 0.85em; white-space: nowrap;">❌ UNRESOLVED</span> | — | The broker or financial instrument was not matched to an existing entity in the database (requires resolution in Step 4 before importing). |
 
 By default, the wizard automatically unchecks "Likely" duplicates to prevent double-entry, but
-you can override this choice. A banner above the grid summarizes why rows are deselected.
+you can override this choice. This also applies to a movement found in two of your files: its
+badge opens the comparison with the transaction already stored. A banner above the grid
+summarizes why rows are deselected.
 
 Two more badges come from comparisons *inside this import* rather than against the database:
 
@@ -357,8 +367,8 @@ separate flow for every wizard screen.
   write any data for you.
 - **It saves progress one step at a time.** In automatic mode, **X** skips only the current
   guide step; later steps remain due and start when the wizard reaches them. In replay mode,
-  exiting affects only that browser-session replay and never changes the saved onboarding
-  status.
+  exiting affects only the replay stored in this browser for your account and never changes the
+  saved onboarding status.
 
 You can also re-arm the guide on demand from
 **[Settings → Preferences → Onboarding and guides](../../settings/preferences.md#onboarding-and-guides)**,
