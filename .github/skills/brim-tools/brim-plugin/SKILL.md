@@ -43,8 +43,10 @@ converter.
    `TRANSFER`/`ADJUSTMENT` seed (opening snapshot, TRANSFER_IN), store the cost **per single
    unit**, never the total — the engine multiplies it by `quantity`. If the source reports a
    total countervalue, divide by quantity first. Set `cost_basis_currency` alongside it.
-8. **Fake asset IDs.** Emit negative fake asset IDs (keyed by ISIN/ticker) plus the
-   extracted asset info, so the core can drive the asset-matching UI.
+8. **Fake asset IDs.** Emit high positive placeholder asset IDs — start at
+   `FAKE_ASSET_ID_BASE` (`2**31 - 1`, in `backend/app/schemas/brim.py`) and count down, one
+   per ISIN/ticker — plus the extracted asset info, so the core can drive the
+   asset-matching UI. They are never negative and never persisted.
 
 ## 🛠️ Rough shape of the work
 
