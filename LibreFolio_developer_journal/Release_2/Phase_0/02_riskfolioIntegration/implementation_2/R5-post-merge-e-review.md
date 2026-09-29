@@ -1748,3 +1748,50 @@ CHANGELOG, client generato). Commit e fusioni li fa solo il developer.
 > della Dashboard mostra (`resultErrorCodes`) — un cambiamento di comportamento, quindi nel blocco replay, mio; la
 > sezione dei livelli di confronto non legge `loadDiscarded` — per F nel giro UI; i mock dell'E2E del laboratorio hanno
 > solo `message`, senza `message_i18n_key` (il backend ora le manda) — per F.
+
+### G4 — committato; `dev_release2` con K → Risk · ✅ 28/09/2026
+
+> K1–K11: `a04be75df` → `2e2894742` → `41605d669` → `65a622915` (6 + 6 + 5 + 1 file). Poi la fusione
+> `dd85b9317` (`dev_release2` con J, A e K), fatta dal developer con lo script del coordinator: albero come la
+> simulazione. **Validazione** nella 6152: unit rischio e `core-unit` 2779 / `component-unit` 2120 (con i test
+> `TreeSelect`/`AssetTypeSelect` di K), `services risk-all` 639, `schemas` 34 + 70, `api assets-crud` 35, `api risk`
+> 14, `check-orphans` 0, audit i18n 3482/0, `front check` a 3, E2E `risk` 13 · `risk-lab` 18 · `risk-asset-detail` 2 ·
+> `asset-list` 28 (con le icone composte di K).
+>
+> **⚠️ Fuori pista — `api risk` al primo giro, infrastruttura**: la fusione aveva reso vecchia `frontend/build`, e
+> l'avvio del backend di test l'ha ricostruita oltre i 120 s del runner. Lezione: dopo una fusione che tocca il
+> frontend, `front build --debug` **prima della prima suite che avvia un backend**, non solo prima degli E2E.
+
+### Le voci di K sulla torta · ✅ 28/09/2026
+
+> **Perché**: le icone composte di K sono arrivate davvero (ogni sottotipo ha la sua: ETF con l'azione, ETF con
+> l'obbligazione, …, e il tipo nuovo «crowdfunding immobiliare»). Il mio `allocationFamily` metteva gli ETF sotto ETF
+> con una regola sua, e lasciava il crowdfunding immobiliare come famiglia a sé: il suo tooltip avrebbe mostrato il
+> contenuto due volte (la composta di K più la mia sovrapposizione). Tre test fissavano il mondo prima di K.
+>
+> **Cura**: la torta prende le famiglie da `assetTypeFamily` di K (il crowdfunding immobiliare va sotto Crowdfunding,
+> con il secondo anello come gli ETF); il tooltip mostra **una** icona, quella del tipo — la composta di K per un
+> sottotipo; la sovrapposizione e `allocationFamily.ts` se ne vanno (dopo K non poteva più scattare per nessun tipo,
+> e la sua regola di famiglia era il difetto). Riscritti i commenti di `allocationRings.ts` e di `allocationHierarchy.ts`
+> («quanti membri può avere un gruppo»).
+>
+> **Test** (test-author, prima della cura): una torta montata in jsdom (`AllocationPieChart.test.ts`) controlla le
+> famiglie sui due anelli, la didascalia del membro generico, la legenda e l'icona unica del tooltip, leggendo il
+> formattatore vero; i test di anelli e gerarchia usano le funzioni vere di K invece di copie a mano. **15 test tolti**:
+> quelli delle due funzioni cancellate, quelli della sovrapposizione prima di K e l'intero gruppo che simulava le
+> composite (un mondo a metà che non è mai stato rilasciato). Tre mutanti, tutti presi. `allocation-unit` 142 ✓,
+> `risk-levels-unit` 240 ✓, E2E `dashboard`: 10 ✓ e 5 rossi, tutti fra quelli noti del target (GrowthChart di I).
+>
+> **⚠️ Fuori pista — un difetto più vecchio, trovato dal test nuovo**: per veicolo la famiglia ETF può avere 7 membri
+> (l'ETF generico e i suoi sei sottotipi), e la sfumatura, che si muove sulla luminosità in una sola direzione, arriva
+> a nero o bianco puro dopo 2–4 passi: gli ultimi sottotipi prendono lo stesso colore, senza tinta (14 posizioni su 14
+> delle due palette della torta). Non è di K: è latente da R12-B (24/09). Sui dati del developer non si vede (la sua
+> famiglia ETF ha 2 membri), ma con i sottotipi di K una famiglia di 5 o più è normale. Nessun passo lo risolve: serve
+> un'altra regola. **Decisione del coordinator**: fuori da questo checkpoint (il test dei 7 membri salvato nei file di
+> sessione, da riportare rosso per primo con la cura), voce del giro UI da decidere col developer, con i gruppi fino a
+> 3 identici (il grafico storico di I non deve cambiare) — e **cancello per l'ingresso in `dev_release2`**. Il test dei
+> 3 membri per contenuto (immobiliare puro, ETF immobiliare, crowdfunding immobiliare) passa oggi e resta.
+>
+> **Un rosso del target, fuori famiglia**: `front-asset asset-unit` ha 12 rossi in `chartCoreHelpers.test.ts`, tutti
+> test che rispecchiano il sorgente del GrowthChart di I; né il test né il grafico sono cambiati dall'inizio del giro, e
+> nessuno dei file che legge è fra quelli di questo checkpoint → al coordinator.
