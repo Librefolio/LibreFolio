@@ -3305,7 +3305,8 @@
       "historical_replay_excluded_missing_fx": "Sin tipo de cambio a tu moneda en la ventana de la repetición: {names} — {treatment, select, zero_return_residual {peso contado como liquidez con rendimiento cero} other {fuera de la repetición}}.",
       "historical_replay_excluded_stale_at_start": "Sin precio en los {days} días anteriores al inicio de la ventana de la repetición: {names} — {treatment, select, zero_return_residual {peso contado como liquidez con rendimiento cero} other {fuera de la repetición}}.",
       "historical_replay_excluded_stale_at_end": "Sin precio en los últimos {days} días de la ventana de la repetición: {names} — {treatment, select, zero_return_residual {peso contado como liquidez con rendimiento cero} other {fuera de la repetición}}.",
-      "historical_replay_mostly_excluded": "El resultado describe solo una parte de tu cartera ({covered, number, percent}): el resto queda fuera de la repetición."
+      "historical_replay_mostly_excluded": "El resultado describe solo una parte de tu cartera ({covered, number, percent}): el resto queda fuera de la repetición.",
+      "assets_excluded_no_price_source": "{count, plural, one {# activo excluido} other {# activos excluidos}} del cálculo: sin fuente de precios asignada ni ningún precio registrado — {names}."
     },
     "assetDetail": {
       "overviewTab": "Resumen",
