@@ -28,9 +28,10 @@ import {describe, expect, it} from 'vitest';
 import {ASSET_TYPE_EMOJI, getAssetTypeEmoji} from './allocationTypeEmoji';
 
 // -----------------------------------------------------------------------------
-// COPIED from src/lib/utils/__tests__/assetTypeTables.test.ts (paths :46-51,
-// `read` :59, `assertScraped` :69, `readAssetTypes` :89-97), not imported: that
-// file is K's enum gate, and importing a test file registers its tests twice.
+// COPIED from src/lib/utils/__tests__/assetTypeTables.test.ts (the path
+// constants `HERE`, `FRONTEND_DIR`, `REPO_DIR` and `MODELS_PY`, and the helpers
+// `read`, `assertScraped` and `readAssetTypes`), not imported: that file is K's
+// enum gate, and importing a test file registers its tests twice.
 // Only the relative depth of FRONTEND_DIR is this file's own.
 // -----------------------------------------------------------------------------
 
