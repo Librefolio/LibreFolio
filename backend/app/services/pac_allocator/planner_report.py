@@ -56,6 +56,7 @@ from backend.app.schemas.pac_allocator import (
     PlannerPositiveMoneyInput,
     PlannerProvenance,
     PlannerResultSnapshot,
+    PlannerRoundingTopUp,
     PlannerScenarioCounts,
     ReportedFloatingSolverEvidence,
     SolverSettingEvidence,
@@ -73,6 +74,7 @@ from backend.app.services.pac_allocator.models import (
     ExactEvaluation,
     ExactPlannerScenario,
     ExactPolicyView,
+    ExactRoundingTopUp,
 )
 from backend.app.services.pac_allocator.numeric import ExactRatio
 from backend.app.services.pac_allocator.solver import SolverRunResult
@@ -613,6 +615,25 @@ def build_ledger_rows(evaluation: ExactEvaluation) -> list[PlannerLedgerRow]:
             )
         )
     return rows
+
+
+def build_rounding_top_ups(scenario: ExactPlannerScenario, top_ups: tuple[ExactRoundingTopUp, ...]) -> list[PlannerRoundingTopUp]:
+    """Project the classifier's rounding top-ups, in the order it gave them.
+
+    ``evaluator.rounding_top_ups`` decided every figure, the valuation
+    included: the amount goes out as fixed-decimal text in the pool's own
+    currency, the valuation as exact money in the valuation currency.
+    """
+    return [
+        PlannerRoundingTopUp(
+            broker_id=top_up.broker_id,
+            currency=top_up.currency,
+            amount=ratio_to_fixed_decimal(top_up.amount),
+            rounded_postings=top_up.rounded_postings,
+            valuation_amount=_money(top_up.valuation_amount, scenario.valuation_currency),
+        )
+        for top_up in top_ups
+    ]
 
 
 def build_accounting(scenario: ExactPlannerScenario, evaluation: ExactEvaluation) -> PlannerAccountingSummary:

@@ -353,6 +353,7 @@
         "final_physical": "5.00"
       }
     ],
+    "rounding_top_ups": [],
     "exposure_rows": [
       {
         "dimension": "asset_type",

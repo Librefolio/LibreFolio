@@ -28,6 +28,7 @@ export type PacFundingAction = PacSolution['funding_actions'][number];
 export type PacFxAction = PacSolution['fx_actions'][number];
 export type PacOrderRow = PacSolution['order_rows'][number];
 export type PacLedgerRow = PacSolution['ledger_rows'][number];
+export type PacRoundingTopUp = PacSolution['rounding_top_ups'][number];
 export type PacExposureRow = PacSolution['exposure_rows'][number];
 export type PacAccounting = PacSolution['accounting'];
 export type PacCosts = PacSolution['costs'];

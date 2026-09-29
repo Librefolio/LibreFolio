@@ -174,6 +174,22 @@ def _unpriced_request() -> dict:
     return payload
 
 
+def _rounding_tie_request() -> dict:
+    """The min fixture at €33.335 a whole unit with €100.00 of cash: a HALF_UP tie.
+
+    The fixture already trades in EUR with a zero fee. SCIP buys three units
+    (€100.005 at the exact price), whose BUY debit posts HALF_UP as €100.01:
+    broker-one/EUR ends one cent short, over one rounded posting.
+    """
+    payload = _min_request()
+    asset = next(row for row in payload["assets"] if row["asset_id"] == "asset-one")
+    asset["quote"]["amount"] = "33.335"
+    for cash in payload["existing_cash"]:
+        cash["available"]["amount"] = "100.00"
+        cash["selected"]["amount"] = "100.00"
+    return payload
+
+
 def _other_version(version: str) -> str:
     major, _, rest = version.partition(".")
     return f"{int(major) + 1}.{rest}"
@@ -217,6 +233,37 @@ async def test_pac_compute_plans_a_buying_scenario_to_a_proven_optimum(test_serv
     # window, as tool_plugins/pac_allocator.py does, instead of solver.py's
     # fallback for a caller with no window to claim.
     in_process = plan_pac_allocation(PAC_PLAN_INPUT_ADAPTER.validate_python(_buying_request()), solver_time_budget_seconds=solver_time_budget_seconds)
+    assert plan == PAC_PLAN_OUTPUT_ADAPTER.dump_python(in_process, mode="json", by_alias=True)
+
+
+@pytest.mark.asyncio
+async def test_pac_compute_publishes_a_rounding_tie_with_its_top_up(test_server):
+    """A plan that posts one cent over the cash reaches the caller, with the top-up that covers it (QX1-b).
+
+    The Decimal replay stays authoritative: a deficit within the pool's rounded
+    postings (here one, the BUY debit) no longer suppresses the plan, it travels
+    as a ``ready_incumbent`` whose top-up says what to add. The rejection path
+    (beyond the threshold, reported as ``execution_failed``) stays a service
+    test: the worker runs in a spawned child, out of reach of any seam.
+    """
+    async with _tool_user() as client:
+        identity = await _served_identity(client)
+        engine_timeout_ms = await _served_engine_timeout_ms(client, "plan")
+        item = _item(identity, _rounding_tie_request())
+        payload, results = await _compute(client, item)
+
+    result = results[item["correlation_id"]]
+    assert result["status"] == "success", result
+    assert (payload["success_count"], payload["failed_count"]) == (1, 0)
+    plan = result["result"]
+    assert (plan["result_state"], plan["stop_reason"]) == ("ready_incumbent", "completed")
+    (order,) = plan["primary_solution"]["order_rows"]
+    assert (order["broker_id"], order["instruction"]["kind"], Decimal(order["instruction"]["quantity"])) == ("broker-one", "whole_quantity", 3)
+    (top_up,) = plan["primary_solution"]["rounding_top_ups"]
+    assert (top_up["broker_id"], top_up["currency"], top_up["rounded_postings"]) == ("broker-one", "EUR", 1)
+    assert Decimal(top_up["amount"]) == Decimal("0.01")
+    # The worker publishes what the planner computes in process, in the same engine window.
+    in_process = plan_pac_allocation(PAC_PLAN_INPUT_ADAPTER.validate_python(_rounding_tie_request()), solver_time_budget_seconds=engine_timeout_ms / 1000)
     assert plan == PAC_PLAN_OUTPUT_ADAPTER.dump_python(in_process, mode="json", by_alias=True)
 
 

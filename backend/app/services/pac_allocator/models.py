@@ -1389,3 +1389,28 @@ class ExactEvaluation:
             )
         ):
             raise ValueError("invalid candidate contracts cannot carry economic results")
+
+
+@dataclass(frozen=True, slots=True)
+class ExactRoundingTopUp:
+    """Cash one pool (broker x currency) lacks because the replay rounds HALF_UP.
+
+    ``amount`` is the pool's negative final spendable balance, in the pool's own
+    currency; ``rounded_postings`` counts the pool's postings that carry a
+    quantum, the ones whose rounding can explain the deficit; and
+    ``valuation_amount`` is ``amount`` in the scenario's valuation currency.
+    """
+
+    broker_id: str
+    currency: str
+    amount: ExactRatio
+    rounded_postings: int
+    valuation_amount: ExactRatio
+
+    def __post_init__(self) -> None:
+        _require_text(self.broker_id, "top-up broker_id")
+        _require_currency(self.currency, "top-up currency")
+        _require_positive(self.amount, "top-up amount")
+        if isinstance(self.rounded_postings, bool) or not isinstance(self.rounded_postings, int) or self.rounded_postings < 1:
+            raise ValueError("top-up rounded_postings must be a positive integer")
+        _require_positive(self.valuation_amount, "top-up valuation_amount")

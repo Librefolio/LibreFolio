@@ -27,7 +27,6 @@
     const verified = $derived('primary_solution' in result && result.primary_solution.validation === 'decimal_verified');
     const objectives = $derived('primary_solution' in result ? result.primary_solution.objectives : null);
     const stages = $derived(solver.stages);
-    const unfinished = $derived(stages.filter((stage) => stage.status === 'unfinished').length);
     const engines = $derived([...new Set(stages.map((stage) => [stage.engine, stage.version].join(' ')))]);
     const scopes = $derived([...new Set(stages.map((stage) => stage.scope))]);
 
@@ -73,12 +72,9 @@
                     {$t(`${KEY}.notProven`, {default: 'Not proven'})} ·
                     {$t(`tools.pacAllocator.planner.result.proof.reasons.${proof.reason_code}`, {default: 'an exact proof was not established'})}
                 </p>
+                <!-- Every finished stage is SCIP-optimal, so a published plan that is not proven always has an open stage. -->
                 <p class={HINT}>
-                    {#if unfinished === 0}
-                        {$t(`${KEY}.floatingFinished`, {default: 'The solver closed every stage, but its plan did not pass the exact Decimal check.'})}
-                    {:else}
-                        {$t(`${KEY}.floatingUnfinished`, {default: 'The solver stopped before closing every stage: this is the best plan found, not a proven one.'})}
-                    {/if}
+                    {$t(`${KEY}.floatingUnfinished`, {default: 'The solver stopped before closing every stage: this is the best plan found, not a proven one.'})}
                 </p>
             {:else}
                 <p>
