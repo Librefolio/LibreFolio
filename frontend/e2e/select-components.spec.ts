@@ -172,6 +172,40 @@ test.describe('Select Components', () => {
             // Listbox should be hidden
             await expect(page.locator('[role="listbox"]')).not.toBeVisible({timeout: 2000});
         });
+
+        test('typing CSV highlights Generic CSV in view, and Enter picks it (R13)', async ({page}) => {
+            // R13: every plugin description mentions CSV, so the query kept all of them in backend
+            // order and left the highlight — the row Enter picks — on the first, with Generic CSV
+            // far below the fold. The expected name is read from the endpoint the select renders:
+            // a backend product name, not a translation.
+            const response = await page.request.get('/api/v1/brokers/import/plugins');
+            expect(response.ok(), `GET /api/v1/brokers/import/plugins answered ${response.status()}`).toBe(true);
+            const generic = ((await response.json()) as Array<{code: string; name: string}>).find((p) => p.code === 'broker_generic_csv');
+            if (!generic) throw new Error('The backend serves no broker_generic_csv plugin: this spec reproduces R13 on it.');
+
+            const pluginSelect = page.getByTestId('import-plugin-select');
+            const trigger = pluginSelect.getByRole('combobox');
+            await trigger.click();
+            const listbox = pluginSelect.getByRole('listbox');
+            await expect(listbox).toBeVisible();
+            // The plugin list is fetched on first use: a query typed while it loads races the fetch.
+            await expect(listbox).not.toHaveAttribute('aria-busy', 'true', {timeout: 5_000});
+
+            // ImportPluginSelect forwards no testId, so the inline search box is reached by role.
+            const search = pluginSelect.getByRole('textbox');
+            await search.pressSequentially('CSV');
+            await expect(search).toHaveValue('CSV');
+
+            // Scoped to the wrapper: every SearchSelect renders its options under this testid prefix.
+            const genericOption = pluginSelect.getByTestId('search-select-option-broker_generic_csv');
+            await expect(genericOption).toHaveAttribute('data-highlighted', 'true');
+            await expect(genericOption).toBeInViewport();
+
+            await search.press('Enter');
+            await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+            await expect(listbox).toBeHidden();
+            await expect(trigger).toContainText(generic.name);
+        });
     });
 
     test.describe('Global Settings Selects (Admin)', () => {
