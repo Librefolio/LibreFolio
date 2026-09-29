@@ -40,6 +40,7 @@ them, with exposure variants built via ``dataclasses.replace``.
 from __future__ import annotations
 
 from dataclasses import replace
+from decimal import Decimal
 from fractions import Fraction
 
 import pytest
@@ -53,6 +54,7 @@ from backend.app.schemas.pac_allocator import (
     _exact_fraction,
     _validate_weight_availability,
 )
+from backend.app.services.pac_allocator import models as pac_models
 from backend.app.services.pac_allocator import planner_report as PR
 from backend.app.services.pac_allocator.compiler import compile_policy_program
 from backend.app.services.pac_allocator.evaluator import build_exact_policy_view, evaluate_exact_candidate
@@ -190,6 +192,7 @@ def _build_primary_solution(scenario, view, evaluation, *, sequence: PR._Sequenc
         fx_actions=PR.build_fx_actions(scenario, evaluation, allocator),
         order_rows=PR.build_order_rows(scenario, evaluation, allocator),
         ledger_rows=PR.build_ledger_rows(evaluation),
+        rounding_top_ups=[],  # every caller asserts a feasible replay, and a feasible replay has no top-up
         exposure_rows=PR.build_exposure_rows(scenario, evaluation),
         accounting=PR.build_accounting(scenario, evaluation),
         costs=PR.build_costs(scenario, evaluation),
@@ -582,6 +585,40 @@ def test_each_action_section_is_internally_ascending() -> None:
     for section in (funding, fx, orders):
         section_sequences = [row.sequence for row in section]
         assert section_sequences == sorted(section_sequences)
+
+
+# --------------------------------------------------------------------------
+# Rounding top-ups — a pure projection of what the classifier decided
+# --------------------------------------------------------------------------
+
+
+def test_rounding_top_ups_are_projected_not_recomputed() -> None:
+    """``build_rounding_top_ups`` only re-expresses the classifier's dataclasses.
+
+    The amount goes out as fixed-decimal text in the pool's own currency; the
+    valuation, already computed by the classifier, as money in the scenario's
+    valuation currency: ``finite_decimal`` when it terminates (EUR 1/100),
+    ``exact_ratio`` when it does not (USD 0.01 valued at EUR 1/120). The input
+    order is deliberately not the canonical (broker, currency) one, so "order
+    preserved" is a real assertion: a projection never re-sorts.
+    """
+    scenario = _pac_scenario()
+    assert scenario.valuation_currency == "EUR"
+    top_ups = (
+        pac_models.ExactRoundingTopUp(broker_id="broker:b", currency="USD", amount=R(1, 100), rounded_postings=2, valuation_amount=R(1, 120)),
+        pac_models.ExactRoundingTopUp(broker_id="broker:a", currency="EUR", amount=R(1, 100), rounded_postings=1, valuation_amount=R(1, 100)),
+    )
+
+    rows = PR.build_rounding_top_ups(scenario, top_ups)
+
+    assert [(row.broker_id, row.currency, row.rounded_postings) for row in rows] == [("broker:b", "USD", 2), ("broker:a", "EUR", 1)]
+    assert [Decimal(row.amount) for row in rows] == [Decimal("0.01"), Decimal("0.01")]
+    assert [row.model_dump(mode="json")["amount"] for row in rows] == ["0.01", "0.01"]
+    usd, eur = rows
+    assert (eur.valuation_amount.currency, eur.valuation_amount.value.kind) == ("EUR", "finite_decimal")
+    assert _exact_fraction(eur.valuation_amount.value) == Fraction(1, 100)
+    assert (usd.valuation_amount.currency, usd.valuation_amount.value.kind) == ("EUR", "exact_ratio")
+    assert _exact_fraction(usd.valuation_amount.value) == Fraction(1, 120)
 
 
 # --------------------------------------------------------------------------

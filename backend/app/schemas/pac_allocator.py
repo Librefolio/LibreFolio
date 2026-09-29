@@ -1409,6 +1409,9 @@ class PlannerLedgerRow(AllocationStrictModel):
 
     @model_validator(mode="after")
     def validate_ledger_identity(self) -> PlannerLedgerRow:
+        # The final balances may be negative: a PAC pool a few minor units short
+        # to HALF_UP rounding is published with the top-up that covers it
+        # (``PacPlanSolution``); ``RebalancerPlanSolution`` still refuses them.
         nonnegative_fields = (
             "initial_selected",
             "funding_in",
@@ -1421,8 +1424,6 @@ class PlannerLedgerRow(AllocationStrictModel):
             "sell_fees",
             "broker_withheld_tax",
             "self_reserved_tax",
-            "final_spendable",
-            "final_physical",
         )
         if any(_fixed_fraction(getattr(self, name)) < 0 for name in nonnegative_fields):
             raise ValueError("Published ledger amounts cannot be negative")
@@ -1443,6 +1444,29 @@ class PlannerLedgerRow(AllocationStrictModel):
             raise ValueError("Ledger spendable balance does not reconcile its posted debits and credits")
         if _fixed_fraction(self.final_spendable) + _fixed_fraction(self.self_reserved_tax) != _fixed_fraction(self.final_physical):
             raise ValueError("Ledger spendable balance does not reconcile")
+        return self
+
+
+class PlannerRoundingTopUp(AllocationStrictModel):
+    """Cash one ledger pool lacks because the exact replay rounds HALF_UP (QX1-b).
+
+    ``amount`` is what to add on ``broker_id`` in ``currency`` for the plan to
+    execute: the pool's negative final balance, negated. ``rounded_postings``
+    counts the pool's postings that carry a quantum (BUY debit, nonzero fee, FX
+    credit), and bounds ``amount`` at that many minor units. ``valuation_amount``
+    is ``amount`` in the scenario valuation currency.
+    """
+
+    broker_id: PlannerId
+    currency: CurrencyCode
+    amount: PlannerPositiveDecimal
+    rounded_postings: PlannerPositiveInteger
+    valuation_amount: ExactMoney
+
+    @model_validator(mode="after")
+    def validate_positive_valuation(self) -> PlannerRoundingTopUp:
+        if _money_fraction(self.valuation_amount) <= 0:
+            raise ValueError("PAC rounding top-up valuations must be positive")
         return self
 
 
@@ -1556,6 +1580,28 @@ class PlannerObjectiveResults(AllocationStrictModel):
         return self
 
 
+def _validate_pac_rounding_top_ups(solution: PacPlanSolution) -> None:
+    """Bind the top-ups to the ledger pools they excuse.
+
+    One top-up per negative pool, for exactly the missing amount; its rounded
+    postings can be no more than the pool's own rows carry: a BUY debit and a
+    fee per order paying from the pool, a credit per FX action into it. It is
+    only a cap: a fee that rounds to zero is not posted, and still counts in
+    the order row. The minor-unit bound needs the catalogue, so it lives in
+    ``_validate_ready_solution``.
+    """
+    _require_unique([(row.broker_id, row.currency) for row in solution.rounding_top_ups], "PAC rounding top-up scopes")
+    deficits = {(row.broker_id, row.currency): -_fixed_fraction(row.final_spendable) for row in solution.ledger_rows if _fixed_fraction(row.final_spendable) < 0}
+    if {(row.broker_id, row.currency): _fixed_fraction(row.amount) for row in solution.rounding_top_ups} != deficits:
+        raise ValueError("PAC rounding top-ups must cover exactly the negative ledger balances")
+    for top_up in solution.rounding_top_ups:
+        scope = (top_up.broker_id, top_up.currency)
+        orders = sum(1 for row in solution.order_rows if (row.broker_id, row.cash_debit.currency) == scope)
+        fx_credits = sum(1 for row in solution.fx_actions if (row.broker_id, row.destination_credit.currency) == scope)
+        if top_up.rounded_postings > 2 * orders + fx_credits:
+            raise ValueError("A PAC rounding top-up cannot count more rounded postings than its ledger scope carries")
+
+
 class PacPlanSolution(AllocationStrictModel):
     solution_id: PlannerId
     solution_kind: Literal["primary"]
@@ -1565,6 +1611,7 @@ class PacPlanSolution(AllocationStrictModel):
     fx_actions: list[PlannerFxAction]
     order_rows: list[PlannerBuyOrderRow]
     ledger_rows: list[PlannerLedgerRow]
+    rounding_top_ups: list[PlannerRoundingTopUp] = Field(description="One top-up per ledger pool left short by HALF_UP rounding; empty when every pool balances.")
     exposure_rows: list[PacExposurePlanRow]
     accounting: PlannerAccountingSummary
     costs: PlannerCostTotals
@@ -1581,6 +1628,7 @@ class PacPlanSolution(AllocationStrictModel):
             raise ValueError("PAC action sections must be sequence-ordered")
         _require_unique([(row.broker_id, row.currency) for row in self.ledger_rows], "PAC ledger scopes")
         _require_unique([(row.dimension, row.category_id) for row in self.exposure_rows], "PAC exposure rows")
+        _validate_pac_rounding_top_ups(self)
         return self
 
 
@@ -1612,6 +1660,9 @@ class RebalancerPlanSolution(AllocationStrictModel):
         if any([row.sequence for row in rows] != sorted(row.sequence for row in rows) for rows in (self.funding_actions, self.fx_actions, self.order_rows)):
             raise ValueError("Rebalancer action sections must be sequence-ordered")
         _require_unique([(row.broker_id, row.currency) for row in self.ledger_rows], "Rebalancer ledger scopes")
+        # The Rebalancer has no rounding top-ups, so no pool of it may end short.
+        if any(_fixed_fraction(row.final_spendable) < 0 or _fixed_fraction(row.final_physical) < 0 for row in self.ledger_rows):
+            raise ValueError("Rebalancer ledger balances cannot be negative")
         _require_unique([(row.dimension, row.category_id) for row in self.exposure_rows], "Rebalancer exposure rows")
         _require_unique([row.evidence_id for row in self.sell_irreducibility], "SELL evidence IDs")
         _require_unique([row.order_id for row in self.sell_irreducibility], "SELL evidence order IDs")
@@ -1668,6 +1719,7 @@ class PacNoOpSolution(PacPlanSolution):
     funding_actions: Annotated[list[PlannerFundingAction], Field(max_length=0)]
     fx_actions: Annotated[list[PlannerFxAction], Field(max_length=0)]
     order_rows: Annotated[list[PlannerBuyOrderRow], Field(max_length=0)]
+    rounding_top_ups: Annotated[list[PlannerRoundingTopUp], Field(max_length=0)]
 
     @model_validator(mode="after")
     def validate_no_op_projection(self) -> PacNoOpSolution:
@@ -1791,7 +1843,15 @@ def _validate_distinct_deployment(
             raise ValueError("Deployment objective delta must equal deployment minus primary")
 
 
-def _validate_accounting_summary(accounting: PlannerAccountingSummary) -> None:
+def _validate_accounting_summary(accounting: PlannerAccountingSummary, *, top_up_value: Fraction = Fraction(0)) -> None:
+    """Check the accounting identities; ``top_up_value`` is the PAC rounding top-ups' total value.
+
+    A top-up is cash the user adds before executing: reachable funding the
+    plan relies on, which the published accounting does not include. So it
+    relaxes the two rules that read the balance — free cash and the favorable
+    shortfall bound — by exactly its value, and nothing else. The Rebalancer
+    has no top-up and passes zero.
+    """
     nonnegative = (
         accounting.current_invested,
         accounting.selected_funding,
@@ -1799,20 +1859,21 @@ def _validate_accounting_summary(accounting: PlannerAccountingSummary) -> None:
         accounting.trapped_funding,
         accounting.fixed_reference,
         accounting.final_invested,
-        accounting.free_cash,
         accounting.physical_reserves,
         accounting.economic_losses,
         accounting.rounding_bound,
     )
     if any(_money_fraction(money) < 0 for money in nonnegative):
         raise ValueError("Nonnegative accounting totals cannot be negative")
+    if _money_fraction(accounting.free_cash) + top_up_value < 0:
+        raise ValueError("Free cash cannot be negative beyond the rounding top-ups")
     if _money_fraction(accounting.selected_funding) != _money_fraction(accounting.reachable_funding) + _money_fraction(accounting.trapped_funding):
         raise ValueError("Selected funding must equal reachable plus trapped funding")
     if _money_fraction(accounting.fixed_reference) != _money_fraction(accounting.current_invested) + _money_fraction(accounting.reachable_funding):
         raise ValueError("Fixed reference must equal current invested plus reachable funding")
     if abs(_money_fraction(accounting.rounding_delta)) > _money_fraction(accounting.rounding_bound):
         raise ValueError("Rounding delta must remain inside its exact bound")
-    if _money_fraction(accounting.shortfall) < -_money_fraction(accounting.rounding_bound):
+    if _money_fraction(accounting.shortfall) + top_up_value < -_money_fraction(accounting.rounding_bound):
         raise ValueError("Shortfall cannot exceed the favorable rounding bound")
     decomposition = _money_fraction(accounting.free_cash) + _money_fraction(accounting.physical_reserves) + _money_fraction(accounting.economic_losses) + _money_fraction(accounting.rounding_delta)
     if _money_fraction(accounting.shortfall) != decomposition:
@@ -1938,11 +1999,15 @@ def _validate_solution_financials(
     valuation_money.extend(row.spread_loss for row in solution.fx_actions)
     valuation_money.extend(row.execution_margin_cost for row in solution.order_rows)
     valuation_money.extend(row.fx_cost for row in solution.order_rows if isinstance(row, PlannerBuyOrderRow))
+    top_ups = solution.rounding_top_ups if isinstance(solution, PacPlanSolution) else []
+    valuation_money.extend(row.valuation_amount for row in top_ups)
     if any(money.currency != valuation_currency for money in valuation_money):
         raise ValueError("Asset, accounting, and cost projections must use the valuation currency")
+    if any(row.currency == valuation_currency and _money_fraction(row.valuation_amount) != _fixed_fraction(row.amount) for row in top_ups):
+        raise ValueError("A PAC rounding top-up in the valuation currency must be valued at its own amount")
     if any(_exact_fraction(getattr(solution.costs, name).value) < 0 for name in type(solution.costs).model_fields):
         raise ValueError("Cost totals cannot be negative")
-    _validate_accounting_summary(solution.accounting)
+    _validate_accounting_summary(solution.accounting, top_up_value=sum((_money_fraction(row.valuation_amount) for row in top_ups), Fraction()))
     if isinstance(solution, RebalancerPlanSolution) and _money_fraction(solution.accounting.final_invested) <= 0:
         raise ValueError("Ready Rebalancer solutions require positive final invested value")
     _validate_asset_projection(solution)
@@ -1951,6 +2016,18 @@ def _validate_solution_financials(
         raise ValueError("Valuation objective units must use the scenario valuation currency")
     if any(stage.objective_code == "shortfall" and _exact_fraction(stage.value) != _money_fraction(solution.accounting.shortfall) for stage in solution.objectives.stages):
         raise ValueError("The shortfall objective must equal the authoritative accounting shortfall")
+
+
+def _validate_pac_top_up_minor_units(
+    catalogs: PlannerCatalogs,
+    solution: PacPlanSolution | RebalancerPlanSolution,
+) -> None:
+    """``amount <= rounded_postings x minor unit``: the one top-up bound that needs the catalogue."""
+    if not isinstance(solution, PacPlanSolution):
+        return
+    minor_units = {row.currency: _fixed_fraction(row.minor_unit) for row in catalogs.currencies}
+    if any(_fixed_fraction(row.amount) > row.rounded_postings * minor_units[row.currency] for row in solution.rounding_top_ups):
+        raise ValueError("A PAC rounding top-up cannot exceed its rounded postings times the currency minor unit")
 
 
 def _validate_ready_solution(
@@ -1975,6 +2052,7 @@ def _validate_ready_solution(
         raise ValueError("Order rows must reference catalog Asset and Broker IDs")
     if not _collect_currency_codes(solution.model_dump(mode="python")) <= currencies:
         raise ValueError("Solution rows must reference catalog currencies")
+    _validate_pac_top_up_minor_units(catalogs, solution)
     referenced_provenance = {provenance_id for row in [*solution.funding_actions, *solution.fx_actions, *solution.order_rows, *solution.exposure_rows] for provenance_id in row.provenance_ids}
     if not referenced_provenance <= provenance_ids:
         raise ValueError("Solution rows must reference top-level provenance IDs")
@@ -2257,6 +2335,9 @@ class PacPlannerReadyNoIncumbentResult(_PacReadyResultBase):
     result_state: Literal["ready_no_incumbent"]
     outcome: Literal["no_incumbent"]
     proof: NotProvenProof
+    # A completed search always holds a plan: the replay publishes it with its
+    # rounding top-ups or raises. "No plan" is only a limit stop (QX1-b).
+    stop_reason: Literal["time_limit", "node_limit"]
 
 
 class _RebalancerReadyResultBase(AllocationStrictModel):
@@ -2322,6 +2403,7 @@ class RebalancerPlannerReadyNoIncumbentResult(_RebalancerReadyResultBase):
     result_state: Literal["ready_no_incumbent"]
     outcome: Literal["no_incumbent"]
     proof: NotProvenProof
+    stop_reason: Literal["time_limit", "node_limit"]
 
 
 type PacPlannerResult = Annotated[

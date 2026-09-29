@@ -1299,6 +1299,75 @@ E2E Playwright: **dopo** l'approvazione umana, come da hard gate di Step 5 (Step
 >      > `_forced_min_scenario_view()` del blocco «Item 7»: resta anche quando quel blocco si pulisce.
 >   6. ✅ F1 → F2 → F3 → F5 (28/09, note nei passi), con il lotto di test di F4 e i gate: in F4,
 >      «Lotto del commit 4». F6 viene dopo il commit.
+>   7. ✅ commit 4 committato dal developer alle 12:51: `b48b3cec9`, 31 file, sopra `6061affd7`
+>      (§8).
+>   8. ✅ allineamento a `dev_release2`, deciso dal developer per subito dopo il commit 4 e prima
+>      del commit 5. Merge `d32f27c24` alle 13:51, genitori `b48b3cec9` e `7c61dd924` (J, A, K e
+>      il CHANGELOG di K), albero `b5f2dda8`.
+>      - Nessun conflitto. In comune ci sono solo i 4 cataloghi (unione esatta, 4102 chiavi) e
+>        `moneyRenderSites.test.ts`.
+>      - Nessuna migrazione e nessuna dipendenza nuova; i file Python di D sono identici a
+>        `b48b3cec9`.
+>      - Dal target entra `AssetType.CROWDFUND_REAL_ESTATE`. Per il PAC è un codice come gli altri:
+>        `plannerAssetClass` abbassa solo le maiuscole, `PlannerCode` lo accetta, e nessun ramo
+>        del PAC elenca i tipi.
+>
+>      Gate sulla nuova base (13:58-14:04), lane 6151, un comando alla volta. Script
+>      `/tmp/libreFolio_d_gate_merge.sh`, riepilogo in `.summary`, log in
+>      `/tmp/libreFolio_d_merge_*.log`:
+>      - `api sync`: nessun file tracciato cambiato;
+>      - `front check`: 3 errori e 41 avvisi, negli stessi 4 file di prima; nessuno nel PAC;
+>      - Vitest `front-utility core-unit` (98 file, 2647 test) e `component-unit` (85 file, 2113
+>        test), verdi. Dentro ci sono `moneyRenderSites`, `allocationSource`, `ToolsHub` e
+>        `ToolHost`;
+>      - services: core 152, evaluator 139, oracle 20, policies 40, solver 19, proof 30,
+>        wire-numbers 39, report 17, service 25, tools-registry 93;
+>      - schemas: pac-planner 450, tools 271;
+>      - api: pac-planner-tool 5, tools 7. Conteggi uguali a prima del merge. La build del
+>        frontend, vecchia dopo il merge, l'ha rifatta l'avvio del backend di `api pac-planner-tool`
+>        (`frontend/build` delle 14:03:13), dentro i 120 s del runner;
+>      - `i18n audit`: 4102 chiavi, tutte complete. Le voci PAC fra le inutilizzate sono le stesse
+>        di prima: 3 «not verified» per prefisso dinamico e 168 del P1 (decisione a);
+>      - ruff pulito sui 31 file Python di D.
+>
+>      > **⚠️ Fuori pista**: due rossi, entrambi precedenti al merge e presenti anche su
+>      > `dev_release2`. Nessuno viene dal commit 4.
+>      > - `api portfolio`: 51 passed e 1 failed,
+>      >   `test_report_allocation_source_authenticated_contract` (`test_portfolio_api.py:593`,
+>      >   assert a `:767`). Il pin sulle chiavi di primo livello di `/report`, scritto l'11/09 da
+>      >   `8273335ff`, non conta le 6 sezioni opzionali che il P&L (`8ed7a0f0d`, 18/09) ha aggiunto
+>      >   a `PortfolioReportResponse`, serializzate a `null`. Test, schema e rotta sono identici
+>      >   fra `f1047f766` e `7c61dd924`, quindi il rosso c'è anche lì. Una sonda pura
+>      >   (`/tmp/libreFolio_d_legacy_pins_probe.py`) mostra che i pin annidati su sorgente, asset e
+>      >   quote coincidono con lo schema di oggi. È il test che la S10 di I sistema («riattiva i
+>      >   pin annidati di `:593`»): D non lo tocca.
+>      > - black su `test_portfolio_api.py`: 8 blocchi da riformattare (`:1675-2314`), gli stessi 8
+>      >   a `f1047f766`. Vengono dal PAC v1 (per esempio `0088748a8`, 18/09), non dal checkpoint.
+>      >   Il file è condiviso con I, quindi non lo riformatto ora. Gli altri 28 file sono puliti.
+>   9. ✅ il coordinator accetta il gate (28/09). Le sue risposte:
+>      - **le 168 chiavi del P1 restano**, per decisione (a) del developer: «Le chiavi verranno
+>        decretate morte solo alla vera fine del round di sviluppo». Il principio del 25/09 vale
+>        per test e codice, non per le chiavi i18n. Vanno nella lista di fine round, con le 22
+>        chiavi del tour di J. Lo stesso vale per le 2 chiavi che il commit 5 lascia senza uso
+>        (F2c, passo 6);
+>      - `:593` e il black di `test_portfolio_api.py` sono voci d'integrazione del coordinator. Se
+>        la S10 di I entra prima, D non fa niente;
+>      - via al commit 5 (QX1-b): prima i test rossi del test-author, poi `CHECKPOINT READY` e
+>        `FROZEN`.
+>   10. ✅ 2026-09-28 commit 5 (QX1-b, F2c): cura e gate verdi. Il disegno e i passi sono in F2c,
+>       i test e gli esiti in F4 («cura del commit 5»). `CHECKPOINT READY` al coordinator, poi
+>       `FROZEN` fino al commit del developer.
+  11. ✅ risposte del coordinator (28/09) a ciò che gli ho mandato sul commit 5:
+      - `contract_version` resta `2.0.0`;
+      - le 2 chiavi che restano senza uso vanno nella lista di fine round;
+      - la chiave nuova passa da `dev.py i18n`, e il totale sale a 4103;
+      - il test di componente di `StateNotice` lo registro io, ma solo con la riga del percorso
+        in `front_component_unit` (`scripts/test_runner/_frontend_utility.py`). La riga va
+        vicino a `ToolsHub` e `ToolHost`, non in fondo: Risk ha aggiunto la sua intorno a
+        `:211`. Il `desc` di `component-unit` **non si tocca**, perché anche Risk l'ha
+        riscritto: la frase la mette il coordinator nella lista d'integrazione;
+      - nel handoff vanno i due fingerprint nuovi dello schema completo. Il coordinator ha già
+        in lista l'`api sync` dopo l'integrazione.
 >
 > **Principio del developer** (25/09 alle 11:54, per tutte le lane, via coordinator):
 > - il prodotto, per ora, va bene così com'è;
@@ -1575,17 +1644,98 @@ Ordine, con i documenti prima del codice (regola del developer):
   > - Il docstring di `test_fee_epigraph_cap_oblivious_regression` dice ancora «can never cause
   >   false infeasibility». È falso già oggi, per QX1-a. Non l'ho toccato: il test è del
   >   test-author, e al commit 3 si inverte e si riscrive comunque.
-- **F2c — arrotondamenti oltre la cassa (QX1-b, deciso il 25/09).**
+- **F2c — arrotondamenti oltre la cassa (QX1-b, deciso il 25/09).** ✅ 2026-09-28 (commit 5;
+  esiti in F4, «cura del commit 5»)
   - Il replay classifica il rifiuto. Se l'unica violazione è un deficit di cassa entro
     `N × unità minima` per cassa, il piano esce con l'importo da aggiungere per ogni cassa.
     Altrimenti è un errore (§2).
-  - Schema: un campo nel risultato pronto con le casse da integrare (broker, valuta, importo, `N`).
+  - Schema: un campo nel risultato pronto con le casse da integrare (broker, valuta, importo, `N`,
+    e il suo valore nella valuta di valutazione: passo 3).
   - Report e UI: la nota per cassa; i18n via `dev.py i18n` nelle 4 lingue.
   - Il deficit è un dato personale, quindi passa dalla maschera della privacy.
   - Dal commit 4 (28/09): il commit 5 rende irraggiungibile il rifiuto del replay per un solo
     deficit di cassa entro `N`, quindi toglie anche il ramo che la UI gli dedica al commit 4
     (`proof.floatingFinished` riscritto e `states.noIncumbent.rejected`), se non resta un altro
     rifiuto che lo usi.
+
+  **Disegno del commit 5** (28/09, analisi in sola lettura sul codice di `d32f27c24`), in ordine:
+  1. **Classificatore** (`evaluator.py`, tipo in `models.py`):
+     `rounding_top_ups(scenario, evaluation)` restituisce una tupla di
+     `ExactRoundingTopUp(broker_id, currency, amount, rounded_postings, valuation_amount)`,
+     nell'ordine dei ledger.
+     - Piano esatto → tupla vuota.
+     - Candidato fuori contratto (`candidate_valid=False`) → `ExactReplayRejectedError`, sottoclasse
+       di `ExactEvaluatorError`.
+     - Violazioni ammesse: solo `SPENDABLE_CASH_NONNEGATIVE`, `FX_SOURCE_CASH`,
+       `NO_SHORT_OR_LEVERAGE` e `ROUNDING_BOUND`, con almeno una `SPENDABLE_CASH_NONNEGATIVE`.
+       Qualunque altra → errore.
+     - Per ogni cassa con saldo finale negativo: `D = −saldo`. `N` conta le registrazioni della
+       cassa con un `quantum`: l'acquisto di ogni ordine, la commissione quando non è zero, il
+       credito FX. Sono le stesse che formano `rounding_bound` (`evaluator.py:2268-2279`); una
+       commissione esatta a zero non si registra (`_append_rounded_posting`, `:1563`). Errore se
+       `N = 0` o `D > N × unità minima`.
+     - Una quantità finale negativa → errore: `NO_SHORT_OR_LEVERAGE` (`:2711-2720`) si spiega solo
+       con le casse.
+     - `FX_SOURCE_CASH` vale il saldo della cassa sorgente (`:2463`): se è violato, quella cassa è
+       già fra le integrazioni.
+     - `ROUNDING_BOUND` violato: accettato solo se `|arrotondamento| ≤ limite` e
+       `shortfall + ΣV ≥ −limite`, con `V` = valore di `D` nella valuta di valutazione. È il
+       vincolo come sarebbe con le integrazioni: l'integrazione è liquidità raggiungibile, quindi
+       alza `fixed_reference` e `shortfall` di `V`, e lascia uguali arrotondamento e limite. Serve
+       perché il rischio residuo di §2 dice che uno sforamento entro la soglia esce.
+  2. **Planner** (`planner.py:150-160`): dopo il replay, `rounding_top_ups`. L'errore propaga: il
+     worker lo rende `execution_failed`, senza dettagli (`tools/worker.py:178-180`), e la UI lo
+     mostra con il pannello d'errore che c'è già. Il rifiuto del replay non dà più
+     `ready_no_incumbent`. Docstring aggiornati: modulo (`:19-23`), `plan_pac_allocation` («never
+     raises…») e `_no_incumbent_result`.
+  3. **Schema** (`schemas/pac_allocator.py`):
+     - `PlannerRoundingTopUp(broker_id, currency, amount, rounded_postings, valuation_amount)`;
+       `PacPlanSolution.rounding_top_ups` obbligatorio, senza default; `PacNoOpSolution` lo vuole
+       vuoto;
+     - `PlannerLedgerRow` (`:1409-1425`) non vieta più il saldo finale negativo, e tiene le due
+       identità. Lo vieta `RebalancerPlanSolution`, come oggi. `PacPlanSolution` lo ammette solo con
+       l'integrazione della stessa cassa e `amount = −saldo`, e ogni integrazione ha la sua riga
+       negativa;
+     - `rounded_postings ≤ 2 × ordini della cassa + FX che entrano nella cassa`. È solo un tetto:
+       una commissione che si arrotonda a zero conta in `N` ma sul filo vale 0;
+       `amount ≤ rounded_postings × unità minima` del catalogo;
+     - `valuation_amount` nella valuta di valutazione, positivo, uguale ad `amount` quando la cassa
+       è in quella valuta;
+     - contabilità (`_validate_accounting_summary`, `:1794`): `free_cash + ΣV ≥ 0` e
+       `shortfall + ΣV ≥ −limite`. Le identità restano uguali; il Rebalancer passa `ΣV = 0`;
+     - `ready_no_incumbent`: `stop_reason` solo `time_limit`/`node_limit`, per PAC e Rebalancer,
+       come l'infeasible al commit 4. Dopo il commit 5 «nessun piano» nasce solo da SCIP senza
+       soluzione al primo stadio, e quello stadio è non finito (`solver.py:397-437`): anche
+       un'anomalia lo segna `unfinished`.
+  4. **Report** (`planner_report.py`): `build_rounding_top_ups`, con `ratio_to_fixed_decimal` e
+     `_money` nella valuta di valutazione.
+  5. **UI**: in `StateNotice`, dopo la catena degli stati, una nota `NOTICE.warning` con
+     `role="status"`, una riga per cassa (`pac-planner-top-up`, `pac-planner-top-up-row` con
+     `data-broker` e `data-currency`). L'importo passa da `formatPlannerMoneyPlain`, quindi è
+     mascherato. Via il ramo `ready_no_incumbent` + `completed` di `StateNotice` (`:85-91`) e il
+     ramo `floatingFinished` di `ProofPanel` (`:77-81`), con il suo `unfinished`.
+  6. **i18n**, via `dev.py i18n add`: una chiave nuova nelle 4 lingue,
+     `tools.pacAllocator.planner.result.states.topUp.row`. Testo IT: «Per eseguire il piano servono
+     {amount} in più su {broker} ({currency}), per gli arrotondamenti all'unità minima.» Le due
+     chiavi che restano senza uso, `result.proof.floatingFinished` e
+     `result.states.noIncumbent.rejected`, **restano**, per decisione (a): vanno nella lista di
+     fine round.
+  7. `api sync`, poi i gate.
+
+  - **Perché `valuation_amount`.** Lo schema non ha i cambi: senza il valore nella valuta di
+    valutazione non potrebbe verificare la contabilità con le integrazioni, e dovrebbe solo
+    allentarla.
+  - **Versione.** `contract_version` resta `2.0.0`: il Tool non è rilasciato, come al commit 4.
+  - **Rebalancer.** Il classificatore non lo copre: non ha un planner. È un residuo dichiarato.
+  - **Prova in sola lettura** (28/09, sonda pura senza DB né server:
+    `files/qx1b-probes/tie_currency_probe.py` e `.log`, nella cartella di sessione). Sui tre
+    pareggi (`3 × 33,335` € su 100,00; `3 × 333,5` JPY su 1 000; `3 × 33,3335` BHD su 100,000):
+    - SCIP chiude tutti gli stadi con 3 quote;
+    - il replay vede solo `SPENDABLE_CASH_NONNEGATIVE` e `NO_SHORT_OR_LEVERAGE`;
+    - deficit di 1 unità minima, `N = 1`;
+    - `ROUNDING_BOUND` rispettato, perché `shortfall = −limite`;
+    - il planner di oggi dà `ready_no_incumbent` + `completed`: è il rosso.
+    Controllo: a 33,336 € SCIP sceglie 2 quote e il replay le accetta.
 - **F3 — oracolo solo nei test.** ✅ 2026-09-28
   - `oracle.py` passa nell'albero dei test.
   - Un test strutturale verifica che nessun modulo di produzione lo importi.
@@ -1614,6 +1764,183 @@ Ordine, con i documenti prima del codice (regola del developer):
     - un deficit oltre `N` unità minime → errore;
     - un'altra violazione delle regole esatte → errore, anche se il deficit sta sotto la soglia;
     - una valuta a 0 decimali (JPY) e una a 3 (BHD), per l'unità minima.
+
+    Lotto del commit 5 (28/09), rosso prima della cura:
+    - **servizio, SCIP vero**, sul risultato pubblicato e rivalidato: EUR, JPY e BHD come nella
+      sonda di F2c; stato `ready_incumbent`, 3 quote, una sola integrazione (broker, valuta, 1
+      unità minima, `N = 1`) e il saldo finale a −1 unità minima. La stessa proposta con 1 unità
+      minima di cassa in più passa il replay: l'importo detto basta;
+    - **classificatore**, su candidati costruiti a mano con `evaluate_exact_candidate`:
+      - deficit oltre `N × unità minima` → errore;
+      - commissione presente, `N = 2`: 0,02 accettato, 0,03 errore;
+      - un'altra violazione più un piccolo deficit → errore;
+      - due casse: la soglia vale per cassa, non sommata;
+      - il credito FX conta in `N`;
+      - candidato fuori contratto → errore;
+    - **planner**: un candidato oltre la soglia fa sollevare `plan_pac_allocation`, e non dà mai
+      `ready_no_incumbent`. Sostituisce `test_replay_failure_suppresses_the_plan`, che prova il
+      comportamento rovesciato il 25/09 (attribuzione con la test-triage);
+    - **schema**: riga negativa solo con la sua integrazione; importo diverso, integrazione senza
+      riga negativa, oltre `N × unità minima`, `rounded_postings` sopra il tetto, no-op con
+      un'integrazione, saldo negativo nel Rebalancer, `valuation_amount` fuori valuta o diverso
+      dall'importo nella stessa valuta → invalidi; contabilità allentata solo di `ΣV`;
+      `ready_no_incumbent` + `completed` → invalido. La fixture `_ready_no_incumbent_result` passa a
+      uno stop per limite con uno stadio non finito;
+    - **API**: il pareggio EUR da `/tools/compute`, con l'integrazione sul risultato;
+    - **UI**: la nota per cassa, se c'è un banco di prova per componenti adatto.
+
+    ✅ 2026-09-28 — **rossi scritti dal test-author** (brief nella cartella di sessione,
+    `files/commit5/test_author_red_prompt.md`), lanciati una volta ciascuno sulla 6151, uno alla
+    volta; log in `/tmp/libreFolio_d_c5_*.log`.
+
+    > **Note implementazione**:
+    > - Rossi, tutti per l'assenza del bersaglio e dopo che i fatti di partenza passano:
+    >   - classificatore, 20 (`test_pac_planner_evaluator.py:4643-5068`): `rounding_top_ups`,
+    >     `ExactReplayRejectedError` o `ExactRoundingTopUp` assenti. Chiave intera: 20 failed,
+    >     139 passed;
+    >   - servizio, 7 (`test_pac_planner_planner.py:337-516`): i tre pareggi danno
+    >     `ready_no_incumbent` invece di `ready_incumbent`; i tre controfattuali non hanno
+    >     `rounding_top_ups`; il rifiuto oltre soglia risponde invece di sollevare. Chiave
+    >     intera: 7 failed, 24 passed;
+    >   - report, 1 (`test_pac_planner_report.py:589-622`). Chiave intera: 1 failed, 17 passed;
+    >   - schema, 17 (`test_pac_planner_schemas.py:2280-2312`, `:2554-2804`): `extra_forbidden`
+    >     su `rounding_top_ups`, «Published ledger amounts cannot be negative» al posto dei
+    >     messaggi nuovi, `DID NOT RAISE` sul `completed` senza piano. Chiave intera: 17 failed,
+    >     450 passed;
+    >   - API, 1 (`test_pac_planner_tool_api.py:239-269`): `ready_no_incumbent` al posto di
+    >     `ready_incumbent`;
+    >   - componente, 4 (`StateNotice.test.ts`, nuovo): `pac-planner-top-up` assente. I 2 casi
+    >     «nessun blocco» sono verdi prima e dopo, con la loro barriera di presenza.
+    > - Nessun test esistente cambia stato. `_ready_no_incumbent_result` diventa uno stop per
+    >   limite con uno stadio non finito; il caso `no-incumbent-over-infeasible-stage` ora
+    >   aspetta il messaggio della regola sullo stop, che scatta prima: verde prima e dopo.
+    > - **Attribuzione con la test-triage** di `test_replay_failure_suppresses_the_plan` e del suo
+    >   `_InfeasibleReplay`: test vecchio per scelta. Provava il comportamento che il developer ha
+    >   rovesciato il 25/09 (il rifiuto del replay dava `ready_no_incumbent` + `completed`). Non è
+    >   un flake e non è un difetto del prodotto: sostituito da
+    >   `test_replay_rejection_beyond_the_rounding_threshold_raises`. Tolto anche
+    >   `_ZERO_CANDIDATE_ID`, rimasto senza uso.
+    > - Porta 6151 libera dopo l'API (`lsof` vuoto, uscita 1). Nessun file di prodotto, runner,
+    >   i18n, fixture JSON o fingerprint toccato.
+
+    > **⚠️ Fuori pista** (scelte del test-author, verificate sui test):
+    > - Il rifiuto oltre soglia non può usare il pareggio a commissione zero: la vista limita la
+    >   rotta a 3 quote, quindi la quarta è fuori contratto e non oltre soglia. Usa il pareggio
+    >   EUR con 1 € di commissione fissa: SCIP compra 2 quote, la sonda ne fa 3, la cassa resta
+    >   a −1,01 € con `N = 2`.
+    > - Per la stessa ragione (limite della vista): 0,03 € con `N = 2` viene da 0,02 € di
+    >   commissione su 100 € di cassa; «una quota che la cassa non paga» è una quota da 10 € con
+    >   1 € di commissione su 10 €; l'«altra violazione» è un minimo d'ordine di 4 quote
+    >   (`ORDER_MIN_IF_ACTIVE`), non un tetto di rotta.
+    > - Credito FX: 84,16 € lasciano la cassa USD a −0,02 (accettata), 84,15 € a −0,03 (errore),
+    >   valori letti dall'evaluator.
+    > - Schema: USD entra nel catalogo, così il messaggio sulla valuta di valutazione è quello
+    >   inchiodato. Secondo caso positivo: 0,02 € con 2 registrazioni.
+    > - **Ordine dei validatori che la cura deve rispettare**: unicità delle casse prima della
+    >   copertura; positività del valore prima dell'uguaglianza con l'importo; valuta di
+    >   valutazione prima dell'uguaglianza; controllo dello shortfall prima della decomposizione,
+    >   come oggi.
+
+    ✅ 2026-09-28 — **cura del commit 5** (prodotto, fixture e gate): tutti i gate verdi sulla
+    6151.
+
+    > **Note implementazione**:
+    > - `models.py`: `ExactRoundingTopUp` (frozen, slots). Controlla testo, valuta, importo
+    >   positivo, `rounded_postings` intero ≥ 1 e non bool, valore positivo.
+    > - `evaluator.py`: `ExactReplayRejectedError(ExactEvaluatorError)` e
+    >   `rounding_top_ups(scenario, evaluation)`. Legge solo `evaluation.accounting` e i codici dei
+    >   conflitti, perché i test fabbricano valutazioni con `replace`. I messaggi nominano regole e
+    >   casse, mai importi.
+    > - `planner.py`: dopo il replay chiama `rounding_top_ups`, e l'errore propaga. Tolto il ramo
+    >   `ready_no_incumbent` del rifiuto.
+    > - `planner_report.py`: `build_rounding_top_ups`, una proiezione senza ricalcolo,
+    >   nell'ordine del classificatore.
+    > - Schema:
+    >   - `PlannerRoundingTopUp`; `PacPlanSolution.rounding_top_ups` obbligatorio;
+    >     `PacNoOpSolution` con `max_length=0`;
+    >   - `PlannerLedgerRow` non vieta più il saldo negativo: lo vieta `RebalancerPlanSolution`;
+    >   - `_validate_pac_rounding_top_ups`, nell'ordine unicità → copertura → tetto;
+    >   - l'unità minima del catalogo in `_validate_ready_solution`;
+    >   - la valuta di valutazione e l'uguaglianza in `_validate_solution_financials`;
+    >   - `_validate_accounting_summary(…, top_up_value)` allenta solo free cash e shortfall;
+    >   - lo `stop_reason` dei due `ReadyNoIncumbent` ammette solo i limiti.
+    > - UI:
+    >   - `StateNotice`: il blocco `pac-planner-top-up` dopo la catena degli stati, una riga per
+    >     cassa nell'ordine del filo. Tolto il ramo `ready_no_incumbent` + `completed`;
+    >   - `ProofPanel`: tolti `unfinished` e il ramo `floatingFinished`;
+    >   - `types.ts`: `PacRoundingTopUp`, che tipizza la lista in `StateNotice`.
+    > - i18n con `dev.py i18n add` (`/tmp/libreFolio_d_i18n_c5.sh`): da 4102 a 4103 chiavi per
+    >   lingua, stesso insieme nelle 4 lingue, +3 righe per file.
+    > - `api sync` alle 16:23 (`/tmp/libreFolio_d_c5_api_sync.log`):
+    >   - fingerprint PAC da `bd52b93a…` a `502e8c48dbbf3cc5…`;
+    >   - generazione del contratto dei tool `2f30f6ce92e3b7fe…`, versione `2.0.0`;
+    >   - Rebalancer da `fff1f966…` a `17d5625e8bf24e20…`, con una sonda di solo import sulle
+    >     funzioni del test.
+    > - Chiavi sulla 6151, una alla volta:
+    >   - evaluator 159/159;
+    >   - servizio 31/31;
+    >   - report 16 passed, 2 failed;
+    >   - schema 443 passed, 24 failed;
+    >   - API 6/6, con la porta libera dopo.
+    > - Attribuzione dei rossi residui:
+    >   - 22 dello schema e 2 del report: manca `rounding_top_ups` nelle due fixture JSON PAC e
+    >     in `_build_primary_solution` del report;
+    >   - 2 sono i fingerprint;
+    >   - i 17 casi nuovi dello schema e il test di proiezione del report sono verdi.
+    >   Lotto al test-author (`c5-fixture-followup`): solo modifiche, senza lanciare suite.
+    > - Il lotto del test-author:
+    >   - `"rounding_top_ups": []` nelle due fixture JSON PAC (`pac_plan_result.min.v2.json` e
+    >     `pac_plan_result.candidate-max.v2.json`), e `rounding_top_ups=[]` in
+    >     `_build_primary_solution` del test del report;
+    >   - i due fingerprint del test dello schema, calcolati con le sue funzioni:
+    >     PAC `502e8c48dbbf3cc55fbe02f2a2c43b186d5970ff3f1fe5130d35748641c8e374`,
+    >     Rebalancer `17d5625e8bf24e20090ef3c58e7cd98178eaadb74884aee92cbc1753d5591cc3`;
+    >   - una ricerca in tutto l'albero dei test: nessun'altra soluzione PAC costruita senza il campo;
+    >   - su mia richiesta, due docstring vecchie in `test_pac_planner_schemas.py`
+    >     (`_pac_top_up_result` e il caso che lo segue).
+    > - Lint: ruff dava 2 C901 nuovi, miei (a HEAD era pulito). Ho estratto
+    >   `_require_rounding_only_rejection` (evaluator) e `_validate_pac_top_up_minor_units` (schema),
+    >   senza cambiare l'ordine dei controlli. ruff e black puliti.
+    > - Gate sulla 6151, in serie (`/tmp/libreFolio_d_c5_gates.sh`, riepilogo in
+    >   `/tmp/libreFolio_d_c5_gates_summary.log`):
+    >   - services: core 152, evaluator 159, oracle 20, policies 40, solver 19, proof 30,
+    >     wire-numbers 39, report 18, service 31, tools-registry 93;
+    >   - schemas: pac-planner 467, tools 271;
+    >   - api: pac-planner-tool 6, tools 7;
+    >   - Vitest `core-unit` (98 file, 2647 test) e `component-unit` (86 file, 2119 test);
+    >     `StateNotice.test.ts` da solo: 6;
+    >   - rispetto al gate dopo il merge: evaluator +20, servizio +6 netti, report +1, schema +17,
+    >     API +1, componenti +1 file e +6 test. Sono i rossi del lotto, ora verdi;
+    >   - 6151 libera dopo (`lsof` esce con 1).
+    > - Controlli statici:
+    >   - `front check`: 3 errori e 41 avvisi, negli stessi 4 file non PAC di prima;
+    >   - Prettier pulito sui file frontend toccati e sui 4 cataloghi;
+    >   - ruff e black puliti sui file Python toccati, test e runner compresi;
+    >   - `git diff --check` pulito;
+    >   - `i18n audit`: 4103 chiavi per lingua, tutte complete, e `topUp.row` risulta usata. Fra le
+    >     «Likely Unused» le PAC sono 170: le 168 del P1 e le 2 tenute per decisione (a).
+
+    > **⚠️ Fuori pista**:
+    > - `ProofPanel`: prima di togliere `floatingFinished` ho verificato che sia irraggiungibile.
+    >   Lo schema da solo ammette `not_proven` con tutti gli stadi finiti, il prodotto no:
+    >   - `solver.py:396-405` segna `finished` solo con stato `optimal` e una soluzione;
+    >   - un'anomalia (`:429-434`) cade sempre su uno stadio non finito;
+    >   - quindi `proof.py:204-213` dà `optimal_proven` quando tutti gli stadi sono finiti e il
+    >     piano pubblicato è quello di SCIP.
+    >   Un piano `not_proven` ha sempre uno stadio aperto.
+    > - Il contesto del test-author dei rossi non c'era più: il brief nuovo è autosufficiente.
+    > - Finché le fixture PAC non avevano il campo, un caso negativo dello schema partiva da una
+    >   base già invalida, e poteva essere verde per la ragione sbagliata. Ora la base è valida (i
+    >   casi positivi che la caricano sono verdi), quindi ogni caso negativo verde respinge la sua
+    >   mutazione, non la fixture.
+    > - L'audit sposta 2 chiavi PAC da «usate» a «not verified»: `result.ledger.fields.final_spendable`
+    >   e `.final_physical`. In `backend/app` comparivano come testo solo nella tupla
+    >   `nonnegative_fields` di `PlannerLedgerRow`, e il commit 5 le toglie da lì, perché il saldo
+    >   finale ora può essere negativo. Il vocabolario dell'audit legge solo `backend/app`
+    >   (`frontend/scripts/i18n-audit.py:51`, `scripts/i18n_usage.py:242-260`). Le chiavi restano
+    >   usate: `LedgerTable.svelte:56` le compone da `LEDGER_FIELDS` (`model.ts:174`). Nessuna
+    >   azione. Le PAC «not verified» passano da 3 a 5; le «Likely Unused» sono solo le 2 attese in
+    >   più.
   - Il gate d'accordo SCIP↔oracolo tiene conto di X3 respinta. Dove un pareggio è raggiungibile,
     SCIP può fare meglio dell'oracolo esatto usando il centesimo del pareggio. Quindi:
     - sui domini senza pareggi (`_half_up_tie_reachable` falso) gli ottimi coincidono;
@@ -1967,6 +2294,16 @@ Ogni tema matematico si guarda **sulla schermata della UI che lo espone**, sui d
   >    UI e i18n.
   >    Un solo commit: schema, planner, UI, i18n e test cambiano insieme, perché lo schema della
   >    prova è cambiato e il fingerprint lega il client.
+  >
+  > **28/09 alle 12:51 — committato** dal developer con lo script guardato del coordinator
+  > (`/tmp/libreFolio_commit_d_f4.sh`): `b48b3cec9`, 31 file, sopra `6061affd7`. Il coordinator ha
+  > verificato la lista e il messaggio. Git legge `oracle.py` → `_pac_exhaustive_oracle.py` come
+  > una rinomina, quindi il suo script conta i file con `--no-renames`. Dopo il commit l'albero è
+  > pulito.
+  >
+  > **28/09 alle 13:51 — merge di allineamento** `dev_release2` → D, lanciato dal developer con lo
+  > script del coordinator: `d32f27c24`, genitori `b48b3cec9` e `7c61dd924`, nessun conflitto. Il
+  > gate sulla nuova base è nel Passo F, punto 8 della ripresa del 28/09.
 - CHANGELOG `[Unreleased]` (**superato il 25/09**, vedi la nota sotto):
   - `✨ Added` — «PAC allocator: interactive planner in Tools»;
   - `✨ Added` — «PAC allocator: copy the current portfolio distribution as the starting target»;

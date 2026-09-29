@@ -4517,6 +4517,9 @@
               "body": "Con {amount} ninguna compra cumple las restricciones: el plan es no hacer nada.",
               "empty": "Ninguna orden, ningún cambio, ninguna financiación.",
               "title": "Ninguna operación"
+            },
+            "topUp": {
+              "row": "Para ejecutar el plan se necesitan {amount} más en {broker} ({currency}), por los redondeos a la unidad mínima."
             }
           },
           "stop": {

@@ -4517,6 +4517,9 @@
               "body": "With {amount} no purchase meets the constraints: the plan is to do nothing.",
               "empty": "No order, no FX, no funding.",
               "title": "No operation"
+            },
+            "topUp": {
+              "row": "To execute the plan you need {amount} more on {broker} ({currency}), because of rounding to the minimum unit."
             }
           },
           "stop": {
