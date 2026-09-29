@@ -1097,7 +1097,6 @@
             color: #cbd5e1;
         }
         .tx-table-wrap .tx-cash-cell .emoji-flag {
-            font-family: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif;
             line-height: 1;
         }
         .tx-table-wrap .currency-code {
