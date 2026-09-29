@@ -5,6 +5,12 @@
 
 /* LibreFolio Design System */
 @theme {
+    /* Fonts — 'LF Flags' (static/lf-flags.css) leads every stack but only draws the regional
+       indicators of the flags (its unicode-range), so no emoji font ever comes before the text font.
+       Overriding Tailwind's defaults also drops the emoji families they end with. */
+    --font-sans: 'LF Flags', Inter, system-ui, sans-serif;
+    --font-mono: 'LF Flags', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+
     /* Brand Colors */
     --color-libre-green: #1a4031;
     --color-libre-banner: #1a4031;
@@ -43,7 +49,7 @@
 
 /* Base styles */
 html {
-    font-family: Inter, system-ui, sans-serif;
+    font-family: 'LF Flags', Inter, system-ui, sans-serif;
     overscroll-behavior-x: none;
     /* Reserve scrollbar space permanently so opening a modal (which locks
        body/html overflow to hidden) never removes/re-adds the scrollbar and
@@ -97,9 +103,10 @@ textarea,
     top: calc(1rem + env(safe-area-inset-top, 0px));
 }
 
-/* Flag emoji — Apple Color Emoji first for iOS, Noto for Windows/Linux */
+/* Flag emoji — only needed where an element brings its own font stack (a monospace cell, say): the
+   'LF Flags' face draws the flag there too. Everywhere else the global stacks already lead with it. */
 .emoji-flag {
-    font-family: 'Apple Color Emoji', 'Noto Color Emoji', 'Segoe UI Emoji', sans-serif;
+    font-family: 'LF Flags', Inter, system-ui, sans-serif;
 }
 
 /* Utility: Hidden scrollbar but still scrollable */
