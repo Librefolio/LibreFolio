@@ -422,6 +422,17 @@ Il set rende esplicita questa realtà. Lo schema qui sotto è il contenuto che i
 > - Verificando il motore (`portfolio_engine._is_capital_adjustment`): una rettifica negativa conta come uscita di capitale solo se porta un PMC, ma l'editor lo toglie sempre (`TransactionBulkModal`, `txPayloadHelpers.ts`, regola `required_qty_pos`). Quindi la linea vecchia di una scissione lascia capitale investito e guadagno sfalsati del suo costo. Il developer lo accetta come limite noto.
 > - Per lo stesso motivo un blocco sul PMC di una rettifica negativa non si può risolvere nell'editor: nel plugin Danske la linea vecchia avrà un avviso, non un blocco. Il CSV generico emette il blocco su ogni rettifica senza PMC, di qualunque segno: va verificato se ha lo stesso problema, ma è fuori dal mio perimetro e l'ho segnalato al coordinatore.
 > - Nell'[analisi](analysis-phase00BrimDanskeBank.md) ho corretto «ID finto negativo»: gli ID finti sono positivi alti (regola 8 della skill).
+>
+> **Commit del journal v4**: `e3244095e` (developer, 12:57), «docs(journal): design v4 of the Danske report sets».
+>
+> **Note implementazione (2026-09-29) — design v5, riscrittura completa**. Richiesta del developer: «rifai il piano di design partendo dalla nuova api e risalendo, spiegando i vari casi limite e come ci si dovrebbe comportare, ed evidenziando per ogni capitolo, a livello funzionale, la migrazione da ora al tendere, e alla fine un'analisi logica per trovare incongruenze».
+> - **Struttura nuova**: la nuova API è il capitolo centrale (§3, endpoint per endpoint, con quello che ciascuno chiede al plugin e al core); poi si risale a wizard (§4), pagina file (§5), guide (§6) e banche (§7). Ogni capitolo ha una tabella dei casi limite e un riquadro «Migrazione» (oggi → pilota → a regime). In fondo, l'analisi logica (§11): invarianti, copertura dei casi, sette scenari Danske, incongruenze A1–A14, tensioni R1–R9.
+> - **Da confermare** (§10): D-S13 (orfani di bordo al posto dello spostamento di `T0`), D-S25 (`H0`), D-S26 (`combine` puro), D-S27 (regola di sicurezza dei checkpoint), D-S28 (file sovrapposti), D-S29 (prove E1 ed E4), D-S30 (parte non spiegata ai checkpoint intermedi).
+> - Fatti ricontrollati sul codice: le route del router `/brokers/import`; i campi di `BRIMParseOutput`; i criteri dei duplicati in `detect_tx_duplicates`; la soglia `opened_at` nel wizard (`importRowState.ts`); le righe in attesa che il wizard riceve dall'editor (`pendingCreateTransactions`, `pendingDeleteTxIds`); lo split generico `split_hint` in `FixFlaggedStep.svelte`; il seed del patrimonio Intesa; le gambe `auto_cash` e i blocchi sovrapposti di CA.
+>
+> **⚠️ Fuori pista**:
+> - Rileggendo la v5 durante la scrittura ho trovato tre incongruenze mie (A12–A14): la spiegazione delle correzioni avrebbe contato righe già presenti; mancava il checkpoint quando il CSV inizia dopo l'XLSX; la prima formulazione di `H0` era sbagliata in tre casi. Sono corrette nel testo e registrate nel §11.4.
+> - La guida utente CA dice che il saldo iniziale sta in testa all'XLSX dell'estratto: la v4 lo dava «da verificare» (A10).
 
 ### 3. ⏳ Risposte dell'autore
 
