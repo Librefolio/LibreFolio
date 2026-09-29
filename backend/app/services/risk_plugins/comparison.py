@@ -25,6 +25,7 @@ from backend.app.services.risk.analytic_helpers import (
 from backend.app.services.risk.base import (
     RiskAnalytic,
     RiskComputation,
+    RiskSeriesInputs,
     RiskUnavailableError,
 )
 from backend.app.services.risk.metrics import (
@@ -61,6 +62,7 @@ class ComparisonAnalytic(RiskAnalytic):
     supported_modes = (RiskMode.HISTORICAL, RiskMode.CURRENT_COMPOSITION)
     params_model = ComparisonParams
     min_observations = RISK_MIN_OBSERVATIONS
+    series_inputs = RiskSeriesInputs.PRIMARY_AND_BENCHMARK
 
     def compute(self, params, context):
         primary_dates, primary_returns = require_primary_returns(context)

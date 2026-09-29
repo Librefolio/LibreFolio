@@ -60,7 +60,10 @@ class AssetRiskReturnAnalytic(RiskAnalytic):
     """
 
     analytic_code = "asset_risk_return"
-    algorithm_version = "1.0.0"
+    # 1.1.0 — the reported numbers are unchanged; the payload additionally carries
+    # `excluded_weight`, so a client can tell a zero excluded weight apart from a server
+    # that predates the field.
+    algorithm_version = "1.1.0"
     name_i18n_key = "risk.analytics.assetRiskReturn.name"
     description_i18n_key = "risk.analytics.assetRiskReturn.description"
     output_kind = RiskOutputKind.RISK_RETURN
@@ -106,6 +109,7 @@ class AssetRiskReturnAnalytic(RiskAnalytic):
                 portfolio_volatility=annualized_volatility(primary_returns, annualization),
                 portfolio_expected_annual_return=annualized_expected_return(primary_returns, annualization),
                 cash_weight=context.cash_weight,
+                excluded_weight=context.excluded_weight,
                 items=items,
             ),
             method="asset_risk_return_current_composition",

@@ -18,6 +18,7 @@ from backend.app.services.risk.analytic_helpers import require_primary_returns
 from backend.app.services.risk.base import (
     RiskAnalytic,
     RiskComputation,
+    RiskSeriesInputs,
     RiskUnavailableError,
 )
 from backend.app.services.risk.metrics import historical_var_cvar, return_distribution_histogram
@@ -66,6 +67,7 @@ class HistoricalVarAnalytic(RiskAnalytic):
     supported_modes = (RiskMode.HISTORICAL, RiskMode.CURRENT_COMPOSITION)
     params_model = HistoricalVarParams
     min_observations = RISK_MIN_OBSERVATIONS
+    series_inputs = RiskSeriesInputs.PRIMARY
 
     def compute(self, params, context):
         _dates, returns = require_primary_returns(context)
