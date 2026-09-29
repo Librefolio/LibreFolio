@@ -3,6 +3,7 @@ import {login, navigateTo} from '../fixtures/auth-helpers';
 import {expectChartCanvas, showChartTooltip} from '../fixtures/charts';
 import {TEST_USER} from '../fixtures/test-users';
 import {appears} from '../fixtures/probe';
+import {lotIsOpenish, type LotOpenish} from '../../src/lib/components/brokers/lots/lotsAnalysisHelpers';
 
 /**
  * Ensure at least one broker exists for the test user.
@@ -567,6 +568,355 @@ test.describe('Broker Detail Page', () => {
             await expect(aggregateToggle).toHaveAttribute('aria-pressed', 'false');
             await expectChartCanvas(page, 'lot-comparison-echart');
         });
+    });
+});
+
+/**
+ * The lots charts must never merge their responsive x-axis patch into a chart that holds no option.
+ *
+ * The defect: `TypeError: Cannot read properties of undefined (reading 'axisBuilder')`, thrown by
+ * ECharts 6's `CartesianAxisView.render`. Each lots chart watches its container with a
+ * ResizeObserver and, when the usable width is compact (< 480 px), merges a lazy patch
+ * `setOption({xAxis: {splitNumber, axisLabel}}, {lazyUpdate: true})`. Merged into an instance that
+ * `renderChart()` has just `init()`-ed or `clear()`-ed because there is nothing to draw, it leaves a
+ * model with one x-axis and no grid, and the next ECharts frame throws. That frame belongs to
+ * ECharts' own loop, not to anything a test awaits, so the only reliable observable is the uncaught
+ * exception: every test here collects `pageerror` from before its first navigation and ends on that
+ * list being empty.
+ *
+ * Two UI triggers are pinned:
+ * - the Gantt Open/Closed filter narrowed to a state that leaves no lane — deterministic: the sticky
+ *   axis node is unmounted, its instance cleared, and the ResizeObserver still reports the removed
+ *   node at width 0, which is compact by definition;
+ * - the phone load path of the comparison chart — racy on its own (it depends on when the selection
+ *   response lands), made deterministic by holding that response.
+ *
+ * The WAC/price chart has the same site but no UI path reaches its cleared state today; its pin is
+ * the source contract in `chartCoreHelpers.test.ts`.
+ */
+
+/** The narrowest common phone width, and the house way to get it inside a desktop-project test
+ *  (see dashboard.spec.ts): at 375 px the comparison chart's usable width is below the 480 px
+ *  threshold, so its policy is compact and the patch path is live from the first paint. */
+const PHONE_VIEWPORT = {width: 375, height: 800};
+
+/** An asset held on Interactive Brokers whose every lot is open-ish. */
+interface AllOpenLotsAsset {
+    id: number;
+    name: string;
+}
+
+/** The two fields `lotIsOpenish` reads, plus the id the selection request needs. */
+type ProbedLot = LotOpenish & {lot_id: number};
+
+/** The uncaught exceptions of one test, and the step each one arrived in. */
+interface PageErrorLog {
+    /** Every entry reads `[step] message <- frame <- frame <- frame`. */
+    readonly list: string[];
+    /** Name the step that starts now; call it right before the action that begins the step. */
+    mark(step: string): void;
+}
+
+/**
+ * Collect every uncaught exception the page raises, tagged with the step it arrived in.
+ *
+ * Registered before the first navigation because the defect throws from ECharts' frame loop, in a
+ * frame no action of the test awaits — a listener armed later could miss it. The stack of such a
+ * throw is ECharts' own (the axis view, called from its frame loop) and never names the chart, so
+ * the step is what tells the triggers apart: several lots charts share the defect and more than one
+ * trigger is live at 375 px. Page errors and command replies travel in order, so an error thrown
+ * before a step's last await returned carries that step's name.
+ */
+function collectPageErrors(page: Page): PageErrorLog {
+    const list: string[] = [];
+    let current = 'login';
+    page.on('pageerror', (error) => {
+        const frames = (error.stack ?? '')
+            .split('\n')
+            .slice(1, 4)
+            .map((line) => line.trim());
+        list.push([`[${current}] ${error.message}`, ...frames].join(' <- '));
+    });
+    return {
+        list,
+        mark: (step) => {
+            current = step;
+        },
+    };
+}
+
+/** One `POST /portfolio/lots/analysis`, read-only, failing loudly on a non-2xx. */
+async function lotsAnalysis(page: Page, body: {asset_id: number; broker_ids: number[]; selected_lot_ids?: number[]; requested_analyses: string[]}): Promise<Record<string, unknown>> {
+    const response = await page.request.post('/api/v1/portfolio/lots/analysis', {data: body});
+    expect(response.ok(), `lots analysis ${body.requested_analyses.join('+')} for asset ${body.asset_id} answered ${response.status()}`).toBe(true);
+    return (await response.json()) as Record<string, unknown>;
+}
+
+/**
+ * Find an Interactive Brokers holding whose lots are all open-ish, with a value history to draw.
+ *
+ * Why this shape: the Open/Closed filter is tri-state and exclusive per lot (`filterVisibleLots`:
+ * both off means both on; an open-ish lot lands only in the open bucket), so a single state empties
+ * the Gantt only for an asset whose lots are all in the other one. Turning "Open" off on an all-open
+ * asset leaves no lane. The value history is required because the comparison chart stays hidden
+ * without one, and the tests below wait for it to show data.
+ *
+ * Why read-only on the mock rather than self-owned data: an asset with lots means committed
+ * transactions, and `Transaction` has no `user_id` — every other worker would see them, and the
+ * test would owe a cleanup. The mock already ships such holdings and nothing here writes.
+ *
+ * Why this is safe beside neighbours: no test in this file writes transactions or lots, and the
+ * candidates are walked in ascending `asset_id`, so the seeded assets (created by
+ * populate_mock_data.py before any test runs) come first and an asset created by another spec is
+ * only reached if no seeded one qualifies. The choice is a state checked right before use and
+ * checked again in the UI after the toggle, so a concurrent writer can only make the precondition
+ * fail loudly, never turn the test into a silent pass.
+ *
+ * The predicate is the product's own `lotIsOpenish`, imported rather than restated, so the probe
+ * and the filter cannot disagree about which bucket a lot belongs to.
+ */
+async function findAllOpenLotsAsset(page: Page, brokerId: number): Promise<AllOpenLotsAsset> {
+    const summaryResponse = await page.request.get(`/api/v1/brokers/${brokerId}/summary`);
+    expect(summaryResponse.ok(), `broker ${brokerId} summary answered ${summaryResponse.status()}`).toBe(true);
+    const summary = (await summaryResponse.json()) as {holdings?: {asset_id: number; asset_name: string}[] | null};
+    const candidates = new Map<number, string>();
+    for (const holding of summary.holdings ?? []) candidates.set(holding.asset_id, holding.asset_name);
+
+    const verdicts: string[] = [];
+    for (const [id, name] of [...candidates].sort(([a], [b]) => a - b)) {
+        const analysis = await lotsAnalysis(page, {asset_id: id, broker_ids: [brokerId], requested_analyses: ['LOT_SUMMARY']});
+        const lots = (Array.isArray(analysis.lots) ? analysis.lots : []) as ProbedLot[];
+        const closed = lots.filter((lot) => !lotIsOpenish(lot)).length;
+        if (lots.length === 0 || closed > 0) {
+            verdicts.push(`${id} ${name}: ${lots.length} lots, ${closed} closed`);
+            continue;
+        }
+
+        // The same request the panel's selection step sends for an implicit "all lots" selection.
+        const histories = await lotsAnalysis(page, {asset_id: id, broker_ids: [brokerId], selected_lot_ids: lots.map((lot) => lot.lot_id), requested_analyses: ['VALUE_HISTORY', 'RETURN_HISTORY']});
+        if (!Array.isArray(histories.value_history) || histories.value_history.length === 0) {
+            verdicts.push(`${id} ${name}: all ${lots.length} lots open, no value history`);
+            continue;
+        }
+
+        // Which asset a green run exercised, for whoever reads the report next.
+        test.info().annotations.push({type: 'all-open-lots asset', description: `${id} ${name}`});
+        return {id, name};
+    }
+
+    throw new Error(`No ${BROKER_WITH_HOLDINGS} holding has only open lots and a value history, so no single state filter can empty its Gantt — check populate_mock_data.py. Candidates: ${verdicts.join('; ') || 'none'}`);
+}
+
+/** Interactive Brokers' id, read back from the page the helper landed on, and the asset to use. */
+async function resolveAllOpenLotsAsset(page: Page): Promise<{brokerId: number; asset: AllOpenLotsAsset}> {
+    await goToBrokerWithHoldings(page);
+    const brokerId = Number(new URL(page.url()).pathname.split('/').filter(Boolean).pop());
+    expect(Number.isFinite(brokerId), 'the detail URL carries the broker id').toBe(true);
+    return {brokerId, asset: await findAllOpenLotsAsset(page, brokerId)};
+}
+
+/** The deep link the page writes itself (`?tab=posizioni&asset=`), so the panel mounts at the
+ *  viewport under test from its first paint instead of after a desktop-sized layout. */
+function lotsPanelUrl(brokerId: number, assetId: number): string {
+    return `/brokers/${brokerId}?tab=posizioni&asset=${assetId}`;
+}
+
+/** The render counter `attachChartReady` publishes on a chart container. */
+async function chartRenders(chart: Locator): Promise<number> {
+    return Number((await chart.getAttribute('data-chart-renders')) ?? '0');
+}
+
+/**
+ * Let the page run `count` rendering frames.
+ *
+ * Not a clock wait: it counts frames, not milliseconds, and the defect is scheduled on frames. A
+ * ResizeObserver callback runs in a frame's rendering step; the Gantt merges its patch right there,
+ * the comparison chart one requestAnimationFrame later; ECharts applies a lazy patch on the next
+ * tick of its own rAF loop, and that tick is where it throws. Three frames cover the longest of
+ * those chains, and on a slow machine each frame is simply longer. The promise settles in the page,
+ * so any pageerror raised in those frames reaches the test before this call returns: the protocol
+ * delivers events and replies in order.
+ */
+async function runFrames(page: Page, count = 3): Promise<void> {
+    await page.evaluate(
+        (frames) =>
+            new Promise<void>((resolve) => {
+                const step = (left: number): void => {
+                    if (left === 0) resolve();
+                    else requestAnimationFrame(() => step(left - 1));
+                };
+                step(frames);
+            }),
+        count,
+    );
+}
+
+/**
+ * Open the lots panel on `asset` and wait until it has settled with data.
+ *
+ * The title barrier comes first on purpose. The panel's currency prop is the asset's own currency
+ * once the asset cache resolves (the base currency before), and a currency change re-issues the
+ * main request, which swaps every chart for the loading skeleton and mounts it again. The title
+ * gains the asset name in the same update, so once it shows, the charts found afterwards are the
+ * final ones and cannot be remounted under the test's feet.
+ */
+async function openLotsPanelSettled(page: Page, brokerId: number, asset: AllOpenLotsAsset): Promise<void> {
+    await navigateTo(page, lotsPanelUrl(brokerId, asset.id));
+    await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 10_000});
+    await expect(page.getByTestId('lots-analysis-panel-title')).toContainText(asset.name, {timeout: 10_000});
+
+    // The Gantt has drawn its lanes, the sticky axis the defect patches is mounted, and the
+    // comparison chart shows data (it stays `invisible` while it has nothing to draw).
+    await expect(page.getByTestId('lot-gantt-echart')).toHaveAttribute('data-chart-ready', 'true', {timeout: 20_000});
+    await expect(page.getByTestId('lot-gantt-sticky-axis')).toBeVisible();
+    await expect(page.getByTestId('lot-comparison-echart')).toBeVisible({timeout: 20_000});
+}
+
+/**
+ * Turn "Open" off so no lane is left, let the defect's frames run, then turn it back on.
+ *
+ * Turning "Open" off leaves only closed lots, which this asset has none of: `chartHasData` goes
+ * false, both chart containers unmount, `renderChart()` clears both instances, and the
+ * ResizeObserver still watching the removed axis node fires at width 0 — on the current code, the
+ * patch lands on the cleared axis instance here.
+ *
+ * The frame wait sits before turning "Open" back on because that remount disposes the old axis
+ * instance, and a disposed instance skips its pending frame: restoring too early could cancel the
+ * very throw this test exists to see. It also orders the evidence: the throw happens on the frame
+ * after the removal, the remounted chart can only report ready on a later one, and the pageerror
+ * reaches the test before the answer to any later poll.
+ */
+async function emptyThenRestoreGantt(page: Page, asset: AllOpenLotsAsset, pageErrors: PageErrorLog): Promise<void> {
+    const filterOpen = page.getByTestId('lot-gantt-filter-open');
+    const lanes = page.getByTestId('lot-gantt-echart');
+
+    await expect(filterOpen).toHaveAttribute('aria-pressed', 'true');
+    pageErrors.mark('emptying the Gantt');
+    await filterOpen.click();
+    await expect(filterOpen).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByTestId('lot-gantt-filter-closed')).toHaveAttribute('aria-pressed', 'true');
+
+    // Verified, not assumed: the probe said every lot is open, and this is the UI agreeing. The
+    // filter control is still on screen, so "no lanes" cannot be "no Gantt at all".
+    await expect(page.getByTestId('lot-gantt-state-filter')).toBeVisible();
+    await expect(lanes, `${asset.name} (asset ${asset.id}) still draws Gantt lanes with only closed lots shown, so it has a closed lot after all — the mock changed (populate_mock_data.py) or something wrote to this asset during the run`).toHaveCount(0);
+    await expect(page.getByTestId('lot-gantt-sticky-axis')).toHaveCount(0);
+
+    await runFrames(page);
+
+    pageErrors.mark('restoring the Gantt');
+    await filterOpen.click();
+    await expect(filterOpen).toHaveAttribute('aria-pressed', 'true');
+    await expect(lanes).toHaveAttribute('data-chart-ready', 'true', {timeout: 10_000});
+}
+
+/**
+ * Hold every selection request (the lots-analysis POST that asks for VALUE_HISTORY) until release.
+ *
+ * The panel fetches in two steps: the main analysis (lots, Gantt, WAC — no `selected_lot_ids`),
+ * then, once the lots are known, the value/return histories of the selection. The comparison chart
+ * mounts between the two with nothing to draw and clears itself: that window is the defect's, and
+ * the network decides how long it stays open. Holding the second request keeps it open as long as
+ * the test needs, without touching the first. After release, later selection requests pass through.
+ */
+async function holdSelectionHistories(page: Page): Promise<{held: () => number; release: () => Promise<void>}> {
+    const pending: Array<() => Promise<void>> = [];
+    let heldTotal = 0;
+    let released = false;
+    await page.route(/\/api\/v1\/portfolio\/lots\/analysis(\?.*)?$/, async (route) => {
+        const body = route.request().postDataJSON() as {requested_analyses?: unknown} | null;
+        const analyses = Array.isArray(body?.requested_analyses) ? body.requested_analyses : [];
+        if (!released && analyses.includes('VALUE_HISTORY')) {
+            heldTotal += 1;
+            pending.push(() => route.continue());
+            return;
+        }
+        await route.continue();
+    });
+    return {
+        held: () => heldTotal,
+        release: async () => {
+            released = true;
+            await Promise.all(pending.splice(0).map((resume) => resume()));
+        },
+    };
+}
+
+test.describe('Lots charts axisBuilder guard', () => {
+    // No beforeEach on purpose: each test arms its pageerror collector before its first navigation,
+    // login included, so nothing the pages do can throw unseen.
+
+    test('Gantt state filter leaving no lane keeps the sticky axis error-free on desktop', async ({page}) => {
+        // Login, the broker page, the probe requests and a full panel load before the action.
+        test.setTimeout(60_000);
+        const pageErrors = collectPageErrors(page);
+        await login(page, TEST_USER);
+        pageErrors.mark('broker page and asset probe');
+        const {brokerId, asset} = await resolveAllOpenLotsAsset(page);
+
+        // Default desktop viewport: the comparison chart is wide here and never patches, so this case
+        // isolates the Gantt's sticky axis.
+        pageErrors.mark('opening the lots panel');
+        await openLotsPanelSettled(page, brokerId, asset);
+        await emptyThenRestoreGantt(page, asset, pageErrors);
+
+        expect(pageErrors.list, `uncaught page errors while ${asset.name} (asset ${asset.id}) had its Gantt emptied by the state filter and restored at 1280 px — "axisBuilder" is the responsive x-axis patch merged into a cleared chart`).toEqual([]);
+    });
+
+    test('Gantt state filter leaving no lane keeps the sticky axis and the comparison chart error-free at 375 px', async ({page}) => {
+        test.setTimeout(60_000);
+        const pageErrors = collectPageErrors(page);
+        await login(page, TEST_USER);
+        pageErrors.mark('broker page and asset probe');
+        const {brokerId, asset} = await resolveAllOpenLotsAsset(page);
+
+        // Phone width from the panel's first paint: the Gantt path as on desktop, plus the comparison
+        // chart, which unmounts with the empty selection and remounts cleared when "Open" comes back.
+        await page.setViewportSize(PHONE_VIEWPORT);
+        pageErrors.mark('opening the lots panel');
+        await openLotsPanelSettled(page, brokerId, asset);
+        await emptyThenRestoreGantt(page, asset, pageErrors);
+
+        // The comparison chart shows data again only once the new selection response has landed; a
+        // throw from its cleared remount has happened by then.
+        await expect(page.getByTestId('lot-comparison-echart')).toBeVisible({timeout: 20_000});
+
+        expect(pageErrors.list, `uncaught page errors while ${asset.name} (asset ${asset.id}) had its Gantt emptied by the state filter and restored at 375 px — "axisBuilder" is the responsive x-axis patch merged into a cleared chart`).toEqual([]);
+    });
+
+    test('opening the lots panel at 375 px with the selection histories held keeps the comparison chart error-free', async ({page}) => {
+        test.setTimeout(60_000);
+        const pageErrors = collectPageErrors(page);
+        await login(page, TEST_USER);
+        pageErrors.mark('broker page and asset probe');
+        const {brokerId, asset} = await resolveAllOpenLotsAsset(page);
+
+        // Armed before the navigation: the selection request leaves as soon as the main one lands.
+        const selection = await holdSelectionHistories(page);
+        await page.setViewportSize(PHONE_VIEWPORT);
+        pageErrors.mark('opening the lots panel, histories held');
+        await navigateTo(page, lotsPanelUrl(brokerId, asset.id));
+        await expect(page.getByTestId('lots-analysis-panel-title')).toContainText(asset.name, {timeout: 10_000});
+
+        // The state the defect needs, verified: the chart is mounted, has painted its cleared frame,
+        // shows nothing (it stays `invisible` without data), and its histories are really held.
+        const comparison = page.getByTestId('lot-comparison-echart');
+        await expect(comparison).toBeAttached({timeout: 20_000});
+        await expect.poll(() => selection.held(), {message: 'the selection request must be held, or the chart is not in the state this test is about', timeout: 10_000}).toBeGreaterThan(0);
+        await expect.poll(() => chartRenders(comparison), {timeout: 10_000}).toBeGreaterThanOrEqual(1);
+        await expect(comparison).toBeHidden();
+
+        // ResizeObserver → rAF (patch) → ECharts frame (throw): let that chain finish before the data
+        // can arrive, so the release cannot pre-empt it.
+        await runFrames(page);
+
+        const before = await chartRenders(comparison);
+        pageErrors.mark('releasing the histories');
+        await selection.release();
+        await expect(comparison).toBeVisible({timeout: 20_000});
+        await expect.poll(() => chartRenders(comparison), {message: 'the comparison chart must paint the released histories', timeout: 10_000}).toBeGreaterThan(before);
+
+        expect(pageErrors.list, `uncaught page errors while ${asset.name} (asset ${asset.id}) loaded its lots panel at 375 px with the selection histories held — "axisBuilder" is the responsive x-axis patch merged into a cleared chart`).toEqual([]);
     });
 });
 
