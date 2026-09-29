@@ -7,11 +7,16 @@ alle 14:18: 8 commit per slice, `cb7ae3476`…`804bc9903`. C2 committato alle 14
 e l'OK sulla test list di S10, con E8 ed E9 in più (§7; registro «Pausa e ripresa dopo il riavvio»). S7, S7b, S8 e S10
 sono sbloccate. `needs_engine` va per primo, in un commit a sé (coordinator, 15:24 e 15:37; registro «Triage del
 contratto di `/portfolio/report`»). Pausa dal 24/09 alle 18:35 al 25/09 alle 09:09, con un riavvio in mezzo.
+C4 committato il 2026-09-28 alle 11:41 (`00bb1ac75`…`472f51498`), poi il merge di `dev_release2` (`9016bb0d1`).
+C5 committato il 2026-09-29 alle 10:02 (`026bc20fb`…`5e638a2ed`), poi il merge di `dev_release2` con K
+(`b2112ba61`, 12:37). C6 pronto il 2026-09-29 alle 15:27: 6 commit (emoji, tipi E2E, due margini, la guardia dei
+grafici dei lotti, journal).
 **Workstream:** I (grafici performance) · ramo `e-alfy-performance-charts-plan` · coordinatore
 `c8328a01-f208-4ade-a352-0486d1f14de2`.
 **Baseline:** `dev_release2` = `f1047f766` (fast-forward), albero pulito, rimisurata il 2026-09-23 prima di ogni
 versione del piano e il 2026-09-24 dopo l'approvazione. Poi, sul ramo: C0 di J (`2a5927c48`, fast-forward, 11:16),
-C1 (`804bc9903`, 14:18), C2 (`6a88561fd`, 14:51) e C3 (`4d885f1e8`, 15:39).
+C1 (`804bc9903`, 14:18), C2 (`6a88561fd`, 14:51) e C3 (`4d885f1e8`, 15:39); C4 (`472f51498`, 28/09 11:41), il
+merge `9016bb0d1` (11:45); C5 (`5e638a2ed`, 29/09 10:02), il merge con K `b2112ba61` (12:37).
 **Lane:** copia di prod `6167` + `/tmp/librefolio-r2-i-charts-prodcopy` (server, verifica visiva, review) · suite
 `6157` + `/tmp/librefolio-r2-i-charts` (solo `dev.py test …`). **Mai** `dev.py test` sulla copia.
 Preambolo: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py …`.
@@ -46,11 +51,14 @@ Indicatore di lettura rapida: va riletto **a ogni consegna**, non a ogni sospett
 | G | Gallery: Abs esplicito prima dello scatto `main` | C1 (opzione B) | ✅ 2026-09-24: hunk scritto e verificato staticamente (registro «G»); ✅ **committato in C2**: `980dee4bf` |
 | C2 | Checkpoint: G + registro di C1 | G | ✅ **committato 2026-09-24 14:51**: `980dee4bf`, `6a88561fd` (registro «C2 committato») |
 | C3 | Checkpoint: docs di S11 in parte + registri di C2, del triage e di S11 | S11 in parte | ✅ autorizzato dal coordinator 2026-09-24 15:24 · ✅ **committato 15:39**: `671d4ab49` docs, `4d885f1e8` registri (registro «C3 committato») |
+| C4 | Checkpoint: S10 backend e unit, registri | S10 passi 1–10 | ✅ **committato 2026-09-28 11:41**: 8 commit, `00bb1ac75`…`472f51498`; merge `9016bb0d1` (registro «Checkpoint C4 — committato») |
+| C5 | Checkpoint: S10 E2E (brief 03, E7) e registri | C4 | ✅ **committato 2026-09-29 10:02**: `026bc20fb`…`5e638a2ed`; merge con K `b2112ba61` (registro «Checkpoint C5 — committato») |
+| C6 | Checkpoint: emoji, tipi E2E, margini della Crescita e dei lotti, guardia `axisBuilder`, registri | C5 + merge con K | 🔄 **pronto 2026-09-29 15:27** (registro «Checkpoint C6 — pronto»). Dopo: D23 con D23b |
 | S7 | Asse dei bucket (R8 dopo D4, R10) | S6 | 🔓 sbloccata 2026-09-25: D4 ✅, D16 = (ii)+(i) ✅, D17 = (a) ✅ (§7). Parte dopo S10 |
 | S7b | Tacche Y doppie (reperto N1) | S7 | 🔓 D18 = sì ✅ 2026-09-25: assi del denaro di Crescita e Performance; `%` escluso |
 | S8 | R11 valore di acquisto | S7 | ⏳ legge soltanto il motore (risposta al coordinator, 12:25): prima di iniziare rimisuro per simbolo |
 | S9 | R9 didascalia | S1 | ✅ 2026-09-24 (scorrimento a 375 px: verifica live in S6) |
-| S10 | Debiti e test residui | S1 | 🔄 **OK del developer sulla test list, 2026-09-25**, con E8 ed E9 in più (D8 ✅ 2026-09-24). Ordine: `needs_engine` per primo, in un commit a sé (coordinator, 15:24 e 15:37), poi il contratto di `/portfolio/report` (registro «Triage del contratto di `/portfolio/report`») e il resto di §4. **Passo 1 ✅ 2026-09-25 10:38**: `needs_engine` corretto (6 rossi → verdi), contratto a 13 chiavi, `api portfolio` 55/55, `services roi-fifo-utils` 507/507 (registro «S10 passo 1»). **Passo 2 ✅ 11:10**: D20, il test dei Proventi pulisce i suoi dati, misurato con un controllo positivo; `api portfolio` 55/55 (registro «S10 passo 2»). **Passo 3 ✅ 11:37**: `chartCoreHelpers.test.ts` 159 → 145 (D19: −14), i 7 specchi ri-pinnati ognuno col suo perché, C4 convertito sulla copia fedele; 145/145, 0 falliti (registro «S10 passo 3»). Reperti del passo → D21, ✅ deciso dal developer (§7). **Passo 4 ✅ 11:59**: `AllocationPanel.test.ts` (3 casi) e `allocationTypeEmoji.test.ts` (8 casi), nuovi, 11/11 (registro «S10 passo 4»). **Passo 5 ✅ 12:15**: `GrowthChart.test.ts` 6 → 17 casi (S2a, S5, S9) e la `why` di D13, 23/23 (registro «S10 passo 5»). **Passo 6 ✅ 12:15**: i 3 file nuovi registrati nel runner, nome visibile di `growth-chart-memo`; `check-orphans` pulito (registro «S10 passo 6»). **Passo 7 ✅ 12:27**: la pulizia di `…positions_contribution_is_date_aware`, assegnata sotto D20, misurata con un controllo positivo: nessuna perdita; `api portfolio` 55/55 (registro «S10 passo 7»). **Passo 8 ✅ 12:30**: `PerformanceChart.test.ts`, nuovo, 6/6 (registro «S10 passo 8»). **Passo 9 ✅ 12:30**: D21 e D22 su `chartCoreHelpers.test.ts`, 145 → 142 → 144, 144/144, 0 falliti (registro «S10 passo 9»). **Passo 10 ✅ 12:33**: `front check` al floor, 3 errori e 41 avvisi, nessuno nei miei file (registro «S10 passo 10»). **C4 ✅ 2026-09-28 11:41** (8 commit, `00bb1ac75`→`472f51498`), poi il merge di `dev_release2` (`9016bb0d1`) e i gate sulla revisione combinata, tutti verdi (registro «Validazione sulla revisione combinata»). **Brief 03 ✅ 13:00**: dashboard 15/5 → **18/18**, broker detail 28/1 → **28/28**, in seriale e con `--workers 4` (registro «S10 — brief 03»). **E7 ✅ 13:52**: asset detail 28/1 → **28/28**, in seriale e con `--workers 4`; la coda risvegliata è verde (registro «S10 — E7 completato»). Prossimo: C5 (brief 03, E7 e registri); poi D23 in un commit a sé |
+| S10 | Debiti e test residui | S1 | 🔄 **OK del developer sulla test list, 2026-09-25**, con E8 ed E9 in più (D8 ✅ 2026-09-24). Ordine: `needs_engine` per primo, in un commit a sé (coordinator, 15:24 e 15:37), poi il contratto di `/portfolio/report` (registro «Triage del contratto di `/portfolio/report`») e il resto di §4. **Passo 1 ✅ 2026-09-25 10:38**: `needs_engine` corretto (6 rossi → verdi), contratto a 13 chiavi, `api portfolio` 55/55, `services roi-fifo-utils` 507/507 (registro «S10 passo 1»). **Passo 2 ✅ 11:10**: D20, il test dei Proventi pulisce i suoi dati, misurato con un controllo positivo; `api portfolio` 55/55 (registro «S10 passo 2»). **Passo 3 ✅ 11:37**: `chartCoreHelpers.test.ts` 159 → 145 (D19: −14), i 7 specchi ri-pinnati ognuno col suo perché, C4 convertito sulla copia fedele; 145/145, 0 falliti (registro «S10 passo 3»). Reperti del passo → D21, ✅ deciso dal developer (§7). **Passo 4 ✅ 11:59**: `AllocationPanel.test.ts` (3 casi) e `allocationTypeEmoji.test.ts` (8 casi), nuovi, 11/11 (registro «S10 passo 4»). **Passo 5 ✅ 12:15**: `GrowthChart.test.ts` 6 → 17 casi (S2a, S5, S9) e la `why` di D13, 23/23 (registro «S10 passo 5»). **Passo 6 ✅ 12:15**: i 3 file nuovi registrati nel runner, nome visibile di `growth-chart-memo`; `check-orphans` pulito (registro «S10 passo 6»). **Passo 7 ✅ 12:27**: la pulizia di `…positions_contribution_is_date_aware`, assegnata sotto D20, misurata con un controllo positivo: nessuna perdita; `api portfolio` 55/55 (registro «S10 passo 7»). **Passo 8 ✅ 12:30**: `PerformanceChart.test.ts`, nuovo, 6/6 (registro «S10 passo 8»). **Passo 9 ✅ 12:30**: D21 e D22 su `chartCoreHelpers.test.ts`, 145 → 142 → 144, 144/144, 0 falliti (registro «S10 passo 9»). **Passo 10 ✅ 12:33**: `front check` al floor, 3 errori e 41 avvisi, nessuno nei miei file (registro «S10 passo 10»). **C4 ✅ 2026-09-28 11:41** (8 commit, `00bb1ac75`→`472f51498`), poi il merge di `dev_release2` (`9016bb0d1`) e i gate sulla revisione combinata, tutti verdi (registro «Validazione sulla revisione combinata»). **Brief 03 ✅ 13:00**: dashboard 15/5 → **18/18**, broker detail 28/1 → **28/28**, in seriale e con `--workers 4` (registro «S10 — brief 03»). **E7 ✅ 13:52**: asset detail 28/1 → **28/28**, in seriale e con `--workers 4`; la coda risvegliata è verde (registro «S10 — E7 completato»). **C5 ✅ committato 2026-09-29 10:02** (registro «Checkpoint C5 — committato»). Resta D23 con D23b, dopo C6 |
 | S11 | Docs (docs-writer) | S2b, S3, S4b, S8, S9 | 🔄 in parte, ✅ 2026-09-24 (autorizzata dal coordinator alle 14:45; registro «S11 in parte»): `charts.en.md` (memoria della vista, privacy di Crescita, didascalia delle candele, candele senza broker, memoria di Allocazione) e `positions.en.md` (privacy di Performance). Accettato dal coordinator (15:24) ed entrato in C3 (`671d4ab49`). Il resto dopo S7/S8, più due voci aggiunte (coordinator, 16:07): `index.en.md`, che conta tre schede invece di quattro (reperto di J), e la deriva dei nomi, che c'è anche nella mia frase di C3 (registro «S11-finale — voci aggiunte») |
 | S12 | Handoff | S10, S11, S2c | ⏳ |
 
@@ -507,6 +515,7 @@ rifatta con `git merge-tree` contro il target **al momento** di ogni checkpoint.
 | D21 | developer (da S10 passo 3, 2026-09-25) | reperti di `chartCoreHelpers.test.ts` fuori dalla test list (registro «S10 passo 3»). **(a)** test verdi che descrivono le candele con l'overlay per broker, tolto il 21/09, e `toPositionalValue` del prodotto senza più chiamanti: si allineano? **(b)** `splitBySign`, la correzione dell'area che spariva al cambio di segno, non ha test; al suo posto i 6 `signCrossingScenarios` provano la versione di prima e affermano metà lunghe come la sorgente, falso con la correzione: si convertono? | **(a) sì**, prodotto compreso: `toPositionalValue` esce dal prodotto in S7 (tocca già il file); escono i suoi 3 test e i 2 letterali che la pinnano; la fixture ECharts reale del crash delle candele prende la forma vera (la candela da sola); `:1998` perde la metà broker; il titolo di `:2361` si corregge. 145 → 142. **(b) sì**: gli stessi 6 casi, su una copia fedele di `splitBySign` legata alla sorgente come C4. Conteggio invariato<br>✅ **Deciso dal developer (2026-09-25, `ask_user` nella chat di I): (a) sì, prodotto compreso; (b) sì, convertiti**<br>**Principio del developer, da applicare d'ora in poi (stessa risposta):** il prodotto per ora va bene; i test devono provare il prodotto di oggi, non i passi intermedi. Se scrivendo i test saltano fuori test vecchi, si tolgono; se scrivendo i nuovi saltano fuori pezzi del prodotto che non servono più, è corretto toglierli. Le domande al developer vanno fatte in italiano |
 | D22 | developer (da D21b, 2026-09-25) | `signCrossingScenarios` convertito su `splitBySign` (142/142): test-author, con le mutazioni sulla copia, trova due rami del prodotto che nessuna riga esercita. (1) Lo zero accanto a un valore positivo: il titolo promette «niente inventato a uno zero», ma nessuna riga lo prova. (2) Un incrocio fra ampiezze diverse: tutti gli incroci sono fra ±5 e ±20, quindi un peso preso dal lato sbagliato resta verde. In più 3 asserzioni sulla linea di riferimento non possono fallire, perché il test la costruisce da sé. Aggiungo le 2 righe e tolgo le 3 asserzioni? | **Sì**: righe `[5, 0, -5]` (0 incroci) e `[30, -10]` (incrocio alle 18:00); la terza colonna diventa la lista degli istanti scritta a mano; via le 3 asserzioni vuote. 142 → 144. I nomi «pari» e «dispari», scambiati, li correggo io: stessi casi, nome giusto<br>✅ **Deciso dal developer (2026-09-25, `ask_user` nella chat di I): sì, 2 righe e via le 3 asserzioni** |
 | D23 | developer (da S10, dopo la privacy di J, 2026-09-28) | I quattro formatter degli importi nei grafici scrivono il meno ASCII: `fmtCurrency` e `yAxisFormatter` in `GrowthChart.svelte`, `shortMoney` e `axisTickAmount` in `PerformanceChart.svelte`. Li porto su `maskFormattedNumber` di J (`maskable.ts:133`), che lascia il segno come lo scrive il locale del browser? Il segreto non cambia in nessuno dei due casi: cifre e k/M mascherati, il segno visibile. Cambia solo il glifo. Dalla sonda (`files/d23_probe/`): U+2212 solo in sv, fi, nb, et, lt, sl, hr, eu e fa; en, it, fr ed es (le lingue dell'interfaccia), e anche de, nl e pt, usano il trattino ASCII | **Restare ASCII**: il formatter principale (`formatCurrencyAmountPlain`/`Html`, schede KPI e tabelle) scrive sempre `-`, e prima della privacy solo `fmtCurrency` seguiva il locale; gli assi e `shortMoney` erano già ASCII. Migrare vuol dire due convenzioni nella stessa app<br>✅ **Deciso dal developer (2026-09-28, `ask_user` nella chat di I), testuale: «Migrare tutti e quattro i formatter: il meno segue il locale del browser anche su assi ed etichette».** Conseguenza, da segnalare al coordinator: i grafici seguono il locale, le schede KPI e le tabelle restano ASCII (`currencyFormat.ts`, non mio). Esecuzione: dopo C5, in un commit a sé; gli assi insieme a S7b (D18), che riscrive le stesse righe. Da conservare: `EUR 0,00` per lo zero (S2a), lo zero dell'asse mascherato (D12), e in `shortMoney` la forma segno, simbolo, `•••`. I ri-pin degli unit (`PerformanceChart.test.ts` caso 6, `GrowthChart.test.ts`) vanno al test-author |
+| D23b | developer (da D23, 2026-09-29, `ask_user` nella chat di I) | Nel tooltip della Crescita quattro righe con segno scrivono il segno a mano, prima della valuta, con il meno tipografico U+2212 fisso in tutte le lingue: il P&L totale (`GrowthChart.svelte:1957`), le righe P&L della linea (`:1973`), le righe per broker (`:2000`) e le righe di Income (`:2015`). Esempi: «+EUR 5,00», «−EUR 12,00». Con D23 il resto dei grafici scriverà il meno della lingua, dopo la valuta: «EUR -12,00» in it/en/fr/es. Senza intervento, nello stesso tooltip ci sarebbero due trattini e due posizioni. Opzioni proposte: il meno segue la lingua e la posizione resta (consigliata); U+2212 fisso; stessa forma del resto anche per la posizione | ✅ **Deciso dal developer (2026-09-29), testuale: «voglio che li uniformi, non puoi modificare l'helper?»**. Lo leggo così: una sola forma, prodotta dall'helper. `fmtCurrency` di `GrowthChart.svelte`, locale al grafico e mio (non `maskFormattedNumber` di J, che resta com'è), prende un'opzione «con segno» (`signDisplay: 'exceptZero'`): `+` per i guadagni, il meno della lingua per le perdite, niente segno per lo zero. Le quattro righe lo chiamano invece di scrivere il segno a mano. Risultato: «EUR +5,00» e «EUR -12,00» in it/en/fr/es, come le altre righe; mascherato «EUR +•••» e «EUR -•••». `maskFormattedNumber` tiene già il `+` iniziale (`LEADING_SIGN`, `maskable.ts`). Esecuzione insieme a D23, dopo C6. Il ri-pin di S2a in `GrowthChart.test.ts` (oggi «+EUR •••» sulla riga P&L) va al test-author |
 
 ---
 
@@ -2853,3 +2862,425 @@ comando la porta 6157 è libera.
 >   dipendono da questo file, quindi qui non ci sono: li registro dopo il commit.
 > - **Dopo C5:** l'allineamento a `dev_release2` con K e il controllo delle emoji; poi D23b, la domanda al developer;
 >   poi D23 in un commit a sé, e gli errori di tipo in un altro.
+
+### Checkpoint C5 — committato ✅ 2026-09-29 10:02
+
+> **Note implementazione:**
+> - **Il bundle**, costruito il 28/09 senza scrivere nel repository, sta in `/tmp/libreFolio_i_c5_commits/`, con la
+>   copia nella cartella di sessione (`files/c5_commit_bundle/`). Le guardie sono quelle di C4, con HEAD `9016bb0d1`,
+>   i 4 percorsi e i 4 alberi di C5. Nessun file si divide fra più commit.
+>
+> | verifica | come | esito |
+> |---|---|---|
+> | patch semplici | `git apply` in sequenza su copie di BASE, poi `cmp`, con git Apple e Homebrew | 4/4 identici, nessun file in più |
+> | digest del contenuto | come in C1–C4 | `3e626783…1f26`, identico con 4 git: Apple 2.54, Homebrew 2.55, 2.53 del bundle dell'app, e ambiente vuoto in it_IT con bash 5 |
+> | dry-run sul repository reale | matrice di 9 configurazioni (bash 3.2 e 5; git Apple, Homebrew e del bundle; `env -i`; it_IT ed en_US), più una dalla copia di backup | rc 0 in 9 su 9, «would commit 4/4». Fuori da `refs/copilot/` refs invariati; nessuno degli 11 oggetti propri del bundle nel repository |
+> | commit veri, in 3 cloni usa-e-getta | git Homebrew con bash 3.2, git 2.53 con bash 5, git Apple in `env -i` | 9/9 PASS in ognuno; il secondo lancio è rifiutato, i commit restano 4 |
+> | messaggi | `check_messages.py` | `MESSAGES OK`: subject ASCII, righe ≤ 72, niente attribuzioni AI. La scansione privacy segnala solo righe del journal già registrate come sintetiche o citazioni di controlli |
+> | revisione combinata, prima del merge | `merge-tree` con `dev_release2` (`7c61dd924`) in uno store di oggetti usa-e-getta | 0 conflitti; albero `744125fb2428`. Fusi in automatico: i 4 cataloghi i18n e `_frontend_utility.py` |
+>
+> - sha256 dello script `ce71ab36…508c`.
+> - **Il coordinator ha rifatto le verifiche da sé**, poi il developer ha committato alle 10:02 (segnale alle 10:09).
+>   La mia verifica dopo il commit, in sola lettura: ogni albero è quello di `trees.txt` del bundle; ogni messaggio è
+>   identico byte per byte al suo `.msg`; ogni commit tocca un file solo e ha un solo genitore, in fila su
+>   `9016bb0d1`; albero di lavoro pulito e stage vuoto; porte 6157 e 6167 libere.
+>
+> | # | commit | subject | albero |
+> |---|---|---|---|
+> | 1 | `026bc20fb` | `test(dashboard): re-pin and extend chart e2e` | `04fa202bb651` |
+> | 2 | `5b395204f` | `test(brokers): accept unsigned zero in P&L e2e` | `a1ecad0fd619` |
+> | 3 | `f70b9c3ba` | `test(assets): derive MAX interior date from window` | `e31f73117e8f` |
+> | 4 | `5e638a2ed` | `docs(journal): record S10 e2e and checkpoint C5` | `a92703eaa3f2` |
+
+> **⚠️ Fuori pista (la prima matrice di dry-run vedeva il repository cambiare):** nella prima versione l'hash delle
+> refs e il conto degli oggetti cambiavano (454 → 455). Non era lo script: durante la corsa le sessioni dell'app
+> (il coordinator e altre due) scrivevano i loro checkpoint in `refs/copilot/checkpoints/…`, nello store condiviso.
+> La seconda versione confronta le refs fuori da `refs/copilot/` e controlla che nessuno degli 11 oggetti propri del
+> bundle (10 alberi e il blob del journal) sia entrato nel repository: invariato.
+> Resta un effetto innocuo di git: quando scrive un oggetto che esiste già, anche attraverso gli alternates, ne
+> aggiorna la data di modifica (il file sciolto o l'intero `.pack`). Il contenuto e l'insieme degli oggetti non
+> cambiano; la data conta solo per il periodo di grazia di `gc`/`prune`. Vale per ogni dry-run da C1, anche per
+> quelli del coordinator. Il commento dello script («nothing written to the index, objects or refs») vale per il
+> contenuto, non per le date; il testo revisionato non l'ho cambiato.
+
+### Compiti nuovi: il margine sinistro dei grafici (2026-09-29 10:22–10:30)
+
+> **Note implementazione:**
+> - **Il developer, nella mia chat, alle 10:22**, con uno screenshot dal telefono della Crescita in P&L/Income: «In
+>   mobile il grafico ha un po' troppo spazio a sinistra vuoto […] riesci a fare che tutti i grafici non hanno così
+>   tanto spazio sprecato a sinistra?».
+> - **La causa, nella Crescita, è una mia regressione.** `GrowthChart.svelte:1921` mette
+>   `grid.left: CHART_PLOT_LEFT_PX` (52, `:449`) con `containLabel: true`: con `containLabel` il `left` è il bordo
+>   esterno, e le etichette Y si disegnano dentro. Quindi 52 px restano vuoti prima delle etichette.
+>   - Il valore l'ho introdotto io in `ef7cce61c` (18/09), per allineare lo strato sopra il grafico; prima era `'3%'`.
+>   - È superato da `e7773a143` (21/09, fetta del round 3): da allora lo strato legge il bordo misurato, `plotLeftPx`
+>     (`:1662`, `:2211`).
+> - **Gli altri 12 componenti ECharts, letti:**
+>
+> | componente | margine sinistro | esito |
+> |---|---|---|
+> | `PerformanceChart` | 4 su telefono; 260 su desktop, voluto | a posto |
+> | `AllocationHistoryChart` | `'3%'` | a posto |
+> | `PriceChartFull`, `CandlestickChart`, `LineChart` | 10 (o 5) con `containLabel` | a posto |
+> | torte, ciambella, mappa, treemap | nessun asse cartesiano | — |
+> | `CorrelationHeatmap` | calcolato dalle etichette | a posto |
+> | `scatterChartHelpers.ts:208` | 64 con `containLabel` | stesso difetto; lo usano `AssetSetRiskReturnSection` e `L3RiskAdjusted` |
+> | `LotComparisonChart.svelte:1158` | 24 con `containLabel` | stesso difetto |
+> | `LotGanttChart` / `LotWacPriceChart` | `GRID_LEFT_PX = 56`, senza `containLabel` | allineati fra loro, da misurare |
+>
+> - **La decisione del developer** (con `ask_user`): per la Crescita **`'3%'`**, come prima del 18/09 e come
+>   l'Allocazione.
+> - **L'assegnazione del coordinator (10:30):**
+>   - la Crescita: `'3%'` in un commit a sé dopo `:1395`/`:1397`, con un caso unit del test-author;
+>   - **i tre grafici dei lotti sono miei** (nessun ramo attivo li tocca). Un commit a sé dopo la Crescita.
+>     `LotComparisonChart`: si corregge il valore. La coppia Gantt/WAC: **prima si misura**, si cambia solo se lo spazio
+>     sprecato è misurato, e i due grafici restano allineati. I test li scrive il test-author, dove un test fissa il
+>     margine;
+>   - **`scatterChartHelpers.ts` è di A** (tabella dei proprietari del giro della UI, approvata dal developer): lo
+>     porta il coordinator nel giro della UI tramite Risk, con la mia misura (64 px vuoti);
+>   - **l'ordine dopo il merge:** gate → emoji → `:1395`/`:1397` → margine della Crescita → margine dei lotti → D23b.
+> - **La mia risposta sui lotti (letti senza modifiche):**
+>   - `LotComparisonChart` va a **10 px**, la convenzione dei grafici con `containLabel`. `'3%'` su un desktop largo
+>     1000 px darebbe 30 px, più dei 24 di oggi.
+>   - Il Gantt non disegna etichette Y (`axisLabel.show: false` nelle due griglie): i suoi 56 px servono solo ad
+>     allinearlo al WAC. Nel WAC le etichette vengono da `formatAxisNumber` (`lotChartShared.ts:78-85`): al massimo 6
+>     caratteri (`999.99`, `123.4K`), o interi con `%`. Con gli 8 px di ECharts fra etichetta e asse fanno circa 48 px:
+>     il gioco nel caso peggiore è di circa 8 px. Il Gantt ha `min-w-[720px]`: su telefono scorre in orizzontale.
+>   - La misura: una sonda non committata nella 6157, sul pannello dei lotti del broker a 375 e 1280 px, in modalità
+>     assoluta e %, confrontando la prima colonna disegnata della tela del WAC con 56.
+>   - Nessun test fissa i margini dei lotti, e non c'è un harness che registri l'opzione di questi componenti.
+> - **Visto nello screenshot, e rimandato:** un'etichetta «-888» sotto lo zero, che viene dalla funzione `min`
+>   dell'asse y (`:2115`). Va in S7b; lì chiedo al developer.
+
+### Allineamento a `dev_release2` con K — merge `b2112ba61` ✅ 2026-09-29 12:37
+
+> **Note implementazione:**
+> - Lo script l'ha preparato il coordinator (`/tmp/libreFolio_merge_target_into_i3.sh`) e l'ha lanciato il developer;
+>   io non ho toccato Git.
+> - `b2112ba61`: genitori `5e638a2ed` (C5) e `4ce1dc35f` (`dev_release2`), albero `f275c8d109f7`, quello della
+>   simulazione del coordinator. Nessun merge in corso, albero di lavoro pulito, stage vuoto.
+> - **Perché l'albero non è `744125fb`, quello previsto con C5:** fra la mia previsione e il merge il target è
+>   avanzato di un commit, `4ce1dc35f` («the next release is v1.2.0»), che cambia una riga di `CHANGELOG.md` e
+>   nient'altro. Nel merge `CHANGELOG.md` è identico a quello del target.
+> - **Cosa porta** (19 commit dal merge base `ea30d5ccf`): K, cioè la selezione del tipo a due livelli, le icone
+>   composte, il tipo `CROWDFUND_REAL_ESTATE`, le correzioni dell'import (duplicati, scelte del resolver), le icone
+>   dei broker e l'ordine delle righe del bulk; più le voci del CHANGELOG.
+>   - Nel backend solo `models.py` (il valore nuovo dell'enum e la sua docstring) e due scenari di stress, che danno
+>     uno shock al tipo nuovo. Niente in `api/`, `schemas/` o `alembic/`, né in `Pipfile*`, `package.json` o nel
+>     lock: niente `npm ci`.
+>   - Il runner: le 6 righe di K in `_frontend_utility.py`, in righe diverse dalle mie (`moneyRenderSites` a `:91`,
+>     `PerformanceChart` e `AllocationPanel` a `:225-226`); `_frontend_asset.py` invariato (`allocationTypeEmoji` a
+>     `:34`).
+>   - Nessuno dei miei file cambia: la cartella `components/dashboard`, i grafici dei lotti, le tre spec E2E, `utils/privacy`.
+> - `front build --debug` (prima di ogni suite che avvia il backend, come chiesto): rc 0. svelte-check 3 errori e 41
+>   avvisi in 4 file, gli stessi, riga per riga, della build su `9016bb0d1`, nessuno nei miei file. L'`api sync` della
+>   build non lascia file tracciati cambiati. Log in `/tmp/libreFolio_i_postmerge3/`.
+
+### Gate sulla revisione combinata `b2112ba61` ✅ 2026-09-29 12:50
+
+> **Note implementazione:** nella 6157 / `/tmp/librefolio-r2-i-charts`, un comando alla volta, dopo la build di
+> debug. Log in `/tmp/libreFolio_i_postmerge3/` (`02_…` → `12_…`). Porta 6157 libera dopo ogni comando.
+>
+> | # | gate | esito | atteso |
+> |---|---|---|---|
+> | 1 | `api portfolio` | 55/55 | 55/55 |
+> | 2 | `services roi-fifo-utils` | 507/507 | 507/507 |
+> | 3 | `front-utility core-unit` | 2646/2646 su 98 file | cresciuto con K |
+> | 4 | `front-utility component-unit` | 2122/2122 su 87 file | idem |
+> | 5 | `front-asset asset-unit` | 460/462 su 18 file: i **2 rossi attesi** di `allocationTypeEmoji.test.ts` | i 2 rossi annunciati |
+> | 6 | `vitest run …/moneyRenderSites.test.ts` | 6/6 | 6/6 |
+> | 7 | E2E `front-portfolio dashboard` | 18/18 | 18 |
+> | 8 | E2E `front-broker detail` | 28/28 | 28 |
+> | 9 | E2E `front-asset asset-detail` | 28/28 | 28 |
+> | 10 | `tsc -p tsconfig.e2e.json` | 4 errori: `asset-detail.spec.ts:1395` e `:1397` (miei), `onboarding-tour.spec.ts:863` e `files.ts:9` (estranei) | gli stessi |
+>
+> - I due rossi di (5) sono la regola della famiglia sul tipo nuovo di K, `CROWDFUND_REAL_ESTATE`: l'emoji non
+>   c'era. Nessun altro rosso: i due noti del target (`dashboard` e `brokers-detail:710`) restano chiusi.
+
+### Emoji di `CROWDFUND_REAL_ESTATE` ✅ 2026-09-29 12:51
+
+> **Note implementazione:**
+> - `allocationTypeEmoji.ts`: una costante `CROWDFUND_EMOJI = '🤝'`, usata da `CROWDFUND` e dal sottotipo
+>   `CROWDFUND_REAL_ESTATE`, come `ETF_EMOJI` per i sottotipi ETF. Il commento ora dice la regola per tutte e due le
+>   famiglie: il sottotipo prende l'emoji della famiglia.
+> - `asset-unit` dopo: 462/462 (`11_asset_unit_after_emoji.log`).
+> - Il test-author (brief 09, parte A) ha tolto dall'intestazione di `allocationTypeEmoji.test.ts` i numeri di riga
+>   della copia da `assetTypeTables.test.ts`, invecchiati col merge di K: ora nomina i pezzi copiati (le quattro
+>   costanti di percorso, `read`, `assertScraped`, `readAssetTypes`). Ha confrontato i 7 pezzi con l'originale:
+>   identici byte per byte. Solo commento, 8/8.
+>
+> **⚠️ Fuori pista:** nel brief 09 avevo scritto che K aveva solo inserito `scrapeRecordKeys` fra i pezzi copiati.
+> Sbagliato, e l'ha notato il test-author: `scrapeRecordKeys` c'era già prima del merge (primo genitore `5e638a2ed`,
+> `:76`). K ha allungato l'intestazione di 13 righe, aggiunto 3 costanti di percorso e una riga di commento fra
+> `MODELS_PY` e `read`, e un helper `readRecord` dopo `expectNoGaps`, sotto il blocco copiato. La modifica non
+> cambia: i pezzi copiati sono intatti.
+
+### `asset-detail.spec.ts:1395` e `:1397` — i due errori di tipo ✅ 2026-09-29 13:04
+
+> **Note implementazione:**
+> - Test-author, brief 09 parte B. Il tipo `CalendarSignalResultFixture` (`:641-678`) ha ora il membro
+>   `availability`, esattamente quello che costruisce `buildCalendarResult`: 9 campi, `input_coverage` con i suoi 13.
+>   I tipi seguono `SignalAvailability` e `SignalInputCoverage` di `backend/app/schemas/signals.py`. Le due firme
+>   indicizzate restano.
+> - Solo tipi: nessuna riga tolta, nessun cast, nessuna espressione nuova. Il JS che esce è identico.
+> - `tsc`: da 4 errori a 2, i due estranei (`onboarding-tour.spec.ts:863`, `files.ts:9`).
+
+### Margine sinistro della Crescita ✅ 2026-09-29 13:10
+
+> **Note implementazione:**
+> - `GrowthChart.svelte`: `grid.left: '3%'` con `containLabel: true`, come l'Allocazione e come prima del 18/09. La
+>   costante px diventa `PLOT_LEFT_FALLBACK_PX = 52`: serve solo come bordo del grafico finché ECharts non ha fatto il
+>   primo layout; poi gli strati sopra il grafico leggono `plotLeftPx` misurato. Commenti riscritti di conseguenza.
+> - Test-author (brief 09, parte C): un caso nuovo in `GrowthChart.test.ts`, «GrowthChart grid left inset», che fissa
+>   `grid.left === '3%'` e `containLabel === true` sulla prima vista (Valore) e su P&L/Income, la vista dello
+>   screenshot. Sul prodotto di HEAD è rosso per costruzione (`52` non è mai `'3%'`). L'intestazione del file dice ora
+>   «quattro» soggetti. 18/18.
+> - **Misura sulla copia della produzione (6167)**, prima colonna disegnata del grafico:
+>
+> | larghezza | `left: 52` | `left: '3%'` |
+> |---|---|---|
+> | 375 | x 82.6, piano largo 214 | x 39.8, piano largo 257 |
+> | 1280 | — | x 46.9, piano largo 476 |
+>
+> - `front build --debug` di questo stato (13:04), per la sonda e per le E2E seguenti.
+
+### Margine sinistro dei grafici dei lotti ✅ 2026-09-29 13:30
+
+> **Note implementazione:**
+> - **La sonda** (`files/probe/libreFolio_i_margin_probe.mjs`, 6167, 5 asset con più lotti, it-IT ed en-US, 375 e
+>   1280 px): prima colonna disegnata, in px dal bordo della tela.
+>   - `LotComparisonChart`, `left: 24`: vuoto di 24–34 px prima delle etichette.
+>   - `LotWacPriceChart`, `GRID_LEFT_PX = 56`: vuoto di 17–29 px.
+>   - `LotGanttChart`: nessuna etichetta Y; le corsie partono a 46–47 px, l'asse a 53–55.
+> - `LotComparisonChart.svelte`: `grid.left` **24 → 10**, con un commento sul perché (`containLabel`: il `left` è solo
+>   il vuoto prima delle etichette). 10 è la convenzione dei grafici con `containLabel` (`PriceChartFull`,
+>   `CandlestickChart`, `LineChart`).
+> - **WAC e Gantt: il developer, con `ask_user`, sceglie «Lascia WAC e Gantt a 56 px (Consigliato)».** Il gioco del
+>   WAC è di pochi px nel caso peggiore, e i due grafici restano allineati fra loro. Nessuna modifica.
+> - Nessun test fissa i margini dei lotti: niente test-author per questo passo.
+>
+> **⚠️ Fuori pista 1 — `horizontalPadding`:** `LotComparisonChart` (`:1240`) e `LotWacPriceChart` (`:1619`) passano alla
+> policy dell'asse X `horizontalPadding: 42`, che non viene dalla griglia: in `LotComparisonChart` era `24 + 18`,
+> nel WAC il sinistro è 56. Lo spazio vero, etichette comprese, è circa 74 px, quindi la policy crede di avere
+> circa 32 px in più e le etichette X escono un po' più fitte. Non l'ho toccato: sposta la soglia «compatta», ed è
+> un comportamento che nessuno ha chiesto. Va nel backlog del coordinator.
+>
+> **⚠️ Fuori pista 2 — la sonda trova un crash:** durante la misura a 375 px, la pagina ha dato
+> `TypeError: Cannot read properties of undefined (reading 'axisBuilder')`. Vedi la sezione seguente.
+
+### Il crash `axisBuilder` dei grafici dei lotti — misura, decisione, rosso affidato 🔄 2026-09-29 13:34
+
+> **Note implementazione:**
+> - **Chi crasha.** Nel chunk di ECharts, solo nella copia del browser, ho messo una sonda che nomina il
+>   contenitore del modello che crasha (`files/probe/libreFolio_i_axisbuilder_diag.mjs` e
+>   `…_gantt_diag.mjs`; log `/tmp/libreFolio_i_axisbuilder_diag.log` e `…_gantt_diag.log`). Il modello ha **un
+>   solo `xAxis` e nient'altro** (0 grid, 0 yAxis, 0 series).
+> - **Il meccanismo**, uguale nei tre grafici: l'istanza non ha un'opzione completa (appena creata, o `clear()` da
+>   `renderChart()` perché non c'è niente da disegnare). Il ResizeObserver calcola la policy responsiva dell'asse X;
+>   se è «compatta» (larghezza utile < 480) applica una patch lazy `setOption({xAxis: {splitNumber, axisLabel}})`. Al
+>   frame seguente l'asse X non ha una griglia: `CartesianAxisView.render` lancia. Origine: `2d22130bd` (17/09,
+>   l'asse X responsivo).
+>
+> | come ci si arriva | larghezza | chi crasha | esito |
+> |---|---|---|---|
+> | aprire il pannello dei lotti | 375 | `lot-comparison-echart` | 3 asset su 5: una corsa |
+> | filtro del Gantt su un solo stato che non lascia corsie («solo chiusi» con soli lotti aperti) | 1280 | `lot-gantt-sticky-axis` | 5 su 5 |
+> | lo stesso filtro | 375 | `lot-gantt-sticky-axis` e `lot-comparison-echart` | 5 su 5 |
+> | l'altro stato («solo aperti», le corsie restano) | tutte e due | — | nessun errore |
+>
+> - **Il Gantt è raggiungibile anche da desktop**, con un filtro normale. Senza corsie, `LotGanttChart` smonta i due
+>   contenitori (`{#if chartHasData}`) e `renderChart()` fa `clear()` sull'asse; il ResizeObserver guarda ancora il
+>   nodo rimosso e scatta con larghezza 0, che è «compatta». Il WAC non l'ho mai visto crashare: il suo `clear()`
+>   serve un grafico senza punti nella modalità scelta. In % senza dati il componente torna all'assoluto
+>   (`:1728-1731`); in assoluto vuol dire un asset senza nessun punto.
+> - **La decisione del coordinator (13:30):** la correzione entra in C6, commit a sé; tutti e tre i punti con la
+>   stessa cura; **prima il rosso**, un'E2E del test-author senza pageerror, poi la correzione e il verde, anche con
+>   `--workers 4`. La misura sulla 6167 va bene. Nessun'altra corsia tocca `brokers-detail.spec.ts` né
+>   `chartCoreHelpers.test.ts` (conferma del coordinator, 13:40).
+> - **La correzione prevista** è la guardia di casa, già in `LineChart`, `PriceChartFull` e `CandlestickChart`:
+>   `chartOptionSet` in `LotComparisonChart` e nel WAC, `axisOptionSet` per l'asse del Gantt su tutti e due i rami
+>   del ResizeObserver. Il flag va a `false` a ogni `init`, `clear` e `dispose`, e a `true` dopo la `setOption`
+>   completa.
+> - **Gli altri 5 grafici con la stessa patch lazy, verificati: nessun buco.** Candlestick, Line e PriceChartFull
+>   hanno già la guardia. `AllocationHistoryChart` non crea l'istanza prima dei dati. In `GrowthChart` il contenitore
+>   non viene mai distrutto e non c'è `clear()`; `renderChart()` esce prima di `init` se la storia è vuota, e dopo
+>   `init` la `setOption` completa arriva nella stessa chiamata: il `return` su `logicalRange` (`:1810`) è
+>   irraggiungibile, perché `dates` deriva da `history` (`:472`, `:702`).
+> - **Brief 10 al test-author** (`files/c6_briefs/10-lots-axisbuilder-red.md`), nella 6157, solo i due file di test:
+>   - A: E2E deterministica col filtro, su desktop e a 375 px, zero pageerror;
+>   - B: il percorso d'apertura a 375 px, tenendo ferma la richiesta della selezione; la tiene o la scarta lui, con
+>     la ragione;
+>   - C: contratto sul sorgente dei tre grafici in `chartCoreHelpers.test.ts`, l'unico che copre il WAC;
+>   - prova del rosso (due giri seriali, vitest rosso sul contratto), poi si ferma.
+>
+> **⚠️ Fuori pista — la ricompilazione automatica (13:50–14:08).** Al primo turno il test-author non ha lanciato
+> nulla nella corsia, e aveva ragione.
+> - Ogni `dev.py test front-*` passa da `_ensure_frontend_build()` (`scripts/test_runner/_frontend_common.py:43`).
+>   Se `check_frontend_needs_build()` (`scripts/cli_base.py:540`) trova sotto `frontend/src`, o nei file di
+>   configurazione, un file più recente di `build/index.html`, ricompila **senza debug**, `api sync` compresa.
+> - La build delle 13:04 era più vecchia di `GrowthChart.test.ts` e di `LotComparisonChart.svelte`, quindi non
+>   aveva il margine `left: 10`.
+> - Ha fatto solo i controlli che non toccano la corsia, log in `/tmp/libreFolio_i_c6/`:
+>   - vitest `chartCoreHelpers.test.ts`: 144/144;
+>   - tsc: solo i 2 errori noti;
+>   - prettier: pulito;
+>   - 6157 libera.
+> - **Rimedio.** Alle 14:07 ho lanciato io `front build --debug`: rc 0, svelte-check al floor (3 errori, 41
+>   warning in 4 file), `git status` identico prima e dopo. Poi `check_frontend_needs_build()` risponde `False`, e
+>   il chunk costruito contiene `left: 10` di LotComparison (log `/tmp/libreFolio_i_c6/b1_front_build_debug.log`).
+> - **Ordine nuovo, approvato:**
+>   1. Parte 0;
+>   2. A e B (`frontend/e2e/` non entra nel controllo);
+>   3. rosso E2E, due giri per caso;
+>   4. solo allora la parte C, che sta sotto `frontend/src`;
+>   5. vitest rosso lanciato direttamente;
+>   6. controlli, poi stop.
+>
+>   Dopo la parte C non si lanciano più corse `front-*` fino alla mia prossima `front build --debug`.
+> - **Regola che resta:** prima di ogni corsa E2E, la build di debug deve essere più recente di tutto
+>   `frontend/src`. Chi modifica `frontend/src` ricompila prima di rientrare nella corsia.
+>
+> **Stato:** rosso provato alle 14:52, correzione alle 15:01: vedi le due sezioni seguenti.
+
+### Il crash `axisBuilder` — rosso provato ✅ 2026-09-29 14:52
+
+> **Note implementazione** (test-author, brief 10; log in `/tmp/libreFolio_i_c6/`):
+> - **Parte 0, la base:** `front-broker detail` 28/28 verde in 58,1 s (`p0_baseline.log`).
+> - **Diff:** solo i suoi due file, +490 righe e nessuna tolta.
+>   - `e2e/brokers/brokers-detail.spec.ts`, +350: un describe nuovo, «Lots charts axisBuilder guard», con A1
+>     (desktop), A2 (375 px) e B (375 px, con la richiesta della selezione tenuta ferma).
+>   - `chartCoreHelpers.test.ts`, +140: il contratto `LOT_X_AXIS_PATCH_GUARDS`, 2 × 3 casi.
+> - **L'asset** è scelto in sola lettura sul mock IB: il primo, per `asset_id` crescente, con tutti i lotti aperti e
+>   una storia di valore. In ogni corsa è uscito Microsoft Corporation (asset 2). Il nome e l'id finiscono nei
+>   messaggi d'errore.
+> - **`--workers 4` è sicuro.** Nessun test di `brokers-detail.spec.ts` scrive transazioni o lotti IB: fa solo
+>   `ensureBrokerExists`. Gli altri spec `front-broker` toccano solo i propri broker.
+> - **Il rosso:**
+>   - 6 corse su 6 (A1, A2 e B, due giri ciascuno), ognuna con un solo pageerror,
+>     `Cannot read properties of undefined (reading 'axisBuilder')` in `CartesianAxisView2.render`;
+>   - fallisce alle righe `:863`, `:884` e `:919`;
+>   - file intero in seriale: 31 test, 28 passano, 3 falliscono, esattamente i nuovi (`p_d1_full_file_serial.log`).
+> - **La metà «confronto» di A2 è una corsa:** in 4 giri non ha mai lanciato. Per `LotComparisonChart` il pin
+>   affidabile è B.
+> - **Vitest:** `6 failed | 144 passed (150)`, e fallisce solo sulle asserzioni del flag (`p_d2_unit_red.log`). La
+>   sua prova (`p_d2_contract_selfcheck.log`): le varianti corrette passano, quelle incomplete restano rosse.
+> - **Controlli:** prettier pulito; tsc con i soli 2 errori noti; `diff --check` pulito; 6157 libera.
+>
+> **La mia review del diff.**
+> - L'E2E usa solo `data-testid`, `aria-pressed` e `data-chart-*`. Nessuna posizione e nessun conteggio globale:
+>   l'unico `toHaveCount(0)` è sulle corsie del proprio asset, con un messaggio che dice cosa è cambiato se fallisce.
+> - Le attese sono condizioni, più i frame rAF approvati.
+> - La richiesta tenuta ferma lascia passare quella principale e quelle dopo il rilascio.
+> - Il contratto verifica tre cose:
+>   - una scrittura protetta dentro `if (policy.axisLabel) {`, con `responsiveXAxisCompact = policy.compact;` subito
+>     prima, fuori dalla guardia;
+>   - `flag = false;` come riga successiva a ogni `init` e `clear` (per il Gantt anche a ogni `dispose`, dopo
+>     `axisInstance = undefined;`);
+>   - una sola `setOption` completa, seguita da `flag = true;`.
+
+### Il crash `axisBuilder` — correzione nei tre grafici, contratto verde ✅ 2026-09-29 15:01
+
+> **Note implementazione:**
+> - **`LotComparisonChart.svelte`**:
+>   - `let chartOptionSet = false;` accanto a `chartInstance`, con un commento che rimanda alla guardia di `LineChart`;
+>   - nel callback del ResizeObserver, `if (chartOptionSet)` davanti alla patch lazy;
+>   - in `renderChart()`: `false` dopo `init` e dopo `clear()`, `true` dopo la `setOption` completa.
+> - **`LotWacPriceChart.svelte`**: le stesse quattro modifiche.
+> - **`LotGanttChart.svelte`**:
+>   - `let axisOptionSet = false;`;
+>   - la guardia su **tutte e due** le scritture del ResizeObserver dell'asse: la patch lazy e la ricostruzione
+>     compatta → larga;
+>   - `false` dopo i due `clear()`, dopo `dispose` (dopo `axisInstance = undefined;`) e dopo `init`;
+>   - la `setOption` completa dell'asse ora sta in `if (axisInstance) { …; axisOptionSet = true; }`, così il flag non
+>     dice «opzione completa» quando l'istanza non c'è.
+>   - L'istanza delle corsie non viene mai toccata dal ResizeObserver e resta senza flag.
+> - **Gli altri percorsi, verificati: nessun buco.**
+>   - `updateHoverDots` (`LotComparisonChart`, l'unica altra `setOption` parziale) esce subito su un grafico
+>     svuotato, perché `renderChart()` riporta `lastHoverDotAxisValue` a `null` prima di ogni opzione.
+>   - `syncResolutionToViewport` non ha una `setOption` sua.
+> - **Esito:**
+>   - vitest `chartCoreHelpers.test.ts` 150/150, prima 144 + 6 rossi (`f1_unit_green.log`);
+>   - prettier `--check` pulito sui 3 file (`f1_prettier.log`).
+>
+> **Prossimo:** `front build --debug`, poi il verde E2E nella 6157, in seriale e con `--workers 4`, poi le sonde
+> sulla 6167.
+
+### Il crash `axisBuilder` — verde E2E e sonde sulla copia ✅ 2026-09-29 15:12
+
+> **Note implementazione** (log in `/tmp/libreFolio_i_c6/`):
+> - **`front build --debug`** alle 15:03: rc 0, svelte-check al floor (3 errori, 41 warning in 4 file),
+>   `git status` identico prima e dopo. `check_frontend_needs_build()` risponde `False`, e la guardia è nei chunk
+>   costruiti (`b2_front_build_debug.log`).
+> - **`front-broker detail` in seriale**: 31/31 in 1,0 min; i tre test nuovi sono verdi e il runner scrive
+>   «Frontend build is up to date» (`g1_e2e_serial.log`).
+> - **Con `--workers 4`**: 31/31 in 38,7 s (`g2_e2e_workers4.log`).
+> - **Sonda del Gantt sulla 6167**, sugli stessi 5 asset × 2 larghezze della misura (chunk di ECharts nuovo,
+>   `BksFbP3h.js`, patchato 6 volte per larghezza):
+>   - «solo chiusi» smonta le corsie in ogni caso (`mounted=0`);
+>   - 0 LFPROBE e 0 PAGEERROR, contro le 36 righe di prima (`/tmp/libreFolio_i_axisbuilder_gantt_diag_after.log`).
+> - **Sonda dei margini** (`/tmp/libreFolio_i_margin_probe2.json`, confronto in `/tmp/libreFolio_i_margin_compare.log`):
+>   - pageerror da 7 (`axisBuilder` all'apertura del pannello dei lotti) a 0;
+>   - Crescita, WAC e Gantt identici;
+>   - il confronto dei lotti ha 14 px in meno ovunque, cioè 24 → 10, in tutte e due le larghezze e i due locali.
+>   - Nota: la prima sonda girava sulla build delle 13:04, senza `left: 10`. Questo confronto è quindi anche la
+>     conferma del margine sulla copia.
+> - **Server 6167 fermato**; `lsof` libero su 6167 e 6157.
+
+### Gate finale di C6 ✅ 2026-09-29 15:19
+
+> **Note implementazione:**
+> - Nella 6157 / `/tmp/librefolio-r2-i-charts`, un comando alla volta, sulla build di debug delle 15:03. Il runner
+>   scrive «Frontend build is up to date» a ogni E2E.
+> - Log in `/tmp/libreFolio_i_c6/gate/` e `/tmp/libreFolio_i_c6/g*_e2e_*.log`.
+> - Il backend non si rilancia: C6 non tocca il backend, e `api portfolio` 55/55 e `roi-fifo-utils` 507/507 sono
+>   quelli del gate delle 12:50, sullo stesso HEAD.
+>
+> | # | gate | esito | atteso |
+> |---|---|---|---|
+> | 1 | `front-utility core-unit` | 2646/2646 su 98 file | invariato |
+> | 2 | `front-utility component-unit` | 2122/2122 su 87 file | invariato |
+> | 3 | `front-asset asset-unit` | 468/468 su 18 file | 462 + 6 casi del contratto (`chartCoreHelpers.test.ts`); i 2 rossi delle emoji ora verdi |
+> | 4 | `front-asset growth-chart-memo` | 18/18 | 18 (con il describe del margine) |
+> | 5 | `vitest run …/moneyRenderSites.test.ts` | 6/6 | 6/6 |
+> | 6 | E2E `front-portfolio dashboard` | 18/18 in 44,4 s | 18 |
+> | 7 | E2E `front-broker detail` | 31/31 in seriale e con `--workers 4` | 28 + 3 nuovi |
+> | 8 | E2E `front-asset asset-detail` | 28/28 in 1,8 min | 28 |
+> | 9 | `tsc -p tsconfig.e2e.json` | 2 errori: `onboarding-tour.spec.ts:863` e `files.ts:9`, fuori dal mio perimetro | `:1395` e `:1397` spariti |
+> | 10 | prettier `--check` sui 10 file del frontend | pulito | pulito |
+> | 11 | `git diff --check` | pulito; nessun `.only` né `.skip` | pulito |
+>
+> - Porte 6157 e 6167 libere.
+
+### Checkpoint C6 — pronto (2026-09-29 15:27)
+
+> **Note implementazione:**
+> - **Contenuto:** 6 commit su `b2112ba61`, 11 percorsi:
+>
+> | # | subject | contenuto | percorsi |
+> |---|---|---|---|
+> | 1 | `fix(dashboard): emoji for CROWDFUND_REAL_ESTATE` | 🤝 per la regola della famiglia; i 2 rossi del test ora verdi | `allocationTypeEmoji.ts`, `allocationTypeEmoji.test.ts` |
+> | 2 | `test(assets): type calendar fixture availability` | `:1395` e `:1397`: solo tipi, innocui a runtime | `frontend/e2e/assets/asset-detail.spec.ts` |
+> | 3 | `fix(dashboard): shrink growth chart left gutter` | `grid.left '3%'` e il caso unit del test-author (brief 09) | `GrowthChart.svelte`, `GrowthChart.test.ts` |
+> | 4 | `fix(brokers): shrink lot comparison left gutter` | `left: 24` → `10`, con il commento | `LotComparisonChart.svelte` (solo il margine) |
+> | 5 | `fix(brokers): stop lot chart axisBuilder crash` | la guardia nei tre grafici dei lotti; i test del test-author (brief 10) | `LotComparisonChart.svelte` (il resto), `LotWacPriceChart.svelte`, `LotGanttChart.svelte`, `frontend/e2e/brokers/brokers-detail.spec.ts`, `chartCoreHelpers.test.ts` |
+> | 6 | `docs(journal): record checkpoint C6 review fixes` | questo file | il journal |
+>
+> - **Un file si divide fra due commit:** `LotComparisonChart.svelte`. Il commit 4 prende la copia salvata dopo il
+>   margine e prima della guardia; il commit 5 aggiunge solo la guardia. `gen_states.py` lo prova (`check_split`):
+>   la copia differisce da BASE solo nelle righe del margine (−1 +4); il commit 5 non tocca quelle righe; l'ultimo
+>   confine è il file del worktree, byte per byte.
+> - **Le prove per confine:** i commit 1–5 toccano il frontend, quindi rifaccio a ogni confine, nella copia di prova
+>   completa (tutto l'albero di BASE, `node_modules` clonato, mai un link verso il worktree): svelte-check, l'intera
+>   suite vitest, `tsc -p tsconfig.e2e.json`, Prettier sui 10 file e l'elenco di Playwright delle due spec (`--list`,
+>   che non avvia né il server né il setup globale). Il commit 6 tocca solo il journal: il suo frontend è quello del
+>   commit 5, e lo script lo verifica prima di partire.
+> - **Come:** lo stesso protocollo di C1–C5. Patch e messaggi; script a guardie derivato da quello di C5, con
+>   sostituzioni contate; digest; dry-run in it_IT ed en_US; un clone usa-e-getta per i commit veri; `merge-tree`
+>   con `dev_release2`.
+> - **Esclusi:** i log in `/tmp`, `test-results/`, `playwright-report/`, la build del frontend, i file generati e
+>   le sonde nella cartella di sessione.
+> - **Questa è l'ultima scrittura nel worktree prima del digest.** I numeri del bundle (alberi, sha256, digest)
+>   dipendono da questo file, quindi qui non ci sono: li registro dopo il commit.
+> - **Dopo C6:** D23 con D23b (un'opzione «con segno» in `fmtCurrency`, commit a sé, ri-pin via test-author); poi
+>   S7 (con la parte di D21 nel prodotto, `toPositionalValue`) e S7b, S8, la verifica sulla copia, S11-finale
+>   (docs-writer), S12.
