@@ -42,9 +42,10 @@
  * "Fixed 6-slot order matches buildFullSeries's matching index reads exactly"). Broker
  * series ARE matched by name, because those names are values this test supplied as props.
  *
- * THE REST OF THE FILE. Three smaller subjects share the same recorder: privacy masking
+ * THE REST OF THE FILE. Four smaller subjects share the same recorder: privacy masking
  * of the axis and tooltip formatters (S2a), persistence of the mode and the P&L submode
- * (S5), and the synthetic-candle caption (S9). Each describe states its own reasons.
+ * (S5), the synthetic-candle caption (S9), and the grid's left inset (developer review,
+ * 2026-09-29). Each describe states its own reasons.
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 
@@ -927,5 +928,41 @@ describe('GrowthChart synthetic-candle caption (S9)', () => {
         await fireEvent.click(getByTestId('growth-pnl-submode-income'));
         expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-income']);
         expect(queryAllByTestId(CAPTION)).toHaveLength(0);
+    });
+});
+
+// =============================================================================
+// The grid's left inset (developer review, 2026-09-29)
+// =============================================================================
+
+/**
+ * With `containLabel: true`, `grid.left` is the OUTER inset: ECharts draws the y labels inside
+ * it. It used to be a 52 px constant shared with the floating overlays, so 52 px stood empty
+ * before the labels. The overlays now read the laid-out grid back (`syncPlotGeometry` →
+ * `plotLeftPx`), so nothing needs a fixed gutter any more.
+ */
+describe('GrowthChart grid left inset (developer review, 2026-09-29)', () => {
+    /** `FullOption` leaves the grid out: only this describe reads it. */
+    type WithGrid = FullOption & {grid?: {left?: unknown; containLabel?: unknown}};
+
+    /** The two properties the decision is about, on one full rebuild. */
+    function expectLeftInset(option: FullOption, view: string) {
+        const grid = (option as WithGrid).grid;
+        expect(grid?.left, `${view}: grid.left`).toBe('3%');
+        expect(grid?.containLabel, `${view}: grid.containLabel`).toBe(true);
+    }
+
+    it('insets the grid by 3% with containLabel, so the y labels start near the edge, with no fixed px gutter before them', async () => {
+        // WHY: developer review, 2026-09-29, from a phone on P&L/Income: too much empty space
+        // on the left of the chart. Catches a px constant put back into `grid.left` (the old 52
+        // can never be '3%'), or `containLabel` dropped, which would squeeze the labels into the
+        // 3% and clip them. Right, top and bottom are not part of that decision: not asserted.
+        const {getByTestId} = render(GrowthChart, {props: {history: HISTORY}});
+        expectLeftInset(await waitForFrame(FRAME.abs), 'Abs');
+
+        // The view the review was made on.
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        await fireEvent.click(getByTestId('growth-pnl-submode-income'));
+        expectLeftInset(await waitForFrame(FRAME.income), 'P&L Income');
     });
 });
