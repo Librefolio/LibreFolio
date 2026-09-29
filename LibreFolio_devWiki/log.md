@@ -2150,3 +2150,10 @@ report), [[concepts/test-isolation-classes]] (a single `api` action after `servi
 [[decisions/asset-global-page-shows-no-money]] (the redesigned card keeps the rule).
 Graph: the graphify `--update` is **deferred** — `graphify-out/graph.json` and `.graphify_python` do not exist in this
 worktree. `check_source_paths.py`: 0 missing paths on these nine pages (60 pre-existing elsewhere).
+
+## [2026-09-29] file | Flag emoji on Windows — the global flags-only face
+The developer turned the per-container `.emoji-flag` rule into one global face, `'LF Flags'`, whose unicode-range
+covers only the regional indicators: Apple flags on Apple devices, the self-hosted Noto flags subset elsewhere,
+every other character on its usual font. The page records the new solution, why the old "not globally" rule fell,
+and how to verify it without Windows.
+Filed: [[problems/flag-emoji-windows]] (updated); [[domains/layout-settings]] (its known-problems line aligned).

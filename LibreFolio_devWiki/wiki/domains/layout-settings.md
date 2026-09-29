@@ -53,7 +53,7 @@ graph TD
 
 ## Known problems / limitations
 
-- [[problems/flag-emoji-windows]] — flag emoji in the language selector are blank on Windows unless the `Noto Color Emoji` font is loaded; resolved by explicit font loading in `app.css`.
+- [[problems/flag-emoji-windows]] — flag emoji (language selector, currencies) print as letter pairs on Windows, whose emoji font has no flags; resolved by the global flags-only face `'LF Flags'` (`static/lf-flags.css`), which leads every font stack: Apple flags on Apple devices, the self-hosted Noto flags subset elsewhere. ECharts text is not covered yet.
 - [[problems/liveticker-header-crash]] — LiveTicker in `Header.svelte` caused a crash on navigation in early versions; resolved by lifecycle guard.
 
 ## What comes next

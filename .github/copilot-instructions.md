@@ -83,7 +83,7 @@ In `async def` handlers, **every sync library doing I/O** MUST be wrapped in `aw
 - **Dark mode**: `html.dark` with Tailwind `dark:*` classes
 - **Icons**: lucide-svelte
 - **Selectors**: always use `data-testid` — never CSS classes or text (fragile with i18n)
-- **Flag emoji**: use `Noto Color Emoji` web font for Windows compatibility
+- **Flag emoji**: the `'LF Flags'` face (`static/lf-flags.css`, flags-only `unicode-range`) leads every font stack — Apple flags on Apple devices, the self-hosted Noto flags subset elsewhere, Windows included. Never name an emoji font in a `font-family`; a component with its own stack starts it with `'LF Flags'` or wraps the flag in `.emoji-flag`
 
 ## Developer Journal & Plan Methodology
 
