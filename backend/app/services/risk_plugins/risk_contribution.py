@@ -40,7 +40,10 @@ class RiskContributionParams(BaseModel):
 @register_plugin(RiskAnalyticRegistry)
 class RiskContributionAnalytic(RiskAnalytic):
     analytic_code = "risk_contribution"
-    algorithm_version = "1.1.0"
+    # 1.2.0 — the reported numbers are unchanged; the payload additionally carries
+    # `excluded_weight`, so a client can tell a zero excluded weight apart from a server
+    # that predates the field.
+    algorithm_version = "1.2.0"
     name_i18n_key = "risk.analytics.riskContribution.name"
     description_i18n_key = "risk.analytics.riskContribution.description"
     output_kind = RiskOutputKind.CONTRIBUTION
@@ -79,6 +82,7 @@ class RiskContributionAnalytic(RiskAnalytic):
             output=RiskContributionOutput(
                 portfolio_volatility=summary.portfolio_volatility,
                 cash_weight=context.cash_weight,
+                excluded_weight=context.excluded_weight,
                 effective_number_of_assets=effective_number_of_assets(weights),
                 diversification_ratio=diversification_ratio(
                     annualized_covariance,

@@ -104,6 +104,13 @@ def test_every_literal_key_is_one_the_warning_schema_accepts():
         assert RiskWarning(code="scan", message="scan", message_i18n_key=key).message_i18n_key == key
 
 
+def test_the_no_price_source_sentence_is_written_out_where_the_audit_reads_it():
+    # Developer's decision of 29/09/2026: an asset excluded because no price source is assigned to
+    # it gets a sentence of its own. A key built at runtime would escape both this scan and the i18n
+    # audit, so the branch must spell it out — and then the catalogue check below demands the words.
+    assert "risk.warnings.assets_excluded_no_price_source" in KEYS
+
+
 @pytest.mark.parametrize("language", sorted(CATALOGUES))
 def test_every_risk_warning_key_has_a_sentence_in_each_catalogue(language):
     catalogue = json.loads(CATALOGUES[language].read_text(encoding="utf-8"))
