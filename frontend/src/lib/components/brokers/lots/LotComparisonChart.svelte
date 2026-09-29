@@ -1151,11 +1151,14 @@
         const multiYearAxis = !!axisDateRange && new Date(axisDateRange.min).getFullYear() !== new Date(axisDateRange.max).getFullYear();
         return {
             ...CHART_ANIMATION_CONFIG,
+            // With `containLabel: true`, `left` is only the empty inset BEFORE the y labels
+            // (ECharts adds the label width itself). 24 px left a visible empty strip on a phone
+            // (developer review, 2026-09-29): 10 px keeps the labels off the card edge.
             grid: {
                 top: 62,
                 right: 18,
                 bottom: 34,
-                left: 24,
+                left: 10,
                 containLabel: true,
             },
             legend: {
