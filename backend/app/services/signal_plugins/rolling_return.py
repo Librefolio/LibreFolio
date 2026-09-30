@@ -63,6 +63,7 @@ class RollingReturnPlugin(SignalPlugin):
     semantic_id = "rolling_compounded_return"
     semantic_description = "Compounds canonical simple returns over a rolling window."
     icon = "↗️"
+    docs_path = "financial-theory/fundamentals/returns/"
     category = SignalCategory.RISK
     params_model = RollingReturnParams
     input_requirements = SignalInputRequirements(

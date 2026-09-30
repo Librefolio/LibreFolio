@@ -78,6 +78,7 @@ class RollingBetaPlugin(SignalPlugin):
     semantic_id = "rolling_beta"
     semantic_description = "Estimates rolling sensitivity to a real comparison asset."
     icon = "β"
+    docs_path = "financial-theory/technical-analysis/risk-metrics/beta-active-return/"
     category = SignalCategory.RISK
     params_model = RollingBetaParams
     input_requirements = SignalInputRequirements(
