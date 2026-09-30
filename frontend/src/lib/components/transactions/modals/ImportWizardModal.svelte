@@ -2938,6 +2938,8 @@ ${arrow}<span>${label}</span></span>`,
 
         uploading = true;
         uploadError = null;
+        // Files uploaded together form one report set: they share a batch id.
+        const batchId = generateUUID();
 
         await mapWithConcurrency(toUpload, async (entry) => {
             pendingFiles = pendingFiles.map((f) => (f.id === entry.id ? {...f, status: 'uploading'} : f));
@@ -2945,6 +2947,7 @@ ${arrow}<span>${label}</span></span>`,
             const formData = new FormData();
             formData.append('file', entry.file);
             formData.append('broker_id', String(entry.brokerId));
+            formData.append('batch_id', batchId);
             if (entry.fileName !== entry.file.name) {
                 formData.append('custom_filename', entry.fileName);
             }

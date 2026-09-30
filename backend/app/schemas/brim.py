@@ -608,6 +608,66 @@ class BRIMVerification(StrictModel):
     evidence: List[BRIMEvidence] = Field(default_factory=list, description="Source rows backing the verification")
 
 
+class BRIMSetRequest(StrictModel):
+    """Identifies one report set: the files uploaded together for a broker and recognised by a plugin."""
+
+    broker_id: int = Field(..., gt=0, description="Target broker ID")
+    plugin_code: str = Field(..., description="Report-set plugin code")
+    batch_id: str = Field(..., description="Upload batch shared by the set's files")
+
+
+class BRIMSetMemberInfo(StrictModel):
+    """One file of a report set, as the preview sees it."""
+
+    file_id: str = Field(..., description="UUID of the file")
+    filename: str = Field(..., description="Original filename")
+    role: Optional[str] = Field(default=None, description="Role recognised by the plugin, or None")
+    rows: int = Field(default=0, ge=0, description="Number of data rows")
+    coverage: List[BRIMCoverage] = Field(default_factory=list, description="Covered period per date axis")
+
+
+class BRIMSetRoleStatus(StrictModel):
+    """Whether a plugin role is covered by the set's files."""
+
+    code: str = Field(..., description="Role code")
+    required: bool = Field(..., description="The set needs this role")
+    multiple: bool = Field(..., description="Several files of this role are allowed")
+    status: Literal["present", "missing", "excess"] = Field(..., description="present, missing, or too many files for a single-file role")
+    file_ids: List[str] = Field(default_factory=list, description="Files recognised with this role")
+
+
+class BRIMSetMissing(StrictModel):
+    """A required role the set lacks, with the period its file must cover when it can be computed."""
+
+    role: str = Field(..., description="Missing role code")
+    start: Optional[date] = Field(default=None, description="First day the missing export must cover")
+    end: Optional[date] = Field(default=None, description="Last day the missing export must cover")
+
+
+class BRIMSetPreview(StrictModel):
+    """What a report set contains and whether it can be combined. Read-only."""
+
+    broker_id: int = Field(..., description="Target broker ID")
+    plugin_code: str = Field(..., description="Report-set plugin code")
+    batch_id: str = Field(..., description="Upload batch of the set")
+    members: List[BRIMSetMemberInfo] = Field(default_factory=list, description="Files of the set")
+    roles: List[BRIMSetRoleStatus] = Field(default_factory=list, description="One entry per plugin role")
+    missing: List[BRIMSetMissing] = Field(default_factory=list, description="Required roles without a file")
+    segments: List[DateRangeModel] = Field(default_factory=list, description="Covered segments, in date order")
+    gaps: List[DateRangeModel] = Field(default_factory=list, description="Proven gaps between segments")
+    history_start: Optional[date] = Field(default=None, description="First day of the broker history already in LibreFolio")
+    warnings: List[BRIMNotice] = Field(default_factory=list, description="Notices with stable codes for the UI")
+    complete: bool = Field(default=False, description="True when the set can be combined")
+
+
+class BRIMSetCombineResponse(StrictModel):
+    """The combined file of a report set."""
+
+    combined: BRIMFileInfo = Field(..., description="The combined file, parseable like any other file")
+    summary: Dict[str, Any] = Field(default_factory=dict, description="Combine summary (counts, window, checkpoints)")
+    reused: bool = Field(default=False, description="True when an identical combined file already existed")
+
+
 # =============================================================================
 # FIELD_TODO (intentionally incomplete field in accepted TX)
 # =============================================================================

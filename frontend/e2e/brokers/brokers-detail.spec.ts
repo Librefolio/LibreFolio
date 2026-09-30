@@ -885,4 +885,78 @@ test.describe('Broker detail — import history upload', () => {
         // …and the modal lists it: on success handleUpload reloads this broker's files.
         await expect(modal.locator(`[data-row-id="${uploaded.file_id}"]`)).toBeVisible({timeout: 8_000});
     });
+
+    // ── C1: one upload action is one report-set batch (design D-S22) ─────────────
+    //
+    // Every file of one upload carries the same client-generated `batch_id` (a UUID in
+    // the multipart form), and the next upload from the same modal opens a new batch:
+    // the server builds report sets per batch, so an id shared by two uploads would
+    // merge two sets, and no id at all leaves every file a set of its own. Read back
+    // from this page's own upload responses, never from a shared list.
+    const SECOND_BRIM_REPORT = path.resolve(__dirname, '../../../backend/app/services/brim_providers/sample_reports/generic_with_assets.csv');
+    const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    type UploadedInfo = BrimFileInfo & {batch_id?: string | null};
+
+    /** The upload responses `action` produces on this page: exactly `expected` of them, each a 200. */
+    async function uploadsDuring(page: Page, expected: number, action: () => Promise<void>): Promise<UploadedInfo[]> {
+        const replies: Array<Promise<{status: number; body: string}>> = [];
+        const listener = (response: Awaited<ReturnType<Page['waitForResponse']>>) => {
+            if (response.request().method() === 'POST' && new URL(response.url()).pathname === BRIM_UPLOAD_PATH) replies.push(response.text().then((body) => ({status: response.status(), body})));
+        };
+        // Armed before the action: a response is an edge, not a state.
+        page.on('response', listener);
+        try {
+            await action();
+            await expect.poll(() => replies.length, {message: `${expected} upload response(s) from one action`, timeout: 15_000}).toBe(expected);
+        } finally {
+            page.off('response', listener);
+        }
+        const settled = await Promise.all(replies);
+        for (const {status, body} of settled) expect(status, `POST ${BRIM_UPLOAD_PATH}: ${body}`).toBe(200);
+        return settled.map(({body}) => JSON.parse(body) as UploadedInfo);
+    }
+
+    /** Opens the modal's uploader and submits `files`; ends once the uploader has handed them over. */
+    async function uploadFromHistoryModal(modal: Locator, files: string[]): Promise<void> {
+        await modal.getByTestId('import-files-upload-toggle').click();
+        const uploader = modal.getByTestId('file-uploader');
+        await expect(uploader).toBeVisible({timeout: 5_000});
+        await uploader.getByTestId('file-input').setInputFiles(files);
+        await uploader.getByTestId('file-upload-submit').click();
+        // handleUpload hides the uploader as soon as it starts sending.
+        await expect(uploader).toBeHidden({timeout: 5_000});
+    }
+
+    function expectUuid(value: string | null | undefined, what: string): string {
+        expect(typeof value === 'string' && UUID_PATTERN.test(value), `${what}: ${JSON.stringify(value)} must be a UUID`).toBe(true);
+        return value as string;
+    }
+
+    test('C1 one upload from the import history modal gives its files one fresh batch id', async ({page}) => {
+        test.setTimeout(60_000);
+        const brokerName = `Upload batch history ${uniqueSuffix()}`;
+        const brokerId = await createOwnedBroker(page, brokerName);
+        ownedBrokerId = brokerId;
+
+        await navigateTo(page, `/brokers/${brokerId}`);
+        await expect(page.getByTestId('broker-name')).toHaveText(brokerName, {timeout: 10_000});
+        await goToTransazioniTab(page);
+        await page.getByTestId('broker-show-import-history').click();
+        const modal = page.getByTestId('import-files-modal');
+        await expect(modal).toBeVisible({timeout: 5_000});
+
+        const together = await uploadsDuring(page, 2, () => uploadFromHistoryModal(modal, [SAMPLE_BRIM_REPORT, SECOND_BRIM_REPORT]));
+        expect(
+            together.map((file) => file.target_broker_id),
+            'both files go to this broker',
+        ).toEqual([brokerId, brokerId]);
+        const batchIds = together.map((file) => file.batch_id);
+        const batchId = expectUuid(batchIds[0], 'batch_id of the first upload');
+        expect(batchIds, 'the files of one upload share one batch_id').toEqual([batchId, batchId]);
+
+        // The list reloads once the upload is over, so the next upload starts from an idle modal.
+        for (const file of together) await expect(modal.locator(`[data-row-id="${file.file_id}"]`)).toBeVisible({timeout: 8_000});
+        const [next] = await uploadsDuring(page, 1, () => uploadFromHistoryModal(modal, [SAMPLE_BRIM_REPORT]));
+        expect(expectUuid(next.batch_id, 'batch_id of the next upload'), 'every upload action opens a new batch').not.toBe(batchId);
+    });
 });

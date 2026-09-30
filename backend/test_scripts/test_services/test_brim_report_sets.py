@@ -28,29 +28,60 @@ No server and no database. BRIM storage is redirected to ``tmp_path`` (the
 put back exactly as it was after every test that registers the fake. All data is
 synthetic: no value comes from a real bank export.
 
+Phase A2 (second half of this file) is written red-first the same way, through
+``_sets`` for the new service module ``backend.app.services.brim_report_sets`` and
+the ``phase="A2"`` lookups for the additions to the schemas, the contract and the
+storage. It covers:
+
+- A the ``BRIMProvider.history_tag`` default;
+- B the request and response schemas of ``POST /sets/preview`` and ``/sets/combine``;
+- C ``read_combine_summary``;
+- D the service: ``get_set_plugin``, ``collect_members`` (the set is one upload,
+  D-S22), ``history_start`` (D-S25), ``build_preview`` (roles, ``missing``, coverage
+  warnings, ``mixed_accounts``, H0 and gap-fix warnings), ``preview_set``,
+  ``combine_set`` (reuse, generated name, refusal of an incomplete set),
+  ``ensure_parseable`` (D-S4) and ``apply_history`` (the checkpoints kept at parse).
+
+The API server parses through a process pool and, under the runner, lives in its
+own process: the fake cannot be registered there. So everything a set contains is
+tested here, and ``test_api/test_brim_api.py`` covers routing, permissions and
+validation. Where H0 needs transactions, each test gets a private in-memory SQLite
+database with the ORM schema (``db_session``): never the shared test database.
+The A2 tests whose docstring starts with "Fixture guard" check that infrastructure
+(the database, the fake's ``describe_set``, the plugin variants, the helpers), not
+the product: they pass before and after A2.
+
 Design: LibreFolio_developer_journal/Release_2/Phase_0/26_brimDanskeBank/design-phase00BrimReportSets.md (v5.3), §3.1–§3.5 and §3.8
-Plan: LibreFolio_developer_journal/Release_2/Phase_0/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md, §3 A1
+Plan: LibreFolio_developer_journal/Release_2/Phase_0/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md, §3 A1 and A2
 """
 
 from __future__ import annotations
 
 import csv
+import importlib
 import inspect
 import json
 import shutil
 import uuid
-from collections.abc import Iterator
-from datetime import UTC, date, datetime
+from collections.abc import AsyncIterator, Iterator, Sequence
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from types import ModuleType
 from typing import Any, Dict, List, Optional, Tuple
 
 import pytest
+import pytest_asyncio
 from pydantic import ValidationError
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlmodel import SQLModel
 
+from backend.app.db.models import Broker, Transaction, TransactionType
 from backend.app.schemas import brim as brim_schemas
 from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMEvidence, BRIMFileInfo, BRIMFileStatus, BRIMNotice, BRIMParseOutput, BRIMParseResponse, BRIMPluginInfo
 from backend.app.schemas.common import Currency, DateRangeModel
+from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services import brim_provider
 from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.provider_registry import BRIMProviderRegistry
@@ -66,6 +97,7 @@ CASH_MARKER = "lf_fake_cash"
 CUSTODY_COLUMNS = ("trade_date", "asset", "quantity")
 CASH_COLUMNS = ("value_date", "amount", "currency", "description")
 FAKE_ACCOUNT = "fake-custody-account-0001"
+FAKE_SET_NOTICE = "fake_set_described"
 COMBINED_FILENAME = f"{FAKE_CODE} — combined 2025-01-02…2025-01-17.csv"
 NEW_FILE_INFO_FIELDS = ("batch_id", "kind", "derived_from", "combined_into", "combine_is_stale")
 
@@ -117,24 +149,24 @@ EXISTING_PLUGIN_CODES = (
 # =============================================================================
 
 
-def _missing(what: str) -> None:
-    """Fail the current test (not the collection), naming what phase A1 has to add."""
-    pytest.fail(f"{what}: not implemented yet (BRIM report sets, phase A1)", pytrace=False)
+def _missing(what: str, phase: str = "A1") -> None:
+    """Fail the current test (not the collection), naming what the phase has to add."""
+    pytest.fail(f"{what}: not implemented yet (BRIM report sets, phase {phase})", pytrace=False)
 
 
-def _schema(name: str) -> Any:
+def _schema(name: str, phase: str = "A1") -> Any:
     """A new schema class from ``backend.app.schemas.brim``."""
     found = getattr(brim_schemas, name, None)
     if found is None:
-        _missing(f"backend.app.schemas.brim.{name} does not exist")
+        _missing(f"backend.app.schemas.brim.{name} does not exist", phase)
     return found
 
 
-def _service(name: str) -> Any:
+def _service(name: str, phase: str = "A1") -> Any:
     """A new function or exception from ``backend.app.services.brim_provider``."""
     found = getattr(brim_provider, name, None)
     if found is None:
-        _missing(f"backend.app.services.brim_provider.{name} does not exist")
+        _missing(f"backend.app.services.brim_provider.{name} does not exist", phase)
     return found
 
 
@@ -145,11 +177,11 @@ def _require_fields(model: Any, *names: str) -> None:
         _missing(f"{model.__name__} has no field {', '.join(absent)}")
 
 
-def _require_contract(*names: str) -> None:
+def _require_contract(*names: str, phase: str = "A1") -> None:
     """``BRIMProvider`` itself, not a subclass, defines every member in ``names``."""
     absent = [name for name in names if not hasattr(BRIMProvider, name)]
     if absent:
-        _missing(f"BRIMProvider has no {', '.join(absent)}")
+        _missing(f"BRIMProvider has no {', '.join(absent)}", phase)
 
 
 def _require_param(function: Any, name: str) -> None:
@@ -290,12 +322,39 @@ class _FakeTwoRoleProvider(BRIMProvider):
         return self.detect_role(file_path) is not None or (header[:2] == ["lf_row_kind", "lf_source"] and f"custody:{CUSTODY_COLUMNS[0]}" in header)
 
     def describe_member(self, file_path: Path) -> Any:
-        """Rows and covered dates of one member: trade dates for custody, value dates for cash."""
+        """Rows and covered dates of one member: trade dates for custody, value dates for cash.
+
+        A custody header may carry an ``account=<id>`` cell, which becomes the member's
+        account fingerprint (``FAKE_ACCOUNT`` when absent): that is how a test mixes two
+        custody accounts in one set.
+        """
         member_summary, coverage = _schema("BRIMMemberSummary"), _schema("BRIMCoverage")
         role = self.detect_role(file_path)
+        if role is None:
+            return member_summary(role=None, rows=0)
         dates = [date.fromisoformat(cells[1]) for _line, cells in self._rows(file_path)]
         spans = [coverage(axis="trade" if role == "custody" else "value", start=min(dates), end=max(dates))] if dates else []
-        return member_summary(role=role, rows=len(dates), coverage=spans, account_fingerprint=FAKE_ACCOUNT if role == "custody" else None)
+        account = None
+        if role == "custody":
+            account = next((cell.split("=", 1)[1] for cell in self._header(file_path) if cell.startswith("account=")), FAKE_ACCOUNT)
+        return member_summary(role=role, rows=len(dates), coverage=spans, account_fingerprint=account)
+
+    def describe_set(self, members: Dict[str, List[Path]]) -> Any:
+        """Segments are the custody trade spans, merged when they overlap or touch; each space between two segments is a gap.
+
+        Also one info notice (``FAKE_SET_NOTICE``), so a test can see the plugin's notices reach the preview.
+        """
+        spans = sorted((span.start, span.end) for path in members.get("custody", []) for span in self.describe_member(path).coverage)
+        merged: List[List[date]] = []
+        for start, end in spans:
+            if merged and start <= merged[-1][1] + timedelta(days=1):
+                merged[-1][1] = max(merged[-1][1], end)
+            else:
+                merged.append([start, end])
+        segments = [DateRangeModel(start=start, end=end) for start, end in merged]
+        gaps = [DateRangeModel(start=before.end + timedelta(days=1), end=after.start - timedelta(days=1)) for before, after in zip(segments, segments[1:], strict=False)]
+        notice = BRIMNotice(severity="info", code=FAKE_SET_NOTICE, message="Fake set: segments come from the custody exports")
+        return _schema("BRIMSetShape")(segments=segments, gaps=gaps, notices=[notice])
 
     def combine(self, members: Dict[str, List[Path]]) -> Any:
         """Pure: one ``standalone`` row per member row, its values copied verbatim under ``<role>:<column>``."""
@@ -1227,3 +1286,1079 @@ class TestListFilesReportSetFields:
         assert info.derived_from == _refs(("custody", custody), ("cash", cash))
         legacy = listed[legacy_id]
         assert (legacy.kind, legacy.batch_id, legacy.derived_from, legacy.combined_into, legacy.combine_is_stale) == ("original", None, [], [], False)
+
+
+# =============================================================================
+# PHASE A2 — data, plugin variants, helpers and fixtures
+# =============================================================================
+
+A2 = "A2"
+SETS_MODULE = "backend.app.services.brim_report_sets"
+HISTORY_TAG = "danske_bank"
+OTHER_ACCOUNT = "fake-custody-account-0002"
+FAKE_PROVIDER_NAME = "Fake two-role report set (tests)"
+# Member names a combined file must never repeat (design §3.4.4: Danske's CSV name carries the IBAN).
+CUSTODY_NAME = "custody-export-4711.csv"
+CASH_NAME = "cash-statement-4711.csv"
+# Every set error: its HTTP status and its stable code.
+SET_ERRORS = {
+    "BRIMSetPluginNotFound": (404, "plugin_not_found"),
+    "BRIMSetPluginNotASet": (400, "plugin_not_a_set"),
+    "BRIMSetMembersNotFound": (404, "members_not_found"),
+    "BRIMSetIncomplete": (422, "set_incomplete"),
+}
+COVERAGE_CODES = {"coverage_starts_late", "coverage_ends_early"}
+
+
+def _custody_csv(*trade_dates: str, account: Optional[str] = None) -> bytes:
+    """A synthetic custody export, one trade per date; ``account`` adds the ``account=<id>`` header cell."""
+    header = [CUSTODY_MARKER, *CUSTODY_COLUMNS, *([f"account={account}"] if account else [])]
+    return "".join(f"{line}\n" for line in [";".join(header), *(f"row;{day};ACME Oyj;1" for day in trade_dates)]).encode()
+
+
+def _cash_csv(*value_dates: str) -> bytes:
+    """A synthetic cash export, one movement per value date."""
+    header = [CASH_MARKER, *CASH_COLUMNS]
+    return "".join(f"{line}\n" for line in [";".join(header), *(f"row;{day};-1.00;EUR;Liike {day}" for day in value_dates)]).encode()
+
+
+# The spans every A2 test reasons about: custody on the trade axis, cash on the value axis.
+CUSTODY_JAN = _custody_csv("2025-01-02", "2025-01-15")
+CUSTODY_MAR = _custody_csv("2025-03-03", "2025-03-20")
+CASH_JAN = _cash_csv("2025-01-01", "2025-01-06", "2025-01-17")  # covers CUSTODY_JAN from its eve to past its end
+CASH_JAN_MAR = _cash_csv("2025-01-01", "2025-02-10", "2025-03-20")  # covers both custody spans
+JAN_SEGMENT = DateRangeModel(start=date(2025, 1, 2), end=date(2025, 1, 15))
+MAR_SEGMENT = DateRangeModel(start=date(2025, 3, 3), end=date(2025, 3, 20))
+
+
+class _FakeSingleCustodyProvider(_FakeTwoRoleProvider):
+    """The fake with a custody role that takes one file only (``multiple=False``)."""
+
+    @property
+    def report_roles(self) -> List[Any]:
+        role = _schema("BRIMReportRole")
+        return [
+            role(code="custody", required=True, multiple=False, extensions=[".csv"], description="Fake custody export, one file per set"),
+            role(code="cash", required=True, multiple=True, extensions=[".csv"], description="Fake cash export", must_cover="custody"),
+        ]
+
+
+class _FakeOptionalRoleProvider(_FakeTwoRoleProvider):
+    """The fake plus an optional third role that no file ever fills."""
+
+    @property
+    def report_roles(self) -> List[Any]:
+        role = _schema("BRIMReportRole")
+        return [*super().report_roles, role(code="statement", required=False, multiple=False, extensions=[".csv"], description="Fake optional statement")]
+
+
+class _FakeNoShapeProvider(_FakeTwoRoleProvider):
+    """The fake whose set description proves no segment at all."""
+
+    def describe_set(self, members: Dict[str, List[Path]]) -> Any:
+        return _schema("BRIMSetShape")()
+
+
+class _FakeBankProvider(_FakeTwoRoleProvider):
+    """The fake under a ``broker_`` code, so its history tag (``fake_bank``) differs from its code."""
+
+    @property
+    def provider_code(self) -> str:
+        return "broker_fake_bank"
+
+
+class _FakeBankImportPolicyProvider(_FakeBankProvider):
+    """``_FakeBankProvider`` importing the rows before its first checkpoint (policy ``import``, as CA will)."""
+
+    @property
+    def pre_checkpoint_policy(self) -> str:
+        return "import"
+
+
+class _FakeInfixProvider(_FakeTwoRoleProvider):
+    """A code with ``broker_`` in the middle: only a leading ``broker_`` is dropped."""
+
+    @property
+    def provider_code(self) -> str:
+        return "fake_broker_bank"
+
+
+def _sets_module() -> Optional[ModuleType]:
+    """The new service module, or None while it does not exist. An import error *inside* it is not swallowed."""
+    try:
+        return importlib.import_module(SETS_MODULE)
+    except ModuleNotFoundError as exc:
+        if exc.name != SETS_MODULE:
+            raise
+        return None
+
+
+def _sets(name: str) -> Any:
+    """A function or exception of the new service module ``backend.app.services.brim_report_sets``."""
+    module = _sets_module()
+    if module is None:
+        _missing(f"{SETS_MODULE} does not exist", A2)
+    found = getattr(module, name, None)
+    if found is None:
+        _missing(f"{SETS_MODULE}.{name} does not exist", A2)
+    return found
+
+
+def _member(content: bytes, filename: str, *, batch_id: Optional[str] = None, broker_id: int = BROKER_ID) -> BRIMFileInfo:
+    """Store one synthetic export through the real ``save_uploaded_file``, as ``POST /upload`` does."""
+    return brim_provider.save_uploaded_file(content, filename, user_id=USER_ID, broker_id=broker_id, batch_id=batch_id)
+
+
+def _rewrite_sidecar(root: Path, file_id: str, **changes: Any) -> None:
+    """Overwrite keys of an uploaded file's sidecar, as if it had been stored differently (e.g. at another time)."""
+    path = root / BRIMFileStatus.UPLOADED.value / f"broker_{BROKER_ID}" / f"{file_id}.json"
+    metadata = json.loads(path.read_text())
+    metadata.update(changes)
+    path.write_text(json.dumps(metadata, indent=2))
+
+
+def _file_info(kind: str) -> BRIMFileInfo:
+    """A stored-file description of the given kind, for the parse guard (which never opens the file)."""
+    return BRIMFileInfo(file_id="f-1", filename="custody.csv", size_bytes=10, status=BRIMFileStatus.UPLOADED, uploaded_at=UPLOADED_AT, compatible_plugins=[FAKE_CODE], target_broker_id=BROKER_ID, kind=kind)
+
+
+def _codes(preview: Any) -> List[str]:
+    """The notice codes of a preview's warnings, in order."""
+    return [notice.code for notice in preview.warnings]
+
+
+def _roles(preview: Any) -> Dict[str, Any]:
+    """The preview's role statuses, by role code."""
+    return {role.code: role for role in preview.roles}
+
+
+def _preview(plugin: BRIMProvider, members: Sequence[BRIMFileInfo], *, history_start: Optional[date] = None, gap_fix_dates: Sequence[date] = ()) -> Any:
+    """``build_preview`` for the fake's code on ``BROKER_ID``, in batch ``batch-a2``."""
+    build_preview = _sets("build_preview")
+    return build_preview(plugin, list(members), broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id="batch-a2", history_start=history_start, gap_fix_dates=list(gap_fix_dates))
+
+
+def _combined_files() -> List[BRIMFileInfo]:
+    """Every combined file of ``BROKER_ID`` in the isolated storage (a collection each test owns entirely)."""
+    return [info for info in brim_provider.list_files(broker_ids=[BROKER_ID]) if info.target_broker_id == BROKER_ID and info.kind == "combined"]
+
+
+async def _seed_history(session: AsyncSession, rows: Sequence[Tuple[int, date, Optional[str]]]) -> None:
+    """Both brokers, and one transaction per ``(broker_id, date, tags)``; ``tags`` exactly as stored (comma-separated)."""
+    for broker_id in sorted({BROKER_ID, OTHER_BROKER_ID, *(row[0] for row in rows)}):
+        session.add(Broker(id=broker_id, name=f"Report-set broker {broker_id}"))
+    for broker_id, day, tags in rows:
+        session.add(Transaction(broker_id=broker_id, type=TransactionType.DEPOSIT, date=day, amount=Decimal("1"), currency="EUR", tags=tags))
+    await session.commit()
+
+
+def _parse_output(*, transactions: Sequence[str] = (), checkpoints: Sequence[Tuple[str, str]] = (), verifications: Sequence[str] = ()) -> BRIMParseOutput:
+    """A parse output of a combined file: deposits on the given dates, checkpoints ``(as_of, kind)`` and verifications."""
+    checkpoint, verification = _schema("BRIMCheckpoint"), _schema("BRIMVerification")
+    return BRIMParseOutput(
+        transactions=[TXCreateItem(broker_id=BROKER_ID, type=TransactionType.DEPOSIT, date=date.fromisoformat(day), cash=Currency(code="EUR", amount=Decimal("10"))) for day in transactions],
+        checkpoints=[checkpoint(as_of=date.fromisoformat(as_of), kind=kind) for as_of, kind in checkpoints],
+        verifications=[verification(as_of=date.fromisoformat(as_of)) for as_of in verifications],
+    )
+
+
+@pytest.fixture
+def set_storage(isolated_brim_dir: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """``isolated_brim_dir``, extended to the set service should it keep its own reference to the storage root."""
+    module = _sets_module()
+    if module is not None and hasattr(module, "get_broker_reports_dir"):
+        monkeypatch.setattr(module, "get_broker_reports_dir", lambda: isolated_brim_dir)
+    return isolated_brim_dir
+
+
+@pytest_asyncio.fixture
+async def db_session() -> AsyncIterator[AsyncSession]:
+    """A private in-memory SQLite database with the ORM schema, for H0: never the shared test database."""
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as connection:
+        await connection.run_sync(SQLModel.metadata.create_all)
+    session = AsyncSession(engine, expire_on_commit=False)
+    try:
+        yield session
+    finally:
+        await session.close()
+        await engine.dispose()
+
+
+# =============================================================================
+# A2 · A — CONTRACT: history_tag
+# =============================================================================
+
+
+class TestHistoryTag:
+    """A — ``BRIMProvider.history_tag``: the tag H0 looks for; by default the code without a leading ``broker_``."""
+
+    def test_real_plugin(self) -> None:
+        _require_contract("history_tag", phase=A2)
+
+        assert BRIMProviderRegistry.get_provider_instance("broker_credit_agricole").history_tag == "credit_agricole"
+
+    def test_every_existing_plugin_gets_the_default(self) -> None:
+        """None of the 30 single-file plugins overrides it."""
+        _require_contract("history_tag", phase=A2)
+
+        tags = {code: BRIMProviderRegistry.get_provider_instance(code).history_tag for code in EXISTING_PLUGIN_CODES}
+
+        assert tags == {code: code.removeprefix("broker_") for code in EXISTING_PLUGIN_CODES}
+
+    def test_fake_without_the_prefix_keeps_its_code(self, fake_plugin: BRIMProvider) -> None:
+        _require_contract("history_tag", phase=A2)
+
+        assert fake_plugin.history_tag == FAKE_CODE
+
+    @pytest.mark.parametrize(("provider", "expected"), [pytest.param(_FakeBankProvider, "fake_bank", id="leading-prefix-dropped"), pytest.param(_FakeInfixProvider, "fake_broker_bank", id="infix-kept")])
+    def test_only_a_leading_prefix_is_dropped(self, provider: type, expected: str) -> None:
+        _require_contract("history_tag", phase=A2)
+
+        assert provider().history_tag == expected
+
+
+# =============================================================================
+# A2 · B — SCHEMAS
+# =============================================================================
+
+
+class TestSetSchemas:
+    """B — the request and response schemas of ``POST /sets/preview`` and ``POST /sets/combine``."""
+
+    FILE_INFO = {"file_id": "c-1", "filename": "combined.csv", "size_bytes": 10, "status": "uploaded", "uploaded_at": "2026-09-30T12:00:00+00:00"}
+
+    @pytest.mark.parametrize(
+        ("name", "valid"),
+        [
+            pytest.param("BRIMSetRequest", {"broker_id": 7, "plugin_code": FAKE_CODE, "batch_id": "b-1"}, id="BRIMSetRequest"),
+            pytest.param("BRIMSetMemberInfo", {"file_id": "f-1", "filename": "custody.csv"}, id="BRIMSetMemberInfo"),
+            pytest.param("BRIMSetRoleStatus", {"code": "cash", "required": True, "multiple": True, "status": "present"}, id="BRIMSetRoleStatus"),
+            pytest.param("BRIMSetMissing", {"role": "cash"}, id="BRIMSetMissing"),
+            pytest.param("BRIMSetPreview", {"broker_id": 7, "plugin_code": FAKE_CODE, "batch_id": "b-1"}, id="BRIMSetPreview"),
+            pytest.param("BRIMSetCombineResponse", {"combined": FILE_INFO}, id="BRIMSetCombineResponse"),
+        ],
+    )
+    def test_rejects_an_unknown_key(self, name: str, valid: Dict[str, Any]) -> None:
+        """Every one is a ``StrictModel``: the baseline payload is valid, the same plus one unknown key is not."""
+        model = _schema(name, A2)
+        model.model_validate(valid)
+
+        with pytest.raises(ValidationError):
+            model.model_validate({**valid, "unexpected_key": "x"})
+
+    @pytest.mark.parametrize("missing", ["broker_id", "plugin_code", "batch_id"])
+    def test_request_fields_are_required(self, missing: str) -> None:
+        set_request = _schema("BRIMSetRequest", A2)
+        payload = {"broker_id": 7, "plugin_code": FAKE_CODE, "batch_id": "b-1"}
+        assert set_request.model_validate(payload).model_dump() == payload
+        del payload[missing]
+
+        with pytest.raises(ValidationError):
+            set_request.model_validate(payload)
+
+    @pytest.mark.parametrize("broker_id", [0, -1])
+    def test_request_broker_id_is_positive(self, broker_id: int) -> None:
+        set_request = _schema("BRIMSetRequest", A2)
+
+        with pytest.raises(ValidationError):
+            set_request(broker_id=broker_id, plugin_code=FAKE_CODE, batch_id="b-1")
+
+    def test_member_info_defaults_and_coverage(self) -> None:
+        """A member whose role is unknown has no rows and no coverage; a recognised one carries typed spans."""
+        member_info, coverage = _schema("BRIMSetMemberInfo", A2), _schema("BRIMCoverage")
+
+        bare = member_info(file_id="f-1", filename="custody.csv")
+        full = member_info.model_validate({"file_id": "f-2", "filename": "cash.csv", "role": "cash", "rows": 3, "coverage": [{"axis": "value", "start": "2025-01-01", "end": "2025-01-17"}]})
+
+        assert (bare.role, bare.rows, bare.coverage) == (None, 0, [])
+        assert full.coverage == [coverage(axis="value", start=date(2025, 1, 1), end=date(2025, 1, 17))]
+
+    @pytest.mark.parametrize("status", ["present", "missing", "excess"])
+    def test_role_status_values(self, status: str) -> None:
+        role_status = _schema("BRIMSetRoleStatus", A2)(code="cash", required=True, multiple=False, status=status)
+
+        assert (role_status.status, role_status.file_ids) == (status, [])
+
+    def test_role_status_rejects_other_values(self) -> None:
+        role_status = _schema("BRIMSetRoleStatus", A2)
+
+        with pytest.raises(ValidationError):
+            role_status(code="cash", required=True, multiple=False, status="partial")
+
+    def test_missing_has_no_period_by_default(self) -> None:
+        missing = _schema("BRIMSetMissing", A2)(role="custody")
+
+        assert (missing.role, missing.start, missing.end) == ("custody", None, None)
+
+    def test_preview_defaults(self) -> None:
+        """Nothing known yet: no member, no role, nothing missing, no span, no H0, not complete."""
+        preview = _schema("BRIMSetPreview", A2)(broker_id=7, plugin_code=FAKE_CODE, batch_id="b-1")
+
+        assert (preview.members, preview.roles, preview.missing, preview.segments, preview.gaps, preview.history_start, preview.warnings, preview.complete) == ([], [], [], [], [], None, [], False)
+
+    def test_preview_round_trips_through_json(self) -> None:
+        set_preview = _schema("BRIMSetPreview", A2)
+        payload = {
+            "broker_id": 7,
+            "plugin_code": FAKE_CODE,
+            "batch_id": "b-1",
+            "members": [{"file_id": "f-1", "filename": "custody.csv", "role": "custody", "rows": 2, "coverage": [{"axis": "trade", "start": "2025-01-02", "end": "2025-01-15"}]}],
+            "roles": [{"code": "custody", "required": True, "multiple": True, "status": "present", "file_ids": ["f-1"]}, {"code": "cash", "required": True, "multiple": True, "status": "missing"}],
+            "missing": [{"role": "cash", "start": "2025-01-01", "end": "2025-01-15"}],
+            "segments": [{"start": "2025-01-02", "end": "2025-01-15"}],
+            "gaps": [],
+            "history_start": "2025-01-02",
+            "warnings": [{"severity": "warning", "code": "coverage_starts_late", "message": "Cash starts late", "context": {"role": "cash", "covered_role": "custody", "date": "2025-01-01"}}],
+            "complete": False,
+        }
+
+        preview = set_preview.model_validate(payload)
+
+        assert set_preview.model_validate_json(preview.model_dump_json()) == preview
+        assert preview.segments == [JAN_SEGMENT]
+        assert (preview.missing[0].start, preview.history_start) == (date(2025, 1, 1), date(2025, 1, 2))
+        assert all(isinstance(notice, BRIMNotice) for notice in preview.warnings)
+
+    def test_combine_response_defaults(self) -> None:
+        response = _schema("BRIMSetCombineResponse", A2).model_validate({"combined": self.FILE_INFO})
+
+        assert isinstance(response.combined, BRIMFileInfo)
+        assert (response.combined.file_id, response.summary, response.reused) == ("c-1", {}, False)
+
+
+# =============================================================================
+# A2 · C — STORAGE: read_combine_summary
+# =============================================================================
+
+
+class TestReadCombineSummary:
+    """C — ``read_combine_summary``: the combine summary kept in a combined file's sidecar, ``{}`` for anything else."""
+
+    def test_combined_file_gives_its_summary(self, isolated_brim_dir: Path, fake_plugin: BRIMProvider) -> None:
+        read_combine_summary = _service("read_combine_summary", A2)
+        custody, cash = _upload("custody"), _upload("cash")
+        combined, table = _save_combined(fake_plugin, ("custody", custody), ("cash", cash))
+        assert table.summary, "precondition: the fake's combine summary is not empty"
+
+        assert read_combine_summary(combined.file_id) == table.summary
+
+    def test_original_gives_an_empty_summary(self, isolated_brim_dir: Path, fake_plugin: BRIMProvider) -> None:
+        """Even an original that already went into a combined file."""
+        read_combine_summary = _service("read_combine_summary", A2)
+        custody, cash = _upload("custody"), _upload("cash")
+        _save_combined(fake_plugin, ("custody", custody), ("cash", cash))
+
+        assert read_combine_summary(custody.file_id) == {}
+
+    def test_unknown_id_gives_an_empty_summary(self, isolated_brim_dir: Path) -> None:
+        read_combine_summary = _service("read_combine_summary", A2)
+
+        assert read_combine_summary(str(uuid.uuid4())) == {}
+
+
+# =============================================================================
+# A2 · D — SERVICE: errors and plugin lookup
+# =============================================================================
+
+
+class TestSetErrors:
+    """D — one ``BRIMSetError`` family; each error carries its HTTP status and its stable code (asserted where raised)."""
+
+    def test_family(self) -> None:
+        base = _sets("BRIMSetError")
+
+        assert issubclass(base, Exception)
+        assert {name: issubclass(_sets(name), base) for name in SET_ERRORS} == dict.fromkeys(SET_ERRORS, True)
+
+
+class TestGetSetPlugin:
+    """D1 — ``get_set_plugin``: only a registered plugin that declares report roles."""
+
+    def test_unknown_code(self) -> None:
+        get_set_plugin = _sets("get_set_plugin")
+
+        with pytest.raises(_sets("BRIMSetPluginNotFound")) as caught:
+            get_set_plugin("no_such_plugin_a2")
+
+        assert (caught.value.status_code, caught.value.code) == SET_ERRORS["BRIMSetPluginNotFound"]
+
+    def test_single_file_plugin(self) -> None:
+        get_set_plugin = _sets("get_set_plugin")
+
+        with pytest.raises(_sets("BRIMSetPluginNotASet")) as caught:
+            get_set_plugin("broker_generic_csv")
+
+        assert (caught.value.status_code, caught.value.code) == SET_ERRORS["BRIMSetPluginNotASet"]
+
+    def test_report_set_plugin(self, fake_plugin: BRIMProvider) -> None:
+        get_set_plugin = _sets("get_set_plugin")
+
+        plugin = get_set_plugin(FAKE_CODE)
+
+        assert isinstance(plugin, _FakeTwoRoleProvider)
+        assert plugin.provider_code == FAKE_CODE
+
+
+# =============================================================================
+# A2 · D2 — SERVICE: collect_members
+# =============================================================================
+
+
+class TestCollectMembers:
+    """D2 — ``collect_members``: the set is one upload for one broker and one plugin (D-S22), never the rest of the archive (A16)."""
+
+    def test_collects_the_originals_of_one_upload(self, set_storage: Path, fake_plugin: BRIMProvider) -> None:
+        """Each distractor shares something with the set and none belongs to it; a member already parsed by another plugin still does."""
+        collect_members = _sets("collect_members")
+        batch = str(uuid.uuid4())
+        custody = _member(CUSTODY_JAN, CUSTODY_NAME, batch_id=batch)
+        cash = _member(CASH_JAN, CASH_NAME, batch_id=batch)
+        _member(CUSTODY_MAR, "custody-other-broker.csv", batch_id=batch, broker_id=OTHER_BROKER_ID)
+        _member(CUSTODY_MAR, "custody-other-batch.csv", batch_id=str(uuid.uuid4()))
+        _member(CUSTODY_MAR, "custody-no-batch.csv")
+        other_plugin = _member(GENERIC_CSV, "generic.csv", batch_id=batch)
+        failed = _member(CUSTODY_MAR, "custody-failed.csv", batch_id=batch)
+        assert brim_provider.move_to_failed(failed.file_id, "synthetic failure")
+        combined, _ = _save_combined(fake_plugin, ("custody", custody), ("cash", cash))
+        assert brim_provider.move_to_parsed(cash.file_id)
+        assert FAKE_CODE not in other_plugin.compatible_plugins, "precondition: the fake does not read the generic CSV"
+        assert _info(combined.file_id).batch_id == batch, "precondition: the combined file shares the upload's batch"
+
+        members = collect_members(broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch)
+
+        assert {member.file_id for member in members} == {custody.file_id, cash.file_id}
+        assert len(members) == 2, [member.filename for member in members]
+        assert all(isinstance(member, BRIMFileInfo) and member.kind == "original" for member in members)
+
+    def test_orders_by_upload_time_then_filename(self, set_storage: Path, fake_plugin: BRIMProvider) -> None:
+        """Earliest upload first; on the same instant, by filename. The first by name is the last by time."""
+        collect_members = _sets("collect_members")
+        batch = str(uuid.uuid4())
+        latest = _member(CASH_JAN_MAR, "a-cash.csv", batch_id=batch)
+        tie_b = _member(CUSTODY_JAN, "b-custody.csv", batch_id=batch)
+        tie_a = _member(CUSTODY_MAR, "a-custody.csv", batch_id=batch)
+        _rewrite_sidecar(set_storage, latest.file_id, uploaded_at="2026-09-30T12:00:00+00:00")
+        _rewrite_sidecar(set_storage, tie_b.file_id, uploaded_at="2026-09-30T11:00:00+00:00")
+        _rewrite_sidecar(set_storage, tie_a.file_id, uploaded_at="2026-09-30T11:00:00+00:00")
+
+        members = collect_members(broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch)
+
+        assert [member.file_id for member in members] == [tie_a.file_id, tie_b.file_id, latest.file_id]
+
+    @pytest.mark.parametrize("scenario", ["unknown-batch", "only-non-members"])
+    def test_no_member_raises(self, set_storage: Path, fake_plugin: BRIMProvider, scenario: str) -> None:
+        collect_members = _sets("collect_members")
+        members_not_found = _sets("BRIMSetMembersNotFound")
+        batch = str(uuid.uuid4())
+        if scenario == "only-non-members":
+            _member(GENERIC_CSV, "generic.csv", batch_id=batch)
+            _member(CUSTODY_JAN, "custody-other-broker.csv", batch_id=batch, broker_id=OTHER_BROKER_ID)
+            failed = _member(CUSTODY_JAN, "custody-failed.csv", batch_id=batch)
+            assert brim_provider.move_to_failed(failed.file_id, "synthetic failure")
+
+        with pytest.raises(members_not_found) as caught:
+            collect_members(broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch)
+
+        assert (caught.value.status_code, caught.value.code) == SET_ERRORS["BRIMSetMembersNotFound"]
+
+
+# =============================================================================
+# A2 · D3 — SERVICE: history_start (H0, D-S25)
+# =============================================================================
+
+
+def _own(day: str, tags: Optional[str]) -> Tuple[int, date, Optional[str]]:
+    """A transaction of the broker whose H0 is asked for."""
+    return (BROKER_ID, date.fromisoformat(day), tags)
+
+
+def _foreign(day: str, tags: Optional[str]) -> Tuple[int, date, Optional[str]]:
+    """A transaction of another broker: never part of this broker's history."""
+    return (OTHER_BROKER_ID, date.fromisoformat(day), tags)
+
+
+# (transactions in the database, expected H0 for BROKER_ID and tag "danske_bank")
+HISTORY_CASES = [
+    pytest.param([], None, id="empty-broker"),
+    pytest.param([_own("2024-06-01", None), _own("2024-07-01", "manual")], None, id="manual-history-without-the-tag"),
+    pytest.param([_own("2025-03-10", "import,danske_bank"), _own("2025-01-02", "danske_bank,import"), _own("2025-02-01", "danske_bank")], date(2025, 1, 2), id="oldest-tagged-row-any-tag-position"),
+    pytest.param([_own("2024-01-01", None), _own("2024-02-01", "import"), _own("2025-01-02", "import,danske_bank")], date(2025, 1, 2), id="older-rows-without-the-tag-do-not-count"),
+    pytest.param([_own("2024-12-31", "import,danske_bank,gap_fix"), _own("2025-01-02", "import,danske_bank")], date(2025, 1, 1), id="gap-fix-counts-from-the-next-day"),
+    pytest.param([_own("2024-12-31", "import,danske_bank,gap_fix")], date(2025, 1, 1), id="gap-fix-alone"),
+    pytest.param([_own("2024-12-31", "import,danske_bank,gap_fix"), _own("2024-12-31", "import,danske_bank")], date(2024, 12, 31), id="row-on-the-gap-fix-day-wins"),
+    pytest.param([_own("2025-01-02", "import,danske_bank"), _own("2025-06-30", "import,danske_bank,gap_fix")], date(2025, 1, 2), id="later-gap-fix-does-not-move-it"),
+    pytest.param([_own("2024-06-30", "import,credit_agricole,gap_fix"), _own("2025-01-02", "import,danske_bank")], date(2025, 1, 2), id="another-plugins-gap-fix-does-not-count"),
+    pytest.param([_own("2024-01-01", "import,danske_bank_old"), _own("2024-02-01", "old_danske_bank"), _own("2024-03-01", "import,danske_bankx"), _own("2025-01-02", "import,danske_bank")], date(2025, 1, 2), id="exact-tag-only"),
+    pytest.param([_own("2024-01-01", "danske_bank_old,import"), _own("2024-02-01", "xdanske_bank")], None, id="near-miss-tags-alone"),
+    pytest.param([_foreign("2023-01-01", "import,danske_bank"), _foreign("2023-01-01", "import,danske_bank,gap_fix"), _own("2025-01-02", "import,danske_bank")], date(2025, 1, 2), id="other-broker-never-counts"),
+    pytest.param([_foreign("2023-01-01", "import,danske_bank")], None, id="other-broker-alone"),
+]
+
+
+class TestHistoryStart:
+    """D3 — ``history_start``: the first day LibreFolio already has this plugin's history for the broker (D-S25, A2, A3, A14)."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("rows", "expected"), HISTORY_CASES)
+    async def test_cases(self, db_session: AsyncSession, rows: List[Tuple[int, date, Optional[str]]], expected: Optional[date]) -> None:
+        history_start = _sets("history_start")
+        await _seed_history(db_session, rows)
+
+        assert await history_start(db_session, broker_id=BROKER_ID, history_tag=HISTORY_TAG) == expected
+
+
+# =============================================================================
+# A2 · D4 — SERVICE: build_preview
+# =============================================================================
+
+
+class TestBuildPreview:
+    """D4 — ``build_preview``: what is in the set, read through the plugin without combining (§3.3)."""
+
+    def test_complete_set(self, set_storage: Path, fake_plugin: BRIMProvider) -> None:
+        coverage = _schema("BRIMCoverage")
+        custody, cash = _member(CUSTODY_JAN, CUSTODY_NAME), _member(CASH_JAN, CASH_NAME)
+
+        preview = _preview(fake_plugin, [custody, cash])
+
+        assert isinstance(preview, _schema("BRIMSetPreview", A2))
+        assert (preview.broker_id, preview.plugin_code, preview.batch_id, preview.history_start) == (BROKER_ID, FAKE_CODE, "batch-a2", None)
+        members = {member.file_id: member for member in preview.members}
+        assert set(members) == {custody.file_id, cash.file_id}
+        assert (members[custody.file_id].filename, members[custody.file_id].role, members[custody.file_id].rows) == (CUSTODY_NAME, "custody", 2)
+        assert members[custody.file_id].coverage == [coverage(axis="trade", start=date(2025, 1, 2), end=date(2025, 1, 15))]
+        assert (members[cash.file_id].filename, members[cash.file_id].role, members[cash.file_id].rows) == (CASH_NAME, "cash", 3)
+        assert members[cash.file_id].coverage == [coverage(axis="value", start=date(2025, 1, 1), end=date(2025, 1, 17))]
+        roles = _roles(preview)
+        assert set(roles) == {"custody", "cash"}
+        assert (roles["custody"].required, roles["custody"].multiple, roles["custody"].status, roles["custody"].file_ids) == (True, True, "present", [custody.file_id])
+        assert (roles["cash"].required, roles["cash"].multiple, roles["cash"].status, roles["cash"].file_ids) == (True, True, "present", [cash.file_id])
+        assert (preview.missing, preview.segments, preview.gaps) == ([], [JAN_SEGMENT], [])
+        assert _codes(preview) == [FAKE_SET_NOTICE], "a clean set carries the plugin's notices and nothing from the core"
+        assert preview.complete is True
+
+    def test_missing_role_period_comes_from_must_cover(self, set_storage: Path, fake_plugin: BRIMProvider) -> None:
+        """Cash must cover custody: ``missing`` asks for it from the eve of the first trade to the last trade, across every custody file."""
+        missing = _schema("BRIMSetMissing", A2)
+        jan, mar = _member(CUSTODY_JAN, "custody-jan.csv"), _member(CUSTODY_MAR, "custody-mar.csv")
+
+        preview = _preview(fake_plugin, [jan, mar])
+
+        roles = _roles(preview)
+        assert (roles["custody"].status, sorted(roles["custody"].file_ids)) == ("present", sorted([jan.file_id, mar.file_id]))
+        assert (roles["cash"].status, roles["cash"].file_ids) == ("missing", [])
+        assert preview.missing == [missing(role="cash", start=date(2025, 1, 1), end=date(2025, 3, 20))]
+        assert preview.complete is False
+
+    def test_incomplete_set_is_not_described(self, set_storage: Path, fake_plugin: BRIMProvider) -> None:
+        """``describe_set`` is asked only once every required role is present: before that, no segment, no gap, no plugin notice."""
+        preview = _preview(fake_plugin, [_member(CUSTODY_JAN, CUSTODY_NAME)])
+
+        assert (preview.segments, preview.gaps) == ([], [])
+        assert FAKE_SET_NOTICE not in _codes(preview)
+
+    def test_missing_role_without_must_cover_has_no_period(self, set_storage: Path, fake_plugin: BRIMProvider) -> None:
+        missing = _schema("BRIMSetMissing", A2)
+
+        preview = _preview(fake_plugin, [_member(CASH_JAN, CASH_NAME)])
+
+        assert preview.missing == [missing(role="custody")]
+        assert preview.complete is False
+
+    def test_nothing_recognised(self, set_storage: Path, fake_plugin: BRIMProvider) -> None:
+        """Without custody the cash period cannot be computed either: both missing roles come without dates."""
+        stray = _member(GENERIC_CSV, "generic.csv")
+
+        preview = _preview(fake_plugin, [stray])
+
+        assert {item.role: (item.start, item.end) for item in preview.missing} == {"custody": (None, None), "cash": (None, None)}
+        assert [(member.file_id, member.role) for member in preview.members] == [(stray.file_id, None)]
+        assert preview.complete is False
+
+    def test_unrecognised_member_is_reported_and_ignored(self, set_storage: Path, fake_plugin: BRIMProvider) -> None:
+        """Listed with no role and flagged ``unknown_role`` (context: its file id); completeness is decided without it."""
+        custody, cash, stray = _member(CUSTODY_JAN, CUSTODY_NAME), _member(CASH_JAN, CASH_NAME), _member(GENERIC_CSV, "generic.csv")
+
+        preview = _preview(fake_plugin, [custody, cash, stray])
+
+        members = {member.file_id: member for member in preview.members}
+        assert (members[stray.file_id].filename, members[stray.file_id].role, members[stray.file_id].rows, members[stray.file_id].coverage) == ("generic.csv", None, 0, [])
+        unknown = [notice for notice in preview.warnings if notice.code == "unknown_role"]
+        assert [(notice.context or {}).get("file_id") for notice in unknown] == [stray.file_id]
+        assert all(stray.file_id not in role.file_ids for role in preview.roles)
+        assert preview.complete is True
+
+    def test_two_files_for_a_single_file_role_are_excess(self, set_storage: Path) -> None:
+        jan, mar, cash = _member(CUSTODY_JAN, "custody-jan.csv"), _member(CUSTODY_MAR, "custody-mar.csv"), _member(CASH_JAN_MAR, CASH_NAME)
+
+        preview = _preview(_FakeSingleCustodyProvider(), [jan, mar, cash])
+
+        custody = _roles(preview)["custody"]
+        assert (custody.multiple, custody.status, sorted(custody.file_ids)) == (False, "excess", sorted([jan.file_id, mar.file_id]))
+        assert "excess_files" in _codes(preview)
+        assert preview.missing == []
+        assert preview.complete is False
+
+    def test_one_file_for_a_single_file_role_is_present(self, set_storage: Path) -> None:
+        preview = _preview(_FakeSingleCustodyProvider(), [_member(CUSTODY_JAN, CUSTODY_NAME), _member(CASH_JAN, CASH_NAME)])
+
+        assert _roles(preview)["custody"].status == "present"
+        assert "excess_files" not in _codes(preview)
+        assert preview.complete is True
+
+    def test_optional_role_may_stay_missing(self, set_storage: Path) -> None:
+        """Listed as ``missing``, but ``missing`` names required roles only, and the set is complete without it."""
+        preview = _preview(_FakeOptionalRoleProvider(), [_member(CUSTODY_JAN, CUSTODY_NAME), _member(CASH_JAN, CASH_NAME)])
+
+        statement = _roles(preview)["statement"]
+        assert (statement.required, statement.status, statement.file_ids) == (False, "missing", [])
+        assert preview.missing == []
+        assert preview.complete is True
+
+    @pytest.mark.parametrize(
+        ("cash_dates", "expected"),
+        [
+            pytest.param(("2025-01-01", "2025-01-15"), set(), id="from-the-eve-to-the-last-trade"),
+            pytest.param(("2024-12-01", "2025-02-28"), set(), id="wider"),
+            pytest.param(("2025-01-02", "2025-01-17"), {"coverage_starts_late"}, id="starts-on-the-first-trade-day"),
+            pytest.param(("2025-01-06", "2025-01-17"), {"coverage_starts_late"}, id="starts-late"),
+            pytest.param(("2025-01-01", "2025-01-14"), {"coverage_ends_early"}, id="ends-the-day-before-the-last-trade"),
+            pytest.param(("2025-01-05", "2025-01-10"), {"coverage_starts_late", "coverage_ends_early"}, id="both"),
+        ],
+    )
+    def test_cash_coverage_against_custody(self, set_storage: Path, fake_plugin: BRIMProvider, cash_dates: Tuple[str, str], expected: set) -> None:
+        """Cash must cover custody from the eve of its first trade to its last one (``must_cover``): a shortfall warns, it does not block."""
+        preview = _preview(fake_plugin, [_member(CUSTODY_JAN, CUSTODY_NAME), _member(_cash_csv(*cash_dates), CASH_NAME)])
+
+        found = [notice for notice in preview.warnings if notice.code in COVERAGE_CODES]
+        assert {notice.code for notice in found} == expected
+        for notice in found:
+            assert notice.context is not None and {"role", "covered_role", "date"} <= set(notice.context), notice.context
+            assert (notice.context["role"], notice.context["covered_role"]) == ("cash", "custody")
+            assert notice.context["date"] is not None
+        assert preview.complete is True
+
+    def test_two_custody_accounts_are_mixed(self, set_storage: Path, fake_plugin: BRIMProvider) -> None:
+        """Two deposit accounts in one set: not complete, and neither account number leaves memory (§3.3)."""
+        jan = _member(CUSTODY_JAN, "custody-jan.csv")
+        mar = _member(_custody_csv("2025-03-03", "2025-03-20", account=OTHER_ACCOUNT), "custody-mar.csv")
+        cash = _member(CASH_JAN_MAR, CASH_NAME)
+        assert fake_plugin.describe_member(brim_provider.get_file_path(mar.file_id)).account_fingerprint == OTHER_ACCOUNT  # precondition
+
+        preview = _preview(fake_plugin, [jan, mar, cash])
+
+        assert "mixed_accounts" in _codes(preview)
+        assert preview.complete is False
+        dumped = preview.model_dump_json()
+        assert FAKE_ACCOUNT not in dumped and OTHER_ACCOUNT not in dumped
+
+    def test_one_custody_account_is_not_mixed(self, set_storage: Path, fake_plugin: BRIMProvider) -> None:
+        preview = _preview(fake_plugin, [_member(CUSTODY_JAN, "custody-jan.csv"), _member(CUSTODY_MAR, "custody-mar.csv"), _member(CASH_JAN_MAR, CASH_NAME)])
+
+        assert "mixed_accounts" not in _codes(preview)
+        assert preview.complete is True
+        assert FAKE_ACCOUNT not in preview.model_dump_json()
+
+    @pytest.mark.parametrize(
+        ("history_start", "flagged"),
+        [
+            pytest.param(None, 0, id="no-history"),
+            pytest.param(date(2025, 1, 15), 0, id="h0-on-the-last-day-of-the-first-segment"),
+            pytest.param(date(2025, 1, 16), 1, id="h0-the-day-after-the-first-segment"),
+            pytest.param(date(2025, 3, 3), 1, id="h0-on-the-first-day-of-the-second-segment"),
+        ],
+    )
+    def test_segment_before_history_start(self, set_storage: Path, fake_plugin: BRIMProvider, history_start: Optional[date], flagged: int) -> None:
+        """A segment that ends before H0 is history already: warned, never imported (D-S21). Segments and gaps are the plugin's."""
+        members = [_member(CUSTODY_JAN, "custody-jan.csv"), _member(CUSTODY_MAR, "custody-mar.csv"), _member(CASH_JAN_MAR, CASH_NAME)]
+
+        preview = _preview(fake_plugin, members, history_start=history_start)
+
+        assert (preview.segments, preview.gaps) == ([JAN_SEGMENT, MAR_SEGMENT], [DateRangeModel(start=date(2025, 1, 16), end=date(2025, 3, 2))])
+        assert preview.history_start == history_start
+        assert _codes(preview).count("before_history_segment") == flagged
+
+    @pytest.mark.parametrize(
+        ("gap_fix_dates", "warned"),
+        [
+            pytest.param([], False, id="none"),
+            pytest.param([date(2025, 1, 10)], True, id="inside"),
+            pytest.param([date(2025, 1, 2)], True, id="first-day"),
+            pytest.param([date(2025, 1, 15)], True, id="last-day"),
+            pytest.param([date(2025, 1, 1)], False, id="the-eve-a-previous-opening"),
+            pytest.param([date(2025, 1, 1), date(2025, 2, 1)], False, id="outside-only"),
+        ],
+    )
+    def test_gap_fix_inside_a_segment(self, set_storage: Path, fake_plugin: BRIMProvider, gap_fix_dates: List[date], warned: bool) -> None:
+        """A gap-fix already inside a segment of the set would count its cash twice: warned (D-S21)."""
+        preview = _preview(fake_plugin, [_member(CUSTODY_JAN, CUSTODY_NAME), _member(CASH_JAN, CASH_NAME)], gap_fix_dates=gap_fix_dates)
+
+        assert ("covers_gap_fix" in _codes(preview)) is warned
+
+
+# =============================================================================
+# A2 · D5 — SERVICE: preview_set
+# =============================================================================
+
+
+class TestPreviewSet:
+    """D5 — ``preview_set``: the plugin, the members of one upload, H0 and the gap-fix dates from the database."""
+
+    @pytest.mark.asyncio
+    async def test_reads_history_and_gap_fixes_from_the_database(self, set_storage: Path, fake_plugin: BRIMProvider, db_session: AsyncSession) -> None:
+        preview_set = _sets("preview_set")
+        batch = str(uuid.uuid4())
+        custody = _member(CUSTODY_JAN, CUSTODY_NAME, batch_id=batch)
+        cash = _member(CASH_JAN, CASH_NAME, batch_id=batch)
+        earlier_upload = _member(_custody_csv("2023-05-02", "2023-05-31"), "custody-2023.csv", batch_id=str(uuid.uuid4()))
+        await _seed_history(db_session, [(BROKER_ID, date(2025, 1, 8), f"import,{FAKE_CODE}"), (BROKER_ID, date(2025, 1, 9), f"import,{FAKE_CODE},gap_fix")])
+
+        preview = await preview_set(db_session, broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch)
+
+        assert (preview.broker_id, preview.plugin_code, preview.batch_id) == (BROKER_ID, FAKE_CODE, batch)
+        assert preview.history_start == date(2025, 1, 8)
+        assert "covers_gap_fix" in _codes(preview)
+        assert {member.file_id for member in preview.members} == {custody.file_id, cash.file_id}
+        assert earlier_upload.file_id not in preview.model_dump_json(), "another upload of the same broker is never read (A16)"
+        assert preview.segments == [JAN_SEGMENT]
+        assert preview.complete is True
+
+    @pytest.mark.asyncio
+    async def test_other_brokers_history_is_ignored(self, set_storage: Path, fake_plugin: BRIMProvider, db_session: AsyncSession) -> None:
+        preview_set = _sets("preview_set")
+        batch = str(uuid.uuid4())
+        _member(CUSTODY_JAN, CUSTODY_NAME, batch_id=batch)
+        _member(CASH_JAN, CASH_NAME, batch_id=batch)
+        await _seed_history(db_session, [(OTHER_BROKER_ID, date(2025, 1, 5), f"import,{FAKE_CODE}"), (OTHER_BROKER_ID, date(2025, 1, 9), f"import,{FAKE_CODE},gap_fix")])
+
+        preview = await preview_set(db_session, broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch)
+
+        assert preview.history_start is None
+        assert "covers_gap_fix" not in _codes(preview)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("plugin_code", "error"), [("no_such_plugin_a2", "BRIMSetPluginNotFound"), ("broker_generic_csv", "BRIMSetPluginNotASet"), (FAKE_CODE, "BRIMSetMembersNotFound")])
+    async def test_errors(self, set_storage: Path, fake_plugin: BRIMProvider, db_session: AsyncSession, plugin_code: str, error: str) -> None:
+        preview_set = _sets("preview_set")
+
+        with pytest.raises(_sets(error)) as caught:
+            await preview_set(db_session, broker_id=BROKER_ID, plugin_code=plugin_code, batch_id=str(uuid.uuid4()))
+
+        assert (caught.value.status_code, caught.value.code) == SET_ERRORS[error]
+
+
+# =============================================================================
+# A2 · D6 — SERVICE: combine_set
+# =============================================================================
+
+
+class TestCombineSet:
+    """D6 — ``combine_set``: preview, then reuse or ``plugin.combine`` + ``save_combined_file`` (§3.4, D-S6)."""
+
+    @pytest.mark.asyncio
+    async def test_combines_and_saves_a_complete_set(self, set_storage: Path, fake_plugin: BRIMProvider, db_session: AsyncSession) -> None:
+        combine_set = _sets("combine_set")
+        batch = str(uuid.uuid4())
+        custody = _member(CUSTODY_JAN, CUSTODY_NAME, batch_id=batch)
+        cash = _member(CASH_JAN, CASH_NAME, batch_id=batch)
+
+        result = await combine_set(db_session, broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch, user_id=USER_ID)
+
+        expected = fake_plugin.combine({"custody": [brim_provider.get_file_path(custody.file_id)], "cash": [brim_provider.get_file_path(cash.file_id)]})
+        assert isinstance(result, _schema("BRIMSetCombineResponse", A2))
+        assert (result.reused, result.summary) == (False, expected.summary)
+        combined = result.combined
+        assert (combined.kind, combined.status, combined.target_broker_id, combined.compatible_plugins) == ("combined", BRIMFileStatus.UPLOADED, BROKER_ID, [FAKE_CODE])
+        assert (combined.batch_id, combined.uploaded_by_user_id) == (batch, USER_ID)
+        assert {ref.file_id: (ref.role, ref.filename, ref.deleted) for ref in combined.derived_from} == {custody.file_id: ("custody", CUSTODY_NAME, False), cash.file_id: ("cash", CASH_NAME, False)}
+        with open(brim_provider.get_file_path(combined.file_id), encoding="utf-8-sig", newline="") as handle:
+            assert list(csv.reader(handle, delimiter=";")) == [expected.headers, *expected.rows]
+        for member in (custody, cash):
+            assert combined.file_id in _info(member.file_id).combined_into
+
+    @pytest.mark.asyncio
+    async def test_generated_name_never_repeats_a_member_name(self, set_storage: Path, fake_plugin: BRIMProvider, db_session: AsyncSession) -> None:
+        """``<provider name> — combined <first segment start>…<last segment end>.csv``: the members' names (Danske: an IBAN) stay out."""
+        combine_set = _sets("combine_set")
+        batch = str(uuid.uuid4())
+        members = [_member(CUSTODY_JAN, CUSTODY_NAME, batch_id=batch), _member(CASH_JAN, CASH_NAME, batch_id=batch)]
+
+        result = await combine_set(db_session, broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch, user_id=USER_ID)
+
+        assert result.combined.filename == f"{FAKE_PROVIDER_NAME} — combined 2025-01-02…2025-01-15.csv"
+        for member in members:
+            assert member.filename not in result.combined.filename and Path(member.filename).stem not in result.combined.filename
+
+    @pytest.mark.asyncio
+    async def test_generated_name_spans_every_segment(self, set_storage: Path, fake_plugin: BRIMProvider, db_session: AsyncSession) -> None:
+        combine_set = _sets("combine_set")
+        batch = str(uuid.uuid4())
+        _member(CUSTODY_JAN, "custody-jan.csv", batch_id=batch)
+        _member(CUSTODY_MAR, "custody-mar.csv", batch_id=batch)
+        _member(CASH_JAN_MAR, CASH_NAME, batch_id=batch)
+
+        result = await combine_set(db_session, broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch, user_id=USER_ID)
+
+        assert result.combined.filename == f"{FAKE_PROVIDER_NAME} — combined 2025-01-02…2025-03-20.csv"
+
+    @pytest.mark.asyncio
+    async def test_generated_name_without_segments(self, set_storage: Path, fake_plugin: BRIMProvider, db_session: AsyncSession) -> None:
+        combine_set = _sets("combine_set")
+        batch = str(uuid.uuid4())
+        _member(CUSTODY_JAN, CUSTODY_NAME, batch_id=batch)
+        _member(CASH_JAN, CASH_NAME, batch_id=batch)
+        # Same code, a plugin that proves no segment. `fake_plugin` restores the whole registry afterwards.
+        BRIMProviderRegistry._providers[FAKE_CODE] = _FakeNoShapeProvider
+
+        result = await combine_set(db_session, broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch, user_id=USER_ID)
+
+        assert result.combined.filename == f"{FAKE_PROVIDER_NAME} — combined.csv"
+
+    @pytest.mark.asyncio
+    async def test_same_members_reuse_the_combined_file(self, set_storage: Path, fake_plugin: BRIMProvider, db_session: AsyncSession) -> None:
+        """The second combine returns the first file and its stored summary, and writes nothing (D-S6)."""
+        combine_set = _sets("combine_set")
+        batch = str(uuid.uuid4())
+        _member(CUSTODY_JAN, CUSTODY_NAME, batch_id=batch)
+        _member(CASH_JAN, CASH_NAME, batch_id=batch)
+        first = await combine_set(db_session, broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch, user_id=USER_ID)
+        assert first.reused is False  # presence barrier: the first call does combine
+
+        second = await combine_set(db_session, broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch, user_id=USER_ID)
+
+        assert (second.reused, second.combined.file_id) == (True, first.combined.file_id)
+        assert second.summary == first.summary and second.summary
+        assert [info.file_id for info in _combined_files()] == [first.combined.file_id]
+
+    @pytest.mark.asyncio
+    async def test_new_plugin_version_combines_again(self, set_storage: Path, fake_plugin: BRIMProvider, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A bumped plugin writes a new combined file; the old one stays, marked stale."""
+        combine_set = _sets("combine_set")
+        batch = str(uuid.uuid4())
+        _member(CUSTODY_JAN, CUSTODY_NAME, batch_id=batch)
+        _member(CASH_JAN, CASH_NAME, batch_id=batch)
+        first = await combine_set(db_session, broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch, user_id=USER_ID)
+        monkeypatch.setattr(_FakeTwoRoleProvider, "plugin_version", "2.0.0-a2-test")
+
+        second = await combine_set(db_session, broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch, user_id=USER_ID)
+
+        assert second.reused is False
+        assert second.combined.file_id != first.combined.file_id
+        assert (_info(first.combined.file_id).combine_is_stale, _info(second.combined.file_id).combine_is_stale) == (True, False)
+
+    @pytest.mark.asyncio
+    async def test_incomplete_set_is_refused(self, set_storage: Path, fake_plugin: BRIMProvider, db_session: AsyncSession) -> None:
+        combine_set = _sets("combine_set")
+        batch = str(uuid.uuid4())
+        _member(CUSTODY_JAN, CUSTODY_NAME, batch_id=batch)
+
+        with pytest.raises(_sets("BRIMSetIncomplete")) as caught:
+            await combine_set(db_session, broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch, user_id=USER_ID)
+
+        assert (caught.value.status_code, caught.value.code) == SET_ERRORS["BRIMSetIncomplete"]
+        assert caught.value.missing_roles == ["cash"]
+        assert _combined_files() == []
+
+    @pytest.mark.asyncio
+    async def test_mixed_accounts_set_is_refused(self, set_storage: Path, fake_plugin: BRIMProvider, db_session: AsyncSession) -> None:
+        """Every role is there, but two deposit accounts make the set incomplete: nothing is missing, nothing is written."""
+        combine_set = _sets("combine_set")
+        batch = str(uuid.uuid4())
+        _member(CUSTODY_JAN, "custody-jan.csv", batch_id=batch)
+        _member(_custody_csv("2025-03-03", "2025-03-20", account=OTHER_ACCOUNT), "custody-mar.csv", batch_id=batch)
+        _member(CASH_JAN_MAR, CASH_NAME, batch_id=batch)
+
+        with pytest.raises(_sets("BRIMSetIncomplete")) as caught:
+            await combine_set(db_session, broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch, user_id=USER_ID)
+
+        assert caught.value.missing_roles == []
+        assert _combined_files() == []
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("plugin_code", "error"), [("no_such_plugin_a2", "BRIMSetPluginNotFound"), ("broker_generic_csv", "BRIMSetPluginNotASet"), (FAKE_CODE, "BRIMSetMembersNotFound")])
+    async def test_errors(self, set_storage: Path, fake_plugin: BRIMProvider, db_session: AsyncSession, plugin_code: str, error: str) -> None:
+        combine_set = _sets("combine_set")
+
+        with pytest.raises(_sets(error)) as caught:
+            await combine_set(db_session, broker_id=BROKER_ID, plugin_code=plugin_code, batch_id=str(uuid.uuid4()), user_id=USER_ID)
+
+        assert (caught.value.status_code, caught.value.code) == SET_ERRORS[error]
+
+
+# =============================================================================
+# A2 · D7 — SERVICE: ensure_parseable (the parse guard, D-S4)
+# =============================================================================
+
+
+class TestEnsureParseable:
+    """D7 — ``ensure_parseable``: an original of a report-set plugin cannot be parsed on its own; everything else passes."""
+
+    def test_original_of_a_set_plugin_is_refused(self, fake_plugin: BRIMProvider) -> None:
+        ensure_parseable = _sets("ensure_parseable")
+
+        with pytest.raises(_service("BRIMSetRequiredError")) as caught:
+            ensure_parseable(fake_plugin, _file_info("original"))
+
+        assert isinstance(caught.value, BRIMParseError)
+        assert sorted(caught.value.missing_roles) == ["cash", "custody"]
+
+    def test_only_required_roles_are_named(self) -> None:
+        ensure_parseable = _sets("ensure_parseable")
+
+        with pytest.raises(_service("BRIMSetRequiredError")) as caught:
+            ensure_parseable(_FakeOptionalRoleProvider(), _file_info("original"))
+
+        assert sorted(caught.value.missing_roles) == ["cash", "custody"]
+
+    def test_combined_file_passes(self, fake_plugin: BRIMProvider) -> None:
+        ensure_parseable = _sets("ensure_parseable")
+
+        assert ensure_parseable(fake_plugin, _file_info("combined")) is None
+
+    def test_single_file_plugin_passes(self) -> None:
+        ensure_parseable = _sets("ensure_parseable")
+
+        assert ensure_parseable(BRIMProviderRegistry.get_provider_instance("broker_generic_csv"), _file_info("original")) is None
+
+
+# =============================================================================
+# A2 · D8 — SERVICE: apply_history (H0 at parse time)
+# =============================================================================
+
+
+class TestApplyHistory:
+    """D8 — ``apply_history``: H0 at parse time, and the checkpoints kept from its eve on (D-S21, D-S25)."""
+
+    @pytest.mark.asyncio
+    async def test_history_in_the_database(self, db_session: AsyncSession) -> None:
+        """H0 comes from the plugin's history tag (``fake_bank``, not the code); checkpoints before its eve go, verifications all stay."""
+        apply_history = _sets("apply_history")
+        await _seed_history(db_session, [(BROKER_ID, date(2025, 3, 3), "import,fake_bank"), (BROKER_ID, date(2024, 1, 2), "import,broker_fake_bank")])
+        output = _parse_output(checkpoints=[("2024-12-31", "opening"), ("2025-03-01", "gap"), ("2025-03-02", "gap"), ("2025-06-30", "gap")], verifications=["2024-06-30", "2025-12-31"])
+
+        checkpoints, verifications, h0 = await apply_history(db_session, broker_id=BROKER_ID, plugin=_FakeBankProvider(), output=output)
+
+        assert h0 == date(2025, 3, 3)
+        assert sorted(item.as_of for item in checkpoints) == [date(2025, 3, 2), date(2025, 6, 30)]
+        assert verifications == output.verifications
+
+    @pytest.mark.asyncio
+    async def test_reimport_keeps_the_opening_checkpoint(self, db_session: AsyncSession) -> None:
+        """Scenario 4, the same set again: the opening gap-fix counts from the next day, so its checkpoint (the eve) stays."""
+        apply_history = _sets("apply_history")
+        await _seed_history(db_session, [(BROKER_ID, date(2024, 12, 31), "import,fake_bank,gap_fix"), (BROKER_ID, date(2025, 1, 2), "import,fake_bank")])
+        output = _parse_output(checkpoints=[("2024-12-31", "opening")])
+
+        checkpoints, _verifications, h0 = await apply_history(db_session, broker_id=BROKER_ID, plugin=_FakeBankProvider(), output=output)
+
+        assert h0 == date(2025, 1, 1)
+        assert [item.as_of for item in checkpoints] == [date(2024, 12, 31)]
+
+    @pytest.mark.asyncio
+    async def test_first_import_summarize_starts_after_the_first_checkpoint(self, db_session: AsyncSession) -> None:
+        """No history of this plugin here (another broker's does not count): H0 is the day after the earliest checkpoint, whatever the rows say."""
+        apply_history = _sets("apply_history")
+        await _seed_history(db_session, [(OTHER_BROKER_ID, date(2020, 1, 1), "import,fake_bank"), (BROKER_ID, date(2020, 1, 1), "manual")])
+        output = _parse_output(transactions=["2024-11-05"], checkpoints=[("2025-06-30", "gap"), ("2024-12-31", "opening")], verifications=["2025-12-31"])
+
+        checkpoints, verifications, h0 = await apply_history(db_session, broker_id=BROKER_ID, plugin=_FakeBankProvider(), output=output)
+
+        assert h0 == date(2025, 1, 1)
+        assert sorted(item.as_of for item in checkpoints) == [date(2024, 12, 31), date(2025, 6, 30)]
+        assert verifications == output.verifications
+
+    @pytest.mark.asyncio
+    async def test_first_import_summarize_without_checkpoints(self, db_session: AsyncSession) -> None:
+        apply_history = _sets("apply_history")
+        output = _parse_output(transactions=["2025-01-02"], verifications=["2025-01-17"])
+
+        checkpoints, verifications, h0 = await apply_history(db_session, broker_id=BROKER_ID, plugin=_FakeBankProvider(), output=output)
+
+        assert (h0, checkpoints) == (None, [])
+        assert verifications == output.verifications
+
+    @pytest.mark.asyncio
+    async def test_first_import_import_policy_starts_at_the_oldest_row(self, db_session: AsyncSession) -> None:
+        apply_history = _sets("apply_history")
+        output = _parse_output(transactions=["2025-02-01", "2024-11-05"], checkpoints=[("2024-10-01", "opening"), ("2024-12-31", "gap")])
+
+        checkpoints, _verifications, h0 = await apply_history(db_session, broker_id=BROKER_ID, plugin=_FakeBankImportPolicyProvider(), output=output)
+
+        assert h0 == date(2024, 11, 5)
+        assert [item.as_of for item in checkpoints] == [date(2024, 12, 31)]
+
+    @pytest.mark.asyncio
+    async def test_first_import_import_policy_without_rows_falls_back_to_the_checkpoint(self, db_session: AsyncSession) -> None:
+        apply_history = _sets("apply_history")
+        output = _parse_output(checkpoints=[("2024-12-31", "opening")])
+
+        checkpoints, _verifications, h0 = await apply_history(db_session, broker_id=BROKER_ID, plugin=_FakeBankImportPolicyProvider(), output=output)
+
+        assert h0 == date(2025, 1, 1)
+        assert [item.as_of for item in checkpoints] == [date(2024, 12, 31)]
+
+
+# =============================================================================
+# A2 · FIXTURE GUARDS
+# =============================================================================
+
+
+class TestA2FixtureGuards:
+    """Fixture guards (pass before and after A2): the A2 test infrastructure works, so every A2 red is about the product.
+
+    Most A2 tests look up the missing piece first and never reach their helpers
+    before the cure; without these, a broken helper would only surface afterwards,
+    looking like a product defect.
+    """
+
+    @pytest.mark.asyncio
+    async def test_fixture_guard_private_database(self, db_session: AsyncSession) -> None:
+        """Fixture guard: ``_seed_history`` writes both brokers and the transactions, tags verbatim, into this test's own database."""
+        await _seed_history(db_session, [_own("2024-12-31", "import,danske_bank,gap_fix"), _foreign("2024-01-01", None)])
+
+        brokers = (await db_session.execute(select(Broker.id))).scalars().all()
+        rows = (await db_session.execute(select(Transaction.broker_id, Transaction.date, Transaction.tags))).all()
+
+        assert sorted(brokers) == [BROKER_ID, OTHER_BROKER_ID]
+        assert sorted((row.broker_id, row.date, row.tags or "") for row in rows) == [(BROKER_ID, date(2024, 12, 31), "import,danske_bank,gap_fix"), (OTHER_BROKER_ID, date(2024, 1, 1), "")]
+
+    def test_fixture_guard_fake_describes_its_set(self, isolated_brim_dir: Path, fake_plugin: BRIMProvider) -> None:
+        """Fixture guard: the fake's ``describe_set`` merges custody spans that overlap or touch, and proves a gap between the others."""
+        jan, mar, touching = (brim_provider.get_file_path(_member(content, name).file_id) for content, name in ((CUSTODY_JAN, "jan.csv"), (CUSTODY_MAR, "mar.csv"), (_custody_csv("2025-01-16", "2025-01-20"), "touching.csv")))
+
+        shape = fake_plugin.describe_set({"custody": [mar, jan]})
+        merged = fake_plugin.describe_set({"custody": [jan, touching]})
+
+        assert (shape.segments, shape.gaps) == ([JAN_SEGMENT, MAR_SEGMENT], [DateRangeModel(start=date(2025, 1, 16), end=date(2025, 3, 2))])
+        assert [notice.code for notice in shape.notices] == [FAKE_SET_NOTICE]
+        assert (merged.segments, merged.gaps) == ([DateRangeModel(start=date(2025, 1, 2), end=date(2025, 1, 20))], [])
+
+    def test_fixture_guard_account_fingerprint(self, isolated_brim_dir: Path, fake_plugin: BRIMProvider) -> None:
+        """Fixture guard: a custody header's ``account=<id>`` cell is the fingerprint; without it, ``FAKE_ACCOUNT``; cash has none; a stranger file has no role."""
+        contents = ((CUSTODY_JAN, "jan.csv"), (_custody_csv("2025-03-03", account=OTHER_ACCOUNT), "mar.csv"), (CASH_JAN, "cash.csv"), (GENERIC_CSV, "generic.csv"))
+        paths = [brim_provider.get_file_path(_member(content, name).file_id) for content, name in contents]
+
+        assert [fake_plugin.describe_member(path).account_fingerprint for path in paths] == [FAKE_ACCOUNT, OTHER_ACCOUNT, None, None]
+        assert [fake_plugin.detect_role(path) for path in paths] == ["custody", "custody", "cash", None]
+        assert (fake_plugin.describe_member(paths[-1]).role, fake_plugin.describe_member(paths[-1]).rows) == (None, 0)
+
+    def test_fixture_guard_plugin_variants(self) -> None:
+        """Fixture guard: each variant differs from the fake in exactly what its docstring says."""
+        assert [(role.code, role.multiple) for role in _FakeSingleCustodyProvider().report_roles] == [("custody", False), ("cash", True)]
+        assert [(role.code, role.required) for role in _FakeOptionalRoleProvider().report_roles] == [("custody", True), ("cash", True), ("statement", False)]
+        assert _FakeNoShapeProvider().describe_set({}) == _schema("BRIMSetShape")()
+        assert (_FakeBankProvider().provider_code, _FakeBankProvider().pre_checkpoint_policy) == ("broker_fake_bank", "summarize")
+        assert (_FakeBankImportPolicyProvider().provider_code, _FakeBankImportPolicyProvider().pre_checkpoint_policy) == ("broker_fake_bank", "import")
+        assert _FakeInfixProvider().provider_code == "fake_broker_bank"
+
+    def test_fixture_guard_parse_output_and_sidecar_rewrite(self, isolated_brim_dir: Path) -> None:
+        """Fixture guard: ``_parse_output`` builds valid rows and truth points; ``_rewrite_sidecar`` changes what ``get_file_info`` reads."""
+        output = _parse_output(transactions=["2024-11-05"], checkpoints=[("2024-12-31", "opening")], verifications=["2025-01-17"])
+        stored = _member(CUSTODY_JAN, CUSTODY_NAME)
+
+        _rewrite_sidecar(isolated_brim_dir, stored.file_id, uploaded_at="2026-09-30T11:00:00+00:00")
+
+        assert [(tx.type, tx.date) for tx in output.transactions] == [(TransactionType.DEPOSIT, date(2024, 11, 5))]
+        assert ([item.as_of for item in output.checkpoints], [item.as_of for item in output.verifications]) == ([date(2024, 12, 31)], [date(2025, 1, 17)])
+        assert _info(stored.file_id).uploaded_at == datetime(2026, 9, 30, 11, 0, tzinfo=UTC)
