@@ -2069,3 +2069,139 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 > **⚠️ Fuori pista**: `ASSET_CALENDAR_ROLLING_RETURN` è nascosto dal catalogo (`catalog_visible = False`): il suo
 > `docs_path` non fa comparire nessun pulsante, perché la pagina dell'asset disegna quella serie senza `DocsLink` →
 > decisione dell'interfaccia, di I (segnalata al coordinator).
+
+### Il calendario di borsa nel motore — giro 1: riporti, festivi e TWRR · 🔵 30/09/2026
+
+> **Numeri prima del codice** (copia di prod, sola lettura, script e cifre solo in `/tmp`): sull'anno, il VaR
+> giornaliero della Dashboard sale di circa un terzo e quello mensile di circa un quarto; nel laboratorio il VaR
+> giornaliero sale del 5–20 % e la volatilità non si muove (la frequenza osservata compensa); un insieme di soli ETF
+> passa da f ≈ 360 a f ≈ 256, quindi i «365 giorni» della simulazione diventerebbero 1,43 anni di sedute senza la
+> conversione del giro 2. Il developer: «Procedi con l'implementazione, test prima».
+>
+> **Confini concessi dal coordinator**: l'aggancio in `main.py` (avvio come il prewarm dei provider, rilascio allo
+> spegnimento accanto a `shutdown_quant_worker_pools()`, senza mai aspettare la costruzione); lato segnali
+> `signal_series_preparation.py`, nel passo dopo, con l'RSI 14 misurato prima e dopo.
+>
+> **Test prima** (test-author): 55 rossi su cinque file (`test_market_calendar.py` nuovo, registrato in
+> `RISK_SERVICE_TEST_PATHS`; `test_series_preparation.py`, `test_risk_eligibility.py`, `test_risk_service.py`). Tre sue
+> scelte accettate: il punto base del TWRR resta sempre; l'uguaglianza è numerica (`101.50 == 101.5`); il confronto è
+> sulla chiusura **nativa**.
+>
+> **Note implementazione**
+> - `backend/app/services/market_calendar.py` (nuovo): la regola in un helper solo, `is_market_closed_repeat(day, close,
+>   previous_close, holidays)`: sabato, domenica o festivo dell'unione, e chiusura *identica* alla riga precedente. La
+>   tabella dei festivi (`build_market_holidays`) è l'unione dei giorni feriali di chiusura di TARGET, Borsa Italiana,
+>   Xetra, Euronext Paris, LSE, SIX e NYSE fra il 1970 e il 2100, e QuantLib si importa **solo** dentro quella funzione.
+>   `ensure_market_holidays()` la costruisce una volta in un processo `spawn` a sé (demone, 120 s al massimo, chiuso
+>   alla fine); chi aspetta passa da `asyncio.shield`, quindi l'annullamento di una richiesta non annulla la
+>   costruzione. Se fallisce: tabella vuota (resta la regola del weekend) e un nuovo tentativo dopo 10 minuti.
+>   `start_market_holiday_prewarm()` all'avvio, `shutdown_market_holidays()` allo spegnimento (termina il processo e
+>   annulla il task, senza aspettare).
+> - `series_preparation.py`: `_mark_market_closed_carries()` segna i riporti come valori riportati in avanti (con la
+>   data della chiusura vera), quindi non entrano nel calendario congiunto; `quote_dates` per asset in
+>   `PreparedAssetSeries`; `prepare_asset_series_set(..., market_holidays=frozenset())`.
+> - `risk/eligibility.py`: le 20 quotazioni si contano con la stessa regola (finestra `LAG` in SQL).
+> - `risk/service.py`: la tabella si aspetta una volta per `execute`, per `asset_eligibility` e per il replay; il TWRR
+>   si legge solo nei giorni in cui almeno un titolo posseduto ha una quotazione vera (`_held_quote_dates`), gli altri
+>   giorni si concatenano nel successivo, e la copertura si misura su quei giorni.
+> - Verde: `services risk-all` 737; i due rossi rimasti erano previsti (una fixture che finiva di sabato, un pin degli
+>   argomenti del loader del replay) e li riallinea test-author.
+>
+> **⚠️ Fuori pista**: in QuantLib 1.43 `ql.Switzerland()` non ha l'enum del mercato (`.SIX` non esiste): il calendario
+> svizzero è quello e basta. E Xetra è aperta il 31/12/2025, ma nell'unione quel giorno resta festivo per gli altri: è
+> la conseguenza voluta dell'unione, che costa al più un giorno piatto vero.
+
+### Il calendario di borsa nel motore — giro 2: gli orizzonti in giorni di calendario · ✅ 30/09/2026
+
+> **Test prima** (test-author): 34 rossi sul contratto (VaR 16 + 2 Vitest, simulazione 23 fra motore e plugin, meno le
+> guardie già verdi), 9 sulle mie decisioni, 8 sul cambio di nome. Riallineati senza indebolirli: i 6 test di schema
+> che costruiscono `RiskVarCvarOutput`, la relazione dell'oracolo (ora passa da `horizon_observations`) e il dizionario
+> esatto del rifiuto del blocco. La copia congelata del resampler che il test-author aveva scritto come oracolo è
+> diventata valori catturati sul codice intatto (`10b0b0d48`), con `rel=1e-12`: i test provano il prodotto di oggi.
+>
+> **Mie decisioni sulle ambiguità del test-author**: una sola conversione, `calendar_days_to_observations` in
+> `risk/metrics.py` (modulo puro, lo importa anche il worker `spawn`); la lunghezza del blocco si confronta con la
+> storia in osservazioni, sia nel plugin (`INVALID_PARAMETERS`, dettaglio nuovo `block_length_observations`) sia nel
+> validatore del motore; il budget delle risorse resta in giorni di calendario (per eccesso); `steps_per_year` è
+> rifiutato da GBM e deve essere > 0; l'ordine dei rifiuti di `historical_var` resta quello (prima la serie, poi f);
+> la mappatura a scala (un giorno senza passo ripete il precedente: niente borsa, niente movimento).
+>
+> **Note implementazione**
+> - `metrics.py`: `calendar_days_to_observations(giorni, f) = max(1, round(giorni × f / 365))`. I parametri di
+>   `horizon_compounded_returns`, `historical_var_cvar` e `estimate_drift_uncertainty` si chiamano ora
+>   `horizon_observations`: ricevono osservazioni, e il vecchio nome `horizon_days` è quello che aveva nascosto C2 e C3.
+> - `historical_var` 3.0.0 e `asset_set_var` 2.0.0: `horizon_days` in giorni di calendario, composti su `n` osservazioni
+>   con la frequenza osservata; campo obbligatorio nuovo `horizon_observations` nelle due uscite; il controllo della
+>   storia insufficiente conta le finestre (`N − n + 1`) e i dettagli portano giorni e osservazioni.
+> - Simulazione 4.0.0: `SimulationEngineRequest.steps_per_year` (solo bootstrap; assente = 365, cioè il motore di
+>   prima, identico al byte). Il resampler converte orizzonte, regimi e blocco in passi; la deriva della crisi è per
+>   anno di passi; i percorsi tornano ai giorni di calendario (giorno d → passo ⌊d × passi / giorni⌋), quindi la banda
+>   ha sempre `horizon_days + 1` punti e il frontend non cambia; la dichiarazione resta in giorni di calendario. Il
+>   plugin passa la f osservata; l'incertezza della deriva si compone su `n` osservazioni, per GBM e bootstrap.
+> - Frontend: `MONTHLY_VAR_HORIZON_DAYS` 21 → 30; `api sync` (il client generato è ignorato da git).
+> - Fixture di A e F, con il loro OK una tantum: `risk-analysis.spec.ts` (A: la copia della costante e il mock),
+>   `risk-lab.spec.ts`, `AssetSetComparisonLevels.test.ts`, `AssetSetLossComparisonSection.test.ts`,
+>   `assetSetLevels.test.ts` (F); `risk-mocks.ts` è mio.
+>
+> **Verifica** (6152, un comando per volta): `services risk-all` 789 · `schemas risk` 47 · `series-preparation` 22 ·
+> `asset-signals` 20 · `signal-plugins-core` 46 · `signal-plugin-matrix` 65 · `signal-service` 50 · `signal-runtime` 6 ·
+> `ai-export` 922 · `api risk` 14 (dopo `db populate --force`) · `check-orphans` pulito · `front check` al pavimento
+> di 3 · `risk-levels-unit` 269 · `core-unit` 2845 · `component-unit` 2161 · Vitest della cartella del rischio 796 · E2E
+> `risk` 13, `risk-lab` 22, `risk-asset-detail` 2 (dopo `front build --debug`).
+>
+> **Misura sulla copia di prod, con il codice vero** (cifre solo in `/tmp` e in chat): coincide col prototipo del
+> mattino. Il TWRR di un anno ha 255 osservazioni con f = 255,7 e il mese di 30 giorni vale 21 osservazioni; l'insieme
+> degli asset quotati ha f = 256; la simulazione di 365 giorni fa 256 passi e pubblica 366 punti.
+>
+> **⚠️ Fuori pista**
+> - Avevo scritto a F che `assetSetLevels.test.ts` non rompeva nessun cancello: falso. Il suo `assetSetLevels.ts` legge
+>   le uscite con Zod, e un tipo largo (`Record<string, unknown>`) nasconde il campo mancante a svelte-check ma non a
+>   runtime: 6 rossi. Un campo obbligatorio nuovo rompe ogni fixture che passa dal parser, non solo quelli tipizzati:
+>   si cercano le chiamate al parser, non i tipi. Corretto con un secondo OK di F.
+> - Nel brief avevo scritto 50 × 252 / 365 → 34: è 34,52, quindi 35. L'ha preso il test-author.
+> - Il bootstrap a blocchi non ha una pagina di teoria nel manuale: debito di prima, lasciato alla ripresa della
+>   simulazione che il developer ha rimandato.
+
+### `comparison` — una regressione del giro 1, trovata dal docs-writer · ✅ 30/09/2026
+
+> **Il difetto**: il confronto con un benchmark accoppiava per data i ritorni del primario e quelli del benchmark. Dal
+> giro 1 il TWRR del portafoglio ha ritorni solo nei giorni di osservazione, mentre il benchmark resta sul calendario
+> congiunto, che contiene anche i giorni quotati solo da lui (un benchmark cripto nel weekend, un ETF americano in un
+> festivo europeo): lì il suo ritorno cadeva, e il successivo veniva accoppiato a un ritorno del TWRR su un intervallo
+> più lungo. Prima del giro 1 non poteva succedere, perché il TWRR aveva ogni giorno di calendario. L'ha trovato il
+> docs-writer leggendo `comparison.py` per scrivere la frase giusta nel manuale.
+>
+> **La cura** (`comparison` 1.1.0, test prima): le due serie si compongono fra le date che condividono. Fino alla prima
+> coppia, una data del primario senza ritorno del benchmark cade e l'intervallo riparte da lì (un benchmark che parte
+> tardi si aggancia dall'ultima data che non poteva rispondere); dopo, quella data non è un confine: l'intervallo va
+> avanti dall'ultima data condivisa e alla successiva si compongono entrambe le serie. Un solo ritorno per lato si
+> prende così com'è, quindi su un calendario comune (un asset, la composizione attuale) il risultato è identico al byte.
+>
+> **⚠️ Fuori pista**: la mia prima versione faceva ripartire l'intervallo da ogni data scartata, e non era esatta quando
+> il benchmark non ha ritorni dentro l'intervallo scartato (il suo ritorno successivo parte da prima). Di nuovo il
+> docs-writer, descrivendo la regola, ha trovato il caso; il contratto è passato a «fra le date condivise», con un
+> test rosso prima e il vecchio caso di metà finestra riscritto.
+>
+> **Mutanti** (test-author, su produzione, impronte dei 14 file controllate prima e dopo ciascuno): 46 sui giri 1 e 2,
+> 43 presi dai test esistenti; i 3 sopravvissuti sono ora presi da 2 test nuovi e 1 stretto — il confronto sulla
+> chiusura nativa e non su quella convertita (una quotazione in dollari che ripete la chiusura mentre il cambio si
+> muove), il punto base del TWRR in un festivo della borsa posseduta, lo spegnimento che deve fermare il processo nel
+> momento in cui ritorna. Poi 10 su `comparison` nel contratto finale, tutti presi.
+>
+> **Verifica finale** (6152): `services risk-all` 799 · `schemas risk` 47 · `api risk` 14 (dopo un nuovo
+> `db populate --force`: il DB della corsia era stato ricreato dalle esecuzioni intermedie) · `check-orphans` pulito ·
+> ruff, black, prettier e `git diff --check` puliti · `mkdocs build` rigoroso senza avvisi e `check-links` 88 validi
+> (docs-writer). Il frontend non è cambiato dopo gli E2E e la cartella Vitest del rischio (796).
+>
+> **Manuale** (docs-writer, solo EN, pagine senza traduzioni): `value-at-risk` (T = N − n + 1 con n dall'orizzonte in
+> giorni di calendario; i numeri dell'esempio a h = 10 ricalcolati; il riquadro che diceva il conteggio dei metadati
+> «già al netto dell'orizzonte» era falso), `observed-annualization` (i giorni di osservazione del portafoglio; la
+> copertura; il calendario congiunto è un'unione, non un'intersezione), `data-quality` (la sezione nuova «Stored
+> Carries»), `historical-replay` (il replay prepara le sue serie, non «le stesse»), `benchmark-selection` (la coppia fra
+> le date condivise).
+>
+> **Restano** (non in questo checkpoint): il passo dei segnali (`signal_series_preparation.py`, concesso, con l'RSI 14
+> prima e dopo; `price_query.py` riceve oggi solo la regola del weekend, i festivi lì sono fuori famiglia); la frase
+> di `historical-replay.en.md:59` («refuses to run and asks for a decision»), falsa da prima, va al blocco replay; la
+> guida di F (`user/assets/correlation.en.md:99` e la regola 2 di `:153`) va riallineata da F; il bootstrap a blocchi
+> non ha una pagina di teoria.
