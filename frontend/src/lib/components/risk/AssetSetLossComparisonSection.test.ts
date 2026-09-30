@@ -102,11 +102,12 @@ function ok(instanceId: string, analyticCode: string, output: VarCvarOutput | Dr
     return {instance_id: instanceId, analytic_code: analyticCode, status: 'ok', output};
 }
 
-// Invented tails. 752 daily observations; compounding to 21 days consumes 20 of them, hence 732.
+// Invented tails. 752 daily observations; a 30-day month is 21 of them, and compounding over 21 consumes 20, hence 732.
 const DAILY_VAR = ok('invented-daily-var', 'asset_set_var', {
     kind: 'var_cvar_set',
     confidence_level: 0.95,
     horizon_days: 1,
+    horizon_observations: 1,
     observations: 752,
     items: [
         {asset_id: OPEN_ASSET, value_at_risk: 0.031, conditional_value_at_risk: 0.046},
@@ -116,7 +117,8 @@ const DAILY_VAR = ok('invented-daily-var', 'asset_set_var', {
 const MONTHLY_VAR = ok('invented-monthly-var', 'asset_set_var', {
     kind: 'var_cvar_set',
     confidence_level: 0.95,
-    horizon_days: 21,
+    horizon_days: 30,
+    horizon_observations: 21,
     observations: 732,
     items: [
         {asset_id: OPEN_ASSET, value_at_risk: 0.118, conditional_value_at_risk: 0.171},

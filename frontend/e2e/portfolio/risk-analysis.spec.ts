@@ -100,8 +100,11 @@ interface RiskMockOptions {
  * than imported: the dashboard test asserts that the panel really puts this
  * number on the wire, so a drift in the product shows up as a red here instead
  * of a constant that silently agrees with whatever was sent.
+ *
+ * The unit is calendar days: the backend turns them into the observations the
+ * series holds (21 of a weekday series), and states that count beside them.
  */
-const MONTHLY_VAR_HORIZON_DAYS = 21;
+const MONTHLY_VAR_HORIZON_DAYS = 30;
 
 /**
  * A loss as the panel writes it: a real minus sign (U+2212), not a hyphen.
@@ -482,6 +485,7 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
                     kind: 'var_cvar',
                     confidence_level: 0.95,
                     horizon_days: longHorizon ? MONTHLY_VAR_HORIZON_DAYS : 1,
+                    horizon_observations: longHorizon ? 21 : 1,
                     observations: 60,
                     value_at_risk: longHorizon ? 0.068 : 0.021,
                     conditional_value_at_risk: longHorizon ? 0.094 : 0.031,
