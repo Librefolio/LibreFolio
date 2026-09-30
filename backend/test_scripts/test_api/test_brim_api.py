@@ -1638,6 +1638,128 @@ class TestGapFixEndpoint:
 
 
 # ============================================================================
+# CATEGORY 10: THE DANSKE BANK REPORT SET, END TO END (phase B)
+# ============================================================================
+#
+# The first report-set plugin the test backend itself knows, so a whole set can go
+# through HTTP: the two synthetic "main" exports uploaded together, preview, combine
+# (then reused), a member refused on its own, the combined file parsed, and the
+# gap-fix of that parse on a fresh broker. The test deletes the files and the broker
+# it created. What a set contains, rule by rule, is in test_external/test_brim_danske_bank.py.
+
+DANSKE_CODE = "broker_danske_bank"
+DANSKE_SAMPLE_DIR = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports"
+DANSKE_MAIN = (("danske_bank-custody.xlsx", "custody"), ("danske_bank-cash.csv", "cash"))
+DANSKE_GAP_FIX_TAGS = ["import", "danske_bank", "gap_fix"]
+XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+async def _upload_sample(client: httpx.AsyncClient, broker_id: int, name: str, batch_id: str) -> httpx.Response:
+    """``POST /upload`` of one sample export, with the batch it belongs to."""
+    media_type = XLSX_MEDIA_TYPE if name.endswith(".xlsx") else "text/csv"
+    files = {"file": (name, io.BytesIO((DANSKE_SAMPLE_DIR / name).read_bytes()), media_type)}
+    return await client.post(f"{API_BASE}/brokers/import/upload", files=files, data={"broker_id": broker_id, "batch_id": batch_id}, timeout=TIMEOUT)
+
+
+async def _require_plugin(client: httpx.AsyncClient, code: str) -> None:
+    """Fail, saying so, while the test backend does not have the plugin."""
+    response = await client.get(f"{API_BASE}/brokers/import/plugins", timeout=TIMEOUT)
+    assert response.status_code == 200, response.text
+    if code not in {plugin["code"] for plugin in response.json()}:
+        pytest.fail(f"the test backend has no {code} plugin: not implemented yet (BRIM report sets, phase B)", pytrace=False)
+
+
+async def _delete_files(client: httpx.AsyncClient, file_ids: list) -> None:
+    """Whoever uploads cleans up: every file this test stored, before its broker goes."""
+    for file_id in file_ids:
+        response = await client.delete(f"{API_BASE}/brokers/import/files/{file_id}", timeout=TIMEOUT)
+        assert response.status_code in (200, 404), f"{file_id}: {response.status_code} {response.text}"
+
+
+def _money_list(items: list) -> dict:
+    """``{currency: amount}`` of JSON truth-cash entries, compared as numbers."""
+    return {item["currency"]: Decimal(item["amount"]) for item in items}
+
+
+class TestDanskeReportSetEndToEnd:
+    """B — the Danske main samples through the report-set API, from the upload to the gap-fix, on a fresh broker."""
+
+    @pytest.mark.asyncio
+    async def test_main_set_from_upload_to_gap_fix(self, test_server):
+        """RS-B01: preview 2020-02-03…06-26 without gaps; combine, then reuse; a member alone is 422; the combined parse
+        brings the opening checkpoint, the verification and H0; the gap-fix proposes the opening deposit and checks the verification."""
+        print_section("RS-B01: Danske main set, from upload to gap-fix")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+            file_ids = []
+            try:
+                await _require_plugin(client, DANSKE_CODE)
+                batch = str(uuid.uuid4())
+                uploaded = {}
+                for name, role in DANSKE_MAIN:
+                    response = await _upload_sample(client, broker_id, name, batch)
+                    assert response.status_code == 200, response.text
+                    file_ids.append(response.json()["file_id"])
+                    uploaded[role] = response.json()
+                    assert (uploaded[role]["batch_id"], DANSKE_CODE in uploaded[role]["compatible_plugins"]) == (batch, True), uploaded[role]
+                body = {"broker_id": broker_id, "plugin_code": DANSKE_CODE, "batch_id": batch}
+
+                preview = await client.post(_set_url("preview"), json=body, timeout=TIMEOUT)
+                assert preview.status_code == 200, preview.text
+                shape = preview.json()
+                assert (shape["complete"], shape["missing"], shape["gaps"]) == (True, [], [])
+                assert shape["segments"] == [{"start": "2020-02-03", "end": "2020-06-26"}]
+                assert {member["file_id"]: (member["role"], member["rows"]) for member in shape["members"]} == {uploaded["custody"]["file_id"]: ("custody", 15), uploaded["cash"]["file_id"]: ("cash", 32)}
+
+                first = await client.post(_set_url("combine"), json=body, timeout=TIMEOUT)
+                assert first.status_code == 200, first.text
+                combined = first.json()["combined"]
+                file_ids.append(combined["file_id"])
+                assert first.json()["reused"] is False
+                assert (combined["kind"], combined["compatible_plugins"], combined["batch_id"]) == ("combined", [DANSKE_CODE], batch)
+                assert combined["filename"] == "Danske Bank — combined 2020-02-03…2020-06-26.csv"
+                assert sorted(ref["role"] for ref in combined["derived_from"]) == ["cash", "custody"]
+                again = await client.post(_set_url("combine"), json=body, timeout=TIMEOUT)
+                assert again.status_code == 200, again.text
+                assert (again.json()["reused"], again.json()["combined"]["file_id"]) == (True, combined["file_id"])
+
+                member = uploaded["custody"]["file_id"]
+                refused = await client.post(f"{API_BASE}/brokers/import/files/{member}/parse", json={"plugin_code": DANSKE_CODE, "broker_id": broker_id}, timeout=TIMEOUT)
+                assert refused.status_code == 422, refused.text
+                assert refused.json()["detail"]["code"] == "set_required"
+                assert (await client.get(f"{API_BASE}/brokers/import/files/{member}", timeout=TIMEOUT)).json()["status"] == "uploaded"
+
+                parsed = await client.post(f"{API_BASE}/brokers/import/files/{combined['file_id']}/parse", json={"plugin_code": DANSKE_CODE, "broker_id": broker_id}, timeout=TIMEOUT)
+                assert parsed.status_code == 200, parsed.text
+                result = parsed.json()
+                assert (result["history_start"], len(result["transactions"])) == ("2020-02-03", 27)
+                assert len(result["checkpoints"]) == 1 and len(result["verifications"]) == 1, (result["checkpoints"], result["verifications"])
+                checkpoint, verification = result["checkpoints"][0], result["verifications"][0]
+                assert (checkpoint["as_of"], checkpoint["kind"], _money_list(checkpoint["cash"]), len(checkpoint["positions"])) == ("2020-02-02", "opening", {"EUR": Decimal("2699.50")}, 3)
+                assert (verification["as_of"], _money_list(verification["cash"])) == ("2020-06-26", {"EUR": Decimal("1994.46")})
+
+                selection = [tx for tx in result["transactions"] if tx["date"] >= result["history_start"]]
+                fix = await _gap_fix(client, {"broker_id": broker_id, "plugin_code": DANSKE_CODE, "checkpoints": result["checkpoints"], "verifications": result["verifications"], "selection": selection})
+                assert fix.status_code == 200, fix.text
+                opening = _one(fix.json()["checkpoints"], "2020-02-02")
+                assert _cash_proposals(opening) == [("DEPOSIT", "EUR", Decimal("2699.50"))]
+                assert (opening["proposals"][0]["date"], opening["proposals"][0]["tags"]) == ("2020-02-02", DANSKE_GAP_FIX_TAGS)
+                assert opening["positions"] == [], "the positions of the bank are on fake ids until the wizard resolves them"
+                unresolved = sorted(note["context"]["asset_id"] for note in opening["explanation"]["notes"] if note["code"] == "unresolved_asset")
+                assert unresolved == sorted(position["asset_id"] for position in checkpoint["positions"])
+                explanation = opening["explanation"]
+                assert (explanation["absorbed_count"], explanation["absorbed_missing_count"], explanation["unexplained_cash"]) == (14, 14, [])
+                check = _one(fix.json()["verifications"], "2020-06-26")
+                assert (check["ok"], _money_rows(check["cash"])) == (True, {"EUR": (Decimal("1994.46"), Decimal("1994.46"), Decimal("0"))})
+                assert await _broker_tx_ids(client, broker_id) == set(), "the set API and the gap-fix save nothing"
+                print_success("✓ Danske main set: combined, parsed and aligned with the bank")
+            finally:
+                await _delete_files(client, file_ids)
+                await _delete_created(client, broker_ids=[broker_id])
+
+
+# ============================================================================
 # Note: E2E tests are in test_e2e/test_brim_e2e.py
 # ============================================================================
 

@@ -405,6 +405,16 @@ class BRIMProvider(ABC):
         single = self.test_file_pattern
         return [single] if single else []
 
+    @property
+    def test_sample_sets(self) -> List[Dict[str, List[str]]]:
+        """Sample report sets for the test suite, one ``{role: [sample file names]}`` per set.
+
+        Only a report-set plugin declares them: its members are never parsed alone, so the
+        generic suite combines each set and parses the combined file. The names refer to
+        ``sample_reports/``. Default: ``[]``.
+        """
+        return []
+
     # -------------------------------------------------------------------------
     # Report sets (multi-file imports). Every default keeps a plugin single-file.
     # -------------------------------------------------------------------------

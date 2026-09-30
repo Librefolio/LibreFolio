@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 from collections import defaultdict
 from datetime import date, timedelta
+from decimal import Decimal
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
@@ -23,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Transaction
 from backend.app.schemas.brim import (
+    BRIMAbsorbed,
     BRIMCheckpoint,
     BRIMCoverage,
     BRIMDerivedRef,
@@ -35,10 +37,11 @@ from backend.app.schemas.brim import (
     BRIMSetMissing,
     BRIMSetPreview,
     BRIMSetRoleStatus,
+    BRIMTruthCash,
     BRIMVerification,
 )
 from backend.app.services import brim_provider
-from backend.app.services.brim_provider import BRIMProvider, BRIMSetRequiredError
+from backend.app.services.brim_provider import BRIMParseError, BRIMProvider, BRIMSetRequiredError
 from backend.app.services.provider_registry import BRIMProviderRegistry
 
 logger = structlog.get_logger(__name__)
@@ -84,6 +87,13 @@ class BRIMSetIncomplete(BRIMSetError):
     def __init__(self, message: str, missing_roles: Sequence[str]):
         super().__init__(message)
         self.missing_roles: List[str] = list(missing_roles)
+
+
+class BRIMSetCombineFailed(BRIMSetError):
+    """The plugin could not combine the members; they stay as they are."""
+
+    status_code = 422
+    code = "combine_failed"
 
 
 # =============================================================================
@@ -316,7 +326,11 @@ async def combine_set(session: AsyncSession, *, broker_id: int, plugin_code: str
             raise BRIMSetMembersNotFound(f"File {member.filename} is no longer available")
         paths_by_role[member.role].append(path)
 
-    table = await asyncio.to_thread(plugin.combine, dict(paths_by_role))
+    try:
+        table = await asyncio.to_thread(plugin.combine, dict(paths_by_role))
+    except (BRIMParseError, ValueError) as exc:
+        message = getattr(exc, "message", None) or str(exc)
+        raise BRIMSetCombineFailed(f"The report set could not be combined: {message}") from exc
     info = await asyncio.to_thread(
         brim_provider.save_combined_file,
         broker_id=broker_id,
@@ -362,6 +376,7 @@ async def apply_history(
     represented in LibreFolio.
     """
     start = await history_start(session, broker_id=broker_id, history_tag=plugin.history_tag)
+    later_import = start is not None
     if start is None:
         if plugin.pre_checkpoint_policy == "import" and output.transactions:
             start = min(tx.date for tx in output.transactions)
@@ -370,4 +385,21 @@ async def apply_history(
     if start is None:
         return list(output.checkpoints), list(output.verifications), None
     floor = start - timedelta(days=1)
-    return [checkpoint for checkpoint in output.checkpoints if checkpoint.as_of >= floor], list(output.verifications), start
+    kept = [checkpoint for checkpoint in output.checkpoints if checkpoint.as_of >= floor]
+    if later_import:
+        kept = [_without_represented_rows(checkpoint, start) for checkpoint in kept]
+    return kept, list(output.verifications), start
+
+
+def _without_represented_rows(checkpoint: BRIMCheckpoint, start: date) -> BRIMCheckpoint:
+    """On a later import, what precedes H0 is already represented in LibreFolio.
+
+    The earlier opening correction summarises it: the explanation of the gap-fix must
+    neither count those rows as missing again nor subtract the opening balance again.
+    """
+    rows = [row for row in checkpoint.absorbed.rows if row.as_of >= start]
+    sums: Dict[str, Decimal] = defaultdict(Decimal)
+    for row in rows:
+        sums[row.currency] += row.amount
+    absorbed = BRIMAbsorbed(count=len(rows), cash=[BRIMTruthCash(currency=code, amount=amount) for code, amount in sorted(sums.items())], rows=rows, opening_cash=[])
+    return checkpoint.model_copy(update={"absorbed": absorbed})
