@@ -69,7 +69,7 @@
      * telling the page when there is nothing to sync.
      */
     import {untrack} from 'svelte';
-    import {Briefcase, CheckCheck, ChevronDown, FlipHorizontal, RefreshCw, Square, Wallet, X} from 'lucide-svelte';
+    import {AlertTriangle, Briefcase, CheckCheck, ChevronDown, FlipHorizontal, RefreshCw, Square, Wallet, X} from 'lucide-svelte';
 
     import {_ as t} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
@@ -83,15 +83,15 @@
     import {brokerStoreVersion, ensureBrokersLoaded, getAccessibleBrokers} from '$lib/stores/reference/brokerStore';
     import {ensureFxRoutesLoaded, fxRoutesVersion, getConfiguredPairSlugs} from '$lib/stores/reference/fxRoutesStore';
     import {invalidateRisk} from '$lib/stores/risk/riskStore.svelte';
-    import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import AssetSetCorrelationSection from './AssetSetCorrelationSection.svelte';
     import AssetSetComparisonLevels from './AssetSetComparisonLevels.svelte';
     import AssetSetReplaySection from './AssetSetReplaySection.svelte';
+    import AssetChip from './AssetChip.svelte';
     import LabAssetPicker from './LabAssetPicker.svelte';
     import LabPopover from './LabPopover.svelte';
     import {riskBenchmark} from '$lib/stores/risk/riskBenchmarkStore.svelte';
     import {applyBulkAction, MAX_SELECTED_ASSETS, readPersistedSelection, resolveInitialSelectionWithSource, writePersistedSelection, type BulkAction, type SelectionSource} from './assetSetSelection';
-    import {dayFormatter, describeEligibility, eligibilityBatches, EMPTY_VERDICTS, isSelectable, mergeEligibilityAnswers, type EligibilityView, type EligibilityVerdicts} from './eligibility';
+    import {dayFormatter, describeEligibility, eligibilityBatches, EMPTY_VERDICTS, fitPeriodOffer, isSelectable, mergeEligibilityAnswers, type DayRange, type EligibilityView, type EligibilityVerdicts} from './eligibility';
     import {buildSyncTargets} from './syncTargets';
 
     interface AssetOption {
@@ -123,9 +123,14 @@
          * a run over an empty selection.
          */
         canSync?: boolean;
+        /**
+         * Move the page's period — the toolbar's — to the one the engine suggests for the
+         * selection. The period belongs to the page, so the panel can only ask for it.
+         */
+        onfitperiod?: (range: DayRange) => void;
     }
 
-    let {assets, dateStart, dateEnd, targetCurrency, onsynced, canSync = $bindable(false)}: Props = $props();
+    let {assets, dateStart, dateEnd, targetCurrency, onsynced, canSync = $bindable(false), onfitperiod}: Props = $props();
 
     let selectedAssetIds = $state<number[]>([]);
     let brokerAssetsLoading = $state(false);
@@ -250,11 +255,17 @@
         return () => clearTimeout(timer);
     });
 
+    /** One question to the engine for a set of ids, split in the batches it accepts. */
+    async function requestEligibility(ids: number[], period: {start: string; end: string}, currency: string): Promise<EligibilityVerdicts> {
+        const answers = await Promise.all(eligibilityBatches(ids).map((batch) => zodiosApi.asset_eligibility_api_v1_risk_eligibility_post({asset_ids: batch, date_range: {start: period.start, end: period.end || null}, target_currency: currency})));
+        return mergeEligibilityAnswers(answers);
+    }
+
     async function loadEligibility(generation: number, ids: number[], period: {start: string; end: string}, currency: string): Promise<void> {
         try {
-            const answers = await Promise.all(eligibilityBatches(ids).map((batch) => zodiosApi.asset_eligibility_api_v1_risk_eligibility_post({asset_ids: batch, date_range: {start: period.start, end: period.end || null}, target_currency: currency})));
+            const next = await requestEligibility(ids, period, currency);
             if (generation !== eligibilityGeneration) return;
-            verdicts = mergeEligibilityAnswers(answers);
+            verdicts = next;
             eligibilityFailed = false;
         } catch (error) {
             if (generation !== eligibilityGeneration) return;
@@ -271,6 +282,44 @@
         for (const [assetId, item] of verdicts.items) view.set(assetId, describeEligibility(item, verdicts, targetCurrency, $t, formatDay));
         return view;
     });
+
+    /**
+     * The same question for the **selection** alone, parked assets included, for the
+     * "use the period in which all have prices" offer. The catalogue's answer cannot
+     * serve: its common span is the catalogue's, and an unselected asset with a short
+     * history would narrow the period offered to everyone (D1, agreed with Risk). The
+     * selection holds at most a hundred ids, so this is one request. A failure only
+     * withholds the offer; the verdicts on the chips come from the catalogue's answer.
+     */
+    let selectionVerdicts = $state<EligibilityVerdicts>(EMPTY_VERDICTS);
+    let selectionEligibilityGeneration = 0;
+    let selectionKey = $derived([...new Set(selectedAssetIds)].sort((left, right) => left - right).join(','));
+
+    $effect(() => {
+        const ids = selectionKey ? selectionKey.split(',').map(Number) : [];
+        const period = {start: dateStart, end: dateEnd};
+        const currency = targetCurrency;
+        const generation = ++selectionEligibilityGeneration;
+        if (ids.length === 0 || !period.start) {
+            selectionVerdicts = EMPTY_VERDICTS;
+            return;
+        }
+        const timer = setTimeout(async () => {
+            try {
+                const next = await requestEligibility(ids, period, currency);
+                if (generation === selectionEligibilityGeneration) selectionVerdicts = next;
+            } catch (error) {
+                if (generation !== selectionEligibilityGeneration) return;
+                console.error('[Risk] Eligibility of the selection unavailable:', error);
+                selectionVerdicts = EMPTY_VERDICTS;
+            }
+        }, ELIGIBILITY_DEBOUNCE_MS);
+        return () => clearTimeout(timer);
+    });
+
+    let fitOffer = $derived(fitPeriodOffer(selectionVerdicts, selectedAssetIds));
+    let fitDay = $derived(dayFormatter($currentLanguage));
+    let fitNames = $derived.by(() => (fitOffer ? fitOffer.recoverable.map((assetId) => selectionLabels.get(assetId) ?? `#${assetId}`).join(', ') : ''));
 
     /** What the quick actions may bring in: the catalogue without what the engine rules out. */
     let candidates = $derived(assets.filter((asset) => isSelectable(verdicts, asset.id)));
@@ -533,10 +582,6 @@
         void runHoldingsPreset(brokerId);
     }
 
-    function hideBrokenIcon(event: Event): void {
-        (event.currentTarget as HTMLImageElement).style.visibility = 'hidden';
-    }
-
     /**
      * "My assets" left this row: it read `tx_count_own`, any transaction ever made
      * in the user's brokers, so it also brought back positions sold years ago. Its
@@ -552,37 +597,64 @@
 </script>
 
 {#snippet chip(asset: AssetOption, verdict: EligibilityView | undefined)}
-    {@const parked = verdict?.level === 'ineligible'}
-    {@const warned = verdict?.level === 'warning'}
-    <span
-        class="inline-flex h-7 items-center gap-1.5 rounded-full py-1 pl-1.5 pr-1 text-xs {parked
-            ? 'cursor-help border border-dashed border-gray-300 text-gray-400 dark:border-slate-600 dark:text-gray-500'
-            : warned
-              ? 'cursor-help border border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-600 dark:bg-amber-900/20 dark:text-amber-300'
-              : 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-gray-300'}"
-        data-testid="risk-selected-asset-{asset.id}"
+    <!-- The shared `AssetChip` (owned here, mounted by the Dashboard's banner too). The help
+         cursor goes with the tooltip the caller wraps around a chip that has a verdict. -->
+    <AssetChip
+        {asset}
+        variant={verdict?.level === 'ineligible' ? 'excluded' : verdict?.level === 'warning' ? 'warning' : 'default'}
+        help={verdict !== undefined && verdict.level !== 'eligible'}
+        testId="risk-selected-asset-{asset.id}"
         data-level={verdict?.level ?? 'unknown'}
         data-reasons={verdict?.codes.join(' ') ?? ''}
     >
-        <img src={asset.icon_url || getAssetTypeIconUrl(asset.asset_type)} alt="" class="h-4 w-4 shrink-0 object-contain {parked ? 'opacity-50' : ''}" onerror={hideBrokenIcon} />
-        <span class={parked ? 'line-through decoration-gray-300 dark:decoration-slate-600' : ''}>{asset.display_name}</span>
-        <button
-            class="rounded-full p-0.5 hover:bg-gray-200 dark:hover:bg-slate-600"
-            onclick={(event) => {
-                // Removing is not asking why: the click must not also pin the chip's tooltip.
-                event.stopPropagation();
-                removeAsset(asset.id);
-            }}
-            aria-label={$t('common.remove')}
-            data-testid="risk-remove-asset-{asset.id}"
-        >
-            <X size={11} />
-        </button>
-    </span>
+        {#snippet trailing()}
+            <button
+                class="rounded-full p-0.5 hover:bg-gray-200 dark:hover:bg-slate-600"
+                onclick={(event) => {
+                    // Removing is not asking why: the click must not also pin the chip's tooltip.
+                    event.stopPropagation();
+                    removeAsset(asset.id);
+                }}
+                aria-label={$t('common.remove')}
+                data-testid="risk-remove-asset-{asset.id}"
+            >
+                <X size={11} />
+            </button>
+        {/snippet}
+    </AssetChip>
 {/snippet}
 
 <div class="space-y-4" data-testid="asset-global-risk-panel">
     <section class="rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 p-4" data-testid="risk-asset-set-controls" data-selection-source={selectionSource}>
+        {#if fitOffer}
+            <!-- The developer's choice: a strip at the top of the card that says the chosen period
+                 leaves some selected assets without prices, with the button that fixes it. The
+                 period itself belongs to the page's toolbar, so the button asks the page. -->
+            <div
+                class="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200"
+                data-testid="risk-fit-period-banner"
+                data-recoverable={fitOffer.recoverable.length}
+            >
+                <AlertTriangle size={14} class="shrink-0" />
+                <span class="min-w-0 flex-1">{$t('risk.assetSet.fitPeriod.banner', {values: {count: fitOffer.recoverable.length}})}</span>
+                <Tooltip text={$t('risk.assetSet.fitPeriod.hint', {values: {names: fitNames}})} position="bottom" maxWidth="360px" interactiveChild>
+                    <button
+                        type="button"
+                        class="rounded-md border border-amber-300 bg-white px-2.5 py-1 font-medium text-amber-800 hover:bg-amber-100 dark:border-amber-600 dark:bg-slate-800 dark:text-amber-200 dark:hover:bg-amber-900/40"
+                        onclick={(event) => {
+                            // Not up to the Tooltip wrapper: its click would pin the hint over the page.
+                            event.stopPropagation();
+                            if (fitOffer) onfitperiod?.(fitOffer.range);
+                        }}
+                        data-testid="risk-fit-period-button"
+                        data-start={fitOffer.range.start}
+                        data-end={fitOffer.range.end}
+                    >
+                        {$t('risk.assetSet.fitPeriod.button', {values: {start: fitDay(fitOffer.range.start), end: fitDay(fitOffer.range.end)}})}
+                    </button>
+                </Tooltip>
+            </div>
+        {/if}
         <!-- Row 1 — what goes on the table: three quick actions and the holdings command, then
              how many assets are in the analysis. The type and currency filters live in the "+":
              beside these buttons they also narrowed them, so "select all" meant "select what the
