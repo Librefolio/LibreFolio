@@ -61,19 +61,27 @@
 
             <!-- Username Input -->
             <div class="relative">
+                <label class="sr-only" for="login-username">{$_('auth.usernameOrEmail')}</label>
                 <input
+                    autocapitalize="none"
                     autocomplete="username"
                     bind:value={username}
                     class="w-full px-4 py-3 rounded-lg border border-gray-400 bg-transparent text-libre-dark placeholder-gray-500 focus:outline-none focus:border-libre-green focus:ring-1 focus:ring-libre-green transition-all disabled:opacity-50"
                     data-testid="login-username"
                     disabled={$isAuthLoading}
+                    id="login-username"
+                    name="username"
                     placeholder={$_('auth.usernameOrEmail')}
+                    spellcheck="false"
                     type="text"
                 />
             </div>
 
             <!-- Password Input -->
-            <PasswordInput autocomplete="current-password" bind:value={password} disabled={$isAuthLoading} placeholder={$_('auth.password')} testId="login-password" />
+            <div>
+                <label class="sr-only" for="login-password">{$_('auth.password')}</label>
+                <PasswordInput autocomplete="current-password" bind:value={password} disabled={$isAuthLoading} id="login-password" name="password" placeholder={$_('auth.password')} testId="login-password" />
+            </div>
 
             <!-- Forgot Password Link -->
             <div class="flex justify-end">
