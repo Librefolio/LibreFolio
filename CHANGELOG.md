@@ -43,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Non-sticky bulk-table action headers stay at the end of the table rather than covering the rightmost visible columns.
 - Page-size menus remain reachable in short, scrollable modal tables instead of clipping their first options.
 - The Transactions page clears its selection after a saved bulk edit, clone, deletion, addition or import, and after linking or unlinking a pair; cancelling keeps it.
+- Uploading broker reports from the Files page or from a broker's import history no longer fails with a validation error. The failure dated back to v0.9.0; the import wizard was not affected.
 
 #### 🧩 Asset providers and feedback
 
