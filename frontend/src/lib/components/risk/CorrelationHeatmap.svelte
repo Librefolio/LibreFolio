@@ -88,7 +88,6 @@
     let {output, assetLabels = new Map(), assetTypes = new Map(), assetSectors = new Map(), assetRegions = new Map(), initialOrdering = 'similarity'}: Props = $props();
     /** `null` means "the caller's choice still stands"; any click pins it locally. */
     let orderingOverride = $state<Ordering | null>(null);
-    let ordering = $derived<Ordering>(orderingOverride ?? initialOrdering);
     let sectorGroups = $derived(exposureGroups(assetSectors));
     let regionGroups = $derived(exposureGroups(assetRegions));
     let modes = $derived<Ordering[]>([
@@ -99,6 +98,14 @@
         // Last, by the developer's choice: the one ordering that says nothing about the assets.
         'name',
     ]);
+    /**
+     * The reader's choice holds only while it is offered. A grouping whose data went
+     * away (a failed metadata read) used to stay in force with no button pressed,
+     * ordering the matrix by a criterion the reader can no longer see; now the matrix
+     * falls back to the caller's ordering. The choice itself is kept, so it applies
+     * again the moment its data comes back.
+     */
+    let ordering = $derived<Ordering>(orderingOverride !== null && modes.includes(orderingOverride) ? orderingOverride : initialOrdering);
     let container: HTMLDivElement | undefined = $state(undefined);
     /** The scrolling box around the chart: its width, not the chart's, is the room available. */
     let wrapper: HTMLDivElement | undefined = $state(undefined);
