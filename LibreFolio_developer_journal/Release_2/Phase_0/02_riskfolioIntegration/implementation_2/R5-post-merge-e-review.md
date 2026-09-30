@@ -1941,3 +1941,77 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 > **Poi A**, nei suoi file e dopo il checkpoint (e dopo `api sync`, perché il client generato non è versionato): l'avviso
 > (tono informativo per `no_price_source`, ambra per il resto), la scheda «non misurato» di L2 e la nota sotto lo
 > scatter di L3, su `excluded_weight` invece che su `cash_weight`.
+
+### Commit, fusione di `dev_release2` e le primitive per l'avviso di A · 29/09/2026 (sera)
+
+> **Commit del «parziale»** (developer, 22:26), verificati: `56b0c36bd` (i18n, 4 file) · `20eff079e` (backend, test e
+> runner, 15) · `a8fdf9f1d` (doc, 2) · `7840fa7df` (journal, 1); messaggi identici a quelli proposti, albero pulito. A in
+> avanzamento semplice a `7840fa7df` (22:31); F resta dov'è (lavoro del giro non ancora committato).
+>
+> **`dev_release2` → Risk = `25b8a5766`** (22:47; genitori `7840fa7df` + `5068b706c`): i seguiti di K (font delle
+> bandiere, selezione delle transazioni, titolo della scheda), il CHANGELOG, due voci di journal. Un solo conflitto,
+> `LibreFolio_devWiki/log.md`: tutte e due le parti avevano aggiunto in coda (le due voci di F del 23 e del 25/09 da qui,
+> quella di K del 29/09 da là). Risolto aggiungendo, in ordine di data, con uno script guardato (additività controllata
+> nei due versi, 97 + 2 + 1 = 100 intestazioni, blob `7f546cc3`); messo in stage solo quel file; albero `991c4d8b`,
+> identico alla prova del coordinator. Validazione nella 6152: `front check` al pavimento di 3 · i18n 3483/0 ·
+> `check-orphans` pulito · `front build --debug` · unit `risk-unit` 17, `risk-request-unit` 26, `risk-benchmark-unit` 8,
+> `risk-controller-unit` 54, `risk-levels-component` 22, `risk-frame-component` 13, `risk-levels-unit` 241,
+> `allocation-unit` 142, `core-unit` 2784, `component-unit` 2120 · `services risk-all` 682 · E2E `risk` 13, `risk-lab` 18,
+> `risk-asset-detail` 2, `asset-list` 28, `document-title` 22.
+>
+> **Decisione del developer sull'avviso in cima** (via A): gli asset esclusi diventano **badge per asset** (icona e nome
+> barrato, come nel laboratorio) con una frase breve per causa, scritta da A nelle sue chiavi; la frase completa del
+> backend resta il ripiego quando la causa manca. Il badge è **un solo componente**: F estrae il chip del laboratorio in
+> `risk/AssetChip.svelte`, suo come la heatmap (varianti `default | warning | excluded`, `help`, `testId`, snippet finale,
+> `data-*`, `data-variant`), nel suo checkpoint; A lo monta dopo F → Risk → A. Regola del coordinator: A non modifica
+> `L2Diversification.svelte` finché questo checkpoint non è nel suo ramo.
+>
+> **Questo checkpoint** — le primitive chieste da A, nei miei file:
+> - `ResultReason.reason` e `ResultReason.assetIds` (`levelHelpers.ts`, letti in `warningSentence.ts`): la causa da
+>   `details.reason`; gli asset come il backend li legge per nominarli nella frase (`_warning_asset_ids`: `asset_ids`,
+>   altrimenti un solo `asset_id`), tutto o niente sugli interi. Una frase fusa li tiene solo finché tutti gli avvisi
+>   dietro di lei concordano, e non li riprende più: il ripiego non tradotto dice ogni esclusione con le stesse parole, e
+>   una causa permanente letta su uno potrebbe essere occasionale su un altro.
+> - `uncoveredWeight()` → `{total, unpriced, cash}`: `total` è `cash_weight` e `unpriced` è `excluded_weight`, tutti e
+>   due così come sono pubblicati (mai una somma delle parti, nessun tetto); `cash` è la differenza, che sotto `1e-9` vale
+>   zero — la tolleranza che il servizio del rischio usa già sui pesi (`service.py`, controlli della leva e del residuo in
+>   transito). Si legge da qualunque uscita della composizione attuale che pubblica i due pesi, senza guardare `kind`:
+>   `risk_contribution` (L2) e, su richiesta di A, anche `asset_risk_return` (L3). A passa L3 a questa funzione e toglie
+>   i suoi due gemelli (`uncoveredShares()`, `cashWeight()`) nel suo checkpoint.
+> - `L2Diversification.svelte:87` → `?.total ?? null`, con l'OK di A: la scheda di L2 non cambia; la didascalia la
+>   riscrive A.
+>
+> **Note implementazione**: test prima (test-author, 18 rossi su `25b8a5766`, provati su un'implementazione usa e getta e
+> 21 varianti sbagliate fuori dal worktree), poi il codice. Verde nella 6152: i due file 144 · `risk-levels-unit` 258 ·
+> `risk-levels-component` 22 · `risk-frame-component` 13 · `risk-controller-unit` 54 · `core-unit` 2784 ·
+> `component-unit` 2120 · `front check` al pavimento di 3 · prettier pulito · E2E `risk` 13 (`data-uncovered` sempre
+> 0.05) e `risk-lab` 18. **Mutanti** sul codice vero: 15 su 16 presi (M15 dall'E2E `risk`: `data-uncovered` «0» invece
+> di «0.05»). **M16 sopravvive** (`?? 0` al posto di `?? null` in `L2Diversification.svelte:87`): non è equivalente —
+> con il contributo assente, non disponibile o fallito la scheda comparirebbe con uno 0 % falso — ma è un buco di test
+> del componente di A che c'era già (nessun test fissa l'assenza della scheda) → il test jsdom lo scrive A nel suo
+> checkpoint. Quattro mie decisioni sopravvivevano perché nessun test le fissava (`reason` ripulito, `null` che ripiega
+> su `asset_id`, insiemi con doppioni, nessun tetto a `unpriced`) → fissate, ciascuna con il suo mutante preso. Poi le
+> aggiunte di A, di nuovo col rosso prima (3 rossi sulla tolleranza, un controllo che non mangi la liquidità vera, un test
+> che fissa la lettura di `asset_risk_return`): i due file 153. **Ultima passata** sul codice nuovo: M17 (niente
+> tolleranza), M18 (tolleranza da `1e-2`, mangia la liquidità vera), M19 (tolleranza anche sul totale) e il controllo su
+> `kind` presi; M20 (`<=` al posto di `<`) equivalente sui valori fissati e M21 (tolleranza anche su `unpriced`) **non**
+> equivalente — un asset «polvere» senza prezzo sparirebbe dalla scheda mentre l'avviso ne mostra il badge → fissati
+> tutti e due (il limite è stretto come nel controllo del residuo in transito del backend), ciascuno col suo mutante
+> preso. Finale: i due file **155** · `risk-levels-unit` **269** · `risk-levels-component` 22 · `front check` al
+> pavimento di 3 · prettier pulito · i 3 file di produzione identici alla loro impronta dopo ogni mutante.
+>
+> **⚠️ Fuori pista**:
+> - Il mio esempio per «`total` non è una somma» (0,3 e 0,1) non distingueva niente: `0,1 + (0,3 − 0,1)` torna
+>   esattamente 0,3 in virgola mobile. test-author ha scelto 0,45 e 0,1, con una guardia che lo verifica.
+> - Nel contratto avevo scritto «`asset_ids` presente ma non valido → nessun ripiego su `asset_id`», senza dire cosa fa
+>   un `null`: deciso come il backend, `null` vale assente e si passa ad `asset_id`.
+> - Il mio «a zero se lo supererebbe» toglieva solo il rumore negativo. A l'ha misurato: il backend pubblica i due pesi da
+>   due somme separate, e senza liquidità vera la loro differenza vale zero o un'unità dell'ultima cifra da una parte o
+>   dall'altra — positiva in circa un caso su quattro su portafogli simulati — e bastava per scrivere «0 % in liquidità».
+>   Sistemato con la tolleranza del backend, non con una soglia nuova del frontend.
+>
+> **Limiti noti**: il client generato dà a `excluded_weight` il valore 0 quando manca (`default(0)` di Zod), quindi un
+> campo assente si leggerebbe «tutta liquidità»; non succede, perché backend e frontend escono nella stessa immagine e il
+> backend lo manda sempre (a distinguere resta `algorithm_version`). Gli avvisi di dati vecchi o mancanti portano
+> `asset_ids` ma la causa in `details.cause`: avranno i badge e non `reason`, quindi l'ambra. Il «tutto o niente» sugli
+> id è più severo del backend, che scarta i valori non interi e tiene gli altri: oggi il backend non ne manda mai.
