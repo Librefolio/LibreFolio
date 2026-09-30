@@ -39,7 +39,7 @@ A price rise on heavy volume produces a much larger positive money flow than the
 
 | Parameter | Key | Default | Description |
 |---|---|---|---|
-| Period ($N$) | `period` | 14 | Lookback window for accumulating positive/negative money flow. |
+| Period ($N$) | `period` | 14 | Lookback window for accumulating positive/negative money flow, in sessions. |
 | Overbought | `overbought` | 80 | Threshold for the overbought zone. |
 | Oversold | `oversold` | 20 | Threshold for the oversold zone. |
 
