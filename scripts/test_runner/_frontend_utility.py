@@ -68,6 +68,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/components/charts/priceChartHelpers.test.ts",
             "src/lib/components/charts/candlestickChartHelpers.test.ts",
             "src/lib/components/charts/chartSignalsHelpers.test.ts",
+            "src/lib/components/charts/lineChartHelpers.sessionGaps.test.ts",
             "src/lib/components/charts/scatterChartHelpers.test.ts",
             "src/lib/components/risk/riskAnalysisHelpers.test.ts",
             "src/lib/components/risk/correlationHelpers.test.ts",
