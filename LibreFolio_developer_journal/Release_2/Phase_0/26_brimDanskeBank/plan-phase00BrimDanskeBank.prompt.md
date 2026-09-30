@@ -419,6 +419,15 @@ Reperto di L, verificato dal coordinatore. Decisione del developer: «L lo corre
 > - le costanti `__filename`/`__dirname` e il blocco «import history upload» vanno in fondo al file, dopo il `describe` GrowthChart.
 >
 > Il file risulta identico alla copia di prova del coordinatore (`diff` vuoto), e con quella il merge dà 0 conflitti. Dopo lo spostamento: Prettier pulito, il test nuovo da solo passa (1/1), `front-broker detail` dà 28 passati e 1 fallito (GrowthChart, preesistente, che il coordinatore passa a I), porta 6156 libera.
+>
+> **Commit** (developer, 2026-09-30). Il developer ha deciso che il fix entra in `dev_release2` da solo; il fix della codifica (step 1) resta nel ramo di L.
+>
+> | Commit | Dove | Oggetto |
+> |---|---|---|
+> | `f82eaa020` | ramo di L | fix(brim): send broker_id in upload form |
+> | `7a6c772a4` | ramo di L | docs(brim): record the upload 422 fix |
+> | `0743b9f44` | `dev_release2` | cherry-pick `-x` di `f82eaa020`, stesso diff |
+> | `b1835949e` | `dev_release2` | voce 🐛 Fixed del CHANGELOG, scritta dal coordinatore |
 
 ### 2. ⏳ Documento di design dei set
 
@@ -505,6 +514,18 @@ Reperto di L, verificato dal coordinatore. Decisione del developer: «L lo corre
 >   - §5 e §6; §7.2, dove i file CA caricati prima dei set non hanno `batch_id`;
 >   - §8, §10 (D-S8, D-S9, D-S22, D-S31), §11 (A15 risolta, A16, R10).
 > - Il controllo dei valori inventati, rilanciato sul §4 nuovo, dà lo stesso esito: coincide solo «0,00».
+>
+> **Commit del journal v5.1 e v5.2**: `14122a76a` (developer).
+>
+> **Note implementazione (2026-09-30) — design v5.3**. Il developer chiede come si mostra un file obbligatorio che manca, cosa fa `POST /gap-fix`, e se c'è già un'analisi logica.
+> - §4.2: il set incompleto si vede già al passo ①, dove basta trascinare il file mancante nello stesso caricamento; al passo ② resta il caso B.
+> - Una nuova passata dell'analisi logica sulla v5.2 trova due punti:
+>   - **A17**: il §3.2 e il §4 si contraddicevano su un originale eliminato. Ora, finché il combinato è aggiornato, il set resta importabile;
+>   - **A18**: il set dipendeva dal plugin scelto in automatico. Ora un file di cui un plugin a set riconosce il ruolo entra nel suo set; il CSV generico, per esempio, accetta qualsiasi CSV con un'intestazione.
+>
+>   Aggiunto anche lo **scenario 8**: due set dello stesso broker importati insieme su un broker vuoto non contano niente due volte.
+> - §3.2: i tre chiamanti restano su `axiosInstance` con `FormData`, e il `batch_id` è un campo in più del form; il 422 è già corretto (`f82eaa020`).
+> - Il controllo dei valori inventati dà lo stesso esito.
 
 ### 3. ⏳ Risposte dell'autore
 
@@ -550,6 +571,10 @@ Reperto di L, verificato dal coordinatore. Decisione del developer: «L lo corre
 
 - Test rossi con un **plugin finto a due ruoli**, che non dipende dall'autore.
 - Schemi, manifest, endpoint, provenienza.
+- **Contratto API** (nota del coordinatore, 2026-09-30):
+  - `api sync` solo nella corsia di L (6156, `/tmp/librefolio-r2-l`);
+  - all'integrazione `openapi.json` e `generated.ts` si rigenerano, non si uniscono a mano, perché anche D cambia il contratto (R4.9);
+  - `POST /upload` riceve `batch_id` come campo del form. I tre chiamanti (wizard, pagina file, `BrokerImportFilesModal`) restano su `axiosInstance` con `FormData`, come oggi: nel codice è scritto che Zodios non gestisce bene il `FormData`.
 
 ### 5. ⏸ Plugin Danske (dopo il gate 2)
 
