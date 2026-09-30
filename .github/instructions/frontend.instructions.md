@@ -49,7 +49,8 @@ frontend/
 - **Tailwind CSS 4**: config via `@theme {}` in `app.css` (no TS config file)
 - **Brand colors**: `#1a4031` (libre-green), `#f5f4ef` (libre-beige)
 - **Full dark mode**: CSS variables in `html.dark`
-- **Font**: Inter, system-ui, sans-serif + `Noto Color Emoji` for flags
+- **Font**: `'LF Flags', Inter, system-ui, sans-serif` (`html`, `@theme --font-sans`; `--font-mono` also starts with `'LF Flags'`)
+- **Flags**: `'LF Flags'` (`static/lf-flags.css`, linked by `app.html` and `offline.html`) draws only the flags (`unicode-range: U+1F1E6-1F1FF`) — Apple flags on Apple devices, the self-hosted Noto flags subset elsewhere. Never name an emoji font in a `font-family`: emoji fonts also draw digits, `#` and `*`. A component with its own stack starts it with `'LF Flags'` or wraps the flag in `.emoji-flag`. Gate: `src/flagFont.gate.test.ts`; ECharts text is not covered yet
 - **Icons**: lucide-svelte
 
 ## Stores (`lib/stores/`)

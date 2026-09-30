@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-**Preparing v1.1.1.** These fixes and refinements are in preparation; this version has not been released.
+**Preparing v1.2.0.** These features and fixes are in preparation; this version has not been released.
 
 ### ✨ Added
 
@@ -42,6 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Balance diagnostics identify all contributing workspace rows and navigate to the first affected row in the current display order. Backdated FX pairs sort with their dates without changing operation identity or submission order, and new rows on the same date keep the order in which you added them.
 - Non-sticky bulk-table action headers stay at the end of the table rather than covering the rightmost visible columns.
 - Page-size menus remain reachable in short, scrollable modal tables instead of clipping their first options.
+- The Transactions page clears its selection after a saved bulk edit, clone, deletion, addition or import, and after linking or unlinking a pair; cancelling keeps it.
 
 #### 🧩 Asset providers and feedback
 
@@ -49,8 +50,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Equivalent distributions no longer appear different merely because their entries arrived in another order.
 - Duplicate broker-name errors include localized recovery guidance and reset when a new dialog is opened. Successful broker creation and deletion receive confirmation toasts.
 - Manual update checks refresh release metadata and compare against the running server version. Failed or unavailable checks no longer report “up to date”; a positive success message includes the version detected online. Checking from the changelog window always shows the outcome, and a newer version appears at once instead of after the window is closed.
-- Leaving the Files page no longer leaves “Files” as the window title of every other page.
 - The header theme button is labelled in every interface language.
+- Country flags render as flags on Windows everywhere, dashboard currencies included, instead of letter pairs such as “EU”. Apple devices show their own flags without downloading a flag font.
 - Docker image availability checks now complete GHCR's public authentication handshake through the LibreFolio backend, so a published release is no longer rejected because the registry first returns an authentication challenge. Invalid or untrusted challenges still fail closed.
 - Social-dialog logos retain a circular, fixed-size background even beside long translated instructions.
 - Global settings use the standard amber in-app confirmation before discarding an unsaved draft; cancel and Escape keep the draft unlocked.
@@ -65,6 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The Generic CSV guide clarifies one file per broker—not one file per currency—and keeps its column reference in a single table.
 - Files show who uploaded them in a sortable column, with an avatar/name multi-select filter. Uploader filters survive switching between list and grid.
 - The header hides while scrolling down and returns while scrolling up on desktop and mobile. Focus, open menus and dialogs keep it visible.
+- The browser tab title stays “LibreFolio” on every page: the Files page no longer sets its own, so it can no longer linger after you leave it.
 - Preferences and broker-sharing forms retain staged Save/Undo/Reset, persisted values and role-based access after their Svelte 5 migration. Successful sharing saves close the list-page modal without another discard prompt; saving from the broker's Info tab keeps the inline editor open.
 - New FX-pair configuration closes immediately while automatic synchronization continues in the background. Creation and sync results use flagged, clickable pair links; linked completion feedback keeps the pair, fetched/changed counters and provider badges on one compact detail row. Asset-library creation success links point to the new asset without changing contextual import or transaction flows.
 
