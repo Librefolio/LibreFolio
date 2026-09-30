@@ -68,6 +68,7 @@ PROVIDER_ERROR_TEST_PATHS = (
 
 RISK_SERVICE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_quantlib_smoke.py",
+    "backend/test_scripts/test_services/test_market_calendar.py",
     "backend/test_scripts/test_services/test_series_preparation.py",
     "backend/test_scripts/test_services/test_risk_metrics.py",
     "backend/test_scripts/test_services/test_risk_metrics_oracle.py",
