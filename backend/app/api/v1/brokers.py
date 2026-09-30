@@ -50,6 +50,8 @@ from backend.app.schemas.brim import (
     BRIMDuplicateReport,
     BRIMFileInfo,
     BRIMFileStatus,
+    BRIMGapFixRequest,
+    BRIMGapFixResponse,
     BRIMParseOutput,
     BRIMParseRequest,
     BRIMParseResponse,
@@ -77,7 +79,7 @@ from backend.app.schemas.brokers import (
     BRUpdateItem,
 )
 from backend.app.schemas.uploads import FilePreviewResponse
-from backend.app.services import brim_provider, brim_report_sets
+from backend.app.services import brim_gap_fix, brim_provider, brim_report_sets
 from backend.app.services.brim_parse_pool import parse_file_offloaded
 from backend.app.services.brim_provider import BRIMParseError, BRIMProvider, BRIMSetRequiredError, detect_tx_duplicates, search_asset_candidates, search_asset_candidates_bulk
 from backend.app.services.brim_report_sets import BRIMSetError, BRIMSetIncomplete
@@ -1061,6 +1063,28 @@ async def combine_report_set(
     await _require_broker_editor(request.broker_id, current_user, session)
     try:
         return await brim_report_sets.combine_set(session, broker_id=request.broker_id, plugin_code=request.plugin_code, batch_id=request.batch_id, user_id=current_user.id)
+    except BRIMSetError as e:
+        raise HTTPException(status_code=e.status_code, detail=_set_error_detail(e)) from e
+
+
+@brim_router.post("/gap-fix", response_model=BRIMGapFixResponse)
+async def gap_fix(
+    request: BRIMGapFixRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session_generator),
+) -> BRIMGapFixResponse:
+    """
+    Compare the bank's truth points with what LibreFolio will know, and propose the corrections.
+
+    For each checkpoint, in date order, LibreFolio's state is the saved transactions
+    (minus the ones the editor is deleting) plus the editor's unsaved rows, the
+    wizard's selection and the corrections of the earlier checkpoints. Only the
+    differences are proposed, as transactions tagged ``gap_fix``. Verifications are
+    compared, never corrected. Writes nothing.
+    """
+    await _require_broker_editor(request.broker_id, current_user, session)
+    try:
+        return await brim_gap_fix.compute_gap_fix(session, request)
     except BRIMSetError as e:
         raise HTTPException(status_code=e.status_code, detail=_set_error_detail(e)) from e
 

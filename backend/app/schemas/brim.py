@@ -578,11 +578,27 @@ class BRIMTruthPosition(StrictModel):
     unit_cost: Optional[Currency] = Field(default=None, description="Per-unit cost, when the files prove it")
 
 
+class BRIMAbsorbedRow(StrictModel):
+    """One cash row a checkpoint summarises (value date, currency, amount), used to explain a difference."""
+
+    as_of: date = Field(..., description="Value date of the row")
+    currency: str = Field(..., description="ISO 4217 currency code")
+    amount: SafeDecimal = Field(..., description="Signed cash amount of the row")
+    label: Optional[str] = Field(default=None, description="Short description from the export")
+
+    @field_validator("currency", mode="before")
+    @classmethod
+    def _validate_currency(cls, value: Any) -> str:
+        return Currency.validate_code(value)
+
+
 class BRIMAbsorbed(StrictModel):
     """Rows a checkpoint summarises instead of importing them one by one."""
 
     count: int = Field(default=0, ge=0, description="Number of summarised rows")
     cash: List[BRIMTruthCash] = Field(default_factory=list, description="Net cash of the summarised rows, per currency")
+    rows: List[BRIMAbsorbedRow] = Field(default_factory=list, description="The summarised cash rows, to tell which ones LibreFolio already has")
+    opening_cash: List[BRIMTruthCash] = Field(default_factory=list, description="Balance before the first summarised row (the start of the export)")
 
 
 class BRIMCheckpoint(StrictModel):
@@ -693,6 +709,80 @@ class BRIMFieldTodo(StrictModel):
     message: str = Field(..., description="Human-readable fallback message (English)")
     context: Optional[Dict[str, Any]] = Field(default=None, description="Extra params for i18n (e.g. {old_ticker, new_ticker})")
     evidence: List[BRIMEvidence] = Field(default_factory=list, description="Source-data tables backing this todo (e.g. the originating file row)")
+
+
+# =============================================================================
+# GAP-FIX (align LibreFolio with the bank's truth points)
+# =============================================================================
+
+
+class BRIMGapFixRequest(StrictModel):
+    """What the wizard is about to import, and what the bank states: the gap-fix compares them."""
+
+    broker_id: int = Field(..., gt=0, description="Target broker ID")
+    plugin_code: str = Field(..., description="Plugin that produced the truth points")
+    checkpoints: List[BRIMCheckpoint] = Field(default_factory=list, description="Truth points with real asset IDs")
+    verifications: List[BRIMVerification] = Field(default_factory=list, description="Truth points that are only compared")
+    selection: List[TXCreateItem] = Field(default_factory=list, description="Transactions the wizard is about to hand to the editor")
+    pending_creates: List[TXCreateItem] = Field(default_factory=list, description="Unsaved rows already in the bulk editor")
+    pending_delete_tx_ids: List[int] = Field(default_factory=list, description="Saved transactions the bulk editor is about to delete")
+
+
+class BRIMGapFixCashRow(StrictModel):
+    """Bank vs LibreFolio cash in one currency at a truth point."""
+
+    currency: str = Field(..., description="ISO 4217 currency code")
+    bank: SafeDecimal = Field(..., description="Balance stated by the bank")
+    librefolio: SafeDecimal = Field(..., description="Balance LibreFolio will have")
+    difference: SafeDecimal = Field(..., description="bank - librefolio")
+
+
+class BRIMGapFixPositionRow(StrictModel):
+    """Bank vs LibreFolio quantity of one asset at a checkpoint."""
+
+    asset_id: int = Field(..., description="Real asset ID")
+    exactness: Literal["exact", "at_least"] = Field(..., description="exact quantity or lower bound")
+    bank: SafeDecimal = Field(..., description="Quantity stated or proven by the bank")
+    librefolio: SafeDecimal = Field(..., description="Quantity LibreFolio will have")
+    difference: SafeDecimal = Field(..., description="Quantity proposed (bank - librefolio; never negative for at_least)")
+
+
+class BRIMGapFixExplanation(StrictModel):
+    """Where a checkpoint difference comes from."""
+
+    absorbed_count: int = Field(default=0, ge=0, description="Rows the checkpoint summarises")
+    absorbed_missing_count: int = Field(default=0, ge=0, description="Summarised rows LibreFolio does not have")
+    absorbed_missing_cash: List[BRIMTruthCash] = Field(default_factory=list, description="Net cash of the missing summarised rows")
+    opening_cash: List[BRIMTruthCash] = Field(default_factory=list, description="Balance before the export (opening checkpoint only)")
+    unexplained_cash: List[BRIMTruthCash] = Field(default_factory=list, description="Difference not explained by the rows above")
+    notes: List[BRIMNotice] = Field(default_factory=list, description="Notices (e.g. an asset still unresolved)")
+
+
+class BRIMGapFixCheckpointResult(StrictModel):
+    """One checkpoint: the comparison and the gap-fix corrections that close it."""
+
+    as_of: date = Field(..., description="End of the day of the checkpoint")
+    kind: Literal["opening", "gap"] = Field(..., description="opening or gap")
+    cash: List[BRIMGapFixCashRow] = Field(default_factory=list, description="Cash comparison per currency")
+    positions: List[BRIMGapFixPositionRow] = Field(default_factory=list, description="Position comparison per asset")
+    proposals: List[TXCreateItem] = Field(default_factory=list, description="Gap-fix corrections, tagged gap_fix")
+    todos: List[BRIMFieldTodo] = Field(default_factory=list, description="Fields to complete on the proposals (tx_index into proposals)")
+    explanation: BRIMGapFixExplanation = Field(default_factory=BRIMGapFixExplanation, description="Where the difference comes from")
+
+
+class BRIMGapFixVerificationResult(StrictModel):
+    """A truth point that is only compared."""
+
+    as_of: date = Field(..., description="End of the day of the verification")
+    ok: bool = Field(..., description="True when every currency matches within 0.01")
+    cash: List[BRIMGapFixCashRow] = Field(default_factory=list, description="Cash comparison per currency")
+
+
+class BRIMGapFixResponse(StrictModel):
+    """The gap-fix of one broker: checkpoints in date order, then verifications."""
+
+    checkpoints: List[BRIMGapFixCheckpointResult] = Field(default_factory=list, description="Checkpoint results, in date order")
+    verifications: List[BRIMGapFixVerificationResult] = Field(default_factory=list, description="Verification results, in date order")
 
 
 class BRIMParseResponse(StrictModel):
