@@ -2681,8 +2681,11 @@
         </button>
 
         {#if assetInfo}
-            <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3" data-testid="asset-detail-info">
-                <div class="flex items-center gap-3">
+            <!-- min-w-0 on both wrappers: without it their minimum width is the whole title on one
+                 line, so a long name widened the page (below ~341 px, and just above 1024 px where
+                 the title loses its max width); the title itself scrolls (scrollOnOverflow). -->
+            <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 min-w-0" data-testid="asset-detail-info">
+                <div class="flex items-center gap-3 min-w-0">
                     <AssetIcon iconUrl={assetInfo.icon_url} assetType={assetInfo.asset_type} altText={assetInfo.display_name} size="md" />
                     <span class="w-2.5 h-2.5 rounded-full shrink-0 {assetInfo.active !== false ? 'bg-green-500' : 'bg-red-400'}" data-testid="asset-status-dot" title={assetInfo.active !== false ? $t('common.active') : $t('assets.status.archived')}></span>
                     <h2 use:scrollOnOverflow class="{overflowScrollTextClass} text-xl font-bold text-gray-800 dark:text-gray-100 max-w-[15ch] sm:max-w-[30ch] lg:max-w-none" title={assetInfo.display_name}>{assetInfo.display_name}</h2>
@@ -2749,7 +2752,7 @@
     <!--               [ actions ── 2×2   ]  (narrowest tier — Round 12 removed iconOnly)     -->
     <!-- ======================================================================= -->
     <PageToolbar
-        thresholds={{oneRow: 1215, denseRow: 780, stackFilters: 400, oneColumn: 360, labelHideActions: 230, labelHideTabs: 370}}
+        thresholds={{oneRow: 1215, denseRow: 850, stackFilters: 510, oneColumn: 360, labelHideActions: 230, labelHideTabs: 370}}
         tabs={assetDetailTabs}
         {activeTab}
         ontabchange={handleAssetDetailTabChange}

@@ -644,7 +644,7 @@
     <h1 class="sr-only">{$_('nav.dashboard')}</h1>
 
     <PageToolbar
-        thresholds={{oneRow: 1000, denseRow: 810, stackFilters: 430, oneColumn: 390, noExtraLabel: 410, labelHideActions: 210, labelHideTabs: 370}}
+        thresholds={{oneRow: 1000, denseRow: 950, stackFilters: 510, oneColumn: 390, noExtraLabel: 410, labelHideActions: 210, labelHideTabs: 460}}
         tabs={dashboardTabs}
         {activeTab}
         ontabchange={handleTabChange}
