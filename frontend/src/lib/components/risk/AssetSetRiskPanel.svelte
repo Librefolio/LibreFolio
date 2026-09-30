@@ -90,6 +90,7 @@
     import LabAssetPicker from './LabAssetPicker.svelte';
     import LabPopover from './LabPopover.svelte';
     import {riskBenchmark} from '$lib/stores/risk/riskBenchmarkStore.svelte';
+    import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {applyBulkAction, MAX_SELECTED_ASSETS, readPersistedSelection, resolveInitialSelectionWithSource, writePersistedSelection, type BulkAction, type SelectionSource} from './assetSetSelection';
     import {dayFormatter, describeEligibility, eligibilityBatches, EMPTY_VERDICTS, fitPeriodOffer, isSelectable, mergeEligibilityAnswers, type DayRange, type EligibilityView, type EligibilityVerdicts} from './eligibility';
     import {buildSyncTargets} from './syncTargets';
@@ -378,6 +379,23 @@
             if (!types.has(assetId)) types.set(assetId, getAssetInfo(assetId)?.asset_type);
         }
         return types;
+    });
+
+    /**
+     * Same sources again, resolved the way the selection's chips resolve an icon
+     * (`AssetChip`): the asset's own, else its type's. The loss table's asset cells read
+     * it; an id known to neither source gets no icon and shows its name alone.
+     */
+    let selectionIcons = $derived.by(() => {
+        void $assetStoreVersion;
+        const icons = new Map<number, string>();
+        for (const asset of selectedAssets) icons.set(asset.id, asset.icon_url || getAssetTypeIconUrl(asset.asset_type));
+        for (const assetId of selectedAssetIds) {
+            if (icons.has(assetId)) continue;
+            const info = getAssetInfo(assetId);
+            if (info) icons.set(assetId, info.icon_url || getAssetTypeIconUrl(info.asset_type));
+        }
+        return icons;
     });
 
     $effect(() => {
@@ -752,7 +770,7 @@
 
     {#if analysedIds.length > 0}
         <AssetSetCorrelationSection assetIds={analysedIds} assetLabels={selectionLabels} assetTypes={selectionTypes} {dateStart} {dateEnd} {targetCurrency} refreshVersion={syncGeneration} />
-        <AssetSetComparisonLevels assetIds={analysedIds} assetLabels={selectionLabels} {dateStart} {dateEnd} {targetCurrency} {benchmarkId} refreshVersion={syncGeneration} />
+        <AssetSetComparisonLevels assetIds={analysedIds} assetLabels={selectionLabels} assetIcons={selectionIcons} {dateStart} {dateEnd} {targetCurrency} {benchmarkId} refreshVersion={syncGeneration} />
         <AssetSetReplaySection assetIds={analysedIds} assetLabels={selectionLabels} {dateStart} {dateEnd} {targetCurrency} refreshVersion={syncGeneration} />
     {:else if seeding}
         <div class="rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 p-8 text-center" data-testid="risk-asset-set-seeding">
