@@ -20,7 +20,7 @@ from collections import defaultdict
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Collection, Dict, List, Optional, Set, Tuple
 from uuid import uuid4
 
 from fastapi import HTTPException
@@ -436,17 +436,30 @@ class TransactionService:
 
             current_date += timedelta(days=1)
 
-    async def _get_balances_before_date(self, broker_id: int, before_date: date_type) -> Tuple[Dict[str, Decimal], Dict[int, Decimal]]:
-        """Get cash and asset balances at end of day before the given date."""
-        cash_stmt = select(Transaction.currency, func.sum(Transaction.amount)).where(Transaction.broker_id == broker_id).where(Transaction.date < before_date).where(Transaction.currency.isnot(None)).group_by(Transaction.currency)
-        result = await self.session.execute(cash_stmt)
+    async def _get_balances_before_date(self, broker_id: int, before_date: date_type, exclude_tx_ids: Collection[int] = ()) -> Tuple[Dict[str, Decimal], Dict[int, Decimal]]:
+        """Get cash and asset balances at end of day before the given date.
+
+        ``exclude_tx_ids`` leaves those transactions out of both sums (e.g. rows the bulk
+        editor is about to delete, when the report-set gap-fix compares with the bank).
+        """
+        excluded = list(exclude_tx_ids)
+        cash_stmt = select(Transaction.currency, func.sum(Transaction.amount)).where(Transaction.broker_id == broker_id).where(Transaction.date < before_date).where(Transaction.currency.isnot(None))
+        asset_stmt = select(Transaction.asset_id, func.sum(Transaction.quantity)).where(Transaction.broker_id == broker_id).where(Transaction.date < before_date).where(Transaction.asset_id.isnot(None))
+        if excluded:
+            cash_stmt = cash_stmt.where(Transaction.id.notin_(excluded))
+            asset_stmt = asset_stmt.where(Transaction.id.notin_(excluded))
+
+        result = await self.session.execute(cash_stmt.group_by(Transaction.currency))
         cash_balances: Dict[str, Decimal] = {currency: amount for currency, amount in result.all() if currency}
 
-        asset_stmt = select(Transaction.asset_id, func.sum(Transaction.quantity)).where(Transaction.broker_id == broker_id).where(Transaction.date < before_date).where(Transaction.asset_id.isnot(None)).group_by(Transaction.asset_id)
-        result = await self.session.execute(asset_stmt)
+        result = await self.session.execute(asset_stmt.group_by(Transaction.asset_id))
         asset_balances: Dict[int, Decimal] = {asset_id: qty for asset_id, qty in result.all() if asset_id}
 
         return cash_balances, asset_balances
+
+    async def get_balances_at_end_of(self, broker_id: int, as_of: date_type, exclude_tx_ids: Collection[int] = ()) -> Tuple[Dict[str, Decimal], Dict[int, Decimal]]:
+        """Cash per currency and quantity per asset of a broker at the end of ``as_of`` (inclusive)."""
+        return await self._get_balances_before_date(broker_id, as_of + timedelta(days=1), exclude_tx_ids)
 
     # =========================================================================
     # BALANCE QUERIES (for BRSummary)

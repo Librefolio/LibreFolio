@@ -9,6 +9,7 @@ Tests for Broker Report Import Manager API endpoints:
 - POST /brokers/import/files/{id}/parse: Parse file
 - GET /brokers/import/plugins: List available plugins
 - POST /brokers/import/sets/preview and /sets/combine: report sets (phase A2)
+- POST /brokers/import/gap-fix: the corrections that align LibreFolio with the bank (phase A3)
 
 See checklist: 01_test_brim_plan.md - Categories 5, 6
 Note: E2E tests are in test_e2e/test_brim_e2e.py (Category 7)
@@ -21,6 +22,7 @@ import io
 import json
 import time
 import uuid
+from decimal import Decimal
 
 import httpx
 import pytest
@@ -1314,6 +1316,325 @@ class TestParseReportSetFields:
             assert {key: cached.json()[key] for key in empty} == empty
             info = await client.get(f"{API_BASE}/brokers/import/files/{file_id}", timeout=TIMEOUT)
             assert info.json()["status"] == "parsed"
+
+
+# ============================================================================
+# CATEGORY 9: GAP-FIX (phase A3) — POST /brokers/import/gap-fix
+# ============================================================================
+#
+# The gap-fix accepts any registered plugin, because it reads only the plugin's
+# history tag and name: unlike the set endpoints, its behaviour is proven over
+# HTTP, with the generic CSV plugin (history tag "generic_csv"). Each test builds
+# its own broker (and assets) through the API, writes LibreFolio's side with
+# POST /transactions/commit, and deletes what it created. The complete rule set
+# (tolerance, positions, explanation, three checkpoints, scenario 8) is tested
+# at service level, in test_services/test_brim_gap_fix.py.
+
+GAP_FIX_URL = f"{API_BASE}/brokers/import/gap-fix"
+GAP_FIX_PLUGIN = "broker_generic_csv"
+GAP_FIX_TAGS = ["import", "generic_csv", "gap_fix"]
+GAP_FIX_PLUGIN_NAME = "Generic CSV"
+GAP_FIX_EVE = "2024-12-31"
+COST_TODO = ("cost_basis_override", "blocker", "gap_fix_cost")
+
+
+def _route_missing(response: httpx.Response) -> bool:
+    """The answer comes from the router, not from a handler: 404 ``Not Found``, or 405 because only the SPA catch-all GET matches the path."""
+    return response.status_code == 405 or (response.status_code == 404 and _detail_text(response) == "Not Found")
+
+
+async def _gap_fix(client: httpx.AsyncClient, body: dict) -> httpx.Response:
+    """``POST /gap-fix``; while the route does not exist, the test fails saying so instead of on a status code."""
+    response = await client.post(GAP_FIX_URL, json=body, timeout=TIMEOUT)
+    if _route_missing(response):
+        pytest.fail(f"POST /brokers/import/gap-fix does not exist yet (BRIM report sets, phase A3): {response.status_code} {response.text}", pytrace=False)
+    return response
+
+
+def _gap_fix_body(broker_id: int, **fields) -> dict:
+    """A ``BRIMGapFixRequest`` body for the generic CSV plugin; ``fields`` add to it or override it."""
+    return {"broker_id": broker_id, "plugin_code": GAP_FIX_PLUGIN, **fields}
+
+
+def _checkpoint_json(kind: str = "opening", *, cash: dict = None, positions: list = ()) -> dict:
+    """A checkpoint dated ``GAP_FIX_EVE``; ``cash`` is ``{currency: amount}``."""
+    return {"as_of": GAP_FIX_EVE, "kind": kind, "cash": [{"currency": currency, "amount": amount} for currency, amount in (cash or {}).items()], "positions": list(positions)}
+
+
+def _verification_json(as_of: str, currency: str, amount: str) -> dict:
+    return {"as_of": as_of, "cash": [{"currency": currency, "amount": amount}]}
+
+
+def _cash_movement(broker_id: int, tx_type: str, day: str, amount: str, currency: str = "EUR") -> dict:
+    """A DEPOSIT or WITHDRAWAL as ``/transactions/commit`` and ``BRIMGapFixRequest`` both take it."""
+    return {"broker_id": broker_id, "type": tx_type, "date": day, "quantity": "0", "cash": {"code": currency, "amount": amount}}
+
+
+async def _commit_creates(client: httpx.AsyncClient, *creates: dict) -> list:
+    """Save rows through ``POST /transactions/commit``; returns their ids, in order."""
+    response = await client.post(f"{API_BASE}/transactions/commit", json={"creates": list(creates)}, timeout=TIMEOUT)
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data.get("committed") is True, response.text
+    ids_by_index = {result["index"]: result["ids"] for result in data["results"]}
+    return [ids_by_index[index][0] for index in range(len(creates))]
+
+
+async def _broker_tx_ids(client: httpx.AsyncClient, broker_id: int) -> set:
+    response = await client.get(f"{API_BASE}/transactions", params={"broker_id": broker_id}, timeout=TIMEOUT)
+    assert response.status_code == 200, response.text
+    return {item["id"] for item in response.json()}
+
+
+async def _create_gap_fix_asset(client: httpx.AsyncClient) -> int:
+    response = await client.post(f"{API_BASE}/assets", json=[{"display_name": f"GapFix_{uuid.uuid4().hex[:10]}", "currency": "EUR", "asset_type": "STOCK"}], timeout=TIMEOUT)
+    assert response.status_code in (200, 201), response.text
+    return response.json()["results"][0]["asset_id"]
+
+
+async def _delete_created(client: httpx.AsyncClient, broker_ids: list = (), asset_ids: list = ()) -> None:
+    """Whoever writes cleans up: the brokers first (``force``: their transactions go with them), then the assets they held."""
+    if broker_ids:
+        response = await client.delete(f"{API_BASE}/brokers", params={"ids": list(broker_ids), "force": True}, timeout=TIMEOUT)
+        assert response.status_code == 200 and response.json().get("success_count") == len(broker_ids), response.text
+    if asset_ids:
+        response = await client.delete(f"{API_BASE}/assets", params={"asset_ids": list(asset_ids)}, timeout=TIMEOUT)
+        assert response.status_code == 200 and response.json().get("success_count") == len(asset_ids), response.text
+
+
+def _one(results: list, as_of: str) -> dict:
+    """The one result dated ``as_of`` (a checkpoint or a verification)."""
+    found = [item for item in results if item["as_of"] == as_of]
+    assert len(found) == 1, f"one result expected at {as_of}: {results}"
+    return found[0]
+
+
+def _money_rows(rows: list) -> dict:
+    """``{currency: (bank, librefolio, difference)}`` of a result's cash rows, compared as numbers."""
+    return {row["currency"]: (Decimal(row["bank"]), Decimal(row["librefolio"]), Decimal(row["difference"])) for row in rows}
+
+
+def _cash_proposals(result: dict) -> list:
+    """``[(type, currency, amount)]`` of a checkpoint's proposals."""
+    return [(item["type"], item["cash"]["code"], Decimal(item["cash"]["amount"])) for item in result["proposals"]]
+
+
+class TestGapFixEndpoint:
+    """A3 — ``POST /brokers/import/gap-fix``: what the bank states against what LibreFolio has, and the corrections that close the gap. Writes nothing."""
+
+    @pytest.mark.asyncio
+    async def test_first_import_proposes_the_opening_deposit(self, test_server):
+        """GF-001: an empty broker and one opening checkpoint: one DEPOSIT dated C, tagged and described for the plugin; nothing is saved."""
+        print_section("GF-001: gap-fix on an empty broker proposes the opening deposit")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+            try:
+                response = await _gap_fix(client, _gap_fix_body(broker_id, checkpoints=[_checkpoint_json(cash={"EUR": "1523.40"})]))
+
+                assert response.status_code == 200, response.text
+                data = response.json()
+                assert data["verifications"] == []
+                result = _one(data["checkpoints"], GAP_FIX_EVE)
+                assert result["kind"] == "opening"
+                assert _money_rows(result["cash"]) == {"EUR": (Decimal("1523.40"), Decimal("0"), Decimal("1523.40"))}
+                assert _cash_proposals(result) == [("DEPOSIT", "EUR", Decimal("1523.40"))]
+                proposal = result["proposals"][0]
+                assert (proposal["date"], proposal["broker_id"], proposal["tags"]) == (GAP_FIX_EVE, broker_id, GAP_FIX_TAGS)
+                assert proposal["description"].startswith(f"Gap-fix {GAP_FIX_EVE}") and GAP_FIX_PLUGIN_NAME in proposal["description"], proposal["description"]
+                assert await _broker_tx_ids(client, broker_id) == set(), "the gap-fix only proposes: nothing is saved"
+                print_success("✓ opening deposit proposed, nothing saved")
+            finally:
+                await _delete_created(client, broker_ids=[broker_id])
+
+    @pytest.mark.asyncio
+    async def test_matching_state_proposes_nothing(self, test_server):
+        """GF-002: LibreFolio already agrees with the bank at C and at V: no proposal, and the verification is ok."""
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+            try:
+                await _commit_creates(client, _cash_movement(broker_id, "DEPOSIT", "2024-06-03", "1000"), _cash_movement(broker_id, "WITHDRAWAL", "2024-09-02", "-250"))
+                body = _gap_fix_body(broker_id, checkpoints=[_checkpoint_json(cash={"EUR": "750"})], verifications=[_verification_json("2025-01-17", "EUR", "750")])
+
+                response = await _gap_fix(client, body)
+
+                assert response.status_code == 200, response.text
+                result = _one(response.json()["checkpoints"], GAP_FIX_EVE)
+                assert (result["proposals"], result["todos"]) == ([], [])
+                assert _money_rows(result["cash"]) == {"EUR": (Decimal("750"), Decimal("750"), Decimal("0"))}
+                verification = _one(response.json()["verifications"], "2025-01-17")
+                assert (verification["ok"], _money_rows(verification["cash"])) == (True, {"EUR": (Decimal("750"), Decimal("750"), Decimal("0"))})
+            finally:
+                await _delete_created(client, broker_ids=[broker_id])
+
+    @pytest.mark.asyncio
+    async def test_positions_with_and_without_a_unit_cost(self, test_server):
+        """GF-003: an exact position held in part gets an ADJUSTMENT at the known unit cost; a missing minimum without cost gets one and a blocking todo."""
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+            assets = []
+            try:
+                assets.append(await _create_gap_fix_asset(client))
+                assets.append(await _create_gap_fix_asset(client))
+                costed, uncosted = assets
+                await _commit_creates(client, {"broker_id": broker_id, "asset_id": costed, "type": "BUY", "date": "2024-06-03", "quantity": "6", "cash": {"code": "EUR", "amount": "-60"}})
+                positions = [{"asset_id": costed, "quantity": "10", "exactness": "exact", "unit_cost": {"code": "EUR", "amount": "12.50"}}, {"asset_id": uncosted, "quantity": "2", "exactness": "at_least"}]
+
+                response = await _gap_fix(client, _gap_fix_body(broker_id, checkpoints=[_checkpoint_json(positions=positions)]))
+
+                assert response.status_code == 200, response.text
+                result = _one(response.json()["checkpoints"], GAP_FIX_EVE)
+                rows = {row["asset_id"]: (row["exactness"], Decimal(row["bank"]), Decimal(row["librefolio"]), Decimal(row["difference"])) for row in result["positions"]}
+                assert rows == {costed: ("exact", Decimal("10"), Decimal("6"), Decimal("4")), uncosted: ("at_least", Decimal("2"), Decimal("0"), Decimal("2"))}
+                proposals = {item["asset_id"]: item for item in result["proposals"]}
+                assert len(result["proposals"]) == 2 and set(proposals) == {costed, uncosted}, result["proposals"]
+                cost = proposals[costed]["cost_basis_override"]
+                assert (proposals[costed]["type"], Decimal(proposals[costed]["quantity"]), cost and cost["code"], cost and Decimal(cost["amount"])) == ("ADJUSTMENT", Decimal("4"), "EUR", Decimal("12.50"))
+                assert (proposals[uncosted]["type"], Decimal(proposals[uncosted]["quantity"]), proposals[uncosted]["cost_basis_override"]) == ("ADJUSTMENT", Decimal("2"), None)
+                assert [(todo["field"], todo["severity"], todo["reason_code"]) for todo in result["todos"]] == [COST_TODO]
+                assert result["proposals"][result["todos"][0]["tx_index"]]["asset_id"] == uncosted
+            finally:
+                await _delete_created(client, broker_ids=[broker_id], asset_ids=assets)
+
+    @pytest.mark.asyncio
+    async def test_pending_deletes_are_honoured(self, test_server):
+        """GF-004: a saved row the editor is deleting (``pending_delete_tx_ids``) is left out of LibreFolio's side; nothing is deleted."""
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+            try:
+                kept, deleting = await _commit_creates(client, _cash_movement(broker_id, "DEPOSIT", "2024-06-03", "1000"), _cash_movement(broker_id, "DEPOSIT", "2024-07-01", "500"))
+                checkpoints = [_checkpoint_json("gap", cash={"EUR": "1000"})]
+
+                counted = await _gap_fix(client, _gap_fix_body(broker_id, checkpoints=checkpoints))
+                excluded = await _gap_fix(client, _gap_fix_body(broker_id, checkpoints=checkpoints, pending_delete_tx_ids=[deleting]))
+
+                assert (counted.status_code, excluded.status_code) == (200, 200), (counted.text, excluded.text)
+                assert _cash_proposals(_one(counted.json()["checkpoints"], GAP_FIX_EVE)) == [("WITHDRAWAL", "EUR", Decimal("-500"))], "presence barrier: without the pending delete both deposits count"
+                result = _one(excluded.json()["checkpoints"], GAP_FIX_EVE)
+                assert _money_rows(result["cash"]) == {"EUR": (Decimal("1000"), Decimal("1000"), Decimal("0"))}
+                assert result["proposals"] == []
+                assert await _broker_tx_ids(client, broker_id) == {kept, deleting}, "the gap-fix deletes nothing either"
+            finally:
+                await _delete_created(client, broker_ids=[broker_id])
+
+    @pytest.mark.asyncio
+    async def test_editor_rows_and_selection_are_counted(self, test_server):
+        """GF-005: unsaved rows count up to C, pending in the editor or selected in the wizard; a selected row dated after C does not."""
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+            try:
+                body = _gap_fix_body(
+                    broker_id,
+                    checkpoints=[_checkpoint_json("gap", cash={"EUR": "550"})],
+                    pending_creates=[_cash_movement(broker_id, "DEPOSIT", "2024-05-02", "300")],
+                    selection=[_cash_movement(broker_id, "DEPOSIT", GAP_FIX_EVE, "200"), _cash_movement(broker_id, "DEPOSIT", "2025-01-02", "999")],
+                )
+
+                response = await _gap_fix(client, body)
+
+                assert response.status_code == 200, response.text
+                result = _one(response.json()["checkpoints"], GAP_FIX_EVE)
+                assert _money_rows(result["cash"]) == {"EUR": (Decimal("550"), Decimal("500"), Decimal("50"))}
+                assert _cash_proposals(result) == [("DEPOSIT", "EUR", Decimal("50"))]
+            finally:
+                await _delete_created(client, broker_ids=[broker_id])
+
+    @pytest.mark.asyncio
+    async def test_verification_ok_and_not_ok(self, test_server):
+        """GF-006: a verification only compares: ok within a cent, not ok beyond, with the difference; without checkpoints there is nothing to propose."""
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+            try:
+                await _commit_creates(client, _cash_movement(broker_id, "DEPOSIT", "2025-01-02", "1000"))
+                verifications = [_verification_json("2025-01-17", "EUR", "1000.01"), _verification_json("2025-01-18", "EUR", "1200")]
+
+                response = await _gap_fix(client, _gap_fix_body(broker_id, verifications=verifications))
+
+                assert response.status_code == 200, response.text
+                data = response.json()
+                assert data["checkpoints"] == []
+                within, off = _one(data["verifications"], "2025-01-17"), _one(data["verifications"], "2025-01-18")
+                assert (within["ok"], off["ok"]) == (True, False)
+                assert _money_rows(off["cash"]) == {"EUR": (Decimal("1200"), Decimal("1000"), Decimal("200"))}
+            finally:
+                await _delete_created(client, broker_ids=[broker_id])
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("plugin_code", "owner_status"), [pytest.param(GAP_FIX_PLUGIN, 200, id="registered-plugin"), pytest.param("no_such_plugin_a3", 404, id="unknown-plugin")])
+    async def test_editor_role_is_checked_first(self, test_server, plugin_code, owner_status):
+        """GF-007: a VIEWER of the broker and a user without access get 403, whatever the plugin; the OWNER, with the same body, reaches the handler."""
+        async with httpx.AsyncClient() as owner, httpx.AsyncClient() as viewer, httpx.AsyncClient() as stranger:
+            owner_id = await create_test_user(owner)
+            viewer_id = await create_test_user(viewer)
+            await create_test_user(stranger)
+            broker_id = await create_test_broker(owner)
+            try:
+                access = await owner.put(
+                    f"{API_BASE}/brokers/{broker_id}/access",
+                    json=[{"user_id": owner_id, "role": "OWNER", "share_percentage": 1.0}, {"user_id": viewer_id, "role": "VIEWER", "share_percentage": 0}],
+                    timeout=TIMEOUT,
+                )
+                assert access.status_code == 200, access.text
+                body = _gap_fix_body(broker_id, plugin_code=plugin_code, checkpoints=[_checkpoint_json(cash={"EUR": "100"})])
+
+                control = await _gap_fix(owner, body)
+
+                assert control.status_code == owner_status, f"presence barrier, the owner reaches the handler: {control.status_code} {control.text}"
+                for who, client in (("viewer", viewer), ("stranger", stranger)):
+                    response = await _gap_fix(client, body)
+                    assert response.status_code == 403, f"{who}: {response.status_code} {response.text}"
+            finally:
+                await _delete_created(owner, broker_ids=[broker_id])
+
+    @pytest.mark.asyncio
+    async def test_unknown_plugin_is_404_with_its_code(self, test_server):
+        """GF-008: an unknown plugin code answers 404 with ``plugin_not_found``: the code is asserted, a bare 404 is also what a missing route says."""
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+            try:
+                body = _gap_fix_body(broker_id, plugin_code=f"no_such_plugin_{uuid.uuid4().hex[:6]}", checkpoints=[_checkpoint_json(cash={"EUR": "100"})])
+
+                response = await _gap_fix(client, body)
+
+                assert response.status_code == 404, response.text
+                assert "plugin_not_found" in _detail_text(response), response.text
+            finally:
+                await _delete_created(client, broker_ids=[broker_id])
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("drop", "add", "field"),
+        [
+            pytest.param("plugin_code", {}, "plugin_code", id="missing-plugin_code"),
+            pytest.param(None, {"broker_id": 0}, "broker_id", id="broker_id-zero"),
+            pytest.param(None, {"batch_id": "0b6f7a3e-5d1c-4c1e-9a53-2f0e4d9b7c10"}, "batch_id", id="unknown-key"),
+            pytest.param(None, {"checkpoints": [{"as_of": GAP_FIX_EVE, "kind": "closing"}]}, "kind", id="checkpoint-kind"),
+            pytest.param(None, {"pending_delete_tx_ids": ["not-an-id"]}, "pending_delete_tx_ids", id="pending-delete-ids"),
+        ],
+    )
+    async def test_body_is_validated(self, test_server, drop, add, field):
+        """GF-009: ``BRIMGapFixRequest`` is strict: a missing field, a non-positive broker, an unknown key, a bad checkpoint or id answer 422 naming the field."""
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+            try:
+                body = _gap_fix_body(broker_id)
+                body.pop(drop, None)
+                body.update(add)
+
+                response = await _gap_fix(client, body)
+
+                assert response.status_code == 422, response.text
+                errors = response.json().get("detail")
+                assert isinstance(errors, list) and any(field in [str(part) for part in error.get("loc", [])] for error in errors), errors
+            finally:
+                await _delete_created(client, broker_ids=[broker_id])
 
 
 # ============================================================================
