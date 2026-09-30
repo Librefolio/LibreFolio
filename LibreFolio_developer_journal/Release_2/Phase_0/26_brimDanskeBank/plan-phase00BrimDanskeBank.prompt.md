@@ -369,6 +369,57 @@ Il set rende esplicita questa realtà. Lo schema qui sotto è il contenuto che i
 > | `dafff60da` | docs(brim): fake asset IDs are high positive | skill e istruzione |
 > | `c9ad3bb03` | docs(journal): record Danske step 1 commits | piano |
 
+### 1c. ✅ Fix del 422 nell'upload dalla pagina file e dal dettaglio broker — 2026-09-30
+
+Reperto di L, verificato dal coordinatore. Decisione del developer: «L lo corregge subito dopo la pausa del venv, in un commit a sé con prima il test rosso, senza aspettare il design».
+
+- **Il bug.** `POST /brokers/import/upload` chiede `broker_id` nel form (`Form(...)`, dal commit `eb78aacdb` del 15/06). Due chiamanti lo mandano ancora nella query (`?broker_id=`):
+  - `BrokerImportFilesModal.svelte:124`, la modale «storico import» del dettaglio broker;
+  - `files/+page.svelte:511`, la scheda BRIM della pagina file.
+
+  Risultato: 422 a ogni upload da lì, dalla v0.9.0 alla v1.1.0 rilasciata. Il wizard è corretto. Nessun test lo copriva: i test API e l'E2E caricano già con il form.
+- **Perimetro.** La cura, e solo quella, più quattro `data-testid` per i test; `batch_id` e CHANGELOG restano fuori. Dopo i test rossi del test-author, nei due spec già registrati (`brokers/brokers-detail.spec.ts` → `front-broker detail`; `files.spec.ts` → `front-utility files`).
+- **Base**: merge `183ce7b3d` (`dev_release2` in L, developer). `npm ci` autorizzato dal coordinatore.
+
+**Passi**
+1. ✅ `npm ci` (una volta, dal lock): exit 0. Avviso di npm 11 sugli script d'installazione non approvati (esbuild, fsevents, es5-ext): nessuna azione.
+2. ✅ `data-testid`, solo attributi: `import-files-upload-toggle` (pulsante del footer della modale), `brim-assign-modal` (`testId` della `ModalBase`), `brim-assign-all` (il `div` «Assegna tutti a», come `import-wizard-step1-broker-select` nel wizard), `brim-upload-confirm`.
+3. ✅ Test rossi (test-author, corsia 6156): un caso nuovo per spec, con broker proprio, il campione sintetico `generic_simple.csv` e la pulizia in `afterEach`.
+   - `brokers-detail.spec.ts` → «uploads a report from the import history modal to its own broker»;
+   - `files.spec.ts` → «uploads a BRIM report through the assign-brokers modal to its own broker». Aggiunge un parametro facoltativo `name` al `createBroker` locale; l'unico chiamante esistente resta invariato.
+
+   Tutti e due rossi con `422 … "loc":["body","broker_id"],"msg":"Field required"`. Prima della cura, le azioni complete danno: `front-broker detail` 27 passati e 2 falliti, `front-utility files` 20 passati e 1 fallito.
+4. ✅ La cura, solo nei due chiamanti: `formData.append('broker_id', String(brokerId))` e via `?broker_id=` dall'URL. Nessun `?broker_id=` rimasto in `frontend/src`.
+5. ✅ Verde, corsia 6156, un comando alla volta, dopo `front build --debug` (exit 0):
+
+   | Comando | Esito |
+   |---|---|
+   | `front-broker detail "import history modal to its own broker"` | 1 passato |
+   | `front-utility files "assign-brokers modal to its own broker"` | 1 passato |
+   | `front-broker detail` | 28 passati, 1 fallito (GrowthChart, preesistente) |
+   | `front-utility files` | 21 passati |
+   | Prettier sui 4 file toccati | pulito |
+   | `git diff --check` | pulito |
+   | porta 6156 | libera |
+
+   Checkpoint consegnato al coordinatore per il commit `fix(brim): …`.
+
+> **⚠️ Fuori pista**: i `data-testid` sono entrati prima dei test rossi, invertendo l'ordine del coordinatore. Così il test fallisce per il 422 e non per un selettore mancante; il commit resta lo stesso.
+>
+> **⚠️ Fuori pista**:
+> - **Test rosso preesistente**, fuori perimetro: `brokers-detail.spec.ts` «Broker detail — GrowthChart P&L mode › line and income submodes render this broker own figures».
+>   - Fallisce anche da solo, prima e dopo la cura.
+>   - Il tooltip delle entrate cade su una settimana in cui dividendi e interessi valgono zero, e gli zeri si mostrano senza segno: il test si aspetta almeno 3 importi col segno e ne trova 1. Sembra dipendere dalla data.
+>   - Segnalato al coordinatore.
+> - Prettier lanciato dalla radice del repo non trova `prettier-plugin-svelte`: va lanciato da `frontend/` (`node_modules/.bin/prettier --check …`).
+> - Il build (`svelte-check`) riporta 3 errori preesistenti in file estranei: `TransactionFormModal.test.ts` e `ToolExecutionMetrics.svelte`.
+>
+> **⚠️ Fuori pista**: il ramo di I (`e-alfy-performance-charts-plan`) aggiunge righe in `brokers-detail.spec.ts` negli stessi punti, e il merge a tre vie dava 2 conflitti. Su richiesta del coordinatore:
+> - i 3 import nuovi vanno prima di `import {appears}`;
+> - le costanti `__filename`/`__dirname` e il blocco «import history upload» vanno in fondo al file, dopo il `describe` GrowthChart.
+>
+> Il file risulta identico alla copia di prova del coordinatore (`diff` vuoto), e con quella il merge dà 0 conflitti. Dopo lo spostamento: Prettier pulito, il test nuovo da solo passa (1/1), `front-broker detail` dà 28 passati e 1 fallito (GrowthChart, preesistente, che il coordinatore passa a I), porta 6156 libera.
+
 ### 2. ⏳ Documento di design dei set
 
 - File `26_brimDanskeBank/design-phase00BrimReportSets.md`: §2 sviluppato con contratti, stati, errori, casi limite (bordi del periodo, troncamenti, righe identiche), compatibilità, test e fasi.
