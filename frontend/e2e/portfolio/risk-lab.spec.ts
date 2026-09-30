@@ -35,6 +35,7 @@ import {login, navigateTo} from '../fixtures/auth-helpers';
 import {expectChartCanvas} from '../fixtures/charts';
 import {TEST_USER} from '../fixtures/test-users';
 import {schemas} from '../../src/lib/api/generated';
+import {OVERFLOW_MARQUEE_SELECTOR} from '../../src/lib/actions/scrollOnOverflow';
 
 type RiskScope = {kind: 'asset'; asset_id: number} | {kind: 'asset_set'; asset_ids: number[]} | {kind: 'portfolio'; broker_ids?: number[] | null};
 
@@ -209,6 +210,12 @@ const MOCK_ALGORITHM_VERSION = 'e2e-mock-v1';
 const INVENTED = {
     /** VaR 95% over one day, as a positive loss fraction, per asset index. */
     badDayVar: (index: number) => 0.021 + index * 0.004,
+    /**
+     * The one-day VaR the sort test plants instead (`zigzagBadDay`), per *rank* rather than
+     * per index: a gentler ramp of its own, so that ranks run as far as the selection does
+     * without leaving the band a real instrument occupies as fast as `badDayVar` would.
+     */
+    zigzagBadDayVar: (rank: number) => 0.012 + rank * 0.0015,
     /** CVaR is the mean *beyond* the quantile, so it is wider — here by a flat 40%. */
     tailWidening: 1.4,
     /** A month is drawn wider than a day, but never as `day × √21`: that would be a model. */
@@ -413,11 +420,12 @@ function isHistoricalReplay(analytic: RiskAnalyticRequest): boolean {
 /**
  * How this test wants the backend to behave, where "ordinary" is not the subject.
  *
- * Both knobs reproduce a state the **real** backend reaches on its own; neither
- * invents one. That distinction is the whole reason they are options rather than
- * separate hand-written payloads: a stub that can only produce the happy path
+ * The first two knobs reproduce a state the **real** backend reaches on its own;
+ * neither invents one. That distinction is the whole reason they are options rather
+ * than separate hand-written payloads: a stub that can only produce the happy path
  * makes the unhappy paths unreachable, and a stub that produces an impossible
- * one tests a page against a world that does not exist.
+ * one tests a page against a world that does not exist. The third is not a state
+ * at all: the same ordinary answer, with one column's figures in another order.
  */
 interface RiskStubOptions {
     /**
@@ -440,6 +448,17 @@ interface RiskStubOptions {
      * beside four `unavailable` — same request, same calendar, same window.
      */
     shortWindow?: boolean;
+    /**
+     * Plant the one-day VaR as a zig-zag in id order instead of the ramp.
+     *
+     * For the test that sorts L1°'s bad day. The ramp climbs with the request's
+     * ascending ids, and the selection often opens in that same order, so a column
+     * sorted by the ramp comes out in the selection's order or in its reverse — and
+     * "sorted" and "cleared" could then draw the same rows. {@link zigzagRank} gives
+     * every position a distinct rank, even positions below odd ones: a straight line
+     * in value, a zig-zag in id order. The month keeps the ramp.
+     */
+    zigzagBadDay?: boolean;
 }
 
 /** True when this analytic is one of the five the comparison levels read. */
@@ -680,6 +699,18 @@ function correlationOutput(request: RiskRequest, options: RiskStubOptions = {}) 
  * number out of here.
  */
 
+/**
+ * The rank {@link RiskStubOptions.zigzagBadDay} gives the asset at `position` of `count`.
+ *
+ * Even positions take the low ranks in order, odd positions the ranks above them, so
+ * every rank from 0 to `count - 1` is used exactly once — no two rows tie — and for
+ * three or more assets the order by value is neither the order of the ids nor its
+ * reverse: `[0, 1, 2]` ranks as `[0, 2, 1]`.
+ */
+function zigzagRank(position: number, count: number): number {
+    return position % 2 === 0 ? position / 2 : Math.ceil(count / 2) + (position - 1) / 2;
+}
+
 /** Per-asset VaR/CVaR at one horizon. Positive magnitudes, CVaR ≥ VaR. */
 function assetSetVarOutput(request: RiskRequest, analytic: RiskAnalyticRequest, options: RiskStubOptions) {
     const {covered} = preparedAssetIds(request, options);
@@ -698,7 +729,7 @@ function assetSetVarOutput(request: RiskRequest, analytic: RiskAnalyticRequest, 
         observations: Math.max(1, observationCount(options) - (horizonObservations - 1)),
         items: covered.map((assetId, index) => {
             const row = variant(index);
-            const valueAtRisk = INVENTED.badDayVar(row) * horizonFactor;
+            const valueAtRisk = options.zigzagBadDay && horizonDays === 1 ? INVENTED.zigzagBadDayVar(zigzagRank(index, covered.length)) : INVENTED.badDayVar(row) * horizonFactor;
             return {
                 asset_id: assetId,
                 value_at_risk: valueAtRisk,
@@ -1777,24 +1808,50 @@ const paidSection = (page: Page) => page.getByTestId('asset-global-risk-panel').
 const L1_CELLS = ['badDay', 'badMonth', 'worstFall', 'currentFall', 'toPeak'] as const;
 
 /**
- * The asset ids the L1° table drew a row for, read from the rows themselves.
+ * The L1° rows, top to bottom.
  *
- * `data-asset-id` is on the row because the table is a *transposition*: the
- * reader compares instruments down the page, so the row is the identity and the
- * column is the measure. Reading it back is what lets an assertion be phrased
- * over the selection rather than over positions.
+ * L1° is the project's DataTable, which writes the row's identity as `data-row-id`
+ * — here the asset id, because the table is a *transposition*: the reader compares
+ * instruments down the page, so the row is the identity and the column is the
+ * measure. Scoped to `tbody`: the header row is a row too, and carries no asset.
+ */
+const lossRows = (page: Page) => lossTable(page).locator('tbody tr[data-row-id]');
+
+/** One asset's L1° row, by the id DataTable writes on it — never by position. */
+const lossRow = (page: Page, assetId: number) => lossTable(page).locator(`tbody tr[data-row-id="${assetId}"]`);
+
+/**
+ * The asset ids the L1° table drew a row for, in the order it drew them, read from
+ * the rows themselves. Reading them back is what lets an assertion be phrased over
+ * the selection rather than over positions — and, once the reader sorts, over the
+ * order the sort produced.
+ *
+ * One read, not a retry: a caller that expects an order polls it.
  */
 async function lossRowAssetIds(page: Page): Promise<number[]> {
-    return (
-        await lossTable(page)
-            .getByTestId('risk-asset-set-l1-row')
-            .evaluateAll((nodes) => nodes.map((node) => Number(node.getAttribute('data-asset-id'))))
-    ).filter((id) => Number.isInteger(id));
+    return (await lossRows(page).evaluateAll((nodes) => nodes.map((node) => Number(node.getAttribute('data-row-id'))))).filter((id) => Number.isInteger(id));
 }
 
 /** A single L1° cell, addressed by the asset it belongs to — never by position. */
 function lossCell(page: Page, assetId: number, cell: (typeof L1_CELLS)[number]) {
-    return lossTable(page).locator(`tr[data-asset-id="${assetId}"] [data-testid="risk-asset-set-l1-${cell}"]`);
+    return lossRow(page, assetId).locator(`[data-testid="risk-asset-set-l1-${cell}"]`);
+}
+
+/** One asset's name cell: its type icon and its name, carrying the asset's id. */
+function lossNameCell(page: Page, assetId: number) {
+    return lossTable(page).locator(`[data-testid="risk-asset-set-l1-name"][data-asset-id="${assetId}"]`);
+}
+
+/**
+ * The L1° column ids, in the order the header draws them, read off DataTable's own
+ * `dt-header-<id>` titles — so a hidden column is simply absent from the list.
+ *
+ * One read, not a retry: a caller that expects an order polls it.
+ */
+async function lossHeaderIds(page: Page): Promise<string[]> {
+    return lossTable(page)
+        .locator('thead th[data-testid^="dt-header-"]')
+        .evaluateAll((nodes) => nodes.map((node) => (node.getAttribute('data-testid') ?? '').slice('dt-header-'.length)));
 }
 
 /**
@@ -3305,8 +3362,7 @@ test.describe('Asset Global risk laboratory', () => {
         // seed data this test does not own. A literal here would be a count of
         // somebody else's fixture.
         await expect(lossTable(page)).toHaveAttribute('data-row-count', String(selected.length));
-        const rows = lossTable(page).getByTestId('risk-asset-set-l1-row');
-        await expect(rows).toHaveCount(selected.length);
+        await expect(lossRows(page)).toHaveCount(selected.length);
         expect(
             [...(await lossRowAssetIds(page))].sort((left, right) => left - right),
             'the rows must be the selection, not a slice of it and not a superset',
@@ -3367,8 +3423,8 @@ test.describe('Asset Global risk laboratory', () => {
         // asset — including the one no analytic answered for.
         expect(selected, 'the unmeasured asset is still selected; that is the whole premise').toContain(unmeasured);
         await expect(lossTable(page)).toHaveAttribute('data-row-count', String(selected.length));
-        await expect(lossTable(page).getByTestId('risk-asset-set-l1-row')).toHaveCount(selected.length);
-        await expect(lossTable(page).locator(`tr[data-asset-id="${unmeasured}"]`), 'the asset nobody could measure must still have a row of its own').toHaveCount(1);
+        await expect(lossRows(page)).toHaveCount(selected.length);
+        await expect(lossRow(page, unmeasured), 'the asset nobody could measure must still have a row of its own').toHaveCount(1);
 
         // …and every one of its cells declares itself unmeasured, rather than
         // printing a zero. `data-measured="false"` is the difference between "this
@@ -3480,6 +3536,247 @@ test.describe('Asset Global risk laboratory', () => {
         await expect(paidHealth).toBeVisible();
         await expect(paidHealth).toHaveAttribute('data-count', '2');
         await expect(page.getByTestId('risk-asset-set-l3-risk-return'), 'a scatter with no measurable coordinate is not an empty chart, it is no chart').toHaveCount(0);
+    });
+
+    /**
+     * L1°'s headers explain; they do not link.
+     *
+     * Each value column carries its help as the tooltip of its own title — DataTable's
+     * `headerTooltip` with no URL — so there is no ⓘ beside a title and no anchor in the
+     * header row. The documentation lives on the section frame's manual icon, one for the
+     * whole level. The previous design put a link to a theory page beside every title:
+     * five anchors whose paths were assembled at runtime, which the link gate could not
+     * even read.
+     *
+     * The tooltip's words are not read: they are translated, and the component test
+     * already proves each title shows its own key's message. What only a browser can
+     * prove is that resting the pointer on the title opens it.
+     */
+    test("L1°'s value columns carry their help as a tooltip on the title, and its header row carries no link", async ({page}) => {
+        await installRiskMocks(page);
+        await openAssetGlobalRisk(page);
+        await waitForRiskCatalog(page);
+        await waitForLossTable(page);
+
+        // Presence first: every title is drawn, so the absences below are about a header
+        // that exists rather than one that has not rendered yet.
+        for (const column of ['name', ...L1_CELLS]) {
+            await expect(lossTable(page).getByTestId(`dt-header-${column}`), `the ${column} title is missing from L1°'s header`).toBeVisible();
+        }
+        await expect(lossTable(page).locator('thead a'), "a link in L1°'s header row: the documentation belongs to the frame's manual icon").toHaveCount(0);
+        await expect(lossTable(page).locator('[data-testid^="dt-header-tooltip-"]'), 'an ⓘ beside a title: the help is the title itself').toHaveCount(0);
+        await expect(page.locator('[data-testid^="risk-asset-set-l1-docs-"]')).toHaveCount(0);
+
+        // The help itself, where the pointer rests. The Tooltip opens after its own hover
+        // delay, which the retrying assertion absorbs: nothing here waits on a clock.
+        await lossTable(page).getByTestId('dt-sort-badDay').hover();
+        const help = page.getByTestId('tooltip-content');
+        await expect(help, 'resting on the bad-day title must open its help').toBeVisible();
+        await expect(help, 'the help opened empty').not.toHaveText(/^\s*$/);
+        await expect(help, 'the help printed its own key: the catalogue has no message for it').not.toHaveText('risk.assetSet.levels.l1.columnHelp.badDay');
+        // Resting is not pressing: the column is still unsorted.
+        await expect(lossTable(page).getByTestId('dt-header-badDay')).toHaveAttribute('data-sort', 'none');
+    });
+
+    /**
+     * L1° sorts a column by the figure it draws.
+     *
+     * A loss is drawn negative, so ascending puts the largest loss first; an asset nobody
+     * could measure is a blank, not a zero, and goes last whichever way the column points;
+     * the third press clears the sort and gives the rows back in the selection's order —
+     * the only order the system ever chooses, since the level compares and never ranks.
+     *
+     * The figures are this file's own ({@link INVENTED}), re-planted as a zig-zag
+     * (`zigzagBadDay`) so that ascending, descending and the opening order are three
+     * different orders; the blank is the asset `dropLastAsset` excludes, the state the
+     * backend leaves when it cannot prepare a series. The expected orders are worked out
+     * from the answer the stub sent, rebuilt through the same function that sent it.
+     */
+    test('L1° sorts a column by the loss it draws: the largest first, the unmeasured last both ways, and a third press restores the selection order', async ({page}) => {
+        const options: RiskStubOptions = {dropLastAsset: true, zigzagBadDay: true};
+        const requests = await installRiskMocks(page, options);
+        await openAssetGlobalRisk(page);
+        await ensureSelectionAtLeast(page, MINIMUM_SELECTION);
+        await waitForRiskCatalog(page);
+        await waitForLossTable(page);
+
+        // The answer the page was given for the selection on screen, rebuilt from the
+        // request it answered: the bad day of every measured asset, and the one left blank.
+        const selected = await chipIds(page);
+        await expect.poll(() => levelRequestsFor(requests, selected).length, {timeout: 20_000, message: 'the per-asset wave must have been requested for the selection on screen'}).toBeGreaterThan(0);
+        const levels = levelRequestsFor(requests, selected)[0];
+        const daily = levels.analytics.find((analytic) => analytic.analytic_code === 'asset_set_var' && Number(analytic.parameters?.horizon_days ?? 1) === 1);
+        if (!daily) throw new Error('The per-asset wave carries no one-day asset_set_var, so the bad day has nothing to sort.');
+        const badDay = new Map(assetSetVarOutput(levels, daily, options).items.map((item): [number, number] => [item.asset_id, item.conditional_value_at_risk]));
+        const {excluded} = preparedAssetIds(levels, options);
+        expect(excluded, 'dropLastAsset must leave exactly one selected asset unmeasured').toHaveLength(1);
+        const unmeasured = excluded[0];
+
+        // Barrier: the answer is on screen — every row drawn, the measured ones measured and
+        // the excluded one blank — before any order is read.
+        await expect(lossRows(page)).toHaveCount(selected.length);
+        await expect(lossTable(page).locator('[data-testid="risk-asset-set-l1-badDay"][data-measured="true"]')).toHaveCount(badDay.size);
+        await expect(lossCell(page, unmeasured, 'badDay')).toHaveAttribute('data-measured', 'false');
+
+        const opening = await lossRowAssetIds(page);
+        expect(
+            [...opening].sort((left, right) => left - right),
+            'the rows must be the selection',
+        ).toEqual([...selected].sort((left, right) => left - right));
+
+        // The oracle, stated as the rule: the figure drawn is the loss with its sign, −CVaR,
+        // so ascending is the largest CVaR first, and a blank goes last either way. Every
+        // figure is distinct (`zigzagRank`), so no tie is left to the table to settle.
+        const drawn = (assetId: number): number | null => {
+            const cvar = badDay.get(assetId);
+            return cvar === undefined ? null : -cvar;
+        };
+        const orderedBy = (direction: 'asc' | 'desc'): number[] =>
+            [...opening].sort((left, right) => {
+                const a = drawn(left);
+                const b = drawn(right);
+                if (a === null || b === null) return a === null ? (b === null ? 0 : 1) : -1;
+                return direction === 'asc' ? a - b : b - a;
+            });
+        const ascending = orderedBy('asc');
+        const descending = orderedBy('desc');
+        const largestLoss = [...badDay.entries()].sort(([, left], [, right]) => right - left)[0][0];
+        expect(ascending[0], 'the oracle itself: ascending opens on the largest loss').toBe(largestLoss);
+        expect([ascending[ascending.length - 1], descending[descending.length - 1]], 'the oracle itself: the blank closes both orders').toEqual([unmeasured, unmeasured]);
+        // Premise: every press must move a row, or the order read after it proves nothing.
+        expect(ascending, 'premise: ascending must differ from the opening order').not.toEqual(opening);
+        expect(descending, 'premise: descending must differ from the opening order, or "cleared" and "descending" would draw the same rows').not.toEqual(opening);
+
+        const header = lossTable(page).getByTestId('dt-header-badDay');
+        const title = lossTable(page).getByTestId('dt-sort-badDay');
+        await expect(header, 'L1° opens unsorted').toHaveAttribute('data-sort', 'none');
+
+        await title.click();
+        await expect(header).toHaveAttribute('data-sort', 'asc');
+        await expect.poll(() => lossRowAssetIds(page), {message: 'ascending: the largest loss first, the unmeasured asset last'}).toEqual(ascending);
+
+        await title.click();
+        await expect(header).toHaveAttribute('data-sort', 'desc');
+        await expect.poll(() => lossRowAssetIds(page), {message: 'descending: the smallest loss first, the unmeasured asset still last'}).toEqual(descending);
+
+        await title.click();
+        await expect(header).toHaveAttribute('data-sort', 'none');
+        await expect.poll(() => lossRowAssetIds(page), {message: "the third press must give the rows back in the selection's order"}).toEqual(opening);
+    });
+
+    /**
+     * L1°'s asset cell is the Assets list's: the type icon, then the name on one line.
+     *
+     * The panel resolves each icon as `icon_url || getAssetTypeIconUrl(asset_type)`, and
+     * the second half never comes back empty, so every asset on this page has one. The
+     * name sits in the span the marquee attaches to — found by the marquee's own selector,
+     * a hook rather than a style — and does not wrap: a long name scrolls instead of
+     * pushing its row onto two lines, which is the point of the pattern.
+     */
+    test('L1° names each asset with its type icon and a name that stays on one line', async ({page}) => {
+        await installRiskMocks(page);
+        await openAssetGlobalRisk(page);
+        await waitForRiskCatalog(page);
+        await waitForLossTable(page);
+
+        const selected = await chipIds(page);
+        await expect(lossRows(page)).toHaveCount(selected.length);
+        for (const assetId of selected) {
+            const cell = lossNameCell(page, assetId);
+            await expect(cell, `asset ${assetId} has no name cell of its own`).toHaveCount(1);
+            await expect(lossRow(page, assetId).getByTestId('risk-asset-set-l1-name'), `asset ${assetId}: its name cell sits in another row`).toHaveAttribute('data-asset-id', String(assetId));
+
+            const icon = cell.getByTestId('risk-asset-set-l1-icon');
+            await expect(icon, `asset ${assetId}: no type icon beside the name`).toHaveCount(1);
+            await expect(icon, `asset ${assetId}: the icon has no source`).toHaveAttribute('src', /\S/);
+
+            const name = cell.locator(OVERFLOW_MARQUEE_SELECTOR);
+            await expect(name, `asset ${assetId}: the name is not in the marquee's span`).toHaveCount(1);
+            await expect(name, `asset ${assetId}: the name is empty`).not.toHaveText(/^\s*$/);
+            await expect(name, `asset ${assetId}: the name wraps instead of scrolling`).toHaveCSS('white-space', 'nowrap');
+        }
+    });
+
+    /**
+     * L1°'s columns are chosen from its frame, right before the manual icon.
+     *
+     * The toggle is the project's `ColumnVisibilityToggle`, placed in the frame's header
+     * (`RiskLevelSection`'s `actions`) rather than above the table: the header row is where
+     * the level's own controls live. The component tests pin its place in the markup and its
+     * wiring; what only a browser can show is what the reader sees — the toggle on the icon's
+     * line, right before it rather than spread across the header — and that a column really
+     * goes and really comes back.
+     *
+     * `badMonth` is the column switched off because it sits between two others: the rest must
+     * close up in their order, and it must come back where it was. The choice is kept in this
+     * context's `localStorage`, under the table's storage key, and dies with the context; the
+     * test switches it back all the same, and ends on the table it found. Reordering by drag
+     * is left out on purpose.
+     */
+    test("L1°'s frame offers the column toggle right before its manual icon, and bad month switched off and on goes and comes back alone", async ({page}) => {
+        await installRiskMocks(page);
+        await openAssetGlobalRisk(page);
+        await waitForRiskCatalog(page);
+        await waitForLossTable(page);
+
+        const frame = lossSection(page);
+        const toggle = frame.getByTestId('column-visibility-toggle');
+        const docs = frame.getByTestId('risk-asset-set-loss-docs');
+        await expect(toggle, "L1°'s frame offers no column toggle").toBeVisible();
+        await expect(docs).toBeVisible();
+        await expect(frame.getByTestId('risk-asset-set-loss-body').getByTestId('column-visibility-toggle'), "the toggle sits in L1°'s body: it belongs to the header, beside the manual icon").toHaveCount(0);
+
+        // Order and geometry in one read, after the barriers above: both boxes come from the
+        // same layout, so a section above that finishes loading and pushes the frame down
+        // cannot land between two measurements.
+        const head = await frame.evaluate((section) => {
+            const toggleNode = section.querySelector('[data-testid="column-visibility-toggle"]');
+            const docsNode = section.querySelector('[data-testid="risk-asset-set-loss-docs"]');
+            if (toggleNode === null || docsNode === null) return null;
+            const box = (node: Element) => {
+                const {left, right, top, bottom, width} = node.getBoundingClientRect();
+                return {left, right, top, bottom, width};
+            };
+            return {togglePrecedesDocs: !toggleNode.contains(docsNode) && (toggleNode.compareDocumentPosition(docsNode) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0, toggle: box(toggleNode), docs: box(docsNode)};
+        });
+        if (head === null) throw new Error('The toggle and the manual icon were visible a moment ago and are gone from the frame.');
+        expect(head.togglePrecedesDocs, 'the toggle must come before the manual icon').toBe(true);
+
+        // As the reader sees it: on the icon's line, to its left, and beside it — not spread
+        // across the header, which is where a third child of the title row's `justify-between`
+        // would land. "Beside" is measured against the toggle itself: less than its own width away.
+        expect(head.toggle.top < head.docs.bottom && head.docs.top < head.toggle.bottom, "the toggle is not on the manual icon's line").toBe(true);
+        const gap = head.docs.left - head.toggle.right;
+        expect(gap, 'the toggle is not to the left of the manual icon').toBeGreaterThanOrEqual(0);
+        expect(gap, 'the toggle floats away from the manual icon').toBeLessThan(head.toggle.width);
+
+        // L3°'s frame is drawn, with its own manual icon, and has no toggle.
+        await expect(paidSection(page).getByTestId('risk-asset-set-paid-docs')).toBeVisible();
+        await expect(paidSection(page).getByTestId('column-visibility-toggle'), "L3° got a column toggle: only L1°'s table has one").toHaveCount(0);
+
+        // Every column drawn, and a row per selected asset, before any column is touched.
+        const selected = await chipIds(page);
+        await expect(lossRows(page)).toHaveCount(selected.length);
+        const opening = ['name', ...L1_CELLS];
+        await expect.poll(() => lossHeaderIds(page), {message: 'L1° must open on every column, in its order'}).toEqual(opening);
+
+        await toggle.click();
+        const menu = frame.getByTestId('column-visibility-dropdown');
+        await expect(menu).toBeVisible();
+        const badMonth = menu.getByTestId('column-visibility-item-badMonth');
+
+        await badMonth.click();
+        await expect(lossTable(page).getByTestId('dt-header-badMonth'), 'bad month is still drawn after switching it off').toHaveCount(0);
+        await expect(lossTable(page).getByTestId('risk-asset-set-l1-badMonth'), "bad month's cells outlived its title").toHaveCount(0);
+        await expect.poll(() => lossHeaderIds(page), {message: 'the other columns must stay, closed up in their order'}).toEqual(opening.filter((column) => column !== 'badMonth'));
+        for (const cell of L1_CELLS.filter((column) => column !== 'badMonth')) {
+            await expect(lossTable(page).getByTestId(`risk-asset-set-l1-${cell}`), `${cell} lost cells when bad month was hidden`).toHaveCount(selected.length);
+        }
+
+        // Back on: the column returns where it was, with a cell in every row.
+        await badMonth.click();
+        await expect.poll(() => lossHeaderIds(page), {message: 'bad month must come back where it was'}).toEqual(opening);
+        await expect(lossTable(page).getByTestId('risk-asset-set-l1-badMonth'), 'bad month came back without its cells').toHaveCount(selected.length);
     });
 
     /**
@@ -3639,7 +3936,7 @@ test.describe('Asset Global risk laboratory', () => {
         // than the wire, because this scope may already sit in `queryRisk`'s cache,
         // and a cached answer sends nothing to wait for.
         await expect(lossTable(page)).toHaveAttribute('data-row-count', String(remaining.length), {timeout: 15_000});
-        await expect(lossTable(page).locator(`tr[data-asset-id="${removedId}"]`)).toHaveCount(0);
+        await expect(lossRow(page, removedId)).toHaveCount(0);
 
         await openPicker(page);
         await expect(addPanel(page).getByTestId(`risk-asset-add-option-${removedId}`), 'a removed asset must be offered back by the "+"').toBeVisible();
