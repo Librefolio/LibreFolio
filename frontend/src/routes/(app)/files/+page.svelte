@@ -688,10 +688,6 @@
     }
 </script>
 
-<svelte:head>
-    <title>{$t('uploads.title')} - LibreFolio</title>
-</svelte:head>
-
 <div class="files-page" aria-busy={loading} data-busy={loading ? 'true' : 'false'} data-testid="files-page">
     <header class="page-header">
         <h1>{$t('uploads.title')}</h1>
