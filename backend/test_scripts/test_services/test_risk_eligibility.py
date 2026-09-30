@@ -987,3 +987,245 @@ async def test_a_replay_of_assets_never_priced_in_the_window_is_unavailable_with
     assert result.status == RiskResultStatus.UNAVAILABLE
     assert result.error.code == RiskErrorCode.INSUFFICIENT_HISTORY
     assert result.error.details == {"excluded_asset_ids": sorted([ids["empty"], ids["after_only"]])}
+
+
+# ---------------------------------------------------------------------------
+# Market-closed repeats are no quotes (developer's decision of 30/09/2026)
+#
+# A source such as justETF stores a row for every calendar day, repeating the last close on a weekend
+# or an exchange holiday. A row on a weekend or a market holiday with exactly the close of the row
+# before it is a carry: the facts count and date genuine quotes only. A weekend move is a quote, a
+# flat weekday too, and so is the first row of a history, which has no row before it.
+#
+# Easter 2025 stored the justETF way: Good Friday and Easter Monday repeat Thursday's close. Every
+# close is a multiple of 0.25, so a repeat is exact however the column stores it.
+# ---------------------------------------------------------------------------
+
+EASTER_2025 = frozenset({date(2025, 4, 18), date(2025, 4, 21)})
+SEVEN_DAY_FIRST = date(2025, 4, 5)  # a Saturday, and the first row of every history below
+SEVEN_DAY_LAST = date(2025, 5, 4)  # a Sunday
+THREE_WEEKS = (date(2025, 4, 7), date(2025, 4, 27))  # Monday to Sunday
+
+
+def seven_day_closes(*, closed_weekdays: frozenset[date] = frozenset(), weekend_moves: frozenset[date] = frozenset()) -> dict[date, Decimal]:
+    """A row every calendar day: weekdays move, a weekend or a closed weekday repeats the row before."""
+    closes: dict[date, Decimal] = {}
+    previous: Decimal | None = None
+    for day in every_day(SEVEN_DAY_FIRST, SEVEN_DAY_LAST):
+        moving = Decimal("100") + Decimal((day - SEVEN_DAY_FIRST).days) / 2
+        if previous is None:
+            value = moving
+        elif day in weekend_moves:
+            value = previous + Decimal("0.25")
+        elif day.weekday() >= 5 or day in closed_weekdays:
+            value = previous
+        else:
+            value = moving
+        closes[day] = value
+        previous = value
+    return closes
+
+
+SEVEN_DAY_ASSETS: dict[str, dict[date, Decimal]] = {
+    "etf": seven_day_closes(closed_weekdays=EASTER_2025),
+    # Saturday 12 moves; Sunday 13 repeats Saturday — the row before it, not Friday's.
+    "weekend_move": seven_day_closes(closed_weekdays=EASTER_2025, weekend_moves=frozenset({date(2025, 4, 12)})),
+    "crypto": {day: Decimal("300") + Decimal((day - SEVEN_DAY_FIRST).days) * Decimal("0.75") for day in every_day(SEVEN_DAY_FIRST, SEVEN_DAY_LAST)},
+}
+
+
+@pytest.fixture(scope="module")
+def seven_day_assets():
+    marker = uuid4().hex
+
+    async def setup() -> dict[str, int]:
+        async with session() as db:
+            assets = {key: Asset(display_name=f"Seven-day {key} {marker}", currency="EUR", asset_type=AssetType.STOCK, active=True) for key in SEVEN_DAY_ASSETS}
+            db.add_all(assets.values())
+            await db.flush()
+            db.add_all(PriceHistory(asset_id=assets[key].id, date=day, close=value, currency="EUR", source_plugin_key="seven_day_test") for key, closes in SEVEN_DAY_ASSETS.items() for day, value in closes.items())
+            await db.commit()
+            return {key: asset.id for key, asset in assets.items()}
+
+    async def cleanup(ids: dict[str, int]) -> None:
+        async with session() as db:
+            owned = list(ids.values())
+            await db.execute(delete(PriceHistory).where(PriceHistory.asset_id.in_(owned)))
+            await db.execute(delete(Asset).where(Asset.id.in_(owned)))
+            await db.commit()
+
+    ids = asyncio.run(setup())
+    yield ids
+    asyncio.run(cleanup(ids))
+
+
+async def seven_day_facts(ids: dict[str, int], key: str, window: tuple[date, date], market_holidays: frozenset[date] | None = None) -> PriceWindowFacts:
+    """One asset's facts over one window; the holiday table is passed only when a test gives one."""
+    table = {} if market_holidays is None else {"market_holidays": market_holidays}
+    async with session() as db:
+        facts_by_asset = await load_price_window_facts(db, asset_ids=[ids[key]], window_start=window[0], window_end=window[1], target_currency="EUR", **table)
+    return facts_by_asset[ids[key]]
+
+
+@pytest.mark.asyncio
+async def test_weekend_repeats_are_carries_not_quotes_in_the_window_facts(seven_day_assets):
+    crypto = await seven_day_facts(seven_day_assets, "crypto", THREE_WEEKS)
+    etf = await seven_day_facts(seven_day_assets, "etf", THREE_WEEKS)
+
+    # Control, from the same loader: a series that moves every day keeps every row as a quote.
+    assert crypto == PriceWindowFacts(
+        first_quote=date(2025, 4, 5),
+        last_quote=date(2025, 4, 27),
+        last_quote_before_start=date(2025, 4, 6),
+        quotes_in_window=21,
+        fx_available=True,
+        first_quote_in_window=date(2025, 4, 7),
+        first_quote_ever=date(2025, 4, 5),
+        last_quote_ever=date(2025, 5, 4),
+    )
+    # The seven-day ETF is quoted on weekdays only. Without a holiday table, Good Friday and Easter
+    # Monday are flat weekdays, so quotes. The first row, a Saturday, has no row before it: a quote.
+    assert etf == PriceWindowFacts(
+        first_quote=date(2025, 4, 5),
+        last_quote=date(2025, 4, 25),
+        last_quote_before_start=date(2025, 4, 5),
+        quotes_in_window=15,
+        fx_available=True,
+        first_quote_in_window=date(2025, 4, 7),
+        first_quote_ever=date(2025, 4, 5),
+        last_quote_ever=date(2025, 5, 2),
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_window_ending_on_sunday_ends_on_fridays_quote_and_one_starting_on_saturday_begins_on_monday(seven_day_assets):
+    ending_on_sunday = await seven_day_facts(seven_day_assets, "etf", (date(2025, 4, 7), date(2025, 4, 13)))
+    assert (ending_on_sunday.last_quote, ending_on_sunday.quotes_in_window) == (date(2025, 4, 11), 5)
+
+    starting_on_saturday = await seven_day_facts(seven_day_assets, "etf", (date(2025, 4, 12), date(2025, 4, 20)))
+    assert starting_on_saturday.first_quote_in_window == date(2025, 4, 14)
+    assert starting_on_saturday.last_quote_before_start == date(2025, 4, 11)
+    # Monday 14 to Good Friday, a flat weekday without the holiday table.
+    assert (starting_on_saturday.last_quote, starting_on_saturday.quotes_in_window) == (date(2025, 4, 18), 5)
+
+
+@pytest.mark.asyncio
+async def test_a_weekend_move_is_a_quote_and_the_repeat_after_it_is_not(seven_day_assets):
+    three_weeks = await seven_day_facts(seven_day_assets, "weekend_move", THREE_WEEKS)
+    # The fifteen weekdays, and Saturday 12, which moved.
+    assert three_weeks.quotes_in_window == 16
+
+    first_week = await seven_day_facts(seven_day_assets, "weekend_move", (date(2025, 4, 7), date(2025, 4, 13)))
+    # Sunday 13 repeats Saturday's close, the row before it: a carry, although it differs from Friday's.
+    assert (first_week.last_quote, first_week.quotes_in_window) == (date(2025, 4, 12), 6)
+
+
+@pytest.mark.asyncio
+async def test_a_repeat_on_a_market_holiday_is_a_carry_and_a_move_on_it_is_a_quote(seven_day_assets):
+    three_weeks = await seven_day_facts(seven_day_assets, "etf", THREE_WEEKS, EASTER_2025)
+    # Good Friday and Easter Monday repeat Thursday's close: carries once they are holidays.
+    assert (three_weeks.quotes_in_window, three_weeks.last_quote) == (13, date(2025, 4, 25))
+
+    easter_week = await seven_day_facts(seven_day_assets, "etf", (date(2025, 4, 14), date(2025, 4, 20)), EASTER_2025)
+    assert (easter_week.last_quote, easter_week.quotes_in_window) == (date(2025, 4, 17), 4)
+
+    after_easter = await seven_day_facts(seven_day_assets, "etf", (date(2025, 4, 19), THREE_WEEKS[1]), EASTER_2025)
+    assert (after_easter.last_quote_before_start, after_easter.first_quote_in_window, after_easter.quotes_in_window) == (date(2025, 4, 17), date(2025, 4, 22), 4)
+
+    # The crypto moved over Easter: a move on a holiday is a quote.
+    crypto = await seven_day_facts(seven_day_assets, "crypto", THREE_WEEKS, EASTER_2025)
+    assert crypto.quotes_in_window == 21
+
+    # Control: without the holiday table, the very same Good Friday row is a flat weekday, and a quote.
+    no_table = await seven_day_facts(seven_day_assets, "etf", (date(2025, 4, 14), date(2025, 4, 20)))
+    assert (no_table.last_quote, no_table.quotes_in_window) == (date(2025, 4, 18), 5)
+
+
+@pytest.mark.asyncio
+async def test_twenty_calendar_days_of_a_seven_day_source_are_too_few_quotes(seven_day_assets, monkeypatch):
+    period = (date(2025, 4, 7), date(2025, 4, 26))  # Monday to Saturday: twenty rows
+    etf = await seven_day_facts(seven_day_assets, "etf", period)
+    crypto = await seven_day_facts(seven_day_assets, "crypto", period)
+
+    # Twenty rows each: fifteen quotes for the ETF, twenty for the crypto.
+    assert (etf.quotes_in_window, crypto.quotes_in_window) == (15, 20)
+    assert analysis_eligibility(etf, *period) == (Level.INELIGIBLE, (Why.TOO_FEW_QUOTES,))
+    assert analysis_eligibility(crypto, *period) == (Level.ELIGIBLE, ())
+
+    # Through the service, which reads the facts with the holiday table it awaits: Easter takes two more.
+    async def easter_table() -> frozenset[date]:
+        return EASTER_2025
+
+    monkeypatch.setattr(risk_service_module, "ensure_market_holidays", easter_table, raising=False)
+    response = await eligibility([seven_day_assets["etf"], seven_day_assets["crypto"]], *period)
+
+    by_id = {item.asset_id: item for item in response.items}
+    etf_item, crypto_item = by_id[seven_day_assets["etf"]], by_id[seven_day_assets["crypto"]]
+    assert (etf_item.level, etf_item.reasons, etf_item.quotes_in_period, etf_item.last_quote) == (Level.INELIGIBLE, [Why.TOO_FEW_QUOTES], 13, date(2025, 4, 25))
+    assert (crypto_item.level, crypto_item.quotes_in_period) == (Level.ELIGIBLE, 20)
+
+
+# ---------------------------------------------------------------------------
+# One holiday table per request, handed to every reading of it (developer's decision of 30/09/2026)
+#
+# The service awaits `ensure_market_holidays()` once per request and passes the table to every
+# `load_price_window_facts` and `prepare_asset_series_set` it runs. The table served below is a date
+# nothing here is quoted near, so it moves no number: only the plumbing is observed.
+# ---------------------------------------------------------------------------
+
+NOT_PASSED = object()
+
+
+@pytest.fixture
+def holiday_table_plumbing(monkeypatch):
+    table = frozenset({date(1999, 12, 31)})
+    seen: dict[str, list] = {"ensure": [], "loader": [], "prepare": []}
+    real_loader = risk_service_module.load_price_window_facts
+    real_prepare = risk_service_module.prepare_asset_series_set
+
+    async def served_table() -> frozenset[date]:
+        seen["ensure"].append(table)
+        return table
+
+    async def loader_spy(db, **kwargs):
+        seen["loader"].append(kwargs.get("market_holidays", NOT_PASSED))
+        return await real_loader(db, **kwargs)
+
+    def prepare_spy(*args, **kwargs):
+        seen["prepare"].append(kwargs.get("market_holidays", NOT_PASSED))
+        return real_prepare(*args, **kwargs)
+
+    monkeypatch.setattr(risk_service_module, "ensure_market_holidays", served_table, raising=False)
+    monkeypatch.setattr(risk_service_module, "load_price_window_facts", loader_spy)
+    monkeypatch.setattr(risk_service_module, "prepare_asset_series_set", prepare_spy)
+    return table, seen
+
+
+@pytest.mark.asyncio
+async def test_a_replay_request_awaits_the_holiday_table_once_and_hands_it_to_every_reading(window_assets, holiday_table_plumbing):
+    table, seen = holiday_table_plumbing
+    ids = window_assets.ids
+
+    _result, audit = replay_audit(await replay([ids["early"], ids["holiday"], ids["late"], ids["empty"]]))
+
+    # Premise: this request reads the facts twice (the crisis window, then the proposal) and prepares
+    # two series sets (the analysis period, then the replay window).
+    assert audit.suggested_range is not None
+    assert (len(seen["loader"]), len(seen["prepare"])) == (2, 2)
+    assert len(seen["ensure"]) == 1
+    assert seen["loader"] == [table, table]
+    assert seen["prepare"] == [table, table]
+
+
+@pytest.mark.asyncio
+async def test_an_eligibility_request_awaits_the_holiday_table_once_for_both_readings(window_assets, holiday_table_plumbing):
+    table, seen = holiday_table_plumbing
+    ids = window_assets.ids
+
+    response = await eligibility([ids["a_full"], ids["a_late"]])
+
+    # Premise: a verified proposal, so the facts are read twice.
+    assert response.suggested_range is not None
+    assert len(seen["loader"]) == 2
+    assert len(seen["ensure"]) == 1
+    assert seen["loader"] == [table, table]

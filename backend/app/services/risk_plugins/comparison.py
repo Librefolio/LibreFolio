@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from dataclasses import dataclass
+from datetime import date
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.risk import (
@@ -18,7 +22,6 @@ from backend.app.services.data_quality_thresholds import RISK_MIN_OBSERVATIONS
 from backend.app.services.provider_registry import RiskAnalyticRegistry, register_plugin
 from backend.app.services.risk.analytic_helpers import (
     prepared_asset_return_points,
-    prepared_asset_returns,
     require_annualization_factor,
     require_primary_returns,
 )
@@ -33,6 +36,76 @@ from backend.app.services.risk.metrics import (
     annualized_volatility,
     comparison_summary,
 )
+
+
+@dataclass(frozen=True)
+class _SpanPair:
+    """One primary return and the benchmark's return over the same span."""
+
+    point_date: date
+    span_start: date
+    primary_return: float
+    comparison_return: float
+
+
+def _compounded(values: Sequence[float]) -> float:
+    """Compound simple returns, taking a single one as it is so no rounding is added."""
+    if len(values) == 1:
+        return values[0]
+    growth = 1.0
+    for value in values:
+        growth *= 1.0 + value
+    return growth - 1.0
+
+
+def _pair_over_primary_spans(
+    primary_dates: Sequence[date],
+    primary_returns: Sequence[float],
+    primary_baseline: date | None,
+    benchmark_points: Sequence[tuple[date, date, float]],
+) -> list[_SpanPair]:
+    """Pair the two series over the same spans: between the dates they share.
+
+    Each series is compounded from its own returns dated inside the span, so a benchmark
+    quoted on days the primary skips keeps those moves: a portfolio is read only on the
+    days its holdings are quoted, while a crypto benchmark also moves at weekends and a
+    benchmark from another exchange trades on this one's holidays. A side with a single
+    return in the span takes it as it is, so two series on one calendar pair exactly as
+    a plain date match would.
+
+    The first span starts at the primary's baseline. Until the first pair, a primary
+    date the benchmark has no return on is dropped and the next span starts there, so a
+    benchmark that starts late is joined from the last date it could not answer. After
+    the first pair, such a date is no boundary: the span runs on from the last shared
+    date, and both sides are compounded across it at the next one.
+    """
+    benchmark = sorted(benchmark_points, key=lambda point: point[0])
+    pairs: list[_SpanPair] = []
+    index = 0
+    span_start = primary_baseline
+    primary_inside: list[float] = []
+    benchmark_inside: list[tuple[date, date, float]] = []
+    for point_date, primary_return in zip(primary_dates, primary_returns, strict=True):
+        primary_inside.append(primary_return)
+        while index < len(benchmark) and benchmark[index][0] <= point_date:
+            if span_start is None or benchmark[index][0] > span_start:
+                benchmark_inside.append(benchmark[index])
+            index += 1
+        if benchmark_inside and benchmark_inside[-1][0] == point_date:
+            pairs.append(
+                _SpanPair(
+                    point_date=point_date,
+                    span_start=span_start if span_start is not None else benchmark_inside[0][1],
+                    primary_return=_compounded(primary_inside),
+                    comparison_return=_compounded([value for _benchmark_date, _previous_date, value in benchmark_inside]),
+                )
+            )
+        elif pairs:
+            continue
+        span_start = point_date
+        primary_inside = []
+        benchmark_inside = []
+    return pairs
 
 
 class ComparisonParams(BaseModel):
@@ -51,7 +124,10 @@ class ComparisonParams(BaseModel):
 @register_plugin(RiskAnalyticRegistry)
 class ComparisonAnalytic(RiskAnalytic):
     analytic_code = "comparison"
-    algorithm_version = "1.0.0"
+    # 1.1.0 — both series are compounded between the dates they share. A portfolio read
+    # on its observation days skips days its benchmark may still be quoted on; 1.0.0
+    # paired by date and dropped the benchmark's moves on those days.
+    algorithm_version = "1.1.0"
     name_i18n_key = "risk.analytics.comparison.name"
     description_i18n_key = "risk.analytics.comparison.description"
     output_kind = RiskOutputKind.COMPARISON
@@ -66,13 +142,13 @@ class ComparisonAnalytic(RiskAnalytic):
 
     def compute(self, params, context):
         primary_dates, primary_returns = require_primary_returns(context)
-        comparison_dates, comparison_returns = prepared_asset_returns(
-            context,
-            params.comparison_asset_id,
+        pairs = _pair_over_primary_spans(
+            primary_dates,
+            primary_returns,
+            context.primary_baseline_date,
+            prepared_asset_return_points(context, params.comparison_asset_id),
         )
-        primary_map = dict(zip(primary_dates, primary_returns, strict=True))
-        comparison_map = dict(zip(comparison_dates, comparison_returns, strict=True))
-        common_dates = tuple(sorted(set(primary_map) & set(comparison_map)))
+        common_dates = tuple(pair.point_date for pair in pairs)
         if len(common_dates) < self.min_observations:
             raise RiskUnavailableError(
                 "Comparison has insufficient common observations",
@@ -82,19 +158,12 @@ class ComparisonAnalytic(RiskAnalytic):
                     "required": self.min_observations,
                 },
             )
-        comparison_points = {
-            point_date: previous_date
-            for point_date, previous_date, _value in prepared_asset_return_points(
-                context,
-                params.comparison_asset_id,
-            )
-        }
-        baseline_date = comparison_points[common_dates[0]]
+        baseline_date = pairs[0].span_start
         calendar_days = (common_dates[-1] - baseline_date).days
         annualization_factor = len(common_dates) * 365 / calendar_days if calendar_days > 0 else require_annualization_factor(context)
-        comparison_common_returns = [comparison_map[point_date] for point_date in common_dates]
+        comparison_common_returns = [pair.comparison_return for pair in pairs]
         summary = comparison_summary(
-            [primary_map[point_date] for point_date in common_dates],
+            [pair.primary_return for pair in pairs],
             comparison_common_returns,
             annualization_factor,
         )

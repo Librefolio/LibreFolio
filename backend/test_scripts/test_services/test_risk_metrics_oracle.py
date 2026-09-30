@@ -45,6 +45,7 @@ from backend.app.services.risk.metrics import (
     annualized_sortino,
     annualized_volatility,
     beta,
+    calendar_days_to_observations,
     compounded_return,
     correlation_matrix,
     covariance_matrix,
@@ -321,7 +322,7 @@ def test_historical_var_cvar_matches_the_coherent_estimator_after_m2():
     assert five_day.value_at_risk == pytest.approx(0.10)
     assert five_day.conditional_value_at_risk == pytest.approx(0.10)
 
-    two_day = historical_var_cvar([-0.1, 0.0, -0.2], confidence_level=0.5, horizon_days=2)
+    two_day = historical_var_cvar([-0.1, 0.0, -0.2], confidence_level=0.5, horizon_observations=2)
     assert two_day.value_at_risk == pytest.approx(0.20)
     assert two_day.conditional_value_at_risk == pytest.approx(0.20)
 
@@ -360,7 +361,7 @@ def test_historical_tail_risk_horizon_returns_compound_the_requested_observation
     """``horizon_returns`` is the signed, overlapping, compounded series — not the floored losses."""
     returns = _daily_returns()
     horizon = 5
-    tail = historical_var_cvar(returns, confidence_level=_CONFIDENCE_LEVEL, horizon_days=horizon)
+    tail = historical_var_cvar(returns, confidence_level=_CONFIDENCE_LEVEL, horizon_observations=horizon)
     array = np.asarray(returns, dtype=float)
     reference = [float(np.prod(1.0 + array[start : start + horizon]) - 1.0) for start in range(len(array) - horizon + 1)]
 
@@ -1121,7 +1122,7 @@ def test_the_bars_left_of_the_pinned_edge_hold_the_confidence_tail_of_the_sample
     """The shaded area is a whole number of bars AND it is the tail, not a bar boundary artefact.
 
     The sample is fed as ``tail.horizon_returns`` because that is what the producer
-    bins, and at ``horizon_days=1`` those are ``(1 + r) - 1`` rather than ``r`` — a
+    bins, and at ``horizon_observations=1`` those are ``(1 + r) - 1`` rather than ``r`` — a
     last-ulp difference on 740 of these 750 observations, which is enough to move an
     observation across a cut placed exactly on one of them.
 
@@ -1322,8 +1323,10 @@ def test_the_historical_var_analytic_publishes_contiguous_bins_cut_exactly_on_th
     that lets a renderer cross between the two conventions in one payload. Everything
     asserted here is exact equality: the producer must not round, re-bin or re-derive.
 
-    PURE: the context carries only the primary return series, which is all
-    ``require_primary_returns`` reads. No database, no server, no prepared series.
+    PURE: the context carries the primary return series, which is all
+    ``require_primary_returns`` reads, and the annualization factor, which
+    ``historical_var`` reads to turn its calendar-day horizon into observations.
+    No database, no server, no prepared series.
     """
     returns = _daily_returns()
     output = HistoricalVarAnalytic().compute(HistoricalVarParams(confidence_level=_CONFIDENCE_LEVEL), _var_execution_context(returns)).output
@@ -1347,10 +1350,14 @@ def test_the_historical_var_analytic_publishes_contiguous_bins_cut_exactly_on_th
     assert tuple(item.count for item in bins) == histogram.counts
 
     # A multi-day horizon bins the COMPOUNDED series, so the observation count is the
-    # overlapping-window count and the bins must still tile it completely.
+    # overlapping-window count and the bins must still tile it completely. The horizon
+    # is in calendar days; a window spans the observations those days hold on this
+    # series, which the output publishes. That count is pinned against the conversion
+    # first, so the window relation below cannot pass on a wrong count.
     horizon = 5
     multi_day = HistoricalVarAnalytic().compute(HistoricalVarParams(confidence_level=_CONFIDENCE_LEVEL, horizon_days=horizon), _var_execution_context(returns)).output
-    assert multi_day.observations == len(returns) - horizon + 1
+    assert multi_day.horizon_observations == calendar_days_to_observations(horizon, _ANNUALIZATION) == 3
+    assert multi_day.observations == len(returns) - multi_day.horizon_observations + 1
     assert sum(item.count for item in multi_day.return_bins) == multi_day.observations
     assert multi_day.var_bin_edge == -multi_day.value_at_risk
     assert all(multi_day.return_bins[index].upper_bound == multi_day.return_bins[index + 1].lower_bound for index in range(len(multi_day.return_bins) - 1))
