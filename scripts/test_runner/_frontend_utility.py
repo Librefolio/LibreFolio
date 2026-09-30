@@ -180,6 +180,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/ui/modals/PageSyncModal.test.ts",
             "src/lib/components/ui/feedback/ToastContainer.test.ts",
             "src/lib/components/ui/feedback/Tooltip.test.ts",
+            "src/lib/components/ui/tabs/TabBar.test.ts",
             "src/lib/components/table/DataTableColumnFilter.test.ts",
             "src/lib/components/table/DataTable.test.ts",
             "src/lib/components/table/DataTablePagination.test.ts",
