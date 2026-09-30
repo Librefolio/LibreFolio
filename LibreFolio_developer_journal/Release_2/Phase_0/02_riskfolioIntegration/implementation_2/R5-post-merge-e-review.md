@@ -2015,3 +2015,57 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 > backend lo manda sempre (a distinguere resta `algorithm_version`). Gli avvisi di dati vecchi o mancanti portano
 > `asset_ids` ma la causa in `details.cause`: avranno i badge e non `reason`, quindi l'ambra. Il «tutto o niente» sugli
 > id è più severo del backend, che scarta i valori non interi e tiene gli altri: oggi il backend non ne manda mai.
+
+### Il laboratorio di F in Risk, il nodo del calendario e le guide dei segnali · 30/09/2026
+
+> **Commit delle primitive per A** (developer, 10:01), verificati: `91e91346c` (5 file) · `d618e80ed` (journal); A avanzato
+> a `d618e80ed` con i suoi 9 file non committati intatti. 6162 spenta: serviva `ffe41c5ba`.
+>
+> **Checkpoint 4 di F → Risk.** Il developer l'ha approvato dopo la review sulla 6164. Letto da me prima del commit, in
+> sola lettura: le due superfici fuori famiglia (la callback `onfitperiod` di `assets/+page.svelte`, le 4 righe del
+> runner) sono esattamente le eccezioni concesse; i cataloghi hanno solo le 3 chiavi `risk.assetSet.fitPeriod.*`;
+> `AssetChip.svelte` rispetta l'interfaccia approvata; la modifica della heatmap non cambia niente sulla L2 di A; l'ordine
+> dei commit regge (`check-orphans` rosso da C1 a C6, accettato dal coordinator: i test si registrano in C7). Fusione
+> prevista pulita con `merge-tree` su un clone usa e getta, poi confermata sui commit veri. Commit di F (10:18):
+> `d613d443d` … `506d17f18`. **Fusione `881941e44`** (10:20; genitori `d618e80ed` + `506d17f18`, albero `f81095c3` come
+> previsto; script con `--no-commit` e controllo dell'albero prima del commit). Validazione nella 6152: `front check` al
+> pavimento di 3 · i18n 3486/0 · `check-orphans` pulito · unit `risk-levels-unit` 269, `allocation-unit` 142,
+> `core-unit` 2843, `component-unit` 2161 · E2E `risk` 13 (la heatmap sulla L2), `risk-lab` 22 (il chip nel
+> laboratorio), `risk-asset-detail` 2, `asset-list` 28. F avanzato sulla punta (10:36), poi la sua guida sotto la regola
+> dei 7 giorni (`73ba9f08e`, `b26ca6e29`): i cinque motivi del replay che descrive coincidono con `replay_coverage`.
+>
+> **Il nodo del calendario** (da F, sulla sua L1°; il motore è mio). Le righe del weekend che justETF salva (il venerdì
+> ripetuto) sono trattate come quotazioni fresche, quindi entrano nel calendario come osservazioni a rendimento zero.
+> **Non è nuovo e non è solo del laboratorio**: il TWRR del portafoglio ha un punto per ogni giorno di calendario, quindi
+> la «giornata storta» della Dashboard è da sempre per giorno di calendario e il suo «mese storto» (21 osservazioni) copre
+> circa 3 settimane. Stima teorica: VaR giornaliero sottostimato di circa il 10 %, mensile di circa il 16 %. Non
+> cambiano volatilità, Sharpe e Sortino (la frequenza osservata compensa), drawdown, replay, shock, correlazione,
+> rendimenti. La simulazione ha l'errore opposto: sui dati solo feriali «365 giorni» sono 365 sedute.
+>
+> **Decisioni del developer** (30/09, mattina):
+> - «sì, approvo tutto il piano»: (1) una riga di **sabato o domenica — o di un festivo di borsa —** che ripete
+>   *esattamente* l'ultima chiusura è un riporto, non una quotazione (niente «uguale al giorno prima → ignora» su tutti i
+>   giorni: toglierebbe i giorni feriali piatti veri); (2) il TWRR si legge solo nei giorni con almeno una quotazione
+>   vera, concatenando gli altri; (3) gli orizzonti in giorni di calendario («mese» = 30 giorni), convertiti in
+>   osservazioni con la frequenza osservata, simulazione compresa; **prima i numeri prima/dopo sui suoi dati, poi il
+>   codice**.
+> - **I festivi**: dai calendari di QuantLib, come **unione** delle borse principali («ci serve solo per sapere se
+>   potenzialmente è un giorno di festa»); la regola resta la ripetizione esatta, quindi un festivo di troppo costa al più
+>   un giorno piatto vero. **La tabella si genera a ogni avvio, in un processo separato** (scelta del developer, dopo la
+>   spiegazione del perché il server web non importa QuantLib: i worker nascono in modalità `spawn` e reimportano tutto,
+>   quindi un import nel padre non risparmierebbe memoria ai worker e terrebbe circa 170 MB sempre occupati).
+> - Il coordinator: la regola del riporto è **un solo helper condiviso**, che userà anche `signal_series_preparation.py`
+>   (anche gli indicatori tecnici contano oggi le righe del weekend come osservazioni).
+>
+> **Le guide dei segnali di rischio** (punto 8 dell'analisi di K, riassegnato a me dal developer): `docs_path` su
+> `RISK_DRAWDOWN` (`current-drawdown/`), `RISK_ROLLING_RETURN` e `ASSET_CALENDAR_ROLLING_RETURN` (`fundamentals/returns/`),
+> `RISK_ROLLING_VOLATILITY` (`volatility/`), `RISK_ROLLING_SHARPE` (`sharpe-ratio/`), `RISK_ROLLING_BETA`
+> (`beta-active-return/`). Test prima (test-author): `docs_path` obbligatorio per **tutti** i segnali registrati,
+> nascosti compresi, con forma fissata (relativo, barra finale, minuscole: su macOS un maiuscolo passerebbe in locale e
+> darebbe 404 sul sito), pagina `.en.md` esistente e tabella dei sei valori; rosso sui sei codici, poi verde.
+> Verifica: `services signal-plugin-matrix` 65 · `signal-registry` 65 · `signal-contracts` 10 · `api signal-catalogs` 4 ·
+> `check-links` 88 validi (erano 83: i 5 percorsi nuovi sono visti dal gate).
+>
+> **⚠️ Fuori pista**: `ASSET_CALENDAR_ROLLING_RETURN` è nascosto dal catalogo (`catalog_visible = False`): il suo
+> `docs_path` non fa comparire nessun pulsante, perché la pagina dell'asset disegna quella serie senza `DocsLink` →
+> decisione dell'interfaccia, di I (segnalata al coordinator).
