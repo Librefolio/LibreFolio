@@ -22,6 +22,12 @@
  * the code and in the four catalogues. The last block reads the catalogues
  * themselves — the one place this file does — for presence and for the arguments
  * each sentence asks for, never for its wording.
+ *
+ * **The period offer is read, not computed.** The engine suggests a period and names
+ * the span every asset is quoted in; the module only reads the two ranges from a
+ * single answer (`toDayRange`) and decides whom a suggestion brings back
+ * (`fitPeriodOffer`). The cases below pin both halves: which answers a range may be
+ * read from, and which selected assets count as recoverable.
  */
 import {afterEach, describe, expect, it, vi} from 'vitest';
 
@@ -33,7 +39,7 @@ import fr from '$lib/i18n/fr.json';
 import itCatalogue from '$lib/i18n/it.json';
 import {icuArguments} from '$test/riskWarningCatalogue';
 
-import {ELIGIBILITY_BATCH, EMPTY_VERDICTS, dayFormatter, describeEligibility, eligibilityBatches, isSelectable, mergeEligibilityAnswers, reasonText, type AssetEligibilityItem, type EligibilityReason, type EligibilityVerdicts} from './eligibility';
+import {ELIGIBILITY_BATCH, EMPTY_VERDICTS, dayFormatter, describeEligibility, eligibilityBatches, fitPeriodOffer, isSelectable, mergeEligibilityAnswers, reasonText, toDayRange, type AssetEligibilityItem, type DayRange, type EligibilityReason, type EligibilityVerdicts} from './eligibility';
 
 /** A verdict as the engine sends it: eligible, with nothing to say, unless told otherwise. */
 function verdict(assetId: number, overrides: Partial<AssetEligibilityItem> = {}): AssetEligibilityItem {
@@ -212,6 +218,105 @@ describe('mergeEligibilityAnswers', () => {
     it('takes the thresholds from the first answer', () => {
         const merged = mergeEligibilityAnswers([answer([verdict(1)], 60, 7), answer([verdict(2)], 90, 14)]);
         expect([merged.minQuotes, merged.staleDays]).toEqual([60, 7]);
+    });
+
+    it("reads a single answer's two ranges as spans of days", () => {
+        const merged = mergeEligibilityAnswers([{...answer([verdict(1)]), common_range: {start: '2023-03-15', end: '2024-11-29'}, suggested_range: {start: '2023-03-16', end: '2024-11-29'}}]);
+        expect(merged.commonRange).toEqual({start: '2023-03-15', end: '2024-11-29'});
+        expect(merged.suggestedRange).toEqual({start: '2023-03-16', end: '2024-11-29'});
+    });
+
+    it('reads the ranges through toDayRange: a list-wrapped range, and one without an end', () => {
+        const merged = mergeEligibilityAnswers([{...answer([verdict(1)]), common_range: [{start: '2023-03-15', end: '2024-11-29'}], suggested_range: {start: '2024-11-29', end: null}}]);
+        expect(merged.commonRange).toEqual({start: '2023-03-15', end: '2024-11-29'});
+        expect(merged.suggestedRange).toEqual({start: '2024-11-29', end: '2024-11-29'});
+    });
+
+    it('has no range when the single answer names none', () => {
+        const merged = mergeEligibilityAnswers([{...answer([verdict(1)]), common_range: null}]);
+        expect(merged.commonRange).toBeNull();
+        expect(merged.suggestedRange).toBeNull();
+    });
+
+    it('keeps no range from two batches or more: a span of the whole request cannot be merged here', () => {
+        const ranged = {common_range: {start: '2023-03-15', end: '2024-11-29'}, suggested_range: {start: '2023-03-16', end: '2024-11-29'}};
+        const merged = mergeEligibilityAnswers([
+            {...answer([verdict(1)]), ...ranged},
+            {...answer([verdict(2)]), ...ranged},
+        ]);
+        // The verdicts are merged as before; only the ranges are withheld.
+        expect(merged.items.size).toBe(2);
+        expect(merged.commonRange).toBeNull();
+        expect(merged.suggestedRange).toBeNull();
+    });
+});
+
+describe('toDayRange', () => {
+    it('reads a range with both ends as it came', () => {
+        expect(toDayRange({start: '2023-03-15', end: '2024-11-29'})).toEqual({start: '2023-03-15', end: '2024-11-29'});
+    });
+
+    it('reads a list-wrapped range through its first entry, and list-wrapped ends through theirs', () => {
+        expect(toDayRange([{start: '2023-03-15', end: '2024-11-29'}])).toEqual({start: '2023-03-15', end: '2024-11-29'});
+        expect(toDayRange({start: ['2023-03-15'], end: ['2024-11-29']})).toEqual({start: '2023-03-15', end: '2024-11-29'});
+    });
+
+    it.each([
+        ['a missing end', {start: '2024-11-29'}],
+        ['a null end', {start: '2024-11-29', end: null}],
+        ['an empty list for an end', {start: '2024-11-29', end: []}],
+        ['a list holding null for an end', {start: '2024-11-29', end: [null]}],
+    ])('makes a single day of a range with %s', (_case, range) => {
+        expect(toDayRange(range)).toEqual({start: '2024-11-29', end: '2024-11-29'});
+    });
+
+    it.each([
+        ['nothing', undefined],
+        ['null', null],
+        ['an empty list', []],
+        ['a range with no start', {end: '2024-11-29'}],
+        ['a null start', {start: null, end: '2024-11-29'}],
+        ['an empty start', {start: '', end: '2024-11-29'}],
+        ['a start that is not a string', {start: 20241129, end: '2024-11-29'}],
+    ])('is null for %s', (_case, range) => {
+        expect(toDayRange(range)).toBeNull();
+    });
+});
+
+describe('fitPeriodOffer', () => {
+    const SUGGESTED: DayRange = {start: '2023-03-16', end: '2024-11-29'};
+    // Distinct ids, listed against the selection's order below so that order is the selection's, not the map's.
+    const WARNED = verdict(5, {level: 'warning', reasons: ['starts_late']});
+    const RULED_OUT = verdict(7, {level: 'ineligible', reasons: ['no_prices']});
+    const NEVER_QUOTED = verdict(9, {level: 'ineligible', reasons: ['no_price_history']});
+    const ELIGIBLE_ONE = verdict(3);
+    const NO_VERDICT = 11;
+    const offered = (items: readonly AssetEligibilityItem[]): EligibilityVerdicts => ({...verdictsOf(items), suggestedRange: SUGGESTED});
+
+    it('offers nothing without a suggested period, whoever the period leaves out', () => {
+        const items = [WARNED, RULED_OUT];
+        expect(fitPeriodOffer(verdictsOf(items), [5, 7])).toBeNull();
+        expect(fitPeriodOffer({...verdictsOf(items), suggestedRange: null}, [5, 7])).toBeNull();
+    });
+
+    it('brings back the selected assets that are warned about or ruled out, in the order of the selection', () => {
+        const verdicts = offered([ELIGIBLE_ONE, WARNED, RULED_OUT, NEVER_QUOTED]);
+        expect(fitPeriodOffer(verdicts, [7, 3, 9, 5, NO_VERDICT])).toEqual({range: SUGGESTED, recoverable: [7, 5]});
+    });
+
+    it('leaves out an asset never quoted at all, an eligible one, and one with no verdict: no period helps them, or they need none', () => {
+        const verdicts = offered([ELIGIBLE_ONE, NEVER_QUOTED]);
+        // A suggestion is there, and it brings nobody back: that is not an offer.
+        expect(fitPeriodOffer(verdicts, [3, 9, NO_VERDICT])).toBeNull();
+    });
+
+    it('asks only about the selection: an unselected asset the period leaves out brings no offer', () => {
+        expect(fitPeriodOffer(offered([ELIGIBLE_ONE, WARNED]), [3])).toBeNull();
+    });
+
+    it('counts a verdict that is not eligible even when it lists no reason', () => {
+        const unexplained: AssetEligibilityItem = {asset_id: 13, level: 'warning', quotes_in_period: 40};
+        expect(fitPeriodOffer(offered([unexplained]), [13])).toEqual({range: SUGGESTED, recoverable: [13]});
     });
 });
 
