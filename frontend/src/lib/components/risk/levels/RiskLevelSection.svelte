@@ -101,9 +101,17 @@
          * at the developer's request (F-3b V7).
          */
         docsLabel?: string;
+        /**
+         * Actions drawn in the header, just before the manual's icon and in the same
+         * row — beside the toggle when the level is collapsible, never inside it, so a
+         * click on an action neither opens nor folds the level. Optional: a caller that
+         * passes nothing renders exactly as before. Added for the column toggle of Asset
+         * Global's loss table (the developer's review of L1°, 30/09; lent by Risk).
+         */
+        actions?: Snippet;
     }
 
-    let {title, lead = '', level, collapsible = false, testId, health = [], reasons = [], errorCodes = [], metadata = [], children, onfirstopen, docsPath, docsLabel}: Props = $props();
+    let {title, lead = '', level, collapsible = false, testId, health = [], reasons = [], errorCodes = [], metadata = [], children, onfirstopen, docsPath, docsLabel, actions}: Props = $props();
 
     /**
      * The failure sentences, recomputed on every locale change.
@@ -146,6 +154,9 @@
                 {@render header()}
                 <ChevronDown size={18} class="shrink-0 text-gray-400 transition-transform {open ? 'rotate-180' : ''}" />
             </button>
+            {#if actions}
+                {@render actions()}
+            {/if}
             {#if docsPath}
                 <DocsLink path={docsPath} label={docsLabel ?? title} icon="book" size={16} testId="{testId}-docs" />
             {/if}
@@ -255,7 +266,16 @@
         <!-- The title on the left, the manual's icon alone on the right edge of the card (the developer). -->
         <div class="flex items-start justify-between gap-2">
             <h3 class="text-base font-semibold text-gray-800 dark:text-gray-100" data-testid="{testId}-title">{title}</h3>
-            {#if docsPath && !collapsible}
+            {#if actions && !collapsible}
+                <!-- The actions and the manual's icon share the right edge; the wrapper exists
+                     only when there are actions, so a level without them is unchanged. -->
+                <div class="flex shrink-0 items-start gap-2">
+                    {@render actions()}
+                    {#if docsPath}
+                        <DocsLink path={docsPath} label={docsLabel ?? title} icon="book" size={16} testId="{testId}-docs" />
+                    {/if}
+                </div>
+            {:else if docsPath && !collapsible}
                 <!-- A collapsible level shows the icon beside its toggle instead (see the
                      section's head): inside the toggle it would be a link inside a `<button>`. -->
                 <DocsLink path={docsPath} label={docsLabel ?? title} icon="book" size={16} testId="{testId}-docs" />
