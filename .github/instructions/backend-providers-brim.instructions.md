@@ -32,7 +32,7 @@ The abstract base class `BRIMProvider` is defined in `backend/app/services/brim_
 
 ## Fake Asset ID Flow
 
-BRIM plugins use **fake asset IDs** (negative integers) during parsing. The frontend then maps these to real assets via the asset matching UI. This two-phase approach allows import without requiring pre-existing assets.
+BRIM plugins use **fake asset IDs** — high positive placeholders counting down from `FAKE_ASSET_ID_BASE` (`2**31 - 1`) — during parsing. The frontend then maps these to real assets via the asset matching UI. This two-phase approach allows import without requiring pre-existing assets.
 
 ## Adding a New Plugin
 

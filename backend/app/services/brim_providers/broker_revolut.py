@@ -321,7 +321,7 @@ class RevolutBrokerProvider(BRIMProvider):
         detected_delim = self.detect_csv_delimiter(file_path)
 
         try:
-            with open(file_path, encoding="utf-8-sig") as f:
+            with self._open_text(file_path) as f:
                 reader = csv.DictReader(f, delimiter=detected_delim)
                 if _is_invest_header(reader.fieldnames):
                     return self._parse_invest(reader, broker_id)
