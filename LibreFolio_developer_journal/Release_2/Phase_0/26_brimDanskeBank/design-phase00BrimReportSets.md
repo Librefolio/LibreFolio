@@ -1,6 +1,6 @@
 # Design — BRIM «report set»: un import da più export della stessa banca
 
-**Stato**: bozza **v5** per la revisione del developer. È il gate dello step 2 del [piano](plan-phase00BrimDanskeBank.prompt.md): nessun codice dei set prima dell'approvazione.
+**Stato**: ✅ **approvato dal developer il 2026-09-30, nella v5.3** (ask_user: «Confermo il design v5.3 com'è, con le sette decisioni come proposte»). È il gate dello step 2 del [piano](plan-phase00BrimDanskeBank.prompt.md), che ora è chiuso. Il codice dei set comincia secondo il piano d'implementazione.
 
 **v5 (2026-09-29)**: riscrittura completa, su richiesta del developer:
 - si parte dalla nuova API e si risale verso il wizard, la pagina file e le guide;
@@ -100,7 +100,7 @@ Il router resta `/brokers/import`. Nasce qualcosa, qualcosa cambia, il resto res
 | `POST /files/{id}/parse` | cambia | sul combinato restituisce anche checkpoint e verifiche; su un membro da solo risponde 422 |
 | `POST /gap-fix` | **nuovo** | calcola le correzioni ai checkpoint e le verifiche; non scrive nulla |
 | `POST /duplicates`, `POST /asset-candidates` | invariati | lavorano sulle righe del combinato come su quelle di un file qualsiasi |
-| `POST /brokers/{id}/transactions/bulk` | invariato | l'editor salva anche le correzioni, che sono transazioni normali con un tag |
+| `POST /transactions/validate` e `POST /transactions/commit` | invariati | l'editor salva anche le correzioni, che sono transazioni normali con un tag. **[v5.3]** Il nome giusto è questo, cioè `execute_batch`; `/brokers/{id}/transactions/bulk`, citato in un vecchio commento dello schema, non esiste |
 
 ```mermaid
 sequenceDiagram
@@ -434,7 +434,7 @@ Le proposte sono transazioni normali:
 ### 3.7 Quello che non cambia
 
 - `POST /duplicates` e `POST /asset-candidates`: le righe del combinato sono righe come le altre.
-- Il salvataggio (`POST /brokers/{id}/transactions/bulk`): le correzioni sono transazioni normali con il tag `gap_fix`.
+- Il salvataggio (`POST /transactions/validate` e `/commit`, cioè `TransactionService.execute_batch`): le correzioni sono transazioni normali con il tag `gap_fix`.
 - Il rilevamento dei duplicati confronta tipo, data, quantità e importo, e per i «probabili» anche la descrizione. Per questo le descrizioni del plugin sono deterministiche (S8).
 
 ### 3.8 Cosa chiede l'API al plugin: il contratto
@@ -918,7 +918,7 @@ Gli scenari del §11.3 diventano test API end-to-end.
 | D-S10 | Avvisi sui periodi: CSV che inizia dopo o finisce prima dell'XLSX (§3.3) | proposta |
 | D-S11 | Notice del set con codici i18n; quelle del plugin nella lingua del report | proposta |
 | D-S12 | Motore di abbinamento dentro Danske fino a CA | proposta |
-| D-S13 | Inizio del segmento | **[v5] da confermare**: il checkpoint è la vigilia del primo giorno dell'XLSX; la cassa dei trade precedenti che si regolano nei primi giorni (gli orfani di bordo, al massimo 5 giorni lavorativi) entra nel checkpoint; tutte le righe dell'XLSX si importano. Sostituisce lo spostamento in avanti di `T0` della v4 (A1) |
+| D-S13 | Inizio del segmento | ✅ developer 2026-09-30: il checkpoint è la vigilia del primo giorno dell'XLSX; la cassa dei trade precedenti che si regolano nei primi giorni (gli orfani di bordo, al massimo 5 giorni lavorativi) entra nel checkpoint; tutte le righe dell'XLSX si importano. Sostituisce lo spostamento in avanti di `T0` della v4 (A1) |
 | D-S14 | Cassa iniziale: punto di verità, correzione proposta dal sistema | ✅ developer |
 | D-S15 | Stato iniziale: la differenza rispetto a quello che LibreFolio sa già | ✅ developer |
 | D-S16 | Posizioni: prove esatte o minime; correzioni solo automatiche; costo come todo | ✅ developer |
@@ -930,12 +930,12 @@ Gli scenari del §11.3 diventano test API end-to-end.
 | D-S22 | Perimetro del set | ✅ **[v5.2] il set nasce dal caricamento**: i file caricati insieme per lo stesso broker e riconosciuti dallo stesso plugin. È un'unità nel passo ② e nella pagina file; «Carica il file mancante» lo completa; caricamenti diversi non si mescolano. Decisa dal developer il 2026-09-30; sostituisce la versione del 2026-09-29 («i file scelti in un import») |
 | D-S23 | Righe autonome nei buchi, importate con la loro data | ✅ developer |
 | D-S24 | Proposta tolta: non compensata in questo import, riproposta al prossimo | proposta, **[v5]** precisata |
-| D-S25 | `H0`: la transazione più vecchia col tag del plugin (le correzioni contano dal giorno dopo); al primo import, il giorno dopo il primo checkpoint, o la riga più vecchia se il plugin importa anche quelle precedenti | **[v5] da confermare** (A2, A3, A14) |
-| D-S26 | `combine` puro; `H0` applicato al parse | **[v5] da confermare** (A4) |
-| D-S27 | Regola di sicurezza dei checkpoint | **[v5] da confermare** (A5) |
-| D-S28 | File dello stesso ruolo sovrapposti: se uguali si uniscono; se diversi, vale il più recente, con una notice | **[v5] da confermare** (A9) |
-| D-S29 | Prove di posizione: E1 (30 giorni senza trade) ed E4 (nessuna riga esclusa in mezzo) | **[v5] da confermare** (A8) |
-| D-S30 | La parte non spiegata ai checkpoint intermedi si propone, selezionata, con la spiegazione | **[v5] da confermare** (A5) |
+| D-S25 | `H0`: la transazione più vecchia col tag del plugin (le correzioni contano dal giorno dopo); al primo import, il giorno dopo il primo checkpoint, o la riga più vecchia se il plugin importa anche quelle precedenti | ✅ developer 2026-09-30 (A2, A3, A14) |
+| D-S26 | `combine` puro; `H0` applicato al parse | ✅ developer 2026-09-30 (A4) |
+| D-S27 | Regola di sicurezza dei checkpoint | ✅ developer 2026-09-30 (A5) |
+| D-S28 | File dello stesso ruolo sovrapposti: se uguali si uniscono; se diversi, vale il più recente, con una notice | ✅ developer 2026-09-30 (A9) |
+| D-S29 | Prove di posizione: E1 (30 giorni senza trade) ed E4 (nessuna riga esclusa in mezzo) | ✅ developer 2026-09-30 (A8) |
+| D-S30 | La parte non spiegata ai checkpoint intermedi si propone, selezionata, con la spiegazione | ✅ developer 2026-09-30 (A5) |
 | D-S31 | Completamento automatico del set con i file già caricati (v5.1) | ❌ **ritirata** il 2026-09-30, su obiezione del developer: trasformava l'archivio dei file in una memoria nascosta (A16). Sostituita dalla D-S22 |
 
 Decisioni del piano per il plugin Danske, tutte chiuse:
@@ -993,7 +993,7 @@ Metodo: prima le proprietà che il design deve garantire (§11.1), poi la verifi
 
 | # | Dove | Incongruenza | Conseguenza | Nella v5 |
 |---|---|---|---|---|
-| A1 | v4: S14, §10.3, §10.5 | Spostando `T0` in avanti, i trade dell'XLSX fra il suo inizio e `T0` diventavano «posizioni esatte con costo noto». Ma un trade dice di quanto cambia una posizione, non quanto vale: non è una prova esatta. E un dividendo in quei giorni finiva nel versamento iniziale | posizioni sbagliate se c'era già qualcosa; dividendi persi come reddito | nessuno spostamento: gli orfani di bordo entrano nel checkpoint e l'XLSX si importa tutto (D-S13, da confermare) |
+| A1 | v4: S14, §10.3, §10.5 | Spostando `T0` in avanti, i trade dell'XLSX fra il suo inizio e `T0` diventavano «posizioni esatte con costo noto». Ma un trade dice di quanto cambia una posizione, non quanto vale: non è una prova esatta. E un dividendo in quei giorni finiva nel versamento iniziale | posizioni sbagliate se c'era già qualcosa; dividendi persi come reddito | nessuno spostamento: gli orfani di bordo entrano nel checkpoint e l'XLSX si importa tutto (D-S13, approvata il 2026-09-30) |
 | A2 | v4: tabella del §10.8 | «Prima di `H0`: riassunte nel primo checkpoint» valeva anche agli import successivi: il loro checkpoint di apertura avrebbe riproposto il saldo iniziale | cassa contata due volte | prima di `H0` non entra nulla; l'apertura c'è solo al primo import (D-S25) |
 | A3 | v4: `H0` nel §10.8 | `H0` veniva solo dalle correzioni `gap_fix`. Se al primo import la storia era già giusta e non serviva nessuna correzione, `H0` scivolava in avanti | le righe autonome di un buco finivano riassunte invece che importate, contro D-S23 | `H0` viene da ogni transazione col tag del plugin (D-S25) |
 | A4 | v4: §7, D-S6 | `combine` riceveva `H0` dal database | il combinato non era riproducibile, e il riuso dipendeva anche da `H0` | `combine` puro; `H0` al parse (D-S26) |

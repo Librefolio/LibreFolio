@@ -429,10 +429,10 @@ Reperto di L, verificato dal coordinatore. Decisione del developer: «L lo corre
 > | `0743b9f44` | `dev_release2` | cherry-pick `-x` di `f82eaa020`, stesso diff |
 > | `b1835949e` | `dev_release2` | voce 🐛 Fixed del CHANGELOG, scritta dal coordinatore |
 
-### 2. ⏳ Documento di design dei set
+### 2. ✅ Documento di design dei set — approvato il 2026-09-30 (v5.3)
 
 - File `26_brimDanskeBank/design-phase00BrimReportSets.md`: §2 sviluppato con contratti, stati, errori, casi limite (bordi del periodo, troncamenti, righe identiche), compatibilità, test e fasi.
-- **Gate: approvazione del developer.** Senza, niente codice sui set.
+- **Gate: approvazione del developer.** Senza, niente codice sui set. ✅ **Chiuso il 2026-09-30.**
 
 > **Note implementazione (2026-09-28)**: [bozza scritta](design-phase00BrimReportSets.md), in attesa della revisione.
 > - **Fatti di partenza**: raccolti da due agenti explore in sola lettura, uno sul backend (storage, API, schemi, registry) e uno sul frontend (wizard, pagina file, anteprima, i18n).
@@ -526,6 +526,34 @@ Reperto di L, verificato dal coordinatore. Decisione del developer: «L lo corre
 >   Aggiunto anche lo **scenario 8**: due set dello stesso broker importati insieme su un broker vuoto non contano niente due volte.
 > - §3.2: i tre chiamanti restano su `axiosInstance` con `FormData`, e il `batch_id` è un campo in più del form; il 422 è già corretto (`f82eaa020`).
 > - Il controllo dei valori inventati dà lo stesso esito.
+>
+> **Commit del journal v5.3**: `1f8d2ea82` (developer).
+>
+> **✅ Gate 2 chiuso (2026-09-30).** Il developer: «ho letto il piano, e mi pare possa funzionare, almeno vorrei tentare». Poi, con ask_user: «Confermo il design v5.3 com'è, con le sette decisioni come proposte».
+> - D-S13 e D-S25…D-S30 passano a ✅ nel design.
+> - L'approvazione è inoltrata al coordinatore con le parole del developer.
+>
+> **Prima dello sviluppo**, su richiesta del developer («se ci sono altri lavori preparatori che abbiamo concluso e che potrebbero essere utili agli altri agenti, facciamo un commit cherry pick anche per loro»):
+> - proposti al coordinatore i cherry-pick `-x` in `dev_release2` di `6ea71ea8d`, `9d9c26d0d`, `e892e2e0e` e `dafff60da`, cioè il fix della codifica, il runner e la regola degli ID finti;
+> - il journal resta in L fino all'integrazione finale (scelta del developer, ask_user);
+> - la simulazione con `git merge-tree`, in sequenza sull'albero di `b1835949e`, è pulita: 35 file, identici all'HEAD di L;
+> - gate sull'HEAD `1f8d2ea82`: `services brim-provider-base` 34 passati; `external brim-providers` 537 passati e 2 saltati.
+>
+> **Cherry-pick in `dev_release2`** (developer, 2026-09-30), albero `3ec4420c1` come nella simulazione:
+>
+> | Commit in `dev_release2` | Cherry-pick `-x` di |
+> |---|---|
+> | `cc4ae7aeb` | `6ea71ea8d` fix(brim): fall back to cp1252 for CSV exports |
+> | `8efbbed14` | `9d9c26d0d` fix(brim): read CSV plugins via the base reader |
+> | `c1108c9d0` | `e892e2e0e` test(runner): describe brim-provider-base scope |
+> | `e4dfb6d55` | `dafff60da` docs(brim): fake asset IDs are high positive |
+> | `1622a7a38` | la voce del CHANGELOG, scritta dal coordinatore |
+>
+> I 35 file sono identici a quelli di L, quindi al prossimo aggiornamento della base non ci saranno conflitti.
+>
+> **Pianificazione (2026-09-30).** Due esplorazioni in sola lettura, una sul backend e una sul frontend, hanno raccolto i fatti del codice. Il piano d'implementazione è [in un file a parte](plan-phase00BrimDanskeBankStep4Implementation.prompt.md).
+>
+> **⚠️ Fuori pista**: il design citava `POST /brokers/{id}/transactions/bulk`, che non esiste; l'editor salva con `POST /transactions/validate` e `/commit` (`execute_batch`). Il nome veniva da un vecchio commento in `schemas/brim.py`. Corretto nel design v5.3. Le esplorazioni hanno trovato anche due superfici che il design non considerava: la guida d'onboarding dell'import (step versionati) e la registrazione dei test nel runner.
 
 ### 3. ⏳ Risposte dell'autore
 
@@ -568,6 +596,8 @@ Reperto di L, verificato dal coordinatore. Decisione del developer: «L lo corre
 > Proposta applicata nella **v2 del design** (2026-09-29, §10 «Finestre temporali, stato iniziale e commissioni»), in attesa della revisione del developer.
 
 ### 4. ⏸ Framework dei set (dopo il gate 2)
+
+> **Piano d'implementazione dettagliato degli step 4–8**: [plan-phase00BrimDanskeBankStep4Implementation.prompt.md](plan-phase00BrimDanskeBankStep4Implementation.prompt.md), scritto il 2026-09-30. Contiene fasi, checkpoint, superfici condivise e decisioni D-I1…D-I3.
 
 - Test rossi con un **plugin finto a due ruoli**, che non dipende dall'autore.
 - Schemi, manifest, endpoint, provenienza.
