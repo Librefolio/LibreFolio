@@ -14,14 +14,14 @@ from backend.app.schemas.risk import (
 )
 from backend.app.services.data_quality_thresholds import RISK_MIN_OBSERVATIONS
 from backend.app.services.provider_registry import RiskAnalyticRegistry, register_plugin
-from backend.app.services.risk.analytic_helpers import prepared_scope_series
+from backend.app.services.risk.analytic_helpers import prepared_scope_series, require_annualization_factor
 from backend.app.services.risk.base import (
     RiskAnalytic,
     RiskComputation,
     RiskExecutionContext,
     RiskUnavailableError,
 )
-from backend.app.services.risk.metrics import historical_var_cvar
+from backend.app.services.risk.metrics import calendar_days_to_observations, historical_var_cvar
 
 
 class AssetSetVarParams(BaseModel):
@@ -58,17 +58,22 @@ class AssetSetVarAnalytic(RiskAnalytic):
     Acerbi-Tasche tail rather than the plug-in one — so a figure read here and a
     figure read on an asset detail page mean the same thing.
 
-    ⚠️ THE HORIZON CHECK IS SET-LEVEL, AND IT CAN ONLY BE. Compounding to a
-    multi-day horizon costs ``horizon_days - 1`` observations, so a request that
-    clears the plugin's minimum on raw returns can still fall short once
+    ⚠️ THE HORIZON CHECK IS SET-LEVEL, AND IT CAN ONLY BE. The horizon is in
+    calendar days and is compounded over the observations the joint calendar holds
+    in them, which costs ``horizon_observations - 1`` observations, so a request
+    that clears the plugin's minimum on raw returns can still fall short once
     compounded. Because every asset in one prepared set carries the same joint
-    calendar, that shortfall is the same for all of them: there is no case where
-    the horizon leaves one asset measurable and another not. The refusal is
-    therefore reported once, for the request, instead of silently dropping rows.
+    calendar — and so the same observed frequency — that shortfall is the same for
+    all of them: there is no case where the horizon leaves one asset measurable and
+    another not. The refusal is therefore reported once, for the request, instead
+    of silently dropping rows.
     """
 
     analytic_code = "asset_set_var"
-    algorithm_version = "1.0.0"
+    # 2.0.0 — the horizon is in calendar days, converted to `horizon_observations`
+    # at the joint calendar's observed frequency; 1.x compounded `horizon_days`
+    # observations.
+    algorithm_version = "2.0.0"
     name_i18n_key = "risk.analytics.assetSetVar.name"
     description_i18n_key = "risk.analytics.assetSetVar.description"
     output_kind = RiskOutputKind.VAR_CVAR_SET
@@ -81,25 +86,27 @@ class AssetSetVarAnalytic(RiskAnalytic):
         series = prepared_scope_series(context)
         prepared = context.prepared_series
         observations = prepared.n_observations if prepared else 0
-        horizon_observations = observations - params.horizon_days + 1
-        if horizon_observations < self.min_observations:
+        horizon_observations = calendar_days_to_observations(params.horizon_days, require_annualization_factor(context))
+        windows = observations - horizon_observations + 1
+        if windows < self.min_observations:
             raise RiskUnavailableError(
                 "VaR/CVaR has insufficient compounded horizon observations",
                 code=RiskErrorCode.INSUFFICIENT_HISTORY,
                 details={
-                    "observations": max(horizon_observations, 0),
+                    "observations": max(windows, 0),
                     "required": self.min_observations,
                     "horizon_days": params.horizon_days,
+                    "horizon_observations": horizon_observations,
                 },
             )
 
         items: list[RiskAssetSetVarCvarItem] = []
-        horizon_count = horizon_observations
+        horizon_count = windows
         for asset_id, _dates, returns in series:
             summary = historical_var_cvar(
                 returns,
                 confidence_level=params.confidence_level,
-                horizon_days=params.horizon_days,
+                horizon_observations=horizon_observations,
             )
             horizon_count = len(summary.horizon_returns)
             items.append(
@@ -114,6 +121,7 @@ class AssetSetVarAnalytic(RiskAnalytic):
             output=RiskAssetSetVarCvarOutput(
                 confidence_level=params.confidence_level,
                 horizon_days=params.horizon_days,
+                horizon_observations=horizon_observations,
                 # Stated once: the joint calendar gives every asset the same
                 # compounded count, so the loop above rewrites the same number.
                 observations=horizon_count,

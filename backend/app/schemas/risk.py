@@ -435,6 +435,9 @@ class PreparedAssetSeries(StrictModel):
 
     valuations: AssetValuationSeries
     returns: AssetReturnSeries
+    # The asset's own quote dates inside the requested range, whether or not the joint calendar kept
+    # them: a stored carry (a weekend or market-holiday row repeating the close before it) is not one.
+    quote_dates: List[date] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_alignment(self) -> PreparedAssetSeries:
@@ -1044,10 +1047,21 @@ class RiskVarCvarBin(StrictModel):
 
 
 class RiskVarCvarOutput(StrictModel):
+    """Historical VaR and CVaR at one confidence level and one horizon.
+
+    `horizon_days` is the requested horizon in **calendar days**. The tail is
+    estimated on returns compounded over `horizon_observations` consecutive
+    observations: the number the series holds in that many calendar days at its
+    observed frequency, so a 30-day month is 21 observations of a series quoted on
+    trading days and 30 of one quoted every day. `observations` counts the
+    compounded windows the tail was estimated from, `horizon_observations - 1`
+    fewer than the series' returns.
+    """
 
     kind: Literal[RiskOutputKind.VAR_CVAR] = Field(default=RiskOutputKind.VAR_CVAR, json_schema_extra={"enum": ["var_cvar"]})
     confidence_level: FiniteFloat = Field(..., gt=0, lt=1)
     horizon_days: PositiveInt
+    horizon_observations: PositiveInt
     observations: PositiveInt
     value_at_risk: FiniteFloat = Field(..., ge=0)
     conditional_value_at_risk: FiniteFloat = Field(..., ge=0)
@@ -1394,8 +1408,10 @@ class RiskAssetSetVarCvarOutput(StrictModel):
     one horizon gives every asset the same count, so a per-row copy would suggest
     they could differ. It is stated anyway, rather than left to the metadata,
     because compounding to a multi-day horizon *consumes* observations — this is
-    the count the tail was actually estimated from, which is `horizon_days - 1`
-    fewer than the window's.
+    the count the tail was actually estimated from, which is
+    `horizon_observations - 1` fewer than the window's. As on the singular output,
+    `horizon_days` is in calendar days and `horizon_observations` is what the joint
+    calendar holds in them.
 
     No `return_bins`. The singular :class:`RiskVarCvarOutput` publishes a
     histogram because one surface draws one distribution; *n* histograms would
@@ -1406,6 +1422,7 @@ class RiskAssetSetVarCvarOutput(StrictModel):
     kind: Literal[RiskOutputKind.VAR_CVAR_SET] = Field(default=RiskOutputKind.VAR_CVAR_SET, json_schema_extra={"enum": ["var_cvar_set"]})
     confidence_level: FiniteFloat = Field(..., gt=0, lt=1)
     horizon_days: PositiveInt
+    horizon_observations: PositiveInt
     observations: PositiveInt
     items: List[RiskAssetSetVarCvarItem]
 

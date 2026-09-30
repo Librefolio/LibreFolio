@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
@@ -51,6 +52,7 @@ from backend.app.schemas.risk import (
 )
 from backend.app.services.asset_source import AssetSourceManager
 from backend.app.services.data_quality_thresholds import RISK_MIN_OBSERVATIONS, STALE_PRICE_THRESHOLD_DAYS
+from backend.app.services.market_calendar import ensure_market_holidays
 from backend.app.services.portfolio_service import PortfolioService
 from backend.app.services.provider_registry import RiskAnalyticRegistry
 from backend.app.services.risk.base import (
@@ -185,10 +187,13 @@ class RiskService:
         if missing_scope_asset_ids:
             raise RiskScopeNotFoundError(f"Unknown asset IDs in risk scope: {sorted(missing_scope_asset_ids)}")
 
+        # One holiday table per request, handed to every preparation and reading of it (see `market_calendar`).
+        market_holidays = await ensure_market_holidays()
         prepared = await self._prepare_asset_series(
             asset_ids=tuple(sorted(set(scope_inputs.requested_asset_ids) | (comparison_dependency_asset_ids & existing_asset_ids))),
             date_range=request.date_range,
             target_currency=request.target_currency,
+            market_holidays=market_holidays,
         )
         never_priced_asset_ids = await self._never_priced_asset_ids(
             tuple(item.asset_id for item in _scope_exclusions(scope_inputs.requested_asset_ids, prepared) if item.reason == DataQualityExclusionReason.MISSING_PRICE),
@@ -238,6 +243,7 @@ class RiskService:
                         scope_inputs=scope_inputs,
                         existing_asset_ids=existing_asset_ids,
                         target_currency=request.target_currency,
+                        market_holidays=market_holidays,
                     )
                 except RiskUnavailableError as exc:
                     results[index] = self._unavailable(
@@ -344,7 +350,8 @@ class RiskService:
         start = request.date_range.start
         end = request.date_range.end or start
         asset_ids = list(dict.fromkeys(request.asset_ids))
-        facts = await load_price_window_facts(self.db, asset_ids=asset_ids, window_start=start, window_end=end, target_currency=request.target_currency)
+        market_holidays = await ensure_market_holidays()
+        facts = await load_price_window_facts(self.db, asset_ids=asset_ids, window_start=start, window_end=end, target_currency=request.target_currency, market_holidays=market_holidays)
         items: list[RiskAssetEligibility] = []
         for asset_id in asset_ids:
             fact = facts[asset_id]
@@ -367,7 +374,7 @@ class RiskService:
         suggested = None
         if any(period_limits_coverage(facts[asset_id], start, end) for asset_id in quoted_ids):
             for candidate in suggested_analysis_ranges(common, start, end):
-                if await self._every_asset_eligible(quoted_ids, candidate, request.target_currency):
+                if await self._every_asset_eligible(quoted_ids, candidate, request.target_currency, market_holidays):
                     suggested = candidate
                     break
         return RiskEligibilityResponse(
@@ -378,10 +385,10 @@ class RiskService:
             suggested_range=DateRangeModel(start=suggested[0], end=suggested[1]) if suggested else None,
         )
 
-    async def _every_asset_eligible(self, asset_ids: list[int], window: tuple[date, date], target_currency: str) -> bool:
+    async def _every_asset_eligible(self, asset_ids: list[int], window: tuple[date, date], target_currency: str, market_holidays: AbstractSet[date] = frozenset()) -> bool:
         """Whether every asset is eligible, without warnings, for an analysis of `window`."""
         start, end = window
-        facts = await load_price_window_facts(self.db, asset_ids=asset_ids, window_start=start, window_end=end, target_currency=target_currency)
+        facts = await load_price_window_facts(self.db, asset_ids=asset_ids, window_start=start, window_end=end, target_currency=target_currency, market_holidays=market_holidays)
         return all(analysis_eligibility(facts[asset_id], start, end)[0] == RiskEligibilityLevel.ELIGIBLE for asset_id in asset_ids)
 
     async def _with_warning_asset_names(self, items: list[RiskAnalyticResult]) -> list[RiskAnalyticResult]:
@@ -615,12 +622,14 @@ class RiskService:
         asset_ids: tuple[int, ...],
         date_range: DateRangeModel,
         target_currency: str,
+        market_holidays: AbstractSet[date] = frozenset(),
     ) -> PreparedAssetSeriesSet:
         if not asset_ids:
             return prepare_asset_series_set(
                 [],
                 requested_range=date_range,
                 target_currency=target_currency,
+                market_holidays=market_holidays,
             )
         date_end = date_range.end or date_range.start
         load_start = date_range.start
@@ -644,6 +653,7 @@ class RiskService:
             price_results,
             requested_range=date_range,
             target_currency=target_currency,
+            market_holidays=market_holidays,
         )
 
     async def _prepare_historical_replay_context(
@@ -654,6 +664,7 @@ class RiskService:
         scope_inputs: _ScopeInputs,
         existing_asset_ids: set[int],
         target_currency: str,
+        market_holidays: AbstractSet[date] = frozenset(),
     ) -> RiskExecutionContext:
         replay_range = getattr(plan.params, "replay_range", None)
         if not isinstance(replay_range, DateRangeModel):
@@ -697,6 +708,7 @@ class RiskService:
             window_start=replay_range.start,
             window_end=replay_end,
             target_currency=target_currency,
+            market_holidays=market_holidays,
         )
         auto_excluded = {asset_id: reason for asset_id in own_ids if (reason := replay_coverage(window_facts[asset_id], replay_range.start, replay_end)) is not None}
         suggested_range, recovers = await self._verified_replay_range(
@@ -705,12 +717,14 @@ class RiskService:
             own_ids=own_ids,
             window=(replay_range.start, replay_end),
             target_currency=target_currency,
+            market_holidays=market_holidays,
         )
         source_asset_ids = {asset_id: proxy_by_asset.get(asset_id, asset_id) for asset_id in candidate_ids if asset_id not in auto_excluded}
         prepared = await self._prepare_asset_series(
             asset_ids=tuple(sorted(set(source_asset_ids.values()))),
             date_range=replay_range,
             target_currency=target_currency,
+            market_holidays=market_holidays,
         )
         replay_data_quality = _merge_data_quality(
             scope_inputs.data_quality,
@@ -742,6 +756,7 @@ class RiskService:
         own_ids: list[int],
         window: tuple[date, date],
         target_currency: str,
+        market_holidays: AbstractSet[date] = frozenset(),
     ) -> tuple[Optional[DateRangeModel], tuple[int, ...]]:
         """A part of the replay window that brings back the assets its edges exclude.
 
@@ -754,7 +769,7 @@ class RiskService:
             return None, ()
         (start, end), recovers = proposal
         kept = [asset_id for asset_id in own_ids if asset_id not in auto_excluded or asset_id in recovers]
-        check = await load_price_window_facts(self.db, asset_ids=kept, window_start=start, window_end=end, target_currency=target_currency)
+        check = await load_price_window_facts(self.db, asset_ids=kept, window_start=start, window_end=end, target_currency=target_currency, market_holidays=market_holidays)
         if any(replay_coverage(check[asset_id], start, end) is not None for asset_id in kept):
             return None, ()
         return DateRangeModel(start=start, end=end), recovers
@@ -797,7 +812,10 @@ class RiskService:
                 calendar_days,
                 annualization_factor,
                 coverage,
-            ) = _portfolio_twrr_returns(scope_inputs.portfolio_report)
+            ) = _portfolio_twrr_returns(
+                scope_inputs.portfolio_report,
+                observation_dates=_held_quote_dates(prepared, scope_inputs.requested_asset_ids),
+            )
             primary_return_basis = RiskReturnBasis.TWRR
         elif request.scope.kind == RiskScopeKind.PORTFOLIO:
             rows = {asset_id: tuple(float(point.value) for point in prepared_by_asset[asset_id].returns.points) for asset_id in usable_scope_asset_ids}
@@ -1063,8 +1081,15 @@ class RiskService:
         )
 
 
+def _held_quote_dates(prepared: PreparedAssetSeriesSet, held_asset_ids: tuple[int, ...]) -> frozenset[date]:
+    """The days on which at least one held asset has a quote of its own — a benchmark's quotes don't count."""
+    held = set(held_asset_ids)
+    return frozenset(quote_date for series in prepared.series if series.returns.asset_id in held for quote_date in series.quote_dates)
+
+
 def _portfolio_twrr_returns(
     report: Optional[PortfolioReportResponse],
+    observation_dates: AbstractSet[date] = frozenset(),
 ) -> tuple[
     Optional[date],
     tuple[date, ...],
@@ -1073,9 +1098,19 @@ def _portfolio_twrr_returns(
     Optional[float],
     float,
 ]:
+    """The portfolio TWRR as period returns, read on the observation days (developer's decision of 30/09/2026).
+
+    The report has one TWRR point per calendar day, so a day on which nothing held was quoted is a
+    zero return that no market produced. With `observation_dates` — the days a held asset was quoted —
+    only those points are kept after the baseline, and each return is chain-linked from the cumulative
+    TWRR across the days dropped, so the TWRR stays exact; coverage is then measured against those
+    days, not against the calendar. With none (nothing held has a quote), every calendar day is kept.
+    """
     if report is None or not report.history:
         return None, (), (), 0, None, 0.0
     points = [point for point in report.history if point.twrr is not None]
+    if observation_dates:
+        points = points[:1] + [point for point in points[1:] if point.date in observation_dates]
     if len(points) < 2:
         return None, (), (), 0, None, 0.0
     cumulative = [float(point.twrr) for point in points]
@@ -1084,7 +1119,11 @@ def _portfolio_twrr_returns(
     baseline = points[0].date
     calendar_days = (return_dates[-1] - baseline).days
     annualization_factor = len(returns) * 365 / calendar_days if calendar_days > 0 else None
-    coverage = min(1.0, len(returns) / calendar_days) if calendar_days > 0 else 0.0
+    if observation_dates:
+        candidates = sum(1 for quote_date in observation_dates if baseline < quote_date <= return_dates[-1])
+        coverage = min(1.0, len(returns) / candidates) if candidates else 0.0
+    else:
+        coverage = min(1.0, len(returns) / calendar_days) if calendar_days > 0 else 0.0
     return (
         baseline,
         return_dates,

@@ -295,7 +295,9 @@ def test_carried_fx_rate_degrades_only_beyond_the_stale_threshold(carry_days, ex
 
 def test_a_carried_baseline_never_degrades_even_when_older_than_the_threshold():
     stale_since = CARRY_BASELINE - timedelta(days=30)
-    fresh_after = [converted_point(_day(offset), native_close="100", target_close="90") for offset in range(2, 6)]
+    # Every fresh quote moves: a close repeated into Saturday 7 March would be a weekend carry, not a
+    # fresh quote (developer's decision of 30/09/2026), and freshness is not what this test is about.
+    fresh_after = [converted_point(_day(offset), native_close=str(100 + offset), target_close=str(Decimal(100 + offset) * Decimal("0.9"))) for offset in range(2, 6)]
 
     def stale(offset: int) -> FAPricePoint:
         return converted_point(_day(offset), native_close="100", target_close="90", effective_price_date=stale_since, fx_rate_date=stale_since)
@@ -478,3 +480,233 @@ def test_asset_source_preserves_price_source_through_backward_fill():
         "manual_fixture",
         "manual_fixture",
     ]
+
+
+# ---------------------------------------------------------------------------
+# Market-closed repeats (developer's decision of 30/09/2026)
+#
+# Some sources (justETF) store a row for every calendar day: Saturday and Sunday repeat Friday's
+# close, an exchange holiday repeats the day before. Such a row — on a weekend or on a market holiday,
+# with exactly the close of the row before it — is a carry, not a quote: its date is no candidate for
+# the joint calendar, and where another asset puts that date on it anyway, the repeating asset is
+# valued at its last genuine quote. A move on a weekend or a holiday is a quote; so is a flat weekday.
+# Without a holiday table, weekends still apply.
+# ---------------------------------------------------------------------------
+
+REPEAT_FIRST = date(2025, 1, 6)  # a Monday, and the baseline of every preparation below
+REPEAT_LAST = date(2025, 1, 26)  # a Sunday, three weeks later
+REPEAT_RANGE = DateRangeModel(start=date(2025, 1, 7), end=REPEAT_LAST)
+
+
+def every_calendar_day(first: date, last: date) -> list[date]:
+    return [first + timedelta(days=offset) for offset in range((last - first).days + 1)]
+
+
+DAYS_IN_RANGE = every_calendar_day(REPEAT_RANGE.start, REPEAT_LAST)
+WEEKDAYS_IN_RANGE = [day for day in DAYS_IN_RANGE if day.weekday() < 5]
+
+
+def moving_close(day: date) -> Decimal:
+    """A weekday close different from every other day's."""
+    return Decimal("100") + Decimal((day - REPEAT_FIRST).days) / Decimal("2")
+
+
+def seven_day_etf(asset_id: int = 1, *, flat_weekdays: frozenset[date] = frozenset()) -> FAPriceQueryResult:
+    """A stored row every calendar day: weekdays move, a weekend or a flat weekday repeats the row before."""
+    prices: list[FAPricePoint] = []
+    previous: Decimal | None = None
+    for day in every_calendar_day(REPEAT_FIRST, REPEAT_LAST):
+        repeats = previous is not None and (day.weekday() >= 5 or day in flat_weekdays)
+        close = previous if repeats else moving_close(day)
+        prices.append(native_point(day, str(close)))
+        previous = close
+    return FAPriceQueryResult(asset_id=asset_id, prices=prices)
+
+
+def five_day_series(asset_id: int = 1, *, flat_weekdays: frozenset[date] = frozenset()) -> FAPriceQueryResult:
+    """The same quotes stored on weekdays only, served as the price query serves them: weekends backward-filled."""
+    prices: list[FAPricePoint] = []
+    last_quote: date | None = None
+    last_close: Decimal | None = None
+    for day in every_calendar_day(REPEAT_FIRST, REPEAT_LAST):
+        if day.weekday() < 5:
+            last_close = last_close if last_close is not None and day in flat_weekdays else moving_close(day)
+            last_quote = day
+            prices.append(native_point(day, str(last_close)))
+        else:
+            prices.append(native_point(day, str(last_close), effective_price_date=last_quote))
+    return FAPriceQueryResult(asset_id=asset_id, prices=prices)
+
+
+def weekend_mover(asset_id: int = 2, *, missing: frozenset[date] = frozenset()) -> FAPriceQueryResult:
+    """A crypto-like series: quoted every calendar day, moving on weekends too."""
+    return FAPriceQueryResult(
+        asset_id=asset_id,
+        prices=[native_point(day, str(Decimal("300") + Decimal((day - REPEAT_FIRST).days) * Decimal("0.75"))) for day in every_calendar_day(REPEAT_FIRST, REPEAT_LAST) if day not in missing],
+    )
+
+
+def prepare_repeats(*results: FAPriceQueryResult, market_holidays: frozenset[date] | None = None):
+    """Prepare over REPEAT_RANGE; the holiday table is passed only when a test gives one."""
+    table = {} if market_holidays is None else {"market_holidays": market_holidays}
+    return prepare_asset_series_set(list(results), requested_range=REPEAT_RANGE, target_currency="EUR", **table)
+
+
+def series_of(prepared, asset_id: int):
+    return next(item for item in prepared.series if item.valuations.asset_id == asset_id)
+
+
+def return_on(prepared, asset_id: int, day: date):
+    return next(point for point in series_of(prepared, asset_id).returns.points if point.date == day)
+
+
+def test_weekend_repeats_of_a_seven_day_source_are_not_observations():
+    prepared = prepare_repeats(seven_day_etf())
+
+    assert prepared.baseline_date == REPEAT_FIRST
+    assert len(WEEKDAYS_IN_RANGE) == 14
+    assert prepared.joint_return_dates == WEEKDAYS_IN_RANGE
+    assert prepared.n_observations == 14
+    # The trailing weekend repeats Friday 24: the series ends there, and so does its span.
+    assert prepared.effective_range == DateRangeModel(start=date(2025, 1, 7), end=date(2025, 1, 24))
+    assert prepared.calendar_days == 18
+    assert prepared.annualization_factor == pytest.approx(14 * 365 / 18)
+    assert prepared.calendar_coverage == pytest.approx(1.0)
+    assert prepared.fresh_quote_coverage == pytest.approx(1.0)
+    # Monday's return is measured from Friday's quote.
+    monday = return_on(prepared, 1, date(2025, 1, 13))
+    assert monday.previous_valuation_date == date(2025, 1, 10)
+    assert monday.value == pytest.approx(float(moving_close(date(2025, 1, 13)) / moving_close(date(2025, 1, 10)) - 1))
+
+
+def calendar_projection(prepared) -> dict[str, object]:
+    """Everything the analytics read from a prepared set, and nothing incidental."""
+    return {
+        "baseline": prepared.baseline_date,
+        "valuation_dates": prepared.joint_valuation_dates,
+        "return_dates": prepared.joint_return_dates,
+        "n_observations": prepared.n_observations,
+        "calendar_days": prepared.calendar_days,
+        "annualization_factor": prepared.annualization_factor,
+        "calendar_coverage": prepared.calendar_coverage,
+        "fresh_quote_coverage": prepared.fresh_quote_coverage,
+        "valuations": {item.valuations.asset_id: [(point.valuation_date, point.effective_price_date, point.is_price_carried_forward, point.target_close) for point in item.valuations.points] for item in prepared.series},
+        "returns": {item.returns.asset_id: [(point.date, point.previous_valuation_date, point.value) for point in item.returns.points] for item in prepared.series},
+        "carried_forward_price_points": prepared.data_quality.carried_forward_price_points,
+        "data_quality_status": prepared.data_quality.data_quality_status,
+    }
+
+
+@pytest.mark.parametrize("beside", [pytest.param((), id="alone"), pytest.param((weekend_mover(),), id="beside-a-series-quoted-every-day")])
+def test_a_seven_day_source_prepares_exactly_like_its_weekday_quotes_alone(beside):
+    """The cure in one line: storing the weekends as repeats must change nothing at all."""
+    seven_days = prepare_repeats(seven_day_etf(), *beside)
+    five_days = prepare_repeats(five_day_series(), *beside)
+
+    assert calendar_projection(seven_days) == calendar_projection(five_days)
+
+
+def test_a_repeat_on_a_market_holiday_is_not_an_observation_but_a_move_is():
+    flat_holiday, moving_holiday = date(2025, 1, 15), date(2025, 1, 22)  # two Wednesdays
+    etf = seven_day_etf(flat_weekdays=frozenset({flat_holiday}))
+
+    prepared = prepare_repeats(etf, market_holidays=frozenset({flat_holiday, moving_holiday}))
+
+    assert prepared.joint_return_dates == [day for day in WEEKDAYS_IN_RANGE if day != flat_holiday]
+    assert moving_holiday in prepared.joint_return_dates
+    assert prepared.annualization_factor == pytest.approx(13 * 365 / 18)
+    # Thursday's return spans the holiday, from Tuesday's quote.
+    thursday = return_on(prepared, 1, date(2025, 1, 16))
+    assert thursday.previous_valuation_date == date(2025, 1, 14)
+    assert thursday.value == pytest.approx(float(moving_close(date(2025, 1, 16)) / moving_close(date(2025, 1, 14)) - 1))
+
+
+def test_a_series_that_moves_on_weekends_keeps_every_weekend_observation():
+    prepared = prepare_repeats(weekend_mover(asset_id=1))
+
+    assert prepared.joint_return_dates == DAYS_IN_RANGE
+    assert prepared.n_observations == 20
+    assert prepared.annualization_factor == pytest.approx(365.0)
+
+
+def test_beside_a_weekend_quote_a_seven_day_source_is_carried_through_the_weekend():
+    prepared = prepare_repeats(seven_day_etf(asset_id=1), weekend_mover(asset_id=2))
+
+    # The crypto is quoted every day, so every day stays on the joint calendar...
+    assert prepared.joint_return_dates == DAYS_IN_RANGE
+    # ...and on a weekend the ETF is valued at Friday's quote, carried.
+    etf = {point.valuation_date: point for point in series_of(prepared, 1).valuations.points}
+    for day in DAYS_IN_RANGE:
+        friday = day - timedelta(days=day.weekday() - 4) if day.weekday() >= 5 else day
+        assert (etf[day].is_price_carried_forward, etf[day].effective_price_date) == (day != friday, friday), day
+    assert return_on(prepared, 1, date(2025, 1, 11)).value == 0.0
+    monday = return_on(prepared, 1, date(2025, 1, 13))
+    assert monday.value == pytest.approx(float(moving_close(date(2025, 1, 13)) / moving_close(date(2025, 1, 10)) - 1))
+    # A carried point is no fresh quote: 14 of the ETF's 20 points, and all 20 of the crypto's.
+    assert prepared.fresh_quote_coverage == pytest.approx(34 / 40)
+    # A carry of a day or two is ordinary: it degrades nothing.
+    assert prepared.data_quality.carried_forward_price_points == 0
+    assert prepared.data_quality.carried_forward_price_asset_ids == []
+    assert prepared.data_quality.data_quality_status == DataQualityStatus.OK
+    # Each asset lists its own genuine quotes in the requested range.
+    assert series_of(prepared, 1).quote_dates == WEEKDAYS_IN_RANGE
+    assert series_of(prepared, 2).quote_dates == DAYS_IN_RANGE
+
+
+def test_a_flat_weekday_is_still_a_quote():
+    flat_monday, flat_wednesday = date(2025, 1, 13), date(2025, 1, 15)
+    bond = five_day_series(flat_weekdays=frozenset({flat_monday, flat_wednesday}))
+
+    prepared = prepare_repeats(bond)
+
+    assert prepared.joint_return_dates == WEEKDAYS_IN_RANGE
+    assert return_on(prepared, 1, flat_monday).value == 0.0
+    assert return_on(prepared, 1, flat_wednesday).value == 0.0
+
+
+def test_quote_dates_are_each_assets_own_quotes_even_on_a_date_the_joint_calendar_drops():
+    """What the portfolio TWRR is sampled on: a day a held asset is quoted, joint calendar or not."""
+    gap = date(2025, 1, 15)
+
+    prepared = prepare_repeats(seven_day_etf(asset_id=1), weekend_mover(asset_id=2, missing=frozenset({gap})))
+
+    # Presence barrier: the crypto has no row on the 15th, so the joint calendar drops that date...
+    assert gap not in prepared.joint_return_dates
+    assert prepared.data_quality.incomplete_valuation_dates == [gap]
+    # ...yet the ETF was quoted on it, and says so.
+    assert series_of(prepared, 1).quote_dates == WEEKDAYS_IN_RANGE
+    assert series_of(prepared, 2).quote_dates == [day for day in DAYS_IN_RANGE if day != gap]
+
+
+def seven_day_usd_etf(asset_id: int = 1) -> FAPriceQueryResult:
+    """A USD listing stored every calendar day and served in EUR: its weekend rows repeat Friday's USD
+    close, while the rate that converts them moves every day, weekends included."""
+    prices: list[FAPricePoint] = []
+    previous: Decimal | None = None
+    for offset, day in enumerate(every_calendar_day(REPEAT_FIRST, REPEAT_LAST)):
+        native = previous if previous is not None and day.weekday() >= 5 else moving_close(day)
+        rate = Decimal("0.9") + Decimal(offset) / Decimal("1000")
+        prices.append(converted_point(day, native_close=str(native), target_close=str(native * rate)))
+        previous = native
+    return FAPriceQueryResult(asset_id=asset_id, prices=prices)
+
+
+def test_a_foreign_listing_repeating_its_native_close_is_a_carry_although_its_converted_close_moves():
+    """The rule reads the close as the market set it, in the listing's own currency.
+
+    A moving FX rate turns Friday's repeated USD close into a different EUR amount on Saturday and
+    Sunday; no market traded the listing on those days, so they are carries all the same.
+    """
+    etf = seven_day_usd_etf()
+    rows = {point.date: point for point in etf.prices}
+    friday, saturday, sunday = date(2025, 1, 10), date(2025, 1, 11), date(2025, 1, 12)
+    # Presence barrier: the USD close repeats, the EUR one does not.
+    assert rows[saturday].original_close == rows[sunday].original_close == rows[friday].original_close
+    assert len({rows[friday].close, rows[saturday].close, rows[sunday].close}) == 3
+
+    prepared = prepare_repeats(etf)
+
+    assert prepared.joint_return_dates == WEEKDAYS_IN_RANGE
+    assert series_of(prepared, 1).quote_dates == WEEKDAYS_IN_RANGE
+    # Monday's return is measured from Friday's quote.
+    assert return_on(prepared, 1, date(2025, 1, 13)).previous_valuation_date == friday
