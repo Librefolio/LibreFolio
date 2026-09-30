@@ -2362,3 +2362,168 @@ class TestA2FixtureGuards:
         assert [(tx.type, tx.date) for tx in output.transactions] == [(TransactionType.DEPOSIT, date(2024, 11, 5))]
         assert ([item.as_of for item in output.checkpoints], [item.as_of for item in output.verifications]) == ([date(2024, 12, 31)], [date(2025, 1, 17)])
         assert _info(stored.file_id).uploaded_at == datetime(2026, 9, 30, 11, 0, tzinfo=UTC)
+
+
+# =============================================================================
+# PHASE B — the test_sample_sets contract, and two fixes of the set framework
+# =============================================================================
+#
+# Written red-first with the Danske Bank plugin (plan §4 B0, last lines): the
+# ``test_sample_sets`` contract property, ``apply_history`` on a later import (what
+# precedes H0 is already in LibreFolio, so the kept checkpoints must not absorb it
+# again) and ``combine_set`` turning a plugin error into a 422 (``BRIMSetCombineFailed``).
+
+B = "B"
+
+
+def _set_symbol(name: str, phase: str) -> Any:
+    """A symbol of ``brim_report_sets`` that ``phase`` adds (``_sets`` names phase A2 in its message)."""
+    module = _sets_module()
+    found = None if module is None else getattr(module, name, None)
+    if found is None:
+        _missing(f"{SETS_MODULE}.{name} does not exist", phase)
+    return found
+
+
+def _cash_of(items: Sequence[Any]) -> Dict[str, Decimal]:
+    """``{currency: amount}`` of truth-cash entries, zero amounts left out (an empty sum may be written either way)."""
+    return {item.currency: item.amount for item in items if item.amount != 0}
+
+
+def _absorbed(rows: Sequence[Tuple[str, str]], *, opening: Optional[str] = None) -> Any:
+    """A ``BRIMAbsorbed`` of EUR rows ``(value date, amount)``, count and cash from the rows, ``opening_cash`` when given."""
+    absorbed_row, absorbed, truth_cash = _schema("BRIMAbsorbedRow", B), _schema("BRIMAbsorbed", B), _schema("BRIMTruthCash", B)
+    items = [absorbed_row(as_of=date.fromisoformat(day), currency="EUR", amount=Decimal(amount), label=f"Rivi {day}") for day, amount in rows]
+    total = sum((item.amount for item in items), Decimal(0))
+    return absorbed(
+        count=len(items),
+        cash=[truth_cash(currency="EUR", amount=total)] if items else [],
+        rows=items,
+        opening_cash=[] if opening is None else [truth_cash(currency="EUR", amount=Decimal(opening))],
+    )
+
+
+def _truth_checkpoint(as_of: str, kind: str, absorbed: Any) -> Any:
+    """A checkpoint stating 1000 EUR, with the given absorbed rows."""
+    checkpoint, truth_cash = _schema("BRIMCheckpoint", B), _schema("BRIMTruthCash", B)
+    return checkpoint(as_of=date.fromisoformat(as_of), kind=kind, cash=[truth_cash(currency="EUR", amount=Decimal("1000"))], absorbed=absorbed)
+
+
+class _FakeCombineParseErrorProvider(_FakeTwoRoleProvider):
+    """The fake whose ``combine`` refuses its members the way a plugin reports a file it cannot read."""
+
+    failure: type = BRIMParseError
+
+    def combine(self, members: Dict[str, List[Path]]) -> Any:
+        raise self.failure("fake combine failure: the cash export does not cover the custody period")
+
+
+class _FakeCombineValueErrorProvider(_FakeCombineParseErrorProvider):
+    """The same failure raised as a ``ValueError``."""
+
+    failure = ValueError
+
+
+class TestSampleSetsContract:
+    """B — ``BRIMProvider.test_sample_sets``: the sample sets a report-set plugin declares; ``[]`` by default, like ``test_file_patterns``."""
+
+    def test_defaults_to_no_set(self) -> None:
+        _require_contract("test_sample_sets", phase=B)
+
+        assert BRIMProviderRegistry.get_provider_instance("broker_generic_csv").test_sample_sets == []
+
+    def test_every_existing_plugin_keeps_the_default(self) -> None:
+        _require_contract("test_sample_sets", phase=B)
+
+        declaring = sorted(code for code in EXISTING_PLUGIN_CODES if BRIMProviderRegistry.get_provider_instance(code).test_sample_sets != [])
+
+        assert declaring == []
+
+
+class TestApplyHistoryLaterImport:
+    """B, fix 1 — ``apply_history`` when H0 comes from the database: what precedes H0 is already represented.
+
+    The kept checkpoints lose ``opening_cash`` and the absorbed rows dated before H0, and
+    their count and cash follow the rows kept. Otherwise the gap-fix explanation would
+    subtract the opening balance a second time. A first import is left unchanged.
+    """
+
+    @pytest.mark.asyncio
+    async def test_later_import_drops_what_precedes_h0(self, db_session: AsyncSession) -> None:
+        apply_history = _sets("apply_history")
+        await _seed_history(db_session, [(BROKER_ID, date(2025, 3, 3), "import,fake_bank")])
+        eve = _truth_checkpoint("2025-03-02", "opening", _absorbed([("2025-01-10", "500"), ("2025-03-02", "-3.5")], opening="400"))
+        later = _truth_checkpoint("2025-06-30", "gap", _absorbed([("2025-03-02", "-20"), ("2025-03-03", "-100"), ("2025-05-15", "250")]))
+
+        checkpoints, _verifications, h0 = await apply_history(db_session, broker_id=BROKER_ID, plugin=_FakeBankProvider(), output=BRIMParseOutput(checkpoints=[eve, later]))
+
+        assert h0 == date(2025, 3, 3)
+        kept = {item.as_of: item for item in checkpoints}
+        assert sorted(kept) == [date(2025, 3, 2), date(2025, 6, 30)]
+        first, second = kept[date(2025, 3, 2)], kept[date(2025, 6, 30)]
+        assert (first.kind, first.cash, second.kind, second.cash) == ("opening", eve.cash, "gap", later.cash)
+        assert (first.absorbed.count, first.absorbed.rows, _cash_of(first.absorbed.cash), first.absorbed.opening_cash) == (0, [], {}, [])
+        assert [(row.as_of, row.amount) for row in second.absorbed.rows] == [(date(2025, 3, 3), Decimal("-100")), (date(2025, 5, 15), Decimal("250"))]
+        assert (second.absorbed.count, _cash_of(second.absorbed.cash), second.absorbed.opening_cash) == (2, {"EUR": Decimal("150")}, [])
+
+    @pytest.mark.asyncio
+    async def test_reimport_of_the_same_set_keeps_the_opening_empty(self, db_session: AsyncSession) -> None:
+        """Scenario 4: the opening gap-fix is in the database, so H0 is the next day; the opening checkpoint stays, with nothing to explain again."""
+        apply_history = _sets("apply_history")
+        await _seed_history(db_session, [(BROKER_ID, date(2024, 12, 31), "import,fake_bank,gap_fix"), (BROKER_ID, date(2025, 1, 2), "import,fake_bank")])
+        opening = _truth_checkpoint("2024-12-31", "opening", _absorbed([("2024-06-03", "1000"), ("2024-12-31", "-3.5")], opening="3.5"))
+
+        checkpoints, _verifications, h0 = await apply_history(db_session, broker_id=BROKER_ID, plugin=_FakeBankProvider(), output=BRIMParseOutput(checkpoints=[opening]))
+
+        assert h0 == date(2025, 1, 1)
+        assert len(checkpoints) == 1
+        kept = checkpoints[0]
+        assert (kept.as_of, kept.kind, kept.cash) == (opening.as_of, "opening", opening.cash)
+        assert (kept.absorbed.count, kept.absorbed.rows, _cash_of(kept.absorbed.cash), kept.absorbed.opening_cash) == (0, [], {}, [])
+
+    @pytest.mark.asyncio
+    async def test_first_import_is_unchanged(self, db_session: AsyncSession) -> None:
+        """Guard (passes before and after the fix): no history in the database, so the checkpoints come back as the plugin made them."""
+        apply_history = _sets("apply_history")
+        opening = _truth_checkpoint("2024-12-31", "opening", _absorbed([("2024-06-03", "1000"), ("2024-12-31", "-3.5")], opening="3.5"))
+        gap = _truth_checkpoint("2025-06-30", "gap", _absorbed([("2025-03-10", "-100")]))
+
+        checkpoints, _verifications, h0 = await apply_history(db_session, broker_id=BROKER_ID, plugin=_FakeBankProvider(), output=BRIMParseOutput(checkpoints=[opening, gap]))
+
+        assert h0 == date(2025, 1, 1)
+        assert checkpoints == [opening, gap]
+
+
+class TestCombineSetPluginFailure:
+    """B, fix 2 — ``combine_set``: a ``BRIMParseError`` or ``ValueError`` of ``plugin.combine`` is ``BRIMSetCombineFailed``: 422, ``combine_failed``.
+
+    The message says what the plugin said; nothing is written; the members stay ``uploaded`` with their sidecars untouched.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("provider", [_FakeCombineParseErrorProvider, _FakeCombineValueErrorProvider], ids=["BRIMParseError", "ValueError"])
+    async def test_a_plugin_error_is_a_422(self, provider: type, set_storage: Path, fake_plugin: BRIMProvider, db_session: AsyncSession) -> None:
+        combine_set, failed, set_error = _sets("combine_set"), _set_symbol("BRIMSetCombineFailed", B), _sets("BRIMSetError")
+        batch = str(uuid.uuid4())
+        members = [_member(CUSTODY_JAN, CUSTODY_NAME, batch_id=batch), _member(CASH_JAN, CASH_NAME, batch_id=batch)]
+        sidecars = {member.file_id: _sidecar(set_storage, member.file_id) for member in members}
+        # Same code, a plugin whose combine fails. `fake_plugin` restores the whole registry afterwards.
+        BRIMProviderRegistry._providers[FAKE_CODE] = provider
+
+        with pytest.raises(failed) as caught:
+            await combine_set(db_session, broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch, user_id=USER_ID)
+
+        assert issubclass(failed, set_error)
+        assert (caught.value.status_code, caught.value.code) == (422, "combine_failed")
+        assert "the cash export does not cover the custody period" in caught.value.message
+        assert _combined_files() == []
+        assert {member.file_id: _sidecar(set_storage, member.file_id) for member in members} == sidecars
+        assert [_info(member.file_id).status for member in members] == [BRIMFileStatus.UPLOADED, BRIMFileStatus.UPLOADED]
+
+    def test_fixture_guard_the_failing_fakes(self, tmp_path: Path) -> None:
+        """Fixture guard: each variant fails with its own exception type, and only in ``combine``."""
+        for provider, failure in ((_FakeCombineParseErrorProvider, BRIMParseError), (_FakeCombineValueErrorProvider, ValueError)):
+            plugin = provider()
+            assert plugin.detect_role(_write(tmp_path, "custody.csv", CUSTODY_CSV)) == "custody"
+            with pytest.raises(failure):
+                plugin.combine({})
