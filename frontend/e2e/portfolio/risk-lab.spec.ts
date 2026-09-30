@@ -684,16 +684,18 @@ function correlationOutput(request: RiskRequest, options: RiskStubOptions = {}) 
 function assetSetVarOutput(request: RiskRequest, analytic: RiskAnalyticRequest, options: RiskStubOptions) {
     const {covered} = preparedAssetIds(request, options);
     const horizonDays = Number(analytic.parameters?.horizon_days ?? 1);
+    const horizonObservations = Math.max(1, Math.round((horizonDays * 252) / 365));
     const horizonFactor = horizonDays > 1 ? INVENTED.monthFactor : 1;
     return {
         kind: 'var_cvar_set',
         confidence_level: Number(analytic.parameters?.confidence_level ?? 0.95),
         horizon_days: horizonDays,
+        horizon_observations: horizonObservations,
         // Compounding to a multi-day horizon consumes observations, so the count
-        // the tail was estimated from is `horizon_days - 1` fewer than the
+        // the tail was estimated from is `horizon_observations - 1` fewer than the
         // window's — the backend says so in `RiskAssetSetVarCvarOutput`'s
         // docstring, and a flat copy of `n_observations` here would contradict it.
-        observations: Math.max(1, observationCount(options) - (horizonDays - 1)),
+        observations: Math.max(1, observationCount(options) - (horizonObservations - 1)),
         items: covered.map((assetId, index) => {
             const row = variant(index);
             const valueAtRisk = INVENTED.badDayVar(row) * horizonFactor;
@@ -3296,7 +3298,7 @@ test.describe('Asset Global risk laboratory', () => {
         expect(
             varInstances.map((analytic) => Number(analytic.parameters?.horizon_days)).sort((left, right) => left - right),
             'the bad month is a second measurement over a compounded horizon, never the bad day scaled',
-        ).toEqual([1, 21]);
+        ).toEqual([1, 30]);
 
         // ③ THE TRANSPOSITION. One row per *selected* asset — asserted against the
         // chips the page is actually showing, because the opening selection is
