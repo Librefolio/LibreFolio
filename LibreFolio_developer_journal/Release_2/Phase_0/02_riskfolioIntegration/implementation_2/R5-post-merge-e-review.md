@@ -2205,3 +2205,144 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 > di `historical-replay.en.md:59` («refuses to run and asks for a decision»), falsa da prima, va al blocco replay; la
 > guida di F (`user/assets/correlation.en.md:99` e la regola 2 di `:153`) va riallineata da F; il bootstrap a blocchi
 > non ha una pagina di teoria.
+
+### F in Risk, la guida di F e gli indicatori tecnici sui giorni di quotazione · 🔵 30/09/2026 (pomeriggio)
+
+> **Commit** (developer), verificati dal coordinator: il checkpoint del calendario `1996b84e4` … `95051fa8a`; la
+> fusione F → Risk `3c46c8e60` (genitori `95051fa8a` + `1b62abd2e`, albero `25235c91`), aperta con `--no-commit`,
+> adattati da me i due fixture nuovi di F (`SORT_DAILY_VAR`/`SORT_MONTHLY_VAR`: `horizon_observations`, il mese a 30
+> giorni, con l'OK di F) e validata prima del commit (`risk-lab` 26, `asset-list` 28, unit e `front check` al
+> pavimento); F in fast-forward. Poi la guida di F dopo il calendario (`31cff1e5e`, `3eff35036`).
+>
+> **Il passo dei segnali era più grande del previsto.** La query dei prezzi (`_build_backward_filled_series`) dà agli
+> indicatori tecnici un punto per ogni giorno di calendario, riempiendo weekend e festivi con l'ultima barra, e i
+> plugin calcolano su tutti: su **ogni** asset, non solo su quelli di justETF. La regola dei riporti da sola avrebbe
+> cambiato solo i conteggi della copertura, non un valore. Misurato sugli asset del developer (ultimo anno, cifre
+> solo in `/tmp`): RSI 14 si sposta in media di 2,5–3 punti (fino a 7–10) e resta fuori da 30–70 molto più spesso
+> (54 giorni contro 32); SMA 200 copre 199 giorni di calendario (circa 140 sedute) e il suo livello cambia fino al 9 %;
+> la larghezza delle bande di Bollinger cambia in media del 18 %; l'istogramma del MACD cambia segno in un giorno su
+> sette circa; l'ATR (una sola fonte con OHLC) del 6 % in media; l'EMA 20 poco (sotto l'1 % in media).
+>
+> **Decisione del developer**: «Sui giorni di quotazione, come la definizione standard: SMA 200 = 200 sedute». Il
+> coordinator me la assegna, sul mio ramo, con le superfici concesse (`price_query.py`: marcatura dei riporti
+> nell'ingresso dei segnali, l'attesa della tabella dei festivi, i festivi ai segnali di rischio, il moltiplicatore
+> del riscaldamento; `api/v1/fx.py`: solo il moltiplicatore; `technical_shared.py`: il moltiplicatore FX e le versioni
+> dei componenti) e un vincolo (`backend/app/services/fx.py` resta fuori: c'è la PR #28 di un contributore).
+>
+> **Il piano**, approvato dal developer («Sì, procedi con il piano, test prima»):
+> 1. un giorno di quotazione è un punto senza `backward_fill_info`; i riporti salvati diventano riempiti alla fonte;
+> 2. la copertura resta di calendario (il frontend non cambia: i grafici allineano per data e le linee scavalcano il
+>    weekend);
+> 3. il servizio dei segnali passa al plugin solo i giorni di quotazione dei punti scelti, per i plugin con
+>    `computes_on_quote_days` (vero per i 17 indicatori tecnici; falso per `calendar_rolling_return`, che ha finestre
+>    di calendario per definizione, e per i 5 segnali di rischio, già sulle serie preparate);
+> 4. il riscaldamento carica punti × 2 giorni di calendario;
+> 5. versioni: i 17 plugin a 2.0.0, i 5 segnali di rischio minori, i componenti tecnici dell'AI Export da 1 a 2;
+> 6. il manuale (EN): i periodi in sedute.
+> Nessun test di altri rami fissa valori assoluti degli indicatori; nel mio blocco si riallineano alcuni test
+> dell'AI Export e del servizio dei segnali.
+>
+> | passo | stato |
+> |---|---|
+> | test rossi (test-author) | ✅ 44 test, 32 rossi per il motivo giusto, provati contro una simulazione del contratto |
+> | implementazione, versioni | ✅ |
+> | mutanti | ✅ 14 presi; i 2 sopravvissuti (Q-3, Q-9a) presi da 2 test nuovi, più un test diretto per Q-1 |
+> | prove dell'AI Export, numeri prima/dopo col codice vero | ✅ |
+> | manuale (docs-writer) | ✅ 21 pagine EN (gli indicatori, `indicators/index`, `ai_export_sampling.md`); ha trovato le due regressioni UI qui sotto |
+> | UI: i periodi in sedute (unità e suggerimenti) | ✅ 30/09 |
+> | UI: le bande di Bollinger e Donchian sul weekend | ✅ 30/09 — riempite fra due punti; concessione rivista dal coordinator |
+> | checkpoint | 🔵 congelato il 30/09, in verifica dal coordinator |
+>
+> **Mie decisioni sulle ambiguità del test-author**: un giorno di quotazione è un **prezzo** genuino (`days_back == 0`),
+> anche se il cambio è riportato, come per il motore e per l'AI Export: altrimenti le ultime sedute sparirebbero
+> quando la sincronizzazione dei cambi è in ritardo; `calendar_rolling_return` passa a 1.4.0 (valori e date uguali,
+> ma sui riporti salvati ora dichiara il riporto); un intervallo visibile di soli weekend è non disponibile.
+>
+> **Note implementazione**
+> - `signal_plugins/base.py`: `computes_on_quote_days` (vero di default; falso su `calendar_rolling_return` e sui 5
+>   segnali di rischio, già sul calendario delle serie preparate). I 17 indicatori a 2.0.0; i 5 segnali di rischio
+>   minori; `calendar_rolling_return` 1.4.0.
+> - `signal_series_preparation.py`: `is_quote_day`, `quote_day_points`, `SESSION_WARMUP_DAY_MULTIPLIER = 2`.
+> - `signal_service.py`: il piano separa i punti di riscaldamento in sedute, calendario e serie preparate
+>   (`max_history_days_before_visible`: sedute × 2 giorni di calendario); dopo la selezione il plugin riceve solo le
+>   sedute; la copertura resta di calendario.
+> - `price_query.py`: la stessa `mark_market_closed_carries` del motore (resa pubblica in `series_preparation.py`)
+>   sull'ingresso dei segnali; la tabella dei festivi attesa una volta per chiamata, solo se ci sono segnali, e passata
+>   anche ai segnali di rischio; il riscaldamento in giorni di calendario. `api/v1/fx.py` e
+>   `technical_shared._fx_warmup_days`: lo stesso riscaldamento.
+> - Test di altri riallineati senza indebolirli: le due fixture FX con un solo cambio salvato (ora più giorni pubblicati),
+>   il caso del seme per intervallo con abbastanza sedute, le docstring dello scenario dell'AI Export (le copie
+>   dell'ancora sono riporti, non sedute) con i controlli di presenza che hanno mostrato che la metà FX confrontava
+>   due insiemi vuoti.
+>
+> **Il codice vero sui dati del developer** (copia di prod, cifre solo in `/tmp`): RSI 14 e SMA 200 coincidono al
+> centesimo col prototipo su tutti gli 11 asset quotati, nessun punto di weekend, circa 250 punti l'anno, versioni
+> 2.0.0; il BTP è «parziale» per SMA 200, a ragione (storia breve).
+>
+> **Le prove dell'AI Export** (skill `ai-export-probe-tuning`, prove mirate, alfy, 1Y, Standard; la sorgente è la
+> snapshot in sola lettura, l'uscita in `/tmp`, la porta 6162; il «prima» da un'esportazione di `3c46c8e60` in
+> `/tmp`): asset `asset.market_history` prompt +0,4 %, stessi dataset e componenti, stesse righe di storia, eventi
+> esportati 116 → 106; portafoglio `portfolio.asset_history` +1,8 %, 5 indicatori da OK a parziale (le storie brevi,
+> ora che il riscaldamento conta sedute), eventi rilevati −17 % (meno incroci prodotti dai weekend piatti). Sorgente
+> invariata, controllo dei segreti superato, prompt uguali fra UI e prova. FX non provabile sui dati del developer
+> (nessuna esposizione in valuta): coperto dai test.
+>
+> **⚠️ Fuori pista — le versioni dei componenti dell'AI Export**: nel piano le avevo portate da 1 a 2. La prova vera ha
+> fallito i controlli del prompt pubblico: il renderer del frontend (`snapshotDataRenderer.ts:1438`) scrive in forma
+> compatta solo i componenti alla versione 1, e per gli altri ricade sullo YAML grezzo, con gli identificativi. Né la
+> logica dei componenti né la forma dei loro dati cambiano, cambiano solo i valori degli indicatori a monte, che hanno
+> le loro versioni (2.0.0): versioni dei componenti riportate a 1, i pin tolti. Una regola scritta sul quando cambiare
+> la versione di un componente non c'è; questo è il caso che la motiva.
+
+#### Le due regressioni UI di (a), trovate dal docs-writer · ✅ 30/09/2026 (sera)
+
+> Rilette le pagine, il docs-writer ha visto ciò che il backend non poteva mostrare: i campi del periodo dicono
+> ancora «giorni», e il riempimento delle bande si spezza a ogni weekend (i punti ora sono solo sulle sedute, l'asse
+> delle date resta di calendario). Il coordinator concede le due superfici: `lineChartHelpers.ts` (di I) e le chiavi
+> i18n, più una riga nella lista Vitest `core-unit`.
+>
+> **Note implementazione — i periodi in sedute** (test rossi del test-author prima: 17 in
+> `test_signal_plugin_matrix.py`, un pin per plugin di unità e suggerimento, più la presenza delle chiavi nei quattro
+> cataloghi):
+> - i 16 indicatori con un periodo dichiarano `"x-suffix": "sessions"`; i 12 sul suggerimento comune passano a
+>   `chartSettings.tooltips.sessionPeriod`; EMA, MACD, PPO e StochRSI tengono le loro chiavi. `calendar_rolling_return`,
+>   i 4 segnali di rischio a finestra e i 3 plugin di rischio con orizzonte restano in «giorni», che per loro sono veri;
+> - i18n con `dev.py i18n`: `signals.units.sessions` e `chartSettings.tooltips.sessionPeriod` nuove, riscritte
+>   `emaPeriod`, `fastPeriod`, `slowPeriod` e `signalPeriod`; `chartSettings.tooltips.period` resta com'è (il benchmark
+>   Sine del frontend conta giorni veri). In francese lo spazio indivisibile prima dei due punti, che c'era, resta.
+>
+> **⚠️ Fuori pista — `connectNulls` non ripara la banda, la rompe.** Il rimedio concesso era mettere `connectNulls`
+> anche sulle due serie impilate della banda (la base invisibile e il delta). Prima di chiudere l'ho disegnato davvero,
+> con ECharts 6.0.0 in un browser, le stesse tre serie di `buildBandSeries`: dove la base di una serie impilata è
+> nulla, ECharts prende come fondo l'origine dell'asse (`getStackedOnPoint`), e `connectNulls` salta solo i punti di
+> sopra: il bordo inferiore precipita all'asse a ogni weekend. Nessuna opzione di ECharts lo evita. Tolto; il file è
+> tornato com'era. La proposta al coordinator: riempire, solo nella base e nel delta, i giorni strettamente fra due
+> punti con la retta fra i vicini (ciò che `connectNulls` disegna per una linea); prima del primo punto e dopo
+> l'ultimo resta il vuoto; la linea di mezzo non cambia, e i tooltip saltano già le due serie di servizio, quindi un
+> valore riempito non si vede mai. Cambia un test di I (una data mancante in mezzo non è più nulla nella base).
+> Disegno di prova: tre pannelli, prima, `connectNulls`, riempimento (solo in `/tmp` e fra i file della sessione).
+>
+> **Note implementazione — le bande** (concessione rivista dal coordinator: l'aiuto in `lineChartHelpers.ts` e un solo
+> test di I, riscritto al contratto nuovo; test rossi del test-author prima, 6):
+> - `bridgeBetweenPoints`, locale: le posizioni dell'asse strettamente fra due punti prendono la retta fra i vicini;
+>   prima del primo e dopo l'ultimo restano come sono. Solo sulla base invisibile e sul delta impilato; nessun
+>   `connectNulls` su di loro; la linea di mezzo non cambia;
+> - il test di I (`'maps a date absent from the signal to null across all three series'`) ora dice ciò che prova: la
+>   data assente in mezzo è riempita nella banda, per posizione sull'asse, e resta vuota nella linea di mezzo;
+> - il file nuovo è `lineChartHelpers.sessionGaps.test.ts` (un `lineChartHelpers.test.ts` c'era già, sotto
+>   `__tests__/`), in `core-unit`: il weekend, un lunedì festivo, i vuoti ai due capi, il delta con la sua pendenza,
+>   nessun nullo dentro il riempimento;
+> - 7 mutanti (niente riempimento della base o del delta, riempimento in testa o in coda, riempimento della linea di
+>   mezzo, `connectNulls` sulla base, pendenza sfasata): presi tutti;
+> - il disegno col `buildBandSeries` vero, HEAD contro l'albero di lavoro (esbuild e un browser): HEAD si spezza a ogni
+>   weekend e sul festivo, l'albero di lavoro è continuo, i capi vuoti.
+>
+> **Verifica finale del blocco** (6152, un comando alla volta): matrice dei plugin 92; registro 65, contratti 10,
+> plugin 46 + 62 + 75 + 40, servizio 64, annotazioni 25, runtime 6; API cataloghi 4, anteprima 5, validazione 2;
+> `core-unit` 2854; `component-unit` 2194; `front check` al pavimento di 3 (4 file non miei); i18n 3493 chiavi, nessuna
+> mancante; orfani ✅; link ✅; ruff, black, `diff --check` puliti; nessun segreto. E2E `fx-detail` 17/17,
+> `asset-detail` 27/28 (il `:486` noto, la fixture scaduta il 17/09, riparata nel ramo di I).
+>
+> **⚠️ Fuori pista — un rosso che c'era già**: `asset-unit` dà 12 rossi in `chartCoreHelpers.test.ts`, i test che
+> rileggono il sorgente di `GrowthChart.svelte`. Gli stessi 12 su HEAD e su `dev_release2` (esportati in `/tmp`): il
+> grafico è cambiato con `e7773a143` e i test no. Non è (a); il ramo di I li ritira (`2e4c8589f`).
