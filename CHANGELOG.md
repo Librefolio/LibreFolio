@@ -44,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Page-size menus remain reachable in short, scrollable modal tables instead of clipping their first options.
 - The Transactions page clears its selection after a saved bulk edit, clone, deletion, addition or import, and after linking or unlinking a pair; cancelling keeps it.
 - Uploading broker reports from the Files page or from a broker's import history no longer fails with a validation error. The failure dated back to v0.9.0; the import wizard was not affected.
+- Every CSV importer now reads broker exports saved as Windows-1252 or Latin-1 (for example re-saved with Excel on Windows): accented characters and the euro sign no longer make the import fail, and semicolon-separated files are no longer split on commas.
 
 #### 🧩 Asset providers and feedback
 
