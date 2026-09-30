@@ -9,14 +9,16 @@ sono sbloccate. `needs_engine` va per primo, in un commit a sé (coordinator, 15
 contratto di `/portfolio/report`»). Pausa dal 24/09 alle 18:35 al 25/09 alle 09:09, con un riavvio in mezzo.
 C4 committato il 2026-09-28 alle 11:41 (`00bb1ac75`…`472f51498`), poi il merge di `dev_release2` (`9016bb0d1`).
 C5 committato il 2026-09-29 alle 10:02 (`026bc20fb`…`5e638a2ed`), poi il merge di `dev_release2` con K
-(`b2112ba61`, 12:37). C6 pronto il 2026-09-29 alle 15:27: 6 commit (emoji, tipi E2E, due margini, la guardia dei
-grafici dei lotti, journal).
+(`b2112ba61`, 12:37). C6 committato il 2026-09-29 alle 22:26: 6 commit, `6d8b951bc`…`602ea299e` (emoji, tipi E2E,
+due margini, la guardia dei grafici dei lotti, journal), poi il merge di `dev_release2` (`921f1fc05`, 22:31).
+D23 con D23b ✅ il 2026-09-30 alle 00:03; C7 pronto alle 00:07 (2 commit), in attesa del commit del developer.
 **Workstream:** I (grafici performance) · ramo `e-alfy-performance-charts-plan` · coordinatore
 `c8328a01-f208-4ade-a352-0486d1f14de2`.
 **Baseline:** `dev_release2` = `f1047f766` (fast-forward), albero pulito, rimisurata il 2026-09-23 prima di ogni
 versione del piano e il 2026-09-24 dopo l'approvazione. Poi, sul ramo: C0 di J (`2a5927c48`, fast-forward, 11:16),
 C1 (`804bc9903`, 14:18), C2 (`6a88561fd`, 14:51) e C3 (`4d885f1e8`, 15:39); C4 (`472f51498`, 28/09 11:41), il
-merge `9016bb0d1` (11:45); C5 (`5e638a2ed`, 29/09 10:02), il merge con K `b2112ba61` (12:37).
+merge `9016bb0d1` (11:45); C5 (`5e638a2ed`, 29/09 10:02), il merge con K `b2112ba61` (12:37); C6 (`602ea299e`,
+22:26), il merge `921f1fc05` (22:31).
 **Lane:** copia di prod `6167` + `/tmp/librefolio-r2-i-charts-prodcopy` (server, verifica visiva, review) · suite
 `6157` + `/tmp/librefolio-r2-i-charts` (solo `dev.py test …`). **Mai** `dev.py test` sulla copia.
 Preambolo: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py …`.
@@ -53,12 +55,13 @@ Indicatore di lettura rapida: va riletto **a ogni consegna**, non a ogni sospett
 | C3 | Checkpoint: docs di S11 in parte + registri di C2, del triage e di S11 | S11 in parte | ✅ autorizzato dal coordinator 2026-09-24 15:24 · ✅ **committato 15:39**: `671d4ab49` docs, `4d885f1e8` registri (registro «C3 committato») |
 | C4 | Checkpoint: S10 backend e unit, registri | S10 passi 1–10 | ✅ **committato 2026-09-28 11:41**: 8 commit, `00bb1ac75`…`472f51498`; merge `9016bb0d1` (registro «Checkpoint C4 — committato») |
 | C5 | Checkpoint: S10 E2E (brief 03, E7) e registri | C4 | ✅ **committato 2026-09-29 10:02**: `026bc20fb`…`5e638a2ed`; merge con K `b2112ba61` (registro «Checkpoint C5 — committato») |
-| C6 | Checkpoint: emoji, tipi E2E, margini della Crescita e dei lotti, guardia `axisBuilder`, registri | C5 + merge con K | 🔄 **pronto 2026-09-29 15:27** (registro «Checkpoint C6 — pronto»). Dopo: D23 con D23b |
+| C6 | Checkpoint: emoji, tipi E2E, margini della Crescita e dei lotti, guardia `axisBuilder`, registri | C5 + merge con K | ✅ pronto 2026-09-29 15:27 · ✅ **committato 22:26**: 6 commit, `6d8b951bc`…`602ea299e`; merge `921f1fc05`, gate rapido verde (registri «Checkpoint C6 — committato» e «Gate rapido sulla revisione combinata `921f1fc05`»). Dopo: D23 con D23b |
+| C7 | Checkpoint: D23 + D23b (il segno del locale nei grafici, il colore dello zero), registri | C6 + merge `921f1fc05` | ✅ pronto 2026-09-30 00:07: 2 commit (registro «Checkpoint C7 — pronto») |
 | S7 | Asse dei bucket (R8 dopo D4, R10) | S6 | 🔓 sbloccata 2026-09-25: D4 ✅, D16 = (ii)+(i) ✅, D17 = (a) ✅ (§7). Parte dopo S10 |
 | S7b | Tacche Y doppie (reperto N1) | S7 | 🔓 D18 = sì ✅ 2026-09-25: assi del denaro di Crescita e Performance; `%` escluso |
 | S8 | R11 valore di acquisto | S7 | ⏳ legge soltanto il motore (risposta al coordinator, 12:25): prima di iniziare rimisuro per simbolo |
 | S9 | R9 didascalia | S1 | ✅ 2026-09-24 (scorrimento a 375 px: verifica live in S6) |
-| S10 | Debiti e test residui | S1 | 🔄 **OK del developer sulla test list, 2026-09-25**, con E8 ed E9 in più (D8 ✅ 2026-09-24). Ordine: `needs_engine` per primo, in un commit a sé (coordinator, 15:24 e 15:37), poi il contratto di `/portfolio/report` (registro «Triage del contratto di `/portfolio/report`») e il resto di §4. **Passo 1 ✅ 2026-09-25 10:38**: `needs_engine` corretto (6 rossi → verdi), contratto a 13 chiavi, `api portfolio` 55/55, `services roi-fifo-utils` 507/507 (registro «S10 passo 1»). **Passo 2 ✅ 11:10**: D20, il test dei Proventi pulisce i suoi dati, misurato con un controllo positivo; `api portfolio` 55/55 (registro «S10 passo 2»). **Passo 3 ✅ 11:37**: `chartCoreHelpers.test.ts` 159 → 145 (D19: −14), i 7 specchi ri-pinnati ognuno col suo perché, C4 convertito sulla copia fedele; 145/145, 0 falliti (registro «S10 passo 3»). Reperti del passo → D21, ✅ deciso dal developer (§7). **Passo 4 ✅ 11:59**: `AllocationPanel.test.ts` (3 casi) e `allocationTypeEmoji.test.ts` (8 casi), nuovi, 11/11 (registro «S10 passo 4»). **Passo 5 ✅ 12:15**: `GrowthChart.test.ts` 6 → 17 casi (S2a, S5, S9) e la `why` di D13, 23/23 (registro «S10 passo 5»). **Passo 6 ✅ 12:15**: i 3 file nuovi registrati nel runner, nome visibile di `growth-chart-memo`; `check-orphans` pulito (registro «S10 passo 6»). **Passo 7 ✅ 12:27**: la pulizia di `…positions_contribution_is_date_aware`, assegnata sotto D20, misurata con un controllo positivo: nessuna perdita; `api portfolio` 55/55 (registro «S10 passo 7»). **Passo 8 ✅ 12:30**: `PerformanceChart.test.ts`, nuovo, 6/6 (registro «S10 passo 8»). **Passo 9 ✅ 12:30**: D21 e D22 su `chartCoreHelpers.test.ts`, 145 → 142 → 144, 144/144, 0 falliti (registro «S10 passo 9»). **Passo 10 ✅ 12:33**: `front check` al floor, 3 errori e 41 avvisi, nessuno nei miei file (registro «S10 passo 10»). **C4 ✅ 2026-09-28 11:41** (8 commit, `00bb1ac75`→`472f51498`), poi il merge di `dev_release2` (`9016bb0d1`) e i gate sulla revisione combinata, tutti verdi (registro «Validazione sulla revisione combinata»). **Brief 03 ✅ 13:00**: dashboard 15/5 → **18/18**, broker detail 28/1 → **28/28**, in seriale e con `--workers 4` (registro «S10 — brief 03»). **E7 ✅ 13:52**: asset detail 28/1 → **28/28**, in seriale e con `--workers 4`; la coda risvegliata è verde (registro «S10 — E7 completato»). **C5 ✅ committato 2026-09-29 10:02** (registro «Checkpoint C5 — committato»). Resta D23 con D23b, dopo C6 |
+| S10 | Debiti e test residui | S1 | 🔄 **OK del developer sulla test list, 2026-09-25**, con E8 ed E9 in più (D8 ✅ 2026-09-24). Ordine: `needs_engine` per primo, in un commit a sé (coordinator, 15:24 e 15:37), poi il contratto di `/portfolio/report` (registro «Triage del contratto di `/portfolio/report`») e il resto di §4. **Passo 1 ✅ 2026-09-25 10:38**: `needs_engine` corretto (6 rossi → verdi), contratto a 13 chiavi, `api portfolio` 55/55, `services roi-fifo-utils` 507/507 (registro «S10 passo 1»). **Passo 2 ✅ 11:10**: D20, il test dei Proventi pulisce i suoi dati, misurato con un controllo positivo; `api portfolio` 55/55 (registro «S10 passo 2»). **Passo 3 ✅ 11:37**: `chartCoreHelpers.test.ts` 159 → 145 (D19: −14), i 7 specchi ri-pinnati ognuno col suo perché, C4 convertito sulla copia fedele; 145/145, 0 falliti (registro «S10 passo 3»). Reperti del passo → D21, ✅ deciso dal developer (§7). **Passo 4 ✅ 11:59**: `AllocationPanel.test.ts` (3 casi) e `allocationTypeEmoji.test.ts` (8 casi), nuovi, 11/11 (registro «S10 passo 4»). **Passo 5 ✅ 12:15**: `GrowthChart.test.ts` 6 → 17 casi (S2a, S5, S9) e la `why` di D13, 23/23 (registro «S10 passo 5»). **Passo 6 ✅ 12:15**: i 3 file nuovi registrati nel runner, nome visibile di `growth-chart-memo`; `check-orphans` pulito (registro «S10 passo 6»). **Passo 7 ✅ 12:27**: la pulizia di `…positions_contribution_is_date_aware`, assegnata sotto D20, misurata con un controllo positivo: nessuna perdita; `api portfolio` 55/55 (registro «S10 passo 7»). **Passo 8 ✅ 12:30**: `PerformanceChart.test.ts`, nuovo, 6/6 (registro «S10 passo 8»). **Passo 9 ✅ 12:30**: D21 e D22 su `chartCoreHelpers.test.ts`, 145 → 142 → 144, 144/144, 0 falliti (registro «S10 passo 9»). **Passo 10 ✅ 12:33**: `front check` al floor, 3 errori e 41 avvisi, nessuno nei miei file (registro «S10 passo 10»). **C4 ✅ 2026-09-28 11:41** (8 commit, `00bb1ac75`→`472f51498`), poi il merge di `dev_release2` (`9016bb0d1`) e i gate sulla revisione combinata, tutti verdi (registro «Validazione sulla revisione combinata»). **Brief 03 ✅ 13:00**: dashboard 15/5 → **18/18**, broker detail 28/1 → **28/28**, in seriale e con `--workers 4` (registro «S10 — brief 03»). **E7 ✅ 13:52**: asset detail 28/1 → **28/28**, in seriale e con `--workers 4`; la coda risvegliata è verde (registro «S10 — E7 completato»). **C5 ✅ committato 2026-09-29 10:02** (registro «Checkpoint C5 — committato»). **C6 ✅ committato 22:26**, merge `921f1fc05` e gate rapido verde (registro «Checkpoint C6 — committato»). **D23 con D23b ✅ 2026-09-30 00:03**: il segno del locale in `fmtCurrency` e `shortMoney`, una sola forma per le righe con segno, il colore dello zero; test ri-pinnati e nuovi, corsia verde (registro «D23 + D23b»). **C7 pronto 2026-09-30 00:07** (registro «Checkpoint C7 — pronto») |
 | S11 | Docs (docs-writer) | S2b, S3, S4b, S8, S9 | 🔄 in parte, ✅ 2026-09-24 (autorizzata dal coordinator alle 14:45; registro «S11 in parte»): `charts.en.md` (memoria della vista, privacy di Crescita, didascalia delle candele, candele senza broker, memoria di Allocazione) e `positions.en.md` (privacy di Performance). Accettato dal coordinator (15:24) ed entrato in C3 (`671d4ab49`). Il resto dopo S7/S8, più due voci aggiunte (coordinator, 16:07): `index.en.md`, che conta tre schede invece di quattro (reperto di J), e la deriva dei nomi, che c'è anche nella mia frase di C3 (registro «S11-finale — voci aggiunte») |
 | S12 | Handoff | S10, S11, S2c | ⏳ |
 
@@ -3284,3 +3287,277 @@ comando la porta 6157 è libera.
 > - **Dopo C6:** D23 con D23b (un'opzione «con segno» in `fmtCurrency`, commit a sé, ri-pin via test-author); poi
 >   S7 (con la parte di D21 nel prodotto, `toPositionalValue`) e S7b, S8, la verifica sulla copia, S11-finale
 >   (docs-writer), S12.
+
+### Checkpoint C6 — committato ✅ 2026-09-29 22:26
+
+> **Note implementazione:**
+> - **Il bundle**, costruito fra le 15:35 e le 15:50 senza scrivere nel repository, sta in
+>   `/tmp/libreFolio_i_c6_commits/`, con la copia nella cartella di sessione (`files/c6_commit_bundle/`). Le guardie
+>   sono quelle di C5, con HEAD `b2112ba61`, gli 11 percorsi e i 6 alberi di C6. Un file si divide fra due commit,
+>   `LotComparisonChart.svelte` (commit 4 e 5), e `check_split` lo prova.
+>
+> | verifica | come | esito |
+> |---|---|---|
+> | patch semplici | `git apply` in sequenza su copie di BASE, poi `cmp` | 6/6 identici, nessun file in più |
+> | prove per confine | nella copia di prova completa (5220 file tracciati uguali a BASE, `node_modules` clonato): svelte-check, l'intera suite vitest, `tsc -p tsconfig.e2e.json`, Prettier sui 10 file, `playwright --list` | svelte-check al floor a ogni confine (3 errori, 41 avvisi, 4 file). vitest: b0 solo i 2 rossi delle emoji (6495/6497), b1–b4 verdi, b5 6504/6504. tsc: 4 errori a b0 e b1, 2 da b2 (`:1395` e `:1397` spariti). `--list`: asset-detail 28; brokers-detail 28, 31 a b5. Per il frontend b6 = b5 (10 percorsi) |
+> | digest del contenuto | come in C1–C5 | `3e053bc8…9ad6`, identico con 4 git: 2.53 del bundle dell'app, Apple 2.54, Homebrew 2.55, e ambiente vuoto in it_IT con bash 5 |
+> | dry-run sul repository reale | matrice di 9 configurazioni (bash 3.2 e 5; git Apple, Homebrew e del bundle; `env -i`; it_IT ed en_US) | rc 0 in 9 su 9, «would commit 6/6». Fuori da `refs/copilot/` refs invariati; nessuno dei 35 oggetti propri del bundle nel repository |
+> | commit veri, in 3 cloni usa-e-getta | git Homebrew 2.55 con bash 3.2, git 2.53 con bash 5, git Apple in `env -i` | 9/9 PASS in ognuno; il secondo lancio è rifiutato, i commit restano 6 |
+> | messaggi | `check_messages.py` | `MESSAGES OK`: subject ASCII fra 46 e 48 caratteri, righe ≤ 68. La scansione privacy segnala solo 2 righe del journal, già note: la riga di D23b nella tabella delle decisioni (importi d'esempio) e una riga della verifica di C5 |
+> | revisione combinata, prima del merge | `merge-tree` con `dev_release2` (`5068b706c`) in uno store di oggetti usa-e-getta | 0 conflitti; albero `c6099a997801`. Fuso in automatico: `_frontend_utility.py` |
+>
+> - sha256 dello script `5ea70fc3…139d`.
+> - **Il developer ha committato alle 22:26** (segnale del coordinator alle 22:28). La mia verifica dopo il commit,
+>   in sola lettura:
+>   - 6 commit in fila su `b2112ba61`, ognuno con un solo genitore;
+>   - ogni albero è quello di `trees.txt` del bundle;
+>   - ogni messaggio è identico byte per byte al suo `.msg`;
+>   - i 35 oggetti propri del bundle ora sono tutti nel repository (35 su 35);
+>   - `merge-tree` sul HEAD reale con `5068b706c` dà ancora `c6099a997801`;
+>   - albero di lavoro pulito, stage vuoto; porte 6157 e 6167 libere.
+>
+> | # | commit | subject | albero |
+> |---|---|---|---|
+> | 1 | `6d8b951bc` | `fix(dashboard): emoji for CROWDFUND_REAL_ESTATE` | `573e9a48609e` |
+> | 2 | `efb1ce6c7` | `test(assets): type calendar fixture availability` | `28cdab6d2ec6` |
+> | 3 | `cda9408d4` | `fix(dashboard): shrink growth chart left gutter` | `78466d2be615` |
+> | 4 | `1d5975542` | `fix(brokers): shrink lot comparison left gutter` | `e95791e3555c` |
+> | 5 | `0e4de83f7` | `fix(brokers): stop lot chart axisBuilder crash` | `7a2997232b76` |
+> | 6 | `602ea299e` | `docs(journal): record checkpoint C6 review fixes` | `bf4a87b2a990` |
+
+> **⚠️ Fuori pista (tre, mentre costruivo il bundle; nessuno cambia il contenuto dei commit):**
+> 1. **La prima matrice di dry-run era un falso verde.** `ro_snapshot2.sh`, lo script che fotografa refs e oggetti
+>    prima e dopo, non era nella cartella di lavoro del bundle. Le due fotografie erano quindi vuote, e il confronto
+>    fra due file vuoti diceva «invariato». Ho copiato gli script nella cartella, ho fatto fermare la matrice su una
+>    fotografia vuota e l'ho rilanciata. La corsa valida è la seconda, quella della tabella.
+> 2. **`e2e_test.sh` non cancellava il suo clone**, anche se il suo commento dice di sì. L'ho cancellato a mano dopo
+>    i tre giri.
+> 3. **Una password su file.** Le sonde sulla copia di prod (la 6167) leggevano la password da
+>    `/tmp/libreFolio_i_margin_pw` (permessi 600), contro la regola che vieta le credenziali su file. Il file è
+>    cancellato; le sonde salvate in sessione contengono solo il percorso, non la password.
+
+### Allineamento a `dev_release2` — merge `921f1fc05` ✅ 2026-09-29 22:31
+
+> **Note implementazione:**
+> - Lo script l'ha preparato il coordinator (`/tmp/libreFolio_merge_target_into_i5.sh`) e l'ha lanciato il
+>   developer; io non ho toccato Git.
+> - `921f1fc05`: genitori `602ea299e` (C6) e `5068b706c` (`dev_release2`), albero `c6099a997801`. È l'albero previsto
+>   dal mio `merge-tree` di C6 e dalla simulazione del coordinator. Nessun merge in corso, albero di lavoro pulito,
+>   stage vuoto.
+> - **Cosa porta** (6 commit dal merge base `4ce1dc35f`, 34 file): i seguiti della review di K (passo 12) e i
+>   registri.
+>   - Le bandiere: un font solo per le bandiere, `'LF Flags'` (`app.css`, `static/lf-flags.css`, `offline.html`),
+>     con il gate `src/flagFont.gate.test.ts` e l'E2E `fx-flag-font.spec.ts`.
+>   - La selezione delle transazioni si svuota dopo il salvataggio (`transactions/+page.svelte`, E2E
+>     `tx-selection-after-bulk.spec.ts`).
+>   - Il titolo dell'app resta su ogni pagina (`(app)/+layout.svelte`). Il test passa da `layout.gate.test.ts` (da 4
+>     a 2 casi) al nuovo `documentTitle.guard.test.ts` (5 casi), più l'E2E `document-title.spec.ts`.
+>   - `scripts/update_js_cache.py`, con il suo test backend.
+>   - Il CHANGELOG, il journal del PAC e di K, il devWiki e due file di istruzioni.
+>   - Il runner: `_frontend_fx.py`, `_frontend_transaction.py` e `_frontend_utility.py` (la guardia del titolo in
+>     core-unit), in righe diverse dalle mie.
+> - **Le istruzioni cambiate** (`.github/copilot-instructions.md`, `frontend.instructions.md`): la faccia `'LF Flags'`
+>   apre ogni pila di font, e nessuna `font-family` nomina un font di emoji. Nei miei file (la cartella
+>   `components/dashboard`, i grafici dei lotti, `utils/privacy`) non c'è nessuna `font-family` né `fontFamily`:
+>   nulla da adeguare.
+> - **Nessuno dei miei file cambia**: la cartella `components/dashboard`, i grafici dei lotti, le tre spec E2E,
+>   `chartCoreHelpers.test.ts`. Niente in `backend/app/`, `alembic/`, `Pipfile*`, `package.json` o nel lock: niente
+>   `npm ci`, e i gate del backend del portafoglio non si rilanciano.
+
+### Gate rapido sulla revisione combinata `921f1fc05` ✅ 2026-09-29 22:37
+
+> **Note implementazione:** nella 6157 / `/tmp/librefolio-r2-i-charts`, un comando alla volta. Log in
+> `/tmp/libreFolio_i_m5/` (da `01_…` a `05_…`). Alla fine porte 6157 e 6167 libere; albero di lavoro pulito prima e
+> dopo.
+>
+> | # | gate | esito | atteso |
+> |---|---|---|---|
+> | 1 | `front build --debug` (22:32–22:33) | rc 0; svelte-check 3 errori e 41 avvisi in 4 file; l'`api sync` non lascia file tracciati cambiati | il floor |
+> | 2 | `front-utility core-unit` | 2651/2651 su 99 file | 2646 su 98 prima del merge. I +5 casi e il file in più sono tutti di `documentTitle.guard.test.ts` (K, passo 12c), registrato in core-unit |
+> | 3 | `front-utility component-unit` | 2122/2122 su 87 file | invariato. Il merge porta `layout.gate.test.ts` da 4 a 2 casi, ma quel file sta in `front_onboarding_component_unit` (`_frontend_utility.py:285`), non in component-unit |
+> | 4 | `front-asset asset-unit` | 468/468 su 18 file | invariato |
+> | 5 | E2E `front-portfolio dashboard` | 18/18 in 47,5 s; «Frontend build is up to date» | 18 |
+>
+> - A fine E2E il runner scrive «Shared backend ignored SIGTERM for 5s». È la voce già nel backlog del runner del
+>   coordinator (un calcolo del portafoglio ancora in volo a fine corsa), non un rosso.
+> - **Prossimo:** D23 con D23b, in un commit a sé.
+
+### D23 + D23b — il segno del locale nei grafici ✅ 2026-09-30 00:03 (dal 2026-09-29 22:40)
+
+> **Note implementazione (prodotto):** due file, nessun altro.
+>
+> - `GrowthChart.svelte`, `fmtCurrency(v, signed = false)`: il numero, segno compreso, esce da una sola chiamata
+>   `toLocaleString` (`signDisplay: signed ? 'exceptZero' : 'auto'`), su `v === 0 ? 0 : v` perché `auto` scrive
+>   `-0.00` per uno zero negativo. La maschera passa a `maskFormattedNumber` di J (`maskable.ts:133`), che lascia il
+>   segno fuori dai `•••`.
+>   - Le quattro famiglie di righe con segno (il P&L totale di Abs, `pnlRow` della linea P&L, le righe dei broker
+>     nelle candele, `signedRow` dell'Income) chiamano `fmtCurrency(v, true)`, al posto del segno scritto a mano
+>     prima della valuta con U+2212 fisso. Forma unica (D23b): `EUR +5,00` / `EUR -12,00`, lo zero senza segno;
+>     mascherata `EUR +•••` / `EUR -•••`.
+>   - Le righe OHLC restano senza segno forzato (`EUR -12,34`, col meno del locale).
+> - `PerformanceChart.svelte`, `shortMoney`: il segno viene dalla stessa chiamata Intl delle cifre
+>   (`signDisplay: showSign ? 'exceptZero' : 'auto'`, `-0` normalizzato), staccato con la stessa regex del segno
+>   iniziale di `maskable.ts` (copiata in locale: là è privata). La riga di ritorno è identica byte per byte: in en-US
+>   l'etichetta non cambia (`+€1,2K`, `-1,2K CHF`); cambia solo il glifo del meno nei locale che usano U+2212.
+> - Non toccati, come deciso: gli assi (`yAxisFormatter`, `axisTickAmount`) vanno con S7b, che riscrive le stesse
+>   righe; `currencyFormat.ts` (KPI e tabelle) resta ASCII, nel backlog del coordinator.
+>
+> | controllo | esito |
+> |---|---|
+> | `prettier --check` sui 2 file | pulito |
+> | `front build --debug` (22:50) | rc 0; svelte-check 3 errori e 41 avvisi in 4 file, il floor; nessuno nei due file (gli errori stanno in `TransactionFormModal.test.ts` e `ToolExecutionMetrics.svelte`). Log `/tmp/libreFolio_i_d23/02_front_build_debug.log` |
+> | rossi misurati prima del ri-pin (`vitest run` dei 3 file) | 3 su 30, esattamente quelli attesi: il caso S2a di `GrowthChart.test.ts:701` (asserzione `:720`: atteso `+EUR •••`, ricevuto `EUR +•••`) e i due casi del registro di `moneyRenderSites.test.ts` (riga nuova non registrata, snippet vecchio). `PerformanceChart.test.ts` è verde solo perché in en-US il meno ASCII coincide con il `-` scritto nel test. Log `/tmp/libreFolio_i_d23/01_red_before_repin.log` |
+>
+> **⚠️ Fuori pista (E2E):** D23b cambia anche due spec E2E mie. I pattern di `dashboard.spec.ts:376-387` e
+> `brokers-detail.spec.ts:949-958` fissano la forma vecchia (`+EUR …` / `−EUR …`). In più, `brokers-detail.spec.ts:1122`
+> contava le righe con segno per dire «nessuna riga P&L per broker»: con la forma unica una riga OHLC negativa e una
+> riga P&L negativa sono lo stesso testo, quindi quel conteggio diventerebbe rosso a ogni candela sotto zero. Va
+> sostituito con un controllo strutturale (le righe valore del tooltip sono esattamente le quattro OHLC), come già a
+> `:1094`.
+>
+> - **Ri-pin ✅ 2026-09-29 23:37** (test-author `d23-repin`, rivisto da me riga per riga). Non ha lanciato `dev.py`:
+>   le suite della corsia le lancio io.
+>   - `GrowthChart.test.ts`: il caso S2a ri-pinnato (`EUR +•••` / `EUR -•••`, il meno preso dalla stessa chiamata
+>     Intl); il caso «privacy off» fissa il P&L totale con segno e una riga OHLC negativa senza `+`. Un `describe`
+>     nuovo (D23, D23b) percorre le quattro famiglie in 4 viste (locale della macchina e sv-SE, in chiaro e
+>     mascherate), con righe intere e numero esatto di righe. Le viste sv-SE forzano `toLocaleString` e fissano
+>     U+2212 come letterale: il glifo è il soggetto. Una guardia finale verifica che il giro abbia incontrato un
+>     guadagno, una perdita e uno zero con segno, e una perdita senza segno.
+>   - `PerformanceChart.test.ts`: `compactNet` prende il valore con segno e restituisce `{sign, digits}` dalla
+>     stessa chiamata di `shortMoney`; casi 2, 3 e 6 senza segni letterali; commento del caso 6 riscritto (etichetta
+>     risolta, assi a S7b, tooltip ASCII per convenzione di `currencyFormat.ts`). Un `it.each` sv-SE copre i due
+>     template di `shortMoney`, con simbolo e senza.
+>   - `moneyRenderSites.test.ts`: la voce di `GrowthChart.svelte:1968` ri-chiavata, `why` aggiornato; stato `masked`.
+>   - E2E: i pattern di `dashboard.spec.ts` e `brokers-detail.spec.ts` alla forma nuova; `BROKER_SIGNED_AMOUNT`
+>     rimosso; il controllo «nessuna riga per broker» nelle candele è ora strutturale (le righe valore sono
+>     esattamente le quattro OHLC).
+>   - `vitest run` dei 3 file: 36/36. `tsc -p tsconfig.e2e.json`: i 2 errori di base, fuori dai miei file.
+>
+> **⚠️ Fuori pista (il colore dello zero, difetto introdotto da D23b):** il test-author ha notato che una somma di
+> bucket dell'Income può essere un residuo float (0,1 + 0,2 − 0,3 = 5,55e-17). Con D23b la riga stampa `EUR 0.00`
+> senza segno, ma `signedValueColor` decideva ancora sul valore grezzo, e la dipingeva di verde: proprio il difetto
+> «uno zero verde si legge come un guadagno» che il suo commento descrive. Prima di D23b segno e colore erano
+> d'accordo (`+EUR 0.00` in verde, sbagliati tutti e due). Corretto nello stesso commit: lo zero è ciò che la riga
+> stampa come zero, `Math.abs(v) < 0.005`. La sonda `/tmp/libreFolio_i_d23/probe_half_cent.mjs` lo verifica
+> equivalente a «`fmtCurrency` stampa 0.00 senza segno» su 208.013 double, ±2000 ulp attorno a ±0,005 compresi: 0
+> discrepanze. Il test-author aggiunge un caso relativo sul colore (residuo = zero esatto ≠ guadagno ≠ perdita).
+>
+> - **Non corretto, osservazione:** una riga senza segno (`signDisplay: 'auto'`) stamperebbe `-0.00` per un
+>   negativo minuscolo come −0,004. Era così anche prima (`'-'` + `abs`). Non è raggiungibile: le righe senza segno
+>   (OHLC e Abs) leggono livelli dall'API a due decimali, e la composizione delle candele usa primo, massimo, minimo e
+>   ultimo, senza somme; il `-0.00` reale è già normalizzato. `signDisplay: 'negative'` lo risolverebbe, ma è solo
+>   Intl v3 e sui motori più vecchi lancia `RangeError`.
+>
+> - **Caso del colore ✅ 2026-09-29 23:41** (test-author, rivisto): `GrowthChart.test.ts:1151-1198`, in fondo al
+>   `describe` D23. Un render in chiaro, Income; precondizioni: l'interesse disegnato non è 0 ma stampa zero, il
+>   reinvestito è uno 0 esatto, le due righe stampano lo stesso `EUR 0.00`. I colori si leggono dallo `style.color`
+>   del `<b>` di ogni riga e si confrontano solo fra loro, nessun letterale esadecimale: neutro ≠ guadagno ≠ perdita,
+>   poi residuo = zero esatto. Con `v === 0` il residuo prenderebbe il colore del guadagno (5,55e-17 > 0) e il caso
+>   andrebbe rosso all'ultima asserzione: il test-author l'ha dimostrato seguendo il codice (il valore del tooltip è
+>   lo stesso array delle serie, `ladderFlowMetric`), senza toccare il prodotto. Per farlo ha estratto
+>   `tooltipRowElements` (stessa definizione di riga dei controlli di testo; `tooltipRows` restituisce ciò che
+>   restituiva) e la precondizione del residuo in `expectDrawnInterestResidue()`, usata da entrambi i casi.
+>   `vitest run` dei 3 file: 37/37 (GrowthChart 23, PerformanceChart 8, moneyRenderSites 6).
+>
+> **Corsia 6157 dopo il caso del colore** (2026-09-29 23:43–23:48), `/tmp/librefolio-r2-i-charts`, uno alla volta:
+>
+> | # | comando | esito | nota |
+> |---|---|---|---|
+> | 1 | `front build --debug` | rc 0; svelte-check 3 errori e 41 avvisi in 4 file, il floor | gli errori restano in `TransactionFormModal.test.ts:787`/`:819` e `ToolExecutionMetrics.svelte:44`; nessuno nei miei file, test compresi. Log `03_front_build_debug.log` |
+> | 2 | `front-asset growth-chart-memo` | 23/23 | 18 → 23: le 4 viste D23 e il caso del colore |
+> | 3 | `front-utility component-unit` | 2124/2124 su 87 file | 2122 → 2124: l'`it.each` sv-SE di `PerformanceChart.test.ts` (2 template). Il file aveva 6 casi, non 5: 6 + 2 = 8 |
+> | 4 | `front-utility core-unit` | 2651/2651 su 99 file | invariato (il registro ri-chiavato, stessi casi) |
+> | 5 | `front-asset asset-unit` | 468/468 su 18 file | invariato |
+> | 6 | `front-portfolio dashboard` (E2E) | 18/18 | i pattern nuovi, ancorati (`^…$`): la forma vecchia `+EUR …` non passerebbe più |
+> | 7 | `front-broker detail` (E2E) | 31/31 | compreso il controllo strutturale delle candele (le quattro righe OHLC e nient'altro) |
+>
+> `git diff --check` pulito; `prettier --check` sui 7 file frontend pulito; nessun `.only`, `.skip`, `fixme` o
+> `waitForTimeout` fra le righe aggiunte; 6157 e 6167 libere. Log in `/tmp/libreFolio_i_d23/`.
+>
+> **⚠️ Fuori pista (il ramo compatto di `shortMoney` senza prova, osservazione 3 del test-author):** l'`it.each`
+> sv-SE forza `Number.prototype.toLocaleString`, cioè solo il ramo corto (< 1000). Il ramo compatto costruisce il suo
+> `Intl.NumberFormat` e la spia non lo raggiunge; nel locale della macchina un meno scritto a mano coincide col
+> trattino, quindi nessun caso lo distingue. Eppure è il ramo delle etichette più comuni (`+€1,2K`). Affidato allo
+> stesso test-author (23:50): una spia su `Intl.NumberFormat` che porta in sv-SE solo le chiamate senza locale, con
+> guardie contro il vuoto (U+2212 nel compatto svedese; la spia chiamata con `notation: 'compact'`), etichetta intera
+> in chiaro e mascherata, il suffisso svedese dentro la maschera. Dopo: `component-unit` e `front build --debug`
+> di nuovo nella corsia.
+>
+> - **Chiuso ✅ 2026-09-29 23:58** (test-author, rivisto): in `PerformanceChart.test.ts`, un `it.each` fratello sui
+>   due template, sul ramo compatto con una perdita ≥ 1000. EUR usa una fixture nuova, `EUR_LOSS_EFFECT` (−3456,78):
+>   l'unica posizione EUR è un guadagno. CHF riusa la posizione esistente (−1876,54), quindi l'etichetta porta anche
+>   il rendimento.
+>   - `inNumberFormatLocale` spia `Intl.NumberFormat`. Solo le chiamate senza locale vanno in sv-SE; le altre passano
+>     intatte. L'implementazione è una `function`, perché il prodotto chiama con `new`, e la spia si ripristina nel
+>     `finally`.
+>   - `RealNumberFormat` è preso prima di ogni spia e costruisce le attese: la spia non può alimentare i due lati di
+>     un confronto.
+>   - Due guardie contro il vuoto. Nel compatto svedese reale il segno è U+2212, e il suffisso è una parola (`tn`).
+>     In chiaro e mascherata, la lettura dell'etichetta ha chiesto al locale di default un numero `compact`.
+>   - Etichetta intera in chiaro (`\u2212` + simbolo o codice + cifre svedesi + suffisso) e mascherata
+>     (`\u2212€•••` / `\u2212••• CHF (…)`), senza `tn`.
+>   - Il commento del caso sul ramo corto ora rimanda a questo, invece di dire che il compatto non è raggiunto.
+>   - Rosso per costruzione, dimostrato seguendo il codice: con un segno scritto a mano nel ramo compatto le cifre
+>     diventano svedesi e il segno resta ASCII (`-€3,5 tn` contro `\u2212€3,5 tn`), in entrambi i template. Il caso
+>     prende anche una maschera che inghiotte il segno, un `LEADING_SIGN` senza U+2212, una locale esplicita sulla
+>     chiamata compatta (guardia) e un suffisso lasciato fuori dalla maschera.
+>   - `vitest run` dei 3 file: 39/39 (GrowthChart 23, PerformanceChart 10, moneyRenderSites 6). Log
+>     `/tmp/libreFolio_i_d23/ta_vitest_compact.log`.
+>
+> **Corsia 6157 dopo il ramo compatto** (2026-09-29 23:59 – 2026-09-30 00:03):
+>
+> | # | comando | esito | nota |
+> |---|---|---|---|
+> | 1 | `front build --debug` | rc 0; svelte-check 3 errori e 41 avvisi in 4 file, il floor | gli stessi 3 errori (`TransactionFormModal.test.ts:787`/`:819`, `ToolExecutionMetrics.svelte:44`); la tipizzazione della spia su `Intl.NumberFormat` passa. Log `12_front_build_debug.log` |
+> | 2 | `front-utility component-unit` | 2126/2126 su 87 file | 2124 → 2126: i 2 casi compatti. Log `13_component_unit.log` |
+>
+> Le altre suite non si rilanciano: dopo la corsia delle 23:43–23:48 è cambiato solo `PerformanceChart.test.ts`, che
+> gira in `component-unit`. Prodotto, specifiche E2E e registro sono gli stessi. `git diff --check` pulito;
+> `prettier --check` sui 7 file frontend pulito; nessun `.only`, `.skip`, `fixme` o attesa a orologio fra le righe
+> aggiunte del frontend; 6157 e 6167 libere.
+>
+> **Stato finale di D23 + D23b** (HEAD `921f1fc05`, non committato; 8 file):
+>
+> | file | cosa |
+> |---|---|
+> | `GrowthChart.svelte` | `fmtCurrency(v, signed)`: segno e cifre da una sola chiamata Intl, maschera con `maskFormattedNumber`; le quattro famiglie con segno la usano; `signedValueColor` decide lo zero su ciò che la riga stampa |
+> | `PerformanceChart.svelte` | `shortMoney`: il segno dalla stessa chiamata Intl, in entrambi i rami |
+> | `GrowthChart.test.ts` | S2a ri-pinnato; `describe` D23 (4 viste) e il caso del colore: 18 → 23 |
+> | `PerformanceChart.test.ts` | casi 2, 3 e 6 ri-pinnati; sv-SE sui due rami e i due template: 6 → 10 |
+> | `moneyRenderSites.test.ts` | la voce della riga del P&L totale ri-chiavata |
+> | `dashboard.spec.ts`, `brokers-detail.spec.ts` | pattern alla forma nuova, ancorati; il controllo strutturale delle candele |
+> | questo journal | il registro |
+>
+> Fuori da D23, come deciso: gli assi (`yAxisFormatter`, `axisTickAmount`) con S7b; `currencyFormat.ts` (KPI,
+> tabelle, tooltip di Performance) resta ASCII, nel backlog del coordinator.
+
+### Checkpoint C7 — pronto (2026-09-30 00:07)
+
+> **Note implementazione:**
+> - **Mandato** (coordinator, 00:05): via al bundle di C7, 2 commit come proposti, con il solito protocollo. La voce
+>   di `moneyRenderSites.test.ts` va bene così: solo la mia, ri-chiavata, come concordato con J. Il `-0.00` non
+>   raggiungibile va nel suo backlog.
+> - **Contenuto:** 2 commit su `921f1fc05`, 8 percorsi:
+>
+> | # | subject | contenuto | percorsi |
+> |---|---|---|---|
+> | 1 | `fix(charts): follow locale sign in chart amounts` | D23 + D23b: il segno dalla stessa chiamata Intl delle cifre in `fmtCurrency` e `shortMoney`, la forma unica delle quattro righe con segno, il colore dello zero; i test ri-pinnati e nuovi, la voce del registro, i pattern E2E | `GrowthChart.svelte`, `GrowthChart.test.ts`, `PerformanceChart.svelte`, `PerformanceChart.test.ts`, `moneyRenderSites.test.ts`, `frontend/e2e/portfolio/dashboard.spec.ts`, `frontend/e2e/brokers/brokers-detail.spec.ts` |
+> | 2 | `docs(journal): record C6 merge and D23` | questo file | il journal |
+>
+> - **Nessun file si divide fra due commit.**
+> - **Le prove per confine:** il commit 1 tocca il frontend, quindi rifaccio b0 (= BASE) e b1 nella copia di prova
+>   completa (tutto l'albero di BASE, `node_modules` clonato, mai un link verso il worktree): svelte-check, l'intera
+>   suite vitest, `tsc -p tsconfig.e2e.json`, Prettier sui 7 file e l'elenco di Playwright delle due spec (`--list`,
+>   che non avvia né il server né il setup globale). Il commit 2 tocca solo il journal: il suo frontend è quello del
+>   commit 1, e lo script lo verifica prima di partire.
+> - **Come:** lo stesso protocollo di C1–C6. Patch e messaggi; lo script a guardie derivato da quello di C6 (sha256
+>   `5ea70fc3…139d`), con sostituzioni contate; il digest con 4 git; il dry-run in 9 configurazioni; 3 cloni
+>   usa-e-getta per i commit veri; `merge-tree` con `dev_release2`.
+> - **Esclusi:** i log in `/tmp`, `test-results/`, `playwright-report/`, la build del frontend, i file generati, le
+>   sonde di D23 (`/tmp/libreFolio_i_d23/`, `files/d23_probe/` nella cartella di sessione).
+> - **Pulizia:** `/tmp/libreFolio_i_c6_commits` (991 MB) è cancellata: C6 è committato e verificato, e la sua copia
+>   sta in `files/c6_commit_bundle/` (script identico, confrontato con `cmp` prima di cancellare).
+> - **Questa è l'ultima scrittura nel worktree prima del digest.** I numeri del bundle (alberi, sha256, digest)
+>   dipendono da questo file, quindi qui non ci sono: li registro dopo il commit.
+> - **Dopo C7:** S7 (asse dei bucket, con la parte di D21 nel prodotto, `toPositionalValue`) e S7b (tacche Y doppie,
+>   gli assi di D23, «-888»); poi S8 (R11), la verifica sulla copia, S11-finale (docs-writer), S12.
