@@ -3106,7 +3106,7 @@
         "blankNote": "An em-dash means the measurement could not be made for that asset over this window — it does not mean zero.",
         "l1": {
           "title": "How much did each of these hurt?",
-          "description": "The same scale of harm, asked of every selected asset. Percentages only: a set of assets has no weights, so there is no amount to put beside them.",
+          "description": "For each selected asset, how much it lost at the worst moments of the period: the bad day, the bad month, the deepest fall, and how far it still stands below its peak.",
           "lastedDays": "lasted {days} d",
           "columns": {
             "badDay": "Bad day",
@@ -3114,6 +3114,13 @@
             "worstFall": "Worst fall",
             "currentFall": "Below peak now",
             "toPeak": "Rise to peak"
+          },
+          "columnHelp": {
+            "badDay": "The average loss on the worst 5% of days in the window (historical CVaR at 95%).",
+            "badMonth": "Like the bad day, over a longer run of consecutive days: the average loss on the worst 5% of those runs (historical CVaR at 95%).",
+            "worstFall": "The deepest fall from a peak to the lowest point that followed it within the window, and how long it lasted.",
+            "currentFall": "How far below its highest point in the window the asset stands on the last day.",
+            "toPeak": "How much it must rise to get back to that highest point: after a 20% fall it takes +25%."
           }
         },
         "l3": {

@@ -3106,7 +3106,7 @@
         "blankNote": "Un trattino significa che la misura non è stata possibile per quell'asset su questa finestra — non significa zero.",
         "l1": {
           "title": "Quanto ha fatto male ciascuno?",
-          "description": "La stessa scala del danno, chiesta a ogni asset selezionato. Solo percentuali: un insieme di asset non ha pesi, quindi non c'è un importo da affiancare.",
+          "description": "Per ogni asset selezionato, quanto ha perso nei momenti peggiori del periodo: la giornata storta, il mese storto, la discesa più profonda e quanto è ancora sotto il suo massimo.",
           "lastedDays": "durata {days} g",
           "columns": {
             "badDay": "Giornata storta",
@@ -3114,6 +3114,13 @@
             "worstFall": "Peggior discesa",
             "currentFall": "Sotto il massimo",
             "toPeak": "Risalita al massimo"
+          },
+          "columnHelp": {
+            "badDay": "La perdita media nel 5% dei giorni peggiori della finestra (CVaR storico al 95%).",
+            "badMonth": "Come la giornata storta, ma su un tratto più lungo di giorni consecutivi: la perdita media nel 5% dei tratti peggiori (CVaR storico al 95%).",
+            "worstFall": "La caduta più profonda da un massimo al punto più basso che l'ha seguito nella finestra, e quanto è durata.",
+            "currentFall": "Quanto l'asset è sotto il suo massimo della finestra, all'ultimo giorno.",
+            "toPeak": "Quanto deve risalire per tornare a quel massimo: dopo una caduta del 20% serve +25%."
           }
         },
         "l3": {

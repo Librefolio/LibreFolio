@@ -2495,3 +2495,114 @@ sopra. Posizione e testo del pulsante del periodo comune si decidono subito dopo
 > - **Cancelli**: quelli della sezione «Chiusura del punto 3 e del chip» (23:00–23:15 del 29/09). Dopo, nessun sorgente è
 >   cambiato: le sole modifiche sono a questo piano.
 > - **Stato**: FROZEN fino al commit e alle fusioni F → Risk e `dev_release2`.
+
+## Dopo il checkpoint 4 · commit, riallineamento e prossimo componente · 2026-09-30, 10:13–10:40
+
+> **Commit** (developer, 10:18): `d613d443d` … `506d17f18`, 8 commit C1–C8. Verificato in sola lettura
+> (`/tmp/libreFolio_f4/verify_ckpt4.sh`): ogni commit ha il messaggio e i file del suo gruppo; il digest del contenuto è
+> `88ff8368…`, lo stesso consegnato; 22 file, +2851/−154. **PASS.**
+>
+> **Riallineamento**:
+> - fusione F → Risk `881941e44`, validata da Risk tutta verde, `risk-lab` 22 compreso;
+> - fast-forward di F su `881941e44` (coordinatore, 10:36). Verificato: HEAD `881941e44`, `506d17f18` suo antenato, albero
+>   pulito, 6154 e 6164 libere.
+> - La base contiene `dev_release2` (i seguiti di K), le novità di Risk sul «parziale» (soglia dei 7 giorni), le funzioni per
+>   l'avviso di A e il checkpoint 4.
+>
+> **Prossimo componente**, proposto da me e accettato da Risk (10:2x): **L1° «Quanto ha fatto male ciascuno?»**
+> (`AssetSetLossComparisonSection.svelte`), poi L3°. È il prossimo nella lista della famiglia (R5, Tempo ②), e la
+> sezione «Asset Global — in %» di `R5-tempo2-schede.md` è ancora da compilare. Decisioni di Risk:
+> 1. l'ordinamento promesso dal docblock (`:19`) e assente: o lo faccio, o tolgo la promessa; si decide col developer;
+> 2. i link delle intestazioni (`<a href="/mkdocs/{column.docs}">ⓘ</a>`, `:135`) diventano `DocsLink` con l'icona del
+>    libro e percorsi scritti per intero, così il gate li vede: **il buco va chiuso**. Prova: la riga
+>    `🔵 {column.docs}` sparisce da `check-links` e il conteggio dei link validi sale;
+> 3. il nome con l'icona via `AssetChip`: lo decide il developer;
+> 4. C3 («mese storto» = 21 osservazioni sulla griglia di calendario, «giornata» diluita dai weekend) è del motore, cioè
+>    **di Risk**: nella scheda va con owner Risk, e Risk è presente alla review di quella parte. Nel frattempo nessun
+>    ritocco al frontend.
+> - L3°: i ritocchi al grafico passano da A. Presento io il componente al developer dopo il riallineamento, e rinomino
+>   la sessione quando lui dice sì.
+>
+> ⚠️ **Fuori pista — attribuzione sbagliata**: ho segnalato a Risk lo stesso buco del gate in
+> `levels/L1HowMuchItHurts.svelte`: lo snippet `measure` (`:124-134`) riceve i percorsi come argomenti posizionali
+> (`:165`, `:171`, `:174`), e il gate non li legge. L'ho detto «di Risk», ma è **di A**: in questo giro i livelli della
+> Dashboard sono di A. Risk l'ha girato ad A col rimedio.
+
+### Voce di documentazione · `user/assets/correlation.en.md` · 2026-09-30, dalle 10:40
+
+**Portata** (Risk, «prima strada»): la regola 3 e i fatti del replay, veri oggi nel backend e indipendenti dall'F3 di
+Risk. I passi dell'interfaccia del replay (From/To, preset, periodo comune) si riscrivono dopo l'F3 di Risk, sul suo
+handoff. La pagina è solo inglese, quindi nessun debito di traduzione né timbro.
+
+**Fatti verificati sulla base `881941e44`**
+- **Soglia**: `STALE_PRICE_THRESHOLD_DAYS = 7` (`data_quality_thresholds.py:14`), applicata ai prezzi e ai cambi
+  riportati in `series_preparation.py:320` e `:323`. Un valore riportato diventa vecchio solo **oltre 7 giorni di
+  calendario**; più giovane non degrada niente, ma il suo rendimento zero entra comunque nel campione. È definita in
+  `data-quality.en.md#staleness-threshold`, che già cita il laboratorio.
+- **Avviso**: `_data_quality_warnings` (`risk/service.py:1214-1241`) emette un avviso per causa. Nel frontend inglese:
+  «Prices older than {days} days for {count} asset(s): {names}.» e «Exchange rates older than {days} days: {pairs}.».
+  La vecchia frase «Risk result uses incomplete or carried-forward source data.» resta solo come messaggio di ripiego
+  del backend, e l'interfaccia mostra la frase tradotta.
+- **Replay, regola dei bordi**: `replay_coverage` (`risk/eligibility.py:113-140`). Un asset è escluso se:
+  - manca il cambio;
+  - non ha prezzi nel periodo né nei 7 giorni prima;
+  - era quotato prima, ma non nei 7 giorni prima dell'inizio;
+  - comincia più di 7 giorni dopo l'inizio;
+  - non ha un prezzo negli ultimi 7 giorni.
+  Il periodo non si sposta.
+- **Replay, nessun blocco**: un asset rimasto senza rendimenti è escluso da sé (`risk_plugins/stress.py:500-515`), con
+  un avviso per motivo (`historical_replay_excluded_*`, «… — left out of the replay»). Si ferma solo per un sostituto
+  inutilizzabile, e il laboratorio non ha sostituti. Se non resta nessun asset, il replay non è disponibile (`:524-535`).
+  - L'elenco «Left out:» di `L4Replay` si riempie solo con «Leave it out and run again» (`:129`, `:171`), che segue un
+    blocco. Quindi cade insieme al blocco.
+
+**Frasi false nella pagina**:
+- `:138`: tutto il paragrafo, anche l'apertura «Like the other sections, the replay follows the rules of One Shared
+  Window» (il replay esclude, non sposta);
+- `:154`: la regola 3 («marked Partial» e la frase inglese del backend);
+- `:183`: «prices carried forward from an earlier day» come esempio di nota: ora sono i prezzi vecchi di oltre 7 giorni.
+
+> ✅ **Fatto (2026-09-30, 10:45–11:05), via docs-writer** (`correlation-guide-fix`): solo la pagina, solo EN; niente build
+> o test lanciati da lui, i cancelli li ho lanciati io.
+> - **`:138` replay**: il paragrafo è riscritto.
+>   - Il replay tiene il suo periodo, «give or take» i 7 giorni della soglia, e ogni asset deve avere un prezzo ai due
+>     capi. Chi non ce l'ha è **left out of the replay**: niente barra, sezione **Partial**, una nota col motivo.
+>   - Se nessun asset si può simulare: **Unavailable for the selected data**.
+>   - Seguono i cinque motivi in elenco. Tolti «Leave it out and run again» e «Left out:».
+> - **`:154` regola 3**: il riporto nel weekend o nei festivi non marca niente; oltre **7 giorni di calendario** la sezione
+>   è **Partial**, con la nota *Prices older than 7 days for 1 asset: …* (o *Exchange rates older than 7 days: …*) e il
+>   link a `data-quality.md#staleness-threshold`.
+> - **`:183`**: l'esempio di nota diventa «prices older than seven days».
+>
+> ⚠️ **Fuori pista — due scostamenti di docs-writer dalla consegna, verificati nel codice e accettati**:
+> 1. «give or take the seven days» invece di «il periodo non si sposta mai». Un asset quotato per la prima volta entro 7
+>    giorni dall'inizio resta dentro, e il replay parte dal suo primo prezzo: la preparazione carica da `inizio − 1`
+>    (`service.py:626-628`), e senza una data completa prima dell'inizio la base è la prima data completa
+>    (`series_preparation.py:243-248`). La mia consegna diceva il contrario.
+> 2. «The section is then marked Partial»: gli avvisi di esclusione degradano di default (`degrades_result=True`,
+>    `schemas/risk.py:1591`; l'unico `False` in `stress.py:383` è dello shock ipotetico), e gli esclusi del replay
+>    (`stress.py:641`) rendono il risultato `PARTIAL` (`service.py:945`).
+>
+> **Altri reperti di docs-writer, verificati**:
+> - Il passo 3 del replay («Read one bar per asset») vale solo se nessuno è escluso. Non l'ho toccato: è un passo
+>   dell'interfaccia, si riscrive dopo l'F3 di Risk.
+> - In `L4Replay` (di Risk), senza esclusi, il riepilogo sul laboratorio usa la frase dei perimetri pesati: «Left out: 0
+>   (0.0% of the scope, carried at zero return)» (`replayAudit`). È una quota di peso su una pagina senza pesi. Il commento
+>   a `:222-235` la tiene di proposito → a Risk, per l'F3.
+> - Il `suggested_range` dell'errore «nessun asset simulabile» non è letto dal frontend: è già nell'F3 di Risk (il pulsante
+>   del periodo comune).
+>
+> **Cancelli** (uno per volta):
+> - `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py mkdocs build`:
+>   - exit 0, **0 WARNING**, in 22 s;
+>   - nella pagina generata ci sono i 2 link a `data-quality/#staleness-threshold`, e l'ancora di destinazione esiste.
+> - `… dev.py mkdocs check-links`:
+>   - exit 0, **83 validi** (invariato, come atteso: il link nuovo va da pagina a pagina e lo valida la build strict),
+>     3 ancore note, 9 non verificabili;
+>   - fra questi resta `{column.docs}` di L1°, che si chiude col prossimo componente.
+> - ⚠️ **Fuori pista — la build riscrive un file tracciato**: `frontend/static/sw.js`, solo il timbro di build
+>   (`// build: 450af3dd` → `3e7bd439`). Non toccato, escluso dal checkpoint, riferito al coordinatore.
+
+> ➡️ **Seguito**: la guida è committata (`73ba9f08e`, `b26ca6e29`, alle 11:03). Il lavoro sul prossimo componente, L1° «Quanto
+> ha fatto male ciascuno?», approvato dal developer, prosegue nel piano
+> [F-L1-confronto-perdite.md](F-L1-confronto-perdite.md).
