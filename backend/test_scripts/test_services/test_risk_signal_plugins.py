@@ -234,6 +234,50 @@ async def test_signal_service_computes_five_risk_plugins_from_prepared_series():
 
 
 @pytest.mark.asyncio
+async def test_prepared_risk_signals_keep_the_carried_days_of_their_joint_calendar():
+    """Quote-day filtering is for the indicators (developer's decision of 30/09/2026).
+
+    A prepared risk signal computes on its joint calendar, where a day quoted by the comparison
+    carries the primary's last price. The five prepared plugins opt out of quote days and the
+    service never filters their input: the carried day stays in the input and in the output.
+    """
+    dates = _dates(7)
+    carried_day = dates[3]
+    primary_prices = [100.0, 110.0, 99.0, 99.0, 112.86, 129.789, 119.40588]  # the carried day repeats the day before
+    comparison_prices = [100.0, 105.0, 99.75, 109.725, 106.981875, 115.005515625, 110.405295]
+    quoted = _prepared_series(1, dates, primary_prices)
+    carried_points = [point.model_copy(update={"effective_price_date": dates[2], "is_price_carried_forward": True}) if point.valuation_date == carried_day else point for point in quoted.valuations.points]
+    primary = quoted.model_copy(update={"valuations": quoted.valuations.model_copy(update={"points": carried_points})})
+    comparison = _prepared_series(2, dates, comparison_prices)
+    bundle = SignalPreparedSeriesBundle(
+        primary_asset_id=1,
+        series_sets={None: _prepared_set(primary), 2: _prepared_set(primary, comparison)},
+    )
+    requests = [
+        SignalRequest(instance_id="drawdown", signal_code="RISK_DRAWDOWN"),
+        SignalRequest(instance_id="volatility", signal_code="RISK_ROLLING_VOLATILITY", params={"window": 2}),
+        SignalRequest(instance_id="return", signal_code="RISK_ROLLING_RETURN", params={"window": 2}),
+        SignalRequest(instance_id="sharpe", signal_code="RISK_ROLLING_SHARPE", params={"window": 2, "risk_free_annual_rate": 0.0}),
+        SignalRequest(instance_id="beta", signal_code="RISK_ROLLING_BETA", params={"window": 2, "comparison_asset_id": 2}),
+    ]
+
+    results = await SignalService().compute(
+        requests,
+        _price_points(dates, primary_prices),
+        _context(dates),
+        prepared_series_bundle=bundle,
+    )
+
+    # Premise: the carried day reaches the service as a carried point, not as a quote.
+    assert primary.valuations.points[3].is_price_carried_forward is True
+    assert [result.status for result in results] == [SignalStatus.OK] * 5, [(result.instance_id, result.error) for result in results]
+    for result in results:
+        assert [point.date for point in result.series[0].points] == dates[3:], result.instance_id
+    carried_return = next(point for point in results[2].series[0].points if point.date == carried_day)
+    assert carried_return.value == pytest.approx((99.0 / 110.0 - 1) * 100)
+
+
+@pytest.mark.asyncio
 async def test_flat_comparison_variance_is_unavailable_not_zero():
     dates = _dates(7)
     primary_prices = [100.0, 101.0, 99.0, 102.0, 100.0, 103.0, 101.0]
@@ -658,7 +702,8 @@ def test_calendar_default_window_is_thirty_days():
     default_series = _calendar_series(_calendar_compute(points))
     explicit_series = _calendar_series(_calendar_compute(points, window_days=30))
 
-    assert CalendarRollingReturnPlugin.implementation_version == "1.3.0"
+    assert CalendarRollingReturnPlugin.implementation_version == "1.4.0"
+    assert CalendarRollingReturnPlugin.computes_on_quote_days is False
     assert CalendarRollingReturnPlugin.allows_sparse_input_dates is True
     assert CalendarRollingReturnPlugin.allows_sparse_output_dates is True
     assert CalendarRollingReturnParams().window_days == 30
