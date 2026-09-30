@@ -3155,7 +3155,12 @@
       },
       "selectedCountHint": "Il primo numero conta gli asset che il laboratorio sta analizzando adesso. Il secondo conta quanti ne potrebbe analizzare nel periodo scelto: tutti gli asset presenti in LibreFolio, non solo quelli che possiedi, purché abbiano abbastanza prezzi in quel periodo. Quelli che non li hanno li trovi comunque nel «+», in sola lettura, con il motivo.",
       "parkedNote": "{count, plural, one {# asset scelto non è analizzabile nel periodo e resta fuori dall'analisi.} other {# asset scelti non sono analizzabili nel periodo e restano fuori dall'analisi.}}",
-      "eligibilityFailed": "Non è stato possibile verificare l'idoneità: tutti gli asset restano selezionabili."
+      "eligibilityFailed": "Non è stato possibile verificare l'idoneità: tutti gli asset restano selezionabili.",
+      "fitPeriod": {
+        "banner": "Con il periodo scelto, {count, plural, one {# asset scelto non ha prezzi} other {# asset scelti non hanno prezzi}} per una parte dell'intervallo.",
+        "button": "Usa il periodo in cui tutti hanno prezzi (dal {start} al {end})",
+        "hint": "Sposta il periodo in alto sull'intervallo in cui sono quotati tutti gli asset scelti che hanno prezzi. Tornano nell'analisi: {names}."
+      }
     },
     "metrics": {
       "volatility": "Volatilità",
