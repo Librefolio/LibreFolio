@@ -20,7 +20,7 @@
     import {get} from 'svelte/store';
     import {axiosInstance, schemas, zodiosApi} from '$lib/api';
     import {goBack} from '$lib/stores/app/navigationStore';
-    import {ArrowLeft, ChartLine, ChevronDown, ExternalLink, Info, Pencil, Percent, RefreshCw, RotateCw, Ruler, Settings, TrendingUp, X} from 'lucide-svelte';
+    import {ArrowLeft, ChartLine, ChevronDown, ExternalLink, Info, Pencil, Percent, RefreshCw, RotateCw, Ruler, Settings, Shield, TrendingUp, X} from 'lucide-svelte';
     import AssetDataEditorSection from '$lib/components/assets/AssetDataEditorSection.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import PriceChartFull from '$lib/components/charts/PriceChartFull.svelte';
@@ -122,8 +122,8 @@
     type AssetDetailTabId = (typeof ASSET_DETAIL_TAB_IDS)[number];
     let activeTab = $state<AssetDetailTabId>('overview');
     let assetDetailTabs = $derived([
-        {id: 'overview', label: $t('risk.assetDetail.overviewTab'), testId: 'asset-detail-tab-overview'},
-        {id: 'risk', label: $t('risk.assetDetail.riskScenariosTab'), testId: 'asset-detail-tab-risk', guideAnchor: 'asset.detail.risk'},
+        {id: 'overview', label: $t('risk.assetDetail.overviewTab'), icon: ChartLine, testId: 'asset-detail-tab-overview'},
+        {id: 'risk', label: $t('risk.assetDetail.riskScenariosTab'), icon: Shield, testId: 'asset-detail-tab-risk', guideAnchor: 'asset.detail.risk'},
     ]);
 
     $effect(() => {
@@ -136,6 +136,8 @@
 
     let assetInfo = $state<AssetDetail | null>(null);
     let providerAssignment = $state<ProviderAssignmentFlat | null>(null);
+    // Unknown is not "manual": until the assignment request settles, Sync is merely disabled.
+    let providerAssignmentLoaded = $state(false);
     let chartData: any[] = $state([]);
     let events: any[] = $state([]);
     let comparisonEvents = $state<Map<number, any[]>>(new Map());
@@ -471,7 +473,7 @@
         void $assetProvidersVersion;
         return isParametricProvider(providerAssignment?.provider_code);
     });
-    let isManualOnly = $derived(!providerAssignment);
+    let isManualOnly = $derived(providerAssignmentLoaded && !providerAssignment);
     let isInactive = $derived(assetInfo?.active === false);
     let syncDisabledReason = $derived(isManualOnly ? $t('assetDetail.syncDisabledManual') : isInactive ? $t('assetDetail.syncDisabledInactive') : '');
     let syncBlocked = $derived(isManualOnly || isInactive);
@@ -1381,6 +1383,7 @@
         // Reset state for new asset
         assetInfo = null;
         providerAssignment = null;
+        providerAssignmentLoaded = false;
         chartData = [];
         events = [];
         signalInstanceResults = [];
@@ -1582,6 +1585,8 @@
             providerAssignment = items.length > 0 ? (items[0] as ProviderAssignmentFlat) : null;
         } catch (e: any) {
             console.error('Failed to load provider assignment:', e);
+        } finally {
+            providerAssignmentLoaded = true;
         }
     }
 
@@ -2811,7 +2816,7 @@
             {#if syncBlocked}
                 <Tooltip text={syncDisabledReason} position="top" maxWidth="320px" interactiveChild>
                     <button
-                        class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors opacity-50 cursor-not-allowed"
+                        class="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors opacity-50 cursor-not-allowed"
                         data-testid="asset-detail-sync-btn"
                         disabled={syncing || syncBlocked}
                         onclick={handleSync}
@@ -2824,7 +2829,7 @@
                 <button
                     class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                     data-testid="asset-detail-sync-btn"
-                    disabled={syncing || syncBlocked}
+                    disabled={syncing || syncBlocked || !providerAssignmentLoaded}
                     onclick={handleSync}
                 >
                     <RotateCw class={syncing ? 'animate-spin' : ''} size={14} />
