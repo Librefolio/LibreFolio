@@ -946,16 +946,19 @@ test.describe('Lots charts axisBuilder guard', () => {
 
 type BrokerPnlSubmode = 'line' | 'candles' | 'income';
 
-/** `EUR 1,234.56` / `EUR -12.30` — an unsigned tooltip amount (the OHLC rows). */
-const BROKER_PLAIN_AMOUNT = /^[A-Z]{3}\s-?[\d.,]+$/;
-/** `+EUR 359.04` / `−EUR 12.00` — a signed tooltip amount (P&L rows; U+2212). */
-const BROKER_SIGNED_AMOUNT = /^[+\u2212][A-Z]{3}\s[\d.,]+$/;
 /**
- * `+EUR 359.04` / `−EUR 12.00` / `EUR 0.00` — a P&L or income tooltip amount,
- * sign optional: a zero carries none, by design (a green zero read as a gain),
- * so a signed-only pattern stops counting a row on the day its value is zero.
+ * `EUR 1,234.56` / `EUR -12.30` — an unsigned tooltip amount (the OHLC rows). The
+ * minus is the browser locale's own (D23): ASCII in English, U+2212 in Swedish.
  */
-const BROKER_AMOUNT = /^[+\u2212]?[A-Z]{3}\s[\d.,]+$/;
+const BROKER_PLAIN_AMOUNT = /^[A-Z]{3}\s[-\u2212]?[\d.,]+$/;
+/**
+ * `EUR +359.04` / `EUR -12.00` / `EUR 0.00` — a P&L or income tooltip amount.
+ * One form for every signed row (D23b): the sign after the currency, the minus
+ * the locale's own, ASCII or U+2212 (D23). Sign optional: a zero carries none, by
+ * design (a green zero read as a gain), so a signed-only pattern stops counting a
+ * row on the day its value is zero.
+ */
+const BROKER_AMOUNT = /^[A-Z]{3}\s[+\-\u2212]?[\d.,]+$/;
 
 interface BrokerReportCall {
     body: Record<string, unknown> & {broker_ids?: number[]};
@@ -1118,8 +1121,12 @@ test.describe('Broker detail — GrowthChart P&L mode', () => {
         await showChartTooltip(page, chart, chart.getByText(BROKER_PLAIN_AMOUNT), 20_000, 4);
         await expect(chart.getByText(BROKER_PLAIN_AMOUNT), 'open, close, high and low — the total candle in full').toHaveCount(4);
 
-        // An overlay line would add a signed row per broker, named after it.
-        await expect(chart.getByText(BROKER_SIGNED_AMOUNT), 'no per-broker P&L row belongs on a single-broker page').toHaveCount(0);
+        // An overlay line would add a row per broker, named after it, so the value
+        // rows must be exactly the four OHLC values. Counted BY ROW, never by sign:
+        // after D23b a losing broker row reads exactly like a negative OHLC value
+        // (`EUR -12.00`), and a zero one like any unsigned amount, so no pattern can
+        // tell the two apart. Every value row is `<span>label</span><b>value</b>`.
+        await expect(chart.locator('div > span + b'), 'the four OHLC values and nothing else — an overlay would add a fifth, broker-named row').toHaveText([BROKER_PLAIN_AMOUNT, BROKER_PLAIN_AMOUNT, BROKER_PLAIN_AMOUNT, BROKER_PLAIN_AMOUNT]);
         await expect(chart.getByText(BROKER_WITH_HOLDINGS, {exact: true}), 'the broker name would only appear here as an overlay legend row').toHaveCount(0);
     });
 });
