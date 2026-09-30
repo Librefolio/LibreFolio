@@ -3106,7 +3106,7 @@
         "blankNote": "Un tiret signifie que la mesure n'a pas pu être faite pour cet actif sur cette fenêtre — cela ne signifie pas zéro.",
         "l1": {
           "title": "Combien chacun a-t-il fait mal ?",
-          "description": "La même échelle de perte, posée à chaque actif sélectionné. Uniquement des pourcentages : un ensemble d'actifs n'a pas de pondérations, donc aucun montant à afficher.",
+          "description": "Pour chaque actif sélectionné, ce qu'il a perdu aux pires moments de la période : la mauvaise journée, le mauvais mois, la baisse la plus profonde et à quelle distance il se trouve encore de son sommet.",
           "lastedDays": "durée {days} j",
           "columns": {
             "badDay": "Mauvaise journée",
@@ -3114,6 +3114,13 @@
             "worstFall": "Pire baisse",
             "currentFall": "Sous le sommet",
             "toPeak": "Hausse jusqu'au sommet"
+          },
+          "columnHelp": {
+            "badDay": "La perte moyenne sur les 5 % des pires jours de la fenêtre (CVaR historique à 95 %).",
+            "badMonth": "Comme la mauvaise journée, mais sur une plus longue suite de jours consécutifs : la perte moyenne sur les 5 % des pires de ces périodes (CVaR historique à 95 %).",
+            "worstFall": "La baisse la plus profonde d'un sommet jusqu'au point le plus bas qui a suivi dans la fenêtre, et sa durée.",
+            "currentFall": "À quelle distance de son sommet de la fenêtre l'actif se trouve le dernier jour.",
+            "toPeak": "De combien il doit monter pour retrouver ce sommet : après une baisse de 20 %, il faut +25 %."
           }
         },
         "l3": {
