@@ -433,6 +433,27 @@ Il set rende esplicita questa realtà. Lo schema qui sotto è il contenuto che i
 > **⚠️ Fuori pista**:
 > - Rileggendo la v5 durante la scrittura ho trovato tre incongruenze mie (A12–A14): la spiegazione delle correzioni avrebbe contato righe già presenti; mancava il checkpoint quando il CSV inizia dopo l'XLSX; la prima formulazione di `H0` era sbagliata in tre casi. Sono corrette nel testo e registrate nel §11.4.
 > - La guida utente CA dice che il saldo iniziale sta in testa all'XLSX dell'estratto: la v4 lo dava «da verificare» (A10).
+>
+> **Commit del journal v5**: `ed83ea279` (developer, 13:29).
+>
+> **Note implementazione (2026-09-30) — design v5.1**. Il developer approva l'impianto fino al wizard, ma chiede un dettaglio del §4 con i disegni dei passi. Il suo dubbio principale: «dopo l'upload, come capiscono l'utente o il sistema quali file caricati includere, e se serve includere altro già caricato?».
+> - Il §4 è riscritto con una tabella «oggi → pilota» e i disegni di ② Seleziona file (casi A, B, C, D e la variante col buco), ③ Analizza (con il dettaglio del set), Correzioni, Revisione, «Allinea con la banca» (primo import, buco, verifica che non torna) ed editor.
+> - Il nodo (§4.1, D-S31 da confermare): nessuno dichiara cosa va insieme. Il set sono i file scelti con lo stesso broker e lo stesso plugin, e il sistema lo completa da solo, per periodi, con i file già caricati che servono, spuntati, segnati e rimovibili. Se non trova nulla, dice quale export serve e per quale periodo, con un pulsante per caricarlo lì.
+> - Adeguati di conseguenza: §3.3 (`additions`, `missing`, `excluded_file_ids`, cache nel sidecar), §3.8 (`must_cover`), §8 (test), §10 (D-S8 precisata, D-S31), §11 (A15, R10).
+> - Rilevato sul codice di oggi: il passo ② elenca già tutti i file del broker e spunta quelli appena caricati (`loadBrokerFiles`, T7). Nel passo Correzioni finiscono solo i blocchi sui campi che servono al confronto dei duplicati, gli asset mancanti e gli split (`fixRowLifecycle.ts`); il costo mancante si scrive nell'editor. Per questo il costo della scissione è disegnato nell'editor, non in Correzioni.
+>
+> **⚠️ Fuori pista**: per non riportare nel design valori reali, ho confrontato date e importi inventati dei disegni con i due export, in sola lettura e senza stamparne il contenuto (`/tmp/libreFolio_l_mockcheck.py`). Su 24 valori coincide solo «0,00».
+>
+> **Note implementazione (2026-09-30) — design v5.2**. Il developer ha contestato il completamento automatico: «il plugin riceve ogni volta la lista di tutti gli upload precedenti e poi sceglie? Non mi pare il comportamento giusto. Forse è più lineare il set di upload». Abbiamo messo a confronto tre modelli (completamento automatico, selezione a mano, set di caricamento). Nel caso normale si comportano allo stesso modo; cambiano solo quando un file manca, quando un import si interrompe, e per la memoria fra un import e l'altro.
+> - **D-S22 ✅** (ask_user): **il set nasce dal caricamento**. I file caricati insieme per lo stesso broker e riconosciuti dallo stesso plugin formano il set, che è un'unità. «Carica il file mancante» lo completa, e caricamenti diversi non si mescolano.
+> - **D-S31 ❌ ritirata**: cercare fra i file già caricati trasformava l'archivio dei file in una memoria nascosta accanto al database (A16).
+> - Applicato nel design:
+>   - §2: «Caricamento», e la nuova definizione di «Set»;
+>   - §3: `batch_id` all'upload, con i tre punti che caricano (wizard, pagina file, `BrokerImportFilesModal`); preview e combine per caricamento; la preview non guarda mai gli altri file del broker;
+>   - §4.1–§4.4: disegni nuovi (casi A–F, set come riga unica, raggruppamento visibile già al passo ①);
+>   - §5 e §6; §7.2, dove i file CA caricati prima dei set non hanno `batch_id`;
+>   - §8, §10 (D-S8, D-S9, D-S22, D-S31), §11 (A15 risolta, A16, R10).
+> - Il controllo dei valori inventati, rilanciato sul §4 nuovo, dà lo stesso esito: coincide solo «0,00».
 
 ### 3. ⏳ Risposte dell'autore
 
