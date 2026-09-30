@@ -1602,6 +1602,12 @@
             <AssetSetRiskPanel
                 bind:this={labPanel}
                 bind:canSync={labCanSync}
+                onfitperiod={(range) => {
+                    // A period set by code must switch the picker's preset off by hand:
+                    // `activePreset` is bound to it, and would keep the old badge lit.
+                    activePreset = null;
+                    handleDateRangeChange(range.start, range.end);
+                }}
                 {assets}
                 {dateStart}
                 {dateEnd}

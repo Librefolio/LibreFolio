@@ -2121,3 +2121,377 @@ descrizione del runner, copertura di `risk-reload-button`). Poi i cancelli compl
 > - HEAD `5010fe815`. L'unico percorso sporco è questo piano, da mettere in un commit di journal (via del coordinatore).
 > - Niente è a metà: la validazione è chiusa. Nessun test-author al lavoro; 6154 e 6164 libere.
 > - **Alla ripartenza**: il commit di journal del piano (script del coordinatore), poi F → Risk con Risk.
+
+## Giro UI rischio, coordinato da Risk · analisi · 2026-09-29, 10:38–11:00 (FROZEN, niente codice prima del via)
+
+**Coordinate**: worktree `e-alfy-super-dollop`, ramo `e-alfy-risk-asset-global-lab`, HEAD **`ffe41c5ba`** = punta di Risk
+= base comune dichiarata (✅ coincide), albero pulito; corsie 6154 (suite) e 6164 (copia); coordinatore del giro: Risk
+(`0000738d-…`), con l'arbitrato del coordinatore (`c8328a01-…`) per i file fuori famiglia.
+
+**Affermazioni di Risk, verificate nel codice**
+- ✅ K1: `reasonText` ha `no_price_history` → `risk.eligibility.reasons.no_price_history`, presente in tutte e 4 le lingue.
+- ✅ K7: il replay del laboratorio passa `discardedErrorCodes(controller.discarded, ['replay'])` (`AssetSetReplaySection:111`),
+  e il frame lo dice come `risk.errors.answer_discarded`. Il nome in codice è `ANSWER_DISCARDED_CODE`: nessuna stringa
+  `answer_discarded` nei componenti.
+- ✅ K8: le mie tre sezioni passano `$t` a `resultReasons`; la guardia è `warningTranslatorSites.test.ts`.
+- ✅ K9: `RiskLevelSection` usa `analyticNameKey`.
+- ✅ K10: niente più `height` in `CorrelationHeatmap` né nei chiamanti.
+- ✅ K: le icone composte sono arrivate (`ETF_BOND` → `etf-bond`); l'osservazione del developer del 25/09 si chiude da sé.
+
+**Base verificata** (solo artefatti ignorati scritti):
+- `api sync`: il client ha 6 motivi, `common_range` e `suggested_range`.
+- `front check`: il pavimento noto.
+- vitest su 17 percorsi (i 15 + `AssetSetReplaySection.test.ts` + `warningTranslatorSites.test.ts`): **17 file, 650 test**.
+- `front build --debug` e `mkdocs build`, albero invariato.
+- E2E `risk-lab` nella 6154: **18/18** (fine 10:45:56).
+
+**La lista di Risk, verificata**
+1. ✅ `AssetSetComparisonLevels` non legge `controller.loadDiscarded`. **E nemmeno `controller.loadError`**, e questo va
+   oltre il brief. Le righe nascono dagli id selezionati (`buildAssetSetHurtRows`, `buildAssetSetPaidRows`), quindi con un
+   errore o una risposta scartata L1 e L3 mostrano tabelle di trattini senza una parola. La correlazione invece ha
+   `risk-correlation-error` e `risk-correlation-discarded`, con «Riprova» (`controller.loadBase(true)`).
+2. ✅ `exclusionWarnings()` (`risk-lab.spec.ts:436`) porta `code`, `message` e `details`, ma non `message_i18n_key`. Il
+   backend manda `assets_excluded` con una chiave per motivo (`service.py:1128`, `risk.warnings.assets_excluded_*`) e
+   `details.reason`, e `warningSentence` preferisce la chiave. Gli E2E provano quindi solo il ripiego inglese.
+3. ✅ Il contratto c'è: `RiskEligibilityResponse.common_range` e `suggested_range` (`schemas/risk.py:1685`), con
+   `suggested_range` offerto solo quando il periodo esce dall'intervallo comune.
+   - ⚠️ **Da decidere**: il laboratorio chiede l'idoneità per **tutto il catalogo** (serve al «+»), quindi il
+     `common_range` di quella risposta è quello del catalogo. Il pulsante riguarda la **selezione**, e un asset non scelto
+     con una storia corta restringerebbe il periodo proposto a tutti.
+   - ⚠️ Il pulsante cambia il periodo della barra, che vive in `routes/(app)/assets/+page.svelte`: quel file non è nella
+     lista di Risk (è fuori famiglia, lo arbitra il coordinatore).
+4. Estetica: aspetto il passaggio visivo di Risk sulla 6162.
+
+**Dal mio backlog, da proporre**:
+5. **C1b**: la variante con privacy accesa della rete «nessun importo». J ha corretto `formatCurrencyAmount`
+   (`riskAnalysisHelpers.ts:151`, cifre mascherate e valuta intatta, `maskCurrencyParts`), che era la condizione scritta.
+   Il commento a `risk-lab.spec.ts:1919` («No privacy-ON variant yet… once its masking is repaired») è quindi superato.
+
+**Risposte di Risk (10:53)**
+- **Nuovo modo di lavorare**: il developer scrive direttamente a F e ad A, e il via per il codice lo dà lui. Risk
+  coordina. Un'osservazione che tocca un pezzo in comune o un file non mio va a Risk **prima** di muovermi: `ScatterChart`
+  (di A); la cornice del livello, le funzioni degli avvisi, il controller e il replay (di Risk). I checkpoint passano da
+  Risk.
+1. **Forma canonica (b)**:
+   - una base scartata → `errorCodes` con `controller.loadDiscarded ? [ANSWER_DISCARDED_CODE] : []`, cioè il frame dice
+     `risk.errors.answer_discarded`, più «Riprova» nel corpo;
+   - `loadError` → la frase nel corpo (`risk.states.loadFailed`) più «Riprova»;
+   - allineare anche la correlazione; il frame resta com'è. Conferma finale del developer con il via.
+2. Mock con le chiavi per motivo: sì, via test-author.
+3. **D1**: seconda chiamata con i soli id selezionati, parcheggiati compresi; nessuna modifica al backend (limite 500).
+   **D2**: il via per `onfitperiod` in `+page.svelte` lo chiede Risk al coordinatore; **non toccare** la pagina fino alla
+   risposta. Posizione e testo: F con il developer.
+4. **C1b**: ok dal coordinamento, da proporre al developer, insieme alla correzione del commento superato a `:1919`.
+
+**Messaggi di Risk dopo le 10:53**
+- **D2, via del coordinatore**: `routes/(app)/assets/+page.svelte` si tocca **solo** per il collegamento `onfitperiod` del
+  pannello verso `handleDateRangeChange`, che nella base sta a `:763` (Risk aveva scritto `:716`). Niente refactor. Un
+  test, scritto da test-author e visto rosso prima, prova che il pulsante sposta il periodo della barra. La modifica passa
+  da Risk nel checkpoint.
+  - Verificato: `handleDateRangeChange` aggiorna `dateStart`, `dateEnd`, la memoria del periodo, l'URL e i prezzi.
+    `activePreset` resta com'era: da vedere se un preset rimane evidenziato dopo lo spostamento.
+- **Revisione grafica del developer**: tab Correlazione di Asset Global, «tutto ok». Nessun compito grafico per F.
+- **Nuovo compito K11 (Dashboard)**: la matrice della L2 della Dashboard deve avere anche gli ordini per tipo, settore e
+  area. Da fare:
+  - estrarre il caricamento delle mappe da `AssetSetCorrelationSection` (`:106-147`: GET bulk `/assets`, `distributionOf`,
+    le mappe `sectorsById` e `regionsById`, `ensureCountriesLoaded`, lo scarto delle risposte superate) in un modulo
+    condiviso, accanto a `correlationHelpers`;
+  - passare il laboratorio al modulo **senza cambiare comportamento**;
+  - A lo collegherà alla sua L2 senza copiare codice. Test prima dove serve; `risk-lab` come rete.
+- **Sessione rinominata** «F - Correlazione Asset Global», su richiesta del developer relayata da Risk.
+
+**Lista in attesa del via del developer**:
+1. errore e risposta scartata in L1 e L3, forma (b), con la correlazione allineata;
+2. mock con le chiavi per motivo;
+3. pulsante del periodo comune (D1 e D2 decise; posizione e testo col developer);
+4. C1b più il commento a `:1919`;
+5. K11, il modulo condiviso delle mappe della matrice.
+
+**▶️ VIA DEL DEVELOPER (2026-09-29, ask_user), alla lettera**: «Sì, tutti e cinque (consigliato)», per i punti 1–5 qui
+sopra. Posizione e testo del pulsante del periodo comune si decidono subito dopo.
+
+**Ordine di lavoro**:
+- K11 per primo, perché A aspetta il modulo;
+- poi i punti 1, 2 e 4, con test-author nella corsia 6154 (io intanto lavoro fuori corsia);
+- poi il pulsante (3), dopo posizione e testo.
+
+**Pulsante del periodo comune, decisioni del developer (ask_user)**:
+- prima scelta: in alto a destra, accanto al conteggio. Poi, scegliendo il testo, il developer cambia: «direi C, ma se è
+  così cambio la risposta di prima, forse conviene far comparire un banner in alto e poi il pulsante per fixare».
+- **Posizione**: una striscia in cima alla scheda di selezione che spiega il problema, con il pulsante per risolverlo.
+- **Testo del pulsante**: «Usa il periodo in cui tutti hanno prezzi (dal X al Y)».
+- La striscia compare solo quando la risposta d'idoneità **della selezione** (D1) porta `suggested_range`.
+
+### K11 · il modulo condiviso degli ingressi della matrice · 2026-09-29, dalle 11:10
+
+> **Note implementazione**
+> - Nuovo `frontend/src/lib/components/risk/matrixMetadata.svelte.ts`, non ancora collegato al laboratorio:
+>   - funzioni pure: `distributionOf`, `matrixMetadataFromRows` (i tipi letti con `safeString`, perché nel client generato
+>     `asset_type` è «valore o lista»), `assetIdsKey`, `EMPTY_MATRIX_METADATA`;
+>   - lettura: `loadMatrixMetadata(ids, language)`, cioè `ensureCountriesLoaded` e poi il GET in blocco `/assets`;
+>   - fabbrica reattiva: `createMatrixMetadata(() => ({assetIds, language}))`, con gli id confrontati come insieme, le
+>     risposte superate scartate, e `.types`, `.sectors`, `.regions`.
+>   - A differenza del laboratorio, il modulo fornisce **anche i tipi**: la L2 della Dashboard ne ha bisogno. Il
+>     laboratorio continua a prendere i tipi dalla sua lista, così il suo comportamento non cambia.
+> - `correlationHelpers.ts` resta senza import, di proposito.
+> - `front check` al pavimento; prettier pulito; `front build --debug` (marcatore `1`).
+> - test-author `k11-matrix-metadata`:
+>   - A: un E2E di caratterizzazione. Gli ordini tipo, settore e area compaiono con i metadati; se la lettura fallisce
+>     spariscono settore e area e restano tipo, similarità e nome. **Verde prima** dell'estrazione.
+>   - B: test unitari delle funzioni pure, in `matrixMetadata.test.ts`.
+> - Chiesto a Risk il via del coordinatore per registrare il nuovo test in `_frontend_utility.py`.
+> - Mentre test-author usa la corsia, nessun sorgente del frontend si tocca: il server di test ricostruirebbe a metà.
+
+### Progetto dei prossimi punti (da confermare dopo K11)
+
+**Punto 1, forma (b)**:
+- in `AssetSetComparisonLevels.svelte`, `l1Errors` e `l3Errors` diventano `resultErrorCodes(...)` più
+  `ANSWER_DISCARDED_CODE` quando `controller.loadDiscarded`;
+- le sezioni figlie ricevono `failed` (`controller.loadError`), `discarded` e `onretry` (`controller.loadBase(true)`).
+  Ordine dei rami: errore (frase `risk.states.loadFailed` più «Riprova») → caricamento → scartata senza cifre (solo
+  «Riprova», la frase la dice il frame) → vuoto → tabella;
+- la correlazione riceve `errorCodes` con `ANSWER_DISCARDED_CODE` quando `controller.loadDiscarded`: solo quello, niente
+  altro cambia.
+
+**Punto 3, la striscia del periodo comune**:
+- una seconda chiamata d'idoneità per i soli `selectedAssetIds`, parcheggiati compresi, con lo stesso debounce e lo
+  scarto delle risposte superate. `mergeEligibilityAnswers` porta anche `commonRange` e `suggestedRange`, che valgono solo
+  con un unico lotto: la selezione è ≤ 100 id;
+- la striscia `risk-fit-period-banner` in cima alla scheda, con una frase che conta gli asset scelti con un problema, e il
+  pulsante `risk-fit-period-button` («Usa il periodo in cui tutti hanno prezzi (dal X al Y)», con `data-start` e
+  `data-end`). Il tooltip nomina gli asset che tornano analizzabili: quelli con un problema, esclusi i mai quotati
+  (`no_price_history`), come dice il contratto («ogni asset quotato»);
+- una prop `onfitperiod({start, end})` nel pannello; nella pagina `handleDateRangeChange(start, end)`, **più
+  `activePreset = null`**, perché `DateRangePicker.effectivePreset` darebbe la precedenza al preset scelto prima. Da
+  confermare con Risk, che ha dato il via per il solo collegamento.
+- chiavi nuove `risk.assetSet.fitPeriod.*`;
+- test: test-author scrive l'E2E «il pulsante sposta il periodo della barra», rosso finché la pagina non è collegata.
+
+> **K11, test di test-author (`k11-matrix-metadata`)**:
+> - **A, E2E di caratterizzazione** a `risk-lab.spec.ts:2670` (aiutanti a `:1896–2055`), in due fasi:
+>   - la lettura riesce: i dati vengono dalle righe vere della corsia, con settori e aree piantati; compaiono i cinque
+>     ordini; «per settore» raggruppa;
+>   - la lettura fallisce (HTTP 500): restano tipo, similarità e nome, spariscono settore, area e le righe dei gruppi.
+>   - **Verde prima** dell'estrazione: 1 ⇒ 1; tutto il file con 4 worker **19 ⇒ 19**.
+>   - Due mutazioni temporanee (mappe scambiate; mappe non svuotate al fallimento) lo fanno diventare rosso.
+> - **B**: `matrixMetadata.test.ts`, **37 test** verdi. È orfano finché non arriva il via del coordinatore per la riga del
+>   runner.
+> - **Estrazione fatta**: `AssetSetCorrelationSection` usa `createMatrixMetadata` e tiene `assetTypes` dalla sua prop
+>   (l'ordine «per tipo» deve sopravvivere a una lettura fallita). Tolti gli import rimasti senza uso: `zodiosApi`,
+>   `ensureCountriesLoaded`, `safeScalar`, `normalizeDistribution` e `Distribution`. `front check` al pavimento,
+>   `front build --debug`.
+> - ⚠️ **Fuori pista, difetto trovato da test-author** in `CorrelationHeatmap.svelte:91`: `ordering = orderingOverride ??
+>   initialOrdering`. Un ordine scelto che sparisce (lettura fallita) resta attivo senza nessun pulsante premuto, e la
+>   matrice ordina per un criterio non più offerto. Correzione nel mio file: si ricade su `initialOrdering` quando l'ordine
+>   scelto non è fra le modalità offerte. Il test rosso lo scrive test-author prima della correzione. La matrice è montata
+>   anche dalla L2 di A: dopo la correzione gira anche l'E2E `risk`.
+
+> **K11 chiuso (verde)**, test-author:
+> - il test esteso è **rosso prima** della correzione (0 pulsanti premuti; ordine per nome invece che per similarità) e
+>   **verde dopo** (1 ⇒ 1);
+> - `risk-lab` **19 ⇒ 19** con 1 worker (35,6 s) e con 4 (29,3 s);
+> - `risk`, lo spec della Dashboard di A: **13 ⇒ 13**. La L2 della Dashboard oggi passa solo `output` e `assetLabels`,
+>   quindi offre similarità e nome: la correzione lì non può scattare, e nessun test controlla gli ordini della L2. Li
+>   aggiungerà A quando collega il modulo.
+> - **Correzione** `CorrelationHeatmap.svelte`: `ordering` è derivato dopo `modes`, come `orderingOverride !== null &&
+>   modes.includes(orderingOverride) ? orderingOverride : initialOrdering`. La scelta non si cancella e torna quando i dati
+>   tornano; test-author lo verifica.
+> - A Risk: il modulo è pronto per A, con l'uso in una riga. Chiesto il via per **tre** righe del runner:
+>   `matrixMetadata.test.ts`, `AssetSetComparisonLevels.test.ts`, `AssetSetCorrelationSection.test.ts`.
+>
+> **Punto 1, rosso prima**: test-author scrive i test di componente (jsdom, sul modello di
+> `AssetSetReplaySection.test.ts`) contro il contratto dei testid:
+> - `risk-asset-set-l1-error`, `-l1-discarded`, `-l1-retry` e lo stesso per `l3`;
+> - `risk-asset-set-loss-error` e `-paid-error` con `data-code="answer_discarded"`;
+> - `risk-correlation-section-error[data-code="answer_discarded"]`.
+
+### Punto 1 · errore e risposta scartata in L1, L3 e correlazione (forma b) · 2026-09-29
+
+> - **Rosso prima** (test-author): due file nuovi di test di componente (jsdom, sul modello di
+>   `AssetSetReplaySection.test.ts`), `AssetSetComparisonLevels.test.ts` (10) e `AssetSetCorrelationSection.test.ts` (4):
+>   **14 test, 8 rossi** per le ragioni giuste (testid mancanti, codici del frame `[]`), 6 verdi (l'impianto e i
+>   complementi).
+> - **Correzione**:
+>   - i figli `AssetSetLossComparisonSection` e `AssetSetRiskReturnSection` hanno le prop `failed`, `discarded` e
+>     `onretry`. Rami: errore (`risk-asset-set-l{1,3}-error`, frase `risk.states.loadFailed` più
+>     `risk-asset-set-l{1,3}-retry`) → caricamento → scartata senza cifre (`-discarded`, solo «Riprova») → vuoto →
+>     tabella;
+>   - il genitore aggiunge `ANSWER_DISCARDED_CODE` agli `errorCodes` di L1 e L3 quando `controller.loadDiscarded`, e
+>     collega `onretry` a `controller.loadBase(true)`;
+>   - la correlazione: il frame ha `errorCodes` con `answer_discarded`. Nel ramo errore ora c'è anche «Riprova»
+>     (`risk-correlation-retry`, dentro `risk-correlation-error`), come in L1 e L3, perché prima c'era solo la frase.
+> - **Verde**: 2 file, **14/14**; vitest su 20 percorsi (i 17 più `matrixMetadata` e i due nuovi): **20 file, 701 test**;
+>   `front check` al pavimento; `front build --debug`.
+>
+> ⚠️ **Fuori pista**: il testid `risk-correlation-retry` sul pulsante del ramo «scartata» c'era già in HEAD, e il mio
+> script l'ha aggiunto una seconda volta. Prettier si è fermato su `attribute_duplicate`; ho tolto il doppione, e ora ogni
+> ramo ne ha uno.
+>
+> **In corso (test-author)**: l'asserzione sul «Riprova» del ramo errore della correlazione; la rete `risk-lab`; il punto 2
+> (mock con le chiavi per motivo); il punto 4 (C1b, privacy accesa, più il commento a `:1917-1920`).
+
+### Punti 2 e 4 chiusi; punto 3 dal lato del pannello · 2026-09-29
+
+> **Punti 2 e 4** (test-author):
+> - «Riprova» nel ramo errore della correlazione verificato (unitari **15/15**);
+> - mock `assets_excluded` con una chiave per motivo e i `message_params`, come il backend. Il test prova la frase
+>   tradotta tramite il nome `#<id>` piantato, e senza la chiave diventa rosso;
+> - C1b, variante con privacy accesa («prints no money with privacy on either, masked or in clear»): quattro iniezioni
+>   temporanee di markup nel replay (etichetta nuda: verde; `-€•••`, `€98.76` e un `€` isolato: rossi);
+> - commento a `:1917-1920` e documentazione di `pinPrivacyOff` aggiornati;
+> - `risk-lab` **20 ⇒ 20** con 1 e con 4 worker.
+>
+> **Punto 3, lato pannello** (la pagina aspetta la conferma di Risk su `activePreset = null`):
+> - `eligibility.ts`: `DayRange`, `toDayRange` (con `safeScalar`/`safeString`, perché nel client generato
+>   `common_range` è «valore o lista»), `mergeEligibilityAnswers` con `commonRange` e `suggestedRange` (solo da una
+>   risposta a lotto unico), `fitPeriodOffer`. L'offerta c'è solo con `suggested_range` e almeno un asset scelto
+>   recuperabile (livello ≠ `eligible` e non `no_price_history`). I due campi nuovi di `EligibilityVerdicts` sono
+>   facoltativi, così i test esistenti restano validi.
+> - `AssetSetRiskPanel.svelte`:
+>   - `requestEligibility` in comune;
+>   - una seconda domanda per la sola selezione, con lo stesso debounce e lo scarto delle risposte superate;
+>   - la striscia `risk-fit-period-banner` (`data-recoverable`) in cima alla scheda, con il pulsante
+>     `risk-fit-period-button` (`data-start`, `data-end`) e il tooltip che nomina gli asset che tornano;
+>   - la prop `onfitperiod(range)`.
+> - i18n ×4 via `dev.py i18n`: `risk.assetSet.fitPeriod.{banner,button,hint}`, 3485 chiavi, insiemi identici.
+> - `front check` al pavimento (dopo un fuori pista di tipi: `common_range` letto come valore o lista); `eligibility.test.ts`
+>   34/34; `front build --debug`.
+> - test-author: allinea il test con privacy spenta; scrive gli unitari delle funzioni nuove; scrive l'E2E rosso-prima
+>   del pulsante (sposta il periodo e spegne il preset attivo).
+
+> **test-author, giro del punto 3**:
+> - **A**: il test con privacy spenta e la variante con privacy accesa usano ora un solo aiutante. Contano
+>   `.currency-amount` e non `.currency-symbol`, e ignorano un'etichetta di valuta nuda; 2 ⇒ 2. Un'iniezione temporanea
+>   (etichetta nuda più `.currency-amount`) fallisce solo al conteggio degli importi.
+> - **B**: `eligibility.test.ts` **56** test (+22: `toDayRange`, gli intervalli di `mergeEligibilityAnswers`,
+>   `fitPeriodOffer`).
+> - **C, rosso prima**: due E2E, «the fit-period strip moves the toolbar to the period in which every selected asset has
+>   prices, and lights no preset» e «…stays away when the suggested period would bring no selected asset back».
+>   - Il primo è **rosso per la ragione giusta**: atteso `2025-12-29 → 2026-09-28`, ricevuto `2025-09-29 → 2026-09-29`
+>     (1A ancora attivo).
+>   - Il secondo è verde, e con un asset lasciato fuori diventa rosso.
+>   - `risk-lab`: 22 dichiarati, 21 passati, 1 rosso atteso.
+> - Due commenti fuori posto in `eligibility.ts` (segnalati da test-author) rimessi sulle loro funzioni; 56/56.
+> - **In attesa**: la conferma di Risk su `activePreset = null` nella pagina, poi il collegamento `onfitperiod`.
+
+> **Voce in coda da Risk (14:54), non urgente**: la regola 3 di `mkdocs_src/docs/user/assets/correlation.en.md:154`
+> (guida del laboratorio, solo inglese) dice ancora che ogni prezzo riportato fa segnare **Parziale**, con la nota
+> inglese. Dalla soglia di Risk, un prezzo riportato conta solo oltre i **7 giorni di calendario**, e la nota è la frase
+> tradotta `risk.warnings.data_quality_stale_prices`.
+> - **Rinviata a dopo l'aggiornamento della base**: l'ancora da linkare, `data-quality.en.md#staleness-threshold`, non è
+>   in `ffe41c5ba` (grep: 0), perché sta nel checkpoint di Risk non ancora committato.
+> - La scriverà docs-writer, con `mkdocs build` e `check-links`. I due file di `financial-theory` li ha aggiornati Risk:
+>   se servisse toccarli, prima glielo dico.
+> - Per il codice non cambia niente: il nuovo motivo `no_price_source` arriva come avviso con la sua chiave.
+
+### Richiesta di Risk (22:50): il chip dell'asset diventa un componente condiviso
+
+> - **Perché**: il developer ha deciso che l'avviso in cima alla Dashboard (di A) mostri gli asset esclusi come badge,
+>   «icona e nome barrato, come nel lab». Un solo componente, di cui F è proprietario e A monta.
+> - **Stato verificato**: lo snippet `chip` di `AssetSetRiskPanel.svelte:603-631` è identico a HEAD, con due punti di
+>   chiamata (`:743`, `:746`, dentro e fuori dal Tooltip).
+> - **Risposta a Risk**: sì, in questo giro. Interfaccia proposta per `risk/AssetChip.svelte`: `asset`, `variant`
+>   (`default | warning | excluded`), `help` (il `cursor-help`, facoltativo), `testId`, lo snippet `trailing`, e `...rest`
+>   per i `data-*`; il componente pubblica `data-variant`. Il laboratorio non cambia (stessi testid, `data-level`,
+>   `data-reasons`, Tooltip).
+> - Prove previste: `risk-lab` verde e `AssetChip.test.ts` (jsdom) di test-author.
+> - La registrazione nel runner aspetta il via del coordinatore, come gli altri tre file nuovi.
+> - **Prima del codice: il via del developer** (regola del giro).
+
+> **▶️ Via del developer (ask_user), alla lettera**: «Sì, procedi (consigliato)». Risk approva l'interfaccia così com'è e
+> segna `AssetChip.svelte` come file di F nella tabella dei proprietari (stesse regole della heatmap). Prima del checkpoint
+> Risk proverà il chip su entrambe le pagine.
+>
+> **Note implementazione**
+> - Nuovo `frontend/src/lib/components/risk/AssetChip.svelte`:
+>   - props `asset`, `variant` (`default | warning | excluded`), `help`, `testId`, `trailing` e `...rest` sullo `<span>`;
+>   - pubblica `data-variant`; le classi sono quelle di oggi, alla lettera (`cursor-help` ora dipende da `help`); icona di
+>     ripiego `getAssetTypeIconUrl`; icona rotta nascosta; niente i18n.
+> - `AssetSetRiskPanel.svelte`: lo snippet `chip` rende `<AssetChip>` con `variant` dal livello, `help` quando c'è un
+>   verdetto diverso da `eligible` (la stessa condizione del Tooltip), `testId`, `data-level` e `data-reasons`, e la ✕
+>   come `trailing`. I due punti di chiamata non cambiano.
+> - Tolti dal pannello `getAssetTypeIconUrl` e `hideBrokenIcon`, rimasti senza uso (principio del developer).
+> - `front check` al pavimento; prettier pulito; `front build --debug`.
+> - test-author: `AssetChip.test.ts` (jsdom) e la rete `risk-lab`.
+> - **Al coordinatore**, come indicato da Risk: la conferma di `activePreset = null` nella pagina e il via per le **quattro**
+>   righe del runner.
+
+> **Via del coordinatore (22:56)**, alla lettera:
+> - **`activePreset = null`: sì**, nella stessa callback,
+>   `onfitperiod={(range) => { activePreset = null; handleDateRangeChange(range.start, range.end); }}`; nella pagina non
+>   cambia nient'altro;
+> - **quattro righe nel runner: sì, solo i percorsi**; le `desc` di `core-unit` e `component-unit` non si toccano (sono
+>   già riscritte in altri rami).
+>
+> **Note implementazione**
+> - Runner: `matrixMetadata.test.ts` a `_frontend_utility.py:76` (dopo `eligibility.test.ts`); `AssetSetComparisonLevels`,
+>   `AssetSetCorrelationSection` e `AssetChip.test.ts` a `:215-217` (dopo `AssetSetReplaySection.test.ts`). Solo aggiunte;
+>   sintassi verificata con `ast.parse`.
+> - ⚠️ **Fuori pista**: accanto al replay è registrato anche `AssetSetLossComparisonSection.test.ts`, il test del figlio
+>   L1 toccato al punto 1, e con lui `assetSetI18n.test.ts`. Sono di A, arrivati con `dev_release2`, e mancavano dalla mia
+>   lista vitest. Lanciati: **2 file, 21 test**, verdi. La lista del giro ora ha 23 percorsi (`files/Fround_vitest_paths.txt`).
+> - Pagina: il collegamento lo scrivo **dopo** che test-author finisce il suo giro nella corsia, così il server di test non
+>   ricostruisce a metà.
+
+> **Chiusura del punto 3 e del chip** (23:00–23:15)
+> - test-author: `AssetChip.test.ts` **26/26**; `risk-lab` 21/22 con il solo rosso atteso del pulsante. Nota: `...rest`
+>   veniva dopo `data-variant`, quindi un chiamante poteva sovrascrivere la variante che i test leggono. **Corretto**:
+>   `data-variant` viene dopo lo spread; 26/26.
+> - **Pagina** (via del coordinatore): `onfitperiod={(range) => { activePreset = null; handleDateRangeChange(range.start,
+>   range.end); }}` sul montaggio del pannello; nient'altro cambia nella pagina.
+> - **I due E2E del pulsante: verdi** (2 ⇒ 2), da rossi che erano: il periodo si sposta, nessun preset resta acceso, la
+>   striscia sparisce.
+>
+> **Cancelli del giro** (corsia 6154, uno per volta, porta libera prima e dopo):
+> ```
+> front check        · pavimento (3 errori + 41 avvisi, stessi 4 file) · 0 nei miei
+> prettier           · pulito sui file del frontend nel delta · git diff --check pulito
+> vitest             · 23 percorsi (i 17 + matrixMetadata, ComparisonLevels, CorrelationSection, AssetChip, LossComparisonSection e assetSetI18n di A) ⇒ 23 file · 771 test
+> front-utility core-unit       · 102 file · 2838 test (matrixMetadata registrato)
+> front-utility component-unit  · 89 file · 2161 test (i tre jsdom registrati)
+> check-orphans      · exit 0 · «All test files are registered» (spariti anche i 5 orfani di J)
+> i18n audit         · exit 0 · 0 mancanti · 3485 chiavi
+> mkdocs check-links · exit 0 · 83 validi
+> E2E risk-lab       · 22 ⇒ 22 (fine 23:08:04)
+> E2E risk           · 13 ⇒ 13 (fine 23:08:51)
+> E2E risk-asset-detail · 2 ⇒ 2 (fine 23:09:20)
+> E2E asset-list     · 28 ⇒ 28 (fine 23:10:26)
+> ```
+
+## ✅ Review del developer sul giro UI rischio · 2026-09-30, 10:05
+
+> Dopo l'aggiornamento notturno dell'app (sessione interrotta), il coordinatore chiede di verificare e mandare il
+> checkpoint. Verificato: HEAD `ffe41c5ba`, stage vuoto, **22 percorsi**; `+page.svelte` alle 23:04:41 e il piano alle
+> 23:13:11, come atteso; nessun sotto-agente al lavoro.
+>
+> **Il developer (ask_user), alla lettera**: «stavo proprio ora scrivendoti la review, è perfetto, lo adoro ed è
+> magnifico, segna il task come completamente completato, sentiti con il coordinatore e quando tutto è riallineato dimmi
+> qual è il prossimo componente da migliorare».
+> → **Giro UI rischio di F: completato.** Dopo il riallineamento, proporre al developer il prossimo componente.
+>
+> ⚠️ **Fuori pista — spegnimento della 6164 dopo l'aggiornamento dell'app**
+> - `stop_bash f4server` non ha fermato niente: quella shell apparteneva alla sessione di prima dell'aggiornamento, e il
+>   server era rimasto orfano e ancora in ascolto.
+> - Nessun comando di stop in `dev.py`. Verificato che il processo fosse mio: `dev.py server --test --port 6164
+>   --data-dir /tmp/librefolio-r2-f-prodcopy` (PID 39648) e il suo worker uvicorn 39715, cwd nel worktree, in ascolto
+>   sulla 6164.
+> - Mandato un **SIGTERM mirato per PID**, con un controllo del comando o della cwd prima di ciascuno: prima il wrapper
+>   39648, poi il worker 39715, che era rimasto in ascolto. Log: spegnimento ordinato («Shutting down LibreFolio»,
+>   «Scheduler loop stopped»).
+> - Esito: nessuno dei due processi è rimasto; `lsof` su 6164 e 6154 esce 1.
+> - Durante il controllo, un `grep` con la parola del comando di terminazione nel pattern è stato bloccato dal controllo
+>   dei comandi dello strumento; riscritto senza quella parola.
+>
+> **Non incluso nel checkpoint**: la correzione della regola 3 di `user/assets/correlation.en.md`, voce di Risk messa in
+> coda. Va fatta dopo l'aggiornamento della base, perché l'ancora `#staleness-threshold` non è ancora nel ramo.
+
+## Checkpoint 4 — giro UI rischio di F, verso Risk · 2026-09-30, 10:15
+
+> - **Base**: HEAD `ffe41c5ba`, stage vuoto. **22 percorsi**: 16 modificati e 6 nuovi.
+> - **Gruppi** in `/tmp/libreFolio_commits/f-ckpt4-groups.txt`, messaggi in `f-ckpt4-C1..C8.txt` (ASCII, oggetto ≤ 50,
+>   righe ≤ 72). L'ordine tiene compilabile ogni commit intermedio: il modulo della matrice (C1) viene prima della
+>   correlazione (C4), `AssetChip` (C3) prima del pannello (C6), le chiavi (C5) prima della striscia (C6).
+> - **i18n**: +3 chiavi `risk.assetSet.fitPeriod.*` per catalogo, 3485 chiavi, insiemi identici.
+> - **Cancelli**: quelli della sezione «Chiusura del punto 3 e del chip» (23:00–23:15 del 29/09). Dopo, nessun sorgente è
+>   cambiato: le sole modifiche sono a questo piano.
+> - **Stato**: FROZEN fino al commit e alle fusioni F → Risk e `dev_release2`.
