@@ -49,9 +49,12 @@
      * happened to catch it.
      */
     import {_ as t} from '$lib/i18n';
+    import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
+    import type DataTable from '$lib/components/table/DataTable.svelte';
     import {ANSWER_DISCARDED_CODE, createRiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
 
     import AssetSetLossComparisonSection from './AssetSetLossComparisonSection.svelte';
+    import type {AssetSetHurtRow} from './assetSetLevels';
     import AssetSetRiskReturnSection from './AssetSetRiskReturnSection.svelte';
     import {ASSET_SET_DAILY_VAR_INSTANCE, ASSET_SET_MONTHLY_VAR_INSTANCE, resultByCode, resultByInstance} from './riskAnalysisHelpers';
     import {degradedResults, levelMetadata, resultErrorCodes, resultReasons} from './levels/levelHelpers';
@@ -61,6 +64,8 @@
         /** Already non-empty: the caller's `{#if}` is the guard, see above. */
         assetIds: number[];
         assetLabels: ReadonlyMap<number, string>;
+        /** Each asset's icon URL, resolved by the panel, for the loss table's asset cells. */
+        assetIcons: ReadonlyMap<number, string>;
         dateStart: string;
         dateEnd: string;
         targetCurrency: string;
@@ -76,7 +81,7 @@
         refreshVersion?: number;
     }
 
-    let {assetIds, assetLabels, dateStart, dateEnd, targetCurrency, benchmarkId, refreshVersion = 0}: Props = $props();
+    let {assetIds, assetLabels, assetIcons, dateStart, dateEnd, targetCurrency, benchmarkId, refreshVersion = 0}: Props = $props();
 
     const controller = createRiskPanelController(
         () => ({
@@ -144,11 +149,22 @@
      * inapplicable comparison.
      */
     let benchmarkApplies = $derived(benchmarkId !== null && comparison?.status === 'ok');
+
+    /**
+     * The loss table's instance, bound while the table is on screen. The column toggle
+     * it feeds sits in the frame's header beside the manual (the developer's review,
+     * 30/09), and only while there is a table to act on.
+     */
+    let lossTable = $state<DataTable<AssetSetHurtRow>>();
 </script>
 
-<RiskLevelSection title={$t('risk.assetSet.levels.l1.title')} level={1} testId="risk-asset-set-loss" health={l1Health} reasons={l1Reasons} errorCodes={l1Errors} metadata={l1Metadata} docsPath="financial-theory/technical-analysis/risk-metrics/">
-    <AssetSetLossComparisonSection {assetIds} {assetLabels} {dailyVar} {monthlyVar} {drawdown} loading={controller.initialLoading} failed={controller.loadError} discarded={controller.loadDiscarded} onretry={() => void controller.loadBase(true)} />
+<RiskLevelSection title={$t('risk.assetSet.levels.l1.title')} level={1} testId="risk-asset-set-loss" health={l1Health} reasons={l1Reasons} errorCodes={l1Errors} metadata={l1Metadata} docsPath="financial-theory/technical-analysis/risk-metrics/" actions={lossTable ? lossActions : undefined}>
+    <AssetSetLossComparisonSection bind:tableRef={lossTable} {assetIds} {assetLabels} {assetIcons} {dailyVar} {monthlyVar} {drawdown} loading={controller.initialLoading} failed={controller.loadError} discarded={controller.loadDiscarded} onretry={() => void controller.loadBase(true)} />
 </RiskLevelSection>
+
+{#snippet lossActions()}
+    <ColumnVisibilityToggle tableRef={lossTable} />
+{/snippet}
 
 <RiskLevelSection title={$t('risk.assetSet.levels.l3.title')} level={3} testId="risk-asset-set-paid" health={l3Health} reasons={l3Reasons} errorCodes={l3Errors} metadata={l3Metadata} docsPath="financial-theory/technical-analysis/risk-metrics/">
     <AssetSetRiskReturnSection {assetIds} {assetLabels} {riskReturn} {kpi} {comparison} {benchmarkApplies} loading={controller.initialLoading} failed={controller.loadError} discarded={controller.loadDiscarded} onretry={() => void controller.loadBase(true)} />

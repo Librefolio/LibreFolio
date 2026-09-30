@@ -103,7 +103,12 @@ const LABELS: ReadonlyMap<number, string> = new Map([
     [HOLDING_A, 'Invented holding A'],
     [HOLDING_B, 'Invented holding B'],
 ]);
-const PROPS = {assetIds: SELECTION, assetLabels: LABELS, dateStart: DATE_START, dateEnd: DATE_END, targetCurrency: 'EUR', benchmarkId: null, refreshVersion: 0};
+/** Invented: the icons the panel would resolve for the two holdings, passed through to L1°. */
+const ICONS: ReadonlyMap<number, string> = new Map([
+    [HOLDING_A, '/icons/asset-types/etf.png'],
+    [HOLDING_B, '/icons/asset-types/stock.png'],
+]);
+const PROPS = {assetIds: SELECTION, assetLabels: LABELS, assetIcons: ICONS, dateStart: DATE_START, dateEnd: DATE_END, targetCurrency: 'EUR', benchmarkId: null, refreshVersion: 0};
 
 /** Each level: the prefix its body publishes, and the testid of the frame it sits in. */
 const LEVELS = [
@@ -242,11 +247,23 @@ async function blockWithRetry(level: Level, state: 'error' | 'discarded', why: s
     return {block, retry: retry as HTMLElement};
 }
 
+/**
+ * An asset's L1 row, found by the asset id it carries — `[data-asset-id]`, walked up to its `tr` —
+ * rather than by a row testid: L1° is the project's DataTable, whose rows publish `data-row-id`
+ * and whose name cell carries the asset. The table's own structure is pinned in
+ * `AssetSetLossComparisonSection.test.ts`; here a row only has to be found.
+ */
+function l1RowOf(assetId: number): HTMLElement | undefined {
+    const carriers = screen.queryByTestId('risk-asset-set-l1-table')?.querySelectorAll<HTMLElement>(`[data-asset-id="${assetId}"]`) ?? [];
+    const rows = [...new Set([...carriers].map((carrier) => carrier.closest('tr')))].filter((row): row is HTMLTableRowElement => row !== null);
+    return rows.length === 1 ? rows[0] : undefined;
+}
+
 /** The barrier of the answer with figures: every selected asset has its L1 row, and its bad day is measured. */
 async function expectFigures(): Promise<void> {
     await waitFor(() => {
         for (const assetId of SELECTION) {
-            const row = screen.queryAllByTestId('risk-asset-set-l1-row').find((candidate) => candidate.dataset.assetId === String(assetId));
+            const row = l1RowOf(assetId);
             expect(row, `asset ${assetId} has no L1 row`).toBeDefined();
             expect(within(row as HTMLElement).getByTestId('risk-asset-set-l1-badDay'), `asset ${assetId}: the bad day is a dash — the fixture was rejected, or never arrived`).toHaveAttribute('data-measured', 'true');
         }
@@ -385,5 +402,167 @@ describe('AssetSetComparisonLevels — an answer: nothing failed, nothing discar
         for (const cell of screen.getAllByTestId('risk-asset-set-l1-badDay')) expect(cell).toHaveAttribute('data-measured', 'false');
 
         expectNoLoadChrome('an answer that measured nothing');
+    });
+});
+
+/**
+ * L1°'s column toggle — the project's `ColumnVisibilityToggle`, in the L1 frame's header just
+ * before its manual icon (`RiskLevelSection`'s `actions`), bound to the loss table
+ * (`AssetSetLossComparisonSection`'s bindable `tableRef`).
+ *
+ * It exists only while the table does: a toggle beside no table opens onto nothing, or onto the
+ * columns of a table the reader cannot see. So it is absent while the first answer is in flight,
+ * after a failed wave, and after an answer discarded with nothing to keep — and each of those
+ * cases then brings the table and proves the toggle arrives with it, which is what keeps the
+ * absence from passing about a page that has no toggle at all. Wherever the table is drawn it is
+ * there: with figures, with an answer that measured nothing (a row of dashes per selected asset
+ * is still a table), and when a later answer is discarded and the figures stay. L3° has none.
+ *
+ * Found by testid; the menu is read by its items' testids, never by their labels. Switching a
+ * column off and on is the E2E's (`risk-lab.spec.ts`): here the table only has to be the one the
+ * menu reads.
+ */
+
+/** L1°'s value columns, as `AssetSetLossComparisonSection` defines them. */
+const L1_VALUE_COLUMNS = ['badDay', 'badMonth', 'worstFall', 'currentFall', 'toPeak'] as const;
+
+const lossFrame = (): HTMLElement => screen.getByTestId('risk-asset-set-loss');
+const paidFrame = (): HTMLElement => screen.getByTestId('risk-asset-set-paid');
+
+/** A frame's column toggle, if it has one. */
+function toggleIn(frame: HTMLElement): HTMLElement | null {
+    return within(frame).queryByTestId('column-visibility-toggle');
+}
+
+/** Whether `first` comes before `second` in document order, `second` not inside it. */
+function precedes(first: Node, second: Node): boolean {
+    return !first.contains(second) && (first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+}
+
+/** L1°'s toggle, waited for: the barrier of every case in which the table is drawn. */
+async function expectToggle(why: string): Promise<HTMLElement> {
+    return waitFor(() => {
+        const toggle = toggleIn(lossFrame());
+        expect(toggle, why).not.toBeNull();
+        return toggle as HTMLElement;
+    });
+}
+
+/**
+ * No toggle in L1°'s frame — asserted with the frame's header drawn, its title and its manual
+ * icon, and with no table, which is the state's own premise: the absence is about the toggle.
+ */
+function expectNoToggle(why: string): void {
+    const frame = lossFrame();
+    within(frame).getByTestId('risk-asset-set-loss-title');
+    within(frame).getByTestId('risk-asset-set-loss-docs');
+    expect(screen.queryByTestId('risk-asset-set-l1-table'), `${why} — premise: this state draws no table`).toBeNull();
+    expect(toggleIn(frame), why).toBeNull();
+}
+
+/**
+ * Hold every base question in flight until the test releases it with the figures. The harness's
+ * own answers settle at once, which leaves the skeleton on screen for no moment a test could rely
+ * on. One test's scope: `beforeEach` installs the ordinary answers again.
+ */
+function holdAnswers(): () => void {
+    const held: ((answer: {items: RiskAnalyticResult[]}) => void)[] = [];
+    queryRisk.mockImplementation((request: RiskQueryRequest, force?: boolean) => {
+        script.asked.push({request, force: force === true});
+        return new Promise((resolve) => held.push(resolve));
+    });
+    return () => {
+        for (const resolve of held.splice(0)) resolve({items: FIGURES});
+    };
+}
+
+/** Press a retry with figures to answer it: the table arrives. */
+async function retryIntoFigures(retry: HTMLElement): Promise<void> {
+    script.outcome = 'figures';
+    await fireEvent.click(retry);
+    await expectFigures();
+}
+
+describe("AssetSetComparisonLevels — L1°'s column toggle, in its frame beside the manual icon", () => {
+    it("with figures: in L1°'s header, after the title and before the manual icon — and L3° has none", async () => {
+        const {controller} = mount();
+        await settled(controller);
+        await expectFigures();
+        const toggle = await expectToggle('L1° shows its figures and its frame offers no column toggle');
+
+        const frame = lossFrame();
+        expect(within(frame).getByTestId('risk-asset-set-loss-body').contains(toggle), "the toggle is in L1°'s body: it belongs to the frame's header").toBe(false);
+        expect(precedes(within(frame).getByTestId('risk-asset-set-loss-title'), toggle), "the toggle does not come after L1°'s title, or sits inside it").toBe(true);
+        expect(precedes(toggle, within(frame).getByTestId('risk-asset-set-loss-docs')), "the toggle does not come before L1°'s manual icon").toBe(true);
+
+        // L3°'s frame is drawn, its manual icon included, and carries no toggle of its own.
+        within(paidFrame()).getByTestId('risk-asset-set-paid-docs');
+        expect(toggleIn(paidFrame()), "L3° got a column toggle: only L1°'s table has one").toBeNull();
+        expect(screen.getAllByTestId('column-visibility-toggle'), 'the levels carry one column toggle, L1°').toHaveLength(1);
+    });
+
+    it("opening it lists L1°'s columns: the menu reads the loss table", async () => {
+        const {controller} = mount();
+        await settled(controller);
+        await expectFigures();
+        await fireEvent.click(await expectToggle('L1° shows its figures and its frame offers no column toggle'));
+
+        const menu = await waitFor(() => screen.getByTestId('column-visibility-dropdown'));
+        for (const column of L1_VALUE_COLUMNS) {
+            expect(within(menu).queryByTestId(`column-visibility-item-${column}`), `the menu does not offer ${column}: the toggle is not reading L1°'s table`).not.toBeNull();
+        }
+    });
+
+    it('is not there while the first answer is in flight, and arrives with the table', async () => {
+        const release = holdAnswers();
+        const {controller} = mount();
+        await waitFor(() => expect(script.asked, 'the base question was never asked: nothing is in flight').toHaveLength(1));
+        expect(controller.initialLoading, 'premise: the first answer is still loading').toBe(true);
+        await waitFor(() => expect(screen.queryByTestId('risk-asset-set-l1-loading'), 'L1° is not drawing its skeleton').not.toBeNull());
+        expectNoToggle('a column toggle beside a skeleton');
+
+        release();
+        await expectFigures();
+        await expectToggle('the table arrived without its toggle');
+    });
+
+    it('is not there after a failed wave, and arrives with the table a retry brings', async () => {
+        await mountFailed();
+        const {retry} = await blockWithRetry('l1', 'error', 'L1° shows no error block: the state under test is not on screen');
+        expectNoToggle('a column toggle beside a failed wave');
+
+        await retryIntoFigures(retry);
+        await expectToggle('the retry brought the table without its toggle');
+    });
+
+    it('is not there after an answer discarded with nothing to keep, and arrives with the table a retry brings', async () => {
+        await mountDiscarded();
+        const {retry} = await blockWithRetry('l1', 'discarded', 'L1° shows no discarded block: the state under test is not on screen');
+        expectNoToggle('a column toggle beside a discarded answer');
+
+        await retryIntoFigures(retry);
+        await expectToggle('the retry brought the table without its toggle');
+    });
+
+    it('is there with an answer that measured nothing: a row of dashes per selected asset is still a table', async () => {
+        script.outcome = 'nothing';
+        const {controller} = mount();
+        await settled(controller);
+        await waitFor(() => expect(screen.getByTestId('risk-asset-set-l1-table')).toHaveAttribute('data-row-count', String(SELECTION.length)));
+
+        await expectToggle('L1° draws its table and its frame offers no column toggle');
+    });
+
+    it('stays when a later answer is discarded: the figures stay, and so does their toggle', async () => {
+        const {view, controller} = mount();
+        await settled(controller);
+        await expectFigures();
+        await expectToggle('L1° shows its figures and its frame offers no column toggle');
+
+        script.outcome = 'discard';
+        view.rerender({refreshVersion: 1});
+        await waitFor(() => expect(controller.loadDiscarded, 'the refreshed answer was never recorded as discarded').toBe(true));
+        await expectFigures();
+        expect(toggleIn(lossFrame()), 'the figures stayed and their toggle went: it follows the table, not the load state').not.toBeNull();
     });
 });
