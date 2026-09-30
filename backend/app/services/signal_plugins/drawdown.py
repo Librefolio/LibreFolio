@@ -66,6 +66,7 @@ class DrawdownPlugin(SignalPlugin):
     semantic_id = "underwater_drawdown"
     semantic_description = "Measures each price observation below its running peak."
     icon = "📉"
+    docs_path = "financial-theory/technical-analysis/risk-metrics/current-drawdown/"
     category = SignalCategory.RISK
     params_model = DrawdownParams
     input_requirements = SignalInputRequirements(

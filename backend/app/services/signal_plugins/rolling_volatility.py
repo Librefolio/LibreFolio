@@ -63,6 +63,7 @@ class RollingVolatilityPlugin(SignalPlugin):
     semantic_id = "rolling_realized_volatility"
     semantic_description = "Annualizes rolling sample volatility at observed frequency."
     icon = "〽️"
+    docs_path = "financial-theory/technical-analysis/risk-metrics/volatility/"
     category = SignalCategory.RISK
     params_model = RollingVolatilityParams
     input_requirements = SignalInputRequirements(

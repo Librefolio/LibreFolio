@@ -6,10 +6,10 @@ import inspect
 import json
 import re
 from datetime import timedelta
-from pathlib import Path
 
 import pytest
 
+from backend.app.config import PROJECT_ROOT
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.signals import (
     SignalAggregationProfile,
@@ -175,6 +175,21 @@ EXPECTED_SEMANTIC_IDS = {
         ],
     ),
 }
+DOCS_ROOT = PROJECT_ROOT / "mkdocs_src" / "docs"
+# DocsLink opens `/mkdocs/<lang>/<docs_path>` as-is: relative (no leading
+# slash), directory-style (trailing slash), as every declared value is.
+# Lowercase too: the page-exists check below is case-insensitive on macOS,
+# the served site is not.
+DOCS_PATH_SHAPE = re.compile(r"(?:[a-z0-9][a-z0-9_-]*/)+")
+# Pinned so an edit cannot silently repoint a risk signal's in-app guide.
+EXPECTED_RISK_DOCS_PATHS = {
+    "RISK_DRAWDOWN": "financial-theory/technical-analysis/risk-metrics/current-drawdown/",
+    "RISK_ROLLING_RETURN": "financial-theory/fundamentals/returns/",
+    "RISK_ROLLING_VOLATILITY": "financial-theory/technical-analysis/risk-metrics/volatility/",
+    "RISK_ROLLING_SHARPE": "financial-theory/technical-analysis/risk-metrics/sharpe-ratio/",
+    "RISK_ROLLING_BETA": "financial-theory/technical-analysis/risk-metrics/beta-active-return/",
+    "ASSET_CALENDAR_ROLLING_RETURN": "financial-theory/fundamentals/returns/",
+}
 
 
 @pytest.fixture(scope="module")
@@ -212,11 +227,6 @@ def test_registry_has_twenty_two_complete_definitions():
 
     for definition in definitions:
         assert definition.implementation_version
-        if definition.signal_code in LEGACY_CODES:
-            assert definition.docs_path
-        if definition.docs_path:
-            documentation = Path("mkdocs_src/docs") / f"{definition.docs_path.rstrip('/')}.en.md"
-            assert documentation.is_file()
         assert definition.params_schema["additionalProperties"] is False
         assert definition.output_specs
         assert len({spec.key for spec in definition.output_specs}) == len(definition.output_specs)
@@ -260,6 +270,20 @@ def test_registry_has_twenty_two_complete_definitions():
         '"color"',
     ):
         assert forbidden not in serialized
+
+    # docs_path is what makes a signal's in-app guide button appear, so every
+    # *registered* plugin must declare one. Walked through the registry, not
+    # list_definitions(), which omits catalog-hidden plugins such as
+    # ASSET_CALENDAR_ROLLING_RETURN. Each rule collects every offending code.
+    docs_paths = {code: SignalPluginRegistry.get_plugin(code).catalog_definition().docs_path for code in sorted(SignalPluginRegistry.list_plugin_codes())}
+    without_docs_path = [code for code, docs_path in docs_paths.items() if not docs_path]
+    assert not without_docs_path, f"signals without docs_path: {', '.join(without_docs_path)}"
+    misshaped = {code: docs_path for code, docs_path in docs_paths.items() if not DOCS_PATH_SHAPE.fullmatch(docs_path)}
+    assert not misshaped, f"docs_path must be relative, lowercase and end with '/': {misshaped}"
+    without_page = {code: docs_path for code, docs_path in docs_paths.items() if not (DOCS_ROOT / f"{docs_path.rstrip('/')}.en.md").is_file()}
+    assert not without_page, f"docs_path with no .en.md page under {DOCS_ROOT}: {without_page}"
+    repointed = [f"{code}: declared {docs_paths.get(code)!r}, pinned {pinned!r}" for code, pinned in EXPECTED_RISK_DOCS_PATHS.items() if docs_paths.get(code) != pinned]
+    assert not repointed, f"risk signals off their pinned guide: {'; '.join(repointed)}"
 
 
 def test_all_plugin_outputs_declare_exact_aggregation_profile_matrix():
