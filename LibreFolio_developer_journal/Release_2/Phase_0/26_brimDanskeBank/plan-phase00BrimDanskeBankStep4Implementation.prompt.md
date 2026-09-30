@@ -269,3 +269,38 @@ Tutti e tre con `crypto.randomUUID()`, come campo del `FormData`.
 - ✅ **Piano scritto il 2026-09-30.** Il coordinatore ha dato il via sulle superfici del §7, aggiungendo i due modali condivisi con K; il developer ha deciso D-I1…D-I3.
 - ⏳ Prossimo passo: `CHECKPOINT READY` del journal, cioè design, piano principale e questo piano. Dopo il commit si parte con **A1**.
 - ⏸ C2 e C3 aspettano la voce 0 di K in `dev_release2` e l'aggiornamento della base di L.
+
+### A1 — ⏳ in corso (2026-09-30)
+
+- Journal della pianificazione committato: `f6f0d2637`. Il coordinatore dà il via ad A1 e conferma che la base va bene così: fuori dal journal, `dev_release2` ha in più solo le righe del CHANGELOG.
+- Test rossi affidati al test-author, sull'interfaccia fissata qui:
+  - file nuovo `test_services/test_brim_report_sets.py`;
+  - registrazione `services brim-report-sets`, subito dopo `brim-provider-base`;
+  - venti punti: schemi, contratto, plugin finto a due ruoli, storage.
+- La cura è pronta come script e si applica solo dopo la prova del rosso.
+
+> **Note implementazione (2026-09-30)**:
+> - **Rosso** (test-author): 107 test raccolti, 106 falliscono, ciascuno con «not implemented yet (BRIM report sets, phase A1)» sul pezzo che manca (31 pezzi distinti). Passa solo il controllo del plugin finto, che non usa niente di A1. `brim-provider-base` resta 34/34; `check-orphans` è pulito (224 file registrati).
+> - **Cura**, applicata dopo il rosso:
+>   - `schemas/brim.py`:
+>     - `BRIMReportRole`, `BRIMCoverage`, `BRIMMemberSummary` (con `account_fingerprint` escluso dalla serializzazione);
+>     - `BRIMSetShape`, `BRIMCombinedTable` (con le colonne obbligatorie `lf_row_kind` e `lf_source`), `BRIMDerivedRef`;
+>     - i punti di verità: `BRIMTruthCash`, `BRIMTruthPosition`, `BRIMAbsorbed`, `BRIMCheckpoint`, `BRIMVerification`;
+>     - i campi nuovi di `BRIMFileInfo`, `BRIMPluginInfo`, `BRIMParseOutput` e `BRIMParseResponse`;
+>     - corretto il commento sull'endpoint `…/bulk`.
+>   - `brim_provider.py`:
+>     - `BRIMSetRequiredError` e il contratto dei set, con tutti i default;
+>     - `batch_id` all'upload; `write_combined_csv`, `save_combined_file`, `find_reusable_combined`;
+>     - `combine_is_stale`; `delete_file` mantiene i collegamenti.
+> - **Verde**: `services brim-report-sets` 107/107; `brim-provider-base` 34, `brim-parse-error` 4, `brim-parse-pool` 8, `brim-parse-race` 6, `brim-create-transaction` 14, `brim-versioning` 5.
+> - **Lint**: `dev.py lint` pulito. Black su `brim_provider.py` ha unito su una riga una mia condizione su più righe; ora i 4 file sono puliti.
+>
+> **⚠️ Fuori pista**: `external brim-providers` dava 4 rossi in `TestCreditAgricoleCanonicalCharacterization`. Il test congela l'elenco dei campi di `BRIMParseOutput` e l'intero output in un letterale, e le due chiavi nuove, vuote, `checkpoints` e `verifications`, lo facevano fallire. È un cambio di contratto voluto e il contenuto di CA non cambia: la riparazione (chiavi aggiunte al letterale, non filtrate) è affidata al test-author.
+>
+> **Note implementazione (2026-09-30), chiusura di A1**:
+> - Test-author: +7 righe in `test_brim_providers.py`. Le due chiavi entrano nell'elenco congelato dei campi e nei due letterali `EXPECTED_OUTPUTS`, con un commento, così un punto di verità inatteso da CA fa ancora fallire il test.
+> - `external brim-providers`: 537 passati, 2 saltati (gli stessi di prima, `TestWindows1252Invariance` sul campione Degiro).
+> - `api brim`: 30 passati; le risposte con i campi nuovi funzionano.
+> - `git diff --check` pulito; black pulito sui 5 file Python; porta 6156 libera.
+>
+> ### A1 — ✅ pronta per il checkpoint (2026-09-30)
