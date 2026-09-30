@@ -2,6 +2,9 @@ import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {expectChartCanvas, showChartTooltip} from '../fixtures/charts';
 import {TEST_USER} from '../fixtures/test-users';
+import {uniqueSuffix} from '../fixtures/unique';
+import path from 'path';
+import {fileURLToPath} from 'url';
 import {appears} from '../fixtures/probe';
 
 /**
@@ -758,5 +761,128 @@ test.describe('Broker detail — GrowthChart P&L mode', () => {
         // An overlay line would add a signed row per broker, named after it.
         await expect(chart.getByText(BROKER_SIGNED_AMOUNT), 'no per-broker P&L row belongs on a single-broker page').toHaveCount(0);
         await expect(chart.getByText(BROKER_WITH_HOLDINGS, {exact: true}), 'the broker name would only appear here as an overlay legend row').toHaveCount(0);
+    });
+});
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+/**
+ * Import history modal — uploading a BRIM file.
+ *
+ * `POST /brokers/import/upload` reads `broker_id` from the multipart **form**
+ * (`Form(...)`). BrokerImportFilesModal sent it as a query parameter and put only
+ * `file` in the FormData, so every upload from this modal answered 422 and the user
+ * got nothing but an error banner. The status is asserted first because it *is* the
+ * defect; the stored file is then read back through the API, scoped to a broker this
+ * test creates — the mock seeds its own `generic_simple.csv` on Interactive Brokers,
+ * so matching by file name alone would prove nothing.
+ */
+const API = '/api/v1';
+const BRIM_UPLOAD_PATH = `${API}/brokers/import/upload`;
+/** The repository's synthetic Generic CSV sample — never a real broker export. */
+const SAMPLE_BRIM_REPORT = path.resolve(__dirname, '../../../backend/app/services/brim_providers/sample_reports/generic_simple.csv');
+const SAMPLE_BRIM_REPORT_NAME = path.basename(SAMPLE_BRIM_REPORT);
+
+type BrimFileInfo = {file_id: string; filename: string; target_broker_id: number | null};
+
+/** A broker this test owns. The name goes through `uniqueSuffix()`: `brokers.name` is uniquely indexed. */
+async function createOwnedBroker(page: Page, name: string): Promise<number> {
+    const response = await page.request.post(`${API}/brokers`, {data: [{name, allow_cash_overdraft: true}]});
+    expect(response.ok(), `create owned broker: HTTP ${response.status()} ${await response.text()}`).toBe(true);
+    const {results} = (await response.json()) as {results: Array<{name: string; success: boolean; broker_id: number | null}>};
+    const created = results.find((result) => result.name === name);
+    if (!created?.success || typeof created.broker_id !== 'number') throw new Error(`Owned broker "${name}" was not created: ${JSON.stringify(results)}`);
+    return created.broker_id;
+}
+
+/**
+ * The BRIM files stored on one broker. The list endpoint also returns legacy files that
+ * carry no broker at all, so the target is filtered here rather than assumed.
+ */
+async function brimFilesOn(page: Page, brokerId: number): Promise<BrimFileInfo[]> {
+    const response = await page.request.get(`${API}/brokers/import/files?broker_ids=${brokerId}`);
+    expect(response.ok(), `list the BRIM files of broker ${brokerId}: HTTP ${response.status()}`).toBe(true);
+    const files = (await response.json()) as BrimFileInfo[];
+    return files.filter((file) => file.target_broker_id === brokerId);
+}
+
+/**
+ * Delete every BRIM file on the owned broker, then the broker. Scoped to the id this
+ * test created, never to "whatever appeared since"; when the upload never happened
+ * there is simply no file to delete, so the red this block exists for stays the only red.
+ */
+async function deleteOwnedBrokerAndFiles(page: Page, brokerId: number): Promise<void> {
+    const failures: string[] = [];
+    try {
+        for (const file of await brimFilesOn(page, brokerId)) {
+            const response = await page.request.delete(`${API}/brokers/import/files/${file.file_id}`);
+            if (!response.ok()) failures.push(`BRIM file ${file.file_id}: HTTP ${response.status()}`);
+        }
+    } catch (error) {
+        failures.push(`list the BRIM files of broker ${brokerId}: ${String(error)}`);
+    }
+    try {
+        const response = await page.request.delete(`${API}/brokers?ids=${brokerId}&force=true`);
+        const body = (await response.json().catch(() => null)) as {results?: Array<{id: number; success: boolean}>} | null;
+        if (!response.ok() || !body?.results?.find((result) => result.id === brokerId)?.success) failures.push(`broker ${brokerId}: HTTP ${response.status()} ${JSON.stringify(body)}`);
+    } catch (error) {
+        failures.push(`broker ${brokerId}: ${String(error)}`);
+    }
+    expect(failures, 'cleanup removes the BRIM files and the broker this test created').toEqual([]);
+}
+
+test.describe('Broker detail — import history upload', () => {
+    let ownedBrokerId: number | undefined;
+
+    test.beforeEach(async ({page}) => {
+        ownedBrokerId = undefined;
+        await login(page, TEST_USER);
+    });
+
+    // afterEach, not `finally`: a cleanup throwing from `finally` would replace the
+    // assertion error it follows, and that assertion is the point of this block.
+    test.afterEach(async ({page}) => {
+        if (ownedBrokerId !== undefined) await deleteOwnedBrokerAndFiles(page, ownedBrokerId);
+    });
+
+    test('uploads a report from the import history modal to its own broker', async ({page}) => {
+        test.setTimeout(60_000);
+        // Sorts after every seeded broker, so a neighbour's "first card" stays a mock broker.
+        const brokerName = `Upload regression history ${uniqueSuffix()}`;
+        const brokerId = await createOwnedBroker(page, brokerName);
+        ownedBrokerId = brokerId;
+
+        await navigateTo(page, `/brokers/${brokerId}`);
+        await expect(page.getByTestId('broker-name')).toHaveText(brokerName, {timeout: 10_000});
+        await goToTransazioniTab(page);
+        await page.getByTestId('broker-show-import-history').click();
+        const modal = page.getByTestId('import-files-modal');
+        await expect(modal).toBeVisible({timeout: 5_000});
+
+        await modal.getByTestId('import-files-upload-toggle').click();
+        const uploader = modal.getByTestId('file-uploader');
+        await expect(uploader).toBeVisible({timeout: 5_000});
+        await uploader.getByTestId('file-input').setInputFiles(SAMPLE_BRIM_REPORT);
+        const submit = uploader.getByTestId('file-upload-submit');
+        await expect(submit).toBeVisible({timeout: 5_000});
+
+        // Armed before the click: a response is an edge, not a state.
+        const uploadResponse = page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === BRIM_UPLOAD_PATH, {timeout: 15_000});
+        await submit.click();
+        const upload = await uploadResponse;
+        const body = await upload.text();
+        expect(upload.status(), `POST ${BRIM_UPLOAD_PATH} from the import history modal: ${body}`).toBe(200);
+
+        const uploaded = JSON.parse(body) as BrimFileInfo;
+        expect(uploaded, 'the modal uploads to the broker whose history it shows').toMatchObject({filename: SAMPLE_BRIM_REPORT_NAME, target_broker_id: brokerId});
+        const stored = (await brimFilesOn(page, brokerId)).filter((file) => file.filename === SAMPLE_BRIM_REPORT_NAME);
+        expect(
+            stored.map((file) => file.file_id),
+            `${SAMPLE_BRIM_REPORT_NAME} is stored exactly once on broker ${brokerId}`,
+        ).toEqual([uploaded.file_id]);
+
+        // …and the modal lists it: on success handleUpload reloads this broker's files.
+        await expect(modal.locator(`[data-row-id="${uploaded.file_id}"]`)).toBeVisible({timeout: 8_000});
     });
 });
