@@ -240,8 +240,18 @@ export function plainName(name: string): string {
  * plain one.
  */
 export function nameOrder(assetIds: readonly number[], nameOf: (assetId: number) => string, locale?: string): number[] {
+    const compare = nameComparator(locale);
+    return [...assetIds].sort((left, right) => compare(nameOf(left), nameOf(right)) || left - right);
+}
+
+/**
+ * The comparison behind `nameOrder`, for a caller that sorts rows rather than ids —
+ * the loss table of Asset Global sorts its "Asset" column with it, so the table and
+ * the matrix's "by name" button can never disagree. Ties are the caller's to break.
+ */
+export function nameComparator(locale?: string): (left: string, right: string) => number {
     const collator = new Intl.Collator(locale, {sensitivity: 'base', numeric: true});
-    return [...assetIds].sort((left, right) => collator.compare(plainName(nameOf(left)), plainName(nameOf(right))) || left - right);
+    return (left, right) => collator.compare(plainName(left), plainName(right));
 }
 
 /** One entry of the pair list. */
