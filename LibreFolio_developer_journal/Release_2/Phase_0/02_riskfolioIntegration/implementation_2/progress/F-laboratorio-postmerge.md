@@ -2602,3 +2602,7 @@ handoff. La pagina è solo inglese, quindi nessun debito di traduzione né timbr
 >   - fra questi resta `{column.docs}` di L1°, che si chiude col prossimo componente.
 > - ⚠️ **Fuori pista — la build riscrive un file tracciato**: `frontend/static/sw.js`, solo il timbro di build
 >   (`// build: 450af3dd` → `3e7bd439`). Non toccato, escluso dal checkpoint, riferito al coordinatore.
+
+> ➡️ **Seguito**: la guida è committata (`73ba9f08e`, `b26ca6e29`, alle 11:03). Il lavoro sul prossimo componente, L1° «Quanto
+> ha fatto male ciascuno?», approvato dal developer, prosegue nel piano
+> [F-L1-confronto-perdite.md](F-L1-confronto-perdite.md).
