@@ -33,7 +33,9 @@
  * badge and the tooltip captions all change with EN/IT/FR/ES. Rows are found by the asset name or
  * the effect description this file passes in as props. No locale-formatted number is written as
  * a literal. Every expected string is built with the same `Intl.NumberFormat` or `toLocaleString`
- * call the component makes, so the file passes on any host locale.
+ * call the component makes, so the file passes on any host locale. The one deliberate exception
+ * is the U+2212 of the sv-SE cases (D23): there the glyph itself is the subject, and the cases
+ * force their locale instead of reading the host's.
  *
  * THE FLAG. `enabled` in the privacy store is module state shared by every case in this file.
  * Every case sets it or checks it at the start. The `afterEach` switches it back off whatever the
@@ -202,6 +204,19 @@ const CHF_ASSET = {
 const EUR_PROPS: ChartProps = {positions: [EUR_ASSET], otherEffects: [EUR_EFFECT], displayCurrency: 'EUR'};
 const CHF_PROPS: ChartProps = {positions: [CHF_ASSET], otherEffects: [], displayCurrency: 'CHF'};
 
+/** A small loss in a currency with no symbol: the short branch of `shortMoney` through its
+ *  no-symbol template, which the EUR effect row does not reach. Only the D23 case mounts it. */
+const CHF_EFFECT_NET = -43.21;
+const CHF_EFFECT = {description: 'Probe franc adjustment', category: 'Other', period_pnl: decimal(CHF_EFFECT_NET), broker_id: 8, broker_name: 'Probe Bank'};
+const CHF_EFFECT_PROPS: ChartProps = {positions: [CHF_ASSET], otherEffects: [CHF_EFFECT], displayCurrency: 'CHF'};
+
+/** A large loss in a currency with a symbol: the compact branch of `shortMoney` with a minus,
+ *  through its symbol template. The EUR position is a gain, so no other EUR row reaches it. Only
+ *  the D23 compact case mounts it. */
+const EUR_LOSS_EFFECT_NET = -3456.78;
+const EUR_LOSS_EFFECT = {description: 'Probe write-down', category: 'Other', period_pnl: decimal(EUR_LOSS_EFFECT_NET), broker_id: 7, broker_name: 'Probe Broker'};
+const EUR_LOSS_EFFECT_PROPS: ChartProps = {positions: [EUR_ASSET], otherEffects: [EUR_LOSS_EFFECT], displayCurrency: 'EUR'};
+
 // =============================================================================
 // What the component prints, rebuilt with the calls it makes
 // =============================================================================
@@ -211,10 +226,81 @@ function tickNumber(abs: number): string {
     return new Intl.NumberFormat(undefined, {notation: 'compact', maximumFractionDigits: abs < 10 ? 2 : abs < 100 ? 1 : 0}).format(abs);
 }
 
-/** The number `shortMoney` prints for an amount of 1000 or more, from the same call. */
-function compactNet(abs: number): string {
-    if (abs < 1000) throw new Error(`compactNet mirrors only the compact branch of shortMoney, and ${abs} takes the other one`);
-    return new Intl.NumberFormat(undefined, {notation: 'compact', maximumFractionDigits: 1}).format(abs);
+/** A sign at the start of a formatted number, bidi marks included: the pattern `shortMoney` and
+ *  `maskFormattedNumber` split off and keep outside the mask. */
+const LEADING_SIGN = /^[\p{Cf}+\-\u2212]*/u;
+
+interface SignedNumber {
+    /** The sign as the locale writes it: `+`, its own minus, or nothing on a zero. */
+    sign: string;
+    digits: string;
+}
+
+function splitSign(formatted: string): SignedNumber {
+    const sign = LEADING_SIGN.exec(formatted)?.[0] ?? '';
+    return {sign, digits: formatted.slice(sign.length)};
+}
+
+/** The real constructor, taken before any case spies on it. The expectations are built through
+ *  it, so a spy on `Intl.NumberFormat` can never feed both sides of a comparison. */
+const RealNumberFormat = Intl.NumberFormat;
+
+/**
+ * What `shortMoney` prints for an amount of 1000 or more, from the same call: compact, on the
+ * SIGNED value, with `exceptZero`. The sign therefore comes out of the call as the locale writes
+ * it (D23), never from a literal here. `locale` forces one.
+ */
+function compactNet(value: number, locale?: string): SignedNumber {
+    if (Math.abs(value) < 1000) throw new Error(`compactNet mirrors only the compact branch of shortMoney, and ${value} takes the other one`);
+    return splitSign(new RealNumberFormat(locale, {notation: 'compact', maximumFractionDigits: 1, signDisplay: 'exceptZero'}).format(value));
+}
+
+/** What `shortMoney` prints for an amount under 1000, from the same call. `locale` forces one. */
+function plainNet(value: number, locale?: string): SignedNumber {
+    const abs = Math.abs(value);
+    if (abs >= 1000) throw new Error(`plainNet mirrors only the short branch of shortMoney, and ${value} takes the compact one`);
+    return splitSign((value === 0 ? 0 : value).toLocaleString(locale, {minimumFractionDigits: abs % 1 === 0 ? 0 : 2, maximumFractionDigits: 2, signDisplay: 'exceptZero'}));
+}
+
+/**
+ * Runs `read` with every `Number.prototype.toLocaleString` call forced to `locale`, the
+ * component's own included. Synchronous on purpose: the spy comes off before anything else runs.
+ */
+function inLocale<T>(locale: string, read: () => T): T {
+    const original = Number.prototype.toLocaleString;
+    const spy = vi.spyOn(Number.prototype, 'toLocaleString').mockImplementation(function (this: number, _locales?: unknown, options?: Intl.NumberFormatOptions) {
+        return original.call(this, locale, options);
+    });
+    try {
+        return read();
+    } finally {
+        spy.mockRestore();
+    }
+}
+
+/**
+ * Runs `read` with every `new Intl.NumberFormat(undefined, …)` forced to `locale`: the call the
+ * compact branch of `shortMoney` makes, which the spy of `inLocale` does not reach. A call that
+ * names its locale passes through untouched. Returns what `read` returned and the options of
+ * every call that asked for the default locale, so a case can prove which branch it reached.
+ * Synchronous like `inLocale`, and restored whatever the outcome.
+ */
+function inNumberFormatLocale<T>(locale: string, read: () => T): {value: T; defaultLocaleCalls: Intl.NumberFormatOptions[]} {
+    const defaultLocaleCalls: Intl.NumberFormatOptions[] = [];
+    // The component calls it with `new`, and the spy forwards `new` to the implementation, so the
+    // implementation must be a constructor: a `function`, never an arrow. A constructor that
+    // returns an object makes that object the result: the component gets a real `NumberFormat`.
+    const spy = vi.spyOn(Intl, 'NumberFormat').mockImplementation(function (...args: ConstructorParameters<typeof Intl.NumberFormat>) {
+        const [locales, options] = args;
+        if (locales !== undefined) return new RealNumberFormat(locales, options);
+        defaultLocaleCalls.push({...options});
+        return new RealNumberFormat(locale, options);
+    });
+    try {
+        return {value: read(), defaultLocaleCalls};
+    } finally {
+        spy.mockRestore();
+    }
 }
 
 /** `formatSignedPercent` applied to the return on the opening value: `+53.2%`. */
@@ -394,17 +480,24 @@ describe('PerformanceChart privacy masking (S2b)', () => {
             setPrivacyEnabled(true);
             const chart = await mountChart(EUR_PROPS);
 
-            expect(netLabelOf(latestFullOption(chart), EUR_ASSET.asset_name)).toBe(`+${EUR_INFO.symbol}${PRIVACY_PLACEHOLDER}${labelSuffix(EUR_POSITION.net, EUR_POSITION.start)}`);
+            const {sign} = compactNet(EUR_POSITION.net);
+            // Precondition: a gain carries a sign, so the check below is about one.
+            expect(sign).not.toBe('');
+            expect(netLabelOf(latestFullOption(chart), EUR_ASSET.asset_name)).toBe(`${sign}${EUR_INFO.symbol}${PRIVACY_PLACEHOLDER}${labelSuffix(EUR_POSITION.net, EUR_POSITION.start)}`);
         });
 
         it('masks a CHF net label as -••• CHF: a currency without a symbol keeps its code after the mask', async () => {
             // WHY: the same label through the other branch of `shortMoney`, a separate template
             // literal, so masking one branch does not mask the other. Catches `maskable` dropped
-            // from the no-symbol branch only, or the minus or the code swallowed by the mask.
+            // from the no-symbol branch only, or the minus or the code swallowed by the mask. The
+            // minus is the one the locale writes (D23), taken from the component's own call.
             setPrivacyEnabled(true);
             const chart = await mountChart(CHF_PROPS);
 
-            expect(netLabelOf(latestFullOption(chart), CHF_ASSET.asset_name)).toBe(`-${PRIVACY_PLACEHOLDER} CHF${labelSuffix(CHF_POSITION.net, CHF_POSITION.start)}`);
+            const {sign} = compactNet(CHF_POSITION.net);
+            // Precondition: a loss carries a minus, whichever glyph the locale writes.
+            expect(sign).toMatch(/[-\u2212]/);
+            expect(netLabelOf(latestFullOption(chart), CHF_ASSET.asset_name)).toBe(`${sign}${PRIVACY_PLACEHOLDER} CHF${labelSuffix(CHF_POSITION.net, CHF_POSITION.start)}`);
         });
 
         it('prints no tooltip amount in the clear, on an asset row or an other-effect row', async () => {
@@ -467,9 +560,12 @@ describe('PerformanceChart privacy masking (S2b)', () => {
         // WHY: masking must be a pure overlay. With the flag off, not one character of today's
         // output may change. Catches `maskable` made unconditional, a changed compaction step or
         // sign rule, a different composition of sign, symbol and number, or a dropped return.
-        // Today the component prefixes an ASCII `-` to the formatted absolute value, and the
-        // expectations mirror that. On a locale whose minus is U+2212 (sv-SE), that already
-        // differs from `format(-x)`. It is a known follow-up, pinned here as it stands.
+        // The net label takes its sign from the same Intl call as its digits (D23), so its
+        // expectation takes the sign from that call too, in whatever glyph the locale writes; the
+        // sv-SE cases below pin the glyph itself. The axis tick still prefixes an ASCII `-` to the
+        // formatted absolute value until S7b migrates it, and is pinned here as it stands. The
+        // tooltip's ASCII sign is the convention of `formatCurrencyAmountPlain`
+        // (`currencyFormat.ts`), tracked outside this workstream.
         expect(isPrivacyEnabled()).toBe(false);
         const eur = latestFullOption(await mountChart(EUR_PROPS));
 
@@ -479,7 +575,14 @@ describe('PerformanceChart privacy masking (S2b)', () => {
         // `'0'` is a literal in the component too, not a formatted number.
         expect(axisTick(0)).toBe('0');
 
-        expect(netLabelOf(eur, EUR_ASSET.asset_name)).toBe(`+${EUR_INFO.symbol}${compactNet(EUR_POSITION.net)}${labelSuffix(EUR_POSITION.net, EUR_POSITION.start)}`);
+        const eurNet = compactNet(EUR_POSITION.net);
+        // Precondition: the net carries a sign, so the check below is about one.
+        expect(eurNet.sign).not.toBe('');
+        expect(netLabelOf(eur, EUR_ASSET.asset_name)).toBe(`${eurNet.sign}${EUR_INFO.symbol}${eurNet.digits}${labelSuffix(EUR_POSITION.net, EUR_POSITION.start)}`);
+        // The other-effect row goes through the short branch, and carries no return.
+        const effectNet = plainNet(EUR_EFFECT_NET);
+        expect(effectNet.sign).not.toBe('');
+        expect(netLabelOf(eur, EUR_EFFECT.description)).toBe(`${effectNet.sign}${EUR_INFO.symbol}${effectNet.digits}`);
 
         // The net and the four components carry a sign and their return. Costs are shown
         // negative. The start and end values carry neither.
@@ -497,6 +600,105 @@ describe('PerformanceChart privacy masking (S2b)', () => {
         expect(effectTooltip).not.toContain(PRIVACY_PLACEHOLDER);
 
         const chf = latestFullOption(await mountChart(CHF_PROPS));
-        expect(netLabelOf(chf, CHF_ASSET.asset_name)).toBe(`-${compactNet(Math.abs(CHF_POSITION.net))} CHF${labelSuffix(CHF_POSITION.net, CHF_POSITION.start)}`);
+        const chfNet = compactNet(CHF_POSITION.net);
+        expect(chfNet.sign).not.toBe('');
+        expect(netLabelOf(chf, CHF_ASSET.asset_name)).toBe(`${chfNet.sign}${chfNet.digits} CHF${labelSuffix(CHF_POSITION.net, CHF_POSITION.start)}`);
+    });
+});
+
+// =============================================================================
+// D23: the net label writes the locale's minus
+// =============================================================================
+
+describe('PerformanceChart net label sign (D23)', () => {
+    // The flag is module state shared by every case in the file. Whoever switches it on
+    // switches it off, whatever the outcome of the case.
+    afterEach(() => setPrivacyEnabled(false));
+
+    const SWEDISH = 'sv-SE';
+
+    /** `shortMoney` composes the sign in two template literals, one per currency kind. */
+    const SYMBOL_TEMPLATE = (sign: string, number: string) => `${sign}${EUR_INFO.symbol}${number}`;
+    const CODE_TEMPLATE = (sign: string, number: string) => `${sign}${number} CHF`;
+
+    /** Each template through the short branch of `shortMoney`, under 1000. */
+    const TEMPLATES = [
+        {title: 'EUR, the symbol template', props: EUR_PROPS, row: EUR_EFFECT.description, net: EUR_EFFECT_NET, compose: SYMBOL_TEMPLATE},
+        {title: 'CHF, the no-symbol template', props: CHF_EFFECT_PROPS, row: CHF_EFFECT.description, net: CHF_EFFECT_NET, compose: CODE_TEMPLATE},
+    ];
+
+    /** Each template through the compact branch, 1000 or more, on a loss. The CHF row is a
+     *  position, so its label ends with its return, which an effect row does not carry. */
+    const COMPACT_TEMPLATES = [
+        {title: 'EUR, the symbol template', props: EUR_LOSS_EFFECT_PROPS, row: EUR_LOSS_EFFECT.description, net: EUR_LOSS_EFFECT_NET, suffix: '', compose: SYMBOL_TEMPLATE},
+        {title: 'CHF, the no-symbol template', props: CHF_PROPS, row: CHF_ASSET.asset_name, net: CHF_POSITION.net, suffix: labelSuffix(CHF_POSITION.net, CHF_POSITION.start), compose: CODE_TEMPLATE},
+    ];
+
+    it.each(TEMPLATES)("writes the locale's own minus in the net label, in the clear and masked, U+2212 in sv-SE: $title", async ({props, row, net, compose}) => {
+        // WHY: in Node's default locale the minus is a hyphen, the very character a hand-written
+        // sign would use, so the cases above cannot tell the two apart. Forcing the one call the
+        // label's short branch makes, `Number.prototype.toLocaleString`, to a locale whose minus
+        // is U+2212 can. Catches a sign written by hand again (`amount < 0 ? '-' : ''`) in either
+        // template, and a mask that swallows it. The glyph is a literal here on purpose: it is
+        // the subject. The compact branch builds its own `Intl.NumberFormat`, which this spy does
+        // not reach: the next case forces that constructor instead.
+        // Precondition: this Node has Swedish locale data and writes U+2212 there. Without it the
+        // locale would fall back in silence and the check would prove nothing.
+        expect(plainNet(-1, SWEDISH).sign).toBe('\u2212');
+        expect(isPrivacyEnabled()).toBe(false);
+        const chart = await mountChart(props);
+
+        const clear = inLocale(SWEDISH, () => netLabelOf(latestFullOption(chart), row));
+        expect(clear).toBe(compose('\u2212', plainNet(net, SWEDISH).digits));
+
+        const beforeOn = chart.setOptionCalls.length;
+        setPrivacyEnabled(true);
+        const masked = await fullOptionAfter(chart, beforeOn);
+        expect(inLocale(SWEDISH, () => netLabelOf(masked, row))).toBe(compose('\u2212', PRIVACY_PLACEHOLDER));
+    });
+
+    it.each(COMPACT_TEMPLATES)("writes the locale's own minus in a compact net label, in the clear and masked, U+2212 in sv-SE: $title", async ({props, row, net, suffix, compose}) => {
+        // WHY: the compact branch prints the label most real rows show (`+€1.2K`), and it builds
+        // its own `Intl.NumberFormat`, out of reach of the `toLocaleString` spy above. In Node's
+        // default locale its minus is a hyphen too, so a sign written by hand in this branch,
+        // `(amount < 0 ? '-' : '') + format(abs)`, passes every host-locale case. Forcing the
+        // default-locale constructor to a locale whose minus is U+2212 tells the two apart: the
+        // digits turn Swedish either way, the sign only if it comes out of the same call. Catches
+        // that hand-written sign in either template, a mask that swallows the sign, and a mask
+        // that leaks the compact suffix. Swedish writes its thousands as a word (`tn`) after a
+        // no-break space, and a word left outside the mask discloses the order of magnitude just
+        // as `€•••K` would. The glyph is a literal here on purpose: it is the subject. The return
+        // after a position's label goes through `toLocaleString`, which this spy leaves alone, so
+        // it keeps the host's form.
+        const swedish = compactNet(net, SWEDISH);
+        // Preconditions, through the real constructor with an explicit locale. This Node has
+        // Swedish locale data and writes U+2212 in a compact number there: without it the forced
+        // locale would fall back in silence and prove nothing. And the Swedish compact suffix
+        // carries a word, so its absence from the masked label is about something.
+        expect(swedish.sign).toBe('\u2212');
+        const suffixWord = /\p{L}+/u.exec(swedish.digits)?.[0] ?? '';
+        expect(suffixWord, `the Swedish compact number "${swedish.digits}" carries no word suffix`).not.toBe('');
+        expect(isPrivacyEnabled()).toBe(false);
+        const chart = await mountChart(props);
+
+        const clear = inNumberFormatLocale(SWEDISH, () => netLabelOf(latestFullOption(chart), row));
+        // Guard: the label asked the default locale for a compact number, so it took the compact
+        // branch and its locale was the forced one.
+        expect(
+            clear.defaultLocaleCalls.some(({notation}) => notation === 'compact'),
+            'the clear label never asked the default locale for a compact number',
+        ).toBe(true);
+        expect(clear.value).toBe(`${compose('\u2212', swedish.digits)}${suffix}`);
+
+        const beforeOn = chart.setOptionCalls.length;
+        setPrivacyEnabled(true);
+        const maskedOption = await fullOptionAfter(chart, beforeOn);
+        const masked = inNumberFormatLocale(SWEDISH, () => netLabelOf(maskedOption, row));
+        expect(
+            masked.defaultLocaleCalls.some(({notation}) => notation === 'compact'),
+            'the masked label never asked the default locale for a compact number',
+        ).toBe(true);
+        expect(masked.value).toBe(`${compose('\u2212', PRIVACY_PLACEHOLDER)}${suffix}`);
+        expect(masked.value).not.toContain(suffixWord);
     });
 });

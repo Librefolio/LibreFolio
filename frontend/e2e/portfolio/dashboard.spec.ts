@@ -374,17 +374,22 @@ type PnlSubmode = 'line' | 'candles' | 'income';
 
 const PNL_SUBMODES: readonly PnlSubmode[] = ['line', 'candles', 'income'];
 
-/** `EUR 1,234.56` / `EUR -12.30` — an unsigned tooltip amount (the OHLC rows). */
-const PLAIN_AMOUNT = /^[A-Z]{3}\s-?[\d.,]+$/;
 /**
- * `+EUR 359.04` / `−EUR 12.00` / `EUR 0.00` — a P&L or income tooltip amount
- * (U+2212). The sign is optional because a zero carries none, by design: a green
- * zero read as a gain. A signed-only pattern therefore stops counting a row on
- * the day its value happens to be zero, which is a calendar, not a contract.
+ * `EUR 1,234.56` / `EUR -12.30` — an unsigned tooltip amount (the OHLC rows). The
+ * minus is the browser locale's own (D23): ASCII in English, U+2212 in Swedish.
  */
-const PNL_AMOUNT = /^[+\u2212]?[A-Z]{3}\s[\d.,]+$/;
+const PLAIN_AMOUNT = /^[A-Z]{3}\s[-\u2212]?[\d.,]+$/;
+/**
+ * `EUR +359.04` / `EUR -12.00` / `EUR 0.00` — a P&L or income tooltip amount.
+ * One form for every signed row (D23b): the sign after the currency, the minus
+ * the locale's own, ASCII or U+2212 (D23). The sign is optional because a zero
+ * carries none, by design: a green zero read as a gain. A signed-only pattern
+ * therefore stops counting a row on the day its value happens to be zero, which
+ * is a calendar, not a contract.
+ */
+const PNL_AMOUNT = /^[A-Z]{3}\s[+\-\u2212]?[\d.,]+$/;
 /** A P&L line tooltip value: an amount as above, or `—` for a broker with no value that day. */
-const PNL_LINE_VALUE = /^(?:[+\u2212]?[A-Z]{3}\s[\d.,]+|—)$/;
+const PNL_LINE_VALUE = /^(?:[A-Z]{3}\s[+\-\u2212]?[\d.,]+|—)$/;
 /** The ISO date every tooltip header carries, whatever the bucket width. */
 const TOOLTIP_DATE = /\d{4}-\d{2}-\d{2}/;
 /** GrowthChart's `LADDER_MIN_BODY_PX`: the narrowest candle body the ladder offers. */

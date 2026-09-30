@@ -159,12 +159,22 @@
         return value.replace(/[{}]/g, '');
     }
 
+    /** A sign at the start of a formatted number, with the invisible bidi marks some locales
+     *  write around it. The same pattern `maskFormattedNumber` keeps outside the mask. */
+    const LEADING_SIGN = /^[\p{Cf}+\-\u2212]*/u;
+
     function shortMoney(amount: number, currency: string, showSign = true): string {
         const info = getCurrencyInfo(currency);
         const symbol = info.symbol && info.symbol !== currency ? info.symbol : '';
         const abs = Math.abs(amount);
-        const compact = abs >= 1000 ? new Intl.NumberFormat(undefined, {notation: 'compact', maximumFractionDigits: 1}).format(abs) : abs.toLocaleString(undefined, {minimumFractionDigits: abs % 1 === 0 ? 0 : 2, maximumFractionDigits: 2});
-        const sign = showSign && amount > 0 ? '+' : amount < 0 ? '-' : '';
+        // D23: the sign comes from the same call as the digits, so it is the one the browser
+        // locale writes (U+2212 in Swedish). `exceptZero` gives no sign to an amount that rounds
+        // to zero; `-0 === 0`, so a negative zero becomes +0, which `auto` would print `-0`.
+        const signDisplay = showSign ? 'exceptZero' : 'auto';
+        const value = amount === 0 ? 0 : amount;
+        const formatted = abs >= 1000 ? new Intl.NumberFormat(undefined, {notation: 'compact', maximumFractionDigits: 1, signDisplay}).format(value) : value.toLocaleString(undefined, {minimumFractionDigits: abs % 1 === 0 ? 0 : 2, maximumFractionDigits: 2, signDisplay});
+        const sign = LEADING_SIGN.exec(formatted)?.[0] ?? '';
+        const compact = formatted.slice(sign.length);
         // D8: sign, symbol and currency stay readable. The compact suffix goes inside the
         // mask: `€•••K` would still disclose the order of magnitude.
         return symbol ? `${sign}${symbol}${maskable(compact)}` : `${sign}${maskable(compact)} ${currency}`;

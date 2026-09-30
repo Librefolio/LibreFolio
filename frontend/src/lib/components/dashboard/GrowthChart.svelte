@@ -22,7 +22,7 @@
     import * as echarts from 'echarts';
     import {attachChartReady} from '$lib/utils/chartReady';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
-    import {maskable, shouldMaskAmount} from '$lib/utils/privacy/maskable';
+    import {maskable, maskFormattedNumber, shouldMaskAmount} from '$lib/utils/privacy/maskable';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
@@ -1883,14 +1883,30 @@
          * `v >= 0` painted every zero green, which reads as a gain that did not happen —
          * and in the Income submode most buckets are legitimately zero, so the tooltip was
          * mostly green for weeks in which nothing was earned.
+         *
+         * Zero is what the row prints as zero, as for the sign (D23b): `fmtCurrency` keeps two
+         * decimals, so under half a cent it prints `0.00` with no sign. A bucket sum can land
+         * there without being 0 (0.1 + 0.2 − 0.3 is 5.55e-17), and tested on the raw value it
+         * would print `EUR 0.00` in green.
          */
-        const signedValueColor = (v: number, dark: boolean, neutral: string) => (v === 0 ? neutral : v > 0 ? (dark ? '#4ade80' : '#16a34a') : dark ? '#f87171' : '#dc2626');
+        const signedValueColor = (v: number, dark: boolean, neutral: string) => (Math.abs(v) < 0.005 ? neutral : v > 0 ? (dark ? '#4ade80' : '#16a34a') : dark ? '#f87171' : '#dc2626');
 
         /**
-         * Format a number as currency. As in `formatCurrencyAmountPlain`, only the digits go
-         * through `maskable`; the currency and the sign stay readable (D8).
+         * Format a number as currency: `EUR 1,234.56`, and with `signed` `EUR +5.00` or
+         * `EUR -12.00`, the one form of every signed tooltip row (D23b).
+         *
+         * The sign comes from the same `toLocaleString` call as the digits, so it is the one the
+         * browser locale writes (D23): `-` in the four UI languages, U+2212 in Swedish. `signed`
+         * adds `+` to a gain and no sign to an amount that rounds to zero. As in
+         * `formatCurrencyAmountPlain`, only the digits are masked; the currency and the sign stay
+         * readable (D8).
          */
-        const fmtCurrency = (v: number | null | undefined) => (v != null ? `${baseCurrency} ${v < 0 ? '-' : ''}${maskable(Math.abs(v).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}))}` : '—');
+        const fmtCurrency = (v: number | null | undefined, signed = false) => {
+            if (v == null) return '—';
+            // `-0 === 0`, so a negative zero becomes +0: `signDisplay: 'auto'` would print it `-0.00`.
+            const formatted = (v === 0 ? 0 : v).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2, signDisplay: signed ? 'exceptZero' : 'auto'});
+            return `${baseCurrency} ${maskFormattedNumber(formatted)}`;
+        };
 
         const option: echarts.EChartsOption = {
             ...CHART_ANIMATION_CONFIG,
@@ -1954,7 +1970,7 @@
                         html += buildTooltipRow(eurLabels.capitalBaselineTooltip, fmtCurrency(baselineVal), cc('capitalBaseline'));
                         if (totalPnlVal != null) {
                             const pnlColor = signedValueColor(totalPnlVal, isDark, textColor);
-                            html += `<div style="display:flex;justify-content:space-between;gap:16px;color:${pnlColor}"><span><b>${$_('dashboard.totalPnl')}</b></span><b>${totalPnlVal === 0 ? '' : totalPnlVal > 0 ? '+' : '−'}${fmtCurrency(Math.abs(totalPnlVal))}</b></div>`;
+                            html += `<div style="display:flex;justify-content:space-between;gap:16px;color:${pnlColor}"><span><b>${$_('dashboard.totalPnl')}</b></span><b>${fmtCurrency(totalPnlVal, true)}</b></div>`;
                         }
                         html += `<div style="font-size:10px;color:${textColor};opacity:0.7">${$_('dashboard.pnlFormulaHint')}</div>`;
                         html += buildTooltipDivider(tooltipBorder);
@@ -1970,7 +1986,7 @@
                         const pnlRow = (label: string, v: number | null | undefined, color: string) => {
                             if (v == null) return buildTooltipRow(label, '—', color);
                             const signColor = signedValueColor(v, isDark, textColor);
-                            return `<div style="display:flex;justify-content:space-between;gap:16px;color:${color}"><span>${label}</span><b style="color:${signColor}">${v === 0 ? '' : v > 0 ? '+' : '−'}${fmtCurrency(Math.abs(v))}</b></div>`;
+                            return `<div style="display:flex;justify-content:space-between;gap:16px;color:${color}"><span>${label}</span><b style="color:${signColor}">${fmtCurrency(v, true)}</b></div>`;
                         };
                         html += pnlRow(`<b>${pnlLabels.total}</b>`, totalVal, cc('totalPnl'));
                         activeChartData?.pnl.brokers.forEach((broker, index) => {
@@ -1997,7 +2013,7 @@
                             const v = broker.metric.values[idx];
                             if (v == null) return;
                             const signColor = signedValueColor(v, isDark, textColor);
-                            html += `<div style="display:flex;justify-content:space-between;gap:16px;color:${brokerColor(index, isDark)}"><span>${broker.brokerName}</span><b style="color:${signColor}">${v === 0 ? '' : v > 0 ? '+' : '−'}${fmtCurrency(Math.abs(v))}</b></div>`;
+                            html += `<div style="display:flex;justify-content:space-between;gap:16px;color:${brokerColor(index, isDark)}"><span>${broker.brokerName}</span><b style="color:${signColor}">${fmtCurrency(v, true)}</b></div>`;
                         });
                         return html;
                     }
@@ -2012,7 +2028,7 @@
                         const acqReinvestedVal = activeChartData?.pnl.acquisition.fromReinvested.values[idx] ?? 0;
                         const signedRow = (label: string, v: number, color: string) => {
                             const signColor = signedValueColor(v, isDark, textColor);
-                            return `<div style="display:flex;justify-content:space-between;gap:16px;color:${color}"><span>${label}</span><b style="color:${signColor}">${v === 0 ? '' : v > 0 ? '+' : '−'}${fmtCurrency(Math.abs(v))}</b></div>`;
+                            return `<div style="display:flex;justify-content:space-between;gap:16px;color:${color}"><span>${label}</span><b style="color:${signColor}">${fmtCurrency(v, true)}</b></div>`;
                         };
                         html += signedRow(pnlLabels.dividend, divVal, cc('dividend'));
                         html += signedRow(pnlLabels.interest, intVal, cc('interest'));
