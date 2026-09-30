@@ -3155,7 +3155,12 @@
       },
       "selectedCountHint": "The first number counts the assets the laboratory is analysing right now. The second counts how many it could analyse in the chosen period: every asset in LibreFolio, not only the ones you hold, as long as it has enough prices in that period. The assets that do not are still listed in the “+”, read-only, with the reason.",
       "parkedNote": "{count, plural, one {# selected asset cannot be analysed in the period and stays out of the analysis.} other {# selected assets cannot be analysed in the period and stay out of the analysis.}}",
-      "eligibilityFailed": "Eligibility could not be checked: every asset stays selectable."
+      "eligibilityFailed": "Eligibility could not be checked: every asset stays selectable.",
+      "fitPeriod": {
+        "banner": "With the chosen period, {count, plural, one {# selected asset has} other {# selected assets have}} no prices for part of it.",
+        "button": "Use the period in which all have prices ({start} – {end})",
+        "hint": "Moves the period at the top to the span in which every selected asset with prices is quoted. Back in the analysis: {names}."
+      }
     },
     "metrics": {
       "volatility": "Volatility",

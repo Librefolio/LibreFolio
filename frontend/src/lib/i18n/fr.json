@@ -3155,7 +3155,12 @@
       },
       "selectedCountHint": "Le premier nombre compte les actifs que le laboratoire analyse en ce moment. Le second compte combien il pourrait en analyser sur la période choisie : tous les actifs présents dans LibreFolio, pas seulement ceux que vous détenez, pourvu qu'ils aient assez de prix sur cette période. Ceux qui n'en ont pas restent listés dans le « + », en lecture seule, avec le motif.",
       "parkedNote": "{count, plural, one {# actif sélectionné n'est pas analysable sur la période et reste hors de l'analyse.} other {# actifs sélectionnés ne sont pas analysables sur la période et restent hors de l'analyse.}}",
-      "eligibilityFailed": "L'éligibilité n'a pas pu être vérifiée : tous les actifs restent sélectionnables."
+      "eligibilityFailed": "L'éligibilité n'a pas pu être vérifiée : tous les actifs restent sélectionnables.",
+      "fitPeriod": {
+        "banner": "Avec la période choisie, {count, plural, one {# actif sélectionné n'a pas de prix} other {# actifs sélectionnés n'ont pas de prix}} sur une partie de l'intervalle.",
+        "button": "Utiliser la période où tous ont des prix (du {start} au {end})",
+        "hint": "Déplace la période en haut sur l'intervalle où tous les actifs sélectionnés qui ont des prix sont cotés. Reviennent dans l'analyse : {names}."
+      }
     },
     "metrics": {
       "volatility": "Volatilité",
