@@ -1523,7 +1523,8 @@
       "navigate_asset": "Ver activo",
       "navigate_fx": "Ver FX",
       "add_fx_pair": "Añadir par FX",
-      "sync_fx_pair": "Sincronizar"
+      "sync_fx_pair": "Sincronizar",
+      "sync_asset_prices": "Sincronizar"
     },
     "referencePriceFallback": "Precio de apertura del lote no disponible en la fecha exacta — se usa el último precio conocido {reference_price} como referencia para el rendimiento relativo",
     "referencePriceUnavailable": "No hay precio de referencia disponible para la apertura de un lote — no se puede calcular el rendimiento relativo",
