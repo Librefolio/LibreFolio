@@ -80,6 +80,7 @@ class RollingSharpePlugin(SignalPlugin):
     semantic_id = "rolling_sharpe_ratio"
     semantic_description = "Compares rolling excess return with sample volatility."
     icon = "⚖️"
+    docs_path = "financial-theory/technical-analysis/risk-metrics/sharpe-ratio/"
     category = SignalCategory.RISK
     params_model = RollingSharpeParams
     input_requirements = SignalInputRequirements(

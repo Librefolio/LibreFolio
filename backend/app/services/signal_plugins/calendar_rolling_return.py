@@ -120,6 +120,7 @@ class CalendarRollingReturnPlugin(SignalPlugin):
     semantic_id = "calendar_rolling_return"
     semantic_description = "Measures price-only return over an exact calendar-day window."
     icon = "↗️"
+    docs_path = "financial-theory/fundamentals/returns/"
     category = SignalCategory.RISK
     params_model = CalendarRollingReturnParams
     catalog_visible = False
