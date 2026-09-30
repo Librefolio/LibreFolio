@@ -54,3 +54,28 @@ export function warningSentence(warning: RiskResultWarning | null | undefined, t
     }
     return message;
 }
+
+/** A warning's `details` as a plain record: `{}` when it has none, or none that is a record. */
+function detailsOf(warning: RiskResultWarning | null | undefined): Record<string, unknown> {
+    const details: unknown = warning?.details;
+    return details !== null && typeof details === 'object' && !Array.isArray(details) ? (details as Record<string, unknown>) : {};
+}
+
+/** The cause a warning states in `details.reason` (for an exclusion, `no_price_source`, `missing_price`, …), when it states one. */
+export function warningReason(warning: RiskResultWarning | null | undefined): string | undefined {
+    const reason = detailsOf(warning).reason;
+    return typeof reason === 'string' && reason.trim() !== '' ? reason.trim() : undefined;
+}
+
+/**
+ * The assets a warning is about, read as the backend reads them to name them in the sentence
+ * (`_warning_asset_ids`): `details.asset_ids`, or else a single `details.asset_id`.
+ *
+ * All or nothing, where the backend filters: a list with anything but integers is not taken at
+ * all, so a badge drawn from it can never silently leave an asset out.
+ */
+export function warningAssetIds(warning: RiskResultWarning | null | undefined): number[] | undefined {
+    const details = detailsOf(warning);
+    const ids = details.asset_ids ?? (details.asset_id === undefined ? undefined : [details.asset_id]);
+    return Array.isArray(ids) && ids.length > 0 && ids.every((id) => Number.isInteger(id)) ? (ids as number[]) : undefined;
+}

@@ -153,6 +153,22 @@ describe('partialNotice', () => {
         ).toEqual([backendSentence]);
     });
 
+    it('hands each reason on with the cause and the assets the notice picks its tone and draws its badges from', () => {
+        // The exclusion as the backend sends it: one `assets_excluded` warning per cause, the
+        // cause and the ids in `details`, repeated on every result read off the scope's own series.
+        const key = 'risk.warnings.assets_excluded_no_price_source';
+        const params = {count: 2, names: 'Synthetic Holding A, Synthetic Holding B'};
+        const excluded: Warning = {code: 'assets_excluded', message: 'One or more scope assets were excluded from risk calculations.', message_i18n_key: key, message_params: params, details: {asset_ids: [41, 42], reason: 'no_price_source'}};
+
+        const worded = get(_)(key, {values: params});
+        expect(worded, 'guard: the key does not resolve through svelte-i18n').not.toBe(key);
+        expect(worded, 'guard: the catalogue sentence did not format with these values').not.toContain('{');
+
+        const notice = partialNotice([result(CORRELATION, 'correlation', 'partial', [excluded]), result('base-current_composition-risk_contribution', 'risk_contribution', 'partial', [excluded])], get(_));
+
+        expect(notice.reasons, 'the notice lost the cause (its tone) or the assets (its badges) on the way from the warnings').toStrictEqual([{key: `assets_excluded:${worded}`, message: worded, occurrences: 2, reason: 'no_price_source', assetIds: [41, 42]}]);
+    });
+
     it('has nothing to disclose for a wave that came back whole and silent', () => {
         expect(partialNotice([result(KPI, 'historical_kpi', 'ok'), result(CORRELATION, 'correlation', 'ok'), null])).toStrictEqual({partial: [], reasons: []});
     });

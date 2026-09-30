@@ -84,7 +84,7 @@
      * it, and the fallback that type invites — zero — reads as "nothing
      * uncovered". That is precisely the reassurance this line exists to withhold.
      */
-    let uncovered = $derived(uncoveredWeight(contributionResult));
+    let uncovered = $derived(uncoveredWeight(contributionResult)?.total ?? null);
     let concentration = $derived(buildConcentration(contributionResult));
     let expanded = $state(false);
     let shown = $derived(expanded ? rows : rows.slice(0, visibleRows));

@@ -10,7 +10,7 @@ import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 import {singleValue} from '$lib/risk/riskTypes';
 
 import {DAILY_VAR_INSTANCE, MONTHLY_VAR_INSTANCE, resultByCode, resultByInstance} from '../riskAnalysisHelpers';
-import {warningSentence, type WarningTranslator} from './warningSentence';
+import {warningAssetIds, warningReason, warningSentence, type WarningTranslator} from './warningSentence';
 
 // Provenance lives in its own module — this file is at its size ceiling and the
 // subject is a separate one — but consumers keep a single door onto the level
@@ -115,6 +115,12 @@ export interface ResultReason {
     message: string;
     /** How many results carried this same sentence. */
     occurrences: number;
+    /** The cause the warnings state in `details.reason` — for an exclusion, `no_price_source` is a
+     *  permanent one. Absent when a warning of the sentence states none, or another one. */
+    reason?: string;
+    /** The assets the warnings are about, as the backend names them in the sentence. Absent when a
+     *  warning of the sentence names none, names them in a form that cannot be trusted, or names others. */
+    assetIds?: number[];
 }
 
 /**
@@ -151,16 +157,35 @@ export function resultReasons(results: ReadonlyArray<RiskAnalyticResult | null |
         for (const warning of result.warnings ?? []) {
             const message = warningSentence(warning, translate);
             if (!message) continue;
+            const reason = warningReason(warning);
+            const assetIds = warningAssetIds(warning);
             const existing = byMessage.get(message);
             // Deduplicated by the sentence rather than by `code`, because the
             // sentence *is* what is shown: printing it twice would read as a
             // rendering fault, not as "two assets". The arity is kept in
             // `occurrences` so it is published instead of lost.
-            if (existing) existing.occurrences += 1;
-            else byMessage.set(message, {key: `${warning?.code ?? 'warning'}:${message}`, message, occurrences: 1});
+            if (existing) {
+                existing.occurrences += 1;
+                // A merged sentence keeps a cause or a list of assets only while every warning
+                // behind it agrees, and never takes one back: the untranslated fallback words
+                // every exclusion alike, and a permanent cause read off one of them could be
+                // an occasional cause of another.
+                if (existing.reason !== reason) delete existing.reason;
+                if (existing.assetIds && !sameAssets(existing.assetIds, assetIds)) delete existing.assetIds;
+            } else {
+                byMessage.set(message, {key: `${warning?.code ?? 'warning'}:${message}`, message, occurrences: 1, ...(reason === undefined ? {} : {reason}), ...(assetIds === undefined ? {} : {assetIds})});
+            }
         }
     }
     return [...byMessage.values()];
+}
+
+/** Whether two warnings name the same assets, in whatever order. */
+function sameAssets(left: readonly number[], right: readonly number[] | undefined): boolean {
+    if (!right) return false;
+    const a = new Set(left);
+    const b = new Set(right);
+    return a.size === b.size && [...a].every((id) => b.has(id));
 }
 
 /**
@@ -539,20 +564,48 @@ export function buildConcentration(contributionResult: RiskAnalyticResult | null
     return {effectiveNumberOfAssets, diversificationRatio};
 }
 
+/** The share of the portfolio the risk model does **not** speak for, and what it is made of. */
+export interface UncoveredWeight {
+    /** `cash_weight` exactly as published: the whole zero-return residual. */
+    total: number;
+    /** `excluded_weight` exactly as published: the holdings left without a usable price series. `null` when the payload does not state it. */
+    unpriced: number | null;
+    /** What the residual holds besides them — cash and value in transit —, with float noise read as none. `null` with `unpriced`. */
+    cash: number | null;
+}
+
+/**
+ * Below this, a weight is noise, not money: the risk service's own tolerance on weights
+ * (`backend/app/services/risk/service.py`, the leverage and in-transit checks). The backend
+ * publishes `cash_weight` and `excluded_weight` from two separate sums, so with no true cash
+ * their difference lands a unit in the last place either side of zero — and a positive one
+ * would put a «0 % cash» on screen.
+ */
+const WEIGHT_NOISE = 1e-9;
+
 /**
  * The share of the portfolio the risk model does **not** speak for.
  *
  * `cash_weight` is a residual — `max(0, 1 − Σ usable weights)` — so it absorbs
  * genuine cash *and* every holding dropped for want of a usable price series.
  * Calling it "cash" on screen is false the moment one asset cannot be priced,
- * and the reader would take a modelling gap for a deliberate allocation.
+ * and the reader would take a modelling gap for a deliberate allocation. The
+ * payload names the second part (`excluded_weight`), so the two are told apart
+ * here; both published numbers are reported as published, and only the cash
+ * derived from them is cleaned.
+ *
+ * Read from any output of today's composition that publishes the two weights —
+ * `risk_contribution` (L2) and `asset_risk_return` (L3) — with no check on `kind`.
  */
-export function uncoveredWeight(contributionResult: RiskAnalyticResult | null): number | null {
-    const output = okOutput(contributionResult);
+export function uncoveredWeight(weightedResult: RiskAnalyticResult | null): UncoveredWeight | null {
+    const output = okOutput(weightedResult);
     if (!output) return null;
-    const weight = finite(output.cash_weight);
-    if (weight === null || weight < 0) return null;
-    return weight;
+    const total = finite(output.cash_weight);
+    if (total === null || total < 0) return null;
+    const unpriced = finite(output.excluded_weight);
+    if (unpriced === null || unpriced < 0) return {total, unpriced: null, cash: null};
+    const cash = total - unpriced;
+    return {total, unpriced, cash: cash < WEIGHT_NOISE ? 0 : cash};
 }
 
 /* ------------------------------------------------------------------ L3 --- */
