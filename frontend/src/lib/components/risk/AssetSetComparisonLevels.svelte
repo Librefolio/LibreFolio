@@ -49,7 +49,7 @@
      * happened to catch it.
      */
     import {_ as t} from '$lib/i18n';
-    import {createRiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
+    import {ANSWER_DISCARDED_CODE, createRiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
 
     import AssetSetLossComparisonSection from './AssetSetLossComparisonSection.svelte';
     import AssetSetRiskReturnSection from './AssetSetRiskReturnSection.svelte';
@@ -120,12 +120,18 @@
 
     let l1Health = $derived(degradedResults(l1Results, VAR_LABELS));
     let l1Reasons = $derived(resultReasons(l1Results, $t));
-    let l1Errors = $derived(resultErrorCodes(l1Results));
+    /**
+     * A base answer discarded twice running is said once, by the frame, with the same
+     * code the replay and the Dashboard's L4 use (`answer_discarded`); the body only
+     * offers the retry. Without it both levels showed their rows of dashes in silence.
+     */
+    let discardedCodes = $derived(controller.loadDiscarded ? [ANSWER_DISCARDED_CODE] : []);
+    let l1Errors = $derived([...resultErrorCodes(l1Results), ...discardedCodes]);
     let l1Metadata = $derived(levelMetadata(l1Results));
 
     let l3Health = $derived(degradedResults(l3Results));
     let l3Reasons = $derived(resultReasons(l3Results, $t));
-    let l3Errors = $derived(resultErrorCodes(l3Results));
+    let l3Errors = $derived([...resultErrorCodes(l3Results), ...discardedCodes]);
     let l3Metadata = $derived(levelMetadata(l3Results));
 
     /**
@@ -141,9 +147,9 @@
 </script>
 
 <RiskLevelSection title={$t('risk.assetSet.levels.l1.title')} level={1} testId="risk-asset-set-loss" health={l1Health} reasons={l1Reasons} errorCodes={l1Errors} metadata={l1Metadata} docsPath="financial-theory/technical-analysis/risk-metrics/">
-    <AssetSetLossComparisonSection {assetIds} {assetLabels} {dailyVar} {monthlyVar} {drawdown} loading={controller.initialLoading} />
+    <AssetSetLossComparisonSection {assetIds} {assetLabels} {dailyVar} {monthlyVar} {drawdown} loading={controller.initialLoading} failed={controller.loadError} discarded={controller.loadDiscarded} onretry={() => void controller.loadBase(true)} />
 </RiskLevelSection>
 
 <RiskLevelSection title={$t('risk.assetSet.levels.l3.title')} level={3} testId="risk-asset-set-paid" health={l3Health} reasons={l3Reasons} errorCodes={l3Errors} metadata={l3Metadata} docsPath="financial-theory/technical-analysis/risk-metrics/">
-    <AssetSetRiskReturnSection {assetIds} {assetLabels} {riskReturn} {kpi} {comparison} {benchmarkApplies} loading={controller.initialLoading} />
+    <AssetSetRiskReturnSection {assetIds} {assetLabels} {riskReturn} {kpi} {comparison} {benchmarkApplies} loading={controller.initialLoading} failed={controller.loadError} discarded={controller.loadDiscarded} onretry={() => void controller.loadBase(true)} />
 </RiskLevelSection>

@@ -42,9 +42,22 @@
         monthlyVar: RiskAnalyticResult | null;
         drawdown: RiskAnalyticResult | null;
         loading?: boolean;
+        /**
+         * The base wave failed (`controller.loadError`): the body says so and offers a retry.
+         * Without it the rows, which come from the selected ids, read as a table of dashes.
+         */
+        failed?: boolean;
+        /**
+         * The base answer arrived and was discarded twice running (`controller.loadDiscarded`).
+         * The frame says so (`answer_discarded` in its `errorCodes`); the body only offers
+         * the cure, a retry, when there is no figure to show.
+         */
+        discarded?: boolean;
+        /** Ask the base again, past the cache (`controller.loadBase(true)`). */
+        onretry?: () => void;
     }
 
-    let {assetIds, assetLabels, dailyVar, monthlyVar, drawdown, loading = false}: Props = $props();
+    let {assetIds, assetLabels, dailyVar, monthlyVar, drawdown, loading = false, failed = false, discarded = false, onretry}: Props = $props();
 
     let rows = $derived(buildAssetSetHurtRows(assetIds, assetLabels, dailyVar, monthlyVar, drawdown));
     let hasAnyFigure = $derived(rows.some((row) => row.badDay !== null || row.badMonth !== null || row.worstFall !== null));
@@ -95,8 +108,18 @@
 <div class="space-y-3" data-testid="risk-asset-set-l1">
     <p class="text-xs text-gray-500 dark:text-gray-400">{$t('risk.assetSet.levels.l1.description')}</p>
 
-    {#if loading && !hasAnyFigure}
+    {#if failed}
+        <div class="py-4 text-center" data-testid="risk-asset-set-l1-error">
+            <p class="text-sm text-red-600 dark:text-red-400">{$t('risk.states.loadFailed')}</p>
+            <button type="button" class="mt-2 rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-700" onclick={() => onretry?.()} data-testid="risk-asset-set-l1-retry">{$t('common.retry')}</button>
+        </div>
+    {:else if loading && !hasAnyFigure}
         <div class="h-32 animate-pulse rounded-lg bg-gray-100 dark:bg-slate-700" data-testid="risk-asset-set-l1-loading"></div>
+    {:else if discarded && !hasAnyFigure}
+        <!-- The frame carries the sentence (`answer_discarded`); the body carries the cure. -->
+        <div class="py-4 text-center" data-testid="risk-asset-set-l1-discarded">
+            <button type="button" class="mt-2 rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-700" onclick={() => onretry?.()} data-testid="risk-asset-set-l1-retry">{$t('common.retry')}</button>
+        </div>
     {:else if rows.length === 0}
         <p class="py-4 text-center text-sm text-gray-400 dark:text-gray-500" data-testid="risk-asset-set-l1-empty">{$t('risk.states.empty')}</p>
     {:else}
