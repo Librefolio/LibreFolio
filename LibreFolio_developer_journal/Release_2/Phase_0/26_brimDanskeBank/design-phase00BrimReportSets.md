@@ -13,6 +13,8 @@ Le versioni precedenti sono nella storia di git (v4: `e3244095e`). Le novità di
 
 **v5.2 (2026-09-30)**: il set nasce dal caricamento (D-S22, decisa dal developer): i file caricati insieme formano il set, e se ne manca uno lo si carica nello stesso set. Il completamento automatico della v5.1 (D-S31) è ritirato, perché trasformava l'archivio dei file in una memoria nascosta (A16). Le novità sono segnate **[v5.2]**.
 
+**v5.3 (2026-09-30)**: dopo la domanda del developer sul file mancante, il §4.2 mostra già al passo ① il set incompleto. Una nuova passata dell'analisi logica sulla v5.2 aggiunge A17, A18 e lo scenario 8 (§11). Le novità sono segnate **[v5.3]**.
+
 **Workstream**: L · **Pilota**: Danske Bank · **Dopo il pilota**: Crédit Agricole, Intesa Sanpaolo.
 **Analisi degli export Danske**: [analysis-phase00BrimDanskeBank.md](analysis-phase00BrimDanskeBank.md).
 
@@ -154,13 +156,13 @@ Gli endpoint nuovi chiedono il permesso EDITOR sul broker, come il parse, e fann
 | **[v5.2]** Upload senza `batch_id` (client vecchio, file caricati prima di questa funzione) | il file è un caricamento a sé |
 | **[v5.2]** Stesso `batch_id` con broker diversi | un set per broker: la chiave del set è caricamento, broker e plugin |
 | Lo stesso file caricato due volte nello stesso caricamento | due file, che nel set contano una volta sola (§3.4, regola M) |
-| Un originale eliminato dopo il combine | il combinato resta usabile, perché contiene i valori verbatim; il badge dice «originale eliminato» |
+| Un originale eliminato dopo il combine | il combinato resta usabile, perché contiene i valori verbatim; il badge dice «originale eliminato». **[v5.3]** Il set resta importabile finché il combinato c'è ed è aggiornato; gli originali servono solo per ricombinare (A17) |
 | Il combinato eliminato | gli originali restano; il prossimo import lo rigenera |
 | Un combinato scaricato e ricaricato come file nuovo | si analizza come un file qualsiasi, perché è autosufficiente, ma senza legami |
 
 **Migrazione**
 - *Oggi*: file indipendenti, caricati da tre punti: il wizard, la pagina file e la pagina del broker (`BrokerImportFilesModal`).
-- *Pilota*: tutti e tre mandano il `batch_id`; i combinati sono collegati agli originali.
+- *Pilota*: tutti e tre mandano il `batch_id`; i combinati sono collegati agli originali. **[v5.3]** I tre chiamanti usano `axiosInstance` con un `FormData` (Zodios non gestisce bene il multipart, come dice il codice), quindi il `batch_id` è solo un campo in più del form. Il 422 della pagina file e della pagina del broker, che mandavano `broker_id` nella query, è già corretto (`f82eaa020`, in `dev_release2` con `0743b9f44`).
 - *A regime*: il set come riga raggruppata nella pagina file (D-S9).
 
 ### 3.3 `POST /sets/preview`: cosa c'è nel set
@@ -487,7 +489,7 @@ class BRIMProvider:
 
 **Nessuno dichiara quali file vanno insieme, e il sistema non va a cercarli fra i file vecchi.** Il set è quello che l'utente carica insieme.
 
-1. **Un caricamento, un set.** Formano un set i file caricati insieme per lo stesso broker e riconosciuti dallo stesso plugin a set. «Insieme» vuol dire nella stessa sessione del passo ①, oppure con una sola azione dalla pagina file o dalla pagina del broker. Ogni file porta nel sidecar l'identificativo del suo caricamento (`batch_id`).
+1. **Un caricamento, un set.** Formano un set i file caricati insieme per lo stesso broker e riconosciuti dallo stesso plugin a set. **[v5.3]** Un file di cui un plugin a set riconosce il ruolo entra nel set di quel plugin, anche se il broker ha come predefinito un altro plugin compatibile, per esempio il CSV generico (A18). Se l'utente cambia il plugin a mano, il file esce dal set. «Insieme» vuol dire nella stessa sessione del passo ①, oppure con una sola azione dalla pagina file o dalla pagina del broker. Ogni file porta nel sidecar l'identificativo del suo caricamento (`batch_id`).
 2. **Il ruolo lo riconosce il plugin** dal contenuto: titoli o cassa. L'utente non dichiara nulla.
 3. **Il set è un'unità.** Nel passo ② e nella pagina file è una riga sola; si seleziona, si analizza e si importa per intero. File di caricamenti diversi non si mescolano mai.
 4. **Set incompleto.** La card dice quale export manca e per quale periodo, e offre «Carica il file mancante»: il file entra in quel set, con lo stesso `batch_id`, anche giorni dopo. In alternativa si ricarica tutto insieme.
@@ -524,6 +526,23 @@ Per l'utente non cambia nulla: trascina i file e sceglie il broker, per tutti o 
 
                                             [ Indietro ]  [ Continua ]
 ```
+
+**[v5.3] Se manca un file obbligatorio**, lo si vede già qui, nel momento più comodo per aggiungerlo: basta trascinarlo sopra, ed entra nello stesso caricamento.
+
+```text
+   File                        Broker         Stato
+   Transactions.xlsx           Danske OST     Caricato   set Danske Bank:
+                                                         manca la cassa
+   Fineco_2031.xlsx            Fineco         Caricato
+
+ ATTENZIONE: per Danske serve anche l'estratto del conto OST (CSV),
+ almeno dal 30.09.2030 al 30.09.2031. Trascinalo qui sopra: entra nello
+ stesso set.                               » Come esportarlo
+
+                                            [ Indietro ]  [ Continua ]
+```
+
+Si può comunque continuare: al passo ② il set compare incompleto (caso B), con «Carica il file mancante».
 
 ### 4.3 ② Seleziona file: il set è una riga
 
@@ -757,7 +776,7 @@ Il costo delle azioni nuove di una scissione si scrive qui, come oggi per il CSV
 | L'utente cambia a mano il plugin di un file del set | il file esce dal set e si analizza da solo; se il suo ruolo era obbligatorio, il set diventa incompleto |
 | Nello stesso caricamento, file di due broker | due set, uno per broker |
 | File con ruolo non riconosciuto | segnalato nella card e tolto dal set |
-| Un file del set eliminato | se il suo ruolo era obbligatorio, il set diventa incompleto e la card chiede il file |
+| Un file del set eliminato | **[v5.3]** se il combinato c'è ed è aggiornato, il set resta importabile e la card dice «originale eliminato»; altrimenti, se il suo ruolo era obbligatorio, il set diventa incompleto e la card chiede il file (A17) |
 | L'utente spunta un set vecchio, già importato | si analizza di nuovo: i movimenti risultano duplicati, e il combinato si riusa |
 | Lo stesso file caricato due volte | nello stesso set conta una volta sola (regola M); in set diversi, ogni set lo usa per conto suo |
 | L'utente carica il file mancante dalla card | va allo stesso broker e allo stesso caricamento, entra nel set, e la card si aggiorna |
@@ -968,6 +987,7 @@ Metodo: prima le proprietà che il design deve garantire (§11.1), poi la verifi
 | 5 | Un XLSX 2024 caricato dopo lo scenario 1 | invariata | segmento prima di `H0`: scartato con una notice | I2, a costo di non importarlo (D-S21) |
 | 6 | Apertura tolta nello scenario 1 | la data della prima coppia del 2025 | la differenza torna al primo checkpoint successivo, con una data più tarda | I6 |
 | 7 | Broker con una storia inserita a mano, senza tag | il primo giorno dell'XLSX | tutto quello che precede è riassunto; il gap-fix propone solo la differenza con la storia a mano | I1 |
+| 8 | **[v5.3]** Due set dello stesso broker importati insieme su un broker vuoto (XLSX 2025 e CSV, XLSX 2026 e CSV) | per ogni set, il giorno dopo il suo primo checkpoint | ogni set calcola il suo «primo import». Le righe del set più recente prima del suo `H0` restano nascoste, quindi non si importano due volte; il gap-fix, calcolato sull'unione, dà zero al secondo checkpoint | I1, I2 |
 
 ### 11.4 Incongruenze trovate e come le risolve la v5
 
@@ -989,6 +1009,8 @@ Metodo: prima le proprietà che il design deve garantire (§11.1), poi la verifi
 | A14 | v5, trovata rileggendo il §3.5 | La prima formulazione di `H0` metteva le correzioni prima delle altre transazioni del plugin: una correzione successiva avrebbe spostato `H0` in avanti. E «il primo giorno del primo segmento» non vale per Intesa (niente segmenti) né per CA (righe importate prima del checkpoint) | `H0` sbagliata in tre casi | una regola sola sulle transazioni col tag del plugin; al primo import, il giorno dopo il primo checkpoint, o la riga più vecchia con la politica `import` (D-S25) |
 | A15 | v5: §4.1, trovata dal developer | La card raggruppava solo i file già spuntati, ma non diceva come entrano nel set i file già caricati che servono: l'utente avrebbe dovuto sapere da solo quali spuntare | contro l'obiettivo 4 (l'utente non deve sapere nulla) | **[v5.2]** il set nasce dal caricamento, e quello che manca si chiede con il periodo e si carica nello stesso set (§4.1, D-S22) |
 | A16 | v5.1: §4.1 e D-S31, trovata dal developer | Il completamento automatico cercava fra tutti i file già caricati del broker. L'archivio dei file diventava una seconda memoria, nascosta accanto al database: il risultato di un import dipendeva da file vecchi, magari dimenticati, e cancellarne uno lo cambiava | comportamento poco prevedibile, e una seconda fonte di verità | ritirato: il set nasce dal caricamento (D-S22) e la preview guarda solo i membri del set |
+| A17 | v5.2: §3.2 e tabella dei casi limite del §4, trovata rileggendo la v5.2 | Il §3.2 diceva che, se si elimina un originale, il combinato resta usabile; il §4 diceva che il set diventa incompleto | comportamento contraddittorio | **[v5.3]** finché il combinato c'è ed è aggiornato, il set resta importabile; gli originali servono solo per ricombinare |
+| A18 | v5.2: §4.1, trovata rileggendo la v5.2 | Il set dipendeva dal plugin scelto in automatico per ogni file. Se il broker ha come predefinito un altro plugin compatibile (il CSV generico accetta qualsiasi CSV con un'intestazione), il CSV finiva lì e il set si rompeva | set incompleto senza motivo | **[v5.3]** un file di cui un plugin a set riconosce il ruolo entra nel set di quel plugin, qualunque sia il plugin predefinito del broker (§4.1, regola 1) |
 
 ### 11.5 Tensioni che restano
 
