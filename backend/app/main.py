@@ -38,6 +38,7 @@ from backend.app.config import (
 from backend.app.db.session import get_async_engine
 from backend.app.logging_config import configure_logging, get_logger
 from backend.app.services.brim_parse_pool import shutdown_pool as shutdown_brim_parse_pool
+from backend.app.services.market_calendar import shutdown_market_holidays, start_market_holiday_prewarm
 from backend.app.services.provider_registry import (
     AssetProviderRegistry,
     BRIMProviderRegistry,
@@ -269,6 +270,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     _background_tasks.add(provider_prewarm_task)
     provider_prewarm_task.add_done_callback(_background_tasks.discard)
 
+    # Build the market holiday table in its own process, in background: the first computation that needs it awaits it
+    market_holiday_task = start_market_holiday_prewarm()
+    _background_tasks.add(market_holiday_task)
+    market_holiday_task.add_done_callback(_background_tasks.discard)
+
     # Start scheduler daemon
     shutdown_event = get_shutdown_event()
     scheduler_task = asyncio.create_task(scheduler_loop(shutdown_event))
@@ -293,6 +299,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     # a parse only exists inside one.
     shutdown_brim_parse_pool(wait=True)
     await shutdown_quant_worker_pools()
+    # Never waits for a holiday build in progress: its process is ended at once
+    await shutdown_market_holidays()
 
     # Close all TTL caches (stop timer wheel threads for clean exit)
     close_all_caches()
