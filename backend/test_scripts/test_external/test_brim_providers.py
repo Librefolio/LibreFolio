@@ -4440,6 +4440,8 @@ class TestCreditAgricoleCanonicalCharacterization:
                     "notices": [{"kind": "maturity_suspected", "reason": "Rilevata almeno una transazione di scadenza/rimborso (es. «TITOLI SCADUTI» o «FONDI: " "RIMBORSO»).", "transaction_indexes": [70, 71]}],
                 },
             },
+            "checkpoints": [],
+            "verifications": [],
         },
         "account": {
             "transactions": [
@@ -5039,6 +5041,8 @@ class TestCreditAgricoleCanonicalCharacterization:
                 2147483645: {"extracted_symbol": None, "extracted_isin": "IT0000000003", "extracted_name": "BTP OTHER 1/9/2030", "notices": []},
                 2147483644: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP SAMPLE", "notices": [{"kind": "maturity_suspected", "reason": "Rilevata almeno una transazione di scadenza/rimborso (es. «TITOLI SCADUTI» o «FONDI: " "RIMBORSO»).", "transaction_indexes": [20]}]},
             },
+            "checkpoints": [],
+            "verifications": [],
         },
     }
 
@@ -5062,6 +5066,9 @@ class TestCreditAgricoleCanonicalCharacterization:
             "validation_issues",
             "field_todos",
             "extracted_assets",
+            # BRIM report sets (phase A1): truth points, always empty for single-file plugins like CA
+            "checkpoints",
+            "verifications",
         }
         assert set(TXCreateItem.model_fields) == {
             "broker_id",
