@@ -22,7 +22,26 @@ import {afterEach, beforeEach, describe, expect, it} from 'vitest';
 import type {RiskDataQualityReport} from '$lib/risk/riskTypes';
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 import {setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
-import {addDays, buildBaseAnalytics, formatCurrencyAmount, formatRatio, formatScopedCurrencyAmount, localizedScenarioText, normalizeQualityIssue, numberRecord, presentStressBuckets, resultByCode, scalarString, stressImpactDimension, type BaseAnalyticsContext} from './riskAnalysisHelpers';
+import {
+    addDays,
+    ASSET_SET_DAILY_VAR_INSTANCE,
+    ASSET_SET_MONTHLY_VAR_INSTANCE,
+    buildBaseAnalytics,
+    DAILY_VAR_INSTANCE,
+    formatCurrencyAmount,
+    formatRatio,
+    formatScopedCurrencyAmount,
+    localizedScenarioText,
+    MONTHLY_VAR_HORIZON_DAYS,
+    MONTHLY_VAR_INSTANCE,
+    normalizeQualityIssue,
+    numberRecord,
+    presentStressBuckets,
+    resultByCode,
+    scalarString,
+    stressImpactDimension,
+    type BaseAnalyticsContext,
+} from './riskAnalysisHelpers';
 
 type Issue = NonNullable<RiskDataQualityReport['issues']>[number];
 
@@ -521,6 +540,26 @@ describe('buildBaseAnalytics', () => {
     it('historical: VaR carries a 1-day 95% window', () => {
         const analytics = buildBaseAnalytics('historical', ctx(['historical_var']));
         expect(analytics[0].parameters).toEqual({confidence_level: 0.95, horizon_days: 1});
+    });
+
+    // The bad month is a calendar month: the backend turns calendar days into the observations the
+    // series holds (21 for a weekday series, 30 for one quoted every day — developer's decision of
+    // 30/09/2026), so the request says 30, not the 21 trading days it used to assume.
+    it('historical: the monthly VaR asks for a calendar month, 30 days, beside the 1-day one', () => {
+        const analytics = buildBaseAnalytics('historical', {...ctx(['historical_var']), includeMonthlyVar: true});
+        expect(MONTHLY_VAR_HORIZON_DAYS).toBe(30);
+        expect(analytics.map((a) => [a.instance_id, a.parameters])).toEqual([
+            [DAILY_VAR_INSTANCE, {confidence_level: 0.95, horizon_days: 1}],
+            [MONTHLY_VAR_INSTANCE, {confidence_level: 0.95, horizon_days: 30}],
+        ]);
+    });
+
+    it('asset set: the monthly per-asset VaR asks for the same calendar month', () => {
+        const analytics = buildBaseAnalytics('historical', {...ctx(['asset_set_var']), includeAssetSetLevels: true});
+        expect(analytics.map((a) => [a.instance_id, a.parameters])).toEqual([
+            [ASSET_SET_DAILY_VAR_INSTANCE, {confidence_level: 0.95, horizon_days: 1}],
+            [ASSET_SET_MONTHLY_VAR_INSTANCE, {confidence_level: 0.95, horizon_days: 30}],
+        ]);
     });
 
     it('historical: omits any capability the catalog does not advertise', () => {

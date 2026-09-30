@@ -116,12 +116,13 @@ function ok(instanceId: string, output: VarCvarOutput): RiskAnalyticResult {
     return {instance_id: instanceId, analytic_code: 'asset_set_var', status: 'ok', output};
 }
 
-/** Invented tails, CVaR ≥ VaR. 740 daily observations; compounding to 21 days consumes 20 of them. */
+/** Invented tails, CVaR ≥ VaR. 740 daily observations; a 30-day month is 21 of them, and compounding over 21 consumes 20. */
 const FIGURES: RiskAnalyticResult[] = [
     ok(ASSET_SET_DAILY_VAR_INSTANCE, {
         kind: 'var_cvar_set',
         confidence_level: 0.95,
         horizon_days: 1,
+        horizon_observations: 1,
         observations: 740,
         items: [
             {asset_id: HOLDING_A, value_at_risk: 0.024, conditional_value_at_risk: 0.037},
@@ -131,7 +132,8 @@ const FIGURES: RiskAnalyticResult[] = [
     ok(ASSET_SET_MONTHLY_VAR_INSTANCE, {
         kind: 'var_cvar_set',
         confidence_level: 0.95,
-        horizon_days: 21,
+        horizon_days: 30,
+        horizon_observations: 21,
         observations: 720,
         items: [
             {asset_id: HOLDING_A, value_at_risk: 0.094, conditional_value_at_risk: 0.133},

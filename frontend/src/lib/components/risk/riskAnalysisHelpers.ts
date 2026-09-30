@@ -262,8 +262,13 @@ export interface BaseAnalyticsContext {
     assetSetBenchmarkId?: number | null;
 }
 
-/** Horizon, in observations, used for L1's "bad month" row. */
-export const MONTHLY_VAR_HORIZON_DAYS = 21;
+/**
+ * Horizon of L1's "bad month" row, in calendar days. The backend compounds it over
+ * the observations the series holds in 30 days at its observed frequency — 21 for a
+ * series quoted on trading days, 30 for one quoted every day — and publishes that
+ * count as `horizon_observations`.
+ */
+export const MONTHLY_VAR_HORIZON_DAYS = 30;
 
 /** Instance id of the 1-day base VaR. */
 export const DAILY_VAR_INSTANCE = 'base-historical-historical_var';

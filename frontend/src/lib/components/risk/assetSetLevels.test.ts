@@ -91,7 +91,7 @@ function varItem(assetId: number, valueAtRisk: number, conditionalValueAtRisk: n
 
 /** The one-day tail. 502 daily observations over the window below. */
 function dailyVar(items: Payload[], overrides: Payload = {}): RiskAnalyticResult {
-    return ok('asset_set_var', {kind: 'var_cvar_set', confidence_level: 0.95, horizon_days: 1, observations: 502, items, ...overrides}, ASSET_SET_DAILY_VAR_INSTANCE);
+    return ok('asset_set_var', {kind: 'var_cvar_set', confidence_level: 0.95, horizon_days: 1, horizon_observations: 1, observations: 502, items, ...overrides}, ASSET_SET_DAILY_VAR_INSTANCE);
 }
 
 /**
@@ -99,10 +99,11 @@ function dailyVar(items: Payload[], overrides: Payload = {}): RiskAnalyticResult
  *
  * `observations` is 20 lower than the daily run's and that is not decoration —
  * the output's own docstring says compounding to a horizon consumes
- * `horizon_days - 1` observations, so 502 − 20 = 482.
+ * `horizon_observations - 1` observations, and a 30-day month is 21
+ * observations, so 502 − 20 = 482.
  */
 function monthlyVar(items: Payload[]): RiskAnalyticResult {
-    return ok('asset_set_var', {kind: 'var_cvar_set', confidence_level: 0.95, horizon_days: 21, observations: 482, items}, ASSET_SET_MONTHLY_VAR_INSTANCE);
+    return ok('asset_set_var', {kind: 'var_cvar_set', confidence_level: 0.95, horizon_days: 30, horizon_observations: 21, observations: 482, items}, ASSET_SET_MONTHLY_VAR_INSTANCE);
 }
 
 /**
@@ -226,7 +227,7 @@ describe('buildAssetSetHurtRows', () => {
         const rows = buildAssetSetHurtRows(
             SELECTION,
             LABELS,
-            partial('asset_set_var', {kind: 'var_cvar_set', confidence_level: 0.95, horizon_days: 1, observations: 502, items: [varItem(7, 0.021, 0.031), varItem(12, 0.009, 0.013)]}, ASSET_SET_DAILY_VAR_INSTANCE),
+            partial('asset_set_var', {kind: 'var_cvar_set', confidence_level: 0.95, horizon_days: 1, horizon_observations: 1, observations: 502, items: [varItem(7, 0.021, 0.031), varItem(12, 0.009, 0.013)]}, ASSET_SET_DAILY_VAR_INSTANCE),
             null,
             drawdownResult([openFall(3)]),
         );
@@ -591,7 +592,7 @@ describe('the widened optional numerics', () => {
      * different reasons — which is the whole reason to write them separately.
      */
     it('unwraps an output that arrived wrapped in a list', () => {
-        const wrapped = ok('asset_set_var', [{kind: 'var_cvar_set', confidence_level: 0.95, horizon_days: 1, observations: 502, items: [varItem(7, 0.021, 0.031)]}], ASSET_SET_DAILY_VAR_INSTANCE);
+        const wrapped = ok('asset_set_var', [{kind: 'var_cvar_set', confidence_level: 0.95, horizon_days: 1, horizon_observations: 1, observations: 502, items: [varItem(7, 0.021, 0.031)]}], ASSET_SET_DAILY_VAR_INSTANCE);
 
         expect(rowFor(buildAssetSetHurtRows([7], LABELS, wrapped, null, null), 7).badDay).toBe(0.031);
     });
