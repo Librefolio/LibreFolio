@@ -2,19 +2,23 @@
 BRIM API Tests.
 
 Tests for Broker Report Import Manager API endpoints:
-- POST /brokers/import/upload: Upload broker report file
+- POST /brokers/import/upload: Upload broker report file (optional batch_id: report sets)
 - GET /brokers/import/files: List uploaded files
 - GET /brokers/import/files/{id}: Get file details
 - DELETE /brokers/import/files/{id}: Delete file
 - POST /brokers/import/files/{id}/parse: Parse file
 - GET /brokers/import/plugins: List available plugins
+- POST /brokers/import/sets/preview and /sets/combine: report sets (phase A2)
 
 See checklist: 01_test_brim_plan.md - Categories 5, 6
 Note: E2E tests are in test_e2e/test_brim_e2e.py (Category 7)
+Report sets: what a set contains is tested at service level, in
+test_services/test_brim_report_sets.py (Category 8 below explains why).
 Reference: backend/app/api/v1/brokers.py
 """
 
 import io
+import json
 import time
 import uuid
 
@@ -1106,6 +1110,210 @@ class TestMultiUserBRIM:
 
             # Content should match uploaded file
             assert download_response.content == sample_csv_content
+
+
+# ============================================================================
+# CATEGORY 8: REPORT SETS (phase A2) — upload batch_id, /sets/*, parse fields
+# ============================================================================
+#
+# Under the runner the test backend is a process of its own, and it parses through
+# a process pool: the test-only report-set plugin of test_brim_report_sets.py
+# cannot be registered there. What a set contains (roles, missing periods, H0,
+# reuse, two brokers, the parse guard) is therefore tested at service level. Here,
+# what HTTP shows without a report-set plugin: the upload batch_id, the routes, the
+# EDITOR permission, body validation, error codes, the unchanged single-file parse.
+
+SET_ENDPOINTS = ("preview", "combine")
+
+
+def _detail_text(response: httpx.Response) -> str:
+    """An error response's ``detail`` as text, whatever its shape (a string, or an object carrying a code)."""
+    try:
+        detail = response.json().get("detail")
+    except ValueError:
+        return response.text
+    return detail if isinstance(detail, str) else json.dumps(detail)
+
+
+async def _upload_csv(client: httpx.AsyncClient, broker_id: int, content: bytes, filename: str, **form: str) -> httpx.Response:
+    """``POST /upload`` of one CSV, with any extra form field (e.g. ``batch_id``)."""
+    files = {"file": (filename, io.BytesIO(content), "text/csv")}
+    return await client.post(f"{API_BASE}/brokers/import/upload", files=files, data={"broker_id": broker_id, **form}, timeout=TIMEOUT)
+
+
+async def _files_on(client: httpx.AsyncClient, broker_id: int) -> list:
+    """The BRIM files stored on one broker; the list also returns legacy files with no broker, so the target is filtered."""
+    response = await client.get(f"{API_BASE}/brokers/import/files", params={"broker_ids": broker_id}, timeout=TIMEOUT)
+    assert response.status_code == 200, response.text
+    return [info for info in response.json() if info.get("target_broker_id") == broker_id]
+
+
+def _set_url(endpoint: str) -> str:
+    return f"{API_BASE}/brokers/import/sets/{endpoint}"
+
+
+class TestUploadBatchId:
+    """A2 — ``POST /upload`` takes an optional ``batch_id`` form field: the files of one upload action form one report set (D-S22)."""
+
+    @pytest.mark.asyncio
+    async def test_batch_id_is_stored_and_returned(self, test_server, sample_csv_content):
+        """RS-001: two files uploaded with one batch_id carry it in the upload response, in GET /files/{id} and in GET /files."""
+        print_section("RS-001: upload batch_id is stored and returned")
+        batch = str(uuid.uuid4())
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+
+            uploads = [await _upload_csv(client, broker_id, sample_csv_content, name, batch_id=batch) for name in ("batch_custody.csv", "batch_cash.csv")]
+
+            assert [response.status_code for response in uploads] == [200, 200], [response.text for response in uploads]
+            file_ids = [response.json()["file_id"] for response in uploads]
+            assert [response.json()["batch_id"] for response in uploads] == [batch, batch]
+            for file_id in file_ids:
+                detail = await client.get(f"{API_BASE}/brokers/import/files/{file_id}", timeout=TIMEOUT)
+                assert detail.status_code == 200, detail.text
+                assert detail.json()["batch_id"] == batch
+            listed = {info["file_id"]: info for info in await _files_on(client, broker_id)}
+            assert {file_id: listed[file_id]["batch_id"] for file_id in file_ids} == dict.fromkeys(file_ids, batch)
+            print_success("✓ batch_id stored and returned")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("bad_batch_id", ["not-a-uuid", "1234", "0b6f7a3e-5d1c-4c1e-9a53-2f0e4d9b7c1"], ids=["words", "digits", "one-hex-digit-short"])
+    async def test_invalid_batch_id_is_rejected(self, test_server, sample_csv_content, bad_batch_id):
+        """RS-002: a batch_id that is not a UUID answers 422, and nothing is stored."""
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+            filename = f"bad_batch_{uuid.uuid4().hex[:8]}.csv"
+
+            response = await _upload_csv(client, broker_id, sample_csv_content, filename, batch_id=bad_batch_id)
+
+            assert response.status_code == 422, f"batch_id={bad_batch_id!r}: {response.status_code} {response.text}"
+            assert filename not in {info["filename"] for info in await _files_on(client, broker_id)}
+
+    @pytest.mark.asyncio
+    async def test_upload_without_batch_id_has_none(self, test_server, sample_csv_content):
+        """RS-003 — retro-compatibility guard (passes before and after A2): an old client sends no batch_id, and the file is an upload of its own."""
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+
+            response = await _upload_csv(client, broker_id, sample_csv_content, "no_batch.csv")
+
+            assert response.status_code == 200, response.text
+            assert "batch_id" in response.json() and response.json()["batch_id"] is None
+
+
+class TestReportSetEndpoints:
+    """A2 — ``POST /sets/preview`` and ``POST /sets/combine``: routing, EDITOR permission, body validation, error codes.
+
+    Every ``BRIMSetError`` maps to its status with its code in ``detail``. The code
+    is asserted, not only the status: a bare 404 is also what a missing route says.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("endpoint", SET_ENDPOINTS)
+    async def test_unknown_plugin_is_404_with_its_code(self, test_server, endpoint):
+        """RS-004: an unknown plugin code answers 404 with ``plugin_not_found``."""
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+            body = {"broker_id": broker_id, "plugin_code": f"no_such_plugin_{uuid.uuid4().hex[:6]}", "batch_id": str(uuid.uuid4())}
+
+            response = await client.post(_set_url(endpoint), json=body, timeout=TIMEOUT)
+
+            assert response.status_code == 404, response.text
+            assert "plugin_not_found" in _detail_text(response), response.text
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("endpoint", SET_ENDPOINTS)
+    async def test_single_file_plugin_is_400_with_its_code(self, test_server, endpoint):
+        """RS-005: a plugin without report roles cannot make a set: 400 with ``plugin_not_a_set``."""
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+            body = {"broker_id": broker_id, "plugin_code": "broker_generic_csv", "batch_id": str(uuid.uuid4())}
+
+            response = await client.post(_set_url(endpoint), json=body, timeout=TIMEOUT)
+
+            assert response.status_code == 400, response.text
+            assert "plugin_not_a_set" in _detail_text(response), response.text
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("endpoint", SET_ENDPOINTS)
+    async def test_editor_role_is_required(self, test_server, endpoint):
+        """RS-006: a VIEWER of the broker and a user without access get 403; the OWNER, with the same body, reaches the handler."""
+        async with httpx.AsyncClient() as owner, httpx.AsyncClient() as viewer, httpx.AsyncClient() as stranger:
+            owner_id = await create_test_user(owner)
+            viewer_id = await create_test_user(viewer)
+            await create_test_user(stranger)
+            broker_id = await create_test_broker(owner)
+            access = await owner.put(
+                f"{API_BASE}/brokers/{broker_id}/access",
+                json=[{"user_id": owner_id, "role": "OWNER", "share_percentage": 1.0}, {"user_id": viewer_id, "role": "VIEWER", "share_percentage": 0}],
+                timeout=TIMEOUT,
+            )
+            assert access.status_code == 200, access.text
+            body = {"broker_id": broker_id, "plugin_code": "broker_generic_csv", "batch_id": str(uuid.uuid4())}
+
+            control = await owner.post(_set_url(endpoint), json=body, timeout=TIMEOUT)
+            assert control.status_code == 400 and "plugin_not_a_set" in _detail_text(control), f"presence barrier, the owner reaches the handler: {control.status_code} {control.text}"
+            for who, client in (("viewer", viewer), ("stranger", stranger)):
+                response = await client.post(_set_url(endpoint), json=body, timeout=TIMEOUT)
+                assert response.status_code == 403, f"{who}: {response.status_code} {response.text}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("endpoint", SET_ENDPOINTS)
+    @pytest.mark.parametrize(
+        ("drop", "add", "field"),
+        [
+            pytest.param("batch_id", {}, "batch_id", id="missing-batch_id"),
+            pytest.param(None, {"broker_id": 0}, "broker_id", id="broker_id-zero"),
+            pytest.param(None, {"file_ids": ["f-1"]}, "file_ids", id="unknown-key"),
+        ],
+    )
+    async def test_body_is_validated(self, test_server, endpoint, drop, add, field):
+        """RS-007: ``BRIMSetRequest`` is strict: a missing field, a non-positive broker, an unknown key answer 422 naming the field."""
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+            body = {"broker_id": broker_id, "plugin_code": "broker_generic_csv", "batch_id": str(uuid.uuid4())}
+            body.pop(drop, None)
+            body.update(add)
+
+            response = await client.post(_set_url(endpoint), json=body, timeout=TIMEOUT)
+
+            assert response.status_code == 422, response.text
+            errors = response.json().get("detail")
+            assert isinstance(errors, list) and any(error.get("loc", [])[-1:] == [field] for error in errors), errors
+
+
+class TestParseReportSetFields:
+    """A2 — ``POST /files/{id}/parse`` for a single-file plugin: unchanged, apart from the empty report-set fields."""
+
+    @pytest.mark.asyncio
+    async def test_single_file_parse_has_no_truth_points(self, test_server, sample_csv_content):
+        """RS-008 — retro-compatibility guard (passes before and after A2): a generic CSV parses as before, into ``parsed``;
+        the response and its cache carry ``checkpoints: []``, ``verifications: []`` and ``history_start: null``."""
+        empty = {"checkpoints": [], "verifications": [], "history_start": None}
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+            upload = await _upload_csv(client, broker_id, sample_csv_content, "single_file_parse.csv")
+            assert upload.status_code == 200, upload.text
+            file_id = upload.json()["file_id"]
+
+            parsed = await client.post(f"{API_BASE}/brokers/import/files/{file_id}/parse", json={"plugin_code": "broker_generic_csv", "broker_id": broker_id}, timeout=TIMEOUT)
+
+            assert parsed.status_code == 200, parsed.text
+            data = parsed.json()
+            assert len(data["transactions"]) == 2
+            assert {key: data[key] for key in empty} == empty
+            cached = await client.get(f"{API_BASE}/brokers/import/files/{file_id}/last-parse", timeout=TIMEOUT)
+            assert cached.status_code == 200, cached.text
+            assert {key: cached.json()[key] for key in empty} == empty
+            info = await client.get(f"{API_BASE}/brokers/import/files/{file_id}", timeout=TIMEOUT)
+            assert info.json()["status"] == "parsed"
 
 
 # ============================================================================
