@@ -3106,7 +3106,7 @@
         "blankNote": "Un guion significa que la medición no fue posible para ese activo en esta ventana — no significa cero.",
         "l1": {
           "title": "¿Cuánto dolió cada uno?",
-          "description": "La misma escala de daño, preguntada a cada activo seleccionado. Solo porcentajes: un conjunto de activos no tiene pesos, así que no hay importe que mostrar.",
+          "description": "Para cada activo seleccionado, cuánto perdió en los peores momentos del periodo: el mal día, el mal mes, la caída más profunda y cuánto sigue por debajo de su máximo.",
           "lastedDays": "duró {days} d",
           "columns": {
             "badDay": "Mal día",
@@ -3114,6 +3114,13 @@
             "worstFall": "Peor caída",
             "currentFall": "Bajo el máximo",
             "toPeak": "Subida al máximo"
+          },
+          "columnHelp": {
+            "badDay": "La pérdida media en el 5 % de los peores días de la ventana (CVaR histórico al 95 %).",
+            "badMonth": "Como el mal día, pero en un tramo más largo de días consecutivos: la pérdida media en el 5 % de los peores tramos (CVaR histórico al 95 %).",
+            "worstFall": "La caída más profunda desde un máximo hasta el punto más bajo que la siguió dentro de la ventana, y cuánto duró.",
+            "currentFall": "Cuánto está el activo por debajo de su máximo de la ventana el último día.",
+            "toPeak": "Cuánto debe subir para volver a ese máximo: tras una caída del 20 % hace falta un +25 %."
           }
         },
         "l3": {
