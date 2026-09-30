@@ -1,7 +1,9 @@
 import {expect, test, type Page} from './fixtures/playwright';
 import {login, navigateTo} from './fixtures/auth-helpers';
 import {TEST_USER} from './fixtures/test-users';
-import {waitForEvent} from './fixtures/app-events';
+import {waitForEvent, waitForSettled} from './fixtures/app-events';
+import {optionsClosed} from './fixtures/probe';
+import {uniqueSuffix} from './fixtures/unique';
 import {readFileSync} from 'fs';
 import path from 'path';
 import {fileURLToPath} from 'url';
@@ -32,11 +34,11 @@ async function uploadStaticFile(page: Page, filename: string, content: Buffer | 
     return data.file.id;
 }
 
-async function createBroker(page: Page): Promise<number> {
+async function createBroker(page: Page, name = `Preview Broker ${Date.now()}`): Promise<number> {
     const response = await page.request.post(`${API}/brokers`, {
         data: [
             {
-                name: `Preview Broker ${Date.now()}`,
+                name,
                 allow_cash_overdraft: true,
             },
         ],
@@ -62,6 +64,49 @@ async function uploadBrimFile(page: Page, brokerId: number, filename: string, co
     expect(response.ok()).toBeTruthy();
     const data = (await response.json()) as {file_id: string};
     return data.file_id;
+}
+
+const BRIM_UPLOAD_PATH = `${API}/brokers/import/upload`;
+/** The repository's synthetic Generic CSV sample — never a real broker export. */
+const SAMPLE_BRIM_REPORT = path.resolve(__dirname, '../../backend/app/services/brim_providers/sample_reports/generic_simple.csv');
+const SAMPLE_BRIM_REPORT_NAME = path.basename(SAMPLE_BRIM_REPORT);
+
+type BrimFileInfo = {file_id: string; filename: string; target_broker_id: number | null};
+
+/**
+ * The BRIM files stored on one broker. The list endpoint also returns legacy files that
+ * carry no broker at all, so the target is filtered here rather than assumed.
+ */
+async function brimFilesOn(page: Page, brokerId: number): Promise<BrimFileInfo[]> {
+    const response = await page.request.get(`${API}/brokers/import/files?broker_ids=${brokerId}`);
+    expect(response.ok(), `list the BRIM files of broker ${brokerId}: HTTP ${response.status()}`).toBe(true);
+    const files = (await response.json()) as BrimFileInfo[];
+    return files.filter((file) => file.target_broker_id === brokerId);
+}
+
+/**
+ * Delete every BRIM file on the owned broker, then the broker. Scoped to the id this
+ * test created, never to "whatever appeared since"; when the upload never happened
+ * there is simply no file to delete, so the red this cleanup follows stays the only red.
+ */
+async function deleteOwnedBrokerAndFiles(page: Page, brokerId: number): Promise<void> {
+    const failures: string[] = [];
+    try {
+        for (const file of await brimFilesOn(page, brokerId)) {
+            const response = await page.request.delete(`${API}/brokers/import/files/${file.file_id}`);
+            if (!response.ok()) failures.push(`BRIM file ${file.file_id}: HTTP ${response.status()}`);
+        }
+    } catch (error) {
+        failures.push(`list the BRIM files of broker ${brokerId}: ${String(error)}`);
+    }
+    try {
+        const response = await page.request.delete(`${API}/brokers?ids=${brokerId}&force=true`);
+        const body = (await response.json().catch(() => null)) as {results?: Array<{id: number; success: boolean}>} | null;
+        if (!response.ok() || !body?.results?.find((result) => result.id === brokerId)?.success) failures.push(`broker ${brokerId}: HTTP ${response.status()} ${JSON.stringify(body)}`);
+    } catch (error) {
+        failures.push(`broker ${brokerId}: ${String(error)}`);
+    }
+    expect(failures, 'cleanup removes the BRIM files and the broker this test created').toEqual([]);
 }
 
 async function openStaticListView(page: Page): Promise<void> {
@@ -306,6 +351,78 @@ test.describe('Files Page', () => {
 
             // Verify file is cleared
             await expect(page.locator('.file-item')).not.toBeVisible();
+        });
+    });
+
+    /**
+     * BRIM upload from the Files page (assign-brokers modal).
+     *
+     * `POST /brokers/import/upload` reads `broker_id` from the multipart **form**
+     * (`Form(...)`). `confirmBrimUpload` sent it as a query parameter and put only
+     * `file` in the FormData, so every upload from this page answered 422. The status
+     * is asserted first because it *is* the defect; the stored file is then read back
+     * through the API, scoped to a broker this test creates — the mock seeds its own
+     * `generic_simple.csv` on Interactive Brokers, so a file name alone proves nothing.
+     */
+    test.describe('BRIM upload to an owned broker', () => {
+        let ownedBrokerId: number | undefined;
+
+        test.beforeEach(() => {
+            ownedBrokerId = undefined;
+        });
+
+        // afterEach, not `finally`: a cleanup throwing from `finally` would replace the
+        // assertion error it follows, and that assertion is the point of this block.
+        test.afterEach(async ({page}) => {
+            if (ownedBrokerId !== undefined) await deleteOwnedBrokerAndFiles(page, ownedBrokerId);
+        });
+
+        test('uploads a BRIM report through the assign-brokers modal to its own broker', async ({page}) => {
+            test.setTimeout(60_000);
+            // Unique (`brokers.name` is uniquely indexed) and typed into the select's search below.
+            const brokerName = `Upload regression BRIM ${uniqueSuffix()}`;
+            const brokerId = await createBroker(page, brokerName);
+            ownedBrokerId = brokerId;
+
+            // Created before the page loads, so the page's broker list includes it.
+            await navigateTo(page, '/files?tab=brim');
+            await expect(page.getByTestId('files-tab-brim')).toHaveAttribute('aria-selected', 'true');
+            await waitForSettled(page.getByTestId('files-page'));
+
+            await page.getByTestId('upload-button').click();
+            const uploader = page.getByTestId('file-uploader');
+            await expect(uploader).toBeVisible({timeout: 5_000});
+            // Selecting the file is what opens the assign-brokers modal.
+            await uploader.getByTestId('file-input').setInputFiles(SAMPLE_BRIM_REPORT);
+
+            const modal = page.getByTestId('brim-assign-modal');
+            await expect(modal).toBeVisible({timeout: 5_000});
+            const assignAll = modal.getByTestId('brim-assign-all');
+            await assignAll.getByRole('combobox').click();
+            await assignAll.getByRole('textbox').fill(brokerName);
+            const option = assignAll.getByTestId(`search-select-option-${brokerId}`);
+            await expect(option, `owned broker ${brokerName} must be offered by the assign-all select`).toBeVisible({timeout: 5_000});
+            await option.click();
+            await optionsClosed(page);
+
+            const confirm = modal.getByTestId('brim-upload-confirm');
+            await expect(confirm).toBeEnabled();
+            // Armed before the click: a response is an edge, not a state.
+            const uploadResponse = page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === BRIM_UPLOAD_PATH, {timeout: 15_000});
+            await confirm.click();
+            const upload = await uploadResponse;
+            const body = await upload.text();
+            expect(upload.status(), `POST ${BRIM_UPLOAD_PATH} from the Files page: ${body}`).toBe(200);
+
+            const uploaded = JSON.parse(body) as BrimFileInfo;
+            expect(uploaded, 'the file goes to the broker chosen in the modal').toMatchObject({filename: SAMPLE_BRIM_REPORT_NAME, target_broker_id: brokerId});
+            // confirmBrimUpload closes the modal only after every file has been accepted.
+            await expect(modal).toBeHidden({timeout: 8_000});
+            const stored = (await brimFilesOn(page, brokerId)).filter((file) => file.filename === SAMPLE_BRIM_REPORT_NAME);
+            expect(
+                stored.map((file) => file.file_id),
+                `${SAMPLE_BRIM_REPORT_NAME} is stored exactly once on broker ${brokerId}`,
+            ).toEqual([uploaded.file_id]);
         });
     });
 
