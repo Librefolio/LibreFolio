@@ -92,7 +92,7 @@ A replay is therefore not a forecast and not a probability. It is a measurement 
 
 !!! warning "Returns are taken as they are measured"
 
-    The replay uses the same prepared return series as the rest of the analysis, over the intersection of the calendars available for the holdings involved. Gaps, carried-forward prices and currency conversion all reach the replay through those series. See [Data Quality](data-quality.md) for what the analysis reports about the series it used.
+    The replay prepares its return series the way the rest of the analysis does, but over the window of its episode and for the assets it replays, each proxy in place of the holding it stands for. Those series share one calendar, built as described under [Data Quality](data-quality.md#alignment-what-missing-data-actually-costs): every date of the window on which at least one of those assets has a quote of its own, kept wherever every one of them can be valued, if need be at a price carried forward from an earlier date. Gaps, carried-forward prices and currency conversion all reach the replay through those series. See [Data Quality](data-quality.md) for what the analysis reports about the series it used.
 
 ---
 
