@@ -449,6 +449,15 @@ class BRIMProvider(ABC):
         """What happens to rows before the first checkpoint: ``summarize`` (default) or ``import``."""
         return "summarize"
 
+    @property
+    def history_tag(self) -> str:
+        """Tag this plugin puts on its transactions; the report sets use it to find the broker history.
+
+        Default: the provider code without its ``broker_`` prefix (``broker_credit_agricole`` becomes
+        ``credit_agricole``), which is the tag the existing plugins already write.
+        """
+        return self.provider_code.removeprefix("broker_")
+
     def to_plugin_info(self) -> BRIMPluginInfo:
         """Convert provider to BRIMPluginInfo DTO."""
         return BRIMPluginInfo(
@@ -1135,6 +1144,19 @@ def find_reusable_combined(
         if metadata.get("kind") == "combined" and metadata.get("target_broker_id") == broker_id and metadata.get("combine_plugin_code") == plugin_code and metadata.get("combine_plugin_version") == plugin_version and metadata.get("members_key") == wanted:
             return _build_file_info_from_metadata(meta_path)
     return None
+
+
+def read_combine_summary(file_id: str) -> Dict[str, Any]:
+    """The combine summary stored with a combined file; ``{}`` for originals or unknown files."""
+    meta_path = _find_metadata_path(file_id)
+    if meta_path is None:
+        return {}
+    try:
+        metadata = json.loads(meta_path.read_text())
+    except Exception:
+        return {}
+    summary = metadata.get("combine_summary") if metadata.get("kind") == "combined" else None
+    return dict(summary) if isinstance(summary, dict) else {}
 
 
 def _iter_metadata_paths(broker_id: int) -> Iterator[Path]:

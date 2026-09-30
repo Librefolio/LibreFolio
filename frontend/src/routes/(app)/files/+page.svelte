@@ -21,6 +21,7 @@
     import {browser} from '$app/environment';
     import {t} from '$lib/i18n';
     import {axiosInstance, zodiosApi} from '$lib/api';
+    import {generateUUID} from '$lib/utils/core/uuid';
     import {formatBytes, uploadFile} from '$lib/utils/files/upload';
     import {formatDateTime} from '$lib/utils/core/formatDateTime';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
@@ -498,6 +499,8 @@
         try {
             // Collect broker IDs used in upload
             const usedBrokerIds = new Set<number>();
+            // Files uploaded together form one report set: they share a batch id.
+            const batchId = generateUUID();
 
             for (let i = 0; i < pendingBrimFiles.length; i++) {
                 const file = pendingBrimFiles[i];
@@ -508,6 +511,7 @@
                 const formData = new FormData();
                 formData.append('file', file);
                 formData.append('broker_id', String(brokerId));
+                formData.append('batch_id', batchId);
                 // Use axios directly - Zodios doesn't handle FormData correctly
                 await axiosInstance.post(`/api/v1/brokers/import/upload`, formData);
             }
