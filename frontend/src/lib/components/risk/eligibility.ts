@@ -12,10 +12,17 @@
  */
 import type {z} from 'zod';
 import type {schemas} from '$lib/api';
+import {safeScalar, safeString} from '$lib/types/common';
 
 export type EligibilityLevel = z.infer<typeof schemas.RiskEligibilityLevel>;
 export type EligibilityReason = z.infer<typeof schemas.RiskEligibilityReason>;
 export type AssetEligibilityItem = z.infer<typeof schemas.RiskAssetEligibility>;
+
+/** A span of calendar days, both ends included. */
+export interface DayRange {
+    start: string;
+    end: string;
+}
 
 /** One answer of the engine, for the whole catalogue and one period. */
 export interface EligibilityVerdicts {
@@ -23,6 +30,15 @@ export interface EligibilityVerdicts {
     /** The engine's thresholds, sent with the answer: the sentences quote them rather than copy them. */
     minQuotes: number;
     staleDays: number;
+    /**
+     * The span in which every requested asset with quotes is quoted, and the period the
+     * engine suggests instead of the requested one. Both are about the assets **of that
+     * request** taken together, so they are kept only from a single-batch answer: a
+     * range cannot be merged across batches without computing it here. Absent or `null`:
+     * no range, no suggestion.
+     */
+    commonRange?: DayRange | null;
+    suggestedRange?: DayRange | null;
 }
 
 export const EMPTY_VERDICTS: EligibilityVerdicts = {items: new Map(), minQuotes: 0, staleDays: 0};
@@ -53,12 +69,51 @@ export function eligibilityBatches(assetIds: readonly number[], size: number = E
     return batches;
 }
 
-/** Merge the answers of several batches into one verdict. */
-export function mergeEligibilityAnswers(answers: readonly {items: readonly AssetEligibilityItem[]; min_quotes: number; stale_days: number}[]): EligibilityVerdicts {
+/**
+ * The engine's range, as a span of days: a range without an end is a single day. The
+ * generated client types a scalar as "a value or a list of values", so the range and
+ * its ends are read through the `safe*` helpers.
+ */
+export function toDayRange(range: unknown): DayRange | null {
+    const scalar = safeScalar(range as {start?: unknown; end?: unknown} | null);
+    const start = safeString(scalar?.start);
+    if (!start) return null;
+    return {start, end: safeString(scalar?.end) ?? start};
+}
+
+/** Merge the answers of several batches into one verdict; the ranges survive only a single-batch answer. */
+export function mergeEligibilityAnswers(answers: readonly {items: readonly AssetEligibilityItem[]; min_quotes: number; stale_days: number; common_range?: unknown; suggested_range?: unknown}[]): EligibilityVerdicts {
     if (answers.length === 0) return EMPTY_VERDICTS;
     const items = new Map<number, AssetEligibilityItem>();
     for (const answer of answers) for (const item of answer.items) items.set(item.asset_id, item);
-    return {items, minQuotes: answers[0].min_quotes, staleDays: answers[0].stale_days};
+    const single = answers.length === 1 ? answers[0] : null;
+    return {
+        items,
+        minQuotes: answers[0].min_quotes,
+        staleDays: answers[0].stale_days,
+        commonRange: toDayRange(single?.common_range),
+        suggestedRange: toDayRange(single?.suggested_range),
+    };
+}
+
+/**
+ * The "use the period in which all have prices" offer for a selection, or `null`.
+ *
+ * Offered only when the engine suggests a period **and** at least one selected asset
+ * has a problem the suggestion fixes: the developer's rule is that the offer appears
+ * when the chosen period creates a problem for some asset, and a suggestion that
+ * brings nobody back is not one. The engine's suggestion "makes every quoted asset
+ * eligible", so the assets it brings back are the selected ones not eligible now,
+ * except those never quoted at all (`no_price_history`), which no period can help.
+ */
+export function fitPeriodOffer(verdicts: EligibilityVerdicts, selected: readonly number[]): {range: DayRange; recoverable: number[]} | null {
+    const range = verdicts.suggestedRange;
+    if (!range) return null;
+    const recoverable = selected.filter((assetId) => {
+        const item = verdicts.items.get(assetId);
+        return item !== undefined && item.level !== 'eligible' && !(item.reasons ?? []).includes('no_price_history');
+    });
+    return recoverable.length > 0 ? {range, recoverable} : null;
 }
 
 /**
