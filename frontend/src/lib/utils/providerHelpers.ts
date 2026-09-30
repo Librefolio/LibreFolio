@@ -56,7 +56,7 @@ export function fxProviderBadgeHtml(providerCode: string): string {
     const info = providers.find((p) => p.code === providerCode);
     const cls = PROVIDER_COLORS[providerCode] ?? DEFAULT_PROVIDER_COLOR;
     if (info?.icon_url) {
-        return `<span class="inline-flex items-center px-1 py-0.5 rounded ${cls}" title="${providerCode}"><img src="${info.icon_url}" alt="${providerCode}" class="w-3.5 h-3.5 rounded-sm object-contain" onerror="this.parentElement.textContent='${providerCode.slice(0, 2)}'" /></span>`;
+        return `<span class="inline-flex items-center px-1 py-0.5 rounded ${cls}" title="${providerCode}"><img src="${escapeHtml(info.icon_url)}" alt="${providerCode}" class="w-3.5 h-3.5 rounded-sm object-contain" onerror="this.parentElement.textContent='${providerCode.slice(0, 2)}'" /></span>`;
     }
     return `<span class="inline-flex items-center px-1 py-0.5 text-[9px] font-medium rounded ${cls}">${providerCode}</span>`;
 }
@@ -176,9 +176,9 @@ export function assetProviderBadgeHtml(providerCode: string): string {
     const name = assetProviderNames.get(providerCode) ?? providerCode;
     const cls = PROVIDER_COLORS[providerCode] ?? DEFAULT_PROVIDER_COLOR;
     if (iconUrl) {
-        return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded ${cls}" title="${providerCode}"><img src="${iconUrl}" alt="${providerCode}" class="w-3.5 h-3.5 rounded-sm object-contain" onerror="this.style.display='none'" /><span class="text-[10px] font-medium">${name}</span></span>`;
+        return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded ${cls}" title="${providerCode}"><img src="${escapeHtml(iconUrl)}" alt="${providerCode}" class="w-3.5 h-3.5 rounded-sm object-contain" onerror="this.style.display='none'" /><span class="text-[10px] font-medium">${escapeHtml(name)}</span></span>`;
     }
-    return `<span class="inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded ${cls}">${name}</span>`;
+    return `<span class="inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded ${cls}">${escapeHtml(name)}</span>`;
 }
 
 // =========================================================================

@@ -13,6 +13,7 @@
     import {getTransactionTypeIconUrl} from '$lib/stores/transactions/transactionTypeStore';
     import {getIndexColor} from '$lib/utils/colors';
     import {resolveIssueMessage, translateFieldName} from '$lib/utils/transactions/resolveValidationMessage';
+    import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
     import BrimNoticeList from '$lib/components/transactions/import/BrimNoticeList.svelte';
     import type {BrimParseResponse, BrimAssetMapping, BrimValidationIssue, BrimFieldTodo, BrimNotice} from '$lib/types';
 
@@ -249,7 +250,7 @@
                                     {#if issue.field}
                                         <span class="text-xs text-amber-600 dark:text-amber-400 ml-1">({issue.field})</span>
                                     {/if}
-                                    <span class="text-amber-700 dark:text-amber-400 ml-1">{@html resolveIssueMessage({code: issue.code, params: issue.params ?? undefined, error: issue.message}, $t)}</span>
+                                    <span class="text-amber-700 dark:text-amber-400 ml-1">{@html sanitizeHtml(resolveIssueMessage({code: issue.code, params: issue.params ?? undefined, error: issue.message}, $t))}</span>
                                     {#if issue.context}
                                         <span class="text-xs text-gray-500 dark:text-gray-400 ml-1">— {issue.context}</span>
                                     {/if}

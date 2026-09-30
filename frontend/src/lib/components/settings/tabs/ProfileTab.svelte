@@ -1,4 +1,5 @@
 <script lang="ts">
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {_} from '$lib/i18n';
     import {auth, currentUser} from '$lib/stores/app/auth';
     import {userSettings} from '$lib/stores/app/settings';
@@ -124,7 +125,7 @@
             notify({
                 name: 'settings.profile.saved',
                 detail: {fields: 1, field: fieldName},
-                toast: {variant: 'success', message: `${$_('settings.savedSuccessfully')}:<ul class="mt-1 list-inside list-disc">${[fieldName].map((l) => `<li>${l}</li>`).join('')}</ul>`},
+                toast: {variant: 'success', message: `${$_('settings.savedSuccessfully')}:<ul class="mt-1 list-inside list-disc">${[fieldName].map((l) => `<li>${escapeHtml(l)}</li>`).join('')}</ul>`},
             });
         } catch (e: unknown) {
             debug.error('ProfileTab', 'saveField failed', e);
