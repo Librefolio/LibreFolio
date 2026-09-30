@@ -1856,3 +1856,125 @@ B, non riparato, misurato.
 
 Gli piacerebbe vedere (anche solo per curiosità) quanto del suo guadagno/perdita dipende dal titolo in sé e quanto dalle fluttuazioni del tasso di cambio (il classico spacchettamento tra capital gain e impatto valutario). Ma ribadisce che non è prioritario.
 Discorso originale qui: https://github.com/Librefolio/LibreFolio/discussions/24#discussioncomment-18584139
+
+---
+
+# Feedback del developer — idee e migliorie (lista 06–26/09, smistata il 30/09/2026)
+
+Le voci qui sotto vengono da una lista di appunti del developer. I **difetti** della stessa lista
+sono stati assegnati a un workstream di sviluppo (K, piano dei seguiti di review); qui restano solo
+le migliorie e le funzioni nuove.
+
+## 🤝 Condivisione dei broker — la stessa fetta per più utenti
+
+**Data aggiunta**: 30 Settembre 2026 (appunto del 06/09) · **Status**: ⏳ IN ATTESA · **Priorità**: Bassa
+
+### Contesto
+Oggi ogni utente ha una sua quota di possesso sul broker. L'idea è introdurre la **fetta
+condivisa**: due utenti possiedono al 100% lo stesso broker perché è la stessa fetta. Apre anche a
+scenari, rari, in cui la stessa quota n% appartiene a due utenti: la vedono entrambi con la stessa
+percentuale nella dashboard, e se la quota cambia la subiscono entrambi.
+
+### Azione Futura
+Modellare la fetta come entità a sé (quota → insieme di utenti), con migrazione incrementale e
+compatibilità con le quote attuali. Da incrociare con la sezione GDPR sull'accesso ai broker.
+
+## 🏠 Funzioni in stile HomeBank, parser OFX e migrazione
+
+**Data aggiunta**: 30 Settembre 2026 (appunto del 06/09) · **Status**: ⏳ IN ATTESA · **Priorità**: Bassa
+
+### Contesto
+Far evolvere LibreFolio verso le funzioni di HomeBank: categorie per versamenti e prelievi, i
+grafici relativi e le funzioni accessorie, come il calcolatore per l'auto.
+
+### Azione Futura
+- Un plugin BRIM **OFX** generico, da usare quando manca un plugin specifico della banca.
+- Uno **script di migrazione** da un file HomeBank a LibreFolio, una tabella alla volta.
+- Categorie per le transazioni di cassa, con grafici dedicati.
+
+## 🌙 Task notturno — dividendi e interessi senza evento collegato
+
+**Data aggiunta**: 30 Settembre 2026 (appunto dell'11/09) · **Status**: ⏳ IN ATTESA · **Priorità**: Media
+
+### Contesto
+Insieme alla sincronizzazione notturna, un task cerca le transazioni di tipo dividendo o interesse,
+più vecchie del periodo sincronizzato, **senza evento collegato**. Per ognuna cerca nell'asset un
+evento compatibile in un intervallo di date configurabile (7 giorni per default).
+
+### Azione Futura
+- Se l'evento non c'è: crearlo (manuale o auto-assegnato, da decidere) e collegarlo, **oppure**
+  produrre un report o una notifica che elenca le transazioni trovate con il suggerimento di
+  correzione.
+- Studiare se dai soli dati di una transazione si può riconoscere uno split (dubbio).
+- Studiare cosa succede se l'asset cambia provider: uno nuovo che espone l'evento alla sync, o uno
+  che smette di esporlo.
+- Riusare il backend già pronto della sezione «🔗 Suggerimento eventi collegabili nella bulk modal
+  (da P2-6)».
+
+## 🔥 Strumenti — calcolatore FIRE e riuso del motore matematico
+
+**Data aggiunta**: 30 Settembre 2026 (appunto del 22/09) · **Status**: ⏳ IN ATTESA · **Priorità**: Bassa
+
+### Contesto
+La pagina **Strumenti** esiste: è il posto naturale per un **calcolatore FIRE**. Se il motore
+matematico dei tool (quello del PAC) si presta, può servire anche ad altri calcolatori.
+
+### Azione Futura
+Un plugin Tool nuovo (skill `tool-plugin`), con contratto Pydantic e UI compilata, come il PAC.
+
+## 📥 BRIM — riconoscere all'import una posizione chiusa (Directa, CSV generico)
+
+**Data aggiunta**: 30 Settembre 2026 (appunto del 22/09) · **Status**: ⏳ IN ATTESA — da approfondire se ne vale la pena · **Priorità**: Bassa
+
+### Contesto
+Il flag che fa comparire nel frontend il banner «posizione importata già chiusa: la ricerca potrebbe
+non dare risultati» esiste, ma oggi lo usa solo Crédit Agricole.
+
+### Azione Futura
+- **Directa**: con ETF venduti completamente, verificare se dal solo messaggio si capisce che la
+  posizione si è estinta, e in quel caso alzare il flag.
+- **CSV generico** (per esempio Recrowd importato in blocco): tenere traccia della quantità per
+  capire quando la posizione si annulla.
+
+## ⚙️ Impostazioni per plugin — campi dichiarati dal plugin, UI costruita da sola
+
+**Data aggiunta**: 30 Settembre 2026 (appunto del 24/09) · **Status**: ⏳ IN ATTESA — da studiare · **Priorità**: Media
+
+### Contesto
+Alcuni plugin chiedono parametri, per esempio una chiave di accesso. Oggi non c'è un posto per
+configurarli.
+
+### Azione Futura
+- La classe base di **ogni** tipo di plugin (asset, FX, BRIM, Tool) espone uno o più metodi con i
+  campi di impostazione di cui il plugin ha bisogno.
+- La pagina Impostazioni ha una zona per ciascun plugin, costruita da sola a partire dalla lista dei
+  parametri. Da decidere se l'impostazione è globale o per utente.
+- Primo esempio: justETF e Borsa Italiana filtrano per una nazione e una valuta predefinite, e
+  mostrano tutto solo se non trovano niente.
+- Nel pannello del provider in «Aggiungi asset», un pulsante **Configura** che apre la stessa
+  modale, o porta a quelle impostazioni.
+- Collegamenti: la sezione «🔌 Arricchimento asset da fonti esterne» (JustETF).
+
+## 📚 Documentazione dei segnali — riordino
+
+**Data aggiunta**: 30 Settembre 2026 (appunto del 26/09) · **Status**: ⏳ IN ATTESA · **Priorità**: Media
+
+### Contesto
+Le guide scritte dei segnali stanno oggi vicino alle schede che li mostrano. (Il pulsante che apre la
+guida del segnale e che su mobile sparisce è un difetto: è stato assegnato a K.)
+
+### Azione Futura
+- Spostare le guide dei segnali in **Teoria finanziaria → Segnali**, con una **categoria nuova per i
+  segnali di rischio**.
+- Nelle zone dove sono oggi, descrivere la scheda e mettere i link ai segnali.
+
+## 📈 Scala logaritmica nei grafici
+
+**Data aggiunta**: 30 Settembre 2026 (appunto del 26/09) · **Status**: ⏳ IN ATTESA · **Priorità**: Bassa
+
+### Contesto
+Una modalità di visualizzazione **logaritmica**, soprattutto sulle percentuali.
+
+### Azione Futura
+Sulle percentuali il logaritmo non si applica ai rendimenti negativi: va applicato al fattore di
+crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asset, confronto).
