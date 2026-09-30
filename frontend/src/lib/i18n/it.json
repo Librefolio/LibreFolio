@@ -1165,15 +1165,16 @@
       "period": "Lunghezza della memoria del filtro in giorni. Valori più alti = più liscio ma risposta più lenta.",
       "offset": "Spostamento verticale come percentuale del valore base. Sposta il segnale in alto o in basso.",
       "currencyPair": "Seleziona una coppia FX per sovrapporre i dati del tasso di cambio sul grafico.",
-      "emaPeriod": "Finestra di osservazione in giorni. Corrisponde al coefficiente $\\alpha = 2/(N+1)$. Più corto = reazione veloce, più lungo = più liscio.",
-      "fastPeriod": "Finestra EMA a breve termine per la linea veloce del MACD. Standard: 12 giorni. Valori più bassi reagiscono più rapidamente.",
-      "slowPeriod": "Finestra EMA a lungo termine per la linea lenta del MACD. Standard: 26 giorni. Valori più alti catturano il trend di fondo.",
-      "signalPeriod": "Smussamento EMA applicato alla linea MACD. Standard: 9 giorni. Riduce il rumore nei segnali di incrocio.",
+      "emaPeriod": "Finestra di osservazione in sedute, i giorni con una quotazione. Corrisponde al coefficiente $\\alpha = 2/(N+1)$. Più corto = reazione veloce, più lungo = più liscio.",
+      "fastPeriod": "Finestra EMA a breve termine per la linea veloce del MACD. Standard: 12 sedute. Valori più bassi reagiscono più rapidamente.",
+      "slowPeriod": "Finestra EMA a lungo termine per la linea lenta del MACD. Standard: 26 sedute. Valori più alti catturano il trend di fondo.",
+      "signalPeriod": "Smussamento EMA applicato alla linea MACD. Standard: 9 sedute. Riduce il rumore nei segnali di incrocio.",
       "multiplier": "Numero di deviazioni standard ($k \\cdot \\sigma$). $k=2$ copre ~95% dei valori assumendo distribuzione normale.",
       "overbought": "Livello sopra il quale l'asset è considerato ipercomprato. Standard: 70. Valori vicini a 100 indicano forte pressione d'acquisto.",
       "oversold": "Livello sotto il quale l'asset è considerato ipervenduto. Standard: 30. Valori vicini a 0 indicano forte pressione di vendita.",
       "assetComparison": "Seleziona un asset per sovrapporne il prezzo su questo grafico. In modalità percentuale, entrambe le curve partono da 0%.",
-      "fxPair": "Seleziona una coppia FX per sovrapporne il tasso su questo grafico. In modalità percentuale, entrambe le curve partono da 0%."
+      "fxPair": "Seleziona una coppia FX per sovrapporne il tasso su questo grafico. In modalità percentuale, entrambe le curve partono da 0%.",
+      "sessionPeriod": "Finestra di osservazione in sedute, i giorni con una quotazione. Valori più alti = più liscio ma risposta più lenta."
     },
     "macdLineColor": "Colore Linea MACD",
     "noDataAvailable": "Nessun dato disponibile. Prova a sincronizzare questo asset/coppia.",
@@ -2442,7 +2443,8 @@
       "riskFullHistory": "Misura il drawdown rispetto al picco più alto di tutta la storia disponibile, non solo della finestra visibile. Disattiva per una vista più veloce relativa alla finestra."
     },
     "units": {
-      "days": "giorni"
+      "days": "giorni",
+      "sessions": "sedute"
     },
     "visual": {
       "components": "Componenti",

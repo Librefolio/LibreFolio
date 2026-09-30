@@ -3,17 +3,22 @@
 from __future__ import annotations
 
 import inspect
+import math
 import sys
 from datetime import date, timedelta
+from decimal import Decimal
 
 import pytest
 from pydantic import ValidationError
 
 from backend.app.schemas.common import BackwardFillInfo, DateRangeModel
+from backend.app.schemas.prices import AssetBackwardFillInfo
 from backend.app.schemas.signals import (
     SignalAvailabilityReason,
     SignalBandComponent,
+    SignalBandPoint,
     SignalBandValueSource,
+    SignalCadence,
     SignalComputation,
     SignalDataPolicy,
     SignalDomain,
@@ -24,11 +29,14 @@ from backend.app.schemas.signals import (
     SignalLineSeries,
     SignalOutputValueSource,
     SignalPriceField,
+    SignalPricePoint,
     SignalPriceValueSource,
     SignalRequest,
+    SignalSourceCapability,
     SignalStatus,
     SignalThresholdCrossingRequest,
     SignalValuePoint,
+    SignalVolumeKind,
     SignalWarningCode,
 )
 from backend.app.services import signal_service as signal_service_module
@@ -1621,3 +1629,390 @@ def test_service_has_no_indicator_library_or_domain_io_dependencies():
         "httpx",
     ):
         assert forbidden not in source
+
+
+# =============================================================================
+# Quote days (developer's decision of 30/09/2026)
+#
+# «Sui giorni di quotazione, come la definizione standard: SMA 200 = 200 sedute.»
+# A quote day is a point with ``backward_fill_info is None``. A plugin that
+# computes on quote days (``SignalPlugin.computes_on_quote_days``, True by
+# default) receives only the quote days of its selected points: its warm-up,
+# minimum and visible units count those sessions, and its output is dated on
+# them. The input coverage keeps its calendar meaning.
+#
+# The calendar-filled input below is exactly what the Asset adapter serves for
+# a five-day market: one point per calendar day, each weekend day a copy of
+# Friday's bar with ``backward_fill_info`` naming Friday.
+# =============================================================================
+
+QUOTE_DAY_FIRST_MONDAY = date(2024, 1, 1)
+QUOTE_DAY_SESSIONS = 400
+QUOTE_DAY_SIGNAL_CODES = ("SMA", "EMA", "RSI", "MACD", "BOLLINGER", "ATR", "OBV")
+QUOTE_DAY_CAPABILITY = SignalSourceCapability(
+    supports_meaningful_volume=True,
+    volume_kind=SignalVolumeKind.TRADED_SHARES,
+)
+
+
+def session_bar(day: date, index: int) -> SignalPricePoint:
+    """A deterministic OHLCV bar whose close never repeats the previous session's."""
+    cycle = index % 23 - 11
+    wobble = (index * 5) % 7 - 3
+    close = Decimal(10_000 + 3 * index + 40 * cycle + 25 * wobble) / Decimal(100)
+    open_ = close - Decimal(index % 5 - 2) / Decimal(10)
+    return SignalPricePoint(
+        date=day,
+        open=open_,
+        high=max(open_, close) + Decimal(1 + index % 3) / Decimal(10),
+        low=min(open_, close) - Decimal(1 + index % 4) / Decimal(10),
+        close=close,
+        volume=Decimal(1_000_000 + (index * 7_919) % 50_000),
+    )
+
+
+def weekday_sessions(first_monday: date, sessions: int) -> list[SignalPricePoint]:
+    """One genuine quote per weekday, and nothing on weekends."""
+    points: list[SignalPricePoint] = []
+    day = first_monday
+    while len(points) < sessions:
+        if day.weekday() < 5:
+            points.append(session_bar(day, len(points)))
+        day += timedelta(days=1)
+    return points
+
+
+def calendar_filled(sessions: list[SignalPricePoint], end: date) -> list[SignalPricePoint]:
+    """The same quotes with every missing calendar day carried from the last one, through ``end``."""
+    quotes = {point.date: point for point in sessions}
+    filled: list[SignalPricePoint] = []
+    last = sessions[0]
+    day = sessions[0].date
+    while day <= end:
+        quote = quotes.get(day)
+        if quote is not None:
+            last = quote
+            filled.append(quote)
+        else:
+            filled.append(
+                last.model_copy(
+                    update={
+                        "date": day,
+                        "backward_fill_info": BackwardFillInfo(
+                            actual_rate_date=last.date,
+                            days_back=(day - last.date).days,
+                        ),
+                    }
+                )
+            )
+        day += timedelta(days=1)
+    return filled
+
+
+def two_filled_weeks() -> list[SignalPricePoint]:
+    """Monday 2026-01-05 to Sunday 2026-01-18: ten quotes, four carried weekend days."""
+    return calendar_filled(weekday_sessions(date(2026, 1, 5), 10), date(2026, 1, 18))
+
+
+def quote_day_context(start: date, end: date) -> SignalExecutionContext:
+    return SignalExecutionContext(
+        domain=SignalDomain.ASSET,
+        requested_range=DateRangeModel(start=start, end=end),
+        cadence=SignalCadence.DAILY,
+        source_reference="asset:quote-days",
+        source_capability=QUOTE_DAY_CAPABILITY,
+    )
+
+
+def point_values(point) -> tuple[float | None, ...]:
+    if isinstance(point, SignalBandPoint):
+        return (point.lower, point.middle, point.upper)
+    return (point.value,)
+
+
+def same_values(left, right) -> bool:
+    return all((actual is None and expected is None) or (actual is not None and expected is not None and math.isclose(actual, expected, rel_tol=1e-9, abs_tol=1e-9)) for actual, expected in zip(point_values(left), point_values(right), strict=True))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("signal_code", QUOTE_DAY_SIGNAL_CODES)
+async def test_session_plugin_on_a_calendar_filled_input_equals_the_plugin_on_its_quote_days(signal_code):
+    """T1 — the property: carrying Friday onto the weekend changes nothing an indicator computes."""
+    sessions = weekday_sessions(QUOTE_DAY_FIRST_MONDAY, QUOTE_DAY_SESSIONS)
+    visible_end = sessions[-1].date + timedelta(days=2)  # the Sunday after the last quote
+    visible_start = visible_end - timedelta(days=57)  # a Saturday: the range opens on a day with no quote
+    filled = calendar_filled(sessions, visible_end)
+    context = quote_day_context(visible_start, visible_end)
+    visible_quote_days = [point.date for point in sessions if visible_start <= point.date <= visible_end]
+    # Premise: weekdays quoted, every weekend day carried, and warm-up to spare in sessions.
+    assert [point.date for point in filled if point.backward_fill_info is None] == [point.date for point in sessions]
+    assert len(filled) == (visible_end - sessions[0].date).days + 1
+    assert visible_start.weekday() == 5
+    assert len(visible_quote_days) == 40
+
+    result = (
+        await SignalService(SignalPluginRegistry).compute(
+            [request(signal_code.lower(), signal_code)],
+            filled,
+            context,
+        )
+    )[0]
+
+    plugin_class = SignalPluginRegistry.get_plugin(signal_code)
+    reference = SignalService._normalize_computation(
+        plugin_class().compute(
+            sessions,
+            [],
+            plugin_class.validate_params({}),
+            context,
+        )
+    )
+    assert result.status == SignalStatus.OK, result.availability
+    assert [series.key for series in result.series] == [series.key for series in reference.series]
+    assert [point.date for series in result.series for point in series.points if point.date.weekday() >= 5] == [], f"{signal_code} is dated on weekend days that have no quote"
+    for series, expected in zip(result.series, reference.series, strict=True):
+        expected_points = [point for point in expected.points if visible_start <= point.date <= visible_end]
+        assert [point.date for point in series.points] == visible_quote_days, f"{signal_code}.{series.key} is not dated on the visible quote days"
+        assert [point.date for point in expected_points] == visible_quote_days
+        mismatched = [point.date.isoformat() for point, reference_point in zip(series.points, expected_points, strict=True) if not same_values(point, reference_point)]
+        assert mismatched == [], f"{signal_code}.{series.key} differs from the plugin computed on its quote days"
+
+
+@pytest.mark.asyncio
+async def test_calendar_rolling_return_keeps_computing_on_the_calendar_input():
+    """T2 — guard: calendar windows are calendar days by design, carried weekends included."""
+    sessions = weekday_sessions(QUOTE_DAY_FIRST_MONDAY, 60)
+    visible_end = sessions[-1].date + timedelta(days=2)  # a Sunday
+    visible_start = visible_end - timedelta(days=20)  # a Monday, three weeks
+    filled = calendar_filled(sessions, visible_end)
+    by_date = {point.date: point for point in filled}
+
+    result = (
+        await SignalService(SignalPluginRegistry).compute(
+            [request("calendar", "ASSET_CALENDAR_ROLLING_RETURN", {"window_days": 7})],
+            filled,
+            quote_day_context(visible_start, visible_end),
+        )
+    )[0]
+
+    assert result.status == SignalStatus.OK
+    series = result.series[0]
+    assert [point.date for point in series.points] == [visible_start + timedelta(days=offset) for offset in range(21)]
+    for point in series.points:
+        current = by_date[point.date]
+        reference = by_date[point.date - timedelta(days=7)]
+        assert point.value == pytest.approx((float(current.close) / float(reference.close) - 1) * 100)
+    saturday = next(point for point in series.points if point.date.weekday() == 5)
+    friday = saturday.date - timedelta(days=1)
+    assert saturday.provenance.current_price_date == friday
+    assert saturday.provenance.current_price_days_back == 1
+    assert saturday.provenance.reference_target_date == saturday.date - timedelta(days=7)
+    assert saturday.provenance.reference_price_date == friday - timedelta(days=7)
+    assert saturday.provenance.reference_price_days_back == 1
+    # Its warm-up counts calendar points, carried ones included.
+    assert result.warmup.used_points == (visible_start - filled[0].date).days
+
+
+@pytest.mark.asyncio
+async def test_warmup_counts_quote_days_not_calendar_points():
+    """T3 — five sessions satisfy a five-session warm-up and not a six-session one, although
+    seven calendar points precede the range."""
+    service = make_service()
+    filled = two_filled_weeks()
+    visible_start = date(2026, 1, 12)
+    before = [point for point in filled if point.date < visible_start]
+    assert (len(before), sum(point.backward_fill_info is None for point in before)) == (7, 5)
+
+    exact, short = await service.compute(
+        [
+            request("exact", "FIXTURE_WARMUP", {"minimum_points": 2, "stabilization_points": 3}),
+            request("short", "FIXTURE_WARMUP", {"minimum_points": 2, "stabilization_points": 4}),
+        ],
+        filled,
+        make_context(start=visible_start, end=date(2026, 1, 18)),
+    )
+
+    assert exact.status == SignalStatus.OK
+    assert (exact.warmup.used_points, exact.warmup.complete) == (5, True)
+    assert short.status == SignalStatus.PARTIAL
+    assert short.availability.reason_code == SignalAvailabilityReason.INCOMPLETE_WARMUP
+    assert (short.warmup.used_points, short.warmup.complete) == (5, False)
+    warning = next(item for item in short.warnings if item.code == SignalWarningCode.INCOMPLETE_WARMUP)
+    assert (warning.details["used_points"], warning.details["required_points"]) == (5, 6)
+
+
+@pytest.mark.asyncio
+async def test_minimum_history_counts_quote_days():
+    """T3 — seven calendar points but five sessions cannot feed a six-point minimum."""
+    service = make_service()
+    week = calendar_filled(weekday_sessions(date(2026, 1, 5), 5), date(2026, 1, 11))
+    assert len(week) == 7
+
+    result = (
+        await service.compute(
+            [request("six", "FIXTURE_WARMUP", {"minimum_points": 6, "stabilization_points": 0})],
+            week,
+            make_context(start=date(2026, 1, 5), end=date(2026, 1, 11)),
+        )
+    )[0]
+
+    assert result.status == SignalStatus.UNAVAILABLE
+    assert result.availability.reason_code == SignalAvailabilityReason.INSUFFICIENT_HISTORY
+    assert result.series == []
+
+
+@pytest.mark.asyncio
+async def test_a_visible_range_without_quote_days_is_unavailable():
+    """T3 — visible units count sessions: a weekend of carried days has none."""
+    service = make_service()
+    week = calendar_filled(weekday_sessions(date(2026, 1, 5), 5), date(2026, 1, 11))
+
+    result = (
+        await service.compute(
+            [request("line", "FIXTURE_LINE", {"length": 2})],
+            week,
+            make_context(start=date(2026, 1, 10), end=date(2026, 1, 11)),
+        )
+    )[0]
+
+    assert result.status == SignalStatus.UNAVAILABLE
+    assert result.availability.reason_code == SignalAvailabilityReason.INSUFFICIENT_HISTORY
+    assert result.series == []
+    coverage = result.availability.input_coverage
+    assert (coverage.available_points, coverage.observed_points, coverage.backfilled_points) == (7, 5, 2)
+
+
+def quoted_with_carried_rate(point: SignalPricePoint, *, rate_days_back: int) -> SignalPricePoint:
+    """A genuine quote converted with an exchange rate carried from ``rate_days_back`` days earlier."""
+    return point.model_copy(
+        update={
+            "backward_fill_info": AssetBackwardFillInfo(
+                actual_rate_date=point.date,
+                days_back=0,
+                fx_rate_date=point.date - timedelta(days=rate_days_back),
+                fx_days_back=rate_days_back,
+            )
+        }
+    )
+
+
+def carried_price(last_quote: SignalPricePoint, day: date) -> SignalPricePoint:
+    """No quote on ``day``: the last quote's price carried onto it, converted with that day's own rate."""
+    return last_quote.model_copy(
+        update={
+            "date": day,
+            "backward_fill_info": AssetBackwardFillInfo(
+                actual_rate_date=last_quote.date,
+                days_back=(day - last_quote.date).days,
+                fx_rate_date=day,
+                fx_days_back=0,
+            ),
+        }
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_quote_converted_with_a_carried_rate_is_a_session_and_a_carried_price_is_not():
+    """Decision 1 (30/09/2026): the price decides a session, not the exchange rate.
+
+    A genuine quote converted with a rate carried from an earlier day (``days_back == 0``,
+    ``fx_days_back > 0``) reaches the plugin and counts as warm-up. A price carried from an
+    earlier day (``days_back > 0``) does neither, even converted with a fresh rate.
+    """
+    service = make_service(HookRecordingPlugin)
+    points = two_filled_weeks()
+    assert [points[index].date for index in (1, 3, 9, 10)] == [date(2026, 1, 6), date(2026, 1, 8), date(2026, 1, 14), date(2026, 1, 15)]
+    points[1] = quoted_with_carried_rate(points[1], rate_days_back=1)  # Tuesday, in the warm-up
+    points[3] = carried_price(points[2], points[3].date)  # Thursday, in the warm-up
+    points[9] = quoted_with_carried_rate(points[9], rate_days_back=2)  # Wednesday, visible
+    points[10] = carried_price(points[9], points[10].date)  # Thursday, visible
+    # Premise: every one of those four carries a backfill record; only the price tells them apart.
+    assert [(points[index].backward_fill_info.days_back, points[index].backward_fill_info.fx_days_back) for index in (1, 3, 9, 10)] == [(0, 1), (1, 0), (0, 2), (1, 0)]
+
+    result = (
+        await service.compute(
+            [request("line", "TEST_HOOK_RECORDING", {"length": 4})],
+            points,
+            make_context(start=date(2026, 1, 12), end=date(2026, 1, 18)),
+        )
+    )[0]
+
+    ((reached, _events, _params, _context),) = HookRecordingPlugin.validate_input_calls
+    assert [point.date for point in reached] == [
+        date(2026, 1, 5),
+        date(2026, 1, 6),  # quoted, converted with a carried rate: a session
+        date(2026, 1, 7),
+        date(2026, 1, 9),
+        date(2026, 1, 12),
+        date(2026, 1, 13),
+        date(2026, 1, 14),  # quoted, converted with a carried rate: a session
+        date(2026, 1, 16),
+    ]
+    # Four warm-up sessions for a four-session warm-up: Monday, Tuesday, Wednesday and Friday.
+    assert (result.warmup.used_points, result.warmup.complete) == (4, True)
+    assert result.status == SignalStatus.OK
+    assert [point.date for point in result.series[0].points] == [date(2026, 1, 12), date(2026, 1, 13), date(2026, 1, 14), date(2026, 1, 16)]
+
+
+@pytest.mark.asyncio
+async def test_coverage_of_a_calendar_filled_input_keeps_its_calendar_meaning():
+    """T4 — guard: coverage is the same calendar coverage as before the change, field by field."""
+    service = make_service()
+
+    result = (
+        await service.compute(
+            [request("line", "FIXTURE_LINE", {"length": 2})],
+            two_filled_weeks(),
+            make_context(start=date(2026, 1, 12), end=date(2026, 1, 18)),
+        )
+    )[0]
+
+    assert result.status == SignalStatus.OK
+    assert result.availability.input_coverage.model_dump(mode="python") == {
+        "requested_points": 14,
+        "available_points": 14,
+        "contiguous_points": 14,
+        "observed_points": 10,
+        "backfilled_points": 4,
+        "missing_points": 0,
+        "max_consecutive_missing_points": 0,
+        "internal_gap_count": 0,
+        "coverage_ratio": 1.0,
+        "field_coverage": {SignalPriceField.CLOSE: 1.0},
+        "event_type_counts": {},
+        "first_available_date": date(2026, 1, 5),
+        "last_available_date": date(2026, 1, 18),
+    }
+
+
+@pytest.mark.asyncio
+async def test_partial_plugin_coverage_counts_calendar_slots_and_carried_days():
+    """T4 — guard: a leading gap and an invalid weekday are counted on the calendar, as before."""
+    service = make_service(HighPartialPlugin)
+    filled = two_filled_weeks()
+    assert filled[9].date == date(2026, 1, 14)
+    filled[9] = filled[9].model_copy(update={"high": None})
+
+    result = (
+        await service.compute(
+            [request("high", "TEST_HIGH_PARTIAL", {"length": 2})],
+            filled,
+            make_context(start=date(2026, 1, 2), end=date(2026, 1, 18)),
+        )
+    )[0]
+
+    assert result.availability.input_coverage.model_dump(mode="python") == {
+        "requested_points": 17,
+        "available_points": 13,
+        "contiguous_points": 9,
+        "observed_points": 9,
+        "backfilled_points": 4,
+        "missing_points": 4,
+        "max_consecutive_missing_points": 3,
+        "internal_gap_count": 1,
+        "coverage_ratio": 13 / 17,
+        "field_coverage": {SignalPriceField.CLOSE: 14 / 17, SignalPriceField.HIGH: 13 / 17},
+        "event_type_counts": {},
+        "first_available_date": date(2026, 1, 5),
+        "last_available_date": date(2026, 1, 18),
+    }

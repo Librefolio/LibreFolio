@@ -1165,15 +1165,16 @@
       "period": "Memory length of the filter in days. Higher values = smoother but slower response.",
       "offset": "Vertical offset as percentage of the base value. Shifts the signal up or down.",
       "currencyPair": "Select an FX pair to overlay its exchange rate data on the chart.",
-      "emaPeriod": "Lookback window in days. Maps to filter coefficient $\\alpha = 2/(N+1)$. Shorter = faster reaction, longer = smoother.",
-      "fastPeriod": "Short-term EMA lookback for the MACD fast line. Standard: 12 days. Lower values react faster to price changes.",
-      "slowPeriod": "Long-term EMA lookback for the MACD slow line. Standard: 26 days. Higher values capture the broader trend.",
-      "signalPeriod": "EMA smoothing applied to the MACD line. Standard: 9 days. Reduces noise in crossover signals.",
+      "emaPeriod": "Lookback window in sessions, the days with a quote. Maps to filter coefficient $\\alpha = 2/(N+1)$. Shorter = faster reaction, longer = smoother.",
+      "fastPeriod": "Short-term EMA lookback for the MACD fast line. Standard: 12 sessions. Lower values react faster to price changes.",
+      "slowPeriod": "Long-term EMA lookback for the MACD slow line. Standard: 26 sessions. Higher values capture the broader trend.",
+      "signalPeriod": "EMA smoothing applied to the MACD line. Standard: 9 sessions. Reduces noise in crossover signals.",
       "multiplier": "Number of standard deviations ($k \\cdot \\sigma$). $k=2$ covers ~95% of values assuming normal distribution.",
       "overbought": "Level above which the asset is considered overbought. Standard: 70. Values near 100 indicate strong buying pressure.",
       "oversold": "Level below which the asset is considered oversold. Standard: 30. Values near 0 indicate strong selling pressure.",
       "assetComparison": "Select an asset to overlay its price on this chart. In percentage mode, both curves start at 0%.",
-      "fxPair": "Select an FX pair to overlay its exchange rate on this chart. In percentage mode, both curves start at 0%."
+      "fxPair": "Select an FX pair to overlay its exchange rate on this chart. In percentage mode, both curves start at 0%.",
+      "sessionPeriod": "Lookback window in sessions, the days with a quote. Higher values = smoother but slower response."
     },
     "macdLineColor": "MACD Line Color",
     "noDataAvailable": "No data available. Try syncing this asset/pair.",
@@ -2442,7 +2443,8 @@
       "riskFullHistory": "Measure drawdown against the highest peak of the entire available history, not just the visible window. Disable for a faster, window-relative view."
     },
     "units": {
-      "days": "days"
+      "days": "days",
+      "sessions": "sessions"
     },
     "visual": {
       "components": "Components",

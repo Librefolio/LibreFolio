@@ -54,7 +54,7 @@ class MacdSignalParams(BaseModel):
         json_schema_extra={
             "x-i18n-key": "chartSettings.params.fastPeriod",
             "x-control-order": 1,
-            "x-suffix": "days",
+            "x-suffix": "sessions",
             "x-step": 1,
             "x-tooltip-key": "chartSettings.tooltips.fastPeriod",
         },
@@ -67,7 +67,7 @@ class MacdSignalParams(BaseModel):
         json_schema_extra={
             "x-i18n-key": "chartSettings.params.slowPeriod",
             "x-control-order": 2,
-            "x-suffix": "days",
+            "x-suffix": "sessions",
             "x-step": 1,
             "x-tooltip-key": "chartSettings.tooltips.slowPeriod",
         },
@@ -80,7 +80,7 @@ class MacdSignalParams(BaseModel):
         json_schema_extra={
             "x-i18n-key": "chartSettings.params.signalPeriod",
             "x-control-order": 3,
-            "x-suffix": "days",
+            "x-suffix": "sessions",
             "x-step": 1,
             "x-tooltip-key": "chartSettings.tooltips.signalPeriod",
         },
@@ -102,7 +102,8 @@ _MACD_AXIS = SignalAxisSpec(
 @register_plugin(SignalPluginRegistry)
 class MacdSignalPlugin(SignalPlugin):
     signal_code = "MACD"
-    implementation_version = "1.0.0"
+    # 2.0.0 — computes on quote days: SMA 200 = 200 sessions (developer's decision of 30/09/2026).
+    implementation_version = "2.0.0"
     category = SignalCategory.MOMENTUM
     display_name_key = "signals.macd.name"
     description_key = "signals.macd.description"
