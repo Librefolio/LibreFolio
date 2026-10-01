@@ -624,6 +624,23 @@
   > condividono uno spec E2E), 5, journal. Quattro file toccano più voci (`_frontend_utility.py`, `_frontend_asset.py`,
   > `assets/[id]/+page.svelte`, `dashboard/+page.svelte`): per ognuno c'è una versione intermedia per commit, generata e
   > verificata (l'ultima coincide col worktree), in `/tmp/libreFolio_commits/k-13-split/` col manifesto.
+- [x] **13.12 Validazione della revisione combinata** — i nove commit (`53219bc00`…`d6a5853cd`) uniti a `dev_release2`
+  `b8bfd0cac` (step 1 di L, CHANGELOG, TODO_FUTURI) nel merge `80f1d9155`; lista del coordinator, nella 6155, un comando
+  alla volta; log in `/tmp/libreFolio_k13_merge_*.log`. ✅ 2026-09-30.
+  > **Note implementazione**:
+  > - `front build --debug` exit 0; `front check` exit 1 con i soli 3 errori della baseline
+  >   (`TransactionFormModal.test.ts:787`, `:819`, `ToolExecutionMetrics.svelte:44`).
+  > - `core-unit` 2684/2684; `component-unit` 2182/2182; `check-orphans` pulito.
+  > - E2E dello step 13: `asset-name-xss` 2/2, `stale-price-banner` 1/1, `asset-mobile-layout` 11/11,
+  >   `toolbar-width-sweep` 15/15, `asset-data-editor` 23/23; `front-utility files` 21/21; `front-broker detail` 28 più
+  >   il rosso noto `brokers-detail.spec.ts:713`, con lo stesso errore (`Expected: >= 3, Received: 1`).
+  > - Backend: `roi-fifo-utils` 518, `risk-all` 454, `utils pwa-assets` 20, `provider-errors` 134,
+  >   `borsa-italiana-search` 5, `borsa-italiana-funds` 17, `external brim-providers` 537 più 2 saltati, voluti dal test
+  >   di L (`TestWindows1252Invariance`: il campione degiro-export ha caratteri che Windows-1252 non rappresenta).
+  > - Stato alla consegna: status vuoto, nessun `MERGE_HEAD`, timbro di `sw.js` invariato, porte 6155 e 6165 libere. Il
+  >   coordinator ha poi portato `dev_release2` a `80f1d9155` e ci ha messo sopra il CHANGELOG (`8f18416df`).
+  > - Nota scritta nello step 14 ([`plan-phase00TaxonomySelectStep14TooltipTeardownFixture.prompt.md`](plan-phase00TaxonomySelectStep14TooltipTeardownFixture.prompt.md)),
+  >   per lasciare il worktree pulito al fast-forward.
 
 ## Definizione di fatto (per ogni voce)
 
