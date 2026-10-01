@@ -42,10 +42,11 @@
  * "Fixed 6-slot order matches buildFullSeries's matching index reads exactly"). Broker
  * series ARE matched by name, because those names are values this test supplied as props.
  *
- * THE REST OF THE FILE. Five smaller subjects share the same recorder: privacy masking
+ * THE REST OF THE FILE. Six smaller subjects share the same recorder: privacy masking
  * of the axis and tooltip formatters (S2a), the one form of every signed tooltip amount in
  * the locale's glyphs (D23, D23b), persistence of the mode and the P&L submode (S5), the
- * synthetic-candle caption (S9), and the grid's left inset (developer review, 2026-09-29).
+ * synthetic-candle caption (S9), the grid's left inset (developer review, 2026-09-29), and
+ * the ladder x axis of the Candles and Income submodes (S7).
  * Each describe states its own reasons.
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
@@ -64,10 +65,17 @@ import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest
  * matches the bound container. One mount therefore means exactly one instance, and the
  * tests assert that.
  */
-const {chartInstances, echartsModule} = vi.hoisted(() => {
+const {chartInstances, echartsModule, fakeGeometry} = vi.hoisted(() => {
     interface SetOptionCall {
         option: Record<string, unknown>;
         opts: unknown;
+    }
+
+    interface GridRect {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
     }
 
     interface FakeChart {
@@ -83,6 +91,12 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
         resize: () => void;
         isDisposed: () => boolean;
         dispose: () => void;
+        /** Calls every handler registered with `on(event, …)`, as ECharts does when the user acts (S7). */
+        emit: (event: string) => void;
+        /** Puts a window in the chart's own state, where ECharts keeps it after a user zoom (S7). */
+        setZoom: (start: number, end: number) => void;
+        /** Present only while `fakeGeometry.measured` is on: the laid-out grid `syncPlotGeometry` reads. */
+        getModel?: () => {getComponent: (type: string) => {coordinateSystem: {getRect: () => GridRect}} | undefined};
     }
 
     const chartInstances: FakeChart[] = [];
@@ -92,6 +106,15 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
      *  chart stays at 'daily' and one bucket means one day — no aggregation tier in the
      *  middle of an assertion about aggregation inputs. */
     const PLOT_WIDTH_PX = 1200;
+
+    /**
+     * The laid-out grid, OPT-IN (S7). WHY: every other case keeps today's fake, with no `getModel`,
+     * so `syncPlotGeometry` reads nothing, the plot width stays 0 and every rung of the ladder
+     * stays offered. Off by default and reset after every case. On, the grid is a 527 px plot at
+     * x 40 of the 1200 px chart: 40 px of room on the left, 633 on the right.
+     */
+    const fakeGeometry = {measured: false};
+    const MEASURED_GRID: GridRect = {x: 40, y: 20, width: 527, height: 300};
 
     function createFakeChart(dom: unknown): FakeChart {
         const handlers = new Map<string, Set<() => void>>();
@@ -127,7 +150,18 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
             dispose: () => {
                 disposed = true;
             },
+            emit(event) {
+                // A copy: a handler that unregisters itself must not make its neighbour skip.
+                for (const handler of [...(handlers.get(event) ?? [])]) handler();
+            },
+            setZoom(start, end) {
+                merged = {...merged, dataZoom: [{start, end}]};
+            },
         };
+
+        if (fakeGeometry.measured) {
+            chart.getModel = () => ({getComponent: (type: string) => (type === 'grid' ? {coordinateSystem: {getRect: () => ({...MEASURED_GRID})}} : undefined)});
+        }
 
         chartInstances.push(chart);
         return chart;
@@ -136,15 +170,18 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
     return {
         chartInstances,
         echartsModule: {init: (dom: unknown) => createFakeChart(dom)},
+        fakeGeometry,
     };
 });
 
 vi.mock('echarts', () => echartsModule);
 
+import {tick} from 'svelte';
 import {get} from 'svelte/store';
+import {addMessages, dictionary, waitLocale} from 'svelte-i18n';
 import {fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
 import {OVERFLOW_MARQUEE_SELECTOR} from '$lib/actions/scrollOnOverflow';
-import {_} from '$lib/i18n';
+import {_, locale} from '$lib/i18n';
 import {isPrivacyEnabled, setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
 import type {PortfolioAcquisitionFundingSeries, PortfolioBrokerPnlHistory, PortfolioCostHistorySeries, PortfolioDepositHistorySeries, PortfolioHistoryPoint, PortfolioIncomeHistorySeries, PortfolioPnlCandlePoint, PortfolioPnlCandleSeries} from '$lib/stores/portfolio/portfolioStore.svelte';
 import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
@@ -275,6 +312,69 @@ const NO_PCT_HISTORY: PortfolioHistoryPoint[] = HISTORY.map((point) => ({...poin
 /** Passed explicitly as a prop: the currency code is a value this file supplies, not UI text. */
 const BASE_CURRENCY = 'EUR';
 
+/** Every data prop the candle-width ladder reads, for one period: the S7 cases mount them together. */
+interface LadderFixture {
+    history: PortfolioHistoryPoint[];
+    pnlCandles: PortfolioPnlCandleSeries;
+    incomeHistory: PortfolioIncomeHistorySeries;
+    costHistory: PortfolioCostHistorySeries;
+    depositHistory: PortfolioDepositHistorySeries;
+    acquisitionFunding: PortfolioAcquisitionFundingSeries;
+}
+
+/** `count` consecutive ISO days from a UTC date: WHY, the S7 closings are counted by hand on this calendar. */
+function isoDays(year: number, month0: number, day1: number, count: number): string[] {
+    return Array.from({length: count}, (_day, index) => new Date(Date.UTC(year, month0, day1 + index)).toISOString().slice(0, 10));
+}
+
+/** The 40-day fixtures' per-day formulas over another calendar. WHY: every sum an S7 case expects stays derivable by hand from them. */
+function buildLadderFixture(dates: string[]): LadderFixture {
+    return {
+        history: dates.map((date, index) => ({
+            date,
+            cash_value: eur(1_000 + index),
+            market_value: eur(10_000 + index * 100),
+            nav_value: eur(11_000 + index * 100),
+            capital_baseline: eur(10_500),
+            book_asset_like: eur(9_000 + index * 50),
+            cash_from_contributed_capital: eur(800),
+            cash_from_generated_returns: eur(200 + index),
+            total_pnl: eur(500 + index * 100),
+            twrr: (index * 0.001).toFixed(6),
+            mwrr_cumulative: (index * 0.0012).toFixed(6),
+            roi: (index * 0.0009).toFixed(6),
+        })),
+        pnlCandles: {
+            hypothetical: true,
+            points: dates.map((date, index) => ({date, open: eur(500 + index * 100), high: eur(560 + index * 100), low: eur(480 + index * 100), close: eur(540 + index * 100)})),
+        },
+        incomeHistory: {points: dates.map((date, index) => ({date, dividend: eur(12 + index), interest: eur(3 + index)})), missing_fx_pairs: []},
+        costHistory: {points: dates.map((date, index) => ({date, cost: eur(-(4 + index))})), missing_fx_pairs: []},
+        depositHistory: {points: dates.map((date, index) => ({date, deposit: eur(150 + index)})), missing_fx_pairs: []},
+        acquisitionFunding: {points: dates.map((date, index) => ({date, from_new_capital: eur(90 + index), from_reinvested: eur(45 + index)}))},
+    };
+}
+
+/**
+ * The S7 periods. Each is ONE shared instance, built once, for the reason the `HISTORY` docblock
+ * gives: `GrowthChart` resets its caches and its window exactly when `history !== lastHistoryRef`,
+ * so an accidental new array would be a trigger of its own.
+ *
+ * - 40 days (2026-01-01..02-09): the existing instances, reused as they are. 1W gives six buckets
+ *   and, end-anchored, a short OLDEST one (Jan 1..5, 5 of 7 days).
+ * - 730 days (2024-10-01..2026-09-30): long enough for a measured 527 px plot to drop the narrow
+ *   rungs, and for the 1M window [19..24] and its 2W counterpart.
+ * - 90 days (2026-01-01..03-31): three whole 30-day buckets at 1M, no partial bucket.
+ * - 93 days (2026-01-01..04-03): four buckets at 1M, the oldest covering 3 of 30 days.
+ */
+const FIXTURE_40: LadderFixture = {history: HISTORY, pnlCandles: PNL_CANDLES, incomeHistory: INCOME_HISTORY, costHistory: COST_HISTORY, depositHistory: DEPOSIT_HISTORY, acquisitionFunding: ACQUISITION_FUNDING};
+const FIXTURE_730 = buildLadderFixture(isoDays(2024, 9, 1, 730));
+const FIXTURE_90 = buildLadderFixture(isoDays(2026, 0, 1, 90));
+const FIXTURE_93 = buildLadderFixture(isoDays(2026, 0, 1, 93));
+
+/** The props of one mount on `fixture`. WHY: the currency is a value this file supplies, never left to a default. */
+const ladderProps = (fixture: LadderFixture) => ({...fixture, baseCurrency: BASE_CURRENCY});
+
 /**
  * Three days for the privacy cases.
  *
@@ -369,9 +469,18 @@ function setOptionCount(): number {
     return chartInstances[0].setOptionCalls.length;
 }
 
-/** A line/bar datum is a `SeriesPoint`: `{value: [date, number | null], …}`. */
+/**
+ * The number a line/bar datum carries. On the time axis a datum is a `SeriesPoint`,
+ * `{value: [date, number | null], …}`. WHY widened (S7): on the ladder's category axis it may be
+ * a plain number, `[date, n]` or `{value: n, …}`, and the cases read the value, not the shape, so
+ * one reader serves the code before and after the fix.
+ */
 function pointValue(datum: unknown): number | null {
-    const value = (datum as {value?: unknown})?.value;
+    if (typeof datum === 'number') return datum;
+    if (Array.isArray(datum)) return datum.length === 2 ? ((datum[1] as number | null) ?? null) : null;
+    if (datum == null || typeof datum !== 'object') return null;
+    const value = (datum as {value?: unknown}).value;
+    if (typeof value === 'number') return value;
     return Array.isArray(value) ? ((value[1] as number | null) ?? null) : null;
 }
 
@@ -389,10 +498,21 @@ function nonZeroPoints(series: SeriesUpdate | undefined): number {
     }).length;
 }
 
-/** A candlestick datum is either a real `[open, close, low, high]` quad or ECharts'
- *  `'-'` empty-value sentinel, which is exactly what the stale entry was full of. */
+/**
+ * A candle's `[open, close, low, high]` quad, or null. WHY: today a candle is a flat quad; the S7
+ * fix may wrap it as `{value: quad, itemStyle}` to mark a partial bucket, and the cases read the
+ * quad, not the wrapper.
+ */
+function quadOf(datum: unknown): number[] | null {
+    const raw = Array.isArray(datum) ? datum : datum != null && typeof datum === 'object' ? (datum as {value?: unknown}).value : undefined;
+    return Array.isArray(raw) && raw.length === 4 && raw.every((component) => typeof component === 'number' && Number.isFinite(component)) ? (raw as number[]) : null;
+}
+
+/** A candlestick datum is either a real `[open, close, low, high]` quad (flat, or wrapped in
+ *  `{value}`) or ECharts' `'-'` empty-value sentinel, which is exactly what the stale entry was
+ *  full of. */
 function realCandleQuads(series: SeriesUpdate | undefined): number {
-    return (series?.data ?? []).filter((datum) => Array.isArray(datum) && datum.length === 4 && datum.every((component) => typeof component === 'number' && Number.isFinite(component))).length;
+    return (series?.data ?? []).filter((datum) => quadOf(datum) != null).length;
 }
 
 function brokerSeries(series: SeriesUpdate[]): SeriesUpdate[] {
@@ -538,8 +658,9 @@ interface TooltipRow {
     value: string;
 }
 
-/** Text as a user reads it. The component interpolates `$_()` output into HTML, so an
- *  expected label goes through the same parser as the tooltip it is compared with. */
+/** Text as a user reads it from HTML the component builds with raw `$_()` output (row labels, headers):
+ *  an expected label goes through the same parser as the tooltip it is compared with. A translation the
+ *  component escapes, such as the partial-bucket line, reads as written instead. */
 function htmlText(html: string): string {
     const host = document.createElement('div');
     host.innerHTML = html;
@@ -693,6 +814,13 @@ beforeEach(() => {
     // too, and every click is now a real write.
     storage.clear();
     storageWrites.length = 0;
+});
+
+afterEach(() => {
+    // WHY: the measured grid is opt-in per case (S7), and a case that installed fake timers and
+    // failed before its own `finally` must not hand them to the next one.
+    fakeGeometry.measured = false;
+    vi.useRealTimers();
 });
 
 describe('GrowthChart aggregation memo', () => {
@@ -1378,5 +1506,553 @@ describe('GrowthChart grid left inset (developer review, 2026-09-29)', () => {
         await fireEvent.click(getByTestId('growth-toggle-pnl'));
         await fireEvent.click(getByTestId('growth-pnl-submode-income'));
         expectLeftInset(await waitForFrame(FRAME.income), 'P&L Income');
+    });
+});
+
+// =============================================================================
+// S7 — the ladder x axis of the Candles and Income submodes
+// =============================================================================
+
+/**
+ * Under the candle-width ladder a bucket is a fixed number of days. The product decision (D16-ii)
+ * anchors the buckets on the LAST day of the period: the newest bucket closes on the last day, and
+ * the short bucket, if any, is the OLDEST one, drawn translucent and explained in its tooltip. Both
+ * submodes sit on one category axis whose `data` are the closing dates, labelled and separated by
+ * the planner (`growthLadderAxis.ts`), and the user's window survives a zoom, a rung change and a
+ * redraw of the same period.
+ *
+ * The explanation is a translation inside the tooltip's HTML, so it reaches the user as written,
+ * never as markup (the S7 XSS rule): one B5 block swaps in a markup-looking catalogue message.
+ *
+ * Every expected value is derived by hand from the fixtures' per-day formulas and the calendar,
+ * never by running the planner. The label strings (`Jan 5`, `May 3`) are the planner's Part A
+ * contract in the file's locale (en) on this machine's ICU, which `growthLadderAxis.test.ts`
+ * checks first (A0): they are dates this file chose, not UI translations.
+ *
+ * Opening pick: without the measured grid every rung is offered, so Candles open on 1D and Income
+ * on 1W, its floor. Every case that names a rung presses it and waits for it to read as pressed,
+ * so no case depends on the opening pick.
+ */
+// WHY the 30 s budget: a case chains several 5 s waits, and a red `waitFor` must be able to exhaust
+// its own timeout and rethrow the case's assertion instead of dying on the test timeout.
+describe('GrowthChart ladder x axis (S7)', {timeout: 30_000}, () => {
+    // The flag is module state shared by every case in the file. Whoever switches it on
+    // switches it off, whatever the outcome of the case (as S2a does).
+    afterEach(() => setPrivacyEnabled(false));
+
+    /** The two submodes on the ladder, and the rungs the cases press (the test-id suffixes). WHY: a typo in a case is a type error, not a 5 s timeout. */
+    type Submode = 'candles' | 'income';
+    type Rung = '1d' | '1w' | '2w' | '1m';
+
+    /** Both ladder submodes. WHY: every defect shows on both, and a fix on one alone must stay red. */
+    const SUBMODES: Array<{title: string; submode: Submode}> = [
+        {title: 'Candles', submode: 'candles'},
+        {title: 'Income', submode: 'income'},
+    ];
+
+    /** How many series each submode draws, from its frame. WHY: "no bucket marked" is stated per series, independently of what rendered. */
+    const SERIES_COUNT: Record<Submode, number> = {candles: FRAME.candles.length, income: FRAME.income.length};
+
+    /** 40 days at 1W, end-anchored: 2026-02-09 back by 7 days. WHY a literal: the calendar, counted by hand, is the oracle. */
+    const WEEK_CLOSINGS_40 = ['2026-01-05', '2026-01-12', '2026-01-19', '2026-01-26', '2026-02-02', '2026-02-09'];
+
+    /** 730 days at 1M, buckets 19..24: 2026-09-30 back by 30 days. WHY a literal: the calendar, counted by hand, is the oracle. */
+    const MONTH_WINDOW_CLOSINGS = ['2026-05-03', '2026-06-02', '2026-07-02', '2026-08-01', '2026-08-31', '2026-09-30'];
+
+    /** The zoom start whose left edge is bucket 19 of 0..24. WHY: ECharts rounds `pct / 100 × (n − 1)` to a bucket, so this is the window [19..24]. */
+    const MONTH_WINDOW_START = (19 / 24) * 100;
+
+    /** What a missing callback reads as in a failure diff. WHY: a named sentinel keeps the red on the assertion, not on a TypeError. */
+    const NOT_A_FUNCTION = 'not a function';
+
+    /** Mounts on `fixture` and walks into a ladder submode (Abs, then P&L, then the submode). WHY: the path a user takes, one full frame at a time. */
+    async function enterLadderView(fixture: LadderFixture, submode: Submode) {
+        const view = render(GrowthChart, {props: ladderProps(fixture)});
+        await waitForFrame(FRAME.abs);
+        await fireEvent.click(view.getByTestId('growth-toggle-pnl'));
+        await fireEvent.click(view.getByTestId(`growth-pnl-submode-${submode}`));
+        await waitForFrame(submode === 'candles' ? FRAME.candles : FRAME.income);
+        return view;
+    }
+
+    /** Presses a rung and waits until it reads as pressed. WHY: no case may depend on the rung the chart opened on. */
+    async function pressRung(rung: Rung) {
+        const id = `growth-candle-width-${rung}`;
+        await fireEvent.click(screen.getByTestId(id));
+        await waitFor(() => expect(screen.getByTestId(id).getAttribute('aria-pressed')).toBe('true'), {timeout: 5_000});
+    }
+
+    /** Waits until every series of the latest rendered series array has `count` buckets. WHY: proves the pressed rung has actually been drawn. */
+    async function waitForBuckets(count: number) {
+        await waitFor(
+            () => {
+                const series = renderedSeries();
+                expect(series.length).toBeGreaterThan(0);
+                expect(series.map((entry) => entry.data.length)).toEqual(series.map(() => count));
+            },
+            {timeout: 5_000},
+        );
+    }
+
+    /** Enters `submode` on `fixture`, presses `rung` and waits for its `buckets`. WHY: the common opening, settled on facts true before and after the fix. */
+    async function openRung(fixture: LadderFixture, submode: Submode, rung: Rung, buckets: number) {
+        const view = await enterLadderView(fixture, submode);
+        await pressRung(rung);
+        await waitForBuckets(buckets);
+        return view;
+    }
+
+    /** True when a datum carries the partial mark: an `itemStyle.opacity` strictly between 0 and 1. WHY: translucent is the decided look (D16-ii). */
+    function isMarkedPartial(datum: unknown): boolean {
+        if (datum == null || typeof datum !== 'object' || Array.isArray(datum)) return false;
+        const opacity = (datum as {itemStyle?: {opacity?: unknown}}).itemStyle?.opacity;
+        return typeof opacity === 'number' && opacity > 0 && opacity < 1;
+    }
+
+    /** The indices of the buckets a series marks as partial. WHY: a list makes "bucket 0 and no other" one assertion. */
+    function markedBuckets(series: SeriesUpdate): number[] {
+        return series.data.flatMap((datum, index) => (isMarkedPartial(datum) ? [index] : []));
+    }
+
+    /** The tooltip of bucket `index`. WHY: the formatter reads live state, so the latest full option answers for the rung on screen. */
+    function ladderTooltip(index: number): string {
+        return latestFullOption().tooltip.formatter([{dataIndex: index}]);
+    }
+
+    /** Tooltip HTML parsed into a detached host. WHY: lines are read as elements, never matched as substrings. */
+    function tooltipHost(html: string): HTMLDivElement {
+        const host = document.createElement('div');
+        host.innerHTML = html;
+        return host;
+    }
+
+    /** The text of the first top-level element. WHY: `buildTooltipHeader` emits the header as the first `<div>`. */
+    function tooltipHeaderText(html: string): string | null {
+        return tooltipHost(html).firstElementChild?.textContent ?? null;
+    }
+
+    /** The text of every top-level `<div>`. WHY: "exactly one partial line" is then a count on this list. */
+    function topLevelDivTexts(html: string): string[] {
+        return Array.from(tooltipHost(html).children)
+            .filter((child) => child.tagName === 'DIV')
+            .map((child) => child.textContent ?? '');
+    }
+
+    /** The partial-bucket line as the user reads it. WHY: resolved through i18n with the values the component must pass, never a literal.
+     *  The component escapes this line, so the user reads the resolved text as written; `htmlText` returns that same text while the
+     *  catalogue entry holds no markup or entities, as in all four locales today. The markup case is B5's escape block (`withPartialBucketMessage`). */
+    function partialLine(days: number, total: number): string {
+        const resolved = get(_)('chart.tooltip.partialBucket', {values: {days, total}});
+        if (resolved === 'chart.tooltip.partialBucket') throw new Error('chart.tooltip.partialBucket does not resolve in the file locale');
+        return htmlText(resolved);
+    }
+
+    /** Any partial-bucket line, whatever its numbers. WHY: an absence check must not be defeated by a line carrying other numbers.
+     *  Built through `htmlText`, so it matches the escaped line only while the catalogue entry holds no markup or entities (see `partialLine`). */
+    function partialLinePattern(): RegExp {
+        const text = htmlText(get(_)('chart.tooltip.partialBucket', {values: {days: 'DAYSSLOT', total: 'TOTALSLOT'}}));
+        if (!text.includes('DAYSSLOT') || !text.includes('TOTALSLOT')) throw new Error(`chart.tooltip.partialBucket did not take its values: ${text}`);
+        const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return new RegExp(`^${escaped.replace('DAYSSLOT', '\\d+').replace('TOTALSLOT', '\\d+')}$`);
+    }
+
+    /** The part of an x axis this describe reads. WHY: `FullOption` leaves the x axis out; only S7 reads it. */
+    interface XAxisOption {
+        type?: unknown;
+        data?: unknown;
+        axisLabel?: {formatter?: unknown; interval?: unknown};
+        splitLine?: {interval?: unknown};
+    }
+
+    /** ECharts' category-axis callbacks: `formatter(value, index)`, `interval(index, value)`. WHY: the cases call them the way ECharts does. */
+    type LabelFormatter = (value: string, index: number) => string;
+    type IntervalCallback = (index: number, value: string) => boolean;
+
+    /** The x axis of one option, object or array. WHY: ECharts accepts both, and the fix may send either. */
+    function xAxisOf(option: Record<string, unknown>): XAxisOption | undefined {
+        const axis = option.xAxis;
+        return (Array.isArray(axis) ? axis[0] : axis) as XAxisOption | undefined;
+    }
+
+    /** The x axis of the latest call whose x axis carries `key`. WHY: the axis arrives in pieces, a full option and then `{xAxis}`-only re-plans. */
+    function latestXAxisWith(key: 'axisLabel' | 'data'): XAxisOption | undefined {
+        expect(chartInstances).toHaveLength(1);
+        const calls = chartInstances[0].setOptionCalls;
+        for (let index = calls.length - 1; index >= 0; index -= 1) {
+            const axis = xAxisOf(calls[index].option);
+            if (axis?.[key] != null) return axis;
+        }
+        return undefined;
+    }
+
+    /** `value` when it is a function, else null. WHY: today's axis may carry a number or nothing where the fix puts a callback. */
+    function fn<T>(value: unknown): T | null {
+        return typeof value === 'function' ? (value as T) : null;
+    }
+
+    /** Calls `call`, turning a throw into a labelled value. WHY: today's callbacks were not written for these arguments, and a throw must show in the diff, not replace it. */
+    function attempt<T>(call: () => T): T | string {
+        try {
+            return call();
+        } catch (error) {
+            return `threw: ${error instanceof Error ? error.message : String(error)}`;
+        }
+    }
+
+    /** Zooms the way a user does, on the fake clock. WHY: ECharts' own state first, then the event, then well past the 200 ms debounce. */
+    async function zoomOnFakeClock(start: number, end: number) {
+        expect(chartInstances).toHaveLength(1);
+        chartInstances[0].setZoom(start, end);
+        chartInstances[0].emit('dataZoom');
+        await vi.advanceTimersByTimeAsync(1_000);
+        await tick();
+    }
+
+    /** B9's zoom onto buckets [19..24], without its call counts, then real timers again. WHY: the opening of B10 and B11 must not assert what B9 pins. */
+    async function zoomToMonthWindow1924() {
+        vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout']});
+        try {
+            await zoomOnFakeClock(MONTH_WINDOW_START, 100);
+        } finally {
+            vi.useRealTimers();
+        }
+    }
+
+    /** Measured grid, 730 days at 1M (25 buckets), window [19..24]. WHY: the one state B10 and B11 start from. */
+    async function openMonthWindow1924(submode: Submode) {
+        fakeGeometry.measured = true;
+        const view = await openRung(FIXTURE_730, submode, '1m', 25);
+        await zoomToMonthWindow1924();
+        return view;
+    }
+
+    /** One `dataZoom` entry, fields unknown. WHY: a missing or non-numeric start must show in the diff, not be assumed. */
+    interface ZoomEntry {
+        start?: unknown;
+        end?: unknown;
+    }
+
+    /** The first entry of a `dataZoom`, object or array. WHY: `getZoomPercent()` reads `dataZoom[0]`, the window ECharts keeps. */
+    function firstZoomOf(raw: unknown): ZoomEntry | undefined {
+        return (Array.isArray(raw) ? raw[0] : raw) as ZoomEntry | undefined;
+    }
+
+    /** Waits for the first call after `since` that carries a `dataZoom`, and returns its first entry. WHY: the redraw barrier, without which "kept" could be read before the component reacts. */
+    async function firstZoomAfter(since: number): Promise<ZoomEntry | undefined> {
+        let found: ZoomEntry | undefined;
+        await waitFor(
+            () => {
+                expect(chartInstances).toHaveLength(1);
+                const call = chartInstances[0].setOptionCalls.slice(since).find((entry) => entry.option.dataZoom != null);
+                expect(call, `a setOption call carrying dataZoom after call ${since}`).toBeDefined();
+                found = firstZoomOf(call?.option.dataZoom);
+            },
+            {timeout: 5_000},
+        );
+        return found;
+    }
+
+    /** A window as the bucket at its left edge, and its right edge. WHY: the cases state windows in buckets, with ECharts' own rounding. */
+    function zoomBucket(zoom: ZoomEntry | undefined, lastIndex: number): {startBucket: unknown; end: unknown} {
+        return {startBucket: typeof zoom?.start === 'number' ? Math.round((zoom.start / 100) * lastIndex) : zoom?.start, end: zoom?.end};
+    }
+
+    // --- B1-B3: the buckets end on the last day ------------------------------------------------
+
+    it('B1 Candles, 40 days, 1W: each candle spans its end-anchored week (bucket 0 = Jan 1..5, bucket 5 = Feb 3..9)', async () => {
+        // WHY: defect 1, start-anchored buckets make the newest week the short one; the quads come by hand from open 500+100i, close 540+100i, low 480+100i, high 560+100i.
+        await openRung(FIXTURE_40, 'candles', '1w', 6);
+        const [candles] = renderedSeries();
+        expect([quadOf(candles.data[0]), quadOf(candles.data[5])]).toEqual([
+            [500, 940, 480, 960],
+            [3800, 4440, 3780, 4460],
+        ]);
+    });
+
+    it('B2 Income, 40 days, 1W: each bar sums its end-anchored week, on each of the six series', async () => {
+        // WHY: defect 1 on sums: today bucket 0 adds days 0..6 (dividend 105); end-anchored it adds days 0..4 (5 × 12 + 0+1+2+3+4 = 70) and bucket 5 days 33..39.
+        await openRung(FIXTURE_40, 'income', '1w', 6);
+        // Fixed slot order: dividend, interest, costs, deposit, new capital, reinvested.
+        expect(renderedSeries().map((entry) => [pointValue(entry.data[0]), pointValue(entry.data[5])])).toEqual([
+            [70, 336],
+            [25, 273],
+            [-30, -280],
+            [760, 1302],
+            [460, 882],
+            [235, 567],
+        ]);
+    });
+
+    it.each(SUBMODES)('B3 $title, 40 days, 1W: the tooltip header names the rung and the days the bucket really covers', async ({submode}) => {
+        // WHY: defect 1 in words: the header must describe the drawn bucket (Jan 1 → Jan 5), not a week the chart does not draw (Jan 1 → Jan 7).
+        await openRung(FIXTURE_40, submode, '1w', 6);
+        const weekKey = 'datePicker.granularity.weeksShort';
+        const week = htmlText(get(_)(weekKey));
+        expect(week, `${weekKey} resolves`).not.toBe(weekKey);
+        expect([0, 5].map((index) => tooltipHeaderText(ladderTooltip(index)))).toEqual([`1${week} - 2026-01-01 → 2026-01-05`, `1${week} - 2026-02-03 → 2026-02-09`]);
+    });
+
+    // --- B4-B5: the short bucket is marked, and explained --------------------------------------
+
+    it('B4 Candles, 40 days: no candle marked at 1D; at 1W the short bucket 0 is marked partial, and no other', async () => {
+        // WHY: defect 1, the short bucket is drawn like the others; at 1D every bucket is one whole day, so a mark there would be noise.
+        await openRung(FIXTURE_40, 'candles', '1d', DAY_COUNT);
+        expect(renderedSeries().map(markedBuckets), '1D: no candle marked').toEqual(Array.from({length: SERIES_COUNT.candles}, () => []));
+        await pressRung('1w');
+        await waitForBuckets(6);
+        expect(renderedSeries().map(markedBuckets), '1W: bucket 0 marked, no other').toEqual(Array.from({length: SERIES_COUNT.candles}, () => [0]));
+    });
+
+    it('B4 Income, 40 days, 1W: bucket 0 is marked partial on each of the six series, and no other bucket', async () => {
+        // WHY: every bar of the short oldest week under-counts, so every series must say so, and no whole week may.
+        await openRung(FIXTURE_40, 'income', '1w', 6);
+        expect(renderedSeries().map(markedBuckets)).toEqual(Array.from({length: SERIES_COUNT.income}, () => [0]));
+    });
+
+    it.each(SUBMODES)('B4 $title, 1M: nothing marked on 90 days (three whole months), bucket 0 marked on 93 days (3 of 30 days)', async ({submode}) => {
+        // WHY: the mark follows the calendar, not the rung: 90 days are three whole 30-day buckets, 93 leave a 3-day oldest one.
+        const view = await openRung(FIXTURE_90, submode, '1m', 3);
+        expect(renderedSeries().map(markedBuckets), '90 days: every bucket whole').toEqual(Array.from({length: SERIES_COUNT[submode]}, () => []));
+
+        // One deferred render per effect run: wait for it before pressing, so the press acts on the 93 days.
+        const since = setOptionCount();
+        await view.rerender(ladderProps(FIXTURE_93));
+        await waitFor(() => expect(chartInstances[0].setOptionCalls.slice(since).some((call) => Array.isArray(call.option.series))).toBe(true), {timeout: 5_000});
+        await pressRung('1m');
+        await waitForBuckets(4);
+        expect(renderedSeries().map(markedBuckets), '93 days: bucket 0 marked, no other').toEqual(Array.from({length: SERIES_COUNT[submode]}, () => [0]));
+    });
+
+    it('B5 Candles, 40 days: no partial line at 1D nor on a whole week; the short week says it covers 5 of 7 days, once', async () => {
+        // WHY: the tooltip is where the user learns why the oldest candle is short; it must say so once, with the bucket's own day count, and never on a whole bucket.
+        await openRung(FIXTURE_40, 'candles', '1d', DAY_COUNT);
+        const anyPartial = partialLinePattern();
+        const partialLinesAt = (index: number) => topLevelDivTexts(ladderTooltip(index)).filter((text) => anyPartial.test(text));
+        expect(Array.from(Array(DAY_COUNT).keys()).flatMap(partialLinesAt), '1D: no partial line on any day').toEqual([]);
+
+        await pressRung('1w');
+        await waitForBuckets(6);
+        expect(partialLinesAt(5), '1W: no partial line on the whole week 5').toEqual([]);
+        const line = partialLine(5, 7);
+        expect(
+            topLevelDivTexts(ladderTooltip(0)).filter((text) => text === line),
+            '1W: exactly one partial line on bucket 0',
+        ).toEqual([line]);
+    });
+
+    it('B5 Income, 40 days, 1W: no partial line on a whole week; the short week says it covers 5 of 7 days, once', async () => {
+        // WHY: the Income header drops "value at" (a bar is a sum), so the partial line is the one place the short week is explained.
+        await openRung(FIXTURE_40, 'income', '1w', 6);
+        const anyPartial = partialLinePattern();
+        expect(
+            topLevelDivTexts(ladderTooltip(5)).filter((text) => anyPartial.test(text)),
+            'no partial line on the whole week 5',
+        ).toEqual([]);
+        const line = partialLine(5, 7);
+        expect(
+            topLevelDivTexts(ladderTooltip(0)).filter((text) => text === line),
+            'exactly one partial line on bucket 0',
+        ).toEqual([line]);
+    });
+
+    it.each(SUBMODES)('B5 $title, 93 days, 1M: the short oldest month says it covers 3 of 30 days, once', async ({submode}) => {
+        // WHY: the day count is the bucket's own, not a constant of the rung: 1M on 93 days leaves 3 of 30.
+        await openRung(FIXTURE_93, submode, '1m', 4);
+        const line = partialLine(3, 30);
+        expect(topLevelDivTexts(ladderTooltip(0)).filter((text) => text === line)).toEqual([line]);
+    });
+
+    /** The plain word that opens the swapped-in partial message. WHY: it finds the partial line whatever the component did to the rest of it, so a red shows what the user read. */
+    const PARTIAL_MARKER = 'S7-ESCAPE-LOCK';
+
+    /** A partial-bucket message that is markup if read as HTML: an entity and a tag around the two values. WHY: a translation is data, so both must reach the user as the characters written here. */
+    const MARKUP_LOOKING_PARTIAL = `${PARTIAL_MARKER} &lt;b&gt; {days}/{total} <i>x</i>`;
+
+    /**
+     * Runs `body` while the current locale's `chart.tooltip.partialBucket` reads `message`, then puts the
+     * catalogue's own text back and proves it. WHY: the catalogue is module state shared by every case in
+     * the file, so whoever swaps a message restores it, whatever the outcome of the case (as with the
+     * privacy flag); `body` is synchronous, so no scheduled render can run while the swap is in place.
+     */
+    function withPartialBucketMessage(message: string, body: () => void) {
+        const localeCode = get(locale);
+        if (!localeCode) throw new Error('no current locale: setupI18n() has not run');
+        // The catalogue's own leaf, read along the same nested path the swap writes.
+        const source = () => ['chart', 'tooltip', 'partialBucket'].reduce<unknown>((node, key) => (node !== null && typeof node === 'object' ? (node as Record<string, unknown>)[key] : undefined), get(dictionary)[localeCode]);
+        const resolved = () => get(_)('chart.tooltip.partialBucket', {values: {days: 5, total: 7}});
+        const original = source();
+        if (typeof original !== 'string') throw new Error(`chart.tooltip.partialBucket is not a string in the ${localeCode} catalogue`);
+        const before = resolved();
+        addMessages(localeCode, {chart: {tooltip: {partialBucket: message}}});
+        try {
+            body();
+        } finally {
+            addMessages(localeCode, {chart: {tooltip: {partialBucket: original}}});
+            expect({source: source(), resolved: resolved()}, `the ${localeCode} catalogue is restored`).toEqual({source: original, resolved: before});
+        }
+    }
+
+    it.each(SUBMODES)('B5 $title, 40 days, 1W: the partial line shows its translation as written, never as markup', async ({submode}) => {
+        // WHY: the tooltip is HTML handed to ECharts and a translation is data, so an entity or a tag in it must reach the user as text, on both return paths of the ladder header.
+        await openRung(FIXTURE_40, submode, '1w', 6);
+        withPartialBucketMessage(MARKUP_LOOKING_PARTIAL, () => {
+            const written = get(_)('chart.tooltip.partialBucket', {values: {days: 5, total: 7}});
+            expect(written, 'precondition: the swapped-in message resolves, values in, markup untouched').toBe(MARKUP_LOOKING_PARTIAL.replace('{days}', '5').replace('{total}', '7'));
+            expect(
+                topLevelDivTexts(ladderTooltip(0)).filter((text) => text.includes(PARTIAL_MARKER)),
+                'exactly one partial line, shown as written',
+            ).toEqual([written]);
+        });
+    });
+
+    // --- B6-B8: one category axis, labelled by the planner, and an honest offer ----------------
+
+    it('B6 Income, 40 days, measured, 1W: the category axis carries the six closings, labels each one and draws each separator', async () => {
+        // WHY: defects 2 and 3, the axis must name the buckets it draws; the label strings are the planner's Part A contract on this ICU (A0), dates chosen here, not UI translations.
+        fakeGeometry.measured = true;
+        await openRung(FIXTURE_40, 'income', '1w', 6);
+        await waitFor(
+            () => {
+                const labelled = latestXAxisWith('axisLabel');
+                const format = fn<LabelFormatter>(labelled?.axisLabel?.formatter);
+                const showLabel = fn<IntervalCallback>(labelled?.axisLabel?.interval);
+                const showSeparator = fn<IntervalCallback>(labelled?.splitLine?.interval);
+                expect({
+                    data: latestXAxisWith('data')?.data ?? null,
+                    labels: WEEK_CLOSINGS_40.map((date, index) => (format ? attempt(() => format(date, index)) : NOT_A_FUNCTION)),
+                    labelShown: WEEK_CLOSINGS_40.map((date, index) => (showLabel ? attempt(() => showLabel(index, date)) : NOT_A_FUNCTION)),
+                    separatorShown: WEEK_CLOSINGS_40.map((date, index) => (showSeparator ? attempt(() => showSeparator(index, date)) : NOT_A_FUNCTION)),
+                }).toEqual({
+                    data: WEEK_CLOSINGS_40,
+                    labels: ['Jan 5', 'Jan 12', 'Jan 19', 'Jan 26', 'Feb 2', 'Feb 9'],
+                    labelShown: WEEK_CLOSINGS_40.map(() => true),
+                    separatorShown: WEEK_CLOSINGS_40.map(() => true),
+                });
+            },
+            {timeout: 5_000},
+        );
+    });
+
+    it('B7 Income full option: a category axis; dividend, interest and costs in one stack, deposit alone, the two funding series in another; 10% gaps', async () => {
+        // WHY: defects 3 and 4, bars on a time axis change width with every zoom step, and an unstacked cost column with no gap makes the columns of a bucket touch.
+        await enterLadderView(FIXTURE_40, 'income');
+        const option = latestFullOption() as unknown as Record<string, unknown> & {series: Array<{stack?: unknown; barGap?: unknown; barCategoryGap?: unknown}>};
+        const NONE = 'none';
+        expect({
+            xAxisType: xAxisOf(option)?.type,
+            stack: option.series.map((entry) => entry.stack ?? NONE),
+            barGap: option.series.map((entry) => entry.barGap ?? NONE),
+            barCategoryGap: option.series.map((entry) => entry.barCategoryGap ?? NONE),
+        }).toEqual({
+            xAxisType: 'category',
+            // Fixed slot order: dividend, interest, costs, deposit, new capital, reinvested.
+            stack: ['income', 'income', 'income', NONE, 'acquisition', 'acquisition'],
+            barGap: Array.from({length: SERIES_COUNT.income}, () => '10%'),
+            barCategoryGap: Array.from({length: SERIES_COUNT.income}, () => '10%'),
+        });
+    });
+
+    it.each([
+        {title: 'Income', submode: 'income' as Submode, offered: ['2w', '1m', '3m', '6m'], pressed: '2w'},
+        {title: 'Candles', submode: 'candles' as Submode, offered: ['1w', '2w', '1m', '3m', '6m'], pressed: '1w'},
+    ])('B8 $title, 730 days, measured 527 px plot: offers only the rungs it can draw, and presses one of them', async ({submode, offered, pressed}) => {
+        // WHY: defects 5 and 8, Income bars need slot × 0.9 / 3.2 ≥ 2 px (1W gives 1.41), candle bodies 2.5 px (3D gives 2.16), both 3 bodies (1Y has 2), and the drawn rung must be offered and pressed.
+        fakeGeometry.measured = true;
+        await enterLadderView(FIXTURE_730, submode);
+        const ids = (rungs: string[]) => rungs.map((rung) => `growth-candle-width-${rung}`).sort();
+        await waitFor(
+            () => {
+                const shown = screen
+                    .queryAllByTestId(/^growth-candle-width-/)
+                    .map((button) => button.getAttribute('data-testid') ?? '')
+                    .sort();
+                expect({offered: shown, pressed: pressedAmong(shown)}).toEqual({offered: ids(offered), pressed: ids([pressed])});
+            },
+            {timeout: 5_000},
+        );
+    });
+
+    // --- B9-B11: the user's window is kept ------------------------------------------------------
+
+    it.each(SUBMODES)('B9 $title, 730 days, measured, 1M: a zoom re-plans the labels once, as an {xAxis}-only update, and the same zoom again does not', async ({submode}) => {
+        // WHY: defects 2 and 6, the labels must follow the visible window [19..24]; the update must not carry dataZoom (it would fight the gesture), and an unchanged plan must not redraw.
+        fakeGeometry.measured = true;
+        await openRung(FIXTURE_730, submode, '1m', 25);
+        expect(chartInstances).toHaveLength(1);
+        const chart = chartInstances[0];
+        vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout']});
+        try {
+            const before = chart.setOptionCalls.length;
+            await zoomOnFakeClock(MONTH_WINDOW_START, 100);
+            expect(vi.getTimerCount(), 'no timer pending 1000 ms after the zoom').toBe(0);
+            const added = chart.setOptionCalls.slice(before);
+            expect(added, 'exactly one new setOption call after the zoom').toHaveLength(1);
+            const format = fn<LabelFormatter>(xAxisOf(added[0].option)?.axisLabel?.formatter);
+            expect({
+                keys: Object.keys(added[0].option),
+                labels: MONTH_WINDOW_CLOSINGS.map((date, offset) => (format ? attempt(() => format(date, 19 + offset)) : NOT_A_FUNCTION)),
+            }).toEqual({keys: ['xAxis'], labels: ['May 3', 'Jun 2', 'Jul 2', 'Aug 1', 'Aug 31', 'Sep 30']});
+
+            const afterFirst = chart.setOptionCalls.length;
+            await zoomOnFakeClock(MONTH_WINDOW_START, 100);
+            expect(vi.getTimerCount(), 'no timer pending 1000 ms after the repeated zoom').toBe(0);
+            expect(chart.setOptionCalls.slice(afterFirst), 'no new setOption call for the same window').toHaveLength(0);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it.each(SUBMODES)('B10 $title, 730 days, measured: from 1M on [19..24], pressing 2W puts the window on the bucket that holds its first day', async ({submode}) => {
+        // WHY: defect 6, a rung change must keep what the user was looking at: the window started on 2026-04-04, which 2W holds in bucket 40 (2026-04-02..04-15).
+        await openMonthWindow1924(submode);
+        const since = setOptionCount();
+        await pressRung('2w');
+        expect(zoomBucket(await firstZoomAfter(since), 52)).toEqual({startBucket: 40, end: 100});
+    });
+
+    /** Runs `trigger` on the [19..24] window and checks that the redraw keeps it, in the call and in the chart. WHY: the one check the three B11 triggers share. */
+    async function expectWindowKeptAcross(trigger: () => unknown) {
+        expect(chartInstances).toHaveLength(1);
+        const chart = chartInstances[0];
+        expect(zoomBucket(firstZoomOf(chart.getOption().dataZoom), 24), 'precondition: the window is [19..24]').toEqual({startBucket: 19, end: 100});
+        const since = chart.setOptionCalls.length;
+        await trigger();
+        const call = zoomBucket(await firstZoomAfter(since), 24);
+        expect({call, chart: zoomBucket(firstZoomOf(chart.getOption().dataZoom), 24)}).toEqual({call: {startBucket: 19, end: 100}, chart: {startBucket: 19, end: 100}});
+    }
+
+    it('B11 Income, 730 days, 1M on [19..24]: the privacy toggle keeps the window', async () => {
+        // WHY: defect 6, the privacy toggle redraws the whole option, and that redraw threw the user's window away.
+        await openMonthWindow1924('income');
+        await expectWindowKeptAcross(() => setPrivacyEnabled(true));
+    });
+
+    it('B11 Income, 730 days, 1M on [19..24]: a re-fetch of the same period keeps the window', async () => {
+        // WHY: defect 6, a sync hands a NEW history array with the same dates: the period (first|last date) is unchanged, so the window must be too.
+        const view = await openMonthWindow1924('income');
+        await expectWindowKeptAcross(() => view.rerender({history: FIXTURE_730.history.map((point) => ({...point}))}));
+    });
+
+    it('B11 Income, 730 days, 1M on [19..24]: a locale change keeps the window', async () => {
+        // WHY: defect 6, switching the UI language redraws the labels, and must not move the window.
+        await openMonthWindow1924('income');
+        try {
+            await expectWindowKeptAcross(async () => {
+                locale.set('it');
+                await waitLocale('it');
+            });
+        } finally {
+            locale.set('en');
+            await waitLocale('en');
+        }
+    });
+
+    it('B11 control, Income, 730 days, 1M on [19..24]: a history of another period resets the window to the whole range (green today and after the fix)', async () => {
+        // WHY: gives the three B11 cases their teeth: a new period must NOT keep the old window, so "kept" cannot come from a component that never resets.
+        const view = await openMonthWindow1924('income');
+        const since = setOptionCount();
+        await view.rerender({history: FIXTURE_730.history.slice(30)});
+        const zoom = await firstZoomAfter(since);
+        expect({start: zoom?.start, end: zoom?.end}).toEqual({start: 0, end: 100});
     });
 });
