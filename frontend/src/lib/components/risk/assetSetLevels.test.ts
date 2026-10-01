@@ -26,10 +26,13 @@
  *    That is why no fixture here fakes an unavailable result holding a payload:
  *    the shape does not exist, so a test built on it would prove nothing.
  *
- * `metadata` and `data_quality` are omitted from the successful fixtures even
- * though the same model requires them. Nothing in `assetSetLevels.ts` reads
- * either, so writing two more payloads would add fixture surface to maintain
- * and not one assertion. A stated shortcut, not an oversight.
+ * `metadata` and `data_quality` are omitted from the row builders' fixtures even
+ * though the same model requires them. The row builders read neither, so
+ * writing two more payloads there would add fixture surface to maintain and not
+ * one assertion. A stated shortcut, not an oversight. The one reader of
+ * `metadata` is `assetSetCalculationWindow`, and its fixtures carry a complete
+ * one (`windowMetadata`), proved to parse with `schemas.RiskResultMetadata` —
+ * the schema `riskMetadata()` refuses anything less than.
  *
  * Where arithmetic links two invented figures, it is made exact so the reader
  * can verify the fixture instead of trusting it: a 40% fall that has given back
@@ -39,10 +42,11 @@
  */
 import {describe, expect, it} from 'vitest';
 
+import {schemas} from '$lib/api';
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 
 import {ASSET_SET_DAILY_VAR_INSTANCE, ASSET_SET_MONTHLY_VAR_INSTANCE} from './riskAnalysisHelpers';
-import {buildAssetSetBenchmarkPoint, buildAssetSetHurtRows, buildAssetSetPaidRows, buildAssetSetScatterPoints, type AssetSetPaidRow} from './assetSetLevels';
+import {assetSetCalculationWindow, buildAssetSetBenchmarkPoint, buildAssetSetHurtRows, buildAssetSetPaidRows, buildAssetSetScatterPoints, calendarLength, type AssetSetPaidRow, type CalendarLength} from './assetSetLevels';
 
 type Payload = Record<string, unknown>;
 
@@ -621,5 +625,299 @@ describe('the widened optional numerics', () => {
         // What must never happen is the list itself surviving into a cell, where
         // the next stop is a percent formatter and the output is `NaN%`.
         expect(rows.every((row) => row.sharpe === null || typeof row.sharpe === 'number')).toBe(true);
+    });
+});
+
+/**
+ * A result's `metadata`, complete — it parses with `schemas.RiskResultMetadata`, which is what
+ * `riskMetadata()` reads it through — and filled the way the engine fills it for an asset set
+ * (`RiskService` loads prices from the day before the requested start, `series_preparation.py`
+ * prepares them):
+ *
+ *  - the BASELINE PRICE — the one the first return is measured from — is the last complete date
+ *    before the requested start whenever every asset has history before it. Prices are carried over
+ *    every calendar day, so that is the day before the toolbar's first day, quoted or not. Only when
+ *    some asset has no earlier history is it the first complete date inside the range;
+ *  - `analyzed_range` runs from the first RETURN date to the last one, and a return exists only on a
+ *    day some asset is freshly quoted: a weekend or a holiday is a carry, not a return;
+ *  - `calendar_days` runs from the baseline price date to the last return date;
+ *  - `annualization_factor` is `observed_annualization`'s, `n · 365 / calendar_days`, and nothing
+ *    when nothing was observed.
+ *
+ * So the period the figures cover opens on `end − calendar_days + 1`, the day after the baseline
+ * price — the first day whose price movement they capture, and the toolbar's first day itself
+ * whenever there is history before it — and holds `calendar_days` days, both ends counted. Not on
+ * `end − calendar_days`, the baseline price day, which lies outside the period asked for; nor on
+ * `analyzed_range.start`, which drops the weekend or the holiday a first return spans. Every count of
+ * returns below is invented, of the order a joint calendar of exchange-traded assets gives: about 252
+ * a year.
+ */
+function windowMetadata(firstReturn: string, lastReturn: string | null, calendarDays: number, observations: number): Payload {
+    return {
+        analyzed_range: {start: firstReturn, end: lastReturn},
+        frequency: 'daily',
+        n_observations: observations,
+        calendar_days: calendarDays,
+        annualization_factor: observations > 0 && calendarDays > 0 ? (observations * 365) / calendarDays : null,
+        coverage: 1,
+        currency: 'EUR',
+        scope: 'asset_set',
+        return_basis: 'price_only',
+        algorithm_version: 'invented-asset-set',
+        computed_at: '2026-10-01T09:00:00+00:00',
+    };
+}
+
+/** The same result, carrying the metadata the API sends beside its output. */
+function withMetadata(result: RiskAnalyticResult, metadata: Payload | null): RiskAnalyticResult {
+    return {...result, metadata} as unknown as RiskAnalyticResult;
+}
+
+/**
+ * The period L3°'s note states: the window the figures were actually calculated on, against the one
+ * the toolbar asked for. Read from the first result, in the order handed, whose metadata measured
+ * something — the section hands `[riskReturn, kpi, comparison]`.
+ */
+describe('assetSetCalculationWindow', () => {
+    /** The toolbar's period in most cases below: a year, Wednesday to Wednesday. */
+    const SELECTED_START = '2025-10-01';
+    const SELECTED_END = '2026-09-30';
+
+    /**
+     * The year as an asset set with history before it reports it: the baseline price on 30 September,
+     * the day before the selection opens, the first return on its first day, the last return on its
+     * last day — 365 days from the baseline to the last return, which are the selection's own 365.
+     */
+    const FULL_YEAR = windowMetadata('2025-10-01', '2026-09-30', 365, 252);
+
+    /**
+     * The same history, under a selection opening on Saturday 4 October: the baseline is Friday's
+     * price, the first return Monday's — which holds the weekend's movement as well — and 362 days
+     * run from that Friday to the last return.
+     */
+    const SATURDAY_START = windowMetadata('2025-10-06', '2026-09-30', 362, 249);
+
+    /**
+     * Where the window opens and closes against the selection, and whether that makes it narrower.
+     * With history before the selection the window opens on its first day whatever the calendar, so
+     * a late start is an asset first priced inside the selection — its first price is the baseline,
+     * and the window opens the day after it — and an early end is a last return before the
+     * selection's last day. The tolerance is a week on either side, so seven days is the last that is
+     * not narrowed, and eight the first that is.
+     */
+    const NARROWING = [
+        {case: 'an asset first priced three and a half months into the selection, with no history before it', dateStart: SELECTED_START, dateEnd: SELECTED_END, metadata: windowMetadata('2026-01-16', '2026-09-30', 258, 178), start: '2026-01-16', end: '2026-09-30', days: 258, narrowed: true},
+        {case: 'a selection closing on a Sunday, last quoted on the Friday', dateStart: SELECTED_START, dateEnd: '2026-09-27', metadata: windowMetadata('2025-10-01', '2026-09-25', 360, 249), start: '2025-10-01', end: '2026-09-25', days: 360, narrowed: false},
+        {case: 'a last return a fortnight before the selection closes', dateStart: SELECTED_START, dateEnd: SELECTED_END, metadata: windowMetadata('2025-10-01', '2026-09-15', 350, 241), start: '2025-10-01', end: '2026-09-15', days: 350, narrowed: true},
+        {case: 'a start exactly seven days late', dateStart: SELECTED_START, dateEnd: SELECTED_END, metadata: windowMetadata('2025-10-08', '2026-09-30', 358, 247), start: '2025-10-08', end: '2026-09-30', days: 358, narrowed: false},
+        {case: 'a start eight days late', dateStart: SELECTED_START, dateEnd: SELECTED_END, metadata: windowMetadata('2025-10-09', '2026-09-30', 357, 246), start: '2025-10-09', end: '2026-09-30', days: 357, narrowed: true},
+        {case: 'an end exactly seven days early', dateStart: SELECTED_START, dateEnd: SELECTED_END, metadata: windowMetadata('2025-10-01', '2026-09-23', 358, 247), start: '2025-10-01', end: '2026-09-23', days: 358, narrowed: false},
+        {case: 'an end eight days early', dateStart: SELECTED_START, dateEnd: SELECTED_END, metadata: windowMetadata('2025-10-01', '2026-09-22', 357, 246), start: '2025-10-01', end: '2026-09-22', days: 357, narrowed: true},
+    ];
+
+    /**
+     * `end − calendar_days + 1`, counted in whole UTC days. Each row is a place where counting any
+     * other way comes out a day off: a month end crossed together with a weekend, a leap day, a year
+     * that contains one, and the night the clocks go back in most of Europe — where a local midnight
+     * is still the previous day in UTC. The selection is the window itself, with history before it,
+     * so none is narrowed.
+     */
+    const COUNTING_BACK = [
+        {case: 'across a month end and a weekend, to the Saturday the selection opens on — never the Friday of the baseline price, nor the Monday of the first return', metadata: windowMetadata('2026-03-02', '2026-03-02', 3, 1), start: '2026-02-28', end: '2026-03-02', days: 3},
+        {case: 'onto a leap day', metadata: windowMetadata('2028-02-29', '2028-03-01', 2, 2), start: '2028-02-29', end: '2028-03-01', days: 2},
+        {case: 'over a leap day: 365 days ending on 29 September 2028 open on 1 October of the year before, not on the 30th a plain year back would give', metadata: windowMetadata('2027-10-01', '2028-09-29', 365, 252), start: '2027-10-01', end: '2028-09-29', days: 365},
+        {case: 'across the night the clocks go back, to the Saturday before it', metadata: windowMetadata('2025-10-27', '2025-10-27', 3, 1), start: '2025-10-25', end: '2025-10-27', days: 3},
+    ];
+
+    /** A single day, as `DateRangeModel` allows it: an `end` of null is "the start day only". One return, measured from the price the day before. */
+    const SINGLE_DAY = windowMetadata('2026-09-30', null, 1, 1);
+
+    /**
+     * What a result that measured nothing carries: `RiskService._metadata` zeroes `calendar_days`
+     * whenever `n_observations` is 0, and an unavailable result may still carry its metadata. Its
+     * range is the one asked for, which is no window at all.
+     */
+    const MEASURED_NOTHING = windowMetadata(SELECTED_START, SELECTED_END, 0, 0);
+
+    /** The window one metadata describes, read off the risk/return result alone. */
+    function windowOf(metadata: Payload, dateStart = SELECTED_START, dateEnd = SELECTED_END) {
+        return assetSetCalculationWindow([withMetadata(returnResult([returnItem(7, 0.16, 0.071)]), metadata), null, null], dateStart, dateEnd);
+    }
+
+    it('every metadata fixture here is complete: it parses as the API would send it', () => {
+        const fixtures = [FULL_YEAR, SATURDAY_START, ...NARROWING.map((row) => row.metadata), ...COUNTING_BACK.map((row) => row.metadata), SINGLE_DAY, MEASURED_NOTHING];
+        for (const metadata of fixtures) {
+            const parsed = schemas.RiskResultMetadata.safeParse(metadata);
+            expect(parsed.success, `${JSON.stringify(metadata.analyzed_range)}: ${parsed.success ? '' : parsed.error.message}`).toBe(true);
+        }
+    });
+
+    it('opens the window on the day after the baseline price — with history before the selection, its first day — and holds calendar_days days, both ends counted', () => {
+        const window = windowOf(FULL_YEAR);
+        expect(window?.start, 'opened on end − calendar_days: the baseline price day, outside the period asked for — the figures start from its price, not from its movement').not.toBe('2025-09-30');
+        expect(window).toEqual({start: '2025-10-01', end: '2026-09-30', days: 365, narrowed: false});
+    });
+
+    it("opens on the selection's first day even when nothing is quoted on it, and not on the first return", () => {
+        const window = windowOf(SATURDAY_START, '2025-10-04');
+        expect(window?.start, "opened on analyzed_range.start, the first return: the weekend that Monday's return spans would fall out of the period stated").not.toBe('2025-10-06');
+        expect(window).toEqual({start: '2025-10-04', end: '2026-09-30', days: 362, narrowed: false});
+    });
+
+    it.each(NARROWING)('$case: opens on $start, narrowed $narrowed', ({dateStart, dateEnd, metadata, start, end, days, narrowed}) => {
+        expect(windowOf(metadata, dateStart, dateEnd)).toEqual({start, end, days, narrowed});
+    });
+
+    it.each(COUNTING_BACK)('counts back $case', ({metadata, start, end, days}) => {
+        expect(windowOf(metadata, start, end)).toEqual({start, end, days, narrowed: false});
+    });
+
+    it('reads a range given as a single day — its end null — as ending on its start: a period of that one day', () => {
+        expect(windowOf(SINGLE_DAY, '2026-09-30', '2026-09-30')).toEqual({start: '2026-09-30', end: '2026-09-30', days: 1, narrowed: false});
+    });
+
+    it('reads the first result that measured anything, in the order it is handed', () => {
+        // In one answer the three normally agree: the KPI and the risk/return are measured on one
+        // joint calendar, and the comparison's can only be narrower, since the reference's prices
+        // join it. They differ here only so the one read can be told apart: the KPI's as if its
+        // first common price were Monday 6 October, the comparison's as if it were 15 January, with
+        // no history before either.
+        const own = withMetadata(returnResult([returnItem(7, 0.16, 0.071)]), FULL_YEAR);
+        const kpi = withMetadata(kpiResult([kpiItem(7)]), windowMetadata('2025-10-07', '2026-09-30', 359, 248));
+        const comparison = withMetadata(comparisonResult([comparisonItem(7)]), windowMetadata('2026-01-16', '2026-09-30', 258, 178));
+        const ownWindow = {start: '2025-10-01', end: '2026-09-30', days: 365, narrowed: false};
+        const kpiWindow = {start: '2025-10-07', end: '2026-09-30', days: 359, narrowed: false};
+        const comparisonWindow = {start: '2026-01-16', end: '2026-09-30', days: 258, narrowed: true};
+
+        expect(assetSetCalculationWindow([own, kpi, comparison], SELECTED_START, SELECTED_END), 'the risk/return result comes first: its window is the one read').toEqual(ownWindow);
+        expect(assetSetCalculationWindow([null, kpi, comparison], SELECTED_START, SELECTED_END), 'no risk/return result: the KPI is next').toEqual(kpiWindow);
+        expect(assetSetCalculationWindow([returnResult([returnItem(7, 0.16, 0.071)]), kpi, comparison], SELECTED_START, SELECTED_END), 'a risk/return result without metadata is passed over, never read as an empty window').toEqual(kpiWindow);
+        expect(assetSetCalculationWindow([null, null, comparison], SELECTED_START, SELECTED_END), 'the comparison is the last resort').toEqual(comparisonWindow);
+        // The order is the caller's, not a ranking of analytic codes: the same three, handed the other way round.
+        expect(assetSetCalculationWindow([comparison, kpi, own], SELECTED_START, SELECTED_END)).toEqual(comparisonWindow);
+    });
+
+    it('passes over a result that measured nothing — zero returns over zero days — and reads the next', () => {
+        const nothing = withMetadata(unavailable('asset_set_risk_return'), MEASURED_NOTHING);
+        const kpi = withMetadata(kpiResult([kpiItem(7)]), FULL_YEAR);
+
+        expect(assetSetCalculationWindow([nothing, kpi, null], SELECTED_START, SELECTED_END)).toEqual({start: '2025-10-01', end: '2026-09-30', days: 365, narrowed: false});
+    });
+
+    it('passes over a metadata that breaks its own contract instead of half-reading it', () => {
+        const kpi = withMetadata(kpiResult([kpiItem(7)]), windowMetadata('2025-10-07', '2026-09-30', 359, 248));
+        // Returns observed over no days at all: `observed_annualization` raises before it emits this.
+        const noDays = withMetadata(returnResult([returnItem(7, 0.16, 0.071)]), windowMetadata('2025-10-01', '2026-09-30', 0, 252));
+        // No range at all: the model requires one.
+        const rangeless: Payload = {...FULL_YEAR};
+        delete rangeless.analyzed_range;
+        const noRange = withMetadata(returnResult([returnItem(7, 0.16, 0.071)]), rangeless);
+
+        for (const [why, broken] of [
+            ['no days', noDays],
+            ['no range', noRange],
+        ] as const) {
+            expect(assetSetCalculationWindow([broken, kpi, null], SELECTED_START, SELECTED_END), `${why}: the KPI's window must be read instead`).toEqual({start: '2025-10-07', end: '2026-09-30', days: 359, narrowed: false});
+        }
+    });
+
+    it('is null when no result qualifies: none handed, none answered, none carrying metadata, none that measured anything', () => {
+        expect(assetSetCalculationWindow([], SELECTED_START, SELECTED_END)).toBeNull();
+        expect(assetSetCalculationWindow([null, null, null], SELECTED_START, SELECTED_END)).toBeNull();
+        // The row builders' fixtures above: answers with figures and no metadata.
+        expect(assetSetCalculationWindow([returnResult([returnItem(7, 0.16, 0.071)]), kpiResult([kpiItem(7)]), comparisonResult([comparisonItem(7)])], SELECTED_START, SELECTED_END)).toBeNull();
+        expect(assetSetCalculationWindow([withMetadata(returnResult([returnItem(7, 0.16, 0.071)]), null), null, null], SELECTED_START, SELECTED_END)).toBeNull();
+        expect(assetSetCalculationWindow([withMetadata(unavailable('asset_set_risk_return'), MEASURED_NOTHING), null, null], SELECTED_START, SELECTED_END)).toBeNull();
+    });
+});
+
+/**
+ * The length L3°'s note writes after the period's dates (the developer, 2026-10-01): no longer a count of
+ * days but the same span in calendar units — «3 mesi e 1 giorno», «1 anno», «8 mesi e 15 giorni» — which
+ * the section words from three plural keys, leaving out the parts that are zero.
+ *
+ * The span is the window's, both ends counted, so it runs to the day after `end`. Into it go as many
+ * whole calendar months as fit, each count of them added to `start` itself — never chained from the
+ * month before — with a day the target month lacks clamped to its last: 31 January plus one month is 28
+ * February, or 29. Twelve months make a year; what is left over is whole days. Nothing at all when `end`
+ * precedes `start`. All on UTC days, as `assetSetCalculationWindow` counts: the note's `data-days` is this
+ * very span, counted in days.
+ *
+ * Every row was worked out by hand from that definition, not read off an implementation: each one can be
+ * redone with a calendar.
+ */
+describe('calendarLength', () => {
+    const LENGTHS: {case: string; start: string; end: string; length: CalendarLength}[] = [
+        {case: "the developer's own: 93 days from 1 July are three whole months — July, August, September — and 1 October", start: '2026-07-01', end: '2026-10-01', length: {years: 0, months: 3, days: 1}},
+        {case: 'three months to the day: up to 30 September, nothing is left over', start: '2026-07-01', end: '2026-09-30', length: {years: 0, months: 3, days: 0}},
+        {case: "the toolbar's year, Wednesday to Wednesday: twelve months make one year", start: '2025-10-01', end: '2026-09-30', length: {years: 1, months: 0, days: 0}},
+        {case: 'one day more: a year and a day', start: '2025-10-01', end: '2026-10-01', length: {years: 1, months: 0, days: 1}},
+        {case: 'a year that holds a leap day is still one year: 366 days, not a year and a day', start: '2027-10-01', end: '2028-09-30', length: {years: 1, months: 0, days: 0}},
+        {case: 'less than a month: only days, both ends counted', start: '2026-09-01', end: '2026-09-15', length: {years: 0, months: 0, days: 15}},
+        {case: 'a single day: start and end the same', start: '2026-09-30', end: '2026-09-30', length: {years: 0, months: 0, days: 1}},
+        {case: 'from 16 January: eight months to 16 September, and fifteen days to the end of the month', start: '2026-01-16', end: '2026-09-30', length: {years: 0, months: 8, days: 15}},
+        {case: 'over two years: twenty-five months are two years and a month, and fifteen days', start: '2024-10-01', end: '2026-11-15', length: {years: 2, months: 1, days: 15}},
+        {case: 'clamped: 31 January plus a month is 28 February, so to 28 February is a month and a day — not 29 days, as with a month rolling over into March', start: '2026-01-31', end: '2026-02-28', length: {years: 0, months: 1, days: 1}},
+        {case: 'from the start, never chained: 31 January plus two months is 31 March, not 28 March by way of a clamped February', start: '2026-01-31', end: '2026-03-30', length: {years: 0, months: 2, days: 0}},
+        {case: 'from a leap day: a year on is clamped to 28 February 2029, and 1 March is one day more', start: '2028-02-29', end: '2029-02-28', length: {years: 1, months: 0, days: 1}},
+    ];
+
+    /**
+     * The nights the clocks change in most of Europe — back on Sunday 26 October 2025, forward on Sunday
+     * 29 March 2026 — when a local day lasts 25 hours, or 23. Between local midnights, days across one of
+     * them are an hour longer or shorter than a whole number, which a count rounded the wrong way turns
+     * into a day too many or too few; and a month added in local time to a UTC midnight lands an hour past
+     * the end it must fit before, so it is not counted at all. On UTC days neither can happen.
+     */
+    const CLOCK_CHANGES: {case: string; start: string; end: string; length: CalendarLength}[] = [
+        {case: "the developer's own: October 2025, across the night the clocks go back, is one month", start: '2025-10-01', end: '2025-10-31', length: {years: 0, months: 1, days: 0}},
+        {case: 'the twelve days left over after a month span the night the clocks go back', start: '2025-09-20', end: '2025-10-31', length: {years: 0, months: 1, days: 12}},
+        {case: 'the twelve days left over after a month span the night the clocks go forward', start: '2026-02-20', end: '2026-03-31', length: {years: 0, months: 1, days: 12}},
+    ];
+
+    /** How long a local day lasts, in hours: 24, except on the nights the clocks change. */
+    function localDayHours(year: number, monthIndex: number, day: number): number {
+        return (new Date(year, monthIndex, day + 1).getTime() - new Date(year, monthIndex, day).getTime()) / 3_600_000;
+    }
+
+    /**
+     * `read`, run with the process in Europe/Rome — whose clocks change, and where the lab is read —
+     * whatever zone the suite started in, the zone put back after. Node re-reads the zone when
+     * `process.env.TZ` is assigned, which `chartCoreHelpers.test.ts` relies on too; the two premises prove
+     * it took, so a suite started in UTC cannot pass these rows for want of a night that is not 24 hours.
+     */
+    function inEuropeRome<T>(read: () => T): T {
+        const previousTimeZone = process.env.TZ;
+        process.env.TZ = 'Europe/Rome';
+        try {
+            expect(localDayHours(2025, 9, 26), 'premise: in Europe/Rome, Sunday 26 October 2025 lasts 25 hours').toBe(25);
+            expect(localDayHours(2026, 2, 29), 'premise: in Europe/Rome, Sunday 29 March 2026 lasts 23 hours').toBe(23);
+            return read();
+        } finally {
+            if (previousTimeZone === undefined) delete process.env.TZ;
+            else process.env.TZ = previousTimeZone;
+        }
+    }
+
+    it.each(LENGTHS)('$case ($start … $end)', ({start, end, length}) => {
+        expect(calendarLength(start, end)).toEqual(length);
+    });
+
+    it("counts calendar months, not 30-day ones: the developer's 93 days are three months and a day, not three months and three days", () => {
+        const length = calendarLength('2026-07-01', '2026-10-01');
+        expect(length, '93 = 3 × 30 + 3: counted in 30-day months').not.toEqual({years: 0, months: 3, days: 3});
+        expect(length).toEqual({years: 0, months: 3, days: 1});
+    });
+
+    it.each(CLOCK_CHANGES)('$case ($start … $end): counted on UTC days, in a zone whose clocks change', ({start, end, length}) => {
+        expect(inEuropeRome(() => calendarLength(start, end))).toEqual(length);
+    });
+
+    it.each([
+        {before: 'by a day', start: '2026-09-30', end: '2026-09-29'},
+        {before: 'by three months', start: '2026-10-01', end: '2026-07-01'},
+        {before: 'by two years', start: '2027-10-01', end: '2025-10-01'},
+    ])('is nothing when the end precedes the start $before — never a negative part', ({start, end}) => {
+        expect(calendarLength(start, end)).toEqual({years: 0, months: 0, days: 0});
     });
 });

@@ -24,7 +24,7 @@
  */
 import {schemas} from '$lib/api';
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
-import {riskOutput, singleValue} from '$lib/risk/riskTypes';
+import {riskMetadata, riskOutput, singleValue} from '$lib/risk/riskTypes';
 
 /** One row of the L1° comparison: what this asset did to whoever held it. */
 export interface AssetSetHurtRow {
@@ -231,4 +231,98 @@ export function buildAssetSetBenchmarkPoint(comparison: RiskAnalyticResult | nul
     const assetId = output.comparison_asset_id;
     const name = names.get(assetId) ?? resolveName?.(assetId) ?? label(assetId, names);
     return {assetId, name, volatility, expectedReturn};
+}
+
+/** The period L3°'s figures were calculated on, as its note states it. All days are ISO `YYYY-MM-DD`. */
+export interface AssetSetCalculationWindow {
+    /** The first day whose price movement the figures capture: the day after the baseline price. */
+    start: string;
+    /** The last return day. */
+    end: string;
+    /** Calendar days from `start` to `end`, both counted: the engine's `calendar_days`. */
+    days: number;
+    /** The window falls more than a week short of the toolbar's period at either end. */
+    narrowed: boolean;
+}
+
+/**
+ * A weekend or a holiday before the first quote does not make a period shorter: only a gap
+ * longer than the project's staleness threshold (7 calendar days) does.
+ */
+const NARROWED_AFTER_DAYS = 7;
+const DAY_MS = 86_400_000;
+
+/** A plain day as UTC midnight: a local midnight moves by one on the night the clocks change. */
+function utcDay(isoDay: string): number {
+    return Date.parse(`${isoDay}T00:00:00Z`);
+}
+
+/**
+ * The window the figures were actually calculated on, read from the first result — in the
+ * order handed, the section hands `[riskReturn, kpi, comparison]` — whose metadata measured
+ * something.
+ *
+ * The engine reports an asset set's `analyzed_range` from its first to its last RETURN, and
+ * `calendar_days` from the BASELINE PRICE to that last return. The baseline is the last day
+ * BEFORE the toolbar's period whenever every asset has a price there (`risk/service.py` loads
+ * from the day before; `series_preparation.py` takes the latest such day), and the first price
+ * inside it otherwise. So the period opens the day after the baseline — `end − calendar_days + 1`,
+ * the first day whose movement the figures capture — which is the toolbar's own first day in the
+ * common case, quoted or not. Not `analyzed_range.start`: that is the first QUOTED day, a Monday
+ * for a period opening on a weekend. Metadata that does not parse, or that measured nothing, is
+ * passed over.
+ */
+export function assetSetCalculationWindow(results: readonly (RiskAnalyticResult | null)[], dateStart: string, dateEnd: string): AssetSetCalculationWindow | null {
+    for (const result of results) {
+        const metadata = riskMetadata(result);
+        if (metadata === null || metadata.n_observations <= 0 || metadata.calendar_days <= 0) continue;
+        // The generated range widens each day to a list (`singleValue`, as for every widened field).
+        const end = singleValue(metadata.analyzed_range.end) ?? singleValue(metadata.analyzed_range.start);
+        if (end === null) continue;
+        const endMs = utcDay(end);
+        if (Number.isNaN(endMs)) continue;
+        const start = new Date(endMs - (metadata.calendar_days - 1) * DAY_MS).toISOString().slice(0, 10);
+        const lateStart = (utcDay(start) - utcDay(dateStart)) / DAY_MS;
+        const earlyEnd = (utcDay(dateEnd) - endMs) / DAY_MS;
+        return {start, end, days: metadata.calendar_days, narrowed: lateStart > NARROWED_AFTER_DAYS || earlyEnd > NARROWED_AFTER_DAYS};
+    }
+    return null;
+}
+
+/** An inclusive span of days in whole calendar years, months and days. */
+export interface CalendarLength {
+    years: number;
+    months: number;
+    days: number;
+}
+
+/**
+ * `months` calendar months after `isoDay`, as UTC ms, keeping the day of the month but clamped
+ * to the target month's last day (31 Jan + 1 month = 28/29 Feb). Always counted from the same
+ * day, never chained: chaining would carry a clamp into every later month.
+ */
+function addMonthsClamped(isoDay: string, months: number): number {
+    const [year, month, day] = isoDay.split('-').map(Number);
+    const total = month - 1 + months;
+    const targetYear = year + Math.floor(total / 12);
+    const targetMonth = ((total % 12) + 12) % 12;
+    const lastDay = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
+    return Date.UTC(targetYear, targetMonth, Math.min(day, lastDay));
+}
+
+/**
+ * The length of the period L3°'s note states, in calendar units rather than as a count of days
+ * (the developer's review, round 4): 1 Jul – 1 Oct, both ends counted, is 3 months and 1 day,
+ * because July and August have 31 days — not the "3 months and 3 days" of 30-day months — and
+ * 1 Oct – 30 Sep is one year. Whole months first, then the days left; nothing when `end`
+ * precedes `start`.
+ */
+export function calendarLength(start: string, end: string): CalendarLength {
+    const startMs = utcDay(start);
+    const endExclusive = utcDay(end) + DAY_MS;
+    if (Number.isNaN(startMs) || Number.isNaN(endExclusive) || endExclusive <= startMs) return {years: 0, months: 0, days: 0};
+    let wholeMonths = 0;
+    while (addMonthsClamped(start, wholeMonths + 1) <= endExclusive) wholeMonths += 1;
+    const days = Math.round((endExclusive - addMonthsClamped(start, wholeMonths)) / DAY_MS);
+    return {years: Math.floor(wholeMonths / 12), months: wholeMonths % 12, days};
 }

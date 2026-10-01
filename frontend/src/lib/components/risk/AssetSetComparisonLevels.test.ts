@@ -48,6 +48,12 @@
  * reach both asset columns. The L3° halves are written red first, against the hand-written table they
  * replace.
  *
+ * **The toolbar's period reaches L3°** (third review, 2026-10-01): the levels hand the section the
+ * `dateStart`/`dateEnd` they were given, which its period note compares the calculated window against.
+ * Observed through the note's `data-narrowed` alone, as this file reads no text; the window itself and
+ * the note's sentences are `AssetSetRiskReturnSection.test.ts`'s. Written red first: the section has no
+ * period note yet.
+ *
  * Left elsewhere: the discard and re-ask rules themselves (`riskPanelController.test.ts`), the
  * tables' own cells (`AssetSetLossComparisonSection.test.ts`, `AssetSetRiskReturnSection.test.ts`,
  * `assetSetLevels.test.ts`), and the page end to end (`e2e/portfolio/risk-lab.spec.ts`).
@@ -214,8 +220,8 @@ afterEach(() => {
     consoleError.mockRestore();
 });
 
-function mount() {
-    const view = render(AssetSetComparisonLevels, {props: PROPS});
+function mount(props: typeof PROPS = PROPS) {
+    const view = render(AssetSetComparisonLevels, {props});
     expect(created.controllers, 'the levels did not create a controller of their own').toHaveLength(1);
     return {view, controller: created.controllers[0] as RiskPanelController};
 }
@@ -659,4 +665,56 @@ describe('AssetSetComparisonLevels — the icons reach both tables', () => {
             }
         });
     }
+});
+
+/**
+ * The same answer under three selections: the window is the answer's, so only the comparison against
+ * the toolbar's period moves — the selection itself, one that opens months before the first common
+ * price, one that closes months after the last. A level that dropped either date would leave the
+ * section comparing against nothing, and could not tell the last two from the first.
+ */
+describe("AssetSetComparisonLevels — the toolbar's period reaches L3°'s period note", () => {
+    /**
+     * Invented, and coherent with `DATE_START`…`DATE_END` for assets with history before it: the
+     * baseline price on Sunday 3 January 2021 — the day before the selection opens, carried from the
+     * last quote before it — the first return on Monday the 4th, the last on Friday 29 December 2023:
+     * 1090 days from the baseline, over the 740 daily returns the VaR fixture counts. So the window is
+     * the selection itself, its 1090 days both ends counted. Attached to every result of the answer, as
+     * the API does.
+     */
+    const WINDOW = {
+        analyzed_range: {start: DATE_START, end: DATE_END},
+        frequency: 'daily',
+        n_observations: 740,
+        calendar_days: 1090,
+        annualization_factor: (740 * 365) / 1090,
+        coverage: 1,
+        currency: 'EUR',
+        scope: 'asset_set',
+        return_basis: 'price_only',
+        algorithm_version: 'invented-asset-set',
+        computed_at: '2026-10-01T09:00:00+00:00',
+    } satisfies z.infer<typeof schemas.RiskResultMetadata>;
+    const WINDOWED: RiskAnalyticResult[] = FIGURES.map((result) => ({...result, metadata: WINDOW}));
+
+    it.each([
+        {selection: 'equal to the window', dateStart: DATE_START, dateEnd: DATE_END, narrowed: false},
+        {selection: 'opening months before it', dateStart: '2020-06-01', dateEnd: DATE_END, narrowed: true},
+        {selection: 'closing months after it', dateStart: DATE_START, dateEnd: '2024-06-28', narrowed: true},
+    ])('a selection $selection: narrowed $narrowed', async ({dateStart, dateEnd, narrowed}) => {
+        queryRisk.mockImplementation(async (request: RiskQueryRequest, force?: boolean) => {
+            script.asked.push({request, force: force === true});
+            return {items: WINDOWED};
+        });
+        const {controller} = mount({...PROPS, dateStart, dateEnd});
+        await settled(controller);
+        await expectL3Figures();
+
+        const note = await waitFor(() => screen.getByTestId('risk-asset-set-l3-period'));
+        // The window is the answer's whatever the selection: only its comparison with the toolbar moves.
+        expect(note).toHaveAttribute('data-start', DATE_START);
+        expect(note).toHaveAttribute('data-end', DATE_END);
+        expect(note).toHaveAttribute('data-days', '1090');
+        expect(note, `against ${dateStart}…${dateEnd}: the levels did not hand L3° the toolbar's period`).toHaveAttribute('data-narrowed', String(narrowed));
+    });
 });
