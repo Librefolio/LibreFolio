@@ -8,6 +8,7 @@
   Uses Svelte 5 runes.
 -->
 <script lang="ts">
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
     import {attachChartReady} from '$lib/utils/chartReady';
@@ -776,10 +777,10 @@
 
             if (marker.value !== undefined) {
                 const isConverted = marker.originalValue !== undefined && marker.originalCurrency !== undefined;
-                const currBadge = marker.currency ? ` <span style="font-size:10px;opacity:0.7">(${marker.currencyFlag ?? ''} ${marker.currency})${isConverted ? ' 💱' : ''}</span>` : '';
+                const currBadge = marker.currency ? ` <span style="font-size:10px;opacity:0.7">(${marker.currencyFlag ?? ''} ${escapeHtml(marker.currency)})${isConverted ? ' 💱' : ''}</span>` : '';
                 html += `<br/>💰 ${marker.value.toFixed(4)}${currBadge}`;
                 if (isConverted) {
-                    const origBadge = ` <span style="font-size:10px;opacity:0.7">(${marker.originalCurrencyFlag ?? ''} ${marker.originalCurrency})</span>`;
+                    const origBadge = ` <span style="font-size:10px;opacity:0.7">(${marker.originalCurrencyFlag ?? ''} ${escapeHtml(marker.originalCurrency ?? '')})</span>`;
                     html += `<br/><span style="font-size:10px;opacity:0.7">orig. ${marker.originalValue!.toFixed(4)}${origBadge}</span>`;
                     if (marker.fxRateDate) {
                         const backfillHint = marker.fxDaysBack && marker.fxDaysBack > 0 ? ` (${marker.fxDaysBack}d back)` : '';
@@ -789,12 +790,12 @@
             }
 
             if (marker.notes) {
-                html += `<br/>📝 ${marker.notes}`;
+                html += `<br/>📝 ${escapeHtml(marker.notes)}`;
             }
 
             if (marker.assetLabel) {
                 const sigDot = marker.signalColor ? `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${marker.signalColor};margin-right:3px;"></span>` : '';
-                html += `<br/>🔗 ${sigDot}${truncateName(marker.assetLabel)}`;
+                html += `<br/>🔗 ${sigDot}${escapeHtml(truncateName(marker.assetLabel))}`;
             }
 
             return html;
@@ -948,7 +949,7 @@
                         const axisIdx = isGhost ? 0 : (signalAxisMap.get(p.seriesName) ?? 0);
                         const valueSuffix = axisIdx === 0 ? suffix : '';
                         const axisLabel = signalAxisLabelMap.get(axisIdx);
-                        const axisNote = axisLabel ? ` <span style="font-size:10px;color:#94a3b8">[${axisLabel}]</span>` : '';
+                        const axisNoteHtml = axisLabel ? ` <span style="font-size:10px;color:#94a3b8">[${escapeHtml(axisLabel)}]</span>` : '';
 
                         // Use signalLabelToHtml for proper icon rendering
                         let labelHtml: string;
@@ -957,14 +958,14 @@
                             // Ghost label: "💱 Name (flag CUR)" — keep currency suffix visible.
                             const ghostDot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:4px;"></span>`;
                             const truncatedGhost = formatTruncatedGhostLabel(ghostLabel);
-                            labelHtml = `${ghostDot}<span title="${ghostLabel}">${truncatedGhost}</span>`;
+                            labelHtml = `${ghostDot}<span title="${escapeHtml(ghostLabel)}">${escapeHtml(truncatedGhost)}</span>`;
                             isGhostRow = true;
                         } else {
                             const sigInfo = overlaySignalInfoMap?.get(p.seriesName);
                             if (sigInfo) {
                                 // Append (flag currency) to overlay signal labels
                                 // Skip for ghost signals — currency is already embedded in their label
-                                const currSuffix = sigInfo.currency && !sigInfo.isGhost ? ` <span style="font-size:10px;opacity:0.7">(${sigInfo.currencyFlag || ''} ${sigInfo.currency})</span>` : '';
+                                const currSuffix = sigInfo.currency && !sigInfo.isGhost ? ` <span style="font-size:10px;opacity:0.7">(${sigInfo.currencyFlag || ''} ${escapeHtml(sigInfo.currency)})</span>` : '';
                                 labelHtml = signalLabelToHtml({...sigInfo, label: truncateName(sigInfo.label)}) + currSuffix;
                                 if (sigInfo.isGhost) isGhostRow = true;
                             } else if (p.seriesName === mainSeriesName) {
@@ -989,10 +990,10 @@
                                     }) + currSuffix;
                             } else {
                                 const colorDot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:4px;"></span>`;
-                                labelHtml = `${colorDot}${truncateName(String(p.seriesName ?? ''))}`;
+                                labelHtml = `${colorDot}${escapeHtml(truncateName(String(p.seriesName ?? '')))}`;
                             }
                         }
-                        let rowHtml = `${labelHtml}: ${Number(value).toFixed(4)}${valueSuffix}${axisNote}`;
+                        let rowHtml = `${labelHtml}: ${Number(value).toFixed(4)}${valueSuffix}${axisNoteHtml}`;
                         if (p.seriesName === mainSeriesName) {
                             const context = mainPointContext?.get(date);
                             if (context) {
