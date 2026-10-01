@@ -310,7 +310,7 @@ Tutti e tre con `crypto.randomUUID()`, come campo del `FormData`.
 
 ## 6. Fase D — documentazione (docs-writer, solo in inglese)
 
-- **Pagina utente** `mkdocs_src/docs/user/transactions/import/danske_bank.en.md`: gli export, il caricarli insieme, la profondità, l'import annuale, il passo «Allinea con la banca», le commissioni, le scissioni e i limiti (§6 del design).
+- **Pagina utente** `mkdocs_src/docs/user/transactions/import/danske-bank.en.md`: gli export, il caricarli insieme, la profondità, l'import annuale, il passo «Allinea con la banca», le commissioni, le scissioni e i limiti (§6 del design). Il nome segue il `docs_url` del plugin (`/mkdocs/user/transactions/import/danske-bank/`), fissato dai test della fase B; nessun test controlla che la pagina esista.
 - **Registrazioni**, solo in aggiunta:
   - nav di `mkdocs.yml`;
   - card e riga nell'indice ×4;
@@ -318,6 +318,7 @@ Tutti e tre con `crypto.randomUUID()`, come campo del `FormData`.
   - README dei campioni.
 - **Documentazione sviluppatore**:
   - in `brim_plugin_guide.md`, la sezione «Plugin multi-report»;
+  - in `brim_plugin_guide.md`, la regola che `provider_code` restituisce una **stringa letterale**, mai una costante o un'espressione, con il motivo: il test R13 (`optionFilter.test.ts`, in `front-utility core-unit`) e il runner (`_PROVIDER_CODE_RE` in `scripts/test_runner/_backend_external.py`) lo leggono dal sorgente, senza importare il modulo;
   - in `import-wizard.md`, i set e il passo nuovo;
   - la tabella dei flussi nella pagina utente delle preferenze, se lo step della guida cambia.
 - **Verifica**: `mkdocs build` (strict) e `mkdocs check-links`.
@@ -537,3 +538,31 @@ Tutti e tre con `crypto.randomUUID()`, come campo del `FormData`.
 > - I codici dei todo Danske non hanno una chiave `importWizard.brimNotice.*`, come quelli degli altri plugin (oggi ne esiste una sola): il wizard mostra il messaggio finlandese del plugin (D7). Le chiavi localizzate, se servono, vanno in C2.
 >
 > ### B — ✅ pronta per il checkpoint (2026-09-30)
+
+**Commit di B**: `fda716b46` feat(brim): add Danske Bank report-set importer (14 file) e `2cb29faf1` docs(journal): record report-set phase B.
+
+### Aggiornamento della base e correzione R13 (2026-09-30 → 2026-10-01)
+
+- **Merge di `dev_release2` (`8f18416df`) in L**: aperto dallo script del coordinatore. I 7 conflitti sono stati risolti con la versione di L: i 6 previsti più `test_brim_providers.py`, perché dal lato di `dev_release2` quei file avevano solo i cherry-pick dei commit di L. L'albero è `4873e78e1`, come atteso.
+  - Validato a merge aperto, nella corsia 6156, un comando alla volta:
+    - `front build --debug` ok; `front check` 3 errori, il pavimento, in file non di L; `component-unit` 2182; `check-orphans` pulito;
+    - E2E: `files` 22, `tx-import-upload` 9, `front-broker detail` 29 passati e 1 fallito (`:713` GrowthChart, di I);
+    - backend: le 8 suite BRIM dei servizi, `services transaction` 68, `brim-providers` 574 passati e 2 saltati, `brim-danske-bank` 324, `api brim` 63.
+  - Commit del merge: `5d48c668f`, genitori `2cb29faf1` e `8f18416df`.
+
+> **⚠️ Fuori pista**: `core-unit` è rosso dal commit di B (`fda716b46`), non dal merge. Fallisce `optionFilter.test.ts › ranking › on the real import-plugin list (R13)`, con «broker_danske_bank.py, provider_code: the return is not a string literal».
+> - Il test legge i sorgenti di tutti i plugin BRIM e vuole che `provider_code` restituisca una stringa letterale; il plugin restituiva la costante `PROVIDER_CODE`.
+> - Per la stessa ragione `_PROVIDER_CODE_RE` del runner (`_backend_external.py`) non trovava Danske: l'aiuto di `--providers`/`--exclude-providers` elencava 30 plugin BRIM invece di 31. Il filtro funzionava lo stesso, perché non ha `choices`.
+> - **Lezione**: una modifica a un plugin BRIM fa girare anche `front-utility core-unit`. Una fase «solo backend» non lo è, se un test del frontend legge i sorgenti.
+
+> **Note implementazione (2026-10-01), correzione R13**:
+> - **Decisione del coordinatore**: chiudere il merge così com'è e correggere in un commit a sé. Lo script è `/tmp/libreFolio_l_fix_literal_code.py`: `return "broker_danske_bank"` e via la costante, che aveva lo stesso valore e non serviva altrove. Il comportamento non cambia.
+> - **Prove**, nella corsia 6156, un comando alla volta:
+>   - `front-utility core-unit`: 102 file e 2684 test passati. Prima la suite di R13 falliva intera e i suoi test non si contavano: 2681 passati e 3 saltati;
+>   - `vitest` sul solo `optionFilter.test.ts`: 34/34, comprese le 3 prove di R13;
+>   - aiuto del runner: 31 plugin BRIM, `broker_danske_bank` compreso;
+>   - `external brim-danske-bank` 324/324; `external brim-providers` 574 passati e 2 saltati;
+>   - ruff e black puliti sul file; `git diff --check` pulito; porta 6156 libera.
+> - **Fase D** (§6 aggiornato):
+>   - la guida sviluppatore dirà che `provider_code` è una stringa letterale, e perché;
+>   - la pagina utente si chiamerà `danske-bank.en.md`, perché il `docs_url` del plugin è `…/danske-bank/` e le pagine prendono il nome dal `docs_url` (`credit_agricole/`, `generic-csv/`). Il piano diceva `danske_bank.en.md`.
