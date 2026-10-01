@@ -2113,3 +2113,38 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
   rumore.
 - Per «come cambia il rischio nel tempo» esistono già gli indicatori Rolling Volatility e Rolling
   Sharpe nel grafico dell'asset.
+
+## 🆔 Gli id degli asset (e delle altre tabelle) si riusano dopo una cancellazione
+
+**Data aggiunta**: 1 Ottobre 2026 · **Status**: ⏳ IN ATTESA · **Priorità**: Media
+
+### Contesto
+- Trovato dal test-author di A (famiglia Risk) il 01/10/2026 e verificato sullo schema 004: `assets.id`
+  è `INTEGER PRIMARY KEY` **senza** `AUTOINCREMENT`. Lo stesso vale per tutte le altre tabelle
+  (`brokers`, `transactions`, `users`, `asset_events`, `fx_rates`…).
+- Senza `AUTOINCREMENT`, SQLite dà alla riga nuova `max(id)+1`: se si cancella l'asset più recente e
+  se ne crea un altro, quello nuovo prende il suo id.
+- Il client conserva degli id di asset:
+  - il benchmark condiviso del rischio (`riskBenchmarkStore`);
+  - la selezione persistita del laboratorio Asset Global (D19);
+  - gli asset di confronto dei grafici;
+  - i link salvati (`/assets/<id>`).
+
+  Dopo un riuso, puntano in silenzio a un asset diverso.
+- Il frontend non può accorgersene. `entityStore.ensureLoaded()` si risolve anche quando il
+  caricamento fallisce (`frontend/src/lib/stores/core/entityStore.ts:105`, «Fail silently»), quindi
+  «sparito» e «non caricato» non si distinguono.
+- Per questo il nuovo `BenchmarkSelect` (Risk) non cancella un id sconosciuto: lo tratta come non
+  scelto e lo lascia salvato.
+
+### Azione Futura
+- Backend: `AUTOINCREMENT` sulle tabelle i cui id escono dal backend e restano salvati, a partire da
+  `assets`.
+  - In SQLite serve ricostruire la tabella: una migrazione Alembic incrementale (ricreazione con
+    `batch_alter_table`), con `upgrade` e `downgrade` provati su un DB popolato.
+  - Dopo la copia, `sqlite_sequence` parte dal massimo id esistente: da lì in poi un id non torna
+    più.
+- In alternativa: riferimenti stabili (un identificativo che non si riusa) per quello che il client
+  salva.
+- Prima: censire gli id che il frontend conserva (localStorage e URL), anche di broker e coppie FX.
+- Dopo la cura: decidere se `BenchmarkSelect` può tornare a cancellare gli id spariti.
