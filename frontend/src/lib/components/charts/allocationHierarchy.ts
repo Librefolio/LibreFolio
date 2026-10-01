@@ -37,7 +37,7 @@
  *
  * ## How many members a group holds
  *
- * It depends on the resolver, and the default step is tuned for small groups:
+ * It depends on the resolver:
  *
  * - by **content** (`primaryAssetType`, the allocation history chart), a group holds
  *   its pure type and the subtypes that contain it — up to **three** today,
@@ -45,9 +45,18 @@
  * - by **vehicle** (`assetTypeFamily`, the allocation pie), the ETF family holds the
  *   generic ETF and every ETF subtype — up to **seven** — and Crowdfund holds two.
  *
- * Shading walks lightness in one direction, so it keeps members apart for groups of
- * up to three or four; a group of seven clamps to black or white (known limit,
- * recorded for the risk UI round).
+ * Groups of up to three walk lightness `step` points at a time away from the nearer
+ * extreme, as they always have. From four members on that walk clamps to black or
+ * white after two to four steps (measured on every slot of the pie's palettes, 01/10/2026),
+ * so a larger group spreads its shades on **both sides** of the base within lightness
+ * [10, 90], as far apart as the band allows (never more than `step`), and halves the
+ * saturation of every other shade (the developer's rule "B"). Lightness alone cannot
+ * separate seven members: about 11.5 points apart at best, while the saturation keeps
+ * every pair of a 4–7-member family at least as far apart (CIEDE2000 ≥ 5.8) as the
+ * closest pair of today's groups of two or three (5.4).
+ *
+ * **Known limit**: from eight members on the shades stay distinct but closer (CIEDE2000
+ * about 3) — the band holds only so many separable steps of one hue.
  *
  * ## Scope
  *
@@ -99,6 +108,13 @@ export interface AllocationHierarchyResult<T> {
 }
 
 const DEFAULT_SHADE_STEP = 20;
+/** Groups up to this size keep the one-sided walk, which is what they have always looked like. */
+const ONE_SIDED_GROUP_SIZE = 3;
+/** The lightness band a larger group spreads over: beyond it a shade reads as black or white. */
+const SPREAD_MIN_LIGHTNESS = 10;
+const SPREAD_MAX_LIGHTNESS = 90;
+/** Saturation of every other shade in a larger group: lightness alone cannot separate seven members. */
+const SPREAD_SATURATION_FACTOR = 0.5;
 
 /** Case-insensitive, because `by_type` mixes enum casing with the synthetic `"Liquidity"` bucket. */
 function sameKey(a: string, b: string): boolean {
@@ -106,19 +122,45 @@ function sameKey(a: string, b: string): boolean {
 }
 
 /**
- * Derive a related colour by moving lightness away from the nearer extreme.
- * Falls back to the base colour when it is not parseable hex — a slice keeping
- * its parent's colour is a far better failure than a black one.
+ * Derive a related colour for a group member.
+ *
+ * Without `groupSize`, or for a group of up to three, lightness moves `step` points
+ * per depth away from the nearer extreme — today's shading. A larger group spreads its
+ * shades on both sides of the base (see "How many members a group holds" above).
+ * Falls back to the base colour when it is not parseable hex — a slice keeping its
+ * parent's colour is a far better failure than a black one.
  */
-export function shadeForDepth(base: string, depth: number, step: number = DEFAULT_SHADE_STEP): string {
+export function shadeForDepth(base: string, depth: number, step: number = DEFAULT_SHADE_STEP, groupSize?: number): string {
     if (depth <= 0) return base;
 
     const hsl = hexToHsl(base);
     if (!hsl) return base;
 
     const direction = hsl.l < 50 ? 1 : -1;
-    const lightness = Math.min(100, Math.max(0, hsl.l + direction * step * depth));
-    return hslToHex(hsl.h, hsl.s, lightness);
+    if (groupSize === undefined || groupSize <= ONE_SIDED_GROUP_SIZE) {
+        const lightness = Math.min(100, Math.max(0, hsl.l + direction * step * depth));
+        return hslToHex(hsl.h, hsl.s, lightness);
+    }
+
+    const far = direction > 0 ? SPREAD_MAX_LIGHTNESS : SPREAD_MIN_LIGHTNESS;
+    const near = direction > 0 ? SPREAD_MIN_LIGHTNESS : SPREAD_MAX_LIGHTNESS;
+    const roomFar = Math.abs(far - hsl.l);
+    const roomNear = Math.abs(hsl.l - near);
+    const shades = groupSize - 1;
+    // k shades on the far side, the rest on the near one, spaced as widely as the band allows.
+    let farCount = 1;
+    let gap = -1;
+    for (let k = 1; k <= shades; k++) {
+        const nearCount = shades - k;
+        const candidate = Math.min(roomFar / k, nearCount > 0 ? roomNear / nearCount : Infinity, step);
+        if (candidate > gap) {
+            gap = candidate;
+            farCount = k;
+        }
+    }
+    const lightness = depth <= farCount ? hsl.l + direction * gap * depth : hsl.l - direction * gap * (depth - farCount);
+    const saturation = depth % 2 === 0 ? hsl.s * SPREAD_SATURATION_FACTOR : hsl.s;
+    return hslToHex(hsl.h, saturation, lightness);
 }
 
 /**
@@ -197,7 +239,7 @@ export function buildAllocationHierarchy<T>(entries: readonly AllocationHierarch
             result.push({
                 key: entry.key,
                 item: entry.item,
-                color: depth === 0 ? base : shadeForDepth(base, depth, shadeStep),
+                color: depth === 0 ? base : shadeForDepth(base, depth, shadeStep, members.length),
                 primary: groupKey,
                 depth,
                 groupSize: members.length,

@@ -113,10 +113,12 @@ export function buildAllocationRings<T>(hierarchy: readonly AllocationHierarchyR
         // Shade by rank among the subtypes, not by position in the family: when the
         // pure member is absent the first subtype would otherwise inherit the base
         // colour and vanish into the base arc — the very defect this layout exists for.
+        // The base arc holds depth 0 either way, so the family counts it as a member.
+        const shadeGroupSize = 1 + members.filter((member) => !sameKey(member.key, primary)).length;
         let subtypeRank = 0;
         members.forEach((member, index) => {
             const pure = sameKey(member.key, primary);
-            const color = pure ? baseColor : shadeForDepth(baseColor, ++subtypeRank, shadeStep);
+            const color = pure ? baseColor : shadeForDepth(baseColor, ++subtypeRank, shadeStep, shadeGroupSize);
             outer.push({...shared, key: member.key, role: 'member', weight: weights[index], color, pure, items: [member.item]});
         });
     }
