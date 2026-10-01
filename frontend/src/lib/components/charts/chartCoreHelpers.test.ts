@@ -758,15 +758,23 @@ describe('canonical overlay axis and reference helpers', () => {
                     throw new Error('GrowthChart logical-range reader contract not found');
                 }
                 const rangeReader = source.slice(rangeReaderStart, rangeReaderEnd);
-                expect(rangeReader).toContain('if (!activeChartData || activeChartData.resolution !== currentResolution) return null;');
+                // Why (re-pin, S7): the reader now binds `entry = activeChartData` and exempts a
+                // ladder entry from the resolution check (a ladder entry carries its own buckets,
+                // whatever the cascade's resolution says). The pins keep the invariant: a missing,
+                // stale or empty active entry yields null, so the render falls back to the full
+                // domain instead of reading stale ECharts zoom percentages against new history.
+                expect(rangeReader).toContain('const entry = activeChartData;');
+                expect(rangeReader).toContain('if (!entry || (!entry.ladder && entry.resolution !== currentResolution)) return null;');
+                expect(rangeReader).toContain('if (entry.buckets.length === 0) return null;');
                 expect(rangeReader).not.toContain('getResolutionData(');
 
                 const initialDates = Array.from({length: 9}, (_, index) => `2026-01-${String(index + 1).padStart(2, '0')}`);
                 const replacementDates = ['2026-03-10', '2026-03-12', '2026-03-14', '2026-03-16', '2026-03-18'] as const;
                 let dates: readonly string[] = initialDates;
                 let currentResolution: ChartResolution = 'daily';
-                let activeChartData: {resolution: ChartResolution; buckets: ReturnType<typeof buildBucketInfos>} | null = {
+                let activeChartData: {resolution: ChartResolution; ladder: boolean; buckets: ReturnType<typeof buildBucketInfos>} | null = {
                     resolution: currentResolution,
+                    ladder: false,
                     buckets: buildBucketInfos(initialDates, currentResolution),
                 };
                 let visibleStartDate: string | null = initialDates[0];
@@ -779,9 +787,14 @@ describe('canonical overlay axis and reference helpers', () => {
                     height: 240,
                 });
 
+                // Why (re-pin, S7): this copy follows the reader pinned above, ladder-aware guard and
+                // empty-bucket guard included, so the test does not exercise a reader that no longer
+                // exists. The entry here is a cascade one (`ladder: false`), so the reader's path is
+                // the widening floor/ceil that logicalRangeFromBuckets implements.
                 const logicalRangeFromActiveChart = (): GrowthLogicalRange | null => {
                     const entry = activeChartData;
-                    if (!entry || entry.resolution !== currentResolution) return null;
+                    if (!entry || (!entry.ladder && entry.resolution !== currentResolution)) return null;
+                    if (entry.buckets.length === 0) return null;
                     const zoom = storedGrowthZoom(chart);
                     return logicalRangeFromBuckets(entry.buckets, zoom.start, zoom.end);
                 };
@@ -1191,7 +1204,13 @@ describe('canonical overlay axis and reference helpers', () => {
                 // buildZoomWindow and the statement became a ladder/cascade ternary. The pin keeps
                 // only the off-ladder operand this test simulates: the zoom handed to the full
                 // rebuild is rebuilt from the live logical range, whatever the ladder side says.
-                const zoomWindow = renderChart.search(/const zoomWindow = [^;]*\bbuildZoomWindow\(currentResolution, logicalRange\.startDate, logicalRange\.endDate\);/);
+                // Why (re-pin, S7): the ladder goes through buildZoomWindow again, on its own
+                // entry: renderChart takes `activeData = getActiveAggregation()` (ladder or
+                // cascade) and places the window on that entry's buckets, so the ternary above
+                // is gone and the statement is one call. The invariant is unchanged: the zoom
+                // handed to the immediate full rebuild is rebuilt from the live logical range,
+                // captured and ensured just before it.
+                const zoomWindow = renderChart.search(/const zoomWindow = buildZoomWindow\(activeData, logicalRange\.startDate, logicalRange\.endDate\);/);
                 const fullRebuild = renderChart.indexOf('applyFullOption(isDark, buildFullSeries(isDark, seriesData), zoomWindow);', zoomWindow);
                 expect(capture).toBeGreaterThan(-1);
                 expect(storeStart).toBeGreaterThan(capture);
@@ -1332,13 +1351,24 @@ describe('canonical overlay axis and reference helpers', () => {
             });
         });
 
-        it.each(RESPONSIVE_X_AXIS_CHARTS)('%s imports and applies the shared policy to initial and resized options', (_name, path) => {
+        it.each(RESPONSIVE_X_AXIS_CHARTS)('%s imports and applies the shared policy to initial and resized options', (name, path) => {
             const source = readFileSync(path, 'utf8');
 
             expect(source).toMatch(/import\s+\{\s*buildResponsiveXAxisPolicy\s*\}\s+from\s+['"][^'"]*responsiveXAxis['"]/);
             expect(source).toMatch(/\bbuildResponsiveXAxisPolicy\s*\(/);
             expect(source).toMatch(/if \(policy\.axisLabel\) \{[\s\S]*?setOption\(\{xAxis:\s*\{[\s\S]*?axisLabel:\s*policy\.axisLabel/);
-            expect(source).toContain('...(xAxisPolicy.axisLabel ?? {})');
+            // Why (re-pin, S7): GrowthChart's ladder (P&L Candles and Income) owns its category
+            // x axis, so applyFullOption builds the shared policy for the time axis only
+            // (`ladderActive ? null : buildResponsiveXAxisPolicy(…)`) and merges it through `?.`.
+            // The optional merge is pinned together with that declaration, so its one reason is
+            // pinned too: the policy is null only under the ladder, and the time axis still
+            // applies it. The other seven charts keep the strict, non-optional merge.
+            if (name === 'GrowthChart') {
+                expect(source).toMatch(/const xAxisPolicy = ladderActive\s*\?\s*null\s*:\s*buildResponsiveXAxisPolicy\(\{/);
+                expect(source).toContain('...(xAxisPolicy?.axisLabel ?? {})');
+            } else {
+                expect(source).toContain('...(xAxisPolicy.axisLabel ?? {})');
+            }
         });
 
         it('routes every GrowthChart compact-to-desktop data update through a full x-axis replacement with the current zoom window', () => {
@@ -1360,26 +1390,46 @@ describe('canonical overlay axis and reference helpers', () => {
 
             const updateChartData = source.slice(updateStart, updateEnd);
             const fullOption = source.slice(fullOptionStart, fullOptionEnd);
-            expect(updateChartData).toMatch(
-                /const isCandlesSubmode = viewMode === 'pnl' && pnlSubmode === 'candles';\s*const xAxisPolicy = buildResponsiveXAxisPolicy\(\{\s*width: chartContainer\?\.clientWidth \?\? 0,\s*values: entry\.dates,\s*locale: \$locale \?\? undefined,\s*axisType: isCandlesSubmode \? 'category' : 'time',\s*\}\);/,
-            );
-            expect(updateChartData).toMatch(/const wasCompact = responsiveXAxisCompact;[\s\S]*?if \(wasCompact && !xAxisPolicy\.compact\) \{\s*applyFullOption\(isDark, buildFullSeries\(isDark, seriesData\), zoomWindow\);\s*return;\s*\}\s*responsiveXAxisCompact = xAxisPolicy\.compact;/);
+            // Why (re-pin, S7): the ladder (Candles, Income) owns its x axis, so updateChartData
+            // forks on `entry.ladder` and builds the shared responsive policy on the time branch
+            // only (`axisType: 'time'`); `isCandlesSubmode` and its category policy are gone. The
+            // policy is still computed from the entry's dates at the container width.
+            expect(updateChartData).toMatch(/if \(entry\.ladder\) \{[\s\S]*?\} else \{\s*const xAxisPolicy = buildResponsiveXAxisPolicy\(\{\s*width: chartContainer\?\.clientWidth \?\? 0,\s*values: entry\.dates,\s*locale: \$locale \?\? undefined,\s*axisType: 'time',\s*\}\);/);
+            // Why (re-pin, S7): the time branch now tests `responsiveXAxisCompact` directly
+            // instead of a `wasCompact` copy. The check still runs before the flag is
+            // overwritten, so a compact-to-desktop update still goes through applyFullOption
+            // with the current zoom window and returns before the partial setOption.
+            expect(updateChartData).toMatch(/if \(responsiveXAxisCompact && !xAxisPolicy\.compact\) \{\s*applyFullOption\(isDark, buildFullSeries\(isDark, seriesData\), zoomWindow\);\s*return;\s*\}\s*responsiveXAxisCompact = xAxisPolicy\.compact;/);
             expect(updateChartData).toContain("dataZoom: [{type: 'inside', ...INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG, start: zoomWindow.start, end: zoomWindow.end}],");
-            // Candles submode's category axis needs `data` refreshed on every partial
-            // update (resolution switch changes bucket dates) — the time-axis branch
+            // The ladder's category axis (Candles, Income) needs `data` refreshed on every
+            // partial update (a rung change replaces the bucket dates) — the time-axis branch
             // only needs a label/splitNumber refresh, gated behind `compact`.
-            expect(updateChartData).toContain('xAxis: isCandlesSubmode ? {data: entry.dates, ...(xAxisPolicy.compact ? {axisLabel: xAxisPolicy.axisLabel} : {})} : xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber, axisLabel: xAxisPolicy.axisLabel}');
+            // Why (re-pin, S7): the inline submode ternary is gone. Each branch assigns `xAxis`
+            // (the ladder: its dates with the axis planned for this window), and that one value
+            // rides the series update. The pins keep the claim above on both branches and
+            // prove the computed axis is the one sent.
+            expect(updateChartData).toContain('xAxis = {data: entry.dates, ...ladderAxisOption(plan)};');
+            expect(updateChartData).toContain('xAxis = xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber, axisLabel: xAxisPolicy.axisLabel} : {};');
+            expect(updateChartData).toMatch(/\bxAxis,\s*series,\s*\},\s*CHART_SERIES_UPDATE_OPTS,\s*\);/);
             expect(updateChartData).toMatch(/chartInstance\.setOption\([\s\S]*?CHART_SERIES_UPDATE_OPTS,\s*\);/);
             expect(source).toContain("const CHART_SERIES_UPDATE_OPTS = {notMerge: false, replaceMerge: ['dataZoom']};");
             expect(source).toContain("const CHART_FULL_UPDATE_OPTS = {...CHART_SET_OPTION_OPTS, replaceMerge: [...CHART_SET_OPTION_OPTS.replaceMerge, 'xAxis']};");
             expect(source).not.toContain('const entry = activeChartData?.resolution === currentResolution ? activeChartData : getResolutionData(currentResolution);');
-            expect(source).toContain('if (!activeChartData || activeChartData.resolution !== currentResolution) return null;');
+            // Why (re-pin, S7): the logical-range reader's guard now names `entry`
+            // (= activeChartData) and exempts a ladder entry, which carries its own buckets. A
+            // stale cascade entry still yields null rather than a silently rebuilt one (the
+            // negative above).
+            expect(source).toContain('if (!entry || (!entry.ladder && entry.resolution !== currentResolution)) return null;');
             expect(fullOption).toContain("dataZoom: [{type: 'inside', ...INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG, start: zoomWindow.start, end: zoomWindow.end}],");
             // G1b-candles-fix: xAxis is now a submode-conditional ternary (category for
             // candles — a `time` xAxis silently fails to paint any candlestick body/wick,
             // a known upstream ECharts limitation — time for everything else), not a
             // single unconditional object.
-            expect(fullOption).toContain('xAxis: isCandlesSubmode');
+            // Why (re-pin, S7): the ternary now keys on the ladder plan (`ladderAxis`), not on
+            // the candles submode: the ladder (Candles and Income) draws on the category axis,
+            // every other view on time. The pins below still prove the category branch carries
+            // its own type and dates.
+            expect(fullOption).toMatch(/xAxis: ladderAxis\s*\?\s*\{/);
             expect(fullOption).toContain("type: 'category',");
             expect(fullOption).toContain('data: activeChartData?.dates ?? dates,');
             expect(fullOption).toContain('chartInstance.setOption(option, CHART_FULL_UPDATE_OPTS);');
@@ -1574,7 +1624,10 @@ describe('canonical overlay axis and reference helpers', () => {
             // ladder the zoom is rebuilt from the live logical range, and `renderChart(true)`
             // always takes the full path because forceFullXAxisRebuild is a disjunct of
             // needsFullInit. The triggers are checked as a set, so a new one is not a failure.
-            expect(renderChart).toMatch(/const zoomWindow = [^;]*\bbuildZoomWindow\(currentResolution, logicalRange\.startDate, logicalRange\.endDate\);/);
+            // Why (re-pin, S7): the ladder goes through buildZoomWindow again, on its own entry
+            // (`activeData = getActiveAggregation()`), so the ternary above is gone. The zoom the
+            // forced full path receives is still rebuilt from the live logical range.
+            expect(renderChart).toMatch(/const zoomWindow = buildZoomWindow\(activeData, logicalRange\.startDate, logicalRange\.endDate\);/);
             // G1b: needsFullInit now keys on (viewMode, pnlSubmode) via renderedModeKey, not
             // viewMode alone — a pnlSubmode change (line -> candles) changes the series TYPE
             // (line -> candlestick) while viewMode stays 'pnl', which the partial-update path
@@ -1586,8 +1639,13 @@ describe('canonical overlay axis and reference helpers', () => {
             expect(source).toContain("const CHART_SERIES_UPDATE_OPTS = {notMerge: false, replaceMerge: ['dataZoom']};");
             expect(source).toContain("const CHART_FULL_UPDATE_OPTS = {...CHART_SET_OPTION_OPTS, replaceMerge: [...CHART_SET_OPTION_OPTS.replaceMerge, 'xAxis']};");
             expect(fullOption).toContain("dataZoom: [{type: 'inside', ...INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG, start: zoomWindow.start, end: zoomWindow.end}],");
-            expect(fullOption).toContain('xAxis: isCandlesSubmode');
-            expect(fullOption).toContain('...(xAxisPolicy.axisLabel ?? {}),');
+            // Why (re-pin, S7): the full option's xAxis ternary now keys on the ladder plan
+            // (`ladderAxis`), and the shared policy is null under the ladder, so the time branch
+            // merges it through `?.`. Leaving compact mode is a time-axis event (the resize
+            // watcher skips the ladder), and its full path still replaces the whole xAxis,
+            // labels merged from the desktop policy.
+            expect(fullOption).toMatch(/xAxis: ladderAxis\s*\?\s*\{/);
+            expect(fullOption).toContain('...(xAxisPolicy?.axisLabel ?? {}),');
             expect(fullOption).toContain('chartInstance.setOption(option, CHART_FULL_UPDATE_OPTS);');
         });
 
@@ -2073,8 +2131,8 @@ describe('canonical overlay axis and reference helpers', () => {
             });
         });
 
-        describe('resize watcher keeps the splitNumber/axisLabel update unconditional across submodes', () => {
-            it('computes isCandlesSubmode and forwards it to buildResponsiveXAxisPolicy, but does not fork the actual setOption call on it (splitNumber is undefined-by-construction for category — see the policy test above)', () => {
+        describe('resize watcher keeps the splitNumber/axisLabel update unconditional off the ladder', () => {
+            it('keeps the ladder out of buildResponsiveXAxisPolicy (time axis only), but does not fork the actual setOption call on the submode', () => {
                 const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
                 const resizeStart = source.indexOf('const resizeWatcher = createResizeWatcher(() => {');
                 const resizeEnd = source.indexOf('\n    let darkModeObserver', resizeStart);
@@ -2083,24 +2141,32 @@ describe('canonical overlay axis and reference helpers', () => {
                 if (resizeStart < 0 || resizeEnd <= resizeStart) throw new Error('GrowthChart resize watcher contract not found');
 
                 const resizeCallback = source.slice(resizeStart, resizeEnd);
-                expect(resizeCallback).toContain("const isCandlesSubmode = viewMode === 'pnl' && pnlSubmode === 'candles';");
-                expect(resizeCallback).toContain("axisType: isCandlesSubmode ? 'category' : 'time',");
+                // Why (re-pin, S7): the ladder (Candles, Income) owns its x axis and re-plans it
+                // through the resolution sync, so the watcher no longer computes
+                // isCandlesSubmode: it skips the responsive policy under the ladder and builds
+                // it for the time axis only. The invariant stands: the policy never reaches the
+                // ladder's category axis, and the setOption call below is not forked on the
+                // submode.
+                expect(resizeCallback).toContain('if (chartInstance && chartContainer && activeChartData && !ladderActive) {');
+                expect(resizeCallback).toContain("axisType: 'time',");
                 // The actual xAxis update stays a SINGLE unconditional object — unlike
                 // updateChartData's category branch, it never refreshes `data`: a resize
                 // never changes which dates are on screen, only the pixel budget for labels.
                 expect(resizeCallback).toContain('chartInstance.setOption({xAxis: {splitNumber: policy.splitNumber, axisLabel: policy.axisLabel}}, {lazyUpdate: true});');
                 expect(resizeCallback).not.toContain('data: activeChartData.dates');
                 expect(resizeCallback).not.toContain('data: entry.dates');
-                // Exactly ONE isCandlesSubmode ternary in this block (the axisType line
-                // above) — if a future edit also forked the setOption call, this count
-                // would become 2 and this assertion would catch it.
-                const isCandlesSubmodeTernaryCount = (resizeCallback.match(/isCandlesSubmode\s*\?/g) ?? []).length;
-                expect(isCandlesSubmodeTernaryCount).toBe(1);
+                // Exactly ONE ladderActive reference in this block (the guard above) — if a
+                // future edit also forked the setOption call on it, this count would become 2
+                // and this assertion would catch it.
+                // Why (re-pin, S7): isCandlesSubmode is gone, so a submode fork would now key
+                // on `ladderActive`; that is the name counted.
+                const ladderActiveCount = (resizeCallback.match(/\bladderActive\b/g) ?? []).length;
+                expect(ladderActiveCount).toBe(1);
             });
         });
 
         describe('applyFullOption completes the category-vs-time xAxis ternary on both branches', () => {
-            it('sets category type/data/boundaryGap and time type/splitNumber, sharing the axisLabel merge / axisLine and declaring splitLine exactly once per branch', () => {
+            it('sets category type/data/boundaryGap and time type/splitNumber, merging one axisLabel source per branch, sharing the axisLine and declaring splitLine exactly once per branch', () => {
                 const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
                 const fullOptionStart = source.indexOf('function applyFullOption(');
                 const fullOptionEnd = source.indexOf('\n</script>', fullOptionStart);
@@ -2109,25 +2175,35 @@ describe('canonical overlay axis and reference helpers', () => {
                 if (fullOptionStart < 0 || fullOptionEnd <= fullOptionStart) throw new Error('GrowthChart applyFullOption contract not found');
 
                 const fullOption = source.slice(fullOptionStart, fullOptionEnd);
-                const xAxisStart = fullOption.indexOf('xAxis: isCandlesSubmode');
+                // Why (re-pin, S7): the ternary now keys on the ladder plan (`ladderAxis`), not on
+                // the candles submode; it is still the one xAxis literal, category then time.
+                const xAxisStart = fullOption.search(/xAxis: ladderAxis\s*\?/);
                 const xAxisEnd = fullOption.indexOf('yAxis: {', xAxisStart);
                 expect(xAxisStart).toBeGreaterThan(-1);
                 expect(xAxisEnd).toBeGreaterThan(xAxisStart);
                 if (xAxisStart < 0 || xAxisEnd <= xAxisStart) throw new Error('GrowthChart applyFullOption xAxis ternary not found');
 
                 const xAxisBlock = fullOption.slice(xAxisStart, xAxisEnd);
-                // Category branch (candles submode).
+                // Category branch (the ladder: Candles and Income).
                 expect(xAxisBlock).toContain("type: 'category',");
                 expect(xAxisBlock).toContain('data: activeChartData?.dates ?? dates,');
                 expect(xAxisBlock).toContain('boundaryGap: true,');
                 // Time branch (every other mode/submode) — not just spot-checked, but
                 // proven present alongside the category branch above, in the same slice.
                 expect(xAxisBlock).toContain("type: 'time',");
-                expect(xAxisBlock).toContain('...(xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber} : {}),');
+                // Why (re-pin, S7): the shared policy is null under the ladder, so the time branch
+                // reads it through `?.`; its compact splitNumber is still spread on that branch.
+                expect(xAxisBlock).toContain('...(xAxisPolicy?.compact ? {splitNumber: xAxisPolicy.splitNumber} : {}),');
 
-                // Shared theming appears exactly twice (once per branch) — catches a
-                // future edit that updates one branch and forgets its sibling.
-                const axisLabelMergeCount = (xAxisBlock.match(/\.\.\.\(xAxisPolicy\.axisLabel \?\? \{\}\),/g) ?? []).length;
+                // Each branch merges its own label source exactly once, and the shared axisLine
+                // appears exactly twice (once per branch) — catches a future edit that updates
+                // one branch and forgets its sibling.
+                // Why (re-pin, S7): the axisLabel merge is no longer shared. The time branch
+                // merges the responsive policy, the category branch the ladder plan's labels.
+                // Counting each source once keeps both branches complete, and a policy merge
+                // leaking onto the ladder's axis (a count of 2) still turns this red.
+                const policyLabelMergeCount = (xAxisBlock.match(/\.\.\.\(xAxisPolicy\??\.axisLabel \?\? \{\}\)/g) ?? []).length;
+                const ladderLabelMergeCount = (xAxisBlock.match(/\.\.\.ladderAxis\.axisLabel\b/g) ?? []).length;
                 const axisLineCount = (xAxisBlock.match(/axisLine: \{lineStyle: \{color: gridColor\}\},/g) ?? []).length;
                 // Why (re-pin, S10): splitLine is no longer shared theming. It now draws the
                 // bucket separators: always on the category branch, and on the time branch only
@@ -2135,8 +2211,13 @@ describe('canonical overlay axis and reference helpers', () => {
                 // (splitLine.interval). What survives is that each branch declares the KEY once:
                 // a second `splitLine` in the same literal silently wins, and the product comment
                 // records that this already happened. The pin counts the key, not its value.
+                // Why (re-pin, S7): the category branch (the ladder: Candles and Income) now takes
+                // its separators from the ladder plan (`interval: ladderAxis.splitLine.interval`);
+                // the time branch draws none (`splitLine: {show: false}`), so the S10 lines above
+                // describe the pre-S7 state. The pin is unchanged: one `splitLine` KEY per branch.
                 const splitLineCount = (xAxisBlock.match(/^[ \t]+splitLine:/gm) ?? []).length;
-                expect(axisLabelMergeCount).toBe(2);
+                expect(policyLabelMergeCount).toBe(1);
+                expect(ladderLabelMergeCount).toBe(1);
                 expect(axisLineCount).toBe(2);
                 expect(splitLineCount).toBe(2);
             });
@@ -2387,7 +2468,13 @@ describe('canonical overlay axis and reference helpers', () => {
                 // left to follow the candle slot. The pin proves the return holds the total
                 // candle ALONE, and the matching buildFullSeries pin below proves the same on the
                 // other side, so a spread cannot come back on one side only.
-                expect(updateSeries).toMatch(/return \[\s*\{name: pnlLabels\.total, data: entry\.pnl\.candle\.points\.map\(toCandlestickPoint\) as unknown as SeriesPoint\[\]\},?\s*\];/);
+                // Why (re-pin, S7): the partial first bucket is now faded (item 4). Each quad from
+                // toCandlestickPoint goes through a map that wraps a partial bucket's quad as
+                // `{value, itemStyle}`, so the return reads `candles` instead of the inline map.
+                // The pin still proves the return holds the total candle ALONE: one
+                // `pnlLabels.total` series, built from entry.pnl.candle.points through
+                // toCandlestickPoint, with no broker spread after it.
+                expect(updateSeries).toMatch(/const candles = entry\.pnl\.candle\.points\.map\(\(point, index\) => \{\s*const quad = toCandlestickPoint\(point\);[\s\S]*?\}\);\s*return \[\s*\{name: pnlLabels\.total, data: candles as unknown as SeriesPoint\[\]\},?\s*\];/);
 
                 // buildFullSeries: line submode consumes seriesData[0]/[1]/[2] for
                 // positive/negative/reference, then slices from index 3 for brokers —
@@ -2532,7 +2619,11 @@ describe('canonical overlay axis and reference helpers', () => {
             const EXPECTED_SLOTS = [
                 {label: 'dividend', dataPath: 'entry.pnl.income.dividend.points', stack: 'income'},
                 {label: 'interest', dataPath: 'entry.pnl.income.interest.points', stack: 'income'},
-                {label: 'costs', dataPath: 'entry.pnl.costs.points', stack: null},
+                // Why (re-pin, S7): costs moved into the income stack (item 6). They are signed
+                // negative and a same-sign stack splits by sign, so they hang below dividends and
+                // interest in the same column. The expectation still pins, slot by slot, the label
+                // order buildFullSeries reads seriesData[0..5] in and the stack each slot joins.
+                {label: 'costs', dataPath: 'entry.pnl.costs.points', stack: 'income'},
                 {label: 'deposit', dataPath: 'entry.pnl.deposits.points', stack: null},
                 {label: 'acqNewCapital', dataPath: 'entry.pnl.acquisition.fromNewCapital.points', stack: 'acquisition'},
                 {label: 'acqReinvested', dataPath: 'entry.pnl.acquisition.fromReinvested.points', stack: 'acquisition'},
@@ -2544,7 +2635,11 @@ describe('canonical overlay axis and reference helpers', () => {
 
                 const emitted = [...block.matchAll(/\{name: pnlLabels\.(\w+), data: ([^}]+)\}/g)].map((match) => ({label: match[1], dataPath: match[2].trim()}));
 
-                expect(emitted).toEqual(EXPECTED_SLOTS.map(({label, dataPath}) => ({label, dataPath})));
+                // Why (re-pin, S7): the partial first bucket is now faded on every income column
+                // (item 4), so each slot passes its path through `faded(...)`. The pin still
+                // proves exactly 6 slots, in order, each reading its own AggregatedResolutionData
+                // path (the wrapper's argument).
+                expect(emitted).toEqual(EXPECTED_SLOTS.map(({label, dataPath}) => ({label, dataPath: `faded(${dataPath})`})));
             });
 
             it('buildFullSeries consumes seriesData[0..5] in exactly the same label order — a swap here would silently draw two bars with each other data', () => {
@@ -2581,8 +2676,14 @@ describe('canonical overlay axis and reference helpers', () => {
                 const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
                 const block = incomeBranchOf(source, 'buildFullSeries');
 
-                expect(block).toContain("{name: pnlLabels.acqNewCapital, type: 'bar' as const, stack: 'acquisition', data: seriesData[4].data, itemStyle: {color: cc('cashContributed')}}");
-                expect(block).toContain("{name: pnlLabels.acqReinvested, type: 'bar' as const, stack: 'acquisition', data: seriesData[5].data, itemStyle: {color: cc('cashGenerated')}}");
+                // Why (re-pin, S7): every income series now spreads the column gaps (`...gaps`,
+                // item 6), so the acquisition lines no longer close on the itemStyle, and slice
+                // S8 edits them again. The pin is the colour per zone, not the whole line: new
+                // capital (seriesData[4]) keeps cc('cashContributed') and reinvested
+                // (seriesData[5]) keeps cc('cashGenerated'), the EUR-mode pool colours, so a swap
+                // or an invented colour still turns it red.
+                expect(block).toMatch(/\{name: pnlLabels\.acqNewCapital, [^\n]*?data: seriesData\[4\]\.data, [^\n]*?itemStyle: \{color: cc\('cashContributed'\)\}/);
+                expect(block).toMatch(/\{name: pnlLabels\.acqReinvested, [^\n]*?data: seriesData\[5\]\.data, [^\n]*?itemStyle: \{color: cc\('cashGenerated'\)\}/);
             });
 
             it('builds all six aggregated dimensions through the SAME aggregateFlowMetric — flows are summed per bucket, never end-of-period', () => {

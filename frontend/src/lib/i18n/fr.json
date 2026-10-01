@@ -1072,7 +1072,8 @@
       "weekRange": "Semaine {start} – {end}",
       "monthLabel": "{month}",
       "valueAt": "Valeur au {date}",
-      "eventsInPeriod": "Événements sur la période :"
+      "eventsInPeriod": "Événements sur la période :",
+      "partialBucket": "Partiel : {days} sur {total} jours"
     },
     "resolution": {
       "weekly": "Hebdomadaire",
