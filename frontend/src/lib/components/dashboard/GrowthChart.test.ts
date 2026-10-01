@@ -42,12 +42,14 @@
  * "Fixed 6-slot order matches buildFullSeries's matching index reads exactly"). Broker
  * series ARE matched by name, because those names are values this test supplied as props.
  *
- * THE REST OF THE FILE. Seven smaller subjects share the same recorder: privacy masking
+ * THE REST OF THE FILE. Eight smaller subjects share the same recorder: privacy masking
  * of the axis and tooltip formatters (S2a), the one form of every signed tooltip amount in
  * the locale's glyphs (D23, D23b), persistence of the mode and the P&L submode (S5), the
  * synthetic-candle caption (S9), the grid's left inset (developer review, 2026-09-29), the
- * ladder x axis of the Candles and Income submodes (S7), and the money axis ticks: distinct,
- * in the locale's glyphs, with the edge the chart fixes left unlabelled (S7b: D18, D23, D25).
+ * ladder x axis of the Candles and Income submodes (S7), the money axis ticks: distinct,
+ * in the locale's glyphs, with the edge the chart fixes left unlabelled (S7b: D18, D23, D25),
+ * and the purchase value of the Income submode: one name for its two halves, their total in
+ * the tooltip, each half in its Abs colour (S8: R11, D26).
  * Each describe states its own reasons.
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
@@ -703,9 +705,20 @@ function tooltipRows(html: string): TooltipRow[] {
     return tooltipRowElements(html).map(({label, value}) => ({label: label.textContent ?? '', value: value.textContent ?? ''}));
 }
 
-/** The value of the one row labelled by `labelKey`, with the label resolved through i18n as the component resolves it. */
-function rowValue(rows: TooltipRow[], labelKey: string): string {
-    const label = htmlText(get(_)(labelKey));
+/**
+ * The label of one half of the Income purchase value, as the user reads it: `↳ `, then the key's
+ * text (S8, R11). WHY a helper: the halves are indented under the purchase value, so their row
+ * no longer reads as their key alone, and every case must build that label the same way.
+ */
+const subRowLabel = (labelKey: string) => htmlText(`↳ ${get(_)(labelKey)}`);
+
+/**
+ * The value of the one row labelled by `labelKey`, with the label resolved through i18n as the
+ * component resolves it. `readAs` builds a label that is more than the key's text, such as
+ * `subRowLabel` (S8).
+ */
+function rowValue(rows: TooltipRow[], labelKey: string, readAs: (key: string) => string = (key) => htmlText(get(_)(key))): string {
+    const label = readAs(labelKey);
     const matching = rows.filter((row) => row.label === label);
     expect(matching, `exactly one tooltip row labelled ${labelKey}`).toHaveLength(1);
     return matching[0].value;
@@ -1182,18 +1195,26 @@ describe('GrowthChart signed tooltip amounts (D23, D23b)', () => {
     }
 
     /** The Income tooltip of the one bar, every row signed. The fixtures give costs and deposit a
-     *  value, and new capital one, which is what brings in both acquisition rows. */
+     *  value, and new capital one, which is what brings in the purchase-value group: the bold
+     *  purchase value, then its two `↳` halves (new capital, reinvested). */
     function incomeRows(): AmountRow[] {
         const dividend = barSum(MONEY_INCOME.points, (point) => point.dividend);
         const interest = barSum(MONEY_INCOME.points, (point) => point.interest);
+        // Why (re-pin, S8): R11 heads the two acquisition rows with the purchase value, their
+        // sum, and indents them under it as `↳ ` rows, so the bar prints 8 rows instead of 7. The
+        // rows still pin every Income amount in its one signed form, the exact zero of nothing
+        // reinvested included.
+        const newCapital = barSum(MONEY_ACQUISITION.points, (point) => point.from_new_capital);
+        const reinvested = barSum(MONEY_ACQUISITION.points, (point) => point.from_reinvested);
         return [
             {label: labelOf('transactions.types.DIVIDEND'), amount: dividend, signed: true},
             {label: labelOf('transactions.types.INTEREST'), amount: interest, signed: true},
             {label: labelOf('assets.distribution.total'), amount: dividend + interest, signed: true},
             {label: labelOf('dashboard.feesAndTaxes'), amount: barSum(MONEY_COSTS.points, (point) => point.cost), signed: true},
             {label: labelOf('transactions.types.DEPOSIT'), amount: barSum(MONEY_DEPOSITS.points, (point) => point.deposit), signed: true},
-            {label: labelOf('dashboard.pnlAcqNewCapital'), amount: barSum(MONEY_ACQUISITION.points, (point) => point.from_new_capital), signed: true},
-            {label: labelOf('dashboard.pnlAcqReinvested'), amount: barSum(MONEY_ACQUISITION.points, (point) => point.from_reinvested), signed: true},
+            {label: labelOf('dashboard.bookValue'), amount: newCapital + reinvested, signed: true},
+            {label: subRowLabel('dashboard.pnlAcqNewCapital'), amount: newCapital, signed: true},
+            {label: subRowLabel('dashboard.pnlAcqReinvested'), amount: reinvested, signed: true},
         ];
     }
 
@@ -1335,15 +1356,18 @@ describe('GrowthChart signed tooltip amounts (D23, D23b)', () => {
         // Both rows print the same zero, so only their colour can still tell them apart.
         const zero = expectedAmount(0, {signed: true});
         expect(rowValue(tooltipRows(html), 'transactions.types.INTEREST')).toBe(zero);
-        expect(rowValue(tooltipRows(html), 'dashboard.pnlAcqReinvested')).toBe(zero);
+        // Why (re-pin, S8): R11 indents the reinvested half under the purchase value, so its row
+        // reads `↳ ` before the key's text and both reads below go through `subRowLabel`. The case
+        // still proves that an exact zero and a float residue that print alike are painted alike.
+        expect(rowValue(tooltipRows(html), 'dashboard.pnlAcqReinvested', subRowLabel)).toBe(zero);
 
         /** The colour of a row's value: its `<b>`'s own, which jsdom normalises (`#…` reads back as `rgb(…)`). */
-        const colourOf = (labelKey: string) => {
-            const matching = tooltipRowElements(html).filter(({label}) => label.textContent === labelOf(labelKey));
+        const colourOf = (labelKey: string, readAs: (key: string) => string = labelOf) => {
+            const matching = tooltipRowElements(html).filter(({label}) => label.textContent === readAs(labelKey));
             expect(matching, `exactly one tooltip row labelled ${labelKey}`).toHaveLength(1);
             return matching[0].value.style.color;
         };
-        const neutral = colourOf('dashboard.pnlAcqReinvested');
+        const neutral = colourOf('dashboard.pnlAcqReinvested', subRowLabel);
         const gain = colourOf('transactions.types.DIVIDEND');
         const loss = colourOf('dashboard.feesAndTaxes');
         // Preconditions: three real colours, all different. A palette that painted every row
@@ -2295,5 +2319,264 @@ describe('GrowthChart money axis ticks (S7b: D18, D23, D25)', {timeout: 30_000},
         const back = await waitForFrame(FRAME.pnlLine);
         expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-line']);
         expect(lowerEdgeOf(back)).toEqual(FIXED_EDGE);
+    });
+});
+
+// =============================================================================
+// S8 — the purchase value in the Income submode (R11, D26)
+// =============================================================================
+
+/**
+ * The Income submode's acquisition column is the purchase value, the KPI card's own figure
+ * (`dashboard.bookValue`), split by the money that paid for it: new capital, then reinvested
+ * returns (R11, D2 = A).
+ *
+ * One name. Both halves carry the purchase value's name, so the legend lists it once and one
+ * click on it hides or shows both, as the P&L line's two halves share one total. Neither half's
+ * own label reaches the legend.
+ *
+ * One total. The tooltip prints the purchase value in bold, then each half under it as a `↳ `
+ * row, every amount signed like the rest of Income (D23b). The total is the sum of what the two
+ * bars draw.
+ *
+ * One colour per kind of money (D26). Each half is painted in the colour its money has in the
+ * Abs view: new capital in the KPI blue of the purchase cost (`dashboard.assetsAtCost`), the
+ * reinvested returns in the colour of `dashboard.cashFromGeneratedReturns`. The colours are read
+ * from the Abs option of the same mount, never written down: the palette is the component's to
+ * choose, and the agreement of the two views is the contract.
+ *
+ * WHY names are asserted here, where the file header says they are not: the shared name IS the
+ * subject. Every name is the `get(_)` of its key in the locale the component renders in, never
+ * English text. Series names and legend entries are compared raw, as ECharts receives them, and
+ * tooltip labels as the user reads them, through `htmlText`.
+ */
+// WHY the 30 s budget: a case chains several 5 s waits, and a red `waitFor` must be able to
+// exhaust its own timeout and rethrow the case's assertion instead of dying on the test timeout
+// (as S7 and S7b do).
+describe('GrowthChart Income purchase value (S8: R11, D26)', {timeout: 30_000}, () => {
+    /**
+     * New capital and reinvested returns on two of the three money days, so the one Income bar is
+     * a sum on both halves: 500 + 400 and 100 + 200. Whole amounts, none of them zero, and the two
+     * halves differ, so a swap cannot pass: the subject is the total and which half is which, not
+     * the sign of a zero (D23 covers that, on `MONEY_ACQUISITION`, which stays as it is).
+     */
+    const PURCHASE_FUNDING: PortfolioAcquisitionFundingSeries = {
+        points: [
+            {date: DATES[0], from_new_capital: eur(500), from_reinvested: eur(100)},
+            {date: DATES[2], from_new_capital: eur(400), from_reinvested: eur(200)},
+        ],
+    };
+    /** What the one bar sums each half to, and the two together, counted by hand from `PURCHASE_FUNDING`. */
+    const NEW_CAPITAL = 900;
+    const REINVESTED = 300;
+    const PURCHASE_VALUE = 1_200;
+
+    /** The parts of a full rebuild this describe reads. WHY local: the shared `FullOption` has no stack, colour or legend, and only S8 reads them. */
+    interface PurchaseValueOption extends Omit<FullOption, 'series'> {
+        series: Array<{type?: string; name?: string; stack?: string; itemStyle?: {color?: string}; data?: unknown[]}>;
+        legend?: {data?: unknown[]};
+    }
+
+    const labelOf = (key: string) => htmlText(get(_)(key));
+
+    /** A colour as jsdom reads it back from a `style`, where `#rrggbb` becomes `rgb(…)`. WHY: a tooltip row's colour reads back normalised and an option's as written, so both sides go through here. */
+    function cssColour(colour: string | undefined): string {
+        const probe = document.createElement('div');
+        probe.style.color = colour ?? '';
+        return probe.style.color;
+    }
+
+    /**
+     * Mounts the three money days with `PURCHASE_FUNDING`, opens on Abs, walks to P&L, then to
+     * Income, and returns the full rebuild of each end. Every step waits for its own frame and
+     * reads its toggle as pressed, so neither option can be mistaken for the other.
+     */
+    async function openIncome(): Promise<{abs: PurchaseValueOption; income: PurchaseValueOption}> {
+        // The amounts are read in the clear. The flag is module state, and the cases that switch it on switch it off.
+        expect(isPrivacyEnabled()).toBe(false);
+        const {getByTestId} = render(GrowthChart, {
+            props: {history: MONEY_HISTORY, incomeHistory: MONEY_INCOME, costHistory: MONEY_COSTS, depositHistory: MONEY_DEPOSITS, acquisitionFunding: PURCHASE_FUNDING, baseCurrency: BASE_CURRENCY},
+        });
+        const abs: PurchaseValueOption = await waitForFrame(FRAME.abs);
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-eur']);
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        await waitForFrame(FRAME.pnlLine);
+        await fireEvent.click(getByTestId('growth-pnl-submode-income'));
+        const income: PurchaseValueOption = await waitForFrame(FRAME.income);
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-income']);
+        return {abs, income};
+    }
+
+    /** The options that carry a series array, recorded from call `since` onwards: full rebuilds and partial updates alike. */
+    function seriesCallsSince(since: number): Array<Record<string, unknown>> {
+        expect(chartInstances).toHaveLength(1);
+        return chartInstances[0].setOptionCalls
+            .slice(since)
+            .map((call) => call.option)
+            .filter((option) => Array.isArray(option.series));
+    }
+
+    /** The one tooltip row labelled `label`, as elements: its label `<span>`, and the `<div>` that carries the row's colour. */
+    function rowOf(html: string, label: string): {span: Element; row: HTMLElement} {
+        const matching = tooltipRowElements(html).filter((entry) => entry.label.textContent === label);
+        expect(matching, `exactly one tooltip row labelled ${label}`).toHaveLength(1);
+        const row = matching[0].label.parentElement;
+        if (row == null) throw new Error(`the row labelled ${label} has no element around it`);
+        return {span: matching[0].label, row};
+    }
+
+    it('names both acquisition halves after the purchase value, in the one acquisition stack, on the full rebuild', async () => {
+        // WHY: R11. The two halves are one quantity, the purchase value, split by where its money
+        // came from, so both carry its name. Catches a half that keeps its own label, which also
+        // lists it in the legend apart from the other, and a half that leaves the acquisition
+        // stack, which would draw it as a column of its own. `openIncome` waits for the Income
+        // frame, so slots 4 and 5 are the last two of six bars.
+        const {income} = await openIncome();
+        const purchaseValue = get(_)('dashboard.bookValue');
+        expect(income.series.slice(4).map(({name, stack}) => ({name, stack}))).toEqual([
+            {name: purchaseValue, stack: 'acquisition'},
+            {name: purchaseValue, stack: 'acquisition'},
+        ]);
+    });
+
+    it('keeps the shared name on the partial update that draws funding arriving after Income is on screen', async () => {
+        // WHY: R11 on the other path. Data that arrives in the view on screen is drawn by the
+        // partial update, which sends every slot's name with its data and is built apart from the
+        // full rebuild. Catches that path still naming the halves apart, so the bars would carry
+        // names the legend does not list. The funding arrives after Income is drawn, as the
+        // dashboard's lazy fetch delivers it, which is what makes the update partial.
+        const {getByTestId, rerender} = render(GrowthChart, {props: {history: HISTORY}});
+        await waitFor(() => expect(chartInstances).toHaveLength(1), {timeout: 5_000});
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        await fireEvent.click(getByTestId('growth-pnl-submode-income'));
+        await waitForFrame(FRAME.income);
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-income']);
+        // Presence barrier: the six slots are drawn, and the acquisition ones carry nothing yet.
+        const drawnBefore = renderedSeries();
+        expect(drawnBefore).toHaveLength(6);
+        expect(nonZeroPoints(drawnBefore[4]) + nonZeroPoints(drawnBefore[5]), 'no funding before it arrives').toBe(0);
+
+        // Sampled BEFORE the arrival, so the update read below is one recorded after it.
+        const before = setOptionCount();
+        await rerender({acquisitionFunding: ACQUISITION_FUNDING});
+        let update: SeriesUpdate[] = [];
+        await waitFor(
+            () => {
+                const calls = seriesCallsSince(before);
+                expect(calls.length, 'a series update after the arrival').toBeGreaterThan(0);
+                const latest = calls[calls.length - 1];
+                // Partial: series without the axis and the tooltip that only a full rebuild carries.
+                expect(latest.yAxis, 'a partial update: no y axis').toBeUndefined();
+                expect(latest.tooltip, 'a partial update: no tooltip').toBeUndefined();
+                update = latest.series as SeriesUpdate[];
+                expect(update).toHaveLength(6);
+                expect(nonZeroPoints(update[4]), 'new capital arrived').toBeGreaterThan(0);
+                expect(nonZeroPoints(update[5]), 'reinvested arrived').toBeGreaterThan(0);
+            },
+            {timeout: 5_000},
+        );
+
+        const purchaseValue = get(_)('dashboard.bookValue');
+        expect(update.slice(4).map((series) => series.name)).toEqual([purchaseValue, purchaseValue]);
+    });
+
+    it('lists the purchase value once in the Income legend, after the other four columns, and neither half under its own label', async () => {
+        // WHY: R11 with the legend code left as it is. The legend lists each distinct series name
+        // in slot order, so the shared name is what makes the purchase value one entry, which
+        // hides or shows both halves at once. Catches a half named apart, which lists its own
+        // label and toggles alone, and an acquisition slot moved ahead of the other columns.
+        const {income} = await openIncome();
+        const legend = income.legend?.data;
+        expect(legend).toEqual(['transactions.types.DIVIDEND', 'transactions.types.INTEREST', 'dashboard.feesAndTaxes', 'transactions.types.DEPOSIT', 'dashboard.bookValue'].map((key) => get(_)(key)));
+        expect(
+            legend?.filter((entry) => entry === get(_)('dashboard.bookValue')),
+            'the purchase value, once',
+        ).toHaveLength(1);
+        expect(legend).not.toContain(get(_)('dashboard.pnlAcqNewCapital'));
+        expect(legend).not.toContain(get(_)('dashboard.pnlAcqReinvested'));
+    });
+
+    it('prints the purchase value in bold as the total of its halves, then new capital and reinvested under it, all signed', async () => {
+        // WHY: R11 in the tooltip. The purchase value is the figure a user compares with the KPI
+        // card, so it is printed whole, in bold like the income total, with each half under it as
+        // a `↳ ` row. Catches a missing total, a total of one half only, the halves swapped or
+        // printed away from their total, a half printed unsigned, and a total set like its halves.
+        const {income} = await openIncome();
+        const html = income.tooltip.formatter([{dataIndex: 0}]);
+        const rows = tooltipRows(html);
+        const purchaseValue = labelOf('dashboard.bookValue');
+        expect(
+            rows.filter((row) => row.label === purchaseValue),
+            'exactly one purchase-value row',
+        ).toHaveLength(1);
+        const head = rows.findIndex((row) => row.label === purchaseValue);
+        expect(rows.slice(head, head + 3), 'the purchase value, then its two halves, in a row').toEqual([
+            {label: purchaseValue, value: expectedAmount(PURCHASE_VALUE, {signed: true})},
+            {label: subRowLabel('dashboard.pnlAcqNewCapital'), value: expectedAmount(NEW_CAPITAL, {signed: true})},
+            {label: subRowLabel('dashboard.pnlAcqReinvested'), value: expectedAmount(REINVESTED, {signed: true})},
+        ]);
+
+        /** How a row's label is set: the tags right under its `<span>`, and the text of the first. */
+        const setting = (label: string) => {
+            const {span} = rowOf(html, label);
+            return {tags: Array.from(span.children, (child) => child.tagName), text: span.firstElementChild?.textContent ?? null};
+        };
+        // Precondition: the income total is set as one bold label, the form the purchase value takes.
+        const total = labelOf('assets.distribution.total');
+        expect(setting(total), 'the income total is bold').toEqual({tags: ['B'], text: total});
+        expect(setting(purchaseValue), 'the purchase value is bold, like the income total').toEqual({tags: ['B'], text: purchaseValue});
+        expect(setting(subRowLabel('dashboard.pnlAcqNewCapital')), 'new capital is not').toEqual({tags: [], text: null});
+        expect(setting(subRowLabel('dashboard.pnlAcqReinvested')), 'reinvested is not').toEqual({tags: [], text: null});
+    });
+
+    it('prints as the purchase value the sum of the two acquisition bars it draws', async () => {
+        // WHY: the tooltip and the bars must tell one story. The total is checked against the
+        // values the recorder received for the two acquisition bars, not against the fixture, so
+        // it holds whatever the bucketing makes of the days. Catches a total folded from other
+        // values than the bars draw, or from one bar only.
+        const {income} = await openIncome();
+        const [drawnNew, drawnReinvested] = income.series.slice(4).map((series, index) => {
+            expect(series.data, `slot ${4 + index}: the three days are one Income bar`).toHaveLength(1);
+            return pointValue(series.data?.[0]);
+        });
+        if (drawnNew == null || drawnReinvested == null) throw new Error('an acquisition bar carries no value');
+        // Preconditions: both halves draw something, so neither alone can pass for the sum.
+        expect(drawnNew, 'new capital is drawn').not.toBe(0);
+        expect(drawnReinvested, 'reinvested is drawn').not.toBe(0);
+
+        const rows = tooltipRows(income.tooltip.formatter([{dataIndex: 0}]));
+        expect(rowValue(rows, 'dashboard.bookValue')).toBe(expectedAmount(drawnNew + drawnReinvested, {signed: true}));
+    });
+
+    it('paints each half in the colour its money has in Abs, on its bar and on its tooltip row (D26)', async () => {
+        // WHY: D26. The purchase value has one colour across the app, the KPI blue, so the new
+        // capital that paid for it keeps that blue, and the reinvested returns keep the colour the
+        // returns have in Abs. Catches new capital left in the contributed-capital colour, the two
+        // colours swapped, and a tooltip row painted apart from its bar.
+        const {abs, income} = await openIncome();
+        /** The colour of the one Abs series named after `labelKey`. */
+        const absColour = (labelKey: string) => {
+            const matching = abs.series.filter((series) => series.name === get(_)(labelKey));
+            expect(matching, `exactly one Abs series named ${labelKey}`).toHaveLength(1);
+            return matching[0].itemStyle?.color ?? '';
+        };
+        const purchaseCost = absColour('dashboard.assetsAtCost');
+        const returns = absColour('dashboard.cashFromGeneratedReturns');
+        // Preconditions: two real colours, and different ones. One colour everywhere would pass every check below.
+        expect(purchaseCost, 'the purchase cost has a colour in Abs').not.toBe('');
+        expect(returns, 'the returns have a colour in Abs').not.toBe('');
+        expect(purchaseCost, 'two different colours').not.toBe(returns);
+
+        const bars = income.series.slice(4).map((series) => series.itemStyle?.color);
+        expect(bars, 'new capital in the purchase-cost blue, then reinvested in the returns colour').toEqual([purchaseCost, returns]);
+
+        // Each `↳` row in its bar's colour. The row reads back normalised, so the bar's colour goes through `cssColour` too.
+        const html = income.tooltip.formatter([{dataIndex: 0}]);
+        const barColours = bars.map((colour) => cssColour(colour));
+        expect(
+            barColours.every((colour) => colour !== ''),
+            'the bar colours read back as CSS colours',
+        ).toBe(true);
+        expect(['dashboard.pnlAcqNewCapital', 'dashboard.pnlAcqReinvested'].map((key) => rowOf(html, subRowLabel(key)).row.style.color)).toEqual(barColours);
     });
 });

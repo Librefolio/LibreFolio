@@ -2599,7 +2599,11 @@ describe('canonical overlay axis and reference helpers', () => {
         // (the tooltip's conditional section) are reimplemented faithfully here for real
         // execution and tied back to the real source text by a contract test.
 
-        describe('income-submode fixed 6-slot order (dividend / interest / costs / deposit / acqNewCapital / acqReinvested)', () => {
+        // Why (re-pin, S8): R11 names both acquisition slots after the purchase value
+        // (pnlLabels.bookValue, the KPI card's key), so slots 4-5 now share one label. The
+        // block still pins the fixed 6-slot order, new capital before reinvested, the path
+        // each slot reads and the stack it joins.
+        describe('income-submode fixed 6-slot order (dividend / interest / costs / deposit / bookValue: new capital, then reinvested)', () => {
             /** The income branch of one of the two builders, sliced out of the real source. */
             function incomeBranchOf(source: string, functionName: string): string {
                 const fnStart = source.indexOf(`function ${functionName}(`);
@@ -2625,8 +2629,12 @@ describe('canonical overlay axis and reference helpers', () => {
                 // order buildFullSeries reads seriesData[0..5] in and the stack each slot joins.
                 {label: 'costs', dataPath: 'entry.pnl.costs.points', stack: 'income'},
                 {label: 'deposit', dataPath: 'entry.pnl.deposits.points', stack: null},
-                {label: 'acqNewCapital', dataPath: 'entry.pnl.acquisition.fromNewCapital.points', stack: 'acquisition'},
-                {label: 'acqReinvested', dataPath: 'entry.pnl.acquisition.fromReinvested.points', stack: 'acquisition'},
+                // Why (re-pin, S8): R11 (D2 = A) gives both acquisition halves the shared
+                // purchase-value name, pnlLabels.bookValue, so the legend shows it once. The
+                // slots still pin new capital at 4 and reinvested at 5, each on its own data
+                // path, both in the 'acquisition' stack: a swap still turns both tests red.
+                {label: 'bookValue', dataPath: 'entry.pnl.acquisition.fromNewCapital.points', stack: 'acquisition'},
+                {label: 'bookValue', dataPath: 'entry.pnl.acquisition.fromReinvested.points', stack: 'acquisition'},
             ] as const;
 
             it('emits exactly the 6 expected slots, in order, each reading its own AggregatedResolutionData path', () => {
@@ -2672,18 +2680,24 @@ describe('canonical overlay axis and reference helpers', () => {
                 }
             });
 
-            it('reuses the EUR-mode capital/returns pool colors for the two acquisition zones rather than inventing new ones', () => {
+            it('paints the two acquisition zones in the Abs view colours: new capital in the KPI blue of the purchase cost, reinvested in the returns colour', () => {
                 const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
                 const block = incomeBranchOf(source, 'buildFullSeries');
 
                 // Why (re-pin, S7): every income series now spreads the column gaps (`...gaps`,
                 // item 6), so the acquisition lines no longer close on the itemStyle, and slice
                 // S8 edits them again. The pin is the colour per zone, not the whole line: new
-                // capital (seriesData[4]) keeps cc('cashContributed') and reinvested
-                // (seriesData[5]) keeps cc('cashGenerated'), the EUR-mode pool colours, so a swap
-                // or an invented colour still turns it red.
-                expect(block).toMatch(/\{name: pnlLabels\.acqNewCapital, [^\n]*?data: seriesData\[4\]\.data, [^\n]*?itemStyle: \{color: cc\('cashContributed'\)\}/);
-                expect(block).toMatch(/\{name: pnlLabels\.acqReinvested, [^\n]*?data: seriesData\[5\]\.data, [^\n]*?itemStyle: \{color: cc\('cashGenerated'\)\}/);
+                // capital (seriesData[4]) kept cc('cashContributed') until S8 (below) and
+                // reinvested (seriesData[5]) keeps cc('cashGenerated'), the EUR-mode pool colours,
+                // so a swap or an invented colour still turns it red.
+                // Why (re-pin, S8): D26 moves new capital from the sage cc('cashContributed') to
+                // cc('bookAssetLike'), the KPI blue of the Abs purchase-cost series, and R11 names
+                // both zones pnlLabels.bookValue; reinvested keeps cc('cashGenerated'), the Abs
+                // returns colour. The pin is still one colour per zone, tied to the seriesData
+                // index it paints, so a swap or an invented colour still turns it red.
+                expect(block).toMatch(/\{name: pnlLabels\.bookValue, [^\n]*?data: seriesData\[4\]\.data, [^\n]*?itemStyle: \{color: cc\('bookAssetLike'\)\}/);
+                expect(block).toMatch(/\{name: pnlLabels\.bookValue, [^\n]*?data: seriesData\[5\]\.data, [^\n]*?itemStyle: \{color: cc\('cashGenerated'\)\}/);
+                expect(block).not.toContain("cc('cashContributed')");
             });
 
             it('builds all six aggregated dimensions through the SAME aggregateFlowMetric — flows are summed per bucket, never end-of-period', () => {
@@ -2888,8 +2902,13 @@ describe('canonical overlay axis and reference helpers', () => {
                     if (costVal !== 0) html += signedRow('costs', costVal);
                     if (depositVal !== 0) html += signedRow('deposit', depositVal);
                     if (acqNewVal !== 0 || acqReinvestedVal !== 0) {
-                        html += signedRow('acqNewCapital', acqNewVal);
-                        html += signedRow('acqReinvested', acqReinvestedVal);
+                        // Why (re-pin, S8): R11 heads the acquisition rows with the purchase value
+                        // (bold, new + reinvested) and indents the two halves under it with `↳ `.
+                        // The mirror still proves the gate: either half non-zero prints the whole
+                        // group, and a zero half keeps its row.
+                        html += signedRow('<b>bookValue</b>', acqNewVal + acqReinvestedVal);
+                        html += signedRow('↳ acqNewCapital', acqNewVal);
+                        html += signedRow('↳ acqReinvested', acqReinvestedVal);
                     }
                 }
                 return html;
@@ -2917,8 +2936,11 @@ describe('canonical overlay axis and reference helpers', () => {
             const singleDimensionScenarios: Array<[string, Partial<IncomeTooltipValues>, string[]]> = [
                 ['only costs', {costVal: -12}, ['costs']],
                 ['only deposit', {depositVal: 500}, ['deposit']],
-                ['only fresh-capital acquisition', {acqNewVal: 400}, ['acqNewCapital', 'acqReinvested']],
-                ['only reinvested acquisition', {acqReinvestedVal: 200}, ['acqNewCapital', 'acqReinvested']],
+                // Why (re-pin, S8): R11 prints the purchase value above the two indented halves,
+                // so either acquisition half now opens three rows. The scenarios still prove that
+                // only the non-zero dimensions open the section, and the halves come as a pair.
+                ['only fresh-capital acquisition', {acqNewVal: 400}, ['<b>bookValue</b>', '↳ acqNewCapital', '↳ acqReinvested']],
+                ['only reinvested acquisition', {acqReinvestedVal: 200}, ['<b>bookValue</b>', '↳ acqNewCapital', '↳ acqReinvested']],
             ];
 
             it.each(singleDimensionScenarios)('opens the second section for %s, and only for the dimensions that are actually non-zero', (_label, overrides, expectedExtraRows) => {
@@ -2935,14 +2957,21 @@ describe('canonical overlay axis and reference helpers', () => {
                 // question at all, rather than answering it with a zero.
                 const html = buildIncomeTooltipImpl({...zeroDay, acqNewVal: 0, acqReinvestedVal: 200});
 
-                expect(rowLabels(html)).toContain('acqNewCapital');
-                expect(html).toContain('<row label="acqNewCapital" value="0">');
+                // Why (re-pin, S8): R11 indents the halves under the purchase value, so the zero
+                // half is now the `↳ acqNewCapital` row and the purchase value prints the sum
+                // (0 + 200). The pin still proves the zero leg is printed, not hidden.
+                expect(rowLabels(html)).toContain('↳ acqNewCapital');
+                expect(html).toContain('<row label="↳ acqNewCapital" value="0">');
+                expect(html).toContain('<row label="<b>bookValue</b>" value="200">');
             });
 
             it('renders every batch-2 row when all four dimensions are active, in a fixed order', () => {
                 const html = buildIncomeTooltipImpl({divVal: 10, intVal: 2, costVal: -5, depositVal: 1000, acqNewVal: 300, acqReinvestedVal: 100});
 
-                expect(rowLabels(html)).toEqual(['dividend', 'interest', '<b>total</b>', 'costs', 'deposit', 'acqNewCapital', 'acqReinvested']);
+                // Why (re-pin, S8): R11 replaces the two acquisition rows with the purchase value
+                // followed by its two indented halves. The pin still proves one fixed order for
+                // every batch-2 row and a single divider before them.
+                expect(rowLabels(html)).toEqual(['dividend', 'interest', '<b>total</b>', 'costs', 'deposit', '<b>bookValue</b>', '↳ acqNewCapital', '↳ acqReinvested']);
                 expect(dividerCount(html)).toBe(2);
             });
 
@@ -2950,6 +2979,9 @@ describe('canonical overlay axis and reference helpers', () => {
                 const html = buildIncomeTooltipImpl({divVal: 10, intVal: 2, costVal: -5, depositVal: 1000, acqNewVal: 300, acqReinvestedVal: 100});
 
                 expect(html).toContain('<row label="<b>total</b>" value="12">');
+                // Why (re-pin, S8): R11 gives the purchase value its own total (300 + 100). The
+                // income total above still folds in none of the batch-2 dimensions.
+                expect(html).toContain('<row label="<b>bookValue</b>" value="400">');
             });
 
             it('mirrors the exact literal body of the tooltip income branch in GrowthChart.svelte (ties the reimplementation above to the real source)', () => {
@@ -2973,8 +3005,15 @@ describe('canonical overlay axis and reference helpers', () => {
                 expect(block).toContain("if (costVal !== 0) html += signedRow(pnlLabels.costs, costVal, cc('costs'));");
                 expect(block).toContain("if (depositVal !== 0) html += signedRow(pnlLabels.deposit, depositVal, cc('deposit'));");
                 expect(block).toContain('if (acqNewVal !== 0 || acqReinvestedVal !== 0) {');
-                expect(block).toContain("html += signedRow(pnlLabels.acqNewCapital, acqNewVal, cc('cashContributed'));");
-                expect(block).toContain("html += signedRow(pnlLabels.acqReinvested, acqReinvestedVal, cc('cashGenerated'));");
+                // Why (re-pin, S8): R11 swaps the two acquisition rows for the purchase value (bold
+                // label, new + reinvested, text colour) and its two `↳ ` halves, painted in the D26
+                // zone colours (KPI blue, returns). The contract still ties the mirror's rows and
+                // gates to the real source, and the old two-row form must be gone.
+                expect(block).toContain('html += signedRow(`<b>${pnlLabels.bookValue}</b>`, acqNewVal + acqReinvestedVal, textColor);');
+                expect(block).toContain("html += signedRow(`↳ ${pnlLabels.acqNewCapital}`, acqNewVal, cc('bookAssetLike'));");
+                expect(block).toContain("html += signedRow(`↳ ${pnlLabels.acqReinvested}`, acqReinvestedVal, cc('cashGenerated'));");
+                expect(block).not.toContain("html += signedRow(pnlLabels.acqNewCapital, acqNewVal, cc('cashContributed'));");
+                expect(block).not.toContain("html += signedRow(pnlLabels.acqReinvested, acqReinvestedVal, cc('cashGenerated'));");
                 // Each of the six values defaults to 0 when the aggregated entry is absent —
                 // which is what makes "all zero" the honest reading of an empty day.
                 for (const path of ['pnl.income.dividend', 'pnl.income.interest', 'pnl.costs', 'pnl.deposits', 'pnl.acquisition.fromNewCapital', 'pnl.acquisition.fromReinvested']) {
