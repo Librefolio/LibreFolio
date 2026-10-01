@@ -86,8 +86,8 @@
 | L3-3 | i18n via `dev.py i18n`: `columnHelp.*` ×6, `axisReturn`, etichetta, descrizione e nota del grafico nelle 4 lingue | ✅ 2026-09-30 |
 | L3-4 | cancelli, mutanti sugli E2E nuovi | ✅ 2026-09-30 (E2E rossi veri sul codice vecchio, niente mutanti) |
 | L3-5 | review del developer sulla 6164: giro 1 (tabella prima del grafico), giro 2 (selezione collegata, via la nota del benchmark), giro 3 (approvato; richieste del giro 4) | ✅ 2026-10-01 |
-| L3-6 | checkpoint a Risk dei giri 1–3 (G1–G6; rifatto senza la voce di `TODO_FUTURI.md`, 13:0x) | ⏳ FROZEN fino al commit |
-| L3-7 | giro 4: tooltip sui trattini (L1° e L3°), nota del periodo, guida; poi il selettore del benchmark (variante B) dalla primitiva `BenchmarkSelect` di Risk, quando arriva nel mio ramo | ⏳ dopo il commit e la fusione |
+| L3-6 | checkpoint a Risk dei giri 1–3 (G1–G6; rifatto senza la voce di `TODO_FUTURI.md`, 13:0x) | ✅ 2026-10-01: `c66757dcc`…`b69df5c96`, fusione `2130bc42e` validata |
+| L3-7 | giro 4: tooltip sui trattini (L1° e L3°), nota del periodo, guida; poi il selettore del benchmark (variante B) dalla primitiva `BenchmarkSelect` di Risk, quando arriva nel mio ramo | ⏳ in corso: vedi «Giro 4» (L4-0…L4-7) |
 
 ## Esecuzione
 
@@ -434,4 +434,257 @@
 
 > Il delta, i gruppi (G1–G6) e i digest stanno nel messaggio a Risk e in `/tmp/libreFolio_commits/f-l3-*`. Prima
 > versione (12:4x) con 7 gruppi; rifatta alle 13:0x senza la voce di `TODO_FUTURI.md`.
+> Stato: **FROZEN** fino al commit: niente modifiche, test, server o comandi Git.
+
+> ✅ **Committato** dal developer: `c66757dcc` G1 · `f6f11cb9c` G2 · `eeb22b7dc` G3 · `78b9ba04f` G4 · `41728d8d9` G5 ·
+> `b69df5c96` G6. Verificato in sola lettura (`/tmp/libreFolio_f4/verify_l3_merged.sh`, prima linea dei genitori
+> `3eff35036..b69df5c96`): messaggi e file uguali per ogni commit, blob identici al registro (`dd0579fb…`) → **PASS**.
+>
+> **Fusione della punta di Risk** (del coordinatore, 15:3x): `2130bc42e`, genitori `b69df5c96` + `cf09df7f6`, albero
+> uguale alla simulazione, pulito. Validata nella 6154, uno per volta (`/tmp/libreFolio_f4/merge2130_gates.sh`, log in
+> `/tmp/libreFolio_f4/merge2130/`):
+> - `front build --debug` 0; `front check` al pavimento (3 errori e 41 avvisi negli stessi 4 file, nessuno mio);
+> - `core-unit` **107 file, 2896 test**, con i due cancelli XSS di K (`htmlInterpolation.gate`, `htmlSink.gate`);
+>   `component-unit` **98 file, 2356 test**;
+> - `check-orphans` pulito; `i18n audit` 3500 chiavi, tutte tradotte;
+> - E2E `risk-lab` **31/31**, `risk` **13/13**, `asset-list` **28/28**;
+> - backend `risk-all` non eseguito, per la regola del coordinatore: nessun file del motore di rischio è cambiato, e
+>   `series_preparation.py` rende solo pubblica `mark_market_closed_carries`, con corpo identico.
+> - Evidenza a Risk e al coordinatore (15:50).
+
+## Giro 4 · 2026-10-01, dalle 15:55
+
+**Via libera**: le bozze del developer («ok per le bozze», 12:4x); Risk (15:51): «Non serve che tu stia fermo […] Puoi
+iniziare adesso le voci del giro 4 che non riguardano il selettore». Le chiavi nuove vanno sotto `risk.assetSet.*`.
+Il selettore (variante B) arriva dopo, con la primitiva `BenchmarkSelect` di Risk e una fusione vera della sua punta.
+
+**Fatti verificati sul codice (base `2130bc42e`)**:
+- **Trattini**: `HtmlCell.tooltip: {text}` (`table/types.ts:147`) avvolge la cella nel `<Tooltip>` del progetto
+  (`DataTable.svelte:1372`). Il wrapper è un `role="button"` focalizzabile, e il suo `toggle` chiama
+  `event.stopPropagation()` (`Tooltip.svelte:144-145`). **Conseguenza in L3°**: un clic proprio sul trattino apre la
+  spiegazione e non seleziona la riga; il resto della riga la seleziona come prima. `DataTable` non espone
+  `interactiveChild`, e non è mio: comportamento accettato, da dire al developer in review.
+- **Periodo** per un insieme di asset (`series_preparation.py:398-429`):
+  - `effective_range` va dal primo all'ultimo giorno di **rendimento** e diventa `metadata.analyzed_range`;
+  - `calendar_days` = ultimo rendimento − prezzo di partenza;
+  - quindi il primo giorno di prezzo è `analyzed_range.end − calendar_days`, e i giorni inclusi sono
+    `calendar_days + 1`. Col periodo 1 ott – 30 set la nota dice «dal 1 ott al 30 set (365 giorni)», come la barra.
+  - **Più corto del periodo scelto** quando l'inizio cade più di 7 giorni dopo `dateStart`, o la fine più di 7 giorni
+    prima di `dateEnd`. È la soglia di freschezza del progetto, quindi weekend e festivi non lo fanno scattare.
+- **Fonte**: i metadati di `riskReturn`, da cui vengono volatilità e rendimento; in mancanza `kpi`, poi `comparison`.
+  Senza metadati, o con 0 osservazioni, la nota non compare.
+- **Date**: `dayFormatter($currentLanguage)` (`eligibility.ts:123`), come il banner del periodo.
+- **Annualizzati**: volatilità e rendimento medio; Sharpe e Sortino ne derivano; beta e correlazione no.
+
+**Passi**:
+
+| # | passo | stato |
+|---|---|---|
+| L4-0 | piano | ✅ 2026-10-01 |
+| L4-1 | test rossi (test-author): helper della finestra, trattini con tooltip in L1° e L3°, via le due note fisse, nota del periodo; E2E | ✅ 2026-10-01 (rilanciati in due dopo la caduta di rete) |
+| L4-2 | i18n via `dev.py i18n`: `risk.assetSet.levels.l3.period.{window,narrowed,annualized}` × 4 | ✅ 2026-10-01 |
+| L4-3 | codice: `assetSetCalculationWindow` (`assetSetLevels.ts`), tooltip del trattino condiviso (`assetSetTable.ts`), sezioni L1° e L3°, `dateStart`/`dateEnd` passati a L3° | ✅ 2026-10-01 |
+| L4-4 | guida (docs-writer, solo EN): `:110-118`, `:128`, ordinamento, selezione collegata, trattino, nota del periodo; `:124` e `:122` aspettano | ✅ 2026-10-01 (da riverificare dopo il codice: due frasi descrivono comportamenti nuovi) |
+| L4-5 | cancelli, uno per volta | ⏳ |
+| L4-6 | review del developer sulla 6164, poi checkpoint a Risk | ⏳ |
+| L4-7 | fusione vera della punta di Risk con `BenchmarkSelect`, poi il selettore sopra L1° e L3° (e `:124` della guida) | ⏳ |
+
+### L4-2 · i18n ✅ 2026-10-01 (script `/tmp/libreFolio_f4/l4_i18n_add.sh`, 3 `dev.py i18n add`)
+
+> **Note implementazione**:
+> - Tre frasi composte nella nota, sotto `risk.assetSet.levels.l3.period`:
+>   - `window`, con `{start}`, `{end}` e il plurale ICU `{days}`;
+>   - `narrowed`, con `{selectedStart}` e `{selectedEnd}`;
+>   - `annualized`.
+> - Date nello stile del bottone del periodo (`fitPeriod.button`): IT «dal … al», EN «… – …», FR «du … au», ES «del … al»
+>   (con «período», come lì).
+> - Il trattino non ha una chiave nuova: il tooltip riusa `risk.assetSet.levels.blankNote`, già nelle 4 lingue
+>   (approvato nella bozza).
+
+> **⚠️ Fuori pista (16:2x)**: i due agenti del giro (test-author `l4-red-tests`, docs-writer `l4-guide`) sono caduti
+> dopo ~25 minuti per errori di rete del modello: una connessione scaduta, poi «408 Timed out reading request body…
+> use a smaller request size». Nessuna modifica lasciata nel worktree (`git status`: solo il piano e le 4 chiavi i18n).
+> Rilanciati con contesti più piccoli: test-author diviso in due (unitari / E2E, file disgiunti), e letture mirate
+> (`grep`, `view_range`) invece dei file interi.
+
+### L4-4 · la guida ✅ 2026-10-01, 16:4x (docs-writer `l4-guide-retry`)
+
+> **Note implementazione** (`mkdocs_src/docs/user/assets/correlation.en.md`, solo EN, la pagina non ha traduzioni):
+> - L1° (`:94`, `:106`): icona e nome su una riga; il falso «ⓘ next to each column heading opens its theory page»
+>   diventa: la pagina non ordina da sé, ordina solo il clic sul titolo; il titolo spiega in un tooltip e non porta a
+>   nessuna pagina; il libro della testata apre Risk Metrics (`docsPath` = `…/risk-metrics/`, verificato), l'occhio
+>   mostra o nasconde le colonne.
+> - L3° (`:110-121`):
+>   - prima la tabella, poi il grafico; «Average annual return» al posto di «Expected return», anche nel titolo
+>     dell'avviso, che ora dice anche che descrive il passato;
+>   - l'ordinamento del lettore, la riga del periodo, la selezione condivisa (il punto del benchmark non seleziona);
+>   - `:131`: tolta la frase sulla nota sotto la tabella, link intatti.
+> - `:174`: le date stanno nella riga sotto la tabella di L3°, le cifre in «Calculation details». `:184`: la
+>   spiegazione sta sul trattino.
+> - `:125` (rombo) e `:127` (*Compared with*, nessun selettore): **verbatim**, aspettano A e Risk.
+> - `mkdocs build` (strict) pulito; `check-links` **88 validi, 8 non verificabili, 3 ancore note** (come la base);
+>   `sw.js` riscritto con lo stesso timbro → nessuna differenza in git.
+> - Da riverificare dopo il codice: la riga del periodo (`:114`) e il trattino (`:184`) descrivono il comportamento
+>   del giro 4.
+
+### L4-1 · test rossi prima ✅ 2026-10-01, 16:3x–17:1x (test-author `l4-unit-tests` e `l4-e2e-tests`, file disgiunti)
+
+> **Unitari** (4 file, 235 casi): **45 rossi, 190 verdi**, tutti i rossi nuovi e per la ragione giusta, verificato da
+> me (`/tmp/libreFolio_f4/l4_red.log`):
+> - `assetSetLevels.test.ts`: 17 rossi, `assetSetCalculationWindow is not a function`. Coprono l'esempio dell'anno,
+>   7 casi sul restringimento (con 7 giorni contro 8 su ciascun lato), 4 sul conteggio all'indietro (fine mese più
+>   weekend, 29 febbraio 2028, un anno che lo contiene, la notte del cambio d'ora), il giorno singolo con `end` nullo,
+>   l'ordine dei risultati, i metadati rotti (letti via `riskMetadata()`, cioè Zod) e i casi `null`;
+> - L1°: 8 rossi (la nota fissa c'è ancora; 5 colonne più 2 casi cella per cella senza Tooltip sul trattino);
+> - L3°: 17 rossi (la nota fissa in 2 casi; 8 trattini senza Tooltip; 7 casi della nota del periodo);
+> - livelli: 3 rossi (nessuna nota del periodo dopo l'arrivo delle cifre).
+> - Guardie già verdi: nessuna nota negli stati di errore, caricamento, scarto e vuoto; le chiavi nelle 4 lingue;
+>   nessuna nota del periodo senza metadati; una riga di soli trattini si seleziona dal nome.
+> - Prova di test-author: implementazione di riferimento in `/private/tmp` → 235/235; 6 difetti voluti, ciascuno preso
+>   (conti in ora locale, `>= 7`, partenza il giorno prima del primo rendimento, livelli senza date, Tooltip su ogni
+>   cella, date in `'en'` fisso). Copia cancellata.
+> - Fissato anche l'ordine delle frasi: periodo, «più corto», «annualizzati».
+>
+> **E2E** (`risk-lab.spec.ts`): un caso cambiato (nessuna delle due note, ~:4237-4243) e tre nuovi:
+> - i trattini di L1° (`:4334`) e di L3° (`:4396`) spiegano sé stessi al passaggio del mouse, e una cifra misurata non ha
+>   Tooltip;
+> - la nota del periodo (`:4444`): attributi ricavati dai metadati dello stub (`metadata()` dello spec, 87 giorni
+>   fissi); la posizione fra tabella e grafico; poi il preset `1y` → `data-narrowed="true"`.
+> - Nessuno stub esteso; `risk-mocks.ts` (di E) non toccato; `tsc -p tsconfig.e2e.json` pulito su risk-lab.
+
+### L4-3 · il codice ✅ 2026-10-01, 17:1x
+
+> **Note implementazione**:
+> - `assetSetLevels.ts`: `AssetSetCalculationWindow` e `assetSetCalculationWindow(results, dateStart, dateEnd)`.
+>   - Legge i metadati con `riskMetadata()`, cioè validati da Zod, e salta quelli rotti e quelli che non hanno
+>     misurato nulla.
+>   - `start` = `end − calendar_days` in giorni UTC; `days` = `calendar_days + 1`; «più corto» oltre 7 giorni da
+>     ciascun lato (`NARROWED_AFTER_DAYS`).
+> - `assetSetTable.ts`: `figureCell(html, measured, blankExplanation)`, un solo punto per L1° e L3°. Il trattino ha
+>   `tooltip: {text}`, la cifra misurata nessun tooltip.
+> - L1°: le tre costruzioni di cella passano da `figureCell`; via la nota fissa e il suo commento (ormai falso).
+> - L3°:
+>   - `valueColumn` passa da `figureCell`;
+>   - due prop nuove obbligatorie, `dateStart`/`dateEnd`;
+>   - `calculationWindow`, `formatDay` (`dayFormatter($currentLanguage)`) e `periodText`, composto di tre frasi, la
+>     seconda solo se «più corto»;
+>   - la nota `risk-asset-set-l3-period` con `data-start/end/days/narrowed` prende il posto della nota fissa, fra la
+>     tabella e il grafico.
+> - Livelli: `{dateStart} {dateEnd}` passati a L3°.
+> - vitest sui 4 file: **235/235** (erano 45 rossi).
+
+### L4-5 · cancelli · 2026-10-01, dalle 17:19 (uno per volta, corsia 6154)
+
+> **Prima tornata** (`/tmp/libreFolio_f4/l4_gates1.sh`, log in `/tmp/libreFolio_f4/l4gates/`):
+> - prettier pulito sui 14 file del frontend (dopo `--write` sul solo `AssetSetComparisonLevels.svelte`: la riga del
+>   montaggio di L3°, allungata dalle due prop, va a capo una prop per riga);
+> - vitest sui 27 percorsi del giro: **27 file, 1044 test**;
+> - `front build --debug` 0; E2E `risk-lab` **34/34** (31 + i 3 casi nuovi);
+> - `tsc -p tsconfig.e2e.json`: i soliti 4 errori in altri file, 0 negli spec del rischio.
+> - **⚠️ Fuori pista**: `front check` dava **5** errori, 2 miei in `assetSetLevels.ts`: il tipo generato allarga ogni
+>   giorno di `analyzed_range` a `string | (string | null)[]`, e io lo passavo come `string`. Vitest non controlla i
+>   tipi, quindi i 235 test erano verdi. Cura: `singleValue()`, come per ogni campo allargato, e un salto se il giorno
+>   resta `null`. Poi vitest sui due file toccati 153/153 e `front check` di nuovo **al pavimento** (3 errori e 41
+>   avvisi negli stessi 4 file, nessuno mio). Comportamento invariato su una stringa; la build e l'E2E si rifanno
+>   comunque sul codice finale.
+> - Interruzione di servizio a metà tornata (17:2x–18:4x): nessun comando lasciato a metà; albero ricontrollato, nessun
+>   mutante applicato, 6154 e 6164 libere.
+
+> **Mutanti sui casi E2E nuovi** (`/tmp/libreFolio_f4/l4_mutants.sh`): tre difetti insieme → build → i 4 casi mirati
+> (`risk-lab "explains itself" | "shows beta and correlation…" | "publishes the period…"`) → **4/4 rossi**, ciascuno per
+> la ragione giusta:
+> - nota fissa di L1° rimessa → il caso del benchmark (`:4241`, attesa 0, trovata 1);
+> - nessun Tooltip sui trattini → i due casi dei trattini (`badDay` `:4376`, `volatility` `:4428`);
+> - `data-narrowed` sempre falso → il caso del periodo, sul preset `1y` (`:2018`).
+> - Ripristino byte per byte, sha256 verificato per i tre file.
+>
+> **⚠️ Fuori pista, e un presupposto falso del MIO brief** (trovato dal docs-writer `l4-guide-period`, verificato da me):
+> - avevo scritto che il prezzo di partenza cade sul primo giorno del periodo. **Falso**:
+>   - `risk/service.py:635-637` carica i prezzi dal giorno **prima** del periodo;
+>   - `series_preparation.py:292-294` prende come base l'ultimo giorno prima del periodo, quando tutti gli asset
+>     hanno storia prima;
+> - quindi nel caso comune `end − calendar_days` è il giorno prima della barra. La nota avrebbe detto «dal 30 set 2025
+>   al 30 set 2026 (366 giorni)», contro la bozza approvata «dal 1 ott 2025 al 30 set 2026 (365 giorni)»;
+> - i test erano verdi perché i fixture seguivano il mio brief, non il motore;
+> - **cura**, allineata alla bozza approvata: il periodo va dal giorno **dopo** il prezzo di partenza, cioè il primo
+>   giorno di cui le cifre colgono il movimento, all'ultimo rendimento: `start = end − calendar_days + 1`,
+>   `days = calendar_days`, regola dei 7 giorni invariata. Con storia precedente `start` = il primo giorno della barra.
+>   Test prima (test-author), poi una riga di codice.
+> - La frase della guida (`:114`) l'ha già riscritta il docs-writer: «sempre le date usate davvero», qualche giorno di
+>   differenza a un capo non fa dire «più corto», solo oltre una settimana. Resta vera anche con la cura.
+>   - **Test riallineati** (test-author `l4-period-realign`): fixture realistici (l'anno pieno: primo rendimento
+>     2025-10-01, `calendar_days` 365); due casi guardia, uno contro la formula vecchia (`end − calendar_days`) e uno
+>     contro chi leggesse `analyzed_range.start` (inizio di sabato 2025-10-04, primo rendimento lunedì 10-06); fine di
+>     domenica; confini 7/8 e conti all'indietro ricalcolati; E2E `l3PeriodFor` e premesse aggiornati. Contro il codice
+>     di prima: **26 rossi**, tutti lo sfasamento di un giorno (`start` un giorno prima, `days` uno in più).
+>   - **Codice**: `start = end − (calendar_days − 1)`, `days = calendar_days`; docblock con i fatti del motore. →
+>     vitest sui 3 file **184/184**; prettier pulito.
+
+> **Cancelli finali sul codice definitivo** (19:20–19:26, `/tmp/libreFolio_f4/l4_gates2.sh`, log in
+> `/tmp/libreFolio_f4/l4final/`, uno per volta nella 6154):
+> - prettier pulito; vitest sui 27 percorsi **27 file, 1045 test**;
+> - `front check` **al pavimento** (3 errori e 41 avvisi negli stessi 4 file, nessuno mio); `tsc -p tsconfig.e2e.json`
+>   4 errori, 0 negli spec del rischio;
+> - `front build --debug` 0; E2E `risk-lab` **34/34** (= i test dello spec), `risk` **13/13**;
+> - `core-unit` **107 file, 2915 test**; `component-unit` **98 file, 2406 test**, nessun errore non gestito;
+> - `check-orphans` pulito; `i18n audit` **3503 chiavi**, tutte tradotte; `check-links` **88 validi**, 8 non
+>   verificabili, 3 ancore note (invariato);
+> - `git diff --check` pulito; `sw.js` invariato; 6154 libera.
+
+### L4-6 · review del developer sulla 6164 · 2026-10-01, dalle 19:3x
+
+> **Preparazione**: copia di prod fresca (`5c0a681bc4e4b59c`), build del codice definitivo, server `l4server` sulla 6164.
+>
+> **Risposta del developer (ask_user), alla lettera**: «quando scrivi: Periodo: dal 1 lug 2026 al 1 ott 2026 (93
+> giorni). Volatilità e rendimento medio sono annualizzati; Sharpe e Sortino derivano da questi. non mettere 93 giorni,
+> meglio 3 mesi e 3 giorni e poi andrei a capo a Volatilità e rendimento .... Riguardo al grafico, credi potremmo
+> sfruttare il raggio dei puntini per mettere un altra informazione? se si quale? per il resto ok,, mi piace quello che
+> hai fatto, fai questo intanto che aspetti risk»
+>
+> **Il raggio dei puntini** (parere dato, nessun lavoro): si può, ma non lo farei.
+> - In Dashboard il raggio vuol dire già «quanto ne possiedi» (05 §7.5, «bolla ∝ peso»), e una selezione non ha pesi.
+> - L'area è il canale che si legge peggio, e una bolla grande diventa una classifica implicita.
+> - L'unico candidato sensato è la peggior discesa, con legenda, valore nel tooltip e il permesso di A; meglio
+>   lasciarla in L1°.
+>
+> **La durata**: 1 lug – 1 ott, contando i due capi, a mesi di calendario fa «3 mesi e 1 giorno», non «3 e 3» (mesi da
+> 30 giorni). Chiesto (ask_user): il developer sceglie **«Mesi di calendario: 3 mesi e 1 giorno, e 1 anno per l'anno
+> pieno»**.
+>
+> **Note implementazione**:
+> - i18n (`/tmp/libreFolio_f4/l4_i18n_length.sh`): `period.window` aggiornato a `({length})` nelle 4 lingue; nuove
+>   `period.years`, `period.months`, `period.days`, ciascuna con plurale ICU.
+> - Test rossi prima (test-author `l4-length-tests`): `calendarLength` (19 casi: l'esempio del developer con la guardia
+>   contro i mesi da 30 giorni, mesi tagliati a fine mese, mai a catena, 29 febbraio, cambio d'ora in Europe/Rome);
+>   la nota su due righe (`-period-window`, `-period-annualized`), senza il numero dei giorni, con la durata composta
+>   dalle chiavi e da `Intl.ListFormat` (caso a tre parti, 1 anno, 2 mesi e 3 giorni). → 23 rossi per le ragioni
+>   giuste.
+> - Codice:
+>   - `calendarLength(start, end)` in `assetSetLevels.ts`: mesi interi da `start`, tagliati a fine mese e mai a
+>     catena, poi i giorni rimasti fino al giorno dopo `end`;
+>   - nella sezione `periodLength` (parti a zero omesse, `Intl.ListFormat` nella lingua corrente) e `periodWindowText`;
+>     la nota ha due `span.block`.
+>   - `data-days` invariato.
+> - vitest sui 3 file: **204/204**, poi la sezione da sola 104/104 dopo prettier.
+> - Guida (docs-writer `l4-guide-length`): `:114` e `:174` dicono la durata «in calendar years, months and days» (con
+>   l'esempio 1 luglio – 1 ottobre = 3 mesi e 1 giorno); build strict pulito, `check-links` 88/8/3, `sw.js` invariato.
+>
+> **Cancelli sul codice definitivo, di nuovo** (22:18–22:24, stesso script, log in `/tmp/libreFolio_f4/l4final/`; la
+> tornata precedente è in `l4final_pre_length/`):
+> - prettier pulito; vitest **27 file, 1065 test**; `front check` al pavimento (3 errori e 41 avvisi negli stessi 4 file);
+>   `tsc -p tsconfig.e2e.json` 4 errori, 0 negli spec del rischio;
+> - build 0; E2E `risk-lab` **34/34**, `risk` **13/13**; `core-unit` **107 file, 2934 test**; `component-unit` **98
+>   file, 2407 test**;
+> - `check-orphans` pulito; `i18n audit` **3506 chiavi**, tutte tradotte; `check-links` 88 validi;
+> - `git diff --check` pulito; `sw.js` invariato; 6154 libera.
+>
+> **Ultimo sguardo del developer** (ask_user, 22:2x): «Periodo: dal 1 lug 2026 al 1 ott 2026 (3 mesi e 1 giorno).» su
+> una riga e «Volatilità e rendimento medio…» sotto. Risposta: **«Va bene, procedi col checkpoint»**. Server 6164
+> fermato (`lsof`: libera).
+
+## Checkpoint di L3° · giro 4 (tutto tranne il selettore) · 2026-10-01 (verso Risk)
+
+> Il delta, i gruppi (G1–G6) e i digest stanno nel messaggio a Risk e in `/tmp/libreFolio_commits/f-l4-*`.
+> Dopo il commit: fusione vera della punta di Risk `68b46721b` (script del coordinatore), poi il selettore
+> `BenchmarkSelect` sopra L1° e L3° (L4-7) e la guida `:124`.
 > Stato: **FROZEN** fino al commit: niente modifiche, test, server o comandi Git.
