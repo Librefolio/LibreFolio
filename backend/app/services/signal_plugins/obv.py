@@ -44,7 +44,8 @@ class ObvSignalParams(BaseModel):
 @register_plugin(SignalPluginRegistry)
 class ObvSignalPlugin(SignalPlugin):
     signal_code = "OBV"
-    implementation_version = "1.0.0"
+    # 2.0.0 — computes on quote days: SMA 200 = 200 sessions (developer's decision of 30/09/2026).
+    implementation_version = "2.0.0"
     category = SignalCategory.VOLUME
     display_name_key = "signals.obv.name"
     description_key = "signals.obv.description"

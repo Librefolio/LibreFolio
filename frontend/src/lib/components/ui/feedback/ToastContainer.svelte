@@ -10,6 +10,7 @@
 <script lang="ts">
     import {fly} from 'svelte/transition';
     import {toasts, type ToastVariant} from '$lib/stores/app/toastStore.svelte';
+    import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
     import {AlertCircle, AlertTriangle, CheckCircle, Info, X} from 'lucide-svelte';
 
     const variantStyles: Record<ToastVariant, string> = {
@@ -93,7 +94,7 @@
                 <div class="flex flex-col items-center gap-1 px-4 py-3 text-sm leading-snug text-center">
                     <div class="flex items-start gap-1.5">
                         <Icon size={15} class="shrink-0 mt-0.5" />
-                        <span class="flex-1 whitespace-pre-line text-left">{@html toast.message}</span>
+                        <span class="flex-1 whitespace-pre-line text-left">{@html sanitizeHtml(toast.message)}</span>
                     </div>
                     <button class="shrink-0 p-0.5 rounded hover:bg-white/20 transition-colors absolute top-1.5 right-1.5" onclick={() => toasts.dismiss(toast.id)} aria-label="Dismiss" data-testid="toast-dismiss">
                         <X size={12} />

@@ -29,6 +29,25 @@ from backend.app.services.series_preparation import (
     gap_slots,
 )
 
+# Calendar days loaded per session of warm-up. A year holds about 252 sessions in 365 days, and a long
+# window of holidays lowers that further; two calendar days per session covers both with room to spare.
+SESSION_WARMUP_DAY_MULTIPLIER = 2
+
+
+def is_quote_day(point: SignalPricePoint) -> bool:
+    """Whether a point carries a price quoted on its own date.
+
+    The price is what decides it, not the exchange rate: a quote converted with a rate carried from an
+    earlier day is still a session of the instrument.
+    """
+    info = point.backward_fill_info
+    return info is None or info.days_back == 0
+
+
+def quote_day_points(points: list[SignalPricePoint]) -> list[SignalPricePoint]:
+    """Keep the sessions of a calendar input: the points a price was quoted on."""
+    return [point for point in points if is_quote_day(point)]
+
 
 def _visible_slot_count(context: SignalExecutionContext) -> int:
     end = context.requested_range.end or context.requested_range.start

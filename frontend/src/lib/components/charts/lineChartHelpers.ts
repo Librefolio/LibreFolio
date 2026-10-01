@@ -389,9 +389,35 @@ export function buildMainSeries(values: Array<number | null>, staleDays: number[
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
+ * Fill the axis positions strictly between two points with the straight line joining them.
+ *
+ * Only for the band's invisible stack base and its stacked fill. Indicators have a point on
+ * sessions only while the date axis keeps every calendar day, and where the base of a stacked
+ * series is null ECharts draws the fill down to the axis origin, even with `connectNulls`.
+ * Positions before the first point and after the last one are left as they are. Both chart
+ * tooltips skip these two series, so a bridged value only shapes the fill.
+ */
+function bridgeBetweenPoints(values: (number | null | undefined)[]): (number | null | undefined)[] {
+    const bridged = [...values];
+    let previous = -1;
+    for (let index = 0; index < bridged.length; index += 1) {
+        const value = bridged[index];
+        if (typeof value !== 'number' || !Number.isFinite(value)) continue;
+        if (previous >= 0 && index - previous > 1) {
+            const start = bridged[previous] as number;
+            const step = (value - start) / (index - previous);
+            for (let gap = previous + 1; gap < index; gap += 1) bridged[gap] = start + step * (gap - previous);
+        }
+        previous = index;
+    }
+    return bridged;
+}
+
+/**
  * Build an ECharts band series (Bollinger-style confidence band) from a
  * RenderedSignal with bandData. Returns 3 series: lower (invisible stack base),
- * delta (shaded area), and middle (visible line).
+ * delta (shaded area), and middle (visible line). The base and the delta are
+ * bridged between points (`bridgeBetweenPoints`); the middle line keeps its gaps.
  *
  * Uses explicit upper + lower lines instead of stacking to avoid ECharts
  * rendering artifacts when lower values go negative (common in % mode).
@@ -428,7 +454,7 @@ export function buildBandSeries(signal: RenderedSignal, dates: string[], isDark:
         {
             type: 'line',
             name: `${signal.label} Lower`,
-            data: lowerData,
+            data: bridgeBetweenPoints(lowerData),
             lineStyle: {opacity: 0},
             itemStyle: {color: 'transparent'},
             stack: `bb-${signal.id}`,
@@ -443,7 +469,7 @@ export function buildBandSeries(signal: RenderedSignal, dates: string[], isDark:
         {
             type: 'line',
             name: `${signal.label} Band`,
-            data: deltaData,
+            data: bridgeBetweenPoints(deltaData),
             lineStyle: {opacity: 0},
             areaStyle: {color: hexToRgba(bandColor, bandOpacity)},
             stack: `bb-${signal.id}`,

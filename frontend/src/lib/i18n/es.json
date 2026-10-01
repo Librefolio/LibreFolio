@@ -1165,15 +1165,16 @@
       "period": "Longitud de la memoria del filtro en días. Valores más altos = más suave pero respuesta más lenta.",
       "offset": "Desplazamiento vertical como porcentaje del valor base. Mueve la señal arriba o abajo.",
       "currencyPair": "Selecciona un par FX para superponer sus datos de tipo de cambio en el gráfico.",
-      "emaPeriod": "Ventana retrospectiva en días. Corresponde al coeficiente $\\alpha = 2/(N+1)$. Más corto = reacción rápida, más largo = más suave.",
-      "fastPeriod": "Ventana EMA a corto plazo para la línea rápida del MACD. Estándar: 12 días. Valores más bajos reaccionan más rápido.",
-      "slowPeriod": "Ventana EMA a largo plazo para la línea lenta del MACD. Estándar: 26 días. Valores más altos capturan la tendencia de fondo.",
-      "signalPeriod": "Suavizado EMA aplicado a la línea MACD. Estándar: 9 días. Reduce el ruido en las señales de cruce.",
+      "emaPeriod": "Ventana retrospectiva en sesiones, los días con cotización. Corresponde al coeficiente $\\alpha = 2/(N+1)$. Más corto = reacción rápida, más largo = más suave.",
+      "fastPeriod": "Ventana EMA a corto plazo para la línea rápida del MACD. Estándar: 12 sesiones. Valores más bajos reaccionan más rápido.",
+      "slowPeriod": "Ventana EMA a largo plazo para la línea lenta del MACD. Estándar: 26 sesiones. Valores más altos capturan la tendencia de fondo.",
+      "signalPeriod": "Suavizado EMA aplicado a la línea MACD. Estándar: 9 sesiones. Reduce el ruido en las señales de cruce.",
       "multiplier": "Número de desviaciones estándar ($k \\cdot \\sigma$). $k=2$ cubre ~95% de los valores asumiendo distribución normal.",
       "overbought": "Nivel por encima del cual el activo se considera sobrecomprado. Estándar: 70. Valores cercanos a 100 indican fuerte presión compradora.",
       "oversold": "Nivel por debajo del cual el activo se considera sobrevendido. Estándar: 30. Valores cercanos a 0 indican fuerte presión vendedora.",
       "assetComparison": "Seleccione un activo para superponer su precio en este gráfico. En modo porcentaje, ambas curvas comienzan en 0%.",
-      "fxPair": "Seleccione un par FX para superponer su tipo de cambio en este gráfico. En modo porcentaje, ambas curvas comienzan en 0%."
+      "fxPair": "Seleccione un par FX para superponer su tipo de cambio en este gráfico. En modo porcentaje, ambas curvas comienzan en 0%.",
+      "sessionPeriod": "Ventana retrospectiva en sesiones, los días con cotización. Valores más altos = más suave pero respuesta más lenta."
     },
     "macdLineColor": "Color Línea MACD",
     "noDataAvailable": "No hay datos disponibles. Intenta sincronizar este activo/par.",
@@ -1524,7 +1525,8 @@
       "navigate_asset": "Ver activo",
       "navigate_fx": "Ver FX",
       "add_fx_pair": "Añadir par FX",
-      "sync_fx_pair": "Sincronizar"
+      "sync_fx_pair": "Sincronizar",
+      "sync_asset_prices": "Sincronizar"
     },
     "referencePriceFallback": "Precio de apertura del lote no disponible en la fecha exacta — se usa el último precio conocido {reference_price} como referencia para el rendimiento relativo",
     "referencePriceUnavailable": "No hay precio de referencia disponible para la apertura de un lote — no se puede calcular el rendimiento relativo",
@@ -2442,7 +2444,8 @@
       "riskFullHistory": "Mide el drawdown respecto al pico más alto de todo el historial disponible, no solo de la ventana visible. Desactívalo para una vista más rápida relativa a la ventana."
     },
     "units": {
-      "days": "días"
+      "days": "días",
+      "sessions": "sesiones"
     },
     "visual": {
       "components": "Componentes",
