@@ -3125,11 +3125,19 @@
         },
         "l3": {
           "title": "¿Cuánto pagó cada uno por su riesgo?",
-          "description": "Riesgo frente a rentabilidad, un punto por activo. No se traza ninguna recta: una selección no tiene un todo, así que no hay nada por encima o por debajo.",
-          "expectedReturn": "Rentabilidad esperada",
+          "description": "Para cada activo seleccionado, cuánto osciló y cuánto rindió de media al año, en el gráfico y en la tabla; con un índice de referencia elegido en el Panel, también cuánto se movió junto a él.",
+          "expectedReturn": "Rentabilidad media anual",
           "correlation": "Correlación",
-          "noBenchmark": "Elige un índice de referencia en el Panel para añadir beta y correlación. Un índice que ya está en la selección no puede servirse de medida a sí mismo.",
-          "scatterNote": "Los puntos muestran la rentabilidad esperada en media-varianza: en un activo muy volátil la rentabilidad realmente vivida es menor, porque la volatilidad erosiona la capitalización."
+          "scatterNote": "Cada punto es un activo: el eje horizontal muestra cuánto osciló y el vertical cuánto rindió de media al año. En un activo muy volátil, la media es más alta que lo que rindió de verdad.",
+          "columnHelp": {
+            "volatility": "Cuánto oscilan las rentabilidades del activo, en base anual: la desviación típica de las rentabilidades del periodo, anualizada.",
+            "expectedReturn": "La media de las rentabilidades del periodo, llevada a un año según la frecuencia de las cotizaciones. Describe el pasado, no es una previsión. En un activo muy volátil es más alta que lo que rindió de verdad, porque las oscilaciones erosionan la rentabilidad compuesta.",
+            "sortino": "Cuánta rentabilidad media anual por cada unidad de oscilación a la baja: solo cuentan las caídas, no las subidas.",
+            "sharpe": "Cuánta rentabilidad media anual por cada unidad de volatilidad: la recompensa por el riesgo asumido, subidas y caídas por igual.",
+            "beta": "Cuánto se movió el activo cuando se movía el índice de referencia: 1 significa lo mismo, 2 el doble, 0 con independencia de él.",
+            "correlation": "Cuánto se movieron juntos el activo y el índice de referencia, de −1 (siempre opuestos) a +1 (siempre juntos)."
+          },
+          "axisReturn": "Rentabilidad media anual"
         }
       },
       "legend": {
