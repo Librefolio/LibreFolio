@@ -91,6 +91,27 @@ interface RiskMockOptions {
      * Opt-in: absent, `withInjectedError` hands the result straight back.
      */
     analyticErrors?: Record<string, string>;
+    /**
+     * Gives the results carrying one of these instance ids the status named here.
+     *
+     * Keyed by instance, unlike every sibling above, because one code now answers
+     * for two levels: `historical_kpi` travels in both waves — the historical one
+     * is L1's (`base-historical-historical_kpi`), the current composition's is the
+     * one L3 draws (`base-current_composition-historical_kpi`). An option keyed by
+     * code would degrade both at once, and a test asking *under which level* a
+     * measurement is disclosed could not tell the two claims apart.
+     *
+     * Each status keeps a shape `validate_status_payload` (`schemas/risk.py`)
+     * accepts. `partial` keeps the output the stub answered with — a partial
+     * measurement is still drawn, which is what makes it partial rather than
+     * missing — and `unavailable` drops it (`output: null`) and carries an
+     * `error` whose code is a real `RiskErrorCode` member: Zodios validates the
+     * response, and an invented code would fail the whole wave instead of this
+     * one result.
+     *
+     * Opt-in: absent, `withInjectedStatus` hands the result straight back.
+     */
+    instanceStatus?: Record<string, 'partial' | 'unavailable'>;
 }
 
 /**
@@ -424,9 +445,14 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
             //     `points.length >= 2`, and the portfolio's own dot would satisfy
             //     a count of one all by itself; two identical dots would satisfy
             //     the count while drawing a chart with nothing to compare.
-            //  3. `cash_weight` is strictly positive, so the `{#if cash !== null
-            //     && cash > 0}` clause of `risk-l3-scatter-note` is reachable. A
-            //     zero there is not a neutral default: it deletes a sentence.
+            //  3. `cash_weight` is strictly positive, so `risk-l3-scatter-cash`, the
+            //     cash clause of `risk-l3-scatter-note`, is reachable. A zero there
+            //     is not a neutral default: it deletes a sentence. `excluded_weight`
+            //     is deliberately ABSENT, not 0: the L3 test relies on the in-app
+            //     default — the response passes through Zodios, whose generated
+            //     schema fills a missing `excluded_weight` with 0 — to know the
+            //     split between cash and unpriced. Writing the 0 here would leave
+            //     that test blind to whether the default applies.
             //  4. Ids 1 and 2, the pair every other portfolio-scope answer in this
             //     stub uses (`matrixAssetIds`, the contribution items, the
             //     `dataQuality` issue), so the dots resolve to real names instead
@@ -795,6 +821,24 @@ function withInjectedError(result: Record<string, unknown>, options: RiskMockOpt
     return {...result, status: 'failed', output: null, error: {code, message: `E2E injected ${code}`}};
 }
 
+/**
+ * Gives one result, chosen by instance id, the status the test asked for.
+ *
+ * Applied first, under `withInjectedError`, so a failure injected by code on the
+ * same result still wins and every combination stays a payload the backend can
+ * emit. Meant for a result the stub answers whole — every base analytic here —
+ * since `partial` keeps that output and only changes the status.
+ *
+ * Returns the very same object when nothing is configured for the instance: the
+ * fixtures the pinned tests are written against cannot move.
+ */
+function withInjectedStatus(result: Record<string, unknown>, options: RiskMockOptions): Record<string, unknown> {
+    const status = options.instanceStatus?.[String(result.instance_id)];
+    if (!status) return result;
+    if (status === 'partial') return {...result, status: 'partial'};
+    return {...result, status: 'unavailable', output: null, error: {code: 'insufficient_history', message: `E2E injected unavailable ${String(result.instance_id)}`}};
+}
+
 async function installRiskMocks(page: Page, options: RiskMockOptions = {}): Promise<RiskRequest[]> {
     const requests: RiskRequest[] = [];
 
@@ -821,7 +865,7 @@ async function installRiskMocks(page: Page, options: RiskMockOptions = {}): Prom
             status: 200,
             contentType: 'application/json',
             body: JSON.stringify({
-                items: request.analytics.map((analytic) => withInjectedWarnings(withInjectedError(resultFor(request, analytic, options), options), options)),
+                items: request.analytics.map((analytic) => withInjectedWarnings(withInjectedError(withInjectedStatus(resultFor(request, analytic, options), options), options), options)),
             }),
         });
     });
@@ -2229,10 +2273,135 @@ test.describe('Risk analysis functional integration', () => {
         // words instead, and the stub's `cash_weight` is strictly positive
         // precisely so that clause is reachable.
         //
-        // ⚠️ Presence only, and knowingly so: the cash clause has no testid of its
-        // own — it is inline in this same `<p>` — and its text is translated, so
-        // there is nothing here that can be pinned without either asserting
-        // English or editing a component this test does not own.
+        // Each of the note's two clauses is now a span with a testid of its own
+        // inside this `<p>` — `risk-l3-scatter-cash` and `risk-l3-scatter-unpriced`
+        // — so which of them is said is pinned below by testid, while their
+        // translated text stays unasserted.
         await expect(riskReturn.getByTestId('risk-l3-scatter-note')).toBeVisible();
+
+        // Which clause, and why that is a claim about the app rather than the stub.
+        // The stub's `asset_risk_return` answer sends `cash_weight: 0.05` and
+        // deliberately NO `excluded_weight`. In the app the response passes through
+        // Zodios with `validate: 'response'`, and the generated schema defaults a
+        // missing `excluded_weight` to 0, so the split is known — unpriced 0, cash
+        // 0.05 — and the cash clause is said while the unpriced one is not. Were
+        // that default not applied, `uncoveredWeight()` would return `cash: null`
+        // and the cash clause would vanish: this pair pins that it really applies.
+        // It pins as well that each share lands in its own clause: swapped, the
+        // note would call the cash unpriced and say nothing about cash.
+        //
+        // The unpriced clause is removed with `{#if}`, not hidden, so its absence
+        // is a count of 0 — and the visible cash clause beside it is the barrier
+        // that keeps that count from being satisfied by a note that never rendered.
+        await expect(riskReturn.getByTestId('risk-l3-scatter-cash')).toBeVisible();
+        await expect(riskReturn.getByTestId('risk-l3-scatter-unpriced')).toHaveCount(0);
+    });
+
+    /**
+     * L3 discloses what it draws (F2b).
+     *
+     * L3 draws two measurements out of the current composition wave — the KPI
+     * `selectKpiWave` picks, and the risk/return scatter — but declared the
+     * *historical* KPI in their place. So the notice above the levels never named
+     * those two when they came back partial, and L3 said nothing when the scatter
+     * did not come back at all: the level disclosed a measurement it did not draw,
+     * and neither of the two it did.
+     *
+     * Each test degrades ONE current-composition result, by instance id
+     * (`instanceStatus`): `historical_kpi` travels in both waves, and a code would
+     * degrade L1's as well. Everything else is the stub's usual answer —
+     * `correlation` included, which it always sends back `partial` — so every
+     * count below is a count of this stub's own payload.
+     *
+     * Chips are read by `data-instance` and groups by `data-level`; the names are
+     * translated, so no assertion reads them beyond "never a key".
+     */
+    test.describe('L3 discloses the current composition measurements it draws', () => {
+        const RISK_RETURN = 'base-current_composition-asset_risk_return';
+        const L3_KPI = 'base-current_composition-historical_kpi';
+        const L1_KPI = 'base-historical-historical_kpi';
+        const CORRELATION = 'base-historical-correlation';
+
+        /** One measurement of the notice, by the instance it names. */
+        const chip = (instanceId: string) => `[data-testid="risk-partial-measurement"][data-instance="${instanceId}"]`;
+        /** The notice's group for one level: `1`, `2`, `3`, or `none`. */
+        const group = (notice: Locator, level: string) => notice.locator(`[data-testid="risk-partial-level"][data-level="${level}"]`);
+
+        test('a partial risk/return scatter is named under L3 in the notice, not in the L3 status line', async ({page}) => {
+            await installRiskMocks(page, {instanceStatus: {[RISK_RETURN]: 'partial'}});
+            const panel = await openDashboardRisk(page);
+
+            // Barrier: L3 drew the scatter out of this very answer. A partial result keeps
+            // its output, so the three dots — the portfolio and the stub's two holdings —
+            // are still on screen: that is what makes it a partial measurement rather than
+            // a missing one, and what the absence at the end is measured against.
+            const level3 = panel.getByTestId('risk-level-3');
+            await expect(level3.getByTestId('risk-l3-scatter')).toHaveAttribute('data-point-count', '3', {timeout: 10_000});
+
+            // Named once, above the levels, under the question of the level that shows it.
+            const notice = panel.getByTestId('risk-partial-notice');
+            await expect(group(notice, '3').locator(chip(RISK_RETURN))).toBeVisible();
+            await expect(notice.locator(chip(RISK_RETURN)), 'the scatter is named more than once').toHaveCount(1);
+            await expect(notice.locator(chip(RISK_RETURN)), 'a catalogue key reached the screen instead of a name').not.toContainText(/risk\.[a-zA-Z]+\./);
+            // Two, both from the stub: its own `correlation`, always partial, and the
+            // scatter this test degraded.
+            await expect(notice).toHaveAttribute('data-partial-count', '2');
+            await expect(notice.getByTestId('risk-partial-measurements')).toHaveAttribute('data-count', '2');
+
+            // `partial` is not a status line: under L3 only what did not come back at all
+            // stays. Read after the chip above, so this absence is about routing.
+            await expect(panel.getByTestId('risk-level-3-health')).toHaveCount(0);
+        });
+
+        test('a partial current composition KPI is named under L3, and the historical KPI of L1 is not', async ({page}) => {
+            await installRiskMocks(page, {instanceStatus: {[L3_KPI]: 'partial'}});
+            const panel = await openDashboardRisk(page);
+
+            // Barrier, and the premise: L3 still draws this KPI. `selectKpiWave` accepts a
+            // partial answer, so the perimeter stays the current composition's — read from
+            // the payload's own `metadata.mode` — and the Sortino on screen is this result's.
+            const level3 = panel.getByTestId('risk-level-3');
+            await expect(level3.getByTestId('risk-l3')).toHaveAttribute('data-perimeter', 'current_composition', {timeout: 10_000});
+            await expect(level3.getByTestId('risk-l3-sortino-value')).toHaveText('1.68');
+
+            const notice = panel.getByTestId('risk-partial-notice');
+            const level3Group = group(notice, '3');
+            await expect(level3Group.locator(chip(L3_KPI))).toBeVisible();
+            await expect(notice.locator(chip(L3_KPI)), 'the KPI is named more than once').toHaveCount(1);
+            // Named for what L3 shows from it (`risk.levels.l3.rows.kpi`), never by a key.
+            await expect(notice.locator(chip(L3_KPI)), 'a catalogue key reached the screen instead of a name').not.toContainText(/risk\.[a-zA-Z]+\./);
+            // Two, both from the stub: its own `correlation`, always partial, and this KPI.
+            await expect(notice).toHaveAttribute('data-partial-count', '2');
+
+            // The KPI L3 declares is the one it draws, not L1's historical one. The chip
+            // above is the barrier that makes this absence about L3's slice rather than
+            // about a group that had not rendered.
+            await expect(level3Group.locator(chip(L1_KPI))).toHaveCount(0);
+            await expect(panel.getByTestId('risk-level-3-health')).toHaveCount(0);
+        });
+
+        test('an unavailable risk/return scatter stays under L3 with its status and is not named in the notice', async ({page}) => {
+            await installRiskMocks(page, {instanceStatus: {[RISK_RETURN]: 'unavailable'}});
+            const panel = await openDashboardRisk(page);
+
+            // Barrier: L3 rendered out of this wave — its KPI came back whole and is drawn.
+            const level3 = panel.getByTestId('risk-level-3');
+            await expect(level3.getByTestId('risk-l3-sortino-value')).toHaveText('1.68', {timeout: 10_000});
+
+            // What did not come back at all is disclosed where it is missing: one entry,
+            // the one measurement of L3 this test took away…
+            const health = panel.getByTestId('risk-level-3-health');
+            await expect(health).toBeVisible();
+            await expect(health).toHaveAttribute('data-count', '1');
+            // …and its cause with it, the code the stub sent.
+            await expect(level3.locator('[data-testid="risk-level-3-error"][data-code="insufficient_history"]')).toHaveCount(1);
+
+            // Not in the notice: it did not come back partial, it did not come back. The
+            // stub's `correlation`, always partial, keeps a notice on screen with a chip of
+            // its own — the sibling that gives the absence its teeth — while the absence is
+            // read across the whole panel, so it holds with or without a notice.
+            await expect(panel.getByTestId('risk-partial-notice').locator(chip(CORRELATION))).toBeVisible();
+            await expect(panel.locator(chip(RISK_RETURN))).toHaveCount(0);
+        });
     });
 });

@@ -179,8 +179,3 @@ export function buildRiskReturnPoints({riskReturnResult, comparisonResult, asset
 
     return points;
 }
-
-/** The cash share the scatter deliberately does not draw, or null when unknown. */
-export function cashWeight(riskReturnResult: RiskAnalyticResult | null): number | null {
-    return finite(okOutput(riskReturnResult)?.cash_weight);
-}

@@ -7,8 +7,8 @@
     import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 
     import {formatRatio, resultByCode} from '../riskAnalysisHelpers';
-    import {buildRiskAdjusted} from './levelHelpers';
-    import {buildRiskReturnPoints, cashWeight, selectKpiWave} from './l3Helpers';
+    import {buildRiskAdjusted, uncoveredWeight} from './levelHelpers';
+    import {buildRiskReturnPoints, selectKpiWave} from './l3Helpers';
 
     /**
      * L3 — "am I being paid for this risk?"
@@ -64,7 +64,14 @@
             portfolioLabel: $t('risk.levels.l3.scatter.portfolio'),
         }),
     );
-    let cash = $derived(cashWeight(riskReturnResult));
+    // What the scatter leaves out, named by what it is. `cash_weight` alone used to
+    // be printed as "cash", and on a portfolio whose unpriced holdings were a third
+    // of it — with no cash at all — the sentence announced a third in cash. The split
+    // is L2's own (`uncoveredWeight`), so the two levels cannot tell it differently;
+    // when it is unknown, neither sentence is said rather than call it all cash.
+    let uncovered = $derived(uncoveredWeight(riskReturnResult));
+    let cashShare = $derived(uncovered?.cash ?? null);
+    let unpricedShare = $derived(uncovered?.unpriced ?? null);
 
     let hasAny = $derived(figures.sortino !== null || figures.sharpe !== null || figures.volatility !== null || figures.beta !== null);
     // Two dots are the least that can show a relationship; a lone one is a fact
@@ -171,8 +178,11 @@
                      halved will not guess that the word "expected" was the warning. -->
                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400" data-testid="risk-l3-scatter-note">
                     {$t('risk.levels.l3.scatter.note')}
-                    {#if cash !== null && cash > 0}
-                        {$t('risk.levels.l3.scatter.cash', {values: {share: formatPercent(cash, {scale: 100, signed: false, digits: 0})}})}
+                    {#if cashShare !== null && cashShare > 0}
+                        <span data-testid="risk-l3-scatter-cash">{$t('risk.levels.l3.scatter.cash', {values: {share: formatPercent(cashShare, {scale: 100, signed: false, digits: 0})}})}</span>
+                    {/if}
+                    {#if unpricedShare !== null && unpricedShare > 0}
+                        <span data-testid="risk-l3-scatter-unpriced">{$t('risk.levels.l3.scatter.unpriced', {values: {share: formatPercent(unpricedShare, {scale: 100, signed: false, digits: 0})}})}</span>
                     {/if}
                 </p>
             </div>
