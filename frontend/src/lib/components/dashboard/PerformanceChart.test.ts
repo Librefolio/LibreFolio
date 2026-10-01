@@ -32,10 +32,16 @@
  * WHAT IS DELIBERATELY NOT ASSERTED. Translated text: the labels, the section header, the status
  * badge and the tooltip captions all change with EN/IT/FR/ES. Rows are found by the asset name or
  * the effect description this file passes in as props. No locale-formatted number is written as
- * a literal. Every expected string is built with the same `Intl.NumberFormat` or `toLocaleString`
- * call the component makes, so the file passes on any host locale. The one deliberate exception
- * is the U+2212 of the sv-SE cases (D23): there the glyph itself is the subject, and the cases
- * force their locale instead of reading the host's.
+ * a literal against the host's locale. Every expected string is either built with the same
+ * `Intl.NumberFormat` or `toLocaleString` call the component makes, so the file passes on any
+ * host locale, or pinned as a literal under a locale the case forces. Two kinds of literal are
+ * pinned that way on purpose: the U+2212 of the sv-SE cases (D23), where the glyph itself is the
+ * subject, and the axis ticks of S7b, where the exact label is the subject.
+ *
+ * THE AXIS TICKS (S7b: D18, D23, D25). A tick prints the SIGNED amount through one compact
+ * `Intl.NumberFormat` call with exact digits: no two ticks share a label, and the minus is the
+ * locale's. The two edge ticks sit on the bounds the chart fixes, so their labels are hidden.
+ * The last describe pins all three.
  *
  * THE FLAG. `enabled` in the privacy store is module state shared by every case in this file.
  * Every case sets it or checks it at the start. The `afterEach` switches it back off whatever the
@@ -221,11 +227,6 @@ const EUR_LOSS_EFFECT_PROPS: ChartProps = {positions: [EUR_ASSET], otherEffects:
 // What the component prints, rebuilt with the calls it makes
 // =============================================================================
 
-/** The number `axisTickAmount` prints, from the same `Intl.NumberFormat` call. */
-function tickNumber(abs: number): string {
-    return new Intl.NumberFormat(undefined, {notation: 'compact', maximumFractionDigits: abs < 10 ? 2 : abs < 100 ? 1 : 0}).format(abs);
-}
-
 /** A sign at the start of a formatted number, bidi marks included: the pattern `shortMoney` and
  *  `maskFormattedNumber` split off and keep outside the mask. */
 const LEADING_SIGN = /^[\p{Cf}+\-\u2212]*/u;
@@ -244,6 +245,19 @@ function splitSign(formatted: string): SignedNumber {
 /** The real constructor, taken before any case spies on it. The expectations are built through
  *  it, so a spy on `Intl.NumberFormat` can never feed both sides of a comparison. */
 const RealNumberFormat = Intl.NumberFormat;
+
+/** A locale whose minus is U+2212 MINUS SIGN, where Node's default locale writes a hyphen. */
+const SWEDISH = 'sv-SE';
+
+/**
+ * What `axisTickAmount` prints, from the same call: compact, with exact digits, on the SIGNED
+ * value (S7b). The sign therefore comes out of the call as the locale writes it (D23), and two
+ * ticks never share a label (D18). A negative zero prints as zero. Built through the real
+ * constructor, like every expectation here. `locale` forces one; `undefined` is this machine's.
+ */
+function tickNumber(value: number, locale?: string): string {
+    return new RealNumberFormat(locale, {notation: 'compact', maximumSignificantDigits: 15}).format(value === 0 ? 0 : value);
+}
 
 /**
  * What `shortMoney` prints for an amount of 1000 or more, from the same call: compact, on the
@@ -339,7 +353,7 @@ type RenderItem = (params: {coordSys: {x: number; width: number}}, api: RenderIt
 
 /** The parts of a full option that the cases read. */
 interface FullOption {
-    xAxis: {axisLabel: {formatter: AxisFormatter}};
+    xAxis: {min?: number; max?: number; axisLabel: {formatter: AxisFormatter; showMinLabel?: boolean; showMaxLabel?: boolean}};
     yAxis: {data: number[]; axisLabel: {formatter: AxisFormatter}};
     tooltip: {formatter: TooltipFormatter};
     series: Array<{name?: string; data?: NetLabelDatum[]; renderItem?: RenderItem}>;
@@ -458,18 +472,33 @@ describe('PerformanceChart privacy masking (S2b)', () => {
     afterEach(() => setPrivacyEnabled(false));
 
     describe('with privacy on', () => {
-        it('masks the x-axis ticks, zero included, and keeps the minus outside the mask', async () => {
+        it("masks the x-axis ticks, zero included, and keeps the locale's minus outside the mask", async () => {
             // WHY: the ticks print the scale of the chart (-2K … 2K). A clear tick reveals the
             // size of the largest mover even when every label is masked, and the gate cannot
-            // see `axisTickAmount`. Catches `maskable` dropped from the zero branch (D12) or
-            // the compact branch, the suffix left outside the mask, or the minus moved inside it.
+            // see `axisTickAmount`. Catches the mask dropped from zero (D12) or from any other
+            // tick, the compact suffix left outside the mask, or the minus moved inside it. The
+            // minus kept outside is the locale's (D23). On this machine it comes from the same
+            // call the tick makes. Under a forced sv-SE it must be U+2212, which a minus written
+            // by hand in front of the mask never is.
+            // Preconditions: this machine's locale writes a minus on a loss, so the masked loss
+            // is about one; and this Node has Swedish locale data and writes U+2212 there.
+            const hostMinus = splitSign(tickNumber(-1500)).sign;
+            expect(hostMinus).toMatch(/[-\u2212]/);
+            expect(splitSign(tickNumber(-1500, SWEDISH)).sign).toBe('\u2212');
             setPrivacyEnabled(true);
             const chart = await mountChart(EUR_PROPS);
 
             const axisTick = latestFullOption(chart).xAxis.axisLabel.formatter;
-            expect(axisTick(1500)).toBe(PRIVACY_PLACEHOLDER);
-            expect(axisTick(-1500)).toBe(`-${PRIVACY_PLACEHOLDER}`);
-            expect(axisTick(0)).toBe(PRIVACY_PLACEHOLDER);
+            expect([1500, -1500, 0].map((value) => axisTick(value))).toEqual([PRIVACY_PLACEHOLDER, `${hostMinus}${PRIVACY_PLACEHOLDER}`, PRIVACY_PLACEHOLDER]);
+
+            const swedish = inNumberFormatLocale(SWEDISH, () => axisTick(-1500));
+            // Guard: the tick asked the default locale for a compact number, so the forced locale
+            // reached it.
+            expect(
+                swedish.defaultLocaleCalls.some(({notation}) => notation === 'compact'),
+                'the masked tick never asked the default locale for a compact number',
+            ).toBe(true);
+            expect(swedish.value).toBe(`\u2212${PRIVACY_PLACEHOLDER}`);
         });
 
         it('masks a EUR net label as +€•••: sign and symbol readable, compact suffix inside the mask, return kept', async () => {
@@ -562,18 +591,19 @@ describe('PerformanceChart privacy masking (S2b)', () => {
         // sign rule, a different composition of sign, symbol and number, or a dropped return.
         // The net label takes its sign from the same Intl call as its digits (D23), so its
         // expectation takes the sign from that call too, in whatever glyph the locale writes; the
-        // sv-SE cases below pin the glyph itself. The axis tick still prefixes an ASCII `-` to the
-        // formatted absolute value until S7b migrates it, and is pinned here as it stands. The
-        // tooltip's ASCII sign is the convention of `formatCurrencyAmountPlain`
-        // (`currencyFormat.ts`), tracked outside this workstream.
+        // sv-SE cases below pin the glyph itself. The axis tick takes its sign from the same call
+        // as its digits too (S7b, D23), so its expectation is built by that call; the S7b
+        // describe pins its sv-SE glyphs. The tooltip's ASCII sign is the convention of
+        // `formatCurrencyAmountPlain` (`currencyFormat.ts`), tracked outside this workstream.
         expect(isPrivacyEnabled()).toBe(false);
         const eur = latestFullOption(await mountChart(EUR_PROPS));
 
         const axisTick = eur.xAxis.axisLabel.formatter;
         expect(axisTick(1500)).toBe(tickNumber(1500));
-        expect(axisTick(-1500)).toBe(`-${tickNumber(1500)}`);
-        // `'0'` is a literal in the component too, not a formatted number.
-        expect(axisTick(0)).toBe('0');
+        expect(axisTick(-1500)).toBe(tickNumber(-1500));
+        // Zero is a formatted number like any other tick, so its literal is pinned under a forced
+        // en-US, never against this machine's locale.
+        expect(inNumberFormatLocale('en-US', () => axisTick(0)).value).toBe('0');
 
         const eurNet = compactNet(EUR_POSITION.net);
         // Precondition: the net carries a sign, so the check below is about one.
@@ -614,8 +644,6 @@ describe('PerformanceChart net label sign (D23)', () => {
     // The flag is module state shared by every case in the file. Whoever switches it on
     // switches it off, whatever the outcome of the case.
     afterEach(() => setPrivacyEnabled(false));
-
-    const SWEDISH = 'sv-SE';
 
     /** `shortMoney` composes the sign in two template literals, one per currency kind. */
     const SYMBOL_TEMPLATE = (sign: string, number: string) => `${sign}${EUR_INFO.symbol}${number}`;
@@ -700,5 +728,120 @@ describe('PerformanceChart net label sign (D23)', () => {
         ).toBe(true);
         expect(masked.value).toBe(`${compose('\u2212', PRIVACY_PLACEHOLDER)}${suffix}`);
         expect(masked.value).not.toContain(suffixWord);
+    });
+});
+
+// =============================================================================
+// S7b — the axis ticks: distinct, in the locale's glyphs, the fixed edges unlabelled
+// =============================================================================
+
+/**
+ * The x axis prints the amount scale of the chart through `axisTickAmount`. Three decisions shape
+ * it, and each has its case.
+ *
+ * D18, distinct ticks. ECharts spaces the ticks evenly between the bounds the chart fixes, often
+ * half a thousand apart. A compact number cut to whole thousands printed `-2K -2K -1K … 1K 2K 2K`:
+ * two ticks shared each outer label, so the scale seemed to stall. A tick prints the amount
+ * exactly (`1.5K`, `12.5K`, `1.25M`), and a whole amount with no decimals (`2K`).
+ *
+ * D23, the locale's glyphs. The tick formats the SIGNED amount, so its minus comes out of the same
+ * call as its digits. In Node's default locale that minus is a hyphen, like one written by hand,
+ * so the Swedish case forces the call to a locale whose minus is U+2212 and pins the glyph as a
+ * literal: the glyph is the subject. Every other literal here is pinned under a forced en-US.
+ *
+ * D25, the edges the chart fixes. The axis runs from `-axisBound` to `axisBound`, 5% beyond the
+ * widest bar, and ECharts labels both edges with their raw value: exact formatting would print the
+ * EUR fixture's edge as `2.462292K`. Decision B hides those two labels and keeps the bounds where
+ * they are, so the bars stay as wide as before.
+ */
+describe('PerformanceChart amount axis ticks (S7b: D18, D23, D25)', () => {
+    // The flag is module state shared by every case in the file. Whoever switches it on
+    // switches it off, whatever the outcome of the case.
+    afterEach(() => setPrivacyEnabled(false));
+
+    /** `-0` as written. WHY: `String(-0)` is `'0'`, which would hide which zero a line of the diff is about. */
+    const show = (value: number) => (Object.is(value, -0) ? '-0' : String(value));
+
+    it('D18: prints every tick exactly, so no two ticks share a label, and a whole amount or a zero with no decimals', async () => {
+        // WHY: D18. A compact number with a fixed number of decimals per magnitude (none from 100
+        // up) printed `-2K -2K -1K -500 0 500 1K 2K 2K` for ticks 500 apart, `13K` for 12.5K and
+        // `1M` for 1.25M: the axis repeated labels, and the ones it kept sat at the wrong values.
+        // Catches any rounding of the compact number to a fixed number of decimals. Exactness
+        // must not swing to the other extreme either: catches decimals padded onto a whole
+        // amount, and a negative zero let through to the format call, which prints `-0`.
+        expect(isPrivacyEnabled()).toBe(false);
+        const axisTick = latestFullOption(await mountChart(EUR_PROPS)).xAxis.axisLabel.formatter;
+
+        const read = inNumberFormatLocale('en-US', () => {
+            const ticks = [-2_000, -1_500, -1_000, -500, 0, 500, 1_000, 1_500, 2_000].map((value) => axisTick(value));
+            const singles = [12_500, 1_250_000, 2.5, 0.75, -0, 2_000].map((value) => `${show(value)} → ${axisTick(value)}`);
+            return {ticks, distinct: new Set(ticks).size === ticks.length, singles};
+        });
+        // Guard: the ticks asked the default locale for a compact number, so the forced locale
+        // reached them.
+        expect(
+            read.defaultLocaleCalls.some(({notation}) => notation === 'compact'),
+            'the ticks never asked the default locale for a compact number',
+        ).toBe(true);
+        expect(read.value).toEqual({
+            ticks: ['-2K', '-1.5K', '-1K', '-500', '0', '500', '1K', '1.5K', '2K'],
+            distinct: true,
+            singles: ['12500 → 12.5K', '1250000 → 1.25M', '2.5 → 2.5', '0.75 → 0.75', '-0 → 0', '2000 → 2K'],
+        });
+    });
+
+    it("D23: writes the locale's minus and decimal comma on the ticks, in the clear and masked: U+2212 in sv-SE", async () => {
+        // WHY: D23 on the axis. A minus written by hand in front of the formatted absolute value
+        // is a hyphen in every locale, and in Node's default locale the locale's own minus is a
+        // hyphen too, so no host-locale case can tell the two apart. Forcing the default-locale
+        // constructor the tick calls to a locale whose minus is U+2212 can: the digits turn
+        // Swedish either way, the sign only if it comes out of the same call. Catches that
+        // hand-written sign in the clear tick and in front of the mask, and a mask that swallows
+        // the sign. The glyphs are literals on purpose: they are the subject.
+        // Precondition, through the real constructor with an explicit locale: this Node has
+        // Swedish locale data, and writes a compact Swedish amount the way the literals below
+        // do. Without it the forced locale would fall back in silence, or the literals would be
+        // about another ICU.
+        expect(tickNumber(-1500, SWEDISH)).toBe('\u22121,5\u00a0tn');
+        expect(isPrivacyEnabled()).toBe(false);
+        const chart = await mountChart(EUR_PROPS);
+        const clearTick = latestFullOption(chart).xAxis.axisLabel.formatter;
+        const clear = inNumberFormatLocale(SWEDISH, () => [-1_500, 1_500, -2_000, 0].map((value) => clearTick(value)));
+
+        const beforeOn = chart.setOptionCalls.length;
+        setPrivacyEnabled(true);
+        const maskedTick = (await fullOptionAfter(chart, beforeOn)).xAxis.axisLabel.formatter;
+        const masked = inNumberFormatLocale(SWEDISH, () => [-1_500, 1_500, 0].map((value) => maskedTick(value)));
+
+        // Guards: both reads asked the default locale for a compact number, so the forced locale
+        // reached them.
+        expect({
+            clear: clear.defaultLocaleCalls.some(({notation}) => notation === 'compact'),
+            masked: masked.defaultLocaleCalls.some(({notation}) => notation === 'compact'),
+        }).toEqual({clear: true, masked: true});
+        expect({clear: clear.value, masked: masked.value}).toEqual({
+            clear: ['\u22121,5\u00a0tn', '1,5\u00a0tn', '\u22122\u00a0tn', '0'],
+            masked: [`\u2212${PRIVACY_PLACEHOLDER}`, PRIVACY_PLACEHOLDER, PRIVACY_PLACEHOLDER],
+        });
+    });
+
+    it('D25: hides the labels of the two edges the chart fixes, and keeps the edges symmetric and where they were', async () => {
+        // WHY: D25, decision B. ECharts labels the two bounds of the axis with their raw value,
+        // and the exact ticks of D18 would print the EUR fixture's bound as `2.462292K`. Catches
+        // either edge label left shown. Catches too the fix decision B turned down: a bound moved
+        // to a round number so its label reads well. Rounding up shrinks every bar (the
+        // component's own comment records a nice-number bound that did), and rounding one side
+        // only makes the axis lopsided. So the bounds stay symmetric, 5% beyond the widest bar.
+        expect(isPrivacyEnabled()).toBe(false);
+        const {xAxis} = latestFullOption(await mountChart(EUR_PROPS));
+
+        // The widest bar of the EUR fixture is the asset's three gains stacked.
+        const positiveSide = EUR_POSITION.unrealized + EUR_POSITION.realized + EUR_POSITION.income;
+        // Precondition: no other bar is wider (the asset's costs, its net, the other effect's net),
+        // so the bound below is about this one.
+        expect(positiveSide).toBeGreaterThan(Math.max(EUR_POSITION.feesTaxes, Math.abs(EUR_POSITION.net), Math.abs(EUR_EFFECT_NET)));
+        expect(xAxis.max).toBeCloseTo(positiveSide * 1.05, 6);
+        expect(xAxis.min).toBe(-(xAxis.max as number));
+        expect({showMinLabel: xAxis.axisLabel.showMinLabel, showMaxLabel: xAxis.axisLabel.showMaxLabel}).toEqual({showMinLabel: false, showMaxLabel: false});
     });
 });

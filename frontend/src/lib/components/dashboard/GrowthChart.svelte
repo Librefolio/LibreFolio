@@ -23,7 +23,7 @@
     import * as echarts from 'echarts';
     import {attachChartReady} from '$lib/utils/chartReady';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
-    import {maskable, maskFormattedNumber, shouldMaskAmount} from '$lib/utils/privacy/maskable';
+    import {maskFormattedNumber, shouldMaskAmount} from '$lib/utils/privacy/maskable';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
@@ -2000,12 +2000,18 @@
             viewMode === 'pct'
                 ? (v: number) => `${v.toFixed(1)}%`
                 : (v: number) => {
-                      // D8: the sign stays outside the mask. The k/M suffix goes inside:
-                      // `•••k` would still disclose the order of magnitude.
+                      // D18: the scaled value prints exactly, so two ticks never share a label
+                      // (`5.5k`, `1.25M`) and a whole one has no decimals (`2k`, `1M`). D23: the
+                      // digits and the minus come from the locale; a negative zero prints `0`.
+                      // D8: the sign stays outside the mask, the k/M suffix inside it: `•••k`
+                      // would still disclose the order of magnitude.
                       const abs = Math.abs(v);
-                      const compact = abs >= 1_000_000 ? `${(abs / 1_000_000).toFixed(1)}M` : abs >= 1_000 ? `${(abs / 1_000).toFixed(0)}k` : String(abs);
-                      return `${v < 0 ? '-' : ''}${maskable(compact)}`;
+                      const [scale, suffix]: [number, string] = abs >= 1_000_000 ? [1_000_000, 'M'] : abs >= 1_000 ? [1_000, 'k'] : [1, ''];
+                      const scaled = v === 0 ? 0 : v / scale;
+                      return maskFormattedNumber(`${scaled.toLocaleString(undefined, {maximumSignificantDigits: 15})}${suffix}`);
                   };
+        // Income draws bars, which stand on zero; every other view draws a line or candles.
+        const incomeBars = viewMode === 'pnl' && pnlSubmode === 'income';
 
         /**
          * Colour for a signed amount: green up, red down, **neutral at zero**.
@@ -2240,10 +2246,16 @@
                   },
             yAxis: {
                 type: 'value',
-                // Use a min function so the y-axis auto-scales rather than forcing 0.
-                // This gives detail visibility when portfolio values are large.
-                min: (value: {min: number; max: number}) => Math.floor(value.min - (value.max - value.min) * 0.08),
-                axisLabel: {color: textColor, fontSize: 14, formatter: yAxisFormatter},
+                // Lines and candles: a min function so the y-axis auto-scales rather than
+                // forcing 0, which gives detail visibility when portfolio values are large.
+                // ECharts labels that edge with its raw value, not a round tick, so the label
+                // is hidden and the edge stays where it is (D25). Income keeps ECharts'
+                // defaults: an axis that includes 0, like any bar chart. Its two keys stay
+                // PRESENT as `undefined`: the full rebuild merges `yAxis` into the previous
+                // option (CHART_FULL_UPDATE_OPTS replaces only `series` and `xAxis`), so an
+                // omitted key would keep the line's min function and hidden label.
+                min: incomeBars ? undefined : (value: {min: number; max: number}) => Math.floor(value.min - (value.max - value.min) * 0.08),
+                axisLabel: {color: textColor, fontSize: 14, formatter: yAxisFormatter, showMinLabel: incomeBars ? undefined : false},
                 axisLine: {show: false},
                 splitLine: {lineStyle: {color: gridColor, type: 'dashed'}},
             },
