@@ -3441,7 +3441,11 @@
           "axisReturn": "Expected annualised return",
           "line": "Risk-return line",
           "note": "Above the line means better paid for the risk taken. The dots show the mean-variance expected return, the quantity in which the line's slope is the Sharpe ratio: on a very volatile asset the return actually lived through is lower, because volatility erodes compounding.",
-          "cash": "Cash ({share} of net worth) is not a dot: under the model it returns exactly zero, and drawing it would turn that into a measurement."
+          "cash": "Cash ({share} of net worth) is not a dot: under the model it returns exactly zero, and drawing it would turn that into a measurement.",
+          "unpriced": "Holdings without a price series ({share} of net worth) are not dots either: they could not be measured, so the model carries them at exactly zero return."
+        },
+        "rows": {
+          "kpi": "Sortino, Sharpe and volatility"
         }
       },
       "l4": {
@@ -3507,7 +3511,9 @@
       "backtestNotice": "With a slice active, these figures are rebuilt from today’s composition: they say how it *would* have gone, not how it actually went.",
       "notice": {
         "partialTitle": "Some results are partial",
-        "notesTitle": "Worth knowing about these results"
+        "notesTitle": "Worth knowing about these results",
+        "noPriceSourceTitle": "Holdings without prices, left out of some measurements",
+        "affected": "Measurements affected"
       }
     },
     "eligibility": {

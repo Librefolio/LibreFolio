@@ -3441,7 +3441,11 @@
           "axisReturn": "Rentabilidad anualizada esperada",
           "line": "Recta riesgo-rentabilidad",
           "note": "Por encima de la recta significa mejor pagado por el riesgo asumido. Los puntos muestran la rentabilidad esperada en media-varianza, la magnitud en la que la pendiente de la recta es el ratio de Sharpe: en un activo muy volátil la rentabilidad realmente vivida es menor, porque la volatilidad erosiona la capitalización.",
-          "cash": "La liquidez ({share} del patrimonio) no es un punto: en el modelo rinde exactamente cero, y dibujarla la convertiría en una medición."
+          "cash": "La liquidez ({share} del patrimonio) no es un punto: en el modelo rinde exactamente cero, y dibujarla la convertiría en una medición.",
+          "unpriced": "Las posiciones sin serie de precios ({share} del patrimonio) tampoco son puntos: no se han podido medir, y el modelo las mantiene con una rentabilidad exactamente cero."
+        },
+        "rows": {
+          "kpi": "Sortino, Sharpe y volatilidad"
         }
       },
       "l4": {
@@ -3507,7 +3511,9 @@
       "backtestNotice": "Con un subconjunto activo, estas cifras se reconstruyen sobre la composición de hoy: dicen cómo *habría* ido, no cómo fue en realidad.",
       "notice": {
         "partialTitle": "Algunos resultados son parciales",
-        "notesTitle": "Conviene saber sobre estos resultados"
+        "notesTitle": "Conviene saber sobre estos resultados",
+        "noPriceSourceTitle": "Posiciones sin precios, excluidas de algunas medidas",
+        "affected": "Medidas afectadas"
       }
     },
     "eligibility": {
