@@ -3554,6 +3554,9 @@
         "ineligible": "Non analysable sur la période",
         "warning": "Analysable, avec un avertissement"
       }
+    },
+    "benchmark": {
+      "measuredHere": "Cette référence est aussi un actif mesuré ici et ne peut pas servir de mesure à elle-même : choisissez-en une autre pour la comparaison."
     }
   },
   "updateCheck": {
