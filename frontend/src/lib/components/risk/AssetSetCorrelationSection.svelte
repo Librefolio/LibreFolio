@@ -31,15 +31,13 @@
      * section borrows all three rather than growing a fifth copy — and inherits
      * every future repair to them for free.
      */
-    import {schemas, zodiosApi} from '$lib/api';
+    import {schemas} from '$lib/api';
     import {_ as t} from '$lib/i18n';
     import {riskOutput} from '$lib/risk/riskTypes';
     import {currentLanguage} from '$lib/stores/app/language';
-    import {ensureCountriesLoaded} from '$lib/stores/reference/countryStore';
-    import {createRiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
-    import {safeScalar} from '$lib/types/common';
-    import {normalizeDistribution, type Distribution} from '$lib/components/assets/assetPayload';
+    import {ANSWER_DISCARDED_CODE, createRiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
     import CorrelationHeatmap from './CorrelationHeatmap.svelte';
+    import {createMatrixMetadata} from './matrixMetadata.svelte';
     import {degradedResults, levelMetadata, resultReasons} from './levels/levelHelpers';
     import RiskLevelSection from './levels/RiskLevelSection.svelte';
     import {resultByCode} from './riskAnalysisHelpers';
@@ -92,63 +90,25 @@
      * one string forever, and a value that cannot vary is not provenance.
      */
     let metadata = $derived(levelMetadata([result]));
+    /** A base answer discarded twice running is said by the frame, as on L1°/L3°, the replay and the Dashboard's L4. */
+    let errorCodes = $derived(controller.loadDiscarded ? [ANSWER_DISCARDED_CODE] : []);
 
     /**
      * Sector and country distributions of the selection, for the matrix's two
-     * exposure orderings (F-3b). The page's asset list does not carry them, so
-     * they come from one bulk read of the asset metadata. It is a GET: it cannot
-     * trigger `notifyPortfolioMutation`, so it cannot discard the correlation
-     * answer in flight. An asset without a usable distribution maps to `null`;
-     * a failed read leaves both maps empty, and the two buttons simply do not
-     * appear.
+     * exposure orderings (F-3b), loaded by the shared `matrixMetadata` module
+     * (K11: the Dashboard's L2 matrix reads the same inputs). One bulk GET of the
+     * asset metadata: it cannot trigger `notifyPortfolioMutation`, so it cannot
+     * discard the correlation answer in flight. A failed read leaves the maps
+     * empty, and the two buttons simply do not appear.
+     *
+     * The module also reads each asset's type, but this section keeps taking the
+     * types from the page's list (`assetTypes`): they are known before any read,
+     * and the "by type" ordering must survive a failed metadata read.
      */
-    let sectorsById = $state<ReadonlyMap<number, Distribution | null>>(new Map());
-    let regionsById = $state<ReadonlyMap<number, Distribution | null>>(new Map());
-    let exposureRequest = 0;
-    /** Compared by value: a new array with the same ids must not re-read the metadata (the F-2d lesson). */
-    let exposureIdsKey = $derived([...assetIds].sort((left, right) => left - right).join(','));
-
-    function distributionOf(area: unknown): Distribution | null {
-        const scalar = safeScalar(area as {distribution?: Record<string, string | number>} | null);
-        if (!scalar?.distribution) return null;
-        try {
-            const distribution = normalizeDistribution(scalar.distribution);
-            return Object.keys(distribution).length > 0 ? distribution : null;
-        } catch {
-            return null;
-        }
-    }
-
-    $effect(() => {
-        const ids = exposureIdsKey ? exposureIdsKey.split(',').map(Number) : [];
-        const language = $currentLanguage;
-        const request = ++exposureRequest;
-        if (ids.length === 0) return;
-        void (async () => {
-            try {
-                // Country names come from the store: load it first, so the groups never flash as ISO codes.
-                await ensureCountriesLoaded(language);
-                const rows = await zodiosApi.read_assets_bulk_api_v1_assets_get({queries: {asset_ids: ids}});
-                if (request !== exposureRequest) return;
-                const sectors = new Map<number, Distribution | null>();
-                const regions = new Map<number, Distribution | null>();
-                for (const row of rows) {
-                    const classification = safeScalar(row.classification_params);
-                    sectors.set(row.asset_id, distributionOf(classification?.sector_area));
-                    regions.set(row.asset_id, distributionOf(classification?.geographic_area));
-                }
-                sectorsById = sectors;
-                regionsById = regions;
-            } catch {
-                if (request !== exposureRequest) return;
-                sectorsById = new Map();
-                regionsById = new Map();
-            }
-        })();
-    });
+    const matrixMetadata = createMatrixMetadata(() => ({assetIds, language: $currentLanguage}));
 </script>
 
-<RiskLevelSection title={$t('risk.analytics.correlation.name')} level={2} testId="risk-correlation-section" docsPath="financial-theory/technical-analysis/risk-metrics/correlation/" docsLabel={$t('risk.analytics.correlation.help')} {health} {reasons} {metadata}>
+<RiskLevelSection title={$t('risk.analytics.correlation.name')} level={2} testId="risk-correlation-section" docsPath="financial-theory/technical-analysis/risk-metrics/correlation/" docsLabel={$t('risk.analytics.correlation.help')} {health} {reasons} {errorCodes} {metadata}>
     <!-- `data-catalog` is published here because every section on this page is
          gated on the capability catalogue, so an absent section means
          "unsupported" *or* "not loaded yet" and a test cannot tell which. The
@@ -158,9 +118,14 @@
         <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">{$t('risk.analytics.correlation.description')}</p>
 
         {#if controller.loadError}
-            <p class="py-6 text-center text-sm text-red-600 dark:text-red-400" data-testid="risk-correlation-error">{$t('risk.states.loadFailed')}</p>
+            <div class="py-6 text-center" data-testid="risk-correlation-error">
+                <p class="text-sm text-red-600 dark:text-red-400">{$t('risk.states.loadFailed')}</p>
+                <button type="button" class="mt-2 rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-700" onclick={() => void controller.loadBase(true)} data-testid="risk-correlation-retry"
+                    >{$t('common.retry')}</button
+                >
+            </div>
         {:else if output}
-            <CorrelationHeatmap {output} {assetLabels} {assetTypes} assetSectors={sectorsById} assetRegions={regionsById} />
+            <CorrelationHeatmap {output} {assetLabels} {assetTypes} assetSectors={matrixMetadata.sectors} assetRegions={matrixMetadata.regions} />
         {:else if controller.initialLoading}
             <div class="h-48 animate-pulse rounded-lg bg-gray-100 dark:bg-slate-700" data-testid="risk-correlation-loading"></div>
         {:else if controller.loadDiscarded}

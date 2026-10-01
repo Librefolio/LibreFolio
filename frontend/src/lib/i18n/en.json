@@ -1165,15 +1165,16 @@
       "period": "Memory length of the filter in days. Higher values = smoother but slower response.",
       "offset": "Vertical offset as percentage of the base value. Shifts the signal up or down.",
       "currencyPair": "Select an FX pair to overlay its exchange rate data on the chart.",
-      "emaPeriod": "Lookback window in days. Maps to filter coefficient $\\alpha = 2/(N+1)$. Shorter = faster reaction, longer = smoother.",
-      "fastPeriod": "Short-term EMA lookback for the MACD fast line. Standard: 12 days. Lower values react faster to price changes.",
-      "slowPeriod": "Long-term EMA lookback for the MACD slow line. Standard: 26 days. Higher values capture the broader trend.",
-      "signalPeriod": "EMA smoothing applied to the MACD line. Standard: 9 days. Reduces noise in crossover signals.",
+      "emaPeriod": "Lookback window in sessions, the days with a quote. Maps to filter coefficient $\\alpha = 2/(N+1)$. Shorter = faster reaction, longer = smoother.",
+      "fastPeriod": "Short-term EMA lookback for the MACD fast line. Standard: 12 sessions. Lower values react faster to price changes.",
+      "slowPeriod": "Long-term EMA lookback for the MACD slow line. Standard: 26 sessions. Higher values capture the broader trend.",
+      "signalPeriod": "EMA smoothing applied to the MACD line. Standard: 9 sessions. Reduces noise in crossover signals.",
       "multiplier": "Number of standard deviations ($k \\cdot \\sigma$). $k=2$ covers ~95% of values assuming normal distribution.",
       "overbought": "Level above which the asset is considered overbought. Standard: 70. Values near 100 indicate strong buying pressure.",
       "oversold": "Level below which the asset is considered oversold. Standard: 30. Values near 0 indicate strong selling pressure.",
       "assetComparison": "Select an asset to overlay its price on this chart. In percentage mode, both curves start at 0%.",
-      "fxPair": "Select an FX pair to overlay its exchange rate on this chart. In percentage mode, both curves start at 0%."
+      "fxPair": "Select an FX pair to overlay its exchange rate on this chart. In percentage mode, both curves start at 0%.",
+      "sessionPeriod": "Lookback window in sessions, the days with a quote. Higher values = smoother but slower response."
     },
     "macdLineColor": "MACD Line Color",
     "noDataAvailable": "No data available. Try syncing this asset/pair.",
@@ -1524,7 +1525,8 @@
       "navigate_asset": "View asset",
       "navigate_fx": "View FX",
       "add_fx_pair": "Add FX pair",
-      "sync_fx_pair": "Sync rates"
+      "sync_fx_pair": "Sync rates",
+      "sync_asset_prices": "Sync prices"
     },
     "referencePriceFallback": "Lot opening price unavailable on the exact date — using last known price {reference_price} as reference for relative return",
     "referencePriceUnavailable": "No reference price available for a lot opening — relative return cannot be computed",
@@ -2442,7 +2444,8 @@
       "riskFullHistory": "Measure drawdown against the highest peak of the entire available history, not just the visible window. Disable for a faster, window-relative view."
     },
     "units": {
-      "days": "days"
+      "days": "days",
+      "sessions": "sessions"
     },
     "visual": {
       "components": "Components",
@@ -3106,7 +3109,7 @@
         "blankNote": "An em-dash means the measurement could not be made for that asset over this window — it does not mean zero.",
         "l1": {
           "title": "How much did each of these hurt?",
-          "description": "The same scale of harm, asked of every selected asset. Percentages only: a set of assets has no weights, so there is no amount to put beside them.",
+          "description": "For each selected asset, how much it lost at the worst moments of the period: the bad day, the bad month, the deepest fall, and how far it still stands below its peak.",
           "lastedDays": "lasted {days} d",
           "columns": {
             "badDay": "Bad day",
@@ -3114,15 +3117,30 @@
             "worstFall": "Worst fall",
             "currentFall": "Below peak now",
             "toPeak": "Rise to peak"
+          },
+          "columnHelp": {
+            "badDay": "The average loss on the worst 5% of days in the window (historical CVaR at 95%).",
+            "badMonth": "Like the bad day, over a longer run of consecutive days: the average loss on the worst 5% of those runs (historical CVaR at 95%).",
+            "worstFall": "The deepest fall from a peak to the lowest point that followed it within the window, and how long it lasted.",
+            "currentFall": "How far below its highest point in the window the asset stands on the last day.",
+            "toPeak": "How much it must rise to get back to that highest point: after a 20% fall it takes +25%."
           }
         },
         "l3": {
           "title": "What did each of these pay for its risk?",
-          "description": "Risk against reward, one point per asset. No line is drawn through them: a selection has no whole, so there is nothing to be above or below.",
-          "expectedReturn": "Expected return",
+          "description": "For each selected asset, how much it swung and how much it returned on average per year, in the chart and in the table; with a benchmark chosen on the Dashboard, also how much it moved along with it.",
+          "expectedReturn": "Average annual return",
           "correlation": "Correlation",
-          "noBenchmark": "Choose a benchmark on the Dashboard to add beta and correlation. A benchmark that is itself in the selection cannot be used as its own yardstick.",
-          "scatterNote": "The dots show the mean-variance expected return: on a very volatile asset the return actually lived through is lower, because volatility erodes compounding."
+          "scatterNote": "Each dot is an asset: the horizontal axis shows how much it swung, the vertical one how much it returned on average per year. For a very volatile asset the average is higher than what it actually returned.",
+          "columnHelp": {
+            "volatility": "How much the asset's returns swing, on a yearly basis: the standard deviation of the period's returns, annualised.",
+            "expectedReturn": "The average of the period's returns, scaled to a year by how often the asset is quoted. It describes the past, not a forecast. For a very volatile asset it is higher than what the asset actually returned, because swings erode the compounded return.",
+            "sortino": "How much average annual return for each unit of downward swing: it looks at the falls only, not at the rises.",
+            "sharpe": "How much average annual return for each unit of volatility: the pay for the risk taken, rises and falls alike.",
+            "beta": "How much the asset moved when the benchmark moved: 1 means as much, 2 twice as much, 0 independently of it.",
+            "correlation": "How closely the asset and the benchmark moved together, from −1 (always opposite) to +1 (always together)."
+          },
+          "axisReturn": "Average annual return"
         }
       },
       "legend": {
@@ -3155,7 +3173,12 @@
       },
       "selectedCountHint": "The first number counts the assets the laboratory is analysing right now. The second counts how many it could analyse in the chosen period: every asset in LibreFolio, not only the ones you hold, as long as it has enough prices in that period. The assets that do not are still listed in the “+”, read-only, with the reason.",
       "parkedNote": "{count, plural, one {# selected asset cannot be analysed in the period and stays out of the analysis.} other {# selected assets cannot be analysed in the period and stay out of the analysis.}}",
-      "eligibilityFailed": "Eligibility could not be checked: every asset stays selectable."
+      "eligibilityFailed": "Eligibility could not be checked: every asset stays selectable.",
+      "fitPeriod": {
+        "banner": "With the chosen period, {count, plural, one {# selected asset has} other {# selected assets have}} no prices for part of it.",
+        "button": "Use the period in which all have prices ({start} – {end})",
+        "hint": "Moves the period at the top to the span in which every selected asset with prices is quoted. Back in the analysis: {names}."
+      }
     },
     "metrics": {
       "volatility": "Volatility",
@@ -3529,6 +3552,9 @@
         "ineligible": "Cannot be analysed in the period",
         "warning": "Can be analysed, with a warning"
       }
+    },
+    "benchmark": {
+      "measuredHere": "This benchmark is also an asset measured here and cannot be its own yardstick: choose another one for the comparison."
     }
   },
   "updateCheck": {

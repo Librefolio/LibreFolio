@@ -304,6 +304,7 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
                     kind: 'var_cvar',
                     confidence_level: 0.95,
                     horizon_days: 1,
+                    horizon_observations: 1,
                     observations: 60,
                     value_at_risk: 0.021,
                     conditional_value_at_risk: 0.031,

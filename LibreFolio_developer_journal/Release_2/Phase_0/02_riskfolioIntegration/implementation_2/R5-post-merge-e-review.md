@@ -2015,3 +2015,441 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 > backend lo manda sempre (a distinguere resta `algorithm_version`). Gli avvisi di dati vecchi o mancanti portano
 > `asset_ids` ma la causa in `details.cause`: avranno i badge e non `reason`, quindi l'ambra. Il «tutto o niente» sugli
 > id è più severo del backend, che scarta i valori non interi e tiene gli altri: oggi il backend non ne manda mai.
+
+### Il laboratorio di F in Risk, il nodo del calendario e le guide dei segnali · 30/09/2026
+
+> **Commit delle primitive per A** (developer, 10:01), verificati: `91e91346c` (5 file) · `d618e80ed` (journal); A avanzato
+> a `d618e80ed` con i suoi 9 file non committati intatti. 6162 spenta: serviva `ffe41c5ba`.
+>
+> **Checkpoint 4 di F → Risk.** Il developer l'ha approvato dopo la review sulla 6164. Letto da me prima del commit, in
+> sola lettura: le due superfici fuori famiglia (la callback `onfitperiod` di `assets/+page.svelte`, le 4 righe del
+> runner) sono esattamente le eccezioni concesse; i cataloghi hanno solo le 3 chiavi `risk.assetSet.fitPeriod.*`;
+> `AssetChip.svelte` rispetta l'interfaccia approvata; la modifica della heatmap non cambia niente sulla L2 di A; l'ordine
+> dei commit regge (`check-orphans` rosso da C1 a C6, accettato dal coordinator: i test si registrano in C7). Fusione
+> prevista pulita con `merge-tree` su un clone usa e getta, poi confermata sui commit veri. Commit di F (10:18):
+> `d613d443d` … `506d17f18`. **Fusione `881941e44`** (10:20; genitori `d618e80ed` + `506d17f18`, albero `f81095c3` come
+> previsto; script con `--no-commit` e controllo dell'albero prima del commit). Validazione nella 6152: `front check` al
+> pavimento di 3 · i18n 3486/0 · `check-orphans` pulito · unit `risk-levels-unit` 269, `allocation-unit` 142,
+> `core-unit` 2843, `component-unit` 2161 · E2E `risk` 13 (la heatmap sulla L2), `risk-lab` 22 (il chip nel
+> laboratorio), `risk-asset-detail` 2, `asset-list` 28. F avanzato sulla punta (10:36), poi la sua guida sotto la regola
+> dei 7 giorni (`73ba9f08e`, `b26ca6e29`): i cinque motivi del replay che descrive coincidono con `replay_coverage`.
+>
+> **Il nodo del calendario** (da F, sulla sua L1°; il motore è mio). Le righe del weekend che justETF salva (il venerdì
+> ripetuto) sono trattate come quotazioni fresche, quindi entrano nel calendario come osservazioni a rendimento zero.
+> **Non è nuovo e non è solo del laboratorio**: il TWRR del portafoglio ha un punto per ogni giorno di calendario, quindi
+> la «giornata storta» della Dashboard è da sempre per giorno di calendario e il suo «mese storto» (21 osservazioni) copre
+> circa 3 settimane. Stima teorica: VaR giornaliero sottostimato di circa il 10 %, mensile di circa il 16 %. Non
+> cambiano volatilità, Sharpe e Sortino (la frequenza osservata compensa), drawdown, replay, shock, correlazione,
+> rendimenti. La simulazione ha l'errore opposto: sui dati solo feriali «365 giorni» sono 365 sedute.
+>
+> **Decisioni del developer** (30/09, mattina):
+> - «sì, approvo tutto il piano»: (1) una riga di **sabato o domenica — o di un festivo di borsa —** che ripete
+>   *esattamente* l'ultima chiusura è un riporto, non una quotazione (niente «uguale al giorno prima → ignora» su tutti i
+>   giorni: toglierebbe i giorni feriali piatti veri); (2) il TWRR si legge solo nei giorni con almeno una quotazione
+>   vera, concatenando gli altri; (3) gli orizzonti in giorni di calendario («mese» = 30 giorni), convertiti in
+>   osservazioni con la frequenza osservata, simulazione compresa; **prima i numeri prima/dopo sui suoi dati, poi il
+>   codice**.
+> - **I festivi**: dai calendari di QuantLib, come **unione** delle borse principali («ci serve solo per sapere se
+>   potenzialmente è un giorno di festa»); la regola resta la ripetizione esatta, quindi un festivo di troppo costa al più
+>   un giorno piatto vero. **La tabella si genera a ogni avvio, in un processo separato** (scelta del developer, dopo la
+>   spiegazione del perché il server web non importa QuantLib: i worker nascono in modalità `spawn` e reimportano tutto,
+>   quindi un import nel padre non risparmierebbe memoria ai worker e terrebbe circa 170 MB sempre occupati).
+> - Il coordinator: la regola del riporto è **un solo helper condiviso**, che userà anche `signal_series_preparation.py`
+>   (anche gli indicatori tecnici contano oggi le righe del weekend come osservazioni).
+>
+> **Le guide dei segnali di rischio** (punto 8 dell'analisi di K, riassegnato a me dal developer): `docs_path` su
+> `RISK_DRAWDOWN` (`current-drawdown/`), `RISK_ROLLING_RETURN` e `ASSET_CALENDAR_ROLLING_RETURN` (`fundamentals/returns/`),
+> `RISK_ROLLING_VOLATILITY` (`volatility/`), `RISK_ROLLING_SHARPE` (`sharpe-ratio/`), `RISK_ROLLING_BETA`
+> (`beta-active-return/`). Test prima (test-author): `docs_path` obbligatorio per **tutti** i segnali registrati,
+> nascosti compresi, con forma fissata (relativo, barra finale, minuscole: su macOS un maiuscolo passerebbe in locale e
+> darebbe 404 sul sito), pagina `.en.md` esistente e tabella dei sei valori; rosso sui sei codici, poi verde.
+> Verifica: `services signal-plugin-matrix` 65 · `signal-registry` 65 · `signal-contracts` 10 · `api signal-catalogs` 4 ·
+> `check-links` 88 validi (erano 83: i 5 percorsi nuovi sono visti dal gate).
+>
+> **⚠️ Fuori pista**: `ASSET_CALENDAR_ROLLING_RETURN` è nascosto dal catalogo (`catalog_visible = False`): il suo
+> `docs_path` non fa comparire nessun pulsante, perché la pagina dell'asset disegna quella serie senza `DocsLink` →
+> decisione dell'interfaccia, di I (segnalata al coordinator).
+
+### Il calendario di borsa nel motore — giro 1: riporti, festivi e TWRR · 🔵 30/09/2026
+
+> **Numeri prima del codice** (copia di prod, sola lettura, script e cifre solo in `/tmp`): sull'anno, il VaR
+> giornaliero della Dashboard sale di circa un terzo e quello mensile di circa un quarto; nel laboratorio il VaR
+> giornaliero sale del 5–20 % e la volatilità non si muove (la frequenza osservata compensa); un insieme di soli ETF
+> passa da f ≈ 360 a f ≈ 256, quindi i «365 giorni» della simulazione diventerebbero 1,43 anni di sedute senza la
+> conversione del giro 2. Il developer: «Procedi con l'implementazione, test prima».
+>
+> **Confini concessi dal coordinator**: l'aggancio in `main.py` (avvio come il prewarm dei provider, rilascio allo
+> spegnimento accanto a `shutdown_quant_worker_pools()`, senza mai aspettare la costruzione); lato segnali
+> `signal_series_preparation.py`, nel passo dopo, con l'RSI 14 misurato prima e dopo.
+>
+> **Test prima** (test-author): 55 rossi su cinque file (`test_market_calendar.py` nuovo, registrato in
+> `RISK_SERVICE_TEST_PATHS`; `test_series_preparation.py`, `test_risk_eligibility.py`, `test_risk_service.py`). Tre sue
+> scelte accettate: il punto base del TWRR resta sempre; l'uguaglianza è numerica (`101.50 == 101.5`); il confronto è
+> sulla chiusura **nativa**.
+>
+> **Note implementazione**
+> - `backend/app/services/market_calendar.py` (nuovo): la regola in un helper solo, `is_market_closed_repeat(day, close,
+>   previous_close, holidays)`: sabato, domenica o festivo dell'unione, e chiusura *identica* alla riga precedente. La
+>   tabella dei festivi (`build_market_holidays`) è l'unione dei giorni feriali di chiusura di TARGET, Borsa Italiana,
+>   Xetra, Euronext Paris, LSE, SIX e NYSE fra il 1970 e il 2100, e QuantLib si importa **solo** dentro quella funzione.
+>   `ensure_market_holidays()` la costruisce una volta in un processo `spawn` a sé (demone, 120 s al massimo, chiuso
+>   alla fine); chi aspetta passa da `asyncio.shield`, quindi l'annullamento di una richiesta non annulla la
+>   costruzione. Se fallisce: tabella vuota (resta la regola del weekend) e un nuovo tentativo dopo 10 minuti.
+>   `start_market_holiday_prewarm()` all'avvio, `shutdown_market_holidays()` allo spegnimento (termina il processo e
+>   annulla il task, senza aspettare).
+> - `series_preparation.py`: `_mark_market_closed_carries()` segna i riporti come valori riportati in avanti (con la
+>   data della chiusura vera), quindi non entrano nel calendario congiunto; `quote_dates` per asset in
+>   `PreparedAssetSeries`; `prepare_asset_series_set(..., market_holidays=frozenset())`.
+> - `risk/eligibility.py`: le 20 quotazioni si contano con la stessa regola (finestra `LAG` in SQL).
+> - `risk/service.py`: la tabella si aspetta una volta per `execute`, per `asset_eligibility` e per il replay; il TWRR
+>   si legge solo nei giorni in cui almeno un titolo posseduto ha una quotazione vera (`_held_quote_dates`), gli altri
+>   giorni si concatenano nel successivo, e la copertura si misura su quei giorni.
+> - Verde: `services risk-all` 737; i due rossi rimasti erano previsti (una fixture che finiva di sabato, un pin degli
+>   argomenti del loader del replay) e li riallinea test-author.
+>
+> **⚠️ Fuori pista**: in QuantLib 1.43 `ql.Switzerland()` non ha l'enum del mercato (`.SIX` non esiste): il calendario
+> svizzero è quello e basta. E Xetra è aperta il 31/12/2025, ma nell'unione quel giorno resta festivo per gli altri: è
+> la conseguenza voluta dell'unione, che costa al più un giorno piatto vero.
+
+### Il calendario di borsa nel motore — giro 2: gli orizzonti in giorni di calendario · ✅ 30/09/2026
+
+> **Test prima** (test-author): 34 rossi sul contratto (VaR 16 + 2 Vitest, simulazione 23 fra motore e plugin, meno le
+> guardie già verdi), 9 sulle mie decisioni, 8 sul cambio di nome. Riallineati senza indebolirli: i 6 test di schema
+> che costruiscono `RiskVarCvarOutput`, la relazione dell'oracolo (ora passa da `horizon_observations`) e il dizionario
+> esatto del rifiuto del blocco. La copia congelata del resampler che il test-author aveva scritto come oracolo è
+> diventata valori catturati sul codice intatto (`10b0b0d48`), con `rel=1e-12`: i test provano il prodotto di oggi.
+>
+> **Mie decisioni sulle ambiguità del test-author**: una sola conversione, `calendar_days_to_observations` in
+> `risk/metrics.py` (modulo puro, lo importa anche il worker `spawn`); la lunghezza del blocco si confronta con la
+> storia in osservazioni, sia nel plugin (`INVALID_PARAMETERS`, dettaglio nuovo `block_length_observations`) sia nel
+> validatore del motore; il budget delle risorse resta in giorni di calendario (per eccesso); `steps_per_year` è
+> rifiutato da GBM e deve essere > 0; l'ordine dei rifiuti di `historical_var` resta quello (prima la serie, poi f);
+> la mappatura a scala (un giorno senza passo ripete il precedente: niente borsa, niente movimento).
+>
+> **Note implementazione**
+> - `metrics.py`: `calendar_days_to_observations(giorni, f) = max(1, round(giorni × f / 365))`. I parametri di
+>   `horizon_compounded_returns`, `historical_var_cvar` e `estimate_drift_uncertainty` si chiamano ora
+>   `horizon_observations`: ricevono osservazioni, e il vecchio nome `horizon_days` è quello che aveva nascosto C2 e C3.
+> - `historical_var` 3.0.0 e `asset_set_var` 2.0.0: `horizon_days` in giorni di calendario, composti su `n` osservazioni
+>   con la frequenza osservata; campo obbligatorio nuovo `horizon_observations` nelle due uscite; il controllo della
+>   storia insufficiente conta le finestre (`N − n + 1`) e i dettagli portano giorni e osservazioni.
+> - Simulazione 4.0.0: `SimulationEngineRequest.steps_per_year` (solo bootstrap; assente = 365, cioè il motore di
+>   prima, identico al byte). Il resampler converte orizzonte, regimi e blocco in passi; la deriva della crisi è per
+>   anno di passi; i percorsi tornano ai giorni di calendario (giorno d → passo ⌊d × passi / giorni⌋), quindi la banda
+>   ha sempre `horizon_days + 1` punti e il frontend non cambia; la dichiarazione resta in giorni di calendario. Il
+>   plugin passa la f osservata; l'incertezza della deriva si compone su `n` osservazioni, per GBM e bootstrap.
+> - Frontend: `MONTHLY_VAR_HORIZON_DAYS` 21 → 30; `api sync` (il client generato è ignorato da git).
+> - Fixture di A e F, con il loro OK una tantum: `risk-analysis.spec.ts` (A: la copia della costante e il mock),
+>   `risk-lab.spec.ts`, `AssetSetComparisonLevels.test.ts`, `AssetSetLossComparisonSection.test.ts`,
+>   `assetSetLevels.test.ts` (F); `risk-mocks.ts` è mio.
+>
+> **Verifica** (6152, un comando per volta): `services risk-all` 789 · `schemas risk` 47 · `series-preparation` 22 ·
+> `asset-signals` 20 · `signal-plugins-core` 46 · `signal-plugin-matrix` 65 · `signal-service` 50 · `signal-runtime` 6 ·
+> `ai-export` 922 · `api risk` 14 (dopo `db populate --force`) · `check-orphans` pulito · `front check` al pavimento
+> di 3 · `risk-levels-unit` 269 · `core-unit` 2845 · `component-unit` 2161 · Vitest della cartella del rischio 796 · E2E
+> `risk` 13, `risk-lab` 22, `risk-asset-detail` 2 (dopo `front build --debug`).
+>
+> **Misura sulla copia di prod, con il codice vero** (cifre solo in `/tmp` e in chat): coincide col prototipo del
+> mattino. Il TWRR di un anno ha 255 osservazioni con f = 255,7 e il mese di 30 giorni vale 21 osservazioni; l'insieme
+> degli asset quotati ha f = 256; la simulazione di 365 giorni fa 256 passi e pubblica 366 punti.
+>
+> **⚠️ Fuori pista**
+> - Avevo scritto a F che `assetSetLevels.test.ts` non rompeva nessun cancello: falso. Il suo `assetSetLevels.ts` legge
+>   le uscite con Zod, e un tipo largo (`Record<string, unknown>`) nasconde il campo mancante a svelte-check ma non a
+>   runtime: 6 rossi. Un campo obbligatorio nuovo rompe ogni fixture che passa dal parser, non solo quelli tipizzati:
+>   si cercano le chiamate al parser, non i tipi. Corretto con un secondo OK di F.
+> - Nel brief avevo scritto 50 × 252 / 365 → 34: è 34,52, quindi 35. L'ha preso il test-author.
+> - Il bootstrap a blocchi non ha una pagina di teoria nel manuale: debito di prima, lasciato alla ripresa della
+>   simulazione che il developer ha rimandato.
+
+### `comparison` — una regressione del giro 1, trovata dal docs-writer · ✅ 30/09/2026
+
+> **Il difetto**: il confronto con un benchmark accoppiava per data i ritorni del primario e quelli del benchmark. Dal
+> giro 1 il TWRR del portafoglio ha ritorni solo nei giorni di osservazione, mentre il benchmark resta sul calendario
+> congiunto, che contiene anche i giorni quotati solo da lui (un benchmark cripto nel weekend, un ETF americano in un
+> festivo europeo): lì il suo ritorno cadeva, e il successivo veniva accoppiato a un ritorno del TWRR su un intervallo
+> più lungo. Prima del giro 1 non poteva succedere, perché il TWRR aveva ogni giorno di calendario. L'ha trovato il
+> docs-writer leggendo `comparison.py` per scrivere la frase giusta nel manuale.
+>
+> **La cura** (`comparison` 1.1.0, test prima): le due serie si compongono fra le date che condividono. Fino alla prima
+> coppia, una data del primario senza ritorno del benchmark cade e l'intervallo riparte da lì (un benchmark che parte
+> tardi si aggancia dall'ultima data che non poteva rispondere); dopo, quella data non è un confine: l'intervallo va
+> avanti dall'ultima data condivisa e alla successiva si compongono entrambe le serie. Un solo ritorno per lato si
+> prende così com'è, quindi su un calendario comune (un asset, la composizione attuale) il risultato è identico al byte.
+>
+> **⚠️ Fuori pista**: la mia prima versione faceva ripartire l'intervallo da ogni data scartata, e non era esatta quando
+> il benchmark non ha ritorni dentro l'intervallo scartato (il suo ritorno successivo parte da prima). Di nuovo il
+> docs-writer, descrivendo la regola, ha trovato il caso; il contratto è passato a «fra le date condivise», con un
+> test rosso prima e il vecchio caso di metà finestra riscritto.
+>
+> **Mutanti** (test-author, su produzione, impronte dei 14 file controllate prima e dopo ciascuno): 46 sui giri 1 e 2,
+> 43 presi dai test esistenti; i 3 sopravvissuti sono ora presi da 2 test nuovi e 1 stretto — il confronto sulla
+> chiusura nativa e non su quella convertita (una quotazione in dollari che ripete la chiusura mentre il cambio si
+> muove), il punto base del TWRR in un festivo della borsa posseduta, lo spegnimento che deve fermare il processo nel
+> momento in cui ritorna. Poi 10 su `comparison` nel contratto finale, tutti presi.
+>
+> **Verifica finale** (6152): `services risk-all` 799 · `schemas risk` 47 · `api risk` 14 (dopo un nuovo
+> `db populate --force`: il DB della corsia era stato ricreato dalle esecuzioni intermedie) · `check-orphans` pulito ·
+> ruff, black, prettier e `git diff --check` puliti · `mkdocs build` rigoroso senza avvisi e `check-links` 88 validi
+> (docs-writer). Il frontend non è cambiato dopo gli E2E e la cartella Vitest del rischio (796).
+>
+> **Manuale** (docs-writer, solo EN, pagine senza traduzioni): `value-at-risk` (T = N − n + 1 con n dall'orizzonte in
+> giorni di calendario; i numeri dell'esempio a h = 10 ricalcolati; il riquadro che diceva il conteggio dei metadati
+> «già al netto dell'orizzonte» era falso), `observed-annualization` (i giorni di osservazione del portafoglio; la
+> copertura; il calendario congiunto è un'unione, non un'intersezione), `data-quality` (la sezione nuova «Stored
+> Carries»), `historical-replay` (il replay prepara le sue serie, non «le stesse»), `benchmark-selection` (la coppia fra
+> le date condivise).
+>
+> **Restano** (non in questo checkpoint): il passo dei segnali (`signal_series_preparation.py`, concesso, con l'RSI 14
+> prima e dopo; `price_query.py` riceve oggi solo la regola del weekend, i festivi lì sono fuori famiglia); la frase
+> di `historical-replay.en.md:59` («refuses to run and asks for a decision»), falsa da prima, va al blocco replay; la
+> guida di F (`user/assets/correlation.en.md:99` e la regola 2 di `:153`) va riallineata da F; il bootstrap a blocchi
+> non ha una pagina di teoria.
+
+### F in Risk, la guida di F e gli indicatori tecnici sui giorni di quotazione · ✅ 30/09/2026 (pomeriggio) – 01/10/2026
+
+> **Commit** (developer), verificati dal coordinator: il checkpoint del calendario `1996b84e4` … `95051fa8a`; la
+> fusione F → Risk `3c46c8e60` (genitori `95051fa8a` + `1b62abd2e`, albero `25235c91`), aperta con `--no-commit`,
+> adattati da me i due fixture nuovi di F (`SORT_DAILY_VAR`/`SORT_MONTHLY_VAR`: `horizon_observations`, il mese a 30
+> giorni, con l'OK di F) e validata prima del commit (`risk-lab` 26, `asset-list` 28, unit e `front check` al
+> pavimento); F in fast-forward. Poi la guida di F dopo il calendario (`31cff1e5e`, `3eff35036`).
+>
+> **Il passo dei segnali era più grande del previsto.** La query dei prezzi (`_build_backward_filled_series`) dà agli
+> indicatori tecnici un punto per ogni giorno di calendario, riempiendo weekend e festivi con l'ultima barra, e i
+> plugin calcolano su tutti: su **ogni** asset, non solo su quelli di justETF. La regola dei riporti da sola avrebbe
+> cambiato solo i conteggi della copertura, non un valore. Misurato sugli asset del developer (ultimo anno, cifre
+> solo in `/tmp`): RSI 14 si sposta in media di 2,5–3 punti (fino a 7–10) e resta fuori da 30–70 molto più spesso
+> (54 giorni contro 32); SMA 200 copre 199 giorni di calendario (circa 140 sedute) e il suo livello cambia fino al 9 %;
+> la larghezza delle bande di Bollinger cambia in media del 18 %; l'istogramma del MACD cambia segno in un giorno su
+> sette circa; l'ATR (una sola fonte con OHLC) del 6 % in media; l'EMA 20 poco (sotto l'1 % in media).
+>
+> **Decisione del developer**: «Sui giorni di quotazione, come la definizione standard: SMA 200 = 200 sedute». Il
+> coordinator me la assegna, sul mio ramo, con le superfici concesse (`price_query.py`: marcatura dei riporti
+> nell'ingresso dei segnali, l'attesa della tabella dei festivi, i festivi ai segnali di rischio, il moltiplicatore
+> del riscaldamento; `api/v1/fx.py`: solo il moltiplicatore; `technical_shared.py`: il moltiplicatore FX e le versioni
+> dei componenti) e un vincolo (`backend/app/services/fx.py` resta fuori: c'è la PR #28 di un contributore).
+>
+> **Il piano**, approvato dal developer («Sì, procedi con il piano, test prima»):
+> 1. un giorno di quotazione è un punto senza `backward_fill_info`; i riporti salvati diventano riempiti alla fonte;
+> 2. la copertura resta di calendario (il frontend non cambia: i grafici allineano per data e le linee scavalcano il
+>    weekend);
+> 3. il servizio dei segnali passa al plugin solo i giorni di quotazione dei punti scelti, per i plugin con
+>    `computes_on_quote_days` (vero per i 17 indicatori tecnici; falso per `calendar_rolling_return`, che ha finestre
+>    di calendario per definizione, e per i 5 segnali di rischio, già sulle serie preparate);
+> 4. il riscaldamento carica punti × 2 giorni di calendario;
+> 5. versioni: i 17 plugin a 2.0.0, i 5 segnali di rischio minori, i componenti tecnici dell'AI Export da 1 a 2;
+> 6. il manuale (EN): i periodi in sedute.
+> Nessun test di altri rami fissa valori assoluti degli indicatori; nel mio blocco si riallineano alcuni test
+> dell'AI Export e del servizio dei segnali.
+>
+> | passo | stato |
+> |---|---|
+> | test rossi (test-author) | ✅ 44 test, 32 rossi per il motivo giusto, provati contro una simulazione del contratto |
+> | implementazione, versioni | ✅ |
+> | mutanti | ✅ 14 presi; i 2 sopravvissuti (Q-3, Q-9a) presi da 2 test nuovi, più un test diretto per Q-1 |
+> | prove dell'AI Export, numeri prima/dopo col codice vero | ✅ |
+> | manuale (docs-writer) | ✅ 21 pagine EN (gli indicatori, `indicators/index`, `ai_export_sampling.md`); ha trovato le due regressioni UI qui sotto |
+> | UI: i periodi in sedute (unità e suggerimenti) | ✅ 30/09 |
+> | UI: le bande di Bollinger e Donchian sul weekend | ✅ 30/09 — riempite fra due punti; concessione rivista dal coordinator |
+> | checkpoint | ✅ committato il 30/09: `9d410e4de` · `840bdbc0d` · `6f455dee6` · `d800882b2` (67 percorsi, verificati dal coordinator) |
+>
+> **Mie decisioni sulle ambiguità del test-author**: un giorno di quotazione è un **prezzo** genuino (`days_back == 0`),
+> anche se il cambio è riportato, come per il motore e per l'AI Export: altrimenti le ultime sedute sparirebbero
+> quando la sincronizzazione dei cambi è in ritardo; `calendar_rolling_return` passa a 1.4.0 (valori e date uguali,
+> ma sui riporti salvati ora dichiara il riporto); un intervallo visibile di soli weekend è non disponibile.
+>
+> **Note implementazione**
+> - `signal_plugins/base.py`: `computes_on_quote_days` (vero di default; falso su `calendar_rolling_return` e sui 5
+>   segnali di rischio, già sul calendario delle serie preparate). I 17 indicatori a 2.0.0; i 5 segnali di rischio
+>   minori; `calendar_rolling_return` 1.4.0.
+> - `signal_series_preparation.py`: `is_quote_day`, `quote_day_points`, `SESSION_WARMUP_DAY_MULTIPLIER = 2`.
+> - `signal_service.py`: il piano separa i punti di riscaldamento in sedute, calendario e serie preparate
+>   (`max_history_days_before_visible`: sedute × 2 giorni di calendario); dopo la selezione il plugin riceve solo le
+>   sedute; la copertura resta di calendario.
+> - `price_query.py`: la stessa `mark_market_closed_carries` del motore (resa pubblica in `series_preparation.py`)
+>   sull'ingresso dei segnali; la tabella dei festivi attesa una volta per chiamata, solo se ci sono segnali, e passata
+>   anche ai segnali di rischio; il riscaldamento in giorni di calendario. `api/v1/fx.py` e
+>   `technical_shared._fx_warmup_days`: lo stesso riscaldamento.
+> - Test di altri riallineati senza indebolirli: le due fixture FX con un solo cambio salvato (ora più giorni pubblicati),
+>   il caso del seme per intervallo con abbastanza sedute, le docstring dello scenario dell'AI Export (le copie
+>   dell'ancora sono riporti, non sedute) con i controlli di presenza che hanno mostrato che la metà FX confrontava
+>   due insiemi vuoti.
+>
+> **Il codice vero sui dati del developer** (copia di prod, cifre solo in `/tmp`): RSI 14 e SMA 200 coincidono al
+> centesimo col prototipo su tutti gli 11 asset quotati, nessun punto di weekend, circa 250 punti l'anno, versioni
+> 2.0.0; il BTP è «parziale» per SMA 200, a ragione (storia breve).
+>
+> **Le prove dell'AI Export** (skill `ai-export-probe-tuning`, prove mirate, alfy, 1Y, Standard; la sorgente è la
+> snapshot in sola lettura, l'uscita in `/tmp`, la porta 6162; il «prima» da un'esportazione di `3c46c8e60` in
+> `/tmp`): asset `asset.market_history` prompt +0,4 %, stessi dataset e componenti, stesse righe di storia, eventi
+> esportati 116 → 106; portafoglio `portfolio.asset_history` +1,8 %, 5 indicatori da OK a parziale (le storie brevi,
+> ora che il riscaldamento conta sedute), eventi rilevati −17 % (meno incroci prodotti dai weekend piatti). Sorgente
+> invariata, controllo dei segreti superato, prompt uguali fra UI e prova. FX non provabile sui dati del developer
+> (nessuna esposizione in valuta): coperto dai test.
+>
+> **⚠️ Fuori pista — le versioni dei componenti dell'AI Export**: nel piano le avevo portate da 1 a 2. La prova vera ha
+> fallito i controlli del prompt pubblico: il renderer del frontend (`snapshotDataRenderer.ts:1438`) scrive in forma
+> compatta solo i componenti alla versione 1, e per gli altri ricade sullo YAML grezzo, con gli identificativi. Né la
+> logica dei componenti né la forma dei loro dati cambiano, cambiano solo i valori degli indicatori a monte, che hanno
+> le loro versioni (2.0.0): versioni dei componenti riportate a 1, i pin tolti. Una regola scritta sul quando cambiare
+> la versione di un componente non c'è; questo è il caso che la motiva.
+
+#### Le due regressioni UI di (a), trovate dal docs-writer · ✅ 30/09/2026 (sera)
+
+> Rilette le pagine, il docs-writer ha visto ciò che il backend non poteva mostrare: i campi del periodo dicono
+> ancora «giorni», e il riempimento delle bande si spezza a ogni weekend (i punti ora sono solo sulle sedute, l'asse
+> delle date resta di calendario). Il coordinator concede le due superfici: `lineChartHelpers.ts` (di I) e le chiavi
+> i18n, più una riga nella lista Vitest `core-unit`.
+>
+> **Note implementazione — i periodi in sedute** (test rossi del test-author prima: 17 in
+> `test_signal_plugin_matrix.py`, un pin per plugin di unità e suggerimento, più la presenza delle chiavi nei quattro
+> cataloghi):
+> - i 16 indicatori con un periodo dichiarano `"x-suffix": "sessions"`; i 12 sul suggerimento comune passano a
+>   `chartSettings.tooltips.sessionPeriod`; EMA, MACD, PPO e StochRSI tengono le loro chiavi. `calendar_rolling_return`,
+>   i 4 segnali di rischio a finestra e i 3 plugin di rischio con orizzonte restano in «giorni», che per loro sono veri;
+> - i18n con `dev.py i18n`: `signals.units.sessions` e `chartSettings.tooltips.sessionPeriod` nuove, riscritte
+>   `emaPeriod`, `fastPeriod`, `slowPeriod` e `signalPeriod`; `chartSettings.tooltips.period` resta com'è (il benchmark
+>   Sine del frontend conta giorni veri). In francese lo spazio indivisibile prima dei due punti, che c'era, resta.
+>
+> **⚠️ Fuori pista — `connectNulls` non ripara la banda, la rompe.** Il rimedio concesso era mettere `connectNulls`
+> anche sulle due serie impilate della banda (la base invisibile e il delta). Prima di chiudere l'ho disegnato davvero,
+> con ECharts 6.0.0 in un browser, le stesse tre serie di `buildBandSeries`: dove la base di una serie impilata è
+> nulla, ECharts prende come fondo l'origine dell'asse (`getStackedOnPoint`), e `connectNulls` salta solo i punti di
+> sopra: il bordo inferiore precipita all'asse a ogni weekend. Nessuna opzione di ECharts lo evita. Tolto; il file è
+> tornato com'era. La proposta al coordinator: riempire, solo nella base e nel delta, i giorni strettamente fra due
+> punti con la retta fra i vicini (ciò che `connectNulls` disegna per una linea); prima del primo punto e dopo
+> l'ultimo resta il vuoto; la linea di mezzo non cambia, e i tooltip saltano già le due serie di servizio, quindi un
+> valore riempito non si vede mai. Cambia un test di I (una data mancante in mezzo non è più nulla nella base).
+> Disegno di prova: tre pannelli, prima, `connectNulls`, riempimento (solo in `/tmp` e fra i file della sessione).
+>
+> **Note implementazione — le bande** (concessione rivista dal coordinator: l'aiuto in `lineChartHelpers.ts` e un solo
+> test di I, riscritto al contratto nuovo; test rossi del test-author prima, 6):
+> - `bridgeBetweenPoints`, locale: le posizioni dell'asse strettamente fra due punti prendono la retta fra i vicini;
+>   prima del primo e dopo l'ultimo restano come sono. Solo sulla base invisibile e sul delta impilato; nessun
+>   `connectNulls` su di loro; la linea di mezzo non cambia;
+> - il test di I (`'maps a date absent from the signal to null across all three series'`) ora dice ciò che prova: la
+>   data assente in mezzo è riempita nella banda, per posizione sull'asse, e resta vuota nella linea di mezzo;
+> - il file nuovo è `lineChartHelpers.sessionGaps.test.ts` (un `lineChartHelpers.test.ts` c'era già, sotto
+>   `__tests__/`), in `core-unit`: il weekend, un lunedì festivo, i vuoti ai due capi, il delta con la sua pendenza,
+>   nessun nullo dentro il riempimento;
+> - 7 mutanti (niente riempimento della base o del delta, riempimento in testa o in coda, riempimento della linea di
+>   mezzo, `connectNulls` sulla base, pendenza sfasata): presi tutti;
+> - il disegno col `buildBandSeries` vero, HEAD contro l'albero di lavoro (esbuild e un browser): HEAD si spezza a ogni
+>   weekend e sul festivo, l'albero di lavoro è continuo, i capi vuoti.
+>
+> **Verifica finale del blocco** (6152, un comando alla volta): matrice dei plugin 92; registro 65, contratti 10,
+> plugin 46 + 62 + 75 + 40, servizio 64, annotazioni 25, runtime 6; API cataloghi 4, anteprima 5, validazione 2;
+> `core-unit` 2854; `component-unit` 2194; `front check` al pavimento di 3 (4 file non miei); i18n 3493 chiavi, nessuna
+> mancante; orfani ✅; link ✅; ruff, black, `diff --check` puliti; nessun segreto. E2E `fx-detail` 17/17,
+> `asset-detail` 27/28 (il `:486` noto, la fixture scaduta il 17/09, riparata nel ramo di I).
+>
+> **⚠️ Fuori pista — un rosso che c'era già**: `asset-unit` dà 12 rossi in `chartCoreHelpers.test.ts`, i test che
+> rileggono il sorgente di `GrowthChart.svelte`. Gli stessi 12 su HEAD e su `dev_release2` (esportati in `/tmp`): il
+> grafico è cambiato con `e7773a143` e i test no. Non è (a); il ramo di I li ritira (`2e4c8589f`).
+
+### `dev_release2` → Risk dopo (a): il passo 13 di K e le scelte di L · ✅ 01/10/2026
+
+> **Commit** (developer, script del coordinator): `cf09df7f6`, genitori `d800882b2` + `8f18416df`, albero
+> `918eb1626cbb…`. Fusione aperta con `--no-commit` dallo script del coordinator, che si fermava se i conflitti non erano
+> esattamente i due previsti.
+>
+> **I due conflitti, risolti in anticipo su una simulazione** (`git merge-tree`, nessuna scrittura nell'albero) e
+> applicati da uno script che controllava che i file in conflitto fossero byte per byte quelli simulati:
+> - `AllocationPieChart.svelte`: il mio importo preso dalla voce del grafico e il mio `iconHtml`, più gli escape di K
+>   (`escapeHtml` sull'importo e sull'URL dell'icona, che ora si chiama `iconUrl` come vuole la regola del cancello).
+>   Prendere il lato di K così com'era non compilava: usava un `iconUrl` che il mio lato non definiva più. Risultato
+>   contro il mio: esattamente le 4 modifiche di K.
+> - `assets/+page.svelte`: il blocco dei filtri, che F ha avvolto in `{#if activeTab !== 'correlation'}` reindentandolo
+>   e K ha ricalibrato (`filterWidthClass`). Git chiudeva i segni a metà, e il testo dopo `>>>>>>>` era la copia di F con
+>   le classi vecchie: scegliere un lato era sbagliato in tutti e due i casi. Ricostruito con una fusione a tre del solo
+>   blocco, con la versione di F senza rientro e senza l'`{#if}`, poi rimesso l'avvolgimento. Prova a spazi ignorati:
+>   il risultato contro F è esattamente le 13 righe di K, contro K esattamente le 135 di F.
+>
+> **Verifica del combinato** (6152, un comando alla volta): `front build --debug` ✅; `front check` al pavimento di 3;
+> `core-unit` 2887 (con i cancelli anti-XSS di K); `component-unit` 2263; `allocation-unit` 142 (con
+> `AllocationPieChart.test.ts`); orfani ✅; i18n 3494 chiavi, nessuna mancante; E2E `risk` 13, `risk-lab` 26,
+> `risk-asset-detail` 2, `asset-list` 28, `toolbar-width-sweep` 15, `asset-name-xss` 2, `stale-price-banner` 1;
+> backend `risk-all` 800, matrice dei plugin 92, `signal-service` 64, `ai-export` 925, `roi-fifo-utils` 518,
+> `brim-provider-base` 34, `portfolio-engine` 42 (i due file del portafoglio si erano fusi da soli dai due lati). Rossi
+> di altri invariati: `asset-unit` 12 in `chartCoreHelpers.test.ts`, gli stessi nomi di prima.
+>
+> **A e F**: niente avanzamento veloce, perché il loro lavoro in corso tocca file che la punta cambia. Al prossimo
+> checkpoint ciascuno fonde la punta. Simulazioni sull'albero esatto, con la vera base di fusione (per F `3c46c8e60`, non
+> la sua punta: è due commit di documentazione avanti): A 0 conflitti; F uno solo, in `TODO_FUTURI.md`, che il
+> coordinator ha preso per sé (il file ha un solo scrittore): la voce di F è passata su `dev_release2`, e F la toglie dal
+> suo checkpoint.
+
+### Il benchmark condiviso: anche gli asset posseduti, e il selettore mai vuoto · ✅ 01/10/2026 (la mia parte)
+
+> **Origine**: F aggiunge al laboratorio un selettore del benchmark, su richiesta del developer («non è accettabile che
+> debba andare in dashboard, modificare il selettore e poi tornare qui»), e mi chiede se il laboratorio debba escludere
+> anche gli asset posseduti, come fa la Dashboard.
+>
+> **Il difetto che c'era già**: la Dashboard e il Broker escludono dalla lista gli asset del proprio perimetro, ma il
+> benchmark è uno solo. Il Broker esclude solo i suoi, quindi un benchmark scelto lì può essere posseduto in un altro
+> broker; la Dashboard allora lo toglie dalla lista (`AssetSelect` filtra le opzioni, `SearchSelect` cerca il valore solo
+> fra quelle) e mostra il segnaposto, mentre `run()` confronta proprio contro di lui.
+>
+> **Decisione del developer**, testuale: «credo che matematicamente può avere senso usare come benckmark un asset
+> posseduto, quello che non capisco è quando dici che il selettore resta vuoto. Vorrei che ovunque serve scegliere un
+> benchmark ci sia un selettore che permette di farlo e che al momento del caricamento della pagina, esso mostri il
+> benchmark attuale, vuoto non deve mai essere, eccetto quando non c'è nessun asset impostato». E per la pagina
+> dell'asset: «Sì, usa il benchmark condiviso: all'apertura mostra quello attuale, e cambiarlo lì lo cambia ovunque».
+>
+> **La regola**: si esclude solo ciò che si misura (l'asset sulla sua pagina, gli asset selezionati nel laboratorio); il
+> selettore mostra sempre la scelta corrente, anche quando lì non si può usare, e lo dice; un id salvato che non
+> corrisponde più a nessun asset vale come «non impostato». Il motivo finanziario: un portafoglio contiene quasi sempre
+> qualcosa del suo riferimento, e «i satelliti mi fanno guadagnare o perdere rispetto al solo nucleo?» è la domanda più
+> utile per chi investe così. Il backend lo gestisce già (il benchmark posseduto ed escluso dà un confronto non
+> disponibile, con la qualità dei dati che dice perché).
+>
+> | chi | cosa | stato |
+> |---|---|---|
+> | A | `RiskLevelsPanel`: niente esclusione degli asset posseduti; l'id morto | ⏳ test rossi prima |
+> | F | il selettore nel laboratorio, sopra L1° e L3° (decide il developer); la scelta corrente sempre visibile | ⏳ giro 4 |
+> | io | la primitiva, e la scheda Rischio della pagina dell'asset che legge e scrive il benchmark condiviso | ✅ 01/10 |
+>
+> **Una primitiva, non tre filtri.** La regola vive in `components/risk/BenchmarkSelect.svelte` con
+> `resolveRiskBenchmark()` nello store (miei); A la monta in `L3Benchmark` con `measuredAssetIds={[]}`, F nel
+> laboratorio sopra L1° e L3° (variante B scelta dal developer), io sulla pagina dell'asset. Il ⚠ è il disegno di F
+> approvato dal developer; il testo generico è mio (`risk.benchmark.measuredHere`), il laboratorio passa il suo con
+> `measuredHint`. Due concessioni del coordinator per il runner (il test jsdom in `risk-levels-component`, l'E2E nuovo
+> `risk-benchmark-shared`).
+>
+> **⚠️ Fuori pista — l'id morto non si cancella.** Il primo contratto cancellava dallo store un id senza asset. Il
+> test-author di A ha trovato due ragioni per non farlo: `entityStore.ensureLoaded()` si risolve anche quando il
+> caricamento fallisce («Fail silently»), quindi un asset sparito e una lista non caricata non si distinguono e si
+> perderebbe una scelta valida; e `assets.id` è `INTEGER PRIMARY KEY` senza AUTOINCREMENT, quindi SQLite riusa l'id
+> dell'ultimo asset cancellato e un id salvato può tornare vivo su un altro asset. La primitiva espone ora lo stato
+> della risoluzione (`none`, `pending`, `set`, `unknown`, anche come `data-benchmark-state`): `unknown` vuol dire
+> segnaposto e nessuna richiesta, senza toccare la memoria. Il riuso degli id riguarda ogni riferimento ad asset
+> salvato nel client: passato al coordinator come limite del backend.
+>
+> **Note implementazione** (test rossi prima, test-author, tre giri: 4 + 23, poi gli attributi e il ⚠ di F, poi lo
+> stato della risoluzione; la sessione è caduta alle 14:28 durante la mia verifica dei rossi, ripresa alle 15:42 dai
+> file):
+> - `riskBenchmarkStore.svelte.ts`: `resolveRiskBenchmark()` → `{state: 'none' | 'set' | 'unknown', assetId}`; niente
+>   salvato → `none` senza caricare la lista; altrimenti attende `ensureAssetsLoaded()` e conferma con `getAssetInfo`;
+>   un caricamento fallito dà `unknown` senza rigettare; **non scrive mai** lo store.
+> - `BenchmarkSelect.svelte`: lo stato è sincrono al montaggio (`pending` se c'è un id salvato, altrimenti `none`), poi
+>   la risoluzione (valore prima dello stato); una scelta del lettore scrive lo store, poi stato e valore, poi
+>   `onchange`, e la risoluzione tardiva non la sovrascrive; il filtro toglie solo ciò che la pagina misura, mai la
+>   scelta corrente; benchmark per primi; la radice `${testid}-control` pubblica `data-benchmark-id`,
+>   `data-benchmark-state`, `data-measured`; il ⚠ è il disegno di F (`role="img"`, `tabindex="0"`, `aria-label`, dentro
+>   il `Tooltip` con `interactiveChild`, perché il suo involucro normale è un `role="button"`), testo generico
+>   `risk.benchmark.measuredHere` o `measuredHint` della pagina. Il prop si chiama `state`, la variabile locale
+>   `benchmarkState`: un nome `state` oscura la runa `$state`.
+> - `RiskAnalysisPanel.svelte` (pagina dell'asset): `BenchmarkSelect` al posto di `SignalAssetParamControl` per il
+>   confronto, stesso testid; `comparisonUsable` esclude l'asset stesso, e il pulsante resta il solo avvio.
+> - Runner (due concessioni del coordinator): il test jsdom in `risk-levels-component`, l'E2E nuovo
+>   `risk-benchmark-shared`; la `desc` corretta al contratto finale (il primo giro diceva ancora «is cleared»).
+>
+> **Verifica** (6152, un comando alla volta): store 13 · `BenchmarkSelect` 38 (`risk-levels-component` 74) ·
+> `core-unit` 2887 · `component-unit` 2263 · `front check` al pavimento di 3/41 (nessun avviso nuovo) · i18n 3495 chiavi,
+> nessuna mancante · orfani ✅ · E2E `risk-benchmark-shared` 4/4 (i quattro rossi), la rete senza proprietario
+> `risk-asset-detail` 2/2 (con la memoria vuota la pagina è identica), `risk` 13, `risk-lab` 26. **Mutanti**: 18 su 18
+> presi (5 sullo store: cancella l'id sconosciuto, non attende la lista, rigetta sul fallimento, carica senza id, legge
+> il fallimento come `set`; 13 sulla primitiva: mai `pending`, niente guardia della corsa, scelta corrente filtrata,
+> `onchange` o valore prima dello store, ⚠ mai mostrato, suggerimento della pagina ignorato, niente sezioni, ⚠ non
+> focalizzabile, stato non pubblicato o non scritto, valore dallo store invece che dalla risoluzione, scelta che non
+> arriva allo store); file ripristinati identici (SHA-256).

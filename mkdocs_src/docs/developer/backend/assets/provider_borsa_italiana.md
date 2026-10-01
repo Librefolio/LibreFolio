@@ -25,7 +25,15 @@ Borsa Italiana lists the same instrument families across several markets (MTA, M
 
 ### 💱 Currency
 
-All data is returned in **EUR** — Borsa Italiana is an Italian exchange.
+A listed instrument is priced in its **trading** currency on Borsa Italiana: **EUR** for most listings, but e.g. **USD** for FX-denominated EuroTLX bonds such as the US Treasury `US912810TU25`. One source serves both sides: **the metadata currency is the currency the prices carry**.
+
+- **Prices** (`get_current_value`, `get_history_value`): the currency of the `grafici.borsaitaliana.it` chart-API reply (`ottieni_prezzo_corrente` / `ottieni_storico`), `EUR` when the reply carries none. History goes through `_storico_con_mic_retry`: default route first, then, on `StrumentoNonTrovato`, the stored `mic` as the chart-API exchange.
+- **Metadata and `resolve_url`** (listed instruments): the currency is **not** read from the scheda page. ETF/ETC scheda pages often show only the fund's **denomination** currency («Valuta di Denominazione USD»), while the instrument trades — and is priced — in EUR; read off the scheda, it gave USD metadata over EUR prices (e.g. Invesco Physical Gold ETC `IE00B579F325`, iShares Core MSCI World `IE00B4L5Y983`, iShares Core S&P 500 `IE00B5BMR087`). The module helper `_price_api_currency(identifier, mic)` asks the chart API instead: the same `_storico_con_mic_retry` call, the same `EUR` default.
+- **Currency unknown**: when that chart-API call fails (any exception), `fetch_asset_metadata` leaves `currency` **unset** in the returned `FAAssetPatchItem` (patch contract: present, even if `None` → update/blank; absent → keep), so a metadata refresh keeps the stored asset currency instead of blanking it. `resolve_url` rows carry `currency: None`.
+- **Search**: rows for listed instruments carry `currency: None` — the `cerca` payload has no currency; the metadata fetch fills it.
+- **Funds** (`codice_fondo`): unchanged — the currency comes from the fund page (`DatiFondo.valuta`, default `EUR`).
+
+Note (library ≥ 0.3.2): the scheda parser no longer takes the denomination row for the trading currency — «Valuta» / «Currency» match only as an exact label — and exposes the denomination separately as `SchedaStrumento.valuta_denominazione`, which the plugin does not use. The fix still matters for current prices: `ottieni_prezzo_corrente` falls back to scraping the scheda when its chart-API read fails.
 
 ### 💰 Current Value (`get_current_value`)
 
@@ -67,7 +75,7 @@ The provider captures the internal code into `provider_params.codice_fondo` at a
 - Extracts:
     - **Name**: from `<h1>` tag on the page, appended with language flag emoji (e.g., `"ENEL S.p.A. 🇬🇧"`).
     - **Type**: mapped from instrument type field (e.g., `obbligazione` → BOND, `azione` → STOCK, `etf` → ETF).
-    - **Currency**: negotiation currency (default EUR).
+    - **Currency**: from the chart API that prices the asset, not from the scheda; left unset when unknown — see [Currency](#currency).
     - **Description**: assembled from page description, market, issuer, maturity date, coupon rate, structure, tipology, coupon frequency.
     - **Ticker**: if available on the page (mainly for stocks).
     - **Geographic Area**: inferred from issuer name (e.g., "Republic of Italy" → `ITA`).
@@ -86,7 +94,7 @@ The provider opts into the generic **URL → search-item** capability:
 - `resolvable_url_domains = ["borsaitaliana.it"]` → `supports_url_resolution` is `True`.
 - `resolve_url(url)` recognises two public page families:
     - **Fund detail pages** (`/borsa/fondi/dettaglio/{code}.html`) — fetches the page and returns the **full canonical set a normal search would emit** for that fund: the **IT + EN pair** (Italian first, with flag in `display_name`), each `{identifier: <ISIN from page> or code, identifier_type, display_name, currency, type: "FUND", provider_params: {codice_fondo, language}}`.
-    - **Stock / bond / ETF scheda pages** (`…/scheda/{ISIN}[-{MIC}].html`) — returns the same IT + EN canonical set, priced by ISIN.
+    - **Stock / bond / ETF scheda pages** (`…/scheda/{ISIN}[-{MIC}].html`) — returns the same IT + EN canonical set, priced by ISIN. The rows' `currency` comes from one chart-API call shared by every row (`None` if it fails), not from the scheda.
 
 It is only a different **entry point** — the orchestration flattens the list and de-dupes by `(identifier, language)`. Anything that is not a recognisable Borsa page (off-domain, no extractable fund code or ISIN path) returns `None`. Best-effort: fetch/parse errors return `None`, never raise.
 
