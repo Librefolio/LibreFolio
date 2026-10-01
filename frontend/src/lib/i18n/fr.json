@@ -818,6 +818,50 @@
         "balance_chain_broken": "Le solde progressif du relevé ne concorde plus à partir du {date} : les soldes sont seulement comparés, pas utilisés pour les corrections.",
         "empty_member": "Un export « {role} » ne contient aucune ligne.",
         "mixed_accounts_in_file": "Un export de titres contient plusieurs comptes-titres."
+      },
+      "gapFix": {
+        "stepTitle": "Aligner avec la banque",
+        "intro": "Nous comparons ce que LibreFolio contiendra après cette importation avec ce qu'indique la banque, et proposons les transactions qui comblent l'écart.",
+        "checkpointOpening": "Point de départ · {date}",
+        "checkpointGap": "Après la période manquante · {date}",
+        "bank": "Banque",
+        "difference": "Écart",
+        "cashLabel": "Espèces {currency}",
+        "atLeast": "au moins {quantity}",
+        "absorbed": "{n, plural, one {# mouvement antérieur de l'export est résumé ici.} other {# mouvements antérieurs de l'export sont résumés ici.}}",
+        "absorbedMissing": "{n, plural, one {# d'entre eux n'est pas dans LibreFolio :} other {# d'entre eux ne sont pas dans LibreFolio :}}",
+        "openingCash": "Solde avant l'export :",
+        "unexplained": "Non expliqué par ces mouvements :",
+        "note": {
+          "unresolved_asset": "Une position de la banque concerne un titre pas encore résolu : elle a été laissée de côté."
+        },
+        "toggle": "Importer cette correction",
+        "costToEnter": "coût à saisir",
+        "verificationTitle": "Contrôle de fin de période · {date}",
+        "verificationOk": "Concorde",
+        "verificationKo": "Ne concorde pas",
+        "verificationKoHint": "Non corrigé automatiquement : si vous ajoutez à la main le mouvement manquant, le solde concorde.",
+        "hiddenTitles": "Un titre qui n'a pas bougé dans les fichiers et n'a versé aucun dividende n'apparaît pas : vérifiez vos positions sur le site de la banque.",
+        "error": "La comparaison avec la banque a échoué.",
+        "errorContinue": "Vous pouvez continuer sans corrections.",
+        "selectedCount": "{n, plural, one {# correction sélectionnée} other {# corrections sélectionnées}}",
+        "todo": {
+          "gap_fix_cost": "Saisissez le coût unitaire de cette position : le site de la banque indique le prix moyen."
+        }
+      },
+      "badge": {
+        "column": "Lot de rapports",
+        "combined": "Combiné",
+        "combinedTooltip": "Construit à partir de : {names}",
+        "combinedDeleted": "supprimés : {names}",
+        "stale": "À recombiner",
+        "staleTooltip": "Construit par une version antérieure du plugin : analyser de nouveau le lot le reconstruit.",
+        "usedInCombined": "Utilisé dans un fichier combiné",
+        "usedInCombinedTooltip": "Cet export a servi à un fichier combiné de son lot.",
+        "set": "Lot du {date}",
+        "setTooltip": "Téléversé avec les autres exports de son lot.",
+        "incomplete": "Incomplet",
+        "incompleteTooltip": "Manquant : {roles}"
       }
     }
   },
@@ -4225,7 +4269,7 @@
         },
         "select": {
           "title": "Choisissez les fichiers et analyseurs",
-          "description": "Sélectionnez un ou plusieurs rapports enregistrés. Pour chaque fichier, choisissez le plugin d’analyse approprié ; lorsque toutes les sélections sont terminées, utilisez le bouton à droite pour continuer. Selon le plugin choisi et les données extraites, des étapes facultatives peuvent apparaître pour unifier les actifs, corriger des lignes ou gérer les doublons."
+          "description": "Sélectionnez un ou plusieurs rapports enregistrés. Pour chaque fichier, choisissez le plugin d’analyse approprié ; les exports d’une même banque téléversés ensemble forment un lot, analysé comme un seul. Lorsque toutes les sélections sont terminées, utilisez le bouton à droite pour continuer. Selon le plugin choisi et les données extraites, des étapes facultatives peuvent apparaître pour unifier les actifs, corriger des lignes, gérer les doublons ou aligner avec la banque."
         },
         "analyze": {
           "title": "Analysez les données extraites",
@@ -4250,6 +4294,10 @@
         "bulk": {
           "title": "Tout enregistrer écrit les transactions",
           "description": "Vérifiez et modifiez les brouillons de transactions, puis choisissez Tout enregistrer lorsqu’ils sont prêts."
+        },
+        "gapFix": {
+          "title": "Alignez avec la banque",
+          "description": "Pour un lot d’exports, comparez ce que LibreFolio contiendra avec ce qu’indique la banque, puis gardez ou décochez les corrections qui comblent l’écart avant de continuer."
         }
       }
     },

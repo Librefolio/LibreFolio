@@ -10,6 +10,9 @@
  * The module is loaded inside each test, through `c2()`: while it — or one of its exports —
  * does not exist, every test fails on its own with "not implemented yet", instead of the whole
  * file failing at collection and hiding which pieces are missing.
+ *
+ * Phase C3 adds the badges of the files page and of the broker's import files (`FilesTable`):
+ * `setsOfFiles` and `fileSetBadges`, at the end of the file, loaded the same way through `c3()`.
  */
 import {describe, expect, it} from 'vitest';
 
@@ -41,6 +44,10 @@ interface SetFileInfo {
     batch_id?: string | null;
     kind?: string | null;
     compatible_plugins?: string[] | null;
+    // Read by the badges (phase C3).
+    derived_from?: Array<{file_id: string; role?: string | null; filename: string; deleted?: boolean}> | null;
+    combined_into?: string[] | null;
+    combine_is_stale?: boolean | null;
 }
 interface ReportSetGroup {
     key: string;
@@ -675,5 +682,227 @@ describe('buildSetTimeline', () => {
         const buildSetTimeline = await c2('buildSetTimeline');
         expect(buildSetTimeline({members: []}, ROLES)).toBeNull();
         expect(buildSetTimeline({members: [{file_id: 'f-empty', role: 'cash', coverage: []}], history_start: '2020-01-01'}, ROLES)).toBeNull();
+    });
+});
+
+// ===========================================================================
+// Phase C3 — the badges of FilesTable (files page and the broker's import files)
+// ===========================================================================
+//
+// Pinned in the plan (C3.0): `setsOfFiles(files, plugins)` maps every member of a set to its set,
+// with `groupBrokerFiles` broker by broker; `fileSetBadges(file, ctx)` gives the badges of one
+// file in the fixed order combined · stale · usedInCombined · set · incomplete. What the plan
+// leaves open is pinned here, from what FilesTable holds: the context is `{sets, files, previews}`
+// — the map of `setsOfFiles`, every listed file (a set's combined file is among them) and the
+// previews by set key (`SetPreviewState`, its preview carrying `missing`) — and a badge is
+// `{kind}` plus `names`/`deleted` (combined), `uploadedAt` (set) and `roles` (incomplete).
+
+interface BadgePreviewState {
+    status: 'loading' | 'ready' | 'error';
+    preview?: {complete?: boolean | null; missing?: Array<{role: string; start?: string | null; end?: string | null}> | null} | null;
+    error?: string | null;
+}
+interface FileSetBadge {
+    kind: 'combined' | 'stale' | 'usedInCombined' | 'set' | 'incomplete';
+    names?: string[];
+    deleted?: string[];
+    uploadedAt?: string;
+    roles?: string[];
+}
+interface BadgeContext {
+    sets: ReadonlyMap<string, ReportSetGroup>;
+    files: SetFileInfo[];
+    previews: ReadonlyMap<string, BadgePreviewState>;
+}
+interface ReportSetBadgesModule {
+    setsOfFiles(files: SetFileInfo[], plugins: SetPluginInfo[]): Map<string, ReportSetGroup>;
+    fileSetBadges(file: SetFileInfo, ctx: BadgeContext): FileSetBadge[];
+}
+
+/** One C3 export of the module, loaded for the test that needs it. */
+async function c3<K extends keyof ReportSetBadgesModule>(name: K): Promise<ReportSetBadgesModule[K]> {
+    let mod: Partial<ReportSetBadgesModule>;
+    try {
+        mod = (await import('./importReportSets')) as unknown as Partial<ReportSetBadgesModule>;
+    } catch (error) {
+        throw new Error(`importReportSets.ts cannot be loaded: ${String(error)}`);
+    }
+    const fn = mod[name];
+    if (typeof fn !== 'function') throw new Error(`importReportSets.${name} is not implemented yet (file-set badges, phase C3)`);
+    return fn as ReportSetBadgesModule[K];
+}
+
+const kinds = (badges: FileSetBadge[]) => badges.map((badge) => badge.kind);
+
+// ---------------------------------------------------------------------------
+// setsOfFiles
+// ---------------------------------------------------------------------------
+
+describe('setsOfFiles', () => {
+    // Broker 7: a set of two exports, its combined file, a generic single. Broker 8: one export of
+    // the same batch id — another broker, another set. And a file with no broker at all.
+    const CUSTODY_7 = file({file_id: 'custody-7', filename: 'Transactions.xlsx', uploaded_at: '2026-09-30T10:00:07Z'});
+    const CASH_7 = file({file_id: 'cash-7', filename: 'statement.csv', uploaded_at: '2026-09-30T10:00:03Z', compatible_plugins: [DANSKE, GENERIC]});
+    const COMBINED_7 = file({file_id: 'combined-7', filename: 'combined.csv', uploaded_at: '2026-09-30T10:05:00Z', kind: 'combined'});
+    const GENERIC_7 = file({file_id: 'generic-7', filename: 'generic_simple.csv', batch_id: null, compatible_plugins: [GENERIC]});
+    const CUSTODY_8 = file({file_id: 'custody-8', filename: 'Transactions.xlsx', target_broker_id: 8});
+    const NO_BROKER = file({file_id: 'no-broker', filename: 'legacy.xlsx', target_broker_id: null});
+    const FILES = [GENERIC_7, CUSTODY_7, CUSTODY_8, COMBINED_7, NO_BROKER, CASH_7];
+
+    it('maps every member of a set to its set, broker by broker', async () => {
+        const setsOfFiles = await c3('setsOfFiles');
+        const sets = setsOfFiles(FILES, PLUGINS);
+
+        expect([...sets.keys()].sort()).toEqual(['cash-7', 'custody-7', 'custody-8']);
+        expect(sets.get('custody-7')?.key).toBe(KEY_NEW);
+        expect(sets.get('cash-7')?.key).toBe(KEY_NEW);
+        expect(sets.get('custody-8')?.key).toBe(`set:8:${DANSKE}:${BATCH_NEW}`);
+        expect(sets.get('custody-8')?.brokerId).toBe(8);
+    });
+
+    it('each set is the one groupBrokerFiles builds for its broker', async () => {
+        const setsOfFiles = await c3('setsOfFiles');
+        const groupBrokerFiles = await c2('groupBrokerFiles');
+        const sets = setsOfFiles(FILES, PLUGINS);
+        const [expected7] = groupBrokerFiles(BROKER, [GENERIC_7, CUSTODY_7, COMBINED_7, CASH_7], PLUGINS).sets;
+        const [expected8] = groupBrokerFiles(8, [CUSTODY_8], PLUGINS).sets;
+
+        expect(sets.get('custody-7')).toEqual(expected7);
+        expect(sets.get('cash-7')).toEqual(expected7);
+        expect(ids(sets.get('cash-7')?.files ?? [])).toEqual(['cash-7', 'custody-7']);
+        expect(sets.get('custody-8')).toEqual(expected8);
+    });
+
+    it('leaves out combined files, single files and files without a broker', async () => {
+        const setsOfFiles = await c3('setsOfFiles');
+        const sets = setsOfFiles(FILES, PLUGINS);
+
+        for (const fileId of ['combined-7', 'generic-7', 'no-broker']) expect(sets.has(fileId), fileId).toBe(false);
+    });
+
+    it('is empty for no files', async () => {
+        const setsOfFiles = await c3('setsOfFiles');
+        expect(setsOfFiles([], PLUGINS).size).toBe(0);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// fileSetBadges
+// ---------------------------------------------------------------------------
+
+describe('fileSetBadges', () => {
+    // The set of the new batch: two originals, combined into `combined-new`.
+    const ORIG_CUSTODY = file({file_id: 'orig-custody', filename: 'Transactions.xlsx', uploaded_at: '2026-09-30T10:00:07Z', combined_into: ['combined-new']});
+    const ORIG_CASH = file({file_id: 'orig-cash', filename: 'statement.csv', uploaded_at: '2026-09-30T10:00:03Z', compatible_plugins: [DANSKE, GENERIC], combined_into: ['combined-new']});
+    const combinedNew = (over: Partial<SetFileInfo> = {}) =>
+        file({
+            file_id: 'combined-new',
+            filename: 'Danske Bank — combined.csv',
+            uploaded_at: '2026-09-30T10:05:00Z',
+            kind: 'combined',
+            derived_from: [
+                {file_id: 'orig-custody', role: 'custody', filename: 'Transactions.xlsx', deleted: false},
+                {file_id: 'orig-cash', role: 'cash', filename: 'statement.csv', deleted: false},
+            ],
+            combined_into: [],
+            combine_is_stale: false,
+            ...over,
+        });
+    // The set of the old batch: a custody export alone, never combined.
+    const LONE_CUSTODY = file({file_id: 'lone-custody', filename: 'Transactions-2025.xlsx', uploaded_at: '2026-08-15T09:00:00Z', batch_id: BATCH_OLD, combined_into: []});
+    const SINGLE = file({file_id: 'single', filename: 'generic_simple.csv', batch_id: null, compatible_plugins: [GENERIC], combined_into: []});
+
+    /** Built by hand, so these tests do not lean on setsOfFiles. */
+    const SET_COMBINED: ReportSetGroup = {key: KEY_NEW, brokerId: BROKER, pluginCode: DANSKE, batchId: BATCH_NEW, uploadedAt: '2026-09-30T10:00:03Z', files: [ORIG_CASH, ORIG_CUSTODY]};
+    const SET_LONE: ReportSetGroup = {key: KEY_OLD, brokerId: BROKER, pluginCode: DANSKE, batchId: BATCH_OLD, uploadedAt: '2026-08-15T09:00:00Z', files: [LONE_CUSTODY]};
+    const SETS = new Map<string, ReportSetGroup>([
+        ['orig-custody', SET_COMBINED],
+        ['orig-cash', SET_COMBINED],
+        ['lone-custody', SET_LONE],
+    ]);
+
+    const COMPLETE: BadgePreviewState = {status: 'ready', preview: {complete: true, missing: []}};
+    const MISSING_CASH: BadgePreviewState = {status: 'ready', preview: {complete: false, missing: [{role: 'cash', start: '2025-08-01', end: '2026-07-31'}]}};
+
+    const ctx = (previews: Array<[string, BadgePreviewState]>, combined: SetFileInfo = combinedNew()): BadgeContext => ({
+        sets: SETS,
+        files: [ORIG_CUSTODY, ORIG_CASH, combined, LONE_CUSTODY, SINGLE],
+        previews: new Map(previews),
+    });
+
+    it('combined: the combined file, with the names of its originals and the deleted ones', async () => {
+        const fileSetBadges = await c3('fileSetBadges');
+        const combined = combinedNew({
+            derived_from: [
+                {file_id: 'orig-custody', role: 'custody', filename: 'Transactions.xlsx', deleted: false},
+                {file_id: 'gone-cash', role: 'cash', filename: 'statement-2020.csv', deleted: true},
+            ],
+        });
+
+        expect(fileSetBadges(combined, ctx([[KEY_NEW, COMPLETE]], combined))).toMatchObject([{kind: 'combined', names: ['Transactions.xlsx', 'statement-2020.csv'], deleted: ['statement-2020.csv']}]);
+    });
+
+    it('combined, then stale, on a combined file built by an older plugin version', async () => {
+        const fileSetBadges = await c3('fileSetBadges');
+        const stale = combinedNew({combine_is_stale: true});
+
+        expect(kinds(fileSetBadges(stale, ctx([[KEY_NEW, COMPLETE]], stale)))).toEqual(['combined', 'stale']);
+    });
+
+    it('usedInCombined, then set with the date of the set, on an original of a combined set', async () => {
+        const fileSetBadges = await c3('fileSetBadges');
+
+        expect(fileSetBadges(ORIG_CUSTODY, ctx([[KEY_NEW, COMPLETE]]))).toMatchObject([{kind: 'usedInCombined'}, {kind: 'set', uploadedAt: '2026-09-30T10:00:03Z'}]);
+        expect(kinds(fileSetBadges(ORIG_CASH, ctx([[KEY_NEW, COMPLETE]])))).toEqual(['usedInCombined', 'set']);
+    });
+
+    it('set, then incomplete with the missing roles, on a member of a set the preview calls incomplete', async () => {
+        const fileSetBadges = await c3('fileSetBadges');
+
+        expect(fileSetBadges(LONE_CUSTODY, ctx([[KEY_OLD, MISSING_CASH]]))).toMatchObject([
+            {kind: 'set', uploadedAt: '2026-08-15T09:00:00Z'},
+            {kind: 'incomplete', roles: ['cash']},
+        ]);
+    });
+
+    it('no incomplete while the preview loads, after it failed, or before it was asked', async () => {
+        const fileSetBadges = await c3('fileSetBadges');
+
+        expect(kinds(fileSetBadges(LONE_CUSTODY, ctx([[KEY_OLD, {status: 'loading'}]])))).toEqual(['set']);
+        expect(kinds(fileSetBadges(LONE_CUSTODY, ctx([[KEY_OLD, {status: 'error', error: 'HTTP 500'}]])))).toEqual(['set']);
+        expect(kinds(fileSetBadges(LONE_CUSTODY, ctx([])))).toEqual(['set']);
+        expect(kinds(fileSetBadges(LONE_CUSTODY, ctx([[KEY_OLD, COMPLETE]])))).toEqual(['set']);
+    });
+
+    it('v5.3: no incomplete on a set whose combined file is up to date, even when the preview calls it incomplete', async () => {
+        const fileSetBadges = await c3('fileSetBadges');
+        // The cash original was deleted after the combine: the preview misses it, the combined file still holds it.
+        expect(kinds(fileSetBadges(ORIG_CUSTODY, ctx([[KEY_NEW, MISSING_CASH]])))).toEqual(['usedInCombined', 'set']);
+    });
+
+    it('incomplete again once that combined file is stale: the fixed order of an original, usedInCombined · set · incomplete', async () => {
+        const fileSetBadges = await c3('fileSetBadges');
+        const stale = combinedNew({combine_is_stale: true});
+
+        expect(kinds(fileSetBadges(ORIG_CUSTODY, ctx([[KEY_NEW, MISSING_CASH]], stale)))).toEqual(['usedInCombined', 'set', 'incomplete']);
+    });
+
+    it('the combined file of another batch does not cover a set', async () => {
+        const fileSetBadges = await c3('fileSetBadges');
+        // combined-new is fresh, but it belongs to the new batch: the lone custody export of the old one stays incomplete.
+        expect(kinds(fileSetBadges(LONE_CUSTODY, ctx([[KEY_OLD, MISSING_CASH]])))).toEqual(['set', 'incomplete']);
+    });
+
+    it('usedInCombined is about the original, whatever its set', async () => {
+        const fileSetBadges = await c3('fileSetBadges');
+        const combinedOutsideSets = file({file_id: 'orig-elsewhere', filename: 'elsewhere.csv', batch_id: null, compatible_plugins: [GENERIC], combined_into: ['combined-new']});
+
+        expect(kinds(fileSetBadges(combinedOutsideSets, ctx([])))).toEqual(['usedInCombined']);
+    });
+
+    it('no badge on a single file', async () => {
+        const fileSetBadges = await c3('fileSetBadges');
+        expect(fileSetBadges(SINGLE, ctx([[KEY_NEW, COMPLETE]]))).toEqual([]);
+        expect(fileSetBadges(file({file_id: 'bare', batch_id: null, compatible_plugins: [GENERIC]}), ctx([]))).toEqual([]);
     });
 });

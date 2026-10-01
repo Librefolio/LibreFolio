@@ -63,6 +63,7 @@
     import FixFlaggedStep, {type FixPatch} from '$lib/components/transactions/import/FixFlaggedStep.svelte';
     import AssetGroupStep from '$lib/components/transactions/import/AssetGroupStep.svelte';
     import ReportSetCard from '$lib/components/transactions/import/ReportSetCard.svelte';
+    import GapFixStep from '$lib/components/transactions/import/GapFixStep.svelte';
     import AssetMergeModal from '$lib/components/assets/AssetMergeModal.svelte';
     import TransactionCompareModal from '$lib/components/transactions/modals/TransactionCompareModal.svelte';
     import type {CompareColumn, CompareField, CompareCell} from '$lib/components/transactions/modals/TransactionCompareModal.svelte';
@@ -78,6 +79,7 @@
     import {createNamesFor, createOtherFor, duplicateCandidates, resolutionLabel as resolutionLabelPure} from '$lib/utils/transactions/importResolutionHelpers';
     import {brokerIdForTx, beforeOpeningInfo, isBeforeHistory as isBeforeHistoryPure, isBeforeOpening as isBeforeOpeningPure, isRowAssetResolved as isRowAssetResolvedPure, shouldAutoSelectOnRecheck} from '$lib/utils/transactions/importRowState';
     import {buildParseUnits, combinedFileForSet, groupBrokerFiles, setBlocksAnalysis, setPluginFor, setSelectionState, type ReportSetGroup, type SetPluginInfo, type SetPreviewState} from '$lib/utils/transactions/importReportSets';
+    import {buildGapFixRequests, buildGapFixView, defaultGapFixSelection, gapFixHasSomethingToShow, gapFixSelectedCount, resolveTruthAssetId, selectedGapFixCreates, truthSourcesOf, type GapFixOutcome, type GapFixView, type TruthSource} from '$lib/utils/transactions/gapFixModel';
     import {groupPartitions as groupPartitionsPure, defaultKeeperIndices as defaultKeeperIndicesPure, resolverSelectionFor as resolverSelectionForPure, outlierIndexSet, carryResolverChoices, type ResolverChoices} from '$lib/utils/transactions/importDuplicateResolver';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import {onboardingGuide, type ImportGuideStepId} from '$lib/features/onboarding/onboardingGuide.svelte';
@@ -120,14 +122,15 @@
      *
      * Order matters and encodes the invariant that motivated the split: nothing is
      * compared against the database until the data is complete. Understand → unify →
-     * correct → compare → review.
+     * correct → compare → review. A report set adds, after the review, the alignment with the
+     * bank (`gapFix`): what the bank states at its truth points against what LibreFolio will know.
      *
      * `assets` sits before `fix` deliberately. The correction step asks the user to attach an
      * asset to a flagged row, and its list is derived from the resolutions: unify afterwards and
      * the same security would appear twice there, indistinguishable, so half the rows would land
      * on half the instrument. Unifying first makes that choice unambiguous and asks it once.
      */
-    type StepId = 'upload' | 'select' | 'analyze' | 'assets' | 'fix' | 'duplicates' | 'review';
+    type StepId = 'upload' | 'select' | 'analyze' | 'assets' | 'fix' | 'duplicates' | 'review' | 'gapFix';
 
     const STEP_DEFS: ReadonlyArray<{id: StepId; titleKey: string}> = [
         {id: 'upload', titleKey: 'step1Title'},
@@ -137,6 +140,7 @@
         {id: 'fix', titleKey: 'stepFixTitle'},
         {id: 'duplicates', titleKey: 'stepDuplicatesTitle'},
         {id: 'review', titleKey: 'step4Title'},
+        {id: 'gapFix', titleKey: 'reportSet.gapFix.stepTitle'},
     ];
 
     const STEP_ORDER: ReadonlyArray<StepId> = STEP_DEFS.map((s) => s.id);
@@ -524,6 +528,12 @@
     let duplicateRequestEpoch = 0;
     let importPreparing = $state(false);
     const manualAssetSelections = new Map<string, number | null>();
+    /** "Align with the bank" (report sets): the view of the last gap-fix, and the corrections the user keeps. */
+    let gapFixView = $state<GapFixView | null>(null);
+    let gapFixSelected = $state<ReadonlySet<string>>(new Set());
+    let gapFixSelectedTotal = $derived(gapFixView ? gapFixSelectedCount(gapFixView, gapFixSelected) : 0);
+    /** The per-file remap of the last merge: the gap-fix maps the truth positions through it. */
+    let mergeFakeRemapByFile = new Map<string, Map<number, number>>();
 
     function invalidateCandidateRequests() {
         wizardDataEpoch += 1;
@@ -789,7 +799,9 @@
 
     function mergeAllTransactions() {
         invalidateCandidateRequests();
-        const {txArr, assetMap, fileIdOfFake} = buildMergedTransactions(parseResults, brokers, pendingDeleteTxIds);
+        const {txArr, assetMap, fileIdOfFake, fakeRemapByFile} = buildMergedTransactions(parseResults, brokers, pendingDeleteTxIds);
+        mergeFakeRemapByFile = fakeRemapByFile;
+        if (gapFixView !== null) clearGapFix();
 
         // Unification runs *before* anything else looks at assets: the duplicate report, the
         // correction step and the review all read the resulting list, so a partition applied
@@ -1329,6 +1341,73 @@
             });
     }
 
+    function clearGapFix() {
+        gapFixView = null;
+        gapFixSelected = new Set();
+    }
+
+    function localizeGapFixTodo(reasonCode: string, message: string): string {
+        const key = `importWizard.reportSet.gapFix.todo.${reasonCode}`;
+        const translated = $t(key);
+        return translated === key ? message : translated;
+    }
+
+    function gapFixBrokerName(brokerId: number): string {
+        return brokers.find((b) => b.id === brokerId)?.name ?? getBrokerInfo(brokerId)?.name ?? `#${brokerId}`;
+    }
+
+    /**
+     * One `POST /gap-fix` per broker and plugin with truth points, one after the other. The truth
+     * positions go through the asset each plugin fake became in this wizard; the selection is the
+     * final list, and the editor's unsaved rows and deletions count as they will. A failed request
+     * becomes its group's error: the user can still go on without its corrections.
+     */
+    async function computeGapFixView(sources: TruthSource[], finalList: Array<{tx: TransactionCreateItem; todos: ImportTodo[]}>): Promise<GapFixView> {
+        const context = {fakeRemapByFile: mergeFakeRemapByFile, survivorOf: representativeMap(assetGroups), resolutions: assetResolutions};
+        const requests = buildGapFixRequests(
+            sources,
+            finalList.map((item) => item.tx),
+            pendingCreateTransactions,
+            pendingDeleteTxIds,
+            (fileId, assetId) => resolveTruthAssetId(fileId, assetId, context),
+        );
+        const outcomes: GapFixOutcome[] = [];
+        for (const request of requests) {
+            try {
+                const response = await zodiosApi.gap_fix_api_v1_brokers_import_gap_fix_post(request as unknown as Parameters<typeof zodiosApi.gap_fix_api_v1_brokers_import_gap_fix_post>[0]);
+                outcomes.push({brokerId: request.broker_id, pluginCode: request.plugin_code, response});
+            } catch (error) {
+                outcomes.push({brokerId: request.broker_id, pluginCode: request.plugin_code, error: extractErrorMessage(error, $t('importWizard.reportSet.gapFix.error'))});
+            }
+        }
+        return buildGapFixView(outcomes, localizeGapFixTodo);
+    }
+
+    function handOffToEditor(creates: Array<{tx: TransactionCreateItem; todos: ImportTodo[]}>) {
+        const bulkProgress = {
+            current: visibleSteps.length + 1,
+            total: visibleSteps.length + 1,
+        };
+        onImportBatch(creates, bulkProgress);
+        if (onboardingGuide.active?.flow === 'import_guide') {
+            guideHandedOff = true;
+        }
+    }
+
+    function toggleGapFixProposal(key: string) {
+        const next = new Set(gapFixSelected);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        gapFixSelected = next;
+    }
+
+    /** The review's rows and the corrections the user kept, with their todos (design §4.7). */
+    function handleGapFixContinue() {
+        if (!gapFixView || importPreparing) return;
+        const corrections = selectedGapFixCreates(gapFixView, gapFixSelected).map(({tx, todos}) => ({tx: tx as unknown as TransactionCreateItem, todos}));
+        handOffToEditor([...buildFinalTxList(), ...corrections]);
+    }
+
     async function handleImport() {
         if (importPreparing) return;
         const session = getClientSessionGeneration();
@@ -1363,14 +1442,22 @@
                 }
             }
             if (step4HasUnresolvedSelected || step4SelectedCount === 0) return;
-            const bulkProgress = {
-                current: visibleSteps.length + 1,
-                total: visibleSteps.length + 1,
-            };
-            onImportBatch(buildFinalTxList(), bulkProgress);
-            if (onboardingGuide.active?.flow === 'import_guide') {
-                guideHandedOff = true;
+            const finalList = buildFinalTxList();
+            // A report set brings the bank's truth points: compare them with what LibreFolio will
+            // know, and stop on "Align with the bank" only when there is something to show (§4.6).
+            const sources = truthSourcesOf(parseResults);
+            if (sources.length > 0) {
+                const context = wizardDataEpoch;
+                const view = await computeGapFixView(sources, finalList);
+                if (!open || context !== wizardDataEpoch || !isClientSessionCurrent(session)) return;
+                if (gapFixHasSomethingToShow(view)) {
+                    gapFixView = view;
+                    gapFixSelected = new Set(defaultGapFixSelection(view));
+                    currentStepId = 'gapFix';
+                    return;
+                }
             }
+            handOffToEditor(finalList);
         } finally {
             importPreparing = false;
         }
@@ -2398,6 +2485,8 @@ ${arrow}<span>${label}</span></span>`,
         mergedTransactions = [];
         assetResolutions = [];
         assetGroups = [];
+        clearGapFix();
+        mergeFakeRemapByFile = new Map();
         // Only a full reset drops the user's unification: member keys are content-based, so a
         // re-parse of the same files replays their decisions instead of asking again.
         assetGroupOverride = null;
@@ -2857,6 +2946,8 @@ ${arrow}<span>${label}</span></span>`,
         // one decision only the user can make: which copy to keep when the same movement
         // appears in two of the files being imported.
         if (id === 'duplicates') return duplicateGroups.length > 0;
+        // Reached only from the review's Import, and only with something to show.
+        if (id === 'gapFix') return gapFixView !== null;
         return true;
     }
 
@@ -2897,11 +2988,14 @@ ${arrow}<span>${label}</span></span>`,
         fixCreatedAssets = {};
         duplicateRecheckDone = false;
         duplicateRecheckError = null;
+        clearGapFix();
     }
 
     function goToStep(target: StepId) {
         if (!isStepBeforeCurrent(target)) return;
         invalidateCandidateRequests();
+        // Leaving the alignment drops it: the next Import recomputes it on the current selection.
+        if (gapFixView !== null) clearGapFix();
         if (target === 'upload') selectedFiles = [];
         if (target === 'upload' || target === 'select') resetDownstreamState();
         currentStepId = target;
@@ -2983,6 +3077,7 @@ ${arrow}<span>${label}</span></span>`,
         if (currentStepIndex > 0) {
             currentStepId = visibleSteps[currentStepIndex - 1].id;
         }
+        if (gapFixView !== null && currentStepId !== 'gapFix') clearGapFix();
     }
 
     // =========================================================================
@@ -4950,6 +5045,11 @@ ${arrow}<span>${label}</span></span>`,
                     />
                 </div>
             </div>
+        {:else if currentStepId === 'gapFix' && gapFixView}
+            <!-- ============================================================ -->
+            <!-- Align with the bank (report sets) -->
+            <!-- ============================================================ -->
+            <GapFixStep view={gapFixView} selected={gapFixSelected} onToggle={toggleGapFixProposal} assetName={getAssetDisplayName} brokerName={gapFixBrokerName} />
         {/if}
     </div>
 
@@ -5152,6 +5252,18 @@ ${arrow}<span>${label}</span></span>`,
                 data-testid="import-wizard-duplicates-continue"
                 use:guideAnchor={'import.action.duplicates'}
             >
+                {$t('common.continue')} ▶
+            </button>
+        {:else if currentStepId === 'gapFix'}
+            <div class="flex items-center gap-2">
+                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack} data-testid="import-wizard-back">
+                    ◀ {$t('common.back')}
+                </button>
+                <span class="text-xs text-gray-600 dark:text-gray-300" data-testid="import-wizard-gapfix-count" data-count={gapFixSelectedTotal}>
+                    {$t('importWizard.reportSet.gapFix.selectedCount', {values: {n: gapFixSelectedTotal}})}
+                </span>
+            </div>
+            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50" onclick={handleGapFixContinue} disabled={importPreparing} data-testid="import-wizard-gapfix-continue" use:guideAnchor={'import.action.gapFix'}>
                 {$t('common.continue')} ▶
             </button>
         {:else}
