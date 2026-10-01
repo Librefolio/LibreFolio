@@ -404,10 +404,17 @@ async def test_historical_replay_uses_dedicated_period_and_proxy_series(
         coverage_probes.append(kwargs)
         return {}
 
+    # The holiday table the request awaits once: Presidents' Day 2020, inside the replay window.
+    served_holidays = frozenset({date(2020, 2, 17)})
+
+    async def serve_holidays() -> frozenset[date]:
+        return served_holidays
+
     monkeypatch.setattr(service, "_load_scope_inputs", fake_scope)
     monkeypatch.setattr(service, "_existing_asset_ids", fake_assets)
     monkeypatch.setattr(service, "_prepare_asset_series", fake_prepare)
     monkeypatch.setattr(risk_service_module, "load_price_window_facts", fake_window_facts)
+    monkeypatch.setattr(risk_service_module, "ensure_market_holidays", serve_holidays)
 
     response = await service.execute(
         user_id=7,
@@ -457,14 +464,15 @@ async def test_historical_replay_uses_dedicated_period_and_proxy_series(
         2026,
         2020,
     ]
-    # The coverage probe runs over the replay window, not the analysis period, and leaves the
-    # proxied asset out; nothing is excluded automatically.
+    # The coverage probe runs over the replay window, not the analysis period, with the request's
+    # holiday table, and leaves the proxied asset out; nothing is excluded automatically.
     assert coverage_probes == [
         {
             "asset_ids": [],
             "window_start": date(2020, 2, 2),
             "window_end": date(2020, 2, 21),
             "target_currency": "EUR",
+            "market_holidays": served_holidays,
         }
     ]
     assert result.metadata.historical_replay_audit.excluded_assets == []
@@ -2251,3 +2259,210 @@ async def test_only_a_missing_price_can_become_a_missing_price_source(monkeypatc
 
     assert [(item.asset_id, item.reason) for item in results["correlation"].metadata.excluded_assets] == [(UNPRICED_ASSET_ID, expected)]
     assert db.source_reads() == [], db.statements
+
+
+# ---------------------------------------------------------------------------
+# The portfolio TWRR is read on observation days (developer's decision of 30/09/2026)
+#
+# The TWRR has a point every calendar day by construction. It is read only on the days at least one
+# held scope asset has a genuine quote — the union of their `quote_dates` — and the return between two
+# consecutive observation days is chain-linked from the cumulative TWRR, so none of it is lost. A
+# benchmark's quotes do not count. Without any held quote date (only unpriced holdings, or synthetic
+# series built without quote dates) the TWRR keeps every calendar day, as before.
+# ---------------------------------------------------------------------------
+
+OBSERVATION_START = date(2026, 1, 5)  # a Monday: the TWRR baseline, and itself a quote date
+OBSERVATION_SPAN = 34  # to Sunday 8 February: five weeks
+OBSERVATION_END = OBSERVATION_START + timedelta(days=OBSERVATION_SPAN)
+# The TWRR moves every calendar day, weekends included, so a reading that drops a day instead of
+# chain-linking across it loses something measurable.
+DAILY_TWRR = [round(0.003 * math.sin(index * 0.9) + 0.0004, 10) for index in range(OBSERVATION_SPAN)]
+EVERY_DAY = [OBSERVATION_START + timedelta(days=offset) for offset in range(OBSERVATION_SPAN + 1)]
+WEEKDAYS = [day for day in EVERY_DAY if day.weekday() < 5]
+HELD_RETURNS = {
+    1: [round(0.008 * math.sin(index * 0.6) + 0.0006, 10) for index in range(OBSERVATION_SPAN)],
+    2: [round(0.005 * math.cos(index * 0.4) - 0.0002, 10) for index in range(OBSERVATION_SPAN)],
+}
+BENCHMARK_RETURNS = [round(0.006 * math.sin(index * 0.5 + 0.3), 10) for index in range(OBSERVATION_SPAN)]
+
+
+def with_quote_dates(prepared: PreparedAssetSeriesSet, quote_dates: dict[int, list[date]]) -> PreparedAssetSeriesSet:
+    """The same prepared set, each series declaring the genuine quote dates it came from."""
+    series = [PreparedAssetSeries.model_validate({**item.model_dump(), "quote_dates": quote_dates.get(item.valuations.asset_id, [])}) for item in prepared.series]
+    return prepared.model_copy(update={"series": series})
+
+
+def twrr_read_on(observation_days: list[date]) -> tuple[list[date], list[float]]:
+    """The TWRR read on `observation_days` after the baseline: dates, and chain-linked period returns."""
+    cumulative = {point_date: float(value) for point_date, value in twrr_history(DAILY_TWRR, start=OBSERVATION_START)}
+    days = [OBSERVATION_START, *[day for day in observation_days if day > OBSERVATION_START]]
+    return days[1:], [(1 + cumulative[current]) / (1 + cumulative[previous]) - 1 for previous, current in zip(days, days[1:], strict=False)]
+
+
+async def observe_the_portfolio_twrr(
+    monkeypatch,
+    *,
+    holdings: dict[int, str],
+    prepared: PreparedAssetSeriesSet,
+    analytics: tuple[dict[str, object], ...] = (SPY,),
+) -> tuple[RiskExecutionContext, dict[str, RiskAnalyticResult]]:
+    """One historical request on the whole portfolio: the context the spy saw, and the results by instance."""
+    seen = install_context_spy(monkeypatch)
+
+    async def no_holiday_table() -> frozenset[date]:
+        return frozenset()
+
+    # Never the real build here: these tests are about what the service does with the quote dates.
+    monkeypatch.setattr(risk_service_module, "ensure_market_holidays", no_holiday_table, raising=False)
+    service = RiskService(db=EmptyRowsDb())
+    install_portfolio_report(monkeypatch, service, slice_report(holdings=holdings, cash="100", twrr=twrr_history(DAILY_TWRR, start=OBSERVATION_START)))
+    install_prepared_series(monkeypatch, service, prepared)
+    response = await service.execute(user_id=7, request=slice_request(mode="historical", analytics=list(analytics), start=OBSERVATION_START, end=OBSERVATION_END))
+    (context,) = seen
+    return context, {item.instance_id: item for item in response.items}
+
+
+@pytest.mark.asyncio
+async def test_the_portfolio_twrr_is_read_only_on_the_days_a_held_asset_is_quoted(monkeypatch):
+    prepared = with_quote_dates(make_prepared_set(HELD_RETURNS, baseline=OBSERVATION_START), {1: WEEKDAYS, 2: WEEKDAYS})
+
+    context, results = await observe_the_portfolio_twrr(monkeypatch, holdings={1: "300", 2: "200"}, prepared=prepared, analytics=(SPY, TWRR_READERS["kpi"]))
+
+    dates, returns = twrr_read_on(WEEKDAYS)
+    assert len(dates) == 24  # the weekdays after the baseline Monday
+    assert context.primary_return_basis == RiskReturnBasis.TWRR
+    assert context.primary_baseline_date == OBSERVATION_START
+    assert list(context.primary_return_dates) == dates
+    # Monday's return spans the weekend: (1 + cumulative on Monday) / (1 + cumulative on Friday) − 1.
+    assert dates[dates.index(date(2026, 1, 12)) - 1] == date(2026, 1, 9)
+    assert list(context.primary_returns) == pytest.approx(returns, rel=1e-12, abs=1e-15)
+    # Chain-linked, the TWRR stays exact: the returns compound to its growth up to the last observation.
+    cumulative = dict(twrr_history(DAILY_TWRR, start=OBSERVATION_START))
+    assert math.prod(1 + value for value in context.primary_returns) == pytest.approx((1 + float(cumulative[date(2026, 2, 6)])) / (1 + float(cumulative[OBSERVATION_START])), rel=1e-12)
+    assert context.n_observations == 24
+    assert context.calendar_days == 32  # Monday 5 January to Friday 6 February
+    assert context.annualization_factor == pytest.approx(24 * 365 / 32)
+    # Observations over observation days — not over calendar days, which would read 24/32.
+    assert context.coverage == pytest.approx(1.0)
+
+    kpi = results["kpi"]
+    assert kpi.output is not None, kpi.error
+    assert kpi.metadata.n_observations == 24
+    assert kpi.metadata.annualization_factor == pytest.approx(24 * 365 / 32)
+    assert kpi.metadata.coverage == pytest.approx(1.0)
+    assert kpi.metadata.analyzed_range == DateRangeModel(start=date(2026, 1, 6), end=date(2026, 2, 6))
+
+
+@pytest.mark.asyncio
+async def test_a_benchmark_quote_does_not_make_an_observation_day(monkeypatch):
+    held_holiday = date(2026, 1, 14)  # a Wednesday the held assets' exchange is closed
+    held_days = [day for day in WEEKDAYS if day != held_holiday]
+    prepared = with_quote_dates(
+        make_prepared_set({**HELD_RETURNS, BENCHMARK_ASSET_ID: BENCHMARK_RETURNS}, baseline=OBSERVATION_START),
+        {1: held_days, 2: held_days, BENCHMARK_ASSET_ID: EVERY_DAY},
+    )
+
+    context, _results = await observe_the_portfolio_twrr(monkeypatch, holdings={1: "300", 2: "200"}, prepared=prepared, analytics=(SPY, TWRR_READERS["comparison"]))
+
+    # Neither the benchmark's weekends nor its Wednesday are observations: Thursday chain-links from Tuesday.
+    dates, returns = twrr_read_on(held_days)
+    assert held_holiday not in context.primary_return_dates
+    assert list(context.primary_return_dates) == dates
+    assert list(context.primary_returns) == pytest.approx(returns, rel=1e-12, abs=1e-15)
+    assert context.annualization_factor == pytest.approx(23 * 365 / 32)
+
+
+@pytest.mark.asyncio
+async def test_the_comparison_keeps_the_benchmark_moves_between_two_observation_days(monkeypatch):
+    """Benchmark returns on days no holding is quoted are compounded into the next pair, not dropped.
+
+    Each TWRR return spans the days since the previous observation day; the benchmark's return over the
+    same span is its own returns dated inside it, compounded. A date-by-date match paired Thursday's
+    TWRR, which spans the held holiday, with the benchmark's Thursday move alone.
+    """
+    held_holiday = date(2026, 1, 14)  # a Wednesday the held assets' exchange is closed
+    held_days = [day for day in WEEKDAYS if day != held_holiday]
+    prepared = with_quote_dates(
+        make_prepared_set({**HELD_RETURNS, BENCHMARK_ASSET_ID: BENCHMARK_RETURNS}, baseline=OBSERVATION_START),
+        {1: held_days, 2: held_days, BENCHMARK_ASSET_ID: EVERY_DAY},
+    )
+
+    _context, results = await observe_the_portfolio_twrr(monkeypatch, holdings={1: "300", 2: "200"}, prepared=prepared, analytics=(SPY, TWRR_READERS["comparison"]))
+
+    comparison = results["comparison"]
+    assert comparison.output is not None, comparison.error
+    dates, _returns = twrr_read_on(held_days)
+    own = dict(zip(EVERY_DAY[1:], BENCHMARK_RETURNS, strict=True))
+
+    def benchmark_move(start: date, end: date) -> float:
+        return math.prod(1 + value for day, value in own.items() if start < day <= end) - 1
+
+    cumulative = {point.date: point.comparison_cumulative_return for point in comparison.output.series}
+    assert list(cumulative) == dates
+    # Thursday pairs with the benchmark's Wednesday and Thursday: its move on the held holiday is kept...
+    assert (1 + cumulative[date(2026, 1, 15)]) / (1 + cumulative[date(2026, 1, 13)]) - 1 == pytest.approx(benchmark_move(date(2026, 1, 13), date(2026, 1, 15)), rel=1e-12)
+    # ...and so are its weekends: Monday pairs with Saturday, Sunday and Monday.
+    assert (1 + cumulative[date(2026, 1, 12)]) / (1 + cumulative[date(2026, 1, 9)]) - 1 == pytest.approx(benchmark_move(date(2026, 1, 9), date(2026, 1, 12)), rel=1e-12)
+    # Over the window the benchmark returns what it returned, from the TWRR's baseline to the last observation.
+    assert cumulative[dates[-1]] == pytest.approx(benchmark_move(OBSERVATION_START, dates[-1]), rel=1e-12)
+    assert comparison.output.observations == comparison.metadata.n_observations == len(dates)
+    assert comparison.metadata.coverage == pytest.approx(1.0)
+    assert comparison.metadata.annualization_factor == pytest.approx(len(dates) * 365 / (dates[-1] - OBSERVATION_START).days)
+
+
+@pytest.mark.parametrize(
+    ("holdings", "held_returns"),
+    [
+        pytest.param({UNPRICED_ASSET_ID: "300"}, {}, id="only-an-unpriced-holding"),
+        pytest.param({1: "300", 2: "200"}, HELD_RETURNS, id="held-series-without-quote-dates"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_without_any_held_quote_date_the_twrr_keeps_every_calendar_day(monkeypatch, holdings, held_returns):
+    # The benchmark is quoted on weekdays only: were its dates taken for the scope's, the weekends would go.
+    prepared = with_quote_dates(make_prepared_set({**held_returns, BENCHMARK_ASSET_ID: BENCHMARK_RETURNS}, baseline=OBSERVATION_START), {BENCHMARK_ASSET_ID: WEEKDAYS})
+    if not held_returns:
+        prepared = prepared.model_copy(update={"data_quality": DataQualityReport(unusable_assets=[DataQualityExcludedAsset(asset_id=UNPRICED_ASSET_ID, reason=DataQualityExclusionReason.MISSING_PRICE)])})
+
+    context, _results = await observe_the_portfolio_twrr(monkeypatch, holdings=holdings, prepared=prepared, analytics=(SPY, TWRR_READERS["comparison"]))
+
+    dates, returns = twrr_read_on(EVERY_DAY)
+    assert list(context.primary_return_dates) == dates
+    assert context.n_observations == OBSERVATION_SPAN
+    assert context.annualization_factor == pytest.approx(365.0)
+    assert list(context.primary_returns) == pytest.approx(returns, rel=1e-12, abs=1e-15)
+
+
+@pytest.mark.asyncio
+async def test_a_day_any_held_asset_is_quoted_is_an_observation(monkeypatch):
+    # A held crypto is quoted on weekends: the union of the held quote dates keeps every day.
+    prepared = with_quote_dates(make_prepared_set(HELD_RETURNS, baseline=OBSERVATION_START), {1: WEEKDAYS, 2: EVERY_DAY})
+
+    context, _results = await observe_the_portfolio_twrr(monkeypatch, holdings={1: "300", 2: "200"}, prepared=prepared)
+
+    dates, _returns = twrr_read_on(EVERY_DAY)
+    assert list(context.primary_return_dates) == dates
+    assert context.n_observations == OBSERVATION_SPAN
+
+
+@pytest.mark.asyncio
+async def test_the_first_twrr_point_is_the_baseline_even_on_a_day_nothing_held_is_quoted(monkeypatch):
+    """A range that opens on a holiday is measured from its opening, not from the first quote after it.
+
+    The first TWRR point is always kept as the baseline (developer's decision of 30/09/2026): only the
+    points after it are read on observation days. Here the baseline Monday is a holiday of the held
+    assets' exchange, so Tuesday's return chain-links from Monday's cumulative TWRR.
+    """
+    held_days = [day for day in WEEKDAYS if day != OBSERVATION_START]
+    prepared = with_quote_dates(make_prepared_set(HELD_RETURNS, baseline=OBSERVATION_START), {1: held_days, 2: held_days})
+
+    context, _results = await observe_the_portfolio_twrr(monkeypatch, holdings={1: "300", 2: "200"}, prepared=prepared)
+
+    dates, returns = twrr_read_on(held_days)
+    assert OBSERVATION_START not in held_days  # nothing held is quoted on the baseline
+    assert context.primary_baseline_date == OBSERVATION_START
+    assert list(context.primary_return_dates) == dates
+    assert dates[0] == date(2026, 1, 6)
+    assert list(context.primary_returns) == pytest.approx(returns, rel=1e-12, abs=1e-15)
+    assert context.n_observations == 24
+    assert context.calendar_days == 32  # Monday 5 January to Friday 6 February

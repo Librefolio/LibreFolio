@@ -5,8 +5,10 @@ This module provides:
 - AssetSourceProvider: Abstract base class for pricing providers
 - AssetSourceManager: Manager for provider operations and price data
 - Synthetic yield calculation for SCHEDULED_YIELD assets
-- Backward-fill logic for missing price data
 - Helper functions for decimal precision
+
+Nothing here backward-fills prices: history is stored exactly as providers return
+it, and gaps are filled only when prices are read (asset_sources/price_query.py).
 
 Similar to fx.py but for price_history table (asset prices vs FX rates).
 
@@ -261,7 +263,7 @@ class AssetSourceProvider(ABC):
 
     CORE (AssetSourceService) is responsible for:
     - Database storage and caching of fetched data
-    - Backward-filling historical prices (filling gaps with last known value)
+    - Filling gaps on read only (stored history keeps the provider's own points)
     - Currency conversion if needed
     - Merging data from multiple sources
     - Transaction management and error recovery
@@ -291,8 +293,11 @@ class AssetSourceProvider(ABC):
     1. Core calls plugin.get_history_value(start, end)
     2. Plugin fetches RAW prices from external API (only trading days)
     3. Plugin returns FAHistoricalData with prices list (may have gaps)
-    4. Core applies _backward_fill_prices() to fill weekends/holidays
-    5. Core stores filled data in database
+    4. Core stores the points exactly as returned: nothing is filled on write
+    5. Gaps (weekends, holidays) are filled only when prices are read: the read
+       path (asset_sources/price_query.py) adds the missing days with
+       backward_fill_info, and valuation carries the last observation forward
+       (price_resolver.py)
 
     Required implementations:
     - provider_code: Unique identifier for this provider
@@ -560,19 +565,20 @@ class AssetSourceProvider(ABC):
         PLUGIN RESPONSIBILITY:
         - Fetch RAW historical prices from external source
         - Return only actual data points (trading days with prices)
-        - DO NOT fill gaps (weekends, holidays) - core handles this
-        - DO NOT set backward_filled flag - core handles this
+        - DO NOT fill gaps (weekends, holidays) - the read path handles this
+        - DO NOT set backward_fill_info - the read path computes it
 
         CORE WILL:
-        - Apply backward_fill_prices() to fill gaps with last known value
-        - Set backward_filled=True on filled records
-        - Store all records (real + filled) in database
+        - Store the returned points as they are (no gap filling on write)
+        - Fill gaps only on read (asset_sources/price_query.py): each missing day
+          repeats the last known price and carries backward_fill_info
         - Handle date range chunking for large requests
 
         Example:
             Plugin returns: [Mon: 100, Tue: 101, Wed: 102, Fri: 104]
-            Core fills to:  [Mon: 100, Tue: 101, Wed: 102, Thu: 102*, Fri: 104]
-                            (* = backward_filled=True)
+            Stored:         the same four points
+            Read as:        [Mon: 100, Tue: 101, Wed: 102, Thu: 102*, Fri: 104]
+                            (* = backward_fill_info with days_back=1)
 
         Args:
             identifier: Asset identifier

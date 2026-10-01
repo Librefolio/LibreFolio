@@ -1218,6 +1218,40 @@ def test_bootstrap_and_parametric_contracts_are_mutually_exclusive():
             engine_request(regime=regime)
 
 
+# A block is compared with the history in observations, the unit the history is counted in; and
+# `steps_per_year` belongs to the bootstrap alone, positive when set (developer's decisions of
+# 30/09/2026).
+
+
+def test_the_engine_compares_a_block_with_the_history_in_observations():
+    history = bootstrap_history(observations=30, asset_count=1)
+
+    # 40 calendar days of a 252-a-year series are 28 observations: they fit in 30...
+    assert bootstrap_request(history, block_length_days=40, steps_per_year=252.0).block_length_days == 40
+    # ...and 50 days are 35, which do not.
+    with pytest.raises(ValidationError, match="cannot exceed the observed history"):
+        bootstrap_request(history, block_length_days=50, steps_per_year=252.0)
+    # Unset, a day is an observation, as today: 30 fit, 31 do not.
+    assert bootstrap_request(history, block_length_days=30).block_length_days == 30
+    with pytest.raises(ValidationError, match="cannot exceed the observed history"):
+        bootstrap_request(history, block_length_days=31)
+
+
+def test_steps_per_year_belongs_to_the_bootstrap_and_is_positive():
+    with pytest.raises(ValidationError, match="steps_per_year is meaningful only for the block bootstrap process"):
+        engine_request(steps_per_year=252.0)
+
+    for invalid in (0.0, -252.0):
+        with pytest.raises(ValidationError) as refused:
+            bootstrap_request(steps_per_year=invalid)
+        errors = refused.value.errors()
+        # Refused for its value, not as a field the contract does not know.
+        assert errors and all(error["type"] != "extra_forbidden" for error in errors), errors
+        assert any("steps_per_year" in " ".join([*map(str, error["loc"]), error["msg"]]) for error in errors), errors
+
+    assert bootstrap_request(steps_per_year=252.0).steps_per_year == 252.0
+
+
 def test_block_length_follows_the_cube_root_rule_and_is_disclosed():
     """The rule of thumb is a hypothesis about dependence: it must be shown."""
     assert [resolve_block_length(observations) for observations in (30, 252, 1250, 2500)] == [3, 6, 11, 14]
@@ -1335,6 +1369,214 @@ def test_degenerate_collinear_history_still_resamples():
     )
 
 
+# --- Steps per year (developer's decision of 30/09/2026) ---------------------
+#
+# The block bootstrap resamples OBSERVATIONS, and a series quoted Monday to
+# Friday holds about 252 of them a year, not 365. With `steps_per_year` the
+# engine simulates round(horizon_days × steps / 365) steps and maps them back
+# onto calendar days — day d reads step floor(d × steps / days) — so the bands
+# keep one point per calendar day. A regime is declared in calendar days and
+# applied in steps; the prolonged crisis drifts by log(0.8) per YEAR OF STEPS.
+# The disclosure stays in calendar days. `None` means 365: today's engine, to
+# the byte. GBM is not concerned.
+
+STEADY_RETURN = 0.001
+
+
+def constant_history(simple_return: float, observations: int = 60) -> np.ndarray:
+    """One asset whose every observation is the same, so every resampled path is the same path."""
+    return np.full((observations, 1), simple_return)
+
+
+def resample(history: np.ndarray, **overrides):
+    """Run the resampler itself: the whole path matrix, one column per calendar day."""
+    request = bootstrap_request(history, **{"path_count": 256, **overrides})
+    return resampling_module.run_block_bootstrap(request)
+
+
+@pytest.mark.parametrize(
+    ("steps_per_year", "steps"),
+    [
+        pytest.param(None, 365, id="unset-is-every-calendar-day"),
+        pytest.param(365.0, 365, id="a-series-quoted-every-day"),
+        pytest.param(252.0, 252, id="a-series-quoted-on-trading-days"),
+    ],
+)
+def test_bootstrap_simulates_the_steps_its_calendar_horizon_holds_and_maps_them_back_to_days(steps_per_year, steps):
+    frequency = {} if steps_per_year is None else {"steps_per_year": steps_per_year}
+
+    portfolio, terminal, _timings, _disclosure = resample(constant_history(STEADY_RETURN), horizon_days=365, **frequency)
+
+    # One point per calendar day, whatever the number of steps.
+    assert portfolio.shape == (256, 366)
+    # Every path compounds the same return once per step, and the terminal is the final step.
+    assert (terminal[:, 0] / math.log1p(STEADY_RETURN)).tolist() == pytest.approx([steps] * 256, rel=1e-9)
+    # Day d reads step floor(d × steps / 365): day 0 is step 0, day 365 the last step.
+    assert portfolio[0].tolist() == pytest.approx([(1 + STEADY_RETURN) ** (day * steps // 365) - 1 for day in range(366)], rel=1e-9, abs=1e-12)
+
+
+@pytest.mark.parametrize("steps_per_year", [pytest.param(252.0, id="252-a-year"), pytest.param(365.0, id="365-a-year")])
+def test_a_prolonged_crisis_drifts_by_its_annual_factor_over_one_year_of_steps(steps_per_year):
+    # No return and no dispersion in the history: the regime's level shift is all that moves.
+    portfolio, _terminal, _timings, disclosure = resample(constant_history(0.0), horizon_days=365, regime=RiskSimulationRegime.PROLONGED_CRISIS, steps_per_year=steps_per_year)
+
+    assert (1 + portfolio[:, -1]).tolist() == pytest.approx([0.8] * 256, rel=1e-12)
+    # Disclosed in calendar days: fourteen months declared, the one-year horizon applied.
+    assert (disclosure["regime_declared_days"], disclosure["regime_applied_days"]) == (426, 365)
+
+
+@pytest.mark.parametrize(
+    ("steps_per_year", "crisis_steps"),
+    [pytest.param(252.0, 294, id="426-days-are-294-steps-of-252"), pytest.param(365.0, 426, id="426-days-are-426-daily-steps")],
+)
+def test_a_prolonged_crisis_lasts_its_declared_days_in_steps_and_ends_on_its_calendar_day(steps_per_year, crisis_steps):
+    portfolio, _terminal, _timings, disclosure = resample(constant_history(0.0), horizon_days=730, regime=RiskSimulationRegime.PROLONGED_CRISIS, steps_per_year=steps_per_year)
+    path = 1 + portfolio[0]
+
+    # round(426 × steps / 365) steps of log(0.8) / steps each, then the shift stops.
+    assert path[-1] == pytest.approx(0.8 ** (crisis_steps / steps_per_year), rel=1e-12)
+    # The last crisis step falls on day 426, the declared calendar length, at either frequency.
+    assert path[425] > path[426]
+    assert path[426:].tolist() == pytest.approx([path[426]] * (731 - 426), rel=1e-12)
+    assert (disclosure["regime_declared_days"], disclosure["regime_applied_days"]) == (426, 426)
+
+
+@pytest.mark.parametrize(
+    ("steps_per_year", "shock_steps", "first_step_day"),
+    [pytest.param(252.0, 42, 2, id="61-days-are-42-steps-of-252"), pytest.param(365.0, 61, 1, id="61-days-are-61-daily-steps")],
+)
+def test_a_shock_falls_step_by_step_and_lands_whole_on_its_declared_calendar_day(steps_per_year, shock_steps, first_step_day):
+    portfolio, _terminal, _timings, disclosure = resample(constant_history(0.0), horizon_days=365, regime=RiskSimulationRegime.SHOCK_RECOVERY, steps_per_year=steps_per_year)
+    path = 1 + portfolio[0]
+
+    # Each step takes an equal share of the 35% fall: the first calendar day that reaches step 1.
+    assert path[first_step_day - 1] == 1.0
+    assert path[first_step_day] == pytest.approx(0.65 ** (1 / shock_steps), rel=1e-12)
+    # The whole fall has landed by day 61, the declared length, and nothing moves after it.
+    assert path[60] > path[61]
+    assert path[61:].tolist() == pytest.approx([0.65] * (366 - 61), rel=1e-12)
+    assert (disclosure["regime_declared_days"], disclosure["regime_applied_days"]) == (61, 61)
+
+
+def test_a_calm_regime_spans_every_step_of_the_horizon():
+    request = bootstrap_request(horizon_days=365, path_count=4096, steps_per_year=252.0)
+
+    baseline = run_direct(request)
+    calm = run_direct(request.model_copy(update={"regime": RiskSimulationRegime.CALM}))
+
+    ratio = (terminal_log_dispersion(calm) / terminal_log_dispersion(baseline)).tolist()
+    assert ratio == pytest.approx([0.7] * len(ratio), rel=1e-9)
+    assert (calm.regime_declared_days, calm.regime_applied_days) == (365, 365)
+
+
+@pytest.mark.parametrize(
+    ("steps_per_year", "block_length_days", "disclosed_days"),
+    [
+        pytest.param(252.0, 5, 4, id="five-days-are-three-steps-which-span-four-days"),
+        pytest.param(365.0, 5, 5, id="five-days-of-a-daily-series"),
+        pytest.param(252.0, None, 6, id="the-cube-root-rule-counts-steps-and-discloses-days"),
+        pytest.param(365.0, None, 4, id="the-cube-root-rule-of-a-daily-series"),
+    ],
+)
+def test_the_block_length_is_resolved_in_steps_and_disclosed_in_calendar_days(steps_per_year, block_length_days, disclosed_days):
+    block = {} if block_length_days is None else {"block_length_days": block_length_days}
+
+    _portfolio, _terminal, _timings, disclosure = resample(bootstrap_history(observations=60, asset_count=1), horizon_days=90, steps_per_year=steps_per_year, **block)
+
+    # 5 days × 252/365 → 3 steps, which span round(3 × 365/252) = 4 days; the cube root of 60
+    # observations is 4 steps, which span 6 days of a 252-a-year series.
+    assert disclosure["block_length_days"] == disclosed_days
+
+
+def test_the_worker_publishes_one_band_point_per_calendar_day_whatever_the_steps():
+    result = run_direct(bootstrap_request(horizon_days=365, path_count=512, steps_per_year=252.0))
+
+    assert [len(path) for path in result.percentile_paths] == [366, 366, 366]
+
+
+def test_the_step_frequency_is_part_of_the_simulation_cache_key():
+    daily = bootstrap_request(horizon_days=30, path_count=512)
+    trading_days = bootstrap_request(horizon_days=30, path_count=512, steps_per_year=252.0)
+
+    assert simulation_cache_key(daily, algorithm_version="simulation@steps") != simulation_cache_key(trading_days, algorithm_version="simulation@steps")
+
+
+BOOTSTRAP_CONFIGURATIONS = {
+    "no-regime": {"horizon_days": 120, "path_count": 2048},
+    "crisis-with-a-block-length": {"horizon_days": 500, "path_count": 512, "regime": RiskSimulationRegime.PROLONGED_CRISIS, "block_length_days": 5},
+    "shock": {"horizon_days": 61, "path_count": 1024, "regime": RiskSimulationRegime.SHOCK_RECOVERY},
+    "calm": {"horizon_days": 90, "path_count": 512, "regime": RiskSimulationRegime.CALM},
+}
+# Captured through the worker on 10b0b0d48, from the resampler as it stood before `steps_per_year`:
+# the (p05, p50, p95) band on the first, middle and last day, the terminal statistics and the
+# disclosure. With the frequency unset the engine must still give these numbers. The relative
+# tolerance absorbs libm and BLAS differences between machines; the absolute one covers the day-1
+# medians, where growth − 1 cancels to 1e-4 and one ulp of the growth is already 3e-12 of the result.
+CAPTURED_REL = 1e-12
+CAPTURED_ABS = 1e-15
+CAPTURED_BEFORE_STEPS = {
+    "no-regime": {
+        "bands": {
+            1: (-0.017147875418507263, 7.174996803871458e-05, 0.016450060605750126),
+            60: (-0.10743679198887132, 0.009680407442035133, 0.150395401437865),
+            120: (-0.14290783802907317, 0.020701669780889054, 0.23221075242428496),
+        },
+        "terminal": (0.027372953919993254, 0.11352508096858487, 0.42919921875),
+        "disclosure": (9, None, None),
+    },
+    "crisis-with-a-block-length": {
+        "bands": {
+            1: (-0.04285002460368267, 0.004116087555147807, 0.042931095637983994),
+            250: (-0.5214748663737993, -0.11687598974657865, 0.7032753594111638),
+            500: (-0.6313621579696969, -0.14096361115713357, 1.0436286047743275),
+        },
+        "terminal": (-0.02322925179858988, 0.5509644351880697, 0.638671875),
+        "disclosure": (5, 426, 426),
+    },
+    "shock": {
+        "bands": {
+            1: (-0.02337869902903633, -0.0066776863793373, 0.009365614265159847),
+            30: (-0.25079857351774304, -0.1868603518112133, -0.10430778592799196),
+            61: (-0.41619527485431124, -0.34204164739847925, -0.24930159452695597),
+        },
+        "terminal": (-0.33888212381307414, 0.05240024674243283, 1.0),
+        "disclosure": (9, 61, 61),
+    },
+    "calm": {
+        "bands": {
+            1: (-0.011752697896862174, 0.00012459598771175084, 0.0117947082250013),
+            45: (-0.06433854557413517, 0.004164999795066238, 0.09013845248394589),
+            90: (-0.08436606034916302, 0.015656081127116805, 0.14677827783133654),
+        },
+        "terminal": (0.017385307339057965, 0.06858222271989217, 0.427734375),
+        "disclosure": (9, 90, 90),
+    },
+}
+
+
+@pytest.mark.parametrize("configuration", list(BOOTSTRAP_CONFIGURATIONS))
+def test_with_the_step_frequency_unset_the_bootstrap_gives_the_results_captured_before_it(configuration):
+    result = run_direct(bootstrap_request(**BOOTSTRAP_CONFIGURATIONS[configuration]))
+    captured = CAPTURED_BEFORE_STEPS[configuration]
+
+    for day, band in captured["bands"].items():
+        assert tuple(path[day] for path in result.percentile_paths) == pytest.approx(band, rel=CAPTURED_REL, abs=CAPTURED_ABS), day
+    assert (result.terminal_mean_return, result.terminal_volatility, result.probability_of_loss) == pytest.approx(captured["terminal"], rel=CAPTURED_REL, abs=CAPTURED_ABS)
+    assert (result.block_length_days, result.regime_declared_days, result.regime_applied_days) == captured["disclosure"]
+
+
+@pytest.mark.parametrize("configuration", list(BOOTSTRAP_CONFIGURATIONS))
+def test_at_365_steps_a_year_the_bootstrap_is_the_unset_one_to_the_byte(configuration):
+    unset = resampling_module.run_block_bootstrap(bootstrap_request(**BOOTSTRAP_CONFIGURATIONS[configuration]))
+    daily = resampling_module.run_block_bootstrap(bootstrap_request(**BOOTSTRAP_CONFIGURATIONS[configuration], steps_per_year=365.0))
+
+    unset_portfolio, unset_terminal, _unset_timings, unset_disclosure = unset
+    daily_portfolio, daily_terminal, _daily_timings, daily_disclosure = daily
+    assert daily_portfolio.tobytes() == unset_portfolio.tobytes()
+    assert daily_terminal.tobytes() == unset_terminal.tobytes()
+    assert daily_disclosure == unset_disclosure
+
+
 # --- Drift uncertainty -------------------------------------------------------
 #
 # A band is dispersion *conditional on* an estimated drift, and that drift is a
@@ -1374,7 +1616,7 @@ def drift_projection(
 def drift_factor_closed_form(
     portfolio_returns: list[float],
     *,
-    horizon_days: int,
+    horizon_observations: int,
 ) -> float:
     """``exp(z * H * sigma / sqrt(n))`` over the log returns of a projected series."""
     log_returns = np.log1p(
@@ -1382,7 +1624,7 @@ def drift_factor_closed_form(
     )
     sigma = float(log_returns.std(ddof=1))
     return math.exp(
-        DRIFT_UNCERTAINTY_Z_SCORE * horizon_days * sigma / math.sqrt(log_returns.size),
+        DRIFT_UNCERTAINTY_Z_SCORE * horizon_observations * sigma / math.sqrt(log_returns.size),
     )
 
 
@@ -1395,13 +1637,13 @@ def test_drift_uncertainty_matches_its_closed_form_and_sample_size():
         history,
         [1, 2],
         weights,
-        horizon_days=93,
+        horizon_observations=93,
     )
 
     assert factor == pytest.approx(
         drift_factor_closed_form(
             drift_projection(history, weights),
-            horizon_days=93,
+            horizon_observations=93,
         ),
         rel=1e-12,
     )
@@ -1414,7 +1656,7 @@ def test_drift_uncertainty_matches_its_closed_form_and_sample_size():
         history,
         [1, 2],
         weights,
-        horizon_days=93,
+        horizon_observations=93,
         z_score=DRIFT_UNCERTAINTY_Z_SCORE,
     )
     assert explicit == factor
@@ -1424,7 +1666,7 @@ def test_drift_uncertainty_compounds_with_the_horizon():
     """Estimation error is not a fixed margin: it grows with what it qualifies."""
     history = drift_history()
     weights = [0.6, 0.4]
-    factors = {horizon: estimate_drift_uncertainty(history, [1, 2], weights, horizon_days=horizon)[0] for horizon in (30, 93, 365)}
+    factors = {horizon: estimate_drift_uncertainty(history, [1, 2], weights, horizon_observations=horizon)[0] for horizon in (30, 93, 365)}
 
     assert factors[30] < factors[93] < factors[365]
     # Strictly more than monotone, and the reason the disclosure is a factor
@@ -1458,13 +1700,13 @@ def test_cash_damps_the_drift_uncertainty_instead_of_being_renormalised_away():
         history,
         [1, 2],
         half_invested,
-        horizon_days=365,
+        horizon_observations=365,
     )
     invested, invested_observations = estimate_drift_uncertainty(
         history,
         [1, 2],
         fully_invested,
-        horizon_days=365,
+        horizon_observations=365,
     )
 
     assert damped < invested
@@ -1485,7 +1727,7 @@ def test_a_flat_history_discloses_no_estimation_error():
         flat,
         [1],
         [1.0],
-        horizon_days=365,
+        horizon_observations=365,
     )
 
     assert factor == 1.0
@@ -1505,11 +1747,11 @@ def test_drift_uncertainty_refuses_the_questions_it_cannot_answer():
 
     for horizon in (0, -1):
         with pytest.raises(ValueError, match="positive horizon"):
-            estimate_drift_uncertainty(history, [1, 2], [0.6, 0.4], horizon_days=horizon)
+            estimate_drift_uncertainty(history, [1, 2], [0.6, 0.4], horizon_observations=horizon)
 
     for weights in ([1.0], [0.5, 0.3, 0.2]):
         with pytest.raises(ValueError, match="one weight per aligned asset"):
-            estimate_drift_uncertainty(history, [1, 2], weights, horizon_days=93)
+            estimate_drift_uncertainty(history, [1, 2], weights, horizon_observations=93)
 
     # A long-only book cannot reach the third: weights in [0, 1] summing to at
     # most 1 project returns above -1 onto returns above -1. It takes leverage or
@@ -1520,7 +1762,7 @@ def test_drift_uncertainty_refuses_the_questions_it_cannot_answer():
         2: [0.3, 0.01, 0.0, 0.02],
     }
     with pytest.raises(ValueError, match="greater than -1"):
-        estimate_drift_uncertainty(levered, [1, 2], [2.0, -1.0], horizon_days=93)
+        estimate_drift_uncertainty(levered, [1, 2], [2.0, -1.0], horizon_observations=93)
 
 
 def test_simulation_output_refuses_half_a_drift_uncertainty_disclosure():
@@ -1603,7 +1845,9 @@ def test_bootstrap_refuses_a_block_longer_than_the_history_as_invalid_parameters
     # length, which is an action available to them; "find more history" usually
     # is not. The code has to name the door that is actually open.
     assert refused.value.code == RiskErrorCode.INVALID_PARAMETERS
-    assert refused.value.details == {"block_length_days": 900, "observations": 30}
+    # No step frequency is given, so the builder counts 365 a year: 900 calendar days
+    # are 900 observations, compared with the 30 the history holds.
+    assert refused.value.details == {"block_length_days": 900, "block_length_observations": 900, "observations": 30}
 
     # CONTROL -- the identical parameters against a longer history are accepted.
     # Without this the test above would also pass if the builder refused every

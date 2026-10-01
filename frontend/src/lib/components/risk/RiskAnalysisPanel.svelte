@@ -9,6 +9,7 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import type {RenderedSignal} from '$lib/charts/signals';
     import SignalAssetParamControl from '$lib/components/charts/SignalAssetParamControl.svelte';
+    import BenchmarkSelect from '$lib/components/risk/BenchmarkSelect.svelte';
     import LineChart, {type LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import KpiCard from '$lib/components/dashboard/KpiCard.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
@@ -73,7 +74,11 @@
     let replayLoading = $derived(controller.replayLoading);
     let simulationLoading = $derived(controller.simulationLoading);
 
-    let comparisonAssetId = $state<number | undefined>(undefined);
+    // The shared benchmark (D370): `BenchmarkSelect` opens on it and writes it back. The asset
+    // itself can be the shared choice — chosen on another page — and is then shown and
+    // flagged, but never compared: an asset is not its own yardstick.
+    let comparisonAssetId = $state<number | null>(null);
+    let comparisonUsable = $derived(comparisonAssetId !== null && !(scope.kind === 'asset' && comparisonAssetId === scope.asset_id));
 
     // Without these four the controller would have nothing to re-issue, and the
     // `discard-the-answer-not-the-question` fix would be silently gone while every
@@ -452,7 +457,7 @@
     }
 
     async function runComparison(): Promise<void> {
-        await controller.runGuarded('comparison', () => (comparisonAssetId ? {code: 'comparison', mode: 'historical', parameters: {comparison_asset_id: comparisonAssetId}} : null));
+        await controller.runGuarded('comparison', () => (comparisonUsable ? {code: 'comparison', mode: 'historical', parameters: {comparison_asset_id: comparisonAssetId}} : null));
     }
 
     async function runStress(): Promise<void> {
@@ -699,17 +704,17 @@
             <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-200">{analyticTitle('comparison', 'risk.analytics.comparison.name')}</h3>
             <p class="text-xs text-gray-400 dark:text-gray-500">{analyticDescription('comparison')}</p>
             <div class="mt-3 flex flex-wrap items-end gap-2">
-                <SignalAssetParamControl
-                    value={comparisonAssetId}
-                    excludeAssetIds={scope.kind === 'asset' ? [scope.asset_id] : []}
-                    testId="risk-comparison-asset-select"
-                    onchange={(assetId) => {
+                <BenchmarkSelect
+                    bind:value={comparisonAssetId}
+                    measuredAssetIds={scope.kind === 'asset' ? [scope.asset_id] : []}
+                    testid="risk-comparison-asset-select"
+                    placeholder={$t('signals.comparisonAsset.placeholder')}
+                    onchange={() => {
                         controller.bumpGeneration('comparison');
-                        comparisonAssetId = assetId;
                         controller.resetAnalysis('comparison');
                     }}
                 />
-                <button class="flex items-center gap-1.5 rounded-lg bg-libre-green px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50" onclick={runComparison} disabled={!comparisonAssetId || comparisonLoading} data-testid="risk-comparison-run">
+                <button class="flex items-center gap-1.5 rounded-lg bg-libre-green px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50" onclick={runComparison} disabled={!comparisonUsable || comparisonLoading} data-testid="risk-comparison-run">
                     <Play size={13} />
                     {$t('risk.actions.compare')}
                 </button>

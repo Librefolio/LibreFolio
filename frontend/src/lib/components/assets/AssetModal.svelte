@@ -2176,9 +2176,10 @@
         {/if}
     </fieldset>
 
-    <!-- Footer -->
-    <div class="flex items-center justify-between gap-3 px-6 py-4 border-t border-gray-200 dark:border-slate-700">
-        <div class="flex items-center gap-2">
+    <!-- Footer: switches and buttons share a row when they fit; on a phone the buttons wrap
+         under the switches (right-aligned), and each group can wrap in longer locales. -->
+    <div class="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-t border-gray-200 dark:border-slate-700">
+        <div class="flex flex-wrap items-center gap-2">
             <Tooltip text={$t('assets.modal.activeTooltip')} position="top" maxWidth="320px">
                 <Info size={14} class="text-gray-400 cursor-help shrink-0" />
             </Tooltip>
@@ -2220,7 +2221,7 @@
             </button>
         </div>
 
-        <div class="flex items-center gap-3">
+        <div class="flex flex-wrap items-center justify-end gap-3 ml-auto">
             <button
                 type="button"
                 onclick={handleClose}

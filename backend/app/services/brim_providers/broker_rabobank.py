@@ -140,7 +140,7 @@ class RabobankBrokerProvider(BRIMProvider):
         if file_path.suffix.lower() != ".csv":
             return False
         try:
-            with open(file_path, encoding="utf-8-sig", newline="") as f:
+            with self._open_text(file_path, newline="") as f:
                 header = next(csv.reader(f, delimiter=";"), [])
             return header == EXPECTED_HEADER
         except Exception:
@@ -156,7 +156,7 @@ class RabobankBrokerProvider(BRIMProvider):
         next_fake_id = FAKE_ASSET_ID_BASE
 
         try:
-            with open(file_path, encoding="utf-8-sig", newline="") as f:
+            with self._open_text(file_path, newline="") as f:
                 reader = csv.DictReader(f, delimiter=";")
                 row_num = 1
 

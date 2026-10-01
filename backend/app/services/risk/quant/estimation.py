@@ -88,7 +88,7 @@ def estimate_drift_uncertainty(
     asset_ids: Sequence[int],
     weights: Sequence[float],
     *,
-    horizon_days: int,
+    horizon_observations: int,
     z_score: float = _NORMAL_95_PERCENT,
 ) -> tuple[float, int]:
     """Return the 95% confidence factor on the portfolio drift, and its sample size.
@@ -104,8 +104,11 @@ def estimate_drift_uncertainty(
     Weights are the portfolio's own, so cash enters as the weight that is missing
     from their sum and correctly damps the estimate. Renormalising onto the risky
     sleeve instead would answer a question about a portfolio the user does not hold.
+
+    The error is per observation, so the horizon counts observations too: a horizon
+    in calendar days is converted by the caller at the series' own frequency.
     """
-    if horizon_days <= 0:
+    if horizon_observations <= 0:
         raise ValueError("drift uncertainty requires a positive horizon")
     matrix = align_simple_returns(returns_by_asset, asset_ids)
     weight_vector = np.asarray(weights, dtype=float)
@@ -120,7 +123,7 @@ def estimate_drift_uncertainty(
     sigma = float(log_returns.std(ddof=1))
     if not np.isfinite(sigma):
         raise ValueError("drift uncertainty produced a non-finite dispersion")
-    standard_error = horizon_days * sigma / math.sqrt(observations)
+    standard_error = horizon_observations * sigma / math.sqrt(observations)
     return math.exp(z_score * standard_error), observations
 
 

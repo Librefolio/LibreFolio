@@ -29,6 +29,17 @@ returns and shifting their level. Both leave the correlation matrix
 mathematically invariant, which is precisely why the user-facing text says that
 correlations stay those of their own history instead of claiming a number the
 code does not produce.
+
+Calendar days and steps
+-----------------------
+The history is a sequence of *observations*, and a series quoted on trading days
+holds about 252 of them a year, not 365. The horizon, the regimes and the block
+length are declared in calendar days; each is converted into the steps the
+history holds in that span (``steps_per_year``, its observed frequency), the
+steps are simulated, and the paths are mapped back to one point per calendar
+day: day ``d`` reads step ``floor(d × steps / days)``. A day that falls between
+two steps repeats the earlier one — no trading, no move. Unset, the frequency is
+one step per calendar day.
 """
 
 from __future__ import annotations
@@ -38,6 +49,7 @@ import time
 import numpy as np
 
 from backend.app.schemas.risk import RiskSimulationRegime
+from backend.app.services.risk.metrics import calendar_days_to_observations
 from backend.app.services.risk.quant.models import (
     SimulationEngineRequest,
     historical_returns_digest,
@@ -48,7 +60,6 @@ _CALM_DISPERSION_SCALE = 0.7
 _CRISIS_DISPERSION_SCALE = 2.5
 _CRISIS_ANNUAL_GROSS_FACTOR = 0.8
 _SHOCK_GROSS_FACTOR = 0.65
-_SIMULATED_DAYS_PER_YEAR = 365.0
 _MINIMUM_PORTFOLIO_RETURN = -1.0 + 1e-12
 
 _REGIME_DECLARED_DAYS: dict[RiskSimulationRegime, int | None] = {
@@ -85,22 +96,47 @@ def resolve_regime_days(regime: RiskSimulationRegime, horizon_days: int) -> tupl
     return declared, min(declared, horizon_days)
 
 
+def _applied_regime_steps(
+    regime: RiskSimulationRegime,
+    horizon_steps: int,
+    steps_per_year: float,
+) -> int | None:
+    """Return how many simulated steps a regime covers.
+
+    The declared duration is in calendar days, so it is converted like the
+    horizon: a fourteen-month crisis is 426 daily steps of a series quoted every
+    day, and 294 of one quoted on trading days. Either way it ends on the same
+    calendar day.
+    """
+    if regime == RiskSimulationRegime.NONE:
+        return None
+    declared = _REGIME_DECLARED_DAYS[regime]
+    if declared is None:
+        return horizon_steps
+    return min(calendar_days_to_observations(declared, steps_per_year), horizon_steps)
+
+
 def _regime_profile(
     regime: RiskSimulationRegime,
-    horizon_days: int,
-    applied_days: int,
+    horizon_steps: int,
+    applied_steps: int,
+    steps_per_year: float,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Build the per-day dispersion scale and level shift of a regime."""
-    scale = np.ones(horizon_days, dtype=np.float64)
-    shift = np.zeros(horizon_days, dtype=np.float64)
-    window = slice(0, applied_days)
+    """Build the per-step dispersion scale and level shift of a regime.
+
+    The crisis shift is annual, so it is spread over a year of *steps*: one year
+    of them compounds to the declared factor whatever the series' frequency.
+    """
+    scale = np.ones(horizon_steps, dtype=np.float64)
+    shift = np.zeros(horizon_steps, dtype=np.float64)
+    window = slice(0, applied_steps)
     if regime == RiskSimulationRegime.CALM:
         scale[window] = _CALM_DISPERSION_SCALE
     elif regime == RiskSimulationRegime.PROLONGED_CRISIS:
         scale[window] = _CRISIS_DISPERSION_SCALE
-        shift[window] = np.log(_CRISIS_ANNUAL_GROSS_FACTOR) / _SIMULATED_DAYS_PER_YEAR
+        shift[window] = np.log(_CRISIS_ANNUAL_GROSS_FACTOR) / steps_per_year
     elif regime == RiskSimulationRegime.SHOCK_RECOVERY:
-        shift[window] = np.log(_SHOCK_GROSS_FACTOR) / applied_days
+        shift[window] = np.log(_SHOCK_GROSS_FACTOR) / applied_steps
     return scale, shift
 
 
@@ -139,10 +175,14 @@ def run_block_bootstrap(
 
     observations, asset_count = log_returns.shape
     horizon_days = request.horizon_days
+    steps_per_year = request.effective_steps_per_year
+    horizon_steps = calendar_days_to_observations(horizon_days, steps_per_year)
     path_count = request.path_count
-    block_length = resolve_block_length(observations, request.block_length_days)
-    block_count = -(-horizon_days // block_length)
+    block_override = None if request.block_length_days is None else calendar_days_to_observations(request.block_length_days, steps_per_year)
+    block_length = resolve_block_length(observations, block_override)
+    block_count = -(-horizon_steps // block_length)
     declared_days, applied_days = resolve_regime_days(request.regime, horizon_days)
+    applied_steps = _applied_regime_steps(request.regime, horizon_steps, steps_per_year)
 
     rng = np.random.default_rng(request.bootstrap_seed)
     sampling_started = time.perf_counter()
@@ -157,23 +197,23 @@ def run_block_bootstrap(
     asset_means = log_returns.mean(axis=0)
     scale, shift = (None, None)
     if request.regime != RiskSimulationRegime.NONE:
-        assert applied_days is not None
-        scale, shift = _regime_profile(request.regime, horizon_days, applied_days)
+        assert applied_steps is not None
+        scale, shift = _regime_profile(request.regime, horizon_steps, applied_steps, steps_per_year)
 
     weights = np.asarray(request.weights, dtype=np.float64)
     portfolio_returns = np.empty((path_count, horizon_days + 1), dtype=np.float64)
-    portfolio_returns[:, 0] = 0.0
     terminal_log_returns = np.empty((path_count, asset_count), dtype=np.float64)
+    day_steps = (np.arange(horizon_days + 1, dtype=np.int64) * horizon_steps) // horizon_days
 
     offsets = np.arange(block_length, dtype=np.int64)
-    chunk_size = max(1, _CELL_BUDGET // max(1, horizon_days * asset_count))
+    chunk_size = max(1, _CELL_BUDGET // max(1, horizon_steps * asset_count))
     resampling_seconds = 0.0
     aggregation_seconds = 0.0
     for start in range(0, path_count, chunk_size):
         stop = min(start + chunk_size, path_count)
         stage_started = time.perf_counter()
         indices = (starts[start:stop, :, None] + offsets) % observations
-        indices = indices.reshape(stop - start, block_count * block_length)[:, :horizon_days]
+        indices = indices.reshape(stop - start, block_count * block_length)[:, :horizon_steps]
         draws = log_returns[indices]
         if scale is not None:
             draws = asset_means + scale[None, :, None] * (draws - asset_means) + shift[None, :, None]
@@ -182,14 +222,17 @@ def run_block_bootstrap(
         stage_started = time.perf_counter()
         cumulative_log = np.cumsum(draws, axis=1)
         growth = np.exp(cumulative_log)
-        portfolio_returns[start:stop, 1:] = request.cash_weight + growth @ weights - 1.0
+        step_returns = np.empty((stop - start, horizon_steps + 1), dtype=np.float64)
+        step_returns[:, 0] = 0.0
+        step_returns[:, 1:] = request.cash_weight + growth @ weights - 1.0
+        portfolio_returns[start:stop] = step_returns[:, day_steps]
         terminal_log_returns[start:stop] = cumulative_log[:, -1, :]
         aggregation_seconds += time.perf_counter() - stage_started
 
     np.maximum(portfolio_returns, _MINIMUM_PORTFOLIO_RETURN, out=portfolio_returns)
 
     disclosure: dict[str, int | None] = {
-        "block_length_days": block_length,
+        "block_length_days": max(1, round(block_length * 365 / steps_per_year)),
         "regime_declared_days": declared_days,
         "regime_applied_days": applied_days,
     }

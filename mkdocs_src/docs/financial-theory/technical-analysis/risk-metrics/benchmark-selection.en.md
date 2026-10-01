@@ -64,13 +64,13 @@ The comparison is not free-form. The analysis takes a **real asset that exists i
 
 ## 📏 The Shared Window {: #the-shared-window }
 
-Two series rarely cover exactly the same dates, so the comparison is computed on the **intersection** of the two calendars: only dates present in both contribute.
+Two series rarely cover exactly the same dates, so the comparison is computed on the **intersection** of the two calendars: on each shared date, each series contributes its returns since the previous shared date — for the first, since the primary's previous date — compounded into one. A benchmark quoted on days the primary skips — a crypto-asset at the weekend, beside a portfolio read on its [observation days](data-quality.md#coverage) — keeps those moves.
 
 Three consequences are published with the result.
 
 **A minimum applies.** Below 20 shared observations the comparison is not computed at all: the result comes back unavailable with an insufficient-history reason carrying both the number of shared observations found and the number required. A benchmark that barely overlaps your history produces no figure instead of a fragile one.
 
-**Coverage is reported.** The result records what fraction of the primary series' own dates survived the intersection — that is, how much of your history the chosen reference was actually able to cover. A benchmark launched halfway through your holding period does not silently compare half a period; it says so.
+**Coverage is reported.** The result records what fraction of the primary series' own dates survived the intersection — that is, on how many of your dates the chosen reference had a return of its own. A benchmark launched halfway through your holding period does not silently compare half a period; it says so.
 
 **The annualisation factor is re-measured on the shared window.** Because the intersection is generally shorter and sparser than the full analysis window, any annualised quantity in the comparison is scaled by a factor measured on the common sample rather than inherited from the wider analysis — the same observed-factor logic described in [Observed Annualization](observed-annualization.md), applied to the overlap.
 
@@ -92,7 +92,7 @@ Three consequences are published with the result.
 
 !!! warning "A shared calendar hides what it discards"
 
-    Only dates present in both series are compared. If the reference is missing precisely during the turbulent stretch that matters most, those dates leave the comparison entirely, and the remaining figure is calmer than the period it claims to describe. The coverage figure is what makes that loss visible — read it before reading the beta.
+    Only dates present in both series are compared. If the reference is missing precisely during the turbulent stretch that matters most, the comparison sees that stretch as a single compounded step — or not at all, before the reference's first shared date — rather than as it unfolded. The coverage figure is what makes that loss visible — read it before reading the beta.
 
 ---
 

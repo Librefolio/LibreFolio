@@ -71,6 +71,7 @@ from backend.app.schemas.portfolio import (
     PortfolioReportResponse,
     PortfolioSummary,
     PositionsContribution,
+    StalePriceAsset,
     UnallocatedContribution,
 )
 from backend.app.schemas.wac import WACMissingPairInfo, WACPreviewResultItem, WACQualifyingTX
@@ -697,6 +698,7 @@ class PortfolioService:
         from backend.app.services.portfolio_engine import (  # noqa: PLC0415
             DerivedViewsBuilder,
             PortfolioCalculationEngine,
+            ValuationSource,
         )
 
         today = date_type.today()
@@ -1245,10 +1247,25 @@ class PortfolioService:
         manual_implied_ids = implied_asset_ids - assets_with_provider
         transaction_implied_assets = [a for a in transaction_implied_assets if a.asset_id not in manual_implied_ids]
 
+        # STALE_PRICE: an open position valued at a market price carried forward past the
+        # threshold, for an asset with a provider — the case a price sync can fix. A manual
+        # asset valued at its last trade price (crowdfunding, HOLD) is stale by design, and a
+        # provider asset with no quote at all is TRANSACTION_IMPLIED's case. One entry per asset.
+        stale_price_dates: dict[int, date_type] = {}
+        for ps in end_positions:
+            if not ps.valuation_stale or ps.valuation_source != ValuationSource.MARKET_PRICE:
+                continue
+            if ps.asset_id not in assets_with_provider or ps.valuation_reference_date is None:
+                continue
+            known = stale_price_dates.get(ps.asset_id)
+            stale_price_dates[ps.asset_id] = ps.valuation_reference_date if known is None else max(known, ps.valuation_reference_date)
+        stale_prices = [StalePriceAsset(asset_id=asset_id, name=assets_map[asset_id].display_name, last_price_date=last_date, stale_days=(valuation_date - last_date).days) for asset_id, last_date in sorted(stale_price_dates.items(), key=lambda item: (item[1], item[0])) if asset_id in assets_map]
+
         configured_fx_pairs, real_provider_fx_pairs = await self._get_configured_fx_pair_sets()
         merged_missing_fx_pairs = self._merge_missing_pairs(all_missing_pairs)
         data_quality = views.build_data_quality_report(
             missing_price_assets_dto=missing_price_assets,
+            stale_prices_dto=stale_prices or None,
             missing_fx_pairs_dto=merged_missing_fx_pairs,
             transaction_implied_assets_dto=transaction_implied_assets if transaction_implied_assets else None,
             mwrr_available=mwrr_result is not None,

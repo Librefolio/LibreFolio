@@ -25,6 +25,8 @@ from backend.app.schemas.risk import (
     PreparedAssetSeries,
     PreparedAssetSeriesSet,
     RiskAnalyticOutput,
+    RiskComparisonOutput,
+    RiskComparisonPoint,
     RiskCompositionPolicy,
     RiskDrawdownRecoveryStatus,
     RiskErrorCode,
@@ -37,6 +39,7 @@ from backend.app.schemas.risk import (
     RiskReturnBasis,
     RiskReturnOutput,
     RiskScopeKind,
+    RiskSimulationProcess,
     RiskStressApplicationRule,
     RiskStressMethod,
     RiskValueStatus,
@@ -46,6 +49,7 @@ from backend.app.services.data_quality_thresholds import STALE_PRICE_THRESHOLD_D
 from backend.app.services.provider_registry import RiskAnalyticRegistry
 from backend.app.services.risk import acquired
 from backend.app.services.risk import base as risk_base
+from backend.app.services.risk.analytic_helpers import require_annualization_factor
 from backend.app.services.risk.base import (
     RiskAnalytic,
     RiskAssetClassification,
@@ -57,15 +61,20 @@ from backend.app.services.risk.metrics import (
     annualized_expected_return,
     annualized_sharpe,
     annualized_volatility,
+    comparison_summary,
     current_buy_and_hold_returns,
+    historical_var_cvar,
     summarize_drawdown,
 )
+from backend.app.services.risk.quant.estimation import estimate_drift_uncertainty
+from backend.app.services.risk.quant.models import SimulationEngineResult
 from backend.app.services.risk.quant.optimization_engine import (
     clear_optimization_cache,
 )
 from backend.app.services.risk.quant.workers import (
     shutdown_quant_worker_pools,
 )
+from backend.app.services.risk_plugins import simulation as simulation_plugin_module
 from backend.app.services.risk_plugins.asset_risk_return import (
     AssetRiskReturnAnalytic,
     AssetRiskReturnParams,
@@ -107,12 +116,18 @@ from backend.app.services.risk_plugins.stress import StressAnalytic, StressParam
 
 def make_prepared_set(
     returns_by_asset: dict[int, list[float]],
+    *,
+    valuation_dates: list[date] | None = None,
 ) -> PreparedAssetSeriesSet:
-    baseline = date(2026, 1, 1)
+    """Prepared series on one joint calendar: consecutive days from 1 January 2026 unless `valuation_dates` (baseline first) says otherwise."""
     observations = len(next(iter(returns_by_asset.values())))
     assert all(len(values) == observations for values in returns_by_asset.values())
-    valuation_dates = [baseline + timedelta(days=index) for index in range(observations + 1)]
+    if valuation_dates is None:
+        valuation_dates = [date(2026, 1, 1) + timedelta(days=index) for index in range(observations + 1)]
+    assert len(valuation_dates) == observations + 1
+    baseline = valuation_dates[0]
     return_dates = valuation_dates[1:]
+    calendar_days = (return_dates[-1] - baseline).days
     prepared: list[PreparedAssetSeries] = []
     for asset_id, returns in returns_by_asset.items():
         wealth = Decimal("100")
@@ -176,8 +191,8 @@ def make_prepared_set(
         joint_valuation_dates=valuation_dates,
         joint_return_dates=return_dates,
         n_observations=observations,
-        calendar_days=observations,
-        annualization_factor=365.0,
+        calendar_days=calendar_days,
+        annualization_factor=observations * 365 / calendar_days,
         calendar_coverage=1.0,
         fresh_quote_coverage=1.0,
         data_quality=DataQualityReport(),
@@ -637,6 +652,7 @@ def test_comparison_measures_the_reference_on_the_common_days_it_reports():
     )
     context = replace(
         full_context,
+        primary_baseline_date=full_context.primary_return_dates[common.start - 1],
         primary_return_dates=full_context.primary_return_dates[common],
         primary_returns=full_context.primary_returns[common],
     )
@@ -685,6 +701,220 @@ def test_comparison_publishes_the_reference_pair_only_beside_a_beta_it_could_mea
     assert output.comparison_volatility > 0
     assert output.comparison_expected_annual_return is not None
     assert output.comparison_expected_annual_return / output.comparison_volatility == pytest.approx(sharpe, rel=1e-12)
+
+
+# --------------------------------------------------------------------------- #
+# Comparison pairs each primary return with the benchmark's return over the same span
+# (developer's decision of 30/09/2026).
+#
+# A primary return dated D_i spans (D_{i-1}, D_i], the first from the primary's own
+# baseline. Since round 1 the portfolio TWRR is read on observation days only, so a
+# benchmark quoted on more days than the holdings — a crypto's weekends, a US ETF on an
+# EU holiday — has several returns inside one primary span. They are compounded into
+# the pair; a date-by-date match kept the last and lost the others. A span holding one
+# benchmark return uses it as it is, so one shared calendar is unchanged to the byte.
+# Before the first pair, a primary date the benchmark has no return on is dropped and the
+# span starts at it. After the first pair it is no boundary (contract C): at the next date
+# both series share, each is compounded over (last paired date, D]. The annualization
+# baseline is the first pair's span start.
+# --------------------------------------------------------------------------- #
+
+COMPARISON_BENCHMARK_ID = 2
+SPAN_BASELINE = date(2026, 1, 2)  # a Friday: the primary's baseline
+SPAN_END = date(2026, 2, 13)  # a Friday, six weeks on
+SPAN_EVERY_DAY = [SPAN_BASELINE + timedelta(days=offset) for offset in range((SPAN_END - SPAN_BASELINE).days + 1)]
+SPAN_WEEKDAYS = [day for day in SPAN_EVERY_DAY[1:] if day.weekday() < 5]  # the primary's 30 dates
+SPAN_PRIMARY_RETURNS = [round(0.005 * math.cos(index * 0.9) + 0.0005, 10) for index in range(len(SPAN_WEEKDAYS))]
+# The benchmark moves every calendar day, weekends included.
+SPAN_BENCHMARK_EVERY_DAY = [round(0.004 * math.sin(index * 0.7 + 0.2) + 0.0015 * math.cos(index * 2.1), 10) for index in range(len(SPAN_EVERY_DAY) - 1)]
+
+
+def span_context(benchmark_dates: list[date], benchmark_returns: list[float]) -> RiskExecutionContext:
+    """A portfolio TWRR read on `SPAN_WEEKDAYS` from `SPAN_BASELINE`, beside a benchmark prepared on its own calendar."""
+    calendar_days = (SPAN_WEEKDAYS[-1] - SPAN_BASELINE).days
+    return replace(
+        make_context({1: SPAN_PRIMARY_RETURNS, COMPARISON_BENCHMARK_ID: SPAN_PRIMARY_RETURNS}, scope_asset_ids=(1,)),
+        prepared_series=make_prepared_set({COMPARISON_BENCHMARK_ID: benchmark_returns}, valuation_dates=[SPAN_BASELINE, *benchmark_dates]),
+        primary_baseline_date=SPAN_BASELINE,
+        primary_return_dates=tuple(SPAN_WEEKDAYS),
+        primary_returns=tuple(SPAN_PRIMARY_RETURNS),
+        calendar_days=calendar_days,
+        annualization_factor=len(SPAN_WEEKDAYS) * 365 / calendar_days,
+    )
+
+
+def benchmark_move(own: dict[date, float], start: date, end: date) -> float:
+    """The benchmark's own return over (start, end]: its returns dated inside, compounded."""
+    return math.prod(1 + value for day, value in own.items() if start < day <= end) - 1
+
+
+def test_comparison_compounds_the_benchmark_moves_inside_each_primary_span():
+    own = dict(zip(SPAN_EVERY_DAY[1:], SPAN_BENCHMARK_EVERY_DAY, strict=True))
+    assert all(value != 0.0 for day, value in own.items() if day.weekday() >= 5)  # the weekend moves are real
+
+    computation = ComparisonAnalytic().compute(ComparisonParams(comparison_asset_id=COMPARISON_BENCHMARK_ID), span_context(SPAN_EVERY_DAY[1:], SPAN_BENCHMARK_EVERY_DAY))
+    output = computation.output
+    cumulative = {point.date: point.comparison_cumulative_return for point in output.series}
+
+    # The first span runs from the primary's baseline: Friday to Monday holds Saturday, Sunday and Monday.
+    first = SPAN_WEEKDAYS[0]
+    assert (SPAN_BASELINE.weekday(), first.weekday()) == (4, 0)
+    assert cumulative[first] == pytest.approx(benchmark_move(own, SPAN_BASELINE, first), rel=1e-12)
+    # Every later Monday pairs with the weekend before it: (1 + cumulative on Monday) / (1 + cumulative on Friday) − 1.
+    friday, monday = date(2026, 1, 9), date(2026, 1, 12)
+    assert (1 + cumulative[monday]) / (1 + cumulative[friday]) - 1 == pytest.approx(benchmark_move(own, friday, monday), rel=1e-12)
+    # Over the window the benchmark returns exactly what it returned: none of its moves is lost.
+    assert cumulative[SPAN_END] == pytest.approx(math.prod(1 + value for value in SPAN_BENCHMARK_EVERY_DAY) - 1, rel=1e-12)
+    assert output.observations == computation.n_observations == len(SPAN_WEEKDAYS)
+    assert computation.coverage == 1.0
+
+    # Everything downstream reads the pairs, annualized from the first pair's span start.
+    pairs = [benchmark_move(own, start, end) for start, end in zip([SPAN_BASELINE, *SPAN_WEEKDAYS[:-1]], SPAN_WEEKDAYS, strict=True)]
+    factor = len(SPAN_WEEKDAYS) * 365 / (SPAN_END - SPAN_BASELINE).days
+    summary = comparison_summary(SPAN_PRIMARY_RETURNS, pairs, factor)
+    assert computation.calendar_days == (SPAN_END - SPAN_BASELINE).days
+    assert computation.annualization_factor == pytest.approx(factor, rel=1e-12)
+    assert [output.active_return, output.tracking_error, output.information_ratio, output.correlation, output.beta] == pytest.approx([summary.active_return, summary.tracking_error, summary.information_ratio, summary.correlation, summary.beta], rel=1e-12)
+    assert output.comparison_volatility == pytest.approx(annualized_volatility(pairs, factor), rel=1e-12)
+    assert output.comparison_expected_annual_return == pytest.approx(annualized_expected_return(pairs, factor), rel=1e-12)
+    assert [point.comparison_drawdown for point in output.series] == pytest.approx(summary.comparison_drawdowns, rel=1e-12, abs=1e-15)
+
+
+@pytest.mark.parametrize(
+    ("scope_kind", "mode"),
+    [
+        pytest.param(RiskScopeKind.ASSET, RiskMode.HISTORICAL, id="asset"),
+        pytest.param(RiskScopeKind.PORTFOLIO, RiskMode.CURRENT_COMPOSITION, id="portfolio-current-composition"),
+    ],
+)
+def test_comparison_on_one_shared_calendar_is_the_date_match_to_the_byte(scope_kind, mode):
+    primary = [round(0.004 * math.sin(index * 0.8) + 0.0007, 10) for index in range(30)]
+    reference = [round(0.006 * math.cos(index * 0.55) - 0.0003, 10) for index in range(30)]
+    # A single return re-derived as (1 + r) − 1 differs from r in its last bits here, so the pin can see one.
+    assert any((1 + value) - 1 != value for value in reference)
+    context = make_context({1: primary, COMPARISON_BENCHMARK_ID: reference}, scope_kind=scope_kind, mode=mode, scope_asset_ids=(1,))
+
+    computation = ComparisonAnalytic().compute(ComparisonParams(comparison_asset_id=COMPARISON_BENCHMARK_ID), context)
+
+    # The date match, computed here: each date's two returns as they are, from the shared baseline.
+    dates = context.primary_return_dates
+    calendar_days = (dates[-1] - context.primary_baseline_date).days
+    factor = len(dates) * 365 / calendar_days
+    summary = comparison_summary(primary, reference, factor)
+    expected = RiskComparisonOutput(
+        comparison_asset_id=COMPARISON_BENCHMARK_ID,
+        active_return=summary.active_return,
+        tracking_error=summary.tracking_error,
+        information_ratio=summary.information_ratio,
+        correlation=summary.correlation,
+        beta=summary.beta,
+        observations=len(dates),
+        comparison_volatility=annualized_volatility(reference, factor),
+        comparison_expected_annual_return=annualized_expected_return(reference, factor),
+        series=[
+            RiskComparisonPoint(date=day, primary_cumulative_return=primary_cumulative, comparison_cumulative_return=comparison_cumulative, primary_drawdown=primary_drawdown, comparison_drawdown=comparison_drawdown)
+            for day, primary_cumulative, comparison_cumulative, primary_drawdown, comparison_drawdown in zip(dates, summary.primary_cumulative, summary.comparison_cumulative, summary.primary_drawdowns, summary.comparison_drawdowns, strict=True)
+        ],
+    )
+    assert computation.output.model_dump() == expected.model_dump()
+    assert computation.output.model_dump_json() == expected.model_dump_json()  # the same payload, bit for bit
+    assert (computation.n_observations, computation.calendar_days, computation.annualization_factor, computation.coverage) == (len(dates), calendar_days, factor, 1.0)
+
+
+@pytest.mark.parametrize(
+    ("dropped", "first_span_start"),
+    [
+        # The start rule: before the first pair, the dropped date moves the span start to itself. A
+        # date dropped after a pair follows contract C instead (the test after this one).
+        pytest.param(date(2026, 1, 5), date(2026, 1, 5), id="the-first-primary-date"),
+    ],
+)
+def test_comparison_drops_a_primary_date_the_benchmark_lacks_and_starts_the_next_span_at_it(dropped, first_span_start):
+    # The benchmark trades the weekend before `dropped` but has no return dated on it, and no other weekend.
+    weekend = [dropped - timedelta(days=2), dropped - timedelta(days=1)]
+    benchmark_dates = sorted({*SPAN_WEEKDAYS, *weekend} - {dropped})
+    benchmark_returns = [round(0.005 * math.sin(index * 0.65 + 0.4), 10) for index in range(len(benchmark_dates))]
+    own = dict(zip(benchmark_dates, benchmark_returns, strict=True))
+
+    computation = ComparisonAnalytic().compute(ComparisonParams(comparison_asset_id=COMPARISON_BENCHMARK_ID), span_context(benchmark_dates, benchmark_returns))
+    output = computation.output
+
+    kept = [day for day in SPAN_WEEKDAYS if day != dropped]
+    assert [point.date for point in output.series] == kept
+    assert output.observations == computation.n_observations == len(kept)
+    assert computation.coverage == pytest.approx(len(kept) / len(SPAN_WEEKDAYS))
+    # The next span is (dropped, Tuesday]: the benchmark's Tuesday return alone. The weekend moves sat in
+    # the dropped span and leave with it, rather than being folded into Tuesday.
+    tuesday = dropped + timedelta(days=1)
+    position = kept.index(tuesday)
+    before = output.series[position - 1].comparison_cumulative_return if position else 0.0
+    assert (1 + output.series[position].comparison_cumulative_return) / (1 + before) - 1 == pytest.approx(own[tuesday], rel=1e-12)
+    # The primary's return on the dropped date leaves too.
+    primary = dict(zip(SPAN_WEEKDAYS, SPAN_PRIMARY_RETURNS, strict=True))
+    assert output.series[-1].primary_cumulative_return == pytest.approx(math.prod(1 + primary[day] for day in kept) - 1, rel=1e-12)
+    # The annualization baseline is the first pair's span start.
+    factor = len(kept) * 365 / (SPAN_END - first_span_start).days
+    assert computation.calendar_days == (SPAN_END - first_span_start).days
+    assert computation.annualization_factor == pytest.approx(factor, rel=1e-12)
+    assert output.comparison_volatility == pytest.approx(annualized_volatility([own[day] for day in kept], factor), rel=1e-12)
+
+
+@pytest.mark.parametrize(
+    ("dropped", "inside_the_gap"),
+    [
+        # Primary returns dated 5, 6 and 7 January; benchmark returns dated 5 and 7, the latter spanning 5→7.
+        pytest.param(date(2026, 1, 6), [], id="the-benchmark-is-silent-in-the-gap"),
+        # The benchmark trades the weekend before a Monday it has no return on.
+        pytest.param(date(2026, 1, 12), [date(2026, 1, 10), date(2026, 1, 11)], id="a-monday-inside-the-window"),
+    ],
+)
+def test_comparison_compounds_both_series_across_a_primary_date_the_benchmark_lacks_after_the_first_pair(dropped, inside_the_gap):
+    """Contract C: after the first pair, both series are compounded between the dates they share.
+
+    Once a pair exists, a primary date without a benchmark return is no span boundary: the span stays
+    anchored on the last paired date, and at the next shared date the primary's returns and the
+    benchmark's returns dated inside (anchor, D] are compounded, each on its own side. The two sides of
+    a pair then always span the same days, and nothing either series returned is lost.
+    """
+    assert SPAN_WEEKDAYS.index(dropped) > 0  # the gap follows a pair: the start rule is not in play
+    benchmark_dates = sorted({*SPAN_WEEKDAYS, *inside_the_gap} - {dropped})
+    benchmark_returns = [round(0.005 * math.sin(index * 0.65 + 0.4), 10) for index in range(len(benchmark_dates))]
+    own = dict(zip(benchmark_dates, benchmark_returns, strict=True))
+    primary = dict(zip(SPAN_WEEKDAYS, SPAN_PRIMARY_RETURNS, strict=True))
+    anchor = SPAN_WEEKDAYS[SPAN_WEEKDAYS.index(dropped) - 1]  # the last paired date before the gap
+    joined = SPAN_WEEKDAYS[SPAN_WEEKDAYS.index(dropped) + 1]  # the next date both series share
+
+    computation = ComparisonAnalytic().compute(ComparisonParams(comparison_asset_id=COMPARISON_BENCHMARK_ID), span_context(benchmark_dates, benchmark_returns))
+    output = computation.output
+    by_date = {point.date: point for point in output.series}
+
+    kept = [day for day in SPAN_WEEKDAYS if day != dropped]
+    assert [point.date for point in output.series] == kept
+    # The pair on `joined` spans (anchor, joined] on both sides: the primary across the dropped date...
+    assert (1 + by_date[joined].primary_cumulative_return) / (1 + by_date[anchor].primary_cumulative_return) - 1 == pytest.approx((1 + primary[dropped]) * (1 + primary[joined]) - 1, rel=1e-12)
+    # ...and the benchmark over the same days, whatever it returned inside the gap.
+    assert (1 + by_date[joined].comparison_cumulative_return) / (1 + by_date[anchor].comparison_cumulative_return) - 1 == pytest.approx(benchmark_move(own, anchor, joined), rel=1e-12)
+    # Nothing either series returned is lost.
+    assert output.series[-1].primary_cumulative_return == pytest.approx(math.prod(1 + value for value in SPAN_PRIMARY_RETURNS) - 1, rel=1e-12)
+    assert output.series[-1].comparison_cumulative_return == pytest.approx(math.prod(1 + value for value in benchmark_returns) - 1, rel=1e-12)
+    assert output.observations == computation.n_observations == len(kept)
+    assert computation.coverage == pytest.approx(len(kept) / len(SPAN_WEEKDAYS))
+
+    # Everything downstream reads the pairs, annualized from the first pair's span start.
+    primary_pairs = [primary[day] for day in kept]
+    benchmark_pairs = [own[day] for day in kept]
+    primary_pairs[kept.index(joined)] = (1 + primary[dropped]) * (1 + primary[joined]) - 1
+    benchmark_pairs[kept.index(joined)] = benchmark_move(own, anchor, joined)
+    factor = len(kept) * 365 / (SPAN_END - SPAN_BASELINE).days
+    summary = comparison_summary(primary_pairs, benchmark_pairs, factor)
+    assert computation.calendar_days == (SPAN_END - SPAN_BASELINE).days
+    assert computation.annualization_factor == pytest.approx(factor, rel=1e-12)
+    assert [output.active_return, output.tracking_error, output.correlation, output.beta] == pytest.approx([summary.active_return, summary.tracking_error, summary.correlation, summary.beta], rel=1e-12)
+    assert output.comparison_volatility == pytest.approx(annualized_volatility(benchmark_pairs, factor), rel=1e-12)
+
+
+def test_comparison_pairing_by_span_is_a_new_algorithm_version():
+    assert ComparisonAnalytic.algorithm_version == "1.1.0"
 
 
 def test_stress_projects_hypothetical_percentages_and_amounts():
@@ -1568,6 +1798,193 @@ async def test_simulation_uses_current_composition_and_discloses_assumptions():
     assert computation.sobol_start_index is None
     assert "quantlib" in computation.method
     assert PortfolioOptimizationAnalytic.output_kind.value == "optimization"
+
+
+# ---------------------------------------------------------------------------
+# VaR horizons in calendar days (developer's decision of 30/09/2026)
+#
+# `horizon_days` is calendar days. The analytic compounds n = max(1, round(horizon_days × f / 365))
+# observations, f being the observed annualization factor of the series it reads: a month holds 21
+# observations of a series quoted Monday to Friday and 30 of one quoted every day. The output states
+# both, and the history floor is counted in the observations the horizon compounds.
+# ---------------------------------------------------------------------------
+
+VAR_RETURNS = [round(0.012 * math.sin(index * 0.7) - 0.004 * math.cos(index * 1.3), 10) for index in range(60)]
+WEEKDAY_FACTOR = 365 * 5 / 7  # the observed factor of a series quoted Monday to Friday, ≈ 260.7
+
+
+def var_context(returns: list[float], annualization_factor: float | None) -> RiskExecutionContext:
+    """An asset scope reading `returns`, with the observed factor under test."""
+    context = make_context({1: returns, 2: returns}, scope_kind=RiskScopeKind.ASSET, scope_asset_ids=(1,))
+    return replace(context, annualization_factor=annualization_factor)
+
+
+@pytest.mark.parametrize(
+    ("annualization_factor", "horizon_days", "horizon_observations"),
+    [
+        pytest.param(252.0, 30, 21, id="a-month-of-a-252-a-year-series"),
+        pytest.param(WEEKDAY_FACTOR, 30, 21, id="a-month-of-a-weekday-series"),
+        pytest.param(252.0, 1, 1, id="a-day-is-never-less-than-one-observation"),
+        pytest.param(365.0, 30, 30, id="a-month-of-a-series-quoted-every-day"),
+    ],
+)
+def test_historical_var_compounds_the_observations_its_calendar_horizon_holds(annualization_factor, horizon_days, horizon_observations):
+    output = HistoricalVarAnalytic().compute(HistoricalVarParams(confidence_level=0.95, horizon_days=horizon_days), var_context(VAR_RETURNS, annualization_factor)).output
+    expected = historical_var_cvar(VAR_RETURNS, confidence_level=0.95, horizon_observations=horizon_observations)
+
+    # The request's calendar horizon is echoed; the observations it holds are stated beside it.
+    assert output.horizon_days == horizon_days
+    assert output.horizon_observations == horizon_observations
+    assert output.observations == len(VAR_RETURNS) - horizon_observations + 1
+    assert output.value_at_risk == pytest.approx(expected.value_at_risk, rel=1e-12)
+    assert output.conditional_value_at_risk == pytest.approx(expected.conditional_value_at_risk, rel=1e-12)
+
+
+def test_historical_var_counts_its_history_floor_in_horizon_observations():
+    # A month of a 252-a-year series is 21 observations: 40 returns leave 20 compounded windows,
+    # exactly the floor, and 39 leave one fewer.
+    enough = HistoricalVarAnalytic().compute(HistoricalVarParams(horizon_days=30), var_context(VAR_RETURNS[:40], 252.0)).output
+    assert (enough.horizon_observations, enough.observations) == (21, HistoricalVarAnalytic.min_observations)
+
+    with pytest.raises(RiskUnavailableError) as refused:
+        HistoricalVarAnalytic().compute(HistoricalVarParams(horizon_days=30), var_context(VAR_RETURNS[:39], 252.0))
+
+    assert refused.value.code == RiskErrorCode.INSUFFICIENT_HISTORY
+    details = refused.value.details
+    assert (details["horizon_days"], details["horizon_observations"], details["observations"], details["required"]) == (30, 21, 19, HistoricalVarAnalytic.min_observations)
+
+
+def test_historical_var_without_an_observed_factor_refuses_as_the_annualized_metrics_do():
+    context = var_context(VAR_RETURNS, None)
+    with pytest.raises(RiskUnavailableError) as annualized:
+        require_annualization_factor(context)
+
+    # Without f there is no telling how many observations a calendar horizon holds.
+    with pytest.raises(RiskUnavailableError) as refused:
+        HistoricalVarAnalytic().compute(HistoricalVarParams(horizon_days=30), context)
+
+    assert refused.value.code == annualized.value.code
+
+
+def test_historical_var_missing_both_its_series_and_its_factor_names_the_series_first():
+    context = replace(var_context(VAR_RETURNS, None), primary_returns=(), primary_return_dates=())
+
+    with pytest.raises(RiskUnavailableError) as refused:
+        HistoricalVarAnalytic().compute(HistoricalVarParams(horizon_days=30), context)
+
+    assert refused.value.code == RiskErrorCode.DATA_UNAVAILABLE
+
+
+def test_historical_var_calendar_horizon_is_a_new_algorithm_version():
+    assert HistoricalVarAnalytic.algorithm_version == "3.0.0"
+
+
+# ---------------------------------------------------------------------------
+# Simulation steps (developer's decision of 30/09/2026): the block bootstrap resamples observations,
+# so the plugin hands it the observed factor; GBM stays in calendar days. The drift's uncertainty,
+# a sample mean compounded over the horizon, is compounded over the observations the horizon holds.
+# ---------------------------------------------------------------------------
+
+SIMULATION_DRIVER = [0.01, -0.005, 0.002, -0.001, 0.004, -0.007] * 7
+
+
+def simulation_context(annualization_factor: float) -> RiskExecutionContext:
+    context = make_context({1: SIMULATION_DRIVER, 2: [value * 0.5 for value in SIMULATION_DRIVER]}, mode=RiskMode.CURRENT_COMPOSITION)
+    return replace(context, annualization_factor=annualization_factor)
+
+
+def bootstrap_params(horizon_days: int) -> SimulationParams:
+    return SimulationParams(horizon_days=horizon_days, path_count=256, bootstrap_seed=7)
+
+
+def gbm_params(horizon_days: int) -> SimulationParams:
+    return SimulationParams(horizon_days=horizon_days, path_count=256, random_seed=7)
+
+
+@pytest.fixture
+def engine_requests(monkeypatch) -> list:
+    """Answer every engine call with a flat result, and keep the request it was given."""
+    captured: list = []
+
+    async def fake_run_simulation(request, *, algorithm_version):
+        captured.append(request)
+        flat = [0.0] * (request.horizon_days + 1)
+        assets = len(request.asset_ids)
+        result = SimulationEngineResult(
+            percentile_paths=[flat, flat, flat],
+            terminal_mean_return=0.0,
+            terminal_volatility=0.0,
+            probability_of_loss=0.0,
+            terminal_asset_log_means=[0.0] * assets,
+            terminal_asset_log_covariance=[[0.0] * assets for _ in range(assets)],
+            # A resample always discloses its block; a parametric result never has one.
+            block_length_days=4 if request.process == RiskSimulationProcess.BLOCK_BOOTSTRAP else None,
+        )
+        return result, False, None
+
+    monkeypatch.setattr(simulation_plugin_module, "run_simulation", fake_run_simulation)
+    return captured
+
+
+@pytest.mark.asyncio
+async def test_simulation_hands_the_observed_factor_to_the_bootstrap_and_not_to_gbm(engine_requests):
+    context = simulation_context(252.0)
+
+    await SimulationAnalytic().execute(bootstrap_params(30), context)
+    await SimulationAnalytic().execute(gbm_params(30), context)
+
+    bootstrap, gbm = engine_requests
+    assert bootstrap.process == RiskSimulationProcess.BLOCK_BOOTSTRAP
+    assert bootstrap.steps_per_year == 252.0
+    # The horizon still travels in calendar days: the engine converts it.
+    assert bootstrap.horizon_days == 30
+    assert gbm.process == RiskSimulationProcess.GBM
+    assert gbm.steps_per_year is None
+    assert gbm.horizon_days == 30
+
+
+@pytest.mark.parametrize("params", [pytest.param(bootstrap_params, id="block-bootstrap"), pytest.param(gbm_params, id="gbm")])
+@pytest.mark.asyncio
+async def test_drift_uncertainty_compounds_over_the_observations_the_horizon_holds(engine_requests, params):
+    context = simulation_context(252.0)
+
+    output = (await SimulationAnalytic().execute(params(365), context)).output
+
+    returns = {1: SIMULATION_DRIVER, 2: [value * 0.5 for value in SIMULATION_DRIVER]}
+    weights = [context.weights[1], context.weights[2]]
+    # A year of a 252-a-year series is 252 observations, not 365.
+    expected, observations = estimate_drift_uncertainty(returns, (1, 2), weights, horizon_observations=252)
+    over_calendar_days, _ = estimate_drift_uncertainty(returns, (1, 2), weights, horizon_observations=365)
+    assert output.drift_uncertainty_factor == pytest.approx(expected, rel=1e-12)
+    assert output.drift_uncertainty_factor != pytest.approx(over_calendar_days, rel=1e-6)
+    assert output.drift_uncertainty_observations == observations
+    # The bands are still one per calendar day.
+    assert len(output.percentile_bands) == 366
+
+
+def test_simulation_steps_are_a_new_algorithm_version():
+    assert SimulationAnalytic.algorithm_version == "4.0.0-bootstrap-quantlib-1.43"
+
+
+@pytest.mark.asyncio
+async def test_the_plugin_compares_a_block_with_the_history_in_observations(engine_requests):
+    driver = SIMULATION_DRIVER[:30]
+    context = replace(make_context({1: driver, 2: [value * 0.5 for value in driver]}, mode=RiskMode.CURRENT_COMPOSITION), annualization_factor=252.0)
+
+    # 40 calendar days of a 252-a-year series are 28 observations: they fit in 30, and the engine
+    # receives the block in calendar days, to convert it the same way.
+    await SimulationAnalytic().execute(SimulationParams(horizon_days=30, path_count=256, bootstrap_seed=7, block_length_days=40), context)
+    (request,) = engine_requests
+    assert request.block_length_days == 40
+
+    # 50 days are 35 observations: still refused as the user's choice, naming both units.
+    with pytest.raises(RiskUnavailableError) as refused:
+        await SimulationAnalytic().execute(SimulationParams(horizon_days=30, path_count=256, bootstrap_seed=7, block_length_days=50), context)
+
+    assert refused.value.code == RiskErrorCode.INVALID_PARAMETERS
+    details = refused.value.details
+    assert (details["block_length_days"], details["block_length_observations"], details["observations"]) == (50, 35, 30)
+    assert len(engine_requests) == 1
 
 
 @pytest.mark.asyncio

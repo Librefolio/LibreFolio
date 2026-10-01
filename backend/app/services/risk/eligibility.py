@@ -25,9 +25,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Iterable, Mapping, Optional, Sequence
+from typing import AbstractSet, Iterable, Mapping, Optional, Sequence
 
-from sqlalchemy import and_, case, func, select
+from sqlalchemy import and_, case, func, not_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, PriceHistory
@@ -41,9 +41,9 @@ from backend.app.services.fx import convert_bulk
 class PriceWindowFacts:
     """What one asset's own quotes say about one window.
 
-    A quote is a stored price row. Rows a provider writes for days its market was closed (a weekend
-    repeating Friday's close) are quotes too: the price pipeline treats them as fresh, and so does
-    this reading.
+    A quote is a stored price row, except a stored carry: a row dated on a weekend or a market holiday
+    that repeats the close of the row before it (developer's decision of 30/09/2026, see
+    `market_calendar`). Such rows are left out of every fact below.
     """
 
     first_quote: Optional[date]
@@ -226,28 +226,40 @@ async def load_price_window_facts(
     window_start: date,
     window_end: date,
     target_currency: str,
+    market_holidays: AbstractSet[date] = frozenset(),
 ) -> dict[int, PriceWindowFacts]:
-    """Read the facts of every asset for one window: one aggregate query, plus one FX probe per currency."""
+    """Read the facts of every asset for one window: one aggregate query, plus one FX probe per currency.
+
+    The query skips stored carries — weekend or `market_holidays` rows repeating the close before them —
+    with the same rule the series preparation applies (`market_calendar.is_market_closed_repeat`).
+    """
     ids = sorted(set(asset_ids))
     if not ids:
         return {}
 
-    up_to_end = PriceHistory.date <= window_end
-    in_window = and_(PriceHistory.date >= window_start, up_to_end)
+    previous_close = func.lag(PriceHistory.close).over(partition_by=PriceHistory.asset_id, order_by=PriceHistory.date)
+    ordered = select(PriceHistory.asset_id.label("asset_id"), PriceHistory.date.label("date"), PriceHistory.close.label("close"), previous_close.label("previous_close")).where(PriceHistory.asset_id.in_(ids)).subquery("ordered")
+    closed_day = func.strftime("%w", ordered.c.date).in_(("0", "6"))
+    holidays = sorted(day for day in market_holidays if day <= window_end)
+    if holidays:
+        closed_day = or_(closed_day, ordered.c.date.in_(holidays))
+    carry = and_(closed_day, ordered.c.previous_close.is_not(None), ordered.c.close == ordered.c.previous_close)
+    quotes = select(ordered.c.asset_id, ordered.c.date).where(not_(carry)).subquery("quotes")
+
+    up_to_end = quotes.c.date <= window_end
+    in_window = and_(quotes.c.date >= window_start, up_to_end)
     rows = (
         await session.execute(
             select(
-                PriceHistory.asset_id,
-                func.min(case((up_to_end, PriceHistory.date))),
-                func.max(case((up_to_end, PriceHistory.date))),
-                func.max(case((PriceHistory.date < window_start, PriceHistory.date))),
+                quotes.c.asset_id,
+                func.min(case((up_to_end, quotes.c.date))),
+                func.max(case((up_to_end, quotes.c.date))),
+                func.max(case((quotes.c.date < window_start, quotes.c.date))),
                 func.sum(case((in_window, 1), else_=0)),
-                func.min(case((in_window, PriceHistory.date))),
-                func.min(PriceHistory.date),
-                func.max(PriceHistory.date),
-            )
-            .where(PriceHistory.asset_id.in_(ids))
-            .group_by(PriceHistory.asset_id)
+                func.min(case((in_window, quotes.c.date))),
+                func.min(quotes.c.date),
+                func.max(quotes.c.date),
+            ).group_by(quotes.c.asset_id)
         )
     ).all()
     by_asset = {asset_id: (first, last, before, int(count or 0), first_in, first_ever, last_ever) for asset_id, first, last, before, count, first_in, first_ever, last_ever in rows}

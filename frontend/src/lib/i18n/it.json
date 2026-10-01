@@ -1165,15 +1165,16 @@
       "period": "Lunghezza della memoria del filtro in giorni. Valori più alti = più liscio ma risposta più lenta.",
       "offset": "Spostamento verticale come percentuale del valore base. Sposta il segnale in alto o in basso.",
       "currencyPair": "Seleziona una coppia FX per sovrapporre i dati del tasso di cambio sul grafico.",
-      "emaPeriod": "Finestra di osservazione in giorni. Corrisponde al coefficiente $\\alpha = 2/(N+1)$. Più corto = reazione veloce, più lungo = più liscio.",
-      "fastPeriod": "Finestra EMA a breve termine per la linea veloce del MACD. Standard: 12 giorni. Valori più bassi reagiscono più rapidamente.",
-      "slowPeriod": "Finestra EMA a lungo termine per la linea lenta del MACD. Standard: 26 giorni. Valori più alti catturano il trend di fondo.",
-      "signalPeriod": "Smussamento EMA applicato alla linea MACD. Standard: 9 giorni. Riduce il rumore nei segnali di incrocio.",
+      "emaPeriod": "Finestra di osservazione in sedute, i giorni con una quotazione. Corrisponde al coefficiente $\\alpha = 2/(N+1)$. Più corto = reazione veloce, più lungo = più liscio.",
+      "fastPeriod": "Finestra EMA a breve termine per la linea veloce del MACD. Standard: 12 sedute. Valori più bassi reagiscono più rapidamente.",
+      "slowPeriod": "Finestra EMA a lungo termine per la linea lenta del MACD. Standard: 26 sedute. Valori più alti catturano il trend di fondo.",
+      "signalPeriod": "Smussamento EMA applicato alla linea MACD. Standard: 9 sedute. Riduce il rumore nei segnali di incrocio.",
       "multiplier": "Numero di deviazioni standard ($k \\cdot \\sigma$). $k=2$ copre ~95% dei valori assumendo distribuzione normale.",
       "overbought": "Livello sopra il quale l'asset è considerato ipercomprato. Standard: 70. Valori vicini a 100 indicano forte pressione d'acquisto.",
       "oversold": "Livello sotto il quale l'asset è considerato ipervenduto. Standard: 30. Valori vicini a 0 indicano forte pressione di vendita.",
       "assetComparison": "Seleziona un asset per sovrapporne il prezzo su questo grafico. In modalità percentuale, entrambe le curve partono da 0%.",
-      "fxPair": "Seleziona una coppia FX per sovrapporne il tasso su questo grafico. In modalità percentuale, entrambe le curve partono da 0%."
+      "fxPair": "Seleziona una coppia FX per sovrapporne il tasso su questo grafico. In modalità percentuale, entrambe le curve partono da 0%.",
+      "sessionPeriod": "Finestra di osservazione in sedute, i giorni con una quotazione. Valori più alti = più liscio ma risposta più lenta."
     },
     "macdLineColor": "Colore Linea MACD",
     "noDataAvailable": "Nessun dato disponibile. Prova a sincronizzare questo asset/coppia.",
@@ -1524,7 +1525,8 @@
       "navigate_asset": "Vedi asset",
       "navigate_fx": "Vedi FX",
       "add_fx_pair": "Aggiungi coppia FX",
-      "sync_fx_pair": "Sincronizza"
+      "sync_fx_pair": "Sincronizza",
+      "sync_asset_prices": "Sincronizza"
     },
     "referencePriceFallback": "Prezzo di apertura del lotto non disponibile alla data esatta — usato come riferimento l'ultimo prezzo noto {reference_price} per il rendimento relativo",
     "referencePriceUnavailable": "Nessun prezzo di riferimento disponibile per l'apertura di un lotto — rendimento relativo non calcolabile",
@@ -2442,7 +2444,8 @@
       "riskFullHistory": "Misura il drawdown rispetto al picco più alto di tutta la storia disponibile, non solo della finestra visibile. Disattiva per una vista più veloce relativa alla finestra."
     },
     "units": {
-      "days": "giorni"
+      "days": "giorni",
+      "sessions": "sedute"
     },
     "visual": {
       "components": "Componenti",
@@ -3106,7 +3109,7 @@
         "blankNote": "Un trattino significa che la misura non è stata possibile per quell'asset su questa finestra — non significa zero.",
         "l1": {
           "title": "Quanto ha fatto male ciascuno?",
-          "description": "La stessa scala del danno, chiesta a ogni asset selezionato. Solo percentuali: un insieme di asset non ha pesi, quindi non c'è un importo da affiancare.",
+          "description": "Per ogni asset selezionato, quanto ha perso nei momenti peggiori del periodo: la giornata storta, il mese storto, la discesa più profonda e quanto è ancora sotto il suo massimo.",
           "lastedDays": "durata {days} g",
           "columns": {
             "badDay": "Giornata storta",
@@ -3114,15 +3117,30 @@
             "worstFall": "Peggior discesa",
             "currentFall": "Sotto il massimo",
             "toPeak": "Risalita al massimo"
+          },
+          "columnHelp": {
+            "badDay": "La perdita media nel 5% dei giorni peggiori della finestra (CVaR storico al 95%).",
+            "badMonth": "Come la giornata storta, ma su un tratto più lungo di giorni consecutivi: la perdita media nel 5% dei tratti peggiori (CVaR storico al 95%).",
+            "worstFall": "La caduta più profonda da un massimo al punto più basso che l'ha seguito nella finestra, e quanto è durata.",
+            "currentFall": "Quanto l'asset è sotto il suo massimo della finestra, all'ultimo giorno.",
+            "toPeak": "Quanto deve risalire per tornare a quel massimo: dopo una caduta del 20% serve +25%."
           }
         },
         "l3": {
           "title": "Quanto ha pagato ciascuno per il suo rischio?",
-          "description": "Rischio contro rendimento, un punto per asset. Non ci passa nessuna retta: una selezione non ha un tutto, quindi non c'è niente sopra o sotto cui stare.",
-          "expectedReturn": "Rendimento atteso",
+          "description": "Per ogni asset selezionato, quanto ha oscillato e quanto ha reso in media all'anno, nel grafico e nella tabella; con un benchmark scelto nella Dashboard, anche quanto si è mosso insieme a lui.",
+          "expectedReturn": "Rendimento medio annuo",
           "correlation": "Correlazione",
-          "noBenchmark": "Scegli un benchmark nella Dashboard per aggiungere beta e correlazione. Un benchmark che è già nella selezione non può fare da metro a sé stesso.",
-          "scatterNote": "I punti mostrano il rendimento atteso in media-varianza: su un asset molto volatile il rendimento realmente vissuto è più basso, perché la volatilità erode il composto."
+          "scatterNote": "Ogni punto è un asset: l'asse orizzontale dice quanto ha oscillato, quello verticale quanto ha reso in media all'anno. Per un asset molto volatile la media è più alta di quanto ha reso davvero.",
+          "columnHelp": {
+            "volatility": "Quanto oscillano i rendimenti dell'asset, su base annua: la deviazione standard dei rendimenti del periodo, annualizzata.",
+            "expectedReturn": "La media dei rendimenti del periodo, riportata a un anno con la frequenza delle quotazioni. Descrive il passato, non è una previsione. Per un asset molto volatile è più alta di quanto ha reso davvero, perché le oscillazioni erodono il rendimento composto.",
+            "sortino": "Quanto rendimento medio annuo per ogni unità di oscillazione verso il basso: guarda solo le cadute, non le salite.",
+            "sharpe": "Quanto rendimento medio annuo per ogni unità di volatilità: il compenso per il rischio preso, salite e cadute insieme.",
+            "beta": "Quanto si è mosso l'asset quando si muoveva il benchmark: 1 vuol dire come lui, 2 il doppio, 0 indipendentemente da lui.",
+            "correlation": "Quanto l'asset e il benchmark si sono mossi insieme, da −1 (sempre opposti) a +1 (sempre insieme)."
+          },
+          "axisReturn": "Rendimento medio annuo"
         }
       },
       "legend": {
@@ -3155,7 +3173,12 @@
       },
       "selectedCountHint": "Il primo numero conta gli asset che il laboratorio sta analizzando adesso. Il secondo conta quanti ne potrebbe analizzare nel periodo scelto: tutti gli asset presenti in LibreFolio, non solo quelli che possiedi, purché abbiano abbastanza prezzi in quel periodo. Quelli che non li hanno li trovi comunque nel «+», in sola lettura, con il motivo.",
       "parkedNote": "{count, plural, one {# asset scelto non è analizzabile nel periodo e resta fuori dall'analisi.} other {# asset scelti non sono analizzabili nel periodo e restano fuori dall'analisi.}}",
-      "eligibilityFailed": "Non è stato possibile verificare l'idoneità: tutti gli asset restano selezionabili."
+      "eligibilityFailed": "Non è stato possibile verificare l'idoneità: tutti gli asset restano selezionabili.",
+      "fitPeriod": {
+        "banner": "Con il periodo scelto, {count, plural, one {# asset scelto non ha prezzi} other {# asset scelti non hanno prezzi}} per una parte dell'intervallo.",
+        "button": "Usa il periodo in cui tutti hanno prezzi (dal {start} al {end})",
+        "hint": "Sposta il periodo in alto sull'intervallo in cui sono quotati tutti gli asset scelti che hanno prezzi. Tornano nell'analisi: {names}."
+      }
     },
     "metrics": {
       "volatility": "Volatilità",
@@ -3529,6 +3552,9 @@
         "ineligible": "Non analizzabile nel periodo",
         "warning": "Analizzabile, con un avviso"
       }
+    },
+    "benchmark": {
+      "measuredHere": "Questo benchmark è anche un asset misurato qui e non può fare da metro a sé stesso: scegline un altro per il confronto."
     }
   },
   "updateCheck": {

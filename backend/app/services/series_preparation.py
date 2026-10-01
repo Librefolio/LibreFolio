@@ -6,6 +6,7 @@ import hashlib
 import json
 import math
 from collections.abc import Sequence
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -16,7 +17,7 @@ from backend.app.schemas.portfolio import (
     DataQualityExclusionReason,
     DataQualityReport,
 )
-from backend.app.schemas.prices import FAPricePoint, FAPriceQueryResult
+from backend.app.schemas.prices import AssetBackwardFillInfo, FAPricePoint, FAPriceQueryResult
 from backend.app.schemas.risk import (
     AssetReturnPoint,
     AssetReturnSeries,
@@ -26,6 +27,7 @@ from backend.app.schemas.risk import (
     PreparedAssetSeriesSet,
 )
 from backend.app.services.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
+from backend.app.services.market_calendar import is_market_closed_repeat
 
 
 def date_is_within_range(
@@ -105,6 +107,7 @@ class _AssetSeriesInput:
     all_points: dict[date, FAPricePoint]
     target_points: dict[date, FAPricePoint]
     warnings: tuple[str, ...]
+    quote_dates: tuple[date, ...] = ()
 
 
 def _indexed_points(
@@ -124,6 +127,46 @@ def _indexed_points(
 def _price_is_fresh(point: FAPricePoint) -> bool:
     info = point.backward_fill_info
     return info is None or info.days_back == 0
+
+
+def mark_market_closed_carries(points: dict[date, FAPricePoint], market_holidays: AbstractSet[date]) -> dict[date, FAPricePoint]:
+    """Turn every stored carry into a carried point (developer's decision of 30/09/2026).
+
+    A stored row dated on a weekend or a market holiday whose native close repeats the row before it
+    is not a quote: its date must not enter the calendar as an observation, and where another asset's
+    quote puts that date in the calendar anyway, this asset's value there is carried from its last
+    quote. See `market_calendar`.
+    """
+    marked: dict[date, FAPricePoint] = {}
+    previous: FAPricePoint | None = None
+    previous_effective: date | None = None
+    for point_date, point in points.items():
+        stored = point
+        if (
+            _price_is_fresh(point)
+            and previous is not None
+            and previous_effective is not None
+            and (previous.original_currency or previous.currency) == (point.original_currency or point.currency)
+            and is_market_closed_repeat(
+                point_date,
+                point.original_close if point.original_close is not None else point.close,
+                previous.original_close if previous.original_close is not None else previous.close,
+                market_holidays,
+            )
+        ):
+            info = point.backward_fill_info
+            carried = AssetBackwardFillInfo(
+                actual_rate_date=previous_effective,
+                days_back=(point_date - previous_effective).days,
+                fx_rate_date=info.fx_rate_date if info is not None else None,
+                fx_days_back=info.fx_days_back if info is not None else None,
+            )
+            point = point.model_copy(update={"backward_fill_info": carried})
+        info = point.backward_fill_info
+        previous_effective = info.actual_rate_date if info is not None and info.days_back else point_date
+        previous = stored
+        marked[point_date] = point
+    return marked
 
 
 def _valuation_point(
@@ -181,8 +224,13 @@ def prepare_asset_series_set(  # noqa: C901 — sequential pipeline stages with 
     *,
     requested_range: DateRangeModel,
     target_currency: str,
+    market_holidays: AbstractSet[date] = frozenset(),
 ) -> PreparedAssetSeriesSet:
-    """Build one converted-price joint calendar, then derive simple returns."""
+    """Build one converted-price joint calendar, then derive simple returns.
+
+    A stored carry — a weekend or `market_holidays` row repeating the close before it — is read as a
+    carried point, not a quote (see `market_calendar`); weekends apply even with no holiday table.
+    """
     target_currency = Currency.validate_code(target_currency)
     requested_end = requested_range.end or requested_range.start
     asset_ids = [result.asset_id for result in price_results]
@@ -194,7 +242,7 @@ def prepare_asset_series_set(  # noqa: C901 — sequential pipeline stages with 
     warnings: set[str] = set()
     missing_fx_pairs: set[str] = set()
     for result in price_results:
-        all_points = _indexed_points(result, requested_end)
+        all_points = mark_market_closed_carries(_indexed_points(result, requested_end), market_holidays)
         target_points = {point_date: point for point_date, point in all_points.items() if point.currency == target_currency}
         warnings.update(result.errors)
         missing_fx_pairs.update(f"{point.currency}/{target_currency}" for point in all_points.values() if requested_range.start <= point.date <= requested_end and point.currency is not None and point.currency != target_currency)
@@ -215,6 +263,7 @@ def prepare_asset_series_set(  # noqa: C901 — sequential pipeline stages with 
                 all_points=all_points,
                 target_points=target_points,
                 warnings=tuple(result.errors),
+                quote_dates=tuple(point_date for point_date, point in target_points.items() if requested_range.start <= point_date <= requested_end and _price_is_fresh(point)),
             )
         )
 
@@ -266,6 +315,7 @@ def prepare_asset_series_set(  # noqa: C901 — sequential pipeline stages with 
                     target_currency=target_currency,
                     warnings=list(item.warnings),
                 ),
+                quote_dates=list(item.quote_dates),
             )
             for item in active
         ]
@@ -339,6 +389,7 @@ def prepare_asset_series_set(  # noqa: C901 — sequential pipeline stages with 
                     points=return_points,
                     warnings=list(item.warnings),
                 ),
+                quote_dates=list(item.quote_dates),
             )
         )
 
@@ -396,6 +447,7 @@ __all__ = [
     "distance_slots",
     "fx_content_fingerprint",
     "gap_slots",
+    "mark_market_closed_carries",
     "observed_annualization",
     "prepare_asset_series_set",
 ]

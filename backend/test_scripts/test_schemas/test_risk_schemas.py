@@ -566,6 +566,7 @@ def test_risk_result_contract_enforces_status_and_var_tail_ordering():
         RiskVarCvarOutput(
             confidence_level=0.95,
             horizon_days=1,
+            horizon_observations=1,
             observations=4,
             value_at_risk=0.2,
             conditional_value_at_risk=0.1,
@@ -1015,6 +1016,7 @@ def _chart_var_cvar_payload(**overrides):
     base = {
         "confidence_level": 0.95,
         "horizon_days": 1,
+        "horizon_observations": 1,
         "observations": 40,
         "value_at_risk": 0.031,
         "conditional_value_at_risk": 0.042,
@@ -1257,7 +1259,9 @@ def test_var_cvar_chart_fields_are_omissible_because_the_additive_design_rests_o
     # list, so a future required field added to the model fails here too rather than
     # escaping a stale literal.
     pre_k1 = {key: value for key, value in _chart_var_cvar_payload().items() if key not in {"return_bins", "var_bin_edge"}}
-    assert set(pre_k1) == {"confidence_level", "horizon_days", "observations", "value_at_risk", "conditional_value_at_risk"}
+    # `horizon_observations` is required on purpose (developer's decision of 30/09/2026): the
+    # tripwire fired as designed, and the new field is acknowledged here rather than escaping it.
+    assert set(pre_k1) == {"confidence_level", "horizon_days", "horizon_observations", "observations", "value_at_risk", "conditional_value_at_risk"}
 
     output = RiskVarCvarOutput(**pre_k1)
     assert output.return_bins == []
@@ -1502,3 +1506,48 @@ def test_a_weightless_asset_set_output_has_no_excluded_weight_to_state():
     with pytest.raises(ValidationError) as exc_info:
         RiskAssetSetReturnOutput(items=[RiskAssetSetReturnItem(asset_id=1, volatility=0.2, expected_annual_return=0.1)], excluded_weight=0.0)
     assert [error["type"] for error in exc_info.value.errors()] == ["extra_forbidden"]
+
+
+# =============================================================================
+# VaR horizons in calendar days (developer's decision of 30/09/2026)
+#
+# `horizon_days` echoes the request's calendar horizon; `horizon_observations` states how many
+# observations it compounded — 21 for a month of a weekday series, 30 for one quoted every day. It is
+# required, at least one, and it must survive the discriminated union, or a client would read a
+# calendar month as if it were 30 trading days.
+# =============================================================================
+
+
+def _var_outputs():
+    single = _chart_var_cvar_payload(horizon_days=30, horizon_observations=21, observations=20)
+    per_asset = {"confidence_level": 0.95, "horizon_days": 30, "horizon_observations": 21, "observations": 20, "items": [{"asset_id": 1, "value_at_risk": 0.03, "conditional_value_at_risk": 0.04}]}
+    return [
+        pytest.param(RiskVarCvarOutput, single, id="var_cvar"),
+        pytest.param(RiskAssetSetVarCvarOutput, per_asset, id="var_cvar_set"),
+    ]
+
+
+@pytest.mark.parametrize(("model", "payload"), _var_outputs())
+def test_var_outputs_state_the_observations_their_calendar_horizon_compounded(model, payload):
+    output = model(**payload)
+
+    assert (output.horizon_days, output.horizon_observations) == (30, 21)
+    restored = TypeAdapter(RiskAnalyticOutput).validate_python(output.model_dump(mode="json"))
+    assert isinstance(restored, model)
+    assert restored.horizon_observations == 21
+    assert restored.model_dump(mode="json") == output.model_dump(mode="json")
+
+
+@pytest.mark.parametrize(("model", "payload"), _var_outputs())
+def test_var_outputs_require_at_least_one_horizon_observation(model, payload):
+    missing = {key: value for key, value in payload.items() if key != "horizon_observations"}
+    with pytest.raises(ValidationError) as absent:
+        model(**missing)
+    assert [(error["loc"], error["type"]) for error in absent.value.errors()] == [(("horizon_observations",), "missing")]
+
+    for invalid in (0, -21):
+        with pytest.raises(ValidationError) as below:
+            model(**{**payload, "horizon_observations": invalid})
+        assert [error["loc"] for error in below.value.errors()] == [("horizon_observations",)]
+
+    assert model(**{**payload, "horizon_observations": 1}).horizon_observations == 1
