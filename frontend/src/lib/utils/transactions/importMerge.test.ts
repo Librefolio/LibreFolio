@@ -338,3 +338,44 @@ describe('U6: buildMergedTransactions — the database verdict, kept apart from 
         expect(txArr[2].dupMatches.map((m) => m.existing_tx_id)).toEqual([703]);
     });
 });
+
+describe('C2: buildMergedTransactions — rows before the broker history (H0)', () => {
+    // The parse of a combined report-set file carries `history_start` (H0): what precedes it is
+    // already represented in LibreFolio, so those rows start deselected, like the rows before the
+    // broker opening. H0 itself is in the history: its rows keep the usual default.
+    const cashRow = (date: string) => ({type: 'FEE', date, quantity: 0});
+
+    it('starts every row dated before H0 deselected', () => {
+        const results = [src('combined', 1, {history_start: '2020-02-03', transactions: [cashRow('2019-01-07'), cashRow('2019-12-31'), cashRow('2020-02-02')]})];
+        const {txArr} = buildMergedTransactions(results, [{id: 1}], []);
+        expect(txArr.map((t) => t.selected)).toEqual([false, false, false]);
+    });
+
+    it('reads H0 per response: a row before H0 in one file, the same date in a file without H0', () => {
+        const results = [src('combined', 1, {history_start: '2020-02-03', transactions: [cashRow('2019-12-31')]}), src('generic', 1, {transactions: [cashRow('2019-12-31')]})];
+        const {txArr} = buildMergedTransactions(results, [{id: 1}], []);
+        expect(txArr.map((t) => [t.sourceFileId, t.selected])).toEqual([
+            ['combined', false],
+            ['generic', true],
+        ]);
+    });
+
+    it('keeps the usual default on H0 and after it (unchanged behaviour)', () => {
+        const results = [
+            src('combined', 1, {
+                history_start: '2020-02-03',
+                transactions: [cashRow('2020-02-03'), cashRow('2020-02-04'), cashRow('2020-03-31')],
+                duplicates: {tx_likely_duplicates: [{tx_row_index: 2, tx_existing_matches: [{existing_tx_id: 900}]}]},
+            }),
+        ];
+        const {txArr} = buildMergedTransactions(results, [{id: 1}], []);
+        // On H0 and after: auto-selected unless the usual rules say otherwise (a likely duplicate).
+        expect(txArr.map((t) => t.selected)).toEqual([true, true, false]);
+    });
+
+    it('leaves a response with a null H0 as it was (unchanged behaviour)', () => {
+        const results = [src('combined', 1, {history_start: null, transactions: [cashRow('2019-12-31')]})];
+        const {txArr} = buildMergedTransactions(results, [{id: 1}], []);
+        expect(txArr[0].selected).toBe(true);
+    });
+});

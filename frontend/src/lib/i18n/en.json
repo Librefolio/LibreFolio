@@ -742,7 +742,84 @@
       "body": "Link an existing asset or create it manually. Future imports will recognize its saved identifier when the match is unique."
     },
     "selectionChangedReview": "The final duplicate check changed the selection. Review it before importing.",
-    "duplicatesChangedReview": "The final duplicate check found new or changed duplicates between your files. Review them before importing."
+    "duplicatesChangedReview": "The final duplicate check found new or changed duplicates between your files. Review them before importing.",
+    "reportSet": {
+      "selectSet": "Select the whole set",
+      "setLabel": "Set uploaded on {date} · {plugin}",
+      "fileCount": "{n} file(s)",
+      "setCount": "{n} set(s) of exports",
+      "status": {
+        "complete": "Complete",
+        "missing": "A file is missing",
+        "incomplete": "Cannot be combined",
+        "loading": "Checking…",
+        "error": "Check failed",
+        "analysed": "Already analysed"
+      },
+      "roleName": {
+        "custody": "Securities transactions",
+        "cash": "Cash statement"
+      },
+      "period": {
+        "years": "{n, plural, one {# year} other {# years}}",
+        "months": "{n, plural, one {# month} other {# months}}",
+        "days": "{n, plural, one {# day} other {# days}}"
+      },
+      "maxHistory": "the bank exports at most {period}",
+      "rows": "{n, plural, one {# row} other {# rows}}",
+      "missingRole": "Missing: {role} ({ext})",
+      "missingPeriod": "Needed at least from {start} to {end}, better until a few days later.",
+      "uploadMissing": "Upload the missing file",
+      "howToExport": "How to export it",
+      "howToExportBoth": "How to export the files",
+      "unrecognised": "Not recognised",
+      "historyFirst": "First import of this broker: at the end we propose the balance and the positions on {date}; from then on every movement is imported.",
+      "historyLater": "LibreFolio already holds this broker's history from {date}: the movements it already has will show up as duplicates, and the earlier ones are not imported again.",
+      "exclude": "Exclude from the import",
+      "selectedCount": "{sets} set(s) and {n} file(s) selected from {b} broker(s)",
+      "incompleteBlocks": "Continue is disabled while a selected set is incomplete: upload its missing file or exclude it.",
+      "step1Missing": "{plugin} also needs: {role} ({ext}).",
+      "step1MissingHint": "Drop it here: it joins the same set. You can also continue: the set will show as incomplete.",
+      "analyzeRowLabel": "Set of {date} · combined ({n} files)",
+      "beforeHistoryCount": "{n} already in LibreFolio (hidden)",
+      "showBeforeHistory": "show",
+      "hideBeforeHistory": "hide",
+      "beforeHistoryStatus": "Already in LibreFolio",
+      "beforeHistoryTooltip": "Before the start of this broker's history in LibreFolio: already represented, by the earlier imports or by the opening balance. It is not imported.",
+      "pairingTitle": "Matching securities ↔ cash",
+      "outcome": {
+        "pair": "pairs",
+        "standalone": "standalone rows",
+        "summarized": "summarised in a checkpoint",
+        "deferred": "with the next import",
+        "excluded": "excluded"
+      },
+      "reason": {
+        "no_counterpart": "no counterpart",
+        "ambiguous": "ambiguous",
+        "status": "not executed or not booked",
+        "unknown_type": "unknown type",
+        "invalid": "invalid",
+        "not_yet_settled": "not settled yet",
+        "outside_cash_coverage": "settled before the cash statement starts",
+        "superseded": "replaced by a newer file"
+      },
+      "downloadCombined": "Download the combined file",
+      "warning": {
+        "unknown_role": "A file is not an export this plugin combines: it stays out of the set.",
+        "excess_files": "Only one “{role}” export is allowed in a set.",
+        "coverage_starts_late": "The “{role}” export starts after the “{covered_role}” period ({date}): the trades settled earlier will be excluded. Export it from an earlier date.",
+        "coverage_ends_early": "The “{role}” export ends before the “{covered_role}” period ({date}): the trades of the last days will come with the next import.",
+        "mixed_accounts": "The files come from different accounts: upload the exports of one account only.",
+        "before_history_segment": "The period {start} – {end} is older than the history already in LibreFolio: it will not be imported.",
+        "covers_gap_fix": "A gap-fix correction of {date} falls inside this period: remove it after the import, or the cash counts twice.",
+        "gap": "No securities export covers {start} – {end}: the trades of that period are summarised. If the bank still has it, export it.",
+        "overlap_mismatch": "Two “{role}” exports disagree on {days} day(s) between {first} and {last}: the newer one is used for those days.",
+        "balance_chain_broken": "The running balance of the cash statement does not add up from {date}: the balances are only compared, not used for corrections.",
+        "empty_member": "A “{role}” export has no rows.",
+        "mixed_accounts_in_file": "A securities export contains several custody accounts."
+      }
+    }
   },
   "brokers": {
     "title": "Brokers",

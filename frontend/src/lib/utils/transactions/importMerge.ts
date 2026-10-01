@@ -132,6 +132,9 @@ export function buildMergedTransactions(parseResults: MergeSourceResult[], broke
             // already rules out a nullish date. Istanbul flags that `?? ''` as a half-covered
             // branch; it is dead by short-circuit, not an untested state. Left intentionally.
             const beforeOpening = openedAt != null && String(tx.date ?? '') !== '' && String(tx.date ?? '') < openedAt;
+            // A report set's rows before H0 are already represented in LibreFolio: never selected.
+            const historyStart = resp.history_start ? String(resp.history_start).slice(0, 10) : null;
+            const beforeHistory = historyStart !== null && String(tx.date ?? '') !== '' && String(tx.date ?? '').slice(0, 10) < historyStart;
 
             // Clone so re-mapping the fake asset id never mutates the stored parse result
             // (mergeAllTransactions may run again after a broker/opening edit).
@@ -176,7 +179,7 @@ export function buildMergedTransactions(parseResults: MergeSourceResult[], broke
                 index: globalIndex++,
                 sourceFileId: result.fileId,
                 tx: txClone,
-                selected: !beforeOpening && duplicateStatusAllowsAutoSelect(dupStatus),
+                selected: !beforeOpening && !beforeHistory && duplicateStatusAllowsAutoSelect(dupStatus),
                 duplicateStatus: dupStatus,
                 dbDuplicateStatus: dupStatus === 'likely' || dupStatus === 'possible' ? dupStatus : undefined,
                 dupMatches: dupMatchesMap.get(txIdx) ?? [],

@@ -742,7 +742,84 @@
       "body": "Associez un actif existant ou créez-le manuellement. Les prochains imports reconnaîtront son identifiant enregistré si la correspondance est unique."
     },
     "selectionChangedReview": "Le dernier contrôle des doublons a modifié la sélection. Vérifiez-la avant l'import.",
-    "duplicatesChangedReview": "Le dernier contrôle des doublons a trouvé des doublons nouveaux ou modifiés entre vos fichiers. Vérifiez-les avant l'import."
+    "duplicatesChangedReview": "Le dernier contrôle des doublons a trouvé des doublons nouveaux ou modifiés entre vos fichiers. Vérifiez-les avant l'import.",
+    "reportSet": {
+      "selectSet": "Sélectionner tout le lot",
+      "setLabel": "Lot téléversé le {date} · {plugin}",
+      "fileCount": "{n} fichier(s)",
+      "setCount": "{n} lot(s) d'exports",
+      "status": {
+        "complete": "Complet",
+        "missing": "Il manque un fichier",
+        "incomplete": "Impossible à combiner",
+        "loading": "Vérification…",
+        "error": "Échec de la vérification",
+        "analysed": "Déjà analysé"
+      },
+      "roleName": {
+        "custody": "Opérations sur titres",
+        "cash": "Relevé du compte espèces"
+      },
+      "period": {
+        "years": "{n, plural, one {# an} other {# ans}}",
+        "months": "{n, plural, one {# mois} other {# mois}}",
+        "days": "{n, plural, one {# jour} other {# jours}}"
+      },
+      "maxHistory": "la banque exporte au plus {period}",
+      "rows": "{n, plural, one {# ligne} other {# lignes}}",
+      "missingRole": "Manquant : {role} ({ext})",
+      "missingPeriod": "Nécessaire au moins du {start} au {end}, idéalement jusqu'à quelques jours après.",
+      "uploadMissing": "Téléverser le fichier manquant",
+      "howToExport": "Comment l'exporter",
+      "howToExportBoth": "Comment exporter les fichiers",
+      "unrecognised": "Non reconnus",
+      "historyFirst": "Premier import de ce courtier : à la fin, nous proposons le solde et les positions au {date} ; ensuite, chaque mouvement est importé.",
+      "historyLater": "LibreFolio a déjà l'historique de ce courtier depuis le {date} : les mouvements déjà présents apparaîtront comme doublons, et les précédents ne sont pas réimportés.",
+      "exclude": "Exclure de l'import",
+      "selectedCount": "{sets} lot(s) et {n} fichier(s) sélectionné(s) de {b} courtier(s)",
+      "incompleteBlocks": "Continuer est désactivé tant qu'un lot sélectionné est incomplet : téléversez le fichier manquant ou excluez-le.",
+      "step1Missing": "{plugin} a aussi besoin de : {role} ({ext}).",
+      "step1MissingHint": "Déposez-le ici : il rejoint le même lot. Vous pouvez aussi continuer : le lot apparaîtra incomplet.",
+      "analyzeRowLabel": "Lot du {date} · combiné ({n} fichiers)",
+      "beforeHistoryCount": "{n} déjà dans LibreFolio (masquées)",
+      "showBeforeHistory": "afficher",
+      "hideBeforeHistory": "masquer",
+      "beforeHistoryStatus": "Déjà dans LibreFolio",
+      "beforeHistoryTooltip": "Avant le début de l'historique de ce courtier dans LibreFolio : déjà représentée, par les imports précédents ou par le solde d'ouverture. Elle n'est pas importée.",
+      "pairingTitle": "Rapprochement titres ↔ espèces",
+      "outcome": {
+        "pair": "paires",
+        "standalone": "lignes autonomes",
+        "summarized": "résumées dans un point de contrôle",
+        "deferred": "au prochain import",
+        "excluded": "exclues"
+      },
+      "reason": {
+        "no_counterpart": "sans contrepartie",
+        "ambiguous": "ambiguës",
+        "status": "non exécutées ou non comptabilisées",
+        "unknown_type": "type inconnu",
+        "invalid": "invalides",
+        "not_yet_settled": "pas encore réglées",
+        "outside_cash_coverage": "réglées avant le début du relevé",
+        "superseded": "remplacées par un fichier plus récent"
+      },
+      "downloadCombined": "Télécharger le fichier combiné",
+      "warning": {
+        "unknown_role": "Un fichier n'est pas un export que ce plugin combine : il reste hors du lot.",
+        "excess_files": "Un seul export « {role} » est autorisé par lot.",
+        "coverage_starts_late": "L'export « {role} » commence après la période de « {covered_role} » ({date}) : les opérations réglées avant seront exclues. Exportez-le depuis une date antérieure.",
+        "coverage_ends_early": "L'export « {role} » se termine avant la période de « {covered_role} » ({date}) : les opérations des derniers jours arriveront au prochain import.",
+        "mixed_accounts": "Les fichiers proviennent de comptes différents : téléversez les exports d'un seul compte.",
+        "before_history_segment": "La période {start} – {end} est antérieure à l'historique déjà présent dans LibreFolio : elle ne sera pas importée.",
+        "covers_gap_fix": "Une correction gap-fix du {date} tombe dans cette période : supprimez-la après l'import, sinon les espèces comptent deux fois.",
+        "gap": "Aucun export de titres ne couvre {start} – {end} : les opérations de cette période sont résumées. Si la banque l'a encore, exportez-le.",
+        "overlap_mismatch": "Deux exports « {role} » diffèrent sur {days} jour(s) entre le {first} et le {last} : le plus récent est utilisé pour ces jours.",
+        "balance_chain_broken": "Le solde progressif du relevé ne concorde plus à partir du {date} : les soldes sont seulement comparés, pas utilisés pour les corrections.",
+        "empty_member": "Un export « {role} » ne contient aucune ligne.",
+        "mixed_accounts_in_file": "Un export de titres contient plusieurs comptes-titres."
+      }
+    }
   },
   "brokers": {
     "title": "Courtiers",
