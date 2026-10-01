@@ -2025,3 +2025,53 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
 - Alternativa scartata per ora: l'autenticazione fatta dal reverse proxy con un header («forward
   auth»), rischiosa se il backend è raggiungibile senza passare dal proxy.
 - Stima: qualche giorno, ben delimitato; non tocca i calcoli.
+
+## ⚡ Motore del portafoglio — caricare solo i prezzi che servono
+
+**Data aggiunta**: 1 Ottobre 2026 · **Status**: ⏳ IN ATTESA — dopo il merge della PR #28 ·
+**Priorità**: Media (prima va misurata)
+
+### Contesto
+- La PR [#28](https://github.com/Librefolio/LibreFolio/pull/28) (msov19) corregge `convert_bulk`.
+  La query dei cambi aveva solo il limite superiore e a ogni chiamata caricava tutta la storia della
+  coppia. Ora carica la finestra [ultimo cambio ≤ prima data richiesta, ultima data richiesta] e
+  cerca con `bisect`.
+- Banco di prova del coordinatore (01/10, 10 anni di cambi, 3.650 conversioni giornaliere):
+  - la ricerca passa da 120–200 ms a meno di 1 ms;
+  - nel `convert_bulk` completo (~17 ms) il `bisect` pesa ~4%; il resto è la query e la creazione
+    degli oggetti `Currency`.
+  - **Valutato e scartato**: sostituire il `bisect` con una ricerca O(1) (dizionario per data con
+    passo indietro, dizionario pre-riempito per ogni giorno, cursore). Risparmierebbe meno dell'1%;
+    il cursore non aiuta perché `portfolio_engine` passa le date in ordine sparso (le raccoglie in
+    un `set`).
+- Lo stesso schema della query dei cambi c'è nel motore del portafoglio:
+  - `backend/app/services/portfolio_engine.py:2452` precarica i prezzi con solo `date <= actual_to`,
+    come oggetti ORM completi (`select(PriceHistory)`);
+  - quindi legge tutta la storia di ogni asset posseduto, anche gli anni prima del primo acquisto o
+    del periodo richiesto (`actual_from = date_from or first_tx_date`, `:2386`).
+- A cosa servono i prezzi caricati:
+  - il calcolo dei giorni che cambiano (`:855`), che dei prezzi precedenti a `frame_start` usa solo
+    l'ultimo;
+  - il resolver `AssetPriceSeries` (`backend/app/services/price_resolver.py:146`), che con `bisect`
+    trova l'ultima osservazione ≤ data.
+- `get_prices_bulk` (`backend/app/services/asset_sources/price_query.py:149`), il corrispettivo di
+  `convert_bulk` per i prezzi, ha già la finestra con minimo e massimo.
+
+### Azione Futura
+- **Prima misurare**, su una copia dei dati reali: righe lette e tempo della query a `:2452` rispetto
+  al calcolo intero, con e senza `date_from`.
+- Se conviene:
+  - limitare la query a [ultimo prezzo ≤ `frame_start` per asset, `actual_to`], con la stessa
+    sottoquery «ancora» della PR #28;
+  - leggere solo le colonne usate (data, close, valuta; open/high/low solo con le candele), invece
+    degli oggetti ORM.
+- Da verificare prima: nessuno deve chiedere al resolver una data precedente a `frame_start`
+  (periodo pre-frame, intervalli in transito, prezzi alle date dei BUY). Altrimenti l'ancora va
+  presa dalla prima di quelle date.
+- Test:
+  - confronto differenziale del risultato del motore, prima e dopo, su più utenti e periodi, come
+    quello fatto per la PR #28;
+  - poi `services portfolio-engine`, `services roi-fifo-utils`, `api portfolio`.
+- Minori, solo se la misura lo giustifica, in `get_prices_bulk`: la finestra è unica per tutte le
+  richieste (minimo e massimo globali), e il prezzo «seme» si cerca con una query per asset. Si
+  possono fare per asset, in una query sola, come nella PR #28.
