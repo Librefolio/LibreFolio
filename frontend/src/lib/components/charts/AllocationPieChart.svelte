@@ -17,6 +17,7 @@
   - Asset Detail Page (metadata section, sector distribution)
 -->
 <script lang="ts">
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
     import {attachChartReady} from '$lib/utils/chartReady';
@@ -411,7 +412,7 @@
             // member share a display name ("Bonds") but not an amount, so a lookup by
             // name would give the family's arc the member's figure or vice versa.
             const absAmount = typeof params.data?.amount === 'number' ? params.data.amount : amountByName[params.name];
-            const amountLine = absAmount != null && absAmount > 0 ? `<br/><span style="font-size:11px;opacity:0.8">${formatCurrencyAmountPlain(absAmount, currency, {showSign: false})}</span>` : '';
+            const amountLine = absAmount != null && absAmount > 0 ? `<br/><span style="font-size:11px;opacity:0.8">${escapeHtml(formatCurrencyAmountPlain(absAmount, currency, {showSign: false}))}</span>` : '';
             if (mode === 'type') {
                 // Bugfix: same as above — use the raw backend type from the data item
                 // rather than re-deriving from the already-translated params.name.
@@ -422,7 +423,8 @@
                 const translated = params.data?.caption ?? (tr(`assets.types.${rawKey}`) || params.name);
                 // One icon, the type's own: a subtype's is K's composite, which already names
                 // its vehicle and its content (the review of R12, 24/09/2026, asked for both).
-                const iconHtml = `<img src="${getAssetTypeIconUrl(rawKey)}" style="width:14px;height:14px;vertical-align:middle;margin-right:5px;">`;
+                const iconUrl = getAssetTypeIconUrl(rawKey);
+                const iconHtml = `<img src="${escapeHtml(iconUrl)}" style="width:14px;height:14px;vertical-align:middle;margin-right:5px;">`;
                 // The shading says "this belongs to that mass"; this line says how big
                 // the mass is. Only when there is actually a sibling — otherwise it
                 // would restate the slice's own number.
@@ -445,7 +447,7 @@
                 return `${iconHtml}${translated}: ${params.value}%${amountLine}${parentLine}`;
             }
             // Sector: display name already contains the emoji prefix
-            return `${params.name}: ${params.value}%${amountLine}`;
+            return `${escapeHtml(String(params.name ?? ''))}: ${params.value}%${amountLine}`;
         };
 
         const option: echarts.EChartsOption = {

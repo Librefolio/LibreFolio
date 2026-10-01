@@ -101,13 +101,15 @@
             use:guideAnchor={tab.guideAnchor ?? ''}
             role="tab"
             aria-selected={activeTab === tab.id}
+            aria-label={tab.icon && showLabels === false ? tab.label : undefined}
             title={tab.label}
             onclick={() => handleTabClick(tab.id)}
         >
             {#if tab.icon}
                 <tab.icon size={18} />
             {/if}
-            <span bind:this={labelRefs[tab.id]} class={showLabels === false ? 'hidden' : showLabels === true ? '' : hideLabelOnMobile ? 'hidden sm:inline' : ''}>{tab.label}</span>
+            <!-- Only a tab with an icon may lose its label: an icon-less tab would be left empty. -->
+            <span bind:this={labelRefs[tab.id]} class={!tab.icon ? '' : showLabels === false ? 'hidden' : showLabels === true ? '' : hideLabelOnMobile ? 'hidden sm:inline' : ''}>{tab.label}</span>
             {#if tab.badge != null && tab.badge > 0}
                 <span class="text-[10px] px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 rounded-full">
                     {tab.badge}

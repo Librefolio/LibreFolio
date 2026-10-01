@@ -1,4 +1,5 @@
 <script lang="ts">
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
     /**
      * ScatterChart — risk against return, one dot per thing.
      *
@@ -143,8 +144,8 @@
                         const item = params.data;
                         if (!item?.value) return '';
                         const [volatility, annualReturn] = item.value;
-                        const name = (item.name ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-                        return [`<div style="font-weight:600">${name}</div>`, `<div style="margin-top:4px">${labels.volatility}: ${axisPercent(volatility)}</div>`, `<div>${labels.return}: ${formatPercent(annualReturn, {scale: 100, digits: 1})}</div>`].join('');
+                        const nameHtml = escapeHtml(String(item.name ?? ''));
+                        return [`<div style="font-weight:600">${nameHtml}</div>`, `<div style="margin-top:4px">${labels.volatility}: ${axisPercent(volatility)}</div>`, `<div>${labels.return}: ${formatPercent(annualReturn, {scale: 100, digits: 1})}</div>`].join('');
                     },
                 },
             },

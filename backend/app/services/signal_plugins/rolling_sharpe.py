@@ -74,7 +74,9 @@ class RollingSharpePlugin(SignalPlugin):
     """Compare rolling mean excess return with rolling sample volatility."""
 
     signal_code = "RISK_ROLLING_SHARPE"
-    implementation_version = "1.0.0"
+    # 1.1.0 — the prepared series drop stored carries and read the market holidays.
+    implementation_version = "1.1.0"
+    computes_on_quote_days = False
     display_name_key = "signals.riskRollingSharpe.name"
     description_key = "signals.riskRollingSharpe.description"
     semantic_id = "rolling_sharpe_ratio"

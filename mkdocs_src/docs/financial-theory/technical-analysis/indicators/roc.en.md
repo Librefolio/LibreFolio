@@ -24,7 +24,7 @@ This is simply a percentage $N$-period return, re-expressed as a running indicat
 
 | Parameter | Key | Default | Description |
 |---|---|---|---|
-| Period ($N$) | `period` | 12 | Number of days back used as the reference price. |
+| Period ($N$) | `period` | 12 | Number of sessions back used as the reference price. |
 
 ---
 

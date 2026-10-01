@@ -129,7 +129,7 @@ def _price_is_fresh(point: FAPricePoint) -> bool:
     return info is None or info.days_back == 0
 
 
-def _mark_market_closed_carries(points: dict[date, FAPricePoint], market_holidays: AbstractSet[date]) -> dict[date, FAPricePoint]:
+def mark_market_closed_carries(points: dict[date, FAPricePoint], market_holidays: AbstractSet[date]) -> dict[date, FAPricePoint]:
     """Turn every stored carry into a carried point (developer's decision of 30/09/2026).
 
     A stored row dated on a weekend or a market holiday whose native close repeats the row before it
@@ -242,7 +242,7 @@ def prepare_asset_series_set(  # noqa: C901 — sequential pipeline stages with 
     warnings: set[str] = set()
     missing_fx_pairs: set[str] = set()
     for result in price_results:
-        all_points = _mark_market_closed_carries(_indexed_points(result, requested_end), market_holidays)
+        all_points = mark_market_closed_carries(_indexed_points(result, requested_end), market_holidays)
         target_points = {point_date: point for point_date, point in all_points.items() if point.currency == target_currency}
         warnings.update(result.errors)
         missing_fx_pairs.update(f"{point.currency}/{target_currency}" for point in all_points.values() if requested_range.start <= point.date <= requested_end and point.currency is not None and point.currency != target_currency)
@@ -447,6 +447,7 @@ __all__ = [
     "distance_slots",
     "fx_content_fingerprint",
     "gap_slots",
+    "mark_market_closed_carries",
     "observed_annualization",
     "prepare_asset_series_set",
 ]

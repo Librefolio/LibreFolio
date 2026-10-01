@@ -273,6 +273,24 @@ def _storico_con_mic_retry(identifier: str, periodo: str, mic: str | None):
         return ottieni_storico(identifier, periodo=periodo, sessione=_get_session(), exchange=mic)
 
 
+def _price_api_currency(identifier: str, mic: str | None) -> str | None:
+    """Currency of the chart API that prices ``identifier``, or ``None`` when unknown.
+
+    ETF/ETC scheda pages often show only the fund's *denomination* currency
+    («Valuta di Denominazione USD»), while the instrument trades — and the chart API
+    prices it — in EUR on Borsa Italiana. Metadata must carry the currency the prices
+    will carry, so it is read from the same API ``get_history_value`` uses, with the
+    same ``"EUR"`` default for a reply without one. Any failure means unknown: a guess
+    read off the page would be worse than no answer.
+    """
+    try:
+        risultato = _storico_con_mic_retry(identifier, "1M", mic)
+    except Exception as e:  # best-effort — the currency lookup never sinks the metadata
+        logger.debug(f"Borsa Italiana: price-API currency lookup failed for '{identifier}': {e}")
+        return None
+    return risultato.valuta or "EUR"
+
+
 def _select_period(start_date: date, end_date: date) -> str:
     """Select the best API period to cover the requested date range.
 
@@ -695,10 +713,11 @@ class BorsaItalianaProvider(AssetSourceProvider):
         """Emit the canonical search-item set for a resolved stock/bond/ETF page.
 
         Mirrors :meth:`_fund_search_items_all_langs` for ISIN-priced instruments: the
-        scheda is fetched once (ISIN, currency and type are language-independent) and
-        one row per supported language is emitted with a flag suffix, so a web
-        link-finder hit behaves exactly like an on-site ``cerca`` result. Returns
-        ``None`` when the page can't be fetched or parsed.
+        scheda is fetched once (ISIN and type are language-independent) and one row
+        per supported language is emitted with a flag suffix, so a web link-finder
+        hit behaves exactly like an on-site ``cerca`` result. The currency comes from
+        one chart-API call shared by every row (see :func:`_price_api_currency`), not
+        from the scheda. Returns ``None`` when the page can't be fetched or parsed.
 
         ``url_diretto`` (the canonical page URL the link-finder found) bypasses the
         universal-URL redirect entirely — it rescues markets like EuroTLX when the
@@ -713,6 +732,7 @@ class BorsaItalianaProvider(AssetSourceProvider):
             return None
         asset_type = _map_asset_type(scheda.tipo)
         real_isin = scheda.isin or isin
+        currency = _price_api_currency(real_isin, mic)
         preferred = ("it", "en")
         emit_language_order = tuple(lg for lg in preferred if lg in self.SUPPORTED_LANGUAGES) + tuple(lg for lg in self.SUPPORTED_LANGUAGES if lg not in preferred)
         # The page URL we actually loaded (scheda.url_pagina = post-redirect canonical,
@@ -724,7 +744,7 @@ class BorsaItalianaProvider(AssetSourceProvider):
                 "identifier": real_isin,
                 "identifier_type": IdentifierType.ISIN,
                 "display_name": f"{scheda.nome} {self.LANGUAGE_FLAGS[lingua]}",
-                "currency": scheda.valuta or "EUR",
+                "currency": currency,
                 "type": asset_type.value if asset_type else scheda.tipo,
                 "provider_params": {
                     "language": lingua,
@@ -1056,10 +1076,16 @@ class BorsaItalianaProvider(AssetSourceProvider):
                 sector_area=sector_area,
             )
 
+            # The scheda's currency can be the fund's denomination (see
+            # _price_api_currency). When the API gives no answer the field stays
+            # unset: a metadata refresh then keeps the stored currency instead of
+            # blanking it (FAAssetPatchItem: present-even-if-None means UPDATE).
+            currency = _price_api_currency(identifier, mic)
+
             return FAAssetPatchItem(
                 asset_id=0,  # Placeholder — caller sets the real ID
                 display_name=f"{scheda.nome} {self.LANGUAGE_FLAGS[lingua]}",
-                currency=scheda.valuta,
+                **({"currency": currency} if currency else {}),
                 asset_type=asset_type,
                 classification_params=classification,
                 identifier_isin=identifier,
