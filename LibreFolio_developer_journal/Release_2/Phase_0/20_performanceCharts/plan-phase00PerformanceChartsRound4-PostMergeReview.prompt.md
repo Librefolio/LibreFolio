@@ -59,8 +59,9 @@ Indicatore di lettura rapida: va riletto **a ogni consegna**, non a ogni sospett
 | C6 | Checkpoint: emoji, tipi E2E, margini della Crescita e dei lotti, guardia `axisBuilder`, registri | C5 + merge con K | ✅ pronto 2026-09-29 15:27 · ✅ **committato 22:26**: 6 commit, `6d8b951bc`…`602ea299e`; merge `921f1fc05`, gate rapido verde (registri «Checkpoint C6 — committato» e «Gate rapido sulla revisione combinata `921f1fc05`»). Dopo: D23 con D23b |
 | C7 | Checkpoint: D23 + D23b (il segno del locale nei grafici, il colore dello zero), registri | C6 + merge `921f1fc05` | ✅ pronto 2026-09-30 00:07 · ✅ **committato 10:01**: `9d8fb520b`, `039baea22`; `dev_release2` già contenuto, nessun merge (registro «Checkpoint C7 — committato») |
 | C8 | Checkpoint: S7 (asse a scala di Candele e Proventi, riga «parziale» con `escapeHtml`), registri | S7 | ✅ pronto 2026-09-30 23:51: 3 commit su `039baea22` (il pianificatore; la cura di S7; il journal), il runner diviso fra i commit 1 e 2; prima la `desc` del runner e i doc di tre helper di test (registri «Checkpoint C8 — preparazione» e «Checkpoint C8 — pronto») · ✅ **committato 2026-10-01 11:04**: `7bfa064f0`, `69cba356f`, `de5349e46`; merge `851d3a5cf` con `dev_release2` (`8f18416df`: il passo 13 di K e le scelte di L), una regione risolta in `GrowthChart.svelte`, gate verde (registri «Checkpoint C8 — committato», «Allineamento a `dev_release2` — merge `851d3a5cf`» e «Gate sulla revisione combinata `851d3a5cf`»). Dopo: S7b |
+| C9 | Checkpoint: S7b (tacche del denaro esatte e distinte, il meno del locale sugli assi, il bordo senza etichetta), registri | S7b | ✅ pronto 2026-10-01 15:02: 2 commit su `cd6502084` (la cura con i test; il journal); proposte al coordinator la `desc` di `growth-chart-memo` e la riga del CHANGELOG (registro «S7b — passo 6») |
 | S7 | Asse dei bucket (R8 dopo D4, R10) | S6 | ✅ **2026-09-30 23:05** (avviata dal coordinator alle 10:04): il pianificatore `growthLadderAxis.ts` e la cura di `GrowthChart.svelte`; la riga «parziale» passa per `escapeHtml` (fuori pista, registro «S7 — passo 6»). Unit, build, E2E seriale e con 4 worker verdi. Decisioni: D4 ✅, D16 = (ii)+(i) ✅, D17 = (a) ✅ (§7) |
-| S7b | Tacche Y doppie (reperto N1) | S7 | 🔓 D18 = sì ✅ 2026-09-25: assi del denaro di Crescita e Performance; `%` escluso |
+| S7b | Tacche Y doppie (reperto N1) | S7 | 🔓 D18 = sì ✅ 2026-09-25: assi del denaro di Crescita e Performance; `%` escluso · ▶️ avviata 2026-10-01 (coordinator, dopo `cd6502084`): analisi ✅ 13:19; D25 = B ✅ 13:51; test rossi ✅ 14:46; cura ✅ 14:50; gate ✅ 15:00 · ✅ **2026-10-01 15:02**, in C9 (registro «S7b») |
 | S8 | R11 valore di acquisto | S7 | ⏳ legge soltanto il motore (risposta al coordinator, 12:25): prima di iniziare rimisuro per simbolo |
 | S8b | Guida del Rendimento mobile nel dettaglio asset (D24) | S8, D24 | ⏳ approvato dal developer (2026-09-30 11:52): «?» in fondo alla riga della finestra, solo in Rendimento mobile, verso la guida utente; commit a sé dopo S8 |
 | S9 | R9 didascalia | S1 | ✅ 2026-09-24 (scorrimento a 375 px: verifica live in S6) |
@@ -523,6 +524,7 @@ rifatta con `git merge-tree` contro il target **al momento** di ogni checkpoint.
 | D23 | developer (da S10, dopo la privacy di J, 2026-09-28) | I quattro formatter degli importi nei grafici scrivono il meno ASCII: `fmtCurrency` e `yAxisFormatter` in `GrowthChart.svelte`, `shortMoney` e `axisTickAmount` in `PerformanceChart.svelte`. Li porto su `maskFormattedNumber` di J (`maskable.ts:133`), che lascia il segno come lo scrive il locale del browser? Il segreto non cambia in nessuno dei due casi: cifre e k/M mascherati, il segno visibile. Cambia solo il glifo. Dalla sonda (`files/d23_probe/`): U+2212 solo in sv, fi, nb, et, lt, sl, hr, eu e fa; en, it, fr ed es (le lingue dell'interfaccia), e anche de, nl e pt, usano il trattino ASCII | **Restare ASCII**: il formatter principale (`formatCurrencyAmountPlain`/`Html`, schede KPI e tabelle) scrive sempre `-`, e prima della privacy solo `fmtCurrency` seguiva il locale; gli assi e `shortMoney` erano già ASCII. Migrare vuol dire due convenzioni nella stessa app<br>✅ **Deciso dal developer (2026-09-28, `ask_user` nella chat di I), testuale: «Migrare tutti e quattro i formatter: il meno segue il locale del browser anche su assi ed etichette».** Conseguenza, da segnalare al coordinator: i grafici seguono il locale, le schede KPI e le tabelle restano ASCII (`currencyFormat.ts`, non mio). Esecuzione: dopo C5, in un commit a sé; gli assi insieme a S7b (D18), che riscrive le stesse righe. Da conservare: `EUR 0,00` per lo zero (S2a), lo zero dell'asse mascherato (D12), e in `shortMoney` la forma segno, simbolo, `•••`. I ri-pin degli unit (`PerformanceChart.test.ts` caso 6, `GrowthChart.test.ts`) vanno al test-author |
 | D23b | developer (da D23, 2026-09-29, `ask_user` nella chat di I) | Nel tooltip della Crescita quattro righe con segno scrivono il segno a mano, prima della valuta, con il meno tipografico U+2212 fisso in tutte le lingue: il P&L totale (`GrowthChart.svelte:1957`), le righe P&L della linea (`:1973`), le righe per broker (`:2000`) e le righe di Income (`:2015`). Esempi: «+EUR 5,00», «−EUR 12,00». Con D23 il resto dei grafici scriverà il meno della lingua, dopo la valuta: «EUR -12,00» in it/en/fr/es. Senza intervento, nello stesso tooltip ci sarebbero due trattini e due posizioni. Opzioni proposte: il meno segue la lingua e la posizione resta (consigliata); U+2212 fisso; stessa forma del resto anche per la posizione | ✅ **Deciso dal developer (2026-09-29), testuale: «voglio che li uniformi, non puoi modificare l'helper?»**. Lo leggo così: una sola forma, prodotta dall'helper. `fmtCurrency` di `GrowthChart.svelte`, locale al grafico e mio (non `maskFormattedNumber` di J, che resta com'è), prende un'opzione «con segno» (`signDisplay: 'exceptZero'`): `+` per i guadagni, il meno della lingua per le perdite, niente segno per lo zero. Le quattro righe lo chiamano invece di scrivere il segno a mano. Risultato: «EUR +5,00» e «EUR -12,00» in it/en/fr/es, come le altre righe; mascherato «EUR +•••» e «EUR -•••». `maskFormattedNumber` tiene già il `+` iniziale (`LEADING_SIGN`, `maskable.ts`). Esecuzione insieme a D23, dopo C6. Il ri-pin di S2a in `GrowthChart.test.ts` (oggi «+EUR •••» sulla riga P&L) va al test-author |
 | D24 | developer (richiesta del coordinator, 2026-09-30 11:40, senza urgenza) | Risk ha messo `docs_path` (la pagina teorica `financial-theory/fundamentals/returns/`) sul mio `ASSET_CALENDAR_ROLLING_RETURN`. Il plugin però ha `catalog_visible = False` (`calendar_rolling_return.py:125`), e il catalogo pubblica solo i visibili (`provider_registry.py:328`), quindi il `docs_path` non arriva a nessuna API. Il dettaglio asset disegna la modalità Rendimento mobile fuori dal catalogo, e oggi non ha nessun «?». Si mostra? Dove, e verso quale pagina? Opzioni: «?» in fondo alla riga della finestra, solo in modalità Rendimento mobile, verso la guida utente del grafico con un'ancora stabile (consigliata); stessa posizione verso la pagina teorica di Risk; nessun pulsante | ✅ **developer, 2026-09-30 11:52**: «Sì: «?» in fondo alla riga della finestra, solo in Rendimento mobile, verso la guida utente del grafico (consigliata)». → S8b, commit a sé; l'ancora e il rimando alla teoria in S11-finale; il test via test-author |
+| D25 | developer (da S7b passo 1, 2026-10-01; il «−888» rimandato da S6) | La tacca di bordo non è una tacca regolare: ECharts la mette sul bordo che il grafico fissa (Crescita: minimo dei dati − 8 %, `GrowthChart.svelte:2245`; Performance: ±105 % della barra più lunga, `PerformanceChart.svelte:987-988`). Oggi `toFixed` la arrotonda e la nasconde; con D18 diventa esatta e illeggibile: `9,752k`, `93,64k`, `1,17344M`, `−2,55465K` (sonda ECharts 6, registro «S7b»). Nei Proventi senza costi è il «−888». Che cosa ci va? | **(B) solo tacche tonde (consigliata)**:<br>• linee, candele e `%` della Crescita: il bordo resta dov'è, senza etichetta (`showMinLabel: false`);<br>• Proventi: l'asse parte da 0, o dalla prima tacca tonda sotto i costi, come ogni grafico a barre;<br>• Performance: le due etichette di bordo spariscono (`showMinLabel`/`showMaxLabel: false`), le barre restano larghe come oggi.<br>Alternative:<br>• **(A)** bordo tondo: l'asse arriva a una tacca tonda; più spazio vuoto (P&L da −3,2k: asse a −6k), barre della Performance più corte (2.433: dal 95 % all'81 %);<br>• **(C)** com'è: il bordo stampa il valore esatto e resta il «−888»<br>✅ **B** (developer, 2026-10-01 13:51), dopo una domanda: nel P&L da −3,2k a 8,7k la tacca più bassa è −3k. Chiarito che l'asse parte da −4,15k: −3,2k è il punto più basso della linea, appena sotto la riga −3k, nella fascia senza etichetta; nulla è tagliato. Una tacca con etichetta sempre sotto il minimo è A, con la fascia vuota (qui fino a −6k): scartata |
 
 ---
 
@@ -4832,3 +4834,237 @@ comando la porta 6157 è libera.
 >   aperto lo script del coordinator verifica l'albero: tutti e tre i registri li ho scritti dopo il commit, come per
 >   `921f1fc05`.
 > - **Prossimo:** S7b (tacche Y doppie, D18), poi S8.
+
+### S7b — Tacche Y distinte (D18, D23 sugli assi) e tacca di bordo (D25) ✅ 2026-10-01 15:02
+
+**Passo 1 — analisi, sola lettura ✅ 2026-10-01 13:19**
+
+> **Note implementazione:**
+> - Base: `cd6502084` (il journal di C8, sul merge `851d3a5cf`), albero pulito, porte 6157 e 6167 libere. Avvio:
+>   il coordinator, dopo la verifica di `cd6502084`.
+> - Le righe da cambiare, entrambe mie:
+>   - `GrowthChart.svelte:1999-2008`, `yAxisFormatter`, ramo del denaro: `toFixed(0)` per i k, `toFixed(1)` per
+>     gli M, il meno ASCII scritto a mano, poi `maskable(compact)`. Il ramo `%` (`toFixed(1)`) resta (D18);
+>   - `PerformanceChart.svelte:183-188`, `axisTickAmount`: il compatto di Intl con `maximumFractionDigits: 0` da
+>     100 in su, il meno ASCII a mano, lo zero `maskable('0')`.
+> - Progetto, un solo commit come da piano (`fix(charts): keep Y axis ticks distinct`):
+>   - Crescita: la scala resta quella di oggi (k da 1.000, M da 1.000.000, suffisso scritto da noi); il valore
+>     scalato passa per `toLocaleString(undefined, {maximumSignificantDigits: 15})` e la stringa intera per
+>     `maskFormattedNumber` di J;
+>   - Performance: `Intl.NumberFormat(undefined, {notation: 'compact', maximumSignificantDigits: 15})` sul valore
+>     con il segno, poi `maskFormattedNumber`;
+>   - in entrambi lo zero entra come `v === 0 ? 0 : v`, perché Intl scrive `-0` per lo zero negativo.
+> - Perché 15 cifre significative: una tacca di ECharts è già arrotondata alla precisione del passo, quindi il
+>   valore scalato è il double più vicino a un decimale corto, e 15 cifre lo stampano esatto, senza zeri in coda né
+>   rumore. Vale con qualunque scala compatta del locale (`5 tn` in svedese, `5 mil` in spagnolo).
+> - Sonda in Node, ECharts 6.0.0 dal `frontend/node_modules` di questo worktree, in SSR (nessun browser, nessun
+>   server). Script e log: `/tmp/libreFolio_i_s7b_probe.{cjs,log}`, copiati nei file della sessione.
+>   - D18 in en-US: `5k | 5.5k | 6k | 6.5k | 7k | 7.5k | 8k` (7 distinte) e `1k | 1.5k | 2k | 2.5k` (4 distinte,
+>     oggi `1k | 2k | 2k | 3k`); gli interi senza decimali (`2k`, `20k`, `1M`); la Performance uguale, con `K`.
+>   - Un cambiamento voluto: un milione tondo diventa `1M`, non più `1.0M`, per la regola di D18.
+>   - D23 in sv-SE: `−5k`, `−1,5 tn` con U+2212, venuto dalla stessa chiamata delle cifre; it, fr ed es scrivono
+>     `-` e la virgola decimale.
+>   - I doppioni di oggi, misurati sulle tacche vere: Abs fra 9,8k e 10,4k → 8 etichette tutte `10k`; fra 1,18M e
+>     1,26M → `1.2M` ×5 e `1.3M` ×2; il caso di N1 → `3k`, `2k` ×4, `1k`, `900`. Con D18 sono tutte distinte.
+>
+> **⚠️ Fuori pista: la tacca di bordo (D25).**
+> - Causa, in ECharts 6.0.0 (`echarts/lib/scale/Interval.js:126-136`, `getTicks`): se un bordo dell'asse è
+>   fissato, la tacca su quel bordo è il valore grezzo, non un multiplo del passo. Un bordo libero, ECharts lo
+>   arrotonda al passo.
+>   - La Crescita fissa il minimo (`GrowthChart.svelte:2245`): minimo dei dati − 8 % dell'escursione, arrotondato
+>     all'intero.
+>   - La Performance fissa entrambi i bordi (`PerformanceChart.svelte:987-988`): ±105 % della barra più lunga.
+> - Oggi `toFixed(0)` arrotonda il bordo e lo nasconde, a volte creando un doppione. Con D18 diventa esatto e
+>   illeggibile: misurati `9.752k`, `93.64k`, `1.17344M`, `-4.152k`, `-2.55465K`, `-1.29629535M`.
+> - Nei Proventi senza costi il bordo è il «−888» visto in S6: le barre partono da 0, sotto resta una fascia
+>   vuota.
+> - Nessun test fissa la funzione `min` né i bordi (`grep` su unit ed E2E). L'E2E `axisLabels` chiama il formatter
+>   con valori dati, quindi non vede quali tacche ECharts disegna.
+> - In S6 era scritto «Va in S7b; lì chiedo al developer». Va al developer come **D25** (§7), con le etichette
+>   misurate per ogni opzione.
+>
+> **Passi:**
+> 1. ✅ analisi;
+> 2. ✅ D25 al developer: B (13:51);
+> 3. ✅ test rossi e ri-pin via test-author: GrowthChart.test.ts, PerformanceChart.test.ts (14:46);
+> 4. ✅ la cura: GrowthChart.svelte, PerformanceChart.svelte (14:50);
+> 5. ✅ gate nella 6157, un comando alla volta (15:00);
+> 6. ✅ registro, poi `CHECKPOINT READY` al coordinator e FROZEN (15:02).
+
+**Passo 2 — D25 al developer ✅ 2026-10-01 13:51**
+
+> **Note implementazione:**
+> - Due `ask_user` nella chat di I. La prima presentava A, B e C con le etichette misurate (§7, D25). Il developer ha
+>   chiesto: nel P&L da −3,2k a 8,7k la tacca più bassa è −3k? Chiarito che l'asse parte da −4,15k: −3,2k è il punto
+>   più basso della linea, appena sotto la riga −3k, nella fascia senza etichetta; nulla è tagliato.
+> - Risposta, testuale: «B così: la linea scende appena sotto −3k, il bordo resta senza etichetta (Consigliata)».
+> - Che cosa cambia, per modo:
+>   - Crescita, linee (€ e P&L), candele e `%`: `min` resta la funzione di oggi (minimo − 8 % dell'escursione,
+>     `GrowthChart.svelte:2245`); in più `axisLabel.showMinLabel: false`;
+>   - Crescita, Proventi: nessun minimo fissato e `showMinLabel` al default di ECharts. Con `scale: false`, il
+>     default, l'asse comprende lo 0: senza costi `0 2k … 12k`, con −1,2k di costi `−3k 0 3k … 12k`;
+>   - Performance: `showMinLabel: false` e `showMaxLabel: false` in `xAxis.axisLabel`; i bordi restano ±105 %
+>     della barra più lunga (`axisBound`), con `splitNumber: 4`.
+> - Limite accettato con B: una tacca tonda che cade proprio sul bordo fissato perde anche lei l'etichetta.
+>
+> **⚠️ Fuori pista: l'asse y della Crescita si fonde, non si sostituisce.**
+> - La ricostruzione completa passa `CHART_FULL_UPDATE_OPTS` (`GrowthChart.svelte:505`): `replaceMerge` copre
+>   `series` e `xAxis`, non `yAxis`. Una chiave assente dal nuovo `yAxis` conserva il valore di prima. Il cambio di
+>   sottomodo forza la ricostruzione (`renderedModeKey`, `:1948`), ma passando dalla linea P&L ai Proventi la
+>   funzione `min` e `showMinLabel: false` resterebbero.
+> - Sonda in Node, ECharts 6.0.0 in SSR, linea e poi barre con le opzioni del componente. Script e log:
+>   `/tmp/libreFolio_i_s7b_merge.{cjs,log}` e `/tmp/libreFolio_i_s7b_merge2.{cjs,log}`.
+>   - Chiavi omesse: estensione `[-888, 12000]`; nel modello restano `min` (la funzione) e `showMinLabel: false`.
+>   - `min` e `showMinLabel` espliciti, a `null` o a `undefined`: estensione `[0, 12000]`, etichette
+>     `0 | 2k | … | 12k`; nel modello `null` o `undefined`.
+> - Scelgo `undefined` esplicito. I tipi di ECharts non ammettono `null` né per `min` (`ScaleDataValue`, `'dataMin'`
+>   o una funzione) né per `showMinLabel` (`boolean`), e il frontend compila in `strict`. Il test deve quindi provare
+>   che la chiave c'è (`toHaveProperty`), non solo che vale `undefined`: un'opzione che la omette passerebbe.
+> - Scartata: `'yAxis'` in `replaceMerge`. Cambierebbe la ricostruzione di ogni modo per un caso solo.
+> - La Performance chiama `setOption(…, true)`, cioè `notMerge`: nessun residuo.
+> - Nessun altro test fissa l'asse y della Crescita. I `showMinLabel` di `chartCoreHelpers.test.ts` (`:276-732`)
+>   riguardano l'asse x della policy responsiva (`responsiveXAxis.ts`). Gli E2E `AXIS_*`
+>   (`dashboard.spec.ts:898-900`) accettano già `-` e U+2212, e chiamano il formatter con 20.000, −5.000 e 0:
+>   nessun cambio.
+
+**Passo 3 — test rossi e ri-pin, via test-author ✅ 2026-10-01 14:46**
+
+> **Note implementazione:**
+> - Test-author (sync), solo `GrowthChart.test.ts` (+257/−16) e `PerformanceChart.test.ts` (+168/−25); nessun
+>   componente toccato. Due esecuzioni Vitest nella 6157, una alla volta, nessun server.
+> - Ri-pin dei casi esistenti:
+>   - S2a, asse mascherato: il segno del negativo viene dalla stessa `toLocaleString` del formatter (helper nuovo
+>     `axisNumber`); in più sv-SE forzato, `\u2212•••`;
+>   - S2a, privacy spenta: `['-5k','1.3M','0','0']` ora sotto `inLocale('en-US')`, commento «`toFixed`, non
+>     `toLocaleString`» riscritto;
+>   - S2b: `tickNumber(value, locale?)` rifà la nuova chiamata sul valore con segno; i casi mascherato, toggle e
+>     privacy spenta la seguono (`tickNumber(-1500)` al posto di `-${tickNumber(1500)}`, lo zero `'0'` sotto en-US
+>     forzato); sv-SE mascherato `\u2212•••`. `SWEDISH` sale al livello del file;
+>   - invariati: `'12.3%'` (il ramo `%`) e i `'20k'` di S2a.
+> - Casi nuovi, due describe «… axis ticks (S7b: D18, D23, D25)»:
+>   - Crescita: le cinque sequenze di D18 in en-US, esatte e distinte, in Abs e nella linea P&L; gli interi (`2k`,
+>     `20k`, `1M`, `1.3M`, `900`, `-5k`, `0`, `-0` → `0`); D23 sv-SE in chiaro (`\u22125k`, `\u22121,5k`, `1,5k`)
+>     e mascherato; D25 nei quattro modi: `min` funzione, `min({min: -3200, max: 8700}) === -4152`,
+>     `showMinLabel: false`; D25 nei Proventi, entrati dalla linea: `toHaveProperty('min', undefined)` su `yAxis` e
+>     `toHaveProperty('showMinLabel', undefined)` su `axisLabel` (la chiave deve esserci), poi di nuovo la linea,
+>     con funzione e `false`;
+>   - Performance: la sequenza −2K…2K esatta e distinta, più `12.5K`, `1.25M`, `2.5`, `0.75`, `-0` → `0`, `2K`;
+>     D23 sv-SE in chiaro (`\u22121,5\u00a0tn`) e mascherato; D25: `showMinLabel` e `showMaxLabel` a `false`,
+>     `min === -max`, `max` ≈ barra più lunga × 1,05.
+> - Rossi, ciascuno per la ragione voluta; nessuno per fixture, setup o tipi:
+>   - `growth-chart-memo`: 6 falliti / 48 passati (54). sv-SE mascherato `-•••`; i doppioni `5k 6k 6k …` e
+>     `1.0M`; sv-SE in chiaro `-5k -2k 2k`; `showMinLabel` `undefined` nei quattro modi; nei Proventi `min` è
+>     ancora la funzione e la chiave `showMinLabel` manca; tornati alla linea, `showMinLabel` `undefined`;
+>   - `component-unit PerformanceChart`: 6 falliti / 7 passati / 2185 saltati (2198). `2K` invece di `1.5K` (i
+>     tre casi S2b e D18), `13K`, `1M`; sv-SE `-2\u00a0tn`; `showMinLabel` e `showMaxLabel` `undefined`. Due casi
+>     S2b si fermano alla prima tacca: le loro righe successive girano solo dopo la cura.
+> - Verdi prima e dopo, voluti: S2a a privacy spenta (in en-US vecchio e nuovo formatter scrivono uguale; il caso
+>   prova che la privacy spenta non cambia nulla); dentro i rossi, il bordo `-4152`, i limiti della Performance,
+>   gli zeri e gli interi già giusti, cioè «il bordo non si sposta».
+> - Ho riletto io i due diff e i log: i messaggi d'errore coincidono con le ragioni sopra.
+> - Comandi, uno alla volta (log in `/tmp/` e copiati in `files/s7b_probe/` della sessione):
+>   - `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6157 --data-dir
+>     /tmp/librefolio-r2-i-charts front-asset growth-chart-memo` → `/tmp/libreFolio_i_s7b_red_gcm.log`;
+>   - stesso prefisso, `front-utility component-unit PerformanceChart` → `/tmp/libreFolio_i_s7b_red_perf.log`;
+>   - `frontend/node_modules/.bin/prettier --write`, poi `--check`, sui due file: nessun cambio, pulito.
+>
+> **⚠️ Fuori pista:**
+> - Il test-author ha lanciato anche `svelte-check` in sola lettura, fuori dalla concessione e senza
+>   `svelte-kit sync`: nessun problema nei due file; 3 errori e 41 avvisi, quelli noti del pavimento, in altri file.
+>   Log: `/tmp/libreFolio_i_s7b_svelte_check.log`.
+> - Il caso D25 della Performance fissa anche `max` ≈ barra più lunga × 1,05, il margine di oggi. Lo tengo: è
+>   l'oracolo «il bordo non si sposta», come il `-4152` della Crescita.
+
+**Passo 4 — la cura ✅ 2026-10-01 14:50**
+
+> **Note implementazione:**
+> - `GrowthChart.svelte` (+21/−9), ramo del denaro di `yAxisFormatter` (`:1999-2012`): scala e suffisso da una
+>   tupla (`[1_000_000, 'M']`, `[1_000, 'k']`, `[1, '']`), poi `scaled.toLocaleString(undefined,
+>   {maximumSignificantDigits: 15})` e `maskFormattedNumber`:
+>   - cifre esatte, quindi nessun doppione e nessun decimale sugli interi (D18);
+>   - separatore e meno del locale (D23); lo zero negativo scrive `0`;
+>   - segno fuori dalla maschera, `k`/`M` dentro (D8); lo zero mascherato (D12);
+>   - quindici cifre significative, non diciassette: assorbono il rumore binario (`0.1 + 0.2` → `0.3`);
+>   - tolto l'import di `maskable`: lo usava solo il vecchio formatter.
+> - Asse y della Crescita (`:2246-2258`): la costante `incomeBars` (P&L, sottomodo Proventi) decide due chiavi.
+>   - Linee, candele e `%`: `min` resta la funzione, più `axisLabel.showMinLabel: false` (D25 = B).
+>   - Proventi: `min` e `showMinLabel` presenti a `undefined`, per il fuori pista del passo 2 (`yAxis` si fonde).
+>   - Leggere `pnlSubmode` nel costruttore non aggiunge dipendenze: `renderChart` lo legge già in
+>     `renderedModeKey` (`:1949`).
+> - `PerformanceChart.svelte` (+10/−5):
+>   - `axisTickAmount` (`:183-189`) passa l'importo con segno a un solo `Intl.NumberFormat` compatto, con
+>     `maximumSignificantDigits: 15`, e poi a `maskFormattedNumber`; `maskable` resta per `shortMoney`;
+>   - `xAxis.axisLabel` (`:999-1006`): `showMinLabel` e `showMaxLabel` a `false`; `±axisBound` e `splitNumber: 4`
+>     invariati.
+> - Un solo consumatore per ciascun formatter: `axisTickAmount` solo l'asse x (`:1001`), `yAxisFormatter` solo
+>   l'asse y (`:2258`). Nessuna etichetta non tonda, come una markLine, diventa lunga per le cifre esatte.
+> - Verdi nella 6157, uno alla volta, nessun server:
+>   - `growth-chart-memo`: 54/54 → `/tmp/libreFolio_i_s7b_green_gcm.log`;
+>   - `component-unit PerformanceChart`: 13 passati / 2185 saltati (2198) →
+>     `/tmp/libreFolio_i_s7b_green_perf.log`.
+> - Prettier `--write` sui due componenti: nessun cambio; `--check` sui quattro file: pulito. Diff della cura:
+>   `/tmp/libreFolio_i_s7b_fix.diff`.
+> - Comandi: gli stessi del passo 3, con i log `green` al posto dei `red`.
+> - Nessun fuori pista.
+
+**Passo 5 — gate nella 6157 ✅ 2026-10-01 15:00**
+
+> **Note implementazione:** un comando alla volta, con `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run
+> python dev.py`; i `test` con `--test-port 6157 --data-dir /tmp/librefolio-r2-i-charts`. Log in
+> `/tmp/libreFolio_i_s7b_{build,check,core,comp,assetunit,orphans,e2e_dashboard,e2e_broker}.log`.
+>
+> | # | gate | esito |
+> |---|---|---|
+> | 1 | `front build --debug` (14:52) | rc 0 |
+> | 2 | `front check` | 3 errori e 41 avvisi in 4 file, rc 1: il floor |
+> | 3 | `front-utility core-unit` | 2684/2684 su 102 file |
+> | 4 | `front-utility component-unit` | 2198/2198 su 94 file |
+> | 5 | `front-asset asset-unit` | 530/530 su 19 file |
+> | 6 | `front-asset growth-chart-memo` | 54/54, il verde del passo 4 |
+> | 7 | `check-orphans` | rc 0: 92 E2E, 275 unit, 224 backend raggiungibili |
+> | 8 | E2E `front-portfolio dashboard` | 24/24, 1 worker, 1,3 min |
+> | 9 | E2E `front-broker detail` | 32/32, 1 worker, 1,1 min |
+>
+> - 1: la build rigenera i contratti OpenAPI e TypeScript; nessun file tracciato è cambiato. Serve agli E2E.
+> - 2: `BrokerSharingPanel` 27, `GlobalSettingsTab` 14, `TransactionFormModal.test.ts` 2,
+>   `ToolExecutionMetrics` 1; nessuna riga su GrowthChart o PerformanceChart.
+> - 3: dentro, i gate di K `htmlInterpolation.gate.test.ts` e `htmlSink.gate.test.ts`.
+> - 4: tre casi in più del gate del merge (2195): quelli nuovi di `PerformanceChart.test.ts`.
+> - 6: non rilanciato. Il verde del passo 4 è finito alle 14:48:55; i due componenti sono fermi alle 14:48:04 e
+>   14:48:23, i due test alle 14:34 e 14:38.
+> - 8: `:948` e `:983`, gli assi in privacy (S2a e S2b), verdi senza toccare lo spec: gli `AXIS_*`
+>   (`:898-900`) accettano già `-` e U+2212. `:1530`, S7-E2: i Proventi sulla scala.
+> - 9: `:1072`, linea e Proventi del P&L del broker: il sottomodo Proventi, ora con i default di ECharts, in un
+>   render reale.
+> - Nessun retry, nessun flaky. A fine giro: porte 6157 e 6167 libere (`lsof`); `git diff --check` pulito; stage
+>   vuoto; 0 file non tracciati; 5 file tracciati modificati.
+> - Non lanciati, fuori dal delta: il vitest completo; l'`i18n audit` (nessuna chiave); il backend (nessun file
+>   Python); l'E2E `asset-detail`, che non ha assi del denaro (`asset-detail.spec.ts:2352-2370` legge l'asse
+>   delle date).
+
+**Passo 6 — registro e `CHECKPOINT READY` (C9) ✅ 2026-10-01 15:02**
+
+> **Note implementazione:**
+> - Base `cd6502084`. Delta: 5 file tracciati modificati, nessun file nuovo, stage vuoto:
+>   - `frontend/src/lib/components/dashboard/GrowthChart.svelte` (+21/−9);
+>   - `frontend/src/lib/components/dashboard/PerformanceChart.svelte` (+10/−5);
+>   - `frontend/src/lib/components/dashboard/GrowthChart.test.ts` (+257/−16);
+>   - `frontend/src/lib/components/dashboard/PerformanceChart.test.ts` (+168/−25);
+>   - questo piano.
+> - Esclusi: la build, i log, l'istantanea del DB (`00_archive/test-db_20261001_145647.tar.xz`), le sonde in
+>   `/tmp/`.
+> - Commit proposti, due, come in C7:
+>   1. `fix(charts): keep money axis ticks distinct`, i quattro file del frontend. Il soggetto del piano (`:580`)
+>      diceva «Y axis», ma l'asse del denaro della Performance è l'x;
+>   2. `docs(journal): record S7b and D25`, questo piano.
+> - Proposte per i registri del coordinator:
+>   - `desc` di `growth-chart-memo` (`scripts/test_runner/_frontend_asset.py:189`), in coda: «, and the money
+>     axis ticks (S7b): exact, distinct labels (D18), the locale's minus (D23), the auto-scaled lower edge
+>     unlabelled while Income keeps ECharts' zero-based defaults (D25)»;
+>   - CHANGELOG, 🐛 Fixed: «The amount axes of the Growth and Performance charts no longer show the same label
+>     twice (`5.5k` printed as `6k` next to a real `6k`, `1.25M` as `1.3M`) and use the minus sign of the
+>     browser's language. An axis edge placed automatically beyond the data is no longer labelled as if it were
+>     a regular step, and the Income bars stand on an axis that starts at zero.»
+> - Conflitti attesi: nessuno. Il delta non tocca `lineChartHelpers.ts` né il suo test (Risk, `840bdbc0d`), né
+>   file condivisi o registri del coordinator.
+> - Stato: FROZEN, nessun edit, test, server o Git fino al prossimo messaggio del coordinator.
