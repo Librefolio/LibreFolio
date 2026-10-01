@@ -21,7 +21,7 @@
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {buildGridColors, buildTooltipDivider, buildTooltipHeader, buildTooltipRow, buildTooltipTheme, setupTooltipAutoHide, scheduleFirstRenderStabilityFix} from '$lib/components/charts/echartsTooltipHelpers';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
-    import {maskable, shouldMaskAmount} from '$lib/utils/privacy/maskable';
+    import {maskable, maskFormattedNumber, shouldMaskAmount} from '$lib/utils/privacy/maskable';
     import {truncateName} from '$lib/utils/text';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {translateOr} from '$lib/utils/core/translateOr';
@@ -181,10 +181,11 @@
     }
 
     function axisTickAmount(amount: number): string {
-        if (amount === 0) return maskable('0');
-        const abs = Math.abs(amount);
-        const compact = new Intl.NumberFormat(undefined, {notation: 'compact', maximumFractionDigits: abs < 10 ? 2 : abs < 100 ? 1 : 0}).format(abs);
-        return `${amount < 0 ? '-' : ''}${maskable(compact)}`;
+        // D18: exact digits, so two ticks never share a label (`1.5K`, `12.5K`) and a whole
+        // amount has none (`2K`). D23: the signed amount goes in, so the minus is the locale's;
+        // a negative zero prints `0`. D8: the sign stays outside the mask, the compact suffix
+        // inside it, zero included (D12).
+        return maskFormattedNumber(new Intl.NumberFormat(undefined, {notation: 'compact', maximumSignificantDigits: 15}).format(amount === 0 ? 0 : amount));
     }
 
     function formatSignedPercent(value: number): string {
@@ -998,6 +999,10 @@
                 axisLabel: {
                     color: gridColors.textColor,
                     formatter: (value: number) => axisTickAmount(Number(value)),
+                    // D25: the two edges sit on ±axisBound, not on round ticks, and ECharts
+                    // labels them with their raw value. The labels go, the bounds stay.
+                    showMinLabel: false,
+                    showMaxLabel: false,
                 },
             },
             yAxis: {
