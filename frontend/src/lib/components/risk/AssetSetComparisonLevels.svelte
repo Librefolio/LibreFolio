@@ -54,7 +54,7 @@
     import {ANSWER_DISCARDED_CODE, createRiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
 
     import AssetSetLossComparisonSection from './AssetSetLossComparisonSection.svelte';
-    import type {AssetSetHurtRow} from './assetSetLevels';
+    import type {AssetSetHurtRow, AssetSetPaidRow} from './assetSetLevels';
     import AssetSetRiskReturnSection from './AssetSetRiskReturnSection.svelte';
     import {ASSET_SET_DAILY_VAR_INSTANCE, ASSET_SET_MONTHLY_VAR_INSTANCE, resultByCode, resultByInstance} from './riskAnalysisHelpers';
     import {degradedResults, levelMetadata, resultErrorCodes, resultReasons} from './levels/levelHelpers';
@@ -156,6 +156,8 @@
      * 30/09), and only while there is a table to act on.
      */
     let lossTable = $state<DataTable<AssetSetHurtRow>>();
+    /** L3°'s table, the same way: its toggle beside L3°'s manual, only while the table is shown. */
+    let riskTable = $state<DataTable<AssetSetPaidRow>>();
 </script>
 
 <RiskLevelSection title={$t('risk.assetSet.levels.l1.title')} level={1} testId="risk-asset-set-loss" health={l1Health} reasons={l1Reasons} errorCodes={l1Errors} metadata={l1Metadata} docsPath="financial-theory/technical-analysis/risk-metrics/" actions={lossTable ? lossActions : undefined}>
@@ -166,6 +168,10 @@
     <ColumnVisibilityToggle tableRef={lossTable} />
 {/snippet}
 
-<RiskLevelSection title={$t('risk.assetSet.levels.l3.title')} level={3} testId="risk-asset-set-paid" health={l3Health} reasons={l3Reasons} errorCodes={l3Errors} metadata={l3Metadata} docsPath="financial-theory/technical-analysis/risk-metrics/">
-    <AssetSetRiskReturnSection {assetIds} {assetLabels} {riskReturn} {kpi} {comparison} {benchmarkApplies} loading={controller.initialLoading} failed={controller.loadError} discarded={controller.loadDiscarded} onretry={() => void controller.loadBase(true)} />
+{#snippet riskActions()}
+    <ColumnVisibilityToggle tableRef={riskTable} />
+{/snippet}
+
+<RiskLevelSection title={$t('risk.assetSet.levels.l3.title')} level={3} testId="risk-asset-set-paid" health={l3Health} reasons={l3Reasons} errorCodes={l3Errors} metadata={l3Metadata} docsPath="financial-theory/technical-analysis/risk-metrics/" actions={riskTable ? riskActions : undefined}>
+    <AssetSetRiskReturnSection bind:tableRef={riskTable} {assetIds} {assetLabels} {assetIcons} {riskReturn} {kpi} {comparison} {benchmarkApplies} loading={controller.initialLoading} failed={controller.loadError} discarded={controller.loadDiscarded} onretry={() => void controller.loadBase(true)} />
 </RiskLevelSection>

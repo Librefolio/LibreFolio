@@ -213,6 +213,8 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/charts/SignalTreeSelect.test.ts",
             "src/lib/components/charts/MeasurePanel.test.ts",
             "src/lib/components/risk/AssetSetLossComparisonSection.test.ts",
+            "src/lib/components/risk/AssetSetRiskReturnSection.test.ts",
+            "src/lib/components/charts/ScatterChart.test.ts",
             "src/lib/components/risk/AssetSetReplaySection.test.ts",
             "src/lib/components/risk/AssetSetComparisonLevels.test.ts",
             "src/lib/components/risk/AssetSetCorrelationSection.test.ts",
