@@ -44,11 +44,10 @@
     import {attachOverflowMarqueeToDescendants} from '$lib/actions/scrollOnOverflow';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {formatPercent} from '$lib/utils/core/formatPercent';
-    import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 
     import {buildAssetSetHurtRows, type AssetSetHurtRow} from './assetSetLevels';
-    import {nameComparator} from './correlationHelpers';
+    import {assetNameColumn} from './assetSetTable';
 
     interface Props {
         assetIds: number[];
@@ -121,9 +120,6 @@
         return fraction === null ? null : -Math.abs(fraction);
     }
 
-    /** The matrix's "by name" comparison — emoji ignored — so the two orders agree. */
-    const compareNames = nameComparator();
-
     const LOSS_CLASS = 'tabular-nums text-red-600 dark:text-red-400';
     // Minimums only: the table is laid out `auto`, and the DataTable draws its titles
     // upper-case on one line, so every column widens to its own title in whatever
@@ -134,14 +130,6 @@
 
     function cellHtml(column: string, measured: boolean, text: string, classes: string, extra = ''): string {
         return `<span class="${classes}" data-testid="risk-asset-set-l1-${column}" data-measured="${measured}"${extra}>${text}</span>`;
-    }
-
-    // Capped, because an `auto` table widens a column to its longest unbreakable content:
-    // without the cap the longest name would set the column's width instead of scrolling.
-    function nameHtml(row: AssetSetHurtRow): string {
-        const icon = assetIcons.get(row.assetId);
-        const iconHtml = icon ? `<img src="${escapeHtml(icon)}" alt="" class="h-5 w-5 shrink-0 object-contain" data-testid="risk-asset-set-l1-icon" />` : '';
-        return `<div class="flex min-w-0 max-w-56 items-center gap-2" data-testid="risk-asset-set-l1-name" data-asset-id="${row.assetId}">${iconHtml}<span class="min-w-0 flex-1 text-gray-700 dark:text-gray-200 ${overflowScrollTextClass}">${escapeHtml(row.name)}</span></div>`;
     }
 
     function lossColumn(id: 'badDay' | 'badMonth' | 'currentFall', figure: (row: AssetSetHurtRow) => number | null): ColumnDef<AssetSetHurtRow> {
@@ -172,17 +160,12 @@
      * ordering and the headings do. Sorting reorders the rows, never the columns.
      */
     const columns: ColumnDef<AssetSetHurtRow>[] = [
-        {
-            id: 'name',
-            header: () => $t('risk.assetSet.levels.asset'),
-            type: 'text',
-            pinned: 'left',
-            width: 220,
-            minWidth: 140,
-            filterable: false,
-            sortFn: (left, right) => compareNames(left.name, right.name) || left.assetId - right.assetId,
-            cell: (row) => ({type: 'html', html: nameHtml(row)}),
-        },
+        // The asset column is shared with L3° (`assetSetTable`): icon, one-line name, by-name order.
+        assetNameColumn<AssetSetHurtRow>(
+            () => $t('risk.assetSet.levels.asset'),
+            () => assetIcons,
+            'risk-asset-set-l1',
+        ),
         lossColumn('badDay', (row) => row.badDay),
         lossColumn('badMonth', (row) => row.badMonth),
         {
@@ -199,12 +182,12 @@
             // figure rather than standing as one more risk, exactly as the portfolio's
             // L1 keeps its acquired measures as sub-rows instead of promoting them to cards.
             cell: (row) => {
-                const lasted =
+                const lastedHtml =
                     row.worstFall !== null && row.worstFallDays !== null
                         ? `<span class="block text-[10px] font-normal text-gray-400 dark:text-gray-500" data-testid="risk-asset-set-l1-worstFall-days">${escapeHtml($t('risk.assetSet.levels.l1.lastedDays', {values: {days: row.worstFallDays}}))}</span>`
                         : '';
                 const text = row.worstFall === null ? '\u2014' : fall(row.worstFall);
-                return {type: 'html', html: cellHtml('worstFall', row.worstFall !== null, `${text}${lasted}`, LOSS_CLASS, ` data-recovery="${escapeHtml(row.recovery ?? '')}"`)};
+                return {type: 'html', html: cellHtml('worstFall', row.worstFall !== null, `${text}${lastedHtml}`, LOSS_CLASS, ` data-recovery="${escapeHtml(row.recovery ?? '')}"`)};
             },
         },
         lossColumn('currentFall', (row) => row.currentFall),
