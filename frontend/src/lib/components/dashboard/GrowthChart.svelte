@@ -570,6 +570,9 @@
         deposit: $_('transactions.types.DEPOSIT'),
         acqNewCapital: $_('dashboard.pnlAcqNewCapital'),
         acqReinvested: $_('dashboard.pnlAcqReinvested'),
+        // R11: the purchase value, the KPI card's own key, names both acquisition zones;
+        // the two labels above stay for the tooltip rows of its halves.
+        bookValue: $_('dashboard.bookValue'),
     });
 
     /**
@@ -1472,8 +1475,8 @@
                 {name: pnlLabels.interest, data: faded(entry.pnl.income.interest.points)},
                 {name: pnlLabels.costs, data: faded(entry.pnl.costs.points)},
                 {name: pnlLabels.deposit, data: faded(entry.pnl.deposits.points)},
-                {name: pnlLabels.acqNewCapital, data: faded(entry.pnl.acquisition.fromNewCapital.points)},
-                {name: pnlLabels.acqReinvested, data: faded(entry.pnl.acquisition.fromReinvested.points)},
+                {name: pnlLabels.bookValue, data: faded(entry.pnl.acquisition.fromNewCapital.points)},
+                {name: pnlLabels.bookValue, data: faded(entry.pnl.acquisition.fromReinvested.points)},
             ];
         }
 
@@ -1631,12 +1634,15 @@
                 {name: pnlLabels.interest, type: 'bar' as const, stack: 'income', data: seriesData[1].data, itemStyle: {color: cc('interest')}, ...gaps},
                 {name: pnlLabels.costs, type: 'bar' as const, stack: 'income', data: seriesData[2].data, itemStyle: {color: cc('costs')}, ...gaps},
                 {name: pnlLabels.deposit, type: 'bar' as const, data: seriesData[3].data, itemStyle: {color: cc('deposit')}, ...gaps},
-                // Acquisition 2-zone stacked bar (batch 2, plan §5.2): reuses the exact
-                // same capital/returns-pool colors as EUR mode's own cashContributed/
-                // cashGenerated areas — same underlying financial concept (K/R pool),
-                // so the same color means the same thing everywhere in the app.
-                {name: pnlLabels.acqNewCapital, type: 'bar' as const, stack: 'acquisition', data: seriesData[4].data, itemStyle: {color: cc('cashContributed')}, ...gaps},
-                {name: pnlLabels.acqReinvested, type: 'bar' as const, stack: 'acquisition', data: seriesData[5].data, itemStyle: {color: cc('cashGenerated')}, ...gaps},
+                // Acquisition 2-zone stacked bar (batch 2, plan §5.2): the purchase value,
+                // split by the money that paid for it (R11). Both zones carry its name, so
+                // the legend lists it once and one click hides both. Each zone keeps the
+                // colour its money has in the Abs view (D26): new capital the KPI blue of
+                // the assets at cost, reinvested the green of the generated returns.
+                // The Abs area shows the same text and ECharts keeps legend state by name,
+                // so hiding it in one view hides it in the other too (accepted, D27).
+                {name: pnlLabels.bookValue, type: 'bar' as const, stack: 'acquisition', data: seriesData[4].data, itemStyle: {color: cc('bookAssetLike')}, ...gaps},
+                {name: pnlLabels.bookValue, type: 'bar' as const, stack: 'acquisition', data: seriesData[5].data, itemStyle: {color: cc('cashGenerated')}, ...gaps},
             ];
         }
 
@@ -2178,8 +2184,11 @@
                             if (costVal !== 0) html += signedRow(pnlLabels.costs, costVal, cc('costs'));
                             if (depositVal !== 0) html += signedRow(pnlLabels.deposit, depositVal, cc('deposit'));
                             if (acqNewVal !== 0 || acqReinvestedVal !== 0) {
-                                html += signedRow(pnlLabels.acqNewCapital, acqNewVal, cc('cashContributed'));
-                                html += signedRow(pnlLabels.acqReinvested, acqReinvestedVal, cc('cashGenerated'));
+                                // R11: the purchase value in bold, like the income total, then
+                                // its two halves under it, each in its zone's colour (D26).
+                                html += signedRow(`<b>${pnlLabels.bookValue}</b>`, acqNewVal + acqReinvestedVal, textColor);
+                                html += signedRow(`↳ ${pnlLabels.acqNewCapital}`, acqNewVal, cc('bookAssetLike'));
+                                html += signedRow(`↳ ${pnlLabels.acqReinvested}`, acqReinvestedVal, cc('cashGenerated'));
                             }
                         }
                         return html;
