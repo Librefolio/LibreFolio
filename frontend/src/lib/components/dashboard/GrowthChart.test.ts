@@ -42,11 +42,12 @@
  * "Fixed 6-slot order matches buildFullSeries's matching index reads exactly"). Broker
  * series ARE matched by name, because those names are values this test supplied as props.
  *
- * THE REST OF THE FILE. Six smaller subjects share the same recorder: privacy masking
+ * THE REST OF THE FILE. Seven smaller subjects share the same recorder: privacy masking
  * of the axis and tooltip formatters (S2a), the one form of every signed tooltip amount in
  * the locale's glyphs (D23, D23b), persistence of the mode and the P&L submode (S5), the
- * synthetic-candle caption (S9), the grid's left inset (developer review, 2026-09-29), and
- * the ladder x axis of the Candles and Income submodes (S7).
+ * synthetic-candle caption (S9), the grid's left inset (developer review, 2026-09-29), the
+ * ladder x axis of the Candles and Income submodes (S7), and the money axis ticks: distinct,
+ * in the locale's glyphs, with the edge the chart fixes left unlabelled (S7b: D18, D23, D25).
  * Each describe states its own reasons.
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
@@ -526,9 +527,13 @@ function brokerSeries(series: SeriesUpdate[]): SeriesUpdate[] {
 type AxisFormatter = (value: number) => string;
 type TooltipFormatter = (params: Array<{dataIndex: number}>) => string;
 
-/** The part of a full rebuild that the privacy, persistence and caption cases read. */
+/**
+ * The part of a full rebuild that the privacy, persistence, caption and axis cases read. `min`
+ * stays `unknown`: it is a callback in most views and an explicit `undefined` in Income (D25),
+ * so a case proves which before it calls it.
+ */
 interface FullOption {
-    yAxis: {axisLabel: {formatter: AxisFormatter}};
+    yAxis: {min?: unknown; axisLabel: {formatter: AxisFormatter; showMinLabel?: boolean}};
     tooltip: {formatter: TooltipFormatter};
     series: Array<{type?: string; name?: string}>;
 }
@@ -652,6 +657,15 @@ function inLocale<T>(locale: string | undefined, read: () => T): T {
         spy.mockRestore();
     }
 }
+
+/**
+ * The number a money axis label prints before its k/M suffix, from the same call the axis
+ * formatter makes on the SCALED value: -5000 prints as `-5`, then `k` (S7b). A negative zero
+ * prints as zero, which is the contract, not a detail of the call. The expected sign of an axis
+ * label comes from here, never from a literal (D23). `locale` forces one; `undefined` is this
+ * machine's.
+ */
+const axisNumber = (scaled: number, locale?: string) => (scaled === 0 ? 0 : scaled).toLocaleString(locale, {maximumSignificantDigits: 15});
 
 interface TooltipRow {
     label: string;
@@ -885,20 +899,36 @@ describe('GrowthChart privacy masking (S2a)', () => {
      *  comes from the same call the component makes, never from a literal (D23). */
     const MASKED_NEGATIVE = expectedAmount(-1, {masked: true});
 
-    /** What every money axis label must print with privacy on. */
+    /**
+     * What every money axis label must print with privacy on: the mask, and on a loss the
+     * locale's minus kept outside it (D8, D23). This machine's minus comes from the same call the
+     * axis formatter makes. The Swedish one is the glyph D23 is about, so it is a literal, under
+     * a forced locale.
+     */
     function expectMaskedMoneyAxis(format: AxisFormatter) {
-        expect(format(20_000)).toBe(PRIVACY_PLACEHOLDER);
-        expect(format(-5_000)).toBe(`-${PRIVACY_PLACEHOLDER}`);
-        expect(format(0)).toBe(PRIVACY_PLACEHOLDER);
+        const values = [20_000, -5_000, 0];
+        // Preconditions: this machine's locale writes a minus on a loss, so the masked loss is
+        // about one; and this Node has Swedish locale data and writes U+2212 there, so the forced
+        // locale cannot fall back to a hyphen in silence.
+        const hostMinus = leadingSign(axisNumber(-5));
+        expect(hostMinus).toMatch(/[-\u2212]/);
+        expect(leadingSign(axisNumber(-5, SWEDISH))).toBe('\u2212');
+        const labels = {host: values.map((value) => format(value)), swedish: inLocale(SWEDISH, () => values.map((value) => format(value)))};
+        expect(labels).toEqual({
+            host: [PRIVACY_PLACEHOLDER, `${hostMinus}${PRIVACY_PLACEHOLDER}`, PRIVACY_PLACEHOLDER],
+            swedish: [PRIVACY_PLACEHOLDER, `\u2212${PRIVACY_PLACEHOLDER}`, PRIVACY_PLACEHOLDER],
+        });
         // The property itself, whatever the placeholder looks like: no digit and no k/M
         // suffix, because `•••k` would still reveal the order of magnitude (D8).
-        for (const value of [20_000, -5_000, 0]) expect(format(value)).not.toMatch(/[0-9kM]/);
+        for (const label of [...labels.host, ...labels.swedish]) expect(label).not.toMatch(/[0-9kM]/);
     }
 
-    it('masks the money axis labels in Abs and P&L line: no digit, no k/M suffix, the minus kept outside', async () => {
+    it("masks the money axis labels in Abs and P&L line: no digit, no k/M suffix, the locale's minus kept outside", async () => {
         // WHY: with privacy on, the axis ticks are the one place a masked chart would still
-        // print the scale of the portfolio (20k, 1.3M). Catches `maskable` being dropped
-        // from the compact label, or the suffix moving outside it (`maskable(n) + 'k'`).
+        // print the scale of the portfolio (20k, 1.3M). Catches the mask dropped from the
+        // compact label, or the suffix moving outside it (`mask(n) + 'k'`). Catches too a minus
+        // written by hand in front of the mask instead of the locale's own (D23): in Node's
+        // default locale both are a hyphen, so only the forced sv-SE labels tell them apart.
         setPrivacyEnabled(true);
         const {getByTestId} = render(GrowthChart, {props: {history: HISTORY}});
 
@@ -991,10 +1021,11 @@ describe('GrowthChart privacy masking (S2a)', () => {
         const {getByTestId} = render(GrowthChart, {props: {history: MONEY_HISTORY, pnlCandles: MONEY_CANDLES, baseCurrency: BASE_CURRENCY}});
         const absOption = await waitForFrame(FRAME.abs);
 
-        // The axis labels use `toFixed`, not `toLocaleString`, so literals are the honest
-        // expectation here.
+        // The axis labels format their number through the locale (S7b), so their literals are
+        // pinned under a forced en-US, never against this machine's locale. These four print as
+        // they always did; the labels S7b changed (`1.5k`, `1M`) are pinned in its own describe.
         const axis = absOption.yAxis.axisLabel.formatter;
-        expect([-5_000, 1_300_000, 0, -0].map((value) => axis(value))).toEqual(['-5k', '1.3M', '0', '0']);
+        expect(inLocale('en-US', () => [-5_000, 1_300_000, 0, -0].map((value) => axis(value)))).toEqual(['-5k', '1.3M', '0', '0']);
 
         const absRows = tooltipRows(absOption.tooltip.formatter([{dataIndex: 0}]));
         expect(rowValue(absRows, 'dashboard.navValue')).toBe(`${BASE_CURRENCY} ${formatAmount(1_234.56)}`);
@@ -2054,5 +2085,215 @@ describe('GrowthChart ladder x axis (S7)', {timeout: 30_000}, () => {
         await view.rerender({history: FIXTURE_730.history.slice(30)});
         const zoom = await firstZoomAfter(since);
         expect({start: zoom?.start, end: zoom?.end}).toEqual({start: 0, end: 100});
+    });
+});
+
+// =============================================================================
+// S7b — the money axis ticks: distinct, in the locale's glyphs, the fixed edge unlabelled
+// =============================================================================
+
+/**
+ * Every money view (Abs, P&L line, Candles, Income) labels its y axis through one formatter,
+ * chosen when the full option is built. Three decisions shape it, and each has its cases.
+ *
+ * D18, distinct ticks. ECharts can space ticks half a thousand apart, and a formatter that
+ * rounded the scaled value to whole thousands printed `5k 6k 6k 7k 7k 8k 8k`. Two ticks shared
+ * each label, so the scale seemed to jump. A label prints the scaled value exactly (`5.5k`,
+ * `1.25M`), and a whole value with no decimals (`2k`, `1M`).
+ *
+ * D23, the locale's glyphs. The number and its minus come from `toLocaleString`, so a Swedish
+ * axis writes `−1,5k`, with U+2212 and a decimal comma. A minus written by hand is a hyphen in
+ * every locale, and in Node's default locale the locale's own minus is a hyphen too. So the
+ * Swedish cases force the call to a locale whose minus differs, and pin that glyph as a literal:
+ * the glyph is the subject. Every other literal here is pinned under a forced en-US.
+ *
+ * D25, the edge the chart fixes. The axis `min` is a callback that leaves 8% of the range below
+ * the data, and ECharts labels that edge with its raw value: exact formatting would print it as
+ * `-4.152k`. Decision B hides that one label and keeps the edge where it is. Income draws bars,
+ * so it keeps ECharts' default instead: an axis that includes zero, like any bar chart, and no
+ * hidden label. Its two keys are present and `undefined`, never omitted. The full rebuild
+ * replaces `series` and `xAxis` but MERGES `yAxis` into the previous one, so an omitted key would
+ * keep the line's callback and hidden label after a switch to Income.
+ */
+// WHY the 30 s budget: a case walks several views, each behind a 5 s wait, and a red `waitFor`
+// must be able to exhaust its own timeout and rethrow the case's assertion instead of dying on
+// the test timeout (as S7 does).
+describe('GrowthChart money axis ticks (S7b: D18, D23, D25)', {timeout: 30_000}, () => {
+    // The flag is module state shared by every case in the file. Whoever switches it on
+    // switches it off, whatever the outcome of the case (as S2a does).
+    afterEach(() => setPrivacyEnabled(false));
+
+    /** Tick sequences ECharts lays out on a money axis, with what each must print in en-US. WHY literals: the exact labels are the subject, under a forced locale. */
+    const TICKS_EN = [
+        {values: [5_000, 5_500, 6_000, 6_500, 7_000, 7_500, 8_000], labels: ['5k', '5.5k', '6k', '6.5k', '7k', '7.5k', '8k']},
+        {values: [1_000, 1_500, 2_000, 2_500], labels: ['1k', '1.5k', '2k', '2.5k']},
+        {values: [900, 950, 1_000, 1_050], labels: ['900', '950', '1k', '1.05k']},
+        {values: [1_000_000, 1_250_000, 1_500_000, 1_750_000, 2_000_000], labels: ['1M', '1.25M', '1.5M', '1.75M', '2M']},
+        {values: [-3_000, -1_500, 0, 1_500, 3_000], labels: ['-3k', '-1.5k', '0', '1.5k', '3k']},
+    ];
+
+    /** What `format` prints for each sequence in en-US, and whether those labels are distinct. WHY both: the literals pin this formatting, the property holds for any that replaces it. */
+    function readTicks(format: AxisFormatter, sequences: Array<{values: number[]}>) {
+        return inLocale('en-US', () =>
+            sequences.map(({values}) => {
+                const labels = values.map((value) => format(value));
+                return {labels, distinct: new Set(labels).size === labels.length};
+            }),
+        );
+    }
+
+    /** `-0` as written. WHY: `String(-0)` is `'0'`, which would hide which zero a line of the diff is about. */
+    const show = (value: number) => (Object.is(value, -0) ? '-0' : String(value));
+
+    /** What ECharts hands an axis `min` callback: the extent of the data on that axis. */
+    type AxisMin = (extent: {min: number; max: number}) => number;
+
+    /** The extent the edge cases hand the callback. WHY: data from -3200 to 8700 leaves an edge no tick lands on. */
+    const EXTENT = {min: -3_200, max: 8_700};
+
+    /** What a callback edge reads as in a failure diff. WHY: a named sentinel keeps the red on the assertion, not on a TypeError. */
+    const NOT_A_CALLBACK = 'not a callback';
+
+    /** The lower edge of the y axis on one full rebuild: whether `min` is a callback, where it puts the edge on `EXTENT`, and whether that edge is labelled. */
+    function lowerEdgeOf(option: FullOption) {
+        const {min, axisLabel} = option.yAxis;
+        return {
+            minIsCallback: typeof min === 'function',
+            edge: typeof min === 'function' ? (min as AxisMin)(EXTENT) : NOT_A_CALLBACK,
+            showMinLabel: axisLabel.showMinLabel,
+        };
+    }
+
+    /** The lower edge every view but Income must keep. WHY a literal: floor(-3200 - 11900 × 0.08) = -4152, counted by hand, is the oracle that the edge did not move. */
+    const FIXED_EDGE = {minIsCallback: true, edge: -4_152, showMinLabel: false};
+
+    it('D18: prints every tick of a money axis exactly, so no two ticks share a label, in Abs and in the P&L line', async () => {
+        // WHY: D18. `toFixed(0)` on thousands printed `5k 6k 6k 7k 7k 8k 8k` for ticks half a
+        // thousand apart, and `toFixed(1)` on millions printed `1.3M` for 1.25M: the axis
+        // repeated labels, and the ones it kept sat at the wrong values. Catches any rounding of
+        // the scaled value to a fixed number of decimals. The P&L line is a separate full
+        // rebuild: one sequence proves it hands ECharts the same money formatter, not an older
+        // one.
+        expect(isPrivacyEnabled()).toBe(false);
+        const {getByTestId} = render(GrowthChart, {props: {history: HISTORY}});
+
+        const absOption = await waitForFrame(FRAME.abs);
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-eur']);
+        const abs = readTicks(absOption.yAxis.axisLabel.formatter, TICKS_EN);
+
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        const lineOption = await waitForFrame(FRAME.pnlLine);
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-line']);
+        const pnlLine = readTicks(lineOption.yAxis.axisLabel.formatter, TICKS_EN.slice(0, 1));
+
+        const expected = TICKS_EN.map(({labels}) => ({labels, distinct: true}));
+        expect({abs, pnlLine}).toEqual({abs: expected, pnlLine: expected.slice(0, 1)});
+    });
+
+    it('D18: prints a whole scaled value with no decimals (2k, 20k, 1M, 900), and a zero or a negative zero as 0', async () => {
+        // WHY: exact formatting must not swing to the other extreme. `1.0M` pads a label that
+        // reads no differently without it, and a negative zero printed `-0` invents a loss on the
+        // zero line. Catches `toFixed(1)` kept on the millions, a fixed minimum of decimals, and
+        // a zero test that lets `-0` through to `toLocaleString`.
+        expect(isPrivacyEnabled()).toBe(false);
+        render(GrowthChart, {props: {history: HISTORY}});
+        const axis = (await waitForFrame(FRAME.abs)).yAxis.axisLabel.formatter;
+
+        const singles = inLocale('en-US', () => [2_000, 20_000, 1_000_000, 1_300_000, 900, -5_000, 0, -0].map((value) => `${show(value)} → ${axis(value)}`));
+        expect(singles).toEqual(['2000 → 2k', '20000 → 20k', '1000000 → 1M', '1300000 → 1.3M', '900 → 900', '-5000 → -5k', '0 → 0', '-0 → 0']);
+    });
+
+    it("D23: writes the locale's minus and decimal comma on the money axis, in the clear and masked: U+2212 in sv-SE", async () => {
+        // WHY: D23 on the axis. A minus written by hand is a hyphen in every locale, and in Node's
+        // default locale the locale's own minus is a hyphen too, so no host-locale case can tell
+        // the two apart. Forcing the call the formatter makes, `Number.prototype.toLocaleString`,
+        // to a locale whose minus is U+2212 can. Catches a hand-written `-` in the clear label
+        // and in front of the mask, and a decimal point written by hand where the locale writes
+        // a comma. The glyphs are literals on purpose: they are the subject.
+        // Precondition: this Node has Swedish locale data and writes U+2212 there. Without it the
+        // forced locale would fall back in silence and the check would prove nothing.
+        expect(leadingSign(axisNumber(-5, SWEDISH))).toBe('\u2212');
+        expect(isPrivacyEnabled()).toBe(false);
+        render(GrowthChart, {props: {history: HISTORY}});
+        const clearAxis = (await waitForFrame(FRAME.abs)).yAxis.axisLabel.formatter;
+        const clear = inLocale(SWEDISH, () => [-5_000, -1_500, 1_500, -0].map((value) => clearAxis(value)));
+
+        const beforeOn = setOptionCount();
+        setPrivacyEnabled(true);
+        const maskedAxis = (await fullOptionAfter(beforeOn)).yAxis.axisLabel.formatter;
+        const masked = inLocale(SWEDISH, () => [-5_000, 1_500, 0].map((value) => maskedAxis(value)));
+
+        expect({clear, masked}).toEqual({
+            clear: ['\u22125k', '\u22121,5k', '1,5k', '0'],
+            masked: [`\u2212${PRIVACY_PLACEHOLDER}`, PRIVACY_PLACEHOLDER, PRIVACY_PLACEHOLDER],
+        });
+    });
+
+    it('D25: keeps the lower edge where it was and hides its label, in Abs, P&L line, Candles and %', async () => {
+        // WHY: D25, decision B. ECharts labels the edge a `min` callback fixes with its raw
+        // value, which the exact labels of D18 would print as `-4.152k` under a round scale.
+        // Catches that label left shown in any of the four views. Catches too the opposite fix,
+        // the callback dropped or changed, which would move the edge: the axis would start from
+        // a nice number, or hug the data. One builder serves all four views, so walking them all
+        // catches a condition that hides the label in some views only. Income, the one view whose
+        // edge goes, is the next case.
+        expect(isPrivacyEnabled()).toBe(false);
+        const {getByTestId} = render(GrowthChart, {props: ladderProps(FIXTURE_40)});
+
+        const abs = lowerEdgeOf(await waitForFrame(FRAME.abs));
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-eur']);
+
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        const pnlLine = lowerEdgeOf(await waitForFrame(FRAME.pnlLine));
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-line']);
+
+        await fireEvent.click(getByTestId('growth-pnl-submode-candles'));
+        const candles = lowerEdgeOf(await waitForFrame(FRAME.candles));
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-candles']);
+
+        // % comes last: it draws three lines, the P&L line's frame, so entering it from the
+        // candles leaves no earlier option it could be mistaken for. Its barrier is its own
+        // formatter, whose label reads the same in every locale.
+        expect(getByTestId('growth-toggle-pct')).toBeEnabled();
+        await fireEvent.click(getByTestId('growth-toggle-pct'));
+        await waitFor(() => expect(latestFullOption().yAxis.axisLabel.formatter(12.3)).toBe('12.3%'), {timeout: 5_000});
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-pct']);
+        const pct = lowerEdgeOf(latestFullOption());
+
+        expect({abs, pnlLine, candles, pct}).toEqual({abs: FIXED_EDGE, pnlLine: FIXED_EDGE, candles: FIXED_EDGE, pct: FIXED_EDGE});
+    });
+
+    it("D25: Income hands ECharts min and showMinLabel present as undefined, so the yAxis merge cannot keep the line's edge, and the line gets both back", async () => {
+        // WHY: D25 for bars. Bars stand on zero, so Income keeps ECharts' default axis, which
+        // includes zero. The trap is the merge: the full rebuild merges `yAxis` into the previous
+        // option, so an Income option that merely OMITS `min` and `showMinLabel` keeps the
+        // line's callback and hidden label in the chart. On real ECharts 6, line then bars gave an
+        // extent of [-888, 12000] with the keys omitted, and [0, 12000] with them set to
+        // `undefined`. The recorder merges shallowly and cannot show that, so the guard is on the
+        // recorded option itself: both keys PRESENT, with the value `undefined`. A bare
+        // `toBeUndefined()` would pass on the omitted keys, the very defect. The walk enters
+        // Income from the line, the path where the merge leaks, then returns to the line, which
+        // must get its callback and hidden label back.
+        expect(isPrivacyEnabled()).toBe(false);
+        const {getByTestId} = render(GrowthChart, {props: ladderProps(FIXTURE_40)});
+        await waitForFrame(FRAME.abs);
+
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        const line = await waitForFrame(FRAME.pnlLine);
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-line']);
+        // Precondition: the view Income is entered from has a callback the merge could keep.
+        expect(typeof line.yAxis.min).toBe('function');
+
+        await fireEvent.click(getByTestId('growth-pnl-submode-income'));
+        const income = await waitForFrame(FRAME.income);
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-income']);
+        // Soft, so one red names both keys.
+        expect.soft(income.yAxis).toHaveProperty('min', undefined);
+        expect.soft(income.yAxis.axisLabel).toHaveProperty('showMinLabel', undefined);
+
+        await fireEvent.click(getByTestId('growth-pnl-submode-line'));
+        const back = await waitForFrame(FRAME.pnlLine);
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-line']);
+        expect(lowerEdgeOf(back)).toEqual(FIXED_EDGE);
     });
 });
