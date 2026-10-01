@@ -226,6 +226,13 @@ const INVENTED = {
     volatility: (index: number) => 0.12 + index * 0.02,
     /** Mean-variance expected annual return; crosses zero so both signs get drawn. */
     expectedReturn: (index: number) => 0.045 - index * 0.015,
+    /**
+     * The average annual return the L3° sort test plants instead (`zigzagExpectedReturn`), per *rank*
+     * rather than per index: it starts below zero and crosses it by the third rank, so any selection
+     * the test can stand on draws both signs, and a sort by magnitude or by the printed text lands in
+     * an order a sort by value does not.
+     */
+    zigzagExpectedReturn: (rank: number) => -0.021 + rank * 0.012,
     sharpe: (index: number) => 0.35 + index * 0.1,
     beta: (index: number) => 0.8 + index * 0.15,
     /** Bounded to [-1, 1] by the contract; this ramp stays well inside it. */
@@ -424,7 +431,7 @@ function isHistoricalReplay(analytic: RiskAnalyticRequest): boolean {
  * neither invents one. That distinction is the whole reason they are options rather
  * than separate hand-written payloads: a stub that can only produce the happy path
  * makes the unhappy paths unreachable, and a stub that produces an impossible
- * one tests a page against a world that does not exist. The third is not a state
+ * one tests a page against a world that does not exist. The last two are not states
  * at all: the same ordinary answer, with one column's figures in another order.
  */
 interface RiskStubOptions {
@@ -459,6 +466,15 @@ interface RiskStubOptions {
      * in value, a zig-zag in id order. The month keeps the ramp.
      */
     zigzagBadDay?: boolean;
+    /**
+     * Plant L3°'s average annual return as the same zig-zag, crossing zero.
+     *
+     * For the test that sorts L3°'s return column, for L1°'s reason — the ramp would sort into the
+     * selection's order or its reverse — and one of its own: the column sorts by the value with
+     * its sign, so the planted figures must hold both signs, and a loss of 2.1% must sort below a
+     * gain of 0.3% although it is larger. The benchmark's active return follows the same figure.
+     */
+    zigzagExpectedReturn?: boolean;
 }
 
 /** True when this analytic is one of the five the comparison levels read. */
@@ -711,6 +727,16 @@ function zigzagRank(position: number, count: number): number {
     return position % 2 === 0 ? position / 2 : Math.ceil(count / 2) + (position - 1) / 2;
 }
 
+/**
+ * The average annual return the stub answers for the asset at `position` of the `count` it could
+ * prepare: the ramp, or — with {@link RiskStubOptions.zigzagExpectedReturn} — the zig-zag that
+ * crosses zero. One function for the two outputs that carry it, so the risk/return point and the
+ * benchmark's active return cannot disagree about an asset.
+ */
+function plantedExpectedReturn(position: number, count: number, options: RiskStubOptions): number {
+    return options.zigzagExpectedReturn ? INVENTED.zigzagExpectedReturn(zigzagRank(position, count)) : INVENTED.expectedReturn(variant(position));
+}
+
 /** Per-asset VaR/CVaR at one horizon. Positive magnitudes, CVaR ≥ VaR. */
 function assetSetVarOutput(request: RiskRequest, analytic: RiskAnalyticRequest, options: RiskStubOptions) {
     const {covered} = preparedAssetIds(request, options);
@@ -832,7 +858,7 @@ function assetSetRiskReturnOutput(request: RiskRequest, options: RiskStubOptions
         items: covered.map((assetId, index) => ({
             asset_id: assetId,
             volatility: INVENTED.volatility(variant(index)),
-            expected_annual_return: INVENTED.expectedReturn(variant(index)),
+            expected_annual_return: plantedExpectedReturn(index, covered.length, options),
         })),
     };
 }
@@ -863,7 +889,7 @@ function assetSetComparisonOutput(request: RiskRequest, analytic: RiskAnalyticRe
             .filter((assetId) => assetId !== comparisonAssetId)
             .map((assetId, index) => {
                 const row = variant(index);
-                const activeReturn = INVENTED.expectedReturn(row) - INVENTED.benchmarkExpectedReturn;
+                const activeReturn = plantedExpectedReturn(index, covered.length, options) - INVENTED.benchmarkExpectedReturn;
                 const trackingError = INVENTED.trackingError(row);
                 return {
                     asset_id: assetId,
@@ -1866,6 +1892,57 @@ async function lossHeaderIds(page: Page): Promise<string[]> {
 async function waitForLossTable(page: Page): Promise<void> {
     await expect(lossTable(page)).toBeVisible({timeout: 20_000});
     await expect(page.getByTestId('risk-asset-set-l1-loading')).toHaveCount(0);
+}
+
+/**
+ * ─── L3° — "what did each of these pay for its risk?" ──────────────────────
+ *
+ * Since the developer's review of 30/09 L3°'s table is the project's DataTable, as L1°'s is, and
+ * its locators mirror L1°'s one for one: the wrapper publishes `data-row-count`, DataTable writes
+ * each row's asset as `data-row-id`, the asset cell carries `data-asset-id`, and the header draws
+ * one `dt-header-<id>` per visible column. `paidSection` above is the level's frame.
+ */
+const paidTable = (page: Page) => page.getByTestId('risk-asset-set-l3-table');
+
+/** The four value cells every L3° table draws, in their order; a benchmark adds beta and correlation after them. */
+const L3_CELLS = ['volatility', 'expectedReturn', 'sortino', 'sharpe'] as const;
+
+/** The L3° rows, top to bottom. Scoped to `tbody`: the header row carries no asset. */
+const paidRows = (page: Page) => paidTable(page).locator('tbody tr[data-row-id]');
+
+/** One asset's L3° row, by the id DataTable writes on it — never by position. */
+const paidRow = (page: Page, assetId: number) => paidTable(page).locator(`tbody tr[data-row-id="${assetId}"]`);
+
+/** The asset ids of the L3° rows, in the order drawn. One read, not a retry: a caller that expects an order polls it. */
+async function paidRowAssetIds(page: Page): Promise<number[]> {
+    return (await paidRows(page).evaluateAll((nodes) => nodes.map((node) => Number(node.getAttribute('data-row-id'))))).filter((id) => Number.isInteger(id));
+}
+
+/** A single L3° cell, addressed by the asset it belongs to — never by position. */
+function paidCell(page: Page, assetId: number, cell: (typeof L3_CELLS)[number]) {
+    return paidRow(page, assetId).locator(`[data-testid="risk-asset-set-l3-${cell}"]`);
+}
+
+/** One asset's L3° name cell: its type icon and its name, carrying the asset's id. */
+function paidNameCell(page: Page, assetId: number) {
+    return paidTable(page).locator(`[data-testid="risk-asset-set-l3-name"][data-asset-id="${assetId}"]`);
+}
+
+/** The L3° column ids, in the order the header draws them; a hidden column is absent. One read, not a retry. */
+async function paidHeaderIds(page: Page): Promise<string[]> {
+    return paidTable(page)
+        .locator('thead th[data-testid^="dt-header-"]')
+        .evaluateAll((nodes) => nodes.map((node) => (node.getAttribute('data-testid') ?? '').slice('dt-header-'.length)));
+}
+
+/**
+ * Wait until L3° has stopped being a skeleton and is showing its table — the same barrier as
+ * {@link waitForLossTable}: the section draws its skeleton while `loading` and no figure has
+ * arrived, so the table's presence is the "the wave landed" signal for this level too.
+ */
+async function waitForPaidTable(page: Page): Promise<void> {
+    await expect(paidTable(page)).toBeVisible({timeout: 20_000});
+    await expect(page.getByTestId('risk-asset-set-l3-loading')).toHaveCount(0);
 }
 
 /** The user id the benchmark store will scope its storage key with. */
@@ -3750,9 +3827,9 @@ test.describe('Asset Global risk laboratory', () => {
         expect(gap, 'the toggle is not to the left of the manual icon').toBeGreaterThanOrEqual(0);
         expect(gap, 'the toggle floats away from the manual icon').toBeLessThan(head.toggle.width);
 
-        // L3°'s frame is drawn, with its own manual icon, and has no toggle.
-        await expect(paidSection(page).getByTestId('risk-asset-set-paid-docs')).toBeVisible();
-        await expect(paidSection(page).getByTestId('column-visibility-toggle'), "L3° got a column toggle: only L1°'s table has one").toHaveCount(0);
+        // One toggle in L1°'s frame, its own table's. L3°'s frame has one of its own since L3° became a
+        // table too; the L3° test below proves it, and that it reads L3°'s columns rather than these.
+        await expect(frame.getByTestId('column-visibility-toggle'), "L1°'s frame carries one toggle, its own table's").toHaveCount(1);
 
         // Every column drawn, and a row per selected asset, before any column is touched.
         const selected = await chipIds(page);
@@ -3780,12 +3857,265 @@ test.describe('Asset Global risk laboratory', () => {
     });
 
     /**
+     * L3°'s headers explain; they do not link — L1°'s rule, on the table that now has L1°'s shape
+     * (the developer's review, 30/09).
+     *
+     * Each value column carries its help as the tooltip of its own title (`headerTooltip`, no URL),
+     * so there is no ⓘ beside a title and no anchor in the header row: the documentation is the
+     * frame's manual icon, one for the whole level. The return column's help is the one the
+     * developer asked for by name — how the average annual return is computed — so it is the one
+     * rested on. Its words are not read: the component test proves each title shows its own key's
+     * message; what only a browser can prove is that resting the pointer on the title opens it.
+     *
+     * And the titles fit: the table is laid out `auto`, so every column widens to its own title in
+     * whatever language. DataTable draws its titles upper-case on one line, and a fixed layout sized
+     * for Italian let a French title spill out of its column on L1°.
+     */
+    test("L3°'s value columns carry their help as a tooltip on the title, and its header row carries no link", async ({page}) => {
+        await installRiskMocks(page);
+        await openAssetGlobalRisk(page);
+        await waitForRiskCatalog(page);
+        await waitForPaidTable(page);
+
+        // Presence first: every title is drawn, so the absences below are about a header that exists
+        // rather than one that has not rendered yet.
+        for (const column of ['name', ...L3_CELLS]) {
+            await expect(paidTable(page).getByTestId(`dt-header-${column}`), `the ${column} title is missing from L3°'s header`).toBeVisible();
+        }
+        await expect(paidTable(page).locator('thead a'), "a link in L3°'s header row: the documentation belongs to the frame's manual icon").toHaveCount(0);
+        await expect(paidTable(page).locator('[data-testid^="dt-header-tooltip-"]'), 'an ⓘ beside a title: the help is the title itself').toHaveCount(0);
+        await expect(page.locator('[data-testid^="risk-asset-set-l3-docs-"]')).toHaveCount(0);
+        await expect(paidTable(page).locator('table', {has: page.getByTestId('dt-header-name')}), "L3°'s table is not laid out auto: a title longer than its column spills out of it").toHaveCSS('table-layout', 'auto');
+
+        // The help itself, where the pointer rests. The Tooltip opens after its own hover delay,
+        // which the retrying assertion absorbs: nothing here waits on a clock.
+        await paidTable(page).getByTestId('dt-sort-expectedReturn').hover();
+        const help = page.getByTestId('tooltip-content');
+        await expect(help, 'resting on the return title must open its help').toBeVisible();
+        await expect(help, 'the help opened empty').not.toHaveText(/^\s*$/);
+        await expect(help, 'the help printed its own key: the catalogue has no message for it').not.toHaveText('risk.assetSet.levels.l3.columnHelp.expectedReturn');
+        // Resting is not pressing: the column is still unsorted.
+        await expect(paidTable(page).getByTestId('dt-header-expectedReturn')).toHaveAttribute('data-sort', 'none');
+    });
+
+    /**
+     * L3° sorts a column by the figure it draws, with its sign.
+     *
+     * The average annual return is the column where the sign decides: a loss of 2.1% is larger than
+     * a gain of 0.3% and must still sort below it, so neither a sort by magnitude nor one by the
+     * printed text passes. An asset nobody could measure is a blank, not a zero, and goes last
+     * whichever way the column points; the third press clears the sort and gives the rows back in
+     * the selection's order — the only order the system ever chooses, since the level compares and
+     * never ranks.
+     *
+     * The figures are this file's own ({@link INVENTED}), re-planted as a zig-zag that crosses zero
+     * (`zigzagExpectedReturn`) so that ascending, descending and the opening order are three
+     * different orders; the blank is the asset `dropLastAsset` excludes. The expected orders are
+     * worked out from the answer the stub sent, rebuilt through the same function that sent it.
+     */
+    test('L3° sorts the average annual return by its value with its sign, the unmeasured last both ways, and a third press restores the selection order', async ({page}) => {
+        const options: RiskStubOptions = {dropLastAsset: true, zigzagExpectedReturn: true};
+        const requests = await installRiskMocks(page, options);
+        await openAssetGlobalRisk(page);
+        await ensureSelectionAtLeast(page, MINIMUM_SELECTION);
+        await waitForRiskCatalog(page);
+        await waitForPaidTable(page);
+
+        // The answer the page was given for the selection on screen, rebuilt from the request it
+        // answered: the average return of every measured asset, and the one left blank.
+        const selected = await chipIds(page);
+        await expect.poll(() => levelRequestsFor(requests, selected).length, {timeout: 20_000, message: 'the per-asset wave must have been requested for the selection on screen'}).toBeGreaterThan(0);
+        const levels = levelRequestsFor(requests, selected)[0];
+        const averageReturn = new Map(assetSetRiskReturnOutput(levels, options).items.map((item): [number, number] => [item.asset_id, item.expected_annual_return]));
+        const {excluded} = preparedAssetIds(levels, options);
+        expect(excluded, 'dropLastAsset must leave exactly one selected asset unmeasured').toHaveLength(1);
+        const unmeasured = excluded[0];
+        const losing = [...averageReturn.entries()].filter(([, value]) => value < 0).map(([assetId]) => assetId);
+        const gaining = [...averageReturn.entries()].filter(([, value]) => value > 0).map(([assetId]) => assetId);
+        expect([losing.length > 0, gaining.length > 0], `premise: the planted returns must cross zero, or the sign goes untested — read ${JSON.stringify([...averageReturn.values()])}`).toEqual([true, true]);
+
+        // Barrier: the answer is on screen — every row drawn, the measured ones measured and the
+        // excluded one blank — before any order is read.
+        await expect(paidRows(page)).toHaveCount(selected.length);
+        await expect(paidTable(page).locator('[data-testid="risk-asset-set-l3-expectedReturn"][data-measured="true"]')).toHaveCount(averageReturn.size);
+        await expect(paidCell(page, unmeasured, 'expectedReturn')).toHaveAttribute('data-measured', 'false');
+        // …and each sign is drawn as its own glyph: a loss with U+2212, a gain with +.
+        await expect(paidCell(page, losing[0], 'expectedReturn'), 'a negative average return must be drawn with U+2212').toHaveText(/^\s*\u2212/);
+        await expect(paidCell(page, gaining[0], 'expectedReturn'), 'a positive average return must be drawn with +').toHaveText(/^\s*\+/);
+
+        const opening = await paidRowAssetIds(page);
+        expect(
+            [...opening].sort((left, right) => left - right),
+            'the rows must be the selection',
+        ).toEqual([...selected].sort((left, right) => left - right));
+
+        // The oracle, stated as the rule: by the value with its sign, and a blank last either way.
+        // Every figure is distinct (`zigzagRank`), so no tie is left to the table to settle.
+        const orderedBy = (figure: (assetId: number) => number | undefined, direction: 'asc' | 'desc'): number[] =>
+            [...opening].sort((left, right) => {
+                const a = figure(left);
+                const b = figure(right);
+                if (a === undefined || b === undefined) return a === undefined ? (b === undefined ? 0 : 1) : -1;
+                return direction === 'asc' ? a - b : b - a;
+            });
+        const ascending = orderedBy((assetId) => averageReturn.get(assetId), 'asc');
+        const descending = orderedBy((assetId) => averageReturn.get(assetId), 'desc');
+        const byMagnitude = orderedBy((assetId) => (averageReturn.has(assetId) ? Math.abs(averageReturn.get(assetId) as number) : undefined), 'asc');
+        expect([ascending[ascending.length - 1], descending[descending.length - 1]], 'the oracle itself: the blank closes both orders').toEqual([unmeasured, unmeasured]);
+        // Premises: every press must move a row, and the order by value must not be the order by size.
+        expect(ascending, 'premise: ascending must differ from the opening order').not.toEqual(opening);
+        expect(descending, 'premise: descending must differ from the opening order, or "cleared" and "descending" would draw the same rows').not.toEqual(opening);
+        expect(ascending, 'premise: by value must differ from by magnitude, or a sort that dropped the sign would pass').not.toEqual(byMagnitude);
+
+        const header = paidTable(page).getByTestId('dt-header-expectedReturn');
+        const title = paidTable(page).getByTestId('dt-sort-expectedReturn');
+        await expect(header, 'L3° opens unsorted').toHaveAttribute('data-sort', 'none');
+
+        await title.click();
+        await expect(header).toHaveAttribute('data-sort', 'asc');
+        await expect.poll(() => paidRowAssetIds(page), {message: 'ascending: the lowest return first — a loss before a gain, whatever its size — and the unmeasured asset last'}).toEqual(ascending);
+
+        await title.click();
+        await expect(header).toHaveAttribute('data-sort', 'desc');
+        await expect.poll(() => paidRowAssetIds(page), {message: 'descending: the highest return first, the unmeasured asset still last'}).toEqual(descending);
+
+        await title.click();
+        await expect(header).toHaveAttribute('data-sort', 'none');
+        await expect.poll(() => paidRowAssetIds(page), {message: "the third press must give the rows back in the selection's order"}).toEqual(opening);
+    });
+
+    /**
+     * L3°'s asset cell is L1°'s: the same helper, the same icons, under L3°'s testids.
+     *
+     * The panel resolves each icon as `icon_url || getAssetTypeIconUrl(asset_type)`, and the second
+     * half never comes back empty, so every asset on this page has one; the levels hand the same map
+     * to both tables, so an asset's icon and name are the same in both. The name sits in the span the
+     * marquee attaches to — found by the marquee's own selector, a hook rather than a style — and does
+     * not wrap: a long name scrolls instead of pushing its row onto two lines.
+     */
+    test('L3° names each asset with the type icon and the one-line name L1° gives it', async ({page}) => {
+        await installRiskMocks(page);
+        await openAssetGlobalRisk(page);
+        await waitForRiskCatalog(page);
+        await waitForLossTable(page);
+        await waitForPaidTable(page);
+
+        const selected = await chipIds(page);
+        await expect(lossRows(page)).toHaveCount(selected.length);
+        await expect(paidRows(page)).toHaveCount(selected.length);
+        for (const assetId of selected) {
+            const cell = paidNameCell(page, assetId);
+            await expect(cell, `asset ${assetId} has no L3° name cell of its own`).toHaveCount(1);
+            await expect(paidRow(page, assetId).getByTestId('risk-asset-set-l3-name'), `asset ${assetId}: its L3° name cell sits in another row`).toHaveAttribute('data-asset-id', String(assetId));
+
+            const icon = cell.getByTestId('risk-asset-set-l3-icon');
+            await expect(icon, `asset ${assetId}: no type icon beside the name`).toHaveCount(1);
+            await expect(icon, `asset ${assetId}: the icon has no source`).toHaveAttribute('src', /\S/);
+
+            const name = cell.locator(OVERFLOW_MARQUEE_SELECTOR);
+            await expect(name, `asset ${assetId}: the name is not in the marquee's span`).toHaveCount(1);
+            await expect(name, `asset ${assetId}: the name is empty`).not.toHaveText(/^\s*$/);
+            await expect(name, `asset ${assetId}: the name wraps instead of scrolling`).toHaveCSS('white-space', 'nowrap');
+
+            // The same asset, drawn the same in both tables: read off L1°'s cell, behind the barriers above.
+            const l1Cell = lossNameCell(page, assetId);
+            const l1Icon = await l1Cell.getByTestId('risk-asset-set-l1-icon').getAttribute('src');
+            const l1Name = ((await l1Cell.locator(OVERFLOW_MARQUEE_SELECTOR).textContent()) ?? '').trim();
+            await expect(icon, `asset ${assetId}: L3° draws another icon than L1° — the levels did not hand both tables the same map`).toHaveAttribute('src', l1Icon ?? '');
+            await expect(name, `asset ${assetId}: L3° names it otherwise than L1°`).toHaveText(l1Name);
+        }
+    });
+
+    /**
+     * L3°'s columns are chosen from its frame, right before its manual icon — L1°'s arrangement.
+     *
+     * One toggle per level table, each in its own frame's header (`RiskLevelSection`'s `actions`),
+     * each reading its own table: the component tests pin the markup and the wiring; this shows what
+     * the reader sees — the toggle on the icon's line, right before it — and that a column of L3°
+     * really goes and really comes back, and that L1° is not touched by it.
+     *
+     * `sortino` is the column switched off because it sits between two others: the rest must close
+     * up in their order, and it must come back where it was. The choice is kept in this context's
+     * `localStorage`, under the table's own storage key, and dies with the context; the test switches
+     * it back all the same, and ends on the table it found.
+     */
+    test("L3°'s frame offers the column toggle right before its manual icon, and Sortino switched off and on goes and comes back alone", async ({page}) => {
+        await installRiskMocks(page);
+        await openAssetGlobalRisk(page);
+        await waitForRiskCatalog(page);
+        await waitForLossTable(page);
+        await waitForPaidTable(page);
+
+        const frame = paidSection(page);
+        const toggle = frame.getByTestId('column-visibility-toggle');
+        const docs = frame.getByTestId('risk-asset-set-paid-docs');
+        await expect(toggle, "L3°'s frame offers no column toggle").toBeVisible();
+        await expect(docs).toBeVisible();
+        await expect(frame.getByTestId('risk-asset-set-paid-body').getByTestId('column-visibility-toggle'), "the toggle sits in L3°'s body: it belongs to the header, beside the manual icon").toHaveCount(0);
+        await expect(page.getByTestId('asset-global-risk-panel').getByTestId('column-visibility-toggle'), 'one column toggle per level table: L1° and L3°').toHaveCount(2);
+
+        // Order and geometry in one read, after the barriers above: both boxes come from the same
+        // layout, so a section above that finishes loading and pushes the frame down cannot land
+        // between two measurements.
+        const head = await frame.evaluate((section) => {
+            const toggleNode = section.querySelector('[data-testid="column-visibility-toggle"]');
+            const docsNode = section.querySelector('[data-testid="risk-asset-set-paid-docs"]');
+            if (toggleNode === null || docsNode === null) return null;
+            const box = (node: Element) => {
+                const {left, right, top, bottom, width} = node.getBoundingClientRect();
+                return {left, right, top, bottom, width};
+            };
+            return {togglePrecedesDocs: !toggleNode.contains(docsNode) && (toggleNode.compareDocumentPosition(docsNode) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0, toggle: box(toggleNode), docs: box(docsNode)};
+        });
+        if (head === null) throw new Error('The toggle and the manual icon were visible a moment ago and are gone from the frame.');
+        expect(head.togglePrecedesDocs, 'the toggle must come before the manual icon').toBe(true);
+        expect(head.toggle.top < head.docs.bottom && head.docs.top < head.toggle.bottom, "the toggle is not on the manual icon's line").toBe(true);
+        const gap = head.docs.left - head.toggle.right;
+        expect(gap, 'the toggle is not to the left of the manual icon').toBeGreaterThanOrEqual(0);
+        expect(gap, 'the toggle floats away from the manual icon').toBeLessThan(head.toggle.width);
+
+        // Every column drawn, and a row per selected asset, before any column is touched.
+        const selected = await chipIds(page);
+        await expect(paidRows(page)).toHaveCount(selected.length);
+        const opening = ['name', ...L3_CELLS];
+        await expect.poll(() => paidHeaderIds(page), {message: 'L3° must open on every column, in its order'}).toEqual(opening);
+        await expect.poll(() => lossHeaderIds(page), {message: 'L1° must open on every column, in its order'}).toEqual(['name', ...L1_CELLS]);
+
+        await toggle.click();
+        const menu = frame.getByTestId('column-visibility-dropdown');
+        await expect(menu).toBeVisible();
+        // The menu reads L3°'s table: its columns, none of L1°'s.
+        await expect(menu.getByTestId('column-visibility-item-expectedReturn')).toBeVisible();
+        await expect(menu.getByTestId('column-visibility-item-badMonth'), "L3°'s menu lists L1°'s columns: it reads the wrong table").toHaveCount(0);
+        const sortino = menu.getByTestId('column-visibility-item-sortino');
+
+        await sortino.click();
+        await expect(paidTable(page).getByTestId('dt-header-sortino'), 'Sortino is still drawn after switching it off').toHaveCount(0);
+        await expect(paidTable(page).getByTestId('risk-asset-set-l3-sortino'), "Sortino's cells outlived its title").toHaveCount(0);
+        await expect.poll(() => paidHeaderIds(page), {message: 'the other columns must stay, closed up in their order'}).toEqual(opening.filter((column) => column !== 'sortino'));
+        for (const cell of L3_CELLS.filter((column) => column !== 'sortino')) {
+            await expect(paidTable(page).getByTestId(`risk-asset-set-l3-${cell}`), `${cell} lost cells when Sortino was hidden`).toHaveCount(selected.length);
+        }
+        // L1° is another table with another storage key: hiding a column of L3° hides nothing of it.
+        expect(await lossHeaderIds(page), "switching off L3°'s Sortino changed L1°'s columns").toEqual(['name', ...L1_CELLS]);
+
+        // Back on: the column returns where it was, with a cell in every row.
+        await sortino.click();
+        await expect.poll(() => paidHeaderIds(page), {message: 'Sortino must come back where it was'}).toEqual(opening);
+        await expect(paidTable(page).getByTestId('risk-asset-set-l3-sortino'), 'Sortino came back without its cells').toHaveCount(selected.length);
+    });
+
+    /**
      * (f) — the benchmark columns appear only when a benchmark applies.
      *
      * Both branches, because the absence is the ordinary state of this page and a
      * test that only proved the presence would leave the default unguarded.
+     *
+     * And no sentence explains the missing columns: the note that sent the reader to
+     * the Dashboard for a benchmark is gone (the developer's second review, 30/09 —
+     * "fuori luogo qui"), in either branch.
      */
-    test('L3° shows beta and correlation only when a benchmark applies', async ({page}) => {
+    test('L3° shows beta and correlation only when a benchmark applies, with no note about the benchmark either way', async ({page}) => {
         // The two navigations below (read the selection, then seed the shared
         // benchmark and come back) are the price of a module-scope store that
         // hydrates from a user-scoped key at mount.
@@ -3795,17 +4125,21 @@ test.describe('Asset Global risk laboratory', () => {
         await ensureSelectionAtLeast(page, 2);
         await waitForRiskCatalog(page);
         await waitForLossTable(page);
+        await waitForPaidTable(page);
 
         // ── The false branch, which is what this page shows by default ──────
         const paid = page.getByTestId('risk-asset-set-l3');
         await expect(paid).toHaveAttribute('data-benchmark', 'false');
-        await expect(page.getByTestId('risk-asset-set-l3-no-benchmark'), 'two columns are missing and the reason is a choice made elsewhere; leaving that to be noticed reads as a limitation of the page').toBeVisible();
-        await expect(paid.getByTestId('risk-asset-set-l3-beta')).toHaveCount(0);
-        await expect(paid.getByTestId('risk-asset-set-l3-correlation')).toHaveCount(0);
         // The columns that do not depend on a benchmark are present throughout, so
         // "the beta cells are absent" cannot be satisfied by an unrendered table.
         const selected = await chipIds(page);
         await expect(paid.getByTestId('risk-asset-set-l3-volatility')).toHaveCount(selected.length);
+        await expect(paid.getByTestId('risk-asset-set-l3-beta')).toHaveCount(0);
+        await expect(paid.getByTestId('risk-asset-set-l3-correlation')).toHaveCount(0);
+        // The blank note is drawn in the very branch the no-benchmark note sat in: with
+        // it on screen, the note's absence is about a body that exists.
+        await expect(paid.getByTestId('risk-asset-set-l3-blank-note')).toBeVisible();
+        await expect(page.getByTestId('risk-asset-set-l3-no-benchmark'), 'the no-benchmark note is back: the developer took it out of this page').toHaveCount(0);
 
         // ── The true branch ─────────────────────────────────────────────────
         // A benchmark that is not one of the measured, because
@@ -3894,6 +4228,78 @@ test.describe('Asset Global risk laboratory', () => {
         // Nothing to restore: the benchmark and the selection both live in this
         // context's `localStorage`, which dies with the context, and no database
         // row was touched by any of the above.
+    });
+
+    /**
+     * L3°'s rows select, one at a time, and the scatter follows — the one selection L3° shares
+     * between its table and its scatter (the developer's second review, 30/09).
+     *
+     * The table is DataTable in single selection, so there is no checkbox to find: a click on a
+     * row selects it, a second click on the same row clears it, and a click on another row moves
+     * the selection there. Nothing is selected on opening, and every row says so. The state is
+     * read where DataTable publishes it, `data-selected` on the row — never a class, never a
+     * colour.
+     *
+     * The row → dot half is read where the chart publishes it: `data-selected-id` on the
+     * scatter's container, the selection the chart was handed — `asset-<id>`, `""` for none —
+     * because the dot's own green is inside a canvas (`scatterChartHelpers.test.ts` pins how it
+     * is drawn). The dot → row half is not driven here: a click on a dot would need the canvas's
+     * pixel coordinates, which this suite does not compute. `AssetSetRiskReturnSection.test.ts`
+     * pins it with the real section — a dot's click selects its row through the table, a second
+     * click clears it, the benchmark's dot selects nothing — and `ScatterChart.test.ts` pins that
+     * a click on a dot comes back as that dot's id.
+     *
+     * Nothing to restore: the selection is the table's own state and dies with the page.
+     */
+    test('L3° selects one row at a time: a click selects it, a second click clears it, a click on another row moves it there, and the scatter follows', async ({page}) => {
+        await installRiskMocks(page);
+        await openAssetGlobalRisk(page);
+        await ensureSelectionAtLeast(page, 2);
+        await waitForRiskCatalog(page);
+        await waitForPaidTable(page);
+
+        // Barrier: a row per selected asset, so every count below is about a table that is drawn.
+        const selected = await chipIds(page);
+        expect(selected.length, 'premise: two rows at least, or the selection has nowhere to move').toBeGreaterThanOrEqual(2);
+        await expect(paidRows(page)).toHaveCount(selected.length);
+        const selectedRows = paidTable(page).locator('tbody tr[data-row-id][data-selected="true"]');
+
+        // The chart half is read off the scatter, which is drawn only from two placeable dots up: a
+        // premise stated here, so a missing chart fails as one rather than as a selection nobody
+        // marked. One dot per row — no benchmark on this page by default — so each row clicked below
+        // has its dot; a selection grown above gets its last dots with its own wave, hence the wait.
+        const scatter = page.getByTestId('risk-asset-set-l3-scatter');
+        await expect(scatter, 'premise: the scatter is drawn — two placeable dots at least — or there is no dot to mark').toBeVisible({timeout: 20_000});
+        await expectChartCanvas(page, 'risk-asset-set-l3-scatter', 20_000);
+        await expect(scatter, 'premise: one dot per row, so each row clicked below has a dot to mark').toHaveAttribute('data-point-count', String(selected.length), {timeout: 20_000});
+
+        // Nothing is selected on opening — and every row states it, rather than carrying no state at all.
+        await expect(paidTable(page).locator('tbody tr[data-row-id][data-selected="false"]'), 'nothing may be selected before the reader clicks').toHaveCount(selected.length);
+        await expect(selectedRows).toHaveCount(0);
+        await expect(scatter, 'nothing selected on opening: the chart is handed no dot to mark').toHaveAttribute('data-selected-id', '');
+
+        // Any two rows of this context's own selection: which two is irrelevant, they are told apart by id.
+        const [first, second] = selected;
+
+        await paidRow(page, first).click();
+        await expect(paidRow(page, first), 'a click on a row must select it').toHaveAttribute('data-selected', 'true');
+        await expect(selectedRows, 'one row selected: the one clicked').toHaveCount(1);
+        await expect(scatter, "the chart must be handed the selected row's asset, to mark its dot").toHaveAttribute('data-selected-id', `asset-${first}`);
+        // Single selection is the click itself: no checkbox column appeared to hold it.
+        await expect(paidTable(page).locator('[data-testid^="dt-row-checkbox-"], [data-testid="dt-select-all"]'), 'selecting a row drew checkboxes').toHaveCount(0);
+
+        await paidRow(page, first).click();
+        await expect(paidRow(page, first), 'a second click on the selected row must clear it').toHaveAttribute('data-selected', 'false');
+        await expect(selectedRows).toHaveCount(0);
+        await expect(scatter, 'a cleared selection must leave the chart no dot to mark').toHaveAttribute('data-selected-id', '');
+
+        await paidRow(page, first).click();
+        await expect(paidRow(page, first), 'premise: the row is selected again before the selection moves').toHaveAttribute('data-selected', 'true');
+        await paidRow(page, second).click();
+        await expect(paidRow(page, second), 'a click on another row must move the selection there').toHaveAttribute('data-selected', 'true');
+        await expect(paidRow(page, first), 'the row selected before must let go').toHaveAttribute('data-selected', 'false');
+        await expect(selectedRows, 'one row at most').toHaveCount(1);
+        await expect(scatter, "the chart's mark must move with the selection, to the new row's dot").toHaveAttribute('data-selected-id', `asset-${second}`);
     });
 
     test("broker preset: loads exactly that broker's holdings and lets no amount through, a broker holding nothing keeps the selection, and a chip removed by hand comes back through the picker", async ({page}) => {

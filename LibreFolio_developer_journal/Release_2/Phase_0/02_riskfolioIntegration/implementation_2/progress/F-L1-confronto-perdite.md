@@ -96,7 +96,7 @@ la cura al developer nella sua sessione. In L1° nessun numero cambia. Vincolo d
 | L1-3 | 5 chiavi `risk.assetSet.levels.l1.columnHelp.*` nelle 4 lingue via `dev.py i18n` (dopo il RESUME) | ✅ 2026-09-30 |
 | L1-4 | cancelli: prettier, `front check`, vitest, `front-utility`, orfani, `i18n audit`, `check-links`, `front build --debug`, E2E | ✅ 2026-09-30 |
 | L1-5 | review del developer sulla 6164, con una copia di prod fresca | ✅ 2026-09-30 (terzo giro: «Va bene così») |
-| L1-6 | checkpoint a Risk | ⏳ |
+| L1-6 | checkpoint a Risk | ✅ 2026-09-30 (committato: `76fd7f208` … `1b62abd2e`) |
 
 ## Definizione di finito
 
@@ -353,3 +353,68 @@ la cura al developer nella sua sessione. In L1° nessun numero cambia. Vincolo d
 ## Checkpoint · 2026-09-30, 15:30 (verso Risk)
 
 > Il delta, i gruppi e i digest stanno nel messaggio a Risk. Stato: FROZEN fino al commit.
+
+> ✅ **Committato** dal developer (14:2x):
+> - `76fd7f208` G1 · `2f0d12e99` G2 · `ae4079510` G3 · `c9f8de31d` G4 · `9b38a65cc` G5 · `1b62abd2e` G6;
+> - verificato in sola lettura (`/tmp/libreFolio_f4/verify_l1.sh`): **PASS**, con messaggi e file uguali per ogni
+>   commit, digest del contenuto `51497c65…`, 15 file, +1979/−106.
+>
+> **Fusione e fast-forward**:
+> - il checkpoint del calendario di Risk (`b32ddea77` e seguenti) è entrato prima della fusione F → Risk `3c46c8e60`,
+>   validata da Risk (`risk-lab` 26/26 sulla revisione combinata);
+> - il coordinatore mi porta in fast-forward su `3c46c8e60`. Verificato: HEAD `3c46c8e60`, `1b62abd2e` suo antenato,
+>   albero pulito;
+> - adattamenti di Risk nei miei file, con i miei OK: `horizon_observations` nei fixture e negli stub di VaR, il mese a
+>   30 giorni di calendario, il pin E2E `[1, 30]`, e i commenti di `assetSetLevels.test.ts` e dei due file dei
+>   fixture.
+
+## Dopo L1° · la guida e il prossimo componente · 2026-09-30, dalle 15:55
+
+**Richieste di Risk, in ordine**:
+1. la guida `user/assets/correlation.en.md`, falsa in due punti dopo il calendario (solo EN, via docs-writer, con build
+   e `check-links`; i passi del replay restano fermi fino all'F3 di Risk);
+2. proporre a Risk il prossimo componente, con la stessa analisi di L1°; niente codice prima del via del developer.
+
+**Fatti verificati sulla base `3c46c8e60`**:
+- **Il mese**: `asset_set_var` 2.0.0 (`risk_plugins/asset_set_var.py:73-99`) prende l'orizzonte in giorni di
+  calendario e lo converte con `calendar_days_to_observations` (`risk/metrics.py:731`, giorni × f / 365, arrotondato,
+  mai meno di 1). Il mese sono 30 giorni: 21 osservazioni su una serie quotata nei giorni di borsa, 30 su una quotata
+  ogni giorno. Il frontend usa `MONTHLY_VAR_HORIZON_DAYS = 30` (`riskAnalysisHelpers.ts:271`) e non mostra
+  `horizon_observations` da nessuna parte.
+- **I riporti memorizzati**: `_mark_market_closed_carries` (`series_preparation.py:132`). Una riga datata di sabato, di
+  domenica o in un festivo di una delle borse principali, con la chiusura **esattamente** uguale alla riga precedente,
+  è un riporto, non una quotazione: non aggiunge date alla finestra comune. È documentato in
+  `data-quality.en.md#stored-carries`.
+- **Frasi false nella guida**:
+  - `:99`, la riga «Bad month»: «21 consecutive observations… three weeks when it counts every day — as it does when one
+    of the selected assets comes from a source that records prices at weekends too»;
+  - la regola 2: «Some sources record prices at weekends too, and those weekends then count for the whole selection».
+
+### La guida dopo il calendario ✅ 2026-09-30, 16:00–16:20 (docs-writer `guide-calendar-fix`, solo EN)
+
+> **Note implementazione**: tre passaggi di `user/assets/correlation.en.md`.
+> - **`:99`, «Bad month»**: 30 giorni di calendario, composti dai rendimenti veri; circa 21 osservazioni se la scheda
+>   conta solo i giorni di borsa, 30 se conta ogni giorno. Via «three weeks» e la frase sulle fonti che scrivono i
+>   weekend.
+> - **Regola 2 (`:159`)**: un prezzo del weekend o di un festivo che ripete esattamente la chiusura precedente è un
+>   **riporto, non una quotazione** (link a `data-quality.md#stored-carries`) e non aggiunge date. Un weekend conta solo
+>   se un prezzo si è mosso davvero, come può fare quello di una cripto.
+> - **Punto «equità» (`:167`)**: «a weekend on which its price really moves».
+> - La pagina non promette il numero di osservazioni del mese, perché l'interfaccia non lo mostra.
+>
+> **Reperto lasciato** per la riscrittura dei passi del replay dopo l'F3 di Risk:
+> - nelle regole dei bordi (`:138-143`), «price» vuol dire in realtà «quotazione», perché anche il replay salta i
+>   riporti (`eligibility.py:246-247`);
+> - la differenza si vede solo se, vicino a un capo del periodo, le uniche righe di un asset sono chiusure ripetute di
+>   weekend o festivi.
+>
+> **Cancelli**:
+> - `dev.py mkdocs build`: exit 0, 0 WARNING; nella pagina generata c'è il link a `…/data-quality/#stored-carries`;
+> - `dev.py mkdocs check-links`: exit 0, **88 validi** (la base è cresciuta con la correzione di A), 8 non verificabili,
+>   3 ancore note.
+> - ⚠️ La build ha riscritto di nuovo il timbro di `frontend/static/sw.js`: non toccato, fuori dal checkpoint.
+
+> ✅ **Guida committata**: `31cff1e5e` (la guida) e `3eff35036` (il journal), con `sw.js` riportato al timbro committato.
+>
+> ➡️ **Seguito**: il prossimo componente, **L3° «Quanto ha pagato ciascuno per il suo rischio?»**, approvato dal developer
+> («Sì, partiamo da L3° come L1°»), prosegue nel piano [F-L3-rischio-rendimento.md](F-L3-rischio-rendimento.md).
