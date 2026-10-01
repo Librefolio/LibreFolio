@@ -3140,7 +3140,15 @@
             "beta": "Cuánto se movió el activo cuando se movía el índice de referencia: 1 significa lo mismo, 2 el doble, 0 con independencia de él.",
             "correlation": "Cuánto se movieron juntos el activo y el índice de referencia, de −1 (siempre opuestos) a +1 (siempre juntos)."
           },
-          "axisReturn": "Rentabilidad media anual"
+          "axisReturn": "Rentabilidad media anual",
+          "period": {
+            "window": "Período: del {start} al {end} ({length}).",
+            "narrowed": "Más corto que el período elegido (del {selectedStart} al {selectedEnd}).",
+            "annualized": "La volatilidad y la rentabilidad media están anualizadas; Sharpe y Sortino se derivan de ellas.",
+            "years": "{count, plural, one {# año} other {# años}}",
+            "months": "{count, plural, one {# mes} other {# meses}}",
+            "days": "{count, plural, one {# día} other {# días}}"
+          }
         }
       },
       "legend": {

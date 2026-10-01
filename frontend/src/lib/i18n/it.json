@@ -3140,7 +3140,15 @@
             "beta": "Quanto si è mosso l'asset quando si muoveva il benchmark: 1 vuol dire come lui, 2 il doppio, 0 indipendentemente da lui.",
             "correlation": "Quanto l'asset e il benchmark si sono mossi insieme, da −1 (sempre opposti) a +1 (sempre insieme)."
           },
-          "axisReturn": "Rendimento medio annuo"
+          "axisReturn": "Rendimento medio annuo",
+          "period": {
+            "window": "Periodo: dal {start} al {end} ({length}).",
+            "narrowed": "Più corto del periodo scelto (dal {selectedStart} al {selectedEnd}).",
+            "annualized": "Volatilità e rendimento medio sono annualizzati; Sharpe e Sortino derivano da questi.",
+            "years": "{count, plural, one {# anno} other {# anni}}",
+            "months": "{count, plural, one {# mese} other {# mesi}}",
+            "days": "{count, plural, one {# giorno} other {# giorni}}"
+          }
         }
       },
       "legend": {

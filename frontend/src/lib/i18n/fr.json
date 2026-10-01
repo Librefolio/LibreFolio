@@ -3140,7 +3140,15 @@
             "beta": "De combien l'actif a bougé quand la référence bougeait : 1 veut dire autant, 2 deux fois plus, 0 indépendamment d'elle.",
             "correlation": "À quel point l'actif et la référence ont évolué ensemble, de −1 (toujours opposés) à +1 (toujours ensemble)."
           },
-          "axisReturn": "Rendement moyen annuel"
+          "axisReturn": "Rendement moyen annuel",
+          "period": {
+            "window": "Période : du {start} au {end} ({length}).",
+            "narrowed": "Plus court que la période choisie (du {selectedStart} au {selectedEnd}).",
+            "annualized": "La volatilité et le rendement moyen sont annualisés ; Sharpe et Sortino en découlent.",
+            "years": "{count, plural, one {# an} other {# ans}}",
+            "months": "{count, plural, one {# mois} other {# mois}}",
+            "days": "{count, plural, one {# jour} other {# jours}}"
+          }
         }
       },
       "legend": {

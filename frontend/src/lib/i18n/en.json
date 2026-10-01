@@ -3140,7 +3140,15 @@
             "beta": "How much the asset moved when the benchmark moved: 1 means as much, 2 twice as much, 0 independently of it.",
             "correlation": "How closely the asset and the benchmark moved together, from −1 (always opposite) to +1 (always together)."
           },
-          "axisReturn": "Average annual return"
+          "axisReturn": "Average annual return",
+          "period": {
+            "window": "Period: {start} – {end} ({length}).",
+            "narrowed": "Shorter than the selected period ({selectedStart} – {selectedEnd}).",
+            "annualized": "Volatility and average return are annualised; Sharpe and Sortino derive from them.",
+            "years": "{count, plural, one {# year} other {# years}}",
+            "months": "{count, plural, one {# month} other {# months}}",
+            "days": "{count, plural, one {# day} other {# days}}"
+          }
         }
       },
       "legend": {
