@@ -67,6 +67,7 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {cashAmountsCancel} from '$lib/utils/transactions/promoteHelpers';
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/transactions/resolveValidationMessage';
+    import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
     import {generateUUID} from '$lib/utils/core/uuid';
     import {formatCurrencyAmountHtml, formatCurrencyCodeHtml} from '$lib/utils/currency/currencyFormat';
     import {getStringColor} from '$lib/utils/colors';
@@ -1570,8 +1571,8 @@
         const name = info?.display_name ?? `#${assetId}`;
         // Bug11-fix: use asset type icon as fallback when icon_url is null
         const iconUrl = info?.icon_url ?? (info?.asset_type ? getAssetTypeIconUrl(info.asset_type) : null);
-        const iconHtml = iconUrl ? `<img src="${iconUrl}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />` : '';
-        return `<span class="inline-flex items-center gap-1.5 text-sm truncate">${iconHtml}${name}</span>`;
+        const iconHtml = iconUrl ? `<img src="${escapeHtml(iconUrl)}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />` : '';
+        return `<span class="inline-flex items-center gap-1.5 text-sm truncate">${iconHtml}${escapeHtml(name)}</span>`;
     }
 
     /** H1-fix: Broker name with favicon icon for readonly cells. */
@@ -1582,7 +1583,7 @@
             height: 16,
             className: 'w-4 h-4 rounded-full object-contain shrink-0',
         });
-        return `<span class="inline-flex items-center gap-1.5 text-sm truncate">${iconHtml}${name}</span>`;
+        return `<span class="inline-flex items-center gap-1.5 text-sm truncate">${iconHtml}${escapeHtml(name)}</span>`;
     }
 
     let columns = $derived.by<ColumnDef<PendingOp>[]>(() => {
@@ -1881,7 +1882,7 @@
                     const typeLabel = $t(`assetDetail.eventType.${ev.type}`) || ev.type.replace(/_/g, ' ');
                     let tooltipHtml = `<strong>${emoji} ${typeLabel}</strong><br>${fullDate}`;
                     if (amt !== 0) tooltipHtml += `<br>${$t('transactions.bulk.eventTooltipAmount')}: <span style="font-family:monospace">${amt.toFixed(4)} ${ev.code}</span>`;
-                    if (ev.notes) tooltipHtml += `<br>📝 ${$t('common.notes')}: ${ev.notes}`;
+                    if (ev.notes) tooltipHtml += `<br>📝 ${$t('common.notes')}: ${escapeHtml(ev.notes)}`;
                     return {
                         type: 'html',
                         html: `<span class="inline-flex items-center gap-1 text-xs"><span class="text-sm">${emoji}</span><span class="text-gray-600 dark:text-gray-400">${shortDate}</span>${fmtAmt ? `<span class="font-mono text-gray-500">${fmtAmt}</span>` : ''}</span>`,
@@ -3061,7 +3062,7 @@
                                     <button type="button" class="underline hover:opacity-80 text-left" onclick={() => jumpToIssue(issue)} data-testid="tx-bulk-issue">
                                         {#if issue.index < 0}{getVisualRowLabel(issue)}:
                                         {:else}{$t('common.rowN', {values: {n: getVisualRowLabel(issue)}})}:
-                                        {/if}{@html resolveIssueMessage(issue, $t, resolverCtx)}
+                                        {/if}{@html sanitizeHtml(resolveIssueMessage(issue, $t, resolverCtx))}
                                     </button>
                                 </li>
                             {/each}
@@ -3072,7 +3073,7 @@
                         <ul class="list-disc pl-4 space-y-0.5 text-sm text-left" data-testid="tx-bulk-balance-issues">
                             {#each balanceIssues as issue}
                                 <li data-testid="tx-bulk-balance-issue">
-                                    {@html resolveIssueMessage(issue, $t, resolverCtx)}
+                                    {@html sanitizeHtml(resolveIssueMessage(issue, $t, resolverCtx))}
                                     {#if getIssueRows(issue).length > 0}
                                         <button type="button" class="block underline hover:opacity-80 text-left disabled:opacity-50" disabled={lastIssueDraftKey !== lastDraftKey} onclick={() => jumpToIssue(issue)} data-testid="tx-bulk-balance-rows">
                                             {issueRowsLabel(issue)}
@@ -3102,7 +3103,7 @@
                                     <button type="button" class="underline hover:opacity-80 text-left" onclick={() => jumpToIssue(issue)} data-testid="tx-bulk-issue">
                                         {#if issue.index < 0}{getVisualRowLabel(issue)}:
                                         {:else}{$t('common.rowN', {values: {n: getVisualRowLabel(issue)}})}:
-                                        {/if}{@html resolveIssueMessage(issue, $t, resolverCtx)}
+                                        {/if}{@html sanitizeHtml(resolveIssueMessage(issue, $t, resolverCtx))}
                                     </button>
                                 </li>
                             {/each}
@@ -3113,7 +3114,7 @@
                         <ul class="list-disc pl-4 space-y-0.5 text-sm text-left" data-testid="tx-bulk-balance-issues">
                             {#each balanceIssues as issue}
                                 <li data-testid="tx-bulk-balance-issue">
-                                    {@html resolveIssueMessage(issue, $t, resolverCtx)}
+                                    {@html sanitizeHtml(resolveIssueMessage(issue, $t, resolverCtx))}
                                     {#if getIssueRows(issue).length > 0}
                                         <button type="button" class="block underline hover:opacity-80 text-left disabled:opacity-50" disabled={lastIssueDraftKey !== lastDraftKey} onclick={() => jumpToIssue(issue)} data-testid="tx-bulk-balance-rows">
                                             {issueRowsLabel(issue)}

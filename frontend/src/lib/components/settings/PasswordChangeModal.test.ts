@@ -29,9 +29,20 @@
  *
  * One behaviour recorded here is a characterisation, not an endorsement: the
  * submit *event* bypasses `canSubmit` entirely.
+ *
+ * The last block pins markup no user looks at and Chrome's password manager
+ * reads (developer note, 30/09: Chrome offered saved credentials on the login
+ * password field only, never on the username; `LoginCard.test.ts` tells the
+ * story in full). Decision D2 aligns all three credential forms. This one's own
+ * gap is the username: there is none on screen, so when the new password is
+ * saved Chrome cannot tell which stored account it replaces. Chromium's advice
+ * for change-password forms is a username field the user does not see, carrying
+ * the account name, inside the same form. The account name comes from
+ * `currentUser`, mocked below as a writable so a test can rename the user, or
+ * end the session, under a mounted dialog.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {readable} from 'svelte/store';
+import {readable, writable} from 'svelte/store';
 import {tick} from 'svelte';
 import {cleanup, fireEvent, render, screen, waitFor, within} from '$test/component';
 
@@ -39,6 +50,13 @@ import {cleanup, fireEvent, render, screen, waitFor, within} from '$test/compone
 // can name the message that was chosen without naming any one language.
 vi.mock('$lib/i18n', () => ({_: readable((key: string) => key)}));
 vi.mock('$lib/api', () => ({zodiosApi: {change_password_api_v1_auth_change_password_post: vi.fn()}}));
+// The signed-in user, read by the hidden username field (last block). A lazy
+// `subscribe`, as in `ProfileTab.test.ts`: the factory runs while the component
+// is being imported, before `signedIn` below exists, so it must not touch the
+// store until the component subscribes to it.
+vi.mock('$lib/stores/app/auth', () => ({
+    currentUser: {subscribe: (run: (value: unknown) => void) => signedIn.subscribe(run)},
+}));
 
 import PasswordChangeModal from './PasswordChangeModal.svelte';
 import {zodiosApi} from '$lib/api';
@@ -49,6 +67,11 @@ const changePassword = vi.mocked(zodiosApi.change_password_api_v1_auth_change_pa
 const GOOD_PASSWORD = 'Str0ng!pass';
 /** A second one, equally valid, for "the new one differs from the old". */
 const OLD_PASSWORD = 'Old3r!pass';
+/** The account the dialog changes the password of, and the name it is renamed to. */
+const USERNAME = 'alice';
+const RENAMED = 'alice.renamed';
+
+const signedIn = writable<{username: string} | null>({username: USERNAME});
 
 interface Mounted {
     close: ReturnType<typeof vi.fn>;
@@ -488,5 +511,116 @@ describe('PasswordChangeModal — the submit event bypasses the button that guar
 
         await waitFor(() => expect(changePassword).toHaveBeenCalledTimes(1));
         expect(changePassword).toHaveBeenCalledWith({current_password: '', new_password: GOOD_PASSWORD});
+    });
+});
+
+describe("PasswordChangeModal — the markup Chrome's password manager reads", () => {
+    // Decision D2 (30/09). The three passwords keep their ids and labels; they
+    // gain a `name`. The username is new: see the header.
+    const PASSWORDS = [
+        {testId: 'password-current', id: 'currentPassword', name: 'current-password', autocomplete: 'current-password', key: 'settings.currentPassword'},
+        {testId: 'password-new', id: 'newPassword', name: 'new-password', autocomplete: 'new-password', key: 'settings.newPassword'},
+        {testId: 'password-confirm', id: 'confirmPassword', name: 'confirm-password', autocomplete: 'new-password', key: 'settings.confirmNewPassword'},
+    ];
+
+    beforeEach(() => signedIn.set({username: USERNAME}));
+
+    function input(testId: string): HTMLInputElement {
+        return screen.getByTestId(testId) as HTMLInputElement;
+    }
+
+    /** The dialog's one `<form>`, reached through a field in it: it has no test id. */
+    function theForm(): HTMLFormElement {
+        const form = input('password-current').form;
+        if (!form) throw new Error('the current-password field is not inside a form');
+        return form;
+    }
+
+    /** The form's one field that declares itself a username — red if none, or several. */
+    function usernameField(): HTMLInputElement {
+        const fields = Array.from(theForm().querySelectorAll<HTMLInputElement>('input[autocomplete="username"]'));
+        expect(fields, 'fields with autocomplete="username" inside the change-password form').toHaveLength(1);
+        return fields[0];
+    }
+
+    /**
+     * The named attributes of one element as a single object, `null` where
+     * absent, so a red shows every mismatch in one diff instead of the first.
+     */
+    function attributes(el: Element, names: readonly string[]): Record<string, string | null> {
+        return Object.fromEntries(names.map((name) => [name, el.getAttribute(name)]));
+    }
+
+    /** Tag and test id of an element: enough for a red to say which one it means. */
+    function describeElement(el: Element): string {
+        const testId = el.getAttribute('data-testid');
+        return testId ? `${el.tagName.toLowerCase()}[data-testid="${testId}"]` : el.tagName.toLowerCase();
+    }
+
+    it('hides a username field in the form, as Chromium asks of change-password forms', () => {
+        mount();
+        const field = usernameField();
+
+        // `type="text"`, not `type="hidden"`: the password manager reads
+        // text-like inputs, and Chromium's own example hides a real input rather
+        // than using a hidden one. `hidden` keeps it off screen and out of the
+        // tab order; `readonly` keeps it out of the user's hands.
+        expect(attributes(field, ['type', 'name', 'autocomplete'])).toEqual({type: 'text', name: 'username', autocomplete: 'username'});
+        expect(field).toHaveAttribute('hidden');
+        expect(field).not.toBeVisible();
+        expect(field).toHaveAttribute('readonly');
+        expect(field.form).toBe(theForm());
+    });
+
+    it("carries the signed-in user's username", () => {
+        mount();
+
+        expect(usernameField()).toHaveValue(USERNAME);
+    });
+
+    it('carries the new username after a rename made while the dialog was closed', async () => {
+        // `ProfileTab` keeps this dialog mounted, closed, for as long as the tab
+        // is open, and lets the user rename themselves there; `checkAuth()` then
+        // refreshes `currentUser`. A value read once at mount would file the new
+        // password under the old name.
+        const {rerender} = render(PasswordChangeModal, {isOpen: false} as never);
+        signedIn.set({username: RENAMED});
+
+        await rerender({isOpen: true} as never);
+
+        expect(usernameField()).toHaveValue(RENAMED);
+    });
+
+    it('holds an empty value, not an error, when the session ends under the open dialog', async () => {
+        mount();
+
+        signedIn.set(null);
+        await tick();
+
+        expect(usernameField()).toHaveValue('');
+    });
+
+    it.each(PASSWORDS)('names $testId by id, name and autocomplete, and keeps its label', ({testId, id, name, autocomplete, key}) => {
+        mount();
+        const field = input(testId);
+
+        expect(attributes(field, ['id', 'name', 'autocomplete', 'type'])).toEqual({id, name, autocomplete, type: 'password'});
+        expect(screen.getByLabelText(key)).toBe(field);
+        expect(field.form).toBe(theForm());
+    });
+
+    it('leaves no element with an empty id', () => {
+        // A guard: the three passwords already pass their ids, and the new
+        // username field must not bring an empty one with it.
+        const {container} = mount();
+
+        expect(Array.from(container.querySelectorAll('[id=""]'), describeElement)).toEqual([]);
+    });
+
+    it('gives every id in the dialog to one element only', () => {
+        const {container} = mount();
+        const ids = Array.from(container.querySelectorAll('[id]'), (el) => el.id).filter((id) => id !== '');
+
+        expect([...new Set(ids.filter((id, index) => ids.indexOf(id) !== index))]).toEqual([]);
     });
 });

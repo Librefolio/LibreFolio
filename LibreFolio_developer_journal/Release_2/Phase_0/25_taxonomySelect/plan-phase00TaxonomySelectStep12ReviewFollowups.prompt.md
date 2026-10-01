@@ -4,6 +4,7 @@
 > le raccomandazioni (coordinator, 29/09 10:52). Viene dopo lo step 11
 > ([`plan-phase00TaxonomySelectStep11BulkCreationOrder.prompt.md`](plan-phase00TaxonomySelectStep11BulkCreationOrder.prompt.md)).
 > Ordine **c → a → b**, un commit per punto, un solo checkpoint alla fine. Test rossi prima (test-author).
+> Seguito: step 13, [`plan-phase00TaxonomySelectStep13DevNotesFixes.prompt.md`](plan-phase00TaxonomySelectStep13DevNotesFixes.prompt.md).
 
 | | |
 |---|---|
