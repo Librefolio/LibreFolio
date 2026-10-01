@@ -67,7 +67,6 @@ from backend.app.services.provider_registry import BRIMProviderRegistry, registe
 
 logger = structlog.get_logger(__name__)
 
-PROVIDER_CODE = "broker_danske_bank"
 HISTORY_TAG = "danske_bank"
 # The equity savings cash account is in euro, and the cash statement has no currency column.
 CURRENCY = "EUR"
@@ -1598,7 +1597,7 @@ class DanskeBankBrokerProvider(BRIMProvider):
 
     @property
     def provider_code(self) -> str:
-        return PROVIDER_CODE
+        return "broker_danske_bank"
 
     @property
     def provider_name(self) -> str:
