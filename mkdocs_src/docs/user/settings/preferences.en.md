@@ -53,7 +53,7 @@ is reached.
 
 **Import Wizard** and **bulk workspace** are each one step-managed flow with individually saved
 steps. Expand either row to see its **N/M** progress and the status of each step. Optional Import
-steps (**Unify Assets**, **Corrections**, and **Duplicates**) stay pending until a real import
+steps (**Unify Assets**, **Corrections**, **Duplicates** and **Align with the bank**) stay pending until a real import
 first encounters them; they are not silently completed when an earlier import does not need
 them.
 
