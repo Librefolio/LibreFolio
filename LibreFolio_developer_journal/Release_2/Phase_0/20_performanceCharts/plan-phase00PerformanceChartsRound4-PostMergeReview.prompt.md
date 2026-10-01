@@ -58,7 +58,7 @@ Indicatore di lettura rapida: va riletto **a ogni consegna**, non a ogni sospett
 | C5 | Checkpoint: S10 E2E (brief 03, E7) e registri | C4 | ✅ **committato 2026-09-29 10:02**: `026bc20fb`…`5e638a2ed`; merge con K `b2112ba61` (registro «Checkpoint C5 — committato») |
 | C6 | Checkpoint: emoji, tipi E2E, margini della Crescita e dei lotti, guardia `axisBuilder`, registri | C5 + merge con K | ✅ pronto 2026-09-29 15:27 · ✅ **committato 22:26**: 6 commit, `6d8b951bc`…`602ea299e`; merge `921f1fc05`, gate rapido verde (registri «Checkpoint C6 — committato» e «Gate rapido sulla revisione combinata `921f1fc05`»). Dopo: D23 con D23b |
 | C7 | Checkpoint: D23 + D23b (il segno del locale nei grafici, il colore dello zero), registri | C6 + merge `921f1fc05` | ✅ pronto 2026-09-30 00:07 · ✅ **committato 10:01**: `9d8fb520b`, `039baea22`; `dev_release2` già contenuto, nessun merge (registro «Checkpoint C7 — committato») |
-| C8 | Checkpoint: S7 (asse a scala di Candele e Proventi, riga «parziale» con `escapeHtml`), registri | S7 | ✅ pronto 2026-09-30 23:51: 3 commit su `039baea22` (il pianificatore; la cura di S7; il journal), il runner diviso fra i commit 1 e 2; prima la `desc` del runner e i doc di tre helper di test (registri «Checkpoint C8 — preparazione» e «Checkpoint C8 — pronto») |
+| C8 | Checkpoint: S7 (asse a scala di Candele e Proventi, riga «parziale» con `escapeHtml`), registri | S7 | ✅ pronto 2026-09-30 23:51: 3 commit su `039baea22` (il pianificatore; la cura di S7; il journal), il runner diviso fra i commit 1 e 2; prima la `desc` del runner e i doc di tre helper di test (registri «Checkpoint C8 — preparazione» e «Checkpoint C8 — pronto») · ✅ **committato 2026-10-01 11:04**: `7bfa064f0`, `69cba356f`, `de5349e46`; merge `851d3a5cf` con `dev_release2` (`8f18416df`: il passo 13 di K e le scelte di L), una regione risolta in `GrowthChart.svelte`, gate verde (registri «Checkpoint C8 — committato», «Allineamento a `dev_release2` — merge `851d3a5cf`» e «Gate sulla revisione combinata `851d3a5cf`»). Dopo: S7b |
 | S7 | Asse dei bucket (R8 dopo D4, R10) | S6 | ✅ **2026-09-30 23:05** (avviata dal coordinator alle 10:04): il pianificatore `growthLadderAxis.ts` e la cura di `GrowthChart.svelte`; la riga «parziale» passa per `escapeHtml` (fuori pista, registro «S7 — passo 6»). Unit, build, E2E seriale e con 4 worker verdi. Decisioni: D4 ✅, D16 = (ii)+(i) ✅, D17 = (a) ✅ (§7) |
 | S7b | Tacche Y doppie (reperto N1) | S7 | 🔓 D18 = sì ✅ 2026-09-25: assi del denaro di Crescita e Performance; `%` escluso |
 | S8 | R11 valore di acquisto | S7 | ⏳ legge soltanto il motore (risposta al coordinator, 12:25): prima di iniziare rimisuro per simbolo |
@@ -4660,3 +4660,175 @@ comando la porta 6157 è libera.
 >     `GrowthChart.tooltip.test.ts`), con `growth-chart-memo`, `component-unit` e `asset-unit`;
 >   - poi S7b (tacche Y doppie, gli assi di D23, «-888»), S8 (R11), S8b (D24), la verifica sulla copia nella 6167,
 >     S11-finale (docs-writer), S12.
+
+### Checkpoint C8 — committato ✅ 2026-10-01 11:04
+
+> **Note implementazione:**
+> - **Il bundle**, costruito fra le 23:52 e le 00:12 senza scrivere nel repository dopo il registro «pronto», stava
+>   in `/tmp/libreFolio_i_c8_commits/`, con la copia nella cartella di sessione (`files/c8_commit_bundle/`). Le
+>   guardie sono quelle di C7, con HEAD `039baea22`, i 12 percorsi e i 3 alberi di C8. Un file si divide fra due
+>   commit, `_frontend_asset.py`: le patch vanno solo nell'indice, e il worktree resta alla versione finale.
+>
+> | verifica | come | esito |
+> |---|---|---|
+> | patch semplici | `git apply` in sequenza su copie di BASE, poi `cmp`, con git Homebrew 2.55 e Apple 2.54 | identici a ogni confine (10/10 percorsi a BASE, 12/12 dopo), nessun file in più. Patch 01: 3 file (2 nuovi), +1282 −1, sha256 `5a080a4c…1d93`; patch 02: 9 file, +1735 −179, sha256 `7207215c…8a31`; patch 03: il journal, +1105 −6, sha256 `6d5dea3e…1774` |
+> | prove per confine | nella copia di prova completa (tutto l'albero di BASE, `node_modules` clonato; `pipenv --venv` indica il venv condiviso): svelte-check, l'intera suite vitest, `tsc -p tsconfig.e2e.json`, Prettier, la parità dei cataloghi, `playwright --list` di `dashboard.spec.ts`; dalla radice della copia, `py_compile` del runner, `front-asset asset-unit` e `check-orphans` | svelte-check al floor a b0, b1 e b2 (3 errori, 41 avvisi, 4 file). vitest: b0 6529, b1 6591 (+62, `growthLadderAxis.test.ts`), b2 6617 (+26), 0 falliti. tsc: i 2 errori della base, invariati. Cataloghi: 3416, 3416, 3417 chiavi (+1, `chart.tooltip.partialBucket`). `--list` di dashboard: 18, 18, 24. Prettier pulito su 8, 10 e 10 file. Runner: rc 0 ai tre confini; a b1, cioè il commit 1 da solo, `check-orphans` trova 265 unit registrati e raggiungibili (264 a b0) |
+> | digest del contenuto | come in C1–C7 | `ef9600f2…9100c`, identico con 4 git: 2.53 del bundle dell'app, Homebrew 2.55, Apple 2.54, Apple 2.54 in ambiente vuoto |
+> | dry-run sul repository reale | matrice di 9 configurazioni (bash 3.2 e 5; git Apple, Homebrew e del bundle; `env -i`, anche in it_IT) | rc 0 in 9 su 9, «would commit 3/3». Fuori da `refs/copilot/` refs invariati; nessuno dei 19 oggetti propri del bundle nel repository |
+> | commit veri, in 3 cloni usa-e-getta | git Homebrew 2.55 con bash 3.2, git 2.53 con bash 5, git Apple in `env -i` | PASS 16 in ognuno: le guardie, il dry-run, 3 commit lineari, il runner intermedio nel commit 1 e finale nel 2, il secondo lancio rifiutato. Ogni clone cancellato dallo script, repository reale invariato |
+> | messaggi | `check_messages.py` | `MESSAGES OK`: subject ASCII di 37, 50 e 31 caratteri, righe ≤ 69. La scansione privacy segnala 2 righe del journal, attese: la riga «messaggi» del registro di C7 e il «token rich» di ECharts |
+> | revisione combinata, prima del merge | `merge-tree` con `dev_release2` (`8f18416df`, base del merge `5068b706c`), per HEAD e per l'albero di C8, in un archivio di oggetti usa-e-getta | una sola regione in conflitto, in `GrowthChart.svelte`, come nella simulazione del coordinator. Il target tocca altri 5 percorsi di C8 (i 4 cataloghi, `_frontend_asset.py`), che si fondono da soli |
+>
+> - sha256 dello script `1310bc9a…55cb`, derivato da quello di C7 (`485cbd92…ad58`) con sostituzioni contate.
+> - **Il developer ha committato alle 11:04** (ora d'autore 11:03:59; segnale del coordinator alle 11:12). Il
+>   coordinator ha confrontato alberi e messaggi con il bundle. La mia verifica, in sola lettura, fatta dopo il merge
+>   (`/tmp/libreFolio_i_c8_postcommit_check.sh`, 12:28):
+>   - 3 commit in fila su `039baea22`, ognuno con un solo genitore;
+>   - ogni albero è quello del bundle;
+>   - ogni messaggio è identico byte per byte al suo `.msg`;
+>   - i 12 file nell'albero di `de5349e46` hanno lo sha256 registrato nel bundle;
+>   - i 19 oggetti propri del bundle ora sono tutti nel repository (19 su 19);
+>   - `dev_release2` (`8f18416df`) è antenato di HEAD, con il merge del registro qui sotto.
+>
+> | # | commit | subject | albero |
+> |---|---|---|---|
+> | 1 | `7bfa064f0` | `feat(charts): add ladder axis planner` | `8a8d09f8e6a8` |
+> | 2 | `69cba356f` | `fix(charts): rebuild candle and income bucket axis` | `e2b708b78638` |
+> | 3 | `de5349e46` | `docs(journal): record C7 and S7` | `741865f8a6e9` |
+>
+> - **Pulizia:** cancellata `/tmp/libreFolio_i_c8_commits` (1,9 GB), dopo il confronto con `cmp` fra la copia in
+>   sessione e quella in `/tmp`: script, digest, patch e messaggi. Nella copia in sessione mancava lo script della
+>   risoluzione, `resolve_worktree.py`: l'ho aggiunto prima di cancellare (`files/c8_commit_bundle/work/`).
+
+### Allineamento a `dev_release2` — merge `851d3a5cf` ✅ 2026-10-01 12:15
+
+> **Note implementazione:**
+> - **L'apertura.** Lo script del coordinator, `/tmp/libreFolio_merge_target_into_i8_open.sh`, lanciato dal developer
+>   dopo il commit di C8, ha riconosciuto C8 dagli alberi e ha aperto il merge con `8f18416df`. Il merge base è
+>   `5068b706c`. È rimasto in conflitto il solo `GrowthChart.svelte`, nessun file non tracciato.
+> - **Il commit.** Lo script del coordinator, `/tmp/libreFolio_commit_i8_merge.sh`, con guardia sull'albero (dry run
+>   GUARDS_OK), lanciato dal developer alle 12:15; segnale del coordinator alle 12:19. La mia verifica, in sola
+>   lettura:
+>   - `851d3a5cf`, genitori `de5349e46` e `8f18416df`, albero `6b4a1dd90394`: lo stesso che stava in stage durante
+>     il gate del registro qui sotto, quindi il gate vale per il commit;
+>   - subject `merge(charts): dev_release2 into I (K step 13, L picks)`;
+>   - nessun merge in corso, albero di lavoro pulito, 0 file non tracciati; porte 6157 e 6167 libere.
+> - **Cosa porta**: 21 commit e 144 file, +7460 −355.
+>   - **Il passo 13 di K** (`80f1d9155`, CHANGELOG in `8f18416df`).
+>     - L'escape del testo utente nei sink HTML (`53219bc00`) e i gate `htmlInterpolation.gate.test.ts` e
+>       `htmlSink.gate.test.ts`, entrambi in core-unit.
+>     - `GrowthChart.tooltip.test.ts`, in component-unit, con tre casi: linea, candele, percentuale.
+>     - Gli escape nei grafici: `echartsTooltipHelpers.ts`, `signalLabel.ts`, `PriceChartFull`, `ExposureTreemap` e
+>       altri. Nessuno di questi file l'ho toccato io dal merge base.
+>   - **STALE_PRICE con la CTA di sincronizzazione** (`f1fe176a2`).
+>     - `portfolio_service.get_report` costruisce `stale_prices` dalle `end_positions` (MARKET_PRICE, asset con
+>       provider).
+>     - In `portfolio_engine.py` la `cta_action` passa da `navigate_asset` a `sync_asset_prices`.
+>     - Test: +253 righe in `test_portfolio_service.py`, +45 in `test_data_quality_report.py`.
+>   - **Borsa Italiana**.
+>     - La valuta viene dall'API dei prezzi (`fa03e116a`).
+>     - `borsa-italiana-scraping` sale a 0.3.2 (`3c9f78b50`: `Pipfile` e lock, dipendenza git `ref` `95d6a59d…`).
+>     - Il venv condiviso l'ha già aggiornato il developer sotto freeze. Misurato al gate: borsa 0.3.2, idna 3.20,
+>       soupsieve 2.10, gli stessi del lock. Nessuna azione mia.
+>   - **Le scelte di L**, prese con cherry-pick dal suo ramo:
+>     - la correzione dell'upload, `0743b9f44`: il form manda il `broker_id` (CHANGELOG `b1835949e`);
+>     - dal passo 1: i CSV in cp1252 (`cc4ae7aeb`), i plugin CSV con il lettore di base (`8efbbed14`), la `desc` del
+>       runner per `brim-provider-base` (`c1108c9d0`), gli ID d'asset finti nei doc (`e4dfb6d55`); CHANGELOG
+>       `1622a7a38`;
+>     - cambiano anche un file di istruzioni BRIM e lo skill BRIM: non è il mio dominio.
+>   - **Il resto**:
+>     - PWA: icone opache e una maskable vera (`b4f425226`), service worker ritimbrato (`3d625e703`);
+>     - i nomi dei campi per i password manager (`f23f68e2e`);
+>     - il layout da telefono della scheda asset (`007528dc6`);
+>     - le cinque toolbar (`3e5313d3e`);
+>     - le pagine developer del banner e della PWA, `user/dashboard/index.en.md` (+2);
+>     - TODO (`8bd6be663`, `b8bfd0cac`) e CHANGELOG.
+>   - Niente in `alembic/`, `app/db`, `app/schemas`, nel client API o nel `package.json`/lock del frontend: niente
+>     `npm ci`, niente ripopolamento del DB.
+> - **La risoluzione**: una regione sola, `GrowthChart.svelte:2146` (5 righe → 1), la riga del broker nel tooltip
+>   delle candele.
+>   - Tengo la mia (`fmtCurrency(v, true)`, D23b) con l'`escapeHtml(broker.brokerName)` di K.
+>   - L'ha scritta `resolve_worktree.py` (copia in `files/c8_commit_bundle/work/`), che scrive solo se lo sha
+>     coincide. Lo sha256 è `98dfee0a…fca5`: uguale alla prova preliminare e alla risoluzione rifatta dal
+>     coordinator.
+>   - Ho messo in stage solo quel file. L'albero in stage, calcolato con indice e oggetti usa-e-getta, è
+>     `6b4a1dd90394`, quello previsto dalla prova del coordinator su un clone.
+>   - Gli escape nel file risolto:
+>     - l'import `:21`;
+>     - `partialText` `:1267` (S7);
+>     - il nome del broker in `pnlRow` `:2123`;
+>     - la riga delle candele `:2146`;
+>     - `seriesName` nella vista % `:2190`.
+>   - Le altre `<span>${label}</span>` (`:2119`, `:2131`, `:2161`) ricevono etichette già passate per escape o fisse.
+> - **I 10 file toccati da entrambi i lati**: Git ha fuso da solo tutti tranne `GrowthChart.svelte`.
+>   - Verifica: ogni riga aggiunta da un lato rispetto al merge base dev'essere nel risultato in stage. Script
+>     `/tmp/libreFolio_i_m8_shared_lines.py`, log `/tmp/libreFolio_i_m8_shared_lines.log`.
+>   - Mancano solo le due versioni della riga risolta, come atteso.
+>
+> | file | righe mie presenti | righe del target presenti |
+> |---|---|---|
+> | `backend/app/services/portfolio_service.py` | 13/13 | 16/16 |
+> | `frontend/e2e/brokers/brokers-detail.spec.ts` | 348/348 | 111/111 |
+> | `GrowthChart.svelte` | 361/362 | 3/4 (la riga risolta, su entrambi i lati) |
+> | i18n `en`/`it`/`fr`/`es` | 2/2 ciascuno | 2/2 ciascuno |
+> | `routes/(app)/assets/[id]/+page.svelte` | 3/3 | 17/17 |
+> | `scripts/test_runner/_frontend_asset.py` | 11/11 | 29/29 |
+> | `scripts/test_runner/_frontend_utility.py` | 2/2 | 30/30 |
+>
+> - **`portfolio_service.py`: le due modifiche sono indipendenti.**
+>   - La mia allarga `needs_engine` in `get_report` (`:2422` nel file unito) a tutte le sezioni.
+>   - Quella del target aggiunge STALE_PRICE nel percorso del motore (`:1248`).
+>   - Con la mia, una richiesta di sole candele o proventi passa dal motore e riceve anche il nuovo avviso. È
+>     coerente.
+> - **Per i passi successivi**:
+>   - nel codice nuovo valgono i gate di K: `escapeHtml(` per il testo utente, `…Html`/`…Badge` per le variabili con
+>     HTML, `…Url`/`…Src` per gli URL;
+>   - per S11-final, `user/dashboard/index.en.md` ha 2 righe nuove del target.
+
+### Gate sulla revisione combinata `851d3a5cf` ✅ 2026-10-01 11:48 (dalle 11:17; merge aperto, albero `6b4a1dd90394`)
+
+> **Note implementazione:**
+> - Corsia: 6157, `/tmp/librefolio-r2-i-charts`, un comando alla volta, con merge aperto e albero in stage
+>   `6b4a1dd90394`, prima del commit. Il commit ha lo stesso albero (registro qui sopra): il gate vale per
+>   `851d3a5cf`.
+> - Log: `/tmp/libreFolio_i_m8_*.log`.
+> - A fine giro:
+>   - porte 6157 e 6167 libere;
+>   - albero in stage ricalcolato, `6b4a1dd90394`;
+>   - 0 voci in conflitto, albero di lavoro uguale all'indice, 0 file non tracciati;
+>   - `diff --cached --check` pulito.
+>
+> | # | gate | esito | atteso |
+> |---|---|---|---|
+> | 1 | `front build --debug` (11:17) | rc 0 | la build, più nuova di ogni sorgente, serve agli E2E |
+> | 2 | `front check` | 3 errori e 41 avvisi in 4 file, rc 1 | il floor: `TransactionFormModal.test.ts` ×2, `ToolExecutionMetrics.svelte` ×1; `BrokerSharingPanel` 27, `GlobalSettingsTab` 14 |
+> | 3 | `front-utility core-unit` | 2684/2684 su 102 file | dentro: `htmlInterpolation.gate.test.ts` 18/18, `htmlSink.gate.test.ts` 7/7 (K) |
+> | 4 | `front-asset asset-unit` | 530/530 su 19 file | dentro: `growthLadderAxis.test.ts` 62/62, `chartCoreHelpers.test.ts` 150/150. I 12 rossi di `computeZoomWindowRange` di `dev_release2` qui non ci sono |
+> | 5 | `front-utility component-unit` | 2195/2195 su 94 file | dentro: `GrowthChart.tooltip.test.ts` 6/6 (K) |
+> | 6 | `front-asset growth-chart-memo` | 49/49 | |
+> | 7 | vitest completo (`/tmp/libreFolio_i_m8_vitest_full.sh`) | 6719/6719, 1564 suite, 0 falliti, 108 s | per file: flagFont 13/13, layout.gate 2/2 |
+> | 8 | `check-orphans` | rc 0: 92 E2E, 275 unit, 224 backend raggiungibili | il runner scrive l'istantanea del DB (`test-db_20261001_113135.tar.xz`), comportamento normale |
+> | 9 | `i18n audit` | rc 0: 3418 chiavi in ognuno dei 4 cataloghi, nessuna traduzione mancante | `chart.tooltip.partialBucket` non è fra le «likely unused» |
+> | 10 | `services roi-fifo-utils` | 518/518 | dentro: i test STALE_PRICE del target, tutti verdi |
+> | 11 | `services portfolio-engine` | 42/42 | |
+> | 12 | `services portfolio-allocation-source` | 69/69 | |
+> | 13 | `services fx-core` | 23/23 | |
+> | 14 | `api portfolio` | 55/55 | server di prova sulla 6157, poi libera |
+> | 15 | `services ai-export` | 922/922, 3 avvisi, 220 s | i 3 avvisi: `PytestUnhandledThreadExceptionWarning` di aiosqlite («Event loop is closed») alla chiusura di `test_ai_export_components_fx.py::TestPairIdentity::test_direct_pair`. Nessuno dei due lati tocca `ai_export`, FX o i conftest |
+> | 16 | E2E `front-portfolio dashboard` | 24/24, 1 worker, 1,5 min | le righe di D23/S7 e i tooltip ancorati alla fixture (C5) |
+> | 17 | E2E `front-asset asset-detail` | 28/28, 1 worker, 2,0 min | `:486` «calendar-return primary mode» verde in 1,2 min, come al gate B4 (budget 180 s di `2d22130bd`) |
+> | 18 | E2E `front-broker detail` | 32/32, 1 worker, 1,2 min | `:1072` «line and income submodes render this broker own figures» verde. Il blocco di L, «import history upload» (`0743b9f44`), sta in fondo allo spec (`:1205`) ed è verde a `:1219` |
+>
+> - Nessun retry e nessun flaky nei tre log E2E. Dei rossi noti di `dev_release2` dipendenti dalla data non ne
+>   resta nessuno sulla revisione combinata: `asset-detail :486`, il P&L di `brokers-detail`, `dashboard`.
+> - **Non lanciato: `services risk-all`.**
+>   - È pesante (QuantLib, Riskfolio, worker) e appartiene a Risk.
+>   - L'unico punto di contatto è `risk/service.py:362`, che chiama `PortfolioService.get_report`, e
+>     `test_risk_service.py` lo sostituisce con un finto.
+>   - Il `get_report` combinato lo coprono già `api portfolio` e `test_portfolio_service.py`, dentro
+>     `roi-fifo-utils`.
+>   - Il coordinator (12:05) conferma che non serve: nessuno dei due lati lo tocca.
+> - **Il registro arriva dopo il commit.** La regola del piano chiede di aggiornarlo a ogni passo, ma con il merge
+>   aperto lo script del coordinator verifica l'albero: tutti e tre i registri li ho scritti dopo il commit, come per
+>   `921f1fc05`.
+> - **Prossimo:** S7b (tacche Y doppie, D18), poi S8.
