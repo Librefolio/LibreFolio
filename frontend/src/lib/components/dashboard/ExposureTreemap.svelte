@@ -9,6 +9,7 @@
   Svelte 5 Runes, dark mode, data-testid.
 -->
 <script lang="ts">
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
     import {attachChartReady} from '$lib/utils/chartReady';
@@ -582,16 +583,16 @@
                 tooltip: {
                     formatter: (params: any) => {
                         const meta = params.data?._meta;
-                        if (!meta) return params.name;
-                        let html = buildTooltipHeader(meta.broker, theme.textColor);
-                        html += buildTooltipRow($_('common.asset'), meta.assetId ? truncateName(meta.name ?? '') : params.name);
-                        html += buildTooltipRow($_('common.type'), meta.type);
-                        html += buildTooltipRow($_('common.value'), formatCurrencyAmountPlain(meta.value, displayCurrency));
+                        if (!meta) return escapeHtml(String(params.name ?? ''));
+                        let html = buildTooltipHeader(escapeHtml(String(meta.broker ?? '')), theme.textColor);
+                        html += buildTooltipRow($_('common.asset'), escapeHtml(meta.assetId ? truncateName(meta.name ?? '') : String(params.name ?? '')));
+                        html += buildTooltipRow($_('common.type'), escapeHtml(String(meta.type ?? '')));
+                        html += buildTooltipRow($_('common.value'), escapeHtml(formatCurrencyAmountPlain(meta.value, displayCurrency)));
                         if (meta.weight != null) html += buildTooltipRow($_('dashboard.navWeight'), `${meta.weight.toFixed(1)}%`);
                         html += buildTooltipDivider(theme.border);
                         if (meta.gl != null) {
                             const glColor = meta.gl >= 0 ? (isDark ? '#4ade80' : '#16a34a') : isDark ? '#f87171' : '#dc2626';
-                            html += buildTooltipRow($_('dashboard.unrealizedPnl'), `<span style="color:${glColor}">${formatCurrencyAmountPlain(meta.gl, displayCurrency, {showSign: true})}</span>`);
+                            html += buildTooltipRow($_('dashboard.unrealizedPnl'), `<span style="color:${glColor}">${escapeHtml(formatCurrencyAmountPlain(meta.gl, displayCurrency, {showSign: true}))}</span>`);
                         }
                         if (meta.glPct != null) {
                             html += buildTooltipRow('', `${(meta.glPct * 100).toFixed(2)}%`);

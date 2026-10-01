@@ -1523,7 +1523,8 @@
       "navigate_asset": "View asset",
       "navigate_fx": "View FX",
       "add_fx_pair": "Add FX pair",
-      "sync_fx_pair": "Sync rates"
+      "sync_fx_pair": "Sync rates",
+      "sync_asset_prices": "Sync prices"
     },
     "referencePriceFallback": "Lot opening price unavailable on the exact date — using last known price {reference_price} as reference for relative return",
     "referencePriceUnavailable": "No reference price available for a lot opening — relative return cannot be computed",

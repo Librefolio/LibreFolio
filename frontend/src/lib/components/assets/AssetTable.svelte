@@ -6,6 +6,7 @@
   Used by: /assets list page (table/list view)
 -->
 <script lang="ts">
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {goto} from '$app/navigation';
     import {onMount} from 'svelte';
     import {_ as t} from '$lib/i18n';
@@ -98,7 +99,7 @@
     function assetIconHtml(row: AssetRow): string {
         const iconSrc = row.icon_url || (row.asset_type ? getAssetTypeIconUrl(row.asset_type) : null);
         if (iconSrc) {
-            return `<img src="${iconSrc}" alt="" class="w-5 h-5 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />`;
+            return `<img src="${escapeHtml(iconSrc)}" alt="" class="w-5 h-5 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />`;
         }
         return `<div class="w-5 h-5 rounded-full bg-libre-green/10 flex items-center justify-center shrink-0 text-libre-green"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg></div>`;
     }
@@ -122,7 +123,7 @@
         // The map is shared with AssetCard — see assetTypeBadgeClass().
         const cls = assetTypeBadgeClass(type);
         const label = $t(`assets.types.${type}`) || type;
-        return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded ${cls}"><img src="${imgSrc}" alt="" class="w-3.5 h-3.5 object-contain" onerror="this.style.display='none'" />${label}</span>`;
+        return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded ${cls}"><img src="${escapeHtml(imgSrc)}" alt="" class="w-3.5 h-3.5 object-contain" onerror="this.style.display='none'" />${label}</span>`;
     }
 
     // =========================================================================
@@ -140,7 +141,7 @@
                     const activeDot = row.active ? '<span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>' : '<span class="w-2 h-2 rounded-full bg-red-400 shrink-0"></span>';
                     return {
                         type: 'html',
-                        html: `<div class="flex items-center gap-2 min-w-0">${icon}<span class="min-w-0 flex-1 font-medium text-gray-800 dark:text-gray-100 ${overflowScrollTextClass}">${row.display_name}</span>${activeDot}</div>`,
+                        html: `<div class="flex items-center gap-2 min-w-0">${icon}<span class="min-w-0 flex-1 font-medium text-gray-800 dark:text-gray-100 ${overflowScrollTextClass}">${escapeHtml(row.display_name)}</span>${activeDot}</div>`,
                     };
                 },
                 type: 'text',
@@ -190,7 +191,7 @@
                 header: () => $t('common.currency'),
                 cell: (row) => {
                     const info = getCurrencyInfo(row.currency);
-                    return {type: 'html', html: `<span class="emoji-flag">${info.flag_emoji}</span> ${row.currency}`};
+                    return {type: 'html', html: `<span class="emoji-flag">${info.flag_emoji}</span> ${escapeHtml(row.currency)}`};
                 },
                 type: 'text',
                 getValue: (row) => row.currency,

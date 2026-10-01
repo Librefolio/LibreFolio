@@ -1,4 +1,5 @@
 import type {ECharts} from 'echarts';
+import {escapeHtml} from '$lib/utils/core/escapeHtml';
 
 /**
  * echartsTooltipHelpers.ts — Shared tooltip and lifecycle utilities for ALL ECharts charts.
@@ -81,13 +82,13 @@ export function buildTooltipTopN(items: {name: string; value: number; color: str
 
     let html = '';
     for (const item of top) {
-        html += buildTooltipRow(item.name, formatValue(item.value), item.color);
+        html += buildTooltipRow(escapeHtml(item.name), formatValue(item.value), item.color);
     }
 
     if (rest.length > 0) {
         const sumValue = rest.reduce((s, r) => s + r.value, 0);
         const label = `${otherLabel} (${rest.length})`;
-        html += buildTooltipRow(label, formatValue(sumValue), theme.mutedColor);
+        html += buildTooltipRow(escapeHtml(label), formatValue(sumValue), theme.mutedColor);
     }
 
     return html;
@@ -113,14 +114,14 @@ export function buildTooltipByThreshold(items: {name: string; value: number; col
 
     let html = '';
     for (const item of visible) {
-        html += buildTooltipRow(item.name, formatValue(item.value), item.color);
+        html += buildTooltipRow(escapeHtml(item.name), formatValue(item.value), item.color);
     }
 
     // Grouped small items — always at the very bottom
     if (grouped.length > 0) {
         const sumValue = grouped.reduce((s, r) => s + r.value, 0);
         const label = `${remainingLabel} (${grouped.length})`;
-        html += buildTooltipRow(label, formatValue(sumValue), theme.mutedColor);
+        html += buildTooltipRow(escapeHtml(label), formatValue(sumValue), theme.mutedColor);
     }
 
     return html;

@@ -5,8 +5,10 @@ The happy paths for search, fund NAV and resolve_url live in
 fills the error and branch gaps those leave open: the pure inference helpers,
 the library-error → AssetSourceError mappings for current value / history /
 fund NAV, the ISIN scheda metadata assembly and its failure, and the search /
-resolve_url failure branches. Every scraping-library call is monkeypatched, so
-no request reaches borsaitaliana.it and each assertion is exact.
+resolve_url failure branches. It also pins where an ISIN instrument's currency
+comes from: the chart API that prices it, never the scheda page. Every
+scraping-library call is monkeypatched, so no request reaches borsaitaliana.it
+and each assertion is exact.
 """
 
 from __future__ import annotations
@@ -83,6 +85,26 @@ def _cerca_result(isin, nome, tipo, link=None):
     if link is None:
         link = f"https://www.borsaitaliana.it/borsa/search/scheda.html?code={isin}&mic=MTAA&lang=it"
     return SimpleNamespace(isin=isin, nome=nome, tipo=tipo, link=link)
+
+
+def _price_api(monkeypatch, answer):
+    """Stand in for the chart API (``ottieni_storico``) and log how it is asked.
+
+    ``answer`` is the ``valuta`` the API replies with (``None`` and ``""``
+    included) or an exception instance it raises instead. Returns the call log as
+    ``(identifier, exchange)`` pairs. A real reply always carries at least one
+    point: on an empty series the library raises ``DatiNonDisponibili`` instead.
+    """
+    calls: list[tuple[str, str | None]] = []
+
+    def fake(ident, periodo=None, sessione=None, exchange=None):
+        calls.append((ident, exchange))
+        if isinstance(answer, BaseException):
+            raise answer
+        return _storico([_punto(date.today() - timedelta(days=1), chiusura=Decimal("100"), ultimo=Decimal("100"))], valuta=answer)
+
+    monkeypatch.setattr(bi, "ottieni_storico", fake, raising=False)
+    return calls
 
 
 # ── pure helpers ─────────────────────────────────────────────────────────────
@@ -457,11 +479,13 @@ async def test_metadata_scheda_bond_full(monkeypatch):
         isin="IT0005436693",
     )
     monkeypatch.setattr(bi, "ottieni_scheda", lambda ident, mic=None, lingua=None, sessione=None, platform=None, url_diretto=None: scheda, raising=False)
+    # The currency is the chart API's answer, not the scheda's (K step 13, item 3b).
+    _price_api(monkeypatch, "EUR")
 
     result = await _provider().fetch_asset_metadata("IT0005436693", IdentifierType.ISIN, {"language": "it"})
     assert result is not None
     assert result.asset_type == AssetType.BOND
-    assert result.currency == "EUR"
+    assert result.currency == "EUR"  # from the price-API double
     assert result.identifier_isin == "IT0005436693"
     assert result.identifier_ticker == "BTP30"
     sd = result.classification_params.short_description
@@ -510,11 +534,14 @@ async def test_metadata_scheda_unresolved_page_raises_unsupported(monkeypatch):
 @pytest.mark.asyncio
 async def test_metadata_scheda_minimal_no_optional_fields(monkeypatch):
     # tipo/nome/valuta only — every optional description field is None, so the
-    # description stays None and no geographic/sector area is built.
+    # description stays None and no geographic/sector area is built. The currency
+    # is the chart API's answer, not the scheda's (K step 13, item 3b).
     scheda = _scheda(tipo="Azione", nome="ENEL", valuta="EUR", isin="IT0003128367")
     monkeypatch.setattr(bi, "ottieni_scheda", lambda ident, mic=None, lingua=None, sessione=None, platform=None, url_diretto=None: scheda, raising=False)
+    _price_api(monkeypatch, "EUR")
     result = await _provider().fetch_asset_metadata("IT0003128367", IdentifierType.ISIN)
     assert result.asset_type == AssetType.STOCK
+    assert result.currency == "EUR"  # from the price-API double
     assert result.classification_params.short_description is None
     assert result.classification_params.geographic_area is None
     assert result.classification_params.sector_area is None
@@ -663,12 +690,15 @@ async def test_resolve_url_scheda_page(monkeypatch):
     # resolve_url rediscovers the authoritative mic/platform via the site search:
     # exact-ISIN hit whose link carries the market routing params.
     monkeypatch.setattr(bi, "cerca", lambda q, lingua=None, sessione=None: [_cerca_result("IT0003128367", "ENEL", "Azione")], raising=False)
+    # The rows' currency is the chart API's answer, not the scheda's (K step 13, item 3b).
+    _price_api(monkeypatch, "EUR")
 
     url = "https://www.borsaitaliana.it/borsa/azioni/scheda/IT0003128367.html"
     items = await _provider().resolve_url(url)
     assert items is not None and len(items) == 2
     assert {it["identifier"] for it in items} == {"IT0003128367"}
     assert {it["type"] for it in items} == {AssetType.STOCK.value}
+    assert {it["currency"] for it in items} == {"EUR"}  # from the price-API double
     # the rediscovered mic lands in provider_params so the saved asset can be routed
     assert {it["provider_params"]["mic"] for it in items} == {"MTAA"}
 
@@ -698,6 +728,162 @@ async def test_resolve_url_unmatched_borsa_url_returns_none(monkeypatch):
     monkeypatch.setattr(bi, "estrai_codice_da_url", lambda url: None, raising=False)
     # A borsaitaliana.it URL that is neither a fund code nor a scheda ISIN pattern.
     assert await _provider().resolve_url("https://www.borsaitaliana.it/borsa/homepage.html") is None
+
+
+# ── Metadata currency = price-API currency (K step 13, item 3b) ──────────────
+#
+# Borsa Italiana ETF/ETC scheda pages show only the fund's *denomination*
+# currency ("Valuta di Denominazione USD"), which the scraping library used to
+# read as the trading currency. On 30/09 the Invesco Physical Gold ETC
+# (IE00B579F325), iShares Core MSCI World (IE00B4L5Y983) and iShares Core
+# S&P 500 (IE00B5BMR087) all got USD metadata while the chart API priced them
+# in EUR. So an ISIN instrument's currency comes from the SAME chart API that
+# prices it (``ottieni_storico``, with the stored-mic retry), never from the
+# scheda. A reply without a currency means EUR, history's own default, so the
+# metadata matches the prices. A failed call leaves the currency unset (unknown):
+# never a guess read off the page, never a blank over a stored currency.
+
+_GOLD_ETC = "IE00B579F325"  # Invesco Physical Gold ETC, listed on ETFplus
+_GOLD_ETC_URL = f"https://www.borsaitaliana.it/borsa/etf/scheda/{_GOLD_ETC}.html?lang=it"
+
+
+def _gold_etc_scheda(valuta: str) -> SimpleNamespace:
+    return _scheda(tipo="etf", nome="Invesco Physical Gold ETC", valuta=valuta, mercato="ETFplus", ticker="SGLD", isin=_GOLD_ETC)
+
+
+def _serve_gold_etc_page(monkeypatch, scheda_valuta: str) -> list[str]:
+    """Wire resolve_url for the gold ETC scheda URL; return the scheda-fetch log."""
+    monkeypatch.setattr(bi, "estrai_codice_da_url", lambda url: None, raising=False)  # not a fund
+    link = f"https://www.borsaitaliana.it/borsa/search/scheda.html?code={_GOLD_ETC}&mic=ETFP&lang=it"
+    monkeypatch.setattr(bi, "cerca", lambda q, lingua=None, sessione=None: [_cerca_result(_GOLD_ETC, "Invesco Physical Gold ETC", "ETC/ETN", link=link)], raising=False)
+    fetched: list[str] = []
+
+    def fake_scheda(ident, mic=None, lingua=None, sessione=None, platform=None, url_diretto=None):
+        fetched.append(ident)
+        return _gold_etc_scheda(scheda_valuta)
+
+    monkeypatch.setattr(bi, "ottieni_scheda", fake_scheda, raising=False)
+    return fetched
+
+
+@pytest.mark.asyncio
+async def test_metadata_currency_is_price_api_currency_not_scheda_denomination(monkeypatch):
+    """Gold ETC: the scheda's USD is the fund's denomination, and the chart API
+    prices it in EUR. The metadata currency must be the one the prices carry."""
+    monkeypatch.setattr(bi, "ottieni_scheda", lambda ident, mic=None, lingua=None, sessione=None, platform=None, url_diretto=None: _gold_etc_scheda("USD"), raising=False)
+    calls = _price_api(monkeypatch, "EUR")
+
+    result = await _provider().fetch_asset_metadata(_GOLD_ETC, IdentifierType.ISIN)
+
+    assert result is not None
+    assert result.currency == "EUR"
+    assert result.model_dump(exclude_unset=True)["currency"] == "EUR"  # set: a refresh writes it
+    # asked once, about this ISIN, on the default route (no mic stored)
+    assert calls == [(_GOLD_ETC, None)]
+
+
+@pytest.mark.asyncio
+async def test_metadata_currency_follows_stored_mic_retry(monkeypatch):
+    """EuroTLX T-Bond: the chart API does not know it on the default route and
+    answers in USD on the stored mic, the same retry pricing uses. The scheda
+    says EUR here, so only the API can be the source of the USD."""
+    isin = "US912810TU25"
+    scheda = _scheda(tipo="Obbligazione EuroTLX", nome="United States Treasury 4% Nv34", valuta="EUR", isin=isin)
+    monkeypatch.setattr(bi, "ottieni_scheda", lambda ident, mic=None, lingua=None, sessione=None, platform=None, url_diretto=None: scheda, raising=False)
+    calls: list[tuple[str, str | None]] = []
+
+    def chart_api(ident, periodo=None, sessione=None, exchange=None):
+        calls.append((ident, exchange))
+        if exchange is None:
+            raise bi.StrumentoNonTrovato("unknown on the default exchange")
+        return _storico([_punto(date.today() - timedelta(days=1), chiusura=Decimal("92.9"), ultimo=Decimal("92.9"))], valuta="USD")
+
+    monkeypatch.setattr(bi, "ottieni_storico", chart_api, raising=False)
+
+    result = await _provider().fetch_asset_metadata(isin, IdentifierType.ISIN, {"mic": "ETLX", "platform": "TLX"})
+
+    assert result is not None
+    assert result.currency == "USD"
+    # the retry carried the stored mic as the chart-API exchange
+    assert calls == [(isin, None), (isin, "ETLX")]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("api_error", [bi.DatiNonDisponibili, StrumentoNonRisolto, RuntimeError], ids=["DatiNonDisponibili", "StrumentoNonRisolto", "RuntimeError"])
+async def test_metadata_currency_unknown_when_price_api_fails(monkeypatch, api_error):
+    """Unknown beats guessed: when the chart API fails, the currency is left unset
+    (it reads None) even though the scheda offers a plausible EUR. The rest of the
+    metadata is still returned: the currency lookup must never sink the whole
+    fetch, nor turn into the scheda path's UNSUPPORTED_PAGE."""
+    isin = "IE00B4L5Y983"  # iShares Core MSCI World
+    scheda = _scheda(tipo="etf", nome="iShares Core MSCI World UCITS ETF USD (Acc)", valuta="EUR", mercato="ETFplus", ticker="SWDA", isin=isin)
+    monkeypatch.setattr(bi, "ottieni_scheda", lambda ident, mic=None, lingua=None, sessione=None, platform=None, url_diretto=None: scheda, raising=False)
+    calls = _price_api(monkeypatch, api_error("chart API unavailable"))
+
+    result = await _provider().fetch_asset_metadata(isin, IdentifierType.ISIN)
+
+    assert result is not None
+    assert "currency" not in result.model_dump(exclude_unset=True)  # unknown is not "blank it": a refresh keeps the stored currency
+    assert result.currency is None
+    assert result.display_name == "iShares Core MSCI World UCITS ETF USD (Acc) 🇬🇧"
+    assert result.asset_type == AssetType.ETF
+    assert result.identifier_isin == isin
+    assert result.identifier_ticker == "SWDA"
+    assert result.classification_params.short_description == "Market: ETFplus"
+    # the API was asked, and its failure is what left the currency unknown
+    assert len(calls) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("api_valuta", [None, ""], ids=["valuta-None", "valuta-empty"])
+async def test_metadata_currency_defaults_to_eur_like_history(monkeypatch, api_valuta):
+    """A chart-API reply without a currency means EUR, history's own default, so
+    the metadata currency is the one the prices will carry, not the scheda's USD."""
+    isin = "IE00B5BMR087"  # iShares Core S&P 500
+    scheda = _scheda(tipo="etf", nome="iShares Core S&P 500 UCITS ETF USD (Acc)", valuta="USD", mercato="ETFplus", ticker="CSSPX", isin=isin)
+    monkeypatch.setattr(bi, "ottieni_scheda", lambda ident, mic=None, lingua=None, sessione=None, platform=None, url_diretto=None: scheda, raising=False)
+    _price_api(monkeypatch, api_valuta)
+    provider = _provider()
+
+    result = await provider.fetch_asset_metadata(isin, IdentifierType.ISIN)
+    history = await provider.get_history_value(isin, IdentifierType.ISIN, None, date.today() - timedelta(days=5), date.today())
+
+    assert result is not None
+    assert result.currency == "EUR"
+    assert result.currency == history.currency  # one source, one default
+
+
+@pytest.mark.asyncio
+async def test_resolve_url_scheda_currency_from_one_price_api_call(monkeypatch):
+    """resolve_url on the gold ETC page: every language row carries the chart API's
+    EUR, not the scheda's USD denomination. One scheda fetch and ONE API call serve
+    the whole resolution, not one per row."""
+    fetched = _serve_gold_etc_page(monkeypatch, scheda_valuta="USD")
+    calls = _price_api(monkeypatch, "EUR")
+
+    items = await _provider().resolve_url(_GOLD_ETC_URL)
+
+    assert items is not None and len(items) == 2  # IT + EN rows
+    assert [it["currency"] for it in items] == ["EUR", "EUR"]
+    assert calls == [(_GOLD_ETC, None)]
+    assert fetched == [_GOLD_ETC]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("api_error", [bi.DatiNonDisponibili, RuntimeError], ids=["DatiNonDisponibili", "RuntimeError"])
+async def test_resolve_url_scheda_currency_unknown_when_price_api_fails(monkeypatch, api_error):
+    """A failing chart API leaves every row's currency unknown. The scheda's EUR
+    is not a fallback, and the rows are still returned."""
+    _serve_gold_etc_page(monkeypatch, scheda_valuta="EUR")
+    calls = _price_api(monkeypatch, api_error("chart API unavailable"))
+
+    items = await _provider().resolve_url(_GOLD_ETC_URL)
+
+    assert items is not None and len(items) == 2  # IT + EN rows, still returned
+    assert [it["currency"] for it in items] == [None, None]
+    assert {it["identifier"] for it in items} == {_GOLD_ETC}
+    assert {it["type"] for it in items} == {AssetType.ETF.value}
+    assert len(calls) == 1  # once per resolution, not once per row
 
 
 if __name__ == "__main__":

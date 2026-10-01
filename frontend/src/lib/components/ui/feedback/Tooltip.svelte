@@ -34,6 +34,7 @@
      */
     import type {Snippet} from 'svelte';
     import {escapeHtml, renderInlineMath} from '$lib/utils/inlineMath';
+    import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
     import {isOutsideClick} from '$lib/utils/core/clickOutside';
 
     interface Props {
@@ -420,7 +421,7 @@
         onmouseleave={handlePointerLeave}
     >
         {#if math || html}
-            {@html renderedContent}
+            {@html sanitizeHtml(renderedContent)}
         {:else}
             <span style="white-space: pre-line">{text}</span>
         {/if}
