@@ -173,5 +173,20 @@
 {/snippet}
 
 <RiskLevelSection title={$t('risk.assetSet.levels.l3.title')} level={3} testId="risk-asset-set-paid" health={l3Health} reasons={l3Reasons} errorCodes={l3Errors} metadata={l3Metadata} docsPath="financial-theory/technical-analysis/risk-metrics/" actions={riskTable ? riskActions : undefined}>
-    <AssetSetRiskReturnSection bind:tableRef={riskTable} {assetIds} {assetLabels} {assetIcons} {riskReturn} {kpi} {comparison} {benchmarkApplies} loading={controller.initialLoading} failed={controller.loadError} discarded={controller.loadDiscarded} onretry={() => void controller.loadBase(true)} />
+    <AssetSetRiskReturnSection
+        bind:tableRef={riskTable}
+        {assetIds}
+        {assetLabels}
+        {assetIcons}
+        {riskReturn}
+        {kpi}
+        {comparison}
+        {benchmarkApplies}
+        {dateStart}
+        {dateEnd}
+        loading={controller.initialLoading}
+        failed={controller.loadError}
+        discarded={controller.loadDiscarded}
+        onretry={() => void controller.loadBase(true)}
+    />
 </RiskLevelSection>
