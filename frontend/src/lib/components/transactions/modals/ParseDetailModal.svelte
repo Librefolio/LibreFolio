@@ -29,6 +29,27 @@
         status: 'pending' | 'parsing' | 'done' | 'error';
         response: BrimParseResponse | null;
         errorMessage?: string;
+        /** A report set analysed through its combined file (the row's `fileId` is the combined file). */
+        set?: {memberNames: string[]; summary: Record<string, unknown> | null; reused: boolean} | null;
+    }
+
+    /** The combine outcomes shown for a report set, in reading order. */
+    const SET_OUTCOMES = ['pair', 'standalone', 'summarized', 'deferred', 'excluded'] as const;
+
+    function summaryCounts(summary: Record<string, unknown> | null | undefined, key: string): Record<string, number> {
+        const raw = summary?.[key];
+        if (!raw || typeof raw !== 'object') return {};
+        const counts: Record<string, number> = {};
+        for (const [name, value] of Object.entries(raw as Record<string, unknown>)) {
+            if (typeof value === 'number' && Number.isFinite(value)) counts[name] = value;
+        }
+        return counts;
+    }
+
+    function reasonLabel(reason: string): string {
+        const key = `importWizard.reportSet.reason.${reason}`;
+        const translated = $t(key);
+        return translated === key ? reason : translated;
     }
 
     interface Props {
@@ -171,6 +192,34 @@
                 <div class="text-sm text-gray-500 dark:text-gray-400">
                     {$t('importWizard.txCount', {values: {n: activeResults.reduce((s, r) => s + (r.response!.transactions?.length ?? 0), 0), k: activeResults.length}})}
                 </div>
+            {/if}
+
+            <!-- Report set: how the exports were matched -->
+            {#if parseResult?.set}
+                {@const outcomes = summaryCounts(parseResult.set.summary, 'outcomes')}
+                {@const reasons = summaryCounts(parseResult.set.summary, 'reasons')}
+                <section data-testid="parse-detail-pairing" data-pair={outcomes.pair ?? 0} data-standalone={outcomes.standalone ?? 0} data-summarized={outcomes.summarized ?? 0} data-deferred={outcomes.deferred ?? 0} data-excluded={outcomes.excluded ?? 0}>
+                    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{$t('importWizard.reportSet.pairingTitle')}</h3>
+                    <p class="mb-2 text-xs text-gray-500 dark:text-gray-400">{parseResult.set.memberNames.join(' + ')}</p>
+                    <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                        {#each SET_OUTCOMES as outcome}
+                            <div class="flex flex-col items-center rounded bg-gray-100 px-2 py-1.5 dark:bg-slate-800">
+                                <span class="text-sm font-semibold text-gray-900 dark:text-white">{outcomes[outcome] ?? 0}</span>
+                                <span class="text-center text-xs text-gray-500 dark:text-gray-400">{$t(`importWizard.reportSet.outcome.${outcome}`)}</span>
+                            </div>
+                        {/each}
+                    </div>
+                    {#if Object.keys(reasons).length > 0}
+                        <ul class="mt-2 space-y-0.5 text-xs text-gray-600 dark:text-gray-400">
+                            {#each Object.entries(reasons) as [reason, count]}
+                                <li data-testid="parse-detail-pairing-reason" data-reason={reason}>{reasonLabel(reason)}: {count}</li>
+                            {/each}
+                        </ul>
+                    {/if}
+                    <a class="mt-2 inline-flex items-center gap-1 text-xs text-libre-green hover:underline" href={`/api/v1/brokers/import/files/${encodeURIComponent(parseResult.fileId)}/download`} data-testid="parse-detail-download-combined">
+                        <FileText size={12} />{$t('importWizard.reportSet.downloadCombined')}
+                    </a>
+                </section>
             {/if}
 
             <!-- TX by Type -->

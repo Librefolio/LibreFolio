@@ -42,7 +42,7 @@
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
     import {BrokerSearchSelect} from '$lib/components/ui/select';
-    import ImportPluginSelect, {getCachedPlugins} from '$lib/components/ui/select/ImportPluginSelect.svelte';
+    import ImportPluginSelect, {getCachedPlugins, setCachedPlugins} from '$lib/components/ui/select/ImportPluginSelect.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
     import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
@@ -62,6 +62,7 @@
     import BrimNoticeList from '$lib/components/transactions/import/BrimNoticeList.svelte';
     import FixFlaggedStep, {type FixPatch} from '$lib/components/transactions/import/FixFlaggedStep.svelte';
     import AssetGroupStep from '$lib/components/transactions/import/AssetGroupStep.svelte';
+    import ReportSetCard from '$lib/components/transactions/import/ReportSetCard.svelte';
     import AssetMergeModal from '$lib/components/assets/AssetMergeModal.svelte';
     import TransactionCompareModal from '$lib/components/transactions/modals/TransactionCompareModal.svelte';
     import type {CompareColumn, CompareField, CompareCell} from '$lib/components/transactions/modals/TransactionCompareModal.svelte';
@@ -75,12 +76,13 @@
     import {buildMergedTransactions, mergeCandidates, uniqueCandidateId} from '$lib/utils/transactions/importMerge';
     import {cmpSourceFromTx, cmpSourceFromExisting, compareTypeCellHtml, type CmpSource} from '$lib/utils/transactions/importCompare';
     import {createNamesFor, createOtherFor, duplicateCandidates, resolutionLabel as resolutionLabelPure} from '$lib/utils/transactions/importResolutionHelpers';
-    import {brokerIdForTx, beforeOpeningInfo, isBeforeOpening as isBeforeOpeningPure, isRowAssetResolved as isRowAssetResolvedPure, shouldAutoSelectOnRecheck} from '$lib/utils/transactions/importRowState';
+    import {brokerIdForTx, beforeOpeningInfo, isBeforeHistory as isBeforeHistoryPure, isBeforeOpening as isBeforeOpeningPure, isRowAssetResolved as isRowAssetResolvedPure, shouldAutoSelectOnRecheck} from '$lib/utils/transactions/importRowState';
+    import {buildParseUnits, combinedFileForSet, groupBrokerFiles, setBlocksAnalysis, setPluginFor, setSelectionState, type ReportSetGroup, type SetPluginInfo, type SetPreviewState} from '$lib/utils/transactions/importReportSets';
     import {groupPartitions as groupPartitionsPure, defaultKeeperIndices as defaultKeeperIndicesPure, resolverSelectionFor as resolverSelectionForPure, outlierIndexSet, carryResolverChoices, type ResolverChoices} from '$lib/utils/transactions/importDuplicateResolver';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import {onboardingGuide, type ImportGuideStepId} from '$lib/features/onboarding/onboardingGuide.svelte';
 
-    import type {TransactionCreateItem, BrimFile, BrimParseResponse, FilePreviewResponse} from '$lib/types';
+    import type {TransactionCreateItem, BrimFile, BrimParseResponse, BrimPlugin, BrimSetCombineResponse, BrimSetPreview, FilePreviewResponse} from '$lib/types';
 
     // =========================================================================
     // Props
@@ -194,6 +196,8 @@
         brokerId: number | null;
         status: 'pending' | 'uploading' | 'uploaded' | 'error';
         serverFileId?: string;
+        /** The server's file info, from the upload response: role detection needs its plugins and batch. */
+        serverInfo?: BrimFile;
         errorMessage?: string;
     }
 
@@ -204,6 +208,27 @@
     let fileUploaderRef: FileUploader | undefined = $state(undefined);
     let dropZoneExpanded = $state(true); // T2: collapsible drop zone
     let dropZoneContainerRef: HTMLDivElement | undefined = $state(undefined);
+
+    /**
+     * One upload batch per wizard session: the files uploaded together form a report set
+     * (design D-S22), and an export dropped after the "missing export" warning joins that set.
+     */
+    let uploadBatchId = $state(generateUUID());
+
+    /** A required export missing from a set this session uploaded (design §4.2). */
+    interface Step1SetWarning {
+        key: string;
+        pluginCode: string;
+        pluginName: string;
+        docsUrl: string | null;
+        roleCode: string;
+        roleLabel: string;
+        extensions: string;
+        start: string | null;
+        end: string | null;
+    }
+
+    let step1SetWarnings = $state<Step1SetWarning[]>([]);
 
     // T1/R3: click outside drop zone → collapse if files exist
     $effect(() => {
@@ -249,8 +274,29 @@
     let expandedBrokers = $state<Set<number>>(new Set());
     let filePluginOverrides = $state<Map<string, string>>(new Map());
 
+    // Report sets (design §4.3): the plugin catalogue, the files grouped into sets, each set's
+    // preview, and which cards are open. A set is selected, analysed and imported as a whole.
+    type SetPreviewEntry = SetPreviewState & {preview?: BrimSetPreview | null};
+    let importPlugins = $state<BrimPlugin[]>([]);
+    let setPreviews = $state<Map<string, SetPreviewEntry>>(new Map());
+    let expandedSets = $state<Set<string>>(new Set());
+    let setUploadingRole = $state<Map<string, string>>(new Map());
+    let setPreviewEpoch = 0;
+    let setPluginInfos = $derived(importPlugins as unknown as SetPluginInfo[]);
+    let brokerSetGroups = $derived.by(() => {
+        const groups = new Map<number, {sets: ReportSetGroup[]; singles: BrimFile[]}>();
+        for (const [brokerId, files] of brokerFilesMap) groups.set(brokerId, groupBrokerFiles(brokerId, files, setPluginInfos, filePluginOverrides));
+        return groups;
+    });
+    let allReportSets = $derived([...brokerSetGroups.values()].flatMap((group) => group.sets));
+    let selectedFileIdSet = $derived(new Set(selectedFiles.map((f) => f.fileId)));
+    let blockingSets = $derived(allReportSets.filter((set) => setBlocksAnalysis(set, selectedFileIdSet, setPreviews.get(set.key))));
+    let parseUnits = $derived(buildParseUnits(selectedFiles, allReportSets));
+    let selectedSetCount = $derived(parseUnits.filter((unit) => unit.kind === 'set').length);
+    let setPreviewsLoading = $derived([...setPreviews.values()].some((entry) => entry.status === 'loading'));
+
     // T9: Parse validation — all selected files must have a plugin
-    let step2CanParse = $derived(selectedFiles.length > 0 && selectedFiles.every((f) => f.pluginCode !== ''));
+    let step2CanParse = $derived(selectedFiles.length > 0 && selectedFiles.every((f) => f.pluginCode !== '') && blockingSets.length === 0);
 
     // =========================================================================
     // Step 3 State — Parse Engine & Results
@@ -268,6 +314,20 @@
         status: 'pending' | 'parsing' | 'done' | 'error';
         response: BrimParseResponse | null;
         errorMessage?: string;
+        /** Set when the row is a report set, analysed as one through its combined file. */
+        set?: ParsedSetInfo;
+    }
+
+    /** A report set analysed as one row: its files, and the combined file it is parsed through. */
+    interface ParsedSetInfo {
+        key: string;
+        batchId: string;
+        uploadedAt: string;
+        memberIds: string[];
+        memberNames: string[];
+        combinedFileId: string | null;
+        summary: Record<string, unknown> | null;
+        reused: boolean;
     }
 
     let parseResults = $state<ParsedFileResult[]>([]);
@@ -660,24 +720,38 @@
         mergedTransactions = mergedTransactions.map((t) => (beforeOpeningIndices.has(t.index) ? {...t, selected: false} : t));
     });
 
+    /** A report set's rows before H0: already represented in LibreFolio, hidden in the review and never imported. */
+    function isBeforeHistory(mt: MergedTx): boolean {
+        return isBeforeHistoryPure(mt, parseResults);
+    }
+
+    let beforeHistoryIndices = $derived.by(() => new Set(mergedTransactions.filter(isBeforeHistory).map((t) => t.index)));
+    let showBeforeHistory = $state(false);
+
+    $effect(() => {
+        if (!mergedTransactions.some((t) => t.selected && beforeHistoryIndices.has(t.index))) return;
+        mergedTransactions = mergedTransactions.map((t) => (beforeHistoryIndices.has(t.index) ? {...t, selected: false} : t));
+    });
+
     /** True unless the row's asset is an unresolved fake mapping (no bound real asset yet). */
     function isRowAssetResolved(t: MergedTx): boolean {
         return isRowAssetResolvedPure(t, assetResolutions);
     }
 
     // Step 4 deriveds
-    let step4Rows = $derived(mergedTransactions.filter((t) => !isResolvedAwayDuplicate(t)));
+    let step4Rows = $derived(mergedTransactions.filter((t) => !isResolvedAwayDuplicate(t) && (showBeforeHistory || !beforeHistoryIndices.has(t.index))));
     let step4SelectedCount = $derived(mergedTransactions.filter((t) => t.selected && !beforeOpeningIndices.has(t.index)).length);
-    let step4TotalCount = $derived(step4Rows.filter((t) => !beforeOpeningIndices.has(t.index)).length);
+    let step4TotalCount = $derived(step4Rows.filter((t) => !beforeOpeningIndices.has(t.index) && !beforeHistoryIndices.has(t.index)).length);
     let step4UnresolvedCount = $derived(assetResolutions.filter((r) => r.resolvedAssetId === null).length);
     let step4MissingAssetCount = $derived(assetResolutions.filter((r) => r.resolvedAssetId === null && r.candidates.length === 0).length);
     let step4HasUnresolvedSelected = $derived(mergedTransactions.some((t) => t.selected && !beforeOpeningIndices.has(t.index) && !isRowAssetResolved(t)));
     let step4CanImport = $derived(step4SelectedCount > 0 && !step4HasUnresolvedSelected && !candidatesRefreshing && !candidatesError && !duplicateRecheckRunning && !importPreparing);
     let step4SelectedDuplicateCount = $derived(mergedTransactions.filter((t) => t.selected && !beforeOpeningIndices.has(t.index) && duplicateStatusIsSelectedWarning(t.duplicateStatus)).length);
     let step4BeforeOpeningCount = $derived(beforeOpeningIndices.size);
+    let step4BeforeHistoryCount = $derived(beforeHistoryIndices.size);
     // Reasons a visible step-4 row is pre-deselected (for the explanatory banner)
-    let step4DeselectPendingDup = $derived(step4Rows.filter((t) => !t.selected && !beforeOpeningIndices.has(t.index) && t.duplicateStatus === 'pending_duplicate').length);
-    let step4DeselectDbDup = $derived(step4Rows.filter((t) => !t.selected && !beforeOpeningIndices.has(t.index) && t.duplicateStatus === 'likely').length);
+    let step4DeselectPendingDup = $derived(step4Rows.filter((t) => !t.selected && !beforeOpeningIndices.has(t.index) && !beforeHistoryIndices.has(t.index) && t.duplicateStatus === 'pending_duplicate').length);
+    let step4DeselectDbDup = $derived(step4Rows.filter((t) => !t.selected && !beforeOpeningIndices.has(t.index) && !beforeHistoryIndices.has(t.index) && t.duplicateStatus === 'likely').length);
     let step4HasDeselectReasons = $derived(step4BeforeOpeningCount > 0 || step4DeselectPendingDup > 0 || step4DeselectDbDup > 0);
 
     interface BrokerOpeningIssue {
@@ -819,7 +893,10 @@
     function rebuildDuplicateGroups(txArr: MergedTx[], assetMap: Map<number, AssetResolution>, previous?: {groups: DuplicateGroup[]; rows: MergedTx[]; choices: ResolverChoices}): DuplicateGroup[] {
         // The editor verdict first: the resolver below reads it to choose the keepers.
         detectPendingBulkDuplicates(txArr, assetMap);
-        const groups = buildDuplicateGroups(txArr, assetMap);
+        const groups = buildDuplicateGroups(
+            txArr.filter((mt) => !isBeforeHistory(mt)),
+            assetMap,
+        );
         duplicateGroups = groups;
         let changed: DuplicateGroup[] = [];
         if (previous) {
@@ -1240,7 +1317,7 @@
 
     function buildFinalTxList(): Array<{tx: TransactionCreateItem; todos: ImportTodo[]}> {
         return mergedTransactions
-            .filter((t) => t.selected && !beforeOpeningIndices.has(t.index))
+            .filter((t) => t.selected && !beforeOpeningIndices.has(t.index) && !beforeHistoryIndices.has(t.index))
             .map((t) => {
                 const tx = {...t.tx} as any;
                 const assetId = typeof tx.asset_id === 'number' ? tx.asset_id : null;
@@ -1794,14 +1871,16 @@
                 align: 'center' as const,
                 pinned: 'left' as const,
                 sortFn: (a: MergedTx, b: MergedTx) => {
-                    const order = {before_opening: 0, unresolved: 1, pending_duplicate: 2, pending_possible_duplicate: 3, likely: 4, possible: 5, unique: 6};
+                    const order = {before_history: 0, before_opening: 0, unresolved: 1, pending_duplicate: 2, pending_possible_duplicate: 3, likely: 4, possible: 5, unique: 6};
                     const aKey = (() => {
+                        if (beforeHistoryIndices.has(a.index)) return 'before_history';
                         if (beforeOpeningIndices.has(a.index)) return 'before_opening';
                         const id = typeof a.tx.asset_id === 'number' ? a.tx.asset_id : null;
                         if (id !== null && isFakeAssetId(id) && !assetResolutions.find((r) => r.fakeAssetId === id)?.resolvedAssetId) return 'unresolved';
                         return a.duplicateStatus;
                     })();
                     const bKey = (() => {
+                        if (beforeHistoryIndices.has(b.index)) return 'before_history';
                         if (beforeOpeningIndices.has(b.index)) return 'before_opening';
                         const id = typeof b.tx.asset_id === 'number' ? b.tx.asset_id : null;
                         if (id !== null && isFakeAssetId(id) && !assetResolutions.find((r) => r.fakeAssetId === id)?.resolvedAssetId) return 'unresolved';
@@ -1810,6 +1889,7 @@
                     return (order[aKey as keyof typeof order] ?? 3) - (order[bKey as keyof typeof order] ?? 3);
                 },
                 getValue: (mt) => {
+                    if (beforeHistoryIndices.has(mt.index)) return 'before_history';
                     if (beforeOpeningIndices.has(mt.index)) return 'before_opening';
                     const assetId = typeof mt.tx.asset_id === 'number' ? mt.tx.asset_id : null;
                     if (assetId !== null && isFakeAssetId(assetId) && !assetResolutions.find((r) => r.fakeAssetId === assetId)?.resolvedAssetId) return 'unresolved';
@@ -1823,8 +1903,16 @@
                     {value: 'pending_possible_duplicate', label: $t('importWizard.status.possiblePendingDuplicate')},
                     {value: 'unresolved', label: $t('importWizard.status.unresolved')},
                     {value: 'before_opening', label: $t('importWizard.status.beforeOpening')},
+                    {value: 'before_history', label: $t('importWizard.reportSet.beforeHistoryStatus')},
                 ],
                 cell: (mt) => {
+                    if (beforeHistoryIndices.has(mt.index)) {
+                        return {
+                            type: 'html',
+                            html: `<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300" data-testid="import-wizard-before-history-badge"><span>⏮</span><span class="hidden sm:inline">${$t('importWizard.reportSet.beforeHistoryStatus')}</span></span>`,
+                            tooltip: {text: $t('importWizard.reportSet.beforeHistoryTooltip'), position: 'top', maxWidth: '300px'},
+                        };
+                    }
                     if (beforeOpeningIndices.has(mt.index)) {
                         return {
                             type: 'html',
@@ -1899,7 +1987,7 @@
                 width: 44,
                 minWidth: 44,
                 cell: (mt) => {
-                    const beforeOpening = beforeOpeningIndices.has(mt.index);
+                    const beforeOpening = beforeOpeningIndices.has(mt.index) || beforeHistoryIndices.has(mt.index);
                     return {
                         type: 'editable-checkbox',
                         value: beforeOpening ? false : mt.selected,
@@ -2190,7 +2278,7 @@ ${arrow}<span>${label}</span></span>`,
     function step4SelectAll() {
         // Do not re-select in-batch duplicates that were resolved away (non-keeper group members):
         // selecting them would surface hidden duplicates. Keepers and non-group rows are selected.
-        mergedTransactions = mergedTransactions.map((t) => ({...t, selected: !beforeOpeningIndices.has(t.index) && !(t.dupGroupKey != null && t.isDupKeeper === false)}));
+        mergedTransactions = mergedTransactions.map((t) => ({...t, selected: !beforeOpeningIndices.has(t.index) && !beforeHistoryIndices.has(t.index) && !(t.dupGroupKey != null && t.isDupKeeper === false)}));
     }
     function step4DeselectAll() {
         mergedTransactions = mergedTransactions.map((t) => ({...t, selected: false}));
@@ -2205,7 +2293,7 @@ ${arrow}<span>${label}</span></span>`,
         if (ids.size === 0) return;
         mergedTransactions = mergedTransactions.map((t) => {
             if (!ids.has(String(t.index))) return t;
-            if (beforeOpeningIndices.has(t.index)) return t;
+            if (beforeOpeningIndices.has(t.index) || beforeHistoryIndices.has(t.index)) return t;
             if (t.dupGroupKey != null && t.isDupKeeper === false) return t;
             return {...t, selected: true};
         });
@@ -2289,6 +2377,13 @@ ${arrow}<span>${label}</span></span>`,
         brokerFilesLoading = false;
         expandedBrokers = new Set();
         filePluginOverrides = new Map();
+        uploadBatchId = generateUUID();
+        step1SetWarnings = [];
+        setPreviewEpoch += 1;
+        setPreviews = new Map();
+        expandedSets = new Set();
+        setUploadingRole = new Map();
+        showBeforeHistory = false;
         confirmCloseOpen = false;
         step1SelectedIds = [];
         // Step 3 reset
@@ -2339,7 +2434,7 @@ ${arrow}<span>${label}</span></span>`,
 
     async function loadBrokers() {
         brokersLoading = true;
-        await Promise.all([ensureBrokersLoaded(), ensureTypesLoaded()]);
+        await Promise.all([ensureBrokersLoaded(), ensureTypesLoaded(), ensureImportPlugins()]);
         brokers = getEditableBrokers();
         brokersLoading = false;
     }
@@ -2378,7 +2473,7 @@ ${arrow}<span>${label}</span></span>`,
      */
     let fixStepRows = $derived(
         mergedTransactions
-            .filter((m) => rowStaysInFixStep(m.todos, fixDecisions[m.index]))
+            .filter((m) => !isBeforeHistory(m) && rowStaysInFixStep(m.todos, fixDecisions[m.index]))
             // Only the todos this step can actually act on are handed over: showing a row a
             // cost-basis complaint it cannot fix here would be noise at best.
             .map((m) => ({
@@ -2843,7 +2938,17 @@ ${arrow}<span>${label}</span></span>`,
     function goNext() {
         if (candidatesRefreshing || duplicateRecheckRunning) return;
         if (currentStepId === 'upload') {
-            uploadAllPendingFiles().then(() => {
+            const uploadsNow = pendingFiles.some((f) => f.status === 'pending' && f.brokerId !== null);
+            void uploadAllPendingFiles().then(async () => {
+                // A set this upload left incomplete is announced here, where its missing export can
+                // still be dropped into the same set; a second Continue goes on regardless (§4.2).
+                const warnings = uploadsNow ? await collectStep1SetWarnings() : [];
+                if (!open || currentStepId !== 'upload') return;
+                step1SetWarnings = warnings;
+                if (warnings.length > 0) {
+                    dropZoneExpanded = true;
+                    return;
+                }
                 currentStepId = 'select';
                 loadBrokerFiles();
             });
@@ -2938,8 +3043,8 @@ ${arrow}<span>${label}</span></span>`,
 
         uploading = true;
         uploadError = null;
-        // Files uploaded together form one report set: they share a batch id.
-        const batchId = generateUUID();
+        // The files of one wizard session form one report set: they share the session's batch id.
+        const batchId = uploadBatchId;
 
         await mapWithConcurrency(toUpload, async (entry) => {
             pendingFiles = pendingFiles.map((f) => (f.id === entry.id ? {...f, status: 'uploading'} : f));
@@ -2956,8 +3061,9 @@ ${arrow}<span>${label}</span></span>`,
             if (result.status === 'error') {
                 pendingFiles = pendingFiles.map((f) => (f.id === entry.id ? {...f, status: 'error', errorMessage: result.message} : f));
             } else {
-                const serverFileId = result.data?.data?.file_id ?? generateUUID();
-                pendingFiles = pendingFiles.map((f) => (f.id === entry.id ? {...f, status: 'uploaded', serverFileId} : f));
+                const serverInfo = result.data?.data as BrimFile | undefined;
+                const serverFileId = serverInfo?.file_id ?? generateUUID();
+                pendingFiles = pendingFiles.map((f) => (f.id === entry.id ? {...f, status: 'uploaded', serverFileId, serverInfo} : f));
             }
         });
 
@@ -3101,6 +3207,7 @@ ${arrow}<span>${label}</span></span>`,
                 map.get(bid)!.push(f);
             }
             brokerFilesMap = map;
+            await ensureImportPlugins();
 
             const step1FileIds = new Set(pendingFiles.filter((f) => f.status === 'uploaded' && f.serverFileId).map((f) => f.serverFileId!));
             expandedBrokers = new Set(
@@ -3119,6 +3226,11 @@ ${arrow}<span>${label}</span></span>`,
                     }
                 }
             }
+
+            // The sets of this session open on their card; every set's preview runs in the background.
+            const sessionSets = allReportSets.filter((set) => set.files.some((file) => step1FileIds.has(file.file_id)));
+            expandedSets = new Set([...expandedSets, ...sessionSets.map((set) => set.key)]);
+            void refreshSetPreviews(allReportSets);
         } catch (e) {
             console.error('Failed to load broker files:', e);
         } finally {
@@ -3128,6 +3240,9 @@ ${arrow}<span>${label}</span></span>`,
 
     // T6: Smart plugin auto-selection
     function pickBestPlugin(file: BrimFile, brokerId: number): string {
+        // A file a report-set plugin recognises is read through its set (A18).
+        const setPlugin = setPluginFor(file, setPluginInfos);
+        if (setPlugin) return setPlugin;
         const broker = brokers.find((b) => b.id === brokerId);
         const defaultPlugin = broker?.default_import_plugin ?? '';
         const compatible = (file.compatible_plugins as string[] | undefined) ?? [];
@@ -3152,8 +3267,10 @@ ${arrow}<span>${label}</span></span>`,
     }
 
     function handleSelectionChange(brokerId: number, selectedIds: string[]) {
-        // Remove deselected files from this broker
-        selectedFiles = selectedFiles.filter((f) => f.brokerId !== brokerId || selectedIds.includes(f.fileId));
+        // Remove the single files this table deselected. A set's files are not in the table: they
+        // keep their selection, which the set's card owns.
+        const singleIds = new Set((brokerSetGroups.get(brokerId)?.singles ?? []).map((file) => file.file_id));
+        selectedFiles = selectedFiles.filter((f) => f.brokerId !== brokerId || !singleIds.has(f.fileId) || selectedIds.includes(f.fileId));
 
         // Add newly selected files with auto-picked plugin
         const existing = new Set(selectedFiles.map((f) => f.fileId));
@@ -3191,6 +3308,7 @@ ${arrow}<span>${label}</span></span>`,
     async function confirmDeleteFile() {
         const target = pendingDeleteFile;
         if (!target) return;
+        const affectedSet = allReportSets.find((set) => set.files.some((file) => file.file_id === target.fileId)) ?? null;
         try {
             await zodiosApi.delete_file_api_v1_brokers_import_files__file_id__delete(undefined, {
                 params: {file_id: target.fileId},
@@ -3202,6 +3320,7 @@ ${arrow}<span>${label}</span></span>`,
                 (map.get(target.brokerId) ?? []).filter((f) => f.file_id !== target.fileId),
             );
             brokerFilesMap = map;
+            if (affectedSet) void previewSet(affectedSet);
         } catch (e) {
             console.error('Delete report failed:', e);
             toasts.error($t('files.deleteFailed'));
@@ -3214,6 +3333,185 @@ ${arrow}<span>${label}</span></span>`,
     function cancelDeleteFile() {
         showDeleteFileConfirm = false;
         pendingDeleteFile = null;
+    }
+
+    // =========================================================================
+    // Report sets (design §4.1–§4.4)
+    // =========================================================================
+
+    /**
+     * The plugin catalogue, with each plugin's report roles; shared with ImportPluginSelect's cache.
+     *
+     * Memoised in a plain variable, never read from `$state`: `loadBrokers()` runs inside the
+     * open effect, and a reactive read here would make the effect depend on the list it writes
+     * after the request — an endless reload whenever the catalogue comes back empty.
+     */
+    let importPluginsRequest: Promise<BrimPlugin[]> | null = null;
+
+    function ensureImportPlugins(): Promise<BrimPlugin[]> {
+        importPluginsRequest ??= loadImportPlugins();
+        return importPluginsRequest;
+    }
+
+    async function loadImportPlugins(): Promise<BrimPlugin[]> {
+        const cached = getCachedPlugins();
+        if (cached && cached.length > 0) {
+            importPlugins = cached;
+            return cached;
+        }
+        try {
+            const plugins = ((await zodiosApi.list_plugins_api_v1_brokers_import_plugins_get()) as BrimPlugin[] | undefined) ?? [];
+            if (plugins.length > 0) setCachedPlugins(plugins);
+            importPlugins = plugins;
+            return plugins;
+        } catch (e) {
+            console.error('Failed to load import plugins:', e);
+            importPluginsRequest = null;
+            return [];
+        }
+    }
+
+    /** An ISO day (or timestamp) in the user's date format, read as a calendar day. */
+    function formatSetDay(iso: string | null | undefined): string {
+        if (!iso) return '—';
+        const day = String(iso).slice(0, 10);
+        const [year, month, date] = day.split('-').map(Number);
+        if (!year || !month || !date) return day;
+        return new Date(Date.UTC(year, month - 1, date)).toLocaleDateString(undefined, {timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit'});
+    }
+
+    function setRowLabel(set: ReportSetGroup, fileCount: number): string {
+        return $t('importWizard.reportSet.analyzeRowLabel', {values: {date: formatSetDay(set.uploadedAt), n: fileCount}});
+    }
+
+    /** A combined file of the set was already parsed: the set was analysed before (design §4.3, case C). */
+    function isSetAnalysed(set: ReportSetGroup): boolean {
+        return combinedFileForSet(set, brokerFilesMap.get(set.brokerId) ?? [])?.status === 'parsed';
+    }
+
+    function toggleSetExpanded(key: string) {
+        const next = new Set(expandedSets);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        expandedSets = next;
+    }
+
+    /** A set is selected or deselected as a whole: its files are read together, through the set's plugin. */
+    function toggleSetSelection(set: ReportSetGroup) {
+        const ids = new Set(set.files.map((file) => file.file_id));
+        const others = selectedFiles.filter((f) => !ids.has(f.fileId));
+        if (setSelectionState(set, selectedFileIdSet) !== 'none') {
+            selectedFiles = others;
+            return;
+        }
+        selectedFiles = [...others, ...set.files.map((file) => ({fileId: file.file_id, fileName: file.filename, brokerId: set.brokerId, pluginCode: set.pluginCode}))];
+        if (!setPreviews.has(set.key)) void previewSet(set);
+    }
+
+    /** "Exclude from the import": the incomplete set stops blocking, and the other files go on (design §4.1, rule 6). */
+    function excludeSet(set: ReportSetGroup) {
+        const ids = new Set(set.files.map((file) => file.file_id));
+        selectedFiles = selectedFiles.filter((f) => !ids.has(f.fileId));
+    }
+
+    async function previewSet(set: ReportSetGroup): Promise<SetPreviewEntry> {
+        const epoch = setPreviewEpoch;
+        setPreviews = new Map(setPreviews).set(set.key, {status: 'loading', preview: setPreviews.get(set.key)?.preview ?? null});
+        let entry: SetPreviewEntry;
+        try {
+            const preview = (await zodiosApi.preview_report_set_api_v1_brokers_import_sets_preview_post({broker_id: set.brokerId, plugin_code: set.pluginCode, batch_id: set.batchId})) as BrimSetPreview;
+            entry = {status: 'ready', preview};
+        } catch (e) {
+            entry = {status: 'error', preview: null, error: extractErrorMessage(e)};
+        }
+        if (epoch === setPreviewEpoch) setPreviews = new Map(setPreviews).set(set.key, entry);
+        return entry;
+    }
+
+    async function refreshSetPreviews(sets: ReportSetGroup[]) {
+        await mapWithConcurrency(sets, async (set) => {
+            await previewSet(set);
+        });
+    }
+
+    /** Re-read one broker's files; the list also returns files with no broker, which are left out. */
+    async function refreshBrokerFiles(brokerId: number) {
+        try {
+            const files = (await zodiosApi.list_files_api_v1_brokers_import_files_get({queries: {broker_ids: [brokerId]}})) as BrimFile[];
+            brokerFilesMap = new Map(brokerFilesMap).set(
+                brokerId,
+                files.filter((file) => file.target_broker_id === brokerId),
+            );
+        } catch (e) {
+            console.error('Failed to reload broker files:', e);
+        }
+    }
+
+    /**
+     * "Upload the missing file": the export joins the same set (same broker, same upload batch)
+     * and the card updates; if the set was selected, so is its new file (design §4.1, rule 4).
+     */
+    async function uploadMissingIntoSet(set: ReportSetGroup, roleCode: string, file: globalThis.File) {
+        if (setUploadingRole.has(set.key)) return;
+        setUploadingRole = new Map(setUploadingRole).set(set.key, roleCode);
+        const wasSelected = setSelectionState(set, selectedFileIdSet) !== 'none';
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('broker_id', String(set.brokerId));
+            formData.append('batch_id', set.batchId);
+            const result = await trySave(() => axiosInstance.post(`/api/v1/brokers/import/upload`, formData), {toast: false, fallback: 'Upload failed', prefix: file.name});
+            if (result.status === 'error') {
+                notify({name: 'tx.import.set.upload_failed', detail: {set: set.key, role: roleCode}, toast: {variant: 'error', message: result.message}});
+                return;
+            }
+            const uploaded = result.data?.data as BrimFile | undefined;
+            await refreshBrokerFiles(set.brokerId);
+            if (wasSelected && uploaded?.file_id && !selectedFileIdSet.has(uploaded.file_id) && setPluginFor(uploaded, setPluginInfos) === set.pluginCode) {
+                selectedFiles = [...selectedFiles, {fileId: uploaded.file_id, fileName: uploaded.filename, brokerId: set.brokerId, pluginCode: set.pluginCode}];
+            }
+            await previewSet(set);
+            notify({name: 'tx.import.set.file_added', detail: {set: set.key, role: roleCode, fileId: uploaded?.file_id ?? null}});
+        } finally {
+            const next = new Map(setUploadingRole);
+            next.delete(set.key);
+            setUploadingRole = next;
+        }
+    }
+
+    /** The missing exports of the sets this session uploaded, from their previews. */
+    async function collectStep1SetWarnings(): Promise<Step1SetWarning[]> {
+        const plugins = (await ensureImportPlugins()) as unknown as SetPluginInfo[];
+        const byBroker = new Map<number, BrimFile[]>();
+        for (const entry of pendingFiles) {
+            if (entry.status !== 'uploaded' || !entry.serverInfo || entry.brokerId === null) continue;
+            byBroker.set(entry.brokerId, [...(byBroker.get(entry.brokerId) ?? []), entry.serverInfo]);
+        }
+        const sets = [...byBroker].flatMap(([brokerId, files]) => groupBrokerFiles(brokerId, files, plugins).sets);
+        const warnings: Step1SetWarning[] = [];
+        await mapWithConcurrency(sets, async (set) => {
+            const entry = await previewSet(set);
+            if (entry.status !== 'ready' || !entry.preview || entry.preview.complete) return;
+            const plugin = plugins.find((p) => p.code === set.pluginCode);
+            for (const missing of entry.preview.missing ?? []) {
+                const role = plugin?.report_roles?.find((r) => r.code === missing.role);
+                const roleKey = `importWizard.reportSet.roleName.${missing.role}`;
+                const translated = $t(roleKey);
+                warnings.push({
+                    key: `${set.key}:${missing.role}`,
+                    pluginCode: set.pluginCode,
+                    pluginName: plugin?.name ?? set.pluginCode,
+                    docsUrl: plugin?.docs_url ?? null,
+                    roleCode: missing.role,
+                    roleLabel: translated === roleKey ? (role?.description ?? missing.role) : translated,
+                    extensions: (role?.extensions ?? []).map((ext) => ext.replace(/^\./, '').toUpperCase()).join(', '),
+                    start: missing.start ? String(missing.start) : null,
+                    end: missing.end ? String(missing.end) : null,
+                });
+            }
+        });
+        warnings.sort((a, b) => a.key.localeCompare(b.key));
+        return warnings;
     }
 
     // =========================================================================
@@ -3347,27 +3645,66 @@ ${arrow}<span>${label}</span></span>`,
         duplicateResolverSelections = {};
         expandedDuplicateGroupKeys = new Set();
 
-        // Build fresh ParsedFileResult[] from selectedFiles
+        // Build fresh ParsedFileResult[]: one per single file, one per report set (its files are analysed together)
         const results: ParsedFileResult[] = [];
-        for (const file of selectedFiles) {
-            const pluginName = getPluginName(file.pluginCode);
-            const broker = brokers.find((b) => b.id === file.brokerId);
-            results.push({
-                fileId: file.fileId,
-                fileName: file.fileName,
-                brokerId: file.brokerId,
-                brokerName: getBrokerName(file.brokerId),
+        for (const unit of parseUnits) {
+            const brokerId = unit.kind === 'file' ? unit.file.brokerId : unit.set.brokerId;
+            const pluginCode = unit.kind === 'file' ? unit.file.pluginCode : unit.set.pluginCode;
+            const broker = brokers.find((b) => b.id === brokerId);
+            const base = {
+                brokerId,
+                brokerName: getBrokerName(brokerId),
                 brokerIconUrl: broker?.icon_url ?? null,
                 brokerPortalUrl: broker?.portal_url ?? null,
-                pluginUsed: file.pluginCode,
-                pluginName,
-                status: 'pending',
+                pluginUsed: pluginCode,
+                pluginName: getPluginName(pluginCode),
+                status: 'pending' as const,
                 response: null,
+            };
+            if (unit.kind === 'file') {
+                results.push({...base, fileId: unit.file.fileId, fileName: unit.file.fileName});
+                continue;
+            }
+            results.push({
+                ...base,
+                // Keyed by the set until the combine answers, then by its combined file.
+                fileId: unit.set.key,
+                fileName: setRowLabel(unit.set, unit.members.length),
+                set: {
+                    key: unit.set.key,
+                    batchId: unit.set.batchId,
+                    uploadedAt: unit.set.uploadedAt,
+                    memberIds: unit.members.map((member) => member.fileId),
+                    memberNames: unit.members.map((member) => member.fileName),
+                    combinedFileId: null,
+                    summary: null,
+                    reused: false,
+                },
             });
         }
         parseResults = results;
         syncDuplicateFilePriority();
         lastParseHash = newHash;
+    }
+
+    /**
+     * Parse one row of the analysis in place. A report set is combined first (or its identical
+     * combined file reused), and the combined file is what gets parsed: the set stays one row (§4.4).
+     */
+    async function parseResultInPlace(result: ParsedFileResult) {
+        try {
+            if (result.set) {
+                const combined = (await zodiosApi.combine_report_set_api_v1_brokers_import_sets_combine_post({broker_id: result.brokerId, plugin_code: result.pluginUsed, batch_id: result.set.batchId})) as BrimSetCombineResponse;
+                result.fileId = combined.combined.file_id;
+                result.set = {...result.set, combinedFileId: combined.combined.file_id, summary: (combined.summary ?? null) as Record<string, unknown> | null, reused: combined.reused ?? false};
+            }
+            const res = await zodiosApi.parse_file_api_v1_brokers_import_files__file_id__parse_post({plugin_code: result.pluginUsed, broker_id: result.brokerId}, {params: {file_id: result.fileId}});
+            result.response = res as BrimParseResponse;
+            result.status = 'done';
+        } catch (e) {
+            result.status = 'error';
+            result.errorMessage = extractErrorMessage(e);
+        }
     }
 
     // Parses run in parallel too. The server off-loads each parse to its own process, so the
@@ -3384,15 +3721,7 @@ ${arrow}<span>${label}</span></span>`,
                 file.status = 'parsing';
                 parseResults = [...parseResults];
 
-                try {
-                    const res = await zodiosApi.parse_file_api_v1_brokers_import_files__file_id__parse_post({plugin_code: file.pluginUsed, broker_id: file.brokerId}, {params: {file_id: file.fileId}});
-                    file.response = res as BrimParseResponse;
-                    file.status = 'done';
-                } catch (e) {
-                    file.status = 'error';
-                    file.errorMessage = extractErrorMessage(e);
-                }
-
+                await parseResultInPlace(file);
                 parseResults = [...parseResults];
             },
             {shouldStop: () => abortParsing},
@@ -3423,7 +3752,12 @@ ${arrow}<span>${label}</span></span>`,
         {
             id: 'fileName',
             header: () => $t('common.name'),
-            cell: (row) => ({type: 'icon-text', icon: FileText, text: row.fileName}) as const,
+            cell: (row) => {
+                if (!row.set) return {type: 'icon-text', icon: FileText, text: row.fileName} as const;
+                // A set is one row: its label, and the files it was combined from underneath.
+                const members = row.set.memberNames.map((member) => escapeHtml(member)).join(' + ');
+                return {type: 'html', html: `<div class="min-w-0" data-testid="parse-row-set"><div class="truncate font-medium">${escapeHtml(row.fileName)}</div><div class="truncate text-xs text-gray-500 dark:text-gray-400">${members}</div></div>`} as const;
+            },
             type: 'text',
             sortable: true,
             width: 250,
@@ -3617,14 +3951,7 @@ ${arrow}<span>${label}</span></span>`,
         // Parse just this one file
         result.status = 'parsing';
         parseResults = [...parseResults];
-        try {
-            const res = await zodiosApi.parse_file_api_v1_brokers_import_files__file_id__parse_post({plugin_code: result.pluginUsed, broker_id: result.brokerId}, {params: {file_id: result.fileId}});
-            result.response = res as BrimParseResponse;
-            result.status = 'done';
-        } catch (e) {
-            result.status = 'error';
-            result.errorMessage = extractErrorMessage(e);
-        }
+        await parseResultInPlace(result);
         parseResults = [...parseResults];
         mergeAllTransactions();
     }
@@ -3774,6 +4101,30 @@ ${arrow}<span>${label}</span></span>`,
                     <InfoBanner variant="error" message={uploadError} dismissible ondismiss={() => (uploadError = null)} />
                 {/if}
 
+                <!-- A report set this upload left incomplete: the missing export dropped here joins the same set -->
+                {#each step1SetWarnings as warning (warning.key)}
+                    <div
+                        class="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200"
+                        data-testid="import-wizard-step1-set-warning"
+                        data-plugin-code={warning.pluginCode}
+                        data-role={warning.roleCode}
+                    >
+                        <AlertTriangle size={16} class="mt-0.5 shrink-0" />
+                        <div class="space-y-1">
+                            <p>{$t('importWizard.reportSet.step1Missing', {values: {plugin: warning.pluginName, role: warning.roleLabel, ext: warning.extensions}})}</p>
+                            {#if warning.start && warning.end}
+                                <p>{$t('importWizard.reportSet.missingPeriod', {values: {start: formatSetDay(warning.start), end: formatSetDay(warning.end)}})}</p>
+                            {/if}
+                            <p class="text-xs">
+                                {$t('importWizard.reportSet.step1MissingHint')}
+                                {#if warning.docsUrl}
+                                    <a class="ml-1 text-libre-green hover:underline" href={warning.docsUrl} target="_blank" rel="noopener noreferrer">{$t('importWizard.reportSet.howToExport')}</a>
+                                {/if}
+                            </p>
+                        </div>
+                    </div>
+                {/each}
+
                 <!-- T2: Collapsible drop zone -->
                 {#if dropZoneExpanded}
                     <div bind:this={dropZoneContainerRef}>
@@ -3867,7 +4218,7 @@ ${arrow}<span>${label}</span></span>`,
             <!-- Step 2: Select Files from Broker Panels (DataTable) -->
             <!-- ============================================================ -->
         {:else if currentStepId === 'select'}
-            <div class="space-y-4" data-testid="import-wizard-step2" data-busy={brokerFilesLoading || uploading}>
+            <div class="space-y-4" data-testid="import-wizard-step2" data-busy={brokerFilesLoading || uploading || setPreviewsLoading || setUploadingRole.size > 0}>
                 {#if brokerFilesLoading}
                     <div class="py-8 text-center">
                         <LoadingSpinner size="md" />
@@ -3876,7 +4227,11 @@ ${arrow}<span>${label}</span></span>`,
                     <!-- Header: selected count + column visibility -->
                     <div class="flex items-center justify-between flex-wrap gap-2">
                         <span class="text-sm font-medium text-gray-700 dark:text-gray-200">
-                            {$t('importWizard.selectedCount', {values: {n: selectedFiles.length, b: selectedBrokerCount}})}
+                            {#if allReportSets.length > 0}
+                                {$t('importWizard.reportSet.selectedCount', {values: {sets: selectedSetCount, n: parseUnits.length - selectedSetCount, b: selectedBrokerCount}})}
+                            {:else}
+                                {$t('importWizard.selectedCount', {values: {n: selectedFiles.length, b: selectedBrokerCount}})}
+                            {/if}
                         </span>
                         <div class="flex items-center gap-2">
                             <ColumnVisibilityToggle tableRef={tableRefs.find((table) => table != null)} additionalTableRefs={tableRefs.filter((table) => table != null).slice(1)} />
@@ -3891,6 +4246,7 @@ ${arrow}<span>${label}</span></span>`,
                     <!-- Broker panels with DataTable -->
                     {#each brokers as broker, brokerIdx}
                         {@const brokerFiles = brokerFilesMap.get(broker.id) ?? []}
+                        {@const brokerGroups = brokerSetGroups.get(broker.id) ?? {sets: [], singles: brokerFiles}}
                         {#if brokerFiles.length > 0}
                             <div class="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden" data-testid={`import-wizard-broker-files-${broker.id}`}>
                                 <!-- Broker header (collapsible) -->
@@ -3911,21 +4267,47 @@ ${arrow}<span>${label}</span></span>`,
                                     {#if selectedFiles.filter((f) => f.brokerId === broker.id).length > 0}
                                         <span class="text-xs font-medium text-libre-green ml-1">({selectedFiles.filter((f) => f.brokerId === broker.id).length})</span>
                                     {/if}
-                                    <span class="text-xs text-gray-400 ml-auto">{brokerFiles.length} file(s)</span>
+                                    <span class="text-xs text-gray-400 ml-auto">
+                                        {#if brokerGroups.sets.length > 0}{$t('importWizard.reportSet.setCount', {values: {n: brokerGroups.sets.length}})} ·{/if}
+                                        {brokerGroups.singles.length + brokerGroups.sets.reduce((total, set) => total + set.files.length, 0)} file(s)
+                                    </span>
                                 </button>
 
-                                <!-- DataTable per broker -->
-                                {#if expandedBrokers.has(broker.id)}
+                                <!-- Report sets, one card each; the single files stay in the table -->
+                                {#if expandedBrokers.has(broker.id) && brokerGroups.sets.length > 0}
+                                    <div class="space-y-2 border-t border-gray-200 p-2 dark:border-gray-700" data-testid={`import-wizard-broker-sets-${broker.id}`}>
+                                        {#each brokerGroups.sets as set (set.key)}
+                                            <ReportSetCard
+                                                {set}
+                                                plugin={setPluginInfos.find((p) => p.code === set.pluginCode) ?? null}
+                                                previewState={setPreviews.get(set.key)}
+                                                selection={setSelectionState(set, selectedFileIdSet)}
+                                                expanded={expandedSets.has(set.key)}
+                                                analysed={isSetAnalysed(set)}
+                                                uploadingRole={setUploadingRole.get(set.key) ?? null}
+                                                onToggleSelected={() => toggleSetSelection(set)}
+                                                onToggleExpanded={() => toggleSetExpanded(set.key)}
+                                                onUploadMissing={(roleCode, file) => void uploadMissingIntoSet(set, roleCode, file)}
+                                                onExclude={() => excludeSet(set)}
+                                                onPreviewFile={(fileId) => openPreview(fileId)}
+                                                onDeleteFile={(file) => requestDeleteFile(file as BrimFile, broker.id)}
+                                            />
+                                        {/each}
+                                    </div>
+                                {/if}
+
+                                <!-- DataTable per broker: the single files -->
+                                {#if expandedBrokers.has(broker.id) && brokerGroups.singles.length > 0}
                                     <div class="border-t border-gray-200 dark:border-gray-700">
                                         <DataTable
                                             bind:this={tableRefs[brokerIdx]}
-                                            data={brokerFiles}
+                                            data={brokerGroups.singles}
                                             columns={fileTableColumns}
                                             getRowId={(row) => row.file_id}
                                             storageKey={`import-wizard-files-${broker.id}`}
                                             enableSelection={true}
                                             selectionMode="multi"
-                                            initialSelectedIds={selectedFiles.filter((f) => f.brokerId === broker.id).map((f) => f.fileId)}
+                                            initialSelectedIds={selectedFiles.filter((f) => f.brokerId === broker.id && brokerGroups.singles.some((single) => single.file_id === f.fileId)).map((f) => f.fileId)}
                                             onSelectionChange={(ids) => handleSelectionChange(broker.id, ids)}
                                             onRowDoubleClick={(row) => openPreview(row.file_id)}
                                             enableActions={true}
@@ -3937,8 +4319,8 @@ ${arrow}<span>${label}</span></span>`,
                                             enableSorting={true}
                                             enableColumnFilters={true}
                                             enableColumnResize={true}
-                                            enablePagination={brokerFiles.length > 5}
-                                            alwaysShowPagination={brokerFiles.length > 5}
+                                            enablePagination={brokerGroups.singles.length > 5}
+                                            alwaysShowPagination={brokerGroups.singles.length > 5}
                                             enableColumnVisibility={false}
                                             defaultPageSize={5}
                                             pageSizeOptions={[5, 10, 25, 50, 100, 0]}
@@ -4495,6 +4877,12 @@ ${arrow}<span>${label}</span></span>`,
                             {#if step4BeforeOpeningCount > 0}
                                 <span class="text-xs text-gray-500 dark:text-gray-400">⛔ {step4BeforeOpeningCount} {$t('importWizard.beforeOpeningCount')}</span>
                             {/if}
+                            {#if step4BeforeHistoryCount > 0}
+                                <span class="text-xs text-gray-500 dark:text-gray-400" data-testid="import-wizard-before-history-count" data-count={step4BeforeHistoryCount}>⏮ {$t('importWizard.reportSet.beforeHistoryCount', {values: {n: step4BeforeHistoryCount}})}</span>
+                                <button type="button" class="text-xs text-libre-green hover:underline" onclick={() => (showBeforeHistory = !showBeforeHistory)} aria-pressed={showBeforeHistory} data-testid="import-wizard-before-history-toggle">
+                                    {showBeforeHistory ? $t('importWizard.reportSet.hideBeforeHistory') : $t('importWizard.reportSet.showBeforeHistory')}
+                                </button>
+                            {/if}
                         </div>
                         <div class="flex items-center gap-2">
                             {#if step4BeforeOpeningCount > 0}
@@ -4614,7 +5002,12 @@ ${arrow}<span>${label}</span></span>`,
                 <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack} data-testid="import-wizard-back">
                     ◀ {$t('common.back')}
                 </button>
-                {#if selectedFiles.length > 0 && !step2CanParse}
+                {#if blockingSets.length > 0}
+                    <span class="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400" data-testid="import-wizard-set-blocks">
+                        <AlertTriangle size={14} />
+                        {$t('importWizard.reportSet.incompleteBlocks')}
+                    </span>
+                {:else if selectedFiles.length > 0 && !step2CanParse}
                     <span class="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
                         <AlertTriangle size={14} />
                         {$t('importWizard.pluginRequired')}
@@ -4627,7 +5020,7 @@ ${arrow}<span>${label}</span></span>`,
                 {/if}
             </div>
             <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed" onclick={goNext} disabled={!step2CanParse} data-testid="import-wizard-parse" use:guideAnchor={'import.action.select'}>
-                {$t('importWizard.parse', {values: {n: selectedFiles.length}})} ▶
+                {$t('importWizard.parse', {values: {n: parseUnits.length}})} ▶
             </button>
         {:else if currentStepId === 'analyze'}
             <div class="flex items-center gap-1">

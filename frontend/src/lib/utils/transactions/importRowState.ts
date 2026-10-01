@@ -10,10 +10,12 @@ import {isFakeAssetId} from '$lib/utils/brim/isFakeAssetId';
 import {duplicateStatusAllowsAutoSelect} from './importDedup';
 import type {AssetResolution, MergedTx} from './importTypes';
 
-/** The minimum a parse result must expose to map a row back to its broker. */
+/** The minimum a parse result must expose to map a row back to its broker (and to its broker history). */
 export interface RowBrokerSource {
     fileId: string;
     brokerId: number;
+    /** The parse response; a report set's carries `history_start` (H0). */
+    response?: {history_start?: unknown} | null;
 }
 
 /** The minimum a broker must expose for the opening-date cutoff. */
@@ -47,6 +49,24 @@ export function isBeforeOpening(mt: MergedTx, parseResults: RowBrokerSource[], b
     return info !== null && txDate !== '' && txDate < info.openedAt;
 }
 
+/** The first day of the broker history LibreFolio already holds (H0), from the parse of the row's file; null when unknown. */
+export function historyStartFor(mt: MergedTx, parseResults: RowBrokerSource[]): string | null {
+    const start = parseResults.find((r) => r.fileId === mt.sourceFileId)?.response?.history_start;
+    return typeof start === 'string' && start !== '' ? start.slice(0, 10) : null;
+}
+
+/**
+ * Whether a row predates the broker history LibreFolio already holds (a report set's H0).
+ * Strict `<`: a row dated on H0 is inside the history, and the duplicate check judges it.
+ * Earlier rows are already represented — by the earlier imports, or on a first import by the
+ * opening correction — so the review hides them and never imports them.
+ */
+export function isBeforeHistory(mt: MergedTx, parseResults: RowBrokerSource[]): boolean {
+    const start = historyStartFor(mt, parseResults);
+    const txDate = mt.tx.date ? String(mt.tx.date).slice(0, 10) : '';
+    return start !== null && txDate !== '' && txDate < start;
+}
+
 /** True unless the row's asset is an unresolved fake mapping (no bound real asset yet). */
 export function isRowAssetResolved(t: MergedTx, assetResolutions: AssetResolution[]): boolean {
     if (typeof t.tx.asset_id === 'number' && isFakeAssetId(t.tx.asset_id)) {
@@ -69,5 +89,5 @@ export function isRowAssetResolved(t: MergedTx, assetResolutions: AssetResolutio
  * without mounting the wizard.
  */
 export function shouldAutoSelectOnRecheck(t: MergedTx, parseResults: RowBrokerSource[], brokers: BrokerOpening[], assetResolutions: AssetResolution[]): boolean {
-    return !t.selected && !isBeforeOpening(t, parseResults, brokers) && isRowAssetResolved(t, assetResolutions) && duplicateStatusAllowsAutoSelect(t.duplicateStatus);
+    return !t.selected && !isBeforeOpening(t, parseResults, brokers) && !isBeforeHistory(t, parseResults) && isRowAssetResolved(t, assetResolutions) && duplicateStatusAllowsAutoSelect(t.duplicateStatus);
 }
