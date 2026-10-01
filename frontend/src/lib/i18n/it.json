@@ -742,7 +742,84 @@
       "body": "Collega un asset esistente o crealo a mano. Nei prossimi import verrà riconosciuto dall'identificativo salvato, se univoco."
     },
     "selectionChangedReview": "Il controllo finale dei duplicati ha cambiato la selezione. Rivedila prima di importare.",
-    "duplicatesChangedReview": "Il controllo finale dei duplicati ha trovato duplicati nuovi o cambiati fra i tuoi file. Rivedili prima di importare."
+    "duplicatesChangedReview": "Il controllo finale dei duplicati ha trovato duplicati nuovi o cambiati fra i tuoi file. Rivedili prima di importare.",
+    "reportSet": {
+      "selectSet": "Seleziona tutto il set",
+      "setLabel": "Set caricato il {date} · {plugin}",
+      "fileCount": "{n} file",
+      "setCount": "{n} set di export",
+      "status": {
+        "complete": "Completo",
+        "missing": "Manca un file",
+        "incomplete": "Non combinabile",
+        "loading": "Verifica…",
+        "error": "Verifica non riuscita",
+        "analysed": "Già analizzato"
+      },
+      "roleName": {
+        "custody": "Movimenti titoli",
+        "cash": "Estratto del conto"
+      },
+      "period": {
+        "years": "{n, plural, one {# anno} other {# anni}}",
+        "months": "{n, plural, one {# mese} other {# mesi}}",
+        "days": "{n, plural, one {# giorno} other {# giorni}}"
+      },
+      "maxHistory": "la banca esporta al massimo {period}",
+      "rows": "{n, plural, one {# riga} other {# righe}}",
+      "missingRole": "Manca: {role} ({ext})",
+      "missingPeriod": "Serve almeno dal {start} al {end}, meglio fino a qualche giorno dopo.",
+      "uploadMissing": "Carica il file mancante",
+      "howToExport": "Come esportarlo",
+      "howToExportBoth": "Come esportare i file",
+      "unrecognised": "Non riconosciuti",
+      "historyFirst": "Primo import di questo broker: alla fine ti proponiamo il saldo e le posizioni al {date}; da lì in poi importiamo ogni movimento.",
+      "historyLater": "LibreFolio ha già la storia di questo broker dal {date}: i movimenti già presenti risulteranno duplicati, e quelli precedenti non si reimportano.",
+      "exclude": "Escludi dall'import",
+      "selectedCount": "{sets} set e {n} file selezionati da {b} broker",
+      "incompleteBlocks": "Continua è disattivato finché un set selezionato è incompleto: carica il file mancante o escludilo.",
+      "step1Missing": "Per {plugin} serve anche: {role} ({ext}).",
+      "step1MissingHint": "Trascinalo qui sopra: entra nello stesso set. Puoi anche continuare: il set comparirà incompleto.",
+      "analyzeRowLabel": "Set del {date} · combinato ({n} file)",
+      "beforeHistoryCount": "{n} già in LibreFolio (nascoste)",
+      "showBeforeHistory": "mostra",
+      "hideBeforeHistory": "nascondi",
+      "beforeHistoryStatus": "Già in LibreFolio",
+      "beforeHistoryTooltip": "Prima dell'inizio della storia di questo broker in LibreFolio: è già rappresentata, dagli import precedenti o dal saldo d'apertura. Non si importa.",
+      "pairingTitle": "Abbinamento titoli ↔ cassa",
+      "outcome": {
+        "pair": "coppie",
+        "standalone": "righe autonome",
+        "summarized": "riassunte in un checkpoint",
+        "deferred": "col prossimo import",
+        "excluded": "escluse"
+      },
+      "reason": {
+        "no_counterpart": "senza controparte",
+        "ambiguous": "ambigue",
+        "status": "non eseguite o non contabilizzate",
+        "unknown_type": "tipo sconosciuto",
+        "invalid": "non valide",
+        "not_yet_settled": "non ancora regolate",
+        "outside_cash_coverage": "regolate prima dell'inizio dell'estratto",
+        "superseded": "sostituite da un file più recente"
+      },
+      "downloadCombined": "Scarica il combinato",
+      "warning": {
+        "unknown_role": "Un file non è un export che questo plugin combina: resta fuori dal set.",
+        "excess_files": "In un set è ammesso un solo export «{role}».",
+        "coverage_starts_late": "L'export «{role}» inizia dopo il periodo di «{covered_role}» ({date}): i trade regolati prima saranno esclusi. Esportalo da una data precedente.",
+        "coverage_ends_early": "L'export «{role}» finisce prima del periodo di «{covered_role}» ({date}): i trade degli ultimi giorni arriveranno col prossimo import.",
+        "mixed_accounts": "I file vengono da conti diversi: carica gli export di un solo conto.",
+        "before_history_segment": "Il periodo {start} – {end} è più vecchio della storia già in LibreFolio: non verrà importato.",
+        "covers_gap_fix": "Una correzione gap-fix del {date} cade dentro questo periodo: toglila dopo l'import, altrimenti la cassa conta due volte.",
+        "gap": "Nessun export dei titoli copre {start} – {end}: i trade di quel periodo sono riassunti. Se la banca lo ha ancora, esportalo.",
+        "overlap_mismatch": "Due export «{role}» non coincidono in {days} giorni fra il {first} e il {last}: per quei giorni vale il più recente.",
+        "balance_chain_broken": "Il saldo progressivo dell'estratto non torna dal {date}: i saldi si confrontano soltanto, non servono per le correzioni.",
+        "empty_member": "Un export «{role}» non ha righe.",
+        "mixed_accounts_in_file": "Un export dei titoli contiene più depositi titoli."
+      }
+    }
   },
   "brokers": {
     "title": "Broker",

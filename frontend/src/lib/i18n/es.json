@@ -742,7 +742,84 @@
       "body": "Vincula un activo existente o créalo manualmente. Las próximas importaciones reconocerán su identificador guardado si la coincidencia es única."
     },
     "selectionChangedReview": "La comprobación final de duplicados ha cambiado la selección. Revísala antes de importar.",
-    "duplicatesChangedReview": "La comprobación final de duplicados ha encontrado duplicados nuevos o modificados entre tus archivos. Revísalos antes de importar."
+    "duplicatesChangedReview": "La comprobación final de duplicados ha encontrado duplicados nuevos o modificados entre tus archivos. Revísalos antes de importar.",
+    "reportSet": {
+      "selectSet": "Seleccionar todo el conjunto",
+      "setLabel": "Conjunto subido el {date} · {plugin}",
+      "fileCount": "{n} archivo(s)",
+      "setCount": "{n} conjunto(s) de exportaciones",
+      "status": {
+        "complete": "Completo",
+        "missing": "Falta un archivo",
+        "incomplete": "No se puede combinar",
+        "loading": "Comprobando…",
+        "error": "Comprobación fallida",
+        "analysed": "Ya analizado"
+      },
+      "roleName": {
+        "custody": "Movimientos de valores",
+        "cash": "Extracto de la cuenta de efectivo"
+      },
+      "period": {
+        "years": "{n, plural, one {# año} other {# años}}",
+        "months": "{n, plural, one {# mes} other {# meses}}",
+        "days": "{n, plural, one {# día} other {# días}}"
+      },
+      "maxHistory": "el banco exporta como máximo {period}",
+      "rows": "{n, plural, one {# fila} other {# filas}}",
+      "missingRole": "Falta: {role} ({ext})",
+      "missingPeriod": "Se necesita al menos del {start} al {end}, mejor hasta unos días después.",
+      "uploadMissing": "Subir el archivo que falta",
+      "howToExport": "Cómo exportarlo",
+      "howToExportBoth": "Cómo exportar los archivos",
+      "unrecognised": "No reconocidos",
+      "historyFirst": "Primera importación de este broker: al final proponemos el saldo y las posiciones al {date}; a partir de ahí se importa cada movimiento.",
+      "historyLater": "LibreFolio ya tiene el historial de este broker desde el {date}: los movimientos ya presentes aparecerán como duplicados, y los anteriores no se vuelven a importar.",
+      "exclude": "Excluir de la importación",
+      "selectedCount": "{sets} conjunto(s) y {n} archivo(s) seleccionado(s) de {b} broker(s)",
+      "incompleteBlocks": "Continuar está desactivado mientras un conjunto seleccionado esté incompleto: sube el archivo que falta o exclúyelo.",
+      "step1Missing": "{plugin} también necesita: {role} ({ext}).",
+      "step1MissingHint": "Suéltalo aquí: se une al mismo conjunto. También puedes continuar: el conjunto aparecerá incompleto.",
+      "analyzeRowLabel": "Conjunto del {date} · combinado ({n} archivos)",
+      "beforeHistoryCount": "{n} ya en LibreFolio (ocultas)",
+      "showBeforeHistory": "mostrar",
+      "hideBeforeHistory": "ocultar",
+      "beforeHistoryStatus": "Ya en LibreFolio",
+      "beforeHistoryTooltip": "Antes del inicio del historial de este broker en LibreFolio: ya está representada, por las importaciones anteriores o por el saldo de apertura. No se importa.",
+      "pairingTitle": "Emparejamiento valores ↔ efectivo",
+      "outcome": {
+        "pair": "pares",
+        "standalone": "filas independientes",
+        "summarized": "resumidas en un punto de control",
+        "deferred": "con la próxima importación",
+        "excluded": "excluidas"
+      },
+      "reason": {
+        "no_counterpart": "sin contrapartida",
+        "ambiguous": "ambiguas",
+        "status": "no ejecutadas o no contabilizadas",
+        "unknown_type": "tipo desconocido",
+        "invalid": "no válidas",
+        "not_yet_settled": "aún no liquidadas",
+        "outside_cash_coverage": "liquidadas antes del inicio del extracto",
+        "superseded": "sustituidas por un archivo más reciente"
+      },
+      "downloadCombined": "Descargar el archivo combinado",
+      "warning": {
+        "unknown_role": "Un archivo no es una exportación que este plugin combine: queda fuera del conjunto.",
+        "excess_files": "Solo se admite una exportación «{role}» por conjunto.",
+        "coverage_starts_late": "La exportación «{role}» empieza después del periodo de «{covered_role}» ({date}): las operaciones liquidadas antes se excluirán. Expórtala desde una fecha anterior.",
+        "coverage_ends_early": "La exportación «{role}» termina antes del periodo de «{covered_role}» ({date}): las operaciones de los últimos días llegarán con la próxima importación.",
+        "mixed_accounts": "Los archivos provienen de cuentas diferentes: sube las exportaciones de una sola cuenta.",
+        "before_history_segment": "El periodo {start} – {end} es anterior al historial ya presente en LibreFolio: no se importará.",
+        "covers_gap_fix": "Una corrección gap-fix del {date} cae dentro de este periodo: elimínala después de la importación, o el efectivo contará dos veces.",
+        "gap": "Ninguna exportación de valores cubre {start} – {end}: las operaciones de ese periodo se resumen. Si el banco aún la tiene, expórtala.",
+        "overlap_mismatch": "Dos exportaciones «{role}» no coinciden en {days} día(s) entre el {first} y el {last}: para esos días se usa la más reciente.",
+        "balance_chain_broken": "El saldo acumulado del extracto no cuadra desde el {date}: los saldos solo se comparan, no se usan para las correcciones.",
+        "empty_member": "Una exportación «{role}» no tiene filas.",
+        "mixed_accounts_in_file": "Una exportación de valores contiene varias cuentas de custodia."
+      }
+    }
   },
   "brokers": {
     "title": "Brókeres",
