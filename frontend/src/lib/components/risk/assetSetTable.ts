@@ -11,11 +11,20 @@
  * The scrolling itself is attached by each table on its own wrapper
  * (`attachOverflowMarqueeToDescendants`): an HTML string cannot carry a `use:` action.
  */
-import type {ColumnDef} from '$lib/components/table/types';
+import type {ColumnDef, HtmlCell} from '$lib/components/table/types';
 import {escapeHtml} from '$lib/utils/core/escapeHtml';
 import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
 
 import {nameComparator} from './correlationHelpers';
+
+/**
+ * A figure's cell, in either table. A figure nobody could measure is an em dash, and the
+ * dash explains itself in the project's Tooltip — the tables carry no fixed note under them
+ * any more (the developer's review, round 4). A measured figure carries no tooltip.
+ */
+export function figureCell(html: string, measured: boolean, blankExplanation: () => string): HtmlCell {
+    return measured ? {type: 'html', html} : {type: 'html', html, tooltip: {text: blankExplanation()}};
+}
 
 /** What the asset column reads from a row of either table. */
 export interface AssetSetTableRow {
