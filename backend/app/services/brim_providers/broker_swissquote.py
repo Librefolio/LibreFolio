@@ -186,7 +186,7 @@ class SwissquoteBrokerProvider(BRIMProvider):
         detected_delim = self.detect_csv_delimiter(file_path)
 
         try:
-            with open(file_path, encoding="utf-8-sig", newline="") as f:
+            with self._open_text(file_path, newline="") as f:
                 reader = csv.DictReader(f, delimiter=detected_delim)
                 if reader.fieldnames != SWISSQUOTE_HEADER:
                     raise BRIMParseError("Unexpected Swissquote CSV header")

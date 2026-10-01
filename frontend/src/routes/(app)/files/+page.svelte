@@ -507,8 +507,9 @@
                 usedBrokerIds.add(brokerId);
                 const formData = new FormData();
                 formData.append('file', file);
+                formData.append('broker_id', String(brokerId));
                 // Use axios directly - Zodios doesn't handle FormData correctly
-                await axiosInstance.post(`/api/v1/brokers/import/upload?broker_id=${brokerId}`, formData);
+                await axiosInstance.post(`/api/v1/brokers/import/upload`, formData);
             }
 
             // Reset state
@@ -826,6 +827,7 @@
 <ModalBase
     contentClass="upload-modal"
     maxWidth="600px"
+    testId="brim-assign-modal"
     onRequestClose={() => {
         if (pendingBrimFiles.length > 0) {
             showCloseUploaderConfirm = true;
@@ -864,7 +866,7 @@
 
     <div class="modal-body upload-modal-body">
         <!-- Assign All section -->
-        <div class="assign-all-section">
+        <div class="assign-all-section" data-testid="brim-assign-all">
             <span class="assign-all-label">{$t('uploads.assignAll') || 'Assign all to'}:</span>
             <BrokerSearchSelect
                 {brokers}
@@ -927,7 +929,7 @@
         <button class="btn btn-secondary" on:click={cancelBrimUpload}>
             {$t('common.cancel')}
         </button>
-        <button class="btn btn-primary" class:btn-disabled={!canConfirmBrim} disabled={!canConfirmBrim} on:click={confirmBrimUpload}>
+        <button class="btn btn-primary" class:btn-disabled={!canConfirmBrim} disabled={!canConfirmBrim} on:click={confirmBrimUpload} data-testid="brim-upload-confirm">
             {$t('uploads.upload')} ({pendingBrimFiles.length})
         </button>
     </div>

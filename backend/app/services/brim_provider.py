@@ -29,6 +29,7 @@ This module provides:
 from __future__ import annotations
 
 import csv
+import io
 import json
 import re
 import uuid
@@ -65,6 +66,11 @@ from backend.app.services.provider_registry import BRIMProviderRegistry
 from backend.app.utils.datetime_utils import utcnow
 
 logger = structlog.get_logger(__name__)
+
+# Encodings tried, in order, whenever a broker export is read as text. UTF-8 (with or
+# without BOM) first; then Windows-1252, which Excel on Windows and many banks write;
+# Latin-1 last, because it decodes any byte sequence and so always succeeds.
+TEXT_ENCODINGS: Tuple[str, ...] = ("utf-8-sig", "cp1252", "latin-1")
 
 
 # =============================================================================
@@ -181,11 +187,9 @@ class BRIMProvider(ABC):
         """
         Read the first N lines of a file with encoding fallback.
 
-        Tries multiple encodings to handle different file formats:
-        - utf-8-sig (UTF-8 with BOM, common in Windows exports)
-        - utf-8
-        - latin-1 (ISO-8859-1)
-        - cp1252 (Windows Western European)
+        Tries ``TEXT_ENCODINGS`` in order: UTF-8 (with or without BOM), then
+        Windows-1252, then Latin-1. Line endings are normalised to LF, as in any
+        text-mode read.
 
         Args:
             file_path: Path to the file
@@ -194,9 +198,7 @@ class BRIMProvider(ABC):
         Returns:
             String containing the first N lines, empty string on error
         """
-        encodings = ["utf-8-sig", "utf-8", "latin-1", "cp1252"]
-
-        for encoding in encodings:
+        for encoding in TEXT_ENCODINGS:
             try:
                 with open(file_path, encoding=encoding) as f:
                     lines = []
@@ -212,6 +214,34 @@ class BRIMProvider(ABC):
                 return ""
 
         return ""
+
+    @staticmethod
+    def _read_text(file_path: Path) -> str:
+        """Read a whole text export, trying ``TEXT_ENCODINGS`` in order.
+
+        Broker exports are not always UTF-8: a file produced by a European bank, or
+        re-saved with Excel on Windows, is often Windows-1252 or Latin-1, and a UTF-8
+        read fails on its first accented byte. The BOM, if any, is dropped; line
+        endings are returned untouched.
+        """
+        raw = Path(file_path).read_bytes()
+        for encoding in TEXT_ENCODINGS[:-1]:
+            try:
+                return raw.decode(encoding)
+            except UnicodeDecodeError:
+                continue
+        return raw.decode(TEXT_ENCODINGS[-1])
+
+    @staticmethod
+    def _open_text(file_path: Path, *, newline: Optional[str] = None) -> io.StringIO:
+        """Open a text export like ``open(file_path, encoding=...)``, with encoding fallback.
+
+        Plugins use this instead of ``open()`` with a fixed encoding. The result is an
+        in-memory stream that also works in a ``with`` block. The default
+        ``newline=None`` normalises CRLF and CR to LF exactly like a text-mode
+        ``open``; pass ``newline=""`` to keep line endings for the ``csv`` module.
+        """
+        return io.StringIO(BRIMProvider._read_text(file_path), newline=newline)
 
     @property
     def icon_url(self) -> Optional[str]:
@@ -461,16 +491,15 @@ class BRIMProvider(ABC):
     def detect_csv_delimiter(file_path: Path, lines_to_read: int = 15) -> str:
         """Sniff the delimiter used in a CSV file.
 
+        The head is read with the same encoding fallback as ``_open_text``. A plain
+        UTF-8 read used to fail on a Windows-1252 or Latin-1 export, leave the
+        sample empty and answer ``,`` for a ``;``-separated file.
+
         Uses ``csv.Sniffer`` which handles quoted fields correctly.
         Falls back to counting raw characters when sniffing fails.
         """
-        sample = ""
+        sample = BRIMProvider._read_file_head(file_path, num_lines=lines_to_read)
         try:
-            with open(file_path, encoding="utf-8-sig") as f:
-                for i, line in enumerate(f):
-                    if i >= lines_to_read:
-                        break
-                    sample += line
             dialect = csv.Sniffer().sniff(sample, delimiters=[",", ";", "\t"])
             return dialect.delimiter
         except Exception:

@@ -16,6 +16,18 @@ def front_portfolio_banners(verbose: bool = False, ui: bool = False, headed: boo
     return _run_playwright("portfolio/data-quality-banners.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_portfolio_stale_price_banner(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the STALE_PRICE dashboard banner E2E test (D8) on the desktop project, the runner default."""
+    print_section("Frontend Portfolio Stale Price Banner Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("portfolio/stale-price-banner.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_portfolio_broker_icons(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run dashboard broker icon fallback E2E tests."""
     print_section("Frontend Portfolio Broker Icon Tests")
@@ -273,6 +285,14 @@ def populate_registry(registry: dict) -> None:
         help_text="Frontend Portfolio E2E tests (dashboard banners, broker icons, asset detail, FX detail)",
         description="""Frontend Portfolio Tests\n\nOptions: --ui, --headed, --debug""")
     add_test(cat, "banners", front_portfolio_banners, name="DataQualityBanner Tests", desc="Banner component: dashboard grouped, asset/FX flat mode", tests="portfolio/data-quality-banners.spec.ts")
+    add_test(
+        cat,
+        "stale-price-banner",
+        front_portfolio_stale_price_banner,
+        name="Stale Price Banner Tests",
+        desc="STALE_PRICE (D8): a provider-priced holding last quoted 10 days ago raises the dashboard warning, and its sync CTA posts one item per affected asset over the dashboard range, stays busy while the sync runs, then reloads the report — on a disposable account, with the provider sync intercepted",
+        tests="portfolio/stale-price-banner.spec.ts",
+    )
     add_test(cat, "broker-icons", front_portfolio_broker_icons, name="Broker Icon Tests", desc="Dashboard positions broker fallback chain", tests="portfolio/broker-icons.spec.ts")
     add_test(cat, "dashboard", front_portfolio_dashboard, name="Dashboard Chart Tests", desc="PositionsPanel 2x2 view matrix (treemap + perf chart), toggle persistence, AllocationPanel now/history, loading state", tests="portfolio/dashboard.spec.ts")
     add_test(
