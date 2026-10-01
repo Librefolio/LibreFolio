@@ -818,6 +818,50 @@
         "balance_chain_broken": "El saldo acumulado del extracto no cuadra desde el {date}: los saldos solo se comparan, no se usan para las correcciones.",
         "empty_member": "Una exportación «{role}» no tiene filas.",
         "mixed_accounts_in_file": "Una exportación de valores contiene varias cuentas de custodia."
+      },
+      "gapFix": {
+        "stepTitle": "Alinear con el banco",
+        "intro": "Comparamos lo que LibreFolio tendrá tras esta importación con lo que indica el banco, y te proponemos las transacciones que cierran la diferencia.",
+        "checkpointOpening": "Punto de partida · {date}",
+        "checkpointGap": "Después del hueco · {date}",
+        "bank": "Banco",
+        "difference": "Diferencia",
+        "cashLabel": "Efectivo {currency}",
+        "atLeast": "al menos {quantity}",
+        "absorbed": "{n, plural, one {# movimiento anterior de la exportación se resume aquí.} other {# movimientos anteriores de la exportación se resumen aquí.}}",
+        "absorbedMissing": "{n, plural, one {# de ellos no está en LibreFolio:} other {# de ellos no están en LibreFolio:}}",
+        "openingCash": "Saldo antes de la exportación:",
+        "unexplained": "No explicado por estos movimientos:",
+        "note": {
+          "unresolved_asset": "Una posición del banco se refiere a un valor aún no resuelto: se ha dejado fuera."
+        },
+        "toggle": "Importar esta corrección",
+        "costToEnter": "coste por introducir",
+        "verificationTitle": "Comprobación de fin de periodo · {date}",
+        "verificationOk": "Cuadra",
+        "verificationKo": "No cuadra",
+        "verificationKoHint": "No se corrige automáticamente: si añades a mano el movimiento que falta, el saldo cuadra.",
+        "hiddenTitles": "Un valor que no se movió en los archivos y no pagó dividendos no se ve: comprueba tus posiciones en la web del banco.",
+        "error": "La comparación con el banco ha fallado.",
+        "errorContinue": "Puedes continuar sin correcciones.",
+        "selectedCount": "{n, plural, one {# corrección seleccionada} other {# correcciones seleccionadas}}",
+        "todo": {
+          "gap_fix_cost": "Introduce el coste por unidad de esta posición: la web del banco muestra el precio medio."
+        }
+      },
+      "badge": {
+        "column": "Conjunto de informes",
+        "combined": "Combinado",
+        "combinedTooltip": "Construido a partir de: {names}",
+        "combinedDeleted": "eliminados: {names}",
+        "stale": "Por recombinar",
+        "staleTooltip": "Construido por una versión anterior del plugin: analizar de nuevo el conjunto lo reconstruye.",
+        "usedInCombined": "Usado en un archivo combinado",
+        "usedInCombinedTooltip": "Esta exportación entró en un archivo combinado de su conjunto.",
+        "set": "Conjunto del {date}",
+        "setTooltip": "Subido junto con las demás exportaciones de su conjunto.",
+        "incomplete": "Incompleto",
+        "incompleteTooltip": "Falta: {roles}"
       }
     }
   },
@@ -4225,7 +4269,7 @@
         },
         "select": {
           "title": "Elige archivos y analizadores",
-          "description": "Selecciona uno o varios informes guardados. Para cada archivo, elige el plugin de análisis adecuado; cuando todas las selecciones estén completas, usa el botón de la derecha para continuar. Según el plugin elegido y los datos extraídos, pueden aparecer pasos opcionales para unificar activos, corregir filas o gestionar duplicados."
+          "description": "Selecciona uno o varios informes guardados. Para cada archivo, elige el plugin de análisis adecuado; las exportaciones de un mismo banco subidas juntas forman un conjunto, que se analiza como uno solo. Cuando todas las selecciones estén completas, usa el botón de la derecha para continuar. Según el plugin elegido y los datos extraídos, pueden aparecer pasos opcionales para unificar activos, corregir filas, gestionar duplicados o alinear con el banco."
         },
         "analyze": {
           "title": "Analiza los datos extraídos",
@@ -4250,6 +4294,10 @@
         "bulk": {
           "title": "Guardar todo escribe las transacciones",
           "description": "Revisa y modifica los borradores de transacciones y elige Guardar todo cuando estén listos."
+        },
+        "gapFix": {
+          "title": "Alinea con el banco",
+          "description": "Para un conjunto de exportaciones, compara lo que LibreFolio tendrá con lo que indica el banco, y conserva o desmarca las correcciones que cierran la diferencia antes de continuar."
         }
       }
     },

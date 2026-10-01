@@ -41,6 +41,10 @@ export interface SetFileInfo {
     batch_id?: unknown;
     kind?: unknown;
     compatible_plugins?: string[] | null;
+    // Read by the file badges (FilesTable).
+    derived_from?: unknown;
+    combined_into?: unknown;
+    combine_is_stale?: unknown;
 }
 
 /** The files of one broker uploaded together and recognised by one report-set plugin. */
@@ -68,7 +72,7 @@ export type ParseUnit = {kind: 'file'; file: SelectedFileLike} | {kind: 'set'; s
 /** The wizard's knowledge of a set's preview. */
 export interface SetPreviewState {
     status: 'loading' | 'ready' | 'error';
-    preview?: {complete?: boolean | null} | null;
+    preview?: {complete?: boolean | null; missing?: unknown} | null;
     error?: string | null;
 }
 
@@ -215,6 +219,15 @@ export function dayBefore(isoDate: string): string {
     return isoOfDay(dayNumber(isoDate) - 1);
 }
 
+/** The day of an ISO date or instant, in the browser's locale like the tables' dates; `—` when absent. */
+export function formatIsoDay(iso: string | null | undefined): string {
+    if (!iso) return '—';
+    const day = String(iso).slice(0, 10);
+    const [year, month, date] = day.split('-').map(Number);
+    if (!year || !month || !date) return day;
+    return new Date(Date.UTC(year, month - 1, date)).toLocaleDateString(undefined, {timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit'});
+}
+
 interface TimelinePreview {
     members: Array<{file_id: string; role?: unknown; coverage: Array<{axis: string; start: string; end: string}>}>;
     history_start?: string | null;
@@ -249,4 +262,81 @@ export function buildSetTimeline(preview: TimelinePreview, roleOrder: string[]):
     const end = isoOfDay(last);
     const history = preview.history_start ? bar(preview.history_start, end) : null;
     return {start: isoOfDay(first), end, rows, history};
+}
+
+// ---------------------------------------------------------------------------
+// The badges of the files page and of the broker's import files (FilesTable, design §5)
+// ---------------------------------------------------------------------------
+
+/** One badge of a file, about its report set. */
+export interface FileSetBadge {
+    kind: 'combined' | 'stale' | 'usedInCombined' | 'set' | 'incomplete';
+    /** combined: the originals it was built from, and those of them since deleted. */
+    names?: string[];
+    deleted?: string[];
+    /** set: when the set was uploaded. */
+    uploadedAt?: string;
+    /** incomplete: the roles the set lacks. */
+    roles?: string[];
+}
+
+/** What the badges read: the set of each member file, every listed file, and the previews by set key. */
+export interface FileSetBadgeContext {
+    sets: ReadonlyMap<string, ReportSetGroup>;
+    files: SetFileInfo[];
+    previews: ReadonlyMap<string, SetPreviewState>;
+}
+
+function isRecordValue(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** Every member of a report set, mapped to its set: the sets `groupBrokerFiles` builds, broker by broker. Files without a broker belong to none. */
+export function setsOfFiles<F extends SetFileInfo>(files: F[], plugins: SetPluginInfo[]): Map<string, ReportSetGroup> {
+    const byBroker = new Map<number, F[]>();
+    for (const file of files) {
+        if (typeof file.target_broker_id !== 'number') continue;
+        const list = byBroker.get(file.target_broker_id) ?? [];
+        list.push(file);
+        byBroker.set(file.target_broker_id, list);
+    }
+    const setOfFile = new Map<string, ReportSetGroup>();
+    for (const [brokerId, brokerFiles] of byBroker) {
+        for (const set of groupBrokerFiles(brokerId, brokerFiles, plugins).sets) {
+            for (const file of set.files) setOfFile.set(file.file_id, set);
+        }
+    }
+    return setOfFile;
+}
+
+/**
+ * The badges of one file, in a fixed order: combined · stale · usedInCombined · set · incomplete.
+ *
+ * `incomplete` needs the set's preview, ready and saying `complete: false`; while it loads, after
+ * it failed, or when the set has an up-to-date combined file (which still holds a deleted
+ * original, v5.3), the set is not called incomplete.
+ */
+export function fileSetBadges(file: SetFileInfo, ctx: FileSetBadgeContext): FileSetBadge[] {
+    const badges: FileSetBadge[] = [];
+    if (file.kind === 'combined') {
+        const originals = Array.isArray(file.derived_from) ? file.derived_from.filter(isRecordValue) : [];
+        badges.push({
+            kind: 'combined',
+            names: originals.map((original) => String(original.filename ?? '')),
+            deleted: originals.filter((original) => original.deleted === true).map((original) => String(original.filename ?? '')),
+        });
+    }
+    if (file.combine_is_stale === true) badges.push({kind: 'stale'});
+    if (Array.isArray(file.combined_into) && file.combined_into.length > 0) badges.push({kind: 'usedInCombined'});
+    const set = ctx.sets.get(file.file_id);
+    if (!set) return badges;
+    badges.push({kind: 'set', uploadedAt: set.uploadedAt});
+    const state = ctx.previews.get(set.key);
+    const preview = state?.status === 'ready' ? state.preview : null;
+    if (preview?.complete !== false) return badges;
+    const combined = combinedFileForSet(set, ctx.files);
+    if (combined !== null && combined.combine_is_stale !== true) return badges;
+    const missing = Array.isArray(preview.missing) ? preview.missing.filter(isRecordValue) : [];
+    badges.push({kind: 'incomplete', roles: missing.map((item) => String(item.role ?? '')).filter((role) => role !== '')});
+    return badges;
 }

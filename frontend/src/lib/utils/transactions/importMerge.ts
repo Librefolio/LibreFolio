@@ -40,6 +40,12 @@ export interface MergeResult {
     assetMap: Map<number, AssetResolution>;
     /** Which file each global fake id came from — the grouping layer needs the provenance. */
     fileIdOfFake: Map<number, string>;
+    /**
+     * Per file: the plugin's fake asset id → the global fake id its rows were remapped to. Only the
+     * ids that appear in rows are here: the gap-fix maps a report set's truth positions through it,
+     * and plugin and global fakes share one range, so an id missing here must never be read as global.
+     */
+    fakeRemapByFile: Map<string, Map<number, number>>;
 }
 
 /** Mirror BRIM selection: one distinct candidate; conflicting aliases remain unresolved. */
@@ -71,6 +77,7 @@ export function buildMergedTransactions(parseResults: MergeSourceResult[], broke
     const assetMap = new Map<number, AssetResolution>();
     /** Which file each global fake id came from — the grouping layer needs the provenance. */
     const fileIdOfFake = new Map<number, string>();
+    const fakeRemapByFile = new Map<string, Map<number, number>>();
     let globalIndex = 0;
     // Global unique fake-id allocator. Each source file's plugin emits fake ids from the
     // same FAKE_ASSET_ID_BASE downward, so ids collide across files. Re-map every file's
@@ -84,6 +91,7 @@ export function buildMergedTransactions(parseResults: MergeSourceResult[], broke
         const resp = result.response!;
         // Per-file map: original plugin fake id → globally-unique fake id.
         const fakeRemap = new Map<number, number>();
+        fakeRemapByFile.set(result.fileId, fakeRemap);
         // Build todos map by tx_index
         const todosMap = new Map<number, ImportTodo[]>();
         for (const ft of resp.field_todos ?? []) {
@@ -188,5 +196,5 @@ export function buildMergedTransactions(parseResults: MergeSourceResult[], broke
         }
     }
 
-    return {txArr, assetMap, fileIdOfFake};
+    return {txArr, assetMap, fileIdOfFake, fakeRemapByFile};
 }

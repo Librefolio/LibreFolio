@@ -1,5 +1,5 @@
 import {describe, it, expect} from 'vitest';
-import {FAKE_ASSET_ID_BASE} from '$lib/utils/brim/isFakeAssetId';
+import {FAKE_ASSET_ID_BASE, isFakeAssetId} from '$lib/utils/brim/isFakeAssetId';
 import type {BrimParseResponse} from '$lib/types';
 import {buildMergedTransactions, mergeCandidates, uniqueCandidateId, type MergeSourceResult, type MergeBroker} from './importMerge';
 import type {AssetResolution} from './importTypes';
@@ -377,5 +377,60 @@ describe('C2: buildMergedTransactions — rows before the broker history (H0)', 
         const results = [src('combined', 1, {history_start: null, transactions: [cashRow('2019-12-31')]})];
         const {txArr} = buildMergedTransactions(results, [{id: 1}], []);
         expect(txArr[0].selected).toBe(true);
+    });
+});
+
+describe('C3: buildMergedTransactions — fakeRemapByFile, the remap of each file’s plugin fake ids', () => {
+    // The truth positions of a report set carry the plugin's fake ids of their own file. The
+    // gap-fix turns them into the assets the user resolved through this map — plugin id → global
+    // id, per file — built by the same rules that remap the rows (plan C3.0). Plugin fakes and
+    // globals share one range, so only the ids that appear in rows may be in it.
+    const buy = (asset_id: number, date = '2024-05-01') => ({type: 'BUY', date, quantity: 1, asset_id});
+    const mapping = (fake_asset_id: number, isin: string) => ({fake_asset_id, extracted_isin: isin, candidates: [], selected_asset_id: null});
+
+    /** The C3 field, read through a structural type so this file compiles before the field exists. */
+    function fakeRemapOf(result: ReturnType<typeof buildMergedTransactions>): Map<string, Map<number, number>> {
+        const remap = (result as {fakeRemapByFile?: unknown}).fakeRemapByFile;
+        expect(remap, 'buildMergedTransactions returns fakeRemapByFile (phase C3)').toBeInstanceOf(Map);
+        return remap as Map<string, Map<number, number>>;
+    }
+
+    it('maps each file’s plugin ids to the globals of its rows: the same plugin id in two files is two globals', () => {
+        const results = [src('fileA', 1, {transactions: [buy(FAKE), buy(FAKE - 1), buy(42)], asset_mappings: [mapping(FAKE, 'IT0001'), mapping(FAKE - 1, 'IT0002')]}), src('fileB', 1, {transactions: [buy(FAKE, '2024-05-02'), buy(FAKE, '2024-05-03')], asset_mappings: [mapping(FAKE, 'IT0003')]})];
+        const result = buildMergedTransactions(results, [{id: 1}], []);
+        const remap = fakeRemapOf(result);
+        const {txArr} = result;
+
+        expect(remap.get('fileA')?.get(FAKE)).toBe(txArr[0].tx.asset_id);
+        expect(remap.get('fileA')?.get(FAKE - 1)).toBe(txArr[1].tx.asset_id);
+        expect(remap.get('fileB')?.get(FAKE)).toBe(txArr[3].tx.asset_id);
+        expect(remap.get('fileB')?.get(FAKE)).toBe(txArr[4].tx.asset_id);
+        expect(remap.get('fileA')?.get(FAKE)).not.toBe(remap.get('fileB')?.get(FAKE));
+    });
+
+    it('holds only the plugin ids that appear in rows: not a mapping without rows, not a real id', () => {
+        const results = [src('fileA', 1, {transactions: [buy(FAKE), buy(42)], asset_mappings: [mapping(FAKE, 'IT0001'), mapping(FAKE - 5, 'IT0009')]})];
+        const remap = fakeRemapOf(buildMergedTransactions(results, [{id: 1}], []));
+
+        expect([...(remap.get('fileA')?.keys() ?? [])]).toEqual([FAKE]);
+    });
+
+    it('its globals are exactly the fake ids the rows were remapped to', () => {
+        const results = [src('fileA', 1, {transactions: [buy(FAKE), buy(FAKE - 1)]}), src('fileB', 2, {transactions: [buy(FAKE - 1), buy(7), buy(FAKE)]}), src('fileC', 1, {transactions: [buy(FAKE)]})];
+        const result = buildMergedTransactions(results, [{id: 1}, {id: 2}], []);
+        const remap = fakeRemapOf(result);
+        const globals = [...remap.values()].flatMap((perFile) => [...perFile.values()]).sort((x, y) => x - y);
+        const rowFakes = [...new Set(result.txArr.map((t) => t.tx.asset_id).filter((id): id is number => typeof id === 'number' && isFakeAssetId(id)))].sort((x, y) => x - y);
+
+        expect(globals).toEqual(rowFakes);
+        expect(globals).toHaveLength(5);
+    });
+
+    it('a file without fake ids, or a result that is not done, has nothing to remap', () => {
+        const results: MergeSourceResult[] = [src('real-only', 1, {transactions: [buy(42)]}), {fileId: 'err', brokerId: 1, status: 'error', response: {transactions: [buy(FAKE)]} as unknown as BrimParseResponse}];
+        const remap = fakeRemapOf(buildMergedTransactions(results, [{id: 1}], []));
+
+        expect(remap.get('real-only')?.size ?? 0).toBe(0);
+        expect(remap.get('err')?.size ?? 0).toBe(0);
     });
 });
