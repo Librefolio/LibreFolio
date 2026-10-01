@@ -1180,6 +1180,15 @@ function shiftDay(isoDay: string, days: number): string {
     return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
 }
 
+/** The calendar days from one plain day to another, negative when `to` comes first: {@link shiftDay}'s inverse, counted in UTC the same way. */
+function daysBetween(from: string, to: string): number {
+    const utc = (isoDay: string) => {
+        const [year, month, day] = isoDay.split('-').map(Number);
+        return Date.UTC(year, month - 1, day);
+    };
+    return Math.round((utc(to) - utc(from)) / 86_400_000);
+}
+
 /**
  * How the scripted engine answers a period it has not suggested itself.
  *
@@ -1943,6 +1952,93 @@ async function paidHeaderIds(page: Page): Promise<string[]> {
 async function waitForPaidTable(page: Page): Promise<void> {
     await expect(paidTable(page)).toBeVisible({timeout: 20_000});
     await expect(page.getByTestId('risk-asset-set-l3-loading')).toHaveCount(0);
+}
+
+/**
+ * ─── The blanks, and L3°'s period (the developer's review, round 4) ────────
+ *
+ * Neither table carries a fixed note under it any more. A value nobody could measure is an em dash,
+ * and the dash explains itself: DataTable draws the cell — an `HtmlCell` with a `tooltip` — inside the
+ * project's Tooltip, whose trigger is the component's own `div.tooltip-wrapper` with `role="button"`.
+ * It carries no testid, so its class and its role are the contract read here; a measured cell is
+ * drawn without a tooltip and has no such wrapper at all.
+ *
+ * Found by the cell it wraps, inside one row: the cell's testid names a column, the row the asset.
+ */
+function cellTooltip(row: Locator, cellTestId: string): Locator {
+    return row.locator('div.tooltip-wrapper[role="button"]', {has: row.page().locator(`[data-testid="${cellTestId}"]`)});
+}
+
+/** The key of the sentence a dash explains itself with: what its help would print if the catalogue had no message for it. */
+const BLANK_NOTE_KEY = 'risk.assetSet.levels.blankNote';
+
+/** The window L3°'s period note publishes beside its sentence, as `data-start`, `data-end`, `data-days` and `data-narrowed`. */
+interface L3Period {
+    start: string;
+    end: string;
+    days: number;
+    narrowed: boolean;
+}
+
+/** How far the analysed window may fall short of the toolbar's period, at either end, before the note calls it narrowed. */
+const L3_PERIOD_TOLERANCE_DAYS = 7;
+
+/**
+ * What L3°'s period note must publish for the answer the stub sent to `request`, worked out from that
+ * answer's `asset_set_risk_return` metadata as the engine defines it: `calendar_days` runs from the
+ * baseline price — the one the first return is measured from — to `analyzed_range.end`, so the window
+ * ends on `analyzed_range.end`, opens on the day after the baseline (`calendar_days − 1` days before
+ * that end: the first day whose price movement the figures capture) and holds `calendar_days` days,
+ * both ends counted. It is narrowed when it starts more than a week after the toolbar's period does,
+ * or ends more than a week before it.
+ *
+ * The toolbar's period is the one the request carried: the page asks for the period its toolbar
+ * shows, and the fit-period cases at the end of this file read the same dates off the URL. Rebuilt
+ * through {@link metadata}, the function that answered, so the oracle cannot drift from the stub.
+ */
+function l3PeriodFor(request: RiskRequest, options: RiskStubOptions = {}): L3Period {
+    const analytic = request.analytics.find((candidate) => candidate.analytic_code === 'asset_set_risk_return');
+    if (!analytic) throw new Error('The per-asset wave carries no asset_set_risk_return, so L3° has no window to publish.');
+    const served = metadata(request, analytic, options);
+    const end = served.analyzed_range.end;
+    const start = shiftDay(end, -served.calendar_days + 1);
+    const toolbar: DayRange = {start: request.date_range.start, end: request.date_range.end ?? request.date_range.start};
+    const narrowed = daysBetween(toolbar.start, start) > L3_PERIOD_TOLERANCE_DAYS || daysBetween(end, toolbar.end) > L3_PERIOD_TOLERANCE_DAYS;
+    return {start, end, days: served.calendar_days, narrowed};
+}
+
+/**
+ * End on L3°'s period note publishing exactly `expected`. Every read retries, so a caller that has
+ * moved the toolbar waits here for the note to follow; the sentence is translated, and is only
+ * required to say something.
+ */
+async function expectL3Period(page: Page, expected: L3Period, timeout: number): Promise<void> {
+    const note = page.getByTestId('risk-asset-set-l3-period');
+    await expect(note, 'L3° must say which period its figures cover').toBeVisible({timeout});
+    await expect(note, "data-end must be the answer's analyzed_range.end").toHaveAttribute('data-end', expected.end, {timeout});
+    await expect(note, 'data-start must be the day after the baseline price: that end less calendar_days, plus one').toHaveAttribute('data-start', expected.start, {timeout});
+    await expect(note, 'data-days must be calendar_days: the days from data-start to data-end, both counted').toHaveAttribute('data-days', String(expected.days), {timeout});
+    await expect(note, "data-narrowed must say whether the window falls more than a week short of the toolbar's period").toHaveAttribute('data-narrowed', String(expected.narrowed), {timeout});
+    await expect(note, 'the note publishes a period but says nothing').not.toHaveText(/^\s*$/);
+}
+
+/**
+ * Where L3°'s period note sits, in document order: `between` when it follows the table and precedes
+ * the scatter, inside neither; otherwise what is wrong. One read, not a retry: a caller fronts it with
+ * barriers on all three.
+ */
+async function l3PeriodPlacement(page: Page): Promise<string> {
+    return page.getByTestId('risk-asset-set-l3').evaluate((level) => {
+        const tables = level.querySelectorAll('[data-testid="risk-asset-set-l3-table"] table');
+        const table = tables.length > 0 ? tables[tables.length - 1] : null;
+        const note = level.querySelector('[data-testid="risk-asset-set-l3-period"]');
+        const scatter = level.querySelector('[data-testid="risk-asset-set-l3-scatter"]');
+        if (!table || !note || !scatter) return `missing: table=${table !== null} note=${note !== null} scatter=${scatter !== null}`;
+        const precedes = (first: Element, second: Element) => !first.contains(second) && !second.contains(first) && (first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+        if (!precedes(table, note)) return 'before or inside the table';
+        if (!precedes(note, scatter)) return 'after or inside the scatter';
+        return 'between';
+    });
 }
 
 /** The user id the benchmark store will scope its storage key with. */
@@ -4114,6 +4210,11 @@ test.describe('Asset Global risk laboratory', () => {
      * And no sentence explains the missing columns: the note that sent the reader to
      * the Dashboard for a benchmark is gone (the developer's second review, 30/09 —
      * "fuori luogo qui"), in either branch.
+     *
+     * Nor does a fixed note sit under either table any more (round 4): the blank note
+     * that explained every dash at once is gone from L1° and L3° alike, because each
+     * dash now explains itself — see the two dash cases below, which check the same
+     * absence on tables that do hold a blank.
      */
     test('L3° shows beta and correlation only when a benchmark applies, with no note about the benchmark either way', async ({page}) => {
         // The two navigations below (read the selection, then seed the shared
@@ -4136,9 +4237,12 @@ test.describe('Asset Global risk laboratory', () => {
         await expect(paid.getByTestId('risk-asset-set-l3-volatility')).toHaveCount(selected.length);
         await expect(paid.getByTestId('risk-asset-set-l3-beta')).toHaveCount(0);
         await expect(paid.getByTestId('risk-asset-set-l3-correlation')).toHaveCount(0);
-        // The blank note is drawn in the very branch the no-benchmark note sat in: with
-        // it on screen, the note's absence is about a body that exists.
-        await expect(paid.getByTestId('risk-asset-set-l3-blank-note')).toBeVisible();
+        // No fixed note under either table (round 4): each dash explains itself now. The
+        // bodies the notes sat under are on screen — L1°'s table by `waitForLossTable`,
+        // L3°'s volatility cells just above — so these absences, and the no-benchmark
+        // note's below, are about tables that exist rather than ones still loading.
+        await expect(page.getByTestId('risk-asset-set-l1-blank-note'), "L1°'s fixed blank note is back: each dash explains itself now").toHaveCount(0);
+        await expect(page.getByTestId('risk-asset-set-l3-blank-note'), "L3°'s fixed blank note is back: each dash explains itself now").toHaveCount(0);
         await expect(page.getByTestId('risk-asset-set-l3-no-benchmark'), 'the no-benchmark note is back: the developer took it out of this page').toHaveCount(0);
 
         // ── The true branch ─────────────────────────────────────────────────
@@ -4228,6 +4332,165 @@ test.describe('Asset Global risk laboratory', () => {
         // Nothing to restore: the benchmark and the selection both live in this
         // context's `localStorage`, which dies with the context, and no database
         // row was touched by any of the above.
+    });
+
+    /**
+     * Every dash in L1° explains itself (the developer's review, round 4).
+     *
+     * A figure nobody could measure is drawn as an em dash, and the fixed note that sat under the
+     * table to explain every dash at once is gone: the explanation now rides on each dash, as the
+     * project's Tooltip around the cell ({@link cellTooltip}). A measured figure owes the reader no
+     * explanation and carries none — no wrapper at all, so resting on a number opens nothing.
+     *
+     * The blank is the asset `dropLastAsset` excludes, the state the backend leaves when it cannot
+     * prepare a series, so the table holds measured rows and a blank one side by side. The note's
+     * absence is checked here too, on a table that does hold a blank: a note drawn only when
+     * something is blank would slip past the benchmark case, whose tables hold none. The help's words
+     * are not read — they are translated; what only a browser can prove is that resting on the dash
+     * opens a help that says something, and that the catalogue had a message for it, not its key.
+     */
+    test('every dash in L1° explains itself in a tooltip of its own, and a measured figure carries none', async ({page}) => {
+        const options: RiskStubOptions = {dropLastAsset: true};
+        const requests = await installRiskMocks(page, options);
+        await openAssetGlobalRisk(page);
+        await ensureSelectionAtLeast(page, 2);
+        await waitForRiskCatalog(page);
+        await waitForLossTable(page);
+
+        // Which asset is blank is read from the request the stub answered — it drops the last id of
+        // the scope it was asked about — never guessed from the chips.
+        const selected = await chipIds(page);
+        await expect.poll(() => levelRequestsFor(requests, selected).length, {timeout: 20_000, message: 'the per-asset wave must have been requested for the selection on screen'}).toBeGreaterThan(0);
+        const {covered, excluded} = preparedAssetIds(levelRequestsFor(requests, selected)[0], options);
+        expect(excluded, 'dropLastAsset must leave exactly one selected asset unmeasured').toHaveLength(1);
+        const unmeasured = excluded[0];
+        // Any measured asset will do: none of them may carry a tooltip.
+        const measured = covered[0];
+
+        // Presence first — every measured figure drawn, every cell of the blank row blank — so the
+        // absences below are about a table showing its answer, not one still loading.
+        for (const cell of L1_CELLS) {
+            await expect(lossTable(page).locator(`[data-testid="risk-asset-set-l1-${cell}"][data-measured="true"]`)).toHaveCount(covered.length);
+            await expect(lossCell(page, unmeasured, cell)).toHaveAttribute('data-measured', 'false');
+        }
+
+        // THE RULE: every dash is wrapped in its own explanation…
+        for (const cell of L1_CELLS) {
+            await expect(cellTooltip(lossRow(page, unmeasured), `risk-asset-set-l1-${cell}`), `the ${cell} dash of an unmeasured asset has no tooltip to say why it is blank`).toHaveCount(1);
+        }
+        // …and no figure is: not one wrapper around anything measured, anywhere in the table.
+        await expect(lossTable(page).locator('.tooltip-wrapper', {has: page.locator('[data-measured="true"]')}), 'a measured figure carries a tooltip: only a dash owes the reader an explanation').toHaveCount(0);
+        await expect(page.getByTestId('risk-asset-set-l1-blank-note'), 'the fixed blank note is back under L1°, on the very table whose dashes explain themselves').toHaveCount(0);
+
+        // A clean slate: the pointer rests on a figure, which has no tooltip to open, so whatever
+        // help opens next is the dash's.
+        await lossCell(page, measured, 'badDay').hover();
+        const help = page.getByTestId('tooltip-content');
+        await expect(help, 'a help is still open with the pointer resting on a measured figure').toHaveCount(0);
+
+        // Resting on the dash opens its help. The Tooltip opens after its own hover delay, which the
+        // retrying assertion absorbs: nothing here waits on a clock.
+        await cellTooltip(lossRow(page, unmeasured), 'risk-asset-set-l1-badDay').hover();
+        await expect(help, 'resting on a dash must open its explanation').toBeVisible();
+        await expect(help, 'the explanation opened empty').not.toHaveText(/^\s*$/);
+        await expect(help, 'the explanation printed its own key: the catalogue has no message for it').not.toHaveText(BLANK_NOTE_KEY);
+    });
+
+    /**
+     * Every dash in L3° explains itself — L1°'s rule, on the table that has L1°'s shape (the
+     * developer's review, round 4).
+     *
+     * The same blank, the same wrapper and the same absences as the L1° case above, read through
+     * L3°'s own locators. Resting is all this case does: a press on the dash opens the same help and
+     * selects no row, which the developer accepted as it is and asked not to pin.
+     */
+    test('every dash in L3° explains itself in a tooltip of its own, and a measured figure carries none', async ({page}) => {
+        const options: RiskStubOptions = {dropLastAsset: true};
+        const requests = await installRiskMocks(page, options);
+        await openAssetGlobalRisk(page);
+        await ensureSelectionAtLeast(page, 2);
+        await waitForRiskCatalog(page);
+        await waitForPaidTable(page);
+
+        const selected = await chipIds(page);
+        await expect.poll(() => levelRequestsFor(requests, selected).length, {timeout: 20_000, message: 'the per-asset wave must have been requested for the selection on screen'}).toBeGreaterThan(0);
+        const {covered, excluded} = preparedAssetIds(levelRequestsFor(requests, selected)[0], options);
+        expect(excluded, 'dropLastAsset must leave exactly one selected asset unmeasured').toHaveLength(1);
+        const unmeasured = excluded[0];
+        // Any measured asset will do: none of them may carry a tooltip.
+        const measured = covered[0];
+
+        // Presence first, as in L1°.
+        for (const cell of L3_CELLS) {
+            await expect(paidTable(page).locator(`[data-testid="risk-asset-set-l3-${cell}"][data-measured="true"]`)).toHaveCount(covered.length);
+            await expect(paidCell(page, unmeasured, cell)).toHaveAttribute('data-measured', 'false');
+        }
+
+        // THE RULE: every dash is wrapped in its own explanation, and no figure is.
+        for (const cell of L3_CELLS) {
+            await expect(cellTooltip(paidRow(page, unmeasured), `risk-asset-set-l3-${cell}`), `the ${cell} dash of an unmeasured asset has no tooltip to say why it is blank`).toHaveCount(1);
+        }
+        await expect(paidTable(page).locator('.tooltip-wrapper', {has: page.locator('[data-measured="true"]')}), 'a measured figure carries a tooltip: only a dash owes the reader an explanation').toHaveCount(0);
+        await expect(page.getByTestId('risk-asset-set-l3-blank-note'), 'the fixed blank note is back under L3°, on the very table whose dashes explain themselves').toHaveCount(0);
+
+        // A clean slate, then the dash of the column whose help the developer asked for by name.
+        await paidCell(page, measured, 'expectedReturn').hover();
+        const help = page.getByTestId('tooltip-content');
+        await expect(help, 'a help is still open with the pointer resting on a measured figure').toHaveCount(0);
+
+        await cellTooltip(paidRow(page, unmeasured), 'risk-asset-set-l3-expectedReturn').hover();
+        await expect(help, 'resting on a dash must open its explanation').toBeVisible();
+        await expect(help, 'the explanation opened empty').not.toHaveText(/^\s*$/);
+        await expect(help, 'the explanation printed its own key: the catalogue has no message for it').not.toHaveText(BLANK_NOTE_KEY);
+    });
+
+    /**
+     * L3° says which period its figures cover (the developer's review, round 4).
+     *
+     * Between the table and the scatter, a note publishes the window the figures were measured over
+     * as attributes beside its sentence ({@link expectL3Period}), worked out from the
+     * `asset_set_risk_return` result's own metadata ({@link l3PeriodFor}). The sentence is translated
+     * and not read.
+     *
+     * The stub measures a fixed 87 days ending on the period's last day — a window opening 86 days
+     * before it — and echoes the period's own start in `analyzed_range.start`: a note that took its
+     * start from there instead of from `calendar_days` would publish another day, which is the
+     * difference this case pins. The toolbar opens on three months, 89 to 92 days, which 87 fill to
+     * within the week — the window opens three to six days after the toolbar — so the note opens not
+     * narrowed; a year in the toolbar leaves the same 87 days far short of it, and the note must say so.
+     */
+    test("L3° publishes the period its figures cover between its table and its scatter, and says when it is narrower than the toolbar's", async ({page}) => {
+        // Two answers to wait for, the opening period's and a year's, the first one drawn as a
+        // chart as well. Every wait below is a barrier on a published state; the budget pays for
+        // the second wave, it does not hedge against a slow one.
+        test.setTimeout(45_000);
+        const requests = await installRiskMocks(page);
+        await openAssetGlobalRisk(page);
+        await ensureSelectionAtLeast(page, 2);
+        await waitForRiskCatalog(page);
+        await waitForPaidTable(page);
+        await expectChartCanvas(page, 'risk-asset-set-l3-scatter', 20_000);
+
+        // The opening answer, rebuilt from the request it answered.
+        const selected = await chipIds(page);
+        await expect.poll(() => levelRequestsFor(requests, selected).length, {timeout: 20_000, message: 'the per-asset wave must have been requested for the selection on screen'}).toBeGreaterThan(0);
+        const openingRequest = levelRequestsFor(requests, selected).at(-1) as RiskRequest;
+        const opening = l3PeriodFor(openingRequest);
+        expect(opening.start, "premise: the stub's analyzed_range.start (the period's own start) must differ from the window's start, end − calendar_days + 1, or a note reading the wrong one would pass").not.toBe(openingRequest.date_range.start);
+        expect(opening.narrowed, `premise: the toolbar's opening three months hold the stub's 87 days to within a week — read ${JSON.stringify(opening)}`).toBe(false);
+        await expectL3Period(page, opening, 10_000);
+
+        // …where the developer put it: after the table, before the chart that draws the same figures.
+        expect(await l3PeriodPlacement(page), "the period note must sit after L3°'s table and before its scatter").toBe('between');
+
+        // ── A year in the toolbar: the same 87 days now fall far short of it ──
+        const year = await pressPeriodPreset(page, '1y');
+        const askedFor = (period: DayRange) => levelRequestsFor(requests, selected).filter((request) => rangeKey({start: request.date_range.start, end: request.date_range.end ?? request.date_range.start}) === rangeKey(period));
+        await expect.poll(() => askedFor(year).length, {timeout: 20_000, message: "the year's per-asset wave must have been requested for the same selection"}).toBeGreaterThan(0);
+        const widened = l3PeriodFor(askedFor(year).at(-1) as RiskRequest);
+        expect(widened.narrowed, `premise: a year in the toolbar leaves the stub's 87 days more than a week short of it — read ${JSON.stringify(widened)}`).toBe(true);
+        await waitForPaidTable(page);
+        await expectL3Period(page, widened, 10_000);
     });
 
     /**
