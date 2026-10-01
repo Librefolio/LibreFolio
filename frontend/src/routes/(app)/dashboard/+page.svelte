@@ -23,6 +23,8 @@
     import {aiExportCatalogLoader, emptyAiExportCompatibility, type AiExportCatalogCompatibilityResult} from '$lib/features/ai-export/catalog/compatibility';
     import {buildAiExportMenuLabels, getAiExportErrorMessage, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {buildAssetSyncToast} from '$lib/utils/sync/syncToastHelpers';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
 
     import {
@@ -357,6 +359,34 @@
                 syncLoading = false;
                 syncingCode = null;
             }
+        } else if (action === 'sync_asset_prices') {
+            // STALE_PRICE: re-sync the flagged provider assets from the day after their last
+            // stored price ('resume', the rule every auto-sync uses) up to the dashboard's end
+            // date, then reload the report (the banner clears once the prices are fresh).
+            const assetIds = _issue.affected_asset_ids ?? [];
+            if (assetIds.length === 0) return;
+            const assetNames = _issue.affected_asset_names ?? [];
+            const tr = (key: string, opts?: any) => $_(key, opts);
+            syncLoading = true;
+            syncingCode = _issue.code;
+            try {
+                const response = await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post(
+                    assetIds.map((asset_id) => ({asset_id, date_range: {start: 'resume', end: dateRangeCtl.end}})),
+                    {timeout: 120 * 1000},
+                );
+                for (const result of ((response as any)?.results ?? []) as any[]) {
+                    const name = assetNames[assetIds.indexOf(result?.asset_id)] ?? `#${result?.asset_id}`;
+                    const toast = buildAssetSyncToast(result, escapeHtml(name), tr);
+                    toasts[toast.variant](toast.message);
+                }
+                invalidate();
+                await loadAll(true);
+            } catch (e: any) {
+                toasts.error(`${$_('common.sync')} — ${e?.message || $_('prices.sync.failedDefault')}`);
+            } finally {
+                syncLoading = false;
+                syncingCode = null;
+            }
         }
     }
 
@@ -614,7 +644,7 @@
     <h1 class="sr-only">{$_('nav.dashboard')}</h1>
 
     <PageToolbar
-        thresholds={{oneRow: 1000, denseRow: 810, stackFilters: 430, oneColumn: 390, noExtraLabel: 410, labelHideActions: 210, labelHideTabs: 370}}
+        thresholds={{oneRow: 1000, denseRow: 950, stackFilters: 510, oneColumn: 390, noExtraLabel: 410, labelHideActions: 210, labelHideTabs: 460}}
         tabs={dashboardTabs}
         {activeTab}
         ontabchange={handleTabChange}
