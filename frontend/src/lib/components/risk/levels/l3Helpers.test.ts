@@ -2,7 +2,7 @@ import {describe, expect, it} from 'vitest';
 
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 
-import {buildRiskReturnPoints, cashWeight, selectKpiWave} from './l3Helpers';
+import {buildRiskReturnPoints, selectKpiWave} from './l3Helpers';
 
 /**
  * Every figure below is invented here, on purpose.
@@ -136,8 +136,6 @@ describe('buildRiskReturnPoints', () => {
         const points = buildRiskReturnPoints({...base, riskReturnResult: result, comparisonResult: null});
 
         expect(points.every((point) => point.volatility !== 0 || point.annualReturn !== 0)).toBe(true);
-        // The share is still published, so the caller can say it in words.
-        expect(cashWeight(result)).toBe(0.49);
     });
 
     it('drops a point it cannot place instead of pinning it to an axis', () => {
@@ -190,6 +188,5 @@ describe('buildRiskReturnPoints', () => {
 
     it('draws nothing at all when the analytic did not run', () => {
         expect(buildRiskReturnPoints({...base, riskReturnResult: null, comparisonResult: null})).toEqual([]);
-        expect(cashWeight(null)).toBeNull();
     });
 });

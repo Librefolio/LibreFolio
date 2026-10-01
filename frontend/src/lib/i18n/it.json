@@ -3441,7 +3441,11 @@
           "axisReturn": "Rendimento annualizzato atteso",
           "line": "Retta rischio-rendimento",
           "note": "Sopra la retta significa pagato meglio per il rischio preso. I punti mostrano il rendimento atteso in media-varianza, la grandezza in cui la pendenza della retta è lo Sharpe: su un asset molto volatile il rendimento realmente vissuto è più basso, perché la volatilità erode il composto.",
-          "cash": "La liquidità ({share} del patrimonio) non è un punto: nel modello rende esattamente zero, e disegnarla la trasformerebbe in una misura."
+          "cash": "La liquidità ({share} del patrimonio) non è un punto: nel modello rende esattamente zero, e disegnarla la trasformerebbe in una misura.",
+          "unpriced": "Anche le posizioni senza una serie di prezzi ({share} del patrimonio) non sono punti: non è stato possibile misurarle, e il modello le tiene a rendimento esattamente zero."
+        },
+        "rows": {
+          "kpi": "Sortino, Sharpe e volatilità"
         }
       },
       "l4": {
@@ -3507,7 +3511,9 @@
       "backtestNotice": "Con una fetta attiva, questi numeri sono ricostruiti sulla composizione di oggi: dicono come *sarebbe* andata, non come è andata davvero.",
       "notice": {
         "partialTitle": "Alcuni risultati sono parziali",
-        "notesTitle": "Da sapere su questi risultati"
+        "notesTitle": "Da sapere su questi risultati",
+        "noPriceSourceTitle": "Posizioni senza prezzi, escluse da alcune misure",
+        "affected": "Misure interessate"
       }
     },
     "eligibility": {
