@@ -18,6 +18,7 @@
            ResizeObserver for responsive sizing.
 -->
 <script lang="ts">
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
     import {attachChartReady} from '$lib/utils/chartReady';
@@ -1916,7 +1917,7 @@
                         };
                         html += pnlRow(`<b>${pnlLabels.total}</b>`, totalVal, cc('totalPnl'));
                         activeChartData?.pnl.brokers.forEach((broker, index) => {
-                            html += pnlRow(broker.brokerName, broker.metric.values[idx], brokerColor(index, isDark));
+                            html += pnlRow(escapeHtml(broker.brokerName), broker.metric.values[idx], brokerColor(index, isDark));
                         });
                         return html;
                     }
@@ -1940,7 +1941,7 @@
                             const v = broker.metric.values[idx];
                             if (v == null) return;
                             const signColor = signedValueColor(v, isDark, textColor);
-                            html += `<div style="display:flex;justify-content:space-between;gap:16px;color:${brokerColor(index, isDark)}"><span>${broker.brokerName}</span><b style="color:${signColor}">${v === 0 ? '' : v > 0 ? '+' : '−'}${fmtCurrency(Math.abs(v))}</b></div>`;
+                            html += `<div style="display:flex;justify-content:space-between;gap:16px;color:${brokerColor(index, isDark)}"><span>${escapeHtml(broker.brokerName)}</span><b style="color:${signColor}">${v === 0 ? '' : v > 0 ? '+' : '−'}${fmtCurrency(Math.abs(v))}</b></div>`;
                         });
                         return html;
                     }
@@ -1984,7 +1985,7 @@
                         .map((p: any) => {
                             const rawVal = Array.isArray(p.value) ? p.value[1] : p.value;
                             const val = `${Number(rawVal).toFixed(2)}%`;
-                            return buildTooltipRow(p.seriesName, val, p.color);
+                            return buildTooltipRow(escapeHtml(String(p.seriesName ?? '')), val, p.color);
                         })
                         .join('');
                     return html;

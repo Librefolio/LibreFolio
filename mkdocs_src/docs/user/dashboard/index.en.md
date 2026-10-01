@@ -70,6 +70,8 @@ If any prices or FX rates are missing on the end date, a banner appears at the t
 </div>
  Assets without a price provider (entered manually, such as real-estate crowdfunding projects) are permanently valued at purchase cost — this is intentional and does not generate a warning.
 
+The banner also warns you when an asset you hold has a price provider but its latest price is **more than a week old** on the end date: click **Sync prices** to fetch the missing prices, and the warning goes away once they are up to date. Manual assets are never flagged this way, since there is nothing to sync.
+
 ---
 
 ## 🔗 In this section

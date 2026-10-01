@@ -534,3 +534,79 @@ describe('DataEditor — dated import compatibility', () => {
         ]);
     });
 });
+
+describe('DataEditor — a value rendered into an html cell stays text (K step 13, item 0)', () => {
+    // Four branches of the column builder hand DataTable an `html` cell — rendered with `{@html}` —
+    // built around the row's own value: a readonly row of a string column, of an enum column whose
+    // value matches no option (the fallback label), of a currency column, and every column of a
+    // readonly editor. Rows are readonly when they are auto/provider events, and asset events belong
+    // to global assets: a note written as markup would run for every user who opens the asset. So
+    // these cases read the rendered cell rather than the payload the parent receives — the rendered
+    // cell is where the defect is.
+    const PAYLOAD = '<img src=x onerror="window.__k13=1">';
+    const KIND_OPTIONS = [
+        {value: 'DIVIDEND', label: 'Dividend', emoji: '💰'},
+        {value: 'SPLIT', label: 'Split', emoji: '✂️'},
+    ];
+    const NOTES: ColumnDef = {key: 'notes', label: 'Notes', type: 'string', editable: true, required: false};
+    const KIND: ColumnDef = {key: 'kind', label: 'Kind', type: 'enum', editable: true, required: true, enumOptions: KIND_OPTIONS};
+    const CURRENCY: ColumnDef = {key: 'currency', label: 'Currency', type: 'currency', editable: true, required: false};
+
+    // `ordinary` carries an ampersand where the column takes free text: it must come out as `&`, never
+    // as `&amp;` — the control that would catch an escape applied twice.
+    const PATHS = [
+        {path: '(a) a readonly row of a string column', column: NOTES, readonlyEditor: false, readonlyRow: true, ordinary: 'Paid & reinvested'},
+        {path: '(b) an enum column, value outside the options', column: KIND, readonlyEditor: false, readonlyRow: true, ordinary: 'LEGACY_KIND'},
+        {path: '(c) a readonly row of a currency column', column: CURRENCY, readonlyEditor: false, readonlyRow: true, ordinary: 'EUR'},
+        {path: '(d) a string column of a readonly editor', column: NOTES, readonlyEditor: true, readonlyRow: false, ordinary: 'Paid & reinvested'},
+    ];
+
+    interface CellSetup {
+        readonlyEditor?: boolean;
+        readonlyRow?: boolean;
+        readonlyReason?: string;
+    }
+
+    /** DataTable marks the header, not the cell: the header's position names the cell of a row. */
+    function cellOf(container: HTMLElement, rowId: string, columnId: string): Element {
+        const header = container.querySelector(`th[data-testid="dt-header-${columnId}"]`);
+        const tr = container.querySelector(`tr[data-row-id="${rowId}"]`);
+        if (!header?.parentElement || !tr) throw new Error(`no ${columnId} header, or no row ${rowId}`);
+        const cell = tr.children[[...header.parentElement.children].indexOf(header)];
+        if (cell?.tagName !== 'TD') throw new Error(`no ${columnId} cell in row ${rowId}`);
+        return cell;
+    }
+
+    async function renderCell(column: ColumnDef, value: string, {readonlyEditor = false, readonlyRow = false, readonlyReason}: CellSetup = {}): Promise<Element> {
+        const rows: DataRow[] = [{rowId: 'k13', date: '2026-01-05', status: 'original', originalStatus: 'original', values: {[column.key]: value}, selected: false, readonly: readonlyRow, readonlyReason}];
+        const {container} = render(DataEditor, {props: {columns: [column], rows, readonly: readonlyEditor, onchange: vi.fn()}});
+        return waitFor(() => cellOf(container, 'k13', column.key));
+    }
+
+    const handlerAttributes = (root: Element): string[] =>
+        [...root.querySelectorAll('*')].flatMap((el) =>
+            el
+                .getAttributeNames()
+                .filter((name) => name.toLowerCase().startsWith('on'))
+                .map((name) => `<${el.tagName.toLowerCase()} ${name}>`),
+        );
+
+    it.each(PATHS)('$path: a value made of markup is shown as text', async ({column, readonlyEditor, readonlyRow}) => {
+        const cell = await renderCell(column, PAYLOAD, {readonlyEditor, readonlyRow});
+        expect.soft(cell.querySelectorAll('img').length, 'the value must not become an <img>').toBe(0);
+        expect.soft(handlerAttributes(cell), 'the value must not add a handler').toEqual([]);
+        expect.soft(cell.textContent?.trim(), 'the cell must show the value as the characters it is made of').toBe(PAYLOAD);
+    });
+
+    it.each(PATHS)('$path: an ordinary value is shown unchanged (control)', async ({column, readonlyEditor, readonlyRow, ordinary}) => {
+        // Also the proof that `cellOf` finds the cell the cases above read.
+        const cell = await renderCell(column, ordinary, {readonlyEditor, readonlyRow});
+        expect(cell.textContent?.trim()).toBe(ordinary);
+    });
+
+    it('an enum value matching an option shows its emoji and label, and the lock badge stays markup (control)', async () => {
+        const cell = await renderCell(KIND, 'DIVIDEND', {readonlyRow: true, readonlyReason: 'Auto-generated by provider'});
+        expect(cell.textContent).toContain('💰 Dividend');
+        expect([...cell.querySelectorAll('span')].some((span) => span.textContent === '🔒')).toBe(true);
+    });
+});
