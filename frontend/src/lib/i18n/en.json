@@ -818,6 +818,50 @@
         "balance_chain_broken": "The running balance of the cash statement does not add up from {date}: the balances are only compared, not used for corrections.",
         "empty_member": "A “{role}” export has no rows.",
         "mixed_accounts_in_file": "A securities export contains several custody accounts."
+      },
+      "gapFix": {
+        "stepTitle": "Align with the bank",
+        "intro": "We compare what LibreFolio will hold after this import with what the bank states, and propose the transactions that close the difference.",
+        "checkpointOpening": "Starting point · {date}",
+        "checkpointGap": "After the gap · {date}",
+        "bank": "Bank",
+        "difference": "Difference",
+        "cashLabel": "Cash {currency}",
+        "atLeast": "at least {quantity}",
+        "absorbed": "{n, plural, one {# earlier movement of the export is summarised here.} other {# earlier movements of the export are summarised here.}}",
+        "absorbedMissing": "{n, plural, one {# of them is not in LibreFolio:} other {# of them are not in LibreFolio:}}",
+        "openingCash": "Balance before the export:",
+        "unexplained": "Not explained by these movements:",
+        "note": {
+          "unresolved_asset": "A position of the bank refers to a security that is not resolved yet: it was left out."
+        },
+        "toggle": "Import this correction",
+        "costToEnter": "cost to enter",
+        "verificationTitle": "End-of-period check · {date}",
+        "verificationOk": "Matches",
+        "verificationKo": "Does not match",
+        "verificationKoHint": "Not corrected automatically: if you add the missing movement by hand, the balance matches.",
+        "hiddenTitles": "A security that did not move in the files and paid no dividends cannot be seen: check your positions on the bank's website.",
+        "error": "The comparison with the bank failed.",
+        "errorContinue": "You can continue without corrections.",
+        "selectedCount": "{n, plural, one {# correction selected} other {# corrections selected}}",
+        "todo": {
+          "gap_fix_cost": "Enter the per-unit cost of this position: the bank's website shows the average price."
+        }
+      },
+      "badge": {
+        "column": "Report set",
+        "combined": "Combined",
+        "combinedTooltip": "Built from: {names}",
+        "combinedDeleted": "deleted: {names}",
+        "stale": "To re-combine",
+        "staleTooltip": "Built by an older version of the plugin: analysing the set again rebuilds it.",
+        "usedInCombined": "Used in a combined file",
+        "usedInCombinedTooltip": "This export went into a combined file of its set.",
+        "set": "Set of {date}",
+        "setTooltip": "Uploaded together with the other exports of its set.",
+        "incomplete": "Incomplete",
+        "incompleteTooltip": "Missing: {roles}"
       }
     }
   },
@@ -4225,7 +4269,7 @@
         },
         "select": {
           "title": "Choose files and parsers",
-          "description": "Select one or more saved reports. Choose the appropriate analysis plugin for each file; when every selection is complete, use the button on the right to continue. Depending on the chosen plugin and extracted data, optional steps may appear to unify assets, correct rows, or manage duplicates."
+          "description": "Select one or more saved reports. Choose the appropriate analysis plugin for each file; exports of one bank uploaded together form a set, analysed as one. When every selection is complete, use the button on the right to continue. Depending on the chosen plugin and extracted data, optional steps may appear to unify assets, correct rows, manage duplicates, or align with the bank."
         },
         "analyze": {
           "title": "Analyze extracted data",
@@ -4250,6 +4294,10 @@
         "bulk": {
           "title": "Save All writes the transactions",
           "description": "Review and edit prepared transaction drafts, then choose Save All when they are ready."
+        },
+        "gapFix": {
+          "title": "Align with the bank",
+          "description": "For a set of exports, compare what LibreFolio will hold with what the bank states, and keep or untick the corrections that close the difference before continuing."
         }
       }
     },

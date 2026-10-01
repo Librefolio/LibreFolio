@@ -818,6 +818,50 @@
         "balance_chain_broken": "Il saldo progressivo dell'estratto non torna dal {date}: i saldi si confrontano soltanto, non servono per le correzioni.",
         "empty_member": "Un export «{role}» non ha righe.",
         "mixed_accounts_in_file": "Un export dei titoli contiene più depositi titoli."
+      },
+      "gapFix": {
+        "stepTitle": "Allinea con la banca",
+        "intro": "Confrontiamo quello che LibreFolio avrà dopo l'import con quello che dice la banca, e ti proponiamo le transazioni che chiudono la differenza.",
+        "checkpointOpening": "Punto di partenza · {date}",
+        "checkpointGap": "Dopo il buco · {date}",
+        "bank": "Banca",
+        "difference": "Differenza",
+        "cashLabel": "Cassa {currency}",
+        "atLeast": "almeno {quantity}",
+        "absorbed": "{n, plural, one {# movimento precedente dell'export è riassunto qui.} other {# movimenti precedenti dell'export sono riassunti qui.}}",
+        "absorbedMissing": "{n, plural, one {# di questi non è in LibreFolio:} other {# di questi non sono in LibreFolio:}}",
+        "openingCash": "Saldo prima dell'export:",
+        "unexplained": "Non spiegato da questi movimenti:",
+        "note": {
+          "unresolved_asset": "Una posizione della banca riguarda un titolo non ancora risolto: è stata lasciata fuori."
+        },
+        "toggle": "Importa questa correzione",
+        "costToEnter": "costo da inserire",
+        "verificationTitle": "Verifica a fine periodo · {date}",
+        "verificationOk": "Torna",
+        "verificationKo": "Non torna",
+        "verificationKoHint": "Non la correggiamo: se aggiungi a mano il movimento che manca, la cassa torna.",
+        "hiddenTitles": "Un titolo che nei file non si è mosso e non ha pagato dividendi non si vede: controlla le posizioni sul sito della banca.",
+        "error": "Il confronto con la banca non è riuscito.",
+        "errorContinue": "Puoi proseguire senza correzioni.",
+        "selectedCount": "{n, plural, one {# correzione selezionata} other {# correzioni selezionate}}",
+        "todo": {
+          "gap_fix_cost": "Inserisci il costo per unità di questa posizione: il sito della banca mostra il prezzo medio."
+        }
+      },
+      "badge": {
+        "column": "Set di report",
+        "combined": "Combinato",
+        "combinedTooltip": "Costruito da: {names}",
+        "combinedDeleted": "eliminati: {names}",
+        "stale": "Da ricombinare",
+        "staleTooltip": "Costruito da una versione precedente del plugin: analizzando di nuovo il set si ricostruisce.",
+        "usedInCombined": "Usato in un combinato",
+        "usedInCombinedTooltip": "Questo export è entrato in un file combinato del suo set.",
+        "set": "Set del {date}",
+        "setTooltip": "Caricato insieme agli altri export del suo set.",
+        "incomplete": "Incompleto",
+        "incompleteTooltip": "Manca: {roles}"
       }
     }
   },
@@ -4225,7 +4269,7 @@
         },
         "select": {
           "title": "Scegli file e parser",
-          "description": "Seleziona uno o più report salvati. Per ciascun file scegli il plugin di analisi adatto; quando tutte le selezioni sono complete, usa il pulsante a destra per continuare. In base al plugin e ai dati estratti potranno comparire passaggi opzionali per unificare asset, correggere righe o gestire duplicati."
+          "description": "Seleziona uno o più report salvati. Per ciascun file scegli il plugin di analisi adatto; gli export di una banca caricati insieme formano un set, che si analizza come uno solo. Quando tutte le selezioni sono complete, usa il pulsante a destra per continuare. In base al plugin e ai dati estratti potranno comparire passaggi opzionali per unificare asset, correggere righe, gestire duplicati o allineare con la banca."
         },
         "analyze": {
           "title": "Analizza i dati estratti",
@@ -4250,6 +4294,10 @@
         "bulk": {
           "title": "Salva tutto scrive le transazioni",
           "description": "Rivedi e modifica le bozze delle transazioni, poi scegli Salva tutto quando sono pronte."
+        },
+        "gapFix": {
+          "title": "Allinea con la banca",
+          "description": "Per un set di export, confronta quello che LibreFolio avrà con quello che dice la banca, e tieni o togli le correzioni che chiudono la differenza prima di continuare."
         }
       }
     },

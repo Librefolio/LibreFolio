@@ -14,7 +14,7 @@
     import {_ as t} from '$lib/i18n';
     import {ChevronDown, ChevronRight, Eye, FileText, Layers, Trash2, Upload, ExternalLink, AlertTriangle, Info} from 'lucide-svelte';
     import LoadingSpinner from '$lib/components/ui/feedback/LoadingSpinner.svelte';
-    import {buildSetTimeline, dayBefore, parseIsoPeriod, type ReportSetGroup, type SetFileInfo, type SetPluginInfo, type SetPreviewState, type SetRoleInfo} from '$lib/utils/transactions/importReportSets';
+    import {buildSetTimeline, dayBefore, formatIsoDay, parseIsoPeriod, type ReportSetGroup, type SetFileInfo, type SetPluginInfo, type SetPreviewState, type SetRoleInfo} from '$lib/utils/transactions/importReportSets';
     import type {BrimSetPreview} from '$lib/types';
 
     interface Props {
@@ -86,13 +86,7 @@
         };
     }
 
-    function formatDay(iso: string | null | undefined): string {
-        if (!iso) return '—';
-        const day = String(iso).slice(0, 10);
-        const [year, month, date] = day.split('-').map(Number);
-        if (!year || !month || !date) return day;
-        return new Date(Date.UTC(year, month - 1, date)).toLocaleDateString(undefined, {timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit'});
-    }
+    const formatDay = formatIsoDay;
 
     function translateOr(key: string, fallback: string, values?: Record<string, unknown>): string {
         const translated = $t(key, values ? {values: values as Record<string, string | number | boolean | Date | null | undefined>} : undefined);
