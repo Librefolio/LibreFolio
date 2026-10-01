@@ -1978,3 +1978,50 @@ Una modalità di visualizzazione **logaritmica**, soprattutto sulle percentuali.
 ### Azione Futura
 Sulle percentuali il logaritmo non si applica ai rendimenti negativi: va applicato al fattore di
 crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asset, confronto).
+
+## 🔐 Accesso con un provider OIDC esterno (SSO)
+
+**Data aggiunta**: 30 Settembre 2026 · **Status**: ⏳ IN ATTESA — dopo Release 2 · **Priorità**: Media ·
+**Issue**: [#27](https://github.com/Librefolio/LibreFolio/issues/27)
+
+### Contesto
+- Richiesta (Johan3F, 29/09): entrare in LibreFolio con il provider di identità del proprio homelab
+  (Authelia, Authentik, Keycloak, Pocket ID…), senza un'altra password.
+- Oggi c'è solo il login locale: username o email e password. Il login emette un JWT senza stato nel
+  cookie `session`, con la durata presa dalle impostazioni globali; a ogni richiesta
+  `get_current_user` ricarica l'utente e controlla `is_active` (`backend/app/api/v1/auth.py:55`).
+  La registrazione è aperta solo se abilitata nelle impostazioni globali, e il primo utente diventa
+  admin (`auth.py:177`).
+- `hashed_password` è obbligatoria (`models.py:370`), ma la password serve solo al login: nessun dato
+  è cifrato con una chiave derivata da lei.
+- **Più utenti**: i permessi stanno tutti in LibreFolio (ruoli OWNER/EDITOR/VIEWER sui broker in
+  `BrokerUserAccess`, `is_superuser`, impostazioni per utente) e sono legati all'id dell'utente, non
+  al modo in cui entra. OIDC sostituisce solo il passo «chi sei», quindi funziona anche con più
+  utenti.
+
+### Azione Futura
+- Configurazione da variabili d'ambiente: indirizzo del provider, client id e secret, scope, testo
+  del pulsante. Un solo provider, ma l'identità salvata come coppia (issuer, `sub`), per non
+  escluderne altri.
+- Flusso Authorization Code con PKCE, `state` e `nonce`; verifica del token (firma via JWKS, issuer,
+  audience, scadenza); poi lo stesso JWT di oggi, così il resto dell'app non cambia.
+- DB, con una migrazione Alembic incrementale: `oidc_issuer` e `oidc_subject` unici insieme;
+  `hashed_password` facoltativa per chi entra solo con OIDC.
+- Frontend: pulsante «Accedi con …» nella pagina di login; cambio password nascosto a chi non ha
+  una password.
+- Decisioni da prendere, per il caso con più utenti:
+  - creazione automatica al primo accesso, alle stesse condizioni della registrazione, ed
+    eventualmente solo per i membri di un gruppo del provider;
+  - collegamento a un utente locale già esistente: per email solo se il provider la dà per
+    verificata, oppure dal profilo, dopo il login locale;
+  - admin: gestito in LibreFolio, oppure da un gruppo del provider, riletto a ogni accesso;
+  - username ed email presi da `preferred_username` ed `email`; cosa fare se sono già usati (nel DB
+    sono unici);
+  - login locale: tenerlo accanto, oppure spegnerlo lasciando un admin di riserva per quando il
+    provider è giù;
+  - un utente disattivato nel provider non entra più, ma la sessione aperta dura fino alla scadenza
+    del JWT, a meno di disattivarlo anche in LibreFolio.
+- Test con un provider finto; guida per l'admin con esempi (Authelia, Authentik, Keycloak).
+- Alternativa scartata per ora: l'autenticazione fatta dal reverse proxy con un header («forward
+  auth»), rischiosa se il backend è raggiungibile senza passare dal proxy.
+- Stima: qualche giorno, ben delimitato; non tocca i calcoli.

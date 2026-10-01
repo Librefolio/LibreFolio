@@ -10,6 +10,8 @@
 <script lang="ts">
     import {onDestroy, untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
     import {Upload, Trash2, Eye, Search, ChevronDown, ChevronRight, Check, AlertTriangle, Info, Plus, CheckCircle, FileText, RefreshCw, CheckSquare, Square, ListChecks, X, Wand2, Pencil, Loader2} from 'lucide-svelte';
     import {axiosInstance, zodiosApi} from '$lib/api';
     import {extractErrorMessage, trySave} from '$lib/utils/trySave';
@@ -1393,7 +1395,6 @@
      * A function (not a derived) so the keeper column can close over the specific group.
      */
     function resolverMemberColumns(group: DuplicateGroup): ColumnDef<MergedTx>[] {
-        const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const cmpMembers = resolverGroupMembers(group);
         const descOutliers = outlierIndexSet(cmpMembers, (mt) =>
             String(mt.tx.description ?? '')
@@ -1472,7 +1473,7 @@
                     const arrow = isPair ? '<span class="shrink-0 mr-0.5">↔</span>' : '';
                     return {
                         type: 'html',
-                        html: `<span class="inline-flex items-center gap-1.5 text-xs leading-snug"><img src="/icons/transactions/${slug}.png" alt="" style="width:1.5rem;height:1.5rem" class="object-contain shrink-0" onerror="this.style.display='none'"/>${arrow}<span>${esc(label)}</span></span>`,
+                        html: `<span class="inline-flex items-center gap-1.5 text-xs leading-snug"><img src="/icons/transactions/${slug}.png" alt="" style="width:1.5rem;height:1.5rem" class="object-contain shrink-0" onerror="this.style.display='none'"/>${arrow}<span>${escapeHtml(label)}</span></span>`,
                     };
                 },
             },
@@ -1509,7 +1510,7 @@
                 width: 170,
                 minWidth: 130,
                 getValue: (mt) => getSourceFileName(mt.sourceFileId),
-                cell: (mt) => ({type: 'html', html: `<span class="${overflowScrollTextClass} text-xs text-gray-600 dark:text-gray-300" title="${esc(getSourceFileName(mt.sourceFileId))}">${esc(getSourceFileName(mt.sourceFileId))}</span>`}),
+                cell: (mt) => ({type: 'html', html: `<span class="${overflowScrollTextClass} text-xs text-gray-600 dark:text-gray-300" title="${escapeHtml(getSourceFileName(mt.sourceFileId))}">${escapeHtml(getSourceFileName(mt.sourceFileId))}</span>`}),
             },
             {
                 id: 'description',
@@ -1522,7 +1523,7 @@
                 cell: (mt) => {
                     const raw = String(mt.tx.description ?? '').trim();
                     const hl = descOutliers.has(mt.index) ? diffCls : '';
-                    return {type: 'html', html: `<span class="${overflowScrollTextClass} text-xs text-gray-800 dark:text-gray-100${hl}" title="${esc(raw)}">${esc(raw || '—')}</span>`};
+                    return {type: 'html', html: `<span class="${overflowScrollTextClass} text-xs text-gray-800 dark:text-gray-100${hl}" title="${escapeHtml(raw)}">${escapeHtml(raw || '—')}</span>`};
                 },
             },
         ];
@@ -2013,19 +2014,19 @@ ${arrow}<span>${label}</span></span>`,
                         if (res?.resolvedAssetId) {
                             const rInfo = getAssetInfo(res.resolvedAssetId);
                             const rName = rInfo?.display_name ?? `#${res.resolvedAssetId}`;
-                            const rIcon = rInfo?.icon_url ?? (rInfo?.asset_type ? getAssetTypeIconUrl(rInfo.asset_type) : null);
-                            const rIconHtml = rIcon ? `<img src="${rIcon}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />` : '';
+                            const rIconUrl = rInfo?.icon_url ?? (rInfo?.asset_type ? getAssetTypeIconUrl(rInfo.asset_type) : null);
+                            const rIconHtml = rIconUrl ? `<img src="${escapeHtml(rIconUrl)}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />` : '';
                             const origName = getAssetDisplayName(assetId);
-                            return {type: 'html', html: `<span class="inline-flex items-center gap-1.5 truncate text-emerald-600 dark:text-emerald-400" title="${origName} → ${rName}">${rIconHtml}<span class="truncate">${rName}</span></span>`};
+                            return {type: 'html', html: `<span class="inline-flex items-center gap-1.5 truncate text-emerald-600 dark:text-emerald-400" title="${escapeHtml(origName)} → ${escapeHtml(rName)}">${rIconHtml}<span class="truncate">${escapeHtml(rName)}</span></span>`};
                         }
                         const name = getAssetDisplayName(assetId);
-                        return {type: 'html', html: `<span class="text-red-600 dark:text-red-400 inline-flex items-center gap-1">✗ <span class="truncate">${name}</span></span>`};
+                        return {type: 'html', html: `<span class="text-red-600 dark:text-red-400 inline-flex items-center gap-1">✗ <span class="truncate">${escapeHtml(name)}</span></span>`};
                     }
                     const info = getAssetInfo(assetId);
                     const name = info?.display_name ?? `#${assetId}`;
                     const iconUrl = info?.icon_url ?? (info?.asset_type ? getAssetTypeIconUrl(info.asset_type) : null);
-                    const iconHtml = iconUrl ? `<img src="${iconUrl}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />` : '';
-                    return {type: 'html', html: `<span class="inline-flex items-center gap-1.5 truncate">${iconHtml}<span class="truncate">${name}</span></span>`};
+                    const iconHtml = iconUrl ? `<img src="${escapeHtml(iconUrl)}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />` : '';
+                    return {type: 'html', html: `<span class="inline-flex items-center gap-1.5 truncate">${iconHtml}<span class="truncate">${escapeHtml(name)}</span></span>`};
                 },
             },
             {
@@ -2059,13 +2060,13 @@ ${arrow}<span>${label}</span></span>`,
                     const b = brokers.find((x) => x.id === brokerId) ?? getBrokerInfo(brokerId);
                     const name = b?.name ?? `#${brokerId}`;
                     const iconUrl = b?.icon_url ?? null;
-                    const iconHtml = iconUrl ? `<img src="${iconUrl}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />` : '';
+                    const iconHtml = iconUrl ? `<img src="${escapeHtml(iconUrl)}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />` : '';
                     // For rows blocked by the broker's opening date, surface a discoverable
                     // "edit opening date" affordance directly in the destination-broker column.
                     if (beforeOpeningIndices.has(mt.index)) {
                         return {
                             type: 'html',
-                            html: `<span class="inline-flex items-center gap-1 cursor-pointer text-gray-700 dark:text-gray-200 hover:text-libre-green" title="${$t('importWizard.status.editBrokerDate')}">${iconHtml}<span class="truncate">${name}</span><span class="shrink-0">✏️</span></span>`,
+                            html: `<span class="inline-flex items-center gap-1 cursor-pointer text-gray-700 dark:text-gray-200 hover:text-libre-green" title="${$t('importWizard.status.editBrokerDate')}">${iconHtml}<span class="truncate">${escapeHtml(name)}</span><span class="shrink-0">✏️</span></span>`,
                             onClick: () => openBrokerOpeningEdit(mt),
                             testId: `import-wizard-broker-edit-${mt.index}`,
                         };
@@ -2166,7 +2167,6 @@ ${arrow}<span>${label}</span></span>`,
 
         // Show source file column only when multiple files were parsed (avoids noise for single-file imports)
         if (doneFilesCount > 1) {
-            const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
             columns.push({
                 id: 'sourceFileId',
                 header: () => $t('importWizard.sourceFile'),
@@ -2179,7 +2179,7 @@ ${arrow}<span>${label}</span></span>`,
                 getValue: (mt) => parseResults.find((r) => r.fileId === mt.sourceFileId)?.fileName ?? mt.sourceFileId,
                 cell: (mt) => {
                     const name = parseResults.find((r) => r.fileId === mt.sourceFileId)?.fileName ?? mt.sourceFileId;
-                    return {type: 'html', html: `<span class="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[180px] block" title="${esc(name)}">${esc(name)}</span>`} as const;
+                    return {type: 'html', html: `<span class="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[180px] block" title="${escapeHtml(name)}">${escapeHtml(name)}</span>`} as const;
                 },
             });
         }
@@ -3454,14 +3454,13 @@ ${arrow}<span>${label}</span></span>`,
             id: 'pluginName',
             header: () => 'Plugin',
             cell: (row) => {
-                const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
                 const plugin = (getCachedPlugins() ?? []).find((p) => p.code === row.pluginUsed);
                 const iconUrl = (plugin as {icon_url?: string | null} | undefined)?.icon_url;
                 const name = row.pluginName || row.pluginUsed;
                 const icon = iconUrl
-                    ? `<img src="${esc(iconUrl)}" class="w-5 h-5 rounded-full object-cover shrink-0" alt="">`
-                    : `<span class="w-5 h-5 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-500 shrink-0">${esc(name.charAt(0).toUpperCase())}</span>`;
-                return {type: 'html', html: `<div class="flex items-center gap-1.5 min-w-0">${icon}<span class="truncate text-xs">${esc(name)}</span></div>`} as const;
+                    ? `<img src="${escapeHtml(iconUrl)}" class="w-5 h-5 rounded-full object-cover shrink-0" alt="">`
+                    : `<span class="w-5 h-5 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-500 shrink-0">${escapeHtml(name.charAt(0).toUpperCase())}</span>`;
+                return {type: 'html', html: `<div class="flex items-center gap-1.5 min-w-0">${icon}<span class="truncate text-xs">${escapeHtml(name)}</span></div>`} as const;
             },
             type: 'text',
             sortable: true,
@@ -3479,10 +3478,9 @@ ${arrow}<span>${label}</span></span>`,
                 // Failed rows carry the reason in a tooltip: a bare "Error" badge tells
                 // the user nothing about what went wrong.
                 if (row.status === 'error') {
-                    const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
                     return {
                         type: 'html',
-                        html: `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">${esc($t('common.error'))}</span>`,
+                        html: `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">${escapeHtml($t('common.error'))}</span>`,
                         tooltip: {text: row.errorMessage ?? $t('common.error'), position: 'top', maxWidth: '28rem'},
                     } as const;
                 }
@@ -5064,13 +5062,15 @@ ${arrow}<span>${label}</span></span>`,
                 {$t('importWizard.addIdentifier.title')}
             </h2>
             <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed" data-testid="identifier-prompt-body">
-                {@html $t('importWizard.addIdentifier.body', {
-                    values: {
-                        asset: `<strong>${identifierPromptAssetName ?? ''}</strong>`,
-                        value: `<strong>${identifierPromptValues[0] ?? ''}</strong>`,
-                        type: identifierPromptField === 'identifier_ticker' ? 'Ticker' : 'ISIN',
-                    },
-                })}
+                {@html sanitizeHtml(
+                    $t('importWizard.addIdentifier.body', {
+                        values: {
+                            asset: `<strong>${escapeHtml(identifierPromptAssetName ?? '')}</strong>`,
+                            value: `<strong>${escapeHtml(identifierPromptValues[0] ?? '')}</strong>`,
+                            type: identifierPromptField === 'identifier_ticker' ? 'Ticker' : 'ISIN',
+                        },
+                    }),
+                )}
             </p>
         {/if}
 

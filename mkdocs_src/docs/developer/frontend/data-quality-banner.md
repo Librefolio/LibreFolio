@@ -76,6 +76,9 @@ onaction?: (action: string, target: string | null, issue: DataQualityIssue) => v
 | `navigate_asset` | asset_id string | `goto('/assets/' + target)` | Redirects the user to the specific asset details page. |
 | `navigate_fx` | FX pair slug | `goto('/fx/' + target + '?start=...&end=...')` | Redirects to the FX pair details page. |
 | `add_fx_pair` | FX pair slug | `FxPairAddModal` | Opens the modal to configure the missing FX pair. |
+| `sync_asset_prices` | First affected id, unused — the handler syncs every id in `issue.affected_asset_ids` | `POST /api/v1/assets/prices/sync` (dashboard `handleBannerAction`) | Sends one item per affected asset: `{asset_id, date_range: {start: 'resume', end: <dashboard end date>}}`. `'resume'` is the backend sentinel for "the day after the last stored price" (full history when there is none). Shows one toast per asset result, then reloads the dashboard report. |
+
+In grouped mode, `navigate_asset` renders one link per affected asset; every other action, `sync_asset_prices` included, renders a single CTA button. While a sync request runs, the dashboard passes the issue's code as the `busyCode` prop: that issue's CTA button shows a spinner and stays disabled until the request settles.
 
 ---
 
@@ -91,10 +94,19 @@ onaction?: (action: string, target: string | null, issue: DataQualityIssue) => v
 |------|----------|-----------|------------|
 | `MISSING_PRICE` | 🔴 Error | Asset held with no PriceHistory and no WAC/cost basis fallback | `navigate_asset` |
 | `TRANSACTION_IMPLIED` | 🟡 Warning | Asset held with no PriceHistory but WAC/cost basis available — valued at cost temporarily | `navigate_asset` |
-| `STALE_PRICE` | 🟡 Warning | Latest price older than staleness threshold | `navigate_asset` |
+| `STALE_PRICE` | 🟡 Warning | Open position valued at a market price carried forward more than 7 days, on an asset with a provider (full rule below) | `sync_asset_prices` |
 | `MISSING_FX_MARKET` | 🟡 Warning | Asset in foreign currency without a configured FX pair | `add_fx_pair` |
 | `NAV_INCOMPLETE` | 🔵 Info | One or more days had incomplete NAV (caused by MISSING_PRICE) | none |
 | `MWRR_NOT_CALCULABLE` | 🔵 Info | MWRR did not converge or period is too short | none |
+
+**`STALE_PRICE` rule.** `PortfolioService.get_summary` builds the list and passes it to `build_data_quality_report` as `stale_prices_dto`. An asset is listed when, at the end date, all of these hold:
+
+* its position is open (quantity above the dust threshold);
+* the position is valued at a **market** price (`ValuationSource.MARKET_PRICE`), not at a trade price;
+* that price is carried forward **more than** `STALE_PRICE_THRESHOLD_DAYS` (7) days, so a quote exactly 7 days old is still current;
+* the asset has a provider assignment.
+
+Each asset appears once, whatever the number of brokers holding it, as `StalePriceAsset{asset_id, name, last_price_date, stale_days}`, with `stale_days` counted from `last_price_date` to the end date. Left out on purpose: manual assets, which have nothing to sync (those valued at their last trade price, such as crowdfunding or `HOLD` assets, are stale by design); provider assets with no quote at all, already reported as `TRANSACTION_IMPLIED`; closed positions. With stale prices and nothing that makes it `partial`, the report's derived `data_quality_status` is `carried_forward` ([source-data status](../../financial-theory/technical-analysis/risk-metrics/data-quality.md#source-data-status)), so portfolio risk results that read it can turn `PARTIAL`.
 
 ### 📈 Asset Detail Issues (built client-side in `assets/[id]/+page.svelte`)
 
@@ -122,7 +134,7 @@ onaction?: (action: string, target: string | null, issue: DataQualityIssue) => v
 |-------|----------------|
 | `MISSING_PRICE` | Add a BUY transaction for an asset that has no PriceHistory entries AND no WAC/cost basis is available. The NAV will exclude it. |
 | `TRANSACTION_IMPLIED` | Buy an asset (e.g. BTP in collocamento) before its first PriceHistory is available. WAC must exist. The engine uses WAC as a temporary proxy; the issue disappears once the first price becomes available. |
-| `STALE_PRICE` | Use an asset that hasn't been synced recently, or manually set `last_price_date` far in the past in the DB. |
+| `STALE_PRICE` | Hold an open position in an asset **with a provider** whose newest market price is more than 7 days before the dashboard end date, e.g. prices seeded with `POST /api/v1/assets/prices` and ending 10 days ago. Any fresh quote clears it, including the live-price polling of the asset pages (`POST /api/v1/assets/prices/current` stores today's quote). `e2e/portfolio/stale-price-banner.spec.ts` seeds a holding that stays stale: `mockprov` with `INVALID_TICKER_12345`, the one identifier the mock refuses a current price for, and it intercepts the sync the CTA sends. |
 | `MISSING_FX_MARKET` | Add an asset in a foreign currency (e.g. USD) when the dashboard target currency is EUR and the EUR/USD pair is not configured. |
 | `NAV_INCOMPLETE` | Same scenario as `MISSING_PRICE` — appears automatically when NAV is incomplete for ≥1 day. |
 | `MWRR_NOT_CALCULABLE` | Portfolio with only 1 transaction on 1 day. MWRR needs ≥2 nav snapshots with a non-zero cash flow. |
@@ -191,12 +203,21 @@ In the response JSON, look for:
 * Covers all 5 portfolio codes: severity, affected fields, CTA, count, date_range.
 * Empty inputs produce no issues.
 * All 5 codes can appear together.
+* `TestStalePriceIssue`: the `sync_asset_prices` CTA, the unchanged `dataQuality.stalePrice` message contract (count, aligned affected ids and names) and the `carried_forward` status of a stale-only report.
 
-Run test suite:
+### 🗄️ Backend Service Tests (`test_portfolio_service.py`)
+`TestStalePriceDataQuality` checks the `STALE_PRICE` rule through `get_summary`, on a DB-backed portfolio:
+
+* a provider asset last quoted 10 days ago is flagged once, with its `last_price_date`, its `stale_days` and the `sync_asset_prices` CTA, and the status is `carried_forward`;
+* not flagged: a quote exactly 7 days old, a fresh quote, a manual asset with the same 10-day-old quote, a position sold before the end date, a provider asset valued at its trade price (left to `TRANSACTION_IMPLIED`);
+* an asset held at two brokers is a single `StalePriceAsset`.
+
+Run both backend suites:
 ```bash
 pipenv run ./dev.py test services roi-fifo-utils
+pipenv run ./dev.py test services roi-fifo-utils TestStalePriceIssue TestStalePriceDataQuality   # STALE_PRICE only
 ```
-*(Covers `test_services/test_financial/` — includes `test_data_quality_report.py` and `test_transaction_implied.py`)*
+*(Covers `test_services/test_financial/` — includes `test_portfolio_engine/test_data_quality_report.py` and `test_portfolio_service.py`)*
 
 ### 🎭 Frontend E2E Tests (`e2e/portfolio/data-quality-banners.spec.ts`)
 * Dashboard loads without JS errors.
@@ -210,4 +231,15 @@ pipenv run ./dev.py test services roi-fifo-utils
 Run test suite:
 ```bash
 pipenv run ./dev.py test front-portfolio banners
+```
+
+### 🎭 Frontend E2E Tests (`e2e/portfolio/stale-price-banner.spec.ts`)
+* On a disposable account, a provider-priced holding last quoted 10 days ago is reported as `STALE_PRICE` with the `sync_asset_prices` CTA.
+* The grouped banner shows the issue with its single CTA button, not per-asset links.
+* The CTA posts one item per affected asset to `POST /api/v1/assets/prices/sync` (`start: 'resume'`, `end`: the dashboard end date), and the button is disabled while the sync runs.
+* Once the sync answers, the dashboard reloads its report and the CTA is enabled again. The sync is intercepted with a canned response: no provider is called and no price is written.
+
+Run test suite:
+```bash
+pipenv run ./dev.py test front-portfolio stale-price-banner
 ```
