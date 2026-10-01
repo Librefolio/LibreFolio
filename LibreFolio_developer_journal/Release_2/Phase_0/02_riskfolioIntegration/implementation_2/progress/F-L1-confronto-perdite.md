@@ -413,3 +413,8 @@ la cura al developer nella sua sessione. In L1° nessun numero cambia. Vincolo d
 > - `dev.py mkdocs check-links`: exit 0, **88 validi** (la base è cresciuta con la correzione di A), 8 non verificabili,
 >   3 ancore note.
 > - ⚠️ La build ha riscritto di nuovo il timbro di `frontend/static/sw.js`: non toccato, fuori dal checkpoint.
+
+> ✅ **Guida committata**: `31cff1e5e` (la guida) e `3eff35036` (il journal), con `sw.js` riportato al timbro committato.
+>
+> ➡️ **Seguito**: il prossimo componente, **L3° «Quanto ha pagato ciascuno per il suo rischio?»**, approvato dal developer
+> («Sì, partiamo da L3° come L1°»), prosegue nel piano [F-L3-rischio-rendimento.md](F-L3-rischio-rendimento.md).
