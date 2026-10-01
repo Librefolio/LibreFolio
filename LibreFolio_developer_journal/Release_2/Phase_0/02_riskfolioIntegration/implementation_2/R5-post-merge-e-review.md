@@ -2493,3 +2493,52 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 > commenti: falsi link rotti), passata al coordinator, a cui appartiene lo strumento; il limite delle sfumature della
 > torta (famiglie di 5–7 membri), da decidere col developer, cancello per `dev_release2`; poi il blocco replay (F3) o
 > l'idoneità del benchmark (F4).
+
+### Le sfumature della torta per le famiglie grandi — il cancello per `dev_release2` · ✅ 01/10/2026 (sera)
+
+> **Il difetto** (latente da R12-B, trovato il 28/09 dal test dei 7 membri, parcheggiato): la sfumatura sposta la
+> luminosità di 20 punti per livello in una sola direzione, lontano dall'estremo più vicino. Con la tassonomia di K la
+> famiglia ETF per veicolo ha 7 membri: dopo 2–4 passi la luminosità si blocca a 0 o 100, e gli ultimi sottotipi
+> diventano bianco puro (tema chiaro) o nero (tema scuro), tutti uguali: su 28 posizioni su 28 delle due palette della
+> torta. Sui dati del developer non si vede (la sua famiglia ETF ha 2 membri), ma con i sottotipi di K diventa normale.
+>
+> **La misura, prima della scelta** (formule HSL identiche a `colors.ts`, distanza percettiva CIEDE2000, script e
+> immagine fra i file della sessione):
+> - il criterio del test parcheggiato, «almeno 15 punti di luminosità fra i membri», **è irraggiungibile** per 7 membri
+>   che tengono il tono: in una fascia utilizzabile (circa 10–92, oltre si legge nero o bianco) il massimo ottenibile con
+>   la sola luminosità è circa 11,5 punti;
+> - la sola luminosità, anche distribuita sui due lati del colore base, lascia la coppia più vicina a ΔE2000 3,4 nel
+>   caso peggiore; le coppie di oggi (gruppi di 2–3) stanno a 5,4;
+> - aggiungendo la saturazione dimezzata a un membro sì e uno no, con la fascia [10, 90]: ΔE2000 minimo 6,97 (N=4),
+>   6,10 (5), 7,84 (6), 5,82 (7), sopra le coppie di oggi; tono spostato al massimo di 2,2° (quantizzazione dell'hex);
+>   da 8 membri la distanza scende a circa 3 (distinti, ma più deboli): limite dichiarato.
+>
+> **Decisione del developer**: la regola **B** (luminosità sui due lati in [10, 90], passo massimizzato e non oltre 20,
+> saturazione ×0,5 sulle profondità pari), preferita alla sola luminosità (A) e ai colori distinti nell'anello esterno,
+> dopo il confronto disegnato con ECharts (tema chiaro e scuro, il primo colore della palette e il caso peggiore).
+> I gruppi fino a 3 restano identici: il grafico storico di I (gruppi per contenuto, al massimo 3) non cambia.
+>
+> **Concessione del coordinator**: `allocationHierarchy.ts`, `allocationRings.ts` e i loro due test; il parametro della
+> dimensione del gruppo facoltativo, con il comportamento di oggi come predefinito; il pin byte per byte dei gruppi
+> fino a 3 sulle quattro palette come prova che il grafico di I non si muove; il limite da 8 membri scritto nel
+> modulo. Il nuovo criterio del test: ogni coppia almeno quanto la coppia più vicina di oggi, tono entro 3°.
+>
+> **Note implementazione** (test rossi prima, test-author: 18 rossi sul criterio, 118 guardie verdi; il righello
+> CIEDE2000 validato sulle coppie pubblicate di Sharma, Wu e Dalal; il minimo di oggi misurato dal test: 5,4123):
+> - `allocationHierarchy.ts`: `shadeForDepth(base, depth, step?, groupSize?)`; senza `groupSize`, o fino a 3, il
+>   cammino di oggi; da 4 la regola B (costanti nominate: gruppo a un lato fino a 3, fascia [10, 90], saturazione
+>   ×0,5); la nota «How many members a group holds» riscritta con la regola, la misura e il limite da 8 membri;
+>   `buildAllocationHierarchy` passa `members.length`.
+> - `allocationRings.ts`: l'anello esterno passa `1 + sottotipi`, perché l'arco interno tiene la profondità 0 anche
+>   quando il membro puro manca.
+> - Test: il test dei 7 membri ripristinato con il criterio nuovo; famiglie di 4–6 e di 8–10 (queste senza il minimo,
+>   col limite citato); gli anelli con e senza il membro puro; il pin byte per byte dei gruppi fino a 3 sulle quattro
+>   palette (il grafico storico di I non si muove) e del valore predefinito; i valori esatti della regola su tre basi
+>   (il tetto del passo, il pareggio fra due ripartizioni, il tema scuro).
+> - Mutanti: 9 su 9 presi. I due che il criterio percettivo non vede (il passo oltre 20, il pareggio vinto dall'ultima
+>   ripartizione) li prendono i valori esatti, aggiunti apposta.
+>
+> **Verifica** (6152, un comando alla volta): `allocation-unit` 211 · `component-unit` 2356 · `core-unit` 2896 ·
+> `front check` al pavimento di 3/41 · orfani ✅ · `front build --debug` ✅ · E2E `asset-list` 28 · E2E `dashboard`: i due
+> test dell'allocazione verdi, i 5 rossi sono quelli noti del GrowthChart di I. Il grafico storico non cambia: lo
+> prova il pin byte per byte dei gruppi fino a 3 sulle sue due palette.
