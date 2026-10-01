@@ -3125,11 +3125,19 @@
         },
         "l3": {
           "title": "Quanto ha pagato ciascuno per il suo rischio?",
-          "description": "Rischio contro rendimento, un punto per asset. Non ci passa nessuna retta: una selezione non ha un tutto, quindi non c'è niente sopra o sotto cui stare.",
-          "expectedReturn": "Rendimento atteso",
+          "description": "Per ogni asset selezionato, quanto ha oscillato e quanto ha reso in media all'anno, nel grafico e nella tabella; con un benchmark scelto nella Dashboard, anche quanto si è mosso insieme a lui.",
+          "expectedReturn": "Rendimento medio annuo",
           "correlation": "Correlazione",
-          "noBenchmark": "Scegli un benchmark nella Dashboard per aggiungere beta e correlazione. Un benchmark che è già nella selezione non può fare da metro a sé stesso.",
-          "scatterNote": "I punti mostrano il rendimento atteso in media-varianza: su un asset molto volatile il rendimento realmente vissuto è più basso, perché la volatilità erode il composto."
+          "scatterNote": "Ogni punto è un asset: l'asse orizzontale dice quanto ha oscillato, quello verticale quanto ha reso in media all'anno. Per un asset molto volatile la media è più alta di quanto ha reso davvero.",
+          "columnHelp": {
+            "volatility": "Quanto oscillano i rendimenti dell'asset, su base annua: la deviazione standard dei rendimenti del periodo, annualizzata.",
+            "expectedReturn": "La media dei rendimenti del periodo, riportata a un anno con la frequenza delle quotazioni. Descrive il passato, non è una previsione. Per un asset molto volatile è più alta di quanto ha reso davvero, perché le oscillazioni erodono il rendimento composto.",
+            "sortino": "Quanto rendimento medio annuo per ogni unità di oscillazione verso il basso: guarda solo le cadute, non le salite.",
+            "sharpe": "Quanto rendimento medio annuo per ogni unità di volatilità: il compenso per il rischio preso, salite e cadute insieme.",
+            "beta": "Quanto si è mosso l'asset quando si muoveva il benchmark: 1 vuol dire come lui, 2 il doppio, 0 indipendentemente da lui.",
+            "correlation": "Quanto l'asset e il benchmark si sono mossi insieme, da −1 (sempre opposti) a +1 (sempre insieme)."
+          },
+          "axisReturn": "Rendimento medio annuo"
         }
       },
       "legend": {
