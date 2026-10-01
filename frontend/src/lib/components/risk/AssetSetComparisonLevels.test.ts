@@ -39,12 +39,18 @@
  *
  * ⚠️ Every figure and name below is invented, shaped to pass the schemas the levels parse it
  * through (`assetSetLevels.ts`); nothing was read off a running backend. The answer with figures
- * carries L1's two VaR horizons only: an L3 figure has no attribute to be observed by, and two
- * risk/return points would draw the scatter, which needs a canvas jsdom does not have.
+ * carries L1's two VaR horizons and L3's KPI — volatility, Sortino and Sharpe — and never a
+ * risk/return point: two of those would draw the scatter, which needs a canvas jsdom does not have.
+ *
+ * **Both levels are tables now** (the developer's review, 30/09: L3° gets L1°'s treatment), so the
+ * column toggle and the icons are asked of both: one toggle per level table, each in its own frame's
+ * header before its own manual icon, each reading its own table; and the icons the panel resolved
+ * reach both asset columns. The L3° halves are written red first, against the hand-written table they
+ * replace.
  *
  * Left elsewhere: the discard and re-ask rules themselves (`riskPanelController.test.ts`), the
- * tables' own cells (`AssetSetLossComparisonSection.test.ts`, `assetSetLevels.test.ts`), and the
- * page end to end (`e2e/portfolio/risk-lab.spec.ts`).
+ * tables' own cells (`AssetSetLossComparisonSection.test.ts`, `AssetSetRiskReturnSection.test.ts`,
+ * `assetSetLevels.test.ts`), and the page end to end (`e2e/portfolio/risk-lab.spec.ts`).
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi, type MockInstance} from 'vitest';
 import type {z} from 'zod';
@@ -92,6 +98,7 @@ import AssetSetComparisonLevels from './AssetSetComparisonLevels.svelte';
 import {ASSET_SET_DAILY_VAR_INSTANCE, ASSET_SET_MONTHLY_VAR_INSTANCE} from './riskAnalysisHelpers';
 
 type VarCvarOutput = z.infer<typeof schemas.RiskAssetSetVarCvarOutput>;
+type KpiOutput = z.infer<typeof schemas.RiskAssetSetKpiOutput>;
 
 // Invented: a window, and a selection of two with their names.
 const DATE_START = '2021-01-04';
@@ -103,7 +110,7 @@ const LABELS: ReadonlyMap<number, string> = new Map([
     [HOLDING_A, 'Invented holding A'],
     [HOLDING_B, 'Invented holding B'],
 ]);
-/** Invented: the icons the panel would resolve for the two holdings, passed through to L1°. */
+/** Invented: the icons the panel would resolve for the two holdings, passed through to both levels. */
 const ICONS: ReadonlyMap<number, string> = new Map([
     [HOLDING_A, '/icons/asset-types/etf.png'],
     [HOLDING_B, '/icons/asset-types/stock.png'],
@@ -145,6 +152,22 @@ const FIGURES: RiskAnalyticResult[] = [
             {asset_id: HOLDING_B, value_at_risk: 0.061, conditional_value_at_risk: 0.084},
         ],
     }),
+    // L3°'s figures: the KPI fills its volatility, Sortino and Sharpe cells. Invented: Sharpe is about
+    // 0.7 × Sortino — a downside deviation near 70% of the volatility — and the fall is ≤ 0, as the
+    // contract requires.
+    {
+        instance_id: 'base-historical-asset_set_kpi',
+        analytic_code: 'asset_set_kpi',
+        status: 'ok',
+        output: {
+            kind: 'kpi_set',
+            drawdown_confidence_level: 0.95,
+            items: [
+                {asset_id: HOLDING_A, volatility: 0.21, max_drawdown: -0.27, max_drawdown_duration_days: 140, sharpe: 0.62, sortino: 0.88},
+                {asset_id: HOLDING_B, volatility: 0.14, max_drawdown: -0.16, max_drawdown_duration_days: 95, sharpe: 0.41, sortino: 0.57},
+            ],
+        } satisfies KpiOutput,
+    },
 ];
 
 /**
@@ -272,6 +295,34 @@ async function expectFigures(): Promise<void> {
     });
 }
 
+/**
+ * An asset's L3 row, found the way `l1RowOf` finds L1's: by the asset id it carries, walked up to its
+ * `tr` — so it finds the row on the hand-written table (`tr[data-asset-id]`) and on the DataTable that
+ * replaces it (the name cell carries the id) alike. The table's structure is pinned in
+ * `AssetSetRiskReturnSection.test.ts`; here a row only has to be found.
+ */
+function l3RowOf(assetId: number): HTMLElement | undefined {
+    const carriers = screen.queryByTestId('risk-asset-set-l3-table')?.querySelectorAll<HTMLElement>(`[data-asset-id="${assetId}"]`) ?? [];
+    const rows = [...new Set([...carriers].map((carrier) => carrier.closest('tr')))].filter((row): row is HTMLTableRowElement => row !== null);
+    return rows.length === 1 ? rows[0] : undefined;
+}
+
+/**
+ * The same barrier for L3°: every selected asset has its L3 row, and its volatility is a figure rather
+ * than the dash. Read as "not the blank" rather than through `data-measured`, which only the redesigned
+ * cells publish, so that on either table this barrier stands and a red further on is about the case's
+ * own subject.
+ */
+async function expectL3Figures(): Promise<void> {
+    await waitFor(() => {
+        for (const assetId of SELECTION) {
+            const row = l3RowOf(assetId);
+            expect(row, `asset ${assetId} has no L3 row`).toBeDefined();
+            expect(normalize(within(row as HTMLElement).getByTestId('risk-asset-set-l3-volatility').textContent), `asset ${assetId}: the volatility is a dash — the KPI fixture was rejected, or never arrived`).not.toBe('\u2014');
+        }
+    });
+}
+
 /** None of the load-state chrome: no body block, no retry, and no frame saying an answer was discarded. */
 function expectNoLoadChrome(why: string): void {
     for (const {level, frame} of LEVELS) {
@@ -307,8 +358,9 @@ describe('AssetSetComparisonLevels — the harness itself', () => {
             'the question is not the per-asset wave these levels read',
         ).toEqual(expect.arrayContaining(['asset_set_var', 'asset_set_drawdown', 'asset_set_risk_return', 'asset_set_kpi']));
 
-        // An answer with figures is a complement's barrier below: its fixtures must reach the cells.
+        // An answer with figures is a complement's barrier below: its fixtures must reach the cells, both levels'.
         await expectFigures();
+        await expectL3Figures();
     });
 });
 
@@ -357,10 +409,11 @@ describe('AssetSetComparisonLevels — a base answer discarded twice running', (
         });
     });
 
-    it('after an answer with figures, keeps them: the frames say the new answer was lost, and L1 keeps its table', async () => {
+    it('after an answer with figures, keeps them: the frames say the new answer was lost, and both levels keep their tables', async () => {
         const {view, controller} = mount();
         await settled(controller);
         await expectFigures();
+        await expectL3Figures();
 
         // An accepted sync re-reads the base, and its answer is discarded twice running.
         const before = script.asked.length;
@@ -371,11 +424,12 @@ describe('AssetSetComparisonLevels — a base answer discarded twice running', (
 
         // The discard kept the answer on screen, and says it lost the new one.
         await expectFigures();
+        await expectL3Figures();
         for (const {level, frame} of LEVELS) {
             await waitFor(() => expect(frameCodes(frame), `${level}: an answer was discarded and the level's frame does not say so`).toEqual([ANSWER_DISCARDED_CODE]));
+            expect(screen.queryByTestId(`risk-asset-set-${level}-discarded`), `${level} has figures: the discarded block is for a level with none, not a replacement for the table`).toBeNull();
+            expect(screen.queryByTestId(`risk-asset-set-${level}-error`), `${level}: a discarded answer is shown as a failed wave`).toBeNull();
         }
-        expect(screen.queryByTestId('risk-asset-set-l1-discarded'), 'L1 has figures: the discarded block is for a level with none, not a replacement for the table').toBeNull();
-        expect(screen.queryByTestId('risk-asset-set-l1-error'), 'a discarded answer is shown as a failed wave').toBeNull();
     });
 });
 
@@ -408,28 +462,30 @@ describe('AssetSetComparisonLevels — an answer: nothing failed, nothing discar
 });
 
 /**
- * L1°'s column toggle — the project's `ColumnVisibilityToggle`, in the L1 frame's header just
- * before its manual icon (`RiskLevelSection`'s `actions`), bound to the loss table
- * (`AssetSetLossComparisonSection`'s bindable `tableRef`).
+ * Each level's column toggle — the project's `ColumnVisibilityToggle`, in the level frame's header
+ * just before its manual icon (`RiskLevelSection`'s `actions`), bound to the level's table through
+ * the section's bindable `tableRef`: L1° (`risk-asset-set-loss`) reads the loss table, and — since the
+ * developer's review of 30/09 gave L3° the same table — L3° (`risk-asset-set-paid`) reads its own.
  *
- * It exists only while the table does: a toggle beside no table opens onto nothing, or onto the
+ * It exists only while its table does: a toggle beside no table opens onto nothing, or onto the
  * columns of a table the reader cannot see. So it is absent while the first answer is in flight,
  * after a failed wave, and after an answer discarded with nothing to keep — and each of those
  * cases then brings the table and proves the toggle arrives with it, which is what keeps the
  * absence from passing about a page that has no toggle at all. Wherever the table is drawn it is
  * there: with figures, with an answer that measured nothing (a row of dashes per selected asset
- * is still a table), and when a later answer is discarded and the figures stay. L3° has none.
+ * is still a table), and when a later answer is discarded and the figures stay. One toggle per
+ * level table: two on the page.
  *
  * Found by testid; the menu is read by its items' testids, never by their labels. Switching a
  * column off and on is the E2E's (`risk-lab.spec.ts`): here the table only has to be the one the
- * menu reads.
+ * menu reads — its own level's, and not the other's.
  */
 
-/** L1°'s value columns, as `AssetSetLossComparisonSection` defines them. */
-const L1_VALUE_COLUMNS = ['badDay', 'badMonth', 'worstFall', 'currentFall', 'toPeak'] as const;
-
-const lossFrame = (): HTMLElement => screen.getByTestId('risk-asset-set-loss');
-const paidFrame = (): HTMLElement => screen.getByTestId('risk-asset-set-paid');
+/** Each level's table: the frame its toggle sits in, the value columns its menu lists, and its figures barrier. */
+const TABLE_LEVELS = [
+    {name: 'L1°', level: 'l1', frame: 'risk-asset-set-loss', columns: ['badDay', 'badMonth', 'worstFall', 'currentFall', 'toPeak'], figures: expectFigures},
+    {name: 'L3°', level: 'l3', frame: 'risk-asset-set-paid', columns: ['volatility', 'expectedReturn', 'sortino', 'sharpe'], figures: expectL3Figures},
+] as const;
 
 /** A frame's column toggle, if it has one. */
 function toggleIn(frame: HTMLElement): HTMLElement | null {
@@ -441,25 +497,25 @@ function precedes(first: Node, second: Node): boolean {
     return !first.contains(second) && (first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
 }
 
-/** L1°'s toggle, waited for: the barrier of every case in which the table is drawn. */
-async function expectToggle(why: string): Promise<HTMLElement> {
+/** A level's toggle, waited for: the barrier of every case in which its table is drawn. */
+async function expectToggle(frame: string, why: string): Promise<HTMLElement> {
     return waitFor(() => {
-        const toggle = toggleIn(lossFrame());
+        const toggle = toggleIn(screen.getByTestId(frame));
         expect(toggle, why).not.toBeNull();
         return toggle as HTMLElement;
     });
 }
 
 /**
- * No toggle in L1°'s frame — asserted with the frame's header drawn, its title and its manual
+ * No toggle in a level's frame — asserted with the frame's header drawn, its title and its manual
  * icon, and with no table, which is the state's own premise: the absence is about the toggle.
  */
-function expectNoToggle(why: string): void {
-    const frame = lossFrame();
-    within(frame).getByTestId('risk-asset-set-loss-title');
-    within(frame).getByTestId('risk-asset-set-loss-docs');
-    expect(screen.queryByTestId('risk-asset-set-l1-table'), `${why} — premise: this state draws no table`).toBeNull();
-    expect(toggleIn(frame), why).toBeNull();
+function expectNoToggle(level: Level, frame: string, why: string): void {
+    const section = screen.getByTestId(frame);
+    within(section).getByTestId(`${frame}-title`);
+    within(section).getByTestId(`${frame}-docs`);
+    expect(screen.queryByTestId(`risk-asset-set-${level}-table`), `${why} — premise: this state draws no table`).toBeNull();
+    expect(toggleIn(section), why).toBeNull();
 }
 
 /**
@@ -478,93 +534,129 @@ function holdAnswers(): () => void {
     };
 }
 
-/** Press a retry with figures to answer it: the table arrives. */
-async function retryIntoFigures(retry: HTMLElement): Promise<void> {
+/** Press a retry with figures to answer it, and end on the level's figures: its table arrives. */
+async function retryIntoFigures(retry: HTMLElement, figures: () => Promise<void>): Promise<void> {
     script.outcome = 'figures';
     await fireEvent.click(retry);
-    await expectFigures();
+    await figures();
 }
 
-describe("AssetSetComparisonLevels — L1°'s column toggle, in its frame beside the manual icon", () => {
-    it("with figures: in L1°'s header, after the title and before the manual icon — and L3° has none", async () => {
+for (const {name, level, frame, columns, figures} of TABLE_LEVELS) {
+    describe(`AssetSetComparisonLevels — ${name}'s column toggle, in its frame beside the manual icon`, () => {
+        it("with figures: in its own frame's header, after the title and before the manual icon", async () => {
+            const {controller} = mount();
+            await settled(controller);
+            await figures();
+            const toggle = await expectToggle(frame, `${name} shows its figures and its frame offers no column toggle`);
+
+            const section = screen.getByTestId(frame);
+            expect(within(section).getByTestId(`${frame}-body`).contains(toggle), `the toggle is in ${name}'s body: it belongs to the frame's header`).toBe(false);
+            expect(precedes(within(section).getByTestId(`${frame}-title`), toggle), `the toggle does not come after ${name}'s title, or sits inside it`).toBe(true);
+            expect(precedes(toggle, within(section).getByTestId(`${frame}-docs`)), `the toggle does not come before ${name}'s manual icon`).toBe(true);
+            expect(within(section).getAllByTestId('column-visibility-toggle'), `${name}'s frame carries one toggle, its own table's`).toHaveLength(1);
+        });
+
+        it("opening it lists this level's columns and none of the other's: the menu reads its own table", async () => {
+            const {controller} = mount();
+            await settled(controller);
+            await figures();
+            await fireEvent.click(await expectToggle(frame, `${name} shows its figures and its frame offers no column toggle`));
+
+            const menu = await waitFor(() => within(screen.getByTestId(frame)).getByTestId('column-visibility-dropdown'));
+            for (const column of columns) {
+                expect(within(menu).queryByTestId(`column-visibility-item-${column}`), `the menu does not offer ${column}: the toggle is not reading ${name}'s table`).not.toBeNull();
+            }
+            const others = TABLE_LEVELS.filter((other) => other.level !== level).flatMap((other) => [...other.columns]);
+            for (const column of others) {
+                expect(within(menu).queryByTestId(`column-visibility-item-${column}`), `${name}'s menu offers ${column}: it is reading the other level's table`).toBeNull();
+            }
+        });
+
+        it('is not there while the first answer is in flight, and arrives with the table', async () => {
+            const release = holdAnswers();
+            const {controller} = mount();
+            await waitFor(() => expect(script.asked, 'the base question was never asked: nothing is in flight').toHaveLength(1));
+            expect(controller.initialLoading, 'premise: the first answer is still loading').toBe(true);
+            await waitFor(() => expect(screen.queryByTestId(`risk-asset-set-${level}-loading`), `${name} is not drawing its skeleton`).not.toBeNull());
+            expectNoToggle(level, frame, 'a column toggle beside a skeleton');
+
+            release();
+            await figures();
+            await expectToggle(frame, 'the table arrived without its toggle');
+        });
+
+        it('is not there after a failed wave, and arrives with the table a retry brings', async () => {
+            await mountFailed();
+            const {retry} = await blockWithRetry(level, 'error', `${name} shows no error block: the state under test is not on screen`);
+            expectNoToggle(level, frame, 'a column toggle beside a failed wave');
+
+            await retryIntoFigures(retry, figures);
+            await expectToggle(frame, 'the retry brought the table without its toggle');
+        });
+
+        it('is not there after an answer discarded with nothing to keep, and arrives with the table a retry brings', async () => {
+            await mountDiscarded();
+            const {retry} = await blockWithRetry(level, 'discarded', `${name} shows no discarded block: the state under test is not on screen`);
+            expectNoToggle(level, frame, 'a column toggle beside a discarded answer');
+
+            await retryIntoFigures(retry, figures);
+            await expectToggle(frame, 'the retry brought the table without its toggle');
+        });
+
+        it('is there with an answer that measured nothing: a row of dashes per selected asset is still a table', async () => {
+            script.outcome = 'nothing';
+            const {controller} = mount();
+            await settled(controller);
+            await waitFor(() => expect(screen.getByTestId(`risk-asset-set-${level}-table`)).toHaveAttribute('data-row-count', String(SELECTION.length)));
+
+            await expectToggle(frame, `${name} draws its table and its frame offers no column toggle`);
+        });
+
+        it('stays when a later answer is discarded: the figures stay, and so does their toggle', async () => {
+            const {view, controller} = mount();
+            await settled(controller);
+            await figures();
+            await expectToggle(frame, `${name} shows its figures and its frame offers no column toggle`);
+
+            script.outcome = 'discard';
+            view.rerender({refreshVersion: 1});
+            await waitFor(() => expect(controller.loadDiscarded, 'the refreshed answer was never recorded as discarded').toBe(true));
+            await figures();
+            expect(toggleIn(screen.getByTestId(frame)), 'the figures stayed and their toggle went: it follows the table, not the load state').not.toBeNull();
+        });
+    });
+}
+
+describe('AssetSetComparisonLevels — one column toggle per level table', () => {
+    it('with figures: two toggles on the page, one in each frame', async () => {
         const {controller} = mount();
         await settled(controller);
         await expectFigures();
-        const toggle = await expectToggle('L1° shows its figures and its frame offers no column toggle');
+        await expectL3Figures();
 
-        const frame = lossFrame();
-        expect(within(frame).getByTestId('risk-asset-set-loss-body').contains(toggle), "the toggle is in L1°'s body: it belongs to the frame's header").toBe(false);
-        expect(precedes(within(frame).getByTestId('risk-asset-set-loss-title'), toggle), "the toggle does not come after L1°'s title, or sits inside it").toBe(true);
-        expect(precedes(toggle, within(frame).getByTestId('risk-asset-set-loss-docs')), "the toggle does not come before L1°'s manual icon").toBe(true);
-
-        // L3°'s frame is drawn, its manual icon included, and carries no toggle of its own.
-        within(paidFrame()).getByTestId('risk-asset-set-paid-docs');
-        expect(toggleIn(paidFrame()), "L3° got a column toggle: only L1°'s table has one").toBeNull();
-        expect(screen.getAllByTestId('column-visibility-toggle'), 'the levels carry one column toggle, L1°').toHaveLength(1);
+        for (const {name, frame} of TABLE_LEVELS) await expectToggle(frame, `${name} draws its table and its frame offers no column toggle`);
+        expect(screen.getAllByTestId('column-visibility-toggle'), 'the levels carry one column toggle per table, L1° and L3°').toHaveLength(TABLE_LEVELS.length);
     });
+});
 
-    it("opening it lists L1°'s columns: the menu reads the loss table", async () => {
-        const {controller} = mount();
-        await settled(controller);
-        await expectFigures();
-        await fireEvent.click(await expectToggle('L1° shows its figures and its frame offers no column toggle'));
+/**
+ * The icons the panel resolved (`assetIcons`) reach both tables' asset columns — the same map, handed
+ * to each level, drawn by the same asset cell under each level's testids.
+ */
+describe('AssetSetComparisonLevels — the icons reach both tables', () => {
+    for (const {name, level, figures} of TABLE_LEVELS) {
+        it(`${name}: every asset cell draws the icon the panel resolved for it`, async () => {
+            const {controller} = mount();
+            await settled(controller);
+            await figures();
 
-        const menu = await waitFor(() => screen.getByTestId('column-visibility-dropdown'));
-        for (const column of L1_VALUE_COLUMNS) {
-            expect(within(menu).queryByTestId(`column-visibility-item-${column}`), `the menu does not offer ${column}: the toggle is not reading L1°'s table`).not.toBeNull();
-        }
-    });
-
-    it('is not there while the first answer is in flight, and arrives with the table', async () => {
-        const release = holdAnswers();
-        const {controller} = mount();
-        await waitFor(() => expect(script.asked, 'the base question was never asked: nothing is in flight').toHaveLength(1));
-        expect(controller.initialLoading, 'premise: the first answer is still loading').toBe(true);
-        await waitFor(() => expect(screen.queryByTestId('risk-asset-set-l1-loading'), 'L1° is not drawing its skeleton').not.toBeNull());
-        expectNoToggle('a column toggle beside a skeleton');
-
-        release();
-        await expectFigures();
-        await expectToggle('the table arrived without its toggle');
-    });
-
-    it('is not there after a failed wave, and arrives with the table a retry brings', async () => {
-        await mountFailed();
-        const {retry} = await blockWithRetry('l1', 'error', 'L1° shows no error block: the state under test is not on screen');
-        expectNoToggle('a column toggle beside a failed wave');
-
-        await retryIntoFigures(retry);
-        await expectToggle('the retry brought the table without its toggle');
-    });
-
-    it('is not there after an answer discarded with nothing to keep, and arrives with the table a retry brings', async () => {
-        await mountDiscarded();
-        const {retry} = await blockWithRetry('l1', 'discarded', 'L1° shows no discarded block: the state under test is not on screen');
-        expectNoToggle('a column toggle beside a discarded answer');
-
-        await retryIntoFigures(retry);
-        await expectToggle('the retry brought the table without its toggle');
-    });
-
-    it('is there with an answer that measured nothing: a row of dashes per selected asset is still a table', async () => {
-        script.outcome = 'nothing';
-        const {controller} = mount();
-        await settled(controller);
-        await waitFor(() => expect(screen.getByTestId('risk-asset-set-l1-table')).toHaveAttribute('data-row-count', String(SELECTION.length)));
-
-        await expectToggle('L1° draws its table and its frame offers no column toggle');
-    });
-
-    it('stays when a later answer is discarded: the figures stay, and so does their toggle', async () => {
-        const {view, controller} = mount();
-        await settled(controller);
-        await expectFigures();
-        await expectToggle('L1° shows its figures and its frame offers no column toggle');
-
-        script.outcome = 'discard';
-        view.rerender({refreshVersion: 1});
-        await waitFor(() => expect(controller.loadDiscarded, 'the refreshed answer was never recorded as discarded').toBe(true));
-        await expectFigures();
-        expect(toggleIn(lossFrame()), 'the figures stayed and their toggle went: it follows the table, not the load state').not.toBeNull();
-    });
+            for (const assetId of SELECTION) {
+                const cells = screen.getByTestId(`risk-asset-set-${level}-table`).querySelectorAll<HTMLElement>(`[data-testid="risk-asset-set-${level}-name"][data-asset-id="${assetId}"]`);
+                expect(cells, `asset ${assetId}: no ${name} asset cell of its own`).toHaveLength(1);
+                const icons = within(cells[0]).queryAllByTestId(`risk-asset-set-${level}-icon`);
+                expect(icons, `asset ${assetId}: ${name} draws no icon — the levels did not hand it assetIcons`).toHaveLength(1);
+                expect(icons[0].getAttribute('src'), `asset ${assetId}: ${name}'s icon is not the one the panel resolved`).toBe(ICONS.get(assetId));
+            }
+        });
+    }
 });
