@@ -643,7 +643,7 @@ describe('AssetSetLossComparisonSection — the table is the project DataTable',
         }
     });
 
-    it('draws every selected asset however many there are, with no pagination and no selection, filter or action chrome', () => {
+    it('draws every selected asset however many there are, with no pagination and no selection, filter or action chrome', async () => {
         mountWith({assetIds: WIDE_SELECTION, assetLabels: WIDE_LABELS, assetIcons: new Map()});
 
         expect(drawnOrder(), `${WIDE_SELECTION.length} assets selected and DataTable's default page holds 10: a row on page two reads as an asset nobody selected`).toEqual(WIDE_SELECTION);
@@ -653,6 +653,10 @@ describe('AssetSetLossComparisonSection — the table is the project DataTable',
         expect(document.querySelectorAll('[data-testid^="dt-row-checkbox-"]')).toHaveLength(0);
         expect(document.querySelectorAll('[data-testid^="col-filter-trigger-"]'), 'no column filters: the selection is the filter').toHaveLength(0);
         expect(document.querySelectorAll('[data-testid^="row-actions-"]'), 'no row actions').toHaveLength(0);
+
+        // Nor by a click: L3°'s rows select because L3° has a scatter to link a row to; L1° has no chart.
+        await fireEvent.click(rowById(WIDE_SELECTION[0]));
+        expect(rowById(WIDE_SELECTION[0]), 'a click selected an L1° row: this table has no chart for a selection to point at').toHaveAttribute('data-selected', 'false');
     });
 
     it('keeps its layout under its own storage key', () => {
