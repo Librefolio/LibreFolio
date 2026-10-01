@@ -370,7 +370,7 @@ Scritta prima dei test rossi: è l'interfaccia per il test-author. Le regole ven
   - le correzioni selezionate, con i loro todo, si aggiungono a `onImportBatch`.
 - **La guida d'onboarding** (skill `onboarding-guide`):
   - nuovo step `import.gapFix` fra `import.review` e `import.bulk`, nel backend e nel catalogo e overlay del frontend;
-  - IMPORT_GUIDE passa alla **versione 2**, perché il contenuto cambia. Si aggiorna anche il testo di `import.select`, per i set;
+  - ~~IMPORT_GUIDE passa alla **versione 2**~~ → **resta alla versione 1** (D-I1 rivisto il 2026-10-01: le guide non sono mai state rilasciate). Si aggiorna anche il testo di `import.select`, per i set;
   - l'ancora solo su elementi davvero visibili; E2E della guida su desktop e mobile.
 - **Pagina file e modale del broker**: badge del set, del combinato e di «incompleto» (D-S9, nel pilota il minimo).
 - **i18n**: `importWizard.reportSet.*` via `dev.py i18n`, in 4 lingue; le chiavi della guida nel loro namespace (§7).
@@ -379,6 +379,96 @@ Scritta prima dei test rossi: è l'interfaccia per il test-author. Le regole ven
   - Vitest per i due moduli puri e per `isBeforeHistory`, aggiunti alla lista di `front tx-unit`;
   - Playwright `tx-import-report-set.spec.ts`, **spec nuovo** da registrare: set completo, set incompleto con «Carica il file mancante», combinato come riga unica, righe prima di `H0`, passo «Allinea» selezionato di default, consegna con `gap_fix`;
   - aggiornamento di `onboarding-guides.spec.ts`.
+
+#### C3.0 Specifica di dettaglio (2026-10-01)
+
+Scritta prima dei test rossi: è l'interfaccia per il test-author. Le regole vengono dal design v5.3 (§3.6, §4.6, §4.7, §5) e dalla skill `onboarding-guide`; qui ci sono le scelte d'implementazione e i punti in cui il codice obbliga a precisare il piano.
+
+**Fatti del codice che cambiano il disegno**
+- **Lo step della guida segue il passo da solo.** L'id dello step è `import.${StepId}` (`importGuideStep`), quindi il passo `gapFix` porta lo step `import.gapFix`. Il `$effect` del wizard avvia lo step del passo corrente quando non c'è una guida attiva: il clic su «Importa» (ancora `import.action.review`) chiude lo step della revisione, e il passo nuovo avvia `import.gapFix`. Nessun codice di guida nuovo nel wizard, solo l'ancora `import.action.gapFix` sul «Continua» del passo.
+- **D-I1, rivisto il 2026-10-01: la guida resta alla versione 1.** Le guide non sono mai state rilasciate (capitolo Unreleased; la v1.1.0 non le ha), e il Round 4 dell'onboarding ha deciso «tutti i flow restano unreleased/v1, nessun bump simulato», bloccato dal test «Every unreleased Round 5 flow must remain at version 1» (`test_settings_service.py:702`, `:741`). Lo step nuovo compare comunque a tutti: il frontend considera da fare uno step `pending` (`isOnboardingStepProgressDue`), e per gli utenti esistenti `ensure` crea la sua riga `pending`. Lo step nuovo nasce `pending` per tutti (`ensure`). Come Unifica, Correzioni e Duplicati, resta in sospeso finché un import non mostra il passo. Gli utenti E2E canonici restano in regola: il grandfathering segue `ONBOARDING_FLOW_VERSIONS`/`STEPS`, e ogni invocazione E2E ripopola il database.
+- **Le posizioni dei punti di verità hanno gli ID finti del plugin, per file.** `buildMergedTransactions` li rimappa (`fakeRemap`) solo per gli ID che compaiono nelle righe, e solo dentro la funzione. Gli ID finti del plugin e quelli globali stanno nello stesso intervallo (≥ 2147473647, a scendere), quindi un ID del plugin che non compare nelle righe **non va mai cercato** fra i globali: resta finto, e il backend lo salta con la nota `unresolved_asset`.
+- **La tabella delle correzioni è per punto, non quella della revisione.** Il piano diceva «la stessa tabella della revisione». Il mock del §4.6 però raggruppa per punto, ciascuno con il suo confronto e la sua spiegazione, e la DataTable della revisione è globale e paginata. Le colonne restano quelle della revisione: tipo, data, asset, quantità, cassa, tag.
+- **Il messaggio del todo `gap_fix_cost` arriva in inglese**, e l'editor mostra `todo.message` così com'è. Il wizard lo localizza quando converte il todo: `importWizard.reportSet.gapFix.todo.<reason_code>`, e il messaggio del backend se la chiave manca.
+- **`step4CanImport` comprende già `!importPreparing`**: il pulsante della revisione resta disattivato mentre il gap-fix gira.
+- **`FilesTable` serve sia la pagina file sia il modale del broker**: i badge stanno solo lì, nel tipo `brim`. `files/+page.svelte` e `BrokerImportFilesModal.svelte` non cambiano.
+- **Nessuna modifica all'API**, quindi niente `api sync`.
+
+**Modulo puro** `frontend/src/lib/utils/transactions/gapFixModel.ts`, test in `gapFixModel.test.ts`, registrato nella lista di `front-transaction tx-unit`. I tipi sono strutturali: i campi che i tipi generati allargano si leggono come `unknown` e si restringono dentro (lezione di C2). I decimali arrivano come stringhe.
+
+| Funzione | Contratto |
+|---|---|
+| `truthSourcesOf(parseResults)` | una fonte `{fileId, brokerId, pluginCode, checkpoints, verifications}` per ogni risultato `done` con una risposta che ha almeno un checkpoint o una verifica; `pluginCode` = `response.plugin_code`. Nell'ordine d'ingresso |
+| `resolveTruthAssetId(fileId, assetId, ctx)` | `ctx = {fakeRemapByFile, survivorOf, resolutions}`. Un ID reale resta com'è. Un ID finto del plugin: il globale del suo file (`fakeRemapByFile.get(fileId)?.get(id)`); **se manca, l'ID del plugin com'è**. Poi il sopravvissuto dell'unificazione (`survivorOf.get(globale) ?? globale`), poi il suo `resolvedAssetId` se è un numero; altrimenti il sopravvissuto, che resta finto |
+| `buildGapFixRequests(sources, selection, pendingCreates, pendingDeleteTxIds, resolveAsset)` | una richiesta per (broker, plugin), nell'ordine della prima fonte. `checkpoints` e `verifications` sono l'unione delle fonti (scenario 8: due set dello stesso broker). Ogni checkpoint è copiato con `positions[].asset_id = resolveAsset(fileId, asset_id)`, il resto invariato. `selection` e `pending_creates` sono filtrati su `broker_id` del gruppo; `pending_delete_tx_ids` passa intero. Nessuna fonte → `[]` |
+| `buildGapFixView(outcomes, localizeTodo)` | `outcomes`: `{brokerId, pluginCode, response?, error?}` per richiesta. Un gruppo per esito, con chiave `<broker>:<plugin>`; checkpoint `<gruppo>:cp:<i>`, proposte `<checkpoint>:p:<j>`, verifiche `<gruppo>:v:<i>`. I todo della risposta (`tx_index` = indice nelle `proposals` del checkpoint) diventano `ImportTodo {field, severity, reasonCode, message: localizeTodo(reason_code, message), evidence: evidence ?? [], context: context ?? undefined}` della proposta giusta. `needsCost` = la proposta ha un todo bloccante su `cost_basis_override`. Un esito con `error` dà un gruppo senza righe, con l'errore |
+| `gapFixHasSomethingToShow(view)` | `true` se c'è almeno una proposta, una verifica con `ok: false` o un gruppo in errore. Le sole note (`unresolved_asset`) non aprono il passo |
+| `defaultGapFixSelection(view)` | tutte le chiavi delle proposte: le correzioni sono selezionate di default (D-S14) |
+| `selectedGapFixCreates(view, selected)` | `Array<{tx, todos}>` delle proposte selezionate, per gruppo, punto e proposta |
+| `gapFixSelectedCount(view, selected)` | quante proposte della vista sono selezionate |
+
+**`importMerge.ts`**: `MergeResult` guadagna `fakeRemapByFile: Map<fileId, Map<idDelPlugin, idGlobale>>`, in aggiunta e con le stesse regole di oggi.
+
+**Wizard** (`ImportWizardModal.svelte`)
+- `StepId` `gapFix`, dopo `review` in `STEP_DEFS`, con `titleKey` `reportSet.gapFix.stepTitle`. `stepIsActive('gapFix')` è vero solo se c'è la vista del gap-fix, e `enterNextActiveStep` non lo raggiunge mai, perché la revisione è sempre attiva.
+- **`handleImport`**, dopo i controlli di oggi:
+  - le fonti (`truthSourcesOf`); se non ce ne sono, consegna come oggi, **senza chiamare** `POST /gap-fix`;
+  - altrimenti una `POST /gap-fix` per richiesta, una dopo l'altra, con la lista finale (`buildFinalTxList`), `pendingCreateTransactions` e `pendingDeleteTxIds`;
+  - se nel frattempo il wizard si è chiuso, i dati sono cambiati o la sessione non è più quella, si ferma;
+  - se `gapFixHasSomethingToShow`, la vista, la selezione di default e `currentStepId = 'gapFix'`; altrimenti consegna.
+- **Errore** di una richiesta: il suo gruppo mostra il messaggio, e «Continua» resta attivo; consegna le proposte degli altri gruppi.
+- **«Continua»** del passo: `onImportBatch([...buildFinalTxList(), ...selectedGapFixCreates(...)], progresso)`, e `guideHandedOff` come oggi.
+- **Ricalcolo**: la vista e la selezione si cancellano tornando indietro dal passo, andando a un passo precedente, in `resetDownstreamState`, in `resetState` e a ogni `mergeAllTransactions`. Il clic successivo su «Importa» ricalcola.
+- **Piede del passo**: «Indietro» (`import-wizard-back`); il conteggio `import-wizard-gapfix-count` (`data-count`), «N correzioni selezionate»; «Continua» `import-wizard-gapfix-continue`, con l'ancora `import.action.gapFix`.
+
+**`GapFixStep.svelte`** (`frontend/src/lib/components/transactions/import/`). È testo Svelte, senza `{@html}` (gate di K). La cassa passa per `CurrencyAmount`; le quantità **delle posizioni** passano per `maskableQuantity` (D5′: una posizione accanto ai prezzi); quelle delle proposte sono transazioni e restano visibili.
+- Prop: `view`, `selected`, `onToggle(key)`, `assetName(assetId)`, `brokerName(brokerId)`.
+- Radice `import-wizard-gapfix` (`data-proposal-count`, `data-selected-count`), con l'introduzione del §4.6.
+- Per gruppo, `gapfix-group` (`data-broker-id`, `data-plugin-code`), col nome del broker; in errore, `gapfix-error`.
+- Per checkpoint, `gapfix-checkpoint` (`data-as-of`, `data-kind`): «Punto di partenza · ‹data›» oppure «Dopo il buco · ‹data›».
+  - `gapfix-cash-row` (`data-currency`, `data-difference`): LibreFolio, Banca, Differenza;
+  - `gapfix-position-row` (`data-asset-id`, `data-exactness`), con «almeno» se `at_least`;
+  - la spiegazione `gapfix-explanation`: i movimenti riassunti e quelli che mancano in LibreFolio, il saldo d'apertura, la parte non spiegata, le note `gapfix-note` (`data-code`), localizzate con `importWizard.reportSet.gapFix.note.<codice>` e, se la chiave manca, il messaggio del backend;
+  - le proposte `gapfix-proposal` (`data-key`, `data-type`, `data-date`, `data-selected`), con la casella `gapfix-proposal-toggle`: tipo, data, asset, quantità, cassa, e «costo da inserire» se `needsCost`.
+- Per verifica, `gapfix-verification` (`data-as-of`, `data-ok`): «TORNA» o «NON TORNA», con le righe di cassa se non torna.
+- In fondo, la riga `gapfix-info-hidden-titles`: un titolo che nel file non si è mosso e non ha pagato dividendi non si vede.
+
+**Guida d'onboarding** (skill `onboarding-guide`)
+- Backend, `onboarding_service.py`: `import.gapFix` fra `import.review` e `import.bulk`; `import_guide` resta alla versione 1 (D-I1 rivisto).
+- Frontend:
+  - `IMPORT_GUIDE_STEP_IDS`, con la stessa aggiunta;
+  - l'overlay, con `importPresentation`, l'ancora `import.action.gapFix`, le chiavi `onboarding.importGuide.steps.gapFix.{title,description}`, `/transactions` e profondità 2;
+  - l'etichetta nella sezione di Impostazioni.
+- Testi: lo step nuovo, e la descrizione di `import.select`, che spiega i set. Nessun testo annuncia un'altra guida.
+- Test esistenti, con le concessioni del coordinatore (sotto): solo la versione e l'id dello step.
+
+**Badge nella pagina file** (`FilesTable.svelte`, solo nel tipo `brim`)
+- Nel modulo puro `importReportSets.ts` (test in `importReportSets.test.ts`):
+  - `setsOfFiles(files, plugins)` → `Map<fileId, ReportSetGroup>`, con `groupBrokerFiles` per broker;
+  - `fileSetBadges(file, ctx)` → i badge nell'ordine fisso `combined`, `stale`, `usedInCombined`, `set`, `incomplete`:
+    - `combined`, per `kind: "combined"`, con i nomi di `derived_from` e quelli eliminati;
+    - `stale`, per `combine_is_stale`;
+    - `usedInCombined`, per un originale con `combined_into` non vuoto;
+    - `set`, per un membro di un set, con la data del set;
+    - `incomplete`, per un membro di un set la cui preview dice `complete: false`, con i ruoli mancanti; **non** se il set ha un combinato aggiornato (v5.3).
+- Una colonna `reportSet` col componente `FileSetBadges.svelte` (`frontend/src/lib/components/files/`): `file-set-badge` con `data-kind`.
+- Il catalogo dei plugin si carica una volta, in una cache del modulo. Una preview per set, in cache per chiave del set e file. Un errore non mostra il badge `incomplete`.
+
+**i18n**: le chiavi nuove in `importWizard.reportSet.gapFix.*` e `importWizard.reportSet.badge.*`, più quelle della guida, nelle 4 lingue, via `dev.py i18n`.
+
+**Test** (test-author; tutti rossi prima)
+- **Vitest**, in `tx-unit`:
+  - `gapFixModel.test.ts` (nuovo) e `GapFixStep.test.ts` (nuovo, jsdom), da registrare nella lista;
+  - i badge, in `importReportSets.test.ts`;
+  - `fakeRemapByFile`, in `importMerge.test.ts` (in `core-unit`).
+- **Onboarding**: gli unit che leggono la costante del catalogo si adattano da soli. Una riga in `OnboardingCoachmark.test.ts` se la sua tabella deve essere completa.
+- **E2E**, in `tx-import-report-set.spec.ts`:
+  - **R5**: set principale su un broker nuovo → revisione → «Importa» → passo `gapFix`. Il punto `opening` del 2020-02-02 ha la proposta di versamento di 2.699,50 EUR, selezionata; c'è la verifica del 2020-06-26. «Indietro» e di nuovo «Importa» ricalcolano: due `POST /gap-fix`. «Continua» porta nell'editor tante righe col tag `gap_fix` quante proposte selezionate;
+  - **R6**: tutte le proposte tolte → conteggio 0 → nell'editor nessuna riga `gap_fix`;
+  - **R7**: un CSV generico da solo non chiama mai `POST /gap-fix` e va diritto all'editor;
+  - **R8**: badge, con file caricati e combinati via API: `combined` sul combinato; `set` e `usedInCombined` sugli originali; `set` e `incomplete` su un XLSX da solo;
+  - **R9**, in uno **spec separato**, `tx-import-report-set-guide.spec.ts`, con l'azione `tx-import-report-set-guide` (`project=""`): `tx-import-report-set` gira solo su desktop, la guida va provata anche su mobile. Un account usa e getta (`fixtures/onboarding-accounts.ts`); gli step d'import prima di `gapFix` si chiudono via API; al passo il coachmark è ancorato su `import-wizard-gapfix-continue`.
+- **Liste a mano**, con le concessioni: `test_settings_service.py`, `test_settings_api.py`, `onboarding-tour.spec.ts:764` e `settings.spec.ts:735`.
 
 ## 6. Fase D — documentazione (docs-writer, solo in inglese)
 
@@ -407,6 +497,9 @@ Scritta prima dei test rossi: è l'interfaccia per il test-author. Le regole ven
 | i18n fuori da `importWizard.reportSet.*` | testi della guida | ✅ via `dev.py i18n`, 4 lingue |
 | `FilesTable.svelte` | badge nella pagina file | ✅ solo nel tipo `brim` |
 | documentazione: nav di `mkdocs.yml`, `user/transactions/import/index.{en,it,fr,es}.md`, `providers_list.md`, `brim_plugin_guide.md`, `import-wizard.md` | pagina e registrazioni | ✅ solo aggiunte. Il docs-writer scrive in inglese; le card negli indici it/fr/es sono una modifica minima, seguita da `translate-stamp`. **`mkdocs build` ritimbra `frontend/static/sw.js`, che non va committato** |
+| **C3 (2026-10-01)**: `backend/test_scripts/test_services/test_settings_service.py` (`:610`, `:633-641`), `backend/test_scripts/test_api/test_settings_api.py` (`:423-431`), `frontend/e2e/onboarding-tour.spec.ts:764`, `frontend/e2e/settings.spec.ts:735` | liste a mano degli step della guida d'import, e la sua versione | ✅ **solo** la versione 1→2 e l'id `import.gapFix` fra `import.review` e `import.bulk`, nient'altro; le modifiche le fa il test-author |
+| **C3 (2026-10-01)**: `frontend/e2e/transactions/tx-import-report-set-guide.spec.ts` e la nuova azione `tx-import-report-set-guide` in `_frontend_transaction.py` | E2E della guida (R9) su desktop e mobile: l'azione `tx-import-report-set` gira solo su desktop | ✅ solo R9, con un account usa e getta; azione con `project=""` come `onboarding-tour`, solo aggiunte; `check-orphans` e lo spec sui due progetti fra i controlli di C3 |
+| **Fase D (2026-10-01)**: `mkdocs_src/docs/user/settings/preferences.en.md` | la frase sugli step facoltativi dell'import | ✅ via docs-writer. È un fatto nuovo nell'EN di una pagina tradotta: debito di traduzione vero, quindi **niente stamp**; va nella lista di traduzione di fine round |
 | **`ImportWizardModal.svelte` e `TransactionBulkModal.svelte`** (mancavano nella prima stesura) | card del set, analisi, passo nuovo | ⚠️ K ha modifiche non committate (audit XSS, voce 0): nel wizard le righe ~12, 1396–1525, 2016–2068, 2169–2182, 3454–3482 e 5064; nel bulk, righe sparse fra 69 e 3117. **C1**: nel wizard solo la riga del `FormData` (~`:2951`), che il coordinatore simula al checkpoint. **C2 e C3**: solo dopo che la voce 0 di K è entrata in `dev_release2` e la base di L è aggiornata, su segnale del coordinatore |
 
 ## 8. Rischi
@@ -416,7 +509,7 @@ Scritta prima dei test rossi: è l'interfaccia per il test-author. Le regole ven
 | Gap-fix incoerente col motore: trasferimenti, coppie collegate, split | somme grezze di quantità e cassa, come `_get_balances_before_date`; casi di test con trasferimenti e rettifiche |
 | Il wizard ha già più di 5 100 righe | la logica nuova sta in moduli puri e componenti nuovi; nel modale solo il collegamento |
 | Tempi degli E2E (limite di 120 s del runner) | `front build --debug` prima; spec nuovo separato; niente attese fisse |
-| La versione 2 della guida la ripropone a chi l'aveva già finita | è la regola della skill; va confermata dal developer (D-I1) |
+| La versione 2 della guida la ripropone a chi l'aveva già finita | superato: D-I1 rivisto, la guida resta alla versione 1 finché non è rilasciata |
 | Il combinato contiene i nomi delle controparti del CSV | stesso posto e stessi permessi degli originali; nessun log dei valori |
 | Campioni troppo simili ai dati reali | valori inventati; controllo automatico prima del checkpoint B |
 
@@ -424,7 +517,7 @@ Scritta prima dei test rossi: è l'interfaccia per il test-author. Le regole ven
 
 | # | Decisione | Esito (2026-09-30, ask_user) |
 |---|---|---|
-| D-I1 | Guida dell'import: step `import.gapFix` e versione 2, che la ripropone a chi l'aveva già finita | ✅ «Sì: nuovo step e versione 2, la guida ricompare anche a chi l'aveva finita» |
+| D-I1 | Guida dell'import: step `import.gapFix` e versione 2, che la ripropone a chi l'aveva già finita | ✅ «Sì: nuovo step e versione 2, la guida ricompare anche a chi l'aveva finita». **Rivisto il 2026-10-01** (ask_user): «Resta alla versione 1, aggiungo solo lo step». Le guide non sono mai state rilasciate, e un test blocca la regola «unreleased = versione 1»; lo step nuovo compare comunque a tutti, e nel CHANGELOG non c'è la riga sulla guida che ricompare |
 | D-I2 | Commit per fase | ✅ «Sì: un commit per fase, con C1 insieme ad A2»: A1, A2 con C1, A3, B, C2, C3, D |
 | D-I3 | Stato a una data | ✅ il parametro facoltativo `exclude_tx_ids` in `transaction_service.py`, che è libero. Il developer: «mi aspetto che sfrutti la lista che hai già quando si apre l'import wizard». Il wizard riceve già dall'editor `pendingDeleteTxIds` (oggi serve a scartare i duplicati di righe in cancellazione, `pendingDeleteSet` in `importMerge.ts`) e `pendingCreateTransactions`. Il gap-fix riceve le stesse due liste: gli ID vanno a `exclude_tx_ids`, le righe non salvate si sommano in memoria |
 
@@ -710,3 +803,92 @@ Scritta prima dei test rossi: è l'interfaccia per il test-author. Le regole ven
 > Non sono nel perimetro di L: vanno al coordinatore. I file orfani non sono un difetto di produzione, perché lì il database non si ricrea senza i file: sono un problema del setup dei test, che dovrebbe pulire `broker_reports` quando ricrea il database.
 >
 > ### C2 — ✅ pronta per il checkpoint (2026-10-01)
+
+**Commit di C2**: `8c3271235` feat(import): report sets in the import wizard e `918693ed9` docs(journal): record report-set phase C2.
+
+### C3 — ⏳ in corso (2026-10-01)
+
+- Via del coordinatore, da `918693ed9`, nella corsia 6156.
+- **Base dei controlli**: `front-utility onboarding-component-unit` su `918693ed9`, 408/408 verde (contiene `ImportWizardModal.test.ts`).
+- **Concessioni del coordinatore**: nel §7 (le liste a mano della guida, `preferences.en.md` per la fase D).
+- **C3.0 scritta**, nel §5: la specifica di dettaglio prima dei test rossi.
+
+> **⚠️ Fuori pista**:
+> - C2 non aveva lanciato `onboarding-component-unit`, che contiene `ImportWizardModal.test.ts`: l'ho lanciato ora, 408/408, e da C3 entra fra i controlli.
+> - D-I1 regge col solo aumento della versione: la verifica è nella C3.0. Il coordinatore chiede una riga nel CHANGELOG, perché la guida d'import ricompare a tutti quelli che l'avevano finita. *(Superato: D-I1 rivisto più sotto, la guida resta alla versione 1 e la riga non serve.)*
+> - Le liste a mano degli step della guida stanno in quattro test fuori dal §7: due backend e due E2E. Concessi con un vincolo: solo la versione e l'id dello step. Le liste simulate di altri quattro spec E2E non cambiano: rispondono «completed» e restano innocue.
+
+> **Note implementazione (2026-10-01), rosso di C3** (test-author, corsia 6156, un comando alla volta):
+> - **`front-transaction tx-unit`**: 440 verdi (la base di C2) e 55 rossi, tutti nuovi:
+>   - `gapFixModel.test.ts` (nuovo, 32 test): «gapFixModel.ts cannot be loaded»;
+>   - `GapFixStep.test.ts` (nuovo, 9 test, jsdom): componente assente;
+>   - `importReportSets.test.ts`: `setsOfFiles` (4) e `fileSetBadges` (10), «not implemented yet».
+> - **`front-utility core-unit`**: 2700 verdi e 4 rossi, `fakeRemapByFile` in `importMerge.test.ts`.
+> - **`front-utility onboarding-component-unit`**: 408 verdi e 1 rosso, la riga `import.gapFix` aggiunta alla tabella delle presentazioni di `OnboardingCoachmark.test.ts`: l'ancora non riceve `aria-describedby`.
+> - **Backend**: `services settings` 20/3 e `api settings` 37/2; rossi solo sulle liste concesse (versione 2 e `import.gapFix`).
+> - **E2E `tx-import-report-set`**: R1–R4 verdi, R7 verde per costruzione (protegge il comportamento di oggi), R5, R6 e R8 rossi sul primo elemento nuovo: il passo resta `review`, e il badge `combined` manca.
+> - **E2E `tx-import-report-set-guide`** (nuovo, desktop e mobile): 0/2, «the import guide has the step import.gapFix».
+> - **E2E con le liste concesse**: `onboarding-tour` 0/2 e `settings` 0/1, sulla lista degli step.
+> - `check-orphans`: pulito, dopo la registrazione dello spec della guida.
+>
+> **Scelte del test-author dove la C3.0 taceva**: le `resolutions` sono l'array `assetResolutions` del wizard; una selezione è un `ReadonlySet<string>`; il contesto dei badge è `{sets, files, previews}`. Negli E2E, «Importa» si abilita lasciando selezionate solo le 5 righe di cassa senza asset (deseleziona tutto, filtro «nessun asset», seleziona le visibili): così niente da risolvere e nessun asset creato. L'editor si chiude con «Chiudi» e «Scarta», mai «Salva tutto».
+
+> **Note implementazione (2026-10-01), cura di C3** (script in `/tmp/libreFolio_l_c3_*`):
+> - **Moduli puri**:
+>   - `gapFixModel.ts`, nuovo: fonti, risoluzione degli asset, richieste, vista con chiavi, selezione;
+>   - `importMerge.ts`: `MergeResult.fakeRemapByFile`;
+>   - `importReportSets.ts`: `setsOfFiles`, `fileSetBadges` e `formatIsoDay`, il formattatore del giorno che stava nella card di C2 (la card ora lo importa).
+> - **Componenti**:
+>   - `GapFixStep.svelte`, nuovo, senza `{@html}`: la cassa con `CurrencyAmount`, le quantità delle posizioni con `maskableQuantity`; le righe ripetute hanno chiave per indice;
+>   - `FileSetBadges.svelte`, nuovo;
+>   - `FilesTable.svelte`: la colonna `reportSet` nel tipo `brim`, il catalogo dei plugin dalla cache condivisa di `ImportPluginSelect`, una preview per set (le richieste fallite tolgono solo il badge).
+> - **Wizard**:
+>   - il passo `gapFix` dopo `review`;
+>   - in `handleImport`, con fonti di verità, una `POST /gap-fix` per broker e plugin, poi il passo o la consegna;
+>   - «Continua» consegna la lista finale più le correzioni scelte;
+>   - la vista si cancella tornando indietro, in `goToStep`, in `resetDownstreamState`, in `resetState` e a ogni merge.
+> - **Guida**: lo step `import.gapFix` (la versione resta 1, D-I1 rivisto più sotto) nel backend, nel catalogo, nell'overlay (ancora `import.action.gapFix` sul «Continua» del passo) e nella sezione delle Impostazioni.
+> - **i18n**: 38 chiavi nuove e il testo nuovo di `import.select`, nelle 4 lingue, con `dev.py i18n`. Parità: 3519 chiavi in ogni lingua.
+>   - I badge usano chiavi letterali, così l'audit non le conta fra le inutilizzate;
+>   - `reportSet.gapFix.stepTitle` resta segnalata come `importWizard.step4Title`: i titoli dei passi si leggono con `importWizard.${titleKey}`.
+>
+> **⚠️ Fuori pista**:
+> - In `GapFixStep.test.ts` il caricamento pigro del componente (`import.meta.glob`, scelto per il rosso) ora avviene dentro il primo test. La trasformazione a freddo dura circa 7,7 s, oltre i 5 s del test: il primo test scade, e il suo montaggio tardivo rompe il secondo.
+>   - Prova: il file da solo dà 3 rossi e 6 verdi; con `--testTimeout=30000` dà 9/9.
+>   - Verdetto della skill `test-triage`: **assunzione sul tempo**, del test. La correzione (caricamento in un `beforeAll`) va al test-author; prodotto e configurazione restano invariati.
+
+> **⚠️ Fuori pista: D-I1 rivisto (2026-10-01).** Con la versione 2, `services settings` restava rosso su due asserzioni che la concessione non copriva: «Every unreleased Round 5 flow must remain at version 1» (`test_settings_service.py:702`) e le righe degli step alla versione 1 (`:741`).
+> - Le guide non sono mai state rilasciate: sono nel capitolo Unreleased, la v1.1.0 non le ha, e il dossier dell'onboarding lo dice («onboarding never shipped in 1.1.0»). Il Round 4 aveva deciso «tutti i flow restano unreleased/v1, nessun bump simulato».
+> - Lo step nuovo compare comunque a tutti: per gli utenti esistenti `ensure` crea la riga `pending`, e uno step `pending` è da fare.
+> - Domanda al developer (ask_user), risposta: «Resta alla versione 1, aggiungo solo lo step». Quindi:
+>   - `onboarding_service.py` torna a `IMPORT_GUIDE: 1`;
+>   - il test-author annulla il suo 1→2 a `test_settings_service.py:610`, l'unica modifica di versione che la concessione permetteva;
+>   - le liste degli step restano con `import.gapFix`;
+>   - nella proposta per il CHANGELOG non c'è la riga sulla guida che ricompare.
+
+> **Note implementazione (2026-10-01), riparazioni dei test** (test-author; il prodotto non cambia):
+> - `GapFixStep.test.ts`: il modello e il componente si caricano una volta in un `beforeAll` (timeout del hook 60 s). Un modulo assente fa ancora fallire ogni test da solo, col suo messaggio.
+> - R6 (`tx-import-report-set.spec.ts`): l'editor mostra sempre la barra di paginazione (`alwaysShowPagination={true}`, `TransactionBulkModal.svelte:3395`). R6 ora mostra tutte le righe come R5, e prova che non c'è un'altra pagina con «precedente» e «successiva» disattivati. Verdetto: assunzione del test, e il prodotto era giusto (lo screenshot: 5 righe, nessuna `gap_fix`).
+> - `test_settings_service.py:610`: annullato l'1→2 (D-I1 rivisto). Commento di R9 senza «version 2».
+
+> **Note implementazione (2026-10-01), verde di C3** (corsia 6156, un comando alla volta):
+> - **Unit**:
+>   - `front-transaction tx-unit` 495/495, di cui `gapFixModel` 32, `GapFixStep` 9 e i badge 14;
+>   - `front-utility core-unit` 2704/2704, compresi i gate XSS di K, la copia delle guide e R13;
+>   - `front-utility onboarding-component-unit` 409/409;
+>   - `front-utility component-unit` 2182/2182.
+> - **Backend**: `services settings` 23/23, `api settings` 39/39, `db referential-integrity` 17/17.
+> - **Statici**:
+>   - `front check` al pavimento: 3 errori e 41 avvisi, negli stessi 3 file di prima;
+>   - prettier pulito sui 24 file del frontend toccati; black e ruff puliti su `onboarding_service.py`; `dev.py lint` pulito;
+>   - `check-orphans` pulito (94 E2E, 274 Vitest, 227 backend); `git diff --check` pulito;
+>   - i18n: 3519 chiavi complete in ogni lingua.
+> - **E2E nuovi**, dopo `front build --debug`:
+>   - `tx-import-report-set` 8/8 (R1–R8, desktop);
+>   - `tx-import-report-set-guide` 2/2 (R9, desktop e mobile).
+> - **Regressione E2E**: verdi `onboarding-tour` 10, `onboarding-guides` 24, `settings` 45, `files` 22, `tx-import-flow` 10, `tx-import-upload` 9, `tx-import-duplicate-precedence` 6, `tx-asset-identity` 9, `tx-import-resolution` 12 e `tx-import-matching` 6. `front-broker detail` 29/30: l'unico rosso è `brokers-detail.spec.ts:713`, il rosso noto del workstream I (GrowthChart). I test del modale dei file importati, che usa `FilesTable`, sono verdi.
+> - Porta 6156 libera alla fine.
+>
+> **Limite noto, da documentare in D**: le righe non salvate dell'editor dello stesso broker vanno al gap-fix così come sono. Una bozza incompleta (per esempio un acquisto senza asset) fa rispondere 422 a tutta la richiesta. Il gruppo mostra l'errore, e si prosegue senza correzioni.
+
+### C3 — ✅ pronta per il checkpoint (2026-10-01)
