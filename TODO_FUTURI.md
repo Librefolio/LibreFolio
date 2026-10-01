@@ -2075,3 +2075,41 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
 - Minori, solo se la misura lo giustifica, in `get_prices_bulk`: la finestra è unica per tutte le
   richieste (minimo e massimo globali), e il prezzo «seme» si cerca con una query per asset. Si
   possono fare per asset, in una query sola, come nella PR #28.
+
+## 💡 Traccia rischio/rendimento nel tempo («snail trail»)
+
+**Data aggiunta**: 1 Ottobre 2026 · **Status**: 💡 IDEA — da approfondire prima di pianificarla ·
+**Priorità**: Bassa
+
+### Contesto
+- Origine: la review del developer di L3° di Asset Global (scheda Correlazione), 01/10/2026. Il
+  parere di F è nel suo diario di avanzamento di L3°
+  (`LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/progress/F-L3-rischio-rendimento.md`,
+  ancora sul ramo di F).
+- Cambiando il periodo, i punti del grafico rischio/rendimento si spostano. Per mostrare
+  quell'evoluzione il developer propone una traccia: con un periodo di 1A, un punto per ciascun
+  trimestre, uniti da una linea. In letteratura esiste e si chiama *snail trail*: i punti
+  rischio/rendimento di sotto-periodi successivi, uniti nel tempo.
+
+### ⚠️ Perché non a trimestri dentro un anno
+- **Asse orizzontale, la volatilità**: si stima bene già su ~63 sedute (errore relativo ≈ 1/√(2n),
+  cioè 9–14% con le code grasse), e cambia davvero nel tempo, perché i mercati alternano fasi calme e
+  agitate. Qui la traccia direbbe il vero.
+- **Asse verticale, il rendimento medio annuo**: anche per un asset che non cambia affatto, la media
+  annualizzata di un sotto-periodo lungo T anni si scosta per puro caso di σ/√T. Su un trimestre fa
+  2σ: ±40 punti per un ETF azionario al 20% di volatilità, ±140 per una cripto al 70%. In più,
+  annualizzare un trimestre lo moltiplica per quattro: un +10% nel trimestre diventa «+40% annuo».
+- **Il risultato**: punti che saltano di decine di punti, e un'evoluzione che si vede ma non c'è. È
+  il grafico «plausibile ma sbagliato» che il laboratorio evita.
+- **La leggibilità**: N asset per 4 punti, più N linee che si incrociano.
+
+### Azione Futura — la versione onesta, se un giorno la si vuole
+- Solo per l'asset selezionato: la selezione collegata fra tabella e grafico di L3° c'è già.
+- Segmenti di un anno solare: il rendimento davvero ottenuto in quell'anno, un fatto e non
+  un'estrapolazione. Quindi solo per periodi di almeno 3 anni.
+- Calcolata dal motore (Risk): un campo nuovo nell'uscita di `asset_set_risk_return`, con le regole
+  di copertura per segmento.
+- Prima di disegnarla, un prototipo sui dati veri, per vedere se la traccia dice qualcosa di più del
+  rumore.
+- Per «come cambia il rischio nel tempo» esistono già gli indicatori Rolling Volatility e Rolling
+  Sharpe nel grafico dell'asset.
