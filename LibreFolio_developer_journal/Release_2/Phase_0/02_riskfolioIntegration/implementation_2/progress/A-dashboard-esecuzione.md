@@ -840,3 +840,154 @@ residual`).
 > **⚠️ Fuori pista — un confronto di lint invalido**, corretto prima di usarlo: black lanciato su una copia in `/tmp`
 > non legge `pyproject.toml` (lunghezza di riga predefinita 88 invece di 300). Rifatto via stdin con
 > `--stdin-filename`.
+
+---
+
+## Dal 01/10 16:30 al 17:12: decisioni e passaggi registrati mentre ero congelato
+
+> Scritto fuori dal worktree mentre il piano era congelato con il checkpoint (e poi in stage con la fusione);
+> riportato qui com'era, dopo il commit della fusione.
+
+
+
+## 01/10 16:32 — decisione del developer: quote sotto l'1 % con uno o due decimali
+Testuale: «si, per le quote sotto l'1% metti un decimale o due».
+
+**Misurato (sola lettura, 01/10)**:
+- L3, le due frasi sotto lo scatter (`L3RiskAdjusted.svelte:182`, `:185`): `digits: 0`, quindi «0 %» sotto lo 0,5 %.
+- L2, `share()` (`L2Diversification.svelte:156`, `digits: 1`): scheda «non misurato» (`:261`), riga del residuo
+  (`:276`), peso (`:305`) e contributo (`:309`) di ogni riga, che sono span di L2 accanto alle barre e non le barre
+  (`KpiDivergingFlowBar` resta fuori dal giro). «0.0%» sotto lo 0,05 %.
+- Nessun helper adattivo esistente (`utils/core/formatDecimal.ts` serve ad altro). `formatPercent` usa `toFixed`.
+
+**Regola proposta**: le cifre si decidono su |quota|; da 1 % in su resta il formato di oggi (0 cifre in L3, 1 in L2); sotto
+l'1 % 1 decimale; sotto lo 0,1 % 2 decimali; se con 2 decimali verrebbe «0.00%», si scrive «< 0.01%». Uno zero vero resta
+zero.
+**Dove**: un modulo mio nuovo in `levels/`, usato da L2 e L3, con test unitari ai confini → un file di test nuovo, da
+registrare in `risk-levels-unit` (`_frontend_portfolio.py:148`, `:292`): serve una concessione.
+**Quando**: dopo il commit del checkpoint 1. Toccare ora `L3RiskAdjusted.svelte` invaliderebbe la verifica di Risk.
+
+**✅ Approvata dal developer (01/10)**, con la sua test list: «Approvata: la faccio dopo il commit». Test unitari ai
+confini (1 %, 0,1 %, «< 0.01%», zero, negativi), rossi prima del codice, scritti da test-author. Si fa subito dopo il
+commit del checkpoint 1.
+
+## 01/10 16:52 — checkpoint 1 committato come `2b9362618`; in arrivo la fusione della punta di Risk `a7f1dbea4`
+- Albero pulito, nessuna fusione aperta (verificato in sola lettura).
+- **Pre-verifica della risoluzione di Risk** (`/tmp/libreFolio_a_runner_resolved.py`), fatta prima che la fusione si apra:
+  - rispetto alla sua parte (`a7f1dbea4`) cambia **solo** le due righe in conflitto (`:179`, `:324`);
+  - rispetto alla mia (`2b9362618`) aggiunge solo i suoi blocchi;
+  - la mia fusione a tre vie (base `d618e80ed`) trova **2 conflitti**, le stesse due righe;
+  - nel contenuto: elenco di esecuzione e `tests=` con 5 file (i 3 di prima, `L2Diversification.test.ts`,
+    `BenchmarkSelect.test.ts`); nella `desc` tutte le mie modifiche (26 pezzi a livello di carattere) più la sua frase
+    sul selettore condiviso; «joined by a middle dot» non c'è più.
+- **Quando la fusione è aperta**: confronto con `cmp`, in stage **solo** il runner, stato a Risk (unmerged 0, stage, cmp
+  OK). Dopo la sua verifica, validazione sulla 6153: `risk-levels-component` (5 file), `check-orphans`, `front check`,
+  `core-unit`/`component-unit`, E2E `risk` e `risk-benchmark-shared`. Poi FROZEN al coordinator.
+- **Dopo**, nel prossimo giro: `BenchmarkSelect` in `L3Benchmark` più i B1–B4 riapplicati con `git merge-file`; la regola
+  delle quote; `SYMBOL_BY_ROLE` e V6.
+- **Nessuna modifica all'albero** finché la fusione non è aperta e chiusa.
+
+## 01/10 17:00-17:10 — la fusione di Risk `a7f1dbea4` nel mio `2b9362618`: risolta, validata, FROZEN
+- **Fusione aperta** dallo script del coordinator: un solo file in conflitto, `_frontend_portfolio.py`, con 2 regioni
+  (`:179`, `:328`).
+- **Risoluzione**: `cp` del riferimento di Risk; `cmp` 0 sul file nell'albero e sul blob in stage; `py_compile` OK; in
+  stage **solo** quel file.
+- **Stato**: unmerged 0, fuori dallo stage 0, non tracciati 0, 274 file in stage, `write-tree`
+  `01a6c2d67673da4ab885a3a8469ec1a99bd450aa`.
+- **Rivisti i file della mia area uniti in automatico**:
+  - spec E2E: solo le due righe di Risk più un commento;
+  - i18n: le mie 4 chiavi intatte; dal lato di Risk 1 tolta e 8 cambiate, nessuna nel mio spazio;
+  - `scatterChartHelpers.ts` di F: solo aggiunte, nessun effetto senza `selectedId`.
+- **Prima della validazione, un `api sync`**: la fusione cambia il contratto (`schemas/risk.py` +21,
+  `horizon_observations`; `api/v1/fx.py`). Riscrive solo il client ignorato da git (`write-tree` uguale prima e dopo).
+- **Validazione sulla 6153, un comando alla volta (01/10)**:
+  1. `front build --debug` → OK;
+  2. `front check` → i soliti 3 errori, 0 in file risk;
+  3. `core-unit` → 107 file · 2896 test;
+  4. `component-unit` → 98 file · 2356 test;
+  5. `risk-levels-component` → **5 file** · 96 test;
+  6. `check-orphans` → tutto registrato, 292 test unitari e 93 E2E raggiungibili;
+  7. `i18n audit` → 3505 chiavi, complete;
+  8. E2E `risk` → **16 passed**;
+  9. E2E `risk-benchmark-shared` → **4 passed**.
+
+  Dopo: `write-tree` invariato, porte libere.
+- **FROZEN** al coordinator e a Risk, con l'albero in stage. Da riportare nel piano dopo il commit della fusione,
+  insieme alla decisione sulle quote.
+- **17:11 — il coordinator ha verificato la fusione**: albero in stage `01a6c2d67673…` (ricalcolato), 0/0/0; runner = riferimento;
+  solo il runner differisce dall'unione automatica di Git. Script di commit `/tmp/libreFolio_commit_a_merge_risk_tip.sh`
+  (prova a vuoto GUARDS_OK), messaggio ASCII `merge(risk): Risk's tip into A (shared benchmark, F's L3)` («°» tolto). Va
+  al developer. **FROZEN fino allo SHA**; poi il piano e il prossimo giro.
+
+- **17:12 — fusione committata dal developer**: `738ddc064`, genitori `2b9362618` + `a7f1dbea4`, albero `01a6c2d67673` =
+  quello in stage, albero di lavoro pulito (verificato dal coordinator e da me). Non sono più congelato.
+
+### Passo 8 (ripresa) — `L3Benchmark` sulla primitiva `BenchmarkSelect` · 🔶 01/10
+
+> **Note implementazione**:
+> - **B1–B4 riapplicati** sullo spec fuso con `git merge-file` (base = versione del checkpoint, full = versione con i
+>   B): fusione **pulita**, nessun marcatore. Le due righe di Risk restano (`:128` `30`, `:514`
+>   `horizon_observations`); prettier pulito; rispetto a HEAD `+371/−9`.
+> - **Rossi di nuovo, sul codice fuso di oggi** (`738ddc064`, prima di toccare `L3Benchmark`) → **5 failed**, sulle
+>   stesse clausole sostanziali del 01/10 mattina (trigger con il segnaposto, opzione posseduta assente, id morto
+>   pubblicato e mandato al server, `data-benchmark-state` assente). La base è cambiata con la fusione: rifare la prova
+>   non era formale.
+> - ⚠️ **Fuori pista — turno interrotto** da un errore del servizio subito dopo questa prova. Ripreso su richiesta di
+>   Risk, senza perdite: lo stato era nell'albero (spec e piano) e nel log `/tmp/libreFolio_a_e2e_bench_red2.log`.
+> - **Il codice** (`L3Benchmark.svelte`, `RiskLevelsPanel.svelte`):
+>   - `L3Benchmark` monta `BenchmarkSelect` con `bind:value`, `bind:state`, `measuredAssetIds={[]}`,
+>     `boxClass="w-full"` e `testid="risk-l3-benchmark-select"`. **Via** l'idratazione, `riskBenchmark.set`,
+>     `AssetSelect` e il `filter`; via anche la prop `excludeAssetIds`, che nessuno passa più.
+>   - Resta la logica del controller: l'effetto di avvio e il callback di `run()` (che il controller può richiamare
+>     da solo) partono **solo con `state === 'set'`**; `choose()` sposta l'epoca e azzera la risposta precedente, dopo
+>     che la primitiva ha già scritto store, valore e stato.
+>   - Il wrapper `risk-l3-benchmark` ripubblica `data-benchmark-id` (la scelta in vigore) e `data-benchmark-state`.
+>   - `RiskLevelsPanel`: `<L3Benchmark {controller} />`; `assetIds` serve ancora ai nomi e all'intestazione.
+>   - Direzione del menu (`auto`), `compact` e segnaposto ora vengono dalla primitiva, quindi il commento lungo su
+>     `dropdownPosition` se ne va con `AssetSelect`.
+> - **Verdi** (01/10, 6153):
+>   - B1–B4 → **5 passed**;
+>   - E2E `front-portfolio risk` → **21 passed** (16 + 5);
+>   - `risk-benchmark-shared` → **4 passed**;
+>   - `front check` → i soliti 3 errori, 0 nei miei file; prettier senza modifiche.
+> - ⚠️ **Fuori pista — il backend di test non è partito, una volta.** Primo lancio dei B dopo il codice
+>   (17:31): «Shared backend did not answer within 120s», **prima della raccolta dei test**. Nessun test eseguito,
+>   nessun DB toccato, porta libera dopo.
+>   - **Indagine**: il log dell'app non ha niente di quel tentativo (l'ultima riga è lo spegnimento delle 17:17), quindi
+>     il processo non è arrivato all'avvio dell'app. Il runner manda la sua uscita in `DEVNULL` (`_server.py:269`); il
+>     processo era vivo ma non rispondeva. Carico della macchina alto: 7,77 sui 15 minuti, con un'altra corsia sulla
+>     6161. I miei cambiamenti sono solo frontend.
+>   - **Rilanciato una volta lo stesso comando** (nessun aggiramento) alle 17:42: backend pronto, 5 passed. Causa
+>     probabile: avvio lento sotto carico. Non provata.
+
+### Passo 8 — i mutanti sulla logica del benchmark · ✅ 01/10
+
+> **Richiesta di Risk (17:58)**: checkpoint ora, solo il benchmark; prima due o tre mutanti con ripristino verificato
+> per sha256. Driver: `/tmp/libreFolio_a_bench_mutants.py`. Ogni mutante viene applicato, si lanciano i B sulla 6153 e
+> si ripristina il file, controllando lo sha256 di `L3Benchmark` `4927e201…` e `RiskLevelsPanel` `5d13ddaa…`.
+
+| mutante | esito | perché |
+|---|---|---|
+| **M1** l'effetto parte anche fuori da `set` (`!== 'none'`) | **sopravvive** (5 passed) | equivalente **con la primitiva di oggi**: dà a `value` un id solo con `set` (`BenchmarkSelect.svelte:50`, `:65-66`, `:81-82`), quindi `selected !== null` blocca lo stesso |
+| **M2** `run()` senza la guardia sullo stato | **sopravvive** (5 passed) | stessa ragione |
+| **M3** `measuredAssetIds={assetIds}` rimesso | **ucciso** da B2, Dashboard e Broker (2 failed) | l'asset posseduto sparisce dalla lista. B1 sopravvive, come previsto: la primitiva tiene comunque in lista la scelta corrente, con il ⚠ |
+| **M4** (aggiunto da me) lettura diretta dello store, aggirando la primitiva: il comportamento di prima | **ucciso** da B3 (1 failed) | l'id morto torna al server |
+
+- **Le guardie di M1/M2 restano, e non sono decorative**: i test della primitiva **non fissano apposta** cosa contengano
+  `value` e `data-benchmark-id` mentre lo stato è `pending` (`BenchmarkSelect.test.ts:45-47`). Il contratto permette quindi
+  una primitiva che mostri l'id salvato prima di confermarlo, e allora sarebbero queste due guardie a impedire a L3 di
+  misurare contro un id non confermato. Per ucciderli servirebbe un test di `L3Benchmark` con una primitiva finta che
+  pubblica `value = id` con `state = 'pending'`: **proposto**, non scritto (non era nella lista approvata).
+- ⚠️ **Fuori pista — il backend non è partito, di nuovo**: il primo lancio (M1) è finito «did not answer within 120s»
+  con carico 10,25. Rilanciato M1 da solo, identico: sopravvive. È la seconda volta oggi, sempre con la macchina carica.
+- **Dopo il ripristino**: E2E `front-portfolio risk` → **21 passed**, che ricostruisce anche `frontend/build`, dove era
+  rimasto compilato il mutante M1.
+
+## Checkpoint 2 del giro — solo il benchmark · 01/10 18:20
+
+- **Delta (4 percorsi)**: `frontend/src/lib/components/risk/levels/L3Benchmark.svelte`, `…/levels/RiskLevelsPanel.svelte`,
+  `frontend/e2e/portfolio/risk-analysis.spec.ts` (B1–B4 e helper, più il commento di `chooseBenchmark`), questo piano.
+- **Prove**: rossi B1–B4 rifatti sul codice fuso prima del codice (5 failed); verdi: B1–B4 5 passed, `risk` 21 passed (due
+  volte, prima e dopo i mutanti), `risk-benchmark-shared` 4 passed, `front check` con i soliti 3 errori, 0 nei miei file;
+  prettier pulito; mutanti come da tabella.
+- **Commit proposto**: `/tmp/libreFolio_commits/A-dashboard-ckpt2.txt`.

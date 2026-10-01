@@ -280,7 +280,7 @@
         </RiskLevelSection>
 
         <RiskLevelSection level={3} title={$t('risk.levels.l3.title')} testId="risk-level-3" docsPath="financial-theory/technical-analysis/risk-metrics/" health={levelErrorHealth(l3Health)} errorCodes={l3Errors} metadata={l3Metadata}>
-            <L3Benchmark {controller} excludeAssetIds={assetIds} />
+            <L3Benchmark {controller} />
             <L3RiskAdjusted {historicalResults} {currentResults} {assetNames} {appliedRiskFreePercent} comparisonResult={controller.comparisonResult} {benchmarkName} loading={initialLoading} />
         </RiskLevelSection>
 
