@@ -9,6 +9,7 @@
  */
 
 import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+import {escapeHtml} from '$lib/utils/core/escapeHtml';
 
 // =============================================================================
 // Types
@@ -68,15 +69,15 @@ export function signalLabelToHtml(info: SignalLabelInfo, truncateAt?: number): s
 
     // Icon (priority chain: custom icon_url → asset type PNG)
     if (info.iconUrl) {
-        parts.push(`<img src="${info.iconUrl}" alt="" style="width:14px;height:14px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:3px;display:inline-block;" />`);
+        parts.push(`<img src="${escapeHtml(info.iconUrl)}" alt="" style="width:14px;height:14px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:3px;display:inline-block;" />`);
     } else if (info.assetType) {
         const url = getAssetTypeIconUrl(info.assetType);
-        parts.push(`<img src="${url}" alt="" style="width:14px;height:14px;object-fit:contain;vertical-align:middle;margin-right:3px;display:inline-block;" />`);
+        parts.push(`<img src="${escapeHtml(url)}" alt="" style="width:14px;height:14px;object-fit:contain;vertical-align:middle;margin-right:3px;display:inline-block;" />`);
     }
 
     // Label text — optionally truncated (tooltip uses truncateAt=15, tables rely on CSS overflow)
     const displayLabel = truncateAt && info.label.length > truncateAt ? info.label.slice(0, truncateAt) + '…' : info.label;
-    parts.push(`<span style="vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:calc(100% - 40px);min-width:0;flex-shrink:1" title="${info.label}">${displayLabel}</span>`);
+    parts.push(`<span style="vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:calc(100% - 40px);min-width:0;flex-shrink:1" title="${escapeHtml(info.label)}">${escapeHtml(displayLabel)}</span>`);
 
     // Non-truncatable suffix (e.g. currency badge) — always visible
     if (info.suffix) {

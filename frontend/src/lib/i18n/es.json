@@ -1165,15 +1165,16 @@
       "period": "Longitud de la memoria del filtro en días. Valores más altos = más suave pero respuesta más lenta.",
       "offset": "Desplazamiento vertical como porcentaje del valor base. Mueve la señal arriba o abajo.",
       "currencyPair": "Selecciona un par FX para superponer sus datos de tipo de cambio en el gráfico.",
-      "emaPeriod": "Ventana retrospectiva en días. Corresponde al coeficiente $\\alpha = 2/(N+1)$. Más corto = reacción rápida, más largo = más suave.",
-      "fastPeriod": "Ventana EMA a corto plazo para la línea rápida del MACD. Estándar: 12 días. Valores más bajos reaccionan más rápido.",
-      "slowPeriod": "Ventana EMA a largo plazo para la línea lenta del MACD. Estándar: 26 días. Valores más altos capturan la tendencia de fondo.",
-      "signalPeriod": "Suavizado EMA aplicado a la línea MACD. Estándar: 9 días. Reduce el ruido en las señales de cruce.",
+      "emaPeriod": "Ventana retrospectiva en sesiones, los días con cotización. Corresponde al coeficiente $\\alpha = 2/(N+1)$. Más corto = reacción rápida, más largo = más suave.",
+      "fastPeriod": "Ventana EMA a corto plazo para la línea rápida del MACD. Estándar: 12 sesiones. Valores más bajos reaccionan más rápido.",
+      "slowPeriod": "Ventana EMA a largo plazo para la línea lenta del MACD. Estándar: 26 sesiones. Valores más altos capturan la tendencia de fondo.",
+      "signalPeriod": "Suavizado EMA aplicado a la línea MACD. Estándar: 9 sesiones. Reduce el ruido en las señales de cruce.",
       "multiplier": "Número de desviaciones estándar ($k \\cdot \\sigma$). $k=2$ cubre ~95% de los valores asumiendo distribución normal.",
       "overbought": "Nivel por encima del cual el activo se considera sobrecomprado. Estándar: 70. Valores cercanos a 100 indican fuerte presión compradora.",
       "oversold": "Nivel por debajo del cual el activo se considera sobrevendido. Estándar: 30. Valores cercanos a 0 indican fuerte presión vendedora.",
       "assetComparison": "Seleccione un activo para superponer su precio en este gráfico. En modo porcentaje, ambas curvas comienzan en 0%.",
-      "fxPair": "Seleccione un par FX para superponer su tipo de cambio en este gráfico. En modo porcentaje, ambas curvas comienzan en 0%."
+      "fxPair": "Seleccione un par FX para superponer su tipo de cambio en este gráfico. En modo porcentaje, ambas curvas comienzan en 0%.",
+      "sessionPeriod": "Ventana retrospectiva en sesiones, los días con cotización. Valores más altos = más suave pero respuesta más lenta."
     },
     "macdLineColor": "Color Línea MACD",
     "noDataAvailable": "No hay datos disponibles. Intenta sincronizar este activo/par.",
@@ -1524,7 +1525,8 @@
       "navigate_asset": "Ver activo",
       "navigate_fx": "Ver FX",
       "add_fx_pair": "Añadir par FX",
-      "sync_fx_pair": "Sincronizar"
+      "sync_fx_pair": "Sincronizar",
+      "sync_asset_prices": "Sincronizar"
     },
     "referencePriceFallback": "Precio de apertura del lote no disponible en la fecha exacta — se usa el último precio conocido {reference_price} como referencia para el rendimiento relativo",
     "referencePriceUnavailable": "No hay precio de referencia disponible para la apertura de un lote — no se puede calcular el rendimiento relativo",
@@ -2442,7 +2444,8 @@
       "riskFullHistory": "Mide el drawdown respecto al pico más alto de todo el historial disponible, no solo de la ventana visible. Desactívalo para una vista más rápida relativa a la ventana."
     },
     "units": {
-      "days": "días"
+      "days": "días",
+      "sessions": "sesiones"
     },
     "visual": {
       "components": "Componentes",
@@ -3106,7 +3109,7 @@
         "blankNote": "Un guion significa que la medición no fue posible para ese activo en esta ventana — no significa cero.",
         "l1": {
           "title": "¿Cuánto dolió cada uno?",
-          "description": "La misma escala de daño, preguntada a cada activo seleccionado. Solo porcentajes: un conjunto de activos no tiene pesos, así que no hay importe que mostrar.",
+          "description": "Para cada activo seleccionado, cuánto perdió en los peores momentos del periodo: el mal día, el mal mes, la caída más profunda y cuánto sigue por debajo de su máximo.",
           "lastedDays": "duró {days} d",
           "columns": {
             "badDay": "Mal día",
@@ -3114,15 +3117,30 @@
             "worstFall": "Peor caída",
             "currentFall": "Bajo el máximo",
             "toPeak": "Subida al máximo"
+          },
+          "columnHelp": {
+            "badDay": "La pérdida media en el 5 % de los peores días de la ventana (CVaR histórico al 95 %).",
+            "badMonth": "Como el mal día, pero en un tramo más largo de días consecutivos: la pérdida media en el 5 % de los peores tramos (CVaR histórico al 95 %).",
+            "worstFall": "La caída más profunda desde un máximo hasta el punto más bajo que la siguió dentro de la ventana, y cuánto duró.",
+            "currentFall": "Cuánto está el activo por debajo de su máximo de la ventana el último día.",
+            "toPeak": "Cuánto debe subir para volver a ese máximo: tras una caída del 20 % hace falta un +25 %."
           }
         },
         "l3": {
           "title": "¿Cuánto pagó cada uno por su riesgo?",
-          "description": "Riesgo frente a rentabilidad, un punto por activo. No se traza ninguna recta: una selección no tiene un todo, así que no hay nada por encima o por debajo.",
-          "expectedReturn": "Rentabilidad esperada",
+          "description": "Para cada activo seleccionado, cuánto osciló y cuánto rindió de media al año, en el gráfico y en la tabla; con un índice de referencia elegido en el Panel, también cuánto se movió junto a él.",
+          "expectedReturn": "Rentabilidad media anual",
           "correlation": "Correlación",
-          "noBenchmark": "Elige un índice de referencia en el Panel para añadir beta y correlación. Un índice que ya está en la selección no puede servirse de medida a sí mismo.",
-          "scatterNote": "Los puntos muestran la rentabilidad esperada en media-varianza: en un activo muy volátil la rentabilidad realmente vivida es menor, porque la volatilidad erosiona la capitalización."
+          "scatterNote": "Cada punto es un activo: el eje horizontal muestra cuánto osciló y el vertical cuánto rindió de media al año. En un activo muy volátil, la media es más alta que lo que rindió de verdad.",
+          "columnHelp": {
+            "volatility": "Cuánto oscilan las rentabilidades del activo, en base anual: la desviación típica de las rentabilidades del periodo, anualizada.",
+            "expectedReturn": "La media de las rentabilidades del periodo, llevada a un año según la frecuencia de las cotizaciones. Describe el pasado, no es una previsión. En un activo muy volátil es más alta que lo que rindió de verdad, porque las oscilaciones erosionan la rentabilidad compuesta.",
+            "sortino": "Cuánta rentabilidad media anual por cada unidad de oscilación a la baja: solo cuentan las caídas, no las subidas.",
+            "sharpe": "Cuánta rentabilidad media anual por cada unidad de volatilidad: la recompensa por el riesgo asumido, subidas y caídas por igual.",
+            "beta": "Cuánto se movió el activo cuando se movía el índice de referencia: 1 significa lo mismo, 2 el doble, 0 con independencia de él.",
+            "correlation": "Cuánto se movieron juntos el activo y el índice de referencia, de −1 (siempre opuestos) a +1 (siempre juntos)."
+          },
+          "axisReturn": "Rentabilidad media anual"
         }
       },
       "legend": {
@@ -3155,7 +3173,12 @@
       },
       "selectedCountHint": "El primer número cuenta los activos que el laboratorio está analizando ahora. El segundo cuenta cuántos podría analizar en el período elegido: todos los activos de LibreFolio, no solo los que posees, siempre que tengan suficientes precios en ese período. Los que no los tienen siguen en el «+», de solo lectura, con el motivo.",
       "parkedNote": "{count, plural, one {# activo seleccionado no es analizable en el período y queda fuera del análisis.} other {# activos seleccionados no son analizables en el período y quedan fuera del análisis.}}",
-      "eligibilityFailed": "No se pudo comprobar la idoneidad: todos los activos siguen seleccionables."
+      "eligibilityFailed": "No se pudo comprobar la idoneidad: todos los activos siguen seleccionables.",
+      "fitPeriod": {
+        "banner": "Con el período elegido, {count, plural, one {# activo seleccionado no tiene precios} other {# activos seleccionados no tienen precios}} en una parte del intervalo.",
+        "button": "Usar el período en que todos tienen precios (del {start} al {end})",
+        "hint": "Mueve el período de arriba al intervalo en que cotizan todos los activos seleccionados que tienen precios. Vuelven al análisis: {names}."
+      }
     },
     "metrics": {
       "volatility": "Volatilidad",
@@ -3529,6 +3552,9 @@
         "ineligible": "No analizable en el período",
         "warning": "Analizable, con un aviso"
       }
+    },
+    "benchmark": {
+      "measuredHere": "Este índice de referencia es también un activo medido aquí y no puede servir de medida de sí mismo: elige otro para la comparación."
     }
   },
   "updateCheck": {

@@ -96,7 +96,7 @@ The second section, **How much did each of these hurt?**, puts every selected as
 | Column | What it tells you |
 |---|---|
 | **Bad day** | The average loss on the worst 5% of days (CVaR 95%, one day) |
-| **Bad month** | The same over every run of 21 consecutive observations, compounded from real returns — not scaled up from the bad day. How long 21 observations last depends on the dates the tab counts: about a month when it counts market days only, three weeks when it counts every day — as it does when one of the selected assets comes from a source that records prices at weekends too (see [One Shared Window](#one-shared-window)) |
+| **Bad month** | The same over every run of 30 calendar days, compounded from real returns — not scaled up from the bad day. Those 30 days hold about 21 observations when the tab counts market days only, and 30 when it counts every day (see [One Shared Window](#one-shared-window)) |
 | **Worst fall** | The deepest drop from a peak to a later low within the window. The line under it, *lasted N d*, counts the calendar days from that peak until the asset was back at it — or until the end of the window, if it has not recovered |
 | **Below peak now** | How far the asset stands, at the end of the window, below the highest level it reached within the window |
 | **Rise to peak** | The gain it still needs to get back to that peak |
@@ -135,7 +135,13 @@ The last section, **What if…?**, starts closed: click its title to open it. On
 2. Press **Run replay**: the replay runs only when you ask for it.
 3. Read one bar per asset — what that asset actually returned over the period, worst first: losses to the left in red, gains to the right in green. There is no total, because a selection has no composition to add up.
 
-Like the other sections, the replay follows the rules of [One Shared Window](#one-shared-window), applied to its own period: an asset whose prices begin partway through the period moves the start of the replay for every asset, and an asset whose prices stopped before the period enters with its last price throughout, so its price never moves. If an asset cannot be valued at all over the period — no price up to its last day, or no exchange rate into the tab's currency — the replay stops and names it; the way forward offered on this tab is **Leave it out and run again**. Left-out assets are listed after **Left out:** — click one to bring it back, then run the replay again.
+The replay keeps its period, give or take the seven days of the [staleness threshold](../../financial-theory/technical-analysis/risk-metrics/data-quality.md#staleness-threshold): each asset must be priced at both ends of it. An asset that is not is **left out of the replay**: it gets no bar, and the other assets are replayed without it. The section is then marked **Partial**, and a note names the assets left out and says why — for example *First quote after the replay window began: … — left out of the replay.* If none of the selected assets can be replayed, the section is marked **Unavailable for the selected data**. An asset is left out when:
+
+- it has no price in the period, nor in the seven days before it begins;
+- it was quoted before the period, but not in the seven days before it begins;
+- its first price comes more than seven days after the period begins;
+- it has no price in the last seven days of the period;
+- its currency has no exchange rate into the tab's currency over the period.
 
 Changing the selection or the page's date range clears a finished replay: run it again for the new answer. See [Historical Replay](../../financial-theory/technical-analysis/risk-metrics/historical-replay.md) for the method.
 
@@ -150,15 +156,15 @@ A few properties of this tab are easy to misread. Each one is deliberate, not a 
 Every figure is measured over **one window, the same for every selected asset**. It is built from the page's date range — the date picker in the toolbar, the same one the Assets tab uses (the replay uses its own period, as described above) — by three rules:
 
 1. **It starts on the first day on which every selected asset can be valued** — has a price, and an exchange rate into the tab's currency if it is quoted in another. When they all can be valued from before the date range, the window simply starts with the range; an asset whose history begins later moves the start for all of them.
-2. **From there, every date on which at least one selected asset is quoted counts** — quoted meaning that a price was recorded for that very day. Some sources record prices at weekends too, and those weekends then count for the whole selection.
-3. **An asset that is not quoted on one of those dates enters with its last price**, so its price does not move that day: its return is zero — or, for an asset quoted in another currency, only the exchange rate's move. When that happens, every section measured over the window says so: its measurements are marked **Partial**, and its notes include *Risk result uses incomplete or carried-forward source data.*
+2. **From there, every date on which at least one selected asset is quoted counts** — quoted meaning that a price was recorded for that very day. A price recorded on a weekend or a market holiday is a **carry, not a quote**, when it repeats the previous close exactly (see [Stored Carries](../../financial-theory/technical-analysis/risk-metrics/data-quality.md#stored-carries)): it adds no date, so a weekend counts only when an asset's price really moved on it, as a crypto-asset's can.
+3. **An asset that is not quoted on one of those dates enters with its last price**, so its price does not move that day: its return is zero — or, for an asset quoted in another currency, only the exchange rate's move. Over a weekend, a holiday or a day on which only another market traded, that is ordinary and marks nothing. Only a price held over for **more than seven calendar days** — the [staleness threshold](../../financial-theory/technical-analysis/risk-metrics/data-quality.md#staleness-threshold) — makes every section measured over the window say so: its measurements are marked **Partial**, with a note naming the assets, as in *Prices older than 7 days for 1 asset: …*; an exchange rate held over for more than seven days does the same, with *Exchange rates older than 7 days: …*.
 
 A date on which one of the assets cannot be valued even so is left out for all of them. That is what makes the rows comparable: two assets side by side fell, rose and moved over exactly the same days.
 
 The price of that fairness is shared too:
 
 - **Adding an asset with a shorter history narrows the window for all of them, and their figures change.** Removing it widens the window again. This is expected, not an error.
-- **Adding an asset quoted on days the others are not adds those days for all of them** — a day its market is open and theirs is closed, or a weekend, when its source records prices then. On those days the others enter with their last price, so their figures change as well.
+- **Adding an asset quoted on days the others are not adds those days for all of them** — a day its market is open and theirs is closed, or a weekend on which its price really moves. On those days the others enter with their last price, so their figures change as well.
 - **A benchmark, when one applies, joins the window** of *How much did each of these hurt?* and *What did each of these pay for its risk?*, because it is measured together with the selection there: a benchmark with a shorter history narrows those two sections as well, and the days on which it is quoted count there too. The correlation matrix is computed without it and keeps the selection's own window.
 - **An asset that cannot be valued at all** over the window — no price up to its last day, or no exchange rate into the tab's currency — narrows nothing: it is left out of the calculation. It disappears from the matrix, keeps a row of dashes in the tables, and the sections say that an asset was excluded.
 
@@ -180,7 +186,7 @@ Rather than going blank, each section states its own condition in amber above it
 
 - which measurement fell short, and how — **Partial**, **Unavailable for the selected data** or **Calculation failed**;
 - for a measurement that did not run, the limit that stopped it — for example *Insufficient history for this calculation.*;
-- the calculation's own notes, such as prices carried forward from an earlier day or an asset excluded from the calculation.
+- the calculation's own notes, such as prices older than seven days or an asset excluded from the calculation.
 
 A **Partial** section still shows its figures: the notes say what they are missing.
 

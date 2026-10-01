@@ -61,8 +61,10 @@ from backend.app.services.signal_plugins.base import (
     SignalUnavailableError,
 )
 from backend.app.services.signal_series_preparation import (
+    SESSION_WARMUP_DAY_MULTIPLIER,
     build_signal_availability_warnings,
     build_signal_coverage,
+    quote_day_points,
     resolve_signal_availability,
     select_signal_computation_points,
     select_signal_events,
@@ -127,10 +129,25 @@ class SignalExecutionPlan:
     # drawdown). The fetch path then loads from the start of the available
     # history, not from a points-derived day count.
     requires_full_history: bool = False
+    # The same warm-up split by what a plugin counts: sessions (quote days) or calendar days.
+    max_session_total_points: int = 0
+    max_calendar_total_points: int = 0
 
     @property
     def max_history_points_before_visible(self) -> int:
         return self.max_total_points
+
+    @property
+    def max_history_days_before_visible(self) -> int:
+        """Calendar days of raw price history the plan needs before the visible start.
+
+        A plugin that computes on quote days counts sessions, and each takes more than one calendar
+        day; a plugin that counts calendar days asks for them directly.
+        """
+        return max(
+            self.max_session_total_points * SESSION_WARMUP_DAY_MULTIPLIER,
+            self.max_calendar_total_points,
+        )
 
     @property
     def max_prepared_history_points_before_visible(self) -> int:
@@ -192,6 +209,8 @@ class SignalService:
         preflight_results: dict[str, SignalResult] = {}
         max_total_points = 0
         max_prepared_total_points = 0
+        max_session_total_points = 0
+        max_calendar_total_points = 0
         requires_full_history = False
         required_price_fields: set[SignalPriceField] = set()
         requires_events = False
@@ -279,6 +298,10 @@ class SignalService:
                     )
                     if comparison_asset_id is not None:
                         comparison_asset_ids.add(comparison_asset_id)
+                elif plugin_class.computes_on_quote_days:
+                    max_session_total_points = max(max_session_total_points, requirement.total_points)
+                else:
+                    max_calendar_total_points = max(max_calendar_total_points, requirement.total_points)
                 required_price_fields.update(plugin_class.input_requirements.price_fields)
                 if plugin_class.input_requirements.requires_events:
                     requires_events = True
@@ -314,6 +337,8 @@ class SignalService:
             comparison_asset_ids=frozenset(comparison_asset_ids),
             annotation_requests=annotation_models,
             requires_full_history=requires_full_history,
+            max_session_total_points=max_session_total_points,
+            max_calendar_total_points=max_calendar_total_points,
         )
 
     async def execute(
@@ -733,6 +758,10 @@ class SignalService:
                 planned.requirement.minimum_points,
             )
         )
+        if plugin_class.computes_on_quote_days and not requirements.uses_prepared_asset_series:
+            # Indicators count sessions (developer's decision of 30/09/2026): the coverage above keeps its
+            # calendar meaning, while the plugin computes on the days a price was actually quoted.
+            selected_points = quote_day_points(selected_points)
         selected_events = select_signal_events(
             event_points,
             requirements.event_types,

@@ -1,11 +1,11 @@
 /**
  * scatterChartHelpers — the arithmetic behind the risk/return scatter.
  *
- * Split from the component for the reason every chart here is split: no chart
- * `.svelte` in this repository has a unit test, because mounting ECharts in
- * jsdom tests the mock rather than the drawing. The option object is the part
- * that carries the decisions, so it is built by a pure function and asserted
- * directly. `ScatterChart.svelte` is the drawing.
+ * Split from the component for the reason every chart here is split: mounting
+ * ECharts in jsdom tests the mock rather than the drawing. The option object is
+ * the part that carries the decisions, so it is built by a pure function and
+ * asserted directly, the selected point's look included. `ScatterChart.svelte`
+ * is the drawing; its own spec pins only the wiring.
  *
  * WHY THIS EXISTS AT ALL, given `LineChart` already draws points. `LineChart`
  * is a TIME SERIES: its `xAxis` is `{type: 'category', data: dates}`, and the
@@ -69,12 +69,29 @@ export interface ScatterOptionInput {
         return: string;
         capitalMarketLine: string;
     };
+    /**
+     * Id of the point the caller has selected, or `null`. That point is drawn larger,
+     * opaque and in the selection green; nothing else changes. An id that names no
+     * placed point highlights nothing, so the result is then the unselected one.
+     */
+    selectedId?: string | null;
 }
 
 /** Smallest a dot may be and still be clickable. */
 export const MIN_SYMBOL_PX = 8;
 /** Largest a bubble may be before it starts hiding its neighbours. */
 export const MAX_SYMBOL_PX = 44;
+
+/**
+ * How much larger the selected point is drawn than it would be otherwise. Applied past
+ * `MAX_SYMBOL_PX` too: the largest bubble must still grow when it is the one selected.
+ */
+const SELECTED_SYMBOL_SCALE = 1.5;
+
+/** The selection green, the hue of a selected table row, apart from every role colour. */
+function selectedColor(dark: boolean): string {
+    return dark ? '#4ade80' : '#22c55e';
+}
 
 const SYMBOL_BY_ROLE: Record<RiskReturnRole, string> = {
     portfolio: 'circle',
@@ -151,22 +168,28 @@ export interface ScatterOptionResult {
 }
 
 export function buildScatterOption(input: ScatterOptionInput): ScatterOptionResult {
-    const {points, riskFreeRate = 0, dark = false, labels} = input;
+    const {points, riskFreeRate = 0, dark = false, labels, selectedId = null} = input;
 
     const placeable = points.filter(isPlaceable);
     const droppedCount = points.length - placeable.length;
 
+    // The selected point keeps its series and its place in it: the highlight changes how
+    // it is drawn, never where it is filed.
     const byRole = (role: RiskReturnRole): ScatterDataItem[] =>
         placeable
             .filter((point) => point.role === role)
-            .map((point) => ({
-                value: [point.volatility, point.annualReturn] as [number, number],
-                name: point.name,
-                symbolSize: role === 'benchmark' ? MIN_SYMBOL_PX * 1.6 : symbolSizeForWeight(point.weight),
-                itemStyle: {color: colorForRole(role, dark), opacity: role === 'asset' ? 0.75 : 1},
-                role,
-                id: point.id,
-            }));
+            .map((point) => {
+                const size = role === 'benchmark' ? MIN_SYMBOL_PX * 1.6 : symbolSizeForWeight(point.weight);
+                const selected = point.id === selectedId;
+                return {
+                    value: [point.volatility, point.annualReturn] as [number, number],
+                    name: point.name,
+                    symbolSize: selected ? size * SELECTED_SYMBOL_SCALE : size,
+                    itemStyle: selected ? {color: selectedColor(dark), opacity: 1} : {color: colorForRole(role, dark), opacity: role === 'asset' ? 0.75 : 1},
+                    role,
+                    id: point.id,
+                };
+            });
 
     const axisColor = dark ? '#475569' : '#cbd5e1';
     const textColor = dark ? '#cbd5e1' : '#475569';

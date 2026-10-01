@@ -60,6 +60,7 @@ from backend.app.schemas.risk import (
 )
 from backend.app.services.provider_registry import RiskAnalyticRegistry
 from backend.app.services.risk.base import RiskAnalytic, RiskExecutionContext, RiskUnavailableError
+from backend.app.services.risk.metrics import historical_var_cvar
 from backend.app.services.risk.service import RiskService, _AnalyticPlan, _ScopeInputs
 from backend.app.services.risk_plugins.asset_risk_return import AssetRiskReturnAnalytic
 from backend.app.services.risk_plugins.asset_set_comparison import (
@@ -820,6 +821,94 @@ def test_asset_set_var_uses_the_coherent_tail_and_not_the_plug_in_mean():
     assert item.conditional_value_at_risk == pytest.approx(expected_cvar, rel=1e-9)
     assert item.conditional_value_at_risk >= item.value_at_risk
     assert item.conditional_value_at_risk != pytest.approx(plug_in_cvar, rel=1e-6)
+
+
+# ---------------------------------------------------------------------------
+# VaR horizons in calendar days (developer's decision of 30/09/2026)
+#
+# `horizon_days` is calendar days; the per-asset VaR compounds n = max(1, round(horizon_days × f /
+# 365)) observations, f being the prepared set's observed factor. Checked rather than assumed: for an
+# asset set the context's factor is the prepared set's, since only the portfolio TWRR overrides it.
+# The weekday fixture goes through the production preparation, so its factor is observed (40
+# weekdays over 56 calendar days: ≈ 260.7), never declared.
+# ---------------------------------------------------------------------------
+
+WEEKDAY_BASELINE = date(2026, 1, 2)  # a Friday
+
+
+def weekday_prepared_set(weeks: int, *, drop_last: int = 0) -> PreparedAssetSeriesSet:
+    """Two assets quoted Monday to Friday for `weeks` weeks after the baseline, `drop_last` weekdays short."""
+    calendar = [WEEKDAY_BASELINE + timedelta(days=offset) for offset in range(1, 7 * weeks + 1)]
+    weekdays = [day for day in calendar if day.weekday() < 5][: 5 * weeks - drop_last]
+    results = []
+    for asset_id, amplitude, phase in ((CHOPPY_ASSET_ID, 0.02, 0.7), (STEADY_ASSET_ID, 0.012, 0.4)):
+        close = Decimal("100")
+        prices = {WEEKDAY_BASELINE: "100"}
+        for index, day in enumerate(weekdays):
+            close = (close * Decimal(str(1 + amplitude * math.sin(index * phase) + 0.001))).quantize(Decimal("0.000001"))
+            prices[day] = str(close)
+        results.append(price_result(asset_id, prices))
+    return prepare_asset_series_set(results, requested_range=DateRangeModel(start=weekdays[0], end=weekdays[-1]), target_currency="EUR")
+
+
+def daily_prepared_set(observations: int) -> PreparedAssetSeriesSet:
+    """The same two assets quoted every calendar day: an observed factor of 365."""
+    return make_prepared_set(
+        {
+            CHOPPY_ASSET_ID: [0.02 * math.sin(index * 0.7) + 0.001 for index in range(observations)],
+            STEADY_ASSET_ID: [0.012 * math.sin(index * 0.4) + 0.001 for index in range(observations)],
+        }
+    )
+
+
+def compute_asset_set_var(prepared: PreparedAssetSeriesSet, horizon_days: int) -> RiskAssetSetVarCvarOutput:
+    context = asset_set_context({}, scope_asset_ids=(CHOPPY_ASSET_ID, STEADY_ASSET_ID), prepared=prepared)
+    # The check the contract asked for: one factor, whichever of the two the plugin reads.
+    assert context.annualization_factor == prepared.annualization_factor
+    return AssetSetVarAnalytic().compute(AssetSetVarParams(confidence_level=0.95, horizon_days=horizon_days), context).output
+
+
+@pytest.mark.parametrize(
+    ("prepared_factory", "horizon_days", "horizon_observations"),
+    [
+        pytest.param(lambda: weekday_prepared_set(8), 30, 21, id="a-month-of-weekday-series"),
+        pytest.param(lambda: weekday_prepared_set(8), 1, 1, id="a-day-is-never-less-than-one-observation"),
+        pytest.param(lambda: daily_prepared_set(60), 30, 30, id="a-month-of-series-quoted-every-day"),
+    ],
+)
+def test_asset_set_var_compounds_the_observations_its_calendar_horizon_holds(prepared_factory, horizon_days, horizon_observations):
+    prepared = prepared_factory()
+
+    output = compute_asset_set_var(prepared, horizon_days)
+
+    assert output.horizon_days == horizon_days
+    assert output.horizon_observations == horizon_observations
+    assert output.observations == prepared.n_observations - horizon_observations + 1
+    series = {item.returns.asset_id: [point.value for point in item.returns.points] for item in prepared.series}
+    assert [item.asset_id for item in output.items] == [CHOPPY_ASSET_ID, STEADY_ASSET_ID]
+    for item in output.items:
+        expected = historical_var_cvar(series[item.asset_id], confidence_level=0.95, horizon_observations=horizon_observations)
+        assert item.value_at_risk == pytest.approx(expected.value_at_risk, rel=1e-12)
+        assert item.conditional_value_at_risk == pytest.approx(expected.conditional_value_at_risk, rel=1e-12)
+
+
+def test_asset_set_var_counts_its_history_floor_in_horizon_observations():
+    analytic = AssetSetVarAnalytic()
+    # Forty weekdays hold twenty compounded windows of 21 observations: exactly the floor.
+    enough = compute_asset_set_var(weekday_prepared_set(8), 30)
+    assert (enough.horizon_observations, enough.observations) == (21, analytic.min_observations)
+
+    # One weekday fewer, one window short — refused for the whole request, stating both horizons.
+    with pytest.raises(RiskUnavailableError) as refused:
+        compute_asset_set_var(weekday_prepared_set(8, drop_last=1), 30)
+
+    assert refused.value.code == RiskErrorCode.INSUFFICIENT_HISTORY
+    details = refused.value.details
+    assert (details["horizon_days"], details["horizon_observations"], details["observations"], details["required"]) == (30, 21, 19, analytic.min_observations)
+
+
+def test_asset_set_var_calendar_horizon_is_a_new_algorithm_version():
+    assert AssetSetVarAnalytic.algorithm_version == "2.0.0"
 
 
 def test_asset_set_drawdown_states_one_window_once_and_one_episode_per_asset():

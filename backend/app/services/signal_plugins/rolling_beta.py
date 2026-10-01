@@ -72,12 +72,15 @@ class RollingBetaPlugin(SignalPlugin):
     """Estimate rolling sample beta on a canonical joint return calendar."""
 
     signal_code = "RISK_ROLLING_BETA"
-    implementation_version = "1.0.0"
+    # 1.1.0 — the prepared series drop stored carries and read the market holidays.
+    implementation_version = "1.1.0"
+    computes_on_quote_days = False
     display_name_key = "signals.riskRollingBeta.name"
     description_key = "signals.riskRollingBeta.description"
     semantic_id = "rolling_beta"
     semantic_description = "Estimates rolling sensitivity to a real comparison asset."
     icon = "β"
+    docs_path = "financial-theory/technical-analysis/risk-metrics/beta-active-return/"
     category = SignalCategory.RISK
     params_model = RollingBetaParams
     input_requirements = SignalInputRequirements(

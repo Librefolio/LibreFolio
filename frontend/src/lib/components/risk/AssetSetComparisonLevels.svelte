@@ -49,9 +49,12 @@
      * happened to catch it.
      */
     import {_ as t} from '$lib/i18n';
-    import {createRiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
+    import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
+    import type DataTable from '$lib/components/table/DataTable.svelte';
+    import {ANSWER_DISCARDED_CODE, createRiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
 
     import AssetSetLossComparisonSection from './AssetSetLossComparisonSection.svelte';
+    import type {AssetSetHurtRow, AssetSetPaidRow} from './assetSetLevels';
     import AssetSetRiskReturnSection from './AssetSetRiskReturnSection.svelte';
     import {ASSET_SET_DAILY_VAR_INSTANCE, ASSET_SET_MONTHLY_VAR_INSTANCE, resultByCode, resultByInstance} from './riskAnalysisHelpers';
     import {degradedResults, levelMetadata, resultErrorCodes, resultReasons} from './levels/levelHelpers';
@@ -61,6 +64,8 @@
         /** Already non-empty: the caller's `{#if}` is the guard, see above. */
         assetIds: number[];
         assetLabels: ReadonlyMap<number, string>;
+        /** Each asset's icon URL, resolved by the panel, for the loss table's asset cells. */
+        assetIcons: ReadonlyMap<number, string>;
         dateStart: string;
         dateEnd: string;
         targetCurrency: string;
@@ -76,7 +81,7 @@
         refreshVersion?: number;
     }
 
-    let {assetIds, assetLabels, dateStart, dateEnd, targetCurrency, benchmarkId, refreshVersion = 0}: Props = $props();
+    let {assetIds, assetLabels, assetIcons, dateStart, dateEnd, targetCurrency, benchmarkId, refreshVersion = 0}: Props = $props();
 
     const controller = createRiskPanelController(
         () => ({
@@ -120,12 +125,18 @@
 
     let l1Health = $derived(degradedResults(l1Results, VAR_LABELS));
     let l1Reasons = $derived(resultReasons(l1Results, $t));
-    let l1Errors = $derived(resultErrorCodes(l1Results));
+    /**
+     * A base answer discarded twice running is said once, by the frame, with the same
+     * code the replay and the Dashboard's L4 use (`answer_discarded`); the body only
+     * offers the retry. Without it both levels showed their rows of dashes in silence.
+     */
+    let discardedCodes = $derived(controller.loadDiscarded ? [ANSWER_DISCARDED_CODE] : []);
+    let l1Errors = $derived([...resultErrorCodes(l1Results), ...discardedCodes]);
     let l1Metadata = $derived(levelMetadata(l1Results));
 
     let l3Health = $derived(degradedResults(l3Results));
     let l3Reasons = $derived(resultReasons(l3Results, $t));
-    let l3Errors = $derived(resultErrorCodes(l3Results));
+    let l3Errors = $derived([...resultErrorCodes(l3Results), ...discardedCodes]);
     let l3Metadata = $derived(levelMetadata(l3Results));
 
     /**
@@ -138,12 +149,29 @@
      * inapplicable comparison.
      */
     let benchmarkApplies = $derived(benchmarkId !== null && comparison?.status === 'ok');
+
+    /**
+     * The loss table's instance, bound while the table is on screen. The column toggle
+     * it feeds sits in the frame's header beside the manual (the developer's review,
+     * 30/09), and only while there is a table to act on.
+     */
+    let lossTable = $state<DataTable<AssetSetHurtRow>>();
+    /** L3°'s table, the same way: its toggle beside L3°'s manual, only while the table is shown. */
+    let riskTable = $state<DataTable<AssetSetPaidRow>>();
 </script>
 
-<RiskLevelSection title={$t('risk.assetSet.levels.l1.title')} level={1} testId="risk-asset-set-loss" health={l1Health} reasons={l1Reasons} errorCodes={l1Errors} metadata={l1Metadata} docsPath="financial-theory/technical-analysis/risk-metrics/">
-    <AssetSetLossComparisonSection {assetIds} {assetLabels} {dailyVar} {monthlyVar} {drawdown} loading={controller.initialLoading} />
+<RiskLevelSection title={$t('risk.assetSet.levels.l1.title')} level={1} testId="risk-asset-set-loss" health={l1Health} reasons={l1Reasons} errorCodes={l1Errors} metadata={l1Metadata} docsPath="financial-theory/technical-analysis/risk-metrics/" actions={lossTable ? lossActions : undefined}>
+    <AssetSetLossComparisonSection bind:tableRef={lossTable} {assetIds} {assetLabels} {assetIcons} {dailyVar} {monthlyVar} {drawdown} loading={controller.initialLoading} failed={controller.loadError} discarded={controller.loadDiscarded} onretry={() => void controller.loadBase(true)} />
 </RiskLevelSection>
 
-<RiskLevelSection title={$t('risk.assetSet.levels.l3.title')} level={3} testId="risk-asset-set-paid" health={l3Health} reasons={l3Reasons} errorCodes={l3Errors} metadata={l3Metadata} docsPath="financial-theory/technical-analysis/risk-metrics/">
-    <AssetSetRiskReturnSection {assetIds} {assetLabels} {riskReturn} {kpi} {comparison} {benchmarkApplies} loading={controller.initialLoading} />
+{#snippet lossActions()}
+    <ColumnVisibilityToggle tableRef={lossTable} />
+{/snippet}
+
+{#snippet riskActions()}
+    <ColumnVisibilityToggle tableRef={riskTable} />
+{/snippet}
+
+<RiskLevelSection title={$t('risk.assetSet.levels.l3.title')} level={3} testId="risk-asset-set-paid" health={l3Health} reasons={l3Reasons} errorCodes={l3Errors} metadata={l3Metadata} docsPath="financial-theory/technical-analysis/risk-metrics/" actions={riskTable ? riskActions : undefined}>
+    <AssetSetRiskReturnSection bind:tableRef={riskTable} {assetIds} {assetLabels} {assetIcons} {riskReturn} {kpi} {comparison} {benchmarkApplies} loading={controller.initialLoading} failed={controller.loadError} discarded={controller.loadDiscarded} onretry={() => void controller.loadBase(true)} />
 </RiskLevelSection>

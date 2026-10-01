@@ -6,10 +6,10 @@ import inspect
 import json
 import re
 from datetime import timedelta
-from pathlib import Path
 
 import pytest
 
+from backend.app.config import PROJECT_ROOT
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.signals import (
     SignalAggregationProfile,
@@ -28,6 +28,7 @@ from backend.app.schemas.signals import (
     SignalWarningCode,
 )
 from backend.app.services.provider_registry import SignalPluginRegistry
+from backend.app.services.signal_plugins.base import SignalPlugin
 from backend.app.services.signal_service import SignalService
 from backend.test_scripts.fixtures.signals.plugin_test_utils import (
     VISIBLE_POINTS,
@@ -175,6 +176,85 @@ EXPECTED_SEMANTIC_IDS = {
         ],
     ),
 }
+DOCS_ROOT = PROJECT_ROOT / "mkdocs_src" / "docs"
+# DocsLink opens `/mkdocs/<lang>/<docs_path>` as-is: relative (no leading
+# slash), directory-style (trailing slash), as every declared value is.
+# Lowercase too: the page-exists check below is case-insensitive on macOS,
+# the served site is not.
+DOCS_PATH_SHAPE = re.compile(r"(?:[a-z0-9][a-z0-9_-]*/)+")
+# Pinned so an edit cannot silently repoint a risk signal's in-app guide.
+EXPECTED_RISK_DOCS_PATHS = {
+    "RISK_DRAWDOWN": "financial-theory/technical-analysis/risk-metrics/current-drawdown/",
+    "RISK_ROLLING_RETURN": "financial-theory/fundamentals/returns/",
+    "RISK_ROLLING_VOLATILITY": "financial-theory/technical-analysis/risk-metrics/volatility/",
+    "RISK_ROLLING_SHARPE": "financial-theory/technical-analysis/risk-metrics/sharpe-ratio/",
+    "RISK_ROLLING_BETA": "financial-theory/technical-analysis/risk-metrics/beta-active-return/",
+    "ASSET_CALENDAR_ROLLING_RETURN": "financial-theory/fundamentals/returns/",
+}
+CALENDAR_CODE = "ASSET_CALENDAR_ROLLING_RETURN"
+# Developer's decision of 30/09/2026: technical indicators compute on quote days
+# («SMA 200 = 200 sedute»). The calendar return keeps calendar windows by design
+# and the prepared risk signals already run on the prepared quote calendar, so
+# those six opt out.
+QUOTE_DAY_CODES = LEGACY_CODES
+CALENDAR_INPUT_CODES = RISK_CODES | {CALENDAR_CODE}
+# The seventeen indicators change their numbers (major); the prepared risk
+# signals change their input (holidays; minor); the calendar return keeps its
+# numbers but now reports a stored weekend or holiday repeat as carried (minor).
+EXPECTED_IMPLEMENTATION_VERSIONS = {
+    **dict.fromkeys(LEGACY_CODES, "2.0.0"),
+    "RISK_DRAWDOWN": "1.2.0",
+    "RISK_ROLLING_BETA": "1.1.0",
+    "RISK_ROLLING_RETURN": "1.1.0",
+    "RISK_ROLLING_SHARPE": "1.1.0",
+    "RISK_ROLLING_VOLATILITY": "1.1.0",
+    CALENDAR_CODE: "1.4.0",
+}
+# The unit and tooltip of every param, per plugin: (x-suffix, x-tooltip-key). An
+# indicator period counts sessions and says so; the calendar return and the rolling
+# risk windows keep days. The shared period tooltip moves to `sessionPeriod`
+# (`period` stays for the frontend Sine benchmark, where days are real); the
+# EMA, MACD/PPO and StochRSI period tooltips keep their own keys.
+SESSION_PERIOD = ("sessions", "chartSettings.tooltips.sessionPeriod")
+MACD_PPO_PERIODS = {
+    "fastPeriod": ("sessions", "chartSettings.tooltips.fastPeriod"),
+    "slowPeriod": ("sessions", "chartSettings.tooltips.slowPeriod"),
+    "signalPeriod": ("sessions", "chartSettings.tooltips.signalPeriod"),
+}
+EXPECTED_PARAM_UNITS = {
+    "ADX": {"period": SESSION_PERIOD},
+    "AROON": {"period": SESSION_PERIOD},
+    "ATR": {"period": SESSION_PERIOD},
+    "BOLLINGER": {"period": SESSION_PERIOD, "multiplier": ("σ", "chartSettings.tooltips.multiplier")},
+    "CCI": {"period": SESSION_PERIOD},
+    "DONCHIAN": {"period": SESSION_PERIOD},
+    "EMA": {"period": ("sessions", "chartSettings.tooltips.emaPeriod"), "offset": ("%", "chartSettings.tooltips.offset")},
+    "KAMA": {"period": SESSION_PERIOD},
+    "MACD": MACD_PPO_PERIODS,
+    "MFI": {"period": SESSION_PERIOD, "overbought": (None, "chartSettings.tooltips.overbought"), "oversold": (None, "chartSettings.tooltips.oversold")},
+    "NATR": {"period": SESSION_PERIOD},
+    "OBV": {},
+    "PPO": MACD_PPO_PERIODS,
+    "ROC": {"period": SESSION_PERIOD},
+    "RSI": {"period": SESSION_PERIOD, "overbought": (None, "chartSettings.tooltips.overbought"), "oversold": (None, "chartSettings.tooltips.oversold")},
+    "SMA": {"period": SESSION_PERIOD},
+    "STOCH_RSI": {
+        "period": ("sessions", "signals.tooltips.stochRsiPeriod"),
+        "dPeriod": ("sessions", "signals.tooltips.dPeriod"),
+        "overbought": (None, "chartSettings.tooltips.overbought"),
+        "oversold": (None, "chartSettings.tooltips.oversold"),
+    },
+    "RISK_DRAWDOWN": {"full_history": (None, "signals.tooltips.riskFullHistory")},
+    "RISK_ROLLING_BETA": {"window": ("days", "signals.tooltips.riskWindow"), "comparison_asset_id": (None, "signals.tooltips.comparisonAsset")},
+    "RISK_ROLLING_RETURN": {"window": ("days", "signals.tooltips.riskWindow")},
+    "RISK_ROLLING_SHARPE": {"window": ("days", "signals.tooltips.riskWindow"), "risk_free_annual_rate": (None, "signals.tooltips.riskFreeAnnualRate")},
+    "RISK_ROLLING_VOLATILITY": {"window": ("days", "signals.tooltips.riskWindow")},
+    CALENDAR_CODE: {"window_days": ("days", "signals.tooltips.riskWindow")},
+}
+I18N_CATALOGS = {language: PROJECT_ROOT / "frontend" / "src" / "lib" / "i18n" / f"{language}.json" for language in ("en", "it", "fr", "es")}
+# A word unit is looked up as `signals.units.<suffix>`; a symbol (%, σ) is rendered as
+# itself by the parameter control when no such key exists.
+WORD_UNIT = re.compile(r"[a-z]+")
 
 
 @pytest.fixture(scope="module")
@@ -212,11 +292,6 @@ def test_registry_has_twenty_two_complete_definitions():
 
     for definition in definitions:
         assert definition.implementation_version
-        if definition.signal_code in LEGACY_CODES:
-            assert definition.docs_path
-        if definition.docs_path:
-            documentation = Path("mkdocs_src/docs") / f"{definition.docs_path.rstrip('/')}.en.md"
-            assert documentation.is_file()
         assert definition.params_schema["additionalProperties"] is False
         assert definition.output_specs
         assert len({spec.key for spec in definition.output_specs}) == len(definition.output_specs)
@@ -261,6 +336,20 @@ def test_registry_has_twenty_two_complete_definitions():
     ):
         assert forbidden not in serialized
 
+    # docs_path is what makes a signal's in-app guide button appear, so every
+    # *registered* plugin must declare one. Walked through the registry, not
+    # list_definitions(), which omits catalog-hidden plugins such as
+    # ASSET_CALENDAR_ROLLING_RETURN. Each rule collects every offending code.
+    docs_paths = {code: SignalPluginRegistry.get_plugin(code).catalog_definition().docs_path for code in sorted(SignalPluginRegistry.list_plugin_codes())}
+    without_docs_path = [code for code, docs_path in docs_paths.items() if not docs_path]
+    assert not without_docs_path, f"signals without docs_path: {', '.join(without_docs_path)}"
+    misshaped = {code: docs_path for code, docs_path in docs_paths.items() if not DOCS_PATH_SHAPE.fullmatch(docs_path)}
+    assert not misshaped, f"docs_path must be relative, lowercase and end with '/': {misshaped}"
+    without_page = {code: docs_path for code, docs_path in docs_paths.items() if not (DOCS_ROOT / f"{docs_path.rstrip('/')}.en.md").is_file()}
+    assert not without_page, f"docs_path with no .en.md page under {DOCS_ROOT}: {without_page}"
+    repointed = [f"{code}: declared {docs_paths.get(code)!r}, pinned {pinned!r}" for code, pinned in EXPECTED_RISK_DOCS_PATHS.items() if docs_paths.get(code) != pinned]
+    assert not repointed, f"risk signals off their pinned guide: {'; '.join(repointed)}"
+
 
 def test_all_plugin_outputs_declare_exact_aggregation_profile_matrix():
     definitions = {definition.signal_code: definition for definition in SignalPluginRegistry.list_definitions()}
@@ -297,6 +386,64 @@ def test_asset_only_field_rich_plugins_allow_partial_contiguous_input():
         else:
             assert requirements.data_policy == SignalDataPolicy.STRICT_CONTIGUOUS
             assert requirements.minimum_coverage == 1.0
+
+
+def test_every_registered_plugin_declares_whether_it_computes_on_quote_days():
+    """T9 — True by default; the calendar return and the five prepared risk signals opt out."""
+    assert getattr(SignalPlugin, "computes_on_quote_days", None) is True
+    registered = set(SignalPluginRegistry.list_plugin_codes())
+    assert registered == ALL_CODES | {CALENDAR_CODE}
+    declared = {code: getattr(SignalPluginRegistry.get_plugin(code), "computes_on_quote_days", "<not declared>") for code in sorted(registered)}
+
+    assert {code for code, value in declared.items() if value is True} == QUOTE_DAY_CODES, declared
+    assert {code for code, value in declared.items() if value is False} == CALENDAR_INPUT_CODES, declared
+    # The opt-outs are exactly the prepared-series plugins plus the sparse calendar input.
+    opted_out = {code for code, value in declared.items() if value is False}
+    prepared = {code for code in registered if SignalPluginRegistry.get_plugin(code).input_requirements.uses_prepared_asset_series}
+    assert opted_out == prepared | {CALENDAR_CODE}
+
+
+def test_implementation_versions_follow_the_quote_day_change():
+    """T9 — pinned per plugin, so a bump on one side only cannot stay green."""
+    versions = {code: SignalPluginRegistry.get_plugin(code).implementation_version for code in SignalPluginRegistry.list_plugin_codes()}
+
+    assert versions == EXPECTED_IMPLEMENTATION_VERSIONS
+
+
+def _declared_param_units(signal_code: str) -> dict[str, tuple[str | None, str | None]]:
+    """(x-suffix, x-tooltip-key) of every param, read from the schema the catalog serves."""
+    properties = SignalPluginRegistry.get_plugin(signal_code).catalog_definition().params_schema.get("properties", {})
+    return {key: (schema.get("x-suffix"), schema.get("x-tooltip-key")) for key, schema in properties.items()}
+
+
+def _translation(catalog: dict, dotted_key: str) -> object:
+    node: object = catalog
+    for part in dotted_key.split("."):
+        node = node.get(part) if isinstance(node, dict) else None
+    return node
+
+
+def test_every_registered_plugin_has_its_param_units_pinned():
+    assert set(EXPECTED_PARAM_UNITS) == set(SignalPluginRegistry.list_plugin_codes())
+
+
+@pytest.mark.parametrize("signal_code", sorted(EXPECTED_PARAM_UNITS))
+def test_period_params_declare_sessions_or_days_and_their_tooltip(signal_code):
+    """An indicator period is a number of sessions; the calendar return and the rolling risk windows are days."""
+    assert _declared_param_units(signal_code) == EXPECTED_PARAM_UNITS[signal_code]
+
+
+def test_every_param_tooltip_and_word_unit_is_translated_in_the_four_catalogs():
+    """The pinned keys and the declared ones alike, so a key renamed in the plugins is checked too."""
+    units = [unit for code in EXPECTED_PARAM_UNITS for unit in (*EXPECTED_PARAM_UNITS[code].values(), *_declared_param_units(code).values())]
+    keys = {tooltip for _suffix, tooltip in units if tooltip} | {f"signals.units.{suffix}" for suffix, _tooltip in units if suffix and WORD_UNIT.fullmatch(suffix)}
+    # Premise: both word units and the moved tooltip are among the keys checked.
+    assert {"signals.units.days", "signals.units.sessions", "chartSettings.tooltips.sessionPeriod"} <= keys
+    catalogs = {language: json.loads(path.read_text(encoding="utf-8")) for language, path in I18N_CATALOGS.items()}
+
+    untranslated = {language: sorted(key for key in keys if not (isinstance(text := _translation(catalog, key), str) and text.strip())) for language, catalog in catalogs.items()}
+
+    assert untranslated == dict.fromkeys(I18N_CATALOGS, [])
 
 
 def test_full_plan_aggregates_all_fields_and_max_warmup(neutral_points):

@@ -238,7 +238,7 @@
         },
         "borsa-italiana-scraping": {
             "git": "https://github.com/Librefolio/borsaItaliana-scraping.git",
-            "ref": "b3a8058da946688a000c5d56807806ef01336a5f"
+            "ref": "95d6a59d1b91c8b8dd360562cf4dbe00658fe0bc"
         },
         "build": {
             "hashes": [
@@ -1040,11 +1040,11 @@
         },
         "idna": {
             "hashes": [
-                "sha256:5e0811a4383b21dc5838069f801c4fb62113b7447663d2530d2bd6e77b49bf15",
-                "sha256:815e7be7a7806d54abb586dc943addc79e8b2ee16915059658cbeff4b1b43bf4"
+                "sha256:a7db850025b95ded1eae8a46181a1a6c56c92c96f0e2b005d9ff8dc0210cab44",
+                "sha256:ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c"
             ],
             "markers": "python_version >= '3.9'",
-            "version": "==3.19"
+            "version": "==3.20"
         },
         "interface-meta": {
             "hashes": [
@@ -2850,11 +2850,11 @@
         },
         "soupsieve": {
             "hashes": [
-                "sha256:4a55d8cf158a9c2e587fa4922f1bbb91d68ac829e2d6f25403a85747c71daf74",
-                "sha256:8089a26fd974ca7a1f30276d3d8492ab266ab15af581642dfe8aa162e0c1c823"
+                "sha256:49e9380d7d2905463583bafe285e818c7366a9ed7b3aee221c1ac79c905d8bc0",
+                "sha256:8596eb8967d744174820280fa62b4542a2e955bfaccca73ed8a13c6eb8e9b502"
             ],
             "markers": "python_version >= '3.10'",
-            "version": "==2.9.2"
+            "version": "==2.10"
         },
         "sparsediffpy": {
             "hashes": [

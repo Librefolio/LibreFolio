@@ -35,6 +35,7 @@ import {login, navigateTo} from '../fixtures/auth-helpers';
 import {expectChartCanvas} from '../fixtures/charts';
 import {TEST_USER} from '../fixtures/test-users';
 import {schemas} from '../../src/lib/api/generated';
+import {OVERFLOW_MARQUEE_SELECTOR} from '../../src/lib/actions/scrollOnOverflow';
 
 type RiskScope = {kind: 'asset'; asset_id: number} | {kind: 'asset_set'; asset_ids: number[]} | {kind: 'portfolio'; broker_ids?: number[] | null};
 
@@ -92,6 +93,30 @@ const MONEY_PATTERN = /12[.,\u00a0\u202f\u2009 ]?345[.,]67/;
  * page: percentages and coefficients carry no group, counts carry no decimals.
  */
 const GROUPED_AMOUNT_PATTERN = /\d{1,3}(?:[.,\u00a0\u202f\u2009 ]\d{3})+[.,]\d{2}(?!\d)/;
+
+/**
+ * What a masked amount reads under global privacy: `PRIVACY_PLACEHOLDER` of
+ * `utils/privacy/maskable.ts`, copied because the spec cannot import a module
+ * that reads the privacy store.
+ *
+ * Only money formatters produce it — `formatPercent` masks nothing — so on this
+ * page, where no amount may exist, the placeholder is an amount that reached the
+ * renderer with its number hidden.
+ */
+const MASKED_AMOUNT = '•••';
+
+/**
+ * A figure with a currency beside it, in either order, masked or in clear:
+ * `€12,345.67`, `12.345,67 €`, `−€•••`, `••• €`, `EUR •••`.
+ *
+ * Symbols count beside a digit or the mask; a code counts only beside the mask,
+ * because a code beside a digit is also how asset names read ("… EUR 2-10Y …").
+ * A currency on its own is not matched: a bare code, or `formatCurrencyCodeHtml`'s
+ * `€ 🇪🇺 EUR`, names a currency and quotes no sum. "Beside" means on the same line:
+ * the separator is horizontal space only, or a figure ending one line would pair
+ * with a currency label starting the next.
+ */
+const CURRENCY_BESIDE_FIGURE = /[€$£¥][ \t\u00a0\u202f\u2009]*[-−+]?[ \t\u00a0\u202f\u2009]*[\d•]|[\d•][ \t\u00a0\u202f\u2009]*[€$£¥]|\b[A-Z]{3}[ \t\u00a0\u202f\u2009]*[-−+]?[ \t\u00a0\u202f\u2009]*•|•[ \t\u00a0\u202f\u2009]*[A-Z]{3}\b/;
 
 /**
  * The composition return the stubbed replay claims.
@@ -185,6 +210,12 @@ const MOCK_ALGORITHM_VERSION = 'e2e-mock-v1';
 const INVENTED = {
     /** VaR 95% over one day, as a positive loss fraction, per asset index. */
     badDayVar: (index: number) => 0.021 + index * 0.004,
+    /**
+     * The one-day VaR the sort test plants instead (`zigzagBadDay`), per *rank* rather than
+     * per index: a gentler ramp of its own, so that ranks run as far as the selection does
+     * without leaving the band a real instrument occupies as fast as `badDayVar` would.
+     */
+    zigzagBadDayVar: (rank: number) => 0.012 + rank * 0.0015,
     /** CVaR is the mean *beyond* the quantile, so it is wider — here by a flat 40%. */
     tailWidening: 1.4,
     /** A month is drawn wider than a day, but never as `day × √21`: that would be a model. */
@@ -195,6 +226,13 @@ const INVENTED = {
     volatility: (index: number) => 0.12 + index * 0.02,
     /** Mean-variance expected annual return; crosses zero so both signs get drawn. */
     expectedReturn: (index: number) => 0.045 - index * 0.015,
+    /**
+     * The average annual return the L3° sort test plants instead (`zigzagExpectedReturn`), per *rank*
+     * rather than per index: it starts below zero and crosses it by the third rank, so any selection
+     * the test can stand on draws both signs, and a sort by magnitude or by the printed text lands in
+     * an order a sort by value does not.
+     */
+    zigzagExpectedReturn: (rank: number) => -0.021 + rank * 0.012,
     sharpe: (index: number) => 0.35 + index * 0.1,
     beta: (index: number) => 0.8 + index * 0.15,
     /** Bounded to [-1, 1] by the contract; this ramp stays well inside it. */
@@ -244,15 +282,40 @@ const SHORT_OBSERVATIONS = 5;
 const INSUFFICIENT_HISTORY = 'insufficient_history';
 
 /**
- * The warning `_build_context` appends when a requested asset could not be prepared.
+ * The warning `_assets_excluded_warnings` (`service.py`) sends for the assets a request
+ * could not prepare, one per reason.
  *
- * Copied from `service.py:604-610` verbatim, code and sentence both, because
- * `resultReasons` renders the backend's own string and deduplicates *by that
- * string*: a paraphrase here would still produce one entry and would still look
- * right, while testing a sentence the product never emits.
+ * Each carries the catalogue key of its reason, and the backend's English `message`
+ * only as the fallback `warningSentence` shows when the key cannot be worded. The
+ * sentence is the same for every reason, and copied verbatim, because a test proves
+ * the key was worded by showing that *this* string is not the one on screen.
  */
 const EXCLUDED_WARNING_CODE = 'assets_excluded';
 const EXCLUDED_WARNING_MESSAGE = 'One or more scope assets were excluded from risk calculations.';
+
+/**
+ * The key of each exclusion reason, as `_assets_excluded_warnings` writes them out
+ * branch by branch. Any other reason — `insufficient_history`, the default the
+ * prepared set falls back to — takes the last key.
+ */
+const EXCLUDED_WARNING_KEYS: Readonly<Record<string, string>> = {
+    missing_price: 'risk.warnings.assets_excluded_missing_price',
+    missing_fx: 'risk.warnings.assets_excluded_missing_fx',
+    invalid_currency: 'risk.warnings.assets_excluded_invalid_currency',
+};
+const EXCLUDED_WARNING_OTHER_KEY = 'risk.warnings.assets_excluded_insufficient_history';
+
+/**
+ * How the backend names an asset it has no display name for (`_with_warning_asset_names`:
+ * `names.get(asset_id, f"#{asset_id}")`).
+ *
+ * The stub knows no names, so it names every asset this way. That is also what makes
+ * the name a proof: it reaches the screen only through the formatter, never through
+ * the English fallback.
+ */
+function unnamedAsset(assetId: number): string {
+    return `#${assetId}`;
+}
 
 /**
  * The capability catalogue this file pretends the backend publishes.
@@ -364,24 +427,24 @@ function isHistoricalReplay(analytic: RiskAnalyticRequest): boolean {
 /**
  * How this test wants the backend to behave, where "ordinary" is not the subject.
  *
- * Both knobs reproduce a state the **real** backend reaches on its own; neither
- * invents one. That distinction is the whole reason they are options rather than
- * separate hand-written payloads: a stub that can only produce the happy path
+ * The first two knobs reproduce a state the **real** backend reaches on its own;
+ * neither invents one. That distinction is the whole reason they are options rather
+ * than separate hand-written payloads: a stub that can only produce the happy path
  * makes the unhappy paths unreachable, and a stub that produces an impossible
- * one tests a page against a world that does not exist.
+ * one tests a page against a world that does not exist. The last two are not states
+ * at all: the same ordinary answer, with one column's figures in another order.
  */
 interface RiskStubOptions {
     /**
      * Answer for one fewer asset than the scope asked about.
      *
      * The backend does this whenever a requested asset has no usable series: it
-     * is dropped from the prepared set (`service.py:590-598`), every analytic in
-     * the request then answers about the survivors, the result's status becomes
-     * `partial` rather than `ok` (`service.py:783`) and one `assets_excluded`
-     * warning rides on all of them (`:604-610`). Reproduced in full here —
-     * including on `correlation`, because the exclusion is a property of the
-     * *prepared series set* and not of any one analytic, so hiding it from the
-     * matrix would be a state the backend cannot produce.
+     * is dropped from the prepared set, every analytic in the request then answers
+     * about the survivors, the result's status becomes `partial` rather than `ok`,
+     * and the same `assets_excluded` warnings — one per reason — ride on all of them.
+     * Reproduced in full here — including on `correlation`, because the exclusion is
+     * a property of the *prepared series set* and not of any one analytic, so hiding
+     * it from the matrix would be a state the backend cannot produce.
      */
     dropLastAsset?: boolean;
     /**
@@ -392,6 +455,26 @@ interface RiskStubOptions {
      * beside four `unavailable` — same request, same calendar, same window.
      */
     shortWindow?: boolean;
+    /**
+     * Plant the one-day VaR as a zig-zag in id order instead of the ramp.
+     *
+     * For the test that sorts L1°'s bad day. The ramp climbs with the request's
+     * ascending ids, and the selection often opens in that same order, so a column
+     * sorted by the ramp comes out in the selection's order or in its reverse — and
+     * "sorted" and "cleared" could then draw the same rows. {@link zigzagRank} gives
+     * every position a distinct rank, even positions below odd ones: a straight line
+     * in value, a zig-zag in id order. The month keeps the ramp.
+     */
+    zigzagBadDay?: boolean;
+    /**
+     * Plant L3°'s average annual return as the same zig-zag, crossing zero.
+     *
+     * For the test that sorts L3°'s return column, for L1°'s reason — the ramp would sort into the
+     * selection's order or its reverse — and one of its own: the column sorts by the value with
+     * its sign, so the planted figures must hold both signs, and a loss of 2.1% must sort below a
+     * gain of 0.3% although it is larger. The benchmark's active return follows the same figure.
+     */
+    zigzagExpectedReturn?: boolean;
 }
 
 /** True when this analytic is one of the five the comparison levels read. */
@@ -432,17 +515,45 @@ function preparedAssetIds(request: RiskRequest, options: RiskStubOptions): {cove
     return {covered: all.slice(0, -1), excluded: all.slice(-1)};
 }
 
-/** The `assets_excluded` warning, verbatim, or nothing at all. */
-function exclusionWarnings(excluded: readonly number[]) {
-    if (excluded.length === 0) return [];
-    return [
-        {
+/** One asset the request could not prepare, and why — the shape of `metadata.excluded_assets`. */
+interface ExcludedAsset {
+    asset_id: number;
+    reason: string;
+}
+
+/**
+ * The assets the stub could not prepare, with the reason `_build_context` gives:
+ * `insufficient_history`, the default the prepared set falls back to.
+ *
+ * One source for the two places the backend reports them — the metadata's
+ * `excluded_assets` and the warnings built from it — so they cannot disagree.
+ */
+function excludedAssets(request: RiskRequest, options: RiskStubOptions): ExcludedAsset[] {
+    return preparedAssetIds(request, options).excluded.map((assetId) => ({asset_id: assetId, reason: INSUFFICIENT_HISTORY}));
+}
+
+/**
+ * The `assets_excluded` warnings as the response carries them, or none.
+ *
+ * Built the way `_assets_excluded_warnings` builds them: one warning per reason, in
+ * reason order, with that reason's key and `details: {asset_ids, reason}`. The
+ * `names` and `count` in `message_params` are what `_with_warning_asset_names` adds
+ * before the response leaves, and what the catalogue sentences interpolate. Without
+ * them the key cannot be worded, and the English fallback shows instead.
+ */
+function exclusionWarnings(excluded: readonly ExcludedAsset[]) {
+    const byReason = new Map<string, number[]>();
+    for (const {asset_id, reason} of excluded) byReason.set(reason, [...(byReason.get(reason) ?? []), asset_id]);
+    return [...byReason.entries()]
+        .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+        .map(([reason, assetIds]) => ({
             code: EXCLUDED_WARNING_CODE,
             message: EXCLUDED_WARNING_MESSAGE,
-            details: {asset_ids: [...excluded]},
+            details: {asset_ids: assetIds, reason},
             degrades_result: true,
-        },
-    ];
+            message_i18n_key: EXCLUDED_WARNING_KEYS[reason] ?? EXCLUDED_WARNING_OTHER_KEY,
+            message_params: {names: assetIds.map(unnamedAsset).join(', '), count: assetIds.length},
+        }));
 }
 
 /**
@@ -461,7 +572,6 @@ function metadata(request: RiskRequest, analytic: RiskAnalyticRequest, options: 
     // Scaled with the window, so the annualization factor stays a plausible
     // consequence of the two numbers beside it instead of contradicting them.
     const calendarDays = options.shortWindow ? 7 : 87;
-    const {excluded} = preparedAssetIds(request, options);
     return {
         analyzed_range: {
             start: request.date_range.start,
@@ -481,9 +591,9 @@ function metadata(request: RiskRequest, analytic: RiskAnalyticRequest, options: 
         ...(request.composition_policy ? {composition_policy: request.composition_policy} : {}),
         return_basis: 'price_only',
         // `_build_context` names every requested asset it could not prepare, with
-        // the reason the prepared set gave — `insufficient_history` is the default
-        // that `service.py:594` falls back to.
-        excluded_assets: isHistoricalReplay(analytic) ? [] : excluded.map((assetId) => ({asset_id: assetId, reason: INSUFFICIENT_HISTORY})),
+        // the reason the prepared set gave — the same list the warnings are built
+        // from (`excludedAssets`).
+        excluded_assets: isHistoricalReplay(analytic) ? [] : excludedAssets(request, options),
         algorithm_version: MOCK_ALGORITHM_VERSION,
         computed_at: '2026-01-31T12:00:00Z',
         // `service.py:860` copies the plugin's audit into the metadata of every
@@ -605,23 +715,47 @@ function correlationOutput(request: RiskRequest, options: RiskStubOptions = {}) 
  * number out of here.
  */
 
+/**
+ * The rank {@link RiskStubOptions.zigzagBadDay} gives the asset at `position` of `count`.
+ *
+ * Even positions take the low ranks in order, odd positions the ranks above them, so
+ * every rank from 0 to `count - 1` is used exactly once — no two rows tie — and for
+ * three or more assets the order by value is neither the order of the ids nor its
+ * reverse: `[0, 1, 2]` ranks as `[0, 2, 1]`.
+ */
+function zigzagRank(position: number, count: number): number {
+    return position % 2 === 0 ? position / 2 : Math.ceil(count / 2) + (position - 1) / 2;
+}
+
+/**
+ * The average annual return the stub answers for the asset at `position` of the `count` it could
+ * prepare: the ramp, or — with {@link RiskStubOptions.zigzagExpectedReturn} — the zig-zag that
+ * crosses zero. One function for the two outputs that carry it, so the risk/return point and the
+ * benchmark's active return cannot disagree about an asset.
+ */
+function plantedExpectedReturn(position: number, count: number, options: RiskStubOptions): number {
+    return options.zigzagExpectedReturn ? INVENTED.zigzagExpectedReturn(zigzagRank(position, count)) : INVENTED.expectedReturn(variant(position));
+}
+
 /** Per-asset VaR/CVaR at one horizon. Positive magnitudes, CVaR ≥ VaR. */
 function assetSetVarOutput(request: RiskRequest, analytic: RiskAnalyticRequest, options: RiskStubOptions) {
     const {covered} = preparedAssetIds(request, options);
     const horizonDays = Number(analytic.parameters?.horizon_days ?? 1);
+    const horizonObservations = Math.max(1, Math.round((horizonDays * 252) / 365));
     const horizonFactor = horizonDays > 1 ? INVENTED.monthFactor : 1;
     return {
         kind: 'var_cvar_set',
         confidence_level: Number(analytic.parameters?.confidence_level ?? 0.95),
         horizon_days: horizonDays,
+        horizon_observations: horizonObservations,
         // Compounding to a multi-day horizon consumes observations, so the count
-        // the tail was estimated from is `horizon_days - 1` fewer than the
+        // the tail was estimated from is `horizon_observations - 1` fewer than the
         // window's — the backend says so in `RiskAssetSetVarCvarOutput`'s
         // docstring, and a flat copy of `n_observations` here would contradict it.
-        observations: Math.max(1, observationCount(options) - (horizonDays - 1)),
+        observations: Math.max(1, observationCount(options) - (horizonObservations - 1)),
         items: covered.map((assetId, index) => {
             const row = variant(index);
-            const valueAtRisk = INVENTED.badDayVar(row) * horizonFactor;
+            const valueAtRisk = options.zigzagBadDay && horizonDays === 1 ? INVENTED.zigzagBadDayVar(zigzagRank(index, covered.length)) : INVENTED.badDayVar(row) * horizonFactor;
             return {
                 asset_id: assetId,
                 value_at_risk: valueAtRisk,
@@ -724,7 +858,7 @@ function assetSetRiskReturnOutput(request: RiskRequest, options: RiskStubOptions
         items: covered.map((assetId, index) => ({
             asset_id: assetId,
             volatility: INVENTED.volatility(variant(index)),
-            expected_annual_return: INVENTED.expectedReturn(variant(index)),
+            expected_annual_return: plantedExpectedReturn(index, covered.length, options),
         })),
     };
 }
@@ -755,7 +889,7 @@ function assetSetComparisonOutput(request: RiskRequest, analytic: RiskAnalyticRe
             .filter((assetId) => assetId !== comparisonAssetId)
             .map((assetId, index) => {
                 const row = variant(index);
-                const activeReturn = INVENTED.expectedReturn(row) - INVENTED.benchmarkExpectedReturn;
+                const activeReturn = plantedExpectedReturn(index, covered.length, options) - INVENTED.benchmarkExpectedReturn;
                 const trackingError = INVENTED.trackingError(row);
                 return {
                     asset_id: assetId,
@@ -858,15 +992,15 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
     }
 
     // An excluded asset degrades the whole request, not one analytic: the status
-    // becomes `partial` and one `assets_excluded` warning rides on every result
-    // (`service.py:766-783`). Both halves matter — `degradedResults` reads the
+    // becomes `partial` and the same `assets_excluded` warnings, one per reason,
+    // ride on every result. Both halves matter — `degradedResults` reads the
     // status, `resultReasons` reads the sentence — and a stub that sent one
     // without the other would leave whichever half it omitted untested.
     const degraded = excluded.length > 0;
     const answered = {
         ...base,
         status: degraded ? 'partial' : 'ok',
-        warnings: exclusionWarnings(excluded),
+        warnings: exclusionWarnings(excludedAssets(request, options)),
     };
 
     if (analytic.analytic_code === 'correlation') return {...answered, output: correlationOutput(request, options)};
@@ -1021,6 +1155,163 @@ function pageCatalogue(calls: readonly EligibilityCall[]): Set<number> {
     const last = calls[calls.length - 1];
     if (!last) throw new Error('The page never asked the eligibility engine, so its asset list is unknown to this test.');
     return new Set(last.assetIds);
+}
+
+/**
+ * ─── The period in which every selected asset has prices ───────────────────
+ *
+ * The panel asks the engine twice: about the whole catalogue (the chips' verdicts)
+ * and about the selection alone. When the selection's answer carries a
+ * `suggested_range`, and the suggestion brings back at least one selected asset the
+ * requested period leaves out or warns about, a strip at the top of the controls
+ * offers that period (`risk-fit-period-banner`), and its button hands it to the
+ * page's toolbar.
+ */
+
+/** A span of calendar days, both ends included: `common_range` and `suggested_range` as the panel reads them. */
+interface DayRange {
+    start: string;
+    end: string;
+}
+
+/** A plain day moved by `days`, counted in UTC so no timezone moves it. */
+function shiftDay(isoDay: string, days: number): string {
+    const [year, month, day] = isoDay.split('-').map(Number);
+    return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+}
+
+/**
+ * How the scripted engine answers a period it has not suggested itself.
+ *
+ *  - `plain`: every asset eligible and no range, like {@link answerEligibility}.
+ *  - `late`: the `late` assets were first quoted 90 days into the period, so they
+ *    start late (a warning); every quote ends the day before the period does. The
+ *    engine suggests what the backend's schema describes: the day after the latest
+ *    first quote, to the earliest last quote.
+ *  - `trimmedEnd`: every asset quoted from before the period to the day before its
+ *    end — all eligible, since one day is not stale — and the engine still suggests
+ *    the period trimmed at that end ("the requested period trimmed to the common
+ *    span"). A suggestion that brings nobody back.
+ *
+ * A period the engine has suggested is answered as the backend would: everyone
+ * eligible, no suggestion. That is what makes following the offer end it.
+ */
+type EngineMode = {kind: 'plain'} | {kind: 'late'; late: ReadonlySet<number>} | {kind: 'trimmedEnd'};
+
+/** One question the page put to the scripted engine, and what it said about it. */
+interface EngineExchange {
+    assetIds: number[];
+    period: DayRange;
+    /** The period asked was one this engine had suggested. */
+    fitted: boolean;
+    suggested: DayRange | null;
+    /** The ids this answer did not call eligible. */
+    notEligible: number[];
+}
+
+function rangeKey(range: DayRange): string {
+    return `${range.start}/${range.end}`;
+}
+
+/**
+ * Answer `POST /risk/eligibility` for exactly the ids each request asks about, as
+ * `mode` says, and keep every exchange.
+ *
+ * Registered after `installRiskMocks`, so it wins over {@link answerEligibility}. The
+ * suggestion is a function of the period asked, never of the test's clock, so
+ * whoever reads the log can tell which answer went with which period. The body
+ * passes the generated schema before it leaves, because the client validates every
+ * response.
+ */
+async function scriptEligibility(page: Page): Promise<{exchanges: EngineExchange[]; setMode: (mode: EngineMode) => void}> {
+    const exchanges: EngineExchange[] = [];
+    const offered = new Set<string>();
+    let mode: EngineMode = {kind: 'plain'};
+    await page.route('**/api/v1/risk/eligibility', async (route) => {
+        const sent = (route.request().postDataJSON() ?? {}) as {asset_ids?: number[]; date_range?: {start?: string; end?: string | null}};
+        const assetIds = [...new Set(sent.asset_ids ?? [])];
+        const start = sent.date_range?.start ?? '';
+        const period: DayRange = {start, end: sent.date_range?.end ?? start};
+        const fitted = offered.has(rangeKey(period));
+        const quote = (assetId: number, overrides: Record<string, unknown> = {}) => ({
+            asset_id: assetId,
+            level: 'eligible',
+            reasons: [],
+            first_quote: shiftDay(period.start, -30),
+            last_quote: period.end,
+            quotes_in_period: AMPLE_OBSERVATIONS,
+            ...overrides,
+        });
+
+        let items = assetIds.map((assetId) => quote(assetId));
+        let commonRange: DayRange | null = null;
+        let suggested: DayRange | null = null;
+        if (fitted) {
+            commonRange = {start: shiftDay(period.start, -1), end: period.end};
+        } else if (mode.kind === 'late') {
+            const late = mode.late;
+            const firstQuote = shiftDay(period.start, 90);
+            const lastQuote = shiftDay(period.end, -1);
+            items = assetIds.map((assetId) => (late.has(assetId) ? quote(assetId, {level: 'warning', reasons: ['starts_late'], first_quote: firstQuote, last_quote: lastQuote, quotes_in_period: 40}) : quote(assetId, {last_quote: lastQuote})));
+            commonRange = {start: firstQuote, end: lastQuote};
+            suggested = {start: shiftDay(firstQuote, 1), end: lastQuote};
+        } else if (mode.kind === 'trimmedEnd') {
+            const lastQuote = shiftDay(period.end, -1);
+            items = assetIds.map((assetId) => quote(assetId, {last_quote: lastQuote}));
+            commonRange = {start: shiftDay(period.start, -30), end: lastQuote};
+            suggested = {start: period.start, end: lastQuote};
+        }
+        if (suggested) offered.add(rangeKey(suggested));
+
+        const body = schemas.RiskEligibilityResponse.parse({
+            items,
+            min_quotes: ENGINE_MIN_QUOTES,
+            stale_days: ENGINE_STALE_DAYS,
+            ...(commonRange ? {common_range: commonRange} : {}),
+            ...(suggested ? {suggested_range: suggested} : {}),
+        });
+        await route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify(body)});
+        exchanges.push({assetIds, period, fitted, suggested, notEligible: items.filter((item) => item.level !== 'eligible').map((item) => item.asset_id)});
+    });
+    return {
+        exchanges,
+        setMode: (next) => {
+            mode = next;
+        },
+    };
+}
+
+/** The last exchange about exactly `assetIds` for `period`, if the page has asked it. */
+function exchangeFor(exchanges: readonly EngineExchange[], assetIds: readonly number[], period: DayRange): EngineExchange | undefined {
+    return [...exchanges].reverse().find((exchange) => scopeKey(exchange.assetIds) === scopeKey(assetIds) && rangeKey(exchange.period) === rangeKey(period));
+}
+
+/** The period the page's URL carries (`gotoDateRange` writes it as ISO days), or `null` before it carries one. */
+function urlPeriod(page: Page): DayRange | null {
+    const url = new URL(page.url());
+    const start = url.searchParams.get('start');
+    const end = url.searchParams.get('end');
+    return start && end ? {start, end} : null;
+}
+
+/**
+ * Press a preset of the toolbar's period picker, and end on its period being the
+ * page's: the badge lit and the URL carrying the dates. Returns that period.
+ *
+ * The badge must not be lit before: pressing a preset already in force asks the
+ * engine nothing new, and every exchange a caller then waits for would never come.
+ */
+async function pressPeriodPreset(page: Page, key: string): Promise<DayRange> {
+    const badge = page.getByTestId(`date-preset-${key}`);
+    await expect(badge).toBeVisible({timeout: 10_000});
+    await expect(badge, `the ${key} preset is already in force: pressing it would ask the engine nothing new`).toHaveAttribute('data-active', 'false');
+    const before = urlPeriod(page);
+    await badge.click();
+    await expect(badge).toHaveAttribute('data-active', 'true');
+    await expect.poll(() => urlPeriod(page), {message: `the ${key} preset did not move the page's period`}).not.toEqual(before);
+    const period = urlPeriod(page);
+    if (!period) throw new Error(`the ${key} preset left the URL without a period`);
+    return period;
 }
 
 /**
@@ -1213,12 +1504,15 @@ async function openAssetGlobalRiskReleasingSeed(page: Page, reports: readonly He
 /**
  * Pin global privacy off through the control a user has, and prove it took.
  *
- * The no-money net only has teeth while values are shown. `L4Replay` formats
- * every amount it may print with `formatCurrencyAmount` (`riskAnalysisHelpers.ts`),
- * which under privacy returns `•••` in place of the *whole* string — no digits,
- * no `€`, no `.currency-symbol` — so with privacy on, a scope-violating euro
- * would pass all three money assertions. (`.currency-symbol` never guarded that
- * formatter anyway: only the HTML formatters of `currencyFormat.ts` emit it.)
+ * The first no-money net reads digits. `L4Replay` formats every amount it may
+ * print with `formatCurrencyAmount` (`riskAnalysisHelpers.ts`), which under
+ * privacy masks the number and keeps the currency and the sign
+ * (`maskCurrencyParts`): with privacy on, the stubbed magnitude never reaches the
+ * page, and the digit assertion would pass about a figure it cannot see. The
+ * masked form has a net of its own, in the privacy-ON variant, pinned by
+ * {@link pinPrivacyOn}; each test pins the state its net needs. (`.currency-symbol`
+ * never guarded that formatter anyway: only the HTML formatters of
+ * `currencyFormat.ts` emit it.)
  *
  * Off is today's default only by implication: the key is absent in a fresh
  * browser context, and absent means off (`privacyStore.svelte.ts`, D3). Pinning
@@ -1237,6 +1531,75 @@ async function pinPrivacyOff(page: Page): Promise<void> {
     await expect(toggle).toBeVisible({timeout: 10_000});
     if ((await toggle.getAttribute('aria-pressed')) === 'true') await toggle.click();
     await expect(toggle, 'global privacy must be off, or the no-money net cannot see an amount').toHaveAttribute('aria-pressed', 'false');
+}
+
+/**
+ * Pin global privacy on, through the same control: the inverse of
+ * {@link pinPrivacyOff}, for the variant of the net that reads masked amounts.
+ *
+ * The flag lives in this browser context's `localStorage` (`privacyStore.svelte.ts`)
+ * and nowhere else, so pinning it reaches no neighbouring test and no row of the
+ * shared database.
+ */
+async function pinPrivacyOn(page: Page): Promise<void> {
+    const toggle = page.getByTestId('privacy-toggle');
+    await expect(toggle).toBeVisible({timeout: 10_000});
+    if ((await toggle.getAttribute('aria-pressed')) !== 'true') await toggle.click();
+    await expect(toggle, 'global privacy must be on, or this variant repeats the first net instead of testing the masked one').toHaveAttribute('aria-pressed', 'true');
+}
+
+/** The glyph `Intl` writes for a currency, `€` for EUR, as the formatters under test write it. */
+function currencySymbol(code: string): string {
+    return new Intl.NumberFormat('en', {style: 'currency', currency: code}).formatToParts(0).find((part) => part.type === 'currency')?.value ?? code;
+}
+
+/**
+ * Every visible `glyph` under `root` that is not part of a bare currency label, as
+ * the markup around it (for the failure message).
+ *
+ * `.currency-symbol` has two sources in `currencyFormat.ts`. `formatCurrencyAmountHtml`
+ * puts it beside an amount (`.currency-amount`). `formatCurrencyCodeHtml` renders a
+ * currency on its own — symbol, flag and code, `€ 🇪🇺 EUR` — for labels and filters,
+ * and a page may show one: it names a currency and quotes no sum. So a glyph inside a
+ * `.currency-symbol` whose parent holds no `.currency-amount` is left out; every other
+ * one is money, or a currency's glyph with nothing to label.
+ */
+async function strayCurrencySymbols(root: Locator, glyph: string): Promise<string[]> {
+    return root.evaluate((element, symbol) => {
+        const stray: string[] = [];
+        const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            if (!node.textContent?.includes(symbol)) continue;
+            const holder = node.parentElement;
+            if (!holder) continue;
+            const visible = typeof holder.checkVisibility === 'function' ? holder.checkVisibility() : holder.getClientRects().length > 0;
+            if (!visible) continue;
+            const label = holder.closest('.currency-symbol');
+            if (label && !label.parentElement?.querySelector('.currency-amount')) continue;
+            stray.push(holder.outerHTML.slice(0, 200));
+        }
+        return stray;
+    }, glyph);
+}
+
+/**
+ * The no-money net over the lab's panel, shared by the privacy-off test and its
+ * privacy-on variant so that the two cannot drift apart.
+ *
+ * Four ways an amount shows: the planted magnitude in clear, a figure with a
+ * currency beside it, a currency glyph anywhere but in a bare currency label, and
+ * the amount half of the HTML money formatter. A bare currency label passes:
+ * `.currency-symbol` has two sources, and `formatCurrencyCodeHtml`'s (`€ 🇪🇺 EUR`)
+ * names a currency and quotes no sum, which the page may do. So the net counts
+ * `.currency-amount`, the part only an amount has, rather than the symbol both have.
+ */
+async function expectNoMoneyOnPanel(panel: Locator, rendered: string, requests: readonly RiskRequest[]): Promise<void> {
+    expect(rendered, `the panel printed the stubbed monetary magnitude. Panel text was:\n${rendered}`).not.toMatch(MONEY_PATTERN);
+    expect(rendered, `the panel printed a figure with a currency beside it. Panel text was:\n${rendered}`).not.toMatch(CURRENCY_BESIDE_FIGURE);
+    for (const glyph of new Set(['€', currencySymbol(await answerCurrency(requests))])) {
+        expect(await strayCurrencySymbols(panel, glyph), `the panel printed "${glyph}" outside a bare currency label — no amount of money belongs on an unweighted asset set`).toEqual([]);
+    }
+    await expect(panel.locator('.currency-amount'), 'the panel holds an amount of the HTML money formatter').toHaveCount(0);
 }
 
 /**
@@ -1471,24 +1834,50 @@ const paidSection = (page: Page) => page.getByTestId('asset-global-risk-panel').
 const L1_CELLS = ['badDay', 'badMonth', 'worstFall', 'currentFall', 'toPeak'] as const;
 
 /**
- * The asset ids the L1° table drew a row for, read from the rows themselves.
+ * The L1° rows, top to bottom.
  *
- * `data-asset-id` is on the row because the table is a *transposition*: the
- * reader compares instruments down the page, so the row is the identity and the
- * column is the measure. Reading it back is what lets an assertion be phrased
- * over the selection rather than over positions.
+ * L1° is the project's DataTable, which writes the row's identity as `data-row-id`
+ * — here the asset id, because the table is a *transposition*: the reader compares
+ * instruments down the page, so the row is the identity and the column is the
+ * measure. Scoped to `tbody`: the header row is a row too, and carries no asset.
+ */
+const lossRows = (page: Page) => lossTable(page).locator('tbody tr[data-row-id]');
+
+/** One asset's L1° row, by the id DataTable writes on it — never by position. */
+const lossRow = (page: Page, assetId: number) => lossTable(page).locator(`tbody tr[data-row-id="${assetId}"]`);
+
+/**
+ * The asset ids the L1° table drew a row for, in the order it drew them, read from
+ * the rows themselves. Reading them back is what lets an assertion be phrased over
+ * the selection rather than over positions — and, once the reader sorts, over the
+ * order the sort produced.
+ *
+ * One read, not a retry: a caller that expects an order polls it.
  */
 async function lossRowAssetIds(page: Page): Promise<number[]> {
-    return (
-        await lossTable(page)
-            .getByTestId('risk-asset-set-l1-row')
-            .evaluateAll((nodes) => nodes.map((node) => Number(node.getAttribute('data-asset-id'))))
-    ).filter((id) => Number.isInteger(id));
+    return (await lossRows(page).evaluateAll((nodes) => nodes.map((node) => Number(node.getAttribute('data-row-id'))))).filter((id) => Number.isInteger(id));
 }
 
 /** A single L1° cell, addressed by the asset it belongs to — never by position. */
 function lossCell(page: Page, assetId: number, cell: (typeof L1_CELLS)[number]) {
-    return lossTable(page).locator(`tr[data-asset-id="${assetId}"] [data-testid="risk-asset-set-l1-${cell}"]`);
+    return lossRow(page, assetId).locator(`[data-testid="risk-asset-set-l1-${cell}"]`);
+}
+
+/** One asset's name cell: its type icon and its name, carrying the asset's id. */
+function lossNameCell(page: Page, assetId: number) {
+    return lossTable(page).locator(`[data-testid="risk-asset-set-l1-name"][data-asset-id="${assetId}"]`);
+}
+
+/**
+ * The L1° column ids, in the order the header draws them, read off DataTable's own
+ * `dt-header-<id>` titles — so a hidden column is simply absent from the list.
+ *
+ * One read, not a retry: a caller that expects an order polls it.
+ */
+async function lossHeaderIds(page: Page): Promise<string[]> {
+    return lossTable(page)
+        .locator('thead th[data-testid^="dt-header-"]')
+        .evaluateAll((nodes) => nodes.map((node) => (node.getAttribute('data-testid') ?? '').slice('dt-header-'.length)));
 }
 
 /**
@@ -1503,6 +1892,57 @@ function lossCell(page: Page, assetId: number, cell: (typeof L1_CELLS)[number]) 
 async function waitForLossTable(page: Page): Promise<void> {
     await expect(lossTable(page)).toBeVisible({timeout: 20_000});
     await expect(page.getByTestId('risk-asset-set-l1-loading')).toHaveCount(0);
+}
+
+/**
+ * ─── L3° — "what did each of these pay for its risk?" ──────────────────────
+ *
+ * Since the developer's review of 30/09 L3°'s table is the project's DataTable, as L1°'s is, and
+ * its locators mirror L1°'s one for one: the wrapper publishes `data-row-count`, DataTable writes
+ * each row's asset as `data-row-id`, the asset cell carries `data-asset-id`, and the header draws
+ * one `dt-header-<id>` per visible column. `paidSection` above is the level's frame.
+ */
+const paidTable = (page: Page) => page.getByTestId('risk-asset-set-l3-table');
+
+/** The four value cells every L3° table draws, in their order; a benchmark adds beta and correlation after them. */
+const L3_CELLS = ['volatility', 'expectedReturn', 'sortino', 'sharpe'] as const;
+
+/** The L3° rows, top to bottom. Scoped to `tbody`: the header row carries no asset. */
+const paidRows = (page: Page) => paidTable(page).locator('tbody tr[data-row-id]');
+
+/** One asset's L3° row, by the id DataTable writes on it — never by position. */
+const paidRow = (page: Page, assetId: number) => paidTable(page).locator(`tbody tr[data-row-id="${assetId}"]`);
+
+/** The asset ids of the L3° rows, in the order drawn. One read, not a retry: a caller that expects an order polls it. */
+async function paidRowAssetIds(page: Page): Promise<number[]> {
+    return (await paidRows(page).evaluateAll((nodes) => nodes.map((node) => Number(node.getAttribute('data-row-id'))))).filter((id) => Number.isInteger(id));
+}
+
+/** A single L3° cell, addressed by the asset it belongs to — never by position. */
+function paidCell(page: Page, assetId: number, cell: (typeof L3_CELLS)[number]) {
+    return paidRow(page, assetId).locator(`[data-testid="risk-asset-set-l3-${cell}"]`);
+}
+
+/** One asset's L3° name cell: its type icon and its name, carrying the asset's id. */
+function paidNameCell(page: Page, assetId: number) {
+    return paidTable(page).locator(`[data-testid="risk-asset-set-l3-name"][data-asset-id="${assetId}"]`);
+}
+
+/** The L3° column ids, in the order the header draws them; a hidden column is absent. One read, not a retry. */
+async function paidHeaderIds(page: Page): Promise<string[]> {
+    return paidTable(page)
+        .locator('thead th[data-testid^="dt-header-"]')
+        .evaluateAll((nodes) => nodes.map((node) => (node.getAttribute('data-testid') ?? '').slice('dt-header-'.length)));
+}
+
+/**
+ * Wait until L3° has stopped being a skeleton and is showing its table — the same barrier as
+ * {@link waitForLossTable}: the section draws its skeleton while `loading` and no figure has
+ * arrived, so the table's presence is the "the wave landed" signal for this level too.
+ */
+async function waitForPaidTable(page: Page): Promise<void> {
+    await expect(paidTable(page)).toBeVisible({timeout: 20_000});
+    await expect(page.getByTestId('risk-asset-set-l3-loading')).toHaveCount(0);
 }
 
 /** The user id the benchmark store will scope its storage key with. */
@@ -1893,6 +2333,170 @@ function sameMembers(left: readonly string[], right: readonly string[]): boolean
     return left.every((entry) => rightSet.has(entry));
 }
 
+/**
+ * ─── The matrix's grouping inputs ──────────────────────────────────────────
+ *
+ * Beyond similarity and name, the heatmap offers three orderings, and each one
+ * exists only while the lab hands it a map to group by: by type (the page's own
+ * asset list carries the types), by dominant sector and by dominant area (both
+ * from one bulk read of the assets' stored metadata,
+ * `GET /api/v1/assets?asset_ids=…`). That read is answered here and never
+ * inherited from the seed: a test built on what the seed happens to classify
+ * would be measuring the seed.
+ *
+ * The planted classification is keyed by an asset's rank among the ids the read
+ * asked about — the ids the lab analyses, sorted — so a test can rebuild each
+ * asset's group from its own selection. Sectors alternate with the rank and areas
+ * change every second rank, so the two partitions cross: with four assets or
+ * more, no order is grouped by both. That is what lets one click on "by sector"
+ * prove the sector map is the one behind it: had the lab handed the heatmap its
+ * area map there, the blocks drawn would be areas, and those are never sector
+ * blocks. The sector partition also interleaves the similarity order this file's
+ * stub produces (`[0, 3, 2, 1, 4, …]` in rank terms); the test checks that
+ * rather than trusting it.
+ *
+ * Each distribution names its group well above `DOMINANT_SHARE` of its classified
+ * weight, so `dominant` is the key `dominantExposure` picks. The weights are
+ * Decimal strings, as the backend stores them and as the response schema demands
+ * (`FASectorArea_Output`): the client validates every response, and a number here
+ * would be refused and look exactly like a failed read.
+ */
+const PLANTED_SECTORS = [
+    {dominant: 'Technology', distribution: {Technology: '0.7000', 'Health Care': '0.2000', Other: '0.1000'}},
+    {dominant: 'Financials', distribution: {Financials: '0.6000', Energy: '0.3000', Other: '0.1000'}},
+] as const;
+const PLANTED_AREAS = [
+    {dominant: 'USA', distribution: {USA: '0.8000', Other: '0.2000'}},
+    {dominant: 'DEU', distribution: {DEU: '0.6500', FRA: '0.3500'}},
+] as const;
+
+function plantedSector(rank: number): (typeof PLANTED_SECTORS)[number] {
+    return PLANTED_SECTORS[rank % PLANTED_SECTORS.length];
+}
+
+function plantedArea(rank: number): (typeof PLANTED_AREAS)[number] {
+    return PLANTED_AREAS[Math.floor(rank / 2) % PLANTED_AREAS.length];
+}
+
+/** One bulk metadata read, as the page asked it and as this file answered it. */
+interface MetadataRead {
+    /** The ids of the query string, as sent. */
+    assetIds: number[];
+    /** `planted`: the lane's rows with their classification replaced. `failed`: a 500. */
+    answer: 'planted' | 'failed';
+    /** The ids of the rows handed back; empty for a failed read. */
+    rowIds: number[];
+    /** Why the answer is not the one intended — the real read failed, the schema refuses the body — or `null`. */
+    problem: string | null;
+}
+
+/**
+ * Answer the lab's bulk metadata read with the planted classification, until
+ * `failFromNow` turns every later read into a 500 — and `answerFromNow` back.
+ *
+ * Only that read is routed: a `GET /api/v1/assets` carrying `asset_ids`. The
+ * page's other calls under `/api/v1/assets…` — its list (`/assets/query`), the
+ * held live-price poll (`/assets/prices/current`) — have other paths and never
+ * reach this handler, and anything but a GET falls through to the network.
+ *
+ * The lane's own rows are fetched and only `sector_area` and `geographic_area`
+ * are replaced, so the rest of each row — name, currency, type — is what the lane
+ * stores. It is a GET: nothing is written. The planted body is checked against
+ * the generated schema before it leaves, and a refusal is recorded rather than
+ * thrown, so the test can name it instead of timing out on buttons that never
+ * came. The route dies with the test's page; there is nothing else to undo.
+ */
+async function plantAssetMetadata(page: Page): Promise<{reads: MetadataRead[]; failFromNow: () => void; answerFromNow: () => void}> {
+    const reads: MetadataRead[] = [];
+    let failing = false;
+    await page.route(
+        (url) => url.pathname === '/api/v1/assets' && url.searchParams.has('asset_ids'),
+        async (route) => {
+            const request = route.request();
+            if (request.method() !== 'GET') {
+                await route.fallback();
+                return;
+            }
+            const assetIds = new URL(request.url()).searchParams.getAll('asset_ids').map(Number);
+            if (failing) {
+                await route.fulfill({status: 500, json: {detail: 'metadata read failed on purpose by risk-lab.spec.ts'}});
+                reads.push({assetIds, answer: 'failed', rowIds: [], problem: null});
+                return;
+            }
+            try {
+                const response = await route.fetch();
+                if (!response.ok()) {
+                    await route.fulfill({response});
+                    reads.push({assetIds, answer: 'planted', rowIds: [], problem: `the lane answered the real read with ${response.status()}`});
+                    return;
+                }
+                const rows = (await response.json()) as Array<Record<string, unknown>>;
+                const ranked = [...new Set(assetIds)].sort((left, right) => left - right);
+                const planted: Array<Record<string, unknown>> = rows.map((row) => {
+                    const rank = ranked.indexOf(Number(row.asset_id));
+                    const stored = row.classification_params;
+                    const kept = stored !== null && typeof stored === 'object' && !Array.isArray(stored) ? stored : {};
+                    return {
+                        ...row,
+                        classification_params: {...kept, sector_area: {distribution: {...plantedSector(rank).distribution}}, geographic_area: {distribution: {...plantedArea(rank).distribution}}},
+                    };
+                });
+                const verdict = schemas.FAAssetMetadataResponse.array().safeParse(planted);
+                await route.fulfill({response, json: planted});
+                reads.push({
+                    assetIds,
+                    answer: 'planted',
+                    rowIds: planted.map((row) => Number(row.asset_id)),
+                    problem: verdict.success ? null : `the planted rows fail FAAssetMetadataResponse: ${verdict.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ')}`,
+                });
+            } catch (error) {
+                reads.push({assetIds, answer: 'planted', rowIds: [], problem: `the read could not be answered: ${String(error)}`});
+                await route.abort().catch(() => undefined);
+            }
+        },
+    );
+    return {
+        reads,
+        failFromNow: () => {
+            failing = true;
+        },
+        answerFromNow: () => {
+            failing = false;
+        },
+    };
+}
+
+/**
+ * The order the heatmap draws, off `data-asset-order`. A one-shot read, like every
+ * `getAttribute`: callers poll it or front it with a barrier that retries.
+ */
+async function drawnAssetOrder(page: Page): Promise<number[]> {
+    const raw = await page.getByTestId('asset-global-risk-panel').getByTestId('risk-correlation-heatmap').getAttribute('data-asset-order');
+    return (raw ?? '')
+        .split(',')
+        .filter((entry) => entry !== '')
+        .map(Number);
+}
+
+/**
+ * True when every group of `groupOf` forms one unbroken block of `order` — the
+ * shape a grouped ordering promises. Which group comes first is left out on
+ * purpose: groups are sorted by their translated names, and the language is not
+ * this file's subject.
+ */
+function groupedBy(order: readonly number[], groupOf: (assetId: number) => string): boolean {
+    const closed = new Set<string>();
+    let current: string | undefined;
+    for (const assetId of order) {
+        const group = groupOf(assetId);
+        if (group === current) continue;
+        if (current !== undefined) closed.add(current);
+        if (closed.has(group)) return false;
+        current = group;
+    }
+    return true;
+}
+
 // Earned parallel: every block below stubs its own API, owns its selection (which
 // lives in its own browser context) and writes nothing to the shared database, so
 // it can run beside a stranger instead of queueing behind one.
@@ -1914,10 +2518,10 @@ test.describe('Asset Global risk laboratory', () => {
         test.setTimeout(45_000);
         const requests = await installRiskMocks(page);
         await openAssetGlobalRisk(page);
-        // Before anything money-bearing renders: under global privacy the three
-        // money assertions at the end of this test are blind (see `pinPrivacyOff`).
-        // No privacy-ON variant yet, on purpose: it must be written against the risk
-        // formatter once its masking is repaired (hide the number, not the currency).
+        // Before anything money-bearing renders: under global privacy the digit
+        // assertions at the end of this test are blind, because the risk formatter
+        // masks the number (see `pinPrivacyOff`). The masked form has its own net,
+        // in the privacy-ON variant below.
         await pinPrivacyOff(page);
         // L3° draws its scatter only from two dots up: one point is a fact without
         // a comparison. Made a precondition rather than inherited from the seed, so
@@ -2054,10 +2658,71 @@ test.describe('Asset Global risk laboratory', () => {
         // `asset_values={}` and `scope_value=None` for an `AssetSetRiskScope`). It
         // therefore fails the day someone wires those amounts through to the view —
         // which is its entire purpose.
-        expect(rendered, `the panel printed the stubbed monetary magnitude. Panel text was:\n${rendered}`).not.toMatch(MONEY_PATTERN);
-        expect(rendered, 'the panel printed a euro glyph — no amount of money belongs on an unweighted asset set').not.toContain('€');
-        // `.currency-symbol` is what `formatCurrencyAmountHtml` emits around a sum.
-        await expect(panel.locator('.currency-symbol')).toHaveCount(0);
+        //
+        // The currency *glyph* is looked for as money, not as a character: a bare
+        // currency label (`formatCurrencyCodeHtml`, `€ 🇪🇺 EUR`) names a currency the
+        // same way the code does, and passes (see `expectNoMoneyOnPanel`).
+        await expectNoMoneyOnPanel(panel, rendered, requests);
+    });
+
+    /**
+     * C1b — the same net, with privacy on.
+     *
+     * The first test pins privacy off because its net reads digits. With privacy on,
+     * `formatCurrencyAmount` masks the number and keeps the currency and the sign
+     * (`maskCurrencyParts`: privacy hides the number, not the currency). So an amount
+     * that reached this page would still show, as `€ •••`, `−€•••` or `••• €`
+     * depending on the locale. This variant looks for that form, with the same bait,
+     * behind the same barriers, over the same panel. The panel and not the page: the
+     * header may show masked amounts of its own, and those belong to the reader's
+     * portfolio, not to this page.
+     *
+     * Both nets share `expectNoMoneyOnPanel`, which looks for the amount itself and lets a
+     * bare currency label through; this one adds the mask, the form an amount takes here.
+     */
+    test('prints no money with privacy on either, masked or in clear', async ({page}) => {
+        // The first test's budget, for the first test's work: the same barriers on the same sections.
+        test.setTimeout(45_000);
+        const requests = await installRiskMocks(page);
+        await openAssetGlobalRisk(page);
+        // Before anything money-bearing renders, as in the first test, but on.
+        await pinPrivacyOn(page);
+        await ensureSelectionAtLeast(page, 2);
+        await waitForRiskCatalog(page);
+
+        const panel = page.getByTestId('asset-global-risk-panel');
+
+        // The same reach as the first test (its ③): the two comparison levels populated and
+        // the scatter drawn, so the scan below crosses figures rather than empty frames.
+        const selected = await chipIds(page);
+        await waitForLossTable(page);
+        await expect(lossTable(page).locator('[data-testid="risk-asset-set-l1-badDay"][data-measured="true"]'), 'L1° must be showing figures, or the money scan below crosses an empty table').toHaveCount(selected.length);
+        await expect(panel.getByTestId('risk-asset-set-l3-risk-return')).toBeVisible({timeout: 20_000});
+        await expectChartCanvas(page, 'risk-asset-set-l3-scatter', 20_000);
+
+        // The bait: the replay, where the stubbed amounts arrive, run behind the same
+        // presence barriers — the total, a tornado row, and the audit that proves the
+        // answer is a replay.
+        await openAndRunReplay(page);
+        await expect(page.getByTestId('risk-replay-audit')).toBeVisible({timeout: 20_000});
+        await expect
+            .poll(() => requests.some((request) => request.scope.kind === 'asset_set' && request.mode === 'current_composition' && request.analytics.some((analytic) => isHistoricalReplay(analytic))), {
+                timeout: 15_000,
+                message: 'the replay must have run against an asset_set scope — that is the scope the no-money rule is about',
+            })
+            .toBe(true);
+        // The premise, still true at the end: nothing along the way turned privacy off.
+        await expect(page.getByTestId('privacy-toggle')).toHaveAttribute('aria-pressed', 'true');
+
+        // Populated with the half it is allowed to show: percentages, which privacy does not mask.
+        const replayText = await page.getByTestId('risk-l4-replay').innerText();
+        expect(replayText, 'the replay rendered without a single percentage — the barriers above are lying').toContain('%');
+
+        const rendered = await panel.innerText();
+        // THE RULE, masked. An amount on this page is a claim about a portfolio the
+        // reader never described, and hiding its number does not make it true.
+        expect(rendered, `the panel printed a masked amount — privacy hid the number of an amount that must not exist here. Panel text was:\n${rendered}`).not.toContain(MASKED_AMOUNT);
+        await expectNoMoneyOnPanel(panel, rendered, requests);
     });
 
     test('opens on a small selection, never on the API ceiling', async ({page}) => {
@@ -2494,6 +3159,136 @@ test.describe('Asset Global risk laboratory', () => {
     });
 
     /**
+     * The three grouping orderings are inputs the lab loads, not features the
+     * heatmap has: types from the page's asset list, sectors and areas from one
+     * read of the assets' stored metadata (see {@link plantAssetMetadata}). This
+     * test pins where each comes from — the behaviour the extraction of that
+     * loading (K11) must leave exactly as it is.
+     *
+     * The failure is provoked on a *changed* selection, after a read that
+     * succeeded, rather than on a fresh page. A fresh page starts with empty maps,
+     * so a failed read that forgot to clear them would pass there unseen; here the
+     * sector and area orderings are on screen when the read fails, and they must
+     * go. The type ordering must stay, because its map never came from that read.
+     *
+     * And "by sector" is the ordering in use when it goes. An ordering that is no
+     * longer offered cannot stay in charge behind a row of unpressed buttons: the
+     * matrix falls back to its initial ordering — similarity — presses it and draws
+     * it, the very order it drew for the same assets at the start. The fallback
+     * only stands in: the moment "by sector" is offered again, the user's choice
+     * applies again.
+     */
+    test("the matrix offers type, sector and area orderings from the assets' stored metadata, and loses only those when the metadata read fails", async ({page}) => {
+        // Four selections, each read and drawn, and the "+" once or twice in one
+        // page: more than the default budget, no more than the neighbours' 45 s.
+        test.setTimeout(45_000);
+        await installRiskMocks(page);
+        const metadata = await plantAssetMetadata(page);
+        await openAssetGlobalRisk(page);
+        await ensureSelectionAtLeast(page, MINIMUM_SELECTION);
+
+        // Every chip is analysed — the stubbed engine admits them all — so these are
+        // the ids the read asks about, in the rank order the planted groups follow.
+        const selection = [...(await chipIds(page))].sort((left, right) => left - right);
+        const matrix = selection.slice(0, MATRIX_LIMIT);
+        expect(matrix.length, 'the two planted partitions only cross from four assets up').toBeGreaterThanOrEqual(MINIMUM_SELECTION);
+        const sectorOf = (assetId: number): string => {
+            const rank = selection.indexOf(assetId);
+            return rank < 0 ? `unselected #${assetId}` : plantedSector(rank).dominant;
+        };
+        expect(new Set(matrix.map(sectorOf)).size, 'the matrix must hold both planted sectors, or "grouped" is one block and proves nothing').toBe(PLANTED_SECTORS.length);
+
+        const panel = page.getByTestId('asset-global-risk-panel');
+        const ordering = (mode: string) => panel.getByTestId(`risk-correlation-ordering-${mode}`);
+        /** The first read answered `answer` for exactly `assetIds` among those after the `since`-th: sample the length before acting. */
+        const readAfter = (since: number, answer: MetadataRead['answer'], assetIds: readonly number[]) => metadata.reads.slice(since).find((read) => read.answer === answer && scopeKey(read.assetIds) === scopeKey(assetIds));
+        const readOf = (answer: MetadataRead['answer'], assetIds: readonly number[]) => readAfter(0, answer, assetIds);
+        /** Exactly one ordering button is pressed, and it is `mode`'s. Both halves retry. */
+        const expectOnlyPressed = async (mode: string, why: string) => {
+            const pressed = panel.locator('[data-testid^="risk-correlation-ordering-"][aria-pressed="true"]');
+            await expect(pressed, why).toHaveCount(1);
+            await expect(pressed, why).toHaveAttribute('data-testid', `risk-correlation-ordering-${mode}`);
+        };
+
+        await waitForRiskCatalog(page);
+        await expect.poll(() => readOf('planted', selection) !== undefined, {timeout: 15_000, message: 'the lab must read the stored metadata of exactly the assets it analyses'}).toBe(true);
+        const answered = readOf('planted', selection);
+        expect(answered?.problem ?? null, 'the planted answer must be one the client accepts, or the maps stay empty for a reason this test did not choose').toBeNull();
+        expect(scopeKey(answered?.rowIds ?? []), 'every selected asset must come back with its planted classification').toBe(scopeKey(selection));
+
+        // The two orderings the heatmap always has, then the three the inputs open.
+        await expect(ordering('similarity')).toBeVisible({timeout: 20_000});
+        await expect(ordering('similarity')).toHaveAttribute('aria-pressed', 'true');
+        await expect(ordering('name')).toBeVisible();
+        await expect(ordering('type')).toBeVisible();
+        await expect(ordering('sector')).toBeVisible({timeout: 10_000});
+        await expect(ordering('region')).toBeVisible();
+        // The composition rows read the same two maps, whatever the ordering.
+        await expect(panel.getByTestId('risk-correlation-groups-sector')).toBeVisible();
+        await expect(panel.getByTestId('risk-correlation-groups-region')).toBeVisible();
+
+        // 🔴 The precondition that gives the click its teeth: were similarity to draw
+        // the planted sectors as blocks already, a button that only toggled its own
+        // pressed state would pass the grouping assertion below.
+        await expect.poll(async () => scopeKey(await drawnAssetOrder(page)), {timeout: 20_000, message: 'the heatmap must draw the selection this test holds'}).toBe(scopeKey(matrix));
+        const clustered = await drawnAssetOrder(page);
+        expect(groupedBy(clustered, sectorOf), `similarity must not already draw the planted sectors as blocks: ${clustered.map((assetId) => `${assetId}=${sectorOf(assetId)}`).join(', ')}`).toBe(false);
+
+        await ordering('sector').click();
+        await expect(ordering('sector')).toHaveAttribute('aria-pressed', 'true');
+        await expect(ordering('similarity')).toHaveAttribute('aria-pressed', 'false');
+        await expect.poll(async () => groupedBy(await drawnAssetOrder(page), sectorOf), {message: 'by sector must draw each planted sector as one block — the map keyed by asset id, and the sector one, not the area one'}).toBe(true);
+        expect(scopeKey(await drawnAssetOrder(page)), 'grouping is a view choice: it may move rows, never drop one').toBe(scopeKey(matrix));
+
+        // ── The read fails. Every read from here on is a 500; a smaller selection
+        // makes the lab ask again. The largest id of the matrix goes, so the matrix
+        // itself changes and its redraw is something to wait for.
+        const beforeFailure = metadata.reads.length;
+        metadata.failFromNow();
+        const removed = Math.max(...matrix);
+        const remaining = selection.filter((assetId) => assetId !== removed);
+        await page.getByTestId(`risk-remove-asset-${removed}`).click();
+        await expect(page.getByTestId(`risk-selected-asset-${removed}`)).toHaveCount(0);
+        await expect.poll(() => readAfter(beforeFailure, 'failed', remaining) !== undefined, {timeout: 15_000, message: 'a changed selection must be read again'}).toBe(true);
+        await expect.poll(async () => scopeKey(await drawnAssetOrder(page)), {timeout: 20_000, message: 'the heatmap must redraw for the smaller selection'}).toBe(scopeKey(remaining.slice(0, MATRIX_LIMIT)));
+
+        // Presence before absence: the orderings the page supplies are on screen, so
+        // the two missing ones are missing from a rendered heatmap, not from one
+        // that has not drawn yet.
+        await expect(ordering('similarity')).toBeVisible();
+        await expect(ordering('name')).toBeVisible();
+        await expect(ordering('type')).toBeVisible();
+        await expect(ordering('sector')).toHaveCount(0);
+        await expect(ordering('region')).toHaveCount(0);
+        await expect(panel.getByTestId('risk-correlation-groups')).toHaveCount(0);
+
+        // 🔴 "By sector" was the ordering in use, and it is no longer offered. The
+        // matrix must not keep ordering by it behind a row of unpressed buttons.
+        await expectOnlyPressed('similarity', 'with "by sector" gone, the matrix falls back to similarity and presses it');
+
+        // ── The same assets as phase 1, the read still failing: the fallback must
+        // draw the very order similarity drew for them at the start. A pressed
+        // button over some other order would be the same defect, better hidden.
+        const beforeReAdd = metadata.reads.length;
+        await addThroughPicker(page, [removed]);
+        await expect.poll(() => readAfter(beforeReAdd, 'failed', selection) !== undefined, {timeout: 15_000, message: 'the restored selection must be read again'}).toBe(true);
+        await expect.poll(async () => scopeKey(await drawnAssetOrder(page)), {timeout: 20_000, message: 'the heatmap must redraw for the restored selection'}).toBe(scopeKey(matrix));
+        await expect(ordering('sector')).toHaveCount(0);
+        await expectOnlyPressed('similarity', 'the fallback holds while "by sector" stays unavailable');
+        await expect.poll(() => drawnAssetOrder(page), {message: 'the fallback must draw the similarity order phase 1 drew for these very assets'}).toEqual(clustered);
+
+        // ── The read answers again: "by sector" is back, and the user's choice with
+        // it. The fallback stood in for the choice; it did not take it away.
+        const beforeRecovery = metadata.reads.length;
+        metadata.answerFromNow();
+        await page.getByTestId(`risk-remove-asset-${removed}`).click();
+        await expect(page.getByTestId(`risk-selected-asset-${removed}`)).toHaveCount(0);
+        await expect.poll(() => readAfter(beforeRecovery, 'planted', remaining) !== undefined, {timeout: 15_000, message: 'a changed selection must be read again'}).toBe(true);
+        await expect(ordering('sector')).toBeVisible({timeout: 10_000});
+        await expectOnlyPressed('sector', 'once "by sector" is offered again, the choice the user made applies again');
+    });
+
+    /**
      * ═══════════════════════════════════════════════════════════════════════
      * THE GUARD. Everything above this line is stubbed; this is the one test
      * that talks to the real backend, and it exists because of the stubbing.
@@ -2637,15 +3432,14 @@ test.describe('Asset Global risk laboratory', () => {
         expect(
             varInstances.map((analytic) => Number(analytic.parameters?.horizon_days)).sort((left, right) => left - right),
             'the bad month is a second measurement over a compounded horizon, never the bad day scaled',
-        ).toEqual([1, 21]);
+        ).toEqual([1, 30]);
 
         // ③ THE TRANSPOSITION. One row per *selected* asset — asserted against the
         // chips the page is actually showing, because the opening selection is
         // seed data this test does not own. A literal here would be a count of
         // somebody else's fixture.
         await expect(lossTable(page)).toHaveAttribute('data-row-count', String(selected.length));
-        const rows = lossTable(page).getByTestId('risk-asset-set-l1-row');
-        await expect(rows).toHaveCount(selected.length);
+        await expect(lossRows(page)).toHaveCount(selected.length);
         expect(
             [...(await lossRowAssetIds(page))].sort((left, right) => left - right),
             'the rows must be the selection, not a slice of it and not a superset',
@@ -2706,8 +3500,8 @@ test.describe('Asset Global risk laboratory', () => {
         // asset — including the one no analytic answered for.
         expect(selected, 'the unmeasured asset is still selected; that is the whole premise').toContain(unmeasured);
         await expect(lossTable(page)).toHaveAttribute('data-row-count', String(selected.length));
-        await expect(lossTable(page).getByTestId('risk-asset-set-l1-row')).toHaveCount(selected.length);
-        await expect(lossTable(page).locator(`tr[data-asset-id="${unmeasured}"]`), 'the asset nobody could measure must still have a row of its own').toHaveCount(1);
+        await expect(lossRows(page)).toHaveCount(selected.length);
+        await expect(lossRow(page, unmeasured), 'the asset nobody could measure must still have a row of its own').toHaveCount(1);
 
         // …and every one of its cells declares itself unmeasured, rather than
         // printing a zero. `data-measured="false"` is the difference between "this
@@ -2723,8 +3517,8 @@ test.describe('Asset Global risk laboratory', () => {
         }
 
         // AND THE PAGE SAYS WHY. An exclusion degrades every analytic of the
-        // request (`service.py:783`), so all three of L1°'s results come back
-        // `partial` and all three carry the one `assets_excluded` sentence —
+        // request, so all three of L1°'s results come back `partial` and all three
+        // carry the same `assets_excluded` warning — one reason, one sentence —
         // deduplicated for the reader, counted in the attribute.
         const health = lossSection(page).getByTestId('risk-asset-set-loss-health');
         await expect(health).toBeVisible();
@@ -2733,7 +3527,19 @@ test.describe('Asset Global risk laboratory', () => {
         const reasons = lossSection(page).getByTestId('risk-asset-set-loss-reasons');
         await expect(reasons).toBeVisible();
         await expect(reasons, 'one distinct sentence, however many results carried it').toHaveAttribute('data-count', '1');
-        await expect(reasons.getByTestId('risk-asset-set-loss-reason'), 'its arity is published rather than drawn three times').toHaveAttribute('data-occurrences', '3');
+        const reason = reasons.getByTestId('risk-asset-set-loss-reason');
+        await expect(reason, 'its arity is published rather than drawn three times').toHaveAttribute('data-occurrences', '3');
+
+        // …in the reader's language. The warning arrives as its reason's key and
+        // values, with the backend's English `message` only as the fallback. So the
+        // sentence on screen must be the one worded from the key. That is proved by
+        // shape, never by wording: it names the asset the warning planted, a name
+        // only the formatter can have put there; it is not the fallback; and no ICU
+        // brace was left unformatted.
+        await expect(reason, "the warning's names never reached the formatter: the reason was not worded from its key").toContainText(unnamedAsset(unmeasured));
+        const sentence = ((await reason.textContent()) ?? '').trim();
+        expect(sentence, "the reason is the backend's English fallback, not the sentence of its key").not.toBe(EXCLUDED_WARNING_MESSAGE);
+        expect(sentence, 'the reason carries an unformatted ICU placeholder').not.toContain('{');
 
         // Nothing *failed* — a degraded measurement is not an absent one, and the
         // two disclosures are deliberately separate lists. The barriers above make
@@ -2810,12 +3616,506 @@ test.describe('Asset Global risk laboratory', () => {
     });
 
     /**
+     * L1°'s headers explain; they do not link.
+     *
+     * Each value column carries its help as the tooltip of its own title — DataTable's
+     * `headerTooltip` with no URL — so there is no ⓘ beside a title and no anchor in the
+     * header row. The documentation lives on the section frame's manual icon, one for the
+     * whole level. The previous design put a link to a theory page beside every title:
+     * five anchors whose paths were assembled at runtime, which the link gate could not
+     * even read.
+     *
+     * The tooltip's words are not read: they are translated, and the component test
+     * already proves each title shows its own key's message. What only a browser can
+     * prove is that resting the pointer on the title opens it.
+     */
+    test("L1°'s value columns carry their help as a tooltip on the title, and its header row carries no link", async ({page}) => {
+        await installRiskMocks(page);
+        await openAssetGlobalRisk(page);
+        await waitForRiskCatalog(page);
+        await waitForLossTable(page);
+
+        // Presence first: every title is drawn, so the absences below are about a header
+        // that exists rather than one that has not rendered yet.
+        for (const column of ['name', ...L1_CELLS]) {
+            await expect(lossTable(page).getByTestId(`dt-header-${column}`), `the ${column} title is missing from L1°'s header`).toBeVisible();
+        }
+        await expect(lossTable(page).locator('thead a'), "a link in L1°'s header row: the documentation belongs to the frame's manual icon").toHaveCount(0);
+        await expect(lossTable(page).locator('[data-testid^="dt-header-tooltip-"]'), 'an ⓘ beside a title: the help is the title itself').toHaveCount(0);
+        await expect(page.locator('[data-testid^="risk-asset-set-l1-docs-"]')).toHaveCount(0);
+
+        // The help itself, where the pointer rests. The Tooltip opens after its own hover
+        // delay, which the retrying assertion absorbs: nothing here waits on a clock.
+        await lossTable(page).getByTestId('dt-sort-badDay').hover();
+        const help = page.getByTestId('tooltip-content');
+        await expect(help, 'resting on the bad-day title must open its help').toBeVisible();
+        await expect(help, 'the help opened empty').not.toHaveText(/^\s*$/);
+        await expect(help, 'the help printed its own key: the catalogue has no message for it').not.toHaveText('risk.assetSet.levels.l1.columnHelp.badDay');
+        // Resting is not pressing: the column is still unsorted.
+        await expect(lossTable(page).getByTestId('dt-header-badDay')).toHaveAttribute('data-sort', 'none');
+    });
+
+    /**
+     * L1° sorts a column by the figure it draws.
+     *
+     * A loss is drawn negative, so ascending puts the largest loss first; an asset nobody
+     * could measure is a blank, not a zero, and goes last whichever way the column points;
+     * the third press clears the sort and gives the rows back in the selection's order —
+     * the only order the system ever chooses, since the level compares and never ranks.
+     *
+     * The figures are this file's own ({@link INVENTED}), re-planted as a zig-zag
+     * (`zigzagBadDay`) so that ascending, descending and the opening order are three
+     * different orders; the blank is the asset `dropLastAsset` excludes, the state the
+     * backend leaves when it cannot prepare a series. The expected orders are worked out
+     * from the answer the stub sent, rebuilt through the same function that sent it.
+     */
+    test('L1° sorts a column by the loss it draws: the largest first, the unmeasured last both ways, and a third press restores the selection order', async ({page}) => {
+        const options: RiskStubOptions = {dropLastAsset: true, zigzagBadDay: true};
+        const requests = await installRiskMocks(page, options);
+        await openAssetGlobalRisk(page);
+        await ensureSelectionAtLeast(page, MINIMUM_SELECTION);
+        await waitForRiskCatalog(page);
+        await waitForLossTable(page);
+
+        // The answer the page was given for the selection on screen, rebuilt from the
+        // request it answered: the bad day of every measured asset, and the one left blank.
+        const selected = await chipIds(page);
+        await expect.poll(() => levelRequestsFor(requests, selected).length, {timeout: 20_000, message: 'the per-asset wave must have been requested for the selection on screen'}).toBeGreaterThan(0);
+        const levels = levelRequestsFor(requests, selected)[0];
+        const daily = levels.analytics.find((analytic) => analytic.analytic_code === 'asset_set_var' && Number(analytic.parameters?.horizon_days ?? 1) === 1);
+        if (!daily) throw new Error('The per-asset wave carries no one-day asset_set_var, so the bad day has nothing to sort.');
+        const badDay = new Map(assetSetVarOutput(levels, daily, options).items.map((item): [number, number] => [item.asset_id, item.conditional_value_at_risk]));
+        const {excluded} = preparedAssetIds(levels, options);
+        expect(excluded, 'dropLastAsset must leave exactly one selected asset unmeasured').toHaveLength(1);
+        const unmeasured = excluded[0];
+
+        // Barrier: the answer is on screen — every row drawn, the measured ones measured and
+        // the excluded one blank — before any order is read.
+        await expect(lossRows(page)).toHaveCount(selected.length);
+        await expect(lossTable(page).locator('[data-testid="risk-asset-set-l1-badDay"][data-measured="true"]')).toHaveCount(badDay.size);
+        await expect(lossCell(page, unmeasured, 'badDay')).toHaveAttribute('data-measured', 'false');
+
+        const opening = await lossRowAssetIds(page);
+        expect(
+            [...opening].sort((left, right) => left - right),
+            'the rows must be the selection',
+        ).toEqual([...selected].sort((left, right) => left - right));
+
+        // The oracle, stated as the rule: the figure drawn is the loss with its sign, −CVaR,
+        // so ascending is the largest CVaR first, and a blank goes last either way. Every
+        // figure is distinct (`zigzagRank`), so no tie is left to the table to settle.
+        const drawn = (assetId: number): number | null => {
+            const cvar = badDay.get(assetId);
+            return cvar === undefined ? null : -cvar;
+        };
+        const orderedBy = (direction: 'asc' | 'desc'): number[] =>
+            [...opening].sort((left, right) => {
+                const a = drawn(left);
+                const b = drawn(right);
+                if (a === null || b === null) return a === null ? (b === null ? 0 : 1) : -1;
+                return direction === 'asc' ? a - b : b - a;
+            });
+        const ascending = orderedBy('asc');
+        const descending = orderedBy('desc');
+        const largestLoss = [...badDay.entries()].sort(([, left], [, right]) => right - left)[0][0];
+        expect(ascending[0], 'the oracle itself: ascending opens on the largest loss').toBe(largestLoss);
+        expect([ascending[ascending.length - 1], descending[descending.length - 1]], 'the oracle itself: the blank closes both orders').toEqual([unmeasured, unmeasured]);
+        // Premise: every press must move a row, or the order read after it proves nothing.
+        expect(ascending, 'premise: ascending must differ from the opening order').not.toEqual(opening);
+        expect(descending, 'premise: descending must differ from the opening order, or "cleared" and "descending" would draw the same rows').not.toEqual(opening);
+
+        const header = lossTable(page).getByTestId('dt-header-badDay');
+        const title = lossTable(page).getByTestId('dt-sort-badDay');
+        await expect(header, 'L1° opens unsorted').toHaveAttribute('data-sort', 'none');
+
+        await title.click();
+        await expect(header).toHaveAttribute('data-sort', 'asc');
+        await expect.poll(() => lossRowAssetIds(page), {message: 'ascending: the largest loss first, the unmeasured asset last'}).toEqual(ascending);
+
+        await title.click();
+        await expect(header).toHaveAttribute('data-sort', 'desc');
+        await expect.poll(() => lossRowAssetIds(page), {message: 'descending: the smallest loss first, the unmeasured asset still last'}).toEqual(descending);
+
+        await title.click();
+        await expect(header).toHaveAttribute('data-sort', 'none');
+        await expect.poll(() => lossRowAssetIds(page), {message: "the third press must give the rows back in the selection's order"}).toEqual(opening);
+    });
+
+    /**
+     * L1°'s asset cell is the Assets list's: the type icon, then the name on one line.
+     *
+     * The panel resolves each icon as `icon_url || getAssetTypeIconUrl(asset_type)`, and
+     * the second half never comes back empty, so every asset on this page has one. The
+     * name sits in the span the marquee attaches to — found by the marquee's own selector,
+     * a hook rather than a style — and does not wrap: a long name scrolls instead of
+     * pushing its row onto two lines, which is the point of the pattern.
+     */
+    test('L1° names each asset with its type icon and a name that stays on one line', async ({page}) => {
+        await installRiskMocks(page);
+        await openAssetGlobalRisk(page);
+        await waitForRiskCatalog(page);
+        await waitForLossTable(page);
+
+        const selected = await chipIds(page);
+        await expect(lossRows(page)).toHaveCount(selected.length);
+        for (const assetId of selected) {
+            const cell = lossNameCell(page, assetId);
+            await expect(cell, `asset ${assetId} has no name cell of its own`).toHaveCount(1);
+            await expect(lossRow(page, assetId).getByTestId('risk-asset-set-l1-name'), `asset ${assetId}: its name cell sits in another row`).toHaveAttribute('data-asset-id', String(assetId));
+
+            const icon = cell.getByTestId('risk-asset-set-l1-icon');
+            await expect(icon, `asset ${assetId}: no type icon beside the name`).toHaveCount(1);
+            await expect(icon, `asset ${assetId}: the icon has no source`).toHaveAttribute('src', /\S/);
+
+            const name = cell.locator(OVERFLOW_MARQUEE_SELECTOR);
+            await expect(name, `asset ${assetId}: the name is not in the marquee's span`).toHaveCount(1);
+            await expect(name, `asset ${assetId}: the name is empty`).not.toHaveText(/^\s*$/);
+            await expect(name, `asset ${assetId}: the name wraps instead of scrolling`).toHaveCSS('white-space', 'nowrap');
+        }
+    });
+
+    /**
+     * L1°'s columns are chosen from its frame, right before the manual icon.
+     *
+     * The toggle is the project's `ColumnVisibilityToggle`, placed in the frame's header
+     * (`RiskLevelSection`'s `actions`) rather than above the table: the header row is where
+     * the level's own controls live. The component tests pin its place in the markup and its
+     * wiring; what only a browser can show is what the reader sees — the toggle on the icon's
+     * line, right before it rather than spread across the header — and that a column really
+     * goes and really comes back.
+     *
+     * `badMonth` is the column switched off because it sits between two others: the rest must
+     * close up in their order, and it must come back where it was. The choice is kept in this
+     * context's `localStorage`, under the table's storage key, and dies with the context; the
+     * test switches it back all the same, and ends on the table it found. Reordering by drag
+     * is left out on purpose.
+     */
+    test("L1°'s frame offers the column toggle right before its manual icon, and bad month switched off and on goes and comes back alone", async ({page}) => {
+        await installRiskMocks(page);
+        await openAssetGlobalRisk(page);
+        await waitForRiskCatalog(page);
+        await waitForLossTable(page);
+
+        const frame = lossSection(page);
+        const toggle = frame.getByTestId('column-visibility-toggle');
+        const docs = frame.getByTestId('risk-asset-set-loss-docs');
+        await expect(toggle, "L1°'s frame offers no column toggle").toBeVisible();
+        await expect(docs).toBeVisible();
+        await expect(frame.getByTestId('risk-asset-set-loss-body').getByTestId('column-visibility-toggle'), "the toggle sits in L1°'s body: it belongs to the header, beside the manual icon").toHaveCount(0);
+
+        // Order and geometry in one read, after the barriers above: both boxes come from the
+        // same layout, so a section above that finishes loading and pushes the frame down
+        // cannot land between two measurements.
+        const head = await frame.evaluate((section) => {
+            const toggleNode = section.querySelector('[data-testid="column-visibility-toggle"]');
+            const docsNode = section.querySelector('[data-testid="risk-asset-set-loss-docs"]');
+            if (toggleNode === null || docsNode === null) return null;
+            const box = (node: Element) => {
+                const {left, right, top, bottom, width} = node.getBoundingClientRect();
+                return {left, right, top, bottom, width};
+            };
+            return {togglePrecedesDocs: !toggleNode.contains(docsNode) && (toggleNode.compareDocumentPosition(docsNode) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0, toggle: box(toggleNode), docs: box(docsNode)};
+        });
+        if (head === null) throw new Error('The toggle and the manual icon were visible a moment ago and are gone from the frame.');
+        expect(head.togglePrecedesDocs, 'the toggle must come before the manual icon').toBe(true);
+
+        // As the reader sees it: on the icon's line, to its left, and beside it — not spread
+        // across the header, which is where a third child of the title row's `justify-between`
+        // would land. "Beside" is measured against the toggle itself: less than its own width away.
+        expect(head.toggle.top < head.docs.bottom && head.docs.top < head.toggle.bottom, "the toggle is not on the manual icon's line").toBe(true);
+        const gap = head.docs.left - head.toggle.right;
+        expect(gap, 'the toggle is not to the left of the manual icon').toBeGreaterThanOrEqual(0);
+        expect(gap, 'the toggle floats away from the manual icon').toBeLessThan(head.toggle.width);
+
+        // One toggle in L1°'s frame, its own table's. L3°'s frame has one of its own since L3° became a
+        // table too; the L3° test below proves it, and that it reads L3°'s columns rather than these.
+        await expect(frame.getByTestId('column-visibility-toggle'), "L1°'s frame carries one toggle, its own table's").toHaveCount(1);
+
+        // Every column drawn, and a row per selected asset, before any column is touched.
+        const selected = await chipIds(page);
+        await expect(lossRows(page)).toHaveCount(selected.length);
+        const opening = ['name', ...L1_CELLS];
+        await expect.poll(() => lossHeaderIds(page), {message: 'L1° must open on every column, in its order'}).toEqual(opening);
+
+        await toggle.click();
+        const menu = frame.getByTestId('column-visibility-dropdown');
+        await expect(menu).toBeVisible();
+        const badMonth = menu.getByTestId('column-visibility-item-badMonth');
+
+        await badMonth.click();
+        await expect(lossTable(page).getByTestId('dt-header-badMonth'), 'bad month is still drawn after switching it off').toHaveCount(0);
+        await expect(lossTable(page).getByTestId('risk-asset-set-l1-badMonth'), "bad month's cells outlived its title").toHaveCount(0);
+        await expect.poll(() => lossHeaderIds(page), {message: 'the other columns must stay, closed up in their order'}).toEqual(opening.filter((column) => column !== 'badMonth'));
+        for (const cell of L1_CELLS.filter((column) => column !== 'badMonth')) {
+            await expect(lossTable(page).getByTestId(`risk-asset-set-l1-${cell}`), `${cell} lost cells when bad month was hidden`).toHaveCount(selected.length);
+        }
+
+        // Back on: the column returns where it was, with a cell in every row.
+        await badMonth.click();
+        await expect.poll(() => lossHeaderIds(page), {message: 'bad month must come back where it was'}).toEqual(opening);
+        await expect(lossTable(page).getByTestId('risk-asset-set-l1-badMonth'), 'bad month came back without its cells').toHaveCount(selected.length);
+    });
+
+    /**
+     * L3°'s headers explain; they do not link — L1°'s rule, on the table that now has L1°'s shape
+     * (the developer's review, 30/09).
+     *
+     * Each value column carries its help as the tooltip of its own title (`headerTooltip`, no URL),
+     * so there is no ⓘ beside a title and no anchor in the header row: the documentation is the
+     * frame's manual icon, one for the whole level. The return column's help is the one the
+     * developer asked for by name — how the average annual return is computed — so it is the one
+     * rested on. Its words are not read: the component test proves each title shows its own key's
+     * message; what only a browser can prove is that resting the pointer on the title opens it.
+     *
+     * And the titles fit: the table is laid out `auto`, so every column widens to its own title in
+     * whatever language. DataTable draws its titles upper-case on one line, and a fixed layout sized
+     * for Italian let a French title spill out of its column on L1°.
+     */
+    test("L3°'s value columns carry their help as a tooltip on the title, and its header row carries no link", async ({page}) => {
+        await installRiskMocks(page);
+        await openAssetGlobalRisk(page);
+        await waitForRiskCatalog(page);
+        await waitForPaidTable(page);
+
+        // Presence first: every title is drawn, so the absences below are about a header that exists
+        // rather than one that has not rendered yet.
+        for (const column of ['name', ...L3_CELLS]) {
+            await expect(paidTable(page).getByTestId(`dt-header-${column}`), `the ${column} title is missing from L3°'s header`).toBeVisible();
+        }
+        await expect(paidTable(page).locator('thead a'), "a link in L3°'s header row: the documentation belongs to the frame's manual icon").toHaveCount(0);
+        await expect(paidTable(page).locator('[data-testid^="dt-header-tooltip-"]'), 'an ⓘ beside a title: the help is the title itself').toHaveCount(0);
+        await expect(page.locator('[data-testid^="risk-asset-set-l3-docs-"]')).toHaveCount(0);
+        await expect(paidTable(page).locator('table', {has: page.getByTestId('dt-header-name')}), "L3°'s table is not laid out auto: a title longer than its column spills out of it").toHaveCSS('table-layout', 'auto');
+
+        // The help itself, where the pointer rests. The Tooltip opens after its own hover delay,
+        // which the retrying assertion absorbs: nothing here waits on a clock.
+        await paidTable(page).getByTestId('dt-sort-expectedReturn').hover();
+        const help = page.getByTestId('tooltip-content');
+        await expect(help, 'resting on the return title must open its help').toBeVisible();
+        await expect(help, 'the help opened empty').not.toHaveText(/^\s*$/);
+        await expect(help, 'the help printed its own key: the catalogue has no message for it').not.toHaveText('risk.assetSet.levels.l3.columnHelp.expectedReturn');
+        // Resting is not pressing: the column is still unsorted.
+        await expect(paidTable(page).getByTestId('dt-header-expectedReturn')).toHaveAttribute('data-sort', 'none');
+    });
+
+    /**
+     * L3° sorts a column by the figure it draws, with its sign.
+     *
+     * The average annual return is the column where the sign decides: a loss of 2.1% is larger than
+     * a gain of 0.3% and must still sort below it, so neither a sort by magnitude nor one by the
+     * printed text passes. An asset nobody could measure is a blank, not a zero, and goes last
+     * whichever way the column points; the third press clears the sort and gives the rows back in
+     * the selection's order — the only order the system ever chooses, since the level compares and
+     * never ranks.
+     *
+     * The figures are this file's own ({@link INVENTED}), re-planted as a zig-zag that crosses zero
+     * (`zigzagExpectedReturn`) so that ascending, descending and the opening order are three
+     * different orders; the blank is the asset `dropLastAsset` excludes. The expected orders are
+     * worked out from the answer the stub sent, rebuilt through the same function that sent it.
+     */
+    test('L3° sorts the average annual return by its value with its sign, the unmeasured last both ways, and a third press restores the selection order', async ({page}) => {
+        const options: RiskStubOptions = {dropLastAsset: true, zigzagExpectedReturn: true};
+        const requests = await installRiskMocks(page, options);
+        await openAssetGlobalRisk(page);
+        await ensureSelectionAtLeast(page, MINIMUM_SELECTION);
+        await waitForRiskCatalog(page);
+        await waitForPaidTable(page);
+
+        // The answer the page was given for the selection on screen, rebuilt from the request it
+        // answered: the average return of every measured asset, and the one left blank.
+        const selected = await chipIds(page);
+        await expect.poll(() => levelRequestsFor(requests, selected).length, {timeout: 20_000, message: 'the per-asset wave must have been requested for the selection on screen'}).toBeGreaterThan(0);
+        const levels = levelRequestsFor(requests, selected)[0];
+        const averageReturn = new Map(assetSetRiskReturnOutput(levels, options).items.map((item): [number, number] => [item.asset_id, item.expected_annual_return]));
+        const {excluded} = preparedAssetIds(levels, options);
+        expect(excluded, 'dropLastAsset must leave exactly one selected asset unmeasured').toHaveLength(1);
+        const unmeasured = excluded[0];
+        const losing = [...averageReturn.entries()].filter(([, value]) => value < 0).map(([assetId]) => assetId);
+        const gaining = [...averageReturn.entries()].filter(([, value]) => value > 0).map(([assetId]) => assetId);
+        expect([losing.length > 0, gaining.length > 0], `premise: the planted returns must cross zero, or the sign goes untested — read ${JSON.stringify([...averageReturn.values()])}`).toEqual([true, true]);
+
+        // Barrier: the answer is on screen — every row drawn, the measured ones measured and the
+        // excluded one blank — before any order is read.
+        await expect(paidRows(page)).toHaveCount(selected.length);
+        await expect(paidTable(page).locator('[data-testid="risk-asset-set-l3-expectedReturn"][data-measured="true"]')).toHaveCount(averageReturn.size);
+        await expect(paidCell(page, unmeasured, 'expectedReturn')).toHaveAttribute('data-measured', 'false');
+        // …and each sign is drawn as its own glyph: a loss with U+2212, a gain with +.
+        await expect(paidCell(page, losing[0], 'expectedReturn'), 'a negative average return must be drawn with U+2212').toHaveText(/^\s*\u2212/);
+        await expect(paidCell(page, gaining[0], 'expectedReturn'), 'a positive average return must be drawn with +').toHaveText(/^\s*\+/);
+
+        const opening = await paidRowAssetIds(page);
+        expect(
+            [...opening].sort((left, right) => left - right),
+            'the rows must be the selection',
+        ).toEqual([...selected].sort((left, right) => left - right));
+
+        // The oracle, stated as the rule: by the value with its sign, and a blank last either way.
+        // Every figure is distinct (`zigzagRank`), so no tie is left to the table to settle.
+        const orderedBy = (figure: (assetId: number) => number | undefined, direction: 'asc' | 'desc'): number[] =>
+            [...opening].sort((left, right) => {
+                const a = figure(left);
+                const b = figure(right);
+                if (a === undefined || b === undefined) return a === undefined ? (b === undefined ? 0 : 1) : -1;
+                return direction === 'asc' ? a - b : b - a;
+            });
+        const ascending = orderedBy((assetId) => averageReturn.get(assetId), 'asc');
+        const descending = orderedBy((assetId) => averageReturn.get(assetId), 'desc');
+        const byMagnitude = orderedBy((assetId) => (averageReturn.has(assetId) ? Math.abs(averageReturn.get(assetId) as number) : undefined), 'asc');
+        expect([ascending[ascending.length - 1], descending[descending.length - 1]], 'the oracle itself: the blank closes both orders').toEqual([unmeasured, unmeasured]);
+        // Premises: every press must move a row, and the order by value must not be the order by size.
+        expect(ascending, 'premise: ascending must differ from the opening order').not.toEqual(opening);
+        expect(descending, 'premise: descending must differ from the opening order, or "cleared" and "descending" would draw the same rows').not.toEqual(opening);
+        expect(ascending, 'premise: by value must differ from by magnitude, or a sort that dropped the sign would pass').not.toEqual(byMagnitude);
+
+        const header = paidTable(page).getByTestId('dt-header-expectedReturn');
+        const title = paidTable(page).getByTestId('dt-sort-expectedReturn');
+        await expect(header, 'L3° opens unsorted').toHaveAttribute('data-sort', 'none');
+
+        await title.click();
+        await expect(header).toHaveAttribute('data-sort', 'asc');
+        await expect.poll(() => paidRowAssetIds(page), {message: 'ascending: the lowest return first — a loss before a gain, whatever its size — and the unmeasured asset last'}).toEqual(ascending);
+
+        await title.click();
+        await expect(header).toHaveAttribute('data-sort', 'desc');
+        await expect.poll(() => paidRowAssetIds(page), {message: 'descending: the highest return first, the unmeasured asset still last'}).toEqual(descending);
+
+        await title.click();
+        await expect(header).toHaveAttribute('data-sort', 'none');
+        await expect.poll(() => paidRowAssetIds(page), {message: "the third press must give the rows back in the selection's order"}).toEqual(opening);
+    });
+
+    /**
+     * L3°'s asset cell is L1°'s: the same helper, the same icons, under L3°'s testids.
+     *
+     * The panel resolves each icon as `icon_url || getAssetTypeIconUrl(asset_type)`, and the second
+     * half never comes back empty, so every asset on this page has one; the levels hand the same map
+     * to both tables, so an asset's icon and name are the same in both. The name sits in the span the
+     * marquee attaches to — found by the marquee's own selector, a hook rather than a style — and does
+     * not wrap: a long name scrolls instead of pushing its row onto two lines.
+     */
+    test('L3° names each asset with the type icon and the one-line name L1° gives it', async ({page}) => {
+        await installRiskMocks(page);
+        await openAssetGlobalRisk(page);
+        await waitForRiskCatalog(page);
+        await waitForLossTable(page);
+        await waitForPaidTable(page);
+
+        const selected = await chipIds(page);
+        await expect(lossRows(page)).toHaveCount(selected.length);
+        await expect(paidRows(page)).toHaveCount(selected.length);
+        for (const assetId of selected) {
+            const cell = paidNameCell(page, assetId);
+            await expect(cell, `asset ${assetId} has no L3° name cell of its own`).toHaveCount(1);
+            await expect(paidRow(page, assetId).getByTestId('risk-asset-set-l3-name'), `asset ${assetId}: its L3° name cell sits in another row`).toHaveAttribute('data-asset-id', String(assetId));
+
+            const icon = cell.getByTestId('risk-asset-set-l3-icon');
+            await expect(icon, `asset ${assetId}: no type icon beside the name`).toHaveCount(1);
+            await expect(icon, `asset ${assetId}: the icon has no source`).toHaveAttribute('src', /\S/);
+
+            const name = cell.locator(OVERFLOW_MARQUEE_SELECTOR);
+            await expect(name, `asset ${assetId}: the name is not in the marquee's span`).toHaveCount(1);
+            await expect(name, `asset ${assetId}: the name is empty`).not.toHaveText(/^\s*$/);
+            await expect(name, `asset ${assetId}: the name wraps instead of scrolling`).toHaveCSS('white-space', 'nowrap');
+
+            // The same asset, drawn the same in both tables: read off L1°'s cell, behind the barriers above.
+            const l1Cell = lossNameCell(page, assetId);
+            const l1Icon = await l1Cell.getByTestId('risk-asset-set-l1-icon').getAttribute('src');
+            const l1Name = ((await l1Cell.locator(OVERFLOW_MARQUEE_SELECTOR).textContent()) ?? '').trim();
+            await expect(icon, `asset ${assetId}: L3° draws another icon than L1° — the levels did not hand both tables the same map`).toHaveAttribute('src', l1Icon ?? '');
+            await expect(name, `asset ${assetId}: L3° names it otherwise than L1°`).toHaveText(l1Name);
+        }
+    });
+
+    /**
+     * L3°'s columns are chosen from its frame, right before its manual icon — L1°'s arrangement.
+     *
+     * One toggle per level table, each in its own frame's header (`RiskLevelSection`'s `actions`),
+     * each reading its own table: the component tests pin the markup and the wiring; this shows what
+     * the reader sees — the toggle on the icon's line, right before it — and that a column of L3°
+     * really goes and really comes back, and that L1° is not touched by it.
+     *
+     * `sortino` is the column switched off because it sits between two others: the rest must close
+     * up in their order, and it must come back where it was. The choice is kept in this context's
+     * `localStorage`, under the table's own storage key, and dies with the context; the test switches
+     * it back all the same, and ends on the table it found.
+     */
+    test("L3°'s frame offers the column toggle right before its manual icon, and Sortino switched off and on goes and comes back alone", async ({page}) => {
+        await installRiskMocks(page);
+        await openAssetGlobalRisk(page);
+        await waitForRiskCatalog(page);
+        await waitForLossTable(page);
+        await waitForPaidTable(page);
+
+        const frame = paidSection(page);
+        const toggle = frame.getByTestId('column-visibility-toggle');
+        const docs = frame.getByTestId('risk-asset-set-paid-docs');
+        await expect(toggle, "L3°'s frame offers no column toggle").toBeVisible();
+        await expect(docs).toBeVisible();
+        await expect(frame.getByTestId('risk-asset-set-paid-body').getByTestId('column-visibility-toggle'), "the toggle sits in L3°'s body: it belongs to the header, beside the manual icon").toHaveCount(0);
+        await expect(page.getByTestId('asset-global-risk-panel').getByTestId('column-visibility-toggle'), 'one column toggle per level table: L1° and L3°').toHaveCount(2);
+
+        // Order and geometry in one read, after the barriers above: both boxes come from the same
+        // layout, so a section above that finishes loading and pushes the frame down cannot land
+        // between two measurements.
+        const head = await frame.evaluate((section) => {
+            const toggleNode = section.querySelector('[data-testid="column-visibility-toggle"]');
+            const docsNode = section.querySelector('[data-testid="risk-asset-set-paid-docs"]');
+            if (toggleNode === null || docsNode === null) return null;
+            const box = (node: Element) => {
+                const {left, right, top, bottom, width} = node.getBoundingClientRect();
+                return {left, right, top, bottom, width};
+            };
+            return {togglePrecedesDocs: !toggleNode.contains(docsNode) && (toggleNode.compareDocumentPosition(docsNode) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0, toggle: box(toggleNode), docs: box(docsNode)};
+        });
+        if (head === null) throw new Error('The toggle and the manual icon were visible a moment ago and are gone from the frame.');
+        expect(head.togglePrecedesDocs, 'the toggle must come before the manual icon').toBe(true);
+        expect(head.toggle.top < head.docs.bottom && head.docs.top < head.toggle.bottom, "the toggle is not on the manual icon's line").toBe(true);
+        const gap = head.docs.left - head.toggle.right;
+        expect(gap, 'the toggle is not to the left of the manual icon').toBeGreaterThanOrEqual(0);
+        expect(gap, 'the toggle floats away from the manual icon').toBeLessThan(head.toggle.width);
+
+        // Every column drawn, and a row per selected asset, before any column is touched.
+        const selected = await chipIds(page);
+        await expect(paidRows(page)).toHaveCount(selected.length);
+        const opening = ['name', ...L3_CELLS];
+        await expect.poll(() => paidHeaderIds(page), {message: 'L3° must open on every column, in its order'}).toEqual(opening);
+        await expect.poll(() => lossHeaderIds(page), {message: 'L1° must open on every column, in its order'}).toEqual(['name', ...L1_CELLS]);
+
+        await toggle.click();
+        const menu = frame.getByTestId('column-visibility-dropdown');
+        await expect(menu).toBeVisible();
+        // The menu reads L3°'s table: its columns, none of L1°'s.
+        await expect(menu.getByTestId('column-visibility-item-expectedReturn')).toBeVisible();
+        await expect(menu.getByTestId('column-visibility-item-badMonth'), "L3°'s menu lists L1°'s columns: it reads the wrong table").toHaveCount(0);
+        const sortino = menu.getByTestId('column-visibility-item-sortino');
+
+        await sortino.click();
+        await expect(paidTable(page).getByTestId('dt-header-sortino'), 'Sortino is still drawn after switching it off').toHaveCount(0);
+        await expect(paidTable(page).getByTestId('risk-asset-set-l3-sortino'), "Sortino's cells outlived its title").toHaveCount(0);
+        await expect.poll(() => paidHeaderIds(page), {message: 'the other columns must stay, closed up in their order'}).toEqual(opening.filter((column) => column !== 'sortino'));
+        for (const cell of L3_CELLS.filter((column) => column !== 'sortino')) {
+            await expect(paidTable(page).getByTestId(`risk-asset-set-l3-${cell}`), `${cell} lost cells when Sortino was hidden`).toHaveCount(selected.length);
+        }
+        // L1° is another table with another storage key: hiding a column of L3° hides nothing of it.
+        expect(await lossHeaderIds(page), "switching off L3°'s Sortino changed L1°'s columns").toEqual(['name', ...L1_CELLS]);
+
+        // Back on: the column returns where it was, with a cell in every row.
+        await sortino.click();
+        await expect.poll(() => paidHeaderIds(page), {message: 'Sortino must come back where it was'}).toEqual(opening);
+        await expect(paidTable(page).getByTestId('risk-asset-set-l3-sortino'), 'Sortino came back without its cells').toHaveCount(selected.length);
+    });
+
+    /**
      * (f) — the benchmark columns appear only when a benchmark applies.
      *
      * Both branches, because the absence is the ordinary state of this page and a
      * test that only proved the presence would leave the default unguarded.
+     *
+     * And no sentence explains the missing columns: the note that sent the reader to
+     * the Dashboard for a benchmark is gone (the developer's second review, 30/09 —
+     * "fuori luogo qui"), in either branch.
      */
-    test('L3° shows beta and correlation only when a benchmark applies', async ({page}) => {
+    test('L3° shows beta and correlation only when a benchmark applies, with no note about the benchmark either way', async ({page}) => {
         // The two navigations below (read the selection, then seed the shared
         // benchmark and come back) are the price of a module-scope store that
         // hydrates from a user-scoped key at mount.
@@ -2825,17 +4125,21 @@ test.describe('Asset Global risk laboratory', () => {
         await ensureSelectionAtLeast(page, 2);
         await waitForRiskCatalog(page);
         await waitForLossTable(page);
+        await waitForPaidTable(page);
 
         // ── The false branch, which is what this page shows by default ──────
         const paid = page.getByTestId('risk-asset-set-l3');
         await expect(paid).toHaveAttribute('data-benchmark', 'false');
-        await expect(page.getByTestId('risk-asset-set-l3-no-benchmark'), 'two columns are missing and the reason is a choice made elsewhere; leaving that to be noticed reads as a limitation of the page').toBeVisible();
-        await expect(paid.getByTestId('risk-asset-set-l3-beta')).toHaveCount(0);
-        await expect(paid.getByTestId('risk-asset-set-l3-correlation')).toHaveCount(0);
         // The columns that do not depend on a benchmark are present throughout, so
         // "the beta cells are absent" cannot be satisfied by an unrendered table.
         const selected = await chipIds(page);
         await expect(paid.getByTestId('risk-asset-set-l3-volatility')).toHaveCount(selected.length);
+        await expect(paid.getByTestId('risk-asset-set-l3-beta')).toHaveCount(0);
+        await expect(paid.getByTestId('risk-asset-set-l3-correlation')).toHaveCount(0);
+        // The blank note is drawn in the very branch the no-benchmark note sat in: with
+        // it on screen, the note's absence is about a body that exists.
+        await expect(paid.getByTestId('risk-asset-set-l3-blank-note')).toBeVisible();
+        await expect(page.getByTestId('risk-asset-set-l3-no-benchmark'), 'the no-benchmark note is back: the developer took it out of this page').toHaveCount(0);
 
         // ── The true branch ─────────────────────────────────────────────────
         // A benchmark that is not one of the measured, because
@@ -2926,6 +4230,78 @@ test.describe('Asset Global risk laboratory', () => {
         // row was touched by any of the above.
     });
 
+    /**
+     * L3°'s rows select, one at a time, and the scatter follows — the one selection L3° shares
+     * between its table and its scatter (the developer's second review, 30/09).
+     *
+     * The table is DataTable in single selection, so there is no checkbox to find: a click on a
+     * row selects it, a second click on the same row clears it, and a click on another row moves
+     * the selection there. Nothing is selected on opening, and every row says so. The state is
+     * read where DataTable publishes it, `data-selected` on the row — never a class, never a
+     * colour.
+     *
+     * The row → dot half is read where the chart publishes it: `data-selected-id` on the
+     * scatter's container, the selection the chart was handed — `asset-<id>`, `""` for none —
+     * because the dot's own green is inside a canvas (`scatterChartHelpers.test.ts` pins how it
+     * is drawn). The dot → row half is not driven here: a click on a dot would need the canvas's
+     * pixel coordinates, which this suite does not compute. `AssetSetRiskReturnSection.test.ts`
+     * pins it with the real section — a dot's click selects its row through the table, a second
+     * click clears it, the benchmark's dot selects nothing — and `ScatterChart.test.ts` pins that
+     * a click on a dot comes back as that dot's id.
+     *
+     * Nothing to restore: the selection is the table's own state and dies with the page.
+     */
+    test('L3° selects one row at a time: a click selects it, a second click clears it, a click on another row moves it there, and the scatter follows', async ({page}) => {
+        await installRiskMocks(page);
+        await openAssetGlobalRisk(page);
+        await ensureSelectionAtLeast(page, 2);
+        await waitForRiskCatalog(page);
+        await waitForPaidTable(page);
+
+        // Barrier: a row per selected asset, so every count below is about a table that is drawn.
+        const selected = await chipIds(page);
+        expect(selected.length, 'premise: two rows at least, or the selection has nowhere to move').toBeGreaterThanOrEqual(2);
+        await expect(paidRows(page)).toHaveCount(selected.length);
+        const selectedRows = paidTable(page).locator('tbody tr[data-row-id][data-selected="true"]');
+
+        // The chart half is read off the scatter, which is drawn only from two placeable dots up: a
+        // premise stated here, so a missing chart fails as one rather than as a selection nobody
+        // marked. One dot per row — no benchmark on this page by default — so each row clicked below
+        // has its dot; a selection grown above gets its last dots with its own wave, hence the wait.
+        const scatter = page.getByTestId('risk-asset-set-l3-scatter');
+        await expect(scatter, 'premise: the scatter is drawn — two placeable dots at least — or there is no dot to mark').toBeVisible({timeout: 20_000});
+        await expectChartCanvas(page, 'risk-asset-set-l3-scatter', 20_000);
+        await expect(scatter, 'premise: one dot per row, so each row clicked below has a dot to mark').toHaveAttribute('data-point-count', String(selected.length), {timeout: 20_000});
+
+        // Nothing is selected on opening — and every row states it, rather than carrying no state at all.
+        await expect(paidTable(page).locator('tbody tr[data-row-id][data-selected="false"]'), 'nothing may be selected before the reader clicks').toHaveCount(selected.length);
+        await expect(selectedRows).toHaveCount(0);
+        await expect(scatter, 'nothing selected on opening: the chart is handed no dot to mark').toHaveAttribute('data-selected-id', '');
+
+        // Any two rows of this context's own selection: which two is irrelevant, they are told apart by id.
+        const [first, second] = selected;
+
+        await paidRow(page, first).click();
+        await expect(paidRow(page, first), 'a click on a row must select it').toHaveAttribute('data-selected', 'true');
+        await expect(selectedRows, 'one row selected: the one clicked').toHaveCount(1);
+        await expect(scatter, "the chart must be handed the selected row's asset, to mark its dot").toHaveAttribute('data-selected-id', `asset-${first}`);
+        // Single selection is the click itself: no checkbox column appeared to hold it.
+        await expect(paidTable(page).locator('[data-testid^="dt-row-checkbox-"], [data-testid="dt-select-all"]'), 'selecting a row drew checkboxes').toHaveCount(0);
+
+        await paidRow(page, first).click();
+        await expect(paidRow(page, first), 'a second click on the selected row must clear it').toHaveAttribute('data-selected', 'false');
+        await expect(selectedRows).toHaveCount(0);
+        await expect(scatter, 'a cleared selection must leave the chart no dot to mark').toHaveAttribute('data-selected-id', '');
+
+        await paidRow(page, first).click();
+        await expect(paidRow(page, first), 'premise: the row is selected again before the selection moves').toHaveAttribute('data-selected', 'true');
+        await paidRow(page, second).click();
+        await expect(paidRow(page, second), 'a click on another row must move the selection there').toHaveAttribute('data-selected', 'true');
+        await expect(paidRow(page, first), 'the row selected before must let go').toHaveAttribute('data-selected', 'false');
+        await expect(selectedRows, 'one row at most').toHaveCount(1);
+        await expect(scatter, "the chart's mark must move with the selection, to the new row's dot").toHaveAttribute('data-selected-id', `asset-${second}`);
+    });
+
     test("broker preset: loads exactly that broker's holdings and lets no amount through, a broker holding nothing keeps the selection, and a chip removed by hand comes back through the picker", async ({page}) => {
         // Three report round trips — the opening seed, the preset, the broker that
         // holds nothing — beside two trips through the "+". The budget pays for that
@@ -2966,7 +4342,7 @@ test.describe('Asset Global risk laboratory', () => {
         // than the wire, because this scope may already sit in `queryRisk`'s cache,
         // and a cached answer sends nothing to wait for.
         await expect(lossTable(page)).toHaveAttribute('data-row-count', String(remaining.length), {timeout: 15_000});
-        await expect(lossTable(page).locator(`tr[data-asset-id="${removedId}"]`)).toHaveCount(0);
+        await expect(lossRow(page, removedId)).toHaveCount(0);
 
         await openPicker(page);
         await expect(addPanel(page).getByTestId(`risk-asset-add-option-${removedId}`), 'a removed asset must be offered back by the "+"').toBeVisible();
@@ -3443,5 +4819,86 @@ test.describe('Asset Global risk laboratory', () => {
 
         // Nothing to restore: every route is this page's own, and nothing but reads
         // reached the database.
+    });
+
+    /**
+     * The strip that offers the period in which every selected asset has prices.
+     *
+     * The panel's half is built: a second question to the engine about the selection
+     * alone, the strip when that answer suggests a period bringing a selected asset
+     * back, and a button that hands the period to the page (`onfitperiod`). The page's
+     * half — moving the toolbar to that period and letting go of the preset in force —
+     * is what this test waits for. Until it is wired the button does nothing, and the
+     * test is red at the period.
+     *
+     * The engine is scripted (`scriptEligibility`), and nothing is written anywhere:
+     * the period lives in this context's URL and store, and the selection in its
+     * `localStorage`.
+     */
+    test('the fit-period strip moves the toolbar to the period in which every selected asset has prices, and lights no preset', async ({page}) => {
+        await installRiskMocks(page);
+        const engine = await scriptEligibility(page);
+        await openAssetGlobalRisk(page);
+
+        // The asset the period will leave behind: picked by value from this test's own selection.
+        const selection = await chipIds(page);
+        const late = Math.min(...selection);
+        engine.setMode({kind: 'late', late: new Set([late])});
+
+        // A preset in force first, so that following the offer has one to let go of.
+        const period = await pressPeriodPreset(page, '1y');
+        await expect.poll(() => exchangeFor(engine.exchanges, selection, period)?.suggested ?? null, {timeout: 15_000, message: "the selection's own question was not asked for the preset's period, or came back with no suggestion"}).not.toBeNull();
+        const asked = exchangeFor(engine.exchanges, selection, period) as EngineExchange;
+        expect(asked.notEligible, 'the premise: the period leaves exactly the late asset behind').toEqual([late]);
+        const suggested = asked.suggested as DayRange;
+
+        const banner = page.getByTestId('risk-asset-set-controls').getByTestId('risk-fit-period-banner');
+        const offer = banner.getByTestId('risk-fit-period-button');
+        await expect(banner, 'a selected asset starts after the period does, and the engine suggests a period that brings it back').toBeVisible({timeout: 10_000});
+        await expect(banner, 'the strip counts the selected assets the suggestion brings back').toHaveAttribute('data-recoverable', '1');
+        await expect(offer).toHaveAttribute('data-start', suggested.start);
+        await expect(offer).toHaveAttribute('data-end', suggested.end);
+
+        await offer.click();
+
+        // 🔴 The page takes the period: its dates are the suggested ones…
+        await expect.poll(() => urlPeriod(page), {timeout: 10_000, message: "pressing the offer did not move the page's period to the one it offers"}).toEqual(suggested);
+        // …no preset claims a period the reader did not pick from the badges…
+        await expect(page.getByTestId('date-preset-1y')).toBeVisible();
+        await expect(page.locator('[data-testid^="date-preset-"][data-active="true"]'), 'a preset stays lit over a period it does not describe').toHaveCount(0);
+        // …and once the new period's answer is in, nobody is left out, so the strip goes.
+        await expect.poll(() => exchangeFor(engine.exchanges, selection, suggested)?.fitted ?? false, {timeout: 15_000, message: 'the selection was not asked about the new period'}).toBe(true);
+        await expect(banner, 'the strip outlives the problem it offered to fix').toHaveCount(0);
+    });
+
+    /**
+     * The complement: a suggestion that brings nobody back is not an offer.
+     *
+     * The engine suggests a period whenever the requested one misses the common span,
+     * and a period that merely ends after the last common quote does, with every asset
+     * eligible. Shown on its own, the strip's absence would also be true of an answer
+     * not applied yet; so the strip is brought on screen first, by a period that leaves
+     * an asset behind, and its going is what proves the new answer was read. The panel
+     * keeps the previous verdicts until the new ones land.
+     */
+    test('the fit-period strip stays away when the suggested period would bring no selected asset back', async ({page}) => {
+        await installRiskMocks(page);
+        const engine = await scriptEligibility(page);
+        await openAssetGlobalRisk(page);
+        const selection = await chipIds(page);
+
+        // The positive control: a period that leaves an asset behind brings the strip.
+        engine.setMode({kind: 'late', late: new Set([Math.min(...selection)])});
+        await pressPeriodPreset(page, '1y');
+        const banner = page.getByTestId('risk-asset-set-controls').getByTestId('risk-fit-period-banner');
+        await expect(banner, 'the positive control: a period that leaves an asset behind must bring the strip').toBeVisible({timeout: 15_000});
+
+        // A period in which every selected asset is eligible, and the engine suggests one all the same.
+        engine.setMode({kind: 'trimmedEnd'});
+        const period = await pressPeriodPreset(page, '2y');
+        await expect.poll(() => exchangeFor(engine.exchanges, selection, period)?.suggested ?? null, {timeout: 15_000, message: "the selection's own question was not asked for the new period, or came back with no suggestion"}).not.toBeNull();
+        expect(exchangeFor(engine.exchanges, selection, period)?.notEligible, 'the premise: every selected asset is eligible in the new period').toEqual([]);
+
+        await expect(banner, 'the engine suggests a period, but it brings no selected asset back: there is nothing to offer').toHaveCount(0);
     });
 });
