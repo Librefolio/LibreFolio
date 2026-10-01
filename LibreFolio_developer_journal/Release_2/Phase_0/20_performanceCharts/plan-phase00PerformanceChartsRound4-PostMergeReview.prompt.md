@@ -59,10 +59,11 @@ Indicatore di lettura rapida: va riletto **a ogni consegna**, non a ogni sospett
 | C6 | Checkpoint: emoji, tipi E2E, margini della Crescita e dei lotti, guardia `axisBuilder`, registri | C5 + merge con K | ✅ pronto 2026-09-29 15:27 · ✅ **committato 22:26**: 6 commit, `6d8b951bc`…`602ea299e`; merge `921f1fc05`, gate rapido verde (registri «Checkpoint C6 — committato» e «Gate rapido sulla revisione combinata `921f1fc05`»). Dopo: D23 con D23b |
 | C7 | Checkpoint: D23 + D23b (il segno del locale nei grafici, il colore dello zero), registri | C6 + merge `921f1fc05` | ✅ pronto 2026-09-30 00:07 · ✅ **committato 10:01**: `9d8fb520b`, `039baea22`; `dev_release2` già contenuto, nessun merge (registro «Checkpoint C7 — committato») |
 | C8 | Checkpoint: S7 (asse a scala di Candele e Proventi, riga «parziale» con `escapeHtml`), registri | S7 | ✅ pronto 2026-09-30 23:51: 3 commit su `039baea22` (il pianificatore; la cura di S7; il journal), il runner diviso fra i commit 1 e 2; prima la `desc` del runner e i doc di tre helper di test (registri «Checkpoint C8 — preparazione» e «Checkpoint C8 — pronto») · ✅ **committato 2026-10-01 11:04**: `7bfa064f0`, `69cba356f`, `de5349e46`; merge `851d3a5cf` con `dev_release2` (`8f18416df`: il passo 13 di K e le scelte di L), una regione risolta in `GrowthChart.svelte`, gate verde (registri «Checkpoint C8 — committato», «Allineamento a `dev_release2` — merge `851d3a5cf`» e «Gate sulla revisione combinata `851d3a5cf`»). Dopo: S7b |
-| C9 | Checkpoint: S7b (tacche del denaro esatte e distinte, il meno del locale sugli assi, il bordo senza etichetta), registri | S7b | ✅ pronto 2026-10-01 15:02: 2 commit su `cd6502084` (la cura con i test; il journal); proposte al coordinator la `desc` di `growth-chart-memo` e la riga del CHANGELOG (registro «S7b — passo 6») |
+| C9 | Checkpoint: S7b (tacche del denaro esatte e distinte, il meno del locale sugli assi, il bordo senza etichetta), registri | S7b | ✅ pronto 2026-10-01 15:02: 2 commit su `cd6502084` (la cura con i test; il journal); proposte al coordinator la `desc` di `growth-chart-memo` e la riga del CHANGELOG (registro «S7b — passo 6») · ✅ **committato 15:31**: `07035fd4f` (messaggio v2), `99bc08911`; nessun merge (registro «Checkpoint C9 — committato»). Dopo: S8 |
+| C10 | Checkpoint: S8 (R11: il valore di acquisto nei Proventi, una voce di legenda, il totale e le due quote, il nuovo capitale in blu KPI), registri | S8 | ✅ pronto 2026-10-01 17:57: 2 commit su `99bc08911` (la cura con i test e la `desc` concessa del runner; il journal); proposte al coordinator la clausola di S8 per la `desc` e nessuna voce del CHANGELOG (registro «S8 — passo 6») |
 | S7 | Asse dei bucket (R8 dopo D4, R10) | S6 | ✅ **2026-09-30 23:05** (avviata dal coordinator alle 10:04): il pianificatore `growthLadderAxis.ts` e la cura di `GrowthChart.svelte`; la riga «parziale» passa per `escapeHtml` (fuori pista, registro «S7 — passo 6»). Unit, build, E2E seriale e con 4 worker verdi. Decisioni: D4 ✅, D16 = (ii)+(i) ✅, D17 = (a) ✅ (§7) |
 | S7b | Tacche Y doppie (reperto N1) | S7 | 🔓 D18 = sì ✅ 2026-09-25: assi del denaro di Crescita e Performance; `%` escluso · ▶️ avviata 2026-10-01 (coordinator, dopo `cd6502084`): analisi ✅ 13:19; D25 = B ✅ 13:51; test rossi ✅ 14:46; cura ✅ 14:50; gate ✅ 15:00 · ✅ **2026-10-01 15:02**, in C9 (registro «S7b») |
-| S8 | R11 valore di acquisto | S7 | ⏳ legge soltanto il motore (risposta al coordinator, 12:25): prima di iniziare rimisuro per simbolo |
+| S8 | R11 valore di acquisto | S7 | ▶️ avviata 2026-10-01 (coordinator, dopo `99bc08911`): motore rimisurato per simbolo, invariato; analisi e D26 = blu KPI ✅ 15:49; test rossi ✅ 17:06 (11 in `growth-chart-memo`, 4 in `asset-unit`, ciascuno per la ragione voluta); cura ✅ 17:14 (60/60, 530/530); D27 = legenda condivisa fra Abs e Proventi, accettata ✅ 17:14; gate ✅ 17:50 (10 verdi, l'E2E del dashboard corso due volte); `desc` del runner ✅ 17:53 · ✅ **2026-10-01 17:57**, in C10 (registro «S8») |
 | S8b | Guida del Rendimento mobile nel dettaglio asset (D24) | S8, D24 | ⏳ approvato dal developer (2026-09-30 11:52): «?» in fondo alla riga della finestra, solo in Rendimento mobile, verso la guida utente; commit a sé dopo S8 |
 | S9 | R9 didascalia | S1 | ✅ 2026-09-24 (scorrimento a 375 px: verifica live in S6) |
 | S10 | Debiti e test residui | S1 | 🔄 **OK del developer sulla test list, 2026-09-25**, con E8 ed E9 in più (D8 ✅ 2026-09-24). Ordine: `needs_engine` per primo, in un commit a sé (coordinator, 15:24 e 15:37), poi il contratto di `/portfolio/report` (registro «Triage del contratto di `/portfolio/report`») e il resto di §4. **Passo 1 ✅ 2026-09-25 10:38**: `needs_engine` corretto (6 rossi → verdi), contratto a 13 chiavi, `api portfolio` 55/55, `services roi-fifo-utils` 507/507 (registro «S10 passo 1»). **Passo 2 ✅ 11:10**: D20, il test dei Proventi pulisce i suoi dati, misurato con un controllo positivo; `api portfolio` 55/55 (registro «S10 passo 2»). **Passo 3 ✅ 11:37**: `chartCoreHelpers.test.ts` 159 → 145 (D19: −14), i 7 specchi ri-pinnati ognuno col suo perché, C4 convertito sulla copia fedele; 145/145, 0 falliti (registro «S10 passo 3»). Reperti del passo → D21, ✅ deciso dal developer (§7). **Passo 4 ✅ 11:59**: `AllocationPanel.test.ts` (3 casi) e `allocationTypeEmoji.test.ts` (8 casi), nuovi, 11/11 (registro «S10 passo 4»). **Passo 5 ✅ 12:15**: `GrowthChart.test.ts` 6 → 17 casi (S2a, S5, S9) e la `why` di D13, 23/23 (registro «S10 passo 5»). **Passo 6 ✅ 12:15**: i 3 file nuovi registrati nel runner, nome visibile di `growth-chart-memo`; `check-orphans` pulito (registro «S10 passo 6»). **Passo 7 ✅ 12:27**: la pulizia di `…positions_contribution_is_date_aware`, assegnata sotto D20, misurata con un controllo positivo: nessuna perdita; `api portfolio` 55/55 (registro «S10 passo 7»). **Passo 8 ✅ 12:30**: `PerformanceChart.test.ts`, nuovo, 6/6 (registro «S10 passo 8»). **Passo 9 ✅ 12:30**: D21 e D22 su `chartCoreHelpers.test.ts`, 145 → 142 → 144, 144/144, 0 falliti (registro «S10 passo 9»). **Passo 10 ✅ 12:33**: `front check` al floor, 3 errori e 41 avvisi, nessuno nei miei file (registro «S10 passo 10»). **C4 ✅ 2026-09-28 11:41** (8 commit, `00bb1ac75`→`472f51498`), poi il merge di `dev_release2` (`9016bb0d1`) e i gate sulla revisione combinata, tutti verdi (registro «Validazione sulla revisione combinata»). **Brief 03 ✅ 13:00**: dashboard 15/5 → **18/18**, broker detail 28/1 → **28/28**, in seriale e con `--workers 4` (registro «S10 — brief 03»). **E7 ✅ 13:52**: asset detail 28/1 → **28/28**, in seriale e con `--workers 4`; la coda risvegliata è verde (registro «S10 — E7 completato»). **C5 ✅ committato 2026-09-29 10:02** (registro «Checkpoint C5 — committato»). **C6 ✅ committato 22:26**, merge `921f1fc05` e gate rapido verde (registro «Checkpoint C6 — committato»). **D23 con D23b ✅ 2026-09-30 00:03**: il segno del locale in `fmtCurrency` e `shortMoney`, una sola forma per le righe con segno, il colore dello zero; test ri-pinnati e nuovi, corsia verde (registro «D23 + D23b»). **C7 pronto 2026-09-30 00:07** (registro «Checkpoint C7 — pronto») |
@@ -416,7 +417,7 @@ Regole: niente posizione/conteggi globali/clock/testo tradotto; solo `data-testi
 | S5 | `GrowthChart.test.ts` + `dashboard.spec.ts` + `gallery.spec.ts` | chiave pnl/income → primo `setOption` Income; invalido → eur; pct senza dati → eur, **senza** riscrivere la scelta salvata; un clic durante il caricamento non viene scavalcato dal fallback; chiave `lf_{id}_…`; E2E navigazione → ritorno → `aria-pressed`. `GrowthChart.test.ts`: `localStorage` in memoria, svuotato in `beforeEach`, così ogni caso monta dal default per costruzione e non per caso (vedi registro S5). Asserzioni sul contenuto dello stub (metodo di F): un clic su `pnl` scrive `lf_anon_dashboard-growth-mode = pnl`, uno su una sottomodalità scrive `…-pnl-submode`; un valore ripristinato non viene riscritto. Misurato oggi con uno storage vero: la suite lascia 2 chiavi (registro S5, verifica successiva). **Obbligatorio con S5, nello stesso checkpoint C1:** `gallery.spec.ts` «main dashboard» deve cliccare `growth-toggle-eur` prima dello scatto `main` (registro S5). **OK del coordinator (2026-09-24):** un solo hunk, nel ciclo *main dashboard*; nessun altro tocca il file, e K dipende solo dai testid `signal-tree-option-*`, che non cambiano |
 | S7 | `GrowthChart.test.ts` + `dashboard.spec.ts` | **Bucket (D16-ii)**:<br>• l'ultimo bucket finisce sull'ultima data e ha N giorni<br>• se `length % N ≠ 0` il parziale è il **primo**, marcato con i suoi giorni<br>• numero di bucket = `ceil(length / N)`, come oggi<br>• una fixture di 93 giorni a 1M dà 4 bucket: 3 + 30 + 30 + 30<br>**Etichette**:<br>• nessuna etichetta mostrata compare due volte, per ogni gradino di una fixture da 2 anni<br>• mai il formato ISO<br>• se entrano tutte, ognuna è la data di chiusura del suo bucket; oltre l'anno porta anche l'anno<br>• se non entrano, una per mese al massimo, sul bucket che contiene il 1°, quando così nella finestra visibile restano almeno 2 etichette<br>• altrimenti (D4-bis, finestra corta): date di chiusura, una ogni k bucket, ancorate all'ultimo bucket della serie; nessuna doppia, e almeno 2 etichette a 1M a 1G su un plot da telefono<br>**Separatori**:<br>• `splitLine.interval` è una funzione, non `'auto'`<br>• slot ≥ T → tutti i confini; slot < T → solo il primo bucket di ogni mese<br>**Proventi**:<br>• `xAxis.type = 'category'`<br>• costi nello stack dei proventi (D17-a)<br>• `barCategoryGap` e `barGap` fissati nell'opzione, non derivati dai dati<br>**Offerta**: con una fixture da 2A, in Proventi 1S non è offerto e 2S sì (D17-a); le candele non cambiano<br>**E2E** (lane suite): la larghezza di una barra dei Proventi, letta con `getItemLayout` via `__lfChart`, è la stessa prima e dopo un `datazoom` a 0–99 %. È il sintomo di R10, misurato come in S6. I test Income esistenti restano verdi |
 | S7b | `GrowthChart.test.ts` + `PerformanceChart.test.ts` | **Solo se D18 = sì.** Formatter Y a privacy OFF:<br>• tacche 5000…8000 a passo 500 → 7 etichette distinte<br>• 1000…2500 a passo 500 → 4 distinte (oggi `1k, 2k, 2k, 3k`)<br>• i valori interi restano senza decimali (`2k`, non `2,0k`)<br>**Privacy ON**: invariato, nessuna cifra (`•••`, `-•••`) |
-| S8 | `GrowthChart.test.ts` | nome e stack condivisi; legenda una volta; 900 + 300 → riga totale 1,200.00; identità di somma |
+| S8 | `GrowthChart.test.ts` | nome e stack condivisi; legenda una volta; 900 + 300 → riga totale 1,200.00; identità di somma; **con D26** (2026-10-01): colore per zona sull'opzione vera: nuovo capitale = area «Valore di acquisto» di Abs, reinvestito = area «Rendimento», confrontati fra loro e non con letterali |
 | S9 | `GrowthChart.test.ts` + `dashboard.spec.ts` | **jsdom**: la didascalia c'è solo in candele, porta la classe `overflow-scroll-marquee` e la chiave corta. Il `ResizeObserver` inerte di `$test/component` basta: l'overflow qui non si prova.<br>**E2E a 375 px**: `data-overflowing="true"` sulla didascalia. L'attributo lo mette l'azione, quindi non serve nessuna attesa a tempo.<br>`dev.py i18n audit` pulito. Gli specchi rotti da S9 sono già convertiti (registro S9) |
 | S10 | `chartCoreHelpers.test.ts` / `dashboard.spec.ts` / `brokers-detail.spec.ts` / `test_portfolio_api.py` | **Cancellazioni** a mano, per nome, una alla volta, contando prima e dopo (−N esatto):<br>• C6, C9, C10, C11 → −4 su 159; **con D19 (developer, 2026-09-25) anche i 10 verdi del blocco di C10/C11, che provano solo una copia locale di una funzione uscita dal prodotto: −14, 159 → 145**, insieme alla copia e agli helper rimasti senza chiamanti. **C8 non si cancella più**: è guarito in S9, perché la didascalia consuma di nuovo la chiave corta. La causa di C9 è cambiata: la coppia corta/lunga non esiste più (registro S9)<br>• E1–E3, un solo `for` → −3 su 15; con loro vanno gli helper rimasti senza chiamanti<br>**Ri-pin**, ognuno col suo perché scritto:<br>• i 7 specchi<br>• E4 sulla scala: in linea nessuna scala e nessun badge; in candele la scala c'è e il gradino premuto non è `1d`<br>• E5/E6 con un'àncora a segno opzionale, soglia 3 (Dividend, Interest, Total: righe sempre rese)<br>• **E8/E9** (trovati nella misura «prima» del 2026-09-25, registro «Pausa e ripresa dopo il riavvio»; aggiunti dal developer): `dashboard.spec.ts:467` conta gli importi **con segno** (Totale più uno per broker), e `:496` riconosce l'OHLC contando quelli **senza segno**. Sotto il puntatore oggi c'è 2026-08-09, dove Coinbase vale `EUR 0.00`, e lo zero non ha segno per scelta (`e7773a143`). Rimedio come E5/E6: le righe si contano per segno opzionale, e l'OHLC si riconosce per riga, non per assenza di segno<br>• **E7** (trovato in S3; rimedio raffinato il 2026-09-24, registro «C1 committato»): la data dell'evento del peer, **solo per MAX**, ricavata dal range accettato invece che cercata nella fixture fissa (`:1970`). `successorReadyEvents` (`:769`) resta com'è, perché lo leggono anche il mock condiviso (`:2157`, `:2165`) e sezioni dello stesso test oggi verdi, a range assoluto (`:6088`, `:6241`). La correzione riaccende 61 `expect(` e 3 `expect.poll(` fermi dal 18/09: un rosso che ne esce va attribuito, non è per forza E7. Prima dell'edit lo annuncio al coordinator<br>• **Contratto di `/portfolio/report`** (`test_portfolio_api.py`, triage del 2026-09-24, registro omonimo; verdetto «assumption» accettato dal coordinator alle 15:24): `test_report_allocation_source_authenticated_contract` allarga l'insieme a mondo chiuso di `:767` da 7 a 13 chiavi, come il gemello di servizio `test_portfolio_service.py:3767` allargato nel merge `b7a0b1e1a`. **Non** a `⊇`: un sovrainsieme renderebbe il test cieco a una sezione di troppo. In più `is None` per ognuna delle 6 sezioni, perché il test esiste per dire «senza eseguire le altre viste». La coda (59 `assert` dopo `:767`, ferma dal 21/09) gira per la prima volta: un rosso che ne esce va attribuito prima di correggerlo<br>• **`needs_engine`** (difetto latente, registro omonimo; ✅ deciso dal coordinator alle 15:24: mio, in un **commit a sé**; alle 15:37: aspetta l'OK come il resto di S10, poi va **per primo**, perché è la parte più piccola e la meno legata alle altre). Prima il test API: chiede `allocation_source` insieme a una delle 6 sezioni, senza le 4 viste originali, e vuole la sezione piena e il suo nome in `included_features`. Oggi è rosso: la sezione torna `null` e `included_features` vale `["allocation_source"]`. Poi la correzione, una sola istruzione: i 6 flag in `needs_engine` (`portfolio_service.py:2404`; con 300 colonne black la spezzerà su più righe). Il test diventa verde. La cache L2 non chiede altro: la sua chiave contiene già i 6 flag (`:2375-2380`, letto il 2026-09-24), quindi un report del ramo corto non può rispondere a una richiesta diversa. Nessun conflitto con Risk: `a766a9d5d` tocca il file solo a `:694-695`, un import (misura del coordinator)<br>**Copertura mancante**: nessun E2E sulla scala `growth-candle-width-*`. Proposta: la scala è offerta in candele e in income e non in linea; un clic sposta `aria-pressed` e ridisegna (`data-chart-renders` +1)<br>**Registro (D13, deciso da J):** quando esiste il test privacy di GrowthChart (S2a), aggiorno la `why` della riga P&L totale del tooltip perché lo citi. Oggi la `why` non lo cita, perché il test non c'è<br>**Seguito non bloccante (J, S2c):** a privacy OFF `sv-SE` perde il meno U+2212 (reperto 11). J l'ha risolto con `maskFormattedNumber`, identico byte per byte da smascherato, nel suo C1 `176f19707`. **Solo quando** quel C1 è nel target e la mia base è aggiornata: `fmtCurrency`, `yAxisFormatter`, `shortMoney` e `axisTickAmount` passano su quella primitiva. Prima no: non è nel mio albero |
 
@@ -525,6 +526,8 @@ rifatta con `git merge-tree` contro il target **al momento** di ogni checkpoint.
 | D23b | developer (da D23, 2026-09-29, `ask_user` nella chat di I) | Nel tooltip della Crescita quattro righe con segno scrivono il segno a mano, prima della valuta, con il meno tipografico U+2212 fisso in tutte le lingue: il P&L totale (`GrowthChart.svelte:1957`), le righe P&L della linea (`:1973`), le righe per broker (`:2000`) e le righe di Income (`:2015`). Esempi: «+EUR 5,00», «−EUR 12,00». Con D23 il resto dei grafici scriverà il meno della lingua, dopo la valuta: «EUR -12,00» in it/en/fr/es. Senza intervento, nello stesso tooltip ci sarebbero due trattini e due posizioni. Opzioni proposte: il meno segue la lingua e la posizione resta (consigliata); U+2212 fisso; stessa forma del resto anche per la posizione | ✅ **Deciso dal developer (2026-09-29), testuale: «voglio che li uniformi, non puoi modificare l'helper?»**. Lo leggo così: una sola forma, prodotta dall'helper. `fmtCurrency` di `GrowthChart.svelte`, locale al grafico e mio (non `maskFormattedNumber` di J, che resta com'è), prende un'opzione «con segno» (`signDisplay: 'exceptZero'`): `+` per i guadagni, il meno della lingua per le perdite, niente segno per lo zero. Le quattro righe lo chiamano invece di scrivere il segno a mano. Risultato: «EUR +5,00» e «EUR -12,00» in it/en/fr/es, come le altre righe; mascherato «EUR +•••» e «EUR -•••». `maskFormattedNumber` tiene già il `+` iniziale (`LEADING_SIGN`, `maskable.ts`). Esecuzione insieme a D23, dopo C6. Il ri-pin di S2a in `GrowthChart.test.ts` (oggi «+EUR •••» sulla riga P&L) va al test-author |
 | D24 | developer (richiesta del coordinator, 2026-09-30 11:40, senza urgenza) | Risk ha messo `docs_path` (la pagina teorica `financial-theory/fundamentals/returns/`) sul mio `ASSET_CALENDAR_ROLLING_RETURN`. Il plugin però ha `catalog_visible = False` (`calendar_rolling_return.py:125`), e il catalogo pubblica solo i visibili (`provider_registry.py:328`), quindi il `docs_path` non arriva a nessuna API. Il dettaglio asset disegna la modalità Rendimento mobile fuori dal catalogo, e oggi non ha nessun «?». Si mostra? Dove, e verso quale pagina? Opzioni: «?» in fondo alla riga della finestra, solo in modalità Rendimento mobile, verso la guida utente del grafico con un'ancora stabile (consigliata); stessa posizione verso la pagina teorica di Risk; nessun pulsante | ✅ **developer, 2026-09-30 11:52**: «Sì: «?» in fondo alla riga della finestra, solo in Rendimento mobile, verso la guida utente del grafico (consigliata)». → S8b, commit a sé; l'ancora e il rimando alla teoria in S11-finale; il test via test-author |
 | D25 | developer (da S7b passo 1, 2026-10-01; il «−888» rimandato da S6) | La tacca di bordo non è una tacca regolare: ECharts la mette sul bordo che il grafico fissa (Crescita: minimo dei dati − 8 %, `GrowthChart.svelte:2245`; Performance: ±105 % della barra più lunga, `PerformanceChart.svelte:987-988`). Oggi `toFixed` la arrotonda e la nasconde; con D18 diventa esatta e illeggibile: `9,752k`, `93,64k`, `1,17344M`, `−2,55465K` (sonda ECharts 6, registro «S7b»). Nei Proventi senza costi è il «−888». Che cosa ci va? | **(B) solo tacche tonde (consigliata)**:<br>• linee, candele e `%` della Crescita: il bordo resta dov'è, senza etichetta (`showMinLabel: false`);<br>• Proventi: l'asse parte da 0, o dalla prima tacca tonda sotto i costi, come ogni grafico a barre;<br>• Performance: le due etichette di bordo spariscono (`showMinLabel`/`showMaxLabel: false`), le barre restano larghe come oggi.<br>Alternative:<br>• **(A)** bordo tondo: l'asse arriva a una tacca tonda; più spazio vuoto (P&L da −3,2k: asse a −6k), barre della Performance più corte (2.433: dal 95 % all'81 %);<br>• **(C)** com'è: il bordo stampa il valore esatto e resta il «−888»<br>✅ **B** (developer, 2026-10-01 13:51), dopo una domanda: nel P&L da −3,2k a 8,7k la tacca più bassa è −3k. Chiarito che l'asse parte da −4,15k: −3,2k è il punto più basso della linea, appena sotto la riga −3k, nella fascia senza etichetta; nulla è tagliato. Una tacca con etichetta sempre sotto il minimo è A, con la fascia vuota (qui fino a −6k): scartata |
+| D26 | developer (da S8 passo 1, 2026-10-01) | Il colore del nuovo capitale nella colonna degli acquisti dei Proventi. Oggi le due zone hanno i colori dei pool di Abs: salvia `cashContributed` per il nuovo capitale, emerald `cashGenerated` per il reinvestito (`GrowthChart.svelte:1634-1639`). Lo storyboard di R11 (§2) dice «blu KPI», e con D2 la colonna prende il nome «Valore di acquisto»: lo stesso testo dell'area blu di Abs (`dashboard.assetsAtCost` e `dashboard.bookValue` coincidono in en, it, fr ed es) e della barra blu della scheda KPI (`KpiSection.svelte:364`). Quale colore? | **Blu KPI (consigliata)**: stesso nome, stesso colore. Il nuovo capitale prende `cc('bookAssetLike')`, `#3b82f6`/`#60a5fa`, gli stessi esadecimali di `bg-blue-500`/`dark:bg-blue-400` della scheda; il reinvestito resta emerald, `cc('cashGenerated')`, il colore dell'area «Rendimento» di Abs.<br>Alternativa: salvia ed emerald come oggi, coerenti con i pool, ma sotto un nome che in Abs indica l'area blu<br>✅ **Deciso dal developer (2026-10-01 15:49, `ask_user` nella chat di I), testuale: «Blu KPI, come nello storyboard: stesso nome, stesso colore di Abs (consigliato)»** |
+| D27 | developer (da S8 passo 3, 2026-10-01) | La legenda condivisa fra le viste. Con D2 le barre degli acquisti dei Proventi e l'area blu di Abs hanno lo stesso testo in tutte e quattro le lingue. ECharts tiene la selezione della legenda per nome, e GrowthChart usa una sola istanza per tutte le viste, fondendo la legenda (`replaceMerge` copre `series` e `xAxis`). Nascondere «Valore di acquisto» in Abs lo nasconde anche nei Proventi, e viceversa: sonda ECharts 6.0.0 (registro «S8», passo 3). Il tooltip dei Proventi mostra comunque le righe. Precedente: «P&L totale» fra Linea e Candele | **Accettare (consigliata)**: stessa voce, stesso interruttore in tutte le viste; un commento nel codice.<br>Alternative: azzerare la legenda a ogni cambio di vista, per tutte le voci, con un test nuovo, fuori da R11; separare il solo «Valore di acquisto», con più codice<br>✅ **Deciso dal developer (2026-10-01 17:14, `ask_user` nella chat di I), testuale: «Accetta: stessa voce, stesso interruttore in tutte le viste; lo annoto nel diario (consigliato)»** |
 
 ---
 
@@ -5067,4 +5070,350 @@ comando la porta 6157 è libera.
 >     a regular step, and the Income bars stand on an axis that starts at zero.»
 > - Conflitti attesi: nessuno. Il delta non tocca `lineChartHelpers.ts` né il suo test (Risk, `840bdbc0d`), né
 >   file condivisi o registri del coordinator.
+> - Stato: FROZEN, nessun edit, test, server o Git fino al prossimo messaggio del coordinator.
+
+### Checkpoint C9 — committato ✅ 2026-10-01 15:31
+
+> **Note implementazione:**
+> - Il coordinator ha adottato il mio messaggio v2 per il commit 1, ha rigenerato lo script prima del lancio e l'ha
+>   provato a secco (GUARDS_OK, stessi controlli su percorsi e blob). Il developer ha committato alle 15:31.
+> - La mia verifica dopo il commit, in sola lettura (15:32, `/tmp/libreFolio_i_c9_check.log`):
+>   - 2 commit in fila su `cd6502084`, ognuno con un solo genitore, nessun merge;
+>   - i messaggi sono identici byte per byte a quelli approvati;
+>   - commit 1: i 4 file del frontend, +456 −55; commit 2: questo piano, +237 −1. In tutto 5 file, il delta di C9;
+>   - albero di lavoro pulito, stage vuoto; porte 6157 e 6167 libere.
+>
+> | # | commit | subject | albero |
+> |---|---|---|---|
+> | 1 | `07035fd4f` | `fix(charts): keep money axis ticks distinct` | `d042dea789f9` |
+> | 2 | `99bc08911` | `docs(journal): record S7b and D25` | `6ca564575565` |
+>
+> - **`dev_release2` è andato avanti** (misurato alle 15:56): `ed3bf870a`, 4 commit `docs(todo)` fra le 12:15 e le
+>   14:44 (`5405f25a1`, `e04001a49`, `9d018ba76`, `ed3bf870a`). Toccano solo `TODO_FUTURI.md` (+150), che il mio
+>   ramo non ha mai toccato. Non sono in HEAD, e C9 non li ha fusi. L'allineamento lo decide il coordinator: lo
+>   segnalo nell'handoff di C10.
+> - **Mandato** (coordinator, dopo la verifica di C9): la verifica in sola lettura, poi S8 (R11) nella 6157. La
+>   `desc` approvata di `growth-chart-memo` entra nel checkpoint di S8.
+
+### S8 — R11 «Valore di acquisto» (D2 = A, D26, D27) ✅ 2026-10-01 17:57
+
+**Passo 1 — analisi, sola lettura, e D26 ✅ 2026-10-01 15:49**
+
+> **Note implementazione:**
+> - Base: `99bc08911`, albero pulito, porte 6157 e 6167 libere.
+> - **Il motore, rimisurato per simbolo** (come promesso alle 12:25): invariato, S8 lo legge soltanto.
+>   - `portfolio_engine.py`: `AcquisitionFundingContribution` a `:498`, i campi `from_new_capital` e
+>     `from_reinvested` a `:507-508`, costruito a `:1219-1224`, serializzato a `:1857-1875`;
+>   - `schemas/portfolio.py`: `AcquisitionFundingPoint` a `:672` (campi `:686-687`), `AcquisitionFundingSeries` a
+>     `:690`;
+>   - `portfolio_service.py`: `get_acquisition_funding_history` a `:1705-1759`.
+>   - Per costruzione, `from_new_capital + from_reinvested` è l'uscita di cassa dei BUY del giorno (docstring a
+>     `:503` e `:1862-1863`). Il totale della colonna è quindi una somma, non un dato nuovo.
+> - **Il frontend oggi** (`GrowthChart.svelte`), Proventi, la terza colonna di D17-a:
+>   - due serie nello stack `acquisition`, con due nomi (`pnlLabels.acqNewCapital`, `pnlLabels.acqReinvested`) e
+>     quindi due voci di legenda: aggiornamento a `:1475-1476`, costruzione a `:1638-1639`;
+>   - colori: salvia `cc('cashContributed')` ed emerald `cc('cashGenerated')`, i pool di Abs (commento `:1634-1637`);
+>   - tooltip (`:2180-2183`): le due quote, senza un totale.
+> - **La distanza dallo storyboard di R11** (§2): una voce sola, «Valore di acquisto» (D2: la chiave del KPI,
+>   `dashboard.bookValue`), che accende e spegne entrambe le zone; nel tooltip il totale, poi le due quote con «↳ »;
+>   il nuovo capitale in «blu KPI». Il colore è l'unico punto aperto → D26.
+> - **Il progetto**, tutto in `GrowthChart.svelte`, zero chiavi i18n nuove:
+>   - `pnlLabels` (`:561-573`) prende `bookValue: $_('dashboard.bookValue')`. `acqNewCapital` e `acqReinvested`
+>     restano, per le quote nel tooltip;
+>   - le due serie prendono lo stesso nome, `pnlLabels.bookValue`, nell'aggiornamento e nella costruzione. Stack,
+>     ordine degli slot (il nuovo capitale sotto), dati e `faded()` non cambiano;
+>   - colori secondo D26: il nuovo capitale `cc('bookAssetLike')`, il reinvestito `cc('cashGenerated')`. Il commento
+>     di `:1634-1637` si riscrive;
+>   - tooltip, dentro lo stesso `if (acqNewVal !== 0 || acqReinvestedVal !== 0)`: prima una riga in grassetto,
+>     `<b>${pnlLabels.bookValue}</b>`, con la somma e il segno (D23b), come il totale dei proventi a `:2172`; poi
+>     `↳ ${pnlLabels.acqNewCapital}` e `↳ ${pnlLabels.acqReinvested}`, nei colori delle due zone. Le quote restano
+>     entrambe anche quando una vale zero, come oggi. «↳ » ha un precedente in `AllocationPieChart.svelte:367`;
+>   - la forma della riga, `<div><span>…</span><b>…</b></div>`, non cambia: i test la leggono come le altre.
+> - **Legenda e fusione, verificate nel codice:**
+>   - la legenda (`:2210-2217`) toglie i nomi doppi con un `Set`: resta una voce. ECharts prende l'icona dalla
+>     prima serie con quel nome (il nuovo capitale, blu), e un clic spegne tutte le serie con quel nome;
+>   - l'aggiornamento (`CHART_SERIES_UPDATE_OPTS`, `:457`, `notMerge: false`) abbina i nomi doppi in ordine. Le due
+>     metà della linea P&L condividono già `pnlLabels.total`;
+>   - nessun'altra ricerca per nome: il `seriesName` di `:2196` è della sola vista `%`.
+> - **Il gate di K** (`htmlInterpolation.gate.test.ts`) passa senza eccezioni nuove: `signedRow` non è fra gli
+>   `HTML_FIRST_ARGUMENT` (`:172`), `pnlLabels.*` è un `LABEL_BUNDLE` (`:175`), e `TEXT_SUFFIXES` (`:138`) non
+>   contiene `label`.
+> - **Gli specchi da convertire**, tutti in file miei (D8: per nome, uno alla volta, conteggio prima e dopo, ognuno
+>   col suo perché):
+>   - `chartCoreHelpers.test.ts`:
+>     - `EXPECTED_SLOTS` (`:2628-2629`), letto dai due test di `:2632` e `:2645` (regex sulla sorgente);
+>     - il pin dei colori (`:2675-2686`), da ri-pinnare su `bookValue` e `cc('bookAssetLike')`, titolo compreso;
+>     - lo specchio del tooltip, `buildIncomeTooltipImpl` (`:2879-2895`), i suoi scenari (`:2920-2945`) e il
+>       contratto sulla sorgente (`:2976-2977`), che deve contenere esattamente le 3 righe nuove;
+>     - non si toccano `:2822-2845`, `:2980` e `WIRED_KEYS` (`:3051`): le due chiavi delle quote restano consumate;
+>   - `GrowthChart.test.ts`:
+>     - `incomeRows()` (`:1186-1198`) prende la riga del totale, con segno, e le quote con «↳ »;
+>     - il test del colore dello zero (`:1310-1357`) cerca le righe per etichetta esatta (`:1338`, `:1346`): con «↳ »;
+>     - non si toccano gli stack di B7 (`:1980`) né `series[4]`/`[5]` (`:808-817`).
+> - **Test nuovi** (test list §4, con D26): nome e stack condivisi; la legenda mostra la voce una volta; 900 + 300 →
+>   una riga del totale da 1,200.00, con segno; identità di somma; colore per zona sull'opzione vera, confrontato con
+>   le aree di Abs e non con letterali.
+> - **E2E non toccati:** `dashboard.spec.ts:696-710` e `brokers-detail.spec.ts:1101-1113` contano almeno 3 righe
+>   nel tooltip dei Proventi; `dashboard.spec.ts:690-691` legge solo i campi dell'API. Li rilancio nei gate.
+> - **Docs, in S11-finale con il docs-writer:** `charts.en.md:156`, `:158` e `:168`. Il nome «Valore di acquisto»,
+>   e il fatto che le barre sono gli acquisti lordi del periodo mentre il KPI è il costo aperto di oggi (il ⚠️ dello
+>   storyboard).
+> - **Conflitti attesi: nessuno.** `GrowthChart.svelte` e i due test sono miei. Non tocco `lineChartHelpers.ts` né
+>   il suo test (Risk, `840bdbc0d`), né cataloghi i18n, CHANGELOG o runner, salvo la `desc` approvata.
+>
+> **Passi:**
+> 1. ✅ analisi e D26 (15:49);
+> 2. ✅ test rossi e conversione degli specchi, via test-author: `GrowthChart.test.ts`, `chartCoreHelpers.test.ts`
+>    (17:06);
+> 3. ✅ la cura: `GrowthChart.svelte`, e D27 (17:14);
+> 4. ✅ gate nella 6157, un comando alla volta (17:50);
+> 5. ✅ la `desc` di `growth-chart-memo`: il testo approvato per S7b, più la proposta di una clausola per S8 (17:53);
+> 6. ✅ registro, poi `CHECKPOINT READY` (C10) al coordinator e FROZEN (17:57).
+
+**D26 — il colore del nuovo capitale ✅ 2026-10-01 15:49**
+
+> **Note implementazione:**
+> - Una `ask_user` nella chat di I, con le due opzioni di §7 (D26): blu KPI (consigliata), oppure salvia ed emerald
+>   come oggi.
+> - Risposta, testuale: «Blu KPI, come nello storyboard: stesso nome, stesso colore di Abs (consigliato)».
+> - Effetto: nel tema chiaro il nuovo capitale passa da salvia `#9caf9c` a blu `#3b82f6`, nello scuro da `#6b8e6b` a
+>   `#60a5fa`; il reinvestito resta `#10b981`/`#34d399`. Il test confronta i colori delle serie fra loro, quindi
+>   un cambio futuro della palette non lo rompe.
+
+**Passo 2 — test rossi e conversione degli specchi, via test-author ✅ 2026-10-01 17:06**
+
+> **Note implementazione:**
+> - Test-author (sync), solo i due file di test: `GrowthChart.test.ts` (+296/−13) e `chartCoreHelpers.test.ts`
+>   (+57/−18). Nessun componente toccato. Due esecuzioni Vitest nella 6157, una alla volta, nessun server.
+> - **Conversioni (D8)**, per nome, ognuna col suo `// Why (re-pin, S8):`:
+>   - `chartCoreHelpers.test.ts`:
+>     - il describe degli slot, ritolato («… / bookValue: new capital, then reinvested»). `EXPECTED_SLOTS` dà
+>       `label: 'bookValue'` agli slot 4 e 5; percorsi dei dati e stack invariati;
+>     - il pin dei colori, ritolato: regex su `pnlLabels.bookValue` con `cc('bookAssetLike')` per `seriesData[4]`
+>       e `cc('cashGenerated')` per `[5]`, più `not.toContain("cc('cashContributed')")` sull'intero blocco dei
+>       Proventi della costruzione completa, **commenti compresi**: il commento della cura non può citare quel colore;
+>     - lo specchio `buildIncomeTooltipImpl` stampa tre righe (`<b>bookValue</b>` con la somma, `↳ acqNewCapital`,
+>       `↳ acqReinvested`). Gli scenari seguono: la quota a zero aggiunge il totale `200`, il «non piega nulla» il
+>       totale `400`;
+>     - il contratto sulla sorgente: le 3 righe nuove, esatte, in `toContain`; le 2 vecchie in `not.toContain`.
+>   - `GrowthChart.test.ts`:
+>     - `incomeRows()` passa a 8 righe: il valore di acquisto (la somma, con segno), poi le due quote con «↳ »,
+>       lette da un helper nuovo a livello di file, `subRowLabel`;
+>     - `rowValue` e il `colourOf` locale prendono un `readAs` opzionale. Il test del colore dello zero legge la
+>       quota reinvestita con `subRowLabel`.
+> - **Casi nuovi**, describe «GrowthChart Income purchase value (S8: R11, D26)», `{timeout: 30_000}` come S7 e
+>   S7b. Fixture locale `PURCHASE_FUNDING`: 500/100 il primo giorno e 400/200 il terzo, quindi una barra da
+>   900 + 300 = 1.200, con quote diverse fra loro (uno scambio non passa). I sei casi:
+>   1. le due metà portano il nome del valore di acquisto, nello stack `acquisition`, nella costruzione completa;
+>   2. lo stesso nome nell'aggiornamento parziale: i finanziamenti arrivano (`rerender`) dopo che i Proventi sono a
+>      schermo, e l'opzione registrata ha le serie senza `yAxis` né `tooltip`;
+>   3. la legenda dei Proventi: cinque voci, il valore di acquisto una volta e per ultimo, nessuna delle due quote;
+>   4. il tooltip: il totale in grassetto (1.200, con segno), poi «↳ » nuovo capitale (900) e «↳ » reinvestito
+>      (300). Precondizione: il totale dei proventi è in grassetto nello stesso modo; le quote no;
+>   5. l'identità di somma, contro i valori che le due barre disegnano davvero, non contro la fixture;
+>   6. D26: le barre hanno i colori delle serie di Abs `dashboard.assetsAtCost` e
+>      `dashboard.cashFromGeneratedReturns`, letti dall'opzione Abs dello stesso montaggio, mai scritti a mano; ogni
+>      riga «↳ » ha il colore della sua barra (jsdom normalizza in `rgb(…)`, quindi entrambi passano da `cssColour`).
+> - **Conteggi** (`it(` / `it.each(` / `describe(`): `GrowthChart.test.ts` 30/9/8 → 36/9/9;
+>   `chartCoreHelpers.test.ts` 88/15/23 → 88/15/23. Il confronto dei titoli per nome con l'istantanea dà +1
+>   describe e +6 casi nel primo, 2 ritolature nel secondo, nessuna rimozione.
+> - **Rossi**, ciascuno per la ragione voluta; nessuno per fixture, setup o tipi:
+>   - `growth-chart-memo`: 11 falliti / 49 passati (60):
+>     - i quattro casi di `it.each(VIEWS)` «prints every signed row…»: nei Proventi arrivano `New capital` e
+>       `Reinvested` al posto delle tre righe;
+>     - il colore dello zero: nessuna riga «↳ Reinvested»;
+>     - i sei nuovi: i nomi `['New capital','Reinvested']` invece di due volte `Purchase Cost`, la legenda di sei
+>       voci, nessuna riga del totale, i colori `['#9caf9c','#10b981']` invece di `['#3b82f6','#10b981']`.
+>     - Le precondizioni dei casi 2, 5 e 6 passano;
+>   - `front-asset asset-unit`: 4 falliti / 526 passati (530; 18 file su 19 verdi), tutti in
+>     `chartCoreHelpers.test.ts`: i due test degli slot, il pin dei colori, il contratto sulla sorgente. Gli
+>     scenari dello specchio sono verdi, come devono: specchio e scenari cambiano insieme.
+> - Ho riletto io i due diff e i due log: i messaggi d'errore coincidono con le ragioni sopra.
+> - Comandi, uno alla volta:
+>   - `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6157 --data-dir
+>     /tmp/librefolio-r2-i-charts front-asset growth-chart-memo` → `/tmp/libreFolio_i_s8_red_gcm.log`;
+>   - stesso prefisso, `front-asset asset-unit` → `/tmp/libreFolio_i_s8_red_au.log`;
+>   - `svelte-check` in sola lettura, concesso: il pavimento (3 errori, 41 avvisi in 4 file), nessuno nei due file
+>     → `/tmp/libreFolio_i_s8_svelte_check.log`;
+>   - `frontend/node_modules/.bin/prettier --write`, poi `--check`, sui due file: nessun cambio, pulito
+>     → `/tmp/libreFolio_i_s8_prettier.log`;
+>   - conteggi e titoli: `/tmp/libreFolio_i_s8_counts_before.log`, `/tmp/libreFolio_i_s8_titles_before.log` e
+>     `_after.log`, script `/tmp/libreFolio_i_s8_titles.py`.
+>
+> **⚠️ Fuori pista:**
+> - Il test-author ha toccato anche l'intestazione di `GrowthChart.test.ts` («Seven» → «Eight» soggetti, più una
+>   frase su S8), fuori dall'elenco. È corretta: la tengo.
+> - Ha aggiunto `readAs` a `rowValue` e al `colourOf` locale invece di un secondo helper. È opzionale e i chiamanti
+>   esistenti non cambiano: lo tengo.
+> - Aveva lasciato due commenti superati: il «Why (re-pin, S7)» del pin dei colori diceva ancora che il nuovo
+>   capitale «keeps cc('cashContributed')», e la JSDoc di `incomeRows()` parlava di «both acquisition rows».
+>   - Li ha corretti un secondo test-author (sync), solo commenti, come in C8: «kept cc('cashContributed') until
+>     S8 (below)», e «the purchase-value group: the bold purchase value, then its two `↳` halves». Il Why di S7
+>     resta, come storia (D8).
+>   - Diff contro le copie di prima (`/tmp/libreFolio_i_s8_cc_pre_{cch,gct}.ts`): solo righe di commento;
+>     prettier pulito. Nessuna esecuzione: i rossi non possono cambiare.
+
+**Passo 3 — la cura, `GrowthChart.svelte` ✅ 2026-10-01 17:14**
+
+> **Note implementazione:**
+> - `GrowthChart.svelte` +19/−10, quattro punti, nessuna chiave i18n nuova:
+>   - `pnlLabels` (`:575`): `bookValue: $_('dashboard.bookValue')`, con un commento: `acqNewCapital` e
+>     `acqReinvested` restano, per le righe delle due quote;
+>   - l'aggiornamento parziale (`:1478-1479`): le due serie prendono `pnlLabels.bookValue`; dati e `faded()`
+>     invariati;
+>   - la costruzione completa (`:1644-1645`): stesso nome, stack `acquisition`, colori secondo D26:
+>     `cc('bookAssetLike')` per il nuovo capitale, `cc('cashGenerated')` per il reinvestito. Il commento (`:1637`)
+>     si riscrive e non cita più `cashContributed`, perché il pin dei colori legge anche i commenti;
+>   - il tooltip (`:2189-2191`), dentro lo stesso `if`: la riga in grassetto `<b>${pnlLabels.bookValue}</b>` con la
+>     somma, poi `↳ ${pnlLabels.acqNewCapital}` e `↳ ${pnlLabels.acqReinvested}`, nei colori delle due zone.
+>     «↳ » è U+21B3 più uno spazio, come nei test.
+> - Il gate di K: `signedRow` riceve `pnlLabels.*` (un `LABEL_BUNDLE`) e un `<b>` letterale, nessun dato
+>   dell'utente. Lo conferma `core-unit` al passo 4.
+> - Verdi mirati, uno alla volta, nella 6157:
+>   - `front-asset growth-chart-memo`: 60/60 → `/tmp/libreFolio_i_s8_green_gcm.log`;
+>   - `front-asset asset-unit`: 530/530, 19 file → `/tmp/libreFolio_i_s8_green_au.log`.
+> - Prettier `--write`, poi `--check`: nessun cambio, pulito → `/tmp/libreFolio_i_s8_prettier_fix.log`.
+>
+> **⚠️ Fuori pista:**
+> - **La legenda condivisa fra le viste.** `dashboard.bookValue` e `dashboard.assetsAtCost` hanno lo stesso testo in
+>   tutte e quattro le lingue («Purchase Cost», «Valore di acquisto», «Coût d'achat», «Coste de compra»). Le barre
+>   dei Proventi e l'area di Abs portano quindi lo stesso nome di serie.
+>   - ECharts tiene `legend.selected` per nome. GrowthChart usa una sola istanza, perché il contenitore non sta in
+>     un `{#if}`, e la costruzione completa fonde la legenda: `replaceMerge` copre `series` e `xAxis`, non `legend`.
+>   - Prova su ECharts 6.0.0, con le stesse opzioni (`/tmp/libreFolio_i_s8_legend/probe.cjs` →
+>     `/tmp/libreFolio_i_s8_legend_probe.log`): spenta in Abs, la voce resta spenta nei Proventi e al ritorno in Abs.
+>   - Il tooltip dei Proventi legge i valori per indice: le righe restano anche con le barre spente.
+>   - Precedente: «P&L totale» fa già così fra Linea e Candele. Anche una voce senza omonimi, NAV, resta spenta
+>     quando si torna in Abs.
+>   - Decisione del developer → D27, sotto. La registra anche un commento di due righe nel codice (`:1642-1643`):
+>     solo commento, prettier pulito (`/tmp/libreFolio_i_s8_prettier_fix2.log`). I verdi sopra sono di prima di
+>     quel commento: il passo 4 rilancia entrambe le suite sul file finale.
+
+**D27 — la legenda condivisa fra le viste ✅ 2026-10-01 17:14**
+
+> **Note implementazione:**
+> - Una `ask_user` nella chat di I, con tre opzioni: accettare (consigliata); azzerare la legenda a ogni cambio di
+>   vista, che vale per tutte le voci e chiede un test nuovo, fuori da R11; separare il solo «Valore di acquisto».
+> - Risposta, testuale: «Accetta: stessa voce, stesso interruttore in tutte le viste; lo annoto nel diario
+>   (consigliato)».
+> - Effetto: nessun cambio al codice della legenda. L'accoppiamento dipende dal testo, non dalla chiave: se una
+>   traduzione futura separa i due testi, in quella lingua le voci diventano indipendenti, senza danni. Nessun test
+>   lo fissa, perché è una conseguenza accettata e non un requisito.
+
+**Passo 4 — gate nella 6157 ✅ 2026-10-01 17:50**
+
+> **Note implementazione:** un comando alla volta, con `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run
+> python dev.py`; i `test` con `--test-port 6157 --data-dir /tmp/librefolio-r2-i-charts`. Log in
+> `/tmp/libreFolio_i_s8_{build,check,core,comp,assetunit,gcm,orphans,e2e_dashboard,e2e_broker,i18n_audit}.log`.
+>
+> | # | gate | esito |
+> |---|---|---|
+> | 1 | `front build --debug` (17:15–17:17) | rc 0 |
+> | 2 | `front check` | 3 errori e 41 avvisi in 4 file, rc 1: il floor |
+> | 3 | `front-utility core-unit` | 2684/2684 su 102 file |
+> | 4 | `front-utility component-unit` | 2198/2198 su 94 file |
+> | 5 | `front-asset asset-unit` | 530/530 su 19 file |
+> | 6 | `front-asset growth-chart-memo` | 60/60 su 1 file |
+> | 7 | `check-orphans` | rc 0: 92 E2E, 275 unit, 224 backend raggiungibili |
+> | 8 | E2E `front-portfolio dashboard` | 24/24, 1 worker, 1,2 min (17:33:49–17:36:10); rifatto: 24/24, 1,3 min (17:48:39–17:50:19) |
+> | 9 | E2E `front-broker detail` | 32/32, 1 worker, 1,3 min (17:43:31–17:45:06) |
+> | 10 | `i18n audit` | 3418 chiavi, 392 potenzialmente inutilizzate, nessuna mancante: come al merge |
+>
+> - 1: la build rigenera i contratti OpenAPI e TypeScript; nessun file tracciato è cambiato. Serve agli E2E.
+> - 2: gli stessi 4 file di S7b, con le stesse posizioni (`BrokerSharingPanel` 27, `GlobalSettingsTab` 14,
+>   `TransactionFormModal.test.ts` 2, `ToolExecutionMetrics` 1); nessuna riga su GrowthChart o sui due test.
+>   Prettier `--check` sui tre file di codice e di test: pulito → `/tmp/libreFolio_i_s8_prettier_gate.log`.
+> - 3: dentro, i gate di K `htmlInterpolation.gate.test.ts` e `htmlSink.gate.test.ts`. Accettano la riga nuova:
+>   `signedRow` riceve un `<b>` letterale e `pnlLabels.*`, nessun dato dell'utente.
+> - 5 e 6: i verdi mirati del passo 3, rilanciati sul file finale, cioè con il commento di D27 (`:1642-1643`).
+> - 8: dentro, `:668`, i Proventi del dashboard: il tooltip conta «almeno 3» righe (`:709-711`), quindi le righe
+>   del valore di acquisto, nei giorni che ne hanno, passano. Poi `:713`, `:948` e `:983` (gli assi in privacy) e
+>   `:1530` (S7-E2, i Proventi sulla scala).
+> - 8, la seconda corsa: la prima era finita alle 17:36:10, prima dell'interruzione delle 17:37, con il log
+>   completo (`PASSED`, il blocco dei tempi, l'istantanea `00_archive/test-db_20261001_173609.tar.xz`). Il
+>   coordinator la dava per probabilmente incompiuta e ha chiesto di rifarla intera: rifatta dopo il gate 9, con
+>   lo stesso codice (fermo dalle 17:14:21) e la stessa build (17:17:13) →
+>   `/tmp/libreFolio_i_s8_e2e_dashboard_rerun.log`, istantanea `test-db_20261001_175019.tar.xz`. Stesso esito.
+> - 9: `:1072`, linea e Proventi del P&L del broker, in un render reale; anche qui «almeno 3» righe
+>   (`:1110-1112`).
+> - 10: le chiavi di S8 (`dashboard.bookValue`, `pnlAcqNewCapital`, `pnlAcqReinvested`, `assetsAtCost`) non sono
+>   fra le inutilizzate. Unica differenza dal report del merge (`/tmp/libreFolio_i_m8_i18n_audit.log`): «exact
+>   keys in source code» 4024 → 4029, che conta le stringhe trovate nei sorgenti, test compresi. Attribuzione
+>   esatta, su copie dell'albero di lavoro con i soli file cambiati riportati indietro
+>   (`/tmp/libreFolio_i_s8_i18n_attr/attr2.py` → `/tmp/libreFolio_i_s8_i18n_attr2.log`): C9 +7, le etichette
+>   delle tacche nei test (`1k`, `2.5k`, …); S8 −2, `'acqNewCapital'` e `'acqReinvested'` dei vecchi slot e dello
+>   specchio di `chartCoreHelpers.test.ts`. Nessuna è una chiave del catalogo.
+> - Nessun retry, nessun flaky. A fine giro: porte 6157 e 6167 libere (`lsof`); `git diff --check` pulito; stage
+>   vuoto; 0 file non tracciati; 4 file tracciati modificati.
+> - Non lanciati, fuori dal delta: il vitest completo; il backend (nessun file Python); l'E2E `asset-detail`: la
+>   pagina dell'asset non monta GrowthChart (la montano solo `dashboard` e `brokers/[id]`).
+>
+> **⚠️ Fuori pista:**
+> - Due interruzioni del servizio, segnalate dal coordinator e non dovute al lavoro: alle 17:18, dopo il gate 1, e
+>   alle 17:37, dopo il gate 8. Dopo ciascuna ho ricontrollato lo stato: HEAD `99bc08911`, gli stessi 4 percorsi,
+>   scritture complete, porte libere, nessun processo rimasto.
+> - Il gate 8 è stato corso due volte, per la richiesta del coordinator (sopra): due verdi, nessuna differenza.
+> - Il gate 10 non era nella lista: l'ho aggiunto perché S8 cambia il consumo delle chiavi (GrowthChart ora legge
+>   `dashboard.bookValue`).
+
+**Passo 5 — la `desc` di `growth-chart-memo` ✅ 2026-10-01 17:53**
+
+> **Note implementazione:**
+> - `scripts/test_runner/_frontend_asset.py:189` (+1/−1): in coda alla `desc`, solo il testo approvato per S7b,
+>   «, and the money axis ticks (S7b): exact, distinct labels (D18), the locale's minus (D23), the auto-scaled
+>   lower edge unlabelled while Income keeps ECharts' zero-based defaults (D25)». Il file è del coordinator: la
+>   concessione copre quel testo e nient'altro.
+> - Verifiche, una alla volta:
+>   - `python3 -m py_compile`: pulito; la sua cache, `scripts/test_runner/__pycache__/`, è ignorata;
+>   - `check-orphans`: rc 0, 92/275/224 → `/tmp/libreFolio_i_s8_orphans_runner.log`;
+>   - `front-asset growth-chart-memo`, attraverso il runner: 60/60 → `/tmp/libreFolio_i_s8_gcm_runner.log`;
+>   - `test front-asset --help`: la riga di `growth-chart-memo` porta la clausola →
+>     `/tmp/libreFolio_i_s8_runner_help.log`.
+> - **Proposta per S8, non applicata**, da decidere al coordinator; in coda, dopo quella di S7b: «, and the Income
+>   purchase value (S8): both halves named as the book value in the full build and the partial update, one
+>   legend entry, the bold total over its two ↳ shares and their sum, new capital in the KPI blue (R11, D26)».
+>   D27 resta fuori: nessun test lo fissa.
+> - Nessun fuori pista.
+
+**Passo 6 — registro e `CHECKPOINT READY` (C10) ✅ 2026-10-01 17:57**
+
+> **Note implementazione:**
+> - Base `99bc08911`. Delta: 5 file tracciati modificati, nessun file nuovo, stage vuoto:
+>   - `frontend/src/lib/components/dashboard/GrowthChart.svelte` (+19/−10);
+>   - `frontend/src/lib/components/dashboard/GrowthChart.test.ts` (+296/−13);
+>   - `frontend/src/lib/components/charts/chartCoreHelpers.test.ts` (+57/−18);
+>   - `scripts/test_runner/_frontend_asset.py` (+1/−1), la `desc` concessa;
+>   - questo piano.
+> - Esclusi: la build, i log, le istantanee del DB (`00_archive/test-db_20261001_173609.tar.xz`, `_174506`,
+>   `_175019` e le precedenti), le sonde in `/tmp/`, la cache `scripts/test_runner/__pycache__/`.
+> - Commit proposti, due, come in C9:
+>   1. `feat(charts): show purchase value in income bars`, il soggetto del piano (`:588`): i tre file del frontend
+>      e il runner;
+>   2. `docs(journal): record S8, D26 and D27`, questo piano.
+> - Proposte per i registri del coordinator:
+>   - la clausola di S8 per la `desc` di `growth-chart-memo` (passo 5), non applicata;
+>   - CHANGELOG: nessuna voce per S8. Il sottomodo Proventi è nato dopo la 1.1.0 (`d5e834de4`, 2026-09-18; in
+>     `v1.1.0` GrowthChart non legge i finanziamenti dell'acquisto): nessun comportamento rilasciato cambia. Il
+>     capitolo `[Unreleased]` non descrive ancora la modalità P&L (Linea, Candele, Proventi): una voce ✨ Added per
+>     l'intera funzione, valore di acquisto compreso, la propongo all'handoff di S12.
+> - Conflitti attesi: nessuno. `GrowthChart.svelte` e i due test sono miei; nel runner cambia solo la `desc`
+>   concessa. Non tocco `lineChartHelpers.ts` né il suo test (Risk, `840bdbc0d`), né cataloghi i18n o CHANGELOG.
+> - `dev_release2` è fermo a `ed3bf870a` (misurato alle 17:55): HEAD è avanti di 42 commit e indietro di 4, i
+>   quattro `docs(todo)` già segnalati in C9, che toccano solo `TODO_FUTURI.md`. L'allineamento lo decide il
+>   coordinator.
+> - Verifiche finali, dopo la chiusura del passo (17:58–18:03):
+>   - la riga C10 nella tabella di stato; il rimando al soggetto del piano portato a `:588`, perché la riga nuova
+>     sposta di uno tutto ciò che segue;
+>   - il lint del runner, in sola lettura, col `pyproject.toml` del repo (`black --check`, `ruff check
+>     --no-cache`): rosso già sulla base, e S8 non aggiunge nulla. Ruff: 21 E701 (`:82-138`) e 1 PLC0415
+>     (`:184`), un'uscita identica byte per byte a quella di `HEAD` (`/tmp/libreFolio_i_s8_ruff{,_head}.log`).
+>     Black: lo stesso riformato di `HEAD`, e l'unica riga diversa è la `desc` stessa
+>     (`/tmp/libreFolio_i_s8_black_{head,wt}.diff`). Le due righe di `add_test` oltre i 300 caratteri sono più
+>     vecchie: `asset-unit` lo è da prima di `69d0d27c6`, `growth-chart-memo` è nata così in `69d0d27c6`. In
+>     `scripts/test_runner/` Black riformatterebbe 15 file su 30: non è un gate del runner, e non cambio nulla;
+>   - non lanciato `front-ai-export unit`, che registra di nuovo `chartCoreHelpers.test.ts` (nel backlog del
+>     coordinator): stesso `npx vitest run` da `frontend/`, stessa configurazione, e il file è verde nel gate 5;
+>   - nessun file sotto `backend/`: l'unico Python del delta è il runner, coperto dal passo 5 e dal lint qui
+>     sopra. Il «nessun file Python» del passo 4 valeva prima del passo 5;
+>   - `git diff --check` pulito, stage vuoto, 0 file non tracciati, 5 file tracciati; porte 6157 e 6167 libere.
 > - Stato: FROZEN, nessun edit, test, server o Git fino al prossimo messaggio del coordinator.
