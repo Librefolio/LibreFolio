@@ -1001,16 +1001,20 @@ function portfolioAnalytics(requests: RiskRequest[], mode: RiskRequest['mode']):
 /**
  * Pick the L3 benchmark from the picker on `panel`, and say which one was picked.
  *
- * The dropdown is driven through `role=combobox` rather than a `-trigger` testid
- * because `AssetSelect` does **not** forward its `testid` to the `SearchSelect`
- * it wraps: `risk-l3-benchmark-select` names the wrapper div only, so
- * `risk-l3-benchmark-select-trigger` does not exist in the DOM. (The neighbouring
- * `risk-comparison-asset-select-trigger` works because that one is a bare
- * `SearchSelect` given a `testId` directly.)
+ * `AssetSelect` forwards its `testid` to the `SearchSelect` it wraps — it hands it
+ * down as `testId` and keeps none on its own layout div — so
+ * `risk-l3-benchmark-select` names the select's root and its trigger carries
+ * `risk-l3-benchmark-select-trigger`, the handle the shared-benchmark block at the
+ * end of this file reads the shown choice from. The click below still goes
+ * through `role=combobox`, which inside that root resolves to that very trigger:
+ * a `SearchSelect` has exactly one.
  *
- * The id is read off the option rather than hardcoded: which assets are offered
- * depends on the scope's own holdings, since `excludeAssetIds` drops everything
- * already in the portfolio so nothing is compared against itself.
+ * The id is read off the option rather than hardcoded, and *which* asset comes
+ * first is deliberately not this helper's concern. On these two scopes the list
+ * offers every asset, held ones included: what is measured is the portfolio, not
+ * an asset, so nothing in it is excluded (developer's decision of 01/10/2026,
+ * pinned by that same block). And the catalogue is seed data every other spec
+ * shares, so no id in it is this test's to assume.
  *
  * Ends on the choice being in force on the page that made it — the click having
  * landed is what the caller is owed, and it is a stronger statement than the
@@ -1068,6 +1072,201 @@ function comparisonAssetIds(requests: RiskRequest[], brokerIds: number[]): numbe
         .flatMap((request) => request.analytics)
         .filter((analytic) => analytic.analytic_code === 'comparison')
         .map((analytic) => Number(analytic.parameters?.comparison_asset_id));
+}
+
+/**
+ * Store `assetId` as the shared benchmark before the next document boots.
+ *
+ * Seeded through `addInitScript` rather than through the picker, because the
+ * state under test is "already stored when the page loads": `riskBenchmark`
+ * hydrates on its first read, and a value an init script writes is in
+ * `localStorage` before any module of the app has evaluated, so the very first
+ * mount reads it. The script runs again on every document load of this page,
+ * which no navigation in between can therefore lose; `clearRiskBenchmark`, in
+ * the caller's `finally`, takes it out of the document the test ends on.
+ *
+ * Writing, unlike clearing, cannot match by suffix: the store reads exactly one
+ * key, so the seed has to spell it — `lf_<userId>_risk_benchmark_asset`, as
+ * `storageKey()` in `riskBenchmarkStore` builds it — and the account's id is
+ * asked of `/auth/me`, the endpoint the app resolves it from. The user-scoped
+ * spelling only: on Dashboard and Broker Detail the `(app)` layout renders the
+ * page once `checkAuth` has moved the client session to this user, so no read of
+ * the `anon` key can come first.
+ */
+async function seedRiskBenchmark(page: Page, assetId: number): Promise<void> {
+    const response = await page.request.get('/api/v1/auth/me');
+    expect(response.ok(), 'the benchmark is stored under a user-scoped key, so the seed needs the id the app resolves').toBe(true);
+    const userId = ((await response.json()) as {user?: {id?: number}}).user?.id;
+    expect(Number.isInteger(userId), `auth/me must publish an integer user id, read ${String(userId)}`).toBe(true);
+    await page.addInitScript(
+        ({key, value}) => {
+            try {
+                window.localStorage.setItem(key, value);
+            } catch {
+                // Storage disabled: the choice never arrives, and the assertions that read it say so.
+            }
+        },
+        {key: `lf_${userId}_risk_benchmark_asset`, value: String(assetId)},
+    );
+}
+
+/** Every asset on the list the picker is built from — `/assets/query`, what `assetStore` loads — with the name it is drawn by. */
+async function assetDisplayNames(page: Page): Promise<Map<number, string>> {
+    const response = await page.request.get('/api/v1/assets/query');
+    expect(response.ok(), 'the asset list the picker is built from must be readable').toBe(true);
+    const items = (await response.json()) as Array<{id: number; display_name?: string | null}>;
+    return new Map(items.map((item) => [Number(item.id), String(item.display_name ?? '').trim()]));
+}
+
+/**
+ * What one broker holds now: its report's summary holdings, deduplicated and
+ * ascending — or `null` when the report is refused, as for a broker deleted
+ * between the listing and this request.
+ */
+async function brokerHoldings(page: Page, brokerId: number): Promise<number[] | null> {
+    const response = await page.request.post('/api/v1/portfolio/report', {
+        data: {
+            broker_ids: [brokerId],
+            include_summary: true,
+            include_history: false,
+            include_allocation_history: false,
+            include_breakdown: false,
+            include_positions_contribution: false,
+        },
+    });
+    if (!response.ok()) return null;
+    const report = (await response.json()) as {summary?: unknown};
+    // The generated union types let a scalar arrive wrapped, so it is read the way the pages read it.
+    const summary = (Array.isArray(report.summary) ? report.summary[0] : report.summary) as {holdings?: Array<{asset_id: number}>} | null | undefined;
+    return [...new Set((summary?.holdings ?? []).map((holding) => holding.asset_id))].sort((left, right) => left - right);
+}
+
+/** A held asset to store as the benchmark: the broker that holds it, and the name the picker draws it by. */
+interface HeldBenchmark {
+    brokerId: number;
+    assetId: number;
+    displayName: string;
+}
+
+/**
+ * An asset this user holds now, through a broker the Dashboard counts.
+ *
+ * Read from the backend, never from the page under test, and through
+ * `page.request`, which the routes of `installRiskMocks` do not intercept. The
+ * holdings come from `/portfolio/report` — the question both pages ask for
+ * theirs — one broker at a time, over the brokers `getOwnedBrokers()` keeps
+ * (owner, share unset or above zero). So one answer serves both scopes: Broker
+ * Detail filtered its picker by what its own report holds, and the Dashboard by
+ * what the report over every such broker holds — which contains it, since a
+ * positive holding in one broker is still held in their sum.
+ *
+ * Oldest broker first, by id rather than by the name order the list arrives in.
+ * The seed creates its brokers before any test runs, so the lowest ids are
+ * fixture; a broker another spec creates — and may delete mid-run — can carry a
+ * name such as `CA Contract …`, which sorts ahead of every seeded one. A broker
+ * that vanished under this test would turn a red about the picker into a red
+ * about a missing page.
+ *
+ * The asset must also be on the list the picker is built from, under a
+ * non-empty name: the tests read the trigger by that name.
+ */
+async function heldBenchmarkCandidate(page: Page): Promise<HeldBenchmark> {
+    const brokersResponse = await page.request.get('/api/v1/brokers');
+    expect(brokersResponse.ok(), 'the brokers this user can see must be listable').toBe(true);
+    const brokers = ((await brokersResponse.json()) as {items?: Array<{id: number; user_role?: string | null; user_share_percentage?: string | number | null}>}).items ?? [];
+    const owned = brokers.filter((broker) => broker.user_role === 'OWNER' && (broker.user_share_percentage == null || parseFloat(String(broker.user_share_percentage)) > 0)).sort((left, right) => left.id - right.id);
+
+    const names = await assetDisplayNames(page);
+    const refused: number[] = [];
+    for (const broker of owned) {
+        const held = await brokerHoldings(page, broker.id);
+        if (held === null) {
+            refused.push(broker.id);
+            continue;
+        }
+        const assetId = held.find((id) => (names.get(id) ?? '') !== '');
+        if (assetId !== undefined) return {brokerId: broker.id, assetId, displayName: names.get(assetId) ?? ''};
+    }
+    throw new Error(`No broker this user owns holds an asset the picker can name (owned: ${owned.map((broker) => broker.id).join(', ') || 'none'}; report refused: ${refused.join(', ') || 'none'}). Check populate_mock_data.py.`);
+}
+
+/**
+ * The Dashboard's risk tab, handed back only once the page knows what the
+ * portfolio holds.
+ *
+ * The picker's options are a function of the holdings — they used to be
+ * filtered by them — and the Dashboard learns its holdings from its own report,
+ * which it asks for only after the asset cache has landed (`onMount` awaits
+ * `ensureAssetsLoaded()` first). So there is a window, often the whole of
+ * `openDashboardRisk`, in which the list is complete and the holdings are still
+ * unknown: a filter on holdings has nothing to filter yet, and a claim about held
+ * assets read there says nothing about held assets.
+ *
+ * `data-busy` on `dashboard-page` is the page's own signal that its report has
+ * landed: it starts `true`, and drops only after `summary` — the object
+ * `assetIds` is drawn from — has been assigned.
+ */
+async function openDashboardRiskWithHoldings(page: Page): Promise<Locator> {
+    const panel = await openDashboardRisk(page);
+    await expect(page.getByTestId('dashboard-page')).toHaveAttribute('data-busy', 'false', {timeout: 20_000});
+    return panel;
+}
+
+/**
+ * One broker's Risk tab, mounted only after its page knows what the broker holds.
+ *
+ * Opened by id rather than through the list, which `openFirstBrokerRisk` walks
+ * by position: these tests need a broker that holds something, and the first
+ * card is whichever name sorts first.
+ *
+ * Broker Detail loads the asset cache and its report side by side and publishes
+ * no busy flag on the page, so the barrier is its refresh control, which stays
+ * disabled while `loading || reportLoading` — `reportLoading` starts `true` and
+ * drops only after `portfolioSummary`, the object `assetIds` is drawn from, has
+ * been assigned. The Risk tab is opened after it, so the picker mounts with the
+ * holdings already known.
+ */
+async function openBrokerRiskWithHoldings(page: Page, brokerId: number): Promise<Locator> {
+    await navigateTo(page, `/brokers/${brokerId}`);
+    await expect(page.getByTestId('broker-detail-page')).toBeVisible({timeout: 10_000});
+    await expect(page.getByTestId('broker-refresh')).toBeEnabled({timeout: 20_000});
+    await page.getByTestId('broker-tab-risk').click();
+    await expect(page.getByTestId('broker-risk-tab')).toBeVisible({timeout: 8_000});
+    return waitForRiskLevels(page);
+}
+
+/**
+ * Open the benchmark picker on `panel`, and hand it back open on a loaded list.
+ *
+ * Ends on an option being drawn, not on the click: `AssetSelect` fetches the
+ * asset cache on mount and the open list reads "loading" until it lands, so an
+ * absence read before this line would be about latency. Every locator is scoped
+ * to the picker's own root — the dropdown renders inside it, fixed-positioned —
+ * because every `SearchSelect` in the app names its options
+ * `search-select-option-*`.
+ */
+async function openBenchmarkPicker(panel: Locator): Promise<Locator> {
+    const picker = panel.getByTestId('risk-l3-benchmark-select');
+    await expect(picker).toBeVisible({timeout: 10_000});
+    await picker.getByTestId('risk-l3-benchmark-select-trigger').click();
+    await expect(picker.getByTestId(/^search-select-option-\d+$/).first()).toBeVisible({timeout: 10_000});
+    return picker;
+}
+
+/**
+ * Close the picker, and end on the trigger at rest.
+ *
+ * Escape from the inline search box, which `SearchSelect` handles as a close.
+ * The post-condition has three parts because each absence needs the presence
+ * beside it: no option and no search box say the list is gone, and the visible
+ * trigger says what replaced it — without it, "nothing drawn in the trigger" would
+ * also hold for a trigger that is not there.
+ */
+async function closeBenchmarkPicker(picker: Locator): Promise<void> {
+    await picker.getByTestId('risk-l3-benchmark-select-search').press('Escape');
+    await expect(picker.getByTestId(/^search-select-option-\d+$/)).toHaveCount(0);
+    await expect(picker.getByTestId('risk-l3-benchmark-select-search')).toHaveCount(0);
+    await expect(picker.getByTestId('risk-l3-benchmark-select-trigger')).toBeVisible();
 }
 
 // Earned parallel: this file's blocks own the data they touch and wait on published
@@ -2406,6 +2605,169 @@ test.describe('Risk analysis functional integration', () => {
             // read across the whole panel, so it holds with or without a notice.
             await expect(panel.getByTestId('risk-partial-notice').locator(chip(CORRELATION))).toBeVisible();
             await expect(panel.locator(chip(RISK_RETURN))).toHaveCount(0);
+        });
+    });
+
+    /**
+     * The shared benchmark: what may be chosen, what the picker shows, and what an
+     * id that names nothing means.
+     *
+     * Developer's decision of 01/10/2026: "A held asset may be the benchmark.
+     * Wherever a benchmark is chosen there is a selector, and on page load it shows
+     * the current benchmark — never empty, except when no asset is set." The rule
+     * under it is to exclude only what is measured. On Dashboard and Broker Detail
+     * the portfolio is measured, not an asset, so nothing is excluded: "am I paid
+     * more than the asset I hold most of" is a question with an answer, not a
+     * comparison of something with itself.
+     *
+     * The three defects this block was written against:
+     *  - the picker dropped every held asset (`excludeAssetIds`), so a held
+     *    benchmark already stored found no option to draw and the trigger showed
+     *    its placeholder over a comparison still being run against it — a
+     *    benchmark in force that the reader could not see;
+     *  - for the same reason a held asset could not be chosen at all;
+     *  - a stored id that names no asset was hydrated as it was and sent to the
+     *    server.
+     *
+     * `risk-l3-benchmark` publishes the decision: `data-benchmark-state` is `none`
+     * (nothing stored), `pending` (stored, asset list not loaded yet), `set`
+     * (stored, and the asset exists) or `unknown` (stored, list loaded, id absent),
+     * and `data-benchmark-id` is the id in force — the id when `set`, `''`
+     * otherwise. Only `set` computes. A dead id stays in storage, ignored; that
+     * half is not asserted here.
+     *
+     * The held asset is read from the backend (`heldBenchmarkCandidate`), never
+     * from the page under test, and Dashboard and Broker Detail run the same body,
+     * as the rest of this file asserts them: one component, two scopes, one
+     * property. Each scope is read only once its page knows what it holds (the two
+     * openers), because "a held asset is offered" read before the holdings arrive
+     * is a statement about an empty filter.
+     */
+    test.describe('the shared benchmark: a held asset is allowed, the choice is always shown, a dead id is ignored', () => {
+        const SCOPES: Array<{surface: string; open: (page: Page, brokerId: number) => Promise<{panel: Locator; brokerIds: number[]}>}> = [
+            // The Dashboard counts every broker the candidate can come from (`getOwnedBrokers()`), so what that broker holds, the portfolio holds.
+            {surface: 'Dashboard', open: async (page) => ({panel: await openDashboardRiskWithHoldings(page), brokerIds: []})},
+            {surface: 'Broker Detail', open: async (page, brokerId) => ({panel: await openBrokerRiskWithHoldings(page, brokerId), brokerIds: [brokerId]})},
+        ];
+
+        /** Positive and integral, so the store accepts it as an id; far above anything the seed or a spec creates. */
+        const DEAD_ASSET_ID = 2_000_000_000;
+
+        for (const scope of SCOPES) {
+            test(`${scope.surface}: a held benchmark already stored is shown on load and measured against`, async ({page}) => {
+                const held = await heldBenchmarkCandidate(page);
+                const requests = await installRiskMocks(page);
+
+                try {
+                    await seedRiskBenchmark(page, held.assetId);
+                    // Barriers, in the opener: the catalogue is ready, the base wave has landed,
+                    // and the page knows what the scope holds — so the asset below is held *as far
+                    // as the page is concerned*, not merely as far as this test is.
+                    const {panel, brokerIds} = await scope.open(page, held.brokerId);
+                    const benchmark = panel.getByTestId('risk-l3-benchmark');
+                    await expect(benchmark).toBeVisible({timeout: 10_000});
+
+                    // Soft, all four: four faces of one fact, and a red should name every face that
+                    // broke rather than stop at the first.
+                    //
+                    // The reader's face, and the defect. `SearchSelect` draws the chosen option only
+                    // when the value is among its options (`selectedOption`), so a held asset dropped
+                    // from the list left the trigger nothing to draw but its placeholder — over a
+                    // benchmark in force. A red here is that again. The display name is data, not a
+                    // translation, and `AssetSelect` draws it in the trigger with or without a ticker.
+                    // First and the longest wait: the name can only be drawn once the asset list has
+                    // landed, which makes this the list's barrier for the two clauses after it.
+                    await expect.soft(benchmark.getByTestId('risk-l3-benchmark-select-trigger'), 'the stored benchmark is in force but the picker does not show it').toContainText(held.displayName, {timeout: 10_000});
+
+                    // The page's face: the stored choice is the one in force, and it is because the
+                    // asset exists — `set`, the only state that computes. The id is also what proves
+                    // the seed reached the store: a key the app never reads would leave it `''`.
+                    await expect.soft(benchmark, 'the stored held benchmark is not the one in force').toHaveAttribute('data-benchmark-id', String(held.assetId), {timeout: 5_000});
+                    await expect.soft(benchmark, 'a stored benchmark whose asset exists is not published as set').toHaveAttribute('data-benchmark-state', 'set', {timeout: 5_000});
+
+                    // The server's face: shown and measured are one claim, or the picker names a
+                    // reference nothing was compared with. Nothing was clicked, so the load alone has
+                    // to put this id on the wire as this scope's comparison.
+                    await expect.soft.poll(() => comparisonAssetIds(requests, brokerIds), {timeout: 15_000, message: 'the stored benchmark was never measured against'}).toContain(held.assetId);
+                } finally {
+                    await clearRiskBenchmark(page);
+                }
+            });
+
+            test(`${scope.surface}: the picker offers an asset the scope holds`, async ({page}) => {
+                const held = await heldBenchmarkCandidate(page);
+                await installRiskMocks(page);
+
+                // Barriers, in the opener: catalogue ready, base wave landed, holdings known. A list
+                // read before the holdings arrive offers held assets for free — nothing has been
+                // filtered yet — and would pass this test on the code it exists to fail.
+                const {panel} = await scope.open(page, held.brokerId);
+
+                // Barrier: the list has loaded — an option is drawn — so the absence a red reports
+                // is about what the list holds, not about how far the asset cache had got.
+                const picker = await openBenchmarkPicker(panel);
+
+                // Narrowed by name, the way a reader looks for one asset in a long list; asserted
+                // by id, because the name is only how it is found. Nothing is clicked: offering is
+                // the claim, and choosing it would write a benchmark this test would then own.
+                await picker.getByTestId('risk-l3-benchmark-select-search').fill(held.displayName);
+                await expect(picker.getByTestId(`search-select-option-${held.assetId}`), 'the picker does not offer an asset the scope holds').toBeVisible({timeout: 5_000});
+            });
+        }
+
+        test('a stored id that matches no asset is not in force: no choice drawn, nothing computed', async ({page}) => {
+            // The precondition, checked rather than assumed: the id names nothing on the very
+            // list the picker is built from.
+            const names = await assetDisplayNames(page);
+            expect(names.has(DEAD_ASSET_ID), `asset ${DEAD_ASSET_ID} exists, so it cannot stand for a benchmark that names nothing`).toBe(false);
+            const requests = await installRiskMocks(page);
+
+            try {
+                await seedRiskBenchmark(page, DEAD_ASSET_ID);
+                const panel = await openDashboardRisk(page);
+
+                // Barrier 1: the levels rendered out of this wave — L3's own KPI is drawn.
+                await expect(panel.getByTestId('risk-l3-sortino-value')).toHaveText('1.68', {timeout: 10_000});
+
+                // Barrier 2: the asset list has loaded — an option was drawn — and the picker is
+                // closed again, so the trigger is back at rest rather than showing its search box.
+                // Before the list lands a dead id cannot be told from a live one still loading:
+                // that is `pending`, a different state from the one this test is about.
+                const picker = await openBenchmarkPicker(panel);
+                await closeBenchmarkPicker(picker);
+
+                const benchmark = panel.getByTestId('risk-l3-benchmark');
+
+                // Soft, all four: one fact seen from four sides, and every side that breaks should
+                // say so in the same red.
+                //
+                // The decision. `unknown` and not `none` is also what proves the seed reached the
+                // store: a key the app never reads would leave `none`, and the three absences below
+                // would pass for a reason that has nothing to do with dead ids.
+                await expect.soft(benchmark, 'a stored id that matches no asset is not published as unknown').toHaveAttribute('data-benchmark-state', 'unknown', {timeout: 5_000});
+
+                // Not in force. The attribute carries the id in force, and an id that names
+                // nothing is not one.
+                await expect.soft(benchmark, 'a stored id that matches no asset is in force').toHaveAttribute('data-benchmark-id', '', {timeout: 5_000});
+
+                // Nothing drawn, read off structure rather than off the placeholder's words, which
+                // are translated. `SearchSelect` draws a chosen option inside a `div` and the
+                // placeholder as a bare `span`, so a `div` under the closed trigger is a drawn
+                // choice, whatever it says. The visible trigger in `closeBenchmarkPicker` is the
+                // presence that keeps this zero from being a trigger that is not there.
+                await expect.soft(picker.getByTestId('risk-l3-benchmark-select-trigger').locator('> div'), 'the picker draws a choice for an id that matches no asset').toHaveCount(0);
+
+                // Nothing computed, on any scope. Read once, after both barriers and the state above
+                // had their time: a comparison the page meant to send is in the log by now. It used
+                // to leave the moment the catalogue was ready, with the dead id as its benchmark.
+                const asked = requests
+                    .flatMap((request) => request.analytics)
+                    .filter((analytic) => analytic.analytic_code === 'comparison')
+                    .map((analytic) => Number(analytic.parameters?.comparison_asset_id));
+                expect.soft(asked, 'an id that matches no asset was sent to the server as a benchmark').not.toContain(DEAD_ASSET_ID);
+            } finally {
+                await clearRiskBenchmark(page);
+            }
         });
     });
 });

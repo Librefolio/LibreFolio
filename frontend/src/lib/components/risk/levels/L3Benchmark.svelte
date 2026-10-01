@@ -1,8 +1,9 @@
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import AssetSelect from '$lib/components/ui/select/AssetSelect.svelte';
     import type {RiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
-    import {riskBenchmark} from '$lib/stores/risk/riskBenchmarkStore.svelte';
+    import type {RiskBenchmarkState} from '$lib/stores/risk/riskBenchmarkStore.svelte';
+
+    import BenchmarkSelect from '../BenchmarkSelect.svelte';
 
     /**
      * The one benchmark L3 measures against, on every page at once.
@@ -12,18 +13,26 @@
      * If one said "vs MSCI World" and the other "vs S&P 500" the two pages would
      * stop being comparable, which is the property D10 exists to build.
      *
+     * The picker is the shared `BenchmarkSelect` (developer's decision of 01/10/2026):
+     * it opens on the stored choice once the asset list confirms it, writes the store,
+     * and is the same on every Risk surface. Nothing is left out of its list here:
+     * these scopes measure the portfolio, not an asset, so a held asset is a fair
+     * benchmark. This component keeps only what is L3's own — when to ask the
+     * controller, and against which epoch.
+     *
      * Kept out of `L3RiskAdjusted` on purpose: that component renders figures and
      * takes no decisions, so it stays testable as a pure read of the payload.
      */
     interface Props {
         controller: RiskPanelController;
-        /** Asset ids already in scope, excluded so nothing is compared to itself. */
-        excludeAssetIds?: number[];
     }
 
-    let {controller, excludeAssetIds = []}: Props = $props();
+    let {controller}: Props = $props();
 
+    /** The choice in force, resolved by the picker: an id the asset list does not hold reads as null. */
     let selected = $state<number | null>(null);
+    /** Only `set` is a benchmark to measure against; `pending` is still being confirmed. */
+    let benchmarkState = $state<RiskBenchmarkState>('none');
     /**
      * The base epoch the benchmark was last asked for.
      *
@@ -41,12 +50,10 @@
         controller.registerLauncher('comparison', run);
     });
 
-    // Hydration is deliberately an effect and not an initialiser: the store reads
-    // `localStorage`, which does not exist during SSR, and reading it at module
-    // evaluation would throw while rendering rather than on the client.
+    // Launched by an effect, not at mount: the picker confirms a stored choice against
+    // the asset list asynchronously (`pending`), and only a confirmed one (`set`) is
+    // measured — a stored id that names no asset (`unknown`) is never sent.
     $effect(() => {
-        const stored = riskBenchmark.assetId;
-        if (selected === null && stored !== null) selected = stored;
         // `catalogState` is read here for its *dependency*, not just its value.
         // The capability gate in `runSingle` returns null when the catalogue has
         // not landed yet, and it does so silently — so launching before it is
@@ -60,7 +67,7 @@
         // A persisted benchmark that needed a click on every page load would make
         // the persistence worth nothing: the reader would re-choose the same
         // reference twice per visit, and the two pages would disagree in between.
-        if (launchedEpoch !== epoch && ready && selected !== null && !controller.comparisonResult) {
+        if (launchedEpoch !== epoch && ready && benchmarkState === 'set' && selected !== null && !controller.comparisonResult) {
             launchedEpoch = epoch;
             void run();
         }
@@ -84,15 +91,19 @@
         // The measurement that settled it, with its fixture and date, is in the
         // journal under `implementation_2/progress/S3-esecuzione.md`; the figures are
         // not repeated here because the mock dataset moves under them.
-        await controller.runGuarded('comparison', () => (selected === null ? null : {code: 'comparison', mode: 'current_composition', parameters: {comparison_asset_id: selected}}));
+        // The controller may call this launcher by itself (a re-run on a new period), so the
+        // guard is here and not only in the effect: nothing but a confirmed choice is asked.
+        await controller.runGuarded('comparison', () => (benchmarkState !== 'set' || selected === null ? null : {code: 'comparison', mode: 'current_composition', parameters: {comparison_asset_id: selected}}));
     }
 
+    /**
+     * After the picker has written the store, `value` and `state` — so `selected` is
+     * already the new choice here.
+     */
     function choose(next: number | null): void {
         // Bumping first discards the answer to the *previous* question, so a slow
         // reply to the old benchmark cannot land under the new one's name.
         controller.bumpGeneration('comparison');
-        selected = next;
-        riskBenchmark.set(next);
         controller.resetAnalysis('comparison');
         // Claim the current epoch so the effect reads this as already asked and
         // does not fire a second, identical request behind the click.
@@ -101,21 +112,12 @@
     }
 </script>
 
-<div class="flex items-center gap-2" data-testid="risk-l3-benchmark" data-benchmark-id={selected ?? ''}>
+<!-- `data-benchmark-id` is the choice in force, `data-benchmark-state` how far the picker got
+     confirming it: republished from the picker, because the rest of this page and its tests
+     read L3's benchmark here. -->
+<div class="flex items-center gap-2" data-testid="risk-l3-benchmark" data-benchmark-id={selected ?? ''} data-benchmark-state={benchmarkState}>
     <span class="shrink-0 text-xs text-gray-500 dark:text-gray-400">{$t('risk.levels.l3.benchmark')}</span>
     <div class="min-w-0 max-w-xs flex-1">
-        <!-- `sections` and `restLabel` (K3, mandate B) are not in this tree yet.
-             They are additive and default to today's behaviour, so the day they
-             land this call gains them without changing anything it does now. -->
-        <!-- `auto`, because the default `bottom` does not clip the list — it
-             *shortens* it. `SearchSelect` already renders the dropdown at a
-             computed `position: fixed`, so no ancestor's overflow is involved;
-             what it does with `bottom` is set the height to the space below the
-             trigger (`dynamicMaxHeight = maxBelow * ITEM_HEIGHT`). Near the foot
-             of the page that leaves the two-item floor, and the picker reads as
-             truncated. `auto` takes the side with more room instead, which is
-             the behaviour asked for: go down while the page allows, else open
-             upwards. -->
-        <AssetSelect value={selected} compact testid="risk-l3-benchmark-select" dropdownPosition="auto" placeholder={$t('risk.comparison.comparisonAsset')} filter={(asset) => !excludeAssetIds.includes(asset.id)} onchange={choose} />
+        <BenchmarkSelect bind:value={selected} bind:state={benchmarkState} measuredAssetIds={[]} boxClass="w-full" testid="risk-l3-benchmark-select" onchange={choose} />
     </div>
 </div>
