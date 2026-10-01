@@ -2206,7 +2206,7 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 > guida di F (`user/assets/correlation.en.md:99` e la regola 2 di `:153`) va riallineata da F; il bootstrap a blocchi
 > non ha una pagina di teoria.
 
-### F in Risk, la guida di F e gli indicatori tecnici sui giorni di quotazione · 🔵 30/09/2026 (pomeriggio)
+### F in Risk, la guida di F e gli indicatori tecnici sui giorni di quotazione · ✅ 30/09/2026 (pomeriggio) – 01/10/2026
 
 > **Commit** (developer), verificati dal coordinator: il checkpoint del calendario `1996b84e4` … `95051fa8a`; la
 > fusione F → Risk `3c46c8e60` (genitori `95051fa8a` + `1b62abd2e`, albero `25235c91`), aperta con `--no-commit`,
@@ -2251,7 +2251,7 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 > | manuale (docs-writer) | ✅ 21 pagine EN (gli indicatori, `indicators/index`, `ai_export_sampling.md`); ha trovato le due regressioni UI qui sotto |
 > | UI: i periodi in sedute (unità e suggerimenti) | ✅ 30/09 |
 > | UI: le bande di Bollinger e Donchian sul weekend | ✅ 30/09 — riempite fra due punti; concessione rivista dal coordinator |
-> | checkpoint | 🔵 congelato il 30/09, in verifica dal coordinator |
+> | checkpoint | ✅ committato il 30/09: `9d410e4de` · `840bdbc0d` · `6f455dee6` · `d800882b2` (67 percorsi, verificati dal coordinator) |
 >
 > **Mie decisioni sulle ambiguità del test-author**: un giorno di quotazione è un **prezzo** genuino (`days_back == 0`),
 > anche se il cambio è riportato, come per il motore e per l'AI Export: altrimenti le ultime sedute sparirebbero
@@ -2346,3 +2346,199 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 > **⚠️ Fuori pista — un rosso che c'era già**: `asset-unit` dà 12 rossi in `chartCoreHelpers.test.ts`, i test che
 > rileggono il sorgente di `GrowthChart.svelte`. Gli stessi 12 su HEAD e su `dev_release2` (esportati in `/tmp`): il
 > grafico è cambiato con `e7773a143` e i test no. Non è (a); il ramo di I li ritira (`2e4c8589f`).
+
+### `dev_release2` → Risk dopo (a): il passo 13 di K e le scelte di L · ✅ 01/10/2026
+
+> **Commit** (developer, script del coordinator): `cf09df7f6`, genitori `d800882b2` + `8f18416df`, albero
+> `918eb1626cbb…`. Fusione aperta con `--no-commit` dallo script del coordinator, che si fermava se i conflitti non erano
+> esattamente i due previsti.
+>
+> **I due conflitti, risolti in anticipo su una simulazione** (`git merge-tree`, nessuna scrittura nell'albero) e
+> applicati da uno script che controllava che i file in conflitto fossero byte per byte quelli simulati:
+> - `AllocationPieChart.svelte`: il mio importo preso dalla voce del grafico e il mio `iconHtml`, più gli escape di K
+>   (`escapeHtml` sull'importo e sull'URL dell'icona, che ora si chiama `iconUrl` come vuole la regola del cancello).
+>   Prendere il lato di K così com'era non compilava: usava un `iconUrl` che il mio lato non definiva più. Risultato
+>   contro il mio: esattamente le 4 modifiche di K.
+> - `assets/+page.svelte`: il blocco dei filtri, che F ha avvolto in `{#if activeTab !== 'correlation'}` reindentandolo
+>   e K ha ricalibrato (`filterWidthClass`). Git chiudeva i segni a metà, e il testo dopo `>>>>>>>` era la copia di F con
+>   le classi vecchie: scegliere un lato era sbagliato in tutti e due i casi. Ricostruito con una fusione a tre del solo
+>   blocco, con la versione di F senza rientro e senza l'`{#if}`, poi rimesso l'avvolgimento. Prova a spazi ignorati:
+>   il risultato contro F è esattamente le 13 righe di K, contro K esattamente le 135 di F.
+>
+> **Verifica del combinato** (6152, un comando alla volta): `front build --debug` ✅; `front check` al pavimento di 3;
+> `core-unit` 2887 (con i cancelli anti-XSS di K); `component-unit` 2263; `allocation-unit` 142 (con
+> `AllocationPieChart.test.ts`); orfani ✅; i18n 3494 chiavi, nessuna mancante; E2E `risk` 13, `risk-lab` 26,
+> `risk-asset-detail` 2, `asset-list` 28, `toolbar-width-sweep` 15, `asset-name-xss` 2, `stale-price-banner` 1;
+> backend `risk-all` 800, matrice dei plugin 92, `signal-service` 64, `ai-export` 925, `roi-fifo-utils` 518,
+> `brim-provider-base` 34, `portfolio-engine` 42 (i due file del portafoglio si erano fusi da soli dai due lati). Rossi
+> di altri invariati: `asset-unit` 12 in `chartCoreHelpers.test.ts`, gli stessi nomi di prima.
+>
+> **A e F**: niente avanzamento veloce, perché il loro lavoro in corso tocca file che la punta cambia. Al prossimo
+> checkpoint ciascuno fonde la punta. Simulazioni sull'albero esatto, con la vera base di fusione (per F `3c46c8e60`, non
+> la sua punta: è due commit di documentazione avanti): A 0 conflitti; F uno solo, in `TODO_FUTURI.md`, che il
+> coordinator ha preso per sé (il file ha un solo scrittore): la voce di F è passata su `dev_release2`, e F la toglie dal
+> suo checkpoint.
+
+### Il benchmark condiviso: anche gli asset posseduti, e il selettore mai vuoto · ✅ 01/10/2026 (la mia parte)
+
+> **Origine**: F aggiunge al laboratorio un selettore del benchmark, su richiesta del developer («non è accettabile che
+> debba andare in dashboard, modificare il selettore e poi tornare qui»), e mi chiede se il laboratorio debba escludere
+> anche gli asset posseduti, come fa la Dashboard.
+>
+> **Il difetto che c'era già**: la Dashboard e il Broker escludono dalla lista gli asset del proprio perimetro, ma il
+> benchmark è uno solo. Il Broker esclude solo i suoi, quindi un benchmark scelto lì può essere posseduto in un altro
+> broker; la Dashboard allora lo toglie dalla lista (`AssetSelect` filtra le opzioni, `SearchSelect` cerca il valore solo
+> fra quelle) e mostra il segnaposto, mentre `run()` confronta proprio contro di lui.
+>
+> **Decisione del developer**, testuale: «credo che matematicamente può avere senso usare come benckmark un asset
+> posseduto, quello che non capisco è quando dici che il selettore resta vuoto. Vorrei che ovunque serve scegliere un
+> benchmark ci sia un selettore che permette di farlo e che al momento del caricamento della pagina, esso mostri il
+> benchmark attuale, vuoto non deve mai essere, eccetto quando non c'è nessun asset impostato». E per la pagina
+> dell'asset: «Sì, usa il benchmark condiviso: all'apertura mostra quello attuale, e cambiarlo lì lo cambia ovunque».
+>
+> **La regola**: si esclude solo ciò che si misura (l'asset sulla sua pagina, gli asset selezionati nel laboratorio); il
+> selettore mostra sempre la scelta corrente, anche quando lì non si può usare, e lo dice; un id salvato che non
+> corrisponde più a nessun asset vale come «non impostato». Il motivo finanziario: un portafoglio contiene quasi sempre
+> qualcosa del suo riferimento, e «i satelliti mi fanno guadagnare o perdere rispetto al solo nucleo?» è la domanda più
+> utile per chi investe così. Il backend lo gestisce già (il benchmark posseduto ed escluso dà un confronto non
+> disponibile, con la qualità dei dati che dice perché).
+>
+> | chi | cosa | stato |
+> |---|---|---|
+> | A | `RiskLevelsPanel`: niente esclusione degli asset posseduti; l'id morto | ⏳ test rossi prima |
+> | F | il selettore nel laboratorio, sopra L1° e L3° (decide il developer); la scelta corrente sempre visibile | ⏳ giro 4 |
+> | io | la primitiva, e la scheda Rischio della pagina dell'asset che legge e scrive il benchmark condiviso | ✅ 01/10 |
+>
+> **Una primitiva, non tre filtri.** La regola vive in `components/risk/BenchmarkSelect.svelte` con
+> `resolveRiskBenchmark()` nello store (miei); A la monta in `L3Benchmark` con `measuredAssetIds={[]}`, F nel
+> laboratorio sopra L1° e L3° (variante B scelta dal developer), io sulla pagina dell'asset. Il ⚠ è il disegno di F
+> approvato dal developer; il testo generico è mio (`risk.benchmark.measuredHere`), il laboratorio passa il suo con
+> `measuredHint`. Due concessioni del coordinator per il runner (il test jsdom in `risk-levels-component`, l'E2E nuovo
+> `risk-benchmark-shared`).
+>
+> **⚠️ Fuori pista — l'id morto non si cancella.** Il primo contratto cancellava dallo store un id senza asset. Il
+> test-author di A ha trovato due ragioni per non farlo: `entityStore.ensureLoaded()` si risolve anche quando il
+> caricamento fallisce («Fail silently»), quindi un asset sparito e una lista non caricata non si distinguono e si
+> perderebbe una scelta valida; e `assets.id` è `INTEGER PRIMARY KEY` senza AUTOINCREMENT, quindi SQLite riusa l'id
+> dell'ultimo asset cancellato e un id salvato può tornare vivo su un altro asset. La primitiva espone ora lo stato
+> della risoluzione (`none`, `pending`, `set`, `unknown`, anche come `data-benchmark-state`): `unknown` vuol dire
+> segnaposto e nessuna richiesta, senza toccare la memoria. Il riuso degli id riguarda ogni riferimento ad asset
+> salvato nel client: passato al coordinator come limite del backend.
+>
+> **Note implementazione** (test rossi prima, test-author, tre giri: 4 + 23, poi gli attributi e il ⚠ di F, poi lo
+> stato della risoluzione; la sessione è caduta alle 14:28 durante la mia verifica dei rossi, ripresa alle 15:42 dai
+> file):
+> - `riskBenchmarkStore.svelte.ts`: `resolveRiskBenchmark()` → `{state: 'none' | 'set' | 'unknown', assetId}`; niente
+>   salvato → `none` senza caricare la lista; altrimenti attende `ensureAssetsLoaded()` e conferma con `getAssetInfo`;
+>   un caricamento fallito dà `unknown` senza rigettare; **non scrive mai** lo store.
+> - `BenchmarkSelect.svelte`: lo stato è sincrono al montaggio (`pending` se c'è un id salvato, altrimenti `none`), poi
+>   la risoluzione (valore prima dello stato); una scelta del lettore scrive lo store, poi stato e valore, poi
+>   `onchange`, e la risoluzione tardiva non la sovrascrive; il filtro toglie solo ciò che la pagina misura, mai la
+>   scelta corrente; benchmark per primi; la radice `${testid}-control` pubblica `data-benchmark-id`,
+>   `data-benchmark-state`, `data-measured`; il ⚠ è il disegno di F (`role="img"`, `tabindex="0"`, `aria-label`, dentro
+>   il `Tooltip` con `interactiveChild`, perché il suo involucro normale è un `role="button"`), testo generico
+>   `risk.benchmark.measuredHere` o `measuredHint` della pagina. Il prop si chiama `state`, la variabile locale
+>   `benchmarkState`: un nome `state` oscura la runa `$state`.
+> - `RiskAnalysisPanel.svelte` (pagina dell'asset): `BenchmarkSelect` al posto di `SignalAssetParamControl` per il
+>   confronto, stesso testid; `comparisonUsable` esclude l'asset stesso, e il pulsante resta il solo avvio.
+> - Runner (due concessioni del coordinator): il test jsdom in `risk-levels-component`, l'E2E nuovo
+>   `risk-benchmark-shared`; la `desc` corretta al contratto finale (il primo giro diceva ancora «is cleared»).
+>
+> **Verifica** (6152, un comando alla volta): store 13 · `BenchmarkSelect` 38 (`risk-levels-component` 74) ·
+> `core-unit` 2887 · `component-unit` 2263 · `front check` al pavimento di 3/41 (nessun avviso nuovo) · i18n 3495 chiavi,
+> nessuna mancante · orfani ✅ · E2E `risk-benchmark-shared` 4/4 (i quattro rossi), la rete senza proprietario
+> `risk-asset-detail` 2/2 (con la memoria vuota la pagina è identica), `risk` 13, `risk-lab` 26. **Mutanti**: 18 su 18
+> presi (5 sullo store: cancella l'id sconosciuto, non attende la lista, rigetta sul fallimento, carica senza id, legge
+> il fallimento come `set`; 13 sulla primitiva: mai `pending`, niente guardia della corsa, scelta corrente filtrata,
+> `onchange` o valore prima dello store, ⚠ mai mostrato, suggerimento della pagina ignorato, niente sezioni, ⚠ non
+> focalizzabile, stato non pubblicato o non scritto, valore dallo store invece che dalla risoluzione, scelta che non
+> arriva allo store); file ripristinati identici (SHA-256).
+
+### I piccoli debiti di documentazione, e un difetto di (a) che la guida ha fatto emergere · ✅ 01/10/2026 (sera)
+
+> **Commit della famiglia nel pomeriggio**: A `2b9362618` (avviso con la causa prima, residuo onesto di L3); il mio
+> checkpoint del benchmark `07f6bb01d` · `8a2cc16dd`; Risk ← F `a7f1dbea4` (validato: `core-unit` 2896,
+> `component-unit` 2356, E2E `risk-lab` 31, `risk` 13, `risk-benchmark-shared` 4, `risk-asset-detail` 2, `asset-list`
+> 28); la punta in A `738ddc064`, con il solo conflitto atteso sulle due righe del runner, risolto in modo additivo e
+> controllato byte per byte contro la mia risoluzione calcolata a parole.
+>
+> **Scelta del developer**: dopo F → Risk, prima i piccoli debiti di documentazione, poi il blocco replay o l'idoneità
+> del benchmark.
+>
+> **Note implementazione**
+> - **La guida dei plugin dei segnali** (docs-writer, solo EN: le pagine per sviluppatori non hanno traduzioni):
+>   `computes_on_quote_days` nel contratto, il filtro delle sedute nell'esecuzione (la copertura resta di calendario),
+>   il riscaldamento separato per sedute e giorni (`SESSION_WARMUP_DAY_MULTIPLIER = 2`), `sessions` contro `days` nei
+>   metadati dei parametri, la regola della versione. Ha corretto anche sette punti già sbagliati prima (la categoria
+>   `risk`, l'esempio completo che la registrazione avrebbe rifiutato, i campi semantici obbligatori, il tipo `area`,
+>   un nome di costante dei test superato). Build severa e link verdi.
+> - **⚠️ Fuori pista — un difetto di (a), trovato dal docs-writer leggendo il codice**: l'avviso di copertura parziale
+>   (`build_signal_availability_warnings`) contava come «esclusi» tutti i punti di calendario fuori da quelli scelti, e
+>   dal 30/09 quelli scelti sono le sole sedute: i giorni riportati dentro il segmento finivano fra gli esclusi, e il
+>   numero sul grafico (`signalProblem.ts:226` → `chartSignalsHelpers.ts:86`) era gonfiato. Rosso prima (test-author):
+>   15 esclusi contro 11, e i bordi del segmento dati come prima e ultima seduta invece che come estremi di calendario;
+>   un plugin gemello con `computes_on_quote_days = False` fa da metro. Cura: l'avviso riceve la selezione della
+>   copertura, prima del filtro delle sedute. Mutanti: tornare alle sedute, togliere il filtro: presi entrambi.
+>   Consumatori di `excluded_points`: solo l'avviso del grafico; l'AI Export legge degli avvisi solo codice e
+>   messaggio, e solo nel contesto del drawdown, che non usa le sedute: niente prova dell'AI Export.
+> - **Il pin «nessun id mentre è `pending`»** in `BenchmarkSelect.test.ts` (reperto di A): i due mutanti di A sulle sue
+>   guardie `state === 'set'` sopravvivevano solo perché la primitiva non pubblica un id non confermato, cosa che il
+>   contratto non fissava. Ora la fissa (39 test); il mutante che pubblica l'id salvato al montaggio muore anche nel
+>   caso di un id che la lista poi conferma, che prima nessun test copriva.
+>
+> **Verifica** (6152): `signal-service` 65 · matrice 92 · `asset-signals` 30 · plugin OHLC 75 e core 46 ·
+> `risk-levels-component` 75 · orfani ✅ · ruff e black puliti · `diff --check` pulito.
+>
+> **Restano**: la nota sul cancello della documentazione (`scripts/docs_links.py` riconosce `docsPath:` anche nei
+> commenti: falsi link rotti), passata al coordinator, a cui appartiene lo strumento; il limite delle sfumature della
+> torta (famiglie di 5–7 membri), da decidere col developer, cancello per `dev_release2`; poi il blocco replay (F3) o
+> l'idoneità del benchmark (F4).
+
+### Le sfumature della torta per le famiglie grandi — il cancello per `dev_release2` · ✅ 01/10/2026 (sera)
+
+> **Il difetto** (latente da R12-B, trovato il 28/09 dal test dei 7 membri, parcheggiato): la sfumatura sposta la
+> luminosità di 20 punti per livello in una sola direzione, lontano dall'estremo più vicino. Con la tassonomia di K la
+> famiglia ETF per veicolo ha 7 membri: dopo 2–4 passi la luminosità si blocca a 0 o 100, e gli ultimi sottotipi
+> diventano bianco puro (tema chiaro) o nero (tema scuro), tutti uguali: su 28 posizioni su 28 delle due palette della
+> torta. Sui dati del developer non si vede (la sua famiglia ETF ha 2 membri), ma con i sottotipi di K diventa normale.
+>
+> **La misura, prima della scelta** (formule HSL identiche a `colors.ts`, distanza percettiva CIEDE2000, script e
+> immagine fra i file della sessione):
+> - il criterio del test parcheggiato, «almeno 15 punti di luminosità fra i membri», **è irraggiungibile** per 7 membri
+>   che tengono il tono: in una fascia utilizzabile (circa 10–92, oltre si legge nero o bianco) il massimo ottenibile con
+>   la sola luminosità è circa 11,5 punti;
+> - la sola luminosità, anche distribuita sui due lati del colore base, lascia la coppia più vicina a ΔE2000 3,4 nel
+>   caso peggiore; le coppie di oggi (gruppi di 2–3) stanno a 5,4;
+> - aggiungendo la saturazione dimezzata a un membro sì e uno no, con la fascia [10, 90]: ΔE2000 minimo 6,97 (N=4),
+>   6,10 (5), 7,84 (6), 5,82 (7), sopra le coppie di oggi; tono spostato al massimo di 2,2° (quantizzazione dell'hex);
+>   da 8 membri la distanza scende a circa 3 (distinti, ma più deboli): limite dichiarato.
+>
+> **Decisione del developer**: la regola **B** (luminosità sui due lati in [10, 90], passo massimizzato e non oltre 20,
+> saturazione ×0,5 sulle profondità pari), preferita alla sola luminosità (A) e ai colori distinti nell'anello esterno,
+> dopo il confronto disegnato con ECharts (tema chiaro e scuro, il primo colore della palette e il caso peggiore).
+> I gruppi fino a 3 restano identici: il grafico storico di I (gruppi per contenuto, al massimo 3) non cambia.
+>
+> **Concessione del coordinator**: `allocationHierarchy.ts`, `allocationRings.ts` e i loro due test; il parametro della
+> dimensione del gruppo facoltativo, con il comportamento di oggi come predefinito; il pin byte per byte dei gruppi
+> fino a 3 sulle quattro palette come prova che il grafico di I non si muove; il limite da 8 membri scritto nel
+> modulo. Il nuovo criterio del test: ogni coppia almeno quanto la coppia più vicina di oggi, tono entro 3°.
+>
+> **Note implementazione** (test rossi prima, test-author: 18 rossi sul criterio, 118 guardie verdi; il righello
+> CIEDE2000 validato sulle coppie pubblicate di Sharma, Wu e Dalal; il minimo di oggi misurato dal test: 5,4123):
+> - `allocationHierarchy.ts`: `shadeForDepth(base, depth, step?, groupSize?)`; senza `groupSize`, o fino a 3, il
+>   cammino di oggi; da 4 la regola B (costanti nominate: gruppo a un lato fino a 3, fascia [10, 90], saturazione
+>   ×0,5); la nota «How many members a group holds» riscritta con la regola, la misura e il limite da 8 membri;
+>   `buildAllocationHierarchy` passa `members.length`.
+> - `allocationRings.ts`: l'anello esterno passa `1 + sottotipi`, perché l'arco interno tiene la profondità 0 anche
+>   quando il membro puro manca.
+> - Test: il test dei 7 membri ripristinato con il criterio nuovo; famiglie di 4–6 e di 8–10 (queste senza il minimo,
+>   col limite citato); gli anelli con e senza il membro puro; il pin byte per byte dei gruppi fino a 3 sulle quattro
+>   palette (il grafico storico di I non si muove) e del valore predefinito; i valori esatti della regola su tre basi
+>   (il tetto del passo, il pareggio fra due ripartizioni, il tema scuro).
+> - Mutanti: 9 su 9 presi. I due che il criterio percettivo non vede (il passo oltre 20, il pareggio vinto dall'ultima
+>   ripartizione) li prendono i valori esatti, aggiunti apposta.
+>
+> **Verifica** (6152, un comando alla volta): `allocation-unit` 211 · `component-unit` 2356 · `core-unit` 2896 ·
+> `front check` al pavimento di 3/41 · orfani ✅ · `front build --debug` ✅ · E2E `asset-list` 28 · E2E `dashboard`: i due
+> test dell'allocazione verdi, i 5 rossi sono quelli noti del GrowthChart di I. Il grafico storico non cambia: lo
+> prova il pin byte per byte dei gruppi fino a 3 sulle sue due palette.

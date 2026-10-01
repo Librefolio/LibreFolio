@@ -76,6 +76,13 @@ class SparseInputLinePlugin(PartialLinePlugin):
     allows_sparse_input_dates = True
 
 
+class CalendarPartialLinePlugin(PartialLinePlugin):
+    """``PartialLinePlugin`` computed on its calendar input: the reference for the partial-coverage warning."""
+
+    signal_code = "TEST_CALENDAR_PARTIAL_LINE"
+    computes_on_quote_days = False
+
+
 class HighStrictPlugin(LineFixturePlugin):
     signal_code = "TEST_HIGH_STRICT"
     input_requirements = SignalInputRequirements(
@@ -653,6 +660,62 @@ async def test_partial_policy_uses_contiguous_suffix_and_warns():
     assert warning.details["selected_end_date"] == "2026-01-06"
     assert warning.details["excluded_points"] == 2
     assert warning.details["max_consecutive_missing_points"] == 1
+
+
+@pytest.mark.asyncio
+async def test_partial_policy_warning_describes_the_calendar_segment_not_its_quote_days():
+    """The partial-coverage warning describes the calendar segment the coverage chose.
+
+    Computing on quote days is a separate contract: the plugin receives only the segment's sessions, while the
+    warning keeps the segment's calendar bounds and excludes only the input points outside it — the carried
+    days inside the segment are not excluded. The same plugin computing on its calendar input says the same.
+    """
+    service = make_service(PartialLinePlugin, CalendarPartialLinePlugin)
+    hole = date(2026, 1, 16)  # a Friday with no point at all: the weekend after it carries Thursday's bar
+    sessions = [point for point in weekday_sessions(date(2026, 1, 5), 15) if point.date != hole]
+    points = [point for point in calendar_filled(sessions, date(2026, 1, 25)) if point.date != hole]
+    carried = [point.date for point in points if point.backward_fill_info is not None and point.backward_fill_info.days_back > 0]
+    # Premise: carried weekends before the hole, right after it, and at the end of the input.
+    assert carried == [date(2026, 1, 10), date(2026, 1, 11), date(2026, 1, 17), date(2026, 1, 18), date(2026, 1, 24), date(2026, 1, 25)]
+
+    results = await service.compute(
+        [
+            request("quote-days", "TEST_PARTIAL_LINE", {"length": 2}),
+            request("calendar", "TEST_CALENDAR_PARTIAL_LINE", {"length": 2}),
+        ],
+        points,
+        make_context(start=date(2026, 1, 5), end=date(2026, 1, 25)),
+    )
+    results_by_id = {result.instance_id: result for result in results}
+    on_quote_days = results_by_id["quote-days"]
+    on_calendar = results_by_id["calendar"]
+
+    assert (PartialLinePlugin.computes_on_quote_days, CalendarPartialLinePlugin.computes_on_quote_days) == (True, False)
+    for result in (on_quote_days, on_calendar):
+        assert (result.status, result.availability.reason_code, result.availability.partial_coverage_used) == (SignalStatus.PARTIAL, SignalAvailabilityReason.DATA_GAP, True), result.instance_id
+    # A dense plugin is dated on exactly the points it received, and the requested range covers the whole input.
+    # Premise: the calendar twin received the segment the coverage chose, Saturday 17 to Sunday 25, and it holds carried days.
+    segment = [point.date for point in on_calendar.series[0].points]
+    assert segment == [date(2026, 1, 17) + timedelta(days=offset) for offset in range(9)]
+    assert [day for day in segment if day in carried] == [date(2026, 1, 17), date(2026, 1, 18), date(2026, 1, 24), date(2026, 1, 25)]
+    # Premise: the quote-day plugin received only the segment's sessions, Monday 19 to Friday 23 — fewer points than the segment.
+    received = [point.date for point in on_quote_days.series[0].points]
+    assert received == [date(2026, 1, 19) + timedelta(days=offset) for offset in range(5)]
+    assert len(received) < len(segment)
+
+    details = {}
+    for result in (on_quote_days, on_calendar):
+        warning = next(item for item in result.warnings if item.code == SignalWarningCode.DATA_GAP)
+        details[result.instance_id] = {key: warning.details[key] for key in ("selected_start_date", "selected_end_date", "excluded_points", "first_excluded_date")}
+    # The eleven points before the hole are excluded, their carried weekend included; the carried days inside the
+    # segment are not, and the bounds are the segment's own calendar days.
+    assert details["calendar"] == {
+        "selected_start_date": "2026-01-17",
+        "selected_end_date": "2026-01-25",
+        "excluded_points": 11,
+        "first_excluded_date": "2026-01-05",
+    }
+    assert details["quote-days"] == details["calendar"]
 
 
 @pytest.mark.asyncio
