@@ -60,11 +60,12 @@ Indicatore di lettura rapida: va riletto **a ogni consegna**, non a ogni sospett
 | C7 | Checkpoint: D23 + D23b (il segno del locale nei grafici, il colore dello zero), registri | C6 + merge `921f1fc05` | ✅ pronto 2026-09-30 00:07 · ✅ **committato 10:01**: `9d8fb520b`, `039baea22`; `dev_release2` già contenuto, nessun merge (registro «Checkpoint C7 — committato») |
 | C8 | Checkpoint: S7 (asse a scala di Candele e Proventi, riga «parziale» con `escapeHtml`), registri | S7 | ✅ pronto 2026-09-30 23:51: 3 commit su `039baea22` (il pianificatore; la cura di S7; il journal), il runner diviso fra i commit 1 e 2; prima la `desc` del runner e i doc di tre helper di test (registri «Checkpoint C8 — preparazione» e «Checkpoint C8 — pronto») · ✅ **committato 2026-10-01 11:04**: `7bfa064f0`, `69cba356f`, `de5349e46`; merge `851d3a5cf` con `dev_release2` (`8f18416df`: il passo 13 di K e le scelte di L), una regione risolta in `GrowthChart.svelte`, gate verde (registri «Checkpoint C8 — committato», «Allineamento a `dev_release2` — merge `851d3a5cf`» e «Gate sulla revisione combinata `851d3a5cf`»). Dopo: S7b |
 | C9 | Checkpoint: S7b (tacche del denaro esatte e distinte, il meno del locale sugli assi, il bordo senza etichetta), registri | S7b | ✅ pronto 2026-10-01 15:02: 2 commit su `cd6502084` (la cura con i test; il journal); proposte al coordinator la `desc` di `growth-chart-memo` e la riga del CHANGELOG (registro «S7b — passo 6») · ✅ **committato 15:31**: `07035fd4f` (messaggio v2), `99bc08911`; nessun merge (registro «Checkpoint C9 — committato»). Dopo: S8 |
-| C10 | Checkpoint: S8 (R11: il valore di acquisto nei Proventi, una voce di legenda, il totale e le due quote, il nuovo capitale in blu KPI), registri | S8 | ✅ pronto 2026-10-01 17:57: 2 commit su `99bc08911` (la cura con i test e la `desc` concessa del runner; il journal); proposte al coordinator la clausola di S8 per la `desc` e nessuna voce del CHANGELOG (registro «S8 — passo 6») |
+| C10 | Checkpoint: S8 (R11: il valore di acquisto nei Proventi, una voce di legenda, il totale e le due quote, il nuovo capitale in blu KPI), registri | S8 | ✅ pronto 2026-10-01 17:57: 2 commit su `99bc08911` (la cura con i test e la `desc` concessa del runner; il journal); proposte al coordinator la clausola di S8 per la `desc` e nessuna voce del CHANGELOG (registro «S8 — passo 6») · ✅ **committato 18:47**: `c4595922e`, `567fee80e`; nessun merge (registro «Checkpoint C10 — committato»). Dopo: S8b |
+| C11 | Checkpoint: S8b (D24: il «?» della guida in fondo alla riga della finestra; D28: l'ancora inglese, il rosso di it/fr/es accettato fino ad Aphra), registri | S8b | ✅ pronto 2026-10-01 21:42: 2 commit su `567fee80e` (la cura con il test, l'ancora inglese e la clausola concessa di S8 nel runner; il journal); nessuna voce del CHANGELOG, il debito di traduzione e la nota sul rimontaggio al coordinator (registro «S8b — passo 6») |
 | S7 | Asse dei bucket (R8 dopo D4, R10) | S6 | ✅ **2026-09-30 23:05** (avviata dal coordinator alle 10:04): il pianificatore `growthLadderAxis.ts` e la cura di `GrowthChart.svelte`; la riga «parziale» passa per `escapeHtml` (fuori pista, registro «S7 — passo 6»). Unit, build, E2E seriale e con 4 worker verdi. Decisioni: D4 ✅, D16 = (ii)+(i) ✅, D17 = (a) ✅ (§7) |
 | S7b | Tacche Y doppie (reperto N1) | S7 | 🔓 D18 = sì ✅ 2026-09-25: assi del denaro di Crescita e Performance; `%` escluso · ▶️ avviata 2026-10-01 (coordinator, dopo `cd6502084`): analisi ✅ 13:19; D25 = B ✅ 13:51; test rossi ✅ 14:46; cura ✅ 14:50; gate ✅ 15:00 · ✅ **2026-10-01 15:02**, in C9 (registro «S7b») |
 | S8 | R11 valore di acquisto | S7 | ▶️ avviata 2026-10-01 (coordinator, dopo `99bc08911`): motore rimisurato per simbolo, invariato; analisi e D26 = blu KPI ✅ 15:49; test rossi ✅ 17:06 (11 in `growth-chart-memo`, 4 in `asset-unit`, ciascuno per la ragione voluta); cura ✅ 17:14 (60/60, 530/530); D27 = legenda condivisa fra Abs e Proventi, accettata ✅ 17:14; gate ✅ 17:50 (10 verdi, l'E2E del dashboard corso due volte); `desc` del runner ✅ 17:53 · ✅ **2026-10-01 17:57**, in C10 (registro «S8») |
-| S8b | Guida del Rendimento mobile nel dettaglio asset (D24) | S8, D24 | ⏳ approvato dal developer (2026-09-30 11:52): «?» in fondo alla riga della finestra, solo in Rendimento mobile, verso la guida utente; commit a sé dopo S8 |
+| S8b | Guida del Rendimento mobile nel dettaglio asset (D24) | S8, D24 | ⏳ approvato dal developer (2026-09-30 11:52): «?» in fondo alla riga della finestra, solo in Rendimento mobile, verso la guida utente; commit a sé dopo S8 · ▶️ avviata 2026-10-01 (coordinator, dopo `567fee80e`): analisi ✅ 18:59, test rosso ✅ 19:36, cura ✅ 19:37, gate 1–5 ✅ 19:45, `check-links` ❌ → D28 ✅ 21:28 (ancora inglese ora; il rosso di it/fr/es è accettato fino ad Aphra); ancora inglese ✅ 21:33, passo 4 ✅ 21:37; `desc` del runner ✅ 21:39 · ✅ **2026-10-01 21:42**, in C11 (registro «S8b») |
 | S9 | R9 didascalia | S1 | ✅ 2026-09-24 (scorrimento a 375 px: verifica live in S6) |
 | S10 | Debiti e test residui | S1 | 🔄 **OK del developer sulla test list, 2026-09-25**, con E8 ed E9 in più (D8 ✅ 2026-09-24). Ordine: `needs_engine` per primo, in un commit a sé (coordinator, 15:24 e 15:37), poi il contratto di `/portfolio/report` (registro «Triage del contratto di `/portfolio/report`») e il resto di §4. **Passo 1 ✅ 2026-09-25 10:38**: `needs_engine` corretto (6 rossi → verdi), contratto a 13 chiavi, `api portfolio` 55/55, `services roi-fifo-utils` 507/507 (registro «S10 passo 1»). **Passo 2 ✅ 11:10**: D20, il test dei Proventi pulisce i suoi dati, misurato con un controllo positivo; `api portfolio` 55/55 (registro «S10 passo 2»). **Passo 3 ✅ 11:37**: `chartCoreHelpers.test.ts` 159 → 145 (D19: −14), i 7 specchi ri-pinnati ognuno col suo perché, C4 convertito sulla copia fedele; 145/145, 0 falliti (registro «S10 passo 3»). Reperti del passo → D21, ✅ deciso dal developer (§7). **Passo 4 ✅ 11:59**: `AllocationPanel.test.ts` (3 casi) e `allocationTypeEmoji.test.ts` (8 casi), nuovi, 11/11 (registro «S10 passo 4»). **Passo 5 ✅ 12:15**: `GrowthChart.test.ts` 6 → 17 casi (S2a, S5, S9) e la `why` di D13, 23/23 (registro «S10 passo 5»). **Passo 6 ✅ 12:15**: i 3 file nuovi registrati nel runner, nome visibile di `growth-chart-memo`; `check-orphans` pulito (registro «S10 passo 6»). **Passo 7 ✅ 12:27**: la pulizia di `…positions_contribution_is_date_aware`, assegnata sotto D20, misurata con un controllo positivo: nessuna perdita; `api portfolio` 55/55 (registro «S10 passo 7»). **Passo 8 ✅ 12:30**: `PerformanceChart.test.ts`, nuovo, 6/6 (registro «S10 passo 8»). **Passo 9 ✅ 12:30**: D21 e D22 su `chartCoreHelpers.test.ts`, 145 → 142 → 144, 144/144, 0 falliti (registro «S10 passo 9»). **Passo 10 ✅ 12:33**: `front check` al floor, 3 errori e 41 avvisi, nessuno nei miei file (registro «S10 passo 10»). **C4 ✅ 2026-09-28 11:41** (8 commit, `00bb1ac75`→`472f51498`), poi il merge di `dev_release2` (`9016bb0d1`) e i gate sulla revisione combinata, tutti verdi (registro «Validazione sulla revisione combinata»). **Brief 03 ✅ 13:00**: dashboard 15/5 → **18/18**, broker detail 28/1 → **28/28**, in seriale e con `--workers 4` (registro «S10 — brief 03»). **E7 ✅ 13:52**: asset detail 28/1 → **28/28**, in seriale e con `--workers 4`; la coda risvegliata è verde (registro «S10 — E7 completato»). **C5 ✅ committato 2026-09-29 10:02** (registro «Checkpoint C5 — committato»). **C6 ✅ committato 22:26**, merge `921f1fc05` e gate rapido verde (registro «Checkpoint C6 — committato»). **D23 con D23b ✅ 2026-09-30 00:03**: il segno del locale in `fmtCurrency` e `shortMoney`, una sola forma per le righe con segno, il colore dello zero; test ri-pinnati e nuovi, corsia verde (registro «D23 + D23b»). **C7 pronto 2026-09-30 00:07** (registro «Checkpoint C7 — pronto») |
 | S11 | Docs (docs-writer) | S2b, S3, S4b, S8, S9 | 🔄 in parte, ✅ 2026-09-24 (autorizzata dal coordinator alle 14:45; registro «S11 in parte»): `charts.en.md` (memoria della vista, privacy di Crescita, didascalia delle candele, candele senza broker, memoria di Allocazione) e `positions.en.md` (privacy di Performance). Accettato dal coordinator (15:24) ed entrato in C3 (`671d4ab49`). Il resto dopo S7/S8, più due voci aggiunte (coordinator, 16:07): `index.en.md`, che conta tre schede invece di quattro (reperto di J), e la deriva dei nomi, che c'è anche nella mia frase di C3 (registro «S11-finale — voci aggiunte») |
@@ -528,6 +529,7 @@ rifatta con `git merge-tree` contro il target **al momento** di ogni checkpoint.
 | D25 | developer (da S7b passo 1, 2026-10-01; il «−888» rimandato da S6) | La tacca di bordo non è una tacca regolare: ECharts la mette sul bordo che il grafico fissa (Crescita: minimo dei dati − 8 %, `GrowthChart.svelte:2245`; Performance: ±105 % della barra più lunga, `PerformanceChart.svelte:987-988`). Oggi `toFixed` la arrotonda e la nasconde; con D18 diventa esatta e illeggibile: `9,752k`, `93,64k`, `1,17344M`, `−2,55465K` (sonda ECharts 6, registro «S7b»). Nei Proventi senza costi è il «−888». Che cosa ci va? | **(B) solo tacche tonde (consigliata)**:<br>• linee, candele e `%` della Crescita: il bordo resta dov'è, senza etichetta (`showMinLabel: false`);<br>• Proventi: l'asse parte da 0, o dalla prima tacca tonda sotto i costi, come ogni grafico a barre;<br>• Performance: le due etichette di bordo spariscono (`showMinLabel`/`showMaxLabel: false`), le barre restano larghe come oggi.<br>Alternative:<br>• **(A)** bordo tondo: l'asse arriva a una tacca tonda; più spazio vuoto (P&L da −3,2k: asse a −6k), barre della Performance più corte (2.433: dal 95 % all'81 %);<br>• **(C)** com'è: il bordo stampa il valore esatto e resta il «−888»<br>✅ **B** (developer, 2026-10-01 13:51), dopo una domanda: nel P&L da −3,2k a 8,7k la tacca più bassa è −3k. Chiarito che l'asse parte da −4,15k: −3,2k è il punto più basso della linea, appena sotto la riga −3k, nella fascia senza etichetta; nulla è tagliato. Una tacca con etichetta sempre sotto il minimo è A, con la fascia vuota (qui fino a −6k): scartata |
 | D26 | developer (da S8 passo 1, 2026-10-01) | Il colore del nuovo capitale nella colonna degli acquisti dei Proventi. Oggi le due zone hanno i colori dei pool di Abs: salvia `cashContributed` per il nuovo capitale, emerald `cashGenerated` per il reinvestito (`GrowthChart.svelte:1634-1639`). Lo storyboard di R11 (§2) dice «blu KPI», e con D2 la colonna prende il nome «Valore di acquisto»: lo stesso testo dell'area blu di Abs (`dashboard.assetsAtCost` e `dashboard.bookValue` coincidono in en, it, fr ed es) e della barra blu della scheda KPI (`KpiSection.svelte:364`). Quale colore? | **Blu KPI (consigliata)**: stesso nome, stesso colore. Il nuovo capitale prende `cc('bookAssetLike')`, `#3b82f6`/`#60a5fa`, gli stessi esadecimali di `bg-blue-500`/`dark:bg-blue-400` della scheda; il reinvestito resta emerald, `cc('cashGenerated')`, il colore dell'area «Rendimento» di Abs.<br>Alternativa: salvia ed emerald come oggi, coerenti con i pool, ma sotto un nome che in Abs indica l'area blu<br>✅ **Deciso dal developer (2026-10-01 15:49, `ask_user` nella chat di I), testuale: «Blu KPI, come nello storyboard: stesso nome, stesso colore di Abs (consigliato)»** |
 | D27 | developer (da S8 passo 3, 2026-10-01) | La legenda condivisa fra le viste. Con D2 le barre degli acquisti dei Proventi e l'area blu di Abs hanno lo stesso testo in tutte e quattro le lingue. ECharts tiene la selezione della legenda per nome, e GrowthChart usa una sola istanza per tutte le viste, fondendo la legenda (`replaceMerge` copre `series` e `xAxis`). Nascondere «Valore di acquisto» in Abs lo nasconde anche nei Proventi, e viceversa: sonda ECharts 6.0.0 (registro «S8», passo 3). Il tooltip dei Proventi mostra comunque le righe. Precedente: «P&L totale» fra Linea e Candele | **Accettare (consigliata)**: stessa voce, stesso interruttore in tutte le viste; un commento nel codice.<br>Alternative: azzerare la legenda a ogni cambio di vista, per tutte le voci, con un test nuovo, fuori da R11; separare il solo «Valore di acquisto», con più codice<br>✅ **Deciso dal developer (2026-10-01 17:14, `ask_user` nella chat di I), testuale: «Accetta: stessa voce, stesso interruttore in tutte le viste; lo annoto nel diario (consigliato)»** |
+| D28 | developer (da S8b passo 4, 2026-10-01) | Il gate `mkdocs check-links` è rosso sul link di D24: `user/assets/detail/chart/#rolling-return` → «anchor not found» (`+page.svelte:3006`). Il controllo sta in `dev.py` (`_mkdocs_check_anchor`, `:1133`, da `b35a8581e`, 18/09): l'ancora deve esistere in inglese **e** in ogni traduzione presente. `chart.{it,fr,es}.md` esistono, senza la sezione delle modalità (58 righe contro 123), e le eccezioni (`MKDOCS_ANCHOR_EXCEPTIONS`, `:1126`) «devono solo restringersi». Lo schema di D24 (link con l'ancora in S8b, ancora inglese in S11-finale, traduzione dopo) non passa quindi il gate in nessun momento prima della traduzione. Oggi il link apre la pagina in cima in tutte e quattro le lingue, con o senza `#`. Che fare? | **A (consigliata)**: ora il link alla pagina senza ancora (`user/assets/detail/chart/`), gate verde, ri-pin dei 2 URL dell'E2E via test-author; per l'utente nulla cambia rispetto a oggi. In S11-finale il docs-writer mette `{: #rolling-return }` sull'intestazione inglese (nessun link lo usa ancora: nessun gate). Il `#rolling-return` torna sul link, con il ri-pin dell'E2E, nel cambio che porta in it/fr/es la traduzione della sezione con lo stesso id, come le schede KPI (`kpi-cards.*.md:15`): voce per la lista del debito di traduzione del coordinator.<br>**B**: ora l'ancora inglese (docs-writer, anticipo di S11-finale) e la traduzione della sezione in it/fr/es, chiesta dal developer (Aphra o modifica diretta): gate verde con l'ancora, E2E invariato; traduzione fuori da S8b, forse da rifare dopo S11-finale.<br>**C (sconsigliata)**: l'ancora inglese ora e una voce nuova in `MKDOCS_ANCHOR_EXCEPTIONS` per it/fr/es: contro la regola «solo restringersi», in un file condiviso.<br>Scartate senza chiedere: un'ancora piantata nelle traduzioni in cima o su un'intestazione estranea (passa il controllo ma porta nel posto sbagliato: nasconde il debito che la lista rende visibile); la pagina teorica (D24 ha scelto la guida)<br>✅ **Deciso dal developer (2026-10-01, due `ask_user` nella chat di I, entro le 21:28), testuale:** «per ora ignora l'errore, lo risolveremo dopo che avvieremo la pipeline di traduzione, l'importante è che sia in inglese»; poi, sui tempi dell'ancora inglese: «Ora in S8b, nello stesso commit: in inglese funziona subito, il rosso resta solo per it/fr/es (Consigliata)».<br>→ Il link resta `#rolling-return`. `{: #rolling-return }` va ora sull'intestazione inglese (`chart.en.md:22`), via docs-writer, senza timbro Aphra: il debito di traduzione è reale. Il rosso residuo di `check-links` («missing in: it, fr, es») è accettato fino al giro Aphra di fine round, che deve portare lo stesso id nelle tre lingue. Vincoli del coordinator, la stessa sera: le traduzioni tutte insieme a fine giro (developer, 30/09), quindi niente B; C esclusa; la voce va nella sua lista del debito di traduzione |
 
 ---
 
@@ -5416,4 +5418,276 @@ comando la porta 6157 è libera.
 >   - nessun file sotto `backend/`: l'unico Python del delta è il runner, coperto dal passo 5 e dal lint qui
 >     sopra. Il «nessun file Python» del passo 4 valeva prima del passo 5;
 >   - `git diff --check` pulito, stage vuoto, 0 file non tracciati, 5 file tracciati; porte 6157 e 6167 libere.
+> - Stato: FROZEN, nessun edit, test, server o Git fino al prossimo messaggio del coordinator.
+
+### Checkpoint C10 — committato ✅ 2026-10-01 18:47
+
+> **Note implementazione:**
+> - Il coordinator ha verificato C10 (18:08): i 5 percorsi, i blob dichiarati, i messaggi ASCII entro i 68
+>   caratteri. Ha preparato lo script `/tmp/libreFolio_commit_i_c10.sh`, l'ha provato a secco (GUARDS_OK) e su un
+>   clone (2 commit con 5 file, puliti; la seconda corsa rifiutata). Il developer ha committato alle 18:47.
+> - La mia verifica dopo il commit, in sola lettura (18:48):
+>   - 2 commit in fila su `99bc08911`, ognuno con un solo genitore, nessun merge;
+>   - i messaggi sono identici byte per byte a quelli proposti (`/tmp/libreFolio_commit_i10_{1,2}.txt`);
+>   - commit 1: i 3 file del frontend e il runner, +373 −42; commit 2: questo piano, +352 −3. In tutto 5 file, il
+>     delta di C10, con i blob dichiarati;
+>   - albero di lavoro pulito, stage vuoto; porte 6157 e 6167 libere.
+>
+> | # | commit | subject | albero |
+> |---|---|---|---|
+> | 1 | `c4595922e` | `feat(charts): show purchase value in income bars` | `0daa0cbd3e1b` |
+> | 2 | `567fee80e` | `docs(journal): record S8, D26 and D27` | `91ecc5ce48b3` |
+>
+> - **Decisioni del coordinator su C10** (18:08):
+>   - la clausola di S8 per la `desc` di `growth-chart-memo` (passo 5) è approvata senza D27, che nessun test fissa.
+>     Entra nel prossimo checkpoint, C11;
+>   - nessuna voce del CHANGELOG per S8: il sottomodo Proventi non è rilasciato. La voce ✨ per l'intera modalità
+>     P&L arriva all'handoff di S12;
+>   - il `<b>${pnlLabels.bookValue}</b>` passato a `signedRow` va nella sua lista con K, insieme alle altre
+>     traduzioni non escapate;
+>   - nessun allineamento a `dev_release2` per ora: ha in più solo i 4 commit TODO, che non mi toccano.
+> - `dev_release2` resta `ed3bf870a`: HEAD è avanti di 44 commit e indietro di 4.
+> - **Mandato** (coordinator, 18:48): la verifica in sola lettura, poi il passo successivo del piano nella 6157.
+>   È S8b (D24). Il fix della data di `asset-detail.spec.ts:486` non c'è più da fare: è E7, in C5 (`f70b9c3ba`),
+>   come registrato al punto B4.
+
+### S8b — La guida del Rendimento mobile nel dettaglio asset (D24)
+
+**Passo 1 — analisi, sola lettura ✅ 2026-10-01 18:59**
+
+> **Note implementazione:**
+> - Base: `567fee80e`, un solo file modificato (questo piano), stage vuoto, porte 6157 e 6167 libere.
+>   `dev_release2` (`ed3bf870a`) ha in più solo i 4 commit TODO, che toccano soltanto `TODO_FUTURI.md`.
+> - **Il punto d'inserimento** (`assets/[id]/+page.svelte`): la riga della finestra,
+>   `asset-calendar-window-controls` (`:2965-2999`), dentro `{#if primaryMode === 'calendar-return'}`. Contiene
+>   l'etichetta, i 4 preset e `CompactDurationBadge` (`:2980-2998`). Il «?» va dopo il badge, prima del `</div>` di
+>   `:2999`. Il secondo `asset-chart-primary-controls` (`:3178`) è lo stato vuoto dei Prezzi, senza la riga della
+>   finestra: non si tocca.
+> - **`DocsLink`** (`ui/DocsLink.svelte`): un pulsante dentro un `Tooltip`, con `aria-label={label}` e
+>   `data-testid={testId}`. Al clic apre `/mkdocs/` + (`lang/` se la lingua non è l'inglese) + `path`, con
+>   `window.open(…, '_blank', 'noopener')`. La pagina oggi non lo importa: serve un import, accanto a `Tooltip` e
+>   `CompactDurationBadge` (`:41-45`).
+>   - `localizedFallbackPath` serve alle pagine che esistono solo in inglese. La nostra esiste nelle 4 lingue:
+>     non lo uso, e l'URL segue la lingua attiva, come vuole D24.
+> - **L'etichetta**: `signals.riskRollingReturn.description`, presente nelle 4 lingue (EN «Compounded price-only
+>   return over a rolling window.»). Oggi nessun file del frontend la usa in modo statico. Zero chiavi nuove.
+> - **I gate dei link:**
+>   - `mkdocs check-links` (`scripts/docs_links.py`): `_DOCSLINK_PROP` (`:61`) legge il `path=` letterale sulla
+>     riga di `<DocsLink`, e `find_page` (`:263`) toglie il `#…`. Verifica la pagina, che esiste nelle 4 lingue;
+>   - l'ancora non la controlla nessuno. `validation: anchors: warn` (`mkdocs.yml:24`) copre solo i link interni
+>     ai docs, come spiega il commento di `mkdocs.yml:9-23` (due metà disgiunte);
+>   - quindi, fino a S11-finale, il link apre la pagina in cima, senza saltare alla sezione. In it/fr/es lo farà
+>     finché manca la traduzione. È il prezzo noto di D24, e all'integrazione (S12) S11-finale sarà già fatto.
+> - **Per S11-finale:** l'intestazione oggi è `### 🗓️ Rolling Return Window` (`chart.en.md:22`), con lo slug
+>   automatico. Il nome dell'ancora lo fissa il link, `{: #rolling-return }`; l'intestazione la sceglie il
+>   docs-writer (`## 🔀 Primary Modes` a `:13`, o la finestra a `:22`).
+> - **Il test**, in `asset-detail.spec.ts`:
+>   - c'è già l'helper `goToSeededAssetDetail` (`:104`), e `t` di `fixtures/i18n-data` (`:18`);
+>   - la lingua si cambia con `setLanguage` (`fixtures/auth-helpers.ts:53`). Vive in `localStorage`
+>     (`librefolio-locale`, `i18n/index.ts:101`), cioè nel contesto del browser del test: nessuno stato condiviso;
+>   - il popup `noopener` si raccoglie con `page.waitForEvent('popup')`, come in `support-copy-and-go.spec.ts:225`.
+>     Il backend serve `/mkdocs/…` (`main.py:377`), con un segnaposto se il sito non è costruito; un `route` sul
+>     contesto per `**/mkdocs/**` toglie anche questa dipendenza;
+>   - nessun test esistente conta i figli della riga della finestra: le 5 asserzioni su
+>     `asset-calendar-window-controls` controllano solo la visibilità (`:3081`, `:3121`, `:7029`, `:7148`, `:7803`).
+>     Nessun test unitario legge la sorgente della pagina di dettaglio; `risk-asset-detail.spec.ts` guarda solo le
+>     schede, e `asset-mobile-layout.spec.ts` non entra in Rendimento mobile.
+> - **Conflitti:**
+>   - il 30-09 il coordinator ha confermato che nessun altro tocca `assets/[id]/+page.svelte` (K era lontano, ed è
+>     entrato con m8). L'edit aggiunge 1 import e 1 riga nel blocco di G3, che è mio;
+>   - `asset-detail.spec.ts` (8 012 righe) è condiviso: aggiungo un test nuovo e non tocco quelli esistenti. La
+>     sovrapposizione la verifica il coordinator al checkpoint.
+> - **Il runner:** la `desc` di `asset-detail` («Detail chart, panels, sync, edit») copre già il caso, quindi per
+>   S8b non propongo clausole. In C11 entra solo la clausola di S8 già approvata per `growth-chart-memo`.
+> - **I passi:**
+>   2. il test rosso, via test-author, in `asset-detail.spec.ts`;
+>   3. la cura in `+page.svelte`;
+>   4. i gate nella 6157, uno alla volta: `front build --debug`, `front check` (soglia 3), il test nuovo da solo
+>      (`--grep`, dal nome posizionale), l'E2E `front-asset asset-detail` intero, `check-orphans`,
+>      `mkdocs check-links`;
+>   5. la clausola di S8 nella `desc` di `growth-chart-memo`;
+>   6. C11, `CHECKPOINT READY` e FROZEN.
+
+**Passo 2 — il test rosso, via test-author ✅ 2026-10-01 19:36**
+
+> **Note implementazione:**
+> - **Il test** (`asset-detail.spec.ts`, test-author): `rolling-return guide link sits at the end of the window row
+>   and follows the active language`, righe 7837-7912, con un'intestazione (7826-7836) che spiega D24. Sta dopo il
+>   grande test del Rendimento mobile e prima di «Test 18». L'import diventa `{login, setLanguage}`. Cosa verifica:
+>   - in Prezzi, in inglese: la riga della finestra e il link non ci sono, in tutta la pagina;
+>   - in Rendimento mobile: il link è visibile dentro la riga ed è l'ultimo dei suoi controlli (`.last()` su
+>     `button, a[href], input, select, textarea, [role="button"]`), dopo il controllo personalizzato. Non i pixel:
+>     la riga va a capo. Non l'ultimo figlio: il `Tooltip` monta la nuvoletta subito dopo il pulsante;
+>   - il nome accessibile è `t('en', chiave)`, e il popup apre `/mkdocs/user/assets/detail/chart/#rolling-return`;
+>   - in italiano il nome è `t('it', chiave)`, e il popup apre `/mkdocs/it/user/assets/detail/chart/#rolling-return`;
+>   - tornati ai Prezzi, la riga e il link spariscono;
+>   - un `route` sul contesto per `**/mkdocs/**` risponde 200 con una pagina vuota: il soggetto è l'URL, non il
+>     sito. Due guardie su `t()` evitano di confrontare una chiave con se stessa (EN ≠ chiave, IT ≠ EN).
+> - **Il rosso, per la ragione giusta:** 1 test, 1 fallito a `:7884:101`, il `toBeVisible` del link («element(s)
+>   not found»), dopo che login, navigazione, cambio di modo e la riga stessa (`:7883`) sono passati. Lo screenshot
+>   mostra la riga: Window, 1W, 1M (premuto), 3M, 1Y, Custom, e nulla dopo.
+>   - Comando: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6157
+>     --data-dir /tmp/librefolio-r2-i-charts front-asset asset-detail "<titolo del test>"`.
+>   - Log: `/tmp/libreFolio_i_s8b_red.log` (prima stesura) e `/tmp/libreFolio_i_s8b_red2.log` (dopo la
+>     riparazione qui sotto, 38 s).
+> - **Le mie verifiche:** `test(` 28 → 29, `test.describe(` 3 → 3, righe 8 012 → 8 100, `git diff --numstat`
+>   +89/−1 sulla spec, sha256 `604ce9c0d5397eb7…`; prettier `--check` pulito (da `frontend/`); 6157 e 6167 libere.
+>   Copia di prima: `/tmp/libreFolio_i_s8b_pre_spec.ts` (`e10ab03f621a10f7…`).
+> - `tsc -p tsconfig.e2e.json` (test-author, senza emit): 0 errori nella spec. Restano i 2 di base, altrove
+>   (`onboarding-tour.spec.ts:863`, `src/lib/types/files.ts:9`).
+>
+> **⚠️ Fuori pista:**
+> - **L'asserzione «il cambio di lingua non lascia il Rendimento mobile» dipendeva dal tempo: tolta.** Il
+>   test-author l'aveva segnalata come rischio, e la lettura del codice lo conferma:
+>   - svelte-i18n 4.0.1 (`runtime.js:319-338`): se il dizionario non è ancora caricato, `$isLoading` passa a vero
+>     dopo `loadingDelay` = 200 ms;
+>   - il layout radice (`routes/+layout.svelte:42`) mostra `<div></div>` al posto di `<slot />` finché carica: la
+>     pagina di dettaglio si smonta e si rimonta;
+>   - `primaryMode` è un `$state('price')` non persistito (`+page.svelte:193`): al rimontaggio torna ai Prezzi.
+>
+>   L'esito dipendeva quindi da un dizionario italiano più veloce di 200 ms. Nessun precedente si fida dello stato
+>   dopo un cambio di lingua: `transactions-modals.spec.ts:540` naviga di nuovo, `support-copy-and-go.spec.ts:159`
+>   clicca la scheda dopo. Riparazione, con un secondo test-author (il primo era sincrono e non accetta seguiti):
+>   dopo `setLanguage` il test **rientra** nel modo con un clic, che è un no-op se il modo è sopravvissuto
+>   (`setPrimaryMode` esce subito, `+page.svelte:414`), poi verifica modo e `aria-pressed`. Il commento dice perché.
+>   Il rosso rifatto è identico (`:7884:101`).
+> - **Il comportamento resta nel prodotto, fuori dal mio perimetro:** con un dizionario lento, cambiare lingua
+>   azzera lo stato della pagina (qui il modo del grafico). Non lo curo in S8b; lo segnalo al coordinator in C11.
+> - **Ogni run `front-*` ripopola il DB della corsia** (`_frontend_common.py:150`: `populate_mock_data --force
+>   --with-reports` su `/tmp/librefolio-r2-i-charts`, archivio `test-db_20261001_192123.tar.xz`). È il
+>   comportamento normale del runner, come nei gate E2E precedenti, non un'azione del test-author. Lo annoto perché
+>   contraddice la lettera del mio brief.
+> - `test.setTimeout(60_000)`: due popup e un caricamento di dizionario oltre al solito setup, contro i 30 s di
+>   default (`playwright.config.ts:97`). È il settimo `test.setTimeout` della spec: ha precedenti.
+> - Prettier lanciato dalla radice del worktree si ferma prima di controllare (`Cannot find package
+>   'prettier-plugin-svelte'` da `noop.js`): va lanciato da `frontend/`, come dice la skill lint-format-frontend.
+
+**Passo 3 — la cura in `+page.svelte` ✅ 2026-10-01 19:37**
+
+> **Note implementazione:**
+> - `frontend/src/routes/(app)/assets/[id]/+page.svelte`, +2/−0 (3 570 → 3 572 righe, sha256 `bc1123d8c8f558e8…`):
+>   - l'import `DocsLink from '$lib/components/ui/DocsLink.svelte'`, dopo `CompactDurationBadge` (`:46`);
+>   - nella riga della finestra, dopo `CompactDurationBadge` e prima del `</div>` di
+>     `asset-calendar-window-controls` (`:3006`): `<DocsLink path="user/assets/detail/chart/#rolling-return"
+>     label={$t('signals.riskRollingReturn.description')} size={14} testId="asset-calendar-return-docs" />`.
+> - Sta dentro `{#if primaryMode === 'calendar-return'}`, quindi esiste solo in Rendimento mobile. `size={14}` come
+>   i «?» delle card KPI (`KpiSection.svelte:240`). Il tag sta su una riga sola: `_DOCSLINK_PROP`
+>   (`docs_links.py:61`) legge il `path=` letterale sulla riga di `<DocsLink`, e con `printWidth` 300
+>   (`frontend/.prettierrc`) prettier non la spezza.
+> - Prettier `--check` pulito, lanciato da `frontend/` con il percorso letterale. Il glob con `[[]id]` non trova
+>   il file; prettier 3 risolve invece il percorso con le parentesi così com'è.
+
+**Passo 4 — gate nella 6157 ✅ 2026-10-01 21:37: 1–5 verdi; il 6 rosso solo per it/fr/es, accettato (D28)**
+
+> **Note implementazione** (un comando alla volta, corsia 6157 su `/tmp/librefolio-r2-i-charts`; la cura è delle
+> 19:37:01, il primo gate parte alle 19:37:59):
+>
+> | # | Gate | Esito | Log in `/tmp/` |
+> |---|---|---|---|
+> | 1 | `front build --debug` | EXIT 0; il suo svelte-check è al floor, 3 errori e 41 avvisi (`TransactionFormModal.test.ts:787,819`, `ToolExecutionMetrics.svelte:44`), nessuno nei miei file; nessun file tracciato cambiato | `libreFolio_i_s8b_build.log` |
+> | 2 | `front check` | EXIT 1 al floor: 3/41, gli stessi | `libreFolio_i_s8b_check.log` |
+> | 3 | il test nuovo da solo (`front-asset asset-detail "<titolo>"`) | 1 passed (2,6 s): il rosso di `:7884` è verde | `libreFolio_i_s8b_green1.log` |
+> | 4 | `front-asset asset-detail` intero | 29 passed (1,9 min), nessun flaky | `libreFolio_i_s8b_assetdetail.log` |
+> | 5 | `check-orphans` | EXIT 0: 92 E2E, 275 unit, 224 backend raggiungibili | `libreFolio_i_s8b_orphans.log` |
+> | 6 | `mkdocs check-links` | ❌ EXIT 1: 80 validi, 3 noti (le eccezioni), **1 rotto**: `user/assets/detail/chart/#rolling-return` → «File exists but anchor #rolling-return not found» (da `+page.svelte:3006`) | `libreFolio_i_s8b_links.log` |
+>
+> - Prefisso: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py`; i test con `test --test-port
+>   6157 --data-dir /tmp/librefolio-r2-i-charts`. Ogni run `front-*` ripopola il DB della corsia (archivi
+>   `test-db_20261001_194150` e `test-db_20261001_194426`).
+>
+> **⚠️ Fuori pista:**
+> - **Il passo 1 sbagliava: l'ancora la controlla `dev.py`.** Avevo letto solo `scripts/docs_links.py` e
+>   `mkdocs.yml`. `cmd_mkdocs_check_links` (`dev.py:1170`) passa ogni link con `#` a `_mkdocs_check_anchor`
+>   (`:1133`, da `b35a8581e`, 18/09). L'ancora deve esistere nel file inglese (`_mkdocs_anchor_slugs`, `:1096`:
+>   gli id espliciti di attr_list e gli slug delle intestazioni) **e** in ogni traduzione presente. Una pagina senza
+>   traduzione è salva, perché mkdocs-static-i18n ricade sull'inglese; una tradotta no.
+>   - `chart.{it,fr,es}.md` esistono, di 58 righe contro 123: la sezione delle modalità è arrivata il 17/09
+>     (`2d22130bd`), dopo l'ultima traduzione del 04/09 (`757aac84a`);
+>   - le eccezioni (`MKDOCS_ANCHOR_EXCEPTIONS`, `:1126`) sono 3 e «devono solo restringersi».
+>
+>   Lo schema di D24 non passa quindi il gate in nessun momento prima della traduzione: oggi manca l'ancora
+>   inglese, e con quella di S11-finale mancherebbe in it, fr ed es. Il precedente che passa è `kpi-cards`, con lo
+>   stesso id esplicito nelle quattro lingue (`kpi-cards.*.md:15`, `:57`, `:99`). Lo slug automatico di oggi,
+>   `#rolling-return-window`, non lo usa nessuno.
+> - Decisione al developer: D28 (§7). Il gate 6 si rifà dopo la decisione, con il resto del passo.
+> - Il timbro del passo 3 diceva 19:41, ma il piano era salvato alle 19:37:40 (mtime), dopo la pagina (19:37:01).
+>   Corretto a 19:37, anche nella riga di S8b (§1).
+>
+> **▶️ D28 deciso (developer, 21:28; §7).** Il link resta con `#rolling-return`. L'ancora inglese entra ora, in S8b,
+> via docs-writer e senza timbro Aphra. Il rosso residuo di `check-links`, solo per it/fr/es, resta accettato fino
+> al giro Aphra di fine round. Il passo 4 riprende con il docs-writer, poi `mkdocs build` e `check-links`.
+>
+> **Ripresa dopo D28 (21:33–21:37):**
+>
+> | # | Gate | Esito | Log in `/tmp/` |
+> |---|---|---|---|
+> | 6a | docs-writer: `chart.en.md:22` → `### 🗓️ Rolling Return Window {: #rolling-return }` | +1/−1, solo l'inglese; it/fr/es intatti; niente timbro, `.translate-hashes.json` invariato; `_Last updated_` non toccato (l'id non si vede) | — |
+> | 7 | `mkdocs build` (strict, docs-writer) | EXIT 0, nessun WARNING/ERROR; la pagina inglese ha `<h3 id="rolling-return">` | `libreFolio_i_s8b_docs_build.log` |
+> | 6 | `mkdocs check-links`, rifatto da me | EXIT 1, **rosso accettato (D28)**: 80 validi, 3 noti, 1 rotto, il solo `#rolling-return` → «resolves in English but is missing in: it, fr, es» | `libreFolio_i_s8b_links2.log` |
+> | 8 | `mkdocs translate-validate --file user/assets/detail/chart.en.md` (sola lettura, docs-writer) | EXIT 1, 15 errori e 27 avvisi: il debito già noto, non di S8b | `libreFolio_i_s8b_docs_validate.log` |
+>
+> - Il debito di traduzione, per la lista del coordinator: a `chart.{it,fr,es}.md` manca `## 🔀 Primary Modes` con
+>   le sue 3 sottosezioni (12 intestazioni contro 8; dal 37 al 39% dei caratteri). Sono superate anche l'intro, Date
+>   Range, Currency Selector, il toggle Assoluto/%, Event Markers e Aesthetics. L'intestazione tradotta di Rolling
+>   Return Window deve portare `{: #rolling-return }` in tutte e tre le lingue: solo allora il gate 6 diventa verde.
+> - Il test E2E e la pagina non cambiano: l'hash del link è quello già fissato dal test (gate 3–4).
+>   L'ancora non serve a quel test, che controlla solo l'URL del popup.
+
+**Passo 5 — la `desc` di `growth-chart-memo` ✅ 2026-10-01 21:39**
+
+> **Note implementazione:**
+> - `scripts/test_runner/_frontend_asset.py:189` (+1/−1): in coda alla `desc`, dopo la clausola di S7b, solo il
+>   testo approvato dal coordinator per S8 (senza D27): «, and the Income purchase value (S8): both halves named as
+>   the book value in the full build and the partial update, one legend entry, the bold total over its two ↳
+>   shares and their sum, new capital in the KPI blue (R11, D26)». Per S8b nessuna clausola nella `desc` di
+>   `asset-detail`.
+> - Verifiche, una alla volta, come in C10:
+>   - `python3 -m py_compile`: pulito; la cache `scripts/test_runner/__pycache__/` è ignorata;
+>   - `test front-asset --help`: rc 0, la riga di `growth-chart-memo` porta la clausola →
+>     `/tmp/libreFolio_i_s8b_runner_help.log`;
+>   - `check-orphans` nella 6157: rc 0, 92/275/224 → `/tmp/libreFolio_i_s8b_orphans_runner.log`;
+>   - `front-asset growth-chart-memo`, attraverso il runner: 60/60 → `/tmp/libreFolio_i_s8b_gcm_runner.log`;
+>   - lint del runner in sola lettura contro `HEAD` (`/tmp/libreFolio_i_s8b_lint.sh` → `…_lint.log`): Ruff dà
+>     un'uscita identica a quella di `HEAD`, 21 E701 e 1 PLC0415 già sulla base. Black riformatterebbe entrambe
+>     le versioni, e l'unica differenza è la riga della `desc` (`/tmp/libreFolio_i_s8b_black_delta.log`).
+> - Archivi del DB della corsia: `test-db_20261001_213854` e `test-db_20261001_213915`.
+> - Nessun fuori pista.
+
+**Passo 6 — registro e `CHECKPOINT READY` (C11) ✅ 2026-10-01 21:42**
+
+> **Note implementazione:**
+> - Base `567fee80e`. Delta: 5 file tracciati modificati, nessun file nuovo, stage vuoto:
+>   - `frontend/src/routes/(app)/assets/[id]/+page.svelte` (+2/−0, sha256 `bc1123d8c8f558e8…`);
+>   - `frontend/e2e/assets/asset-detail.spec.ts` (+89/−1, `604ce9c0d5397eb7…`): l'import prende `setLanguage`,
+>     e c'è il test nuovo;
+>   - `mkdocs_src/docs/user/assets/detail/chart.en.md` (+1/−1, `67744138eda2045e…`), l'ancora di D28;
+>   - `scripts/test_runner/_frontend_asset.py` (+1/−1, `c7fd563082ae7a69…`), la clausola concessa di S8;
+>   - questo piano.
+> - Esclusi: le build (`mkdocs_src/site/` è ignorato), i log, gli archivi del DB della corsia
+>   (`test-db_20261001_194150`, `_194426`, `_213854`, `_213915`), le sonde e gli script in `/tmp/`, la cache
+>   `scripts/test_runner/__pycache__/`.
+> - Commit proposti, due, come in C10. Messaggi ASCII, righe al massimo di 68 caratteri:
+>   1. `feat(assets): add rolling-return guide link`, con la pagina, la spec, `chart.en.md` e il runner
+>      (`/tmp/libreFolio_commit_i11_1.txt`, sha256 `ca90e6c9edf7294c…`). La lista dei soggetti (`:579-594`) non ha
+>      una voce per S8b, che è nata dopo, con D24;
+>   2. `docs(journal): record S8b and D28`, questo piano (`/tmp/libreFolio_commit_i11_2.txt`, `46714f6cb6c37f49…`).
+> - Proposte per i registri del coordinator:
+>   - CHANGELOG: nessuna voce per S8b. Il Rendimento mobile del dettaglio asset non è in `v1.1.0` (0 occorrenze
+>     nella pagina) e `[Unreleased]` non lo descrive ancora. Propongo la sua voce ✨ Added, link alla guida
+>     compreso, all'handoff di S12, insieme a quella della modalità P&L;
+>   - il debito di traduzione (D28): a `chart.{it,fr,es}.md` mancano `## 🔀 Primary Modes` e le sue 3
+>     sottosezioni; sono superate anche l'intro, Date Range, Currency Selector, il toggle Assoluto/%, Event Markers
+>     e Aesthetics. L'intestazione tradotta di Rolling Return Window deve portare `{: #rolling-return }`. Fino ad
+>     allora `check-links` esce con 1 (rosso accettato), e in it/fr/es il link apre la pagina in cima;
+>   - nota di prodotto, fuori dal mio perimetro: se il dizionario di una lingua arriva dopo i 200 ms di
+>     `loadingDelay` (il default di svelte-i18n), `{#if $i18nLoading}` (`routes/+layout.svelte:42`) smonta e
+>     rimonta l'app. Lo stato della pagina si perde: qui `primaryMode` (`$state`, `+page.svelte:194`) torna ai
+>     Prezzi. Il test rientra nel modo dopo `setLanguage` (passo 2).
+> - Conflitti attesi: la pagina è solo mia (coordinator, 30/09); nella spec condivisa aggiungo un test e un nome
+>   nell'import, senza toccare i test esistenti; `chart.en.md` cambia di una riga, la sovrapposizione la verifica
+>   il coordinator; nel runner cambia solo la `desc` concessa. Non tocco `dev.py`, cataloghi i18n o CHANGELOG.
+> - `dev_release2` è fermo a `ed3bf870a` (misurato alle 21:41): HEAD è avanti di 44 commit e indietro di 4, i
+>   quattro `docs(todo)` già noti, che toccano solo `TODO_FUTURI.md`.
+> - Verifiche finali: `git diff --check` pulito, stage vuoto, 0 file non tracciati, 5 file tracciati; porte 6157 e
+>   6167 libere.
 > - Stato: FROZEN, nessun edit, test, server o Git fino al prossimo messaggio del coordinator.
