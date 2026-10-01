@@ -470,6 +470,53 @@ Scritta prima dei test rossi: è l'interfaccia per il test-author. Le regole ven
   - **R9**, in uno **spec separato**, `tx-import-report-set-guide.spec.ts`, con l'azione `tx-import-report-set-guide` (`project=""`): `tx-import-report-set` gira solo su desktop, la guida va provata anche su mobile. Un account usa e getta (`fixtures/onboarding-accounts.ts`); gli step d'import prima di `gapFix` si chiudono via API; al passo il coachmark è ancorato su `import-wizard-gapfix-continue`.
 - **Liste a mano**, con le concessioni: `test_settings_service.py`, `test_settings_api.py`, `onboarding-tour.spec.ts:764` e `settings.spec.ts:735`.
 
+#### C3b.0 Le bozze incomplete dell'editor (2026-10-01) — ❌ non eseguita: il developer l'ha annullata (vedi §11, C3b)
+
+Decisione del developer, riportata dal coordinatore: «Correggerlo subito, prima della fase D». Una bozza incompleta dell'editor non deve più far fallire tutto il gap-fix.
+
+**Il problema.** Il wizard manda al gap-fix le righe non salvate dell'editor dello stesso broker (`pending_creates`, D-I3). Oggi FastAPI valida tutta la richiesta come `List[TXCreateItem]`, quindi una sola bozza incompleta (per esempio un acquisto senza asset: «{type} requires asset_id») fa rispondere 422 a tutta la richiesta. Il gruppo mostra l'errore, e si perdono tutte le correzioni.
+
+**Il comportamento** (quello predefinito del coordinatore):
+- una bozza incompleta resta fuori da ogni calcolo del gap-fix: la cassa, le quantità e le righe «presenti» della spiegazione;
+- il passo lo dice: quali righe (data, tipo, importo o quantità, asset) e perché, con gli stessi messaggi della validazione dell'editor;
+- il resto prosegue: le bozze valide contano come prima;
+- il passo si apre anche quando c'è solo questo da dire. Altrimenti l'utente non saprebbe che il confronto le ha ignorate.
+
+**Backend**
+- `BRIMGapFixRequest.pending_creates`: ogni elemento è `TXCreateItem | dict`, provato da sinistra a destra (`union_mode="left_to_right"`, esplicito sul tipo dell'elemento: il default di pydantic sarebbe «smart», e un `dict` preferirebbe il ramo `dict`). Una bozza valida diventa `TXCreateItem`, come oggi; una incompleta resta un `dict` e non fa più fallire la richiesta. Un elemento che non è un oggetto resta un 422. `extra="forbid"` resta: un campo sconosciuto diventa un'esclusione col suo motivo.
+  - **Perché l'unione e non `List[dict]`** come il precedente di `/transactions/validate` e `/commit` (`transactions.py:708-717`). Scelta confermata col coordinatore il 2026-10-01:
+    - i test di A3 fissano il contratto di oggi: `type(request.pending_creates[0]) is TXCreateItem` (`test_brim_gap_fix.py:723`), e il costruttore delle richieste dei test di servizio passa istanze di `TXCreateItem`, che un `dict` non accetta;
+    - l'OpenAPI tiene lo schema dell'elemento, quindi il client generato resta tipizzato. Il precedente deve documentarlo a mano, con `openapi_extra` sulla rotta;
+    - le bozze valide le legge FastAPI una volta sola; solo quelle incomplete passano da `_parse_lenient`. È lo stesso helper del precedente, quindi i motivi sono identici.
+
+    Il costo è un secondo percorso di lettura, limitato alle bozze che FastAPI non ha potuto leggere.
+- `compute_gap_fix`: le bozze `dict` si validano una per una con `_parse_lenient` (`transaction_batch_stages.py`), lo stesso helper di `/transactions/validate` e `/commit`. Le bozze valide vanno nei calcoli; i problemi delle altre vanno nella risposta, con l'indice originale.
+- `BRIMGapFixResponse.excluded_pending: List[TXValidationIssue]`: un problema per voce, `operation="create"`, `index` nella lista `pending_creates` della richiesta, `code`, `params`, `field` ed `error` come li produce `_parse_lenient`.
+- `selection` resta `List[TXCreateItem]`: le righe del wizard vengono dal parse e sono valide per costruzione. Una riga non valida sarebbe un difetto del wizard, e il 422 resta il segnale giusto.
+- Contratto: cambia, quindi `api sync` nella corsia di L (i file generati sono ignorati).
+
+**Frontend**
+- `gapFixModel.ts`:
+  - `GapFixOutcome` riceve `pendingCreates`, la lista mandata con la richiesta;
+  - ogni gruppo ha `excluded: Array<{index, tx, issues}>`: un elemento per bozza, in ordine di indice, `tx` = la bozza mandata a quell'indice;
+  - `gapFixHasSomethingToShow` è vero anche con sole bozze escluse.
+
+  Gli elementi di `excluded` non hanno `key`, così le chiavi della vista non cambiano.
+- `GapFixStep.svelte`: nel gruppo, il blocco `gapfix-excluded` (`data-count`), con una riga `gapfix-excluded-row` (`data-index`) per bozza: la data, il tipo, l'importo o la quantità, l'asset, poi i motivi. I motivi si risolvono con `resolveIssueMessage`, che produce HTML escapato, e passano da `{@html sanitizeHtml(…)}`, la forma ammessa dal gate di K. Una frase dice che le correzioni proposte non tengono conto di quelle righe.
+- Wizard: a ogni esito passa la `pending_creates` della sua richiesta.
+- i18n: `importWizard.reportSet.gapFix.excludedTitle` (plurale) ed `excludedHint`, nelle 4 lingue.
+
+**Test** (test-author, rossi prima):
+- `services brim-gap-fix`:
+  - la lettura di un corpo JSON con una bozza valida e una incompleta dà i tipi (`TXCreateItem`, `dict`);
+  - il calcolo conta solo la bozza valida, e `excluded_pending` dà indice e codice (`assetRequired`; data mancante → campo `date`);
+  - le proposte sono le stesse della richiesta senza la bozza incompleta;
+  - senza bozze incomplete, `excluded_pending == []`.
+- `api brim`: `POST /gap-fix` con una bozza incompleta risponde 200, non 422, con `excluded_pending`, e non scrive nulla.
+- `gapFixModel.test.ts`: `excluded` raggruppato per indice con la bozza giusta; il passo si apre con sole esclusioni; i gruppi in errore hanno `excluded: []`.
+- `GapFixStep.test.ts`: il blocco e le sue righe.
+- E2E, se l'editor permette di costruire una bozza incompleta dall'interfaccia: R10 apre l'editor con una bozza incompleta del broker, poi «Importa» dall'editor e il set. Il passo mostra la riga esclusa e propone ancora il versamento d'apertura. Se non è praticabile, il test-author lo dice e lo spiega.
+
 ## 6. Fase D — documentazione (docs-writer, solo in inglese)
 
 - **Pagina utente** `mkdocs_src/docs/user/transactions/import/danske-bank.en.md`: gli export, il caricarli insieme, la profondità, l'import annuale, il passo «Allinea con la banca», le commissioni, le scissioni e i limiti (§6 del design). Il nome segue il `docs_url` del plugin (`/mkdocs/user/transactions/import/danske-bank/`), fissato dai test della fase B; nessun test controlla che la pagina esista.
@@ -892,3 +939,83 @@ Scritta prima dei test rossi: è l'interfaccia per il test-author. Le regole ven
 > **Limite noto, da documentare in D**: le righe non salvate dell'editor dello stesso broker vanno al gap-fix così come sono. Una bozza incompleta (per esempio un acquisto senza asset) fa rispondere 422 a tutta la richiesta. Il gruppo mostra l'errore, e si prosegue senza correzioni.
 
 ### C3 — ✅ pronta per il checkpoint (2026-10-01)
+
+**Commit di C3**: `9336c0e9b` feat(import): align imports with bank truth e `8ec9f46e0` docs(journal): record report-set phase C3.
+
+### C3b — ⏳ in corso (2026-10-01)
+
+- Decisione del developer, riportata dal coordinatore: correggere subito il limite delle bozze incomplete, prima della fase D.
+- Base `8ec9f46e0`. Prima di ogni modifica, nella corsia 6156: `services brim-gap-fix` 99/99 e `api brim` 63/63.
+- **C3b.0 scritta**, nel §5. Il comportamento è quello predefinito del coordinatore. Le scelte d'implementazione: la validazione riga per riga nel backend, con lo stesso helper dell'editor; l'unione `TXCreateItem | dict` sulle sole `pending_creates`; il passo che si apre anche con sole esclusioni.
+- **Via del coordinatore** su C3b come descritta: la validazione nel backend con `_parse_lenient`, `excluded_pending: List[TXValidationIssue]`, il passo che si apre anche con sole esclusioni, `selection` rigida.
+  - Scelta fra unione e `List[dict]`: resta l'unione con `union_mode="left_to_right"` esplicito; il motivo è nella C3b.0.
+  - `api sync` solo nella corsia di L; il client va rigenerato all'integrazione in `dev_release2`, e il coordinatore lo annota.
+- **Rosso di C3b** (test-author, corsia 6156): `services brim-gap-fix` 12 rossi e 106 verdi (99 vecchi e 7 guardie), `front-transaction tx-unit` 10 rossi e 495 verdi, `api brim` 1 rosso e 65 verdi (63 vecchi e 2 guardie). Tutti rossi sul pezzo mancante; `check-orphans` pulito.
+
+> **⚠️ Fuori pista: il limite noto non si raggiunge dall'interfaccia.** Il test-author non è riuscito a scrivere l'E2E R10: l'editor non permette di creare una bozza incompleta. L'ho verificato nel codice:
+> - nel form di aggiunta e di modifica, «Applica» (`tx-form-save`) resta disattivato finché la riga non è completa (`!commitOnSave && !isFormComplete`, `TransactionFormModal.svelte`), con le stesse regole del backend;
+> - le celle della griglia sono in sola lettura;
+> - `addRow()`, l'unica funzione che aggiunge una riga vuota, non è collegata all'interfaccia (`void addRow;`, `TransactionBulkModal.svelte`);
+> - i cloni copiano righe già valide, e le righe del wizard vengono dal parse.
+>
+> Il 422 che avevo descritto nel verde di C3 («un acquisto senza asset») quindi si produce solo se le regole del form e quelle del backend divergono. La mia segnalazione esagerava la probabilità.
+>
+> Domanda al developer (ask_user), risposta: «Lascio perdere C3b: annullo i test rossi, tengo il comportamento di oggi (errore nel gruppo, si prosegue senza correzioni) e lo documento in D». Quindi:
+> - il test-author riporta i quattro file di test a `HEAD` (`git show HEAD:…`, senza `checkout`);
+> - nessuna modifica al prodotto;
+> - la fase D documenta il comportamento: se il gap-fix fallisce, il gruppo mostra l'errore e l'import prosegue senza correzioni.
+
+### C3b — ❌ annullata dal developer (2026-10-01)
+
+### D — ⏳ in corso (2026-10-01)
+
+- Via del coordinatore da `8ec9f46e0`. Nessun altro ramo tocca `mkdocs.yml`, le pagine dell'import, `user/files`, `preferences.en.md` e `patterns/brim_plugin_guide.md`. La nota di C3b entra nel commit del journal di D.
+- **Traduzioni**: un fatto nuovo in una pagina tradotta è debito vero, **senza stamp**; la lista di `translate-validate` va nella consegna. La card e la riga degli indici it/fr/es le scrivo io, come il §7 e la guida dei plugin prevedono, poi lo stamp dell'indice.
+- **Basi prima delle modifiche**:
+  - `mkdocs build` verde;
+  - `mkdocs check-links` con un solo errore: manca `user/transactions/import/danske-bank`, la pagina del `docs_url` che D crea;
+  - `mkdocs translate-validate` con 498 errori già presenti (LaTeX e blocchi di codice), registro in `/tmp/libreFolio_l_d_base_tv.log`.
+- Docs-writer al lavoro: la pagina utente, nav, l'indice EN, i badge in `user/files`, la frase di `preferences`, la sezione «report set» e la regola del `provider_code` letterale nella guida dei plugin, `providers_list`, `import-wizard.md` e il README dei campioni.
+
+> **Note implementazione (2026-10-01), D** (docs-writer in inglese; io i tre indici tradotti):
+> - **Utente**:
+>   - `user/transactions/import/danske-bank.en.md`, nuova e solo in inglese. Contiene gli export (Sijoitukset → Tapahtumat, l'estratto dell'osakesäästötili), il periodo, il caricarli insieme, il file mancante, l'import annuale con sovrapposizioni, la tabella dei tipi, le commissioni nelle Correzioni, le scissioni (vero.fi), il primo import e «Align with the bank», l'errore del confronto, i buchi, la verifica di fine periodo, i limiti e i badge.
+>   - `mkdocs.yml`: «Danske Bank» fra 🏦 Banks & Neobrokers, dopo Crédit Agricole.
+>   - `import/index.en.md`: la card e la riga delle capacità. Io le ho riportate in it/fr/es (`set di report`, `lot de rapports`, `conjunto de informes`, come l'interfaccia) e ho stampato l'indice con `translate-stamp`; cambia solo la voce dell'indice in `.translate-hashes.json`.
+>   - `user/files/index.en.md`: la sezione «🧩 Report sets» con i cinque badge.
+>   - `preferences.en.md`: «Align with the bank» fra gli step facoltativi, senza cambio di versione.
+> - **Sviluppatore**:
+>   - `brim_plugin_guide.md`: l'avviso «`provider_code` must `return` a string literal», col motivo (R13 legge anche `provider_name` e `description`; `_PROVIDER_CODE_RE`), e la sezione «🧺 Multi-report plugins (report sets)»: ruoli, API del set, `combine` puro, zone ed esiti, punti di verità e regola di sicurezza, H0, tag, `/gap-fix`, test;
+>   - `providers_list.md`: la riga di Danske;
+>   - `import-wizard.md`: la sezione «🧺 Report sets» (moduli puri, passi, `gapFix`, la catena degli ID degli asset, i badge) e lo step `import.gapFix`, che resta alla versione 1.
+>
+>   Il README dei campioni era già a posto dalla fase B.
+> - **Verificato da me sul codice**: `Korko` → interesse, la finestra di prova di 30 giorni (`PROOF_WINDOW_DAYS`), i messaggi del plugin in finlandese, gli avvisi della card `before_history_segment` e `covers_gap_fix`, le etichette delle Correzioni. Nessun dato reale: solo nomi di colonna e parole di servizio.
+> - **Controlli**:
+>   - `mkdocs build` verde, strict: l'unico avviso è il banner di Material;
+>   - `mkdocs check-links` verde: 81 link validi, i 3 🟡 noti, e la pagina del `docs_url` ora esiste;
+>   - `git diff --check` pulito; `frontend/static/sw.js` intatto.
+> - **Debito di traduzione nuovo** (`translate-validate`: da 498 a 513 errori, file mancanti da 63 a 66; nessuno stamp):
+>   - `user/files/index.{it,fr,es}.md`: la sezione «Report sets» e il link a `danske-bank`, cioè 5 errori e 5 avvisi per lingua;
+>   - `user/settings/preferences.{it,fr,es}.md`: la frase sugli step facoltativi. `translate-validate` non la rileva, e quelle traduzioni erano già segnalate come troncate (21–22 %);
+>   - `user/transactions/import/danske-bank.{it,fr,es}.md`: non esistono, la pagina è solo in inglese per scelta.
+>
+>   Gli indici dell'import non hanno debito nuovo: riportati a mano e stampati.
+>
+> **⚠️ Fuori pista: design e codice divergono, e la documentazione segue il codice** (rilevato dal docs-writer):
+> 1. lo slug è `danske-bank`, non `danske_bank`;
+> 2. gli avvisi di copertura si chiamano `coverage_starts_late` / `coverage_ends_early`, e la preview non conta le righe prima di H0 (le conta solo la Revisione);
+> 3. le Correzioni chiedono una decisione per ogni trade;
+> 4. l'avviso del file mancante compare dopo il primo «Next: Select Files»;
+> 5. la seconda metà di A18 non c'è: nessuna scelta del plugin per membro;
+> 6. A17 non c'è nel wizard: un set con un originale eliminato resta bloccato finché l'export non si ricarica, e solo il badge della pagina file segue la v5.3;
+> 7. le verifiche non elencano le righe sospette, e nessuno elenca i titoli scambiati in un buco;
+> 8. un file caricato senza `batch_id` non è in nessun set, e il suo parse risponde 422 `set_required`;
+> 9. il dettaglio dell'analisi offre solo lo scaricamento del combinato;
+> 10. `settlement_lag_business_days` è nel contratto ma il framework non lo legge.
+>
+> **Da segnalare al coordinatore** (fuori dallo scope di D):
+> - **UX**: dopo un anno saltato, la correzione compare sotto «Starting point» e non «After the gap». Il plugin marca `opening` il primo segmento di ogni set (`broker_danske_bank.py:718`): i numeri sono giusti, l'etichetta no.
+> - **Pagine che citano il flusso d'import e non sono state toccate**: `user/transactions/import/how-to.en.md` (la tabella dei passi e «Guided First Import» non nominano «Align with the bank») e `user/brokers/import.en.md` («Uploaded Reports» non nomina la colonna dei set). Aggiornarle aggiunge debito di traduzione.
+
+### D — ✅ pronta per il checkpoint (2026-10-01)
