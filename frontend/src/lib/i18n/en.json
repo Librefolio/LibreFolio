@@ -3128,11 +3128,19 @@
         },
         "l3": {
           "title": "What did each of these pay for its risk?",
-          "description": "Risk against reward, one point per asset. No line is drawn through them: a selection has no whole, so there is nothing to be above or below.",
-          "expectedReturn": "Expected return",
+          "description": "For each selected asset, how much it swung and how much it returned on average per year, in the chart and in the table; with a benchmark chosen on the Dashboard, also how much it moved along with it.",
+          "expectedReturn": "Average annual return",
           "correlation": "Correlation",
-          "noBenchmark": "Choose a benchmark on the Dashboard to add beta and correlation. A benchmark that is itself in the selection cannot be used as its own yardstick.",
-          "scatterNote": "The dots show the mean-variance expected return: on a very volatile asset the return actually lived through is lower, because volatility erodes compounding."
+          "scatterNote": "Each dot is an asset: the horizontal axis shows how much it swung, the vertical one how much it returned on average per year. For a very volatile asset the average is higher than what it actually returned.",
+          "columnHelp": {
+            "volatility": "How much the asset's returns swing, on a yearly basis: the standard deviation of the period's returns, annualised.",
+            "expectedReturn": "The average of the period's returns, scaled to a year by how often the asset is quoted. It describes the past, not a forecast. For a very volatile asset it is higher than what the asset actually returned, because swings erode the compounded return.",
+            "sortino": "How much average annual return for each unit of downward swing: it looks at the falls only, not at the rises.",
+            "sharpe": "How much average annual return for each unit of volatility: the pay for the risk taken, rises and falls alike.",
+            "beta": "How much the asset moved when the benchmark moved: 1 means as much, 2 twice as much, 0 independently of it.",
+            "correlation": "How closely the asset and the benchmark moved together, from −1 (always opposite) to +1 (always together)."
+          },
+          "axisReturn": "Average annual return"
         }
       },
       "legend": {

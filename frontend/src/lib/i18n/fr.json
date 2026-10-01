@@ -3128,11 +3128,19 @@
         },
         "l3": {
           "title": "Combien chacun a-t-il payé pour son risque ?",
-          "description": "Risque contre rendement, un point par actif. Aucune droite ne les traverse : une sélection n'a pas de tout, donc rien au-dessus ou en dessous de quoi se situer.",
-          "expectedReturn": "Rendement attendu",
+          "description": "Pour chaque actif sélectionné, l'ampleur de ses variations et son rendement moyen annuel, dans le graphique et dans le tableau ; avec une référence choisie dans le tableau de bord, aussi à quel point il a évolué avec elle.",
+          "expectedReturn": "Rendement moyen annuel",
           "correlation": "Corrélation",
-          "noBenchmark": "Choisissez une référence dans le tableau de bord pour ajouter le bêta et la corrélation. Une référence déjà présente dans la sélection ne peut pas servir de mesure à elle-même.",
-          "scatterNote": "Les points montrent le rendement attendu en moyenne-variance : sur un actif très volatil, le rendement réellement vécu est plus faible, car la volatilité érode la capitalisation."
+          "scatterNote": "Chaque point est un actif : l'axe horizontal montre combien il a varié, l'axe vertical combien il a rapporté en moyenne par an. Pour un actif très volatil, la moyenne dépasse ce qu'il a réellement rapporté.",
+          "columnHelp": {
+            "volatility": "L'ampleur des variations des rendements de l'actif, sur une base annuelle : l'écart type des rendements de la période, annualisé.",
+            "expectedReturn": "La moyenne des rendements de la période, ramenée à une année selon la fréquence des cotations. Elle décrit le passé, ce n'est pas une prévision. Pour un actif très volatil, elle dépasse ce qu'il a réellement rapporté, car les variations érodent le rendement composé.",
+            "sortino": "Combien de rendement moyen annuel pour chaque unité de variation à la baisse : seules les baisses comptent, pas les hausses.",
+            "sharpe": "Combien de rendement moyen annuel pour chaque unité de volatilité : la rémunération du risque pris, hausses et baisses confondues.",
+            "beta": "De combien l'actif a bougé quand la référence bougeait : 1 veut dire autant, 2 deux fois plus, 0 indépendamment d'elle.",
+            "correlation": "À quel point l'actif et la référence ont évolué ensemble, de −1 (toujours opposés) à +1 (toujours ensemble)."
+          },
+          "axisReturn": "Rendement moyen annuel"
         }
       },
       "legend": {
