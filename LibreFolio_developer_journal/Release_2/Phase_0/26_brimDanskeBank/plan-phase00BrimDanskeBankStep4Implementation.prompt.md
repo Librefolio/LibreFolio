@@ -289,6 +289,78 @@ Tutti e tre con `crypto.randomUUID()`, come campo del `FormData`.
 - **③ Analizza**: per un set, prima `sets/combine`, poi il parse del combinato. In `ParsedFileResult` c'è anche il set, per l'etichetta della riga; il dettaglio della riga ha la parte sull'abbinamento.
 - **④ Revisione**: il predicato `isBeforeHistory` in `importRowState.ts`, accanto a `isBeforeOpening`. Le righe prima di `H0` restano nascoste dietro un contatore.
 
+#### C2.0 Specifica di dettaglio (2026-10-01)
+
+Scritta prima dei test rossi: è l'interfaccia per il test-author. Le regole vengono dal design v5.3 (§4.1–§4.5, §4.7); qui ci sono le scelte d'implementazione e i punti in cui il codice obbliga a precisare il design.
+
+**Fatti del codice che cambiano il disegno**
+- **Il wizard carica i file solo su «Continua» del passo ①** (`goNext` → `uploadAllPendingFiles`). Al passo ① il ruolo dei file non si conosce finché non sono caricati. Quindi l'avviso del file mancante (§4.2, v5.3) compare dopo il primo «Continua»: il wizard carica, chiede la preview dei set nati da quel caricamento e, se un set è incompleto, **resta al passo ①** con l'avviso. Il file trascinato dopo entra nello stesso set; un secondo «Continua» prosegue comunque (caso B).
+- **Il `batch_id` del wizard diventa uno per sessione**, come diceva il piano C1, e si rigenera in `resetState`. Oggi è uno per chiamata di `uploadAllPendingFiles`, quindi il file aggiunto dopo l'avviso finirebbe in un altro set.
+- **Il passo Correzioni chiede una decisione per ogni riga**, anche per gli avvisi con `split_hint`: «Continua» è disattivato finché ne resta una in sospeso, e «Accetta tutti» le chiude in un clic. Il design (§4.5) diceva «non blocca»: vale il comportamento di oggi, lo stesso di CA.
+- **La preview e il combine del backend non conoscono il plugin scelto a mano**: raccolgono tutti i file del caricamento che il plugin sa leggere. Quindi la seconda frase di A18 («se l'utente cambia il plugin a mano, il file esce dal set») non si realizza nel pilota: nella card non c'è la scelta del plugin per i membri. Servirebbe un `exclude_file_ids` in `BRIMSetRequest`; resta nel backlog.
+
+**Modulo puro** `frontend/src/lib/utils/transactions/importReportSets.ts`, test in `importReportSets.test.ts`, registrato nella lista di `front-transaction tx-unit`:
+
+| Funzione | Contratto |
+|---|---|
+| `isReportSetPlugin(plugin)` | `true` se il plugin dichiara almeno un ruolo |
+| `setPluginFor(file, plugins, override?)` | il plugin a set di un file, oppure `null`. `null` per un combinato (`kind: "combined"`) e per un file senza `batch_id`. Con `override`: l'override stesso se è un plugin a set, altrimenti `null`. Senza: il primo di `compatible_plugins` (già in ordine di priorità) che sia un plugin a set (A18) |
+| `reportSetKey(brokerId, pluginCode, batchId)` | `set:<broker>:<plugin>:<batch>` |
+| `groupBrokerFiles(brokerId, files, plugins, overrides?)` | `{sets, singles}`. I combinati non stanno in nessuna delle due liste. Un set per (broker, plugin a set, `batch_id`); i file del set in ordine di `uploaded_at`, poi di nome; `uploadedAt` del set = il più vecchio dei suoi; i set dal più recente. I singoli restano nell'ordine d'ingresso |
+| `setSelectionState(set, selectedIds)` | `all`, `some` o `none` |
+| `combinedFileForSet(set, files)` | il combinato dello stesso broker, `batch_id` e plugin (`compatible_plugins` lo contiene), il più recente; `null` se manca |
+| `buildParseUnits(selected, sets)` | le unità d'analisi: i file selezionati di un set, col plugin del set, diventano **una** unità `set`, nella posizione del primo; ogni altro file è un'unità `file` |
+| `setBlocksAnalysis(set, selectedIds, state?)` | `true` se il set ha almeno un file selezionato e la sua preview non è pronta, è in errore o dice `complete: false` |
+| `parseIsoPeriod(value)` | `P1Y`, `P6M`, `P90D`, `P1Y6M` → `{years, months, days}`; altrimenti `null` |
+| `dayBefore(isoDate)` | il giorno prima, in `YYYY-MM-DD` |
+| `buildSetTimeline(preview, roleOrder)` | una riga per ruolo, nell'ordine del plugin; una barra per copertura di ogni file, in percentuale dell'intervallo fra la data più vecchia e la più recente, compresa `H0`; la barra della storia di LibreFolio da `H0` alla fine. `null` se nessun file ha una copertura |
+
+**`importRowState.ts`**: `RowBrokerSource` guadagna `response?: {history_start?: string | null} | null`.
+- `historyStartFor(mt, parseResults)` restituisce la `history_start` della risposta da cui viene la riga.
+- `isBeforeHistory(mt, parseResults)` è vero se la data della riga è **strettamente** prima di `H0`: le righe del giorno `H0` sono nella storia, e il controllo dei duplicati le giudica.
+- `shouldAutoSelectOnRecheck` non riseleziona mai una riga prima di `H0`.
+
+**`importMerge.ts`**: in `buildMergedTransactions` una riga prima di `H0` nasce deselezionata, come una riga prima dell'apertura del broker.
+
+**Wizard**
+- **Catalogo dei plugin**: caricato all'apertura (`list_plugins`), e messo nella cache condivisa di `ImportPluginSelect`.
+- **① Carica**:
+  - dopo il caricamento, i file della sessione si raggruppano con `groupBrokerFiles`, partendo dalle risposte dell'upload, e per ogni set parte `POST /sets/preview`;
+  - se un set è incompleto, il passo resta il ① e mostra `import-wizard-step1-set-warning`, uno per ruolo mancante (`data-plugin-code`, `data-role`): il plugin, il ruolo, le estensioni, il periodo di `missing` e il link «Come esportarlo» (`docs_url`);
+  - il secondo «Continua», senza file nuovi, va al passo ②.
+- **② Seleziona file**:
+  - nel pannello di ogni broker, una `ReportSetCard` per set, sopra la tabella; la tabella mostra solo i singoli;
+  - i set nati dal caricamento della sessione sono selezionati, gli altri no; un membro selezionato ha come plugin quello del set (A18, in `pickBestPlugin`);
+  - `handleSelectionChange` della tabella non deve mai togliere i membri di un set;
+  - il pulsante d'analisi conta le unità (un set conta 1); è disattivato se un set selezionato blocca (`setBlocksAnalysis`), con il messaggio `import-wizard-set-blocks`;
+  - `data-busy` del passo è vero anche mentre una preview è in corso.
+- **`ReportSetCard.svelte`** (`frontend/src/lib/components/transactions/import/`). È testo Svelte, senza `{@html}` (gate di K). Radice `report-set-card` con `data-set-key`, `data-batch-id`, `data-plugin-code`, `data-set-status` (`loading`, `complete`, `incomplete`, `error`), `data-selected` (`all`, `some`, `none`), `data-analysed`.
+  - Intestazione: la casella `report-set-select`, l'apertura `report-set-toggle`, «Set caricato il ‹data› · ‹plugin›», il numero di file, lo stato.
+  - Corpo:
+    - per ruolo, il nome localizzato (`importWizard.reportSet.roleName.<ruolo>`, altrimenti la descrizione del plugin), le estensioni e la profondità («al massimo 1 anno»);
+    - per file, `report-set-member` (`data-file-id`, `data-role`): nome, copertura, righe, anteprima ed eliminazione;
+    - per ruolo mancante, `report-set-missing` (`data-role`), con il periodo, `report-set-upload-missing` (un `<input type=file>` nascosto, `report-set-upload-input`, che accetta le estensioni del ruolo) e «Come esportarlo»;
+    - gli avvisi della preview, `report-set-warning` (`data-code`), localizzati con `importWizard.reportSet.warning.<codice>` e, se la chiave manca, il messaggio inglese;
+    - la nota sulla storia, `report-set-history` (`data-kind` `first` o `later`);
+    - la linea del tempo, `report-set-timeline`;
+    - per un set che blocca, «Escludi dall'import» (`report-set-exclude`), che lo deseleziona.
+  - «Carica il file mancante»: carica con lo stesso broker e lo stesso `batch_id`, rilegge i file del broker, rifà la preview del set e, se il set era selezionato, seleziona anche il file nuovo. Un errore di caricamento dà un toast (`notify`, `tx.import.set.upload_failed`).
+- **③ Analizza**:
+  - un set è una riga sola (`ParsedFileResult.set`), con l'etichetta «Set del ‹data› · combinato (N file)» e i nomi dei file sotto, escapati, in `parse-row-set`. All'inizio la riga ha come `fileId` la chiave del set; dopo il combine, quello del combinato;
+  - `doParseAll` per un set fa prima `POST /sets/combine`, poi il parse del combinato col plugin del set. Un errore del combine va sulla riga, e le altre proseguono;
+  - il dettaglio della riga ha la sezione `parse-detail-pairing`: i conteggi di `summary.outcomes` e `summary.reasons`, con `data-*` per E2E, più «Apri il combinato» e «Scarica».
+- **④ Revisione**:
+  - le righe prima di `H0` non si selezionano mai; un `$effect` le deseleziona come quelle prima dell'apertura;
+  - restano fuori dalle Correzioni e dai gruppi di duplicati fra file (scenario 8: due set dello stesso broker importati insieme);
+  - sono nascoste dietro il contatore `import-wizard-before-history-count` (`data-count`) e il pulsante `import-wizard-before-history-toggle`. Mostrate, sono grigie, col badge «Già in LibreFolio» e la casella disattivata. Non contano nel totale.
+- **i18n**: le chiavi nuove stanno in `importWizard.reportSet.*`, nelle 4 lingue, via `dev.py i18n`.
+
+**E2E**: `frontend/e2e/transactions/tx-import-report-set.spec.ts`, spec nuovo, azione `front-transaction tx-import-report-set`. Ogni test ha il suo broker e i campioni sintetici Danske; alla fine cancella file e broker.
+- **R1**: XLSX e CSV insieme → passo ② con un set completo e selezionato, 2 file coi loro ruoli e la nota `first` → ③ una riga sola, con le coppie nel dettaglio → revisione con 7 righe prima di `H0` (2020-02-03) nascoste; mostrate, hanno la casella disattivata.
+- **R2**: solo l'XLSX → l'avviso al passo ① per il ruolo `cash` → si trascina il CSV → «Continua» → passo ② con un set completo, e i due file hanno lo stesso `batch_id`.
+- **R3**: solo l'XLSX, poi due volte «Continua» → set incompleto, selezionato, con l'analisi bloccata → «Carica il file mancante» col CSV → set completo, analisi possibile.
+- **R4**: un set incompleto più un singolo CSV generico → «Escludi dall'import» deseleziona il set e sblocca l'analisi del singolo.
+
 ### C3. «Allinea con la banca», guida e pagina file
 
 - **Il passo nuovo**:
@@ -566,3 +638,75 @@ Tutti e tre con `crypto.randomUUID()`, come campo del `FormData`.
 > - **Fase D** (§6 aggiornato):
 >   - la guida sviluppatore dirà che `provider_code` è una stringa letterale, e perché;
 >   - la pagina utente si chiamerà `danske-bank.en.md`, perché il `docs_url` del plugin è `…/danske-bank/` e le pagine prendono il nome dal `docs_url` (`credit_agricole/`, `generic-csv/`). Il piano diceva `danske_bank.en.md`.
+
+**Commit della correzione R13**: `791db7fee` fix(brim): return a literal Danske provider code e `fb90a8697` docs(journal): record the base merge and the R13 fix.
+
+### C2 — ⏳ in corso (2026-10-01)
+
+- Via del coordinatore, da `fb90a8697`: la voce 0 di K è nella base dal merge `5d48c668f`.
+- **C2.0 scritta**, nel §5: la specifica di dettaglio prima dei test rossi.
+
+> **⚠️ Fuori pista** (dalla lettura del wizard):
+> - Il wizard carica i file solo su «Continua» del passo ①, quindi l'avviso del file mancante compare dopo il primo «Continua»: il passo resta il ①, e un secondo «Continua» prosegue.
+> - Il `batch_id` del wizard passa a uno per sessione, come diceva il piano C1: con uno per chiamata, il file aggiunto dopo l'avviso finirebbe in un altro set.
+> - Il passo Correzioni chiede una decisione anche per gli avvisi con `split_hint` («Accetta tutti» le chiude). Il §4.5 del design diceva «non blocca».
+> - La preview e il combine del backend non conoscono il plugin scelto a mano: la seconda frase di A18 resta nel backlog (serve `exclude_file_ids` in `BRIMSetRequest`). Nella card non c'è la scelta del plugin per i membri.
+> - I test dei componenti (`component-unit`) si registrano in `_frontend_utility.py`, che non è fra le superfici approvate: la logica sta nei moduli puri (`tx-unit`), e la card si prova con gli E2E.
+
+> **Note implementazione (2026-10-01), rosso di C2** (test-author, corsia 6156, un comando alla volta):
+> - **`front-transaction tx-unit`**: 9 file. `importReportSets.test.ts`, file nuovo, registrato: 65 test, 65 falliti, ognuno sul modulo che manca, perché il modulo si carica dentro ogni test. Gli altri 8 file: 375/375 verdi.
+> - **`front-utility core-unit`**: 2700 test, 12 falliti, 2688 passati; tutti i 2684 di prima restano verdi.
+>   - `importRowState.test.ts`: 10 falliti: `historyStartFor` (3), `isBeforeHistory` (6), `shouldAutoSelectOnRecheck`, che riseleziona una riga prima di `H0` (1);
+>   - `importMerge.test.ts`: 2 falliti, le righe prima di `H0` nascono selezionate.
+>
+>   4 test nuovi passano già, ed è voluto: proteggono il comportamento che non deve cambiare.
+> - **E2E `front-transaction tx-import-report-set`** (spec nuovo, registrato): 4/4 falliti in circa 10 s ciascuno, sul primo elemento che manca:
+>   - R1 arriva al passo ② e si ferma su `report-set-card`;
+>   - R2, R3 e R4 si fermano su `import-wizard-step1-set-warning`.
+> - **Gate**: `check-orphans` pulito; `tx-import-upload` 9/9 (C1 invariato); `svelte-check` dà solo l'errore atteso del modulo mancante, più i 3 del pavimento.
+> - **Precisazioni dei test**:
+>   - R1 vuole un solo `POST /sets/combine` e un solo parse, quello del combinato col plugin Danske;
+>   - il broker di R1 ha come predefinito il CSV generico, quindi R1 copre A18 in `pickBestPlugin`;
+>   - nella revisione: 20 righe importabili, poi 27 col pulsante, 7 disattivate.
+>
+> **⚠️ Fuori pista** (test-author):
+> - I file BRIM della corsia sopravvivono al ripopolamento del database, quindi un broker nuovo con un id già usato eredita i file di prove vecchie. Il primo giro di E2E, con la pulizia larga del C1, ha cancellato un file rimasto (`parse_test.csv`); poi la pulizia è stata limitata ai file caricati dal test.
+> - Un aggiornamento senza filtro della tabella dei todo è stato corretto dal test-author stesso.
+
+> **Note implementazione (2026-10-01), cura di C2** (gli script in `/tmp/libreFolio_l_c2_*`):
+> - **Moduli puri**: `importReportSets.ts`, nuovo; `isBeforeHistory` e `historyStartFor` in `importRowState.ts`; in `importMerge.ts` le righe prima di `H0` nascono deselezionate.
+> - **Card e tipi**: `ReportSetCard.svelte`, nuovo; i tipi `BrimSetPreview` e `BrimSetCombineResponse` in `types/files.ts`.
+> - **`ParseDetailModal.svelte`**: la sezione dell'abbinamento, con lo scaricamento del combinato.
+> - **`ImportWizardModal.svelte`**:
+>   - un `batch_id` per sessione e l'avviso al passo ①;
+>   - le card al passo ②, con A18 in `pickBestPlugin`, la selezione per set e «Carica il file mancante»;
+>   - al passo ③ prima il combine, poi il parse in `parseResultInPlace`, una funzione sola anche per il parse di un solo file;
+>   - alla revisione le righe prima di `H0`, escluse anche dalle Correzioni e dai duplicati fra file.
+> - **i18n**: 63 chiavi `importWizard.reportSet.*` nelle 4 lingue, con `dev.py i18n add`; diff di +79/−1 per lingua.
+>
+> **⚠️ Fuori pista**:
+> - Il primo `front check` ha dato 16 errori nuovi:
+>   - i tipi generati allargano i campi nullabili (`T | null | Array<T | null>`), quindi i tipi dei moduli puri ora accettano `unknown` e restringono dentro;
+>   - nella card, una prop chiamata `state` trasformava `$state` in una sottoscrizione a uno store: rinominata in `previewState`.
+>
+>   Dopo le correzioni, gli errori sono i 3 del pavimento.
+> - **`component-unit` si bloccava** (un worker al 100 % di CPU per 6 minuti, fermato da me). `ensureImportPlugins()` leggeva `importPlugins` dentro l'effetto d'apertura, attraverso `loadBrokers()`, e poi la riscriveva dopo l'`await`. Col mock del test, che risponde con un catalogo vuoto, l'effetto ripartiva all'infinito; in produzione sarebbe ripartito una volta sola. Cura: la richiesta si memorizza in una variabile normale, non reattiva. Il file del wizard: 21/21.
+
+> **Note implementazione (2026-10-01), verde di C2** (corsia 6156, un comando alla volta):
+> - **Unit**: `front-transaction tx-unit` 440/440, di cui `importReportSets.test.ts` 65; `front-utility core-unit` 2700/2700, compresi i gate XSS di K; `front-utility component-unit` 2182/2182.
+> - **Statici**: `front check` 3 errori e 41 avvisi, il pavimento; prettier pulito sui 15 file toccati; `dev.py lint` pulito; `check-orphans` pulito (93 E2E, 272 Vitest, 227 backend); `git diff --check` pulito; i18n con le stesse 3481 chiavi in tutte e 4 le lingue.
+> - **E2E nuovi**: `tx-import-report-set` 4/4 al primo giro (R1–R4), dopo `front build --debug`.
+> - **Regressione E2E del wizard**: verdi `tx-import-upload` 9, `tx-import-flow` 10, `tx-import-duplicate-precedence` 6, `tx-asset-identity` 9, `tx-import-resolution` 12, `tx-import-matching` 6, `front-utility onboarding-tour` 10.
+>
+> **⚠️ Fuori pista: quattro rossi che c'erano già** (triage con la skill `test-triage`). Per confrontare ho esportato `HEAD` (`fb90a8697`, senza C2) con `git archive` in `/tmp`, e ho fatto girare gli stessi spec nella stessa corsia e con lo stesso stato. Poi ho cancellato la copia.
+>
+> | Spec | Con C2 | Base senza C2 | Verdetto |
+> |---|---|---|---|
+> | `tx-brim-import` T1 | rosso | rosso | **orologio** (assunzione del test). L'helper usa `isVisible({timeout})`, che in Playwright non aspetta, e analizza «il primo file disponibile» della corsia |
+> | `tx-ca-contract` CAC-011 e CAC-012 | rossi | rossi | **orologio**. Lo stesso `isVisible({timeout})` in `walkToReview`: se il passo Correzioni arriva dopo il controllo, il test non preme «Accetta tutti» e resta fermo lì (l'ho visto nell'istantanea) |
+> | `tx-import-file-selection` «existing files» | rosso | rosso | **ambiente**. Il broker di controllo ha una riga in più: un file di una prova vecchia. La corsia ricrea il database (`db populate --force`, e le suite dei servizi che lo ricreano) senza `--clean`: i broker spariscono, ma i loro file BRIM restano su disco in `broker_<id>`. SQLite riusa gli id (max+1), quindi un broker nuovo eredita i file di uno sparito. La cancellazione via API invece li toglie (`_delete_brim_files_for_brokers`). Il raggruppamento di C2 può solo togliere righe (set e combinati), mai aggiungerne |
+> | `tx-import-asset-inspector` E2-001 | 1 passato su 4 | 1 passato su 3 | **intermittente anche senza C2**. Il secondo clic sulla valuta, dopo l'annullamento del cambio di valuta, non apre la lista; non tocca codice di C2 |
+>
+> Non sono nel perimetro di L: vanno al coordinatore. I file orfani non sono un difetto di produzione, perché lì il database non si ricrea senza i file: sono un problema del setup dei test, che dovrebbe pulire `broker_reports` quando ricrea il database.
+>
+> ### C2 — ✅ pronta per il checkpoint (2026-10-01)
