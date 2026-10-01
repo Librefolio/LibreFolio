@@ -91,7 +91,7 @@ The matrix needs at least two assets to show a pair. When a square has no coeffi
 
 ### 📉 How Much Did Each of These Hurt? {: #how-much-did-each-hurt }
 
-The second section, **How much did each of these hurt?**, puts every selected asset on the same scale of harm. Each asset gets a row, and the columns run from the shortest horizon to the longest:
+The second section, **How much did each of these hurt?**, puts every selected asset on the same scale of harm. Each asset gets a row, headed by its icon and its name on one line — a name too long to fit scrolls by itself — and the columns run from the shortest horizon to the longest:
 
 | Column | What it tells you |
 |---|---|
@@ -103,19 +103,22 @@ The second section, **How much did each of these hurt?**, puts every selected as
 
 **Rise to peak** is there to teach an asymmetry: the way back is steeper than the way down, because the rise starts from a smaller base. An asset **20% below its peak needs +25%** to return to it, not +20%.
 
-Every loss is drawn in the same red for every asset, and nothing is ranked: the table compares the assets, it does not grade them. The ⓘ next to each column heading opens its theory page — [Conditional Value at Risk](../../financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md), [Max Drawdown](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md) or [Current Drawdown](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md).
+Every loss is drawn in the same red for every asset, and the page never ranks the assets by itself: the table opens in the order of the selection, and only a click on a column title sorts it, as in the [next section](#what-did-each-pay). Each figure's title explains it in a tooltip — hover it, or tap it on a touch screen — but links nowhere: the book icon in the section's header opens the manual's [Risk Metrics](../../financial-theory/technical-analysis/risk-metrics/index.md) pages, the eye icon beside it shows or hides columns, and the theory behind the columns is in [Conditional Value at Risk](../../financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md), [Max Drawdown](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md) and [Current Drawdown](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md).
 
 ### ⚖️ What Did Each of These Pay for Its Risk? {: #what-did-each-pay }
 
-The third section, **What did each of these pay for its risk?**, sets risk against reward, asset by asset.
+The third section, **What did each of these pay for its risk?**, sets risk against reward, asset by asset: first in a table, then in a chart of the same figures.
 
-- **The chart** places one dot per asset — annualised volatility across, expected annualised return up — as soon as at least two points can be placed.
+- **The table** gives the figures of every asset — **Volatility**, **Average annual return**, **Sortino** and **Sharpe** — one row per asset, named as in the previous section. Sortino measures the return per unit of downside risk, Sharpe per unit of total volatility. Each figure's title explains it in a tooltip: hover it, or tap it on a touch screen. The eye icon beside the section's book icon shows or hides columns.
+- **Only you sort it.** The table opens in the order of the selection. A click on a column title sorts by that figure — ascending, then descending, then back to the selection's order — and [dashes](#a-dash-is-not-a-zero) stay last whichever way it sorts; the **Asset** title sorts by name. The figures are printed plainly, with no colours and no arrows in the cells: the page never ranks the assets by itself.
+- **Under the table, a line gives the period** the figures were computed over: its first and last day, and its length in calendar years, months and days (1 July to 1 October, both ends counted, is 3 months and 1 day). These are always the dates actually used, and a difference of a few days from the page's date range at either end, such as a weekend or a holiday on which no selected asset is quoted can leave, does not make the line call the period shorter: it does so, recalling the selected dates, only when an asset — or the benchmark — with a shorter history makes the period start more than seven days after the range's first day, or end more than seven days before its last (see [One Shared Window](#one-shared-window)). It also says that volatility and the average annual return are annualised, and that Sharpe and Sortino derive from them. Beta and correlation, the benchmark columns described below, are not annualised.
+- **The chart** places one dot per asset — annualised volatility across, average annual return up — as soon as at least two points can be placed.
 - **No line is drawn through the points.** On a portfolio, a line through the portfolio's own point separates "better paid" from "worse paid" for the risk taken. A selection has no whole, so there is nothing to be above or below: the chart shows the trade-off and leaves the judgement to you.
-- **The table** gives the figures of every asset — **Volatility**, **Expected return**, **Sortino** and **Sharpe** — printed plainly: no colours, no arrows, no ranking. Sortino measures the return per unit of downside risk, Sharpe per unit of total volatility.
+- **The table and the chart share one selection.** A click on a row, or on its dot, selects that asset in both: the row is highlighted, and the dot is drawn larger and in green. A second click on it clears the selection; a click on another asset, in either, moves the selection there. The benchmark's dot has no row, so a click on it selects nothing.
 
-!!! warning "Expected return is not the return you lived through"
+!!! warning "The average annual return is not the return you lived through"
 
-    **Expected return** is the window's average return scaled to a year — the quantity a risk/return chart is built on. On a very volatile asset, the return actually lived through over the same window is lower, because volatility erodes compounding. Do not read the height of a dot as what the asset earned.
+    The **average annual return** is the window's average return scaled to a year — the quantity a risk/return chart is built on. It describes the past; it is not a forecast. On a very volatile asset, the return actually lived through over the same window is lower, because volatility erodes compounding. Do not read the height of a dot as what the asset earned.
 
 Sharpe and Sortino are computed here against a **risk-free rate of zero**: the tab has no control to set one.
 
@@ -125,7 +128,7 @@ Two more columns, **Beta** (how much the asset moves when the benchmark moves) a
 - it **cannot be one of the selected assets**: a yardstick cannot also be one of the things it measures. Remove it from the selection, or choose another benchmark, to get the columns back;
 - the columns also stay hidden when the benchmark could not be measured over the window.
 
-When the two columns are missing, a note under the table recalls how to add them. See [Volatility](../../financial-theory/technical-analysis/risk-metrics/volatility.md), [Sharpe Ratio](../../financial-theory/technical-analysis/risk-metrics/sharpe-ratio.md), [Sortino Ratio](../../financial-theory/technical-analysis/risk-metrics/sortino-ratio.md) and [Beta & Active Return](../../financial-theory/technical-analysis/risk-metrics/beta-active-return.md).
+See [Volatility](../../financial-theory/technical-analysis/risk-metrics/volatility.md), [Sharpe Ratio](../../financial-theory/technical-analysis/risk-metrics/sharpe-ratio.md), [Sortino Ratio](../../financial-theory/technical-analysis/risk-metrics/sortino-ratio.md) and [Beta & Active Return](../../financial-theory/technical-analysis/risk-metrics/beta-active-return.md).
 
 ### ⏮️ What If…? {: #what-if }
 
@@ -168,7 +171,7 @@ The price of that fairness is shared too:
 - **A benchmark, when one applies, joins the window** of *How much did each of these hurt?* and *What did each of these pay for its risk?*, because it is measured together with the selection there: a benchmark with a shorter history narrows those two sections as well, and the days on which it is quoted count there too. The correlation matrix is computed without it and keeps the selection's own window.
 - **An asset that cannot be valued at all** over the window — no price up to its last day, or no exchange rate into the tab's currency — narrows nothing: it is left out of the calculation. It disappears from the matrix, keeps a row of dashes in the tables, and the sections say that an asset was excluded.
 
-To see what a section was measured over, open **Calculation details** at its bottom. It shows the number of **Observations** behind the figures, together with the **Coverage**, the annualization factor and the return basis. It gives figures rather than dates, and the observations can move either way when you add an asset: down if its history is shorter, up if it is quoted on days the others are not. **Coverage** looks at every date in the date range on which at least one asset is quoted, and gives the share the window keeps: below 100%, the window starts later than the range, or skips days on which an asset could not be valued.
+To see what a section was measured over, open **Calculation details** at its bottom. It shows the number of **Observations** behind the figures, together with the **Coverage**, the annualization factor and the return basis. It gives figures rather than dates. For the dates, look under the table of *What did each of these pay for its risk?*: a [line](#what-did-each-pay) there gives the first and last day of that section's window and its length in calendar years, months and days, while its Calculation details keeps the figures. The observations can move either way when you add an asset: down if its history is shorter, up if it is quoted on days the others are not. **Coverage** looks at every date in the date range on which at least one asset is quoted, and gives the share the window keeps: below 100%, the window starts later than the range, or skips days on which an asset could not be valued.
 
 ### 💱 One Currency {: #one-currency }
 
@@ -177,6 +180,8 @@ Returns are measured in the instance's default currency — the one your adminis
 ### ➖ A Dash Is Not a Zero {: #a-dash-is-not-a-zero }
 
 A dash (—) means *this could not be measured for that asset over this window*. It never means zero: a zero is a measurement, a dash is the absence of one. A selected asset always keeps its row, so a row of dashes means "not measurable here", never "not selected".
+
+The tables carry no standing note about this: the explanation sits on the dash itself. Hover a dash — or tap it on a touch screen — to read it.
 
 ### 🧩 Each Section Speaks for Itself {: #each-section-speaks-for-itself }
 
