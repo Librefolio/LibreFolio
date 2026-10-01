@@ -308,3 +308,61 @@ describe('resolveIssueMessage — residual defensive branches', () => {
         expect(msg).toBe('Quantity: raw');
     });
 });
+
+/**
+ * K step 13, item 0 — every caller renders the result with `{@html}` (TransactionFormModal,
+ * TransactionBulkModal, ParseDetailModal), so what a user or a backend wrote must come out as text.
+ * Assertions are on the string, the way the sink receives it: `&lt;` where a tag would open, `&quot;`
+ * where an attribute would close — and never the attribute a payload tries to write.
+ */
+describe('resolveIssueMessage — user and backend text reaches {@html} escaped', () => {
+    const HOSTILE = '<img src=x onerror="window.__k13=1">';
+    const BREAKOUT_URL = 'x" onerror="window.__k13=1';
+    /** An attribute written by a payload: it can only appear when a quote was left unescaped. */
+    const INJECTED_ATTRIBUTE = 'onerror="window.__k13';
+
+    it('escapes a broker name', () => {
+        const t = makeT({'transactions.errors.E': 'broker={brokerName}'});
+        const ctx: ResolverContext = {brokers: [{id: 7, name: `${HOSTILE} Fineco`}]};
+        const msg = resolveIssueMessage({code: 'E', params: {brokerId: 7}}, t, ctx);
+        expect(msg).toContain('&lt;img');
+        expect(msg).not.toContain('<img src=x');
+        expect(msg).not.toContain(INJECTED_ATTRIBUTE);
+        expect(msg).toContain('Fineco');
+    });
+
+    it('keeps a broker icon URL inside its src attribute', () => {
+        const t = makeT({'transactions.errors.E': 'broker={brokerName}'});
+        const ctx: ResolverContext = {brokers: [{id: 7, name: 'Fineco'}], getBrokerIconUrl: () => BREAKOUT_URL};
+        const msg = resolveIssueMessage({code: 'E', params: {brokerId: 7}}, t, ctx);
+        expect(msg).toContain('&quot;');
+        expect(msg).not.toContain(INJECTED_ATTRIBUTE);
+        expect(msg).toContain('Fineco');
+    });
+
+    it('escapes an asset name, and keeps its icon_url inside its src attribute', () => {
+        const t = makeT({'transactions.errors.E': 'asset={assetName}'});
+        const ctx: ResolverContext = {assets: [{id: 3, display_name: `${HOSTILE} Apple`, icon_url: BREAKOUT_URL}]};
+        const msg = resolveIssueMessage({code: 'E', params: {assetId: 3}}, t, ctx);
+        expect(msg).toContain('&lt;img');
+        expect(msg).toContain('&quot;');
+        expect(msg).not.toContain('<img src=x');
+        expect(msg).not.toContain(INJECTED_ATTRIBUTE);
+        expect(msg).toContain('Apple');
+    });
+
+    it('escapes a raw backend message returned when the issue has no code', () => {
+        const msg = resolveIssueMessage({error: `Duplicate of ${HOSTILE}`}, makeT());
+        expect(msg).toContain('&lt;img');
+        expect(msg).not.toContain('<img');
+        expect(msg).toContain('Duplicate of');
+    });
+
+    it('escapes a raw backend message used as the last fallback, and keeps its field prefix', () => {
+        const t = makeT({'transactions.fields.description': 'Description'});
+        const msg = resolveIssueMessage({code: 'UNMAPPED_CODE', msg: HOSTILE, field: 'description'}, t);
+        expect(msg.startsWith('Description: ')).toBe(true);
+        expect(msg).toContain('&lt;img');
+        expect(msg).not.toContain('<img');
+    });
+});

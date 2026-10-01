@@ -160,6 +160,15 @@ def utils_gate_docs_links(verbose: bool = False, test_names: list = None) -> boo
     return run_command(cmd, "Docs link discovery tests", verbose=verbose)
 
 
+def utils_pwa_assets(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the committed PWA icons, manifest, apple-touch link and service-worker stamp."""
+    print_section("Utils: PWA Assets")
+    print_info("Testing: frontend/static/{icons/,manifest.json,sw.js,offline.html}, frontend/src/app.html")
+    print_info("Tests: opaque RGB icons, maskable safe zone on splash beige, 180px apple-touch icon, sw.js stamp = md5(offline.html)[:8]")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_pwa_assets.py", test_names)
+    return run_command(cmd, "PWA asset tests", verbose=verbose)
+
+
 def utils_gate_i18n_usage(verbose: bool = False, test_names: list = None) -> bool:
     """Test the i18n three-verdict classifier (used / not verified / dead)."""
     print_section("Utils: i18n Usage Gate")
@@ -274,6 +283,16 @@ Tests for utility modules and helper functions:
         utils_gate_docs_links,
         name="Docs Link Gate",
         desc="Cross-boundary link discovery: a resolved const confirms a link but an unresolved interpolation may never condemn one, plugin/provider folders are found by glob rather than by a hand-written list, and what cannot be decided is reported as unverifiable instead of dropped",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pwa-assets",
+        utils_pwa_assets,
+        name="PWA Assets",
+        desc="Opaque RGB icons at exact sizes (any, maskable, apple-touch 180), maskable logo inside the 0.40 safe zone on the splash beige, one manifest entry per purpose and size with no file serving both, app.html apple-touch link at 180x180, sw.js build stamp = md5(offline.html)[:8]",
+        # Reads committed files under frontend/static/ and frontend/src/app.html only:
+        # no DB, no server, no network, no writes.
         isolation="pure",
     )
     add_test(

@@ -269,10 +269,10 @@
         }
 
         const distributedLabel = brokerIds.length > 1 ? label('brokers.lots.brokersCount', '{count} brokers').replace('{count}', String(brokerIds.length)) : label('brokers.lots.inTransit', 'In transit');
-        const transitTag = hasInTransit ? `<span class="rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[11px] font-semibold text-sky-700 dark:border-sky-800/70 dark:bg-sky-950/40 dark:text-sky-300">${escapeHtml(label('brokers.lots.inTransitShort', 'Transit'))}</span>` : '';
+        const transitBadge = hasInTransit ? `<span class="rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[11px] font-semibold text-sky-700 dark:border-sky-800/70 dark:bg-sky-950/40 dark:text-sky-300">${escapeHtml(label('brokers.lots.inTransitShort', 'Transit'))}</span>` : '';
         return {
             type: 'html',
-            html: `<span class="inline-flex max-w-full items-center gap-1.5" data-testid="unified-lots-custody-${row.lotId}"><span class="rounded-full border border-violet-200 bg-violet-50 px-2 py-1 text-xs font-semibold text-violet-700 dark:border-violet-800/70 dark:bg-violet-950/40 dark:text-violet-300">${escapeHtml(distributedLabel)}</span>${transitTag}</span>`,
+            html: `<span class="inline-flex max-w-full items-center gap-1.5" data-testid="unified-lots-custody-${row.lotId}"><span class="rounded-full border border-violet-200 bg-violet-50 px-2 py-1 text-xs font-semibold text-violet-700 dark:border-violet-800/70 dark:bg-violet-950/40 dark:text-violet-300">${escapeHtml(distributedLabel)}</span>${transitBadge}</span>`,
             tooltip: {html: tooltip, position: 'top', maxWidth: '280px'},
             onClick: () => onCustodyCellClick?.(row.lot),
         };

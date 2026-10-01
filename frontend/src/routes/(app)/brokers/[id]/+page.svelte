@@ -497,7 +497,7 @@
              content, so it disappeared on Posizioni/Transazioni even though those tabs
              depend on the same date-scoped data). -->
         <PageToolbar
-            thresholds={{oneRow: 1000, denseRow: 800, stackFilters: 470, oneColumn: 430, labelHideActions: 270, labelHideTabs: 370}}
+            thresholds={{oneRow: 1000, denseRow: 840, stackFilters: 530, oneColumn: 430, labelHideActions: 270, labelHideTabs: 660}}
             tabs={brokerTabs}
             {activeTab}
             ontabchange={handleTabChange}
