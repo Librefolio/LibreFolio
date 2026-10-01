@@ -29,8 +29,10 @@ converter.
 3. **Currency from the source.** Take each transaction's currency from the broker's own
    currency column (per row) and tag every monetary figure in that row with it. One file
    may contain multiple currencies — keep them as reported.
-4. **Detect the delimiter.** Always resolve the separator with the base-class
-   `detect_csv_delimiter` helper — never hardcode `,` or `;`.
+4. **Detect the delimiter, never assume the encoding.** Always resolve the separator with
+   the base-class `detect_csv_delimiter` helper — never hardcode `,` or `;` — and read the
+   file with `self._open_text(file_path)` (or `_brim_io.read_rows`), never with
+   `open(..., encoding=...)`: bank exports are often Windows-1252 or Latin-1.
 5. **Handle multiple layouts.** When a broker ships more than one report layout (e.g. with
    and without commission columns), detect the variant **dynamically**: locate the header
    row and branch on the real column set, not a fixed line offset.
@@ -41,8 +43,10 @@ converter.
    `TRANSFER`/`ADJUSTMENT` seed (opening snapshot, TRANSFER_IN), store the cost **per single
    unit**, never the total — the engine multiplies it by `quantity`. If the source reports a
    total countervalue, divide by quantity first. Set `cost_basis_currency` alongside it.
-8. **Fake asset IDs.** Emit negative fake asset IDs (keyed by ISIN/ticker) plus the
-   extracted asset info, so the core can drive the asset-matching UI.
+8. **Fake asset IDs.** Emit high positive placeholder asset IDs — start at
+   `FAKE_ASSET_ID_BASE` (`2**31 - 1`, in `backend/app/schemas/brim.py`) and count down, one
+   per ISIN/ticker — plus the extracted asset info, so the core can drive the
+   asset-matching UI. They are never negative and never persisted.
 
 ## 🛠️ Rough shape of the work
 
