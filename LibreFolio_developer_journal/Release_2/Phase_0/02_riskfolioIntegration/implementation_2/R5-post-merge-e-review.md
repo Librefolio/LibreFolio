@@ -2453,3 +2453,43 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 > `onchange` o valore prima dello store, ⚠ mai mostrato, suggerimento della pagina ignorato, niente sezioni, ⚠ non
 > focalizzabile, stato non pubblicato o non scritto, valore dallo store invece che dalla risoluzione, scelta che non
 > arriva allo store); file ripristinati identici (SHA-256).
+
+### I piccoli debiti di documentazione, e un difetto di (a) che la guida ha fatto emergere · ✅ 01/10/2026 (sera)
+
+> **Commit della famiglia nel pomeriggio**: A `2b9362618` (avviso con la causa prima, residuo onesto di L3); il mio
+> checkpoint del benchmark `07f6bb01d` · `8a2cc16dd`; Risk ← F `a7f1dbea4` (validato: `core-unit` 2896,
+> `component-unit` 2356, E2E `risk-lab` 31, `risk` 13, `risk-benchmark-shared` 4, `risk-asset-detail` 2, `asset-list`
+> 28); la punta in A `738ddc064`, con il solo conflitto atteso sulle due righe del runner, risolto in modo additivo e
+> controllato byte per byte contro la mia risoluzione calcolata a parole.
+>
+> **Scelta del developer**: dopo F → Risk, prima i piccoli debiti di documentazione, poi il blocco replay o l'idoneità
+> del benchmark.
+>
+> **Note implementazione**
+> - **La guida dei plugin dei segnali** (docs-writer, solo EN: le pagine per sviluppatori non hanno traduzioni):
+>   `computes_on_quote_days` nel contratto, il filtro delle sedute nell'esecuzione (la copertura resta di calendario),
+>   il riscaldamento separato per sedute e giorni (`SESSION_WARMUP_DAY_MULTIPLIER = 2`), `sessions` contro `days` nei
+>   metadati dei parametri, la regola della versione. Ha corretto anche sette punti già sbagliati prima (la categoria
+>   `risk`, l'esempio completo che la registrazione avrebbe rifiutato, i campi semantici obbligatori, il tipo `area`,
+>   un nome di costante dei test superato). Build severa e link verdi.
+> - **⚠️ Fuori pista — un difetto di (a), trovato dal docs-writer leggendo il codice**: l'avviso di copertura parziale
+>   (`build_signal_availability_warnings`) contava come «esclusi» tutti i punti di calendario fuori da quelli scelti, e
+>   dal 30/09 quelli scelti sono le sole sedute: i giorni riportati dentro il segmento finivano fra gli esclusi, e il
+>   numero sul grafico (`signalProblem.ts:226` → `chartSignalsHelpers.ts:86`) era gonfiato. Rosso prima (test-author):
+>   15 esclusi contro 11, e i bordi del segmento dati come prima e ultima seduta invece che come estremi di calendario;
+>   un plugin gemello con `computes_on_quote_days = False` fa da metro. Cura: l'avviso riceve la selezione della
+>   copertura, prima del filtro delle sedute. Mutanti: tornare alle sedute, togliere il filtro: presi entrambi.
+>   Consumatori di `excluded_points`: solo l'avviso del grafico; l'AI Export legge degli avvisi solo codice e
+>   messaggio, e solo nel contesto del drawdown, che non usa le sedute: niente prova dell'AI Export.
+> - **Il pin «nessun id mentre è `pending`»** in `BenchmarkSelect.test.ts` (reperto di A): i due mutanti di A sulle sue
+>   guardie `state === 'set'` sopravvivevano solo perché la primitiva non pubblica un id non confermato, cosa che il
+>   contratto non fissava. Ora la fissa (39 test); il mutante che pubblica l'id salvato al montaggio muore anche nel
+>   caso di un id che la lista poi conferma, che prima nessun test copriva.
+>
+> **Verifica** (6152): `signal-service` 65 · matrice 92 · `asset-signals` 30 · plugin OHLC 75 e core 46 ·
+> `risk-levels-component` 75 · orfani ✅ · ruff e black puliti · `diff --check` pulito.
+>
+> **Restano**: la nota sul cancello della documentazione (`scripts/docs_links.py` riconosce `docsPath:` anche nei
+> commenti: falsi link rotti), passata al coordinator, a cui appartiene lo strumento; il limite delle sfumature della
+> torta (famiglie di 5–7 membri), da decidere col developer, cancello per `dev_release2`; poi il blocco replay (F3) o
+> l'idoneità del benchmark (F4).
