@@ -43,6 +43,7 @@
     import AssetRiskScenariosView from '$lib/components/risk/AssetRiskScenariosView.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import CompactDurationBadge from '$lib/components/ui/date/CompactDurationBadge.svelte';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {
         backendSignalSchemas,
@@ -3002,6 +3003,7 @@
                                     }
                                 }}
                             />
+                            <DocsLink path="user/assets/detail/chart/#rolling-return" label={$t('signals.riskRollingReturn.description')} size={14} testId="asset-calendar-return-docs" />
                         </div>
                     {/if}
                 </div>

@@ -19,7 +19,7 @@ Use the two buttons above the chart to choose its primary series:
 
 Opening or reloading an asset starts in **Prices** mode. LibreFolio remembers the Rolling Return window, but it does not persist the selected primary mode.
 
-### 🗓️ Rolling Return Window
+### 🗓️ Rolling Return Window {: #rolling-return }
 
 The four presets are exact calendar-day aliases:
 
