@@ -41,11 +41,16 @@
  *      once when nothing is stored; `pending` from the first instant an id is stored and
  *      until its check settles, then `set` or `unknown`. A reader's choice is `set` before
  *      anyone hears of it, and a late check overwrites none of it.
+ *  10. **An unconfirmed id is never published.** While the state is `pending`, `value`
+ *      stays null, `data-benchmark-id` is `''` and the trigger shows no asset — even for
+ *      an id the list goes on to confirm, which arrives with `set` and not before. So a
+ *      page that waits for `set` and a page that reads `value` cannot disagree, and
+ *      neither can measure against an id nobody confirmed.
  *
  * Not pinned, on purpose: whether `onchange` also fires when the mount-time resolution
- * lands (the contract does not say), what the trigger, `value` and `data-benchmark-id`
- * hold while the state is `pending`, and clearing — `AssetSelect` has no control that
- * empties a choice, so there is nothing for a reader to press.
+ * lands (the contract does not say), what the trigger says while the state is `pending`
+ * beyond showing no asset, and clearing — `AssetSelect` has no control that empties a
+ * choice, so there is nothing for a reader to press.
  *
  * Observed only through what a page can see: `data-testid`s, the bound `value` (held in
  * a `$state` behind a getter/setter, as a parent's `bind:value` would hold it), the
@@ -926,6 +931,46 @@ describe('BenchmarkSelect — the resolution state it publishes', () => {
         expect(transitions(m.states)).toEqual(['pending', 'set']);
         expect(control(m)).toHaveAttribute('data-benchmark-id', String(BOREALIS.id));
         expect(m.box.value).toBe(BOREALIS.id);
+    });
+
+    it('publishes no id while pending, even one the list goes on to confirm: value null, data-benchmark-id empty, no asset on the trigger', async () => {
+        // Rule 10. A page that measures only once the state is `set` and a page that reads
+        // `value` agree only because nothing is handed out while the check runs. BOREALIS is
+        // in the list, so the check will confirm it: what is pinned is the window, not a
+        // refusal — the id arrives, with `set` and not before.
+        const list = holdTheList();
+        returningReader(BOREALIS.id);
+        const m = mount();
+
+        /** Every channel a page reads the choice through, still empty. */
+        function expectNothingPublished(moment: string): void {
+            expect(m.box.value, `${moment}: value holds an id the list has not confirmed`).toBeNull();
+            expect(control(m), `${moment}: the root publishes an id the list has not confirmed`).toHaveAttribute('data-benchmark-id', '');
+            expect(
+                m.writes.filter((write) => write.value !== null),
+                `${moment}: value was handed an id the list has not confirmed, if only for an instant`,
+            ).toEqual([]);
+            expectNoAssetOn(m.trigger);
+        }
+
+        // `render()` flushes before returning: this is the first thing a page can read.
+        expectState(m, 'pending', 'an id is stored and its check has not settled: the window this case is about');
+        expectNothingPublished('at mount');
+
+        await tick();
+        expect(resolveSpy(), 'the check never started: there was no window to hold open').toHaveBeenCalled();
+        expectState(m, 'pending', 'pending gave way while the asset list was still held');
+        expectNothingPublished('a tick later, with the check under way');
+
+        list.resolve();
+        await resolutionSettled();
+
+        // The presence barrier for every absence above: the same id reaches the same
+        // channels as soon as the list confirms it.
+        expectState(m, 'set');
+        expect(m.box.value).toBe(BOREALIS.id);
+        expect(control(m)).toHaveAttribute('data-benchmark-id', String(BOREALIS.id));
+        expect(m.trigger).toHaveTextContent(BOREALIS.display_name);
     });
 
     it('goes pending → unknown for a stored id the list does not hold, and leaves it stored', async () => {
