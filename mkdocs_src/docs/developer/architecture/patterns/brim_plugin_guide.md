@@ -83,6 +83,16 @@ mandatory for every new plugin:
   as reported.
 - **Delimiter detection.** Always resolve the separator with
   `self.detect_csv_delimiter(file_path)` — **never hardcode** `,` or `;`.
+- **Encoding fallback.** Never open an export with a fixed encoding such as
+  `open(file_path, encoding="utf-8-sig")` — banks and Excel on Windows often write
+  Windows-1252 or Latin-1, and a UTF-8 read fails on the first accented byte. Read text
+  with `self._open_text(file_path)` (add `newline=""` when the stream feeds `csv` and
+  line endings must be kept) or through `_brim_io.read_rows`. The test suite enforces
+  it (class `TestWindows1252Invariance`): `test_no_plugin_opens_files_with_a_fixed_encoding`
+  fails on any `open(..., encoding=...)` in a `broker_*.py`, and
+  `test_sample_parses_identically_when_saved_as_windows_1252` requires every non-ASCII
+  CSV sample, re-saved as Windows-1252, to be detected and parsed identically by each
+  plugin that accepts the original.
 - **Multiple export layouts.** When a broker ships more than one report layout (e.g. with
   and without commission columns), detect the variant **dynamically** — locate the header
   row and branch on the actual column set rather than assuming a fixed line offset.
@@ -126,8 +136,9 @@ Defined on `BRIMProvider` — call these instead of re-implementing:
 
 | Helper | Use it in | What it does |
 |--------|-----------|--------------|
-| `self._read_file_head(file_path, num_lines=15)` | `can_parse` | Reads the first N lines trying multiple encodings (utf-8-sig, utf-8, latin-1, cp1252) |
-| `self.detect_csv_delimiter(file_path)` | `parse` | Sniffs the delimiter (`,` `;` `\t`) via `csv.Sniffer` with a char-count fallback |
+| `self._read_file_head(file_path, num_lines=15)` | `can_parse` | Reads the first N lines trying `TEXT_ENCODINGS` (module constant in `brim_provider.py`) in order: UTF-8 (with or without BOM), then Windows-1252, then Latin-1, which always decodes |
+| `self.detect_csv_delimiter(file_path)` | `parse` | Sniffs the delimiter (`,` `;` `\t`) via `csv.Sniffer` with a char-count fallback; reads the head with the same `TEXT_ENCODINGS` fallback |
+| `self._open_text(file_path, newline=None)` | `parse` (and `can_parse` when you must read the header with `csv`) | Drop-in replacement for `open(...)`: an in-memory text stream decoded with `TEXT_ENCODINGS`; `newline=""` keeps line endings for `csv` |
 | `self._create_transaction(row_num, transactions, validation_issues, context, **tx_fields)` | `parse` | Builds a `TXCreateItem`, appends on success, or records structured `BRIMValidationIssue`s on `ValidationError`. **Never** call `TXCreateItem(...)` directly. |
 
 ---

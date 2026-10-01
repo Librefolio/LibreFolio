@@ -68,6 +68,7 @@
     import {createValidateScheduler} from '$lib/utils/transactions/useValidateScheduler.svelte';
     import {commitTransactions, validateTransactions} from '$lib/utils/transactions/txCommitApi';
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/transactions/resolveValidationMessage';
+    import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
     import {generateUUID} from '$lib/utils/core/uuid';
     import {computeSignHint} from '$lib/utils/transactions/signHintColor';
     import {deduplicateIssues, signLabel, signHintKey} from '$lib/utils/transactions/txFormFields';
@@ -1397,7 +1398,7 @@
                         <p class="font-semibold text-sm mt-2 mb-1">{$t('transactions.validate.issuesHeader')}</p>
                         <ul class="list-disc list-inside space-y-0.5 text-sm" data-testid="tx-form-issues">
                             {#each fieldIssues as issue}
-                                <li data-testid="tx-form-issue">{@html resolveIssueMessage(issue, $t, resolverCtx)}</li>
+                                <li data-testid="tx-form-issue">{@html sanitizeHtml(resolveIssueMessage(issue, $t, resolverCtx))}</li>
                             {/each}
                         </ul>
                     {/if}
@@ -1405,7 +1406,7 @@
                         <p class="font-semibold text-sm mt-2 mb-1">{$t('transactions.validate.balanceIssuesHeader')}</p>
                         <ul class="list-disc list-inside space-y-0.5 text-sm">
                             {#each balanceIssues as issue}
-                                <li>{@html resolveIssueMessage(issue, $t, resolverCtx)}</li>
+                                <li>{@html sanitizeHtml(resolveIssueMessage(issue, $t, resolverCtx))}</li>
                             {/each}
                         </ul>
                     {/if}
@@ -1440,7 +1441,7 @@
                                         <span>{$t('transactions.errors.wacFxUnavailableOrManual')}</span>
                                     </li>
                                 {:else}
-                                    <li data-testid="tx-form-issue">{@html resolveIssueMessage(issue, $t, resolverCtx)}</li>
+                                    <li data-testid="tx-form-issue">{@html sanitizeHtml(resolveIssueMessage(issue, $t, resolverCtx))}</li>
                                 {/if}
                             {/each}
                         </ul>
@@ -1449,7 +1450,7 @@
                         <p class="font-semibold text-sm {fieldIssues.length > 0 ? 'mt-2' : ''} mb-1.5">{$t('transactions.validate.balanceIssuesHeader')}</p>
                         <ul class="list-disc list-inside space-y-0.5 text-sm">
                             {#each balanceIssues as issue}
-                                <li>{@html resolveIssueMessage(issue, $t, resolverCtx)}</li>
+                                <li>{@html sanitizeHtml(resolveIssueMessage(issue, $t, resolverCtx))}</li>
                             {/each}
                         </ul>
                     {/if}

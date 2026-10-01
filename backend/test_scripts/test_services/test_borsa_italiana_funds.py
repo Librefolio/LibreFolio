@@ -35,6 +35,13 @@ def _fund(data_nav: date, *, codice: str = CODE, isin: str | None = ISIN) -> bor
     )
 
 
+def _chart_api(valuta: str):
+    """Chart-API double (``ottieni_storico``). An ISIN instrument's currency comes
+    from the API that prices it, not from the scheda page (K step 13, item 3b)."""
+    reply = SimpleNamespace(punti=[SimpleNamespace(data=date.today() - timedelta(days=1), chiusura=Decimal("100"), ultimo=Decimal("100"))], valuta=valuta)
+    return lambda ident, periodo=None, sessione=None, exchange=None: reply
+
+
 @pytest.fixture(autouse=True)
 def _available(monkeypatch):
     monkeypatch.setattr(borsa_italiana, "BORSA_ITALIANA_AVAILABLE", True)
@@ -80,6 +87,8 @@ async def test_resolve_url_bond_scheda_page(monkeypatch):
         return SimpleNamespace(isin=isin, nome="Btp Tf 0,6% Ag31 Eur", valuta="EUR", tipo="obbligazione", url_pagina=None)
 
     monkeypatch.setattr(borsa_italiana, "ottieni_scheda", fake_ottieni_scheda, raising=False)
+    # The rows' currency is the chart API's answer, not the scheda's (K step 13, item 3b).
+    monkeypatch.setattr(borsa_italiana, "ottieni_storico", _chart_api("EUR"), raising=False)
 
     items = await BorsaItalianaProvider().resolve_url("https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda/IT0005436693-MOTX.html?lang=it")
 
@@ -125,6 +134,8 @@ async def test_resolve_url_eurotlx_scheda_page(monkeypatch):
 
     monkeypatch.setattr(borsa_italiana, "cerca", fake_cerca, raising=False)
     monkeypatch.setattr(borsa_italiana, "ottieni_scheda", fake_ottieni_scheda, raising=False)
+    # The rows' currency is the chart API's answer, not the scheda's (K step 13, item 3b).
+    monkeypatch.setattr(borsa_italiana, "ottieni_storico", _chart_api("USD"), raising=False)
 
     items = await BorsaItalianaProvider().resolve_url("https://www.borsaitaliana.it/borsa/obbligazioni/eurotlx/scheda/US912810TU25-ETLX.html")
 
@@ -135,7 +146,7 @@ async def test_resolve_url_eurotlx_scheda_page(monkeypatch):
     for item in items:
         assert item["identifier"] == isin
         assert item["type"] == "BOND"
-        # currency comes from the scheda (EuroTLX hosts FX-denominated bonds)
+        # currency comes from the chart API that prices the bond (EuroTLX hosts FX-denominated bonds)
         assert item["currency"] == "USD"
         assert item["provider_params"]["mic"] == "ETLX"
         assert item["provider_params"]["platform"] == "TLX"
