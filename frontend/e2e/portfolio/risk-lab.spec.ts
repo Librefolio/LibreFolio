@@ -367,11 +367,23 @@ const CATALOG = {
     ],
 };
 
-/** The five codes the laboratory's comparison levels put on the wire together. */
+/** The five codes the laboratory's two comparison levels put on the wire between them — each level its own share, in a request of its own. */
 const ASSET_SET_LEVEL_CODES = ['asset_set_kpi', 'asset_set_var', 'asset_set_drawdown', 'asset_set_risk_return', 'asset_set_comparison'] as const;
 
-/** The four that ride on every load; `asset_set_comparison` joins only with a benchmark. */
-const ASSET_SET_UNCONDITIONAL_CODES = ASSET_SET_LEVEL_CODES.filter((code) => code !== 'asset_set_comparison');
+/**
+ * L1°'s share (`risk-asset-set-loss`): the bad day and the bad month — two instances of
+ * `asset_set_var` — and the drawdown. Never `asset_set_comparison`, whatever the benchmark: the
+ * engine prepares a request's comparison asset together with its scope (`risk/service.py:183-196`),
+ * so a benchmark riding with L1° would move L1°'s window. The developer saw L1° turn «Partial»
+ * because of one, and split the levels' request in two (02/10/2026).
+ */
+const LOSS_LEVEL_CODES = ['asset_set_var', 'asset_set_drawdown'] as const;
+
+/** L3°'s share (`risk-asset-set-paid`); `asset_set_comparison` joins it only when a benchmark applies. */
+const PAID_LEVEL_CODES = ['asset_set_kpi', 'asset_set_risk_return', 'asset_set_comparison'] as const;
+
+/** The L3° codes that ride on every load: all of its share but the comparison. */
+const PAID_UNCONDITIONAL_CODES = PAID_LEVEL_CODES.filter((code) => code !== 'asset_set_comparison');
 
 /**
  * An empty but valid scenario catalog.
@@ -453,7 +465,8 @@ interface RiskStubOptions {
      *
      * `asset_set_drawdown` declares `min_observations = 2` where the other four
      * declare 20, so the gate at `service.py:230-243` genuinely returns one `ok`
-     * beside four `unavailable` — same request, same calendar, same window.
+     * beside four `unavailable` — same selection, same period, same window, in
+     * whichever level's request each of the five rides.
      */
     shortWindow?: boolean;
     /**
@@ -1361,17 +1374,18 @@ function assetSetHistoricalRequests(requests: readonly RiskRequest[]): RiskReque
 }
 
 /**
- * The requests carrying any of the five per-asset codes.
+ * The requests carrying any of the five per-asset codes — both levels' requests.
  *
  * Deliberately *not* "every asset-set historical request": the laboratory puts
  * more than one of those on the wire and always has. `AssetSetCorrelationSection`
  * and `AssetSetReplaySection` each build their own controller without
  * `includeAssetSetLevels`, so their wave is `[correlation]` — canonically equal
- * to each other, hence one network call between them — while
- * `AssetSetComparisonLevels` asks for `correlation` plus the five and is
- * therefore a second, differently-shaped request. Counting all asset-set
- * historical requests and expecting one would assert something false about the
- * page; what has to be true is that the **five travel together**.
+ * to each other, hence one network call between them — while the comparison
+ * levels ask for `correlation` plus their per-asset codes, differently-shaped
+ * requests again. Counting all asset-set historical requests and expecting one
+ * would assert something false about the page; what has to be true is that
+ * **each level's codes travel together** — L1°'s in one request, L3°'s in
+ * another, since the developer's split of 02/10/2026 ({@link LOSS_LEVEL_CODES}).
  */
 function assetSetLevelRequests(requests: readonly RiskRequest[]): RiskRequest[] {
     return assetSetHistoricalRequests(requests).filter((request) => request.analytics.some((analytic) => isAssetSetLevel(analytic)));
@@ -1382,23 +1396,52 @@ function codesOf(request: RiskRequest): Set<string> {
     return new Set(request.analytics.map((analytic) => analytic.analytic_code));
 }
 
+/** True when `request` carries any of `codes`. */
+function carriesAny(request: RiskRequest, codes: readonly string[]): boolean {
+    const carried = codesOf(request);
+    return codes.some((code) => carried.has(code));
+}
+
 /** An asset-set scope as a comparable string, in the ascending order the client sends. */
 function scopeKey(assetIds: readonly number[]): string {
     return [...assetIds].sort((left, right) => left - right).join(',');
 }
 
 /**
- * The per-asset waves asked about exactly this selection.
+ * The per-asset waves asked about exactly this selection, both levels' together, in
+ * the order they left.
  *
  * Filtered by scope and not merely counted, because a test that grows the
  * selection — `ensureSelectionAtLeast` does, when the seed is small — legitimately
  * produces a second wave for the second scope. Counting all of them and expecting
  * one would then be a test of the fixture's size rather than of the page, green on
  * a large seed and red on a small one with nothing wrong either time.
+ *
+ * Both levels' because L1° and L3° ask apart: a caller that reads an analytic, a
+ * scope or a window off a request says whose request it reads, through
+ * {@link lossRequestsFor} or {@link paidRequestsFor}.
  */
 function levelRequestsFor(requests: readonly RiskRequest[], selection: readonly number[]): RiskRequest[] {
     const wanted = scopeKey(selection);
     return assetSetLevelRequests(requests).filter((request) => request.scope.kind === ASSET_SET_SCOPE && scopeKey(request.scope.asset_ids) === wanted);
+}
+
+/**
+ * L1°'s requests about exactly this selection, in the order they left: those carrying any of
+ * {@link LOSS_LEVEL_CODES}.
+ *
+ * Told apart by what they carry — the one thing that distinguishes the two levels' requests on the
+ * wire — never by position or by count. So a request carrying both levels' codes, the one request
+ * the levels shared before the split, is L1°'s *and* L3°'s here: a case that needs them apart turns
+ * red on it instead of reading whichever happened to leave first.
+ */
+function lossRequestsFor(requests: readonly RiskRequest[], selection: readonly number[]): RiskRequest[] {
+    return levelRequestsFor(requests, selection).filter((request) => carriesAny(request, LOSS_LEVEL_CODES));
+}
+
+/** L3°'s requests about exactly this selection, in the order they left: those carrying any of {@link PAID_LEVEL_CODES}, told apart the same way. */
+function paidRequestsFor(requests: readonly RiskRequest[], selection: readonly number[]): RiskRequest[] {
+    return levelRequestsFor(requests, selection).filter((request) => carriesAny(request, PAID_LEVEL_CODES));
 }
 
 /**
@@ -1996,10 +2039,13 @@ const L3_PERIOD_TOLERANCE_DAYS = 7;
  * The toolbar's period is the one the request carried: the page asks for the period its toolbar
  * shows, and the fit-period cases at the end of this file read the same dates off the URL. Rebuilt
  * through {@link metadata}, the function that answered, so the oracle cannot drift from the stub.
+ *
+ * `request` is L3°'s ({@link paidRequestsFor}): since the levels ask apart, L1°'s request carries
+ * no `asset_set_risk_return`, and handing it here fails by name rather than reading another level.
  */
 function l3PeriodFor(request: RiskRequest, options: RiskStubOptions = {}): L3Period {
     const analytic = request.analytics.find((candidate) => candidate.analytic_code === 'asset_set_risk_return');
-    if (!analytic) throw new Error('The per-asset wave carries no asset_set_risk_return, so L3° has no window to publish.');
+    if (!analytic) throw new Error(`This request carries no asset_set_risk_return, so it is not L3°'s and has no window for L3° to publish — it carried ${JSON.stringify([...codesOf(request)])}.`);
     const served = metadata(request, analytic, options);
     const end = served.analyzed_range.end;
     const start = shiftDay(end, -served.calendar_days + 1);
@@ -2266,25 +2312,27 @@ async function chooseBenchmark(page: Page, asset: NamedAsset): Promise<void> {
 }
 
 /**
- * What each per-asset wave about this selection compared against, in the order the waves left:
- * the `comparison_asset_id` of its `asset_set_comparison`, or `null` for a wave that carried
- * none. One entry per wave, so "every wave carried this benchmark" and "no wave carried any" are
- * both read off the same list. One read, not a retry: a caller polls it.
+ * What each L3° request about this selection compared against, in the order they left: the
+ * `comparison_asset_id` of its `asset_set_comparison`, or `null` for one that carried none. One entry
+ * per request, so "every L3° request carried this benchmark" and "none carried any" are both read off
+ * the same list. L3°'s requests only ({@link paidRequestsFor}): the comparison is L3°'s analytic, and
+ * L1°'s requests — which must never carry one — are {@link expectLossWithoutComparison}'s to read.
+ * One read, not a retry: a caller polls it.
  */
 function waveBenchmarks(requests: readonly RiskRequest[], selection: readonly number[]): Array<number | null> {
-    return levelRequestsFor(requests, selection).map((request) => {
+    return paidRequestsFor(requests, selection).map((request) => {
         const comparison = request.analytics.find((analytic) => analytic.analytic_code === 'asset_set_comparison');
         return comparison ? Number(comparison.parameters?.comparison_asset_id) : null;
     });
 }
 
 /**
- * L3° drawn against `referenceId`: a per-asset wave about the selection carried it, its answer is
+ * L3° drawn against `referenceId`: an L3° request about the selection carried it, its answer is
  * the one drawn, beta and correlation fill a cell per selected asset, and the scatter holds one
  * dot per asset plus the reference's own.
  */
 async function expectComparisonWith(page: Page, requests: readonly RiskRequest[], selection: readonly number[], referenceId: number): Promise<void> {
-    await expect.poll(() => waveBenchmarks(requests, selection), {timeout: 20_000, message: `no per-asset wave about the selection carried benchmark ${referenceId}`}).toContain(referenceId);
+    await expect.poll(() => waveBenchmarks(requests, selection), {timeout: 20_000, message: `no L3° request about the selection carried benchmark ${referenceId}`}).toContain(referenceId);
     const paid = page.getByTestId('risk-asset-set-l3');
     await expect(paid, 'the comparison must come back and be the answer drawn').toHaveAttribute('data-benchmark', 'true', {timeout: 20_000});
     await expect(paid.getByTestId('risk-asset-set-l3-beta')).toHaveCount(selection.length);
@@ -2295,9 +2343,9 @@ async function expectComparisonWith(page: Page, requests: readonly RiskRequest[]
 
 /**
  * L3° drawn with no comparison: a row per selected asset without beta or correlation, one dot
- * per asset and none for a reference, and no per-asset wave about the selection carrying a
+ * per asset and none for a reference, and no L3° request about the selection carrying a
  * comparison. Every absence is read behind a presence — the volatility cells, the drawn chart,
- * a wave on the wire — so none of them can be satisfied by a level that is still loading.
+ * an L3° request on the wire — so none of them can be satisfied by a level that is still loading.
  */
 async function expectNoComparison(page: Page, requests: readonly RiskRequest[], selection: readonly number[]): Promise<void> {
     await waitForPaidTable(page);
@@ -2308,12 +2356,36 @@ async function expectNoComparison(page: Page, requests: readonly RiskRequest[], 
     await expect(paid.getByTestId('risk-asset-set-l3-correlation')).toHaveCount(0);
     await expectChartCanvas(page, 'risk-asset-set-l3-scatter', 20_000);
     await expect(page.getByTestId('risk-asset-set-l3-scatter'), 'one dot per selected asset, and none for a benchmark that does not apply').toHaveAttribute('data-point-count', String(selection.length), {timeout: 20_000});
-    await expect.poll(() => waveBenchmarks(requests, selection).length, {timeout: 20_000, message: 'no per-asset wave about the selection reached the wire, so "no comparison" would prove nothing'}).toBeGreaterThan(0);
+    await expect.poll(() => waveBenchmarks(requests, selection).length, {timeout: 20_000, message: 'no L3° request about the selection reached the wire, so "no comparison" would prove nothing'}).toBeGreaterThan(0);
     const waves = waveBenchmarks(requests, selection);
+    const unwarranted = `an L3° request carried a comparison this benchmark does not warrant — L3°'s benchmarks, in the order its requests left: ${JSON.stringify(waves)}`;
     expect(
         waves.filter((id) => id !== null),
-        `a per-asset wave carried a comparison this benchmark does not warrant — the waves' benchmarks, in order: ${JSON.stringify(waves)}`,
+        unwarranted,
     ).toEqual([]);
+}
+
+/**
+ * L1° measured without a benchmark, whatever the benchmark: its table drawn, its request about the
+ * selection on the wire, and no L1° request in this page's capture — about any scope, at any point —
+ * carrying `asset_set_comparison`. The absence is read behind both presences, so a level that has not
+ * asked yet cannot satisfy it.
+ *
+ * Read off the wire because the wire is the one place this spec can see a benchmark reach L1°. The
+ * engine prepares a request's comparison asset together with its scope (`risk/service.py:183-196`),
+ * so a benchmark joins the prepared set of everything in its request and can move its window — what
+ * turned L1° «Partial» for the developer. The stub answers every analytic on its own and reproduces
+ * none of that, so L1°'s figures and provenance would be drawn the same with or without a benchmark
+ * riding along: on screen, "unaffected" would hold for the wrong reason. The request L1° sent cannot
+ * hide what rode with it.
+ */
+async function expectLossWithoutComparison(page: Page, requests: readonly RiskRequest[], selection: readonly number[]): Promise<void> {
+    await waitForLossTable(page);
+    await expect.poll(() => lossRequestsFor(requests, selection).length, {timeout: 20_000, message: 'no L1° request about the selection reached the wire, so "L1° carries no comparison" would prove nothing'}).toBeGreaterThan(0);
+    const carrying = assetSetLevelRequests(requests).filter((request) => carriesAny(request, LOSS_LEVEL_CODES) && codesOf(request).has('asset_set_comparison'));
+    const shapes = carrying.map((request) => ({assets: request.scope.kind === ASSET_SET_SCOPE ? scopeKey(request.scope.asset_ids) : '', analytics: [...codesOf(request)].sort()}));
+    const reached = `a benchmark reached L1°: an L1° request carried asset_set_comparison, which is L3°'s alone and would move L1°'s window — the L1° requests that carried one: ${JSON.stringify(shapes)}`;
+    expect(shapes, reached).toEqual([]);
 }
 
 /**
@@ -3740,62 +3812,83 @@ test.describe('Asset Global risk laboratory', () => {
     });
 
     /**
-     * (a) + (b) — one request, and one row per selected asset.
+     * (a) + (b) — one request per level, and one row per selected asset.
      *
      * The two belong together because the second is only meaningful given the
      * first: L1° is a *transposition* of a joint measurement, so every row has to
      * come from the same prepared calendar. Split across requests the rows would
      * still line up on screen and would no longer be comparable.
+     *
+     * One request per *level*, never one for both (the developer's decision of
+     * 02/10/2026): L1° asks for {@link LOSS_LEVEL_CODES} and L3° for
+     * {@link PAID_LEVEL_CODES}, each in a request of its own, so that a benchmark —
+     * which the engine prepares with the scope of whichever request carries it —
+     * can never move L1°'s window.
+     *
+     * Red until the levels ask apart: today one request carries both levels'
+     * analytics, and the shape check of ① names it.
      */
-    test('the five per-asset analytics travel in one request, and L1° gives every selected asset a row', async ({page}) => {
+    test('L1° and L3° each ask for their per-asset analytics in one request of their own, never mixed, and L1° gives every selected asset a row', async ({page}) => {
         const requests = await installRiskMocks(page);
         await openAssetGlobalRisk(page);
         await ensureSelectionAtLeast(page, MINIMUM_SELECTION);
         await waitForRiskCatalog(page);
         await waitForLossTable(page);
 
-        // ① ONE REQUEST. `service.py:170` prepares the joint series once per
-        // request, before the analytic loop, so five separate requests would pay
-        // for five preparations and — the part that reaches the reader — would put
-        // dots from five calendars on one chart. `queryRisk` caches on the
-        // canonical request, so "they were asked together" is observable exactly
-        // here, on the wire, and nowhere else.
+        // ① ONE REQUEST PER LEVEL. `service.py:170` prepares the joint series once
+        // per request, before the analytic loop, so a level split across requests
+        // would pay for one preparation per piece and — the part that reaches the
+        // reader — would draw one table, or one chart, from several calendars.
+        // `queryRisk` caches on the canonical request, so "they were asked
+        // together" is observable exactly here, on the wire, and nowhere else.
+        //
+        // And never one request for both levels: the engine prepares a request's
+        // comparison asset with its scope (`service.py:183-196`), so a level riding
+        // with L3°'s benchmark would be measured on the benchmark's calendar too —
+        // the «Partial» the developer saw on L1°.
         //
         // Scoped to the selection the page is showing: the laboratory legitimately
         // puts more than one asset-set historical request on the wire — the
         // correlation and replay sections build their own controllers without
         // `includeAssetSetLevels`, so their wave is `[correlation]` — and growing
-        // the selection above adds a second scope. What must be true is that the
-        // five are never split, not that the page makes one call.
+        // the selection above adds a second scope. What must be true is that no
+        // level is ever split or mixed, not that the page makes a number of calls.
         const selected = await chipIds(page);
         expect(selected.length, 'the transposition needs more than one instrument to be a comparison').toBeGreaterThanOrEqual(MINIMUM_SELECTION);
-        await expect.poll(() => levelRequestsFor(requests, selected).length, {timeout: 20_000, message: 'the per-asset wave must be asked for exactly once for the selection on screen'}).toBe(1);
+        await expect.poll(() => lossRequestsFor(requests, selected).length, {timeout: 20_000, message: "L1°'s request must be asked for exactly once for the selection on screen"}).toBe(1);
+        await expect.poll(() => paidRequestsFor(requests, selected).length, {timeout: 20_000, message: "L3°'s request must be asked for exactly once for the selection on screen"}).toBe(1);
 
-        // …and no request anywhere carried a *part* of it. The assertion above
-        // would still pass if a stray second request had smuggled one code out on
-        // its own; this one is what forbids the split outright.
+        // …and no request anywhere carried a *part* of a level, or parts of both.
+        // The counts above would still pass if a stray request had smuggled one
+        // code out on its own, or if one request answered for both levels — it
+        // counts as each level's; this is what forbids both outright.
+        const levelShapes = [[...LOSS_LEVEL_CODES].sort(), [...PAID_UNCONDITIONAL_CODES].sort()];
         for (const request of assetSetHistoricalRequests(requests)) {
             const carried = ASSET_SET_LEVEL_CODES.filter((code) => codesOf(request).has(code));
             if (carried.length === 0) continue;
-            expect([...carried].sort(), 'a request may carry the whole per-asset wave or none of it, never a slice').toEqual([...ASSET_SET_UNCONDITIONAL_CODES].sort());
+            const sliced = `a request may carry one level's whole wave or none of it — never a slice, never both levels — and this one carried ${JSON.stringify(carried)}`;
+            expect(levelShapes, sliced).toContainEqual([...carried].sort());
         }
 
-        const levels = levelRequestsFor(requests, selected)[0];
-        const codes = codesOf(levels);
-        // Only four of the five ride unconditionally: `asset_set_comparison` needs
-        // a benchmark, and this context has none. Asserting all five here would
-        // fail for the right reason on the wrong page — the benchmark branch has
-        // its own test below.
-        for (const code of ASSET_SET_UNCONDITIONAL_CODES) {
-            expect([...codes], `${code} must travel with the rest of the per-asset wave`).toContain(code);
+        const loss = lossRequestsFor(requests, selected)[0];
+        const paid = paidRequestsFor(requests, selected)[0];
+        for (const code of LOSS_LEVEL_CODES) {
+            expect([...codesOf(loss)], `${code} must travel with the rest of L1°'s wave`).toContain(code);
         }
-        expect([...codes], 'no benchmark is chosen in this context, so the comparison must not have been asked for').not.toContain('asset_set_comparison');
+        // Only two of L3°'s three ride unconditionally: `asset_set_comparison`
+        // needs a benchmark, and this context has none. Asserting all three here
+        // would fail for the right reason on the wrong page — the benchmark branch
+        // has its own tests below.
+        for (const code of PAID_UNCONDITIONAL_CODES) {
+            expect([...codesOf(paid)], `${code} must travel with the rest of L3°'s wave`).toContain(code);
+        }
+        expect([...codesOf(paid)], 'no benchmark is chosen in this context, so the comparison must not have been asked for').not.toContain('asset_set_comparison');
 
         // ② THE TWO HORIZONS ARE TWO INSTANCES, NOT TWO REQUESTS. They share an
         // analytic code, so only the instance id keeps the bad day and the bad
         // month apart; a stub that resolved by code would answer both with
         // whichever arrived first and the two columns would silently become one.
-        const varInstances = levels.analytics.filter((analytic) => analytic.analytic_code === 'asset_set_var');
+        const varInstances = loss.analytics.filter((analytic) => analytic.analytic_code === 'asset_set_var');
         expect(varInstances.map((analytic) => analytic.instance_id).sort()).toEqual(['base-historical-asset_set_var', 'base-historical-asset_set_var-monthly']);
         expect(
             varInstances.map((analytic) => Number(analytic.parameters?.horizon_days)).sort((left, right) => left - right),
@@ -3852,14 +3945,15 @@ test.describe('Asset Global risk laboratory', () => {
         await waitForRiskCatalog(page);
         await waitForLossTable(page);
 
-        // Which asset went missing is read from the request the stub answered, not
-        // assumed from the chips: the client canonicalises `asset_ids` ascending
-        // before sending, and the chips render in name order, so guessing here
-        // would be guessing at two orderings at once.
+        // Which asset went missing is read from the request the stub answered —
+        // L1°'s, the one this table is drawn from — not assumed from the chips: the
+        // client canonicalises `asset_ids` ascending before sending, and the chips
+        // render in name order, so guessing here would be guessing at two orderings
+        // at once.
         const selected = await chipIds(page);
-        await expect.poll(() => levelRequestsFor(requests, selected).length, {timeout: 20_000, message: 'the per-asset wave must have been requested for the selection on screen'}).toBe(1);
-        const levels = levelRequestsFor(requests, selected)[0];
-        const scope = levels.scope.kind === ASSET_SET_SCOPE ? levels.scope.asset_ids : [];
+        await expect.poll(() => lossRequestsFor(requests, selected).length, {timeout: 20_000, message: "L1°'s request must have been asked for the selection on screen, exactly once"}).toBe(1);
+        const loss = lossRequestsFor(requests, selected)[0];
+        const scope = loss.scope.kind === ASSET_SET_SCOPE ? loss.scope.asset_ids : [];
         expect(scope.length, 'dropping one asset needs at least two to have been asked about').toBeGreaterThanOrEqual(2);
         const unmeasured = scope[scope.length - 1];
         const measured = scope.slice(0, -1);
@@ -4046,14 +4140,14 @@ test.describe('Asset Global risk laboratory', () => {
         await waitForLossTable(page);
 
         // The answer the page was given for the selection on screen, rebuilt from the
-        // request it answered: the bad day of every measured asset, and the one left blank.
+        // request it answered — L1°'s: the bad day of every measured asset, and the one left blank.
         const selected = await chipIds(page);
-        await expect.poll(() => levelRequestsFor(requests, selected).length, {timeout: 20_000, message: 'the per-asset wave must have been requested for the selection on screen'}).toBeGreaterThan(0);
-        const levels = levelRequestsFor(requests, selected)[0];
-        const daily = levels.analytics.find((analytic) => analytic.analytic_code === 'asset_set_var' && Number(analytic.parameters?.horizon_days ?? 1) === 1);
-        if (!daily) throw new Error('The per-asset wave carries no one-day asset_set_var, so the bad day has nothing to sort.');
-        const badDay = new Map(assetSetVarOutput(levels, daily, options).items.map((item): [number, number] => [item.asset_id, item.conditional_value_at_risk]));
-        const {excluded} = preparedAssetIds(levels, options);
+        await expect.poll(() => lossRequestsFor(requests, selected).length, {timeout: 20_000, message: "L1°'s request must have been asked for the selection on screen"}).toBeGreaterThan(0);
+        const loss = lossRequestsFor(requests, selected)[0];
+        const daily = loss.analytics.find((analytic) => analytic.analytic_code === 'asset_set_var' && Number(analytic.parameters?.horizon_days ?? 1) === 1);
+        if (!daily) throw new Error("L1°'s request carries no one-day asset_set_var, so the bad day has nothing to sort.");
+        const badDay = new Map(assetSetVarOutput(loss, daily, options).items.map((item): [number, number] => [item.asset_id, item.conditional_value_at_risk]));
+        const {excluded} = preparedAssetIds(loss, options);
         expect(excluded, 'dropLastAsset must leave exactly one selected asset unmeasured').toHaveLength(1);
         const unmeasured = excluded[0];
 
@@ -4290,12 +4384,12 @@ test.describe('Asset Global risk laboratory', () => {
         await waitForPaidTable(page);
 
         // The answer the page was given for the selection on screen, rebuilt from the request it
-        // answered: the average return of every measured asset, and the one left blank.
+        // answered — L3°'s: the average return of every measured asset, and the one left blank.
         const selected = await chipIds(page);
-        await expect.poll(() => levelRequestsFor(requests, selected).length, {timeout: 20_000, message: 'the per-asset wave must have been requested for the selection on screen'}).toBeGreaterThan(0);
-        const levels = levelRequestsFor(requests, selected)[0];
-        const averageReturn = new Map(assetSetRiskReturnOutput(levels, options).items.map((item): [number, number] => [item.asset_id, item.expected_annual_return]));
-        const {excluded} = preparedAssetIds(levels, options);
+        await expect.poll(() => paidRequestsFor(requests, selected).length, {timeout: 20_000, message: "L3°'s request must have been asked for the selection on screen"}).toBeGreaterThan(0);
+        const paid = paidRequestsFor(requests, selected)[0];
+        const averageReturn = new Map(assetSetRiskReturnOutput(paid, options).items.map((item): [number, number] => [item.asset_id, item.expected_annual_return]));
+        const {excluded} = preparedAssetIds(paid, options);
         expect(excluded, 'dropLastAsset must leave exactly one selected asset unmeasured').toHaveLength(1);
         const unmeasured = excluded[0];
         const losing = [...averageReturn.entries()].filter(([, value]) => value < 0).map(([assetId]) => assetId);
@@ -4487,6 +4581,10 @@ test.describe('Asset Global risk laboratory', () => {
      * that explained every dash at once is gone from L1° and L3° alike, because each
      * dash now explains itself — see the two dash cases below, which check the same
      * absence on tables that do hold a blank.
+     *
+     * The request half of the true branch is red until the levels ask apart (the
+     * developer's split, 02/10/2026): today the comparison rides in the one request
+     * both levels share, beside L1°'s `asset_set_var` and `asset_set_drawdown`.
      */
     test('L3° shows beta and correlation only when a benchmark applies, with no note about the benchmark either way', async ({page}) => {
         // The two navigations below (read the selection, then seed the shared
@@ -4576,21 +4674,30 @@ test.describe('Asset Global risk laboratory', () => {
         const reselected = await chipIds(page);
         expect(reselected, 'the persisted selection must not have swallowed the benchmark, or the comparison is withheld by design').not.toContain(benchmarkId);
 
-        // The comparison rides in the SAME request as the other four — not in one
-        // of its own. `RiskAssetSetComparisonOutput` publishes the reference's own
-        // volatility and expected return so a scatter can place it beside the
-        // holdings, and that is only sound because the reference is prepared inside
-        // the same request as the scope. Asked separately, the benchmark dot would
-        // land on a chart whose other dots were measured over different dates.
-        await expect.poll(() => levelRequestsFor(requests, reselected).some((request) => codesOf(request).has('asset_set_comparison')), {timeout: 20_000, message: 'the benchmark must have reached the wire'}).toBe(true);
+        // The comparison rides in L3°'s request — beside the figures it is drawn
+        // with, not in one of its own. `RiskAssetSetComparisonOutput` publishes the
+        // reference's own volatility and expected return so a scatter can place it
+        // beside the holdings, and that is only sound because the reference is
+        // prepared inside the same request as the `asset_set_risk_return` that
+        // places them. Asked separately, the benchmark dot would land on a chart
+        // whose other dots were measured over different dates.
+        //
+        // And never in L1°'s (the developer's split, 02/10/2026): the engine
+        // prepares the reference with the scope of the request carrying it, so
+        // whatever shares that request shares the benchmark's calendar — and L1°'s
+        // window must not depend on a benchmark.
+        await expect.poll(() => paidRequestsFor(requests, reselected).some((request) => codesOf(request).has('asset_set_comparison')), {timeout: 20_000, message: 'the benchmark must have reached the wire'}).toBe(true);
         // Filtered by the comparison's *presence*, not merely by scope: the first
         // visit asked about this same selection without a benchmark, so its request
         // is in the capture too and a scope-only filter would count two.
-        const withBenchmark = levelRequestsFor(requests, reselected).filter((request) => codesOf(request).has('asset_set_comparison'));
+        const withBenchmark = paidRequestsFor(requests, reselected).filter((request) => codesOf(request).has('asset_set_comparison'));
         expect(withBenchmark, 'the comparison must be asked for once, not once per section').toHaveLength(1);
         const codes = codesOf(withBenchmark[0]);
-        for (const code of ASSET_SET_LEVEL_CODES) {
-            expect([...codes], `${code} must share the request with the comparison — one preparation, one calendar`).toContain(code);
+        for (const code of PAID_LEVEL_CODES) {
+            expect([...codes], `${code} must share the request with the comparison — one preparation, one calendar for everything L3° draws`).toContain(code);
+        }
+        for (const code of LOSS_LEVEL_CODES) {
+            expect([...codes], `${code} is L1°'s and must not share the comparison's request: whatever rides with the benchmark is measured on its calendar`).not.toContain(code);
         }
         expect(withBenchmark[0].analytics.find((analytic) => analytic.analytic_code === 'asset_set_comparison')?.parameters?.comparison_asset_id, 'the request must carry the benchmark the shared store holds').toBe(benchmarkId);
 
@@ -4627,13 +4734,15 @@ test.describe('Asset Global risk laboratory', () => {
      * before the correlation section and both comparison levels, inside none of them.
      *
      * Opened on a stored benchmark the asset list confirms and the selection does not hold, so the
-     * comparison applies: the root says `set`, with that id and nothing measured; a wave carries
-     * it; L3° draws beta, correlation and the reference's dot. The ⓘ's words are not held on to —
-     * they are translated — but they must be the lab's own sentence, read from the catalogue in the
-     * language the page is drawn in.
+     * comparison applies: the root says `set`, with that id and nothing measured; an L3° request
+     * carries it, and no L1° request does (the developer's split, 02/10/2026: a benchmark must never
+     * move L1°'s window); L3° draws beta, correlation and the reference's dot. The ⓘ's words are not
+     * held on to — they are translated — but they must be the lab's own sentence, read from the
+     * catalogue in the language the page is drawn in.
      *
      * Red until the row moves into the selection card: today it sits after the card, between the
-     * correlation section and the two levels.
+     * correlation section and the two levels. Its L1° half is red until the levels ask apart: today
+     * the comparison rides in the one request both levels share.
      */
     test('the benchmark picker sits in the selection card, before the correlation section and both comparison levels, with its help, and opens on the stored benchmark', async ({page}) => {
         test.setTimeout(BENCHMARK_CASE_BUDGET);
@@ -4656,6 +4765,8 @@ test.describe('Asset Global risk laboratory', () => {
         await expect.poll(() => benchmarkRowPlacement(page), {message: 'the benchmark row must sit in the selection card, after the chips row, before the correlation section, L1° and L3°, inside none of them, its help before its picker'}).toBe('in the selection card');
 
         await expectComparisonWith(page, requests, selection, reference.id);
+        // …in L3° alone: L1° is measured without it, read once L3°'s answer with the benchmark is drawn.
+        await expectLossWithoutComparison(page, requests, selection);
 
         // Its help, last, so the open tooltip covers nothing read above. From a clean slate: the
         // pointer first rests on a measured figure, which has no tooltip to open, so nothing left
@@ -4673,17 +4784,27 @@ test.describe('Asset Global risk laboratory', () => {
     });
 
     /**
-     * Benchmark picker (b) — a choice made in the lab is the shared choice.
+     * Benchmark picker (b) — a choice made in the lab is the shared choice, and only L3° asks again.
      *
      * Opened with nothing stored, so the picker says `none` and L3° has no comparison to draw.
      * Choosing a flagged benchmark the selection does not hold — typed and clicked the way a reader
-     * does — must write the store's user-scoped key, which every Risk page reads, and the levels
-     * must ask again with it: beta and correlation appear, and the scatter gains the reference's
-     * dot. "Gains" is read as a change: the opening is asserted to lack all three first.
+     * does — must write the store's user-scoped key, which every Risk page reads, and L3° must ask
+     * again with it: beta and correlation appear, and the scatter gains the reference's dot. "Gains"
+     * is read as a change: the opening is asserted to lack all three first.
      *
-     * Red until the lab mounts the picker.
+     * L1° must not ask again (the developer's split, 02/10/2026): the benchmark is none of its
+     * business, so the choice leaves its question — and its window — where they were. Read as a delta
+     * of this page's own L1° requests about the selection: sampled once L1°'s opening is drawn and on
+     * the wire, so a late opening cannot pass for a re-ask; read again once L3°'s answer with the
+     * benchmark is drawn, the state the choice produces — a re-ask the choice set off would leave with
+     * L3°'s, so it is in the capture by then. The delta counts the wire: a re-ask the client's cache
+     * serves is the same question, and cannot move L1°'s window either.
+     *
+     * Red until the lab mounts the picker. Past that, its L1° half is red until the levels ask apart:
+     * today the choice re-sends the one request both levels share, now with `asset_set_comparison`,
+     * and that request carries L1°'s analytics — one new L1° request where none is allowed.
      */
-    test('choosing a benchmark in the lab writes the shared choice, and the levels ask again with it and draw beta, correlation and its dot', async ({page}) => {
+    test('choosing a benchmark in the lab writes the shared choice, and only L3° asks again with it and draws beta, correlation and its dot', async ({page}) => {
         test.setTimeout(BENCHMARK_CASE_BUDGET);
         const requests = await installRiskMocks(page);
         const {selection, reference} = await castBenchmark(page);
@@ -4694,6 +4815,9 @@ test.describe('Asset Global risk laboratory', () => {
         await expect(control, 'with nothing stored the lab must open its picker empty').toHaveAttribute('data-benchmark-state', 'none', {timeout: 15_000});
         await expect(control).toHaveAttribute('data-benchmark-id', '');
         await expectNoComparison(page, requests, selection);
+        // L1°'s opening — drawn, on the wire, without a comparison — is the baseline the choice is measured against.
+        await expectLossWithoutComparison(page, requests, selection);
+        const lossBefore = lossRequestsFor(requests, selection).length;
 
         await chooseBenchmark(page, reference);
 
@@ -4704,6 +4828,12 @@ test.describe('Asset Global risk laboratory', () => {
         await expect.poll(() => readStorage(page, key), {message: 'the choice made in the lab did not reach the shared key'}).toBe(String(reference.id));
 
         await expectComparisonWith(page, requests, selection, reference.id);
+
+        // …and L3° alone asked: no new L1° request about the selection, read behind L3°'s answer drawn above.
+        const lossAfter = lossRequestsFor(requests, selection);
+        const reasked = `choosing a benchmark re-asked L1° about the selection: ${lossAfter.length - lossBefore} new L1° request(s), carrying ${JSON.stringify(lossAfter.slice(lossBefore).map((request) => [...codesOf(request)].sort()))}`;
+        expect(lossAfter.length - lossBefore, reasked).toBe(0);
+        await expectLossWithoutComparison(page, requests, selection);
     });
 
     /**
@@ -4712,11 +4842,12 @@ test.describe('Asset Global risk laboratory', () => {
      * It stays the current choice — never dropped, never silently swapped — and the picker says so:
      * that id, published as measured, with the ⚠ beside it explaining why it cannot serve here, in
      * the lab's own sentence rather than the primitive's generic one. Nothing is compared:
-     * `validate_reference_is_not_a_subject` refuses a yardstick that is also a subject, so no wave
-     * carries a comparison and L3° draws neither column nor the reference's dot.
+     * `validate_reference_is_not_a_subject` refuses a yardstick that is also a subject, so no request
+     * carries a comparison — neither L3°'s nor, whatever the benchmark, L1°'s — and L3° draws neither
+     * column nor the reference's dot.
      *
-     * Red until the lab mounts the picker. The "compares nothing" half already holds today: the
-     * panel withholds a benchmark the selection holds.
+     * Red until the lab mounts the picker. The "compares nothing" half already holds today, L1°'s
+     * included: the panel withholds a benchmark the selection holds.
      */
     test('a stored benchmark that is one of the selected assets stays shown, flagged by a ⚠ that explains, and compares nothing', async ({page}) => {
         test.setTimeout(BENCHMARK_CASE_BUDGET);
@@ -4735,6 +4866,7 @@ test.describe('Asset Global risk laboratory', () => {
         await expect(warning, 'a benchmark that is also measured must carry its ⚠').toBeVisible();
 
         await expectNoComparison(page, requests, selection);
+        await expectLossWithoutComparison(page, requests, selection);
 
         // The ⚠ explains — last, so its open tooltip covers nothing read above, and from a clean slate:
         // the pointer first rests on a measured figure, which has no tooltip to open, so the
@@ -4781,33 +4913,48 @@ test.describe('Asset Global risk laboratory', () => {
     });
 
     /**
-     * Benchmark picker (e) — one wave, not two.
+     * Benchmark picker (e) — one wave, not two, and the benchmark in L3°'s alone.
      *
-     * With a benchmark stored, the picker starts `pending` while the asset list confirms it, and
-     * the levels must not ask in the meantime: a wave asked then would leave without the benchmark,
-     * and a second one would follow with it — two preparations, and a table drawn twice. So every
-     * per-asset wave about the opening selection must carry the stored benchmark.
+     * With a benchmark stored, the picker starts `pending` while the asset list confirms it, and L3°
+     * must not ask in the meantime: a request asked then would leave without the benchmark, and a
+     * second one would follow with it — two preparations, and a table drawn twice. So every L3°
+     * request about the opening selection must carry the stored benchmark.
      *
-     * No wait of its own is needed for the earlier wave: it would leave before the one that carries
-     * the benchmark, so once that one is in the capture, an earlier one is too.
+     * And no L1° request may ever carry it (the developer's split, 02/10/2026). L1° asks for
+     * `asset_set_var` ×2 and `asset_set_drawdown` in a request of its own, whatever the benchmark:
+     * the engine prepares a request's comparison asset with its scope, so a benchmark riding with L1°
+     * would move L1°'s window — the developer saw L1° turn «Partial» because of one.
      *
-     * A regression guard rather than a red: today the panel mirrors the store before the levels
-     * mount, so this may already pass. It reads only the wire — the picker's state is (a)'s.
+     * No wait of its own is needed for an earlier L3° request: it would leave before the one that
+     * carries the benchmark, so once that one is in the capture, an earlier one is too. L1°'s absence
+     * is read behind its own presence ({@link expectLossWithoutComparison}). It reads only the wire —
+     * the picker's state is (a)'s.
+     *
+     * Red until the levels ask apart. Requests are told apart by the analytics they carry
+     * ({@link lossRequestsFor}, {@link paidRequestsFor}), and today's one request carries both
+     * levels' analytics and, the benchmark being stored, `asset_set_comparison` with it. So it is
+     * L3°'s — and the L3° half passes: every L3° request carries the benchmark — and it is L1°'s too,
+     * as the request carrying `asset_set_var` and `asset_set_drawdown`: "no L1° request carries the
+     * comparison" finds it there, and fails naming it.
      */
-    test('with a benchmark stored, every per-asset wave about the opening selection carries it: one wave, never one without it first', async ({page}) => {
+    test('with a benchmark stored, every L3° request about the opening selection carries it and no L1° request ever does: one wave, never one without it first', async ({page}) => {
         test.setTimeout(BENCHMARK_CASE_BUDGET);
         const requests = await installRiskMocks(page);
         const {selection, reference} = await castBenchmark(page);
         await storeLabOpening(page, selection, reference.id);
         await openLabOn(page, selection);
 
-        await expect.poll(() => waveBenchmarks(requests, selection), {timeout: 20_000, message: 'the stored benchmark never reached the per-asset wave'}).toContain(reference.id);
-        await expect(page.getByTestId('risk-asset-set-l3'), 'the wave carrying the benchmark must be the answer drawn').toHaveAttribute('data-benchmark', 'true', {timeout: 20_000});
+        await expect.poll(() => waveBenchmarks(requests, selection), {timeout: 20_000, message: "the stored benchmark never reached L3°'s request"}).toContain(reference.id);
+        await expect(page.getByTestId('risk-asset-set-l3'), 'the L3° request carrying the benchmark must be the answer drawn').toHaveAttribute('data-benchmark', 'true', {timeout: 20_000});
         const waves = waveBenchmarks(requests, selection);
+        const leftWithout = `an L3° request about the opening selection left without the stored benchmark — L3°'s benchmarks, in the order its requests left: ${JSON.stringify(waves)}`;
         expect(
             waves.filter((id) => id !== reference.id),
-            `a per-asset wave about the opening selection left without the stored benchmark — the waves' benchmarks, in order: ${JSON.stringify(waves)}`,
+            leftWithout,
         ).toEqual([]);
+
+        // …and L1°, measured all the same, never with it.
+        await expectLossWithoutComparison(page, requests, selection);
     });
 
     /**
@@ -4833,11 +4980,11 @@ test.describe('Asset Global risk laboratory', () => {
         await waitForRiskCatalog(page);
         await waitForLossTable(page);
 
-        // Which asset is blank is read from the request the stub answered — it drops the last id of
-        // the scope it was asked about — never guessed from the chips.
+        // Which asset is blank is read from the request the stub answered — L1°'s, the one this table
+        // is drawn from; it drops the last id of the scope it was asked about — never guessed from the chips.
         const selected = await chipIds(page);
-        await expect.poll(() => levelRequestsFor(requests, selected).length, {timeout: 20_000, message: 'the per-asset wave must have been requested for the selection on screen'}).toBeGreaterThan(0);
-        const {covered, excluded} = preparedAssetIds(levelRequestsFor(requests, selected)[0], options);
+        await expect.poll(() => lossRequestsFor(requests, selected).length, {timeout: 20_000, message: "L1°'s request must have been asked for the selection on screen"}).toBeGreaterThan(0);
+        const {covered, excluded} = preparedAssetIds(lossRequestsFor(requests, selected)[0], options);
         expect(excluded, 'dropLastAsset must leave exactly one selected asset unmeasured').toHaveLength(1);
         const unmeasured = excluded[0];
         // Any measured asset will do: none of them may carry a tooltip.
@@ -4888,9 +5035,10 @@ test.describe('Asset Global risk laboratory', () => {
         await waitForRiskCatalog(page);
         await waitForPaidTable(page);
 
+        // Read, as in L1°, from the request the stub answered — L3°'s, the one this table is drawn from.
         const selected = await chipIds(page);
-        await expect.poll(() => levelRequestsFor(requests, selected).length, {timeout: 20_000, message: 'the per-asset wave must have been requested for the selection on screen'}).toBeGreaterThan(0);
-        const {covered, excluded} = preparedAssetIds(levelRequestsFor(requests, selected)[0], options);
+        await expect.poll(() => paidRequestsFor(requests, selected).length, {timeout: 20_000, message: "L3°'s request must have been asked for the selection on screen"}).toBeGreaterThan(0);
+        const {covered, excluded} = preparedAssetIds(paidRequestsFor(requests, selected)[0], options);
         expect(excluded, 'dropLastAsset must leave exactly one selected asset unmeasured').toHaveLength(1);
         const unmeasured = excluded[0];
         // Any measured asset will do: none of them may carry a tooltip.
@@ -4925,8 +5073,8 @@ test.describe('Asset Global risk laboratory', () => {
      *
      * Between the table and the scatter, a note publishes the window the figures were measured over
      * as attributes beside its sentence ({@link expectL3Period}), worked out from the
-     * `asset_set_risk_return` result's own metadata ({@link l3PeriodFor}). The sentence is translated
-     * and not read.
+     * `asset_set_risk_return` result's own metadata ({@link l3PeriodFor}), read off L3°'s own request
+     * ({@link paidRequestsFor}). The sentence is translated and not read.
      *
      * The stub measures a fixed 87 days ending on the period's last day — a window opening 86 days
      * before it — and echoes the period's own start in `analyzed_range.start`: a note that took its
@@ -4947,10 +5095,11 @@ test.describe('Asset Global risk laboratory', () => {
         await waitForPaidTable(page);
         await expectChartCanvas(page, 'risk-asset-set-l3-scatter', 20_000);
 
-        // The opening answer, rebuilt from the request it answered.
+        // The opening answer, rebuilt from the request it answered — L3°'s own: L1°'s carries no
+        // `asset_set_risk_return`, and the two levels' requests leave in no promised order.
         const selected = await chipIds(page);
-        await expect.poll(() => levelRequestsFor(requests, selected).length, {timeout: 20_000, message: 'the per-asset wave must have been requested for the selection on screen'}).toBeGreaterThan(0);
-        const openingRequest = levelRequestsFor(requests, selected).at(-1) as RiskRequest;
+        await expect.poll(() => paidRequestsFor(requests, selected).length, {timeout: 20_000, message: "L3°'s request must have been asked for the selection on screen"}).toBeGreaterThan(0);
+        const openingRequest = paidRequestsFor(requests, selected).at(-1) as RiskRequest;
         const opening = l3PeriodFor(openingRequest);
         expect(opening.start, "premise: the stub's analyzed_range.start (the period's own start) must differ from the window's start, end − calendar_days + 1, or a note reading the wrong one would pass").not.toBe(openingRequest.date_range.start);
         expect(opening.narrowed, `premise: the toolbar's opening three months hold the stub's 87 days to within a week — read ${JSON.stringify(opening)}`).toBe(false);
@@ -4961,8 +5110,8 @@ test.describe('Asset Global risk laboratory', () => {
 
         // ── A year in the toolbar: the same 87 days now fall far short of it ──
         const year = await pressPeriodPreset(page, '1y');
-        const askedFor = (period: DayRange) => levelRequestsFor(requests, selected).filter((request) => rangeKey({start: request.date_range.start, end: request.date_range.end ?? request.date_range.start}) === rangeKey(period));
-        await expect.poll(() => askedFor(year).length, {timeout: 20_000, message: "the year's per-asset wave must have been requested for the same selection"}).toBeGreaterThan(0);
+        const askedFor = (period: DayRange) => paidRequestsFor(requests, selected).filter((request) => rangeKey({start: request.date_range.start, end: request.date_range.end ?? request.date_range.start}) === rangeKey(period));
+        await expect.poll(() => askedFor(year).length, {timeout: 20_000, message: "the year's L3° request must have been asked for the same selection"}).toBeGreaterThan(0);
         const widened = l3PeriodFor(askedFor(year).at(-1) as RiskRequest);
         expect(widened.narrowed, `premise: a year in the toolbar leaves the stub's 87 days more than a week short of it — read ${JSON.stringify(widened)}`).toBe(true);
         await waitForPaidTable(page);
@@ -5414,15 +5563,20 @@ test.describe('Asset Global risk laboratory', () => {
         // counted among this test's captured requests only. The correlation section
         // and the replay section build identical `[correlation]` waves, which
         // `queryRisk` serves from one flight — so that count speaks for both, and the
-        // replay's own part of a refresh is its answer, asserted further down.
+        // replay's own part of a refresh is its answer, asserted further down. L1° and
+        // L3° ask apart (the developer's split, 02/10/2026), so each level is counted
+        // on its own: one level re-reading must not pass for both, nor one level's
+        // late opening for a refresh.
         const correlationWaves = () => assetSetHistoricalRequests(requests).filter((request) => request.scope.kind === ASSET_SET_SCOPE && scopeKey(request.scope.asset_ids) === scope && sameMembers([...codesOf(request)], ['correlation'])).length;
-        const levelWaves = () => levelRequestsFor(requests, selection).length;
+        const lossWaves = () => lossRequestsFor(requests, selection).length;
+        const paidWaves = () => paidRequestsFor(requests, selection).length;
         const replayRuns = () => requests.filter((request) => request.scope.kind === ASSET_SET_SCOPE && scopeKey(request.scope.asset_ids) === scope && request.analytics.some((analytic) => isHistoricalReplay(analytic))).length;
-        // Sampled once both base waves are in, so the baseline is not a snapshot of
+        // Sampled once every base wave is in, so the baseline is not a snapshot of
         // a page still loading.
         await expect.poll(correlationWaves, {timeout: 15_000, message: 'the correlation wave must have been asked'}).toBeGreaterThan(0);
-        await expect.poll(levelWaves, {timeout: 15_000, message: 'the comparison levels must have been asked'}).toBeGreaterThan(0);
-        const before = {correlation: correlationWaves(), levels: levelWaves(), replay: replayRuns()};
+        await expect.poll(lossWaves, {timeout: 15_000, message: 'L1° must have been asked'}).toBeGreaterThan(0);
+        await expect.poll(paidWaves, {timeout: 15_000, message: 'L3° must have been asked'}).toBeGreaterThan(0);
+        const before = {correlation: correlationWaves(), loss: lossWaves(), paid: paidWaves(), replay: replayRuns()};
         expect(before.replay, 'the replay above must have reached the wire').toBeGreaterThan(0);
 
         // The page toolbar's sync, which reaches this panel's modal through `openSync`.
@@ -5441,7 +5595,7 @@ test.describe('Asset Global risk laboratory', () => {
         // is therefore proof that no refresh was triggered — not a guess about time.
         await expect(replayAnswer.first()).toBeVisible();
         expect(syncCalls.assets.length + syncCalls.fxPairs.length, 'closing the modal must ask no provider for anything').toBe(0);
-        expect({correlation: correlationWaves(), levels: levelWaves(), replay: replayRuns()}, 'a sync that never ran must re-read nothing').toEqual(before);
+        expect({correlation: correlationWaves(), loss: lossWaves(), paid: paidWaves(), replay: replayRuns()}, 'a sync that never ran must re-read nothing').toEqual(before);
 
         // ── an accepted run ──────────────────────────────────────────────────
         await syncButton.click();
@@ -5459,7 +5613,8 @@ test.describe('Asset Global risk laboratory', () => {
         // identical waves, a discarded answer is re-asked once — and not this test's
         // subject. That each section re-read its base is.
         await expect.poll(correlationWaves, {timeout: 15_000, message: 'the correlation section must re-read its base after an accepted sync'}).toBeGreaterThan(before.correlation);
-        await expect.poll(levelWaves, {timeout: 15_000, message: 'the comparison levels must re-read their base after an accepted sync'}).toBeGreaterThan(before.levels);
+        await expect.poll(lossWaves, {timeout: 15_000, message: 'L1° must re-read its base after an accepted sync'}).toBeGreaterThan(before.loss);
+        await expect.poll(paidWaves, {timeout: 15_000, message: 'L3° must re-read its base after an accepted sync'}).toBeGreaterThan(before.paid);
         // The replay was computed on the prices just replaced, so it is forgotten —
         // the rung stays, only the answer goes…
         await expect(replayAnswer, 'the replay on screen was computed on the prices the sync replaced').toHaveCount(0);
@@ -5518,13 +5673,15 @@ test.describe('Asset Global risk laboratory', () => {
         // Each section's own question about this scope, counted the way the sync test
         // counts them: the correlation section and the replay section build the same
         // `[correlation]` wave, which `queryRisk` serves from one flight, so that count
-        // speaks for both.
+        // speaks for both; L1° and L3° ask apart, so each level is counted on its own.
         const correlationWaves = () => assetSetHistoricalRequests(requests).filter((request) => request.scope.kind === ASSET_SET_SCOPE && scopeKey(request.scope.asset_ids) === scope && sameMembers([...codesOf(request)], ['correlation'])).length;
-        const levelWaves = () => levelRequestsFor(requests, selection).length;
+        const lossWaves = () => lossRequestsFor(requests, selection).length;
+        const paidWaves = () => paidRequestsFor(requests, selection).length;
         await expect.poll(correlationWaves, {timeout: 15_000, message: 'the correlation wave must have been asked'}).toBeGreaterThan(0);
-        await expect.poll(levelWaves, {timeout: 15_000, message: 'the comparison levels must have been asked'}).toBeGreaterThan(0);
+        await expect.poll(lossWaves, {timeout: 15_000, message: 'L1° must have been asked'}).toBeGreaterThan(0);
+        await expect.poll(paidWaves, {timeout: 15_000, message: 'L3° must have been asked'}).toBeGreaterThan(0);
         expect(priceQueries, 'the page must have loaded its price series').toBeGreaterThan(0);
-        const before = {correlation: correlationWaves(), levels: levelWaves(), prices: priceQueries};
+        const before = {correlation: correlationWaves(), loss: lossWaves(), paid: paidWaves(), prices: priceQueries};
 
         // The reload sits in the page toolbar on this tab, beside the sync.
         const toolbar = page.getByTestId('assets-controls');
@@ -5537,7 +5694,8 @@ test.describe('Asset Global risk laboratory', () => {
         // flights one refresh costs is the store's business; that each section asked
         // again is this test's.
         await expect.poll(correlationWaves, {timeout: 15_000, message: 'the correlation section, and the replay section with it, must re-read its base after a reload'}).toBeGreaterThan(before.correlation);
-        await expect.poll(levelWaves, {timeout: 15_000, message: 'the comparison levels must re-read their base after a reload'}).toBeGreaterThan(before.levels);
+        await expect.poll(lossWaves, {timeout: 15_000, message: 'L1° must re-read its base after a reload'}).toBeGreaterThan(before.loss);
+        await expect.poll(paidWaves, {timeout: 15_000, message: 'L3° must re-read its base after a reload'}).toBeGreaterThan(before.paid);
 
         // Still a working page: the re-read landed rather than failed. It is also the
         // barrier the absences below are read behind.
