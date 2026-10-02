@@ -71,6 +71,7 @@ Indicatore di lettura rapida: va riletto **a ogni consegna**, non a ogni sospett
 | S10 | Debiti e test residui | S1 | 🔄 **OK del developer sulla test list, 2026-09-25**, con E8 ed E9 in più (D8 ✅ 2026-09-24). Ordine: `needs_engine` per primo, in un commit a sé (coordinator, 15:24 e 15:37), poi il contratto di `/portfolio/report` (registro «Triage del contratto di `/portfolio/report`») e il resto di §4. **Passo 1 ✅ 2026-09-25 10:38**: `needs_engine` corretto (6 rossi → verdi), contratto a 13 chiavi, `api portfolio` 55/55, `services roi-fifo-utils` 507/507 (registro «S10 passo 1»). **Passo 2 ✅ 11:10**: D20, il test dei Proventi pulisce i suoi dati, misurato con un controllo positivo; `api portfolio` 55/55 (registro «S10 passo 2»). **Passo 3 ✅ 11:37**: `chartCoreHelpers.test.ts` 159 → 145 (D19: −14), i 7 specchi ri-pinnati ognuno col suo perché, C4 convertito sulla copia fedele; 145/145, 0 falliti (registro «S10 passo 3»). Reperti del passo → D21, ✅ deciso dal developer (§7). **Passo 4 ✅ 11:59**: `AllocationPanel.test.ts` (3 casi) e `allocationTypeEmoji.test.ts` (8 casi), nuovi, 11/11 (registro «S10 passo 4»). **Passo 5 ✅ 12:15**: `GrowthChart.test.ts` 6 → 17 casi (S2a, S5, S9) e la `why` di D13, 23/23 (registro «S10 passo 5»). **Passo 6 ✅ 12:15**: i 3 file nuovi registrati nel runner, nome visibile di `growth-chart-memo`; `check-orphans` pulito (registro «S10 passo 6»). **Passo 7 ✅ 12:27**: la pulizia di `…positions_contribution_is_date_aware`, assegnata sotto D20, misurata con un controllo positivo: nessuna perdita; `api portfolio` 55/55 (registro «S10 passo 7»). **Passo 8 ✅ 12:30**: `PerformanceChart.test.ts`, nuovo, 6/6 (registro «S10 passo 8»). **Passo 9 ✅ 12:30**: D21 e D22 su `chartCoreHelpers.test.ts`, 145 → 142 → 144, 144/144, 0 falliti (registro «S10 passo 9»). **Passo 10 ✅ 12:33**: `front check` al floor, 3 errori e 41 avvisi, nessuno nei miei file (registro «S10 passo 10»). **C4 ✅ 2026-09-28 11:41** (8 commit, `00bb1ac75`→`472f51498`), poi il merge di `dev_release2` (`9016bb0d1`) e i gate sulla revisione combinata, tutti verdi (registro «Validazione sulla revisione combinata»). **Brief 03 ✅ 13:00**: dashboard 15/5 → **18/18**, broker detail 28/1 → **28/28**, in seriale e con `--workers 4` (registro «S10 — brief 03»). **E7 ✅ 13:52**: asset detail 28/1 → **28/28**, in seriale e con `--workers 4`; la coda risvegliata è verde (registro «S10 — E7 completato»). **C5 ✅ committato 2026-09-29 10:02** (registro «Checkpoint C5 — committato»). **C6 ✅ committato 22:26**, merge `921f1fc05` e gate rapido verde (registro «Checkpoint C6 — committato»). **D23 con D23b ✅ 2026-09-30 00:03**: il segno del locale in `fmtCurrency` e `shortMoney`, una sola forma per le righe con segno, il colore dello zero; test ri-pinnati e nuovi, corsia verde (registro «D23 + D23b»). **C7 pronto 2026-09-30 00:07** (registro «Checkpoint C7 — pronto») · ✅ **chiusa 2026-10-02 00:36**, in S12: l'E2E della scala delle larghezze c'è (`dashboard.spec.ts:720` e `:801`, da `026bc20fb`, C5); il seguito di `maskFormattedNumber` l'ha fatto D23; DBT-A e DBT-B fuori dal round per D9 (registro «S12 — handoff finale») |
 | S11 | Docs (docs-writer) | S2b, S3, S4b, S8, S9 | 🔄 in parte, ✅ 2026-09-24 (autorizzata dal coordinator alle 14:45; registro «S11 in parte»): `charts.en.md` (memoria della vista, privacy di Crescita, didascalia delle candele, candele senza broker, memoria di Allocazione) e `positions.en.md` (privacy di Performance). Accettato dal coordinator (15:24) ed entrato in C3 (`671d4ab49`). Il resto dopo S7/S8, più due voci aggiunte (coordinator, 16:07): `index.en.md`, che conta tre schede invece di quattro (reperto di J), e la deriva dei nomi, che c'è anche nella mia frase di C3 (registro «S11-finale — voci aggiunte») · ▶️ ripresa 2026-10-01 (coordinator, dopo `1c568bfe0`): fatti verificati in tre passate; docs-writer ✅ 00:00; revisione con due correzioni mie; `mkdocs build` EXIT 0 e `check-links` con il solo rosso di D28, entrambi rieseguiti sui blob finali · ✅ **2026-10-02 00:12** (registro «S11-finale — le tre pagine inglesi riallineate al codice») |
 | S12 | Handoff | S10, S11, S2c | ⏳ · ▶️ avviata 2026-10-02 (coordinator, dopo `1c568bfe0`): merge-tree contro `ed3bf870a` pulito, vitest intero 6733/6733, S10 chiusa, residui, CHANGELOG e commit proposti · ✅ **2026-10-02 00:36** (registro «S12 — handoff finale») |
+| R-D15 | Review manuale di D15 sulla copia nella 6167, con il developer | S12, D15 | ▶️ avviata 2026-10-02 09:54 (coordinator, 09:45, dopo `e11298294`): build, server staccato, domanda al developer nella mia finestra · ⏸️ **sospesa 10:03**: il developer chiede di fare il punto con il coordinator (la torta qui non ha il secondo anello, che sta nei rami di Risk e F) · ⏭️ **spostata alla review della revisione unita** (2026-10-02 10:05): la torta col secondo anello vive solo nella famiglia di Risk e nessuna build mostra insieme i due lavori. Decisione del developer, verbatim: «Sì, procedi così». Server spento alle 10:35, 6167 libera, copia cancellata |
 
 ## 0. Come si è arrivati a questa versione
 
@@ -516,7 +517,7 @@ rifatta con `git merge-tree` contro il target **al momento** di ogni checkpoint.
 | D12 | developer | asse denaro in privacy: anche lo `0` diventa `•••`? | **sì**, `maskable('0')`: una sola regola e test più semplici. Il centro resta visibile grazie alla markLine |
 | D13 | J (via coordinator) — **girato a J il 2026-09-24, decide lui**. ⏭️ **Deciso: (a)** (coordinator, 2026-09-24 11:40). La scelta sta nel piano di J, `Round2-PostReview.prompt.md:126-128`: me l'ha riferita il coordinator, io non l'ho letta. La `why` dice solo ciò che è vero oggi e cita la riga per contenuto. In S10, quando il test di GrowthChart esiste, la aggiorno perché lo citi | come classificare `:1899` (riga P&L totale del tooltip di Growth) dopo S2a, visto che resta un hit | **(a) consigliata**: la voce resta e passa `residual`→`masked`, con la `why` «coperta dalla definizione mascherata; il gate non segue la chiamata dentro una closure locale; bloccata da un test di GrowthChart» (stessa forma del precedente di `LotComparisonChart`, mascherato al confine). **(b)** instradare la riga su `formatCurrencyAmountPlain`: la voce diventa stantia, ma quella riga avrebbe un formato diverso dalle altre; oppure migrare tutti gli 8 consumi, cioè un cambiamento visibile su un grafico già approvato. **(c) esclusa**: riscrivere la riga perché il gate non la veda è elusione del gate (09 §1.6) |
 | D14 | coordinator | il gate-prep tarda? | ✅ **confermato (2026-09-24)**; il CHANGELOG lo scrive il coordinator all'integrazione. **Due checkpoint**: C1 = S0–S1b + S3–S9, senza privacy. C2 = S2 + review di J. Se il gate-prep arriva prima di C1, un checkpoint solo |
-| D15 | io (il coordinator lo chiede a me), 2026-09-24 | R12 rivista: la torta raggruppa per **veicolo** (`allocationFamily`: `isEtfSubtype(t) ? 'ETF' : t`, solo nel ramo di Risk). `AllocationHistoryChart` si allinea? | ✅ **Mi allineo, con una riga all'integrazione** scritta da chi entra per secondo: `resolvePrimary: allocationFamily` a `AllocationHistoryChart.svelte:596`. Prima dell'integrazione non importo un modulo che nel mio ramo non esiste e non lo duplico.<br>**Che cosa governa quella riga, misurato:** nel grafico storico `resolvePrimary` decide l'adiacenza nello stack e la sfumatura del colore; le serie restano una per `asset_type` grezzo (`allocationHierarchy.ts:132-160`).<br>**Perché:**<br>• la torta e lo storico sono due viste dello stesso pannello: lo stesso tipo deve portare lo stesso colore di famiglia;<br>• il mio grafico è già diviso in sé. L'emoji di `ETF_STOCK` è quella del veicolo (📊, regola S4b), ma sfumatura e posizione nello stack sono quelle del contenuto (STOCK). Allineandomi, emoji, colore e stack dicono la stessa cosa.<br>**Da dire all'integrazione:**<br>• cambia un grafico già approvato, per i portafogli con sottotipi ETF: va mostrato al developer in review;<br>• il commento della palette a `:123` nomina il codominio di `primaryAssetType` e va aggiornato nella stessa riga di commit. Il conteggio chiude comunque: il nuovo codominio è più piccolo, perché tutti gli `ETF_*` vanno in ETF;<br>• D71 (colori per peso medio o per peso di oggi) resta aperta: allineare il resolver è necessario, non sufficiente;<br>• ~~`allocationFamily` piega solo gli ETF. `CROWDFUND_REAL_ESTATE` di K resterebbe un gruppo a sé, salvo un resolver per famiglia (`ASSET_TYPE_FAMILY`)~~ → ⏭️ **chiuso dal coordinator (2026-09-24 11:05)**: all'integrazione `allocationFamily` passa ad `assetTypeFamily` di K. Risk ha verificato che normalizza allo stesso modo. Quindi `CROWDFUND_REAL_ESTATE` cade nella famiglia CROWDFUND e il gruppo a sé non si forma: coerente con la mia emoji (🤝).<br>**Registrato** nella lista d'integrazione del coordinator: la riga `:596` e il commento `:123` nello stesso commit, e il grafico va mostrato al developer |
+| D15 | io (il coordinator lo chiede a me), 2026-09-24 | R12 rivista: la torta raggruppa per **veicolo** (`allocationFamily`: `isEtfSubtype(t) ? 'ETF' : t`, solo nel ramo di Risk). `AllocationHistoryChart` si allinea? | ✅ **Mi allineo, con una riga all'integrazione** scritta da chi entra per secondo: `resolvePrimary: allocationFamily` a `AllocationHistoryChart.svelte:596`. Prima dell'integrazione non importo un modulo che nel mio ramo non esiste e non lo duplico.<br>**Che cosa governa quella riga, misurato:** nel grafico storico `resolvePrimary` decide l'adiacenza nello stack e la sfumatura del colore; le serie restano una per `asset_type` grezzo (`allocationHierarchy.ts:132-160`).<br>**Perché:**<br>• la torta e lo storico sono due viste dello stesso pannello: lo stesso tipo deve portare lo stesso colore di famiglia;<br>• il mio grafico è già diviso in sé. L'emoji di `ETF_STOCK` è quella del veicolo (📊, regola S4b), ma sfumatura e posizione nello stack sono quelle del contenuto (STOCK). Allineandomi, emoji, colore e stack dicono la stessa cosa.<br>**Da dire all'integrazione:**<br>• cambia un grafico già approvato, per i portafogli con sottotipi ETF: va mostrato al developer in review;<br>• il commento della palette a `:123` nomina il codominio di `primaryAssetType` e va aggiornato nella stessa riga di commit. Il conteggio chiude comunque: il nuovo codominio è più piccolo, perché tutti gli `ETF_*` vanno in ETF;<br>• D71 (colori per peso medio o per peso di oggi) resta aperta: allineare il resolver è necessario, non sufficiente;<br>• ~~`allocationFamily` piega solo gli ETF. `CROWDFUND_REAL_ESTATE` di K resterebbe un gruppo a sé, salvo un resolver per famiglia (`ASSET_TYPE_FAMILY`)~~ → ⏭️ **chiuso dal coordinator (2026-09-24 11:05)**: all'integrazione `allocationFamily` passa ad `assetTypeFamily` di K. Risk ha verificato che normalizza allo stesso modo. Quindi `CROWDFUND_REAL_ESTATE` cade nella famiglia CROWDFUND e il gruppo a sé non si forma: coerente con la mia emoji (🤝).<br>**Registrato** nella lista d'integrazione del coordinator: la riga `:596` e il commento `:123` nello stesso commit, e il grafico va mostrato al developer<br>⏭️ **2026-10-02 10:05:** I entra per primo, quindi la riga e il commento li scrive la famiglia di Risk dopo aver preso `dev_release2`. La review si fa una volta sola, sulla revisione unita (registro «D15 — review manuale con il developer») |
 | D16 | developer (da S6, 2026-09-24) | il bucket parziale, cioè il resto di `length % N`, che oggi sta in coda: dove va e come si vede | Storyboard §2. **(ii) + (i)**:<br>• bucket ancorati alla fine: l'ultima candela chiude sull'ultima data ed è sempre piena;<br>• il parziale, che diventa il più vecchio, è marcato (corpo o barra chiari, tooltip «parziale: N gg su 30»).<br>Stesso numero di bucket; vale per candele e Proventi.<br>Sconsigliati: (iii) fonderlo nel penultimo (fino a 2N−1 giorni); (iv) scartarlo<br>✅ **Deciso dal developer (2026-09-25, `ask_user` nella chat di I): (ii)+(i)** |
 | D17 | developer (da S6, 2026-09-24) | geometria dei Proventi: quante colonne per bucket | **(a) 3 colonne**:<br>• i costi, già negativi, scendono sotto lo zero nella colonna dei proventi (entrate sopra, uscite sotto), con gap 10 %;<br>• per colonna: 0,281 × slot, contro 0,163 × slot di oggi con 4 colonne e gap di default (tabella in §2 R10);<br>• legenda e tooltip invariati;<br>• si lega a S8: la terza colonna è il valore di acquisto (D2 = A).<br>Alternative:<br>• **(b)** 4 colonne con gap 10 %: 0,209 × slot; 1A/1S e 2A/2S restano, al limite (2,1 px);<br>• **(c)** 4 colonne con i gap di default: 1A/1S e 2A/2S escono dall'offerta<br>✅ **Deciso dal developer (2026-09-25, `ask_user` nella chat di I): (a), 3 colonne**, costi sotto lo zero nella colonna dei proventi, gap al 10 % |
 | D18 | developer (da S6, 2026-09-24) | tacche Y doppie (reperto N1, fuori dal piano approvato): entrano nel round? | **Sì, come S7b**: stesse righe dei formatter già toccati da S2, stesso owner, un test piccolo. Regola: i decimali minimi che rendono esatta la tacca, così due tacche diverse non danno mai la stessa etichetta.<br>Il `%` (`toFixed(1)`) ha la stessa forma, latente sotto un passo di 0,1 % e mai osservata. L'indicazione «in % non va toccato» riguardava la privacy, ma la rispetto alla lettera: lo includo solo se il developer lo chiede<br>✅ **Deciso dal developer (2026-09-25, `ask_user` nella chat di I): sì, come S7b, sugli assi del denaro; il `%` resta escluso** |
@@ -6110,3 +6111,97 @@ comando la porta 6157 è libera.
 >   target per il handoff ho visto che `6d8b951bc` l'aveva già chiuso: corretto alle 00:39.
 > - Nella stessa rilettura il residuo 5 aveva il numero di riga del reperto (`:170`), spostato da D23 a `:180`, e
 >   legava con un «quindi» due fatti separati: corretto, con la ragione per cui `axisTickAmount` resta fuori.
+
+### D15 — review manuale con il developer, sulla copia nella 6167 ⏭️ spostata alla revisione unita, 2026-10-02 10:05
+
+> **Note implementazione:**
+> - **Mandato.** Coordinator, 09:45, dopo `e11298294`: il developer ha approvato la review manuale di D15, cioè il
+>   grafico storico dell'allocazione, `resolvePrimary` a `AllocationHistoryChart.svelte:596` e il commento della
+>   palette a `:123`. Server nella 6167 sulla copia già fatta il 01/10 alle 23:09, senza farne una nuova;
+>   `front build` prima; nessuna modifica di codice. Dopo la review: server spento, 6167 libera, copia cancellata,
+>   con `ls` come prova.
+> - **Controllo in sola lettura di S12:** HEAD `e11298294`, padre `0a9c2bbc5`, il cui padre è `1c568bfe0`; messaggi
+>   identici alle bozze; blob uguali a quelli dichiarati; albero pulito.
+> - **Stato misurato prima di mostrare:**
+>   - in HEAD la torta (`AllocationPieChart.svelte:198`) e lo storico (`AllocationHistoryChart.svelte:596`) usano
+>     entrambi `resolvePrimary: primaryAssetType`, la vista per contenuto. Così anche su `dev_release2`
+>     (`ed3bf870a`, riga `:614`). **Oggi i due grafici concordano.**
+>   - il passaggio della torta alla vista per veicolo (`assetTypeFamily` di K) vive solo nei rami di Risk
+>     (`0a22b2ab3`, `a5d9f850e`), non ancora in `dev_release2`. Lo stato «dopo» non si può mostrare senza una
+>     modifica di codice, che il mandato esclude: si mostra lo stato di oggi e si descrive il dopo.
+>   - la copia contiene sottotipi ETF: D15 è visibile sui dati del developer.
+>   - che cosa cambia: oggi un sottotipo ETF sta accanto al tipo del suo contenuto, in una sfumatura di quel colore,
+>     oppure da solo e senza sfumatura se quel tipo non c'è. Dopo D15 tutti i tipi ETF stanno vicini, i sottotipi in
+>     sfumature dell'ETF. La palette segue il rango dei gruppi per peso medio, quindi possono cambiare colore anche
+>     altri gruppi (il tema di D71, che resta aperta).
+>   - le emoji sono già per veicolo (📊, regola S4b): dopo D15 emoji, colore e stack dicono la stessa cosa.
+> - **Percorso per il developer:** Dashboard → pannello «Asset Allocation» → interruttore History (icona ad area,
+>   `allocation-view-history`) → scheda «By Type» (`allocation-tab-type`). Il confronto è con Now (icona a torta,
+>   `allocation-view-now`). Vista e scheda restano memorizzate per utente.
+> - **Build:** `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py front build`, verde;
+>   `frontend/build/index.html` delle 09:51; albero pulito dopo la build.
+> - **Server:** `… dev.py server --test --port 6167 --data-dir /tmp/librefolio-r2-i-charts-prodcopy`, staccato perché
+>   sopravviva al turno, log in `/tmp`. In ascolto dopo circa 50 s, per la sincronizzazione delle API e svelte-check
+>   prima dell'avvio. `GET /` e `GET /dashboard` 200; database = la copia, schema aggiornato; un solo avvio, nessun
+>   reload.
+> - **Credenziali:** nessun reset. Il rinfresco delle 23:09 ha rimesso l'hash vero: il developer entra col suo
+>   account.
+> - **Domanda al developer** (`ask_user`, verso le 09:55): URL, percorso, D15 in due righe, la nota che il «dopo» non si
+>   può mostrare; scelte: allineamento all'integrazione come previsto (raccomandata), storico per contenuto, decidere
+>   dopo. Aperto anche un pannello browser sulla 6167, senza leggerne il contenuto (dati privati).
+> - **Risposta del developer, verbatim:** «eccomi chat, però mi scrivi in italiano? mi pare che il grafico a torta
+>   sia regredito, avevamo messo con successo i sotto tipi in una seconda linea esterna che fine hanno fatto? sono in
+>   un altro agente? forse devi riallineare la baseline? fai un attimo il punto con il coordinatore perchè avevamo
+>   fatto delle altre correzioni di margine dei grafici e altre cose, e vedendo questo mix vecchio nuovo non sono
+>   sicuro di dare i feedback giusti». D'ora in poi gli scrivo in italiano.
+>
+> **⚠️ Fuori pista:**
+> - La review si ferma prima del feedback: la build della mia finestra mescola il vecchio e il nuovo. Misurato in sola
+>   lettura alle 10:00:
+>   - `dev_release2` è ancora `ed3bf870a`: io ho 48 commit in più e 4 in meno, i soli `docs(todo)`;
+>   - il secondo anello e la torta per veicolo (`a34d2b4d8`, `0a22b2ab3`, `580fa8053`, `a983808ad`, `a5d9f850e`,
+>     `8e809312f`) stanno solo nei rami di Risk (`e-alfy-risk-management-replan`, `-levels`) e di F
+>     (`e-alfy-risk-asset-global-lab`, che il 01/10 ha fuso la punta di Risk). Non sono né qui né in `dev_release2`;
+>   - le mie correzioni dei margini (`cda9408d4`, Crescita, 29/09; lotti `24 → 10`) e tutto il round 4 stanno solo
+>     qui: Risk, F e `dev_release2` non le hanno (merge-base `8f18416df`);
+>   - quindi nessuna build di oggi mostra lo stato combinato: qui margini nuovi e torta vecchia, in Risk e F il
+>     contrario. D15 riguarda proprio lo stato combinato;
+>   - in Risk e F lo storico usa ancora `primaryAssetType` (`:614`): D15 non è applicata da nessuna parte;
+>   - `git merge-tree --write-tree HEAD <ramo>`: io + Risk pulito (albero `6a4373fde621`), io + F pulito
+>     (`97f24bcd17a9`).
+> - Proposta al coordinator: niente review di D15 sul mio ramo. Prima si integra I, poi Risk e F prendono
+>   `dev_release2`; chi entra per secondo applica D15 (una riga e il commento) e il developer guarda una volta sola
+>   lo stato combinato. Il server resta acceso (PID 95512) finché il coordinator non decide.
+>
+> **Decisione e chiusura** (coordinator, 10:33):
+> - **Decisione del developer** (`ask_user` del coordinator, 10:05), verbatim: «Sì, procedi così». Resta la mia
+>   proposta:
+>   - la review di D15 passa allo **stato unito**, una volta sola, sul server della famiglia di Risk, con una copia
+>     nuova dei dati che il coordinator gli chiederà allora;
+>   - **I si integra per primo**;
+>   - la famiglia di Risk prende `dev_release2` e applica D15: la riga e il commento.
+> - **Server spento** alle 10:35 (`stop_bash` sulla shell staccata): dei tre processi (shell, `dev.py server`,
+>   uvicorn 95512) non ne resta nessuno; `lsof -nP -iTCP:6167 -sTCP:LISTEN` vuoto, `GET /` non risponde; nessun
+>   file aperto nella copia (`lsof +D`).
+> - **Copia cancellata** alle 10:35: `rm -rf /tmp/librefolio-r2-i-charts-prodcopy`, poi
+>   `ls -ld /tmp/librefolio-r2-i-charts-prodcopy*` → «No such file or directory». Cancellati anche i log del server
+>   e della build e i miei appunti in `/tmp`. Resta `/tmp/librefolio-r2-i-charts`, la corsia dei test, senza dati
+>   privati.
+> - **Pannello browser:** non accetta `about:blank`. L'ho ricaricato sulla 6167 spenta: ora mostra un errore di
+>   connessione, non più la dashboard della copia.
+> - **Per il commit di D15 della famiglia di Risk**, letto in sola lettura sui rami:
+>   - il commento della palette (`AllocationHistoryChart.svelte:123-127` qui, da `:122` nella punta di Risk) punta
+>     ancora a `portfolio_engine.py:1041`. L'iniezione di «Liquidity» oggi sta in `DailyStateBuilder.build`, passo
+>     4h (`:1235-1237` qui, `:1233-1234` in Risk): meglio citare il simbolo, non la riga;
+>   - il commento di K in `assetTypes.ts:61-62` («The select groups by family; allocation charts aggregate by
+>     content.») è uguale qui, in Risk e in F. Con la torta di Risk e D15 smette di essere vero.
+> - **Prossimi passi** (coordinator, 10:33):
+>   1. il developer integra K: in `dev_release2` entrano solo lo Step 14 di K e le docs;
+>   2. ricevo lo script del merge di baseline col nuovo `dev_release2`, pulito in simulazione;
+>   3. valido la revisione combinata nella corsia 6157: `core-unit` e `component-unit` (il Tooltip di K),
+>      `front check`, le E2E dashboard, brokers-detail e asset-detail, `api transactions` e `api portfolio`,
+>      check-links con il rosso noto D28;
+>   4. il developer fa avanzare `dev_release2` e il coordinator aggiunge le mie voci del CHANGELOG.
+> - **Commit proposto:** `docs(journal): defer D15 review to merged revision`, solo questo piano.
+>   `/tmp/libreFolio_commit_i_d15.txt`, sha256 `19c38276a32d…`: ASCII, oggetto di 50 caratteri, righe ≤ 66,
+>   nessuno spazio in coda.
