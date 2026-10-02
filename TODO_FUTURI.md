@@ -2025,3 +2025,153 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
 - Alternativa scartata per ora: l'autenticazione fatta dal reverse proxy con un header («forward
   auth»), rischiosa se il backend è raggiungibile senza passare dal proxy.
 - Stima: qualche giorno, ben delimitato; non tocca i calcoli.
+
+## ⚡ Motore del portafoglio — caricare solo i prezzi che servono
+
+**Data aggiunta**: 1 Ottobre 2026 · **Status**: ⏳ IN ATTESA — dopo il merge della PR #28 ·
+**Priorità**: Media (prima va misurata)
+
+### Contesto
+- La PR [#28](https://github.com/Librefolio/LibreFolio/pull/28) (msov19) corregge `convert_bulk`.
+  La query dei cambi aveva solo il limite superiore e a ogni chiamata caricava tutta la storia della
+  coppia. Ora carica la finestra [ultimo cambio ≤ prima data richiesta, ultima data richiesta] e
+  cerca con `bisect`.
+- Banco di prova del coordinatore (01/10, 10 anni di cambi, 3.650 conversioni giornaliere):
+  - la ricerca passa da 120–200 ms a meno di 1 ms;
+  - nel `convert_bulk` completo (~17 ms) il `bisect` pesa ~4%; il resto è la query e la creazione
+    degli oggetti `Currency`.
+  - **Valutato e scartato**: sostituire il `bisect` con una ricerca O(1) (dizionario per data con
+    passo indietro, dizionario pre-riempito per ogni giorno, cursore). Risparmierebbe meno dell'1%;
+    il cursore non aiuta perché `portfolio_engine` passa le date in ordine sparso (le raccoglie in
+    un `set`).
+- Lo stesso schema della query dei cambi c'è nel motore del portafoglio:
+  - `backend/app/services/portfolio_engine.py:2452` precarica i prezzi con solo `date <= actual_to`,
+    come oggetti ORM completi (`select(PriceHistory)`);
+  - quindi legge tutta la storia di ogni asset posseduto, anche gli anni prima del primo acquisto o
+    del periodo richiesto (`actual_from = date_from or first_tx_date`, `:2386`).
+- A cosa servono i prezzi caricati:
+  - il calcolo dei giorni che cambiano (`:855`), che dei prezzi precedenti a `frame_start` usa solo
+    l'ultimo;
+  - il resolver `AssetPriceSeries` (`backend/app/services/price_resolver.py:146`), che con `bisect`
+    trova l'ultima osservazione ≤ data.
+- `get_prices_bulk` (`backend/app/services/asset_sources/price_query.py:149`), il corrispettivo di
+  `convert_bulk` per i prezzi, ha già la finestra con minimo e massimo.
+
+### Azione Futura
+- **Prima misurare**, su una copia dei dati reali: righe lette e tempo della query a `:2452` rispetto
+  al calcolo intero, con e senza `date_from`.
+- Se conviene:
+  - limitare la query a [ultimo prezzo ≤ `frame_start` per asset, `actual_to`], con la stessa
+    sottoquery «ancora» della PR #28;
+  - leggere solo le colonne usate (data, close, valuta; open/high/low solo con le candele), invece
+    degli oggetti ORM.
+- Da verificare prima: nessuno deve chiedere al resolver una data precedente a `frame_start`
+  (periodo pre-frame, intervalli in transito, prezzi alle date dei BUY). Altrimenti l'ancora va
+  presa dalla prima di quelle date.
+- Test:
+  - confronto differenziale del risultato del motore, prima e dopo, su più utenti e periodi, come
+    quello fatto per la PR #28;
+  - poi `services portfolio-engine`, `services roi-fifo-utils`, `api portfolio`.
+- Minori, solo se la misura lo giustifica, in `get_prices_bulk`: la finestra è unica per tutte le
+  richieste (minimo e massimo globali), e il prezzo «seme» si cerca con una query per asset. Si
+  possono fare per asset, in una query sola, come nella PR #28.
+
+## 💡 Traccia rischio/rendimento nel tempo («snail trail»)
+
+**Data aggiunta**: 1 Ottobre 2026 · **Status**: 💡 IDEA — da approfondire prima di pianificarla ·
+**Priorità**: Bassa
+
+### Contesto
+- Origine: la review del developer di L3° di Asset Global (scheda Correlazione), 01/10/2026. Il
+  parere di F è nel suo diario di avanzamento di L3°
+  (`LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/progress/F-L3-rischio-rendimento.md`,
+  ancora sul ramo di F).
+- Cambiando il periodo, i punti del grafico rischio/rendimento si spostano. Per mostrare
+  quell'evoluzione il developer propone una traccia: con un periodo di 1A, un punto per ciascun
+  trimestre, uniti da una linea. In letteratura esiste e si chiama *snail trail*: i punti
+  rischio/rendimento di sotto-periodi successivi, uniti nel tempo.
+
+### ⚠️ Perché non a trimestri dentro un anno
+- **Asse orizzontale, la volatilità**: si stima bene già su ~63 sedute (errore relativo ≈ 1/√(2n),
+  cioè 9–14% con le code grasse), e cambia davvero nel tempo, perché i mercati alternano fasi calme e
+  agitate. Qui la traccia direbbe il vero.
+- **Asse verticale, il rendimento medio annuo**: anche per un asset che non cambia affatto, la media
+  annualizzata di un sotto-periodo lungo T anni si scosta per puro caso di σ/√T. Su un trimestre fa
+  2σ: ±40 punti per un ETF azionario al 20% di volatilità, ±140 per una cripto al 70%. In più,
+  annualizzare un trimestre lo moltiplica per quattro: un +10% nel trimestre diventa «+40% annuo».
+- **Il risultato**: punti che saltano di decine di punti, e un'evoluzione che si vede ma non c'è. È
+  il grafico «plausibile ma sbagliato» che il laboratorio evita.
+- **La leggibilità**: N asset per 4 punti, più N linee che si incrociano.
+
+### Azione Futura — la versione onesta, se un giorno la si vuole
+- Solo per l'asset selezionato: la selezione collegata fra tabella e grafico di L3° c'è già.
+- Segmenti di un anno solare: il rendimento davvero ottenuto in quell'anno, un fatto e non
+  un'estrapolazione. Quindi solo per periodi di almeno 3 anni.
+- Calcolata dal motore (Risk): un campo nuovo nell'uscita di `asset_set_risk_return`, con le regole
+  di copertura per segmento.
+- Prima di disegnarla, un prototipo sui dati veri, per vedere se la traccia dice qualcosa di più del
+  rumore.
+- Per «come cambia il rischio nel tempo» esistono già gli indicatori Rolling Volatility e Rolling
+  Sharpe nel grafico dell'asset.
+
+## 🆔 Gli id degli asset (e delle altre tabelle) si riusano dopo una cancellazione
+
+**Data aggiunta**: 1 Ottobre 2026 · **Status**: ⏳ IN ATTESA · **Priorità**: Media
+
+### Contesto
+- Trovato dal test-author di A (famiglia Risk) il 01/10/2026 e verificato sullo schema 004: `assets.id`
+  è `INTEGER PRIMARY KEY` **senza** `AUTOINCREMENT`. Lo stesso vale per tutte le altre tabelle
+  (`brokers`, `transactions`, `users`, `asset_events`, `fx_rates`…).
+- Senza `AUTOINCREMENT`, SQLite dà alla riga nuova `max(id)+1`: se si cancella l'asset più recente e
+  se ne crea un altro, quello nuovo prende il suo id.
+- Il client conserva degli id di asset:
+  - il benchmark condiviso del rischio (`riskBenchmarkStore`);
+  - la selezione persistita del laboratorio Asset Global (D19);
+  - gli asset di confronto dei grafici;
+  - i link salvati (`/assets/<id>`).
+
+  Dopo un riuso, puntano in silenzio a un asset diverso.
+- Il frontend non può accorgersene. `entityStore.ensureLoaded()` si risolve anche quando il
+  caricamento fallisce (`frontend/src/lib/stores/core/entityStore.ts:105`, «Fail silently»), quindi
+  «sparito» e «non caricato» non si distinguono.
+- Per questo il nuovo `BenchmarkSelect` (Risk) non cancella un id sconosciuto: lo tratta come non
+  scelto e lo lascia salvato.
+
+### Azione Futura
+- Backend: `AUTOINCREMENT` sulle tabelle i cui id escono dal backend e restano salvati, a partire da
+  `assets`.
+  - In SQLite serve ricostruire la tabella: una migrazione Alembic incrementale (ricreazione con
+    `batch_alter_table`), con `upgrade` e `downgrade` provati su un DB popolato.
+  - Dopo la copia, `sqlite_sequence` parte dal massimo id esistente: da lì in poi un id non torna
+    più.
+- ⚠️ **Rischi della migrazione** (verificati il 01/10/2026):
+  - **Durante le migrazioni le chiavi esterne sono attive.** Il processo di Alembic importa
+    `backend.app.db.session`, che registra su ogni `Engine` il listener `PRAGMA foreign_keys=ON`
+    (`session.py:20`, `:52`).
+  - Ricostruire `assets` vuol dire cancellare la tabella vecchia. Con le chiavi esterne attive,
+    SQLite prima cancella le sue righe:
+    - `price_history`, `asset_events` e `asset_provider_assignments` sono legate con
+      `ON DELETE CASCADE`, quindi verrebbero svuotate;
+    - `transactions` (`NO ACTION`) fa fallire l'istruzione: la migrazione si ferma e l'app non
+      parte, perché l'avvio esegue `alembic upgrade head` (`main.py:200`).
+    - Su un DB senza transazioni, invece, prezzi, eventi e assegnazioni sparirebbero in silenzio.
+  - Nessuna migrazione del progetto (001–004) ha mai ricostruito una tabella referenziata: questa
+    sarebbe la prima, senza uno schema già collaudato.
+  - Come farla:
+    - spegnere le chiavi esterne fuori dalla transazione
+      (`op.get_context().autocommit_block()` con `PRAGMA foreign_keys=OFF`) e riaccenderle;
+    - `PRAGMA foreign_key_check` alla fine;
+    - ricreare la tabella copiando esattamente il DDL scritto a mano dello schema (vincoli, indici,
+      default), più `AUTOINCREMENT`;
+    - provare `upgrade` e `downgrade` su una copia del DB vero.
+- Alternativa senza toccare il DB, per il caso del localStorage: gli asset hanno `created_at`. Il
+  client può salvare `{id, created_at}` e trattare una differenza come «sparito». Risolve benchmark
+  e selezioni, non i link salvati.
+- In alternativa: riferimenti stabili (un identificativo che non si riusa) per quello che il client
+  salva.
+- Prima: censire gli id che il frontend conserva (localStorage e URL), anche di broker e coppie FX.
+- Dopo la cura: decidere se `BenchmarkSelect` può tornare a cancellare gli id spariti.
+- Da correggere comunque: il rapporto di fattibilità del motore FIFO
+  (`LibreFolio_developer_journal/RoadmapV4_UI/fifo-engine/v1/high-level-plan_v1-feasibility-report.md:300`)
+  dà la PK per «autoincrementante mai riusata». Non è vero. Lì l'identità del lotto si calcola a ogni
+  esecuzione e non si salva, quindi oggi non fa danni.
