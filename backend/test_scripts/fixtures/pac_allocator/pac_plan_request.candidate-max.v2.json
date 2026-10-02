@@ -45,28 +45,32 @@
       "identity": {"kind": "manual_broker", "name": "Synthetic EUR Broker"},
       "provenance_id": "prov-candidate-max",
       "capabilities": [{"kind": "whole_quantity", "capability_id": "cap-eur-whole", "quantity_unit": "asset_unit", "quantity_step": "0"}],
-      "fee_schedules": [{"fee_schedule_id": "fee-eur-buy", "capability_id": "cap-eur-whole", "side": "buy", "fixed_fee": {"amount": "-0.01", "currency": "EUR"}, "rate": "1.5", "variable_floor": {"amount": "-0.02", "currency": "EUR"}, "variable_cap": {"kind": "amount", "amount": {"amount": "-0.03", "currency": "EUR"}}}]
+      "fee_schedules": [{"fee_schedule_id": "fee-eur-buy", "capability_id": "cap-eur-whole", "side": "buy", "fixed_fee": {"amount": "-0.01", "currency": "EUR"}, "rate": "1.5", "variable_floor": {"amount": "-0.02", "currency": "EUR"}, "variable_cap": {"kind": "amount", "amount": {"amount": "-0.03", "currency": "EUR"}}}],
+      "conversion_mode": "manual"
     },
     {
       "broker_id": "broker-usd",
       "identity": {"kind": "manual_broker", "name": "Synthetic USD Broker"},
       "provenance_id": "prov-candidate-max",
       "capabilities": [{"kind": "monetary_amount", "capability_id": "cap-usd-money", "order_amount_step": {"amount": "1", "currency": "USD"}}],
-      "fee_schedules": [{"fee_schedule_id": "fee-usd-buy", "capability_id": "cap-usd-money", "side": "buy", "fixed_fee": {"amount": "0", "currency": "USD"}, "rate": "0", "variable_floor": {"amount": "0", "currency": "USD"}, "variable_cap": {"kind": "amount", "amount": {"amount": "0", "currency": "USD"}}}]
+      "fee_schedules": [{"fee_schedule_id": "fee-usd-buy", "capability_id": "cap-usd-money", "side": "buy", "fixed_fee": {"amount": "0", "currency": "USD"}, "rate": "0", "variable_floor": {"amount": "0", "currency": "USD"}, "variable_cap": {"kind": "amount", "amount": {"amount": "0", "currency": "USD"}}}],
+      "conversion_mode": "automatic"
     },
     {
       "broker_id": "broker-gbp",
       "identity": {"kind": "manual_broker", "name": "Synthetic GBP Broker"},
       "provenance_id": "prov-candidate-max",
       "capabilities": [{"kind": "whole_quantity", "capability_id": "cap-gbp-whole", "quantity_unit": "asset_unit", "quantity_step": "1"}],
-      "fee_schedules": [{"fee_schedule_id": "fee-gbp-buy", "capability_id": "cap-gbp-whole", "side": "buy", "fixed_fee": {"amount": "0", "currency": "GBP"}, "rate": "0", "variable_floor": {"amount": "0", "currency": "GBP"}, "variable_cap": {"kind": "amount", "amount": {"amount": "0", "currency": "GBP"}}}]
+      "fee_schedules": [{"fee_schedule_id": "fee-gbp-buy", "capability_id": "cap-gbp-whole", "side": "buy", "fixed_fee": {"amount": "0", "currency": "GBP"}, "rate": "0", "variable_floor": {"amount": "0", "currency": "GBP"}, "variable_cap": {"kind": "amount", "amount": {"amount": "0", "currency": "GBP"}}}],
+      "conversion_mode": "manual"
     },
     {
       "broker_id": "broker-jpy",
       "identity": {"kind": "manual_broker", "name": "Synthetic JPY Broker"},
       "provenance_id": "prov-candidate-max",
       "capabilities": [{"kind": "monetary_amount", "capability_id": "cap-jpy-money", "order_amount_step": {"amount": "100", "currency": "JPY"}}],
-      "fee_schedules": [{"fee_schedule_id": "fee-jpy-buy", "capability_id": "cap-jpy-money", "side": "buy", "fixed_fee": {"amount": "0", "currency": "JPY"}, "rate": "0", "variable_floor": {"amount": "0", "currency": "JPY"}, "variable_cap": {"kind": "amount", "amount": {"amount": "0", "currency": "JPY"}}}]
+      "fee_schedules": [{"fee_schedule_id": "fee-jpy-buy", "capability_id": "cap-jpy-money", "side": "buy", "fixed_fee": {"amount": "0", "currency": "JPY"}, "rate": "0", "variable_floor": {"amount": "0", "currency": "JPY"}, "variable_cap": {"kind": "amount", "amount": {"amount": "0", "currency": "JPY"}}}],
+      "conversion_mode": "automatic"
     }
   ],
   "existing_cash": [

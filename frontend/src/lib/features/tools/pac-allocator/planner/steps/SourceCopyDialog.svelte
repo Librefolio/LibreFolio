@@ -1,9 +1,8 @@
 <script lang="ts">
     import {onDestroy, onMount} from 'svelte';
-    import {t, locale} from '$lib/i18n';
+    import {t} from '$lib/i18n';
     import {applyClassificationCopy, applyFxCopy, applyPriceCopy, newCopyRecord, type CopyOutcome} from '../copies';
     import type {PlannerDraft} from '../draft.svelte';
-    import {formatPlannerDate} from '../format';
     import {loadCopyScope, selectableIds} from '../scope';
     import type {PlannerSource, SourceSection} from '../source';
     import {SourceLoad} from '../sourceLoad.svelte';
@@ -46,6 +45,7 @@
 
     async function copy(): Promise<void> {
         if (!ready || !owners) return;
+        draft.refreshAsOf();
         const source = await load.load(
             {
                 asOf: draft.data.asOf,
@@ -77,10 +77,10 @@
     <div class="space-y-3" data-testid="{testid}-body" data-state={load.status} aria-busy={load.status === 'loading'}>
         <p class={HINT}>
             {kind === 'prices'
-                ? $t('tools.pacAllocator.planner.pricesCopy.source', {default: 'Source: prices stored in LibreFolio, the last one on or before {date}. No provider is called.', values: {date: formatPlannerDate(draft.data.asOf, $locale)}})
+                ? $t('tools.pacAllocator.planner.pricesCopy.source', {default: 'Source: the latest prices stored in LibreFolio. No provider is called.'})
                 : kind === 'classifications'
                   ? $t('tools.pacAllocator.planner.classificationsCopy.source', {default: 'Source: the Asset classifications (type, sector, geography) stored in LibreFolio.'})
-                  : $t('tools.pacAllocator.planner.fxCopy.source', {default: 'Source: FX rates stored in LibreFolio, the last one on or before {date}. No provider is called.', values: {date: formatPlannerDate(draft.data.asOf, $locale)}})}
+                  : $t('tools.pacAllocator.planner.fxCopy.source', {default: 'Source: the latest FX rates stored in LibreFolio. No provider is called.'})}
         </p>
         <p class={HINT}>{$t('tools.pacAllocator.planner.copy.ownerScope', {default: 'The Portfolio API reads through the Brokers you own; these values do not depend on the Broker.'})}</p>
 

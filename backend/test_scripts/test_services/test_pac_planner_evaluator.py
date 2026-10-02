@@ -169,6 +169,7 @@ def _broker(
     *,
     active: bool | None = True,
     domain: bool = False,
+    conversion_mode: str = "manual",
 ) -> ExactBroker:
     return ExactBroker(
         broker_id=broker_id,
@@ -188,6 +189,7 @@ def _broker(
                 ),
             )
         ),
+        conversion_mode=conversion_mode,
     )
 
 
@@ -529,6 +531,7 @@ def _planner_request_with_whole_step(
                             "variable_cap": {"kind": "none"},
                         }
                     ],
+                    "conversion_mode": "manual",
                 }
             ],
             "existing_cash": [

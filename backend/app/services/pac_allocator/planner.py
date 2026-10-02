@@ -274,20 +274,27 @@ def _common_ready_fields(scenario, view, search: _Search, evaluation: ExactEvalu
 def _build_solution_parts(scenario: ExactPlannerScenario, view: ExactPolicyView, evaluation: ExactEvaluation, top_ups: tuple[ExactRoundingTopUp, ...]) -> dict:
     """Assemble the primary solution.
 
-    One ``_SequenceAllocator`` is shared across funding, FX and order rows —
-    not one per section. The schema wants ids and sequences unique across all
-    three *and* each section internally ascending; three counters would
-    collide on row one, and a single dense counter satisfies both at once.
+    One ``_SequenceAllocator`` is shared across funding, manual conversions
+    and order rows — not one per section. The schema wants ids and sequences
+    unique across the sections *and* each section internally ascending;
+    separate counters would collide on row one, and a single dense counter
+    satisfies both at once. The call order is the execution order: funding
+    first, then the conversions the user performs, then the orders.
     """
     sequence = report._SequenceAllocator()
+    funding_actions = report.build_funding_actions(scenario, evaluation, sequence)
+    fx_actions = report.build_fx_actions(scenario, evaluation)
+    conversions = report.build_conversions(scenario, evaluation, fx_actions, sequence)
+    order_rows = report.build_order_rows(scenario, evaluation, sequence)
     return {
         "solution_id": _PRIMARY_SOLUTION_ID,
         "solution_kind": "primary",
         "validation": "decimal_verified",
         "asset_rows": report.build_asset_rows(scenario, evaluation),
-        "funding_actions": report.build_funding_actions(scenario, evaluation, sequence),
-        "fx_actions": report.build_fx_actions(scenario, evaluation, sequence),
-        "order_rows": report.build_order_rows(scenario, evaluation, sequence),
+        "funding_actions": funding_actions,
+        "fx_actions": fx_actions,
+        "conversions": conversions,
+        "order_rows": order_rows,
         "ledger_rows": report.build_ledger_rows(evaluation),
         "rounding_top_ups": report.build_rounding_top_ups(scenario, top_ups),
         "exposure_rows": report.build_exposure_rows(scenario, evaluation),

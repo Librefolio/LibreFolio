@@ -1,5 +1,6 @@
 <script lang="ts">
     import {t} from '$lib/i18n';
+    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
     import {compareDecimal} from '../decimal';
     import {formatPlannerPercent} from '../format';
     import type {ScopeBroker} from '../scope';
@@ -31,6 +32,7 @@
             {#if broker.selectable}
                 <label class="flex items-center gap-2">
                     <input type="checkbox" class="rounded border-gray-300 text-libre-green focus:ring-libre-green" checked={selected.includes(broker.id)} {disabled} data-testid="{testid}-check" onchange={(event) => toggle(broker.id, event.currentTarget.checked)} />
+                    <BrokerIcon brokerId={broker.id} iconUrl={broker.iconUrl} portalUrl={broker.portalUrl} pluginCode={broker.pluginCode} altText="" size={20} />
                     <span class="font-medium text-gray-900 dark:text-gray-100">{broker.name}</span>
                 </label>
                 {#if partial(broker.share)}
@@ -42,6 +44,7 @@
             {:else}
                 <span class="flex items-center gap-2 text-gray-500 dark:text-gray-400">
                     <input type="checkbox" class="rounded border-gray-300" disabled checked={false} aria-hidden="true" tabindex="-1" />
+                    <span class="inline-flex opacity-60"><BrokerIcon brokerId={broker.id} iconUrl={broker.iconUrl} portalUrl={broker.portalUrl} pluginCode={broker.pluginCode} altText="" size={20} /></span>
                     <span>{broker.name}</span>
                 </span>
                 <span class={HINT} data-testid="{testid}-blocked">

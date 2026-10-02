@@ -612,7 +612,7 @@
     "fx_actions": [
       {
         "action_id": "fx-action-beta-eur-usd",
-        "sequence": 3,
+        "conversion_id": "conversion-beta-eur-usd",
         "order_route_id": "route-c-beta-buy",
         "broker_id": "broker-beta",
         "source_debit": {
@@ -649,6 +649,52 @@
         "provenance_ids": [
           "prov-market",
           "prov-manual"
+        ]
+      }
+    ],
+    "conversions": [
+      {
+        "conversion_id": "conversion-beta-eur-usd",
+        "mode": "manual",
+        "sequence": 3,
+        "broker_id": "broker-beta",
+        "source_debit": {
+          "amount": "10",
+          "currency": "EUR"
+        },
+        "destination_credit": {
+          "amount": "12.50",
+          "currency": "USD"
+        },
+        "spot_rate": {
+          "source_currency": "EUR",
+          "destination_currency": "USD",
+          "value": {
+            "kind": "finite_decimal",
+            "value": "1.25"
+          }
+        },
+        "effective_rate": {
+          "source_currency": "EUR",
+          "destination_currency": "USD",
+          "value": {
+            "kind": "finite_decimal",
+            "value": "1.25"
+          }
+        },
+        "spread_loss": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        },
+        "fx_action_ids": [
+          "fx-action-beta-eur-usd"
+        ],
+        "provenance_ids": [
+          "prov-manual",
+          "prov-market"
         ]
       }
     ],

@@ -2093,7 +2093,7 @@ async def test_complete_saved_domain_copy_is_select_only_private_and_stable(
             "classifications",
             "fx_quotes",
         ],
-        "source_revision": "2.0.0",
+        "source_revision": "1.0.0",
     }
     assert [row["provenance_id"] for row in dumped["provenance"]] == [
         "source:portfolio-ledger",

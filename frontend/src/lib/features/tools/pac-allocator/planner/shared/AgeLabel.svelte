@@ -29,7 +29,7 @@
     {:else if state === 'before'}
         {$t('tools.pacAllocator.planner.age.daysBefore', {default: '{count, plural, one {# day} other {# days}} before {date}', values: {count: days ?? 0, date: asOfText}})}
     {:else if state === 'after'}
-        {$t('tools.pacAllocator.planner.age.after', {default: 'After the scenario date {date}', values: {date: asOfText}})}
+        {$t('tools.pacAllocator.planner.age.after', {default: 'Dated after {date}', values: {date: asOfText}})}
     {:else}
         {$t('tools.pacAllocator.planner.age.unknown', {default: 'Date unknown'})}
     {/if}

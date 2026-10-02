@@ -26,6 +26,7 @@ def check_budget(checkpoint: Checkpoint | None) -> None:
 type PlannerProduct = Literal["pac", "rebalancer"]
 type PlannerPolicy = Literal["proportional", "min_fragmentation", "invest_only", "invest_and_sell"]
 type IdentityKind = Literal["domain", "manual"]
+type ConversionMode = Literal["manual", "automatic"]
 type FreshnessKind = Literal["fresh", "stale"]
 type ProvenanceKind = Literal["manual", "domain_copy"]
 type CapabilityKind = Literal["whole_quantity", "monetary_amount"]
@@ -309,10 +310,15 @@ class ExactBroker:
     provenance_id: str
     capabilities: tuple[ExactOrderCapability, ...]
     fee_schedules: tuple[ExactFeeSchedule, ...]
+    # Presentation only: how the report shows this Broker's conversions. No
+    # constraint or objective reads it, so the computed plan does not depend on it.
+    conversion_mode: ConversionMode
 
     def __post_init__(self) -> None:
         if (self.identity_kind == "domain") != (self.source_broker_id is not None):
             raise ValueError("domain Broker identity requires source_broker_id and manual identity forbids it")
+        if self.conversion_mode not in ("manual", "automatic"):
+            raise ValueError(f"unknown Broker conversion mode {self.conversion_mode!r}")
         _require_canonical_tuple(self.capabilities, lambda capability: capability.capability_id, "broker capabilities")
         _require_canonical_tuple(self.fee_schedules, lambda schedule: (schedule.capability_id, schedule.side, schedule.fee_schedule_id), "broker fee schedules")
         _require_unique_values(
@@ -436,7 +442,8 @@ class ExactOrderRoute:
     side: OrderSide
     minimum_if_active: ExactOrderMinimum
     required_minimum: ExactOrderMinimum
-    cap: ExactOrderCap
+    # None: no cap of its own; a buy stays bounded by the resources, a sell by the holding.
+    cap: ExactOrderCap | None
     execution_margin_rate: ExactRatio
     priority: int
     provenance_id: str

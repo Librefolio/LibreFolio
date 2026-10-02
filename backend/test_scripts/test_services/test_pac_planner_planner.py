@@ -48,6 +48,11 @@ raises ``ExactReplayRejectedError``, which the Tool reports as
 * **``plan_rebalancing`` is deliberately absent**, and ``plan_pac_allocation`` is
   deliberately *not* re-exported from the package ``__init__`` so P1 consumers
   do not drag SCIP in at import — pinned by a subprocess (item 9).
+* **A Broker's conversion mode changes no figure** (R4.9): the same FX plan,
+  planned with manual and with automatic conversions, publishes the same
+  orders, ledger, costs and objectives; only the conversion's mode and step
+  number differ, and an automatic conversion takes no step, so the orders
+  follow the funding directly (test_conversion_mode_*).
 
 These are pure in-process tests (``isolation="pure"``) except the one deliberate
 subprocess in ``test_scip_import_isolation_in_subprocess``: no server, no
@@ -73,7 +78,7 @@ import subprocess
 import sys
 import textwrap
 from dataclasses import replace
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from fractions import Fraction
 from pathlib import Path
 from typing import get_args
@@ -260,6 +265,7 @@ def test_unmodified_fixture_is_no_op_optimal(noop_result):
     assert solution.order_rows == []
     assert solution.funding_actions == []
     assert solution.fx_actions == []
+    assert solution.conversions == []
     _revalidate(noop_result)
 
 
@@ -670,12 +676,21 @@ def test_scip_import_isolation_in_subprocess():
 # --------------------------------------------------------------------------
 # Item 10 — sequence, containment and evidence properties on ready results.
 # --------------------------------------------------------------------------
+def _numbered_sections(solution) -> tuple[list, list, list]:
+    """The action sections a user executes in order: funding, manual conversions, orders.
+
+    An FX action is the engine's per-route decision, not a step; an automatic
+    conversion happens inside the orders, so it carries no sequence either.
+    """
+    return list(solution.funding_actions), [row for row in solution.conversions if row.sequence is not None], list(solution.order_rows)
+
+
 def _action_sequences(solution) -> list[int]:
-    return [row.sequence for row in (*solution.funding_actions, *solution.fx_actions, *solution.order_rows)]
+    return [row.sequence for section in _numbered_sections(solution) for row in section]
 
 
 def _referenced_provenance(solution) -> set[str]:
-    rows = (*solution.funding_actions, *solution.fx_actions, *solution.order_rows, *solution.exposure_rows)
+    rows = (*solution.funding_actions, *solution.fx_actions, *solution.conversions, *solution.order_rows, *solution.exposure_rows)
     return {provenance_id for row in rows for provenance_id in row.provenance_ids}
 
 
@@ -698,13 +713,214 @@ def test_ready_result_sequence_and_containment_properties(ready_result):
 
     solution = ready_result.primary_solution
     sequences = _action_sequences(solution)
-    assert len(sequences) == len(set(sequences))  # globally unique across funding/fx/order
-    for section in (solution.funding_actions, solution.fx_actions, solution.order_rows):
+    assert len(sequences) == len(set(sequences))  # globally unique across funding/manual conversions/orders
+    for section in _numbered_sections(solution):
         section_sequences = [row.sequence for row in section]
         assert section_sequences == sorted(section_sequences)  # each section internally ascending
 
     published = {provenance.provenance_id for provenance in ready_result.provenance}
     assert _referenced_provenance(solution) <= published
+
+
+# --------------------------------------------------------------------------
+# R4.9 — a Broker's conversion mode is presentation only. The same FX plan,
+# planned once with manual and once with automatic conversions, differs only in
+# the mode and step number of its conversion — and, since an automatic
+# conversion is not a step the user performs, in where the order numbering
+# starts.
+# --------------------------------------------------------------------------
+_FX_CONTRIBUTION_ID = "contribution-one"
+_FX_FUNDING_ROUTE_ID = "funding-contribution-one-broker-one"
+_CONVERSION_MODES = ("manual", "automatic")
+
+
+def _fx_contribution_payload(conversion_mode: str) -> dict:
+    """A EUR contribution buying a USD-quoted Asset at broker-one: the plan must convert.
+
+    The min fixture's Asset is quoted in USD (its zero fee schedule moves with
+    it), the Broker holds no cash, and one €50 contribution can reach it in EUR
+    only. A 1.25 EUR/USD rate with a 4% spread makes the conversion cost
+    something, so equal figures across modes are not trivially equal zeros.
+    The spread is chosen, not incidental: the effective rate 1.25 × 0.96 = 6/5
+    has an odd denominator, so no EUR→USD credit lands on a HALF_UP tie of the
+    USD cent. Ties are no longer refused (option A removed the compiler's
+    credit-tie guard) and
+    ``test_manual_conversion_reaching_an_exact_credit_tie_still_plans`` plans
+    one, but this fixture keeps the conversion-mode tests free of them.
+    """
+    payload = _pac_request()
+    asset = next(row for row in payload["assets"] if row["asset_id"] == _ASSET_ONE_ID)
+    asset["quote"]["currency"] = "USD"
+    broker = next(row for row in payload["brokers"] if row["broker_id"] == _BROKER_ONE_ID)
+    broker["conversion_mode"] = conversion_mode
+    for fee in broker["fee_schedules"]:
+        fee["fixed_fee"]["currency"] = "USD"
+        fee["variable_floor"]["currency"] = "USD"
+        fee["variable_cap"]["amount"]["currency"] = "USD"
+    payload["fx_rates"] = {"EUR/USD": "1.25"}
+    payload["fx_spread_rate"] = "0.04"
+    payload["existing_cash"] = []
+    payload["contributions"] = [{"contribution_id": _FX_CONTRIBUTION_ID, "label": "Monthly", "amount": {"amount": "50.00", "currency": "EUR"}, "provenance_id": "prov-manual"}]
+    payload["funding_routes"] = [
+        {
+            "funding_route_id": _FX_FUNDING_ROUTE_ID,
+            "source": {"kind": "contribution", "contribution_id": _FX_CONTRIBUTION_ID},
+            "broker_id": _BROKER_ONE_ID,
+            "currency": "EUR",
+            "priority": 1,
+            "transfer_cap": {"amount": "50.00", "currency": "EUR"},
+            "provenance_id": "prov-manual",
+        }
+    ]
+    return payload
+
+
+@pytest.fixture(scope="module")
+def fx_plan_by_mode() -> dict[str, dict]:
+    """The FX scenario planned once per conversion mode, as dumped wire results."""
+    return {mode: _plan_wire(_fx_contribution_payload(mode)) for mode in _CONVERSION_MODES}
+
+
+def _without_numbering(solution: dict) -> dict:
+    """The solution's figures: every step number and every conversion mode removed."""
+    figures = copy.deepcopy(solution)
+    for section in ("funding_actions", "conversions", "order_rows"):
+        for row in figures[section]:
+            row.pop("sequence")
+    for row in figures["conversions"]:
+        row.pop("mode")
+    return figures
+
+
+def _wire_exact(number: dict) -> Fraction:
+    """An ``ExactNumber`` read off the wire, exactly: either branch of the union."""
+    if number["kind"] == "finite_decimal":
+        return Fraction(Decimal(number["value"]))
+    return Fraction(int(number["numerator"]), int(number["denominator"]))
+
+
+def test_conversion_mode_changes_no_figure_of_the_plan(fx_plan_by_mode):
+    """Manual and automatic conversions publish the same plan, figure for figure.
+
+    Both runs are proven optima on the same compiled model — the engine never
+    reads the mode — so orders, FX actions, ledger, costs, accounting and
+    objectives must agree exactly. The conversion row agrees too, once its mode
+    and step number are set aside; nothing else may differ.
+    """
+    for mode, wire in fx_plan_by_mode.items():
+        assert (wire["result_state"], wire["proof"]["kind"]) == ("ready_incumbent", "optimal_proven"), mode
+        solution = wire["primary_solution"]
+        assert solution["funding_actions"] and solution["fx_actions"] and solution["order_rows"], f"{mode}: the scenario must fund, convert and buy"
+        assert [row["mode"] for row in solution["conversions"]] == [mode], solution["conversions"]
+
+    manual, automatic = fx_plan_by_mode["manual"], fx_plan_by_mode["automatic"]
+    assert manual["primary_solution"]["fx_actions"] == automatic["primary_solution"]["fx_actions"]
+    assert _without_numbering(manual["primary_solution"]) == _without_numbering(automatic["primary_solution"])
+    assert manual["scenario_basis"] == automatic["scenario_basis"]
+
+
+def test_conversion_mode_conversion_aggregates_the_fx_actions(fx_plan_by_mode):
+    """The published conversion is the EUR→USD one at broker-one, built from every FX action.
+
+    Its debit and spread are the exact sums of the actions', its credit the sum
+    of their posted credits, and each action names it — read off the live
+    result, in either mode.
+    """
+    for mode, wire in fx_plan_by_mode.items():
+        solution = wire["primary_solution"]
+        (conversion,) = solution["conversions"]
+        assert conversion["conversion_id"] == f"conversion:{_BROKER_ONE_ID}:EUR:USD", mode
+        assert (conversion["broker_id"], conversion["source_debit"]["currency"], conversion["destination_credit"]["currency"]) == (_BROKER_ONE_ID, "EUR", "USD")
+        actions = solution["fx_actions"]
+        assert conversion["fx_action_ids"] == [action["action_id"] for action in actions]
+        assert {action["conversion_id"] for action in actions} == {conversion["conversion_id"]}
+        assert all("sequence" not in action for action in actions), actions
+        assert Fraction(Decimal(conversion["source_debit"]["amount"])) == sum(Fraction(Decimal(action["source_debit"]["amount"])) for action in actions)
+        assert Fraction(Decimal(conversion["destination_credit"]["amount"])) == sum(Fraction(Decimal(action["destination_credit"]["amount"])) for action in actions)
+        assert _wire_exact(conversion["spread_loss"]["value"]) == sum(_wire_exact(action["spread_loss"]["value"]) for action in actions)
+        assert _wire_exact(conversion["spread_loss"]["value"]) > 0, "a 4% spread must cost something"
+
+
+@pytest.mark.parametrize("mode", _CONVERSION_MODES)
+def test_conversion_mode_decides_whether_the_conversion_is_a_step(fx_plan_by_mode, mode):
+    """Manual: the conversion is the step between funding and orders. Automatic: it is none.
+
+    The steps a user performs are numbered 1..n in execution order — funding,
+    manual conversions, orders — with no gap: an automatic conversion consumes
+    no number, so the first order directly follows the last funding action.
+    """
+    solution = fx_plan_by_mode[mode]["primary_solution"]
+    funding = [row["sequence"] for row in solution["funding_actions"]]
+    conversions = [row["sequence"] for row in solution["conversions"]]
+    orders = [row["sequence"] for row in solution["order_rows"]]
+
+    assert funding == list(range(1, len(funding) + 1))
+    if mode == "manual":
+        assert conversions == list(range(len(funding) + 1, len(funding) + len(conversions) + 1))
+        first_order = len(funding) + len(conversions) + 1
+    else:
+        assert conversions == [None] * len(conversions)
+        first_order = len(funding) + 1
+    assert orders == list(range(first_order, first_order + len(orders)))
+
+
+# --------------------------------------------------------------------------
+# R13 — option A: a conversion whose range reaches an exact HALF_UP credit tie
+# plans like any other. The compiler's credit-tie guard is gone; the developer's
+# EUR→USD case, rebuilt synthetically on the R4.9 FX fixture, is the regression.
+# --------------------------------------------------------------------------
+def test_manual_conversion_reaching_an_exact_credit_tie_still_plans():
+    """1.1298 EUR/USD, no spread, a €30 contribution: a proven optimum, not ``execution_failed``.
+
+    €25.00 converts to exactly 28.245 USD, half a USD cent: an exact HALF_UP
+    credit tie inside the conversion's range (the EUR quantum is one cent and
+    the FX decision's box reaches 2500 of them). Before option A the
+    compiler's credit-tie guard raised ``LedgerPostingScopeError`` as soon as
+    such a tie was reachable, published as ``execution_failed``, while €20
+    (below the first tie, at €25) already planned. A posted credit enters the
+    ledger only with a ``+`` sign, so the model's latitude at a tie cannot
+    change what is feasible: the request must plan to a proven optimum, and
+    every published credit must be the HALF_UP posting of its exact conversion.
+    """
+    payload = _fx_contribution_payload("manual")
+    payload["fx_rates"] = {"EUR/USD": "1.1298"}
+    payload["fx_spread_rate"] = "0"
+    payload["contributions"][0]["amount"]["amount"] = "30.00"
+    payload["funding_routes"][0]["transfer_cap"]["amount"] = "30.00"
+    request = _validated(payload)
+
+    # The precondition, verified rather than assumed: €25.00 is a whole number
+    # of EUR quanta, converts to exactly half a USD quantum, and lies inside the
+    # FX decision's box -- the tie is reachable in the compiled scenario.
+    assert Decimal("25.00") * Decimal("1.1298") == Decimal("28.245")
+    outcome = normalize_pac_plan(request)
+    assert outcome.ready, [issue.code for issue in outcome.issues]
+    scenario = outcome.normalized
+    minor_unit = {spec.currency: Fraction(*spec.minor_unit.as_integer_ratio()) for spec in scenario.currency_specs}
+    (rate,) = [Fraction(*row.rate.as_integer_ratio()) for row in scenario.fx_rates if (row.pair_first, row.pair_second) == ("EUR", "USD")]
+    assert (rate, scenario.fx_spread_rate) == (Fraction(Decimal("1.1298")), 0)
+    tie_quanta = Fraction(Decimal("25.00")) / minor_unit["EUR"]
+    assert tie_quanta.denominator == 1
+    assert (tie_quanta * minor_unit["EUR"] * rate / minor_unit["USD"]) % 1 == Fraction(1, 2)
+    fx_decision_id = exact_decision_id("fx_debit", f"{_ASSET_ONE_ROUTE_ID}:EUR")
+    (fx_access,) = [access for access in build_exact_policy_view(scenario, purpose="primary").decisions if access.decision_id == fx_decision_id]
+    assert fx_access.mode == "mutable"
+    assert fx_access.lower_quanta <= tie_quanta <= fx_access.upper_quanta
+
+    result = plan_pac_allocation(request, solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
+    assert result.availability == "ready"
+    assert isinstance(result, PacPlannerReadyIncumbentResult)
+    assert (result.result_state, result.proof.kind, result.stop_reason) == ("ready_incumbent", "optimal_proven", "completed")
+    _revalidate(result)
+
+    wire = PAC_PLAN_OUTPUT_ADAPTER.dump_python(result, mode="json", by_alias=True)
+    solution = wire["primary_solution"]
+    assert solution["funding_actions"] and solution["fx_actions"] and solution["order_rows"], "the plan must fund, convert and buy"
+    usd_minor_unit = _published_minor_unit(wire, "USD")
+    for action in solution["fx_actions"]:
+        debit, credit = action["source_debit"], action["destination_credit"]
+        assert (debit["currency"], credit["currency"]) == ("EUR", "USD"), action
+        assert Decimal(credit["amount"]) == (Decimal(debit["amount"]) * Decimal("1.1298")).quantize(usd_minor_unit, rounding=ROUND_HALF_UP), action
 
 
 # --------------------------------------------------------------------------

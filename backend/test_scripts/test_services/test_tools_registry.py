@@ -1202,8 +1202,8 @@ def test_registered_pac_allocator_service_is_the_v2_planner_card():
     # The i18n key is the card's contract: the frontend catalogues own the text.
     assert descriptor.name_i18n_key == "tools.pacAllocator.name"
     assert descriptor.description_i18n_key == "tools.pacAllocator.description"
-    assert descriptor.ui.model_dump(mode="json") == {"kind": "custom", "component_key": "pac-allocator", "version": "2.0.0"}
-    assert (descriptor.contract_version, descriptor.implementation_version) == ("2.0.0", "2.0.0")
+    assert descriptor.ui.model_dump(mode="json") == {"kind": "custom", "component_key": "pac-allocator", "version": "1.0.0"}
+    assert (descriptor.contract_version, descriptor.implementation_version) == ("1.0.0", "1.0.0")
     assert [policy.operation for policy in descriptor.operations] == ["plan"]
 
     # The English fallback is shown whenever a catalogue misses the key: it must

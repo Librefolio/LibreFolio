@@ -5,11 +5,6 @@
  * recommendation, and none is sent without appearing in the draft first.
  */
 
-// TODO(pac-allocator): reduce this ceiling once the execution-time simulations with
-// increasing thresholds have measured the supported domain (Q-C0-5, Step 3 point 13).
-// A high cap does not widen the search: each order is bounded by min(cap, resources).
-export const DEFAULT_ROUTE_CAP = '1000000000';
-
 /** Lower is preferred (N13); negative priorities are rejected by the backend. */
 export const DEFAULT_ROUTE_PRIORITY = '0';
 export const DEFAULT_FUNDING_PRIORITY = '0';
@@ -26,8 +21,15 @@ export const DEFAULT_FEE = {
     cap: '',
 } as const;
 
-export const PLANNER_TOOL_CODE = 'pac_allocator';
-export const PLANNER_CONTRACT_VERSION = '2.0.0';
+/** Today in the local calendar, clamped to the UTC date: `as_of` may not pass the snapshot date (N26). */
+export function defaultAsOf(now: Date = new Date()): string {
+    const local = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
+    const utc = now.toISOString().slice(0, 10);
+    return local < utc ? local : utc;
+}
 
-/** The only value the 2.0.0 wire accepts for `operation`. */
+export const PLANNER_TOOL_CODE = 'pac_allocator';
+export const PLANNER_CONTRACT_VERSION = '1.0.0';
+
+/** The only value the 1.0.0 wire accepts for `operation`. */
 export const PLANNER_OPERATION = 'plan';

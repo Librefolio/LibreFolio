@@ -58,6 +58,17 @@ export interface SourceBroker {
     provenance_id: string;
 }
 
+/**
+ * Which Asset is held at which Broker. Identifiers only: the picker of the
+ * user's own Assets needs no quantity, so none crosses into the planner.
+ */
+export interface SourceHolding {
+    holding_id: string;
+    asset_id: string;
+    broker_id: string;
+    provenance_id: string;
+}
+
 export interface SourceCash {
     cash_id: string;
     broker_id: string;
@@ -143,6 +154,7 @@ export interface PlannerSource {
     provenance: SourceProvenance[];
     assets: SourceAsset[];
     brokers: SourceBroker[];
+    holdings: SourceHolding[];
     cash: SourceCash[];
     prices: SourcePrice[];
     classifications: SourceClassification[];
@@ -217,6 +229,12 @@ function mapResponse(raw: RawResponse): PlannerSource {
             observed_currencies: [...row.observed_currencies],
             active: row.active,
             execution_profile_status: row.execution_profile_status,
+            provenance_id: row.provenance_id,
+        })),
+        holdings: raw.holdings.map((row) => ({
+            holding_id: row.holding_id,
+            asset_id: row.asset_id,
+            broker_id: row.broker_id,
             provenance_id: row.provenance_id,
         })),
         cash: raw.cash_balances.map((row) => ({

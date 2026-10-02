@@ -1391,6 +1391,76 @@ def test_immutable_exact_models_reject_duplicate_semantic_identities(
 
 
 # ---------------------------------------------------------------------------
+# R4.9 — each Broker's conversion mode travels from the request into the exact
+# model untouched, and the exact model admits only the two published modes.
+# ---------------------------------------------------------------------------
+
+CONVERSION_MODES = ("manual", "automatic")
+
+
+def _ready_pac_payload() -> JsonObject:
+    return _fixture(PAC_FIXTURE)
+
+
+CONVERSION_MODE_CARRY_CASES = tuple(
+    pytest.param(product, build_payload, broker_id, mode, id=f"{product}-{broker_id}-{mode}")
+    for product, build_payload, broker_id in (
+        ("pac", _ready_pac_payload, "broker-one"),
+        ("rebalancer", _ready_rebalancer_payload, "broker-alpha"),
+        ("rebalancer", _ready_rebalancer_payload, "broker-beta"),
+    )
+    for mode in CONVERSION_MODES
+)
+
+
+@pytest.mark.parametrize(
+    ("product", "build_payload", "broker_id", "mode"),
+    CONVERSION_MODE_CARRY_CASES,
+)
+def test_normalization_carries_each_broker_conversion_mode_into_the_exact_model(
+    product: str,
+    build_payload: Callable[[], JsonObject],
+    broker_id: str,
+    mode: str,
+) -> None:
+    payload = build_payload()
+    _find_row(payload["brokers"], "broker_id", broker_id)["conversion_mode"] = mode
+    requested = {row["broker_id"]: row["conversion_mode"] for row in payload["brokers"]}
+
+    result = _normalize_payload(product, payload)
+
+    assert result.availability == "ready", result.issues
+    assert result.normalized is not None
+    normalized = {broker.broker_id: broker.conversion_mode for broker in result.normalized.brokers}
+    assert normalized[broker_id] == mode
+    # Per Broker, not per request: every other Broker keeps the mode it asked for.
+    assert normalized == requested
+
+
+@pytest.mark.parametrize("mode", CONVERSION_MODES)
+def test_exact_broker_accepts_each_published_conversion_mode(mode: str) -> None:
+    broker = next(item for item in _ready_rebalancer_scenario().brokers if item.broker_id == "broker-alpha")
+
+    assert replace(broker, conversion_mode=mode).conversion_mode == mode
+
+
+@pytest.mark.parametrize(
+    "mode",
+    (
+        pytest.param("Manual", id="capitalised"),
+        pytest.param("auto", id="abbreviated"),
+        pytest.param("", id="empty"),
+        pytest.param(None, id="none"),
+    ),
+)
+def test_exact_broker_rejects_an_unknown_conversion_mode(mode: object) -> None:
+    broker = next(item for item in _ready_rebalancer_scenario().brokers if item.broker_id == "broker-alpha")
+
+    with pytest.raises(ValueError, match="unknown Broker conversion mode"):
+        replace(broker, conversion_mode=mode)
+
+
+# ---------------------------------------------------------------------------
 # C0b.3 — an Asset's exposures may not sum above one within a dimension.
 # ---------------------------------------------------------------------------
 
