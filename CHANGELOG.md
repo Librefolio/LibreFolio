@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixed
 
+#### 🔒 Security
+
+- Asset, broker and note names that contain markup are shown as plain text in tables, chart tooltips, notifications and validation messages, instead of being interpreted as HTML. This closes a stored cross-site scripting issue present since v1.1.0, where a crafted asset name could run code in another user's browser.
+
 #### 🤖 AI Export and signal contracts
 
 - AI Export structural validation now raises typed errors for invalid component, dataset, analysis, policy and detail-level definitions even when Python runs with optimization enabled. Public IDs, versions and catalog ordering remain unchanged.
@@ -59,6 +63,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Global settings use the standard amber in-app confirmation before discarding an unsaved draft; cancel and Escape keep the draft unlocked.
 - Search in select menus ranks name matches first: typing "CSV" puts "Generic CSV" at the top.
 - Creating an asset, the provider data comparison no longer opens on top of the ISIN choice: it waits for your answer and never asks the same question twice.
+- Borsa Italiana ETFs and ETCs take the currency they are quoted in (EUR), not the fund's denomination currency, whether they are found by search or added from their page address.
+- The Dashboard again warns about assets whose provider has not delivered a new price for more than 7 days. The warning now has a **Sync** button that refreshes those assets; manual assets are never flagged.
+
+#### 📱 Sign-in, app icons and small screens
+
+- Browsers offer saved credentials on the sign-in username field too, and registration and password change are recognised by password managers, so changing a password updates the right saved account.
+- The installed app no longer shows black corners on the Android splash screen or around the iPhone home-screen icon, and Android gets a proper maskable icon.
+- On phones, the asset dialog keeps Save and Cancel reachable, **Sync** on an asset page no longer looks crossed out while the page loads, and the asset page tabs show an icon.
+- The top toolbars of the Assets, asset detail, Dashboard, broker detail and FX pages no longer push buttons out of the bar at intermediate widths, in every interface language.
 
 ### 🔄 Changed
 
