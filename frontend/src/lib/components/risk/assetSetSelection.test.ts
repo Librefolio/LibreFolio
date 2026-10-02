@@ -8,8 +8,9 @@
  * asked for and gave no way back. Every rule it now enforces is a decision
  * taken before a component renders — which assets are on the table, what the
  * filter row means when it is empty, what a mass action does to the ruled-out
- * assets parked in the selection, which rows the "+" picker offers — so all of
- * it is asserted here rather than through a page.
+ * assets parked in the selection, which rows the "+" picker offers, which
+ * benchmark the comparison levels measure against — so all of it is asserted
+ * here rather than through a page.
  *
  * Two deliberate choices in the fixtures:
  *
@@ -38,12 +39,14 @@
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 
 import {getClientSessionUserId, transitionClientSession} from '$lib/stores/app/clientSession';
+import type {RiskBenchmarkState} from '$lib/stores/risk/riskBenchmarkStore.svelte';
 import {
     FALLBACK_SELECTION_SIZE,
     MAX_SELECTED_ASSETS,
     applyBulkAction,
     applyFilters,
     foldForSearch,
+    labBenchmarkId,
     pickerRows,
     readPersistedSelection,
     resolveInitialSelectionWithSource,
@@ -885,5 +888,68 @@ describe('toggleVisibleRows and visibleRowsAllChecked', () => {
             expect(toggleVisibleRows(checked, [1, 2, 3], room), `room ${room}`).not.toBe(checked);
         }
         expect(checked).toEqual([9, 1]);
+    });
+});
+
+/**
+ * labBenchmarkId — the benchmark the lab's comparison levels measure against.
+ *
+ * A non-null answer is what starts them: the beta and correlation columns, and
+ * the benchmark's dot on L3°'s chart, begin only from an id. Each guard keeps
+ * one kind of wrong id out of the request:
+ *
+ *  - **The state, pinned on its own.** Risk's shared picker, `BenchmarkSelect`,
+ *    publishes `pending` while a stored choice is still being confirmed against
+ *    the asset list, `unknown` for a stored id no asset matches and `none` when
+ *    nothing is stored; only `set` is a confirmed choice. An unconfirmed or
+ *    unknown id must never reach the request. No component test can pin this
+ *    guard: with today's picker `value` stays null until `set`, so removing it
+ *    there is an equivalent mutant. Here it is not — each of its rows carries an
+ *    id every other guard lets through, and first proves it under `set`.
+ *  - **The value.** A confirmed state that comes with no id names no benchmark:
+ *    the answer is `null` itself, the one value that starts nothing.
+ *  - **The analysed set.** A yardstick cannot also be one of the measured: a
+ *    benchmark the reader also selected would make the backend reject the
+ *    comparison, wherever it sits among the analysed ids.
+ */
+describe('labBenchmarkId', () => {
+    it.each<[string, number, readonly number[]]>([
+        ['it is not among the analysed assets', 7, [1, 2]],
+        ['nothing is analysed yet', 7, []],
+    ])('measures against a confirmed benchmark when %s', (_label, value, analysedIds) => {
+        expect(labBenchmarkId('set', value, analysedIds)).toBe(value);
+    });
+
+    it.each<[string, RiskBenchmarkState, number, readonly number[]]>([
+        ['the stored choice is still pending confirmation', 'pending', 7, [1, 2]],
+        ['the stored id matches no asset', 'unknown', 7, [1, 2]],
+        ['nothing is stored', 'none', 7, []],
+    ])('measures against nothing while %s, however usable the id', (_label, state, value, analysedIds) => {
+        // The control: confirmed, this very id and analysed set would be measured against — the state alone refuses it.
+        expect(labBenchmarkId('set', value, analysedIds), 'the same id, confirmed').toBe(value);
+        expect(labBenchmarkId(state, value, analysedIds)).toBeNull();
+    });
+
+    it.each<[string, number | null, readonly number[]]>([
+        // A yardstick among the measured is refused wherever it sits in the list.
+        ['the benchmark is also the first analysed asset', 7, [7, 9]],
+        ['the benchmark is also the last analysed asset', 9, [7, 9]],
+        // And a confirmed state that carries no id at all.
+        ['no id comes with the choice', null, [1]],
+    ])('measures against nothing when %s, even once confirmed', (_label, value, analysedIds) => {
+        // `null` itself: `undefined` is not the contract's "no comparison".
+        expect(labBenchmarkId('set', value, analysedIds)).toBeNull();
+    });
+
+    it('leaves the analysed list it was given untouched', () => {
+        // Unsorted and holding an id it is asked about, so an in-place sort or a splice would both show.
+        const analysed = [9, 7, 3];
+        const states: RiskBenchmarkState[] = ['none', 'pending', 'set', 'unknown'];
+        for (const state of states) {
+            for (const value of [7, 5, null]) {
+                labBenchmarkId(state, value, analysed);
+            }
+        }
+        expect(analysed).toEqual([9, 7, 3]);
     });
 });
