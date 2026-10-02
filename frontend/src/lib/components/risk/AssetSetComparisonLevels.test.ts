@@ -27,12 +27,15 @@
  * blank is not a failure; and a discard *after* an answer keeps its figures — the frames say the
  * new answer was lost, and the table is not replaced by a retry.
  *
- * **The harness is `AssetSetReplaySection.test.ts`'s.** The controller is the real one, observed
- * through its factory, so every case first states its premise — the controller did record the
- * failure, or the discard — before asserting what the page makes of it. `queryRisk` answers by
- * outcome and keeps every question with its `force` flag. Capabilities are gated the way the
- * backend declares them for an asset set (historical only; the correlation and the per-asset
- * family), so one base load is one question and "asked again" is a count.
+ * **The harness is `AssetSetReplaySection.test.ts`'s.** The controllers are the real ones, observed
+ * through their factory, so every case first states its premise — every controller the levels
+ * created did record the failure, or the discard — before asserting what the page makes of it. The
+ * premises are stated over all of them because their number is what the split below changes: one
+ * today, one per level once the levels ask apart. `queryRisk` answers by outcome, with the results the
+ * question asked for (by instance, as the backend answers), and keeps every question with its `force`
+ * flag. Capabilities are gated the way the backend declares them for an asset set (historical only;
+ * the correlation and the per-asset family), so each controller's base load is one question and
+ * "asked again" is a count.
  *
  * **No text is asserted.** Testids, `data-code` and `data-measured` are the contract; a sentence
  * is only checked to be there (non-empty) or not there, never read.
@@ -53,6 +56,11 @@
  * Observed through the note's `data-narrowed` alone, as this file reads no text; the window itself and
  * the note's sentences are `AssetSetRiskReturnSection.test.ts`'s. Written red first: the section has no
  * period note yet.
+ *
+ * **L1° and L3° ask apart** (the developer's decision, 2026-10-02): L1° is measured without the
+ * benchmark, and only L3° asks with it — one question per level, each with its own load state and its
+ * own retry. Pinned by the last blocks of this file; written red first, against the single question
+ * both levels share today.
  *
  * Left elsewhere: the discard and re-ask rules themselves (`riskPanelController.test.ts`), the
  * tables' own cells (`AssetSetLossComparisonSection.test.ts`, `AssetSetRiskReturnSection.test.ts`,
@@ -121,7 +129,7 @@ const ICONS: ReadonlyMap<number, string> = new Map([
     [HOLDING_A, '/icons/asset-types/etf.png'],
     [HOLDING_B, '/icons/asset-types/stock.png'],
 ]);
-const PROPS = {assetIds: SELECTION, assetLabels: LABELS, assetIcons: ICONS, dateStart: DATE_START, dateEnd: DATE_END, targetCurrency: 'EUR', benchmarkId: null, refreshVersion: 0};
+const PROPS = {assetIds: SELECTION, assetLabels: LABELS, assetIcons: ICONS, dateStart: DATE_START, dateEnd: DATE_END, targetCurrency: 'EUR', benchmarkId: null as number | null, refreshVersion: 0};
 
 /** Each level: the prefix its body publishes, and the testid of the frame it sits in. */
 const LEVELS = [
@@ -205,7 +213,7 @@ beforeEach(() => {
         script.asked.push({request, force: force === true});
         if (script.outcome === 'reject') throw new Error('invented: the base wave failed');
         if (script.outcome === 'discard') return null;
-        return {items: script.outcome === 'figures' ? FIGURES : []};
+        return {items: script.outcome === 'figures' ? answerTo(request, FIGURES) : []};
     });
     // The controller logs a failed wave. That one line is expected and kept out of the run's
     // output; anything else still reaches it.
@@ -220,33 +228,50 @@ afterEach(() => {
     consoleError.mockRestore();
 });
 
+/**
+ * The results a question asked for, by instance — as the backend answers it: never a result for an
+ * analytic another question carried. Today's single question asks for every fixture, so this changes
+ * nothing for it; once the levels ask apart, each level gets its own figures and no one else's.
+ */
+function answerTo(request: RiskQueryRequest, results: RiskAnalyticResult[]): RiskAnalyticResult[] {
+    const asked = new Set(request.analytics.map((analytic) => analytic.instance_id));
+    return results.filter((result) => asked.has(result.instance_id));
+}
+
 function mount(props: typeof PROPS = PROPS) {
     const view = render(AssetSetComparisonLevels, {props});
-    expect(created.controllers, 'the levels did not create a controller of their own').toHaveLength(1);
-    return {view, controller: created.controllers[0] as RiskPanelController};
+    expect(created.controllers.length, 'the levels did not create a controller of their own').toBeGreaterThan(0);
+    return {view, controllers: [...created.controllers] as RiskPanelController[]};
 }
 
-async function settled(controller: RiskPanelController): Promise<void> {
-    await waitFor(() => expect(controller.initialLoading, 'the base wave the mount fires never settled').toBe(false));
+/** A controller's load states, named so that a premise over all of them reads as one: `controllers.every(hasFailed)`. */
+const isLoading = (controller: RiskPanelController): boolean => controller.initialLoading;
+const hasFailed = (controller: RiskPanelController): boolean => controller.loadError;
+const wasDiscarded = (controller: RiskPanelController): boolean => controller.loadDiscarded;
+const isBusy = (controller: RiskPanelController): boolean => controller.initialLoading || controller.refreshing;
+
+/** Every controller the levels created has settled the base wave its mount fires. */
+async function settled(controllers: RiskPanelController[]): Promise<void> {
+    await waitFor(() => expect(controllers.some(isLoading), 'the base wave the mount fires never settled').toBe(false));
 }
 
-/** Mounted with the wave failing, and the premise: the controller recorded the failure. */
-async function mountFailed(): Promise<RiskPanelController> {
+/** Mounted with the wave failing, and the premise: every controller recorded the failure. */
+async function mountFailed(): Promise<RiskPanelController[]> {
     script.outcome = 'reject';
-    const {controller} = mount();
-    await waitFor(() => expect(controller.loadError, 'the controller never recorded the failure: the path under test did not run').toBe(true));
-    expect(controller.loadDiscarded, 'a failure is not a discard').toBe(false);
-    return controller;
+    const {controllers} = mount();
+    await waitFor(() => expect(controllers.every(hasFailed), 'the controller never recorded the failure: the path under test did not run').toBe(true));
+    expect(controllers.some(wasDiscarded), 'a failure is not a discard').toBe(false);
+    return controllers;
 }
 
-/** Mounted with every answer discarded, and the premise: asked, re-asked once, and the discard recorded. */
-async function mountDiscarded(): Promise<RiskPanelController> {
+/** Mounted with every answer discarded, and the premise: each question asked, re-asked once, and the discard recorded. */
+async function mountDiscarded(): Promise<RiskPanelController[]> {
     script.outcome = 'discard';
-    const {controller} = mount();
-    await waitFor(() => expect(controller.loadDiscarded, 'the controller never recorded the discard: the path under test did not run').toBe(true));
-    expect(script.asked, 'the base question was not asked and then re-asked exactly once').toHaveLength(2);
-    expect(controller.loadError, 'a discard is not a failure').toBe(false);
-    return controller;
+    const {controllers} = mount();
+    await waitFor(() => expect(controllers.every(wasDiscarded), 'the controller never recorded the discard: the path under test did not run').toBe(true));
+    expect(script.asked, 'each base question was not asked and then re-asked exactly once').toHaveLength(2 * controllers.length);
+    expect(controllers.some(hasFailed), 'a discard is not a failure').toBe(false);
+    return controllers;
 }
 
 function normalize(text: string | null | undefined): string {
@@ -329,14 +354,17 @@ async function expectL3Figures(): Promise<void> {
     });
 }
 
-/** None of the load-state chrome: no body block, no retry, and no frame saying an answer was discarded. */
-function expectNoLoadChrome(why: string): void {
-    for (const {level, frame} of LEVELS) {
-        for (const part of ['error', 'discarded', 'retry']) {
-            expect(screen.queryByTestId(`risk-asset-set-${level}-${part}`), `${why}: ${level} shows risk-asset-set-${level}-${part}`).toBeNull();
-        }
-        expect(frameCodes(frame), `${why}: the ${level} frame says an answer was discarded`).not.toContain(ANSWER_DISCARDED_CODE);
+/** None of the load-state chrome in one level: no body block, no retry, and no frame saying an answer was discarded. */
+function expectNoLoadChromeIn(level: Level, frame: string, why: string): void {
+    for (const part of ['error', 'discarded', 'retry']) {
+        expect(screen.queryByTestId(`risk-asset-set-${level}-${part}`), `${why}: ${level} shows risk-asset-set-${level}-${part}`).toBeNull();
     }
+    expect(frameCodes(frame), `${why}: the ${level} frame says an answer was discarded`).not.toContain(ANSWER_DISCARDED_CODE);
+}
+
+/** None of the load-state chrome, in either level. */
+function expectNoLoadChrome(why: string): void {
+    for (const {level, frame} of LEVELS) expectNoLoadChromeIn(level, frame, why);
 }
 
 /** Press a retry and prove it asked the base question again, past the cache; then let the wave settle. */
@@ -356,12 +384,12 @@ describe('AssetSetComparisonLevels — the harness itself', () => {
     it('runs effects, asks one question per base load, and its figures survive the parsers', async () => {
         expect(() => assertEffectsRun()).not.toThrow();
 
-        const {controller} = mount();
-        await settled(controller);
-        expect(script.asked, 'one base load must be one question: the capability gate lets only the asset-set wave through').toHaveLength(1);
+        const {controllers} = mount();
+        await settled(controllers);
+        expect(script.asked, 'one base load must be one question per controller: the capability gate lets only the asset-set wave through').toHaveLength(controllers.length);
         expect(
-            script.asked[0].request.analytics.map((analytic) => analytic.analytic_code),
-            'the question is not the per-asset wave these levels read',
+            script.asked.flatMap(({request}) => request.analytics.map((analytic) => analytic.analytic_code)),
+            'the questions are not the per-asset wave these levels read',
         ).toEqual(expect.arrayContaining(['asset_set_var', 'asset_set_drawdown', 'asset_set_risk_return', 'asset_set_kpi']));
 
         // An answer with figures is a complement's barrier below: its fixtures must reach the cells, both levels'.
@@ -382,10 +410,10 @@ describe('AssetSetComparisonLevels — a base wave that fails', () => {
     });
 
     it.each(LEVELS.map(({level}) => level))('the %s retry asks the base question again, past the cache', async (level) => {
-        const controller = await mountFailed();
+        const controllers = await mountFailed();
         const {retry} = await blockWithRetry(level, 'error', `${level}: the base wave failed and the level offers no way to ask again`);
 
-        await expectRetryAsksAgain(level, retry, () => expect(controller.loadError, 'the re-asked wave never settled').toBe(true));
+        await expectRetryAsksAgain(level, retry, () => expect(controllers.every(hasFailed), 'the re-asked wave never settled').toBe(true));
     });
 });
 
@@ -404,20 +432,20 @@ describe('AssetSetComparisonLevels — a base answer discarded twice running', (
     });
 
     it.each(LEVELS.map(({level}) => level))('the %s retry asks the base question again, past the cache', async (level) => {
-        const controller = await mountDiscarded();
+        const controllers = await mountDiscarded();
         const {retry} = await blockWithRetry(level, 'discarded', `${level}: the answer was discarded and the level offers no way to ask again`);
         const before = script.asked.length;
 
         // Discarded again, and re-asked again by the controller itself: two more questions.
         await expectRetryAsksAgain(level, retry, () => {
             expect(script.asked.length, 'the re-asked wave never settled').toBe(before + 2);
-            expect(controller.loadDiscarded).toBe(true);
+            expect(controllers.every(wasDiscarded)).toBe(true);
         });
     });
 
     it('after an answer with figures, keeps them: the frames say the new answer was lost, and both levels keep their tables', async () => {
-        const {view, controller} = mount();
-        await settled(controller);
+        const {view, controllers} = mount();
+        await settled(controllers);
         await expectFigures();
         await expectL3Figures();
 
@@ -425,8 +453,8 @@ describe('AssetSetComparisonLevels — a base answer discarded twice running', (
         const before = script.asked.length;
         script.outcome = 'discard';
         view.rerender({refreshVersion: 1});
-        await waitFor(() => expect(controller.loadDiscarded, 'the refreshed answer was never recorded as discarded').toBe(true));
-        expect(script.asked.length - before, 'the refresh was not asked and then re-asked exactly once').toBe(2);
+        await waitFor(() => expect(controllers.every(wasDiscarded), 'the refreshed answer was never recorded as discarded').toBe(true));
+        expect(script.asked.length - before, 'the refresh was not asked and then re-asked exactly once, question by question').toBe(2 * controllers.length);
 
         // The discard kept the answer on screen, and says it lost the new one.
         await expectFigures();
@@ -441,8 +469,8 @@ describe('AssetSetComparisonLevels — a base answer discarded twice running', (
 
 describe('AssetSetComparisonLevels — an answer: nothing failed, nothing discarded', () => {
     it('with figures, shows none of it', async () => {
-        const {controller} = mount();
-        await settled(controller);
+        const {controllers} = mount();
+        await settled(controllers);
         await expectFigures();
 
         expectNoLoadChrome('an answer with figures');
@@ -450,10 +478,10 @@ describe('AssetSetComparisonLevels — an answer: nothing failed, nothing discar
 
     it('that measured nothing, shows none of it either: a blank is not a failure', async () => {
         script.outcome = 'nothing';
-        const {controller} = mount();
-        await settled(controller);
-        expect(controller.loadError).toBe(false);
-        expect(controller.loadDiscarded).toBe(false);
+        const {controllers} = mount();
+        await settled(controllers);
+        expect(controllers.some(hasFailed)).toBe(false);
+        expect(controllers.some(wasDiscarded)).toBe(false);
 
         // The barrier: both tables drawn, a row per selected asset, nothing measured — the very
         // picture a failed or discarded wave used to leave behind.
@@ -530,13 +558,13 @@ function expectNoToggle(level: Level, frame: string, why: string): void {
  * on. One test's scope: `beforeEach` installs the ordinary answers again.
  */
 function holdAnswers(): () => void {
-    const held: ((answer: {items: RiskAnalyticResult[]}) => void)[] = [];
+    const held: {request: RiskQueryRequest; resolve: (answer: {items: RiskAnalyticResult[]}) => void}[] = [];
     queryRisk.mockImplementation((request: RiskQueryRequest, force?: boolean) => {
         script.asked.push({request, force: force === true});
-        return new Promise((resolve) => held.push(resolve));
+        return new Promise((resolve) => held.push({request, resolve}));
     });
     return () => {
-        for (const resolve of held.splice(0)) resolve({items: FIGURES});
+        for (const {request, resolve} of held.splice(0)) resolve({items: answerTo(request, FIGURES)});
     };
 }
 
@@ -550,8 +578,8 @@ async function retryIntoFigures(retry: HTMLElement, figures: () => Promise<void>
 for (const {name, level, frame, columns, figures} of TABLE_LEVELS) {
     describe(`AssetSetComparisonLevels — ${name}'s column toggle, in its frame beside the manual icon`, () => {
         it("with figures: in its own frame's header, after the title and before the manual icon", async () => {
-            const {controller} = mount();
-            await settled(controller);
+            const {controllers} = mount();
+            await settled(controllers);
             await figures();
             const toggle = await expectToggle(frame, `${name} shows its figures and its frame offers no column toggle`);
 
@@ -563,8 +591,8 @@ for (const {name, level, frame, columns, figures} of TABLE_LEVELS) {
         });
 
         it("opening it lists this level's columns and none of the other's: the menu reads its own table", async () => {
-            const {controller} = mount();
-            await settled(controller);
+            const {controllers} = mount();
+            await settled(controllers);
             await figures();
             await fireEvent.click(await expectToggle(frame, `${name} shows its figures and its frame offers no column toggle`));
 
@@ -580,9 +608,9 @@ for (const {name, level, frame, columns, figures} of TABLE_LEVELS) {
 
         it('is not there while the first answer is in flight, and arrives with the table', async () => {
             const release = holdAnswers();
-            const {controller} = mount();
-            await waitFor(() => expect(script.asked, 'the base question was never asked: nothing is in flight').toHaveLength(1));
-            expect(controller.initialLoading, 'premise: the first answer is still loading').toBe(true);
+            const {controllers} = mount();
+            await waitFor(() => expect(script.asked, 'the base questions were never asked: nothing is in flight').toHaveLength(controllers.length));
+            expect(controllers.every(isLoading), 'premise: the first answer is still loading').toBe(true);
             await waitFor(() => expect(screen.queryByTestId(`risk-asset-set-${level}-loading`), `${name} is not drawing its skeleton`).not.toBeNull());
             expectNoToggle(level, frame, 'a column toggle beside a skeleton');
 
@@ -611,22 +639,22 @@ for (const {name, level, frame, columns, figures} of TABLE_LEVELS) {
 
         it('is there with an answer that measured nothing: a row of dashes per selected asset is still a table', async () => {
             script.outcome = 'nothing';
-            const {controller} = mount();
-            await settled(controller);
+            const {controllers} = mount();
+            await settled(controllers);
             await waitFor(() => expect(screen.getByTestId(`risk-asset-set-${level}-table`)).toHaveAttribute('data-row-count', String(SELECTION.length)));
 
             await expectToggle(frame, `${name} draws its table and its frame offers no column toggle`);
         });
 
         it('stays when a later answer is discarded: the figures stay, and so does their toggle', async () => {
-            const {view, controller} = mount();
-            await settled(controller);
+            const {view, controllers} = mount();
+            await settled(controllers);
             await figures();
             await expectToggle(frame, `${name} shows its figures and its frame offers no column toggle`);
 
             script.outcome = 'discard';
             view.rerender({refreshVersion: 1});
-            await waitFor(() => expect(controller.loadDiscarded, 'the refreshed answer was never recorded as discarded').toBe(true));
+            await waitFor(() => expect(controllers.every(wasDiscarded), 'the refreshed answer was never recorded as discarded').toBe(true));
             await figures();
             expect(toggleIn(screen.getByTestId(frame)), 'the figures stayed and their toggle went: it follows the table, not the load state').not.toBeNull();
         });
@@ -635,8 +663,8 @@ for (const {name, level, frame, columns, figures} of TABLE_LEVELS) {
 
 describe('AssetSetComparisonLevels — one column toggle per level table', () => {
     it('with figures: two toggles on the page, one in each frame', async () => {
-        const {controller} = mount();
-        await settled(controller);
+        const {controllers} = mount();
+        await settled(controllers);
         await expectFigures();
         await expectL3Figures();
 
@@ -652,8 +680,8 @@ describe('AssetSetComparisonLevels — one column toggle per level table', () =>
 describe('AssetSetComparisonLevels — the icons reach both tables', () => {
     for (const {name, level, figures} of TABLE_LEVELS) {
         it(`${name}: every asset cell draws the icon the panel resolved for it`, async () => {
-            const {controller} = mount();
-            await settled(controller);
+            const {controllers} = mount();
+            await settled(controllers);
             await figures();
 
             for (const assetId of SELECTION) {
@@ -706,8 +734,8 @@ describe("AssetSetComparisonLevels — the toolbar's period reaches L3°'s perio
             script.asked.push({request, force: force === true});
             return {items: WINDOWED};
         });
-        const {controller} = mount({...PROPS, dateStart, dateEnd});
-        await settled(controller);
+        const {controllers} = mount({...PROPS, dateStart, dateEnd});
+        await settled(controllers);
         await expectL3Figures();
 
         const note = await waitFor(() => screen.getByTestId('risk-asset-set-l3-period'));
@@ -718,3 +746,236 @@ describe("AssetSetComparisonLevels — the toolbar's period reaches L3°'s perio
         expect(note, `against ${dateStart}…${dateEnd}: the levels did not hand L3° the toolbar's period`).toHaveAttribute('data-narrowed', String(narrowed));
     });
 });
+
+/**
+ * L1° and L3° ask apart (the developer's decision, 2026-10-02). L1° — «How much did each of these
+ * hurt?» — is measured without the benchmark; only L3° — «What did each of these pay for its risk?» —
+ * asks with it. One question shared by both had the backend prepare a single joint window with the
+ * benchmark inside, so a benchmark with stale prices turned L1° «Partial» for a reason L1° never asks
+ * about. So each level has its own question: L1°'s carries the loss family and nothing of the
+ * benchmark, L3°'s the paid family and, when a benchmark applies, the comparison against it. Changing
+ * the benchmark re-asks L3° alone, and each level's loading, failure, discard and retry are its own.
+ *
+ * A question belongs to a level by the analytics it carries — never by its position, nor by which
+ * controller sent it. Written red first: today one controller asks both levels' analytics in a single
+ * question, so every case below goes red where it first needs two.
+ */
+
+/** The analytics that attribute a question to a level. `correlation` rides in every historical wave and attributes nothing. */
+const LEVEL_CODES: Record<Level, readonly string[]> = {
+    l1: ['asset_set_var', 'asset_set_drawdown'],
+    l3: ['asset_set_kpi', 'asset_set_risk_return', 'asset_set_comparison'],
+};
+const LEVEL_NAMES: Record<Level, string> = {l1: 'L1°', l3: 'L3°'};
+
+/** Invented benchmarks, outside the selection. Neither number occurs anywhere else in a question — not as an id, a horizon or a rate — so finding one means the benchmark is in it. */
+const BENCHMARK = 47;
+const OTHER_BENCHMARK = 53;
+
+function otherThan(level: Level): Level {
+    return level === 'l1' ? 'l3' : 'l1';
+}
+
+function codesOf(request: RiskQueryRequest): string[] {
+    return request.analytics.map((analytic) => analytic.analytic_code);
+}
+
+/** Whether a question carries any of a level's analytics. */
+function carries(request: RiskQueryRequest, level: Level): boolean {
+    return codesOf(request).some((code) => LEVEL_CODES[level].includes(code));
+}
+
+/** The other level's analytics a question carries: none, once the levels ask apart. */
+function foreignCodes(request: RiskQueryRequest, level: Level): string[] {
+    return codesOf(request).filter((code) => LEVEL_CODES[otherThan(level)].includes(code));
+}
+
+/** Every question asked so far that carries a level's analytics. */
+function questionsOf(level: Level): RiskQueryRequest[] {
+    return script.asked.map(({request}) => request).filter((request) => carries(request, level));
+}
+
+/** Every key and every leaf of a question, however deep: where a benchmark would hide. */
+function leavesOf(value: unknown): unknown[] {
+    if (Array.isArray(value)) return value.flatMap(leavesOf);
+    if (value !== null && typeof value === 'object') return Object.entries(value).flatMap(([key, child]) => [key, ...leavesOf(child)]);
+    return [value];
+}
+
+/** The benchmark a question compares against, when it asks for a comparison. */
+function comparedWith(request: RiskQueryRequest): unknown {
+    const parameters = request.analytics.find((analytic) => analytic.analytic_code === 'asset_set_comparison')?.parameters as Record<string, unknown> | undefined;
+    return parameters?.comparison_asset_id;
+}
+
+/** Whether a question asked since `before` compares against `benchmark`. */
+function comparedSince(before: number, benchmark: number): boolean {
+    return script.asked.slice(before).some(({request}) => comparedWith(request) === benchmark);
+}
+
+/** Every controller has settled whatever it was asking: no first load, no refresh in flight. */
+async function quiet(controllers: RiskPanelController[]): Promise<void> {
+    await waitFor(() => expect(controllers.some(isBusy), 'a base wave never settled').toBe(false));
+}
+
+/**
+ * The split itself: a question of the level's own, carrying none of the other level's analytics. What
+ * every case below first needs, and what today's single question is not.
+ */
+async function ownQuestion(level: Level): Promise<RiskQueryRequest> {
+    const why = `${LEVEL_NAMES[level]} has no question of its own: its analytics still travel with ${LEVEL_NAMES[otherThan(level)]}'s, in one request`;
+    return waitFor(() => {
+        const own = questionsOf(level).filter((request) => !carries(request, otherThan(level)));
+        expect(own.length, why).toBeGreaterThan(0);
+        return own[0];
+    });
+}
+
+/** What was asked since `before`: something, all of it past the cache, and nothing of the other level's. */
+function expectAskedAlone(level: Level, before: number, who: string): void {
+    const asked = script.asked.slice(before);
+    const forced = asked.every(({force}) => force);
+    const strays = asked.filter(({request}) => carries(request, otherThan(level))).map(({request}) => codesOf(request));
+    expect(asked.length, `${who} asked nothing`).toBeGreaterThan(0);
+    expect(forced, `${who} must ask past the cache — controller.loadBase(true)`).toBe(true);
+    expect(strays, `${who} asked ${LEVEL_NAMES[otherThan(level)]}'s question too`).toEqual([]);
+}
+
+describe('AssetSetComparisonLevels — two questions: L1° is measured without the benchmark, only L3° asks with it', () => {
+    it("with a benchmark: L1°'s question carries nothing of it, and L3°'s compares against it", async () => {
+        const {controllers} = mount({...PROPS, benchmarkId: BENCHMARK});
+        await settled(controllers);
+
+        const loss = questionsOf('l1');
+        expect(loss, 'L1° asked no question, or asked it more than once').toHaveLength(1);
+        const leaked = "L1°'s question carries asset_set_comparison: the benchmark is prepared inside L1°'s window, so its prices decide whether L1° is Partial";
+        expect(codesOf(loss[0]), leaked).not.toContain('asset_set_comparison');
+        expect(leavesOf(loss[0]), "L1°'s question names the benchmark: L1° is measured without it").not.toContain(BENCHMARK);
+        expect(leavesOf(loss[0]), "L1°'s question carries a comparison parameter: L1° is measured without the benchmark").not.toContain('comparison_asset_id');
+        expect(foreignCodes(loss[0], 'l1'), "L1°'s question carries L3°'s analytics").toEqual([]);
+
+        const paid = questionsOf('l3');
+        expect(paid, 'L3° asked no question, or asked it more than once').toHaveLength(1);
+        expect(foreignCodes(paid[0], 'l3'), "L3°'s question carries L1°'s analytics").toEqual([]);
+        expect(comparedWith(paid[0]), "L3°'s question does not compare against the benchmark the panel chose").toBe(BENCHMARK);
+        expect(codesOf(paid[0]), "L3°'s question lost its own analytics").toEqual(expect.arrayContaining(['asset_set_kpi', 'asset_set_risk_return']));
+    });
+
+    it("changing the benchmark re-asks L3°'s question alone: L1°'s is not asked again", async () => {
+        const {view, controllers} = mount({...PROPS, benchmarkId: BENCHMARK});
+        await settled(controllers);
+        await expectFigures();
+        const lossAsked = questionsOf('l1').length;
+        const before = script.asked.length;
+
+        await view.rerender({benchmarkId: OTHER_BENCHMARK});
+        // The barrier: L3° asked again, against the new benchmark — then every wave settled.
+        await waitFor(() => expect(comparedSince(before, OTHER_BENCHMARK), 'L3° never asked against the new benchmark: the change did not reach its question').toBe(true));
+        await quiet(controllers);
+
+        expect(questionsOf('l1').length - lossAsked, "changing the benchmark asked L1°'s question again: the benchmark still decides L1°'s window").toBe(0);
+        await expectFigures();
+    });
+
+    it('without a benchmark: neither question carries a comparison', async () => {
+        const {controllers} = mount();
+        await settled(controllers);
+
+        for (const level of ['l1', 'l3'] as const) {
+            const question = await ownQuestion(level);
+            expect(codesOf(question), `${LEVEL_NAMES[level]}'s question asks for a comparison with no benchmark chosen`).not.toContain('asset_set_comparison');
+            expect(leavesOf(question), `${LEVEL_NAMES[level]}'s question carries a comparison parameter with no benchmark chosen`).not.toContain('comparison_asset_id');
+        }
+        const paid = await ownQuestion('l3');
+        expect(codesOf(paid), 'without a benchmark L3° still asks what each asset was paid: the KPI and the risk/return').toEqual(expect.arrayContaining(['asset_set_kpi', 'asset_set_risk_return']));
+    });
+});
+
+/** How a level's questions are answered. Read at call time, so a case can turn a level around before pressing its retry. */
+type LevelOutcome = 'figures' | 'reject' | 'discard' | 'hold';
+
+/**
+ * Answer each question by the levels whose analytics it carries. A question carrying both — today's
+ * single question — takes the outcome that is not an answer: one request cannot half-fail, which is
+ * exactly why the levels ask apart. A held question gets its figures on `release()`.
+ */
+function scriptByLevel(outcomes: Record<Level, LevelOutcome>): () => void {
+    const held: {request: RiskQueryRequest; resolve: (answer: {items: RiskAnalyticResult[]}) => void}[] = [];
+    queryRisk.mockImplementation(async (request: RiskQueryRequest, force?: boolean) => {
+        script.asked.push({request, force: force === true});
+        const own = LEVELS.filter(({level}) => carries(request, level)).map(({level}) => outcomes[level]);
+        if (own.includes('reject')) throw new Error("invented: this level's base wave failed");
+        if (own.includes('discard')) return null;
+        if (own.includes('hold')) return new Promise((resolve) => held.push({request, resolve}));
+        return {items: answerTo(request, FIGURES)};
+    });
+    return () => {
+        for (const {request, resolve} of held.splice(0)) resolve({items: answerTo(request, FIGURES)});
+    };
+}
+
+/** Both levels answered with their figures, except `level`, answered with `outcome`. */
+function allFiguresBut(level: Level, outcome: LevelOutcome): Record<Level, LevelOutcome> {
+    const outcomes: Record<Level, LevelOutcome> = {l1: 'figures', l3: 'figures'};
+    outcomes[level] = outcome;
+    return outcomes;
+}
+
+for (const {name, level, frame, figures} of TABLE_LEVELS) {
+    const other = TABLE_LEVELS.find((candidate) => candidate.level !== level) as (typeof TABLE_LEVELS)[number];
+
+    describe(`AssetSetComparisonLevels — ${name}'s load state is its own: ${other.name} is untouched`, () => {
+        it(`${name}'s question failing shows ${name}'s error and retry, and leaves ${other.name}'s table on screen; the retry asks ${name}'s question alone`, async () => {
+            const outcomes = allFiguresBut(level, 'reject');
+            scriptByLevel(outcomes);
+            mount();
+            await ownQuestion(level);
+            await ownQuestion(other.level);
+
+            const {retry} = await blockWithRetry(level, 'error', `${name}'s question failed and ${name} shows no error block`);
+            await other.figures();
+            expectNoLoadChromeIn(other.level, other.frame, `only ${name}'s question failed`);
+
+            const before = script.asked.length;
+            outcomes[level] = 'figures';
+            await fireEvent.click(retry);
+            await figures();
+            expectAskedAlone(level, before, `${name}'s retry`);
+            await other.figures();
+        });
+
+        it(`${name}'s answer discarded twice running is said in ${name}'s frame alone; the retry asks ${name}'s question alone`, async () => {
+            const outcomes = allFiguresBut(level, 'discard');
+            scriptByLevel(outcomes);
+            mount();
+            await ownQuestion(level);
+            await ownQuestion(other.level);
+
+            await waitFor(() => expect(frameCodes(frame), `${name}'s answer was discarded and its frame does not say so`).toEqual([ANSWER_DISCARDED_CODE]));
+            const {retry} = await blockWithRetry(level, 'discarded', `${name}'s answer was discarded and ${name} offers no way to ask again`);
+            await other.figures();
+            expectNoLoadChromeIn(other.level, other.frame, `only ${name}'s answer was discarded`);
+
+            const before = script.asked.length;
+            outcomes[level] = 'figures';
+            await fireEvent.click(retry);
+            await figures();
+            expectAskedAlone(level, before, `${name}'s retry`);
+            expect(frameCodes(frame), `${name} was answered on retry and its frame still says the answer was discarded`).not.toContain(ANSWER_DISCARDED_CODE);
+        });
+
+        it(`${name}'s question in flight keeps ${name}'s skeleton alone: ${other.name} draws its answer meanwhile`, async () => {
+            const release = scriptByLevel(allFiguresBut(level, 'hold'));
+            mount();
+            await ownQuestion(level);
+            await ownQuestion(other.level);
+
+            await other.figures();
+            expect(screen.queryByTestId(`risk-asset-set-${level}-loading`), `${name}'s question is still in flight and ${name} shows no skeleton`).not.toBeNull();
+            expect(screen.queryByTestId(`risk-asset-set-${other.level}-loading`), `${other.name} has its answer and still shows a skeleton`).toBeNull();
+
+            release();
+            await figures();
+        });
+    });
+}
