@@ -106,7 +106,7 @@ The old line carries a warning instead: removing those shares does not lower you
 
 ---
 
-## 🏁 First import: align with the bank
+## 🏁 First import: align with the bank {: #first-import-align-with-the-bank }
 
 On the first import of a Danske Bank broker, LibreFolio does not replay years of old movements. Everything before the first day of your securities export is summarised in a **starting point**, at the end of the previous day; from that first day on, every movement is imported one by one. The set's card in **Select Files** tells you the date.
 
