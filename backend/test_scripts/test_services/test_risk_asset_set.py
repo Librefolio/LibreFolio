@@ -53,6 +53,7 @@ from backend.app.schemas.risk import (
     RiskMode,
     RiskOutputKind,
     RiskQueryRequest,
+    RiskResultStatus,
     RiskReturnBasis,
     RiskReturnItem,
     RiskReturnOutput,
@@ -958,14 +959,29 @@ def test_asset_set_drawdown_states_one_window_once_and_one_episode_per_asset():
     assert recovered.remaining_to_peak_ratio == pytest.approx(0.0, abs=1e-12)
 
 
-def test_asset_set_comparison_keeps_the_reference_out_of_the_measured():
-    """The yardstick cannot also be one of the measured, at three independent levels.
+# ---------------------------------------------------------------------------
+# A selected asset may be the benchmark (developer's decision of 02/10/2026, D371)
+#
+# In the lab the comparison asset may be one of the selected assets — five ETFs compared against the
+# core one, which is among them — and it becomes the reference of the others. It stays the yardstick,
+# never a subject: `items` are the other selected assets, in the selection's order, measured exactly as
+# they are with the reference beside the selection, because the service prepares the union of the two
+# once, on one joint calendar. The reference's own row ("not applicable: it is the benchmark itself")
+# is the renderer's to draw, so the payload has no number to invent for it.
+# ---------------------------------------------------------------------------
+
+
+def test_asset_set_comparison_never_makes_the_reference_a_subject():
+    """The yardstick is never one of the measured, at three independent levels.
 
     The reference is prepared inside the same request as the selection, so its own
     coordinates are measured on the same joint calendar as every item — which is what
-    lets a scatter place the benchmark beside the holdings. But it is not a subject:
-    the plugin refuses a selection that contains it, and the output model refuses the
-    payload even if a future caller assembled one by hand.
+    lets a scatter place the benchmark beside the holdings. But it is not a subject,
+    whether or not it is selected. Beside the selection it gets no item. Inside the
+    selection the request is answered instead of refused (D371), and it still gets no
+    item: the others are measured against it. And the output model refuses a payload
+    that lists it among the items even if a future caller assembled one by hand — the
+    reference's own row belongs to the renderer, never to a beta of itself on itself.
     """
     context = asset_set_context(
         {
@@ -981,6 +997,7 @@ def test_asset_set_comparison_keeps_the_reference_out_of_the_measured():
     computation = AssetSetComparisonAnalytic().compute(AssetSetComparisonParams(comparison_asset_id=REFERENCE_ASSET_ID), context)
     output = computation.output
 
+    # Level one: beside the selection, the reference gets no item.
     assert output.comparison_asset_id == REFERENCE_ASSET_ID
     assert [item.asset_id for item in output.items] == list(context.scope_asset_ids)
     assert REFERENCE_ASSET_ID not in {item.asset_id for item in output.items}
@@ -990,7 +1007,8 @@ def test_asset_set_comparison_keeps_the_reference_out_of_the_measured():
     assert output.comparison_expected_annual_return == pytest.approx(statistics.fmean(REFERENCE) * factor, rel=1e-9)
     assert all(item.beta is not None for item in output.items)
 
-    # Level two: the same reference inside the selection is refused by the plugin.
+    # Level two: the same reference inside the selection is accepted, and still gets no
+    # item — the items are the other selected assets, in the selection's order.
     overlapping = asset_set_context(
         {
             CHOPPY_ASSET_ID: CHOPPY,
@@ -999,10 +1017,11 @@ def test_asset_set_comparison_keeps_the_reference_out_of_the_measured():
         },
         scope_asset_ids=(CHOPPY_ASSET_ID, STEADY_ASSET_ID, REFERENCE_ASSET_ID),
     )
-    with pytest.raises(RiskUnavailableError) as exc_info:
-        AssetSetComparisonAnalytic().compute(AssetSetComparisonParams(comparison_asset_id=REFERENCE_ASSET_ID), overlapping)
-    assert exc_info.value.code == RiskErrorCode.INVALID_PARAMETERS
-    assert exc_info.value.details["comparison_asset_id"] == REFERENCE_ASSET_ID
+    assert REFERENCE_ASSET_ID in overlapping.scope_asset_ids
+    selected = AssetSetComparisonAnalytic().compute(AssetSetComparisonParams(comparison_asset_id=REFERENCE_ASSET_ID), overlapping).output
+    assert selected.comparison_asset_id == REFERENCE_ASSET_ID
+    assert [item.asset_id for item in selected.items] == [CHOPPY_ASSET_ID, STEADY_ASSET_ID]
+    assert REFERENCE_ASSET_ID not in {item.asset_id for item in selected.items}
 
     # Level three: even hand-assembled, the payload cannot carry the contradiction.
     with pytest.raises(ValidationError):
@@ -1020,6 +1039,156 @@ def test_asset_set_comparison_keeps_the_reference_out_of_the_measured():
                 )
             ],
         )
+
+
+@pytest.mark.parametrize(
+    ("reference_returns", "selection", "baseline_warning_codes"),
+    [
+        pytest.param(REFERENCE, (CHOPPY_ASSET_ID, STEADY_ASSET_ID, REFERENCE_ASSET_ID), set(), id="reference-last"),
+        pytest.param(REFERENCE, (REFERENCE_ASSET_ID, CHOPPY_ASSET_ID, STEADY_ASSET_ID), set(), id="reference-first"),
+        pytest.param(REFERENCE, (CHOPPY_ASSET_ID, REFERENCE_ASSET_ID, STEADY_ASSET_ID), set(), id="reference-between"),
+        pytest.param(
+            FLAT_GAINER,
+            (CHOPPY_ASSET_ID, STEADY_ASSET_ID, REFERENCE_ASSET_ID),
+            {"comparison_beta_undefined", "comparison_correlation_undefined"},
+            id="flat-reference-with-warnings",
+        ),
+    ],
+)
+def test_asset_set_comparison_measures_the_others_identically_when_the_reference_is_also_selected(reference_returns, selection, baseline_warning_codes):
+    """Selecting the reference changes nothing about the others — which is what makes it hard to fake.
+
+    One prepared set, two selections of it: the two other assets with the reference
+    beside them, and the same two with the reference among them, wherever it sits. One
+    material on one joint calendar, so everything published must coincide — each item
+    field by field, the window, the reference's own pair and the warnings. An empty or
+    truncated result for the selected case cannot pass, nor one that depends on where in
+    the selection the reference sits.
+
+    The flat reference gives the warnings comparison its teeth. Against it beta and
+    correlation are undefined for every item, so the two lists compared are not two
+    empty lists; and it is the case where measuring the reference against itself would
+    leak — its own beta on a zero-variance series is undefined too, so a plugin that
+    measured it and then dropped its row would still name it in the warnings.
+    """
+    prepared = make_prepared_set(
+        {
+            CHOPPY_ASSET_ID: CHOPPY,
+            STEADY_ASSET_ID: STEADY,
+            REFERENCE_ASSET_ID: reference_returns,
+        }
+    )
+    beside = asset_set_context({}, scope_asset_ids=(CHOPPY_ASSET_ID, STEADY_ASSET_ID), prepared=prepared)
+    inside = asset_set_context({}, scope_asset_ids=selection, prepared=prepared)
+    # The precondition, verified rather than assumed: one material, and the reference
+    # selected in only one of the two contexts.
+    assert inside.prepared_series is beside.prepared_series
+    assert REFERENCE_ASSET_ID not in beside.scope_asset_ids
+    assert inside.scope_asset_ids == selection
+    params = AssetSetComparisonParams(comparison_asset_id=REFERENCE_ASSET_ID)
+
+    expected = AssetSetComparisonAnalytic().compute(params, beside)
+    # The baseline is a real measurement of both others, so the equalities below cannot
+    # hold by having nothing to compare.
+    assert [item.asset_id for item in expected.output.items] == [CHOPPY_ASSET_ID, STEADY_ASSET_ID]
+    assert all(item.tracking_error > 0 for item in expected.output.items)
+    assert {warning.code for warning in expected.warnings} == baseline_warning_codes
+
+    actual = AssetSetComparisonAnalytic().compute(params, inside)
+
+    assert actual.output.comparison_asset_id == REFERENCE_ASSET_ID
+    assert [item.asset_id for item in actual.output.items] == [CHOPPY_ASSET_ID, STEADY_ASSET_ID]
+    for measured, baseline in zip(actual.output.items, expected.output.items, strict=True):
+        assert measured.model_dump() == pytest.approx(baseline.model_dump(), rel=1e-12, abs=1e-12), measured.asset_id
+    assert actual.output.observations == expected.output.observations == OBSERVATIONS
+    assert actual.output.comparison_volatility == pytest.approx(expected.output.comparison_volatility, rel=1e-12, abs=1e-12)
+    assert actual.output.comparison_expected_annual_return == pytest.approx(expected.output.comparison_expected_annual_return, rel=1e-12, abs=1e-12)
+    assert [warning.model_dump() for warning in actual.warnings] == [warning.model_dump() for warning in expected.warnings]
+
+
+def test_asset_set_comparison_of_the_reference_alone_is_an_empty_result_not_an_error():
+    """Nothing left to compare is an answer, not a refusal.
+
+    ``asset_ids`` takes a single asset, so a selection made of the benchmark alone is a
+    valid request. The reference is the yardstick, so nothing is measured against it and
+    ``items`` is empty — a required list, so an empty result and an absent key cannot
+    read the same. What is still measured is the reference itself: its own pair, on the
+    window it was prepared on.
+    """
+    context = asset_set_context({REFERENCE_ASSET_ID: REFERENCE})
+    assert context.scope_asset_ids == (REFERENCE_ASSET_ID,)
+    factor = context.annualization_factor
+    assert factor is not None
+
+    output = AssetSetComparisonAnalytic().compute(AssetSetComparisonParams(comparison_asset_id=REFERENCE_ASSET_ID), context).output
+
+    assert output.comparison_asset_id == REFERENCE_ASSET_ID
+    assert output.items == []
+    assert output.observations == OBSERVATIONS
+    assert output.comparison_volatility == pytest.approx(statistics.stdev(REFERENCE) * math.sqrt(factor), rel=1e-9)
+    assert output.comparison_expected_annual_return == pytest.approx(statistics.fmean(REFERENCE) * factor, rel=1e-9)
+
+
+@pytest.mark.asyncio
+async def test_asset_set_comparison_accepts_a_selected_reference_through_the_service(monkeypatch):
+    """The whole request path answers a selection that contains its own benchmark.
+
+    The plugin tests above prove the computation; this one proves nothing upstream
+    refuses the request first, and that the reference — selected *and* named as the
+    comparison asset — enters the single preparation once, so it lands on the joint
+    calendar it measures the others on. The stand-ins are those of the one-preparation
+    test at the top of this file: the only two DB reads on this path.
+
+    Admitted statuses are OK and PARTIAL: what is pinned is that the request is not
+    refused and what its items are, not how the status grades it.
+    """
+    prepared = make_prepared_set(
+        {
+            CHOPPY_ASSET_ID: CHOPPY,
+            STEADY_ASSET_ID: STEADY,
+            REFERENCE_ASSET_ID: REFERENCE,
+        }
+    )
+    # Neither in id order nor with the reference last: the items must follow the
+    # selection's own order, minus the reference.
+    selection = (STEADY_ASSET_ID, REFERENCE_ASSET_ID, CHOPPY_ASSET_ID)
+    request = asset_set_request(selection, prepared, analytic_codes=("asset_set_comparison",))
+    # The precondition, verified: the benchmark is both selected and the comparison asset.
+    assert REFERENCE_ASSET_ID in request.scope.asset_ids
+    assert [analytic.parameters["comparison_asset_id"] for analytic in request.analytics] == [REFERENCE_ASSET_ID]
+
+    service = RiskService(db=None)
+    preparation_calls: list[dict] = []
+
+    async def counting_prepare(**kwargs):
+        preparation_calls.append(kwargs)
+        return prepared
+
+    async def existing_asset_ids(asset_ids):
+        return set(asset_ids)
+
+    monkeypatch.setattr(service, "_prepare_asset_series", counting_prepare)
+    monkeypatch.setattr(service, "_existing_asset_ids", existing_asset_ids)
+
+    response = await service.execute(user_id=1, request=request)
+
+    # One preparation, and the reference in it once although it is asked for twice.
+    assert len(preparation_calls) == 1
+    assert preparation_calls[0]["asset_ids"] == (CHOPPY_ASSET_ID, STEADY_ASSET_ID, REFERENCE_ASSET_ID)
+
+    (result,) = response.items
+    assert result.analytic_code == "asset_set_comparison"
+    # Neither refused nor failed; the error is the failure message when it is.
+    assert result.status in {RiskResultStatus.OK, RiskResultStatus.PARTIAL}, result.error
+    assert result.output.kind == RiskOutputKind.COMPARISON_SET
+    assert result.output.comparison_asset_id == REFERENCE_ASSET_ID
+    assert [item.asset_id for item in result.output.items] == [STEADY_ASSET_ID, CHOPPY_ASSET_ID]
+    assert result.metadata.comparison_asset_id == REFERENCE_ASSET_ID
+
+
+def test_asset_set_comparison_accepting_a_selected_reference_is_a_new_algorithm_version():
+    """A request the plugin used to refuse now has an answer (D371): a new algorithm version."""
+    assert AssetSetComparisonAnalytic.algorithm_version == "1.1.0"
 
 
 def test_asset_set_comparison_reports_an_undefined_beta_as_undefined():
