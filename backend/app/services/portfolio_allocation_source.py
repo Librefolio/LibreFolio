@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections import defaultdict
 from datetime import date as date_type
 from decimal import Decimal
@@ -381,7 +382,7 @@ def _build_selected_cash_balances(
 # Planner source v2 — dedicated uncached domain-copy endpoint
 # =============================================================================
 
-_PLANNER_SOURCE_REVISION = "2.0.0"
+_PLANNER_SOURCE_REVISION = "1.0.0"
 _PORTFOLIO_PROVENANCE_ID = "source:portfolio-ledger"
 _MARKET_PROVENANCE_ID = "source:market-data"
 _BROKER_PROVENANCE_ID = "source:broker-domain"
@@ -389,6 +390,10 @@ _FX_PROVENANCE_ID = "source:saved-fx"
 _WAC_PROVENANCE_ID = "source:runtime-wac"
 _ENGINE_PROVENANCE_ID = "source:portfolio-engine"
 _KNOWN_SECTORS = frozenset(sector.value for sector in FinancialSector)
+# The metadata writers store Pydantic JSON, where a Decimal weight is plain decimal text ("0.6000").
+_SAVED_WEIGHT_TEXT = re.compile(r"[0-9]+(?:\.[0-9]+)?")
+# The catch-all geographic key the writers keep as it is (geo_utils.normalize_country_keys).
+_GEOGRAPHY_OTHER = "Other"
 
 
 class PortfolioPlannerSourceAccessError(PermissionError):
@@ -966,11 +971,14 @@ def _parse_saved_distribution(  # noqa: C901 — direct validation keeps persist
             return None
         if dimension == "sector" and category not in _KNOWN_SECTORS:
             return None
-        if dimension == "geography" and (len(category) != 3 or category != category.upper() or pycountry.countries.get(alpha_3=category) is None):
+        if dimension == "geography" and category != _GEOGRAPHY_OTHER and (len(category) != 3 or category != category.upper() or pycountry.countries.get(alpha_3=category) is None):
             return None
-        if not isinstance(raw_weight, Decimal):
+        if isinstance(raw_weight, Decimal):
+            weight = raw_weight
+        elif isinstance(raw_weight, str) and _SAVED_WEIGHT_TEXT.fullmatch(raw_weight):
+            weight = Decimal(raw_weight)
+        else:
             return None
-        weight = raw_weight
         if not weight.is_finite() or weight < 0:
             return None
         parsed.append((category, weight))

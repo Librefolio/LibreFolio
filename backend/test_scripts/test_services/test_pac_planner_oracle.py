@@ -34,6 +34,11 @@ independent oracle-of-the-oracle: it collects every candidate's
 lexicographic best with its own, differently-written comparison — it does
 not import or reuse `_pac_exhaustive_oracle.py`'s private `_lexicographic_key`.
 
+Item 3b fixes an expected optimum by hand, independently of both SCIP and the
+oracle's own search: on `_credit_tie_fx_scenario` the best candidate exists
+only because an exact HALF_UP FX-credit tie posts up. The solver suite reuses
+that fixture in its oracle-agreement gate.
+
 Several monetary/FX fixtures in the sibling suite (e.g. `_funding_fx_scenario`)
 use a `CENT` currency quantum and blow up combinatorially fast once funding
 and FX decisions are free at the same time (`estimate_oracle_domain_size`
@@ -60,6 +65,7 @@ from backend.app.services.pac_allocator.evaluator import (
     exact_decision_id,
 )
 from backend.app.services.pac_allocator.models import DecisionAccess, ExactPlannerScenario
+from backend.app.services.pac_allocator.numeric import ExactRatio
 from backend.test_scripts.test_services._pac_exhaustive_oracle import (
     MAX_EXHAUSTIVE_ORACLE_CANDIDATES,
     OracleDomainTooLargeError,
@@ -83,6 +89,7 @@ from backend.test_scripts.test_services.test_pac_planner_evaluator import (
     _invest_and_sell_scenario,
     _invest_only_baseline,
     _min_fragmentation_scenario,
+    _objective_map,
     _order_route,
     _pac_scenario,
     _scenario,
@@ -188,6 +195,61 @@ def _coarse_funding_fx_scenario() -> ExactPlannerScenario:
         ),
         fx_rates=(_fx_rate("EUR", "USD", R(6, 5)),),
         fx_spread_rate=R(1, 100),
+        currency_quantums=(("EUR", ONE), ("USD", ONE)),
+    )
+
+
+def _credit_tie_fx_scenario(*, price: ExactRatio, cap: ExactRatio) -> ExactPlannerScenario:
+    """A funding+FX+buy scenario in which an exact HALF_UP **credit** tie is
+    reachable and no debit tie is.
+
+    A 3/2 EUR/USD rate with a zero spread and whole-unit quanta converts every
+    odd EUR amount into an exact `.5` USD -- a HALF_UP tie of the USD quantum
+    (5 EUR -> exactly 7.5 USD, posted 8). The buy fee is zero and `price` is
+    meant to be a whole USD amount, so no buy debit or fee ever lands on a
+    tie. At a tie the compiled model may post either neighbour quantum, but
+    for a credit that latitude cannot change which points are feasible: the
+    posted credit enters every ledger `>= 0` row with a `+` sign and no
+    objective, so whatever the lower neighbour admits the true round-up
+    admits too. On this fixture the compiled model's feasible set must
+    therefore equal the exact one. 5 EUR of existing cash at the source
+    broker is the only money; the destination broker holds the USD route.
+    """
+    capability = _capability("capability:usd")
+    buy_fee = _fee("fee:buy:usd", capability.capability_id, "buy", currency="USD")  # zero fee: no debit tie
+    destination = _broker("broker:destination", (capability,), (buy_fee,))
+    source = _broker("broker:source")
+    return _scenario(
+        "scenario:credit-tie-fx",
+        product="pac",
+        policy="proportional",
+        assets=(_asset("asset:a", price=price, currency="USD"),),
+        brokers=(destination, source),
+        existing_cash=(_cash("cash:source", source.broker_id, R(5)),),
+        funding_routes=(
+            _funding_route(
+                "route:funding:eur",
+                broker_id=destination.broker_id,
+                source_kind="existing_cash",
+                source_id="cash:source",
+                amount=R(5),
+                priority=2,
+            ),
+        ),
+        order_routes=(
+            _order_route(
+                "route:buy:usd",
+                broker_id=destination.broker_id,
+                asset_id="asset:a",
+                capability=capability,
+                fee_id=buy_fee.fee_schedule_id,
+                side="buy",
+                cap=cap,
+                priority=5,
+            ),
+        ),
+        fx_rates=(_fx_rate("EUR", "USD", R(3, 2)),),
+        fx_spread_rate=ZERO,
         currency_quantums=(("EUR", ONE), ("USD", ONE)),
     )
 
@@ -567,6 +629,69 @@ def test_multi_decision_composition_ties_are_full_length_and_best_is_never_reder
     # byte-for-byte (same candidate object, so no normalization needed).
     fresh_replay = evaluate_exact_candidate(scenario, view, result.best_candidate)
     assert fresh_replay == result.best_evaluation
+
+
+# --------------------------------------------------------------------------
+# Item 3b: an exact FX-credit tie decides the optimum -- the expected answer
+# is derived by hand, independently of SCIP and of the oracle's own search.
+# --------------------------------------------------------------------------
+
+
+def test_exact_fx_credit_tie_optimum_matches_the_hand_derived_one() -> None:
+    """On `_credit_tie_fx_scenario(price=2, cap=4)`, by hand:
+
+    * Optimum. The proportional cascade opens with `fixed_l2`. The only
+      asset's target is all 5 EUR of reachable funding, and `b` units at 2 USD
+      are worth `4b/3` EUR at the 3/2 rate, so the residual `4b/3 - 5` squares
+      to 25, 121/9, 49/9, 1 and 1/9 for b = 0..4: 4 units (the route cap) is
+      the unique minimum, *if* it is feasible. 4 units cost 8 USD, and the
+      only USD is the conversion of at most 5 EUR (the funding cap): exactly
+      7.5 USD, a HALF_UP tie that posts 8. Were the tie posted down to 7 USD,
+      or the exact 7.5 used, only 3 units would fit -- the optimum exists only
+      because the tie posts up. That pins fx = 5, hence funding = 5 (the
+      destination's EUR cell cannot go below zero): the best candidate is
+      `{buy: 4, funding: 5, fx: 5}`, with `fixed_l2 == 1/9`.
+    * Feasible count. A point is feasible iff fx <= funding (destination EUR
+      cell) and 2 * buy <= posted(3/2 * fx) (destination USD cell). The
+      posted credits for fx = 0..5 are 0, 2, 3, 5, 6 and 8 USD, admitting 1,
+      2, 2, 3, 4 and 5 buy values; summed over fx <= funding for funding =
+      0..5 that is 1 + 3 + 5 + 8 + 12 + 17 = 46.
+    """
+    scenario = _credit_tie_fx_scenario(price=R(2), cap=R(4))
+    view = build_exact_policy_view(scenario)
+    funding = exact_decision_id("funding_transfer", "route:funding:eur")
+    fx = exact_decision_id("fx_debit", "route:buy:usd:EUR")
+    buy = exact_decision_id("buy_quantum", "route:buy:usd")
+
+    # The derivation's premises, read off the view: three free decisions, the
+    # buy and funding boxes set by the caps, and the tie point inside the fx box.
+    accesses = {access.decision_id: access for access in view.decisions}
+    assert set(accesses) == {funding, fx, buy}
+    assert all(access.mode == "mutable" and access.lower_quanta == 0 for access in accesses.values())
+    assert (accesses[buy].upper_quanta, accesses[funding].upper_quanta) == (4, 5)
+    assert accesses[fx].upper_quanta >= 5
+
+    result = run_exhaustive_oracle(scenario, view)
+    assert result.enumerated_candidates == estimate_oracle_domain_size(view)
+    assert result.feasible_candidates == 46
+    assert result.best_candidate is not None
+    assert result.best_evaluation is not None
+
+    best = result.best_evaluation
+    assert {decision.decision_id: decision.quanta for decision in result.best_candidate.decisions} == {buy: 4, funding: 5, fx: 5}
+    assert _objective_map(view, best)["fixed_l2"] == R(1, 9)
+
+    # The optimum stands on the round-up: an exact 7.5 USD credit, posted 8.
+    fx_evaluation = next(item for item in best.fx if item.order_route_id == "route:buy:usd" and item.source_currency == "EUR")
+    assert fx_evaluation.exact_destination_credit == R(15, 2)
+    assert fx_evaluation.posted_destination_credit == R(8)
+    order_evaluation = next(item for item in best.orders if item.route_id == "route:buy:usd")
+    assert order_evaluation.posted_cash_amount == R(8)
+    assert fx_evaluation.exact_destination_credit < order_evaluation.posted_cash_amount  # the exact credit alone would not cover it
+
+    usd_cell = next(ledger for ledger in best.ledgers if ledger.broker_id == "broker:destination" and ledger.currency == "USD")
+    assert (usd_cell.fx_credit, usd_cell.buy_debit) == (R(8), R(8))
+    assert usd_cell.final_spendable == ZERO
 
 
 # --------------------------------------------------------------------------

@@ -25,17 +25,25 @@
         const presented = toolErrorMessage(outcome.error);
         return {code: outcome.error.code, key: presented.key, fallback: presented.fallback, retryable: clientErrorRetryable(outcome.error)};
     });
+    // Only `execution_failed` leaves a line in the server log (the plugin writes it), and that line carries this id.
+    const reference = $derived(outcome.kind === 'tool_error' && outcome.error.code === 'execution_failed' ? outcome.executionId : null);
 </script>
 
 <div class="{NOTICE.danger} space-y-3" role="alert" data-testid="pac-planner-platform-error" data-kind={outcome.kind} data-code={message.code} data-retryable={message.retryable ? 'true' : 'false'}>
     <p class="flex items-center gap-2 font-semibold">
         <CircleX size={18} aria-hidden="true" />
-        {$t(`${KEY}.title`, {default: 'Calculation failed · Tool platform error'})}
+        {$t(`${KEY}.title`, {default: 'Calculation failed'})}
     </p>
     <p>
         <code class="rounded bg-white/60 px-1 text-xs dark:bg-black/30">{message.code}</code>
         · {$t(message.key, {default: message.fallback, values: {code: message.code}})}
     </p>
+    {#if reference}
+        <p class={HINT} data-testid="pac-planner-platform-reference">
+            {$t(`${KEY}.reference`, {default: 'Reference in the server log:'})}
+            <code class="break-all rounded bg-white/60 px-1 text-xs dark:bg-black/30">{reference}</code>
+        </p>
+    {/if}
     <div class="flex flex-wrap gap-2">
         {#if message.retryable}
             <button type="button" class={BUTTON_PRIMARY} data-testid="pac-planner-platform-retry" {disabled} onclick={onretry}>{$t(`${KEY}.retry`, {default: 'Retry'})}</button>

@@ -24,16 +24,16 @@ checks, to resolve the handful of continuous epigraph/activation variables
 that pinning the integer decisions does not by itself fix) -- a
 single-point-feasible-region MIP, which SCIP solves instantly.
 
-Two ready-made scenario fixtures come from the sibling oracle suite
-(`_two_asset_pac_scenario`, `_coarse_funding_fx_scenario` --
-`test_pac_planner_oracle.py`), and every scenario-construction primitive
-comes from `test_pac_planner_evaluator.py` -- both already-established,
-precedented cross-test-file imports in this package. The handful of
-scenarios that are genuinely new to this file exist because they exercise
-something neither sibling fixture does: two BUY routes sharing one cash
-pool (a real ledger overspend reachable through nothing but each route's
-own already-tightened box bound, never a hand-widened one), two funding
-routes sharing one source, a single isolated funding route, and a
+Three ready-made scenario fixtures come from the sibling oracle suite
+(`_two_asset_pac_scenario`, `_coarse_funding_fx_scenario`,
+`_credit_tie_fx_scenario` -- `test_pac_planner_oracle.py`), and every
+scenario-construction primitive comes from `test_pac_planner_evaluator.py`
+-- both already-established, precedented cross-test-file imports in this
+package. The handful of scenarios that are genuinely new to this file exist
+because they exercise something no sibling fixture does: two BUY routes
+sharing one cash pool (a real ledger overspend reachable through nothing but
+each route's own already-tightened box bound, never a hand-widened one), two
+funding routes sharing one source, a single isolated funding route, and a
 multi-broker scenario where two brokers reuse the same raw capability/
 fee-schedule id string (proving the compiled lookup keys them by
 `(broker_id, id)`, never by `id` alone).
@@ -76,7 +76,6 @@ from backend.app.services.pac_allocator.constraints import (
     CompiledVariables,
     LedgerPostingScopeError,
     ScenarioFacts,
-    _half_up_tie_reachable,
     _require_modelled_rounded_families,
     as_float,
     build_scenario_facts,
@@ -119,6 +118,7 @@ from backend.test_scripts.test_services.test_pac_planner_evaluator import (
 )
 from backend.test_scripts.test_services.test_pac_planner_oracle import (
     _coarse_funding_fx_scenario,
+    _credit_tie_fx_scenario,
     _two_asset_pac_scenario,
 )
 
@@ -925,56 +925,62 @@ def test_half_up_ledger_fx_credit_regression_scip_agrees_with_exact_replay() -> 
 
 
 # --------------------------------------------------------------------------
-# Item A2: three-directional tie lock on `_half_up_tie_reachable`, kept in
-# lockstep with the real `numeric.post_half_up` rounding function.
+# Item A2: an exact FX-credit tie is admitted at its true HALF_UP value, and
+# not one quantum more -- SCIP and the Decimal-exact replay agree on both
+# sides of the tie, with no guard in between (option A).
 # --------------------------------------------------------------------------
 
 
-def test_half_up_tie_reachable_three_directional_and_cross_checked_against_post_half_up() -> None:
-    """`_half_up_tie_reachable` is an O(1) closed form: it must flag exactly
-    the ranges in which some achievable `coefficient * n` lands precisely on a
-    `.5` boundary of the quantum. Tested directly, then cross-checked against
-    `numeric.post_half_up` in all three directions (just below a tie rounds
-    down, exactly at rounds up, just above rounds up), then validated
-    behaviourally against a brute-force scan so the closed form and the real
-    rounding function cannot silently drift apart.
+def test_exact_fx_credit_tie_admits_the_true_round_up_and_not_one_quantum_more() -> None:
+    """`_posted_units_term` encodes a posting as `quantum * units` with the
+    non-strict pair `q*u - q/2 <= exact <= q*u + q/2`, so at an exact HALF_UP
+    tie `units` may take either neighbour, `k` or `k+1`, while the true
+    posting is `k+1`. For the FX credit that looseness can never decide
+    feasibility: the credit enters the ledger `>= 0` rows only with a `+`
+    sign and appears in no objective, so a point is feasible with some
+    `units` exactly when it is feasible with `k+1`. Before option A the
+    compiler refused this very scenario with `LedgerPostingScopeError` (the
+    credit-tie guard, now removed) before a model existed; `_pinned_status`
+    compiling it at all is the first half of this regression.
+
+    `_credit_tie_fx_scenario` converts 5 EUR at 3/2 with no spread into an
+    exact 7.5 USD -- a tie of the whole-USD quantum -- that posts 8 USD. With a
+    1 USD whole-unit asset and a zero fee no debit can land on a tie, so the
+    model's feasible set must equal the exact one: 8 units (exactly the
+    posted credit) feasible in both, 9 units (one quantum more) in neither.
     """
-    # Direct: the specified reachability cases.
-    assert _half_up_tie_reachable(R(1, 2), ONE, 0, 0) is False  # n=0 -> 0, no tie
-    assert _half_up_tie_reachable(R(1, 2), ONE, 0, 1) is True  # n=1 -> 0.5, a tie (ties at odd n)
-    assert _half_up_tie_reachable(R(297, 250), ONE, 0, 14) is False  # first tie only at n=125
-    assert _half_up_tie_reachable(R(297, 250), ONE, 0, 400) is True  # range now includes n=125
-    assert _half_up_tie_reachable(R(297, 250), ONE, 125, 125) is True  # exactly the tie point
-    assert _half_up_tie_reachable(R(297, 250), ONE, 126, 374) is False  # strictly between the 1st (125) and 2nd (375) tie
-    assert _half_up_tie_reachable(R(1, 3), ONE, 0, 10_000) is False  # odd denominator -> never a tie, any range
-    assert _half_up_tie_reachable(R(0), ONE, 0, 10_000) is False  # zero coefficient -> never a tie
+    scenario = _credit_tie_fx_scenario(price=R(1), cap=R(10))
+    view = build_exact_policy_view(scenario)
+    funding = exact_decision_id("funding_transfer", "route:funding:eur")
+    fx = exact_decision_id("fx_debit", "route:buy:usd:EUR")
+    buy = exact_decision_id("buy_quantum", "route:buy:usd")
 
-    # Cross-check the flagged tie point against the real rounding function.
-    tie_value = R(297, 250) * 125  # == 297/2 == 148.5, an exact HALF_UP tie of quantum 1
-    assert tie_value == R(297, 2)
-    assert post_half_up(tie_value, ONE).posted == R(149)  # exactly at the tie -> rounds up (away from zero)
-    assert post_half_up(tie_value, ONE).rounding_delta == ONE / 2  # sits exactly on the .5 boundary
-    assert post_half_up(tie_value - R(1, 1000), ONE).posted == R(148)  # just below -> rounds down
-    assert post_half_up(tie_value + R(1, 1000), ONE).posted == R(149)  # just above -> rounds up
+    # The real rounding function, independently of the ledger: 7.5 sits
+    # exactly on the .5 boundary of quantum ONE and rounds up to 8.
+    assert post_half_up(R(15, 2), ONE).posted == R(8)
+    assert post_half_up(R(15, 2), ONE).rounding_delta == ONE / 2
 
-    # Behavioural validation: a brute-force "is any post_half_up exactly on a
-    # .5 boundary" scan must agree with the closed form across varied inputs.
-    def _brute_force_tie_reachable(coefficient, quantum, lower_quanta: int, upper_quanta: int) -> bool:
-        half_quantum = quantum / 2
-        return any(abs(post_half_up(coefficient * n, quantum).rounding_delta) == half_quantum for n in range(lower_quanta, upper_quanta + 1))
+    for units, expected_feasible, expected_status, expected_usd_balance in (
+        (8, True, "optimal", ZERO),  # 8 posted credit - 8 posted debit
+        (9, False, "infeasible", R(-1)),  # one quantum more than the posted credit
+    ):
+        quanta = {funding: 5, fx: 5, buy: units}
+        candidate = _candidate(view, quanta, candidate_id=f"candidate:credit-tie:{units}")
+        evaluation = evaluate_exact_candidate(scenario, view, candidate)
+        assert evaluation.candidate_valid is True, units  # inside every box: only the cash rules can decide
 
-    scan_cases = [
-        (R(1, 2), ONE, 0, 6),
-        (R(297, 250), ONE, 0, 400),
-        (R(297, 250), ONE, 126, 374),
-        (R(3, 4), ONE, 0, 20),
-        (R(2, 5), R(1, 10), 0, 30),
-        (R(7, 3), ONE, 0, 50),  # odd denominator -> never a tie
-        (R(5), R(2), 0, 10),
-        (R(0), ONE, 0, 50),  # zero coefficient -> never a tie
-    ]
-    for coefficient, quantum, lower_quanta, upper_quanta in scan_cases:
-        assert _half_up_tie_reachable(coefficient, quantum, lower_quanta, upper_quanta) is _brute_force_tie_reachable(coefficient, quantum, lower_quanta, upper_quanta)
+        # Precondition, verified rather than assumed: the conversion really is
+        # an exact tie, posted at its true HALF_UP value.
+        fx_evaluation = next(item for item in evaluation.fx if item.order_route_id == "route:buy:usd" and item.source_currency == "EUR")
+        assert fx_evaluation.exact_destination_credit == R(15, 2), units  # 7.5 USD, an exact tie
+        assert fx_evaluation.posted_destination_credit == R(8), units
+
+        usd_cell = next(ledger for ledger in evaluation.ledgers if ledger.broker_id == "broker:destination" and ledger.currency == "USD")
+        assert (usd_cell.fx_credit, usd_cell.buy_debit) == (R(8), R(units)), units
+        assert usd_cell.final_spendable == expected_usd_balance, units
+
+        assert evaluation.feasible is expected_feasible, units
+        assert _pinned_status(scenario, view, quanta=quanta) == expected_status, units
 
 
 # --------------------------------------------------------------------------

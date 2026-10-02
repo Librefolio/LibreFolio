@@ -99,7 +99,8 @@
             }
           }
         }
-      ]
+      ],
+      "conversion_mode": "manual"
     }
   ],
   "existing_cash": [

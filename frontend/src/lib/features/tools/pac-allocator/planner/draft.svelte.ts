@@ -8,8 +8,9 @@
  * source changed" from "the user changed it" (B4) instead of overwriting.
  */
 import {compareDecimal, sumControlPercentages, remainingControlPercentage, canonicalInput} from './decimal';
-import {DEFAULT_EXECUTION_MARGIN_PERCENT, DEFAULT_FEE, DEFAULT_FUNDING_PRIORITY, DEFAULT_FX_SPREAD_PERCENT, DEFAULT_QUANTITY_STEP, DEFAULT_ROUTE_CAP, DEFAULT_ROUTE_PRIORITY} from './defaults';
+import {DEFAULT_EXECUTION_MARGIN_PERCENT, DEFAULT_FEE, DEFAULT_FUNDING_PRIORITY, DEFAULT_FX_SPREAD_PERCENT, DEFAULT_QUANTITY_STEP, DEFAULT_ROUTE_PRIORITY, defaultAsOf} from './defaults';
 import {canonicalPair, type ExposureDimension, type SourceProvenance} from './source';
+import {PLANNER_STEPS, type PlannerStep} from './types';
 
 export type {ExposureDimension};
 
@@ -59,6 +60,9 @@ export interface DraftFunding {
     enteredAt: string;
 }
 
+/** R4.9: who converts currency for this Broker's orders. The calculation is the same; only the plan's presentation changes. */
+export type ConversionMode = 'manual' | 'automatic';
+
 export interface DraftBroker {
     key: string;
     origin: FactOrigin;
@@ -73,6 +77,7 @@ export interface DraftBroker {
     stamp: CopyRef | null;
     enteredAt: string;
     modes: DraftMode[];
+    conversionMode: ConversionMode;
     funding: DraftFunding[];
 }
 
@@ -120,13 +125,17 @@ export interface DraftAsset {
     key: string;
     origin: FactOrigin;
     sourceAssetId: number | null;
-    manualId: string | null;
     name: string;
     ticker: string;
     assetClass: string;
     iconUrl: string | null;
     active: boolean;
     price: DraftPrice | null;
+    /**
+     * A LibreFolio Asset whose price the user took over (R9.1): it is never read again and
+     * goes out as a manual price, even when equal to the copy. A manual Asset never sets it.
+     */
+    priceManual: boolean;
     copiedPrice: DraftPrice | null;
     priceStamp: CopyRef | null;
     priceSource: string | null;
@@ -145,6 +154,7 @@ export interface DraftRoute {
     /** Empty = no minimum; the unit follows the Broker mode. */
     minimumIfActive: string;
     requiredMinimum: string;
+    /** Empty = no cap of its own: the order stays bounded by the money that can reach it. */
     cap: string;
     marginPercent: string;
     enteredAt: string;
@@ -158,8 +168,13 @@ export interface DraftFx {
     stamp: CopyRef | null;
     source: string | null;
     referenceDate: string | null;
+    /** The user's own rate: used as typed, never read again from LibreFolio. */
+    manual: boolean;
     enteredAt: string;
 }
+
+/** Why the backend needs a pair: to value the portfolio, to convert cash at a buy, or both. */
+export type FxPurpose = 'valuation' | 'conversion' | 'both';
 
 export interface DraftData {
     asOf: string;
@@ -188,15 +203,15 @@ export function routeKey(assetKey: string, brokerKey: string): string {
     return `${assetKey}|${brokerKey}`;
 }
 
-export function nowTimestamp(): string {
-    return new Date().toISOString();
+/** One card of the Liquidity step: existing cash or a new contribution. */
+export type LiquidityEntry = {kind: 'cash'; key: string; enteredAt: string; cash: DraftCash} | {kind: 'contribution'; key: string; enteredAt: string; contribution: DraftContribution};
+
+export function liquidityEntryKey(kind: LiquidityEntry['kind'], key: string): string {
+    return `${kind}|${key}`;
 }
 
-/** Today in the local calendar, clamped to the UTC date: `as_of` may not pass the snapshot date (N26). */
-export function defaultAsOf(now: Date = new Date()): string {
-    const local = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
-    const utc = now.toISOString().slice(0, 10);
-    return local < utc ? local : utc;
+export function nowTimestamp(): string {
+    return new Date().toISOString();
 }
 
 /** Whole days between two ISO dates (`later` − `earlier`); date arithmetic, not money. */
@@ -216,6 +231,21 @@ function sameDecimalText(left: string, right: string): boolean {
 export function samePrice(left: DraftPrice | null, right: DraftPrice | null): boolean {
     if (left === null || right === null) return left === right;
     return left.currency === right.currency && left.referenceDate === right.referenceDate && sameDecimalText(left.amount, right.amount) && sameDecimalText(left.quoteBaseQuantity, right.quoteBaseQuantity);
+}
+
+/**
+ * A price still equal to its copy: it keeps the source date and is re-read before
+ * «Calcola». A typed price, or one switched to manual, is the user's and carries the calculation date.
+ */
+export function priceIsCopied(asset: DraftAsset): boolean {
+    return !asset.priceManual && asset.priceStamp !== null && asset.copiedPrice !== null && samePrice(asset.price, asset.copiedPrice);
+}
+
+/** A rate still equal to its copy (same rule as `priceIsCopied`). */
+export function rateIsCopied(fx: DraftFx): boolean {
+    if (fx.manual || fx.stamp === null || fx.copiedRate === null) return false;
+    const current = canonicalInput(fx.rate);
+    return current !== null && compareDecimal(current, fx.copiedRate) === 0;
 }
 
 function exposureSignature(rows: readonly DraftExposure[]): string {
@@ -283,6 +313,38 @@ export class PlannerDraft {
     /** True once the user has entered anything worth a leave confirmation (A8). */
     readonly dirty = $derived(this.data.brokers.length > 0 || this.data.cash.length > 0 || this.data.contributions.length > 0 || this.data.assets.length > 0 || this.data.fxRates.length > 0 || Object.keys(this.data.targets).length > 0);
 
+    /**
+     * The user's order of the Liquidity cards (`liquidityEntryKey`), set by drag and drop.
+     * Presentation only, kept outside `data`: reordering changes no fingerprint, so it never makes a result stale.
+     */
+    liquidityOrder = $state<string[]>([]);
+
+    /** Liquidity cards: the user's order first, then the rest in the order they were added. */
+    readonly liquidityEntries = $derived.by((): LiquidityEntry[] => {
+        const entries: LiquidityEntry[] = [
+            ...this.data.cash.map((cash): LiquidityEntry => ({kind: 'cash', key: liquidityEntryKey('cash', cash.key), enteredAt: cash.enteredAt, cash})),
+            ...this.data.contributions.map((contribution): LiquidityEntry => ({kind: 'contribution', key: liquidityEntryKey('contribution', contribution.key), enteredAt: contribution.enteredAt, contribution})),
+        ];
+        const rank = new Map(this.liquidityOrder.map((key, index) => [key, index]));
+        const position = (entry: LiquidityEntry): number => rank.get(entry.key) ?? rank.size;
+        return entries.sort((a, b) => position(a) - position(b) || (a.enteredAt < b.enteredAt ? -1 : a.enteredAt > b.enteredAt ? 1 : 0));
+    });
+
+    /**
+     * The user's order of the Asset cards (Asset keys), set by drag and drop in the Assets step.
+     * Presentation only, like `liquidityOrder`: the engine orders Assets by id, so no fingerprint changes.
+     */
+    assetOrder = $state<string[]>([]);
+
+    /** Assets as the steps list them: the user's order first, then the rest in the order they were added. */
+    readonly orderedAssets = $derived.by((): DraftAsset[] => {
+        const rank = new Map(this.assetOrder.map((key, index) => [key, index]));
+        return this.data.assets
+            .map((asset, index) => ({asset, index}))
+            .sort((a, b) => (rank.get(a.asset.key) ?? rank.size) - (rank.get(b.asset.key) ?? rank.size) || a.index - b.index)
+            .map((entry) => entry.asset);
+    });
+
     constructor(valuationCurrency = '', policy = '') {
         this.data = emptyData(valuationCurrency);
         this.data.policy = policy;
@@ -296,6 +358,14 @@ export class PlannerDraft {
     reset(valuationCurrency: string, policy: string): void {
         this.data = emptyData(valuationCurrency);
         this.data.policy = policy;
+        this.liquidityOrder = [];
+        this.assetOrder = [];
+    }
+
+    /** The scenario date is always today: set before every copy read and every calculation. */
+    refreshAsOf(now: Date = new Date()): void {
+        const today = defaultAsOf(now);
+        if (this.data.asOf !== today) this.data.asOf = today;
     }
 
     // -- lookups -----------------------------------------------------------
@@ -339,12 +409,14 @@ export class PlannerDraft {
     addContribution(currency: string, label: string): DraftContribution {
         const item: DraftContribution = {key: this.nextId('contribution'), label, amount: '', currency, enteredAt: nowTimestamp()};
         this.data.contributions.push(item);
+        this.syncFunding();
         return item;
     }
 
     removeContribution(key: string): void {
         this.data.contributions = this.data.contributions.filter((item) => item.key !== key);
         this.dropFundingFrom({kind: 'contribution', contributionKey: key});
+        this.forgetLiquidityEntry(liquidityEntryKey('contribution', key));
     }
 
     /** B3: a manual account is manual cash on a manual, funding-only Broker. */
@@ -364,6 +436,7 @@ export class PlannerDraft {
             stamp: null,
             enteredAt,
             modes: [],
+            conversionMode: 'manual',
             funding: [],
         };
         const cash: DraftCash = {
@@ -380,12 +453,23 @@ export class PlannerDraft {
         };
         this.data.brokers.push(broker);
         this.data.cash.push(cash);
+        this.syncFunding();
         return cash;
     }
 
     removeCash(key: string): void {
         this.data.cash = this.data.cash.filter((item) => item.key !== key);
         this.dropFundingFrom({kind: 'cash', cashKey: key});
+        this.forgetLiquidityEntry(liquidityEntryKey('cash', key));
+    }
+
+    reorderLiquidity(keys: readonly string[]): void {
+        this.liquidityOrder = [...keys];
+    }
+
+    /** A removed card loses its place: added again, it goes to the end like any new one. */
+    private forgetLiquidityEntry(entryKey: string): void {
+        if (this.liquidityOrder.includes(entryKey)) this.liquidityOrder = this.liquidityOrder.filter((key) => key !== entryKey);
     }
 
     private dropFundingFrom(source: FundingSourceRef): void {
@@ -403,6 +487,19 @@ export class PlannerDraft {
 
     fundingFor(broker: DraftBroker, source: FundingSourceRef): DraftFunding | undefined {
         return broker.funding.find((item) => sameSource(item.source, source));
+    }
+
+    /**
+     * Every operative Broker may use every liquidity source unless the user says otherwise: a source
+     * without an entry gets one, enabled. An entry the user switched off stays off.
+     */
+    syncFunding(): void {
+        for (const broker of this.data.brokers) {
+            if (broker.fundingOnly) continue;
+            for (const source of this.fundingCandidates(broker.key)) {
+                if (!this.fundingFor(broker, source)) broker.funding.push({...this.newFunding(source), enabled: true});
+            }
+        }
     }
 
     newFunding(source: FundingSourceRef): DraftFunding {
@@ -436,6 +533,7 @@ export class PlannerDraft {
             stamp: null,
             enteredAt: nowTimestamp(),
             modes: this.defaultModes([]),
+            conversionMode: 'manual',
             funding: [],
         };
         this.data.brokers.push(broker);
@@ -485,7 +583,12 @@ export class PlannerDraft {
     removeAsset(key: string): void {
         this.data.assets = this.data.assets.filter((item) => item.key !== key);
         delete this.data.targets[key];
+        if (this.assetOrder.includes(key)) this.assetOrder = this.assetOrder.filter((item) => item !== key);
         this.syncRoutes();
+    }
+
+    reorderAssets(keys: readonly string[]): void {
+        this.assetOrder = [...keys];
     }
 
     // -- routes ------------------------------------------------------------
@@ -507,7 +610,7 @@ export class PlannerDraft {
                         priority: DEFAULT_ROUTE_PRIORITY,
                         minimumIfActive: '',
                         requiredMinimum: '',
-                        cap: DEFAULT_ROUTE_CAP,
+                        cap: '',
                         marginPercent: DEFAULT_EXECUTION_MARGIN_PERCENT,
                         enteredAt: nowTimestamp(),
                     };
@@ -517,10 +620,12 @@ export class PlannerDraft {
         for (const key of Object.keys(this.data.routes)) {
             if (!wanted.has(key)) delete this.data.routes[key];
         }
+        this.syncFunding();
     }
 
-    routesOf(assetKey: string): DraftRoute[] {
-        return this.data.brokers.filter((broker) => !broker.fundingOnly).flatMap((broker) => this.data.routes[routeKey(assetKey, broker.key)] ?? []);
+    /** The routes of one operative Broker, in the user's Asset order (Routing step). */
+    routesOfBroker(brokerKey: string): DraftRoute[] {
+        return this.orderedAssets.flatMap((asset) => this.data.routes[routeKey(asset.key, brokerKey)] ?? []);
     }
 
     // -- targets (control percentages only, Q-C0-2) --------------------------
@@ -537,10 +642,12 @@ export class PlannerDraft {
     /**
      * Pairs the backend will ask for, mirroring its closure (normalize.py
      * `validate_fx_pair_closure`): every referenced currency against the
-     * valuation currency, plus every cash pool of a Broker against the price
-     * currency of each Asset it can buy. A proposal, never a gate.
+     * valuation currency (`valuationPairs`), plus every cash pool of a Broker
+     * against the price currency of each Asset it can buy (`conversionPairs`).
+     * Only these are sent: a stale extra pair would reference a currency the
+     * scenario no longer has, and the backend would ask for more rates.
      */
-    readonly requiredPairs = $derived.by(() => {
+    readonly #fxClosure = $derived.by(() => {
         const valuation = this.data.valuationCurrency;
         const referenced = new Set<string>();
         const pools = new Map<string, Set<string>>();
@@ -565,16 +672,32 @@ export class PlannerDraft {
             }
         }
         for (const asset of this.data.assets) if (asset.price?.currency) referenced.add(asset.price.currency);
-        const pairs = new Set<string>();
-        for (const currency of referenced) if (valuation && currency && currency !== valuation) pairs.add(canonicalPair(currency, valuation));
+        const valuationPairs = new Set<string>();
+        for (const currency of referenced) if (valuation && currency && currency !== valuation) valuationPairs.add(canonicalPair(currency, valuation));
+        const conversionPairs = new Set<string>();
         for (const route of Object.values(this.data.routes)) {
             if (!route.enabled) continue;
             const quote = this.asset(route.assetKey)?.price?.currency;
             if (!quote) continue;
-            for (const pool of pools.get(route.brokerKey) ?? []) if (pool !== quote) pairs.add(canonicalPair(pool, quote));
+            for (const pool of pools.get(route.brokerKey) ?? []) if (pool !== quote) conversionPairs.add(canonicalPair(pool, quote));
         }
-        return [...pairs].sort();
+        return {valuation: [...valuationPairs].sort(), conversion: [...conversionPairs].sort()};
     });
+
+    readonly valuationPairs = $derived(this.#fxClosure.valuation);
+    readonly conversionPairs = $derived(this.#fxClosure.conversion);
+    readonly requiredPairs = $derived([...new Set([...this.valuationPairs, ...this.conversionPairs])].sort());
+    /** No pair needed: the FX step has nothing to ask and leaves the wizard. */
+    readonly fxNeeded = $derived(this.requiredPairs.length > 0);
+
+    fxPurpose(pair: string): FxPurpose {
+        const valuation = this.valuationPairs.includes(pair);
+        const conversion = this.conversionPairs.includes(pair);
+        return valuation && conversion ? 'both' : conversion ? 'conversion' : 'valuation';
+    }
+
+    /** The wizard steps on screen: FX only when a rate is needed. */
+    readonly visibleSteps: readonly PlannerStep[] = $derived(PLANNER_STEPS.filter((step) => step !== 'fx' || this.fxNeeded));
 
     /** Proposed pairs plus the ones already in the draft, in canonical order. */
     readonly fxPairs = $derived([...new Set([...this.requiredPairs, ...this.data.fxRates.map((item) => item.pair)])].sort());
@@ -582,7 +705,7 @@ export class PlannerDraft {
     ensureFx(pair: string): DraftFx {
         const existing = this.fx(pair);
         if (existing) return existing;
-        const item: DraftFx = {pair, rate: '', copiedRate: null, stamp: null, source: null, referenceDate: null, enteredAt: nowTimestamp()};
+        const item: DraftFx = {pair, rate: '', copiedRate: null, stamp: null, source: null, referenceDate: null, manual: false, enteredAt: nowTimestamp()};
         this.data.fxRates.push(item);
         return this.data.fxRates[this.data.fxRates.length - 1];
     }
@@ -621,11 +744,12 @@ export class PlannerDraft {
         manual += this.data.contributions.length;
         for (const asset of this.data.assets) {
             if (asset.price) {
-                if (asset.priceStamp && samePrice(asset.price, asset.copiedPrice)) copied += 1;
-                else if (asset.priceStamp) modified += 1;
+                if (priceIsCopied(asset)) {
+                    copied += 1;
+                    const age = daysBetween(asset.price.referenceDate, this.data.asOf);
+                    if (age !== null && age > 0) stale += 1;
+                } else if (asset.priceStamp) modified += 1;
                 else manual += 1;
-                const age = daysBetween(asset.price.referenceDate, this.data.asOf);
-                if (age !== null && age > 0) stale += 1;
             }
             if (asset.exposures.length > 0) {
                 if (asset.exposureStamp && sameExposures(asset.exposures, asset.copiedExposures)) copied += 1;
@@ -633,15 +757,15 @@ export class PlannerDraft {
                 else manual += 1;
             }
         }
-        for (const fx of this.data.fxRates) {
-            if (!fx.rate) continue;
-            if (fx.stamp && fx.copiedRate !== null && compareDecimal(fx.rate, fx.copiedRate) === 0) copied += 1;
-            else if (fx.stamp) modified += 1;
-            else manual += 1;
-            if (fx.referenceDate) {
-                const age = daysBetween(fx.referenceDate, this.data.asOf);
+        for (const pair of this.requiredPairs) {
+            const fx = this.fx(pair);
+            if (!fx || !fx.rate) continue;
+            if (rateIsCopied(fx)) {
+                copied += 1;
+                const age = fx.referenceDate ? daysBetween(fx.referenceDate, this.data.asOf) : null;
                 if (age !== null && age > 0) stale += 1;
-            }
+            } else if (fx.stamp) modified += 1;
+            else manual += 1;
         }
         return {copied, manual, modified, stale};
     });

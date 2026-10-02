@@ -264,6 +264,7 @@ PlannerPositiveInteger = Annotated[int, Field(strict=True, gt=0, le=_JS_SAFE_INT
 PlannerWireInteger = Annotated[int, Field(strict=True, ge=-_JS_SAFE_INTEGER, le=_JS_SAFE_INTEGER)]
 QuantityUnit = Literal["asset_unit"]
 OrderSide = Literal["buy", "sell"]
+PlannerConversionMode = Literal["manual", "automatic"]
 
 
 class PlannerSnapshotInput(AllocationStrictModel):
@@ -444,6 +445,7 @@ class PlannerBrokerInput(AllocationStrictModel):
     provenance_id: PlannerId
     capabilities: list[BrokerOrderCapability]
     fee_schedules: list[BrokerFeeScheduleInput]
+    conversion_mode: PlannerConversionMode = Field(description="How the plan presents this Broker's currency conversions: 'manual' as numbered steps the user performs before buying, 'automatic' as conversions the Broker performs when the orders execute. It changes no figure of the plan.")
 
 
 class PlannerHoldingInput(AllocationStrictModel):
@@ -531,8 +533,14 @@ class NotionalOrderCap(AllocationStrictModel):
     amount: PlannerMoneyInput
 
 
+class NoOrderCap(AllocationStrictModel):
+    """No cap of its own: a buy is still bounded by the resources, a sell by the holding."""
+
+    kind: Literal["none"]
+
+
 type OrderCap = Annotated[
-    Union[QuantityOrderCap, NotionalOrderCap],
+    Union[QuantityOrderCap, NotionalOrderCap, NoOrderCap],
     Field(discriminator="kind"),
 ]
 
@@ -1193,8 +1201,8 @@ class PlannerFundingAction(AllocationStrictModel):
 
 class PlannerFxAction(AllocationStrictModel):
     action_id: PlannerId
-    sequence: PlannerPositiveInteger
-    order_route_id: PlannerId
+    conversion_id: PlannerId = Field(description="The Broker x currency-pair conversion this engine decision belongs to; the conversion, not the action, is what gets executed.")
+    order_route_id: PlannerId = Field(description="Key of the engine decision. The credit is pooled in the Broker's cash in the destination currency and funds every order of that Broker in that currency, so this is not the order the conversion pays for.")
     broker_id: PlannerId
     source_debit: PlannerPositiveMoneyInput
     destination_credit: PlannerPositiveMoneyInput
@@ -1219,6 +1227,42 @@ class PlannerFxAction(AllocationStrictModel):
             raise ValueError("Effective FX rate cannot exceed the approved spot rate")
         if _exact_fraction(self.spread_loss.value) < 0:
             raise ValueError("FX spread loss cannot be negative")
+        return self
+
+
+class PlannerConversion(AllocationStrictModel):
+    """One currency conversion per Broker and currency pair, aggregated from the engine's FX actions.
+
+    The engine decides FX per order route, but the credit lands in a cash pool that every
+    order of that Broker in that currency shares, so only the pair total is a fact of the
+    plan. ``source_debit`` and ``spread_loss`` sum the exact action figures;
+    ``destination_credit`` sums the posted credits the ledger reconciles against.
+    """
+
+    conversion_id: PlannerId
+    mode: PlannerConversionMode
+    sequence: PlannerPositiveInteger | None = Field(description="Execution step of a manual conversion; null when the Broker converts automatically at order time.")
+    broker_id: PlannerId
+    source_debit: PlannerPositiveMoneyInput
+    destination_credit: PlannerPositiveMoneyInput
+    spot_rate: ExactFxRate
+    effective_rate: ExactFxRate
+    spread_loss: ExactMoney
+    fx_action_ids: Annotated[list[PlannerId], Field(min_length=1)]
+    provenance_ids: Annotated[list[PlannerId], Field(min_length=1)]
+
+    @model_validator(mode="after")
+    def validate_conversion(self) -> PlannerConversion:
+        if (self.sequence is None) != (self.mode == "automatic"):
+            raise ValueError("A conversion has an execution sequence exactly when it is manual")
+        for rate in (self.spot_rate, self.effective_rate):
+            if (rate.source_currency, rate.destination_currency) != (self.source_debit.currency, self.destination_credit.currency):
+                raise ValueError("Conversion rates must follow the source-to-destination direction")
+        if _exact_fraction(self.effective_rate.value) > _exact_fraction(self.spot_rate.value):
+            raise ValueError("Effective conversion rate cannot exceed the approved spot rate")
+        if _exact_fraction(self.spread_loss.value) < 0:
+            raise ValueError("Conversion spread loss cannot be negative")
+        _require_unique(self.fx_action_ids, "Conversion FX action IDs")
         return self
 
 
@@ -1287,7 +1331,7 @@ class PlannerBuyOrderRow(AllocationStrictModel):
     execution_margin_cost: ExactMoney
     cash_debit: PlannerPositiveMoneyInput
     fee: PlannerNonNegativeMoneyInput
-    fx_cost: ExactMoney
+    fx_cost: ExactMoney = Field(description="Always zero: a conversion funds a shared Broker x currency cash pool, so its spread is published on the conversion, not attributed to one order.")
     buffer: PlannerNonNegativeMoneyInput
     explanation_keys: list[PlannerMessageKey]
     provenance_ids: Annotated[list[PlannerId], Field(min_length=1)]
@@ -1310,8 +1354,8 @@ class PlannerBuyOrderRow(AllocationStrictModel):
             raise ValueError("BUY mid value must be positive")
         if _exact_fraction(self.execution_margin_cost.value) < 0:
             raise ValueError("BUY execution-margin cost cannot be negative")
-        if _exact_fraction(self.fx_cost.value) < 0:
-            raise ValueError("BUY FX cost cannot be negative")
+        if _exact_fraction(self.fx_cost.value) != 0:
+            raise ValueError("BUY FX cost must be zero: conversion spreads are published on the conversion")
         return self
 
 
@@ -1580,6 +1624,67 @@ class PlannerObjectiveResults(AllocationStrictModel):
         return self
 
 
+def _validate_action_ids_and_sequences(solution: PacPlanSolution | RebalancerPlanSolution, label: str) -> None:
+    """IDs unique across every action section; sequences unique across the sequenced ones.
+
+    FX actions carry no sequence: they are engine decisions, executed through their
+    conversion. A manual conversion is a step of its own; an automatic one happens
+    inside the orders, so it has no sequence either.
+    """
+    ids = [
+        *(row.action_id for row in solution.funding_actions),
+        *(row.action_id for row in solution.fx_actions),
+        *(row.conversion_id for row in solution.conversions),
+        *(row.order_id for row in solution.order_rows),
+    ]
+    _require_unique(ids, f"{label} action IDs")
+    sections = (
+        [row.sequence for row in solution.funding_actions],
+        [row.sequence for row in solution.conversions if row.sequence is not None],
+        [row.sequence for row in solution.order_rows],
+    )
+    _require_unique([sequence for section in sections for sequence in section], f"{label} action sequences")
+    if any(section != sorted(section) for section in sections):
+        raise ValueError(f"{label} action sections must be sequence-ordered")
+
+
+def _validate_conversions(solution: PacPlanSolution | RebalancerPlanSolution, label: str) -> None:
+    """Bind every FX action to its Broker x currency-pair conversion.
+
+    A conversion is a pure aggregate: it covers exactly the actions that reference it,
+    repeats their Broker, currency pair and rates, and carries their exact sums. One
+    conversion per pair, and one mode per Broker, because the mode is a Broker input.
+    """
+    _require_unique([row.conversion_id for row in solution.conversions], f"{label} conversion IDs")
+    _require_unique([(row.broker_id, row.source_debit.currency, row.destination_credit.currency) for row in solution.conversions], f"{label} conversion pairs")
+    modes: dict[str, str] = {}
+    if any(modes.setdefault(row.broker_id, row.mode) != row.mode for row in solution.conversions):
+        raise ValueError(f"{label} conversions must use one mode per Broker")
+    conversions = {row.conversion_id: row for row in solution.conversions}
+    members: dict[str, list[PlannerFxAction]] = {conversion_id: [] for conversion_id in conversions}
+    for action in solution.fx_actions:
+        conversion = conversions.get(action.conversion_id)
+        if conversion is None:
+            raise ValueError(f"{label} FX actions must reference a published conversion")
+        if (action.broker_id, action.source_debit.currency, action.destination_credit.currency) != (conversion.broker_id, conversion.source_debit.currency, conversion.destination_credit.currency):
+            raise ValueError(f"{label} FX actions must match their conversion's Broker and currency pair")
+        if _exact_fraction(action.spot_rate.value) != _exact_fraction(conversion.spot_rate.value) or _exact_fraction(action.effective_rate.value) != _exact_fraction(conversion.effective_rate.value):
+            raise ValueError(f"{label} FX actions must use their conversion's rates")
+        members[action.conversion_id].append(action)
+    for conversion_id, conversion in conversions.items():
+        actions = members[conversion_id]
+        if set(conversion.fx_action_ids) != {action.action_id for action in actions}:
+            raise ValueError(f"{label} conversions must list exactly the FX actions that reference them")
+        if (
+            _fixed_fraction(conversion.source_debit.amount) != sum((_fixed_fraction(action.source_debit.amount) for action in actions), Fraction())
+            or _fixed_fraction(conversion.destination_credit.amount) != sum((_fixed_fraction(action.destination_credit.amount) for action in actions), Fraction())
+            or _money_fraction(conversion.spread_loss) != sum((_money_fraction(action.spread_loss) for action in actions), Fraction())
+        ):
+            raise ValueError(f"{label} conversion totals must equal the exact sums of their FX actions")
+        if set(conversion.provenance_ids) != {provenance_id for action in actions for provenance_id in action.provenance_ids}:
+            raise ValueError(f"{label} conversion provenance must be the union of its FX actions' provenance")
+
+
 def _validate_pac_rounding_top_ups(solution: PacPlanSolution) -> None:
     """Bind the top-ups to the ledger pools they excuse.
 
@@ -1609,6 +1714,7 @@ class PacPlanSolution(AllocationStrictModel):
     asset_rows: list[PacAssetPlanRow]
     funding_actions: list[PlannerFundingAction]
     fx_actions: list[PlannerFxAction]
+    conversions: list[PlannerConversion] = Field(description="One conversion per Broker x currency pair, aggregating the FX actions; manual ones are numbered steps.")
     order_rows: list[PlannerBuyOrderRow]
     ledger_rows: list[PlannerLedgerRow]
     rounding_top_ups: list[PlannerRoundingTopUp] = Field(description="One top-up per ledger pool left short by HALF_UP rounding; empty when every pool balances.")
@@ -1620,12 +1726,8 @@ class PacPlanSolution(AllocationStrictModel):
     @model_validator(mode="after")
     def validate_authoritative_rows(self) -> PacPlanSolution:
         _require_unique([row.asset_id for row in self.asset_rows], "PAC Asset rows")
-        actions = [*self.funding_actions, *self.fx_actions, *self.order_rows]
-        _require_unique([action.action_id if hasattr(action, "action_id") else action.order_id for action in actions], "PAC action IDs")
-        sequences = [action.sequence for action in actions]
-        _require_unique(sequences, "PAC action sequences")
-        if any([row.sequence for row in rows] != sorted(row.sequence for row in rows) for rows in (self.funding_actions, self.fx_actions, self.order_rows)):
-            raise ValueError("PAC action sections must be sequence-ordered")
+        _validate_action_ids_and_sequences(self, "PAC")
+        _validate_conversions(self, "PAC")
         _require_unique([(row.broker_id, row.currency) for row in self.ledger_rows], "PAC ledger scopes")
         _require_unique([(row.dimension, row.category_id) for row in self.exposure_rows], "PAC exposure rows")
         _validate_pac_rounding_top_ups(self)
@@ -1639,6 +1741,7 @@ class RebalancerPlanSolution(AllocationStrictModel):
     asset_rows: list[RebalancerAssetPlanRow]
     funding_actions: list[PlannerFundingAction]
     fx_actions: list[PlannerFxAction]
+    conversions: list[PlannerConversion] = Field(description="One conversion per Broker x currency pair, aggregating the FX actions; manual ones are numbered steps.")
     order_rows: list[RebalancerOrderRow]
     sell_irreducibility: list[SellIrreducibilityEvidence]
     ledger_rows: list[PlannerLedgerRow]
@@ -1650,15 +1753,8 @@ class RebalancerPlanSolution(AllocationStrictModel):
     @model_validator(mode="after")
     def validate_authoritative_rows(self) -> RebalancerPlanSolution:
         _require_unique([row.asset_id for row in self.asset_rows], "Rebalancer Asset rows")
-        actions = [*self.funding_actions, *self.fx_actions, *self.order_rows]
-        _require_unique(
-            [action.action_id if hasattr(action, "action_id") else action.order_id for action in actions],
-            "Rebalancer action IDs",
-        )
-        sequences = [action.sequence for action in actions]
-        _require_unique(sequences, "Rebalancer action sequences")
-        if any([row.sequence for row in rows] != sorted(row.sequence for row in rows) for rows in (self.funding_actions, self.fx_actions, self.order_rows)):
-            raise ValueError("Rebalancer action sections must be sequence-ordered")
+        _validate_action_ids_and_sequences(self, "Rebalancer")
+        _validate_conversions(self, "Rebalancer")
         _require_unique([(row.broker_id, row.currency) for row in self.ledger_rows], "Rebalancer ledger scopes")
         # The Rebalancer has no rounding top-ups, so no pool of it may end short.
         if any(_fixed_fraction(row.final_spendable) < 0 or _fixed_fraction(row.final_physical) < 0 for row in self.ledger_rows):
@@ -1718,6 +1814,7 @@ def _validate_rebalancer_no_op(solution: RebalancerPlanSolution) -> None:
 class PacNoOpSolution(PacPlanSolution):
     funding_actions: Annotated[list[PlannerFundingAction], Field(max_length=0)]
     fx_actions: Annotated[list[PlannerFxAction], Field(max_length=0)]
+    conversions: Annotated[list[PlannerConversion], Field(max_length=0)]
     order_rows: Annotated[list[PlannerBuyOrderRow], Field(max_length=0)]
     rounding_top_ups: Annotated[list[PlannerRoundingTopUp], Field(max_length=0)]
 
@@ -1731,6 +1828,7 @@ class PacNoOpSolution(PacPlanSolution):
 class RebalancerNoOpSolution(RebalancerPlanSolution):
     funding_actions: Annotated[list[PlannerFundingAction], Field(max_length=0)]
     fx_actions: Annotated[list[PlannerFxAction], Field(max_length=0)]
+    conversions: Annotated[list[PlannerConversion], Field(max_length=0)]
     order_rows: Annotated[list[RebalancerOrderRow], Field(max_length=0)]
     sell_irreducibility: Annotated[list[SellIrreducibilityEvidence], Field(max_length=0)]
 
@@ -1997,6 +2095,7 @@ def _validate_solution_financials(
             fields = ("before_value", *fields, "sell_mid_value")
         valuation_money.extend(getattr(row, name) for name in fields)
     valuation_money.extend(row.spread_loss for row in solution.fx_actions)
+    valuation_money.extend(row.spread_loss for row in solution.conversions)
     valuation_money.extend(row.execution_margin_cost for row in solution.order_rows)
     valuation_money.extend(row.fx_cost for row in solution.order_rows if isinstance(row, PlannerBuyOrderRow))
     top_ups = solution.rounding_top_ups if isinstance(solution, PacPlanSolution) else []
@@ -2053,10 +2152,10 @@ def _validate_ready_solution(
     if not _collect_currency_codes(solution.model_dump(mode="python")) <= currencies:
         raise ValueError("Solution rows must reference catalog currencies")
     _validate_pac_top_up_minor_units(catalogs, solution)
-    referenced_provenance = {provenance_id for row in [*solution.funding_actions, *solution.fx_actions, *solution.order_rows, *solution.exposure_rows] for provenance_id in row.provenance_ids}
+    referenced_provenance = {provenance_id for row in [*solution.funding_actions, *solution.fx_actions, *solution.conversions, *solution.order_rows, *solution.exposure_rows] for provenance_id in row.provenance_ids}
     if not referenced_provenance <= provenance_ids:
         raise ValueError("Solution rows must reference top-level provenance IDs")
-    for row in [*solution.funding_actions, *solution.fx_actions, *solution.order_rows, *solution.exposure_rows]:
+    for row in [*solution.funding_actions, *solution.fx_actions, *solution.conversions, *solution.order_rows, *solution.exposure_rows]:
         _require_unique(row.provenance_ids, "Result-row provenance IDs")
     _validate_solution_financials(solution, valuation_currency)
 

@@ -20,6 +20,7 @@ from backend.app.schemas.pac_allocator import (
     ManualProvenance,
     MonetaryAmountCapability,
     MonetaryAmountMinimum,
+    NoOrderCap,
     NotionalOrderCap,
     PacPlannerRequest,
     PlannerIssue,
@@ -504,8 +505,10 @@ class _PlannerV2Normalizer:
             return self.money(minimum.amount, path), "notional", minimum.amount.currency
         return ExactRatio(0), "none", None
 
-    def order_cap(self, route: PlannerOrderRouteInput) -> tuple[ExactRatio, str, str | None]:
+    def order_cap(self, route: PlannerOrderRouteInput) -> tuple[ExactRatio | None, str, str | None]:
         path = field_path("routing", "order_route", route.route_id, "cap")
+        if isinstance(route.cap, NoOrderCap):
+            return None, "none", None
         if isinstance(route.cap, NotionalOrderCap):
             return self.money(route.cap.amount, path), "notional", route.cap.amount.currency
         return self.ratio(route.cap.quantity, path), "quantity", None
@@ -554,11 +557,13 @@ class _PlannerV2Normalizer:
             self.issue("allocation.order_minimum_negative", field_path("routing", "order_route", route.route_id, "minimum_if_active"))
         if required_minimum < ExactRatio(0):
             self.issue("allocation.order_minimum_negative", field_path("routing", "order_route", route.route_id, "required_minimum"))
-        if cap <= ExactRatio(0):
+        if cap is not None and cap <= ExactRatio(0):
             self.issue("allocation.order_cap_nonpositive", field_path("routing", "order_route", route.route_id, "cap"))
         expected_kind = "quantity" if isinstance(capability, WholeQuantityCapability) else "notional" if isinstance(capability, MonetaryAmountCapability) else None
         self.validate_order_minimum_kind(route, capability, expected_kind, minimum_if_active_kind, minimum_if_active_currency, quote_currency, "minimum_if_active")
         self.validate_order_minimum_kind(route, capability, expected_kind, required_minimum_kind, required_minimum_currency, quote_currency, "required_minimum")
+        if cap is None:
+            return
         if expected_kind is not None and cap_kind != expected_kind:
             self.issue("allocation.reference_not_found", field_path("routing", "order_route", route.route_id, "cap"))
         if cap_currency is not None and isinstance(capability, MonetaryAmountCapability) and quote_currency is not None and cap_currency != quote_currency:
@@ -905,6 +910,7 @@ class _PlannerV2Normalizer:
                     provenance_id=broker.provenance_id,
                     capabilities=tuple(capabilities),
                     fee_schedules=tuple(fees),
+                    conversion_mode=broker.conversion_mode,
                 )
             )
         return tuple(result)
@@ -937,7 +943,9 @@ class _PlannerV2Normalizer:
             return ExactOrderMinimum(kind="monetary_amount", value=ExactRatio.from_decimal(Decimal(minimum.amount.amount)), currency=minimum.amount.currency)
         return ExactOrderMinimum(kind="none", value=ExactRatio(0), currency=None)
 
-    def build_order_cap(self, cap) -> ExactOrderCap:
+    def build_order_cap(self, cap) -> ExactOrderCap | None:
+        if isinstance(cap, NoOrderCap):
+            return None
         if isinstance(cap, NotionalOrderCap):
             return ExactOrderCap(kind="notional", value=ExactRatio.from_decimal(Decimal(cap.amount.amount)), currency=cap.amount.currency)
         return ExactOrderCap(kind="quantity", value=ExactRatio.from_decimal(Decimal(cap.quantity)), currency=None)

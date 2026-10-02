@@ -1,5 +1,5 @@
 /**
- * Wire types of the PAC planner 2.0.0, derived from the generated contract.
+ * Wire types of the PAC planner 1.0.0, derived from the generated contract.
  *
  * Nothing here is hand-written against the backend: every type is an
  * extraction of `ToolInput`/`ToolOutput`, so a contract change surfaces as a
@@ -7,8 +7,8 @@
  */
 import type {ToolInput, ToolOutput} from '$lib/features/tools/contracts';
 
-export type PacPlannerRequest = ToolInput<'pac_allocator', '2.0.0'>;
-export type PacPlannerResult = ToolOutput<'pac_allocator', '2.0.0'>;
+export type PacPlannerRequest = ToolInput<'pac_allocator', '1.0.0'>;
+export type PacPlannerResult = ToolOutput<'pac_allocator', '1.0.0'>;
 export type PacResultState = PacPlannerResult['result_state'];
 
 export type PacFailureResult = Extract<PacPlannerResult, {result_state: 'needs_input' | 'invalid' | 'unsupported'}>;
@@ -26,6 +26,7 @@ export type PacSolution = PacPlanResult['primary_solution'];
 export type PacAssetRow = PacSolution['asset_rows'][number];
 export type PacFundingAction = PacSolution['funding_actions'][number];
 export type PacFxAction = PacSolution['fx_actions'][number];
+export type PacConversion = PacSolution['conversions'][number];
 export type PacOrderRow = PacSolution['order_rows'][number];
 export type PacLedgerRow = PacSolution['ledger_rows'][number];
 export type PacRoundingTopUp = PacSolution['rounding_top_ups'][number];

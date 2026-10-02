@@ -1,21 +1,22 @@
 <script lang="ts">
     import {untrack} from 'svelte';
-    import {Plus, Trash2} from 'lucide-svelte';
-    import {t, locale} from '$lib/i18n';
+    import {Plus} from 'lucide-svelte';
+    import {t} from '$lib/i18n';
+    import DistributionEditor from '$lib/components/ui/input/DistributionEditor.svelte';
     import ExactDecimalInput from '$lib/components/ui/input/ExactDecimalInput.svelte';
-    import SingleDatePicker from '$lib/components/ui/date/SingleDatePicker.svelte';
+    import AssetTypeSelect from '$lib/components/ui/select/AssetTypeSelect.svelte';
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
-    import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
-    import {restoreCopiedExposures, restoreCopiedPrice} from '../copies';
-    import {EXPOSURE_DIMENSIONS, nowTimestamp, sameExposures, samePrice, type DraftAsset, type ExposureDimension, type PlannerDraft} from '../draft.svelte';
-    import {formatPlannerTimestamp} from '../format';
+    import {ASSET_TYPES} from '$lib/utils/assetTypes';
+    import {plannerAssetClass} from '../copies';
+    import {canonicalInput, compareDecimal, fractionToPercent, percentToFraction, sumControlPercentages} from '../decimal';
+    import {nowTimestamp, type DraftAsset, type DraftExposure, type ExposureDimension, type PlannerDraft} from '../draft.svelte';
     import {DIMENSION_FALLBACKS} from '../labels';
-    import {toPlannerId} from '../source';
-    import {BUTTON_LINK, BUTTON_PRIMARY, BUTTON_SECONDARY, HINT, INPUT, LABEL, NOTICE, SECTION_TITLE} from '../ui';
-    import AgeLabel from '../shared/AgeLabel.svelte';
-    import OriginBadge from '../shared/OriginBadge.svelte';
+    import {BUTTON_LINK, BUTTON_PRIMARY, BUTTON_SECONDARY, INPUT, LABEL_ROW, NOTICE, SECTION_TITLE} from '../ui';
+    import HelpTip from '../shared/HelpTip.svelte';
     import PlannerDialog from '../shared/PlannerDialog.svelte';
+    const KEY = 'tools.pacAllocator.planner.assetEditor';
 
+    /** Only a manual Asset is edited here: an Asset of LibreFolio keeps the data LibreFolio stores (R8.3). */
     interface Props {
         draft: PlannerDraft;
         /** `null` opens an empty manual Asset. */
@@ -26,24 +27,24 @@
     let {draft, assetKey, onclose}: Props = $props();
 
     const ids = $props.id();
-    const CLASS_SUGGESTIONS = ['etf', 'stock', 'bond', 'fund', 'crypto', 'commodity', 'cash', 'real_estate'];
 
     function emptyManual(): DraftAsset {
         return {
             key: '',
             origin: 'manual',
             sourceAssetId: null,
-            manualId: '',
             name: '',
             ticker: '',
             assetClass: 'etf',
             iconUrl: null,
             active: true,
             price: {amount: '', currency: draft.data.valuationCurrency, quoteBaseQuantity: '1', referenceDate: draft.data.asOf},
+            priceManual: false,
             copiedPrice: null,
             priceStamp: null,
             priceSource: null,
-            exposures: [],
+            // Like an Asset of LibreFolio, a manual one is wholly of its own type until the user says otherwise.
+            exposures: [{key: draft.nextId('exposure'), dimension: 'asset_type', categoryId: 'ETF', label: 'ETF', weightPercent: '100', provenanceId: null}],
             copiedExposures: null,
             exposureStamp: null,
             enteredAt: nowTimestamp(),
@@ -57,34 +58,78 @@
     });
     const isNew = initial.key === '';
     let working = $state<DraftAsset>(initial);
-    let error = $state<{key: string; fallback: string} | null>(null);
+    let error = $state<{key: string; fallback: string; values?: Record<string, string>} | null>(null);
 
-    const dimensionOptions = $derived(EXPOSURE_DIMENSIONS.map((dimension) => ({value: dimension, label: $t(`tools.pacAllocator.planner.dimensions.${dimension}`, {default: DIMENSION_FALLBACKS[dimension]})})));
-    const priceModified = $derived(working.priceStamp !== null && !samePrice(working.price, working.copiedPrice));
-    const exposuresModified = $derived(working.exposureStamp !== null && !sameExposures(working.exposures, working.copiedExposures));
+    /** The type is one value, edited beside the identity; the composition is sector and geography. */
+    const COMPOSITION: readonly ExposureDimension[] = ['sector', 'geography'];
+
+    /** The shared distribution editor works on fractions keyed by category; the draft keeps exact percent text. */
+    let sectorValue = $state<Record<string, number>>(distributionOf('sector'));
+    let geographyValue = $state<Record<string, number>>(distributionOf('geography'));
 
     function addPrice(): void {
         working.price = {amount: '', currency: draft.data.valuationCurrency, quoteBaseQuantity: '1', referenceDate: draft.data.asOf};
     }
 
-    function addExposure(): void {
-        working.exposures.push({key: draft.nextId('exposure'), dimension: 'asset_type', categoryId: '', label: '', weightPercent: '', provenanceId: null});
+    function dimensionName(dimension: ExposureDimension): string {
+        return $t(`tools.pacAllocator.planner.dimensions.${dimension}`, {default: DIMENSION_FALLBACKS[dimension]});
     }
 
-    function setDimension(index: number, value: string): void {
-        if ((EXPOSURE_DIMENSIONS as readonly string[]).includes(value)) working.exposures[index].dimension = value as ExposureDimension;
+    function rowsOf(dimension: ExposureDimension): DraftExposure[] {
+        return working.exposures.filter((row) => row.dimension === dimension);
     }
 
-    function removeExposure(key: string): void {
-        working.exposures = working.exposures.filter((row) => row.key !== key);
+    function distributionOf(dimension: ExposureDimension): Record<string, number> {
+        const value: Record<string, number> = {};
+        for (const row of rowsOf(dimension)) {
+            const category = row.categoryId.trim();
+            const fraction = Number(percentToFraction(canonicalInput(row.weightPercent) ?? '') ?? Number.NaN);
+            if (category !== '' && Number.isFinite(fraction)) value[category] = fraction;
+        }
+        return value;
     }
 
-    function restorePrice(): void {
-        restoreCopiedPrice(working);
+    /** Rows the editor sends back replace the dimension; a category already present keeps its identity. */
+    function writeDimension(dimension: ExposureDimension, value: Record<string, number>): void {
+        const previous = new Map(rowsOf(dimension).map((row) => [row.categoryId.trim(), row]));
+        const rows: DraftExposure[] = Object.entries(value).map(([category, fraction]) => {
+            const old = previous.get(category);
+            return {
+                key: old?.key ?? draft.nextId('exposure'),
+                dimension,
+                categoryId: category,
+                label: old?.label.trim() ? old.label : category,
+                weightPercent: Number.isFinite(fraction) ? (fractionToPercent(fraction.toFixed(6)) ?? '') : '',
+                provenanceId: old?.provenanceId ?? null,
+            };
+        });
+        working.exposures = [...working.exposures.filter((row) => row.dimension !== dimension), ...rows];
     }
 
-    function restoreExposures(): void {
-        restoreCopiedExposures(draft, working);
+    /** One type row at 100%, matching the type: a picked type replaces the previous one. */
+    function withTypeRow(rows: readonly DraftExposure[], assetClass: string): DraftExposure[] {
+        const code = assetClass.trim().toUpperCase();
+        if (!(ASSET_TYPES as readonly string[]).includes(code)) return [...rows];
+        const same = rows.find((row) => row.dimension === 'asset_type' && row.categoryId.trim().toUpperCase() === code);
+        const typeRow: DraftExposure = same ? {...same, weightPercent: '100'} : {key: draft.nextId('exposure'), dimension: 'asset_type', categoryId: code, label: code, weightPercent: '100', provenanceId: null};
+        return [typeRow, ...rows.filter((row) => row.dimension !== 'asset_type')];
+    }
+
+    function setType(value: string): void {
+        const next = plannerAssetClass(value);
+        if (next === '') return;
+        working.assetClass = next;
+        working.exposures = withTypeRow(working.exposures, next);
+    }
+
+    function pickCategory(dimension: ExposureDimension): string {
+        return $t(`${KEY}.pickCategory`, {default: '{dimension, select, asset_type {Choose a type} sector {Choose a sector} other {Choose a country}}', values: {dimension}});
+    }
+
+    function compositionHelp(): string {
+        const what = $t('tools.pacAllocator.planner.assets.compositionHelp', {default: 'What the Asset holds, by sector and geography. It is used only by the result report, to show the portfolio before and after: it does not change the orders. A share that is not indicated counts as “Uncategorised”.'});
+        const weights = $t(`${KEY}.weightsHelp`, {default: 'For each dimension, give the shares in percent. They may add up to less than 100%; over 100% the calculation rejects the data.'});
+        return `${what}\n\n${weights}`;
     }
 
     function apply(): void {
@@ -93,176 +138,109 @@
         next.name = next.name.trim();
         next.ticker = next.ticker.trim();
         next.assetClass = next.assetClass.trim();
+        next.exposures = withTypeRow(next.exposures, next.assetClass);
         if (next.name === '') {
             error = {key: 'tools.pacAllocator.planner.problems.assetNameMissing', fallback: 'The Asset name is empty.'};
             return;
         }
-        if (next.origin === 'manual') {
-            const manualId = (next.manualId ?? '').trim();
-            const key = manualId === '' ? null : toPlannerId(['manual-asset', manualId].join(':'));
-            if (manualId === '') {
-                error = {key: 'tools.pacAllocator.planner.assetEditor.idMissing', fallback: 'The instrument ID is required.'};
+        for (const dimension of COMPOSITION) {
+            const total = sumControlPercentages(next.exposures.filter((row) => row.dimension === dimension).map((row) => row.weightPercent));
+            if (total !== null && compareDecimal(total, '100') === 1) {
+                error = {key: `${KEY}.totalOver`, fallback: '{dimension}: the shares add up to more than 100%. Lower one of them before applying.', values: {dimension: dimensionName(dimension)}};
                 return;
             }
-            if (key === null) {
-                error = {key: 'tools.pacAllocator.planner.assetEditor.idTooLong', fallback: 'The instrument ID is too long.'};
-                return;
-            }
-            if (isNew && draft.asset(key)) {
-                error = {key: 'tools.pacAllocator.planner.assetEditor.idDuplicate', fallback: 'This ID is already in the draft: edit that Asset instead of adding it twice.'};
-                return;
-            }
-            next.manualId = manualId;
-            if (isNew) next.key = key;
         }
-        if (isNew) draft.addAsset(next);
-        else draft.replaceAsset(next);
+        // A manual Asset is its own identity: the draft names it, and two Assets are never merged by name or code.
+        if (isNew) {
+            next.key = draft.nextId('manual-asset');
+            draft.addAsset(next);
+        } else draft.replaceAsset(next);
         onclose();
     }
 
-    const title = $derived(working.origin === 'manual' ? $t('tools.pacAllocator.planner.assetEditor.manualTitle', {default: 'Manual Asset'}) : $t('tools.pacAllocator.planner.assetEditor.title', {default: 'Configure {name} · scenario data (the Asset is not changed)', values: {name: working.name}}));
+    const title = $t('tools.pacAllocator.planner.assetEditor.manualTitle', {default: 'Manual Asset'});
 </script>
+
+{#snippet typePicker()}
+    <div data-testid="pac-planner-asset-editor-class">
+        <div class={LABEL_ROW}>
+            <span>{$t('common.type', {default: 'Type'})} *</span>
+            <HelpTip label={$t('common.type', {default: 'Type'})} help={$t(`${KEY}.typeHelp`, {default: 'The kind of instrument, as on the Asset page. It is shown in the result and does not change the orders.'})} />
+        </div>
+        <AssetTypeSelect
+            value={working.assetClass.trim().toUpperCase()}
+            testId="pac-planner-asset-editor-type"
+            placeholder={pickCategory('asset_type')}
+            onchange={setType}
+        />
+    </div>
+{/snippet}
 
 <PlannerDialog open {title} testid="pac-planner-asset-editor" {onclose} maxWidth="4xl">
     <section class="space-y-2" aria-labelledby="{ids}-identity">
-        <h3 id="{ids}-identity" class={SECTION_TITLE}>{$t('tools.pacAllocator.planner.assetEditor.identity', {default: 'Identity'})}</h3>
-        {#if working.origin === 'manual'}
-            <div class="grid gap-3 sm:grid-cols-2">
-                <label>
-                    <span class={LABEL}>{$t('tools.pacAllocator.planner.assetEditor.manualId', {default: 'Instrument ID'})} *</span>
-                    <input class={INPUT} bind:value={working.manualId} disabled={!isNew} maxlength="110" placeholder={$t('tools.pacAllocator.planner.assetEditor.manualIdPlaceholder', {default: 'ISIN or a unique ID of the scenario'})} data-testid="pac-planner-asset-editor-id" />
-                </label>
-                <label>
-                    <span class={LABEL}>{$t('common.name', {default: 'Name'})} *</span>
-                    <input class={INPUT} bind:value={working.name} maxlength="128" data-testid="pac-planner-asset-editor-name" />
-                </label>
-                <label>
-                    <span class={LABEL}>{$t('tools.pacAllocator.planner.assetEditor.ticker', {default: 'Ticker'})}</span>
-                    <input class={INPUT} bind:value={working.ticker} maxlength="128" data-testid="pac-planner-asset-editor-ticker" />
-                </label>
-                <label>
-                    <span class={LABEL}>{$t('tools.pacAllocator.planner.assetEditor.class', {default: 'Class'})} * <span class={HINT}>{$t('tools.pacAllocator.planner.assetEditor.classHint', {default: '(lowercase code)'})}</span></span>
-                    <input class={INPUT} bind:value={working.assetClass} list="{ids}-classes" maxlength="96" data-testid="pac-planner-asset-editor-class" />
-                </label>
+        <h3 id="{ids}-identity" class={SECTION_TITLE}>{$t(`${KEY}.identity`, {default: 'Identity'})}</h3>
+        <div class="grid gap-3 sm:grid-cols-2">
+            <div>
+                <div class={LABEL_ROW}><label for="{ids}-name">{$t('common.name', {default: 'Name'})} *</label></div>
+                <input id="{ids}-name" class={INPUT} bind:value={working.name} maxlength="128" data-testid="pac-planner-asset-editor-name" />
             </div>
-            <p class={HINT}>{$t('tools.pacAllocator.planner.assetEditor.neverByName', {default: 'Never merge Assets by name: the same ID reuses the same identity in the draft.'})}</p>
-        {:else}
-            <div class="flex flex-wrap items-center gap-2 text-sm">
-                <OriginBadge origin="copied" testid="pac-planner-asset-editor-origin" />
-                <span class="font-medium">{working.ticker ? [working.ticker, working.name].join(' ') : working.name}</span>
+            {@render typePicker()}
+            <div>
+                <div class={LABEL_ROW}>
+                    <label for="{ids}-ticker">{$t(`${KEY}.ticker`, {default: 'Ticker / ISIN'})}</label>
+                    <HelpTip label={$t(`${KEY}.ticker`, {default: 'Ticker / ISIN'})} help={$t(`${KEY}.tickerHelp`, {default: 'Optional: a ticker, an ISIN or any code that helps you recognise the Asset in the result. It does not link the Asset to LibreFolio, and two manual Assets are never merged by name or code.'})} />
+                </div>
+                <input id="{ids}-ticker" class={INPUT} bind:value={working.ticker} maxlength="128" data-testid="pac-planner-asset-editor-ticker" />
             </div>
-            <label class="block max-w-xs">
-                <span class={LABEL}>{$t('tools.pacAllocator.planner.assetEditor.class', {default: 'Class'})} * <span class={HINT}>{$t('tools.pacAllocator.planner.assetEditor.classHint', {default: '(lowercase code)'})}</span></span>
-                <input class={INPUT} bind:value={working.assetClass} list="{ids}-classes" maxlength="96" data-testid="pac-planner-asset-editor-class" />
-            </label>
-        {/if}
-        <datalist id="{ids}-classes">
-            {#each CLASS_SUGGESTIONS as code (code)}<option value={code}></option>{/each}
-        </datalist>
+        </div>
     </section>
 
     <section class="space-y-2" aria-labelledby="{ids}-price">
-        <h3 id="{ids}-price" class={SECTION_TITLE}>{$t('tools.pacAllocator.planner.assetEditor.price', {default: 'Price'})}</h3>
+        <h3 id="{ids}-price" class={SECTION_TITLE}>{$t(`${KEY}.price`, {default: 'Price'})}</h3>
         {#if working.price}
-            {#if working.priceStamp}
-                <div class="flex flex-wrap items-center gap-2 text-sm">
-                    <OriginBadge origin="copied" modified={priceModified} when={formatPlannerTimestamp(draft.copyRecord(working.priceStamp)?.capturedAt, $locale)} testid="pac-planner-asset-editor-price-origin" />
-                    {#if working.priceSource}<span class={HINT}>{working.priceSource}</span>{/if}
-                    {#if priceModified}
-                        <button type="button" class={BUTTON_LINK} data-testid="pac-planner-asset-editor-price-restore" onclick={restorePrice}>{$t('tools.pacAllocator.planner.restoreCopied', {default: 'Restore the copied value'})}</button>
-                    {/if}
-                </div>
-            {/if}
-            <div class="grid gap-3 sm:grid-cols-4">
-                <label for="{ids}-amount">
-                    <span class={LABEL}>{$t('tools.pacAllocator.planner.assetEditor.priceAmount', {default: 'Price'})} *</span>
+            <div class="grid gap-3 sm:grid-cols-3">
+                <div>
+                    <div class={LABEL_ROW}><label for="{ids}-amount">{$t(`${KEY}.priceAmount`, {default: 'Price'})} *</label></div>
                     <ExactDecimalInput id="{ids}-amount" bind:value={working.price.amount} step="0.01" className={INPUT} testid="pac-planner-asset-editor-price" />
-                </label>
-                <div>
-                    <span class={LABEL}>{$t('tools.pacAllocator.planner.assetEditor.priceCurrency', {default: 'Currency'})} *</span>
-                    <CurrencySearchSelect bind:value={working.price.currency} testId="pac-planner-asset-editor-price-currency" />
                 </div>
-                <label for="{ids}-basis">
-                    <span class={LABEL}>{$t('tools.pacAllocator.planner.assetEditor.quoteBasis', {default: 'Units per price'})} *</span>
+                <div>
+                    <div class={LABEL_ROW}><span>{$t(`${KEY}.priceCurrency`, {default: 'Currency'})} *</span></div>
+                    <CurrencySearchSelect bind:value={working.price.currency} compact testId="pac-planner-asset-editor-price-currency" />
+                </div>
+                <div>
+                    <div class={LABEL_ROW}>
+                        <label for="{ids}-basis">{$t(`${KEY}.quoteBasis`, {default: 'Units per price'})} *</label>
+                        <HelpTip label={$t(`${KEY}.quoteBasis`, {default: 'Units per price'})} help={$t(`${KEY}.quoteBasisHint`, {default: "'Units per price' says how many units the source price represents; it is not an order step."})} />
+                    </div>
                     <ExactDecimalInput id="{ids}-basis" bind:value={working.price.quoteBaseQuantity} step="1" className={INPUT} testid="pac-planner-asset-editor-basis" />
-                </label>
-                <div>
-                    <span class={LABEL}>{$t('tools.pacAllocator.planner.assetEditor.priceDate', {default: 'Date'})} *</span>
-                    <SingleDatePicker
-                        value={working.price.referenceDate}
-                        label={$t('tools.pacAllocator.planner.assetEditor.priceDate', {default: 'Date'})}
-                        inputStyle
-                        testid="pac-planner-asset-editor-price-date"
-                        onchange={(date) => {
-                            if (working.price) working.price.referenceDate = date;
-                        }}
-                    />
                 </div>
-            </div>
-            <div class="flex flex-wrap items-center gap-2">
-                <AgeLabel date={working.price.referenceDate || null} asOf={draft.data.asOf} manual={!working.priceStamp} testid="pac-planner-asset-editor-price-age" />
-                <span class={HINT}>{$t('tools.pacAllocator.planner.assetEditor.quoteBasisHint', {default: "'Units per price' says how many units the source price represents; it is not an order step."})}</span>
             </div>
             <button type="button" class={BUTTON_LINK} data-testid="pac-planner-asset-editor-price-clear" onclick={() => (working.price = null)}>
-                {$t('tools.pacAllocator.planner.assetEditor.priceClear', {default: 'No price: the calculation will ask for it'})}
+                {$t(`${KEY}.priceClear`, {default: 'No price: the calculation will ask for it'})}
             </button>
         {:else}
             <p class={NOTICE.warning} data-testid="pac-planner-asset-editor-no-price">{$t('tools.pacAllocator.planner.assets.priceMissing', {default: 'Price missing: it stays in the draft, the calculation will ask for it.'})}</p>
-            <div class="flex flex-wrap gap-2">
-                <button type="button" class={BUTTON_SECONDARY} data-testid="pac-planner-asset-editor-price-add" onclick={addPrice}>
-                    <Plus class="h-4 w-4" aria-hidden="true" />{$t('tools.pacAllocator.planner.assetEditor.priceAdd', {default: 'Enter a price'})}
-                </button>
-                {#if working.copiedPrice}
-                    <button type="button" class={BUTTON_SECONDARY} data-testid="pac-planner-asset-editor-price-restore" onclick={restorePrice}>{$t('tools.pacAllocator.planner.restoreCopied', {default: 'Restore the copied value'})}</button>
-                {/if}
-            </div>
+            <button type="button" class={BUTTON_SECONDARY} data-testid="pac-planner-asset-editor-price-add" onclick={addPrice}>
+                <Plus class="h-4 w-4" aria-hidden="true" />{$t(`${KEY}.priceAdd`, {default: 'Enter a price'})}
+            </button>
         {/if}
     </section>
 
-    <section class="space-y-2" aria-labelledby="{ids}-exposures">
-        <h3 id="{ids}-exposures" class={SECTION_TITLE}>{$t('tools.pacAllocator.planner.assetEditor.exposures', {default: 'Exposures (optional)'})}</h3>
-        {#if working.exposureStamp}
-            <div class="flex flex-wrap items-center gap-2 text-sm">
-                <OriginBadge origin="copied" modified={exposuresModified} when={formatPlannerTimestamp(draft.copyRecord(working.exposureStamp)?.capturedAt, $locale)} testid="pac-planner-asset-editor-exposures-origin" />
-                {#if exposuresModified && working.copiedExposures}
-                    <button type="button" class={BUTTON_LINK} data-testid="pac-planner-asset-editor-exposures-restore" onclick={restoreExposures}>{$t('tools.pacAllocator.planner.restoreCopied', {default: 'Restore the copied value'})}</button>
-                {/if}
-            </div>
-        {/if}
-        <ul class="space-y-2">
-            {#each working.exposures as exposure, index (exposure.key)}
-                <li class="grid items-end gap-2 sm:grid-cols-[10rem_minmax(0,1fr)_minmax(0,1fr)_7rem_auto]" data-testid="pac-planner-exposure" data-dimension={exposure.dimension}>
-                    <div>
-                        <span class={LABEL}>{$t('tools.pacAllocator.planner.assetEditor.dimension', {default: 'Dimension'})}</span>
-                        <SimpleSelect value={exposure.dimension} options={dimensionOptions} compact testId="pac-planner-exposure-dimension" onchange={(value) => setDimension(index, value)} />
-                    </div>
-                    <label>
-                        <span class={LABEL}>{$t('tools.pacAllocator.planner.assetEditor.categoryId', {default: 'Category ID'})}</span>
-                        <input class={INPUT} bind:value={exposure.categoryId} maxlength="120" data-testid="pac-planner-exposure-category" />
-                    </label>
-                    <label>
-                        <span class={LABEL}>{$t('tools.pacAllocator.planner.assetEditor.categoryLabel', {default: 'Label'})}</span>
-                        <input class={INPUT} bind:value={exposure.label} maxlength="128" data-testid="pac-planner-exposure-label" />
-                    </label>
-                    <label for="{ids}-{exposure.key}-weight">
-                        <span class={LABEL}>%</span>
-                        <ExactDecimalInput id="{ids}-{exposure.key}-weight" bind:value={exposure.weightPercent} step="1" max="100" className={INPUT} testid="pac-planner-exposure-weight" />
-                    </label>
-                    <button type="button" class={BUTTON_LINK} data-testid="pac-planner-exposure-remove" onclick={() => removeExposure(exposure.key)}>
-                        <Trash2 class="h-4 w-4" aria-hidden="true" /><span class="sr-only">{$t('common.remove', {default: 'Remove'})}</span>
-                    </button>
-                </li>
-            {/each}
-        </ul>
-        <button type="button" class={BUTTON_SECONDARY} data-testid="pac-planner-exposure-add" onclick={addExposure}>
-            <Plus class="h-4 w-4" aria-hidden="true" />{$t('tools.pacAllocator.planner.assetEditor.exposureAdd', {default: 'Add exposure row'})}
-        </button>
-        <p class={HINT}>{$t('tools.pacAllocator.planner.assetEditor.unclassified', {default: "The share not declared goes to the backend 'Uncategorised' row."})}</p>
-        <p class={HINT}>{$t('tools.pacAllocator.planner.assetEditor.overHundred', {default: 'A dimension summing over 100%: the backend rejects it as invalid input.'})}</p>
+    <section class="space-y-3" aria-labelledby="{ids}-exposures" data-testid="pac-planner-asset-editor-composition">
+        <h3 id="{ids}-exposures" class="flex items-center gap-1 {SECTION_TITLE}">
+            {$t('tools.pacAllocator.planner.assets.composition', {default: 'Composition'})}
+            <HelpTip label={$t('tools.pacAllocator.planner.assets.composition', {default: 'Composition'})} help={compositionHelp()} />
+        </h3>
+        <div class="rounded-lg border border-gray-200 p-3 dark:border-gray-700" data-testid="pac-planner-exposure-block" data-dimension="sector">
+            <DistributionEditor kind="sector" bind:value={sectorValue} onchange={(value) => writeDimension('sector', value)} zIndex={70} />
+        </div>
+        <div class="rounded-lg border border-gray-200 p-3 dark:border-gray-700" data-testid="pac-planner-exposure-block" data-dimension="geography">
+            <DistributionEditor kind="geographic" bind:value={geographyValue} onchange={(value) => writeDimension('geography', value)} zIndex={70} />
+        </div>
     </section>
 
     {#if error}
-        <p class={NOTICE.danger} role="alert" data-testid="pac-planner-asset-editor-error">{$t(error.key, {default: error.fallback})}</p>
+        <p class={NOTICE.danger} role="alert" data-testid="pac-planner-asset-editor-error">{$t(error.key, {default: error.fallback, values: error.values})}</p>
     {/if}
 
     {#snippet footer()}

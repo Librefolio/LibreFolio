@@ -16,7 +16,7 @@ type PlannerDescriptor = CompatibleToolDescriptor<typeof PLANNER_TOOL_CODE, type
 
 export type RunOutcome =
     | {kind: 'result'; built: BuiltRequest; result: PacPlannerResult; metrics: ToolItemMetrics; batch: ToolBatchMetrics; executionId: string | null}
-    | {kind: 'tool_error'; built: BuiltRequest; error: {code: string; retryable: boolean; issue_count: number}; metrics: ToolItemMetrics; batch: ToolBatchMetrics}
+    | {kind: 'tool_error'; built: BuiltRequest; error: {code: string; retryable: boolean; issue_count: number}; metrics: ToolItemMetrics; batch: ToolBatchMetrics; executionId: string | null}
     | {kind: 'client_error'; built: BuiltRequest; error: ToolClientError};
 
 export class PlannerRun {
@@ -72,7 +72,7 @@ export class PlannerRun {
                 // Signal for specs and diagnostics: states and counts only, never an amount.
                 notify({name: 'tool.pac-plan.completed', detail: {resultState: result.result_state, revision: built.revision, issues: result.issues.length}});
             } else {
-                this.outcome = {kind: 'tool_error', built, error: item.error, metrics: item.metrics, batch: item.batch.metrics};
+                this.outcome = {kind: 'tool_error', built, error: item.error, metrics: item.metrics, batch: item.batch.metrics, executionId: item.execution_id ?? null};
                 notify({name: 'tool.pac-plan.failed', detail: {code: item.error.code, retryable: item.error.retryable, revision: built.revision}});
             }
         } catch (caught) {

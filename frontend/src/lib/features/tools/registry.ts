@@ -238,9 +238,9 @@ export function createToolRendererRegistry(registrations: readonly CompiledToolR
 }
 
 const compiledRendererRegistrations: readonly CompiledToolRendererRegistration[] = [
-    defineToolRenderer('pac_allocator', '2.0.0', {
+    defineToolRenderer('pac_allocator', '1.0.0', {
         componentKey: 'pac-allocator',
-        uiVersion: '2.0.0',
+        uiVersion: '1.0.0',
         load: () => import('./pac-allocator/planner/PacPlannerTool.svelte'),
     }),
 ];

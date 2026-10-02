@@ -9,7 +9,7 @@
 import {toolContractMap} from '$lib/api/tool-contract-map.generated';
 import {canonicalInput, compareDecimal, decimalSign, isWholeDecimal, percentToFraction} from './decimal';
 import {PLANNER_OPERATION} from './defaults';
-import {daysBetween, routeKey, sameExposures, samePrice, selectionExceedsAvailable, type CopyRef, type DraftAsset, type DraftBroker, type DraftMode, type DraftRoute, type PlannerDraft} from './draft.svelte';
+import {daysBetween, priceIsCopied, routeKey, sameExposures, selectionExceedsAvailable, type CopyRef, type DraftAsset, type DraftBroker, type DraftMode, type DraftRoute, type PlannerDraft} from './draft.svelte';
 import {toPlannerId, toPlannerTimestamp} from './source';
 import type {PacPlannerRequest, PacRequestAsset, PacRequestBroker, PacRequestCash, PacRequestFundingRoute, PacRequestOrderRoute, PacRequestProvenance, PlannerStep} from './types';
 
@@ -76,10 +76,6 @@ function wireInteger(text: string): number | null {
     return Number.isSafeInteger(value) ? value : null;
 }
 
-function priceUnchanged(asset: DraftAsset): boolean {
-    return asset.priceStamp !== null && samePrice(asset.price, asset.copiedPrice);
-}
-
 function exposuresUnchanged(asset: DraftAsset): boolean {
     return asset.exposureStamp !== null && sameExposures(asset.exposures, asset.copiedExposures);
 }
@@ -101,7 +97,6 @@ function cashLabel(draft: PlannerDraft, brokerKey: string, currency: string): st
 export function localProblems(draft: PlannerDraft): LocalProblem[] {
     const problems = new ProblemList();
     const data = draft.data;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(data.asOf)) problems.add('scenario', 'asOfMissing', 'The reference date is missing.');
     if (!/^[A-Z]{3}$/.test(data.valuationCurrency)) problems.add('scenario', 'valuationCurrencyMissing', 'The valuation currency is missing.');
 
     // Liquidity
@@ -158,9 +153,6 @@ export function localProblems(draft: PlannerDraft): LocalProblem[] {
             if (wireDecimal(asset.price.amount) === null) problems.add('assets', 'priceInvalid', 'The price is empty or not a number.', asset.name);
             if (wireDecimal(asset.price.quoteBaseQuantity) === null) problems.add('assets', 'quoteBasisInvalid', "'Units per price' is empty or not a number.", asset.name);
             if (!/^[A-Z]{3}$/.test(asset.price.currency)) problems.add('assets', 'priceCurrencyMissing', 'The price currency is missing.', asset.name);
-            const age = daysBetween(asset.price.referenceDate, data.asOf);
-            if (age === null) problems.add('assets', 'priceDateMissing', 'The price date is missing.', asset.name);
-            else if (age < 0) problems.add('assets', 'priceDateAfterReference', 'The price date is after the reference date.', asset.name);
         }
         for (const exposure of asset.exposures) {
             if (exposure.categoryId.trim() === '' || exposure.label.trim() === '' || wireFraction(exposure.weightPercent) === null) {
@@ -179,10 +171,11 @@ export function localProblems(draft: PlannerDraft): LocalProblem[] {
         const broker = draft.broker(route.brokerKey);
         const label = `${asset?.name ?? route.assetKey} · ${broker?.name ?? route.brokerKey}`;
         const mode = draft.modeFor(route.assetKey, route.brokerKey);
-        if (!mode) problems.add('routing', 'routeNoMode', 'The Broker has no order mode in the price currency of this Asset.', label, {currency: asset?.price?.currency ?? ''});
+        if (!mode && (broker?.modes.length ?? 0) > 0) {
+            problems.add('routing', 'routeNoMode', 'This Broker has no order mode in {currency}, the price currency of this Asset: add it, or exclude the Asset on this Broker.', label, {currency: asset?.price?.currency ?? ''});
+        }
         if (wireInteger(route.priority) === null) problems.add('routing', 'routePriorityInvalid', 'Route priority must be a whole number from 0.', label);
-        if (route.cap.trim() === '') problems.add('routing', 'routeCapMissing', 'The route cap is required.', label);
-        else if (wireDecimal(route.cap) === null) problems.add('routing', 'routeCapInvalid', 'The route cap is not a number.', label);
+        if (route.cap.trim() !== '' && wireDecimal(route.cap) === null) problems.add('routing', 'routeCapInvalid', 'The route cap is not a number.', label);
         for (const value of [route.minimumIfActive, route.requiredMinimum]) {
             if (value.trim() !== '' && wireDecimal(value) === null) problems.add('routing', 'routeMinimumInvalid', 'A route minimum is not a number.', label);
         }
@@ -199,11 +192,12 @@ export function localProblems(draft: PlannerDraft): LocalProblem[] {
         problems.add('targets', 'targetTotalNotHundred', 'The target total is {total}%, it must be 100% (control).', null, {total: total ?? '?'});
     }
 
-    // FX
-    for (const fx of data.fxRates) {
-        if (fx.rate.trim() !== '' && wireDecimal(fx.rate) === null) problems.add('fx', 'fxRateInvalid', 'The rate is not a number.', fx.pair);
+    // FX: only the pairs the scenario needs are sent; the spread only matters when cash is converted.
+    for (const pair of draft.requiredPairs) {
+        const fx = draft.fx(pair);
+        if (fx && fx.rate.trim() !== '' && wireDecimal(fx.rate) === null) problems.add('fx', 'fxRateInvalid', 'The rate is not a number.', pair);
     }
-    if (wireFraction(data.fxSpreadPercent) === null) problems.add('fx', 'fxSpreadInvalid', 'The conversion spread is empty or not a number.');
+    if (draft.conversionPairs.length > 0 && wireFraction(data.fxSpreadPercent) === null) problems.add('fx', 'fxSpreadInvalid', 'The conversion spread is empty or not a number.');
 
     // Strategy
     if (data.policy === '') problems.add('strategy', 'policyMissing', 'Choose a strategy.');
@@ -258,16 +252,18 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date()): Build
     // Assets
     const assets: PacRequestAsset[] = data.assets.map((asset) => {
         const price = asset.price;
+        // A copied price keeps its source date; a typed or edited one is the user's, dated as of the calculation.
         const quote = price
             ? (() => {
-                  const age = daysBetween(price.referenceDate, data.asOf) ?? 0;
+                  const fromCopy = priceIsCopied(asset);
+                  const age = fromCopy ? Math.max(daysBetween(price.referenceDate, data.asOf) ?? 0, 0) : 0;
                   return {
                       amount: wireDecimal(price.amount) as string,
                       currency: price.currency,
                       quote_base_quantity: wireDecimal(price.quoteBaseQuantity) as string,
-                      reference_date: price.referenceDate,
+                      reference_date: fromCopy ? price.referenceDate : data.asOf,
                       freshness: age === 0 ? ({kind: 'fresh'} as const) : ({kind: 'stale', age_days: age, accepted: true} as const),
-                      provenance_id: priceUnchanged(asset) ? copied(asset.priceStamp as CopyRef, 'assets', asset.key) : manual(asset.key, '/quote', 'manual price', asset.enteredAt, 'assets'),
+                      provenance_id: fromCopy ? copied(asset.priceStamp as CopyRef, 'assets', asset.key) : manual(asset.key, '/quote', 'manual price', asset.enteredAt, 'assets'),
                   };
               })()
             : null;
@@ -298,6 +294,7 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date()): Build
             broker_id: broker.key,
             identity: broker.sourceBrokerId !== null ? {kind: 'domain_broker', source_broker_id: String(broker.sourceBrokerId), name: broker.name.trim().slice(0, 128), active: broker.active} : {kind: 'manual_broker', name: broker.name.trim().slice(0, 128)},
             provenance_id: provenanceId,
+            conversion_mode: broker.conversionMode,
             capabilities: modes.map((mode) =>
                 mode.kind === 'whole_quantity'
                     ? {kind: 'whole_quantity', capability_id: capabilityId(broker.key, mode), quantity_unit: 'asset_unit', quantity_step: wireDecimal(mode.step) as string}
@@ -331,7 +328,7 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date()): Build
         provenance_id: manual(item.key, '', 'contribution', item.enteredAt, 'liquidity'),
     }));
 
-    // Funding routes (off by default: no implicit preference)
+    // Funding routes: every source is allowed to every operative Broker until the user excludes it (syncFunding)
     const fundingRoutes: PacRequestFundingRoute[] = [];
     for (const broker of data.brokers) {
         for (const funding of broker.funding) {
@@ -376,7 +373,12 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date()): Build
                 priority: wireInteger(route.priority) as number,
                 minimum_if_active: minimum(route.minimumIfActive),
                 required_minimum: minimum(route.requiredMinimum),
-                cap: mode.kind === 'whole_quantity' ? {kind: 'quantity', quantity: wireDecimal(route.cap) as string, unit: 'asset_unit'} : {kind: 'notional', amount: {amount: wireDecimal(route.cap) as string, currency: mode.currency}},
+                cap:
+                    route.cap.trim() === ''
+                        ? {kind: 'none'}
+                        : mode.kind === 'whole_quantity'
+                          ? {kind: 'quantity', quantity: wireDecimal(route.cap) as string, unit: 'asset_unit'}
+                          : {kind: 'notional', amount: {amount: wireDecimal(route.cap) as string, currency: mode.currency}},
                 execution_margin_rate: wireFraction(route.marginPercent) as string,
                 fee_schedule_id: feeScheduleId(broker.key, mode),
                 provenance_id: manual(route.wireId, '', 'order route', route.enteredAt, 'routing'),
@@ -385,9 +387,10 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date()): Build
     }
 
     const fxRates: Record<string, string> = {};
-    for (const fx of data.fxRates) {
-        const rate = wireDecimal(fx.rate);
-        if (rate !== null) fxRates[fx.pair] = rate;
+    for (const pair of draft.requiredPairs) {
+        const fx = draft.fx(pair);
+        const rate = fx ? wireDecimal(fx.rate) : null;
+        if (rate !== null) fxRates[pair] = rate;
     }
 
     if (late.items.length > 0) return {ok: false, problems: late.items};
@@ -399,7 +402,7 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date()): Build
         valuation_currency: data.valuationCurrency,
         provenance: [...provenance.values()],
         fx_rates: fxRates,
-        fx_spread_rate: wireFraction(data.fxSpreadPercent) as string,
+        fx_spread_rate: (wireFraction(data.fxSpreadPercent) ?? '0') as string,
         assets,
         brokers,
         existing_cash: existingCash,
@@ -410,7 +413,7 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date()): Build
         policy: data.policy,
     } as PacPlannerRequest;
 
-    const parsed = toolContractMap.pac_allocator['2.0.0'].input.safeParse(request);
+    const parsed = toolContractMap.pac_allocator['1.0.0'].input.safeParse(request);
     if (!parsed.success) {
         const structural = new ProblemList();
         for (const issue of parsed.error.issues.slice(0, 20)) {

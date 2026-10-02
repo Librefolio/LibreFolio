@@ -312,6 +312,7 @@ def _rebalancer_no_op_result() -> JsonObject:
     solution["solution_id"] = "rebalancer-primary-no-op"
     solution["funding_actions"] = []
     solution["fx_actions"] = []
+    solution["conversions"] = []
     solution["order_rows"] = []
     solution["sell_irreducibility"] = []
 
@@ -1503,6 +1504,7 @@ def test_inactive_broker_custody_only_spec_keeps_current_facts_as_noncontrolling
     assert wire_result["primary_solution"]["asset_rows"]
     assert wire_result["primary_solution"]["funding_actions"] == []
     assert wire_result["primary_solution"]["fx_actions"] == []
+    assert wire_result["primary_solution"]["conversions"] == []
     assert wire_result["primary_solution"]["order_rows"] == []
 
 
@@ -2806,6 +2808,420 @@ def test_rebalancer_ledger_cannot_go_negative_and_has_no_top_up() -> None:
     _reject_because(REBALANCER_PLAN_OUTPUT_ADAPTER, payload, "Rebalancer ledger balances cannot be negative")
 
 
+# R4.9 - conversions.  An FX action is an engine decision keyed by order route; what
+# the user executes is its Broker x currency-pair conversion, numbered only when the
+# Broker converts manually.  The medium Rebalancer fixture carries one of each: the
+# beta EUR->USD action and its manual conversion, step 3 between funding (1-2) and
+# orders (4-7).  Every rejection below starts from that coherent pair and breaks one
+# rule, so the pinned message is the rule under test, not whatever broke first.
+
+BETA_FX_ACTION_ID = "fx-action-beta-eur-usd"
+BETA_CONVERSION_ID = "conversion-beta-eur-usd"
+REQUEST_BROKER_CONVERSION_MODE_CASES = (
+    pytest.param(PAC_PLAN_INPUT_ADAPTER, _pac_request, "broker-one", id="pac"),
+    pytest.param(REBALANCER_PLAN_INPUT_ADAPTER, _rebalancer_invest_and_sell_request, "broker-beta", id="rebalancer"),
+)
+
+
+@pytest.mark.parametrize(("adapter", "factory", "broker_id"), REQUEST_BROKER_CONVERSION_MODE_CASES)
+@pytest.mark.parametrize("mode", ("manual", "automatic"))
+def test_request_broker_conversion_mode_accepts_manual_and_automatic(
+    adapter: TypeAdapter[Any],
+    factory: PayloadFactory,
+    broker_id: str,
+    mode: str,
+) -> None:
+    payload = factory()
+    _find(payload["brokers"], "broker_id", broker_id)["conversion_mode"] = mode
+    model, _emitted = _strict_roundtrip(adapter, payload)
+    wire = adapter.dump_python(model, mode="json")
+    assert _find(wire["brokers"], "broker_id", broker_id)["conversion_mode"] == mode
+
+
+_MISSING = object()
+
+
+@pytest.mark.parametrize(("adapter", "factory", "broker_id"), REQUEST_BROKER_CONVERSION_MODE_CASES)
+@pytest.mark.parametrize(
+    ("value", "error_type"),
+    (
+        pytest.param(_MISSING, "missing", id="missing"),
+        pytest.param(None, "literal_error", id="null"),
+        pytest.param("Manual", "literal_error", id="capitalised"),
+        pytest.param("auto", "literal_error", id="unknown"),
+    ),
+)
+def test_request_broker_conversion_mode_is_required_and_closed(
+    adapter: TypeAdapter[Any],
+    factory: PayloadFactory,
+    broker_id: str,
+    value: Any,
+    error_type: str,
+) -> None:
+    """The mode is a Broker input with no default: the planner never guesses how a Broker converts."""
+    payload = factory()
+    broker = _find(payload["brokers"], "broker_id", broker_id)
+    if value is _MISSING:
+        broker.pop("conversion_mode")
+    else:
+        broker["conversion_mode"] = value
+    with pytest.raises(ValidationError) as exc_info:
+        adapter.validate_json(_wire(payload), strict=True)
+    errors = exc_info.value.errors(include_url=False)
+    assert any(error["type"] == error_type and error["loc"][-1] == "conversion_mode" for error in errors), errors
+
+
+def _beta_fx_action(solution: JsonObject) -> JsonObject:
+    return _find(solution["fx_actions"], "action_id", BETA_FX_ACTION_ID)
+
+
+def _beta_conversion(solution: JsonObject) -> JsonObject:
+    return _find(solution["conversions"], "conversion_id", BETA_CONVERSION_ID)
+
+
+def _fx_rate(source_currency: str, destination_currency: str, value: JsonObject) -> JsonObject:
+    return {"source_currency": source_currency, "destination_currency": destination_currency, "value": value}
+
+
+def _with_beta_conversion(**fields: Any) -> PayloadFactory:
+    """The medium fixture with fields of the beta conversion replaced, its FX action untouched."""
+
+    def build() -> JsonObject:
+        payload = _rebalancer_incumbent_result()
+        _beta_conversion(payload["primary_solution"]).update(deepcopy(fields))
+        return payload
+
+    return build
+
+
+def _with_beta_fx_action(**fields: Any) -> PayloadFactory:
+    """The medium fixture with fields of the beta FX action replaced, its conversion untouched."""
+
+    def build() -> JsonObject:
+        payload = _rebalancer_incumbent_result()
+        _beta_fx_action(payload["primary_solution"]).update(deepcopy(fields))
+        return payload
+
+    return build
+
+
+def _with_beta_conversion_renamed(conversion_id: str) -> PayloadFactory:
+    """Rename the conversion and its action's reference together, so only the ID itself can collide."""
+
+    def build() -> JsonObject:
+        payload = _rebalancer_incumbent_result()
+        solution = payload["primary_solution"]
+        _beta_conversion(solution)["conversion_id"] = conversion_id
+        _beta_fx_action(solution)["conversion_id"] = conversion_id
+        return payload
+
+    return build
+
+
+def _add_usd_to_eur_conversion(solution: JsonObject, *, mode: str, sequence: int | None) -> None:
+    """Publish a second conversion at broker-beta, for the opposite pair, backed by its own FX action.
+
+    12.50 USD back to 10 EUR at 4/5 with no spread: a coherent row pair that collides
+    with nothing in the fixture, so a case can break one conversion rule on top of it.
+    """
+    rate = _fx_rate("USD", "EUR", _finite("0.8"))
+    action = {
+        "action_id": "fx-action-beta-usd-eur",
+        "conversion_id": "conversion-beta-usd-eur",
+        "order_route_id": "route-b-beta-buy",
+        "broker_id": "broker-beta",
+        "source_debit": {"amount": "12.50", "currency": "USD"},
+        "destination_credit": {"amount": "10", "currency": "EUR"},
+        "spot_rate": deepcopy(rate),
+        "effective_rate": deepcopy(rate),
+        "spread_loss": _money("0"),
+        "provenance_ids": ["prov-market", "prov-manual"],
+    }
+    solution["fx_actions"].append(action)
+    solution["conversions"].append(
+        {
+            "conversion_id": action["conversion_id"],
+            "mode": mode,
+            "sequence": sequence,
+            "broker_id": "broker-beta",
+            "source_debit": deepcopy(action["source_debit"]),
+            "destination_credit": deepcopy(action["destination_credit"]),
+            "spot_rate": deepcopy(rate),
+            "effective_rate": deepcopy(rate),
+            "spread_loss": _money("0"),
+            "fx_action_ids": [action["action_id"]],
+            "provenance_ids": ["prov-manual", "prov-market"],
+        }
+    )
+
+
+def _split_beta_fx_action(solution: JsonObject) -> tuple[JsonObject, JsonObject]:
+    """Split the beta EUR->USD decision into two routes of one pair, 4 + 6 EUR, under the same conversion."""
+    first = _beta_fx_action(solution)
+    second = deepcopy(first)
+    first["source_debit"]["amount"] = "4"
+    first["destination_credit"]["amount"] = "5"
+    second.update(action_id="fx-action-beta-eur-usd-route-b", order_route_id="route-b-beta-buy")
+    second["source_debit"]["amount"] = "6"
+    second["destination_credit"]["amount"] = "7.50"
+    solution["fx_actions"].append(second)
+    _beta_conversion(solution)["fx_action_ids"] = [first["action_id"], second["action_id"]]
+    return first, second
+
+
+def _conversion_over_two_fx_actions() -> JsonObject:
+    payload = _rebalancer_incumbent_result()
+    _split_beta_fx_action(payload["primary_solution"])
+    return payload
+
+
+def _conversion_rates_in_another_exact_form() -> JsonObject:
+    # 5/4 and 12.5 are the action's 1.25 and 12.50: the binding compares numbers, not text.
+    payload = _rebalancer_incumbent_result()
+    conversion = _beta_conversion(payload["primary_solution"])
+    for field in ("spot_rate", "effective_rate"):
+        conversion[field]["value"] = _ratio("5", "4", "1.25")
+    conversion["destination_credit"]["amount"] = "12.5"
+    return payload
+
+
+def _automatic_conversions_take_no_step() -> JsonObject:
+    # Two automatic conversions both publish a null sequence - which must not collide -
+    # and the orders follow the funding directly, as the planner numbers them.
+    payload = _rebalancer_incumbent_result()
+    solution = payload["primary_solution"]
+    _beta_conversion(solution).update(mode="automatic", sequence=None)
+    _add_usd_to_eur_conversion(solution, mode="automatic", sequence=None)
+    for sequence, order in enumerate(sorted(solution["order_rows"], key=lambda row: row["sequence"]), start=3):
+        order["sequence"] = sequence
+    return payload
+
+
+CONVERSION_ACCEPTED_CASES = (
+    pytest.param(_rebalancer_incumbent_result, id="fixture-manual-conversion"),
+    pytest.param(_conversion_over_two_fx_actions, id="two-fx-actions-one-conversion"),
+    pytest.param(_conversion_rates_in_another_exact_form, id="exact-not-lexical-binding"),
+    pytest.param(_automatic_conversions_take_no_step, id="automatic-conversions-take-no-step"),
+)
+
+
+@pytest.mark.parametrize("build", CONVERSION_ACCEPTED_CASES)
+def test_conversion_shapes_the_contract_accepts(build: PayloadFactory) -> None:
+    payload = build()
+    model, _emitted = _strict_roundtrip(REBALANCER_PLAN_OUTPUT_ADAPTER, payload)
+    assert type(model) is RebalancerPlannerReadyIncumbentResult
+    solution = REBALANCER_PLAN_OUTPUT_ADAPTER.dump_python(model, mode="json")["primary_solution"]
+    assert solution["conversions"] == payload["primary_solution"]["conversions"]
+    assert solution["fx_actions"] == payload["primary_solution"]["fx_actions"]
+    assert all("sequence" not in action for action in solution["fx_actions"])
+
+
+def test_medium_fixture_numbers_its_manual_conversion_between_funding_and_orders() -> None:
+    model, _emitted = _strict_roundtrip(REBALANCER_PLAN_OUTPUT_ADAPTER, _rebalancer_incumbent_result())
+    solution = REBALANCER_PLAN_OUTPUT_ADAPTER.dump_python(model, mode="json")["primary_solution"]
+
+    action = _beta_fx_action(solution)
+    conversion = _beta_conversion(solution)
+    assert action["conversion_id"] == conversion["conversion_id"]
+    assert (conversion["mode"], conversion["broker_id"]) == ("manual", action["broker_id"])
+    assert conversion["fx_action_ids"] == [action["action_id"]]
+    assert set(conversion["provenance_ids"]) == set(action["provenance_ids"])
+    assert [row["sequence"] for row in solution["funding_actions"]] == [1, 2]
+    assert [row["sequence"] for row in solution["conversions"]] == [3]
+    assert [row["sequence"] for row in solution["order_rows"]] == [4, 5, 6, 7]
+
+
+@pytest.mark.parametrize("field", ("fx_action_ids", "provenance_ids"))
+def test_conversion_lists_at_least_one_fx_action_and_provenance(field: str) -> None:
+    payload = _rebalancer_incumbent_result()
+    _beta_conversion(payload["primary_solution"])[field] = []
+    with pytest.raises(ValidationError) as exc_info:
+        REBALANCER_PLAN_OUTPUT_ADAPTER.validate_json(_wire(payload), strict=True)
+    errors = exc_info.value.errors(include_url=False)
+    assert any(error["type"] == "too_short" and error["loc"][-1] == field for error in errors), errors
+
+
+CONVERSION_ROW_REJECTION_CASES = (
+    pytest.param(_with_beta_conversion(sequence=None), "A conversion has an execution sequence exactly when it is manual", id="manual-without-sequence"),
+    pytest.param(_with_beta_conversion(mode="automatic"), "A conversion has an execution sequence exactly when it is manual", id="automatic-with-sequence"),
+    pytest.param(_with_beta_conversion(spot_rate=_fx_rate("USD", "EUR", _finite("0.8"))), "Conversion rates must follow the source-to-destination direction", id="spot-rate-reversed"),
+    pytest.param(_with_beta_conversion(effective_rate=_fx_rate("USD", "EUR", _finite("0.8"))), "Conversion rates must follow the source-to-destination direction", id="effective-rate-reversed"),
+    pytest.param(_with_beta_conversion(effective_rate=_fx_rate("EUR", "USD", _finite("1.26"))), "Effective conversion rate cannot exceed the approved spot rate", id="effective-above-spot"),
+    pytest.param(_with_beta_conversion(spread_loss=_money("-0.01")), "Conversion spread loss cannot be negative", id="negative-spread"),
+    pytest.param(_with_beta_conversion(fx_action_ids=[BETA_FX_ACTION_ID, BETA_FX_ACTION_ID]), "Conversion FX action IDs must be unique", id="duplicate-fx-action-id"),
+)
+
+
+@pytest.mark.parametrize(("build", "message"), CONVERSION_ROW_REJECTION_CASES)
+def test_conversion_row_rejects_an_inconsistent_conversion(build: PayloadFactory, message: str) -> None:
+    _reject_because(REBALANCER_PLAN_OUTPUT_ADAPTER, build(), message)
+
+
+def _second_conversion_with_the_beta_id() -> JsonObject:
+    # The action-ID rule runs first and already spans conversion IDs, so it is the one
+    # that speaks; the conversion-ID uniqueness check inside the conversion binding is
+    # a second guard this payload cannot reach.
+    payload = _rebalancer_incumbent_result()
+    solution = payload["primary_solution"]
+    _add_usd_to_eur_conversion(solution, mode="manual", sequence=8)
+    solution["conversions"][-1]["conversion_id"] = BETA_CONVERSION_ID
+    solution["fx_actions"][-1]["conversion_id"] = BETA_CONVERSION_ID
+    return payload
+
+
+def _manual_conversions_out_of_order() -> JsonObject:
+    # Step 8 is free (orders end at 7): only the order inside the conversion section is wrong.
+    payload = _rebalancer_incumbent_result()
+    solution = payload["primary_solution"]
+    _add_usd_to_eur_conversion(solution, mode="manual", sequence=8)
+    solution["conversions"].reverse()
+    return payload
+
+
+ACTION_ID_AND_SEQUENCE_REJECTION_CASES = (
+    pytest.param(_with_beta_conversion_renamed("order-buy-b-beta"), "Rebalancer action IDs must be unique", id="conversion-id-is-an-order-id"),
+    pytest.param(_with_beta_conversion_renamed("funding-action-beta"), "Rebalancer action IDs must be unique", id="conversion-id-is-a-funding-id"),
+    pytest.param(_with_beta_conversion_renamed(BETA_FX_ACTION_ID), "Rebalancer action IDs must be unique", id="conversion-id-is-an-fx-action-id"),
+    pytest.param(_second_conversion_with_the_beta_id, "Rebalancer action IDs must be unique", id="duplicate-conversion-id"),
+    pytest.param(_with_beta_conversion(sequence=2), "Rebalancer action sequences must be unique", id="manual-conversion-on-a-funding-step"),
+    pytest.param(_with_beta_conversion(sequence=4), "Rebalancer action sequences must be unique", id="manual-conversion-on-an-order-step"),
+    pytest.param(_manual_conversions_out_of_order, "Rebalancer action sections must be sequence-ordered", id="conversion-section-out-of-order"),
+)
+
+
+@pytest.mark.parametrize(("build", "message"), ACTION_ID_AND_SEQUENCE_REJECTION_CASES)
+def test_conversions_share_the_action_id_space_and_manual_ones_the_step_numbering(build: PayloadFactory, message: str) -> None:
+    """Conversion IDs collide with every action ID; only a manual conversion holds an execution step.
+
+    The positive half - automatic conversions publish no step, even two of them -
+    is ``automatic-conversions-take-no-step`` in ``CONVERSION_ACCEPTED_CASES``.
+    """
+    _reject_because(REBALANCER_PLAN_OUTPUT_ADAPTER, build(), message)
+
+
+def _second_conversion_for_the_beta_pair() -> JsonObject:
+    payload = _rebalancer_incumbent_result()
+    solution = payload["primary_solution"]
+    action = deepcopy(_beta_fx_action(solution))
+    conversion = deepcopy(_beta_conversion(solution))
+    action.update(action_id="fx-action-beta-eur-usd-route-b", conversion_id="conversion-beta-eur-usd-route-b", order_route_id="route-b-beta-buy")
+    conversion.update(conversion_id=action["conversion_id"], sequence=8, fx_action_ids=[action["action_id"]])
+    solution["fx_actions"].append(action)
+    solution["conversions"].append(conversion)
+    return payload
+
+
+def _broker_with_manual_and_automatic_conversions() -> JsonObject:
+    payload = _rebalancer_incumbent_result()
+    _add_usd_to_eur_conversion(payload["primary_solution"], mode="automatic", sequence=None)
+    return payload
+
+
+def _conversion_missing_one_of_its_fx_actions() -> JsonObject:
+    # Both actions reference the conversion and its totals cover both: only the list is short.
+    payload = _rebalancer_incumbent_result()
+    solution = payload["primary_solution"]
+    first, _second = _split_beta_fx_action(solution)
+    _beta_conversion(solution)["fx_action_ids"] = [first["action_id"]]
+    return payload
+
+
+def _pac_fx_action_without_conversion() -> JsonObject:
+    payload = _pac_incumbent_result()
+    payload["primary_solution"]["fx_actions"] = [deepcopy(_beta_fx_action(_rebalancer_incumbent_result()["primary_solution"]))]
+    return payload
+
+
+CONVERSION_BINDING_REJECTION_CASES = (
+    pytest.param(_second_conversion_for_the_beta_pair, "Rebalancer conversion pairs must be unique", id="two-conversions-for-one-pair"),
+    pytest.param(_broker_with_manual_and_automatic_conversions, "Rebalancer conversions must use one mode per Broker", id="two-modes-for-one-broker"),
+    pytest.param(_with_beta_fx_action(conversion_id="conversion-unpublished"), "Rebalancer FX actions must reference a published conversion", id="dangling-conversion-reference"),
+    pytest.param(_with_beta_fx_action(broker_id="broker-alpha"), "Rebalancer FX actions must match their conversion's Broker and currency pair", id="action-at-another-broker"),
+    pytest.param(
+        _with_beta_fx_action(
+            source_debit={"amount": "12.50", "currency": "USD"},
+            destination_credit={"amount": "10", "currency": "EUR"},
+            spot_rate=_fx_rate("USD", "EUR", _finite("0.8")),
+            effective_rate=_fx_rate("USD", "EUR", _finite("0.8")),
+        ),
+        "Rebalancer FX actions must match their conversion's Broker and currency pair",
+        id="action-for-another-pair",
+    ),
+    pytest.param(_with_beta_fx_action(spot_rate=_fx_rate("EUR", "USD", _finite("1.30"))), "Rebalancer FX actions must use their conversion's rates", id="action-spot-rate-differs"),
+    pytest.param(_with_beta_fx_action(effective_rate=_fx_rate("EUR", "USD", _finite("1.20"))), "Rebalancer FX actions must use their conversion's rates", id="action-effective-rate-differs"),
+    pytest.param(_conversion_missing_one_of_its_fx_actions, "Rebalancer conversions must list exactly the FX actions that reference them", id="fx-action-ids-missing-a-member"),
+    pytest.param(_with_beta_conversion(fx_action_ids=[BETA_FX_ACTION_ID, "fx-action-unpublished"]), "Rebalancer conversions must list exactly the FX actions that reference them", id="fx-action-ids-with-an-extra-id"),
+    pytest.param(_with_beta_conversion(source_debit={"amount": "10.01", "currency": "EUR"}), "Rebalancer conversion totals must equal the exact sums of their FX actions", id="source-debit-total"),
+    pytest.param(_with_beta_conversion(destination_credit={"amount": "12.51", "currency": "USD"}), "Rebalancer conversion totals must equal the exact sums of their FX actions", id="destination-credit-total"),
+    pytest.param(_with_beta_conversion(spread_loss=_money("0.01")), "Rebalancer conversion totals must equal the exact sums of their FX actions", id="spread-loss-total"),
+    pytest.param(_with_beta_conversion(provenance_ids=["prov-manual"]), "Rebalancer conversion provenance must be the union of its FX actions' provenance", id="provenance-missing-an-action-source"),
+    pytest.param(_with_beta_conversion(provenance_ids=["prov-manual", "prov-market", "prov-portfolio"]), "Rebalancer conversion provenance must be the union of its FX actions' provenance", id="provenance-beyond-its-actions"),
+)
+
+
+@pytest.mark.parametrize(("build", "message"), CONVERSION_BINDING_REJECTION_CASES)
+def test_conversions_aggregate_exactly_the_fx_actions_that_reference_them(build: PayloadFactory, message: str) -> None:
+    """A conversion is a pure aggregate: one per Broker x pair, one mode per Broker, exact sums."""
+    _reject_because(REBALANCER_PLAN_OUTPUT_ADAPTER, build(), message)
+
+
+def test_pac_solution_binds_fx_actions_to_conversions_under_its_own_label() -> None:
+    _reject_because(PAC_PLAN_OUTPUT_ADAPTER, _pac_fx_action_without_conversion(), "PAC FX actions must reference a published conversion")
+
+
+def _buy_order_with_fx_cost(value: str) -> PayloadFactory:
+    def build() -> JsonObject:
+        payload = _rebalancer_incumbent_result()
+        _find(payload["primary_solution"]["order_rows"], "order_id", "order-buy-b-beta")["fx_cost"] = _money(value)
+        return payload
+
+    return build
+
+
+def _conversion_provenance_outside_the_result() -> JsonObject:
+    # The union rule makes a conversion's provenance a copy of its actions', so the
+    # unpublished ID has to ride on both rows: the binding holds, the catalogue does not.
+    payload = _rebalancer_incumbent_result()
+    solution = payload["primary_solution"]
+    _beta_fx_action(solution)["provenance_ids"].append("prov-unpublished")
+    _beta_conversion(solution)["provenance_ids"].append("prov-unpublished")
+    return payload
+
+
+CONVERSION_READY_REJECTION_CASES = (
+    pytest.param(_buy_order_with_fx_cost("0.01"), "BUY FX cost must be zero: conversion spreads are published on the conversion", id="buy-fx-cost-positive"),
+    pytest.param(_buy_order_with_fx_cost("-0.01"), "BUY FX cost must be zero: conversion spreads are published on the conversion", id="buy-fx-cost-negative"),
+    pytest.param(_with_beta_conversion(spread_loss=_money("0", "USD")), "Asset, accounting, and cost projections must use the valuation currency", id="spread-outside-the-valuation-currency"),
+    pytest.param(_conversion_provenance_outside_the_result, "Solution rows must reference top-level provenance IDs", id="provenance-not-published"),
+    pytest.param(_with_beta_conversion(provenance_ids=["prov-manual", "prov-market", "prov-manual"]), "Result-row provenance IDs must be unique", id="duplicate-provenance-in-the-row"),
+)
+
+
+@pytest.mark.parametrize(("build", "message"), CONVERSION_READY_REJECTION_CASES)
+def test_ready_result_holds_conversions_to_valuation_currency_and_provenance(build: PayloadFactory, message: str) -> None:
+    """The spread is valued on the conversion, never on a BUY row, and in the valuation currency."""
+    _reject_because(REBALANCER_PLAN_OUTPUT_ADAPTER, build(), message)
+
+
+NO_OP_CONVERSION_CASES = (
+    pytest.param(PAC_PLAN_OUTPUT_ADAPTER, _pac_no_op_result, id="pac"),
+    pytest.param(REBALANCER_PLAN_OUTPUT_ADAPTER, _rebalancer_no_op_result, id="rebalancer"),
+)
+
+
+@pytest.mark.parametrize(("adapter", "factory"), NO_OP_CONVERSION_CASES)
+def test_no_op_publishes_no_conversion(adapter: TypeAdapter[Any], factory: PayloadFactory) -> None:
+    payload = factory()
+    model, _emitted = _strict_roundtrip(adapter, payload)
+    assert adapter.dump_python(model, mode="json")["primary_solution"]["conversions"] == []
+
+    payload["primary_solution"]["conversions"] = [deepcopy(_beta_conversion(_rebalancer_incumbent_result()["primary_solution"]))]
+    with pytest.raises(ValidationError) as exc_info:
+        adapter.validate_json(_wire(payload), strict=True)
+    errors = exc_info.value.errors(include_url=False)
+    assert any(error["type"] == "too_long" and error["loc"][-1] == "conversions" for error in errors), errors
+
+
 def _assert_available_weight_identities(rows: list[JsonObject], weight_field: str, value_field: str, total: Fraction, zero_reason: str) -> None:
     if total == 0:
         assert all(row[weight_field] == {"kind": "unavailable", "reason": zero_reason} for row in rows)
@@ -2996,13 +3412,13 @@ PLANNER_FULL_SCHEMA_FINGERPRINT_CASES = (
     pytest.param(
         PAC_PLAN_INPUT_ADAPTER,
         PAC_PLAN_OUTPUT_ADAPTER,
-        "502e8c48dbbf3cc55fbe02f2a2c43b186d5970ff3f1fe5130d35748641c8e374",
+        "bd84ef14dc43bc6185c8c4e009a336f924a3fee6cdff03a04b1263ab0246cc29",
         id="pac",
     ),
     pytest.param(
         REBALANCER_PLAN_INPUT_ADAPTER,
         REBALANCER_PLAN_OUTPUT_ADAPTER,
-        "17d5625e8bf24e20090ef3c58e7cd98178eaadb74884aee92cbc1753d5591cc3",
+        "0b43bd19dc8716ea6cffc4158764594a5f16fb06adcc43185f1bb54cfa91a1e0",
         id="rebalancer",
     ),
 )

@@ -50,6 +50,7 @@ export function routeMinimumText(minimum: RouteMinimum, translate: Translator, d
 }
 
 export function routeCapText(cap: RouteCap, translate: Translator, digits: CurrencyDigits): string {
+    if (cap.kind === 'none') return translate('tools.pacAllocator.planner.route.capNone', {default: 'no limit'});
     if (cap.kind === 'quantity') return translate(`${KEY}.units`, {default: '{quantity} units', values: {quantity: formatPlannerQuantity(cap.quantity)}});
     return formatPlannerMoneyPlain(cap.amount.amount, cap.amount.currency, {digits});
 }

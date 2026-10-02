@@ -1,16 +1,17 @@
 <script lang="ts">
-    import {CircleAlert, CircleCheck, Info} from 'lucide-svelte';
-    import {t, locale} from '$lib/i18n';
+    import {ChevronDown, ChevronRight, Pencil} from 'lucide-svelte';
+    import {t} from '$lib/i18n';
+    import DataTable from '$lib/components/table/DataTable.svelte';
+    import type {ColumnDef, EnumOption, RowAction} from '$lib/components/table/types';
     import type {PlannerDraft} from '../draft.svelte';
-    import {formatPlannerDate, formatPlannerFxRate, formatPlannerMoneyPlain, formatPlannerPlainDecimal, formatPlannerPricePlain} from '../format';
-    import {STEP_FALLBACKS, stepKey, type ListedIssue} from '../labels';
-    import {sectionCounts, snapshotFacts, type SnapshotFact} from '../review';
+    import type {ListedIssue} from '../labels';
+    import {factOriginState, sectionCounts, snapshotFacts, type FactKind, type FactOriginState, type SnapshotFact} from '../review';
     import type {PlannerStep} from '../types';
-    import {BUTTON_LINK, BUTTON_PRIMARY, BUTTON_SECONDARY, HINT, NOTICE, TABLE, TD, TD_NUM, TH} from '../ui';
+    import {BUTTON_PRIMARY, BUTTON_SECONDARY, HINT, NOTICE, SECTION_TITLE} from '../ui';
+    import HelpTip from '../shared/HelpTip.svelte';
     import IssueList from '../shared/IssueList.svelte';
-    import OriginBadge from '../shared/OriginBadge.svelte';
-    import AgeLabel from '../shared/AgeLabel.svelte';
-    const PLANNER_KEY = 'tools.pacAllocator.planner';
+    import ReviewCell from '../shared/ReviewCell.svelte';
+    import TableColumns from '../shared/TableColumns.svelte';
 
     interface Props {
         draft: PlannerDraft;
@@ -24,146 +25,279 @@
 
     let {draft, problems, busy, hasResult, ongoto, oncalculate, onshowresult}: Props = $props();
 
+    interface SectionRow {
+        step: PlannerStep;
+        blocked: boolean;
+        text: string;
+        currencies: string[];
+    }
+
+    const KEY = 'tools.pacAllocator.planner.review';
+    const PLANNER_KEY = 'tools.pacAllocator.planner';
     const POLICY_FALLBACKS: Record<string, string> = {proportional: 'Proportional'};
     const SECTIONS: PlannerStep[] = ['scenario', 'liquidity', 'brokers', 'assets', 'routing', 'targets', 'fx', 'strategy'];
+    const KIND_ORDER: FactKind[] = ['broker', 'cash', 'contribution', 'price', 'fx'];
+    const KIND_FALLBACKS: Record<FactKind, string> = {broker: 'Broker', cash: 'Cash', contribution: 'Contribution', price: 'Price', fx: 'Exchange rate'};
+    const ORIGIN_ORDER: FactOriginState[] = ['librefolio', 'manual', 'modified'];
 
-    let factsView = $state<'none' | 'all' | 'changed'>('none');
+    let factsOpen = $state(false);
+    let sectionsTable = $state<DataTable<SectionRow>>();
+    let factsTable = $state<DataTable<SnapshotFact>>();
 
     const counts = $derived(sectionCounts(draft));
     const facts = $derived(snapshotFacts(draft));
-    const shownFacts = $derived(factsView === 'all' ? facts : factsView === 'changed' ? facts.filter((fact) => fact.modified || fact.stale) : []);
     const blocked = $derived(new Set(problems.map((problem) => problem.step)));
+    /** R9.4: FX is listed only when the scenario needs a rate, or has a problem there. */
+    const sections = $derived(SECTIONS.filter((step) => step !== 'fx' || draft.fxNeeded || blocked.has('fx')));
 
-    function summary(step: PlannerStep): string {
+    function summary(step: PlannerStep): {text: string; currencies: string[]} {
         switch (step) {
             case 'scenario':
-                return [formatPlannerDate(counts.scenario.asOf, $locale), counts.scenario.currency].filter((part) => part !== '').join(' · ');
+                return counts.scenario.currency ? {text: '', currencies: [counts.scenario.currency]} : {text: '—', currencies: []};
             case 'liquidity':
-                return [$t('tools.pacAllocator.planner.review.sources', {default: '{count, plural, one {# source} other {# sources}}', values: {count: counts.liquidity.sources}}), counts.liquidity.currencies.join(', ')].filter((part) => part !== '').join(' · ');
+                return {text: $t(`${KEY}.sources`, {default: '{count, plural, one {# source} other {# sources}}', values: {count: counts.liquidity.sources}}), currencies: counts.liquidity.currencies};
             case 'brokers':
-                return $t('tools.pacAllocator.planner.review.brokers', {
-                    default: '{operative} operative · {fundingOnly} funding only',
-                    values: {operative: counts.brokers.operative, fundingOnly: counts.brokers.fundingOnly},
-                });
+                return {
+                    text: $t(`${KEY}.brokers`, {
+                        default: '{operative, plural, one {# Broker} other {# Brokers}}{external, plural, =0 {} one { · # external account} other { · # external accounts}}',
+                        values: {operative: counts.brokers.operative, external: counts.brokers.fundingOnly},
+                    }),
+                    currencies: [],
+                };
             case 'assets':
-                return $t('tools.pacAllocator.planner.review.assets', {
-                    default: '{count} · prices {priced}/{count} · {stale} not of the day',
-                    values: {count: counts.assets.count, priced: counts.assets.priced, stale: counts.assets.stale},
-                });
+                return {
+                    text: $t(`${KEY}.assets`, {
+                        default: '{count, plural, one {# Asset} other {# Assets}}{missing, plural, =0 {} other { · # without a price}}{stale, plural, =0 {} one { · # price not of today} other { · # prices not of today}}',
+                        values: {count: counts.assets.count, missing: counts.assets.missing, stale: counts.assets.stale},
+                    }),
+                    currencies: [],
+                };
             case 'routing':
-                return $t('tools.pacAllocator.planner.review.routes', {default: '{count, plural, one {# BUY route} other {# BUY routes}}', values: {count: counts.routing.enabled}});
+                return {text: $t(`${KEY}.routes`, {default: '{assets} of {total, plural, one {# Asset} other {# Assets}} can be bought', values: {assets: counts.routing.assetsWithRoute, total: counts.assets.count}}), currencies: []};
             case 'targets':
-                return $t('tools.pacAllocator.planner.review.targets', {default: '{count, plural, one {# Asset} other {# Assets}}', values: {count: counts.targets.count}});
+                return {text: $t(`${KEY}.targets`, {default: '{count} of {total, plural, one {# Asset} other {# Assets}} with a target', values: {count: counts.targets.count, total: counts.assets.count}}), currencies: []};
             case 'fx':
-                return counts.fx.pairs === 0
-                    ? $t('tools.pacAllocator.planner.review.noFx', {default: 'no conversion rate'})
-                    : $t('tools.pacAllocator.planner.review.fx', {default: '{count, plural, one {# pair} other {# pairs}} · {stale} not of the day', values: {count: counts.fx.pairs, stale: counts.fx.stale}});
+                return {
+                    text: $t(`${KEY}.fxRated`, {
+                        default: '{count, plural, one {# exchange rate} other {# exchange rates}}{missing, plural, =0 {} other { · # without a rate}}{stale, plural, =0 {} other { · # not of today}}',
+                        values: {count: counts.fx.needed, missing: counts.fx.missing, stale: counts.fx.stale},
+                    }),
+                    currencies: [],
+                };
             case 'strategy':
-                return counts.strategy.policy ? $t(`${PLANNER_KEY}.policies.${counts.strategy.policy}`, {default: POLICY_FALLBACKS[counts.strategy.policy] ?? counts.strategy.policy}) : '—';
+                return {text: counts.strategy.policy ? $t(`${PLANNER_KEY}.policies.${counts.strategy.policy}`, {default: POLICY_FALLBACKS[counts.strategy.policy] ?? counts.strategy.policy}) : '—', currencies: []};
             default:
-                return '';
+                return {text: '', currencies: []};
         }
     }
 
-    function factValue(fact: SnapshotFact): string {
-        const value = fact.value;
-        switch (value.kind) {
-            case 'money': {
-                const available = formatPlannerMoneyPlain(value.amount, value.currency);
-                if (value.selected === null) return available;
-                return $t('tools.pacAllocator.planner.review.selectedOf', {default: '{selected} of {available}', values: {selected: formatPlannerMoneyPlain(value.selected, value.currency), available}});
-            }
-            case 'price':
-                return $t('tools.pacAllocator.planner.review.price', {
-                    default: '{price} / {units} {count, plural, one {unit} other {units}}',
-                    values: {price: formatPlannerPricePlain(value.amount, value.currency), units: formatPlannerPlainDecimal(value.units), count: Number(value.units) || 0},
-                });
-            case 'rate':
-                return formatPlannerFxRate(value.rate);
-            case 'rows':
-                return $t('tools.pacAllocator.planner.review.exposureRows', {default: '{count, plural, one {# exposure} other {# exposures}}', values: {count: value.count}});
-            default:
-                return '';
-        }
+    const sectionRows = $derived(sections.map((step): SectionRow => ({step, blocked: blocked.has(step), ...summary(step)})));
+
+    const sectionColumns = $derived.by((): ColumnDef<SectionRow>[] => [
+        {
+            id: 'step',
+            header: () => $t(`${KEY}.factStep`, {default: 'Step'}),
+            type: 'custom',
+            sortable: false,
+            filterable: false,
+            minWidth: 140,
+            cell: (row) => ({type: 'custom', component: ReviewCell, props: {cell: {type: 'step', step: row.step, blocked: row.blocked}}}),
+        },
+        {
+            id: 'summary',
+            header: () => $t(`${KEY}.colSummary`, {default: 'Summary'}),
+            type: 'custom',
+            sortable: false,
+            filterable: false,
+            minWidth: 200,
+            cell: (row) => ({type: 'custom', component: ReviewCell, props: {cell: {type: 'summary', text: row.text, currencies: row.currencies}}}),
+        },
+    ]);
+
+    const sectionActions = $derived.by((): RowAction<SectionRow>[] => [
+        {id: 'edit', icon: Pencil, label: () => $t(`${KEY}.edit`, {default: 'Edit'}), onClick: (row) => ongoto(row.step), testid: 'pac-planner-review-goto'},
+    ]);
+
+    function kindLabel(kind: FactKind): string {
+        return $t(`${KEY}.kind.${kind}`, {default: KIND_FALLBACKS[kind]});
     }
+
+    function originLabel(origin: FactOriginState): string {
+        if (origin === 'librefolio') return $t(`${KEY}.origin.librefolio`, {default: 'LibreFolio'});
+        return $t(`${PLANNER_KEY}.origin.${origin}`, {default: origin === 'manual' ? 'Manual' : 'Modified'});
+    }
+
+    /** The name plus its currency codes, so the text filter also finds «USD». */
+    function searchText(fact: SnapshotFact): string {
+        const subject = fact.subject;
+        const codes = subject.type === 'cash' || subject.type === 'contribution' ? [subject.currency] : subject.type === 'pair' ? [subject.base, subject.quote] : [];
+        return [fact.entity, ...codes].join(' ');
+    }
+
+    const kindOptions = $derived.by((): EnumOption[] => {
+        const present = new Set(facts.map((fact) => fact.kind));
+        return KIND_ORDER.filter((kind) => present.has(kind)).map((kind) => ({value: kind, label: kindLabel(kind)}));
+    });
+    const originOptions = $derived.by((): EnumOption[] => {
+        const present = new Set(facts.map((fact) => factOriginState(fact)));
+        return ORIGIN_ORDER.filter((origin) => present.has(origin)).map((origin) => ({value: origin, label: originLabel(origin)}));
+    });
+
+    const factColumns = $derived.by((): ColumnDef<SnapshotFact>[] => [
+        {
+            id: 'entity',
+            header: () => $t(`${KEY}.factEntity`, {default: 'Item'}),
+            type: 'text',
+            minWidth: 180,
+            getValue: (fact) => searchText(fact),
+            cell: (fact) => ({
+                type: 'custom',
+                component: ReviewCell,
+                props: {
+                    cell: {
+                        type: 'entity',
+                        fact,
+                        broker: fact.subject.type === 'broker' || fact.subject.type === 'cash' ? (draft.broker(fact.subject.brokerKey) ?? null) : null,
+                        asset: fact.subject.type === 'asset' ? (draft.asset(fact.subject.assetKey) ?? null) : null,
+                    },
+                },
+            }),
+        },
+        {
+            id: 'kind',
+            header: () => $t(`${KEY}.colKind`, {default: 'Type'}),
+            type: 'enum',
+            enumOptions: kindOptions,
+            minWidth: 110,
+            getValue: (fact) => fact.kind,
+            sortFn: (a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind),
+            cell: (fact) => ({
+                type: 'custom',
+                component: ReviewCell,
+                props: {cell: {type: 'kind', label: kindLabel(fact.kind)}},
+            }),
+        },
+        {
+            id: 'value',
+            header: () => $t(`${KEY}.factValue`, {default: 'Value'}),
+            type: 'custom',
+            sortable: false,
+            filterable: false,
+            minWidth: 160,
+            cell: (fact) => ({type: 'custom', component: ReviewCell, props: {cell: {type: 'value', fact}}}),
+        },
+        {
+            id: 'origin',
+            header: () => $t(`${KEY}.factOrigin`, {default: 'Origin'}),
+            type: 'enum',
+            enumOptions: originOptions,
+            minWidth: 120,
+            getValue: (fact) => factOriginState(fact),
+            sortFn: (a, b) => ORIGIN_ORDER.indexOf(factOriginState(a)) - ORIGIN_ORDER.indexOf(factOriginState(b)),
+            cell: (fact) => ({type: 'custom', component: ReviewCell, props: {cell: {type: 'origin', fact}}}),
+        },
+    ]);
+
+    const factActions = $derived.by((): RowAction<SnapshotFact>[] => [
+        {id: 'edit', icon: Pencil, label: () => $t(`${KEY}.edit`, {default: 'Edit'}), onClick: (fact) => ongoto(fact.step), testid: 'pac-planner-review-fact-goto'},
+    ]);
 </script>
 
 <div class="space-y-4" data-testid="pac-planner-review">
-    <p class="text-sm text-gray-700 dark:text-gray-300">{$t('tools.pacAllocator.planner.review.intro', {default: 'The backend will receive this complete copy, and only this.'})}</p>
-
-    <ul class="divide-y divide-gray-100 rounded-xl border border-gray-200 dark:divide-gray-800 dark:border-gray-700" data-testid="pac-planner-review-sections">
-        {#each SECTIONS as step (step)}
-            <li class="flex flex-wrap items-center gap-3 px-4 py-2 text-sm" data-testid="pac-planner-review-section" data-step={step} data-blocked={blocked.has(step) ? 'true' : 'false'}>
-                {#if blocked.has(step)}
-                    <CircleAlert class="h-4 w-4 text-amber-600 dark:text-amber-400" aria-hidden="true" />
-                {:else}
-                    <CircleCheck class="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-                {/if}
-                <span class="w-28 font-medium">{$t(stepKey(step), {default: STEP_FALLBACKS[step]})}</span>
-                <span class="flex-1 text-gray-700 dark:text-gray-300">{summary(step)}</span>
-                <button type="button" class={BUTTON_LINK} data-testid="pac-planner-review-goto" onclick={() => ongoto(step)}>{$t('tools.pacAllocator.planner.review.edit', {default: 'Edit'})}</button>
-            </li>
-        {/each}
-    </ul>
-
-    <div class="flex flex-wrap gap-2" role="group" aria-label={$t('tools.pacAllocator.planner.review.factsLabel', {default: 'Facts of the snapshot'})}>
-        <button type="button" class={BUTTON_SECONDARY} aria-pressed={factsView === 'all'} data-testid="pac-planner-review-facts-all" onclick={() => (factsView = factsView === 'all' ? 'none' : 'all')}>
-            {$t('tools.pacAllocator.planner.review.factsAll', {default: 'Full snapshot'})}
-        </button>
-        <button type="button" class={BUTTON_SECONDARY} aria-pressed={factsView === 'changed'} data-testid="pac-planner-review-facts-changed" onclick={() => (factsView = factsView === 'changed' ? 'none' : 'changed')}>
-            {$t('tools.pacAllocator.planner.review.factsChanged', {default: 'Only modified / not of the day'})}
-        </button>
+    <div class="flex flex-wrap items-center gap-1">
+        <p class="text-sm text-gray-700 dark:text-gray-300">{$t(`${KEY}.lead`, {default: 'Last check before the calculation.'})}</p>
+        <HelpTip
+            label={$t(`${KEY}.lead`, {default: 'Last check before the calculation.'})}
+            help={$t(`${KEY}.help`, {
+                default: 'The calculation uses only the data listed here. Just before it, LibreFolio reads again the prices, rates and balances you took from LibreFolio without changing them; the ones you typed or changed stay as they are.',
+            })}
+            testid="pac-planner-review-help"
+        />
+        <TableColumns table={sectionsTable} testid="pac-planner-review-sections-columns" />
     </div>
 
-    {#if factsView !== 'none'}
-        {#if shownFacts.length === 0}
-            <p class={HINT} data-testid="pac-planner-review-facts-empty">{$t('tools.pacAllocator.planner.review.factsEmpty', {default: 'No fact in this view.'})}</p>
-        {:else}
-            <div class="overflow-x-auto">
-                <table class={TABLE} data-testid="pac-planner-review-facts" data-view={factsView}>
-                    <thead>
-                        <tr>
-                            <th scope="col" class={TH}>{$t('tools.pacAllocator.planner.review.factStep', {default: 'Step'})}</th>
-                            <th scope="col" class={TH}>{$t('tools.pacAllocator.planner.review.factEntity', {default: 'Fact'})}</th>
-                            <th scope="col" class="{TH} text-right">{$t('tools.pacAllocator.planner.review.factValue', {default: 'Value'})}</th>
-                            <th scope="col" class={TH}>{$t('tools.pacAllocator.planner.review.factOrigin', {default: 'Origin'})}</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-                        {#each shownFacts as fact (fact.id)}
-                            <tr data-testid="pac-planner-review-fact" data-kind={fact.kind} data-modified={fact.modified ? 'true' : 'false'} data-stale={fact.stale ? 'true' : 'false'}>
-                                <td class={TD}>{$t(stepKey(fact.step), {default: STEP_FALLBACKS[fact.step]})}</td>
-                                <td class={TD}>{fact.entity}</td>
-                                <td class={TD_NUM}>{factValue(fact)}</td>
-                                <td class={TD}>
-                                    <span class="flex flex-wrap items-center gap-2">
-                                        <OriginBadge origin={fact.origin} modified={fact.modified} />
-                                        {#if fact.referenceDate}<AgeLabel date={fact.referenceDate} asOf={draft.data.asOf} />{/if}
-                                    </span>
-                                </td>
-                            </tr>
-                        {/each}
-                    </tbody>
-                </table>
-            </div>
-        {/if}
-    {/if}
+    <div data-testid="pac-planner-review-sections">
+        <DataTable
+            bind:this={sectionsTable}
+            data={sectionRows}
+            columns={sectionColumns}
+            getRowId={(row) => row.step}
+            storageKey="pac-planner-review-sections"
+            onRowClick={(row) => ongoto(row.step)}
+            enableSorting={false}
+            enablePagination={false}
+            enableSelection={false}
+            selectionMode="none"
+            enableColumnVisibility
+            enableColumnFilters={false}
+            enableColumnResize
+            enableContextMenu={false}
+            enableActions
+            rowActions={sectionActions}
+            actionsColumnWidth="64px"
+            tableLayout="auto"
+        />
+    </div>
 
     {#if problems.length > 0}
         <div class={NOTICE.warning} role="alert" data-testid="pac-planner-review-problems">
-            <p class="mb-2 font-medium">{$t('tools.pacAllocator.planner.review.problems', {default: 'Complete these fields before calculating:'})}</p>
+            <p class="mb-2 font-medium">{$t(`${KEY}.problems`, {default: 'Complete these fields before calculating:'})}</p>
             <IssueList items={problems} {ongoto} testid="pac-planner-review-problem" />
         </div>
     {/if}
 
-    <p class="flex items-start gap-2 {NOTICE.info}"><Info class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />{$t('tools.pacAllocator.planner.review.noOrders', {default: 'No order will be sent to the Broker. The calculation uses only this payload.'})}</p>
+    {#if facts.length > 0}
+        <section class="space-y-2">
+            <button
+                type="button"
+                class="flex items-center gap-1 rounded text-left {SECTION_TITLE} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green"
+                aria-expanded={factsOpen}
+                aria-controls="pac-planner-review-facts-body"
+                data-testid="pac-planner-review-facts-toggle"
+                onclick={() => (factsOpen = !factsOpen)}
+            >
+                {#if factsOpen}<ChevronDown size={16} aria-hidden="true" />{:else}<ChevronRight size={16} aria-hidden="true" />{/if}
+                {$t(`${KEY}.factsToggle`, {default: 'Calculation data ({count})', values: {count: facts.length}})}
+            </button>
+            <div id="pac-planner-review-facts-body" hidden={!factsOpen}>
+                {#if factsOpen}
+                    <div class="space-y-2" data-testid="pac-planner-review-facts">
+                        <TableColumns table={factsTable} testid="pac-planner-review-facts-columns" />
+                        <DataTable
+                            bind:this={factsTable}
+                            data={facts}
+                            columns={factColumns}
+                            getRowId={(fact) => fact.id}
+                            storageKey="pac-planner-review-facts"
+                            enableSorting
+                            enablePagination={false}
+                            enableSelection={false}
+                            selectionMode="none"
+                            enableColumnVisibility
+                            enableColumnFilters
+                            enableColumnResize
+                            enableContextMenu={false}
+                            enableActions
+                            rowActions={factActions}
+                            actionsColumnWidth="64px"
+                            tableLayout="auto"
+                            emptyMessage={$t(`${KEY}.factsEmpty`, {default: 'No item matches these filters.'})}
+                        />
+                    </div>
+                {/if}
+            </div>
+        </section>
+    {/if}
 
-    <div class="flex flex-wrap justify-center gap-3">
-        {#if hasResult}
-            <button type="button" class={BUTTON_SECONDARY} data-testid="pac-planner-show-result" onclick={onshowresult}>{$t('tools.pacAllocator.planner.review.showResult', {default: 'See the last result'})}</button>
-        {/if}
-        <button type="button" class={BUTTON_PRIMARY} disabled={busy || problems.length > 0} data-testid="pac-planner-calculate" onclick={oncalculate}>
-            {$t('tools.pacAllocator.planner.review.calculate', {default: 'Calculate plan'})}
-        </button>
+    <div class="space-y-2">
+        <div class="flex flex-wrap justify-center gap-3">
+            {#if hasResult}
+                <button type="button" class={BUTTON_SECONDARY} data-testid="pac-planner-show-result" onclick={onshowresult}>{$t(`${KEY}.showResult`, {default: 'See the last result'})}</button>
+            {/if}
+            <button type="button" class={BUTTON_PRIMARY} disabled={busy || problems.length > 0} data-testid="pac-planner-calculate" onclick={oncalculate}>
+                {$t(`${KEY}.calculate`, {default: 'Calculate plan'})}
+            </button>
+        </div>
+        <p class="text-center {HINT}">{$t(`${KEY}.noOrdersHint`, {default: 'The calculation sends no order to the Brokers.'})}</p>
     </div>
 </div>

@@ -46,6 +46,6 @@ export function listIssue(issue: PresentedIssue): ListedIssue {
 
 export const ORIGIN_FALLBACKS = {copied: 'Copied', manual: 'Manual', modified: 'Modified'} as const;
 
-export const MODE_KIND_FALLBACKS = {whole_quantity: 'Number of units', monetary_amount: 'Amount'} as const;
+export const MODE_KIND_FALLBACKS = {whole_quantity: 'By number of units', monetary_amount: 'By amount'} as const;
 
 export const DIMENSION_FALLBACKS = {asset_type: 'Asset type', geography: 'Geography', sector: 'Sector'} as const;

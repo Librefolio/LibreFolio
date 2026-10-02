@@ -47,6 +47,7 @@ from backend.app.schemas.pac_allocator import (
     PlannerCatalogAsset,
     PlannerCatalogBroker,
     PlannerCatalogs,
+    PlannerConversion,
     PlannerCostTotals,
     PlannerFundingAction,
     PlannerFxAction,
@@ -72,6 +73,7 @@ from backend.app.services.pac_allocator.evaluator import exact_scenario_fingerpr
 from backend.app.services.pac_allocator.models import (
     ExactAsset,
     ExactEvaluation,
+    ExactFxEvaluation,
     ExactPlannerScenario,
     ExactPolicyView,
     ExactRoundingTopUp,
@@ -476,9 +478,9 @@ def build_asset_rows(scenario: ExactPlannerScenario, evaluation: ExactEvaluation
 def build_funding_actions(scenario: ExactPlannerScenario, evaluation: ExactEvaluation, sequence: _SequenceAllocator) -> list[PlannerFundingAction]:
     """Project posted funding transfers.
 
-    ``sequence`` comes from a single allocator shared with the FX and order
-    builders: the schema requires each section to be sequence-ordered *and*
-    every action id and sequence to be unique across all three sections, so a
+    ``sequence`` comes from a single allocator shared with the conversion and
+    order builders: the schema requires each section to be sequence-ordered
+    *and* every action id and sequence to be unique across the sections, so a
     per-section counter starting at one would collide.
     """
     provenance_by_route = {route.route_id: route.provenance_id for route in scenario.funding_routes}
@@ -504,14 +506,21 @@ def build_funding_actions(scenario: ExactPlannerScenario, evaluation: ExactEvalu
     return actions
 
 
-def build_fx_actions(scenario: ExactPlannerScenario, evaluation: ExactEvaluation, sequence: _SequenceAllocator) -> list[PlannerFxAction]:
-    """Project posted FX conversions.
+def _conversion_id(action: ExactFxEvaluation) -> str:
+    return f"conversion:{action.broker_id}:{action.source_currency}:{action.destination_currency}"
+
+
+def build_fx_actions(scenario: ExactPlannerScenario, evaluation: ExactEvaluation) -> list[PlannerFxAction]:
+    """Project posted FX decisions, one per engine decision.
 
     ``destination_credit`` publishes the **posted** credit, not the exact one:
     the ledger identity reconciles on posted amounts (an exact 9.504 USD
     credit posts as 10), which is the same exact/posted distinction the
     compiled model had to learn in Step3 §16.11. ``spread_loss`` by contrast
     is an economic cost and stays exact, matching ``_evaluate_costs``.
+
+    An action has no sequence: what the user executes is its conversion
+    (``build_conversions``).
     """
     provenance_by_route = {route.route_id: route.provenance_id for route in scenario.order_routes}
     actions: list[PlannerFxAction] = []
@@ -519,7 +528,7 @@ def build_fx_actions(scenario: ExactPlannerScenario, evaluation: ExactEvaluation
         actions.append(
             PlannerFxAction(
                 action_id=f"fx:{action.order_route_id}:{action.source_currency}",
-                sequence=sequence.next(),
+                conversion_id=_conversion_id(action),
                 order_route_id=action.order_route_id,
                 broker_id=action.broker_id,
                 source_debit=_positive_money(action.source_debit, action.source_currency),
@@ -535,6 +544,52 @@ def build_fx_actions(scenario: ExactPlannerScenario, evaluation: ExactEvaluation
             )
         )
     return actions
+
+
+def build_conversions(scenario: ExactPlannerScenario, evaluation: ExactEvaluation, fx_actions: list[PlannerFxAction], sequence: _SequenceAllocator) -> list[PlannerConversion]:
+    """Aggregate the FX actions into one conversion per Broker and currency pair.
+
+    The engine decides FX per order route, but no constraint ties a decision to
+    its route's BUY: the credit lands in the Broker's cash in the destination
+    currency, which every order of that Broker in that currency shares, and the
+    canonical tie-break picks the route. So the pair total is the figure the
+    plan can present; rate and spread are global per pair.
+
+    ``fx_actions`` is ``build_fx_actions``'s output for the same evaluation,
+    one row per ``evaluation.fx`` entry in the same order. Manual conversions
+    take the next sequences in (Broker, source, destination) order, which puts
+    them between funding and orders; automatic ones happen inside the orders
+    and carry none.
+    """
+    mode_by_broker = {broker.broker_id: broker.conversion_mode for broker in scenario.brokers}
+    groups: dict[tuple[str, str, str], list[tuple[ExactFxEvaluation, PlannerFxAction]]] = {}
+    for exact, row in zip(evaluation.fx, fx_actions, strict=True):
+        groups.setdefault((exact.broker_id, exact.source_currency, exact.destination_currency), []).append((exact, row))
+    conversions: list[PlannerConversion] = []
+    for (broker_id, source_currency, destination_currency), members in sorted(groups.items()):
+        exacts = [exact for exact, _ in members]
+        rows = [row for _, row in members]
+        mode = mode_by_broker[broker_id]
+        conversions.append(
+            PlannerConversion(
+                conversion_id=_conversion_id(exacts[0]),
+                mode=mode,
+                sequence=sequence.next() if mode == "manual" else None,
+                broker_id=broker_id,
+                source_debit=_positive_money(sum((exact.source_debit for exact in exacts), _EXACT_ZERO), source_currency),
+                destination_credit=_positive_money(sum((exact.posted_destination_credit for exact in exacts), _EXACT_ZERO), destination_currency),
+                spot_rate=rows[0].spot_rate,
+                effective_rate=rows[0].effective_rate,
+                spread_loss=_money(sum((exact.spread_loss for exact in exacts), _EXACT_ZERO), scenario.valuation_currency),
+                fx_action_ids=[row.action_id for row in rows],
+                provenance_ids=_canonical_provenance_ids(
+                    {provenance_id for row in rows for provenance_id in row.provenance_ids},
+                    context=f"conversion {broker_id!r} {source_currency}->{destination_currency}",
+                    asset_ids=(),
+                ),
+            )
+        )
+    return conversions
 
 
 def build_order_rows(scenario: ExactPlannerScenario, evaluation: ExactEvaluation, sequence: _SequenceAllocator) -> list[PlannerBuyOrderRow]:
@@ -716,11 +771,11 @@ def build_objective_results(scenario: ExactPlannerScenario, view: ExactPolicyVie
 
 
 class _SequenceAllocator:
-    """One dense 1-based counter shared by the funding/FX/order builders.
+    """One dense 1-based counter shared by the funding/conversion/order builders.
 
     The schema requires every action id *and* every sequence to be unique
-    across all three sections while each section stays internally ordered, so
-    three independent counters would collide on the first row.
+    across the sections while each section stays internally ordered, so
+    independent counters would collide on the first row.
     """
 
     def __init__(self) -> None:

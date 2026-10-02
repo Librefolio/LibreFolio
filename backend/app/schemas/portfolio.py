@@ -1317,7 +1317,7 @@ class PortfolioPlannerSourceSnapshot(StrictModel):
     target_currency: CurrencyCode
     generated_at: datetime
     requested_sections: List[PlannerSourceSection]
-    source_revision: Literal["2.0.0"]
+    source_revision: Literal["1.0.0"]
 
     @field_validator("generated_at")
     @classmethod

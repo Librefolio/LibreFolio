@@ -13,6 +13,10 @@ export interface ScopeBroker {
     share: string | null;
     active: boolean;
     selectable: boolean;
+    /** Icon fields for `BrokerIcon`; display only. */
+    iconUrl: string | null;
+    portalUrl: string | null;
+    pluginCode: string | null;
 }
 
 export async function loadCopyScope(): Promise<ScopeBroker[]> {
@@ -25,6 +29,9 @@ export async function loadCopyScope(): Promise<ScopeBroker[]> {
             share: broker.user_share_percentage ?? null,
             active: broker.is_active !== false,
             selectable: broker.user_role === 'OWNER',
+            iconUrl: broker.icon_url ?? null,
+            portalUrl: broker.portal_url ?? null,
+            pluginCode: broker.default_import_plugin ?? null,
         }))
         .sort((a, b) => Number(b.selectable) - Number(a.selectable) || a.name.localeCompare(b.name));
 }
