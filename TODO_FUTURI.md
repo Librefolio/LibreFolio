@@ -562,7 +562,9 @@ La prima versione mantiene nello snapshot del singolo calcolo:
 - aliquota sulle plusvalenze per Asset, pre-popolata al `26%` e modificabile;
 - route Asset×Broker e priorità;
 - trasferimenti dichiarati, gratuiti e immediati;
-- FX single-hop e `fx_buffer_rate` esplicito (label UI “Margine di sicurezza FX”).
+- FX single-hop, con lo spread globale. ~~`fx_buffer_rate` esplicito (label UI “Margine di sicurezza FX”)~~ —
+  ❌ **non più da fare**, decisione del developer del 02/10/2026: non esiste e non esisterà (vedi «Non più da
+  fare» più sotto).
 
 Questi dati non diventano automaticamente impostazioni persistenti. Il Tool resta
 atomico e riceve sempre uno snapshot completo.
@@ -621,10 +623,23 @@ raccomandazione: richiede una decisione di prodotto.
 ### Modello Operativo Futuro
 
 - Fee, limiti e tempi di settlement dei trasferimenti.
-- Route FX multi-hop, solo con protezioni anti-ciclo e anti-arbitraggio.
-- Buffer FX dinamico per Asset/volatilità invece del solo `fx_buffer_rate`
-  esplicito.
+- ~~Route FX multi-hop, solo con protezioni anti-ciclo e anti-arbitraggio.~~ ❌ non più da fare nel PAC (02/10/2026).
+- ~~Buffer FX dinamico per Asset/volatilità invece del solo `fx_buffer_rate`
+  esplicito.~~ ❌ non più da fare (02/10/2026).
 - Persistenza opzionale delle fonti manuali.
+
+### ❌ Non più da fare — FX nel PAC (decisione del developer, 02/10/2026)
+
+Nel PAC/Rebalancer **non si faranno mai**:
+
+- un tasso o uno spread FX per Broker;
+- un margine di sicurezza sul tasso, fisso (`fx_buffer_rate`) o dinamico;
+- una commissione di conversione oltre lo spread;
+- conversioni in più passi (multi-hop).
+
+**Perché**: lo spread globale somma già tutti gli attori della conversione; il multi-hop spetta alla parte FX
+(rotte e provider), non al PAC. I piani di D sono già allineati (R13.11). Debito di contratto collegato: `fx_cost`
+della riga d'ordine, nella voce «🔎 Gate sui campi di contratto senza consumatore».
 
 Profili commissionali per mercato e formule intraday/degressive sono già descritti
 nella sezione precedente e non vengono duplicati qui.
@@ -781,6 +796,13 @@ irrigidirebbe contratti che cambiano ogni giorno e produrrebbe rumore su campi
 legittimamente non ancora consumati. Ha senso quando la superficie si
 stabilizza: a quel punto «dichiarato e non usato» smette di essere una fase
 normale dello sviluppo e torna a essere il segnale che è.
+
+**Terzo caso, un campo che non può più portare informazione** (02/10/2026): `fx_cost` della riga d'ordine del
+PAC (`PlannerBuyOrderRow.fx_cost` in `backend/app/schemas/pac_allocator.py`, costruito sempre a zero in
+`backend/app/services/pac_allocator/planner_report.py`, letto dal client dei Tool). Dopo la decisione del
+developer del 02/10 sugli FX nel PAC (nessuna commissione di conversione oltre lo spread) vale sempre 0 e non avrà
+mai un altro valore. Va tolto dal contratto: cambia il contratto e la versione del Tool, quindi non in questo
+round.
 
 **Collocazione**: debito trasversale fra contratto backend e consumatori
 frontend. Non appartiene a PAC/Rebalancer né alla piattaforma Tool: il caso che
