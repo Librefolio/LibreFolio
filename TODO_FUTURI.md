@@ -156,8 +156,8 @@ La prima implementazione G6 resta startup-loaded, senza CRUD, database o watcher
 Il developer, sul rifacimento del blocco del replay: *«teniamoli fuori, ma segnalo in todo_futuri con tutta la
 spiegazione annessa»*.
 
-**Cos'è.** Oggi un asset senza storia nella finestra di una crisi viene escluso dal replay e mostrato con il suo
-motivo. È il caso di un ETF nato nel 2015 davanti alla crisi del 2008. Un **sostituto** è un altro asset che ha storia in
+**Cos'è.** Oggi, in L4 (Dashboard, Broker e laboratorio), un asset senza storia nella finestra di una crisi viene escluso
+dal replay e mostrato con il suo motivo. È il caso di un ETF nato nel 2015 davanti alla crisi del 2008. Un **sostituto** è un altro asset che ha storia in
 quella finestra: il replay usa i suoi rendimenti al posto di quelli che mancano. Può essere l'indice che l'ETF replica,
 oppure un ETF più vecchio sullo stesso indice. Il peso resta quello dell'asset originale. Del sostituto si usano solo
 i rendimenti giornalieri, non i prezzi.
@@ -180,8 +180,11 @@ i rendimenti giornalieri, non i prezzi.
 **Perché è rinviato: cosa manca.**
 
 - **L'interfaccia.** L4 non manda mai `proxy_assets`. Servirebbe un selettore «usa un sostituto» accanto a ogni asset
-  escluso, con la ricerca fra gli asset del DB. Con F3 l'interfaccia perde anche l'esclusione manuale. Il motore
-  accetta ancora `excluded_assets`, ma nessuna schermata lo manda più.
+  escluso, con la ricerca fra gli asset del DB. Un modello c'è già, ma solo per l'asset singolo:
+  nella scheda rischio di Asset Detail (`RiskAnalysisPanel.svelte`, sezione `risk-replay-controls`) si sceglie un
+  sostituto per l'asset stesso con `SignalAssetParamControl`, oppure lo si esclude con una casella; l'audit mostra
+  l'associazione. Con F3 l'esclusione manuale esce da L4: `excluded_assets` lo manda ancora solo quella casella di
+  Asset Detail.
 - **Una regola su quale sostituto sia sensato.** Va deciso se servono la stessa valuta, la stessa classe e una
   correlazione minima nel periodo in cui esistono entrambi. Senza una regola, un sostituto sbagliato dà un numero falso
   che sembra preciso.
