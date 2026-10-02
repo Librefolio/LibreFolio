@@ -4,7 +4,7 @@ import subprocess
 
 from . import _common
 from ._common import Colors, _get_category_tests_for_all, _run_test_suite, add_test, make_category, print_error, print_header, print_section, print_success
-from ._frontend_common import _ensure_frontend_build, _ensure_test_users, _run_playwright, reset_setup_scope
+from ._frontend_common import _ensure_db_populated, _ensure_frontend_build, _ensure_test_users, _run_playwright, reset_setup_scope
 
 
 def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -34,6 +34,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/utils/__tests__/trySave.test.ts",
             "src/lib/utils/layout/headerScroll.test.ts",
             "src/lib/charts/__tests__/loadComparisonData.test.ts",
+            "src/lib/charts/__tests__/signalLabel.test.ts",
             "src/lib/services/fxCreationSync.test.ts",
             "src/lib/utils/sync/__tests__/syncToastHelpers.test.ts",
             "src/lib/utils/core/__tests__/formatDecimal.test.ts",
@@ -89,6 +90,9 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/utils/currency/currencyFormat.test.ts",
             "src/lib/utils/privacy/maskable.test.ts",
             "src/lib/utils/privacy/moneyRenderSites.test.ts",
+            "src/routes/documentTitle.guard.test.ts",
+            "src/htmlInterpolation.gate.test.ts",
+            "src/htmlSink.gate.test.ts",
             "src/lib/components/brokers/lots/lotChartShared.test.ts",
             "src/lib/components/brokers/lots/lotWacPriceChartHelpers.test.ts",
             "src/lib/components/brokers/lots/lotComparisonChartHelpers.test.ts",
@@ -162,6 +166,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/ui/input/ExactDecimalInput.test.ts",
             "src/lib/components/ui/input/ExactQuantityInput.test.ts",
             "src/lib/components/ui/input/TagInput.test.ts",
+            "src/lib/components/ui/input/PasswordInput.test.ts",
             "src/lib/components/ui/select/SimpleSelect.test.ts",
             "src/lib/components/ui/select/SearchSelect.test.ts",
             "src/lib/components/ui/select/CurrencySearchSelect.test.ts",
@@ -176,6 +181,8 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/ui/modals/SyncResultRow.test.ts",
             "src/lib/components/ui/modals/PageSyncModal.test.ts",
             "src/lib/components/ui/feedback/ToastContainer.test.ts",
+            "src/lib/components/ui/feedback/Tooltip.test.ts",
+            "src/lib/components/ui/tabs/TabBar.test.ts",
             "src/lib/components/table/DataTableColumnFilter.test.ts",
             "src/lib/components/table/DataTable.test.ts",
             "src/lib/components/table/DataTablePagination.test.ts",
@@ -211,11 +218,13 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/charts/MeasurePanel.test.ts",
             "src/lib/components/risk/AssetSetLossComparisonSection.test.ts",
             "src/lib/components/auth/RegisterCard.test.ts",
+            "src/lib/components/auth/LoginCard.test.ts",
             "src/lib/components/auth/DonationPopupModal.test.ts",
             "src/lib/components/support/SupportActions.test.ts",
             "src/lib/components/support/SocialShareModal.test.ts",
             "src/lib/components/support/shareNavigation.test.ts",
             "src/lib/utils/clipboard.test.ts",
+            "src/lib/utils/core/sanitizeHtml.test.ts",
             "src/lib/components/brokers/BrokerModal.test.ts",
             "src/lib/components/brokers/BrokerSharingPanel.test.ts",
             "src/lib/components/brokers/BrokerCard.test.ts",
@@ -223,7 +232,11 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/assets/AssetTable.privacy.test.ts",
             "src/lib/components/dashboard/KpiSection.test.ts",
             "src/lib/components/dashboard/ExposureTable.test.ts",
+            "src/lib/components/dashboard/ExposureTreemap.test.ts",
+            "src/lib/components/dashboard/GrowthChart.tooltip.test.ts",
             "src/lib/components/dashboard/ContributionTable.test.ts",
+            "src/lib/components/dashboard/PerformanceChart.test.ts",
+            "src/lib/components/dashboard/AllocationPanel.test.ts",
             "src/lib/components/table/DataTableHeaderTooltip.test.ts",
             "src/lib/components/transactions/import/FixFlaggedStep.test.ts",
             "src/lib/components/layout/ChangelogModal.test.ts",
@@ -374,6 +387,18 @@ def front_document_title(verbose: bool = False, ui: bool = False, headed: bool =
     if not _ensure_test_users():
         return False
     return _run_playwright("layout/document-title.spec.ts", ui=ui, headed=headed, debug=debug, project="", test_names=test_names, coverage=coverage)
+
+
+def front_toolbar_width_sweep(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Sweep the five PageToolbar bars 1700 → 320 px in French, Italian and Spanish (K step 13, item 5)."""
+    print_section("Frontend Toolbar Width Sweep Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/toolbar-width-sweep.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_files_destructive(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -527,7 +552,16 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "files-uploader", front_files_uploader, name="Files Uploader Tests", desc="Uploader URL/list-grid/reload parity, unknown/null identities and avatar geometry with synthetic APIs", tests="files-uploader.spec.ts")
     add_test(cat, "support-copy-and-go", front_support_copy_and_go, name="Support Copy And Go Tests", desc="Icon-to-dialog, fixed public clipboard payload, native blank-tab reservation, safe navigation and denied-copy cleanup", tests="support-copy-and-go.spec.ts")
     add_test(cat, "header-scroll", front_header_scroll, name="Header Scroll Tests", desc="Desktop/mobile document-scroll geometry, retained layout, menu pins and reduced motion with synthetic APIs", tests="layout/header-scroll.spec.ts")
-    add_test(cat, "document-title", front_document_title, name="Document Title Tests", desc="Leaving Files client-side restores the LibreFolio window title, a same-route query change keeps it, Tools still sets its own", prereq="Test users created", tests="layout/document-title.spec.ts")
+    add_test(cat, "document-title", front_document_title, name="Document Title Tests", desc="No page changes the tab title: direct landing on every main page and a tool page, sidebar hops in one runtime, a Files query change", prereq="Test users created", tests="layout/document-title.spec.ts")
+    add_test(
+        cat,
+        "toolbar-width-sweep",
+        front_toolbar_width_sweep,
+        name="Toolbar Width Sweep",
+        desc="The five PageToolbar bars (assets list and detail, dashboard, broker detail, FX list) swept 1700 → 320 px every 10 px in French, Italian and Spanish: no box past its bar, no sideways page scroll, every violation in one table per bar and language (K step 13, item 5)",
+        prereq="Populated DB + test users",
+        tests="layout/toolbar-width-sweep.spec.ts",
+    )
     add_test(cat, "files-destructive", front_files_destructive, name="Files Destructive Tests", desc="Single + bulk file delete, confirm/cancel, delete failure, BRIM delete + empty state (disposable rows, self-restoring)", prereq="Login working", tests="files-destructive.spec.ts")
     add_test(cat, "select", front_select, name="Select Components Tests", desc="SimpleSelect, SearchSelect, keyboard nav", prereq="Login working", tests="select-components.spec.ts")
     add_test(cat, "image-crop", front_image_crop, name="Image Crop & Media Tests", desc="ImageEditModal, AssetPicker, FileGrid, avatar", prereq="Login working", tests="image-crop.spec.ts")

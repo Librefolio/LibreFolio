@@ -134,7 +134,7 @@
         const classes = value > 0 ? 'text-green-600 dark:text-green-400' : value < 0 ? 'text-red-500 dark:text-red-400' : 'text-gray-500 dark:text-gray-400';
         return {
             type: 'html' as const,
-            html: `<span class="font-medium ${classes}">${formatCurrencyAmountPlain(value, displayCurrency, {showSign: value !== 0})}</span>`,
+            html: `<span class="font-medium ${classes}">${escapeHtml(formatCurrencyAmountPlain(value, displayCurrency, {showSign: value !== 0}))}</span>`,
         };
     }
 
@@ -209,11 +209,11 @@
             cell: (row) => {
                 const info = getAssetInfo(row.assetId);
                 const typeIconSrc = info?.icon_url || getAssetTypeIconUrl(row.assetType) || '';
-                const name = escapeHtml(row.assetName);
+                const nameHtml = escapeHtml(row.assetName);
                 const typeIconHtml = typeIconSrc ? `<img src="${escapeHtml(typeIconSrc)}" alt="${escapeHtml(row.assetType)}" class="w-4 h-4 rounded object-contain shrink-0" onerror="this.style.display='none'" />` : '';
                 return {
                     type: 'html',
-                    html: `<div class="flex items-center gap-1.5 min-w-0">${typeIconHtml}<span class="flex-1 min-w-0 ${overflowScrollTextClass} font-medium text-gray-700 dark:text-gray-200" title="${name}">${name}</span></div>`,
+                    html: `<div class="flex items-center gap-1.5 min-w-0">${typeIconHtml}<span class="flex-1 min-w-0 ${overflowScrollTextClass} font-medium text-gray-700 dark:text-gray-200" title="${nameHtml}">${nameHtml}</span></div>`,
                 };
             },
         };

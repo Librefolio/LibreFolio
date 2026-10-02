@@ -3,6 +3,7 @@
 > Difetto trovato da J (FM7 intermittente). Assegnato a K dal developer il 25/09: «Sì: ordine di creazione
 > nel comparatore e test per contenuto, a K dopo C3». Viene dopo lo step 10
 > ([`plan-phase00TaxonomySelectStep10BrokerRequestBurst.prompt.md`](plan-phase00TaxonomySelectStep10BrokerRequestBurst.prompt.md)).
+> Seguito: step 12, [`plan-phase00TaxonomySelectStep12ReviewFollowups.prompt.md`](plan-phase00TaxonomySelectStep12ReviewFollowups.prompt.md).
 
 | | |
 |---|---|

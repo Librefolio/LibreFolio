@@ -472,6 +472,18 @@ def front_tx_bulk_row_order(verbose: bool = False, ui: bool = False, headed: boo
     return _run_playwright("transactions/tx-bulk-row-order.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_selection_after_bulk(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the Transactions page selection-after-operation E2E tests (K step 12a)."""
+    print_section("Frontend TX Selection After Bulk Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-selection-after-bulk.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_transaction_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run all Transaction E2E tests."""
     if _common.nothing_left_to_run("front-transaction"):
@@ -550,6 +562,14 @@ def populate_registry(registry: dict) -> None:
         tests="transactions/tx-broker-icon-hydration.spec.ts",
     )
     add_test(cat, "tx-bulk-row-order", front_tx_bulk_row_order, name="TX Bulk Row Order Tests", desc="C4 E-order: five new same-date rows keep their creation order in the BulkModal grid, read by owned description; editor discarded, nothing saved", tests="transactions/tx-bulk-row-order.spec.ts")
+    add_test(
+        cat,
+        "tx-selection-after-bulk",
+        front_tx_selection_after_bulk,
+        name="TX Selection After Bulk Tests",
+        desc="Step 12a: after an executed edit, clone, delete, add, link or unlink the toolbar and the table checkboxes are empty and one click selects one row; after a cancelled editor, link or unlink both are unchanged",
+        tests="transactions/tx-selection-after-bulk.spec.ts",
+    )
     add_test(cat, "tx-unit", front_tx_unit, test_names=False, name="TX Unit Tests (Vitest)", desc="Pure unit tests: txPayloadHelpers + txCommitApi + promoteHelpers + splitRowCharges + fixRowLifecycle + duplicateRecheckPayload", tests="vitest")
     add_test(cat, "all", front_transaction_all, test_names=False, name="All Transaction Tests", desc="Run all Transaction E2E tests")
     registry["front-transaction"] = cat

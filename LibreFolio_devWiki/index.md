@@ -252,7 +252,7 @@
 | [[problems/fifo-income-silently-dropped-after-full-close]] | Pre-v4 income allocator silently skipped income when no lot was open — now becomes asset_orphan_income | resolved | backend, fifo, dividend, data-quality |
 | [[problems/event-loop-blocking]] | yfinance sync calls in async handlers freeze entire app | resolved | backend, async, performance |
 | [[problems/liveticker-header-crash]] | LiveTicker in Header.svelte crashed on navigation | resolved | frontend, navigation |
-| [[problems/flag-emoji-windows]] | Flag emoji blank on Windows — needs Noto Color Emoji font | resolved | frontend, emoji, windows |
+| [[problems/flag-emoji-windows]] | Flags on Windows: one global 'LF Flags' face, flags-only unicode-range (Apple local, Noto subset elsewhere) | resolved (2026-09-29) | frontend, emoji, windows, fonts |
 | [[problems/justetf-websocket-disconnect]] | JustETF WebSocket silently freezes — reconnect backoff workaround | workaround | backend, providers, websocket |
 | [[problems/asset-currency-mismatch]] | Asset price currency may differ from Asset.currency — per-row currency column | resolved | backend, db, currency, prices |
 | [[problems/tanstack-svelte5-incompatibility]] | TanStack Table v8 official adapter is incompatible with Svelte 5 runes | workaround | frontend, svelte5, tanstack |
