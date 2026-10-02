@@ -531,7 +531,7 @@
     "todoBlockerCommitHint": "Completa tutti i campi obbligatori prima di salvare",
     "todoWarningVerifyHint": "{n, plural, one {# campo auto-derivato da verificare prima di salvare} other {# campi auto-derivati da verificare prima di salvare}}",
     "todoWarningConfirmTitle": "Verificare i campi auto-derivati?",
-    "todoWarningConfirmMessage": "{n} riga/e hanno un valore auto-derivato non ancora verificato (es. la quantità nominale dei titoli scaduti). Rivedili, oppure salva comunque se i valori derivati sono corretti.",
+    "todoWarningConfirmMessage": "{n} riga/e hanno un valore auto-derivato non ancora verificato. Rivedili, oppure salva comunque se i valori derivati sono corretti.",
     "todoWarningConfirmItemsLabel": "{n} campo/i da verificare",
     "todoWarningConfirmProceed": "Salva comunque",
     "todoWarningConfirmReview": "Rivedi",
@@ -863,7 +863,14 @@
         "incomplete": "Incompleto",
         "incompleteTooltip": "Manca: {roles}"
       }
-    }
+    },
+    "parseDetail": {
+      "sourceRow": "Riga del file",
+      "charges": "Commissioni",
+      "suggestions": "Cosa ha trovato l'importatore",
+      "technical": "Dettagli tecnici"
+    },
+    "todoGoto": "Vai alla riga"
   },
   "brokers": {
     "title": "Broker",

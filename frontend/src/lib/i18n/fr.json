@@ -531,7 +531,7 @@
     "todoBlockerCommitHint": "Complétez tous les champs requis avant de sauvegarder",
     "todoWarningVerifyHint": "{n, plural, one {# champ auto-dérivé à vérifier avant d'enregistrer} other {# champs auto-dérivés à vérifier avant d'enregistrer}}",
     "todoWarningConfirmTitle": "Vérifier les champs auto-dérivés ?",
-    "todoWarningConfirmMessage": "{n} ligne(s) ont une valeur auto-dérivée pas encore vérifiée (p. ex. la quantité nominale des obligations arrivées à échéance). Vérifiez-les, ou enregistrez quand même si les valeurs dérivées sont correctes.",
+    "todoWarningConfirmMessage": "{n} ligne(s) ont une valeur auto-dérivée pas encore vérifiée. Vérifiez-les, ou enregistrez quand même si les valeurs dérivées sont correctes.",
     "todoWarningConfirmItemsLabel": "{n} champ(s) à vérifier",
     "todoWarningConfirmProceed": "Enregistrer quand même",
     "todoWarningConfirmReview": "Vérifier",
@@ -863,7 +863,14 @@
         "incomplete": "Incomplet",
         "incompleteTooltip": "Manquant : {roles}"
       }
-    }
+    },
+    "parseDetail": {
+      "sourceRow": "Ligne du fichier",
+      "charges": "Frais",
+      "suggestions": "Ce que l'importateur a trouvé",
+      "technical": "Détails techniques"
+    },
+    "todoGoto": "Aller à la ligne"
   },
   "brokers": {
     "title": "Courtiers",

@@ -73,6 +73,12 @@
  * guard (close, then discard), as tx-import-flow does, before afterEach cleans up.
  *
  * Each C3 scenario gives its first new element a short budget (`C3_FIRST`).
+ *
+ * Phase F1 — the developer's review (2026-10-02):
+ *
+ *   F1-D1 with the step-1 set warning shown, a mousedown outside the drop zone leaves it open (it
+ *         used to fold, moving Next under the pointer and losing the click), and ONE Next reaches
+ *         step 2.
  */
 
 import {expect, test, type Locator, type Page, type Request, type Response} from '../fixtures/playwright';
@@ -809,6 +815,48 @@ test.describe('Import Wizard — report sets', () => {
         await expect(page.getByTestId('import-wizard-set-blocks')).toHaveCount(0);
         await expect(parse).toBeEnabled();
         await expect(genericCheckbox).toHaveAttribute('data-state', 'checked');
+    });
+
+    // -----------------------------------------------------------------------
+    // F1 — the developer's review: D1, the second Next lost on step 1
+    // -----------------------------------------------------------------------
+
+    /**
+     * D1. The drop zone used to fold on every mousedown outside it. The incomplete-set warning reopens
+     * it, so the mousedown half of the next click on Next folded it again: the modal lost height, the
+     * button moved before the mouseup, and the click never happened. While a set warning is shown the
+     * zone stays open. The mousedown is dispatched on its own, so the fold is observed whatever the
+     * geometry of this viewport — Playwright's real click lands wherever the button ends up.
+     */
+    test('F1-D1: with the step-1 set warning shown, a mousedown outside keeps the drop zone open and one Next reaches step 2', async ({page}) => {
+        test.setTimeout(90_000);
+        const brokerId = await startOnOwnedBroker(page, 'F1-D1');
+
+        await dropFiles(page, [CUSTODY_XLSX]);
+        await expect(pendingRows(page)).toHaveCount(1);
+        await assignOwnedBroker(page, brokerId);
+        const next = page.getByTestId('import-wizard-next');
+        await uploadsDuring(page, 1, () => next.click());
+
+        // The warning reopens the drop zone: the missing export can be dropped into the same set.
+        await expect(setWarning(page, 'cash'), 'step 1 warns about the missing cash export of the set').toBeVisible({timeout: C2_FIRST});
+        const step1 = page.getByTestId('import-wizard-step1');
+        await waitForSettled(step1);
+        const uploader = step1.getByTestId('file-uploader');
+        await expect(uploader, 'the set warning opens the drop zone').toBeVisible({timeout: 5_000});
+
+        // The first half of a click on Next: a mousedown outside the drop zone.
+        await next.dispatchEvent('mousedown');
+        await expect(uploader, 'a mousedown outside the drop zone leaves it open while the set warning is shown').toBeVisible();
+        await expect(page.getByTestId('import-wizard-upload-more')).toHaveCount(0);
+        await expect(setWarning(page, 'cash')).toBeVisible();
+
+        // ONE click on Next goes on, with the set incomplete.
+        await next.click();
+        const step2 = page.getByTestId('import-wizard-step2');
+        await expect(step2, 'one click on Next reaches step 2').toBeVisible({timeout: 15_000});
+        await waitForSettled(step2, 20_000);
+        await expect(page.getByTestId('import-wizard-step1')).toHaveCount(0);
     });
 
     // -----------------------------------------------------------------------
