@@ -3128,7 +3128,7 @@
         },
         "l3": {
           "title": "¿Cuánto pagó cada uno por su riesgo?",
-          "description": "Para cada activo seleccionado, cuánto osciló y cuánto rindió de media al año, en el gráfico y en la tabla; con un índice de referencia elegido en el Panel, también cuánto se movió junto a él.",
+          "description": "Para cada activo seleccionado, cuánto osciló y cuánto rindió de media al año, en la tabla y en el gráfico; con un índice de referencia elegido en la parte superior de la pestaña, también cuánto se movió junto a él.",
           "expectedReturn": "Rentabilidad media anual",
           "correlation": "Correlación",
           "scatterNote": "Cada punto es un activo: el eje horizontal muestra cuánto osciló y el vertical cuánto rindió de media al año. En un activo muy volátil, la media es más alta que lo que rindió de verdad.",
@@ -3186,6 +3186,10 @@
         "banner": "Con el período elegido, {count, plural, one {# activo seleccionado no tiene precios} other {# activos seleccionados no tienen precios}} en una parte del intervalo.",
         "button": "Usar el período en que todos tienen precios (del {start} al {end})",
         "hint": "Mueve el período de arriba al intervalo en que cotizan todos los activos seleccionados que tienen precios. Vuelven al análisis: {names}."
+      },
+      "benchmark": {
+        "measuredHint": "Este índice de referencia es también uno de los activos medidos y no puede servir de medida de sí mismo: la beta y la correlación quedan fuera. Elige otro para recuperarlas.",
+        "help": "El activo de referencia, el «riesgo de base»: la beta indica, activo por activo, si cada uno se movió más (por encima de 1) o menos (por debajo de 1) que él; la correlación, cuánto juntos."
       }
     },
     "metrics": {
