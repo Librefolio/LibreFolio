@@ -72,6 +72,7 @@ Indicatore di lettura rapida: va riletto **a ogni consegna**, non a ogni sospett
 | S11 | Docs (docs-writer) | S2b, S3, S4b, S8, S9 | 🔄 in parte, ✅ 2026-09-24 (autorizzata dal coordinator alle 14:45; registro «S11 in parte»): `charts.en.md` (memoria della vista, privacy di Crescita, didascalia delle candele, candele senza broker, memoria di Allocazione) e `positions.en.md` (privacy di Performance). Accettato dal coordinator (15:24) ed entrato in C3 (`671d4ab49`). Il resto dopo S7/S8, più due voci aggiunte (coordinator, 16:07): `index.en.md`, che conta tre schede invece di quattro (reperto di J), e la deriva dei nomi, che c'è anche nella mia frase di C3 (registro «S11-finale — voci aggiunte») · ▶️ ripresa 2026-10-01 (coordinator, dopo `1c568bfe0`): fatti verificati in tre passate; docs-writer ✅ 00:00; revisione con due correzioni mie; `mkdocs build` EXIT 0 e `check-links` con il solo rosso di D28, entrambi rieseguiti sui blob finali · ✅ **2026-10-02 00:12** (registro «S11-finale — le tre pagine inglesi riallineate al codice») |
 | S12 | Handoff | S10, S11, S2c | ⏳ · ▶️ avviata 2026-10-02 (coordinator, dopo `1c568bfe0`): merge-tree contro `ed3bf870a` pulito, vitest intero 6733/6733, S10 chiusa, residui, CHANGELOG e commit proposti · ✅ **2026-10-02 00:36** (registro «S12 — handoff finale») |
 | R-D15 | Review manuale di D15 sulla copia nella 6167, con il developer | S12, D15 | ▶️ avviata 2026-10-02 09:54 (coordinator, 09:45, dopo `e11298294`): build, server staccato, domanda al developer nella mia finestra · ⏸️ **sospesa 10:03**: il developer chiede di fare il punto con il coordinator (la torta qui non ha il secondo anello, che sta nei rami di Risk e F) · ⏭️ **spostata alla review della revisione unita** (2026-10-02 10:05): la torta col secondo anello vive solo nella famiglia di Risk e nessuna build mostra insieme i due lavori. Decisione del developer, verbatim: «Sì, procedi così». Server spento alle 10:35, 6167 libera, copia cancellata |
+| G-K | Gate sulla revisione unita dopo K (`9e9820253`) | R-D15, merge di `dev_release2` | ▶️ avviata 2026-10-02 11:05 (coordinator, 11:04, dopo il merge `9e9820253`): controllo in sola lettura ✅ 11:05; gate 1–15 nella 6157, un rosso nuovo (`S7-E4`), triage ✅ 11:50: assunzione, il gutter dell'host più le etichette dei dati; correzione solo test autorizzata alle 11:54, scritta da test-author, dashboard 24/24 in seriale e con 4 worker ✅ 12:22 · ✅ **2026-10-02 12:29**: rossi noti D28 e `toolbar-width-sweep` fr/es (a K); 2 commit proposti sopra `9e9820253` (registro «G-K») |
 
 ## 0. Come si è arrivati a questa versione
 
@@ -6205,3 +6206,302 @@ comando la porta 6157 è libera.
 > - **Commit proposto:** `docs(journal): defer D15 review to merged revision`, solo questo piano.
 >   `/tmp/libreFolio_commit_i_d15.txt`, sha256 `19c38276a32d…`: ASCII, oggetto di 50 caratteri, righe ≤ 66,
 >   nessuno spazio in coda.
+
+### G-K — Gate sulla revisione unita dopo K (`9e9820253`) ✅ 2026-10-02 12:29 (dalle 11:05)
+
+> **Mandato** (coordinator, 11:04): K è integrato, `dev_release2` = `23828b411` (albero `24f3bfc3683d`); il developer
+> ha committato il journal di D15 (`211e6b638`) e il merge `9e9820253`. Valido la revisione unita nella corsia 6157
+> con l'elenco del coordinator (10:39 e 11:04), poi FROZEN con le prove. Dopo, il coordinator prepara l'avanzamento
+> di `dev_release2` con le mie voci del CHANGELOG.
+
+**Passo 1 — controllo in sola lettura ✅ 2026-10-02 11:05**
+
+> **Note implementazione:**
+> - HEAD `9e9820253`: genitori `211e6b638` + `23828b411`, albero `6aedef9cf42f` = la simulazione del coordinator;
+>   `211e6b638^` = `e11298294`. Albero di lavoro pulito; 50 commit avanti e 0 indietro rispetto a `dev_release2`.
+> - Il piano ha il blob `1b2eca6bbcd9` sia in `211e6b638` sia in HEAD. Il messaggio di `211e6b638` è identico byte
+>   per byte a `/tmp/libreFolio_commit_i_d15.txt` (`git cat-file commit` più `cmp`; `--format=%B` aggiunge solo una
+>   riga vuota in coda).
+> - Il merge porta da `dev_release2` (base `8f18416df`) 6 file, nessuno toccato da I: `Tooltip.svelte` e
+>   `Tooltip.test.ts` (lo Step 14 di K), `test_transactions_api.py` (il test della coppia collegata), `TODO_FUTURI.md`
+>   e due piani di K. `CHANGELOG.md` non cambia dopo `8f18416df`, né da una parte né dall'altra.
+
+**⚠️ Fuori pista — due domande del coordinator sul CHANGELOG ✅ 2026-10-02 11:10**
+
+> **Note implementazione:** solo lettura, contro `v1.1.0` = `837a8f2c7` (2026-09-07), con `git show v1.1.0:…`,
+> `git log -S` e `git tag --contains`; nessun file del codice toccato.
+> 1. **Il margine a sinistra.**
+>    - Crescita: **nessuna riga.** In `v1.1.0` la griglia ha già `left: '3%'` con `containLabel`
+>      (`GrowthChart.svelte:697` del tag). I 52 px li ha messi `ef7cce61c` (2026-09-18, in nessun tag),
+>      `cda9408d4` torna a `'3%'`: rispetto alla release non cambia niente.
+>    - Confronto dei lotti: **riga 🐛 sì, solo per questo grafico.** In `v1.1.0` c'è già `left: 24` con
+>      `containLabel` (`LotComparisonChart.svelte:1159-1160` del tag), mostrato da `LotsAnalysisPanel.svelte:478`;
+>      `1d5975542` lo porta a 10. Proposta: «The lot comparison chart no longer leaves an empty strip left of its
+>      amounts, most visibly on phones.» «wide» esagera: sono 24 px.
+> 2. **D23 sui grafici della release: sì, ma non come è scritto.**
+>    - Il cambiamento visibile è la riga «P&L totale» del tooltip della Crescita, vista Abs (`viewMode === 'eur'`).
+>      In `v1.1.0` il segno è scritto a mano prima della valuta, con U+2212 fisso (`:741` del tag): «+EUR 5.00»,
+>      «−EUR 12.00», e lo zero «+EUR 0.00» in verde. Oggi: «EUR +5.00», «EUR -12.00», lo zero «EUR 0.00» nel colore
+>      del testo. Vale in ogni lingua.
+>    - Le altre righe della Crescita in `v1.1.0` passano già il valore col segno a `toLocaleString` (`:692` del tag):
+>      niente cambia. Il meno ASCII scritto a mano in `fmtCurrency` l'ha messo la privacy (`804bc9903`, 2026-09-24, in
+>      nessun tag) e non è mai uscito.
+>    - Performance, etichette del netto (`shortMoney`, `:166` del tag): il `-` ASCII era a mano, prima del simbolo;
+>      oggi il segno viene da Intl, sempre prima del simbolo. In en/it/fr/es il glifo resta il trattino; U+2212 solo
+>      con il browser in svedese, finlandese, norvegese, estone, lituano, sloveno, croato, basco o persiano. Un
+>      netto che si arrotonda a zero perde il `+`.
+>    - «your language» è impreciso due volte: il meno segue il locale del browser (Intl con `undefined`), non la
+>      lingua dell'interfaccia, e le quattro lingue dell'interfaccia scrivono tutte il trattino. Proposta per la
+>      riga di S7b: «…and chart amounts take their minus sign from your browser's language; the Growth tooltip's
+>      total P&L now reads `EUR -12.00` like the other amounts, instead of `−EUR 12.00`.»
+> 3. **Togliere i Proventi dalla riga di S7b: d'accordo.** In `v1.1.0` la Crescita ha solo
+>    `viewMode: 'eur' | 'pct'` (`:53` del tag): niente P&L, niente Proventi.
+
+**Passo 2 — gate nella 6157** (dalle 11:10) ✅ 2026-10-02 12:22, con la riga 11b dopo la correzione di `S7-E4`
+
+> **Note implementazione:** un comando alla volta, con `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run
+> python dev.py`; i `test` con `--test-port 6157 --data-dir /tmp/librefolio-r2-i-charts`. Porte 6157 e 6167 libere
+> all'avvio. Log in `/tmp/libreFolio_i_gk_*.log`.
+>
+> | # | gate | esito |
+> |---|---|---|
+> | 1 | `front build --debug` (11:10:43–11:11:57) | rc 0; nessun file tracciato cambiato dalla rigenerazione dei contratti |
+> | 2 | `front check` | 3 errori e 41 avvisi in 4 file, rc 1: il floor (`BrokerSharingPanel` 27, `GlobalSettingsTab` 14, `TransactionFormModal.test.ts` 2, `ToolExecutionMetrics` 1); nessuna riga sul Tooltip di K né sui miei file |
+> | 3 | `front-utility core-unit` | 2684/2684 su 102 file |
+> | 4 | `front-utility component-unit` | 2203/2203 su 94 file: i 2198 di S8 più i 5 casi nuovi di K in `Tooltip.test.ts` (da 1 a 6), che è nel catalogo (`_frontend_utility.py:182`) |
+> | 5 | `front-asset asset-unit` | 530/530 su 19 file |
+> | 6 | `front-asset growth-chart-memo` | 60/60 su 1 file |
+> | 7 | `check-orphans` (11:15:42–44) | rc 0: 92 E2E, 275 unit e 224 backend, tutti registrati e raggiungibili. L'istantanea del DB che il runner annuncia va in `.testLog/00_archive/` del worktree, ignorata da `.gitignore:119`: comportamento normale del runner |
+> | 8 | `i18n audit` (11:15:52–56) | rc 0: 3418 chiavi, nessuna traduzione mancante, 392 potenzialmente inutilizzate: come a S8 |
+> | 9 | `api transactions` (11:16:24–49) | rc 0, **23 passati**, 0 saltati. `test_delete_linked_without_pair` (TX-A-031) **gira** e passa: «Got error when trying to delete only one of linked pair». È il test che il commit di K `3cdee7efa` rende padrone del suo asset |
+> | 10 | `api portfolio` (11:17:05–40) | rc 0, 55/55, 0 saltati; il server di prova sulla 6157 si chiude e la porta torna libera |
+> | 11 | E2E `front-portfolio dashboard` (11:18:14–11:20:12) | **rosso: 23/24**, 1 worker, 1,5 min. Fallisce `S7-E4` (`dashboard.spec.ts:1611`), alla precondizione di `openLadder` (`:1469`) e non all'asserzione M: a 375 px, finestra 3m, il gradino `1D` non è offerto (0 elementi in 10 s; lo screenshot mostra 3D, 1W, 2W, 1M). Triage nel Fuori pista qui sotto |
+> | 11b | E2E `front-portfolio dashboard` dopo la correzione di `S7-E4`, solo test: seriale 12:17:05–12:18:45, poi `--workers 4` 12:21:53–12:22:42 | rc 0 e **24/24** tutte e due le volte: 1,3 min con 1 worker, 29,4 s con 4. Registro «Correzione di `S7-E4`», passo 3 |
+> | 12 | E2E `front-broker detail` (11:51:45–11:53:05) | rc 0, **32/32** in 1,1 min, come a S12; verdi anche i tre casi del confronto dei lotti a 375 px, nonostante il gutter di 15 px |
+> | 13 | E2E `front-asset asset-detail` (11:55:35–11:58:09) | rc 0, **29/29** in 2,1 min, come a S8b (il 29° è il link alla guida di C11, `:7837`); `:486` «calendar-return» verde in 1,2 min, dentro il budget di 180 s |
+> | 14 | `mkdocs build` (11:58:34–11:59:01) | rc 0, «Documentation built in 22.95 seconds», nessun WARNING/ERROR |
+> | 15 | `mkdocs check-links` (11:59:05–11:59:07) | rc 1 col solo rosso noto e accettato: 80 validi, 3 eccezioni note, 1 rotto = D28 `user/assets/detail/chart/#rolling-return` in it/fr/es (`+page.svelte:3006`); 9 non verificabili, risolti a runtime |
+
+**⚠️ Fuori pista — il rosso di `S7-E4` sulla revisione unita: triage con la skill `test-triage` ✅ 2026-10-02 11:50**
+
+> **Note implementazione:** solo letture: i `[S7]` delle corse verdi precedenti, il DB e il log del backend della
+> corsia, l'istantanea di ieri del runner e una sonda locale in `/tmp`. Nessun file del prodotto o dei test toccato,
+> nessuna nuova corsa del test: a parità di condizioni la precondizione geometrica fallisce identica.
+> - **La regola del prodotto** (`GrowthChart.svelte:423-442`): `1D` resta offerto solo se
+>   `plotPx / 93 ≥ LADDER_MIN_BODY_PX` (2,5, `:198`), cioè con un'area di almeno 232,5 px. Oggi l'area è ~218 px,
+>   2,35 px a corpo: togliere il gradino è il comportamento voluto («removed, not disabled»).
+> - **La geometria**, ricavata dai `[S7]` e verificata su tutte le righe di ieri e di oggi: la griglia ha
+>   `left: '3%'` con `containLabel` e `right: '4%'` (`:2071`), quindi area = 0,93 × `W` − lo spazio delle etichette
+>   dell'asse y. A 375 px il contenitore è `W` = 375 − 66 − il gutter della barra di scorrimento.
+> - **Prima.** In tutte le corse verdi (09-30 22:58, 10-01 11:42, 14:58, 17:36, 17:50) `[S7] E4 zoomed` registra
+>   `W` 309 ed etichette di 31,36 px: area 256,01 px, 23,5 px sopra la soglia.
+> - **Due cause.**
+>   1. **Ambiente: il gutter, 15 px, misurato.** `app.css:57` ha `scrollbar-gutter: stable` (dal 2026-07-06), che
+>      riserva lo spessore della barra classica e niente per quella sovrapposta. In headless Playwright nasconde le
+>      barre (`--hide-scrollbars`), ma il gutter resta. La sonda `/tmp/libreFolio_i_gk_scrollbar_probe.cjs` (lo
+>      stesso `@playwright/test` 1.61, Chromium 149 headless, descrittore Desktop Chrome, pagina alta 5000 px)
+>      misura oggi **15 px** con `stable` e 0 con `auto`, a 375, 1280 e 1440. Il conto torna al pixel: `W` 294 =
+>      375 − 66 − 15 oggi, 309 in ogni corsa verde; a 1440, 632 contro 641, i 3/5 di 15.
+>      Il gutter **va e viene con lo stato dell'host**, a parità di codice e di strumenti: il 2026-09-24 la
+>      didascalia di S9 misurava 294 px a 375 e 632 a 1440 (`:1160`; il commento di S9 nello spec riporta lo stesso
+>      294), il 09-30 e il 10-01 il contenitore era 309 e 641, oggi di nuovo 294 e 632. Il browser (revisione 1228,
+>      installata il 22/06) e `node_modules` (11/09) non sono cambiati. macOS ha `AppleShowScrollBars` =
+>      `Automatic`, cioè barre classiche quando è collegato un mouse: la spiegazione più probabile, non verificata.
+>   2. **Dati: le etichette dell'asse del P&L, ~19–24 px, osservato.** A 1Y lo spazio delle etichette passa da
+>      36,02 a 54,70 px, identico a 375 e a 1440; a 3m, dallo screenshot, da 31,36 a ~55. Le etichette dei Proventi
+>      (27,45 px) e quelle mascherate dalla privacy (27,37 px) non si muovono. I dati dell'utente E2E cambiano da un
+>      giorno all'altro, per due motivi:
+>      - il runner rifà `populate_mock_data --force --with-reports` all'inizio di ogni E2E (log del gate `:11-24`;
+>        quindi i gate 9–10 non c'entrano). Le operazioni sono datate a ritroso da oggi, i prezzi simulati partono
+>        da una data fissa con semi deterministici (`populate_mock_data.py:106`, `:120-124`): ogni giorno le
+>        operazioni cadono su prezzi diversi. Per esempio, l'acquisto di 0,15 BTC costa 3.177,55 € il 09-06 oggi
+>        e 3.051,75 € il 09-05 ieri;
+>      - a metà corsa il backend prende da Yahoo le quotazioni correnti e le salva sulla data di oggi: 8 righe alle
+>        11:19:17, durante il 17° test, prima del blocco S7 (`logs/librefolio.log:61077-61115` della corsia). BTC
+>        chiude il 10-02 a 86.175,97 contro 18.474,62 simulato il 10-01, ETH a 2.750,71 contro 816,48. L'ultima
+>        candela del P&L salta da ~−0,7k a ~+2,45k €, e coincide col KPI del periodo nello screenshot
+>        (+2.449,19 €, +17,99%): il grafico disegna il dato del backend. Nell'ultima corsa verde di ieri era lo
+>        stesso, sempre al 17° test (BTC 84.261,99 il 10-01, istantanea `test-db_20261001_175019`).
+>
+>      **Perché le etichette siano più larghe oggi non è stabilito**: il salto c'era in tutte e due le corse, e fra
+>      le due il codice dell'asse non è cambiato. Ipotesi non verificata: con un'escursione diversa cambia il passo
+>      delle tacche, e da S7b un passo di 500 porta un decimale («1.5k»).
+>   - Nessuna delle due basta da sola: solo il gutter dà ~242 px (2,60), solo i dati ~232–233 px (2,50, sulla
+>     soglia entro l'errore della stima dallo screenshot). Insieme ~218 px.
+> - **Verdetto: assunzione.** E4 presuppone a 375 px un margine geometrico che dipende dall'host (il gutter) e dai
+>   dati condivisi (le etichette): l'area osservata va da ~218 a 256 px e la soglia di 232,5 cade in mezzo. Non è
+>   un difetto del prodotto, non viene dal merge (porta solo i timer del Tooltip di K) e non è «flaky»: in queste
+>   condizioni fallisce ogni volta.
+> - **Correzione proposta, da autorizzare** (test-author, solo `dashboard.spec.ts`, nessun cambio al prodotto). E4
+>   ha due vincoli opposti: `1D` offerto (area ≥ 2,5 × 93 = 232,5 px) e finestra rada (area / `count` < 8).
+>   `monthEdgeWindow` accetta `count` ≥ 41 e, secondo il giorno del mese, ci arriva (oggi 61): nel caso peggiore
+>   l'area deve restare sotto 328 px. La banda è [232,5; 328).
+>   - **Preferita:** privacy accesa in E4 prima della scelta del gradino, e finestra di ~405 px. Le etichette
+>     mascherate occupano 27,37 px qualunque sia il dato: l'area è ~274 px con il gutter e ~288 senza, ≥ 40 px da
+>     entrambi i bordi. Da confermare con la misura che a 405 px il layout resti quello del telefono (66 px di
+>     cornice). La privacy sta in `localStorage`, cioè solo nel contesto del test, e si spegne nel `finally` come
+>     in E3 (`restorePrivacyOff`). Le asserzioni di E4 leggono indici e linee, nessun importo.
+>   - **Alternativa:** misurare l'area e scegliere la larghezza che la porta al centro della banda.
+>   - **Scartate:** 480 px, perché l'area arriva a ~344–358 px con la privacy (~316–354 senza), oltre 328: la
+>     condizione rada cadrebbe nei giorni in cui `count` scende verso 41. Senza privacy, a ~405 px l'area va da
+>     ~246 a ~284 px con le etichette di ieri e di oggi, ma dipende ancora dai dati. Rilanciare senza mouse
+>     nasconderebbe l'assunzione.
+> - **Due osservazioni fuori dal mio perimetro, per il triage di fine giro:**
+>   - le quotazioni dal vivo rendono i dati E2E non ermetici: dipendono dalla rete e dal mercato del giorno;
+>   - subito dopo il commit delle 8 righe, un salvataggio OHLC del prezzo corrente fallisce su
+>     `UNIQUE constraint failed: price_history.asset_id, price_history.date` e fa rollback
+>     (`logs/librefolio.log:61116`): probabilmente due salvataggi concorrenti sulla stessa data, non indagato.
+> - **Corsia:** il runner ha chiuso il suo server, la 6157 è libera; DB e log restano in `/tmp/librefolio-r2-i-charts`.
+>   Il rosso va al coordinator con la decisione da prendere (correggere E4 prima dell'integrazione o accettarlo come
+>   rosso noto); intanto proseguo con i gate indipendenti.
+
+**Correzione di `S7-E4`, solo test — autorizzata dal coordinator alle 11:54** ✅ 2026-10-02 12:24
+
+> **Mandato** (coordinator, variante (a), la mia preferita): test-author, solo `dashboard.spec.ts`; privacy accesa
+> prima della scelta del gradino, finestra di ~405 px, `restorePrivacyOff` nel `finally` come in E3. Condizioni:
+> - il rosso di oggi è il «prima»; dopo la correzione E4 passa e tutto `front-portfolio dashboard` resta verde;
+> - con l'host di oggi l'area cade nella banda [232,5; 328), e il commento del test scrive come si calcola la banda,
+>   non solo i numeri: chi cambia la soglia o la finestra sa cosa ricalcolare;
+> - controllo gli altri spec sensibili alla larghezza (il gutter di 15 px vale per ogni E2E): se uno diventa rosso
+>   per la stessa ragione, lo dico al coordinator prima di correggerlo;
+> - la correzione va in un commit suo sopra `9e9820253` (`test(charts): …`), preparato dal coordinator col mio
+>   handoff; l'integrazione avanza fino a quel commit.
+>
+> Passi: 1. brief a test-author (solo la modifica del file, nessuna corsa nella corsia); 2. i controlli statici;
+> 3. `front-portfolio dashboard` completo nella 6157; 4. gli spec sensibili alla larghezza; 5. i gate 13–15.
+>
+> **Passi 1–2, la modifica e la mia revisione** ✅ 2026-10-02 12:16. test-author (in background, senza corsia) ha
+> toccato solo `frontend/e2e/portfolio/dashboard.spec.ts`, +64 −14, blob `57ae4e61a847`:
+> - nuova costante `LADDER_E4_PHONE = {width: 405, height: 800}`, con il commento che ricava la banda come formula:
+>   minimo `LADDER_MIN_BODY_PX` × 93 giorni serviti = 232,5; massimo `CANDLE_MIN_SLOT_PX` 8 × il minimo di 41 di
+>   `monthEdgeWindow` = 328; area = 0,93 × (finestra − 66 − gutter) − etichette; gutter 0/15 dall'host; etichette
+>   mascherate 27,37 px; a 405 px ≈ 288 o 274 (≈ 293 se nessuna tacca è negativa); l'elenco di cosa ricalcolare.
+>   `LADDER_PHONE` (375) resta per S7-phone;
+> - `openLadder` ha l'opzione `privacy`: dopo che i dati del sottomodo sono arrivati e prima del gradino chiama
+>   `setPrivacy` (che fa focus, verifica l'header bloccato e attende un nuovo disegno), poi la precondizione
+>   dell'asse mascherato di E3 (`axisLabels` → `AXIS_MASKED`);
+> - E4 tiene `openLadder` dentro il `try`; il `finally` è annidato: le prove (`[S7] E4 window`, `E4 zoomed`)
+>   vengono lette con la privacy ancora accesa, poi `restorePrivacyOff`, che clicca solo se serve. Il titolo non
+>   cambia, quindi nessun effetto su catalogo e documentazione;
+> - la nota «Parallel-safe» del describe ora copre anche E4.
+>
+> I controlli di test-author: `prettier --check` verde; ESLint non applicabile (non c'è né la configurazione né il
+> binario); `tsc --noEmit -p tsconfig.e2e.json` dà 0 errori nello spec, e 2 preesistenti in file senza diff
+> (`onboarding-tour.spec.ts:863`, `src/lib/types/files.ts:9`).
+>
+> La sua lettura del layout a 405 px: stesso layout del telefono a 375 (nessun breakpoint fra 375 e 640; `sm` 640,
+> `lg` 1024), 66 px di cornice (`main p-4` + `p-4` della card + bordo), lo stesso livello della barra.
+>
+> La mia revisione:
+> - `CANDLE_MIN_SLOT_PX` esiste (`timeSeriesAggregation`, usato a `growthLadderAxis.ts:272`);
+> - `LADDER_MIN_BODY_PX` è a `GrowthChart.svelte:198`;
+> - i numeri del commento si ricalcolano: 0,93·309 − 31,36 = 256,01; 0,93·294 − 55 ≈ 218,4;
+>   46,33 − 0,03·632 = 27,37;
+> - `restorePrivacyOff` è idempotente;
+> - nessun altro testo descrive E4 a 375 px.
+>
+> Il dubbio aperto da test-author: un rosso dentro `openLadder` non registra l'area, ma era così anche prima.
+>
+> **Passo 3, `front-portfolio dashboard` completo nella 6157** ✅ 2026-10-02 12:22. Prima in seriale, come il gate
+> 11; poi con `--workers 4`, come in Brief 03 ed E7, perché lo spec ha blocchi paralleli e la nota «Parallel-safe»
+> ora copre anche E4.
+>
+> | corsa | ora | esito | E4 |
+> |---|---|---|---|
+> | prima (gate 11) | 11:18:14–11:20:12 | rc 1, 23/24, 1 worker, 1,5 min | rosso alla precondizione: a 375 px area ~218 px, `1D` non offerto |
+> | dopo, seriale | 12:17:05–12:18:45 | rc 0, **24/24**, 1 worker, 1,3 min | verde |
+> | dopo, `--workers 4` | 12:21:53–12:22:42 | rc 0, **24/24**, 4 worker, 29,4 s (invocazione 48 s) | verde in 5,7 s |
+>
+> - Le prove di E4, identiche nelle due corse: `[S7] E4 zoomed` dà `W` 324 e l'area (x, y, larghezza, altezza) =
+>   (37,09; 10; 273,95; 297,72), slot 2,95 px; `[S7] E4 window` dà `count` 61, slot 4,49 px. La larghezza cade
+>   nella banda [232,5; 328), 41 px sopra il minimo e 54 sotto il massimo. Il conto torna: etichette
+>   37,09 − 0,03 × 324 = 27,37 px, come quelle mascherate di E3; area 0,93 × 324 − 27,37 = 273,95. E
+>   405 − 66 − 324 = 15: il gutter c'è anche ora, quindi la correzione regge proprio nel caso peggiore.
+> - Gli altri `[S7]`, identici nelle due corse: E1-1m/1w `W` 632; E2 area x 46,41; E3 dopo la privacy area x 46,33
+>   a `W` 632; S7-phone (375 px) `W` 294, area 218,72, slot 16,82.
+> - La privacy sta solo in `localStorage` (`privacyStore.svelte.ts:38`, `:47`), cioè nel contesto del singolo
+>   test: la nota «Parallel-safe» vale per costruzione, e la corsa con 4 worker lo conferma.
+> - Istantanee del runner `test-db_20261002_121845` e `test-db_20261002_122242`, in `.testLog/00_archive/`
+>   (ignorata da `.gitignore:119`); log `/tmp/libreFolio_i_gk_e2e_dashboard_fix.log` e `…_fix_w4.log`.
+>
+> **Passo 4, gli spec sensibili alla larghezza** ✅ 2026-10-02 12:07. Ho cercato negli E2E chi rimpicciolisce la
+> finestra e misura pixel: oltre a brokers-detail (gate 12) e dashboard (in correzione), sono `asset-mobile-layout`
+> (390/360), `support-copy-and-go` (560) e `toolbar-width-sweep` (1700 → 320), tutti e tre di K, entrati con
+> `23828b411`. Il progetto mobile (iPhone, `isMobile`) ha scrollbar sovrapposte e nessun gutter.
+>
+> | spec | ora | esito |
+> |---|---|---|
+> | `front-asset asset-mobile-layout` | 12:00:25–12:01:21 | rc 0, **11/11** in 27,2 s |
+> | `front-utility support-copy-and-go` | 12:01:26–12:02:15 | rc 0, **12/12** in 32,1 s |
+> | `front-utility toolbar-width-sweep` | 12:02:20–12:06:36 | rc 1, **13/15**: rossi `dashboard › fr` e `dashboard › es` |
+>
+> > **⚠️ Fuori pista — il rosso dello sweep è la stessa causa di S7-E4, e non è mio.** A vw 320 la barra misura
+> > 239 px = 320 − 66 − 15: c'è il gutter. Il commento dello spec (`:17-21`) assume «headless: no scrollbar
+> > gutter», cioè barra = vw − 66, minimo 254 px. Il selettore «tutti i broker» (`allBrokers`, «Tous les
+> > courtiers» / «Todos los brókers») sporge di 253,5 − barra px (fr; 253,2 es): +4,5 a barra 249 (vw 330), +14,5
+> > a 239 (vw 320). Senza gutter la barra più stretta è 254 e ci sta per 0,5 px; le larghezze 249 e 239 esistono
+> > solo col gutter. L'italiano, più corto, passa. Tra `23828b411` e `9e9820253` sono identici la pagina
+> > dashboard, lo spec, `utils/layout/`, `ui/toolbar/`, `app.css`; nessuno dei 21 file `frontend/src` del mio ramo
+> > è nella barra dei filtri, e il mio delta i18n (`partialBucket`, `pnlCandlesHypothetical`) non tocca
+> > `allBrokers`. Quindi il rosso si riproduce su `dev_release2` con l'host di oggi. Per mandato lo segnalo al
+> > coordinator prima di qualsiasi correzione; lo spec e la calibrazione D5 sono di K, fuori dal mio perimetro, e
+> > non li tocco. Log `/tmp/libreFolio_i_gk_e2e_sweep.log`.
+> >
+> > **Decisione del coordinator (~12:10):** vale il mio default. `toolbar-width-sweep` fr/es entra nel mio handoff
+> > come **rosso noto fuori perimetro**, stessa causa (il gutter di 15 px dell'host), riproducibile su
+> > `dev_release2`; il coordinator lo instrada a K. Io proseguo con la correzione di S7-E4 e la corsa completa della
+> > dashboard.
+>
+> **Passo 5, i gate 13–15** ✅ 2026-10-02 11:59. Sono già nella tabella del passo 2 (`asset-detail` 29/29,
+> `mkdocs build` rc 0, `check-links` con il solo D28). Li ho fatti girare dalle 11:55 alle 11:59, mentre test-author
+> scriveva lo spec senza corsia. Nessuno dei tre dipende da `dashboard.spec.ts`, l'unico file della correzione:
+> l'E2E gira solo `e2e/assets/asset-detail.spec.ts`, `mkdocs build` legge `mkdocs_src/`, `check-links` cerca i link
+> in `frontend/src` (`scripts/docs_links.py:203-208`) e non negli E2E. Non vanno ripetuti.
+>
+> > **⚠️ Fuori pista — la misura del gutter, reperto di K inoltrato dal coordinator** ✅ 2026-10-02 12:24
+> >
+> > - **Il reperto.** In headless `innerWidth − document.documentElement.clientWidth` può dare 0 mentre
+> >   `scrollbar-gutter: stable` riserva comunque 15 px; la misura giusta è
+> >   `innerWidth − document.documentElement.getBoundingClientRect().width`, 15 sia headless sia headed. Per la
+> >   stessa ragione un controllo di sbordo `scrollWidth − clientWidth` conta il gutter nascosto come spazio libero.
+> > - **La correzione non lo misura.** Il commento di `LADDER_E4_PHONE` (`dashboard.spec.ts:1042-1066`) cita il
+> >   gutter come valore («0 or 15px by host») e rimanda a `[S7] E4 zoomed`, da cui si ricava senza misure del DOM:
+> >   405 − 66 − `W` = 15. Nessuna modifica allo spec.
+> > - **La mia sonda delle 11:24 usava `clientWidth`**, su una pagina minima. L'ho estesa per confrontare le due
+> >   misure sulla stessa pagina (`/tmp/libreFolio_i_gk_scrollbar_probe2.cjs`: stesso `@playwright/test`, Chromium
+> >   149.0.7827.55 headless, descrittore Desktop Chrome; nessun server, nessun DB, nessuna corsia). Alle 12:23, a
+> >   375, 405 e 1440 px, con pagina alta e bassa: **15 e 15** con `stable`, **0 e 0** con `auto`. Su questo host e
+> >   su una pagina minima le due misure coincidono: la differenza vista da K qui non si riproduce, e la causa
+> >   (pagina, contesto, stato delle barre dell'host in quel momento) non l'ho indagata.
+> > - **Conseguenze.** Il 15 del triage resta, confermato da `W` nel gate 11 e nel passo 3. Per le misure future
+> >   adotto quella di K, l'unica che regge in tutti i casi osservati.
+
+**Chiusura di G-K — registro e `CHECKPOINT READY`** ✅ 2026-10-02 12:29
+
+> **Note implementazione:**
+> - Base `9e9820253` (genitori `211e6b638` + `23828b411`); `dev_release2` = `23828b411` (rimisurato alle 12:29):
+>   HEAD avanti di 50 commit, indietro di 0. Delta: 2 file tracciati modificati, nessun file nuovo, stage vuoto:
+>   - `frontend/e2e/portfolio/dashboard.spec.ts` (+64/−14, blob `57ae4e61a847`), la correzione di `S7-E4`;
+>   - questo piano.
+> - Corretto nel mio triage un rimando: `LADDER_MIN_BODY_PX` è a `GrowthChart.svelte:198`, non a `:196`
+>   (verificato a HEAD con `git grep`).
+> - Esclusi: i 29 archivi di oggi in `.testLog/00_archive/`, 15 del DB della corsia e 14 di log (cartella ignorata
+>   da `.gitignore:119`), e i risultati di Playwright; fuori dal repo, in `/tmp/`, i log, le sonde e i messaggi di
+>   commit.
+> - Commit proposti, due, sopra `9e9820253`, lo spec per primo. Messaggi ASCII, oggetti di 40 e 45 caratteri,
+>   righe al massimo di 63:
+>   1. `test(charts): stabilize S7-E4 plot width`, solo lo spec (`/tmp/libreFolio_commit_i_gk_test.txt`, sha256
+>      `a3499a02b7ca3054…`);
+>   2. `docs(journal): record G-K gates and S7-E4 fix`, questo piano (`/tmp/libreFolio_commit_i_gk_journal.txt`,
+>      `74056ff1f2f75370…`).
+> - Rossi che restano, entrambi accettati dal coordinator: `check-links` D28 (fino ad Aphra) e
+>   `toolbar-width-sweep` `dashboard › fr/es` (il gutter dell'host; spec di K, instradato a K).
+> - CHANGELOG: restano le voci proposte a S12; la correzione di E4 tocca solo un test, nessuna voce.
+> - Conflitti attesi: nessuno col target, che è contenuto per intero in HEAD (0 indietro): l'integrazione è un
+>   avanzamento. Gli altri rami li confronta il coordinator.
+> - File temporanei: cancellati i file di lavoro che questo piano non cita (`/tmp/libreFolio_i_cl_*` e i
+>   `libreFolio_i_gk_*` di lavoro). Restano, citati qui: i log dei gate (`/tmp/libreFolio_i_gk_*.log`),
+>   `libreFolio_i_gk_e4_fix.diff` e le due sonde.
+> - Verifiche finali (12:28): `git diff --check` pulito, stage vuoto, 0 file non tracciati, 2 file tracciati;
+>   porte 6157 e 6167 senza listener (`lsof` vuoto), nessun processo della corsia.
+> - Stato: FROZEN, nessun edit, test, server o Git fino al prossimo messaggio del coordinator.
