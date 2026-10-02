@@ -3128,7 +3128,7 @@
         },
         "l3": {
           "title": "Quanto ha pagato ciascuno per il suo rischio?",
-          "description": "Per ogni asset selezionato, quanto ha oscillato e quanto ha reso in media all'anno, nel grafico e nella tabella; con un benchmark scelto nella Dashboard, anche quanto si è mosso insieme a lui.",
+          "description": "Per ogni asset selezionato, quanto ha oscillato e quanto ha reso in media all'anno, nella tabella e nel grafico; con un benchmark scelto in cima alla scheda, anche quanto si è mosso insieme a lui.",
           "expectedReturn": "Rendimento medio annuo",
           "correlation": "Correlazione",
           "scatterNote": "Ogni punto è un asset: l'asse orizzontale dice quanto ha oscillato, quello verticale quanto ha reso in media all'anno. Per un asset molto volatile la media è più alta di quanto ha reso davvero.",
@@ -3186,6 +3186,10 @@
         "banner": "Con il periodo scelto, {count, plural, one {# asset scelto non ha prezzi} other {# asset scelti non hanno prezzi}} per una parte dell'intervallo.",
         "button": "Usa il periodo in cui tutti hanno prezzi (dal {start} al {end})",
         "hint": "Sposta il periodo in alto sull'intervallo in cui sono quotati tutti gli asset scelti che hanno prezzi. Tornano nell'analisi: {names}."
+      },
+      "benchmark": {
+        "measuredHint": "Questo benchmark è anche uno degli asset misurati e non può fare da metro a sé stesso: beta e correlazione restano fuori. Scegline un altro per riaverle.",
+        "help": "L'asset di riferimento, il «rischio di base»: beta dice, asset per asset, se ciascuno si è mosso più (sopra 1) o meno (sotto 1) di lui; la correlazione, quanto insieme."
       }
     },
     "metrics": {

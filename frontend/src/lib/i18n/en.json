@@ -3128,7 +3128,7 @@
         },
         "l3": {
           "title": "What did each of these pay for its risk?",
-          "description": "For each selected asset, how much it swung and how much it returned on average per year, in the chart and in the table; with a benchmark chosen on the Dashboard, also how much it moved along with it.",
+          "description": "For each selected asset, how much it swung and how much it returned on average per year, in the table and in the chart; with a benchmark chosen at the top of the tab, also how much it moved along with it.",
           "expectedReturn": "Average annual return",
           "correlation": "Correlation",
           "scatterNote": "Each dot is an asset: the horizontal axis shows how much it swung, the vertical one how much it returned on average per year. For a very volatile asset the average is higher than what it actually returned.",
@@ -3186,6 +3186,10 @@
         "banner": "With the chosen period, {count, plural, one {# selected asset has} other {# selected assets have}} no prices for part of it.",
         "button": "Use the period in which all have prices ({start} – {end})",
         "hint": "Moves the period at the top to the span in which every selected asset with prices is quoted. Back in the analysis: {names}."
+      },
+      "benchmark": {
+        "measuredHint": "This benchmark is also one of the assets being measured and cannot be used as its own yardstick: beta and correlation are left out. Choose another one to get them back.",
+        "help": "The reference asset, the \"baseline risk\": beta tells, asset by asset, whether each moved more (above 1) or less (below 1) than it; correlation, how closely they moved together."
       }
     },
     "metrics": {
