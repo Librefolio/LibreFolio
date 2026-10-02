@@ -527,15 +527,15 @@
     function brokerLabelHtml(brokerId: number | null): string {
         if (brokerId == null) return '?';
         const info = getBrokerInfo(brokerId);
-        const name = escapeHtml(info?.name ?? brokerName(brokerId));
+        const nameHtml = escapeHtml(info?.name ?? brokerName(brokerId));
         const role = getBrokerRole(brokerId);
         const roleSvg = getRoleSvgHtml(role);
-        const iconTag = getBrokerIconHtmlById(brokerId, brokers, {
+        const iconHtml = getBrokerIconHtmlById(brokerId, brokers, {
             width: 16,
             height: 16,
             style: 'display:inline-block;vertical-align:middle;margin-right:3px;border-radius:2px',
         });
-        return `${iconTag}<strong>${name}</strong> ${roleSvg}`;
+        return `${iconHtml}<strong>${nameHtml}</strong> ${roleSvg}`;
     }
 
     function linkedPairTooltip(d: DisplayRow): string {
@@ -764,12 +764,12 @@
                 void $assetStoreVersion;
                 if (!d.tx.asset_id) return '—';
                 const info = getAssetInfo(d.tx.asset_id);
-                const name = escapeHtml(info?.display_name ?? `#${d.tx.asset_id}`);
+                const nameHtml = escapeHtml(info?.display_name ?? `#${d.tx.asset_id}`);
                 const iconSrc = info?.icon_url ?? (info?.asset_type ? getAssetTypeIconUrl(info.asset_type) : null);
                 const iconHtml = iconSrc ? `<img src="${escapeHtml(iconSrc)}" alt="" width="20" height="20" loading="lazy" class="inline-block mr-1 align-middle" onerror="this.style.display='none'" />` : '';
                 return {
                     type: 'html',
-                    html: `<span role="link" tabindex="0" data-asset-navigate="${d.tx.asset_id}" class="inline-flex items-center gap-1 min-w-0 cursor-pointer group" data-testid="tx-asset-link-${d.tx.asset_id}">${iconHtml}<span class="min-w-0 ${overflowScrollTextClass}">${name}</span><span class="shrink-0 opacity-0 group-hover:opacity-60 transition-opacity text-gray-400 dark:text-gray-500 text-[10px] ml-0.5">↗</span></span>`,
+                    html: `<span role="link" tabindex="0" data-asset-navigate="${d.tx.asset_id}" class="inline-flex items-center gap-1 min-w-0 cursor-pointer group" data-testid="tx-asset-link-${d.tx.asset_id}">${iconHtml}<span class="min-w-0 ${overflowScrollTextClass}">${nameHtml}</span><span class="shrink-0 opacity-0 group-hover:opacity-60 transition-opacity text-gray-400 dark:text-gray-500 text-[10px] ml-0.5">↗</span></span>`,
                 };
             },
         },
@@ -826,7 +826,12 @@
             cell: (d) => {
                 const tags = d.tx.tags ?? [];
                 if (tags.length === 0) return '—';
-                const html = tags.map((tag) => `<span class="tx-tag-badge" style="${getStringBadgeStyle(tag)}">${escapeHtml(tag)}</span>`).join('');
+                const html = tags
+                    .map((tag) => {
+                        const badgeStyle = getStringBadgeStyle(tag);
+                        return `<span class="tx-tag-badge" style="${badgeStyle}">${escapeHtml(tag)}</span>`;
+                    })
+                    .join('');
                 return {type: 'html', html: `<span class="tx-tag-list" data-testid="tx-tag-list-${d.tx.id}">${html}</span>`};
             },
         },
@@ -1097,7 +1102,6 @@
             color: #cbd5e1;
         }
         .tx-table-wrap .tx-cash-cell .emoji-flag {
-            font-family: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif;
             line-height: 1;
         }
         .tx-table-wrap .currency-code {

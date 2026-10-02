@@ -189,3 +189,71 @@ describe('ToastContainer — existing dismissal contracts', () => {
         expect(root.style.transform).toBe('');
     });
 });
+
+/**
+ * Evaluate `expression` in the page's own realm — the one inline handlers run in — and return the
+ * result as a string. Vitest's jsdom environment hands the test the Node global as `window` (even
+ * `document.defaultView` answers it, measured), while jsdom compiles inline handlers against its own
+ * window object: a global written by a payload is invisible from the test, and readable only from
+ * another inline handler. This runs one on a probe element and reads back what it computed.
+ */
+function inPage(expression: string): string | null {
+    const probe = document.createElement('i');
+    probe.setAttribute('onclick', `this.setAttribute('data-result', String(${expression}))`);
+    document.body.appendChild(probe);
+    probe.click();
+    const result = probe.getAttribute('data-result');
+    probe.remove();
+    return result;
+}
+
+/**
+ * Fire on every image of `root` the `error` a browser fires for `src=x` — after re-arming the inline
+ * handlers. jsdom leaves an `on*` attribute inert when its element was parsed inside a `<template>` and
+ * then moved into the page, which is exactly how Svelte inserts `{@html}` (measured on jsdom 30: a
+ * moved node runs nothing; the same node with its attribute set again runs it). A browser compiles the
+ * attribute when the event fires instead — `e2e/assets/asset-name-xss.spec.ts` proves it in Chromium —
+ * so setting it again reproduces the browser, it does not invent a handler: one the sanitiser removed
+ * stays removed. No clock is involved; the handler, if any, has run when this returns.
+ */
+function fireImageErrors(root: Element): void {
+    for (const el of root.querySelectorAll('*')) {
+        for (const name of el.getAttributeNames()) if (name.toLowerCase().startsWith('on')) el.setAttribute(name, el.getAttribute(name) ?? '');
+    }
+    for (const img of root.querySelectorAll('img')) img.dispatchEvent(new Event('error'));
+}
+
+describe('ToastContainer — a hostile message is sanitised, not executed (K step 13, item 0)', () => {
+    // The shape of a real toast: an icon, an emoji flag, text — with the icon turned into a payload.
+    const HOSTILE = '<img src=x onerror="window.__k13Toast=1"><span class="emoji-flag">🇮🇹</span> Saved';
+
+    afterEach(() => {
+        inPage('delete window.__k13Toast');
+    });
+
+    it('renders the message without its handler and keeps its harmless markup', () => {
+        // The probe must be able to see a handler run, or "nothing ran" below would mean nothing.
+        expect(inPage('(window.__k13Probe = 7)')).toBe('7');
+        expect(inPage('window.__k13Probe')).toBe('7');
+        inPage('delete window.__k13Probe');
+
+        const {root} = mountToast(HOSTILE);
+        expect(root).toHaveTextContent('Saved');
+        // The flag span is markup the app legitimately sends in toasts: the class is the subject here,
+        // not a selector of convenience — a sanitiser that stripped it would break every flag.
+        const flag = root.querySelector('span.emoji-flag');
+        expect(flag).not.toBeNull();
+        expect(flag).toHaveTextContent('🇮🇹');
+
+        expect
+            .soft(
+                [...root.querySelectorAll('[onerror]')].map((el) => el.outerHTML),
+                'no element of the toast may carry an onerror attribute',
+            )
+            .toEqual([]);
+
+        // Fire the image error a browser would fire: a handler that survived runs now.
+        fireImageErrors(root);
+        expect.soft(inPage('window.__k13Toast'), 'the payload ran as script in the toast').toBe('undefined');
+    });
+});

@@ -1232,8 +1232,11 @@
          stackFilters: [ datepicker                     | col  ]
                       [ search active currency type ×  | btns ]
          oneColumn:    [ datepicker ] [ search active × ] [ currency type ] [ 2×2 btns, now BELOW ] -->
-    <PageToolbar thresholds={{oneRow: 1340, denseRow: 850, stackFilters: 440, oneColumn: 400, labelHideActions: 250, labelHideTabs: 370}} tabs={assetTabs} {activeTab} ontabchange={handleAssetTabChange} testId="assets-controls" filterRowTestId="assets-filter-bar" layoutDebugName="assetsList">
+    <PageToolbar thresholds={{oneRow: 1340, denseRow: 1020, stackFilters: 520, oneColumn: 400, labelHideActions: 250, labelHideTabs: 370}} tabs={assetTabs} {activeTab} ontabchange={handleAssetTabChange} testId="assets-controls" filterRowTestId="assets-filter-bar" layoutDebugName="assetsList">
         {#snippet filters({layoutMode, filtersStacked})}
+            <!-- In oneColumn (phones) the four filters share each row instead of keeping their
+                 176/160 px: two of them no longer fit side by side below a ~314 px bar. -->
+            {@const filterWidthClass = layoutMode === 'oneColumn' ? 'flex-1 min-w-0' : 'w-44 min-w-[160px]'}
             <!-- DateRangePicker. Round 14 bugfix: this wrapper is `contents` (exits the box
                  model — data-testid stays queryable, it's just a DOM attribute) rather than
                  `flex flex-1 ...` — DateRangePicker's own root ALREADY self-applies
@@ -1263,7 +1266,7 @@
                 <div class="flex items-center gap-2 {filtersStacked ? 'w-full justify-around' : ''}">
                     <!-- Search — Round 14: min-w bumped (was a flat w-44/176px that felt too
                          cramped) so it stays comfortably readable even under pressure. -->
-                    <div class="relative w-44 min-w-[160px]">
+                    <div class="relative {filterWidthClass}">
                         <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
                         <input
                             class="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-1 focus:ring-libre-green focus:border-libre-green"
@@ -1281,7 +1284,7 @@
                          Round 15: fixed w-44 (matches Search above and the Currency filter
                          below, once swapped) + flex-1 buttons so the pill splits evenly and
                          lines up as a column with Row 2 in every language. -->
-                    <div class="flex w-44 min-w-[160px] rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden" data-testid="assets-active-filter">
+                    <div class="flex {filterWidthClass} rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden" data-testid="assets-active-filter">
                         <button
                             type="button"
                             class="flex-1 px-3 py-1.5 text-xs font-medium border-r border-gray-200 dark:border-slate-600 transition-colors whitespace-nowrap
@@ -1313,7 +1316,7 @@
                 <div class="flex items-center gap-2 {filtersStacked ? 'w-full justify-around' : ''}">
                     <!-- Currency Filter (D10 — CurrencySearchSelect, adds to Set). w-44
                          matches Search above (was w-36) so column 1 lines up across rows. -->
-                    <div class="w-44 min-w-[160px]">
+                    <div class={filterWidthClass}>
                         <CurrencySearchSelect
                             allowedCurrencies={configuredCurrencies}
                             includeAll={true}
@@ -1336,7 +1339,7 @@
                          VISIBLE button (border/background) actually reach the wrapper's 176px,
                          not just the invisible wrapper box. justify-between then spreads the
                          label/chevron across that width instead of leaving them bunched left. -->
-                    <div class="relative w-44 min-w-[160px]">
+                    <div class="relative {filterWidthClass}">
                         <button
                             bind:this={typeFilterTriggerEl}
                             class="flex items-center justify-between gap-1.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors min-w-0

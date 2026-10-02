@@ -318,8 +318,8 @@
         const days = qtx.fx_info.fx_days_back ?? 0;
         const daysLabel = days === 0 ? $t('transactions.wac.fxTooltipSameDay') || 'same day' : `${days} ${$t('transactions.wac.fxTooltipDaysBefore') || 'days before'}`;
         const dateColor = days > 0 ? 'text-amber-500' : '';
-        const staleNote = days > 5 ? `<br/><span class="text-red-500">⚠️ ${$t('transactions.wac.fxTooltipStale') || 'Rate not up to date'}</span>` : '';
-        return `<b>FX:</b> 1 ${fromHtml} = ${rate} ${toHtml}<br/>📅 ${date} <span class="${dateColor}">(${daysLabel})</span>${staleNote}`;
+        const staleNoteHtml = days > 5 ? `<br/><span class="text-red-500">⚠️ ${$t('transactions.wac.fxTooltipStale') || 'Rate not up to date'}</span>` : '';
+        return `<b>FX:</b> 1 ${fromHtml} = ${rate} ${toHtml}<br/>📅 ${date} <span class="${dateColor}">(${daysLabel})</span>${staleNoteHtml}`;
     }
 
     function buildBadgeTooltipHtml(): string {

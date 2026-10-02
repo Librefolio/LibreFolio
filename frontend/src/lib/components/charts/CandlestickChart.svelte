@@ -18,6 +18,7 @@
   Used by: PriceChartFull (candlestick mode)
 -->
 <script lang="ts">
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
     import {attachChartReady} from '$lib/utils/chartReady';
@@ -509,7 +510,7 @@
 
                 // Overlay signal line
                 if (p.value !== null && p.value !== undefined) {
-                    html += `<div style="font-size:11px"><span style="color:${p.color ?? '#888'}">${truncateName(String(p.seriesName ?? ''))}: ${typeof p.value === 'number' ? p.value.toFixed(4) : p.value}</span></div>`;
+                    html += `<div style="font-size:11px"><span style="color:${p.color ?? '#888'}">${escapeHtml(truncateName(String(p.seriesName ?? '')))}: ${typeof p.value === 'number' ? p.value.toFixed(4) : p.value}</span></div>`;
                 }
             }
 

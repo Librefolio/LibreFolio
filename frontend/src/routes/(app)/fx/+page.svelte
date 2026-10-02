@@ -1002,7 +1002,7 @@
          oneColumn:    [ datepicker       ]  whole bar now ONE column — actions moved BELOW,
                        [ currency-filters ]  still a labeled 2×2 grid (only position changed)
                        [ actions ── 2×2   ]  (narrowest tier — Round 12 removed iconOnly) -->
-    <PageToolbar thresholds={{oneRow: 1120, denseRow: 930, stackFilters: 440, oneColumn: 400, labelHideActions: 260, labelHideTabs: 370}} testId="fx-controls" filterRowTestId="fx-filter-bar" layoutDebugName="fxList">
+    <PageToolbar thresholds={{oneRow: 1120, denseRow: 1030, stackFilters: 560, oneColumn: 400, labelHideActions: 260, labelHideTabs: 370}} testId="fx-controls" filterRowTestId="fx-filter-bar" layoutDebugName="fxList">
         {#snippet filters({layoutMode, filtersStacked})}
             <!-- DateRangePicker. Round 14 bugfix: `contents` (not `flex flex-1 ...`) — see
                  assets/+page.svelte's equivalent wrapper for the full explanation. -->

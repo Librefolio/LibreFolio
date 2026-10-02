@@ -2087,28 +2087,52 @@ def generate_favicon():
 
 
 def generate_pwa_icons():
-    """Generate PWA icons (192x192, 512x512) from logo_square.png with white padding."""
+    """Generate the PWA icons from logo_square.png.
+
+    - icon-{192,512}.png (manifest "any"): the logo on white with ~12 % padding per side;
+    - icon-maskable-{192,512}.png (manifest "maskable"): the logo on the splash beige (the
+      manifest background_color), fitted so every logo pixel stays within 0.37 × size of the
+      centre — the maskable safe zone is a circle of 0.40 × size;
+    - apple-touch-icon.png (180×180): as "any", for iOS.
+
+    Every icon is flattened to opaque RGB: Android's splash and iOS paint transparent pixels
+    black. The logo is resized premultiplied (RGBa), so its transparent black pixels do not
+    bleed a dark fringe into the edge, and composited with alpha_composite, which keeps the
+    canvas opaque (paste with a mask blends the alpha channel too).
+    """
     from PIL import Image
+
     src = PROJECT_ROOT / "frontend" / "static" / "logo_square.png"
     icons_dir = PROJECT_ROOT / "frontend" / "static" / "icons"
     if not src.exists():
         print_warning("logo_square.png not found, skipping PWA icon generation")
         return
     icons_dir.mkdir(parents=True, exist_ok=True)
-    img = Image.open(src).convert("RGBA")
-    w, h = img.size
-    # Add ~12% white padding around the logo
-    padding_ratio = 0.12
+    logo = Image.open(src).convert("RGBA")
+    w, h = logo.size
+    white, beige = (255, 255, 255), (245, 244, 239)
+    any_logo_ratio = 1 / 1.24
+    maskable_reach = 0.37
+
+    # Farthest logo pixel from the centre, as a fraction of the logo side.
+    alpha = logo.getchannel("A").load()
+    cx, cy = (w - 1) / 2, (h - 1) / 2
+    logo_reach = max((((x - cx) ** 2 + (y - cy) ** 2) ** 0.5 for y in range(h) for x in range(w) if alpha[x, y]), default=0.0) / w or 0.5
+
+    def compose(size, background, logo_side):
+        resized = logo.convert("RGBa").resize((logo_side, logo_side), Image.LANCZOS).convert("RGBA")
+        layer = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        offset = (size - logo_side) // 2
+        layer.paste(resized, (offset, offset))
+        canvas = Image.new("RGBA", (size, size), background + (255,))
+        return Image.alpha_composite(canvas, layer).convert("RGB")
+
     for target_size in (192, 512):
-        padded_size = int(target_size * (1 + 2 * padding_ratio))
-        canvas = Image.new("RGBA", (padded_size, padded_size), (255, 255, 255, 255))
-        logo_size = target_size
-        resized = img.resize((logo_size, logo_size), Image.LANCZOS)
-        offset = (padded_size - logo_size) // 2
-        canvas.paste(resized, (offset, offset), resized)
-        final = canvas.resize((target_size, target_size), Image.LANCZOS)
-        final.save(icons_dir / f"icon-{target_size}.png")
-    print_success(f"PWA icons generated (192×192, 512×512 from {w}×{h} logo_square)")
+        compose(target_size, white, round(target_size * any_logo_ratio)).save(icons_dir / f"icon-{target_size}.png", optimize=True)
+        maskable_side = int(target_size * maskable_reach / logo_reach)
+        compose(target_size, beige, maskable_side).save(icons_dir / f"icon-maskable-{target_size}.png", optimize=True)
+    compose(180, white, round(180 * any_logo_ratio)).save(icons_dir / "apple-touch-icon.png", optimize=True)
+    print_success(f"PWA icons generated (any 192/512, maskable 192/512, apple-touch 180 from {w}×{h} logo_square)")
 
 
 def stamp_service_worker():

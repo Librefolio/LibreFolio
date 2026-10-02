@@ -15,6 +15,7 @@
   Used by: PriceChartCompact, PriceChartFull (line mode)
 -->
 <script lang="ts">
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
     import {attachChartReady} from '$lib/utils/chartReady';
@@ -752,8 +753,8 @@
                               // Signals on non-primary axes have their own scale — show without % suffix
                               const valueSuffix = axisIdx === 0 ? suffix : '';
                               const axisLabel = signalAxisLabelMap.get(axisIdx);
-                              const axisNote = axisLabel ? ` <span style="font-size:10px;color:#94a3b8">[${axisLabel}]</span>` : '';
-                              html += `<br/>${colorDot}${truncateName(String(p.seriesName ?? ''))}: ${Number(value).toFixed(4)}${valueSuffix}${axisNote}`;
+                              const axisNoteHtml = axisLabel ? ` <span style="font-size:10px;color:#94a3b8">[${escapeHtml(axisLabel)}]</span>` : '';
+                              html += `<br/>${colorDot}${escapeHtml(truncateName(String(p.seriesName ?? '')))}: ${Number(value).toFixed(4)}${valueSuffix}${axisNoteHtml}`;
                               const representativePoint = overlayPointMeta.get(`${p.seriesName}|${date}`);
                               if (representativePoint?.representativeDate && representativePoint.representativeDate !== date) {
                                   html += ` <span style="font-size:10px;color:#94a3b8">(${$t('chart.tooltip.valueAt', {values: {date: representativePoint.representativeDate}})})</span>`;

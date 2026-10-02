@@ -16,5 +16,5 @@ export function entityDetailLinkHtml(target: EntityLinkTarget, label: string): s
         }
         href = `/fx/${target.slug}`;
     }
-    return `<a href="${href}" class="underline font-semibold hover:no-underline" data-testid="toast-${target.kind}-link">${escapeHtml(label)}</a>`;
+    return `<a href="${escapeHtml(href)}" class="underline font-semibold hover:no-underline" data-testid="toast-${target.kind}-link">${escapeHtml(label)}</a>`;
 }
