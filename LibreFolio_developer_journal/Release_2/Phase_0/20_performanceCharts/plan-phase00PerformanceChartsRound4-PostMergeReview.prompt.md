@@ -72,7 +72,8 @@ Indicatore di lettura rapida: va riletto **a ogni consegna**, non a ogni sospett
 | S11 | Docs (docs-writer) | S2b, S3, S4b, S8, S9 | 🔄 in parte, ✅ 2026-09-24 (autorizzata dal coordinator alle 14:45; registro «S11 in parte»): `charts.en.md` (memoria della vista, privacy di Crescita, didascalia delle candele, candele senza broker, memoria di Allocazione) e `positions.en.md` (privacy di Performance). Accettato dal coordinator (15:24) ed entrato in C3 (`671d4ab49`). Il resto dopo S7/S8, più due voci aggiunte (coordinator, 16:07): `index.en.md`, che conta tre schede invece di quattro (reperto di J), e la deriva dei nomi, che c'è anche nella mia frase di C3 (registro «S11-finale — voci aggiunte») · ▶️ ripresa 2026-10-01 (coordinator, dopo `1c568bfe0`): fatti verificati in tre passate; docs-writer ✅ 00:00; revisione con due correzioni mie; `mkdocs build` EXIT 0 e `check-links` con il solo rosso di D28, entrambi rieseguiti sui blob finali · ✅ **2026-10-02 00:12** (registro «S11-finale — le tre pagine inglesi riallineate al codice») |
 | S12 | Handoff | S10, S11, S2c | ⏳ · ▶️ avviata 2026-10-02 (coordinator, dopo `1c568bfe0`): merge-tree contro `ed3bf870a` pulito, vitest intero 6733/6733, S10 chiusa, residui, CHANGELOG e commit proposti · ✅ **2026-10-02 00:36** (registro «S12 — handoff finale») |
 | R-D15 | Review manuale di D15 sulla copia nella 6167, con il developer | S12, D15 | ▶️ avviata 2026-10-02 09:54 (coordinator, 09:45, dopo `e11298294`): build, server staccato, domanda al developer nella mia finestra · ⏸️ **sospesa 10:03**: il developer chiede di fare il punto con il coordinator (la torta qui non ha il secondo anello, che sta nei rami di Risk e F) · ⏭️ **spostata alla review della revisione unita** (2026-10-02 10:05): la torta col secondo anello vive solo nella famiglia di Risk e nessuna build mostra insieme i due lavori. Decisione del developer, verbatim: «Sì, procedi così». Server spento alle 10:35, 6167 libera, copia cancellata |
-| G-K | Gate sulla revisione unita dopo K (`9e9820253`) | R-D15, merge di `dev_release2` | ▶️ avviata 2026-10-02 11:05 (coordinator, 11:04, dopo il merge `9e9820253`): controllo in sola lettura ✅ 11:05; gate 1–15 nella 6157, un rosso nuovo (`S7-E4`), triage ✅ 11:50: assunzione, il gutter dell'host più le etichette dei dati; correzione solo test autorizzata alle 11:54, scritta da test-author, dashboard 24/24 in seriale e con 4 worker ✅ 12:22 · ✅ **2026-10-02 12:29**: rossi noti D28 e `toolbar-width-sweep` fr/es (a K); 2 commit proposti sopra `9e9820253` (registro «G-K») |
+| G-K | Gate sulla revisione unita dopo K (`9e9820253`) | R-D15, merge di `dev_release2` | ▶️ avviata 2026-10-02 11:05 (coordinator, 11:04, dopo il merge `9e9820253`): controllo in sola lettura ✅ 11:05; gate 1–15 nella 6157, un rosso nuovo (`S7-E4`), triage ✅ 11:50: assunzione, il gutter dell'host più le etichette dei dati; correzione solo test autorizzata alle 11:54, scritta da test-author, dashboard 24/24 in seriale e con 4 worker ✅ 12:22 · ✅ **2026-10-02 12:29**: rossi noti D28 e `toolbar-width-sweep` fr/es (a K); 2 commit proposti sopra `9e9820253` (registro «G-K») · ✅ **committato 12:40 e integrato**: `9a77b1b61`, `6de5646a1`; `dev_release2` = `975a115ae`, col CHANGELOG del coordinator (registro «Dopo l'integrazione») |
+| P-tmp | I file di `/tmp` derivati dalla copia di prod del 29/09 (le sonde dei margini e del crash `axisBuilder`) | integrazione, OK del coordinator (12:47) | ✅ **2026-10-02 12:51**: trovati nel controllo dopo l'integrazione; 15 file cancellati senza aprirli, `ls` come prova. I 5 citati nel piano non esistono più; i reperti restano scritti nei registri che li citano (registro «Dopo l'integrazione») |
 
 ## 0. Come si è arrivati a questa versione
 
@@ -6505,3 +6506,56 @@ comando la porta 6157 è libera.
 > - Verifiche finali (12:28): `git diff --check` pulito, stage vuoto, 0 file non tracciati, 2 file tracciati;
 >   porte 6157 e 6167 senza listener (`lsof` vuoto), nessun processo della corsia.
 > - Stato: FROZEN, nessun edit, test, server o Git fino al prossimo messaggio del coordinator.
+
+### Dopo l'integrazione — i file di `/tmp` della copia di prod del 29/09 cancellati ✅ 2026-10-02 12:51
+
+> **Note implementazione:**
+> - **L'integrazione** (messaggio del coordinator delle 12:41). I due commit di G-K, `9a77b1b61` (lo spec) e
+>   `6de5646a1` (questo piano), committati alle 12:40, sono entrati in `dev_release2` con un avanzamento. Sopra, il
+>   coordinator ha aggiunto `9fb07c3d7` (il CHANGELOG del mio lavoro) e `975a115ae` (il TODO): `dev_release2` =
+>   `975a115ae`.
+> - **Il mio controllo in sola lettura** (12:43; script e log `/tmp/libreFolio_i_integ_check.*`, copiati nei file di
+>   sessione, in `files/postinteg/`):
+>   - HEAD `6de5646a1` è contenuto in `dev_release2`: 0 commit avanti, 2 indietro;
+>   - ogni commit tocca un solo file, con il blob rivisto (`57ae4e61a847` lo spec, `354f38f63889` il piano);
+>     l'albero `f76a266ba124` è quello del coordinator; i messaggi sono identici a quelli proposti;
+>   - `9fb07c3d7` tocca solo `CHANGELOG.md`, `975a115ae` solo `TODO_FUTURI.md`;
+>   - albero di lavoro pulito, stash vuoto; 6157 e 6167 senza listener; la copia della 6167 non c'è più.
+> - **Il reperto.** In `/tmp` restavano 15 file miei derivati dalla copia di prod del 29/09, leggibili da tutti
+>   (`-rw-r--r--`) e quindi, forse, con dati del developer. Non li ho aperti. Il file della password l'avevo già
+>   cancellato il 29/09.
+>   - 12 `libreFolio_i_margin_*`: la sonda dei margini dei lotti, con il log del server 6167;
+>   - 3 `libreFolio_i_axisbuilder_*`: le sonde del crash `axisBuilder`.
+> - **Nessun altro file mio in `/tmp` viene dalle copie**, verificato senza stampare dati:
+>   - i più vecchi sono del 28/09: l'uscita della sonda di S6 (24/09) non c'è più; la sonda e i log della verifica V
+>     (01/10) li avevo cancellati quel giorno;
+>   - delle sonde rimaste, solo quella della toolbar (30/09) parla con un server, `127.0.0.1:6157`. Nel log di quel
+>     server ho contato le occorrenze dei due percorsi dei dati: 0 della copia, 2 della corsia;
+>   - i 5 script che nominano la 6167 o la copia sono controlli e la procedura della copia, senza dati.
+> - **Cancellati alle 12:51:13**, con l'autorizzazione del coordinator delle 12:47: senza aprirli, con un `ls` come
+>   prova. Script `/tmp/libreFolio_i_tmpclean.sh`, log `/tmp/libreFolio_i_tmpclean.log`:
+>   - guardie prima di `rm`: la lista ha 15 nomi e coincide con quelli che trovano i due glob; ogni file è regolare,
+>     non è un link ed è mio; `lsof` non trova processi che li tengano aperti → `GUARDS_OK`;
+>   - `rm --` per nome esplicito: rc 0;
+>   - prova: `ls -l` dei 15 percorsi → «No such file or directory» per tutti, rc 1; in `/tmp/` restano 0 nomi che
+>     iniziano con `libreFolio_i_margin_` o `libreFolio_i_axisbuilder_`.
+>
+> > **⚠️ Fuori pista — `/tmp` è un link.** Su macOS `/tmp` punta a `private/tmp`: `ls -l /tmp` mostra il link e
+> > non il contenuto, e per questo una mia prima scansione dei nomi è uscita vuota. L'ho rifatta con la barra finale
+> > (`ls -l /tmp/`). Il conteggio della prova usava `ls -1 /tmp`, che segue il link; rifatto con la barra: 0.
+>
+> **I 5 file citati in questo piano non esistono più. I loro reperti restano scritti nei registri che li citano:**
+>
+> | file cancellato | citato nel registro | il reperto, scritto lì |
+> |---|---|---|
+> | `libreFolio_i_axisbuilder_diag.log`, `libreFolio_i_axisbuilder_gantt_diag.log` | «Il crash `axisBuilder` dei grafici dei lotti — misura, decisione, rosso affidato» | il modello che crasha ha un solo `xAxis`; il meccanismo; la tabella dei percorsi |
+> | `libreFolio_i_axisbuilder_gantt_diag_after.log` | «Il crash `axisBuilder` — verde E2E e sonde sulla copia» | 0 LFPROBE e 0 PAGEERROR, contro le 36 righe di prima |
+> | `libreFolio_i_margin_probe2.json`, `libreFolio_i_margin_compare.log` | lo stesso | pageerror da 7 a 0; Crescita, WAC e Gantt identici; il confronto dei lotti 14 px più stretto (24 → 10) |
+>
+> Per rifare quelle misure servono una copia nuova e le sonde, che restano nei file di sessione (`files/probe/`).
+>
+> - **Fuori dal mio perimetro:** in `/tmp` resta una copia `.prev-…` della corsia di A. Non l'ho aperta; l'ho
+>   segnalata al coordinator, che la gira alla famiglia di Risk.
+> - Verifiche finali (12:54): `git diff --check` pulito, stage vuoto, 0 file non tracciati, 1 file tracciato
+>   (questo piano); porte 6157 e 6167 senza listener, nessun processo della corsia.
+> - Stato: FROZEN, nessun edit, test, server o Git fino ai SHA del commit di questo registro.
