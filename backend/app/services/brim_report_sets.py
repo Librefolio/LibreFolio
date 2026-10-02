@@ -373,7 +373,9 @@ async def apply_history(
     On the first import H0 is the day after the first checkpoint (or the oldest
     imported row when the plugin imports the rows before it); checkpoints before
     the eve of H0 are dropped, because what precedes the history is already
-    represented in LibreFolio.
+    represented in LibreFolio. On a later import a checkpoint from H0 on closes a
+    gap in a history that already exists: it is a ``gap``, whatever the plugin
+    called the first checkpoint of its set (the plugin cannot know H0).
     """
     start = await history_start(session, broker_id=broker_id, history_tag=plugin.history_tag)
     later_import = start is not None
@@ -388,6 +390,7 @@ async def apply_history(
     kept = [checkpoint for checkpoint in output.checkpoints if checkpoint.as_of >= floor]
     if later_import:
         kept = [_without_represented_rows(checkpoint, start) for checkpoint in kept]
+        kept = [checkpoint.model_copy(update={"kind": "gap"}) if checkpoint.as_of >= start else checkpoint for checkpoint in kept]
     return kept, list(output.verifications), start
 
 

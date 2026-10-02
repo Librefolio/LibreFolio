@@ -1646,11 +1646,18 @@ class TestGapFixEndpoint:
 # (then reused), a member refused on its own, the combined file parsed, and the
 # gap-fix of that parse on a fresh broker. The test deletes the files and the broker
 # it created. What a set contains, rule by rule, is in test_external/test_brim_danske_bank.py.
+#
+# RS-E01 (phase E, plan E.0 point 1) imports the same set on a broker that already holds
+# a Danske history (one row tagged ``danske_bank``, before the set): a later import, whose
+# first checkpoint closes a gap in that history and must say so (``kind == "gap"``).
 
 DANSKE_CODE = "broker_danske_bank"
 DANSKE_SAMPLE_DIR = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports"
 DANSKE_MAIN = (("danske_bank-custody.xlsx", "custody"), ("danske_bank-cash.csv", "cash"))
 DANSKE_GAP_FIX_TAGS = ["import", "danske_bank", "gap_fix"]
+# A row of an earlier Danske import: the plugin's history tag, dated well before the main set's first checkpoint (2020-02-02).
+DANSKE_HISTORY_TAGS = ["import", "danske_bank"]
+DANSKE_HISTORY_DAY = "2019-06-03"
 XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
@@ -1682,7 +1689,7 @@ def _money_list(items: list) -> dict:
 
 
 class TestDanskeReportSetEndToEnd:
-    """B — the Danske main samples through the report-set API, from the upload to the gap-fix, on a fresh broker."""
+    """B — the Danske main samples through the report-set API, from the upload to the gap-fix: on a fresh broker (RS-B01), and after a saved history (RS-E01, phase E)."""
 
     @pytest.mark.asyncio
     async def test_main_set_from_upload_to_gap_fix(self, test_server):
@@ -1754,6 +1761,54 @@ class TestDanskeReportSetEndToEnd:
                 assert (check["ok"], _money_rows(check["cash"])) == (True, {"EUR": (Decimal("1994.46"), Decimal("1994.46"), Decimal("0"))})
                 assert await _broker_tx_ids(client, broker_id) == set(), "the set API and the gap-fix save nothing"
                 print_success("✓ Danske main set: combined, parsed and aligned with the bank")
+            finally:
+                await _delete_files(client, file_ids)
+                await _delete_created(client, broker_ids=[broker_id])
+
+    @pytest.mark.asyncio
+    async def test_a_later_set_closes_a_gap_in_the_history(self, test_server):
+        """RS-E01 (phase E): the broker already holds a Danske history (one row tagged ``danske_bank`` on 2019-06-03, which is H0), and the main set comes later.
+
+        Its parse keeps the 2020-02-02 checkpoint as a ``gap``: the plugin marks it ``opening`` because it cannot
+        know the history, and the framework knows better. The gap-fix of that checkpoint answers ``gap`` too, so
+        the step shows the correction "After the gap". The parse and the gap-fix write nothing.
+        """
+        print_section("RS-E01: a later Danske set closes a gap in the history")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+            file_ids = []
+            try:
+                await _require_plugin(client, DANSKE_CODE)
+                saved = await _commit_creates(client, {**_cash_movement(broker_id, "DEPOSIT", DANSKE_HISTORY_DAY, "100"), "tags": DANSKE_HISTORY_TAGS})
+                batch = str(uuid.uuid4())
+                for name, _role in DANSKE_MAIN:
+                    response = await _upload_sample(client, broker_id, name, batch)
+                    assert response.status_code == 200, response.text
+                    file_ids.append(response.json()["file_id"])
+                combined = await client.post(_set_url("combine"), json={"broker_id": broker_id, "plugin_code": DANSKE_CODE, "batch_id": batch}, timeout=TIMEOUT)
+                assert combined.status_code == 200, combined.text
+                combined_id = combined.json()["combined"]["file_id"]
+                file_ids.append(combined_id)
+
+                parsed = await client.post(f"{API_BASE}/brokers/import/files/{combined_id}/parse", json={"plugin_code": DANSKE_CODE, "broker_id": broker_id}, timeout=TIMEOUT)
+
+                assert parsed.status_code == 200, parsed.text
+                result = parsed.json()
+                assert result["history_start"] == DANSKE_HISTORY_DAY, f"presence barrier: H0 comes from the saved history, so this parse is a later import: {result['history_start']}"
+                checkpoint = _one(result["checkpoints"], "2020-02-02")
+                assert (_money_list(checkpoint["cash"]), len(checkpoint["positions"]), checkpoint["absorbed"]["opening_cash"]) == ({"EUR": Decimal("2699.50")}, 3, []), "what a later import already gives: the bank's cash and positions, no opening balance"
+                assert checkpoint["kind"] == "gap", f"the first checkpoint of a later set closes a gap in the saved history, it is still {checkpoint['kind']!r}: not implemented yet (BRIM report sets, phase E)"
+
+                # No selection: LibreFolio's side at 2020-02-02 is the saved row alone, so the correction is 2699.50 - 100.
+                fix = await _gap_fix(client, {"broker_id": broker_id, "plugin_code": DANSKE_CODE, "checkpoints": result["checkpoints"], "verifications": result["verifications"]})
+
+                assert fix.status_code == 200, fix.text
+                aligned = _one(fix.json()["checkpoints"], "2020-02-02")
+                assert _cash_proposals(aligned) == [("DEPOSIT", "EUR", Decimal("2599.50"))]
+                assert (aligned["kind"], aligned["explanation"]["opening_cash"]) == ("gap", [])
+                assert await _broker_tx_ids(client, broker_id) == set(saved), "the parse and the gap-fix save nothing"
+                print_success("✓ a later Danske set: its first checkpoint is a gap, in the parse and in the gap-fix")
             finally:
                 await _delete_files(client, file_ids)
                 await _delete_created(client, broker_ids=[broker_id])
