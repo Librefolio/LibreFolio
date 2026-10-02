@@ -15,6 +15,7 @@
  */
 
 import {getClientSessionUserId} from '$lib/stores/app/clientSession';
+import type {RiskBenchmarkState} from '$lib/stores/risk/riskBenchmarkStore.svelte';
 
 /** The fields of an asset this module reads. */
 export interface SelectableAsset {
@@ -290,4 +291,18 @@ export function toggleVisibleRows(checked: readonly number[], visible: readonly 
 export function visibleRowsAllChecked(checked: readonly number[], visible: readonly number[], room: number): boolean {
     const current = new Set(checked);
     return visible.length > 0 && (visible.every((id) => current.has(id)) || current.size >= room);
+}
+
+/**
+ * The benchmark the lab's comparison levels measure against, or `null`.
+ *
+ * Read from the shared picker (`BenchmarkSelect`): only a choice it has confirmed against the
+ * asset list (`set`) is used — a stored id still being confirmed, or one no asset matches,
+ * never reaches a request. And not one of the analysed assets: a yardstick cannot also be one
+ * of the measured, and the backend rejects the comparison outright. The picker still shows
+ * such a choice, with its ⚠; it just measures nothing here.
+ */
+export function labBenchmarkId(state: RiskBenchmarkState, value: number | null, analysedIds: readonly number[]): number | null {
+    if (state !== 'set' || value === null || analysedIds.includes(value)) return null;
+    return value;
 }

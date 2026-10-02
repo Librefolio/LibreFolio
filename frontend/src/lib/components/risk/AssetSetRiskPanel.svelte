@@ -69,7 +69,7 @@
      * telling the page when there is nothing to sync.
      */
     import {untrack} from 'svelte';
-    import {AlertTriangle, Briefcase, CheckCheck, ChevronDown, FlipHorizontal, RefreshCw, Square, Wallet, X} from 'lucide-svelte';
+    import {AlertTriangle, Briefcase, CheckCheck, ChevronDown, FlipHorizontal, Info, RefreshCw, Square, Wallet, X} from 'lucide-svelte';
 
     import {_ as t} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
@@ -87,11 +87,12 @@
     import AssetSetComparisonLevels from './AssetSetComparisonLevels.svelte';
     import AssetSetReplaySection from './AssetSetReplaySection.svelte';
     import AssetChip from './AssetChip.svelte';
+    import BenchmarkSelect from './BenchmarkSelect.svelte';
     import LabAssetPicker from './LabAssetPicker.svelte';
     import LabPopover from './LabPopover.svelte';
-    import {riskBenchmark} from '$lib/stores/risk/riskBenchmarkStore.svelte';
+    import type {RiskBenchmarkState} from '$lib/stores/risk/riskBenchmarkStore.svelte';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
-    import {applyBulkAction, MAX_SELECTED_ASSETS, readPersistedSelection, resolveInitialSelectionWithSource, writePersistedSelection, type BulkAction, type SelectionSource} from './assetSetSelection';
+    import {applyBulkAction, labBenchmarkId, MAX_SELECTED_ASSETS, readPersistedSelection, resolveInitialSelectionWithSource, writePersistedSelection, type BulkAction, type SelectionSource} from './assetSetSelection';
     import {dayFormatter, describeEligibility, eligibilityBatches, EMPTY_VERDICTS, fitPeriodOffer, isSelectable, mergeEligibilityAnswers, type DayRange, type EligibilityView, type EligibilityVerdicts} from './eligibility';
     import {buildSyncTargets} from './syncTargets';
 
@@ -543,39 +544,29 @@
     /**
      * The benchmark the comparison levels measure against, when one applies.
      *
-     * Read from the shared `riskBenchmark` and never from a picker of this page's
-     * own: `03-mappa-livelli-pagine` §3.1 makes the benchmark identical across
-     * scopes, because two pages comparing against different references stop being
-     * comparable — which is the property the redesign exists to build.
+     * Chosen in the shared picker (`BenchmarkSelect`), mounted above the two comparison
+     * levels: the developer's rule is that wherever a page measures against a benchmark it
+     * can be chosen there, and that the picker opens on the current one. The choice itself
+     * still lives in the shared `riskBenchmark` store, so choosing it here chooses it on every
+     * risk page — `03-mappa-livelli-pagine` §3.1: two pages comparing against different
+     * references stop being comparable.
      *
-     * 🔴 **Mirrored through `$effect` and not read inside a `$derived`, and that
-     * is a correctness requirement rather than a style.** `riskBenchmark.assetId`
-     * is a getter that *hydrates on read*: it calls `localStorage` and assigns to
-     * the store's `$state`. Writing state while a derived is being evaluated is
-     * fatal in runes mode, so reading it from a `$derived` threw and took the
-     * whole `{#if}` block with it — the controls stayed on screen and every
-     * section below them vanished, which looks exactly like "no assets selected".
-     * An effect may write, so the choice is mirrored here and derived from the
-     * mirror. `L3Benchmark` gets away with a direct read because its read happens
-     * inside a handler, not inside a derivation.
+     * The picker confirms a stored choice against the asset list before it says `set`
+     * (`pending` until then), and only a confirmed choice reaches a request
+     * (`labBenchmarkId`). A choice that is also one of the analysed assets stays shown, with
+     * its ⚠, but is withheld: `RiskAssetSetComparisonOutput` rejects a yardstick that is also
+     * one of the measured.
+     *
+     * 🔴 **The levels mount only once the picker has stopped saying `pending`.** Their
+     * controller asks for its base wave the moment it mounts. Mounted earlier, every load
+     * with a stored benchmark would ask twice — first without the benchmark, over another
+     * window, then with it — and L1° and L3° would show figures that are replaced a moment
+     * later. Starting at `pending` keeps them out until the picker reports; with nothing
+     * stored it reports `none` while it mounts.
      */
-    let benchmarkChoice = $state<number | null>(null);
-
-    $effect(() => {
-        // Reading inside the effect both triggers the hydration and subscribes to
-        // the store's state, so a benchmark chosen on another page still arrives.
-        benchmarkChoice = riskBenchmark.assetId;
-    });
-
-    /**
-     * 🔴 Withheld when the benchmark is itself one of the selected assets.
-     * `RiskAssetSetComparisonOutput` rejects that outright — "the comparison
-     * asset cannot appear among the compared items" — because a yardstick cannot
-     * also be one of the measured. Asking anyway would turn a coherent state into
-     * a validation error the reader has no way to act on, so the request simply
-     * does not carry it and L3° says the columns are unavailable.
-     */
-    let benchmarkId = $derived(benchmarkChoice !== null && !analysedIds.includes(benchmarkChoice) ? benchmarkChoice : null);
+    let benchmarkValue = $state<number | null>(null);
+    let benchmarkState = $state<RiskBenchmarkState>('pending');
+    let benchmarkId = $derived(labBenchmarkId(benchmarkState, benchmarkValue, analysedIds));
 
     function runBulkAction(action: BulkAction): void {
         selectionTouched = true;
@@ -766,11 +757,24 @@
         {#if atCapacity}
             <p class="mt-2 text-xs text-amber-600 dark:text-amber-400">{$t('risk.assetSet.maxAssets')}</p>
         {/if}
+        <!-- The benchmark is a parameter of the whole lab, chosen beside the assets it is set
+             against (the developer's review, 02/10): today only «What did each of these pay?»
+             uses it, for beta, correlation and its dot. Mounted with the card, so a stored
+             choice is confirmed before the levels below ask for their data. -->
+        <div class="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3 dark:border-slate-700" data-testid="risk-asset-set-benchmark-row">
+            <span class="shrink-0 text-xs text-gray-500 dark:text-gray-400">{$t('risk.levels.l3.benchmark')}</span>
+            <Tooltip text={$t('risk.assetSet.benchmark.help')} position="bottom" maxWidth="320px">
+                <span class="inline-flex text-gray-400 dark:text-gray-500" data-testid="risk-asset-set-benchmark-help"><Info size={14} aria-hidden="true" /></span>
+            </Tooltip>
+            <BenchmarkSelect bind:value={benchmarkValue} bind:state={benchmarkState} measuredAssetIds={analysedIds} measuredHint={$t('risk.assetSet.benchmark.measuredHint')} testid="risk-asset-set-benchmark" />
+        </div>
     </section>
 
     {#if analysedIds.length > 0}
         <AssetSetCorrelationSection assetIds={analysedIds} assetLabels={selectionLabels} assetTypes={selectionTypes} {dateStart} {dateEnd} {targetCurrency} refreshVersion={syncGeneration} />
-        <AssetSetComparisonLevels assetIds={analysedIds} assetLabels={selectionLabels} assetIcons={selectionIcons} {dateStart} {dateEnd} {targetCurrency} {benchmarkId} refreshVersion={syncGeneration} />
+        {#if benchmarkState !== 'pending'}
+            <AssetSetComparisonLevels assetIds={analysedIds} assetLabels={selectionLabels} assetIcons={selectionIcons} {dateStart} {dateEnd} {targetCurrency} {benchmarkId} refreshVersion={syncGeneration} />
+        {/if}
         <AssetSetReplaySection assetIds={analysedIds} assetLabels={selectionLabels} {dateStart} {dateEnd} {targetCurrency} refreshVersion={syncGeneration} />
     {:else if seeding}
         <div class="rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 p-8 text-center" data-testid="risk-asset-set-seeding">
