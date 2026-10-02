@@ -26,7 +26,7 @@ If you left the chart on **%** but there is no rate-of-return data to draw, the 
     The eye button in the top bar, labelled **Hide amounts** (or **Show amounts** once they are hidden), hides your amounts. This chart follows it straight away, in both directions, without reloading the page:
 
     - On the vertical axis of **Abs** and **P&L**, each value becomes `•••` or `-•••`: the sign stays, while the `k` or `M` suffix is hidden along with the digits, so not even the order of magnitude shows.
-    - In the tooltips, every amount keeps its currency code and its sign; only the digits turn into `•••`. In the **Abs** tooltip, **Asset Cost**, **Returns**, and **Capital** show `—` when they are zero, whether the amounts are hidden or not.
+    - In the tooltips, every amount keeps its currency code and its sign; only the digits turn into `•••`. In the **Abs** tooltip, **Assets at Cost**, **Returns**, and **Capital** show `—` when they are zero, whether the amounts are hidden or not.
     - The **%** view shows rates of return, not money, so nothing is hidden there.
 
     The lines, candles, bars, and their colors stay as they are — green and red still tell a gain from a loss. Only the amounts are hidden.
@@ -39,28 +39,34 @@ The chart uses a **stacked area + overlay lines** design:
 
 | Element | Color | Meaning |
 |---------|-------|---------|
-| Area — **Asset Cost** | Blue | Cost basis of all open positions (average cost × quantity) |
+| Area — **Purchase Cost** | Blue | Cost basis of all open positions (average cost × quantity) |
 | Area — **Returns** | Emerald | Portfolio returns sitting as liquid cash (interest, realized gains not yet reinvested) |
 | Area — **Capital** | Grey-green | Undeployed deposits sitting in cash |
-| Line — **[NAV](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)** | Dark green solid | Total portfolio value at current market prices |
+| Line — **[Net Asset Value](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)** | Dark green solid | Total portfolio value at current market prices |
 | Line — **[Deposited Capital](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)** | Grey dashed | Net external capital contributed over time |
 
 **The gap between the NAV line and the Deposited Capital line = Total P&L** — all gains ever generated, including unrealized gains, realized gains, interest, and dividends, minus fees and taxes.
 
 #### Tooltip breakdown
 
-When you hover over the chart, the tooltip shows:
+When you hover over the chart, the tooltip shows, from top to bottom:
 
-- **NAV** — total portfolio value at that date
+- **Net Asset Value**, in bold — total portfolio value at that date
 - **Deposited Capital** — net capital you contributed up to that date
-- **Total P&L** — the difference (NAV − Deposited Capital)
-- **Asset Cost** / **Returns** / **Capital** — the three cash components
+- **Total P&L**, in bold — the difference between the two, with its sign: green for a gain, red for a loss. A small reminder line under it spells out the formula, *P&L = NAV − Deposited Capital*.
+
+Then, below a divider, what the portfolio is made of:
+
+- **Assets at Cost** — what the positions you still hold cost you, including assets on their way from one broker to another. It is the blue area, which the legend calls **Purchase Cost**.
+- **Returns** and **Capital** — the two cash pools: returns held as cash, and deposits not yet invested.
+
+Each of these last three rows shows `—` when its value is zero.
 
 !!! tip "Reading income-driven portfolios (P2P, bonds)"
 
-    For portfolios like P2P lending where assets are valued at their purchase price (no live market price), NAV ≈ Asset Cost. The gap between NAV and Deposited Capital may not be visible as a chart gap — but the tooltip **Total P&L** shows the correct value.
+    For portfolios like P2P lending where assets are valued at their purchase price (no live market price), NAV ≈ Purchase Cost. The gap between NAV and Deposited Capital may not be visible as a chart gap — but the tooltip **Total P&L** shows the correct value.
 
-    When you reinvest all returns into new assets, the Returns area stays near zero, and the earned income ends up embedded in the Asset Cost area. This is mathematically correct: your cost basis grew because you reinvested profit.
+    When you reinvest all returns into new assets, the Returns area stays near zero, and the earned income ends up embedded in the Purchase Cost area. This is mathematically correct: your cost basis grew because you reinvested profit.
 
 🔗 **Theory**: [Deposited Capital & Total P&L](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md) · [Cash Decomposition](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#three-pool-cash-model)
 
@@ -91,10 +97,10 @@ Selecting **P&L** reveals a second picker at the top-left of the plot, with thre
 | Submode | What it draws | The question it answers |
 |---------|---------------|------------------------|
 | **Line** | Accumulated P&L as a single line | How has my result moved over time? |
-| **Candles** | One synthetic candle per day, week, or month | How wide was the swing inside each period? |
-| **Income** | Signed bars of the cash that actually moved | Where did the money come from, and what did it cost me? |
+| **Candles** | One synthetic candle per period, of a width you pick — from one day up to a year | How wide was the swing inside each period? |
+| **Income** | Bars of the cash that actually moved | Where did the money come from, and what did it cost me? |
 
-On narrow screens the three buttons fold down to their icons only; the labels stay available to screen readers and as hover tooltips.
+When the chart itself is narrow (on a phone, or in a narrow window), the three buttons fold down to their icons only; the labels stay available to screen readers and as hover tooltips.
 
 #### Line — accumulated P&L {: #pnl-line }
 
@@ -138,50 +144,61 @@ Three further things to expect:
 - **Thin candles are normal here.** Open and close are usually close to each other, while the summed high/low spread is wide — so the bodies look small between long wicks. That is the shape of the data, not a defect.
 - **Gaps are honest.** If a held asset could not be valued on a given day, that day has no candle at all rather than a guessed or zeroed one. Assets with no known intraday range contribute a flat open = high = low = close instead of a made-up spread, which is another reason bodies can be thin.
 
-When the chart groups days into weeks or months, the candle opens at the **first day's open**, closes at the **last day's close**, and takes the **highest high** and **lowest low** of the days in between.
+When a candle covers several days, it opens at the **first day's open**, closes at the **last day's close**, and takes the **highest high** and **lowest low** of those days. Days without a candle of their own are simply skipped; a period with no valued day at all gets no candle, and its tooltip says *No data available*.
 
-Only the total is drawn as candles, with no broker lines laid over them. The tooltip lists **Open, Close, High, Low** for the period and, when two or more brokers are in scope, each broker's P&L at the close of the period.
+Only the total is drawn as candles, with no broker lines laid over them. Hovering a candle shows its width and the days it covers, such as *1W - 2026-09-08 → 2026-09-14*, then *Partial: N of M days* if it is the shorter oldest candle, and *Value at* the last of those days. A candle that covers a single day shows just its date, with no span and no *Value at* line. Below come **Open**, **Close**, **High**, **Low** for the period and, when two or more brokers are in scope, one signed row per broker with its P&L at the close of the period.
 
 #### Income — the cash that actually moved {: #pnl-income }
 
-This submode leaves valuations behind entirely and plots your **real, personal cash flows** as bars: only days where something actually happened get a bar, so the chart is deliberately sparse.
+This submode leaves valuations behind entirely and plots your **real, personal cash flows** as bars. Each bar is the **sum** of the flows on the days its period covers — unlike the line and the candles, which carry a running level forward, a flow is only meaningful as a sum. A period in which nothing happened sums to zero, so it has no bar.
 
-Six series are drawn, in three groups:
+Each period gets up to three columns, side by side:
 
-| Group | Bars | What it represents |
-|-------|------|--------------------|
-| **Income** (stacked) | Dividend · Interest | Money the portfolio paid you |
-| **Costs** | Fees & taxes | What the activity cost you — negative, so it hangs below the axis |
-| **Capital** | Deposit | Fresh external money you put in |
-| **Purchases** (stacked) | New capital · Reinvested | What you spent on buys that day, split by where the money came from |
+| Column | Bars | What it represents |
+|--------|------|--------------------|
+| Income and costs | **Dividend** · **Interest** above zero, **Fees & taxes** below it | Money the portfolio paid you, and what the activity cost you. It is a single stack that splits by sign, so fees and taxes hang below the axis. |
+| Deposits | **Deposit** | Fresh external money you put in. Only deposits are drawn — withdrawals are not. |
+| Purchases | **Purchase Cost**, in two zones: **New capital** at the bottom, **Reinvested** on top | What you spent on buys in that period, split by where the money came from |
 
-The purchases pair is the interesting one: it separates buying with **fresh capital** you deposited from buying with **returns you had already earned** and put back to work. Both halves together equal that day's total purchase outflow.
+The purchase column is the interesting one: it separates buying with **capital you deposited** from buying with **returns you had already earned** and put back to work. When you buy, the returns already held as cash at that broker count as spent first; whatever the purchase needs beyond them is new capital. Each zone wears the colour its money has in the **Abs** view: new capital the blue of the **Purchase Cost** area, reinvested money the green of the **Returns** area. Only purchases of an asset count — sales are never drawn as bars.
+
+The legend shows these six series as five entries: both purchase zones carry the name **Purchase Cost**, so one click hides both. The blue area of the **Abs** view has that same name, and the legend remembers what you hid by name — so hiding **Purchase Cost** in one view hides it in the other too.
 
 !!! info "Signed, not absolute"
 
-    Values keep their sign. A negative correction on a past dividend **reduces** the dividend bar rather than being counted as more income, and fees and taxes stay negative instead of being flipped into a positive "cost" magnitude.
+    Values keep their sign. A negative correction on a past dividend **reduces** the dividend bar rather than being counted as more income, and fees and taxes stay negative instead of being flipped into a positive "cost" magnitude. Deposits and purchases are amounts you put in or spent, so they are drawn above zero.
 
     Both asset-linked entries and broker-level ones (a custody fee charged to the account with no asset attached) are counted — each exactly once.
 
 Because of that, the totals reconcile with the KPI cards: over the same window and the same broker scope, the dividend and interest bars add up exactly to the **Dividends & interest** row of the [Period P&L card](kpi-cards.md#card-1-period-pl).
 
-The tooltip shows Dividend and Interest with their **Total** — which covers income only. Fees & taxes, deposits, and purchases are listed below it as separate rows when they are non-zero, precisely because they are not earnings: a deposit does not make you richer, and money spent on a purchase has only changed shape.
+!!! warning "The purchase bars are not the Purchase Cost KPI"
+
+    The bars are **gross purchases**, a **flow**: what you spent on buys in each period. The **Purchase Cost** row of the [Net Worth card](kpi-cards.md#card-3-net-worth) is a **level**: what the positions you still hold on the end date cost you.
+
+    Adding up the bars does not give the KPI. Sales lower the KPI but never appear as bars, and positions bought before the period count in the KPI but have no bar.
+
+Hovering a period shows its width and the days it covers, plus *Partial: N of M days* on the shorter oldest period. Unlike the candles, there is no *Value at* line: a sum has no closing value.
+
+Below that, every amount carries its sign. **Dividend** and **Interest** come first, then, under a divider, their **Total** — which covers income only. **Fees & taxes**, **Deposit**, and the purchases follow under a second divider, each only when it is non-zero, precisely because they are not earnings: a deposit does not make you richer, and money spent on a purchase has only changed shape. The purchases show as a bold **Purchase Cost** row with its two halves under it, *↳ New capital* and *↳ Reinvested*.
 
 No broker lines are drawn in this submode.
-
-When the chart groups days into weeks or months, these bars **add up the days in the group** — unlike the line and the candles, which carry a running level forward, a flow is only meaningful as a sum.
 
 !!! note "When a currency cannot be converted"
 
     If a transaction cannot be converted into your display currency on its date, it is left out of the sums instead of being silently shown as zero, and the missing currency pair is reported through the usual data-quality channel.
 
-#### The zoom window — 1W / 1M / 1Y / All {: #pnl-zoom }
+#### The candle width — 1D to 1Y {: #pnl-width }
 
-The buttons in the top-right corner of the plot set how much history is visible: the **last week, month, or year**, or **All** for the full range. They are available in all three P&L submodes.
+In **Candles** and **Income**, a row of buttons in the top-right corner of the plot sets how many **days** one candle — or one group of Income bars — covers: **1D**, **3D**, **1W**, **2W**, **1M**, **3M**, **6M**, or **1Y**. The **Line** submode has none: a line has no body to widen.
 
-- It is the **same zoom** you get by dragging or scrolling on the chart, so you can click a preset and then fine-tune it by hand.
-- Your choice **survives switching submodes** — pick 1M on the line, switch to candles, and you are still looking at the last month.
-- It changes **what you look at, not what is computed**. The values stay counted since inception, and the date range selected at the top of the dashboard still decides which data exists in the first place.
+- **A width, not a time window.** It does not choose how much history you see — the chart still covers the whole selected range; only the number of candles changes.
+- **Plain day counts.** The widths are 1, 3, 7, 14, 30, 90, 180, and 365 days: **1M** is 30 days, not a calendar month, and **1W** is 7 days, not a calendar week. The letters follow the interface language.
+- **Only widths that can be drawn.** A width the chart cannot draw at its current size, for the selected period, is removed rather than greyed out. Each candle — and in **Income** each of the three bars — needs a minimum width on screen, and a width that would leave fewer than three candles is dropped too, except **1D**, which is always offered when it fits. **Income** starts at **1W**. There is always at least one width to pick.
+- **Where it starts.** The chart opens on the finest width it can draw, and your choice is not remembered when you reload the page. **Candles** and **Income** share the width: if Income does not offer the one you were using (1D or 3D), switching to Income moves to the next width it offers. When the width you picked can no longer be drawn — the chart got narrower, or you changed the period — it moves up to the next wider one that can, or to the widest one left if none is wider.
+- **Your view stays put.** Changing the width does not move what you are looking at: the same days stay visible, and only the number of candles changes. Zooming and dragging on the chart still work as usual and never change the width, and the date range at the top of the dashboard still decides which data exists in the first place.
+
+Periods are counted back from the most recent day: the newest candle closes on the last day of the range. If the range does not divide evenly, the days left over form the **oldest** period, which covers fewer days than the others — so it is drawn faded, at half opacity, and its tooltip says *Partial: N of M days*.
 
 ---
 
