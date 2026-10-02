@@ -1,6 +1,6 @@
 # Piano d'implementazione — report set BRIM e importer Danske (step 4–8)
 
-**Stato**: ✅ via del coordinatore sulle superfici condivise; decisioni D-I1…D-I3 prese dal developer (2026-09-30). Il design è approvato (v5.3). **Le fasi A e B possono partire; C2 e C3 aspettano la voce 0 di K** (§7).
+**Stato**: ✅ **fasi A–E completate (2026-10-01)**, consegna finale al coordinatore. C3b annullata dal developer, A17 nel backlog (§11, E.0). Storia dello stato: via del coordinatore sulle superfici condivise; decisioni D-I1…D-I3 prese dal developer (2026-09-30), D-I1 rivisto il 2026-10-01; design approvato (v5.3).
 **Riferimenti**:
 - [design v5.3](design-phase00BrimReportSets.md), che è la fonte di verità delle regole;
 - [piano principale](plan-phase00BrimDanskeBank.prompt.md), step 4–8;
@@ -1019,3 +1019,77 @@ Decisione del developer, riportata dal coordinatore: «Correggerlo subito, prima
 > - **Pagine che citano il flusso d'import e non sono state toccate**: `user/transactions/import/how-to.en.md` (la tabella dei passi e «Guided First Import» non nominano «Align with the bank») e `user/brokers/import.en.md` («Uploaded Reports» non nomina la colonna dei set). Aggiornarle aggiunge debito di traduzione.
 
 ### D — ✅ pronta per il checkpoint (2026-10-01)
+
+**Commit di D**: `b643afb31` docs(import): document Danske Bank and report sets e `cf5cb2e35` docs(journal): record phase D and the dropped C3b.
+
+### E — ⏳ in corso (2026-10-01)
+
+- Decisione del developer, riportata dal coordinatore: «Etichetta e due pagine in fase E; A17 nel backlog». Via da `cf5cb2e35`, corsia 6156.
+
+#### E.0 Specifica (2026-10-01)
+
+**1. L'etichetta del gap-fix dopo un anno saltato**
+- Oggi dopo un anno saltato la correzione compare sotto «Starting point». Il plugin marca `opening` il primo segmento di ogni set (`broker_danske_bank.py:718`), e il parse ne ricava il tipo (`:1474`).
+- Il plugin non può sapere se LibreFolio ha già una storia: `combine` è puro, e `H0` lo calcola il framework. In un import successivo, `apply_history` (`brim_report_sets.py`) toglie già le righe prima di `H0` e `opening_cash` (`_without_represented_rows`), quindi i numeri della spiegazione sono giusti. Resta sbagliato solo il tipo.
+- **Correzione, nel framework**: in `apply_history`, in un import successivo, un checkpoint datato **da `H0` in poi** diventa `gap`. Chiude un buco in una storia che esiste già, e il passo lo mostra come «After the gap».
+- Il checkpoint della vigilia di `H0` (`H0 − 1`, cioè il reimport del primo set) resta `opening`, come fissano due test di oggi. Il primo import non cambia.
+- Il plugin non cambia. La regola vale per ogni plugin a set.
+- **Test** (test-author, rossi prima):
+  - in `services brim-report-sets` (`TestApplyHistoryLaterImport`), un import successivo col primo checkpoint `opening` dopo `H0` torna `gap`;
+  - in `api brim`, se praticabile: una storia Danske già salvata, poi il parse del set principale e il gap-fix danno `kind == "gap"`.
+- **Controlli**: `services brim-report-sets`, `services brim-gap-fix`, `external brim-danske-bank`, `api brim`.
+
+**2. Le due pagine utente** (docs-writer, solo EN, **senza stamp**, il debito nella consegna):
+- `user/transactions/import/how-to.en.md`: «Align with the bank» nella tabella dei passi e in «Guided First Import»;
+- `user/brokers/import.en.md`: la colonna dei set in «Uploaded Reports».
+
+**3. Backlog — A17** (da design v5.3, §4.7, riga «Un file del set eliminato»):
+- Se l'originale di un set viene eliminato dopo il combine, e il combinato c'è ed è aggiornato, il set dovrebbe restare importabile, con «originale eliminato» nella card.
+- Oggi il wizard blocca il set finché l'export non si ricarica: la preview dice `complete: false`, e `setBlocksAnalysis` la segue.
+- Solo il badge della pagina file segue la v5.3 (`fileSetBadges`).
+- Serve anche il backend: la preview, o il combine riusato, devono considerare un combinato aggiornato come sostituto dei membri eliminati.
+- Decisione del developer: non ora.
+
+**4. I controlli finali**, come da piano (§10): le suite del backend e del frontend toccate dal workstream, gli E2E del wizard e dei set, la documentazione, `check-orphans`, il controllo dei dati reali, la porta libera. Poi la consegna e la voce 🧪 per il CHANGELOG.
+
+> **Note implementazione (2026-10-01), E.1 l'etichetta**:
+> - **Rosso** (test-author, corsia 6156):
+>   - in `test_brim_report_sets.py`, `TestApplyHistoryLaterImport`: dopo un anno saltato il primo checkpoint è un `gap` (con le politiche `summarize` e `import`); un checkpoint datato `H0` è un `gap`; e una guardia, il primo import con politica `import` tiene `opening` anche dopo `H0`;
+>   - in `test_brim_api.py`, RS-E01: una storia Danske salvata prima del set principale, poi parse e gap-fix danno `kind == "gap"` e un versamento di 2599.50;
+>   - risultati: `services brim-report-sets` 3 rossi e 223 verdi, `api brim` 1 rosso e 63 verdi, tutti sul tipo (`'opening'` invece di `'gap'`); `services brim-gap-fix` 99/99 e `external brim-danske-bank` 324/324 invariati.
+> - **Cura** (`brim_report_sets.apply_history`): in un import successivo, un checkpoint tenuto e datato da `H0` in poi diventa `gap`. Il docstring dice perché: il plugin non può conoscere `H0`. Black e ruff puliti.
+> - **Verde**: `services brim-report-sets` 226/226, `services brim-gap-fix` 99/99, `external brim-danske-bank` 324/324, `api brim` 64/64.
+>
+> **⚠️ Fuori pista** (dal test-author): ogni avvio del backend condiviso chiama `auto_build_mkdocs()`. Se una pagina è più recente del sito costruito, ricostruisce la documentazione e scrive file tracciati (`mkdocs_src/docs/static`, `frontend/static/sw.js`). Dopo ogni corsa nella corsia controllo `git status`: finora nessun file generato è comparso.
+
+> **Note implementazione (2026-10-01), E.2 le due pagine** (docs-writer, solo EN, senza stamp):
+> - `how-to.en.md`:
+>   - la riga «⚖️ Align with the bank» nella tabella dei passi, e «four» passi facoltativi invece di «three»;
+>   - una frase sui set al passo 2, una sul passo nuovo al passo 4, e «Align with the bank» in «Guided First Import».
+> - `user/brokers/import.en.md`: la colonna **Report set** in «Uploaded Reports».
+> - `danske-bank.en.md`: l'ancora esplicita `{: #first-import-align-with-the-bank }`, lo stesso id di prima. I link di `how-to` resteranno validi quando la pagina avrà le traduzioni, che dovranno tenere l'ancora.
+> - `mkdocs build` (strict) e `check-links` verdi (81 link validi).
+> - **Debito di traduzione nuovo** (`translate-validate` da 513 a 525 errori, avvisi da 376 a 382):
+>   - `how-to.{it,fr,es}.md`: i link a `danske-bank`, 9 errori;
+>   - `brokers/import.{it,fr,es}.md`: il link a `files/index.md#report-sets`, 3 errori e 6 avvisi.
+>
+>   Da tradurre: la tabella dei passi, la fine del passo 2, il paragrafo del passo 4, il punto di «Guided First Import» e il punto di «Uploaded Reports».
+
+> **Note implementazione (2026-10-01), E.4 i controlli finali** (corsia 6156, un comando alla volta, script `/tmp/libreFolio_l_efinal.sh`, log `/tmp/libreFolio_l_efinal_*.log`):
+> - **Statici**: `dev.py lint` pulito; `front check` al pavimento (3 errori, 41 avvisi, negli stessi file di sempre).
+> - **Unit del frontend**: `tx-unit` 495/495, `core-unit` 2704/2704, `component-unit` 2182/2182, `onboarding-component-unit` 409/409.
+> - **Backend**: `services brim-provider-base` 34, `brim-report-sets` 226, `brim-gap-fix` 99, `transaction` 68, `settings` 23; `external brim-danske-bank` 324, `brim-providers` 574 più 2 saltati (i plugin di oggi non cambiano); `api brim` 64, `api settings` 39; `api transactions` 22 più 1 saltato; `db referential-integrity` 17.
+> - **E2E**, dopo `front build --debug`:
+>   - verdi: `tx-import-report-set` 8/8, `tx-import-report-set-guide` 2/2 (desktop e mobile), `tx-import-upload` 9, `tx-import-flow` 10, `tx-import-duplicate-precedence` 6, `tx-asset-identity` 9, `tx-import-resolution` 12, `tx-import-matching` 6, `files` 22, `onboarding-tour` 10, `onboarding-guides` 24, `settings` 45;
+>   - rossi, solo quelli noti dal triage di C2: `tx-brim-import` T1 (spec seriale: ne restano 7 non eseguiti), `tx-ca-contract` CAC-011 e CAC-012 (10 verdi), `brokers-detail.spec.ts:713` di I (29 verdi).
+> - **Registrazioni e albero**: `check-orphans` pulito; `git diff --check` pulito; nessun file generato fra le modifiche; 6156 libera.
+> - **Privacy**:
+>   - i 5 campioni Danske non hanno valori in comune con gli export reali (554 celle);
+>   - le 22.558 righe aggiunte dai 29 commit del workstream (prima linea, senza merge), più le modifiche non committate, non contengono nessuno dei 163 token distintivi degli export reali.
+>
+>   Lo script stampa solo un hash del token, mai il valore. Quattro parole generiche che gli export condividono con qualunque testo sono escluse: «number», «account», «holder», «maksaja».
+> - **Documentazione**: `mkdocs build` (strict) e `check-links` verdi, nel giro di E.2.
+>
+> **⚠️ Fuori pista: `api transactions` salta ancora `test_delete_linked_without_pair`**, anche dopo `test db populate --force` nella corsia, come chiesto nella fase B. Lo salta la fixture `test_asset_id` (`test_transactions_api.py:127-162`): `pytest.skip("Could not create test asset")` quando `GET /assets` non le dà un asset e `POST /assets` non risponde 200. È una condizione del setup del test, fuori da L e indipendente dai dati della corsia; il suo proprietario dovrebbe fare un triage.
+
+### E — ✅ completata (2026-10-01)
