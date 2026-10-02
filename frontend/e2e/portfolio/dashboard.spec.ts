@@ -1033,12 +1033,37 @@ test.describe('Chart axes under privacy (S2a/S2b)', () => {
  *
  * Parallel-safe: nothing is written server-side. The window, the mode, the submode
  * and the rung are this context's own state (URL, user-scoped localStorage, component
- * state); privacy (E3) lives in this context's localStorage and is switched back off
- * in `finally`.
+ * state); privacy (E3, and E4 through `openLadder`) lives in this context's
+ * localStorage and is switched back off in the test's `finally`.
  */
 /** The stated geometries: the ladder's every decision is a function of the plot width. */
 const LADDER_DESKTOP = {width: 1440, height: 900};
 const LADDER_PHONE = {width: 375, height: 800};
+/**
+ * E4's phone, sized for its plot rather than as a device: the 3M window at 1d must stay
+ * both drawable and sparse on every host. Drawable: GrowthChart offers a rung only while
+ * plot / bodies ≥ LADDER_MIN_BODY_PX, and at 1d a body is a served day, at most 93 in a
+ * 3M window, so plot ≥ 2.5 × 93 = 232.5px. Sparse: M needs a visible slot under the 8px
+ * candle slot minimum (CANDLE_MIN_SLOT_PX), plot / count < 8, and `monthEdgeWindow` only
+ * guarantees count ≥ 41, so plot < 8 × 41 = 328px.
+ *
+ * The plot is 0.93 × (viewport − 66 − gutter) − labelSpace. 0.93: the grid's insets, 3%
+ * left and 4% right of the chart width, with `containLabel`. 66: the phone chrome, main
+ * `p-4` plus the card's `p-4` and 1px border, which no breakpoint changes below `lg`.
+ * gutter: 0 or 15px by host, as `html { scrollbar-gutter: stable }` keeps a classic
+ * scrollbar's room even with the bar hidden. labelSpace: the widest y label plus its 8px
+ * margin. Unmasked it follows the seeded, partly live amounts — 31px one day, 55px the
+ * next at 3M, which with the gutter took the 375px plot from 256 to 218px — so E4 masks
+ * them (`openLadder`'s `privacy`): `-•••` takes 27.37px whatever the amounts (plot.x −
+ * 0.03 × W in E3's `after-privacy` digest), ~4.7px less if no tick is negative. At 405px:
+ * 0.93 × (339 or 324) − 27.37 ≈ 288 or 274px, ~293 at most unsigned, so at least 35px
+ * inside both edges.
+ *
+ * When LADDER_MIN_BODY_PX, the preset window, the 41-bucket minimum, the slot minimum,
+ * the grid insets, the chrome, the gutter or the masked label change, recompute both
+ * edges and the plot; the `[S7] E4 zoomed` digest logs W and the plot to check against.
+ */
+const LADDER_E4_PHONE = {width: 405, height: 800};
 /** The E1 rungs and the served days one of their buckets spans — the expected closings derive from it. */
 const LADDER_E1_CASES = [
     {rung: '1m', span: 30},
@@ -1429,8 +1454,14 @@ function logLadder(tag: string, snap: LadderSnapshot, served: string[], span: nu
  * re-request or redraw anything, so there would be no delta to wait for. A preset already
  * in force leaves the opening overview, recorded from before navigation, as the oracle.
  * The rung must exist — a width the geometry cannot draw is removed, not disabled.
+ *
+ * `privacy` masks the amounts once the submode's data has drawn, before the rung is
+ * read: unmasked, the y labels' width follows the seed and moves the plot, and with it
+ * the rungs; masked, it is one width (LADDER_E4_PHONE). The masked redraw re-derives the
+ * rungs, which the rung precondition's 10s poll waits out. Privacy stays on: the caller
+ * switches it off in a `finally` whose `try` holds this call.
  */
-async function openLadder(page: Page, opts: {viewport: {width: number; height: number}; preset?: '1y' | '3m'; submode: 'candles' | 'income'; rung: string}): Promise<{chart: Locator; host: Locator; served: string[]}> {
+async function openLadder(page: Page, opts: {viewport: {width: number; height: number}; preset?: '1y' | '3m'; submode: 'candles' | 'income'; rung: string; privacy?: boolean}): Promise<{chart: Locator; host: Locator; served: string[]}> {
     const preset = opts.preset ?? '1y';
     const presetLabel = preset.toUpperCase();
     await page.setViewportSize(opts.viewport);
@@ -1463,6 +1494,11 @@ async function openLadder(page: Page, opts: {viewport: {width: number; height: n
         await expect.poll(async () => (await candleSeries(host)).bodies, {timeout: 20_000, message: 'precondition: the candle report reached the chart'}).toBeGreaterThan(0);
     } else {
         await expect.poll(async () => drawnItems(await ladderSnapshot(host), 'bar').length, {timeout: 20_000, message: 'precondition: the income bars reached the chart'}).toBeGreaterThan(0);
+    }
+    if (opts.privacy) {
+        // Before the rung is read: the rungs follow the plot, the plot follows the y labels.
+        await setPrivacy(page, true, host);
+        await expect.poll(() => axisLabels(host, 'yAxis', [20_000, -5_000, 0]), {message: 'precondition: the chart redrew under privacy, its amount axis masked'}).toEqual(AXIS_MASKED);
     }
 
     const rung = chart.getByTestId(`growth-candle-width-${opts.rung}`);
@@ -1609,16 +1645,22 @@ test.describe('GrowthChart ladder x axis (S7)', () => {
     });
 
     test('S7-E4 a sparse zoomed 1d window draws its one month edge where the month starts', async ({page}) => {
-        // A window change, a lazy candle fetch and a zoom, each awaited, then a soft poll
-        // that runs its full timeout while the axis is wrong.
+        // A window change, a lazy candle fetch, a privacy redraw and a zoom, each awaited,
+        // then a soft poll that runs its full timeout while the axis is wrong.
         test.setTimeout(60_000);
-        const {chart, host, served} = await openLadder(page, {viewport: LADDER_PHONE, preset: '3m', submode: 'candles', rung: '1d'});
-        // At 1d a bucket is one served day: the closings are the served days, n of them.
-        const {F, n, pick} = monthEdgeWindow(served);
-        expect(pick, `precondition: a strict sub-window of the served days holds exactly one 1st, not on its first day, over at least 41 days — F = ${JSON.stringify(F)}, n = ${n}`).not.toBeNull();
-        const {m, vs, ve, count} = pick!;
+        // Set once `openLadder` returns: before that there is no chart to take evidence from.
+        let opened: Awaited<ReturnType<typeof openLadder>> | undefined;
 
+        // The `try` holds `openLadder` because privacy goes on inside it (LADDER_E4_PHONE says
+        // why), so privacy ends off whatever fails after that, the rung precondition included.
         try {
+            opened = await openLadder(page, {viewport: LADDER_E4_PHONE, preset: '3m', submode: 'candles', rung: '1d', privacy: true});
+            const {chart, host, served} = opened;
+            // At 1d a bucket is one served day: the closings are the served days, n of them.
+            const {F, n, pick} = monthEdgeWindow(served);
+            expect(pick, `precondition: a strict sub-window of the served days holds exactly one 1st, not on its first day, over at least 41 days — F = ${JSON.stringify(F)}, n = ${n}`).not.toBeNull();
+            const {m, vs, ve, count} = pick!;
+
             expect(
                 served.slice(vs, ve + 1).filter((date) => date.endsWith('-01')),
                 `precondition: served[${vs}..${ve}] holds exactly one 1st, served[${m}]`,
@@ -1651,10 +1693,18 @@ test.describe('GrowthChart ladder x axis (S7)', () => {
                 })
                 .toEqual([]);
         } finally {
-            // The evidence, however the checks above ended.
-            const snap = await ladderSnapshot(host);
-            console.log('[S7] E4 window ' + JSON.stringify({F, n, vs, ve, m, count, slot: snap.plot ? round2(snap.plot.width / count) : null}));
-            logLadder('E4 zoomed', snap, served, 1);
+            try {
+                // The evidence, however the checks above ended, read while privacy is still
+                // on: the plot logged is the masked one the checks measured.
+                if (opened) {
+                    const {F, n, pick} = monthEdgeWindow(opened.served);
+                    const snap = await ladderSnapshot(opened.host);
+                    console.log('[S7] E4 window ' + JSON.stringify({F, n, vs: pick?.vs, ve: pick?.ve, m: pick?.m, count: pick?.count, slot: snap.plot && pick ? round2(snap.plot.width / pick.count) : null}));
+                    logLadder('E4 zoomed', snap, opened.served, 1);
+                }
+            } finally {
+                await restorePrivacyOff(page);
+            }
         }
     });
 });
