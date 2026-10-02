@@ -688,3 +688,264 @@ Il selettore (variante B) arriva dopo, con la primitiva `BenchmarkSelect` di Ris
 > Dopo il commit: fusione vera della punta di Risk `68b46721b` (script del coordinatore), poi il selettore
 > `BenchmarkSelect` sopra L1° e L3° (L4-7) e la guida `:124`.
 > Stato: **FROZEN** fino al commit: niente modifiche, test, server o comandi Git.
+
+> ✅ **Committato** dal developer: `4a52584cd` G1 · `e1911ef8f` G2 · `1fe9a8883` G3 · `446e6f75b` G4 · `37bc78965` G5 ·
+> `04cbc4997` G6. Verificato in sola lettura (`/tmp/libreFolio_f4/verify_l4_merged.sh`, prima linea dei genitori
+> `2130bc42e..04cbc4997`): messaggi e file uguali per ogni commit, blob identici (`2e7563f5…`) → **PASS**.
+>
+> **Fusione della punta di Risk** (del coordinatore): `c221ed22d`, genitori `04cbc4997` + `68b46721b`
+> (`BenchmarkSelect`, regola B della torta), pulito. Validata nella 6154 (`/tmp/libreFolio_f4/merge_c221_gates.sh`, log
+> in `/tmp/libreFolio_f4/merge_c221/`):
+> - build 0; `front check` al pavimento;
+> - `core-unit` 107/2934; `component-unit` 98/2407; `allocation-unit` 5/211;
+> - `check-orphans` pulito; i18n 3507;
+> - E2E `risk-lab` 34/34, `risk` 13/13, `risk-benchmark-shared` 4/4.
+> - Evidenza a Risk (23:1x).
+
+## Giro 5 · il selettore del benchmark (L4-7) · 2026-10-01, dalle 23:1x
+
+**Decisioni già prese**:
+- il developer: variante **B**, sopra L1° e L3°; il selettore mostra sempre la scelta corrente, ed è vuoto solo se
+  non è impostata;
+- Risk:
+  - la primitiva `BenchmarkSelect` (sua), con `measuredAssetIds` uguali agli asset analizzati;
+  - la mia frase in `measuredHint`, con una chiave sotto `risk.assetSet.*`;
+  - le colonne di beta e correlazione e il punto del benchmark solo con `state === 'set'` e un valore fuori dalla
+    selezione.
+
+**Fatti verificati sul codice (`c221ed22d`)**:
+- `BenchmarkSelect`:
+  - lo stato iniziale è sincrono (`none` o `pending`); poi `resolveRiskBenchmark()` lo conferma contro l'elenco
+    degli asset e dà `set` o `unknown`;
+  - `value` resta `null` finché lo stato non è `set`;
+  - la radice `{testid}-control` pubblica `data-benchmark-id`, `data-benchmark-state` e `data-measured`; il ⚠ è
+    `{testid}-measured`.
+- Il controller dei livelli (`createRiskPanelController`, di Risk) lancia l'onda base appena montato
+  (`$effect` → `applyBaseSignature`) e non ha un cancello.
+- Oggi il pannello specchia `riskBenchmark.assetId` in un `$effect` prima che i livelli si montino (dopo la semina
+  della selezione), quindi l'onda parte una volta sola, già col benchmark.
+
+**Decisione di implementazione (mia, nessun cambio visibile)**: il selettore si monta **nel pannello**, subito sopra
+`AssetSetComparisonLevels`, cioè sopra L1° e L3°; non dentro i livelli.
+- Montato dentro, si risolverebbe dopo che il controller ha già sparato: a ogni caricamento con un benchmark salvato
+  partirebbero **due onde**, la prima senza benchmark e con un'altra finestra.
+- Nel pannello: `bind:value` e `bind:state`; `benchmarkId` diventa un helper puro e testabile (`set`, valore non
+  nullo, fuori dagli analizzati); i livelli si montano solo quando lo stato non è più `pending`.
+- Con un helper puro la guardia sullo stato si prova direttamente. Il mutante che la toglie, equivalente se si
+  guarda il componente intero, qui non lo è.
+
+**Passi**:
+
+| # | passo | stato |
+|---|---|---|
+| L5-1 | i18n: `risk.assetSet.benchmark.measuredHint` (la frase del ⚠) e `risk.assetSet.benchmark.help` (l'ⓘ) × 4 | ✅ 2026-10-01 (`/tmp/libreFolio_f4/l5_i18n_add.sh`; spazio normale prima dei due punti in FR, come 248 stringhe su 255) |
+| L5-2 | test rossi (test-author): helper `labBenchmarkId`, E2E del selettore | ✅ 2026-10-01 |
+| L5-3 | codice: helper, selettore nel pannello con l'ⓘ, livelli dopo la risoluzione, docblock del pannello | ✅ 2026-10-01 |
+| L5-4 | guida `:124` (docs-writer) | ⏳ |
+| L5-5 | cancelli e mutanti, review sulla 6164, checkpoint | ⏳ |
+
+### L5-2 · test rossi prima ✅ 2026-10-01 (test-author `l5-unit` e `l5-e2e`, file disgiunti)
+
+> - **Unitario** (`assetSetSelection.test.ts`): `labBenchmarkId`, 9 casi nuovi, tutti rossi su `labBenchmarkId is not
+>   a function` (98 test, 89 già verdi).
+>   - La guardia sullo stato è provata da sola: righe `pending`, `unknown` e `none` con un valore non nullo, ciascuna
+>     con la controprova che `set` darebbe l'id.
+>   - Gli altri casi: l'id fra gli analizzati (anche non in prima posizione), `null`, e l'elenco non toccato.
+> - **E2E** (`risk-lab.spec.ts`, aiutanti `:2104-2362`):
+>   - casi nuovi, rossi al primo controllo sul selettore: (a) posizione sopra L1° e L3° e apertura su `set`;
+>     (b) la scelta nel laboratorio scrive la chiave condivisa; (c) il benchmark fra i selezionati, col ⚠ e la sua
+>     frase; (d) un id che non corrisponde a nessun asset, `unknown`;
+>   - (e) è una guardia: nessuna onda per-asset senza il benchmark salvato;
+>   - due commenti di un caso esistente riallineati al selettore (nessuna asserzione toccata).
+>   - Le frasi dell'ⓘ e del ⚠ si confrontano con il catalogo (`fixtures/i18n-data`), il solo modo di distinguere la
+>     frase del laboratorio da quella generica.
+
+### L5-3 · il codice ✅ 2026-10-01
+
+> - `assetSetSelection.ts`: `labBenchmarkId(state, value, analysedIds)`.
+> - `AssetSetRiskPanel.svelte`:
+>   - via lo specchio `$effect` di `riskBenchmark.assetId`;
+>   - `benchmarkValue` e `benchmarkState` (iniziale `pending`) legati a `BenchmarkSelect`, e
+>     `benchmarkId = labBenchmarkId(…)`;
+>   - la riga `risk-asset-set-benchmark-row`: «Confrontato con», l'ⓘ `risk-asset-set-benchmark-help` e il selettore
+>     (`measuredAssetIds` = analizzati, `measuredHint` = la mia frase), fra la matrice e L1°;
+>   - `AssetSetComparisonLevels` dentro `{#if benchmarkState !== 'pending'}`;
+>   - docblock riscritto.
+> - vitest `assetSetSelection.test.ts` **98/98**; `front check` al pavimento; `front build --debug` 0.
+
+### L5-4 · la guida ✅ 2026-10-01 (docs-writer `l5-guide`)
+
+> - `:127`: il benchmark si sceglie **su questa scheda**, sotto *Compared with*, in una riga fra la matrice e le due
+>   sezioni che cambia; è la stessa scelta di tutte le pagine di rischio, e l'ⓘ lo dice.
+> - `:128`: l'elenco esclude i selezionati tranne la scelta corrente; un benchmark che è anche selezionato resta
+>   visibile col ⚠ ambra, che spiega perché mancano beta e correlazione.
+> - `:171` (*One Shared Window*): il benchmark che entra nella finestra si sceglie nella riga sopra le due sezioni.
+> - `:125` (rombo): non toccato. Build strict pulito; `check-links` 88/8/3; `sw.js` invariato.
+> - Segnalato dal docs-writer: l'intestazione di `BenchmarkSelect.svelte` (di Risk) dice che Dashboard e broker lo
+>   montano, ma nella mia base usano ancora `L3Benchmark`; scrivono lo stesso store, quindi la guida è vera comunque.
+>   Lo riporto a Risk.
+
+### L5-5 · cancelli e mutanti · 2026-10-01, dalle 23:5x
+
+> - E2E `risk-lab` **39/39** (34 + i 5 nuovi), dopo `front build --debug`.
+> - **Mutanti**, uno per volta (`/tmp/libreFolio_f4/l5_mutants.sh`, log in `/tmp/libreFolio_f4/l5mut/`), ciascuno
+>   preso dal caso giusto:
+>   - senza il cancello `pending` → (e): le onde portano `[null, 10]`, cioè la prima partiva senza il benchmark. È la
+>     prova che il cancello serve: test-author pensava che (e) fosse verde già sul codice vecchio, e lo era solo
+>     perché lì il pannello leggeva lo store prima di montare i livelli;
+>   - `measuredAssetIds={[]}` → (c): `data-measured` `"false"`;
+>   - senza `measuredHint` → (c): la frase generica invece di quella del laboratorio;
+>   - selezione non controllata (`labBenchmarkId(…, [])`) → (c): L3° applica il benchmark (`data-benchmark="true"`).
+>   - La guardia sullo **stato** è un mutante **equivalente** a livello di componente: con la primitiva di oggi
+>     `value` resta `null` finché lo stato non è `set`, come Risk aveva detto. La prendono le righe `pending`,
+>     `unknown` e `none` del test unitario dell'helper.
+>   - Ripristino con sha256 verificato dopo ogni mutante; build finale sul codice ripristinato.
+> - **Cancelli finali** (00:17–00:24, `/tmp/libreFolio_f4/l5_gates.sh`, log in `/tmp/libreFolio_f4/l5final/`):
+>   - **⚠️ Fuori pista**: il primo lancio non è partito (lo strumento ha reso un'uscita vuota senza eseguire: la
+>     cartella dei log non esisteva). Rilanciato; nessun effetto.
+>   - prettier: **un file**, `risk-lab.spec.ts`, formattato a mano da test-author → `--write`. La differenza è solo
+>     di spazi più una virgola finale negli argomenti di due `expect(…)`, verificato confrontando il testo
+>     normalizzato. Poi tsc risk-lab pulito e `risk-lab` di nuovo **39/39**;
+>   - vitest **27 file, 1074 test**; `front check` al pavimento; `tsc -p tsconfig.e2e.json` 4 errori, 0 negli spec del
+>     rischio;
+>   - build 0; E2E `risk-lab` **39/39**, `risk` **13/13**, `risk-benchmark-shared` **4/4**;
+>   - `core-unit` **107/2943**; `component-unit` **98/2407**;
+>   - `check-orphans` pulito; i18n **3509** chiavi, tutte tradotte; `check-links` 88;
+>   - `git diff --check` pulito; `sw.js` invariato; 6154 libera.
+
+> **Review del selettore sulla 6164** (2026-10-02):
+> - **⚠️ Fuori pista**: il developer ha riavviato il programma per aggiornarlo, e il riavvio ha fermato il server (era
+>   legato alla sessione); la domanda di review era rimasta a metà. La copia era stata scritta (`e689ab09…`) →
+>   sostituita con una copia fresca (`5c0a681bc4e4b59c`); la build era ancora più recente di ogni sorgente; server
+>   riavviato (shell `l5server2`, PID 93092), `/assets` 200. HEAD invariata (`c221ed22d`), albero invariato (10 file).
+>
+> **Review del developer (ask_user, 2026-10-02 09:5x), alla lettera**: «l componente che fa il cerca, vorrei sfruttasse
+> il pannel che abbiamo sviluppato per la sezione iniziale, che si apre con il "+", ha i filtri e i nomi scorrono, è
+> molto meglio, ti dirò di più, sarebbe fantastico averlo anche nel segnale del "Confronto Asset", mi pare che quello che
+> c'è ora lo hai preso da lì, dove altro è usato? potremmo migrarlo al nuovo ovunque. Riguardo il tooltip hai scritto:
+> Lo stesso benchmark di tutte le pagine di rischio: cambiarlo qui lo cambia ovunque. Si misura insieme agli asset
+> scelti, aggiunge beta e correlazione e, se ha una storia più corta, restringe il periodo delle due sezioni qui sotto.
+> ma toglierei il faatto che sia lo stesso in tutte le pagine di rischio, userei una frase corta che spiega che serve
+> per scegliere un asset di riferimento, considerato il "rischio base" e fa capire, asset per asset, se il rischio è
+> superiore o meno, o insomma una frase così, informativa. Nella lista degli asset che compaiono non ci sono quelli
+> selezionati, mi pareva avessimo deciso che potessero essere scelti anche loro, o è in risk ancora? Per altro mettere
+> Lonate Pozzolo o gli altri asset con 0 prezzi, similmente a quanto avviene con "+" divrebbero essere esclusi perchè non
+> ammissibili. Poi mettendone 1 ottengo: Giornata storta: Parziale · Mese storto: Parziale · Discese per asset: Parziale
+> Prezzi fermi da più di 7 giorni per 2 asset: […] ma non in un banner come abbiamo sviluppato, ma sia dentro "quanto
+> fa male?" che "quanto ha pagato ciascuno" A livello di posizionamento, io lo ripeterei dentro ogni pannel in cui è
+> utile poterlo editare, senza fare continuamente sopra sotto, altrimenti lo mettevamo direttamente in cima.»
+>
+> **Analisi (verificata sul codice, `c221ed22d`)**:
+> 1. **Il «Parziale» in L1°**: L1° e L3° fanno una richiesta sola (`buildBaseAnalytics`, `includeAssetSetLevels`, in
+>    `riskAnalysisHelpers.ts:313-345`, di Risk), e `asset_set_comparison` vi entra col benchmark. Il motore prepara la
+>    finestra comune per richiesta, benchmark compreso (guida `:171`), quindi il benchmark cambia anche la finestra di
+>    L1°, che non lo mostra. I due ETF «fermi da più di 7 giorni» sono probabilmente l'effetto dei giorni del
+>    benchmark alla fine della finestra (ipotesi, non misurata). Cura possibile: due richieste, L1° senza benchmark
+>    (sulla finestra della matrice) e L3° col benchmark. Serve separare `includeAssetSetLevels` in due gruppi: file di
+>    Risk.
+> 2. **Avvisi**: tutte le sezioni del laboratorio (Correlazione, L1°, L3°, Replay) li mostrano come righe ambra nella
+>    propria cornice (`RiskLevelSection`, di Risk; guida «Each Section Speaks for Itself»). L'unica striscia del
+>    laboratorio è quella del periodo (`risk-fit-period-banner`); in Dashboard c'è `DataQualityBanner`.
+> 3. **Asset selezionati nell'elenco**: la decisione del developer, riportata da Risk, riguardava gli asset
+>    **posseduti**, che si possono scegliere. Quelli **selezionati** restano fuori perché il motore rifiuta un asset
+>    misurato contro sé stesso (`schemas/risk.py:1578`); se la scelta corrente è fra i selezionati, si vede col ⚠.
+>    Non è un lavoro rimasto in Risk.
+> 4. **Asset non ammissibili** (0 prezzi): il «+» li tiene fuori con i verdetti di idoneità
+>    (`LabAssetPicker`, `eligibility`); `BenchmarkSelect` (di Risk) non ha un modo di escluderli: serve una prop, o il
+>    pannello del punto 5.
+> 5. **Il componente di ricerca**: `AssetSelect` (ui, condiviso), su `SearchSelect`, si usa in 6 posti:
+>    - `SignalAssetParamControl` (il segnale «Confronto Asset»);
+>    - `ImportWizardModal` e `TransactionFormModal`;
+>    - `AssetMergeModal`;
+>    - `BenchmarkSelect` e `L3Benchmark`.
+>    `LabAssetPicker` (mio) è a scelta multipla, con filtri, idoneità e nomi che scorrono. Migrarlo ovunque vuol dire
+>    estrarne un pannello riusabile anche a scelta singola; i file sono di più proprietari → coordinatore.
+>
+> **Decisioni del developer (ask_user, 2026-10-02, 10:0x–10:2x), alla lettera**:
+> 1. Posizione e misura: prima «Solo in L3°, e L1° misurato senza benchmark (consigliato)»; poi: «vai da risk, era in
+>    dashboard ma lì abbiamo fatto un bel lavoro di fattorizzazione e spiegazione, vorrei che riusassi quel banner, e sto
+>    iniziando a pensare, essendo un parametro "comune" forse ha senso che sia all'inizio la sua scelta, vicino alla
+>    scelta degli asset da analizzare, poi che per ora lo usa solo L3 è un caso». → Il selettore va **in cima**, vicino
+>    alla scelta degli asset; L1° resta **misurato senza benchmark** (decisione non revocata).
+> 2. Avvisi di qualità dei dati: **il banner della Dashboard**, tramite Risk. Verificato: lì le cornici L1-L3 mostrano
+>    solo gli errori (`levelErrorHealth`, `partialNotice.ts:49`), e la qualità dei dati sta in `DataQualityBanner`
+>    (`RiskPanelHeader.svelte:116`, alimentato da `controller.dataQualityIssues`).
+> 3. Asset selezionati come benchmark: «Permettere di sceglierli: diventa il riferimento degli altri (lavoro di Risk)».
+> 4. Asset non ammissibili (0 prezzi) fuori dall'elenco, come nel «+».
+> 5. Tooltip dell'ⓘ: una frase corta e informativa (asset di riferimento, «rischio di base», asset per asset più o meno
+>    rischioso); via «lo stesso in tutte le pagine».
+> 6. Pannello del «+» al posto del cerca: «sono daccordo con il piano, ma nell'import guidato terrei l'attuale»; e
+>    «Tenere l'attuale anche in «Unisci asset»». Tappe:
+>    1. il pannello riusabile con la scelta singola (mio);
+>    2. `BenchmarkSelect` lo adotta (Risk), con l'esclusione degli asset non ammissibili;
+>    3. il segnale «Confronto Asset»;
+>    4. il modulo della transazione.
+>    L'import guidato e «Unisci asset» tengono `AssetSelect`.
+>
+> Server 6164 fermato (`lsof`: libera).
+>
+> **Risposte (10:3x)**:
+> - **Coordinatore**:
+>   - il pannello riusabile sta in `frontend/src/lib/components/ui/select/`, accanto ad `AssetSelect.svelte`;
+>   - **concessione a F**: solo file nuovi (il pannello e il suo test jsdom) più una riga in `component-unit`
+>     (`_frontend_utility.py`), con `check-orphans`; `index.ts` e `AssetSelect.svelte` non si toccano;
+>   - tappe: 1 di F; 2 e 3 della famiglia Risk; la 4 (`TransactionFormModal`) **non ora**: dopo che il pannello è in
+>     `dev_release2` e dopo la fase F di L; il proprietario lo decide lui. Ogni tappa ha test rossi prima e il suo
+>     checkpoint.
+> - **Risk**:
+>   1. la divisione delle richieste è **concessa una tantum**: due flag additivi in `buildBaseAnalytics`
+>      (`includeAssetSetLossLevels`, `includeAssetSetPaidLevels`, con `includeAssetSetLevels` come loro unione) e il solo
+>      passaggio delle opzioni in `riskPanelController.svelte.ts` (`:122`, `:271`), più i loro test. Rossi prima, e
+>      un pin che le richieste dei chiamanti di oggi restino identiche byte per byte. Niente altro in quei file. La
+>      guida `:168/171` cambia con la decisione: mia;
+>   2. banner **confermato**: cornici con `levelErrorHealth`; il replay con la sua salute; le azioni su `openSync`;
+>      la mappatura delle azioni scritta nei miei file (quella di `RiskPanelHeader` è di A); le questioni dei tre
+>      controller deduplicate con la chiave con cui il banner le raggruppa;
+>   3. il benchmark fra i selezionati è **suo** (decisione D370); fino ad allora `measuredAssetIds` resta la
+>      selezione;
+>   4. asset non ammissibili: **niente prop provvisoria**, arrivano con la tappa 2;
+>   5. tappe: 1 mia; 2 `BenchmarkSelect` sua e `AssetSetRiskPanel` mio; 3 sua;
+>   6. il testo dell'ⓘ: mio.
+>   - L'ordine va bene: ora il selettore in cima e l'ⓘ, poi il checkpoint del giro 5; poi la divisione e il banner;
+>     poi la tappa 1.
+>
+> **Giro 5b · il selettore nella scheda della selezione** (test-author `l5b-placement`): il caso (a) ora vuole la riga
+> dentro `risk-asset-set-controls`, dopo le chip (`risk-selected-assets`), prima della matrice e dei due livelli. Sul
+> codice di oggi è rosso: la riga sta dopo la matrice, fuori dalla scheda.
+>
+> **Note implementazione (5b)**:
+> - `AssetSetRiskPanel.svelte`: la riga «Confrontato con ⓘ [selettore]» diventa l'ultima della scheda della selezione
+>   (`risk-asset-set-controls`), con un filetto sopra. È montata con la scheda, quindi la scelta salvata si conferma
+>   prima che i livelli chiedano i dati; il cancello `pending` resta.
+> - ⓘ (`/tmp/libreFolio_f4/l5b_i18n_help.sh`, `dev.py i18n update`): «L'asset di riferimento, il «rischio di base»:
+>   beta dice, asset per asset, se ciascuno si è mosso più (sopra 1) o meno (sotto 1) di lui; la correlazione, quanto
+>   insieme.» nelle 4 lingue.
+> - Guida (docs-writer `l5b-guide`): `:127` e `:171` mettono la riga nel pannello in cima alla scheda, e l'ⓘ spiega a
+>   cosa serve; il fatto che la scelta sia comune a tutte le pagine resta nella guida. Build strict pulito, 88 link.
+> - **Cancelli** (11:14–11:21, `/tmp/libreFolio_f4/l5b_gates.sh`, log in `/tmp/libreFolio_f4/l5bfinal/`):
+>   - prettier pulito; vitest 27/1074; `front check` al pavimento; tsc e2e 0 negli spec del rischio;
+>   - build 0; E2E `risk-lab` **39/39** (il caso della posizione, rosso prima, ora verde), `risk` 13/13,
+>     `risk-benchmark-shared` 4/4;
+>   - `core-unit` 107/2943; `component-unit` 98/2407; orfani pulito; i18n 3509; link 88;
+>   - `git diff --check` pulito; `sw.js` invariato; 6154 libera.
+>
+> **Review (ask_user, 11:3x), alla lettera**: «va bene ,procedi con il checkpoint, ma mi chiedevo, avendo il beta, sul
+> grafico rendimento-volatilità il beta non si disegna con una retta o sbaglio?» — risposta di teoria nella chat (la
+> retta del beta sta sul grafico beta-rendimento, la Security Market Line; su quello volatilità-rendimento la retta è
+> la Capital Market Line, un verdetto che il laboratorio non disegna). Nessun lavoro richiesto. Server 6164 fermato.
+
+## Checkpoint di L3° · giro 5 (il selettore del benchmark) · 2026-10-02 (verso Risk)
+
+> Il delta, i gruppi (G1–G5) e i digest stanno nel messaggio a Risk e in `/tmp/libreFolio_commits/f-l5-*`.
+> Dopo il commit: la divisione L1°/L3° (concessa), il banner della qualità dei dati, poi la tappa 1 del pannello.
+> Stato: **FROZEN** fino al commit.
+>
+> **Ritocco chiesto dal developer prima del commit (11:3x), alla lettera**: «poi, nella label Per ogni asset
+> selezionato, quanto ha oscillato e quanto ha reso in media all'anno, nel grafico e nella tabella; con un benchmark
+> scelto nella Dashboard, anche quanto si è mosso insieme a lui. aggiorna la parte della scelta del benckmark poi».
+> - `risk.assetSet.levels.l3.description` × 4 (`/tmp/libreFolio_f4/l5_i18n_l3desc.sh`): «… nella tabella e nel grafico;
+>   con un benchmark scelto in cima alla scheda, anche quanto si è mosso insieme a lui.» Era l'ultima frase del
+>   laboratorio a nominare la Dashboard (cercato in `risk.assetSet.*` nelle 4 lingue); in più, l'ordine segue la pagina,
+>   con la tabella prima del grafico.
+> - vitest `assetSetI18n`, sezione e livelli: 145/145; E2E non rifatti, perché nessun selettore legge testo tradotto.
+> - Registro rifatto (G1 e G5 cambiano) e mandato a Risk.
