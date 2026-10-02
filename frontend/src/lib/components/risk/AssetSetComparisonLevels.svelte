@@ -1,36 +1,34 @@
 <script lang="ts">
     /**
-     * The two comparison levels of Asset Global, on one request.
+     * The two comparison levels of Asset Global, each on a request of its own.
      *
-     * **Why one controller for both levels, and not one each.** All five
-     * per-asset analytics are `ASSET_SET` × `HISTORICAL`, so asking for them
-     * together makes a single canonical request — and `queryRisk` caches and
-     * de-duplicates on exactly that key (`riskStore:131`). One flight, one
-     * response, two readers.
+     * **Why two controllers, one per level** (the developer's decision of 02/10):
+     * L1° is measured without the benchmark, L3° with it. A benchmark is prepared
+     * inside the request that asks for its comparison, and joins that request's
+     * joint window. When the two levels shared one request, choosing a benchmark
+     * moved L1°'s figures — and turned them Partial on prices the benchmark's own
+     * dates left stale — for an instrument L1° does not even show. So L1° asks for
+     * its share of the per-asset wave (`includeAssetSetLossLevels`: the two VaR
+     * horizons and the drawdown) and never the comparison; L3° asks for its share
+     * (`includeAssetSetPaidLevels`: the KPI, the risk/return pair and, with a
+     * benchmark, the comparison).
      *
-     * ⚠️ **It is one request for these two levels, not for the page.** The
-     * correlation section and the replay section build their own controllers
-     * without this opt-in, so the laboratory issues more than one call: theirs
-     * carries `[correlation]`, this one carries `correlation` plus the five. An
-     * earlier draft of this comment claimed every section asked for the identical
-     * set — that was the design intent read back as if it were a measurement, and
-     * it was wrong about two sections that never opted in.
+     * ⚠️ **They are not the only requests on the page.** The correlation section
+     * and the replay section build their own controllers too, so the laboratory
+     * issues several calls: each carries `correlation` beside its own analytics.
      *
      * 🔑 **Commensurability survives that, and here is why it is not luck.**
      * Clause ⓪ of the asset-set contract asks for *one preparation per request*,
      * and `service.py:170` prepares the joint series **once per request, before
      * the analytic loop** — from the scope, the window and the currency, never
      * from which analytics were asked for. Two requests that agree on those three
-     * therefore get the *same* joint calendar, so a dot from this wave and a cell
-     * from the matrix above are measured over the same dates. What the extra
-     * request costs is the preparation, paid twice; what it does not cost is
-     * correctness.
+     * therefore get the *same* joint calendar: without a benchmark, a dot from L3°,
+     * a row of L1° and a cell from the matrix above are measured over the same
+     * dates. With one, only L3° moves, and its period line says which window it
+     * used. What the extra request costs is the preparation, paid again; what it
+     * does not cost is correctness.
      *
-     * Folding the matrix into this wave would remove that cost, and was left
-     * undone deliberately: it would hand the correlation section a benchmark id
-     * it has no use for, purely so its request key would match this one.
-     *
-     * **Why its own controller rather than the panel's**, and it is the same
+     * **Why their own controllers rather than the panel's**, and it is the same
      * reason the correlation section gives: `loadBase` has no emptiness check, so
      * a controller declared at the panel's top level fires the instant the
      * selection empties and comes back 422, which the panel would then show as a
@@ -83,34 +81,50 @@
 
     let {assetIds, assetLabels, assetIcons, dateStart, dateEnd, targetCurrency, benchmarkId, refreshVersion = 0}: Props = $props();
 
-    const controller = createRiskPanelController(
+    // Sharpe and Sortino are charged against a zero risk-free rate here, as the
+    // correlation section already does, because this page has no control to set
+    // one — and inventing a rate the reader never chose would put a number in the
+    // denominator of every ratio on screen.
+
+    /** L1°: its share of the wave, and never the benchmark — not even read here. */
+    const lossController = createRiskPanelController(
         () => ({
             scope: {kind: 'asset_set', asset_ids: assetIds},
             dateStart,
             dateEnd,
             targetCurrency,
-            // Sharpe and Sortino are charged against a zero risk-free rate here,
-            // as the correlation section already does, because this page has no
-            // control to set one — and inventing a rate the reader never chose
-            // would put a number in the denominator of every ratio on screen.
+            appliedRiskFreePercent: 0,
+            refreshVersion,
+        }),
+        {includeAssetSetLossLevels: true},
+    );
+
+    /** L3°: its share of the wave, with the benchmark when one applies. */
+    const paidController = createRiskPanelController(
+        () => ({
+            scope: {kind: 'asset_set', asset_ids: assetIds},
+            dateStart,
+            dateEnd,
+            targetCurrency,
             appliedRiskFreePercent: 0,
             refreshVersion,
             assetSetBenchmarkId: benchmarkId,
         }),
-        {includeAssetSetLevels: true},
+        {includeAssetSetPaidLevels: true},
     );
 
-    let historical = $derived(controller.historicalResults);
+    let lossHistorical = $derived(lossController.historicalResults);
+    let paidHistorical = $derived(paidController.historicalResults);
 
     // The two VaR horizons share an analytic code, so they are resolved by
     // instance: a lookup by code would return whichever arrived first and the
     // bad day and the bad month would become the same column.
-    let dailyVar = $derived(resultByInstance(historical, ASSET_SET_DAILY_VAR_INSTANCE));
-    let monthlyVar = $derived(resultByInstance(historical, ASSET_SET_MONTHLY_VAR_INSTANCE));
-    let drawdown = $derived(resultByCode(historical, 'asset_set_drawdown'));
-    let riskReturn = $derived(resultByCode(historical, 'asset_set_risk_return'));
-    let kpi = $derived(resultByCode(historical, 'asset_set_kpi'));
-    let comparison = $derived(resultByCode(historical, 'asset_set_comparison'));
+    let dailyVar = $derived(resultByInstance(lossHistorical, ASSET_SET_DAILY_VAR_INSTANCE));
+    let monthlyVar = $derived(resultByInstance(lossHistorical, ASSET_SET_MONTHLY_VAR_INSTANCE));
+    let drawdown = $derived(resultByCode(lossHistorical, 'asset_set_drawdown'));
+    let riskReturn = $derived(resultByCode(paidHistorical, 'asset_set_risk_return'));
+    let kpi = $derived(resultByCode(paidHistorical, 'asset_set_kpi'));
+    let comparison = $derived(resultByCode(paidHistorical, 'asset_set_comparison'));
 
     // Each level's own slice. The VaR pair is labelled by instance so a
     // disclosure names the row the reader is missing instead of repeating the
@@ -129,14 +143,16 @@
      * A base answer discarded twice running is said once, by the frame, with the same
      * code the replay and the Dashboard's L4 use (`answer_discarded`); the body only
      * offers the retry. Without it both levels showed their rows of dashes in silence.
+     * Each level reads its own controller: one level's discarded answer is not the other's.
      */
-    let discardedCodes = $derived(controller.loadDiscarded ? [ANSWER_DISCARDED_CODE] : []);
-    let l1Errors = $derived([...resultErrorCodes(l1Results), ...discardedCodes]);
+    let lossDiscardedCodes = $derived(lossController.loadDiscarded ? [ANSWER_DISCARDED_CODE] : []);
+    let paidDiscardedCodes = $derived(paidController.loadDiscarded ? [ANSWER_DISCARDED_CODE] : []);
+    let l1Errors = $derived([...resultErrorCodes(l1Results), ...lossDiscardedCodes]);
     let l1Metadata = $derived(levelMetadata(l1Results));
 
     let l3Health = $derived(degradedResults(l3Results));
     let l3Reasons = $derived(resultReasons(l3Results, $t));
-    let l3Errors = $derived([...resultErrorCodes(l3Results), ...discardedCodes]);
+    let l3Errors = $derived([...resultErrorCodes(l3Results), ...paidDiscardedCodes]);
     let l3Metadata = $derived(levelMetadata(l3Results));
 
     /**
@@ -161,7 +177,19 @@
 </script>
 
 <RiskLevelSection title={$t('risk.assetSet.levels.l1.title')} level={1} testId="risk-asset-set-loss" health={l1Health} reasons={l1Reasons} errorCodes={l1Errors} metadata={l1Metadata} docsPath="financial-theory/technical-analysis/risk-metrics/" actions={lossTable ? lossActions : undefined}>
-    <AssetSetLossComparisonSection bind:tableRef={lossTable} {assetIds} {assetLabels} {assetIcons} {dailyVar} {monthlyVar} {drawdown} loading={controller.initialLoading} failed={controller.loadError} discarded={controller.loadDiscarded} onretry={() => void controller.loadBase(true)} />
+    <AssetSetLossComparisonSection
+        bind:tableRef={lossTable}
+        {assetIds}
+        {assetLabels}
+        {assetIcons}
+        {dailyVar}
+        {monthlyVar}
+        {drawdown}
+        loading={lossController.initialLoading}
+        failed={lossController.loadError}
+        discarded={lossController.loadDiscarded}
+        onretry={() => void lossController.loadBase(true)}
+    />
 </RiskLevelSection>
 
 {#snippet lossActions()}
@@ -184,9 +212,9 @@
         {benchmarkApplies}
         {dateStart}
         {dateEnd}
-        loading={controller.initialLoading}
-        failed={controller.loadError}
-        discarded={controller.loadDiscarded}
-        onretry={() => void controller.loadBase(true)}
+        loading={paidController.initialLoading}
+        failed={paidController.loadError}
+        discarded={paidController.loadDiscarded}
+        onretry={() => void paidController.loadBase(true)}
     />
 </RiskLevelSection>
