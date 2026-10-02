@@ -17,8 +17,9 @@ const fetchRiskCatalog = vi.hoisted(() => vi.fn());
 const fetchRiskScenarioCatalog = vi.hoisted(() => vi.fn());
 const queryRisk = vi.hoisted(() => vi.fn());
 const invalidateRisk = vi.hoisted(() => vi.fn());
-/** Read at call time by the `hasRiskCapability` stub; `beforeEach` puts it back. */
-const capability = vi.hoisted(() => ({supported: true}));
+/** Read at call time by the `hasRiskCapability` stub; `beforeEach` puts it back. `only`, when a
+ *  test sets it, narrows "everything" to what one catalogue offers. */
+const capability = vi.hoisted(() => ({supported: true, only: null as ((code: string, scopeKind: string, mode: string) => boolean) | null}));
 
 vi.mock('$lib/stores/risk/riskStore.svelte', async (importOriginal) => {
     const actual = await importOriginal<typeof import('$lib/stores/risk/riskStore.svelte')>();
@@ -30,13 +31,15 @@ vi.mock('$lib/stores/risk/riskStore.svelte', async (importOriginal) => {
         invalidateRisk,
         // Every analytic is available: capability gating is the panel's business,
         // not the controller's, and stubbing it here keeps the subject singular.
-        // The one test about an unsupported analytic flips it for itself.
-        hasRiskCapability: () => capability.supported,
+        // The one test about an unsupported analytic flips it for itself, and the
+        // asset-set cases narrow it to what an asset set is offered, so the lab's
+        // request here is the one the lab sends.
+        hasRiskCapability: (_catalog: unknown, code: string, scopeKind: string, mode: string) => capability.supported && (capability.only?.(code, scopeKind, mode) ?? true),
     };
 });
 
 import {assertEffectsRun, effectRoot, reactiveBox, recordReads} from '$test/runes.svelte';
-import {ANSWER_DISCARDED_CODE, baseSignature, createRiskPanelController, discardedErrorCodes, LEVEL_ON_DEMAND_ANALYSES, ON_DEMAND_ANALYSES, type OnDemandAnalysis, type RiskControllerInputs, type RiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
+import {ANSWER_DISCARDED_CODE, baseSignature, createRiskPanelController, discardedErrorCodes, LEVEL_ON_DEMAND_ANALYSES, ON_DEMAND_ANALYSES, type OnDemandAnalysis, type RiskControllerInputs, type RiskControllerOptions, type RiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
 
 /** `asset_ids` reaches the portfolio scope with K4; the generated client does not
  *  declare it yet, so the test states the shape the controller will actually see. */
@@ -67,9 +70,9 @@ function deferred<T>(): {promise: Promise<T>; resolve: (value: T) => void} {
     return {promise, resolve};
 }
 
-function mountController(initial: RiskControllerInputs = defaultInputs()) {
+function mountController(initial: RiskControllerInputs = defaultInputs(), options: RiskControllerOptions = {}) {
     const inputs = reactiveBox(initial);
-    const {value: controller, stop} = effectRoot(() => createRiskPanelController(() => inputs));
+    const {value: controller, stop} = effectRoot(() => createRiskPanelController(() => inputs, options));
     flushSync();
     return {controller, inputs, stop};
 }
@@ -164,6 +167,7 @@ describe('riskPanelController', () => {
         queryRisk.mockReset().mockResolvedValue({items: []});
         invalidateRisk.mockReset();
         capability.supported = true;
+        capability.only = null;
     });
 
     it('does not touch its inputs while the host script is still running', () => {
@@ -766,6 +770,180 @@ describe('riskPanelController', () => {
             expect(reads.values.at(-1), 'the flag flipped but no effect reading it re-ran: a level deriving its sentence from it would never show it').toBe(true);
             reads.stop();
             stop();
+        });
+    });
+
+    // ------------------------------------------------------------------
+    // The asset-set wave, split per level (the developer's decision, 2026-10-02): L1° is measured
+    // without the benchmark and only L3° asks with it, so the lab builds one controller per level —
+    // `includeAssetSetLossLevels` for L1°, `includeAssetSetPaidLevels` for L3° — and each option has
+    // to reach the request the way `includeAssetSetLevels` does. Written red first: today the
+    // controller passes neither on, so the request it issues carries no per-asset analytic at all.
+    //
+    // The pins are the other half, green today and meant to stay so: the callers that never opt in
+    // — the Dashboard's levels, Asset Detail's panel — and the lab as it asks today, on the union,
+    // each send byte for byte the requests they send now. Copied from a run before the split.
+    // ------------------------------------------------------------------
+    describe('the asset-set wave, split per level', () => {
+        /** Invented, and unlike any other number a request carries — an id, a horizon, a rate. */
+        const BENCHMARK = 47;
+        /** What the backend's catalogue offers an asset set — the correlation and the per-asset family, historical only — as `AssetSetComparisonLevels.test.ts` declares it. */
+        const ASSET_SET_HISTORICAL_CODES = new Set(['correlation', 'asset_set_kpi', 'asset_set_var', 'asset_set_drawdown', 'asset_set_risk_return', 'asset_set_comparison']);
+
+        function assetSetCatalogue(code: string, scopeKind: string, mode: string): boolean {
+            return scopeKind === 'asset_set' && mode === 'historical' && ASSET_SET_HISTORICAL_CODES.has(code);
+        }
+
+        /** The lab's inputs: two holdings, a 0% risk-free rate (the page has no control for one), and a benchmark outside the selection. */
+        function labInputs(): RiskControllerInputs {
+            return {...defaultInputs(), scope: {kind: 'asset_set', asset_ids: [12, 15]}, appliedRiskFreePercent: 0, assetSetBenchmarkId: BENCHMARK};
+        }
+
+        /** Mounted with `options`, its first base wave settled, and stopped when the test ends, red or green. */
+        async function settledController(initial: RiskControllerInputs, options: RiskControllerOptions): Promise<void> {
+            const {controller, stop} = mountController(initial, options);
+            onTestFinished(stop);
+            await vi.waitFor(() => expect(controller.initialLoading, 'the base wave the mount fires never settled').toBe(false));
+        }
+
+        /** The per-asset analytics of the one historical request issued: instance and parameters. */
+        function assetSetAnalyticsAsked(): unknown[] {
+            const historical = queryRisk.mock.calls.map(([request]) => request as RiskQueryRequest).filter((request) => request.mode === 'historical');
+            expect(historical, 'premise: one base load is one historical request').toHaveLength(1);
+            return historical[0].analytics.filter((analytic) => analytic.analytic_code.startsWith('asset_set_')).map((analytic) => [analytic.instance_id, analytic.parameters]);
+        }
+
+        /** Every request issued, with its `force` flag: first as data, for a readable diff, then as the bytes the wire carries. */
+        function expectIssuedToday(today: unknown[], caller: string): void {
+            expect(queryRisk.mock.calls, `${caller}: the requests moved — a caller that never asked for the split sends something new`).toEqual(today);
+            expect(JSON.stringify(queryRisk.mock.calls), `${caller}: the same requests in different bytes — a key moved, or one appeared that serialises`).toBe(JSON.stringify(today));
+        }
+
+        /** The Dashboard's levels over 2025, in EUR, at a 2% risk-free rate: two requests, historical then current composition. */
+        const DASHBOARD_TODAY = [
+            [
+                {
+                    scope: {kind: 'portfolio'},
+                    date_range: {start: '2025-01-01', end: '2025-12-31'},
+                    target_currency: 'EUR',
+                    mode: 'historical',
+                    analytics: [
+                        {instance_id: 'base-historical-historical_kpi', analytic_code: 'historical_kpi', parameters: {risk_free_annual_rate: 0.02, target_annual_return: 0}},
+                        {instance_id: 'base-historical-correlation', analytic_code: 'correlation', parameters: {}},
+                        {instance_id: 'base-historical-historical_var', analytic_code: 'historical_var', parameters: {confidence_level: 0.95, horizon_days: 1}},
+                        {instance_id: 'base-historical-historical_var-monthly', analytic_code: 'historical_var', parameters: {confidence_level: 0.95, horizon_days: 30}},
+                        {instance_id: 'base-historical-drawdown_summary', analytic_code: 'drawdown_summary', parameters: {}},
+                    ],
+                },
+                false,
+            ],
+            [
+                {
+                    scope: {kind: 'portfolio'},
+                    date_range: {start: '2025-01-01', end: '2025-12-31'},
+                    target_currency: 'EUR',
+                    mode: 'current_composition',
+                    composition_policy: 'current_buy_and_hold',
+                    analytics: [
+                        {instance_id: 'base-current_composition-risk_contribution', analytic_code: 'risk_contribution', parameters: {}},
+                        {instance_id: 'base-current_composition-historical_kpi', analytic_code: 'historical_kpi', parameters: {risk_free_annual_rate: 0.02, target_annual_return: 0}},
+                        {instance_id: 'base-current_composition-asset_risk_return', analytic_code: 'asset_risk_return', parameters: {}},
+                    ],
+                },
+                false,
+            ],
+        ];
+
+        /** Asset Detail's panel for one asset, same window: two requests. */
+        const ASSET_DETAIL_TODAY = [
+            [
+                {
+                    scope: {kind: 'asset', asset_id: 12},
+                    date_range: {start: '2025-01-01', end: '2025-12-31'},
+                    target_currency: 'EUR',
+                    mode: 'historical',
+                    analytics: [
+                        {instance_id: 'base-historical-historical_kpi', analytic_code: 'historical_kpi', parameters: {risk_free_annual_rate: 0.02, target_annual_return: 0}},
+                        {instance_id: 'base-historical-correlation', analytic_code: 'correlation', parameters: {}},
+                        {instance_id: 'base-historical-historical_var', analytic_code: 'historical_var', parameters: {confidence_level: 0.95, horizon_days: 1}},
+                    ],
+                },
+                false,
+            ],
+            [
+                {
+                    scope: {kind: 'asset', asset_id: 12},
+                    date_range: {start: '2025-01-01', end: '2025-12-31'},
+                    target_currency: 'EUR',
+                    mode: 'current_composition',
+                    composition_policy: 'current_buy_and_hold',
+                    analytics: [{instance_id: 'base-current_composition-risk_contribution', analytic_code: 'risk_contribution', parameters: {}}],
+                },
+                false,
+            ],
+        ];
+
+        /** The lab's two levels as they ask today, on the union, the benchmark inside: one request for both. */
+        const LAB_UNION_TODAY = [
+            [
+                {
+                    scope: {kind: 'asset_set', asset_ids: [12, 15]},
+                    date_range: {start: '2025-01-01', end: '2025-12-31'},
+                    target_currency: 'EUR',
+                    mode: 'historical',
+                    analytics: [
+                        {instance_id: 'base-historical-correlation', analytic_code: 'correlation', parameters: {}},
+                        {instance_id: 'base-historical-asset_set_kpi', analytic_code: 'asset_set_kpi', parameters: {risk_free_annual_rate: 0, target_annual_return: 0}},
+                        {instance_id: 'base-historical-asset_set_var', analytic_code: 'asset_set_var', parameters: {confidence_level: 0.95, horizon_days: 1}},
+                        {instance_id: 'base-historical-asset_set_var-monthly', analytic_code: 'asset_set_var', parameters: {confidence_level: 0.95, horizon_days: 30}},
+                        {instance_id: 'base-historical-asset_set_drawdown', analytic_code: 'asset_set_drawdown', parameters: {}},
+                        {instance_id: 'base-historical-asset_set_risk_return', analytic_code: 'asset_set_risk_return', parameters: {}},
+                        {instance_id: 'base-historical-asset_set_comparison', analytic_code: 'asset_set_comparison', parameters: {comparison_asset_id: 47}},
+                    ],
+                },
+                false,
+            ],
+        ];
+
+        it('includeAssetSetLossLevels reaches the request: the bad day, the bad month and the drawdown, and nothing of the benchmark', async () => {
+            capability.only = assetSetCatalogue;
+            await settledController(labInputs(), {includeAssetSetLossLevels: true});
+
+            expect(assetSetAnalyticsAsked(), "the loss option never reached L1°'s request, or brought the benchmark into it").toEqual([
+                ['base-historical-asset_set_var', {confidence_level: 0.95, horizon_days: 1}],
+                ['base-historical-asset_set_var-monthly', {confidence_level: 0.95, horizon_days: 30}],
+                ['base-historical-asset_set_drawdown', {}],
+            ]);
+        });
+
+        it('includeAssetSetPaidLevels reaches the request: the KPI, the risk/return and the comparison against the benchmark', async () => {
+            capability.only = assetSetCatalogue;
+            await settledController(labInputs(), {includeAssetSetPaidLevels: true});
+
+            expect(assetSetAnalyticsAsked(), "the paid option never reached L3°'s request").toEqual([
+                ['base-historical-asset_set_kpi', {risk_free_annual_rate: 0, target_annual_return: 0}],
+                ['base-historical-asset_set_risk_return', {}],
+                ['base-historical-asset_set_comparison', {comparison_asset_id: BENCHMARK}],
+            ]);
+        });
+
+        it("pins the Dashboard's levels: the requests they send today, byte for byte", async () => {
+            // `RiskLevelsPanel`'s options (the Dashboard and the broker page), callbacks aside: those change no request.
+            // Every analytic stays advertised, so a split option that defaulted to on would put the per-asset family on this wire.
+            await settledController(defaultInputs(), {includeDrawdownSummary: true, includeMonthlyVar: true, includeCurrentCompositionRiskReturn: true});
+            expectIssuedToday(DASHBOARD_TODAY, "the Dashboard's levels");
+        });
+
+        it("pins Asset Detail's panel: the requests it sends today, byte for byte", async () => {
+            // `RiskAnalysisPanel`'s only option is a callback.
+            await settledController({...defaultInputs(), scope: {kind: 'asset', asset_id: 12}}, {scenarioCatalogLoaded: () => undefined});
+            expectIssuedToday(ASSET_DETAIL_TODAY, "Asset Detail's panel");
+        });
+
+        it('pins the lab as it asks today, on the union with a benchmark: one request, byte for byte', async () => {
+            capability.only = assetSetCatalogue;
+            await settledController(labInputs(), {includeAssetSetLevels: true});
+            expectIssuedToday(LAB_UNION_TODAY, 'the lab on the union');
         });
     });
 });

@@ -120,6 +120,10 @@ export interface RiskControllerOptions {
      * half of clause ⓪, *one preparation per request*.
      */
     includeAssetSetLevels?: boolean;
+    /** L1°'s share of the per-asset wave only (`buildBaseAnalytics`): the lab's loss level, never with the benchmark. */
+    includeAssetSetLossLevels?: boolean;
+    /** L3°'s share of the per-asset wave only: the KPI, the risk/return pair and the comparison. */
+    includeAssetSetPaidLevels?: boolean;
 }
 
 /**
@@ -269,6 +273,8 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
                 includeMonthlyVar: options.includeMonthlyVar === true,
                 includeCurrentCompositionRiskReturn: options.includeCurrentCompositionRiskReturn === true,
                 includeAssetSetLevels: options.includeAssetSetLevels === true,
+                includeAssetSetLossLevels: options.includeAssetSetLossLevels === true,
+                includeAssetSetPaidLevels: options.includeAssetSetPaidLevels === true,
                 assetSetBenchmarkId: assetSetBenchmarkId ?? null,
             };
             const historicalAnalytics = buildBaseAnalytics('historical', context);
