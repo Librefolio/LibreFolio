@@ -851,7 +851,7 @@ $$
 | Termine | Contenuto |
 |---|---|
 | $C_{free}$ | cash raggiungibile spendibile finale, incluso netto SELL non usato |
-| $R_{physical}$ | buffer FX + tax `self_reserved` |
+| $R_{physical}$ | buffer FX (❌ non più da fare, developer, 02/10/2026) + tax `self_reserved` |
 | $L_{economic}$ | fee, spread, differenze charge/sell e tax `broker_withheld`, once-only |
 | $A_{round}$ | delta firmato dei posting alla minor unit |
 
@@ -908,8 +908,8 @@ Cash non selezionato resta fuori da entrambi i lati.
 2. accredito lordo SELL;
 3. fee BUY/SELL;
 4. credito destinazione FX;
-5. fee FX;
-6. buffer FX;
+5. fee FX; ❌ non più da fare (developer, 02/10/2026)
+6. buffer FX; ❌ non più da fare (developer, 02/10/2026)
 7. tax reserve.
 
 Funding, trasferimenti e debiti FX sorgente sono già multipli validati della
@@ -1332,7 +1332,7 @@ Casi minimi:
 4. budget sotto minimo;
 5. required minimum incompatibile;
 6. due valute con FX;
-7. buffer e fee FX;
+7. buffer e fee FX; ❌ non più da fare (developer, 02/10/2026)
 8. cash trapped;
 9. fee fissa e activation;
 10. SELL con PMC/gain/tax;

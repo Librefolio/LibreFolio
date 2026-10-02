@@ -736,7 +736,7 @@ economic loss
 Include:
 
 - fee BUY/SELL;
-- fee FX;
+- fee FX; ❌ non più da fare (developer, 02/10/2026)
 - differenza charge/sell rispetto al mid;
 - tax reserve;
 
@@ -744,7 +744,7 @@ ed esclude:
 
 - cash libero finale per Broker×valuta, mai attribuito artificialmente a un
   Asset o a una route;
-- buffer FX;
+- buffer FX; ❌ non più da fare (developer, 02/10/2026)
 - valore investito;
 - rounding.
 
@@ -991,7 +991,7 @@ Richiede decisione/versione separata:
 - settlement temporale;
 - profili fee dinamici;
 - target per Broker;
-- FX multi-hop;
+- FX multi-hop; ❌ non più da fare (developer, 02/10/2026)
 - Pareto frontier multi-risultato;
 - obiettivo risk-based.
 

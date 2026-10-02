@@ -361,7 +361,7 @@ stabilisce solo ownership e completezza.
 
 Ogni route dichiara separatamente margine prudenziale/spread esecuzione BUY e
 SELL. Questi coefficienti valgono anche quando quotazione e ledger hanno la
-stessa valuta; non vengono confusi con spread o buffer FX.
+stessa valuta; non vengono confusi con spread o buffer FX (❌ non più da fare, developer, 02/10/2026).
 
 ### 6.3 Union esplicite
 

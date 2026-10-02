@@ -1102,15 +1102,15 @@ E2E Playwright: **dopo** l'approvazione umana, come da hard gate di Step 5 (Step
    | # | Scenario | Atteso |
    |---|---|---|
    | S1 | draft vuoto | ~~`needs_input`~~ **corretto il 24/09:** «Continua» si ferma su Liquidità con l'avviso «1 problema da correggere» (gating locale D8), senza chiamate al backend. `needs_input` non si raggiunge dalla UI: si prova in T5 e TB1 |
-   | S2 | solo manuale, senza asset DB | ~~proven oracolo~~ ~~**corretto il 24/09:** `ready_incumbent` + `not_proven` quando il contributo passa da una route di funding di taglia reale. Il trasferimento si enumera al centesimo (`evaluator.py:694-716`), per cui 1000 € su due ETF a 100 e 50 dà 100 001 × 11 × 21 ≈ 2,3·10⁷ candidati, sopra il tetto di 200 000: decide SCIP.~~ **Corretto il 28/09 (D-X1):** la taglia del dominio non conta più. SCIP chiude ogni stadio → `ready_incumbent` + `optimal_proven`, fonte «stato del solver», `completed`. Nessuna copia necessaria (quantum da babel, C0b.1) |
-   | S2b | come S2, dominio minuscolo (5 € su ETF a 1 e 2) | ~~`ready_incumbent` + `optimal_proven` dall'oracolo; il testimone riporta 501 × 6 × 3 = 9 018 candidati~~ **Corretto il 28/09 (D-X1):** `ready_incumbent` + `optimal_proven` dal solver; il testimone dice quanti obiettivi della cascata il solver ha chiuso all'ottimo, non più quanti candidati |
-   | S2c | PAC comune (100 € su ETF a 50 e 100) | **difetto 🔴 X1** (nota del Passo E): ~~oggi `tool_error` `execution_limit`.~~ Curato dal commit 4 (D-X1). Atteso: `ready_incumbent` + `optimal_proven` in pochi istanti, mai errore |
+   | S2 | solo manuale, senza asset DB | ~~proven oracolo~~ ~~**corretto il 24/09:** `ready_incumbent` + `not_proven` quando il contributo passa da una route di funding di taglia reale. Il trasferimento si enumera al centesimo (`evaluator.py:694-716`), per cui 1000 € su due ETF a 100 e 50 dà 100 001 × 11 × 21 ≈ 2,3·10⁷ candidati, sopra il tetto di 200 000: decide SCIP.~~ **Corretto il 28/09 (D-X1):** la taglia del dominio non conta più. SCIP chiude ogni stadio → `ready_incumbent` + `optimal_proven`, fonte «stato del solver», `completed`. Nessuna copia necessaria (quantum da babel, C0b.1). **Visto il 29/09 (F6, smoke):** 1000 € su ETF a 100 e 50, target 60/40 → 6 + 8 unità, L2 = 0, U = 0; testimone «5 obiettivi della cascata chiusi all'ottimo dal solver»; risposta in 0,7 s (compute 20 ms) |
+   | S2b | come S2, dominio minuscolo (5 € su ETF a 1 e 2) | ~~`ready_incumbent` + `optimal_proven` dall'oracolo; il testimone riporta 501 × 6 × 3 = 9 018 candidati~~ **Corretto il 28/09 (D-X1):** `ready_incumbent` + `optimal_proven` dal solver; il testimone dice quanti obiettivi della cascata il solver ha chiuso all'ottimo, non più quanti candidati. **Visto il 29/09 (F6, mobile 430×932):** 3 + 1 unità (3 € + 2 €), `optimal_proven`, 0,66 s (il 24/09 l'oracolo impiegava 29,5 s) |
+   | S2c | PAC comune (100 € su ETF a 50 e 100) | **difetto 🔴 X1** (nota del Passo E): ~~oggi `tool_error` `execution_limit`.~~ Curato dal commit 4 (D-X1). Atteso: `ready_incumbent` + `optimal_proven` in pochi istanti, mai errore. **Visto il 29/09 (F6):** target 60/40 → 1 unità dell'ETF a 50 €, L2 = 1 700 EUR², U = 50 €, `optimal_proven`, 0,7 s |
    | S3 | copie da broker OWNER | provenance e date visibili; età in giorni dei dati non del giorno, nessuna conferma (Q-C0-3) |
-   | S4 | broker non OWNER | errore esplicito |
+   | S4 | broker non OWNER | errore esplicito. **Nota del 29/09:** le finestre di copia elencano solo i Broker di cui l'utente è proprietario, e sulla copia c'è un solo utente: dalla UI si controlla solo il testo; l'errore esplicito lo provano i test API |
    | S5 | budget sotto la quota minima più le fee | `ready_no_op` |
-   | S6 | vincolo impossibile | `infeasibility_proven` |
-   | S7 | pesi non validi | `invalid`, campo evidenziato |
-   | S8 | broker inattivo o altro caso unsupported | `unsupported` |
+   | S6 | vincolo impossibile | `infeasibility_proven` (esempio del 29/09: ETF a 100 €, 100 €, «Minimo obbligatorio» 2 nella route) |
+   | S7 | pesi non validi | ~~`invalid`, campo evidenziato~~ **corretto il 29/09:** «Continua» si ferma su Obiettivi con «Il totale degli obiettivi è X%, deve essere 100% (controllo)» (gating locale D8, `request.ts:197-199`). Come per S1, `invalid` non si raggiunge dalla UI: lo provano i test |
+   | S8 | broker inattivo o altro caso unsupported | `unsupported`. **Nota del 29/09:** dalla UI solo con un Broker inattivo dell'utente, copiato (badge «Inattivo») e usato per un ordine (`normalize.py:342-343`); senza, lo provano i test |
    | S9 | ~~dominio oltre 200 000 candidati~~ **corretto il 28/09 (D-X1):** ricerca troncata da un limite | ~~`not_proven`, tempi in C14; scenario testimone del delta C0 §0.1~~ `ready_incumbent` o `ready_no_incumbent` + `not_proven`, stop `time_limit`. Con 30 s di budget non si raggiunge con dati piccoli: lo provano i test (budget zero) |
    | S10 | EUR + USD con FX e spread | righe FX nel piano |
    | S11 | busy e annulla | D7 |
@@ -1119,6 +1119,8 @@ E2E Playwright: **dopo** l'approvazione umana, come da hard gate di Step 5 (Step
    | S14 | privacy ON/OFF | come T7 |
    | S15 | viewport mobile | D4 |
    | S16 | «Copia distribuzione corrente» sui dati del developer | pesi uguali a quelli della pagina Allocazione quando lo scenario comprende tutti gli holding; asset manuale a 0 con nota; target applicato solo con «Usa come target» |
+   | S17 | **(29/09, QX1-b)** arrotondamento con integrazione: un ETF a 33,335 €, contributo 100,00 €, fee a zero | `ready_incumbent` + `optimal_proven`, 3 unità, addebito 100,01 €; riga «Per eseguire il piano servono 0,01 € in più su <broker> (EUR), per gli arrotondamenti all'unità minima»; saldo finale −0,01 €; U = −0,005 €. Visto nello smoke F6. Qui si fa la review matematica di R3 |
+   | S18 | **(29/09, X2)** fee col minimo: ETF a 10 €, 100 €, fee 0,19 % con minimo 1,50 € | 9 unità, addebito 90 € più fee 1,50 €, funding 91,50 €; U = 10 € (8,50 di cassa libera più 1,50 di fee); `optimal_proven`. Visto nello smoke F6 |
 
 5. Feedback nel piano; correzioni; server spento; porte libere.
 
@@ -1941,10 +1943,16 @@ Ordine, con i documenti prima del codice (regola del developer):
     >   usate: `LedgerTable.svelte:56` le compone da `LEDGER_FIELDS` (`model.ts:174`). Nessuna
     >   azione. Le PAC «not verified» passano da 3 a 5; le «Likely Unused» sono solo le 2 attese in
     >   più.
-  - Il gate d'accordo SCIP↔oracolo tiene conto di X3 respinta. Dove un pareggio è raggiungibile,
-    SCIP può fare meglio dell'oracolo esatto usando il centesimo del pareggio. Quindi:
-    - sui domini senza pareggi (`_half_up_tie_reachable` falso) gli ottimi coincidono;
-    - altrove SCIP non è mai peggiore dell'oracolo.
+  - Il gate d'accordo SCIP↔oracolo tiene conto di X3 respinta. Dove è raggiungibile il pareggio di
+    un addebito (acquisto o commissione), SCIP può fare meglio dell'oracolo esatto usando il
+    centesimo del pareggio. Quindi (riscritto il 02/10, R13.6):
+    - sui domini senza pareggi degli addebiti gli ottimi coincidono, anche quando l'accredito FX
+      cade su un pareggio (fixture `credit_tie_fx`). L'accredito entra solo con `+` nelle righe
+      `≥ 0` e in nessun obiettivo, quindi il modello può sempre usare il valore più alto, che è
+      quello vero: l'insieme ammissibile non cambia;
+    - dove è raggiungibile il pareggio di un addebito, SCIP non è mai peggiore dell'oracolo.
+    - Il guard sui pareggi degli accrediti, con `_half_up_tie_reachable`, non c'è più: opzione A
+      del developer, 02/10.
   - Schema e API.
   - Le prove usa-e-getta del 24/09 sono copiate nella cartella di sessione (`files/x1-probes/`),
     perché `/tmp` si svuota al riavvio.
@@ -2128,10 +2136,109 @@ Ordine, con i documenti prima del codice (regola del developer):
   >     `ready_no_incumbent`, dove nessun piano è pubblicato;
   >   - l'avviso di limite di `StateNotice` per `no_incumbent` dice «nessun piano trovato» anche
   >     quando SCIP ne aveva uno e il replay lo ha respinto.
-- **F6 — verifica.**
+- **F6 — verifica.** ✅ 2026-09-29
   - Suite su 6151, `front check` e build.
   - Smoke S2, S2b e S2c più un caso X2 sulla copia 6161.
   - Copia rinfrescata prima della review.
+
+  > **Note implementazione** (2026-09-29):
+  > - Identità: a HEAD `f6d7a955d` i 22 blob coincidono con `/tmp/libreFolio_commits/d-f5-qx1b.sha8`
+  >   (`/tmp/libreFolio_d_f6_head_sha8.log`).
+  > - `front build --debug`: rc 0 in 1 min 12 s, 10:15:47 → 10:17:00
+  >   (`/tmp/libreFolio_d_f6_front_build.log`). Il build ha rigenerato il client: `openapi.json`
+  >   alle 10:15:54, `generated.ts` alle 10:15:57, i contratti dei tool alle 10:15:59. Il suo
+  >   svelte-check è al pavimento 3/41/4, nessun file PAC.
+  > - `front check` (client delle 10:15:57): rc 1 allo stesso pavimento, 3 errori e 41 warning in
+  >   `BrokerSharingPanel`, `GlobalSettingsTab`, `TransactionFormModal.test`, `ToolExecutionMetrics`
+  >   (`/tmp/libreFolio_d_f6_front_check.log`).
+  > - Stile, tutto pulito:
+  >   - `prettier --check` sui 65 file PAC del frontend e sui 4 cataloghi;
+  >   - `dev.py lint` (ruff, tutto il backend);
+  >   - `black --check` sui 30 file Python del PAC.
+  > - Suite su 6151 (`/tmp/libreFolio_d_f6_gates.sh`, 10:18:32 → 10:21:08), tutte rc 0 e con i
+  >   conteggi del gate del commit 5 (`/tmp/libreFolio_d_f6_gates_summary.log`):
+  >
+  >   | Categoria | Suite | Passati |
+  >   |---|---|---|
+  >   | services | pac-planner-core / -evaluator / -oracle / -policies / -solver | 152 / 159 / 20 / 40 / 19 |
+  >   | services | pac-planner-proof / -wire-numbers / -report / -service | 30 / 39 / 18 / 31 |
+  >   | services | tools-registry | 93 |
+  >   | schemas | pac-planner / tools | 467 / 271 |
+  >   | api | pac-planner-tool / tools | 6 / 7 |
+  >   | front-utility | core-unit / component-unit | 2647 (98 file) / 2119 (86 file) |
+  >
+  > - Smoke Playwright usa-e-getta sulla copia 6161 (`/tmp/libreFolio_d_f6/smoke_pac.mjs`, esito
+  >   in `/tmp/libreFolio_d_f6/smoke/report.json`, con request, response e screenshot di ogni
+  >   scenario): **5/5**, 0 errori di console, 0 page error, 0 risposte 4xx/5xx.
+  >   - Hub `ready`, 0 degradati, 0 interfacce mancanti, «Backend/API 2.0.0 · UI 2.0.0».
+  >   - Ogni scenario: `ready_incumbent`, `optimal_proven`, stop `completed`, replay Decimal
+  >     verificato, i 5 stadi SCIP `finished`. Risposte fra 0,62 e 0,70 s, compute 14–20 ms.
+  >   - S2, S2b (mobile) e S2c: esiti nella tabella del runbook (Passo E). S2c non va più in
+  >     errore: X1 è curato anche sulla UI.
+  >   - X2 (fee col minimo) e il caso del top-up QX1-b sono le righe nuove S18 e S17 del runbook.
+  >     Sul top-up la condizione del coordinator è verificata sul risultato pubblicato: 3 unità e
+  >     0,01 € da aggiungere (`rounding_top_ups`, `rounded_postings` 1), non sulla strada interna.
+  >   - Privacy ON su S2: le istruzioni diventano «buy ••• units», gli importi dei KPI sono
+  >     mascherati, «Ordini 2» resta in chiaro (voce già in R7); OFF ripristina.
+  > - Copia rinfrescata dopo lo smoke: la vecchia, `/tmp/librefolio-r2-d-prodcopy.prev-20260929-102854`,
+  >   è cancellata alle 10:38 su richiesta del coordinator (dati reali, non servono più); utenti = 1,
+  >   solo quello del developer.
+  > - Server di review su 6161, PID 70702, avviato alle 10:30:40: health 200, `/tools/catalog`
+  >   senza auth → 401 (`/tmp/libreFolio_d_f6/server_review.log`). Serve dal disco il build di HEAD
+  >   delle 10:39:27 (vedi F7).
+  >
+  > **⚠️ Fuori pista**:
+  > - **Esperimento dichiarato**, come il 24/09: superuser usa-e-getta `pac_smoke` (ID 2), creato
+  >   dopo un `list` che mostrava solo l'ID 1, con una password casuale tenuta solo nell'ambiente del
+  >   processo e mai scritta. Il refresh lo ha tolto. S3, S4 e S16, che richiedono i dati reali,
+  >   restano al runbook del developer.
+  > - **Flag dei server della copia**, diversi dal comando del Passo E:
+  >   - `--host 127.0.0.1`, perché la copia contiene dati personali;
+  >   - `--no-scheduler`, anche per la review, così prezzi e date restano fermi: S3 mostra l'età
+  >     vera dei dati e S16 si confronta con la pagina Allocazione a parità di prezzi;
+  >   - `--no-reload`.
+  >
+  >   Se il developer vuole lo scheduler, o la review da un telefono sulla LAN, riavvio a richiesta.
+  > - All'avvio c'è un warning dal download di MathJax dal CDN (errore SSL): ambientale, fuori dal PAC.
+  > - Il repo non ha E2E del PAC (arriva dopo lo STOP, §4 punto 7): la verifica UI è lo smoke.
+  > - Nuovo per la review R3, sulla schermata S17: U = −0,005 € (investiti 100,005 € contro 100,00),
+  >   mentre il saldo finale è −0,01 € (addebito 100,01 arrotondato HALF_UP) e la riga «Rounding» del
+  >   ledger vale 0,005 €.
+- **F7 — nessun titolo della scheda nelle pagine Tools** — ~~a D~~ **riassegnato a K il 29/09**
+  (coordinator). Il motivo: il cambiamento è uno solo, cioè nessuna pagina imposta più un titolo.
+  Tocca File, le pagine Tools, il reset di `+layout.svelte` (che diventa codice morto),
+  `document-title.spec.ts` e `layout.gate.test.ts`. Diviso fra due rami sarebbe un conflitto
+  certo sullo stesso spec e sulla sua intestazione, e il comportamento arriverebbe spezzato in due
+  integrazioni. Il ramo di D non ha mai toccato le pagine Tools, quindi la modifica di K non
+  entra in conflitto con D.
+  - ~~`tools/+page.svelte:6-8` e `tools/[tool_code]/+page.svelte:9-11` tolgono il blocco
+    `<svelte:head><title>` («Tools · LibreFolio»), e con lui l'import di `t`, che resta senza uso.~~
+  - ~~La chiave `tools.title` resta: la usano `Sidebar.svelte:41`, `ToolsHub.svelte:151`,
+    `ToolHost.svelte:240-249` e `ToolAboutPanel.svelte:242`. Nessuna modifica i18n.~~ (Dato
+    passato a K col messaggio al coordinator.)
+  - ~~Test: il caso 3 di `e2e/layout/document-title.spec.ts` («una pagina col proprio titolo lo
+    rimette dopo Files», `:139-158`) ha per premessa il titolo di Tools. Diventa obsoleto per
+    decisione di prodotto, non per un difetto. Il test-author lo toglie, riallinea l'intestazione e
+    aggiunge la regressione: le pagine Tools lasciano il titolo di default. Il nuovo caso non passa
+    da Files, così regge anche quando K toglie il titolo di Files.~~ Anche la descrizione del
+    runner (`_frontend_utility.py:527`, «Tools still sets its own») è di K.
+  - ~~`+layout.svelte:57-64` (il reset) resta, finché non sono entrati sia D sia K. Il commento di
+    `layout.gate.test.ts:19` («Only Files and Tools set a title») diventa inesatto: lo lascio a chi
+    toglierà il reset, perché anche K lo rende inesatto.~~
+  - ~~Gate: `front check` al pavimento; prettier sui file toccati; `front build --debug`, poi l'E2E
+    `document-title.spec.ts` su 6151. Il build riscrive `frontend/build`, servito dalla 6161 della
+    review: si fa quando il developer non la sta usando.~~
+
+  > **⚠️ Fuori pista** (2026-09-29):
+  > - Prima del cambio di assegnazione avevo già tolto i due blocchi `<title>` e lanciato
+  >   `front build --debug` (10:36:33 → 10:37:48, rc 0, `/tmp/libreFolio_d_f7_front_build.log`).
+  >   Nessun test lanciato e nessun test-author coinvolto.
+  > - Ripristino con l'edit tool, non con `git checkout`: `git diff --quiet HEAD --` sui due file
+  >   → 0, blob uguali a HEAD (`5b86893a`, `4d51cfb5`).
+  > - `front build --debug` rilanciato (10:38:14 → 10:39:27, rc 0,
+  >   `/tmp/libreFolio_d_f7_front_build_restore.log`). La 6161 (stesso PID 70702) serve di nuovo
+  >   HEAD: i chunk delle pagine Tools (`nodes/13`, `nodes/14`) contengono di nuovo
+  >   «· LibreFolio» e rispondono 200.
 
 ### ⛔ STOP — review di dettaglio col developer
 
@@ -2145,10 +2252,1386 @@ Ogni tema matematico si guarda **sulla schermata della UI che lo espone**, sui d
 | R4 | Cascata obiettivi | L2 fixed → U → priorità → fee → righe → tie-break; cosa significano L2 (EUR²) e U. |
 | R5 | Ricerca e prova | ~~Oracolo fino a 200 000 = dimostrato; SCIP oltre = `not_proven`; infeasible solo dall'oracolo;~~ **D-X1 (24/09):** SCIP unico; `optimal` su tutti gli stage = ottimo, `infeasible` sul primo = impossibile, limite = tempo scaduto; l'oracolo resta nei test. Determinismo = `completed`; budget di 30 s; **domanda aperta sul numero di asset** (ginocchio ≈ 18 asset multi-valuta). Le soglie crescenti per il tetto delle route (Q-C0-5) entrano nella stessa misura. **🔴 X1 (24/09):** la premessa «fino a 200 000 = dimostrato» valeva solo fino a circa 13 000 candidati (≈ 3,3 ms ciascuno contro la soft deadline di 44 s); fra 13 000 e 200 000 il job moriva con `execution_limit`. ~~Opzioni: sotto-budget dell'oracolo con fallback a SCIP; tetto tarato sul tempo; funding e FX dedotti invece che enumerati; evaluator più veloce.~~ Chiuso da D-X1, Passo F. |
 | R6 | Report e spiegazioni | `buffer = 0`, deployment omesso, ~~`describe_conclusion` non usato~~ (tolto nel commit 4, decisione del developer del 28/09), freshness non riportata: cosa mostrare. Reperti N19, N23. |
-| R7 | UI risultati e privacy | Tabella campo per campo personal/public/strutturale, **quantità incluse**; tetti e minimi delle route (default mascherati); input in chiaro durante la scrittura. Voci nuove dello smoke: «1 units» senza plurale; L2 nella locale del browser (`format.ts:185`); titolo del contributo con etichetta vuota; testimone «9,018» contro «2212»; valori floating degli stage con tutte le cifre; numero di ordini in chiaro con privacy ON (da confermare). |
+| R7 | UI risultati e privacy | Tabella campo per campo personal/public/strutturale, **quantità incluse**; tetti e minimi delle route (default mascherati); input in chiaro durante la scrittura. Voci nuove dello smoke: «1 units» senza plurale; L2 nella locale del browser (`format.ts:185`); titolo del contributo con etichetta vuota; testimone «9,018» contro «2212»; valori floating degli stage con tutte le cifre; numero di ordini in chiaro con privacy ON (da confermare). **Voce nuova del 29/09**, trovata preparando la lista per il developer: la copia della distribuzione rimanda a «i valori della pagina Allocazione» e «i pesi differiscono dalla pagina», in tutte e 4 le lingue (`tools.pacAllocator.planner.distribution.source` / `.differs`, `DistributionDialog.svelte:98,118`). Quella pagina non esiste: è il pannello «Allocazione Patrimoniale» della Dashboard (`AllocationPanel.svelte:68`). Nessuna correzione prima della review. |
 | R8 | Registro decisioni | E la prossima fetta (§4). |
 | R9 | Toast di `ToolsHub` | Un `renderer_missing` atteso non merita un toast (`notify.svelte.ts:53-55`): correggerlo ora o metterlo in backlog. |
 | R10 | Stadi di tie-break e stop (latente, da prima di D-X1) | L'evidenza sul filo toglie gli stadi `tie:*` (`planner_report.py:814`), ma `build_stop_reason` li legge (`planner_report.py:910-913`). Se il budget finisce durante un tie-break, lo stop è `time_limit` mentre il filo non mostra alcuno stadio non terminato: `_validate_stop_evidence` (`schemas/pac_allocator.py:2125-2127`) alza un errore e il piano diventa un errore del tool, invece di un `not_proven` onesto. La finestra è stretta, ma con D-X1 ogni piano passa da SCIP. Opzioni: (a) un campo sul filo che dica che il tie-break è stato troncato; (b) contare lo stop solo sugli stadi pubblicati, ma allora `completed` non vorrebbe più dire «riproducibile»; (c) pubblicare anche gli stadi di tie-break, allargando `ObjectiveCode`. Da decidere; nessuna correzione nel commit 4. |
+
+### Iterazione UI col developer — passi 1 (Scenario) e 2 (Liquidità) ⏳ 2026-09-29, in attesa del suo feedback
+
+Il developer guarda la 6161 e scrive direttamente a D. Chiede di migliorare la UI dei passi 1 e 2, **senza test automatici**, e di fargliela vedere subito.
+
+**Cosa ha segnalato:**
+- in Strumenti c'è solo il PAC;
+- Scenario: la data è più bassa del selettore di valuta, e non è chiaro a cosa serva; il banner «Nessun valore finanziario in questo passo.» non ha senso;
+- Liquidità:
+  - vuole l'icona del Broker nella copia;
+  - un clic in qualsiasi punto della riga deve selezionarla e colorarla tutta;
+  - i due avvisi della copia non sono chiari, e ne compare uno su Recrowd, che non aveva selezionato;
+  - non si capisce la differenza fra «Contributo» e «Conto manuale».
+
+- ✅ 2026-09-29 — **modifiche fatte; la build è sulla 6161.**
+
+  > **Note implementazione** (2026-09-29). Tutti i file sono sotto `frontend/src/lib/features/tools/pac-allocator/planner/`.
+  >
+  > **Scenario** (`steps/ScenarioStep.svelte`):
+  > - tolto il banner (`scenario.noValues` rimossa);
+  > - la valuta usa `CurrencySearchSelect compact`, alta quanto un input, e la data non ripete l'etichetta interna;
+  > - due spiegazioni: `scenario.asOfHint` (a cosa serve la data) e `scenario.currencyHint`;
+  > - nuova introduzione `scenario.intro`, che spiega il PAC puro e dice che è una simulazione.
+  >
+  > **Liquidità** (`steps/LiquidityStep.svelte`, `ui.ts`: `CHOICE_CARD`, `ICON_BUBBLE`):
+  > - un'introduzione e tre schede-fonte al posto dei tre pulsanti, testid invariati:
+  >   - «Dai tuoi Broker»;
+  >   - «Nuovo versamento»;
+  >   - «Conto esterno»;
+  > - ogni scheda porta un'icona e una frase che la distingue dalle altre;
+  > - le card della liquidità mostrano l'icona del Broker (`BrokerIcon`, con i campi letti da `getBrokerInfo`); la card del versamento mostra un salvadanaio.
+  >
+  > **Finestra di copia** (`steps/BrokerScopeCopyDialog.svelte`, `scope.ts` con `iconUrl`/`portalUrl`/`pluginCode`):
+  > - ogni riga selezionabile è un'unica `<label>`, quindi un clic ovunque la seleziona;
+  > - la riga selezionata è verde per intero (`data-selected`);
+  > - le righe bloccate hanno un bordo tratteggiato e l'icona grigia.
+  >
+  > **Avvisi della copia** (`shared/CopyNotice.svelte`, `format.ts` con `formatPlannerClock`):
+  > - il riepilogo usa il plurale ICU;
+  > - «copiati alle HH:mm» se la copia è di oggi, altrimenti data e ora;
+  > - l'issue del profilo di esecuzione diventa **una sola frase informativa** con i nomi dei Broker, senza tono di avviso.
+  >
+  > **Terminologia**, solo i valori e non i nomi delle chiavi:
+  > - «contributo» → «versamento» (FR «versement», ES «aportación»);
+  > - «conto manuale» → «conto esterno» (FR «compte externe», ES «cuenta externa»);
+  > - allineate anche 6 chiavi degli altri passi che usavano i vecchi termini (`brokerEditor.noFunding`, `issues.allocation.negative_contribution`, `problems.*` ×3, `summary.contributions`).
+  >
+  > **i18n**, solo con `dev.py i18n`, da `/tmp/libreFolio_d_ui12/i18n_apply.py` (log `i18n_apply.log`):
+  > - 7 chiavi aggiunte, 29 aggiornate, 1 rimossa; da 4103 a 4109 chiavi per lingua, insiemi identici;
+  > - valori riletti uguali al copione (0 differenze);
+  > - le stringhe ICU nuove sono formattate con `intl-messageformat` nelle 4 lingue (log `icu_check.log`).
+  >
+  > **Build**:
+  > - `front build --debug`, dalle 13:21:19 alle 13:22:35, rc 0, log `/tmp/libreFolio_d_ui12/build.log`;
+  > - la 6161 (PID 70702, invariato) serve il chunk con i testid nuovi; health 200.
+  >
+  > **Nessun test eseguito** e nessun test-author coinvolto, su richiesta del developer.
+
+  > **⚠️ Fuori pista** (2026-09-29):
+  > - **Recrowd non selezionato.** `BrokerScopeCopyDialog` legge la fonte per tutti i Broker posseduti, e `outcome()` copiava tutte le `source.issues`. Ora `selectedBrokerIssues` (`copies.ts:35`) tiene solo le issue senza entità o di un Broker selezionato. La usano `applyBrokerCopy` e `applyLiquidityCopy` (`copies.ts:152,170`).
+  > - **Profilo di esecuzione.** Il backend imposta `execution_profile_status="not_available"` per ogni Broker (`portfolio_allocation_source.py:727`) ed emette `allocation.broker_execution_profile_unsupported` con severità `error` (`:743-752`): il DB non ha né fee né modalità d'ordine. Il backend non è stato toccato; la UI la presenta come informazione (`CopyNotice.svelte:32-44`).
+  > - **Un solo tool.** In `backend/app/services/tool_plugins/` c'è solo `pac_allocator.py`: non è un difetto.
+  > - **`svelte-check`**, lanciato dalla build `--debug`: 3 errori e 41 warning in 4 file, **nessuno nel planner**. Gli errori sono in `features/tools/components/ToolExecutionMetrics.svelte:44` (piattaforma C) e `TransactionFormModal.test.ts:787,819`. Sono preesistenti (file non toccati) e fuori perimetro; segnalati al coordinatore.
+  >
+  > **Debito di test**, per il test-author, dopo il feedback:
+  > - le issue filtrate sui Broker selezionati;
+  > - la frase del profilo e il plurale in `CopyNotice` (~~`sameDay`~~: tolto nel round 2);
+  > - il clic sulla riga e `data-selected`;
+  > - ~~`formatPlannerClock`~~: rimossa nel round 2, sostituita da `formatCopyStamp`.
+  >
+  > **Follow-up** per coerenza, non fatti:
+  > - `DistributionDialog` mostra ancora l'issue grezza del profilo;
+  > - `OwnerBrokerPicker` ha ancora le righe vecchie;
+  > - le chiavi legacy `tools.pacAllocator.*` fuori da `planner.` sembrano morte: verificarle con l'audit i18n.
+
+#### Round 2 — secondo feedback del developer ⏳ 2026-09-29, in attesa del suo feedback
+
+**Cosa ha chiesto:**
+- Scenario: le spiegazioni non a schermo, ma in un `Tooltip` dietro un'icona «?»;
+- avviso della copia: togliere «Non si aggiornano da soli…»; solo un badge con data e ora, **solo la data** se i dati sono di un giorno prima di oggi;
+- una domanda: la data di riferimento ha senso? La sua idea era rileggere i prezzi correnti subito prima del calcolo e lasciare i manuali come sono (vedi «Decisione aperta» sotto);
+- un pulsante «Tutto» accanto a «Importo da usare»;
+- versamento: l'etichetta nel titolo, modificabile, numerata «Nuovo versamento 1, 2, …»;
+- conto esterno: la valuta nel titolo a 3 lettere, con `currencyFormat.ts` e le regole di design del progetto;
+- le card nell'ordine dei clic, riordinabili con `OrderableList`.
+
+- ✅ 2026-09-29 — **modifiche fatte; la build è sulla 6161.**
+
+  > **Note implementazione** (2026-09-29). Tutti i file sono sotto `frontend/src/lib/features/tools/pac-allocator/planner/`.
+  >
+  > **Scenario** (`steps/ScenarioStep.svelte`, `ui.ts` con `HELP_BUTTON`):
+  > - le due spiegazioni sono in un `Tooltip` (`components/ui/feedback/Tooltip.svelte`) dietro un pulsante «?» (`CircleHelp`) accanto all'etichetta;
+  > - testid `pac-planner-scenario-date-help` e `-currency-help`; i vecchi `-hint` non esistono più;
+  > - l'`aria-label` del pulsante contiene etichetta e spiegazione;
+  > - l'introduzione resta a schermo.
+  >
+  > **Badge della copia** (`shared/CopyNotice.svelte`, `format.ts` con `formatCopyStamp`):
+  > - la frase `copyNotice.when` è tolta;
+  > - accanto al riepilogo c'è un badge (`BADGE.neutral`, icona `Clock`, testid `…-stamp`):
+  >   - dati di oggi: data e ora della copia;
+  >   - dati di un giorno precedente, o ora illeggibile: solo la data;
+  >   - «oggi» è `defaultAsOf(now)`;
+  > - il `title` del badge usa `copyNotice.stamp`;
+  > - lo stesso testo compare nell'`OriginBadge` della card di cassa copiata;
+  > - `formatPlannerClock` è rimossa: il suo unico uso era `CopyNotice`.
+  >
+  > **`defaultAsOf`** passa da `draft.svelte.ts` a `defaults.ts`: serve a `format.ts` senza creare un ciclo. Non ha altri importatori.
+  >
+  > **«Tutto»** (`steps/LiquidityStep.svelte`, testid `pac-planner-cash-use-all`):
+  > - un `BUTTON_SECONDARY` accanto a «Importo da usare» copia `available` in forma canonica;
+  > - disabilitato se il disponibile non è un numero positivo;
+  > - vale sia per la cassa copiata sia per il conto esterno;
+  > - per un Broker in quota parziale «Tutto» è l'intera custodia, cioè il massimo che il backend accetta (`normalize.py:443-449`).
+  >
+  > **Versamento**:
+  > - il titolo si modifica sul posto: un input dentro l'`<h3>` (`ui.ts` con `TITLE_INPUT`), con una matita `PenLine` che si accende al passaggio; testid invariato `pac-planner-contribution-label`;
+  > - il campo «Etichetta» esce dalla griglia, che resta con 2 colonne (importo e valuta);
+  > - l'importo non ha più il suffisso di valuta, perché il selettore della valuta è accanto;
+  > - nome predefinito da `contribution.defaultLabel`, «Nuovo versamento {n}», con n = numero di versamenti + 1; i nomi già presenti vengono saltati.
+  >
+  > **Valuta nel titolo** (`shared/CurrencyCode.svelte`, nuovo):
+  > - rende `formatCurrencyCodeHtml`: simbolo, bandiera e codice ISO a 3 lettere, la regola di progetto già usata da WAC e dal Bulk modal;
+  > - si ridisegna con `currencyStoreVersion` e carica il catalogo con `ensureCurrenciesLoaded($currentLanguage)`;
+  > - è usata nei titoli di cassa e di conto esterno e come unità in «Liquidità dichiarata» e «Importo da usare»;
+  > - `cash.title` e `cash.manualTitle` non contengono più `{currency}`.
+  >
+  > **Ordine** (`draft.svelte.ts`: `LiquidityEntry`, `liquidityEntryKey`, `liquidityOrder`, `liquidityEntries`, `reorderLiquidity`, `forgetLiquidityEntry`):
+  > - cassa e versamenti sono un'unica `OrderableList`: si trascina su desktop, si usano le frecce su mobile;
+  > - prima l'ordine scelto dall'utente, poi le card restanti per `enteredAt`, cioè nell'ordine dei clic;
+  > - l'ordine sta **fuori da `data`**: riordinare non cambia l'impronta della richiesta e non rende vecchio un risultato;
+  > - `reset` lo svuota; una card rimossa perde il suo posto.
+  >
+  > **i18n**, solo con `dev.py i18n`, da `/tmp/libreFolio_d_ui12/i18n_round2.py` (log `i18n_round2.log`):
+  > - 4 aggiunte: `cash.useAll`, `cash.useAllHint`, `contribution.defaultLabel`, `copyNotice.stamp`;
+  > - 2 aggiornate: `cash.title`, `cash.manualTitle`;
+  > - 1 rimossa: `copyNotice.when`;
+  > - da 4109 a 4112 chiavi per lingua, insiemi identici, 0 differenze dal copione (`verify_round2.log`);
+  > - ICU formattato nelle 4 lingue (`icu_check_r2.log`).
+  >
+  > **Build**:
+  > - `front build --debug`, rc 0, log `/tmp/libreFolio_d_ui12/build2.log`;
+  > - svelte-check dà gli stessi 3 errori preesistenti fuori dal planner, e nessun warning nel planner;
+  > - la 6161 (PID 70702) risponde 200 su health e sulla pagina del tool; il chunk contiene i testid nuovi e nessun riferimento ai vecchi.
+  >
+  > **Nessun test eseguito**, su richiesta del developer.
+
+  > **⚠️ Fuori pista** (2026-09-29):
+  > - **`LiquidityStep.svelte` riscritto per intero** invece che con modifiche mirate, e il sorgente del round 1 non era salvato. L'ho recuperato dalla sourcemap della build di debug (`sourcesContent` di `build/_app/immutable/chunks/O4vLtp2c.js.map`) e l'ho confrontato con la riscrittura: le differenze sono solo quelle volute.
+  > - **Scheduler e prezzi correnti**, per la domanda sulla data:
+  >   - lo scheduler è attivo per default e aggiorna i prezzi correnti ogni 10 minuti, per gli asset attivi con un provider;
+  >   - il percorso è `services/scheduler/jobs.py:38` `run_current_price_refresh` → `get_current_prices_bulk`, che scrive OHLC; le impostazioni sono in `schemas/settings.py:300-309`;
+  >   - quindi una lettura del DB dà già l'ultimo prezzo corrente, senza che il planner chiami un provider o scriva.
+  > - **`OrderableList` e input.** L'intera riga è `draggable`: in Firefox trascinare il mouse dentro un input di una riga trascinabile può non selezionare il testo. `ChartSignalsSection` usa già lo stesso schema con degli input. Da osservare nel feedback.
+  >
+  > **Debito di test**, in aggiunta:
+  > - `formatCopyStamp`: dati di oggi → data e ora; giorno precedente → solo data; ora illeggibile → solo data;
+  > - «Tutto»: valore canonico; disabilitato se il disponibile è vuoto o non positivo;
+  > - titolo modificabile e numerazione predefinita, che salta i nomi presi;
+  > - `CurrencyCode`, con catalogo caricato e non caricato;
+  > - `liquidityEntries`: ordine dei clic, riordino, rimozione, `reset`, e riordino che non cambia l'impronta.
+  >
+  > **Follow-up**, non fatti:
+  > - `BrokerEditor` mostra ancora «etichetta · versamento» (`contribution.kind`);
+  > - gli `OriginBadge` degli altri passi usano ancora `formatPlannerTimestamp`;
+  > - i titoli delle frecce di `OrderableList` sono fissi in inglese: componente condiviso, fuori perimetro.
+
+  > **Decisione — la data di riferimento ✅ 2026-09-29: opzione 2**, scelta dal developer (`ask_user`: «Opzione 2: tolgo la data e rileggo i dati copiati prima di Calcola»). L'esecuzione è il Round 3, sotto. Le opzioni restano qui come traccia.
+  >
+  > Con lo scheduler attivo, «rileggere l'ultimo prezzo corrente» è una lettura del DB. Le opzioni:
+  > 1. **Minima**, circa mezza giornata, solo frontend:
+  >    - il campo data sparisce, e «oggi» è fissato in automatico alla copia e al calcolo;
+  >    - i prezzi manuali perdono la data;
+  >    - quelli copiati tengono la loro, con l'etichetta di età;
+  >    - backend e contratto restano invariati.
+  > 2. **Consigliata**, circa una giornata più i test: l'opzione 1, più una rilettura subito prima di «Calcola»:
+  >    - si rileggono da LibreFolio (`POST /portfolio/allocation-source`, una lettura del DB senza provider e senza scritture) prezzi, FX e cassa copiati e non modificati, e si aggiornano;
+  >    - i valori modificati e quelli manuali restano, senza finestra di conflitto;
+  >    - servono una fase «occupato» e una politica per gli errori;
+  >    - backend e contratto restano invariati;
+  >    - resta coerente col «draft protetto da sovrascritture»: non è un legame live, è un aggiornamento su un'azione dell'utente.
+  > 3. **Chiamata live ai provider** (`POST /assets/prices/current`) prima del calcolo, circa 2 giorni:
+  >    - scrive OHLC di oggi durante una simulazione, contro la decisione chiusa «/assets/prices/current … non innocente auto-prefill»;
+  >    - la risposta non ha `quote_base_quantity`, quindi servono una modifica al backend e un `api sync`;
+  >    - aggiunge latenza e guasti dei provider;
+  >    - rispetto alla 2 guadagna poco, visto lo scheduler.
+  > 4. **Lasciare com'è.**
+  >
+  > Qualunque cambio va al coordinatore, perché 05, 06 e la guida lo registrino.
+
+#### Round 3 — data automatica e rilettura prima di «Calcola» ⏳ 2026-09-29, in attesa del feedback del developer
+
+Decisione del developer: opzione 2 (sopra). Solo frontend del planner: backend, contratto `2.0.0` e client generato restano invariati.
+
+**Passi:**
+- R3.1 ✅ 2026-09-29 — `as_of` automatico:
+  - `draft.refreshAsOf()` fissa `data.asOf = defaultAsOf()`; si chiama prima di ogni lettura di copia e all'inizio di «Calcola»;
+  - il campo data esce dallo Scenario, e la data esce dal riepilogo e dal passo Revisione;
+  - i testi che citano la data della copia la perdono; le chiavi rimaste senza uso si tolgono con `dev.py i18n`.
+- R3.2 ✅ 2026-09-29 — prezzi dell'utente senza data:
+  - `AssetEditor` perde il campo data;
+  - un prezzo manuale, o copiato e poi modificato, parte con `reference_date = as_of` e `fresh`;
+  - i controlli sulla data del prezzo valgono solo per i prezzi copiati e non modificati;
+  - l'etichetta di età sparisce per prezzi e cambi modificati; i conteggi «non del giorno» contano solo i fatti copiati e non modificati (`review.ts`, `draft.svelte.ts`).
+- R3.3 ✅ 2026-09-29 — `refreshCopiedFacts` in `copies.ts`:
+  - una sola `POST /portfolio/allocation-source` per prezzi (`assets`, `prices`), saldi (`brokers`, `cash_balances`) e cambi (`fx_quotes`), solo per i fatti copiati e non modificati;
+  - `broker_ids`: i Broker di proprietà (`loadCopyScope`) più quelli delle casse copiate. Un Broker non più tuo dà 403, mai un taglio silenzioso;
+  - aggiorna valore, base copiata, timbro e fonte. Non aggiunge righe e non tocca «Importo da usare», classificazioni, distribuzione né Broker;
+  - una riga assente lascia il valore di prima e viene contata come «non trovata».
+- R3.4 ✅ 2026-09-29 — fase di rilettura prima del calcolo:
+  - la vista del risultato mostra la rilettura in corso, con «Interrompi attesa», che riporta alla Revisione;
+  - se la rilettura fallisce, un pannello offre «Riprova», «Calcola con i dati copiati» (consenso esplicito) e «Modifica configurazione»;
+  - dopo la rilettura, una riga sopra il risultato dice quanti prezzi, cambi e saldi sono cambiati e quanti non sono stati trovati;
+  - se la rilettura porta «Importo da usare» sopra il disponibile, il calcolo si ferma col problema locale che già esiste.
+- R3.5 ✅ 2026-09-29 — i18n, `front build --debug`, verifica sulla 6161. Nessun test automatico.
+- R3.6 ⏳ — feedback del developer su round 2 e round 3.
+
+  > **Note implementazione** (2026-09-29):
+  >
+  > **Data** (R3.1, R3.2):
+  > - `draft.refreshAsOf()` fissa `data.asOf = defaultAsOf()`, cioè il minimo fra data locale e data UTC, perché `normalize.py:215` rifiuta un `as_of` dopo la data UTC dello snapshot. Si chiama in `SourceCopyDialog.copy()`, `BrokerScopeCopyDialog` (`onMount`), `DistributionDialog.read()` e all'inizio di `calculate`;
+  > - `priceIsCopied` e `rateIsCopied` (`draft.svelte.ts`) dicono se un fatto è ancora uguale alla sua copia. Solo questi fatti portano la data della fonte, l'etichetta di età e i conteggi «non del giorno» (`review.ts`, `AssetsStep`, `AssetEditor`, `FxStep`);
+  > - `request.ts`: un prezzo copiato e non modificato manda la sua data; uno manuale o modificato manda `data.asOf`. I tre problemi sulla data sono tolti;
+  > - tolti il campo data da `ScenarioStep` (resta solo la valuta, col suo `?`), la riga data dal riepilogo e dalla Revisione, il campo data da `AssetEditor` (griglia prezzo a 3 colonne).
+  >
+  > **Rilettura** (R3.3, `copies.ts`, sezione «Re-read before «Calcola»»):
+  > - `refreshPlan` raccoglie gli id degli asset con prezzo copiato e non modificato, i Broker delle casse copiate e le coppie FX copiate e non modificate; `null` se non resta nulla, e allora non si legge niente;
+  > - `refreshQuery` fa una sola lettura: le sezioni servono solo per i tipi presenti; `broker_ids` = Broker di proprietà ∪ Broker delle casse copiate, quindi un Broker non più tuo dà 403 e mai un taglio silenzioso; `asset_ids` esplicito, anche vuoto (lo schema accetta `[]`);
+  > - `refreshCopiedFacts` ricontrolla la condizione «non modificato» al momento di applicare, così una modifica fatta durante la lettura non viene sovrascritta. Crea al più un `CopyRecord` per tipo, e chiude con `pruneCopies`;
+  > - «cambiato» ignora la data per i prezzi (`sameQuote`) e guarda solo il tasso per l'FX: un fatto con la sola data nuova conta come invariato, ma prende timbro e data nuovi;
+  > - cassa: si abbina per `source_broker_id` e valuta; aggiorna disponibile, quota e importo economico, e confronta anche la quota. Il disponibile di una cassa copiata non è modificabile dall'utente (`LiquidityStep.svelte:166-175`), quindi la rilettura non può sovrascrivere una sua modifica;
+  > - non tocca mai «Importo da usare» e non aggiunge righe. Una riga assente lascia il valore copiato e finisce in `missing`, col nome dell'asset, la coppia o «Broker · valuta»;
+  > - distribuzione e classificazioni non si rileggono: sono basi dell'utente.
+  >
+  > **Fase di rilettura** (R3.4, `PacPlannerTool.svelte`):
+  > - `calculate`: `refreshAsOf` → problemi locali (se ci sono, alla Revisione) → rilettura → `buildRequest`, che riesegue i problemi locali. Così un saldo sceso sotto «Importo da usare» ferma il calcolo alla Revisione, con la riga della rilettura sopra;
+  > - `refreshCopies` usa un contatore di sequenza: «Interrompi attesa», un nuovo «Calcola» o lo smontaggio la superano. Proprietari da `loadCopyScope`; errori con le chiavi esistenti `copy.scopeError` e `copy.noOwner`, oppure con quello della lettura;
+  > - `BusyPanel` ha `phase` (`refresh` | `compute`, `data-phase`) e il riepilogo della richiesta solo in fase di calcolo;
+  > - nuovo `result/RefreshFailedPanel.svelte`: «Riprova», «Calcola con i dati copiati» (`calculate({refresh: false})`), «Modifica configurazione»;
+  > - nuovo `result/RefreshNotice.svelte`: quanti prezzi, cambi e saldi sono cambiati, oppure «nessun valore è cambiato», più i non trovati, che la rendono un avviso. Sta sopra il risultato se l'impronta coincide con quella della richiesta, e nella Revisione solo se il calcolo si è fermato lì;
+  > - `runState` aggiunge `refreshing` e `refresh_failed`; `data-busy` e `aria-busy` valgono anche durante la rilettura;
+  > - `retry()` dopo un errore della piattaforma rimanda la stessa richiesta senza rileggere;
+  > - `CopyNotice`: il `title` del badge dice, per prezzi, cambi e liquidità, che i valori non modificati si rileggono prima del calcolo.
+  >
+  > **i18n**, solo con `dev.py i18n`, da `/tmp/libreFolio_d_ui12/i18n_round3.py` (log `i18n_round3.log`, 24 operazioni con rc 0):
+  > - 11 aggiunte: `busy.refreshing`, `refresh.failed.{title,body,retry,proceed}`, `refresh.notice.{summary,prices,fx,cash,unchanged,missing}`;
+  > - 6 aggiornate: `copy.sourcePortfolio`, `pricesCopy.source`, `fxCopy.source`, `distribution.source` (senza `{date}`), `age.after`, `copyNotice.stamp` (ICU `select` su `kind`);
+  > - 7 rimosse: `scenario.asOf`, `scenario.asOfHint`, `summary.date`, `problems.asOfMissing`, `problems.priceDateMissing`, `problems.priceDateAfterReference`, `assetEditor.priceDate`;
+  > - da 4112 a 4116 chiavi per lingua, insiemi identici, 0 differenze dal copione (`verify_round3.log`); ICU formattato nelle 4 lingue, plurali 1/n compresi (`icu_check_r3.log`);
+  > - nessun riferimento rimasto alle chiavi rimosse, né import senza uso nel planner.
+  >
+  > **Build**:
+  > - `front build --debug`, rc 0, log `/tmp/libreFolio_d_ui12/build3.log`;
+  > - svelte-check: gli stessi 3 errori e 41 warning preesistenti, in 4 file fuori dal planner;
+  > - la 6161 (PID 70702) risponde 200 su `/api/v1/system/health` e sulla pagina del tool; i chunk contengono i testid nuovi (`pac-planner-refresh-notice`, `-refresh-failed`, `-refresh-retry`, `-refresh-proceed`, `data-phase`) e nessuno di quelli tolti.
+  >
+  > **Nessun test eseguito**, su richiesta del developer.
+
+  > **⚠️ Fuori pista** (2026-09-29):
+  > - **Tre politiche scelte senza chiedere**, da confermare col feedback: un errore di rilettura blocca e offre le tre scelte; «Importo da usare» non si adegua da solo a un saldo cambiato; un fatto non trovato tiene il valore copiato ed è elencato.
+  > - **«Cambiato» senza la data.** `samePrice` confronta anche la data, che per un prezzo copiato cambia ogni giorno: contarla avrebbe dato «1 prezzo aggiornato» a valore identico. Per il conteggio ho aggiunto `sameQuote`, che la ignora.
+  > - **Nessuno spec E2E del planner** nel ramo: `e2e/tools/allocation-tool-fixtures.ts` viene dal prototipo del Round 4 (`d66f8e58e`) e nessuno spec la importa. La lettura in più non rompe quindi nessuno spec esistente; la fixture orfana va attribuita con la test-triage nel debito di test.
+  >
+  > **Debito di test**, in aggiunta:
+  > - `refreshPlan`: solo fatti copiati e non modificati; `null` senza niente da leggere;
+  > - `refreshQuery`: sezioni per tipo, proprietari ∪ Broker delle casse, `asset_ids` esplicito anche vuoto;
+  > - `refreshCopiedFacts`: invariato, aggiornato, non trovato, fatto modificato durante la lettura lasciato stare, «Importo da usare» intatto, nessuna riga aggiunta, sola data nuova contata come invariata;
+  > - `request.ts`: data dei prezzi dell'utente (`as_of`) contro quella dei prezzi copiati;
+  > - `refreshAsOf` e i conteggi «non del giorno»;
+  > - componenti: pannello d'errore (riprova, calcola senza rileggere, modifica), «Interrompi attesa» durante la rilettura, posizione della riga della rilettura;
+  > - E2E: copia → «Calcola» con la lettura in più e gli stati `refreshing`/`refresh_failed`.
+
+#### Round 4 — feedback sui passi 3 (Broker) e 4 (Asset) ✅ 2026-09-30 (R4.1–R4.8); R4.9 ⏳ dopo i giri UI
+
+**Feedback del developer** (30/09), in sostanza:
+- **Broker, card**:
+  - ogni Broker, ovunque compaia, con la sua icona;
+  - la card è poco chiara («EUR: Numero di unità · passo 1 unità · Commissione BUY 0 / Conversioni: tasso globale + spread (passo FX) / Funding: cassa locale EUR»): alla valuta manca la bandiera, e «passo» e «numero di unità» non sono spiegati;
+  - servono tooltip e info accanto ai parametri.
+- **Broker, «Modifica»**:
+  - pulsanti, etichette e larghezze disallineati;
+  - l'EUR non modificabile va bene, e piace che l'incremento cambi col tipo;
+  - la commissione va su una riga a sé, con «BUY» tradotto, info e tooltip;
+  - «Aggiungi» va in cima, la scelta della valuta dentro il blocco nuovo, e i blocchi in una `OrderableList`.
+- **Funding consentito**: di default tutto spuntato; è l'utente che toglie.
+- **Conversione**: manca un selettore «il Broker converte da solo all'acquisto, oppure serve liquidità già in quella valuta».
+- **Asset (passo 4)**: ci sono solo «Cerca Asset» e «Asset manuale». Serve una selezione con un clic di tutti gli asset posseduti, filtrati per Broker, come «I tuoi asset» in asset-correlation.
+- **Baseline**: «sentiti col coordinatore se serve portare avanti la baseline».
+  - Valutazione: non serve. Bastano i componenti di HEAD: `BrokerIcon`, `OrderableList`, `Tooltip`, `CurrencyCode` e le holdings di `POST /portfolio/allocation-source`.
+  - Il `LabAssetPicker` del risk-lab non è nella baseline, e non serve.
+
+**R3.6, esito**: il developer non ha commentato i passi 1–2 né le tre politiche del Round 3. Le considero accettate in silenzio e le ricordo nella richiesta di feedback.
+
+**Passi:**
+- R4.1 ✅ 2026-09-30 — `shared/PlannerBrokerIcon.svelte`, estratto da `LiquidityStep`. Icona nelle card Broker, nell'editor (titolo e righe di funding), nel routing, in `OwnerBrokerPicker` e nel dialog «I tuoi asset». Le viste del risultato vengono al giro dei risultati.
+- R4.2 ✅ 2026-09-30 — card Broker:
+  - una riga per valuta, con `CurrencyCode`, «per numero di quote / per importo» e «a multipli di N», ciascuno col suo `?`;
+  - commissione di acquisto su una riga a sé, col suo `?`;
+  - riga della conversione, col suo `?`;
+  - liquidità utilizzabile con le icone.
+- R4.3 ✅ 2026-09-30 — editor:
+  - «Aggiungi valuta» in cima; il blocco nuovo porta la scelta della valuta;
+  - modalità in una `OrderableList`;
+  - griglia uniforme: intestazione (`CurrencyCode` e rimuovi), riga tipo + incremento, riga commissione (fissa, %, minimo, massimo), con tooltip.
+- R4.4 ✅ 2026-09-30 — funding abilitato di default (`syncFunding`). Una voce tolta dall'utente non torna mai attiva da sola.
+- R4.5 ✅ 2026-09-30 — selettore di conversione: deciso dal developer, come passo a sé dopo questo giro (**R4.9**).
+  > **Note implementazione**: la prima domanda era impostata male: diceva «solo liquidità già in quella valuta» invece delle due modalità del piano alto. Il developer l'ha corretta: il piano alto aveva due modalità per Broker (`fx_mode`), in `plan-phase00PacRebalancerUiTarget.prompt.md:976-978` e `drafts/pac-rebalancer-end-to-end-design.md:203`, `:375`:
+  > - `auto_convert_on_buy`: il Broker converte all'acquisto;
+  > - `native_currency_required`: conversione preventiva proposta dal piano.
+  >
+  > Il 17/09 la **regola 10** del ridisegno FX a 15 regole le ha tolte: nessun campo modalità, conversione sempre esplicita prima del BUY e mai per il SELL (`plan-phase00Step1PacRebalancerContractsCapacity.prompt.md:911-918`; il «retract» di `conversion_mode` e di `PlannerFxAction.handling` sta nel delta-plan di sessione `w1-fx-redesign-final-delta-plan.md:70` e `:74`). Oggi la lista finale tratta quindi ogni conversione come manuale: un passo «FX» prima degli ordini, uno per route d'ordine × valuta sorgente (`OperationalPlan.svelte:31-75`, `PlannerFxAction` in `schemas/pac_allocator.py:1194`).
+  >
+  > **Decisione del developer (30/09)**: riaprire la regola 10 **come passo a sé subito dopo questo giro UI, con i test**. In questo giro la card dice solo cosa succede oggi.
+- R4.6 ✅ 2026-09-30 — «I tuoi asset»:
+  - mapping `holdings` in `source.ts`;
+  - `steps/OwnedAssetsDialog.svelte`;
+  - pulsante in `AssetsStep`.
+- R4.7 ✅ 2026-09-30 — i18n con `dev.py i18n`, `front build --debug`, verifica sulla 6161. Nessun test automatico.
+- R4.7b ✅ 2026-09-30 — rimesse nei cataloghi le 8 chiavi tolte nei round 1–3, contro la regola (a). Eseguito dopo il RESUME del venv condiviso: vedi il Fuori pista sotto.
+  > **Note implementazione**: `/tmp/libreFolio_d_ui12/i18n_restore_r4.py`, 8 × `dev.py i18n add` con rc 0 e i testi di HEAD nelle 4 lingue (log `i18n_restore_r4.log`, 12:44; sha di prima in `i18n_before_r47b.sha`). Confronto con HEAD (`keydiff_r47b.log`): 4103 → 4157 chiavi per lingua, +54, **0 rimosse**, 0 differenze fuori dal planner. ICU di nuovo verde nelle 4 lingue (`icu_check_r47b.log`). Le 8 chiavi vanno nella lista di fine round.
+- R4.8 ✅ 2026-09-30 — feedback del developer sui passi 2–4, sulla 6161. Diventa l'ingresso del **Round 5** (sotto).
+- R4.9 ⏳ — **dopo questo giro UI**: riapertura della regola 10, cioè la modalità di conversione per Broker. Proposta approvata dal developer il 30/09:
+  - **Passo 3**: una scelta per Broker, «il Broker converte da solo quando compri» oppure «la fai tu prima di comprare». Il default è il comportamento di oggi, cioè la conversione manuale.
+  - **Calcolo invariato**: stessi importi, stesso tasso, stesso spread; motore, oracolo e prova non si toccano.
+  - **Lista finale**:
+    - automatica: la conversione compare dentro la riga dell'ordine;
+    - manuale: un passo «prima converti» per Broker × coppia di valute, col totale.
+  - **Il totale lo calcola il backend**, perché la UI non somma importi (lettura prudente di Q-C0-2). Quindi il contratto cambia:
+    - campo nella richiesta, modalità e totali nel risultato;
+    - fingerprint, `api sync`;
+    - test di schema e report tramite test-author.
+  - **Limite dichiarato**: un ordine può essere pagato in parte con cassa nella valuta dell'asset e in parte convertendo. In modalità automatica si assume che il Broker lo sappia fare; se non lo fa, serve un cambio del calcolo, da portare alla review R1/R3.
+  - Il coordinatore è stato avvisato il 30/09 (contratto, `api sync` in lista d'integrazione).
+
+  > **Note implementazione** (2026-09-30), R4.1–R4.7:
+  >
+  > **Icone** (R4.1):
+  > - `shared/PlannerBrokerIcon.svelte` (nuovo) mette `BrokerIcon` su un Broker del draft, col fallback all'icona del catalogo. La usano `BrokersStep`, `BrokerEditor` (titolo e righe di funding), `RoutingStep` e `LiquidityStep`;
+  > - `OwnerBrokerPicker` e `OwnedAssetsDialog` usano direttamente `BrokerIcon`, e il dialog anche `AssetIcon`, perché mostrano righe della fonte e non del draft.
+  >
+  > **Card Broker** (R4.2, `BrokersStep.svelte`):
+  > - una riga per valuta, con `CurrencyCode` (bandiera e codice di 3 lettere), il tipo d'ordine e l'incremento, ciascuno col suo `HelpTip`;
+  > - la commissione di acquisto sta su una riga a sé;
+  > - la riga della conversione descrive il comportamento di oggi, cioè un passo «FX» esplicito prima degli ordini, in attesa di R4.9;
+  > - la liquidità utilizzabile è mostrata con le icone;
+  > - i testi di tipo, unità, incremento e commissione vengono da `modeText.ts` (nuovo: `modeKindText`, `modeUnitText`, `modeIncrementText`, `modeFeeText`), condiviso con `RoutingStep`.
+  >
+  > **Editor** (R4.3, `BrokerEditor.svelte`):
+  > - «Aggiungi valuta» sta in cima; il blocco nuovo porta la scelta della valuta, e le valute già presenti non ricompaiono;
+  > - i blocchi stanno in una `OrderableList`;
+  > - la griglia è uniforme grazie a `LABEL_ROW`, `INPUT_SUFFIX`, `BUTTON_DANGER_SMALL` e `BUTTON_PILL` (`ui.ts`): intestazione con valuta e «rimuovi», riga tipo + incremento, riga commissione (fissa, %, minimo, massimo), tutte coi loro `?`;
+  > - «BUY» diventa «Commissione di acquisto».
+  >
+  > **Funding** (R4.4):
+  > - `syncFunding()` (`draft.svelte.ts:464-470`) aggiunge già abilitata ogni voce Broker × fonte mancante. Si chiama dopo le copie e le aggiunte di Broker e casse (`:381`, `:424`, `:585`), e `BrokerEditor.svelte:40` fa lo stesso sulla copia di lavoro;
+  > - una voce già presente non viene mai toccata: se l'utente toglie la spunta, resta tolta;
+  > - `newFunding()` (`:473-474`) resta `enabled: false` come fabbrica, ma tutti e tre i chiamanti lo sovrascrivono.
+  >
+  > **«I tuoi Asset»** (R4.6):
+  > - `source.ts` legge la sezione `holdings`;
+  > - `copies.ts`:
+  >   - `ownedAssets(source)` unisce holdings, asset e Broker con le chiavi della fonte, senza leggere quantità;
+  >   - una holding non risolta si conta in `unresolved` e si mostra, mai scartata in silenzio;
+  >   - `applyOwnedAssets` aggiunge solo l'identità (`draftAssetFromSource`), e un asset già nel piano resta com'è.
+  > - `steps/OwnedAssetsDialog.svelte` (nuovo):
+  >   - una sola `POST /portfolio/allocation-source` con `assets`, `brokers` e `holdings`, `broker_ids` uguale ai Broker di proprietà e `asset_ids: null`;
+  >   - filtro per Broker con `OwnerBrokerPicker`. La preselezione sono i Broker del piano, o tutti quelli di proprietà se il piano non ne ha (`:43-46`);
+  >   - tutti gli asset visibili partono spuntati, con «Seleziona tutto» e «Deseleziona tutto»; quelli già nel piano non si selezionano.
+  > - `AssetsStep.svelte:67-68`: pulsante «I tuoi Asset» accanto a «Cerca Asset» e «Asset manuale».
+  >
+  > **i18n** (R4.7), solo con `dev.py i18n`, da `/tmp/libreFolio_d_ui12/i18n_round4.py` (log `i18n_round4.log`, 50 operazioni con rc 0):
+  > - 33 aggiunte, 17 aggiornate, 0 rimosse (regola (a)). I cataloghi passano da 4116 a 4149 chiavi per lingua, con insiemi identici e 0 differenze dal copione (`verify_round4.log`);
+  > - ogni default EN coincide col testo EN del catalogo (`extract_r4c.log`: 0 mancanti, 0 diversi);
+  > - l'ICU si formatta nelle 4 lingue, plurali 1 e n compresi (`icu_check_r4.log`); gli sha256 di prima sono in `i18n_before_r4.sha`;
+  > - terminologia:
+  >   - quote, titres e títulos per le unità;
+  >   - «Seleziona tutto / Deseleziona tutto» presi da `risk.assetSet.bulk.*`;
+  >   - «I tuoi Asset» preso da `assets.panels.own`;
+  >   - FR con lo spazio prima di «:», e ’ tipografico in IT e FR.
+  > - Rispetto a HEAD (`keydiff_r4.log`, fatto con node): +54, −8, e 39 cambiate in EN e 48 nelle altre lingue. Tutte le differenze stanno sotto `tools.pacAllocator.planner.*`: 0 fuori dal planner.
+  > - **10 chiavi rimaste senza uso in questo giro**, per la lista di fine round; non le ho tolte, per la regola (a):
+  >   - `brokerEditor.{feeRule,localCash,origin,stepRule}`;
+  >   - `brokers.{conversions,localCash,stepAmount,fee,funding}`;
+  >   - `route.fee`.
+  >
+  >   Tutte erano usate a HEAD, oggi hanno 0 riferimenti (grep esatto della chiave con la virgoletta) e stanno ancora nei cataloghi.
+  >
+  > **Build**:
+  > - `front build --debug`, rc 0, log `/tmp/libreFolio_d_ui12/build4.log`;
+  > - svelte-check: gli stessi 3 errori e 41 warning di prima, in 4 file fuori dal planner (`ToolExecutionMetrics.svelte:44`, `TransactionFormModal.test.ts:787` e `:819`);
+  > - la 6161 risponde `{"status":"ok"}` e serve la build nuova: `start.BnRn4MPL.js` è lo stesso di `build/index.html`, delle 11:50:49.
+  >
+  > **Nessun test eseguito**, su richiesta del developer.
+
+  > **⚠️ Fuori pista** (2026-09-30):
+  > - **Regola (a) violata nei round 1–3.** Il confronto con HEAD mostra 8 chiavi **tolte** dai cataloghi durante i giri UI. La regola del developer dice: «Le chiavi verranno decretate morte solo alla vera fine del round di sviluppo». Le chiavi sono:
+  >   - `scenario.noValues` (round 1);
+  >   - `copyNotice.when` (round 2);
+  >   - `scenario.asOf`, `summary.date`, `problems.asOfMissing`, `problems.priceDateMissing`, `problems.priceDateAfterReference` e `assetEditor.priceDate` (round 3).
+  >
+  >   `scenario.asOfHint` non conta: è nata e morta dentro i giri, e a HEAD non c'era.
+  >
+  >   **Correzione (R4.7b)**: rimetterle con `dev.py i18n add`, coi testi di HEAD nelle 4 lingue. Lo script è `/tmp/libreFolio_d_ui12/i18n_restore_r4.py`, coi valori in `restore_r4_values.json` estratti da `restore_r4_extract.mjs`. Poi vanno nella lista di fine round, e i cataloghi arrivano a 4157 chiavi per lingua. Lo si esegue solo dopo il RESUME del coordinatore (pausa del venv condiviso per `pipenv update` nel worktree di K, 30/09).
+  > - **Default EN riallineati al catalogo e al codice**: `age.after`, `brokerEditor.fundingCap`, `brokerEditor.modesHelp` («an Asset priced») e `ownedAssets.brokersHelp`. A quest'ultimo si aggiunge «, or all of them if the plan has none yet», come fa il codice a `OwnedAssetsDialog.svelte:45-46`.
+  > - **`ownedAssets.count`**: in EN resta semplice («{selected} of {total} selected»); IT, FR ed ES usano il plurale ICU su `selected`, perché lì il participio concorda.
+  > - **Funding spuntato di default**: lo ha chiesto il developer. Le conseguenze vanno ricordate nel feedback R4.8:
+  >   - più coppie FX richieste;
+  >   - trasferimenti fra Broker proposti più spesso;
+  >   - la preferenza implicita diventa «tutto consentito», e non più «nessuna».
+  >
+  > **Debito di test**, in aggiunta:
+  > - `HelpTip`: apertura, testo e accessibilità;
+  > - `modeText.ts`: tipo, unità, incremento, e commissione zero, fissa + %, minimo e massimo;
+  > - `syncFunding`: voci nuove abilitate, una voce tolta dall'utente mai riattivata, la copia di lavoro di `BrokerEditor`;
+  > - `source.ts`: il mapping di `holdings`;
+  > - `ownedAssets`: join, `unresolved`, ordinamento, Broker non duplicati. `applyOwnedAssets`: solo identità, asset già nel piano intatto, conteggio;
+  > - `OwnedAssetsDialog`: preselezione dei Broker, filtro, spunte di default, «Seleziona tutto / Deseleziona tutto», asset già nel piano, errore dello scope, `accountGeneration`;
+  > - `BrokerEditor`: «Aggiungi valuta» in cima, valuta nel blocco nuovo, `OrderableList`, commissione su riga a sé. `BrokersStep` e `RoutingStep`: testi da `modeText` e icone;
+  > - E2E: passi 3 e 4 con «I tuoi Asset».
+
+#### Round 5 — feedback sui passi 2 (Liquidità), 3 (Broker) e 4 (Asset) ✅ 2026-09-30
+
+**Feedback del developer** (R4.8, 30/09), in sostanza:
+- **Passo 2, liquidità copiata da un Broker**:
+  - via il banner verde «Copia eseguita…» e la nota sulle commissioni;
+  - «Importo da usare» parte da tutto il disponibile.
+- **Passo 3, card Broker**:
+  - più larga: i testi vanno a capo;
+  - «Modifica» e «Rimuovi» in alto a destra;
+  - via il badge «Copiato»;
+  - il chip «già qui» non si capisce.
+- **Passo 3, editor**:
+  - la valuta di un blocco già presente si deve poter cambiare;
+  - un clic in un punto qualsiasi del rettangolo del funding lo seleziona e lo colora;
+  - «massimo utilizzabile qui» con simbolo e bandiera della valuta;
+  - tooltip della commissione con più esempi;
+  - campi della commissione nell'ordine minimo, percentuale, massimo, e la fissa per ultima.
+- **Dialog «Aggiungi Broker»**: nasconde i Broker già aggiunti. Via il concetto «ricopiare aggiorna»: i dati automatici si rileggono a «Calcola».
+- **«I tuoi Asset»**: il filtro per Broker diventa una tendina come quella di Risk in asset-correlation.
+- **«Prezzo mancante»**: dopo aver aggiunto i propri asset non ha senso, perché il prezzo si può ricavare subito.
+
+**Perché oggi compare «Prezzo mancante»** (lettura del codice, 30/09):
+- tutte le vie di aggiunta copiano solo l'identità, con `price: null`: `draftAssetFromInfo` (`copies.ts:91-111`), `applyOwnedAssets` (`:157-166`) e «Cerca Asset» (`AssetsStep.svelte:36-41`);
+- il prezzo arriva solo con «Copia prezzi» (`SourceCopyDialog`, sezioni `assets` + `prices`, poi `applyPriceCopy` a `copies.ts:293`);
+- la rilettura prima di «Calcola» (`refreshPlan`, `:462`) rilegge solo i prezzi già copiati. Un asset senza prezzo non viene mai riletto.
+
+**Baseline**: non serve spostarla. La tendina di Risk (`components/risk/AssetSetRiskPanel.svelte:275-282`, `SimpleSelect`) è già a HEAD.
+
+**Passi:**
+- R5.1 ✅ 2026-09-30 — liquidità:
+  - dopo la copia della liquidità e dei Broker, nessun banner se tutto è andato bene. Restano gli avvisi veri (mancanti, conflitti, problemi) e il dialog dei conflitti;
+  - «Importo da usare» parte dal disponibile. Alla rilettura segue il disponibile nuovo finché l'utente non lo cambia: nessun campo nuovo nel draft.
+  > **Note implementazione**:
+  > - `copies.ts`: `wholeAvailable` (disponibile canonico, zero compreso; vuoto se negativo) e `usesAllAvailable` («Importo da usare» = disponibile). La riga nuova parte da `wholeAvailable`. Una riga esistente segue il saldo nuovo se è vuota o se usa «tutto», sia in `applyLiquidityCopy` sia in `refreshCopiedFacts`; altrimenti resta il conflitto di prima.
+  > - `CopyNotice` e `CopyFlowView`: prop `quiet`. Con `quiet` il banner compare solo con mancanti, conflitti o problemi, e la nota sulle commissioni non c'è più. `LiquidityStep` e `BrokersStep` lo passano.
+  > - `LiquidityStep`: le righe copiate hanno il testo nuovo `cash.selectedAll`; le righe manuali tengono `cash.noPrefill`.
+  > - Il badge con data e ora sulla riga copiata resta: lo aveva chiesto il developer nel giro 2.
+  > **⚠️ Fuori pista**: debito di test. Gli E2E che aspettano `pac-planner-liquidity-notice` o `pac-planner-brokers-notice` dopo una copia riuscita ora non li trovano più: da cercare in `frontend/e2e` al giro dei test. Da coprire anche la regola «tutto» in `copies` (saldo zero e negativo).
+- R5.2 ✅ 2026-09-30 — card Broker: modalità a tutta larghezza, «Modifica» e «Rimuovi» in alto a destra, niente badge «Copiato», il chip «già qui» diventa il Broker stesso (icona, nome, valuta) con un tooltip.
+  > **Note implementazione**: `BrokersStep.svelte`. Le modalità sono una colonna (`space-y-3`), non più `sm:grid-cols-2`. «Modifica» e «Rimuovi» stanno nell'intestazione, a destra; «Inattivo» segue il nome. Il chip della cassa locale mostra icona, nome e valuta del Broker. Ogni chip del funding ha un tooltip, chiave nuova `brokers.fundingChipHelp` (ICU `select`: `local`, `account`, `contribution`). Tolti `copyStamp`, `formatCopyStamp` e `locale`. `OriginBadge` resta solo sulle card dei conti esterni.
+- R5.3 ✅ 2026-09-30 — editor Broker:
+  - valuta modificabile anche nei blocchi già presenti (le valute usate da altri blocchi restano escluse);
+  - il rettangolo del funding si seleziona con un clic ovunque e si colora;
+  - `CurrencyCode` su tutti i suffissi di valuta;
+  - ordine della commissione: minimo, %, massimo, fissa; tooltip con gli esempi della formula del backend (`constraints.py:43`: `fissa + clamp(% × importo, minimo, massimo)`, 0 se non si compra).
+  > **Note implementazione**:
+  > - `BrokerEditor.svelte`, intestazione del blocco: `CurrencySearchSelect compact` (testid nuovo `pac-planner-mode-currency`), che esclude le valute degli altri blocchi. `setCurrency` accetta solo un codice di 3 lettere non usato; con l'ordine «per importo» il passo segue la valuta nuova (`cldrCurrencyStep`), con «per unità» resta. Le cifre della commissione restano quelle scritte: il suffisso mostra la valuta nuova, quindi il cambio è visibile. Il draft cerca le modalità per valuta (`draft.modeFor`, `request.ts:48`) e le rotte sono per Asset e Broker, quindi il cambio non rompe niente.
+  > - Commissione: ordine minimo, percentuale, massimo, fissa; griglia `sm:grid-cols-2 lg:grid-cols-4`; ogni campo ha il suo tooltip (nuovi `brokerEditor.feeRateHelp` e `feeFixedHelp`). `brokers.feeHelp`, usato anche dalla card, ha ora quattro esempi calcolati con `calculate_fee` (`numeric.py:265-290`): 0,19% con minimo 1,50 e massimo 18 su 500, 2.000 e 20.000 → 1,50, 3,80, 18; solo fissa 2,95; fissa 1 + 0,10% su 1.000 → 2; tutto 0. Le cifre sono testo del catalogo, scritte nel formato di ogni lingua, e non passano dai formatter del denaro: il mascheramento della privacy nasconderebbe gli esempi.
+  > - Suffissi di valuta con `CurrencyCode` (passo «per importo», commissioni, «massimo utilizzabile qui»). `INPUT_SUFFIX` passa da `w-12` a `w-20`, così «€ 🇪🇺 EUR» ci sta e tutti i campi restano larghi uguale.
+  > - Funding: la cassa locale è colorata come selezionata e bloccata, senza il badge «già qui» (`brokers.localHere` resta senza uso: lista di fine round); ha il tooltip di `fundingSourceHelp`, che adesso vive in `modeText.ts` ed è usato anche da `BrokersStep`. Ogni sorgente candidata è una card: verde se attiva, grigia se no; tutta la riga in alto è la `<label>` della casella, quindi un clic ovunque la seleziona; i campi priorità e massimo stanno sotto, fuori dalla label (nessuna label annidata).
+  > **⚠️ Fuori pista**: debito di test per il giro dei test: `pac-planner-mode-currency` (cambio valuta, esclusione, passo che segue), ordine dei campi della commissione, clic sulla card del funding, `fundingSourceHelp` (tre rami ICU).
+- R5.4 ✅ 2026-09-30 — dialog di copia di Broker e liquidità: nascondono ciò che è già nel piano, con un messaggio se non resta niente; valute con `CurrencyCode`.
+  > **Note implementazione**: `BrokerScopeCopyDialog.svelte`.
+  > - «Aggiungi Broker» nasconde i Broker già nel piano e legge solo gli altri; se sono tutti nel piano non legge niente.
+  > - «Copia liquidità» mostra, per ogni Broker, solo le valute che il piano non ha ancora (`newCash`, per chiave `domainCashKey`), e nasconde un Broker già nel piano che non ha più niente da aggiungere. Senza la sua snapshot (lettura fallita) un Broker non viene dato per completo. La copia passa a `applyLiquidityCopy` una sorgente filtrata: le righe già nel piano non vengono toccate, e le rilegge «Calcola». Così dal dialog non nasce più il conflitto «ricopiare aggiorna».
+  > - Se non resta niente da copiare: messaggio nuovo `copy.allInPlan` (ICU `select` su `kind`), testid `…-all-in-plan`. Tolto il badge `copy.alreadyInDraft` (chiave senza uso: lista di fine round).
+  > - Valute con `CurrencyCode`: righe della liquidità e valute viste del Broker. Per metterle in fila serve l'etichetta da sola: chiave nuova `brokerCopy.currenciesSeen`; `brokerCopy.currencies` resta senza uso (lista di fine round).
+  > - Aggiornato il testo `liquidityCopy.rule`: l'importo da usare ora parte da tutto il disponibile (R5.1).
+  > **⚠️ Fuori pista**: debito di test: filtro per Broker e per valuta, sorgente filtrata (nessuna riga esistente modificata), messaggio `…-all-in-plan`, nessuna lettura quando tutti i Broker sono già nel piano.
+- R5.5 ✅ 2026-09-30 — «I tuoi Asset»: tendina `SimpleSelect` come Risk; dopo ogni aggiunta (tuoi Asset e «Cerca Asset») una sola `POST /portfolio/allocation-source` con `assets` + `prices` per gli asset nuovi. I prezzi diventano copiati, quindi si rileggono a «Calcola».
+  > **Note implementazione**:
+  > - `copies.ts`: nuova `applyAddedAssetPrices(draft, source, copy, assetIds)`. Riempie solo gli asset elencati con il prezzo ancora vuoto (`price`, `copiedPrice`, `priceStamp`, `priceSource`), mette gli altri in `missing` e chiude con `pruneCopies`. Non produce conflitti: un prezzo scritto a mano durante la lettura non si tocca. `applyPriceCopy` e `refreshCopiedFacts` restano invariati.
+  > - `priceRead.svelte.ts` (nuovo), classe `AddedAssetPrices`: una lettura `assets` + `prices` con i Broker OWNER, niente provider. Ha una sua sequenza; una chiamata nuova sostituisce la vecchia e ne eredita gli id, presi solo dopo lo scope, quindi nessun id si perde. Stato pubblico: `waiting`, `missed` (asset letti senza un prezzo utilizzabile), `busy`, `error`; `stop()` in `onDestroy`.
+  > - `AssetsStep.svelte`: «Cerca Asset» e «I tuoi Asset» (`onadded`) chiamano la lettura. Sulla card: «Lettura del prezzo…» con spinner mentre legge (niente «!»), poi il prezzo copiato, oppure il testo nuovo `assets.priceNotStored` se LibreFolio non ha un prezzo utilizzabile. Nessun banner di copia: lo stato sta sulle card. Errore di rete o di scope: avviso chiudibile `pac-planner-assets-price-error`. Il contenitore pubblica `aria-busy`/`data-busy`, la card `data-price-read` (`reading`, `not-stored`, `idle`). Il suggerimento `assets.noAutoPrice` diventa `assets.priceAuto`.
+  > - `OwnedAssetsDialog.svelte`: il filtro è una tendina `SimpleSelect` come Risk, con «Tutti i Broker» (chiave nuova `ownedAssets.allBrokers`) e icone dei Broker (`item`/`selectedItem`). I Broker con un ruolo inferiore restano nella tendina, disabilitati, con il motivo (N18). Default: il Broker del piano se il piano ne ha uno solo, altrimenti tutti. `ownedAssets.noBroker` resta senza uso (lista di fine round); aggiornati `brokers`, `brokersHelp` e `noneInBrokers`.
+  > **⚠️ Fuori pista**: rispetto alla riga del piano, al posto di `applyPriceCopy` una funzione nuova che riempie solo i prezzi vuoti: così la lettura automatica non apre mai il dialog dei conflitti. Debito di test: lettura dopo «Cerca Asset» e dopo «I tuoi Asset», gara fra due letture, prezzo scritto a mano durante la lettura non sovrascritto, `not-stored`, errore di scope, rilettura a «Calcola» dei prezzi letti così; tendina (default, «Tutti», Broker disabilitati, filtro); E2E del passo 4.
+- R5.6 ✅ 2026-09-30 — i18n solo con `dev.py i18n`: solo aggiunte e aggiornamenti, nessuna rimozione (regola (a)); chiavi rimaste senza uso nella lista di fine round.
+  > **Note implementazione**: `/tmp/libreFolio_d_ui12/i18n_round5.py`, 10 `add` + 5 `update`, tutti rc=0; sha dei 4 cataloghi presi prima in `i18n_before_r5.sha`.
+  > - Nuove: `assets.priceAuto`, `assets.priceNotStored`, `assets.priceReading`, `brokerCopy.currenciesSeen`, `brokerEditor.feeFixedHelp`, `brokerEditor.feeRateHelp`, `brokers.fundingChipHelp` (ICU `select` su `local`/`account`/altro), `cash.selectedAll`, `copy.allInPlan` (ICU `select` su `liquidity`/altro), `ownedAssets.allBrokers`.
+  > - Aggiornate: `brokers.feeHelp` (regola + 4 esempi verificati a mano: 0,19% di 500 = 0,95 → minimo 1,50; di 2.000 = 3,80; di 20.000 = 38 → massimo 18; 1 + 0,10% di 1.000 = 2; numeri scritti nel formato di ogni lingua, FR con lo spazio fine U+202F), `liquidityCopy.rule`, `ownedAssets.brokers`, `ownedAssets.brokersHelp`, `ownedAssets.noneInBrokers`.
+  > - Verifiche: `verify_round5.py` 0 differenze, 4167 chiavi per lingua, stessi insiemi; `keydiff` contro HEAD (4103): +64, 0 rimosse, 0 fuori dal planner in tutte e 4 le lingue; ICU (`icu_check_r5.mjs`) 0 errori, nessuna graffa residua; estrattore: 0 chiavi mancanti, l’unica «differenza» di `feeHelp` è il `\n` letterale del sorgente contro l’a capo reale del catalogo.
+  > - Lista di fine round (regola (a)), 20 chiavi senza uso: 18 usate a HEAD e non più (`assetEditor.priceDate`, `assets.noAutoPrice`, `brokerCopy.currencies`, `brokerEditor.feeRule`, `brokerEditor.localCash`, `brokerEditor.origin`, `brokerEditor.stepRule`, `brokers.conversions`, `brokers.fee`, `brokers.funding`, `brokers.localCash`, `brokers.stepAmount`, `copy.alreadyInDraft`, `copyNotice.when`, `route.fee`, `scenario.asOf`, `scenario.noValues`, `summary.date`) + 2 aggiunte in questi round e già senza uso (`brokers.localHere`, `ownedAssets.noBroker`). Controllate a mano le omonime per suffisso (`${KEY}.fee`, `.funding`, `.priceDate`, `.stepAmount`): sono di altri namespace (`result.*`).
+  > **⚠️ Fuori pista**: lo scanner letterale segnava come senza uso anche `refresh.failed.*` e `refresh.notice.*`: sono usate tramite la costante `KEY` in `RefreshFailedPanel`/`RefreshNotice`, quindi restano fuori dalla lista.
+- R5.7 ✅ 2026-09-30 — `front build --debug`, verifica della 6161, feedback del developer. Nessun test automatico, su sua richiesta.
+  > **Note implementazione** (2026-09-30): `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py front build --debug` rc=0 (log `/tmp/libreFolio_d_ui12/build5.log`); svelte-check 3 errori e 41 warning in 4 file, come la baseline, nessuno nel planner. La 6161 (`srv6161review`, PID 70702) serve la build nuova: `start.BspabasX.js` uguale in `frontend/build/index.html` e in `curl localhost:6161/`. 6151 libera.
+  > **Esito**: il developer approva i passi 1–3 («fino allo step 3 ora è tutto perfetto»). Il feedback sul passo 4 diventa il **Round 6** (sotto).
+
+#### Round 6 — feedback sul passo 4 (Asset) ✅ 2026-09-30 (R6.1–R6.5); il feedback apre il Round 7
+
+**Feedback del developer** (R5.7, 30/09), in sostanza:
+- **(a) Card dell'asset**: perché due badge «Copiato»? Che cosa vuol dire «8 giorni prima del 30/09/2026»?
+- **(b) Nota**: che cosa vogliono dire, su questa pagina, «Nessuna esposizione: il backend la conta come Non classificato» e «classificazione»?
+- **(c) Editor «Modifica asset»**: i componenti hanno altezze diverse, i badge non si capiscono, lo scopo di «Esposizioni (facoltative)» non è chiaro.
+- **(d) Import**: le classificazioni devono arrivare da sole, come i prezzi.
+
+**Decisione del developer sui pulsanti della barra** (30/09, `ask_user`): «Toglili: tutto automatico. Nella modifica resta «Ripristina», e se la lettura fallisce compare un «Riprova»». Quindi via «Copia prezzi» e «Copia classificazioni»; il dialog di copia esplicita resta solo per l'FX (`FxStep`).
+
+**Lettura del codice** (30/09):
+- I due «Copiato»: uno è l'`OriginBadge` dell'identità, nell'intestazione (`AssetsStep.svelte:112-121`); l'altro è quello del prezzo (`:122-147`). «8 giorni prima» è `AgeLabel`: la distanza fra la data del prezzo e la data di riferimento dello scenario.
+- Le esposizioni servono solo al report del risultato (`result/ExposureSection.svelte`): il motore non le usa per decidere gli ordini. Le categorie arrivano dal dominio (`portfolio_allocation_source.py:983-1105`, `_build_planner_classifications`): per `asset_type` il valore dell'enum («ETF»), per `sector` la chiave `FinancialSector`, per `geography` l'ISO alpha-3. Una dimensione che LibreFolio non ha arriva come riga segnaposto con `category_id`/`label`/`weight` nulli, più un avviso.
+- Oggi le classificazioni arrivano solo con «Copia classificazioni» (`SourceCopyDialog`, poi `applyClassificationCopy`, `copies.ts:388-425`). La lettura automatica di R5.5 (`priceRead.svelte.ts`) chiede solo `assets` + `prices`.
+- Nell'editor (`AssetEditor.svelte:207-243`) le righe delle esposizioni hanno `SimpleSelect compact` (più basso) accanto a campi da 38px, e chiedono a mano «ID categoria» ed «Etichetta».
+- Nessun E2E o test unitario usa `pac-planner-prices-copy-open`, `pac-planner-classifications-copy-open` o importa `copies.ts`. L'unico test del planner è `result/StateNotice.test.ts`.
+
+**Passi:**
+- R6.1 ✅ 2026-09-30 — card dell'asset (`AssetsStep.svelte`):
+  - via i pulsanti «Copia prezzi» e «Copia classificazioni», il loro stato e il render di `SourceCopyDialog`. Il suggerimento sul prezzo automatico passa in un `HelpTip` e dice che prezzo e composizione arrivano da soli;
+  - intestazione: `AssetIcon`, nome, tipo tradotto (`assets.types.*`); niente badge «Copiato» dell'identità, «Manuale» solo per gli asset manuali; «Modifica» e «Rimuovi» in alto a destra, come le card dei Broker;
+  - prezzo: un solo badge, con data e ora se il prezzo è di oggi, altrimenti solo la data; il tooltip spiega che è l'ultimo prezzo salvato in LibreFolio, riletto prima del calcolo, e che un valore scritto a mano resta. Via `AgeLabel` dalla card e dall'editor;
+  - riga «Composizione», con un `HelpTip` che dice che serve solo al report del risultato: una riga per dimensione con le etichette leggibili (tipo tradotto, settore con emoji, paese con bandiera), le prime categorie e «+N»; se LibreFolio non ha il dato lo dice, e lo distingue da «non indicata» per gli asset manuali;
+  - «Riprova» sull'avviso di errore della lettura.
+  > **Note implementazione** (✅ 2026-09-30): `AssetsStep.svelte` riscritto.
+  > - Barra: ricerca, «I tuoi Asset», «Asset manuale» e un `HelpTip` (`assets.autoLabel` + `assets.priceAuto`, testid `pac-planner-assets-auto-help`). Via i due pulsanti di copia, il loro stato e `SourceCopyDialog`, che resta solo in `FxStep` (`kind="fx"`).
+  > - Intestazione: `AssetIcon`, ticker + nome, tipo tradotto (`pac-planner-asset-type`); `OriginBadge` solo per «Manuale»; «Inattivo»; «!» se manca il prezzo e non sta leggendo; «Modifica» e «Rimuovi» in alto a destra.
+  > - Prezzo: un solo `OriginBadge` copiato, con `formatCopyStamp` (data e ora se di oggi, altrimenti la data) oppure «Modificato». Il tooltip è `assets.priceCopiedHelp` (ICU con data e fonte) o `assets.priceModifiedHelp`. Via `AgeLabel` dalla card; resta in `ReviewStep`, `DistributionDialog` e `FxStep`.
+  > - Composizione: `dt` con `HelpTip` (`assets.compositionHelp`); una riga per dimensione (`pac-planner-asset-dimension`, `data-dimension`, `data-state` = `set`/`not-stored`/`missing`), categorie per peso decrescente, le prime `VISIBLE_CATEGORIES` e «+N» con tooltip. La riga del tipo non compare quando ripete l'intestazione (una sola categoria al 100% uguale al tipo). «nessun dato in LibreFolio» (`assets.dimensionNotStored`) si distingue da «non indicato/a» (`assets.dimensionNone`, ICU con il genere di «area geografica»). Badge «Modificato» con `assets.compositionModifiedHelp`.
+  > - Errore di lettura: «Riprova» (`pac-planner-assets-read-retry`) quando restano id falliti, più «Chiudi». Al mount si leggono una volta gli asset ripristinati col draft o lasciati a metà lettura (`reader.pending`).
+- R6.2 ✅ 2026-09-30 — classificazioni automatiche: la lettura dopo un'aggiunta chiede anche `classifications` e riempie solo le composizioni vuote e mai copiate (nuova `applyAddedAssetClassifications` in `copies.ts`, nessun conflitto); ricorda per asset e dimensione che cosa LibreFolio non ha; tiene gli id dell'ultima lettura fallita per «Riprova». Le classificazioni non si rileggono a «Calcola» (decisione del Round 3).
+  > **Note implementazione**:
+  > - `assetRead.svelte.ts` (nuovo) sostituisce `priceRead.svelte.ts` di R5.5. Quel file non era tracciato, quindi la cancellazione non lascia traccia in git. Classe `AddedAssetFacts`: una `POST /portfolio/allocation-source` con `assets` + `prices` + `classifications` per gli asset aggiunti, Broker OWNER, niente provider. API: `needsRead`, `pending`, `isReading`, `notStored`, `lackingOf`, `read`, `retry` (id dell'ultima lettura fallita), `canRetry`, `dismiss`, `stop`.
+  > - `copies.ts`: `applyAddedAssetClassifications` (`:411`) e `lackingDimensions` (`:440`), che raccoglie le righe segnaposto con cui il dominio dice che non ha il dato. `applyAddedAssetPrices` (`:370`) invariata.
+- R6.3 ✅ 2026-09-30 — editor (`AssetEditor.svelte`): controlli tutti alti 38px; suggerimenti in `HelpTip`; identità copiata con icona, nome e tipo tradotto; tipo manuale con `AssetTypeSelect`; composizione raggruppata per dimensione, con la scelta della categoria (tipo, settore, paese) e la percentuale, più «Aggiungi» per ogni dimensione; via «ID categoria» ed «Etichetta» (l'etichetta prende l'id, come fa il backend). Restano «Modificato» e «Ripristina».
+  > **Note implementazione**:
+  > - Identità. Asset manuale: griglia a 2 colonne con ID (`HelpTip` `neverByName`), nome, ticker e tipo. Asset copiato: icona, nome e tipo tradotto in sola lettura (`pac-planner-asset-editor-type-text`). Il tipo di un asset copiato resta modificabile solo se la sua classe non è fra gli `ASSET_TYPES`.
+  > - Tipo: `AssetTypeSelect` (testid `pac-planner-asset-editor-type`, trigger `…-type-button`) con `HelpTip` `assetEditor.typeHelp`. Un asset manuale nuovo parte con la composizione `asset_type` = ETF al 100%; se l'unica riga del tipo è al 100% e uguale al tipo, segue il tipo scelto (`setType`).
+  > - Prezzo: importo, `CurrencySearchSelect compact` e base con `HelpTip`; badge «Modificato» con tooltip `assetEditor.priceModifiedHelp` e «Ripristina» (`planner.restore`); tooltip del prezzo copiato come sulla card.
+  > - Composizione: un blocco per dimensione (`pac-planner-exposure-block`, `data-dimension`). Ogni riga ha: la categoria (`AssetTypeSelect`, `SectorSearchSelect` o `CountrySearchSelect`); `ExactDecimalInput` del peso (`w-28`, `%`); rimuovi, solo icona. «Aggiungi un tipo/settore/paese» (ICU). Settori e paesi già usati nel blocco sono esclusi dalla scelta. Un valore che i riferimenti non conoscono (testo libero di un draft vecchio) si mostra in sola lettura. `HelpTip` = `assets.compositionHelp` + `assetEditor.weightsHelp`; badge «Modificato» + «Ripristina».
+  > - Via `SimpleSelect`, il datalist `CLASS_SUGGESTIONS`, i campi «ID categoria», «Etichetta» e «Dimensione», `AgeLabel`, `OriginBadge` e i paragrafi statici `unclassified`/`overHundred`. Il loro testo è ora nel `HelpTip`: a HEAD `overHundred` era solo un suggerimento statico, quindi nessun controllo è andato perso.
+  > **⚠️ Fuori pista**: `AssetTypeSelect` non ha una prop per escludere i tipi già usati, quindi una seconda riga dello stesso tipo resta possibile e la respinge il normalizer (coppia dimensione/categoria duplicata). Domanda aperta al developer.
+- R6.4 ✅ 2026-09-30 — etichette leggibili delle categorie in un helper unico, usato dalla card, dall'editor e da `result/ExposureSection.svelte`.
+  > **Note implementazione**: `categoryLabels.svelte.ts` (nuovo). `exposureCategoryLabel` produce: il tipo tradotto (`assets.types.*`); il settore con emoji e nome (`sectors.*`); il paese con bandiera e nome (`countryStore`). Un codice sconosciuto resta il codice. `CategoryLabels` carica paesi e settori una volta per lingua (`load`), poi offre `text` e `known`. `ExposureSection.label()` lo usa per le dimensioni note, e mantiene la mappatura di «Non classificato».
+- R6.5 ✅ 2026-09-30 — i18n solo con `dev.py i18n` (aggiunte e aggiornamenti), `keydiff` e ICU, `front build --debug`, verifica della 6161, feedback del developer. Nessun test automatico, su sua richiesta.
+  > **Note implementazione**:
+  > - `/tmp/libreFolio_d_ui12/i18n_round6.py`: 16 `add` + 2 `update` (`assets.priceAuto`, `assets.priceReading`), tutti rc=0, nessuna rimozione. Nuove: `restore`; `assets.autoLabel`, `priceCopiedHelp` (ICU), `priceModifiedHelp`, `composition`, `compositionHelp`, `dimensionNotStored`, `dimensionNone` (ICU con il genere), `compositionModifiedHelp`; `assetEditor.typeHelp`, `pickCategory` (ICU), `addCategory` (ICU), `weightsHelp`, `weight`, `priceModifiedHelp`, `compositionModifiedHelp`.
+  > - Verifiche:
+  >   - estrattore `keys_r6.py`: `missing=0`, 57 coppie chiave/default distinte confrontate col catalogo EN, 0 differenze dopo aver allineato 6 default;
+  >   - 4183 chiavi per lingua;
+  >   - `keydiff` contro HEAD (4103): +80, 0 rimosse, 0 fuori dal planner nelle 4 lingue;
+  >   - ICU (`icu_check_r6.mjs`): 0 errori;
+  >   - sha8 dei cataloghi dopo il round in `i18n_sha_after_r6.txt`: en `1c694fc0`, it `17cfbca1`, fr `dca8e3a7`, es `f1178040`.
+  > - `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py front build --debug`: rc=0 (`build6.log`). svelte-check dà 3 errori e 41 warning in 4 file, come la baseline dei round 1–5; nessuno nel planner.
+  > - La 6161 (`srv6161review`, PID 70702) serve `start.DOSki1CW.js`. La 6151 è libera.
+  > - Lista di fine round, regola (a). Scanner `unused_r6.py`, che adesso espande anche le costanti `${KEY}.x`. Risultato: 32 chiavi, cioè le 20 del R5.6 più 12 nuove: `assetEditor.categoryId`, `categoryLabel`, `class`, `classHint`, `dimension`, `exposureAdd`, `exposures`, `overHundred`, `unclassified`; `assets.copyClassifications`, `copyPrices`, `noExposures`. `pricesCopy.*` e `classificationsCopy.*` risultano ancora usate solo perché i rami morti di `SourceCopyDialog` le citano; si liberano con la cascata qui sotto.
+  > **⚠️ Fuori pista**:
+  > - Lo scanner letterale di R5 dava 45 chiavi «nuove senza uso»: 15 erano falsi positivi dovuti alle costanti `KEY`. Da qui la versione r6.
+  > - **Codice morto** (solo inventario; si toglie dopo la test-triage): in `SourceCopyDialog`, i tipi `prices` e `classifications`; `applyPriceCopy` (`copies.ts:305`) e `applyClassificationCopy` (`:453`), citate solo da quei rami; le varianti di conflitto dei prezzi e delle classificazioni (`copies.ts:15-16`, `resolveConflicts`, `ConflictDialog.svelte`). `AgeLabel`, `OriginBadge` e `restoreCopiedRate`/`planner.restoreCopied` restano usati e non si toccano.
+  > - **Debito di test**, per il giro dei test:
+  >   - testid cambiati: `pac-planner-asset-editor-class` ora è un contenitore; `pac-planner-exposure-dimension` e `-label` non esistono più; `-category` è un contenitore. Tipo: `pac-planner-asset-editor-type`, `-type-button`, `-type-text`. Via `price-origin`, `price-age` ed `exposures-origin` nell'editor;
+  >   - le spec della barra di copia;
+  >   - lettura automatica con le classificazioni: riempie solo le composizioni vuote, `not-stored`, «Riprova»;
+  >   - lettura al mount;
+  >   - `CategoryLabels`: tipo, settore, paese, codice sconosciuto;
+  >   - la riga del tipo nascosta sulla card;
+  >   - il tipo che segue la scelta.
+  > **Esito** (30/09): passi 1–3 approvati, con due ritocchi; il resto del feedback diventa il **Round 7** (sotto).
+
+#### Round 7 — ritocchi ai passi 2–3, card ed editor dell'Asset, passo Instradamento ✅ 2026-09-30 (R7.0–R7.7); in attesa del feedback del developer
+
+**Feedback del developer** (R6.5, 30/09), in sostanza:
+- **Passo 2 (Liquidità)**: via il badge «Copiato · data/ora», è una svista.
+- **Editor del Broker**: «tutto perfetto», tranne la spunta in «Liquidità utilizzabile da»: basta lo sfondo colorato.
+- **Card dell'Asset**:
+  - più larghe, perché i parametri lunghi vanno a capo;
+  - ordinabili con `OrderableList`;
+  - i nomi lunghi scorrono;
+  - la composizione dice «nessun dato in LibreFolio» anche quando i dati ci sono;
+  - via il badge «Copiato · data».
+- **Editor dell'Asset**:
+  - deve caricare i dati che LibreFolio ha già;
+  - per la composizione riusa il componente del modale «Aggiungi Asset» (`DistributionEditor`);
+  - il tipo è un valore solo, senza percentuale.
+- **Passo Instradamento**: via il selettore in alto, una zona per ogni Asset; campi chiari (Priorità «0 = preferita», Minimo se operi, Minimo obbligatorio, Tetto 1000000000 «Default alto», Margine di esecuzione %, Commissione di acquisto: nessuna); spiegare il «Tetto». Migliorarlo ora: il feedback preciso arriva al giro dopo.
+
+**Lettura del codice** (30/09):
+- **Causa della composizione vuota** (difetto del backend, codice di D):
+  - chi scrive le classificazioni salva il JSON di Pydantic, con i pesi come **stringhe**: `crud.py:104` (`model_dump_json`) e il PATCH `crud.py:468`/`:600` (`model_dump(mode="json")`); `BaseDistribution` (`schemas/assets.py:335-431`) li quantizza a 4 decimali HALF_EVEN e porta la somma a 1 esatto;
+  - `_parse_saved_distribution` (`portfolio_allocation_source.py:952-980`) accetta solo `Decimal`, quindi restituisce `None`: il dominio manda il segnaposto e l'avviso `allocation.classification_invalid`, e la card dice «nessun dato»;
+  - la geografia rifiuta anche la chiave `"Other"`, che chi scrive lascia passare (`geo_utils.py:185-187`) e che l'API dei paesi elenca (`utilities.py:147-149`, `iso3="Other"`).
+  - Riproduzione: `/tmp/libreFolio_d_ui12/classif_roundtrip.py` (log accanto) → `sector parse: None`, `geo parse: None`, anche senza `"Other"`.
+  - I test esistenti (`test_portfolio_allocation_source.py:186-203`, `:1200-1316`) scrivono pesi numerici: per questo non l'hanno visto. I rifiuti che verificano (somma, settore inventato, `"US"`) restano validi con la correzione.
+- `CategoryLabels` cerca il paese in maiuscolo (`categoryLabels.svelte.ts:25`), quindi `"Other"` diventa `OTHER` e non si trova.
+- Il draft non è persistito (`draft.svelte.ts:4`): dopo il riavvio della 6161 il developer riaggiunge gli Asset e la lettura porta la composizione nuova.
+- Nomi che scorrono: l'azione `use:scrollOnOverflow` (`$lib/actions/scrollOnOverflow.ts`) con `overflowScrollTextClass` (`$lib/utils/overflowScroll.ts`), come in `AssetCard.svelte:183`.
+- L'ordine degli Asset non conta per il motore: il normalizer li ordina per `asset_id` (`normalize.py:833`). Come per la Liquidità (`draft.svelte.ts:303-316`, `liquidityOrder` fuori da `data`), l'ordine è solo presentazione e non cambia il fingerprint.
+- Badge con la data di copia: `LiquidityStep.svelte:152`, il prezzo in `AssetsStep.svelte` (`:200-208`), il timbro di `CopyNotice.svelte:79-81`, il `when` di `FxStep.svelte:71`. `BrokerEditor.svelte:147` resta (il developer lo approva); restano anche `AgeLabel` in `ReviewStep` e `DistributionDialog`.
+- **Significato dei campi della rotta** (contratto `schemas/pac_allocator.py:502-553`):
+  - **Priorità**: gara a pari merito dopo `fixed_l2` e `shortfall` (`objectives.py:9`, `:150-164`), `sum(priorità × attiva)`: vince il numero più basso; tutto a 0 = nessuna preferenza;
+  - **Minimo se operi**: un acquisto è 0 oppure almeno `max(passo, minimo)` (`constraints.py:617-643`);
+  - **Minimo obbligatorio**: pavimento senza condizioni (`constraints.py:600-614`); può rendere il piano impossibile;
+  - **Tetto**: limite superiore in unità o importo, secondo la modalità; `OrderCap` non ha un tipo «nessuno» (`:523-537`), quindi è obbligatorio. Il default 1 000 000 000 (`defaults.ts`) non allarga la ricerca: conta `min(tetto, risorse)`;
+  - **Margine**: prezzo di esecuzione `medio × (1 + margine)` (`constraints.py:170-178`), in [0, 1) (`normalize.py:529-531`): è una riserva di costo, non investimento;
+  - il normalizer rifiuta minimo > tetto (`normalize.py:566-569`).
+- `DistributionEditor` (`$lib/components/ui/input/DistributionEditor.svelte`): `kind` `sector`/`geographic`, `value` legabile in 0..1, `onchange`, emette `Number((w/100).toFixed(4))`; tabella con ricerca del settore o del paese, barra, «Bilancia», import CSV. Uso di riferimento: `AssetModal.svelte:2079-2082`.
+- Nessun E2E o test unitario usa i testid che cambiano (funding-toggle, route-enabled, routing prev/next/asset/title, cash-origin, asset-price-origin, stamp).
+
+**Passi:**
+- R7.0 ✅ 2026-09-30 — questa sezione.
+- R7.1 ✅ 2026-09-30 — via i badge con la data di copia: Liquidità (card della cassa copiata), prezzo sulla card dell'Asset (resta «Modificato»), timbro di `CopyNotice` per prezzi, FX e liquidità (valori riletti prima di «Calcola»); in `FxStep` via solo l'ora dal badge, restano badge e `AgeLabel`, perché lì la data del tasso serve.
+  > **Note implementazione**:
+  > - `CopyNotice.svelte`: `showStamp` è falso per `prices`, `fx` e `liquidity`; il timbro resta per le copie dei Broker e delle classificazioni, dove l'ora di copia è l'unica data che il dato ha.
+  > - Card dell'Asset: resta l'`OriginBadge` («Copiato»/«Modificato»); la data del prezzo passa nel `?` accanto al prezzo (`assets.priceCopiedHelp`, con la fonte quando c'è).
+  > - `FxStep.svelte:70-81`: badge d'origine e `AgeLabel` della data del tasso, senza l'ora di copia.
+- R7.2 ✅ 2026-09-30 — `BrokerEditor`, «Liquidità utilizzabile da»: niente checkbox; la cassa locale è una chip colorata, le altre sono pulsanti `aria-pressed` con lo stesso colore acceso/spento.
+  > **Note implementazione**:
+  > - `BrokerEditor.svelte:312` (cassa locale, sempre `TOGGLE_ON`) e `:323` (fonti, `TOGGLE_ON`/`TOGGLE_OFF`); le classi vivono in `ui.ts:50-52`, condivise con l'Instradamento (R7.6).
+  > - **⚠️ Fuori pista**: i testi d'aiuto parlavano ancora di spunte. `brokerEditor.fundingHelp` e `brokers.fundingHelp` ora dicono «in verde / clicca per escludere»; commento di `request.ts:328` allineato («excludes»).
+- R7.3 ✅ 2026-09-30 — card dell'Asset a tutta larghezza, in `OrderableList`; nome che scorre; `assetOrder`/`orderedAssets`/`reorderAssets` nel draft (fuori da `data`, come la Liquidità), usati anche dall'Instradamento; via la riga del tipo dalla composizione (il tipo è già nell'intestazione).
+  > **Note implementazione**:
+  > - `draft.svelte.ts:332-357` (`assetOrder`, `orderedAssets`: prima l'ordine scelto, poi gli Asset nuovi in coda), `:579` (rimozione), `:583` (`reorderAssets`).
+  > - Lettori dell'ordine: `AssetsStep.svelte:149-150` (`OrderableList`), `TargetsStep.svelte:52`, `RoutingStep.svelte:70-75`. Il fingerprint e la richiesta non cambiano: l'ordine non entra in `data`.
+  > - Nome che scorre con `use:scrollOnOverflow` e `overflowScrollTextClass`, come `AssetCard`.
+- R7.4 ✅ 2026-09-30 — backend: `_parse_saved_distribution` accetta anche il testo decimale che scrive Pydantic (`^[0-9]+(\.[0-9]+)?$`) e la chiave geografica `"Other"`; restano i rifiuti (non finito, negativo, somma ≠ 1, settore sconosciuto, paese non ISO alpha-3). Verifica con lo script di riproduzione; il test di regressione (con lo scrittore vero) va al test-author nel giro dei test. `CategoryLabels` trova `"Other"`.
+  > **Note implementazione**:
+  > - `portfolio_allocation_source.py`: `import re`; costanti `_SAVED_WEIGHT_TEXT` (`fullmatch`) e `_GEOGRAPHY_OTHER` accanto a `_KNOWN_SECTORS`; nel ciclo, un peso `Decimal` resta com'è, un testo che combacia diventa `Decimal(testo)`, tutto il resto → `None`.
+  > - Il peso conserva la scala salvata (`"0.4000"` esce `"0.4000"`: `SafeDecimal` scrive `format(v, "f")`, `schemas/common.py:38-47`); il frontend lo legge esatto (`decimal.ts` `render` toglie gli zeri). Nessuna canonicalizzazione: la funzione dichiara di non modificare il dato salvato.
+  > - Verifica: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python /tmp/libreFolio_d_ui12/classif_roundtrip_r7.py` → 21/21 OK (`classif_roundtrip_r7.log`): creazione (`crud.py:104`) e PATCH (`crud.py:600`) con `"Other"`, JSON numerico dei mock, 12 rifiuti (negativo, esponente, parola, `NaN`, booleano, vuoto, spazio, somma, settore inventato, `US`, `other`, `OTHER`), costruttore intero senza avvisi né segnaposto.
+  > - Nessuna suite lanciata, su richiesta del developer: il test di regressione e `api portfolio`/servizi vanno nel giro dei test.
+- R7.5 ✅ 2026-09-30 — editor dell'Asset: composizione con due `DistributionEditor` (settore e area geografica), agganciati alle esposizioni del draft con conversione esatta percentuale ↔ frazione; «Ripristina» li riallinea. Il tipo è un valore solo: la scelta scrive una sola riga `asset_type` al 100%; niente blocco del tipo nella composizione.
+  > **Note implementazione**:
+  > - `AssetEditor.svelte`: `distributionOf` (esposizioni → `Record` in frazione) e `writeDimension` (ritorno dell'editor → righe del draft; una categoria già presente conserva chiave, etichetta e provenienza); `withTypeRow` tiene una sola riga `asset_type` al 100%; `restoreExposures` rimette la composizione di LibreFolio e riallinea i due editor.
+  > - `compositionModified` (`draft.svelte.ts:254`) è una funzione sola, usata dall'editor e dalla card: prima c'erano due confronti diversi.
+  > - **⚠️ Fuori pista**:
+  >   - `DistributionEditor` emette `Number((w/100).toFixed(4))`: una quota ha al massimo 2 decimali in percentuale. Il ritorno nel draft usa `toFixed(6)` e `fractionToPercent`, quindi non perde nulla di ciò che l'editor mostra.
+  >   - `DistributionEditor` lascia passare totali oltre il 100%. `apply()` ora li blocca per dimensione con `assetEditor.totalOver` (`sumControlPercentages` + `compareDecimal`), prima che il normalizer li rifiuti al «Calcola».
+  >   - Una composizione copiata poteva avere la riga del tipo diversa dal tipo mostrato: `apply()` la normalizza con `withTypeRow`.
+  >   - Via `CategoryLabels.known()` (`categoryLabels.svelte.ts`, nato nel Round 6, mai in HEAD): serviva al vecchio editor a righe per decidere se una categoria era modificabile; con `DistributionEditor` non ha più lettori. `compositionRows` e `compositionModified` sono ora condivisi in `draft.svelte.ts`.
+- R7.6 ✅ 2026-09-30 — Instradamento: una zona per Asset (nell'ordine del passo Asset), una riga per Broker operativo con interruttore colorato (icona, nome, valuta con emoji, modalità, commissione); campi con etichette chiare e `HelpTip`, layout di `BrokerEditor`. Il tetto resta un numero visibile (nasconderlo come «nessun limite» sarebbe una politica nascosta per gli Asset molto economici).
+  > **Note implementazione**:
+  > - `RoutingStep.svelte` riscritto: niente selettore né «precedente/successivo»; per ogni Asset di `orderedAssets` una card `TOGGLE_*` per Broker operativo (clic = consenti/escludi); i Broker di sola liquidità in una riga `routing.fundingOnly`.
+  > - La riga della modalità è `route.modeLine` (tipo · incremento · commissione di acquisto, via `modeText.ts`).
+  > - Campi: «Acquisto minimo», «Acquisto obbligatorio», «Acquisto massimo», «Priorità», «Margine sul prezzo», ognuno con il suo `HelpTip`. Il segnaposto dei campi vuoti è «nessun minimo»/«nessun obbligo».
+  > - I testi d'aiuto dicono ciò che il motore fa (`solver.py:4`, ordine `fixed_l2 → shortfall → route_priority → explicit_cost → active_order_rows`): la priorità pesa più delle commissioni; il margine è un costo esplicito, non investimento; il tetto iniziale `1000000000` è mostrato nel suo aiuto (`route.capHelp`, `{cap}`), per la regola «nessun coefficiente nascosto» del brief.
+  > - **⚠️ Fuori pista**:
+  >   - La riga rossa «nessuna modalità» era sbagliata: `draft.modeFor` ricade su una modalità qualsiasi quando l'Asset non ha prezzo, quindi `null` vuol dire che il Broker non ha modalità. Ora mostra `problems.brokerNoMode` se `broker.modes.length === 0`, altrimenti `problems.routeNoMode` (le stesse chiavi di `request.ts:121`/`:174`); `route.noPrice` non serve più.
+  >   - Il genere di «Nessuna» non andava bene per tutti i campi: segnaposto separati `route.minimumNone`/`route.requiredNone`.
+  >   - Le costanti `TOGGLE_*` sono passate da `BrokerEditor` a `ui.ts`, per averne una sola copia.
+- R7.7 ✅ 2026-09-30 — i18n solo con `dev.py i18n` (aggiunte e aggiornamenti), `keydiff` e ICU, `front build --debug`, riavvio di `srv6161review` per il backend, verifica della 6161, feedback del developer. Nessun test automatico, su sua richiesta.
+  > **Note implementazione**:
+  > - i18n: `python3 /tmp/libreFolio_d_ui12/i18n_round7.py` (log `i18n_round7.log`), 11 aggiunte e 8 aggiornamenti con `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py i18n add|update`, tutti rc=0; nessuna rimozione (decisione (a)).
+  >   - Aggiunte: `route.modeLine`, `route.minimumNone`, `route.requiredNone`, `route.minimumHelp`, `route.requiredHelp`, `route.capHelp`, `route.priorityHelp`, `route.marginHelp`, `routing.intro`, `routing.introHelp`, `assetEditor.totalOver`.
+  >   - Aggiornate: `route.minimumIfActive`, `route.requiredMinimum`, `route.cap`, `route.margin`, `routing.fundingOnly`, `assets.compositionHelp` (via «tipo»), `brokerEditor.fundingHelp`, `brokers.fundingHelp`.
+  >   - Cataloghi: **4194** chiavi per lingua, stesso insieme nelle 4; sha8 en `5f211180`, it `359d08ed`, fr `a19c3c10`, es `48c95675`.
+  > - Verifiche: `keys_r7b.py` → manca solo l'artefatto `problems.` (prefisso dinamico di `request.ts`); `defaults_vs_en_r7.py` → solo il falso positivo `brokers.feeHelp` (la regex legge `\n` alla lettera); `icu_check_r7.mjs` → 21 chiavi × 4 lingue, **0 errori**, nessuna graffa residua.
+  > - Build: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py front build --debug` → rc=0 (`build7.log`), `start.STTnJeXF.js`.
+  > - Riavvio della 6161 (serve per R7.4): stesso comando di F6, `server --test --host 127.0.0.1 --port 6161 --data-dir /tmp/librefolio-r2-d-prodcopy --no-scheduler --no-reload`, shellId `srv6161r7`, log `/tmp/libreFolio_d_f6/server_review_r7.log`. Health 200, catalogo senza auth 401, scheduler spento, la pagina serve `start.STTnJeXF.js`; 6151 libera.
+  > - **⚠️ Fuori pista**: `stop_bash srv6161review` ha risposto «stopped», ma il processo restava in ascolto: lo strumento non tracciava più quella shell. Ho verificato che il padre (PID 70682) fosse proprio `dev.py server --test … --port 6161 --data-dir /tmp/librefolio-r2-d-prodcopy`, cioè il mio server di review, poi ho mandato un SIGTERM al figlio uvicorn (PID 70702): arresto pulito, 6161 libera prima del riavvio. Nessun processo di altre corsie toccato.
+  > - Chiavi del planner senza uso (lista di fine round, decisione (a)): 39 usate in HEAD e ora non più (fra cui `route.ready`, `route.capHint`, `route.priorityHint`, `route.none`, `route.fee`, `route.noPrice`, `routing.unitRule`, `routing.capRule`, `routing.previous`, `routing.next`), più 4 nate nei giri UI e già superate (`assetEditor.addCategory`, `assetEditor.weight`, `brokers.localHere`, `ownedAssets.noBroker`, quest'ultima della vecchia versione a spunte del dialogo). Elenco completo in `/tmp/libreFolio_d_ui12/unused_r7.log`. `routing.asset` resta in uso (`TargetsStep`, `DistributionDialog`).
+  > - Nessun test automatico, su richiesta del developer. Debito per il giro dei test: regressione R7.4 con lo scrittore vero, guardia `totalOver`, ordine degli Asset, `brokerNoMode`/`routeNoMode` nell'Instradamento.
+
+#### Round 8 — Broker, Asset di LibreFolio in sola lettura, Instradamento per Broker, tetto facoltativo, distribuzione ✅ 2026-09-30
+
+**Feedback del developer** (R7.7, 30/09), in sostanza («stiamo migliorando ma devi continuare a lavorarci»):
+1. Editor del Broker (passo 3): via il badge «Copiato · data/ora».
+2. Instradamento: al contrario. Per ogni Broker si sceglie quali Asset può comprare, non i Broker per ogni Asset.
+3. Gli Asset presi da LibreFolio non si modificano, composizione inclusa. Si modificano solo quelli manuali.
+4. Asset manuale: solo nome e tipo, più al massimo un campo ticker che accetti anche un ISIN o un altro codice.
+5. «Acquisto massimo *» non obbligatorio: vuoto = nessun limite (oggi mostra 1000000000).
+6. Obiettivi → «Copia la distribuzione attuale»: il modale resta vuoto prima che compaia il testo; deve usare la DataTable del progetto; il badge «8 giorni prima del 30/09/2026» continua a non essere chiaro.
+
+**Lettura del codice** (30/09):
+- **Tetto** (`schemas/pac_allocator.py:523-537`): `OrderCap` ha solo `quantity`/`notional`, quindi oggi è obbligatorio e il frontend manda `1000000000` (`defaults.ts:8-11`, `TODO(Q-C0-5)`). Il limite vero è già calcolato altrove: `_order_upper_bounds` (`evaluator.py:791-823`) usa `min(tetto, risorse)` per un acquisto e `min(tetto, posizione)` per una vendita, e il compilatore passa a SCIP `ub=access.upper_quanta` (`compiler.py:147`). Senza tetto il limite resta finito (risorse o posizione). Siti del tetto: normalizer `:507-511`, `:549-569`, `:940-943`, `:1032`; evaluator `:318-321`, `:546`, `:802`, `:2530-2535`; il fatto di vincolo accetta già `upper_bound=None` (`models.py:1278`). L'oracolo esaustivo non legge il tetto.
+- **Asset di LibreFolio**: `models.py:640` dà sempre un tipo (`AssetType.OTHER` di default). Un Asset senza prezzo salvato viene rifiutato dal normalizer (`allocation.price_missing`, `normalize.py:239-244`). Il ricarico prima di «Calcola» (`refreshPlan`, `copies.ts:568`) rilegge solo i prezzi copiati (`priceIsCopied`, `draft.svelte.ts:225`): un Asset rimasto senza prezzo non verrebbe mai riletto.
+- **Asset manuale**: l'identità sul wire è `name`, `ticker` (1–128 caratteri), `asset_class` (`schemas:335`). Il codice interno si genera con `draft.nextId('manual-asset')`: il contatore (`draft.svelte.ts:294`, `:348`) è monotono e non collide con `asset:N` (`copies.ts:78`).
+- **Instradamento**: `DraftRoute` (`draft.svelte.ts:139-151`) è già una coppia Asset × Broker (`routeKey`); cambia solo la presentazione. L'ordine sul wire (`request.ts:353-376`) resta.
+- **Distribuzione**: `DistributionDialog.svelte:111-133` è una `<table>` scritta a mano; la tabella compare solo quando la lettura è finita. `DataTable` (`$lib/components/table/DataTable.svelte`) ha `isLoading` (riga con spinner), celle personalizzate e `align`.
+- Nessun E2E e nessun test unitario usa i testid che cambiano (l'unico test del planner è `result/StateNotice.test.ts`).
+
+**Decisioni:**
+- **Tetto facoltativo, contratto**: nuovo `NoOrderCap` (`kind: "none"`, come `NoOrderMinimum`) nell'unione `OrderCap`; `ExactOrderRoute.cap: ExactOrderCap | None`. Senza tetto il normalizer salta i controlli sul tetto (positività, unità, valuta, minimo oltre il tetto); l'evaluator usa solo il limite delle risorse o della posizione, e il fatto `ORDER_CAP` ha `upper_bound=None`, sempre soddisfatto. `contract_version` resta `2.0.0` (contratto non ancora uscito). Dopo l'integrazione serve `api sync`.
+  - **Inversione di una nota del Round 7**: la R7.6 diceva che il tetto «resta un numero visibile (nasconderlo come "nessun limite" sarebbe una politica nascosta)». Ora il «nessun limite» è vero: non c'è più un 1e9 nascosto, il limite è quello delle risorse, che il motore calcolava già.
+- **Asset di LibreFolio in sola lettura**: «Modifica» solo per gli Asset manuali. Via i badge «Modificato» e il ripristino di prezzo e composizione (codice morto per il principio del 25/09; le chiavi restano, decisione (a)).
+  - Un Asset di LibreFolio senza prezzo salvato: l'aiuto lo dice e porta alla pagina dell'Asset (nuova scheda: il draft vive solo in memoria); prima di «Calcola» il prezzo si rilegge anche per questi Asset. Se ancora manca, il backend lo segnala come oggi.
+  - Conseguenza da dire al developer: con la sola lettura stretta non si può scrivere a mano il prezzo di un Asset di LibreFolio.
+
+**Passi:**
+- R8.0 ✅ 2026-09-30 — questa sezione.
+- R8.1 ✅ 2026-09-30 — `BrokerEditor.svelte`: via `formatCopyStamp`, `copyStamp` e il suo `OriginBadge`. Resta il badge sulle card (`BrokersStep.svelte:183`).
+  > **Note implementazione**: tolto l'`OriginBadge` dell'intestazione per entrambe le origini: un Broker copiato ha già «Ripristina i valori copiati», uno manuale ha il nome modificabile. Via anche gli import `locale`, `formatCopyStamp` e `OriginBadge`, rimasti senza uso. Il testid `pac-planner-broker-editor-origin` non ha lettori.
+- R8.2 ✅ 2026-09-30 — Instradamento per Broker: una zona per Broker operativo (icona, nome, valute); dentro, un interruttore per ogni Asset nell'ordine del passo Asset, con i campi della rotta. Helper del draft per le rotte di un Broker.
+  > **Note implementazione**: `draft.routesOfBroker(brokerKey)` sostituisce `routesOf(assetKey)` (unico chiamante era il passo; nessun test). `RoutingStep.svelte` riscritto: una `section` per Broker operativo nell'ordine dei Broker (`pac-planner-routing-broker`, `data-broker-key`), con icona 28 px, nome che scorre, e una riga per modalità (`CurrencyCode` + tipo · passo · commissione). Un Broker senza modalità lo dice una volta nell'intestazione, non su ogni Asset; la riga rossa per Asset (`routeNoMode`) resta solo se il Broker ha modalità ma nessuna nella valuta del prezzo. Ogni Asset è una `TOGGLE_CARD` (`pac-planner-route` con `data-asset-key` e `data-broker-key`): icona, ticker + nome che scorre, tipo, valuta della modalità usata. Pillole «Consenti tutti» / «Escludi tutti» e conteggio per Broker, come nel dialogo degli Asset posseduti. I campi della rotta sono quelli di prima, rientrati sotto il titolo (`sm:pl-10`). Il testid `pac-planner-routing-asset` sparisce: nessun lettore.
+  > **⚠️ Fuori pista**: le pillole «Consenti tutti» / «Escludi tutti» non erano nel feedback; aggiunte perché con la vista per Broker l'unico modo di escludere un Broker da tutto sarebbe un clic per Asset. Da confermare col developer.
+- R8.3 ✅ 2026-09-30 — Asset di LibreFolio in sola lettura; aiuto e collegamento per il prezzo mancante; rilettura del prezzo mancante prima di «Calcola».
+  > **Note implementazione**: `AssetsStep.svelte` — «Modifica» solo per `origin === 'manual'`; via i badge «Modificato» di prezzo e composizione (`samePrice`/`compositionModified` non servono più al passo); l'aiuto del prezzo copiato non ha più il ramo «modificato». Prezzo non memorizzato: testo nuovo (`priceNotStored`) e link «Apri la pagina dell'Asset» (`/assets/{id}`, nuova scheda, `pac-planner-asset-open-page`, icona `ExternalLink`). `priceAuto` riscritto: i dati dell'Asset sono quelli di LibreFolio, solo un Asset manuale si modifica. `copies.ts` — `refreshPlan` include anche gli Asset di LibreFolio in attesa del primo prezzo (`priceAwaitsRead`); `refreshCopiedFacts` li riempie se il prezzo ora c'è (conta in «prezzi aggiornati»), altrimenti non li elenca fra i mancanti: il prezzo resta vuoto e lo segnala il calcolo. `AssetEditor.svelte` ridotto al solo Asset manuale: via ramo d'identità copiata, `typeEditable`, `CategoryLabels`, aiuto del prezzo copiato, «Ripristina» di prezzo e composizione. Codice morto rimosso (principio del 25/09): `restoreCopiedPrice`/`restoreCopiedExposures` (`copies.ts`), `compositionRows`/`compositionModified` (`draft.svelte.ts`); nessun test li nominava (grep su `src` e `e2e`).
+- R8.4 ✅ 2026-09-30 — Asset manuale: Nome*, Tipo*, «Ticker / ISIN» facoltativo; codice interno automatico; via `manualId`.
+  > **Note implementazione**: il modulo ha Nome*, Tipo* e «Ticker / ISIN» (stesso campo `ticker`, 128 caratteri, con aiuto: non collega l'Asset a LibreFolio e non unisce per nome o codice). Il codice interno è `draft.nextId('manual-asset')` (`manual-asset:N`, valido per `PLANNER_ID`, contatore monotono anche dopo `reset`): due Asset manuali con lo stesso nome restano distinti. Via `manualId` da `DraftAsset`, da `draftAssetFromInfo` e dall'editor, con i controlli ID mancante/troppo lungo/duplicato. Titolo del dialogo sempre «Asset manuale». Testid `pac-planner-asset-editor-id` e `-identity`/`-type-text`/`-price-restore`/`-exposures-restore`/`-price-modified`/`-exposures-modified` spariscono: nessun lettore.
+- R8.5 ✅ 2026-09-30 — Tetto facoltativo: `NoOrderCap` nel backend, `api sync`, frontend (vuoto = nessun limite, nessun `*`).
+  > **Note implementazione**: backend — `NoOrderCap` (`kind: "none"`) nell'unione `OrderCap` (`schemas/pac_allocator.py:531-543`); `ExactOrderRoute.cap: ExactOrderCap | None` (`models.py:439-440`); il normalizer salta positività, unità, valuta e «minimo oltre il tetto» quando il tetto manca, senza cambiare l'ordine dei problemi quando c'è (`normalize.py:508-514`, `:552-575`, `:945-950`); l'evaluator applica `min(massimo, tetto)` solo se il tetto esiste (`evaluator.py:791-821`): il massimo resta il limite delle risorse per un acquisto e la posizione (o 0) per una vendita, quindi SCIP riceve sempre un `ub` finito. Il fatto `ORDER_CAP` resta emesso per ogni rotta, con `upper_bound=None` e `satisfied=True` senza tetto. Controllo d'import senza suite: `TypeAdapter(OrderCap).validate_python({'kind':'none'})` → `kind='none'`. `api sync` (exit 0, log `/tmp/libreFolio_d_r8_apisync.log`): fingerprint dello schema PAC `4d8978e958829b2e912fbeb8b8f3e1d83190dc3a296230bdb20b8741c2617aa2` (era `502e8c48…`); generazione del contratto dei tool `61303d560a1ef3d3dc6861c527c7fa8a8df773e382fe0fac5fd10b0942c253c9` (era `2f30f6ce…`); l'unione generata `OrderCap` ha tre membri. Frontend — via `DEFAULT_ROUTE_CAP` e il suo `TODO(Q-C0-5)` (`defaults.ts`); `syncRoutes` crea rotte con tetto vuoto; `request.ts` manda `{kind: 'none'}` per un tetto vuoto e segnala solo un tetto non numerico (`routeCapMissing` non si usa più); nel passo il campo non ha `*`, ha il segnaposto «nessun limite» e un aiuto nuovo senza `{cap}`. Il draft vive solo in memoria: nessun draft vecchio conserva il 1e9.
+  > **⚠️ Fuori pista**: debito di test, da affidare al test-author dopo la review — il test del fingerprint congelato (`test_scripts/test_schemas/test_pac_planner_schemas.py:2999`, atteso `502e8c48…`) va portato a `4d8978e9…`; il fingerprint del ribilanciatore (`17d5625e…`) va riverificato; servono casi `NoOrderCap` per normalizer, evaluator e oracolo.
+- R8.6 ✅ 2026-09-30 — `DistributionDialog` su `DataTable`, subito visibile con lo spinner, icona dell'Asset, senza il badge dell'età.
+  > **Note implementazione**: la `<table>` scritta a mano diventa la `DataTable` del progetto (`storageKey="pac-planner-distribution"`, senza selezione, azioni, paginazione, filtri, menu contestuale e visibilità delle colonne; `tableLayout="auto"`), dentro `pac-planner-distribution-table` con `data-loading`. Tre colonne: Asset (cella nuova `shared/AssetNameCell.svelte`: `AssetIcon` + nome), Peso (numerica, a destra, ordinabile; `—` senza peso) con denominatore, differenze dalla pagina e quanto nel tooltip dell'intestazione, e Valutazione (prezzo di mercato o ultimo prezzo di transazione con la data, manuale, non posseduto, prezzo o cambio mancante). Il modale è subito pieno: mentre il perimetro o i dati si leggono, la `DataTable` mostra la sua riga con lo spinner (`isLoading`), non un modale vuoto. Via il badge dell'età (`AgeLabel` resta per Rivedi e Cambi) e i testi di fonte e denominatore sullo schermo: la fonte sta nel tooltip accanto a «Broker (solo OWNER)». Corretto un difetto latente: togliendo tutti i Broker restava applicabile la proposta vecchia; ora senza Broker non c'è proposta e la tabella dice «Seleziona almeno un Broker». Codice morto rimosso da `copies.ts`: `daysBefore`, `stale` (`DistributionRow`) e `asOf` (`DistributionProposal`), senza lettori. Testid `-loading`, `-reading`, `-row`, `-age` spariti: nessun lettore (grep su `src` ed `e2e`).
+  > **⚠️ Fuori pista**: svelte-check ha trovato 2 errori in `result/text.ts:54`, conseguenza di R8.5: `routeCapText` non conosceva `{kind: 'none'}`. Ora restituisce «nessun limite» (`route.capNone`), e il dettaglio dell'ordine dice «priorità N · nessun tetto» con una chiave sua (`result.detail.routeFactsNoCap`), invece di «tetto nessun limite». Dopo la correzione svelte-check (`/tmp/libreFolio_d_ui12/svelte_check_r8b.log`) dà solo i 3 errori noti fuori scope (`ToolExecutionMetrics.svelte:44`, `TransactionFormModal.test.ts:787`, `:819`) e nessun warning nel PAC.
+- R8.7 ✅ 2026-09-30 — i18n solo con `dev.py i18n`, `api sync`, `front build --debug`, riavvio della 6161 (cambia il backend), verifica, feedback del developer. Nessun test automatico, su sua richiesta.
+  > **Note implementazione**:
+  > - i18n: `python3 /tmp/libreFolio_d_ui12/i18n_round8.py` (log `i18n_round8.log`), 7 aggiunte e 6 aggiornamenti con `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py i18n add|update`, tutti rc=0; nessuna rimozione (decisione (a)).
+  >   - Aggiunte: `result.detail.routeFactsNoCap`, `route.capNone`, `assetEditor.tickerHelp`, `assets.openAssetPage`, `routing.allowAll`, `routing.excludeAll`, `routing.allowedCount` (plurale ICU in it/fr/es, come `ownedAssets.count`).
+  >   - Aggiornate: `assetEditor.ticker` («Ticker / ISIN»), `assets.priceAuto`, `assets.priceNotStored`, `routing.intro`, `routing.introHelp`, `route.capHelp` (via `{cap}`).
+  >   - Cataloghi: **4201** chiavi per lingua, stesso insieme nelle 4; sha8 en `6ea4036c`, it `67f88414`, fr `d8a99fe6`, es `94e63abe`.
+  > - Verifiche: `keys_r8.py` → manca solo l'artefatto `problems.`; `defaults_vs_en_r8.py` → solo il falso positivo `brokers.feeHelp`; `icu_check_r8.mjs` → 15 casi × 4 lingue (con `allowedCount` a 0, 1 e 2), **0 errori**, nessuna graffa residua. svelte-check: solo i 3 errori noti fuori scope.
+  > - `api sync` già fatto in R8.5; nessun cambio del backend dopo.
+  > - Build: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py front build --debug` → rc=0 (`build8.log`), `start.DMvtZW7F.js`.
+  > - Riavvio della 6161: `stop_bash srv6161r7`, questa volta il processo si è fermato davvero (6161 libera, PID 68321 sparito); poi lo stesso comando di F6, shellId `srv6161r8`, log `/tmp/libreFolio_d_f6/server_review_r8.log`. Health 200, `/api/v1/tools/catalog` senza auth 401, scheduler spento, la pagina serve `start.DMvtZW7F.js`; 6151 libera. `git diff --check` pulito.
+  > - Chiavi del planner senza uso (lista di fine round, decisione (a); log `/tmp/libreFolio_d_ui12/unused_r8.log`): **47** usate in HEAD e ora non più (le 39 del Round 7 più `assetEditor.manualId`, `manualIdPlaceholder`, `neverByName`, `idMissing`, `idTooLong`, `idDuplicate`, `assetEditor.title`, `origin.modified`), più **8** nate nei giri UI e già superate (`assetEditor.addCategory`, `assetEditor.weight`, `brokers.localHere`, `assetEditor.priceModifiedHelp`, `assetEditor.compositionModifiedHelp`, `assets.priceModifiedHelp`, `assets.compositionModifiedHelp`, `restore`), più `problems.routeCapMissing` (prefisso dinamico, verificato a mano: nessun riferimento) e le 2 già note del commit 5 (`result.proof.floatingFinished`, `result.states.noIncumbent.rejected`). `ownedAssets.noBroker` torna in uso (messaggio della tabella vuota nel dialogo della distribuzione).
+  > - Debito di test per il giro dei test (oltre a quello di R8.5): Instradamento per Broker e pillole, Asset di LibreFolio in sola lettura, rilettura del prezzo mancante, codice interno dell'Asset manuale, dialogo della distribuzione su `DataTable` (spinner, nessuna proposta senza Broker), `routeCapText` senza tetto.
+
+#### Round 9 — prezzo auto/manuale, riepilogo sotto i passi, Instradamento essenziale, Cambi per coppia, DataTable, Strategia spiegata, Rivedi, Risultato ✅ 2026-09-30 (R9.0–R9.9); feedback ricevuto il 01/10 → Round 10
+
+**Feedback del developer** (risposta all'`ask_user` del Round 8, 30/09), in sostanza:
+1. Asset: di un Asset di LibreFolio si modifica solo il prezzo, con un interruttore auto/manuale. In auto il prezzo si rilegge al «Calcola»; in manuale si usa quello scritto. Il modulo dell'Asset manuale va bene. «Asset manuale» va a destra, nella riga di «Cerca asset» e «Tuoi asset».
+2. Layout desktop: il riepilogo spreca una colonna intera; va sotto i passi, come su mobile.
+3. Instradamento: la priorità solo se ci sono più Broker. Regola generale: un campo compare solo quando ha senso. Via la valuta dopo i campi: è già all'inizio della card.
+4. Cambi: il passo si nasconde o si salta se acquisti e Broker usano tutti la stessa valuta. Altrimenti un blocco per ogni conversione mancante, riempito in automatico quando si può e a mano altrimenti, con un interruttore auto/manuale come quello del PMC dell'ADJUSTMENT in «aggiungi transazione».
+5. Obiettivi, «Copia distribuzione»: prende i rapporti attuali del portafoglio fra gli Asset scelti, portati a 100? Se sì va benissimo, ma l'interfaccia deve renderlo certo. Eventualmente con l'estetica del `DistributionEditor`.
+6. `DataTable` per tutte le tabelle, negli Obiettivi e altrove.
+7. Strategia: descrivere cosa fa e la catena di fallback; spiegare «distanza L2» a parole o con un link.
+8. Rivedi: i 2 pulsanti e le 2 tabelle su `DataTable`, e una spiegazione al developer; hanno molti badge ed errori di design già corretti altrove.
+9. Risultato:
+   - prima la tabella dell'allocazione, poi quella del «riuso dei margini»; aperte solo queste due, le altre chiuse;
+   - nazionalità: 2 mappe (prima/dopo) con la stessa scala di colori; passando su un paese di una delle due, l'infobox mostra la variazione;
+   - tipo e settori: barre ECharts, prima e dopo affiancate.
+10. Altre deviazioni di stile: libero di correggerle, il developer darà feedback.
+
+**Lettura del codice** (30/09):
+- **Distribuzione attuale** (`backend/app/services/portfolio_allocation_source.py:1542-1655`): valori di mercato del motore di portafoglio (lo stesso della pagina Allocazione) solo per gli Asset dello scenario, liquidità esclusa; pesi `_largest_remainder_weights(values)` sul totale degli Asset scelti (somma esatta 1, quanto 0.0001). Un Asset posseduto senza valutazione blocca tutti i pesi (`incomplete`). Quindi **sì**: sono i rapporti attuali fra gli Asset scelti, portati a 100%. Un Asset manuale riceve 0 (`copies.ts`, `distributionProposal`).
+- **Risultato PAC**: `PacExposurePlanRow` (`schemas/pac_allocator.py:1479`) ha solo `target_weight` e `final_weight`, senza «prima» né scarto. In un PAC puro il «prima» è 0 per costruzione: il calcolo non legge le posizioni (pagina utente, «How its target is meant to be read»). Mappe e barre confrontano quindi **Obiettivo** e **Dopo**, con la stessa scala. La variazione nell'infobox è «obiettivo → dopo» con la freccia di `compareDecimal`, senza sottrazioni nell'interfaccia. Alternativa, da chiedere: un `residual_weight` calcolato dal backend (cambio di contratto).
+- **«Riuso dei margini»**: nessun pannello ha questo nome. Dalle richieste precedenti del developer («tabelle che dicono cosa impostare sui broker», poi «una seconda soluzione che raccoglie i margini di liquidità e li spalma per investire tutto») la lettura più probabile è il Piano operativo (ordini e movimenti di liquidità). Scelta: Allocazione e Piano operativo aperti, gli altri chiusi; domanda al developer.
+- **Strategia** (`backend/app/services/pac_allocator/objectives.py:234-246`), cascata `proportional`:
+  1. `fixed_l2` = Σ(valore dopo − valore obiettivo)². Il valore obiettivo è peso × riferimento fisso; il riferimento fisso (`evaluator.py:2221`) è investito attuale + liquidità raggiungibile, cioè 0 + liquidità nel PAC.
+  2. `shortfall`.
+  3. `route_priority` = Σ priorità delle rotte usate: vince il numero più basso.
+  4. `explicit_cost` = commissioni + spread FX + margine di esecuzione.
+  5. `active_order_rows`.
+  6. Spareggio canonico.
+  Ogni obiettivo decide solo fra i piani a pari merito sul precedente. La pagina utente (`mkdocs_src/docs/user/tools/pac-allocator/index.en.md`) non spiega la cascata: un link non basta, la spiegazione va nel passo. Debito docs per il docs-writer.
+- **Tabelle da portare su `DataTable`**: `TargetsStep.svelte:43`, `ReviewStep.svelte:123`, `result/AssetTable.svelte:22`, `result/LedgerTable.svelte:42`, `result/OperationalPlan.svelte:96`, `result/ProofPanel.svelte:99`.
+
+**Decisioni:**
+- **Prezzo auto/manuale**: un flag esplicito `priceManual` su `DraftAsset`.
+  - In auto il prezzo è quello letto da LibreFolio, riletto prima di «Calcola».
+  - In manuale il valore scritto non si tocca mai e va sul wire con provenienza manuale, anche se è uguale alla copia.
+  - Rovescia in parte R8.3 (sola lettura): tutto il resto (nome, tipo, composizione) resta non modificabile.
+- **Cambi**: stesso schema, con un flag `manual` su `DraftFx`. Le coppie sono quelle di `requiredPairs`, senza aggiunta libera. Il passo sparisce dalla navigazione quando non serve nessuna coppia.
+- **Mappe e barre**: Obiettivo contro Dopo (vedi sopra).
+
+**Passi:**
+- R9.0 ✅ 2026-09-30 — questa sezione.
+- R9.1 ✅ 2026-09-30 — Asset: prezzo auto/manuale per gli Asset di LibreFolio; «Asset manuale» a destra.
+  > **Note implementazione**: `DraftAsset.priceManual` (in memoria, nessuna migrazione del draft). `priceIsCopied` è falso in manuale, quindi il prezzo va sul wire con provenienza manuale anche se è uguale alla copia (`request.ts:255`), e `refreshPlan`/`refreshCopiedFacts` non lo rileggono. `priceAwaitsRead` esclude il manuale. `applyPriceCopy` in manuale sposta solo il riferimento (`copiedPrice`/`priceStamp`/`priceSource`) e conta «invariato». Nuovo `setPriceManual` (`copies.ts`): verso manuale parte dal prezzo a schermo, o da un importo vuoto nella valuta del prezzo copiato o, in mancanza, in quella dell'Asset (`getAssetInfo`); verso auto rimette il prezzo copiato, o lo svuota e il passo rilancia subito la lettura. Nuovo `shared/AutoManualToggle.svelte` (le pillole del PMC di `WacPreviewSection.svelte:363-380`, `aria-pressed`, `data-mode`), riusato in R9.4. `AssetsStep.svelte`: l'interruttore sta a destra della riga del prezzo, solo per gli Asset di LibreFolio; in manuale `ExactDecimalInput` + `CurrencyCode` + «/ N unità» + aiuto che mostra il prezzo di LibreFolio che «Auto» ripristina; «Asset manuale» a destra (`ml-auto`), l'aiuto «Dati da LibreFolio» accanto a «Tuoi Asset»; il «!» e `data-price` contano anche un prezzo manuale vuoto; nuovo `data-price-mode`. `review.ts`: in manuale l'origine è manuale e, se esisteva una copia, «modificato» (coerente con `factCounts`). i18n raccolte in `/tmp/libreFolio_d_ui12/i18n_round9.py`, applicate in R9.9.
+- R9.2 ✅ 2026-09-30 — Layout: riepilogo sotto i passi anche su desktop.
+  > **Note implementazione**: `PacPlannerTool.svelte` — la griglia desktop passa da tre colonne (passi · passo · riepilogo) a due (`minmax(11rem,13rem)` · passo). A ogni larghezza c'è un solo blocco: una card con `StepNav` (verticale su desktop, orizzontale o compatta sotto) e, sotto, «Riepilogo» apribile a richiesta, come già su mobile; su desktop la card resta `sticky top-4`. Il passo guadagna la colonna del riepilogo (~15rem). Nessun lettore dei testid del riepilogo fuori dal componente (grep su `e2e`).
+- R9.3 ✅ 2026-09-30 — Instradamento: priorità solo con più Broker per l'Asset; via i suffissi di valuta.
+  > **Note implementazione**: `RoutingStep.svelte` — la «Priorità» compare solo se l'Asset è ammesso su più di un Broker operativo (conteggio `$derived` sulle rotte abilitate), oppure se contiene già un valore diverso da 0 o non valido: un valore nascosto agirebbe senza che l'utente lo veda (`objectives.py:150-164`, la priorità somma anche le rotte singole). Via le colonne `INPUT_SUFFIX` dopo i campi: in modalità importo la valuta è già nella card e nella riga; in modalità unità «unità» e il «%» del margine stanno dentro il campo (`INPUT_ADORNMENT` nuovo in `ui.ts`, il campo si riserva lo spazio con `pr-*`, come `PasswordInput`), così i campi di una riga hanno la stessa larghezza. Ordine: minimo, obbligatorio, massimo, poi margine e (se serve) priorità. svelte-check: solo i 3 errori noti fuori perimetro.
+- R9.4 ✅ 2026-09-30 — Cambi: passo dinamico, un blocco per coppia con interruttore auto/manuale e lettura automatica.
+  > **Note implementazione**:
+  > - **Coppie necessarie** (`draft.svelte.ts:636-694`): chiusura in due parti, calcolata come il backend (`normalize.py:639-650`). `valuationPairs`: ogni valuta citata (prezzi, liquidità, contributi) contro la valuta di valutazione. `conversionPairs`: ogni cassa di un Broker contro la valuta del prezzo di ogni Asset che quel Broker può comprare. `requiredPairs` è l'unione; `fxPurpose(pair)` dice valutazione, conversione o entrambe; `fxNeeded`; `visibleSteps` toglie `fx` da `PLANNER_STEPS` quando non serve nessuna coppia. `PacPlannerTool.svelte:100` mostra comunque tutti i passi mentre si è su «Cambi» o c'è un problema dei Cambi, così il passo non sparisce sotto l'utente. `DraftFx.manual` nuovo (`:168`, in memoria, nessuna migrazione del draft).
+  > - **`copies.ts`**: `rateAwaitsRead` (auto, tasso vuoto, mai letto), `setRateManual` (verso manuale parte dal tasso a schermo; verso auto rimette `copiedRate`, o svuota e il passo rilegge), `applyAwaitingFxRates` (riempie solo le coppie ancora in attesa, mai un tasso scritto a mano). `refreshPlan` include le coppie in attesa, quindi una coppia auto mai visitata si legge prima di «Calcola».
+  > - **`fxRead.svelte.ts`** nuovo, `FxRateReader`: legge le coppie in attesa all'apertura del passo (`pending`), una lettura nuova assorbe le coppie della precedente; memoria per draft (`WeakMap`: `attempted`, `missed`, `ownerless`) che sopravvive all'uscita dal passo, così non rilegge a ogni visita una coppia che LibreFolio non ha. Errore con «Riprova» solo per le coppie fallite.
+  > - **`request.ts:193-198`, `:386-402`**: sul wire vanno solo le `requiredPairs`; lo spread si valida solo se ci sono conversioni (senza conversioni un valore non valido va come 0, il backend lo applica solo alle conversioni: `objectives.py:205`, `constraints.py:421/576`).
+  > - **Rivedi/Riepilogo**: righe dei cambi solo con coppie necessarie (`review.fxRated`, `summary.rates`); `ReviewStep`, `SummaryPanel`, `review.ts`.
+  > - **`steps/FxStep.svelte` riscritto** (backup `/tmp/libreFolio_d_ui12/FxStep.r8.svelte`): una card per coppia (`pac-planner-fx-pair`, con `data-pair`, `data-purpose`, `data-mode`, `data-rate`, `data-read`), titolo «BASE → QUOTE» con `CurrencyCode`, `AutoManualToggle` (`pac-planner-fx-mode`), badge dello scopo con aiuto (valutazione in `{valuta}`, conversione fra casse). Manuale: «1 BASE =» + `ExactDecimalInput` + QUOTE e aiuto col tasso che «Auto» ripristina. Auto: il tasso letto con la sua data nell'aiuto; durante la lettura uno spinner; senza Broker posseduto un avviso; coppia che LibreFolio non ha un avviso e il link alla pagina Cambi (`/fx`, nuova scheda); altrimenti «si legge prima del calcolo». Lo spread compare solo con conversioni, col «%» dentro il campo (`INPUT_ADORNMENT`). Via l'aggiunta libera di coppie, «Copia», il dialogo, la rimozione e il ripristino. Radice con `aria-busy`/`data-busy`.
+  > - svelte-check (`/tmp/libreFolio_d_ui12/check9_4.log`): solo i 3 errori noti fuori perimetro. Nessun test o E2E usa i testid tolti (grep su `e2e` e `src`).
+  > - **Codice senza più uso** (inventario, da togliere solo dopo test-triage; `/tmp/libreFolio_d_ui12/dead_r94.log`): `steps/SourceCopyDialog.svelte` (nessun import; il suo unico utente era `FxStep`), e con lui `applyFxCopy`, `applyPriceCopy`, `applyClassificationCopy` (`copies.ts:305/490/559`; gli ultimi due senza uso reale dal R6), le varianti `fx`/`price`/`exposures` di `CopyConflict` e i loro rami in `resolveConflicts` (`copies.ts:786-818`, oggi solo `cash` è raggiungibile), `restoreCopiedRate` (`copies.ts:823`), `draft.fxPairs` (`:697`, letto solo dal codice morto) e `draft.removeFx` (`:707`). Restano vivi `CopyFlow`/`CopyFlowView` (Liquidità, Broker), `AgeLabel` (Rivedi, da rivedere in R9.7), `OriginBadge`.
+  > - **Chiavi senza più uso** (lista di fine round, decisione (a); `/tmp/libreFolio_d_ui12/unused_r94.log`): 10 in più rispetto al Round 8, `add`, `fx.addFrom`, `fx.addTo`, `fx.copy`, `fx.pairsHint`, `fx.remove`, `restoreCopied`, `review.fx`, `review.noFx`, `summary.pairs`. Le chiavi nuove del passo sono in `i18n_round9.py`, applicate in R9.9.
+  > **⚠️ Fuori pista**: `PortfolioPlannerSourceRequest.broker_ids` ha `min_length=1` (`backend/app/schemas/portfolio.py:1264-1272`): senza un Broker posseduto non si può leggere nessun tasso. Il lettore lo ricorda come «nessun Broker» invece di chiamare l'API. Lo stesso limite toccava «Calcola»: con coppie o prezzi in attesa e nessun Broker, `refreshCopies` chiedeva una lettura impossibile e si fermava con errore. Ora `copiedOnly` (`copies.ts:659`) toglie dal piano le prime letture, così il calcolo parte e segnala come mancante ciò che manca; un fatto già copiato si rilegge ancora. Nessun cambio del backend.
+- R9.5 ✅ 2026-09-30 — Obiettivi su `DataTable` (stile `DistributionEditor`) e dialogo della distribuzione esplicito.
+  > **Note implementazione**: `steps/TargetsStep.svelte` riscritto (copia in `/tmp/libreFolio_d_ui12/TargetsStep.r8.svelte`). In alto intro breve e, a destra, «Copia la distribuzione attuale» con icona `PieChart` e aiuto `targets.copyHelp` (stessa regola di abilitazione). La tabella è una `DataTable` senza ordinamento, paginazione, selezione, filtri né resize: colonne Asset (`AssetNameCell` con icona), barra e Obiettivo %. La barra è quella del `DistributionEditor` (`:137`, `:367`): lunga rispetto al peso più alto, verde a 100%, rossa sopra, ambra sotto. L'obiettivo è la nuova `shared/TargetInputCell.svelte`: `ExactDecimalInput` con suffisso `%`; legge e scrive `draft.data.targets[key]` da sé, quindi l'istanza resta e il fuoco non si perde. Ogni riga ha nel menu ⋮ «Bilancia al 100%»: aggiunge all'obiettivo il mancante, o toglie l'eccesso, con `sumControlPercentages` e limiti 0–100 via `compareDecimal`; nessun `Number` per i valori. Sotto, il totale nello stile del badge `DistributionEditor` (`:523-535`), con `data-state` `balanced|excess|missing|unknown` e aiuto `targets.totalHelp`. Via dallo schermo «(controllo informativo)», che era falso: `request.ts:189-191` blocca il calcolo con totale ≠ 100. `DistributionDialog.svelte`: sottotitolo visibile `distribution.subtitle` («insieme fanno il 100%»), con la vecchia regola in un aiuto; colonna barra; riga di totale nel `footerCells` solo con stato `complete`, dove il backend garantisce somma esatta 1 (`schemas/portfolio.py:1522-1526`, largest remainder). svelte-check: solo i 3 errori noti fuori scope, 0 avvisi del planner.
+  > - **Test da riallineare** (debito per il test-author): i testid `pac-planner-target` e `data-asset-key` passano dalla riga `<tr>` al contenitore dell'input nella cella; nuovi `pac-planner-target-bar`, `pac-planner-targets-total`, `pac-planner-target-balance` (menu ⋮, `row-actions-{key}`), `pac-planner-distribution-subtitle`/`-rule`/`-bar`. Nessuna E2E o unit li usa oggi (verificato con grep).
+  > - **Chiavi**: 5 nuove (`targets.copyHelp`, `targets.excess`, `targets.balance`, `targets.totalHelp`, `distribution.subtitle`), 4 aggiornate (`targets.intro`, `targets.total` senza segnaposto, `targets.remaining` «{value} mancante», `targets.wire` come aiuto della colonna). Senza più uso: `targets.control`. Tutto in `i18n_round9.py` (ADD=25, UPDATE=8, dry run verde).
+- R9.6 ✅ 2026-09-30 — Strategia: descrizione, catena, L2 a parole.
+  > **Note implementazione**: `steps/StrategyStep.svelte` riscritto (copia in `/tmp/libreFolio_d_ui12/StrategyStep.r8.svelte`), con la catena del backend come fonte: `objectives.py:1-9` e `:234-246` (`build_objective_cascade`: `fixed_l2` → `shortfall` → `route_priority` → `explicit_cost` → `active_order_rows`), stadi `:109-221`, spareggio canonico `:224-231` e `evaluator.py:3089` (`canonical_key`); solo acquisti da `constraints.py:5`. In alto un'intro in una frase (`strategy.intro`): la strategia sceglie il migliore fra i piani che rispettano i passi precedenti. Ogni strategia è una card: radio (`accent-libre-green`) con nome e, sotto, cosa cerca a parole (`policyHelp.{policy}`, testid `pac-planner-policy-help`). Nella card la sezione «Come sceglie il piano, in ordine» con la regola della catena (`strategy.cascadeRule`, testid `pac-planner-policy-rule`: ogni criterio decide solo fra i piani ancora alla pari su quelli sopra) e la lista numerata (`ol` `pac-planner-policy-objectives`, `li[data-objective]`, bolla `ICON_BUBBLE`): nome del criterio più una riga che dice cosa preferisce (`objectiveHelp.{code}`). Un «?» solo dove la riga non basta: la distanza L2 spiegata a parole (differenza fra valore comprato e quota del denaro, al quadrato, sommata; il quadrato pesa di più gli scarti grandi; valore al prezzo dell'Asset, senza commissioni né margine) e dove si scelgono i numeri di priorità (passo Route per gli Asset comprabili su più Broker, passo Broker per le fonti; vince il più basso, tutti a 0 = nessuna preferenza), testid `pac-planner-objective-help`. In fondo lo spareggio finale (icona `Equal`, testid `pac-planner-policy-tie-break`): ordine fisso di Asset e Broker, stesso input → stesso piano. Via dallo schermo «Le strategie vengono dal contratto del backend» e «Parametri aggiuntivi: nessuno». Nomi dei criteri resi leggibili: «Vicinanza agli obiettivi (distanza L2)», «Liquidità non investita» (senza «(U)»), «Priorità di Broker e fonti»; allineati i fallback EN di `policies.ts` (`OBJECTIVE_FALLBACKS`, copia in `/tmp/libreFolio_d_ui12/policies.r8.ts`). svelte-check: solo i 3 errori noti fuori scope, 0 avvisi del planner (`/tmp/libreFolio_d_ui12/svelte_check_r96.log`).
+  > - **Riuso**: le etichette `objectives.*` compaiono anche in `result/ProofPanel.svelte:33`/`:141`, che quindi prende i nomi nuovi. Lo spareggio grezzo (`ProofPanel.svelte:148`, «canonical_key») si sistema in R9.8.
+  > - **Test da riallineare** (debito per il test-author): nuovi testid `pac-planner-policy-help`, `pac-planner-policy-rule`, `pac-planner-policy-objectives`, `pac-planner-objective-help`, `pac-planner-policy-tie-break`; `pac-planner-policy` resta sulla card con `data-policy`. Nessuna E2E o unit usa i testid della Strategia (verificato con grep).
+  > - **Debito docs** (docs-writer, EN): la catena con le stesse parole, e dove si impostano le priorità.
+  > - **Chiavi**: 11 nuove (`policyHelp.proportional`, `objectiveHelp.{fixed_l2,shortfall,route_priority,explicit_cost,active_order_rows}`, `strategy.{cascadeRule,l2Help,priorityHelp,tieBreakTitle,tieBreak}`), 5 aggiornate (`strategy.intro`, `strategy.cascade` senza due punti, `objectives.{fixed_l2,shortfall,route_priority}`). Senza più uso: `strategy.fromContract`, `strategy.noParameters`. `i18n_round9.py`: ADD=36, UPDATE=13, dry run verde, nessuna chiave ADD già presente.
+- R9.7 ✅ 2026-09-30 — Rivedi: due `DataTable`, filtri standard al posto dei 2 pulsanti.
+  > **Note implementazione**:
+  > - **Cosa c'era** (per la spiegazione al developer): i 2 pulsanti «Snapshot completo» / «Solo modificati / non del giorno» erano due viste della **stessa** tabella dei fatti, cioè un filtro. Sopra, un elenco dei passi con «Modifica», e un banner fisso sugli ordini.
+  > - **`steps/ReviewStep.svelte` riscritto** (copia in `/tmp/libreFolio_d_ui12/ReviewStep.r8.svelte`):
+  >   1. In alto una frase (`review.lead`) con un «?» (`review.help`, testid `pac-planner-review-help`): il calcolo usa solo questi dati, e subito prima rilegge ciò che è preso da LibreFolio e non modificato (`copies.ts:611-720`).
+  >   2. **Tabella dei passi** (`DataTable`, testid `pac-planner-review-sections`): colonne Passo (icona verde/ambra e nome, `data-step`, `data-blocked`) e Riepilogo (testo e chip di valuta). Clic sulla riga o ⋮ «Modifica» (`pac-planner-review-goto`) → il passo. Riepiloghi riscritti a parole: «2 Broker · 1 conto esterno», «5 Asset · 1 senza prezzo · 2 prezzi non di oggi», «4 di 5 Asset acquistabili», «5 di 5 Asset con un obiettivo», «3 cambi · 1 senza tasso». Riga dei Cambi solo se servono coppie o c'è un problema lì (come R9.4).
+  >   3. I problemi (`pac-planner-review-problems`, `IssueList`) sotto la tabella.
+  >   4. **Tabella dei dati** («Dati del calcolo (N)», chiusa di default, `pac-planner-review-facts-toggle`, `aria-expanded`): `DataTable` con ordinamento e filtri di colonna (testid `pac-planner-review-facts`). Colonne Dato (icona del Broker, del versamento o dell'Asset, come nei passi; il filtro di testo cerca anche i codici valuta), Tipo (filtro enum: Broker, Liquidità, Versamento, Prezzo, Composizione, Cambio), Valore, Origine (filtro enum: LibreFolio, Manuale, Modificato). ⋮ «Modifica» (`pac-planner-review-fact-goto`). I 2 pulsanti diventano il filtro Origine, multiplo: «Manuale» + «Modificato» è la vecchia vista «solo modificati».
+  >   5. Origine senza badge per LibreFolio: testo grigio e, se il valore non è di oggi, la data in ambra con un aiuto (`review.staleTitle`, testid `pac-planner-review-fact-stale`). Badge solo per Manuale e Modificato (`OriginBadge`).
+  >   6. Pulsanti centrati; il banner «nessun ordine» diventa una riga di nota sotto (`review.noOrdersHint`).
+  > - **`shared/ReviewCell.svelte`** nuovo: renderer delle celle delle due tabelle (`step`, `summary`, `entity`, `value`, `origin`). `review.ts`: `SectionCounts.assets.missing`/`fx.missing`, `FactSubject`, `FactOriginState`, `factOriginState`, valore `modes` (valute degli ordini o «Conto esterno»).
+  > - Solo conteggi nell'interfaccia; nessun importo sommato o convertito. svelte-check (`/tmp/libreFolio_d_ui12/svelte_check_r97.log`): solo i 3 errori noti fuori perimetro, 0 avvisi del planner.
+  > - **Codice senza più uso** (inventario, da togliere solo dopo test-triage): `shared/AgeLabel.svelte` (nessun import).
+  > - **Chiavi**: 16 nuove (`review.lead`, `help`, `colSummary`, `colKind`, `kind.{broker,cash,contribution,price,exposures,fx}`, `origin.librefolio`, `staleTitle`, `ordersIn`, `externalAccount`, `noOrdersHint`, `factsToggle`; `review.fxRated` riscritta in `i18n_round9.py` prima di applicarla), 6 aggiornate (`factEntity` «Dato», `factsEmpty` come messaggio dei filtri, `brokers`, `assets`, `routes`, `targets`). Senza più uso (lista di fine round, decisione (a); `/tmp/libreFolio_d_ui12/unused_r97.log`): `review.factsAll`, `factsChanged`, `factsLabel`, `intro`, `noOrders` (più `review.fx`, `review.noFx` già in R9.4). `i18n_round9.py`: ADD=52, UPDATE=19, dry run verde, verifica catalogo pulita (`r9_batchcheck.py`).
+  > - **Test da riallineare** (debito per il test-author): nessun test usa oggi i testid del Rivedi (grep su `e2e` e `src`); nuovi `pac-planner-review-sections`, `-section` (`data-step`, `data-blocked`), `-facts-toggle`, `-facts`, `-fact` (`data-kind`, `data-origin`, `data-stale`), `-fact-stale`, `-fact-goto`, `-help`.
+- R9.8 ✅ 2026-09-30 — Risultato: ordine e apertura dei pannelli; tabelle su `DataTable`; mappe Obiettivo/Dopo; barre ECharts.
+  > **Note implementazione**:
+  > - **`result/ResultView.svelte` riscritto**. Ordine: esito (`OutcomeHeader`), avviso di stato (`StateNotice`), note, `KpiCards`, poi i pannelli **Allocazione per Asset**, **Piano operativo** (solo se ci sono passi, con il conteggio), **Esposizioni**, **Contabilità per cassa**, **Prova**. Aperti di default solo Allocazione e Piano operativo (`OPEN_BY_DEFAULT`); senza soluzione resta la sola Prova, aperta. «Chiudi/Apri tutti» (`pac-planner-result-toggle-all`) quando i pannelli sono più di uno. Il pannello «Asset» separato confluisce nell'Allocazione; tolti `wide` (anche da `PacPlannerTool.svelte`) e l'`allocationHint`.
+  > - **Tutte le tabelle su `DataTable`**, con l'aiuto di ogni colonna in `headerTooltip` e un renderer comune, **`result/ResultCell.svelte`** nuovo (tipi `broker`, `asset` con icona e numero del passo `STEP_NUMBER` di `ui.ts`, `contribution`, `weight`, `bars`, `money`, `exactMoney`, `price`, `instruction`, `label`, `objective`, `solver`).
+  >   1. **Allocazione** (`AssetTable.svelte`): Asset fisso a sinistra, obiettivo, dopo, barre (grigio obiettivo, verde dopo, scala sulla barra più larga), valore obiettivo, valore dopo, scarto con segno, acquisto al prezzo mid (commissioni escluse); legenda (`pac-planner-assets-legend`) e piè con base degli obiettivi e investito dopo. Il testid `pac-planner-assets-row` resta, con `data-asset`.
+  >   2. **Piano operativo** (`OperationalPlan.svelte`): in alto i passi numerati del finanziamento, con un badge per tipo: liquidità dello stesso Broker, trasferimento, versamento, cambio. La priorità di finanziamento compare solo se per quel Broker e quella valuta le scelte sono almeno 2 (`PlanLookup.fundingChoices`). Poi una tabella di ordini per Broker, con icona: Asset con il numero del passo, istruzione, prezzo mid, addebito in cassa (commissione esclusa, `evaluator.py:1908-1943`), commissione. Un clic sulla riga o l'occhio apre il dettaglio dell'ordine. Tolti l'intestazione «Seq» e l'avviso di privacy.
+  >   3. **Contabilità** (`LedgerTable.svelte`): una riga per Broker+valuta, i campi come colonne (`model.ts` `LEDGER_FIELDS`/`ledgerFields`). Si vedono sempre saldo iniziale e saldo finale spendibile; le altre colonne solo se non valgono zero su qualche riga, e il saldo fisico solo se diverso da quello spendibile (`ledgerFields`, `model.ts:262-273`). In un PAC i 4 campi di vendita e imposte (ricavo lordo, commissioni di vendita, imposta trattenuta, imposta accantonata) valgono sempre zero, quindi restano nascosti, e hanno un aiuto comune (`LEDGER_PAC_ZERO_FIELDS` → `ledger.help.alwaysZero`). «Mostra altre N colonne» rivela quelle nascoste. La liquidità dello stesso Broker compare con importi uguali in entrata e in uscita sulla stessa cassa, e l'aiuto lo spiega.
+  >   4. **KPI** (`KpiCards.svelte`): 5 voci con un «?» ciascuna: Base degli obiettivi, Investito dopo, Non investito, Costi, Ordini. La riga del finanziamento cambia secondo i dati: se c'è liquidità intrappolata la nomina (`kpi.funding`), altrimenti dice solo quanta è raggiungibile (`kpi.fundingReachable`, `data-trapped`). La scomposizione del non investito omette l'arrotondamento quando è zero (`kpi.shortfallPartsNoRounding`).
+  >   5. **Prova** (`ProofPanel.svelte`): i valori esatti degli obiettivi in tabella (`proof.exactValue`); lo spareggio finale a parole (`strategy.tieBreakTitle` + `strategy.tieBreak`, testid `pac-planner-proof-tie-break`) al posto del codice; gli stadi del solver con un badge di stato e l'aiuto su primale, duale e gap. La colonna «Ord» è tolta; la colonna dell'ambito compare solo se gli ambiti sono più di uno.
+  > - **Esposizioni** (`ExposureSection.svelte` sostituito): prima i Paesi, su tutta la larghezza; sotto, affiancati su desktop, tipo e settore.
+  >   1. **Mappe** (`ExposureMaps.svelte`, nuovo): due mappe ECharts, Obiettivo e Dopo, su **una sola scala di colore** (massimo comune fra i due lati, indicato sotto). Puntando o toccando un Paese lo si evidenzia in entrambe le mappe; zoom e spostamento sono sincronizzati. Il riquadro del tooltip (`exposureTooltip.ts`) mostra i due pesi e la direzione ▲▼= (sopra/sotto/in linea con l'obiettivo), decisa con `compareExact` sui pesi esatti del backend. Le categorie che la mappa non sa collocare («Altro», la quota non classificata, un codice sconosciuto) sono elencate sotto (`pac-planner-exposures-off-map`), così nessun peso manca. Se la mappa non si carica, i pesi restano in elenco (`exposures.mapUnavailable`, `data-state="failed"`). Il componente condiviso `GeographyMap` non è toccato: la mappa registrata è la stessa.
+  >   2. **Barre** (`ExposureBars.svelte`, nuovo): barre orizzontali ECharts, Obiettivo in grigio e Dopo in verde come nell'Allocazione, con lo stesso tooltip.
+  >   3. Sotto ogni grafico, un elenco `sr-only` con gli stessi numeri (`pac-planner-exposures-values`). Tolto l'avviso `exposures.public`.
+  >   4. **Scelta di merito**: il confronto è Obiettivo contro Dopo, perché il risultato del PAC non pubblica un peso «prima». Un peso di partenza chiederebbe un campo nuovo nel contratto del backend: domanda aperta al developer.
+  > - **Nessun calcolo economico nell'interfaccia.** `chartPercent`/`weightFraction` convertono un peso pubblicato in numero solo per disegnare (colore, lunghezza della barra), mai per sommare o per mostrare una cifra; segno e confronti passano da `exactSign`/`compareExact` sui valori esatti. Gli importi passano solo dai formattatori mascherabili di `planner/format.ts`.
+  > - svelte-check (`/tmp/libreFolio_d_ui12/svelte_check_r98b.log`): solo i 3 errori noti fuori perimetro (`TransactionFormModal.test.ts` ×2, `ToolExecutionMetrics.svelte` ×1), 41 avvisi come prima, 0 avvisi del planner.
+  > - **Chiavi**: nel blocco R9.8 di `i18n_round9.py` (da `:393`) ci sono 40 chiavi nuove (`result.assets.bars`/`buyMidHelp`, `exposures.above`/`below`/`equal`/`scale`/`offMap`/`scaleHelp`/`mapUnavailable`, `kpi.fundingReachable`/`shortfallPartsNoRounding`/`help.*` ×5, `plan.*Help` ×4, `plan.kind.cash`/`transfer`/`deposit`, `proof.exactValue`/`help.*` ×5, `ledger.help.*` ×11) e 31 aggiornate. Totale del batch: ADD=92, UPDATE=50. Il dry run e `r9_batchcheck.py` sono verdi. `r98_postcheck.py` confronta i fallback con il catalogo en dopo il batch: 237 coppie, 219 chiavi, 0 differenze.
+  > - **Chiavi senza più uso** (lista di fine round, decisione (a); `/tmp/libreFolio_d_ui12/unused_r98b.log`): `result.allocationHint`, `exposures.public`, `plan.funding`, `plan.privacyHint`, `plan.sequence`, `proof.floatingFinished`, `proof.ordinal`, `proof.tieBreak`, `states.noIncumbent.rejected`. Nascoste da una famiglia dinamica ma senza uso: `result.kpi.source`, `result.sections.assets`. Usate solo dal codice morto `WeightBars.svelte`: `result.weights.targetShort`/`finalShort`.
+  > - **Codice senza più uso** (inventario, da togliere solo dopo test-triage; `/tmp/libreFolio_d_ui12/dead_r98.log`): `result/WeightBars.svelte` (nessun import); in `result/model.ts` gli export `BadgeTone`, `ResultBadge`, `availableNumber`, `PlanStep`, `RESULT_DIMENSIONS`, `ExposureGroup`, e `weightFraction`, che è usato solo all'interno; in `exposureTooltip.ts` il tipo `ExposureTooltipText`.
+  > - **Test da riallineare** (debito per il test-author). Nessun test usa oggi i testid del Risultato: grep su `e2e` e `src`; l'unico test del risultato, `StateNotice.test.ts`, non cambia. Testid tolti o cambiati: `pac-planner-assets-totals`, `pac-planner-solver-stage` (ora sulla cella dell'obiettivo, `data-status`), le righe del ledger (ora `pac-planner-ledger-row` + `pac-planner-ledger-<campo>`), `pac-planner-exposures-bars` (ora il contenitore ECharts, `data-dimension`). Nuovi: `pac-planner-result-toggle-all`, `-assets-legend`, `-plan-fx-amounts`, `data-funding`, `data-trapped`, `-proof-tie-break`, `-kpi-help`, `-exposures-values`/`-row`/`-maps` (`data-state`)/`-map` (`data-side`)/`-off-map`/`-scale`/`-scale-help`.
+  > **⚠️ Fuori pista**:
+  > - 4 fallback allineati alla terminologia dell'interfaccia prima di scrivere il blocco: `ExposureMaps` `scaleHelp` («Point at a country, or tap it, …»), `OperationalPlan` `midPriceHelp` («…before the price margin.»), `cashDebitHelp` (margine sul prezzo del passo Instradamento, commissioni escluse), `feeHelp` («…set in the Brokers step.»).
+  > - Il 30/09 verso le 23:33 il turno si è interrotto per un errore del servizio, non del lavoro. Alla ripresa nessuna modifica è stata rifatta. Le ultime scritture sono state verificate: `ExposureSection.svelte` identico (`cmp`) alla bozza in `/tmp`; `ExposureMaps.svelte` diverso solo nel fallback voluto di `:272`; `OperationalPlan.svelte` completo. svelte-check è verde come prima.
+  > - Il primo `unused_r98.log` segnava come inutilizzata anche `proof.reasons.portfolio_rebalancer.sell_irreducibility_unresolved`, ma la chiave è raggiunta dinamicamente da `ProofPanel.svelte:173`, perché il codice è nell'enum di `generated-tools.ts:971`. Il controllo rifatto dopo la ripresa, senza i prefissi dinamici troppo larghi `planner` e `planner.result`, dà le 9 chiavi sopra.
+- R9.9 ✅ 2026-09-30 — i18n, svelte-check, build, verifica, feedback. Nessun test automatico, su richiesta del developer.
+  > **Note implementazione**:
+  > - i18n: `python3 /tmp/libreFolio_d_ui12/i18n_round9.py` (log `i18n_round9.log`) con `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py i18n add|update`: **92** aggiunte e **50** aggiornamenti, 0 falliti, nessuna rimozione (decisione (a)). Copia dei cataloghi di prima in `/tmp/libreFolio_d_ui12/pre_apply_r9/`: lo sha8 di en è `6ea4036c`, lo stesso di R8.7, quindi nessuna chiave è cambiata fuori dal batch.
+  >   - Cataloghi: **4293** chiavi per lingua (4201 + 92), stesso insieme nelle 4, 0 valori vuoti; sha8 en `2e791937`, it `8157c51b`, fr `3745c50b`, es `2fff98b0`.
+  > - Verifiche, tutte a 0 differenze: `r9_applied_check.py` (le 142 chiavi × 4 lingue identiche al batch); `icu_check_r9.mjs` (142 chiavi: sintassi ICU, stessi argomenti nelle 4 lingue, formattazione due volte, nessuna graffa residua); `r98_postcheck.py` (fallback del codice contro il catalogo en: 237 coppie, 219 chiavi). `dev.py i18n audit` → rc=0, «All translations complete» (`i18n_audit_r9.log`).
+  > - **Chiavi del planner senza uso, lista unica di fine round** (decisione (a); `unused_r99.py` → `unused_r99.log`, lista in `final_unused_r99.sorted`): **86**. Il controllo copre tutto il namespace: costanti `*KEY*`, famiglie dinamiche tranne le due troppo larghe, chiavi relative al planner a più segmenti. Dà 81 chiavi; le 5 in più sono state verificate a mano: `result.kpi.source` e `result.sections.assets` (nascoste da una famiglia dinamica), `result.weights.{finalShort,targetShort}` (solo il codice morto `WeightBars.svelte`), `problems.routeCapMissing` (Round 8). Il conto torna con le note: Round 8 58 + R9.4 10 + R9.5 1 + R9.6 2 + R9.7 5 + R9.8 11 − `origin.modified`, che è di nuovo in uso (`OriginBadge.svelte:20` produce `'modified'` per `origin.${…}`). Elenco: `add`, `restore`, `restoreCopied`, `assetEditor.{addCategory,categoryId,categoryLabel,class,classHint,compositionModifiedHelp,dimension,exposureAdd,exposures,idDuplicate,idMissing,idTooLong,manualId,manualIdPlaceholder,neverByName,overHundred,priceDate,priceModifiedHelp,title,unclassified,weight}`, `assets.{compositionModifiedHelp,copyClassifications,copyPrices,noAutoPrice,noExposures,priceModifiedHelp}`, `brokerCopy.currencies`, `brokerEditor.{feeRule,localCash,origin,stepRule}`, `brokers.{conversions,fee,funding,localCash,localHere,stepAmount}`, `copy.alreadyInDraft`, `copyNotice.when`, `fx.{addFrom,addTo,copy,pairsHint,remove}`, `problems.routeCapMissing`, `result.allocationHint`, `result.exposures.public`, `result.kpi.source`, `result.plan.{funding,privacyHint,sequence}`, `result.proof.{floatingFinished,ordinal,tieBreak}`, `result.sections.assets`, `result.states.noIncumbent.rejected`, `result.weights.{finalShort,targetShort}`, `review.{factsAll,factsChanged,factsLabel,fx,intro,noFx,noOrders}`, `route.{capHint,fee,noPrice,none,priorityHint,ready}`, `routing.{capRule,next,previous,unitRule}`, `scenario.{asOf,noValues}`, `strategy.{fromContract,noParameters}`, `summary.{date,pairs}`, `targets.control`. Tutte sotto `tools.pacAllocator.planner.`; le 168 chiavi P1 sono una lista a parte.
+  > - svelte-check (`svelte_check_r99.log`): 5477 file, solo i 3 errori noti fuori perimetro (`TransactionFormModal.test.ts` ×2, `ToolExecutionMetrics.svelte` ×1), 41 avvisi come prima, 0 avvisi del planner.
+  > - Build: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py front build --debug` → rc=0 (`build9.log`), `start.CbSeCkiu.js`, `app.-gH496nM.js`. La sincronizzazione dei tipi API della build non cambia file tracciati.
+  > - 6161, senza riavvio (serve `frontend/build` dal disco; il backend non cambia in questo giro): PID 16131 in ascolto, `/api/v1/system/health` 200, `/api/v1/tools/catalog` senza auth 401, `/tools/pac_allocator` 200 con `start.CbSeCkiu.js`. Nei chunk ci sono i testid nuovi (`pac-planner-exposures-maps`, `-result-toggle-all`, `-exposures-scale`, `-ledger-row`, `-proof-tie-break`). 6151 libera.
+  > - Stato: HEAD `f6d7a955d`, 72 percorsi modificati, stage vuoto, `git diff --check` pulito. Resta il feedback del developer sul Round 9, chiesto dopo questa nota.
+  > **⚠️ Fuori pista**:
+  > - `dev.py i18n audit` segna morte 86 chiavi del planner, ma 8 sono **falsi positivi**: `brokers.{feeMax,feeMin,feeZero,fundingChipHelp,stepUnits}` e `units.shares`, scritte per intero in `modeText.ts` dentro `tr(…)` (una funzione passata come parametro, che l'audit non riconosce); `strategy.{l2Help,priorityHelp}`, chiavi relative nei campi `key:` di `StrategyStep.svelte:38/43`. Tutte e 8 sono vive: da non togliere a fine round. Al contrario, `restore` e `restoreCopied` stanno fra le «non verificate» dell'audit (famiglia larga `${PLANNER_KEY}.${…}`), ma sono davvero senza uso. Lo strumento è condiviso e fuori perimetro: lo segnalo al coordinatore nel handoff, senza toccarlo.
+  > - Il primo giro di `unused_r99.py` dava 80: la corrispondenza relativa tra apici considerava usate anche le chiavi di un solo segmento (`'add'` compare ovunque come letterale). Ora vale solo per i percorsi con almeno un punto: 81, più le 5 a mano.
+  > - 01/10 verso le 11:13: il developer ha riavviato l'app per un aggiornamento, e la 6161 si è fermata con lei, perché la shell era collegata alla sessione. L'`ask_user` del Round 9 si è interrotto. Ho riavviato il server con lo stesso comando di F6, questa volta **staccato** (`detach`), così sopravvive a un altro riavvio dell'app:
+  >   - comando: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py server --test --host 127.0.0.1 --port 6161 --data-dir /tmp/librefolio-r2-d-prodcopy --no-scheduler --no-reload`;
+  >   - shellId `srv6161r9`, log `/tmp/libreFolio_d_f6/server_review_r9.log`;
+  >   - PID 58751 (`dev.py server`), 58844 (uvicorn in ascolto).
+  >   Verifiche: health 200 dopo ~4 s, `/api/v1/tools/catalog` senza auth 401, scheduler spento, la pagina serve `start.CbSeCkiu.js`/`app.-gH496nM.js` (il build di R9.9), 6151 libera. HEAD `f6d7a955d`, 72 percorsi, stage vuoto: nulla perso. Il server di F sulla 6164 non l'ho toccato. Poiché è staccato, al handoff va fermato in modo esplicito: `stop_bash srv6161r9`, poi `lsof`. Se resta in ascolto, SIGTERM a 58844, dopo aver verificato che il padre sia il mio `dev.py server`.
+
+#### Round 10 — Obiettivi bilanciabili, Strategia in due righe, L2 con formula, colonne dell'Allocazione, KPI e riquadro del calcolo, colonne ridimensionabili, «≈» delle percentuali, Composizione nel Rivedi, salto alla Prova, barra dei tempi ⏳ 2026-10-01
+
+> Nota sugli ID: i finding `R1`…`R10` della tabella di `:2243-2252` non sono i passi di questo giro, che si chiamano `R10.x`.
+
+**Feedback del developer** (risposta all'`ask_user` del Round 9, 01/10), in sostanza:
+1. Broker: il riepilogo dice «Conversione di valuta — Converti prima di comprare, al tasso del passo FX meno lo spread», ma l'editor non permette di cambiarla. In R5 aveva chiesto un selettore: il Broker converte da solo all'acquisto, o serve già la liquidità in quella valuta?
+2. Asset: il prezzo auto/manuale è «Ottimo».
+3. Obiettivi: bene il riuso del `DistributionEditor`, ma mancano i pulsanti globali, soprattutto «bilancia», che rinormalizza tutte le righe o quelle selezionate.
+4. Strategia: la descrizione su due righe, «Compra in modo che il denaro investito si divida fra gli Asset il più vicino possibile ai tuoi obiettivi.» / «Solo acquisti: non vende nulla.»
+5. Tooltip L2: chiaro ma prolisso. Più corto, con una o due formule LaTeX al posto delle operazioni descritte a parole.
+6. Rivedi, «Dati del calcolo»: le righe «Composizione · N esposizioni» non sono chiare; chiede una spiegazione.
+7. Risultato, «Allocazione per Asset»: «Dopo» non è chiaro, serve un nome che dica come cambia il rapporto fra gli Asset. Anche «Valore obiettivo», «Valore dopo», «Residuo» e «Acquisto (mid)» vanno resi chiari, con tooltip visibili.
+8. Prima sezione del Risultato (KPI): più badge, voci più separate, e un piccolo riquadro con il tempo di calcolo e le opzioni analizzate dall'ottimizzatore.
+9. Tabelle: le colonne non si possono allargare, soprattutto nel Riepilogo.
+10. Mappe delle esposizioni: l'elenco fuori mappa mostra sempre «≈» (es. «Taiwan 16,72% → ≈16,72%»). Numeri piccoli (1500 €) o un bug? L'infobox dice sopra/sotto l'obiettivo: in un PAC (non ribilanciamento) come si definisce l'obiettivo? Le mappe mostrano il portafoglio prima e dopo l'acquisto, o la forma teorica del PAC contro quella reale?
+11. In cima al Risultato, un pulsante che apre l'ultimo pannello (la Prova, con i tempi del backend) e ci scorre.
+12. (In corsa, 01/10) «Tempi del backend»: oltre ai tempi, una barra a colori con un segmento per ogni fase, per vedere a colpo d'occhio come si distribuisce il tempo.
+
+La domanda «riuso dei margini = Piano operativo?» resta accettata (la risposta si apriva con «meglio»): non si richiede.
+
+**Lettura del codice** (01/10):
+- **Punto 1** = R4.9 in attesa (`:2573-2586`): è un cambio di contratto (campo della richiesta, modalità e totali nel risultato, fingerprint, `api sync`, test via test-author). Non entra in un giro UI: domanda separata al developer sul momento.
+- **Punto 3**: `steps/TargetsStep.svelte` ha solo il «Bilancia al 100%» di riga (`:61-68`) e una `DataTable` senza selezione (`:137-154`). Il `DistributionEditor` (`:251-280`, `:430-450`) ha la selezione e il `DataTableToolbar` con «Bilancia selezionati» (proporzionale ai pesi, in parti uguali se sono tutti 0), ma in virgola mobile con `toFixed(2)`. Nel planner le percentuali sono solo controllo (Q-C0-2, `:180-187`) e restano decimali esatti: serve un helper in `decimal.ts`, che oggi non ha divisioni.
+- **Punto 5**: `strategy.l2Help` passa da `shared/HelpTip.svelte`, che non inoltra `math` a `Tooltip` (supportato: `Tooltip.svelte:44`, `:57`, `:332-339`, KaTeX inline `$…$`, `throwOnError: false`). L'`aria-label` di `HelpTip` è «{label}: {help}»: con una formula serve un testo semplice a parte. Vincolo ICU: niente graffe nella stringa (sono segnaposto).
+- **Punto 6**: `review.ts:168-180` produce, per ogni Asset con una composizione, una riga «Composizione» con il numero di righe di esposizione (`review.exposureRows`). Le esposizioni compaiono solo in `normalize.py`, `planner_report.py`, `issues.py`, `models.py` e `planner.py`: sono assenti da solver, obiettivi, evaluator e vincoli, quindi **non cambiano il piano** e alimentano solo mappe e barre del Risultato.
+- **Punto 7**: colonne in `result/AssetTable.svelte:27-108`. Semantica (`evaluator.py:2053-2105`, `planner_report.build_asset_rows` `:446-470`):
+  - valore obiettivo \(T_i = w_i R\), con \(R\) la base degli obiettivi (`evaluator.py:2221`: investito attuale + liquidità raggiungibile);
+  - valore dopo \(F_i\) = quantità finale × prezzo ÷ `quote_base_quantity`, al cambio ufficiale;
+  - residuo \(F_i - T_i\);
+  - acquisto mid = Σ quantità economica × prezzo mid, senza commissioni né margine (`:1880-1907`, `mid_native` `:477`);
+  - quota dopo = \(F_i\) ÷ investito dopo.
+  In un PAC puro valore dopo = acquisto mid. `assets.target`/`assets.final` servono anche ai tooltip delle esposizioni e alla legenda (`AssetTable.svelte:120-121`): le intestazioni nuove vogliono chiavi nuove.
+- **Punto 8**: `result/KpiCards.svelte` mette 5 voci in una griglia senza bordi. Dati disponibili: `ToolItemMetrics` (`backend/app/schemas/tools.py:250-262`) e `solver_evidence` (`backend/app/schemas/pac_allocator.py:979-1080`: stadi con stato, motore, versione e impostazioni, cioè `time_budget` sempre e `limits/nodes` se impostati, `solver.py:288-300`). **Il backend non pubblica il numero di nodi o di candidati esplorati**: `wall_seconds` e `finished_stage_count` sono interni (`solver.py:330-340`). Il riquadro mostra quindi stadi conclusi su totali, motore e versione, tempo concesso e tipo di prova; i nodi richiederebbero un cambio di contratto, da proporre insieme a R4.9.
+- **Punto 9**: `DataTable` ha `enableColumnResize` vero di default (`components/table/DataTable.svelte:138`, solo mouse, `:702-733`, larghezze salvate per `storageKey`), ma il planner lo spegne: `AssetTable.svelte:136`, `LedgerTable.svelte:104`, `OperationalPlan.svelte:209`, `ReviewStep.svelte` (2 tabelle), `TargetsStep.svelte`, `ProofPanel.svelte` (`TABLE_PROPS`, `:131-142`).
+- **Punto 10**: il «≈» viene da `formatExactPercent` (`format.ts`, `exactDisplay` `:60-63`). Un peso pubblicato come frazione esatta periodica (es. 1/3) si mostra arrotondato e quindi è marcato «≈» (regola di C0, `plan-phase00PacRound5-C0UiDelta.prompt.md:48`). Non è un errore di calcolo né dipende dalla cifra: sulle percentuali a 2 decimali il simbolo non dice niente di utile e confonde. Nella mappa, l'obiettivo di una categoria è Σ quota obiettivo × quota di esposizione dichiarata; il Dopo è Σ quota dopo il piano × esposizione (`planner_report.py:300-385`, `_require_unit_closure`). In un PAC puro «Dopo» è solo ciò che si compra: né il portafoglio intero né lo stato prima.
+- **Punto 11**: sezioni e `open` in `result/ResultView.svelte:53-84`; `OutcomeHeader.svelte`; `ResultSection.svelte` (toggle con `aria-expanded`).
+- **Punto 12**: `features/tools/components/ToolExecutionMetrics.svelte` è della piattaforma (C) e in questa base la usa solo `ProofPanel.svelte:215`. Le misure (`backend/app/services/tools/executor.py`, `worker.py:131-162`):
+  - `queue_wait_ms`: ammissione → assegnazione dello slot;
+  - `startup_ms`: assegnazione → worker pronto;
+  - `input_validation_ms`, `compute_ms`, `serialization_ms`, `output_validation_ms`: in sequenza nel worker;
+  - `execution_ms`: assegnazione → fine, quindi **contiene** l'avvio e le fasi del worker;
+  - `cleanup_ms`: dopo l'esecuzione;
+  - `total_ms`: ammissione → fine della pulizia.
+  Le fasi si sovrappongono solo per annidamento. Una barra corretta usa le fasi foglia nell'ordine reale più un resto «non attribuito» = totale − somma delle foglie (caricamento della definizione, costruzione del plugin, passaggio del risultato). Una fase `null` non è osservata: non diventa 0.
+
+**Decisioni:**
+- R4.9 non entra nel Round 10; dopo il feedback, domanda separata sul momento (consigliato: subito dopo questo giro).
+- Il bilanciamento è aritmetica decimale esatta in `decimal.ts`, senza `Number`.
+- Il «≈» esce dalle percentuali (`formatExactPercent`) e resta su importi e quantità. È un emendamento della regola C0, annotato qui. Se due percentuali mostrate sono uguali ma i valori esatti no, il tooltip lo dice.
+- La barra dei tempi è locale al PAC (`planner/result/`), accanto al riquadro «Tempi del backend», senza toccare `ToolExecutionMetrics.svelte` (piattaforma C). Nel handoff propongo al coordinatore di portarla nel componente condiviso, con un solo writer, se la vuole per tutti gli strumenti.
+
+**Passi:**
+- R10.0 ✅ 2026-10-01 — questa sezione.
+- R10.1 ✅ 2026-10-01 — Obiettivi: selezione multipla, «Bilancia selezionati» e «Bilancia tutto», helper esatto.
+  > **Note implementazione**: `decimal.ts` ha `rebalanceControlPercentages(values, selected, of='100')`: righe non selezionate ferme; \(R\) = `of` − somma delle altre; quote \(R \cdot W_i / S\) in unità di \(10^{-P}\), \(P=\max(2,\text{scala degli input})\), con `bigint`: floor e cifre avanzate ai resti più grandi, a pari resto vince l'ordine di riga; tutte a 0 → parti uguali; `null` se un valore non è un numero o è negativo, se la selezione è vuota o se le altre righe superano già `of`. Controllo a mano con uno script usa e getta (esbuild del solo `decimal.ts`, non una suite): `10/20/30` → `16.67/33.33/50`; tre zeri → `33.34/33.33/33.33`; `33.333/0/10` con le ultime due selezionate → `33.333/0/66.667`; `60/50/5` con la sola terza → `null`; somma sempre 100 (`/tmp/libreFolio_d_ui12/r10_rebalance_check.log`). `TargetsStep`: `DataTable` con `enableSelection`, `selectionMode="multi"`, `onSelectionChange` e `bind:this`; in testata `DataTableToolbar` con l'azione «Bilancia le righe selezionate al 100%» (`toolbar-action-balance-selected`, poi `clearSelection()`), il pulsante «Bilancia tutto» (`pac-planner-targets-balance-all`) e «Copia distribuzione attuale». Un campo vuoto vale 0; un testo che non è un numero disattiva i due pulsanti. Il «Bilancia al 100%» di riga resta. `totalHelp` spiega i tre modi.
+- R10.2 ✅ 2026-10-01 — Strategia: descrizione in due righe.
+  > **Note implementazione**: `policyHelp.proportional` si ferma alla prima frase; la seconda è la chiave nuova `policyScope.proportional` («Solo acquisti: non vende nulla.»), su una riga sua (`pac-planner-policy-scope`), con lo stesso stile.
+- R10.3 ✅ 2026-10-01 — L2: tooltip corto con formula.
+  > **Note implementazione**: `HelpTip` ha due prop nuove: `math` (passa a `Tooltip` un `html` già escapato con `escapeHtml` di `$lib/utils/inlineMath`, che tiene gli apostrofi per KaTeX, e con gli a capo resi `<br>`, perché il ramo `math` di `Tooltip` usa `{@html}` e perderebbe il `pre-line`) e `spoken`, il testo a parole per l'`aria-label`. In `StrategyStep` il tooltip di L2 mostra la chiave nuova `strategy.l2Formula`: «Distanza dagli obiettivi:», la formula \(D=\sum_i (V_i - p_i R)^2\) su una riga, poi \(V_i\), \(p_i\), \(R\) e «vince il \(D\) più basso; il quadrato pesa di più gli scarti grandi; prezzo di quotazione, senza commissioni né margine». Senza graffe (ICU). `strategy.l2Help` resta il testo per lo screen reader, riscritto per dire la stessa cosa della formula.
+  > **⚠️ Fuori pista**: il vecchio `l2Help` parlava di «valore comprato»; la formula usa il valore dell'Asset **dopo** il piano (`evaluator.py:2053-2105`), che in un PAC puro coincide ma col pregresso no. Il testo a parole ora dice «dopo il piano».
+- R10.4 ✅ 2026-10-01 — Allocazione: nomi delle colonne e tooltip.
+  > **Note implementazione**: intestazioni nuove, ognuna col suo tooltip: «Quota obiettivo» (`targetShare`, nuova), «Quota dopo il piano» (`finalShare`, nuova), «Valore ideale» (`targetValue`), «Valore dopo il piano» (`finalValue`), «Scarto dall’ideale» (`residual`), «Valore comprato» (`buyMid`). I tooltip spiegano la quota scelta nel passo Obiettivi, la quota sul valore di questi Asset dopo il piano, il valore ideale (quota obiettivo × base degli obiettivi), il valore dopo il piano (quote tenute più comprate, prezzo di quotazione, cambio del passo FX), lo scarto (dopo − ideale, segno) e il valore comprato (senza commissioni né margine; l’uscita di cassa è nel Piano operativo). Chiavi nuove: `targetShare`, `finalShare`, `targetShareHelp`, `finalShareHelp`, `targetValueHelp`, `finalValueHelp`; aggiornate: `targetValue`, `finalValue`, `residual`, `residualHint`, `buyMid`, `buyMidHelp`. La legenda delle barre passa a `targetShare`/`finalShare`; `assets.target`/`assets.final` restano, li usa `exposureTooltip.ts:29-30`. Il «Valore comprato» non dice più «a prezzo di quotazione» nel titolo: l’intestazione di `DataTable` non va a capo (`white-space: nowrap`) e allargherebbe la colonna.
+  > Il segnale «?» visibile: `DataTable` mostra l’icona dei tooltip d’intestazione solo con `headerTooltipUrl` (`DataTable.svelte:1043-1085`); senza URL il tooltip c’è ma non si vede. Nuovo `planner/shared/columnHelp.ts` con `withHelpCues(columns)`: alle colonne con `headerTooltip`, etichetta non vuota, senza `headerHtml` né URL, aggiunge `headerHtml` = etichetta escapata (`$lib/utils/core/escapeHtml`) + l’SVG di lucide `circle-question-mark` a 12 px, `aria-hidden`, grigio. `DataTable.svelte` non si tocca (componente condiviso). Applicato a tutte le tabelle del planner con tooltip d’intestazione, per coerenza: `AssetTable`, `LedgerTable`, `OperationalPlan`, `ProofPanel` (stadi), `TargetsStep`, `DistributionDialog`. `ReviewStep` non ha tooltip d’intestazione.
+- R10.5 ✅ 2026-10-01 — Colonne ridimensionabili.
+  > **Note implementazione**: `enableColumnResize` acceso in `AssetTable`, `LedgerTable`, `OperationalPlan`, `ReviewStep` (sezioni e dati del calcolo), `TargetsStep` e `ProofPanel` (`TABLE_PROPS`, vale per obiettivi e stadi). `DistributionDialog` non lo spegneva: lo era già. Le larghezze si salvano per `storageKey`, come nel resto dell’app. Il trascinamento è solo col mouse (`DataTable.svelte:702-733`): su mobile non c’è.
+  > **⚠️ Fuori pista**: con `tableLayout="auto"` il trascinamento parte da `column.width` o 150 px (`DataTable.svelte:708`), non dalla larghezza disegnata: se la colonna è più larga per il suo contenuto, i primi pixel del trascinamento non si vedono. È lo stesso comportamento delle altre tabelle `auto` con resize (`MeasurePanel`, `ImportWizardModal`, `FilesTable`); correggerlo vuol dire toccare `DataTable`, componente condiviso: lo segnalo nel handoff, non lo cambio qui.
+- R10.6 ✅ 2026-10-01 — KPI a riquadri con badge; riquadro «Calcolo».
+  > **Note implementazione**: `result/KpiCards.svelte` riscritto. Con un piano: titolo «Cifre chiave» (`h3`) col suo «?» (`kpi.source`), poi due colonne da `lg` (riquadri | «Calcolo», 16rem), una sola sotto. Sei riquadri con bordo (`pac-planner-kpi-item`, `data-kpi`), ognuno col valore grande e, sotto, le sue parti come badge (`pac-planner-kpi-chip`, `data-chip`, `data-tone`); una parte esattamente 0 non compare, una illeggibile sì (`exactSign` → `null`):
+  > - «Base degli obiettivi»: «Già investito» + «Liquidità raggiungibile», solo se c’è un investito attuale (in un PAC puro la base è tutta liquidità e i badge ripeterebbero il valore);
+  > - «Investito dopo»: «in N Asset su M» (righe con valore dopo ≠ 0 su righe totali; è un conteggio, non un calcolo economico);
+  > - «Non investito»: liquidità libera, costi (`economic_losses`), imposte accantonate (`physical_reserves`), arrotondamento; se è 0, badge verde «Tutto investito»;
+  > - «Liquidità scelta» (nuovo, prima era una frase sotto la griglia): badge verde «Tutta raggiungibile», oppure raggiungibile + «Non raggiungibile» in giallo; `data-trapped` resta sul riquadro;
+  > - «Costi»: le voci non nulle di `solution.costs` con le etichette già usate dal Saldo e dal dettaglio ordine; se sono tutte 0, badge verde «Nessun costo»;
+  > - «Ordini»: «su N Broker» e, se ci sono, «N cambi valuta». Niente badge acquisti/vendite: il contratto PAC 2.0.0 ha solo righe d’acquisto.
+  > Le due frasi sotto la griglia (`kpi-shortfall-parts`, `kpi-funding`) escono: il loro contenuto è nei badge. Riquadro «Calcolo» (`pac-planner-kpi-compute`, sfondo grigio), con «?» per riga: tempo di calcolo (`compute_ms`, in ms sotto il secondo, in s sopra, `Intl` con unità, «—» se non misurato) e il totale; tempo concesso (impostazione `time_budget` dello stadio, sempre presente); obiettivi chiusi «N su M» (stadi `finished` su stadi totali; nascosto se il problema è impossibile, perché lì lo stadio è uno solo e dice altro); limite di nodi solo se impostato; motore e versione. Nessun badge della prova: è già nell’intestazione (`OutcomeHeader`). Senza piano (impossibile, nessun piano entro i limiti) il componente mostra solo il riquadro «Calcolo»: `ResultView` lo rende per ogni risultato pronto, non più solo con una soluzione.
+  > **⚠️ Fuori pista**: il developer chiedeva anche «le opzioni analizzate dall’ottimizzatore». Il backend non pubblica nodi né candidati esplorati (`solver.py:330-340`, interni): il riquadro dice obiettivi chiusi, tempo e limiti. Pubblicarli è un cambio di contratto, da proporre con R4.9.
+- R10.7 ✅ 2026-10-01 — Pulsante per la Prova in cima al Risultato.
+  > **Note implementazione**: `OutcomeHeader` ha la prop `ongotoproof` e, a destra del titolo, un pulsante-link «Prova e tempi» con la freccia in giù (`pac-planner-goto-proof`, chiave nuova `result.gotoProof`). `ResultView.gotoProof()`: apre la sezione `proof` nel `SvelteSet`, aspetta il `tick()`, la porta in vista (`scrollIntoView`, `smooth`, `auto` con «riduci movimento») e sposta il focus sul suo interruttore senza un secondo scorrimento (`preventScroll`), così anche la tastiera arriva lì. La sezione si cerca dentro il contenitore del Risultato (`bind:this`), non in tutto il documento. `ResultSection` ha `scroll-mt-20`: l’intestazione dell’app è `sticky` (`Header.svelte:213`) e coprirebbe il titolo della sezione. Un solo pulsante, nell’intestazione: il riquadro «Calcolo» non ne ha un secondo.
+- R10.8 ✅ 2026-10-01 — «≈» delle percentuali (a) e Composizione nel Rivedi (b).
+  > **Note implementazione (a)**: `format.ts` `formatExactPercent(value, digits)` passa a `formatPlannerPercent` il testo esatto senza `approx`: nessun «≈» sui pesi, ovunque li si mostri (barre, mappe, elenco fuori mappa, tooltip, Allocazione). Importi, quantità e cambi lo tengono. **Emendamento della regola C0** (`plan-phase00PacRound5-C0UiDelta.prompt.md:48`): il «≈» resta il segno di un importo, di una quantità o di un cambio esatto mostrato arrotondato; sulle percentuali a 2 decimali non lo è più, perché un peso esatto periodico (1/3) lo portava quasi sempre e diceva solo che 2 decimali sono un arrotondamento. Il caso che il simbolo copriva davvero, due pesi uguali a 2 decimali ma diversi nei valori esatti, ora lo dice il tooltip dell'esposizione: `exposureTooltip.ts` aggiunge a «Sopra/Sotto l'obiettivo» la coda «di meno di 0,01 punti» (chiave nuova `result.exposures.hairline`) quando il confronto esatto (`compareExact`) non è 0 ma i due testi mostrati coincidono. Il confronto resta esatto, il testo è solo un confronto fra due stringhe già formattate.
+  > «Dopo» → «Dopo il piano»: `assets.final` è ormai solo l'etichetta delle esposizioni (lato della mappa `ExposureMaps:259`, legenda e serie delle barre, riga del tooltip, elenco per lo screen reader); il valore si aggiorna (chiave invariata) per allinearsi a «Quota dopo il piano» e «Valore dopo il piano» di R10.4. La sezione «Esposizioni» del Risultato ha un «?» accanto al titolo (prop nuova `help` di `ResultSection`, fuori dal pulsante che apre e chiude; chiave nuova `result.exposures.help`), che risponde alla domanda del punto 10: ogni grafico confronta due forme degli stessi Asset (l'obiettivo distribuito sulle esposizioni dichiarate, e le quote dopo il piano distribuite allo stesso modo), non il portafoglio prima del piano; in un PAC puro «Dopo il piano» è solo ciò che si compra, con Asset già posseduti li comprende; le esposizioni alimentano solo questi grafici.
+  > **Note implementazione (b)**: `review.ts`: il valore del fatto «Composizione» passa da `{kind:'rows', count}` a `{kind:'exposures', dimensions}`, il conteggio delle righe per dimensione nell'ordine fisso `EXPOSURE_DIMENSIONS`, senza le dimensioni vuote (un conteggio, non un calcolo economico). `ReviewCell` lo mostra come «Area geografica: 12 voci · Settore: 11 voci · Tipo di Asset: 1 voce» (chiave nuova `review.exposureDimension`, con i nomi delle dimensioni già tradotti `dimensions.*`); tipo nuovo di cella `kind`, etichetta più «?» opzionale. Nel Rivedi la colonna «Tipo» usa quella cella: per la composizione l'etichetta diventa «Composizione per le mappe» (`review.kind.exposures` aggiornata) e il «?» (chiave nuova `review.exposuresHelp`) spiega che viene dalla pagina Asset o è scritta a mano, e che serve solo a mappe e barre delle esposizioni: non entra nel calcolo e non cambia il piano. Il filtro della colonna resta per `fact.kind`. La tabella non ha clic di riga, quindi il «?» non apre la modifica. `review.exposureRows` non ha più usi: va nella lista di fine round (decisione (a)).
+- R10.9 ✅ 2026-10-01 — Barra dei tempi del backend.
+  > **Note implementazione**: nuovo `result/BackendTimingBar.svelte`, in `ProofPanel` sotto il riquadro condiviso «Tempi del backend» (stesso blocco, `space-y-3`); `ToolExecutionMetrics.svelte` non si tocca. Riquadro con lo stesso bordo, titolo `h4` «Come si distribuisce il tempo» (icona `ChartBarStacked`), una riga di spiegazione col totale dell'elemento, poi la barra (`aria-hidden`, alta 16 px, arrotondata) e la legenda in lista (colore, nome, ms, quota). Segmenti: le fasi foglia nell'ordine in cui avvengono (attesa in coda, avvio del worker, validazione degli input, calcolo, serializzazione dell'output, validazione dell'output, pulizia), con le etichette già tradotte `tools.metrics.*`; `execution_ms` non è un segmento perché contiene l'avvio e le fasi del worker. In coda «Non attribuito» = max(0, totale − somma delle foglie), con un «?» che dice cosa contiene (caricamento e preparazione dello strumento, consegna del risultato). Scala = max(totale, somma delle foglie), perché millisecondi interi misurati a parte possono superare il totale di poco. Una fase `null` (non osservata) o a 0 ms non compare: mai uno 0 inventato. Senza un totale > 0 il componente non si mostra. Ogni segmento ha almeno 3 px, per non sparire. Colori Tailwind con la variante scura. Sono durate, non importi: nessuna maschera della privacy. Chiavi nuove `result.timing.title`, `hint`, `unattributed`, `unattributedHelp`. Testid: `pac-planner-timing`, `-timing-bar`, `-timing-segment` (`data-phase`), `-timing-legend`, `-timing-item` (`data-phase`), `-timing-help`.
+- R10.10 ✅ 2026-10-01 — i18n, svelte-check, build. Nessun test automatico, su richiesta del developer.
+  > **Note implementazione**: batch `/tmp/libreFolio_d_ui12/i18n_round10.py`, solo `dev.py i18n add|update`: 43 chiavi nuove e 11 aggiornate, 4 lingue ciascuna, nessuna rimozione (decisione (a)). Prima di scrivere, lo script confronta il valore inglese di ogni chiave con il default del sorgente (chiavi `${KEY}.…`, chiavi letterali, `text()`/`tile()` di `KpiCards`, fallback di `StrategyStep`, `KIND_FALLBACKS` del Rivedi): 54 su 54 uguali (`r10_guard_probe.log`). Esito: 54 su 54 rc=0 (`i18n_round10.log`); 4336 chiavi per catalogo (4293 + 43); sha8 en `5be9096d`, it `7ac1707e`, fr `df9c478c`, es `1ebcd709`. ICU (`icu_check_r10.mjs` sulle 54 chiavi, 4 lingue): 0 problemi. `strategy.l2Formula` conserva i due a capo e il `\sum` in tutte e 4 le lingue. `r10_keys_probe.py`: 54 presenti. `r10_scan_diff.py`: restano solo le 3 differenze di `review.*` (`routes`, `targets`, `fxRated`), anteriori al Round 10, dove il catalogo ha la forma plurale migliore del default: non toccate.
+  > `targets.totalHelp`: il default inglese ora cita «Balance the selected rows to 100%», l'etichetta esatta dell'azione della barra (prima «Balance the selected rows»); le traduzioni citano le etichette tradotte.
+  > Chiavi rimaste senza uso, tutte ancora nel catalogo (lista di fine round, decisione (a)): `result.kpi.funding`, `result.kpi.fundingReachable`, `result.kpi.shortfallParts`, `result.kpi.shortfallPartsNoRounding` (R10.6), `review.exposureRows` (R10.8); da prima `result.proof.floatingFinished`, `result.states.noIncumbent.rejected`.
+  > svelte-check: 3 errori e 41 warning in 4 file, la baseline; nessuno nel planner (`r10_svelte_check2.log`). Build: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py front build --debug` → rc=0 (14:06:34 → 14:08:11, `build10.log`), `start.DSziYD8x.js`, `app.DZ6MhyI-.js`; la 6161 (pid 58844) li serve senza riavvio, perché il backend non cambia. `git diff --check` rc=0.
+- R10.11 ✅ 2026-10-01 — feedback (`ask_user`) con le spiegazioni.
+  > **Note implementazione**: il developer ha risposto con 11 punti, che diventano il Round 11. Sul punto 1 conferma che vuole R4.9 adesso: «Broker: Manca ancora il modo di specificare come il broker gestisce le conversioni».
+
+#### Round 11 — R4.9 (conversione per Broker), titolo della Route, L2 con min ed elenco, Rivedi senza Composizione, badge nell'intestazione, ordine dei valori, marquee, esposizioni «ideale vs reale», colonne spostabili e nascondibili, barra dei tempi interattiva, Prova a card ⏳ 2026-10-01
+
+**Feedback del developer** (risposta all'`ask_user` del Round 10, 01/10), in sostanza:
+1. Broker: manca ancora il modo di dire come il Broker gestisce le conversioni. Il riepilogo dice solo «Conversione di valuta — Converti prima di comprare, al tasso del passo FX meno lo spread». È R4.9, e lo vuole adesso.
+2. Route: il titolo su una riga, «Route - Cosa può comprare ogni Broker».
+3. Tooltip L2: nella prima formula serve il **min**; i parametri in un elenco puntato, uno per riga. Il resto è «ottimo». La formula doppia del testo incollato è il MathML più l'HTML di KaTeX copiati insieme, non un difetto.
+4. Rivedi: togliere del tutto le righe «Composizione per le mappe». La riga del prezzo invece conta.
+5. Intestazione del Risultato: la riga «Distanza L2 … · Non investito … · nessuna nota» va resa con badge e tooltip.
+6. «Allocazione per Asset»: «Valore comprato» e «Valore dopo il piano» possono essere diversi? Il ribilanciamento non lo vede ancora come strumento. Ordine dei valori: Valore dopo il piano → Valore ideale → Scarto.
+7. Nomi degli Asset che non entrano nelle tabelle: marquee, come altrove nel progetto.
+8. Esposizioni: spiegazione da sviluppatore, va resa concisa; «ideale vs reale» nel titolo; tooltip molto più semplice; legende «Distribuzione ideale» e «Distribuzione reale». Nota sua: «quando facciamo il pac invece prima vs dopo».
+9. Tabelle: un pulsante per spostare e nascondere le colonne, nella tabella di ogni sezione.
+10. Barra dei tempi: passando su un segmento si evidenzia la sua voce di legenda, e viceversa.
+11. Prima parte della Prova (Esito, Prova, Arresto): da migliorare. «Valori esatti degli obiettivi» diventa a card: una tabella qui è dispersiva.
+
+**Lettura del codice** (01/10):
+- **Punto 1** = R4.9 (`:2573-2586`), con la sua riga di testa: «Decisione del developer (30/09): riaprire la regola 10 come passo a sé subito dopo questo giro UI, con i test». Contratto attuale: `PlannerFxAction` (`backend/app/schemas/pac_allocator.py:1200-1229`), una per rotta d'ordine × valuta di origine; `PlannerBuyOrderRow` `:1280-1322`; `fx_actions` `:1617`, `:1647`; UI `result/OperationalPlan.svelte:31-75`. La regola 10 del 17/09 aveva ritirato `conversion_mode` e `PlannerFxAction.handling` (`plan-phase00Step1PacRebalancerContractsCapacity.prompt.md:911-918`; `w1-fx-redesign-final-delta-plan.md:70,74`).
+- **Punto 2**: il titolo del passo è l'`h2` di `PacPlannerTool.svelte:349-350`; `steps/RoutingStep.svelte:82-91` aggiunge un `h3` (`routing.intro`) col suo «?» (`routing.introHelp`, `pac-planner-routing-help`).
+- **Punto 3**: i fallback del tooltip sono in `steps/StrategyStep.svelte:49-62` (`OBJECTIVE_TIPS.fixed_l2`); `shared/HelpTip.svelte` passa `math` a `Tooltip` e trasforma gli a capo in `<br>`. Niente graffe nel testo (ICU): `\min` senza pedice.
+- **Punto 4**: `review.ts:169-185` aggiunge un fatto `exposures` per Asset; `steps/ReviewStep.svelte:38-39` (`KIND_ORDER`, `KIND_FALLBACKS`) e `:176-187` (il «?» del tipo); `shared/ReviewCell.svelte:101-110`. `withExposures` (`review.ts:14`) resta: lo usa `shell/SummaryPanel.svelte:58`.
+- **Punto 5**: `result/OutcomeHeader.svelte:54-61`, un `<p>` con le parti unite da « · ».
+- **Punto 6**: `final_value = current_value + buy_mid_value − sell_mid_value` (`backend/app/services/pac_allocator/models.py:1205`, `evaluator.py:2685`). Il PAC esige un investito attuale nullo (`schemas/pac_allocator.py:2085-2086`): `PacPlannerRequest` (`:645-650`) non ha posizioni, le ha solo `_RebalancerPlannerRequestBase.holdings` (`:654`). Quindi in un PAC comprato = dopo, sempre; si separano solo nel ribilanciatore (§4). Colonne in `result/AssetTable.svelte:28-128`.
+- **Punto 7**: lo schema è `use:scrollOnOverflow` + `overflowScrollTextClass` (`$lib/actions/scrollOnOverflow`, `$lib/utils/overflowScroll`), già in `AssetsStep.svelte:201` e `RoutingStep.svelte:107,152`. Nelle tabelle il nome passa da `shared/AssetNameCell.svelte` (`truncate`; lo usano `ResultCell`, `ReviewCell`, `TargetsStep`, `DistributionDialog`) e da `result/ResultCell.svelte` (`NAME`, Broker e versamenti).
+- **Punto 8**: titolo e «?» in `result/ResultView.svelte:139-149`; etichette del tooltip in `result/exposureTooltip.ts:31-35` (`assets.target`/`assets.final`, usate solo lì e nelle mappe/barre); `result/ExposureMaps.svelte:253-279` (scala, `scaleHelp`); `result/ExposureSection.svelte:40-93`.
+- **Punto 9**: `components/table/ColumnVisibilityToggle.svelte` (condiviso, si usa e basta): legge `getColumnsForVisibility()` e chiama `toggleColumnVisibilityById`/`setColumnOrder`/`resetColumnLayout` di `DataTable.svelte:883-908`; esclude le colonne senza intestazione né `displayName`. Visibilità (solo le scelte esplicite) e ordine si salvano per utente e `storageKey` (`DataTable.svelte:193-199`, `:744-751`); `hiddenByDefault` è `components/table/types.ts:289`. `enableColumnVisibility` è solo dichiarato (`DataTable.svelte:54`, `:140`). Il planner lo spegne in `AssetTable.svelte:154`, `LedgerTable.svelte:103`, `OperationalPlan.svelte:208`, `ProofPanel.svelte:140` (`TABLE_PROPS`), `ReviewStep.svelte:239`, `:282`, `TargetsStep.svelte:202`, `DistributionDialog.svelte:224`. Il pulsante ha un `data-testid` fisso (`column-visibility-toggle`): nel planner lo avvolge un contenitore col suo.
+- **Punto 10**: `result/BackendTimingBar.svelte`, segmenti `:96-100`, legenda `:101-111`.
+- **Punto 11**: `result/ProofPanel.svelte`: `<dl>` `:149-198` (esito, prova, arresto), obiettivi `:200-209` (`DataTable`, `pac-planner-result-objectives`, con la nota sul pareggio), stadi `:211-219`.
+
+**Decisioni:**
+- R4.9 entra in questo giro come passo a sé, dopo i punti UI, **con i test** (decisione del developer del 30/09, che qui prevale sul «niente test» dei giri UI). Disegno approvato il 30/09 (`:2573-2586`): calcolo invariato; il backend fa i totali; contratto, fingerprint e `api sync` (lista del coordinatore); test di contratto via test-author, corsia 6151.
+- «Valore comprato» resta, nascosto di default (`hiddenByDefault`): si riaccende dall'occhio. In un PAC è uguale al valore dopo il piano; nel ribilanciatore (§4) no.
+- Esposizioni: «ideale vs reale» adesso; «prima vs dopo» arriva col ribilanciatore (§4), perché in un PAC puro «prima» è vuoto.
+- Colonne: il `ColumnVisibilityToggle` condiviso sopra ogni tabella del planner, a destra; niente componenti condivisi modificati.
+- Le chiavi che restano senza uso vanno nella lista di fine round (decisione (a)).
+
+**Passi:**
+- R11.0 ✅ 2026-10-01 — questa sezione.
+- R11.1 ✅ 2026-10-01 — Route: titolo su una riga, «?» accanto.
+  > **Note implementazione**: `PacPlannerTool.svelte`: il titolo del passo sta in una riga flessibile; sul passo `routing` l'`h2` aggiunge « – Cosa può comprare ogni Broker» (`routing.intro`, `pac-planner-routing-intro`) e accanto, fuori dall'`h2`, il «?» con `routing.introHelp` (`pac-planner-routing-help`, testid invariato). `RoutingStep.svelte` perde l'`h3` e il suo «?», e l'import `SECTION_TITLE` rimasto senza uso. Il trattino è punteggiatura, non testo da tradurre: le due parti restano le chiavi già tradotte. Nessuna chiave nuova; nessun test cita il testid.
+- R11.2 ✅ 2026-10-01 — L2: `\min` ed elenco puntato.
+  > **Note implementazione**: `strategy.l2Formula` (fallback in `StrategyStep.svelte:51`): la formula diventa `$D = \min \sum_i (V_i - p_i R)^2$` e i parametri tre righe «• $V_i$: …», «• $p_i$: …», «• $R$: …»; la frase finale dice «vince il piano con la somma più bassa», perché $D$ ora è il minimo. `shared/HelpTip.svelte`: con `math`, `mathHtml()` trasforma una serie di righe che iniziano con «• » in un solo `<ul class="my-1 list-disc space-y-0.5 pl-4">`; le altre righe restano unite da `<br>`. L'escape avviene prima, come prima: il markup aggiunto è solo `ul`/`li`. `strategy.l2Help` (la versione a parole per lo screen reader) non cambia: dice già «vince il piano con la somma più bassa». Valori delle 4 lingue nel batch di R11.13.
+- R11.3 ✅ 2026-10-01 — Rivedi senza «Composizione per le mappe».
+  > **Note implementazione**: `review.ts` non produce più il fatto `exposures` (blocco per Asset tolto, variante `FactValue` e voce di `FactKind` tolte; import `EXPOSURE_DIMENSIONS`/`sameExposures`/`ExposureDimension` rimasti senza uso tolti). Resta `assets.withExposures` di `sectionCounts`, letto dal pannello Riepilogo (`SummaryPanel.svelte:58`). `ReviewStep.svelte`: `KIND_ORDER`/`KIND_FALLBACKS` senza `exposures`; la cella del tipo è solo `{type:'kind', label}`. `ReviewCell.svelte`: tolti il ramo che contava le righe per dimensione, il «?» del tipo (`pac-planner-review-kind-help`, serviva solo alla composizione) e gli import/costanti rimasti senza uso (`HelpTip`, `DIMENSION_FALLBACKS`, `PLANNER_KEY`). La composizione resta nel passo Asset e nella richiesta (`request.ts:80`), quindi la mappa del risultato non cambia. Nessun test citava i testid tolti. Chiavi rimaste senza uso, per la lista della decisione (a): `review.kind.exposures`, `review.exposureDimension`, `review.exposuresHelp`.
+- R11.4 ✅ 2026-10-01 — Badge e tooltip nell'intestazione del Risultato.
+  > **Note implementazione**: `result/model.ts`: ogni `ResultBadge` porta `help` (`BadgeHelp`, chiave letterale + fallback). Riusate le frasi già tradotte che dicono la stessa cosa: «Nessuna operazione» → `result.states.noOp.empty`; «Infattibile» → `result.states.infeasible.body`; «Nessun piano entro i limiti» → `result.states.noIncumbent.body`; «Infattibilità dimostrata» → `result.proof.solverInfeasibleWitness`; «Ottimalità non dimostrata» → `result.proof.floatingUnfinished`, ma con esito `no_incumbent` la stessa `noIncumbent.body`, perché «il miglior piano trovato» lì sarebbe falso. Chiavi nuove (`result.badges.help.*`): `planAvailable`, `decimalVerified`, `optimalProven`, e per l'arresto `completed`, `timeLimit`, `nodeLimit` (mappa `STOP_HELP`); `completed` dice solo che il solver ha chiuso la ricerca da sé, senza promettere l'ottimo, che resta compito del badge di prova.
+  > `result/OutcomeHeader.svelte`: ogni badge è un `Tooltip` (hover, tap, focus) attorno allo `span` colorato; `li` con `data-badge`/`data-tone` invariati. La riga «Distanza L2 · Non investito · note» diventa badge (`pac-planner-outcome-objective`, `data-objective`): L2 con la formula di Strategia (`strategy.l2Formula`, stessa chiave e stesso fallback, ora `L2_FORMULA_FALLBACK` in `policies.ts`, usato anche da `StrategyStep`); Non investito con `result.kpi.help.shortfall`; note (`pac-planner-outcome-notes`) arancione se c'è un avviso, blu se ci sono solo informazioni, neutro se zero, con la chiave nuova `result.header.notesHelp`. Un risultato pronto non porta errori: il tono non li prevede.
+  > `shared/tipHtml.ts` (nuovo): la trasformazione di R11.2 (escape, poi «• » → `ul`/`li`, il resto `<br>`) esce da `HelpTip.svelte`, che ora la importa; la usa anche il badge L2. Nessun test cita i testid toccati (`grep` su `frontend/`).
+  > **⚠️ Fuori pista**: le date «2026-10-02» di R10.6–R11.3 (e «02/10» nel feedback e nella lettura del codice del Round 11) erano sbagliate: il giorno è il 01/10 (`date`; `build10.log` di R10.10 ha mtime 01/10 14:08:11). Corrette nel piano; `plan_note.py` ora scrive 2026-10-01.
+- R11.5 ✅ 2026-10-01 — Allocazione: ordine dei valori, «Valore comprato» nascosto.
+  > **Note implementazione**: `result/AssetTable.svelte`: ordine Asset, Obiettivo, Quota dopo il piano, barre, **Valore dopo il piano → Valore ideale → Scarto dall’ideale**, poi «Valore comprato» con `hiddenByDefault: true` (lo onora `DataTable.svelte:199` anche senza menu; da R11.8 si riaccende dall’occhio delle colonne). I totali del piede sono per id di colonna, quindi seguono lo spostamento da soli. `result.assets.buyMidHelp` aggiunge «In un PAC, che parte da zero, coincide con il valore dopo il piano» (UPDATE nel batch, 4 lingue). Risposta alla domanda del developer, da riportare nell’`ask_user`: `final_value = current_value + buy_mid_value − sell_mid_value`; il PAC parte da investito nullo e non vende, quindi comprato = dopo; si separano solo nel ribilanciatore (§4). Batch del giro avviato: `/tmp/libreFolio_d_ui13/i18n_round11.py` (R11.2, R11.4, R11.5; `--dry` → ADD=7 UPDATE=2, guard 0).
+- R11.6 ✅ 2026-10-01 — Marquee nei nomi delle tabelle.
+  > **Note implementazione**: `shared/MarqueeName.svelte` (nuovo): il nome in una cella è `<span use:scrollOnOverflow class="{overflowScrollTextClass} font-medium …" title={text}>`, lo schema di `AssetsStep.svelte:201` e `BrokerCard.svelte:107`. Sostituisce il `truncate` in `shared/AssetNameCell.svelte` (quindi `TargetsStep`, `DistributionDialog`, `ReviewCell` e `ResultCell` per gli Asset), in `result/ResultCell.svelte` (Broker, versamento, etichetta: obiettivi e stadi della Prova) e in `shared/ReviewCell.svelte` (Broker, cassa, versamento); le due costanti `NAME` spariscono. Il nome che entra non cambia (niente animazione né listener); quello che non entra scorre da solo e ha il testo intero nel `title`. Nessuna chiave nuova; nessun componente condiviso toccato.
+- R11.7 ✅ 2026-10-01 — Esposizioni «ideale vs reale».
+  > **Note implementazione**: titolo «Esposizioni – ideale vs reale» (`result.sections.exposures`, fallback in `result/ResultView.svelte`); il «?» passa da cinque frasi a due: come si distribuiscono gli Asset per paese, tipo e settore, la distribuzione ideale segue le quote obiettivo e quella reale le quote dopo il piano, i grafici non cambiano il piano. Le due serie si chiamano «Distribuzione ideale» e «Distribuzione reale» (chiavi nuove `result.exposures.ideal`/`actual`, in `result/exposureTooltip.ts`): da lì le prendono le didascalie delle mappe, la legenda delle barre, le righe del tooltip e l’elenco accessibile. La direzione nel tooltip dice «Sopra/Sotto l’ideale», «In linea con l’ideale», come le colonne «Valore ideale» e «Scarto dall’ideale» dell’Allocazione. `scaleHelp` più corto. Batch: ADD 2, UPDATE 6 (titolo, help, scaleHelp, above/below/equal); la guardia ora legge anche i fallback di `title('<id>', …)` in `ResultView`. `--dry` → ADD=9 UPDATE=8, guardia 0. Senza uso da qui (decisione (a), lista di fine round): `result.assets.target`, `result.assets.final`. «Prima vs dopo» resta per il ribilanciatore (§4), come deciso.
+- R11.8 ✅ 2026-10-01 — Colonne spostabili e nascondibili.
+  > **Note implementazione**: nuovo `shared/TableColumns.svelte`, un contenitore `ml-auto` col suo `data-testid` attorno al `ColumnVisibilityToggle` condiviso (usato così com'è, con `showLabel`: l'occhio più «Colonne», così il pulsante ha anche un nome accessibile, che senza etichetta non avrebbe). Messo a destra sopra ogni tabella: Allocazione per Asset (sulla riga della legenda, `pac-planner-assets-columns`), Saldi (`pac-planner-ledger-columns`), ordini per Broker (nella riga del titolo di ogni Broker, `pac-planner-plan-orders-columns`: le tabelle condividono la `storageKey`, quindi ogni pulsante le cambia tutte insieme via `additionalTableRefs`), fasi del solver (`pac-planner-solver-stages-columns`), Rivedi (sezioni sulla riga d'apertura, dati del calcolo sopra la loro tabella), Obiettivi (in fondo alla riga dei pulsanti) e «Copia la distribuzione attuale» (`{testid}-columns`). Ogni `DataTable` ha `bind:this`; `enableColumnVisibility={false}` (solo dichiarato, mai letto da `DataTable`) passa a vero dove c'è il pulsante. Gli obiettivi della Prova non lo hanno: diventano card in R11.10.
+  > **⚠️ Fuori pista**: Saldi. Prima le colonne «mute» uscivano dall'elenco `columns`, e `DataTable` scarta le scelte salvate delle colonne che spariscono: una colonna nascosta a mano sarebbe ricomparsa al piano dopo. Ora `columns` le contiene tutte e le mute hanno `hiddenByDefault: !showAll && !speaking.has(field)`. «Mostra altre colonne» cambia solo il default; una scelta fatta col pulsante vince, e «Reset layout» torna al default. Il conteggio del link resta quello delle colonne mute.
+- R11.9 ✅ 2026-10-01 — Barra dei tempi interattiva.
+  > **Note implementazione**: `result/BackendTimingBar.svelte`. Un solo stato `pointed` (la fase sotto il puntatore), e `active` lo tiene solo se la fase è ancora disegnata, così un nuovo risultato che la toglie non lascia un'evidenza appesa. Segmento e voce di legenda hanno `onpointerenter`/`onpointerleave` sullo stesso stato: quello attivo resta pieno, gli altri si attenuano (segmenti `opacity-30`, voci `opacity-50`), e la voce attiva prende uno sfondo grigio (`bg-gray-100`/`dark:bg-gray-700`), con una transizione breve. Eventi pointer, quindi un tocco su touch screen fa lo stesso. La voce reagisce anche al focus al suo interno (`onfocusin`/`onfocusout`: il «?» di «Non attribuito»), così da tastiera il legame resta. `data-active` su segmento e voce per i test futuri. La barra resta `aria-hidden`: la legenda dice già tutto a parole. Nessuna chiave nuova.
+- R11.10 ✅ 2026-10-01 — Prova: esito a badge, obiettivi a card.
+  > **Note implementazione**: `result/ProofPanel.svelte`. Esito, Prova e Arresto non sono più un `<dl>` di testo ma tre riquadri affiancati (`pac-planner-proof-facts`, una colonna su mobile), ognuno col titolo piccolo e gli stessi badge dell'intestazione, con la loro spiegazione al passaggio, al tocco o al focus. Esito (`pac-planner-proof-outcome`): «Piano disponibile» (o nessuna operazione, impossibile, nessun piano) più «Verificato in Decimal» quando c'è. Prova (`pac-planner-proof-kind`): il badge della prova, e sotto una riga solo quando aggiunge qualcosa: con l'ottimo il numero di obiettivi chiusi (`proof.solverWitness`), senza prova il motivo (`pac-planner-proof-reason`). Arresto (`pac-planner-proof-stop`): il badge dell'arresto. I valori esatti degli obiettivi non sono più una `DataTable` ma card in ordine di cascata (`pac-planner-objective`, `data-objective`), una griglia da 1 a 3 colonne: il numero d'ordine nel cerchio verde della Strategia, il nome con lo stesso «?» della Strategia (la formula L2 col suo testo a voce, la priorità, altrimenti la riga breve `objectiveHelp.*`) e il valore grande (`pac-planner-objective-value`, `formatObjectiveValue`, quindi mascherabile). La nota sullo spareggio finale resta sotto le card; fasi del solver, metriche e barra dei tempi restano come sono.
+  > Nuovo `result/ResultBadgeTip.svelte` (il badge con il suo `Tooltip`), usato anche da `OutcomeHeader`, così intestazione e Prova non possono divergere. In `ui.ts` le classi `TILE` e `TILE_LABEL`. Le spiegazioni degli obiettivi (`OBJECTIVE_HELP_FALLBACKS`, `OBJECTIVE_TIPS`, tipo `ObjectiveTip`) passano da `StrategyStep.svelte` a `policies.ts`, con chiavi assolute, così la Strategia e la Prova leggono lo stesso testo; l'audit ora vede `strategy.l2Help` e `strategy.priorityHelp`, prima falsi positivi. In `ResultCell.svelte` esce il tipo di cella `objective`, che aveva come unico uso la vecchia tabella. Nessuna chiave nuova. Guardia del batch i18n aggiornata (le spiegazioni si leggono da `policies.ts`); `--dry`: ADD=9, UPDATE=8, problemi 0.
+  > Chiavi rimaste senza uso (verificate con grep sulla chiave intera e sulla forma `${KEY}.*`), da aggiungere alla lista di fine round (decisione (a)): `result.proof.optimal`, `result.proof.notProven`, `result.proof.infeasible`, `result.proof.sources.solver_status`, `result.proof.tieBreakClosed`, `result.proof.decimalVerified`, `result.proof.exactValue`, `result.outcomes.incumbent_found`, `result.outcomes.no_op`, `result.outcomes.infeasible_proven`, `result.outcomes.no_incumbent`.
+  > **⚠️ Fuori pista**: con l'infattibilità dimostrata il riquadro Prova mostra solo il badge, senza la riga `solverInfeasibleWitness`: è la spiegazione del badge stesso (R11.4) e l'avviso di stato sopra la dice per intero, quindi sarebbe stata la stessa frase due volte.
+- R11.11 ✅ 2026-10-01 — svelte-check.
+  > **Note implementazione**: `svelte-kit sync`, poi `svelte-check --tsconfig ./tsconfig.json --output machine` in `frontend/` (log `/tmp/libreFolio_d_ui13/check_r11.log`): 5483 file, **3 errori e 41 avvisi, gli stessi della baseline** (`TransactionFormModal.test.ts` ×2, `ToolExecutionMetrics.svelte` ×1, tutti fuori dal planner). Nessun avviso nel planner: né sui gestori pointer/focus della barra dei tempi (R11.9) né sui riquadri e sulle card della Prova (R11.10).
+- R11.12 ⏳ — R4.9: contratto, UI, test, riavvio della 6161.
+  > **Analisi (2026-10-01), prima del codice: la conversione non appartiene a un ordine.**
+  > - **Cosa decide il motore.** Una conversione è una decisione `fx_debit` per rotta d'acquisto × valuta di origine (`evaluator.py:1738-1821`). Il suo accredito però entra nella cassa del Broker nella valuta dell'Asset, la cella `(broker, valuta)` che tutti gli ordini di quel Broker in quella valuta usano insieme (`constraints.py:503-597`). Nessun vincolo lega la conversione all'acquisto della sua rotta: il catalogo dei vincoli (`models.py:53-87`) non ha una regola FX↔BUY, e `_validate_ready_solution` non controlla che `order_route_id` abbia una riga d'ordine.
+  > - **Chi sceglie la rotta.** Nessun obiettivo distingue la rotta: lo spread dipende solo dalla coppia (`objectives.py:167-201`). Decide lo spareggio canonico, che minimizza i quanti in ordine (`objectives.py:224-231`), con la chiave `("", broker, origine, "fx", destinazione, route_id)` (`evaluator.py:3007-3077`). La conversione finisce quindi sull'ultima rotta in ordine di ID fra quelle dello stesso Broker e della stessa valuta, anche su un Asset che il piano non compra.
+  > - **Conseguenze.**
+  >   1. «Dentro la riga dell'ordine» (disegno del 30/09) non ha un importo per ordine definito dal calcolo.
+  >   2. Già oggi la riga «per comprare {asset}» del passo FX (`OperationalPlan.svelte:175`) e le conversioni nel dettaglio d'ordine (`OrderDetail.svelte:29`, filtro su `order_route_id`) possono nominare l'Asset sbagliato, o nessuno.
+  >   3. Il rollup di `fx_cost` per rotta del 17/09 (`w1-fx-redesign-final-delta-plan.md:60-74`, mai implementato) metterebbe il costo sulla rotta sbagliata: non lo implemento. Lo spread resta sul totale per Broker × coppia; il frontend non legge `fx_cost`.
+  > - **Il totale per Broker × coppia invece è ben definito**: debito, accredito registrato e spread si sommano sulle azioni della coppia, e tasso e spread sono globali per coppia, quindi identici in ogni azione.
+  > - Prima di scrivere il contratto, domanda al developer (`ask_user`) su come mostrare la modalità automatica.
+  > **Decisione del developer (2026-10-01, `ask_user`, opzione raccomandata).**
+  > - **Automatica**: nel gruppo «Ordini su {Broker}» un riquadro con il totale per coppia («il Broker converte circa X EUR → Y USD quando compri»); sugli ordini in quella valuta un badge «conversione automatica», senza importo. Nessun passo numerato.
+  > - **Manuale**: resta il passo numerato «prima converti», uno per Broker × coppia, con il totale; la frase diventa «per gli ordini in USD su {Broker}».
+  > - Il calcolo non cambia e non nasce nessuna regola nuova: la modalità decide solo come il piano presenta la conversione.
+  > **Contratto finale di R4.9.**
+  > - Richiesta: `PlannerBrokerInput.conversion_mode: "manual" | "automatic"`, obbligatorio come ogni campo della richiesta. Il normalizzatore lo porta in `ExactBroker.conversion_mode`, quindi l'impronta dello scenario cambia con la modalità: un risultato calcolato con l'altra modalità non passa per fresco.
+  > - `PlannerFxAction`: perde `sequence` e guadagna `conversion_id`. `order_route_id` resta, documentato come chiave della decisione del motore, non come «l'acquisto che la paga».
+  > - Nuovo `PlannerConversion`, uno per Broker × origine × destinazione: `conversion_id`, `mode`, `sequence` (intero se manuale, `None` se automatica), `broker_id`, `source_debit` (Σ esatta delle azioni), `destination_credit` (Σ degli accrediti registrati), `spot_rate` ed `effective_rate` (identici in tutta la coppia), `spread_loss` (Σ esatta, nella valuta di valutazione), `fx_action_ids`, `provenance_ids` (unione di quelli delle azioni).
+  > - Soluzioni PAC e Rebalancer: nuova lista `conversions`; nei no-op `max_length=0`.
+  > - Sequenze: un solo contatore, funding 1..F, poi le conversioni manuali ordinate per Broker, origine e destinazione, poi gli ordini. Uniche fra le tre sezioni e crescenti dentro ognuna, come prima.
+  > - `fx_cost` della riga d'ordine resta 0 e la descrizione del campo lo dice: lo spread vive sulla conversione. Niente rollup per rotta; debito da riportare al coordinatore.
+  > **Note implementazione (backend, 2026-10-01)**: contratto R4.9 scritto.
+  > - Schema: `PlannerBrokerInput.conversion_mode` obbligatorio (`manual`/`automatic`, solo presentazione); `PlannerFxAction` perde `sequence` e guadagna `conversion_id`; nuova `PlannerConversion` (Broker × coppia, `sequence` presente solo se manuale, somme esatte, tassi della coppia, `fx_action_ids`, provenance unione); `conversions` nelle due soluzioni (vuota nei no-op); `fx_cost` del BUY ora deve essere 0.
+  > - Validatori: `_validate_action_ids_and_sequences` (ID unici su funding/fx/conversioni/ordini, sequenze uniche su funding/conversioni manuali/ordini) e `_validate_conversions` (aggregato puro: coppia, tassi, somme Fraction, provenance, un modo per Broker).
+  > - Motore: `ExactBroker.conversion_mode` (normalizer lo passa, `ValueError` su modo ignoto); `build_fx_actions` senza sequenza; nuova `build_conversions` raggruppa per (Broker, src, dst), sequenza solo alle manuali; `_build_solution_parts` chiama funding → fx → conversioni → ordini. Calcolo invariato: tassi e spread sono globali per coppia (`evaluator.py:1765-1772`), quindi l’invariante «stessi tassi nel gruppo» regge.
+  > - Verifica: import dei moduli OK; `api sync` exit 0 (contratti tool `ebf753ba…dde77`). Nuovi fingerprint schema: pac `bd84ef14dc43bc6185c8c4e009a336f924a3fee6cdff03a04b1263ab0246cc29`, rebalancer `0b43bd19dc8716ea6cffc4158764594a5f16fb06adcc43185f1bb54cfa91a1e0` (erano `502e8c48…8e374` e `17d5625e…591cc3`).
+  > - Restano: test e fixture (test-author), frontend, i18n, build, riavvio 6161.
+  > **Note implementazione (frontend, 2026-10-01)**: R4.9 nell'interfaccia.
+  > - **Dati**: `types.ts` `PacConversion`; `draft.svelte.ts:64` `ConversionMode`, `:80` `DraftBroker.conversionMode`, `'manual'` nei due costruttori (`:439`, `:536`) e nella copia del Broker (`copies.ts:198`); `request.ts:295` invia `conversion_mode`. Il draft vive solo in memoria (`draft.svelte.ts:4`), quindi nessun draft salvato può arrivare senza il campo, che ora è obbligatorio.
+  > - **Risultato**: `result/model.ts`: `PlanStep` (funding o conversione manuale), `planSteps(funding, conversions)` (solo le manuali, che hanno la sequenza), `automaticConversions(conversions, brokerId)`, `conversionsFor(conversions, order)` (stesso Broker, accredito nella valuta dell'ordine; più origini possono accreditare la stessa destinazione, quindi è un elenco).
+  >   - `OperationalPlan.svelte`: i passi numerati vengono da `solution.conversions`. La manuale dice «{debito} → circa {accredito}» e «per gli ordini in {valuta}», col «?» `fxEstimateHelp` (`pac-planner-plan-fx-estimate-help`). L'automatica è un riquadro nel gruppo «Ordini su {Broker}» (`pac-planner-plan-auto-conversion`, `data-conversion`), con gli importi «circa {debito} → {accredito}» (`pac-planner-plan-auto-conversion-amounts`) e il «?» `autoConversionHelp` (`pac-planner-plan-auto-conversion-help`). `orphanAutomatic` mostra in fondo le automatiche di un Broker senza ordini, così nulla si perde. Tolto `routeAsset`, che poteva nominare l'Asset sbagliato.
+  >   - `ResultCell.svelte`: badge «Conversione automatica» sugli ordini in quella valuta (`pac-planner-plan-order-auto-conversion`), senza importo.
+  >   - `OrderDetail.svelte`: la prop `conversions` sostituisce `fxActions`; la manuale resta `conversionAction`, l'automatica è `detail.conversionAuto` (`pac-planner-order-detail-conversion`, `data-mode`); lo spread è `detail.spreadLossConversion`.
+  >   - `KpiCards.svelte`: il chip `fx` conta le manuali; nuovo chip `fx_auto` (`kpi.autoConversions`). `ResultView.svelte`: `hasPlan` conta anche `solution.conversions`, e `OrderDetail` riceve `conversions`.
+  > - **Input**: `BrokerEditor.svelte`, sezione «Conversione di valuta» prima del funding (`:299-309`): un `fieldset` con due card radio, «Converti tu prima di comprare» e «Converte il Broker quando compri» (`pac-planner-conversion-modes`, `pac-planner-conversion-mode` con `data-mode`/`data-selected`, `pac-planner-conversion-mode-radio`). `notIn200` aggiornata. `BrokersStep.svelte:127-133`: la riga della card dice la modalità (`pac-planner-broker-conversion`, `data-mode`; `conversionValue` o `conversionValueAuto`), e `conversionHelp` spiega le due.
+  > - **i18n R4.9** (nel batch di R11.13): ADD 11, cioè `brokerEditor.{conversionManual,conversionAutomatic}`, `brokers.conversionValueAuto`, `result.plan.{conversionFor,fxEstimateHelp,autoConversion,autoConversionAmounts,autoConversionHelp}`, `result.detail.{conversionAuto,spreadLossConversion}`, `result.kpi.autoConversions`; UPDATE 3, cioè `brokers.conversionHelp`, `brokerEditor.notIn200`, `result.plan.fxAmounts`.
+  > - **Verifica**: svelte-check dopo R4.9 (`/tmp/libreFolio_d_ui13/svcheck_r49.log`): 3 errori e 41 avvisi, la baseline, nessuno nel planner. `front build --debug` ok (`front_build_r49.log`). 6161 riavviata alle 17:13:05 (shell `srv6161r11`, log `/tmp/libreFolio_d_f6/server_review_r11.log`), dopo l'ultima modifica al backend (16:47:47): serve il backend R4.9, e nel log non ci sono errori dell'app.
+  > **⚠️ Fuori pista**:
+  > - `result.detail.spreadLoss` è condivisa col chip dei costi di `KpiCards`: non la cambio, la conversione ha la chiave nuova `spreadLossConversion`.
+  > - `result.plan.fxTitle` resta senza uso: va nella lista di fine round (decisione (a)).
+  > - `orphanAutomatic` è difensivo: non c'è un vincolo FX↔BUY (vedi l'analisi sopra), quindi non posso escludere un'automatica su un Broker senza ordini.
+  > - `FxStep.svelte` non cambia: il suo testo non dipende dalla modalità.
+  > - Nell'editor ho usato card radio (`fieldset`, `label` + `input type=radio`) e non i bottoni `aria-pressed` di `TOGGLE_CARD` (`ui.ts:62-64`) previsti nel disegno: la scelta è esclusiva fra due, e un gruppo radio lo comunica da solo a tastiera e screen reader.
+  > - Restano: test e fixture (test-author, in corso) e `api pac-planner-tool` nella corsia 6151.
+- R11.13 ✅ 2026-10-01 — i18n, build, feedback (`ask_user`).
+  > **Note implementazione (2026-10-01)**: il developer ha risposto all'`ask_user` del Round 11 con «ottimo». Subito dopo ha segnalato il blocco della Route su un Asset quotato in una valuta senza modalità d'ordine: è il Round 12.
+  > **Note implementazione (2026-10-01)**: batch del giro `/tmp/libreFolio_d_ui13/i18n_round11.py` (R11.2, R11.4, R11.5, R11.7, R11.12), applicato con `dev.py i18n`.
+  > - `--dry` finale (`i18n_r11_dry2.log`): ADD=20 (9 dei punti UI + 11 di R4.9), UPDATE=11 (8 + 3), guardia EN 0 problemi. Applicato alle 17:15:30 (`i18n_r11_apply.log`), tutti rc=0. Controllo ICU (`icu_check_r11.log`): 31 chiavi × 4 lingue, 0 problemi.
+  > - Cataloghi: 4356 chiavi per lingua (erano 4336). sha8 en `cc406707`, it `acfe7d6d`, fr `03d87f38`, es `54eae373` (erano `5be9096d`, `7ac1707e`, `df9c478c`, `1ebcd709`).
+  > - svelte-check (`svcheck_r49.log`, 17:10:11, dopo l'ultima modifica al codice): 3 errori e 41 avvisi, la baseline. `front build --debug` alle 17:17:20 (`front_build_r11.log`; `start.DkwlLmm2.js`, `app.B3xjPxE-.js`), servito dalla 6161 senza riavvio. Il build rifà da sé la sync del client prima di compilare: i generati, ignorati da git, hanno mtime 17:16 e lo stesso hash dei contratti tool `ebf753ba…dde77`.
+  > - **Chiavi del planner senza uso, lista unica di fine round** (decisione (a); `unused_r99.py` → `/tmp/libreFolio_d_ui13/unused_r11.log`; lista in `files/i18n/unused_planner_keys_r11.txt` e `.grouped.txt` della sessione): **107**, tutte verificate come foglie del catalogo EN. Composizione:
+  >   - le 86 del Round 9, meno `result.kpi.source`, di nuovo in uso come «?» del titolo delle cifre chiave (`KpiCards.svelte:152`);
+  >   - 17 nuove trovate dallo script: `result.assets.{final,target}` (R11.7), `result.outcomes.{incumbent_found,infeasible_proven,no_incumbent,no_op}` e `result.proof.{decimalVerified,exactValue,infeasible,notProven,optimal,tieBreakClosed}`, `result.proof.sources.solver_status` (R11.10), `result.plan.fxTitle` (R11.12), `review.{exposureDimension,exposuresHelp}` (R11.3), `review.exposureRows` (R10.8);
+  >   - 5 aggiunte a mano, che lo script non vede perché stanno sotto famiglie dinamiche: `review.kind.exposures` (`${KEY}.kind.${kind}`, `ReviewStep.svelte:122`; R11.3) e `result.kpi.{funding,fundingReachable,shortfallParts,shortfallPartsNoRounding}` (helper `text()`, `KpiCards.svelte:45`; R10.6).
+  > - Dei 5 aggiunti a mano nel Round 9, 4 restano senza uso: `problems.routeCapMissing` (non più in `request.ts`), `result.sections.assets` (non fra le sezioni di `ResultView.svelte:53`), `result.weights.{finalShort,targetShort}` (solo in `result/WeightBars.svelte`, che nessuno importa).
+
+#### Round 12 — Route: Asset quotato in una valuta in cui il Broker non ha una modalità d'ordine ⏳ 2026-10-01
+
+**Feedback del developer** (01/10, dopo l'«ottimo» sul Round 11): Broker directa con conversione manuale, poi un Asset «test» (ETF) aggiunto a mano e quotato in una valuta diversa da EUR. Al passo Route la card dell'Asset dice «Il Broker non ha alcuna modalità d'ordine nella valuta del prezzo di questo Asset», e il banner blocca Continua («1 problema da correggere prima di continuare: Route · test · directa · …»). Non capisce l'errore, «visto che semplicemente tra i passi da fare mi verrà detto di convertire».
+
+**Lettura del codice** (01/10):
+- `draft.syncRoutes()` (`draft.svelte.ts:597-624`) crea **abilitata** ogni rotta Asset × Broker operativo.
+- `draft.modeFor()` (`draft.svelte.ts:397-405`) cerca la modalità nella valuta del prezzo (N10), e dà `null` se il Broker non ne ha una in quella valuta. Senza prezzo ripiega sulla modalità della valuta di valutazione, o sulla prima.
+- `request.ts:174` aggiunge `routeNoMode` per ogni rotta abilitata senza modalità. Passa `{currency}`, ma il testo non lo usa.
+- `RoutingStep.svelte:144-148`: lo span rosso sta dentro il bottone che abilita o esclude la rotta. Sotto, i campi dei limiti compaiono anche senza modalità, con un'unità che non si conosce.
+- Il contratto resta com'è. La modalità d'ordine (unità o importo, incremento, commissioni nella sua valuta) è per Broker × valuta, e la rotta usa quella nella valuta del prezzo. La conversione è una decisione FX a parte (R4.9: manuale = passo numerato, automatica = riquadro con gli ordini del Broker). Il piano non può dimensionare un ordine in USD con le regole e le commissioni in EUR.
+- `BrokerEditor.svelte` è un dialogo autonomo (`{draft, brokerKey, onclose}`): lavora su una copia e scrive nella bozza solo con «Applica alla bozza». Si può aprire anche dalla Route.
+
+**Decisione**, dentro i principi già fissati (nessuna modalità creata in silenzio con commissioni inventate, nessuna rotta esclusa in silenzio):
+- Il requisito resta, ma la card lo spiega e offre le due uscite a un clic.
+- Card di una rotta abilitata senza modalità: al posto dei campi dei limiti, un riquadro ambra fuori dal bottone, con:
+  - la riga «{broker} non ha ancora una modalità d'ordine in {currency}» e un «?» che spiega a cosa serve e perché non è la conversione;
+  - il pulsante «Aggiungi modalità {currency}», che apre l'editor del Broker con il blocco già aggiunto, i valori di partenza in vista, e scrive solo con «Applica»;
+  - il link «Escludi su {broker}».
+- `routeNoMode` vale solo se il Broker ha già delle modalità (a zero c'è `brokerNoMode`), e il suo testo dice cosa fare.
+- Alternativa da proporre al developer, non implementata: creare da sola la modalità mancante, copiando tipo e incremento, con commissioni 0. Va contro «niente coefficienti nascosti»: la commissione in USD varrebbe 0 senza che nessuno l'abbia scritta.
+
+**Passi:**
+- R12.1 ✅ 2026-10-01 — Route: riquadro «modalità mancante» con «?», «Aggiungi modalità {currency}» ed «Escludi su {broker}»; campi solo con la modalità; editor del Broker con il blocco preaggiunto (`addCurrency`, `addFor`); `routeNoMode` solo con modalità presenti, con il testo nuovo.
+  > **Note implementazione (2026-10-01)**: `RoutingStep.svelte` — tolto lo span rosso `pac-planner-route-no-mode` dal pulsante della route; con route attiva e senza modalità, al posto dei campi c'è il riquadro ambra `pac-planner-route-mode-missing` (`data-currency`), con «?» (`route.modeMissingHelp`: cos'è la modalità d’ordine, perché serve nella valuta del prezzo, che non è la conversione), «Aggiungi modalità {currency}» (`pac-planner-route-add-mode`, apre `BrokerEditor` montato fuori dalla radice come in `BrokersStep`) ed «Escludi su {broker}» (`pac-planner-route-exclude`, mette `route.enabled = false`, reversibile col toggle). I campi della route compaiono solo con la modalità. Helper `missingCurrency(asset, mode)`: valuta del prezzo se manca la modalità e il codice è valido, altrimenti `''`.
+  > `BrokerEditor.svelte` — prop opzionali `addCurrency`/`addFor` (default `''`); all'apertura, se il Broker non ha già un blocco in quella valuta, ne aggiunge uno in cima alla copia di lavoro con `defaultMode(draft.nextId('mode'), addCurrency)`, marcato `data-added="true"` e con l'avviso ambra `pac-planner-mode-added-for` (`brokerEditor.addedFor`: controlla tipo di ordine, incremento e commissioni, poi applica). Come ogni modifica dell'editor, arriva alla bozza solo con «Applica alla bozza»: chiudere senza applicare non crea niente. Nessun valore inventato oltre ai default già usati da «Aggiungi valuta».
+  > `request.ts:174` — `routeNoMode` solo se il Broker ha già modalità (a zero vale `brokerNoMode`, `request.ts:121`: prima i due avvisi si sommavano); testo nuovo con `{currency}` e le due vie d'uscita. Verificato su `draft.svelte.ts:397-404`: con modalità presenti, `modeFor` è null solo se la valuta del prezzo è impostata e manca il blocco; senza prezzo restituisce comunque una modalità.
+  > Nessun altro riferimento a `route-no-mode` o al vecchio testo in `frontend/src`, `frontend/e2e`, `backend/test_scripts`, `mkdocs_src/docs`.
+- R12.2 ✅ 2026-10-01 — i18n (`i18n_round12.py`), svelte-check, `front build --debug`, feedback (`ask_user`).
+  > **Note implementazione (2026-10-01)**: `/tmp/libreFolio_d_ui14/i18n_round12.py` — 5 ADD (`route.modeMissing`, `route.modeMissingHelp`, `route.addMode`, `route.excludeHere`, `brokerEditor.addedFor`) e 1 UPDATE (`problems.routeNoMode`, ora con `{currency}` in tutte e 4 le lingue), solo via `dev.py i18n`, tutti rc=0. Guard EN = default del sorgente: 0 problemi; il guard ora legge anche `$t` su più righe (`\{\s*default:`) e i fallback di `problems.add(step, key, fallback)`, e controlla che le ADD siano assenti e l'UPDATE presente. Check ICU (`icu_check_r12.mjs`): 6 chiavi × 4 lingue, 0 problemi. Cataloghi 4361 chiavi per lingua (+5); sha8 en `fdb4e5f9`, it `9ccc83e6`, fr `97747c96`, es `2b555e85`. Termini: «modalità d’ordine», «Broker», «Asset» (IT); «mode d’ordre», «courtier», «actif» (FR); «modo de orden», «bróker», «activo» (ES); «Tipo di ordine», «Incremento», «Applica» come nell'editor.
+  > svelte-check: 3 errori e 41 warning, identici alla baseline, nessuno nel planner (`/tmp/libreFolio_d_ui14/svelte_check_r12.log`). `dev.py front build --debug` rc=0 (`/tmp/libreFolio_d_ui14/front_build_r12.log`); 6161 serve il nuovo bundle senza riavvio (pid 23056, `/tools` 200). Nessun test automatico, per la regola del developer. Feedback chiesto con `ask_user`.
+  > **⚠️ Fuori pista**: il guard di Round 11 non avrebbe visto le due chiavi con `$t` su più righe (riportava `NO SOURCE DEFAULT`), né i fallback di `problems.add`: allargato il guard prima di scrivere.
+
+#### Round 13 — Obiettivi: conferma a tabella; FX: coppia aggiunta sul posto, tasso con simbolo e bandiera, «Non in 2.0.0» nel «?»; «Calcolo non riuscito»: causa nel motore ed errori più chiari; 02/10: motore A, via i limiti FX, errore più corto ✅ 2026-10-02 (R13.0–R13.12); il feedback apre il Round 14
+
+**Feedback del developer** (01/10, con la risposta al Round 12):
+1. Obiettivi, ribilanciamento: un avviso dice «3 items» in inglese; il pannello «Questi obiettivi cambiano:» elenca righe `nome: vecchio% → nuovo%` illeggibili, perché i nomi hanno lunghezze molto diverse. Vuole una tabella a 2 colonne, con i nomi lunghi che scorrono.
+2. FX: al posto del link «Apri la pagina FX», un pulsante che aggiunge la coppia sul posto, con il flusso di aggiunta della pagina FX. Chiede cosa succede se la coppia esiste ma non ha punti, o se è manuale.
+3. Non capisce «Non in 2.0.0: FX per Broker, margine di sicurezza, commissione di conversione, conversioni a più passi.»: va spiegato e rifatto (un «?» o toglierlo).
+4. «1 EUR = 1.1298 USD», in automatico e in manuale, non ha bandiere né simboli: usare `currencyFormat.ts` e `CurrencyCode`.
+5. «Calcolo non riuscito · errore della piattaforma strumenti — execution_failed · Il calcolo non è riuscito all’interno dello strumento.», e niente in console né nei log: vuole errori più chiari.
+
+**Lettura del codice** (01/10):
+- (1) `DistributionDialog.svelte:254-265` usa la `ConfirmModal` condivisa (`components/ui/modals/ConfirmModal.svelte`). Senza `itemsLabel` la modale ripiega su `` `${items.length} items` ``, in inglese e fisso (`:118`), e mostra solo una lista di stringhe (`changeItems`, `DistributionDialog.svelte:185`). Gli altri due usi nel planner (`RemovalConfirm.svelte:47`, `PacPlannerTool.svelte:421`) passano l'etichetta o non hanno elementi. La modale è condivisa: non la tocco.
+- (2) `FxStep.svelte:189-195`: messaggio e `<a href="/fx">`. Il lettore (`fxRead.svelte.ts`) chiede la sezione `fx_quotes`; il backend prende l'ultimo `FxRate` della coppia con data ≤ `as_of`, **qualunque sia il provider** (`portfolio_allocation_source.py:1133-1166`, `:1447-1520`), altrimenti `allocation.saved_fx_missing`. Quindi «non memorizzato» copre due casi: coppia non configurata, e coppia configurata senza punti. Le coppie configurate sono in `fxRoutesStore.getConfiguredPairSlugs()` (slug alfabetico). La modale `FxPairAddModal` (`components/fx/FxPairAddModal.svelte`) è già riusata da dashboard (`dashboard/+page.svelte:858-863`) e dettaglio Asset; con un provider reale scarica da sola i tassi dopo la creazione (`finishFxPairCreation`, `services/fxCreationSync.ts:82`) e poi chiama `onsynced`. Permessi: `POST /fx/providers/routes` e `POST /fx/currencies/sync` chiedono solo l'utente autenticato (`api/v1/fx.py:762-766`, `:173-177`).
+  - Risposte al developer: coppia configurata senza punti → «Scarica i tassi» (chiama i provider, ma solo con il clic dell'utente; la lettura del passo resta senza provider). Coppia con provider manuale: se ha punti, «Auto» legge l'ultimo punto come ogni altro tasso memorizzato; se non ne ha, resta «non memorizzata», e il tasso si scrive nella pagina FX o qui in «Manuale».
+- (3) `FxStep.svelte:224`: elenca ciò che il contratto 2.0.0 non modella: un tasso diverso per Broker, un margine di sicurezza sul tasso, una commissione di conversione separata dallo spread, le conversioni a più passi (EUR→USD→CHF). È un testo da sviluppatore, non da utente.
+- (4) `FxStep.svelte:173-187`: `1 {base} =` e `{quote}` sono testo semplice. `CurrencyCode` (`planner/shared/CurrencyCode.svelte`) rende `simbolo bandiera codice` con `formatCurrencyCodeHtml` (`utils/currency/currencyFormat.ts:80`).
+- (5) **Causa**, riprodotta con dati sintetici (`/tmp/libreFolio_d_r13/repro_tie.py`, nessun dato personale): `_require_credit_tie_free` (`constraints.py:399-427`, chiamata a `:578-585`) solleva `LedgerPostingScopeError` quando un accredito FX può cadere esattamente a metà dell'unità minima (pareggio HALF_UP). Tasso 1,1298 e spread 0: €20 → `ready`; €30 → eccezione. Ogni tasso a 4 decimali con denominatore ridotto pari la fa scattare entro €50: la conversione manuale è di fatto inutilizzabile. L'eccezione esce dal plugin (`tool_plugins/pac_allocator.py:118-151`, nessun `except`); la piattaforma di C (`services/tools/worker.py`) la trasforma in `execution_failed` senza log, per scelta (nessun messaggio né input esposto). Il processo figlio (*spawn*) non chiama `configure_logging` (solo `main.py:74`): un `get_logger(...).error` nel figlio finisce sullo stderr del server (console, `docker logs`), non in `librefolio.log` (`/tmp/libreFolio_d_r13/probe_child_log.py`).
+  - **Perché il guard non serve.** L'unità accreditata `u` è una variabile nuova per (rotta, cassa), con limiti `[0, floor(upper/q + 0,5) + 1]` che includono il valore HALF_UP vero (`_posted_units_term`, `:468-500`). L'epigrafe `q·u − q/2 ≤ E ≤ q·u + q/2` ammette due valori {k, k+1} solo a un pareggio esatto, e il valore vero è k+1. `u` compare solo con segno `+` nelle righe `≥ 0` del ledger (`:576-597`) e in nessun obiettivo (`objectives.py`). Quindi una decisione è ammissibile se e solo se lo è con l'accredito massimo, che è quello vero: il guard non evita nessuna potatura dell'ottimo (il solver «può» scegliere k, non «deve»). I quasi-pareggi in virgola mobile restano coperti dal replay esatto e dai `rounding_top_ups` (`evaluator.py:3684`), come per gli addebiti. È coerente con la decisione del 25/09 (X3 respinta, modello permissivo, «servono N unità minime in più»).
+
+**Decisione** (UI, dentro i principi già fissati):
+- (1) Conferma propria del planner (`PlannerDialog`), con una tabella Asset | Obiettivo (`prima → dopo`), nome con icona e scorrimento (`AssetNameCell`). La `ConfirmModal` condivisa resta com'è; il suo «N items» fisso va segnalato al coordinatore.
+- (2) «Aggiungi la coppia» se la coppia non è configurata: apre `FxPairAddModal` con base e quote già scelte; a creazione o download finiti, il passo rilegge la coppia. «Scarica i tassi» se è configurata ma senza punti. Resta «Manuale». Nessun provider chiamato senza un clic.
+- (3) «Non in 2.0.0» diventa un «?» accanto all'introduzione, con un testo per l'utente.
+- (4) Riga del tasso: `1 <CurrencyCode base> = tasso <CurrencyCode quote>`, anche in manuale.
+- (5) Motore: tre opzioni da far scegliere al developer. **A** (consigliata): togliere il guard e il codice che resta morto, con i loro test. **B**: tenerlo, ma marcare la prova `not_proven` invece di sollevare. **C**: righe intere esatte per l'HALF_UP degli accrediti. Errori: nel plugin un log ERROR con solo classe e posizione (file:riga:funzione), niente messaggi, importi o variabili locali, poi il rilancio, così il codice resta `execution_failed`. Testo UI: «errore interno del calcolo», non dovuto ai dati inseriti, nessun piano pubblicato, dettagli nel log del server per l'amministratore. Al coordinatore: proposta a C di un log di piattaforma per tutti i plugin.
+
+**Passi:**
+- R13.0 ✅ 2026-10-01 — questa sezione.
+- R13.1 ✅ 2026-10-01 — Obiettivi: conferma a tabella.
+  > **Note implementazione (2026-10-01)**: `DistributionDialog.svelte` non usa più la `ConfirmModal` condivisa. La conferma è un `PlannerDialog` (`testid` `pac-planner-distribution-confirm`, `zIndex` 70, `maxWidth` `lg`) con il messaggio e una tabella `table-fixed` a 2 colonne in un riquadro `max-h-80` che scorre, con l'intestazione fissa. Colonna Asset: `AssetNameCell` (icona e nome che scorre se non ci sta); colonna Obiettivo (`w-48`, a destra, `tabular-nums`): prima in grigio → dopo in grassetto. Righe `…-confirm-change` con `data-asset-key`. Piede: Annulla e «Sostituisci» ambra (`BUTTON_WARNING`, nuovo in `ui.ts`, stessi colori del `btn-warning` della modale condivisa). Tolto il derivato `changeItems`.
+  > Chiavi nuove: `distribution.changeColumn`, `distribution.confirmApply`. Resta senza uso `distribution.change` (lista di fine round, decisione (a)).
+  > **⚠️ Fuori pista**: l'«N items» in inglese viene dalla `ConfirmModal` condivisa (`ConfirmModal.svelte:118`, ripiego fisso quando manca `itemsLabel`). Non è un file di D: va segnalato al coordinatore.
+- R13.2 ✅ 2026-10-01 — FX: «Aggiungi la coppia» e «Scarica i tassi» sul posto.
+  > **Note implementazione (2026-10-01)**: nuovo `planner/fxSetup.ts`. `loadPairSetups()` legge `GET /fx/providers/routes` e classifica ogni coppia (slug alfabetico di `createPairSlug`): `provider` se almeno una rotta usa un provider diverso da MANUAL (catene comprese), `manual` se tutte le rotte sono solo MANUAL; `pairSetup()` ricade su `absent` se la coppia non ha rotte. In `FxStep.svelte` il ramo «non memorizzato» (`pac-planner-fx-no-rate`, con `data-setup`) mostra un testo ambra con «?» e un'azione per caso: `absent` → «Aggiungi la coppia» (`pac-planner-fx-add-pair`): apre `FxPairAddModal` con base e quote già scelte; `provider` → «Scarica i tassi» (`pac-planner-fx-sync`): apre `FxSyncModal` sulla sola coppia, e il download parte solo col clic dentro la finestra; `manual` → link «Apri la coppia» a `/fx/{slug}` in una nuova scheda (`pac-planner-fx-open-pair`). Finché le rotte non sono lette: solo il testo, senza pulsante.
+  > Le rotte si leggono solo se almeno una coppia è «non memorizzata», e di nuovo a ogni `invalidateFxRoutes()` (`fxRoutesVersion`), quindi anche dopo una creazione fatta qui. Una lettura fallita ricade su «Aggiungi la coppia»: se la coppia esiste già, lo dice la finestra stessa (`fx.addPair.alreadyExists`).
+  > Date: gli ultimi `SYNC_WINDOW_DAYS = 7` giorni fino a `defaultAsOf()`, la stessa data che il lettore usa con `refreshAsOf`. Sette giorni coprono un ponte o una festività della fonte; le due finestre mostrano le date e il «?» dice il numero (`{days}`): non è un coefficiente nascosto.
+  > Rilettura: `reader.read(draft, [pair], …)` dopo una creazione senza download (solo MANUAL, `autoSyncStarted` falso) e a download finito (`onsynced`, anche parziale o fallito). Le callback tengono la propria coppia, perché `finishFxPairCreation` chiama `onsynced` dopo aver chiuso la finestra. La rilettura riempie solo un tasso ancora in attesa (`rateAwaitsRead`): un «Manuale» scritto nel frattempo resta com'è.
+  > Chiavi nuove: `fx.pairMissing`, `fx.pairAbsent`, `fx.pairAbsentHelp`, `fx.pairNoRates`, `fx.pairNoRatesHelp`, `fx.pairManualOnly`, `fx.pairManualOnlyHelp`, `fx.addPair`, `fx.syncRates`, `fx.openPair`. Restano senza uso `fx.notStored` e `fx.openFxPage` (lista di fine round, decisione (a)).
+  > **⚠️ Fuori pista**: la sezione prevedeva le coppie configurate da `fxRoutesStore.getConfiguredPairSlugs()`. Lo store condiviso tiene solo gli slug, senza i provider, e non distingue «configurata con un provider» da «solo manuale». Per non toccare uno store fuori scope, `fxSetup.ts` legge le rotte dentro il planner. Da proporre al coordinatore: i provider per coppia nello store condiviso.
+- R13.3 ✅ 2026-10-01 — FX: «Non in 2.0.0» nel «?».
+  > **Note implementazione (2026-10-01)**: tolta la riga `fx.notInVersion` in fondo al passo. Il testo nuovo (`fx.limitsHelp`, elenco a punti: tasso o spread diverso per Broker, margine di sicurezza sul tasso, commissione di conversione oltre lo spread, conversioni in più passi EUR → USD → CHF) va in coda al «?» dello spread, dopo una riga vuota; il `Tooltip` rende il testo semplice con `white-space: pre-line` (`Tooltip.svelte:425`), quindi gli a capo restano. Resta senza uso `fx.notInVersion` (lista di fine round, decisione (a)).
+  > **⚠️ Fuori pista**: la decisione diceva «un "?" accanto all'introduzione». I quattro limiti riguardano tutti le conversioni, e il campo dello spread compare solo quando una conversione è possibile: lì il testo è vicino a ciò che descrive, e non appare in un piano che converte niente.
+- R13.4 ✅ 2026-10-01 — FX: riga del tasso con simbolo e bandiera.
+  > **Note implementazione (2026-10-01)**: in «Manuale» l'etichetta è `1 <CurrencyCode base> =` e il suffisso del campo `<CurrencyCode quote>`; in «Auto» `1 <CurrencyCode base> = tasso <CurrencyCode quote>`, con il tasso in grassetto. `CurrencyCode` rende `simbolo bandiera codice` da `formatCurrencyCodeHtml`, come il titolo della card. Nuovi `testid` `pac-planner-fx-rate-base` e `pac-planner-fx-rate-quote`. Solo markup, nessun template literal con valuta e numero: il gate `moneyRenderSites.test.ts` non cambia (un tasso non è un importo).
+- R13.5 ✅ 2026-10-01 — Errori più chiari: log nel plugin, testo della UI.
+  > **Note implementazione (2026-10-01)**: `tool_plugins/pac_allocator.py` ha `logger = get_logger(__name__)` e la chiamata a `plan_pac_allocation` dentro un `try`. Una `ToolExecutionError` (limite di tempo o annullamento della piattaforma, `execution_limit`) passa senza log: è un codice della piattaforma, non un guasto del motore. Ogni altra eccezione passa da `_log_engine_failure`, che scrive un ERROR «PAC planner engine failure» con `error_type` (la classe), `execution_id`, `where` (il frame più interno del codice LibreFolio, `file:riga:funzione`, con il percorso dalla radice del repo) e `raised_in` (il frame di libreria più sotto, solo se c'è). Non scrive il messaggio, gli argomenti né le variabili locali, che possono contenere importi. Poi `raise` nudo: il worker di C la trasforma comunque in `execution_failed`. Il processo figlio (*spawn*) non chiama `configure_logging`, quindi la riga va sullo stderr del server (console, `docker logs`), non in `librefolio.log`.
+  > Prova sintetica, senza DB né server (`/tmp/libreFolio_d_r13/probe_plugin_log.py`, `probe_plugin_log2.py`): pareggio a €30 → `LedgerPostingScopeError` rilanciata, con il log `where=backend/app/services/pac_allocator/constraints.py:424:_require_credit_tie_free` e nient'altro; €20 → piano, nessun log; scadenza già passata, e `ToolExecutionError` sollevata dal motore → nessun log; errore dentro una libreria → `where` più `raised_in=decoder.py:361:raw_decode`. `ruff check` e `black --check` puliti.
+  > UI: il titolo diventa «Calcolo non riuscito». Tolto «· errore della piattaforma strumenti», sbagliato per gli errori del motore e per quelli di rete. Il testo di `execution_failed` dice: errore interno dello strumento, nessun piano pubblicato, il difetto è nello strumento e non nei dati inseriti, il log del server registra dove, per l'amministratore. Il codice resta visibile. `execution_failed` copre anche `ExactReplayRejectedError`, cioè il replay esatto che rifiuta il candidato di SCIP oltre la soglia dei top-up (QX1-b): anche lì i dati sono validi e il limite è dello strumento. La riga di log distingue i due casi per classe.
+  > Chiavi: aggiornate `result.platform.title` e `toolErrors.execution_failed`; nuova `result.platform.reference`.
+  > **⚠️ Fuori pista**: `RunOutcome` di tipo `tool_error` ora tiene `executionId`, che la risposta porta già (`ToolResultIdentity.execution_id`, lo stesso id del contesto del worker: `executor.py:449-450`, `worker.py:122`). `ToolErrorPanel` mostra «Riferimento nel log del server: <id>» (`pac-planner-platform-reference`) solo per `execution_failed`, l'unico codice che lascia una riga di log: la piattaforma non ne scrive (`services/tools/executor.py` e `worker.py` non hanno un logger). La riga di log porta lo stesso id, così l'amministratore la trova dal riferimento che l'utente gli riporta. Da proporre al coordinatore, per C: un log di piattaforma per ogni eccezione non dichiarata di qualunque plugin, con lo stesso criterio (classe e posizione, niente messaggio).
+- R13.6 ✅ 2026-10-02 — Motore: opzione A (developer, 02/10): via il guard dei pareggi degli accrediti FX e il codice rimasto senza uso, nel prodotto e nei test; regressioni via test-author.
+  > **Note implementazione (2026-10-02)**: prodotto, `constraints.py` (13 righe in più, 89 in meno): via il guard `_require_credit_tie_free`, con la sua chiamata, e i tre helper rimasti senza uso, `_half_up_tie_reachable`, `_exact_currency_quantum` e `_exact_fx_rate`. La docstring di `_posted_units_term` ora dice perché il pareggio di un accredito è sicuro: l'accredito entra solo con `+` nelle righe `≥ 0` e in nessun obiettivo. ruff e black puliti; nessun `.py` nomina più le quattro funzioni.
+  > Il caso del developer, `/tmp/libreFolio_d_r13/repro_tie.py` (log `repro_tie_after.log`): €20 e €30 a 1,1298 senza spread, e 1,25 con spread 4% e €50, danno tutti `PacPlannerReadyIncumbentResult`, `availability=ready`. Prima della correzione €30 andava in errore.
+  > La sonda contro l'oracolo, `probe_credit_tie_oracle.py`:
+  > - prezzo 2, cap 4: SCIP uguale all'oracolo (buy 4, funding 5, fx 5; dominio 240, 46 ammissibili);
+  > - prezzo 1, cap 10: SCIP uguale all'oracolo su buy 8 (dominio 528);
+  > - con le decisioni fissate, buy 7 e buy 8 sono ottimi; buy 9 non è ammissibile né per SCIP né per l'oracolo. Accredito esatto 15/2, registrato 8.
+  > Test di test-author (`r13-credit-tie-tests`, lane 6151):
+  > - policies: tolti l'import e il vecchio test A2 dell'helper; nuovo A2, `test_exact_fx_credit_tie_admits_the_true_round_up_and_not_one_quantum_more`. Con prezzo 1 e cap 10, buy 8 è ammissibile e `optimal` con saldo USD 0; buy 9 no, è `infeasible` con saldo −1.
+  > - oracle: fixture `_credit_tie_fx_scenario(*, price, cap)` e Item 3b, `test_exact_fx_credit_tie_optimum_matches_the_hand_derived_one`. L'ottimo è derivato a mano: {buy 4, funding 5, fx 5}, `fixed_l2` = 1/9. 240 candidati, 46 ammissibili (1+3+5+8+12+17).
+  > - solver: `credit_tie_fx` nel gate d'accordo, con uguaglianza esatta dei quanti e della chiave lessicografica.
+  > - planner: `test_manual_conversion_reaching_an_exact_credit_tie_still_plans`, il caso €30 a 1,1298. Verifica prima le premesse (25,00 × 1,1298 = 28,245, con il pareggio dentro il box FX), poi l'esito `ready_incumbent`/`optimal_proven`/`completed`. Ogni accredito pubblicato deve essere l'HALF_UP del suo addebito × 1,1298.
+  > Esiti con `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6151 --data-dir /tmp/librefolio-r2-d services <azione>`: `pac-planner-policies` 40 passed, `pac-planner-oracle` 21, `pac-planner-solver` 20 (con `[credit_tie_fx]`), `pac-planner-service` 36, `pac-planner-proof` 30. Totale 147 passed, 0 failed, 0 skipped. ruff e black puliti sui 4 file. Log in `/tmp/libreFolio_d_r13/r136_*.log`. Alla fine la 6151 è libera (`lsof` rc=1).
+  > Ho riletto i 4 diff e la derivazione a mano: residui 25, 121/9, 49/9, 1, 1/9 e conteggio 46, tutto corretto. Il gate d'accordo SCIP↔oracolo è riscritto (~:1946).
+  > **⚠️ Fuori pista**: test-author ha notato che la frase «The tie never decides feasibility for a credit» era falsa. È proprio l'arrotondamento a 8 che rende possibile il buy 4; quello che non cambia l'insieme ammissibile è la scelta fra i due vicini. Ho corretto la frase nella docstring di `_posted_units_term`: è solo un commento, ruff e black restano puliti, e la 6161 non va riavviata perché il comportamento è lo stesso.
+  > **⚠️ Fuori pista**: il test del planner usa la finestra `_TOOL_ENGINE_WINDOW_SECONDS` (30 s), non 5 s, perché verifica `optimal_proven`/`completed`. SCIP si ferma appena prova l'ottimo, e il file gira in 1,98 s. Due `__pycache__/*.pyc` contengono ancora i nomi rimossi: git li ignora e Python li ricompila da solo.
+- R13.7 ✅ 2026-10-01 — i18n, svelte-check, `front build --debug`, riavvio della 6161, feedback (`ask_user`).
+  > **Note implementazione (2026-10-01)**: `/tmp/libreFolio_d_ui15/i18n_round13.py` — 14 ADD (`distribution.changeColumn`, `distribution.confirmApply`, `fx.pairMissing`, `fx.pairAbsent`, `fx.pairAbsentHelp`, `fx.pairNoRates`, `fx.pairNoRatesHelp`, `fx.pairManualOnly`, `fx.pairManualOnlyHelp`, `fx.addPair`, `fx.syncRates`, `fx.openPair`, `fx.limitsHelp`, `result.platform.reference`) e 2 UPDATE (`result.platform.title`, `toolErrors.execution_failed`), solo via `dev.py i18n add|update`, tutti rc=0, nessuna rimozione (decisione (a)). Guard EN = default del sorgente: 0 problemi; rilettura dei 16 valori nei 4 cataloghi: 0 differenze (gli a capo di `fx.limitsHelp` compresi). Check ICU (`icu_check_r13.mjs`): 16 chiavi × 4 lingue, 0 problemi (`{days}` in tutte). Cataloghi 4375 chiavi per lingua (+14); sha8 en `b62bb24e`, it `a22680d0`, fr `11c86b19`, es `b4de7428`. Scansione finale (`scan_keys_r13.py`): 584 chiavi del planner nel sorgente, 0 mancanti, 0 diverse dal catalogo inglese. Termini: «coppia», «tasso», «provider», «Manuale» (IT); «paire», «taux», «fournisseur», « Manuel » (FR, spazi normali come nel resto del catalogo); «par», «tipo», «proveedor», «Manual», «bróker» (ES).
+  > Lista di fine round (decisione (a)), nel file di sessione `files/i18n/unused_planner_keys_r11.txt`, ordinata: +4 senza più uso, verificate con grep anche nella forma `${KEY}` (`distribution.change`, `fx.notStored`, `fx.openFxPage`, `fx.notInVersion`), 111 in tutto.
+  > svelte-check: 3 errori e 41 warning, identici alla baseline, nessuno nel planner (`/tmp/libreFolio_d_ui15/svelte_check_r13.log`). `dev.py front build --debug` rc=0 (`/tmp/libreFolio_d_ui15/front_build_r13.log`). 6161 riavviata perché il plugin è cambiato (R13.5): fermata la mia shell `srv6161r11` (pid 23056), porta libera, poi `srv6161r13` (pid 64653, log `/tmp/libreFolio_d_f6/server_review_r13.log`, stessi argomenti: `--test`, `--data-dir /tmp/librefolio-r2-d-prodcopy`, `--no-scheduler`, `--no-reload`); `/tools` e `/tools/pac_allocator` 200. Nessun test automatico, per la regola del developer. Feedback e scelta del motore (R13.6) chiesti con `ask_user`.
+  > **⚠️ Fuori pista**: il guard ora legge anche le chiavi scritte come `` `${KEY}.x` `` (con `const KEY = 'tools.pacAllocator.planner…'` nello stesso file) e il blocco `TOOL_ERROR_FALLBACKS` di `issues.ts` (`toolErrors.<codice>`). Così ha trovato 3 differenze di Round 9 (R9.7) che il guard di allora non vedeva: `review.fxRated`, `review.routes`, `review.targets` avevano nel catalogo il testo voluto (plurali corretti, «1 of 1 Asset», «exchange rates»), ma nel sorgente un ripiego più vecchio. Allineati i 3 `default` di `ReviewStep.svelte` al catalogo; nessun cambiamento visibile, perché le chiavi esistono.
+  > **⚠️ Fuori pista (2026-10-02)**: l'`ask_user` del 01/10 è stato interrotto prima di arrivare al developer, e il riavvio dell'app nella notte ha chiuso la 6161. Rimessa online con gli stessi argomenti (`srv6161r13b`, pid 7935, log `/tmp/libreFolio_d_f6/server_review_r13b.log`; `/tools` e `/tools/pac_allocator` 200), sullo stesso build. Domanda riproposta.
+
+**Feedback del developer** (02/10, risposta al Round 13):
+1. Motore: opzione **A**, «togli quello che non serve, sia dal prodotto che dai test».
+2. Punti 1–4: «tutto fantastico».
+3. Nel «?» dello spread va tolto l'elenco «Non in questa versione:». È un testo da sviluppatore, e nessuna di quelle voci si farà. Tasso o spread per Broker, margine di sicurezza e commissione di conversione non hanno senso: lo spread è già il parametro di margine che somma tutti gli attori della conversione. Le conversioni in più passi sono compito della parte FX, e qui ogni conversione è diretta. Se le voci sono in un backlog o altrove, vanno cancellate o segnate come non più da fare.
+4. Testo di `execution_failed`: via la parte lunga («Il difetto è nello strumento…»); finisce a «…e nessun piano è stato pubblicato.»
+
+**Lettura del codice** (02/10):
+- (1) In `constraints.py` il guard è la chiamata `:578-585` più `_require_credit_tie_free` (`:399-427`). Restano senza uso `_half_up_tie_reachable` (`:358-375`), `_exact_currency_quantum` (`:378-382`) e `_exact_fx_rate` (`:385-396`): le chiama solo il guard (`:419-423`). Il guard è citato nella docstring di `LedgerPostingScopeError` (`:296-304`) e in quella di `_posted_units_term` (`:483-484`). `LedgerPostingScopeError` resta: serve a `_require_modelled_rounded_families` (`:351`, `:355`), che non riguarda i pareggi. Gli import `ExactRatio`, `ExactOrderRoute`, `_fx_pair_key` e `math` restano usati nel modulo. Nei test, `_half_up_tie_reachable` compare solo nell'import (`test_pac_planner_policies.py:79`) e nel test A2 (`:928-977`). L'arrotondamento HALF_UP dei pareggi resta provato in `test_pac_planner_exact.py:289-290` (`positive-tie`, `negative-tie`).
+- Il gate d'accordo SCIP↔oracolo di questo piano (`:1946-1949`) usa `_half_up_tie_reachable` per definire i «domini senza pareggi». I pareggi che allargano il modello sono solo quelli degli addebiti (acquisto e commissione), dove il modello resta permissivo (X3 respinta). Un pareggio dell'accredito FX non cambia l'insieme ammissibile: il modello può sempre usare l'accredito più alto, che è quello vero.
+- (3) Nel prodotto l'elenco compare solo in `FxStep.svelte:341-343`, in coda all'aiuto dello spread. Nel backlog: `TODO_FUTURI.md:565` (confine della prima versione: «FX single-hop e `fx_buffer_rate` esplicito», etichetta «Margine di sicurezza FX»), `:624` (route FX multi-hop) e `:625-626` (buffer FX dinamico). `TODO_FUTURI.md` è un file condiviso, non di D. `06_piano_sprint.md` non ha queste voci: le sue 2 «Conversion Fee» sono il campione eToro di BRIM (`:126`, `:597`). Nei piani di D le voci compaiono in tre modi: elenchi di cose rinviate o «non in 2.0.0», parti del disegno mai consegnate (margine di sicurezza, commissione di conversione, buffer FX), e cronaca delle decisioni.
+- `fx_cost` della riga d'ordine: sempre 0 per descrizione (`schemas/pac_allocator.py:1334`), validatore `:1357`, costruito in `planner_report.py:626`. Con la decisione (3) non avrà mai un altro valore. Togliere il campo cambia il contratto: fuori da questo round.
+- (4) Il ripiego è in `issues.ts:211` (`TOOL_ERROR_FALLBACKS.execution_failed`), la chiave è `toolErrors.execution_failed`.
+
+**Decisione**:
+- (1) Opzione A. Tolgo la chiamata, le 4 funzioni e i riferimenti nelle docstring; ruff e black. Test, via test-author: tolti l'import e il test A2. Aggiunti: la regressione del caso del developer (tasso 1,1298, spread 0, €30 → piano `ready`, con il pareggio raggiunto); una prova a decisione fissata sul pareggio esatto (passa un acquisto che consuma l'accredito arrotondato in su, non uno che consuma un'unità minima in più); un accordo SCIP↔oracolo su un dominio piccolo con pareggio dell'accredito e senza pareggi degli addebiti, dove gli ottimi devono coincidere. Selettori sulla corsia 6151, uno alla volta: `services pac-planner-policies`, `services pac-planner-service`, `services pac-planner-oracle`, poi `services pac-planner-solver` e `services pac-planner-proof`. Riscrivo il gate `:1946-1949`.
+- (3) Tolgo la coda dell'aiuto. `fx.limitsHelp` va nella lista di fine round (decisione (a): nessun `i18n remove` durante i round). Nei piani di D, accanto a ogni voce rinviata o mai consegnata, aggiungo «❌ non più da fare (developer, 02/10/2026)» senza riscrivere il testo; la cronaca resta com'è. `TODO_FUTURI.md` e il campo `fx_cost` vanno al coordinatore, come decisione del developer.
+- (4) Testo nuovo: EN «An internal error of the tool stopped the calculation, and no plan was published.» · IT «Un errore interno dello strumento ha fermato il calcolo, e nessun piano è stato pubblicato.» · FR «Une erreur interne de l’outil a interrompu le calcul, et aucun plan n’a été publié.» · ES «Un error interno de la herramienta detuvo el cálculo, y no se publicó ningún plan.» Il riferimento nel log (`result.platform.reference`) resta: è ciò che l'utente riporta all'amministratore.
+
+**Passi:**
+- R13.8 ✅ 2026-10-02 — questa sezione.
+- R13.9 ✅ 2026-10-02 — FX: via l'elenco dei limiti dal «?» dello spread.
+  > **Note implementazione (2026-10-02)**: in `FxStep.svelte` l'aiuto dello spread torna al solo
+  > `fx.spreadHint`: via la coda `\n\n` + `fx.limitsHelp` aggiunta in R13.3. Nessun altro uso di
+  > `limitsHelp` in `frontend/src`. La chiave resta nei cataloghi e va nella lista di fine round
+  > (`files/i18n/unused_planner_keys_r11.txt`, ora 112 chiavi), accanto a `fx.notInVersion`.
+- R13.10 ✅ 2026-10-02 — `execution_failed` più corto.
+  > **Note implementazione (2026-10-02)**: `issues.ts:211` (`TOOL_ERROR_FALLBACKS.execution_failed`)
+  > si ferma a «…and no plan was published.». i18n con `/tmp/libreFolio_d_ui15/i18n_round13b.py`
+  > (copia del modello `i18n_round13.py`, solo UPDATE, guard EN = sorgente): `--dry` pulito, poi
+  > `i18n update tools.pacAllocator.planner.toolErrors.execution_failed` rc=0 nelle 4 lingue, con i
+  > testi della decisione (4). Cataloghi a 4375 chiavi ciascuno, invariati. Verifiche: ICU
+  > (`icu_check_r13b.mjs`, letta su `r13b_keys.json`) 1 chiave, 4 lingue, 0 problemi;
+  > `scan_keys_r13.py` 583 chiavi della sorgente, 0 mancanti, 0 diverse. La riga
+  > `result.platform.reference` resta.
+- R13.11 ✅ 2026-10-02 — Voci «mai» segnate nei piani di D; `TODO_FUTURI.md` e `fx_cost` al coordinatore.
+  > **Note implementazione (2026-10-02)**: script one-shot `/tmp/libreFolio_d_r13/annotate_never.py`
+  > (assert sul contenuto di ogni riga e sulle fence, scrittura solo a fine controlli): 24 marcature
+  > «❌ non più da fare (developer, 02/10/2026)» e 3 note `>` dopo i blocchi ASCII/codice, in 9 file.
+  > Suite target: master `:125`, `:482`, `:559` + nota dopo `:521` (`fx_fees`, `fx_buffer_amount`);
+  > nucleo matematico `:854`, `:911`, `:912`, `:1335`; policy `:739`, `:747`, `:994`; architettura
+  > `:364`; UI target `:896`, `:991`, `:1252`, `:1253`, `:1255`, `:1721` + nota dopo `:1244` (card FX per
+  > Broker con spread, margine e fee propri). C0UiDelta `:147` + nota dopo `:527` (voci «Non in
+  > 2.0.0»). Bozze, solo le tabelle dei rinvii: cronaca `:527`, `:541`; Round5 `:2126-2127`; Round7
+  > `:2576-2577`. Il testo resta com'è: il segno si aggiunge accanto alla voce, o dopo il blocco.
+  > `git diff --check` pulito.
+  > **⚠️ Fuori pista**: la ricerca completa (109 righe) ha trovato più voci della lettura del 02/10
+  > (policy `:739`, `:747`; master `:482`, `:559`; nucleo `:911`, `:1335`; UI `:991`, `:1252`). Segnate
+  > anche quelle: sono parti del target mai consegnate. **Non** segnati `fx_mode` (UI target `:976`,
+  > C0UiDelta `:140`): il modo in cui un Broker converte non è nella lista del developer ed è arrivato
+  > dopo come `conversion_mode` (`schemas/pac_allocator.py:448`). Restano come storia: policy `:195` e
+  > `:943` (multi-hop `unsupported`, comportamento attuale), le note di `ExactCore` e
+  > `ContractsCapacity`, il dossier di review, `pac-rebalancer-end-to-end-design.md` e il resto delle
+  > bozze Round5/Round7. `TODO_FUTURI.md` (`:565`, `:624`, `:625-626`) e il debito `fx_cost` vanno al
+  > coordinatore, come decisione del developer.
+  > Il coordinatore li ha registrati su `dev_release2` (02/10): `TODO_FUTURI.md` `:565`, `:624`,
+  > `:625-626` barrati e segnati, nuova sottosezione «❌ Non più da fare — FX nel PAC»; `fx_cost` è il
+  > terzo caso del gate «campi di contratto senza consumatore», da togliere con un cambio di versione
+  > del Tool, non in questo round.
+- R13.12 ✅ 2026-10-02 — i18n, svelte-check, `front build --debug`, riavvio della 6161 (cambia il motore), feedback (`ask_user`).
+  > **Avanzamento (2026-10-02)**: svelte-check 3 errori e 41 avvisi, come la baseline
+  > (`/tmp/libreFolio_d_ui15/svelte_check_r13b.log`); `front build --debug` ok
+  > (`front_build_r13b.log`); 6161 riavviata come `srv6161r13c` (pid 25576), `/tools` e
+  > `/tools/pac_allocator` 200 dopo 7 s. Gate `:1946` riscritto (R13.6). Mancano gli esiti di
+  > test-author per R13.6, poi la richiesta di feedback.
+  > **Note implementazione (2026-10-02)**: test-author per R13.6: 147 test verdi nella lane 6151
+  > (`/tmp/libreFolio_d_r13/r136_*.log`). Feedback chiesto con `ask_user`; il developer ha risposto
+  > il 02/10 con sei punti: (a) la versione «Backend/API 2.0.0 · UI 2.0.0» deve essere 1.0.0, perché
+  > non è stato rilasciato nulla; (b) un testo nuovo per il «?» dello spread; (c) troppi decimali in
+  > «Cifre chiave» e in «Prova e solver», da arrotondare all'unità minima della valuta; (d)
+  > «esteticamente non mi pare di avere molto altro da dire, ben fatto!!!»; (e) «quando faremo il
+  > ribilanciamento?»; (f) dopo le correzioni, integrare in `dev_release2` e aggiornare la baseline.
+  > I punti (a)–(c) aprono il Round 14; (e) ha risposta nel Round 14; (f) passa al coordinatore.
+
+#### Round 14 — versione 1.0.0, testo dello spread, importi all'unità minima della valuta ✅ 2026-10-02
+
+**Feedback del developer** (02/10, con la risposta al Round 13):
+1. «Backend/API 2.0.0 · UI 2.0.0» deve diventare 1.0.0: non è stato rilasciato nulla.
+2. Il «?» dello spread va riscritto in modo generico e diretto: «un sovrapprezzo di margine per
+   coprire eventuali variazioni del tasso ufficiale o commissioni del broker».
+3. Troppi decimali, da arrotondare all'unità minima della valuta. I suoi esempi:
+   - «Cifre chiave»: Investito dopo ≈2989,751460435475 €; Non investito ≈10,248539564524695 €;
+     Costi e Perdita da spread 10,0581 €; Arrotondamento ≈0,000439564524694636 €;
+   - «Prova e solver»: valori degli obiettivi ≈10,248539564524695 € e 10,0581 €; primale e duale
+     dei passi del solver ≈10,248539564524435 € e ≈10,058100000000113 €.
+4. «Quando faremo il ribilanciamento?»
+5. Dopo le correzioni: integrazione in `dev_release2` e baseline aggiornata.
+
+**Lettura del codice (02/10):**
+- *Decimali.* `format.ts` `moneyArgs` (`:73-83`) fissa `maxFraction = min(20, max(minFraction,
+  decimalScale(valore)))`: mostra tutte le cifre del valore. I risultati esatti del backend
+  (`exact_ratio` con `display_decimal`, `finite_decimal`) arrivano con molte cifre, e
+  `formatExactMoneyPlain/Html` (`:102/:107`) le passano intatte. Il solver: `formatSolverNumber`
+  (`:203`) mostra il float di SCIP (`planner_report.py:1003`, `Decimal(str(float))`) con tutte le
+  cifre e sempre con «≈». La colonna «Gap ass.» (`ProofPanel.svelte:126`) passa da
+  `formatPlannerPlainDecimal`, pubblica e senza unità, anche quando il passo è in valuta.
+- *Quote personali.* `economic_amount = custody_amount × share_percentage`
+  (`portfolio_allocation_source.py:838`) non è arrotondato: lo mostrano `LiquidityStep.svelte:154`
+  e `BrokerScopeCopyDialog.svelte:174`.
+- *Versione.* I siti di D: `tool_plugins/pac_allocator.py:132-133,147,151`; `schemas/portfolio.py:1320`
+  (`source_revision`); `portfolio_allocation_source.py:385`; frontend `tools/registry.ts:241-243`,
+  `planner/defaults.ts:32`, `planner/types.ts:2,10,11`, `planner/request.ts:416`, il commento di
+  `PacPlannerTool.svelte:3`, e la chiave `brokerEditor.notIn200` (`BrokerEditor.svelte:409`, con
+  «SELL» non tradotto). I test: `test_tools_registry.py:1205-1206`,
+  `test_portfolio_allocation_source.py:2096`, `test_api/test_portfolio_api.py:1741`,
+  `tools/registry.test.ts`. Restano a 2.0.0 le fixture sintetiche di C (`test_tools_executor.py:82`,
+  `test_tools_registry.py:537`) e i test di altri domini. Nessuna persistenza legge la versione.
+- *Spread.* Chiave `tools.pacAllocator.planner.fx.spreadHint`, `FxStep.svelte` ~`:337`.
+
+**Decisione (02/10, D, da confermare col developer nella richiesta di feedback):**
+- I risultati esatti in valuta si arrotondano **sempre** all'unità minima, dentro
+  `formatExactMoneyPlain/Html`: `exact_ratio` dal rapporto esatto (numeratore/denominatore in
+  BigInt), `finite_decimal` dal decimale; metà lontano da zero; `Number()` solo sul testo già
+  arrotondato. Coprono «Cifre chiave», tabella Asset, dettaglio ordine, avvisi di stato, cassa
+  libera, perdite da spread e i valori degli obiettivi.
+- Opzione `minorUnit` per i testi grezzi: le quote personali dei passi Liquidità e copia, e il
+  primale e il duale del solver. I numeri di conteggio del solver: al più 2 decimali.
+- **Non** si arrotondano: i prezzi di mercato, i valori digitati, i parametri degli issue, gli
+  importi già all'unità minima (addebiti, commissioni, importi FX) e il gap relativo, che non ha unità.
+- «≈» con la regola A: compare solo quando il valore arrotondato differisce da quello esatto
+  («Arrotondamento ≈0,00 €», «Costi ≈10,06 €»). In alternativa, la regola C toglie «≈» dagli
+  importi, come per i pesi (R10.8): la scelta va al developer.
+- «Gap ass.» diventa una cella del solver con l'unità del passo: in valuta è arrotondato e
+  mascherato con la privacy.
+
+**Passi:**
+- R14.0 ✅ 2026-10-02 — Questa sezione.
+- R14.1 ✅ 2026-10-02 — Versione 1.0.0: siti di D, `api sync`, chiave nuova al posto di `notIn200`; test via test-author.
+  > **Note implementazione**: 1.0.0 nei siti di D. Backend: `tool_plugins/pac_allocator.py`
+  > (`contract_version`, `implementation_version`, `ToolUIDescriptor.version`,
+  > `ToolDocumentation.version`), `schemas/portfolio.py:1320` (`source_revision`) e
+  > `portfolio_allocation_source.py:385`. Frontend: `registry.ts:241-243`, `defaults.ts:32-34`,
+  > `types.ts:2,10-11`, `request.ts:416` e il commento di `PacPlannerTool.svelte:3`.
+  > La nota di `BrokerEditor.svelte:409` usa una chiave nuova, senza versione e con «vendita» tradotto:
+  > `brokerEditor.notYetSupported`, aggiunta nelle 4 lingue con `dev.py i18n add`. `notIn200` non si
+  > cancella (decisione a): va nella lista delle chiavi inutilizzate, che sale a 113.
+  > Nessun controllo di `source_revision` nel frontend, fuori dal codice generato.
+  > `api sync` rc=0: la mappa generata ha `pac_allocator["1.0.0"]`, `uiVersion` 1.0.0, fingerprint
+  > `bd84ef14…`, generazione `bb77549b…`. ruff e black puliti sui 3 file backend.
+  > Restano a 2.0.0, come previsto, le fixture sintetiche di C e i test di altri domini.
+  > I 4 test di versione (`test_tools_registry.py:1205-1206`, `test_portfolio_allocation_source.py:2096`,
+  > `test_api/test_portfolio_api.py:1741`, `registry.test.ts`) passano a R14.4, con test-author.
+- R14.2 ✅ 2026-10-02 — Testo dello spread nelle 4 lingue.
+  > **Note implementazione**: `fx.spreadHint` aggiornata nelle 4 lingue con `dev.py i18n update`, con il
+  > testo del developer. IT: «Un sovrapprezzo di margine, in percentuale dell'importo convertito, per
+  > coprire eventuali variazioni del tasso ufficiale o commissioni del Broker.» Il `default` di
+  > `FxStep.svelte:340` coincide con l'EN, verificato dalla guardia dello script prima della scrittura.
+  > Controllo ICU: 2 chiavi × 4 lingue, 0 problemi. Scansione sorgente/catalogo: 583 chiavi, nessuna
+  > mancante, nessuna diversa.
+- R14.3 ✅ 2026-10-02 — Importi all'unità minima (`decimal.ts`, `format.ts`, `ResultCell`, `ProofPanel`, le due quote personali).
+  > **Note implementazione**: `decimal.ts` ha `roundDecimal`, `roundRatio` e `decimalEqualsRatio`
+  > (BigInt, metà lontano da zero, nessun `-0`). In `format.ts`, `exactMoneyDisplay(value, places)`
+  > arrotonda `finite_decimal` dal decimale e `exact_ratio` dal rapporto; `formatExactMoneyPlain/Html`
+  > la usano con le cifre del catalogo o, in mancanza, quelle CLDR. `MoneyOptions.minorUnit` arrotonda i
+  > testi grezzi: le quote personali di `LiquidityStep.svelte:154` e `BrokerScopeCopyDialog.svelte:174`,
+  > e il primale, il duale e il gap assoluto del solver (`formatSolverNumber`, con `digits` passato da
+  > `ResultCell.svelte:21,98` e `ProofPanel.svelte:127-129`). Il gap assoluto è ora una cella del solver,
+  > quindi è mascherato con la privacy quando è in valuta. I numeri di conteggio del solver hanno al più
+  > 2 decimali. Regola A: «≈» solo se l'arrotondamento cambia il valore. `isExactProjection` usa
+  > `decimalEqualsRatio`.
+  > **Non arrotondati**, come deciso: prezzi, valori digitati, parametri degli issue, flussi già
+  > all'unità minima (addebiti, commissioni, importi FX), importi di custodia (`ReviewCell`) e gap relativo.
+  > `StateNotice.test.ts` resta valido: le sue integrazioni sono flussi già all'unità minima.
+  > svelte-check (client generato il 02/10 alle 11:55): 5 errori, 41 warning. I 3 errori sono quelli di
+  > sempre; i 2 nuovi sono in `registry.test.ts:100,198`, che dice ancora `2.0.0` e va in R14.4.
+- R14.4 ✅ 2026-10-02 — Test del formatter e dei componenti toccati, via test-author.
+  > **Note implementazione (2026-10-02)**: test-author (`r14-tests`), lane 6151, un comando alla volta. Log in `/tmp/libreFolio_d_r14/r14_4_*.log`.
+  > - Versione 1.0.0 nei test: `test_tools_registry.py:1205-1206`, `test_portfolio_allocation_source.py:2096`, `test_api/test_portfolio_api.py:1732` e `registry.test.ts`. In `registry.test.ts` il `fixtureArtifactVersion` sintetico passa da `1.0.0` a `9.4.2`, così resta diverso dalla versione vera del contratto.
+  > - Test nuovi: `planner/decimal.test.ts` e `planner/format.test.ts` in `core-unit`, `planner/result/ResultCell.test.ts` in `component-unit` (`_frontend_utility.py`, 3 righe in più).
+  > - Prodotto, durante il passo:
+  >   - `decimal.ts` legge numeratore e denominatore solo come interi semplici (`INTEGER`, `parseInteger`). `BigInt` da solo accetterebbe anche `''`, `0x10` e testo con spazi.
+  >   - `ResultCell.svelte` ha un `data-testid` per il test di componente.
+  > - Esiti:
+  >   - `services tools-registry` 93/0; `services portfolio-allocation-source` 89/0;
+  >   - `api portfolio` 51/1, poi 52/0 dopo la correzione del Fuori pista 1; `api pac-planner-tool` 6/0;
+  >   - `front-utility core-unit`: 100 file e 2833 test, poi 2840 con i casi L2; `front-utility component-unit`: 87 file e 2126 test;
+  >   - prettier e ruff puliti; per black vedi il Fuori pista 3.
+  > **⚠️ Fuori pista 1**: `test_report_allocation_source_authenticated_contract` (`test_portfolio_api.py:767`) era già rosso sulla baseline. Contava 7 sezioni del report, che dal 18/09 sono 13 (`d5e834de4` e `8ed7a0f0d`, di un altro workstream). Ora confronta le chiavi con `PortfolioReportResponse.model_fields` e chiede `None` per le sezioni non richieste. Il file è condiviso: se un altro ramo l'ha già corretto, all'integrazione va tenuta una versione sola. Segnalato nell'handoff.
+  > **⚠️ Fuori pista 2**: test-author ha trovato che in L2 il «≈» valeva solo per i rapporti inesatti, perché `formatPlannerL2` usava `exactDisplay`. Ora usa `exactMoneyDisplay(value, SOLVER_COUNT_DIGITS)` (`format.ts:202-208`): 2 decimali e regola A anche per `finite_decimal`. I casi, in `format.test.ts:390-440`:
+  >   - 12.345 → ≈12,35; 12.5 → senza «≈»;
+  >   - 1/4 → senza «≈»; 1/3 → ≈0,33;
+  >   - `0.124999999999999999999` → ≈0,12: come numero JavaScript varrebbe 0,125, che darebbe 0,13;
+  >   - `formatSolverNumber` in EUR² → «≈»;
+  >   - privacy ON → `≈••• EUR²`.
+  > **⚠️ Fuori pista 3**: `black --check` fallisce su `test_portfolio_api.py` già a HEAD. Sono 8 blocchi (righe ≈1666–2305) del commit D `0088748a8` del 18/09, lontani dalle righe toccate. Non l'ho riformattato perché il file è condiviso: è debito D, da chiudere dopo l'integrazione. Segnalato nell'handoff.
+- R14.5 ✅ 2026-10-02 — i18n, svelte-check, `front build --debug`, riavvio della 6161, feedback (`ask_user`) con la risposta sul ribilanciamento.
+  > **Note implementazione (2026-10-02)**:
+  > - i18n: nessuna chiave nuova dopo R14.1 (`brokerEditor.notYetSupported`) e R14.2 (`fx.spreadHint`).
+  > - Build R14, poi 6161 riavviata (shell `srv6161r14`). Il feedback l'ho chiesto con `ask_user`, insieme a:
+  >   - le modifiche;
+  >   - la scelta del «≈», regola A o C;
+  >   - la risposta sul ribilanciamento. È la prossima fetta dopo l'integrazione (§4): prima `invest_only`, con fixture e oracolo e poi SCIP; poi `invest_and_sell`, col verifier SELL. L'ordine lo decidono developer e coordinator.
+  > - **Risposta del developer (02/10):** «è tutto perfetto… procedi con l'integrazione e poi rispondimi». Regola A confermata. Ha fatto tre domande nuove, a cui rispondo dopo l'handoff:
+  >   - perché «Calcola» fa due chiamate;
+  >   - una revisione critica di ogni parametro del pacchetto di calcolo;
+  >   - dove sta la nota del Broker.
+  > - Gate finali, sul codice con l'hardening di `decimal.ts` e la correzione L2:
+  >   - svelte-check alle 12:48, con il client generato alle 12:27:47: 3 errori, 41 warning, 4 file. È il pavimento, e nessuno è in un file PAC. I 2 errori di `registry.test.ts:100,198` visti in R14.3 sono spariti. Log `/tmp/libreFolio_d_r14/svelte_check_r14_final.log`.
+  >   - `front build --debug` dalle 12:51 alle 12:52, rc=0. Rigenera il client alle 12:51:23, con lo stesso fingerprint `bd84ef14…` e la stessa generazione `bb77549b…`. Il suo svelte-check dà di nuovo 3 errori, 41 warning, 4 file. Log `/tmp/libreFolio_d_r14/front_build_r14_final.log`.
+- R14.6 ✅ 2026-10-02 — Chiusura della review: 6161 spenta, copia di prod cancellata, handoff d'integrazione al coordinator.
+  > **Note implementazione** (02/10, 12:53):
+  > - Il developer ha approvato il Round 14 («è tutto perfetto… procedi con l'integrazione») e la review sulla 6161 è chiusa.
+  > - Igiene dati, su richiesta del coordinator, per la copia di prod `/tmp/librefolio-r2-d-prodcopy` (dati reali del developer):
+  >   1. `chmod -R go-rwx` subito: directory `drwx------`, 0 file leggibili da gruppo o altri, 31 MB;
+  >   2. server della review fermato (shell `srv6161r14`, pid 52786). Poi `lsof -nP -iTCP:6161 -sTCP:LISTEN` → rc=1 e `lsof -nP -iTCP:6151 -sTCP:LISTEN` → rc=1, mentre `ps -p 52786` → rc=1;
+  >   3. `lsof +D /tmp/librefolio-r2-d-prodcopy` → vuoto (rc=1), e non esistono copie `.prev-*`;
+  >   4. `rm -rf` alle 12:53:31, rc=0. Prova: `ls -ld /tmp/librefolio-r2-d-prodcopy` → «No such file or directory».
+  > - Una copia futura si fa solo con l'OK esplicito del developer.
+  > - Log della review in `/tmp/libreFolio_d_f6/server_review*.log`: nessun traceback. Le sole 2 righe d'errore dell'engine stanno in `server_review_r13b.log` (il caso R13 prima dell'opzione A) e riportano solo tipo d'errore, `execution_id` e posizione nel codice, senza importi.
+  > - Handoff d'integrazione (CHECKPOINT READY) inviato al coordinator `c8328a01-…`, poi `FROZEN`.
+- R14.7 ✅ 2026-10-02 — Preparazione al merge di `dev_release2`, unica modifica sbloccata dal coordinator: tolto il mio pezzo del test sulle sezioni del report.
+  > **⚠️ Fuori pista**: doppia correzione in `test_portfolio_api.py`; vale quella di `dev_release2`.
+  > - Il coordinator ha simulato il merge con `merge-tree`, senza toccare l'indice. Ha trovato un solo conflitto: il test sulle sezioni di `/portfolio/report` (`:767-780`), che avevo reso dinamico con `PortfolioReportResponse.model_fields`.
+  > - `dev_release2` ha già `1b3a20fb0` (28/09, «pin all 13 report top-level keys»), con le 13 chiavi fissate a mano di proposito. Vale quella, che arriva col merge.
+  > - Ho riportato le righe al testo di HEAD con l'edit tool. Prova:
+  >   - `diff` fra HEAD e il file sulle righe 1–1737 → vuoto;
+  >   - l'unico hunk rimasto è `:1741`: `source_revision="1.0.0"` in `_empty_planner_source_response`, che resta;
+  >   - `ast.parse` OK; stesse 2542 righe di HEAD.
+  > - Fino al merge il test torna allo stato del commit 5. `api portfolio` si rilancia dopo il merge, nella lane 6151, contro la versione di `dev_release2`.
 
 ---
 

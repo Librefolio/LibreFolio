@@ -144,7 +144,7 @@ Le righe citano la sezione del target (`UiTarget:riga`). Le decisioni `Q-C0-n` s
 | B10 Routing | `:1072` | `Δ` `+` | Priorità: più bassa = preferita (N13). **`+`** `required_minimum` e `minimum_if_active`. **`+`** tetto obbligatorio (N16), precompilato a `1.000.000.000` e modificabile (Q-C0-5). Minimo e tetto seguono la modalità (N11, N21). **`−`** SELL. |
 | B10 Editor vincoli tipizzato | `:1123` | `=` | Un tipo per campo, scelto da un selettore. |
 | B11 Target PAC | `:1154` | `Δ` `+` | Percentuali in input, decimali sul wire. **`+`** «Copia distribuzione corrente» (Q-C0-6): il target PAC non l'aveva, il B12 del ribilanciatore sì (`:1180,1194`). Totale e restante come controllo informativo (Q-C0-2). |
-| B13 FX | `:1199` | `Δ` `−` | Coppie proposte dalle valute in gioco; chiave solo da selettore (N20). Uno spread **globale** (W2). **`−`** margine di sicurezza per coppia, fee di conversione, buffer, multi-hop. **`−`** freschezza FX sul wire (N15): età solo in UI, senza conferma (Q-C0-3). |
+| B13 FX | `:1199` | `Δ` `−` | Coppie proposte dalle valute in gioco; chiave solo da selettore (N20). Uno spread **globale** (W2). **`−`** margine di sicurezza per coppia, fee di conversione, buffer, multi-hop (❌ non più da fare, developer, 02/10/2026). **`−`** freschezza FX sul wire (N15): età solo in UI, senza conferma (Q-C0-3). |
 | B14 Strategia PAC | `:1240` | `Δ` | Solo `proportional`, con la cascata W12. Le card nascono dalle opzioni del contratto; `min_fragmentation` esce dal wire (Q-C0-4). |
 | B16 Review snapshot | `:1286` | `=` | Snapshot con id e revisione, conteggi, provenance. |
 | B16 Submit | `:1312` | `=` | Un solo invio alla volta. Una risposta vecchia viene scartata. |
@@ -525,6 +525,8 @@ Il tasso è un fatto copiato o scritto a mano. Il backend decide se e quanto con
 | [ <- Indietro ]                                                                            [ Continua -> ] |
 +------------------------------------------------------------------------------------------------------------+
 ```
+
+> ❌ non più da fare (developer, 02/10/2026): le voci «Non in 2.0.0» di questo schema — margine di sicurezza, fee di conversione, multi-hop e un tasso o uno spread diverso per Broker. Il modo in cui un Broker converte è arrivato dopo, come `conversion_mode` (manuale o automatica). L'elenco è uscito dal passo FX con R13.9 del [piano post-merge](plan-phase00PacRound5PostMerge.prompt.md).
 
 ### 3.8 Passo 8 — Strategia (B14, `Δ`)
 
