@@ -2542,3 +2542,58 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 > `front check` al pavimento di 3/41 · orfani ✅ · `front build --debug` ✅ · E2E `asset-list` 28 · E2E `dashboard`: i due
 > test dell'allocazione verdi, i 5 rossi sono quelli noti del GrowthChart di I. Il grafico storico non cambia: lo
 > prova il pin byte per byte dei gruppi fino a 3 sulle sue due palette.
+
+### Il D15 di I e le palette del grafico storico · ⏳ 02/10/2026
+
+> **La sequenza del coordinator** (decisione del developer, 02/10 alle 10:05: la revisione si fa sulla revisione
+> combinata, perché il secondo anello per veicolo vive solo nella nostra famiglia e i margini solo in I): K integrato,
+> poi I, poi la famiglia prende `dev_release2`, e chi entra per secondo applica il **D15 di I** (20_performanceCharts,
+> giro 4 §7, deciso il 24/09): il grafico storico si allinea alla torta per veicolo, `resolvePrimary` → `assetTypeFamily`
+> di K (`AllocationHistoryChart.svelte:614` sulla mia punta), con il commento della palette che cita
+> `DailyStateBuilder.build`, passo 4h, invece di una riga di `portfolio_engine.py`, e la frase di K in
+> `assetTypes.ts:61-62` corretta (concessione). Il D71 di I (colori per peso medio o di oggi) resta aperto.
+>
+> **⚠️ Fuori pista — una mia affermazione falsa, corretta**: al coordinator avevo scritto di aver già misurato le palette
+> del grafico storico, con «niente sotto la coppia più vicina di oggi». Non era vero: avevo misurato solo la torta. La
+> misura fatta dopo dice altro. Sulle palette dello storico (`AllocationHistoryChart.svelte:153-154`) la coppia più
+> vicina di oggi, nei gruppi di 2–3, sta a ΔE2000 **8,34** (sulla torta 5,41); con la regola B le famiglie di 4–7 membri
+> arrivano a 6,97, 6,10, 7,76 e 5,82: sopra il minimo della torta, **sotto** quello dello storico. Due posizioni sono
+> grigie (`#a3a3a3`, `#d4d4d4`): non hanno un tono da conservare, e il criterio del tono richiede un'eccezione.
+>
+> **Proposta, da portare al developer nella revisione combinata con le misure**: (a) un criterio comune, il minimo
+> della torta (5,4), per i due grafici; in alternativa (b) una regola B regolata per palette. Quando si applica il D15,
+> il test-author estende il criterio dei 7 membri a `HISTORY_PALETTES` con il criterio che il developer sceglie, rosso
+> prima se una posizione fallisce, e la descrizione di `allocation-unit` prende una frase in più nello stesso commit.
+
+### D371 — nel laboratorio un asset selezionato può fare da riferimento · ✅ backend 02/10/2026
+
+> **Origine**: la revisione del selettore del laboratorio con il developer, relata da F: *«Permettere di sceglierli:
+> diventa il riferimento degli altri (lavoro di Risk)»*: cinque ETF selezionati confrontati con quello di nucleo, che è
+> fra loro. Scelto dal developer come mio primo blocco, dopo la descrizione di F3 e F4 («prima facciamo l'asset
+> selezionato come benchmark: piccolo, e sblocca F»). La riga del riferimento, sua: *«per le metriche che si calcolano
+> con il benchmark e l'asset stesso è il benckmar, mettici un trattino e un tooltip che spiega che non è applicabile
+> perchè se stesso è già il banckmark»*.
+>
+> **Il contratto**: `asset_set_comparison` (1.0.0 → 1.1.0) non rifiuta più un riferimento che sta nella selezione;
+> calcola gli altri rispetto a lui e lo lascia fuori dagli `items`. Il validatore dell'uscita resta com'è (il
+> riferimento non è mai fra i misurati), così nessun beta 1 per costruzione passa per una misura: la riga del
+> riferimento la riconosce il frontend da `comparison_asset_id`. La finestra non cambia (il riferimento era già
+> preparato con la selezione); una selezione fatta del solo riferimento dà un risultato valido con `items` vuoto.
+>
+> **Note implementazione** (rossi prima, test-author: 8 rossi, fra cui un'equivalenza su quattro casi, il riferimento
+> primo, in mezzo, ultimo e piatto con i suoi avvisi, che pretende gli stessi `items` degli altri, campo per campo,
+> con il riferimento selezionato o no): il rifiuto tolto, il riferimento saltato nel ciclo prima di misurarlo, la
+> docstring con la regola, la versione. Mutanti 5 su 5, compreso il più sottile: misurare il riferimento contro sé
+> stesso e scartarlo dopo, che lascerebbe il suo id negli avvisi del beta e della correlazione indefiniti.
+>
+> **⚠️ Fuori pista**: nella riga D371 del registro avevo scritto che anche il validatore accettava il riferimento; il
+> test-author ha visto la contraddizione col contratto. Corretta: il validatore resta.
+>
+> **Verifica** (6152): `risk-asset-set` 30 · `risk-all` 807 · `schemas risk` 47 · `api risk` 14 (dopo un `db populate
+> --force` nella mia corsia: il primo giro era rosso per il database non popolato, non per il codice) · orfani ✅ · ruff
+> e black puliti.
+>
+> **Il lato del laboratorio è di F**, quando la mia punta arriva nel suo ramo: `labBenchmarkId` accetta un valore della
+> selezione, `measuredAssetIds={[]}`, il trattino col tooltip nella riga del riferimento, un solo punto nel grafico
+> (da portare alla revisione del developer), la guida `correlation.en.md:125`, i test che fissavano «mai uno dei
+> confrontati». La riga di CHANGELOG del selettore del laboratorio la riscrivo con D371.
