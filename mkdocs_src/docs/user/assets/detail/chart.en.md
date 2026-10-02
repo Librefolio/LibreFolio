@@ -2,7 +2,7 @@
 
 The chart is the centerpiece of the asset detail page. It can show the asset's price history or a backend-computed Rolling Return over that history.
 
-_Last updated: 2026-09-16_
+_Last updated: 2026-10-02_
 
 <div class="screenshot-container" style="max-width: 800px; margin: 1rem auto;">
     <img class="gallery-img" data-category="assets" data-name="detail-chart" alt="Asset Price Chart" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -121,3 +121,4 @@ The same aesthetics settings — plus overlay signals — can also be edited for
 - 📊 **[Signals](signals.md)** — Overlay technical indicators
 - 📐 **[Measures](measures.md)** — Measure price differences
 - 📅 **[Events](events.md)** — Understand event markers
+- 📚 **[Returns & Growth Rates](../../../financial-theory/fundamentals/returns.md)** — How simple and annualized returns are calculated
