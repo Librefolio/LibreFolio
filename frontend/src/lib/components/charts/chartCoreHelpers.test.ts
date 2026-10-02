@@ -758,15 +758,23 @@ describe('canonical overlay axis and reference helpers', () => {
                     throw new Error('GrowthChart logical-range reader contract not found');
                 }
                 const rangeReader = source.slice(rangeReaderStart, rangeReaderEnd);
-                expect(rangeReader).toContain('if (!activeChartData || activeChartData.resolution !== currentResolution) return null;');
+                // Why (re-pin, S7): the reader now binds `entry = activeChartData` and exempts a
+                // ladder entry from the resolution check (a ladder entry carries its own buckets,
+                // whatever the cascade's resolution says). The pins keep the invariant: a missing,
+                // stale or empty active entry yields null, so the render falls back to the full
+                // domain instead of reading stale ECharts zoom percentages against new history.
+                expect(rangeReader).toContain('const entry = activeChartData;');
+                expect(rangeReader).toContain('if (!entry || (!entry.ladder && entry.resolution !== currentResolution)) return null;');
+                expect(rangeReader).toContain('if (entry.buckets.length === 0) return null;');
                 expect(rangeReader).not.toContain('getResolutionData(');
 
                 const initialDates = Array.from({length: 9}, (_, index) => `2026-01-${String(index + 1).padStart(2, '0')}`);
                 const replacementDates = ['2026-03-10', '2026-03-12', '2026-03-14', '2026-03-16', '2026-03-18'] as const;
                 let dates: readonly string[] = initialDates;
                 let currentResolution: ChartResolution = 'daily';
-                let activeChartData: {resolution: ChartResolution; buckets: ReturnType<typeof buildBucketInfos>} | null = {
+                let activeChartData: {resolution: ChartResolution; ladder: boolean; buckets: ReturnType<typeof buildBucketInfos>} | null = {
                     resolution: currentResolution,
+                    ladder: false,
                     buckets: buildBucketInfos(initialDates, currentResolution),
                 };
                 let visibleStartDate: string | null = initialDates[0];
@@ -779,9 +787,14 @@ describe('canonical overlay axis and reference helpers', () => {
                     height: 240,
                 });
 
+                // Why (re-pin, S7): this copy follows the reader pinned above, ladder-aware guard and
+                // empty-bucket guard included, so the test does not exercise a reader that no longer
+                // exists. The entry here is a cascade one (`ladder: false`), so the reader's path is
+                // the widening floor/ceil that logicalRangeFromBuckets implements.
                 const logicalRangeFromActiveChart = (): GrowthLogicalRange | null => {
                     const entry = activeChartData;
-                    if (!entry || entry.resolution !== currentResolution) return null;
+                    if (!entry || (!entry.ladder && entry.resolution !== currentResolution)) return null;
+                    if (entry.buckets.length === 0) return null;
                     const zoom = storedGrowthZoom(chart);
                     return logicalRangeFromBuckets(entry.buckets, zoom.start, zoom.end);
                 };
@@ -905,7 +918,13 @@ describe('canonical overlay axis and reference helpers', () => {
                 }
 
                 const historyEffect = source.slice(effectStart, effectEnd);
-                const activeRangeRead = historyEffect.indexOf('const preservedRange = getLogicalRangeFromChart();');
+                // Why (re-pin, S10): since round 2 (master plan §6.0.17) the reset tells new data
+                // for the same period (live zoom kept) from a new period (zoom dropped), so the read
+                // is gated: `periodChanged ? null : getLogicalRangeFromChart()`. The pin guards the
+                // invariant, not the gate's spelling: the preserved range is the LIVE chart read or
+                // null, never a remembered A bound. The gate only adds a null path, so the ungated
+                // simulation below stays a sound model (history B already reads null there).
+                const activeRangeRead = historyEffect.search(/const preservedRange = \w+ \? null : getLogicalRangeFromChart\(\);/);
                 const directReset = historyEffect.indexOf('resetResolutionState(preservedRange);', activeRangeRead);
                 const deferredRender = historyEffect.indexOf('tick().then(() => {', directReset);
                 const render = historyEffect.indexOf('renderChart();', deferredRender);
@@ -1180,7 +1199,18 @@ describe('canonical overlay axis and reference helpers', () => {
                 const storeStart = renderChart.indexOf('visibleStartDate = liveRange.startDate;', capture);
                 const storeEnd = renderChart.indexOf('visibleEndDate = liveRange.endDate;', storeStart);
                 const ensure = renderChart.indexOf('const logicalRange = ensureLogicalRange();', storeEnd);
-                const zoomWindow = renderChart.indexOf('const zoomWindow = buildZoomWindow(currentResolution, logicalRange.startDate, logicalRange.endDate);', ensure);
+                // Why (re-pin, S10): the candle-width ladder (Candles, Income) owns its bucket
+                // width and keeps the whole history on the axis, so it no longer goes through
+                // buildZoomWindow and the statement became a ladder/cascade ternary. The pin keeps
+                // only the off-ladder operand this test simulates: the zoom handed to the full
+                // rebuild is rebuilt from the live logical range, whatever the ladder side says.
+                // Why (re-pin, S7): the ladder goes through buildZoomWindow again, on its own
+                // entry: renderChart takes `activeData = getActiveAggregation()` (ladder or
+                // cascade) and places the window on that entry's buckets, so the ternary above
+                // is gone and the statement is one call. The invariant is unchanged: the zoom
+                // handed to the immediate full rebuild is rebuilt from the live logical range,
+                // captured and ensured just before it.
+                const zoomWindow = renderChart.search(/const zoomWindow = buildZoomWindow\(activeData, logicalRange\.startDate, logicalRange\.endDate\);/);
                 const fullRebuild = renderChart.indexOf('applyFullOption(isDark, buildFullSeries(isDark, seriesData), zoomWindow);', zoomWindow);
                 expect(capture).toBeGreaterThan(-1);
                 expect(storeStart).toBeGreaterThan(capture);
@@ -1321,13 +1351,24 @@ describe('canonical overlay axis and reference helpers', () => {
             });
         });
 
-        it.each(RESPONSIVE_X_AXIS_CHARTS)('%s imports and applies the shared policy to initial and resized options', (_name, path) => {
+        it.each(RESPONSIVE_X_AXIS_CHARTS)('%s imports and applies the shared policy to initial and resized options', (name, path) => {
             const source = readFileSync(path, 'utf8');
 
             expect(source).toMatch(/import\s+\{\s*buildResponsiveXAxisPolicy\s*\}\s+from\s+['"][^'"]*responsiveXAxis['"]/);
             expect(source).toMatch(/\bbuildResponsiveXAxisPolicy\s*\(/);
             expect(source).toMatch(/if \(policy\.axisLabel\) \{[\s\S]*?setOption\(\{xAxis:\s*\{[\s\S]*?axisLabel:\s*policy\.axisLabel/);
-            expect(source).toContain('...(xAxisPolicy.axisLabel ?? {})');
+            // Why (re-pin, S7): GrowthChart's ladder (P&L Candles and Income) owns its category
+            // x axis, so applyFullOption builds the shared policy for the time axis only
+            // (`ladderActive ? null : buildResponsiveXAxisPolicy(…)`) and merges it through `?.`.
+            // The optional merge is pinned together with that declaration, so its one reason is
+            // pinned too: the policy is null only under the ladder, and the time axis still
+            // applies it. The other seven charts keep the strict, non-optional merge.
+            if (name === 'GrowthChart') {
+                expect(source).toMatch(/const xAxisPolicy = ladderActive\s*\?\s*null\s*:\s*buildResponsiveXAxisPolicy\(\{/);
+                expect(source).toContain('...(xAxisPolicy?.axisLabel ?? {})');
+            } else {
+                expect(source).toContain('...(xAxisPolicy.axisLabel ?? {})');
+            }
         });
 
         it('routes every GrowthChart compact-to-desktop data update through a full x-axis replacement with the current zoom window', () => {
@@ -1349,26 +1390,46 @@ describe('canonical overlay axis and reference helpers', () => {
 
             const updateChartData = source.slice(updateStart, updateEnd);
             const fullOption = source.slice(fullOptionStart, fullOptionEnd);
-            expect(updateChartData).toMatch(
-                /const isCandlesSubmode = viewMode === 'pnl' && pnlSubmode === 'candles';\s*const xAxisPolicy = buildResponsiveXAxisPolicy\(\{\s*width: chartContainer\?\.clientWidth \?\? 0,\s*values: entry\.dates,\s*locale: \$locale \?\? undefined,\s*axisType: isCandlesSubmode \? 'category' : 'time',\s*\}\);/,
-            );
-            expect(updateChartData).toMatch(/const wasCompact = responsiveXAxisCompact;[\s\S]*?if \(wasCompact && !xAxisPolicy\.compact\) \{\s*applyFullOption\(isDark, buildFullSeries\(isDark, seriesData\), zoomWindow\);\s*return;\s*\}\s*responsiveXAxisCompact = xAxisPolicy\.compact;/);
+            // Why (re-pin, S7): the ladder (Candles, Income) owns its x axis, so updateChartData
+            // forks on `entry.ladder` and builds the shared responsive policy on the time branch
+            // only (`axisType: 'time'`); `isCandlesSubmode` and its category policy are gone. The
+            // policy is still computed from the entry's dates at the container width.
+            expect(updateChartData).toMatch(/if \(entry\.ladder\) \{[\s\S]*?\} else \{\s*const xAxisPolicy = buildResponsiveXAxisPolicy\(\{\s*width: chartContainer\?\.clientWidth \?\? 0,\s*values: entry\.dates,\s*locale: \$locale \?\? undefined,\s*axisType: 'time',\s*\}\);/);
+            // Why (re-pin, S7): the time branch now tests `responsiveXAxisCompact` directly
+            // instead of a `wasCompact` copy. The check still runs before the flag is
+            // overwritten, so a compact-to-desktop update still goes through applyFullOption
+            // with the current zoom window and returns before the partial setOption.
+            expect(updateChartData).toMatch(/if \(responsiveXAxisCompact && !xAxisPolicy\.compact\) \{\s*applyFullOption\(isDark, buildFullSeries\(isDark, seriesData\), zoomWindow\);\s*return;\s*\}\s*responsiveXAxisCompact = xAxisPolicy\.compact;/);
             expect(updateChartData).toContain("dataZoom: [{type: 'inside', ...INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG, start: zoomWindow.start, end: zoomWindow.end}],");
-            // Candles submode's category axis needs `data` refreshed on every partial
-            // update (resolution switch changes bucket dates) — the time-axis branch
+            // The ladder's category axis (Candles, Income) needs `data` refreshed on every
+            // partial update (a rung change replaces the bucket dates) — the time-axis branch
             // only needs a label/splitNumber refresh, gated behind `compact`.
-            expect(updateChartData).toContain('xAxis: isCandlesSubmode ? {data: entry.dates, ...(xAxisPolicy.compact ? {axisLabel: xAxisPolicy.axisLabel} : {})} : xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber, axisLabel: xAxisPolicy.axisLabel}');
+            // Why (re-pin, S7): the inline submode ternary is gone. Each branch assigns `xAxis`
+            // (the ladder: its dates with the axis planned for this window), and that one value
+            // rides the series update. The pins keep the claim above on both branches and
+            // prove the computed axis is the one sent.
+            expect(updateChartData).toContain('xAxis = {data: entry.dates, ...ladderAxisOption(plan)};');
+            expect(updateChartData).toContain('xAxis = xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber, axisLabel: xAxisPolicy.axisLabel} : {};');
+            expect(updateChartData).toMatch(/\bxAxis,\s*series,\s*\},\s*CHART_SERIES_UPDATE_OPTS,\s*\);/);
             expect(updateChartData).toMatch(/chartInstance\.setOption\([\s\S]*?CHART_SERIES_UPDATE_OPTS,\s*\);/);
             expect(source).toContain("const CHART_SERIES_UPDATE_OPTS = {notMerge: false, replaceMerge: ['dataZoom']};");
             expect(source).toContain("const CHART_FULL_UPDATE_OPTS = {...CHART_SET_OPTION_OPTS, replaceMerge: [...CHART_SET_OPTION_OPTS.replaceMerge, 'xAxis']};");
             expect(source).not.toContain('const entry = activeChartData?.resolution === currentResolution ? activeChartData : getResolutionData(currentResolution);');
-            expect(source).toContain('if (!activeChartData || activeChartData.resolution !== currentResolution) return null;');
+            // Why (re-pin, S7): the logical-range reader's guard now names `entry`
+            // (= activeChartData) and exempts a ladder entry, which carries its own buckets. A
+            // stale cascade entry still yields null rather than a silently rebuilt one (the
+            // negative above).
+            expect(source).toContain('if (!entry || (!entry.ladder && entry.resolution !== currentResolution)) return null;');
             expect(fullOption).toContain("dataZoom: [{type: 'inside', ...INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG, start: zoomWindow.start, end: zoomWindow.end}],");
             // G1b-candles-fix: xAxis is now a submode-conditional ternary (category for
             // candles — a `time` xAxis silently fails to paint any candlestick body/wick,
             // a known upstream ECharts limitation — time for everything else), not a
             // single unconditional object.
-            expect(fullOption).toContain('xAxis: isCandlesSubmode');
+            // Why (re-pin, S7): the ternary now keys on the ladder plan (`ladderAxis`), not on
+            // the candles submode: the ladder (Candles and Income) draws on the category axis,
+            // every other view on time. The pins below still prove the category branch carries
+            // its own type and dates.
+            expect(fullOption).toMatch(/xAxis: ladderAxis\s*\?\s*\{/);
             expect(fullOption).toContain("type: 'category',");
             expect(fullOption).toContain('data: activeChartData?.dates ?? dates,');
             expect(fullOption).toContain('chartInstance.setOption(option, CHART_FULL_UPDATE_OPTS);');
@@ -1556,19 +1617,35 @@ describe('canonical overlay axis and reference helpers', () => {
             const fullOption = source.slice(fullOptionStart, fullOptionEnd);
 
             expect(resizeCallback).toMatch(/const wasCompact = responsiveXAxisCompact;\s*responsiveXAxisCompact = policy\.compact;[\s\S]*?if \(policy\.axisLabel\) \{[\s\S]*?\} else if \(wasCompact\) \{\s*renderChart\(true\);\s*\}/);
-            expect(renderChart).toContain('const zoomWindow = buildZoomWindow(currentResolution, logicalRange.startDate, logicalRange.endDate);');
+            // Why (re-pin, S10): two product changes, neither to the resize path itself. The
+            // candle-width ladder keeps the whole history, so `const zoomWindow` became a
+            // ladder/cascade ternary, and the privacy mask joined the full-rebuild triggers
+            // (ECharts caches axis labels). The pins keep what this test is about: off the
+            // ladder the zoom is rebuilt from the live logical range, and `renderChart(true)`
+            // always takes the full path because forceFullXAxisRebuild is a disjunct of
+            // needsFullInit. The triggers are checked as a set, so a new one is not a failure.
+            // Why (re-pin, S7): the ladder goes through buildZoomWindow again, on its own entry
+            // (`activeData = getActiveAggregation()`), so the ternary above is gone. The zoom the
+            // forced full path receives is still rebuilt from the live logical range.
+            expect(renderChart).toMatch(/const zoomWindow = buildZoomWindow\(activeData, logicalRange\.startDate, logicalRange\.endDate\);/);
             // G1b: needsFullInit now keys on (viewMode, pnlSubmode) via renderedModeKey, not
             // viewMode alone — a pnlSubmode change (line -> candles) changes the series TYPE
             // (line -> candlestick) while viewMode stays 'pnl', which the partial-update path
             // cannot express, so it must also force a full rebuild.
             expect(renderChart).toContain("const renderedModeKey = viewMode === 'pnl' ? `pnl:${pnlSubmode}` : viewMode;");
-            expect(renderChart).toContain('const needsFullInit = forceFullXAxisRebuild || lastRenderedMode !== renderedModeKey || lastRenderedDark !== isDark;');
+            const fullInitTriggers = renderChart.match(/const needsFullInit = ([^;]+);/)?.[1].split(' || ') ?? [];
+            expect(fullInitTriggers).toEqual(expect.arrayContaining(['forceFullXAxisRebuild', 'lastRenderedMode !== renderedModeKey', 'lastRenderedDark !== isDark']));
             expect(renderChart).toMatch(/if \(needsFullInit\) \{\s*applyFullOption\(isDark, buildFullSeries\(isDark, seriesData\), zoomWindow\);\s*\} else \{\s*updateChartData\(activeData, isDark, zoomWindow, false, logicalRange\.startDate\);\s*\}/);
             expect(source).toContain("const CHART_SERIES_UPDATE_OPTS = {notMerge: false, replaceMerge: ['dataZoom']};");
             expect(source).toContain("const CHART_FULL_UPDATE_OPTS = {...CHART_SET_OPTION_OPTS, replaceMerge: [...CHART_SET_OPTION_OPTS.replaceMerge, 'xAxis']};");
             expect(fullOption).toContain("dataZoom: [{type: 'inside', ...INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG, start: zoomWindow.start, end: zoomWindow.end}],");
-            expect(fullOption).toContain('xAxis: isCandlesSubmode');
-            expect(fullOption).toContain('...(xAxisPolicy.axisLabel ?? {}),');
+            // Why (re-pin, S7): the full option's xAxis ternary now keys on the ladder plan
+            // (`ladderAxis`), and the shared policy is null under the ladder, so the time branch
+            // merges it through `?.`. Leaving compact mode is a time-axis event (the resize
+            // watcher skips the ladder), and its full path still replaces the whole xAxis,
+            // labels merged from the desktop policy.
+            expect(fullOption).toMatch(/xAxis: ladderAxis\s*\?\s*\{/);
+            expect(fullOption).toContain('...(xAxisPolicy?.axisLabel ?? {}),');
             expect(fullOption).toContain('chartInstance.setOption(option, CHART_FULL_UPDATE_OPTS);');
         });
 
@@ -1621,6 +1698,146 @@ describe('canonical overlay axis and reference helpers', () => {
             expect(resizeAxisUpdate).toBeDefined();
             if (!resizeAxisUpdate) throw new Error(`${_name} responsive resize axis update not found`);
             expect(resizeAxisUpdate).toContain('axisLabel: policy.axisLabel');
+        });
+
+        /**
+         * The lots charts' `axisBuilder` crash: `TypeError: Cannot read properties of undefined (reading
+         * 'axisBuilder')` from ECharts' `CartesianAxisView.render`. Each resize callback below merges a
+         * lazy `setOption({xAxis: {splitNumber, axisLabel}}, {lazyUpdate: true})` while the usable width
+         * is compact. Merged into an instance that `renderChart()` has just `init()`-ed, or `clear()`-ed
+         * because there is nothing to draw, it leaves a model with one x-axis and no grid, and ECharts'
+         * next frame throws. The fix is the house guard of LineChart, CandlestickChart and PriceChartFull:
+         * a flag that is up only while the instance holds a full option. Every init and clear lowers it,
+         * the full setOption raises it, and the resize callback writes the axis only while it is up. The
+         * compact bookkeeping stays unconditional, so the next full option starts from the right policy.
+         *
+         * brokers-detail.spec.ts ("Lots charts axisBuilder guard") reproduces the Gantt and comparison
+         * crashes in a browser. No UI path reaches the WAC chart's cleared state today (`showChart` false
+         * needs a mode with no points, and the component then falls back to absolute), so for the WAC
+         * chart this contract is the only pin.
+         */
+        const LOT_X_AXIS_PATCH_GUARDS = [
+            {
+                chart: 'LotGanttChart',
+                path: new URL('../brokers/lots/LotGanttChart.svelte', import.meta.url),
+                watcher: 'const axisResizeWatcher = createResizeWatcher(',
+                // Only the sticky axis instance is patched on resize; the lanes instance never is.
+                instance: 'axisInstance',
+                flag: 'axisOptionSet',
+                // The lazy patch and the compact→wide rebuild (`buildAxisOption(isDark), true`).
+                resizeWrites: 2,
+                // The `!chartContainer` branch and the `!chartHasData` branch.
+                minClears: 2,
+                // The axis instance is also disposed when its container is remounted.
+                lowersOnDispose: true,
+                fullSetOption: /axisInstance\??\.setOption\(buildAxisOption\(isDark\), CHART_SET_OPTION_OPTS\)/g,
+            },
+            {
+                chart: 'LotComparisonChart',
+                path: new URL('../brokers/lots/LotComparisonChart.svelte', import.meta.url),
+                watcher: 'const resizeWatcher = createResizeWatcher(',
+                instance: 'chartInstance',
+                flag: 'chartOptionSet',
+                // Only the lazy patch: compact→wide goes through renderChart(), which keeps its own books.
+                resizeWrites: 1,
+                minClears: 1,
+                lowersOnDispose: false,
+                fullSetOption: /chartInstance\.setOption\(option, /g,
+            },
+            {
+                chart: 'LotWacPriceChart',
+                path: new URL('../brokers/lots/LotWacPriceChart.svelte', import.meta.url),
+                watcher: 'const resizeWatcher = createResizeWatcher(',
+                instance: 'chartInstance',
+                flag: 'chartOptionSet',
+                resizeWrites: 1,
+                minClears: 1,
+                lowersOnDispose: false,
+                fullSetOption: /chartInstance\.setOption\(option, /g,
+            },
+        ] as const;
+
+        /** The body of the block that `opener` (ending in `{`) opens first after `anchor`, braces balanced. */
+        function blockAfter(source: string, anchor: string, opener: string): string | undefined {
+            const at = source.indexOf(anchor);
+            const open = at < 0 ? -1 : source.indexOf(opener, at + anchor.length);
+            if (open < 0) return undefined;
+            const bodyStart = open + opener.length;
+            let depth = 1;
+            for (let i = bodyStart; i < source.length; i++) {
+                if (source[i] === '{') depth++;
+                else if (source[i] === '}' && --depth === 0) return source.slice(bodyStart, i);
+            }
+            return undefined;
+        }
+
+        /** Where every match of `pattern` (a global regex) starts in `text`. */
+        function sitesOf(text: string, pattern: RegExp): number[] {
+            return [...text.matchAll(pattern)].map((match) => match.index ?? -1);
+        }
+
+        /**
+         * The first line of code after the call that starts at `callAt`: past its balanced parentheses
+         * and `;`, with blank space and line comments skipped, then an optional `skip` statement.
+         */
+        function lineAfterCall(body: string, callAt: number, skip?: RegExp): string {
+            let end = body.indexOf('(', callAt);
+            for (let depth = 0; end >= 0 && end < body.length; end++) {
+                if (body[end] === '(') depth++;
+                else if (body[end] === ')' && --depth === 0) break;
+            }
+            const gap = /^(?:\s+|\/\/[^\n]*)+/;
+            let rest = body
+                .slice(end + 1)
+                .replace(/^;/, '')
+                .replace(gap, '');
+            if (skip) rest = rest.replace(skip, '').replace(gap, '');
+            return rest.split('\n')[0].trim();
+        }
+
+        it.each(LOT_X_AXIS_PATCH_GUARDS)('$chart writes its x-axis on resize only while $flag says the instance holds a full option', ({chart, watcher, path, instance, flag, resizeWrites}) => {
+            const source = readFileSync(path, 'utf8');
+            const callback = blockAfter(source, watcher, '=> {');
+            if (!callback) throw new Error(`${chart}: resize callback not found (${watcher})`);
+
+            const write = `${instance}\\??\\.setOption\\(`;
+            // The brief's one-liner `if (flag) instance.setOption(…)` and the house block form both qualify.
+            const guardedWrite = `if \\(${flag}\\) \\{?\\s*${write}`;
+            // Positive control first: the scan still sees the writes it is about.
+            expect(sitesOf(callback, new RegExp(write, 'g')).length, `${chart}: setOption calls in the resize callback`).toBe(resizeWrites);
+            expect(sitesOf(callback, new RegExp(guardedWrite, 'g')).length, `${chart}: resize-callback setOption calls behind if (${flag})`).toBe(resizeWrites);
+
+            const lazyPatchInCompactBranch = new RegExp(`if \\(policy\\.axisLabel\\) \\{\\s*${guardedWrite}\\{xAxis:\\s*\\{splitNumber:\\s*policy\\.splitNumber,\\s*axisLabel:\\s*policy\\.axisLabel\\}\\},\\s*\\{lazyUpdate:\\s*true\\}\\);`);
+            expect(lazyPatchInCompactBranch.test(callback), `${chart}: the guarded lazy patch sits inside the existing if (policy.axisLabel) branch`).toBe(true);
+            expect(/responsiveXAxisCompact = policy\.compact;\s*if \(policy\.axisLabel\) \{/.test(callback), `${chart}: the compact bookkeeping stays unconditional, outside the guard`).toBe(true);
+        });
+
+        it.each(LOT_X_AXIS_PATCH_GUARDS)('$chart lowers $flag on every init and clear in renderChart() and raises it after the full setOption', ({chart, path, instance, flag, minClears, lowersOnDispose, fullSetOption}) => {
+            const source = readFileSync(path, 'utf8');
+            const renderChart = blockAfter(source, 'function renderChart(', ') {');
+            if (!renderChart) throw new Error(`${chart}: renderChart() not found`);
+
+            const inits = sitesOf(renderChart, new RegExp(`${instance} = echarts\\.init\\(`, 'g'));
+            const clears = sitesOf(renderChart, new RegExp(`${instance}\\??\\.clear\\(\\)`, 'g'));
+            const disposes = lowersOnDispose ? sitesOf(renderChart, new RegExp(`${instance}\\??\\.dispose\\(\\)`, 'g')) : [];
+            const fullSets = sitesOf(renderChart, fullSetOption);
+            // Positive controls: "every site is followed by …" is also true of no site at all.
+            expect(inits.length, `${chart}: ${instance} init sites in renderChart()`).toBeGreaterThanOrEqual(1);
+            expect(clears.length, `${chart}: ${instance} clear sites in renderChart()`).toBeGreaterThanOrEqual(minClears);
+            if (lowersOnDispose) expect(disposes.length, `${chart}: ${instance} dispose sites in renderChart()`).toBeGreaterThanOrEqual(1);
+            expect(fullSets.length, `${chart}: the full ${instance} setOption in renderChart()`).toBe(1);
+
+            expect(source.includes(`let ${flag} = false;`), `${chart}: declares let ${flag} = false; (no option until renderChart() sets one)`).toBe(true);
+            const lowered = new RegExp(`^${flag} = false;`);
+            for (const at of [...inits, ...clears]) {
+                expect(lineAfterCall(renderChart, at), `${chart}: ${flag} = false; right after ${renderChart.slice(at, renderChart.indexOf('(', at))}(…)`).toMatch(lowered);
+            }
+            for (const at of disposes) {
+                expect(lineAfterCall(renderChart, at, new RegExp(`^${instance} = undefined;`)), `${chart}: ${flag} = false; right after ${instance}.dispose()`).toMatch(lowered);
+            }
+            for (const at of fullSets) {
+                expect(lineAfterCall(renderChart, at), `${chart}: ${flag} = true; right after the full setOption`).toMatch(new RegExp(`^${flag} = true;`));
+            }
         });
 
         it('keeps PerformanceChart outside the date-axis policy', () => {
@@ -1691,23 +1908,70 @@ describe('canonical overlay axis and reference helpers', () => {
             return buildOhlcQuad(point.open, point.close, point.low, point.high, false, 1);
         }
 
-        function toPositionalValueImpl(point: FixtureSeriesPoint): number | null {
-            return point.value[1];
-        }
-
         function clipToSignImpl(point: FixtureSeriesPoint, keepPositive: boolean): FixtureSeriesPoint {
             const v = point.value[1];
             if (v == null || v >= 0 === keepPositive) return point;
             return {...point, value: [point.value[0], null]};
         }
 
-        function findReferenceTotalPnlImpl(points: FixtureSeriesPoint[], referenceDate: string | null): number | null {
-            if (points.length === 0) return null;
-            const point = (referenceDate != null && points.find((p) => p.bucketEnd >= referenceDate)) || points[0];
-            return point.value[1];
+        // Body verbatim from e7773a143, with this file's names for the two product ones it
+        // uses: clipToSignImpl for clipToSign, FixtureSeriesPoint for SeriesPoint.
+        function splitBySignImpl(points: FixtureSeriesPoint[]): {positive: FixtureSeriesPoint[]; negative: FixtureSeriesPoint[]} {
+            const positive: FixtureSeriesPoint[] = [];
+            const negative: FixtureSeriesPoint[] = [];
+
+            for (let i = 0; i < points.length; i++) {
+                const point = points[i];
+                positive.push(clipToSignImpl(point, true));
+                negative.push(clipToSignImpl(point, false));
+
+                const current = point.value[1];
+                const next = points[i + 1]?.value[1];
+                if (current == null || next == null || current === 0 || next === 0) continue;
+                if (current > 0 === next > 0) continue;
+
+                // Linear crossing between the two x positions. `value[0]` is a DATE STRING,
+                // not a number — so it is parsed to millis, interpolated, and formatted back.
+                // The crossing falls inside a day, which a `time` axis accepts as an ISO
+                // instant; this path is only ever reached from the Line submode, whose axis
+                // is `time` (the candles path uses `category`, where a fractional position
+                // would be meaningless).
+                const x0 = new Date(points[i].value[0]).getTime();
+                const x1 = new Date(points[i + 1].value[0]).getTime();
+                if (!Number.isFinite(x0) || !Number.isFinite(x1)) continue;
+                const t = Math.abs(current) / (Math.abs(current) + Math.abs(next));
+                const crossingX = new Date(x0 + (x1 - x0) * t).toISOString();
+                const crossing: FixtureSeriesPoint = {...point, value: [crossingX, 0]};
+                positive.push(crossing);
+                negative.push(crossing);
+            }
+
+            return {positive, negative};
         }
 
-        it('mirrors the exact literal bodies of toCandlestickPoint / toPositionalValue / clipToSign / findReferenceTotalPnl in GrowthChart.svelte (ties every reimplementation above to the real source)', () => {
+        // Body verbatim from e7773a143. The product reads `aggregationInputs` from the
+        // component's closure; here it is the third parameter.
+        function findReferenceTotalPnlImpl(entry: {pnl: {total: {points: FixtureSeriesPoint[]}}}, referenceDate: string | null, aggregationInputs: {dates: string[]; eurStackedData: {totalPnl: Array<number | null>}}): number | null {
+            const daily = aggregationInputs.eurStackedData.totalPnl;
+            const allDates = aggregationInputs.dates;
+            if (allDates.length === 0) return entry.pnl.total.points[0]?.value[1] ?? null;
+
+            if (referenceDate == null) return daily[0] ?? null;
+
+            // Exact day if present; otherwise the last day BEFORE it — never a later one,
+            // because the value on a day that has not happened yet is not a baseline.
+            let idx = allDates.indexOf(referenceDate);
+            if (idx < 0) {
+                idx = 0;
+                for (let i = 0; i < allDates.length; i++) {
+                    if (allDates[i] <= referenceDate) idx = i;
+                    else break;
+                }
+            }
+            return daily[idx] ?? null;
+        }
+
+        it('mirrors the exact literal bodies of toCandlestickPoint / splitBySign / clipToSign / findReferenceTotalPnl in GrowthChart.svelte (ties every reimplementation above to the real source)', () => {
             const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
             const start = source.indexOf('function toCandlestickPoint(point: CandleSeriesPoint): number[] | string {');
             const end = source.indexOf('\n    function buildChartUpdateSeries(', start);
@@ -1721,10 +1985,14 @@ describe('canonical overlay axis and reference helpers', () => {
             expect(block).toContain('if (point.open == null || point.close == null || point.low == null || point.high == null) return ECHARTS_EMPTY_VALUE;');
             expect(block).toContain('return buildOhlcQuad(point.open, point.close, point.low, point.high, false, 1);');
             // No `return null` anywhere in toCandlestickPoint SPECIFICALLY — scoped to
-            // its own body, because findReferenceTotalPnl further down this same block
-            // legitimately returns null for an empty series, and a block-wide ban would
-            // be a false positive on it.
-            const candlestickBody = block.slice(0, block.indexOf('function toPositionalValue('));
+            // its own body, because null is a legitimate result further down this same
+            // block (findReferenceTotalPnl yields it through `?? null` for an empty series
+            // or a day with no P&L), and a block-wide ban would police helpers it has no
+            // business with.
+            // Why (re-pin, S10, D21a): toPositionalValue has had no caller since e7773a143, so its
+            // literals are no longer pinned here, and this slice ends at clipToSign's definition,
+            // which the test pins below, so its scope holds whether or not that helper remains.
+            const candlestickBody = block.slice(0, block.indexOf('function clipToSign('));
             expect(candlestickBody).not.toContain('return null');
             // ...and the sentinel it returns really is ECharts' documented empty value,
             // declared once at module scope rather than inlined at the return site.
@@ -1732,19 +2000,39 @@ describe('canonical overlay axis and reference helpers', () => {
             // The widened return type is part of the contract: `number[] | null` would
             // let a null flow back in without a type error.
             expect(source).toContain('function toCandlestickPoint(point: CandleSeriesPoint): number[] | string {');
-            // toPositionalValue
-            expect(block).toContain('function toPositionalValue(point: SeriesPoint): number | null {');
-            expect(block).toContain('return point.value[1];');
             // clipToSign
             expect(block).toContain('function clipToSign(point: SeriesPoint, keepPositive: boolean): SeriesPoint {');
             expect(block).toContain('const v = point.value[1];');
             expect(block).toContain('if (v == null || v >= 0 === keepPositive) return point;');
             expect(block).toContain('return {...point, value: [point.value[0], null]};');
+            // splitBySign
+            // Why (re-pin, S10, D21b): e7773a143 splits the Total P&L with splitBySign, which the
+            // sign-crossing tests below now execute through splitBySignImpl; these literals tie
+            // that copy to the source, one per step of the rule.
+            expect(block).toContain('function splitBySign(points: SeriesPoint[]): {positive: SeriesPoint[]; negative: SeriesPoint[]} {');
+            expect(block).toContain('positive.push(clipToSign(point, true));');
+            expect(block).toContain('negative.push(clipToSign(point, false));');
+            expect(block).toContain('if (current == null || next == null || current === 0 || next === 0) continue;');
+            expect(block).toContain('if (current > 0 === next > 0) continue;');
+            expect(block).toContain('const t = Math.abs(current) / (Math.abs(current) + Math.abs(next));');
+            expect(block).toContain('const crossingX = new Date(x0 + (x1 - x0) * t).toISOString();');
+            expect(block).toContain('const crossing: SeriesPoint = {...point, value: [crossingX, 0]};');
+            expect(block).toContain('positive.push(crossing);');
+            expect(block).toContain('negative.push(crossing);');
             // findReferenceTotalPnl
+            // Why (re-pin, S10): e7773a143 rewrote it to read the DAILY series and never a later
+            // day. The old first-bucket-end lookup drifted by up to one bucket (~600 instead of 0
+            // in June). The copy above now carries the new body, these literals tie it to the
+            // source, and the negative, behind them, proves the bucket-end lookup is gone.
             expect(block).toContain('function findReferenceTotalPnl(entry: AggregatedResolutionData, referenceDate: string | null): number | null {');
-            expect(block).toContain('const points = entry.pnl.total.points;');
-            expect(block).toContain('if (points.length === 0) return null;');
-            expect(block).toContain('const point = (referenceDate != null && points.find((p) => p.bucketEnd >= referenceDate)) || points[0];');
+            expect(block).toContain('const daily = aggregationInputs.eurStackedData.totalPnl;');
+            expect(block).toContain('const allDates = aggregationInputs.dates;');
+            expect(block).toContain('if (allDates.length === 0) return entry.pnl.total.points[0]?.value[1] ?? null;');
+            expect(block).toContain('if (referenceDate == null) return daily[0] ?? null;');
+            expect(block).toContain('let idx = allDates.indexOf(referenceDate);');
+            expect(block).toContain('if (allDates[i] <= referenceDate) idx = i;');
+            expect(block).toContain('return daily[idx] ?? null;');
+            expect(block).not.toContain('p.bucketEnd >= referenceDate');
         });
 
         describe('toCandlestickPoint', () => {
@@ -1771,23 +2059,6 @@ describe('canonical overlay axis and reference helpers', () => {
 
             it('returns a quad when all four legs are present, even when one leg is exactly zero (zero is not "missing")', () => {
                 expect(toCandlestickPointImpl(candlePointRaw('2026-01-05', 0, 5, 0, 10))).toEqual([0, 5, 0, 10]);
-            });
-        });
-
-        describe('toPositionalValue', () => {
-            it('extracts the bare numeric value, discarding the date half of the [date, value] tuple', () => {
-                expect(toPositionalValueImpl(seriesPoint('2026-01-01', 123.45))).toBe(123.45);
-            });
-
-            it('preserves null (a gap) rather than coercing it to 0 or dropping the point', () => {
-                expect(toPositionalValueImpl(seriesPoint('2026-01-01', null))).toBeNull();
-            });
-
-            it('is a pure 1:1 positional map — mapping it over an array never changes length or order', () => {
-                const dates = ['2026-01-01', '2026-01-02', '2026-01-03', '2026-01-04'];
-                const values: Array<number | null> = [10, null, -5, 0];
-                const points = dates.map((d, i) => seriesPoint(d, values[i]));
-                expect(points.map(toPositionalValueImpl)).toEqual(values);
             });
         });
 
@@ -1831,35 +2102,37 @@ describe('canonical overlay axis and reference helpers', () => {
             const points = dates.map((d, i) => seriesPoint(d, values[i], d));
 
             it('returns null for an empty series (nothing to draw a reference against)', () => {
-                expect(findReferenceTotalPnlImpl([], '2026-01-12')).toBeNull();
+                expect(findReferenceTotalPnlImpl({pnl: {total: {points: []}}}, '2026-01-12', {dates: [], eurStackedData: {totalPnl: []}})).toBeNull();
             });
 
             it('falls back to the first point when referenceDate is null', () => {
-                expect(findReferenceTotalPnlImpl(points, null)).toBe(100);
+                expect(findReferenceTotalPnlImpl({pnl: {total: {points}}}, null, {dates, eurStackedData: {totalPnl: values}})).toBe(100);
             });
 
-            it('picks the first bucket whose bucketEnd reaches a referenceDate that falls strictly between two buckets', () => {
-                // 01-08 sits between bucket 1 (ends 01-05) and bucket 2 (ends 01-12): the
-                // first bucket that "closes over" it is bucket 2 (150), not bucket 1.
-                expect(findReferenceTotalPnlImpl(points, '2026-01-08')).toBe(150);
+            it('anchors a referenceDate that falls between two days on the last day BEFORE it, never on the next one', () => {
+                // Why (re-pin, S10): the product reads the DAILY series and never a later day (e7773a143), so 01-08 anchors on 01-05 (100), not on 01-12 (150).
+                expect(findReferenceTotalPnlImpl({pnl: {total: {points}}}, '2026-01-08', {dates, eurStackedData: {totalPnl: values}})).toBe(100);
             });
 
-            it('matches on an exact bucketEnd', () => {
-                expect(findReferenceTotalPnlImpl(points, '2026-01-19')).toBe(90);
+            it('matches on an exact day', () => {
+                // Why (re-pin, S10): the product reads the DAILY series and never a later day (e7773a143), so an exact date is matched on its own day, not on a bucket end.
+                expect(findReferenceTotalPnlImpl({pnl: {total: {points}}}, '2026-01-19', {dates, eurStackedData: {totalPnl: values}})).toBe(90);
             });
 
-            it('falls back to the first point when referenceDate is after every bucket', () => {
-                expect(findReferenceTotalPnlImpl(points, '2099-01-01')).toBe(100);
+            it('anchors a referenceDate after every day on the LAST day, not on the first', () => {
+                // Why (re-pin, S10): the product reads the DAILY series and never a later day (e7773a143), so a date after every day anchors on the last one, 01-26 (200), not on the first (100).
+                expect(findReferenceTotalPnlImpl({pnl: {total: {points}}}, '2099-01-01', {dates, eurStackedData: {totalPnl: values}})).toBe(200);
             });
 
-            it('can itself return null when the located bucket has no P&L value that day (a genuine gap is a valid reference, never guessed)', () => {
+            it('can itself return null when the located day has no P&L value that day (a genuine gap is a valid reference, never guessed)', () => {
+                // Why (re-pin, S10): the product reads the DAILY series and never a later day (e7773a143), so a day with no P&L yields null, never the next day's 50.
                 const withGap = [seriesPoint('2026-01-05', null), seriesPoint('2026-01-12', 50)];
-                expect(findReferenceTotalPnlImpl(withGap, '2026-01-05')).toBeNull();
+                expect(findReferenceTotalPnlImpl({pnl: {total: {points: withGap}}}, '2026-01-05', {dates: ['2026-01-05', '2026-01-12'], eurStackedData: {totalPnl: [null, 50]}})).toBeNull();
             });
         });
 
-        describe('resize watcher keeps the splitNumber/axisLabel update unconditional across submodes', () => {
-            it('computes isCandlesSubmode and forwards it to buildResponsiveXAxisPolicy, but does not fork the actual setOption call on it (splitNumber is undefined-by-construction for category — see the policy test above)', () => {
+        describe('resize watcher keeps the splitNumber/axisLabel update unconditional off the ladder', () => {
+            it('keeps the ladder out of buildResponsiveXAxisPolicy (time axis only), but does not fork the actual setOption call on the submode', () => {
                 const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
                 const resizeStart = source.indexOf('const resizeWatcher = createResizeWatcher(() => {');
                 const resizeEnd = source.indexOf('\n    let darkModeObserver', resizeStart);
@@ -1868,24 +2141,32 @@ describe('canonical overlay axis and reference helpers', () => {
                 if (resizeStart < 0 || resizeEnd <= resizeStart) throw new Error('GrowthChart resize watcher contract not found');
 
                 const resizeCallback = source.slice(resizeStart, resizeEnd);
-                expect(resizeCallback).toContain("const isCandlesSubmode = viewMode === 'pnl' && pnlSubmode === 'candles';");
-                expect(resizeCallback).toContain("axisType: isCandlesSubmode ? 'category' : 'time',");
+                // Why (re-pin, S7): the ladder (Candles, Income) owns its x axis and re-plans it
+                // through the resolution sync, so the watcher no longer computes
+                // isCandlesSubmode: it skips the responsive policy under the ladder and builds
+                // it for the time axis only. The invariant stands: the policy never reaches the
+                // ladder's category axis, and the setOption call below is not forked on the
+                // submode.
+                expect(resizeCallback).toContain('if (chartInstance && chartContainer && activeChartData && !ladderActive) {');
+                expect(resizeCallback).toContain("axisType: 'time',");
                 // The actual xAxis update stays a SINGLE unconditional object — unlike
                 // updateChartData's category branch, it never refreshes `data`: a resize
                 // never changes which dates are on screen, only the pixel budget for labels.
                 expect(resizeCallback).toContain('chartInstance.setOption({xAxis: {splitNumber: policy.splitNumber, axisLabel: policy.axisLabel}}, {lazyUpdate: true});');
                 expect(resizeCallback).not.toContain('data: activeChartData.dates');
                 expect(resizeCallback).not.toContain('data: entry.dates');
-                // Exactly ONE isCandlesSubmode ternary in this block (the axisType line
-                // above) — if a future edit also forked the setOption call, this count
-                // would become 2 and this assertion would catch it.
-                const isCandlesSubmodeTernaryCount = (resizeCallback.match(/isCandlesSubmode\s*\?/g) ?? []).length;
-                expect(isCandlesSubmodeTernaryCount).toBe(1);
+                // Exactly ONE ladderActive reference in this block (the guard above) — if a
+                // future edit also forked the setOption call on it, this count would become 2
+                // and this assertion would catch it.
+                // Why (re-pin, S7): isCandlesSubmode is gone, so a submode fork would now key
+                // on `ladderActive`; that is the name counted.
+                const ladderActiveCount = (resizeCallback.match(/\bladderActive\b/g) ?? []).length;
+                expect(ladderActiveCount).toBe(1);
             });
         });
 
         describe('applyFullOption completes the category-vs-time xAxis ternary on both branches', () => {
-            it('sets category type/data/boundaryGap and time type/splitNumber, sharing the axisLabel merge / axisLine / splitLine exactly once per branch', () => {
+            it('sets category type/data/boundaryGap and time type/splitNumber, merging one axisLabel source per branch, sharing the axisLine and declaring splitLine exactly once per branch', () => {
                 const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
                 const fullOptionStart = source.indexOf('function applyFullOption(');
                 const fullOptionEnd = source.indexOf('\n</script>', fullOptionStart);
@@ -1894,34 +2175,55 @@ describe('canonical overlay axis and reference helpers', () => {
                 if (fullOptionStart < 0 || fullOptionEnd <= fullOptionStart) throw new Error('GrowthChart applyFullOption contract not found');
 
                 const fullOption = source.slice(fullOptionStart, fullOptionEnd);
-                const xAxisStart = fullOption.indexOf('xAxis: isCandlesSubmode');
+                // Why (re-pin, S7): the ternary now keys on the ladder plan (`ladderAxis`), not on
+                // the candles submode; it is still the one xAxis literal, category then time.
+                const xAxisStart = fullOption.search(/xAxis: ladderAxis\s*\?/);
                 const xAxisEnd = fullOption.indexOf('yAxis: {', xAxisStart);
                 expect(xAxisStart).toBeGreaterThan(-1);
                 expect(xAxisEnd).toBeGreaterThan(xAxisStart);
                 if (xAxisStart < 0 || xAxisEnd <= xAxisStart) throw new Error('GrowthChart applyFullOption xAxis ternary not found');
 
                 const xAxisBlock = fullOption.slice(xAxisStart, xAxisEnd);
-                // Category branch (candles submode).
+                // Category branch (the ladder: Candles and Income).
                 expect(xAxisBlock).toContain("type: 'category',");
                 expect(xAxisBlock).toContain('data: activeChartData?.dates ?? dates,');
                 expect(xAxisBlock).toContain('boundaryGap: true,');
                 // Time branch (every other mode/submode) — not just spot-checked, but
                 // proven present alongside the category branch above, in the same slice.
                 expect(xAxisBlock).toContain("type: 'time',");
-                expect(xAxisBlock).toContain('...(xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber} : {}),');
+                // Why (re-pin, S7): the shared policy is null under the ladder, so the time branch
+                // reads it through `?.`; its compact splitNumber is still spread on that branch.
+                expect(xAxisBlock).toContain('...(xAxisPolicy?.compact ? {splitNumber: xAxisPolicy.splitNumber} : {}),');
 
-                // Shared theming appears exactly twice (once per branch) — catches a
-                // future edit that updates one branch and forgets its sibling.
-                const axisLabelMergeCount = (xAxisBlock.match(/\.\.\.\(xAxisPolicy\.axisLabel \?\? \{\}\),/g) ?? []).length;
+                // Each branch merges its own label source exactly once, and the shared axisLine
+                // appears exactly twice (once per branch) — catches a future edit that updates
+                // one branch and forgets its sibling.
+                // Why (re-pin, S7): the axisLabel merge is no longer shared. The time branch
+                // merges the responsive policy, the category branch the ladder plan's labels.
+                // Counting each source once keeps both branches complete, and a policy merge
+                // leaking onto the ladder's axis (a count of 2) still turns this red.
+                const policyLabelMergeCount = (xAxisBlock.match(/\.\.\.\(xAxisPolicy\??\.axisLabel \?\? \{\}\)/g) ?? []).length;
+                const ladderLabelMergeCount = (xAxisBlock.match(/\.\.\.ladderAxis\.axisLabel\b/g) ?? []).length;
                 const axisLineCount = (xAxisBlock.match(/axisLine: \{lineStyle: \{color: gridColor\}\},/g) ?? []).length;
-                const splitLineCount = (xAxisBlock.match(/splitLine: \{show: false\},/g) ?? []).length;
-                expect(axisLabelMergeCount).toBe(2);
+                // Why (re-pin, S10): splitLine is no longer shared theming. It now draws the
+                // bucket separators: always on the category branch, and on the time branch only
+                // under the ladder. So the value differs between branches, and S7 will reshape it
+                // (splitLine.interval). What survives is that each branch declares the KEY once:
+                // a second `splitLine` in the same literal silently wins, and the product comment
+                // records that this already happened. The pin counts the key, not its value.
+                // Why (re-pin, S7): the category branch (the ladder: Candles and Income) now takes
+                // its separators from the ladder plan (`interval: ladderAxis.splitLine.interval`);
+                // the time branch draws none (`splitLine: {show: false}`), so the S10 lines above
+                // describe the pre-S7 state. The pin is unchanged: one `splitLine` KEY per branch.
+                const splitLineCount = (xAxisBlock.match(/^[ \t]+splitLine:/gm) ?? []).length;
+                expect(policyLabelMergeCount).toBe(1);
+                expect(ladderLabelMergeCount).toBe(1);
                 expect(axisLineCount).toBe(2);
                 expect(splitLineCount).toBe(2);
             });
         });
 
-        describe('candles-submode positional alignment: candlestick quad and broker overlay line up 1:1 with dates', () => {
+        describe('candles-submode positional alignment: candlestick quads line up 1:1 with dates', () => {
             it('mirrors getResolutionData: dates, pnl.total, pnl.candle and every pnl.brokers[].metric are all built from the exact same buckets array (never a second, independently computed one)', () => {
                 const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
                 const start = source.indexOf('function getResolutionData(resolution: ChartResolution): AggregatedResolutionData {');
@@ -1942,38 +2244,20 @@ describe('canonical overlay axis and reference helpers', () => {
                 expect(buildBucketInfosCallCount).toBe(1);
             });
 
-            it('mirrors the buildChartUpdateSeries candles-submode mapping calls exactly: toCandlestickPoint for the total slot, toPositionalValue for every broker slot', () => {
-                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
-                const functionStart = source.indexOf('function buildChartUpdateSeries(');
-                const start = source.indexOf("if (viewMode === 'pnl' && pnlSubmode === 'candles') {", functionStart);
-                const end = source.indexOf("if (viewMode === 'pnl' && pnlSubmode === 'income') {", start);
-                expect(functionStart).toBeGreaterThan(-1);
-                expect(start).toBeGreaterThan(functionStart);
-                expect(end).toBeGreaterThan(start);
-                if (functionStart < 0 || start <= functionStart || end <= start) throw new Error('GrowthChart candles-submode series contract not found');
-
-                const block = source.slice(start, end);
-                expect(block).toContain('entry.pnl.candle.points.map(toCandlestickPoint)');
-                expect(block).toContain('broker.metric.points.map(toPositionalValue)');
-            });
-
-            it('keeps candlestick quads and broker overlay values 1:1 by array position with dates — a gap at one position never shifts a later one', () => {
+            it('keeps candlestick quads 1:1 by array position with dates — a gap at one position never shifts a later one', () => {
+                // Why (re-pin, S10, D21a): the per-broker overlay was removed from the candles submode
+                // (developer review 2026-09-21: total candle only; last caller of toPositionalValue gone
+                // in e7773a143), so only the candle's positional contract is left to prove.
                 const dates = ['2026-01-01', '2026-01-02', '2026-01-03', '2026-01-04', '2026-01-05'];
-                // Distinct sentinel OHLC/values per position so any transposition/shift is
-                // caught. The candle is missing (a genuine gap) at position 2; the broker
-                // value is missing at position 1 — deliberately DIFFERENT positions, to
-                // prove the two series are independently, not jointly, null-preserving.
+                // Distinct sentinel OHLC per position so any transposition/shift is caught. The
+                // candle is missing (a genuine gap) at position 2.
                 const candles: Array<{open: number; high: number; low: number; close: number} | null> = [{open: 10, close: 11, low: 9, high: 12}, {open: 20, close: 22, low: 19, high: 23}, null, {open: 40, close: 38, low: 37, high: 41}, {open: 50, close: 55, low: 49, high: 56}];
-                const brokerValues: Array<number | null> = [100, null, 300, 400, 500];
 
                 const candlePoints = dates.map((d, i) => candlePoint(d, candles[i]));
-                const brokerPoints = dates.map((d, i) => seriesPoint(d, brokerValues[i]));
 
                 const candleSeries = candlePoints.map(toCandlestickPointImpl);
-                const brokerSeries = brokerPoints.map(toPositionalValueImpl);
 
                 expect(candleSeries).toHaveLength(dates.length);
-                expect(brokerSeries).toHaveLength(dates.length);
 
                 dates.forEach((_date, i) => {
                     const ohlc = candles[i];
@@ -1982,21 +2266,13 @@ describe('canonical overlay axis and reference helpers', () => {
                     } else {
                         expect(candleSeries[i]).toEqual(buildOhlcQuad(ohlc.open, ohlc.close, ohlc.low, ohlc.high, false, 1));
                     }
-                    expect(brokerSeries[i]).toBe(brokerValues[i]);
                 });
 
-                // The two gaps are genuinely independent, at different positions — if
-                // either mapping ever filtered instead of preserving position (the exact
-                // off-by-one risk this fix calls out), the two arrays would desync both
-                // from `dates` and from each other. Note the two series express a gap
-                // DIFFERENTLY on purpose: the candlestick needs ECharts' '-' sentinel
-                // (null crashes its init), while the broker overlay is an ordinary line
-                // series where null is the correct, documented way to break the line.
+                // The gap stays at its own position — if the mapping ever filtered instead of
+                // preserving position (the exact off-by-one risk this fix calls out), every
+                // candle after it would desync from `dates`.
                 expect(candleSeries[2]).toBe(ECHARTS_EMPTY_VALUE);
                 expect(candleSeries[1]).not.toBe(ECHARTS_EMPTY_VALUE);
-                expect(brokerSeries[1]).toBeNull();
-                expect(brokerSeries[2]).not.toBeNull();
-                expect(candleSeries).toHaveLength(brokerSeries.length);
             });
 
             // ---------------------------------------------------------------
@@ -2014,16 +2290,17 @@ describe('canonical overlay axis and reference helpers', () => {
             // load-bearing and not incidental.
             // ---------------------------------------------------------------
             describe('real ECharts: a candlestick gap on a category axis must not kill the chart instance', () => {
-                /** The candles submode's real shape: [candlestick, ...broker overlay lines]
-                 *  over a category base axis, exactly as buildFullSeries emits it. */
-                function candlesSubmodeOption(candleData: Array<number[] | string | null>, brokerData: Array<number | null>) {
+                // Why (re-pin, S10, D21a): the per-broker overlay was removed from the candles submode
+                // (developer review 2026-09-21: total candle only), so the guard drives ECharts with the
+                // candlestick alone — and the CONTROL below still proves that a null gap kills it.
+                /** The candles submode's real shape: the total candlestick alone over a category
+                 *  base axis, exactly as buildFullSeries emits it (`return [candleSeries];`, pinned
+                 *  by the series-shape contract test below). */
+                function candlesSubmodeOption(candleData: Array<number[] | string | null>) {
                     return {
                         xAxis: {type: 'category' as const, data: ['2026-01-01', '2026-01-02', '2026-01-03', '2026-01-04', '2026-01-05']},
                         yAxis: {type: 'value' as const},
-                        series: [
-                            {name: 'Total P&L', type: 'candlestick' as const, data: candleData},
-                            {name: 'Broker A', type: 'line' as const, data: brokerData},
-                        ],
+                        series: [{name: 'Total P&L', type: 'candlestick' as const, data: candleData}],
                     };
                 }
 
@@ -2041,7 +2318,6 @@ describe('canonical overlay axis and reference helpers', () => {
                 const dates = ['2026-01-01', '2026-01-02', '2026-01-03', '2026-01-04', '2026-01-05'];
                 const ohlcByPosition: Array<{open: number; high: number; low: number; close: number} | null> = [{open: 10, close: 11, low: 9, high: 12}, null, {open: 30, close: 28, low: 27, high: 31}, null, {open: 50, close: 55, low: 49, high: 56}];
                 const realCandleData = dates.map((d, i) => toCandlestickPointImpl(candlePoint(d, ohlcByPosition[i])));
-                const brokerData = [100, null, 300, 400, null];
 
                 it("uses the SAME sentinel value the real component does — closes the loop between this guard's fixture and the source", () => {
                     // This guard feeds toCandlestickPointImpl (the reimplementation), so on
@@ -2064,7 +2340,7 @@ describe('canonical overlay axis and reference helpers', () => {
                     const withNullGap = realCandleData.map((value) => (value === ECHARTS_EMPTY_VALUE ? null : value));
 
                     withSsrChart((chart) => {
-                        expect(() => chart.setOption(candlesSubmodeOption(withNullGap, brokerData))).toThrow(/Cannot read properties of null/);
+                        expect(() => chart.setOption(candlesSubmodeOption(withNullGap))).toThrow(/Cannot read properties of null/);
 
                         // The throw is only the first symptom. The real damage is that it
                         // happened before GlobalModel finished building, so the instance is
@@ -2077,14 +2353,16 @@ describe('canonical overlay axis and reference helpers', () => {
 
                 it("initialises cleanly with the helper's '-' sentinel, and the instance is left fully alive", () => {
                     withSsrChart((chart) => {
-                        expect(() => chart.setOption(candlesSubmodeOption(realCandleData, brokerData))).not.toThrow();
+                        expect(() => chart.setOption(candlesSubmodeOption(realCandleData))).not.toThrow();
 
-                        // The exact inverse of the control's `series === []`: both series
+                        // The exact inverse of the control's `series === []`: the candlestick
                         // registered and addressable BY INDEX, which is the lookup
                         // (getSeriesByIndex) that produced ~22 console errors on mouse-move.
+                        // Why (re-pin, S10, D21a): one series, not two — the fixture above now has the
+                        // candles submode's real shape, the total candle without a broker overlay.
                         const registered = chart.getOption().series as Array<{name?: string}>;
-                        expect(registered).toHaveLength(2);
-                        expect(registered.map((s) => s.name)).toEqual(['Total P&L', 'Broker A']);
+                        expect(registered).toHaveLength(1);
+                        expect(registered.map((s) => s.name)).toEqual(['Total P&L']);
                         expect(chart.convertToPixel({seriesIndex: 0}, [0, 2])).toBeDefined();
                         expect(chart.renderToSVGString().length).toBeGreaterThan(0);
                     });
@@ -2092,7 +2370,7 @@ describe('canonical overlay axis and reference helpers', () => {
 
                 it('stays alive across a SECOND setOption — the symptom the developer saw was a dead model repainting nothing', () => {
                     withSsrChart((chart) => {
-                        chart.setOption(candlesSubmodeOption(realCandleData, brokerData));
+                        chart.setOption(candlesSubmodeOption(realCandleData));
                         // A zoom/pan or submode switch issues further setOption calls; on a
                         // half-built model these are the ones that silently do nothing.
                         expect(() => chart.setOption({series: [{name: 'Total P&L', type: 'candlestick', data: realCandleData}]})).not.toThrow();
@@ -2108,7 +2386,7 @@ describe('canonical overlay axis and reference helpers', () => {
                     expect(realCandleData.filter((v) => v === ECHARTS_EMPTY_VALUE)).toHaveLength(2);
 
                     withSsrChart((chart) => {
-                        chart.setOption(candlesSubmodeOption(realCandleData, brokerData));
+                        chart.setOption(candlesSubmodeOption(realCandleData));
                         const registered = chart.getOption().series as Array<{data?: unknown[]}>;
                         expect(registered[0].data).toHaveLength(dates.length);
                     });
@@ -2146,7 +2424,7 @@ describe('canonical overlay axis and reference helpers', () => {
         });
 
         describe('line-submode fixed 3-slot P&L split (positive / negative / reference)', () => {
-            it('mirrors the exact buildChartUpdateSeries / buildFullSeries series-shape contract: 3 fixed slots (line submode) or 1 fixed slot (candles submode) before the variable broker spread', () => {
+            it('mirrors the exact buildChartUpdateSeries / buildFullSeries series-shape contract: 3 fixed slots then the variable broker spread (line submode), the total candle alone (candles submode)', () => {
                 const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
                 const updateStart = source.indexOf('function buildChartUpdateSeries(');
                 const updateEnd = source.indexOf('\n    function buildFullSeries(', updateStart);
@@ -2165,10 +2443,13 @@ describe('canonical overlay axis and reference helpers', () => {
 
                 // buildChartUpdateSeries: line submode is exactly [positive, negative,
                 // reference, ...brokers] — 3 fixed named slots, then the variable spread.
+                // Why (re-pin, S10): the two halves now come from ONE splitBySign call instead of
+                // two clipToSign maps. splitBySign adds the interpolated zero crossings, which
+                // changes the points inside the slots but not the slots. Prettier now prints the
+                // return on one line, so the pin is the ORDER of the slots, not their line breaks.
+                expect(updateSeries).toContain('const signSplit = splitBySign(entry.pnl.total.points);');
                 expect(updateSeries).toContain('const referenceValue = findReferenceTotalPnl(entry, referenceDate);');
                 expect(updateSeries).toContain('const referencePoints: SeriesPoint[] = entry.pnl.total.points.map((p) => ({...p, value: [p.value[0], referenceValue]}));');
-                expect(updateSeries).toContain('{name: pnlLabels.total, data: entry.pnl.total.points.map((p) => clipToSign(p, true))},');
-                expect(updateSeries).toContain('{name: pnlLabels.total, data: entry.pnl.total.points.map((p) => clipToSign(p, false))},');
                 // The reference series' name is a shared module-level constant, not an
                 // inline literal: three sites must agree on it (both construction sites
                 // AND applyFullOption's legend exclusion), and a magic string repeated
@@ -2176,12 +2457,24 @@ describe('canonical overlay axis and reference helpers', () => {
                 expect(updateSeries).toContain('{name: PNL_REFERENCE_SERIES_NAME, data: referencePoints},');
                 expect(source).toMatch(/const PNL_REFERENCE_SERIES_NAME = '__pnlReference__';/);
                 expect(updateSeries).not.toContain("'__pnlReference__'");
-                expect(updateSeries).toContain('...entry.pnl.brokers.map((broker) => ({name: broker.brokerName, data: broker.metric.points})),');
+                expect(updateSeries).toMatch(
+                    /return \[\s*\{name: pnlLabels\.total, data: signSplit\.positive\},\s*\{name: pnlLabels\.total, data: signSplit\.negative\},\s*\{name: PNL_REFERENCE_SERIES_NAME, data: referencePoints\},\s*\.\.\.entry\.pnl\.brokers\.map\(\(broker\) => \(\{name: broker\.brokerName, data: broker\.metric\.points\}\)\),?\s*\];/,
+                );
 
-                // buildChartUpdateSeries: candles submode is exactly [candle, ...brokers] —
-                // a single fixed slot, then the variable spread.
-                expect(updateSeries).toContain('{name: pnlLabels.total, data: entry.pnl.candle.points.map(toCandlestickPoint) as unknown as SeriesPoint[]},');
-                expect(updateSeries).toContain('...entry.pnl.brokers.map((broker) => ({name: broker.brokerName, data: broker.metric.points.map(toPositionalValue) as unknown as SeriesPoint[]}))];');
+                // buildChartUpdateSeries: candles submode is exactly [candle] — one fixed
+                // slot and nothing after it.
+                // Why (re-pin, S10): the per-broker overlay was removed from the candles submode
+                // (developer review 2026-09-21: total candle only), so there is no broker spread
+                // left to follow the candle slot. The pin proves the return holds the total
+                // candle ALONE, and the matching buildFullSeries pin below proves the same on the
+                // other side, so a spread cannot come back on one side only.
+                // Why (re-pin, S7): the partial first bucket is now faded (item 4). Each quad from
+                // toCandlestickPoint goes through a map that wraps a partial bucket's quad as
+                // `{value, itemStyle}`, so the return reads `candles` instead of the inline map.
+                // The pin still proves the return holds the total candle ALONE: one
+                // `pnlLabels.total` series, built from entry.pnl.candle.points through
+                // toCandlestickPoint, with no broker spread after it.
+                expect(updateSeries).toMatch(/const candles = entry\.pnl\.candle\.points\.map\(\(point, index\) => \{\s*const quad = toCandlestickPoint\(point\);[\s\S]*?\}\);\s*return \[\s*\{name: pnlLabels\.total, data: candles as unknown as SeriesPoint\[\]\},?\s*\];/);
 
                 // buildFullSeries: line submode consumes seriesData[0]/[1]/[2] for
                 // positive/negative/reference, then slices from index 3 for brokers —
@@ -2193,58 +2486,106 @@ describe('canonical overlay axis and reference helpers', () => {
                 expect(fullSeries).toContain('return [positiveSeries, negativeSeries, referenceSeries, ...brokerSeries];');
 
                 // buildFullSeries: candles submode consumes seriesData[0] for the
-                // candlestick, then slices from index 1 for brokers — matching the single
-                // fixed candle slot above exactly (not slice(2) or higher).
-                expect(fullSeries).toContain('const brokerSeries: echarts.SeriesOption[] = seriesData.slice(1).map((s, index) => ({');
-                expect(fullSeries).toContain('return [candleSeries, ...brokerSeries];');
+                // candlestick and returns it alone — matching the single candle slot above
+                // (no seriesData.slice(1) broker spread any more; see the why above).
+                expect(fullSeries).toContain('return [candleSeries];');
             });
 
-            const signCrossingScenarios: Array<[string, Array<number | null>]> = [
-                ['all positive', [10, 20, 30]],
-                ['all negative', [-10, -20, -30]],
-                ['odd number of sign crossings', [5, -5, 5, -5, 5]],
-                ['even number of sign crossings', [5, -5, 5, -5]],
-                ['many crossings interleaved with gaps', [10, null, -10, 0, -5, null, 20, -20, 0]],
-                ['a single point', [42]],
+            // Why (re-pin, S10, D21b): e7773a143 splits the Total P&L with splitBySign, which
+            // inserts the interpolated zero crossing into both halves (the developer's report: the
+            // area vanished at a sign change). The old claim — each half as long as the source —
+            // described two plain clipToSign maps and is false for the product. What stays fixed
+            // is the series COUNT (pinned in the slot test above); the points inside the halves
+            // are not.
+            // D22 (developer, 2026-09-25): two rows added for the zero guard and the interpolation
+            // weight, and the reference-line assertions removed: the test built that line itself,
+            // so they could not fail. Its flatness is pinned by the slot-test literals and its
+            // value by describe('findReferenceTotalPnl').
+            //
+            // Third column: the instants at which each row must gain a crossing, in order, written
+            // by hand rather than computed with the rule under test. The dates are UTC midnights
+            // (index i is day i + 1), so a crossing between equal magnitudes sits at noon. Only two
+            // neighbours that are both non-null, non-zero and of opposite sign get one, so a pair
+            // touching a gap or a zero gets none (in the gapped row only 20 → −20 qualifies).
+            // [5, 0, −5] is there for the zero guard: every other zero sits next to a negative value
+            // or a gap, which the sign test or the gap guard already skips (0 > 0 is false), whereas
+            // 5 → 0 passes the sign test and, without the guard, would get t = 1 — a crossing at the
+            // zero's own instant. [30, −10] is there for the interpolation weight, which no
+            // equal-magnitude row can tell apart: both ends give noon there, but 30 → −10 reaches
+            // zero three quarters of the way, at 18:00, and the wrong-end weight would give 06:00.
+            const signCrossingScenarios: Array<[string, Array<number | null>, string[]]> = [
+                ['all positive', [10, 20, 30], []],
+                ['all negative', [-10, -20, -30], []],
+                ['even number of sign crossings', [5, -5, 5, -5, 5], ['2026-01-01T12:00:00.000Z', '2026-01-02T12:00:00.000Z', '2026-01-03T12:00:00.000Z', '2026-01-04T12:00:00.000Z']],
+                ['odd number of sign crossings', [5, -5, 5, -5], ['2026-01-01T12:00:00.000Z', '2026-01-02T12:00:00.000Z', '2026-01-03T12:00:00.000Z']],
+                ['many crossings interleaved with gaps', [10, null, -10, 0, -5, null, 20, -20, 0], ['2026-01-07T12:00:00.000Z']],
+                ['a zero between a positive and a negative value', [5, 0, -5], []],
+                ['a single point', [42], []],
+                ['a crossing between unequal magnitudes', [30, -10], ['2026-01-01T18:00:00.000Z']],
             ];
 
-            it.each(signCrossingScenarios)('keeps exactly 3 fixed-length series (positive/negative/reference) for %s — the slot count never varies with the number of sign crossings', (_label, values) => {
+            it.each(signCrossingScenarios)('splits %s into ONE positive and ONE negative half: every source point in exactly one half (a gap null in both), the zero crossing inserted into BOTH between opposite-sign neighbours, nothing invented at a gap or a zero', (_label, values, crossings) => {
                 const dates = values.map((_v, i) => `2026-01-${String(i + 1).padStart(2, '0')}`);
                 const points = dates.map((d, i) => seriesPoint(d, values[i]));
 
-                const positive = points.map((p) => clipToSignImpl(p, true));
-                const negative = points.map((p) => clipToSignImpl(p, false));
-                const referenceValue = findReferenceTotalPnlImpl(points, null);
-                const referencePoints = points.map((p) => ({...p, value: [p.value[0], referenceValue] as [string, number | null]}));
+                const {positive, negative} = splitBySignImpl(points);
 
-                // FIXED length: each of the 3 series has one entry per source point —
-                // exactly what keeps updateChartData's partial by-index series merge
-                // valid across zoom/pan (see clipToSign's own docstring in GrowthChart.svelte).
-                expect(positive).toHaveLength(values.length);
-                expect(negative).toHaveLength(values.length);
-                expect(referencePoints).toHaveLength(values.length);
+                // One point more per crossing, the same number in both halves.
+                expect(positive).toHaveLength(values.length + crossings.length);
+                expect(negative).toHaveLength(positive.length);
 
-                // Completeness + mutual exclusivity per point: a non-null value survives in
-                // EXACTLY one of positive/negative; a null value is preserved as null in
-                // BOTH (a genuine gap, never fabricated into a zero).
+                // A crossing is recognisable without the rule under test: every source date is a
+                // bare day, and a crossing carries an instant that is none of them.
+                const sourceDates = new Set(dates);
+                const isCrossing = (p: FixtureSeriesPoint) => !sourceDates.has(p.value[0]);
+
+                // The crossings are exactly the third column's hand-written instants, in order.
+                expect(positive.filter(isCrossing).map((p) => p.value[0])).toEqual(crossings);
+
+                const positiveSource = positive.filter((p) => !isCrossing(p));
+                const negativeSource = negative.filter((p) => !isCrossing(p));
+
+                // With the crossings taken out, each half is the plain clipToSign map, in order...
+                expect(positiveSource).toEqual(points.map((p) => clipToSignImpl(p, true)));
+                expect(negativeSource).toEqual(points.map((p) => clipToSignImpl(p, false)));
+
+                // ...so a non-null value survives in EXACTLY one half, and a null value stays null
+                // in BOTH (a genuine gap, never fabricated into a zero).
                 values.forEach((v, i) => {
                     if (v == null) {
-                        expect(positive[i].value[1]).toBeNull();
-                        expect(negative[i].value[1]).toBeNull();
+                        expect(positiveSource[i].value[1]).toBeNull();
+                        expect(negativeSource[i].value[1]).toBeNull();
                     } else if (v >= 0) {
-                        expect(positive[i].value[1]).toBe(v);
-                        expect(negative[i].value[1]).toBeNull();
+                        expect(positiveSource[i].value[1]).toBe(v);
+                        expect(negativeSource[i].value[1]).toBeNull();
                     } else {
-                        expect(positive[i].value[1]).toBeNull();
-                        expect(negative[i].value[1]).toBe(v);
+                        expect(positiveSource[i].value[1]).toBeNull();
+                        expect(negativeSource[i].value[1]).toBe(v);
                     }
                 });
 
-                // The reference line is flat: the SAME single value at every position,
-                // regardless of how many points/sign-crossings are in the series.
-                const distinctReferenceValues = new Set(referencePoints.map((p) => p.value[1]));
-                expect(distinctReferenceValues.size).toBe(1);
-                expect(referencePoints[0].value[1]).toBe(referenceValue);
+                // Each crossing: value 0; the same point at the same index in both halves; right
+                // after its left neighbour and right before its right one (never at either end,
+                // never two in a row); only between two non-null, non-zero values of opposite
+                // sign; strictly between their dates. Its exact instant is the third column's,
+                // asserted above.
+                const sourceSlots = positive.flatMap((p, k) => (isCrossing(p) ? [] : [k]));
+                positive.forEach((p, k) => {
+                    if (!isCrossing(p)) return;
+                    const left = sourceSlots.indexOf(k - 1);
+                    expect(left).toBeGreaterThanOrEqual(0);
+                    expect(sourceSlots[left + 1]).toBe(k + 1);
+
+                    expect(p.value[1]).toBe(0);
+                    expect(negative[k]).toEqual(p);
+                    expect(Math.sign(values[left] ?? 0) * Math.sign(values[left + 1] ?? 0)).toBe(-1);
+
+                    const leftMs = new Date(dates[left]).getTime();
+                    const rightMs = new Date(dates[left + 1]).getTime();
+                    const crossingMs = new Date(p.value[0]).getTime();
+                    expect(crossingMs).toBeGreaterThan(leftMs);
+                    expect(crossingMs).toBeLessThan(rightMs);
+                });
             });
         });
 
@@ -2255,11 +2596,14 @@ describe('canonical overlay axis and reference helpers', () => {
         // Same established pattern as the line/candles blocks above: the parts that are
         // pure source *shape* (which slot holds what, which stack it joins) are pinned by
         // reading GrowthChart.svelte, and the parts that are component-local *logic*
-        // (the window-preset date maths, the tooltip's conditional section) are
-        // reimplemented faithfully here for real execution and tied back to the real
-        // source text by a contract test.
+        // (the tooltip's conditional section) are reimplemented faithfully here for real
+        // execution and tied back to the real source text by a contract test.
 
-        describe('income-submode fixed 6-slot order (dividend / interest / costs / deposit / acqNewCapital / acqReinvested)', () => {
+        // Why (re-pin, S8): R11 names both acquisition slots after the purchase value
+        // (pnlLabels.bookValue, the KPI card's key), so slots 4-5 now share one label. The
+        // block still pins the fixed 6-slot order, new capital before reinvested, the path
+        // each slot reads and the stack it joins.
+        describe('income-submode fixed 6-slot order (dividend / interest / costs / deposit / bookValue: new capital, then reinvested)', () => {
             /** The income branch of one of the two builders, sliced out of the real source. */
             function incomeBranchOf(source: string, functionName: string): string {
                 const fnStart = source.indexOf(`function ${functionName}(`);
@@ -2279,10 +2623,18 @@ describe('canonical overlay axis and reference helpers', () => {
             const EXPECTED_SLOTS = [
                 {label: 'dividend', dataPath: 'entry.pnl.income.dividend.points', stack: 'income'},
                 {label: 'interest', dataPath: 'entry.pnl.income.interest.points', stack: 'income'},
-                {label: 'costs', dataPath: 'entry.pnl.costs.points', stack: null},
+                // Why (re-pin, S7): costs moved into the income stack (item 6). They are signed
+                // negative and a same-sign stack splits by sign, so they hang below dividends and
+                // interest in the same column. The expectation still pins, slot by slot, the label
+                // order buildFullSeries reads seriesData[0..5] in and the stack each slot joins.
+                {label: 'costs', dataPath: 'entry.pnl.costs.points', stack: 'income'},
                 {label: 'deposit', dataPath: 'entry.pnl.deposits.points', stack: null},
-                {label: 'acqNewCapital', dataPath: 'entry.pnl.acquisition.fromNewCapital.points', stack: 'acquisition'},
-                {label: 'acqReinvested', dataPath: 'entry.pnl.acquisition.fromReinvested.points', stack: 'acquisition'},
+                // Why (re-pin, S8): R11 (D2 = A) gives both acquisition halves the shared
+                // purchase-value name, pnlLabels.bookValue, so the legend shows it once. The
+                // slots still pin new capital at 4 and reinvested at 5, each on its own data
+                // path, both in the 'acquisition' stack: a swap still turns both tests red.
+                {label: 'bookValue', dataPath: 'entry.pnl.acquisition.fromNewCapital.points', stack: 'acquisition'},
+                {label: 'bookValue', dataPath: 'entry.pnl.acquisition.fromReinvested.points', stack: 'acquisition'},
             ] as const;
 
             it('emits exactly the 6 expected slots, in order, each reading its own AggregatedResolutionData path', () => {
@@ -2291,7 +2643,11 @@ describe('canonical overlay axis and reference helpers', () => {
 
                 const emitted = [...block.matchAll(/\{name: pnlLabels\.(\w+), data: ([^}]+)\}/g)].map((match) => ({label: match[1], dataPath: match[2].trim()}));
 
-                expect(emitted).toEqual(EXPECTED_SLOTS.map(({label, dataPath}) => ({label, dataPath})));
+                // Why (re-pin, S7): the partial first bucket is now faded on every income column
+                // (item 4), so each slot passes its path through `faded(...)`. The pin still
+                // proves exactly 6 slots, in order, each reading its own AggregatedResolutionData
+                // path (the wrapper's argument).
+                expect(emitted).toEqual(EXPECTED_SLOTS.map(({label, dataPath}) => ({label, dataPath: `faded(${dataPath})`})));
             });
 
             it('buildFullSeries consumes seriesData[0..5] in exactly the same label order — a swap here would silently draw two bars with each other data', () => {
@@ -2313,7 +2669,8 @@ describe('canonical overlay axis and reference helpers', () => {
                 expect(consumed.map(({stack}) => stack)).toEqual(EXPECTED_SLOTS.map(({stack}) => stack));
             });
 
-            it('never spreads broker overlays into the income submode — the slot count is fixed at 6, unlike line/candles', () => {
+            it('never spreads broker overlays into the income submode — the slot count is fixed at 6, unlike line', () => {
+                // Why (re-pin, S10, D21a): candles no longer spreads broker overlays either (total candle only, developer review 2026-09-21), so line is the only submode left to contrast with.
                 const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
 
                 for (const fn of ['buildChartUpdateSeries', 'buildFullSeries'] as const) {
@@ -2323,12 +2680,24 @@ describe('canonical overlay axis and reference helpers', () => {
                 }
             });
 
-            it('reuses the EUR-mode capital/returns pool colors for the two acquisition zones rather than inventing new ones', () => {
+            it('paints the two acquisition zones in the Abs view colours: new capital in the KPI blue of the purchase cost, reinvested in the returns colour', () => {
                 const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
                 const block = incomeBranchOf(source, 'buildFullSeries');
 
-                expect(block).toContain("{name: pnlLabels.acqNewCapital, type: 'bar' as const, stack: 'acquisition', data: seriesData[4].data, itemStyle: {color: cc('cashContributed')}}");
-                expect(block).toContain("{name: pnlLabels.acqReinvested, type: 'bar' as const, stack: 'acquisition', data: seriesData[5].data, itemStyle: {color: cc('cashGenerated')}}");
+                // Why (re-pin, S7): every income series now spreads the column gaps (`...gaps`,
+                // item 6), so the acquisition lines no longer close on the itemStyle, and slice
+                // S8 edits them again. The pin is the colour per zone, not the whole line: new
+                // capital (seriesData[4]) kept cc('cashContributed') until S8 (below) and
+                // reinvested (seriesData[5]) keeps cc('cashGenerated'), the EUR-mode pool colours,
+                // so a swap or an invented colour still turns it red.
+                // Why (re-pin, S8): D26 moves new capital from the sage cc('cashContributed') to
+                // cc('bookAssetLike'), the KPI blue of the Abs purchase-cost series, and R11 names
+                // both zones pnlLabels.bookValue; reinvested keeps cc('cashGenerated'), the Abs
+                // returns colour. The pin is still one colour per zone, tied to the seriesData
+                // index it paints, so a swap or an invented colour still turns it red.
+                expect(block).toMatch(/\{name: pnlLabels\.bookValue, [^\n]*?data: seriesData\[4\]\.data, [^\n]*?itemStyle: \{color: cc\('bookAssetLike'\)\}/);
+                expect(block).toMatch(/\{name: pnlLabels\.bookValue, [^\n]*?data: seriesData\[5\]\.data, [^\n]*?itemStyle: \{color: cc\('cashGenerated'\)\}/);
+                expect(block).not.toContain("cc('cashContributed')");
             });
 
             it('builds all six aggregated dimensions through the SAME aggregateFlowMetric — flows are summed per bucket, never end-of-period', () => {
@@ -2533,8 +2902,13 @@ describe('canonical overlay axis and reference helpers', () => {
                     if (costVal !== 0) html += signedRow('costs', costVal);
                     if (depositVal !== 0) html += signedRow('deposit', depositVal);
                     if (acqNewVal !== 0 || acqReinvestedVal !== 0) {
-                        html += signedRow('acqNewCapital', acqNewVal);
-                        html += signedRow('acqReinvested', acqReinvestedVal);
+                        // Why (re-pin, S8): R11 heads the acquisition rows with the purchase value
+                        // (bold, new + reinvested) and indents the two halves under it with `↳ `.
+                        // The mirror still proves the gate: either half non-zero prints the whole
+                        // group, and a zero half keeps its row.
+                        html += signedRow('<b>bookValue</b>', acqNewVal + acqReinvestedVal);
+                        html += signedRow('↳ acqNewCapital', acqNewVal);
+                        html += signedRow('↳ acqReinvested', acqReinvestedVal);
                     }
                 }
                 return html;
@@ -2562,8 +2936,11 @@ describe('canonical overlay axis and reference helpers', () => {
             const singleDimensionScenarios: Array<[string, Partial<IncomeTooltipValues>, string[]]> = [
                 ['only costs', {costVal: -12}, ['costs']],
                 ['only deposit', {depositVal: 500}, ['deposit']],
-                ['only fresh-capital acquisition', {acqNewVal: 400}, ['acqNewCapital', 'acqReinvested']],
-                ['only reinvested acquisition', {acqReinvestedVal: 200}, ['acqNewCapital', 'acqReinvested']],
+                // Why (re-pin, S8): R11 prints the purchase value above the two indented halves,
+                // so either acquisition half now opens three rows. The scenarios still prove that
+                // only the non-zero dimensions open the section, and the halves come as a pair.
+                ['only fresh-capital acquisition', {acqNewVal: 400}, ['<b>bookValue</b>', '↳ acqNewCapital', '↳ acqReinvested']],
+                ['only reinvested acquisition', {acqReinvestedVal: 200}, ['<b>bookValue</b>', '↳ acqNewCapital', '↳ acqReinvested']],
             ];
 
             it.each(singleDimensionScenarios)('opens the second section for %s, and only for the dimensions that are actually non-zero', (_label, overrides, expectedExtraRows) => {
@@ -2580,14 +2957,21 @@ describe('canonical overlay axis and reference helpers', () => {
                 // question at all, rather than answering it with a zero.
                 const html = buildIncomeTooltipImpl({...zeroDay, acqNewVal: 0, acqReinvestedVal: 200});
 
-                expect(rowLabels(html)).toContain('acqNewCapital');
-                expect(html).toContain('<row label="acqNewCapital" value="0">');
+                // Why (re-pin, S8): R11 indents the halves under the purchase value, so the zero
+                // half is now the `↳ acqNewCapital` row and the purchase value prints the sum
+                // (0 + 200). The pin still proves the zero leg is printed, not hidden.
+                expect(rowLabels(html)).toContain('↳ acqNewCapital');
+                expect(html).toContain('<row label="↳ acqNewCapital" value="0">');
+                expect(html).toContain('<row label="<b>bookValue</b>" value="200">');
             });
 
             it('renders every batch-2 row when all four dimensions are active, in a fixed order', () => {
                 const html = buildIncomeTooltipImpl({divVal: 10, intVal: 2, costVal: -5, depositVal: 1000, acqNewVal: 300, acqReinvestedVal: 100});
 
-                expect(rowLabels(html)).toEqual(['dividend', 'interest', '<b>total</b>', 'costs', 'deposit', 'acqNewCapital', 'acqReinvested']);
+                // Why (re-pin, S8): R11 replaces the two acquisition rows with the purchase value
+                // followed by its two indented halves. The pin still proves one fixed order for
+                // every batch-2 row and a single divider before them.
+                expect(rowLabels(html)).toEqual(['dividend', 'interest', '<b>total</b>', 'costs', 'deposit', '<b>bookValue</b>', '↳ acqNewCapital', '↳ acqReinvested']);
                 expect(dividerCount(html)).toBe(2);
             });
 
@@ -2595,6 +2979,9 @@ describe('canonical overlay axis and reference helpers', () => {
                 const html = buildIncomeTooltipImpl({divVal: 10, intVal: 2, costVal: -5, depositVal: 1000, acqNewVal: 300, acqReinvestedVal: 100});
 
                 expect(html).toContain('<row label="<b>total</b>" value="12">');
+                // Why (re-pin, S8): R11 gives the purchase value its own total (300 + 100). The
+                // income total above still folds in none of the batch-2 dimensions.
+                expect(html).toContain('<row label="<b>bookValue</b>" value="400">');
             });
 
             it('mirrors the exact literal body of the tooltip income branch in GrowthChart.svelte (ties the reimplementation above to the real source)', () => {
@@ -2618,8 +3005,15 @@ describe('canonical overlay axis and reference helpers', () => {
                 expect(block).toContain("if (costVal !== 0) html += signedRow(pnlLabels.costs, costVal, cc('costs'));");
                 expect(block).toContain("if (depositVal !== 0) html += signedRow(pnlLabels.deposit, depositVal, cc('deposit'));");
                 expect(block).toContain('if (acqNewVal !== 0 || acqReinvestedVal !== 0) {');
-                expect(block).toContain("html += signedRow(pnlLabels.acqNewCapital, acqNewVal, cc('cashContributed'));");
-                expect(block).toContain("html += signedRow(pnlLabels.acqReinvested, acqReinvestedVal, cc('cashGenerated'));");
+                // Why (re-pin, S8): R11 swaps the two acquisition rows for the purchase value (bold
+                // label, new + reinvested, text colour) and its two `↳ ` halves, painted in the D26
+                // zone colours (KPI blue, returns). The contract still ties the mirror's rows and
+                // gates to the real source, and the old two-row form must be gone.
+                expect(block).toContain('html += signedRow(`<b>${pnlLabels.bookValue}</b>`, acqNewVal + acqReinvestedVal, textColor);');
+                expect(block).toContain("html += signedRow(`↳ ${pnlLabels.acqNewCapital}`, acqNewVal, cc('bookAssetLike'));");
+                expect(block).toContain("html += signedRow(`↳ ${pnlLabels.acqReinvested}`, acqReinvestedVal, cc('cashGenerated'));");
+                expect(block).not.toContain("html += signedRow(pnlLabels.acqNewCapital, acqNewVal, cc('cashContributed'));");
+                expect(block).not.toContain("html += signedRow(pnlLabels.acqReinvested, acqReinvestedVal, cc('cashGenerated'));");
                 // Each of the six values defaults to 0 when the aggregated entry is absent —
                 // which is what makes "all zero" the honest reading of an empty day.
                 for (const path of ['pnl.income.dividend', 'pnl.income.interest', 'pnl.costs', 'pnl.deposits', 'pnl.acquisition.fromNewCapital', 'pnl.acquisition.fromReinvested']) {
@@ -2690,9 +3084,10 @@ describe('canonical overlay axis and reference helpers', () => {
                 expect(missing).toEqual([]);
             });
 
-            // The seven keys batch 2's i18n pass wired, each asserted by NAME rather than
-            // by its English text, so a retranslation never turns this red.
-            const WIRED_KEYS = ['dashboard.pnlSubmodeLine', 'dashboard.pnlSubmodeCandles', 'dashboard.pnlSubmodeIncome', 'dashboard.pnlCandlesHypothetical', 'dashboard.pnlCandlesHypotheticalShort', 'dashboard.pnlAcqNewCapital', 'dashboard.pnlAcqReinvested'] as const;
+            // The keys batch 2's i18n pass wired, each asserted by NAME rather than by its
+            // English text, so a retranslation never turns this red. The long caption key
+            // left in round 4 (R9): the caption now uses the short register.
+            const WIRED_KEYS = ['dashboard.pnlSubmodeLine', 'dashboard.pnlSubmodeCandles', 'dashboard.pnlSubmodeIncome', 'dashboard.pnlCandlesHypotheticalShort', 'dashboard.pnlAcqNewCapital', 'dashboard.pnlAcqReinvested'] as const;
 
             it.each(WIRED_KEYS)('consumes %s through $_() — a key that exists but is never wired is exactly the bug that shipped', (key) => {
                 const source = growthChartSource();
@@ -2758,186 +3153,34 @@ describe('canonical overlay axis and reference helpers', () => {
                     }
                 }
             });
-
-            it('does NOT transpose the SHORT and LONG hypothetical strings — a demonstrated risk, not a hypothetical one', () => {
-                // These two keys differ only by a suffix and a trailing clause, and the
-                // TODO comment that preceded the wiring actively pointed at the wrong one
-                // of the pair. `pnlCandlesHypothetical` is also a strict prefix of
-                // `pnlCandlesHypotheticalShort`, so every assertion here matches the FULL
-                // call including its closing quote — a bare `toContain('…Hypothetical')`
-                // would be satisfied by the Short key and prove nothing.
-                const source = growthChartSource();
-                const LONG_CALL = "$_('dashboard.pnlCandlesHypothetical')";
-                const SHORT_CALL = "$_('dashboard.pnlCandlesHypotheticalShort')";
-
-                // The always-visible caption under the chart takes the LONG form.
-                const caption = source.match(/<p[^>]*data-testid="growth-pnl-candles-hypothetical-label"[^>]*>[\s\S]*?<\/p>/)?.[0];
-                expect(caption).toBeDefined();
-                if (!caption) throw new Error('GrowthChart hypothetical caption not found');
-                expect(caption).toContain(LONG_CALL);
-                expect(caption).not.toContain(SHORT_CALL);
-
-                // The compact candle-tooltip footnote takes the SHORT form.
-                const tooltipFootnote = source.split('\n').find((line) => line.includes('font-size:10px') && line.includes('pnlCandlesHypothetical'));
-                expect(tooltipFootnote).toBeDefined();
-                if (!tooltipFootnote) throw new Error('GrowthChart hypothetical tooltip footnote not found');
-                expect(tooltipFootnote).toContain(SHORT_CALL);
-
-                // Each form is used exactly once, so neither can be doing both jobs.
-                expect(source.split(SHORT_CALL)).toHaveLength(2);
-                expect(source.split(LONG_CALL).length - 1).toBe(1);
-            });
-
-            it('keeps the LONG value a strict extension of the SHORT one in every locale — the pair must stay two registers of one sentence', () => {
-                for (const locale of LOCALES) {
-                    const bundle = localeBundle(locale);
-                    const short = resolveKey(bundle, 'dashboard.pnlCandlesHypotheticalShort') as string;
-                    const long = resolveKey(bundle, 'dashboard.pnlCandlesHypothetical') as string;
-
-                    expect(typeof short).toBe('string');
-                    expect(typeof long).toBe('string');
-                    expect(long.length, `${locale}: the long form must be the longer of the two`).toBeGreaterThan(short.length);
-                    expect(short.endsWith('.'), `${locale}: the compact footnote must not end in a period`).toBe(false);
-                    expect(long.endsWith('.'), `${locale}: the full caption must end in a period`).toBe(true);
-                }
-            });
         });
 
-        describe('P&L zoom-window selector: selectZoomWindow date maths', () => {
-            // Faithful reimplementation of computeZoomWindowRange, pinned to the real
-            // source by the contract test at the end of this block. `dates` is the
-            // component's ascending list of available ISO dates.
-            type ZoomWindowPreset = '1W' | '1M' | '1Y' | 'all';
-
-            function computeZoomWindowRangeImpl(dates: string[], preset: ZoomWindowPreset): {startDate: string; endDate: string} | null {
-                if (dates.length === 0) return null;
-                const endDate = dates[dates.length - 1];
-                if (preset === 'all') return {startDate: dates[0], endDate};
-                const daysBack = preset === '1W' ? 7 : preset === '1M' ? 30 : 365;
-                const startMs = new Date(endDate).getTime() - daysBack * 24 * 60 * 60 * 1000;
-                const computedStart = new Date(startMs).toISOString().slice(0, 10);
-                return {startDate: computedStart < dates[0] ? dates[0] : computedStart, endDate};
-            }
-
-            /** A dense ascending ISO-date range, inclusive of both ends. */
-            function isoRange(from: string, to: string): string[] {
-                const out: string[] = [];
-                for (let ms = new Date(from).getTime(); ms <= new Date(to).getTime(); ms += 24 * 60 * 60 * 1000) {
-                    out.push(new Date(ms).toISOString().slice(0, 10));
-                }
-                return out;
-            }
-
-            // Three full years of daily dates: long enough that even 1Y clamps to nothing.
-            const threeYears = isoRange('2023-01-01', '2026-01-01');
-
-            const presetScenarios: Array<[ZoomWindowPreset, number]> = [
-                ['1W', 7],
-                ['1M', 30],
-                ['1Y', 365],
-            ];
-
-            it.each(presetScenarios)('%s counts back exactly %i days from the LAST available date, not from today', (preset, daysBack) => {
-                const range = computeZoomWindowRangeImpl(threeYears, preset);
-
-                expect(range).not.toBeNull();
-                if (!range) throw new Error('unreachable');
-                // Anchored on the data, never on the wall clock: the last available date is
-                // the end, and the start is exactly `daysBack` calendar days before it.
-                expect(range.endDate).toBe('2026-01-01');
-                expect(range.startDate).toBe(new Date(new Date('2026-01-01').getTime() - daysBack * 86_400_000).toISOString().slice(0, 10));
-                expect(isoRange(range.startDate, range.endDate)).toHaveLength(daysBack + 1);
-            });
-
-            it("'all' spans the entire available range, first date to last", () => {
-                expect(computeZoomWindowRangeImpl(threeYears, 'all')).toEqual({startDate: '2023-01-01', endDate: '2026-01-01'});
-            });
-
-            const clampScenarios: Array<[ZoomWindowPreset, string[]]> = [
-                ['1W', isoRange('2026-01-01', '2026-01-04')],
-                ['1M', isoRange('2025-12-20', '2026-01-04')],
-                ['1Y', isoRange('2025-06-01', '2026-01-04')],
-            ];
-
-            it.each(clampScenarios)('%s clamps to the earliest available date when the computed start precedes it', (preset, dates) => {
-                const range = computeZoomWindowRangeImpl(dates, preset);
-
-                expect(range).toEqual({startDate: dates[0], endDate: dates[dates.length - 1]});
-            });
-
-            it('clamping is exactly at the boundary: a start landing ON the earliest date is kept, not nudged', () => {
-                // Exactly 8 dates -> 1W's computed start (endDate - 7 days) IS dates[0].
-                const dates = isoRange('2026-01-01', '2026-01-08');
-
-                expect(computeZoomWindowRangeImpl(dates, '1W')).toEqual({startDate: '2026-01-01', endDate: '2026-01-08'});
-                // One extra day of history and the computed start is strictly inside.
-                expect(computeZoomWindowRangeImpl(isoRange('2025-12-31', '2026-01-08'), '1W')).toEqual({startDate: '2026-01-01', endDate: '2026-01-08'});
-            });
-
-            it('returns null for an empty dates array, so the caller leaves the zoom untouched', () => {
-                for (const preset of ['1W', '1M', '1Y', 'all'] as const) {
-                    expect(computeZoomWindowRangeImpl([], preset)).toBeNull();
-                }
-            });
-
-            it('does not require the computed start to be a date that exists in the series (a sparse/gapped series still gets a window)', () => {
-                // Trading-day style series: only weekdays present. The computed start may
-                // land on a weekend that is absent from `dates` — that is fine, because
-                // buildZoomWindow resolves it by bucketEnd/bucketStart comparison, not by
-                // an exact lookup.
-                const sparse = ['2025-12-01', '2025-12-08', '2025-12-15', '2025-12-22', '2025-12-29'];
-                const range = computeZoomWindowRangeImpl(sparse, '1W');
-
-                expect(range).toEqual({startDate: '2025-12-22', endDate: '2025-12-29'});
-                expect(sparse).not.toContain('2025-12-23');
-            });
-
-            it('mirrors the exact literal body of computeZoomWindowRange in GrowthChart.svelte (ties the reimplementation above to the real source)', () => {
+        describe('P&L candle-width ladder markup', () => {
+            it('renders one button per available rung of the eight-rung CANDLE_WIDTH_ORDER, with testid, selectCandleWidth handler and aria-pressed bound to the same width, and no zoom-window selector left', () => {
                 const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
-                const start = source.indexOf('function computeZoomWindowRange(preset: ZoomWindowPreset): {startDate: string; endDate: string} | null {');
-                const end = source.indexOf('\n    function formatTooltipMonth(', start);
-                expect(start).toBeGreaterThan(-1);
-                expect(end).toBeGreaterThan(start);
-                if (start < 0 || end <= start) throw new Error('GrowthChart income window contract not found');
+                // Why (re-pin, S10): round 3 removed the 1W/1M/1Y/All visible-range selector
+                // (selectZoomWindow). The control in that place is now the candle-width ladder: it
+                // picks how many days one body covers and keeps the whole history on the axis.
+                // The pins: the eight rungs in order; ONE button per rung through the `#each`,
+                // with testid, handler and aria-pressed all bound to the same loop variable; and
+                // no trace of the old selector, so it cannot come back unnoticed.
+                const order = source.match(/const CANDLE_WIDTH_ORDER: CandleWidth\[\] = \[([^\]]*)\];/)?.[1] ?? '';
+                expect([...order.matchAll(/'(\w+)'/g)].map((m) => m[1])).toEqual(['1D', '3D', '1W', '2W', '1M', '3M', '6M', '1Y']);
 
-                const block = source.slice(start, end);
-                expect(block).toContain('if (dates.length === 0) return null;');
-                expect(block).toContain('const endDate = dates[dates.length - 1];');
-                expect(block).toContain("if (preset === 'all') return {startDate: dates[0], endDate};");
-                expect(block).toContain("const daysBack = preset === '1W' ? 7 : preset === '1M' ? 30 : 365;");
-                expect(block).toContain('const startMs = new Date(endDate).getTime() - daysBack * 24 * 60 * 60 * 1000;');
-                expect(block).toContain('const computedStart = new Date(startMs).toISOString().slice(0, 10);');
-                expect(block).toContain('return {startDate: computedStart < dates[0] ? dates[0] : computedStart, endDate};');
-            });
+                const eachStart = source.indexOf('{#each availableCandleWidths as width (width)}');
+                const eachEnd = source.indexOf('{/each}', eachStart);
+                expect(eachStart).toBeGreaterThan(-1);
+                expect(eachEnd).toBeGreaterThan(eachStart);
+                if (eachStart < 0 || eachEnd <= eachStart) throw new Error('GrowthChart candle-width ladder #each not found');
 
-            it('selectZoomWindow drives the EXISTING shared zoom rather than a parallel windowing system', () => {
-                // The preset must land in the same visibleStartDate/visibleEndDate +
-                // buildZoomWindow + dataZoom path a manual drag-zoom uses, or the two would
-                // fight and a submode switch would lose the window.
-                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
-                const start = source.indexOf('function selectZoomWindow(preset: ZoomWindowPreset) {');
-                const end = source.indexOf('\n    function formatTooltipMonth(', start);
-                expect(start).toBeGreaterThan(-1);
-                expect(end).toBeGreaterThan(start);
-                if (start < 0 || end <= start) throw new Error('GrowthChart selectZoomWindow contract not found');
+                const rung = source.slice(eachStart, eachEnd);
+                expect(rung.match(/<button\b/g) ?? []).toHaveLength(1);
+                expect(rung).toContain('onclick={() => selectCandleWidth(width)}');
+                expect(rung).toContain('aria-pressed={candleWidth === width}');
+                expect(rung).toContain('data-testid="growth-candle-width-{width.toLowerCase()}"');
 
-                const block = source.slice(start, end);
-                expect(block).toContain('const range = computeZoomWindowRange(preset);');
-                expect(block).toContain('if (!range || !chartInstance) return;');
-                expect(block).toContain('visibleStartDate = range.startDate;');
-                expect(block).toContain('visibleEndDate = range.endDate;');
-                expect(block).toContain('const zoomWindow = buildZoomWindow(currentResolution, range.startDate, range.endDate);');
-                expect(block).toContain("chartInstance.setOption({dataZoom: [{type: 'inside', ...INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG, start: zoomWindow.start, end: zoomWindow.end}]}, {replaceMerge: ['dataZoom']});");
-            });
-
-            it('exposes one button per implemented preset — 1W/1M/1Y/All, with no Custom entry (a disclosed scope limitation, not a missing testid)', () => {
-                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
-                const testids = [...source.matchAll(/data-testid="growth-zoom-window-([\w]+)"/g)].map((m) => m[1]);
-
-                expect(testids).toEqual(['1w', '1m', '1y', 'all']);
-                for (const preset of ['1W', '1M', '1Y', 'all'] as const) {
-                    expect(source).toContain(`onclick={() => selectZoomWindow('${preset}')}`);
-                }
+                expect(source).not.toContain('growth-zoom-window-');
+                expect(source).not.toContain('selectZoomWindow');
             });
         });
     });

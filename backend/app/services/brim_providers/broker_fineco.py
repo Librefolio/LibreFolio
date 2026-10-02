@@ -251,7 +251,7 @@ class FinecoBrokerProvider(BRIMProvider):
             return fake_id
 
         try:
-            with open(file_path, encoding="utf-8-sig") as f:
+            with self._open_text(file_path) as f:
                 reader = csv.reader(f, delimiter=detected_delim)
                 rows = list(reader)
 

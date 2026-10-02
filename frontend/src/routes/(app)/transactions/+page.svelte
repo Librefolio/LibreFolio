@@ -247,6 +247,16 @@
         selectedRows = rows;
     }
 
+    /**
+     * Empty both selections: the table's own (the checkboxes) and the page's (the toolbar). The table
+     * reports `onSelectionChange([])`, so `selectedRows` follows; it is also reset here in case the table
+     * is not mounted. Called after every executed operation, never on a cancelled one.
+     */
+    function clearSelection() {
+        transactionsTableComponent?.getTableRef()?.clearSelection();
+        selectedRows = [];
+    }
+
     /** Filter out rows on viewer-only brokers. Returns editable + skipped. */
     function filterEditableRows(rows: TXReadItem[]): {editable: TXReadItem[]; skipped: TXReadItem[]} {
         const editable: TXReadItem[] = [];
@@ -286,6 +296,9 @@
     }
     function handleBulkCommitted(resp: unknown) {
         bulkOpen = false;
+        // Whatever the workspace saved — edits, clones, deletions, new or imported rows — the rows the
+        // selection pointed at may have changed or gone.
+        clearSelection();
         // F11: improved toast with localized summary — bulleted list with emoji
         const r = resp as {results?: Array<{operation: string; status: string}>};
         if (r?.results) {
@@ -403,7 +416,7 @@
                 promoteConfirmOpen = false;
                 promoteTarget = null;
                 promoteMergeData = null;
-                selectedRows = [];
+                clearSelection();
                 await reload({soft: true});
             } else {
                 console.error('[promote] commit failed:', result.issues);
@@ -433,7 +446,7 @@
                 splitConfirmOpen = false;
                 splitConfirmTx = null;
                 splitConfirmPartner = null;
-                selectedRows = [];
+                clearSelection();
                 await reload({soft: true});
             } else {
                 console.error('[split] commit failed:', result.issues);
@@ -714,10 +727,7 @@
                         ...(promoteMatch ? [{id: 'promote', icon: Link2, label: () => `🔗 ${$_('transactions.actions.promotePair') || 'Link as pair'}`, onClick: () => onPromotePair()}] : []),
                         {id: 'delete', icon: Trash2, label: () => $_('common.delete') || 'Delete', variant: 'danger', onClick: () => onBulkDelete()},
                     ]}
-                    onClearSelection={() => {
-                        transactionsTableComponent?.getTableRef()?.clearSelection();
-                        selectedRows = [];
-                    }}
+                    onClearSelection={clearSelection}
                 />
             {/if}
             <div use:guideAnchor={'transactions.page.columns'} data-testid="transactions-columns-guide-target">
@@ -732,8 +742,7 @@
                 onclick={() => {
                     // Reset column filters, selection, and URL filter state before reloading.
                     transactionsTableComponent?.resetFilters();
-                    transactionsTableComponent?.getTableRef()?.clearSelection();
-                    selectedRows = [];
+                    clearSelection();
                     filters = {...filters, types: undefined, tags: undefined, broker_id: undefined, asset_id: undefined, without_asset: undefined, date_start: undefined, date_end: undefined, cash: undefined, page: 1};
                     void reload();
                 }}

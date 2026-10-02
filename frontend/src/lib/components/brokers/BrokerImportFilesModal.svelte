@@ -119,9 +119,10 @@
         for (const file of uploadFiles) {
             const formData = new FormData();
             formData.append('file', file);
+            formData.append('broker_id', String(brokerId));
             const result = await trySave(
                 // Use axios directly - Zodios doesn't handle FormData correctly
-                () => axiosInstance.post(`/api/v1/brokers/import/upload?broker_id=${brokerId}`, formData),
+                () => axiosInstance.post(`/api/v1/brokers/import/upload`, formData),
                 {toast: false, fallback: $_('uploads.uploadFailed'), prefix: file.name},
             );
             if (result.status === 'error') {
@@ -380,7 +381,7 @@
                 <RefreshCw class={loading ? 'animate-spin' : ''} size={16} />
                 {$_('common.refresh')}
             </button>
-            <button class="btn {showUploader ? 'btn-secondary' : 'btn-primary'}" disabled={uploading} onclick={() => (showUploader = !showUploader)}>
+            <button class="btn {showUploader ? 'btn-secondary' : 'btn-primary'}" disabled={uploading} onclick={() => (showUploader = !showUploader)} data-testid="import-files-upload-toggle">
                 <FileUp size={16} />
                 {showUploader ? $_('common.close') : $_('uploads.upload')}
             </button>
