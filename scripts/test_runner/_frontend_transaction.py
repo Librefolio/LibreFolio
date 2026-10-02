@@ -21,6 +21,8 @@ def front_tx_unit(verbose: bool = False, ui: bool = False, headed: bool = False,
            "src/lib/utils/transactions/importReportSets.test.ts",
            "src/lib/utils/transactions/gapFixModel.test.ts",
            "src/lib/components/transactions/import/GapFixStep.test.ts",
+           "src/lib/components/transactions/modals/ParseDetailModal.test.ts",
+           "src/lib/utils/transactions/bulkTodos.test.ts",
            "src/routes/(app)/transactions/filterState.test.ts"]
     print(f"\n{Colors.BLUE}Running: TX Vitest unit tests{Colors.NC}")
     print(f"Command:\n└─▶ $ cd frontend && {' '.join(cmd)}")
@@ -449,6 +451,18 @@ def front_tx_bulk_diagnostics(verbose: bool = False, ui: bool = False, headed: b
     return _run_playwright("transactions/tx-bulk-diagnostics.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_bulk_import_handoff(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the bulk editor after an import hand-over (F1: one validation per import, todo banners that lead to their rows)."""
+    print_section("Frontend TX Bulk Import Handoff Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-bulk-import-handoff.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_import_file_selection(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run owned-file pagination, selection and uploaded-broker folding regressions."""
     print_section("Frontend TX Import File Selection Tests")
@@ -594,6 +608,14 @@ def populate_registry(registry: dict) -> None:
         tests="transactions/tx-import-duplicate-precedence.spec.ts",
     )
     add_test(cat, "tx-bulk-diagnostics", front_tx_bulk_diagnostics, name="TX Bulk Diagnostics Tests", desc="Complete balance-group rows, chronological display-only sorting, and stable payload identity", tests="transactions/tx-bulk-diagnostics.spec.ts")
+    add_test(
+        cat,
+        "tx-bulk-import-handoff",
+        front_tx_bulk_import_handoff,
+        name="TX Bulk Import Handoff Tests",
+        desc="F1 (D5) every import hand-over runs ONE validation, above the 50-row threshold too, an edit above it none, the next import one more; (D4) every entry of the todo banners (blockers and warnings) is a tx-bulk-todo-goto that pages the grid to its row and highlights it; owned broker, synthetic cash-only CSVs, nothing saved",
+        tests="transactions/tx-bulk-import-handoff.spec.ts",
+    )
     add_test(cat, "tx-import-file-selection", front_tx_import_file_selection, name="TX Import File Selection Tests", desc="Owned broker files: five-row pagination, cross-page selection and upload-only panel expansion", tests="transactions/tx-import-file-selection.spec.ts")
     add_test(cat, "tx-import-flow", front_tx_import_flow, name="TX Import Flow Tests", desc="Analyze step (detail modal, view-all, re-parse), step navigation, review selection toolbar + discard guard", tests="transactions/tx-import-flow.spec.ts")
     add_test(

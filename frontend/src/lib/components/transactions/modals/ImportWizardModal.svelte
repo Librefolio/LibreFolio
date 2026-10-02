@@ -234,9 +234,11 @@
 
     let step1SetWarnings = $state<Step1SetWarning[]>([]);
 
-    // T1/R3: click outside drop zone → collapse if files exist
+    // T1/R3: click outside drop zone → collapse if files exist. Not while a set warning asks
+    // for its missing export: collapsing on the mousedown of Next resized the modal under the
+    // pointer, and the click that should have moved on was lost.
     $effect(() => {
-        if (!dropZoneExpanded || pendingFiles.length === 0) return;
+        if (!dropZoneExpanded || pendingFiles.length === 0 || step1SetWarnings.length > 0) return;
         function handleClickOutside(e: MouseEvent) {
             if (isOutsideClick(e.target, (el) => !dropZoneContainerRef || dropZoneContainerRef.contains(el))) {
                 dropZoneExpanded = false;

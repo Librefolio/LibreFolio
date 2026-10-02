@@ -531,7 +531,7 @@
     "todoBlockerCommitHint": "Complete all required fields before saving",
     "todoWarningVerifyHint": "{n, plural, one {# auto-derived field to verify before saving} other {# auto-derived fields to verify before saving}}",
     "todoWarningConfirmTitle": "Verify auto-derived fields?",
-    "todoWarningConfirmMessage": "{n} row(s) have an auto-derived value that hasn't been verified yet (e.g. the nominal quantity of matured bonds). Review them, or save anyway if the derived values are correct.",
+    "todoWarningConfirmMessage": "{n} row(s) have an auto-derived value that hasn't been verified yet. Review them, or save anyway if the derived values are correct.",
     "todoWarningConfirmItemsLabel": "{n} field(s) to verify",
     "todoWarningConfirmProceed": "Save anyway",
     "todoWarningConfirmReview": "Review",
@@ -863,7 +863,14 @@
         "incomplete": "Incomplete",
         "incompleteTooltip": "Missing: {roles}"
       }
-    }
+    },
+    "parseDetail": {
+      "sourceRow": "File line",
+      "charges": "Charges",
+      "suggestions": "What the importer found",
+      "technical": "Technical details"
+    },
+    "todoGoto": "Go to row"
   },
   "brokers": {
     "title": "Brokers",
