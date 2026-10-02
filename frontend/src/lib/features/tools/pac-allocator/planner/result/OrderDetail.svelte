@@ -3,22 +3,22 @@
     import OriginBadge from '../shared/OriginBadge.svelte';
     import PlannerDialog from '../shared/PlannerDialog.svelte';
     import {formatExactFxRate, formatExactMoneyPlain, formatExactQuantity, formatExactPricePlain, formatPlannerDate, formatPlannerMoneyPlain, formatPlannerTimestamp, type CurrencyDigits} from '../format';
-    import type {PacFxAction, PacOrderRow} from '../types';
+    import type {PacConversion, PacOrderRow} from '../types';
     import {BUTTON_LINK, BUTTON_SECONDARY, HINT} from '../ui';
-    import type {PacProvenanceRow, PlanLookup, ResultNames} from './model';
+    import {conversionsFor, type PacProvenanceRow, type PlanLookup, type ResultNames} from './model';
     import {instructionStepText, instructionText, priceText, ratePercentText, routeCapText, routeMinimumText} from './text';
     const PLANNER_KEY = 'tools.pacAllocator.planner';
 
     interface Props {
         order: PacOrderRow | null;
-        fxActions: readonly PacFxAction[];
+        conversions: readonly PacConversion[];
         names: ResultNames;
         lookup: PlanLookup;
         digits: CurrencyDigits;
         onclose: () => void;
     }
 
-    let {order, fxActions, names, lookup, digits, onclose}: Props = $props();
+    let {order, conversions, names, lookup, digits, onclose}: Props = $props();
 
     const KEY = 'tools.pacAllocator.planner.result.detail';
     let showProvenance = $state(false);
@@ -26,7 +26,8 @@
     const route = $derived(order ? lookup.route(order.route_id) : null);
     const quote = $derived(order ? lookup.quote(order.asset_id) : null);
     const quoteOrigin = $derived(quote ? lookup.provenance(quote.provenance_id) : null);
-    const conversions = $derived(order ? fxActions.filter((action) => action.order_route_id === order.route_id) : []);
+    /** R4.9: the conversions crediting the cash this order pays from; they may pay for other orders too. */
+    const related = $derived(order ? conversionsFor(conversions, order) : []);
     const provenance = $derived(order ? order.provenance_ids.map((id) => lookup.provenance(id)).filter((row): row is PacProvenanceRow => row !== null) : []);
     const assetLabel = $derived(order ? [names.ticker(order.asset_id), names.asset(order.asset_id)].filter((part) => part).join(' ') : '');
     const title = $derived(order ? $t(`${KEY}.title`, {default: 'Order {sequence} · {asset} · {broker} · {currency}', values: {sequence: order.sequence, asset: assetLabel, broker: names.broker(order.broker_id), currency: order.cash_debit.currency}}) : '');
@@ -91,21 +92,34 @@
             <dt class="font-medium text-gray-600 dark:text-gray-400">{$t(`${KEY}.fee`, {default: 'Fee'})}</dt>
             <dd class="tabular-nums">{formatPlannerMoneyPlain(order.fee.amount, order.fee.currency, {digits})}</dd>
 
-            {#each conversions as action (action.action_id)}
+            {#each related as action (action.conversion_id)}
                 <dt class="font-medium text-gray-600 dark:text-gray-400">{$t(`${KEY}.conversion`, {default: 'Conversion'})}</dt>
-                <dd data-testid="pac-planner-order-detail-conversion">
-                    {$t(`${KEY}.conversionAction`, {
-                        default: 'action {sequence} · {source} → {destination} · 1 {source} = {rate} {destination} effective',
-                        values: {sequence: action.sequence, source: action.effective_rate.source_currency, destination: action.effective_rate.destination_currency, rate: formatExactFxRate(action.effective_rate.value)},
-                    })}
+                <dd data-testid="pac-planner-order-detail-conversion" data-mode={action.mode}>
+                    {#if action.sequence !== null}
+                        {$t(`${KEY}.conversionAction`, {
+                            default: 'action {sequence} · {source} → {destination} · 1 {source} = {rate} {destination} effective',
+                            values: {sequence: action.sequence, source: action.effective_rate.source_currency, destination: action.effective_rate.destination_currency, rate: formatExactFxRate(action.effective_rate.value)},
+                        })}
+                    {:else}
+                        {$t(`${KEY}.conversionAuto`, {
+                            default: 'by the Broker when you buy · {source} → {destination} · 1 {source} = {rate} {destination} effective',
+                            values: {source: action.effective_rate.source_currency, destination: action.effective_rate.destination_currency, rate: formatExactFxRate(action.effective_rate.value)},
+                        })}
+                    {/if}
                 </dd>
-                <dt class="font-medium text-gray-600 dark:text-gray-400">{$t(`${KEY}.spreadLoss`, {default: 'Spread loss'})}</dt>
+                <dt class="font-medium text-gray-600 dark:text-gray-400">{$t(`${KEY}.spreadLossConversion`, {default: 'Spread loss (whole conversion)'})}</dt>
                 <dd class="tabular-nums">{formatExactMoneyPlain(action.spread_loss, {digits})}</dd>
             {/each}
 
             <dt class="font-medium text-gray-600 dark:text-gray-400">{$t(`${KEY}.route`, {default: 'Route'})}</dt>
             <dd data-testid="pac-planner-order-detail-route">
-                {route ? $t(`${KEY}.routeFacts`, {default: 'priority {priority} · cap {cap}', values: {priority: route.priority, cap: routeCapText(route.cap, $t, digits)}}) : '—'}
+                {#if !route}
+                    —
+                {:else if route.cap.kind === 'none'}
+                    {$t(`${KEY}.routeFactsNoCap`, {default: 'priority {priority} · no cap', values: {priority: route.priority}})}
+                {:else}
+                    {$t(`${KEY}.routeFacts`, {default: 'priority {priority} · cap {cap}', values: {priority: route.priority, cap: routeCapText(route.cap, $t, digits)}})}
+                {/if}
             </dd>
             <dt class="font-medium text-gray-600 dark:text-gray-400">{$t(`${KEY}.minimums`, {default: 'Minimums'})}</dt>
             <dd data-testid="pac-planner-order-detail-minimums">

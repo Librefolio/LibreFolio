@@ -26,17 +26,18 @@ Scope, as everywhere else in this package: PAC `proportional` policy,
 `primary` purpose only. Every fixture is small enough for the oracle to
 enumerate in a fraction of a second (the coarse funding/FX case, which is the
 fixture that caught the Step3 §16.11 HALF_UP ledger defect, has 585
-candidates, the QX1-a example 501; the rest are in the tens). Fixtures with a
-*binding* fee cap are no longer excluded from the agreement gate: since QX1-a
-(found 2026-09-24) the fee epigraph models the cap exactly (`constraints.py`),
-so a capped route that makes the solver prefer another candidate is a
-disagreement like any other, and the gate polices it.
+candidates, the QX1-a example 501, the exact FX-credit tie case 240; the rest
+are in the tens). Fixtures with a *binding* fee cap are no longer excluded
+from the agreement gate: since QX1-a (found 2026-09-24) the fee epigraph
+models the cap exactly (`constraints.py`), so a capped route that makes the
+solver prefer another candidate is a disagreement like any other, and the
+gate polices it.
 
 These are pure in-process tests (`isolation="pure"`): no server, no database,
-no clock assertions, no network. Two ready-made scenario fixtures are imported
+no clock assertions, no network. Three ready-made scenario fixtures are imported
 from the sibling oracle suite (`_two_asset_pac_scenario`,
-`_coarse_funding_fx_scenario`), exactly the way that module imports its own
-primitives from `test_pac_planner_evaluator.py`.
+`_coarse_funding_fx_scenario`, `_credit_tie_fx_scenario`), exactly the way that
+module imports its own primitives from `test_pac_planner_evaluator.py`.
 """
 
 from __future__ import annotations
@@ -57,7 +58,7 @@ from backend.app.services.pac_allocator.solver import (
 )
 from backend.test_scripts.test_services._pac_exhaustive_oracle import run_exhaustive_oracle
 from backend.test_scripts.test_services.test_pac_planner_evaluator import ZERO, R, _pac_scenario
-from backend.test_scripts.test_services.test_pac_planner_oracle import _coarse_funding_fx_scenario, _two_asset_pac_scenario
+from backend.test_scripts.test_services.test_pac_planner_oracle import _coarse_funding_fx_scenario, _credit_tie_fx_scenario, _two_asset_pac_scenario
 
 # --------------------------------------------------------------------------
 # Shared helpers
@@ -185,6 +186,16 @@ def _fee_cap_never_binds_scenario() -> ExactPlannerScenario:
     return _pac_scenario(price=R(10), cash=R(95), fee_rate=R(1, 10), fee_cap=R(50), route_cap=R(100))
 
 
+def _exact_credit_tie_fx_scenario() -> ExactPlannerScenario:
+    """Option A (R13): an exact FX-credit tie decides the optimum. 5 EUR at
+    3/2 with no spread is exactly 7.5 USD, a HALF_UP tie that posts 8, and
+    those 8 USD buy the 4th unit at 2 USD; without the round-up only 3 fit.
+    The oracle suite derives that optimum by hand. Zero fee and a whole-USD
+    price: a credit tie is reachable, no debit tie is. 240 candidates.
+    """
+    return _credit_tie_fx_scenario(price=R(2), cap=R(4))
+
+
 _ORACLE_AGREEMENT_FIXTURES = [
     pytest.param(_two_asset_pac_scenario, id="two_asset_pac"),
     pytest.param(_coarse_funding_fx_scenario, id="coarse_funding_fx"),  # the fixture that caught the Step3 §16.11 defect
@@ -200,6 +211,10 @@ _ORACLE_AGREEMENT_FIXTURES = [
     pytest.param(_fee_fixed_floor_cap_scenario, id="fee_fixed_floor_cap"),
     pytest.param(_fee_cap_binds_qx1a_example_scenario, id="fee_cap_binds_qx1a_example"),
     pytest.param(_fee_cap_never_binds_scenario, id="fee_cap_never_binds"),  # control: a cap the route never reaches
+    # Option A: an exact FX-credit tie is reachable and no debit tie is, so the optima must coincide exactly. The
+    # allowance for SCIP beating the oracle covers DEBIT ties only (X3 rejected): at a credit tie the model may post
+    # either neighbour, but whatever the lower one admits the true round-up admits too, so the feasible sets agree.
+    pytest.param(_exact_credit_tie_fx_scenario, id="credit_tie_fx"),
 ]
 
 

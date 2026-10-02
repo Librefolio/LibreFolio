@@ -1,7 +1,7 @@
 <script lang="ts">
-    import {t, locale} from '$lib/i18n';
+    import {t} from '$lib/i18n';
     import type {PlannerDraft} from '../draft.svelte';
-    import {formatPlannerDate, formatPlannerPercentUnits} from '../format';
+    import {formatPlannerPercentUnits} from '../format';
     import {sectionCounts} from '../review';
     import type {PlannerStep} from '../types';
     import {SECTION_TITLE} from '../ui';
@@ -34,7 +34,6 @@
         switch (step) {
             case 'scenario':
                 return [
-                    {id: 'date', label: $t('tools.pacAllocator.planner.summary.date', {default: 'Date'}), value: formatPlannerDate(c.scenario.asOf, $locale) || '—'},
                     {id: 'currency', label: $t('tools.pacAllocator.planner.summary.currency', {default: 'Currency'}), value: c.scenario.currency || '—'},
                 ];
             case 'liquidity':
@@ -75,9 +74,11 @@
                 ];
             case 'fx':
                 return [
-                    {id: 'pairs', label: $t('tools.pacAllocator.planner.summary.pairs', {default: 'Pairs'}), value: String(c.fx.pairs)},
+                    {id: 'pairs', label: $t('tools.pacAllocator.planner.summary.rates', {default: 'Rates'}), value: [c.fx.pairs, c.fx.needed].join('/'), warn: c.fx.pairs < c.fx.needed},
                     {id: 'stale', label: $t('tools.pacAllocator.planner.summary.stale', {default: 'Not of the day'}), value: String(c.fx.stale)},
-                    {id: 'spread', label: $t('tools.pacAllocator.planner.summary.spread', {default: 'Spread'}), value: c.fx.spreadPercent ? formatPlannerPercentUnits(c.fx.spreadPercent) : '—'},
+                    ...(c.fx.conversions > 0
+                        ? [{id: 'spread', label: $t('tools.pacAllocator.planner.summary.spread', {default: 'Spread'}), value: c.fx.spreadPercent ? formatPlannerPercentUnits(c.fx.spreadPercent) : '—'}]
+                        : []),
                 ];
             case 'strategy':
                 return [

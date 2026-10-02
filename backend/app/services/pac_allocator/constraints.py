@@ -295,12 +295,10 @@ def _source_cash_cell(scenario: ExactPlannerScenario, source_kind: str, source_i
 
 class LedgerPostingScopeError(ValueError):
     """Raised when this module cannot model a scenario's ledger postings
-    faithfully: an unmodelled rounded family would actually be posted, a
-    family exists in ``ledger.py`` that we have no detector for, or a HALF_UP
-    tie is reachable on a *credit*, where the tie ambiguity could prune the
-    true optimum. Always a loud failure, never a silent exact-expression
-    fallback — that silent degradation is precisely what caused the Step3
-    §16.11 defect.
+    faithfully: an unmodelled rounded family would actually be posted, or a
+    family exists in ``ledger.py`` that we have no detector for. Always a
+    loud failure, never a silent exact-expression fallback — that silent
+    degradation is precisely what caused the Step3 §16.11 defect.
     """
 
 
@@ -353,79 +351,6 @@ def _require_modelled_rounded_families(scenario: ExactPlannerScenario, facts: Sc
     unmodelled = posted - _MODELLED_ROUNDED_FAMILIES
     if unmodelled:
         raise LedgerPostingScopeError(f"this {scenario.product}/{scenario.policy} scenario posts rounded ledger families this build does not model: {sorted(unmodelled)}")
-
-
-def _half_up_tie_reachable(coefficient: ExactRatio, quantum: ExactRatio, lower_quanta: int, upper_quanta: int) -> bool:
-    """Is some achievable ``coefficient * n`` exactly on a HALF_UP tie of
-    ``quantum``, for integer ``n`` in ``[lower_quanta, upper_quanta]``?
-
-    Exact and O(1). With ``coefficient/quantum = a/b`` already in lowest
-    terms (``ExactRatio`` normalizes on construction), a tie means
-    ``a*n/b + 1/2`` is an integer, i.e. ``2*a*n + b == 0 (mod 2*b)``. That is
-    solvable only when ``b`` is even, and then exactly for
-    ``n == -a^-1 * (b/2) (mod b)``. Validated against brute force over 4000
-    random rationals.
-    """
-    ratio = coefficient / quantum
-    a, b = ratio.numerator, ratio.denominator
-    if a == 0 or b % 2 == 1:
-        return False
-    n0 = (-pow(a, -1, b) * (b // 2)) % b
-    first_tie = lower_quanta + ((n0 - lower_quanta) % b)
-    return first_tie <= upper_quanta
-
-
-def _exact_currency_quantum(scenario: ExactPlannerScenario, currency: str) -> ExactRatio:
-    for spec in scenario.currency_specs:
-        if spec.currency == currency:
-            return spec.minor_unit
-    raise KeyError(f"unknown currency {currency}")
-
-
-def _exact_fx_rate(scenario: ExactPlannerScenario, source_currency: str, destination_currency: str) -> ExactRatio:
-    """Exact twin of ``fx_rate`` — same direct-or-inverse lookup, no floats."""
-    if source_currency == destination_currency:
-        return ExactRatio(1)
-    key = _fx_pair_key(source_currency, destination_currency)
-    for item in scenario.fx_rates:
-        if item.pair_key != key:
-            continue
-        # ``pair_key`` is alphabetical, so the stored rate is base->quote of
-        # the sorted pair; invert when we are asking the other direction.
-        return item.rate if source_currency < destination_currency else ExactRatio(1) / item.rate
-    raise KeyError(f"no FX pair {key}")
-
-
-def _require_credit_tie_free(
-    scenario: ExactPlannerScenario,
-    *,
-    route: ExactOrderRoute,
-    pool_currency: str,
-    quote_currency: str,
-    lower_quanta: int,
-    upper_quanta: int,
-) -> None:
-    """Guard the one direction where a HALF_UP tie is not safe.
-
-    ``_posted_units_term`` uses the *non-strict* epigraph pair, so at an exact
-    tie both the lower and the upper unit value satisfy it. For a **debit**
-    that ambiguity is permissive — picking the lower unit understates what is
-    owed, so the model can only admit points the exact replay will reject,
-    never prune a real one. For a **credit** it is the opposite: picking the
-    lower unit understates the money available, which *can* prune the true
-    optimum. So credits must be provably tie-free, and we refuse loudly when
-    they are not.
-    """
-    source_quantum = _exact_currency_quantum(scenario, pool_currency)
-    destination_quantum = _exact_currency_quantum(scenario, quote_currency)
-    effective_rate = _exact_fx_rate(scenario, pool_currency, quote_currency) * (ExactRatio(1) - scenario.fx_spread_rate)
-    coefficient = source_quantum * effective_rate
-    if _half_up_tie_reachable(coefficient, destination_quantum, lower_quanta, upper_quanta):
-        raise LedgerPostingScopeError(
-            f"route {route.route_id!r} can reach an exact HALF_UP rounding tie converting {pool_currency}->{quote_currency} "
-            f"(rate {effective_rate}, quantum {destination_quantum}, quanta {lower_quanta}..{upper_quanta}); "
-            "the non-strict posting epigraph cannot disambiguate a credit tie without risking a pruned optimum"
-        )
 
 
 def _fee_cap_excess(fee_schedule: ExactFeeSchedule, notional_upper: float) -> float | None:
@@ -481,8 +406,15 @@ def _posted_units_term(model: Model, *, name: str, exact_expr: LinearTerm, quant
     reachable points — over-pruning, which is the failure class this whole
     change exists to remove. The non-strict pair has no epsilon to calibrate
     and is satisfiable for *every* real ``exact``, so it can never prune. Its
-    only looseness is at exact ties, which ``_require_credit_tie_free``
-    forbids in the one direction where looseness is unsafe.
+    only looseness is at exact ties, where ``units`` may take either
+    neighbour. That is safe in both directions. A debit (``buy_debit``,
+    ``buy_fee``) can only be understated, so the model admits points the
+    exact replay then rejects or tops up (X3 rejected: permissive by design),
+    never prunes one. A credit (``fx_credit``) enters every ledger row with a
+    ``+`` sign and appears in no objective, so a decision is feasible with
+    some ``units`` exactly when it is feasible with the larger neighbour —
+    the true HALF_UP value. The choice of neighbour at a credit tie never
+    changes the feasible set (the round-up itself may well decide it).
 
     ``floor(x + 1/2)`` is ties-toward-+infinity while ``numeric.post_half_up``
     is ties-away-from-zero; the two coincide only for non-negative amounts.
@@ -575,14 +507,6 @@ def add_ledger_balance_constraints(model: Model, scenario: ExactPlannerScenario,
             cells[(route.broker_id, pool_currency)].append(-debit_expr)
             effective_rate = fx_rate(facts, pool_currency, quote_currency) * (1.0 - facts.fx_spread_rate)
             credit_upper = facts.currency_quantum[pool_currency] * fx_decision.getUbOriginal() * effective_rate
-            _require_credit_tie_free(
-                scenario,
-                route=route,
-                pool_currency=pool_currency,
-                quote_currency=quote_currency,
-                lower_quanta=round(fx_decision.getLbOriginal()),
-                upper_quanta=round(fx_decision.getUbOriginal()),
-            )
             cells[(route.broker_id, quote_currency)].append(
                 _posted_units_term(
                     model,

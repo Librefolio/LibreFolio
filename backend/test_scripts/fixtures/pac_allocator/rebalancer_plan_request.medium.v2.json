@@ -269,7 +269,8 @@
             }
           }
         }
-      ]
+      ],
+      "conversion_mode": "automatic"
     },
     {
       "broker_id": "broker-beta",
@@ -381,7 +382,8 @@
             }
           }
         }
-      ]
+      ],
+      "conversion_mode": "manual"
     }
   ],
   "holdings": [

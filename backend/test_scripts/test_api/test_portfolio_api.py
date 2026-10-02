@@ -1738,7 +1738,7 @@ def _empty_planner_source_response() -> PortfolioPlannerSourceResponse:
             target_currency="EUR",
             generated_at=datetime(2026, 9, 15, 12, 30, tzinfo=UTC),
             requested_sections=["assets"],
-            source_revision="2.0.0",
+            source_revision="1.0.0",
         ),
         provenance=[
             PortfolioPlannerSourceProvenance(

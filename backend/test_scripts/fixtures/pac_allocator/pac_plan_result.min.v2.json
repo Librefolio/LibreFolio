@@ -332,6 +332,7 @@
     ],
     "funding_actions": [],
     "fx_actions": [],
+    "conversions": [],
     "order_rows": [],
     "ledger_rows": [
       {

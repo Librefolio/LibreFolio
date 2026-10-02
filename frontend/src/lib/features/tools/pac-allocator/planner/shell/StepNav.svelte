@@ -6,6 +6,8 @@
 
     interface Props {
         current: PlannerStep;
+        /** The steps on screen, in order (R9.4: FX only when a rate is needed). */
+        steps?: readonly PlannerStep[];
         visited: ReadonlySet<PlannerStep>;
         problemSteps: ReadonlySet<PlannerStep>;
         variant: 'vertical' | 'horizontal' | 'compact';
@@ -13,12 +15,12 @@
         onselect: (step: PlannerStep) => void;
     }
 
-    let {current, visited, problemSteps, variant, disabled = false, onselect}: Props = $props();
+    let {current, steps = PLANNER_STEPS, visited, problemSteps, variant, disabled = false, onselect}: Props = $props();
 
     let open = $state(false);
 
-    const index = $derived(PLANNER_STEPS.indexOf(current));
-    const progress = $derived([Math.round(((index + 1) / PLANNER_STEPS.length) * 100), '%'].join(''));
+    const index = $derived(steps.indexOf(current));
+    const progress = $derived([Math.round(((index + 1) / steps.length) * 100), '%'].join(''));
 
     function stepState(step: PlannerStep): 'current' | 'problem' | 'visited' | 'pending' {
         if (step === current) return 'current';
@@ -58,7 +60,7 @@
 
 {#snippet list(horizontal: boolean)}
     <ol class={horizontal ? 'flex flex-wrap gap-1' : 'space-y-1'}>
-        {#each PLANNER_STEPS as step, position (step)}
+        {#each steps as step, position (step)}
             {@const value = stepState(step)}
             <li>
                 <button
@@ -87,7 +89,7 @@
     {#if variant === 'compact'}
         <div class="flex items-center justify-between gap-2">
             <p class="text-sm font-medium" data-testid="pac-planner-nav-position">
-                {$t('tools.pacAllocator.planner.nav.position', {default: '{index}/{total} {step}', values: {index: index + 1, total: PLANNER_STEPS.length, step: label(current)}})}
+                {$t('tools.pacAllocator.planner.nav.position', {default: '{index}/{total} {step}', values: {index: index + 1, total: steps.length, step: label(current)}})}
             </p>
             <button type="button" class="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-2 py-1 text-sm dark:border-gray-600" aria-expanded={open} aria-controls="pac-planner-nav-list" {disabled} data-testid="pac-planner-nav-toggle" onclick={() => (open = !open)}>
                 {$t('tools.pacAllocator.planner.nav.steps', {default: 'Steps'})}

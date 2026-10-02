@@ -1,74 +1,127 @@
+<!--
+  R9.8: balances per Broker and currency, one row each. A column appears only when it says
+  something in this plan; the silent ones are one click away. Every figure is the backend's.
+-->
 <script lang="ts">
     import {t} from '$lib/i18n';
-    import {formatExactMoneyPlain, formatPlannerMoneyPlain, type CurrencyDigits} from '../format';
+    import DataTable from '$lib/components/table/DataTable.svelte';
+    import type {ColumnDef} from '$lib/components/table/types';
+    import type {PlannerDraft} from '../draft.svelte';
+    import {formatExactMoneyPlain, type CurrencyDigits} from '../format';
     import type {PacAccounting, PacLedgerRow} from '../types';
-    import {BUTTON_LINK, HINT, TABLE, TD_NUM, TH} from '../ui';
-    import {LEDGER_FIELDS, LEDGER_ZERO_FIELDS, ledgerColumns, type LedgerField, type ResultNames} from './model';
+    import {BUTTON_LINK, HINT} from '../ui';
+    import ResultCell, {type ResultCellContent} from './ResultCell.svelte';
+    import {LEDGER_FIELDS, LEDGER_PAC_ZERO_FIELDS, ledgerColumns, ledgerFields, type LedgerField, type ResultNames} from './model';
+    import {withHelpCues} from '../shared/columnHelp';
+    import TableColumns from '../shared/TableColumns.svelte';
 
     interface Props {
         rows: readonly PacLedgerRow[];
         accounting: PacAccounting;
         names: ResultNames;
         digits: CurrencyDigits;
+        draft: PlannerDraft;
     }
 
-    let {rows, accounting, names, digits}: Props = $props();
+    let {rows, accounting, names, digits, draft}: Props = $props();
 
     const KEY = 'tools.pacAllocator.planner.result.ledger';
     const FALLBACKS: Record<LedgerField, string> = {
-        initial_selected: 'Initial selected',
-        funding_in: 'Funding in',
-        funding_out: 'Funding out',
-        fx_debit: 'FX debit',
-        fx_credit: 'FX credit',
-        buy_debit: 'Purchases',
-        buy_fees: 'BUY fees',
-        rounding_delta: 'Rounding',
-        final_spendable: 'Final spendable',
-        final_physical: 'Final physical',
+        initial_selected: 'Starting cash',
+        funding_in: 'Incoming',
+        funding_out: 'Outgoing',
+        fx_debit: 'Exchange out',
+        fx_credit: 'Exchange in',
         gross_sell_credit: 'Sales',
-        sell_fees: 'SELL fees',
+        buy_debit: 'Purchases',
+        buy_fees: 'Purchase fees',
+        sell_fees: 'Sale fees',
         broker_withheld_tax: 'Tax withheld by the Broker',
         self_reserved_tax: 'Tax reserved by you',
+        rounding_delta: 'Rounding',
+        final_spendable: 'Left available',
+        final_physical: 'Physical balance',
+    };
+    const HELP_FALLBACKS: Record<string, string> = {
+        initial_selected: 'The cash of this Broker in this currency that you made available to the plan.',
+        funding_in: 'What the plan brings into this cash: deposits, transfers, and this cash itself when the orders here use it.',
+        funding_out: 'What the plan takes from this cash: transfers to other Brokers, and what the orders here use (counted in Incoming too).',
+        fx_debit: 'What the currency exchanges of the plan take from this cash.',
+        fx_credit: 'What the currency exchanges of the plan add to this cash.',
+        buy_debit: 'The amounts of the orders on this Broker in this currency, fees excluded.',
+        buy_fees: 'The Broker fees of those orders.',
+        rounding_delta: 'How much of the amounts in this row comes from rounding to the smallest unit of the currency. It is already included in them.',
+        final_spendable: 'What stays in this cash after the plan.',
+        final_physical: 'What is left available plus the taxes you set aside.',
+        alwaysZero: 'Always 0 in a PAC: it only buys.',
     };
 
-    let showZero = $state(false);
-    const columns = $derived(ledgerColumns(rows));
-    const fields = $derived<readonly LedgerField[]>(showZero ? [...LEDGER_FIELDS, ...LEDGER_ZERO_FIELDS] : LEDGER_FIELDS);
+    let showAll = $state(false);
+    let table = $state<DataTable<PacLedgerRow>>();
+    const data = $derived(ledgerColumns(rows));
+    // R11.8: every column stays in the table, so the column button lists them all. The silent ones
+    // start hidden and «show more» only changes that default: a choice made in the button wins.
+    const speaking = $derived(new Set(ledgerFields(rows, false)));
+    const hidden = $derived(LEDGER_FIELDS.length - speaking.size);
+    const cell = (content: ResultCellContent) => ({type: 'custom' as const, component: ResultCell, props: {cell: content}});
+    const helpKey = (field: LedgerField) => (LEDGER_PAC_ZERO_FIELDS.has(field) ? 'alwaysZero' : field);
+
+    const columns = $derived.by((): ColumnDef<PacLedgerRow>[] => withHelpCues<PacLedgerRow>([
+        {
+            id: 'pool',
+            header: () => $t(`${KEY}.item`, {default: 'Broker and currency'}),
+            type: 'custom',
+            sortable: false,
+            filterable: false,
+            pinned: 'left',
+            minWidth: 180,
+            cell: (row) => cell({type: 'broker', brokerId: row.broker_id, label: names.broker(row.broker_id), broker: draft.broker(row.broker_id) ?? null, currency: row.currency, testid: 'pac-planner-ledger-row'}),
+        },
+        ...LEDGER_FIELDS.map(
+            (field): ColumnDef<PacLedgerRow> => ({
+                id: field,
+                hiddenByDefault: !showAll && !speaking.has(field),
+                header: () => $t(`${KEY}.fields.${field}`, {default: FALLBACKS[field]}),
+                headerTooltip: () => $t(`${KEY}.help.${helpKey(field)}`, {default: HELP_FALLBACKS[helpKey(field)]}),
+                type: 'number',
+                sortable: false,
+                filterable: false,
+                align: 'right',
+                minWidth: 110,
+                cell: (row) => cell({type: 'money', amount: row[field], currency: row.currency, digits, testid: `pac-planner-ledger-${field}`}),
+            }),
+        ),
+    ]));
 </script>
 
 <div class="space-y-3" data-testid="pac-planner-ledger">
-    <div class="overflow-x-auto">
-        <table class={TABLE}>
-            <thead>
-                <tr>
-                    <th scope="col" class={TH}>{$t(`${KEY}.item`, {default: 'Item'})}</th>
-                    {#each columns as column (`${column.broker_id}|${column.currency}`)}
-                        <th scope="col" class="{TH} text-right" data-testid="pac-planner-ledger-column" data-broker={column.broker_id} data-currency={column.currency}>
-                            {[names.broker(column.broker_id), column.currency].join(' · ')}
-                        </th>
-                    {/each}
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-                {#each fields as field (field)}
-                    <tr data-testid="pac-planner-ledger-row" data-field={field}>
-                        <th scope="row" class="px-3 py-2 text-left font-medium text-gray-700 dark:text-gray-300">{$t(`${KEY}.fields.${field}`, {default: FALLBACKS[field]})}</th>
-                        {#each columns as column (`${column.broker_id}|${column.currency}`)}
-                            <td class={TD_NUM}>{formatPlannerMoneyPlain(column[field], column.currency, {digits})}</td>
-                        {/each}
-                    </tr>
-                {/each}
-            </tbody>
-        </table>
-    </div>
-    <p class="{HINT} flex flex-wrap items-center gap-2">
-        <span>{$t(`${KEY}.zeroHint`, {default: 'Sales, SELL fees, withheld and reserved taxes: always 0 in PAC 2.0.0.'})}</span>
-        <button type="button" class={BUTTON_LINK} aria-expanded={showZero} data-testid="pac-planner-ledger-zero-toggle" onclick={() => (showZero = !showZero)}>
-            {showZero ? $t(`${KEY}.hideZero`, {default: 'Hide the zero rows'}) : $t(`${KEY}.showZero`, {default: 'Show {count, plural, one {# zero row} other {# zero rows}}', values: {count: LEDGER_ZERO_FIELDS.length}})}
-        </button>
-    </p>
+    <TableColumns {table} testid="pac-planner-ledger-columns" />
+    <DataTable
+        bind:this={table}
+        {data}
+        {columns}
+        getRowId={(row) => `${row.broker_id}|${row.currency}`}
+        storageKey="pac-planner-result-ledger"
+        enableSorting={false}
+        enableSelection={false}
+        selectionMode="none"
+        enableActions={false}
+        enablePagination={false}
+        enableColumnVisibility
+        enableColumnFilters={false}
+        enableColumnResize
+        enableContextMenu={false}
+        tableLayout="auto"
+    />
+    {#if hidden > 0}
+        <p class="{HINT} flex flex-wrap items-center gap-2">
+            {#if !showAll}<span>{$t(`${KEY}.zeroHint`, {default: 'Hidden: the columns at 0 in this plan, and the physical balance when it equals what is left available.'})}</span>{/if}
+            <button type="button" class={BUTTON_LINK} aria-expanded={showAll} data-testid="pac-planner-ledger-zero-toggle" onclick={() => (showAll = !showAll)}>
+                {showAll ? $t(`${KEY}.hideZero`, {default: 'Show fewer columns'}) : $t(`${KEY}.showZero`, {default: 'Show {count, plural, one {# more column} other {# more columns}}', values: {count: hidden}})}
+            </button>
+        </p>
+    {/if}
     <p class="text-sm" data-testid="pac-planner-ledger-free-cash">
-        {$t(`${KEY}.freeCash`, {default: 'Free cash (accounting): {amount}', values: {amount: formatExactMoneyPlain(accounting.free_cash, {digits})}})}
+        {$t(`${KEY}.freeCash`, {default: 'Cash left free after the plan, in total: {amount}', values: {amount: formatExactMoneyPlain(accounting.free_cash, {digits})}})}
     </p>
 </div>

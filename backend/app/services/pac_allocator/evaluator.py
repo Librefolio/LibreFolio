@@ -315,9 +315,9 @@ def _validate_order_route_units(
             raise ExactScenarioContractError(f"order route {route.route_id} has incompatible {field_name}")
         if minimum.kind == "monetary_amount" and minimum.currency != quote_currency:
             raise ExactScenarioContractError(f"order route {route.route_id} has cross-currency {field_name}")
-    if route.cap.kind != expected_cap_kind:
+    if route.cap is not None and route.cap.kind != expected_cap_kind:
         raise ExactScenarioContractError(f"order route {route.route_id} has incompatible cap unit")
-    if route.cap.kind == "notional" and route.cap.currency != quote_currency:
+    if route.cap is not None and route.cap.kind == "notional" and route.cap.currency != quote_currency:
         raise ExactScenarioContractError(f"order route {route.route_id} has cross-currency cap")
     if fee.fixed_fee.currency != quote_currency:
         raise ExactScenarioContractError(f"order route {route.route_id} has cross-currency fee schedule")
@@ -543,7 +543,7 @@ def _can_reach_buy(
             positive_targets.add(item.asset_id)
     for route in scenario.order_routes:
         check_budget(checkpoint)
-        if route.side != "buy" or route.broker_id != broker_id or route.asset_id not in positive_targets or route.cap.value <= _EXACT_ZERO:
+        if route.side != "buy" or route.broker_id != broker_id or route.asset_id not in positive_targets or (route.cap is not None and route.cap.value <= _EXACT_ZERO):
             continue
         quote_currency = index.assets[route.asset_id].quote.price.currency
         if currency == quote_currency or _fx_pair_key(currency, quote_currency) in index.fx_rate_by_pair:
@@ -799,22 +799,20 @@ def _order_upper_bounds(
         check_budget(checkpoint)
         capability = index.capabilities[(route.broker_id, route.capability_id)]
         quote_currency = index.assets[route.asset_id].quote.price.currency
-        maximum = route.cap.value
         if route.side == "buy":
             native_resource = resource_bound / index.valuation_rate[quote_currency]
-            resource_measure = native_resource / _order_prices(index, route).execution_native if capability.kind == "whole_quantity" else native_resource
-            maximum = min(maximum, resource_measure)
+            maximum = native_resource / _order_prices(index, route).execution_native if capability.kind == "whole_quantity" else native_resource
         else:
             holding = index.holdings.get((route.asset_id, route.broker_id))
             if holding is None:
                 maximum = _EXACT_ZERO
             elif capability.kind == "whole_quantity":
-                maximum = min(maximum, holding.planning_quantity)
+                maximum = holding.planning_quantity
             else:
-                maximum = min(
-                    maximum,
-                    holding.planning_quantity * _order_prices(index, route).execution_native,
-                )
+                maximum = holding.planning_quantity * _order_prices(index, route).execution_native
+        # A route without a cap of its own keeps the resource (buy) or holding (sell) bound.
+        if route.cap is not None:
+            maximum = min(maximum, route.cap.value)
         family: DecisionFamily = "buy_quantum" if route.side == "buy" else "sell_quantum"
         bounds[exact_decision_id(family, route.route_id)] = _floor_units(
             maximum,
@@ -2530,8 +2528,8 @@ def _order_route_constraint_facts(
         _constraint_id("ORDER_CAP", route.route_id): _ConstraintFact(
             value=measure,
             lower_bound=_EXACT_ZERO,
-            upper_bound=route.cap.value,
-            satisfied=measure <= route.cap.value,
+            upper_bound=route.cap.value if route.cap is not None else None,
+            satisfied=route.cap is None or measure <= route.cap.value,
         ),
         _constraint_id(
             "ORDER_SIDE_ALLOWED",

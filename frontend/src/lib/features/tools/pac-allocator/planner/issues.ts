@@ -208,7 +208,7 @@ export const TOOL_ERROR_FALLBACKS: Record<string, string> = {
     execution_limit: 'The calculation hit a resource limit of the tool platform.',
     execution_timeout: 'The calculation exceeded the execution time limit.',
     worker_crashed: 'The calculation process stopped unexpectedly.',
-    execution_failed: 'The calculation failed inside the tool.',
+    execution_failed: 'An internal error of the tool stopped the calculation, and no plan was published.',
     invalid_output: 'The tool produced an output that does not match its contract. It was discarded.',
     output_limit_exceeded: 'The result is larger than the platform accepts.',
     memory_limit: 'The calculation exceeded the memory limit.',

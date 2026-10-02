@@ -37,7 +37,7 @@
     }
 </script>
 
-<PlannerDialog open title={$t('tools.pacAllocator.planner.manualAccount.title', {default: 'Add manual account'})} testid="pac-planner-manual-account" {onclose} maxWidth="lg">
+<PlannerDialog open title={$t('tools.pacAllocator.planner.manualAccount.title', {default: 'Add external account'})} testid="pac-planner-manual-account" {onclose} maxWidth="lg">
     <div class="grid gap-3 sm:grid-cols-2">
         <label class="sm:col-span-2">
             <span class={LABEL}>{$t('tools.pacAllocator.planner.manualAccount.name', {default: 'Account name'})} *</span>
@@ -51,7 +51,7 @@
         <label for="{ids}-available">
             <span class={LABEL}>{$t('tools.pacAllocator.planner.manualAccount.declared', {default: 'Declared liquidity'})} * <span class={HINT}>{currency}</span></span>
             <ExactDecimalInput id="{ids}-available" bind:value={available} {step} className={INPUT} testid="pac-planner-manual-account-available" />
-            <span class={HINT}>{$t('tools.pacAllocator.planner.manualAccount.declaredHint', {default: 'A limit, not a proposal.'})}</span>
+            <span class={HINT}>{$t('tools.pacAllocator.planner.manualAccount.declaredHint', {default: 'How much is on the account: the amount to use cannot exceed it.'})}</span>
         </label>
         <label for="{ids}-selected">
             <span class={LABEL}>{$t('tools.pacAllocator.planner.cash.selected', {default: 'Amount to use'})} * <span class={HINT}>{currency}</span></span>
@@ -64,8 +64,8 @@
     {:else if tried && !complete}
         <p class={NOTICE.danger} role="alert" data-testid="pac-planner-manual-account-incomplete">{$t('tools.pacAllocator.planner.manualAccount.incomplete', {default: 'Fill in every field marked *.'})}</p>
     {/if}
-    <p class={HINT}>{$t('tools.pacAllocator.planner.manualAccount.quantum', {default: 'The minimum step of the currency comes from the backend (CLDR).'})}</p>
-    <p class={HINT}>{$t('tools.pacAllocator.planner.manualAccount.fundingOnly', {default: "In the scenario the account becomes a 'funding only' Broker: no order starts here; it needs a funding route to a Broker."})}</p>
+    <p class={HINT}>{$t('tools.pacAllocator.planner.manualAccount.quantum', {default: 'Amounts follow the smallest unit of the currency (for the euro, one cent).'})}</p>
+    <p class={HINT}>{$t('tools.pacAllocator.planner.manualAccount.fundingOnly', {default: 'Nothing is bought from this account: in the Broker step you choose which Broker receives this money.'})}</p>
 
     {#snippet footer()}
         <button type="button" class={BUTTON_SECONDARY} data-testid="pac-planner-manual-account-cancel" onclick={onclose}>{$t('common.cancel', {default: 'Cancel'})}</button>

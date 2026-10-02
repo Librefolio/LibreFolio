@@ -3845,7 +3845,7 @@
         },
         "add": "Aggiungi",
         "age": {
-          "after": "Dopo la data dello scenario {date}",
+          "after": "Con data successiva al {date}",
           "daysBefore": "{count, plural, one {# giorno} other {# giorni}} prima del {date}",
           "manual": "Inserito a mano",
           "sameDay": "Del giorno",
@@ -3878,12 +3878,21 @@
           "priceAmount": "Prezzo",
           "priceClear": "Nessun prezzo: il calcolo lo chiederà",
           "priceCurrency": "Valuta",
-          "priceDate": "Data",
           "quoteBasis": "Unità per prezzo",
           "quoteBasisHint": "«Unità per prezzo» indica quante unità rappresenta il prezzo della fonte; non è un passo d’ordine.",
-          "ticker": "Ticker",
+          "ticker": "Ticker / ISIN",
           "title": "Configura {name} · dati dello scenario (l’Asset non viene modificato)",
-          "unclassified": "La quota non dichiarata va nella riga «Non classificato» del backend."
+          "unclassified": "La quota non dichiarata va nella riga «Non classificato» del backend.",
+          "priceDate": "Data",
+          "typeHelp": "Il tipo di strumento, come nella scheda Asset. Si vede nel risultato e non cambia gli ordini.",
+          "pickCategory": "{dimension, select, asset_type {Scegli un tipo} sector {Scegli un settore} other {Scegli un paese}}",
+          "addCategory": "{dimension, select, asset_type {Aggiungi un tipo} sector {Aggiungi un settore} other {Aggiungi un paese}}",
+          "weightsHelp": "Per ogni dimensione indica le quote in percentuale. Possono sommare meno del 100%; oltre il 100% il calcolo rifiuta i dati.",
+          "weight": "Quota (%)",
+          "priceModifiedHelp": "Il tuo prezzo resta e non viene riletto prima del calcolo. «Ripristina» riporta quello di LibreFolio, che torna ad aggiornarsi.",
+          "compositionModifiedHelp": "La tua composizione resta. «Ripristina» riporta quella di LibreFolio.",
+          "totalOver": "{dimension}: le quote superano il 100%. Abbassane una prima di applicare.",
+          "tickerHelp": "Facoltativo: un ticker, un ISIN o qualsiasi codice che ti aiuti a riconoscere l’Asset nel risultato. Non collega l’Asset a LibreFolio, e due Asset manuali non vengono mai uniti per nome o per codice."
         },
         "assets": {
           "addManual": "Asset manuale",
@@ -3895,7 +3904,22 @@
           "priceLine": "{price} / {units} {count, plural, one {unità} other {unità}}",
           "priceMissing": "Prezzo mancante: resta nella bozza, il calcolo lo chiederà.",
           "priceMissingShort": "Prezzo mancante",
-          "search": "Cerca Asset"
+          "search": "Cerca Asset",
+          "priceAuto": "Un Asset aggiunto da LibreFolio arriva con l’ultimo prezzo memorizzato e con la sua composizione. La composizione è quella di LibreFolio e qui non si modifica. Il prezzo è «Auto»: viene riletto subito prima del calcolo; passa a «Manuale» per usare un prezzo tuo. Nessun provider viene interrogato: i prezzi sono quelli che LibreFolio ha già.",
+          "priceNotStored": "LibreFolio non ha un prezzo memorizzato per questo Asset: aggiungilo nella sua pagina, oppure passa a «Manuale» e scrivilo. In «Auto» viene riletto subito prima del calcolo.",
+          "priceReading": "Lettura dei dati memorizzati in LibreFolio…",
+          "autoLabel": "Dati da LibreFolio",
+          "priceCopiedHelp": "Ultimo prezzo memorizzato in LibreFolio, del {date}{hasSource, select, yes { (fonte: {source})} other {}}. Viene riletto subito prima del calcolo.",
+          "priceModifiedHelp": "Hai cambiato il prezzo copiato: resta il tuo, e non viene riletto prima del calcolo. In Modifica puoi ripristinare quello di LibreFolio.",
+          "composition": "Composizione",
+          "compositionHelp": "Cosa contiene l’Asset, per settore e area geografica. Serve solo al report del risultato, per mostrare il portafoglio prima e dopo: non cambia gli ordini. La quota non indicata conta come «Non classificato».",
+          "dimensionNotStored": "nessun dato in LibreFolio",
+          "dimensionNone": "{dimension, select, geography {non indicata} other {non indicato}}",
+          "compositionModifiedHelp": "Hai cambiato la composizione copiata. In Modifica puoi ripristinare quella di LibreFolio.",
+          "openAssetPage": "Apri la pagina dell’Asset",
+          "priceMode": "Prezzo di {name}",
+          "perUnits": "/ {units} {count, plural, one {unità} other {unità}}",
+          "priceManualHelp": "Il tuo prezzo: il calcolo lo usa così come lo scrivi e non lo rilegge mai. {hasCopy, select, yes {LibreFolio ha {price}, del {date}: «Auto» lo ripristina.} other {LibreFolio non ha un prezzo memorizzato per questo Asset.}}"
         },
         "brokerCopy": {
           "apply": "{count, plural, one {Copia # Broker} other {Copia # Broker}}",
@@ -3903,37 +3927,52 @@
           "noCurrencies": "Nessuna valuta ancora rilevata: viene proposta una modalità nella valuta di valutazione.",
           "noOwner": "Non possiedi alcun Broker da copiare. Aggiungi invece un Broker manuale.",
           "rule": "Viene copiata solo l’identità del Broker. Modalità d’ordine, commissioni e funding sono dati dello scenario che imposti qui; il Broker stesso non viene modificato.",
-          "title": "Scegli Broker esistenti"
+          "title": "Scegli Broker esistenti",
+          "currenciesSeen": "Valute rilevate:"
         },
         "brokerEditor": {
           "addCurrency": "Aggiungi valuta",
-          "fee": "Commissione BUY (nella valuta della modalità)",
-          "feeCap": "max (vuoto = nessuno)",
-          "feeFixed": "fissa",
-          "feeFloor": "min",
-          "feeRate": "aliquota %",
+          "fee": "Commissione di acquisto",
+          "feeCap": "Massimo",
+          "feeFixed": "Parte fissa",
+          "feeFloor": "Minimo",
+          "feeRate": "Percentuale",
           "feeRule": "Commissione = 0 quando l’importo è 0, altrimenti fissa + clamp(aliquota × importo, min, max).",
-          "funding": "Funding consentito verso {name}",
-          "fundingCap": "Tetto di trasferimento",
-          "fundingCapHint": "Vuoto = l’intero importo della sorgente.",
-          "kind": "Nel Broker inserisci",
+          "funding": "Liquidità utilizzabile da {name}",
+          "fundingCap": "Massimo utilizzabile qui",
+          "fundingCapHint": "Il massimo che il piano può prendere da questa fonte per gli acquisti qui. Vuoto = l’intero importo della fonte.",
+          "kind": "Tipo di ordine",
           "localCash": "Cassa locale {name} {currency} · nessun trasferimento",
-          "modes": "Modalità d’ordine (una per valuta)",
-          "noFunding": "Nessuna liquidità può ancora raggiungere questo Broker: aggiungi cassa o un contributo nel passo Liquidità.",
-          "notIn200": "Non in 2.0.0: gestione FX per valuta, regime fiscale, minusvalenze, commissioni SELL.",
+          "modes": "Come compri, valuta per valuta",
+          "noFunding": "Nessuna liquidità può ancora raggiungere questo Broker: aggiungi liquidità o un versamento nel passo Liquidità.",
+          "notIn200": "Non in 2.0.0: regime fiscale, minusvalenze, commissioni SELL.",
           "origin": "Origine",
           "restore": "Ripristina i valori copiati",
           "sourceAmount": "sorgente {amount}",
-          "step": "Passo",
+          "step": "Incremento",
           "stepRule": "La valuta del passo di una modalità a importo è la valuta della modalità, bloccata. Una commissione ha la valuta del prezzo.",
-          "title": "Configura {name} · dati dello scenario (il Broker non viene modificato)"
+          "title": "Configura {name} · dati dello scenario (il Broker non viene modificato)",
+          "feeCapHelp": "La parte percentuale non supera mai questo importo. Vuoto = nessun massimo.",
+          "feeCapNone": "nessuno",
+          "feeFloorHelp": "La parte percentuale non scende mai sotto questo importo. 0 = nessun minimo.",
+          "fundingCapAll": "tutto",
+          "fundingHelp": "Gli acquisti su questo Broker si pagano con la sua liquidità e con ogni fonte in verde qui. All’inizio è tutto consentito: clicca una fonte per escluderla, clicca di nuovo per consentirla.",
+          "modesHelp": "Un blocco per ogni valuta in cui compri su questo Broker: un Asset quotato in quella valuta si compra con le sue regole. Trascina i blocchi nell’ordine che preferisci.",
+          "pickCurrency": "Valuta del nuovo blocco",
+          "priorityHelp": "Conta solo tra piani che si avvicinano ugualmente all’obiettivo: in quel caso il piano usa prima le fonti con il numero più basso. 0 = preferita.",
+          "feeFixedHelp": "Si paga su ogni acquisto, qualunque sia l’importo, in aggiunta alla parte percentuale. 0 = nessuna.",
+          "feeRateHelp": "La quota dell’importo acquistato, in percentuale: 0,19 significa 0,19%. Minimo e massimo limitano solo questa parte.",
+          "conversionManual": "Converti tu prima di comprare",
+          "conversionAutomatic": "Converte il Broker quando compri",
+          "addedFor": "Modalità {currency} aggiunta per comprare {asset}, con valori di partenza: controlla tipo di ordine, incremento e commissioni, poi applica.",
+          "notYetSupported": "Non ancora supportati: regime fiscale, minusvalenze, commissioni di vendita."
         },
         "brokers": {
           "addManual": "Broker manuale",
           "conversions": "Conversioni: tasso globale + spread (passo FX)",
           "copy": "Scegli Broker esistente",
           "fee": "Commissione BUY {fixed} + {rate}% · min {floor} · max {cap}",
-          "feeZero": "Commissione BUY 0",
+          "feeZero": "nessuna",
           "funding": "Funding: {sources}",
           "fundingOnly": "solo funding",
           "fundingOnlyHint": "Nessun ordine: finanzia altri Broker tramite route. Modificalo nel passo Liquidità.",
@@ -3941,7 +3980,20 @@
           "manualName": "Broker manuale {count}",
           "noFunding": "ancora nessuno",
           "stepAmount": "passo {step}",
-          "stepUnits": "passo {step} unità"
+          "stepUnits": "{count, plural, one {{step} quota} other {{step} quote}}",
+          "conversionHelp": "Quando un acquisto richiede una valuta che qui non hai, il denaro viene convertito al tasso e con lo spread del passo FX. Se converti tu, il piano indica la conversione come passo numerato prima degli ordini; se converte il Broker quando compri, il piano la mostra accanto ai suoi ordini. Il calcolo è lo stesso in entrambi i casi.",
+          "conversionLabel": "Conversione di valuta",
+          "conversionValue": "Converti prima di comprare, al tasso del passo FX meno lo spread.",
+          "feeHelp": "Quanto il Broker addebita su ogni acquisto: la percentuale dell’importo, tenuta fra minimo e massimo, più la parte fissa. Nessun acquisto, nessuna commissione. Si paga con la tua liquidità e non viene investita.\n\nEsempi, nella valuta dell’acquisto:\n• 0,19%, minimo 1,50, massimo 18: su 500 paghi 1,50, su 2.000 paghi 3,80, su 20.000 paghi 18.\n• Solo una parte fissa di 2,95: 2,95 su qualsiasi acquisto.\n• Parte fissa 1 più 0,10%: su 1.000 paghi 2.\n• Tutto a 0: nessuna commissione.",
+          "feeMax": "max {amount}",
+          "feeMin": "min {amount}",
+          "fundingHelp": "Il denaro che il piano può usare per comprare su questo Broker: la sua liquidità, più i versamenti e la liquidità di altri conti che consenti in Modifica. All’inizio è tutto consentito; in Modifica, clicca una fonte per escluderla.",
+          "fundingLabel": "Liquidità utilizzabile",
+          "incrementHelp": "Ogni ordine proposto è un multiplo di questo valore. Per numero di quote: 1 = solo quote intere, 0,001 = frazioni fino a tre decimali. Per importo: l’importo più piccolo che puoi inserire, per esempio 0,01.",
+          "localHere": "già qui",
+          "orderKindHelp": "Come inserisci un ordine su questo Broker: per numero di quote (compri 3 quote) o per importo (investi 150). Stabilisce l’unità dell’incremento e dei limiti di ogni ordine.",
+          "fundingChipHelp": "{kind, select, local {La liquidità in {currency} già su {name}: il piano la usa qui, senza trasferimenti.} account {La liquidità in {currency} di {name}: hai consentito di usarla per gli acquisti su questo Broker.} other {Il versamento {name}: hai consentito di usarlo per gli acquisti su questo Broker.}}",
+          "conversionValueAuto": "Converte il Broker quando compri, al tasso del passo FX meno lo spread."
         },
         "busy": {
           "locked": "La configurazione è bloccata mentre questa richiesta è attiva.",
@@ -3949,16 +4001,20 @@
           "snapshot": "Snapshot rev. {revision} · {assets, plural, one {# Asset} other {# Asset}} · {brokers, plural, one {# Broker operativo} other {# Broker operativi}} · {routes, plural, one {# route BUY} other {# route BUY}} · {pairs, plural, one {# coppia FX} other {# coppie FX}}",
           "stop": "Interrompi attesa",
           "stopHint": "Interrompere ferma solo l’attesa: il server può comunque terminare, e quella risposta viene scartata.",
-          "title": "Calcolo in corso"
+          "title": "Calcolo in corso",
+          "refreshing": "Rilettura da LibreFolio dei dati copiati…"
         },
         "cash": {
           "custody": "Disponibile (custodia) {amount}",
-          "fundingOnly": "Solo funding: non acquista. Serve una route di funding nel passo Broker.",
-          "manualTitle": "{name} · conto manuale {currency}",
-          "noPrefill": "Nessun precompilato: l’importo lo scrivi tu.",
+          "fundingOnly": "Da questo conto non si compra: nel passo Broker scegli quale Broker riceve questo denaro.",
+          "manualTitle": "{name} · conto esterno",
+          "noPrefill": "Scrivi quanta di questa liquidità vuoi investire.",
           "selected": "Importo da usare",
           "share": "quota {share} · tua {amount}",
-          "title": "{name} · cassa {currency}"
+          "title": "{name} · cassa",
+          "useAll": "Tutto",
+          "useAllHint": "Usa tutto l’importo disponibile",
+          "selectedAll": "Parte da tutto l’importo disponibile: abbassalo se vuoi investire di meno."
         },
         "classificationsCopy": {
           "source": "Fonte: le classificazioni degli Asset (tipo, settore, area geografica) salvate in LibreFolio.",
@@ -3987,10 +4043,11 @@
         },
         "continueBlocked": "{count, plural, one {# problema da correggere prima di continuare:} other {# problemi da correggere prima di continuare:}}",
         "contribution": {
-          "destination": "Destinazione: una route di funding nel passo Broker.",
-          "kind": "contributo",
+          "destination": "Nel passo Broker scegli quale Broker riceve questo versamento.",
+          "kind": "versamento",
           "label": "Etichetta",
-          "untitled": "Nuovo contributo"
+          "untitled": "Nuovo versamento",
+          "defaultLabel": "Nuovo versamento {n}"
         },
         "copy": {
           "alreadyInDraft": "Già nella bozza: copiare di nuovo la aggiorna",
@@ -4001,8 +4058,9 @@
           "reading": "Lettura dello snapshot…",
           "rule": "Niente è collegato dal vivo: una copia è uno snapshot che puoi modificare. Copiare di nuovo aggiorna solo ciò che non hai cambiato ed elenca il resto.",
           "scopeError": "Non è stato possibile caricare l’elenco dei Broker. Non è stato copiato nulla.",
-          "sourcePortfolio": "Fonte: API Portfolio (allocation-source) · al {date} · solo i Broker di cui sei proprietario.",
-          "stop": "Interrompi"
+          "sourcePortfolio": "Puoi copiare solo dai Broker di cui sei proprietario.",
+          "stop": "Interrompi",
+          "allInPlan": "{kind, select, liquidity {La liquidità di tutti i Broker che puoi copiare è già nel piano.} other {Tutti i Broker che puoi copiare sono già nel piano.}}"
         },
         "copyNotice": {
           "conflicts": "{count, plural, one {# fatto è cambiato dalla copia precedente: decidi tu nella finestra.} other {# fatti sono cambiati dalla copia precedente: decidi tu nella finestra.}}",
@@ -4014,7 +4072,9 @@
             "liquidity": "Nulla copiato per: {names}.",
             "prices": "Nessun prezzo pubblicato per: {names}. Restano nella bozza; il calcolo li chiederà."
           },
-          "summary": "Copia eseguita: {applied} aggiunti o aggiornati, {unchanged} invariati.",
+          "summary": "Copia eseguita: {applied, plural, =0 {nessun elemento aggiunto o aggiornato} one {# elemento aggiunto o aggiornato} other {# elementi aggiunti o aggiornati}}{unchanged, plural, =0 {} one {, # invariato} other {, # invariati}}.",
+          "executionProfile": "Commissioni e modalità d’ordine di {names} non sono registrate in LibreFolio: {kind, select, brokers {le imposti qui sotto.} other {le imposti nel passo Broker.}}",
+          "stamp": "{kind, select, refreshed {Copiati: {when}. I valori che non modifichi vengono riletti subito prima del calcolo.} other {Copiati: {when}.}}",
           "when": "Snapshot al {date}, letto alle {time}. Nulla resta collegato alla fonte."
         },
         "dimensions": {
@@ -4039,26 +4099,55 @@
           "notHeld": "non posseduto",
           "quantum": "Pesi a {quantum} punti; la somma esatta viene dal backend.",
           "rule": "Solo pesi, nessun valore del portafoglio. Una base da modificare, non un consiglio. Un obiettivo che hai cambiato non viene sovrascritto senza conferma.",
-          "source": "Fonte: motore del portafoglio (i valori della pagina Allocazione) · al {date}",
+          "source": "Fonte: motore del portafoglio (i valori della pagina Allocazione).",
           "title": "Copia la distribuzione attuale",
           "valuation": "Valutazione",
-          "weight": "Peso"
+          "weight": "Peso",
+          "subtitle": "Quanto pesa oggi ciascuno di questi Asset nei Broker spuntati, contando solo questi Asset: insieme fanno il 100%. La cassa e gli altri Asset che possiedi non contano.",
+          "changeColumn": "Obiettivo",
+          "confirmApply": "Sostituisci"
         },
         "fx": {
           "addFrom": "Coppia: prima valuta",
           "addTo": "seconda valuta",
           "copy": "Copia tassi FX",
-          "intro": "Il backend decide se e quanto convertire. Tu fornisci i tassi.",
+          "intro": "I tassi che servono al calcolo, uno per ogni coppia di valute in gioco. «Auto» usa il tasso memorizzato in LibreFolio, «Manuale» un tasso tuo.",
           "none": "Nessuna conversione necessaria: ogni valuta in gioco è la valuta di valutazione.",
           "notInVersion": "Non in 2.0.0: FX per Broker, margine di sicurezza, commissione di conversione, conversioni a più passi.",
           "pairsHint": "Le coppie sono proposte dalle valute di Asset, cassa e modalità d’ordine; una chiave arriva solo dal selettore di coppia, in ordine canonico.",
           "remove": "Rimuovi coppia (non più in gioco)",
           "spread": "Spread di conversione *",
-          "spreadHint": "Uno per scenario, applicato una volta a ogni conversione; la valutazione usa il tasso ufficiale."
+          "spreadHint": "Un sovrapprezzo di margine, in percentuale dell’importo convertito, per coprire eventuali variazioni del tasso ufficiale o commissioni del Broker.",
+          "autoHelp": "«Auto» legge l’ultimo tasso che LibreFolio ha già, quando si apre questo passo e di nuovo subito prima del calcolo: nessun provider viene interrogato. «Manuale» usa il tuo tasso così come lo scrivi e non lo rilegge mai. Se e quanto convertire lo decide il calcolo.",
+          "pairMode": "Tasso {pair}",
+          "purpose": {
+            "valuation": "Valutazione",
+            "valuationHelp": "Esprime in {currency} liquidità, prezzi e versamenti nell’altra valuta, così pesi e totali si possono confrontare. Si usa il tasso ufficiale, senza spread.",
+            "conversion": "Conversione",
+            "conversionHelp": "Un Broker può pagare un Asset quotato in una di queste valute con liquidità nell’altra: il calcolo può convertire a questo tasso, con lo spread di conversione."
+          },
+          "reading": "Lettura del tasso memorizzato in LibreFolio…",
+          "notStored": "LibreFolio non ha un tasso memorizzato per questa coppia: aggiungilo nella pagina FX, oppure passa a «Manuale» e scrivilo.",
+          "ownerless": "LibreFolio legge i tassi memorizzati tramite un Broker di cui sei proprietario, e non ne hai: passa a «Manuale» e scrivi il tasso.",
+          "readLater": "Letto da LibreFolio subito prima del calcolo.",
+          "openFxPage": "Apri la pagina FX",
+          "rateHelp": "Tasso memorizzato in LibreFolio, del {date}{hasSource, select, yes { (fonte: {source})} other {}}. Viene riletto subito prima del calcolo.",
+          "manualHelp": "Il tuo tasso: il calcolo lo usa così come lo scrivi e non lo rilegge mai. {hasCopy, select, yes {LibreFolio ha {rate}, del {date}: «Auto» lo ripristina.} other {In «Auto» il calcolo usa il tasso memorizzato in LibreFolio, quando c’è.}}",
+          "pairMissing": "LibreFolio non ha un tasso memorizzato per questa coppia.",
+          "pairAbsent": "LibreFolio non segue ancora questa coppia: aggiungila qui, oppure passa a «Manuale» e scrivi il tasso.",
+          "pairAbsentHelp": "«Aggiungi la coppia» apre la finestra della pagina FX, con le due valute già scelte. Con un provider, LibreFolio scarica poi i tassi degli ultimi {days} giorni e questo passo legge il più recente; con «Manuale» come unico provider non si scarica nulla, e i tassi si scrivono nella pagina della coppia.",
+          "pairNoRates": "LibreFolio segue questa coppia ma non ha nessun tasso fino a oggi: scarica i tassi qui, oppure passa a «Manuale» e scrivi il tasso.",
+          "pairNoRatesHelp": "«Scarica i tassi» apre la finestra di download della pagina FX per questa coppia, impostata sugli ultimi {days} giorni; quando il download finisce, questo passo legge il tasso più recente. Nessun provider viene interrogato finché non avvii il download.",
+          "pairManualOnly": "LibreFolio segue questa coppia solo con tassi manuali, e non ne ha nessuno fino a oggi: aggiungine uno nella pagina della coppia, oppure passa a «Manuale» e scrivilo qui.",
+          "pairManualOnlyHelp": "L’unico provider di questa coppia è «Manuale»: LibreFolio non scarica nulla e tiene i tassi scritti nella pagina della coppia. «Auto» legge il più recente, quando ce n’è uno.",
+          "addPair": "Aggiungi la coppia",
+          "syncRates": "Scarica i tassi",
+          "openPair": "Apri la coppia",
+          "limitsHelp": "Non in questa versione:\n• un tasso o uno spread diverso per ogni Broker;\n• un margine di sicurezza sul tasso;\n• una commissione di conversione oltre allo spread;\n• conversioni in più passi (EUR → USD → CHF)."
         },
         "fxCopy": {
           "empty": "Non serve ancora nessuna coppia di valute.",
-          "source": "Fonte: tassi FX salvati in LibreFolio, l’ultimo pari o precedente al {date}. Nessun provider viene interrogato.",
+          "source": "Fonte: gli ultimi tassi FX salvati in LibreFolio. Nessun provider viene interrogato.",
           "title": "Copia tassi FX"
         },
         "issues": {
@@ -4093,7 +4182,7 @@
             "identity_fx_rate_not_allowed": "Non è ammesso un tasso di cambio fra la stessa valuta.",
             "invalid_quote_basis": "La base del prezzo non è valida.",
             "negative_cash_unsupported": "Un saldo di cassa negativo non è supportato.",
-            "negative_contribution": "Un contributo non può essere negativo.",
+            "negative_contribution": "Un versamento non può essere negativo.",
             "negative_fee_amount": "Una commissione non può essere negativa.",
             "negative_inventory_unsupported": "Una posizione negativa non è supportata.",
             "no_additional_buy_feasible": "Nessun altro acquisto è possibile con la liquidità disponibile.",
@@ -4157,36 +4246,40 @@
           "title": "Uscire dall’allocatore PAC?"
         },
         "liquidity": {
-          "addContribution": "Contributo",
-          "addManual": "Conto manuale",
-          "copy": "Copia liquidità dai Broker",
-          "empty": "Ancora nessuna liquidità. Copiala dai tuoi Broker, aggiungi un contributo o un conto manuale.",
-          "noConversion": "Nessun controvalore convertito: il cambio avviene solo nel backend."
+          "addContribution": "Nuovo versamento",
+          "addManual": "Conto esterno",
+          "copy": "Dai tuoi Broker",
+          "empty": "Ancora nessuna liquidità: scegli una delle fonti qui sopra.",
+          "noConversion": "Ogni importo resta nella sua valuta; le conversioni, se servono, le calcola il piano.",
+          "intro": "Da dove arriva il denaro da investire? Puoi combinare più fonti.",
+          "copyHint": "La liquidità già presente sui Broker registrati in LibreFolio. Scegli tu quanta usarne.",
+          "contributionHint": "Denaro nuovo che aggiungi, per esempio la rata del PAC. Nel passo Broker scegli quale Broker lo riceve.",
+          "manualHint": "Un saldo che hai già su un conto non registrato in LibreFolio, per esempio in banca. Dichiari quanto c’è e quanto usarne."
         },
         "liquidityCopy": {
           "allYours": "100% tua",
           "apply": "{count, plural, one {Copia # riga} other {Copia # righe}}",
           "custody": "custodia {amount}",
           "noCash": "Nessun saldo di cassa a questa data.",
-          "noOwner": "Non possiedi alcun Broker da cui copiare. Aggiungi invece un conto manuale: lo strumento funziona anche senza alcun Broker nel database.",
-          "rule": "Ogni Broker × valuta diventa una riga. «Importo da usare» resta vuoto: lo scrivi tu. Un 403/404 dall’API compare qui a parole semplici; nessun Broker viene scartato in silenzio.",
+          "noOwner": "Non possiedi alcun Broker da cui copiare. Usa invece un conto esterno o un nuovo versamento: lo strumento funziona anche senza Broker registrati.",
+          "rule": "Ogni valuta di un Broker diventa una riga di liquidità. L’importo da usare parte da tutto il disponibile: dopo la copia puoi ridurlo.",
           "title": "Copia liquidità dai Broker",
           "yourShare": "la tua quota {amount}"
         },
         "manualAccount": {
           "add": "Aggiungi fonte",
           "declared": "Liquidità dichiarata",
-          "declaredHint": "Un limite, non una proposta.",
-          "fundingOnly": "Nello scenario il conto diventa un Broker «solo funding»: da qui non parte nessun ordine; serve una route di funding verso un Broker.",
+          "declaredHint": "Quanto c’è sul conto: l’importo da usare non può superarlo.",
+          "fundingOnly": "Da questo conto non si compra: nel passo Broker scegli quale Broker riceve questo denaro.",
           "incomplete": "Compila ogni campo segnato con *.",
           "name": "Nome del conto",
-          "quantum": "Il passo minimo della valuta viene dal backend (CLDR).",
+          "quantum": "Gli importi seguono l’unità minima della valuta (per l’euro, il centesimo).",
           "selectedHint": "Al massimo la liquidità dichiarata.",
-          "title": "Aggiungi conto manuale"
+          "title": "Aggiungi conto esterno"
         },
         "modeKinds": {
-          "monetary_amount": "Importo",
-          "whole_quantity": "Numero di unità"
+          "monetary_amount": "Per importo",
+          "whole_quantity": "Per numero di quote"
         },
         "nav": {
           "current": "passo attuale",
@@ -4200,11 +4293,11 @@
         "objectives": {
           "active_order_rows": "Numero di ordini",
           "explicit_cost": "Costi espliciti (commissioni, spread, margine)",
-          "fixed_l2": "Distanza L2 dagli obiettivi fissi",
+          "fixed_l2": "Vicinanza agli obiettivi (distanza L2)",
           "incremental_cost": "Costi incrementali",
           "incremental_order_rows": "Ordini aggiuntivi",
-          "route_priority": "Priorità della route",
-          "shortfall": "Liquidità non investita (U)",
+          "route_priority": "Priorità di Broker e fonti",
+          "shortfall": "Liquidità non investita",
           "split_asset_count": "Asset divisi fra più Broker",
           "turnover": "Turnover"
         },
@@ -4217,17 +4310,16 @@
           "proportional": "Proporzionale"
         },
         "pricesCopy": {
-          "source": "Fonte: prezzi salvati in LibreFolio, l’ultimo pari o precedente al {date}. Nessun provider viene interrogato.",
+          "source": "Fonte: gli ultimi prezzi salvati in LibreFolio. Nessun provider viene interrogato.",
           "title": "Copia prezzi"
         },
         "problems": {
-          "asOfMissing": "Manca la data di riferimento.",
           "assetClassInvalid": "La classe dell’Asset deve essere un codice minuscolo di almeno 3 caratteri.",
           "assetNameMissing": "Il nome dell’Asset è vuoto.",
           "brokerNameMissing": "Il nome del Broker è vuoto.",
           "brokerNoMode": "Il Broker non ha alcuna modalità d’ordine.",
-          "contributionAmountMissing": "L’importo del contributo è vuoto o non è un numero.",
-          "contributionLabelMissing": "L’etichetta del contributo è vuota.",
+          "contributionAmountMissing": "L’importo del versamento è vuoto o non è un numero.",
+          "contributionLabelMissing": "L’etichetta del versamento è vuota.",
           "declaredMissing": "«Liquidità dichiarata» è vuoto o non è un numero.",
           "exposureIdTooLong": "Un identificativo di categoria di esposizione è troppo lungo.",
           "exposureIncomplete": "Una riga di esposizione è incompleta.",
@@ -4243,12 +4335,10 @@
           "modeStepNotWhole": "Modalità a unità intere: il passo deve essere un numero intero di unità.",
           "noAssets": "Aggiungi almeno un Asset.",
           "noEnabledRoute": "Nessuna route d’ordine è abilitata.",
-          "noLiquidity": "Aggiungi almeno una riga di cassa o un contributo.",
+          "noLiquidity": "Aggiungi almeno una riga di liquidità o un versamento.",
           "noOperativeBroker": "Aggiungi almeno un Broker su cui si possano proporre ordini.",
           "policyMissing": "Scegli una strategia.",
           "priceCurrencyMissing": "Manca la valuta del prezzo.",
-          "priceDateAfterReference": "La data del prezzo è successiva alla data di riferimento.",
-          "priceDateMissing": "Manca la data del prezzo.",
           "priceInvalid": "Il prezzo è vuoto o non è un numero.",
           "provenanceUnavailable": "Un fatto copiato ha perso il suo record di origine: copialo di nuovo.",
           "quoteBasisInvalid": "«Unità per prezzo» è vuoto o non è un numero.",
@@ -4256,7 +4346,7 @@
           "routeCapMissing": "Il tetto della route è obbligatorio.",
           "routeMarginInvalid": "Il margine di esecuzione è vuoto o non è un numero.",
           "routeMinimumInvalid": "Un minimo della route non è un numero.",
-          "routeNoMode": "Il Broker non ha alcuna modalità d’ordine nella valuta del prezzo di questo Asset.",
+          "routeNoMode": "Il Broker non ha una modalità d’ordine in {currency}, la valuta del prezzo di questo Asset: aggiungila, oppure escludi l’Asset su questo Broker.",
           "routePriorityInvalid": "La priorità della route deve essere un numero intero da 0.",
           "selectedExceedsAvailable": "«Importo da usare» supera l’importo disponibile nella stessa valuta.",
           "selectedInvalid": "«Importo da usare» non è un numero.",
@@ -4264,7 +4354,10 @@
           "structureInvalid": "Un campo non rispetta il contratto del pianificatore: {path}.",
           "targetInvalid": "L’obiettivo non è un numero da 0.",
           "targetTotalNotHundred": "Il totale degli obiettivi è {total}%, deve essere 100% (controllo).",
-          "valuationCurrencyMissing": "Manca la valuta di valutazione."
+          "valuationCurrencyMissing": "Manca la valuta di valutazione.",
+          "asOfMissing": "Manca la data di riferimento.",
+          "priceDateAfterReference": "La data del prezzo è successiva alla data di riferimento.",
+          "priceDateMissing": "Manca la data del prezzo."
         },
         "removal": {
           "cash": "Riga di cassa {broker} · {currency}",
@@ -4280,14 +4373,22 @@
           "allocationHint": "Solo pesi del backend (obiettivo e dopo). Nessun «prima»: in un PAC puro vale 0 per costruzione.",
           "assets": {
             "asset": "Asset",
-            "buyMid": "Acquisto (mid)",
-            "final": "Dopo",
-            "finalValue": "Valore dopo",
-            "residual": "Residuo",
-            "residualHint": "Residuo = il residuo del backend (dopo − obiettivo). L’interfaccia non sottrae nulla.",
+            "buyMid": "Valore comprato",
+            "final": "Dopo il piano",
+            "finalValue": "Valore dopo il piano",
+            "residual": "Scarto dall’ideale",
+            "residualHint": "Valore dopo il piano meno valore ideale: positivo se l’Asset finisce sopra la sua quota, negativo se sotto.",
             "target": "Obiettivo",
-            "targetValue": "Valore obiettivo",
-            "totals": "Totali (contabilità)"
+            "targetValue": "Valore ideale",
+            "totals": "Totali (contabilità)",
+            "bars": "Obiettivo e dopo",
+            "buyMidHelp": "Il valore di ciò che il piano compra di questo Asset, al prezzo di quotazione: senza commissioni né margine sul prezzo. In un PAC, che parte da zero, coincide con il valore dopo il piano. Quanto esce davvero dalla liquidità è nel Piano operativo.",
+            "targetShare": "Quota obiettivo",
+            "finalShare": "Quota dopo il piano",
+            "targetShareHelp": "La quota che hai scelto per questo Asset nel passo Obiettivi.",
+            "finalShareHelp": "La quota dell’Asset sul valore di tutti questi Asset dopo il piano. Confrontala con la quota obiettivo per vedere come cambia l’equilibrio fra gli Asset.",
+            "targetValueHelp": "Quanto varrebbe l’Asset con esattamente la sua quota obiettivo: quota obiettivo × base degli obiettivi (già investito in questi Asset più la liquidità utilizzabile).",
+            "finalValueHelp": "Quanto vale l’Asset dopo il piano: le unità che avevi più quelle comprate, al prezzo di quotazione e, se serve, al tasso del passo FX."
           },
           "badges": {
             "decimalVerified": "Verificato in Decimal",
@@ -4297,7 +4398,15 @@
             "noOperation": "Nessuna operazione",
             "notProven": "Ottimalità non dimostrata",
             "optimalProven": "Ottimo dimostrato",
-            "planAvailable": "Piano disponibile"
+            "planAvailable": "Piano disponibile",
+            "help": {
+              "planAvailable": "Un piano che rispetta tutti i vincoli: le sezioni qui sotto lo dettagliano.",
+              "decimalVerified": "Il backend ha ricontrollato il piano in aritmetica decimale esatta, a parte dal solver: ogni vincolo è rispettato e i valori degli obiettivi sono esatti.",
+              "optimalProven": "Il solver ha dimostrato che non esiste un piano migliore, obiettivo per obiettivo, nell’ordine scelto in Strategia.",
+              "completed": "Il solver ha concluso la ricerca da solo, senza raggiungere un limite.",
+              "timeLimit": "Il solver ha raggiunto il limite di tempo prima di concludere la ricerca.",
+              "nodeLimit": "Il solver ha raggiunto il limite di nodi, il numero di tentativi che può fare, prima di concludere la ricerca."
+            }
           },
           "collapseAll": "Comprimi tutto",
           "detail": {
@@ -4324,7 +4433,10 @@
             "sourcePrice": "Prezzo della fonte",
             "spreadLoss": "Perdita da spread",
             "staleQuote": "{count, plural, one {vecchio di # giorno} other {vecchio di # giorni}} · accettato",
-            "title": "Ordine {sequence} · {asset} · {broker} · {currency}"
+            "title": "Ordine {sequence} · {asset} · {broker} · {currency}",
+            "routeFactsNoCap": "priorità {priority} · nessun tetto",
+            "conversionAuto": "dal Broker quando compri · {source} → {destination} · 1 {source} = {rate} {destination} effettivo",
+            "spreadLossConversion": "Perdita da spread (intera conversione)"
           },
           "domains": {
             "broker": "Broker",
@@ -4338,7 +4450,18 @@
             "nothingDeclared": "Nessuna classificazione dichiarata · 100% non classificato",
             "public": "Pesi pubblici: identici con la privacy attiva.",
             "uncategorised": "Non classificato",
-            "uncategorisedHint": "«Non classificato» è la quota senza classificazione dichiarata."
+            "uncategorisedHint": "«Non classificato» è la quota senza classificazione dichiarata.",
+            "above": "Sopra l’ideale",
+            "below": "Sotto l’ideale",
+            "equal": "In linea con l’ideale",
+            "scale": "Scala di colori",
+            "offMap": "Fuori dalla mappa",
+            "scaleHelp": "Una sola scala per le due mappe: lo stesso colore è lo stesso peso. Passa su un paese, o toccalo, per vedere i suoi due pesi.",
+            "mapUnavailable": "Impossibile caricare la mappa: i pesi sono elencati qui.",
+            "hairline": "di meno di 0,01 punti",
+            "help": "Come si distribuiscono gli Asset per paese, tipo e settore, secondo le esposizioni dichiarate: la distribuzione ideale segue le tue quote obiettivo, quella reale le quote dopo il piano. I grafici non cambiano il piano.",
+            "ideal": "Distribuzione ideale",
+            "actual": "Distribuzione reale"
           },
           "failure": {
             "hideDetails": "Nascondi dettagli",
@@ -4361,43 +4484,95 @@
             "l2": "Distanza L2 {value}",
             "notes": "{count, plural, =0 {nessuna nota} one {# nota} other {# note}}",
             "shortfall": "Non investito {value}",
-            "title": "Piano calcolato"
+            "title": "Piano calcolato",
+            "notesHelp": "I messaggi che il calcolo ha lasciato su questo piano, avvisi o informazioni. Quando ce ne sono, sono elencati subito sotto."
           },
           "kpi": {
-            "explicitCost": "Costi espliciti",
+            "explicitCost": "Costi",
             "finalInvested": "Investito dopo",
-            "fixedReference": "Riferimento fisso",
-            "funding": "Funding selezionato {selected} · raggiungibile {reachable} · bloccato {trapped}",
+            "fixedReference": "Base degli obiettivi",
+            "funding": "Liquidità scelta: {selected}, di cui {reachable} raggiungibile dal piano e {trapped} no.",
             "orders": "Ordini",
-            "shortfall": "Non investito (U)",
-            "shortfallParts": "U = cassa libera {free} + perdite economiche {losses} + arrotondamento {rounding}",
+            "shortfall": "Non investito",
+            "shortfallParts": "Non investito: liquidità libera {free} · costi {losses} · arrotondamento {rounding}",
             "source": "Ogni cifra viene dalla contabilità del backend; l’interfaccia non somma nulla.",
-            "title": "Cifre chiave"
+            "title": "Cifre chiave",
+            "fundingReachable": "Liquidità scelta: {selected}, tutta raggiungibile dal piano.",
+            "shortfallPartsNoRounding": "Non investito: liquidità libera {free} · costi {losses}",
+            "help": {
+              "fixedReference": "L’importo a cui si applicano le percentuali obiettivo: quanto già possiedi degli Asset scelti, più la liquidità che il piano può raggiungere.",
+              "finalInvested": "Il valore degli Asset scelti dopo il piano.",
+              "shortfall": "La parte della base che non finisce negli Asset: liquidità rimasta libera, costi e arrotondamenti.",
+              "explicitCost": "Commissioni dei Broker, spread dei cambi valuta e margini sul prezzo che hai impostato, su tutto il piano.",
+              "orders": "Quanti ordini il piano ti chiede di inserire.",
+              "selectedFunding": "La liquidità che hai scelto per il piano, esistente e nuova, ai tassi del passo FX. Una parte che non può raggiungere un Broker dove puoi comprare è segnata come non raggiungibile e resta fuori dalla base degli obiettivi."
+            },
+            "parts": {
+              "currentInvested": "Già investito",
+              "reachable": "Liquidità raggiungibile",
+              "freeCash": "Liquidità libera",
+              "trapped": "Non raggiungibile"
+            },
+            "assetsHeld": "in {held} Asset su {total}",
+            "allInvested": "Tutto investito",
+            "allReachable": "Tutta raggiungibile",
+            "noCost": "Nessun costo",
+            "selectedFunding": "Liquidità scelta",
+            "brokers": "su {count} Broker",
+            "fxActions": "{count, plural, one {# cambio valuta} other {# cambi valuta}}",
+            "compute": {
+              "title": "Calcolo",
+              "help": "Quanto ha lavorato l’ottimizzatore su questo piano e fin dove è arrivato nel tempo concesso. I dettagli sono in «Prova e solver».",
+              "time": "Tempo di calcolo",
+              "timeHelp": "Il tempo che il backend ha impiegato per calcolare il piano. Il totale conta anche l’attesa in coda, l’avvio del worker e i controlli su input e output.",
+              "total": "totale {value}",
+              "budget": "Tempo concesso",
+              "budgetHelp": "Il tempo massimo che l’ottimizzatore può cercare per ogni obiettivo. Quando finisce, si tiene il miglior piano trovato fin lì e il risultato dice che non è provato ottimo.",
+              "objectives": "Obiettivi chiusi",
+              "objectivesHelp": "Gli obiettivi si ottimizzano uno dopo l’altro. Un obiettivo è chiuso quando l’ottimizzatore ha provato che per esso non esiste niente di meglio; gli altri si sono fermati a un limite.",
+              "objectivesValue": "{closed} su {total}",
+              "nodeLimit": "Limite di nodi",
+              "engine": "Motore"
+            },
+            "autoConversions": "{count, plural, one {# conversione automatica} other {# conversioni automatiche}}"
           },
           "ledger": {
             "fields": {
               "broker_withheld_tax": "Imposte trattenute dal Broker",
               "buy_debit": "Acquisti",
-              "buy_fees": "Commissioni BUY",
-              "final_physical": "Fisico finale",
-              "final_spendable": "Spendibile finale",
-              "funding_in": "Funding in entrata",
-              "funding_out": "Funding in uscita",
-              "fx_credit": "Accredito FX",
-              "fx_debit": "Addebito FX",
+              "buy_fees": "Commissioni di acquisto",
+              "final_physical": "Saldo fisico",
+              "final_spendable": "Resta disponibile",
+              "funding_in": "Entrate",
+              "funding_out": "Uscite",
+              "fx_credit": "Cambio in entrata",
+              "fx_debit": "Cambio in uscita",
               "gross_sell_credit": "Vendite",
-              "initial_selected": "Iniziale selezionato",
+              "initial_selected": "Liquidità iniziale",
               "rounding_delta": "Arrotondamento",
               "self_reserved_tax": "Imposte accantonate da te",
-              "sell_fees": "Commissioni SELL"
+              "sell_fees": "Commissioni di vendita"
             },
-            "freeCash": "Cassa libera (contabilità): {amount}",
-            "hideZero": "Nascondi le righe a zero",
-            "item": "Voce",
-            "showZero": "Mostra {count, plural, one {# riga a zero} other {# righe a zero}}",
-            "zeroHint": "Vendite, commissioni SELL, imposte trattenute e accantonate: sempre 0 nel PAC 2.0.0."
+            "freeCash": "Liquidità rimasta libera dopo il piano, in totale: {amount}",
+            "hideZero": "Mostra meno colonne",
+            "item": "Broker e valuta",
+            "showZero": "Mostra {count, plural, one {# colonna in più} other {# colonne in più}}",
+            "zeroHint": "Nascoste: le colonne a 0 in questo piano, e il saldo fisico quando coincide con quanto resta disponibile.",
+            "help": {
+              "initial_selected": "La liquidità di questo Broker in questa valuta che hai messo a disposizione del piano.",
+              "funding_in": "Quanto il piano porta in questa liquidità: versamenti, trasferimenti, e questa stessa liquidità quando la usano gli ordini qui.",
+              "funding_out": "Quanto il piano prende da questa liquidità: trasferimenti verso altri Broker, e quanto usano gli ordini qui (contato anche in Entrate).",
+              "fx_debit": "Quanto i cambi valuta del piano prendono da questa liquidità.",
+              "fx_credit": "Quanto i cambi valuta del piano aggiungono a questa liquidità.",
+              "buy_debit": "Gli importi degli ordini su questo Broker in questa valuta, commissioni escluse.",
+              "buy_fees": "Le commissioni del Broker su quegli ordini.",
+              "rounding_delta": "Quanto degli importi di questa riga viene dall’arrotondamento all’unità minima della valuta. È già compreso in essi.",
+              "final_spendable": "Quanto resta in questa liquidità dopo il piano.",
+              "final_physical": "Quanto resta disponibile più le imposte che hai accantonato.",
+              "alwaysZero": "Sempre 0 in un PAC: compra soltanto."
+            }
           },
-          "notes": "Note dal backend",
+          "notes": "Note sul calcolo",
           "outcomes": {
             "incumbent_found": "Piano trovato",
             "infeasible_proven": "Infattibile",
@@ -4405,26 +4580,41 @@
             "no_op": "Nessuna operazione"
           },
           "plan": {
-            "cashDebit": "Addebito di cassa",
+            "cashDebit": "Importo dell’ordine",
             "detail": "Dettaglio",
             "fee": "Commissione",
             "funding": "Funding",
-            "fundingDetail": "route di funding · priorità {priority} · {reason}",
-            "fx": "FX",
-            "fxAmounts": "addebito {debit} → accredito {credit}",
+            "fundingDetail": "{reason} · priorità {priority}",
+            "fx": "Cambio valuta",
+            "fxAmounts": "{debit} → circa {credit}",
             "fxRates": "1 {source} = {spot} {destination} spot · {effective} effettivo · perdita da spread {loss}",
-            "fxTitle": "{broker} · {source} → {destination} · per la route di {asset}",
+            "fxTitle": "per comprare {asset}",
             "instruction": "Istruzione",
-            "midPrice": "Prezzo mid",
-            "ordersAt": "Ordini · {broker}",
+            "midPrice": "Prezzo",
+            "ordersAt": "Ordini su {broker}",
             "privacyHint": "I prezzi di mercato sono pubblici; quantità, importi e commissioni addebitate sono patrimonio (privacy).",
             "sequence": "Seq",
-            "sequenceHint": "Nell’ordine di sequenza del backend: l’interfaccia non ricalcola nulla."
+            "sequenceHint": "Segui i numeri: prima la liquidità, poi i cambi valuta, poi gli ordini.",
+            "instructionHelp": "Cosa inserire nell’ordine presso il Broker.",
+            "midPriceHelp": "Il prezzo dell’Asset usato dal calcolo, prima del margine sul prezzo.",
+            "cashDebitHelp": "Quanto l’ordine prende dalla liquidità del Broker: il prezzo più il margine sul prezzo impostato nel passo Route, commissioni escluse.",
+            "feeHelp": "La commissione del Broker per questo ordine, dalle commissioni impostate nel passo Broker.",
+            "kind": {
+              "cash": "Liquidità disponibile",
+              "transfer": "Trasferimento",
+              "deposit": "Versamento"
+            },
+            "conversionFor": "per gli ordini in {currency}",
+            "fxEstimateHelp": "Inserisci l’importo in {source} nella conversione presso il Broker. Quanto ricevi in {destination} dipende dal tasso di quel momento: il piano usa tasso e spread del passo FX.",
+            "autoConversion": "Conversione automatica",
+            "autoConversionAmounts": "circa {debit} → {credit}",
+            "autoConversionHelp": "Non devi fare nulla: il Broker converte quando inserisci gli ordini in {destination}. Dalla tua liquidità in {source} prende circa questo importo; la cifra esatta dipende dal suo tasso in quel momento, mentre il piano usa tasso e spread del passo FX."
           },
           "platform": {
             "draftIntact": "La bozza è intatta.",
             "retry": "Riprova",
-            "title": "Calcolo non riuscito · errore della piattaforma strumenti"
+            "title": "Calcolo non riuscito",
+            "reference": "Riferimento nel log del server:"
           },
           "proof": {
             "absoluteGap": "Gap ass.",
@@ -4470,7 +4660,15 @@
             "tieBreak": "Spareggio finale: {code}.",
             "tieBreakClosed": "spareggio chiuso",
             "solverWitness": "{objectives, plural, one {# obiettivo della cascata chiuso} other {# obiettivi della cascata chiusi}} all’ottimo dal solver",
-            "solverInfeasibleWitness": "Il solver ha chiuso il primo stadio come infattibile: nessun piano rispetta tutti i vincoli rigidi."
+            "solverInfeasibleWitness": "Il solver ha chiuso il primo stadio come infattibile: nessun piano rispetta tutti i vincoli rigidi.",
+            "exactValue": "Valore esatto",
+            "help": {
+              "status": "Se il solver ha chiuso questo stadio: «terminato» vuol dire che ha dimostrato il valore migliore.",
+              "primal": "Il valore del miglior piano trovato dal solver per questo stadio.",
+              "dual": "Il limite dimostrato dal solver: nessun piano può fare meglio di così.",
+              "absoluteGap": "Distanza fra i due valori. 0 vuol dire che lo stadio è chiuso all’ottimo.",
+              "relativeGap": "La stessa distanza, come frazione del valore."
+            }
           },
           "reasons": {
             "allocation": {
@@ -4478,11 +4676,11 @@
             }
           },
           "sections": {
-            "allocation": "Allocazione per Asset · % del valore investito",
+            "allocation": "Allocazione per Asset",
             "assets": "Asset · valori nella valuta di valutazione",
-            "exposures": "Esposizioni · pesi pubblici",
+            "exposures": "Esposizioni – ideale vs reale",
             "ledger": "Saldi per Broker e valuta",
-            "plan": "Piano operativo · nell’ordine di sequenza del backend",
+            "plan": "Piano operativo",
             "proof": "Prova e solver"
           },
           "stale": {
@@ -4546,21 +4744,28 @@
           "weights": {
             "finalShort": "D",
             "targetShort": "O"
+          },
+          "gotoProof": "Prova e tempi",
+          "timing": {
+            "title": "Come si distribuisce il tempo",
+            "hint": "Un colore per fase, nell’ordine in cui avvengono, sul totale dell’elemento ({total}). Le fasi non misurate o sotto 1 ms non compaiono.",
+            "unattributed": "Non attribuito",
+            "unattributedHelp": "Tempo dentro il totale che nessuna fase misura: caricamento dello strumento, sua preparazione, consegna del risultato."
           }
         },
         "review": {
-          "assets": "{count} · prezzi {priced}/{count} · {stale} non del giorno",
-          "brokers": "{operative} operativi · {fundingOnly} solo funding",
+          "assets": "{count, plural, one {# Asset} other {# Asset}}{missing, plural, =0 {} other { · # senza prezzo}}{stale, plural, =0 {} one { · # prezzo non di oggi} other { · # prezzi non di oggi}}",
+          "brokers": "{operative, plural, one {# Broker} other {# Broker}}{external, plural, =0 {} one { · # conto esterno} other { · # conti esterni}}",
           "calculate": "Calcola piano",
           "edit": "Modifica",
           "exposureRows": "{count, plural, one {# esposizione} other {# esposizioni}}",
-          "factEntity": "Fatto",
+          "factEntity": "Dato",
           "factOrigin": "Origine",
           "factStep": "Passo",
           "factValue": "Valore",
           "factsAll": "Snapshot completo",
           "factsChanged": "Solo modificati / non del giorno",
-          "factsEmpty": "Nessun fatto in questa vista.",
+          "factsEmpty": "Nessun dato corrisponde ai filtri.",
           "factsLabel": "Fatti dello snapshot",
           "fx": "{count, plural, one {# coppia} other {# coppie}} · {stale} non del giorno",
           "intro": "Il backend riceverà questa copia completa, e solo questa.",
@@ -4568,37 +4773,79 @@
           "noOrders": "Nessun ordine verrà inviato al Broker. Il calcolo usa solo questo payload.",
           "price": "{price} / {units} {count, plural, one {unità} other {unità}}",
           "problems": "Completa questi campi prima di calcolare:",
-          "routes": "{count, plural, one {# route BUY} other {# route BUY}}",
+          "routes": "{assets} di {total} Asset {assets, plural, one {acquistabile} other {acquistabili}}",
           "selectedOf": "{selected} di {available}",
           "showResult": "Vedi l’ultimo risultato",
           "sources": "{count, plural, one {# fonte} other {# fonti}}",
-          "targets": "{count, plural, one {# Asset} other {# Asset}}"
+          "targets": "{count} di {total} Asset con un obiettivo",
+          "fxRated": "{count, plural, one {# cambio} other {# cambi}}{missing, plural, =0 {} other { · # senza tasso}}{stale, plural, =0 {} other { · # non di oggi}}",
+          "lead": "Ultimo controllo prima del calcolo.",
+          "help": "Il calcolo usa solo i dati elencati qui. Subito prima, LibreFolio rilegge i prezzi, i cambi e i saldi che hai preso da LibreFolio senza modificarli; quelli che hai scritto o modificato restano così.",
+          "colSummary": "Riepilogo",
+          "colKind": "Tipo",
+          "kind": {
+            "broker": "Broker",
+            "cash": "Liquidità",
+            "contribution": "Versamento",
+            "price": "Prezzo",
+            "exposures": "Composizione per le mappe",
+            "fx": "Cambio"
+          },
+          "origin": {
+            "librefolio": "LibreFolio"
+          },
+          "staleTitle": "Non di oggi: il calcolo usa l’ultimo valore che LibreFolio ha.",
+          "ordersIn": "Ordini in",
+          "externalAccount": "Conto esterno",
+          "noOrdersHint": "Il calcolo non invia ordini ai Broker.",
+          "factsToggle": "Dati del calcolo ({count})",
+          "exposureDimension": "{dimension}: {count, plural, one {# voce} other {# voci}}",
+          "exposuresHelp": "Come l’Asset si divide per paese, settore e tipo, copiata dalla sua pagina Asset o scritta da te. Serve solo alle mappe e alle barre delle esposizioni nel Risultato: non entra nel calcolo e non cambia il piano."
         },
         "route": {
-          "cap": "Tetto",
+          "cap": "Acquisto massimo",
           "capHint": "Default alto, modificabile",
           "fee": "BUY {currency} di {broker} · fissa {fixed} + {rate}%",
-          "margin": "Margine di esecuzione",
-          "minimumIfActive": "Minimo se operi",
+          "margin": "Margine sul prezzo",
+          "minimumIfActive": "Acquisto minimo",
           "noPrice": "Ancora nessun prezzo: la modalità segue la valuta del prezzo.",
           "none": "Nessuna",
           "priority": "Priorità",
           "priorityHint": "0 = preferita",
           "ready": "pronta",
-          "requiredMinimum": "Minimo obbligatorio"
+          "requiredMinimum": "Acquisto obbligatorio",
+          "modeLine": "{kind} · Incremento: {step} · Commissione di acquisto: {fee}",
+          "minimumNone": "nessun minimo",
+          "requiredNone": "nessun obbligo",
+          "minimumHelp": "Se il piano compra qui, compra almeno questo. Vuoto = basta l’incremento del Broker. Utile quando un acquisto piccolo farebbe pesare troppo la commissione.",
+          "requiredHelp": "Il piano compra qui almeno questo, in ogni caso. Se le risorse non bastano, il piano diventa impossibile. Vuoto = nessun obbligo.",
+          "capHelp": "Il massimo che il piano può comprare di questo Asset su questo Broker. Vuoto = nessun limite proprio: il piano non compra mai più della liquidità che può arrivare a questo Broker. Compilalo per fermare gli acquisti qui oltre una certa dimensione.",
+          "priorityHelp": "Conta solo fra piani che arrivano ugualmente vicini all’obiettivo: fra questi, si preferisce comprare sui Broker con il numero più basso. Pesa più delle commissioni: per lasciar decidere il costo, lasciali tutti a 0. Tutti a 0 = nessuna preferenza.",
+          "marginHelp": "Ogni acquisto è calcolato a prezzo × (1 + margine), per coprire un prezzo che sale prima dell’ordine. Esempio: 0,5% su 100 → 100,50. La differenza è una riserva per il rialzo: non conta come investito.",
+          "capNone": "nessun limite",
+          "modeMissing": "{broker} non ha ancora una modalità d’ordine in {currency}",
+          "modeMissingHelp": "La modalità d’ordine dice come {broker} accetta un ordine in {currency}: a quote o a importo, con quale incremento e quali commissioni. Il piano ne ha bisogno per dimensionare l’acquisto di questo Asset, che è quotato in {currency}. Non è la conversione: se paghi con un’altra valuta, il piano aggiunge la conversione come l’hai impostata sul Broker. Aggiungi la modalità, oppure escludi l’Asset su questo Broker.",
+          "addMode": "Aggiungi modalità {currency}",
+          "excludeHere": "Escludi su {broker}"
         },
         "routing": {
           "asset": "Asset",
           "capRule": "Il tetto alto non allarga la ricerca: il limite reale di ogni ordine è il minore fra tetto e risorse.",
-          "fundingOnly": "{name} · solo funding, non selezionabile",
+          "fundingOnly": "{name}: da questo conto non si compra",
           "next": "Asset successivo",
           "previous": "Asset precedente",
-          "unitRule": "Minimo e tetto seguono la modalità: unità per «numero di unità», un importo per «importo». Nessuna scelta libera."
+          "unitRule": "Minimo e tetto seguono il tipo di ordine: quote se compri per numero di quote, un importo se compri per importo.",
+          "intro": "Cosa può comprare ogni Broker",
+          "introHelp": "Per ogni Broker, clicca un Asset per consentirlo o escluderlo: in verde, il piano può proporre di comprarlo lì. I limiti si misurano come gli ordini di quel Broker, in quote o come importo. I campi vuoti non limitano nulla: compilali solo quando ti serve un vincolo.",
+          "allowAll": "Consenti tutti",
+          "excludeAll": "Escludi tutti",
+          "allowedCount": "{allowed, plural, one {# consentito} other {# consentiti}} su {total}"
         },
         "scenario": {
-          "asOf": "Data di riferimento",
           "currency": "Valuta di valutazione",
-          "intro": "Allocatore PAC · quantità iniziali zero (PAC puro).",
+          "intro": "Pianifichi un nuovo investimento (PAC puro): il calcolo parte da un portafoglio vuoto, quindi ciò che possiedi già non entra nel conto, e divide la liquidità che scegli fra gli Asset, il più vicino possibile ai pesi obiettivo. È una simulazione: nessun ordine viene inviato.",
+          "currencyHint": "La valuta in cui il piano confronta e riassume gli importi (pesi, scostamenti, liquidità non investita). Il denaro resta nella sua valuta: ogni cambio necessario compare nel piano come operazione FX.",
+          "asOf": "Data di riferimento",
           "noValues": "Nessun valore finanziario in questo passo."
         },
         "scope": {
@@ -4630,22 +4877,27 @@
           "title": "Calcolo interrotto"
         },
         "strategy": {
-          "cascade": "Ordine degli obiettivi, dal più importante:",
+          "cascade": "Come sceglie il piano, in ordine",
           "fromContract": "Le strategie vengono dal contratto del backend.",
-          "intro": "Ogni vincolo dei passi precedenti resta rigido.",
+          "intro": "Fra tutti i piani d’acquisto che rispettano quanto hai impostato nei passi precedenti, la strategia sceglie il migliore.",
           "noParameters": "Parametri aggiuntivi: nessuno.",
-          "none": "Il contratto del backend non offre alcuna strategia: il piano non può essere calcolato."
+          "none": "Il contratto del backend non offre alcuna strategia: il piano non può essere calcolato.",
+          "cascadeRule": "Ogni criterio decide solo fra i piani rimasti alla pari su quelli sopra.",
+          "l2Help": "Distanza dagli obiettivi: per ogni Asset, la differenza fra il suo valore dopo il piano e la sua quota obiettivo di R, al quadrato, poi sommata su tutti gli Asset. R è quanto è già investito in questi Asset più la liquidità che puoi usare. Vince il piano con la somma più bassa; il quadrato fa pesare di più gli scarti grandi. Valori al prezzo di quotazione, senza commissioni né margine.",
+          "priorityHelp": "I numeri li scegli nel passo Route, per gli Asset che più Broker possono comprare, e nel passo Broker, per le fonti di liquidità: vince il più basso. Tutti a 0 = nessuna preferenza.",
+          "tieBreakTitle": "Spareggio finale",
+          "tieBreak": "Se resta ancora un pareggio, decide un ordine fisso di Asset e Broker: con gli stessi dati esce sempre lo stesso piano.",
+          "l2Formula": "Distanza dagli obiettivi:\n$D = \\min \\sum_i (V_i - p_i R)^2$\n• $V_i$: valore dell’Asset dopo il piano\n• $p_i$: il suo obiettivo\n• $R$: già investito più liquidità utilizzabile\nFra i piani possibili vince quello con la somma più bassa: il quadrato fa pesare di più gli scarti grandi. Al prezzo di quotazione, senza commissioni né margine."
         },
         "summary": {
           "assets": "Asset",
           "assetsWithRoute": "Asset con una route",
           "brokers": "Broker",
           "cash": "Righe di cassa",
-          "contributions": "Contributi",
+          "contributions": "Versamenti",
           "copied": "Fatti copiati",
           "currencies": "Valute",
           "currency": "Valuta",
-          "date": "Data",
           "exposures": "Esposizioni",
           "fundingOnly": "Solo funding",
           "fundingRoutes": "Route di funding",
@@ -4665,21 +4917,29 @@
           "title": "Riepilogo",
           "toggle": "Riepilogo",
           "total": "Totale (controllo)",
-          "versions": "Backend/API {api} · UI {ui}"
+          "versions": "Backend/API {api} · UI {ui}",
+          "date": "Data",
+          "rates": "Tassi"
         },
         "targets": {
           "control": "(controllo informativo)",
           "copyDistribution": "Copia la distribuzione attuale",
-          "intro": "Come distribuire la liquidità. Non è un’anteprima del piano.",
-          "remaining": "Rimanente {value}",
+          "intro": "Come dividere fra gli Asset il denaro che investi ora, in percentuale.",
+          "remaining": "{value} mancante",
           "shape": "Distribuzione",
           "target": "Obiettivo %",
-          "total": "Totale {value}",
-          "wire": "Pesi in percentuale; arrivano al backend come decimali."
+          "total": "Totale",
+          "wire": "La quota del denaro che investi ora che va a questo Asset, in percentuale. Sono ammessi i decimali.",
+          "copyHelp": "Legge quanto pesa oggi ciascuno di questi Asset nei Broker che spunti, contando solo questi Asset e non la cassa, e porta i rapporti al 100%. Gli Asset inseriti a mano valgono 0. Vedi i pesi prima di usarli, e un obiettivo che hai cambiato viene sostituito solo dopo la tua conferma.",
+          "excess": "+{value} in eccesso",
+          "balance": "Bilancia al 100%",
+          "totalHelp": "Gli obiettivi dividono fra gli Asset il denaro che investi ora, cassa e versamenti compresi: per calcolare devono sommare esattamente il 100%. «Bilancia tutto» riscala ogni obiettivo mantenendo i loro rapporti (parti uguali se sono tutti a 0). Spunta alcune righe per riscalare solo quelle, con «Bilancia le righe selezionate al 100%». «Bilancia al 100%» su una riga dà a quell’Asset quanto manca, o toglie l’eccesso.",
+          "balanceAll": "Bilancia tutto",
+          "balanceSelected": "Bilancia le righe selezionate al 100%"
         },
         "toolErrors": {
           "cleanup_failed": "Il calcolo è terminato, ma la piattaforma non è riuscita a ripulire dopo di esso.",
-          "execution_failed": "Il calcolo non è riuscito all’interno dello strumento.",
+          "execution_failed": "Un errore interno dello strumento ha fermato il calcolo, e nessun piano è stato pubblicato.",
           "execution_limit": "Il calcolo ha raggiunto un limite di risorse della piattaforma strumenti.",
           "execution_timeout": "Il calcolo ha superato il limite di tempo di esecuzione.",
           "input_limit_exceeded": "Lo scenario è più grande di quanto lo strumento accetti. Rimuovi Asset, route o righe.",
@@ -4696,7 +4956,58 @@
           "worker_crashed": "Il processo di calcolo si è fermato inaspettatamente."
         },
         "units": {
-          "shares": "unità"
+          "shares": "quote"
+        },
+        "refresh": {
+          "failed": {
+            "title": "Non è stato possibile rileggere i dati copiati",
+            "body": "Non è stato calcolato nulla. Riprova, oppure calcola con i valori copiati in precedenza.",
+            "retry": "Riprova",
+            "proceed": "Calcola con i dati copiati"
+          },
+          "notice": {
+            "summary": "Dati copiati riletti da LibreFolio: {changes}.",
+            "prices": "{count, plural, one {# prezzo aggiornato} other {# prezzi aggiornati}}",
+            "fx": "{count, plural, one {# tasso FX aggiornato} other {# tassi FX aggiornati}}",
+            "cash": "{count, plural, one {# saldo aggiornato} other {# saldi aggiornati}}",
+            "unchanged": "nessun valore è cambiato",
+            "missing": "Non trovati, resta il valore copiato: {names}."
+          }
+        },
+        "ownedAssets": {
+          "open": "I tuoi Asset",
+          "title": "Aggiungi gli Asset che possiedi",
+          "brokers": "Broker",
+          "brokersHelp": "L’elenco mostra gli Asset con una posizione aperta oggi nel Broker scelto, oppure in tutti i tuoi Broker. Parte dal Broker del piano quando il piano ne ha uno solo.",
+          "selectAll": "Seleziona tutti",
+          "selectNone": "Deseleziona tutti",
+          "count": "{selected, plural, one {# selezionato} other {# selezionati}} su {total}",
+          "inPlan": "Già nel piano",
+          "noBroker": "Spunta almeno un Broker.",
+          "noHoldings": "Nessuna posizione aperta oggi nei tuoi Broker.",
+          "noneInBrokers": "Nessuna posizione aperta oggi in questo Broker.",
+          "noOwner": "Non sei proprietario di alcun Broker da cui leggere le posizioni. Cerca gli Asset o aggiungi Asset manuali: lo strumento funziona anche senza Broker registrati.",
+          "unresolved": "{count, plural, one {# posizione non è stata ricondotta al suo Asset o Broker e non è in elenco.} other {# posizioni non sono state ricondotte al loro Asset o Broker e non sono in elenco.}}",
+          "apply": "{count, plural, one {Aggiungi # Asset} other {Aggiungi # Asset}}",
+          "allBrokers": "Tutti i Broker"
+        },
+        "restore": "Ripristina",
+        "mode": {
+          "auto": "Auto",
+          "manual": "Manuale"
+        },
+        "policyHelp": {
+          "proportional": "Compra in modo che il denaro investito si divida fra gli Asset il più vicino possibile ai tuoi obiettivi."
+        },
+        "objectiveHelp": {
+          "fixed_l2": "Ogni Asset il più vicino possibile alla sua quota del denaro.",
+          "shortfall": "Meno denaro lasciato non investito.",
+          "route_priority": "Prima i Broker e le fonti di liquidità con il numero di priorità più basso.",
+          "explicit_cost": "Meno spesa in commissioni, spread di conversione e margine sul prezzo.",
+          "active_order_rows": "Meno ordini da inserire."
+        },
+        "policyScope": {
+          "proportional": "Solo acquisti: non vende nulla."
         }
       }
     },
