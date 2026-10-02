@@ -949,3 +949,122 @@ Il selettore (variante B) arriva dopo, con la primitiva `BenchmarkSelect` di Ris
 >   con la tabella prima del grafico.
 > - vitest `assetSetI18n`, sezione e livelli: 145/145; E2E non rifatti, perché nessun selettore legge testo tradotto.
 > - Registro rifatto (G1 e G5 cambiano) e mandato a Risk.
+
+> ✅ **Committato**: `34bf2d804` G1 · `8f94b5d16` G2 · `8a7124782` G3 · `ec2c4dad7` G4 · `23c63080a` G5. Verificato in sola
+> lettura (`/tmp/libreFolio_f4/verify_l5.sh`, base `c221ed22d`): messaggi e file uguali, blob identici (`b185999a…`)
+> → **PASS**.
+
+## Giro 6 · L1° senza benchmark, poi il banner della qualità dei dati · 2026-10-02, dalle 11:4x
+
+**Decisione del developer** (10:0x): «Solo in L3°, e L1° misurato senza benchmark». **Concessione di Risk**, una
+tantum, solo per questa divisione:
+- `riskAnalysisHelpers.ts`: in `buildBaseAnalytics`, due flag additivi, `includeAssetSetLossLevels` (VaR ×2 e drawdown)
+  e `includeAssetSetPaidLevels` (KPI, risk_return e comparison col benchmark); `includeAssetSetLevels` resta la loro
+  unione;
+- `riskPanelController.svelte.ts` (`:122`, `:271`): il solo passaggio delle due opzioni;
+- i loro test, rossi prima, con un pin che i chiamanti di oggi mandino richieste identiche byte per byte.
+- Niente altro in quei due file.
+
+**Fatti verificati (`23c63080a`)**:
+- Oggi l'ordine delle analisi per-asset è: kpi, var 1g, var 30g, drawdown, risk_return, comparison
+  (`riskAnalysisHelpers.ts:313-345`). L'unione deve restare **identica**, quindi nel codice: kpi (paid), poi var, var e
+  drawdown (loss), poi risk_return e comparison (paid).
+- `correlation` entra in ogni onda storica che la capacità permette (`add('correlation')`), quindi in tutte e due le
+  richieste nuove.
+- Senza benchmark le due richieste hanno stessa scala, finestra e valuta → la stessa finestra comune (il motore la
+  prepara per richiesta, «never from the analytics list», `riskAnalysisHelpers.ts:250-254`).
+
+**Passi**:
+
+| # | passo | stato |
+|---|---|---|
+| L6-1 | test rossi (test-author): flag del helper e pin byte per byte, passaggio delle opzioni nel controller, due controller nei livelli; E2E riletti per le richieste divise | ⏳ |
+| L6-2 | codice: helper e controller (concessi), due controller in `AssetSetComparisonLevels` | ⏳ |
+| L6-3 | guida `:168/171` (docs-writer) | ⏳ |
+| L6-4 | cancelli; poi il banner (L6-5…) | ⏳ |
+
+> **In arrivo da Risk (11:4x): D371, l'asset selezionato come benchmark.** La scelta del developer, riportata da Risk,
+> testuale: «per le metriche che si calcolano con il benchmark e l'asset stesso è il benckmar, mettici un trattino e un
+> tooltip che spiega che non è applicabile perchè se stesso è già il banckmark».
+> - Backend (`asset_set_comparison` 1.1.0, di Risk):
+>   - il riferimento fra i selezionati è accettato;
+>   - `items` sono gli **altri** selezionati, senza il riferimento (nessun beta 1,00 inventato);
+>   - i campi `comparison_*` restano quelli del riferimento, sulla stessa finestra;
+>   - con il solo riferimento selezionato, `items == []`.
+> - Il mio lato, quando la punta di Risk arriva nel mio ramo (passo L7, dopo il giro 6):
+>   - `labBenchmarkId` accetta un valore fra i selezionati, e `measuredAssetIds={[]}` toglie il ⚠;
+>   - nella riga del riferimento, un trattino in beta e correlazione col tooltip del developer, con `figureCell` e una
+>     chiave nuova;
+>   - **il grafico**: il punto dell'asset e quello del benchmark coinciderebbero. Risk propone un solo punto, disegnato
+>     come benchmark: da portare alla review del developer;
+>   - la guida (la frase «cannot be one of the selected assets») cambia;
+>   - i test che fissano «mai uno dei confrontati» si riallineano: `AssetSetRiskReturnSection.test.ts:178` e i mock di
+>     `risk-lab.spec.ts` (`:870`, `:1988`, `:4146`).
+
+### L6-1 · test rossi prima, E2E (test-author `l6-e2e`)
+
+> - Le richieste si distinguono per le analisi che portano: L1° = `asset_set_var`/`asset_set_drawdown`; L3° =
+>   `asset_set_kpi`/`asset_set_risk_return`/`asset_set_comparison`. Aiutanti nuovi: `lossRequestsFor`,
+>   `paidRequestsFor` ed `expectLossWithoutComparison`.
+> - Adattati senza cambiarne il senso: le letture delle richieste nei casi sull'asset non misurato, sugli ordinamenti
+>   di L1° e L3°, sui trattini, sulla nota del periodo, sulla sincronizzazione e sul ricarico. Due erano già fragili:
+>   un `[0]` e un `.at(-1)` che potevano cadere sulla richiesta dell'altro livello.
+> - Verificato da me (build, poi `risk-lab`): **5 rossi, 34 verdi**, i 5 annunciati, ciascuno sulla richiesta unica
+>   che porta il confronto:
+>   - una richiesta con una fetta di entrambi i livelli (`:3867`);
+>   - `asset_set_var` insieme al confronto (`:4697`);
+>   - il confronto arriva a L1° (`:2385`, due casi);
+>   - la scelta del benchmark richiede di nuovo L1° (`:4832`).
+> - Non fatto, e detto: un controllo a schermo che «L1° non cambia», perché lo stub non riproduce il restringimento
+>   della finestra da parte del benchmark e passerebbe per la ragione sbagliata.
+>
+> **D371 (12:0x)**: il backend è nella punta di Risk `a9f6bcf9f` (`asset_set_comparison` 1.1.0). Arriva nel mio ramo con
+> la fusione vera del prossimo checkpoint; poi il passo L7, come sopra.
+
+### L6-1 · test rossi prima, unitari (test-author `l6-unit`) · L6-2 · il codice ✅ 2026-10-02
+
+> - **Unitari**: 190 casi nei 3 file, **20 rossi** prima del codice, tutti sulla divisione mancante (flag che non
+>   fanno nulla, opzioni che non arrivano alla richiesta, una sola domanda per due livelli). **6 pin** byte per byte,
+>   verdi prima e dopo: l'unione con e senza benchmark, la Dashboard e i broker, Asset Detail, il laboratorio di oggi.
+>   L'imbracatura dei livelli ora conta tutti i controller del componente, e i mock rispondono solo alle analisi
+>   chieste.
+> - **Codice**:
+>   - `riskAnalysisHelpers.ts` (concesso): `includeAssetSetLossLevels` e `includeAssetSetPaidLevels`. Le stesse
+>     aggiunte nello stesso ordine sotto due guardie, quindi l'unione resta identica; il confronto solo con la parte
+>     di L3°.
+>   - `riskPanelController.svelte.ts` (concesso): le due opzioni e il loro passaggio, nient'altro.
+>   - `AssetSetComparisonLevels.svelte` (mio):
+>     - `lossController` (senza benchmark, che lì non si legge nemmeno) e `paidController` (con il benchmark);
+>     - stati, `answer_discarded` e «Riprova» per livello;
+>     - docblock riscritto.
+> - vitest sui 3 file **190/190**; prettier pulito (lo spec E2E formattato con `--write`: solo spazi e virgole finali,
+>   verificato col testo normalizzato); tsc e2e pulito su risk-lab.
+
+### L6-3 · guida ✅ (docs-writer `l6-guide`) · L6-4 · cancelli ✅ 2026-10-02, 12:15–12:3x
+
+> - Guida `:171`: il benchmark entra nella finestra di «What did each of these pay for its risk?» **soltanto**; «How much
+>   did each of these hurt?» e la matrice restano sulla finestra della selezione. Verificato anche nel backend
+>   (`service.py:183`, `:191-196`: il benchmark entra nella finestra solo della richiesta che chiede il confronto). Build
+>   strict pulito; 88 link.
+> - Cancelli (`/tmp/libreFolio_f4/l6_gates.sh`, log in `/tmp/libreFolio_f4/l6final/`):
+>   - prettier pulito; vitest 27 file, **1100** test; E2E `risk-lab` **39/39** (i 5 rossi di prima ora verdi), `risk`
+>     13/13, `risk-benchmark-shared` 4/4;
+>   - `risk-controller-unit` 59/59, `risk-levels-component` 75, `core-unit` 107/2955, `component-unit` 98/2416;
+>   - orfani pulito; i18n 3509; link 88; `git diff --check` pulito; `sw.js` invariato.
+>   - **⚠️ Fuori pista**: `front check` dava 4 errori, uno nuovo in `AssetSetComparisonLevels.test.ts:807` (un
+>     `parameters?.comparison_asset_id` senza cast). Corretto da test-author come in `riskPanelController.test.ts:114`
+>     (190/190), poi `front check` di nuovo **al pavimento** e `component-unit` 98/2416.
+>
+> **Review (ask_user, 12:4x), alla lettera**: «non posso fare la prova perchè il confronta con mostra ancora solo gli
+> asset non selezionati, e il pannel non è quello del + che avevamo deciso». Spiegato che D371 entra con la fusione dopo
+> questo checkpoint e il pannello con le tappe 1 e 2; scelta del developer: **«Checkpoint ora della divisione, e review a
+> selettore completo»**. La divisione è coperta dai test (5 E2E rossi e poi verdi, 6 pin byte per byte). Server 6164
+> fermato (si era ricostruito da sé all'avvio, perché un file di test in `src` era più recente della build: stesso
+> codice provato).
+
+## Checkpoint · giro 6a, la divisione L1°/L3° · 2026-10-02 (verso Risk)
+
+> Il delta, i gruppi (G1–G5) e i digest stanno nel messaggio a Risk e in `/tmp/libreFolio_commits/f-l6-*`.
+> Dopo il commit: la fusione vera della punta di Risk (con D371), poi D371 lato mio, il banner e la tappa 1, e una
+> review unica a selettore completo.
+> Stato: **FROZEN** fino al commit.
