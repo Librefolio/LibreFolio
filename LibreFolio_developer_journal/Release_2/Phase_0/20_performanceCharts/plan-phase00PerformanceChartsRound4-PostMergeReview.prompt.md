@@ -61,15 +61,16 @@ Indicatore di lettura rapida: va riletto **a ogni consegna**, non a ogni sospett
 | C8 | Checkpoint: S7 (asse a scala di Candele e Proventi, riga «parziale» con `escapeHtml`), registri | S7 | ✅ pronto 2026-09-30 23:51: 3 commit su `039baea22` (il pianificatore; la cura di S7; il journal), il runner diviso fra i commit 1 e 2; prima la `desc` del runner e i doc di tre helper di test (registri «Checkpoint C8 — preparazione» e «Checkpoint C8 — pronto») · ✅ **committato 2026-10-01 11:04**: `7bfa064f0`, `69cba356f`, `de5349e46`; merge `851d3a5cf` con `dev_release2` (`8f18416df`: il passo 13 di K e le scelte di L), una regione risolta in `GrowthChart.svelte`, gate verde (registri «Checkpoint C8 — committato», «Allineamento a `dev_release2` — merge `851d3a5cf`» e «Gate sulla revisione combinata `851d3a5cf`»). Dopo: S7b |
 | C9 | Checkpoint: S7b (tacche del denaro esatte e distinte, il meno del locale sugli assi, il bordo senza etichetta), registri | S7b | ✅ pronto 2026-10-01 15:02: 2 commit su `cd6502084` (la cura con i test; il journal); proposte al coordinator la `desc` di `growth-chart-memo` e la riga del CHANGELOG (registro «S7b — passo 6») · ✅ **committato 15:31**: `07035fd4f` (messaggio v2), `99bc08911`; nessun merge (registro «Checkpoint C9 — committato»). Dopo: S8 |
 | C10 | Checkpoint: S8 (R11: il valore di acquisto nei Proventi, una voce di legenda, il totale e le due quote, il nuovo capitale in blu KPI), registri | S8 | ✅ pronto 2026-10-01 17:57: 2 commit su `99bc08911` (la cura con i test e la `desc` concessa del runner; il journal); proposte al coordinator la clausola di S8 per la `desc` e nessuna voce del CHANGELOG (registro «S8 — passo 6») · ✅ **committato 18:47**: `c4595922e`, `567fee80e`; nessun merge (registro «Checkpoint C10 — committato»). Dopo: S8b |
-| C11 | Checkpoint: S8b (D24: il «?» della guida in fondo alla riga della finestra; D28: l'ancora inglese, il rosso di it/fr/es accettato fino ad Aphra), registri | S8b | ✅ pronto 2026-10-01 21:42: 2 commit su `567fee80e` (la cura con il test, l'ancora inglese e la clausola concessa di S8 nel runner; il journal); nessuna voce del CHANGELOG, il debito di traduzione e la nota sul rimontaggio al coordinator (registro «S8b — passo 6») |
+| C11 | Checkpoint: S8b (D24: il «?» della guida in fondo alla riga della finestra; D28: l'ancora inglese, il rosso di it/fr/es accettato fino ad Aphra), registri | S8b | ✅ pronto 2026-10-01 21:42: 2 commit su `567fee80e` (la cura con il test, l'ancora inglese e la clausola concessa di S8 nel runner; il journal); nessuna voce del CHANGELOG, il debito di traduzione e la nota sul rimontaggio al coordinator (registro «S8b — passo 6») · ✅ **committato 21:47**: `e3af27ff3`, `1c568bfe0`; nessun merge (registro «Checkpoint C11 — committato»). Dopo: la verifica sulla copia nella 6167 |
 | S7 | Asse dei bucket (R8 dopo D4, R10) | S6 | ✅ **2026-09-30 23:05** (avviata dal coordinator alle 10:04): il pianificatore `growthLadderAxis.ts` e la cura di `GrowthChart.svelte`; la riga «parziale» passa per `escapeHtml` (fuori pista, registro «S7 — passo 6»). Unit, build, E2E seriale e con 4 worker verdi. Decisioni: D4 ✅, D16 = (ii)+(i) ✅, D17 = (a) ✅ (§7) |
 | S7b | Tacche Y doppie (reperto N1) | S7 | 🔓 D18 = sì ✅ 2026-09-25: assi del denaro di Crescita e Performance; `%` escluso · ▶️ avviata 2026-10-01 (coordinator, dopo `cd6502084`): analisi ✅ 13:19; D25 = B ✅ 13:51; test rossi ✅ 14:46; cura ✅ 14:50; gate ✅ 15:00 · ✅ **2026-10-01 15:02**, in C9 (registro «S7b») |
 | S8 | R11 valore di acquisto | S7 | ▶️ avviata 2026-10-01 (coordinator, dopo `99bc08911`): motore rimisurato per simbolo, invariato; analisi e D26 = blu KPI ✅ 15:49; test rossi ✅ 17:06 (11 in `growth-chart-memo`, 4 in `asset-unit`, ciascuno per la ragione voluta); cura ✅ 17:14 (60/60, 530/530); D27 = legenda condivisa fra Abs e Proventi, accettata ✅ 17:14; gate ✅ 17:50 (10 verdi, l'E2E del dashboard corso due volte); `desc` del runner ✅ 17:53 · ✅ **2026-10-01 17:57**, in C10 (registro «S8») |
 | S8b | Guida del Rendimento mobile nel dettaglio asset (D24) | S8, D24 | ⏳ approvato dal developer (2026-09-30 11:52): «?» in fondo alla riga della finestra, solo in Rendimento mobile, verso la guida utente; commit a sé dopo S8 · ▶️ avviata 2026-10-01 (coordinator, dopo `567fee80e`): analisi ✅ 18:59, test rosso ✅ 19:36, cura ✅ 19:37, gate 1–5 ✅ 19:45, `check-links` ❌ → D28 ✅ 21:28 (ancora inglese ora; il rosso di it/fr/es è accettato fino ad Aphra); ancora inglese ✅ 21:33, passo 4 ✅ 21:37; `desc` del runner ✅ 21:39 · ✅ **2026-10-01 21:42**, in C11 (registro «S8b») |
+| V | Verifica sulla copia nella 6167: R8, R10, R10z (DoD, fasi di S6), S7b, R11, S8b | C11 | ✅ **2026-10-01 23:10** (coordinator, 21:48): sonda di sessione su `1c568bfe0`, 0 rossi in ogni fase; zoom dei Proventi da ×4,7 a ×1. Poi server spento, copia rinfrescata, sonda e log cancellati: avevano dati del developer (registro «Verifica sulla copia nella 6167») |
 | S9 | R9 didascalia | S1 | ✅ 2026-09-24 (scorrimento a 375 px: verifica live in S6) |
-| S10 | Debiti e test residui | S1 | 🔄 **OK del developer sulla test list, 2026-09-25**, con E8 ed E9 in più (D8 ✅ 2026-09-24). Ordine: `needs_engine` per primo, in un commit a sé (coordinator, 15:24 e 15:37), poi il contratto di `/portfolio/report` (registro «Triage del contratto di `/portfolio/report`») e il resto di §4. **Passo 1 ✅ 2026-09-25 10:38**: `needs_engine` corretto (6 rossi → verdi), contratto a 13 chiavi, `api portfolio` 55/55, `services roi-fifo-utils` 507/507 (registro «S10 passo 1»). **Passo 2 ✅ 11:10**: D20, il test dei Proventi pulisce i suoi dati, misurato con un controllo positivo; `api portfolio` 55/55 (registro «S10 passo 2»). **Passo 3 ✅ 11:37**: `chartCoreHelpers.test.ts` 159 → 145 (D19: −14), i 7 specchi ri-pinnati ognuno col suo perché, C4 convertito sulla copia fedele; 145/145, 0 falliti (registro «S10 passo 3»). Reperti del passo → D21, ✅ deciso dal developer (§7). **Passo 4 ✅ 11:59**: `AllocationPanel.test.ts` (3 casi) e `allocationTypeEmoji.test.ts` (8 casi), nuovi, 11/11 (registro «S10 passo 4»). **Passo 5 ✅ 12:15**: `GrowthChart.test.ts` 6 → 17 casi (S2a, S5, S9) e la `why` di D13, 23/23 (registro «S10 passo 5»). **Passo 6 ✅ 12:15**: i 3 file nuovi registrati nel runner, nome visibile di `growth-chart-memo`; `check-orphans` pulito (registro «S10 passo 6»). **Passo 7 ✅ 12:27**: la pulizia di `…positions_contribution_is_date_aware`, assegnata sotto D20, misurata con un controllo positivo: nessuna perdita; `api portfolio` 55/55 (registro «S10 passo 7»). **Passo 8 ✅ 12:30**: `PerformanceChart.test.ts`, nuovo, 6/6 (registro «S10 passo 8»). **Passo 9 ✅ 12:30**: D21 e D22 su `chartCoreHelpers.test.ts`, 145 → 142 → 144, 144/144, 0 falliti (registro «S10 passo 9»). **Passo 10 ✅ 12:33**: `front check` al floor, 3 errori e 41 avvisi, nessuno nei miei file (registro «S10 passo 10»). **C4 ✅ 2026-09-28 11:41** (8 commit, `00bb1ac75`→`472f51498`), poi il merge di `dev_release2` (`9016bb0d1`) e i gate sulla revisione combinata, tutti verdi (registro «Validazione sulla revisione combinata»). **Brief 03 ✅ 13:00**: dashboard 15/5 → **18/18**, broker detail 28/1 → **28/28**, in seriale e con `--workers 4` (registro «S10 — brief 03»). **E7 ✅ 13:52**: asset detail 28/1 → **28/28**, in seriale e con `--workers 4`; la coda risvegliata è verde (registro «S10 — E7 completato»). **C5 ✅ committato 2026-09-29 10:02** (registro «Checkpoint C5 — committato»). **C6 ✅ committato 22:26**, merge `921f1fc05` e gate rapido verde (registro «Checkpoint C6 — committato»). **D23 con D23b ✅ 2026-09-30 00:03**: il segno del locale in `fmtCurrency` e `shortMoney`, una sola forma per le righe con segno, il colore dello zero; test ri-pinnati e nuovi, corsia verde (registro «D23 + D23b»). **C7 pronto 2026-09-30 00:07** (registro «Checkpoint C7 — pronto») |
-| S11 | Docs (docs-writer) | S2b, S3, S4b, S8, S9 | 🔄 in parte, ✅ 2026-09-24 (autorizzata dal coordinator alle 14:45; registro «S11 in parte»): `charts.en.md` (memoria della vista, privacy di Crescita, didascalia delle candele, candele senza broker, memoria di Allocazione) e `positions.en.md` (privacy di Performance). Accettato dal coordinator (15:24) ed entrato in C3 (`671d4ab49`). Il resto dopo S7/S8, più due voci aggiunte (coordinator, 16:07): `index.en.md`, che conta tre schede invece di quattro (reperto di J), e la deriva dei nomi, che c'è anche nella mia frase di C3 (registro «S11-finale — voci aggiunte») |
-| S12 | Handoff | S10, S11, S2c | ⏳ |
+| S10 | Debiti e test residui | S1 | 🔄 **OK del developer sulla test list, 2026-09-25**, con E8 ed E9 in più (D8 ✅ 2026-09-24). Ordine: `needs_engine` per primo, in un commit a sé (coordinator, 15:24 e 15:37), poi il contratto di `/portfolio/report` (registro «Triage del contratto di `/portfolio/report`») e il resto di §4. **Passo 1 ✅ 2026-09-25 10:38**: `needs_engine` corretto (6 rossi → verdi), contratto a 13 chiavi, `api portfolio` 55/55, `services roi-fifo-utils` 507/507 (registro «S10 passo 1»). **Passo 2 ✅ 11:10**: D20, il test dei Proventi pulisce i suoi dati, misurato con un controllo positivo; `api portfolio` 55/55 (registro «S10 passo 2»). **Passo 3 ✅ 11:37**: `chartCoreHelpers.test.ts` 159 → 145 (D19: −14), i 7 specchi ri-pinnati ognuno col suo perché, C4 convertito sulla copia fedele; 145/145, 0 falliti (registro «S10 passo 3»). Reperti del passo → D21, ✅ deciso dal developer (§7). **Passo 4 ✅ 11:59**: `AllocationPanel.test.ts` (3 casi) e `allocationTypeEmoji.test.ts` (8 casi), nuovi, 11/11 (registro «S10 passo 4»). **Passo 5 ✅ 12:15**: `GrowthChart.test.ts` 6 → 17 casi (S2a, S5, S9) e la `why` di D13, 23/23 (registro «S10 passo 5»). **Passo 6 ✅ 12:15**: i 3 file nuovi registrati nel runner, nome visibile di `growth-chart-memo`; `check-orphans` pulito (registro «S10 passo 6»). **Passo 7 ✅ 12:27**: la pulizia di `…positions_contribution_is_date_aware`, assegnata sotto D20, misurata con un controllo positivo: nessuna perdita; `api portfolio` 55/55 (registro «S10 passo 7»). **Passo 8 ✅ 12:30**: `PerformanceChart.test.ts`, nuovo, 6/6 (registro «S10 passo 8»). **Passo 9 ✅ 12:30**: D21 e D22 su `chartCoreHelpers.test.ts`, 145 → 142 → 144, 144/144, 0 falliti (registro «S10 passo 9»). **Passo 10 ✅ 12:33**: `front check` al floor, 3 errori e 41 avvisi, nessuno nei miei file (registro «S10 passo 10»). **C4 ✅ 2026-09-28 11:41** (8 commit, `00bb1ac75`→`472f51498`), poi il merge di `dev_release2` (`9016bb0d1`) e i gate sulla revisione combinata, tutti verdi (registro «Validazione sulla revisione combinata»). **Brief 03 ✅ 13:00**: dashboard 15/5 → **18/18**, broker detail 28/1 → **28/28**, in seriale e con `--workers 4` (registro «S10 — brief 03»). **E7 ✅ 13:52**: asset detail 28/1 → **28/28**, in seriale e con `--workers 4`; la coda risvegliata è verde (registro «S10 — E7 completato»). **C5 ✅ committato 2026-09-29 10:02** (registro «Checkpoint C5 — committato»). **C6 ✅ committato 22:26**, merge `921f1fc05` e gate rapido verde (registro «Checkpoint C6 — committato»). **D23 con D23b ✅ 2026-09-30 00:03**: il segno del locale in `fmtCurrency` e `shortMoney`, una sola forma per le righe con segno, il colore dello zero; test ri-pinnati e nuovi, corsia verde (registro «D23 + D23b»). **C7 pronto 2026-09-30 00:07** (registro «Checkpoint C7 — pronto») · ✅ **chiusa 2026-10-02 00:36**, in S12: l'E2E della scala delle larghezze c'è (`dashboard.spec.ts:720` e `:801`, da `026bc20fb`, C5); il seguito di `maskFormattedNumber` l'ha fatto D23; DBT-A e DBT-B fuori dal round per D9 (registro «S12 — handoff finale») |
+| S11 | Docs (docs-writer) | S2b, S3, S4b, S8, S9 | 🔄 in parte, ✅ 2026-09-24 (autorizzata dal coordinator alle 14:45; registro «S11 in parte»): `charts.en.md` (memoria della vista, privacy di Crescita, didascalia delle candele, candele senza broker, memoria di Allocazione) e `positions.en.md` (privacy di Performance). Accettato dal coordinator (15:24) ed entrato in C3 (`671d4ab49`). Il resto dopo S7/S8, più due voci aggiunte (coordinator, 16:07): `index.en.md`, che conta tre schede invece di quattro (reperto di J), e la deriva dei nomi, che c'è anche nella mia frase di C3 (registro «S11-finale — voci aggiunte») · ▶️ ripresa 2026-10-01 (coordinator, dopo `1c568bfe0`): fatti verificati in tre passate; docs-writer ✅ 00:00; revisione con due correzioni mie; `mkdocs build` EXIT 0 e `check-links` con il solo rosso di D28, entrambi rieseguiti sui blob finali · ✅ **2026-10-02 00:12** (registro «S11-finale — le tre pagine inglesi riallineate al codice») |
+| S12 | Handoff | S10, S11, S2c | ⏳ · ▶️ avviata 2026-10-02 (coordinator, dopo `1c568bfe0`): merge-tree contro `ed3bf870a` pulito, vitest intero 6733/6733, S10 chiusa, residui, CHANGELOG e commit proposti · ✅ **2026-10-02 00:36** (registro «S12 — handoff finale») |
 
 ## 0. Come si è arrivati a questa versione
 
@@ -5691,3 +5692,421 @@ comando la porta 6157 è libera.
 > - Verifiche finali: `git diff --check` pulito, stage vuoto, 0 file non tracciati, 5 file tracciati; porte 6157 e
 >   6167 libere.
 > - Stato: FROZEN, nessun edit, test, server o Git fino al prossimo messaggio del coordinator.
+
+### Checkpoint C11 — committato ✅ 2026-10-01 21:47
+
+> **Note implementazione:**
+> - Il coordinator ha verificato C11 (21:46): i 5 percorsi, gli sha256 dichiarati, i messaggi ASCII entro i 68
+>   caratteri; nessun altro ramo tocca la pagina, `asset-detail.spec.ts`, `chart.en.md` o `_frontend_asset.py`.
+>   Ha preparato lo script `/tmp/libreFolio_commit_i_c11.sh`, l'ha provato a secco (GUARDS_OK) e su un clone (2
+>   commit con 5 file, puliti; la seconda corsa rifiutata). Il developer ha committato alle 21:47.
+> - La mia verifica dopo il commit, in sola lettura (21:49):
+>   - 2 commit in fila su `567fee80e`, ognuno con un solo genitore, nessun merge;
+>   - i messaggi, letti grezzi dal commit (`git cat-file`), sono identici byte per byte a quelli proposti
+>     (`/tmp/libreFolio_commit_i11_{1,2}.txt`: sha256 `ca90e6c9edf7294c…` e `46714f6cb6c37f49…`);
+>   - commit 1: la pagina, la spec, `chart.en.md` e il runner, +93 −3; commit 2: questo piano, +276 −2. In tutto 5
+>     file, il delta di C11, e il contenuto di ognuno in `HEAD` ha lo sha256 dichiarato;
+>   - albero di lavoro pulito, stage vuoto; porte 6157 e 6167 libere.
+>
+> | # | commit | subject | albero |
+> |---|---|---|---|
+> | 1 | `e3af27ff3` | `feat(assets): add rolling-return guide link` | `b4aef17e3d3d` |
+> | 2 | `1c568bfe0` | `docs(journal): record S8b and D28` | `94b615cabd22` |
+>
+> - **Registri del coordinator su C11** (21:46):
+>   - D28: la risposta testuale del developer è nel suo journal. Il rosso di `check-links` per it/fr/es è noto e
+>     accettato fino alla pipeline di traduzione, e va fra i rossi noti dei gate della mia integrazione;
+>   - il debito di traduzione di `user/assets/detail/chart.{it,fr,es}.md` è nella sua lista: manca
+>     `## 🔀 Primary Modes` con le sue 3 sottosezioni; sono superati l'intro, Date Range, Currency Selector, il
+>     toggle Assoluto/%, Event Markers e Aesthetics; l'intestazione tradotta vuole `{: #rolling-return }`;
+>   - nessuna voce del CHANGELOG per S8b; le voci ✨ arrivano a S12;
+>   - la nota sul `loadingDelay` di 200 ms, che rimonta l'app e perde lo stato della pagina, va nel suo triage di
+>     fine round: è prodotto, fuori dal mio perimetro.
+> - `dev_release2` resta `ed3bf870a`: HEAD è avanti di 46 commit e indietro di 4, i quattro `docs(todo)` già noti.
+> - **Mandato** (coordinator, 21:48): la verifica sulla copia nella 6167, poi S11-finale e S12, come da piano.
+
+### Verifica sulla copia nella 6167 — R8, R10, R10z, S7b, R11, S8b ✅ 2026-10-01 23:10
+
+> **Note implementazione:**
+> - **Perché.** La DoD (§8) vuole R8/R10 confermati sulla copia con le fasi della sonda di S6 (`r8`, `r10`, `r10z`).
+>   La stessa corsa copre S7b, R11 e S8b. Nessuna modifica di prodotto.
+> - **Base e freschezza:**
+>   - HEAD `1c568bfe0`; l'unico file modificato è questo piano;
+>   - la build del frontend (19:39) è più recente di ogni file di `frontend/src`;
+>   - il sito MkDocs (21:33:56) è posteriore a `chart.en.md` (21:33:23): la pagina inglese ha
+>     `id="rolling-return"`, quella italiana no (D28).
+> - **Copia:** rinfrescata alle 21:59 con la procedura di §5, versione `004_release_1_2_0_schema`. Server:
+>   `… dev.py server --test --port 6167 --data-dir /tmp/librefolio-r2-i-charts-prodcopy`.
+> - **Credenziali:** il ripiego di §5, nessun file.
+>   - `list` sulla copia (`LIBREFOLIO_TEST_DATA_DIR`, `--test-db`): una sola riga.
+>   - `reset` solo sulla copia, con una password casuale generata in memoria (`openssl rand`). La sonda l'ha
+>     ricevuta per variabile d'ambiente: mai stampata, mai scritta.
+>   - Il rinfresco finale rimette l'hash vero.
+> - **Metodo:**
+>   - sonda Playwright di sessione, non versionata, in `/tmp/libreFolio_i_copycheck/`: `probe.mjs` con le fasi
+>     `r8`, `r10`, `r10z`, `s7b`, `r11` e `s8b`, più `run.sh` e `analyse.mjs`;
+>   - chromium 1440×900, app in italiano; opzioni e layout letti dall'istanza vera (`__lfChart`), come in S6;
+>   - privacy accesa in `r8`, `r10` e `r10z`; spenta in `s7b` e `r11`, che leggono le cifre. Qui riporto solo
+>     esiti, rapporti e pixel;
+>   - esito: rc 0 in 231 s, analisi verde su tutte le fasi.
+>
+> | fase | privacy | corse | esito |
+> |---|---|---|---|
+> | `r8` candele | accesa | 23: ogni periodo, ogni gradino offerto | 0 rossi |
+> | `r10` Proventi | accesa | 14: 6M con 4 gradini, 1A con 5, 2A con 5 | 0 rossi |
+> | `r10z` zoom dei Proventi | accesa | 10 finestre | 0 rossi |
+> | `s7b` tacche del denaro | spenta | 12 assi Y della Crescita, più l'asse x della Performance | tutte distinte |
+> | `r11` valore di acquisto | spenta | 14 | 0 rossi |
+> | `s8b` guida del Rendimento mobile | — | 1 | trovata al primo tentativo |
+>
+> - **R8 (candele).** Gradini offerti come in S6: 3M `1G 3G 1S 2S 1M`; 6M lo stesso più `3M`; 1A da `3G` a `6M`;
+>   2A da `1S` a `1A`.
+>   - Etichette: in ogni corsa o i mesi o le date di chiusura (k = 1). Nessuna doppia, ISO, incoerente,
+>     sovrapposta, o mancante nel disegno.
+>   - Separatori: disegnati = attesi in ogni corsa. Radi (slot < 8 px, solo i confini di mese): 3M/1G 4 su 4,
+>     6M/1G 7 su 7, 1A/3G 13 su 13, 2A/1S 25 su 25.
+>   - Bucket parziale (D16): sempre il più vecchio, marcato, con la riga «parziale» al suo posto nel tooltip.
+>     Esempi in giorni: 3M/1S 2, 3M/2S 9, 3M/1M 3, 6M/3G 1, 1A/1M 6, 2A/1M 11, 2A/1A 1.
+>   - L'ultima categoria e i giorni coperti non cambiano col gradino: 3M 93, 6M 184, 1A 366, 2A 731.
+>   - Corpo = 0,8 dello slot; il più stretto è 2,49 px, a 6M/1G (slot 3,116).
+>   - Gradini offerti = pulsanti presenti; quello premuto è quello scelto. Intestazioni dei tooltip tutte lette, 0
+>     discordanze.
+>   - Un esempio, 2A/1S: modo mese, 9 etichette con l'anno, separatori radi 25 su 25, 105 intestazioni lette, il
+>     parziale di 3 giorni sul primo bucket, marcato.
+>   - Le cause di S6 non ci sono più: A (mesi doppi), B (separatori ogni k+1), C (moncone in coda), D (ISO).
+>   - Schermata `r8_2y_1w.png`, privacy accesa: asse `•••`, etichette da «ott 24» a «ott 26», la didascalia corta
+>     delle candele, 1S premuto.
+> - **R10 (Proventi).**
+>   - Barra/slot da 0,2812 a 0,2813 (= 0,9/3,2, D17) fin dal primo render.
+>   - Zoom da 0–100 % a 1–100 %: la barra cresce quanto la banda. Il rapporto è 1,02 contro 1,019 quando un bucket
+>     esce dalla finestra, altrimenti 1.
+>   - Barra più stretta: 3,02 px, a 1A/1S e 2A/2S.
+> - **R10z (zoom).** 10 finestre, 1A/1M e 6M/1S × 0–100, 0–99, 0–97, 0–90 e 0–60 %.
+>   - Il rapporto barra/slot resta costante; etichette e separatori restano coerenti.
+>   - A 0–60 %, 1A/1M passa alle date di chiusura (k = 1, 8 etichette); 6M/1S resta sui mesi (4 etichette), con 17
+>     separatori su 17.
+> - **Prima (S6) e dopo, barra dei Proventi in px (slot fra parentesi):**
+>
+> | periodo/gradino | S6 | ora |
+> |---|---:|---:|
+> | 6M/1S | 1,65 (19,5) | 5,92 (21,07) |
+> | 6M/3M | 5,01 (175,7) | 53,32 (189,59) |
+> | 1A/1S | 1 (9,9) | 3,02 (10,73) |
+> | 1A/1M | 1,75 (40,5) | 12,30 (43,75) |
+> | 1A/6M | 3,12 | 53,32 |
+> | 2A/1M | 1,54 (21,1) | 6,40 (22,75) |
+> | 2A/1A | 1 | 53,32 |
+>
+> - Lo zoom di S6 faceva saltare la barra ×4,7 (1A/1M) e ×2,3 (6M/1S); ora ×1.
+> - Il plot è largo 573 px (569 a 2A) contro i 527 di S6, quindi il confronto vale sui rapporti con lo slot, non sui
+>   pixel. La causa più probabile è il margine sinistro della Crescita di C6 (`'3%'` al posto di 52 px), ma non l'ho
+>   misurata.
+> - Schermate `r10_1y_1w.png` e `…_zoom1.png`, privacy accesa: le barre hanno la stessa larghezza prima e dopo lo
+>   zoom.
+> - Le etichette perdono l'anno dopo lo zoom («nov 25 … set 26» al primo render; «nov, gen 26, mar…» dopo), ed è
+>   voluto. `growthLadderAxis.ts:36-39` mette l'anno su ogni etichetta solo se la finestra visibile copre almeno 365
+>   giorni; sotto, lo porta solo gennaio (`:29-30`). Dopo lo zoom la finestra è più corta di un anno.
+> - **S7b (tacche del denaro).** I 12 assi Y della Crescita sono Abs, P&L linea, candele e Proventi, per 6M, 1A e
+>   2A.
+>   - Su ognuno, e sull'asse x della Performance, le etichette sono distinte (D18), sia fra tutte le tacche sia
+>     fra quelle visibili.
+>   - `showMinLabel` è `false` su Abs, linea e candele, e non è impostato sui Proventi (D25 = B).
+>   - Performance: 7 tacche, 5 visibili; le due di bordo sono nascoste (`showMinLabel` e `showMaxLabel` a `false`).
+> - **R11 (valore di acquisto nei Proventi).**
+>   - In ogni bucket con le righe ↳: il totale in grassetto con le due quote sotto, adiacenti, ognuna con il colore
+>     della sua zona. Nessuna riga non letta.
+>   - Totale = nuovo + reinvestito, entro un centesimo di arrotondamento.
+>   - Le due zone hanno lo stesso nome; la legenda lo mostra una volta (D27).
+>   - Colori letti sull'opzione vera (D26): il nuovo capitale `#3b82f6` è quello della serie 0 di Abs (il costo
+>     degli asset); il reinvestito `#10b981` è quello della serie 2 (la liquidità generata).
+> - **S8b (guida del Rendimento mobile, dettaglio asset).**
+>   - Prezzi → Rendimento mobile: pulsante premuto, riga della finestra visibile, controllo personalizzato
+>     presente.
+>   - L'ultimo controllo della riga è `asset-calendar-return-docs`, visibile e con un nome accessibile.
+>   - Il popup ha percorso e hash giusti (`#rolling-return`). Nella pagina italiana l'ancora non c'è (D28).
+>   - La guida inglese risponde 200 con l'ancora, quella italiana 200 senza (D28).
+>   - Di nuovo in Prezzi, il modo è ripristinato e il «?» sparisce (0 elementi).
+> - **Errori:** 0 `pageerror`; un solo errore di console, il 401 prima del login (il controllo di sessione, come
+>   in S6). A fine corsa la privacy è spenta.
+> - **Fughe, con `grep`:**
+>   - JSON e log della corsa: 0 occorrenze della password e del nome utente;
+>   - log del server: 0 della password, 1 del nome utente (una riga di login). Il log è cancellato;
+>   - le 53 schermate vengono tutte da fasi a privacy accesa.
+> - **DoD (§8):**
+>   - R8/R10 confermati sulla copia con le fasi di S6;
+>   - S7b (D18) vero su Crescita e Performance;
+>   - R11: totale = nuovo + reinvestito, colori di D26. La relazione con il KPI nella doc la porta S11-finale;
+>   - S8b vero dal vivo.
+> - **Pulizia** (fino alle 23:10):
+>   - server della 6167 spento, il PID non c'è più; 6157 e 6167 libere (`lsof`);
+>   - copia rinfrescata una seconda volta con la procedura di §5: `004_release_1_2_0_schema`, e `app.db` ha lo
+>     stesso sha256 della snapshot. Solo due file in più, `app.db-shm` (32 KB) e un `app.db-wal` vuoto: li crea
+>     `sqlite3` con la query di versione, perché il database è in modo WAL;
+>   - cancellate le due copie `.prev`: quella spostata alle 21:59 e quella delle 23:09, che aveva l'hash della
+>     password usa-e-getta. Resta solo `/tmp/librefolio-r2-i-charts-prodcopy`;
+>   - cancellate la cartella della sonda e i log `/tmp/libreFolio_i_copycheck_*.log`. Il JSON a privacy spenta
+>     conteneva importi del developer, il log del server il suo nome utente. Le prove di questa verifica restano
+>     solo in questo registro.
+> - Nessun fuori pista.
+
+### S11-finale — le tre pagine inglesi riallineate al codice (docs-writer) ✅ 2026-10-02 00:12
+
+> **Note implementazione:**
+> - **Mandato.** Coordinator, dopo C11 (`e3af27ff3` + `1c568bfe0`): «la verifica sulla copia nella 6167, poi
+>   S11-finale e S12». Base HEAD `1c568bfe0`; prima di S11-finale l'unico file modificato era questo piano.
+> - **Fatti verificati prima di scrivere.** Solo letture, in tre passate fino al 2026-10-01:
+>   - i valori inglesi di ogni chiave i18n citata;
+>   - `GrowthChart.svelte`: serie, tooltip, scala delle larghezze, offerta, riconciliazione, bucket;
+>   - il motore (la spesa dei BUY, `portfolio_engine.py:1076-1081`) e i flussi del servizio
+>     (`portfolio_service.py:1566-1703`);
+>   - il KPI «Purchase Cost» (`KpiSection.svelte:62-64`);
+>   - le schede del dashboard (`+page.svelte:232-246`, `:843-880`);
+>   - le ancore e i link di arrivo, nelle quattro lingue.
+>
+>   Lo script delle chiavi e i suoi log erano in `/tmp`: cancellati.
+> - **docs-writer** (sync). Brief completo:
+>   - regole di corsia; nessun comando `dev.py`: build e controllo dei link li ho lanciati io;
+>   - solo le tre pagine inglesi; niente stamp Aphra, perché sono riscritture e il debito di traduzione è vero;
+>   - i nomi in grassetto uguali al valore inglese della chiave i18n (regola del registro «S11-finale — voci
+>     aggiunte»);
+>   - link fra pagine solo verso ancore che esistono in tutte e quattro le lingue.
+> - **`user/dashboard/charts.en.md`:**
+>   - deriva dei nomi:
+>     - tip privacy: **Assets at Cost**;
+>     - legenda: area **Purchase Cost**, linea **Net Asset Value** (stesso link);
+>     - tooltip di Abs riscritto nell'ordine vero (`GrowthChart.svelte:2111-2121`): Net Asset Value, Deposited
+>       Capital, Total P&L con il promemoria della formula; poi Assets at Cost, Returns, Capital, con `—` quando
+>       valgono zero. Tolto «the three cash components»: il costo degli asset non è cassa;
+>     - tip sui portafogli a reddito: Purchase Cost;
+>   - il selettore dei sottomodi si riduce alle icone quando è stretto il grafico, sotto i 640 px del suo box, non
+>     lo schermo (`:503-504`);
+>   - tabella dei sottomodi: Candles = una candela per periodo, della larghezza scelta, da un giorno a un anno;
+>   - **Candles:**
+>     - la composizione su più giorni: prima apertura, massimo, minimo, ultima chiusura (`:846-866`);
+>     - i giorni senza candela sono saltati; un periodo senza giorni valorizzati non ha candela, e il tooltip dice
+>       «No data available»;
+>     - il tooltip: intestazione, «Partial», «Value at», OHLC, righe dei broker;
+>   - **Income, riscritta:**
+>     - somme per periodo, tre colonne;
+>     - Deposit conta solo i depositi;
+>     - acquisti divisi in nuovo capitale e reinvestito, con la regola del motore;
+>     - legenda a 5 voci, D27;
+>     - nuovo box ⚠️ «flusso contro livello»: le barre di acquisto NON sono il KPI **Purchase Cost** della card Net
+>       Worth (`kpi-cards.md#card-3-net-worth`). È l'obbligo della DoD per R11;
+>     - tooltip senza «Value at» (`:1288`);
+>   - **la finestra 1W/1M/1Y/All (reperto S9, `:396`)** è sostituita dalla sezione
+>     `#### The candle width — 1D to 1Y {: #pnl-width }`:
+>     - gradini in giorni;
+>     - solo le larghezze disegnabili, con l'offerta;
+>     - partenza dal gradino più fine, condiviso fra Candles e Income;
+>     - risalita al gradino offerto successivo, o al più largo se nessuno è più largo (`:1252`);
+>     - la vista non si sposta;
+>     - bucket contati a ritroso dall'ultimo giorno, il più vecchio parziale e sbiadito.
+> - **`user/dashboard/index.en.md`:**
+>   - quattro schede invece di tre;
+>   - **Risk** in testo semplice (decisione del coordinator, 2026-09-24 16:13), con il link all'indice di teoria
+>     Risk Metrics;
+>   - **Transactions** con il link alla guida: lista paginata in sola lettura, doppio clic → dettaglio
+>     (`TransactionsTable.svelte`, `onRowDoubleClick` → `onViewRow`; modale `mode="view"`, `+page.svelte:896`);
+>   - la riga del Growth Chart nomina le tre viste.
+> - **`user/assets/detail/chart.en.md`:** la voce 📚 Returns & Growth Rates in «Related» (D24) e la data.
+> - **La mia revisione**, frase per frase contro codice e i18n. Due correzioni mie dopo docs-writer:
+>   1. la frase sulla candela di un giorno si poteva leggere al contrario; ora dice «shows just its date, with no
+>      span and no *Value at* line» (`:1275-1279`);
+>   2. la data `_Last updated_`: 2026-10-01 nel brief, 2026-10-02 nella pagina, perché il file è stato salvato alle
+>      00:00 del 2 ottobre.
+> - **Dove docs-writer ha seguito il codice e non il brief** (tutto verificato da me):
+>   - la risalita ripiega sul gradino offerto più largo;
+>   - una candela parziale di un giorno mostra la riga «Partial» senza «Value at»;
+>   - «Zooming and dragging», perché la rotella zooma e il trascinamento sposta;
+>   - il doppio clic sulla riga delle transazioni.
+> - **Ancore:**
+>   - `#pnl-zoom` → `#pnl-width`. Nessun link entrante: `grep` su `mkdocs_src` e `frontend/src` trova solo
+>     l'ancora nuova;
+>   - nessun'altra ancora aggiunta o tolta;
+>   - un solo link nuovo fra pagine, `kpi-cards.md#card-3-net-worth`: c'è in tutte e quattro le lingue, e nel
+>     sito costruito c'è `id="card-3-net-worth"`.
+>
+> **Prove** (in serie, nessun server: la build MkDocs non usa porte):
+>
+> | comando (`PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py …`) | esito |
+> |---|---|
+> | `mkdocs build` (strict; `validation.anchors: warn` con `--strict`) | EXIT 0, 0 righe WARNING/ERROR. Corsa due volte: dopo docs-writer e dopo le mie due correzioni, sui blob finali |
+> | `mkdocs check-links`, anche lui due volte | EXIT 1: 80 link validi; 3 ancore già nell'elenco delle eccezioni in attesa di traduzione; 1 rotto, `#rolling-return` in it/fr/es = **D28, rosso noto e accettato** |
+> | `mkdocs translate-validate --file … -L` (sola lettura, informativo) | EXIT 1, il debito di traduzione atteso: 60 errori e 45 avvisi su 9 file. charts 36/12, index 6/6, chart 18/27 |
+>
+> - `git status`: 4 percorsi, il piano e le tre pagine. `git diff --check` pulito.
+> - Blob: `charts.en.md` `49d99f68e5bd`, `index.en.md` `de56b44a87b3`, `chart.en.md` `213206f229e8`.
+>
+> **Debito di traduzione** (it/fr/es, per Aphra; solo su richiesta del developer):
+> - **charts:** le traduzioni (126 righe contro 233; 38–39 % dei caratteri) non hanno la sezione P&L, e i loro titoli
+>   hanno già difetti («ABS ASS — valori assoluti», «Three dimensioni»): serve una ritraduzione intera della pagina.
+>   Mancano tutto `### P&L mode` (con `#pnl-mode`, `#pnl-line`, `#pnl-candles`, `#pnl-income`, `#pnl-width`, solo
+>   inglesi), i nomi del tip privacy, della legenda e del tooltip di Abs, e i nomi del tip sui portafogli a reddito.
+> - **index:** l'elenco delle quattro schede, con i due link nuovi (Risk Metrics, Transactions), e la riga del
+>   Growth Chart.
+> - **chart:** la voce «Related» nuova e la data, in aggiunta al debito già registrato dal coordinator per D28.
+>
+> **⚠️ Fuori pista:**
+> - **Reperto a lato, non mio:** `kpi-cards.en.md:129` e `:144` chiamano «Book Value» la riga che l'interfaccia
+>   chiama «Purchase Cost» (`dashboard.bookValue`). Lo giro al coordinator nell'handoff di S12; la pagina non è nel
+>   mio perimetro.
+> - Le due correzioni mie dopo docs-writer (sopra).
+> - Il resto del lavoro era pianificato: la finestra 1W/1M/1Y/All era già il reperto S9.
+
+### S12 — handoff finale ✅ 2026-10-02 00:36
+
+> **Note implementazione:**
+> - **Mandato.** Coordinator, dopo C11: «la verifica sulla copia nella 6167, poi S11-finale e S12». S12 è definita
+>   in §5 (`:398`), la DoD in §8, l'handoff previsto in §9. Nessun edit di codice e nessun server: solo letture, la
+>   suite vitest intera, i due messaggi di commit e questo registro.
+> - **Base e target**, rimisurati alle 00:31:
+>   - HEAD `1c568bfe0`; `dev_release2` `ed3bf870a`; merge-base `8f18416df`, il lato destro di m8;
+>   - HEAD ha 46 commit in più, 4 dei quali merge, e 4 in meno: i 4 `docs(todo)` di `dev_release2`, che toccano
+>     solo `TODO_FUTURI.md` (+150);
+>   - `git merge-tree --write-tree dev_release2 HEAD`: pulito, albero `b89b76103ca8`. Nessuno dei 4 commit tocca le
+>     pagine di S11-finale o questo piano: il merge resta pulito anche con i due commit di S12;
+>   - il round 4 non è ancora in `dev_release2`. Il modo P&L e il Rendimento mobile ci sono già, dai round
+>     precedenti; mancano i 46 commit di questo round.
+> - **Gate combinati: perché basta la suite vitest intera.**
+>   - Dopo m8 i 18 gate erano verdi sulla revisione combinata (registro «Gate sulla revisione combinata
+>     `851d3a5cf`»).
+>   - Da m8 a HEAD cambiano 10 file: frontend, docs, runner e questo piano. Niente backend e niente cataloghi i18n,
+>     quindi `api portfolio` 55/55 e `i18n audit` (3418 chiavi per catalogo) di m8 valgono ancora.
+>   - S7b e S8 hanno rieseguito build, `front check` (floor 3/41), core-unit, component-unit, asset-unit,
+>     growth-chart-memo, `check-orphans` ed E2E dashboard 24/24 e broker 32/32; S8 anche `i18n audit`. S8b ha
+>     rieseguito build, `front check`, E2E asset detail 29/29, `check-orphans` e mkdocs.
+>   - **Il buco:** i gate che scandiscono i sorgenti (`htmlSink.gate`, `htmlInterpolation.gate`,
+>     `moneyRenderSites`) percorrono `src/` con `readdirSync`. Stanno in core-unit, che S8b non ha corso: non
+>     avevano mai visto il `+page.svelte` di S8b. Per questo la suite intera.
+> - **Suite vitest intera** (`/tmp/libreFolio_i_s12_vitest_full.sh`: `node_modules/.bin/vitest run`, JSON fuori dal
+>   worktree): **6733/6733**, rc 0, 98 s, 1567 suite, 0 file falliti. Rispetto a m8: 6719 → 6733 test (+14), 1564
+>   → 1567 suite. Per file:
+>
+> | file | esito |
+> |---|---|
+> | `flagFont.gate.test.ts` | 13/13 |
+> | `htmlInterpolation.gate.test.ts` | 18/18 |
+> | `htmlSink.gate.test.ts` | 7/7 |
+> | `layout.gate.test.ts` | 2/2 |
+> | `moneyRenderSites.test.ts` | 6/6 |
+> | `GrowthChart.tooltip.test.ts` | 6/6 |
+> | `GrowthChart.test.ts` | 60/60 |
+> | `growthLadderAxis.test.ts` | 62/62 |
+> | `chartCoreHelpers.test.ts` | 150/150 |
+>
+> - **Baseline S1 → finale** (DoD §8: ogni rosso nominato e classificato). La classificazione è in S1
+>   (`:655-664`: C1–C12 ed E1–E6; E7–E9 aggiunti dopo):
+>
+> | gate | S1 | finale |
+> |---|---|---|
+> | `chartCoreHelpers.test.ts` | 12 falliti su 162 | 150/150 (S12) |
+> | E2E dashboard | 5 falliti su 15 | 24/24 (S8) |
+> | E2E broker detail | 1 fallito su 28 | 32/32 (S8) |
+> | asset-unit | 12 falliti su 449 | 530/530 (S8) |
+> | `check-orphans` | 5 orfani | pulito: 92 E2E, 275 unit, 224 backend |
+> | E2E asset detail | non corso in S1; E7: 1 fallito su 28 | 29/29 (S8b) |
+>
+> - **S10 chiusa.** La riga era rimasta 🔄, ma non c'era più niente di aperto:
+>   - l'E2E della scala delle larghezze c'è, `dashboard.spec.ts:720` e `:801`, entrato con `026bc20fb` (C5,
+>     2026-09-29);
+>   - il seguito di `maskFormattedNumber` l'ha fatto D23, usato in `GrowthChart.svelte` e `PerformanceChart.svelte`;
+>   - D9: DBT-A rinviato, DBT-B a chi sa perché è stato scritto, fuori dal round;
+>   - S2c ✅: J approva, 2026-09-24 11:45.
+> - **Delta d'integrazione** (`git diff --stat dev_release2...HEAD`, `/tmp/libreFolio_i_s12_integration_stat.log`):
+>   34 file, +13658/−865. Con i commit di S12 si aggiunge `index.en.md`, il 35°. File condivisi, tutti già
+>   committati:
+>   - cataloghi i18n en/it/fr/es, +2/−2 ciascuno: `chart.tooltip.partialBucket` in più, `dashboard.pnlCandlesHypothetical`
+>     in meno (resta `dashboard.pnlCandlesHypotheticalShort`);
+>   - runner: `_frontend_asset.py` +12/−6; `_frontend_utility.py` +2, cioè `PerformanceChart.test.ts` e
+>     `AllocationPanel.test.ts` in component-unit;
+>   - E2E: `dashboard.spec.ts` +1162/−99, `brokers-detail.spec.ts` +387/−17, `asset-detail.spec.ts` +127/−10,
+>     `gallery.spec.ts` +9/−1;
+>   - `chartCoreHelpers.test.ts` +631/−388 (D8: unico scrittore in questo round);
+>   - `moneyRenderSites.test.ts`, il gate di J, +3/−25;
+>   - `AllocationHistoryChart.svelte` +2/−20, l'hunk delle emoji (D15, K);
+>   - backend: `portfolio_service.py` +13/−1 (`needs_engine`), `test_portfolio_api.py` +214/−59;
+>   - `assets/[id]/+page.svelte` +5/−1;
+>   - i grafici dei lotti: `LotComparisonChart` +11/−2, `LotGanttChart` +14/−3, `LotWacPriceChart` +7/−1;
+>   - `positions.en.md` +4;
+>   - il piano padre `plan-phase00PerformanceCharts.prompt.md` +57/−12.
+> - **Copia rinfrescata:** sì, alle 23:09 del 2026-10-01, in V (`004_release_1_2_0_schema`, sha256 uguale alla
+>   snapshot). S11-finale e S12 non l'hanno usata.
+> - **Pulizia di `/tmp`:** 22 file di scratch miei cancellati, script e log già riportati nei registri. Restano:
+>   - i messaggi di commit di S12 e le prove citate qui (`libreFolio_i_s12_vitest*`, `_integration_stat.log`);
+>   - la corsia `/tmp/librefolio-r2-i-charts` (41 MB) e la copia `/tmp/librefolio-r2-i-charts-prodcopy` (31 MB,
+>     dati privati). Propongo di cancellare la copia dopo la review del developer;
+>   - circa 350 voci `libreFolio_i_*`: una sola pulizia dopo l'integrazione;
+>   - mai toccati: `/tmp/libreFolio_incoming_to_a.txt` e i file del coordinator (`libreFolio_commit_i_c*.sh`, `_m1`,
+>     `_raw1`).
+> - **Residui**, nessuno blocca l'integrazione:
+>   1. **`%` premuto ma disabilitato.** Possibile difetto, non verificato dal vivo, presente da `c9013c496`, prima di
+>      questo round:
+>      - `GrowthChart.svelte:719` calcola `hasPctData`;
+>      - `:725-729`: il ripiego gira una volta sola, e solo per un `%` ripristinato (`restoredPctUnchecked`);
+>      - `:2332-2337`: il bottone ha `disabled={!hasPctData}` e `aria-pressed={viewMode === 'pct'}`;
+>      - `:2461`: il banner chiede `hasPctData && !hasNonZeroPctData`.
+>
+>      Se si cambia periodo stando su `%` verso un intervallo senza dati `%`, il bottone resta premuto e
+>      disabilitato, e il grafico resta vuoto senza messaggio.
+>   2. `isVisible()` di Playwright ignora il suo timeout: la guardia `%` dell'E2E è debole.
+>   3. `AllocationPanel.svelte:142` non ha `data-testid`: il test legge la classe `invisible`.
+>   4. L'effect di render di `GrowthChart` non traccia `loading`; oggi innocuo (registro a `:2259`).
+>   5. `moneyRenderSites` applica `SAFE_CALL` alla riga intera. I due rami di `shortMoney` stanno in un solo
+>      `return`, oggi a `PerformanceChart.svelte:180` (era `:170` al reperto, registro «Reperto per J»): se uno
+>      perdesse `maskable`, l'altro terrebbe zitto il gate. `axisTickAmount` (`:183-189`) il gate non lo vede
+>      affatto, perché non ha né `style: 'currency'` né un template con la valuta.
+>   6. Il runner usa `npx` dentro `front_asset_unit` e `front_growth_chart_memo`.
+>   7. La guardia `Number.isFinite(x0/x1)` non è esercitata da nessun test.
+>   8. Spegnimento del backend oltre 5 s (SIGTERM) in 4 corse E2E su 14.
+>   9. `tsc` degli E2E: 2 errori non miei, `onboarding-tour.spec.ts:863` e `files.ts:9`.
+>   10. `kpi-cards.en.md:129` e `:144` dicono «Book Value» dove l'interfaccia dice «Purchase Cost».
+>   11. `<b>${pnlLabels.bookValue}</b>` senza escape: già nel backlog del coordinator, con K.
+>   12. D15: `AllocationHistoryChart.svelte:596`, `resolvePrimary` → `assetTypeFamily` (K), e il commento della
+>       palette a `:123`. Il grafico va mostrato al developer.
+>   13. `CROWDFUND_REAL_ESTATE` di K: **già chiuso**, niente da fare per chi integra. `6d8b951bc` (C6) gli dà 🤝
+>       in `allocationTypeEmoji.ts`. Su `dev_release2` quel modulo non c'è ancora: lì il tipo ripiega su 📊 finché I
+>       non è integrato.
+>   14. Debito di traduzione, per Aphra e solo su richiesta del developer: charts it/fr/es da ritradurre intera;
+>       index: le schede, i 2 link e la riga Growth; chart: Related, la data e D28.
+>   15. Le etichette di `PrivacyToggle` sono solo inglesi: girate a J.
+>   16. D9: DBT-A rinviato, DBT-B al suo autore.
+>   17. I bundle di C1–C3 esistono solo nella cartella di sessione.
+> - **CHANGELOG** (lo scrive il coordinator). Controllo di novità contro `v1.1.0` (`837a8f2c7`):
+>   - in `v1.1.0` non c'erano la vista P&L (`'pnl'` compare 0 volte in `GrowthChart.svelte`), il plugin
+>     `calendar_rolling_return.py`, la memoria delle viste di Crescita e Allocazione, la privacy;
+>   - `rolling_return.py` c'era già, ma come segnale su N punti, non come modo del grafico;
+>   - la mappa delle emoji di `AllocationHistoryChart` c'era, senza materie prime né immobiliare, e un tipo ignoto
+>     cadeva su 📊, la stessa di ETF;
+>   - `[Unreleased]` non ha righe né per il P&L né per il Rendimento mobile.
+>
+>   Proposte (il testo inglese è nell'handoff):
+>   - ✨ (a) la vista P&L di Crescita. Assorbe le voci di §9 su separatori, ultima candela e bucket parziale,
+>     barre dei Proventi, valore di acquisto e didascalia: correggono una funzione mai rilasciata;
+>   - ✨ (b) il Rendimento mobile nel dettaglio asset;
+>   - ✨ Crescita e Allocazione ricordano la vista (da §9; nuova rispetto a `v1.1.0`);
+>   - 🐛 Allocazione storica: emoji di materie prime, immobiliare e tipo ignoto (da §9; corregge `v1.1.0`);
+>   - 🐛 tacche dell'asse Y del denaro sempre distinte (S7b): il coordinator l'ha già;
+>   - privacy di Crescita e Performance: nessuna riga a sé. La copre la ✨ «Privacy mode» già in `[Unreleased]`
+>     («every portfolio amount (dashboard, …)»).
+> - **Commit proposti** (li esegue il developer, con lo script del coordinator):
+>   1. `docs(dashboard): align chart pages with P&L mode`: le tre pagine inglesi.
+>      `/tmp/libreFolio_commit_i12_1.txt`, sha256 `87f19485b7ca…`. Se il coordinator preferisce, `chart.en.md`
+>      può uscire in un `docs(assets): …` a sé; non lo propongo, sono una voce di Related e la data;
+>   2. `docs(journal): record C11, S11-final and S12`: solo questo piano. `/tmp/libreFolio_commit_i12_2.txt`,
+>      sha256 `3b73a333d533…`.
+>
+>   Controllati con `/tmp/libreFolio_i_s12_msgs.py`: ASCII, oggetto ≤ 50 caratteri, righe ≤ 68, nessuno spazio in
+>   coda.
+> - **Server e porte:** nessun server avviato in S11-finale né in S12; `lsof` su 6157 e 6167 vuoto alle 00:33.
+>
+> **⚠️ Fuori pista:**
+> - Il residuo 1 (`%` premuto ma disabilitato) è emerso rileggendo il codice per i residui. Non è di questo round e
+>   non l'ho toccato.
+> - La riga di S10 era rimasta 🔄 benché tutto fosse chiuso da C5 e D23: chiusa qui, solo aggiungendo in coda.
+> - Le voci di §9 sul P&L non diventano righe a sé: il P&L non è mai uscito, quindi entrano nella ✨ (a).
+> - I due oggetti dei commit superavano 50 caratteri (52 e 56): accorciati prima di calcolare gli sha256.
+> - Il residuo 13 l'avevo copiato da una nota di prima di C6 (`:679`, `:818`). Rileggendo i commit davanti al
+>   target per il handoff ho visto che `6d8b951bc` l'aveva già chiuso: corretto alle 00:39.
+> - Nella stessa rilettura il residuo 5 aveva il numero di riga del reperto (`:170`), spostato da D23 a `:180`, e
+>   legava con un «quindi» due fatti separati: corretto, con la ragione per cui `axisTickAmount` resta fuori.
