@@ -33,6 +33,7 @@ import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {expectChartCanvas} from '../fixtures/charts';
+import {t as catalogueText} from '../fixtures/i18n-data';
 import {TEST_USER} from '../fixtures/test-users';
 import {schemas} from '../../src/lib/api/generated';
 import {OVERFLOW_MARQUEE_SELECTOR} from '../../src/lib/actions/scrollOnOverflow';
@@ -2098,6 +2099,277 @@ async function pickUnselectedAssetId(page: Page): Promise<number> {
     await closePicker(page);
     expect(offered.length, 'the "+" must offer at least one asset the selection does not hold').toBeGreaterThan(0);
     return offered[0];
+}
+
+/**
+ * ─── The lab's benchmark picker ────────────────────────────────────────────
+ *
+ * Developer decision, 01/10/2026: wherever a page measures against a benchmark there is a
+ * picker, it opens on the current benchmark, and it is empty only when nothing is set. The lab
+ * mounts Risk's one primitive for it, `BenchmarkSelect`, under the testid below, in a row of its
+ * own — the label, an ⓘ help, the picker — and mounts the levels only once the picker is no
+ * longer `pending`. Since 02/10/2026 that row is the selection card's last, below the chips and
+ * their «+»: a parameter common to the whole lab sits beside the choice of what to analyse.
+ *
+ * Every case reads what the primitive publishes on its root, `<testid>-control`:
+ * `data-benchmark-id` (`''` when there is none), `data-benchmark-state`
+ * (`none|pending|set|unknown`) and `data-measured`. Never the trigger's label, which is an
+ * asset's name inside a translated frame.
+ *
+ * The choice lives under the user-scoped key {@link benchmarkStorageKey} reproduces, shared by
+ * every Risk page. The cases seed it, and the selection beside it, in this context's
+ * `localStorage`, which dies with the context: there is nothing to restore.
+ */
+const LAB_BENCHMARK = 'risk-asset-set-benchmark';
+
+/** The primitive's root: where the lab's picker publishes its state. */
+const benchmarkControl = (page: Page) => page.getByTestId(`${LAB_BENCHMARK}-control`);
+
+/** How many assets a benchmark case selects: a table and a scatter of their own, and a count "one dot more" is read against. */
+const BENCHMARK_CASE_SELECTION = 3;
+
+/** One full document load, then two levels and a chart to wait on, in a lane running tests in parallel: past the default budget. */
+const BENCHMARK_CASE_BUDGET = 45_000;
+
+/**
+ * How far above the highest id on the list the "matches no asset" id is taken.
+ *
+ * Not `max + 1`: `assets.id` has no AUTOINCREMENT, so SQLite hands the next asset exactly that
+ * id, and a neighbour creating one between this read and the page's own would turn the unknown
+ * id into a real asset. The id is still derived from the list it must be absent from — never a
+ * number assumed to be free.
+ */
+const ABSENT_ID_MARGIN = 100_000;
+
+/** An asset as the picker offers it: the id it is chosen by, and the name a reader types to find it. */
+interface NamedAsset {
+    id: number;
+    display_name: string;
+}
+
+/** What a benchmark case works with, all read off the asset list. */
+interface BenchmarkCast {
+    /** Written as the lab's last selection, so the opening is this test's own (rung 1 of D19). */
+    selection: number[];
+    /** A flagged benchmark the selection does not hold: what a reader would compare against. */
+    reference: NamedAsset;
+    /** An id the asset list does not hold, {@link ABSENT_ID_MARGIN} above its highest. */
+    absentId: number;
+}
+
+/**
+ * Read the assets a benchmark case needs off the list the page, the asset store and the picker
+ * are all built from — `/assets/query` with the empty query — through `page.request`, which
+ * `page.route` does not intercept.
+ *
+ * Picked by property, never by place, and the lowest id within a property: the reference is the
+ * first asset flagged `is_benchmark` and the selection the first ones that are not, so the
+ * reference is outside the selection by construction. `populate_mock_data.py` creates those
+ * before any spec runs, so a neighbour's freshly created asset — which may be deleted under us —
+ * is never one of them; `risk-benchmark-shared.spec.ts` picks the same way.
+ */
+async function castBenchmark(page: Page): Promise<BenchmarkCast> {
+    const response = await page.request.get('/api/v1/assets/query');
+    expect(response.ok(), 'the asset list must answer: it is exactly what the picker offers and confirms a stored id against').toBe(true);
+    const items = (await response.json()) as Array<Record<string, unknown>>;
+    // Flattened the way `assetCatalogue` flattens: the generated union types let a scalar arrive wrapped.
+    const flat = (value: unknown): unknown => (Array.isArray(value) ? value[0] : value);
+    const listed = items.map((item) => ({id: Number(item.id), display_name: String(flat(item.display_name) ?? ''), benchmark: flat(item.is_benchmark) === true})).sort((left, right) => left.id - right.id);
+
+    const reference = listed.find((asset) => asset.benchmark && asset.display_name !== '');
+    if (!reference) throw new Error('No asset is flagged is_benchmark. populate_mock_data.py flags its INDEX assets as benchmarks.');
+    const selection = listed.filter((asset) => !asset.benchmark).map((asset) => asset.id);
+    if (selection.length < BENCHMARK_CASE_SELECTION) throw new Error(`The benchmark cases select ${BENCHMARK_CASE_SELECTION} assets besides the benchmark, and the list holds ${selection.length}. Check populate_mock_data.py.`);
+
+    return {
+        selection: selection.slice(0, BENCHMARK_CASE_SELECTION),
+        reference: {id: reference.id, display_name: reference.display_name},
+        absentId: Math.max(0, ...listed.map((asset) => asset.id)) + ABSENT_ID_MARGIN,
+    };
+}
+
+/** One entry of this origin's `localStorage`, as the app reads it. A one-shot read: a caller that expects a change polls it. */
+async function readStorage(page: Page, key: string): Promise<string | null> {
+    return page.evaluate((storageKey) => window.localStorage.getItem(storageKey), key);
+}
+
+/**
+ * Write the lab's opening into this context's storage — the selection, and the shared
+ * benchmark or its absence — and return the benchmark's key.
+ *
+ * Written from the page the login left open, on the app's origin, and read by a runtime that
+ * starts afterwards: both stores keep their value at module scope and read storage once per
+ * account, so only the full document load of {@link openLabOn} is sure to see the seed — the
+ * pattern of `storeBenchmark` in `risk-benchmark-shared.spec.ts`. Only the user-scoped spelling
+ * of each key is written, on purpose: the `(app)` layout renders after `/auth/me` has resolved,
+ * so that is the key the picker must read, and a picker that opened on any other would be the
+ * defect. "Nothing stored" is written too — as a removal — so it is a fact of the test rather
+ * than an inheritance from a fresh context.
+ */
+async function storeLabOpening(page: Page, selection: readonly number[], benchmarkId: number | null): Promise<string> {
+    const userId = await currentUserId(page);
+    const selectionKey = selectionStorageKey(userId);
+    const benchmarkKey = benchmarkStorageKey(userId);
+    const selectionValue = JSON.stringify(selection);
+    const benchmarkValue = benchmarkId === null ? null : String(benchmarkId);
+    await page.evaluate(
+        ([selectionAt, selectionStored, benchmarkAt, benchmarkStored]) => {
+            window.localStorage.setItem(selectionAt, selectionStored);
+            if (benchmarkStored === null) window.localStorage.removeItem(benchmarkAt);
+            else window.localStorage.setItem(benchmarkAt, benchmarkStored);
+        },
+        [selectionKey, selectionValue, benchmarkKey, benchmarkValue] as const,
+    );
+    expect(await readStorage(page, selectionKey), 'the selection seed did not land in storage').toBe(selectionValue);
+    expect(await readStorage(page, benchmarkKey), 'the benchmark seed did not land in storage').toBe(benchmarkValue);
+    return benchmarkKey;
+}
+
+/**
+ * Open the lab by a full document load, and prove the opening is the one
+ * {@link storeLabOpening} wrote: restored from storage rather than seeded from the holdings,
+ * and holding exactly the stored assets.
+ */
+async function openLabOn(page: Page, selection: readonly number[]): Promise<void> {
+    await openAssetGlobalRisk(page);
+    await expect(page.getByTestId('risk-asset-set-controls'), 'the opening must be the selection this test stored').toHaveAttribute('data-selection-source', 'persisted');
+    await expect.poll(async () => scopeKey(await chipIds(page)), {message: 'the chips must be exactly the selection this test stored'}).toBe(scopeKey(selection));
+}
+
+/**
+ * Open the lab's benchmark picker and end with it open.
+ *
+ * Copied from `risk-benchmark-shared.spec.ts` and pointed at this page's testid.
+ * `SearchSelect.openDropdown()` ignores a click landing within 200 ms of its last close (a guard
+ * against touch double-fire), and nothing on the page says the guard is armed: so this asks for
+ * the end state and clicks only while it is not there, retrying until the list is open — never a
+ * blind second click, which on an open list would close it again.
+ */
+async function openBenchmarkPicker(page: Page): Promise<void> {
+    const trigger = page.getByTestId(`${LAB_BENCHMARK}-trigger`);
+    await expect(async () => {
+        if ((await trigger.getAttribute('aria-expanded')) !== 'true') await trigger.click();
+        await expect(trigger).toHaveAttribute('aria-expanded', 'true', {timeout: 1_000});
+    }, "the lab's benchmark picker never opened").toPass({timeout: 8_000});
+}
+
+/** Choose `asset` in the lab's picker the way a reader does — open, type its name, click it — and end with the list closed. */
+async function chooseBenchmark(page: Page, asset: NamedAsset): Promise<void> {
+    const trigger = page.getByTestId(`${LAB_BENCHMARK}-trigger`);
+    await openBenchmarkPicker(page);
+    await page.getByTestId(`${LAB_BENCHMARK}-search`).fill(asset.display_name);
+    // Scoped to this picker: `search-select-option-*` is shared by every select on the page.
+    const option = page.getByTestId(LAB_BENCHMARK).getByTestId(`search-select-option-${asset.id}`);
+    await expect(option, `${asset.display_name} (#${asset.id}) is not on offer in the lab's benchmark picker`).toBeVisible({timeout: 8_000});
+    await option.click();
+    await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+}
+
+/**
+ * What each per-asset wave about this selection compared against, in the order the waves left:
+ * the `comparison_asset_id` of its `asset_set_comparison`, or `null` for a wave that carried
+ * none. One entry per wave, so "every wave carried this benchmark" and "no wave carried any" are
+ * both read off the same list. One read, not a retry: a caller polls it.
+ */
+function waveBenchmarks(requests: readonly RiskRequest[], selection: readonly number[]): Array<number | null> {
+    return levelRequestsFor(requests, selection).map((request) => {
+        const comparison = request.analytics.find((analytic) => analytic.analytic_code === 'asset_set_comparison');
+        return comparison ? Number(comparison.parameters?.comparison_asset_id) : null;
+    });
+}
+
+/**
+ * L3° drawn against `referenceId`: a per-asset wave about the selection carried it, its answer is
+ * the one drawn, beta and correlation fill a cell per selected asset, and the scatter holds one
+ * dot per asset plus the reference's own.
+ */
+async function expectComparisonWith(page: Page, requests: readonly RiskRequest[], selection: readonly number[], referenceId: number): Promise<void> {
+    await expect.poll(() => waveBenchmarks(requests, selection), {timeout: 20_000, message: `no per-asset wave about the selection carried benchmark ${referenceId}`}).toContain(referenceId);
+    const paid = page.getByTestId('risk-asset-set-l3');
+    await expect(paid, 'the comparison must come back and be the answer drawn').toHaveAttribute('data-benchmark', 'true', {timeout: 20_000});
+    await expect(paid.getByTestId('risk-asset-set-l3-beta')).toHaveCount(selection.length);
+    await expect(paid.getByTestId('risk-asset-set-l3-correlation')).toHaveCount(selection.length);
+    await expectChartCanvas(page, 'risk-asset-set-l3-scatter', 20_000);
+    await expect(page.getByTestId('risk-asset-set-l3-scatter'), 'one dot per selected asset, and one for the benchmark').toHaveAttribute('data-point-count', String(selection.length + 1), {timeout: 20_000});
+}
+
+/**
+ * L3° drawn with no comparison: a row per selected asset without beta or correlation, one dot
+ * per asset and none for a reference, and no per-asset wave about the selection carrying a
+ * comparison. Every absence is read behind a presence — the volatility cells, the drawn chart,
+ * a wave on the wire — so none of them can be satisfied by a level that is still loading.
+ */
+async function expectNoComparison(page: Page, requests: readonly RiskRequest[], selection: readonly number[]): Promise<void> {
+    await waitForPaidTable(page);
+    const paid = page.getByTestId('risk-asset-set-l3');
+    await expect(paid.getByTestId('risk-asset-set-l3-volatility'), 'L3° must draw a row per selected asset before its missing columns mean anything').toHaveCount(selection.length);
+    await expect(paid).toHaveAttribute('data-benchmark', 'false');
+    await expect(paid.getByTestId('risk-asset-set-l3-beta')).toHaveCount(0);
+    await expect(paid.getByTestId('risk-asset-set-l3-correlation')).toHaveCount(0);
+    await expectChartCanvas(page, 'risk-asset-set-l3-scatter', 20_000);
+    await expect(page.getByTestId('risk-asset-set-l3-scatter'), 'one dot per selected asset, and none for a benchmark that does not apply').toHaveAttribute('data-point-count', String(selection.length), {timeout: 20_000});
+    await expect.poll(() => waveBenchmarks(requests, selection).length, {timeout: 20_000, message: 'no per-asset wave about the selection reached the wire, so "no comparison" would prove nothing'}).toBeGreaterThan(0);
+    const waves = waveBenchmarks(requests, selection);
+    expect(
+        waves.filter((id) => id !== null),
+        `a per-asset wave carried a comparison this benchmark does not warrant — the waves' benchmarks, in order: ${JSON.stringify(waves)}`,
+    ).toEqual([]);
+}
+
+/**
+ * Where the lab's benchmark row sits, as one verdict: `'in the selection card'` when its help and
+ * its picker sit inside the selection card, after its row of chips and «+» and outside that row,
+ * and come before the correlation section and both comparison levels, inside none of those three
+ * frames, the help before the picker.
+ *
+ * Document order, not pixels: the row may wrap on a narrow screen, and what the developer
+ * decided is the order a reader meets things in. One read, not a retry: a caller polls it.
+ */
+async function benchmarkRowPlacement(page: Page): Promise<string> {
+    return page.getByTestId('asset-global-risk-panel').evaluate((panel) => {
+        const find = (testId: string) => panel.querySelector(`[data-testid="${testId}"]`);
+        const card = find('risk-asset-set-controls');
+        const chips = find('risk-selected-assets');
+        const control = find('risk-asset-set-benchmark-control');
+        const help = find('risk-asset-set-benchmark-help');
+        const correlation = find('risk-correlation-section');
+        const loss = find('risk-asset-set-loss');
+        const paid = find('risk-asset-set-paid');
+        if (!card || !chips || !control || !help || !correlation || !loss || !paid) return `missing: card=${card !== null} chips=${chips !== null} picker=${control !== null} help=${help !== null} correlation=${correlation !== null} L1°=${loss !== null} L3°=${paid !== null}`;
+        if (!card.contains(control)) return 'the picker is outside the selection card';
+        if (!card.contains(help)) return 'the help is outside the selection card';
+        const frames: Array<[string, Element]> = [
+            ['the chips row', chips],
+            ['the correlation section', correlation],
+            ['L1°', loss],
+            ['L3°', paid],
+        ];
+        for (const [name, frame] of frames) {
+            if (frame.contains(control)) return `the picker is inside ${name}`;
+            if (frame.contains(help)) return `the help is inside ${name}`;
+        }
+        const precedes = (first: Element, second: Element) => !first.contains(second) && !second.contains(first) && (first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+        if (!precedes(chips, help)) return 'the help is above the chips row';
+        if (!precedes(help, control)) return 'the help comes after the picker';
+        if (!precedes(control, correlation)) return 'the picker is below the correlation section';
+        if (!precedes(control, loss)) return 'the picker is below L1°';
+        if (!precedes(control, paid)) return 'the picker is below L3°';
+        return 'in the selection card';
+    });
+}
+
+/**
+ * The catalogue's sentence for `key`, in the language the page is drawn in.
+ *
+ * Read from `<html lang>`, which the root layout keeps on the language actually shown, so a case
+ * can tell the lab's own sentence from the primitive's generic one without holding on to any one
+ * language's words. A key the catalogue lacks fails here, by name.
+ */
+async function catalogueSentence(page: Page, key: string): Promise<string> {
+    const lang = ((await page.locator('html').getAttribute('lang')) ?? '').split('-')[0];
+    const sentence = catalogueText(lang, key);
+    expect(sentence, `the "${lang}" catalogue has no message for ${key}`).not.toBe(key);
+    return sentence;
 }
 
 /**
@@ -4256,23 +4528,33 @@ test.describe('Asset Global risk laboratory', () => {
 
         const userId = await currentUserId(page);
         // Seeded through `localStorage` under the store's own key rather than
-        // through a picker, because this page deliberately has no benchmark picker:
-        // the choice is shared with Dashboard and Broker Detail, and a second
-        // control here would be a second way for the pages to disagree.
+        // through the lab's picker — Risk's shared `BenchmarkSelect`, mounted
+        // above L1° and L3° as `risk-asset-set-benchmark` — because that picker
+        // opens on the choice this key holds, the one shared with Dashboard and
+        // Broker Detail, and this case is about the columns rather than about
+        // choosing: the benchmark picker cases below drive the control itself.
         // `addInitScript` runs before the app boots on the next navigation, so the
         // store hydrates with the value already in place and the first request
         // carries the comparison — no reload race to lose.
         //
-        // ⚠️ BOTH SPELLINGS OF THE KEY, and this is not a shotgun. `hydrate()`
-        // memoises on the key it last read, and the key it asks for is
-        // `lf_${getClientSessionUserId() ?? 'anon'}_...` — so it depends on whether
-        // `/auth/me` has resolved at the instant the panel first reads the store.
-        // If it has not, the store reads the anon key, caches `null`, and nothing
-        // re-reads it: `benchmarkId` is a `$derived` whose dependencies do not move
-        // again, so the page would sit at `data-benchmark="false"` for the rest of
-        // its life and this test would fail on a race rather than on a defect. Both
-        // keys are spellings the app genuinely uses, and they are seeded with the
-        // same value, so the reader's choice is the same whichever one it asks for.
+        // ⚠️ BOTH SPELLINGS OF THE KEY, though only the user-scoped one is still
+        // needed. The panel no longer reads the store: it binds `benchmarkValue`
+        // and `benchmarkState` from `BenchmarkSelect`, derives
+        // `benchmarkId = labBenchmarkId(state, value, analysedIds)` — a confirmed
+        // choice the selection does not hold, or null — and mounts the levels only
+        // once the state is no longer `pending`. The picker is the store's one
+        // reader here: `riskBenchmark.assetId` synchronously for its opening state,
+        // then `resolveRiskBenchmark()` on mount, which confirms the id against the
+        // asset list before saying `set`. Each read goes through `hydrate()`, which
+        // asks storage for one spelling only, the session's at that instant:
+        // `lf_${getClientSessionUserId() ?? 'anon'}_...`. And the picker mounts
+        // inside the page, which the `(app)` layout renders only once `auth.ts` has
+        // published the user — after `transitionClientSession(response.user.id)` —
+        // so its first read is already the scoped spelling, and the anon one is
+        // never read on this page. Seeding it is therefore no longer needed: the
+        // scoped key alone is enough, as in the picker cases below. It is still
+        // written only because this case's code is left as it was, and a key
+        // nobody here reads changes nothing.
         await page.addInitScript(
             ([scoped, anonymous, value]) => {
                 try {
@@ -4332,6 +4614,200 @@ test.describe('Asset Global risk laboratory', () => {
         // Nothing to restore: the benchmark and the selection both live in this
         // context's `localStorage`, which dies with the context, and no database
         // row was touched by any of the above.
+    });
+
+    /**
+     * Benchmark picker (a) — where it sits, and what it opens on.
+     *
+     * The developer's decision of 01/10/2026: wherever a page measures against a benchmark there
+     * is a picker, it opens on the current benchmark, and it is empty only when nothing is set. In
+     * the lab it is a row of its own — label, ⓘ help, picker — and, revised on 02/10/2026, it sits
+     * beside the choice of the assets to analyse, a parameter common to the whole lab: the
+     * selection card's last row, below the chips and their «+», outside that row. So it comes
+     * before the correlation section and both comparison levels, inside none of them.
+     *
+     * Opened on a stored benchmark the asset list confirms and the selection does not hold, so the
+     * comparison applies: the root says `set`, with that id and nothing measured; a wave carries
+     * it; L3° draws beta, correlation and the reference's dot. The ⓘ's words are not held on to —
+     * they are translated — but they must be the lab's own sentence, read from the catalogue in the
+     * language the page is drawn in.
+     *
+     * Red until the row moves into the selection card: today it sits after the card, between the
+     * correlation section and the two levels.
+     */
+    test('the benchmark picker sits in the selection card, before the correlation section and both comparison levels, with its help, and opens on the stored benchmark', async ({page}) => {
+        test.setTimeout(BENCHMARK_CASE_BUDGET);
+        const requests = await installRiskMocks(page);
+        const {selection, reference} = await castBenchmark(page);
+        await storeLabOpening(page, selection, reference.id);
+        await openLabOn(page, selection);
+
+        // It opens on the stored choice, once the asset list has confirmed it.
+        const control = benchmarkControl(page);
+        await expect(control, 'the lab must have a benchmark picker, and it must open on the stored benchmark').toHaveAttribute('data-benchmark-state', 'set', {timeout: 15_000});
+        await expect(control).toHaveAttribute('data-benchmark-id', String(reference.id));
+        await expect(control).toHaveAttribute('data-measured', 'false');
+        // Not one of the selected, so nothing to warn about — an absence asserted behind the presence above.
+        await expect(page.getByTestId(`${LAB_BENCHMARK}-measured`)).toHaveCount(0);
+
+        // Where it sits, read once both levels are drawn to be placed against.
+        await waitForLossTable(page);
+        await waitForPaidTable(page);
+        await expect.poll(() => benchmarkRowPlacement(page), {message: 'the benchmark row must sit in the selection card, after the chips row, before the correlation section, L1° and L3°, inside none of them, its help before its picker'}).toBe('in the selection card');
+
+        await expectComparisonWith(page, requests, selection, reference.id);
+
+        // Its help, last, so the open tooltip covers nothing read above. From a clean slate: the
+        // pointer first rests on a measured figure, which has no tooltip to open, so nothing left
+        // open by wherever the pointer happened to be can pass for the ⓘ's help. The Tooltip's own
+        // hover delay is absorbed by the retrying assertions, not waited out on a clock.
+        const sentence = await catalogueSentence(page, 'risk.assetSet.benchmark.help');
+        const tooltip = page.getByTestId('tooltip-content');
+        const figure = paidCell(page, selection[0], 'volatility');
+        await expect(figure, 'the clean slate needs a measured figure to rest on').toHaveAttribute('data-measured', 'true');
+        await figure.hover();
+        await expect(tooltip, 'a tooltip is still open with the pointer on a measured figure, so the one the ⓘ opens could not be told apart').toHaveCount(0);
+        await page.getByTestId(`${LAB_BENCHMARK}-help`).hover();
+        await expect(tooltip, 'resting on the ⓘ must open its help').toBeVisible();
+        await expect(tooltip, "the ⓘ must say what the benchmark does here, in the lab's own sentence").toHaveText(sentence);
+    });
+
+    /**
+     * Benchmark picker (b) — a choice made in the lab is the shared choice.
+     *
+     * Opened with nothing stored, so the picker says `none` and L3° has no comparison to draw.
+     * Choosing a flagged benchmark the selection does not hold — typed and clicked the way a reader
+     * does — must write the store's user-scoped key, which every Risk page reads, and the levels
+     * must ask again with it: beta and correlation appear, and the scatter gains the reference's
+     * dot. "Gains" is read as a change: the opening is asserted to lack all three first.
+     *
+     * Red until the lab mounts the picker.
+     */
+    test('choosing a benchmark in the lab writes the shared choice, and the levels ask again with it and draw beta, correlation and its dot', async ({page}) => {
+        test.setTimeout(BENCHMARK_CASE_BUDGET);
+        const requests = await installRiskMocks(page);
+        const {selection, reference} = await castBenchmark(page);
+        const key = await storeLabOpening(page, selection, null);
+        await openLabOn(page, selection);
+
+        const control = benchmarkControl(page);
+        await expect(control, 'with nothing stored the lab must open its picker empty').toHaveAttribute('data-benchmark-state', 'none', {timeout: 15_000});
+        await expect(control).toHaveAttribute('data-benchmark-id', '');
+        await expectNoComparison(page, requests, selection);
+
+        await chooseBenchmark(page, reference);
+
+        // Published by the picker, and shared: the user-scoped key holds the id every Risk page reads.
+        await expect(control).toHaveAttribute('data-benchmark-state', 'set');
+        await expect(control).toHaveAttribute('data-benchmark-id', String(reference.id));
+        await expect(control).toHaveAttribute('data-measured', 'false');
+        await expect.poll(() => readStorage(page, key), {message: 'the choice made in the lab did not reach the shared key'}).toBe(String(reference.id));
+
+        await expectComparisonWith(page, requests, selection, reference.id);
+    });
+
+    /**
+     * Benchmark picker (c) — a stored benchmark that is one of the selected assets.
+     *
+     * It stays the current choice — never dropped, never silently swapped — and the picker says so:
+     * that id, published as measured, with the ⚠ beside it explaining why it cannot serve here, in
+     * the lab's own sentence rather than the primitive's generic one. Nothing is compared:
+     * `validate_reference_is_not_a_subject` refuses a yardstick that is also a subject, so no wave
+     * carries a comparison and L3° draws neither column nor the reference's dot.
+     *
+     * Red until the lab mounts the picker. The "compares nothing" half already holds today: the
+     * panel withholds a benchmark the selection holds.
+     */
+    test('a stored benchmark that is one of the selected assets stays shown, flagged by a ⚠ that explains, and compares nothing', async ({page}) => {
+        test.setTimeout(BENCHMARK_CASE_BUDGET);
+        const requests = await installRiskMocks(page);
+        const {selection} = await castBenchmark(page);
+        // One of the assets this test selects: an entry of the array it stores, not a place on the page.
+        const measured = selection[0];
+        await storeLabOpening(page, selection, measured);
+        await openLabOn(page, selection);
+
+        const control = benchmarkControl(page);
+        await expect(control, 'a benchmark that is also selected must stay the current choice, not be dropped').toHaveAttribute('data-benchmark-id', String(measured), {timeout: 15_000});
+        await expect(control).toHaveAttribute('data-benchmark-state', 'set');
+        await expect(control).toHaveAttribute('data-measured', 'true');
+        const warning = page.getByTestId(`${LAB_BENCHMARK}-measured`);
+        await expect(warning, 'a benchmark that is also measured must carry its ⚠').toBeVisible();
+
+        await expectNoComparison(page, requests, selection);
+
+        // The ⚠ explains — last, so its open tooltip covers nothing read above, and from a clean slate:
+        // the pointer first rests on a measured figure, which has no tooltip to open, so the
+        // explanation that opens next is the ⚠'s.
+        const sentence = await catalogueSentence(page, 'risk.assetSet.benchmark.measuredHint');
+        const tooltip = page.getByTestId('tooltip-content');
+        const figure = paidCell(page, measured, 'volatility');
+        await expect(figure, 'the clean slate needs a measured figure to rest on').toHaveAttribute('data-measured', 'true');
+        await figure.hover();
+        await expect(tooltip, 'a tooltip is still open with the pointer on a measured figure, so the one the ⚠ opens could not be told apart').toHaveCount(0);
+        await warning.hover();
+        await expect(tooltip, 'resting on the ⚠ must open its explanation').toBeVisible();
+        await expect(tooltip, 'the ⚠ opened empty').not.toHaveText(/^\s*$/);
+        await expect(tooltip, "the ⚠ must explain in the lab's own sentence, not in the primitive's generic one").toHaveText(sentence);
+    });
+
+    /**
+     * Benchmark picker (d) — a stored id no asset matches.
+     *
+     * Read as `unknown`: the placeholder, an empty `data-benchmark-id`, nothing measured, no ⚠ —
+     * and nothing compared, since a reference nobody can name is no reference. The key keeps the
+     * id: the store reads and never corrects, because a list that failed to arrive and a deleted
+     * asset look the same from the browser. The id is derived from the list it must be absent from,
+     * far above its highest ({@link ABSENT_ID_MARGIN}), never assumed free.
+     *
+     * Red until the lab mounts the picker — and red past it on today's code too, which sends
+     * whatever id the store holds: the comparison goes out and the two columns appear.
+     */
+    test('a stored benchmark no asset matches leaves the picker on its placeholder, as unknown, and compares nothing', async ({page}) => {
+        test.setTimeout(BENCHMARK_CASE_BUDGET);
+        const requests = await installRiskMocks(page);
+        const {selection, absentId} = await castBenchmark(page);
+        const key = await storeLabOpening(page, selection, absentId);
+        await openLabOn(page, selection);
+
+        const control = benchmarkControl(page);
+        await expect(control, 'a stored id no asset matches must read as unknown').toHaveAttribute('data-benchmark-state', 'unknown', {timeout: 15_000});
+        await expect(control, 'an unknown benchmark leaves the picker on its placeholder, holding no value').toHaveAttribute('data-benchmark-id', '');
+        await expect(control).toHaveAttribute('data-measured', 'false');
+        await expect(page.getByTestId(`${LAB_BENCHMARK}-measured`)).toHaveCount(0);
+
+        await expectNoComparison(page, requests, selection);
+        expect(await readStorage(page, key), 'the store must keep an id it cannot confirm: it reads, it never corrects').toBe(String(absentId));
+    });
+
+    /**
+     * Benchmark picker (e) — one wave, not two.
+     *
+     * With a benchmark stored, the picker starts `pending` while the asset list confirms it, and
+     * the levels must not ask in the meantime: a wave asked then would leave without the benchmark,
+     * and a second one would follow with it — two preparations, and a table drawn twice. So every
+     * per-asset wave about the opening selection must carry the stored benchmark.
+     *
+     * No wait of its own is needed for the earlier wave: it would leave before the one that carries
+     * the benchmark, so once that one is in the capture, an earlier one is too.
+     *
+     * A regression guard rather than a red: today the panel mirrors the store before the levels
+     * mount, so this may already pass. It reads only the wire — the picker's state is (a)'s.
+     */
+    test('with a benchmark stored, every per-asset wave about the opening selection carries it: one wave, never one without it first', async ({page}) => {
+        test.setTimeout(BENCHMARK_CASE_BUDGET);
+        const requests = await installRiskMocks(page);
+        const {selection, reference} = await castBenchmark(page);
+        await storeLabOpening(page, selection, reference.id);
+        await openLabOn(page, selection);
+
+        await expect.poll(() => waveBenchmarks(requests, selection), {timeout: 20_000, message: 'the stored benchmark never reached the per-asset wave'}).toContain(reference.id);
+        await expect(page.getByTestId('risk-asset-set-l3'), 'the wave carrying the benchmark must be the answer drawn').toHaveAttribute('data-benchmark', 'true', {timeout: 20_000});
+        const waves = waveBenchmarks(requests, selection);
+        expect(
+            waves.filter((id) => id !== reference.id),
+            `a per-asset wave about the opening selection left without the stored benchmark — the waves' benchmarks, in order: ${JSON.stringify(waves)}`,
+        ).toEqual([]);
     });
 
     /**
