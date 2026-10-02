@@ -2372,6 +2372,11 @@ class TestA2FixtureGuards:
 # ``test_sample_sets`` contract property, ``apply_history`` on a later import (what
 # precedes H0 is already in LibreFolio, so the kept checkpoints must not absorb it
 # again) and ``combine_set`` turning a plugin error into a 422 (``BRIMSetCombineFailed``).
+#
+# Phase E (plan E.0, point 1) extends ``TestApplyHistoryLaterImport``, red-first too: on
+# a later import a kept checkpoint dated from H0 on closes a gap in the history LibreFolio
+# already holds, so it is a ``gap`` even when the plugin, which cannot know that history,
+# marks it ``opening``. The eve of H0 and a first import stay as the plugin made them.
 
 B = "B"
 
@@ -2407,6 +2412,26 @@ def _truth_checkpoint(as_of: str, kind: str, absorbed: Any) -> Any:
     """A checkpoint stating 1000 EUR, with the given absorbed rows."""
     checkpoint, truth_cash = _schema("BRIMCheckpoint", B), _schema("BRIMTruthCash", B)
     return checkpoint(as_of=date.fromisoformat(as_of), kind=kind, cash=[truth_cash(currency="EUR", amount=Decimal("1000"))], absorbed=absorbed)
+
+
+def _proven_checkpoint(as_of: str, kind: str, absorbed: Any) -> Any:
+    """``_truth_checkpoint`` with the rest of what a bank proves: an exact position with its unit cost, a minimum one, and an evidence table."""
+    truth_position = _schema("BRIMTruthPosition")
+    positions = [
+        truth_position(asset_id=FAKE_ASSET_ID_BASE, quantity=Decimal("100"), exactness="exact", unit_cost=Currency(code="EUR", amount=Decimal("12.50"))),
+        truth_position(asset_id=FAKE_ASSET_ID_BASE - 1, quantity=Decimal("180"), exactness="at_least"),
+    ]
+    evidence = [BRIMEvidence(title="Saldo", headers=["Pvm", "Saldo"], rows=[[as_of, "1000,00"]], row_numbers=[21])]
+    return _truth_checkpoint(as_of, kind, absorbed).model_copy(update={"positions": positions, "evidence": evidence})
+
+
+def _all_but_kind_and_absorbed(checkpoint: Any) -> Dict[str, Any]:
+    """A checkpoint as the bank states it: its date, cash, positions and evidence (everything but its kind and its absorbed rows)."""
+    return checkpoint.model_dump(exclude={"kind", "absorbed"})
+
+
+# Phase E: why a checkpoint of a later import, dated from H0 on, must not stay ``opening``.
+LATER_IMPORT_GAP = "on a later import a checkpoint dated from H0 on closes a gap in the history LibreFolio already holds: kind 'gap' — not implemented yet (BRIM report sets, phase E)"
 
 
 class _FakeCombineParseErrorProvider(_FakeTwoRoleProvider):
@@ -2446,6 +2471,11 @@ class TestApplyHistoryLaterImport:
     The kept checkpoints lose ``opening_cash`` and the absorbed rows dated before H0, and
     their count and cash follow the rows kept. Otherwise the gap-fix explanation would
     subtract the opening balance a second time. A first import is left unchanged.
+
+    Phase E (plan E.0, point 1): a kept checkpoint dated from H0 on becomes ``gap``. The
+    plugin marks the first segment of every set ``opening`` (it cannot know the broker's
+    history), so after a skipped year the correction would show as a starting point. The
+    checkpoint on the eve of H0 (the first set imported again) stays as the plugin made it.
     """
 
     @pytest.mark.asyncio
@@ -2491,6 +2521,76 @@ class TestApplyHistoryLaterImport:
         checkpoints, _verifications, h0 = await apply_history(db_session, broker_id=BROKER_ID, plugin=_FakeBankProvider(), output=BRIMParseOutput(checkpoints=[opening, gap]))
 
         assert h0 == date(2025, 1, 1)
+        assert checkpoints == [opening, gap]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("plugin", [_FakeBankProvider, _FakeBankImportPolicyProvider], ids=["summarize-policy", "import-policy"])
+    async def test_after_a_skipped_year_the_first_checkpoint_is_a_gap(self, db_session: AsyncSession, plugin: type) -> None:
+        """Phase E: LibreFolio's history starts with an earlier set (its opening gap-fix is dated 2023-12-31, so H0 is 2024-01-01), and 2025 was never imported.
+
+        The next set's first checkpoint (2025-12-31) is ``opening`` for the plugin, which cannot know that
+        history; it closes a gap in it, so it comes back ``gap``, whatever the plugin's policy. The next one
+        stays ``gap``. Everything else is what a later import already gives: date, cash, positions and
+        evidence untouched, the absorbed rows from H0 on, no opening balance.
+        """
+        apply_history = _sets("apply_history")
+        await _seed_history(db_session, [(BROKER_ID, date(2023, 12, 31), "import,fake_bank,gap_fix"), (BROKER_ID, date(2024, 2, 5), "import,fake_bank")])
+        opening = _proven_checkpoint("2025-12-31", "opening", _absorbed([("2025-11-03", "300"), ("2025-12-31", "-50")], opening="750"))
+        gap = _proven_checkpoint("2026-06-30", "gap", _absorbed([("2026-03-10", "-100")]))
+
+        checkpoints, _verifications, h0 = await apply_history(db_session, broker_id=BROKER_ID, plugin=plugin(), output=BRIMParseOutput(checkpoints=[opening, gap]))
+
+        # Barrier: H0 comes from the database (the day after the opening gap-fix), and both checkpoints are kept.
+        assert h0 == date(2024, 1, 1)
+        kept = {item.as_of: item for item in checkpoints}
+        assert sorted(kept) == [date(2025, 12, 31), date(2026, 6, 30)]
+        first, second = kept[date(2025, 12, 31)], kept[date(2026, 6, 30)]
+        # What a later import already gives, and keeps giving: phase E changes the kind only.
+        assert (_all_but_kind_and_absorbed(first), _all_but_kind_and_absorbed(second)) == (_all_but_kind_and_absorbed(opening), _all_but_kind_and_absorbed(gap))
+        assert [(row.as_of, row.amount) for row in first.absorbed.rows] == [(date(2025, 11, 3), Decimal("300")), (date(2025, 12, 31), Decimal("-50"))]
+        assert (first.absorbed.count, _cash_of(first.absorbed.cash), first.absorbed.opening_cash) == (2, {"EUR": Decimal("250")}, [])
+        assert (second.absorbed.count, _cash_of(second.absorbed.cash), second.absorbed.opening_cash) == (1, {"EUR": Decimal("-100")}, [])
+        # Subject.
+        assert {day: item.kind for day, item in kept.items()} == {date(2025, 12, 31): "gap", date(2026, 6, 30): "gap"}, LATER_IMPORT_GAP
+
+    @pytest.mark.asyncio
+    async def test_a_checkpoint_on_h0_is_a_gap(self, db_session: AsyncSession) -> None:
+        """Phase E, the boundary: from H0 itself, not from the day after.
+
+        The history starts on 2025-03-03 (H0); a set whose first segment starts the next day has its
+        first checkpoint on H0: ``gap``. Its absorbed rows before H0 go, and its opening balance with
+        them, as on any later import. The eve of H0 stays as the plugin made it
+        (``test_later_import_drops_what_precedes_h0``, ``test_reimport_of_the_same_set_keeps_the_opening_empty``).
+        """
+        apply_history = _sets("apply_history")
+        await _seed_history(db_session, [(BROKER_ID, date(2025, 3, 3), "import,fake_bank")])
+        opening = _proven_checkpoint("2025-03-03", "opening", _absorbed([("2025-02-20", "40"), ("2025-03-03", "-100")], opening="1060"))
+
+        checkpoints, _verifications, h0 = await apply_history(db_session, broker_id=BROKER_ID, plugin=_FakeBankProvider(), output=BRIMParseOutput(checkpoints=[opening]))
+
+        assert h0 == date(2025, 3, 3)
+        assert [item.as_of for item in checkpoints] == [date(2025, 3, 3)]
+        kept = checkpoints[0]
+        assert _all_but_kind_and_absorbed(kept) == _all_but_kind_and_absorbed(opening)
+        assert [(row.as_of, row.amount) for row in kept.absorbed.rows] == [(date(2025, 3, 3), Decimal("-100"))]
+        assert (kept.absorbed.count, _cash_of(kept.absorbed.cash), kept.absorbed.opening_cash) == (1, {"EUR": Decimal("-100")}, [])
+        assert kept.kind == "gap", LATER_IMPORT_GAP
+
+    @pytest.mark.asyncio
+    async def test_first_import_keeps_an_opening_dated_after_h0(self, db_session: AsyncSession) -> None:
+        """Guard (passes before and after phase E): with the ``import`` policy a first import starts H0 at its oldest row, so its opening checkpoint falls after H0.
+
+        There is no history yet, so no gap to close: the checkpoints come back as the plugin made them.
+        Only a later import (H0 from the database) turns a checkpoint into a ``gap``.
+        """
+        apply_history = _sets("apply_history")
+        opening = _proven_checkpoint("2024-12-31", "opening", _absorbed([]))
+        gap = _proven_checkpoint("2025-06-30", "gap", _absorbed([("2025-03-10", "-100")]))
+        rows = [TXCreateItem(broker_id=BROKER_ID, type=TransactionType.DEPOSIT, date=date(2024, 11, 5), cash=Currency(code="EUR", amount=Decimal("10")))]
+
+        checkpoints, _verifications, h0 = await apply_history(db_session, broker_id=BROKER_ID, plugin=_FakeBankImportPolicyProvider(), output=BRIMParseOutput(transactions=rows, checkpoints=[opening, gap]))
+
+        assert h0 == date(2024, 11, 5)
         assert checkpoints == [opening, gap]
 
 
