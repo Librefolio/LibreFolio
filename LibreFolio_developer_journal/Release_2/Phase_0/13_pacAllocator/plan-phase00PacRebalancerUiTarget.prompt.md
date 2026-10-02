@@ -893,7 +893,7 @@ non ricrea la selezione e non cambia ordine/priorità.
 |---|---|
 | importo + valuta, prezzo, PMC, fee fissa, min/max fee | `CompactCashCell`; valuta disabilitata quando ereditata |
 | quantità/limiti in quote | componente condiviso estratto dal quantity editor di `TransactionFormModal` |
-| percentuale, spread, safety margin, aliquota | `ExactDecimalInput` con suffisso e range esplicito |
+| percentuale, spread, safety margin (❌ non più da fare, developer, 02/10/2026), aliquota | `ExactDecimalInput` con suffisso e range esplicito |
 | data prezzo/FX | `SingleDatePicker` |
 
 Prima di usarlo qui, il quantity editor deve diventare condiviso e
@@ -988,7 +988,7 @@ regime, minus, funding link.
 - Nessun `quantity_step`.
 - Fee BUY e SELL sempre separate; fisso + percentuale possono coesistere.
 - `Margine prezzo BUY` e `Margine prezzo SELL` sono coefficienti route
-  espliciti, distinti da spread e buffer FX; lo zero resta visibile/editabile.
+  espliciti, distinti da spread e buffer FX (❌ non più da fare, developer, 02/10/2026); lo zero resta visibile/editabile.
 - Fee dinamiche/per mercato non compaiono in v1.
 - `withholding_kind` è read-only derivato dal regime.
 - Carried losses sono fatti; v1 non promette compensazione.
@@ -1243,16 +1243,18 @@ consiglio, non crea binding e non avvia compute.
 +------------------------------------------------------------------------------------------------------------------+
 ```
 
+> ❌ non più da fare (developer, 02/10/2026): lo spread per Broker («Spread aggiuntivo» per card), il margine di sicurezza («Margine sicurezza», «Buffer max», nota [i]) e la fee di conversione di questo schema. Lo spread è uno solo, per scenario, e ogni conversione è diretta.
+
 ### Regole FX
 
 - Coppie mostrate da valute funding, Broker e route; non sono conversioni decise.
 - Campo rate esplicita sempre verso: `1 source = N destination`.
 - Spot modificato diventa `[~]`; fonte manuale.
 - Età e staleness restano visibili.
-- Spread e margine sono percentuali distinte.
-- Fee conversione è costo separato, default esplicito `0`.
+- Spread e margine (❌ non più da fare, developer, 02/10/2026) sono percentuali distinte.
+- Fee conversione è costo separato, default esplicito `0`. ❌ non più da fare (developer, 02/10/2026)
 - Prezzo operativo convertito arriva dal dominio/backend FX; UI non lo calcola.
-- Nessun ciclo o multi-hop configurabile in v1.
+- Nessun ciclo o multi-hop configurabile in v1. ❌ non più da fare (developer, 02/10/2026)
 
 ---
 
@@ -1718,7 +1720,7 @@ Colonne default:
 | Pannello | Colonne visibili |
 |---|---|
 | Funding | azione, da, a, valuta, importo, motivo |
-| FX | Broker, coppia, debito, credito stimato, spot, spread, safety margin |
+| FX | Broker, coppia, debito, credito stimato, spot, spread, safety margin (❌ non più da fare, developer, 02/10/2026) |
 | Ordini | Asset con icona, lato, prezzo corrente, istruzione Broker, quantità esatta/stimata, valore mid/lordo, addebito/accredito, costi, buffer, fee |
 
 La v1 non inventa un `Budget route`: il target e $r_a$ restano Asset-level

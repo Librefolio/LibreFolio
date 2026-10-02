@@ -122,7 +122,7 @@ non interpreta il piano come consulenza finanziaria.
 - modifica di FIFO, WAC/PMC o regime fiscale;
 - sostituzione di Riskfolio o SciPy;
 - tax-loss harvesting, compensazione minus, chiusura/consolidamento Broker;
-- FX multi-hop o cicli di arbitraggio;
+- FX multi-hop o cicli di arbitraggio; ❌ non più da fare (developer, 02/10/2026)
 - profili planner persistenti;
 - esecuzione automatica degli ordini;
 - calcoli economici autorevoli nel frontend;
@@ -479,7 +479,7 @@ U=C_{free}+R_{physical}+L_{economic}+A_{round}.
 $$
 
 - $C_{free}$: cash raggiungibile e spendibile rimasto;
-- $R_{physical}$: buffer FX e tax `self_reserved`;
+- $R_{physical}$: buffer FX (❌ non più da fare, developer, 02/10/2026) e tax `self_reserved`;
 - $L_{economic}$: fee, spread, tax trattenuta e perdite charge/sell once-only;
 - $A_{round}$: rettifica firmata dei posting alla minor unit.
 
@@ -520,6 +520,8 @@ physical_final =
   + self_reserved_tax
 ```
 
+> ❌ non più da fare (developer, 02/10/2026): `fx_fees` e `fx_buffer_amount` nei due blocchi sopra (fee di conversione e buffer FX).
+
 Il provento SELL lordo viene accreditato una volta; fee e tax reserve vengono
 sottratte una volta. `cashNetSell` è un derivato, mai un secondo accredito.
 
@@ -556,7 +558,7 @@ $$
 $$
 
 Sono ammesse soltanto coppie dichiarate, single-hop e senza cicli attivi.
-Buffer e fee FX restano voci distinte.
+Buffer e fee FX restano voci distinte. ❌ non più da fare (developer, 02/10/2026)
 
 ### 6.4 Fee
 
