@@ -1093,3 +1093,174 @@ Decisione del developer, riportata dal coordinatore: «Correggerlo subito, prima
 > **⚠️ Fuori pista: `api transactions` salta ancora `test_delete_linked_without_pair`**, anche dopo `test db populate --force` nella corsia, come chiesto nella fase B. Lo salta la fixture `test_asset_id` (`test_transactions_api.py:127-162`): `pytest.skip("Could not create test asset")` quando `GET /assets` non le dà un asset e `POST /assets` non risponde 200. È una condizione del setup del test, fuori da L e indipendente dai dati della corsia; il suo proprietario dovrebbe fare un triage.
 
 ### E — ✅ completata (2026-10-01)
+
+**Commit di E**: `1a3ba20f2` fix(brim): mark later-import checkpoints as gaps, `37abcd203` docs(import): mention report sets in import pages e `2d0923a4c` docs(journal): record phase E.
+
+---
+
+## 12. Fase F — la review del developer (2026-10-02)
+
+### Review manuale (2026-10-02)
+
+- **Server di review**:
+  - porta 6166, `--data-dir /tmp/librefolio-r2-l-review`, DB nuovo popolato senza `--force`;
+  - `front build --debug` prima;
+  - server staccato, broker «Danske Bank (review)» creato via API.
+- **Prova a secco**, prima di chiamare il developer: via API nella corsia 6156, su un broker usa e getta (cancellato con i suoi file).
+  - Primo import, set principale, solo righe di cassa: `opening` 2020-02-02, versamento 2699.50.
+  - Secondo import, set con buco: due checkpoint `gap`, 2020-08-31 e 2021-01-04.
+- **Il developer** ha provato sia gli export reali dell'autore della issue, caricati da lui solo sul server di review, sia i campioni sintetici.
+  - **Privacy**: niente dei file reali entra in test, campioni, log, piano o messaggi di commit. I difetti si riproducono coi dati sintetici. Alla fine la `--data-dir` di review si cancella.
+- Esito: il flusso è corretto, «Dopo il buco» compare, la pagina File «mi pare sufficiente». Chiede miglioramenti grafici e ha trovato difetti.
+- Via del coordinatore alla fase F, da `2d0923a4c`, nella corsia 6156. Superfici:
+  - wizard, `ParseDetailModal`, `ReportSetCard`, `GapFixStep`, i18n `importWizard.*`;
+  - per U2-B, la preview del backend più `api sync`;
+  - **anche D4–D7**: `TransactionBulkModal.svelte`, `TransactionFormModal.svelte` se serve, i loro test, i testi dell'editor.
+
+  Due checkpoint: **F1** per i difetti (D1, D2, D4–D7) e **F2** per la grafica (U1–U4).
+
+#### F.0 Specifica (2026-10-02)
+
+**Decisioni del developer** (testuali):
+- **D3 / D7, la lingua del plugin**: «riguardo D3 non è un problema, so che il design prevede che, basandosi sulle intestazioni, il plugin risponda nella lingua del report»; «va bene che il plugin risponda in filandese, essendo il report in quella riga, io ti ho fatto i copia e incolla solo perchè non lo so leggere, ma in fondo sono il dev, non l'utente fillandese».
+  - **D7 resta com'è.** Il meccanismo `importWizard.brimNotice.<code>` resta come riserva, ma per Danske non si aggiungono chiavi.
+- **D4**: «D4 diciamo che va in tandem con il fatto che non si era fatto il primo validaate now, ci fosse stato sarebbe stato più chiaro».
+- **D5**: «dopo un processo di import, indipendentemente dalla dimensione dell'import, un validate now è bene che parta in automatico, solo il primo però, gli altri sono in carico all'utente».
+- **D6**: «se apro e chiudo non è sufficiente, devo fare manual->auto affinchè auto gli vada bene, se già lo apre è sufficiente direi».
+- **U1**: «credo che la B sia più adatta, ma nel set potrebbe essere interessante raccogliere, in caso di più file da agglomerare, titoli e cassa in 2 liste ordinate nei periodi (rispetto lo start period)».
+- **U2**: «credo B, le barre mi piacciono, ma serve mostrare bene le cose, magari aggiungendo anche un infobox che se ci si passa sopra ti dice inizio e fine di quel periodo e quante transazioni sono registrate nel mezzo (se si riesce ad avere con poco sforzo)».
+- **U3**: «oltre allo scarica, anche la semplice preview non sarebbe male».
+- **U4**: «anche riguardo U4 il design di B sembra più accattivante».
+- **Domanda del developer**: «cosa succede se 2 file si sovrappongono parzialmente o completamente come periodo?»
+  - Risposta (regola M, D-S28, `_RoleMerge` in `broker_danske_bank.py`): per ogni giorno valgono le righe del file più recente che lo copre, cioè quello che finisce per ultimo.
+  - Se i file coincidono su quel giorno, le righe contano una volta sola, senza avvisi.
+  - Se non coincidono, vince il più recente, e la card mostra `overlap_mismatch` col numero dei giorni in disaccordo.
+
+**F1 · i difetti**
+- **D1, il passo 1 perde il secondo «Avanti»** (`ImportWizardModal.svelte`).
+  - Causa: l'effetto che chiude l'area di upload a ogni `mousedown` esterno. Dopo l'avviso del set incompleto, che riapre l'area, il `mousedown` su «Avanti» la richiude, la modale cambia altezza, il pulsante si sposta prima del `mouseup` e il clic si perde.
+  - Correzione: niente chiusura automatica finché `step1SetWarnings` non è vuoto.
+  - Test: con l'avviso visibile, un `mousedown` fuori dall'area la lascia aperta, e **un solo** «Avanti» porta al passo 2.
+- **D2, i campi da completare nel dettaglio dell'analisi** (`ParseDetailModal.svelte`). Vale per ogni plugin. Per ogni todo:
+  - riga, campo e messaggio: `importWizard.brimNotice.<reason_code>`, e se manca il messaggio del plugin, come in `FixFlaggedStep.todoMessage`;
+  - le chiavi di contesto che l'interfaccia conosce, come fatti con etichetta: `charges` con la valuta, `cash`, `split_suggestions` in elenco (vedi «🗝️ context keys the frontend understands» nella guida dei plugin);
+  - le evidenze con `BrimEvidenceTable`, chiudibili;
+  - il resto del contesto in «Dettagli tecnici», chiuso.
+
+  Nessun `JSON.stringify` in linea. Testid: `parse-detail-todo` (`data-reason-code`, `data-severity`) e `parse-detail-todo-technical`.
+- **D4**, insieme a D5: nell'editor, ogni voce dei banner dei todo (bloccanti e avvisi) è un pulsante `tx-bulk-todo-goto` (`data-row-id`). Porta alla riga e la evidenzia (`tableRef.navigateToRowId`, come `jumpToIssue`). Il banner degli avvisi riceve lo stesso elenco.
+- **D5, una validazione automatica dopo ogni import.** Definizione di «una volta»:
+  - ogni volta che il wizard consegna righe all'editor (`onImportBatch`), l'editor lancia **una** validazione, la stessa di «Validate now», appena le righe nuove sono al loro posto e qualunque sia il numero di righe;
+  - non torna: dopo valgono le regole di oggi (validazione automatica solo fino a `AUTO_VALIDATE_THRESHOLD`, 50 righe; sopra, «Validate now» a mano);
+  - un nuovo import ne lancia un'altra;
+  - se un'altra validazione è già in corso o in coda, quella dell'import la sostituisce: niente doppioni.
+
+  Va fissata da un test.
+- **D6, Auto (WAC)**: nei due filtri che chiudono i todo (`TransactionBulkModal.svelte:803` e `:2460`), un todo su `cost_basis_override` è risolto anche quando la riga è applicata con `cost_basis_mode === 'auto'`, che sia il default o una scelta. Test: una riga col todo, applicata senza toccare la modalità, non ha più il todo.
+- **D7, il testo dell'avviso** `importWizard.todoWarningConfirmMessage`: si toglie l'esempio delle obbligazioni scadute e diventa generico («un valore ricavato dall'importer, non ancora verificato»). 4 lingue, con `dev.py i18n update`. Con D4 l'utente trova la riga.
+
+**F2 · la grafica**
+- **U1-B**: il set resta una card.
+  - I file del set vanno in **una DataTable per ruolo**, «Titoli» e «Cassa», ordinate per inizio del periodo. Colonne: file, periodo, righe, anteprima, eliminazione.
+  - I file non riconosciuti vanno a parte.
+  - Sotto le card, la tabella dei singoli prende il titolo «Altri file di questo broker» quando il broker ha anche set.
+- **U2-B**:
+  - **Backend**: `BRIMSetPreview` riceve `history_end` (l'ultimo giorno della storia salvata, cioè la transazione più recente col tag di storia del plugin) e `history_count` (le transazioni col tag fra `H0` e `history_end`). `api sync` nella corsia.
+  - **Linea del tempo**:
+    - date sulle barre;
+    - i buchi fra due file dello stesso ruolo, tratteggiati;
+    - la barra di LibreFolio da `H0` a `history_end`, non più fino alla fine della linea;
+    - una legenda;
+    - al passaggio del mouse, inizio, fine e numero di righe del file, oppure le transazioni salvate per la barra di LibreFolio.
+- **U3**: nel dettaglio dell'analisi, l'abbinamento ha:
+  - i chip degli esiti (coppie, solo cassa, riassunti, rimandati, esclusi);
+  - una tabella dei motivi coi conteggi;
+  - i comandi «Anteprima» (`FilePreviewModal` sul combinato) e «Scarica».
+- **U4-B, «Allinea con la banca»**:
+  - in alto, una card di riepilogo per punto (tipo, data, differenza di cassa, numero di posizioni) e una per verifica (torna o non torna, differenza);
+  - un clic su una card filtra la tabella; un secondo clic toglie il filtro;
+  - la card si apre col confronto completo: cassa, posizioni con le quantità mascherabili, spiegazione, note;
+  - sotto, **una sola DataTable** delle correzioni: selezione, Punto, Data, Tipo con icona, Asset, Qtà, Cassa, Tag o «costo da inserire»;
+  - i comandi della revisione: seleziona tutto, deseleziona tutto, seleziona in vista.
+
+  Testid: `gapfix-summary` (`data-key`, `data-kind`, `data-as-of`), `gapfix-table`, righe `tr[data-row-id=<chiave della proposta>]`, `gapfix-proposal-toggle` (`aria-pressed`), `gapfix-select-all`, `gapfix-deselect-all` e `gapfix-select-visible`. Restano la radice `import-wizard-gapfix` coi conteggi, `gapfix-group`, `gapfix-error` e `gapfix-info-hidden-titles`.
+
+**Test** (test-author, rossi prima, solo dati sintetici): un giro per F1 e uno per F2. Registrazioni solo in aggiunta, in `_frontend_transaction.py`. Gli E2E dell'editor vanno nelle specifiche `tx-bulk-*` o `tx-wac-bulk`, se servono.
+
+### F1 — ⏳ in corso (2026-10-02)
+
+- **Fine della review**, sul via del developer («Ho finito: spegni il server e cancella i dati della review»):
+  - il server della 6166 è fermo, e `lsof` non mostra listener;
+  - `/tmp/librefolio-r2-l-review` è cancellata, e `ls` dà «No such file or directory»;
+  - è cancellato anche il log del server, perché poteva contenere i nomi dei file reali;
+  - l'istantanea del DB nel `.testLog` è del `db populate`, presa prima dell'avvio del server: contiene solo dati finti.
+- Il coordinatore conferma D3: «the developer has decided, twice … D7 holds».
+- **Rosso di F1** affidato al test-author (D1, D2, D4, D5, D6), nella corsia 6156, con soli dati sintetici.
+
+> **Note implementazione — il rosso (2026-10-02)**, test-author, corsia 6156, solo dati inventati:
+> - **D1**: un test nuovo in `tx-import-report-set.spec.ts` (ora 9). Rosso: col set incompleto, il primo «Avanti» non porta al passo 2.
+> - **D2**: `ParseDetailModal.test.ts`, nuovo, 11 test rossi. Il test registra da sé la chiave `importWizard.brimNotice.probe_localized_blocker`, così «la chiave esiste» non dipende dal catalogo.
+> - **D6**: `bulkTodos.test.ts`, nuovo, 11 test rossi, sulla funzione pura `remainingTodos` (il modulo non esisteva).
+> - **D4 e D5**: `tx-bulk-import-handoff.spec.ts`, nuovo, 2 test rossi, con l'azione nuova `tx-bulk-import-handoff`.
+> - `tx-unit`: 517 test, 22 rossi. `check-orphans` pulito.
+>
+> **Note implementazione — la cura**:
+> - **D1** (`ImportWizardModal.svelte`): l'effetto che chiude l'area di upload a ogni `mousedown` esterno esce subito se `step1SetWarnings` non è vuoto.
+> - **D6**: modulo nuovo `frontend/src/lib/utils/transactions/bulkTodos.ts`, con `remainingTodos(todos, fields)`.
+>   - Un todo resta finché il suo campo è vuoto (`null`, `undefined` o `''`). Un todo su `cost_basis_override` è risolto anche da `cost_basis_mode === 'auto'`.
+>   - L'ordine resta quello di prima, e l'elenco in ingresso non cambia.
+>   - I due filtri di `TransactionBulkModal.svelte` (`patchRowFromForm` e `patchDualRowFromForm`) chiamano la funzione. La modalità è già scritta da `applyFormPayload` prima del filtro.
+> - **D5** (`onImportBatch`): `scheduler.trigger('change')` diventa `scheduler.trigger('manual')`.
+>   - `manual` ignora la soglia di 50 righe e l'anti-rimbalzo, cancella il debounce in coda e parte subito: una validazione per import, senza doppioni.
+>   - Dopo, valgono le regole di prima. `validateFn` non guarda il motivo, quindi «manual» non ha effetti in più sull'interfaccia.
+> - **D4** (`TransactionBulkModal.svelte`):
+>   - ogni voce dei due banner è un pulsante `tx-bulk-todo-goto` (`data-row-id`) che chiama `jumpToTodoRow`;
+>   - `jumpToTodoRow` fa come `jumpToIssue`: se la riga è nascosta dai filtri, mostra il toast `transactions.bulk.issueRowsHidden`; altrimenti `navigateToRowId`, che sceglie la pagina ed evidenzia la riga;
+>   - il banner degli avvisi diventa un contenitore `tx-bulk-todo-warnings` con l'interruttore `tx-bulk-todo-warnings-toggle`, chiuso come quello dei bloccanti, e l'elenco dei todo;
+>   - l'id di destinazione è la riga visibile: `op.pairedWith ?? op.tempId`, così il todo di una gamba nascosta porta alla sua coppia.
+> - **D2** (`ParseDetailModal.svelte`): ogni todo è un `parse-detail-todo` (`data-reason-code`, `data-severity`) con:
+>   - riga, campo e messaggio, con la regola di `FixFlaggedStep.todoMessage`;
+>   - i fatti in un `<dl>`: riga del file, importo (`cash`), commissioni (`charges`), nominale (solo con `compare_nominal`). Gli importi passano da `formatCurrencyAmountPlain`, quindi seguono la privacy;
+>   - `split_suggestions` in un `<ul>`;
+>   - le evidenze con `BrimEvidenceTable` chiudibile;
+>   - il resto del contesto in `<details data-testid="parse-detail-todo-technical">`, chiuso, col JSON indentato in un `<pre>`.
+>
+>   Una chiave conosciuta che non si può mostrare (per esempio un importo senza valuta) non sparisce: finisce nei dettagli tecnici. `split_hint` e `compare_nominal` sono istruzioni per il passo di correzione e non si mostrano.
+> - **D7**: `importWizard.todoWarningConfirmMessage` senza l'esempio delle obbligazioni, in 4 lingue, con `dev.py i18n update`.
+> - **i18n nuove** (`dev.py i18n add`, 4 lingue): `importWizard.parseDetail.{sourceRow, charges, suggestions, technical}` e `importWizard.todoGoto`. Riusate: `importWizard.fixStep.splitRowAmountLabel` e `splitNominalLabel`.
+>
+> **Evidenze** (corsia 6156, un comando per volta):
+>
+> | Verifica | Esito |
+> |---|---|
+> | `front-transaction tx-unit` | `517 passed` (i 22 rossi sono verdi) |
+> | `front check` | 3 errori e 41 avvisi, il pavimento: tutti in `BrokerSharingPanel`, `GlobalSettingsTab`, `TransactionFormModal.test.ts` e `ToolExecutionMetrics`; nessuno nei file toccati |
+> | `front-utility core-unit` (con i gate della privacy e degli sink HTML) | `2704 passed` |
+> | `front-utility component-unit` | `2182 passed` |
+> | `front-utility onboarding-component-unit` | `409 passed` |
+> | `front build --debug` | ok |
+> | E2E `tx-bulk-import-handoff` (D4, D5) | `2 passed` |
+> | E2E `tx-import-report-set` (D1 compreso) | `9 passed` |
+> | E2E `tx-import-flow` / `tx-import-upload` / `tx-import-report-set-guide` | `10` / `9` / `2 passed` |
+> | E2E `tx-wac-bulk` / `tx-bulk-diagnostics` / `tx-bulk-operations` | `10` / `2` / `10 passed` |
+> | E2E `tx-paired-edit` / `tx-import-resolution` | `4` / `12 passed` |
+> | E2E `tx-ca-contract` | `10 passed`, rossi CAC-011 e CAC-012, già noti |
+> | E2E `tx-brim-import` | rosso T1, già noto |
+> | E2E `tx-import-file-selection` | `1 passed`, 1 rosso: vedi «Fuori pista» |
+> | prettier sui file toccati e sui test nuovi | pulito, nessuna riformattazione |
+> | `check-orphans` | pulito |
+> | `dev.py lint` | verde |
+> | `git diff --check` | pulito |
+> | porta 6156 | libera |
+>
+> **⚠️ Fuori pista**:
+> - **`tx-import-file-selection.spec.ts:198`**, rosso: il broker di controllo, appena creato con id 10, mostra 3 file invece di 1. Non viene da F1:
+>   - ogni invocazione del runner ripopola il DB con `--force --with-reports`, senza `--clean`, e gli id dei broker ripartono;
+>   - i file BRIM restano su disco: nella corsia ci sono file `ca-contract-*` lasciati dai rossi CAC-011/012 (del 01/10 e di oggi) e file dei test API del 01/10, sotto i broker 9–46;
+>   - un broker nuovo con un id riusato eredita quei file. La pulizia del test, che cancella il broker tramite l'API, li ha poi rimossi: ora in `broker_10` resta solo il file `ca-contract` di oggi, scritto dopo;
+>   - l'asserzione riguarda il conteggio dei file al passo 2, che arriva dal backend; D1 cambia solo l'area di upload del passo 1, e solo con un avviso di set.
+>
+>   È il caso già nel backlog del coordinatore («`broker_<id>` files surviving a DB rebuild without `--clean`»). Per riavere la spec verde nella corsia serve un `test db populate --force --clean` sulla mia data dir, che il piano non prevede: lo chiedo al coordinatore.
+> - **`scripts/test_runner/_frontend_transaction.py`**: black vorrebbe riformattarlo e ruff trova 4 errori, ma è identico su HEAD: il file ha uno stile suo, scritto a mano. Non lo tocco.
+
+### F1 — ✅ pronta per il checkpoint (2026-10-02)
