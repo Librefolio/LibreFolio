@@ -531,7 +531,7 @@
     "todoBlockerCommitHint": "Complete todos los campos requeridos antes de guardar",
     "todoWarningVerifyHint": "{n, plural, one {# campo auto-derivado a verificar antes de guardar} other {# campos auto-derivados a verificar antes de guardar}}",
     "todoWarningConfirmTitle": "¿Verificar los campos auto-derivados?",
-    "todoWarningConfirmMessage": "{n} fila(s) tienen un valor auto-derivado que aún no se ha verificado (p. ej. la cantidad nominal de los bonos vencidos). Revísalos, o guarda de todos modos si los valores derivados son correctos.",
+    "todoWarningConfirmMessage": "{n} fila(s) tienen un valor auto-derivado que aún no se ha verificado. Revísalos, o guarda de todos modos si los valores derivados son correctos.",
     "todoWarningConfirmItemsLabel": "{n} campo(s) a verificar",
     "todoWarningConfirmProceed": "Guardar de todos modos",
     "todoWarningConfirmReview": "Revisar",
@@ -863,7 +863,14 @@
         "incomplete": "Incompleto",
         "incompleteTooltip": "Falta: {roles}"
       }
-    }
+    },
+    "parseDetail": {
+      "sourceRow": "Línea del archivo",
+      "charges": "Comisiones",
+      "suggestions": "Lo que encontró el importador",
+      "technical": "Detalles técnicos"
+    },
+    "todoGoto": "Ir a la fila"
   },
   "brokers": {
     "title": "Brókeres",
