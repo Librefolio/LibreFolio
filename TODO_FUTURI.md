@@ -680,6 +680,23 @@ raccomandazione: richiede una decisione di prodotto.
   esplicito.~~ ❌ non più da fare (02/10/2026).
 - Persistenza opzionale delle fonti manuali.
 
+### Salvare l'analisi — sul client, non sul server (richiesta del developer, 02/10/2026)
+
+**Status**: 📋 FUTURO · **Priorità**: da stabilire
+
+Il developer, testuale (riportato dal workstream D): *«salvare l'analisi: stampa PDF e condivisione/salvataggio sul
+client, non sul server»*.
+
+- **Cosa**: il risultato del planner (KPI, esposizioni, piano operativo, prova) diventa un documento che l'utente
+  stampa in PDF, salva o condivide dal proprio dispositivo.
+- **Vincolo**: niente salvataggio sul server. Il Tool resta atomico e senza stato (vedi «Confine della Prima
+  Versione»): l'analisi vive solo sul client.
+- **Da decidere alla ripresa**:
+  - il formato: la stampa del browser con un foglio di stile dedicato, oppure un PDF generato nel client;
+  - il contenuto: gli input dello scenario, il risultato, la data e la versione del contratto;
+  - la condivisione: la Web Share API dove esiste, altrimenti il download;
+  - la privacy: il documento contiene importi reali, quindi va deciso se la modalità privacy vale anche lì.
+
 ### ❌ Non più da fare — FX nel PAC (decisione del developer, 02/10/2026)
 
 Nel PAC/Rebalancer **non si faranno mai**:
