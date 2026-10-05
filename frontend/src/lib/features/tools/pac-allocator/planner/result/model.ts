@@ -6,7 +6,7 @@
  */
 import {canonicalDecimal, compareDecimal, decimalSign} from '../decimal';
 import {exactDisplay} from '../format';
-import type {PacConversion, PacExactNumber, PacExposureRow, PacFundingAction, PacLedgerRow, PacNumberAvailability, PacOrderRow, PacPlannerRequest, PacPlannerResult, PacReadyResult, PacRequestAsset, PacRequestFundingRoute, PacRequestOrderRoute} from '../types';
+import type {PacConversion, PacExactNumber, PacExposureRow, PacFundingAction, PacLedgerRow, PacNumberAvailability, PacOrderRow, PacPlannerResult, PacReadyResult, PacResolvedAsset, PacResolvedFundingRoute, PacResolvedOrderRoute, PacResolvedRequest} from '../types';
 
 export const UNCATEGORISED_CATEGORY_ID = 'allocation.uncategorised';
 
@@ -249,15 +249,15 @@ export type PlanSource = {kind: 'cash'; brokerId: string | null; currency: strin
 export interface PlanLookup {
     sourceLabel: (source: PacFundingAction['source']) => string;
     source: (source: PacFundingAction['source']) => PlanSource;
-    route: (routeId: string) => PacRequestOrderRoute | null;
-    fundingRoute: (fundingRouteId: string) => PacRequestFundingRoute | null;
+    route: (routeId: string) => PacResolvedOrderRoute | null;
+    fundingRoute: (fundingRouteId: string) => PacResolvedFundingRoute | null;
     /** How many funding routes of the request reach one Broker in one currency: a priority matters only above one. */
     fundingChoices: (brokerId: string, currency: string) => number;
-    quote: (assetId: string) => NonNullable<PacRequestAsset['quote']> | null;
+    quote: (assetId: string) => NonNullable<PacResolvedAsset['quote']> | null;
     provenance: (id: string) => PacProvenanceRow | null;
 }
 
-export function planLookup(result: PacReadyResult, request: PacPlannerRequest, names: ResultNames): PlanLookup {
+export function planLookup(result: PacReadyResult, request: PacResolvedRequest, names: ResultNames): PlanLookup {
     const cash = new Map(request.existing_cash.map((row) => [row.cash_id, row]));
     const contributions = new Map(request.contributions.map((row) => [row.contribution_id, row]));
     const routes = new Map(request.order_routes.map((row) => [row.route_id, row]));
@@ -290,7 +290,7 @@ export function planLookup(result: PacReadyResult, request: PacPlannerRequest, n
 }
 
 /** Hard minimums of the request, listed next to a proven infeasibility (D12): the backend names no culprit. */
-export function requiredMinimumRoutes(request: PacPlannerRequest): PacRequestOrderRoute[] {
+export function requiredMinimumRoutes(request: PacResolvedRequest): PacResolvedOrderRoute[] {
     return request.order_routes.filter((route) => route.required_minimum.kind !== 'none');
 }
 

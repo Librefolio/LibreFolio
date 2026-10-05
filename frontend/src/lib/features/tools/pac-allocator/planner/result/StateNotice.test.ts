@@ -42,7 +42,7 @@ import {cleanup, render, screen, setupI18n, within} from '$test/component';
 import {isPrivacyEnabled, setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
 import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
 import {catalogCurrencyDigits, formatPlannerMoneyPlain} from '../format';
-import type {PacPlannerRequest, PacReadyResult} from '../types';
+import type {PacReadyResult, PacResolvedRequest} from '../types';
 import type {ResultNames} from './model';
 import StateNotice from './StateNotice.svelte';
 
@@ -58,7 +58,7 @@ const names: ResultNames = {
     broker: (id) => BROKER_NAMES[id] ?? id,
 };
 /** No route with a required minimum: the infeasible notice lists the reachable funding only. */
-const request = {order_routes: []} as unknown as PacPlannerRequest;
+const request = {order_routes: []} as unknown as PacResolvedRequest;
 
 interface TopUp {
     broker_id: string;

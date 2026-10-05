@@ -9,7 +9,7 @@ import type {Readable} from 'svelte/store';
 import type {t} from '$lib/i18n';
 import {compareDecimal, decimalScale, fractionToPercent} from '../decimal';
 import {formatExactPricePlain, formatPlannerMoneyPlain, formatPlannerPercentUnits, formatPlannerPlainDecimal, formatPlannerPricePlain, formatPlannerQuantity, type CurrencyDigits} from '../format';
-import type {PacExactPrice, PacOrderRow, PacRequestOrderRoute} from '../types';
+import type {PacExactPrice, PacOrderRow, PacResolvedOrderRoute} from '../types';
 
 export type Translator = typeof t extends Readable<infer Formatter> ? Formatter : never;
 
@@ -39,8 +39,8 @@ export function priceText(price: PacExactPrice, translate: Translator, digits: C
     return translate(`${KEY}.pricePer`, {default: '{price} per {quantity} units', values: {price: text, quantity: formatPlannerPlainDecimal(price.quote_base_quantity)}});
 }
 
-type RouteMinimum = PacRequestOrderRoute['required_minimum'];
-type RouteCap = PacRequestOrderRoute['cap'];
+type RouteMinimum = PacResolvedOrderRoute['required_minimum'];
+type RouteCap = PacResolvedOrderRoute['cap'];
 
 /** A route minimum: wealth by default until R7 decides otherwise. */
 export function routeMinimumText(minimum: RouteMinimum, translate: Translator, digits: CurrencyDigits): string {

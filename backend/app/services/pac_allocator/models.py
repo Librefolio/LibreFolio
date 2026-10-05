@@ -27,7 +27,6 @@ type PlannerProduct = Literal["pac", "rebalancer"]
 type PlannerPolicy = Literal["proportional", "min_fragmentation", "invest_only", "invest_and_sell"]
 type IdentityKind = Literal["domain", "manual"]
 type ConversionMode = Literal["manual", "automatic"]
-type FreshnessKind = Literal["fresh", "stale"]
 type ProvenanceKind = Literal["manual", "domain_copy"]
 type CapabilityKind = Literal["whole_quantity", "monetary_amount"]
 type OrderSide = Literal["buy", "sell"]
@@ -150,21 +149,6 @@ class ExactMoney:
 
 
 @dataclass(frozen=True, slots=True)
-class ExactFreshness:
-    kind: FreshnessKind
-    age_days: int | None
-    accepted: bool
-
-    def __post_init__(self) -> None:
-        if self.kind == "fresh":
-            if self.age_days is not None or self.accepted:
-                raise ValueError("fresh observations cannot carry stale acceptance")
-            return
-        if self.age_days is None or self.age_days < 0 or not self.accepted:
-            raise ValueError("stale observations require nonnegative age and explicit acceptance")
-
-
-@dataclass(frozen=True, slots=True)
 class ExactSnapshot:
     snapshot_id: str
     draft_revision: int
@@ -240,8 +224,6 @@ class ExactExposure:
 class ExactAssetQuote:
     price: ExactMoney
     quote_base_quantity: ExactRatio
-    reference_date: date
-    freshness: ExactFreshness
     provenance_id: str
 
     def __post_init__(self) -> None:
@@ -256,7 +238,7 @@ class ExactAsset:
     source_asset_id: str | None
     name: str
     ticker: str | None
-    asset_class: str
+    asset_class: str | None
     quote: ExactAssetQuote
     exposures: tuple[ExactExposure, ...]
 
@@ -348,7 +330,6 @@ class ExactHolding:
 
 @dataclass(frozen=True, slots=True)
 class ExactExistingCash:
-    source_kind: Literal["local_broker_cash", "manual_cash"]
     cash_id: str
     broker_id: str
     available: ExactMoney

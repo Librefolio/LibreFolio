@@ -46,7 +46,7 @@
     const solution = $derived(ready && 'primary_solution' in ready ? ready.primary_solution : null);
     const digits = $derived(catalogCurrencyDigits(ready ? ready.catalogs.currencies : []));
     const names = $derived(ready ? resultNames(ready) : null);
-    const lookup = $derived(ready && names ? planLookup(ready, outcome.built.request, names) : null);
+    const lookup = $derived(ready && names ? planLookup(ready, outcome.built.resolved, names) : null);
     const notes = $derived(ready ? presentIssues(ready.issues, draft, outcome.built.ids).map(listIssue) : []);
     const orderCount = $derived(solution ? solution.order_rows.length : 0);
     const hasPlan = $derived(solution !== null && orderCount + solution.funding_actions.length + solution.conversions.length > 0);
@@ -110,7 +110,7 @@
         <FailurePanel result={failure} {draft} ids={outcome.built.ids} {ongoto} {onedit} />
     {:else if ready && names && lookup && outcome.kind === 'result'}
         <OutcomeHeader result={ready} revision={outcome.built.revision} {apiVersion} {digits} disabled={busy} {onedit} {oncalculate} ongotoproof={gotoProof} />
-        <StateNotice result={ready} request={outcome.built.request} {names} {digits} {ongoto} {onedit} />
+        <StateNotice result={ready} request={outcome.built.resolved} {names} {digits} {ongoto} {onedit} />
 
         {#if notes.length > 0}
             <section class="{CARD} space-y-2" aria-labelledby="pac-planner-notes-title" data-testid="pac-planner-notes">

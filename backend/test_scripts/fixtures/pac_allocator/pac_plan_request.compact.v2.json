@@ -15,8 +15,6 @@
       "entered_at": "2026-09-15T12:00:00Z"
     }
   ],
-  "fx_rates": {},
-  "fx_spread_rate": "0",
   "assets": [
     {
       "asset_id": "asset-one",
@@ -73,29 +71,6 @@
           "quantity_step": "1"
         }
       ],
-      "fee_schedules": [
-        {
-          "fee_schedule_id": "fee-broker-one-eur-buy",
-          "capability_id": "cap-broker-one-eur-whole",
-          "side": "buy",
-          "fixed_fee": {
-            "amount": "0",
-            "currency": "EUR"
-          },
-          "rate": "0",
-          "variable_floor": {
-            "amount": "0",
-            "currency": "EUR"
-          },
-          "variable_cap": {
-            "kind": "amount",
-            "amount": {
-              "amount": "0",
-              "currency": "EUR"
-            }
-          }
-        }
-      ],
       "conversion_mode": "manual"
     }
   ],
@@ -114,8 +89,6 @@
       "provenance_id": "prov-manual"
     }
   ],
-  "contributions": [],
-  "funding_routes": [],
   "order_routes": [
     {
       "route_id": "route-asset-one-broker-one-buy",
@@ -129,16 +102,11 @@
         "quantity": "0",
         "unit": "asset_unit"
       },
-      "required_minimum": {
-        "kind": "none"
-      },
       "cap": {
         "kind": "quantity",
         "quantity": "10",
         "unit": "asset_unit"
       },
-      "execution_margin_rate": "0",
-      "fee_schedule_id": "fee-broker-one-eur-buy",
       "provenance_id": "prov-manual"
     }
   ],

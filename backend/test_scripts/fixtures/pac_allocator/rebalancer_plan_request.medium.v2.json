@@ -49,10 +49,6 @@
         "amount": "10",
         "currency": "EUR",
         "quote_base_quantity": "1",
-        "reference_date": "2026-09-15",
-        "freshness": {
-          "kind": "fresh"
-        },
         "provenance_id": "prov-market"
       },
       "exposures": [
@@ -92,10 +88,6 @@
         "amount": "20",
         "currency": "EUR",
         "quote_base_quantity": "1",
-        "reference_date": "2026-09-15",
-        "freshness": {
-          "kind": "fresh"
-        },
         "provenance_id": "prov-market"
       },
       "exposures": [
@@ -135,10 +127,6 @@
         "amount": "25",
         "currency": "USD",
         "quote_base_quantity": "1",
-        "reference_date": "2026-09-15",
-        "freshness": {
-          "kind": "fresh"
-        },
         "provenance_id": "prov-market"
       },
       "exposures": [
@@ -177,10 +165,6 @@
         "amount": "5",
         "currency": "EUR",
         "quote_base_quantity": "1",
-        "reference_date": "2026-09-15",
-        "freshness": {
-          "kind": "fresh"
-        },
         "provenance_id": "prov-manual"
       },
       "exposures": [

@@ -1,7 +1,7 @@
 <script lang="ts">
     import {t} from '$lib/i18n';
     import {formatExactMoneyPlain, formatPlannerMoneyPlain, type CurrencyDigits} from '../format';
-    import type {PacPlannerRequest, PacReadyResult, PacRoundingTopUp, PlannerStep} from '../types';
+    import type {PacReadyResult, PacResolvedRequest, PacRoundingTopUp, PlannerStep} from '../types';
     import {BUTTON_LINK, BUTTON_SECONDARY, HINT, NOTICE} from '../ui';
     import {requiredMinimumRoutes, type ResultNames} from './model';
     import {routeMinimumText} from './text';
@@ -9,7 +9,7 @@
 
     interface Props {
         result: PacReadyResult;
-        request: PacPlannerRequest;
+        request: PacResolvedRequest;
         names: ResultNames;
         digits: CurrencyDigits;
         ongoto: (step: PlannerStep) => void;

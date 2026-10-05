@@ -30,7 +30,9 @@ def _calendar_date(value: str) -> str:
 
 
 class AllocationStrictModel(StrictModel):
-    model_config = ConfigDict(strict=True, frozen=True, revalidate_instances="always")
+    # Input defaults let a caller omit neutral values; the serialization schema still lists
+    # every field as required, because results are dumped in full.
+    model_config = ConfigDict(strict=True, frozen=True, revalidate_instances="always", json_schema_serialization_defaults_required=True)
 
 
 CurrencyCode = Annotated[str, StringConstraints(strict=True, min_length=3, max_length=3, pattern=r"^[A-Z]{3}$"), AfterValidator(Currency.validate_code)]
@@ -171,7 +173,6 @@ PlannerIssueCode = Literal[
     "allocation.order_minimum_exceeds_cap",
     "allocation.order_minimum_negative",
     "allocation.planning_quantity_negative",
-    "allocation.price_date_missing",
     "allocation.price_missing",
     "allocation.price_order_invalid",
     "allocation.provenance_not_found",
@@ -183,8 +184,6 @@ PlannerIssueCode = Literal[
     "allocation.route_priority_negative",
     "allocation.saved_fx_invalid",
     "allocation.solver_limit_no_incumbent",
-    "allocation.stale_age_negative",
-    "allocation.stale_observation_not_accepted",
     "allocation.target_total_not_one",
     "allocation.target_weight_missing",
     "allocation.target_weight_out_of_range",
@@ -292,28 +291,12 @@ class DomainCopyProvenance(AllocationStrictModel):
     provenance_id: PlannerId
     domain: Literal["portfolio", "market_data", "broker", "fx", "wac"]
     source_ref: PlannerRef
-    source_label: PlannerLabel | None
+    source_label: PlannerLabel | None = None
     captured_at: PlannerTimestamp
 
 
 type PlannerProvenance = Annotated[
     Union[ManualProvenance, DomainCopyProvenance],
-    Field(discriminator="kind"),
-]
-
-
-class FreshObservation(AllocationStrictModel):
-    kind: Literal["fresh"]
-
-
-class AcceptedStaleObservation(AllocationStrictModel):
-    kind: Literal["stale"]
-    age_days: PlannerWireInteger
-    accepted: bool
-
-
-type ObservationFreshness = Annotated[
-    Union[FreshObservation, AcceptedStaleObservation],
     Field(discriminator="kind"),
 ]
 
@@ -337,7 +320,7 @@ class ManualAssetIdentity(AllocationStrictModel):
     kind: Literal["manual_asset"]
     name: PlannerLabel
     ticker: PlannerLabel | None
-    asset_class: PlannerCode
+    asset_class: PlannerCode | None = None
 
 
 class DomainAssetIdentity(AllocationStrictModel):
@@ -345,7 +328,7 @@ class DomainAssetIdentity(AllocationStrictModel):
     source_asset_id: PlannerRef
     name: PlannerLabel
     ticker: PlannerLabel | None
-    asset_class: PlannerCode
+    asset_class: PlannerCode | None = None
 
 
 type PlannerAssetIdentity = Annotated[
@@ -358,8 +341,6 @@ class PlannerAssetQuoteInput(AllocationStrictModel):
     amount: PlannerFixedDecimal
     currency: CurrencyCode
     quote_base_quantity: PlannerFixedDecimal
-    reference_date: ReferenceDate
-    freshness: ObservationFreshness
     provenance_id: PlannerId
 
 
@@ -375,7 +356,7 @@ class PlannerAssetInput(AllocationStrictModel):
     asset_id: PlannerId
     identity: PlannerAssetIdentity = Field(description="Nested identity assembled from the authorized flat source Asset row.")
     quote: PlannerAssetQuoteInput | None = Field(description="One complete nested Price fact or explicit absence; never a partial object built from null source fields.")
-    exposures: list[PlannerExposureInput] = Field(description="Complete nested Classification facts assembled by the backend; the frontend performs no financial reconstruction.")
+    exposures: list[PlannerExposureInput] = Field(default=[], description="Complete nested Classification facts assembled by the backend; the frontend performs no financial reconstruction.")
 
 
 class ManualBrokerIdentity(AllocationStrictModel):
@@ -430,21 +411,23 @@ type FeeCap = Annotated[Union[NoFeeCap, AmountFeeCap], Field(discriminator="kind
 
 
 class BrokerFeeScheduleInput(AllocationStrictModel):
+    """An absent money field is zero. A schedule with no money field takes the quote currency of each route using it."""
+
     fee_schedule_id: PlannerId
     capability_id: PlannerId
     side: OrderSide
-    fixed_fee: PlannerMoneyInput
-    rate: PlannerFixedDecimal
-    variable_floor: PlannerMoneyInput
-    variable_cap: FeeCap
+    fixed_fee: PlannerMoneyInput | None = None
+    rate: PlannerFixedDecimal = "0"
+    variable_floor: PlannerMoneyInput | None = None
+    variable_cap: FeeCap = NoFeeCap(kind="none")
 
 
 class PlannerBrokerInput(AllocationStrictModel):
     broker_id: PlannerId
     identity: PlannerBrokerIdentity
     provenance_id: PlannerId
-    capabilities: list[BrokerOrderCapability]
-    fee_schedules: list[BrokerFeeScheduleInput]
+    capabilities: list[BrokerOrderCapability] = []
+    fee_schedules: list[BrokerFeeScheduleInput] = []
     conversion_mode: PlannerConversionMode = Field(description="How the plan presents this Broker's currency conversions: 'manual' as numbered steps the user performs before buying, 'automatic' as conversions the Broker performs when the orders execute. It changes no figure of the plan.")
 
 
@@ -460,7 +443,6 @@ class PlannerHoldingInput(AllocationStrictModel):
 
 
 class PlannerExistingCashInput(AllocationStrictModel):
-    source_kind: Literal["local_broker_cash", "manual_cash"]
     cash_id: PlannerId
     broker_id: PlannerId
     available: PlannerMoneyInput
@@ -496,8 +478,8 @@ class PlannerFundingRouteInput(AllocationStrictModel):
     source: PlannerFundingSourceRef
     broker_id: PlannerId
     currency: CurrencyCode
-    priority: PlannerWireInteger
-    transfer_cap: PlannerMoneyInput
+    priority: PlannerWireInteger = 0
+    transfer_cap: PlannerMoneyInput | None = Field(default=None, description="Absent means the whole selected amount of the source.")
     provenance_id: PlannerId
 
 
@@ -551,17 +533,18 @@ class PlannerOrderRouteInput(AllocationStrictModel):
     broker_id: PlannerId
     capability_id: PlannerId
     side: OrderSide
-    priority: PlannerWireInteger
-    minimum_if_active: OrderMinimum
-    required_minimum: OrderMinimum
-    cap: OrderCap
-    execution_margin_rate: PlannerFixedDecimal
+    priority: PlannerWireInteger = 0
+    minimum_if_active: OrderMinimum = NoOrderMinimum(kind="none")
+    required_minimum: OrderMinimum = NoOrderMinimum(kind="none")
+    cap: OrderCap = NoOrderCap(kind="none")
+    execution_margin_rate: PlannerFixedDecimal = "0"
     fee_schedule_id: PlannerId
     provenance_id: PlannerId
 
 
 class PlannerBuyOrderRouteInput(PlannerOrderRouteInput):
     side: Literal["buy"]
+    fee_schedule_id: PlannerId | None = Field(default=None, description="Absent means a BUY without fees.")
 
 
 class PlannerSellOrderRouteInput(PlannerOrderRouteInput):
@@ -608,9 +591,9 @@ class PlannerBrokerWithholdingInput(AllocationStrictModel):
 class PlannerSellContextInput(AllocationStrictModel):
     """Complete explicit SELL facts; missing fiscal, tax, or withholding facts block assembly."""
 
-    cost_bases: list[PlannerCostBasisInput]
-    asset_taxes: list[PlannerAssetTaxInput]
-    broker_withholding: list[PlannerBrokerWithholdingInput]
+    cost_bases: list[PlannerCostBasisInput] = []
+    asset_taxes: list[PlannerAssetTaxInput] = []
+    broker_withholding: list[PlannerBrokerWithholdingInput] = []
 
 
 class _PlannerRequestBase(AllocationStrictModel):
@@ -619,13 +602,16 @@ class _PlannerRequestBase(AllocationStrictModel):
     as_of: ReferenceDate
     valuation_currency: CurrencyCode
     provenance: list[PlannerProvenance] = Field(description="Root provenance records referenced by every copied or manually supplied fact.")
-    fx_rates: dict[str, PlannerFixedDecimal] = Field(description="Canonical global FX facts; key is an alphabetically sorted uppercase currency pair naming one unit of the first currency, value is units of the second currency per one unit of the first. May be empty.")
-    fx_spread_rate: PlannerFixedDecimal = Field(description="Single global adverse spread applied exactly once to every actual currency conversion; valuation always uses the official rate.")
+    fx_rates: dict[str, PlannerFixedDecimal] = Field(
+        default={},
+        description="Canonical global FX facts; key is an alphabetically sorted uppercase currency pair naming one unit of the first currency, value is units of the second currency per one unit of the first. May be empty.",
+    )
+    fx_spread_rate: PlannerFixedDecimal = Field(default="0", description="Single global adverse spread applied exactly once to every actual currency conversion; valuation always uses the official rate.")
     assets: list[PlannerAssetInput]
     brokers: list[PlannerBrokerInput]
-    existing_cash: list[PlannerExistingCashInput]
-    contributions: list[PlannerContributionInput]
-    funding_routes: list[PlannerFundingRouteInput]
+    existing_cash: list[PlannerExistingCashInput] = []
+    contributions: list[PlannerContributionInput] = []
+    funding_routes: list[PlannerFundingRouteInput] = []
     target_weights: list[PlannerTargetWeightInput]
 
     @model_validator(mode="after")
@@ -653,7 +639,7 @@ class PacPlannerRequest(_PlannerRequestBase):
 
 
 class _RebalancerPlannerRequestBase(_PlannerRequestBase):
-    holdings: list[PlannerHoldingInput]
+    holdings: list[PlannerHoldingInput] = []
     order_routes: list[RebalancerOrderRouteInput]
 
 
@@ -1116,7 +1102,7 @@ class PlannerCatalogAsset(AllocationStrictModel):
     asset_id: PlannerId
     name: PlannerLabel
     ticker: PlannerLabel | None
-    asset_class: PlannerCode
+    asset_class: PlannerCode | None
 
 
 class PlannerCatalogBroker(AllocationStrictModel):

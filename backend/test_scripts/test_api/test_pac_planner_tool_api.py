@@ -53,6 +53,8 @@ SOLE_ADMIN_DELETE_DETAIL = "Cannot delete account: you are the only administrato
 TOOL_CODE = "pac_allocator"
 IDENTITY_KEYS = ("tool_code", "contract_version", "implementation_version", "schema_fingerprint")
 MIN_REQUEST_FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "pac_allocator" / "pac_plan_request.min.v2.json"
+# The same request as the UI sends it: every default omitted, no fee schedule (contract compaction).
+COMPACT_REQUEST_FIXTURE = MIN_REQUEST_FIXTURE.with_name("pac_plan_request.compact.v2.json")
 
 
 @pytest.fixture(scope="module")
@@ -154,12 +156,16 @@ def _min_request() -> dict:
     return json.loads(MIN_REQUEST_FIXTURE.read_text(encoding="utf-8"))
 
 
-def _buying_request() -> dict:
-    """The min fixture with €50 against its €10 whole unit: five units to buy.
+def _compact_request() -> dict:
+    return json.loads(COMPACT_REQUEST_FIXTURE.read_text(encoding="utf-8"))
+
+
+def _buying_request(payload: dict | None = None) -> dict:
+    """The min fixture (or ``payload``) with €50 against its €10 whole unit: five units to buy.
 
     Unmodified, the fixture holds €5, so doing nothing is the proven optimum.
     """
-    payload = _min_request()
+    payload = _min_request() if payload is None else payload
     for cash in payload["existing_cash"]:
         cash["available"]["amount"] = "50.00"
         cash["selected"]["amount"] = "50.00"
@@ -284,7 +290,6 @@ async def test_pac_compute_answers_a_draft_without_a_price_with_needs_input(test
     assert {(issue["code"], issue["kind"], issue["path"]["entity_id"], issue["path"]["field"]) for issue in plan["issues"]} == {
         ("allocation.price_missing", "missing", "asset-one", "quote.amount"),
         ("allocation.quote_base_quantity_missing", "missing", "asset-one", "quote.quote_base_quantity"),
-        ("allocation.price_date_missing", "missing", "asset-one", "quote.reference_date"),
     }
 
 
@@ -342,28 +347,90 @@ async def test_pac_compute_answers_repeated_parameters_once_per_correlation(test
 
 
 # ---------------------------------------------------------------------------
-# (e) inputs C0b withdrew from the wire
+# (e) inputs withdrawn from the wire (C0b, contract compaction)
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 async def test_pac_compute_rejects_withdrawn_inputs_as_invalid_parameters(test_server):
+    """Every input the wire withdrew is refused at its exact path, never silently dropped.
+
+    C0b withdrew ``policy=min_fragmentation`` and ``currency_specs``; contract
+    compaction withdrew the quote's ``freshness`` and ``reference_date`` and the
+    cash's ``source_kind``. Each case is the buying request plus the one stale
+    input, sent back the way an old client would. The items need a worker to
+    be refused, so they travel two per batch (module docstring).
+    """
     min_fragmentation = _buying_request()
     min_fragmentation["policy"] = "min_fragmentation"
     currency_specs = _buying_request()
     currency_specs["currency_specs"] = [{"currency": "EUR", "minor_unit": "0.01"}]
+    quote_freshness = _buying_request()
+    quote_freshness["assets"][0]["quote"]["freshness"] = {"kind": "fresh"}
+    quote_reference_date = _buying_request()
+    quote_reference_date["assets"][0]["quote"]["reference_date"] = "2026-09-15"
+    cash_source_kind = _buying_request()
+    cash_source_kind["existing_cash"][0]["source_kind"] = "local_broker_cash"
 
     async with _tool_user() as client:
         identity = await _served_identity(client)
-        expected = {
-            "policy": (_item(identity, min_fragmentation), {"code": "literal_error", "path": ["policy"]}),
-            "currency_specs": (_item(identity, currency_specs), {"code": "extra_forbidden", "path": ["currency_specs"]}),
-        }
-        payload, results = await _compute(client, *(item for item, _issue in expected.values()))
+        cases = [
+            ("policy", _item(identity, min_fragmentation), {"code": "literal_error", "path": ["policy"]}),
+            ("currency_specs", _item(identity, currency_specs), {"code": "extra_forbidden", "path": ["currency_specs"]}),
+            ("quote.freshness", _item(identity, quote_freshness), {"code": "extra_forbidden", "path": ["assets", 0, "quote", "freshness"]}),
+            ("quote.reference_date", _item(identity, quote_reference_date), {"code": "extra_forbidden", "path": ["assets", 0, "quote", "reference_date"]}),
+            ("existing_cash.source_kind", _item(identity, cash_source_kind), {"code": "extra_forbidden", "path": ["existing_cash", 0, "source_kind"]}),
+        ]
+        batches = []
+        for start in range(0, len(cases), 2):
+            batch = cases[start : start + 2]
+            payload, results = await _compute(client, *(item for _field, item, _issue in batch))
+            batches.append((batch, payload, results))
 
-    assert (payload["success_count"], payload["failed_count"]) == (0, 2)
-    for field, (item, issue) in expected.items():
+    assert sum(len(batch) for batch, _payload, _results in batches) == 5
+    for batch, payload, results in batches:
+        assert (payload["success_count"], payload["failed_count"]) == (0, len(batch))
+        for field, item, issue in batch:
+            result = results[item["correlation_id"]]
+            assert result["status"] == "error", (field, result)
+            assert "result" not in result
+            assert result["error"] == {"code": "invalid_parameters", "retryable": False, "issues": [issue], "issue_count": 1}, field
+
+
+# ---------------------------------------------------------------------------
+# (f) the compact wire: a request without its defaults plans the same
+# ---------------------------------------------------------------------------
+
+
+def _economic_projection(plan: dict) -> dict:
+    """What the user acts on: each order (by route) with its debit and fee, and the objectives."""
+    solution = plan["primary_solution"]
+    orders = {row["route_id"]: (row["kind"], row["asset_id"], row["broker_id"], row["instruction"], row["cash_debit"], row["fee"]) for row in solution["order_rows"]}
+    assert len(orders) == len(solution["order_rows"]), solution["order_rows"]
+    return {"orders": orders, "costs": solution["costs"], "objectives": solution["objectives"]}
+
+
+@pytest.mark.asyncio
+async def test_pac_compute_plans_the_compact_twin_like_the_explicit_request(test_server):
+    """The compact twin (no defaults, no fee schedule) and ``min`` written in full buy the same thing.
+
+    Both carry the same €50 of cash, so the reference really trades. The two
+    results are not compared whole: the twin's implicit zero fee schedule has
+    its own ID, so its ``request_fingerprint`` may differ by design.
+    """
+    async with _tool_user() as client:
+        identity = await _served_identity(client)
+        explicit = _item(identity, _buying_request())
+        compact = _item(identity, _buying_request(_compact_request()))
+        payload, results = await _compute(client, explicit, compact)
+
+    assert (payload["success_count"], payload["failed_count"]) == (2, 0)
+    plans = {}
+    for name, item in (("explicit", explicit), ("compact", compact)):
         result = results[item["correlation_id"]]
-        assert result["status"] == "error", (field, result)
-        assert "result" not in result
-        assert result["error"] == {"code": "invalid_parameters", "retryable": False, "issues": [issue], "issue_count": 1}, field
+        assert result["status"] == "success", (name, result)
+        plan = result["result"]
+        assert (plan["result_state"], plan["proof"]["kind"]) == ("ready_incumbent", "optimal_proven"), name
+        assert plan["primary_solution"]["order_rows"], f"positive control: the {name} request must buy something"
+        plans[name] = plan
+    assert _economic_projection(plans["compact"]) == _economic_projection(plans["explicit"])

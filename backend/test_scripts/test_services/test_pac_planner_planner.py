@@ -53,6 +53,12 @@ raises ``ExactReplayRejectedError``, which the Tool reports as
   orders, ledger, costs and objectives; only the conversion's mode and step
   number differ, and an automatic conversion takes no step, so the orders
   follow the funding directly (test_conversion_mode_*).
+* **How a request is written changes no figure** (contract compaction, plan
+  §1/§3): omitting every default publishes the identical result, fingerprint
+  included (test_omitting_the_defaults_*); the compact twin with no fee schedule
+  buys what ``min`` buys (test_compact_twin_*); a rate-only schedule charges
+  like its explicit EUR twin (test_rate_only_*). The last two may differ only in
+  ``request_fingerprint``, by design.
 
 These are pure in-process tests (``isolation="pure"``) except the one deliberate
 subprocess in ``test_scip_import_isolation_in_subprocess``: no server, no
@@ -104,7 +110,7 @@ from backend.app.services.pac_allocator import planner
 from backend.app.services.pac_allocator.evaluator import build_exact_policy_view, evaluate_exact_candidate, exact_decision_id
 from backend.app.services.pac_allocator.normalize import normalize_pac_plan
 from backend.app.services.pac_allocator.planner import plan_pac_allocation
-from backend.test_scripts.test_schemas.test_pac_planner_schemas import _pac_request
+from backend.test_scripts.test_schemas.test_pac_planner_schemas import _compact_pac_request, _fixture, _pac_request
 
 # The repository root: parents = [test_services, test_scripts, backend, <root>].
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -123,13 +129,13 @@ def _revalidate(result):
     return PAC_PLAN_OUTPUT_ADAPTER.validate_python(result.model_dump(mode="python"))
 
 
-def _incumbent_payload() -> dict:
-    """The no-op fixture, but with enough cash (€50) to buy whole units.
+def _incumbent_payload(payload: dict | None = None) -> dict:
+    """The no-op fixture (or ``payload``), but with enough cash (€50) to buy whole units.
 
     €50 against a €10 whole-unit price buys 5 units, so the proven optimum stops
     being "do nothing" and becomes a single BUY.
     """
-    payload = _pac_request()
+    payload = _pac_request() if payload is None else payload
     for cash in payload["existing_cash"]:
         cash["available"]["amount"] = "50.00"
         cash["selected"]["amount"] = "50.00"
@@ -1217,3 +1223,122 @@ def test_exhaustive_oracle_is_test_only():
         where = os.path.relpath(spec.origin, REPO_ROOT) if spec.origin else f"a namespace package in {list(spec.submodule_search_locations or ())}"
         violations.insert(0, f"{_ORACLE_MODULE} still resolves, to {where}")
     assert not violations, "the exhaustive oracle must be test-only (D-X1), and backend/app must import neither it nor backend.test_scripts:\n" + "\n".join(violations)
+
+
+# --------------------------------------------------------------------------
+# Contract compaction — how a request is written changes no figure of the plan.
+# A field equal to its default may be omitted; a fee schedule without money
+# takes the route's quote currency (F1-extended, plan §3).
+# --------------------------------------------------------------------------
+_CANDIDATE_MAX_FIXTURE = "pac_plan_request.candidate-max.v2.json"
+_BROKER_ONE_CAPABILITY_ID = "cap-broker-one-eur-whole"
+_RATE_SCHEDULE_ID = "fee-broker-one-rate-buy"
+# SCIP's own floats: compared with a tolerance, never exactly.
+_SCIP_FLOAT_FIELDS = ("primal", "dual", "absolute_gap", "relative_gap")
+
+
+def _defaults_omitted(payload: dict) -> dict:
+    """``payload`` as a compact client sends it: every field equal to its default dropped."""
+    validated = _validated(payload)
+    compact = validated.model_dump(mode="json", exclude_defaults=True)
+    assert compact != validated.model_dump(mode="json"), "nothing to omit: the comparison would be vacuous"
+    return compact
+
+
+_EXPLICIT_REQUESTS = (
+    pytest.param(_pac_request, id="min-no-op"),
+    pytest.param(_incumbent_payload, id="min-incumbent"),
+    pytest.param(lambda: _fixture(_CANDIDATE_MAX_FIXTURE), id="candidate-max"),
+)
+
+
+@pytest.mark.parametrize("build_payload", _EXPLICIT_REQUESTS)
+def test_omitting_the_defaults_publishes_the_identical_result(build_payload):
+    """The same validated request, written in full or without its defaults: one result, one fingerprint."""
+    explicit = build_payload()
+
+    explicit_wire = _plan_wire(explicit)
+    compact_wire = _plan_wire(_defaults_omitted(explicit))
+
+    assert compact_wire["snapshot"]["request_fingerprint"] == explicit_wire["snapshot"]["request_fingerprint"]
+    assert compact_wire == explicit_wire
+
+
+def _economic_projection(wire: dict) -> dict:
+    """What the user acts on: each order (by route), its debit and fee, the costs, the objectives and the proof."""
+    solution = wire["primary_solution"]
+    orders = {row["route_id"]: (row["kind"], row["asset_id"], row["broker_id"], row["instruction"], row["cash_debit"], row["fee"]) for row in solution["order_rows"]}
+    assert len(orders) == len(solution["order_rows"]), f"more than one order row on one route: {solution['order_rows']}"
+    return {"orders": orders, "costs": solution["costs"], "objectives": solution["objectives"], "proof": wire["proof"]}
+
+
+def _without_request_fingerprint_and_scip_floats(wire: dict) -> dict:
+    """Every published field but the two kinds that may legitimately differ.
+
+    Measured on this scenario (S1): ``snapshot.request_fingerprint`` is the only
+    field that depends on how the request was written — the implicit and the
+    explicit zero schedule carry different IDs, so they hash differently (plan
+    §3); ``solution_id`` is the constant ``solution:primary``. SCIP's floats are
+    compared on their own, with a tolerance.
+    """
+    figures = copy.deepcopy(wire)
+    figures["snapshot"].pop("request_fingerprint")
+    for stage in figures["solver_evidence"]["stages"]:
+        for field in _SCIP_FLOAT_FIELDS:
+            stage.pop(field, None)
+    return figures
+
+
+def _scip_primals(wire: dict) -> list[tuple[str, float]]:
+    return [(stage["objective_code"], float(stage["primal"])) for stage in wire["solver_evidence"]["stages"]]
+
+
+def _assert_same_plan_figures(candidate: dict, reference: dict) -> None:
+    assert _economic_projection(candidate) == _economic_projection(reference)
+    assert _without_request_fingerprint_and_scip_floats(candidate) == _without_request_fingerprint_and_scip_floats(reference)
+    candidate_primals, reference_primals = _scip_primals(candidate), _scip_primals(reference)
+    assert [code for code, _ in candidate_primals] == [code for code, _ in reference_primals]
+    for (code, candidate_primal), (_, reference_primal) in zip(candidate_primals, reference_primals, strict=True):
+        assert math.isclose(candidate_primal, reference_primal, rel_tol=1e-9, abs_tol=1e-6), code
+
+
+def test_compact_twin_plans_like_min_figure_for_figure():
+    """The compact twin (no defaults, no fee schedule at all) buys exactly what ``min`` buys.
+
+    ``min`` alone is a no-op (€5 against a €10 whole unit), which any two
+    requests would agree on: both get the same €50 of cash first, and the
+    reference must really trade. The fingerprints are not compared — the twin's
+    implicit zero instance has its own ID (plan §3).
+    """
+    reference = _plan_wire(_incumbent_payload())
+    twin = _plan_wire(_incumbent_payload(_compact_pac_request()))
+
+    assert (reference["result_state"], reference["proof"]["kind"]) == ("ready_incumbent", "optimal_proven")
+    assert reference["primary_solution"]["order_rows"], "positive control: the reference must buy something"
+    _assert_same_plan_figures(twin, reference)
+
+
+def _incumbent_with_buy_schedule(**schedule: object) -> dict:
+    payload = _incumbent_payload()
+    broker = next(row for row in payload["brokers"] if row["broker_id"] == _BROKER_ONE_ID)
+    broker["fee_schedules"] = [{"fee_schedule_id": _RATE_SCHEDULE_ID, "capability_id": _BROKER_ONE_CAPABILITY_ID, "side": "buy", **schedule}]
+    route = next(row for row in payload["order_routes"] if row["route_id"] == _ASSET_ONE_ROUTE_ID)
+    route["fee_schedule_id"] = _RATE_SCHEDULE_ID
+    return payload
+
+
+def test_rate_only_schedule_charges_like_its_explicit_eur_twin():
+    """A 1% schedule with no money field charges what the same schedule spelled out in EUR charges.
+
+    The fee is real (> 0), so the agreement is not two zeroes agreeing.
+    """
+    zero_eur = {"amount": "0", "currency": "EUR"}
+    reference = _plan_wire(_incumbent_with_buy_schedule(fixed_fee=zero_eur, rate="0.01", variable_floor=zero_eur, variable_cap={"kind": "none"}))
+    rate_only = _plan_wire(_incumbent_with_buy_schedule(rate="0.01"))
+
+    assert (reference["result_state"], reference["proof"]["kind"]) == ("ready_incumbent", "optimal_proven")
+    order_rows = reference["primary_solution"]["order_rows"]
+    assert order_rows, "positive control: the reference must buy something"
+    assert all(Fraction(row["fee"]["amount"]) > 0 for row in order_rows), order_rows
+    assert _wire_exact(reference["primary_solution"]["costs"]["buy_fees"]["value"]) > 0
+    _assert_same_plan_figures(rate_only, reference)
