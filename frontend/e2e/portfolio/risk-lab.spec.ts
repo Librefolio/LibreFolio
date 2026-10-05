@@ -1516,6 +1516,72 @@ function paidRequestsFor(requests: readonly RiskRequest[], selection: readonly n
 }
 
 /**
+ * The correlation section's requests about exactly this selection, in the order they left: the
+ * asset-set historical waves carrying `correlation` and none of the five per-asset codes. The replay
+ * section asks the same `[correlation]` wave — one network call between the two, see
+ * {@link assetSetLevelRequests} — and the stub answers it the same whoever asked.
+ */
+function correlationRequestsFor(requests: readonly RiskRequest[], selection: readonly number[]): RiskRequest[] {
+    const wanted = scopeKey(selection);
+    return assetSetHistoricalRequests(requests).filter((request) => request.scope.kind === ASSET_SET_SCOPE && scopeKey(request.scope.asset_ids) === wanted && codesOf(request).has('correlation') && !request.analytics.some((analytic) => isAssetSetLevel(analytic)));
+}
+
+/** The request each section feeding the lab's notice last sent about one selection. */
+interface NoticeRequests {
+    correlation: RiskRequest;
+    loss: RiskRequest;
+    paid: RiskRequest;
+}
+
+/**
+ * Wait until the correlation section, L1° and L3° have each asked about `selection`, and hand back the
+ * last request of each: the one whose answer is on screen. The stub answers a request from its scope,
+ * window and analytics alone, so two requests of one section about one selection get one answer.
+ */
+async function noticeRequestsFor(requests: readonly RiskRequest[], selection: readonly number[]): Promise<NoticeRequests> {
+    await expect.poll(() => correlationRequestsFor(requests, selection).length, {timeout: 20_000, message: 'the correlation section never asked about the selection on screen'}).toBeGreaterThan(0);
+    await expect.poll(() => lossRequestsFor(requests, selection).length, {timeout: 20_000, message: 'L1° never asked about the selection on screen'}).toBeGreaterThan(0);
+    await expect.poll(() => paidRequestsFor(requests, selection).length, {timeout: 20_000, message: 'L3° never asked about the selection on screen'}).toBeGreaterThan(0);
+    return {
+        correlation: correlationRequestsFor(requests, selection).at(-1) as RiskRequest,
+        loss: lossRequestsFor(requests, selection).at(-1) as RiskRequest,
+        paid: paidRequestsFor(requests, selection).at(-1) as RiskRequest,
+    };
+}
+
+/** What the lab's one notice (`risk-partial-notice`) must publish. */
+interface LabNotice {
+    /** The results that came back `partial`: the notice's `data-partial-count`, and its measurements' `data-count`. */
+    partial: number;
+    /** The distinct sentences their warnings make — a key with its values: the reasons' `data-count`. */
+    sentences: number;
+    /** The results carrying the `assets_excluded` warning: that sentence's `data-occurrences`. */
+    excluded: number;
+}
+
+/**
+ * What the lab's notice must say, worked out from the answers the stub sent the three sections that
+ * feed it — rebuilt through {@link resultFor}, the function `installRiskMocks` fulfilled them with, from
+ * the requests it recorded, so the oracle cannot drift from the stub.
+ *
+ * The notice reads what those sections *render* (the developer's decision of 05/10/2026, the
+ * Dashboard's pattern), and nothing else: the correlation section's `correlation`; L1°'s two VaR
+ * horizons and its drawdown; L3°'s KPI, risk/return and — with a benchmark — comparison. Not the
+ * `correlation` that rides in each level's own request, which no level draws; not the replay, which
+ * keeps its own disclosure, as the Dashboard's L4 does.
+ */
+function labNoticeFor(sent: NoticeRequests, options: RiskStubOptions): LabNotice {
+    const rendered = (request: RiskRequest, codes: readonly string[]) => request.analytics.filter((analytic) => codes.includes(analytic.analytic_code)).map((analytic) => resultFor(request, analytic, options));
+    const results = [...rendered(sent.correlation, ['correlation']), ...rendered(sent.loss, LOSS_LEVEL_CODES), ...rendered(sent.paid, PAID_LEVEL_CODES)];
+    const warningsOf = (result: Record<string, unknown>) => (result.warnings ?? []) as ReturnType<typeof exclusionWarnings>;
+    return {
+        partial: results.filter((result) => result.status === 'partial').length,
+        sentences: new Set(results.flatMap((result) => warningsOf(result).map((warning) => `${warning.message_i18n_key}|${JSON.stringify(warning.message_params)}`))).size,
+        excluded: results.filter((result) => warningsOf(result).some((warning) => warning.code === EXCLUDED_WARNING_CODE)).length,
+    };
+}
+
+/**
  * True when the two ids sit side by side in `order`.
  *
  * Deliberately a *relation* between ids, never a pair of indices: the whole point
@@ -1953,6 +2019,50 @@ async function recordNextPress(page: Page): Promise<() => Promise<string>> {
 const lossSection = (page: Page) => page.getByTestId('asset-global-risk-panel').getByTestId('risk-asset-set-loss');
 const lossTable = (page: Page) => page.getByTestId('risk-asset-set-l1-table');
 const paidSection = (page: Page) => page.getByTestId('asset-global-risk-panel').getByTestId('risk-asset-set-paid');
+
+/**
+ * The lab's one notice: what came back partial, and why, said once above the frames — the Dashboard's
+ * `RiskPartialNotice`, adopted by the lab (the developer's decision of 05/10/2026). Scoped to the lab.
+ */
+const labNotice = (page: Page) => page.getByTestId('asset-global-risk-panel').getByTestId('risk-partial-notice');
+
+/** The frames whose results the notice reads. The replay keeps its own disclosure, as the Dashboard's L4 does. */
+const NOTICE_FRAMES = ['risk-correlation-section', 'risk-asset-set-loss', 'risk-asset-set-paid'] as const;
+
+/**
+ * Every frame the notice reads has drawn its answer: its provenance block is on screen, and
+ * `RiskLevelSection` draws that block from the same results as its health and its reasons. So an
+ * absence read after this — of the notice, or of a frame's disclosure — is about where a disclosure
+ * lives, not about an answer that had not landed yet.
+ */
+async function waitForNoticeFrames(page: Page): Promise<void> {
+    for (const frame of NOTICE_FRAMES) {
+        await expect(page.getByTestId('asset-global-risk-panel').getByTestId(frame).getByTestId(`${frame}-metadata`), `${frame} never drew its answer's provenance`).toBeVisible({timeout: 20_000});
+    }
+}
+
+/**
+ * Where the lab's notice sits, as one verdict: `'between'` when it follows the selection card and
+ * precedes the correlation section, inside neither — above every frame it speaks for, as the
+ * Dashboard's sits above its levels; otherwise what is wrong.
+ *
+ * Document order, not pixels. One read, not a retry: a caller polls it, or fronts it with barriers.
+ */
+async function partialNoticePlacement(page: Page): Promise<string> {
+    return page.getByTestId('asset-global-risk-panel').evaluate((panel) => {
+        const find = (testId: string) => panel.querySelector(`[data-testid="${testId}"]`);
+        const card = find('risk-asset-set-controls');
+        const notice = find('risk-partial-notice');
+        const correlation = find('risk-correlation-section');
+        if (!card || !notice || !correlation) return `missing: card=${card !== null} notice=${notice !== null} correlation=${correlation !== null}`;
+        if (card.contains(notice)) return 'inside the selection card';
+        if (correlation.contains(notice)) return 'inside the correlation section';
+        const precedes = (first: Element, second: Element) => !first.contains(second) && !second.contains(first) && (first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+        if (!precedes(card, notice)) return 'above the selection card';
+        if (!precedes(notice, correlation)) return 'below the correlation section';
+        return 'between';
+    });
+}
 
 /** The five per-asset cells of the L1° transposition, in the order they are drawn. */
 const L1_CELLS = ['badDay', 'badMonth', 'worstFall', 'currentFall', 'toPeak'] as const;
@@ -4088,6 +4198,13 @@ test.describe('Asset Global risk laboratory', () => {
         // which is the case the row count exists to make visible.
         await expect(lossSection(page).getByTestId('risk-asset-set-loss-metadata')).toHaveAttribute('data-rows', '1');
         await expect(lossSection(page).getByTestId('risk-asset-set-loss-metadata-observations')).toHaveText(String(AMPLE_OBSERVATIONS));
+
+        // ⑥ …and neither does the lab. Its one notice reads the correlation section's
+        // answer and L3°'s as well as L1°'s, so all three frames must have drawn theirs
+        // before its absence means "nothing came back partial, nothing carries a
+        // warning" rather than "not every answer has landed".
+        await waitForNoticeFrames(page);
+        await expect(labNotice(page), 'the wave came back whole and the lab still shows a notice: it calls something partial when nothing is').toHaveCount(0);
     });
 
     /**
@@ -4099,9 +4216,17 @@ test.describe('Asset Global risk laboratory', () => {
      * says so in its own header — rows are built from the selection and the cells
      * are nullable, never the other way round — and this is where that survives
      * contact with a payload that is genuinely short of one asset.
+     *
+     * Why it is blank is said once, above the frames (the developer's decision of
+     * 05/10/2026, the Dashboard's pattern): the exclusion degrades every result of
+     * every request, so the correlation section, L1° and L3° all draw `partial`
+     * results carrying the same warning, and the lab's one notice — after the
+     * selection card, before the matrix — names them and words the warning once.
+     * The frames keep only what did not come back at all, and here nothing did.
      */
-    test('a selected asset the backend could not measure keeps its row, with the reason on the section', async ({page}) => {
-        const requests = await installRiskMocks(page, {dropLastAsset: true});
+    test("a selected asset the backend could not measure keeps its row, with the reason in the lab's notice", async ({page}) => {
+        const options: RiskStubOptions = {dropLastAsset: true};
+        const requests = await installRiskMocks(page, options);
         await openAssetGlobalRisk(page);
         await ensureSelectionAtLeast(page, MINIMUM_SELECTION);
         await waitForRiskCatalog(page);
@@ -4140,19 +4265,28 @@ test.describe('Asset Global risk laboratory', () => {
             await expect(lossTable(page).locator(`[data-testid="risk-asset-set-l1-${cell}"][data-measured="true"]`)).toHaveCount(measured.length);
         }
 
-        // AND THE PAGE SAYS WHY. An exclusion degrades every analytic of the
-        // request, so all three of L1°'s results come back `partial` and all three
-        // carry the same `assets_excluded` warning — one reason, one sentence —
-        // deduplicated for the reader, counted in the attribute.
-        const health = lossSection(page).getByTestId('risk-asset-set-loss-health');
-        await expect(health).toBeVisible();
-        await expect(health, 'L1° reads three results — the two VaR horizons and the drawdown — and an exclusion degrades all of them').toHaveAttribute('data-count', '3');
+        // AND THE PAGE SAYS WHY — ONCE, ABOVE THE FRAMES. An exclusion degrades every
+        // analytic of every request: each result the correlation section, L1° and L3°
+        // draw comes back `partial` under the same `assets_excluded` warning — one
+        // excluded asset, one reason, one sentence. How many is read off the answers
+        // the stub sent for the selection on screen, never counted here by hand.
+        const expected = labNoticeFor(await noticeRequestsFor(requests, selected), options);
+        expect(expected.partial, 'premise: dropLastAsset answered none of the results the notice reads partial').toBeGreaterThan(0);
+        expect(expected.excluded, 'premise: dropLastAsset planted the exclusion warning on none of the results the notice reads').toBeGreaterThan(0);
+        expect(expected.sentences, 'premise: one excluded asset, one reason, the same scope in all three requests — the warnings make one sentence').toBe(1);
+        await waitForNoticeFrames(page);
 
-        const reasons = lossSection(page).getByTestId('risk-asset-set-loss-reasons');
-        await expect(reasons).toBeVisible();
-        await expect(reasons, 'one distinct sentence, however many results carried it').toHaveAttribute('data-count', '1');
-        const reason = reasons.getByTestId('risk-asset-set-loss-reason');
-        await expect(reason, 'its arity is published rather than drawn three times').toHaveAttribute('data-occurrences', '3');
+        const notice = labNotice(page);
+        await expect(notice, 'the lab draws partial results and says nothing of them: its one notice is missing').toBeVisible();
+        await expect.poll(() => partialNoticePlacement(page), {message: 'the notice must sit after the selection card and before the correlation section, inside neither: above every frame it speaks for'}).toBe('between');
+        await expect(notice, `the notice names every partial result the three frames draw: ${expected.partial} in the stub's answers`).toHaveAttribute('data-partial-count', String(expected.partial));
+        await expect(notice.getByTestId('risk-partial-measurements'), 'one entry per partial measurement, by instance: the two VaR horizons are two').toHaveAttribute('data-count', String(expected.partial));
+
+        const reasons = notice.getByTestId('risk-partial-reasons');
+        await expect(reasons, 'one distinct sentence, however many results carried it').toHaveAttribute('data-count', String(expected.sentences));
+        const reason = reasons.getByTestId('risk-partial-reason');
+        await expect(reason).toHaveCount(expected.sentences);
+        await expect(reason, `its arity is published rather than drawn ${expected.excluded} times: every result carrying the exclusion counts once`).toHaveAttribute('data-occurrences', String(expected.excluded));
 
         // …in the reader's language. The warning arrives as its reason's key and
         // values, with the backend's English `message` only as the fallback. So the
@@ -4164,6 +4298,18 @@ test.describe('Asset Global risk laboratory', () => {
         const sentence = ((await reason.textContent()) ?? '').trim();
         expect(sentence, "the reason is the backend's English fallback, not the sentence of its key").not.toBe(EXCLUDED_WARNING_MESSAGE);
         expect(sentence, 'the reason carries an unformatted ICU placeholder').not.toContain('{');
+
+        // …AND NOWHERE ELSE. Every frame has drawn its answer (the barrier above) and
+        // the notice says it all, so these absences say the disclosure moved, not that
+        // a frame was slow: L1°'s frame (`risk-asset-set-loss`) lists no partial
+        // measurement and repeats no sentence — nor do the correlation section's and
+        // L3°'s, or the reader would meet one exclusion four times: in the notice,
+        // then once per frame.
+        for (const frame of NOTICE_FRAMES) {
+            const section = page.getByTestId('asset-global-risk-panel').getByTestId(frame);
+            await expect(section.getByTestId(`${frame}-health`), `${frame} still lists the partial results in its frame: the notice above names them, once`).toHaveCount(0);
+            await expect(section.getByTestId(`${frame}-reasons`), `${frame} still repeats the exclusion's sentence in its frame: the notice above says it, once`).toHaveCount(0);
+        }
 
         // Nothing *failed* — a degraded measurement is not an absent one, and the
         // two disclosures are deliberately separate lists. The barriers above make
@@ -4181,9 +4327,14 @@ test.describe('Asset Global risk laboratory', () => {
      * a short window from a broken page, which is the whole reason
      * `RiskLevelSection` publishes health, errors, reasons and provenance
      * separately.
+     *
+     * What did not come back at all stays in its frame — `levelErrorHealth` keeps
+     * `unavailable` under the level, as the Dashboard keeps it — and the lab's one
+     * notice, which speaks for partial results and warnings, has nothing to say.
      */
     test('a window too short for four of the five analytics is disclosed, not blanked', async ({page}) => {
-        await installRiskMocks(page, {shortWindow: true});
+        const options: RiskStubOptions = {shortWindow: true};
+        const requests = await installRiskMocks(page, options);
         await openAssetGlobalRisk(page);
         await ensureSelectionAtLeast(page, MINIMUM_SELECTION);
         await waitForRiskCatalog(page);
@@ -4217,10 +4368,11 @@ test.describe('Asset Global risk laboratory', () => {
 
         // No *reasons*, and that is a fact about the backend rather than an
         // oversight: `service.py:_unavailable` builds a result with an error and no
-        // warnings at all, so the verbatim-sentence list is legitimately empty here
-        // where it was full in the exclusion case above. The two assertions that
-        // precede this one are its presence barrier — without them "no reasons"
-        // would also be true of a section that had not rendered.
+        // warnings at all, so there is no sentence to word anywhere — not in this
+        // frame, which words none since the lab's notice took them over, and not in
+        // that notice either (below). The two assertions that precede this one are
+        // its presence barrier — without them "no reasons" would also be true of a
+        // section that had not rendered.
         await expect(lossSection(page).getByTestId('risk-asset-set-loss-reasons')).toHaveCount(0);
 
         // AND THE WINDOW ITSELF, which is what makes the disclosure actionable: a
@@ -4237,6 +4389,18 @@ test.describe('Asset Global risk laboratory', () => {
         await expect(paidHealth).toBeVisible();
         await expect(paidHealth).toHaveAttribute('data-count', '2');
         await expect(page.getByTestId('risk-asset-set-l3-risk-return'), 'a scatter with no measurable coordinate is not an empty chart, it is no chart').toHaveCount(0);
+
+        // AND NO NOTICE, as the stub makes it. The gate answers the four it stops
+        // `unavailable` with no warning (`_unavailable` takes none), and lets the
+        // drawdown and the matrix through `ok`, unwarned: nothing the lab draws is
+        // partial or carries a sentence. Read off the answers the stub sent rather
+        // than assumed — a short window that one day came back warned would turn the
+        // premise red, by name, instead of leaving the absence below to go stale.
+        const expected = labNoticeFor(await noticeRequestsFor(requests, selected), options);
+        expect(expected.partial, 'premise: a short window answered a result the notice reads partial').toBe(0);
+        expect(expected.sentences, 'premise: a short window planted a warning on a result the notice reads').toBe(0);
+        await waitForNoticeFrames(page);
+        await expect(labNotice(page), "nothing the lab draws is partial or warned, and the lab shows a notice anyway: what did not come back at all is its frame's to say").toHaveCount(0);
     });
 
     /**
