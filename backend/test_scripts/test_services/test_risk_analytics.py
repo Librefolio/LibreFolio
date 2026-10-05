@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 from dataclasses import replace
 from datetime import date, timedelta
@@ -1218,7 +1219,11 @@ def test_historical_replay_auto_excludes_a_missing_original_instead_of_blocking(
 
     assert exc_info.value.code == RiskErrorCode.INSUFFICIENT_HISTORY
     assert str(exc_info.value) == "No asset in the replay scope covers the replay window"
-    assert exc_info.value.details == {"excluded_asset_ids": [2]}
+    # D372 (02/10/2026): the error also names the asset with its reason, weightless on an asset set.
+    assert exc_info.value.details == {
+        "excluded_asset_ids": [2],
+        "excluded_assets": [{"asset_id": 2, "reason": "no_prices_in_window", "weight": None}],
+    }
 
 
 def test_historical_replay_rejects_existing_proxy_without_usable_series():
@@ -1547,7 +1552,74 @@ def test_historical_replay_with_nothing_left_to_replay_is_unavailable(scope_kind
 
     assert exc_info.value.code == RiskErrorCode.INSUFFICIENT_HISTORY
     assert str(exc_info.value) == "No asset in the replay scope covers the replay window"
-    assert exc_info.value.details == {"excluded_asset_ids": [1, 2]}
+    # D372 (02/10/2026): each excluded asset with its reason, and its weight where the scope has weights.
+    weighted = scope_kind == RiskScopeKind.PORTFOLIO
+    assert exc_info.value.details == {
+        "excluded_asset_ids": [1, 2],
+        "excluded_assets": [
+            {"asset_id": 1, "reason": "manual_exclusion", "weight": 0.5 if weighted else None},
+            {"asset_id": 2, "reason": "stale_at_window_end", "weight": 0.25 if weighted else None},
+        ],
+    }
+
+
+# Nothing left to replay, read by the frontend (developer's decision D372 of 02/10/2026). With no
+# replay there is no audit, so the error is the only place the replay block can read *why* each asset
+# is out and how much of a weighted scope it held: `details["excluded_assets"]`, one item per excluded
+# asset ordered by asset id, beside the `excluded_asset_ids` every reader already finds there.
+#
+# Asset ids run against the enum's order, so an answer ordered by reason cannot pass for one ordered
+# by id; the weights are all different and follow neither, so one ordered by weight cannot either.
+NOTHING_LEFT_REASONS = {
+    1: Reason.MISSING_FX,
+    2: Reason.STALE_AT_WINDOW_END,
+    3: Reason.STALE_AT_WINDOW_START,
+    4: Reason.STARTS_AFTER_WINDOW_START,
+    5: Reason.NO_PRICES_IN_WINDOW,
+    6: Reason.MANUAL_EXCLUSION,
+}
+NOTHING_LEFT_WEIGHTS = {1: 0.05, 2: 0.25, 3: 0.1, 4: 0.2, 5: 0.15, 6: 0.12}
+
+
+@pytest.mark.parametrize(
+    "scope_kind",
+    [
+        # B1: a weighted scope names each asset's weight, the very weight of the scope.
+        pytest.param(RiskScopeKind.PORTFOLIO, id="portfolio-names-each-weight"),
+        # B2: an asset set has no weights to name, whatever the context happens to hold.
+        pytest.param(RiskScopeKind.ASSET_SET, id="asset-set-names-no-weight"),
+    ],
+)
+def test_nothing_left_to_replay_names_each_excluded_asset_with_its_reason_and_weight(scope_kind):
+    weighted = scope_kind == RiskScopeKind.PORTFOLIO
+    context = replay_context(
+        {1: [0.1] + [0.0] * 19},
+        scope_kind=scope_kind,
+        scope_asset_ids=tuple(NOTHING_LEFT_REASONS),
+        # The same weights reach both scopes: the asset set must withhold them, not merely lack them.
+        weights=NOTHING_LEFT_WEIGHTS,
+        cash_weight=0.13,
+        manual=(6,),
+        auto={asset_id: reason for asset_id, reason in NOTHING_LEFT_REASONS.items() if reason != Reason.MANUAL_EXCLUSION},
+    )
+
+    with pytest.raises(RiskUnavailableError) as exc_info:
+        replay(context, excluded_assets=[6])
+
+    # The refusal itself is today's (24/09/2026), unchanged.
+    assert exc_info.value.code == RiskErrorCode.INSUFFICIENT_HISTORY
+    assert str(exc_info.value) == "No asset in the replay scope covers the replay window"
+    details = exc_info.value.details
+    assert details["excluded_asset_ids"] == [1, 2, 3, 4, 5, 6]
+
+    # Every reason the engine has, each under its enum value — the string the API carries.
+    expected = [{"asset_id": asset_id, "reason": NOTHING_LEFT_REASONS[asset_id].value, "weight": NOTHING_LEFT_WEIGHTS[asset_id] if weighted else None} for asset_id in sorted(NOTHING_LEFT_REASONS)]
+    assert {item["reason"] for item in expected} == {reason.value for reason in Reason}
+    assert details.get("excluded_assets") == expected, "the nothing-left error must name each excluded asset with its reason and weight (D372), ordered by asset id"
+    # The error crosses the API as it stands: JSON, and nothing in it but what the reader is owed —
+    # no proposal was found here, so none is offered.
+    assert json.loads(json.dumps(details)) == details
+    assert details == {"excluded_asset_ids": [1, 2, 3, 4, 5, 6], "excluded_assets": expected}
 
 
 def test_historical_replay_unusable_proxy_stays_a_parameter_error_beside_automatic_exclusions():
@@ -1676,15 +1748,23 @@ def test_historical_replay_audit_has_no_proposal_when_the_context_has_none():
     assert (audit.suggested_range, audit.suggested_range_recovers) == (None, [])
 
 
+# Since D372 (02/10/2026) the error also names each excluded asset with its reason (weightless: an
+# asset set), with or without a proposal.
+NOTHING_LEFT_EXCLUDED = [
+    {"asset_id": 1, "reason": "manual_exclusion", "weight": None},
+    {"asset_id": 2, "reason": "starts_after_window_start", "weight": None},
+]
+
+
 @pytest.mark.parametrize(
     ("suggested", "expected_details"),
     [
         pytest.param(
             (PROPOSED, (2,)),
-            {"excluded_asset_ids": [1, 2], "suggested_range": {"start": "2026-01-09", "end": "2026-01-21"}, "suggested_range_recovers": [2]},
+            {"excluded_asset_ids": [1, 2], "excluded_assets": NOTHING_LEFT_EXCLUDED, "suggested_range": {"start": "2026-01-09", "end": "2026-01-21"}, "suggested_range_recovers": [2]},
             id="with-a-verified-proposal",
         ),
-        pytest.param(None, {"excluded_asset_ids": [1, 2]}, id="without-one"),
+        pytest.param(None, {"excluded_asset_ids": [1, 2], "excluded_assets": NOTHING_LEFT_EXCLUDED}, id="without-one"),
     ],
 )
 def test_nothing_left_to_replay_carries_the_proposal_in_the_error(suggested, expected_details):
