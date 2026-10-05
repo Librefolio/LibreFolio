@@ -1264,3 +1264,225 @@ Decisione del developer, riportata dal coordinatore: «Correggerlo subito, prima
 > - **`scripts/test_runner/_frontend_transaction.py`**: black vorrebbe riformattarlo e ruff trova 4 errori, ma è identico su HEAD: il file ha uno stile suo, scritto a mano. Non lo tocco.
 
 ### F1 — ✅ pronta per il checkpoint (2026-10-02)
+
+> **F1 committata** dal developer: `e57d08b84` (13 file) e `cf87bb2ff` (journal).
+>
+> **⚠️ Fuori pista — la verifica d'ambiente di `tx-import-file-selection`** (autorizzata dal coordinatore, 2026-10-02):
+> - `test db populate --force --clean` sulla sola `/private/tmp/librefolio-r2-l`, exit 0. Dopo, `broker_reports/{uploaded,parsed,failed}` hanno 0 voci e 0 file.
+> - La spec rilanciata da sola: `2 passed`. La causa era l'ambiente: file BRIM rimasti su disco, ereditati dagli id dei broker riusati. Resta nel backlog del coordinatore.
+> - Una nota per il backlog: `clean_data_dirs` scrive «(0 files)» anche quando cancella le cartelle `broker_N`, perché conta solo i file al primo livello.
+
+### F2 — ⏳ in corso (2026-10-02)
+
+Base `cf87bb2ff`, corsia 6156.
+
+#### F2.0 Contratto (2026-10-02)
+
+Precisa le voci di F.0 su U1–U4; dove F.0 non decideva, la scelta è indicata.
+
+**U2-B · backend** (`schemas/brim.py`, `services/brim_report_sets.py`)
+- `BRIMSetPreview.history_end: Optional[date] = None`: la data della transazione più recente col tag di storia del plugin, come tag esatto.
+- `BRIMSetPreview.history_count: int = 0`: quante transazioni hanno quel tag.
+  - **Precisazione di F.0** («fra H0 e history_end»): si contano tutte, correzioni del gap-fix comprese. Ogni transazione col tag cade già fra la vigilia di H0 e `history_end`, e la correzione di partenza è una transazione salvata come le altre.
+- Una sola query, quella di `_tagged_dates`, dà H0, la fine e il conteggio; `history_start` non cambia. Gli altri broker e i tag che contengono il tag solo come sottostringa non contano.
+- Poi `api sync` nella corsia.
+
+**U2-B · la linea del tempo** (`buildSetTimeline`, funzione pura)
+- Ingresso in più: `members[].rows`, `history_end`, `history_count`.
+- Barre: una per voce di copertura, come oggi, in ordine di inizio, poi di fine. Ogni barra porta `rows`, le righe del suo file (`null` se ignote).
+- Buchi (`gaps`), per ruolo:
+  - si scorrono le barre in ordine di inizio, tenendo la fine più lontana raggiunta, `e`;
+  - una barra che parte dopo `e + 1` apre un buco da `e + 1` alla vigilia del suo inizio, con la stessa aritmetica delle barre;
+  - mai un buco prima della prima barra o dopo l'ultima.
+- Storia: da H0 a `history_end`, e non più fino alla fine della linea. Se `history_end` è prima di H0 (solo una correzione nella storia), la fine è H0. Porta `count` (`history_count`, oppure 0). È `null` senza H0.
+- L'intervallo della linea comprende anche `history_end`. Resta `null` se nessun membro ha una copertura.
+
+**U1-B e U2-B · `ReportSetCard.svelte`**
+- Per ruolo:
+  - il titolo resta: nome, estensioni, storia massima;
+  - i file del ruolo vanno in una **DataTable** dentro `report-set-role-table` (`data-role`), con righe `tr[data-row-id=<file_id>]`;
+  - ordine per inizio del periodo (il minimo degli inizi delle sue coperture), poi per nome; i file senza copertura vanno in fondo;
+  - colonne: file, periodo (inizio → fine), righe;
+  - azioni di riga: il menu `row-actions-<file_id>` con `context-menu-action-preview` e `context-menu-action-delete`; il doppio clic apre l'anteprima;
+  - niente ordinamento, filtri, paginazione né selezione: il set si sceglie intero con `report-set-select`, e l'ordine resta quello chiesto dal developer.
+- I file non riconosciuti stanno a parte: `report-set-unrecognised` (`data-file-id`). `report-set-member` sparisce.
+- Linea del tempo (`report-set-timeline`):
+  - `report-set-timeline-bar`: `data-role`, `data-file-id`, `data-start`, `data-end`, `data-rows`;
+  - `report-set-timeline-gap`: `data-role`, `data-start`, `data-end`, tratteggiato;
+  - `report-set-timeline-history`: `data-start`, `data-end`, `data-count`, nell'ultima riga;
+  - accanto a ogni riga, le date delle sue barre;
+  - legenda `report-set-timeline-legend` con `report-set-timeline-legend-item` (`data-kind` = `file` | `history` | `gap`). `history` e `gap` compaiono solo se ci sono.
+  - Infobox: ogni barra, buco o storia apre un `Tooltip` al passaggio del mouse o al clic (`tooltip-content`). Dentro: inizio e fine (`formatIsoDay`) e il numero di righe del file, oppure delle transazioni in LibreFolio; per un buco, «non coperto».
+- Tutto il resto della card non cambia.
+
+**U1-B · il wizard**: sopra la tabella dei file singoli, il titolo `import-wizard-other-files-<brokerId>` («Altri file di questo broker»), solo se il broker ha anche set.
+
+**U3 · `ParseDetailModal.svelte`**, sezione `parse-detail-pairing` (gli attributi restano)
+- Gli esiti diventano chip `parse-detail-pairing-outcome` (`data-outcome`, `data-count`), tutti e cinque, nell'ordine di `SET_OUTCOMES`; quelli a zero sono attenuati.
+- I motivi vanno in una tabella `parse-detail-pairing-reasons`, con righe `parse-detail-pairing-reason` (`data-reason`, `data-count`): motivo e righe.
+- I comandi:
+  - «Anteprima», `parse-detail-preview-combined`, chiama `onPreview`, che per un set apre già il combinato; c'è solo se `onPreview` c'è;
+  - «Scarica», `parse-detail-download-combined`, resta.
+
+**U4-B · `GapFixStep.svelte`**
+- Restano:
+  - la radice `import-wizard-gapfix`, coi conteggi;
+  - `gapfix-group` e `gapfix-error`;
+  - `gapfix-info-hidden-titles`;
+  - la prop `onToggle(key)`.
+- Prop nuova: `onSetSelected(keys, selected)`.
+- Le card, per gruppo, in ordine di data (a parità di data, prima i punti), sono pulsanti `gapfix-summary`:
+  - attributi: `data-key`, `data-kind` (`opening` | `gap` | `verification`), `data-as-of`, `aria-pressed`;
+  - su un punto, anche `data-proposals` e `data-positions` (le posizioni con differenza diversa da zero); su una verifica, `data-ok`;
+  - contenuto di un punto: titolo con la data, le differenze di cassa diverse da zero (`CurrencyAmount`, quindi mascherabili), quante posizioni e quante correzioni;
+  - contenuto di una verifica: torna o non torna, e la differenza se non torna.
+- **Il clic** (scelta mia: F.0 non distingueva punti e verifiche):
+  - una card diventa il punto attivo (`aria-pressed="true"`, una sola per gruppo); un secondo clic la spegne;
+  - il punto attivo apre `gapfix-point-details` (`data-key`) col confronto completo, coi testid di oggi: `gapfix-checkpoint` con `gapfix-cash-row`, `gapfix-position-row` (quantità mascherabili), `gapfix-explanation` e `gapfix-note`, oppure `gapfix-verification` con `gapfix-verification-cash-row`;
+  - un punto attivo filtra la tabella alle sue correzioni. Una verifica non ne ha, quindi apre il confronto e lascia la tabella intera: una tabella vuota sembrerebbe aver perso le correzioni.
+- **La tabella**: una sola DataTable `gapfix-table` per gruppo (solo se il gruppo propone qualcosa), con righe `tr[data-row-id=<chiave della correzione>]`, attenuate se non selezionate.
+  - Colonne: selezione, Punto (Partenza o Dopo il buco), Data, Tipo con icona, Asset, Qtà (visibile: è una transazione), Cassa (`CurrencyAmount`), Tag (`gap_fix`, oppure «costo da inserire»).
+  - Il selettore è un pulsante `gapfix-proposal-toggle` (`aria-pressed`, `data-key`, `data-type`, `data-date`, `data-point`) in una cella `custom` nuova, perché la cella `editable-checkbox` della DataTable condivisa non ha testid. La DataTable condivisa non si tocca.
+  - Il tipo usa la cella `image` col testo (niente HTML nuovo).
+  - `gapfix-proposal` sparisce.
+- **I comandi della revisione**, per gruppo:
+  - `gapfix-select-all` e `gapfix-deselect-all` agiscono su tutte le correzioni del gruppo;
+  - `gapfix-select-visible` seleziona le righe della pagina mostrata, filtro compreso, e lascia le altre come sono.
+- Il wizard passa `onSetSelected`, che aggiorna `gapFixSelected` in un colpo solo.
+
+**i18n** (`dev.py i18n add`, 4 lingue, solo `importWizard.*`; i nomi definitivi nell'handoff): titolo «Altri file», colonne del set, legenda e infobox, «Punto», etichette brevi dei punti, conteggi di posizioni e correzioni, suggerimento sul filtro, «Anteprima del combinato» e colonna del motivo. Si riusano `common.*`, `importWizard.selectVisible`, `importWizard.reportSet.rows`, `gapFix.checkpointOpening`, `gapFix.checkpointGap`, `gapFix.verificationTitle`, `gapFix.costToEnter` e `gapFix.selectedCount`.
+
+**Test** (test-author, rossi prima, solo dati inventati, corsia 6156):
+- backend: `TestPreviewSet` in `test_brim_report_sets.py` (`services brim-report-sets`);
+- Vitest:
+  - `importReportSets.test.ts`: la linea del tempo, aggiornando il test della storia «fino alla fine»;
+  - `ReportSetCard.test.ts`, nuovo, registrato in `tx-unit`;
+  - `GapFixStep.test.ts`, riscritto sul contratto nuovo;
+  - `ParseDetailModal.test.ts`, la parte U3;
+- E2E: `tx-import-report-set.spec.ts`, coi selettori nuovi e i flussi di U1–U4.
+
+> **Note implementazione — il rosso di F2 (2026-10-02)**, test-author, corsia 6156, solo dati inventati, nessun file di prodotto toccato:
+>
+> | Comando | Esito | Perché è rosso |
+> |---|---|---|
+> | `services brim-report-sets` | 6 rossi, 226 verdi | i 6 test nuovi: `history_end` e `history_count` non esistono |
+> | `front-transaction tx-unit` | 55 rossi, 520 verdi | `importReportSets` 11, `ReportSetCard` 17 (file nuovo), `GapFixStep` 23 (riscritto), `ParseDetailModal` 4 (U3); i test di F1 restano verdi |
+> | `front-transaction tx-import-report-set` | 7 rossi, 3 verdi | R1–R3 su `report-set-role-table`, R4 su `import-wizard-other-files-<id>`, F2-U2 (nuovo) su `report-set-timeline-history`, R5 e R6 su `gapfix-summary` |
+> | `check-orphans` | pulito | — |
+>
+> Le scelte del test-author dove il contratto era aperto:
+> - all'apertura nessun punto è attivo, e ogni gruppo ha il suo;
+> - una card mostra solo le differenze diverse da zero;
+> - card, selettori e «Anteprima» sono `<button>`; i motivi sono `<tr>`;
+> - R5 e R6 assumono che le correzioni stiano in una pagina della tabella;
+> - F2-U2 semina via API due transazioni col tag `danske_bank` e controlla inizio, fine e conteggio della storia.
+>
+> Da ricordare:
+> - **`api sync`** serve perché `history_end` e `history_count` arrivino alla card: zod scarta le chiavi che non conosce.
+> - **Documentazione sviluppatore**: `developer/frontend/components/features/import-wizard.md` descrive ancora `gapfix-proposal`.
+
+> **Note implementazione — la cura di F2 (2026-10-02)**:
+> - **Backend**:
+>   - `BRIMSetPreview` riceve `history_end` e `history_count`;
+>   - `preview_set` legge le transazioni col tag una volta sola (`_tagged_dates`) e ne ricava H0 (`_first_history_day`), le date del gap-fix (`_gap_fix_days`), la fine e il conteggio;
+>   - `history_start` e `gap_fix_dates` restano, e delegano agli stessi helper;
+>   - `api sync` nella corsia.
+> - **`buildSetTimeline`**:
+>   - barre in ordine di inizio, poi di fine, con `rows`;
+>   - `gaps` per ruolo (`gapsBetween`, che tiene la fine più lontana raggiunta);
+>   - storia da H0 a `max(H0, history_end)`, con `count`; l'intervallo comprende la fine della storia.
+> - **`ReportSetCard.svelte`**:
+>   - una DataTable per ruolo (`report-set-role-table`), con ordine fisso: inizio del periodo, poi nome in ordine naturale, e i file senza copertura in fondo;
+>   - menu di riga anteprima/elimina e doppio clic; i non riconosciuti in `report-set-unrecognised`;
+>   - linea del tempo: barre, buchi tratteggiati e storia, ognuno dentro un `Tooltip` (`showDelayMs` 200) col periodo e le righe o le transazioni; legenda; accanto a ogni riga il suo intervallo complessivo.
+> - **Wizard**: il titolo `import-wizard-other-files-<id>` e `setGapFixProposals`, passata come `onSetSelected`.
+> - **`ParseDetailModal.svelte`** (U3): chip degli esiti con emoji, tabella dei motivi, «Anteprima del combinato» (`onPreview`) e «Scarica».
+> - **`GapFixStep.svelte`** (U4-B), riscritto:
+>   - card per punto, ordinate per data;
+>   - punto attivo per gruppo;
+>   - confronto completo in `gapfix-point-details`: gli snippet `checkpointDetails` e `verificationDetails` riprendono il markup di C3;
+>   - una DataTable per gruppo, coi comandi della revisione;
+>   - il selettore è un componente nuovo, `GapFixToggle.svelte`, usato come cella `custom`.
+> - **i18n**, 19 chiavi nuove in 4 lingue (`dev.py i18n add`):
+>   - `importWizard.reportSet.{otherFiles, previewCombined}`;
+>   - `importWizard.reportSet.column.{file, period, rows, reason}`;
+>   - `importWizard.reportSet.timeline.{legendFile, legendHistory, legendGap, gapInfo, historyCount}`;
+>   - `importWizard.reportSet.gapFix.{filterHint, pointOpening, pointGap, positions, corrections, notesCount, noProposals}` e `gapFix.column.point`.
+>
+>   Il francese usa «lot» e lo spagnolo «conjunto», come le chiavi esistenti.
+> - **Primi verdi**:
+>   - `services brim-report-sets`: `232 passed`;
+>   - `front check`: il pavimento, 3 errori e 41 avvisi, nessuno nei file toccati;
+>   - `front-transaction tx-unit`: `575 passed`, al primo giro.
+>
+> **Evidenze** (corsia 6156, un comando per volta):
+>
+> | Verifica | Esito |
+> |---|---|
+> | `services brim-report-sets` / `services brim-parse-pool` / `api brim` | `232` / `8` / `64 passed` |
+> | `front-transaction tx-unit` | `575 passed` (i 55 rossi sono verdi) |
+> | `front-utility core-unit` (coi gate della privacy e degli sink HTML) / `component-unit` / `onboarding-component-unit` | `2704` / `2182` / `409 passed` |
+> | `front check` | il pavimento, 3 errori e 41 avvisi; nessuno nei file toccati |
+> | `front build --debug` | ok |
+> | E2E `tx-import-report-set` | `10 passed` (i 7 rossi sono verdi) |
+> | E2E `tx-import-report-set-guide` / `tx-bulk-import-handoff` / `tx-import-file-selection` | `2` / `2` / `2 passed` |
+> | E2E `tx-import-flow` / `tx-import-upload` / `tx-import-resolution` | `10` / `9` / `12 passed` |
+> | E2E `tx-brim-import` / `tx-ca-contract` | rossi solo T1, CAC-011 e CAC-012, già noti (`tx-ca-contract`: 10 verdi) |
+> | `dev.py lint`, `check-orphans`, `git diff --check` | verdi, pulito |
+> | Privacy: righe aggiunte dal workstream contro i valori reali | 0 collisioni su 27 000 righe |
+> | porta 6156 | libera |
+>
+> **⚠️ Fuori pista — la documentazione**: tre pagine descrivono ancora l'interfaccia di prima:
+> - `developer/frontend/components/features/import-wizard.md`, le sezioni dei set scritte in D, coi testid di C2 e C3;
+> - `developer/architecture/patterns/brim_plugin_guide.md`, i campi della preview;
+> - `user/transactions/import/danske-bank.en.md`, i passi 2–3 e «Align with the bank».
+>
+> Il via di F non copriva la documentazione: ho chiesto al coordinatore se farla in questo checkpoint, col docs-writer, solo EN e senza stamp, o in un F2b.
+
+> **Documentazione di F2 (2026-10-02)**, col permesso del coordinatore: «la doc va dentro questo checkpoint … solo in EN … niente stamp». L'ha fatta il docs-writer:
+> - **`developer/frontend/components/features/import-wizard.md`**, solo le sezioni dei set scritte in D:
+>   - la riga `select` del flusso;
+>   - `buildSetTimeline` nella tabella degli helper;
+>   - il passo `select`: titolo «Other files», tabelle per ruolo, `report-set-unrecognised`, linea del tempo, legenda e infobox;
+>   - l'abbinamento: chip, tabella dei motivi, anteprima e scarica;
+>   - `GapFixStep`: prop, card, punto attivo, `gapfix-point-details`, tabella con `GapFixToggle` e comandi; `gapfix-proposal` è sparito.
+> - **`developer/architecture/patterns/brim_plugin_guide.md`**: la preview con `history_end` e `history_count`, letti insieme a H0 in una sola lettura, e una frase nel paragrafo su H0.
+> - **`user/transactions/import/danske-bank.en.md`**: i passi 2–3, «Align with the bank» e la verifica di fine periodo. Le ancore restano tutte, compresa `{: #first-import-align-with-the-bank }`.
+> - **Gate** del docs-writer:
+>   - `mkdocs build` strict: exit 0, senza warning;
+>   - `mkdocs check-links`: 81 link validi, coi soli 3 🟡 già noti; il rosso D28 non è uscito;
+>   - `translate-validate`: nessun errore dalle modifiche, perché `danske-bank` non ha ancora traduzioni: tutta la pagina aspetta la sua prima traduzione;
+>   - nessuno stamp.
+> - Il docs-writer segnala piccole differenze fra il brief e il codice, e le ha documentate come sono nel codice: intestazioni «Quantity» e «Tags»; tabella del gap-fix ordinabile e paginata a 10; i conteggi di posizioni e note sulla card solo se diversi da zero.
+
+### ⏸ Pausa (2026-10-02), chiesta dal developer tramite il coordinatore
+
+- **Fatto**:
+  - F1 committata (`e57d08b84` + `cf87bb2ff`);
+  - la verifica d'ambiente di `tx-import-file-selection`: verde;
+  - F2: rosso, cura, gate e documentazione, tutto verde (vedi le note sopra).
+- **In corso**: niente. Nessun comando interrotto, nessun server acceso; le porte 6156 e 6166 sono libere (`lsof` vuoto).
+- **Lo stato non committato**: HEAD `cf87bb2ff`, 23 path sporchi (21 M + 2 nuovi: `GapFixToggle.svelte` e `ReportSetCard.test.ts`), compreso questo piano. La `mkdocs build` non ha lasciato effetti collaterali tracciati.
+- **Prossimo passo esatto**, alla ripresa («riprendi»):
+  1. rileggere i diff delle tre pagine di documentazione (controllo mio), poi `git diff --check`;
+  2. mandare al coordinatore `CHECKPOINT READY` F2, con:
+     - i commit proposti: codice (`feat(import): report-set card, timeline and gap-fix review`), docs (`docs(import): report-set card and align-with-the-bank review`), journal;
+     - la nota su `api sync`: i file generati sono ignorati, e all'integrazione il client va rigenerato;
+     - le righe del CHANGELOG;
+     - le esclusioni (log e `.testLog`);
+  3. FROZEN fino agli SHA; poi il riallineamento della baseline col nuovo `dev_release2`, che fa il coordinatore. Lì `dev_release2` porta la correzione dei warning di svelte-check: quei file non li tocco.
+
+### ▶️ Ripresa (2026-10-05), «Riprendi» del coordinatore
+
+- **Stato alla ripresa**: lo stesso della pausa. HEAD `cf87bb2ff`, 23 path, `git diff --check` pulito, porta 6156 libera. La pulizia notturna di `/tmp` ha lasciato la corsia intatta (`app.db` c'è) e anche lo script del controllo privacy. Il client generato ha ancora `history_end`.
+- **La mia revisione dei tre diff della documentazione**:
+  - la guida dei plugin e la pagina sviluppatore del wizard corrispondono al codice. La frase «sets uploaded in this session are selected and open» era già in D, e il codice la conferma (`expandedSets` riceve i set della sessione);
+  - nella pagina utente, l'esito `summarized` riguarda **movimenti** di ogni tipo, non solo trade: il plugin lo assegna anche alle righe di cassa. Ho corretto la parola a mano, «the trades summarised» → «the movements summarised». È l'unica modifica dopo il docs-writer.
+- La guida dell'import (`onboarding.importGuide.steps.gapFix.description`) è generica e resta corretta: «keep or untick the corrections».
+- **Gate della documentazione, rilanciati da me** dopo la correzione:
+  - `mkdocs build` strict: exit 0, «Documentation built», senza warning;
+  - `mkdocs check-links`: 81 link validi, 3 🟡 già noti, nessun D28;
+  - nessun effetto collaterale sui file tracciati (sempre 23 path).
+- **Privacy**, con la documentazione compresa: 0 collisioni su 27 172 righe aggiunte dal workstream.
+
+### F2 — ✅ pronta per il checkpoint (2026-10-05)
