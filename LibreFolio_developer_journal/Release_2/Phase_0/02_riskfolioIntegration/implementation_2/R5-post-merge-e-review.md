@@ -2597,3 +2597,162 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 > selezione, `measuredAssetIds={[]}`, il trattino col tooltip nella riga del riferimento, un solo punto nel grafico
 > (da portare alla revisione del developer), la guida `correlation.en.md:125`, i test che fissavano «mai uno dei
 > confrontati». La riga di CHANGELOG del selettore del laboratorio la riscrivo con D371.
+
+### Le copie dei dati reali in `/tmp` · ✅ 02/10/2026
+
+> Il coordinator ha chiesto di fare pulizia delle copie dei dati reali in `/tmp`. Sono leggibili da tutti
+> (`drwxr-xr-x`) e pesano circa 32 MB l'una. La mia, `/tmp/librefolio-r2-risk-prodcopy` del 28/09, non serviva a
+> nessuna revisione imminente: per la revisione combinata (D15) arriverà una copia nuova, con l'approvazione del
+> developer. L'ho cancellata il 02/10 alle 12:50, dopo un `lsof +D` vuoto e con le porte 6152 e 6162 libere; `ls`
+> conferma che non esiste più. Alle 12:53 ho cancellato anche altri sei file miei legati a quella copia, tutti senza
+> processi aperti. Tre sono i log del server di revisione sulla 6162 (`/tmp/lf_srv6162_review*.log`, con username e
+> richieste sui dati reali, leggibili da tutti). Due sono gli script Playwright di quelle revisioni, con lo username
+> reale (`libreFolio_g1_privacy_shots.cjs` e `libreFolio_repro_correlation_discard.cjs`): prima ne ho salvato una
+> copia privata nei file della sessione (`drwx------`), per la revisione combinata. L'ultimo è la password di quelle
+> revisioni (`/tmp/libreFolio_review_pw`). Le copie di A e di F spettano a loro: ho passato a ciascuno la sua parte.
+
+### F3 — il blocco del replay · ⏳ 02/10/2026
+
+> **Decisioni (D372)**, chieste al developer una alla volta:
+> 1. esclusione manuale: *«Toglierla»*;
+> 2. il pulsante del periodo comune imposta le date **e** rigioca, in un clic;
+> 3. sostituti in L4: *«teniamoli fuori, ma segnalo in todo_futuri con tutta la spiegazione annessa»*. Il testo è
+>    passato al coordinator, che lo registra su `dev_release2`;
+> 4. gli avvisi di esclusione e di copertura: *«Solo nel blocco del replay, vicino al numero»*.
+>
+> **Il piano** (da F3 del Tempo ②, approvato il 24/09):
+> - via il blocco «escludi e riprova» e `replayBlocker`;
+> - gli esclusi per motivo, con nomi e pesi;
+> - l'avviso forte (C3) sopra il totale;
+> - «niente da rigiocare»;
+> - `DateRangePicker` senza pulsanti rapidi;
+> - il pulsante del periodo comune (C2), con la nota «solo una parte della crisi»;
+> - il menu delle crisi che si apre dove c'è spazio.
+>
+> Si aggiungono due cose:
+> - la vista `replaySectionView`, che i montaggi di A e di F passano alla sezione;
+> - nel backend, i motivi e i pesi degli esclusi anche quando non resta niente da rigiocare.
+>
+> **Passi**:
+> 1. ⏳ rossi (test-author): backend, `scenarioHelpers`, `L4Replay`, i due montaggi, gli E2E del replay;
+> 2. ⏳ codice e i18n;
+> 3. ⏳ revisione visiva col developer;
+> 4. ⏳ guida;
+> 5. ⏳ checkpoint.
+>
+> **⚠️ Fuori pista — due cose che il piano descriveva male, trovate prima di scrivere codice**:
+> - **I motivi di esclusione si vedevano già**, con i nomi, nell'elenco ambra in cima alla sezione L4: vengono dagli
+>   avvisi del backend. Mancavano i pesi, e mancava la vicinanza al numero. Da qui la quarta domanda al developer.
+> - **Esiste una terza superficie del replay.** La scheda rischio di Asset Detail (`RiskAnalysisPanel.svelte`, scope
+>   `asset`) ha un replay suo, con date native, un selettore di sostituto per l'asset stesso e una casella «escludi».
+>   Al developer avevo detto che nessuno sceglie un sostituto: era inesatto. L'ho corretto nel testo di TODO_FUTURI,
+>   con le coppie di correzione mandate al coordinator prima del commit. F3 resta su L4.
+>
+> **Concessioni chieste**:
+> - ad A: `RiskLevelsPanel.svelte:174`, un solo termine;
+> - a F: `AssetSetReplaySection.svelte` `:108` e `:111`, il suo test `:309`, e i casi replay di `risk-lab.spec.ts`.
+>
+> **⏸️ Pausa del developer (02/10, ~13:30)**, chiesta dal coordinator a tutte le sessioni.
+> - **Fatto**:
+>   - le quattro decisioni D372, e D372 nel registro 04;
+>   - le concessioni di A (`RiskLevelsPanel:174`) e di F (`AssetSetReplaySection` `:108/:111`, il suo test `:309`, i
+>     casi replay di `risk-lab.spec.ts`, il punto 📌 del docblock);
+>   - le bozze del codice, fuori dal worktree, nei file della sessione (`f3-draft/`): helper, componente, i18n,
+>     backend, montaggi.
+> - **In corso**: test-author scrive i rossi. Al momento della pausa erano toccati due file di test del backend
+>   (`test_risk_analytics.py`, `test_risk_eligibility.py`); nessuna corsa in esecuzione, 6152 e 6162 libere.
+> - **⚠️ Fuori pista**: test-author non si può fermare a metà turno. Il messaggio di pausa gli è stato consegnato e
+>   lo legge al primo confine; i file che ha scritto restano nel worktree, non committati.
+> - **Prossimo passo, alla ripresa**: leggere il rapporto di test-author (file e sha256, rossi registrati e
+>   mancanti); fargli finire i rossi; poi applicare le bozze, i18n con `dev.py i18n`, e le verifiche.
+>
+> **▶️ Ripresa (05/10, 09:49)**, con il «riprendi» del coordinator.
+> - **⚠️ Fuori pista — test-author interrotto dalla rete**: il 02/10 il primo test-author si è fermato su un errore
+>   DNS verso il servizio del modello, non su un test. Aveva finito i rossi del backend (11, tutti sul campo mancante
+>   `excluded_assets`) e quelli degli helper (43 casi; 31 rossi su export mancanti). Per controllare che i test
+>   fossero soddisfacibili aveva lasciato nel worktree un file scratch con un'implementazione di riferimento. Il
+>   file è uscito dal worktree, ed è conservato con le prove in `/tmp/libreFolio_f3_reds/`.
+> - **Backend fatto**: in `stress.py::_historical`, quando non resta niente da rigiocare, i dettagli dell'errore
+>   portano anche `excluded_assets`, con asset, motivo e peso, e il peso solo sui portafogli. `weighted_scope` e i
+>   motivi ora si calcolano una volta sola, prima del ramo. `algorithm_version` resta 3.0.0, come per l'esclusione
+>   automatica: un dettaglio dell'errore in più non cambia il calcolo.
+>   - verifica: `risk-all` 810 verdi;
+>   - mutanti 2 su 2 uccisi: il peso senza la guardia dei portafogli fa 5 rossi, il motivo sempre «manuale» ne fa
+>     11; ripristino verificato con sha256.
+> - **Helper fatti**, in `scenarioHelpers.ts`: 42 test verdi su 43. L'unico rosso, «`replayBlocker` non più
+>   esportato», si chiude con la riscrittura del componente; fino ad allora `replayBlocker` resta, così i rossi del
+>   componente si registrano sul codice di oggi.
+> - **Il test della data del 1019 risponde a una domanda aperta**: oggi il backend rifiuta il replay perché tutti gli
+>   asset risultano «quotati dopo l'inizio» e propone già il periodo comune. Dopo F3 la schermata mostrerà «niente da
+>   rigiocare», i motivi e il pulsante del periodo comune.
+> - **In corso**: un nuovo test-author scrive i rossi che mancano: il componente, il montaggio del laboratorio, gli E2E.
+>
+> **Passo 1 — rossi ✅ (05/10)**. Il secondo test-author ha scritto quelli che mancavano, tutti rossi sul codice di
+> prima e per il motivo giusto:
+> - `L4Replay.test.ts`, riscritto: 25 casi, 19 rossi;
+> - `AssetSetReplaySection.test.ts`: 3 rossi. Il caso `:309`, sul principio delle chiavi del backend, ora usa
+>   l'avviso dei prezzi fermi, che resta nella sezione;
+> - E2E `risk`: 3 rossi. Il test bloccato è sostituito al suo posto, e sono riallineate le righe del replay nel test
+>   di A sul livello 4, che secondo la tabella dei proprietari spettano a me;
+> - E2E `risk-lab`: 2 rossi.
+> I file di A e di F sono toccati solo nei punti concessi.
+>
+> **Passo 2 — codice ✅ (05/10)**:
+> - via `replayBlocker`;
+> - `L4Replay.svelte` riscritto: `DateRangePicker` senza preset, menu `auto`, avviso forte sopra il totale,
+>   esclusi per motivo con nomi e pesi, «niente da rigiocare», periodo comune in un clic con la nota;
+> - i18n con `dev.py i18n`: 13 chiavi nuove e 6 tolte;
+> - i due montaggi passano `replaySectionView`, e il laboratorio ora dice anche gli errori del risultato;
+> - **⚠️ Fuori pista — l'italiano del pulsante**: «Rigioca dal {start} al {end}» avrebbe dato «dal 8 ott» invece di
+>   «dall'8». Ora è «Rigioca il periodo {start} – {end}: tornano N asset»;
+> - **⚠️ Fuori pista — la nota «solo una parte della crisi»** nella bozza guardava la crisi scelta nel menu, anche
+>   dopo una correzione a mano delle date. Ora guarda la crisi su cui il replay è stato chiesto (`askedCrisis`).
+>   Nessun test lo copriva, e il mutante M4 è sopravvissuto. test-author ha aggiunto il caso: si sceglie la crisi,
+>   si sposta la data d'inizio dentro la crisi, e la nota non deve comparire. È l'unico rosso sotto M4 e diventa
+>   verde sul codice vero (26 su 26).
+>
+> **Verifica**:
+> - vitest 78/78;
+> - `risk-levels-unit` 296, `risk-levels-component` 91, `component-unit` 2359;
+> - E2E `risk` 14 e `risk-lab` 31;
+> - orfani ✅; i18n 3508 chiavi, tutte tradotte;
+> - `front check` al pavimento (3 errori e 41 avvisi, nessuno nei miei file); prettier, ruff e black puliti.
+> - Mutanti uccisi 9 su 9, ripristino verificato con sha256:
+>   - la riga forte sotto il totale;
+>   - la vista della sezione che tiene gli avvisi, e quella che tiene l'errore;
+>   - il pulsante che non rigioca;
+>   - «residuo» che vince su «omesso»;
+>   - il laboratorio senza gli errori del risultato;
+>   - il selettore con i preset;
+>   - in E2E, la Dashboard senza la vista;
+>   - M4, la nota legata alla crisi scelta e non a quella chiesta, ucciso dal caso nuovo: 9 su 9.
+>
+> **Passo 3 — revisione visiva: rinviata, per scelta del developer (05/10)**. Avverrà dentro la revisione combinata
+> che segue l'aggiornamento della famiglia a `dev_release2` (D15 di I, anello della torta, margini, soglia delle
+> palette): una sola copia nuova dei dati, una sola sessione. Le eventuali correzioni faranno un giro successivo.
+>
+> **Passo 4 — guida ✅ (docs-writer, solo EN, la pagina non ha traduzioni)**. In `historical-replay.en.md` la
+> sezione «Holdings Without Enough History» diceva che l'analisi «refuses to run and asks for a decision». Ora
+> descrive l'esclusione automatica, in cinque sottosezioni con le loro ancore:
+> - i motivi, con le etichette che mostra lo schermo;
+> - il trattamento, liquidità a rendimento zero oppure omissione;
+> - cosa mostra il risultato;
+> - il periodo comune e il suo compromesso;
+> - i sostituti, che restano solo nella scheda dell'asset.
+> Anche «Interpretation» è riallineata. `mkdocs build` (strict) è pulito; `check-links` dà 88 link validi e 0 rotti.
+> Una frase superata nella guida di F (`correlation.en.md`, What If…?) l'ho passata a F.
+>
+> **Verifica finale sul codice vero** (6152): `risk-levels-unit` 296 · `risk-levels-component` 92 · E2E `risk` 14 ·
+> E2E `risk-lab` 31. Prima di questo giro l'ultima build era stata compilata con il mutante M9; il runner l'ha rifatta
+> dal codice vero.
+>
+> **Le concessioni usate**:
+> - A, `RiskLevelsPanel.svelte`: il termine `replaySectionView`, il suo import e tre righe di commento sopra
+>   `l4Results`;
+> - F, `AssetSetReplaySection.svelte`: `:108` e `:111`, i due import, il punto 📌 del docblock; il suo test, al
+>   `:309` e nel cablaggio;
+> - F, `risk-lab.spec.ts`: il cancello e lo stub del replay;
+> - in `risk-analysis.spec.ts`, che è di A, solo le parti del replay, che la tabella dei proprietari assegna a me.
+>
+> **Passo 5 — checkpoint**: cinque gruppi (backend · blocco e montaggi · E2E · guida · journal). CHANGELOG al
+> coordinator.
