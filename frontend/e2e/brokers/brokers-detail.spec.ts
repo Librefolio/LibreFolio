@@ -2,7 +2,11 @@ import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {expectChartCanvas, showChartTooltip} from '../fixtures/charts';
 import {TEST_USER} from '../fixtures/test-users';
+import {uniqueSuffix} from '../fixtures/unique';
+import path from 'path';
+import {fileURLToPath} from 'url';
 import {appears} from '../fixtures/probe';
+import {lotIsOpenish, type LotOpenish} from '../../src/lib/components/brokers/lots/lotsAnalysisHelpers';
 
 /**
  * Ensure at least one broker exists for the test user.
@@ -571,6 +575,355 @@ test.describe('Broker Detail Page', () => {
 });
 
 /**
+ * The lots charts must never merge their responsive x-axis patch into a chart that holds no option.
+ *
+ * The defect: `TypeError: Cannot read properties of undefined (reading 'axisBuilder')`, thrown by
+ * ECharts 6's `CartesianAxisView.render`. Each lots chart watches its container with a
+ * ResizeObserver and, when the usable width is compact (< 480 px), merges a lazy patch
+ * `setOption({xAxis: {splitNumber, axisLabel}}, {lazyUpdate: true})`. Merged into an instance that
+ * `renderChart()` has just `init()`-ed or `clear()`-ed because there is nothing to draw, it leaves a
+ * model with one x-axis and no grid, and the next ECharts frame throws. That frame belongs to
+ * ECharts' own loop, not to anything a test awaits, so the only reliable observable is the uncaught
+ * exception: every test here collects `pageerror` from before its first navigation and ends on that
+ * list being empty.
+ *
+ * Two UI triggers are pinned:
+ * - the Gantt Open/Closed filter narrowed to a state that leaves no lane — deterministic: the sticky
+ *   axis node is unmounted, its instance cleared, and the ResizeObserver still reports the removed
+ *   node at width 0, which is compact by definition;
+ * - the phone load path of the comparison chart — racy on its own (it depends on when the selection
+ *   response lands), made deterministic by holding that response.
+ *
+ * The WAC/price chart has the same site but no UI path reaches its cleared state today; its pin is
+ * the source contract in `chartCoreHelpers.test.ts`.
+ */
+
+/** The narrowest common phone width, and the house way to get it inside a desktop-project test
+ *  (see dashboard.spec.ts): at 375 px the comparison chart's usable width is below the 480 px
+ *  threshold, so its policy is compact and the patch path is live from the first paint. */
+const PHONE_VIEWPORT = {width: 375, height: 800};
+
+/** An asset held on Interactive Brokers whose every lot is open-ish. */
+interface AllOpenLotsAsset {
+    id: number;
+    name: string;
+}
+
+/** The two fields `lotIsOpenish` reads, plus the id the selection request needs. */
+type ProbedLot = LotOpenish & {lot_id: number};
+
+/** The uncaught exceptions of one test, and the step each one arrived in. */
+interface PageErrorLog {
+    /** Every entry reads `[step] message <- frame <- frame <- frame`. */
+    readonly list: string[];
+    /** Name the step that starts now; call it right before the action that begins the step. */
+    mark(step: string): void;
+}
+
+/**
+ * Collect every uncaught exception the page raises, tagged with the step it arrived in.
+ *
+ * Registered before the first navigation because the defect throws from ECharts' frame loop, in a
+ * frame no action of the test awaits — a listener armed later could miss it. The stack of such a
+ * throw is ECharts' own (the axis view, called from its frame loop) and never names the chart, so
+ * the step is what tells the triggers apart: several lots charts share the defect and more than one
+ * trigger is live at 375 px. Page errors and command replies travel in order, so an error thrown
+ * before a step's last await returned carries that step's name.
+ */
+function collectPageErrors(page: Page): PageErrorLog {
+    const list: string[] = [];
+    let current = 'login';
+    page.on('pageerror', (error) => {
+        const frames = (error.stack ?? '')
+            .split('\n')
+            .slice(1, 4)
+            .map((line) => line.trim());
+        list.push([`[${current}] ${error.message}`, ...frames].join(' <- '));
+    });
+    return {
+        list,
+        mark: (step) => {
+            current = step;
+        },
+    };
+}
+
+/** One `POST /portfolio/lots/analysis`, read-only, failing loudly on a non-2xx. */
+async function lotsAnalysis(page: Page, body: {asset_id: number; broker_ids: number[]; selected_lot_ids?: number[]; requested_analyses: string[]}): Promise<Record<string, unknown>> {
+    const response = await page.request.post('/api/v1/portfolio/lots/analysis', {data: body});
+    expect(response.ok(), `lots analysis ${body.requested_analyses.join('+')} for asset ${body.asset_id} answered ${response.status()}`).toBe(true);
+    return (await response.json()) as Record<string, unknown>;
+}
+
+/**
+ * Find an Interactive Brokers holding whose lots are all open-ish, with a value history to draw.
+ *
+ * Why this shape: the Open/Closed filter is tri-state and exclusive per lot (`filterVisibleLots`:
+ * both off means both on; an open-ish lot lands only in the open bucket), so a single state empties
+ * the Gantt only for an asset whose lots are all in the other one. Turning "Open" off on an all-open
+ * asset leaves no lane. The value history is required because the comparison chart stays hidden
+ * without one, and the tests below wait for it to show data.
+ *
+ * Why read-only on the mock rather than self-owned data: an asset with lots means committed
+ * transactions, and `Transaction` has no `user_id` — every other worker would see them, and the
+ * test would owe a cleanup. The mock already ships such holdings and nothing here writes.
+ *
+ * Why this is safe beside neighbours: no test in this file writes transactions or lots, and the
+ * candidates are walked in ascending `asset_id`, so the seeded assets (created by
+ * populate_mock_data.py before any test runs) come first and an asset created by another spec is
+ * only reached if no seeded one qualifies. The choice is a state checked right before use and
+ * checked again in the UI after the toggle, so a concurrent writer can only make the precondition
+ * fail loudly, never turn the test into a silent pass.
+ *
+ * The predicate is the product's own `lotIsOpenish`, imported rather than restated, so the probe
+ * and the filter cannot disagree about which bucket a lot belongs to.
+ */
+async function findAllOpenLotsAsset(page: Page, brokerId: number): Promise<AllOpenLotsAsset> {
+    const summaryResponse = await page.request.get(`/api/v1/brokers/${brokerId}/summary`);
+    expect(summaryResponse.ok(), `broker ${brokerId} summary answered ${summaryResponse.status()}`).toBe(true);
+    const summary = (await summaryResponse.json()) as {holdings?: {asset_id: number; asset_name: string}[] | null};
+    const candidates = new Map<number, string>();
+    for (const holding of summary.holdings ?? []) candidates.set(holding.asset_id, holding.asset_name);
+
+    const verdicts: string[] = [];
+    for (const [id, name] of [...candidates].sort(([a], [b]) => a - b)) {
+        const analysis = await lotsAnalysis(page, {asset_id: id, broker_ids: [brokerId], requested_analyses: ['LOT_SUMMARY']});
+        const lots = (Array.isArray(analysis.lots) ? analysis.lots : []) as ProbedLot[];
+        const closed = lots.filter((lot) => !lotIsOpenish(lot)).length;
+        if (lots.length === 0 || closed > 0) {
+            verdicts.push(`${id} ${name}: ${lots.length} lots, ${closed} closed`);
+            continue;
+        }
+
+        // The same request the panel's selection step sends for an implicit "all lots" selection.
+        const histories = await lotsAnalysis(page, {asset_id: id, broker_ids: [brokerId], selected_lot_ids: lots.map((lot) => lot.lot_id), requested_analyses: ['VALUE_HISTORY', 'RETURN_HISTORY']});
+        if (!Array.isArray(histories.value_history) || histories.value_history.length === 0) {
+            verdicts.push(`${id} ${name}: all ${lots.length} lots open, no value history`);
+            continue;
+        }
+
+        // Which asset a green run exercised, for whoever reads the report next.
+        test.info().annotations.push({type: 'all-open-lots asset', description: `${id} ${name}`});
+        return {id, name};
+    }
+
+    throw new Error(`No ${BROKER_WITH_HOLDINGS} holding has only open lots and a value history, so no single state filter can empty its Gantt — check populate_mock_data.py. Candidates: ${verdicts.join('; ') || 'none'}`);
+}
+
+/** Interactive Brokers' id, read back from the page the helper landed on, and the asset to use. */
+async function resolveAllOpenLotsAsset(page: Page): Promise<{brokerId: number; asset: AllOpenLotsAsset}> {
+    await goToBrokerWithHoldings(page);
+    const brokerId = Number(new URL(page.url()).pathname.split('/').filter(Boolean).pop());
+    expect(Number.isFinite(brokerId), 'the detail URL carries the broker id').toBe(true);
+    return {brokerId, asset: await findAllOpenLotsAsset(page, brokerId)};
+}
+
+/** The deep link the page writes itself (`?tab=posizioni&asset=`), so the panel mounts at the
+ *  viewport under test from its first paint instead of after a desktop-sized layout. */
+function lotsPanelUrl(brokerId: number, assetId: number): string {
+    return `/brokers/${brokerId}?tab=posizioni&asset=${assetId}`;
+}
+
+/** The render counter `attachChartReady` publishes on a chart container. */
+async function chartRenders(chart: Locator): Promise<number> {
+    return Number((await chart.getAttribute('data-chart-renders')) ?? '0');
+}
+
+/**
+ * Let the page run `count` rendering frames.
+ *
+ * Not a clock wait: it counts frames, not milliseconds, and the defect is scheduled on frames. A
+ * ResizeObserver callback runs in a frame's rendering step; the Gantt merges its patch right there,
+ * the comparison chart one requestAnimationFrame later; ECharts applies a lazy patch on the next
+ * tick of its own rAF loop, and that tick is where it throws. Three frames cover the longest of
+ * those chains, and on a slow machine each frame is simply longer. The promise settles in the page,
+ * so any pageerror raised in those frames reaches the test before this call returns: the protocol
+ * delivers events and replies in order.
+ */
+async function runFrames(page: Page, count = 3): Promise<void> {
+    await page.evaluate(
+        (frames) =>
+            new Promise<void>((resolve) => {
+                const step = (left: number): void => {
+                    if (left === 0) resolve();
+                    else requestAnimationFrame(() => step(left - 1));
+                };
+                step(frames);
+            }),
+        count,
+    );
+}
+
+/**
+ * Open the lots panel on `asset` and wait until it has settled with data.
+ *
+ * The title barrier comes first on purpose. The panel's currency prop is the asset's own currency
+ * once the asset cache resolves (the base currency before), and a currency change re-issues the
+ * main request, which swaps every chart for the loading skeleton and mounts it again. The title
+ * gains the asset name in the same update, so once it shows, the charts found afterwards are the
+ * final ones and cannot be remounted under the test's feet.
+ */
+async function openLotsPanelSettled(page: Page, brokerId: number, asset: AllOpenLotsAsset): Promise<void> {
+    await navigateTo(page, lotsPanelUrl(brokerId, asset.id));
+    await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 10_000});
+    await expect(page.getByTestId('lots-analysis-panel-title')).toContainText(asset.name, {timeout: 10_000});
+
+    // The Gantt has drawn its lanes, the sticky axis the defect patches is mounted, and the
+    // comparison chart shows data (it stays `invisible` while it has nothing to draw).
+    await expect(page.getByTestId('lot-gantt-echart')).toHaveAttribute('data-chart-ready', 'true', {timeout: 20_000});
+    await expect(page.getByTestId('lot-gantt-sticky-axis')).toBeVisible();
+    await expect(page.getByTestId('lot-comparison-echart')).toBeVisible({timeout: 20_000});
+}
+
+/**
+ * Turn "Open" off so no lane is left, let the defect's frames run, then turn it back on.
+ *
+ * Turning "Open" off leaves only closed lots, which this asset has none of: `chartHasData` goes
+ * false, both chart containers unmount, `renderChart()` clears both instances, and the
+ * ResizeObserver still watching the removed axis node fires at width 0 — on the current code, the
+ * patch lands on the cleared axis instance here.
+ *
+ * The frame wait sits before turning "Open" back on because that remount disposes the old axis
+ * instance, and a disposed instance skips its pending frame: restoring too early could cancel the
+ * very throw this test exists to see. It also orders the evidence: the throw happens on the frame
+ * after the removal, the remounted chart can only report ready on a later one, and the pageerror
+ * reaches the test before the answer to any later poll.
+ */
+async function emptyThenRestoreGantt(page: Page, asset: AllOpenLotsAsset, pageErrors: PageErrorLog): Promise<void> {
+    const filterOpen = page.getByTestId('lot-gantt-filter-open');
+    const lanes = page.getByTestId('lot-gantt-echart');
+
+    await expect(filterOpen).toHaveAttribute('aria-pressed', 'true');
+    pageErrors.mark('emptying the Gantt');
+    await filterOpen.click();
+    await expect(filterOpen).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByTestId('lot-gantt-filter-closed')).toHaveAttribute('aria-pressed', 'true');
+
+    // Verified, not assumed: the probe said every lot is open, and this is the UI agreeing. The
+    // filter control is still on screen, so "no lanes" cannot be "no Gantt at all".
+    await expect(page.getByTestId('lot-gantt-state-filter')).toBeVisible();
+    await expect(lanes, `${asset.name} (asset ${asset.id}) still draws Gantt lanes with only closed lots shown, so it has a closed lot after all — the mock changed (populate_mock_data.py) or something wrote to this asset during the run`).toHaveCount(0);
+    await expect(page.getByTestId('lot-gantt-sticky-axis')).toHaveCount(0);
+
+    await runFrames(page);
+
+    pageErrors.mark('restoring the Gantt');
+    await filterOpen.click();
+    await expect(filterOpen).toHaveAttribute('aria-pressed', 'true');
+    await expect(lanes).toHaveAttribute('data-chart-ready', 'true', {timeout: 10_000});
+}
+
+/**
+ * Hold every selection request (the lots-analysis POST that asks for VALUE_HISTORY) until release.
+ *
+ * The panel fetches in two steps: the main analysis (lots, Gantt, WAC — no `selected_lot_ids`),
+ * then, once the lots are known, the value/return histories of the selection. The comparison chart
+ * mounts between the two with nothing to draw and clears itself: that window is the defect's, and
+ * the network decides how long it stays open. Holding the second request keeps it open as long as
+ * the test needs, without touching the first. After release, later selection requests pass through.
+ */
+async function holdSelectionHistories(page: Page): Promise<{held: () => number; release: () => Promise<void>}> {
+    const pending: Array<() => Promise<void>> = [];
+    let heldTotal = 0;
+    let released = false;
+    await page.route(/\/api\/v1\/portfolio\/lots\/analysis(\?.*)?$/, async (route) => {
+        const body = route.request().postDataJSON() as {requested_analyses?: unknown} | null;
+        const analyses = Array.isArray(body?.requested_analyses) ? body.requested_analyses : [];
+        if (!released && analyses.includes('VALUE_HISTORY')) {
+            heldTotal += 1;
+            pending.push(() => route.continue());
+            return;
+        }
+        await route.continue();
+    });
+    return {
+        held: () => heldTotal,
+        release: async () => {
+            released = true;
+            await Promise.all(pending.splice(0).map((resume) => resume()));
+        },
+    };
+}
+
+test.describe('Lots charts axisBuilder guard', () => {
+    // No beforeEach on purpose: each test arms its pageerror collector before its first navigation,
+    // login included, so nothing the pages do can throw unseen.
+
+    test('Gantt state filter leaving no lane keeps the sticky axis error-free on desktop', async ({page}) => {
+        // Login, the broker page, the probe requests and a full panel load before the action.
+        test.setTimeout(60_000);
+        const pageErrors = collectPageErrors(page);
+        await login(page, TEST_USER);
+        pageErrors.mark('broker page and asset probe');
+        const {brokerId, asset} = await resolveAllOpenLotsAsset(page);
+
+        // Default desktop viewport: the comparison chart is wide here and never patches, so this case
+        // isolates the Gantt's sticky axis.
+        pageErrors.mark('opening the lots panel');
+        await openLotsPanelSettled(page, brokerId, asset);
+        await emptyThenRestoreGantt(page, asset, pageErrors);
+
+        expect(pageErrors.list, `uncaught page errors while ${asset.name} (asset ${asset.id}) had its Gantt emptied by the state filter and restored at 1280 px — "axisBuilder" is the responsive x-axis patch merged into a cleared chart`).toEqual([]);
+    });
+
+    test('Gantt state filter leaving no lane keeps the sticky axis and the comparison chart error-free at 375 px', async ({page}) => {
+        test.setTimeout(60_000);
+        const pageErrors = collectPageErrors(page);
+        await login(page, TEST_USER);
+        pageErrors.mark('broker page and asset probe');
+        const {brokerId, asset} = await resolveAllOpenLotsAsset(page);
+
+        // Phone width from the panel's first paint: the Gantt path as on desktop, plus the comparison
+        // chart, which unmounts with the empty selection and remounts cleared when "Open" comes back.
+        await page.setViewportSize(PHONE_VIEWPORT);
+        pageErrors.mark('opening the lots panel');
+        await openLotsPanelSettled(page, brokerId, asset);
+        await emptyThenRestoreGantt(page, asset, pageErrors);
+
+        // The comparison chart shows data again only once the new selection response has landed; a
+        // throw from its cleared remount has happened by then.
+        await expect(page.getByTestId('lot-comparison-echart')).toBeVisible({timeout: 20_000});
+
+        expect(pageErrors.list, `uncaught page errors while ${asset.name} (asset ${asset.id}) had its Gantt emptied by the state filter and restored at 375 px — "axisBuilder" is the responsive x-axis patch merged into a cleared chart`).toEqual([]);
+    });
+
+    test('opening the lots panel at 375 px with the selection histories held keeps the comparison chart error-free', async ({page}) => {
+        test.setTimeout(60_000);
+        const pageErrors = collectPageErrors(page);
+        await login(page, TEST_USER);
+        pageErrors.mark('broker page and asset probe');
+        const {brokerId, asset} = await resolveAllOpenLotsAsset(page);
+
+        // Armed before the navigation: the selection request leaves as soon as the main one lands.
+        const selection = await holdSelectionHistories(page);
+        await page.setViewportSize(PHONE_VIEWPORT);
+        pageErrors.mark('opening the lots panel, histories held');
+        await navigateTo(page, lotsPanelUrl(brokerId, asset.id));
+        await expect(page.getByTestId('lots-analysis-panel-title')).toContainText(asset.name, {timeout: 10_000});
+
+        // The state the defect needs, verified: the chart is mounted, has painted its cleared frame,
+        // shows nothing (it stays `invisible` without data), and its histories are really held.
+        const comparison = page.getByTestId('lot-comparison-echart');
+        await expect(comparison).toBeAttached({timeout: 20_000});
+        await expect.poll(() => selection.held(), {message: 'the selection request must be held, or the chart is not in the state this test is about', timeout: 10_000}).toBeGreaterThan(0);
+        await expect.poll(() => chartRenders(comparison), {timeout: 10_000}).toBeGreaterThanOrEqual(1);
+        await expect(comparison).toBeHidden();
+
+        // ResizeObserver → rAF (patch) → ECharts frame (throw): let that chain finish before the data
+        // can arrive, so the release cannot pre-empt it.
+        await runFrames(page);
+
+        const before = await chartRenders(comparison);
+        pageErrors.mark('releasing the histories');
+        await selection.release();
+        await expect(comparison).toBeVisible({timeout: 20_000});
+        await expect.poll(() => chartRenders(comparison), {message: 'the comparison chart must paint the released histories', timeout: 10_000}).toBeGreaterThan(before);
+
+        expect(pageErrors.list, `uncaught page errors while ${asset.name} (asset ${asset.id}) loaded its lots panel at 375 px with the selection histories held — "axisBuilder" is the responsive x-axis patch merged into a cleared chart`).toEqual([]);
+    });
+});
+
+/**
  * GrowthChart P&L mode on a broker page (phase I70).
  *
  * The regression this block exists for: the broker page mounted `<GrowthChart>`
@@ -596,10 +949,19 @@ test.describe('Broker Detail Page', () => {
 
 type BrokerPnlSubmode = 'line' | 'candles' | 'income';
 
-/** `EUR 1,234.56` / `EUR -12.30` — an unsigned tooltip amount (the OHLC rows). */
-const BROKER_PLAIN_AMOUNT = /^[A-Z]{3}\s-?[\d.,]+$/;
-/** `+EUR 359.04` / `−EUR 12.00` — a signed tooltip amount (P&L rows; U+2212). */
-const BROKER_SIGNED_AMOUNT = /^[+\u2212][A-Z]{3}\s[\d.,]+$/;
+/**
+ * `EUR 1,234.56` / `EUR -12.30` — an unsigned tooltip amount (the OHLC rows). The
+ * minus is the browser locale's own (D23): ASCII in English, U+2212 in Swedish.
+ */
+const BROKER_PLAIN_AMOUNT = /^[A-Z]{3}\s[-\u2212]?[\d.,]+$/;
+/**
+ * `EUR +359.04` / `EUR -12.00` / `EUR 0.00` — a P&L or income tooltip amount.
+ * One form for every signed row (D23b): the sign after the currency, the minus
+ * the locale's own, ASCII or U+2212 (D23). Sign optional: a zero carries none, by
+ * design (a green zero read as a gain), so a signed-only pattern stops counting a
+ * row on the day its value is zero.
+ */
+const BROKER_AMOUNT = /^[A-Z]{3}\s[+\-\u2212]?[\d.,]+$/;
 
 interface BrokerReportCall {
     body: Record<string, unknown> & {broker_ids?: number[]};
@@ -728,19 +1090,26 @@ test.describe('Broker detail — GrowthChart P&L mode', () => {
         await chart.getByTestId('growth-toggle-pnl').click();
 
         // Line: the total P&L row, and nothing but it — this mount has no
-        // per-broker overlay to add a second row (plan §3.3).
+        // per-broker overlay to add a second row (plan §3.3). Counted by ROW, not by
+        // sign: every value row of the tooltip is `<span>label</span><b>value</b>`,
+        // so "one value cell, and it is an amount" is exact whatever the total is at
+        // the pointer — a zero total prints unsigned, and an overlay row with no
+        // value that day would print `—`, which an amount count would never see.
         await selectBrokerSubmode(chart, 'line');
-        await showChartTooltip(page, chart, chart.getByText(BROKER_SIGNED_AMOUNT), 10_000, 1);
-        await expect(chart.getByText(BROKER_SIGNED_AMOUNT)).toHaveCount(1);
+        await showChartTooltip(page, chart, chart.getByText(BROKER_AMOUNT), 10_000, 1);
+        await expect(chart.locator('div > span + b'), 'exactly one value row, the total P&L — an amount, sign optional').toHaveText([BROKER_AMOUNT]);
 
-        // Income: dividend, interest and their total — three signed rows at the
-        // floor, which a submode that never bound its income series could not
-        // produce. Not an exact count: the batch-2 rows (costs, deposit,
-        // acquisition) are sparse and only join on a day that had that activity,
-        // so an equality would pin which day the pointer happened to land on.
+        // Income: dividend, interest and their total — three rows at the floor,
+        // which a submode that never bound its income series could not produce.
+        // Not an exact count: the batch-2 rows (costs, deposit, acquisition) are
+        // sparse and only join on a day that had that activity, so an equality
+        // would pin which day the pointer happened to land on. Sign optional for
+        // the same reason: the three are always written, but on a week without a
+        // dividend or an interest payment all three are zero, and a zero is unsigned.
         await selectBrokerSubmode(chart, 'income');
-        await showChartTooltip(page, chart, chart.getByText(BROKER_SIGNED_AMOUNT), 10_000, 3);
-        await expect(chart.getByText(BROKER_SIGNED_AMOUNT).first()).toBeVisible();
+        const amounts = chart.getByText(BROKER_AMOUNT);
+        await showChartTooltip(page, chart, amounts, 10_000, 3);
+        await expect.poll(() => amounts.count(), {message: 'dividend, interest and their total are always in the income tooltip, zero or not'}).toBeGreaterThanOrEqual(3);
     });
 
     test('the candles submode shows the total candle only, with no per-broker overlay', async ({page}) => {
@@ -755,8 +1124,209 @@ test.describe('Broker detail — GrowthChart P&L mode', () => {
         await showChartTooltip(page, chart, chart.getByText(BROKER_PLAIN_AMOUNT), 20_000, 4);
         await expect(chart.getByText(BROKER_PLAIN_AMOUNT), 'open, close, high and low — the total candle in full').toHaveCount(4);
 
-        // An overlay line would add a signed row per broker, named after it.
-        await expect(chart.getByText(BROKER_SIGNED_AMOUNT), 'no per-broker P&L row belongs on a single-broker page').toHaveCount(0);
+        // An overlay line would add a row per broker, named after it, so the value
+        // rows must be exactly the four OHLC values. Counted BY ROW, never by sign:
+        // after D23b a losing broker row reads exactly like a negative OHLC value
+        // (`EUR -12.00`), and a zero one like any unsigned amount, so no pattern can
+        // tell the two apart. Every value row is `<span>label</span><b>value</b>`.
+        await expect(chart.locator('div > span + b'), 'the four OHLC values and nothing else — an overlay would add a fifth, broker-named row').toHaveText([BROKER_PLAIN_AMOUNT, BROKER_PLAIN_AMOUNT, BROKER_PLAIN_AMOUNT, BROKER_PLAIN_AMOUNT]);
         await expect(chart.getByText(BROKER_WITH_HOLDINGS, {exact: true}), 'the broker name would only appear here as an overlay legend row').toHaveCount(0);
+    });
+});
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+/**
+ * Import history modal — uploading a BRIM file.
+ *
+ * `POST /brokers/import/upload` reads `broker_id` from the multipart **form**
+ * (`Form(...)`). BrokerImportFilesModal sent it as a query parameter and put only
+ * `file` in the FormData, so every upload from this modal answered 422 and the user
+ * got nothing but an error banner. The status is asserted first because it *is* the
+ * defect; the stored file is then read back through the API, scoped to a broker this
+ * test creates — the mock seeds its own `generic_simple.csv` on Interactive Brokers,
+ * so matching by file name alone would prove nothing.
+ */
+const API = '/api/v1';
+const BRIM_UPLOAD_PATH = `${API}/brokers/import/upload`;
+/** The repository's synthetic Generic CSV sample — never a real broker export. */
+const SAMPLE_BRIM_REPORT = path.resolve(__dirname, '../../../backend/app/services/brim_providers/sample_reports/generic_simple.csv');
+const SAMPLE_BRIM_REPORT_NAME = path.basename(SAMPLE_BRIM_REPORT);
+
+type BrimFileInfo = {file_id: string; filename: string; target_broker_id: number | null};
+
+/** A broker this test owns. The name goes through `uniqueSuffix()`: `brokers.name` is uniquely indexed. */
+async function createOwnedBroker(page: Page, name: string): Promise<number> {
+    const response = await page.request.post(`${API}/brokers`, {data: [{name, allow_cash_overdraft: true}]});
+    expect(response.ok(), `create owned broker: HTTP ${response.status()} ${await response.text()}`).toBe(true);
+    const {results} = (await response.json()) as {results: Array<{name: string; success: boolean; broker_id: number | null}>};
+    const created = results.find((result) => result.name === name);
+    if (!created?.success || typeof created.broker_id !== 'number') throw new Error(`Owned broker "${name}" was not created: ${JSON.stringify(results)}`);
+    return created.broker_id;
+}
+
+/**
+ * The BRIM files stored on one broker. The list endpoint also returns legacy files that
+ * carry no broker at all, so the target is filtered here rather than assumed.
+ */
+async function brimFilesOn(page: Page, brokerId: number): Promise<BrimFileInfo[]> {
+    const response = await page.request.get(`${API}/brokers/import/files?broker_ids=${brokerId}`);
+    expect(response.ok(), `list the BRIM files of broker ${brokerId}: HTTP ${response.status()}`).toBe(true);
+    const files = (await response.json()) as BrimFileInfo[];
+    return files.filter((file) => file.target_broker_id === brokerId);
+}
+
+/**
+ * Delete every BRIM file on the owned broker, then the broker. Scoped to the id this
+ * test created, never to "whatever appeared since"; when the upload never happened
+ * there is simply no file to delete, so the red this block exists for stays the only red.
+ */
+async function deleteOwnedBrokerAndFiles(page: Page, brokerId: number): Promise<void> {
+    const failures: string[] = [];
+    try {
+        for (const file of await brimFilesOn(page, brokerId)) {
+            const response = await page.request.delete(`${API}/brokers/import/files/${file.file_id}`);
+            if (!response.ok()) failures.push(`BRIM file ${file.file_id}: HTTP ${response.status()}`);
+        }
+    } catch (error) {
+        failures.push(`list the BRIM files of broker ${brokerId}: ${String(error)}`);
+    }
+    try {
+        const response = await page.request.delete(`${API}/brokers?ids=${brokerId}&force=true`);
+        const body = (await response.json().catch(() => null)) as {results?: Array<{id: number; success: boolean}>} | null;
+        if (!response.ok() || !body?.results?.find((result) => result.id === brokerId)?.success) failures.push(`broker ${brokerId}: HTTP ${response.status()} ${JSON.stringify(body)}`);
+    } catch (error) {
+        failures.push(`broker ${brokerId}: ${String(error)}`);
+    }
+    expect(failures, 'cleanup removes the BRIM files and the broker this test created').toEqual([]);
+}
+
+test.describe('Broker detail — import history upload', () => {
+    let ownedBrokerId: number | undefined;
+
+    test.beforeEach(async ({page}) => {
+        ownedBrokerId = undefined;
+        await login(page, TEST_USER);
+    });
+
+    // afterEach, not `finally`: a cleanup throwing from `finally` would replace the
+    // assertion error it follows, and that assertion is the point of this block.
+    test.afterEach(async ({page}) => {
+        if (ownedBrokerId !== undefined) await deleteOwnedBrokerAndFiles(page, ownedBrokerId);
+    });
+
+    test('uploads a report from the import history modal to its own broker', async ({page}) => {
+        test.setTimeout(60_000);
+        // Sorts after every seeded broker, so a neighbour's "first card" stays a mock broker.
+        const brokerName = `Upload regression history ${uniqueSuffix()}`;
+        const brokerId = await createOwnedBroker(page, brokerName);
+        ownedBrokerId = brokerId;
+
+        await navigateTo(page, `/brokers/${brokerId}`);
+        await expect(page.getByTestId('broker-name')).toHaveText(brokerName, {timeout: 10_000});
+        await goToTransazioniTab(page);
+        await page.getByTestId('broker-show-import-history').click();
+        const modal = page.getByTestId('import-files-modal');
+        await expect(modal).toBeVisible({timeout: 5_000});
+
+        await modal.getByTestId('import-files-upload-toggle').click();
+        const uploader = modal.getByTestId('file-uploader');
+        await expect(uploader).toBeVisible({timeout: 5_000});
+        await uploader.getByTestId('file-input').setInputFiles(SAMPLE_BRIM_REPORT);
+        const submit = uploader.getByTestId('file-upload-submit');
+        await expect(submit).toBeVisible({timeout: 5_000});
+
+        // Armed before the click: a response is an edge, not a state.
+        const uploadResponse = page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === BRIM_UPLOAD_PATH, {timeout: 15_000});
+        await submit.click();
+        const upload = await uploadResponse;
+        const body = await upload.text();
+        expect(upload.status(), `POST ${BRIM_UPLOAD_PATH} from the import history modal: ${body}`).toBe(200);
+
+        const uploaded = JSON.parse(body) as BrimFileInfo;
+        expect(uploaded, 'the modal uploads to the broker whose history it shows').toMatchObject({filename: SAMPLE_BRIM_REPORT_NAME, target_broker_id: brokerId});
+        const stored = (await brimFilesOn(page, brokerId)).filter((file) => file.filename === SAMPLE_BRIM_REPORT_NAME);
+        expect(
+            stored.map((file) => file.file_id),
+            `${SAMPLE_BRIM_REPORT_NAME} is stored exactly once on broker ${brokerId}`,
+        ).toEqual([uploaded.file_id]);
+
+        // …and the modal lists it: on success handleUpload reloads this broker's files.
+        await expect(modal.locator(`[data-row-id="${uploaded.file_id}"]`)).toBeVisible({timeout: 8_000});
+    });
+
+    // ── C1: one upload action is one report-set batch (design D-S22) ─────────────
+    //
+    // Every file of one upload carries the same client-generated `batch_id` (a UUID in
+    // the multipart form), and the next upload from the same modal opens a new batch:
+    // the server builds report sets per batch, so an id shared by two uploads would
+    // merge two sets, and no id at all leaves every file a set of its own. Read back
+    // from this page's own upload responses, never from a shared list.
+    const SECOND_BRIM_REPORT = path.resolve(__dirname, '../../../backend/app/services/brim_providers/sample_reports/generic_with_assets.csv');
+    const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    type UploadedInfo = BrimFileInfo & {batch_id?: string | null};
+
+    /** The upload responses `action` produces on this page: exactly `expected` of them, each a 200. */
+    async function uploadsDuring(page: Page, expected: number, action: () => Promise<void>): Promise<UploadedInfo[]> {
+        const replies: Array<Promise<{status: number; body: string}>> = [];
+        const listener = (response: Awaited<ReturnType<Page['waitForResponse']>>) => {
+            if (response.request().method() === 'POST' && new URL(response.url()).pathname === BRIM_UPLOAD_PATH) replies.push(response.text().then((body) => ({status: response.status(), body})));
+        };
+        // Armed before the action: a response is an edge, not a state.
+        page.on('response', listener);
+        try {
+            await action();
+            await expect.poll(() => replies.length, {message: `${expected} upload response(s) from one action`, timeout: 15_000}).toBe(expected);
+        } finally {
+            page.off('response', listener);
+        }
+        const settled = await Promise.all(replies);
+        for (const {status, body} of settled) expect(status, `POST ${BRIM_UPLOAD_PATH}: ${body}`).toBe(200);
+        return settled.map(({body}) => JSON.parse(body) as UploadedInfo);
+    }
+
+    /** Opens the modal's uploader and submits `files`; ends once the uploader has handed them over. */
+    async function uploadFromHistoryModal(modal: Locator, files: string[]): Promise<void> {
+        await modal.getByTestId('import-files-upload-toggle').click();
+        const uploader = modal.getByTestId('file-uploader');
+        await expect(uploader).toBeVisible({timeout: 5_000});
+        await uploader.getByTestId('file-input').setInputFiles(files);
+        await uploader.getByTestId('file-upload-submit').click();
+        // handleUpload hides the uploader as soon as it starts sending.
+        await expect(uploader).toBeHidden({timeout: 5_000});
+    }
+
+    function expectUuid(value: string | null | undefined, what: string): string {
+        expect(typeof value === 'string' && UUID_PATTERN.test(value), `${what}: ${JSON.stringify(value)} must be a UUID`).toBe(true);
+        return value as string;
+    }
+
+    test('C1 one upload from the import history modal gives its files one fresh batch id', async ({page}) => {
+        test.setTimeout(60_000);
+        const brokerName = `Upload batch history ${uniqueSuffix()}`;
+        const brokerId = await createOwnedBroker(page, brokerName);
+        ownedBrokerId = brokerId;
+
+        await navigateTo(page, `/brokers/${brokerId}`);
+        await expect(page.getByTestId('broker-name')).toHaveText(brokerName, {timeout: 10_000});
+        await goToTransazioniTab(page);
+        await page.getByTestId('broker-show-import-history').click();
+        const modal = page.getByTestId('import-files-modal');
+        await expect(modal).toBeVisible({timeout: 5_000});
+
+        const together = await uploadsDuring(page, 2, () => uploadFromHistoryModal(modal, [SAMPLE_BRIM_REPORT, SECOND_BRIM_REPORT]));
+        expect(
+            together.map((file) => file.target_broker_id),
+            'both files go to this broker',
+        ).toEqual([brokerId, brokerId]);
+        const batchIds = together.map((file) => file.batch_id);
+        const batchId = expectUuid(batchIds[0], 'batch_id of the first upload');
+        expect(batchIds, 'the files of one upload share one batch_id').toEqual([batchId, batchId]);
+
+        // The list reloads once the upload is over, so the next upload starts from an idle modal.
+        for (const file of together) await expect(modal.locator(`[data-row-id="${file.file_id}"]`)).toBeVisible({timeout: 8_000});
+        const [next] = await uploadsDuring(page, 1, () => uploadFromHistoryModal(modal, [SAMPLE_BRIM_REPORT]));
+        expect(expectUuid(next.batch_id, 'batch_id of the next upload'), 'every upload action opens a new batch').not.toBe(batchId);
     });
 });

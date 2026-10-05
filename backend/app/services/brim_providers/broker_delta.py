@@ -227,7 +227,7 @@ class DeltaBrokerProvider(BRIMProvider):
         detected_delim = self.detect_csv_delimiter(file_path)
 
         try:
-            with open(file_path, encoding="utf-8-sig") as f:
+            with self._open_text(file_path) as f:
                 reader = csv.DictReader(f, delimiter=detected_delim)
                 if not reader.fieldnames or not all(col in reader.fieldnames for col in REQUIRED_COLUMNS):
                     raise BRIMParseError("Unexpected Delta header")

@@ -23,6 +23,8 @@
     import {aiExportCatalogLoader, emptyAiExportCompatibility, type AiExportCatalogCompatibilityResult} from '$lib/features/ai-export/catalog/compatibility';
     import {buildAiExportMenuLabels, getAiExportErrorMessage, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {buildAssetSyncToast} from '$lib/utils/sync/syncToastHelpers';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
 
     import {
@@ -357,6 +359,34 @@
                 syncLoading = false;
                 syncingCode = null;
             }
+        } else if (action === 'sync_asset_prices') {
+            // STALE_PRICE: re-sync the flagged provider assets from the day after their last
+            // stored price ('resume', the rule every auto-sync uses) up to the dashboard's end
+            // date, then reload the report (the banner clears once the prices are fresh).
+            const assetIds = _issue.affected_asset_ids ?? [];
+            if (assetIds.length === 0) return;
+            const assetNames = _issue.affected_asset_names ?? [];
+            const tr = (key: string, opts?: any) => $_(key, opts);
+            syncLoading = true;
+            syncingCode = _issue.code;
+            try {
+                const response = await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post(
+                    assetIds.map((asset_id) => ({asset_id, date_range: {start: 'resume', end: dateRangeCtl.end}})),
+                    {timeout: 120 * 1000},
+                );
+                for (const result of ((response as any)?.results ?? []) as any[]) {
+                    const name = assetNames[assetIds.indexOf(result?.asset_id)] ?? `#${result?.asset_id}`;
+                    const toast = buildAssetSyncToast(result, escapeHtml(name), tr);
+                    toasts[toast.variant](toast.message);
+                }
+                invalidate();
+                await loadAll(true);
+            } catch (e: any) {
+                toasts.error(`${$_('common.sync')} — ${e?.message || $_('prices.sync.failedDefault')}`);
+            } finally {
+                syncLoading = false;
+                syncingCode = null;
+            }
         }
     }
 
@@ -614,7 +644,7 @@
     <h1 class="sr-only">{$_('nav.dashboard')}</h1>
 
     <PageToolbar
-        thresholds={{oneRow: 1000, denseRow: 810, stackFilters: 430, oneColumn: 390, noExtraLabel: 410, labelHideActions: 210, labelHideTabs: 370}}
+        thresholds={{oneRow: 1000, denseRow: 950, stackFilters: 510, oneColumn: 390, noExtraLabel: 410, labelHideActions: 210, labelHideTabs: 460}}
         tabs={dashboardTabs}
         {activeTab}
         ontabchange={handleTabChange}
@@ -663,17 +693,19 @@
                     </div>
                 </div>
 
-                <!-- Broker multi-select panel -->
-                <div class="relative">
+                <!-- Broker multi-select panel. With one broker selected the label is that
+                     broker's name, of any length: the trigger shrinks and truncates it
+                     instead of pushing out of the bar (the full name stays in the DOM). -->
+                <div class="relative min-w-0">
                     <button
                         bind:this={brokerFilterTriggerEl}
-                        class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap
+                        class="flex items-center gap-1.5 min-w-0 max-w-full px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap
                        {brokerFilterActive ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700' : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'}"
                         onclick={toggleBrokerFilterDropdown}
                         data-testid="broker-filter-trigger"
                     >
-                        {brokerFilterLabel}
-                        <svg class="w-3 h-3 transition-transform {brokerFilterOpen ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <span class="truncate">{brokerFilterLabel}</span>
+                        <svg class="w-3 h-3 shrink-0 transition-transform {brokerFilterOpen ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
                         </svg>
                     </button>

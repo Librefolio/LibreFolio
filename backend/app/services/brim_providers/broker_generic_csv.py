@@ -351,7 +351,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
             return False
 
         try:
-            with open(file_path, encoding="utf-8-sig") as f:
+            with self._open_text(file_path) as f:
                 reader = csv.reader(f, delimiter=self.detect_csv_delimiter(file_path))
                 header = next(reader, None)
                 return header is not None and len(header) > 0
@@ -391,7 +391,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
         detected_delim = self.detect_csv_delimiter(file_path)
 
         try:
-            with open(file_path, encoding="utf-8-sig") as f:
+            with self._open_text(file_path) as f:
                 reader = csv.DictReader(f, delimiter=detected_delim)
 
                 # Map header columns to standard names

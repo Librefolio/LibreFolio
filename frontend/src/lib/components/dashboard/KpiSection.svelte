@@ -5,6 +5,7 @@
   Keep markup/data-testid/i18n/colors identical for safe reuse.
 -->
 <script lang="ts">
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {_} from '$lib/i18n';
     import type {PortfolioSummary, PortfolioHistoryPoint} from '$lib/stores/portfolio/portfolioStore.svelte';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
@@ -42,7 +43,7 @@
     }
 
     function tooltipRows(description: string, rows: {emoji: string; label: string; value: string}[]): string {
-        let html = `<div style="font-size:12px;max-width:300px">${description}`;
+        let html = `<div style="font-size:12px;max-width:300px">${escapeHtml(description)}`;
         html += `<table style="width:100%;margin-top:6px;border-collapse:collapse">`;
         for (const r of rows) {
             html += `<tr><td style="white-space:nowrap">${r.emoji} ${r.label}</td><td style="text-align:right;padding-left:12px;white-space:nowrap;font-weight:500">${r.value}</td></tr>`;
