@@ -3059,7 +3059,11 @@
       "carried_forward": "Valores arrastrados",
       "partial": "Parcial",
       "carriedPrices": "Puntos de precio arrastrados",
-      "carriedFx": "Puntos FX arrastrados"
+      "carriedFx": "Puntos FX arrastrados",
+      "missingPrice": "{count} activo(s) sin precio en este periodo — excluidos del análisis",
+      "missingFx": "{count} par(es) de divisas sin fuente de cambio — los activos cotizados en ellas quedan excluidos",
+      "missingFxRates": "Tipos de cambio ausentes o de más de {days} días para {count} par(es) — sincroniza para completar el análisis",
+      "missingFxRatesManual": "Faltan tipos de cambio para {count} par(es) manual(es) — añádelos a mano"
     },
     "assetSet": {
       "assetsTab": "Activos",

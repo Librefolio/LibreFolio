@@ -3059,7 +3059,11 @@
       "carried_forward": "Valeurs reportées",
       "partial": "Partielle",
       "carriedPrices": "Points de prix reportés",
-      "carriedFx": "Points de change reportés"
+      "carriedFx": "Points de change reportés",
+      "missingPrice": "{count} actif(s) sans prix sur cette période — exclus de l'analyse",
+      "missingFx": "{count} paire(s) de devises sans source de change — les actifs cotés dans ces devises sont exclus",
+      "missingFxRates": "Taux de change manquants ou de plus de {days} jours pour {count} paire(s) — synchronisez pour compléter l'analyse",
+      "missingFxRatesManual": "Taux de change manquants pour {count} paire(s) manuelle(s) — ajoutez-les à la main"
     },
     "assetSet": {
       "assetsTab": "Actifs",
