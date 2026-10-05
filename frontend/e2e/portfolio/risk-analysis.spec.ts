@@ -145,6 +145,29 @@ interface RiskMockOptions {
      * default fills the field with 0, so this option never writes a 0 of its own.
      */
     excludedWeight?: number;
+    /**
+     * Puts the concentration pair — `effective_number_of_assets` and
+     * `diversification_ratio` — on the `risk_contribution` output, so L2 draws the
+     * three cards a real answer gives it instead of the uncovered card alone.
+     *
+     * It exists for a measurement of layout. L2's cards sit in a `RiskCardGrid`,
+     * `repeat(auto-fit, minmax(min(17rem, 100%), 1fr))`, and `auto-fit` collapses
+     * the empty tracks: a lone card stretches across the whole level — some 900 px
+     * on the desktop project — where no caption is long enough to be cut. With the
+     * pair, the row holds three cards of some 300 px, near the grid's 17rem floor: the
+     * width a reader with real data sees, and the only one at which "cut or wrapped"
+     * is a question.
+     *
+     * Invented figures, like the rest of the branch, and read by no assertion; the
+     * backend constrains both to be strictly positive, and that is all L2 checks
+     * before drawing the two cards. 2.07 is 1/Σw² of the stub's two weights (0.6
+     * and 0.35), the inverse Herfindahl the backend computes; 1.15 is a ratio above
+     * one, which a long-only pair that is not perfectly correlated has.
+     *
+     * Opt-in, and absent means ABSENT: without it the output carries neither key,
+     * byte for byte the payload of every other test.
+     */
+    concentration?: boolean;
 }
 
 /**
@@ -375,6 +398,15 @@ function excludedWeightField(options: RiskMockOptions): {excluded_weight?: numbe
     return options.excludedWeight === undefined ? {} : {excluded_weight: options.excludedWeight};
 }
 
+/**
+ * The concentration pair of the `risk_contribution` output, only when a test asked for
+ * it (`concentration`). Spread like `excludedWeightField`: with the option absent no
+ * key is added, so the payload every other test reads is unchanged.
+ */
+function concentrationFields(options: RiskMockOptions): {effective_number_of_assets?: number; diversification_ratio?: number} {
+    return options.concentration ? {effective_number_of_assets: 2.07, diversification_ratio: 1.15} : {};
+}
+
 function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options: RiskMockOptions): Record<string, unknown> {
     const base = {
         instance_id: analytic.instance_id,
@@ -471,6 +503,7 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
                     portfolio_volatility: 0.13,
                     cash_weight: 0.05,
                     ...excludedWeightField(options),
+                    ...concentrationFields(options),
                     items: [
                         {asset_id: 1, weight: 0.6, marginal_contribution: 0.11, component_contribution: 0.08, percentage_contribution: 0.65},
                         {asset_id: 2, weight: 0.35, marginal_contribution: 0.13, component_contribution: 0.05, percentage_contribution: 0.35},
@@ -2905,6 +2938,86 @@ test.describe('Risk analysis functional integration', () => {
         // cash, so the cash clause is still said beside the unpriced one. Red here: the
         // residual was handed to the unpriced clause whole instead of being split.
         await expect(riskReturn.getByTestId('risk-l3-scatter-cash')).toBeVisible();
+    });
+
+    /**
+     * L2's uncovered card is read whole: its caption wraps instead of being cut, stops at
+     * two lines, and carries no native tooltip (developer's decision of 05/10/2026).
+     *
+     * The caption was one line clipped with an ellipsis, the rest left to a `title` — a
+     * hover a reader has no reason to try and a touch screen never offers. It now says what
+     * the number is made of, with shares, so a cut would land on the very figures it was
+     * changed to show.
+     *
+     * Layout is the subject, so it is measured on the page: jsdom has none. The stub opts
+     * into two things. `excludedWeight: 0.004` puts L2 in its wordiest case, cash beside
+     * unpriced holdings, both with their shares (4.6 % and 0.4 % of the stub's 0.05).
+     * `concentration` gives L2 the two cards a real answer gives it: without them the
+     * uncovered card is alone in an `auto-fit` grid and spans the whole level, some 900 px
+     * here, where no caption is cut and the first two checks below would pass on width
+     * alone. With them it is a third of the row — some 300 px here, near the grid's 17rem
+     * floor — where today's caption, one fixed sentence (54 characters in English, more in
+     * the other three catalogues) on one clipped line, overflows its box: the red this test
+     * has before the code lands is the first check's.
+     *
+     * Nothing reads the sentence, which is translated. What is read is the caption's box,
+     * and one attribute.
+     */
+    test('L2 wraps the uncovered caption within its card instead of cutting it, and drops the native tooltip', async ({page}) => {
+        await installRiskMocks(page, {excludedWeight: 0.004, concentration: true});
+        const panel = await openDashboardRisk(page);
+
+        // Barriers: the card is on screen and its number is the stub's whole residual, so
+        // what is measured below is this stub's caption on a card that finished drawing.
+        const level2 = panel.getByTestId('risk-level-2');
+        const card = level2.getByTestId('risk-l2-card-uncovered');
+        await expect(card).toBeVisible({timeout: 10_000});
+        await expect(level2.getByTestId('risk-l2-uncovered')).toHaveAttribute('data-uncovered', '0.05');
+
+        // The width barrier: the two concentration cards are drawn, and the three share one
+        // row, so the uncovered card is a third of the level. Read in one evaluation, so a
+        // block above still settling moves the three cards together and never between two
+        // reads. Red here, with the barriers above green: the stub's pair no longer reaches L2,
+        // or the grid gives this card a row of its own — wide enough for the checks below to
+        // pass on width alone.
+        const rowCards = ['risk-l2-card-effective-assets', 'risk-l2-card-diversification-ratio', 'risk-l2-card-uncovered'];
+        for (const testId of rowCards) await expect(level2.getByTestId(testId)).toBeVisible();
+        const tops = await level2.evaluate((section, testIds) => testIds.map((testId) => section.querySelector(`[data-testid="${testId}"]`)?.getBoundingClientRect().top ?? null), rowCards);
+        expect(tops, 'an L2 card has no box although it is visible').not.toContain(null);
+        expect(new Set(tops.map((top) => Math.round(top ?? 0))).size, `L2's three cards do not share one row (tops: ${tops.join(', ')}): the uncovered card is wider than the width this test measures at`).toBe(1);
+
+        // The caption rendered a sentence: an empty node would satisfy every check below.
+        const caption = card.getByTestId('risk-l2-card-uncovered-caption');
+        await expect(caption).toBeVisible();
+        await expect(caption).not.toBeEmpty();
+
+        // 1. Not cut. `scrollWidth` is the width the text asks for, `clientWidth` the width the
+        //    card gives it, and a line clipped with an ellipsis asks for more than it is given.
+        //    Polled as the overflow in pixels, so a red says by how much. Red: the caption is cut
+        //    — `truncate` or any other clip — and the end of the sentence, where the shares are,
+        //    is not on screen.
+        await expect.poll(() => caption.evaluate((element) => element.scrollWidth - element.clientWidth), {message: 'the uncovered caption is cut: its sentence is wider than the card and does not wrap'}).toBeLessThanOrEqual(1);
+
+        // 2. At most two lines. Wrapping is half the decision; the other half is the bound that
+        //    keeps the card in line with its row. Polled as the height beyond two lines, in
+        //    pixels. A `normal` line height resolves to no length that can be read back:
+        //    browsers draw it at about 1.2 × the font size, so that is what it is measured as.
+        //    Red: the caption runs to a third line — it wraps, but nothing clamps it.
+        await expect
+            .poll(
+                () =>
+                    caption.evaluate((element) => {
+                        const style = getComputedStyle(element);
+                        const lineHeight = style.lineHeight === 'normal' ? parseFloat(style.fontSize) * 1.2 : parseFloat(style.lineHeight);
+                        return element.getBoundingClientRect().height - 2 * lineHeight;
+                    }),
+                {message: 'the uncovered caption runs past two lines'},
+            )
+            .toBeLessThanOrEqual(1);
+
+        // 3. No native tooltip. The whole sentence is on the card, so a `title` would only repeat
+        //    it in the browser's own box. Red: the caption still carries one.
+        await expect(caption, 'the uncovered caption still carries a native title').not.toHaveAttribute('title');
     });
 
     /**
