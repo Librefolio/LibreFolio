@@ -1072,7 +1072,8 @@
       "weekRange": "Settimana {start} – {end}",
       "monthLabel": "{month}",
       "valueAt": "Valore al {date}",
-      "eventsInPeriod": "Eventi nel periodo:"
+      "eventsInPeriod": "Eventi nel periodo:",
+      "partialBucket": "Parziale: {days} su {total} giorni"
     },
     "resolution": {
       "weekly": "Settimanale",
@@ -1494,7 +1495,6 @@
     "pnlSubmodeLine": "Linea",
     "pnlSubmodeIncome": "Proventi",
     "pnlSubmodeCandles": "Candele",
-    "pnlCandlesHypothetical": "Sintetico — i massimi/minimi cross-asset sono ipotetici e non simultanei, non una serie intraday reale.",
     "pnlCandlesHypotheticalShort": "Sintetico — i massimi/minimi cross-asset sono ipotetici e non simultanei",
     "pnlAcqNewCapital": "Nuovo capitale",
     "pnlAcqReinvested": "Reinvestito",
@@ -3519,17 +3519,24 @@
           },
           "truncation": "Dichiarato su {declared} giorni, applicato su {applied}: il cono risponde alla domanda più breve."
         },
-        "replayExcluded": "Esclusi:",
-        "replayNeedsChoice": "{name} non ha storico utilizzabile in questo periodo. Escludilo, oppure dagli un sostituto — un sostituto è un’opinione su come sarebbe andato.",
-        "replayProxyUnusable": "Anche il sostituto scelto per {name} non ha storico utilizzabile. Scegline un altro.",
-        "replayExcludeAndRetry": "Escludi e riprova",
         "replayTotal": "Questa composizione avrebbe chiuso il periodo a {percent} {amount}",
-        "replayAudit": "Sostituti: {proxies} · Esclusi: {excluded} ({weight} della fetta, con rendimento zero)",
-        "replayAuditOmitted": "Sostituti: {proxies} · Esclusi: {excluded} (omessi dal replay: le cifre parlano per i restanti)",
         "shockShowDetail": "Mostra lo shock per bucket",
         "shockHideDetail": "Nascondi lo shock per bucket",
         "shockTotal": "Questo scenario muoverebbe la fetta di {percent} {amount}",
-        "shockCoverage": "Solo il {percent} della fetta è stato classificato: il totale parla solo per quella parte."
+        "shockCoverage": "Solo il {percent} della fetta è stato classificato: il totale parla solo per quella parte.",
+        "replayPeriod": "Periodo",
+        "replayExcludedResidual": "Fuori dal replay: {count, plural, one {# asset} other {# asset}}; il {weight} del valore conta come liquidità a rendimento zero.",
+        "replayExcludedOmitted": "Fuori dal replay: {count, plural, one {# asset} other {# asset}}; le cifre parlano per gli altri.",
+        "replayReasonNoPrices": "Nessun prezzo nel periodo",
+        "replayReasonStartsLate": "Quotato dopo l'inizio del periodo",
+        "replayReasonStaleAtStart": "Nessun prezzo recente all'inizio del periodo",
+        "replayReasonStaleAtEnd": "Nessun prezzo recente alla fine del periodo",
+        "replayReasonMissingFx": "Nessun cambio verso la tua valuta",
+        "replayReasonManual": "Escluso da te",
+        "replayReasonOther": "Altro motivo",
+        "replayNothing": "Niente da rigiocare: nessun asset ha prezzi utilizzabili in questo periodo.",
+        "replaySuggested": "Rigioca il periodo {start} – {end}: {count, plural, one {torna # asset} other {tornano # asset}}",
+        "replaySuggestedPartial": "Solo una parte della crisi."
       },
       "backtestNotice": "Con una fetta attiva, questi numeri sono ricostruiti sulla composizione di oggi: dicono come *sarebbe* andata, non come è andata davvero.",
       "notice": {

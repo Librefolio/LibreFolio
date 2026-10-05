@@ -758,6 +758,9 @@ class SignalService:
                 planned.requirement.minimum_points,
             )
         )
+        # The partial-coverage warning describes the calendar segment the coverage chose; the quote-day
+        # filter below is a separate, declared contract and must not count carried days as excluded.
+        coverage_selected_points = selected_points
         if plugin_class.computes_on_quote_days and not requirements.uses_prepared_asset_series:
             # Indicators count sessions (developer's decision of 30/09/2026): the coverage above keeps its
             # calendar meaning, while the plugin computes on the days a price was actually quoted.
@@ -848,7 +851,7 @@ class SignalService:
                 availability,
                 warmup,
                 price_points,
-                selected_points,
+                coverage_selected_points,
                 context,
             ),
             *risk_warnings,

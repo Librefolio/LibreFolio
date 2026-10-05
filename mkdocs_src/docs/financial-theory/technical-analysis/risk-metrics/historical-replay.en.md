@@ -56,23 +56,60 @@ There is a second, quieter consequence. The portfolio held today is the one that
 
 ## 🧩 Holdings Without Enough History {: #holdings-without-enough-history }
 
-An episode from 2008 cannot be replayed on a fund launched in 2019: there are no returns to apply. Rather than filling the gap with an assumption, the analysis **refuses to run** and asks for a decision. Two are available, and both are recorded in the result:
+An episode from 2008 cannot be replayed on a fund launched in 2019: there are no returns to apply. The analysis neither fills the gap with an assumption nor stops: it **leaves the holding out** and replays the others.
 
-**Substitute a proxy.** Another asset's return series stands in for the one with no history.
+Each holding is judged on its own quotes, not on the shared calendar. It takes part only if it is priced at both ends of the window, give or take the seven calendar days of the [staleness threshold](data-quality.md#staleness-threshold): at the start, a quote in the seven days before the window begins — or, for a history that begins inside the window, a first quote no more than seven days after the window begins; at the end, a last quote no more than seven days before the window ends. The test runs before the return series are prepared, and the order matters. The replayed series share one calendar (see [Limitations](#limitations)): a holding that starts late, kept in, would move the start of that calendar and shorten the replay of every other holding to fit its own.
+
+### 🏷️ Why a Holding Is Left Out {: #why-a-holding-is-left-out }
+
+Every holding left out carries exactly one reason:
+
+| Reason | What the holding's quotes show |
+|---|---|
+| No prices in the period | No quote inside the window, and none in the seven days before it begins. |
+| First quoted after the period began | Its history begins inside the window, more than seven days after the start. |
+| No recent price when the period began | It was quoted before the window, but not in the seven days before it begins — a gap in an older history, or a sparse rhythm such as a monthly NAV. |
+| No recent price at the end of the period | No price in the last seven days of the window. Quotes are read only up to the window's end, so a gap and a delisting look the same there and share this reason. |
+| No exchange rate to your currency | No exchange rate from its currency into the currency the analysis is stated in. |
+| Left out by you | The reader left it out by hand, where that is possible — see [Proxies](#proxies). |
+
+### ⚖️ What Takes Its Place {: #what-takes-its-place }
+
+What becomes of a holding left out depends on whether the replay has weights.
+
+**On a portfolio** — the Risk tab of the Dashboard or of a broker's page — the holding leaves the replay, but its weight does not. The excluded weight is added to the cash share $c$, which means it is replayed as **earning exactly zero** for the whole episode.
+
+That treatment is worth a moment, because it is not neutral. Leaving a holding out does not make the portfolio smaller; it makes that fraction of the portfolio flat. In an episode where everything fell, a 10% position held flat is an implicit claim that it would have been the best thing you owned. Nobody makes that claim on purpose — the engine applies it on its own — which is why the result names every holding it left out, with its reason and its share of the value.
+
+**On a selection of assets without weights** — the [Correlation tab](../../../user/assets/correlation.md) of the Assets page — there is no cash share to hold anything. The asset is simply omitted: it gets no return at all, not a return of zero, and the figures speak for the assets that were replayed. A selection has no composition to add up, so those per-asset returns are the whole answer.
+
+### 🔎 What the Result Shows {: #what-the-result-shows }
+
+On those three tabs, the replay says what it left out next to the figures it reports:
+
+- the holdings left out, **grouped by reason** — on a portfolio each with its share of the value, under a line stating how much of the value counts as cash at zero return;
+- a warning **above the total** when more than half of the portfolio's value is left out, stating the share the result still covers: past that point the total speaks for a minority of the portfolio, with the rest held flat beside it;
+- when every holding is left out, no figure: the result says there is **nothing to replay**, and lists the reasons.
+
+### 📆 The Common Period {: #the-common-period }
+
+When the window's edges are what left holdings out — a late start, a gap before the window, no recent price at its end — the analysis proposes the part of the window in which they are priced as well. That part begins the day after the latest first quote, inside the window, of a holding without a price at the start, so that this quote becomes its starting price; it ends at the earliest last quote of a holding without a recent price at the end. Before it is offered, a second reading of the quotes over that shorter window confirms it: every holding it brings back, and every holding the window already covered, must be priced at both of its ends, or nothing is proposed. A holding left out for having no prices in the window, or no exchange rate, is never part of it: no shorter window would bring it back.
+
+On those tabs, the proposal shows its dates and how many holdings it brings back, and one click replays it — also when nothing at all could be replayed over the original window. When the window was one of the built-in crises and the proposal is shorter, it is marked as covering only part of the crisis. That is the trade-off: you get the holdings back, but you replay a shorter stretch than the episode, and whatever the market did outside that stretch is no longer in the answer.
+
+### 🎭 Proxies {: #proxies }
+
+A proxy lets another asset's return series stand in for a holding without the history. It exists in one place only: the **Risk & Scenarios** tab of an asset's detail page, for that asset alone, where the reader can choose a proxy for it or exclude it instead. A proxied holding is replayed on its proxy's returns instead of being left out, and a proxy with no usable returns over the window is refused as an invalid choice, never quietly dropped. The replay on the three tabs above offers neither a proxy nor a manual exclusion.
 
 !!! warning "A proxy is a choice, not a fact"
 
     Replacing a holding with a proxy changes what the result means. It no longer says what would have happened to that position; it says what would have happened **if that position had behaved like its substitute** over that episode. That condition is part of the answer, not a footnote to it — a broad index proxying a concentrated holding will understate how that holding would have moved, and no part of the arithmetic can detect the mismatch. The result records which holdings were proxied.
 
-**Exclude the holding.** The position is dropped from the replay — but its weight is not. The excluded weight is moved into the cash share, which means it is replayed as **earning exactly zero** for the whole episode.
-
-That treatment is worth a moment. Excluding a holding does not make the portfolio smaller; it makes that fraction of the portfolio flat. In an episode where everything fell, a 10% position treated as flat is an implicit claim that it would have been the best thing you owned. The exclusion is recorded in the result with its weight, precisely because the choice is not neutral.
-
 ---
 
 ## 💡 Interpretation {: #interpretation }
 
-The replay produces a compounded return for the episode, and per-holding returns underneath it. Read them as a **conditional statement**: *this composition, through those specific dates, with no rebalancing, cash flat, and whatever proxies or exclusions were declared*.
+The replay produces a compounded return for the episode, and per-holding returns underneath it. Read them as a **conditional statement**: *this composition, through those specific dates, with no rebalancing, cash flat — and flat with it every holding the engine left out — and a proxy only where one was chosen*. On a selection of assets there is no composition to compound and nothing is held flat: the per-asset returns stand alone, for the assets that could be replayed.
 
 Its strength is that every number in it happened. The sequence of returns is the one the market delivered — the drawdown path, the clustering of bad days, the speed of the recovery are all real, which is exactly what a distributional summary cannot reproduce. Its weakness is the mirror image: it is **one** episode. It happened once, and the next stress will not be a copy of it.
 
