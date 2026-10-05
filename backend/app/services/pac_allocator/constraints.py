@@ -39,20 +39,34 @@ floating incumbent survives replay. Every Big-M coefficient below is derived
 from a route's own known finite bounds (``order_step * upper_quanta``) —
 never an arbitrary constant, per Step3 §4's "Nessun Big-M arbitrario" rule.
 
-Known modelling limitation (fee cap): ``calculate_fee``'s upper clamp
-(``maximum_fee``) makes the true fee a concave, three-piece function of the
-notional (flat at the floor, linear, flat at the cap). A minimization
-epigraph can only represent the *convex* floor+linear part exactly with
-plain lower-bound rows; representing the cap exactly needs a second
-disjunctive binary per capped route. This build deliberately does not add
-that second binary: the fee upper bound used for the Big-M (``fee_upper``)
-is left cap-oblivious (``rate * notional_upper``), which only ever makes the
-solver's own fee estimate *pessimistic* (never optimistic) when a cap would
-actually bind — it can never manufacture false infeasibility, and it never
-touches the reported/replayed fee (always Decimal-exact). It can, in a
-narrow case, make the search mildly conservative about a route whose true
-(capped) fee is cheaper than the solver believes. Flagged to the coordinator
-as an open refinement, not a silent decision.
+Fee (``add_fee_epigraph_constraints``): for a nonzero order
+``calculate_fee`` is ``fixed + clamp(rate * notional, floor, cap)``, three
+pieces of the notional: flat at the floor, linear, flat at the cap. Under a
+minimization, plain lower-bound rows represent the convex floor+linear part
+exactly. The cap makes the function concave, so where it can bind within
+the route's range (``_fee_cap_excess``: ``rate * notional_upper > cap``) a
+``fee_capped`` binary picks the branch: the linear one, where the fee's
+upper bound implies ``rate * notional <= cap``, or the flat one, where the
+fee is exactly ``fixed + cap``. The minimal fee the model admits is then
+``calculate_fee`` at every notional. The posted fee is debited in the cash
+ledger, so this is also what lets the model reach the plans the exact
+replay accepts.
+
+Fee bound (``_fee_clamp_upper``): the fee variable of an active BUY route is
+bounded by ``fixed + max(floor, min(rate * notional_upper, cap))``, in the
+epigraph's Big-M and in the posted-fee units alike. Two defects found on
+2026-09-24 shaped it:
+
+- X2: the minimum belongs in the bound. With ``rate * notional_upper``
+  alone, a minimum above it (a flat minimum on a zero rate, or a small
+  route) left the floor row unsatisfiable, order on or off, and the whole
+  model infeasible.
+- QX1-a: the cap used to be ignored. The linear row priced a capped order
+  at the uncapped fee and excluded plans the exact replay accepts (EUR50 050
+  at EUR100 a unit, 0.19% capped at EUR18: the replay buys 500 units, the
+  model stopped at 499). The cap enters the bound only together with its
+  binary: with the linear row always on, a capped bound would make every
+  order past the cap infeasible (at most 94 units in that example).
 """
 
 from __future__ import annotations
@@ -281,12 +295,10 @@ def _source_cash_cell(scenario: ExactPlannerScenario, source_kind: str, source_i
 
 class LedgerPostingScopeError(ValueError):
     """Raised when this module cannot model a scenario's ledger postings
-    faithfully: an unmodelled rounded family would actually be posted, a
-    family exists in ``ledger.py`` that we have no detector for, or a HALF_UP
-    tie is reachable on a *credit*, where the tie ambiguity could prune the
-    true optimum. Always a loud failure, never a silent exact-expression
-    fallback — that silent degradation is precisely what caused the Step3
-    §16.11 defect.
+    faithfully: an unmodelled rounded family would actually be posted, or a
+    family exists in ``ledger.py`` that we have no detector for. Always a
+    loud failure, never a silent exact-expression fallback — that silent
+    degradation is precisely what caused the Step3 §16.11 defect.
     """
 
 
@@ -341,86 +353,41 @@ def _require_modelled_rounded_families(scenario: ExactPlannerScenario, facts: Sc
         raise LedgerPostingScopeError(f"this {scenario.product}/{scenario.policy} scenario posts rounded ledger families this build does not model: {sorted(unmodelled)}")
 
 
-def _half_up_tie_reachable(coefficient: ExactRatio, quantum: ExactRatio, lower_quanta: int, upper_quanta: int) -> bool:
-    """Is some achievable ``coefficient * n`` exactly on a HALF_UP tie of
-    ``quantum``, for integer ``n`` in ``[lower_quanta, upper_quanta]``?
-
-    Exact and O(1). With ``coefficient/quantum = a/b`` already in lowest
-    terms (``ExactRatio`` normalizes on construction), a tie means
-    ``a*n/b + 1/2`` is an integer, i.e. ``2*a*n + b == 0 (mod 2*b)``. That is
-    solvable only when ``b`` is even, and then exactly for
-    ``n == -a^-1 * (b/2) (mod b)``. Validated against brute force over 4000
-    random rationals.
+def _fee_cap_excess(fee_schedule: ExactFeeSchedule, notional_upper: float) -> float | None:
+    """``rate * notional_upper - cap`` where the fee cap can bind within the
+    route's notional range, else ``None`` (no cap, or a linear fee that
+    never exceeds it). This one predicate decides both halves of the exact
+    cap (QX1-a, module docstring): whether ``add_fee_epigraph_constraints``
+    gives the route a ``fee_capped`` binary, with this excess as the Big-M
+    that switches the linear row off on the cap branch, and whether
+    ``_fee_clamp_upper`` lowers the fee bound to the cap.
     """
-    ratio = coefficient / quantum
-    a, b = ratio.numerator, ratio.denominator
-    if a == 0 or b % 2 == 1:
-        return False
-    n0 = (-pow(a, -1, b) * (b // 2)) % b
-    first_tie = lower_quanta + ((n0 - lower_quanta) % b)
-    return first_tie <= upper_quanta
+    if fee_schedule.maximum_fee is None:
+        return None
+    linear_upper = as_float(fee_schedule.proportional_rate) * notional_upper
+    cap = as_float(fee_schedule.maximum_fee.amount)
+    return linear_upper - cap if linear_upper > cap else None
 
 
-def _exact_currency_quantum(scenario: ExactPlannerScenario, currency: str) -> ExactRatio:
-    for spec in scenario.currency_specs:
-        if spec.currency == currency:
-            return spec.minor_unit
-    raise KeyError(f"unknown currency {currency}")
-
-
-def _exact_fx_rate(scenario: ExactPlannerScenario, source_currency: str, destination_currency: str) -> ExactRatio:
-    """Exact twin of ``fx_rate`` — same direct-or-inverse lookup, no floats."""
-    if source_currency == destination_currency:
-        return ExactRatio(1)
-    key = _fx_pair_key(source_currency, destination_currency)
-    for item in scenario.fx_rates:
-        if item.pair_key != key:
-            continue
-        # ``pair_key`` is alphabetical, so the stored rate is base->quote of
-        # the sorted pair; invert when we are asking the other direction.
-        return item.rate if source_currency < destination_currency else ExactRatio(1) / item.rate
-    raise KeyError(f"no FX pair {key}")
-
-
-def _require_credit_tie_free(
-    scenario: ExactPlannerScenario,
-    *,
-    route: ExactOrderRoute,
-    pool_currency: str,
-    quote_currency: str,
-    lower_quanta: int,
-    upper_quanta: int,
-) -> None:
-    """Guard the one direction where a HALF_UP tie is not safe.
-
-    ``_posted_units_term`` uses the *non-strict* epigraph pair, so at an exact
-    tie both the lower and the upper unit value satisfy it. For a **debit**
-    that ambiguity is permissive — picking the lower unit understates what is
-    owed, so the model can only admit points the exact replay will reject,
-    never prune a real one. For a **credit** it is the opposite: picking the
-    lower unit understates the money available, which *can* prune the true
-    optimum. So credits must be provably tie-free, and we refuse loudly when
-    they are not.
+def _fee_clamp_upper(fee_schedule: ExactFeeSchedule, notional_upper: float) -> float:
+    """Upper bound of ``clamp(rate * notional, floor, cap)`` over the route's
+    notional range: ``max(floor, min(rate * notional_upper, cap))``. The
+    floor must be in it (X2); the cap only where ``_fee_cap_excess`` gives
+    the route its binary (QX1-a), both in the module docstring.
     """
-    source_quantum = _exact_currency_quantum(scenario, pool_currency)
-    destination_quantum = _exact_currency_quantum(scenario, quote_currency)
-    effective_rate = _exact_fx_rate(scenario, pool_currency, quote_currency) * (ExactRatio(1) - scenario.fx_spread_rate)
-    coefficient = source_quantum * effective_rate
-    if _half_up_tie_reachable(coefficient, destination_quantum, lower_quanta, upper_quanta):
-        raise LedgerPostingScopeError(
-            f"route {route.route_id!r} can reach an exact HALF_UP rounding tie converting {pool_currency}->{quote_currency} "
-            f"(rate {effective_rate}, quantum {destination_quantum}, quanta {lower_quanta}..{upper_quanta}); "
-            "the non-strict posting epigraph cannot disambiguate a credit tie without risking a pruned optimum"
-        )
+    linear_upper = as_float(fee_schedule.proportional_rate) * notional_upper
+    if fee_schedule.maximum_fee is not None and _fee_cap_excess(fee_schedule, notional_upper) is not None:
+        linear_upper = as_float(fee_schedule.maximum_fee.amount)
+    return max(as_float(fee_schedule.minimum_fee.amount), linear_upper)
 
 
 def _fee_variable_upper(facts: ScenarioFacts, route: ExactOrderRoute, capability: ExactOrderCapability, notional_upper: float) -> float:
-    """The same cap-oblivious upper bound ``add_fee_epigraph_constraints``
-    gives the fee variable, reused so the posted-units variable is bounded by
-    the very envelope the fee itself lives in.
+    """The same upper bound ``add_fee_epigraph_constraints`` gives the fee
+    variable, reused so the posted-units variable is bounded by the very
+    envelope the fee itself lives in.
     """
     fee_schedule = facts.fee_by_key[(route.broker_id, route.fee_schedule_id)]
-    return as_float(fee_schedule.fixed_fee.amount) + as_float(fee_schedule.proportional_rate) * notional_upper
+    return as_float(fee_schedule.fixed_fee.amount) + _fee_clamp_upper(fee_schedule, notional_upper)
 
 
 def _posted_units_term(model: Model, *, name: str, exact_expr: LinearTerm, quantum: float, exact_upper: float) -> LinearTerm:
@@ -439,8 +406,15 @@ def _posted_units_term(model: Model, *, name: str, exact_expr: LinearTerm, quant
     reachable points — over-pruning, which is the failure class this whole
     change exists to remove. The non-strict pair has no epsilon to calibrate
     and is satisfiable for *every* real ``exact``, so it can never prune. Its
-    only looseness is at exact ties, which ``_require_credit_tie_free``
-    forbids in the one direction where looseness is unsafe.
+    only looseness is at exact ties, where ``units`` may take either
+    neighbour. That is safe in both directions. A debit (``buy_debit``,
+    ``buy_fee``) can only be understated, so the model admits points the
+    exact replay then rejects or tops up (X3 rejected: permissive by design),
+    never prunes one. A credit (``fx_credit``) enters every ledger row with a
+    ``+`` sign and appears in no objective, so a decision is feasible with
+    some ``units`` exactly when it is feasible with the larger neighbour —
+    the true HALF_UP value. The choice of neighbour at a credit tie never
+    changes the feasible set (the round-up itself may well decide it).
 
     ``floor(x + 1/2)`` is ties-toward-+infinity while ``numeric.post_half_up``
     is ties-away-from-zero; the two coincide only for non-negative amounts.
@@ -533,14 +507,6 @@ def add_ledger_balance_constraints(model: Model, scenario: ExactPlannerScenario,
             cells[(route.broker_id, pool_currency)].append(-debit_expr)
             effective_rate = fx_rate(facts, pool_currency, quote_currency) * (1.0 - facts.fx_spread_rate)
             credit_upper = facts.currency_quantum[pool_currency] * fx_decision.getUbOriginal() * effective_rate
-            _require_credit_tie_free(
-                scenario,
-                route=route,
-                pool_currency=pool_currency,
-                quote_currency=quote_currency,
-                lower_quanta=round(fx_decision.getLbOriginal()),
-                upper_quanta=round(fx_decision.getUbOriginal()),
-            )
             cells[(route.broker_id, quote_currency)].append(
                 _posted_units_term(
                     model,
@@ -615,8 +581,30 @@ def add_fee_epigraph_constraints(model: Model, scenario: ExactPlannerScenario, f
     clamp(rate*notional, floor, cap)`` for every BUY route, gated by the same
     ``buy_active`` binary as ``add_order_activation_constraints``.
 
-    See the module docstring for the deliberate, documented cap limitation:
-    ``fee_upper`` here is cap-oblivious (pessimistic, never optimistic).
+    Rows, with ``fee_upper`` from ``_fee_clamp_upper`` and ``big_m = fixed +
+    fee_upper``:
+
+    - ``fee_active_upper``: ``fee <= big_m * active``;
+    - ``fee_floor``: ``fee >= fixed + floor - big_m * (1 - active)``;
+    - ``fee_linear``: ``fee >= fixed + rate * notional - big_m * (1 -
+      active) - cap_excess * capped``;
+    - only where the cap can bind (``_fee_cap_excess``), a ``fee_capped``
+      binary with ``fee_capped_active``: ``capped <= active``, and
+      ``fee_cap``: ``fee >= (fixed + cap) * capped``.
+
+    Order off: ``order_active_upper`` forces the notional to zero, ``capped``
+    follows ``active`` to zero, and every lower row is at most zero, since
+    ``fee_upper >= floor``. Order on, ``capped = 0``: the fee lies in
+    ``[fixed + max(floor, rate * notional), fixed + fee_upper]``, which is
+    non-empty exactly when ``rate * notional <= cap`` on a capped route.
+    Order on, ``capped = 1``: the linear row asks at most ``fixed + cap``,
+    because ``cap_excess = rate * notional_upper - cap``, so the fee is
+    exactly ``fixed + cap``. The floor row holds on both branches, because
+    ``ExactFeeSchedule`` validates ``floor <= cap``. The minimum over the
+    branches is ``calculate_fee`` at every notional: ``explicit_cost``
+    minimizes it, and the earlier stages (``fixed_l2``, ``shortfall``,
+    ``route_priority``) feel the fee only through the ledger, where a higher
+    fee never helps them.
     """
     for route in scenario.order_routes:
         if route.side != "buy":
@@ -636,12 +624,21 @@ def add_fee_epigraph_constraints(model: Model, scenario: ExactPlannerScenario, f
         fixed = as_float(fee_schedule.fixed_fee.amount)
         rate = as_float(fee_schedule.proportional_rate)
         floor = as_float(fee_schedule.minimum_fee.amount)
-        fee_upper = rate * notional_upper  # deliberately cap-oblivious, see module docstring
+        fee_upper = _fee_clamp_upper(fee_schedule, notional_upper)
         big_m = fixed + fee_upper
 
         model.addCons(fee <= (fixed + fee_upper) * active, name=f"fee_active_upper:{route.route_id}")
         model.addCons(fee >= fixed + floor - big_m * (1 - active), name=f"fee_floor:{route.route_id}")
-        model.addCons(fee >= fixed + rate * notional_expr - big_m * (1 - active), name=f"fee_linear:{route.route_id}")
+
+        cap_relief: LinearTerm = 0.0
+        cap_excess = _fee_cap_excess(fee_schedule, notional_upper)
+        if fee_schedule.maximum_fee is not None and cap_excess is not None:
+            cap = as_float(fee_schedule.maximum_fee.amount)
+            capped = model.addVar(vtype="B", name=f"fee_capped:{route.route_id}")
+            model.addCons(capped <= active, name=f"fee_capped_active:{route.route_id}")
+            model.addCons(fee >= (fixed + cap) * capped, name=f"fee_cap:{route.route_id}")
+            cap_relief = cap_excess * capped
+        model.addCons(fee >= fixed + rate * notional_expr - big_m * (1 - active) - cap_relief, name=f"fee_linear:{route.route_id}")
 
 
 def compile_hard_constraints(model: Model, scenario: ExactPlannerScenario, facts: ScenarioFacts, variables: CompiledVariables) -> None:

@@ -30,17 +30,18 @@ all (only decision *contract* validity matters — see
 ``_candidate_contract_conflicts``/``_decision_access_conflicts``), so any
 guaranteed-valid probe candidate returns the identical constants.
 
-Known search-quality limitation, stated here (not only in the plan and the
-regression test) so a reader meets it where the code is: the fee epigraph
-``constraints.add_fee_epigraph_constraints`` builds is **cap-oblivious** —
-its internal upper-bound estimate is ``rate * notional_upper``, ignoring the
-route's ``maximum_fee``. A compiled model can therefore believe a heavily
-capped BUY route costs more in fees than it truly does, which can only bias
-which candidate the solver *prefers*. It can never cause false infeasibility
-(the estimate is pessimistic, never optimistic) and never corrupts any
-reported number: every fee published or replayed comes from
-``evaluate_exact_candidate``'s exact ``calculate_fee``, never from the SCIP
-variable. Locked by ``test_fee_epigraph_cap_oblivious_regression``. If a
+Fee fidelity, stated here (not only in the plan and the regression tests) so
+a reader meets it where the code is: the fee epigraph
+``constraints.add_fee_epigraph_constraints`` builds is exact. For every BUY
+route, the minimal fee a compiled model admits is ``calculate_fee`` at every
+notional, minimum and cap included. The minimum is in the bound since X2,
+and the cap has one ``fee_capped`` binary wherever it can bind, since QX1-a;
+the derivation is in ``constraints.py``'s module docstring. The fee
+*variable* may still sit above that minimum where no stage presses it down,
+so it never feeds a reported number: every fee published or replayed comes
+from ``evaluate_exact_candidate``'s exact ``calculate_fee``, never from the
+SCIP variable. Locked by ``test_fee_epigraph_floor_above_linear_upper_boundary``,
+``test_fee_epigraph_cap_boundary`` and ``test_fee_epigraph_cap_exact``. If a
 solve ever produces an incumbent whose SCIP-internal objective disagrees
 with the exact replay in a way that changes the *lexicographic ranking*,
 that is out of tolerance by definition and must be escalated — not absorbed
