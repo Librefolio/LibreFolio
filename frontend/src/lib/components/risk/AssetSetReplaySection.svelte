@@ -55,6 +55,7 @@
 
     import {_ as t} from '$lib/i18n';
     import {createRiskPanelController, discardedErrorCodes} from '$lib/stores/risk/riskPanelController.svelte';
+    import type {AssetSetQualitySource} from './assetSetLevels';
     import L4WhatIf from './levels/L4WhatIf.svelte';
     import L4Replay from './levels/l4/L4Replay.svelte';
     import {replaySectionView} from './levels/l4/scenarioHelpers';
@@ -116,6 +117,15 @@
     // and so is a replay that failed outright, a timeout for one.
     let errorCodes = $derived([...resultErrorCodes([replayView]), ...discardedErrorCodes(controller.discarded, ['replay'])]);
     let metadata = $derived(levelMetadata([controller.replayResult]));
+
+    /**
+     * What the panel reads through `bind:this`: no results, because this frame keeps its own
+     * status and notes (it answers over a period of its own, as L4 on the Dashboard), and its
+     * controller's data-quality issues, which the lab's banner merges with the other sections'.
+     */
+    export function qualitySource(): AssetSetQualitySource {
+        return {results: [], labels: {}, issues: controller.dataQualityIssues};
+    }
 </script>
 
 <!-- Closed by default and loading its catalogue on first open only: reopening a
