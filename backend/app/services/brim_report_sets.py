@@ -80,6 +80,13 @@ class BRIMSetMembersNotFound(BRIMSetError):
     code = "members_not_found"
 
 
+class BRIMSetExcludeUnknown(BRIMSetError):
+    """A file left out of the set that is not an original of its broker and upload."""
+
+    status_code = 422
+    code = "exclude_unknown"
+
+
 class BRIMSetIncomplete(BRIMSetError):
     status_code = 422
     code = "set_incomplete"
@@ -111,9 +118,20 @@ def get_set_plugin(plugin_code: str) -> BRIMProvider:
     return plugin
 
 
-def collect_members(*, broker_id: int, plugin_code: str, batch_id: str) -> List[BRIMFileInfo]:
-    """The original files of one upload batch that the plugin can read, oldest first."""
-    members = [info for info in brim_provider.list_files(broker_ids=[broker_id]) if info.kind == "original" and info.batch_id == batch_id and info.target_broker_id == broker_id and plugin_code in info.compatible_plugins and info.status != BRIMFileStatus.FAILED]
+def collect_members(*, broker_id: int, plugin_code: str, batch_id: str, exclude_file_ids: Sequence[str] = ()) -> List[BRIMFileInfo]:
+    """The original files of one upload batch that the plugin can read, oldest first.
+
+    ``exclude_file_ids`` are the originals the user left out of the set (read alone with
+    another plugin, or removed from it). Each must be an original of this broker and upload:
+    any other id is refused rather than ignored, so a stale request never passes silently.
+    """
+    originals = [info for info in brim_provider.list_files(broker_ids=[broker_id]) if info.kind == "original" and info.batch_id == batch_id and info.target_broker_id == broker_id]
+    known = {info.file_id for info in originals}
+    unknown = sorted({file_id for file_id in exclude_file_ids if file_id not in known})
+    if unknown:
+        raise BRIMSetExcludeUnknown(f"Not an original of batch {batch_id} for this broker: {', '.join(unknown)}")
+    excluded = set(exclude_file_ids)
+    members = [info for info in originals if plugin_code in info.compatible_plugins and info.status != BRIMFileStatus.FAILED and info.file_id not in excluded]
     if not members:
         raise BRIMSetMembersNotFound(f"No files of batch {batch_id} can be read by {plugin_code} for this broker")
     members.sort(key=lambda info: (info.uploaded_at, info.filename))
@@ -276,14 +294,14 @@ def build_preview(  # noqa: C901 — one pass per concern (members, roles, cover
     )
 
 
-async def preview_set(session: AsyncSession, *, broker_id: int, plugin_code: str, batch_id: str) -> BRIMSetPreview:
+async def preview_set(session: AsyncSession, *, broker_id: int, plugin_code: str, batch_id: str, exclude_file_ids: Sequence[str] = ()) -> BRIMSetPreview:
     """Preview one report set; reads the member files, writes nothing.
 
     The broker history comes from one read of the tagged transactions: H0, its last day and its
     size (gap-fix corrections included), shown by the set's timeline, and the gap-fix dates.
     """
     plugin = get_set_plugin(plugin_code)
-    members = await asyncio.to_thread(collect_members, broker_id=broker_id, plugin_code=plugin_code, batch_id=batch_id)
+    members = await asyncio.to_thread(collect_members, broker_id=broker_id, plugin_code=plugin_code, batch_id=batch_id, exclude_file_ids=exclude_file_ids)
     dated = await _tagged_dates(session, broker_id=broker_id, history_tag=plugin.history_tag)
     return await asyncio.to_thread(
         build_preview,
@@ -313,10 +331,13 @@ def _combined_filename(plugin: BRIMProvider, preview: BRIMSetPreview) -> str:
     return f"{plugin.provider_name} — combined.csv"
 
 
-async def combine_set(session: AsyncSession, *, broker_id: int, plugin_code: str, batch_id: str, user_id: Optional[int]) -> BRIMSetCombineResponse:
-    """Combine a complete set, or reuse the identical combined file built before (design D-S6)."""
+async def combine_set(session: AsyncSession, *, broker_id: int, plugin_code: str, batch_id: str, user_id: Optional[int], exclude_file_ids: Sequence[str] = ()) -> BRIMSetCombineResponse:
+    """Combine a complete set, or reuse the identical combined file built before (design D-S6).
+
+    The members are the preview's, without the files the user left out (``exclude_file_ids``).
+    """
     plugin = get_set_plugin(plugin_code)
-    preview = await preview_set(session, broker_id=broker_id, plugin_code=plugin_code, batch_id=batch_id)
+    preview = await preview_set(session, broker_id=broker_id, plugin_code=plugin_code, batch_id=batch_id, exclude_file_ids=exclude_file_ids)
     if not preview.complete:
         missing_roles = [item.role for item in preview.missing]
         reasons = ", ".join(missing_roles) or ", ".join(notice.code for notice in preview.warnings if notice.code in {"excess_files", "mixed_accounts"})

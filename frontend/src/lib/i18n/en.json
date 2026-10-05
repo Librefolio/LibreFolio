@@ -887,7 +887,14 @@
         "gapInfo": "No export of this kind covers these days",
         "historyCount": "{n, plural, one {# transaction already in LibreFolio} other {# transactions already in LibreFolio}}"
       },
-      "previewCombined": "Preview the combined file"
+      "previewCombined": "Preview the combined file",
+      "readAs": "Read as",
+      "readAsOneByOne": "Read the files one by one",
+      "detected": "detected",
+      "readAloneWith": "Read alone with {plugin}",
+      "removeFromSet": "Remove from the set",
+      "defaultPluginNote": "Read as the {plugin} set, not with the broker's default plugin ({defaultPlugin}). To change it, use “Read as” or a file's ⋮ menu.",
+      "alsoRecognisedBy": "{file} is also recognised by: {plugins}"
     },
     "parseDetail": {
       "sourceRow": "File line",

@@ -29,7 +29,7 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import FileSetBadges from '$lib/components/files/FileSetBadges.svelte';
     import {getCachedPlugins, setCachedPlugins} from '$lib/components/ui/select/ImportPluginSelect.svelte';
-    import {fileSetBadges, setsOfFiles, type FileSetBadgeContext, type ReportSetGroup, type SetPluginInfo, type SetPreviewState} from '$lib/utils/transactions/importReportSets';
+    import {fileSetBadges, setRequest, setsOfFiles, type FileSetBadgeContext, type ReportSetGroup, type SetPluginInfo, type SetPreviewState} from '$lib/utils/transactions/importReportSets';
     import type {BrimPlugin, BrimSetPreview} from '$lib/types';
 
     interface Props {
@@ -125,7 +125,8 @@
         const generation = getClientSessionGeneration();
         let state: SetPreviewState;
         try {
-            const preview = (await zodiosApi.preview_report_set_api_v1_brokers_import_sets_preview_post({broker_id: set.brokerId, plugin_code: set.pluginCode, batch_id: set.batchId})) as BrimSetPreview;
+            // The originals left out of the set by the last analysis are named, so the server previews the same set.
+            const preview = (await zodiosApi.preview_report_set_api_v1_brokers_import_sets_preview_post(setRequest(set, files as BrimFile[]))) as BrimSetPreview;
             state = {status: 'ready', preview};
         } catch (error) {
             state = {status: 'error', error: error instanceof Error ? error.message : 'request-failed'};
