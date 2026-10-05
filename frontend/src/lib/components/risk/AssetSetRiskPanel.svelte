@@ -90,6 +90,8 @@
     import BenchmarkSelect from './BenchmarkSelect.svelte';
     import LabAssetPicker from './LabAssetPicker.svelte';
     import LabPopover from './LabPopover.svelte';
+    import {partialNotice} from './levels/partialNotice';
+    import RiskPartialNotice from './levels/RiskPartialNotice.svelte';
     import type {RiskBenchmarkState} from '$lib/stores/risk/riskBenchmarkStore.svelte';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {applyBulkAction, labBenchmarkId, MAX_SELECTED_ASSETS, readPersistedSelection, resolveInitialSelectionWithSource, writePersistedSelection, type BulkAction, type SelectionSource} from './assetSetSelection';
@@ -570,6 +572,27 @@
     let benchmarkState = $state<RiskBenchmarkState>('pending');
     let benchmarkId = $derived(labBenchmarkId(benchmarkState, benchmarkValue));
 
+    /**
+     * One notice above the sections, as on the Dashboard (the developer's decision of 05/10).
+     *
+     * Every section reads the same selection over the same window, so a stale price or an
+     * excluded asset used to be said once under each frame — the same sentence, read as four
+     * problems. The frames now keep only what did not come back at all, and this notice says
+     * what is partial, and why, once: from the results the correlation and the two levels
+     * render, read through `bind:this`. The replay keeps its own, as L4 does on the Dashboard:
+     * it answers another question, over a period of its own.
+     */
+    let correlationSection = $state<ReturnType<typeof AssetSetCorrelationSection>>();
+    let levelsSection = $state<ReturnType<typeof AssetSetComparisonLevels>>();
+    let notice = $derived.by(() => {
+        const sources = [correlationSection?.qualitySource(), levelsSection?.qualitySource()].filter((source) => source !== undefined);
+        return partialNotice(
+            sources.flatMap((source) => source.results),
+            $t,
+            Object.fromEntries(sources.flatMap((source) => Object.entries(source.labels))),
+        );
+    });
+
     function runBulkAction(action: BulkAction): void {
         selectionTouched = true;
         selectedAssetIds = applyBulkAction(action, selectedAssetIds, candidates).sort((left, right) => left - right);
@@ -773,9 +796,10 @@
     </section>
 
     {#if analysedIds.length > 0}
-        <AssetSetCorrelationSection assetIds={analysedIds} assetLabels={selectionLabels} assetTypes={selectionTypes} {dateStart} {dateEnd} {targetCurrency} refreshVersion={syncGeneration} />
+        <RiskPartialNotice partial={notice.partial} reasons={notice.reasons} />
+        <AssetSetCorrelationSection bind:this={correlationSection} assetIds={analysedIds} assetLabels={selectionLabels} assetTypes={selectionTypes} {dateStart} {dateEnd} {targetCurrency} refreshVersion={syncGeneration} />
         {#if benchmarkState !== 'pending'}
-            <AssetSetComparisonLevels assetIds={analysedIds} assetLabels={selectionLabels} assetIcons={selectionIcons} {dateStart} {dateEnd} {targetCurrency} {benchmarkId} refreshVersion={syncGeneration} />
+            <AssetSetComparisonLevels bind:this={levelsSection} assetIds={analysedIds} assetLabels={selectionLabels} assetIcons={selectionIcons} {dateStart} {dateEnd} {targetCurrency} {benchmarkId} refreshVersion={syncGeneration} />
         {/if}
         <AssetSetReplaySection assetIds={analysedIds} assetLabels={selectionLabels} {dateStart} {dateEnd} {targetCurrency} refreshVersion={syncGeneration} />
     {:else if seeding}

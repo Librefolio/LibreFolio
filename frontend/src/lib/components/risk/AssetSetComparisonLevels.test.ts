@@ -62,6 +62,14 @@
  * own retry. Pinned by the last blocks of this file; written red first, against the single question
  * both levels share today.
  *
+ * **One notice for the lab** (the developer's decision, 2026-10-05): what came back `partial`, and
+ * every warning, is said once by the lab panel's `RiskPartialNotice`, as the Dashboard says it above its
+ * levels; each frame keeps only what did not come back at all (`levelErrorHealth`) and no reasons. The
+ * panel reads what the levels render through `bind:this`, so the levels publish `qualitySource()`: their
+ * six results in page order, `null` where absent, the two VaR horizons' labels, and their two
+ * controllers' data-quality issues, L1°'s then L3°'s. Pinned by the final blocks; written red first,
+ * against frames that still list a partial result and repeat its warning, and no `qualitySource`.
+ *
  * Left elsewhere: the discard and re-ask rules themselves (`riskPanelController.test.ts`), the
  * tables' own cells (`AssetSetLossComparisonSection.test.ts`, `AssetSetRiskReturnSection.test.ts`,
  * `assetSetLevels.test.ts`), and the page end to end (`e2e/portfolio/risk-lab.spec.ts`).
@@ -103,12 +111,13 @@ vi.mock('$lib/stores/risk/riskPanelController.svelte', async (importOriginal) =>
 });
 
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
-import {assertEffectsRun} from '$test/runes.svelte';
+import {assertEffectsRun, recordReads} from '$test/runes.svelte';
 import type {schemas} from '$lib/api';
 import type {RiskQueryRequest} from '$lib/risk/riskRequest';
 import {ANSWER_DISCARDED_CODE, type RiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 import AssetSetComparisonLevels from './AssetSetComparisonLevels.svelte';
+import type {AssetSetQualitySource} from './assetSetLevels';
 import {ASSET_SET_DAILY_VAR_INSTANCE, ASSET_SET_MONTHLY_VAR_INSTANCE} from './riskAnalysisHelpers';
 
 type VarCvarOutput = z.infer<typeof schemas.RiskAssetSetVarCvarOutput>;
@@ -979,3 +988,326 @@ for (const {name, level, frame, figures} of TABLE_LEVELS) {
         });
     });
 }
+
+/**
+ * ─── One notice for the lab: each frame keeps what did not come back at all ──────────────────
+ *
+ * The developer's decision of 2026-10-05, the Dashboard's pattern (`RiskLevelsPanel`): the frames of
+ * L1–L3 pass `levelErrorHealth(health)` — `unavailable` and `failed`, never `partial` — and no
+ * `reasons`, and what came back partial, with every warning, is said once by `RiskPartialNotice`. In
+ * the lab that notice is the panel's, fed by what the correlation section, L1° and L3° render. So a
+ * level's frame here:
+ *
+ *   - lists no `partial` result in `{frame}-health`, and shows no `{frame}-reasons` at all — neither a
+ *     partial result's warning nor a note on a complete one;
+ *   - still lists what did not come back at all, with its error codes: `data-count` is the number of
+ *     its `unavailable` and `failed` results, whatever partial result sits beside them.
+ *
+ * Each frame is read after its body has drawn the figures of the very result under test (the barriers
+ * above), so an absence is about where a disclosure lives, never about an answer that had not landed.
+ * The warnings are invented and never read: routed, not worded.
+ */
+
+/** The instance ids of the results `FIGURES` does not carry, as `buildBaseAnalytics` names them (`base-historical-<code>`). */
+const DRAWDOWN_INSTANCE = 'base-historical-asset_set_drawdown';
+const RISK_RETURN_INSTANCE = 'base-historical-asset_set_risk_return';
+const KPI_INSTANCE = 'base-historical-asset_set_kpi';
+const COMPARISON_INSTANCE = 'base-historical-asset_set_comparison';
+/** The `correlation` that rides in every historical question — each level's too, though neither level draws it. */
+const CORRELATION_INSTANCE = 'base-historical-correlation';
+
+type ResultWarning = NonNullable<RiskAnalyticResult['warnings']>[number];
+
+/** Invented: a warning that degrades the result it rides on, as an excluded asset or a carried price does. */
+const PARTIAL_WARNING: ResultWarning = {code: 'invented_carried_price', message: 'Invented: one price was carried forward over a gap.', degrades_result: true};
+/** Invented: a note on a result that is whole (`degrades_result: false`) — the case `resultReasons` refuses to hide. */
+const NOTE_WARNING: ResultWarning = {code: 'invented_note', message: 'Invented: a note on a figure that is whole.', degrades_result: false};
+
+/** What stops a measurement from coming back at all, by the status it then carries: the codes a frame words under itself. */
+const STOPPED_BY = {unavailable: 'insufficient_history', failed: 'execution_failed'} as const;
+type Stopped = keyof typeof STOPPED_BY;
+
+/** The fixture of `FIGURES` that answers an instance. */
+function figure(instanceId: string): RiskAnalyticResult {
+    const found = FIGURES.find((result) => result.instance_id === instanceId);
+    if (!found) throw new Error(`FIGURES carries no ${instanceId}`);
+    return found;
+}
+
+/** A result with figures turned partial by a warning — its output kept, as the backend keeps it. */
+function partial(instanceId: string): RiskAnalyticResult {
+    return {...figure(instanceId), status: 'partial', warnings: [PARTIAL_WARNING]};
+}
+
+/** A complete result with figures that still carries a note. */
+function noted(instanceId: string): RiskAnalyticResult {
+    return {...figure(instanceId), status: 'ok', warnings: [NOTE_WARNING]};
+}
+
+/** A result that did not come back at all: no output, by contract, and the code of what stopped it. */
+function stopped(instanceId: string, analyticCode: string, status: Stopped): RiskAnalyticResult {
+    return {instance_id: instanceId, analytic_code: analyticCode, status, output: null, error: {code: STOPPED_BY[status], message: `Invented: ${analyticCode} came back ${status}.`}};
+}
+
+function isStopped(result: RiskAnalyticResult): boolean {
+    return result.status === 'unavailable' || result.status === 'failed';
+}
+
+/** The result each level's barrier reads its figures from: L1°'s bad day, L3°'s KPI (its volatility). */
+const BARRIER_INSTANCE: Record<Level, string> = {l1: ASSET_SET_DAILY_VAR_INSTANCE, l3: KPI_INSTANCE};
+
+/** `FIGURES`, with the result of one instance replaced. */
+function figuresWith(instanceId: string, replace: (instanceId: string) => RiskAnalyticResult): RiskAnalyticResult[] {
+    return FIGURES.map((result) => (result.instance_id === instanceId ? replace(instanceId) : result));
+}
+
+/**
+ * Each level's three results, every one in a state of its own: the partial one still draws its figures
+ * (the barrier), the other two did not come back at all — one `unavailable`, one `failed`. L3°'s
+ * comparison is asked only with a benchmark, so a case answering it mounts with one.
+ */
+const MIXED: Record<Level, RiskAnalyticResult[]> = {
+    l1: [partial(ASSET_SET_DAILY_VAR_INSTANCE), stopped(ASSET_SET_MONTHLY_VAR_INSTANCE, 'asset_set_var', 'unavailable'), stopped(DRAWDOWN_INSTANCE, 'asset_set_drawdown', 'failed')],
+    l3: [stopped(RISK_RETURN_INSTANCE, 'asset_set_risk_return', 'unavailable'), partial(KPI_INSTANCE), stopped(COMPARISON_INSTANCE, 'asset_set_comparison', 'failed')],
+};
+const MIXED_ALL: RiskAnalyticResult[] = [...MIXED.l1, ...MIXED.l3];
+
+/** Answer every question with the results it asked for, out of `results`, and keep it. One test's scope: `beforeEach` installs the ordinary answers again. */
+function answerWith(results: RiskAnalyticResult[]): void {
+    queryRisk.mockImplementation(async (request: RiskQueryRequest, force?: boolean) => {
+        script.asked.push({request, force: force === true});
+        return {items: answerTo(request, results)};
+    });
+}
+
+for (const {name, level, frame, figures} of TABLE_LEVELS) {
+    describe(`AssetSetComparisonLevels — ${name}'s frame keeps only what did not come back at all: the lab's notice says the rest`, () => {
+        it(`a partial result carrying a warning is named in neither ${name}'s health nor its reasons`, async () => {
+            const instance = BARRIER_INSTANCE[level];
+            answerWith(figuresWith(instance, partial));
+            const {controllers} = mount();
+            await settled(controllers);
+            expect(
+                controllers.some((controller) => controller.historicalResults.some((result) => result.instance_id === instance && result.status === 'partial')),
+                `premise: no controller holds ${name}'s partial result`,
+            ).toBe(true);
+            // The barrier: the partial result's own figures are in the cells.
+            await figures();
+
+            expect(screen.queryByTestId(`${frame}-health`), `${name} still lists a partial result in its frame: the lab's one notice names it, once`).toBeNull();
+            expect(screen.queryByTestId(`${frame}-reasons`), `${name} still repeats a partial result's warning in its frame: the lab's one notice says it, once`).toBeNull();
+        });
+
+        it(`a note on a complete result is not repeated in ${name}'s frame either: the frame carries no reasons at all`, async () => {
+            answerWith(figuresWith(BARRIER_INSTANCE[level], noted));
+            const {controllers} = mount();
+            await settled(controllers);
+            // The barrier: the noted result's own figures are in the cells.
+            await figures();
+
+            expect(screen.queryByTestId(`${frame}-reasons`), `${name} still words a warning in its frame: every warning is the lab's notice's, partial or not`).toBeNull();
+            expect(screen.queryByTestId(`${frame}-health`), `${name} lists a complete result as degraded`).toBeNull();
+        });
+
+        it(`beside a partial result, ${name}'s health still lists what did not come back at all — the unavailable and the failed, not the partial — with their codes`, async () => {
+            answerWith(MIXED_ALL);
+            const {controllers} = mount({...PROPS, benchmarkId: BENCHMARK});
+            await settled(controllers);
+            // The barrier: the partial result's own figures are in the cells.
+            await figures();
+
+            const health = await waitFor(() => screen.getByTestId(`${frame}-health`));
+            const missing = MIXED[level].filter(isStopped);
+            expect(health, `${name}'s health must count its ${missing.length} unavailable and failed results, and leave the partial one to the lab's notice`).toHaveAttribute('data-count', String(missing.length));
+            expect([...frameCodes(frame)].sort(), `${name}'s error codes are not what stopped its results: what did not come back keeps its cause under its level`).toEqual(missing.map((result) => STOPPED_BY[result.status as Stopped]).sort());
+            expect(screen.queryByTestId(`${frame}-reasons`), `${name} still repeats the partial result's warning in its frame`).toBeNull();
+        });
+    });
+}
+
+/**
+ * ─── `qualitySource()`: what the lab panel reads through `bind:this` ───────────────────────────
+ *
+ * The notice is the panel's; the results are the levels'. The panel feeds `partialNotice` with
+ * `qualitySource().results` and `.labels`, and merges `.issues` with the correlation section's, so the
+ * export hands over exactly what the two frames render — the controllers' own objects, in page order,
+ * `null` where the answer had none, whatever their status — and stays reactive: the panel calls it
+ * inside a `$derived`, so an effect reading it must re-run when the store answers again.
+ *
+ * ⚠️ "The objects the store answered" are the controllers' `historicalResults`. A controller keeps its
+ * answer in `$state`, which wraps every result in a proxy, so the fixture `queryRisk` returned is never
+ * the object a frame reads — `===` against it would fail on any implementation. Identity is checked
+ * against the controller's own entry, the one the frame reads; content against the fixture.
+ */
+
+/** The six results the two frames render, in page order — L1°'s three, then L3°'s in its frame's order — with the level whose controller holds each. */
+const RENDERED: ReadonlyArray<{level: Level; instanceId: string}> = [
+    {level: 'l1', instanceId: ASSET_SET_DAILY_VAR_INSTANCE},
+    {level: 'l1', instanceId: ASSET_SET_MONTHLY_VAR_INSTANCE},
+    {level: 'l1', instanceId: DRAWDOWN_INSTANCE},
+    {level: 'l3', instanceId: RISK_RETURN_INSTANCE},
+    {level: 'l3', instanceId: KPI_INSTANCE},
+    {level: 'l3', instanceId: COMPARISON_INSTANCE},
+];
+
+/** The two VaR horizons share an analytic code, so the notice names them by instance — with the keys of their own L1° columns. */
+const VAR_LABELS = {
+    [ASSET_SET_DAILY_VAR_INSTANCE]: 'risk.assetSet.levels.l1.columns.badDay',
+    [ASSET_SET_MONTHLY_VAR_INSTANCE]: 'risk.assetSet.levels.l1.columns.badMonth',
+};
+
+/** The levels' `qualitySource`, reached through the instance the harness mounted — as the panel reaches it, through `bind:this`. */
+function qualitySourceOf(view: {component: unknown}): () => AssetSetQualitySource {
+    const read = (view.component as {qualitySource?: unknown}).qualitySource;
+    expect(typeof read, 'the levels export no qualitySource(): the lab panel has nothing to read their results and issues through bind:this').toBe('function');
+    return read as () => AssetSetQualitySource;
+}
+
+/** The entry a controller holds for an instance — the very object its frame reads — or null. */
+function heldBy(controller: RiskPanelController, instanceId: string): RiskAnalyticResult | null {
+    return controller.historicalResults.find((result) => result.instance_id === instanceId) ?? null;
+}
+
+/** The controller whose answer carries a level's own analytics: found by what it holds, never by creation order. */
+function controllerOf(controllers: RiskPanelController[], level: Level): RiskPanelController {
+    const owners = controllers.filter((controller) => controller.historicalResults.some((result) => LEVEL_CODES[level].includes(result.analytic_code)));
+    expect(owners, `premise: not exactly one controller holds ${LEVEL_NAMES[level]}'s analytics`).toHaveLength(1);
+    return owners[0];
+}
+
+/** What `results` must be: in each slot, the entry its level's controller holds for it, or null. */
+function heldResults(controllers: RiskPanelController[]): Array<RiskAnalyticResult | null> {
+    const owners: Record<Level, RiskPanelController> = {l1: controllerOf(controllers, 'l1'), l3: controllerOf(controllers, 'l3')};
+    return RENDERED.map(({level, instanceId}) => heldBy(owners[level], instanceId));
+}
+
+/** Slot by slot: the same instances in the same order, then the very same objects. */
+function expectSameResults(actual: ReadonlyArray<RiskAnalyticResult | null>, expected: ReadonlyArray<RiskAnalyticResult | null>, when: string): void {
+    expect(
+        actual.map((result) => result?.instance_id ?? null),
+        `${when}: not the six results the two frames render, in page order`,
+    ).toEqual(expected.map((result) => result?.instance_id ?? null));
+    actual.forEach((result, index) => expect(result, `${when}: ${RENDERED[index].instanceId} is not the object its controller holds — the notice would read a copy, not what the frame reads`).toBe(expected[index]));
+}
+
+/** The latest value an effect read, or the error its read threw. */
+function lastRead<T>(values: ReadonlyArray<T | Error>): T {
+    const last = values.at(-1);
+    if (last === undefined) throw new Error('the effect never read qualitySource()');
+    if (last instanceof Error) throw last;
+    return last;
+}
+
+/** Invented: one data-quality issue per level's answer, different so their order is observable. */
+type QualityIssue = NonNullable<z.infer<typeof schemas.DataQualityReport>['issues']>[number];
+const LOSS_ISSUE: QualityIssue = {domain: 'asset', code: 'STALE_PRICE', severity: 'warning', message_i18n_key: 'invented.dataQuality.stalePrice', affected_asset_ids: [HOLDING_A]};
+const PAID_ISSUE: QualityIssue = {domain: 'forex', code: 'FX_PAIR_PARTIAL_GAP', severity: 'info', message_i18n_key: 'invented.dataQuality.fxGap', affected_fx_pairs: ['USD/EUR']};
+
+/**
+ * The `correlation` a level's question carries, with an issue planted in its data quality. It is the
+ * one result of an asset-set answer a controller reads `dataQualityIssues` from — `allResults` knows
+ * `correlation` and not the per-asset family — and it rides in both levels' questions, so each level's
+ * answer carries its own.
+ */
+function correlationCarrying(issue: QualityIssue): RiskAnalyticResult {
+    return {instance_id: CORRELATION_INSTANCE, analytic_code: 'correlation', status: 'ok', output: null, data_quality: {issues: [issue], data_quality_status: 'carried_forward'}};
+}
+
+/** Answer each question with its own level's results: routed by the analytics it carries, so the `correlation` both ask for can differ per level. */
+function answerPerLevel(byLevel: Record<Level, RiskAnalyticResult[]>): void {
+    queryRisk.mockImplementation(async (request: RiskQueryRequest, force?: boolean) => {
+        script.asked.push({request, force: force === true});
+        const own = LEVELS.filter(({level}) => carries(request, level)).flatMap(({level}) => byLevel[level]);
+        return {items: answerTo(request, own)};
+    });
+}
+
+describe('AssetSetComparisonLevels — qualitySource(), what the lab panel reads through bind:this', () => {
+    it("returns the six results the two frames render, in page order — the controllers' own, null where the answer had none", async () => {
+        const {view, controllers} = mount();
+        await settled(controllers);
+        await expectFigures();
+        await expectL3Figures();
+
+        const {results} = qualitySourceOf(view)();
+        const answered = new Set(FIGURES.map((result) => result.instance_id));
+        expect(
+            results.map((result) => result?.instance_id ?? null),
+            'not the bad day, the bad month, the drawdown, then the risk/return, the KPI and the comparison — null where the answer had none',
+        ).toEqual(RENDERED.map(({instanceId}) => (answered.has(instanceId) ? instanceId : null)));
+        expectSameResults(results, heldResults(controllers), 'the ordinary answer');
+    });
+
+    it('with all six answered, whatever their status, returns all six: nothing is filtered, the notice decides what is partial', async () => {
+        answerWith(MIXED_ALL);
+        const {view, controllers} = mount({...PROPS, benchmarkId: BENCHMARK});
+        await settled(controllers);
+        await expectFigures();
+        await expectL3Figures();
+
+        const {results} = qualitySourceOf(view)();
+        expectSameResults(results, heldResults(controllers), 'every result answered');
+        results.forEach((result, index) => {
+            const {instanceId} = RENDERED[index];
+            expect(result, `${instanceId} does not carry what the store answered`).toEqual(MIXED_ALL.find((answered) => answered.instance_id === instanceId));
+        });
+    });
+
+    it('labels the two VaR horizons by instance, with the keys of their own columns: they share an analytic code', async () => {
+        const {view, controllers} = mount();
+        await settled(controllers);
+
+        expect(qualitySourceOf(view)().labels, 'the notice would name the bad day and the bad month alike').toEqual(VAR_LABELS);
+    });
+
+    it("issues: L1°'s controller's data-quality issues, then L3°'s — concatenated, as the controllers hold them", async () => {
+        answerPerLevel({l1: [...FIGURES, correlationCarrying(LOSS_ISSUE)], l3: [...FIGURES, correlationCarrying(PAID_ISSUE)]});
+        const {view, controllers} = mount();
+        await settled(controllers);
+        await expectFigures();
+        await expectL3Figures();
+        const loss = controllerOf(controllers, 'l1');
+        const paid = controllerOf(controllers, 'l3');
+        expect(
+            loss.dataQualityIssues.map((issue) => issue.code),
+            "premise: L1°'s controller does not hold the issue planted in L1°'s answer",
+        ).toEqual([LOSS_ISSUE.code]);
+        expect(
+            paid.dataQualityIssues.map((issue) => issue.code),
+            "premise: L3°'s controller does not hold the issue planted in L3°'s answer",
+        ).toEqual([PAID_ISSUE.code]);
+
+        const {issues} = qualitySourceOf(view)();
+        expect(issues, "not L1°'s controller's issues followed by L3°'s").toEqual([...loss.dataQualityIssues, ...paid.dataQualityIssues]);
+        expect(
+            issues.map((issue) => issue.code),
+            "the order: L1°'s first, then L3°'s",
+        ).toEqual([LOSS_ISSUE.code, PAID_ISSUE.code]);
+    });
+
+    it('answered again, returns the new results — to a plain call, and to an effect that reads it, as the panel does', async () => {
+        const {view, controllers} = mount({...PROPS, benchmarkId: BENCHMARK});
+        await settled(controllers);
+        await expectFigures();
+        const source = qualitySourceOf(view);
+        const reads = recordReads(() => source());
+        try {
+            expectSameResults(lastRead(reads.values).results, heldResults(controllers), 'the first answer, read by an effect');
+
+            // An accepted sync re-reads the base, and the store answers with every result changed.
+            answerWith(MIXED_ALL);
+            await view.rerender({refreshVersion: 1});
+            await waitFor(() => {
+                expect(heldBy(controllerOf(controllers, 'l1'), DRAWDOWN_INSTANCE)?.status, 'the second answer never reached L1°').toBe('failed');
+                expect(heldBy(controllerOf(controllers, 'l3'), COMPARISON_INSTANCE)?.status, 'the second answer never reached L3°').toBe('failed');
+            });
+            await quiet(controllers);
+
+            const now = heldResults(controllers);
+            expectSameResults(source().results, now, 'a plain call after the second answer');
+            await waitFor(() => expectSameResults(lastRead(reads.values).results, now, "an effect reading qualitySource() after the second answer — it never re-ran, so the panel's notice would keep the first"));
+        } finally {
+            reads.stop();
+        }
+    });
+});

@@ -23,8 +23,25 @@
  * nullable, never the other way round.
  */
 import {schemas} from '$lib/api';
+import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 import {riskMetadata, riskOutput, singleValue} from '$lib/risk/riskTypes';
+
+/**
+ * What a section of the lab hands its panel, read through `bind:this`, for the one notice above
+ * the sections (the developer's decision of 05/10/2026, as on the Dashboard since 24/09).
+ *
+ * The notice is the panel's and the results are the sections': a section's frame keeps only
+ * what did not come back at all, so what is partial, and why, is said once, at the top.
+ */
+export interface AssetSetQualitySource {
+    /** The results the section's frames render, in page order, `null` where the answer had none. */
+    results: Array<RiskAnalyticResult | null>;
+    /** i18n keys naming results by instance, where the analytic's name is ambiguous (the two VaR horizons). */
+    labels: Readonly<Record<string, string>>;
+    /** The data-quality issues of the section's controllers, in their order, not yet merged. */
+    issues: DataQualityIssue[];
+}
 
 /** One row of the L1° comparison: what this asset did to whoever held it. */
 export interface AssetSetHurtRow {
