@@ -176,6 +176,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/ui/select/FxProviderSelect.test.ts",
             "src/lib/components/ui/select/TreeSelect.test.ts",
             "src/lib/components/ui/select/AssetTypeSelect.test.ts",
+            "src/lib/components/ui/select/AssetPickerPanel.test.ts",
             "src/lib/components/ui/data-editor/DataEditor.test.ts",
             "src/lib/components/ui/media/AssetPickerModal.test.ts",
             "src/lib/components/ui/media/ImageEditModal.test.ts",

@@ -77,6 +77,7 @@
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
+    import SelectPopover from '$lib/components/ui/select/SelectPopover.svelte';
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
     import {singleValue} from '$lib/risk/riskTypes';
     import {currentLanguage} from '$lib/stores/app/language';
@@ -92,7 +93,6 @@
     import AssetChip from './AssetChip.svelte';
     import BenchmarkSelect from './BenchmarkSelect.svelte';
     import LabAssetPicker from './LabAssetPicker.svelte';
-    import LabPopover from './LabPopover.svelte';
     import {partialNotice} from './levels/partialNotice';
     import RiskPartialNotice from './levels/RiskPartialNotice.svelte';
     import type {RiskBenchmarkState} from '$lib/stores/risk/riskBenchmarkStore.svelte';
@@ -719,7 +719,7 @@
                     </button>
                 {/each}
 
-                <LabPopover bind:open={presetOpen} testId="risk-broker-filter-dropdown" panelClass="w-64">
+                <SelectPopover bind:open={presetOpen} testId="risk-broker-filter-dropdown" panelClass="w-64">
                     {#snippet trigger({open, toggle})}
                         <button type="button" class={QUICK_BUTTON} aria-expanded={open} onclick={toggle} disabled={brokerAssetsLoading} data-testid="risk-broker-filter-button">
                             {#if brokerAssetsLoading}
@@ -756,7 +756,7 @@
                             </div>
                         {/if}
                     {/snippet}
-                </LabPopover>
+                </SelectPopover>
             </div>
 
             <Tooltip text={$t('risk.assetSet.selectedCountHint')} position="bottom" maxWidth="360px" wrapperClass="ml-auto">

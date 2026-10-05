@@ -6,11 +6,12 @@
  * This module is the answer to a single defect: Asset Global used to open on
  * `assets.filter(active).slice(0, 100)`, which drew a 100×100 matrix nobody
  * asked for and gave no way back. Every rule it now enforces is a decision
- * taken before a component renders — which assets are on the table, what the
- * filter row means when it is empty, what a mass action does to the ruled-out
- * assets parked in the selection, which rows the "+" picker offers, which
+ * taken before a component renders — which assets are on the table, what a
+ * mass action does to the ruled-out assets parked in the selection, which
  * benchmark the comparison levels measure against — so all of it is asserted
- * here rather than through a page.
+ * here rather than through a page. The "+" picker's own rules (the filter row,
+ * its rows, its "select visible" switch) moved with the picker to
+ * `ui/select/assetPicker.ts`, and their tests to `ui/select/AssetPickerPanel.test.ts`.
  *
  * Two deliberate choices in the fixtures:
  *
@@ -40,24 +41,7 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 
 import {getClientSessionUserId, transitionClientSession} from '$lib/stores/app/clientSession';
 import type {RiskBenchmarkState} from '$lib/stores/risk/riskBenchmarkStore.svelte';
-import {
-    FALLBACK_SELECTION_SIZE,
-    MAX_SELECTED_ASSETS,
-    applyBulkAction,
-    applyFilters,
-    foldForSearch,
-    labBenchmarkId,
-    pickerRows,
-    readPersistedSelection,
-    resolveInitialSelectionWithSource,
-    toggleVisibleRows,
-    visibleRowsAllChecked,
-    writePersistedSelection,
-    type BulkAction,
-    type SelectableAsset,
-    type SelectionFilters,
-    type SelectionSource,
-} from './assetSetSelection';
+import {FALLBACK_SELECTION_SIZE, MAX_SELECTED_ASSETS, applyBulkAction, labBenchmarkId, readPersistedSelection, resolveInitialSelectionWithSource, writePersistedSelection, type BulkAction, type SelectableAsset, type SelectionSource} from './assetSetSelection';
 
 /** An asset carrying only the fields this module reads. */
 function asset(id: number, overrides: Partial<SelectableAsset> = {}): SelectableAsset {
@@ -628,60 +612,6 @@ describe('resolveInitialSelectionWithSource (D19)', () => {
     });
 });
 
-describe('applyFilters', () => {
-    /** The filter row with no criterion set, as it opens. */
-    const EMPTY_FILTERS: SelectionFilters = {types: [], currencies: []};
-    const assets = [asset(1, {asset_type: 'ETF', currency: 'EUR'}), asset(2, {asset_type: 'STOCK', currency: 'USD'}), asset(3, {asset_type: 'ETF', currency: 'USD'}), asset(4, {asset_type: null, currency: 'EUR'})];
-
-    it('shows everything when no criterion is set', () => {
-        // An empty filter row is unconstrained, not empty. A page that opens
-        // blank makes the user guess what they did wrong.
-        expect(ids(applyFilters(assets, EMPTY_FILTERS))).toEqual(ids(assets));
-    });
-
-    it('narrows by type', () => {
-        expect(ids(applyFilters(assets, {types: ['ETF'], currencies: []}))).toEqual([1, 3]);
-    });
-
-    it('narrows by currency', () => {
-        expect(ids(applyFilters(assets, {types: [], currencies: ['USD']}))).toEqual([2, 3]);
-    });
-
-    it('accepts several values for one criterion', () => {
-        expect(ids(applyFilters(assets, {types: ['ETF', 'STOCK'], currencies: []}))).toEqual([1, 2, 3]);
-    });
-
-    it('composes type and currency with AND', () => {
-        expect(ids(applyFilters(assets, {types: ['ETF'], currencies: ['USD']}))).toEqual([3]);
-    });
-
-    it('matches an asset with no type under OTHER', () => {
-        expect(ids(applyFilters(assets, {types: ['OTHER'], currencies: []}))).toEqual([4]);
-        const untyped = [{id: 9, currency: 'EUR'} as SelectableAsset];
-        expect(ids(applyFilters(untyped, {types: ['OTHER'], currencies: []}))).toEqual([9]);
-    });
-
-    it('matches an asset whose type is an empty string under OTHER', () => {
-        // `||`, not `??`: an empty string is as unclassified as a null one, and
-        // under `??` the asset would match no criterion at all — it would
-        // vanish the moment any type filter was switched on, unreachable.
-        const blank = [asset(9, {asset_type: ''})];
-        expect(ids(applyFilters(blank, {types: ['OTHER'], currencies: []}))).toEqual([9]);
-        expect(ids(applyFilters(blank, EMPTY_FILTERS))).toEqual([9]);
-    });
-
-    it('returns nothing when a criterion that was really set matches nothing', () => {
-        expect(applyFilters(assets, {types: ['CRYPTO'], currencies: []})).toEqual([]);
-    });
-
-    it('leaves the catalogue it was given untouched', () => {
-        const original = [...assets];
-        const filtered = applyFilters(assets, {types: ['ETF'], currencies: []});
-        expect(assets).toEqual(original);
-        expect(filtered).not.toBe(assets);
-    });
-});
-
 describe('applyBulkAction', () => {
     // The candidates are what an action may bring in: the page's catalogue without
     // the assets Risk's engine rules out for the period. A ruled-out asset already
@@ -766,128 +696,6 @@ describe('applyBulkAction', () => {
             expect(applyBulkAction(action, selected, candidates(2, 3))).not.toBe(selected);
         }
         expect(selected).toEqual([1, 2]);
-    });
-});
-
-describe('foldForSearch', () => {
-    it('drops accents and case, so "societe" finds "Société"', () => {
-        expect(foldForSearch('Société Générale')).toBe('societe generale');
-        expect(foldForSearch('ÉCLAIR À LA CRÈME')).toBe('eclair a la creme');
-    });
-
-    it('folds an accent typed as a separate mark exactly like a precomposed one', () => {
-        // "é" arrives as one code point or as "e" + COMBINING ACUTE ACCENT, depending on where the text came from.
-        expect(foldForSearch('Soci\u00E9t\u00E9')).toBe('societe');
-        expect(foldForSearch('Socie\u0301te\u0301')).toBe('societe');
-    });
-
-    it('leaves digits, spaces and punctuation as they are', () => {
-        expect(foldForSearch('S&P 500 — ETF (Acc)')).toBe('s&p 500 — etf (acc)');
-    });
-});
-
-describe('pickerRows', () => {
-    interface Row {
-        id: number;
-        name: string;
-        currency: string;
-    }
-
-    // Not in id order, so "the order the caller passed" cannot pass for "sorted".
-    const rows: Row[] = [
-        {id: 4, name: 'iShares Core MSCI World', currency: 'USD'},
-        {id: 2, name: 'Société Générale', currency: 'EUR'},
-        {id: 7, name: 'Vanguard FTSE All-World ETF', currency: 'USD'},
-        {id: 1, name: 'Amundi MSCI World ETF', currency: 'EUR'},
-    ];
-    const found = (selected: readonly number[], query: string): number[] => pickerRows(rows, selected, query, (row) => `${row.name} ${row.currency}`).map((row) => row.id);
-
-    it('lists every candidate, in the order given, when the query is empty or blank', () => {
-        expect(found([], '')).toEqual([4, 2, 7, 1]);
-        expect(found([], '   ')).toEqual([4, 2, 7, 1]);
-    });
-
-    it('leaves out the assets already selected, even when they match', () => {
-        expect(found([2, 7], '')).toEqual([4, 1]);
-        expect(found([7], 'vanguard')).toEqual([]);
-    });
-
-    it('keeps a row only when every word of the query is in its text, in any order', () => {
-        // "etf usd" finds the ETF quoted in dollars whichever way its name is written;
-        // either word alone also brings the euro ETF, or the dollar fund that is no ETF.
-        expect(found([], 'etf usd')).toEqual([7]);
-        expect(found([], 'usd etf')).toEqual([7]);
-        expect(found([], 'etf')).toEqual([7, 1]);
-        expect(found([], 'usd')).toEqual([4, 7]);
-        expect(found([], 'msci crypto')).toEqual([]);
-    });
-
-    it('matches regardless of accents and case, on either side', () => {
-        expect(found([], 'SOCIETE')).toEqual([2]);
-        expect(found([], 'générale')).toEqual([2]);
-    });
-});
-
-describe('toggleVisibleRows and visibleRowsAllChecked', () => {
-    // `room` is how many assets the selection can still take; the rows checked in
-    // the picker, shown or not, spend it.
-
-    it('checks the visible rows not checked yet, in the order shown', () => {
-        expect(visibleRowsAllChecked([], [3, 1, 2], 10)).toBe(false);
-        expect(toggleVisibleRows([], [3, 1, 2], 10)).toEqual([3, 1, 2]);
-    });
-
-    it('checks no more rows than the selection has room for', () => {
-        const checked = toggleVisibleRows([], [1, 2, 3, 4, 5], 3);
-        expect(checked).toEqual([1, 2, 3]);
-        // Nothing left it could check: the switch now offers to uncheck.
-        expect(visibleRowsAllChecked(checked, [1, 2, 3, 4, 5], 3)).toBe(true);
-    });
-
-    it('counts a row checked under another query against the room, and keeps it', () => {
-        // 9 was checked under an earlier search: it is not shown, and it takes a place.
-        expect(toggleVisibleRows([9], [1, 2, 3], 3)).toEqual([9, 1, 2]);
-    });
-
-    it('unchecks the visible rows once every one is checked, and only those', () => {
-        expect(visibleRowsAllChecked([9, 1, 2], [1, 2], 10)).toBe(true);
-        expect(toggleVisibleRows([9, 1, 2], [1, 2], 10)).toEqual([9]);
-    });
-
-    it('unchecks instead of checking when no room is left', () => {
-        // One visible row checked, two not, and no room for them: the switch clears the one.
-        expect(visibleRowsAllChecked([9, 1], [1, 2, 3], 2)).toBe(true);
-        expect(toggleVisibleRows([9, 1], [1, 2, 3], 2)).toEqual([9]);
-        // With no room at all and nothing checked it has nothing to do — the picker disables it then.
-        expect(visibleRowsAllChecked([], [1, 2, 3], 0)).toBe(true);
-        expect(toggleVisibleRows([], [1, 2, 3], 0)).toEqual([]);
-    });
-
-    it('offers nothing to uncheck when no row is visible', () => {
-        expect(visibleRowsAllChecked([9], [], 10)).toBe(false);
-        expect(toggleVisibleRows([9], [], 10)).toEqual([9]);
-    });
-
-    it('says it would uncheck exactly when the switch unchecks, in every state', () => {
-        // `visibleRowsAllChecked` is the label and `toggleVisibleRows` the action:
-        // if they ever disagreed, the switch would say one thing and do another.
-        const visible = [1, 2, 3];
-        const states = [[], [1], [1, 2], [1, 2, 3], [9], [9, 1], [9, 1, 2, 3]];
-        for (const checked of states) {
-            for (const room of [0, 1, 2, 3, 4, 10]) {
-                const unchecks = !toggleVisibleRows(checked, visible, room).some((id) => visible.includes(id));
-                expect(visibleRowsAllChecked(checked, visible, room), `checked [${checked.join(', ')}], room ${room}`).toBe(unchecks);
-            }
-        }
-    });
-
-    it('hands back a new list and leaves the one it was given alone', () => {
-        // The picker assigns the result to its state: a list changed in place would not re-render.
-        const checked = [9, 1];
-        for (const room of [10, 2]) {
-            expect(toggleVisibleRows(checked, [1, 2, 3], room), `room ${room}`).not.toBe(checked);
-        }
-        expect(checked).toEqual([9, 1]);
     });
 });
 

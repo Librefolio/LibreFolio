@@ -1,17 +1,20 @@
 <!--
-  LabCheckMenu — one filter of the laboratory's selection card, as a compact
-  multi-choice menu.
+  CheckMenu — one filter of a picker, as a compact multi-choice menu. Moved from the Asset Global
+  lab (`risk/LabCheckMenu.svelte`), unchanged but for its test ids, which derive from `testId`.
 
-  The filters used to be a row of chips per criterion, one chip per value, so the
-  card grew with the catalogue. Here each criterion is one button; its values
-  open under it, with their icon and how many assets carry them. An empty choice
-  means "every value", as `applyFilters` reads it, and the button says how many
+  Filters drawn as a row of chips per criterion, one chip per value, grow with the catalogue. Here
+  each criterion is one button; its values open under it, with their icon and how many assets carry
+  them. An empty choice means "every value", as `applyFilters` reads it, and the button says how many
   values are on.
+
+  Test ids: `{testId}-button`, `{testId}-panel`, `{testId}-clear`, and one `{testId}-{value}` per
+  value, the only ones carrying `aria-pressed`.
 -->
 <script lang="ts">
     import {Check, ChevronDown} from 'lucide-svelte';
     import type {ComponentType} from 'svelte';
-    import LabPopover from './LabPopover.svelte';
+
+    import SelectPopover from './SelectPopover.svelte';
 
     export interface CheckMenuItem {
         value: string;
@@ -32,15 +35,14 @@
         onclear: () => void;
         clearLabel: string;
         testId: string;
-        optionTestId: (value: string) => string;
     }
 
-    let {label, icon: Icon, items, selected, ontoggle, onclear, clearLabel, testId, optionTestId}: Props = $props();
+    let {label, icon: Icon, items, selected, ontoggle, onclear, clearLabel, testId}: Props = $props();
 
     let active = $derived(selected.length > 0);
 </script>
 
-<LabPopover testId="{testId}-panel" panelClass="w-60">
+<SelectPopover testId="{testId}-panel" panelClass="w-60">
     {#snippet trigger({open, toggle})}
         <button
             type="button"
@@ -64,7 +66,7 @@
         <div class="max-h-64 overflow-y-auto p-1">
             {#each items as item (item.value)}
                 {@const on = selected.includes(item.value)}
-                <button type="button" class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-slate-700" aria-pressed={on} onclick={() => ontoggle(item.value)} data-testid={optionTestId(item.value)}>
+                <button type="button" class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-slate-700" aria-pressed={on} onclick={() => ontoggle(item.value)} data-testid="{testId}-{item.value}">
                     <span
                         class="flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border transition-colors {on
                             ? 'border-libre-green bg-libre-green text-white dark:border-emerald-400 dark:bg-emerald-400 dark:text-slate-900'
@@ -92,4 +94,4 @@
             </div>
         {/if}
     {/snippet}
-</LabPopover>
+</SelectPopover>
