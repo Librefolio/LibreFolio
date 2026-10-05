@@ -39,7 +39,21 @@ vi.mock('$lib/stores/risk/riskStore.svelte', async (importOriginal) => {
 });
 
 import {assertEffectsRun, effectRoot, reactiveBox, recordReads} from '$test/runes.svelte';
-import {ANSWER_DISCARDED_CODE, baseSignature, createRiskPanelController, discardedErrorCodes, LEVEL_ON_DEMAND_ANALYSES, ON_DEMAND_ANALYSES, type OnDemandAnalysis, type RiskControllerInputs, type RiskControllerOptions, type RiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
+import {
+    ANSWER_DISCARDED_CODE,
+    baseSignature,
+    createRiskPanelController,
+    discardedErrorCodes,
+    LEVEL_ON_DEMAND_ANALYSES,
+    mergeQualityIssues,
+    ON_DEMAND_ANALYSES,
+    type OnDemandAnalysis,
+    type RiskControllerInputs,
+    type RiskControllerOptions,
+    type RiskPanelController,
+} from '$lib/stores/risk/riskPanelController.svelte';
+import {normalizeQualityIssue} from '$lib/components/risk/riskAnalysisHelpers';
+import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
 
 /** `asset_ids` reaches the portfolio scope with K4; the generated client does not
  *  declare it yet, so the test states the shape the controller will actually see. */
@@ -158,6 +172,133 @@ function resultOf(controller: RiskPanelController, analysis: OnDemandAnalysis) {
 
 function loadingOf(controller: RiskPanelController, analysis: OnDemandAnalysis): boolean {
     return {comparison: controller.comparisonLoading, stress: controller.stressLoading, replay: controller.replayLoading, simulation: controller.simulationLoading}[analysis];
+}
+
+// ----------------------------------------------------------------------
+// Data-quality issues, shaped as `portfolio_engine.py` builds them in its
+// data-quality report: the count is the length of the list the issue is
+// about, and the CTA targets the first entry of that list.
+// ----------------------------------------------------------------------
+
+/** An issue as a result's report carries it, before `normalizeQualityIssue`. */
+type RawQualityIssue = Parameters<typeof normalizeQualityIssue>[0];
+
+type NamedAsset = readonly [id: number, name: string];
+
+/** An issue as the controller hands it to the merge: normalized. */
+function normalized(raw: RawQualityIssue): DataQualityIssue {
+    return normalizeQualityIssue(raw);
+}
+
+function stalePriceIssue(assets: readonly NamedAsset[], overrides: Partial<RawQualityIssue> = {}): RawQualityIssue {
+    return {
+        domain: 'portfolio',
+        code: 'STALE_PRICE',
+        severity: 'warning',
+        message_i18n_key: 'dataQuality.stalePrice',
+        message_params: {count: assets.length},
+        count: assets.length,
+        affected_asset_ids: assets.map(([id]) => id),
+        affected_asset_names: assets.map(([, name]) => name),
+        cta_action: 'sync_asset_prices',
+        cta_target: String(assets[0][0]),
+        group_key: 'stale_price',
+        ...overrides,
+    };
+}
+
+/** Carries a parameter of its own beside the count: the date its positions are implied at. */
+function transactionImpliedIssue(assets: readonly NamedAsset[], asOfDate: string): RawQualityIssue {
+    return {
+        domain: 'portfolio',
+        code: 'TRANSACTION_IMPLIED',
+        severity: 'warning',
+        message_i18n_key: 'dataQuality.transactionImplied',
+        message_params: {count: assets.length, as_of_date: asOfDate},
+        count: assets.length,
+        affected_asset_ids: assets.map(([id]) => id),
+        affected_asset_names: assets.map(([, name]) => name),
+        cta_action: 'navigate_asset',
+        cta_target: String(assets[0][0]),
+        group_key: 'transaction_implied',
+    };
+}
+
+/** MISSING_FX_RATES for pairs a provider serves: its dates span what is missing across them. */
+function missingFxRatesIssue(pairs: readonly string[], dates: {from: string; to: string; count: number}): RawQualityIssue {
+    return {
+        domain: 'portfolio',
+        code: 'MISSING_FX_RATES',
+        severity: 'warning',
+        message_i18n_key: 'dataQuality.missingFxRates',
+        message_params: {count: pairs.length, date_from: dates.from, date_to: dates.to, dates_count: dates.count},
+        count: pairs.length,
+        affected_fx_pairs: [...pairs],
+        cta_action: 'sync_fx_pair',
+        cta_target: pairs[0],
+        group_key: 'missing_fx_rates',
+    };
+}
+
+/** MISSING_FX_RATES for manual pairs: the same code, a group of its own, and no dates. */
+function missingFxRatesManualIssue(pairs: readonly string[]): RawQualityIssue {
+    return {
+        domain: 'portfolio',
+        code: 'MISSING_FX_RATES',
+        severity: 'warning',
+        message_i18n_key: 'dataQuality.missingFxRatesManual',
+        message_params: {count: pairs.length},
+        count: pairs.length,
+        affected_fx_pairs: [...pairs],
+        cta_action: 'navigate_fx',
+        cta_target: pairs[0],
+        group_key: 'missing_fx_rates_manual',
+    };
+}
+
+/** About dates, not about assets or pairs: a count and a span, and no list. */
+function navIncompleteIssue(dates: readonly string[]): RawQualityIssue {
+    return {
+        domain: 'portfolio',
+        code: 'NAV_INCOMPLETE',
+        severity: 'info',
+        message_i18n_key: 'dataQuality.navIncomplete',
+        message_params: {count: dates.length, date_from: dates[0], date_to: dates[dates.length - 1]},
+        count: dates.length,
+        group_key: 'nav_incomplete',
+    };
+}
+
+/** No count, no list, no parameter. */
+function mwrrNotCalculableIssue(): RawQualityIssue {
+    return {domain: 'portfolio', code: 'MWRR_NOT_CALCULABLE', severity: 'info', message_i18n_key: 'dataQuality.mwrrNotAvailable', group_key: 'mwrr'};
+}
+
+/**
+ * What every result of a Dashboard wave carries today: one portfolio over one window makes one report,
+ * repeated on each analytic. Both groups of MISSING_FX_RATES, and two issues about no list at all.
+ */
+function dashboardReportIssues(): RawQualityIssue[] {
+    return [
+        stalePriceIssue([
+            [11, 'Alpha'],
+            [12, 'Beta'],
+        ]),
+        missingFxRatesIssue(['EUR-USD', 'EUR-GBP'], {from: '2025-03-03', to: '2025-03-14', count: 5}),
+        missingFxRatesManualIssue(['CHF-EUR']),
+        navIncompleteIssue(['2025-03-07', '2025-03-10', '2025-03-11']),
+        mwrrNotCalculableIssue(),
+    ];
+}
+
+/** A risk result whose data-quality report carries `issues`, as the risk API answers it. */
+function resultWithIssues(analyticCode: string, issues: RawQualityIssue[]) {
+    return {analytic_code: analyticCode, data_quality: {issues, data_quality_status: 'carried_forward'}};
+}
+
+/** Answers the base wave: the historical question with `historical`, the current-composition one with `current`. */
+function answerBaseWave(historical: object[], current: object[]): void {
+    queryRisk.mockImplementation((request: RiskQueryRequest) => Promise.resolve({items: request.mode === 'historical' ? historical : current}));
 }
 
 describe('riskPanelController', () => {
@@ -774,6 +915,81 @@ describe('riskPanelController', () => {
     });
 
     // ------------------------------------------------------------------
+    // The list the data-quality banner renders. `dataQualityIssues` is
+    // `mergeQualityIssues` over the normalized issues of every result, in
+    // result order: the base wave, then the four on-demand answers. It used
+    // to deduplicate by code and lists, so one code and group reached the
+    // banner once per distinct list, and the banner keys its rows by code and
+    // group: Svelte's `each_key_duplicate`.
+    // ------------------------------------------------------------------
+    describe('the data-quality list the banner renders', () => {
+        it('merges one STALE_PRICE carried by two results into one item: [1, 2] and [2, 3] become [1, 2, 3], counted 3', async () => {
+            const {controller, stop} = mountController();
+            answerBaseWave(
+                [
+                    resultWithIssues('historical_kpi', [
+                        stalePriceIssue([
+                            [1, 'Alpha'],
+                            [2, 'Beta'],
+                        ]),
+                    ]),
+                ],
+                [
+                    resultWithIssues('risk_contribution', [
+                        stalePriceIssue([
+                            [2, 'Beta'],
+                            [3, 'Gamma'],
+                        ]),
+                    ]),
+                ],
+            );
+
+            await controller.loadBase(false);
+
+            // Precondition: both reports reached the list, so a red below is the merge and not the plumbing.
+            expect(controller.historicalResults.map((result) => result.analytic_code)).toEqual(['historical_kpi']);
+            expect(controller.currentResults.map((result) => result.analytic_code)).toEqual(['risk_contribution']);
+            expect(new Set(controller.dataQualityIssues.flatMap((issue) => issue.affected_asset_ids ?? [])), 'the issues of both reports did not reach the list').toEqual(new Set([1, 2, 3]));
+
+            expect(controller.dataQualityIssues, 'one code and group reached the banner more than once: its rows, keyed by code and group, throw each_key_duplicate').toEqual([
+                expect.objectContaining({
+                    code: 'STALE_PRICE',
+                    group_key: 'stale_price',
+                    affected_asset_ids: [1, 2, 3],
+                    affected_asset_names: ['Alpha', 'Beta', 'Gamma'],
+                    count: 3,
+                    message_params: {count: 3},
+                    // The historical result comes first in result order, so its issue is the first one.
+                    cta_target: '1',
+                }),
+            ]);
+            stop();
+        });
+
+        it("keeps the Dashboard's list as it is today when every result carries the same report", async () => {
+            const {controller, stop} = mountController();
+            const historicalCodes = ['historical_kpi', 'correlation', 'historical_var', 'drawdown_summary'];
+            answerBaseWave(
+                historicalCodes.map((code) => resultWithIssues(code, dashboardReportIssues())),
+                [resultWithIssues('risk_contribution', dashboardReportIssues())],
+            );
+
+            await controller.loadBase(false);
+
+            expect(
+                controller.historicalResults.map((result) => result.analytic_code),
+                'precondition: the historical half of the wave reached the controller',
+            ).toEqual(historicalCodes);
+            expect(
+                controller.currentResults.map((result) => result.analytic_code),
+                'precondition: the current-composition half of the wave reached the controller',
+            ).toEqual(['risk_contribution']);
+            expect(controller.dataQualityIssues, 'the Dashboard banner changed: the issues every result carries no longer come out once each, as they went in').toEqual(dashboardReportIssues().map(normalized));
+            stop();
+        });
+    });
+
+    // ------------------------------------------------------------------
     // The asset-set wave, split per level (the developer's decision, 2026-10-02): L1° is measured
     // without the benchmark and only L3° asks with it, so the lab builds one controller per level —
     // `includeAssetSetLossLevels` for L1°, `includeAssetSetPaidLevels` for L3° — and each option has
@@ -972,6 +1188,281 @@ describe('discardedErrorCodes', () => {
         expect([...wired].sort(), 'an on-demand analysis is wired into no level, so its discarded answer would vanish in silence again').toEqual([...ON_DEMAND_ANALYSES].sort());
         expect(LEVEL_ON_DEMAND_ANALYSES.l3, 'the benchmark comparison is not disclosed under L3, where its figures are').toEqual(['comparison']);
         expect(new Set(LEVEL_ON_DEMAND_ANALYSES.l4), 'the what-if steps are not the analyses disclosed under L4').toEqual(new Set(['stress', 'replay', 'simulation']));
+    });
+});
+
+// ----------------------------------------------------------------------
+// One merge for the data-quality banner — the owner's contract (05/10).
+// The banner keys its rows by code and group, so one code and group must
+// reach it once, whatever windows and sets the issues came from; the Asset
+// Global lab asks about several, and workstream F merges the issues of its
+// four controllers with this same function.
+// ----------------------------------------------------------------------
+describe('mergeQualityIssues', () => {
+    const keyOf = (issue: DataQualityIssue): string => `${issue.code}/${issue.group_key ?? ''}`;
+
+    /** The one item that issues of one code and group merge into; fails, listing what came out, otherwise. */
+    const onlyItem = (merged: DataQualityIssue[]): DataQualityIssue => {
+        expect(merged.map(keyOf), 'one code and group make one item').toHaveLength(1);
+        return merged[0];
+    };
+
+    it('keys an issue by its code and its group, in order of first appearance, and passes an issue met once through as it is', () => {
+        const fxRates = normalized(missingFxRatesIssue(['EUR-USD'], {from: '2025-03-03', to: '2025-03-07', count: 3}));
+        const fxManual = normalized(missingFxRatesManualIssue(['CHF-EUR']));
+        const nav = normalized(navIncompleteIssue(['2025-03-10']));
+
+        const merged = mergeQualityIssues([normalized(stalePriceIssue([[1, 'Alpha']])), fxRates, normalized(stalePriceIssue([[2, 'Beta']])), fxManual, nav]);
+
+        expect(merged.map(keyOf), 'not one item per code and group, in the order each first appeared').toEqual(['STALE_PRICE/stale_price', 'MISSING_FX_RATES/missing_fx_rates', 'MISSING_FX_RATES/missing_fx_rates_manual', 'NAV_INCOMPLETE/nav_incomplete']);
+        expect(merged.slice(1), 'an issue whose code and group appear once was changed on its way through').toEqual([fxRates, fxManual, nav]);
+    });
+
+    it('keeps one code apart under two groups, even over the same pairs: MISSING_FX_RATES for provider pairs and for manual ones', () => {
+        const provider = normalized(missingFxRatesIssue(['EUR-USD'], {from: '2025-03-03', to: '2025-03-07', count: 3}));
+        const manual = normalized(missingFxRatesManualIssue(['EUR-USD']));
+
+        expect(mergeQualityIssues([provider, manual]), 'two groups of one code were merged, or told apart by their lists: one of the two sentences would be lost').toEqual([provider, manual]);
+    });
+
+    it('takes a missing group, a null one and an empty one for the same group, as the banner does', () => {
+        // The banner keys a row by `code + (group_key ?? '')`: the three spellings make one key there, so
+        // they must make one item here, or the banner throws each_key_duplicate.
+        const withoutGroup = normalized(stalePriceIssue([[1, 'Alpha']]));
+        delete withoutGroup.group_key;
+        const merged = mergeQualityIssues([withoutGroup, {...normalized(stalePriceIssue([[2, 'Beta']])), group_key: null}, {...normalized(stalePriceIssue([[3, 'Gamma']])), group_key: ''}]);
+
+        expect(merged.map((issue) => issue.affected_asset_ids)).toEqual([[1, 2, 3]]);
+    });
+
+    it('unions the affected assets in order of first appearance, each name staying with its id — the first name seen for an id wins', () => {
+        const merged = mergeQualityIssues([
+            normalized(
+                stalePriceIssue([
+                    [2, 'Beta'],
+                    [1, 'Alpha'],
+                ]),
+            ),
+            normalized(
+                stalePriceIssue([
+                    [3, 'Gamma'],
+                    [2, 'Beta, renamed'],
+                ]),
+            ),
+            normalized(
+                stalePriceIssue([
+                    [1, 'Alpha, renamed'],
+                    [4, 'Delta'],
+                ]),
+            ),
+        ]);
+
+        expect(merged, 'one code and group make one item').toHaveLength(1);
+        expect(merged[0].affected_asset_ids, 'the ids are not their union in order of first appearance').toEqual([2, 1, 3, 4]);
+        expect(merged[0].affected_asset_names, 'a name left its id, or a later name replaced the first one seen').toEqual(['Beta', 'Alpha', 'Gamma', 'Delta']);
+        expect(merged[0].count, 'the count is not the size of the union').toBe(4);
+        expect(merged[0].message_params, 'the count the sentence shows is not the size of the union').toEqual({count: 4});
+    });
+
+    it("names an id that comes without a name '#<id>', the replay block's fallback, keeping every name beside its id", () => {
+        // Each issue lists two ids and names only the first. The backend's lists always align; a merge
+        // across controllers must not shift a name onto the wrong id when one does not.
+        const merged = onlyItem(mergeQualityIssues([normalized({...stalePriceIssue([[1, 'Alpha']]), affected_asset_ids: [1, 2], affected_asset_names: ['Alpha']}), normalized({...stalePriceIssue([[3, 'Gamma']]), affected_asset_ids: [3, 4], affected_asset_names: ['Gamma']})]));
+
+        expect(merged.affected_asset_ids, 'precondition: the ids are their union').toEqual([1, 2, 3, 4]);
+        expect(merged.affected_asset_names, "an id no issue names is not called '#<id>', or a name left its id").toEqual(['Alpha', '#2', 'Gamma', '#4']);
+    });
+
+    it("lets a later real name replace a missing one, even after the merge has stood in '#<id>' for it", () => {
+        const unnamedTwo = (): DataQualityIssue =>
+            normalized({
+                ...stalePriceIssue([
+                    [1, 'Alpha'],
+                    [2, 'Beta'],
+                ]),
+                affected_asset_names: ['Alpha'],
+            });
+        // Two issues: the second names the id the first left unnamed.
+        const two = onlyItem(mergeQualityIssues([unnamedTwo(), normalized(stalePriceIssue([[2, 'Beta']]))]));
+        // Three: one in between names something else, so the merge has had to stand in '#2' for the
+        // missing name before the real one arrives.
+        const three = onlyItem(mergeQualityIssues([unnamedTwo(), normalized(stalePriceIssue([[3, 'Gamma']])), normalized(stalePriceIssue([[2, 'Beta']]))]));
+
+        expect(two.affected_asset_names, 'a later real name did not replace the missing one').toEqual(['Alpha', 'Beta']);
+        expect(three.affected_asset_ids, 'precondition: the ids are their union').toEqual([1, 2, 3]);
+        expect(three.affected_asset_names, "the stand-in '#2' was kept as if it were a name: once a merge has filled it, a later real name no longer replaces it").toEqual(['Alpha', 'Beta', 'Gamma']);
+    });
+
+    it('unions the affected pairs in order of first appearance, and counts the pairs', () => {
+        const merged = mergeQualityIssues([normalized(missingFxRatesManualIssue(['EUR-USD', 'EUR-GBP'])), normalized(missingFxRatesManualIssue(['EUR-GBP', 'CHF-EUR']))]);
+
+        expect(merged).toEqual([expect.objectContaining({affected_fx_pairs: ['EUR-USD', 'EUR-GBP', 'CHF-EUR'], count: 3, message_params: {count: 3}})]);
+    });
+
+    it('counts the pairs, not the assets, when the merged issue carries pairs', () => {
+        const withAssets = (raw: RawQualityIssue, ids: number[]): DataQualityIssue => normalized({...raw, affected_asset_ids: ids, affected_asset_names: ids.map((id) => `Asset ${id}`)});
+
+        const merged = mergeQualityIssues([withAssets(missingFxRatesManualIssue(['EUR-USD', 'EUR-GBP']), [1]), withAssets(missingFxRatesManualIssue(['EUR-GBP']), [2, 3])]);
+
+        expect(merged, 'one code and group make one item').toHaveLength(1);
+        // Precondition: the two unions differ in size, or this could not tell which one is counted.
+        expect(merged[0].affected_asset_ids).toEqual([1, 2, 3]);
+        expect(merged[0].affected_fx_pairs).toEqual(['EUR-USD', 'EUR-GBP']);
+        expect(merged[0].count, 'an issue about pairs was counted by its assets').toBe(2);
+        expect(merged[0].message_params?.count, 'an issue about pairs was counted by its assets').toBe(2);
+    });
+
+    it('invents no list that no merged issue has, and takes the list of the one issue that has it', () => {
+        const stale = onlyItem(mergeQualityIssues([normalized(stalePriceIssue([[1, 'Alpha']])), normalized(stalePriceIssue([[2, 'Beta']]))]));
+        const manual = onlyItem(mergeQualityIssues([normalized(missingFxRatesManualIssue(['EUR-USD'])), normalized(missingFxRatesManualIssue(['CHF-EUR']))]));
+        // Pairs in the first issue only, assets in the second only.
+        const assetsOnly = normalized({...missingFxRatesManualIssue(['EUR-USD']), affected_fx_pairs: undefined, affected_asset_ids: [7, 8], affected_asset_names: ['Eta', 'Theta']});
+        const mixed = onlyItem(mergeQualityIssues([normalized(missingFxRatesManualIssue(['EUR-GBP'])), assetsOnly]));
+
+        expect(stale.affected_asset_ids, 'precondition: the two stale prices merged').toEqual([1, 2]);
+        expect(stale.affected_fx_pairs, 'a pair list was invented for issues that list no pair').toBeUndefined();
+        expect(manual.affected_fx_pairs, 'precondition: the two manual-rate issues merged').toEqual(['EUR-USD', 'CHF-EUR']);
+        expect(manual.affected_asset_ids, 'an asset list was invented for issues that list no asset').toBeUndefined();
+        expect(manual.affected_asset_names, 'a name list was invented for issues that name nothing').toBeUndefined();
+        expect(mixed.affected_fx_pairs, 'the pairs only the first issue lists are not the merged pairs').toEqual(['EUR-GBP']);
+        expect(mixed.affected_asset_ids, 'the assets only the second issue lists are not the merged assets').toEqual([7, 8]);
+        expect(mixed.affected_asset_names, 'the names only the second issue gives are not the merged names').toEqual(['Eta', 'Theta']);
+    });
+
+    it.each<[string, DataQualityIssue['severity'][], DataQualityIssue['severity']]>([
+        ['a warning, then an error', ['warning', 'error'], 'error'],
+        ['an error, then an info', ['error', 'info'], 'error'],
+        ['an info, then a warning', ['info', 'warning'], 'warning'],
+        ['an info, an error, a warning', ['info', 'error', 'warning'], 'error'],
+    ])('keeps the most severe severity, of %s', (_title, severities, mostSevere) => {
+        const merged = mergeQualityIssues(severities.map((severity, index) => normalized(stalePriceIssue([[index + 1, `Asset ${index + 1}`]], {severity}))));
+
+        expect(merged.map((issue) => issue.severity)).toEqual([mostSevere]);
+    });
+
+    it("keeps the first issue's CTA, domain, message key and other parameters", () => {
+        const first = normalized(transactionImpliedIssue([[5, 'Epsilon']], '2025-06-30'));
+        const second = normalized({...transactionImpliedIssue([[9, 'Iota']], '2025-12-31'), domain: 'asset', message_i18n_key: 'dataQuality.transactionImpliedElsewhere', cta_action: 'sync_asset_prices'});
+
+        expect(mergeQualityIssues([first, second])).toEqual([
+            expect.objectContaining({
+                domain: 'portfolio',
+                message_i18n_key: 'dataQuality.transactionImplied',
+                cta_action: 'navigate_asset',
+                cta_target: '5',
+                message_params: {count: 2, as_of_date: '2025-06-30'},
+                affected_asset_ids: [5, 9],
+                count: 2,
+            }),
+        ]);
+    });
+
+    it("builds the parameters from the first issue's: a key only a later issue has is added, a shared key keeps its first value, and a count is updated only where one is carried", () => {
+        const withParams = (raw: RawQualityIssue, params: Record<string, string | number>): DataQualityIssue => normalized({...raw, message_params: params});
+
+        const implied = onlyItem(mergeQualityIssues([normalized(transactionImpliedIssue([[5, 'Epsilon']], '2025-06-30')), withParams(transactionImpliedIssue([[9, 'Iota']], '2025-12-31'), {count: 1, as_of_date: '2025-12-31', days: 14})]));
+        const uncounted = onlyItem(mergeQualityIssues([withParams(stalePriceIssue([[1, 'Alpha']]), {days: 7}), withParams(stalePriceIssue([[2, 'Beta']]), {days: 30})]));
+        // Only the later issue carries a count: added, then updated like any carried count.
+        const countedLater = onlyItem(mergeQualityIssues([withParams(stalePriceIssue([[1, 'Alpha']]), {days: 7}), normalized(stalePriceIssue([[2, 'Beta']]))]));
+
+        expect(implied.message_params, 'a key only the later issue has was dropped, or the later value of a shared key won').toEqual({count: 2, as_of_date: '2025-06-30', days: 14});
+        expect(uncounted.count, 'the issue itself is no longer counted by its list').toBe(2);
+        expect(uncounted.message_params, 'a count was created in parameters that carried none, or the later value of a shared key won').toEqual({days: 7});
+        expect(countedLater.message_params, 'a count only the later issue carries was not added, or not updated to the size of the union').toEqual({days: 7, count: 2});
+    });
+
+    it('spans the dates of MISSING_FX_RATES — the earliest date_from, the latest date_to, the larger dates_count — wherever each one is', () => {
+        const merged = mergeQualityIssues([
+            normalized(missingFxRatesIssue(['EUR-USD'], {from: '2025-03-03', to: '2025-03-14', count: 8})),
+            normalized(missingFxRatesIssue(['EUR-GBP'], {from: '2025-02-24', to: '2025-03-07', count: 4})),
+            normalized(missingFxRatesIssue(['EUR-USD', 'EUR-JPY'], {from: '2025-03-01', to: '2025-03-20', count: 6})),
+        ]);
+
+        expect(merged).toEqual([
+            expect.objectContaining({
+                affected_fx_pairs: ['EUR-USD', 'EUR-GBP', 'EUR-JPY'],
+                count: 3,
+                // The larger dates_count, a lower bound: two windows may miss the same dates.
+                message_params: {count: 3, date_from: '2025-02-24', date_to: '2025-03-20', dates_count: 8},
+                cta_target: 'EUR-USD',
+            }),
+        ]);
+    });
+
+    it('merges issues that list nothing — NAV_INCOMPLETE over three windows — into the larger count, a lower bound, and the widest date range', () => {
+        const merged = onlyItem(mergeQualityIssues([normalized(navIncompleteIssue(['2025-03-07', '2025-03-10', '2025-03-18'])), normalized(navIncompleteIssue(['2025-03-03', '2025-03-04', '2025-03-05', '2025-03-06', '2025-03-07'])), normalized(navIncompleteIssue(['2025-02-26', '2025-03-14']))]));
+
+        // The larger count, never the sum: two windows may count the same incomplete dates. Count, start
+        // and end each come from a different issue, so neither the first nor the last issue can pass for the rule.
+        expect(merged.count, 'not the larger count of issues that list nothing').toBe(5);
+        expect(merged.message_params, 'the count the sentence shows is not the larger one, or the date range did not widen').toEqual({count: 5, date_from: '2025-02-26', date_to: '2025-03-18'});
+    });
+
+    it('collapses identical issues to exactly one each, equal to the input: the Dashboard, where every result carries the same report', () => {
+        const report = dashboardReportIssues().map(normalized);
+        // Five results, each with a copy of its own: every result's report is parsed apart.
+        const carried = Array.from({length: 5}, () => report.map((issue) => structuredClone(issue))).flat();
+
+        expect(mergeQualityIssues(carried), 'identical issues did not come out once each, as they went in: the Dashboard banner would change').toEqual(report);
+    });
+
+    it('keeps identical issues equal to the input even when their names are fewer than their ids: an issue equal to the one held is skipped, not merged', () => {
+        // Count and parameters agree with the ids, so only the names can tell a skip from a merge: a
+        // merge would stand in '#2' for the missing name.
+        const shortOfNames = normalized({
+            ...stalePriceIssue([
+                [1, 'Alpha'],
+                [2, 'Beta'],
+            ]),
+            affected_asset_names: ['Alpha'],
+        });
+
+        expect(mergeQualityIssues([shortOfNames, structuredClone(shortOfNames), structuredClone(shortOfNames)]), "identical issues were merged instead of skipped: the missing name became '#2' and the item no longer equals its input").toEqual([shortOfNames]);
+    });
+
+    it('never mutates the issues it merges', () => {
+        const issues = [
+            normalized(
+                stalePriceIssue([
+                    [1, 'Alpha'],
+                    [2, 'Beta'],
+                ]),
+            ),
+            normalized(missingFxRatesIssue(['EUR-USD'], {from: '2025-03-03', to: '2025-03-14', count: 8})),
+            normalized(
+                stalePriceIssue(
+                    [
+                        [2, 'Beta'],
+                        [3, 'Gamma'],
+                    ],
+                    {severity: 'error'},
+                ),
+            ),
+            normalized(missingFxRatesIssue(['EUR-GBP'], {from: '2025-02-24', to: '2025-03-20', count: 9})),
+            normalized(transactionImpliedIssue([[5, 'Epsilon']], '2025-06-30')),
+            normalized(transactionImpliedIssue([[9, 'Iota']], '2025-12-31')),
+        ];
+        const before = structuredClone(issues);
+
+        const merged = mergeQualityIssues(issues);
+
+        // Precondition: the merges happened — six issues, three items — so every rule had something it could change in place.
+        expect(merged.map(keyOf)).toEqual(['STALE_PRICE/stale_price', 'MISSING_FX_RATES/missing_fx_rates', 'TRANSACTION_IMPLIED/transaction_implied']);
+        expect(issues, 'an issue, one of its lists or its parameters was changed in place').toStrictEqual(before);
+    });
+
+    it('reads any iterable, once: the lab merges the issues of four controllers', () => {
+        const issues = [normalized(stalePriceIssue([[1, 'Alpha']])), normalized(missingFxRatesManualIssue(['CHF-EUR'])), normalized(stalePriceIssue([[2, 'Beta']]))];
+        function* oneByOne(): Generator<DataQualityIssue> {
+            yield* issues;
+        }
+
+        const fromGenerator = mergeQualityIssues(oneByOne());
+
+        expect(fromGenerator.map(keyOf)).toEqual(['STALE_PRICE/stale_price', 'MISSING_FX_RATES/missing_fx_rates_manual']);
+        expect(fromGenerator[0].affected_asset_ids).toEqual([1, 2]);
+        expect(fromGenerator, 'a generator, which can be read once, gave another answer than an array').toEqual(mergeQualityIssues(issues));
+        expect(mergeQualityIssues([])).toEqual([]);
     });
 });
 
