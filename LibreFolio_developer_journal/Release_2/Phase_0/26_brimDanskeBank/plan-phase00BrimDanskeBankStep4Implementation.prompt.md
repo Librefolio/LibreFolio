@@ -1486,3 +1486,94 @@ Precisa le voci di F.0 su U1–U4; dove F.0 non decideva, la scelta è indicata.
 - **Privacy**, con la documentazione compresa: 0 collisioni su 27 172 righe aggiunte dal workstream.
 
 ### F2 — ✅ pronta per il checkpoint (2026-10-05)
+
+> **F2 committata** dal developer (2026-10-05): `cdb8b3301` (codice), `5b35da6d4` (docs) e `5904ad20d` (journal). Blob uguali ai record, albero pulito.
+
+## 13. Merge di baseline e validazione della revisione unita (2026-10-05)
+
+- **Il merge**, fatto dal developer con lo script del coordinatore: `c59f9d7c2` «merge(l): dev_release2 into L before F2 integration».
+  - Genitori `5904ad20d` (L) e `9b5291c25` (`dev_release2`); albero `c4d1cea6a`, come nella simulazione; merge-base `8f18416df`.
+  - Porta K (Step 14 e 15), i giri di I, il pavimento di svelte-check a 0/0, il runner con l'attesa a 300 s, la PR #30 (`services/fx.py`) e la riparazione di `broker-sharing.spec.ts`: 54 file.
+
+### 13.1 ✅ I file uniti da Git (2026-10-05)
+
+- **i18n ×4**: controllo semantico a tre vie (base, mio, loro, risultato) di ogni chiave, con uno script fuori dal repo.
+  - In tutte e quattro le lingue: **0 problemi**, nessuna chiave toccata da entrambe le parti.
+  - Le mie 125 aggiunte e le 2 modifiche (`todoWarningConfirmMessage` e `select.description`) ci sono tutte; dall'altra parte una chiave aggiunta.
+  - Dalla base manca una chiave, `dashboard.pnlCandlesHypothetical`: l'ha tolta l'altra parte, non io.
+- **`frontend/e2e/brokers/brokers-detail.spec.ts`**: il mio unico blocco, 74 righe aggiunte in fondo a «Broker detail — import history upload» (il test C1 sul `batch_id`), è intatto e contiguo alla riga 1258 del risultato. I blocchi dell'altra parte (righe 9, 575 e 602–761 della base) non lo toccano.
+
+### 13.2 ✅ Validazione, passi 1–4 (2026-10-05), corsia 6156, un comando per volta
+
+| Passo | Comando | Esito |
+|---|---|---|
+| 1 | `api sync`; `front build --debug`; `mkdocs build` (strict) | ok; il client ha `history_end`; build ok; doc senza warning |
+| 2 | `front check` | **0 errori, 0 avvisi**: il pavimento nuovo |
+| 3 | `i18n audit` | 3543 chiavi in 4 lingue, nessuna traduzione mancante |
+| 4 | `services brim-report-sets` / `brim-parse-pool` / `api brim` | `232` / `8` / `64 passed` |
+| 4 | `front-transaction tx-unit` / `front-utility core-unit` (coi gate XSS di K) / `component-unit` / `onboarding-component-unit` | `575` / `2704` / `2203` / `409 passed` (`component-unit` cresce coi test arrivati dal merge) |
+
+> **⚠️ Fuori pista — `i18n audit`**: fra i «❌ Likely Unused» c'è una mia chiave, `importWizard.reportSet.gapFix.stepTitle`. È un falso positivo, e non viene dal merge:
+> - lo stepper la usa per costruzione: `STEP_DEFS` ha `{id: 'gapFix', titleKey: 'reportSet.gapFix.stepTitle'}` e rende `$t(\`importWizard.${step.titleKey}\`)`;
+> - le chiavi sorelle (`importWizard.step1Title` … `stepDuplicatesTitle`) finiscono in «🔵 Not Verified» per lo stesso schema; la mia, più annidata, non la riconosce l'euristica;
+> - lo strumento dell'audit non è cambiato nel merge (sono cambiati solo file del runner), e la riga 143 è la stessa da C3.
+
+> **Decisione del developer** (2026-10-05), riportata dal coordinatore: il plugin Danske esce come **🔬 Alpha**, non 🧪 Beta. Testuale: «beta è quando è stato fatto dai report trovati online e anonimi, qui abbiamo il suo supporto».
+> - Nello stesso checkpoint, dopo la validazione, va un commit `docs(import): Danske Bank is alpha` con:
+>   - `providers_list.md:30`;
+>   - la cella di `index.{en,it,fr,es}.md` (riga 276 in EN, 274 nelle altre), a mano in 4 lingue, poi `translate-stamp` di `index.en.md`;
+>   - il riquadro e la frase di `danske-bank.en.md`.
+> - Verifiche fatte prima: il plugin e la classe base non hanno un campo di maturità (lo stato vive solo nella documentazione), e nessun test legge queste celle. La card dell'indice non ha badge. La legenda di `providers_list.md` ha già 🔬 Alpha. Nessuna pagina d'import usa ancora un riquadro Alpha, quindi resta `!!! info`.
+> - Il CHANGELOG lo sistema il coordinatore all'integrazione, fuori dalla sezione 🧪 Beta.
+
+- **`check-orphans`** (passo 6): pulito. 96 spec E2E, 281 file Vitest e 227 file backend, tutti raggiungibili da `all`.
+
+> **⚠️ Fuori pista — i file rimasti nella corsia prima degli E2E** (passo 5, in attesa):
+> - `api brim` gira su un DB senza broker: crea 46 broker (id 1–46) e lascia 23 file BRIM su 16 di loro (id 9–46).
+> - Ogni E2E ripopola senza `--clean` (8 broker finti) e crea i suoi broker dall'id 9: eredita quei file. R1 e R7 controllano che manchi il titolo «Other files», e falliscono sulla loro precondizione; `tx-import-file-selection` è lo stesso caso del 02/10.
+> - Il 02/10 `file-selection` era passato solo perché le spec precedenti avevano cancellato i broker 9 e 10 con `force=true`, e i loro file con loro.
+> - Ho chiesto al coordinatore il permesso per un `test db populate --force --clean` sulla mia data dir prima del giro E2E.
+> - **Permesso del coordinatore**: «Sì: `test db populate --force --clean`, una volta, solo su `/private/tmp/librefolio-r2-l`, prima del giro E2E». La causa va nel suo backlog di fine round, accanto al conteggio di `clean_data_dirs` e al riuso degli id senza AUTOINCREMENT.
+> - **Prima**:
+>   - `broker_reports/uploaded`: 24 cartelle di broker, 26 file;
+>   - `parsed`: 24 cartelle, 18 file;
+>   - `failed`: 24 cartelle, 2 file;
+>   - in tutto 46 file, cioè i 23 report di `api brim` e i loro metadati; più 61 file in `custom-uploads`.
+> - **Il comando**: `test --test-port 6156 --data-dir /tmp/librefolio-r2-l db populate --force --clean`, exit 0, sulla corsia `/private/tmp/librefolio-r2-l`.
+> - **Dopo**: `uploaded`, `parsed` e `failed` hanno 0 cartelle e 0 file. `custom-uploads` torna a 61 file: li svuota `--clean` e li ricrea il populate.
+> - Ordine del giro E2E: prima le mie spec, poi la regressione, e in fondo i rossi accettati (T1, CAC-011/012), che lasciano file su disco.
+
+### 13.3 ✅ Validazione, passo 5: gli E2E (2026-10-05), dopo il `--clean`, un comando per volta
+
+| Spec (azione del runner) | Esito |
+|---|---|
+| `tx-import-report-set` / `-guide` / `tx-bulk-import-handoff` / `tx-import-file-selection` | `10` / `2` / `2` / `2 passed` |
+| `tx-import-upload` / `tx-import-flow` / `tx-import-resolution` | `9` / `10` / `12 passed` |
+| `tx-wac-bulk` / `tx-bulk-diagnostics` / `tx-bulk-operations` / `tx-paired-edit` | `10` / `2` / `10` / `4 passed` |
+| `front-utility files` / `settings` / `onboarding-tour` | `22` / `45` / `10 passed` |
+| `front-broker detail` (modificata da entrambe le parti) | `33 passed`: il rosso di I alla riga 713 è sparito col merge |
+| `tx-brim-import` | rosso T1, già accettato; «7 did not run» come in F1 e F2, perché la suite è seriale |
+| `tx-ca-contract` | `10 passed`; rossi CAC-011 e CAC-012, già accettati |
+
+Nessun test saltato né instabile. Albero: solo il piano modificato. Porta 6156 libera.
+
+### 13.4 ✅ Danske Bank in 🔬 Alpha (2026-10-05)
+
+- **Modifiche**, 7 righe in 6 file:
+  - `providers_list.md:30`, lo stato diventa `🔬 Alpha`; la legenda alla riga 41 lo ha già;
+  - la cella della riga Danske in `index.{en,it,fr,es}.md`, `🧪 Beta` → `🔬 Alpha`, a mano nelle 4 lingue: la cella è uguale in tutte;
+  - `danske-bank.en.md`: `!!! info "Alpha"` e «This importer is in **Alpha**»; il resto della frase resta.
+- Non rimane nessun «Beta» riferito a Danske nella documentazione.
+- `mkdocs translate-stamp --file user/transactions/import/index.en.md`, prima a secco: in `.translate-hashes.json` cambia solo la voce dell'indice d'import (l'md5 e tre `stamped_at`), come in D.
+- **Gate della documentazione** (passo 6):
+  - `mkdocs build` strict: exit 0, senza warning;
+  - `mkdocs check-links`: 81 link validi, i 3 🟡 noti, e **1 rosso non mio**: `user/assets/detail/chart/#rolling-return`. L'ancora c'è in `chart.en.md:22` ma manca in it/fr/es; il link sta in `frontend/src/routes/(app)/assets/[id]/+page.svelte:3006`.
+    - È identico su `dev_release2` (`9b5291c25`), non c'era nel mio ramo prima del merge, e il mio diff verso `dev_release2` non lo tocca.
+    - Probabilmente è il rosso D28 che il coordinatore aveva dichiarato noto e accettato il 02/10. Lo segnalo, e non lo correggo: i file non sono miei.
+
+### 13.5 ⏳ Prossimo passo: la scelta del plugin di un set
+
+Richiesta del developer tramite il coordinatore: che il plugin di un set non lo scelga l'utente è «abbastanza grave».
+- Dopo il checkpoint della validazione: un'analisi senza codice, da discutere col developer nella chat di L.
+- Poi due righe di decisione al coordinatore, per l'ordine delle integrazioni e per il CHANGELOG.
+- La bozza dell'analisi è nella cartella di sessione, fuori dal repo.
