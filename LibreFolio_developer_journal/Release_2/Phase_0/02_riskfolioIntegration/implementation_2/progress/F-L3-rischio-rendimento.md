@@ -1390,7 +1390,7 @@ Proposta mia, in attesa di conferma: deduplicare le quattro fonti (correlazione,
 | L8-2 | A: codice | ✅ 2026-10-05 (più la guardia e il perché della correlazione) |
 | L8-3 | B: rossi e codice sui mock, dopo la conferma di Risk sulla regola dell'unione | ⏳ |
 | L8-1b | la guida: la nota di Risk su §What If…? (F3, D372), via docs-writer | ✅ 2026-10-05, più l'allineamento ad A |
-| L8-4 | cancelli; poi la tappa 1 del pannello; poi la review unica (con la punta di Risk) | ⏳ |
+| L8-4 | cancelli; poi la tappa 1 del pannello; poi la review unica (con la punta di Risk) | ✅ cancelli del giro 8a; la tappa 1 e la review dopo B |
 
 ### L8-1 · i rossi di A (test-author `l8-notice`) ✍️ 2026-10-05
 
@@ -1583,3 +1583,142 @@ Dopo il commit e la fusione della punta di Risk, A torna con `git merge-file`:
 >
 > **Checkpoint del giro 8a** a Risk, poi FROZEN fino al commit e alla fusione della sua punta (D15 e
 > `mergeQualityIssues`). Poi B su `mergeQualityIssues`, e la tappa 1 del pannello.
+
+### Giro 8a committato, e la fusione della punta di Risk (k1 + k2) ✅ 2026-10-05, 14:4x-15:01
+
+> - Commit del developer: `64394ad1f` (G1), `132be8e58` (G2), `cd2e87801` (G3), `47069cff1` (G4), albero
+>   `ac09380a9`. Verifica mia in sola lettura: messaggi, file e blob uguali al registro (digest `6fabb88a…`).
+> - La fusione `--no-commit` di `2e2d21e76`: k1 `1ac534552` (D15 di I, `mergeQualityIssues`) più k2 (D373, le
+>   `issues` del backend per gli insiemi di asset). Base `bb513bf8a`.
+> - **⚠️ Fuori pista: un conflitto vero** in `riskPanelController.test.ts`, mentre la previsione di Risk diceva
+>   «0 conflitti» (la sua shell leggeva `$?` dopo una sostituzione `$(basename …)`, che lo azzerava). Ci hanno
+>   aggiunto righe sia il mio giro 6a sia k1, in due punti:
+>   1. la lista degli import;
+>   2. un blocco `describe` in coda.
+> - **Risoluzione** (mia, con la sola `git add` di quel file, come autorizzato dal coordinatore):
+>   - preparata prima che la fusione si aprisse, su una copia privata;
+>   - i tre stadi della fusione vera erano identici byte per byte alla simulazione;
+>   - un solo import con gli 11 nomi, più le due righe in più di Risk;
+>   - i due blocchi interi, prima quello di Risk e poi il mio (l'ordine che Risk ha proposto), nessuna asserzione
+>     cambiata;
+>   - verifica a tre vie sulla base: base più le modifiche dei due lati, niente in meno e niente in più.
+> - **⚠️ Fuori pista: la larghezza.** L'import unito è lungo 315 caratteri, oltre il `printWidth` 300, che nessuno dei
+>   due lati da solo superava. La prima corsa dei cancelli lo ha preso (prettier exit 1). Prettier lo scrive un nome
+>   per riga: stessa istruzione, stessi nomi, stesso ordine. Ripreparato, rimesso in stage e ricontrollato.
+> - Fusioni automatiche riviste:
+>   - `riskPanelController.svelte.ts`: ha sia le mie opzioni per livello sia `mergeQualityIssues` di Risk, ed è
+>     uguale al `merge-file` pulito dei due lati;
+>   - i18n: k2 aggiunge 4 chiavi; JSON validi; le mie chiavi intatte.
+> - Cancelli sulla fusione aperta (`/tmp/libreFolio_f4/merge_2e2d_gates.sh`, 6154, un comando per volta,
+>   14:49-14:57):
+>   - build OK; `front check` 0/0; `tsc e2e` 2 (soglia);
+>   - vitest 1304/1304; `risk-controller-unit` **82/82** (54 di base, 23 di Risk, 5 miei);
+>   - `core-unit` 2984/2984; `component-unit` 2483/2483; `risk-levels-component` 92/92; `allocation-unit` 214/214;
+>   - `risk-lab` 40/40, `risk` 14/14, `risk-benchmark-shared` 4/4;
+>   - `services risk-asset-set` 44/44 (+14 di k2); orfani puliti; i18n 3520/382; link 88/8/3 + D28.
+> - «RESOLVED» al coordinatore con l'albero in stage `e2a600295`. Il developer ha committato la fusione
+>   `89fb5c9b9` (genitori `47069cff1` + `2e2d21e76`, albero `e2a600295`); verificato, albero pulito.
+
+## Giro 8b · B: il banner della qualità dei dati sopra la nota · 2026-10-05
+
+**Decisione** (il developer, 05/10): «B — A più il banner con «Sincronizza»». Il backend ora c'è (k2, D373): per un
+insieme di asset `data_quality.issues` arriva una per categoria, `code + group_key` unico in una risposta:
+
+| codice | gruppo | azione | chiave |
+|---|---|---|---|
+| `STALE_PRICE` (warning) | `stale_price` | `sync_asset_prices` | `dataQuality.stalePrice` |
+| `MISSING_PRICE` (error) | `missing_price` | `navigate_asset` (un link per asset) | `risk.quality.missingPrice` |
+| `MISSING_FX_MARKET` | `missing_fx` | `add_fx_pair` | `risk.quality.missingFx` |
+| `MISSING_FX_RATES` | `missing_fx_rates` | `sync_fx_pair` | `risk.quality.missingFxRates` |
+| `MISSING_FX_RATES` | `missing_fx_rates_manual` | `navigate_fx` | `risk.quality.missingFxRatesManual` |
+
+**Disegno**:
+- `AssetSetReplaySection` esporta anche lui `qualitySource()`: `results` vuoti, perché la sua cornice tiene la sua
+  salute e la nota non lo legge, e le `issues` del suo controller. Il doc del tipo dice che `results` è ciò che la
+  nota legge.
+- Il pannello legge le tre sezioni con `bind:this`. Ne deriva:
+  - la nota, come in A;
+  - `mergeQualityIssues(issues di correlazione, L1°, L3°, replay)`: la funzione di Risk, l'unica regola. Non ne
+    scrivo una mia.
+- `DataQualityBanner` (`grouped`) sopra la nota, come in Dashboard: prima il banner, poi la nota, dopo la scheda
+  della selezione e prima della correlazione. Senza questioni non si vede.
+- Azioni, mappate da un aiutante puro mio in `syncTargets.ts`, `labQualityAction(action, target)`:
+  - `sync_*` → `openSync()`, il modale del laboratorio, limitato alla selezione (prezzi e cambi);
+  - `navigate_asset` → `/assets/<id>`;
+  - `navigate_fx` → `/fx/<slug>`;
+  - `add_fx_pair` → `/fx`;
+  - un'azione sconosciuta non fa nulla.
+- Niente euro: le questioni portano conteggi, nomi e coppie, mai importi.
+- Guida: il banner sopra la nota, con «Sincronizza» e i link.
+
+| # | passo | stato |
+|---|---|---|
+| L8b-1 | rossi (test-author): `labQualityAction`; `qualitySource()` del replay; E2E del banner (unione fra sezioni, posizione, «Sincronizza» → il modale del laboratorio, link all'asset; nessun banner sull'onda completa) | ✅ 2026-10-05 |
+| L8b-2 | codice | ✅ 2026-10-05 |
+| L8b-3 | mutanti, guida, cancelli, checkpoint | ✅ 2026-10-05 |
+
+### L8b-1 · i rossi (test-author `l8b-banner`) · L8b-2 · il codice ✅ 2026-10-05
+
+> - **Rossi, osservati**:
+>   - unitari 8 (6 per `labQualityAction` che non esiste, 2 per il `qualitySource()` del replay che manca);
+>   - E2E: il caso nuovo (e) rosso a `:4660`, «the sections hold data-quality issues and the lab draws no banner».
+> - Lo stub di test-author:
+>   - pianta le questioni per sezione (`labQualityIssues`): `STALE_PRICE` [A, B] sulla correlazione e [B, C] su
+>     L3°, `MISSING_PRICE` [A] su L1° e [C] su L3°, `MISSING_FX_MARKET` solo sulla risposta del replay;
+>   - il replay si esegue nel test;
+>   - la richiesta `[correlation]` è condivisa fra la sezione della correlazione e l'onda di base del replay.
+> - **Codice**:
+>   - `syncTargets.ts`: `labQualityAction(action, target)`;
+>   - `AssetSetReplaySection.svelte`: `qualitySource()` → `{results: [], labels: {}, issues}`;
+>   - `assetSetLevels.ts`: il doc di `results` (che cosa legge la nota);
+>   - `AssetSetRiskPanel.svelte`: `bind:this` anche sul replay;
+>     `qualityIssues = mergeQualityIssues(issues delle quattro fonti)`, la funzione di Risk;
+>     `DataQualityBanner` (`grouped`) prima della nota;
+>     `handleQualityAction` → `openSync()` o `goto(href)`.
+> - Esiti:
+>   - unitari dei 5 file **99/99**; `front check` **0/0**; prettier pulito;
+>   - build, poi `risk-lab` **41/41** (i 40 di prima più (e)), 0 righe dei provider.
+> - **Mutanti**, uno per volta, ciascuno con build e il solo (e), pannello rimesso e `cmp` uguale dopo ognuno:
+>   1. il replay fuori dalle fonti → rosso a `:4678`, «…the panel does not read the replay section»;
+>   2. le questioni concatenate senza `mergeQualityIssues` → rosso a `:4667`, «…must be one item».
+>   - **⚠️ Fuori pista**: il primo tentativo del mutante 2 era sintatticamente invalido (`$derived` con due argomenti).
+>     Il build è fallito e il runner non ha avviato il backend: nessun test è girato, quindi non prova nulla.
+>     Rifatto valido (2b).
+>   - Il banner tolto non serve come mutante: è lo stato di prima del codice, già osservato rosso.
+> - **Decisione del developer (via coordinatore)**: Risk si allinea alla mia punta `89fb5c9b9` e il suo test-author
+>   riallinea 8 miei test al nuovo limite (3 tentativi): 6 dei livelli, 1 della correlazione, 1 del replay.
+>   - Fino alla fusione del suo checkpoint non tocco `AssetSetComparisonLevels.test.ts` né
+>     `AssetSetCorrelationSection.test.ts`.
+>   - In `AssetSetReplaySection.test.ts` tengo le mie modifiche; un'eventuale sovrapposizione la risolvo io alla
+>     fusione.
+>   - Il commento di `risk-lab.spec.ts:6354` («re-asked once») lo correggo **dopo** quella fusione: prima sarebbe
+>     falso il contrario.
+
+### L8b-3 · la guida, i cancelli, un reperto ✅ 2026-10-05, 15:5x-16:02
+
+> - Guida (docs-writer, `correlation.en.md`):
+>   - un paragrafo nuovo, `:205`, in §What Is Missing, What Is Partial: il banner sopra la nota, piegato, che copre
+>     le quattro sezioni compresa What if…?. «Sync prices» e «Sync rates» aprono la stessa sincronizzazione di
+>     «Sync selection» nella barra; gli altri sono link alle pagine degli asset o dei cambi. Il banner offre il
+>     rimedio, la nota dice che cosa è successo alle cifre;
+>   - `:169` corretta: non è più detto «una volta» nella scheda, perché ora lo dicono sia il banner sia la nota.
+> - Lasciati, da segnalare:
+>   - una sincronizzazione cancella anche il replay finito (`:155` nomina solo selezione e date; non è falso);
+>   - `user/assets/index.en.md:37` descrive la sincronizzazione della barra solo per la scheda Assets. Non è mia.
+> - Cancelli (`/tmp/libreFolio_f4/l8B_gates.sh`, 6154, un comando per volta, 15:54-16:02):
+>   - build e `mkdocs build` completi; `front check` **0/0**; `tsc e2e` 2 (soglia), 0 negli spec di rischio;
+>   - prettier pulito; vitest **1312/1312**;
+>   - `core-unit` **2990/2990** (+6) e `component-unit` **2485/2485** (+2);
+>   - `risk-controller-unit` **82/82**; `risk-levels-component` **92/92**;
+>   - E2E: `risk-lab` **41/41**, `risk` **14/14**, `risk-benchmark-shared` **4/4**;
+>   - `services risk-asset-set` **44/44**; orfani puliti; i18n 3520/382; link 88/8/3 + D28;
+>   - `git diff --check` pulito; `sw.js` invariato; 6154 libera.
+> - **Reperto, non mio: `risk-benchmark-shared` arriva a Yahoo.**
+>   - Durante la sua corsa, alle 14:01:25Z, `yahoo_finance | current_value for MSFT` e 4 volte «Intra-day price
+>     extend» sull'asset 2, nel DB della mia lane.
+>   - Le corse dello stesso spec di stamattina (10:36Z, 11:15Z, 12:56Z) non hanno scritto nulla: erano prima
+>     dell'apertura del mercato USA (13:30Z). Dipende dall'orario.
+>   - Lo spec è di Risk (`07f6bb01d`) e non trattiene il poll dei prezzi live.
+>   - Il mio `risk-lab`, che ha girato dopo le 13:30Z: **0** righe, `current_value` compreso.
+>   - Il mio filtro dei provider non conteneva `current_value for` (le chiamate a Yahoo); da qui in poi lo
+>     comprende.
