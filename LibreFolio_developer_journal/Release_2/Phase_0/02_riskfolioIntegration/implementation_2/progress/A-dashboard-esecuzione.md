@@ -1129,3 +1129,99 @@ commit del checkpoint 1.
 >   - Aspettato che il carico scendesse sotto 10 (~5 minuti; era arrivato a 45), poi rilanciato **una volta** lo
 >     stesso comando: verde.
 >   - Il timeout (`STARTUP_TIMEOUT = 120`, `scripts/test_runner/_server.py`) non è mio: lo segnalo a Risk.
+
+---
+
+## Dal 01/10 18:18 al 05/10 14:05: decisioni registrate mentre ero congelato
+
+> Scritte fuori dal worktree mentre il piano era congelato con i checkpoint 2 e 3; riportate qui com'erano.
+
+
+
+- **01/10 18:18 — Risk ha verificato il checkpoint 2** e l'ha passato al coordinator.
+- **Il buco di M1/M2 lo chiude Risk nella primitiva**, la fonte unica: aggiunge ai test di `BenchmarkSelect` il pin
+  «`value` null e `data-benchmark-id` vuoto finché lo stato è `pending`», con un mutante che deve morire, nel suo prossimo
+  checkpoint. Le mie guardie in `L3Benchmark` restano come difesa in profondità; **non serve** il test con una primitiva
+  finta.
+  le due voci più una frase nella `desc`, «nothing else»; `check-orphans` fra i controlli).
+
+
+- **05/10 10:14 — Risk ha verificato il checkpoint 3** (8 percorsi = registro, blob e messaggio coincidono; previsione di
+  fusione pulita: solo il runner è da tutte e due le parti, 0 conflitti) e l'ha passato al coordinator, insieme alla mia
+  segnalazione su `STARTUP_TIMEOUT`. FROZEN fino agli SHA.
+- **Per la prossima fusione**: la F3 di Risk modifica sul posto le parti del replay di `risk-analysis.spec.ts` (l'opzione
+  dello stub del replay, lo stub, il test del replay bloccato). I miei pezzi sono altrove (`instanceStatus`,
+  `excludedWeight`, i rami contribution/risk_return, T3, N2, B, il test del collegamento di L3): fusione attesa
+  additiva. Dopo la fusione: E2E `risk` intero.
+- **Ancora aperti, dopo il commit**: la didascalia di L2 (cassa / senza prezzo, con l'icona `#excluded-weight` sulla
+  scheda); i badge e la frase breve dell'avviso (aspettano `AssetChip` di F); V2 (tooltip dell'istogramma), V3 (aspetto
+  delle card), V4 (ordinamenti della matrice, helper condiviso di F); `SYMBOL_BY_ROLE` e V6 (scatter, dopo il lavoro di F);
+  la citazione vecchia `schemas/risk.py:1056` nei miei commenti.
+- **Checkpoint 3 committato** dal developer: `f8daa6e45` (`feat(risk): small shares never print as zero`).
+
+## La punta di Risk fusa nel mio ramo · 05/10 14:05
+
+> **Coordinator (05/10 14:05)**: fusione fatta dal developer, `f7046b59f`, genitori `f8daa6e45` + `1ac534552`, albero
+> `422f105e2` come simulato, albero di lavoro pulito. Porta i giri di F sul lab, F3 (il blocco del replay), la base di
+> Risk con `dev_release2` (K, i grafici di I, la correzione del pavimento di svelte-check, PR #30), D15 e
+> `mergeQualityIssues`. **Sbloccato.** Da fare: build e validazione della revisione combinata (`front check` deve essere
+> **0/0**), poi il blocco dei prezzi live in `risk-analysis.spec.ts` (`holdLivePricePoll`), poi il checkpoint a Risk.
+
+> **Verificato (05/10)**:
+> - HEAD `f7046b59f`, genitori e albero come detto; il primo genitore è il mio checkpoint 3.
+> - **Nei miei file la fusione porta**: `RiskLevelsPanel.svelte` +7/−… = il token concesso a Risk il 02/10
+>   (`replaySectionView(controller.replayResult)`), più il suo import e un paragrafo di documentazione; lo spec E2E
+>   (le parti del replay, di Risk); `l4/*` (di Risk).
+> - **Il backend** cambia solo nei servizi (`fx.py`, `portfolio_service.py`, `risk_plugins/{asset_set_comparison,stress}.py`,
+>   `signal_service.py`), non negli schemi né nell'API.
+
+### Passo 10 — validazione della revisione combinata `f7046b59f` · ✅ 05/10
+
+> **Note implementazione** (sulla 6153, un comando alla volta):
+> - `api sync` → riscrive solo il client ignorato da git; nessun file tracciato cambia (gli schemi e l'API del backend non
+>   sono cambiati con la fusione: lo misura `git diff --stat f8daa6e45 HEAD -- backend/app/{schemas,api}`, vuoto);
+> - `front build --debug` → OK;
+> - `mkdocs build` → exit 0, 0 righe `WARNING` (l'unico riquadro è l'avviso generico di Material su MkDocs 2.0);
+> - `front check` → **0 errori e 0 avvisi**: il pavimento di svelte-check corretto arriva con la base di `dev_release2`;
+> - `risk-levels-unit` → 10 file · 329 test; `risk-levels-component` → 5 file · 115 test;
+> - `check-orphans` → 298 test unitari e 94 spec E2E registrati;
+> - `i18n audit` → 3512 chiavi, complete;
+> - E2E `front-portfolio risk` → **23 passed** (i miei 22 più uno di F3);
+> - E2E `risk-benchmark-shared` → 4 passed;
+> - prettier pulito sui miei file.
+> - ❌ **`check-links` → exit 1, un link rotto ereditato**: `user/assets/detail/chart/#rolling-return`, da
+>   `frontend/src/routes/(app)/assets/[id]/+page.svelte:3006`. L'ancora esiste solo nella pagina inglese
+>   (`chart.en.md:22`, `{: #rolling-return }`), non in it/fr/es. L'hanno introdotti insieme, link e ancora,
+>   `e3af27ff3 feat(assets): add rolling-return guide link`, arrivato con la punta di Risk (base `dev_release2`). **Non è
+>   mio** (pagina dell'asset e documentazione utente): segnalato, non riparato.
+
+### Passo 11 — i test del rischio non chiamano più fonti esterne · ✅ 05/10
+
+> **Richiesta del coordinator**: il blocco dei prezzi live in `risk-analysis.spec.ts`, solo nei test, scritto da test-author,
+> con lo stesso `holdLivePricePoll` di `risk-lab.spec.ts`; prova: un log del backend senza chiamate ai provider durante
+> `front-portfolio risk`.
+
+> **Note implementazione**:
+> - **Misura prima** (E2E `risk` alle 12:16 UTC, nella finestra della corsa): **51 eventi di provider o di prezzo**. Tra
+>   questi, quotazioni live vere (Yahoo per 8 titoli, i feed JustETF, due pagine lette con lo scraper), lette da SNB, e **due
+>   scritture dei prezzi di oggi nel DB condiviso** («Current-price persist … commit OK (8 row(s) written/updated)» e
+>   «Intra-day price extend»): esattamente il rischio del vincolo Ⓓ.
+>   - **Causa**: `openFirstAssetDetail` passa da `/assets`, che chiede i prezzi live di tutta la lista in una chiamata a
+>     `POST /assets/prices/current`; due test lo usano, quindi due scritture da 8 righe.
+> - **`holdLivePricePoll`** (test-author): copia **identica** di quella del lab, perché Playwright non permette a uno spec
+>   di importarne un altro. La richiesta resta in sospeso, senza risposta (una risposta finta, anche vuota, passerebbe
+>   dall'interceptor e invaliderebbe le cache). Chiamata per prima in `installRiskMocks`; tutti i 21 test la attraversano.
+>   - **Dopo**: 2 eventi, cioè lo spegnimento di JustETF (non è una chiamata) e **una chiamata vera rimasta**, «SNB
+>     dimensions loaded».
+> - **La chiamata rimasta, trovata**: il test «dashboard renders base analytics, quality, warnings, sync and capability gate»
+>   apre la finestra di sincronizzazione; `PageSyncModal` chiama `getCurrencyGraph()` → `GET /api/v1/fx/providers` →
+>   `get_supported_currencies()` di SNB → HTTP GET verso l'API pubblica della Banca nazionale svizzera. Il test controlla
+>   solo che la finestra si apra.
+> - **`holdFxProviderCatalog`** (test-author, **aggiunta mia oltre la richiesta**, perché la prova chiesta la richiede):
+>   stessa forma. L'espressione `/\/api\/v1\/fx\/providers(?:\?|$)/` **non** prende `/fx/providers/routes`, che Asset
+>   Detail aspetta prima del grafico. Nessuna asserzione dello spec dipende dall'elenco dei provider FX.
+> - **Prova finale** (E2E `risk` alle 12:39 UTC, **23 passed**): **0 chiamate ai provider**. Nella finestra 0 URL
+>   esterni, nessun logger di client HTTP, lo scheduler disattivato («Scheduler disabled via LIBREFOLIO_NO_SCHEDULER»);
+>   l'unica riga di `justetf` è lo spegnimento.
+> - **Isola i test, non ripara niente**: fuori da questo spec, aprire `/assets` scrive ancora i prezzi di oggi e aprire la
+>   finestra di sincronizzazione interroga ancora SNB. Lo dicono i commenti dei due helper.

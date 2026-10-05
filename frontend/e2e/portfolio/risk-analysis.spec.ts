@@ -994,7 +994,98 @@ function withInjectedStatus(result: Record<string, unknown>, options: RiskMockOp
     return {...result, status: 'unavailable', output: null, error: {code: 'insufficient_history', message: `E2E injected unavailable ${String(result.instance_id)}`}};
 }
 
+/**
+ * Hold the live-price poll, unanswered, for the whole test.
+ *
+ * Mirrors `holdLivePricePoll` in `risk-lab.spec.ts`, with exactly its behaviour:
+ * the same pattern and the same empty handler. A copy rather than an import,
+ * because Playwright refuses to let one test file import another — so a change to
+ * one is a change to both.
+ *
+ * Two pages poll `POST /assets/prices/current`: `/assets` for every listed asset
+ * at once, and `/assets/{id}` for its own, each on load and every 30 s — Asset
+ * Detail from a second timer too, 5 s in and every minute after. This file reaches
+ * both through `openFirstAssetDetail`. Each answered call is a portfolio mutation
+ * twice over. The backend asks the live providers and writes today's prices into
+ * the shared test database — measured on the test lane on 05/10/2026: one full run
+ * of this file made real provider calls (eight live quotes, JustETF's live feeds,
+ * two scraped pages) and wrote today's prices twice. And `zodios-client`'s
+ * response interceptor calls `notifyPortfolioMutation`, which drops the report
+ * and risk caches and discards every answer still in flight: a background actor
+ * these tests do not control, racing the very requests they measure.
+ *
+ * Held, never answered, because nothing else is inert: a stubbed answer, even an
+ * empty one, still passes through that interceptor and still invalidates. An
+ * unanswered call does nothing at all. Each poller awaits it and, after axios's
+ * 30 s timeout, catches the error — silently on Asset Detail, with one
+ * non-critical warning on `/assets` — and none of them feeds `data-busy`, so the
+ * `data-busy="false"` that `goToAssetsPage` waits for still arrives. The handler
+ * calls no route method, so nothing can throw when the context closes.
+ *
+ * Installed by `installRiskMocks`, so every test in this file holds it. Dashboard
+ * and Broker Detail never poll, so for the tests that stay there it is inert.
+ *
+ * ⚠️ This isolates the tests; it repairs nothing. Outside this file the poll still
+ * reaches the providers, writes on every visit and invalidates whatever is in
+ * flight. All this does is stop these tests from depending on a race nobody
+ * controls: a test that turns green only behind it was losing a race the product
+ * still runs.
+ */
+async function holdLivePricePoll(page: Page): Promise<void> {
+    await page.route(/\/api\/v1\/assets\/prices\/current(?:\?|$)/, () => {
+        // Deliberately neither fulfilled nor continued: see above.
+    });
+}
+
+/**
+ * Hold the FX provider catalogue, unanswered, for the whole test.
+ *
+ * Matches `/api/v1/fx/providers` with or without a query string — GET is the only
+ * method on that path — and never `/fx/providers/routes`, a different endpoint
+ * that only reads the database and that Asset Detail awaits on load.
+ *
+ * Measured on the test lane on 05/10/2026, with `holdLivePricePoll` in place: one
+ * full run of this file left a single real provider call in the backend log,
+ * «SNB dimensions loaded: 25 currencies mapped» (`fx_providers.snb`) — an HTTP GET
+ * to the Swiss National Bank's public API, from `SNBProvider._ensure_currency_map`.
+ * The chain: `risk-sync-button` opens `PageSyncModal`, whose `$effect` fires
+ * `getCurrencyGraph()` as it opens; that fetches this catalogue, and the backend's
+ * `list_providers` awaits `get_supported_currencies()` from every provider it
+ * lists, which for SNB is that GET. Once loaded, the map is cached for the life of
+ * the backend process, so one line in the log is one process paying, not one
+ * request. It writes nothing to the database; it is still an external dependency
+ * of the suite, paid for by a test that only asserts that the modal is visible.
+ *
+ * Held rather than stubbed — not because a stub would invalidate anything, a GET
+ * is never a portfolio mutation, but for one rule in this file: what these tests
+ * do not need is held, and a held request does nothing at all. The modal fires
+ * `getCurrencyGraph()` without awaiting it and nothing in the modal waits on the
+ * answer, so the only trace a hold leaves is an empty FX provider cache: an FX
+ * provider badge would show its code instead of its icon. None is drawn here —
+ * those badges belong to sync results, and no test in this file starts a sync.
+ * The currencies fetched beside it come from their own request and still load.
+ * The one test that opens the modal ends on it, so the held call goes down with
+ * the page long before axios's 30 s timeout could reject it. The handler calls no
+ * route method, so nothing can throw when the context closes.
+ *
+ * Installed by `installRiskMocks` beside the price poll, so every test in this
+ * file holds it; the only one that ever sends it is the one that opens the modal.
+ *
+ * ⚠️ This isolates the tests; it repairs nothing. Outside this file, opening the
+ * sync modal still asks SNB whenever the backend process has not loaded its map
+ * yet. All this does is keep a call to a third party out of tests that never
+ * needed one.
+ */
+async function holdFxProviderCatalog(page: Page): Promise<void> {
+    await page.route(/\/api\/v1\/fx\/providers(?:\?|$)/, () => {
+        // Deliberately neither fulfilled nor continued: see above.
+    });
+}
+
 async function installRiskMocks(page: Page, options: RiskMockOptions = {}): Promise<RiskRequest[]> {
+    await holdLivePricePoll(page);
+    await holdFxProviderCatalog(page);
+
     const requests: RiskRequest[] = [];
 
     await page.route('**/api/v1/risk/catalog', async (route) => {
