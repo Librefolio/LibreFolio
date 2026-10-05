@@ -9,6 +9,7 @@ from decimal import Decimal
 from unittest.mock import MagicMock
 
 from backend.app.schemas.portfolio import (
+    DataQualityStatus,
     IssueCode,
     IssueSeverity,
     MissingPriceAsset,
@@ -137,6 +138,50 @@ class TestStalePriceIssue:
         issue = next(i for i in report.issues if i.code == IssueCode.STALE_PRICE)
         assert "OldAsset" in issue.affected_asset_names
         assert issue.count == 1
+
+    def test_stale_price_cta_syncs_asset_prices(self):
+        """D8 (30/09): the STALE_PRICE CTA is the «Sincronizza» button.
+
+        A stale quote is cured by fetching the provider again, not by opening the
+        asset page, so the issue asks the dashboard for ``sync_asset_prices``.
+        ``cta_target`` is deliberately not asserted: the dashboard syncs every id in
+        ``affected_asset_ids``, the target carries no contract.
+        """
+        views = _make_views()
+        report = views.build_data_quality_report(stale_prices_dto=[_make_stale_asset(7, "Stale ETF")])
+        issue = next(i for i in report.issues if i.code == IssueCode.STALE_PRICE)
+        assert issue.cta_action == "sync_asset_prices"
+
+    def test_stale_price_keeps_message_key_count_and_affected_assets(self):
+        """Control for D8: only the CTA changes; the message contract stays.
+
+        WARNING, ``dataQuality.stalePrice`` with ``{count}``, and the affected ids and
+        names aligned with the input order — the banner zips the two arrays.
+        """
+        assets = [_make_stale_asset(7, "Stale ETF"), _make_stale_asset(8, "Stale Bond")]
+        views = _make_views()
+        report = views.build_data_quality_report(stale_prices_dto=assets)
+        issue = next(i for i in report.issues if i.code == IssueCode.STALE_PRICE)
+        assert issue.severity == IssueSeverity.WARNING
+        assert issue.message_i18n_key == "dataQuality.stalePrice"
+        assert issue.message_params["count"] == 2
+        assert issue.count == 2
+        assert issue.affected_asset_ids == [7, 8]
+        assert issue.affected_asset_names == ["Stale ETF", "Stale Bond"]
+
+    def test_stale_prices_alone_report_carried_forward_status(self):
+        """Control for D8 §3: a stale quote is carried forward, not a partial result.
+
+        With nothing worse in the report (no missing price, FX or NAV day), the
+        derived status is ``carried_forward`` and ``stale_prices`` is the input as
+        given. The status is derived by the schema, so this holds as soon as
+        ``get_summary`` passes ``stale_prices_dto`` at all.
+        """
+        stale = [_make_stale_asset(7, "Stale ETF")]
+        views = _make_views()
+        report = views.build_data_quality_report(stale_prices_dto=stale)
+        assert report.stale_prices == stale
+        assert report.data_quality_status == DataQualityStatus.CARRIED_FORWARD
 
 
 # =============================================================================

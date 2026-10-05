@@ -20,7 +20,7 @@
     import {get} from 'svelte/store';
     import {axiosInstance, schemas, zodiosApi} from '$lib/api';
     import {goBack} from '$lib/stores/app/navigationStore';
-    import {ArrowLeft, ChartLine, ChevronDown, ExternalLink, Info, Pencil, Percent, RefreshCw, RotateCw, Ruler, Settings, TrendingUp, X} from 'lucide-svelte';
+    import {ArrowLeft, ChartLine, ChevronDown, ExternalLink, Info, Pencil, Percent, RefreshCw, RotateCw, Ruler, Settings, Shield, TrendingUp, X} from 'lucide-svelte';
     import AssetDataEditorSection from '$lib/components/assets/AssetDataEditorSection.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import PriceChartFull from '$lib/components/charts/PriceChartFull.svelte';
@@ -43,6 +43,7 @@
     import AssetRiskScenariosView from '$lib/components/risk/AssetRiskScenariosView.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import CompactDurationBadge from '$lib/components/ui/date/CompactDurationBadge.svelte';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {
         backendSignalSchemas,
@@ -122,8 +123,8 @@
     type AssetDetailTabId = (typeof ASSET_DETAIL_TAB_IDS)[number];
     let activeTab = $state<AssetDetailTabId>('overview');
     let assetDetailTabs = $derived([
-        {id: 'overview', label: $t('risk.assetDetail.overviewTab'), testId: 'asset-detail-tab-overview'},
-        {id: 'risk', label: $t('risk.assetDetail.riskScenariosTab'), testId: 'asset-detail-tab-risk', guideAnchor: 'asset.detail.risk'},
+        {id: 'overview', label: $t('risk.assetDetail.overviewTab'), icon: ChartLine, testId: 'asset-detail-tab-overview'},
+        {id: 'risk', label: $t('risk.assetDetail.riskScenariosTab'), icon: Shield, testId: 'asset-detail-tab-risk', guideAnchor: 'asset.detail.risk'},
     ]);
 
     $effect(() => {
@@ -136,6 +137,8 @@
 
     let assetInfo = $state<AssetDetail | null>(null);
     let providerAssignment = $state<ProviderAssignmentFlat | null>(null);
+    // Unknown is not "manual": until the assignment request settles, Sync is merely disabled.
+    let providerAssignmentLoaded = $state(false);
     let chartData: any[] = $state([]);
     let events: any[] = $state([]);
     let comparisonEvents = $state<Map<number, any[]>>(new Map());
@@ -471,7 +474,7 @@
         void $assetProvidersVersion;
         return isParametricProvider(providerAssignment?.provider_code);
     });
-    let isManualOnly = $derived(!providerAssignment);
+    let isManualOnly = $derived(providerAssignmentLoaded && !providerAssignment);
     let isInactive = $derived(assetInfo?.active === false);
     let syncDisabledReason = $derived(isManualOnly ? $t('assetDetail.syncDisabledManual') : isInactive ? $t('assetDetail.syncDisabledInactive') : '');
     let syncBlocked = $derived(isManualOnly || isInactive);
@@ -1381,6 +1384,7 @@
         // Reset state for new asset
         assetInfo = null;
         providerAssignment = null;
+        providerAssignmentLoaded = false;
         chartData = [];
         events = [];
         signalInstanceResults = [];
@@ -1582,6 +1586,8 @@
             providerAssignment = items.length > 0 ? (items[0] as ProviderAssignmentFlat) : null;
         } catch (e: any) {
             console.error('Failed to load provider assignment:', e);
+        } finally {
+            providerAssignmentLoaded = true;
         }
     }
 
@@ -2171,7 +2177,9 @@
         showPageSyncModal = true;
     }
 
-    async function handlePageSyncComplete({accepted}: {accepted: boolean} = {accepted: true}) {
+    // The default only matters to a caller that forgets the detail, and such a caller must
+    // read as a cancel: an omission must never invalidate the comparison as an acceptance.
+    async function handlePageSyncComplete({accepted}: {accepted: boolean} = {accepted: false}) {
         if (accepted && primaryMode === 'calendar-return') {
             comparisonRequestGeneration += 1;
             comparisonInFlight = null;
@@ -2676,8 +2684,11 @@
         </button>
 
         {#if assetInfo}
-            <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3" data-testid="asset-detail-info">
-                <div class="flex items-center gap-3">
+            <!-- min-w-0 on both wrappers: without it their minimum width is the whole title on one
+                 line, so a long name widened the page (below ~341 px, and just above 1024 px where
+                 the title loses its max width); the title itself scrolls (scrollOnOverflow). -->
+            <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 min-w-0" data-testid="asset-detail-info">
+                <div class="flex items-center gap-3 min-w-0">
                     <AssetIcon iconUrl={assetInfo.icon_url} assetType={assetInfo.asset_type} altText={assetInfo.display_name} size="md" />
                     <span class="w-2.5 h-2.5 rounded-full shrink-0 {assetInfo.active !== false ? 'bg-green-500' : 'bg-red-400'}" data-testid="asset-status-dot" title={assetInfo.active !== false ? $t('common.active') : $t('assets.status.archived')}></span>
                     <h2 use:scrollOnOverflow class="{overflowScrollTextClass} text-xl font-bold text-gray-800 dark:text-gray-100 max-w-[15ch] sm:max-w-[30ch] lg:max-w-none" title={assetInfo.display_name}>{assetInfo.display_name}</h2>
@@ -2744,7 +2755,7 @@
     <!--               [ actions ── 2×2   ]  (narrowest tier — Round 12 removed iconOnly)     -->
     <!-- ======================================================================= -->
     <PageToolbar
-        thresholds={{oneRow: 1215, denseRow: 780, stackFilters: 400, oneColumn: 360, labelHideActions: 230, labelHideTabs: 370}}
+        thresholds={{oneRow: 1215, denseRow: 850, stackFilters: 510, oneColumn: 360, labelHideActions: 230, labelHideTabs: 370}}
         tabs={assetDetailTabs}
         {activeTab}
         ontabchange={handleAssetDetailTabChange}
@@ -2811,7 +2822,7 @@
             {#if syncBlocked}
                 <Tooltip text={syncDisabledReason} position="top" maxWidth="320px" interactiveChild>
                     <button
-                        class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors opacity-50 cursor-not-allowed"
+                        class="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors opacity-50 cursor-not-allowed"
                         data-testid="asset-detail-sync-btn"
                         disabled={syncing || syncBlocked}
                         onclick={handleSync}
@@ -2824,7 +2835,7 @@
                 <button
                     class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                     data-testid="asset-detail-sync-btn"
-                    disabled={syncing || syncBlocked}
+                    disabled={syncing || syncBlocked || !providerAssignmentLoaded}
                     onclick={handleSync}
                 >
                     <RotateCw class={syncing ? 'animate-spin' : ''} size={14} />
@@ -2992,6 +3003,7 @@
                                     }
                                 }}
                             />
+                            <DocsLink path="user/assets/detail/chart/#rolling-return" label={$t('signals.riskRollingReturn.description')} size={14} testId="asset-calendar-return-docs" />
                         </div>
                     {/if}
                 </div>

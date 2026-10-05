@@ -13,6 +13,7 @@
   Uses Svelte 5 runes ($state, $derived, $props, $effect).
 -->
 <script lang="ts">
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {tick} from 'svelte';
     import type {Snippet} from 'svelte';
     import {_ as t} from '$lib/i18n';
@@ -232,7 +233,7 @@
                             if (r.readonly) {
                                 return {
                                     type: 'html',
-                                    html: `<span class="text-xs text-gray-600 dark:text-gray-400">${r.values[col.key] ?? '—'}</span>`,
+                                    html: `<span class="text-xs text-gray-600 dark:text-gray-400">${escapeHtml(String(r.values[col.key] ?? '—'))}</span>`,
                                 };
                             }
                             return {
@@ -269,14 +270,14 @@
                                     const docsUrl = opt.docsPath ? `/mkdocs/${prefix}${opt.docsPath}/` : '';
                                     return {
                                         type: 'html',
-                                        html: `<span class="text-xs text-gray-600 dark:text-gray-400">${opt.emoji ? `<span class="cursor-help" title="${opt.tooltip}">${opt.emoji}</span> ` : ''}${docsUrl ? `<a href="${docsUrl}" target="_blank" rel="noopener noreferrer" class="hover:underline">${opt.label}</a>` : opt.label}${readonlyBadge}</span>`,
+                                        html: `<span class="text-xs text-gray-600 dark:text-gray-400">${opt.emoji ? `<span class="cursor-help" title="${escapeHtml(opt.tooltip ?? '')}">${opt.emoji}</span> ` : ''}${docsUrl ? `<a href="${escapeHtml(docsUrl)}" target="_blank" rel="noopener noreferrer" class="hover:underline">${opt.label}</a>` : opt.label}${readonlyBadge}</span>`,
                                         tooltip: tooltipMeta,
                                     };
                                 }
                                 const label = opt ? `${opt.emoji ? opt.emoji + ' ' : ''}${opt.label}` : String(r.values[col.key] ?? '—');
                                 return {
                                     type: 'html',
-                                    html: `<span class="text-xs text-gray-600 dark:text-gray-400">${label}${readonlyBadge}</span>`,
+                                    html: `<span class="text-xs text-gray-600 dark:text-gray-400">${escapeHtml(label)}${readonlyBadge}</span>`,
                                     tooltip: tooltipMeta,
                                 };
                             }
@@ -301,7 +302,7 @@
                             if (r.readonly) {
                                 return {
                                     type: 'html',
-                                    html: `<span class="text-xs text-gray-600 dark:text-gray-400">${r.values[col.key] ?? '—'}</span>`,
+                                    html: `<span class="text-xs text-gray-600 dark:text-gray-400">${escapeHtml(String(r.values[col.key] ?? '—'))}</span>`,
                                 };
                             }
                             return {
@@ -328,7 +329,7 @@
                     type: 'number',
                     cell: (r) => ({
                         type: 'html',
-                        html: `<span class="text-xs font-mono text-gray-600 dark:text-gray-400">${r.values[col.key] ?? '—'}</span>`,
+                        html: `<span class="text-xs font-mono text-gray-600 dark:text-gray-400">${escapeHtml(String(r.values[col.key] ?? '—'))}</span>`,
                     }),
                     getValue: (r) => Number(r.values[col.key] ?? 0),
                     sortable: true,

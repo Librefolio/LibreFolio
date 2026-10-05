@@ -25,6 +25,7 @@
     import {buildTooltipTheme, buildTooltipHeader, buildTooltipByThreshold, buildTooltipTopN, tooltipPositionSide, setupTooltipAutoHide, scheduleFirstRenderStabilityFix} from '$lib/components/charts/echartsTooltipHelpers';
     import {getCountryInfo, ensureCountriesLoaded} from '$lib/stores/reference/countryStore';
     import {getSectorEmoji, ensureSectorsLoaded} from '$lib/stores/reference/sectorStore';
+    import {getAssetTypeEmoji} from '$lib/components/dashboard/allocationTypeEmoji';
     import {sectorI18nKey, primaryAssetType} from '$lib/utils/assetTypes';
     import {buildAllocationHierarchy} from '$lib/components/charts/allocationHierarchy';
     import {currentLanguage} from '$lib/stores/app/language';
@@ -160,26 +161,7 @@
             if (rawName === 'Other' || rawName === 'Unknown') return '🏳️';
             return getCountryInfo(rawName).flag_emoji || '🌍';
         }
-        if (dimension === 'type') {
-            const typeEmojis: Record<string, string> = {
-                STOCK: '📈',
-                ETF: '📊',
-                BOND: '🏛️',
-                // Bitcoin sign (₿, U+20BF) is a currency symbol, not an emoji — it
-                // renders as a thin system-font glyph (no color-emoji font coverage),
-                // making it nearly invisible against the chart's pale area fill,
-                // unlike every other category here. 🪙 is a genuine color emoji with
-                // the same bold visual weight as the rest.
-                CRYPTO: '🪙',
-                FUND: '💼',
-                HOLD: '⏸️',
-                CROWDFUND: '🤝',
-                INDEX: '📉',
-                OTHER: '📦',
-                LIQUIDITY: '💰',
-            };
-            return typeEmojis[rawName.toUpperCase()] ?? '📊';
-        }
+        if (dimension === 'type') return getAssetTypeEmoji(rawName);
         return '';
     }
 

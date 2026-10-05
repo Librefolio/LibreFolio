@@ -2042,7 +2042,8 @@ class DerivedViewsBuilder:
                 )
             )
 
-        # STALE_PRICE — warning: prices older than threshold
+        # STALE_PRICE — warning: market prices carried forward past the threshold. The CTA
+        # syncs the affected assets' prices (the caller only reports provider assets).
         if stale_prices_dto:
             issues.append(
                 DataQualityIssue(
@@ -2054,7 +2055,7 @@ class DerivedViewsBuilder:
                     count=len(stale_prices_dto),
                     affected_asset_ids=[a.asset_id for a in stale_prices_dto],
                     affected_asset_names=[a.name for a in stale_prices_dto],
-                    cta_action="navigate_asset",
+                    cta_action="sync_asset_prices",
                     cta_target=str(stale_prices_dto[0].asset_id),
                     group_key="stale_price",
                 )

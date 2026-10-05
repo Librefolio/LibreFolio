@@ -21,6 +21,7 @@
     import {browser} from '$app/environment';
     import {t} from '$lib/i18n';
     import {axiosInstance, zodiosApi} from '$lib/api';
+    import {generateUUID} from '$lib/utils/core/uuid';
     import {formatBytes, uploadFile} from '$lib/utils/files/upload';
     import {formatDateTime} from '$lib/utils/core/formatDateTime';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
@@ -498,6 +499,8 @@
         try {
             // Collect broker IDs used in upload
             const usedBrokerIds = new Set<number>();
+            // Files uploaded together form one report set: they share a batch id.
+            const batchId = generateUUID();
 
             for (let i = 0; i < pendingBrimFiles.length; i++) {
                 const file = pendingBrimFiles[i];
@@ -507,8 +510,10 @@
                 usedBrokerIds.add(brokerId);
                 const formData = new FormData();
                 formData.append('file', file);
+                formData.append('broker_id', String(brokerId));
+                formData.append('batch_id', batchId);
                 // Use axios directly - Zodios doesn't handle FormData correctly
-                await axiosInstance.post(`/api/v1/brokers/import/upload?broker_id=${brokerId}`, formData);
+                await axiosInstance.post(`/api/v1/brokers/import/upload`, formData);
             }
 
             // Reset state
@@ -826,6 +831,7 @@
 <ModalBase
     contentClass="upload-modal"
     maxWidth="600px"
+    testId="brim-assign-modal"
     onRequestClose={() => {
         if (pendingBrimFiles.length > 0) {
             showCloseUploaderConfirm = true;
@@ -864,7 +870,7 @@
 
     <div class="modal-body upload-modal-body">
         <!-- Assign All section -->
-        <div class="assign-all-section">
+        <div class="assign-all-section" data-testid="brim-assign-all">
             <span class="assign-all-label">{$t('uploads.assignAll') || 'Assign all to'}:</span>
             <BrokerSearchSelect
                 {brokers}
@@ -927,7 +933,7 @@
         <button class="btn btn-secondary" on:click={cancelBrimUpload}>
             {$t('common.cancel')}
         </button>
-        <button class="btn btn-primary" class:btn-disabled={!canConfirmBrim} disabled={!canConfirmBrim} on:click={confirmBrimUpload}>
+        <button class="btn btn-primary" class:btn-disabled={!canConfirmBrim} disabled={!canConfirmBrim} on:click={confirmBrimUpload} data-testid="brim-upload-confirm">
             {$t('uploads.upload')} ({pendingBrimFiles.length})
         </button>
     </div>

@@ -146,7 +146,7 @@ class IBKRBrokerProvider(BRIMProvider):
         detected_delim = self.detect_csv_delimiter(file_path)
 
         try:
-            with open(file_path, encoding="utf-8-sig") as f:
+            with self._open_text(file_path) as f:
                 reader = csv.DictReader(f, delimiter=detected_delim)
                 row_num = 1
 

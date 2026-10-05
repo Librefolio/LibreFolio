@@ -14,6 +14,7 @@
 
 import {formatCurrencyAmountPlain, formatCurrencyCodeHtml} from '../currency/currencyFormat';
 import {getAssetTypeIconUrl} from '../assetTypes';
+import {escapeHtml} from '../core/escapeHtml';
 
 /**
  * Mapping of Pydantic built-in error types to i18n keys.
@@ -138,11 +139,13 @@ export function translateFieldName(fieldName: string, t: (key: string, opts?: an
 export function resolveIssueMessage(issue: ResolvableIssue, t: (key: string, opts?: {values?: Record<string, any>}) => string, ctx?: ResolverContext): string {
     const code = issue.code;
     if (!code) {
-        return issue.error || issue.msg || 'Unknown error';
+        return escapeHtml(issue.error || issue.msg || 'Unknown error');
     }
 
     const rawParams = issue.params ?? {};
-    const enriched: Record<string, any> = {...rawParams};
+    // The result is rendered as HTML: every string that reaches it is escaped, and only the values
+    // enriched below (icons, currency badges) are markup on purpose.
+    const enriched: Record<string, any> = Object.fromEntries(Object.entries(rawParams).map(([key, value]) => [key, typeof value === 'string' ? escapeHtml(value) : value]));
 
     // Resolve type code → translated type name (e.g. "BUY" → "Acquisto")
     for (const typeParam of ['type', 'typeA', 'typeB']) {
@@ -160,8 +163,8 @@ export function resolveIssueMessage(issue: ResolvableIssue, t: (key: string, opt
         const broker = ctx.brokers.find((b) => b.id === rawParams.brokerId);
         const brokerIconHtml = ctx.getBrokerIconHtml?.(rawParams.brokerId) ?? null;
         const iconUrl = brokerIconHtml ? null : ctx.getBrokerIconUrl?.(rawParams.brokerId);
-        const brokerIcon = brokerIconHtml ?? (iconUrl ? `<img src="${iconUrl}" alt="" width="16" height="16" style="display:inline;vertical-align:middle;margin-right:2px" onerror="this.style.display='none'">` : '');
-        enriched.brokerName = broker ? `${brokerIcon}${broker.name}` : `Broker #${rawParams.brokerId}`;
+        const brokerIcon = brokerIconHtml ?? (iconUrl ? `<img src="${escapeHtml(iconUrl)}" alt="" width="16" height="16" style="display:inline;vertical-align:middle;margin-right:2px" onerror="this.style.display='none'">` : '');
+        enriched.brokerName = broker ? `${brokerIcon}${escapeHtml(broker.name)}` : `Broker #${rawParams.brokerId}`;
     } else if (rawParams.brokerId != null) {
         enriched.brokerName = `Broker #${rawParams.brokerId}`;
     }
@@ -171,8 +174,8 @@ export function resolveIssueMessage(issue: ResolvableIssue, t: (key: string, opt
         const asset = ctx.assets.find((a) => a.id === rawParams.assetId);
         if (asset) {
             const iconSrc = asset.icon_url ?? getAssetTypeIconUrl(asset.asset_type);
-            const assetIcon = `<img src="${iconSrc}" alt="" width="16" height="16" style="display:inline;vertical-align:middle;margin-right:2px" onerror="this.style.display='none'">`;
-            enriched.assetName = `${assetIcon}${asset.display_name}`;
+            const assetIcon = `<img src="${escapeHtml(iconSrc)}" alt="" width="16" height="16" style="display:inline;vertical-align:middle;margin-right:2px" onerror="this.style.display='none'">`;
+            enriched.assetName = `${assetIcon}${escapeHtml(asset.display_name)}`;
         } else {
             enriched.assetName = `Asset #${rawParams.assetId}`;
         }
@@ -182,7 +185,7 @@ export function resolveIssueMessage(issue: ResolvableIssue, t: (key: string, opt
 
     // Format balance with currency if both present
     if (rawParams.balance != null && rawParams.currency) {
-        enriched.formattedBalance = formatCurrencyAmountPlain(parseFloat(rawParams.balance), rawParams.currency, {showSign: true, minFraction: 2, maxFraction: 2});
+        enriched.formattedBalance = escapeHtml(formatCurrencyAmountPlain(parseFloat(rawParams.balance), rawParams.currency, {showSign: true, minFraction: 2, maxFraction: 2}));
     } else if (rawParams.balance != null) {
         const num = parseFloat(rawParams.balance);
         // Asset balances: no forced decimals (show "5" not "5.00"), emoji 📈/📉 after number
@@ -244,6 +247,6 @@ export function resolveIssueMessage(issue: ResolvableIssue, t: (key: string, opt
     }
 
     // Fallback to raw error/msg string, still prefixed with field if available
-    const rawMsg = issue.error || issue.msg || code;
-    return fieldLabel ? `${fieldLabel}: ${rawMsg}` : rawMsg;
+    const rawMsg = escapeHtml(issue.error || issue.msg || code);
+    return fieldLabel ? `${escapeHtml(fieldLabel)}: ${rawMsg}` : rawMsg;
 }

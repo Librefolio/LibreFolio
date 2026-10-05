@@ -65,6 +65,10 @@ The YOC column is visible by default beside **Annualized**. Dashboard and broker
 
 The **Performance** view loads on demand and shows open and closed positions together. In the table/chart, **Status** is filterable inside the component, not a top-level toggle.
 
+!!! tip "Hiding the amounts"
+
+    In the **Map** style, the Performance bar chart follows the eye button in the top bar (**Hide amounts**) straight away. Each row's net P&L label keeps its sign and currency, while the digits and any thousands or millions suffix turn into `•••`: `+€•••`, or `+••• CHF` for a currency without a symbol of its own. The axis values become `•••` (or `-•••`), zero included, and tooltip amounts keep only their sign and currency. Percentages stay visible, beside the net label (when there is room) and in the tooltip. The bars keep their real length and colors, and the net labels stay green or red, so the bars' relative size and whether each position gained or lost still show.
+
 #### 🗺️ Visual Style: Table vs. Map
 
 | Visual Mode | Core Features | Optimal Use Case |

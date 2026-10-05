@@ -36,7 +36,7 @@
 
     const numberFormat = $derived(new Intl.NumberFormat($locale ?? 'en'));
 
-    function duration(value: ToolItemMetrics[keyof ToolItemMetrics]): string {
+    function duration(value: number | null): string {
         return value === null
             ? $t('common.noData')
             : $t('tools.metrics.milliseconds', {

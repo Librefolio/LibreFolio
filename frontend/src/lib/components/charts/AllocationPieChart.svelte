@@ -17,6 +17,7 @@
   - Asset Detail Page (metadata section, sector distribution)
 -->
 <script lang="ts">
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
     import {attachChartReady} from '$lib/utils/chartReady';
@@ -344,7 +345,7 @@
         // Tooltip — emoji + translated label + percentage + absolute amount (on new line)
         const tooltipFormatter = (params: any) => {
             const absAmount = amountByName[params.name];
-            const amountLine = absAmount != null && absAmount > 0 ? `<br/><span style="font-size:11px;opacity:0.8">${formatCurrencyAmountPlain(absAmount, currency, {showSign: false})}</span>` : '';
+            const amountLine = absAmount != null && absAmount > 0 ? `<br/><span style="font-size:11px;opacity:0.8">${escapeHtml(formatCurrencyAmountPlain(absAmount, currency, {showSign: false}))}</span>` : '';
             if (mode === 'type') {
                 // Bugfix: same as above — use the raw backend type from the data item
                 // rather than re-deriving from the already-translated params.name.
@@ -365,10 +366,10 @@
                     const parentTotal = Math.round((params.data?.primaryTotal ?? 0) * 10) / 10;
                     parentLine = `<br/><span style="font-size:11px;opacity:0.7">↳ ${parentLabel} ${parentTotal}%</span>`;
                 }
-                return `<img src="${iconUrl}" style="width:14px;height:14px;vertical-align:middle;margin-right:5px;">${translated}: ${params.value}%${amountLine}${parentLine}`;
+                return `<img src="${escapeHtml(iconUrl)}" style="width:14px;height:14px;vertical-align:middle;margin-right:5px;">${translated}: ${params.value}%${amountLine}${parentLine}`;
             }
             // Sector: display name already contains the emoji prefix
-            return `${params.name}: ${params.value}%${amountLine}`;
+            return `${escapeHtml(String(params.name ?? ''))}: ${params.value}%${amountLine}`;
         };
 
         const option: echarts.EChartsOption = {

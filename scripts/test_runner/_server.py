@@ -40,7 +40,11 @@ from ._common import PROJECT_ROOT, Colors, apply_subprocess_coverage_env, print_
 #: Read by backend/test_scripts/test_server_helper.py — see shared_server_mode().
 SHARED_SERVER_ENV = "LIBREFOLIO_TEST_SHARED_SERVER"
 
-STARTUP_TIMEOUT = 300 if os.environ.get("CI") else 120
+#: Generous on purpose. `dev.py server` first rebuilds a stale frontend and MkDocs (about 130 s
+#: after a large merge), and a loaded machine slows the Python start-up too. A server that exits
+#: is caught at once by the poll in start(), so only a start that hangs waits this long.
+#: LIBREFOLIO_TEST_STARTUP_TIMEOUT overrides it, in seconds.
+STARTUP_TIMEOUT = int(os.environ.get("LIBREFOLIO_TEST_STARTUP_TIMEOUT", "300"))
 #: Flushing coverage takes real time; a SIGKILL during it loses everything.
 SHUTDOWN_GRACE_COVERAGE = 30
 SHUTDOWN_GRACE_PLAIN = 5

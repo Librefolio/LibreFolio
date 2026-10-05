@@ -65,6 +65,11 @@ graph TD
 **Plugin responsibility**: Read the broker-specific file format and convert to standard `TXCreateItem` DTOs.
 **Core responsibility**: File storage, asset matching, duplicate detection, database persistence.
 
+A bank that splits one account across several exports (Danske Bank: a custody XLSX and a cash
+CSV) adds a step between the two phases: the exports uploaded together form a **report set**,
+the plugin combines them, and phase 2 parses the combined file. See
+[Multi-report plugins (report sets)](#report-sets).
+
 ---
 
 ## 🧭 Import philosophy & currency rules
@@ -83,6 +88,16 @@ mandatory for every new plugin:
   as reported.
 - **Delimiter detection.** Always resolve the separator with
   `self.detect_csv_delimiter(file_path)` — **never hardcode** `,` or `;`.
+- **Encoding fallback.** Never open an export with a fixed encoding such as
+  `open(file_path, encoding="utf-8-sig")` — banks and Excel on Windows often write
+  Windows-1252 or Latin-1, and a UTF-8 read fails on the first accented byte. Read text
+  with `self._open_text(file_path)` (add `newline=""` when the stream feeds `csv` and
+  line endings must be kept) or through `_brim_io.read_rows`. The test suite enforces
+  it (class `TestWindows1252Invariance`): `test_no_plugin_opens_files_with_a_fixed_encoding`
+  fails on any `open(..., encoding=...)` in a `broker_*.py`, and
+  `test_sample_parses_identically_when_saved_as_windows_1252` requires every non-ASCII
+  CSV sample, re-saved as Windows-1252, to be detected and parsed identically by each
+  plugin that accepts the original.
 - **Multiple export layouts.** When a broker ships more than one report layout (e.g. with
   and without commission columns), detect the variant **dynamically** — locate the header
   row and branch on the actual column set rather than assuming a fixed line offset.
@@ -101,11 +116,30 @@ mandatory for every new plugin:
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `provider_code` | `@property → str` | Unique identifier (e.g., `"directa_csv"`) |
+| `provider_code` | `@property → str` | Unique identifier (e.g., `"directa_csv"`). Must `return` a **string literal** — see below |
 | `provider_name` | `@property → str` | Display name (e.g., `"Directa CSV"`) |
 | `description` | `@property → str` | Brief description for the UI |
 | `can_parse(file_path)` | `→ bool` | Quick check if this plugin can parse the file (check extension, header row) |
 | `parse(file_path, broker_id)` | `→ BRIMParseOutput` | Full parsing — returns structured BRIMParseOutput object containing transactions, warnings, and extracted asset info |
+
+!!! warning "`provider_code` must `return` a string literal"
+
+    Write `return "broker_my_bank"` — never a module constant (`return PROVIDER_CODE`) or an
+    expression. Two tools read the code **from the source, without importing the module**:
+
+    - the R13 test in `frontend/src/lib/components/ui/select/optionFilter.test.ts` (run by
+      `./dev.py test front-utility core-unit`) scrapes every `broker_*.py` for what
+      `provider_code`, `provider_name` and `description` return, and fails on anything but
+      string literals (adjacent literals and a parenthesised run of literals are accepted;
+      an f-string, a name, a call or a `+` are not);
+    - the test runner's `_PROVIDER_CODE_RE` in `scripts/test_runner/_backend_external.py`
+      builds the list of BRIM codes shown in the `--providers` / `--exclude-providers` help:
+      a plugin it cannot read is missing from that list (the filter itself still works,
+      because the option has no fixed choices).
+
+    Danske Bank once returned a constant: the R13 suite failed as a whole, and the runner's help
+    listed one BRIM plugin too few. `provider_name` and `description` follow the same rule,
+    because the R13 test reads them the same way.
 
 ### 🔧 Optional (Override)
 
@@ -118,6 +152,7 @@ mandatory for every new plugin:
 | `plugin_version` | `"1.0.0"` | Semver of the parsing logic — **bump it** whenever output for the same input changes |
 | `test_file_pattern` | `None` | Single filename substring used by the test suite to map a sample → this plugin |
 | `test_file_patterns` | derived from `test_file_pattern` | **List** of filename substrings when one plugin owns several export formats (e.g. `["revolut-invest", "revolut-crypto"]`) |
+| `report_roles` (and the rest of the report-set contract) | `[]` | Non-empty turns the plugin into a **report-set plugin**: see [Multi-report plugins](#report-sets) |
 | `generate_static_url(path)` | — | Helper to build `/api/v1/uploads/plugin/brim/{path}` |
 
 ### 🧰 Base-class helpers you should use
@@ -126,8 +161,9 @@ Defined on `BRIMProvider` — call these instead of re-implementing:
 
 | Helper | Use it in | What it does |
 |--------|-----------|--------------|
-| `self._read_file_head(file_path, num_lines=15)` | `can_parse` | Reads the first N lines trying multiple encodings (utf-8-sig, utf-8, latin-1, cp1252) |
-| `self.detect_csv_delimiter(file_path)` | `parse` | Sniffs the delimiter (`,` `;` `\t`) via `csv.Sniffer` with a char-count fallback |
+| `self._read_file_head(file_path, num_lines=15)` | `can_parse` | Reads the first N lines trying `TEXT_ENCODINGS` (module constant in `brim_provider.py`) in order: UTF-8 (with or without BOM), then Windows-1252, then Latin-1, which always decodes |
+| `self.detect_csv_delimiter(file_path)` | `parse` | Sniffs the delimiter (`,` `;` `\t`) via `csv.Sniffer` with a char-count fallback; reads the head with the same `TEXT_ENCODINGS` fallback |
+| `self._open_text(file_path, newline=None)` | `parse` (and `can_parse` when you must read the header with `csv`) | Drop-in replacement for `open(...)`: an in-memory text stream decoded with `TEXT_ENCODINGS`; `newline=""` keeps line endings for `csv` |
 | `self._create_transaction(row_num, transactions, validation_issues, context, **tx_fields)` | `parse` | Builds a `TXCreateItem`, appends on success, or records structured `BRIMValidationIssue`s on `ValidationError`. **Never** call `TXCreateItem(...)` directly. |
 
 ---
@@ -204,6 +240,7 @@ Copy the structure of an existing, well-tested plugin rather than starting from 
 | `backend/app/services/brim_providers/broker_intesa.py` | CSV/XLSX, two layouts in one plugin; patrimonio snapshot → liquidity `DEPOSIT` when present + per-holding `ADJUSTMENT` seed with per-unit `cost_basis_override` |
 | `backend/app/services/brim_providers/broker_credit_agricole.py` | **Richest wizard integration**: two layouts in one plugin, 4-tier causale registry, evidence tables, `info` notices, blocking and splitting field todos — read it before designing any `field_todos`. Also: automatic cash counter-entries, par-100 bond maturity split, succession rows as cashless `ADJUSTMENT` |
 | `backend/app/services/brim_providers/broker_saxo.py` | Mixed trade/cash rows, verb-in-text events, localized verbs |
+| `backend/app/services/brim_providers/broker_danske_bank.py` | **Report set** (custody XLSX + cash CSV): roles, a pure `combine` with pairing, zones and truth points, the parse of its combined file, Finnish notices — see [Multi-report plugins](#report-sets) |
 
 ## 📥 Canonical imports
 
@@ -266,7 +303,7 @@ transaction breaks these rules, so flip source signs as needed:
     A plugin's user-facing `warnings` (and any `BRIMAssetNotice.reason`) should be written
     in the language of the export it parses. For a single-nation broker whose report is
     published in only one language — e.g. Crédit Agricole, Directa, Intesa Sanpaolo, Fineco
-    (Italian) — emit the warnings in that language so they match the report the user is
+    (Italian), Danske Bank (Finnish) — emit the warnings in that language so they match the report the user is
     reading. When a broker ships differently localized export layouts (a UK vs. IT Fineco
     file, a non-Italian Crédit Agricole entity), detect the format and emit each variant's
     warnings in its own language. Code, comments and docstrings stay in English.
@@ -659,6 +696,338 @@ def test_file_patterns(self) -> List[str]:
 
 The test suite loops over every matching sample, so each variant is exercised.
 
+## 🧺 Multi-report plugins (report sets) {: #report-sets }
+
+Some banks split one account across several exports that only make sense together. Danske Bank
+Finland exports its equity savings account as a **custody** XLSX (trades with quantity and
+price, but no deposits and no balance) and a **cash** CSV (every cash movement with the running
+balance, but no quantities). A **report-set plugin** declares these exports as **roles**; the
+files uploaded together for one broker and recognised by the plugin form a **set**; the plugin
+**combines** them into one **combined file**; and the import wizard parses that file like any
+other.
+
+Every default of the contract keeps a plugin single-file, so the existing plugins do not change.
+The reference implementation is `backend/app/services/brim_providers/broker_danske_bank.py`; the
+framework lives in `backend/app/services/brim_report_sets.py` (members, preview, combine, history
+start) and `backend/app/services/brim_gap_fix.py` (the corrections), the schemas in
+`backend/app/schemas/brim.py`, and the wizard side in
+[Import Wizard → Report sets](../../frontend/components/features/import-wizard.md#report-sets).
+
+```mermaid
+sequenceDiagram
+    participant W as Import wizard
+    participant A as API brokers/import
+    participant P as Plugin
+    participant C as Core and database
+    W->>A: POST upload with batch_id, one file per call
+    A->>P: can_parse
+    W->>A: POST sets/preview
+    A->>P: detect_role, describe_member, describe_set
+    A->>C: history start of the broker
+    A-->>W: roles, missing exports, segments, gaps, warnings
+    W->>A: POST sets/combine
+    A->>P: combine, a pure function
+    A->>C: write the combined file, or reuse it
+    A-->>W: the combined file and its summary
+    W->>A: POST files/ID/parse on the combined file
+    A->>P: parse
+    A->>C: history start, asset candidates, duplicates
+    A-->>W: transactions, checkpoints, verifications, history_start
+    Note over W: unify assets, corrections, duplicates and review as usual
+    W->>A: POST gap-fix, one per broker and plugin
+    A->>C: LibreFolio state at each truth point
+    A-->>W: comparisons and gap_fix proposals
+    Note over W: the bulk editor saves, as usual
+```
+
+### 🎭 Roles and the contract
+
+A report-set plugin overrides `report_roles` with one `BRIMReportRole` per export:
+
+| Field | Meaning | Danske `custody` | Danske `cash` |
+|---|---|---|---|
+| `code` | Role id, unique within the plugin | `custody` | `cash` |
+| `required` | The set cannot be combined without at least one file of this role (default `True`) | `True` | `True` |
+| `multiple` | Several files of this role are allowed in one set (default `False`) | `True` | `True` |
+| `extensions` | Accepted file extensions | `[".xlsx"]` | `[".csv"]` |
+| `description` | English description of the export; the UI falls back to it when `importWizard.reportSet.roleName.<code>` has no translation | `"Custody transactions (Sijoitukset → Tapahtumat), …"` | `"Cash account statement of the equity savings account, …"` |
+| `max_history` | How far back the bank exports this role, as an ISO 8601 duration | `P1Y` | `P5Y` |
+| `must_cover` | The role whose period this role must cover: it gives the period of a missing export and drives the `coverage_starts_late` / `coverage_ends_early` warnings | — | `custody` |
+
+The rest of the contract, all on `BRIMProvider` (`members` is always `Dict[str, List[Path]]`,
+role code → the files of that role):
+
+| Member | Default | In a report-set plugin |
+|---|---|---|
+| `report_roles` | `[]` | Non-empty: `is_report_set_plugin` becomes `True` |
+| `can_parse(path)` | — | `True` for every member **and** for the plugin's own combined files |
+| `detect_role(path)` | `None` | The role of a member; `None` for a combined or a foreign file |
+| `describe_member(path)` | raises `NotImplementedError` | `BRIMMemberSummary`: role, data rows, coverage per date axis (`trade` or `value`), and an `account_fingerprint` compared in memory only (never serialised) |
+| `describe_set(members)` | raises `NotImplementedError` | `BRIMSetShape`: segments, proven gaps and notices, **without** combining |
+| `combine(members)` | raises `NotImplementedError` | The combined table, from a **pure** function (below) |
+| `parse(path, broker_id)` | — | Parses the **combined** file; a member alone raises `BRIMSetRequiredError` |
+| `pre_checkpoint_policy` | `"summarize"` | What happens to the rows before the first checkpoint: `summarize` (Danske) or `import` |
+| `history_tag` | `provider_code` without `broker_` | The tag that marks the plugin's transactions (`danske_bank`) |
+| `settlement_lag_business_days` | `0` | The longest settlement delay (Danske: `5`). Informational: the framework does not read it, and Danske's own zone rules use the same constant |
+| `test_sample_sets` | `[]` | The sample sets of the generic test suite (see [Testing](#report-set-tests)) |
+
+### 📦 The set and its API
+
+A set is the files **uploaded together** (same `batch_id`) for **one broker** and recognised by
+**one** report-set plugin. Nobody declares which files go together, and the server never looks
+for members among the broker's other files: a set is identified by upload batch, broker and plugin.
+
+All routes live under `/api/v1/brokers/import` and require EDITOR or OWNER access on the broker.
+
+- **`POST /upload`** takes an optional form field `batch_id`, a UUID (anything else is a 422),
+  stored in the file's sidecar. The wizard sends one per session, the Files page and a broker's
+  *Uploaded Reports* one per upload action, and *Upload the missing file* reuses the set's own.
+  A file uploaded without one belongs to no set: the wizard lists it as a single file, and its
+  parse answers that the exports must be uploaded together.
+- **`GET /files`** returns `BRIMFileInfo` with `batch_id`, `kind` (`original` or `combined`),
+  `derived_from` (`file_id`, `role`, `filename` and `deleted` of each original), `combined_into`
+  and `combine_is_stale`. **`GET /plugins`** returns the `report_roles` of each plugin.
+- **`POST /sets/preview`** — body `BRIMSetRequest` `{broker_id, plugin_code, batch_id}` — collects
+  the members (the original, non-failed files of that batch and broker that the plugin can read),
+  asks the plugin for `detect_role`, `describe_member` and `describe_set`, reads the broker history
+  from the database, and returns `BRIMSetPreview`: the members with role, rows and coverage; one
+  status per role (`present`, `missing` or `excess`); `missing`, with the period the missing export
+  must cover when `must_cover` gives one (from the day before the covered role starts to its last
+  day); segments and gaps; the history LibreFolio already holds for the plugin: `history_start`
+  ([H0](#report-set-history)), `history_end` (the date of the most recent broker transaction
+  carrying the plugin's `history_tag` as an exact tag) and `history_count` (how many of the
+  broker's transactions carry that tag, gap-fix corrections included; default 0); warnings with
+  stable codes; and `complete`. The three history fields come from one read of the tagged
+  transactions (`_tagged_dates`), which also gives the dates of the earlier gap-fix corrections;
+  the wizard's set card draws that history from H0 to `history_end`, with its count
+  ([Import Wizard → Report sets](../../frontend/components/features/import-wizard.md#report-sets)).
+  It writes nothing. An unknown plugin or a batch without members answers 404, a single-file
+  plugin 400.
+- **`POST /sets/combine`** — same body — repeats the preview and answers 422 `set_incomplete`,
+  with `missing_roles`, unless the set is complete. A combined file of exactly these members, built
+  by the same plugin version, is returned as is (`reused: true`). Otherwise the core runs
+  `plugin.combine` off the event loop, writes the table with `write_combined_csv` (UTF-8 with BOM,
+  `;`-separated) and its sidecar with `save_combined_file` (`kind: "combined"`, `derived_from`,
+  `combine_plugin_code`, `combine_plugin_version`, `combine_summary`), and adds the new file to the
+  `combined_into` of each original. The answer is `BRIMSetCombineResponse` `{combined, summary,
+  reused}`. A `BRIMParseError` or `ValueError` raised by the plugin becomes a 422 `combine_failed`,
+  and the members stay as they are.
+- **`POST /files/{file_id}/parse`** on a member alone answers 422 (`code: "set_required"`, with
+  `missing_roles`) and does **not** move the file to `failed`. On the combined file it adds
+  `checkpoints`, `verifications` and `history_start` to `BRIMParseResponse`.
+
+`complete` is `True` when every required role has a file, no single-file role has several
+(`excess_files`) and the members do not come from different accounts (`mixed_accounts`, decided on
+the account fingerprints). No other warning blocks. The core's codes are `unknown_role`,
+`excess_files`, `coverage_starts_late`, `coverage_ends_early`, `mixed_accounts`,
+`before_history_segment` and `covers_gap_fix`; the plugin adds its own through `describe_set`
+(Danske: `empty_member`, `mixed_accounts_in_file`, `overlap_mismatch`, `gap`,
+`balance_chain_broken`). The wizard localises `importWizard.reportSet.warning.<code>` and falls back
+to the English `message`.
+
+!!! note "Combined files: generated names, stale versions, deleted originals"
+
+    - A combined file gets a generated name, `<provider_name> — combined <first day>…<last day>.csv`,
+      never an original's: those may carry an account number (Danske's cash statement does).
+    - `combine_is_stale` is `True` once the plugin version has changed since the combine. The next
+      combine of the set builds a new file, because reuse needs the same version; the old one stays.
+    - Deleting an original marks it `deleted` in the `derived_from` of its combined files, which stay
+      readable because they carry the verbatim values. Deleting a combined file removes it from the
+      `combined_into` of its originals.
+
+### 🧪 `combine` is pure
+
+`combine` must be a **pure function of the members and of the plugin version**: it never reads
+the database. The same set always yields the same combined file, which is what makes reuse safe
+and the file reproducible. Whatever depends on the broker's history in LibreFolio is applied by the
+core at parse time ([History start](#report-set-history)). `plugin_version` covers both `combine`
+and `parse`: bump it when either output changes for the same files.
+
+`combine` returns a `BRIMCombinedTable` (`headers`, `rows`, `summary`): unique headers that include
+`lf_row_kind` and `lf_source` (`COMBINED_REQUIRED_HEADERS`), and rows as wide as the headers. The
+plugin never writes the file — the core does, so the format is one for every plugin. `summary` is
+free-form and kept in the sidecar; the wizard's analysis detail reads its `outcomes` and `reasons`
+counters.
+
+Danske's combined file has one line per source row (a pair is one line) plus the truth rows, all
+sorted by value date:
+
+| Column | Content |
+|---|---|
+| `lf_row_kind` | `pair`, `standalone`, `excluded`, `summarized`, `deferred`, `truth_cash`, `truth_position` or `verification` |
+| `lf_zone` | `before`, `window`, `gap` or `after` |
+| `lf_reason` | Why a row is excluded: `no_counterpart`, `ambiguous`, `not_yet_settled`, `outside_cash_coverage`, `status`, `unknown_type`, `invalid` or `superseded` |
+| `lf_checkpoint` | The checkpoint that absorbs the row, or the date of a truth row |
+| `lf_source` | Role and line of the source row: `custody:12`, `custody#2:12` when the role has several files, `custody:12 + cash:40` for a pair |
+| `lf_match_key` | The pairing key: value date, amount, currency |
+| `lf_value`, `lf_currency`, `lf_proof` | Truth rows: the cash or the quantity, its currency, and the proof (`exact:E1`, `exact:E2`, `at_least:E3` or `discarded:<rule>:<reason>`) |
+| `custody:<column>`, `cash:<column>` | The verbatim source values — except the custody account column, which is never copied |
+
+### 🗺️ Zones and outcomes
+
+Danske places every row on the **value-date** axis:
+
+- a **segment** is the continuous span covered by the custody files (by trade date): files that
+  overlap or touch form one segment, and two segments stay apart only when the cash statement
+  **proves** trades between them (a cash trade row without counterpart);
+- the **window** of a segment runs from the day after its checkpoint to its last day plus the
+  settlement lag (5 business days), capped at the next checkpoint; its **border** is the first 5
+  business days after the checkpoint;
+- **before** is up to the first checkpoint, a **gap** lies between a window and the next
+  checkpoint, and **after** is beyond the last window.
+
+Every row gets exactly one outcome, with a reason when it is excluded: nothing is lost silently.
+
+| Row | before | window | gap | after |
+|---|---|---|---|---|
+| Cash with no counterpart by nature (deposit, withdrawal, tax, fee, interest) | `standalone`, absorbed by the first checkpoint | `standalone` | `standalone`, imported with its own date | `standalone` |
+| Cash trade or income **with** its custody row | — | `pair`: one transaction | — | — |
+| Cash trade or income **without** its custody row | `summarized` in the first checkpoint | in the border: `summarized` in that checkpoint (a trade made before the custody export, settled after its start); after the segment's last day: the next zone; elsewhere `excluded` (`no_counterpart`) | `summarized` in the next checkpoint | `deferred`: it comes with the next import |
+| Custody trade or income without its cash row | — | `excluded`: `not_yet_settled` (settled after the last cash row), `outside_cash_coverage` (outside the cash statement), otherwise `no_counterpart` | — | — |
+| Custody demerger line | — | `standalone`: a cashless `ADJUSTMENT` | — | — |
+| Not executed or not booked; unknown type; invalid | `excluded` (`status`, `unknown_type`, `invalid`) | same | same | same |
+
+Pairing keys on value date, amount to the cent, currency and direction (`Osto` with a positive
+quantity, `Myynti` with a negative one, income with a positive amount). The name is only a
+consistency check — the cash statement truncates its labels, so one name must be a prefix of the
+other — and a unique key with a different name still pairs, with a `name_mismatch` notice. Pairing
+is one to one: identical candidates pair in file order, and candidates that cannot be told apart
+are all `ambiguous` (so are more than 8 per side). The plugin never guesses.
+
+With several files of one role (rule M), each day belongs to the latest file covering it.
+Identical rows count once (identical partial fills inside one file stay two rows); where the
+files disagree on a day, the rows of the losing file are `excluded` (`superseded`), and
+`describe_set` reports `overlap_mismatch`.
+
+### 📍 Truth points and the safety rule
+
+A truth point is what the bank states at a date. The plugin returns two kinds in
+`BRIMParseOutput`:
+
+- **`BRIMCheckpoint`** — `as_of`, `kind` (`opening` for the earliest, `gap` for the later ones),
+  `cash` (one `BRIMTruthCash` per currency), `positions` (`BRIMTruthPosition`: the parse's fake
+  `asset_id`, a `quantity`, `exactness` `exact` or `at_least`, an optional `unit_cost`), `absorbed`
+  (`BRIMAbsorbed`: how many rows the checkpoint summarises, their net cash, the rows themselves and,
+  for the opening, the balance before them) and `evidence`. The gap-fix compares it with LibreFolio
+  and proposes corrections.
+- **`BRIMVerification`** — `as_of`, `cash`, `evidence`: compared, never corrected.
+
+Danske puts a checkpoint on the eve of each segment (for the first one, the eve of the first day
+both files cover). Its cash is the statement's running balance at the end of that day plus the
+cash of the segment's border rows. Its positions come from proofs inside the segment, each brought
+back to the checkpoint by removing the movements imported in between:
+
+- **E1** — a `Tuotto` (income) states the shares held: exact, unless a movement of that security
+  falls in the 30 days before it;
+- **E2** — the old line of a demerger states the whole holding: exact;
+- **E3** — selling more than was bought since the segment started proves **at least** the largest
+  shortfall;
+- **E4** — an excluded row of the same security between the checkpoint and the proof discards it.
+
+Discarded proofs are reported (`proof_discarded`). A final verification compares the cash at the
+end of the last segment, or of the cash statement if it ends first. The running balance is checked
+day by day: when it does not add up, the cash of every checkpoint becomes a verification
+(`balance_chain_broken`).
+
+!!! warning "The safety rule"
+
+    A truth point may become a **checkpoint** — that is, produce corrections — only if **no future
+    import will bring, one by one, the rows it summarises**. Otherwise it must be a
+    **verification**. Danske's eve of a segment qualifies: it summarises only trades that no custody
+    file of the set covers. The end of the last segment does not: the next import brings its
+    `not_yet_settled` and `deferred` trades, and a correction there would count them twice.
+
+### ⏮️ The history start (H0) {: #report-set-history }
+
+`history_start()` in `brim_report_sets.py` is the first day of the broker history LibreFolio
+already holds for the plugin: the date of the oldest broker transaction carrying the plugin's
+`history_tag` as an exact tag, where a `gap_fix` correction counts from the **day after** its date
+(it summarises everything up to the end of that day). The preview's `history_end` and
+`history_count` come from the same read of the tagged transactions. With no such transaction this
+is the **first import**, and `apply_history()` sets H0 to the day after the first checkpoint — or,
+with `pre_checkpoint_policy == "import"`, to the date of the oldest parsed transaction.
+
+At parse time `apply_history()`:
+
+- keeps only the checkpoints dated on or after the eve of H0, so a first import keeps its opening
+  checkpoint and a segment entirely before the history is dropped;
+- on a later import, removes from the kept checkpoints their `opening_cash` and the absorbed rows
+  dated before H0, which are already represented;
+- returns H0 as `BRIMParseResponse.history_start`: the wizard never selects a row dated strictly
+  before it.
+
+The preview reads the same history: `before_history_segment` warns about a segment older than the
+history (it will not be imported), and `covers_gap_fix` about an earlier `gap_fix` correction that
+falls inside a segment of the set (it must be removed by hand, or the cash counts twice).
+
+### 🏷️ Tags
+
+Every transaction of a report-set plugin carries `import` and its `history_tag` (the generic suite
+checks it); Danske adds `demerger` on demerger lines. H0 is computed from `history_tag`, so the tag
+must stay stable once users have imported with it; the default, the provider code without
+`broker_`, is the tag the existing plugins already write. The gap-fix corrections carry `import`,
+the `history_tag` and `gap_fix`.
+
+### 🧮 `POST /brokers/import/gap-fix`
+
+The wizard calls it after the review, once per broker and plugin, with `BRIMGapFixRequest`
+`{broker_id, plugin_code, checkpoints, verifications, selection, pending_creates,
+pending_delete_tx_ids}`: the truth points of the parse (positions already resolved to real assets
+by the wizard), the transactions it is about to hand to the editor, and the editor's unsaved rows
+and pending deletions. The answer, `BRIMGapFixResponse`, has one `BRIMGapFixCheckpointResult` per
+checkpoint in date order, then the verifications. **It writes nothing.**
+
+For each checkpoint, LibreFolio's state at the end of `as_of` is the sum of the broker's saved
+transactions (`TransactionService.get_balances_at_end_of`, without `pending_delete_tx_ids`) and of
+the unsaved rows, the selection and the corrections proposed at the earlier checkpoints — which
+count as accepted — dated up to `as_of`. Then:
+
+- **cash**, per currency the bank states: a difference above 0.01 becomes a `DEPOSIT` (positive) or
+  a `WITHDRAWAL` (negative) dated `as_of`;
+- **positions**: an `exact` position gets an `ADJUSTMENT` of the difference, positive or negative;
+  an `at_least` one only the missing part, never negative. A positive adjustment without a known
+  `unit_cost` gets a blocker todo `gap_fix_cost` on `cost_basis_override` (its `tx_index` counts
+  within that checkpoint's proposals); a negative one carries no cost. A position whose asset is
+  still a fake id is left out, with an `unresolved_asset` note;
+- **explanation**: how many absorbed rows LibreFolio does not have yet (matched on date, currency
+  and amount, one transaction per row) and their cash, the opening balance (opening checkpoint
+  only), and the part of the difference these do not explain.
+
+Each verification gets the same cash comparison, `ok` when every currency is within 0.01, and
+never a proposal. The proposals are ordinary `TXCreateItem`s described as
+`Gap-fix <date> — <provider_name>: <what> at the end of the day, as stated by the bank`, and the
+bulk editor saves them like any other row. The endpoint accepts any registered plugin, since it
+only reads `history_tag` and `provider_name`.
+
+### 🧪 Testing a report-set plugin {: #report-set-tests }
+
+1. Put **synthetic** members (invented values, the real column layout) in `sample_reports/`,
+   describe them in its `README.md`, and declare the sets in `test_sample_sets`, one
+   `{role: [file names]}` per set:
+
+    ```python
+    @property
+    def test_sample_sets(self) -> List[Dict[str, List[str]]]:
+        return [{"custody": ["danske_bank-custody.xlsx"], "cash": ["danske_bank-cash.csv"]}]
+    ```
+
+2. The generic suite (`./dev.py test external brim-providers`) never parses a member alone: it
+   combines every declared set and parses the combined file. `TestReportSetPlugin` checks that the
+   samples exist and cover the required roles; that each member is recognised with its role and
+   auto-detected for the plugin; `describe_member` and `describe_set`; that `combine` is pure (two
+   runs give the same table and leave the members untouched); that the combined files are
+   recognised without a role; that a member alone raises `BRIMSetRequiredError`; and the parse
+   contract — positions point at extracted assets, every transaction carries `import` and the
+   history tag, and there is exactly one `opening` checkpoint, the earliest. `TestBRIMPlugin` then
+   runs its usual checks on the combined files. To put a set under `TestPluginFrontendContract`
+   too, add it to `CONTRACT_SAMPLES` as a `_ContractSampleSet` (and any new todo reason code to
+   `KNOWN_REASON_CODES`).
+3. Pin the plugin's own rules in a dedicated module, like `test_external/test_brim_danske_bank.py`
+   (`./dev.py test external brim-danske-bank`), registered in the test runner.
+
+The framework has its own suites: `./dev.py test services brim-report-sets`,
+`./dev.py test services brim-gap-fix` and `./dev.py test api brim`.
+
 ## 🧪 Register a sample (required for tests)
 
 The parametrized suite in `backend/test_scripts/test_external/test_brim_providers.py`
@@ -680,6 +1049,9 @@ Then run just the BRIM suite:
 `test_all_plugins_used_at_least_once` and `test_specific_broker_detection_via_plugin_pattern`
 will fail if the sample is missing or if `can_parse` collides with another plugin — keep the
 header check specific.
+
+A report-set plugin's members are never parsed alone: declare its samples as sets in
+`test_sample_sets` — see [Testing a report-set plugin](#report-set-tests).
 
 ## 🖼️ Favicons
 

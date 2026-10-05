@@ -10,6 +10,7 @@
   Uses Svelte 5 runes.
 -->
 <script lang="ts">
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {_ as t} from '$lib/i18n';
     import {ChevronDown, Trash2} from 'lucide-svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
@@ -497,7 +498,7 @@
                 let sigLabel = signal.label;
                 let sigSuffix: string | undefined;
                 if (!isGhost && signal.currency) {
-                    sigSuffix = ` <span style="font-size:10px;opacity:0.7">(${signal.currencyFlag || ''} ${signal.currency})</span>`;
+                    sigSuffix = ` <span style="font-size:10px;opacity:0.7">(${signal.currencyFlag || ''} ${escapeHtml(signal.currency)})</span>`;
                 }
                 rows.push({
                     id: `sig-${signal.label}`,
