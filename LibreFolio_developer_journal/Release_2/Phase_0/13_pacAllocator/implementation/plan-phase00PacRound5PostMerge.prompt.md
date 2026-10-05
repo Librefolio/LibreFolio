@@ -468,6 +468,8 @@ nei doc live di D restituisce solo occorrenze dentro blocchi marcati «superato/
 > - la guida utente: `mkdocs_src/docs/user/tools/index.en.md:49` («This is the PAC
 >   allocator's current state») e `user/tools/pac-allocator/index.en.md:3,14-21,33-37`
 >   («No interface yet»). Vanno a docs-writer nel passo `r5-user-doc-punctual`.
+>   → ✅ 2026-10-05: fatto nel passo S11 di
+>   [plan-phase00PacContractCompaction.prompt.md](plan-phase00PacContractCompaction.prompt.md).
 
 ### Passo C — UI PAC v2.0.0 nella build ✅ 2026-09-24 (verificato sulla copia di prod, vedi Passo E)
 
