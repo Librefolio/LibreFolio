@@ -1,6 +1,7 @@
 import {beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 
 const catalogApi = vi.hoisted(() => vi.fn());
+const scenarioCatalogApi = vi.hoisted(() => vi.fn());
 const queryApi = vi.hoisted(() => vi.fn());
 
 vi.mock('$lib/api', async (importOriginal) => {
@@ -10,6 +11,7 @@ vi.mock('$lib/api', async (importOriginal) => {
         zodiosApi: {
             ...actual.zodiosApi,
             get_risk_catalog_api_v1_risk_catalog_get: catalogApi,
+            get_scenario_catalog_api_v1_risk_scenario_catalog_get: scenarioCatalogApi,
             query_risk_api_v1_risk_query_post: queryApi,
         },
     };
@@ -20,6 +22,7 @@ import {transitionClientSession} from '$lib/stores/app/clientSession';
 import {notifyPortfolioMutation} from '$lib/stores/portfolio/portfolioMutation';
 
 let fetchRiskCatalog: typeof import('./riskStore.svelte').fetchRiskCatalog;
+let fetchRiskScenarioCatalog: typeof import('./riskStore.svelte').fetchRiskScenarioCatalog;
 let getRiskQuerySnapshot: typeof import('./riskStore.svelte').getRiskQuerySnapshot;
 let hasRiskCapability: typeof import('./riskStore.svelte').hasRiskCapability;
 let invalidateRisk: typeof import('./riskStore.svelte').invalidateRisk;
@@ -40,11 +43,12 @@ describe('riskStore', () => {
             configurable: true,
             value: <T>(value: T): T => value,
         });
-        ({fetchRiskCatalog, getRiskQuerySnapshot, hasRiskCapability, invalidateRisk, makeRiskRequestKey, queryRisk} = await import('./riskStore.svelte'));
+        ({fetchRiskCatalog, fetchRiskScenarioCatalog, getRiskQuerySnapshot, hasRiskCapability, invalidateRisk, makeRiskRequestKey, queryRisk} = await import('./riskStore.svelte'));
     });
 
     beforeEach(() => {
         catalogApi.mockReset();
+        scenarioCatalogApi.mockReset();
         queryApi.mockReset();
         invalidateRisk();
     });
@@ -280,6 +284,38 @@ describe('riskStore', () => {
 
         expect(await pending).toEqual({items: [{analytic_code: 'retried'}]});
         expect(catalogApi).toHaveBeenCalledTimes(2);
+    });
+
+    // One bound for every discarded risk answer: the two catalog fetches here, and the
+    // base wave and on-demand runs of `riskPanelController`, which re-ask a `null` from
+    // `queryRisk` (that function deliberately never re-asks by itself: see 'discards an
+    // answer to a question asked before the identity existed').
+    it('exports the discard bound every risk question shares: three attempts in all', async () => {
+        // Read through the namespace rather than as a named import: the name is the subject,
+        // and a named import of a name not exported yet fails the type check, not this test.
+        const store = (await import('./riskStore.svelte')) as unknown as Record<string, unknown>;
+        expect(store.RISK_DISCARD_ATTEMPTS, 'RISK_DISCARD_ATTEMPTS is not exported as 3: the catalogs, the base wave and the on-demand runs would each keep a bound of their own, free to drift apart').toBe(3);
+    });
+
+    it.each<[string, typeof catalogApi, () => Promise<unknown>]>([
+        ['the risk catalog', catalogApi, () => fetchRiskCatalog()],
+        ['the scenario catalog', scenarioCatalogApi, () => fetchRiskScenarioCatalog()],
+    ])('gives up on %s after three attempts discarded in flight, and asks no fourth time', async (_name, api, load) => {
+        // Every attempt is invalidated while it is in flight, as the live price poll's
+        // portfolio mutation does; a fourth would be kept. A fetch that asked until something
+        // stuck, instead of within its bound, would return that fourth answer and look healthy.
+        // `invalidateRisk` rather than `notifyPortfolioMutation`: it is bound with the fetch in
+        // `beforeAll`, so both always reach the same module instance, whichever order the
+        // module-resetting block below runs in.
+        let attempts = 0;
+        api.mockImplementation(() => {
+            attempts += 1;
+            if (attempts <= 3) invalidateRisk();
+            return Promise.resolve({items: [{analytic_code: `attempt ${attempts}`}]});
+        });
+
+        expect(await load(), 'an answer discarded on every attempt was handed back as current, or a fourth attempt was made and kept').toBeNull();
+        expect(api, 'the fetch is not bounded at three attempts').toHaveBeenCalledTimes(3);
     });
 
     it('invalidates catalog and queries after portfolio-affecting mutations', async () => {

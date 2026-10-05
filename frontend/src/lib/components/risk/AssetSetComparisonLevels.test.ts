@@ -200,7 +200,7 @@ const FIGURES: RiskAnalyticResult[] = [
  *  - `nothing`: an answer with no result in it — nothing failed, nothing measured;
  *  - `reject`: the request throws, as a failed wave does (`loadError`);
  *  - `discard`: `null`, what `queryRisk` returns for an answer that arrived and was discarded. The
- *    controller re-asks once, and a second `null` is what sets `loadDiscarded`.
+ *    controller asks three times in all, and a third `null` is what sets `loadDiscarded`.
  */
 type Outcome = 'figures' | 'nothing' | 'reject' | 'discard';
 const script = {outcome: 'figures' as Outcome, asked: [] as {request: RiskQueryRequest; force: boolean}[]};
@@ -273,12 +273,12 @@ async function mountFailed(): Promise<RiskPanelController[]> {
     return controllers;
 }
 
-/** Mounted with every answer discarded, and the premise: each question asked, re-asked once, and the discard recorded. */
+/** Mounted with every answer discarded, and the premise: each question asked three times in all, and the discard recorded. */
 async function mountDiscarded(): Promise<RiskPanelController[]> {
     script.outcome = 'discard';
     const {controllers} = mount();
     await waitFor(() => expect(controllers.every(wasDiscarded), 'the controller never recorded the discard: the path under test did not run').toBe(true));
-    expect(script.asked, 'each base question was not asked and then re-asked exactly once').toHaveLength(2 * controllers.length);
+    expect(script.asked, 'each base question was not asked three times in all — the first attempt and two re-asks').toHaveLength(3 * controllers.length);
     expect(controllers.some(hasFailed), 'a discard is not a failure').toBe(false);
     return controllers;
 }
@@ -426,7 +426,7 @@ describe('AssetSetComparisonLevels — a base wave that fails', () => {
     });
 });
 
-describe('AssetSetComparisonLevels — a base answer discarded twice running', () => {
+describe('AssetSetComparisonLevels — a base answer discarded three times running', () => {
     it("is said once in each level's frame, as answer_discarded, and each body offers the retry and nothing else", async () => {
         await mountDiscarded();
 
@@ -445,9 +445,9 @@ describe('AssetSetComparisonLevels — a base answer discarded twice running', (
         const {retry} = await blockWithRetry(level, 'discarded', `${level}: the answer was discarded and the level offers no way to ask again`);
         const before = script.asked.length;
 
-        // Discarded again, and re-asked again by the controller itself: two more questions.
+        // Discarded again, and re-asked by the controller itself until its third attempt: three more questions.
         await expectRetryAsksAgain(level, retry, () => {
-            expect(script.asked.length, 'the re-asked wave never settled').toBe(before + 2);
+            expect(script.asked.length, 'the re-asked wave never settled').toBe(before + 3);
             expect(controllers.every(wasDiscarded)).toBe(true);
         });
     });
@@ -458,12 +458,12 @@ describe('AssetSetComparisonLevels — a base answer discarded twice running', (
         await expectFigures();
         await expectL3Figures();
 
-        // An accepted sync re-reads the base, and its answer is discarded twice running.
+        // An accepted sync re-reads the base, and its answer is discarded three times running.
         const before = script.asked.length;
         script.outcome = 'discard';
         view.rerender({refreshVersion: 1});
         await waitFor(() => expect(controllers.every(wasDiscarded), 'the refreshed answer was never recorded as discarded').toBe(true));
-        expect(script.asked.length - before, 'the refresh was not asked and then re-asked exactly once, question by question').toBe(2 * controllers.length);
+        expect(script.asked.length - before, 'the refresh was not asked three times in all, question by question').toBe(3 * controllers.length);
 
         // The discard kept the answer on screen, and says it lost the new one.
         await expectFigures();
