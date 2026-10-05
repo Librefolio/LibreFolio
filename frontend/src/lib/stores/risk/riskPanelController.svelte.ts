@@ -149,6 +149,129 @@ export function baseSignature(inputs: RiskControllerInputs): string {
 
 type SingleOutcome = {kind: 'answered'; result: RiskAnalyticResult | null} | {kind: 'unsupported'} | {kind: 'discarded'};
 
+const SEVERITY_RANK: Record<DataQualityIssue['severity'], number> = {info: 0, warning: 1, error: 2};
+/** Date-range parameters that widen on a merge instead of keeping the first issue's value. */
+const RANGE_PARAMS = ['date_from', 'date_to', 'dates_count'] as const;
+
+type IssueParams = NonNullable<DataQualityIssue['message_params']>;
+
+function isoOrNull(value: unknown): string | null {
+    return typeof value === 'string' && value !== '' ? value : null;
+}
+
+function numberOrNull(value: unknown): number | null {
+    return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+/** The first issue's parameters, with keys only the next one has added; ranges widen, `count` is set by the caller. */
+function mergeParams(first: IssueParams | undefined, next: IssueParams | undefined): IssueParams | undefined {
+    if (!first && !next) return undefined;
+    const merged: IssueParams = {...(next ?? {}), ...(first ?? {})};
+    const from = [isoOrNull(first?.date_from), isoOrNull(next?.date_from)].filter((value): value is string => value !== null).sort();
+    const to = [isoOrNull(first?.date_to), isoOrNull(next?.date_to)].filter((value): value is string => value !== null).sort();
+    if (from.length > 0) merged.date_from = from[0];
+    if (to.length > 0) merged.date_to = to[to.length - 1];
+    const datesCount = [numberOrNull(first?.dates_count), numberOrNull(next?.dates_count)].filter((value): value is number => value !== null);
+    if (datesCount.length > 0) merged.dates_count = Math.max(...datesCount);
+    return merged;
+}
+
+/**
+ * A copy of the issue's own shape. Not `structuredClone`: the controller's results live in
+ * `$state`, so an issue can hold Svelte proxies, which `structuredClone` refuses to clone.
+ */
+function copyIssue(issue: DataQualityIssue): DataQualityIssue {
+    const copy: DataQualityIssue = {...issue};
+    if (issue.message_params) copy.message_params = {...issue.message_params};
+    if (issue.affected_asset_ids) copy.affected_asset_ids = [...issue.affected_asset_ids];
+    if (issue.affected_asset_names) copy.affected_asset_names = [...issue.affected_asset_names];
+    if (issue.affected_fx_pairs) copy.affected_fx_pairs = [...issue.affected_fx_pairs];
+    return copy;
+}
+
+/** Order-insensitive on object keys, order-sensitive on lists: equal JSON after sorting keys. */
+function sameIssue(left: DataQualityIssue, right: DataQualityIssue): boolean {
+    const canonical = (value: unknown): unknown =>
+        Array.isArray(value)
+            ? value.map(canonical)
+            : value !== null && typeof value === 'object'
+              ? Object.fromEntries(
+                    Object.entries(value)
+                        .filter(([, entry]) => entry !== undefined)
+                        .sort(([a], [b]) => a.localeCompare(b))
+                        .map(([key, entry]) => [key, canonical(entry)]),
+                )
+              : value;
+    return JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
+}
+
+function combineIssues(first: DataQualityIssue, next: DataQualityIssue): DataQualityIssue {
+    const merged: DataQualityIssue = {...first};
+    if (first.affected_asset_ids !== undefined || next.affected_asset_ids !== undefined) {
+        // Names travel with their ids: the first real name seen for an id wins, and `#<id>` stands in
+        // only where no issue named it — and only when some issue carries names at all.
+        const ids: number[] = [];
+        const names = new Map<number, string>();
+        for (const issue of [first, next]) {
+            (issue.affected_asset_ids ?? []).forEach((id, index) => {
+                if (!ids.includes(id)) ids.push(id);
+                const name = issue.affected_asset_names?.[index];
+                // A held `#<id>` is a stand-in, not a name: a real one arriving later replaces it.
+                if (name !== undefined && name !== `#${id}` && !names.has(id)) names.set(id, name);
+            });
+        }
+        merged.affected_asset_ids = ids;
+        if (first.affected_asset_names !== undefined || next.affected_asset_names !== undefined) merged.affected_asset_names = ids.map((id) => names.get(id) ?? `#${id}`);
+    }
+    if (first.affected_fx_pairs !== undefined || next.affected_fx_pairs !== undefined) {
+        const pairs = [...(first.affected_fx_pairs ?? [])];
+        for (const pair of next.affected_fx_pairs ?? []) if (!pairs.includes(pair)) pairs.push(pair);
+        merged.affected_fx_pairs = pairs;
+    }
+    if (SEVERITY_RANK[next.severity] > SEVERITY_RANK[first.severity]) merged.severity = next.severity;
+    merged.message_params = mergeParams(first.message_params, next.message_params);
+    // The count speaks for the list the issue is about: the pairs, else the assets. With neither, each
+    // count keeps the larger of its two values, a lower bound since the counted things do not travel —
+    // `count` and `message_params.count` separately, so identical issues stay equal to their input.
+    const listed = (merged.affected_fx_pairs?.length ?? 0) > 0 ? merged.affected_fx_pairs!.length : (merged.affected_asset_ids?.length ?? 0) > 0 ? merged.affected_asset_ids!.length : null;
+    if (first.count != null || next.count != null) merged.count = listed ?? Math.max(numberOrNull(first.count) ?? 0, numberOrNull(next.count) ?? 0);
+    if (merged.message_params && 'count' in merged.message_params) {
+        merged.message_params = {...merged.message_params, count: listed ?? Math.max(numberOrNull(first.message_params?.count) ?? 0, numberOrNull(next.message_params?.count) ?? 0)};
+    }
+    if (merged.message_params === undefined) delete merged.message_params;
+    return merged;
+}
+
+/**
+ * Data-quality issues merged on the key the banner renders them by: `code` and `group_key`.
+ *
+ * `DataQualityBanner` keys each item by `code + group_key`, so two issues sharing that pair would
+ * make Svelte throw `each_key_duplicate`. They share it as soon as requests that prepare different
+ * windows carry issues — the Asset Global lab's controllers, a base wave beside a replay — each
+ * naming the stale assets of its own window. One item per key, naming everything any of them named:
+ * - asset ids and FX pairs are unions, in order of first appearance; names stay aligned with their
+ *   ids (the first name seen wins, `#<id>` when an issue names none);
+ * - `count` and `message_params.count` are the size of the union of the list the issue is about —
+ *   the pairs if it has any, else the assets; with neither, the larger count, a lower bound;
+ * - the most severe severity wins; everything else comes from the first issue, keys only a later
+ *   issue has are added, and a date range widens (`dates_count` keeps the larger, a lower bound,
+ *   since the dates themselves do not travel).
+ * Identical issues collapse to one, equal to the input — the Dashboard's case, unchanged. Inputs
+ * are never mutated. Exported because the lab merges its four controllers with the same rule.
+ */
+export function mergeQualityIssues(issues: Iterable<DataQualityIssue>): DataQualityIssue[] {
+    const merged = new Map<string, DataQualityIssue>();
+    for (const issue of issues) {
+        const key = `${issue.code}|${issue.group_key ?? ''}`;
+        const current = merged.get(key);
+        // An issue equal to the one already held adds nothing: skipping it keeps the Dashboard's
+        // identical reports equal to their input, whatever shape they arrive in.
+        if (current && sameIssue(current, issue)) continue;
+        merged.set(key, current ? combineIssues(current, issue) : copyIssue(issue));
+    }
+    return [...merged.values()];
+}
+
 export function createRiskPanelController(inputs: () => RiskControllerInputs, options: RiskControllerOptions = {}) {
     let catalog = $state<RiskCatalogResponse | null>(null);
     let scenarioCatalog = $state<RiskScenarioCatalogResponse | null>(null);
@@ -449,17 +572,8 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
     );
     const qualityReports = $derived(allResults.map(riskDataQuality).filter((report): report is RiskDataQualityReport => report !== null));
 
-    const dataQualityIssues = $derived.by<DataQualityIssue[]>(() => {
-        const deduped = new Map<string, DataQualityIssue>();
-        for (const report of qualityReports) {
-            for (const issue of report?.issues ?? []) {
-                const normalized = normalizeQualityIssue(issue);
-                const key = [normalized.code, normalized.affected_asset_ids?.join(','), normalized.affected_fx_pairs?.join(',')].join('|');
-                deduped.set(key, normalized);
-            }
-        }
-        return [...deduped.values()];
-    });
+    // One item per banner key across every result, through the shared rule (`mergeQualityIssues`).
+    const dataQualityIssues = $derived(mergeQualityIssues(qualityReports.flatMap((report) => (report?.issues ?? []).map(normalizeQualityIssue))));
 
     const qualityStatus = $derived.by(() => {
         const statuses = qualityReports.map((report) => report?.data_quality_status);
