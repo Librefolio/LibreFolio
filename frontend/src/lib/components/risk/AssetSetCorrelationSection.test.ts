@@ -7,7 +7,7 @@
 /**
  * AssetSetCorrelationSection — component test (Vitest + jsdom).
  *
- * The laboratory's matrix already said, in its body, when its answer was discarded twice running
+ * The laboratory's matrix already said, in its body, when its answer was discarded three times running
  * (`risk-correlation-discarded`, a retry and nothing else); when its base wave failed it said so
  * in a sentence and offered no way out. What it did not say is *why* a retry is all a discarded
  * answer offers: that body carries no sentence by design, and its frame carried no line either.

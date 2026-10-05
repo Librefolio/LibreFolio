@@ -71,7 +71,7 @@
          */
         failed?: boolean;
         /**
-         * The base answer arrived and was discarded twice running (`controller.loadDiscarded`).
+         * The base answer arrived and was discarded on every attempt (`controller.loadDiscarded`).
          * The frame says so (`answer_discarded` in its `errorCodes`); the body only offers
          * the cure, a retry, when there is no figure to show.
          */

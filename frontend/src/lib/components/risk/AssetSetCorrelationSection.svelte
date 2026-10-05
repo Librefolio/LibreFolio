@@ -96,7 +96,7 @@
     /**
      * Why the matrix did not come back, said by the frame as L1°/L3° and the replay say theirs:
      * the result's own error code (an unavailable or failed correlation, `insufficient_history`
-     * for one), then a base answer discarded twice running, as on the Dashboard's L4.
+     * for one), then a base answer discarded on every attempt, as on the Dashboard's L4.
      */
     let errorCodes = $derived([...resultErrorCodes([result]), ...(controller.loadDiscarded ? [ANSWER_DISCARDED_CODE] : [])]);
 
