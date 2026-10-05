@@ -393,7 +393,7 @@
     let selectedCategoryLabel = $derived(categoryLabels[selectedCategory] ?? selectedCategory);
 
     // Get selected category icon
-    let selectedCategoryIcon = $derived(selectedCategory === 'all' ? null : visibleCategories.find((c) => c.id === selectedCategory)?.icon || null);
+    let SelectedCategoryIcon = $derived(selectedCategory === 'all' ? null : visibleCategories.find((c) => c.id === selectedCategory)?.icon || null);
 
     function toggleDropdown() {
         showDropdown = !showDropdown;
@@ -430,13 +430,13 @@
             class="w-full flex items-center justify-between px-4 py-3 border border-gray-300 dark:border-slate-600
                    rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 text-sm
                    focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-all"
-            on:click={toggleDropdown}
+            onclick={toggleDropdown}
             type="button"
             data-testid="global-settings-mobile-category-trigger"
         >
             <span class="flex items-center gap-2">
-                {#if selectedCategoryIcon}
-                    <svelte:component this={selectedCategoryIcon} size={16} class="text-gray-500 dark:text-gray-400" />
+                {#if SelectedCategoryIcon}
+                    <SelectedCategoryIcon size={16} class="text-gray-500 dark:text-gray-400" />
                 {/if}
                 {selectedCategoryLabel}
             </span>
@@ -452,7 +452,7 @@
                 <!-- All Settings option -->
                 <button
                     type="button"
-                    on:click={() => selectCategoryMobile('all')}
+                    onclick={() => selectCategoryMobile('all')}
                     data-testid="global-settings-mobile-category-all"
                     class="w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-colors
                            {selectedCategory === 'all' ? 'bg-libre-green/10 text-libre-green font-medium' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700'}"
@@ -467,12 +467,12 @@
                 {#each visibleCategories as cat (cat.id)}
                     <button
                         type="button"
-                        on:click={() => selectCategoryMobile(cat.id)}
+                        onclick={() => selectCategoryMobile(cat.id)}
                         data-testid="global-settings-mobile-category-{cat.id}"
                         class="w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-colors
                                {selectedCategory === cat.id ? 'bg-libre-green/10 text-libre-green font-medium' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700'}"
                     >
-                        <svelte:component this={cat.icon} size={16} class={selectedCategory === cat.id ? 'text-libre-green' : 'text-gray-400'} />
+                        <cat.icon size={16} class={selectedCategory === cat.id ? 'text-libre-green' : 'text-gray-400'} />
                         <span class="flex-1">{categoryLabels[cat.id] ?? cat.id}</span>
                         {#if selectedCategory === cat.id}
                             <ChevronRight size={16} />
@@ -491,7 +491,7 @@
             <button
                 class="w-full flex items-center px-3 py-2 text-sm rounded-lg transition-colors
                     {selectedCategory === 'all' ? 'bg-libre-green text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700'}"
-                on:click={() => (selectedCategory = 'all')}
+                onclick={() => (selectedCategory = 'all')}
             >
                 <span class="flex-1 text-left">{categoryLabels['all'] ?? ''}</span>
                 {#if selectedCategory === 'all'}
@@ -501,12 +501,12 @@
 
             {#each visibleCategories as cat}
                 <button
-                    on:click={() => (selectedCategory = cat.id)}
+                    onclick={() => (selectedCategory = cat.id)}
                     data-testid="global-settings-category-{cat.id}"
                     class="w-full flex items-center px-3 py-2 text-sm rounded-lg transition-colors
                         {selectedCategory === cat.id ? 'bg-libre-green text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700'}"
                 >
-                    <svelte:component this={cat.icon} size={16} class="mr-2" />
+                    <cat.icon size={16} class="mr-2" />
                     <span class="flex-1 text-left">{categoryLabels[cat.id] ?? cat.id}</span>
                     {#if selectedCategory === cat.id}
                         <ChevronRight size={16} />
@@ -528,7 +528,7 @@
                             <SettingBulkActions hasChanges={hasAnyChanges} hasNonDefaults={hasAnyNonDefault} {isLocked} {isSaving} onsaveAll={saveAll} onundoAll={undoAll} onresetAll={resetAllToDefaults} />
                         {/if}
                         <button
-                            on:click={toggleLock}
+                            onclick={toggleLock}
                             data-testid="settings-lock-toggle"
                             class="p-2 rounded-lg transition-all
                                 {isLocked ? 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/50'}"
@@ -688,7 +688,7 @@
                                     <div class="flex-1 min-w-0">
                                         <label for={setting.key} class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-200">
                                             {#if category}
-                                                <svelte:component this={category.icon} size={16} class="mr-2 text-gray-500 dark:text-gray-400" />
+                                                <category.icon size={16} class="mr-2 text-gray-500 dark:text-gray-400" />
                                             {/if}
                                             {getSettingLabel(setting.key)}
                                         </label>
@@ -710,7 +710,7 @@
                                             id={setting.key}
                                             type="text"
                                             value={editedValues[setting.key]}
-                                            on:input={(e) => {
+                                            oninput={(e) => {
                                                 editedValues[setting.key] = e.currentTarget.value;
                                                 editedValues = {...editedValues};
                                             }}
@@ -736,10 +736,10 @@
                     <div
                         class="bg-gray-50 dark:bg-slate-800 rounded-lg px-4 py-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
                         data-testid="scheduler-status-row"
-                        on:click={() => (showLogModal = true)}
+                        onclick={() => (showLogModal = true)}
                         role="button"
                         tabindex={0}
-                        on:keydown={(e) => {
+                        onkeydown={(e) => {
                             if (e.key === 'Enter') showLogModal = true;
                         }}
                     >
@@ -786,7 +786,7 @@
                                     </p>
                                 </div>
                             </div>
-                            <button class="text-xs text-libre-green hover:text-libre-green/80 font-medium shrink-0 disabled:opacity-50 disabled:cursor-not-allowed" type="button" data-testid="scheduler-config-btn" disabled={isLocked} on:click={() => (showConfigModal = true)}>
+                            <button class="text-xs text-libre-green hover:text-libre-green/80 font-medium shrink-0 disabled:opacity-50 disabled:cursor-not-allowed" type="button" data-testid="scheduler-config-btn" disabled={isLocked} onclick={() => (showConfigModal = true)}>
                                 {$_('settings.global.scheduler.status.configure')}
                             </button>
                         </div>
