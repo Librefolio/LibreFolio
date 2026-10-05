@@ -2,9 +2,9 @@
     import {t, locale} from '$lib/i18n';
     import OriginBadge from '../shared/OriginBadge.svelte';
     import PlannerDialog from '../shared/PlannerDialog.svelte';
-    import {formatExactFxRate, formatExactMoneyPlain, formatExactQuantity, formatExactPricePlain, formatPlannerDate, formatPlannerMoneyPlain, formatPlannerTimestamp, type CurrencyDigits} from '../format';
+    import {formatExactFxRate, formatExactMoneyPlain, formatExactQuantity, formatExactPricePlain, formatPlannerMoneyPlain, formatPlannerTimestamp, type CurrencyDigits} from '../format';
     import type {PacConversion, PacOrderRow} from '../types';
-    import {BUTTON_LINK, BUTTON_SECONDARY, HINT} from '../ui';
+    import {BUTTON_LINK, BUTTON_SECONDARY} from '../ui';
     import {conversionsFor, type PacProvenanceRow, type PlanLookup, type ResultNames} from './model';
     import {instructionStepText, instructionText, priceText, ratePercentText, routeCapText, routeMinimumText} from './text';
     const PLANNER_KEY = 'tools.pacAllocator.planner';
@@ -59,19 +59,10 @@
             </dd>
 
             <dt class="font-medium text-gray-600 dark:text-gray-400">{$t(`${KEY}.sourcePrice`, {default: 'Source price'})}</dt>
-            <dd class="tabular-nums">{priceText(order.source_price, $t, digits)}</dd>
-            <dt class="font-medium text-gray-600 dark:text-gray-400">{$t(`${KEY}.priceDate`, {default: 'Price date'})}</dt>
-            <dd class="flex flex-wrap items-center gap-2" data-testid="pac-planner-order-detail-price-date">
-                {#if quote}
-                    <span>{formatPlannerDate(quote.reference_date, $locale)}</span>
-                    {#if quote.freshness.kind === 'stale'}
-                        <span class={HINT}>{$t(`${KEY}.staleQuote`, {default: '{count, plural, one {# day} other {# days}} old · accepted', values: {count: quote.freshness.age_days}})}</span>
-                    {/if}
-                    {#if quoteOrigin}
-                        <OriginBadge origin={quoteOrigin.kind === 'manual' ? 'manual' : 'copied'} />
-                    {/if}
-                {:else}
-                    <span>—</span>
+            <dd class="flex flex-wrap items-center gap-2 tabular-nums sm:col-span-3">
+                <span>{priceText(order.source_price, $t, digits)}</span>
+                {#if quoteOrigin}
+                    <OriginBadge origin={quoteOrigin.kind === 'manual' ? 'manual' : 'copied'} />
                 {/if}
             </dd>
 

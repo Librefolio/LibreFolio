@@ -62,7 +62,6 @@ from backend.app.services.pac_allocator.models import (
     ExactEvaluation,
     ExactExistingCash,
     ExactFeeSchedule,
-    ExactFreshness,
     ExactFundingRoute,
     ExactFxRate,
     ExactHolding,
@@ -94,10 +93,6 @@ CAPTURED_AT = datetime(2026, 9, 16, 20, 0, tzinfo=UTC)
 PROVENANCE_ID = "provenance:test"
 
 
-def _fresh() -> ExactFreshness:
-    return ExactFreshness(kind="fresh", age_days=None, accepted=False)
-
-
 def _money(amount: ExactRatio, currency: str = "EUR") -> ExactMoney:
     return ExactMoney(amount=amount, currency=currency)
 
@@ -119,8 +114,6 @@ def _asset(
         quote=ExactAssetQuote(
             price=_money(price, currency),
             quote_base_quantity=quote_base,
-            reference_date=AS_OF,
-            freshness=_fresh(),
             provenance_id=PROVENANCE_ID,
         ),
         exposures=(),
@@ -398,7 +391,6 @@ def _cash(
     available: ExactRatio | None = None,
 ) -> ExactExistingCash:
     return ExactExistingCash(
-        source_kind="local_broker_cash",
         cash_id=cash_id,
         broker_id=broker_id,
         available=_money(amount if available is None else available, currency),
@@ -491,8 +483,6 @@ def _planner_request_with_whole_step(
                         "amount": "10",
                         "currency": "EUR",
                         "quote_base_quantity": "1",
-                        "reference_date": "2026-09-16",
-                        "freshness": {"kind": "fresh"},
                         "provenance_id": PROVENANCE_ID,
                     },
                     "exposures": [],
@@ -536,7 +526,6 @@ def _planner_request_with_whole_step(
             ],
             "existing_cash": [
                 {
-                    "source_kind": "local_broker_cash",
                     "cash_id": "cash:a",
                     "broker_id": "broker:a",
                     "available": {

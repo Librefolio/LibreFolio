@@ -5,13 +5,31 @@
  * (reachability, fees, FX closure, minimums, feasibility) stays in the
  * backend. A missing price or rate is not a local problem: the backend
  * answers `needs_input` and names it.
+ *
+ * The wire is compact (plan-phase00PacContractCompaction §1-§3): a field that
+ * holds its schema default is left out, and the codec fills it back in. The
+ * builder returns both forms: `request`, the body that is sent, and
+ * `resolved`, the codec's parsed output, which the result views read.
  */
 import {toolContractMap} from '$lib/api/tool-contract-map.generated';
 import {canonicalInput, compareDecimal, decimalSign, isWholeDecimal, percentToFraction} from './decimal';
 import {PLANNER_OPERATION} from './defaults';
-import {daysBetween, priceIsCopied, routeKey, sameExposures, selectionExceedsAvailable, type CopyRef, type DraftAsset, type DraftBroker, type DraftMode, type DraftRoute, type PlannerDraft} from './draft.svelte';
+import {priceIsCopied, routeKey, sameExposures, selectionExceedsAvailable, type CopyRef, type DraftAsset, type DraftBroker, type DraftMode, type DraftRoute, type PlannerDraft} from './draft.svelte';
 import {toPlannerId, toPlannerTimestamp} from './source';
-import type {PacPlannerRequest, PacRequestAsset, PacRequestBroker, PacRequestCash, PacRequestFundingRoute, PacRequestOrderRoute, PacRequestProvenance, PlannerStep} from './types';
+import type {
+    PacPlannerRequest,
+    PacRequestAsset,
+    PacRequestBroker,
+    PacRequestCapability,
+    PacRequestCash,
+    PacRequestExposure,
+    PacRequestFeeSchedule,
+    PacRequestFundingRoute,
+    PacRequestOrderRoute,
+    PacRequestProvenance,
+    PacResolvedRequest,
+    PlannerStep,
+} from './types';
 
 export interface LocalProblem {
     id: string;
@@ -33,7 +51,10 @@ export interface RequestIdMap {
 }
 
 export interface BuiltRequest {
+    /** The compact body that is sent. */
     request: PacPlannerRequest;
+    /** `request` as the codec resolves it, every default filled in: the result views read this one. */
+    resolved: PacResolvedRequest;
     ids: RequestIdMap;
     revision: number;
     fingerprint: string;
@@ -74,6 +95,46 @@ function wireInteger(text: string): number | null {
     if (!SAFE_INTEGER.test(trimmed)) return null;
     const value = Number(trimmed);
     return Number.isSafeInteger(value) ? value : null;
+}
+
+/**
+ * `{[key]: value}`, or nothing when `value` is null. The compact wire leaves a
+ * field out when it holds its schema default: the key is absent, never
+ * `undefined`, because the tool client refuses an `undefined` value.
+ */
+function field<K extends string, V>(key: K, value: V | null): Partial<Record<K, V>> {
+    return value === null ? {} : ({[key]: value} as Partial<Record<K, V>>);
+}
+
+/** `value`, or null when it is zero: the default of every rate and fee. */
+function nonZero(value: string): string | null {
+    return decimalSign(value) === 0 ? null : value;
+}
+
+/** `items`, or null when the list is empty: the default of every list. */
+function nonEmpty<T>(items: T[]): T[] | null {
+    return items.length > 0 ? items : null;
+}
+
+/**
+ * The BUY fee schedule of one mode, without its zero fields (§3), or null when
+ * every fee is zero: a route with no schedule is a BUY without fees. A
+ * rate-only schedule therefore names no currency.
+ */
+function feeSchedule(brokerKey: string, mode: DraftMode): PacRequestFeeSchedule | null {
+    const money = (text: string) => {
+        const amount = nonZero(wireDecimal(text) as string);
+        return amount === null ? null : {amount, currency: mode.currency};
+    };
+    const cap = mode.cap.trim() === '' ? null : (wireDecimal(mode.cap) as string);
+    const fees = {
+        ...field('fixed_fee', money(mode.fixedFee)),
+        ...field('rate', nonZero(wireFraction(mode.ratePercent) as string)),
+        ...field('variable_floor', money(mode.floor)),
+        ...field('variable_cap', cap === null ? null : {kind: 'amount' as const, amount: {amount: cap, currency: mode.currency}}),
+    };
+    if (Object.keys(fees).length === 0) return null;
+    return {fee_schedule_id: feeScheduleId(brokerKey, mode), capability_id: capabilityId(brokerKey, mode), side: 'buy', ...fees};
 }
 
 function exposuresUnchanged(asset: DraftAsset): boolean {
@@ -229,7 +290,7 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date()): Build
         }
         if (!provenance.has(id)) {
             const label = source.source_label?.trim() ? source.source_label.trim().slice(0, 128) : null;
-            provenance.set(id, {kind: 'domain_copy', provenance_id: id, domain: source.domain, source_ref: sourceRef, source_label: label, captured_at: capturedAt});
+            provenance.set(id, {kind: 'domain_copy', provenance_id: id, domain: source.domain, source_ref: sourceRef, ...field('source_label', label), captured_at: capturedAt});
             ids.provenance.set(id, {step, entityKey});
             if (capturedAt > newest) newest = capturedAt;
         }
@@ -249,72 +310,65 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date()): Build
         return id;
     };
 
-    // Assets
+    // Assets. A copied price keeps its date in the draft, where it drives the staleness
+    // warnings (plan §5); the wire carries only the price and where it comes from.
     const assets: PacRequestAsset[] = data.assets.map((asset) => {
         const price = asset.price;
-        // A copied price keeps its source date; a typed or edited one is the user's, dated as of the calculation.
         const quote = price
-            ? (() => {
-                  const fromCopy = priceIsCopied(asset);
-                  const age = fromCopy ? Math.max(daysBetween(price.referenceDate, data.asOf) ?? 0, 0) : 0;
-                  return {
-                      amount: wireDecimal(price.amount) as string,
-                      currency: price.currency,
-                      quote_base_quantity: wireDecimal(price.quoteBaseQuantity) as string,
-                      reference_date: fromCopy ? price.referenceDate : data.asOf,
-                      freshness: age === 0 ? ({kind: 'fresh'} as const) : ({kind: 'stale', age_days: age, accepted: true} as const),
-                      provenance_id: fromCopy ? copied(asset.priceStamp as CopyRef, 'assets', asset.key) : manual(asset.key, '/quote', 'manual price', asset.enteredAt, 'assets'),
-                  };
-              })()
+            ? {
+                  amount: wireDecimal(price.amount) as string,
+                  currency: price.currency,
+                  quote_base_quantity: wireDecimal(price.quoteBaseQuantity) as string,
+                  provenance_id: priceIsCopied(asset) ? copied(asset.priceStamp as CopyRef, 'assets', asset.key) : manual(asset.key, '/quote', 'manual price', asset.enteredAt, 'assets'),
+              }
             : null;
         const exposureProvenance = (provenanceId: string | null): string =>
             exposuresUnchanged(asset) && provenanceId && asset.exposureStamp ? copied({copyId: asset.exposureStamp.copyId, provenanceId}, 'assets', asset.key) : manual(asset.key, '/exposures', 'manual exposures', asset.enteredAt, 'assets');
         const ticker = asset.ticker.trim() === '' ? null : asset.ticker.trim().slice(0, 128);
-        return {
-            asset_id: asset.key,
-            identity:
-                asset.sourceAssetId !== null ? {kind: 'domain_asset', source_asset_id: String(asset.sourceAssetId), name: asset.name.trim().slice(0, 128), ticker, asset_class: asset.assetClass} : {kind: 'manual_asset', name: asset.name.trim().slice(0, 128), ticker, asset_class: asset.assetClass},
-            quote,
-            exposures: asset.exposures.map((exposure) => ({
+        const exposures = asset.exposures.map(
+            (exposure): PacRequestExposure => ({
                 dimension: exposure.dimension,
                 category_id: toPlannerId(exposure.categoryId.trim()) as string,
                 label: exposure.label.trim().slice(0, 128),
                 weight: wireFraction(exposure.weightPercent) as string,
                 provenance_id: exposureProvenance(exposure.provenanceId),
-            })),
+            }),
+        );
+        return {
+            asset_id: asset.key,
+            identity:
+                asset.sourceAssetId !== null ? {kind: 'domain_asset', source_asset_id: String(asset.sourceAssetId), name: asset.name.trim().slice(0, 128), ticker, asset_class: asset.assetClass} : {kind: 'manual_asset', name: asset.name.trim().slice(0, 128), ticker, asset_class: asset.assetClass},
+            quote,
+            ...field('exposures', nonEmpty(exposures)),
         };
     });
 
-    // Brokers, capabilities, fee schedules
+    // Brokers, capabilities, fee schedules. A mode whose fees are all zero sends no schedule.
+    const sentSchedules = new Set<string>();
     const brokers: PacRequestBroker[] = data.brokers.map((broker: DraftBroker) => {
         const provenanceId = broker.origin === 'copied' && broker.stamp ? copied(broker.stamp, 'brokers', broker.key) : manual(broker.key, '', 'manual broker', broker.enteredAt, 'brokers');
         const modes = broker.fundingOnly ? [] : broker.modes;
         for (const mode of modes) ids.capabilities.set(capabilityId(broker.key, mode), {brokerKey: broker.key, modeKey: mode.key});
+        const capabilities = modes.map(
+            (mode): PacRequestCapability =>
+                mode.kind === 'whole_quantity'
+                    ? {kind: 'whole_quantity', capability_id: capabilityId(broker.key, mode), quantity_unit: 'asset_unit', quantity_step: wireDecimal(mode.step) as string}
+                    : {kind: 'monetary_amount', capability_id: capabilityId(broker.key, mode), order_amount_step: {amount: wireDecimal(mode.step) as string, currency: mode.currency}},
+        );
+        const feeSchedules = modes.map((mode) => feeSchedule(broker.key, mode)).filter((schedule): schedule is PacRequestFeeSchedule => schedule !== null);
+        for (const schedule of feeSchedules) sentSchedules.add(schedule.fee_schedule_id);
         return {
             broker_id: broker.key,
             identity: broker.sourceBrokerId !== null ? {kind: 'domain_broker', source_broker_id: String(broker.sourceBrokerId), name: broker.name.trim().slice(0, 128), active: broker.active} : {kind: 'manual_broker', name: broker.name.trim().slice(0, 128)},
             provenance_id: provenanceId,
             conversion_mode: broker.conversionMode,
-            capabilities: modes.map((mode) =>
-                mode.kind === 'whole_quantity'
-                    ? {kind: 'whole_quantity', capability_id: capabilityId(broker.key, mode), quantity_unit: 'asset_unit', quantity_step: wireDecimal(mode.step) as string}
-                    : {kind: 'monetary_amount', capability_id: capabilityId(broker.key, mode), order_amount_step: {amount: wireDecimal(mode.step) as string, currency: mode.currency}},
-            ),
-            fee_schedules: modes.map((mode) => ({
-                fee_schedule_id: feeScheduleId(broker.key, mode),
-                capability_id: capabilityId(broker.key, mode),
-                side: 'buy',
-                fixed_fee: {amount: wireDecimal(mode.fixedFee) as string, currency: mode.currency},
-                rate: wireFraction(mode.ratePercent) as string,
-                variable_floor: {amount: wireDecimal(mode.floor) as string, currency: mode.currency},
-                variable_cap: mode.cap.trim() === '' ? {kind: 'none'} : {kind: 'amount', amount: {amount: wireDecimal(mode.cap) as string, currency: mode.currency}},
-            })),
+            ...field('capabilities', nonEmpty(capabilities)),
+            ...field('fee_schedules', nonEmpty(feeSchedules)),
         };
     });
 
     // Cash and contributions
     const existingCash: PacRequestCash[] = data.cash.map((cash) => ({
-        source_kind: cash.origin === 'copied' ? 'local_broker_cash' : 'manual_cash',
         cash_id: cash.key,
         broker_id: cash.brokerKey,
         available: {amount: wireDecimal(cash.available) as string, currency: cash.currency},
@@ -328,14 +382,15 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date()): Build
         provenance_id: manual(item.key, '', 'contribution', item.enteredAt, 'liquidity'),
     }));
 
-    // Funding routes: every source is allowed to every operative Broker until the user excludes it (syncFunding)
+    // Funding routes: every source is allowed to every operative Broker until the user excludes it (syncFunding).
+    // An empty transfer cap is left out: the backend then moves the whole selected amount of the source.
     const fundingRoutes: PacRequestFundingRoute[] = [];
     for (const broker of data.brokers) {
         for (const funding of broker.funding) {
             if (!funding.enabled) continue;
             const currency = draft.sourceCurrency(funding.source) as string;
-            const sourceAmount = funding.source.kind === 'cash' ? draft.cashRow(funding.source.cashKey)?.selected : draft.contribution(funding.source.contributionKey)?.amount;
-            const cap = funding.cap.trim() === '' ? wireDecimal(sourceAmount ?? '') : wireDecimal(funding.cap);
+            const cap = funding.cap.trim() === '' ? null : (wireDecimal(funding.cap) as string);
+            const priority = wireInteger(funding.priority) as number;
             const wireId = toPlannerId(`funding:${broker.key}/${funding.key}`) as string;
             ids.funding.set(wireId, {brokerKey: broker.key, fundingKey: funding.key});
             fundingRoutes.push({
@@ -343,8 +398,8 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date()): Build
                 source: funding.source.kind === 'cash' ? {kind: 'existing_cash', cash_id: funding.source.cashKey} : {kind: 'contribution', contribution_id: funding.source.contributionKey},
                 broker_id: broker.key,
                 currency,
-                priority: wireInteger(funding.priority) as number,
-                transfer_cap: {amount: cap ?? '0', currency},
+                ...field('priority', priority === 0 ? null : priority),
+                ...field('transfer_cap', cap === null ? null : {amount: cap, currency}),
                 provenance_id: manual(funding.key, '', 'funding route', funding.enteredAt, 'brokers'),
             });
         }
@@ -357,12 +412,20 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date()): Build
             const route: DraftRoute | undefined = data.routes[routeKey(asset.key, broker.key)];
             if (!route?.enabled) continue;
             const mode = draft.modeFor(asset.key, broker.key) as DraftMode;
-            const minimum = (value: string) =>
+            const minimum = (value: string): NonNullable<PacRequestOrderRoute['required_minimum']> | null =>
                 value.trim() === ''
-                    ? ({kind: 'none'} as const)
+                    ? null
                     : mode.kind === 'whole_quantity'
-                      ? ({kind: 'whole_quantity', quantity: wireDecimal(value) as string, unit: 'asset_unit'} as const)
-                      : ({kind: 'monetary_amount', amount: {amount: wireDecimal(value) as string, currency: mode.currency}} as const);
+                      ? {kind: 'whole_quantity', quantity: wireDecimal(value) as string, unit: 'asset_unit'}
+                      : {kind: 'monetary_amount', amount: {amount: wireDecimal(value) as string, currency: mode.currency}};
+            const cap: NonNullable<PacRequestOrderRoute['cap']> | null =
+                route.cap.trim() === ''
+                    ? null
+                    : mode.kind === 'whole_quantity'
+                      ? {kind: 'quantity', quantity: wireDecimal(route.cap) as string, unit: 'asset_unit'}
+                      : {kind: 'notional', amount: {amount: wireDecimal(route.cap) as string, currency: mode.currency}};
+            const priority = wireInteger(route.priority) as number;
+            const scheduleId = feeScheduleId(broker.key, mode);
             ids.routes.set(route.wireId, {assetKey: asset.key, brokerKey: broker.key});
             orderRoutes.push({
                 route_id: route.wireId,
@@ -370,17 +433,12 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date()): Build
                 broker_id: broker.key,
                 capability_id: capabilityId(broker.key, mode),
                 side: 'buy',
-                priority: wireInteger(route.priority) as number,
-                minimum_if_active: minimum(route.minimumIfActive),
-                required_minimum: minimum(route.requiredMinimum),
-                cap:
-                    route.cap.trim() === ''
-                        ? {kind: 'none'}
-                        : mode.kind === 'whole_quantity'
-                          ? {kind: 'quantity', quantity: wireDecimal(route.cap) as string, unit: 'asset_unit'}
-                          : {kind: 'notional', amount: {amount: wireDecimal(route.cap) as string, currency: mode.currency}},
-                execution_margin_rate: wireFraction(route.marginPercent) as string,
-                fee_schedule_id: feeScheduleId(broker.key, mode),
+                ...field('priority', priority === 0 ? null : priority),
+                ...field('minimum_if_active', minimum(route.minimumIfActive)),
+                ...field('required_minimum', minimum(route.requiredMinimum)),
+                ...field('cap', cap),
+                ...field('execution_margin_rate', nonZero(wireFraction(route.marginPercent) as string)),
+                ...field('fee_schedule_id', sentSchedules.has(scheduleId) ? scheduleId : null),
                 provenance_id: manual(route.wireId, '', 'order route', route.enteredAt, 'routing'),
             });
         }
@@ -395,19 +453,20 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date()): Build
 
     if (late.items.length > 0) return {ok: false, problems: late.items};
 
+    const fxSpread = wireFraction(data.fxSpreadPercent) ?? '0';
     const request = {
         operation: PLANNER_OPERATION,
         snapshot: {snapshot_id: `draft:${draft.revision}`, draft_revision: draft.revision, captured_at: newest},
         as_of: data.asOf,
         valuation_currency: data.valuationCurrency,
         provenance: [...provenance.values()],
-        fx_rates: fxRates,
-        fx_spread_rate: (wireFraction(data.fxSpreadPercent) ?? '0') as string,
+        ...field('fx_rates', Object.keys(fxRates).length > 0 ? fxRates : null),
+        ...field('fx_spread_rate', nonZero(fxSpread)),
         assets,
         brokers,
-        existing_cash: existingCash,
-        contributions,
-        funding_routes: fundingRoutes,
+        ...field('existing_cash', nonEmpty(existingCash)),
+        ...field('contributions', nonEmpty(contributions)),
+        ...field('funding_routes', nonEmpty(fundingRoutes)),
         target_weights: data.assets.map((asset) => ({asset_id: asset.key, weight: wireFraction(data.targets[asset.key]?.trim() ? data.targets[asset.key] : '0') as string})),
         order_routes: orderRoutes,
         policy: data.policy,
@@ -425,6 +484,7 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date()): Build
         ok: true,
         built: {
             request,
+            resolved: parsed.data,
             ids,
             revision: draft.revision,
             fingerprint: draft.fingerprint,

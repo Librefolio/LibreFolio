@@ -30,10 +30,6 @@
         "amount": "10.00",
         "currency": "EUR",
         "quote_base_quantity": "1",
-        "reference_date": "2026-09-15",
-        "freshness": {
-          "kind": "fresh"
-        },
         "provenance_id": "prov-manual"
       },
       "exposures": [
@@ -105,7 +101,6 @@
   ],
   "existing_cash": [
     {
-      "source_kind": "local_broker_cash",
       "cash_id": "cash-broker-one-eur",
       "broker_id": "broker-one",
       "available": {

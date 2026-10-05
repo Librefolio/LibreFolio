@@ -46,8 +46,8 @@ def _normalizer_definition(code: PlannerIssueCode, kind: NormalizerIssueKind) ->
 # Canonical public universe.  It intentionally carries no inferred
 # kind/severity policy for codes that this normalizer does not produce.
 CANONICAL_ISSUE_CODES: tuple[PlannerIssueCode, ...] = get_args(PlannerIssueCode)
-if len(CANONICAL_ISSUE_CODES) != 79 or len(set(CANONICAL_ISSUE_CODES)) != 79:
-    raise RuntimeError("PlannerIssueCode must remain the frozen 79-value G3 universe")
+if len(CANONICAL_ISSUE_CODES) != 76 or len(set(CANONICAL_ISSUE_CODES)) != 76:
+    raise RuntimeError("PlannerIssueCode must remain the frozen 76-value G3 universe")
 
 
 # Explicit W1 producer map.  Adding `self.issue(code, ...)` without first
@@ -87,14 +87,11 @@ W1_NORMALIZER_ISSUE_DEFINITIONS: dict[PlannerIssueCode, IssueDefinition] = {
     "allocation.order_minimum_exceeds_cap": _normalizer_definition("allocation.order_minimum_exceeds_cap", "invalid"),
     "allocation.order_minimum_negative": _normalizer_definition("allocation.order_minimum_negative", "invalid"),
     "allocation.planning_quantity_negative": _normalizer_definition("allocation.planning_quantity_negative", "invalid"),
-    "allocation.price_date_missing": _normalizer_definition("allocation.price_date_missing", "missing"),
     "allocation.price_missing": _normalizer_definition("allocation.price_missing", "missing"),
     "allocation.provenance_not_found": _normalizer_definition("allocation.provenance_not_found", "invalid"),
     "allocation.quote_base_quantity_missing": _normalizer_definition("allocation.quote_base_quantity_missing", "missing"),
     "allocation.reference_not_found": _normalizer_definition("allocation.reference_not_found", "invalid"),
     "allocation.route_priority_negative": _normalizer_definition("allocation.route_priority_negative", "invalid"),
-    "allocation.stale_age_negative": _normalizer_definition("allocation.stale_age_negative", "invalid"),
-    "allocation.stale_observation_not_accepted": _normalizer_definition("allocation.stale_observation_not_accepted", "invalid"),
     "allocation.target_total_not_one": _normalizer_definition("allocation.target_total_not_one", "invalid"),
     "allocation.target_weight_missing": _normalizer_definition("allocation.target_weight_missing", "missing"),
     "allocation.target_weight_out_of_range": _normalizer_definition("allocation.target_weight_out_of_range", "invalid"),
