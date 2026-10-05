@@ -789,12 +789,20 @@ All routes live under `/api/v1/brokers/import` and require EDITOR or OWNER acces
   and `combine_is_stale`. **`GET /plugins`** returns the `report_roles` of each plugin.
 - **`POST /sets/preview`** — body `BRIMSetRequest` `{broker_id, plugin_code, batch_id}` — collects
   the members (the original, non-failed files of that batch and broker that the plugin can read),
-  asks the plugin for `detect_role`, `describe_member` and `describe_set`, reads the history start
+  asks the plugin for `detect_role`, `describe_member` and `describe_set`, reads the broker history
   from the database, and returns `BRIMSetPreview`: the members with role, rows and coverage; one
   status per role (`present`, `missing` or `excess`); `missing`, with the period the missing export
   must cover when `must_cover` gives one (from the day before the covered role starts to its last
-  day); segments and gaps; `history_start`; warnings with stable codes; and `complete`. It writes
-  nothing. An unknown plugin or a batch without members answers 404, a single-file plugin 400.
+  day); segments and gaps; the history LibreFolio already holds for the plugin: `history_start`
+  ([H0](#report-set-history)), `history_end` (the date of the most recent broker transaction
+  carrying the plugin's `history_tag` as an exact tag) and `history_count` (how many of the
+  broker's transactions carry that tag, gap-fix corrections included; default 0); warnings with
+  stable codes; and `complete`. The three history fields come from one read of the tagged
+  transactions (`_tagged_dates`), which also gives the dates of the earlier gap-fix corrections;
+  the wizard's set card draws that history from H0 to `history_end`, with its count
+  ([Import Wizard → Report sets](../../frontend/components/features/import-wizard.md#report-sets)).
+  It writes nothing. An unknown plugin or a batch without members answers 404, a single-file
+  plugin 400.
 - **`POST /sets/combine`** — same body — repeats the preview and answers 422 `set_incomplete`,
   with `missing_roles`, unless the set is complete. A combined file of exactly these members, built
   by the same plugin version, is returned as is (`reused: true`). Otherwise the core runs
@@ -934,9 +942,10 @@ day by day: when it does not add up, the cash of every checkpoint becomes a veri
 `history_start()` in `brim_report_sets.py` is the first day of the broker history LibreFolio
 already holds for the plugin: the date of the oldest broker transaction carrying the plugin's
 `history_tag` as an exact tag, where a `gap_fix` correction counts from the **day after** its date
-(it summarises everything up to the end of that day). With no such transaction this is the **first
-import**, and `apply_history()` sets H0 to the day after the first checkpoint — or, with
-`pre_checkpoint_policy == "import"`, to the date of the oldest parsed transaction.
+(it summarises everything up to the end of that day). The preview's `history_end` and
+`history_count` come from the same read of the tagged transactions. With no such transaction this
+is the **first import**, and `apply_history()` sets H0 to the day after the first checkpoint — or,
+with `pre_checkpoint_policy == "import"`, to the date of the oldest parsed transaction.
 
 At parse time `apply_history()`:
 
