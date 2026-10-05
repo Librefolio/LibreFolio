@@ -39,11 +39,12 @@
  *
  * It depends on the resolver:
  *
- * - by **content** (`primaryAssetType`, the allocation history chart), a group holds
- *   its pure type and the subtypes that contain it — up to **three** today,
- *   `REAL_ESTATE` with `ETF_REAL_ESTATE` and `CROWDFUND_REAL_ESTATE`;
- * - by **vehicle** (`assetTypeFamily`, the allocation pie), the ETF family holds the
- *   generic ETF and every ETF subtype — up to **seven** — and Crowdfund holds two.
+ * - by **content** (`primaryAssetType`), a group holds its pure type and the subtypes
+ *   that contain it — up to **three** today, `REAL_ESTATE` with `ETF_REAL_ESTATE` and
+ *   `CROWDFUND_REAL_ESTATE`. No chart groups this way since I's D15;
+ * - by **vehicle** (`assetTypeFamily`, the allocation pie and the allocation history
+ *   chart), the ETF family holds the generic ETF and every ETF subtype — up to
+ *   **seven** — and Crowdfund holds two.
  *
  * Groups of up to three walk lightness `step` points at a time away from the nearer
  * extreme, as they always have. From four members on that walk clamps to black or
@@ -79,7 +80,8 @@ export interface AllocationHierarchyEntry<T> {
 
 export interface AllocationHierarchyOptions {
     /**
-     * Maps a raw key to its primary type — contract **K2**, `primaryAssetType`.
+     * Maps a raw key to its group — contract **K2**. Both allocation charts pass
+     * `assetTypeFamily` (the vehicle); `primaryAssetType` (the content) fits it too.
      *
      * Injected rather than imported: `assetTypes.ts` reads the generated Zodios
      * schemas at module load, so importing it would drag `$lib/api/generated` —
@@ -191,8 +193,9 @@ export function buildAllocationHierarchy<T>(entries: readonly AllocationHierarch
         // `.toUpperCase()` is redundant against contract K2, which already upper-cases
         // before its lookup and returns the normalised value even when it misses. It is
         // kept as a cheap guard against contract drift, not because any test needs it —
-        // that invariant belongs to `primaryAssetType`, so it is pinned in
-        // `assetTypeTables.test.ts` rather than duplicated here.
+        // that invariant belongs to the resolver (`assetTypeFamily`, like
+        // `primaryAssetType`), so it is pinned in `assetTypeTables.test.ts` rather
+        // than duplicated here.
         const groupKey = resolvePrimary(entry.key).toUpperCase();
         const bucket = groups.get(groupKey);
         if (bucket) {
