@@ -29,7 +29,7 @@
  *   and filter options are found by what they are, not by where they sit.
  */
 
-import {expect, test, type Locator, type Page} from '../fixtures/playwright';
+import {expect, test, type Locator, type Page, type Request} from '../fixtures/playwright';
 
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {expectChartCanvas} from '../fixtures/charts';
@@ -885,10 +885,16 @@ function assetSetRiskReturnOutput(request: RiskRequest, options: RiskStubOptions
  * payload where the yardstick is also one of the measured, so a stub that echoed
  * the whole scope back would be publishing a response the backend cannot emit —
  * and the page would then be tested against a payload no user can ever receive.
- * The panel already withholds a benchmark that is in the selection
- * (`AssetSetRiskPanel`'s `benchmarkId`), so this filter should never fire; it is
- * here so that the stub is *incapable* of breaking the invariant, not merely
- * unlikely to.
+ *
+ * And it fires whenever the benchmark is one of the selected (D371, 02/10/2026):
+ * the lab applies such a choice, and `asset_set_comparison` 1.1.0 keeps the
+ * reference in the selection, measures it like the others — so `asset_set_kpi`
+ * and `asset_set_risk_return` still give it a row, here as in the backend — and
+ * skips it in `items`, since a beta and a correlation with itself would be 1 by
+ * construction. Its row's two blanks are the page's to explain. One
+ * simplification stays: a selected reference keeps the invented benchmark's
+ * coordinates below, where the backend would report its row's own (one series,
+ * one calendar); no case here reads where a dot lands, only how many are drawn.
  */
 function assetSetComparisonOutput(request: RiskRequest, analytic: RiskAnalyticRequest, options: RiskStubOptions) {
     const {covered} = preparedAssetIds(request, options);
@@ -1056,7 +1062,9 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
  * toast and no busy flag. The handler calls no route method, so nothing can
  * throw when the context closes, and Playwright waits for a running handler only
  * when explicitly told to (`unrouteAll({behavior: 'wait'})`, which nothing here
- * calls).
+ * calls). Nothing here unroutes at teardown either: removing a route releases
+ * what it holds, and in a run that did, the held poll reached the backend and
+ * wrote today's prices.
  *
  * 🔴 This isolates the tests; it fixes nothing. The race exposed two product
  * defects, and this hold repairs neither: a discarded report read as "no
@@ -1960,6 +1968,9 @@ const paidTable = (page: Page) => page.getByTestId('risk-asset-set-l3-table');
 /** The four value cells every L3° table draws, in their order; a benchmark adds beta and correlation after them. */
 const L3_CELLS = ['volatility', 'expectedReturn', 'sortino', 'sharpe'] as const;
 
+/** The two a benchmark adds, in their order: drawn only while one applies, blank in the reference's own row when it is one of the selected (D371). */
+const L3_BENCHMARK_CELLS = ['beta', 'correlation'] as const;
+
 /** The L3° rows, top to bottom. Scoped to `tbody`: the header row carries no asset. */
 const paidRows = (page: Page) => paidTable(page).locator('tbody tr[data-row-id]');
 
@@ -1972,7 +1983,7 @@ async function paidRowAssetIds(page: Page): Promise<number[]> {
 }
 
 /** A single L3° cell, addressed by the asset it belongs to — never by position. */
-function paidCell(page: Page, assetId: number, cell: (typeof L3_CELLS)[number]) {
+function paidCell(page: Page, assetId: number, cell: (typeof L3_CELLS)[number] | (typeof L3_BENCHMARK_CELLS)[number]) {
     return paidRow(page, assetId).locator(`[data-testid="risk-asset-set-l3-${cell}"]`);
 }
 
@@ -2126,15 +2137,16 @@ function selectionStorageKey(userId: number): string {
 /**
  * An asset the picker offers but the selection does not hold.
  *
- * Both halves are required of an L3° benchmark: it has to be a real asset, and
- * it must not be one of the measured, because
- * `RiskAssetSetComparisonOutput.validate_reference_is_not_a_subject` rejects a
- * yardstick that is also a subject — and `AssetSetRiskPanel` withholds the
- * benchmark entirely rather than send a request the backend would refuse. The
- * "+" already guarantees both — it lists the page's own assets that are not
- * selected yet, and only the ones the engine admits can be checked — so reading a
- * candidate off it is the same decision the product makes rather than an
- * independent one that could disagree.
+ * Both halves are what the case reading it needs of its benchmark: it has to be
+ * a real asset, and it must not be one of the measured — no longer because a
+ * selected benchmark is refused (since D371 the lab applies it, the backend skips
+ * it among the compared, and its own row's beta and correlation are blank), but
+ * because that case counts a dot of the reference's own beside one per selected
+ * asset, and a selected reference is drawn once. The "+" already guarantees
+ * both — it lists the page's own assets that are not selected yet, and only the
+ * ones the engine admits can be checked — so reading a candidate off it is the
+ * same decision the product makes rather than an independent one that could
+ * disagree.
  *
  * Leaves the "+" closed: it opens with an empty search and nothing checked, but a
  * panel left open would sit over the page the rest of the test reads.
@@ -2161,6 +2173,11 @@ async function pickUnselectedAssetId(page: Page): Promise<number> {
  * `data-benchmark-id` (`''` when there is none), `data-benchmark-state`
  * (`none|pending|set|unknown`) and `data-measured`. Never the trigger's label, which is an
  * asset's name inside a translated frame.
+ *
+ * Since D371 (02/10/2026) a selected asset may be the benchmark, and becomes the reference of the
+ * others: the lab's picker lists the selected assets too, publishes `data-measured="false"` whatever
+ * the choice and draws no ⚠, and applies such a choice like any other — L3° leaves the reference's
+ * own beta and correlation blank, each dash saying why, and draws it once (benchmark picker (c), (f)).
  *
  * The choice lives under the user-scoped key {@link benchmarkStorageKey} reproduces, shared by
  * every Risk page. The cases seed it, and the selection beside it, in this context's
@@ -2197,6 +2214,8 @@ interface NamedAsset {
 interface BenchmarkCast {
     /** Written as the lab's last selection, so the opening is this test's own (rung 1 of D19). */
     selection: number[];
+    /** The same assets in the same order, each with the name a reader types to find it in the picker, which offers them too since D371. */
+    selected: NamedAsset[];
     /** A flagged benchmark the selection does not hold: what a reader would compare against. */
     reference: NamedAsset;
     /** An id the asset list does not hold, {@link ABSENT_ID_MARGIN} above its highest. */
@@ -2213,6 +2232,10 @@ interface BenchmarkCast {
  * reference is outside the selection by construction. `populate_mock_data.py` creates those
  * before any spec runs, so a neighbour's freshly created asset — which may be deleted under us —
  * is never one of them; `risk-benchmark-shared.spec.ts` picks the same way.
+ *
+ * Outside it on purpose, no longer by necessity: since D371 a selected benchmark is applied too —
+ * benchmark picker (c) and (f) take theirs from the selection — but drawn once, as its own row's dot,
+ * so the cases that count a dot more than the selection need a reference the selection does not hold.
  */
 async function castBenchmark(page: Page): Promise<BenchmarkCast> {
     const response = await page.request.get('/api/v1/assets/query');
@@ -2224,11 +2247,13 @@ async function castBenchmark(page: Page): Promise<BenchmarkCast> {
 
     const reference = listed.find((asset) => asset.benchmark && asset.display_name !== '');
     if (!reference) throw new Error('No asset is flagged is_benchmark. populate_mock_data.py flags its INDEX assets as benchmarks.');
-    const selection = listed.filter((asset) => !asset.benchmark).map((asset) => asset.id);
-    if (selection.length < BENCHMARK_CASE_SELECTION) throw new Error(`The benchmark cases select ${BENCHMARK_CASE_SELECTION} assets besides the benchmark, and the list holds ${selection.length}. Check populate_mock_data.py.`);
+    const candidates = listed.filter((asset) => !asset.benchmark);
+    if (candidates.length < BENCHMARK_CASE_SELECTION) throw new Error(`The benchmark cases select ${BENCHMARK_CASE_SELECTION} assets besides the benchmark, and the list holds ${candidates.length}. Check populate_mock_data.py.`);
+    const selected = candidates.slice(0, BENCHMARK_CASE_SELECTION).map((asset) => ({id: asset.id, display_name: asset.display_name}));
 
     return {
-        selection: selection.slice(0, BENCHMARK_CASE_SELECTION),
+        selection: selected.map((asset) => asset.id),
+        selected,
         reference: {id: reference.id, display_name: reference.display_name},
         absentId: Math.max(0, ...listed.map((asset) => asset.id)) + ABSENT_ID_MARGIN,
     };
@@ -2329,7 +2354,8 @@ function waveBenchmarks(requests: readonly RiskRequest[], selection: readonly nu
 /**
  * L3° drawn against `referenceId`: an L3° request about the selection carried it, its answer is
  * the one drawn, beta and correlation fill a cell per selected asset, and the scatter holds one
- * dot per asset plus the reference's own.
+ * dot per asset plus the reference's own — unless the selection holds the reference (D371), which
+ * is then one of those dots already and is drawn once.
  */
 async function expectComparisonWith(page: Page, requests: readonly RiskRequest[], selection: readonly number[], referenceId: number): Promise<void> {
     await expect.poll(() => waveBenchmarks(requests, selection), {timeout: 20_000, message: `no L3° request about the selection carried benchmark ${referenceId}`}).toContain(referenceId);
@@ -2338,7 +2364,9 @@ async function expectComparisonWith(page: Page, requests: readonly RiskRequest[]
     await expect(paid.getByTestId('risk-asset-set-l3-beta')).toHaveCount(selection.length);
     await expect(paid.getByTestId('risk-asset-set-l3-correlation')).toHaveCount(selection.length);
     await expectChartCanvas(page, 'risk-asset-set-l3-scatter', 20_000);
-    await expect(page.getByTestId('risk-asset-set-l3-scatter'), 'one dot per selected asset, and one for the benchmark').toHaveAttribute('data-point-count', String(selection.length + 1), {timeout: 20_000});
+    const referenceSelected = selection.includes(referenceId);
+    const dots = referenceSelected ? 'one dot per selected asset, the benchmark among them drawn once, never beside itself' : 'one dot per selected asset, and one for the benchmark';
+    await expect(page.getByTestId('risk-asset-set-l3-scatter'), dots).toHaveAttribute('data-point-count', String(referenceSelected ? selection.length : selection.length + 1), {timeout: 20_000});
 }
 
 /**
@@ -2526,18 +2554,83 @@ function withNothingHeld(answer: Record<string, unknown>): Record<string, unknow
 }
 
 /**
- * Let `/portfolio/report` reach the real backend, and keep what the page was told.
+ * `page.route`, with a callback that absorbs its own failure: whatever `handler`
+ * throws stops it where it stands, leaves the request unanswered, and goes to
+ * stderr rather than up.
+ *
+ * Nothing awaits a route callback, so what it throws is an unhandled rejection,
+ * which Playwright pins on whatever the worker is doing at that moment — the case
+ * it is running, not necessarily the one that installed the route, or between
+ * cases the run itself — and stops the worker. A full run once ended «38 passed, 1
+ * did not run, 1 error was not a part of any test»: `captureReports` was
+ * forwarding a report the Dashboard had sent before the case left it, a slow
+ * backend kept `route.fetch()` waiting past the case's end, and closing the
+ * context rejected it («route.fetch: Test ended»). `sentByLab` removed that cause;
+ * this removes the class. Closing the context disposes what a forward works with,
+ * so the fetch, the answer's `json()` and a `fulfill` with that answer can each
+ * reject once the case is over.
+ *
+ * Absorbed, not hidden. A failed callback hands the page nothing, so what the case
+ * waits for behind that request never comes, and the case fails on its own barrier
+ * — the capture it polls for, the state the answer would have produced. Unanswered
+ * rather than aborted: the preset reads a failed report as it reads a discarded
+ * one and asks again (`gateReports`), so a re-ask forwarded fine would let the
+ * case pass over the failure; an unanswered one is given up only at axios's 30 s
+ * timeout, later than any barrier here waits for a report. Nothing unroutes at
+ * teardown either: see `holdLivePricePoll`.
+ */
+async function routeQuietly(page: Page, url: string, handler: Parameters<Page['route']>[1]): Promise<void> {
+    await page.route(url, async (route, request) => {
+        try {
+            await handler(route, request);
+        } catch (error) {
+            console.warn(`[risk-lab] left ${request.method()} ${request.url()} unanswered: its route callback failed with ${String(error)}`);
+        }
+    });
+}
+
+/**
+ * Whether the lab sent this request: its `Referer` path is `/assets`, whatever the query.
+ *
+ * The browser stamps the referer when the request leaves, so it names the page that
+ * sent it even after that page is gone. `request.frame().url()` would not: it is the
+ * frame's URL when the handler runs, so a Dashboard report whose route event is
+ * handled after `page.goto` has committed the lab could read as the lab's. The app
+ * sets no `Referrer-Policy`, so under the browser's default a same-origin request
+ * carries the full path (the run that motivated this logged `referer: …/dashboard`).
+ * Should that change, nothing would be kept, and the preset's first poll goes red.
+ */
+function sentByLab(request: Request): boolean {
+    return /^https?:\/\/[^/]+\/assets(?:[?#]|$)/.test(request.headers().referer ?? '');
+}
+
+/**
+ * Let `/portfolio/report` reach the real backend, and keep what the lab was told.
  *
  * The preset's oracle is the page's **own** answer rather than a probe taken
  * before the page loaded: a neighbour writing to the shared broker in between
  * would make the two disagree, and no timeout fixes a comparison against data the
  * page never saw. Recorded as a state, read at leisure — not an edge that has to
  * be armed before the click.
+ *
+ * Only what the lab sends goes through here, and only that is kept (`sentByLab`).
+ * `login` lands on the Dashboard, which asks for its own report once its brokers
+ * have loaded — often after this route is in place. That report is no oracle of
+ * the lab's, and forwarding it outlived its page: the test navigated away, the
+ * browser dropped the request, and `route.fetch()` went on waiting for a slow
+ * backend until the context closed under it. It is continued untouched instead.
+ * `continue`, not `fallback`: this route has always had the last word on a
+ * report, so no route registered before it has ever seen one (none matches one
+ * here), and the routes registered after it have already run.
+ *
+ * Registered quietly (`routeQuietly`): a forward that fails anyway leaves the page
+ * unanswered, and the case fails on the capture it polls for, or on the selection
+ * that answer would have set.
  */
 async function captureReports(page: Page): Promise<CapturedReport[]> {
     const captured: CapturedReport[] = [];
-    await page.route('**/api/v1/portfolio/report', async (route) => {
-        if (route.request().method() !== 'POST') return route.continue();
+    await routeQuietly(page, '**/api/v1/portfolio/report', async (route) => {
+        if (route.request().method() !== 'POST' || !sentByLab(route.request())) return route.continue();
         const sent = (route.request().postDataJSON() ?? {}) as ReportBody;
         const response = await route.fetch();
         const answer = (response.ok() ? await response.json() : {}) as {summary?: unknown};
@@ -2569,10 +2662,15 @@ interface HeldReport {
  * (`promise.catch(() => null)`), so a re-ask after a failed answer would look
  * exactly like a re-ask after a discarded one. Only a successful answer makes the
  * `null` attributable to the discard.
+ *
+ * Only the callback is quiet (`routeQuietly`). `release` stays loud on purpose:
+ * the case that calls it awaits it, so what it throws — a failed forward, a
+ * non-2xx, an unreadable answer — fails that case, while it runs. A case that
+ * times out awaiting it leaves the rejection to an await the runner still holds.
  */
 async function gateReports(page: Page): Promise<HeldReport[]> {
     const held: HeldReport[] = [];
-    await page.route('**/api/v1/portfolio/report', async (route) => {
+    await routeQuietly(page, '**/api/v1/portfolio/report', async (route) => {
         if (route.request().method() !== 'POST') return route.continue();
         const sent = (route.request().postDataJSON() ?? {}) as ReportBody;
         let released: Promise<CapturedReport> | undefined;
@@ -4616,13 +4714,14 @@ test.describe('Asset Global risk laboratory', () => {
         await expect(page.getByTestId('risk-asset-set-l3-no-benchmark'), 'the no-benchmark note is back: the developer took it out of this page').toHaveCount(0);
 
         // ── The true branch ─────────────────────────────────────────────────
-        // A benchmark that is not one of the measured, because
-        // `validate_reference_is_not_a_subject` rejects a yardstick that is also a
-        // subject and `AssetSetRiskPanel` withholds such a choice entirely. The
-        // picker's filter already answers both halves, so the candidate is chosen
-        // the way the product would choose it.
+        // A benchmark that is not one of the measured. No longer because a
+        // selected one is refused — since D371 the lab applies it, leaving its own
+        // row's beta and correlation blank (Benchmark picker (c)) — but because
+        // this branch counts a dot of the reference's own beside one per selected
+        // asset, and a selected reference is drawn once. The "+" offers exactly
+        // the assets the selection does not hold, so the candidate is read off it.
         const benchmarkId = await pickUnselectedAssetId(page);
-        expect(selected, 'the reference may not also be one of the compared').not.toContain(benchmarkId);
+        expect(selected, 'this branch needs a reference outside the compared: a selected one is drawn once, with no dot of its own').not.toContain(benchmarkId);
 
         const userId = await currentUserId(page);
         // Seeded through `localStorage` under the store's own key rather than
@@ -4637,9 +4736,9 @@ test.describe('Asset Global risk laboratory', () => {
         //
         // ⚠️ BOTH SPELLINGS OF THE KEY, though only the user-scoped one is still
         // needed. The panel no longer reads the store: it binds `benchmarkValue`
-        // and `benchmarkState` from `BenchmarkSelect`, derives
-        // `benchmarkId = labBenchmarkId(state, value, analysedIds)` — a confirmed
-        // choice the selection does not hold, or null — and mounts the levels only
+        // and `benchmarkState` from `BenchmarkSelect`, derives `benchmarkId` from
+        // them (`labBenchmarkId`) — the confirmed choice, whether or not the
+        // selection holds it (D371), or null — and mounts the levels only
         // once the state is no longer `pending`. The picker is the store's one
         // reader here: `riskBenchmark.assetId` synchronously for its opening state,
         // then `resolveRiskBenchmark()` on mount, which confirms the id against the
@@ -4672,7 +4771,7 @@ test.describe('Asset Global risk laboratory', () => {
         // is re-read rather than reused: the assertion has to be about the page in
         // front of it.
         const reselected = await chipIds(page);
-        expect(reselected, 'the persisted selection must not have swallowed the benchmark, or the comparison is withheld by design').not.toContain(benchmarkId);
+        expect(reselected, "the persisted selection must not have swallowed the benchmark: a selected one is drawn once, and this branch counts a dot of the reference's own").not.toContain(benchmarkId);
 
         // The comparison rides in L3°'s request — beside the figures it is drawn
         // with, not in one of its own. `RiskAssetSetComparisonOutput` publishes the
@@ -4733,10 +4832,10 @@ test.describe('Asset Global risk laboratory', () => {
      * selection card's last row, below the chips and their «+», outside that row. So it comes
      * before the correlation section and both comparison levels, inside none of them.
      *
-     * Opened on a stored benchmark the asset list confirms and the selection does not hold, so the
-     * comparison applies: the root says `set`, with that id and nothing measured; an L3° request
+     * Opened on a stored benchmark the asset list confirms, one the selection does not hold (a
+     * selected one is (c)'s): the root says `set`, with that id and nothing measured; an L3° request
      * carries it, and no L1° request does (the developer's split, 02/10/2026: a benchmark must never
-     * move L1°'s window); L3° draws beta, correlation and the reference's dot. The ⓘ's words are not
+     * move L1°'s window); L3° draws beta, correlation and the reference's own dot. The ⓘ's words are not
      * held on to — they are translated — but they must be the lab's own sentence, read from the
      * catalogue in the language the page is drawn in.
      *
@@ -4756,7 +4855,7 @@ test.describe('Asset Global risk laboratory', () => {
         await expect(control, 'the lab must have a benchmark picker, and it must open on the stored benchmark').toHaveAttribute('data-benchmark-state', 'set', {timeout: 15_000});
         await expect(control).toHaveAttribute('data-benchmark-id', String(reference.id));
         await expect(control).toHaveAttribute('data-measured', 'false');
-        // Not one of the selected, so nothing to warn about — an absence asserted behind the presence above.
+        // Nothing to warn about — in the lab not even a selected benchmark is, since D371 — an absence asserted behind the presence above.
         await expect(page.getByTestId(`${LAB_BENCHMARK}-measured`)).toHaveCount(0);
 
         // Where it sits, read once both levels are drawn to be placed against.
@@ -4837,50 +4936,90 @@ test.describe('Asset Global risk laboratory', () => {
     });
 
     /**
-     * Benchmark picker (c) — a stored benchmark that is one of the selected assets.
+     * Benchmark picker (c) — a stored benchmark that is one of the selected assets (D371).
      *
-     * It stays the current choice — never dropped, never silently swapped — and the picker says so:
-     * that id, published as measured, with the ⚠ beside it explaining why it cannot serve here, in
-     * the lab's own sentence rather than the primitive's generic one. Nothing is compared:
-     * `validate_reference_is_not_a_subject` refuses a yardstick that is also a subject, so no request
-     * carries a comparison — neither L3°'s nor, whatever the benchmark, L1°'s — and L3° draws neither
-     * column nor the reference's dot.
+     * The developer's decision of 02/10/2026: in the lab a selected asset may be the benchmark, and it
+     * becomes the reference of the others. So a stored choice the selection holds is applied like any
+     * other. The picker opens on it — `set`, that id — publishing nothing measured and drawing no ⚠: a
+     * selected benchmark is no mistake to warn about any more. An L3° request carries the comparison
+     * with it, and no L1° request does (the developer's split, 02/10/2026).
      *
-     * Red until the lab mounts the picker. The "compares nothing" half already holds today, L1°'s
-     * included: the panel withholds a benchmark the selection holds.
+     * `asset_set_comparison` 1.1.0 keeps the reference in the selection, measures it like the others
+     * and skips it among the compared: a beta and a correlation with itself would be 1 by
+     * construction. So its own row is a row of figures but for those two, which are dashes flagged
+     * `data-reference="true"`, each explaining itself as the developer asked — «un trattino e un
+     * tooltip che spiega che non è applicabile perché sé stesso è già il benchmark» — in the
+     * catalogue's `risk.assetSet.levels.l3.referenceItself` rather than the generic blank note; the
+     * other rows are measured against it. And the chart draws it once, as its own row's dot with no
+     * second one beside it, so the scatter holds one dot per selected asset. Which dot plays the
+     * reference, and in what colour, is drawn inside the canvas and not read here.
+     *
+     * The tooltip's words are not held on to — they are translated — but they must be the catalogue's
+     * sentence for that key, in the language the page is drawn in, as (a) reads its ⓘ.
+     *
+     * Red until the lab applies a selected benchmark. Today it hands the picker its selection as what
+     * the page measures, so the picker publishes `data-measured="true"` and draws the ⚠ — the first
+     * assertion to fail — and past that the panel withholds the choice (`labBenchmarkId`), so no
+     * request carries a comparison and L3° draws neither column.
      */
-    test('a stored benchmark that is one of the selected assets stays shown, flagged by a ⚠ that explains, and compares nothing', async ({page}) => {
+    test('a stored benchmark that is one of the selected assets is applied: its own row explains its blank beta and correlation, and the chart draws it once', async ({page}) => {
         test.setTimeout(BENCHMARK_CASE_BUDGET);
         const requests = await installRiskMocks(page);
         const {selection} = await castBenchmark(page);
         // One of the assets this test selects: an entry of the array it stores, not a place on the page.
-        const measured = selection[0];
-        await storeLabOpening(page, selection, measured);
+        const reference = selection[0];
+        const others = selection.filter((assetId) => assetId !== reference);
+        await storeLabOpening(page, selection, reference);
         await openLabOn(page, selection);
 
+        // The picker opens on it as on any confirmed choice, and warns about nothing.
         const control = benchmarkControl(page);
-        await expect(control, 'a benchmark that is also selected must stay the current choice, not be dropped').toHaveAttribute('data-benchmark-id', String(measured), {timeout: 15_000});
+        await expect(control, 'a benchmark that is also selected must stay the current choice, not be dropped').toHaveAttribute('data-benchmark-id', String(reference), {timeout: 15_000});
         await expect(control).toHaveAttribute('data-benchmark-state', 'set');
-        await expect(control).toHaveAttribute('data-measured', 'true');
-        const warning = page.getByTestId(`${LAB_BENCHMARK}-measured`);
-        await expect(warning, 'a benchmark that is also measured must carry its ⚠').toBeVisible();
+        await expect(control, 'in the lab a selected asset may be the benchmark (D371): the picker must not publish it as measured').toHaveAttribute('data-measured', 'false');
+        // An absence asserted behind the presence above: the picker is drawn, on this very choice.
+        await expect(page.getByTestId(`${LAB_BENCHMARK}-measured`), 'a selected benchmark is no mistake any more: no ⚠ may flag it').toHaveCount(0);
 
-        await expectNoComparison(page, requests, selection);
+        // Applied: L3° compares against it and draws it once — one dot per selected asset — and L1° is measured without it.
+        await expectComparisonWith(page, requests, selection, reference);
         await expectLossWithoutComparison(page, requests, selection);
 
-        // The ⚠ explains — last, so its open tooltip covers nothing read above, and from a clean slate:
-        // the pointer first rests on a measured figure, which has no tooltip to open, so the
-        // explanation that opens next is the ⚠'s.
-        const sentence = await catalogueSentence(page, 'risk.assetSet.benchmark.measuredHint');
+        // Its own row is measured like the others but for beta and correlation: two dashes, flagged as the reference's, each with a tooltip of its own.
+        for (const cell of L3_CELLS) {
+            await expect(paidCell(page, reference, cell), `the reference is measured like the others: its own ${cell} must be a figure`).toHaveAttribute('data-measured', 'true');
+        }
+        for (const cell of L3_BENCHMARK_CELLS) {
+            const own = paidCell(page, reference, cell);
+            await expect(own, `the reference's own ${cell} must be blank: against itself it would be 1 by construction`).toHaveAttribute('data-measured', 'false');
+            await expect(own, `the reference's own ${cell} must be flagged as the reference's, not left as an ordinary blank`).toHaveAttribute('data-reference', 'true');
+            // The dash every blank of the table is drawn with: «un trattino», not a word.
+            await expect(own, `the reference's own ${cell} must be drawn as a dash`).toHaveText('\u2014');
+            await expect(cellTooltip(paidRow(page, reference), `risk-asset-set-l3-${cell}`), `the reference's ${cell} dash has no tooltip to say why it is blank`).toHaveCount(1);
+        }
+        // The other rows are measured against it, and none of them is flagged as the reference.
+        for (const assetId of others) {
+            for (const cell of L3_BENCHMARK_CELLS) {
+                await expect(paidCell(page, assetId, cell), `asset ${assetId} must be measured against the reference: its ${cell} must be a figure`).toHaveAttribute('data-measured', 'true');
+                await expect(paidCell(page, assetId, cell), `asset ${assetId} is not the reference: its ${cell} must not be flagged as one`).not.toHaveAttribute('data-reference', 'true');
+            }
+        }
+
+        // The two dashes explain themselves — last, so an open tooltip covers nothing read above, and
+        // each from a clean slate: the pointer first rests on the reference's own volatility, a figure
+        // with no tooltip to open, so the explanation that opens next is the dash's. A resting place in
+        // the dashes' own row, because a cell's help opens above or below its row: the one left open by
+        // the first dash may sit over the next row, never over this one. The Tooltip's own hover delay
+        // is absorbed by the retrying assertions, not waited out on a clock.
+        const sentence = await catalogueSentence(page, 'risk.assetSet.levels.l3.referenceItself');
         const tooltip = page.getByTestId('tooltip-content');
-        const figure = paidCell(page, measured, 'volatility');
-        await expect(figure, 'the clean slate needs a measured figure to rest on').toHaveAttribute('data-measured', 'true');
-        await figure.hover();
-        await expect(tooltip, 'a tooltip is still open with the pointer on a measured figure, so the one the ⚠ opens could not be told apart').toHaveCount(0);
-        await warning.hover();
-        await expect(tooltip, 'resting on the ⚠ must open its explanation').toBeVisible();
-        await expect(tooltip, 'the ⚠ opened empty').not.toHaveText(/^\s*$/);
-        await expect(tooltip, "the ⚠ must explain in the lab's own sentence, not in the primitive's generic one").toHaveText(sentence);
+        const figure = paidCell(page, reference, 'volatility');
+        for (const cell of L3_BENCHMARK_CELLS) {
+            await figure.hover();
+            await expect(tooltip, `a tooltip is still open with the pointer on a measured figure, so the one the reference's ${cell} dash opens could not be told apart`).toHaveCount(0);
+            await cellTooltip(paidRow(page, reference), `risk-asset-set-l3-${cell}`).hover();
+            await expect(tooltip, `resting on the reference's ${cell} dash must open its explanation`).toBeVisible();
+            await expect(tooltip, `the reference's ${cell} dash must say it is the benchmark itself, in the catalogue's sentence rather than the generic blank note`).toHaveText(sentence);
+        }
     });
 
     /**
@@ -4954,6 +5093,61 @@ test.describe('Asset Global risk laboratory', () => {
         ).toEqual([]);
 
         // …and L1°, measured all the same, never with it.
+        await expectLossWithoutComparison(page, requests, selection);
+    });
+
+    /**
+     * Benchmark picker (f) — the selected assets are on offer too (D371).
+     *
+     * Since the developer's decision of 02/10/2026 a selected asset may be the benchmark, the
+     * reference of the others, so the lab's picker leaves nothing the page measures out of its list.
+     * Opened with nothing stored, so no asset is kept on offer for being the current choice: what the
+     * list holds is what it offers anyone. Every selected asset must be on it, found the way a reader
+     * finds one — by typing its name — and the one chosen is applied like any other: `set` on its id,
+     * nothing measured and no ⚠; an L3° request about the selection carries it and no L1° request
+     * does; L3° draws it once, one dot per selected asset. Its row is (c)'s subject and the shared
+     * key (b)'s: neither depends on how the benchmark was chosen.
+     *
+     * The opening is drawn without a comparison first, so the one that follows is the choice's doing.
+     *
+     * Red until the list keeps the selected assets: today the lab hands the picker its selection as
+     * what the page measures, and the picker leaves those out of its list (`offered`) unless one is
+     * the current choice — with nothing stored none is, so the first selected asset typed is not on
+     * offer. Past the list it is red as (c) is, until the panel applies a selected benchmark.
+     */
+    test('the benchmark picker offers the selected assets too, and one chosen among them is applied: L3° compares the others against it and draws it once, L1° never asks with it', async ({page}) => {
+        test.setTimeout(BENCHMARK_CASE_BUDGET);
+        const requests = await installRiskMocks(page);
+        const {selection, selected} = await castBenchmark(page);
+        await storeLabOpening(page, selection, null);
+        await openLabOn(page, selection);
+
+        const control = benchmarkControl(page);
+        await expect(control, 'with nothing stored the lab must open its picker empty').toHaveAttribute('data-benchmark-state', 'none', {timeout: 15_000});
+        await expectNoComparison(page, requests, selection);
+
+        // Every selected asset is on offer, typed the way a reader types it. Scoped to this picker:
+        // `search-select-option-*` is shared by every select on the page.
+        await openBenchmarkPicker(page);
+        const search = page.getByTestId(`${LAB_BENCHMARK}-search`);
+        for (const asset of selected) {
+            expect(asset.display_name, `selected asset #${asset.id} has no name a reader could type. Check populate_mock_data.py.`).not.toBe('');
+            await search.fill(asset.display_name);
+            await expect(search).toHaveValue(asset.display_name);
+            const option = page.getByTestId(LAB_BENCHMARK).getByTestId(`search-select-option-${asset.id}`);
+            await expect(option, `selected asset ${asset.display_name} (#${asset.id}) is not on offer in the lab's benchmark picker: since D371 a selected asset may be the benchmark`).toBeVisible({timeout: 8_000});
+        }
+
+        // One of them, chosen as (b) chooses: the last the test stores — an entry of its own array, not a place on the page.
+        const chosen = selected[selected.length - 1];
+        await chooseBenchmark(page, chosen);
+        await expect(control).toHaveAttribute('data-benchmark-state', 'set');
+        await expect(control).toHaveAttribute('data-benchmark-id', String(chosen.id));
+        await expect(control, 'in the lab a selected asset may be the benchmark (D371): the picker must not publish it as measured').toHaveAttribute('data-measured', 'false');
+        await expect(page.getByTestId(`${LAB_BENCHMARK}-measured`), 'a selected benchmark is no mistake any more: no ⚠ may flag it').toHaveCount(0);
+
+        // Applied like any other: L3° asks with it and draws it once, L1° is measured without it.
+        await expectComparisonWith(page, requests, selection, chosen.id);
         await expectLossWithoutComparison(page, requests, selection);
     });
 
@@ -5334,7 +5528,9 @@ test.describe('Asset Global risk laboratory', () => {
         if (otherBrokers.length === 0) throw new Error(`The preset offers no broker besides ${broker.brokerId}, so no uncached report can be asked for. Check populate_mock_data.py.`);
         const idleBrokerId = otherBrokers[0];
         const idleReports: CapturedReport[] = [];
-        await page.route('**/api/v1/portfolio/report', async (route) => {
+        // Quiet (`routeQuietly`): a forward that fails leaves the preset waiting,
+        // and the empty state below never comes.
+        await routeQuietly(page, '**/api/v1/portfolio/report', async (route) => {
             const sent = (route.request().postDataJSON() ?? {}) as ReportBody;
             if (route.request().method() !== 'POST' || !sameMembers((sent.broker_ids ?? []).map(String), [String(idleBrokerId)])) return route.fallback();
             const response = await route.fetch();
