@@ -3148,7 +3148,8 @@
             "years": "{count, plural, one {# year} other {# years}}",
             "months": "{count, plural, one {# month} other {# months}}",
             "days": "{count, plural, one {# day} other {# days}}"
-          }
+          },
+          "referenceItself": "Not applicable: this asset is the benchmark itself, and it is not compared with itself."
         }
       },
       "legend": {
@@ -3188,7 +3189,6 @@
         "hint": "Moves the period at the top to the span in which every selected asset with prices is quoted. Back in the analysis: {names}."
       },
       "benchmark": {
-        "measuredHint": "This benchmark is also one of the assets being measured and cannot be used as its own yardstick: beta and correlation are left out. Choose another one to get them back.",
         "help": "The reference asset, the \"baseline risk\": beta tells, asset by asset, whether each moved more (above 1) or less (below 1) than it; correlation, how closely they moved together."
       }
     },

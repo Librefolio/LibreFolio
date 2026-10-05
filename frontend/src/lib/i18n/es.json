@@ -3148,7 +3148,8 @@
             "years": "{count, plural, one {# año} other {# años}}",
             "months": "{count, plural, one {# mes} other {# meses}}",
             "days": "{count, plural, one {# día} other {# días}}"
-          }
+          },
+          "referenceItself": "No aplicable: este activo es el propio índice de referencia, y no se compara consigo mismo."
         }
       },
       "legend": {
@@ -3188,7 +3189,6 @@
         "hint": "Mueve el período de arriba al intervalo en que cotizan todos los activos seleccionados que tienen precios. Vuelven al análisis: {names}."
       },
       "benchmark": {
-        "measuredHint": "Este índice de referencia es también uno de los activos medidos y no puede servir de medida de sí mismo: la beta y la correlación quedan fuera. Elige otro para recuperarlas.",
         "help": "El activo de referencia, el «riesgo de base»: la beta indica, activo por activo, si cada uno se movió más (por encima de 1) o menos (por debajo de 1) que él; la correlación, cuánto juntos."
       }
     },

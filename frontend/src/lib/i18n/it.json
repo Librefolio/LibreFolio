@@ -3148,7 +3148,8 @@
             "years": "{count, plural, one {# anno} other {# anni}}",
             "months": "{count, plural, one {# mese} other {# mesi}}",
             "days": "{count, plural, one {# giorno} other {# giorni}}"
-          }
+          },
+          "referenceItself": "Non applicabile: questo asset è il benchmark stesso, e non si confronta con sé stesso."
         }
       },
       "legend": {
@@ -3188,7 +3189,6 @@
         "hint": "Sposta il periodo in alto sull'intervallo in cui sono quotati tutti gli asset scelti che hanno prezzi. Tornano nell'analisi: {names}."
       },
       "benchmark": {
-        "measuredHint": "Questo benchmark è anche uno degli asset misurati e non può fare da metro a sé stesso: beta e correlazione restano fuori. Scegline un altro per riaverle.",
         "help": "L'asset di riferimento, il «rischio di base»: beta dice, asset per asset, se ciascuno si è mosso più (sopra 1) o meno (sotto 1) di lui; la correlazione, quanto insieme."
       }
     },

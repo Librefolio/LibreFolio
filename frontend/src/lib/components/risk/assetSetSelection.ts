@@ -298,11 +298,10 @@ export function visibleRowsAllChecked(checked: readonly number[], visible: reado
  *
  * Read from the shared picker (`BenchmarkSelect`): only a choice it has confirmed against the
  * asset list (`set`) is used — a stored id still being confirmed, or one no asset matches,
- * never reaches a request. And not one of the analysed assets: a yardstick cannot also be one
- * of the measured, and the backend rejects the comparison outright. The picker still shows
- * such a choice, with its ⚠; it just measures nothing here.
+ * never reaches a request. A choice that is also one of the selected assets is used too
+ * (D371): the backend keeps it in the selection, measures it like the others, and leaves it
+ * out of the comparison's items, so it is the yardstick of the others and never of itself.
  */
-export function labBenchmarkId(state: RiskBenchmarkState, value: number | null, analysedIds: readonly number[]): number | null {
-    if (state !== 'set' || value === null || analysedIds.includes(value)) return null;
-    return value;
+export function labBenchmarkId(state: RiskBenchmarkState, value: number | null): number | null {
+    return state === 'set' ? value : null;
 }

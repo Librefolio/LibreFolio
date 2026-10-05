@@ -19,9 +19,10 @@
      *
      * 🔑 **Commensurability survives that, and here is why it is not luck.**
      * Clause ⓪ of the asset-set contract asks for *one preparation per request*,
-     * and `service.py:170` prepares the joint series **once per request, before
-     * the analytic loop** — from the scope, the window and the currency, never
-     * from which analytics were asked for. Two requests that agree on those three
+     * and `RiskService.execute` prepares the joint series (`_prepare_asset_series`)
+     * **once per request, before the analytic loop** — from the scope, the window
+     * and the currency, never from which analytics were asked for, except that a
+     * comparison's reference joins it. Two requests that agree on those three
      * therefore get the *same* joint calendar: without a benchmark, a dot from L3°,
      * a row of L1° and a cell from the matrix above are measured over the same
      * dates. With one, only L3° moves, and its period line says which window it
