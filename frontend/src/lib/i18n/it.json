@@ -3438,7 +3438,10 @@
         "uncovered": {
           "label": "Quanto di me non è misurato qui?",
           "caption": "Liquidità, più ogni posizione senza una serie di prezzi utilizzabile",
-          "residual": "Le righe qui sotto descrivono il resto del portafoglio; {share} non è fra loro"
+          "residual": "Le righe qui sotto descrivono il resto del portafoglio; {share} non è fra loro",
+          "split": "{cash} liquidità · {unpriced} senza prezzo",
+          "allUnpriced": "Tutto in posizioni senza prezzo",
+          "allCash": "Tutto in liquidità"
         },
         "rowsCaption": "La barra mostra lo scarto fra peso e rischio: a destra più rischio che peso, a sinistra meno. I pesi sono quote del portafoglio intero.",
         "correlation": {

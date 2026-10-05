@@ -3438,7 +3438,10 @@
         "uncovered": {
           "label": "Quelle part de moi n'est pas mesurée ici ?",
           "caption": "Liquidités, plus chaque position sans série de prix exploitable",
-          "residual": "Les lignes ci-dessous décrivent le reste du portefeuille ; {share} n'en fait pas partie"
+          "residual": "Les lignes ci-dessous décrivent le reste du portefeuille ; {share} n'en fait pas partie",
+          "split": "{cash} de liquidités · {unpriced} sans prix",
+          "allUnpriced": "Tout en positions sans prix",
+          "allCash": "Tout en liquidités"
         },
         "rowsCaption": "La barre montre l'écart entre poids et risque : à droite plus de risque que de poids, à gauche moins. Les poids sont des parts du portefeuille entier.",
         "correlation": {

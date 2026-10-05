@@ -46,7 +46,7 @@ non mio passa **prima** da Risk. Il via per il codice lo dà il developer.
 
 > Domanda del developer: *«in teoria tutti gli asset sono pieni di dati, perché compaiono questi avvisi?»*
 
-**Una causa sola, permanente.** Due crowdfunding senza **nessuna fonte di prezzo e nessun prezzo**
+**Una causa sola, permanente.** Posizioni di crowdfunding senza **nessuna fonte di prezzo e nessun prezzo**
 (`missing_price` allora) venivano esclusi dalla preparazione. L'esclusione è **una per richiesta**
 (`backend/app/services/risk/service.py:928`, `context.excluded_assets`), quindi ogni risultato della stessa
 richiesta diventava `partial`. La lista dei sette nomi diceva «tutti», per la stessa ragione.
@@ -56,7 +56,7 @@ richiesta diventava `partial`. La lista dei sette nomi diceva «tutti», per la 
    perso niente**: il motore valuta quegli asset ogni giorno all'ultimo prezzo di transazione
    (`portfolio_engine.py:1372-1384`, `LAST_TRADE_PRICE`);
 2. nella composizione attuale il peso degli asset senza serie finiva in `cash_weight`, cioè era chiamato
-   **liquidità** mentre la liquidità reale del developer è zero (candidato F2 del 23/09).
+   **liquidità** anche quando non lo era (candidato F2 del 23/09).
 
 > 🔒 **Le percentuali personali** misurate quel giorno sono state riferite al developer e a Risk, e
 > **non** si registrano qui (dati personali; vincolo Ⓕ).
@@ -293,7 +293,7 @@ resta, altrimenti l'albero non compila):
   - **Casi**:
     - presenza, `ok` con `cash_weight: 0.05`: `risk-l2-uncovered` con `data-uncovered="0.05"` e
       `risk-l2-card-uncovered` presenti (proposta di test-author, via Risk);
-    - presenza, **`partial`** (aggiunta mia): è il caso reale del developer, contributo parziale per i due
+    - presenza, **`partial`** (aggiunta mia): è il caso reale del developer, contributo parziale per i
       crowdfunding esclusi. `okOutput` accetta `partial` (`levelHelpers.ts:56`); il test ferma chi condizionasse il
       componente a `status === 'ok'`;
     - assenza, con `contributionResult: null` e con un risultato `unavailable` o `failed` che porta ancora un vecchio
@@ -422,7 +422,7 @@ dei risultati parziali»: la 6163 resta spenta.
 **Perché oggi non è chiara** (sui suoi dati, dopo il backend di Risk): il titolo dice «Alcuni risultati sono parziali»,
 sotto «Correlazione · Contributo al rischio»; non dice cosa manca a quelle misure, dove stanno nella pagina, né che la
 causa è la riga sotto. Ed è **incompleta**: lo scatter di L3 e Sortino/Sharpe della composizione attuale perdono le
-stesse due posizioni, ma l'avviso non li legge (F2b: `RiskLevelsPanel.svelte:135` passa solo il KPI **storico** a L3,
+stesse posizioni, ma l'avviso non li legge (F2b: `RiskLevelsPanel.svelte:135` passa solo il KPI **storico** a L3,
 mentre L3 disegna quello della composizione attuale, scelto da `selectKpiWave`).
 
 **Disposizione**:
@@ -513,17 +513,17 @@ mentre L3 disegna quello della composizione attuale, scelto da `selectKpiWave`).
 
 > **Server per il developer, 30/09 11:05**:
 > - copia **rinfrescata dalla snapshot** (`/tmp/libreFolio_a_prodcopy_refresh.sh`): snapshot senza marcatore, app.db
->   `5c0a681bc4e4b59c`, 71 file; copia identica, `004_release_1_2_0_schema`, scrivibile, senza marcatore; la
+>   identico allo snapshot (hash confrontato); copia identica, `004_release_1_2_0_schema`, scrivibile, senza marcatore; la
 >   precedente in `…prodcopy.prev-20260930-110318`;
-> - **impronta presa prima dell'avvio** (`files/prodcopy-fingerprint-20260930.txt`): 1 utente, 15 asset, conteggi dei
->   prezzi per asset **identici** a quelli del 25/09;
+> - **impronta presa prima dell'avvio** (`files/prodcopy-fingerprint-20260930.txt`, nella cartella di sessione: i
+>   conteggi restano lì): conteggi dei prezzi per asset **identici** a quelli del 25/09;
 > - `dev.py server --test --port 6163 --data-dir /tmp/librefolio-r2-a-prodcopy`, **staccato**, di proposito →
 >   HTTP 200 dopo ~10 s; il log dichiara `db_path /private/tmp/librefolio-r2-a-prodcopy/sqlite/app.db`, 15 tabelle,
 >   schema aggiornato. **Resta mio**: lo spengo e provo la porta libera quando il developer ha finito.
 >
 > ⚠️ **Fuori pista — il mio primo script di rinfresco è uscito con un errore dopo la copia**: nei conteggi di
 > controllo avevo supposto nomi di tabella (`asset`, `user`) che non esistono (`assets`, `users`). La copia era già
-> fatta e giusta: hash uguale alla snapshot, 71 file, `004`. I controlli li ho rifatti a parte con i nomi veri.
+> fatta e giusta: hash uguale alla snapshot, `004`. I controlli li ho rifatti a parte con i nomi veri.
 > Nessun dato toccato oltre alla copia.
 
 > ✅ **Visto dal developer sulla 6163 (30/09)**: «Va bene così: via con test-author». Server **spento subito dopo**
@@ -1006,14 +1006,14 @@ commit del checkpoint 1.
 ### Pulizia dei dati reali in `/tmp` · ✅ 02/10 12:55
 
 > **Richiesta del coordinator, via Risk (02/10 12:50)**: le copie dei dati reali in `/tmp` sono leggibili da tutti
-> (`drwxr-xr-x`, ~32 MB l'una). Cancellare la vecchia copia di riserva; cancellare anche la copia del 30/09, salvo una
+> (`drwxr-xr-x`). Cancellare la vecchia copia di riserva; cancellare anche la copia del 30/09, salvo una
 > review mia imminente. La review combinata D15 avrà una copia **nuova**, con l'approvazione del developer.
 
 > **Note implementazione**:
 > - **Cancellate** con le guardie per ciascun percorso: proprietario `ea_enel`; `lsof` vuoto subito prima (`+D` per le
 >   cartelle); `rm -rf --` sul percorso esatto. Prova con `ls`: «No such file or directory» per tutti e tre.
->   - `/tmp/librefolio-r2-a-prodcopy.prev-20260930-110318` (32 MB, la copia di riserva);
->   - `/tmp/librefolio-r2-a-prodcopy` (32 MB, la copia del 30/09): nessuna review mia imminente;
+>   - `/tmp/librefolio-r2-a-prodcopy.prev-20260930-110318` (la copia di riserva);
+>   - `/tmp/librefolio-r2-a-prodcopy` (la copia del 30/09): nessuna review mia imminente;
 >   - **in più, stessa ragione**: `/tmp/libreFolio_a_server6163.log` (39 KB, `-rw-r--r--`), l'uscita del server di
 >     review sui dati reali. Contiene `username`, `user_id` e le chiusure intragiornaliere degli asset del developer,
 >     più 35 righe di accesso all'API. Ispezionato solo nelle chiavi e nei nomi degli eventi, mai nei valori.
@@ -1225,3 +1225,163 @@ commit del checkpoint 1.
 >   l'unica riga di `justetf` è lo spegnimento.
 > - **Isola i test, non ripara niente**: fuori da questo spec, aprire `/assets` scrive ancora i prezzi di oggi e aprire la
 >   finestra di sincronizzazione interroga ancora SNB. Lo dicono i commenti dei due helper.
+
+
+
+- **05/10 14:43 — Risk ha verificato il checkpoint 4** (2 percorsi, blob e messaggio coincidono) e l'ha passato al
+  coordinator. **`holdFxProviderCatalog` accettato**: la prova «0 chiamate ai provider» lo richiede, e `/routes` resta
+  libero. Il link rotto `#rolling-return` è confermato anche nel suo albero e passato come difetto di `dev_release2`.
+  FROZEN fino agli SHA.
+- **Checkpoint 4 committato** dal developer: `528f6154d` (`test(risk): keep the risk E2E off live providers`).
+
+### La punta di Risk `2e2d21e76` fusa nel mio ramo, validata · ✅ 05/10
+
+> **Coordinator (05/10 14:51)**: fusione `1629a27c5`, genitori `528f6154d` + `2e2d21e76` (il checkpoint 2 di Risk: le
+> anomalie dei dati per gli insiemi di asset), albero `aaa98f99b` come simulato, albero di lavoro pulito. Porta la modifica
+> di Risk a `service.py` e 4 chiavi i18n. Chiesta una validazione breve, poi il resoconto a Risk.
+
+> **Note implementazione** (6153, un comando alla volta):
+> - **verificati** HEAD, genitori e albero. La fusione (8 file) non tocca schemi né API del backend, quindi niente
+>   `api sync`; non tocca nessun mio file (`levels/`, lo spec E2E, `charts/`).
+> - `front check` → **0 errori e 0 avvisi**;
+> - `risk-levels-unit` → 10 file · 329 test; `risk-levels-component` → 5 file · 115 test;
+> - E2E `front-portfolio risk` → **23 passed**, **0 chiamate ai provider** nel log del backend (finestra 12:56:42 → 12:58:59
+>   UTC: 1032 eventi, l'unica riga di provider è lo spegnimento di JustETF, 0 URL esterni). Porta libera dopo.
+
+### Passo 12 — la didascalia di L2: decisioni e test rossi · 🔶 05/10
+
+> **Decisioni del developer (05/10)**: (1) la didascalia della scheda «Quanto di me non è misurato qui?» dice di cosa è
+> fatto il numero, **con le quote** («Con le quote (consigliato)»): solo senza prezzo → «tutto in posizioni senza prezzo»;
+> solo liquidità → «tutto in liquidità»; tutte e due → «5.0% liquidità · 2.0% senza prezzo»; divisione non nota o zero →
+> la frase di oggi; l'icona del manuale porta a `data-quality/#excluded-weight`. (2) le didascalie di **tutte** le schede
+> L1–L3 vanno **a capo su due righe** invece di essere tagliate, **senza il title nativo** («Sì, a capo su tutte le schede
+> di L1–L3»). Test list T1–T5 approvata («si approvo»).
+> - **Ancora**: `check-links` dà rotta un'ancora solo se esiste una pagina tradotta che non la ha (`dev.py:1149-1151`).
+>   `data-quality` esiste solo in inglese → `#excluded-weight` vale ovunque.
+
+> **Note implementazione (test)**:
+> - **test-author**: T1 (6 casi) + T2 + T3 (4 lingue) in `L2Diversification.test.ts`; T4 in `RiskMetricCard.test.ts`;
+>   T5 in `risk-analysis.spec.ts`. **Rossi sul codice di oggi**: 10 failed | 21 passed, tutti su asserzioni (T1 a–d, T2,
+>   T3 ×4, T4); T1 e–f passano oggi, com'è giusto (fissano il ripiego).
+> - **Due differenze dal brief, giuste**:
+>   - `DocsLink` è un `<button>` che chiama `window.open`, non un `<a>`: T2 lo spia;
+>   - T5: con il solo `excludedWeight` lo stub disegna **una** scheda in L2, larga tutto il livello, e la frase di oggi ci
+>     sta su una riga, quindi T5 non sarebbe rosso. test-author ha aggiunto l'opzione `concentration: true` (N_eff 2,07 e
+>     DR 1,15, calcolati dai pesi dello stub): tre schede per riga, ~303 px l'una, e la frase di oggi deborda. In più una
+>     barriera: le tre schede stanno su una riga. **Da confermare con l'esecuzione** (larghezze calcolate dal CSS, non
+>     misurate).
+> - **Il codice aspetta la fine della review**: cambiarlo ora ricostruirebbe la build che la 6163 serve.
+
+### La review della Dashboard sui dati veri · 🔶 05/10
+
+> **Richiesta del developer**: «Sui miei dati veri: chiedi una copia nuova al coordinator» (lo snapshot del 30/09 era stato
+> cancellato dalla pulizia di `/tmp`). **Scope, deciso dal developer via coordinator**: anche la metà Dashboard della review
+> combinata (il blocco del replay F3, lo storico per famiglia D15 con la scelta della palette (a)/(b), la torta con il
+> secondo anello, i margini). Il lab ne resta fuori.
+
+> **Note implementazione**:
+> - **Copia** dal nuovo snapshot del coordinator con lo script corretto (nomi delle tabelle sistemati): app.db identico
+>   allo snapshot (hash confrontato), `004_release_1_2_0_schema`, niente marcatore; **`drwx------`, 0 file leggibili da
+>   altri**. Impronta presa prima dell'avvio (`files/prodcopy-fingerprint-20261005.txt`, `600`, nella cartella di
+>   sessione: i conteggi dei dati veri restano lì, non qui).
+> - **Server**: `dev.py server --test --host 127.0.0.1 --port 6163 --data-dir /tmp/librefolio-r2-a-prodcopy`, staccato, log
+>   **dentro la copia** (`server-review.log`, cartella `700`). Il db_path dichiarato è quello della copia; HTTP 200.
+> - ⚠️ **Fuori pista — il primo avvio ascoltava su `*:6163`**, cioè su tutte le interfacce di rete, con i dati veri dietro
+>   il login. Fermato e riavviato con `--host 127.0.0.1`: ora ascolta **solo** `127.0.0.1:6163`. Anche la review del 30/09
+>   era partita senza `--host`: lezione per lo script della copia, la prossima volta.
+> - **Build**: ricostruita dal server all'avvio; differisce da HEAD solo per i due file di test della didascalia, quindi
+>   il developer vede esattamente il codice committato.
+> - **Guida**: `progress/A-review-dashboard-0510.md` (sezione 1, il mio lavoro; sezioni 2, 3 e 5, i punti di Risk e la domanda
+>   sulla palette, com'erano; sezione 4, la torta e i margini). Aperta nel pannello a lato con il browser.
+
+> ✅ **La review della Dashboard è chiusa (05/10)**. Risposte del developer, testuali, e le due diagnosi chieste da Risk in
+> `progress/A-review-dashboard-0510.md`, tutte inviate a Risk. **Palette: (a)**, confermata. Server spento, copia e log
+> cancellati (prova con `ls`).
+> **Nuovi punti miei dalla review**, da portare al developer come proposte prima del codice:
+> 1. L3, le 4 card: il tooltip dell'icona ripete il titolo → una breve spiegazione per metrica; i sottotitoli (tranne la
+>    volatilità) sono il titolo → qualcosa di meglio;
+> 2. L3, la nota sotto lo scatter: semplificarla, andare a capo, niente muro di testo;
+> 3. L3, la retta: dire da cosa nasce; il tooltip del punto: dire perché ha quella dimensione (il peso);
+> 4. L3, il benchmark posseduto disegnato due volte: deve essere lo stesso punto, che cambia solo ruolo
+>    (`scatterChartHelpers.ts` è mio, nessuna concessione attiva; quando lo tocco, anche `risk-lab` e un avviso a F);
+> 5. L4, la riga di stato «Stress test: Parziale» → «Replay storico: Parziale» (etichette per istanza in `l4Health`), con
+>    test rossi prima: confermato da Risk;
+> 6. la didascalia di L2 (approvata, test rossi già scritti, codice da fare).
+> **Smistati a Risk**: il selettore del benchmark, l'impaginazione del replay, gli asset a +0,00 % (difetto del backend
+> dimostrato), lo storico D15 (tooltip padre-figli e colori scuri che sembrano sovrapposizioni), i margini del grafico di
+> crescita (di I, con la mia diagnosi) e il bucket 1M dell'income.
+> 📌 **Risk, 05/10 16:25**: la concessione di F su `scatterChartHelpers.ts` è finita; la sua modifica (`f6f11cb9c`, blob
+> `87a89684`) è nel mio ramo, uguale in A, Risk e F; nessun albero ha modifiche non committate allo scatter. **V6 e
+> `SYMBOL_BY_ROLE` sono sbloccati.** Le mie porte per lo scatter includono `scatterChartHelpers.test.ts` (di F) ed E2E
+> `risk-lab`. ⚠️ **Da chiarire**: ora Risk chiama la retta e il punto doppio «nuovo scopo sul file di I» e chiede
+> l'ambito esatto per una concessione, mentre alle 14:43 aveva scritto che lo scatter è mio secondo la tabella dei
+> proprietari. Lo chiedo quando porto l'ambito delle proposte. Le due diagnosi: D15 va al developer come decisione (niente
+> doppio conteggio); le barre +0,00 % entrano nella proposta di Risk per il replay.
+
+### Passo 12 (seguito) — la didascalia di L2, scritta · ✅ 05/10
+
+> **Note implementazione**:
+> - **T5 rosso sul codice di oggi** (6153, carico 28; il backend è partito): «the uncovered caption is cut: its sentence is
+>   wider than the card and does not wrap», sporge di **48 px**, dopo le barriere. La disposizione a tre schede per riga di
+>   test-author regge.
+> - **i18n**: `risk.levels.l2.uncovered.split` («{cash} liquidità · {unpriced} senza prezzo»), `.allUnpriced` («Tutto in
+>   posizioni senza prezzo»), `.allCash` («Tutto in liquidità»), 4 lingue con `dev.py i18n add`; **solo aggiunte**, provato.
+> - `L2Diversification.svelte`: una sola chiamata a `uncoveredWeight()` dà il numero (`total`, invariato, con la stessa
+>   forma `?.total ?? null` che il test M16 protegge) e la didascalia (`uncoveredCaption`):
+>   - divisione non nota → la frase di oggi;
+>   - entrambe le parti → `split` con le quote di `share()`;
+>   - solo senza prezzo → `allUnpriced`;
+>   - solo liquidità → `allCash`;
+>   - niente fuori dal modello → la frase di oggi.
+>
+>   L'icona porta a `…/data-quality/#excluded-weight`.
+> - `RiskMetricCard.svelte`: la didascalia passa da `truncate` + `title` a `line-clamp-2`, senza `title`. Etichetta e
+>   sottotitolo restano come sono (li vediamo dopo, come deciso).
+> - **Verdi**:
+>   - vitest sui due file → 31;
+>   - `risk-levels-component` → 5 file · **126**; `risk-levels-unit` → 10 · 329; `component-unit` → 100 · 2381 (contiene
+>     `RiskMetricCard.test.ts`, `_frontend_utility.py:215`);
+>   - `front check` → **0/0**; `i18n audit` → 3519 chiavi, complete, le tre nuove usate;
+>   - `check-links` → la nuova ancora `✅`; l'unico rotto resta `#rolling-return`, ereditato;
+>   - E2E `front-portfolio risk` → **24 passed** (23 + T5), **0 chiamate ai provider**;
+>   - prettier pulito.
+> - **Mutanti** (ripristino verificato per sha256): **6 su 6 uccisi** in vitest:
+>   - didascalia sempre la definizione;
+>   - quote scambiate;
+>   - `&&` → `||`;
+>   - quote senza la regola;
+>   - icona di nuovo su `risk-contribution`;
+>   - `title` rimesso.
+> - ⚠️ **Buco dichiarato — l'andare a capo non è fissato da nessun test.** Il mutante CSS `line-clamp-2` → `truncate`
+>   **sopravvive** a T5 (eseguito sulla 6153: 1 passed). Con i testi nuovi, la frase di L2 dello stub («4.6% cash · 0.4%
+>   without prices») sta su una riga nella sua casella, quindi non c'è niente da mandare a capo. T5 era rosso stamattina
+>   solo perché la frase vecchia, di 54 caratteri, sporgeva. Fissa ancora una proprietà vera (la didascalia si legge
+>   tutta, niente `title`), ma non il ritorno a capo. **Per fissarlo** serve una didascalia più lunga di una riga nel
+>   layout vero, per esempio la definizione, che compare quando non c'è niente fuori dal modello: un'opzione dello stub
+>   con `cash_weight` 0. Ma così il payload sarebbe incoerente (i pesi delle righe sommano a 0,95) e cambierebbero altre
+>   asserzioni. **Da proporre**, non fatto.
+
+### Privacy: i dati veri tolti dal journal · ✅ 05/10
+
+> **Coordinator (05/10)**: il checkpoint 5 è fermo per privacy. Il journal finisce nel repo pubblico, e
+> `A-review-dashboard-0510.md` conteneva cifre dei dati veri del developer. **Regola**: nessuna cifra ricavata dai suoi
+> dati (importi, percentuali, pesi, rendimenti, metriche di rischio, conteggi dei suoi asset) e nessun nome dei suoi
+> asset; restano le sue parole sulla UI e i comportamenti osservati; i valori degli stub restano. **Risk** l'ha estesa alle
+> impronte delle copie, anche nella parte già committata del piano: si corregge nello stesso commit nuovo.
+
+> **Note implementazione**:
+> - **Review**: l'uscita del replay incollata è diventata una descrizione neutra. Tolti i nomi degli esclusi, le due quote
+>   nella citazione sullo scatter (`[quota omessa]`), i conteggi dell'intestazione e di «gli ultimi […]», punti, serie e
+>   tolleranza del D15, e «due» dove contava i suoi asset. L'esempio sul margine ora è dichiarato inventato.
+> - **La percentuale sulla banda del Crowdfunding non era una quota dei suoi dati**: era l'opacità dell'area (alfa
+>   `0x88`). L'ho riscritta lo stesso («circa metà»), perché si leggeva come una quota.
+> - **Piano**: le note delle copie del 30/09 (già in `2b9362618`, che solo questo ramo contiene) e del 05/10 restano
+>   senza hash e senza conteggi; tolti anche «due crowdfunding», «due posizioni», «la liquidità reale … è zero» e la
+>   dimensione delle copie. Resta il metodo: impronta presa, permessi, porta.
+> - ⚠️ **Fuori pista — le copie di confronto**: prima di modificare ho copiato i due file in `/tmp`, dove sono rimaste
+>   leggibili da tutti per circa un minuto. Le ho spostate subito nella cartella privata della sessione (`700`, file
+>   `600`) e cancellate a lavoro verificato. Da ora le copie con dati veri nascono solo lì.
+> - ⚠️ **Fuori pista — il vincolo Ⓕ c'era, ma non l'avevo applicato alle citazioni**: le risposte «testuali» del
+>   developer portavano le cifre che la UI gli mostrava. Da ora una citazione dalla UI sui dati veri passa dalla stessa
+>   regola delle mie note.
+> - Riscrivere la storia per `2b9362618` è una decisione del developer, via coordinator.

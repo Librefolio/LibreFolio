@@ -112,7 +112,9 @@
             </p>
 
             {#if caption}
-                <p class="text-xs text-right text-gray-500 dark:text-gray-400 truncate" title={caption} data-testid={testId ? `${testId}-caption` : undefined}>{caption}</p>
+                <!-- Wraps, at most two lines, instead of being cut to one with «…»; no native
+                     `title`, since the whole caption is on screen (developer's decision of 05/10/2026). -->
+                <p class="text-xs text-right text-gray-500 dark:text-gray-400 line-clamp-2" data-testid={testId ? `${testId}-caption` : undefined}>{caption}</p>
             {/if}
 
             {#if sparkline}
