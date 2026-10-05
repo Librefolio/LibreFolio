@@ -45,7 +45,7 @@ la cura al developer nella sua sessione. In L1° nessun numero cambia. Vincolo d
   - nessun ordinamento, ma il docblock (`:19`) lo promette.
 - I nomi vengono da `selectionLabels` (`AssetSetRiskPanel.svelte:363-366`, id → `display_name`).
 - Snapshot del developer (sola lettura, solo conteggi):
-  - 15 asset; 11 nomi con un'emoji, 10 all'inizio;
+  - la maggior parte dei nomi con un'emoji, per lo più all'inizio;
   - 10 nomi oltre i 30 caratteri;
   - 0 `icon_url` propri.
   → Le «icone» viste erano emoji; l'icona del tipo manca.
@@ -238,7 +238,7 @@ la cura al developer nella sua sessione. In L1° nessun numero cambia. Vincolo d
 ### L1-5 · review del developer sulla 6164 · 2026-09-30, dalle 13:55
 
 > **Preparazione**:
-> - copia di prod fresca in `/tmp/librefolio-r2-f-prodcopy` (`app.db` sha `5c0a681bc4e4b59c`, uguale alla snapshot);
+> - copia di prod fresca in `/tmp/librefolio-r2-f-prodcopy` (uguale alla snapshot);
 > - server `dev.py server --test --port 6164 --data-dir /tmp/librefolio-r2-f-prodcopy`, shell `l1server`, PID 13812.
 >
 > **Primo giro (ask_user), alla lettera**: «bisogna aumentare lievemente la larghezza minima di sotto il massimo e
@@ -346,7 +346,7 @@ la cura al developer nella sua sessione. In L1° nessun numero cambia. Vincolo d
 | **Formula e plugin** | `asset_set_var`: CVaR storico al 95%, orizzonte di 1 osservazione e del «mese». `asset_set_drawdown`: massimo drawdown, durata, drawdown corrente, `remaining_to_peak_ratio` = 1/(1 + dd) − 1. Tutto sulla finestra comune della selezione |
 | **Numeri da confrontare** | La peggior discesa di un ETF contro il grafico di justETF sullo stesso periodo. La risalita: dopo −20% serve +25%. Una giornata storta plausibile contro il peggior giorno visto sul grafico |
 | **Limiti noti** | Finestra comune: chi parte tardi accorcia per tutti. Riporti: fino a 7 giorni non marcano, oltre la sezione è Partial |
-| **C3 · prima/dopo** (owner **Risk**) | Prima: la giornata è diluita dai weekend riportati (−8/−13% sui dati del developer) e il «mese» sono 21 osservazioni, circa 3 settimane (−9/−19%). Dopo il checkpoint di Risk: i riporti di weekend e festivi non contano più come osservazioni, e il mese sono 30 giorni di calendario, convertiti in `n = max(1, round(30·f/365))` osservazioni, con `horizon_observations` nell'uscita. Voce del motore, non difetto di L1° |
+| **C3 · prima/dopo** (owner **Risk**) | Prima: la giornata è diluita dai weekend riportati (misurato sui dati del developer) e il «mese» sono 21 osservazioni, circa 3 settimane. Dopo il checkpoint di Risk: i riporti di weekend e festivi non contano più come osservazioni, e il mese sono 30 giorni di calendario, convertiti in `n = max(1, round(30·f/365))` osservazioni, con `horizon_observations` nell'uscita. Voce del motore, non difetto di L1° |
 | **Cosa sarebbe un difetto** | Un asset scelto senza riga; un trattino dove il dato esiste; un segno incoerente fra perdita e risalita; un ordinamento che non segue le cifre mostrate; un importo in euro |
 | **Owner** | Presentazione F; motore Risk |
 
