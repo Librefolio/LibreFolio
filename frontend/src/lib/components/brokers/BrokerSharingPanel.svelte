@@ -445,6 +445,9 @@
         {value: 'EDITOR', label: $_('brokers.sharing.roleEditor'), shortLabel: $_('brokers.sharing.roleEditorShort')},
         {value: 'VIEWER', label: $_('brokers.sharing.roleViewer'), shortLabel: $_('brokers.sharing.roleViewerShort')},
     ]);
+
+    let NewRoleIcon = $derived(getRoleIcon(newRole));
+    let EditRoleIcon = $derived(getRoleIcon(editRole));
 </script>
 
 <div class="space-y-4" data-testid="broker-sharing-panel" data-access-state={accessLoadState} data-error-key={errorKey ?? undefined} aria-busy={loading ? 'true' : 'false'} aria-invalid={accessLoadState === 'error' ? 'true' : undefined}>
@@ -453,7 +456,7 @@
         <div class="flex justify-end">
             <button
                 type="button"
-                on:click={() => {
+                onclick={() => {
                     accesses = JSON.parse(JSON.stringify(originalAccesses));
                 }}
                 class="p-1.5 text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg transition-colors"
@@ -490,7 +493,7 @@
                 type="button"
                 class="inline-flex items-center gap-1.5 rounded-lg border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 transition-colors hover:bg-red-100 dark:border-red-800 dark:text-red-200 dark:hover:bg-red-900/40"
                 data-testid="sharing-retry-load-btn"
-                on:click={loadAccesses}
+                onclick={loadAccesses}
             >
                 <RotateCcw size={14} />
                 {$_('common.retry')}
@@ -519,7 +522,7 @@
                         <button
                             type="button"
                             class="mt-1 pointer-events-auto inline-flex items-center justify-center w-7 h-7 rounded-full bg-libre-green text-white hover:bg-libre-green/90 transition-colors shadow-sm"
-                            on:click={() => {
+                            onclick={() => {
                                 showAddModal = true;
                                 selectedUserId = null;
                                 newRole = 'VIEWER';
@@ -552,7 +555,7 @@
                             class="flex items-center gap-2 px-3 py-1.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl text-sm transition-colors w-fit {readOnly ? 'cursor-default' : 'cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/30'}"
                             data-testid="access-entry-{entry.user_id}"
                             disabled={!canEditAccess}
-                            on:click={() => startEdit(entry)}
+                            onclick={() => startEdit(entry)}
                         >
                             <span class="w-6 h-6 rounded-full overflow-hidden shrink-0 inline-block">
                                 {#if entry.avatar_url}
@@ -588,7 +591,7 @@
                             class="flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl text-sm transition-colors w-fit {readOnly ? 'cursor-default' : 'cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30'}"
                             data-testid="access-entry-{entry.user_id}"
                             disabled={!canEditAccess}
-                            on:click={() => startEdit(entry)}
+                            onclick={() => startEdit(entry)}
                         >
                             <span class="w-6 h-6 rounded-full overflow-hidden shrink-0 inline-block">
                                 {#if entry.avatar_url}
@@ -624,7 +627,7 @@
                             class="flex items-center gap-2 px-3 py-1.5 bg-gray-50 dark:bg-slate-700/50 border border-gray-200 dark:border-slate-600 rounded-xl text-sm transition-colors w-fit {readOnly ? 'cursor-default' : 'cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700'}"
                             data-testid="access-entry-{entry.user_id}"
                             disabled={!canEditAccess}
-                            on:click={() => startEdit(entry)}
+                            onclick={() => startEdit(entry)}
                         >
                             <span class="w-6 h-6 rounded-full overflow-hidden shrink-0 inline-block">
                                 {#if entry.avatar_url}
@@ -659,7 +662,7 @@
                             type="button"
                             class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-gray-300 dark:border-slate-500 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors disabled:opacity-50"
                             disabled={selfActionBusy}
-                            on:click={() => (confirmDemoteOpen = true)}
+                            onclick={() => (confirmDemoteOpen = true)}
                             data-testid="sharing-self-demote-btn"
                         >
                             <Eye size={13} />
@@ -672,7 +675,7 @@
                             ? 'border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20'
                             : 'border-gray-300 dark:border-slate-500 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600'}"
                         disabled={selfActionBusy}
-                        on:click={() => (confirmLeaveOpen = true)}
+                        onclick={() => (confirmLeaveOpen = true)}
                         data-testid="sharing-self-leave-btn"
                     >
                         <Trash2 size={13} />
@@ -686,7 +689,7 @@
         {#if !readOnly}
             <div class="flex items-center justify-end gap-3 pt-2 border-t border-gray-100 dark:border-slate-700">
                 {#if onCancel}
-                    <button class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" on:click={onCancel} type="button">
+                    <button class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" onclick={onCancel} type="button">
                         {$_('common.cancel')}
                     </button>
                 {/if}
@@ -694,7 +697,7 @@
                     class="flex items-center gap-2 px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     data-testid="sharing-save-btn"
                     disabled={!hasChanges || saving || accessLoadState !== 'ready'}
-                    on:click={handleSave}
+                    onclick={handleSave}
                     type="button"
                 >
                     {#if saving}
@@ -745,7 +748,7 @@
                 </h3>
                 <button
                     class="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg transition-colors"
-                    on:click={() => {
+                    onclick={() => {
                         showAddModal = false;
                         selectedUserId = null;
                     }}
@@ -775,12 +778,12 @@
                         <div class="relative">
                             <button
                                 class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-600"
-                                on:click={() => (showRoleDropdown = !showRoleDropdown)}
+                                onclick={() => (showRoleDropdown = !showRoleDropdown)}
                                 type="button"
                                 data-testid="sharing-add-role-trigger"
                             >
                                 <span class={getRoleIconColor(newRole)}>
-                                    <svelte:component this={getRoleIcon(newRole)} size={14} />
+                                    <NewRoleIcon size={14} />
                                 </span>
                                 {getRoleShortLabel(newRole)}
                                 <ChevronDown size={12} />
@@ -788,18 +791,19 @@
                             {#if showRoleDropdown}
                                 <div class="absolute z-10 bottom-full mb-1 left-0 min-w-full w-max bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg py-1">
                                     {#each roleOptions as opt}
+                                        {@const OptionIcon = getRoleIcon(opt.value)}
                                         <button
                                             type="button"
                                             class="w-full flex items-center gap-2 text-left px-3 py-2 text-xs hover:bg-gray-100 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-200 whitespace-nowrap"
                                             data-testid="sharing-add-role-option-{opt.value}"
-                                            on:click={() => {
+                                            onclick={() => {
                                                 newRole = opt.value;
                                                 showRoleDropdown = false;
                                                 if (opt.value !== 'OWNER') newSharePercent = 0;
                                             }}
                                         >
                                             <span class={getRoleIconColor(opt.value)}>
-                                                <svelte:component this={getRoleIcon(opt.value)} size={14} />
+                                                <OptionIcon size={14} />
                                             </span>
                                             {opt.shortLabel}
                                         </button>
@@ -820,7 +824,7 @@
                                     max={maxNewShare}
                                     step="0.1"
                                     bind:value={newSharePercent}
-                                    on:keydown={(e) => {
+                                    onkeydown={(e) => {
                                         if (e.key === 'Enter') handleAddUser();
                                     }}
                                     class="w-20 px-2 py-1.5 text-sm text-center border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200"
@@ -836,7 +840,7 @@
             <div class="flex items-center justify-end gap-2 p-4 border-t border-gray-200 dark:border-slate-700 shrink-0">
                 <button
                     class="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-lg transition-colors"
-                    on:click={() => {
+                    onclick={() => {
                         showAddModal = false;
                         selectedUserId = null;
                     }}
@@ -848,7 +852,7 @@
                     class="flex items-center gap-1.5 px-4 py-1.5 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     data-testid="sharing-confirm-add"
                     disabled={!selectedUser}
-                    on:click={handleAddUser}
+                    onclick={handleAddUser}
                     type="button"
                 >
                     <Plus size={16} />
@@ -869,7 +873,7 @@
                         <Pencil size={18} class="text-libre-green" />
                         {$_('common.edit')}: {editEntry.username}
                     </h3>
-                    <button type="button" on:click={cancelEdit} class="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg transition-colors">
+                    <button type="button" onclick={cancelEdit} class="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg transition-colors">
                         <X size={18} />
                     </button>
                 </div>
@@ -900,11 +904,11 @@
                             <button
                                 type="button"
                                 class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-600"
-                                on:click={() => (showEditRoleDropdown = !showEditRoleDropdown)}
+                                onclick={() => (showEditRoleDropdown = !showEditRoleDropdown)}
                                 data-testid="sharing-edit-role-trigger"
                             >
                                 <span class={getRoleIconColor(editRole)}>
-                                    <svelte:component this={getRoleIcon(editRole)} size={14} />
+                                    <EditRoleIcon size={14} />
                                 </span>
                                 {getRoleShortLabel(editRole)}
                                 <ChevronDown size={12} />
@@ -912,11 +916,12 @@
                             {#if showEditRoleDropdown}
                                 <div class="absolute z-10 bottom-full mb-1 left-0 min-w-full w-max bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg py-1">
                                     {#each roleOptions as opt}
+                                        {@const OptionIcon = getRoleIcon(opt.value)}
                                         <button
                                             type="button"
                                             class="w-full flex items-center gap-2 text-left px-3 py-2 text-xs hover:bg-gray-100 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-200 whitespace-nowrap"
                                             data-testid="sharing-edit-role-option-{opt.value}"
-                                            on:click={() => {
+                                            onclick={() => {
                                                 editError = null;
                                                 editErrorKey = null;
                                                 editRole = opt.value;
@@ -925,7 +930,7 @@
                                             }}
                                         >
                                             <span class={getRoleIconColor(opt.value)}>
-                                                <svelte:component this={getRoleIcon(opt.value)} size={14} />
+                                                <OptionIcon size={14} />
                                             </span>
                                             {opt.shortLabel}
                                         </button>
@@ -944,7 +949,7 @@
                                     max="100"
                                     step="0.1"
                                     bind:value={editSharePercent}
-                                    on:keydown={(e) => {
+                                    onkeydown={(e) => {
                                         if (e.key === 'Enter') saveEdit();
                                     }}
                                     class="w-16 px-2 py-1.5 text-sm text-center border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200"
@@ -959,7 +964,7 @@
                 <div class="flex items-center justify-between p-4 border-t border-gray-200 dark:border-slate-700 shrink-0">
                     <button
                         type="button"
-                        on:click={() => {
+                        onclick={() => {
                             const entry = editEntry;
                             cancelEdit();
                             if (entry) requestRemove(entry);
@@ -970,10 +975,10 @@
                         {$_('brokers.sharing.remove')}
                     </button>
                     <div class="flex items-center gap-2">
-                        <button type="button" on:click={cancelEdit} class="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-lg transition-colors">
+                        <button type="button" onclick={cancelEdit} class="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-lg transition-colors">
                             {$_('common.cancel')}
                         </button>
-                        <button type="button" on:click={saveEdit} class="flex items-center gap-1.5 px-4 py-1.5 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" data-testid="sharing-confirm-edit">
+                        <button type="button" onclick={saveEdit} class="flex items-center gap-1.5 px-4 py-1.5 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" data-testid="sharing-confirm-edit">
                             <Check size={16} />
                             {$_('common.confirm')}
                         </button>
