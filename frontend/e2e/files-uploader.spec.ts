@@ -7,6 +7,7 @@
  */
 import {test as base, expect} from './fixtures/playwright';
 import type {Locator, Page} from './fixtures/playwright';
+import {schemas} from '../src/lib/api/generated';
 import type {BrimFile, UploadedFile} from '../src/lib/types/files';
 
 const CREATED_AT = '2024-03-15T12:00:00Z';
@@ -63,6 +64,38 @@ const REPORTS = {
     none: brimFile('b0000000-0000-4000-8000-000000000000', 'review-unattributed.csv', null),
 };
 
+/**
+ * The server's step-managed onboarding flows and their steps (ONBOARDING_FLOW_STEPS,
+ * backend/app/services/onboarding_service.py): their progress carries one row per step.
+ * The app reads a step it finds no row for as not due, so a step added there and not
+ * here could never start a guide over this page.
+ */
+const ONBOARDING_FLOW_STEPS: Partial<Record<string, readonly string[]>> = {
+    transaction_bulk_guide: ['transaction.bulk.workspace', 'transaction.bulk.validation', 'transaction.bulk.selection', 'transaction.bulk.save'],
+    import_guide: ['import.upload', 'import.select', 'import.analyze', 'import.assets', 'import.fix', 'import.duplicates', 'import.review', 'import.gapFix', 'import.bulk'],
+};
+
+/**
+ * The onboarding progress of an account that has completed every flow, in the shape
+ * GET /api/v1/settings/onboarding answers it (OnboardingProgressResponse; the route
+ * leaves out null fields): every flow of the server's registry — the generated client's
+ * enum — completed at its current version, with nothing to update, and the steps of the
+ * step-managed flows completed too. Nothing is due, so no welcome redirect, no tour and
+ * no guide covers the Files page. Checked against the generated schema: a contract that
+ * moves fails here, by name, rather than as a page that never renders.
+ */
+function everyFlowCompleted() {
+    const completed = {status: 'completed', version: 1, current_version: 1, update_available: false, created_at: CREATED_AT, updated_at: CREATED_AT, completed_at: CREATED_AT} as const;
+    const body = {
+        flows: schemas.OnboardingFlow.options.map((flow) => {
+            const steps = ONBOARDING_FLOW_STEPS[flow];
+            return steps ? {flow, ...completed, steps: steps.map((step_id) => ({step_id, ...completed}))} : {flow, ...completed};
+        }),
+    };
+    schemas.OnboardingProgressResponse.parse(body);
+    return body;
+}
+
 type GetResponse = {
     body: unknown;
     requiredQuery?: Record<string, string>;
@@ -84,6 +117,11 @@ const test = base.extend<{uploaderPage: Page}>({
         // Zodios may materialize optional query defaults; only those documented
         // values are accepted, not arbitrary query strings or response shapes.
         const responses = new Map<string, GetResponse>([
+            // The app shell's contracts, not the Files page's: what the protected
+            // layout reads before any page renders — the session (auth.checkAuth()),
+            // then its bootstrap: the user's and the global settings, and the
+            // onboarding progress (onboardingApi.getProgress()), without which the
+            // shell blocks. Every flow completed: nothing starts over the page.
             [
                 '/api/v1/auth/me',
                 {
@@ -101,6 +139,8 @@ const test = base.extend<{uploaderPage: Page}>({
             ],
             ['/api/v1/settings/user', {body: {language: 'en', base_currency: 'EUR', theme: 'light', avatar_url: null}}],
             ['/api/v1/settings/global', {body: {items: []}}],
+            ['/api/v1/settings/onboarding', {body: everyFlowCompleted()}],
+            // The Files page's contracts.
             ['/api/v1/brokers/import/plugins', {body: []}],
             [
                 '/api/v1/brokers',
