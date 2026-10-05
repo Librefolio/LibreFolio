@@ -693,17 +693,19 @@
                     </div>
                 </div>
 
-                <!-- Broker multi-select panel -->
-                <div class="relative">
+                <!-- Broker multi-select panel. With one broker selected the label is that
+                     broker's name, of any length: the trigger shrinks and truncates it
+                     instead of pushing out of the bar (the full name stays in the DOM). -->
+                <div class="relative min-w-0">
                     <button
                         bind:this={brokerFilterTriggerEl}
-                        class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap
+                        class="flex items-center gap-1.5 min-w-0 max-w-full px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap
                        {brokerFilterActive ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700' : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'}"
                         onclick={toggleBrokerFilterDropdown}
                         data-testid="broker-filter-trigger"
                     >
-                        {brokerFilterLabel}
-                        <svg class="w-3 h-3 transition-transform {brokerFilterOpen ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <span class="truncate">{brokerFilterLabel}</span>
+                        <svg class="w-3 h-3 shrink-0 transition-transform {brokerFilterOpen ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
                         </svg>
                     </button>
