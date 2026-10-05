@@ -145,7 +145,7 @@
     // one notice says above the sections, from `qualitySource()` (the developer, 05/10).
     let l1Health = $derived(levelErrorHealth(degradedResults(l1Results, VAR_LABELS)));
     /**
-     * A base answer discarded twice running is said once, by the frame, with the same
+     * A base answer discarded on every attempt is said once, by the frame, with the same
      * code the replay and the Dashboard's L4 use (`answer_discarded`); the body only
      * offers the retry. Without it both levels showed their rows of dashes in silence.
      * Each level reads its own controller: one level's discarded answer is not the other's.

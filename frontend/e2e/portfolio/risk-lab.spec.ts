@@ -6351,8 +6351,8 @@ test.describe('Asset Global risk laboratory', () => {
         // many flights one refresh costs is the store's business — the two stubbed
         // sync POSTs are themselves portfolio mutations (`zodios-client` →
         // `notifyPortfolioMutation` → `invalidateRisk`), in-flight sharing merges
-        // identical waves, a discarded answer is re-asked once — and not this test's
-        // subject. That each section re-read its base is.
+        // identical waves, a discarded answer is re-asked, up to three attempts in all —
+        // and not this test's subject. That each section re-read its base is.
         await expect.poll(correlationWaves, {timeout: 15_000, message: 'the correlation section must re-read its base after an accepted sync'}).toBeGreaterThan(before.correlation);
         await expect.poll(lossWaves, {timeout: 15_000, message: 'L1° must re-read its base after an accepted sync'}).toBeGreaterThan(before.loss);
         await expect.poll(paidWaves, {timeout: 15_000, message: 'L3° must re-read its base after an accepted sync'}).toBeGreaterThan(before.paid);

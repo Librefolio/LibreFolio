@@ -10,14 +10,14 @@
  * L1° ("how much did each hurt") and L3° ("was each paid") of Asset Global take their rows from
  * the selection, not from the answer: one row per selected asset, its cells empty until a
  * measurement fills them. That is what keeps an asset nobody could measure on screen — and it is
- * also why a base wave that failed, or whose answer was discarded twice running, looked exactly
+ * also why a base wave that failed, or whose answer was discarded three times running, looked exactly
  * like one that measured nothing: two tables of em-dashes, and not a word. The controller knows
  * the difference (`loadError`, `loadDiscarded`); these tests pin that both levels say it, in the
  * form Risk settled on for the laboratory ("(b)", the correlation section's):
  *
  *   - **a failed wave**: each level's body holds an error block, a sentence and a retry
  *     (`risk-asset-set-l{1,3}-error` around `risk-asset-set-l{1,3}-retry`);
- *   - **an answer discarded twice running**: each level's frame says it once, as its error line
+ *   - **an answer discarded three times running**: each level's frame says it once, as its error line
  *     with `data-code="answer_discarded"` (`risk-asset-set-{loss,paid}-error`), and a body with no
  *     figure offers the retry and nothing else (`risk-asset-set-l{1,3}-discarded`);
  *   - **a retry** asks the base question again, past the cache (`controller.loadBase(true)`).
@@ -953,7 +953,7 @@ for (const {name, level, frame, figures} of TABLE_LEVELS) {
             await other.figures();
         });
 
-        it(`${name}'s answer discarded twice running is said in ${name}'s frame alone; the retry asks ${name}'s question alone`, async () => {
+        it(`${name}'s answer discarded three times running is said in ${name}'s frame alone; the retry asks ${name}'s question alone`, async () => {
             const outcomes = allFiguresBut(level, 'discard');
             scriptByLevel(outcomes);
             mount();
