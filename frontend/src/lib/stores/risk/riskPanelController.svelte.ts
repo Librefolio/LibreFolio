@@ -27,7 +27,7 @@ import {untrack} from 'svelte';
 
 import {buildRiskAnalyticRequest, buildRiskQueryRequest, canonicalizeScope, type RiskAnalyticParameters} from '$lib/risk/riskRequest';
 import {riskDataQuality, type RiskDataQualityReport} from '$lib/risk/riskTypes';
-import {fetchRiskCatalog, fetchRiskScenarioCatalog, hasRiskCapability, invalidateRisk, queryRisk, type RiskAnalyticResult, type RiskCatalogResponse, type RiskMode, type RiskScenarioCatalogResponse, type RiskScope} from '$lib/stores/risk/riskStore.svelte';
+import {fetchRiskCatalog, fetchRiskScenarioCatalog, hasRiskCapability, invalidateRisk, queryRisk, RISK_DISCARD_ATTEMPTS, type RiskAnalyticResult, type RiskCatalogResponse, type RiskMode, type RiskScenarioCatalogResponse, type RiskScope} from '$lib/stores/risk/riskStore.svelte';
 
 import {buildBaseAnalytics, normalizeQualityIssue, resultByCode} from '$lib/components/risk/riskAnalysisHelpers';
 import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
@@ -37,8 +37,9 @@ export type OnDemandAnalysis = 'comparison' | 'stress' | 'replay' | 'simulation'
 
 export const ON_DEMAND_ANALYSES: readonly OnDemandAnalysis[] = ['comparison', 'stress', 'replay', 'simulation'];
 
-/** The error code a level shows when one of its on-demand answers was discarded twice running;
- *  worded as `risk.errors.answer_discarded`, like every other error code a level shows. */
+/** The error code a level shows when one of its on-demand answers was discarded on every attempt
+ *  (`RISK_DISCARD_ATTEMPTS`); worded as `risk.errors.answer_discarded`, like every other error
+ *  code a level shows. */
 export const ANSWER_DISCARDED_CODE = 'answer_discarded';
 
 /**
@@ -302,7 +303,7 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
 
     let requestGeneration = 0;
     const generations: Record<OnDemandAnalysis, number> = {comparison: 0, stress: 0, replay: 0, simulation: 0};
-    /** On-demand answers that arrived and were discarded twice running — the same fact
+    /** On-demand answers that arrived and were discarded on every attempt — the same fact
      *  `loadDiscarded` states for the base wave, kept per analysis. */
     const discarded = $state<Record<OnDemandAnalysis, boolean>>({comparison: false, stress: false, replay: false, simulation: false});
     let lastBaseSignature = '';
@@ -369,7 +370,12 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
         return inFlight;
     }
 
-    async function loadBase(force: boolean, reAskedAfterDiscard = false): Promise<void> {
+    /** The public entry: the bound on re-asks stays private, so no caller can start past it. */
+    function loadBase(force: boolean): Promise<void> {
+        return loadBaseAttempt(force, 1);
+    }
+
+    async function loadBaseAttempt(force: boolean, attempt: number): Promise<void> {
         const generation = ++requestGeneration;
         const {scope, dateStart, dateEnd, targetCurrency, appliedRiskFreePercent, assetSetBenchmarkId} = inputs();
         const hadResults = historicalResults.length > 0 || currentResults.length > 0;
@@ -436,12 +442,14 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
             // The analytics lengths are not decoration: the ternaries above *also* yield
             // null for "not asked", so without them the two nulls are indistinguishable.
             if ((historicalAnalytics.length > 0 && historical === null) || (currentAnalytics.length > 0 && current === null)) {
-                // Re-ask once, under the generation that did the discarding. The guard
-                // itself stays: discarding another account's answer is correct. What was
-                // missing is that a guard which protects by discarding must be able to
-                // say so, or the protection is indistinguishable from an absence of data.
-                if (!reAskedAfterDiscard) {
-                    await loadBase(force, true);
+                // Re-ask under the generation that did the discarding, up to
+                // RISK_DISCARD_ATTEMPTS in all (D374). The guard itself stays: discarding
+                // another account's answer is correct. What was missing is that a guard
+                // which protects by discarding must be able to say so, or the protection is
+                // indistinguishable from an absence of data. A superseded attempt never gets
+                // here: the generation check above returns first.
+                if (attempt < RISK_DISCARD_ATTEMPTS) {
+                    await loadBaseAttempt(force, attempt + 1);
                     return;
                 }
                 loadDiscarded = true;
@@ -499,9 +507,10 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
         setLoading(analysis, true);
         try {
             let outcome = await runSingle(request.code, request.mode, request.parameters);
-            // Re-ask once, as `loadBase` does, while this run is still the current question; a
-            // superseded run leaves everything to the one that replaced it.
-            if (outcome.kind === 'discarded' && generation === generations[analysis]) {
+            // Re-ask, as `loadBase` does, up to RISK_DISCARD_ATTEMPTS in all and only while this
+            // run is still the current question: a superseded run leaves everything to the one
+            // that replaced it. A throw is never re-asked; it goes to the catch below.
+            for (let attempt = 1; attempt < RISK_DISCARD_ATTEMPTS && outcome.kind === 'discarded' && generation === generations[analysis]; attempt += 1) {
                 outcome = await runSingle(request.code, request.mode, request.parameters);
             }
             if (generation !== generations[analysis]) return;
@@ -655,13 +664,13 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
         get loadError() {
             return loadError;
         },
-        /** True when the base load's answer was discarded twice running. Distinct from
+        /** True when the base load's answer was discarded on every attempt. Distinct from
          *  `loadError` and from an empty result: the cure is to ask again, not to
          *  explain, so a surface reading this should offer the action, not a diagnosis. */
         get loadDiscarded() {
             return loadDiscarded;
         },
-        /** Per on-demand analysis: its answer was discarded twice running. The same fact as
+        /** Per on-demand analysis: its answer was discarded on every attempt. The same fact as
          *  `loadDiscarded`, and the same cure: ask again. Cleared by a new run of that analysis,
          *  by `resetAnalysis` and whenever the question changes. */
         get discarded(): Readonly<Record<OnDemandAnalysis, boolean>> {

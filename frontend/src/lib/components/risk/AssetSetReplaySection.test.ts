@@ -10,12 +10,12 @@
  * The laboratory's historical replay (Asset Global, L4°) is the one on-demand analysis
  * of the page, and it runs beside the page's live price polling, which invalidates the
  * risk cache every 30 s: an answer in flight at that moment comes back from `queryRisk`
- * as `null` — *discarded*, not empty. The controller re-asks once, and when the second
- * answer is discarded too it records the fact (`discarded.replay`) for its host to say
+ * as `null` — *discarded*, not empty. The controller re-asks, three attempts in all, and when
+ * the third answer is discarded too it records the fact (`discarded.replay`) for its host to say
  * so, the way the Dashboard's L4 does through `discardedErrorCodes`. Three things this
  * section owes the reader are pinned here, all on the section itself:
  *
- *   1. **A discarded answer is disclosed.** Twice discarded, the replay leaves an empty
+ *   1. **A discarded answer is disclosed.** Three times discarded, the replay leaves an empty
  *      form behind: without the sentence the reader cannot tell "the data moved under
  *      the answer, run it again" from "nothing to show". The sentence is the level's own
  *      error line, `risk.errors.answer_discarded`, under `data-code`. The complement is
@@ -364,20 +364,20 @@ describe('AssetSetReplaySection — the harness itself', () => {
     });
 });
 
-describe('AssetSetReplaySection — a replay answer discarded twice running', () => {
+describe('AssetSetReplaySection — a replay answer discarded three times running', () => {
     beforeAll(async () => {
         await setupI18n('en');
     });
 
     it('is disclosed on the section, in the words of risk.errors.answer_discarded', async () => {
-        replay.answers = [null, null];
+        replay.answers = [null, null, null];
         const controller = await mountOpen();
         await runReplay();
 
-        // The premise, first: the question was asked, re-asked once, and the controller
+        // The premise, first: the question was asked three times in all, and the controller
         // recorded the discard. What follows is then about the section alone.
         await waitFor(() => expect(controller.discarded.replay, 'the controller never recorded the discard: the path under test did not run').toBe(true));
-        expect(replay.asked, 'the replay was not asked and then re-asked exactly once').toHaveLength(2);
+        expect(replay.asked, 'the replay was not asked three times in all — the first attempt and two re-asks').toHaveLength(3);
         expect(controller.replayLoading, 'the run is still in flight').toBe(false);
 
         expect(errorCodes(), 'the controller recorded a discarded replay answer and the section says nothing: an empty form reads as "nothing to show", not as "run it again"').toEqual([ANSWER_DISCARDED_CODE]);
