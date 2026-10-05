@@ -12,18 +12,27 @@
  * risk cache every 30 s: an answer in flight at that moment comes back from `queryRisk`
  * as `null` — *discarded*, not empty. The controller re-asks once, and when the second
  * answer is discarded too it records the fact (`discarded.replay`) for its host to say
- * so, the way the Dashboard's L4 does through `discardedErrorCodes`. Two things this
- * section owes the reader are pinned here, both on the section itself:
+ * so, the way the Dashboard's L4 does through `discardedErrorCodes`. Three things this
+ * section owes the reader are pinned here, all on the section itself:
  *
  *   1. **A discarded answer is disclosed.** Twice discarded, the replay leaves an empty
  *      form behind: without the sentence the reader cannot tell "the data moved under
  *      the answer, run it again" from "nothing to show". The sentence is the level's own
  *      error line, `risk.errors.answer_discarded`, under `data-code`. The complement is
  *      pinned too — a discard the re-ask recovered from is not a lost answer.
- *   2. **Its warnings are in the reader's language.** A replay warning carries its
- *      catalogue key and its values (`message_i18n_key`, `message_params`); the section
- *      words it through them, like the Dashboard, rather than printing the backend's
- *      English `message`. Checked in the four shipped locales.
+ *   2. **The warnings it keeps are in the reader's language.** A replay warning carries
+ *      its catalogue key and its values (`message_i18n_key`, `message_params`); the
+ *      section words it through them, like the Dashboard, rather than printing the
+ *      backend's English `message`. Checked in the four shipped locales, on a warning the
+ *      section keeps after D372: stale prices, which `service.py` attaches to any
+ *      degraded answer, the replay's included.
+ *   3. **What the block explains, the section does not repeat (D372).** The replay's
+ *      exclusion and coverage warnings are shown in the block, beside the number they
+ *      qualify, and a replay with nothing left to run is explained there too. So the
+ *      mount hands the section `replaySectionView` of the answer: its reasons and errors
+ *      leave those out, while its status line still says the replay is partial or
+ *      unavailable. A refusal the block does not explain — a timeout — the section now
+ *      discloses, where it used to disclose only a discarded answer.
  *
  * **How a sentence is asserted without writing one down**: it is resolved from the
  * shipped catalogue through the same `$_` the component uses, with the same values
@@ -43,11 +52,17 @@
  * an asset-set replay (`stress.py::_historical`: no aggregate return on an unweighted
  * scope, the excluded asset `omitted_from_replay`), and the exclusion warning as
  * `_replay_exclusion_warning` builds it and `service.py` completes it with `names` and
- * `count` — but nothing here was read off a running backend.
+ * `count` — but nothing here was read off a running backend. One warning rides a payload
+ * of this scope that the engine would not send, on purpose: the coverage warning, which
+ * it emits on weighted scopes only. It is there to prove the section reads
+ * `replaySectionView` — both of the block's warnings — rather than a filter of its own
+ * that knows one of them.
  *
  * Left elsewhere: the discard/re-ask rules themselves (`riskPanelController.test.ts`),
- * the helper's wording rules (`levels/levelHelpers.test.ts`), the source gate that every
- * section passes a translator (`warningTranslatorSites.test.ts`), and the page end to end
+ * the helper's wording rules (`levels/levelHelpers.test.ts`), what `replaySectionView`
+ * keeps and drops (`levels/l4/scenarioHelpers.test.ts`), the block itself
+ * (`levels/l4/L4Replay.test.ts`), the source gate that every section passes a translator
+ * (`warningTranslatorSites.test.ts`), and the page end to end
  * (`e2e/portfolio/risk-lab.spec.ts`).
  */
 import {beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
@@ -86,7 +101,7 @@ vi.mock('$lib/stores/risk/riskPanelController.svelte', async (importOriginal) =>
     };
 });
 
-import {fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
+import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import {assertEffectsRun} from '$test/runes.svelte';
 import {_, SUPPORTED_LOCALES, type SupportedLocale} from '$lib/i18n';
 import en from '$lib/i18n/en.json';
@@ -98,6 +113,7 @@ import type {RiskResultMetadata, RiskStressOutput} from '$lib/risk/riskTypes';
 import {ANSWER_DISCARDED_CODE, type RiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 import AssetSetReplaySection from './AssetSetReplaySection.svelte';
+import {warningSentence} from './levels/warningSentence';
 
 type Warning = NonNullable<RiskAnalyticResult['warnings']>[number];
 type ReplayAnswer = {items: RiskAnalyticResult[]} | null;
@@ -120,7 +136,7 @@ const LABELS: ReadonlyMap<number, string> = new Map([
     [UNPRICED, 'Synthetic Holding C'],
 ]);
 
-/** The exclusion warning of an asset the engine left out of the window, with the names `service.py` adds. */
+/** The exclusion warning of an asset the engine left out of the window, with the names `service.py` adds. The block shows it (D372). */
 const EXCLUDED_KEY = 'risk.warnings.historical_replay_excluded_no_prices';
 const EXCLUDED_PARAMS = {treatment: 'omitted_from_replay', names: 'Synthetic Holding C', count: 1};
 const EXCLUDED_MESSAGE = 'Historical replay excluded assets with no prices in the replay window.';
@@ -134,11 +150,47 @@ const EXCLUDED_WARNING: Warning = {
 };
 
 /**
+ * The strong warning — the replay describes only part of the portfolio. The block shows
+ * it too (D372). Not emittable on this scope (see the header): it rides one answer to
+ * prove the section reads `replaySectionView` rather than a filter of its own.
+ */
+const COVERAGE_WARNING: Warning = {
+    code: 'historical_replay_mostly_excluded',
+    message: 'Historical replay describes only 40% of the portfolio: the rest is excluded.',
+    details: {excluded_weight_total: 0.6, threshold: 0.5},
+    degrades_result: true,
+    message_i18n_key: 'risk.warnings.historical_replay_mostly_excluded',
+    message_params: {covered: 0.4},
+};
+
+/**
+ * A warning the section keeps: stale prices, as `service.py::_data_quality_warnings`
+ * attaches it to any degraded answer — the replay's included — with the names
+ * `_with_warning_asset_names` adds.
+ */
+const STALE_KEY = 'risk.warnings.data_quality_stale_prices';
+const STALE_PARAMS = {days: 7, names: 'Synthetic Holding A', count: 1};
+const STALE_MESSAGE = 'Risk result uses incomplete or carried-forward source data.';
+const STALE_WARNING: Warning = {
+    code: 'data_quality_degraded',
+    message: STALE_MESSAGE,
+    details: {status: 'carried_forward', cause: 'stale_prices', asset_ids: [HOLDING_A]},
+    degrades_result: true,
+    message_i18n_key: STALE_KEY,
+    message_params: STALE_PARAMS,
+};
+
+/**
  * An asset-set replay answer. The two impacts are declared against the tornado's sort
  * (worst first), so the rendered order is evidence that the output parsed and sorted —
  * the barrier every assertion about the answer stands on.
+ *
+ * By default the third holding was left out of the window (`omitted_from_replay`, as on
+ * every unweighted scope) and the answer carries its exclusion warning; `excluded: false`
+ * answers for all three, which leaves the answer `ok` unless a warning degrades it.
  */
-function replayAnswer(): RiskAnalyticResult {
+function replayAnswer({excluded = true, warnings}: {excluded?: boolean; warnings?: Warning[]} = {}): RiskAnalyticResult {
+    const answerWarnings = warnings ?? (excluded ? [EXCLUDED_WARNING] : []);
     const output: RiskStressOutput = {
         kind: 'stress',
         method: 'historical_replay',
@@ -164,15 +216,21 @@ function replayAnswer(): RiskAnalyticResult {
         historical_replay_audit: {
             proxy_count: 0,
             proxy_assets: [],
-            excluded_count: 1,
-            excluded_assets: [{asset_id: UNPRICED, reason: 'no_prices_in_window', weight: null, treatment: 'omitted_from_replay'}],
+            excluded_count: excluded ? 1 : 0,
+            excluded_assets: excluded ? [{asset_id: UNPRICED, reason: 'no_prices_in_window', weight: null, treatment: 'omitted_from_replay'}] : [],
             excluded_weight_total: 0,
             missing_history_policy: 'manual_proxy_or_exclude',
             composition_policy: 'current_buy_and_hold',
             proxy_series_usage: 'returns_only',
         },
     };
-    return {instance_id: 'single-stress', analytic_code: 'stress', status: 'partial', output, metadata, warnings: [EXCLUDED_WARNING]};
+    const degraded = excluded || answerWarnings.some((warning) => warning?.degrades_result);
+    return {instance_id: 'single-stress', analytic_code: 'stress', status: degraded ? 'partial' : 'ok', output, metadata, warnings: answerWarnings};
+}
+
+/** A replay that did not run: `unavailable` and no output, as `schemas/risk.py` demands of it. */
+function refusal(code: 'execution_timeout' | 'insufficient_history', message: string, details?: Record<string, unknown>): RiskAnalyticResult {
+    return {instance_id: 'single-stress', analytic_code: 'stress', status: 'unavailable', output: null, error: {code, message, ...(details === undefined ? {} : {details})}};
 }
 
 /** The replay's answers, in the order it is asked; and every replay question, as asked. */
@@ -221,7 +279,12 @@ async function runReplay(): Promise<void> {
     await fireEvent.click(screen.getByTestId('risk-replay-run'));
 }
 
-/** The barrier on an answer: its bars in the tornado's order, and its audit parsed from the metadata. */
+/**
+ * The barrier on an answer: its bars in the tornado's order, so its output parsed and the
+ * run finished. What the metadata says is the block's to show (`risk-replay-excluded`),
+ * and the tests that are about it look there; the one-line audit this barrier used to read
+ * is retired with D372.
+ */
 async function expectAnswerOnScreen(): Promise<void> {
     await waitFor(() =>
         expect(
@@ -229,11 +292,28 @@ async function expectAnswerOnScreen(): Promise<void> {
             'the replay answer never reached the screen: its output did not parse, or the run never finished',
         ).toEqual([`asset:${HOLDING_A}`, `asset:${HOLDING_B}`]),
     );
-    expect(screen.getByTestId('risk-replay-audit'), 'the answer metadata did not parse').toHaveAttribute('data-excluded-count', '1');
+}
+
+/** The run is over and the controller holds this answer: what the section says next is about it. */
+async function expectRunSettled(controller: RiskPanelController, status: RiskAnalyticResult['status']): Promise<void> {
+    await waitFor(() => expect(controller.replayResult?.status, 'the replay answer never reached the controller').toBe(status));
+    expect(controller.replayLoading, 'the run is still in flight').toBe(false);
+    expect(replay.asked, 'the replay was not asked exactly once').toHaveLength(1);
 }
 
 function errorCodes(): string[] {
     return screen.queryAllByTestId(`${TEST_ID}-error`).map((line) => line.getAttribute('data-code') ?? '');
+}
+
+function reasonsOnScreen(): string[] {
+    return screen.queryAllByTestId(`${TEST_ID}-reason`).map((line) => normalize(line.textContent));
+}
+
+/** The section's status line: one entry, the replay's, in the state the answer carries. */
+function expectStatusLine(state: 'partial' | 'unavailable'): void {
+    const health = screen.getByTestId(`${TEST_ID}-health`);
+    expect(health, 'the status line does not name the one replay result').toHaveAttribute('data-count', '1');
+    expect(health, `the status line does not say the replay is ${state}`).toHaveTextContent(resolve(`risk.states.${state}`));
 }
 
 beforeEach(() => {
@@ -301,7 +381,7 @@ describe('AssetSetReplaySection — a replay answer discarded twice running', ()
     });
 });
 
-describe.each([...SUPPORTED_LOCALES])('AssetSetReplaySection — a keyed replay warning, in %s', (locale) => {
+describe.each([...SUPPORTED_LOCALES])('AssetSetReplaySection — a keyed replay warning the section keeps, in %s', (locale) => {
     beforeAll(async () => {
         await setupI18n(locale);
     });
@@ -309,19 +389,104 @@ describe.each([...SUPPORTED_LOCALES])('AssetSetReplaySection — a keyed replay 
     it("is worded through its own key and values, like the Dashboard's, not in the backend's English", async () => {
         // The harness first: the sentence exists in this catalogue, takes the values the
         // warning carries, and cannot be mistaken for the backend's own.
-        expect(typeof at(CATALOGUES[locale], EXCLUDED_KEY), `${EXCLUDED_KEY} is missing from ${locale}.json`).toBe('string');
-        const expected = resolve(EXCLUDED_KEY, EXCLUDED_PARAMS);
-        expect(expected, `${EXCLUDED_KEY} does not resolve`).not.toBe(EXCLUDED_KEY);
-        expect(expected, `${EXCLUDED_KEY} still carries ICU braces once formatted with the warning's values`).not.toContain('{');
-        expect(expected, "the warning's names never reached the formatter").toContain(EXCLUDED_PARAMS.names);
-        expect(expected, "the catalogue sentence reads like the backend's: which one rendered could not be told").not.toBe(EXCLUDED_MESSAGE);
+        expect(typeof at(CATALOGUES[locale], STALE_KEY), `${STALE_KEY} is missing from ${locale}.json`).toBe('string');
+        const expected = resolve(STALE_KEY, STALE_PARAMS);
+        expect(expected, `${STALE_KEY} does not resolve`).not.toBe(STALE_KEY);
+        expect(expected, `${STALE_KEY} still carries ICU braces once formatted with the warning's values`).not.toContain('{');
+        expect(expected, "the warning's names never reached the formatter").toContain(STALE_PARAMS.names);
+        expect(expected, "the catalogue sentence reads like the backend's: which one rendered could not be told").not.toBe(STALE_MESSAGE);
 
-        replay.answers = [{items: [replayAnswer()]}];
+        // A replay that left nothing out and carries the one warning: the section's list is
+        // then exactly that warning, before D372 and after it.
+        replay.answers = [{items: [replayAnswer({excluded: false, warnings: [STALE_WARNING]})]}];
         await mountOpen();
         await runReplay();
         await expectAnswerOnScreen();
 
-        const reasons = screen.getAllByTestId(`${TEST_ID}-reason`).map((line) => normalize(line.textContent));
-        expect(reasons, `the section printed the backend's English sentence instead of the ${locale} one its key and values give`).toEqual([expected]);
+        expect(reasonsOnScreen(), `the section printed the backend's English sentence instead of the ${locale} one its key and values give`).toEqual([expected]);
+    });
+});
+
+describe('AssetSetReplaySection — what the block explains, the section does not repeat (D372)', () => {
+    beforeAll(async () => {
+        await setupI18n('en');
+    });
+
+    it('leaves the exclusion and coverage sentences to the block, keeps every other warning, and still says the replay is partial', async () => {
+        replay.answers = [{items: [replayAnswer({warnings: [COVERAGE_WARNING, EXCLUDED_WARNING, STALE_WARNING]})]}];
+        const controller = await mountOpen();
+        await runReplay();
+        await expectAnswerOnScreen();
+
+        // The premise: the controller holds the whole answer, the block's warnings included —
+        // so whatever the section leaves out, it leaves out on purpose.
+        expect(controller.replayResult?.warnings?.map((warning) => warning?.code)).toEqual(['historical_replay_mostly_excluded', 'historical_replay_assets_excluded', 'data_quality_degraded']);
+        expectStatusLine('partial');
+
+        // The section's reasons, read through the helper it words them with: the data
+        // warning stays — the positive control that makes the absences below statements —
+        // and the block's two are not repeated, in either wording.
+        const translate = get(_);
+        const reasons = reasonsOnScreen();
+        expect(reasons, 'a warning the block does not show was dropped from the section').toContain(normalize(warningSentence(STALE_WARNING, translate)));
+        for (const warning of [EXCLUDED_WARNING, COVERAGE_WARNING]) {
+            expect(reasons, `the section repeats the ${warning.code} sentence the block shows beside the figure`).not.toContain(normalize(warningSentence(warning, translate)));
+            expect(reasons, `the section prints the backend's English for ${warning.code}`).not.toContain(normalize(warning.message));
+        }
+        expect(reasons).toEqual([normalize(warningSentence(STALE_WARNING, translate))]);
+
+        // …while the block, beside the bars, lists who was left out and why.
+        const block = screen.getByTestId('risk-replay-excluded');
+        expect(
+            within(block)
+                .getAllByTestId('risk-replay-excluded-group')
+                .map((group) => group.getAttribute('data-reason')),
+        ).toEqual(['no_prices_in_window']);
+        expect(
+            within(block)
+                .getAllByTestId('risk-replay-excluded-asset')
+                .map((item) => item.getAttribute('data-asset-id')),
+        ).toEqual([String(UNPRICED)]);
+    });
+
+    it('discloses a refusal the block does not explain, such as a timeout', async () => {
+        const key = 'risk.errors.execution_timeout';
+        // The harness: the sentence exists and is not the fallback an unknown code gets.
+        expect(resolve(key), `${key} does not resolve`).not.toBe(key);
+        expect(resolve(key), `${key} reads like the unknown-error fallback: which line rendered could not be told`).not.toBe(resolve(UNKNOWN_ERROR_KEY));
+
+        replay.answers = [{items: [refusal('execution_timeout', 'Risk analytic exceeded its time limit')]}];
+        const controller = await mountOpen();
+        await runReplay();
+        await expectRunSettled(controller, 'unavailable');
+        expectStatusLine('unavailable');
+
+        expect(errorCodes(), 'the replay timed out and the section only says it is unavailable: the reader cannot tell a limit of the engine from a limit of the data').toEqual(['execution_timeout']);
+        expect(normalize(screen.getByTestId(`${TEST_ID}-error`).textContent)).toBe(resolve(key));
+    });
+
+    it('explains a replay with nothing left to run in the block, not as an insufficient-history error of the section', async () => {
+        replay.answers = [
+            {
+                items: [
+                    refusal('insufficient_history', 'No asset in the replay scope covers the replay window', {
+                        excluded_asset_ids: [HOLDING_A, HOLDING_B, UNPRICED],
+                        excluded_assets: [
+                            {asset_id: HOLDING_A, reason: 'starts_after_window_start', weight: null},
+                            {asset_id: HOLDING_B, reason: 'starts_after_window_start', weight: null},
+                            {asset_id: UNPRICED, reason: 'no_prices_in_window', weight: null},
+                        ],
+                    }),
+                ],
+            },
+        ];
+        const controller = await mountOpen();
+        await runReplay();
+        await expectRunSettled(controller, 'unavailable');
+
+        // Barrier, and the block's half of the claim: the refusal was read as "nothing left".
+        expect(screen.getByTestId('risk-replay-nothing')).toBeInTheDocument();
+        expectStatusLine('unavailable');
+        expect(errorCodes(), 'the section calls the window that left everything out an insufficient history, beside the block that already says what happened').toEqual([]);
     });
 });

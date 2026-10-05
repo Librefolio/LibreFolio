@@ -198,6 +198,10 @@
     let axisContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | undefined = undefined;
     let axisInstance: echarts.ECharts | undefined = undefined;
+    // Up only while axisInstance holds a full option (the LineChart guard). init() and clear() leave a model
+    // without a grid, and the lazy x-axis patch merged into it throws on `axisBuilder` in ECharts' next frame.
+    // Only the sticky axis is patched on resize, so the lanes instance needs no flag.
+    let axisOptionSet = false;
     let responsiveXAxisCompact = false;
     const resizeWatcher = createResizeWatcher(() => {
         syncAxisViewport();
@@ -210,9 +214,9 @@
             const wasCompact = responsiveXAxisCompact;
             responsiveXAxisCompact = policy.compact;
             if (policy.axisLabel) {
-                axisInstance.setOption({xAxis: {splitNumber: policy.splitNumber, axisLabel: policy.axisLabel}}, {lazyUpdate: true});
+                if (axisOptionSet) axisInstance.setOption({xAxis: {splitNumber: policy.splitNumber, axisLabel: policy.axisLabel}}, {lazyUpdate: true});
             } else if (wasCompact) {
-                axisInstance.setOption(buildAxisOption(isDark), true);
+                if (axisOptionSet) axisInstance.setOption(buildAxisOption(isDark), true);
             }
         }
     });
@@ -1229,6 +1233,7 @@
         if (!chartContainer) {
             chartInstance?.clear();
             axisInstance?.clear();
+            axisOptionSet = false;
             overlayRects = [];
             return;
         }
@@ -1253,6 +1258,7 @@
             axisDataZoomSyncHandle = null;
             axisInstance.dispose();
             axisInstance = undefined;
+            axisOptionSet = false;
         }
 
         if (!chartInstance) {
@@ -1274,6 +1280,7 @@
         }
         if (axisContainer && !axisInstance) {
             axisInstance = echarts.init(axisContainer, undefined, {renderer: 'canvas'});
+            axisOptionSet = false;
             axisDataZoomTouchPanHandle = attachDataZoomTouchPan(axisInstance, axisContainer);
             axisDataZoomSyncHandle = attachDataZoomSync(axisInstance, (start, end) => onZoomChange?.(start, end));
         }
@@ -1282,13 +1289,17 @@
         if (!chartHasData) {
             chartInstance.clear();
             axisInstance?.clear();
+            axisOptionSet = false;
             overlayRects = [];
             return;
         }
 
         syncAxisViewport();
         chartInstance.setOption(buildOption(isDark), CHART_SET_OPTION_OPTS);
-        axisInstance?.setOption(buildAxisOption(isDark), CHART_SET_OPTION_OPTS);
+        if (axisInstance) {
+            axisInstance.setOption(buildAxisOption(isDark), CHART_SET_OPTION_OPTS);
+            axisOptionSet = true;
+        }
         chartInstance.resize();
         axisInstance?.resize();
         refreshOverlayRects();

@@ -43,6 +43,7 @@
     import AssetRiskScenariosView from '$lib/components/risk/AssetRiskScenariosView.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import CompactDurationBadge from '$lib/components/ui/date/CompactDurationBadge.svelte';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {
         backendSignalSchemas,
@@ -2176,7 +2177,9 @@
         showPageSyncModal = true;
     }
 
-    async function handlePageSyncComplete({accepted}: {accepted: boolean} = {accepted: true}) {
+    // The default only matters to a caller that forgets the detail, and such a caller must
+    // read as a cancel: an omission must never invalidate the comparison as an acceptance.
+    async function handlePageSyncComplete({accepted}: {accepted: boolean} = {accepted: false}) {
         if (accepted && primaryMode === 'calendar-return') {
             comparisonRequestGeneration += 1;
             comparisonInFlight = null;
@@ -3000,6 +3003,7 @@
                                     }
                                 }}
                             />
+                            <DocsLink path="user/assets/detail/chart/#rolling-return" label={$t('signals.riskRollingReturn.description')} size={14} testId="asset-calendar-return-docs" />
                         </div>
                     {/if}
                 </div>
