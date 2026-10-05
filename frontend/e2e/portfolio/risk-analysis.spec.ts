@@ -112,6 +112,33 @@ interface RiskMockOptions {
      * Opt-in: absent, `withInjectedStatus` hands the result straight back.
      */
     instanceStatus?: Record<string, 'partial' | 'unavailable'>;
+    /**
+     * Puts this `excluded_weight` on both outputs of today's composition that
+     * publish one: `risk_contribution` (L2) and `asset_risk_return` (L3).
+     *
+     * Both, because in one `current_composition` wave the two plugins read the
+     * same `context.excluded_weight`, as they read the same `cash_weight` (see the
+     * `asset_risk_return` branch of `resultFor`): one without the other would model
+     * a payload the backend cannot emit, and teach L2 and L3 two portfolios under
+     * one date.
+     *
+     * A part of the stub's `cash_weight` (0.05), never an addition to it: the
+     * backend's residual, `max(0, 1 − Σ usable weights)`, already holds every
+     * holding left without a series, and the items are only the usable ones — so
+     * they keep summing to 0.95 and the value given here must not exceed 0.05.
+     * What is left of the residual is true cash.
+     *
+     * What it does NOT model: a real exclusion also brings an `assets_excluded`
+     * warning and a `partial` status (and names the holding in
+     * `metadata.excluded_assets`, which this stub always sends empty). They are
+     * left out because the test that uses this option reads the weight alone.
+     *
+     * Opt-in, and absent means ABSENT: without it neither output carries an
+     * `excluded_weight` key at all, byte for byte the payload of every other test.
+     * The L3 scatter test relies on that absence to prove that the in-app Zod
+     * default fills the field with 0, so this option never writes a 0 of its own.
+     */
+    excludedWeight?: number;
 }
 
 /**
@@ -330,6 +357,18 @@ function matrixAssetIds(request: RiskRequest): number[] {
     return [1, 2];
 }
 
+/**
+ * The `excluded_weight` of the two current-composition outputs, only when a test
+ * asked for one (`excludedWeight`).
+ *
+ * Spread into each output: with the option absent it is an empty object, so no key
+ * is added — not even a 0 — and the payload every other test reads is unchanged
+ * down to the byte. One helper for both branches, so they cannot disagree.
+ */
+function excludedWeightField(options: RiskMockOptions): {excluded_weight?: number} {
+    return options.excludedWeight === undefined ? {} : {excluded_weight: options.excludedWeight};
+}
+
 function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options: RiskMockOptions): Record<string, unknown> {
     const base = {
         instance_id: analytic.instance_id,
@@ -425,6 +464,7 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
                     kind: 'contribution',
                     portfolio_volatility: 0.13,
                     cash_weight: 0.05,
+                    ...excludedWeightField(options),
                     items: [
                         {asset_id: 1, weight: 0.6, marginal_contribution: 0.11, component_contribution: 0.08, percentage_contribution: 0.65},
                         {asset_id: 2, weight: 0.35, marginal_contribution: 0.13, component_contribution: 0.05, percentage_contribution: 0.35},
@@ -455,7 +495,8 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
             //     default — the response passes through Zodios, whose generated
             //     schema fills a missing `excluded_weight` with 0 — to know the
             //     split between cash and unpriced. Writing the 0 here would leave
-            //     that test blind to whether the default applies.
+            //     that test blind to whether the default applies. Only a test that
+            //     opts in through `excludedWeight` gets the key, with its own value.
             //  4. Ids 1 and 2, the pair every other portfolio-scope answer in this
             //     stub uses (`matrixAssetIds`, the contribution items, the
             //     `dataQuality` issue), so the dots resolve to real names instead
@@ -466,7 +507,9 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
             // both plugins read the same `context.weights` and the same
             // `context.cash_weight`, so a fixture where they disagreed would model
             // a payload the backend cannot emit — and would teach L2 and L3 to
-            // report two different portfolios under one date.
+            // report two different portfolios under one date. The same holds for
+            // `context.excluded_weight`, which is why `excludedWeightField` feeds
+            // both branches.
             //
             // The *volatility* of the whole is another matter and is intentionally
             // not 0.13: `risk_contribution` publishes the covariance decomposition's
@@ -484,6 +527,7 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
                     portfolio_volatility: 0.118,
                     portfolio_expected_annual_return: 0.071,
                     cash_weight: 0.05,
+                    ...excludedWeightField(options),
                     items: [
                         {asset_id: 1, weight: 0.6, volatility: 0.152, expected_annual_return: 0.094},
                         {asset_id: 2, weight: 0.35, volatility: 0.087, expected_annual_return: 0.041},
@@ -2498,6 +2542,57 @@ test.describe('Risk analysis functional integration', () => {
         // that keeps that count from being satisfied by a note that never rendered.
         await expect(riskReturn.getByTestId('risk-l3-scatter-cash')).toBeVisible();
         await expect(riskReturn.getByTestId('risk-l3-scatter-unpriced')).toHaveCount(0);
+    });
+
+    /**
+     * L3 words a small unpriced share through the share rule (developer's decision
+     * of 01/10/2026: a small share is never printed as zero).
+     *
+     * The rule, `formatShare`, is unit-tested on its own; what nothing pinned was
+     * L3's USE of it. The scatter's note words both parts of the residual at no
+     * decimal, and under the old `formatPercent(…, digits: 0)` an unpriced share of
+     * 0.4 % read «0%»: a clause announcing holdings the model could not measure,
+     * then weighing them at nothing. Reverting the call site turned no test red.
+     *
+     * The stub's one change is `excludedWeight: 0.004`, carried by both
+     * current-composition outputs so L2 and L3 still describe one portfolio, and
+     * inside the stub's `cash_weight` of 0.05: 0.046 of it stays true cash.
+     *
+     * No assertion on the sentences, which are translated. What is read is a
+     * formatted NUMBER, which no locale translates: `formatPercent` ends in
+     * `toFixed`, so the figure is written alike inside all four catalogues'
+     * sentences, each of which carries the `{share}` argument.
+     */
+    test('L3 words a small unpriced share through the share rule instead of rounding it to zero', async ({page}) => {
+        await installRiskMocks(page, {excludedWeight: 0.004});
+        const panel = await openDashboardRisk(page);
+
+        // Barriers, the same three as the scatter test above: the section is on screen,
+        // it was drawn out of this stub's answer — the portfolio and its two holdings —
+        // and the note that carries both clauses rendered. Without them, a red below
+        // could be a note that never mounted rather than a share worded wrong.
+        const level3 = panel.getByTestId('risk-level-3');
+        const riskReturn = level3.getByTestId('risk-l3-risk-return');
+        await expect(riskReturn).toBeVisible({timeout: 10_000});
+        await expect(riskReturn.getByTestId('risk-l3-scatter')).toHaveAttribute('data-point-count', '3');
+        await expect(riskReturn.getByTestId('risk-l3-scatter-note')).toBeVisible();
+
+        // The clause is rendered only for an unpriced share above zero, so its presence
+        // says the option's weight reached L3 and was read as unpriced. Red here with the
+        // barriers green: the stub no longer sends `excluded_weight` on `asset_risk_return`,
+        // or L3 stopped reading it through `uncoveredWeight`.
+        const unpriced = riskReturn.getByTestId('risk-l3-scatter-unpriced');
+        await expect(unpriced).toBeVisible();
+
+        // The subject. `formatShare(0.004, 0)` prints «0.4%»: below 1 % the rule gives a
+        // share a decimal whatever the caller's base. The old wiring printed «0%». Red
+        // here: L3's unpriced clause is no longer worded through `formatShare`.
+        await expect(unpriced).toContainText('0.4%');
+
+        // The sibling that proves the split happened: 0.05 − 0.004 leaves 0.046 of true
+        // cash, so the cash clause is still said beside the unpriced one. Red here: the
+        // residual was handed to the unpriced clause whole instead of being split.
+        await expect(riskReturn.getByTestId('risk-l3-scatter-cash')).toBeVisible();
     });
 
     /**

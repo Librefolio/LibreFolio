@@ -38,7 +38,7 @@ non mio passa **prima** da Risk. Il via per il codice lo dà il developer.
 | F2b | L3 dichiara i risultati `current_composition` che legge | ✅ (passo 6) |
 | M16 | la scheda «non misurato» di L2 non ha un test che ne fissi l'assenza | ✅ T2 (passo 5) |
 | — | didascalia di L2 con `.unpriced` e `.cash`, e l'icona `#excluded-weight` sulla scheda | ⏳ proposta di forma al developer |
-| — | dove stanno gli avvisi di L4 | decisione del developer |
+| — | dove stanno gli avvisi di L4 | **replay**: deciso il 02/10 (sotto) e scritto da Risk · shock e simulazione invariati |
 
 ---
 
@@ -991,3 +991,141 @@ commit del checkpoint 1.
   volte, prima e dopo i mutanti), `risk-benchmark-shared` 4 passed, `front check` con i soliti 3 errori, 0 nei miei file;
   prettier pulito; mutanti come da tabella.
 - **Commit proposto**: `/tmp/libreFolio_commits/A-dashboard-ckpt2.txt`.
+
+
+
+- **01/10 18:18 — Risk ha verificato il checkpoint 2** e l'ha passato al coordinator.
+- **Il buco di M1/M2 lo chiude Risk nella primitiva**, la fonte unica: aggiunge ai test di `BenchmarkSelect` il pin
+  «`value` null e `data-benchmark-id` vuoto finché lo stato è `pending`», con un mutante che deve morire, nel suo prossimo
+  checkpoint. Le mie guardie in `L3Benchmark` restano come difesa in profondità; **non serve** il test con una primitiva
+  finta.
+- **Dopo il commit**: la regola delle quote (concessione per `shareFormat.test.ts` in `risk-levels-unit` già ricevuta:
+  le due voci più una frase nella `desc`, «nothing else»; `check-orphans` fra i controlli).
+- **Checkpoint 2 committato** dal developer: `2f54c9c0b` (`feat(risk): shared benchmark picker in L3`).
+
+### Pulizia dei dati reali in `/tmp` · ✅ 02/10 12:55
+
+> **Richiesta del coordinator, via Risk (02/10 12:50)**: le copie dei dati reali in `/tmp` sono leggibili da tutti
+> (`drwxr-xr-x`, ~32 MB l'una). Cancellare la vecchia copia di riserva; cancellare anche la copia del 30/09, salvo una
+> review mia imminente. La review combinata D15 avrà una copia **nuova**, con l'approvazione del developer.
+
+> **Note implementazione**:
+> - **Cancellate** con le guardie per ciascun percorso: proprietario `ea_enel`; `lsof` vuoto subito prima (`+D` per le
+>   cartelle); `rm -rf --` sul percorso esatto. Prova con `ls`: «No such file or directory» per tutti e tre.
+>   - `/tmp/librefolio-r2-a-prodcopy.prev-20260930-110318` (32 MB, la copia di riserva);
+>   - `/tmp/librefolio-r2-a-prodcopy` (32 MB, la copia del 30/09): nessuna review mia imminente;
+>   - **in più, stessa ragione**: `/tmp/libreFolio_a_server6163.log` (39 KB, `-rw-r--r--`), l'uscita del server di
+>     review sui dati reali. Contiene `username`, `user_id` e le chiusure intragiornaliere degli asset del developer,
+>     più 35 righe di accesso all'API. Ispezionato solo nelle chiavi e nei nomi degli eventi, mai nei valori.
+> - **Resta** `/tmp/librefolio-r2-a`: la corsia di suite, con i dati finti di `db populate`.
+> - **Lezione**: una copia fatta con `cp -R` + `chmod -R u+w` eredita l'umask 022, quindi in `/tmp` è leggibile da
+>   tutti, e così il log del server rediretto in un file. Ho corretto il mio aiuto `/tmp/libreFolio_a_prodcopy_refresh.sh`:
+>   dopo la copia fa `chmod -R go-rwx`. Una copia futura, e il log del suo server, vanno tenuti solo al proprietario.
+> - **Non toccati**: lo snapshot del coordinator (`/tmp/librefolio-r2-prod-snapshot`, suo) e, nella cartella di sessione,
+>   le impronte `prodcopy-fingerprint-*.txt`: contano le righe di prezzo per id di asset, nessun valore.
+
+> 🔒 **02/10 13:01 — concessione una tantum a Risk su `RiskLevelsPanel.svelte`** (F3, il blocco del replay). **Decisione del
+> developer (02/10)**: «Solo nel blocco del replay, vicino al numero». Gli avvisi di esclusione del replay e «descrive solo
+> l'N % del portafoglio» lasciano la lista ambra di L4: il blocco li mostra da sé, raggruppati per motivo e con i pesi, con
+> l'avviso forte sopra il totale. Resta nella sezione la riga di stato («Replay storico: parziale»). Per il replay chiude
+> la mia decisione aperta «dove stanno gli avvisi di L4»; shock e simulazione non cambiano.
+> - **Il token**: in `l4Results` (nel mio albero `:199`, non `:174`), `controller.replayResult` →
+>   `replaySectionView(controller.replayResult)`, helper di Risk in `l4/scenarioHelpers.ts` (toglie gli avvisi che il
+>   blocco mostra e l'errore quando il blocco dice «niente da riprodurre»; stato e metadati restano). Salute, voci, errori
+>   e metadati di L4 continuano a nascere da `l4Results`.
+> - **Verificato prima di rispondere OK**: l'unico mio test sulla riga di stato di L4 (`risk-analysis.spec.ts:1943`, la
+>   simulazione non disponibile) non dipende dal replay; la regola delle quote non tocca `RiskLevelsPanel.svelte`.
+> - **Uno scrittore per file**: non tocco `RiskLevelsPanel.svelte` finché la sua modifica non è arrivata nel mio ramo.
+
+### Passo 9 — le quote sotto l'1 % non sono mai «0 %» · ✅ 02/10
+
+> **Decisione del developer (01/10 16:32)**: «si, per le quote sotto l'1% metti un decimale o due». Regola e test list
+> approvate lo stesso giorno («Approvata: la faccio dopo il commit»); concessione del coordinator per registrare il test in
+> `risk-levels-unit` (02/10, via Risk).
+
+> **Note implementazione**:
+> - **Prima lo stub**: `levels/shareFormat.ts` con il comportamento di oggi (`formatPercent` con le cifre del chiamante),
+>   così il rosso cade sulle asserzioni e non su un import mancante.
+> - **test-author**: `shareFormat.test.ts`, 33 casi ai confini (1 %, 0,1 %, il «< 0.01%», zero e `-0`, negativi,
+>   valori non finiti, il carattere U+00A0). **Rosso sullo stub**: 18 failed | 15 passed, tutti su asserzioni. Due casi
+>   sotto l'1 % passano anche sullo stub per costruzione (base 1, banda da un decimale): proteggono dagli zeri in più.
+> - **La regola** (`formatShare(fraction, baseDigits: 0 | 1 | 2)`): decide sul modulo in percento. Da 1 % in su il formato
+>   del chiamante; sotto l'1 % almeno un decimale; sotto lo 0,1 % almeno due. Se due decimali darebbero zero, «< 0.01%»
+>   (o «> -0.01%» se negativa), deciso con lo stesso `toFixed` che stampa la cifra. Uno zero vero (anche `-0`) resta lo
+>   zero del chiamante.
+>   - **Il tipo `0 | 1 | 2`** chiude un rilievo di test-author: con 3 o più cifre le due regole non descriverebbero più
+>     la stessa cosa.
+>   - Dopo il restringimento, 7 errori di tipo nel test, che passava `number`. **Corretti da me**: il test ricava il tipo
+>     dalla firma (`Parameters<typeof formatShare>[1]`).
+> - **Collegamento**:
+>   - L2: `share()` → `formatShare(fraction, 1)`: scheda «non misurato», riga del residuo, peso e contributo delle righe
+>     (non le barre, fuori dal giro);
+>   - L3: le due frasi sotto lo scatter → `formatShare(…, 0)`.
+> - **Registrazione** (concessione): `_frontend_portfolio.py` `:160` (lista) e `:326` (`tests=` e una frase nella
+>   `desc`); numstat `2 2`; ruff uguale a HEAD (22).
+> - **Verdi**:
+>   - `risk-levels-unit` → **10 file** · 302 test;
+>   - `risk-levels-component` → 5 file · 96 test;
+>   - `check-orphans` → 293 test unitari registrati, tutti raggiungibili;
+>   - `front check` → i soliti 3 errori, 0 nei miei file;
+>   - E2E `front-portfolio risk` sulla 6153 → **21 passed** (carico 12,4, il backend è partito);
+>   - prettier pulito.
+> - **Mutanti su `formatShare`** (`/tmp/libreFolio_a_share_mutants.py`, ripristino verificato per sha256): **7 su 7
+>   uccisi**. I due confini `>=`→`>`, la soglia decisa a 3 decimali, lo spazio normale al posto di U+00A0, il segno
+>   perso nel negativo minimo, la guardia dello zero tolta, il modulo senza `abs`.
+> - ⚠️ **Buco dichiarato** (✅ **chiuso il 05/10**, sotto): **il collegamento non è fissato da un test**. Riportare `share()` di L2 o le frasi di L3 a
+>   `formatPercent` non farebbe diventare rosso nessun test: gli E2E leggono solo quote ≥ 1 % (`60.0%`) o la presenza.
+>   Proposta, da approvare: un caso in `L2Diversification.test.ts` con `cash_weight: 0.0004`, la cui riga del residuo
+>   deve contenere la frase del catalogo con `0.04%`.
+
+### Passo 9 (seguito) — il collegamento della regola fissato da test, in L2 e in L3 · ✅ 05/10
+
+> **Approvato da Risk** (02/10 ~13:30, confermato il 05/10 dopo l'interruzione): chiudere il buco prima del commit, perché
+> fissa un comportamento già approvato. Sbloccato solo per questo.
+
+> **Note implementazione**:
+> - ⚠️ **Fuori pista — sessione interrotta il 02/10**: un errore di rete (DNS) ha fatto perdere la risposta di test-author.
+>   Alla ripresa (05/10, su richiesta del coordinator) ho verificato l'albero:
+>   - HEAD `2f54c9c0b`, 8 percorsi; i 6 del checkpoint 3 hanno ancora i blob registrati;
+>   - test-author aveva scritto **per intero**, prima dell'errore, i due file dei test (13:32 e 13:33 del 02/10): niente
+>     a metà. Non sapendo se avesse fatto le prove rosse, **le ho rifatte io**.
+> - **La corsia dopo la pulizia di `/tmp` di macOS** (05/10, 00:01): `app.db` c'era, ma `custom-uploads` era vuota (63
+>   voci il 29/09) e `broker_reports` assottigliata. Nessun comando a parte: ogni E2E di questa corsia ripopola il DB da
+>   zero con i report di esempio (`_frontend_common.py:163`, `force=True, with_reports=True`), cioè proprio il
+>   `db populate --force` indicato dal coordinator. Ricostruito al primo E2E verde: `app.db` del 05/10 10:00.
+> - **L2** (`L2Diversification.test.ts`, +1 caso): `cash_weight: 0.0004`. La barriera è `data-uncovered="0.0004"`; i
+>   controlli contro il vuoto: la frase del catalogo si risolve e contiene la cifra. Poi la riga è uguale alla frase del
+>   catalogo con «0.04%», scritto per esteso (è l'uscita di `formatShare` alla base 1, non ricalcolata dal test).
+>   - **Rosso con il mutante** `share()` → `formatPercent(…, digits 1)`: 1 failed | 5 passed. Fallisce solo il caso
+>     nuovo, sull'asserzione principale (la riga diceva «0.0%»). Ripristino verificato per sha256 (`d4fa945e…`).
+>   - Verde: 6 passed.
+> - **L3** (`risk-analysis.spec.ts`): **una sola opzione dello stub** basta, quindi vale la condizione di Risk.
+>   - `excludedWeight?: number`, in fondo a `RiskMockOptions`, scritta da un solo helper, `excludedWeightField`, su
+>     **tutte e due** le uscite della composizione attuale (`risk_contribution` e `asset_risk_return`), perché nel
+>     backend leggono lo stesso contesto.
+>   - È una parte del `cash_weight` dello stub (0,05), mai un'aggiunta. Assente vuol dire **assente**: nessuna chiave
+>     `excluded_weight`, il payload di ogni altro test è identico byte per byte. Su quell'assenza il test T3 prova il
+>     `default(0)` di Zod nell'app.
+>   - Test nuovo «L3 words a small unpriced share through the share rule instead of rounding it to zero», con
+>     `excludedWeight: 0.004`. Le stesse tre barriere del test dello scatter; poi `risk-l3-scatter-unpriced` è
+>     visibile, contiene «0.4%», e `risk-l3-scatter-cash` resta visibile (lo 0,046 di liquidità vera prova che la
+>     divisione è avvenuta).
+>   - **Rosso con il mutante** sulla frase delle posizioni senza prezzo, rimessa a `formatPercent(…, digits 0)`, sulla
+>     6153: 1 failed, esattamente su `toContainText('0.4%')` (`:2590`), dopo le barriere; ricevuto «(0% of net
+>     worth)». Ripristino verificato per sha256 (`ef5f121a…`).
+>   - Non tocca le due righe riservate a Risk né il codice del replay.
+> - **Verdi** (05/10, sulla 6153):
+>   - `risk-levels-unit` → 10 file · 302 test;
+>   - `risk-levels-component` → 5 file · **97** test (erano 96);
+>   - `front check` → i soliti 3 errori, 0 nei miei file;
+>   - E2E `front-portfolio risk` → **22 passed** (21 + 1); ricostruisce anche `frontend/build`, dove era stato
+>     compilato il mutante;
+>   - prettier pulito.
+> - ⚠️ **Fuori pista — il backend di test non parte sotto carico, terza volta.** Primo lancio di L3: «did not answer
+>   within 120s», con carico **21**, prima della raccolta dei test.
+>   - **Prova precisa** dal log dell'app: «Starting LibreFolio» alle 09:53:33, cioè proprio allo scadere dei 120 s del
+>     runner (partito alle 09:51:33); fermato 1,3 s dopo. Il tempo se n'è andato **prima** che l'app partisse, a
+>     lanciare Python e importare i moduli sotto carico, non nell'app.
+>   - Aspettato che il carico scendesse sotto 10 (~5 minuti; era arrivato a 45), poi rilanciato **una volta** lo
+>     stesso comando: verde.
+>   - Il timeout (`STARTUP_TIMEOUT = 120`, `scripts/test_runner/_server.py`) non è mio: lo segnalo a Risk.
