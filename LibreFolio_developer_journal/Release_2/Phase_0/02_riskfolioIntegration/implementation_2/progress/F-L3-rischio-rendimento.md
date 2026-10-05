@@ -1386,9 +1386,10 @@ Proposta mia, in attesa di conferma: deduplicare le quattro fonti (correlazione,
 
 | # | passo | stato |
 |---|---|---|
-| L8-1 | A: test rossi (test-author): unitari delle due sezioni, E2E (b), (c), (d) e la posizione della nota | ✍️ scritti, accantonati per il checkpoint del giro 7 |
-| L8-2 | A: codice | ⏳ |
+| L8-1 | A: test rossi (test-author): unitari delle due sezioni, E2E (b), (c), (d) e la posizione della nota | ✅ 2026-10-05, rimessi dopo la fusione `19b99e8ae` |
+| L8-2 | A: codice | ✅ 2026-10-05 (più la guardia e il perché della correlazione) |
 | L8-3 | B: rossi e codice sui mock, dopo la conferma di Risk sulla regola dell'unione | ⏳ |
+| L8-1b | la guida: la nota di Risk su §What If…? (F3, D372), via docs-writer | ✅ 2026-10-05, più l'allineamento ad A |
 | L8-4 | cancelli; poi la tappa 1 del pannello; poi la review unica (con la punta di Risk) | ⏳ |
 
 ### L8-1 · i rossi di A (test-author `l8-notice`) ✍️ 2026-10-05
@@ -1462,3 +1463,123 @@ Dopo il commit e la fusione della punta di Risk, A torna con `git merge-file`:
 >   scritto **8 righe di prezzo**, due volte, nel DB della mia lane, alle 09:32:20Z. Raffiche uguali di 14 righe
 >   ricorrono nei giorni precedenti, quindi è preesistente. È lo stesso meccanismo che in `risk-lab` tiene
 >   `holdLivePricePoll`. Segnalato a Risk.
+
+### Giro 7 committato e fuso ✅ 2026-10-05, 12:27
+
+> - Commit del developer: `4a2a37401` (G1), `7c15e1f86` (G2), `6f1a30b2e` (G3), `04af0af05` (G4), albero
+>   `1bc6427c6`. Fusione `19b99e8ae`, genitori `04af0af05` + `bb513bf8a` (la punta di Risk, con F3 `c42bbad9e` e
+>   `dev_release2`), albero `aaa7a9cc0`.
+> - `/tmp/libreFolio_f4/verify_l7.sh` (in sola lettura) dà **PASS**:
+>   - 4 commit senza fusioni; messaggi, file e blob uguali al registro (digest `d3fb3c23…`);
+>   - nella fusione, i 5 file toccati da entrambi (i18n ×4, `risk-lab.spec.ts`) sono senza marcatori;
+>   - gli altri 11 sono i miei blob; nessuna voce non fusa.
+> - Cancelli sulla revisione combinata (`/tmp/libreFolio_f4/merge_19b9_gates.sh`, 6154, un comando per volta,
+>   12:28-12:37):
+>   - `front build --debug` e `mkdocs build` completi;
+>   - `front check` **0 errori e 0 avvisi**: la soglia di prima è sparita con `dev_release2`;
+>   - `tsc -p tsconfig.e2e.json`: **2 errori**, in `onboarding-tour.spec.ts` e `src/lib/types/files.ts`, nuova
+>     soglia; 0 negli spec di rischio;
+>   - prettier dei file del laboratorio pulito; vitest **1236/1236** (28 file);
+>   - `core-unit` **2984/2984**, `component-unit` **2461/2461** (100 file), `risk-controller-unit` **59/59**,
+>     `risk-levels-component` **92/92**;
+>   - E2E: `risk-lab` **40/40**, `risk` **14/14**, `risk-benchmark-shared` **4/4**;
+>   - `services risk-asset-set` **30/30**; `check-orphans` pulito; i18n 3516 chiavi, 382 inutilizzate;
+>   - provider: 0 righe durante `risk-lab` e `risk-benchmark-shared`, **14 durante `risk`** (il reperto già
+>     segnalato, non mio);
+>   - albero pulito prima e dopo; `sw.js` invariato; 6154 libera.
+> - 🔴 **`mkdocs check-links`: exit 1, ereditato, non mio.**
+>   - L'ancora `user/assets/detail/chart/#rolling-return` esiste in inglese ma non in it/fr/es. È linkata da
+>     `assets/[id]/+page.svelte:3006`.
+>   - Arriva da `dev_release2` (`c8daff33f`, commit `e3af27ff3` «add rolling-return guide link»), quindi è rossa
+>     anche sulla punta di Risk.
+>   - I conteggi: 88 validi, 8 non verificabili, 3 ancore note, **1 rotta**. Segnalato al coordinatore.
+> - Risposta del coordinatore: il rosso di `check-links` è **D28**, accettato. Si chiude con le traduzioni a fine
+>   giro, e su `dev` dà solo un banner giallo. Il poll durante `risk` è di A (`holdLivePricePoll` nel suo spec).
+>   Nessuna azione mia.
+
+### L8-1 · i rossi di A rimessi nell'albero ✅ 2026-10-05, 12:4x
+
+> - Copia privata verificata prima di usarla (sha256 `42a7311d…`, `4223f6d5…`, `105e590c…`).
+> - I due unitari: HEAD ha gli stessi blob di `a8c1d8d77` (`c6c51c289`, `3dad861a4`), perché né il giro 7 né la
+>   fusione li hanno toccati. Copiati così come sono; `cmp` con la copia dà uguale.
+> - Lo spec: `git merge-file`, con base = lo spec del giro 7 committato (`04af0af05`), nostro = lo spec fuso
+>   (`19b99e8ae`, con F3), loro = la copia. **0 conflitti**, e il delta è la somma esatta dei due: nostro +92 −28,
+>   loro +183 −19, fuso +275 −47. Dentro ci sono sia `expectReplayLeftOutWithoutWeight` (F3) sia `labNoticeFor` (A).
+> - Sul codice fuso i rossi sono gli stessi di prima: **16 falliti e 46 passati**, ciascuno sul comportamento che
+>   manca (`qualitySource` assente ×8; un parziale o un motivo ancora nella cornice ×8).
+> - `tsc e2e` alla soglia nuova (2), 0 in `risk-lab`; prettier pulito. Log in
+>   `/tmp/libreFolio_f4/l8_A_red_restored.log`.
+
+### L8-2 · il codice di A · 2026-10-05, 12:5x
+
+> - `assetSetLevels.ts`: il tipo `AssetSetQualitySource` (`results`, `labels`, `issues`).
+> - `AssetSetComparisonLevels.svelte`:
+>   - cornici con `levelErrorHealth(degradedResults(...))`, senza `reasons`;
+>   - `export function qualitySource()`: i sei risultati nell'ordine della pagina, le etichette dei due VaR, le
+>     questioni di L1° poi di L3°;
+>   - docblock aggiornato.
+> - `AssetSetCorrelationSection.svelte`: la stessa cosa per la correlazione; docblock aggiornato.
+> - `AssetSetRiskPanel.svelte`:
+>   - `bind:this` sulle due sezioni;
+>   - `notice = partialNotice(risultati, $t, etichette)`;
+>   - `RiskPartialNotice` all'inizio del blocco `{#if analysedIds.length > 0}`, dopo la scheda della selezione e
+>     prima della correlazione;
+>   - il replay non partecipa: tiene la sua salute.
+> - Esiti:
+>   - i due unitari **62/62** (erano 16 rossi);
+>   - prettier pulito;
+>   - `front check` **0 errori, 0 avvisi**.
+> - Dopo il codice, build e poi E2E `risk-lab` nella 6154: **40/40**, 0 righe dei provider. Log in
+>   `/tmp/libreFolio_f4/l8A/`.
+> - **Mutante E2E** (il rosso di (c) non era mai stato osservato: test-author non esegue Playwright):
+>   - tolta la riga `<RiskPartialNotice …/>` dal pannello (copia privata, `diff` di una riga);
+>   - build, poi solo (c) (`"with the reason in the lab"`, che il runner passa a `--grep`): **rosso** a `:4280`,
+>     «its one notice is missing»;
+>   - pannello rimesso, `cmp` uguale.
+> - **⚠️ Fuori pista 1: la guardia `warningTranslatorSites.test.ts` è diventata rossa.** È mia (K8, `2e2894742`).
+>   Fissa l'inventario delle chiamate a `resultReasons` e `partialNotice`, e A le ha spostate apposta: via dalle
+>   due sezioni, una `partialNotice` nuova nel pannello.
+>   - Riallineata da test-author (`l8-guard`): via le due voci `resultReasons`, più
+>     `AssetSetRiskPanel.svelte · partialNotice`. 5/5.
+>   - Mutante: nel pannello `$t` → `undefined` nella chiamata a `partialNotice`. La guardia diventa rossa e nomina
+>     `AssetSetRiskPanel.svelte:589`; pannello rimesso, `cmp` uguale.
+>   - Il secondo test della guardia (ogni chiamata passa `$t`) era verde anche prima.
+> - **⚠️ Fuori pista 2: la cornice della correlazione non diceva mai perché mancava** (lo ha trovato docs-writer).
+>   L1°, L3° e il replay passano `resultErrorCodes(...)`; la correlazione solo `answer_discarded`. Preesistente, ma
+>   la regola di A («ogni cornice dice che cosa manca del tutto, e perché») lo rende un buco:
+>   - rossi da test-author (`l8-corr-why`): 3 rossi (`insufficient_history`, `execution_timeout`, e il caso
+>     combinato con `answer_discarded` dopo) e 2 guardie verdi;
+>   - codice: `errorCodes = [...resultErrorCodes([result]), ...scartata]`;
+>   - correlazione, livelli e guardia: **71/71**.
+>
+> ### L8-1b · la guida ✅ 2026-10-05 (docs-writer `l8-whatif`)
+>
+> - §What If…? (`:141-153`):
+>   - il blocco del replay elenca gli asset lasciati fuori, raggruppati per motivo, sotto le barre;
+>   - la sezione tiene solo lo stato;
+>   - «Nothing to replay» quando non resta nulla;
+>   - i cinque motivi con le etichette del blocco;
+>   - il periodo comune con il pulsante e «Only part of the crisis»;
+>   - i link alle tre ancore nuove di `historical-replay`.
+> - Allineamento ad A:
+>   - §Each Section Speaks for Itself diventa «What Is Missing, What Is Partial», con l'ancora invariata;
+>   - `:169` e `:178` (§One Shared Window) rimandano alla nota.
+> - `mkdocs build` pulito; `check-links` 88/8/3 + D28; `sw.js` invariato.
+
+### L8-4a · i cancelli del giro 8a ✅ 2026-10-05, 13:09-13:16
+
+> `/tmp/libreFolio_f4/l8A_gates.sh`, nella 6154, un comando per volta, su `19b99e8ae` più l'albero (10 file):
+> - `front build --debug` e `mkdocs build` completi; `front check` **0/0**; `tsc e2e` 2 (soglia), 0 negli spec di
+>   rischio;
+> - prettier pulito; vitest **1281/1281** (30 file, più `partialNotice` e `RiskPartialNotice`);
+> - `core-unit` **2984/2984**, `component-unit` **2483/2483** (i +22 sono i test nuovi), `risk-controller-unit`
+>   **59/59**, `risk-levels-component` **92/92**;
+> - E2E: `risk-lab` **40/40**, `risk` **14/14**, `risk-benchmark-shared` **4/4**;
+> - `services risk-asset-set` **30/30**; `check-orphans` pulito; i18n 3516/382 (nessuna chiave nuova);
+> - `check-links` 88/8/3 più la sola D28;
+> - provider: 0 durante `risk-lab` e `risk-benchmark-shared`, 14 durante `risk` (di A);
+> - `git diff --check` pulito; `sw.js` invariato; 6154 libera.
+> - Log in `/tmp/libreFolio_f4/l8Afinal/`.
+>
+> **Checkpoint del giro 8a** a Risk, poi FROZEN fino al commit e alla fusione della sua punta (D15 e
+> `mergeQualityIssues`). Poi B su `mergeQualityIssues`, e la tappa 1 del pannello.
