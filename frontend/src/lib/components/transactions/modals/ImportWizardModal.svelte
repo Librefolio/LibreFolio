@@ -1403,6 +1403,16 @@
         gapFixSelected = next;
     }
 
+    /** The gap-fix step's select all / select visible / deselect all, in one update. */
+    function setGapFixProposals(keys: string[], selected: boolean) {
+        const next = new Set(gapFixSelected);
+        for (const key of keys) {
+            if (selected) next.add(key);
+            else next.delete(key);
+        }
+        gapFixSelected = next;
+    }
+
     /** The review's rows and the corrections the user kept, with their todos (design §4.7). */
     function handleGapFixContinue() {
         if (!gapFixView || importPreparing) return;
@@ -4396,6 +4406,9 @@ ${arrow}<span>${label}</span></span>`,
                                 <!-- DataTable per broker: the single files -->
                                 {#if expandedBrokers.has(broker.id) && brokerGroups.singles.length > 0}
                                     <div class="border-t border-gray-200 dark:border-gray-700">
+                                        {#if brokerGroups.sets.length > 0}
+                                            <p class="px-3 pt-2 text-xs font-medium text-gray-600 dark:text-gray-300" data-testid={`import-wizard-other-files-${broker.id}`}>{$t('importWizard.reportSet.otherFiles')}</p>
+                                        {/if}
                                         <DataTable
                                             bind:this={tableRefs[brokerIdx]}
                                             data={brokerGroups.singles}
@@ -5051,7 +5064,7 @@ ${arrow}<span>${label}</span></span>`,
             <!-- ============================================================ -->
             <!-- Align with the bank (report sets) -->
             <!-- ============================================================ -->
-            <GapFixStep view={gapFixView} selected={gapFixSelected} onToggle={toggleGapFixProposal} assetName={getAssetDisplayName} brokerName={gapFixBrokerName} />
+            <GapFixStep view={gapFixView} selected={gapFixSelected} onToggle={toggleGapFixProposal} onSetSelected={setGapFixProposals} assetName={getAssetDisplayName} brokerName={gapFixBrokerName} />
         {/if}
     </div>
 

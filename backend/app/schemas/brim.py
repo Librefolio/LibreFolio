@@ -672,6 +672,8 @@ class BRIMSetPreview(StrictModel):
     segments: List[DateRangeModel] = Field(default_factory=list, description="Covered segments, in date order")
     gaps: List[DateRangeModel] = Field(default_factory=list, description="Proven gaps between segments")
     history_start: Optional[date] = Field(default=None, description="First day of the broker history already in LibreFolio")
+    history_end: Optional[date] = Field(default=None, description="Last day of that history: the latest transaction carrying the plugin's history tag")
+    history_count: int = Field(default=0, ge=0, description="Transactions of that history, gap-fix corrections included")
     warnings: List[BRIMNotice] = Field(default_factory=list, description="Notices with stable codes for the UI")
     complete: bool = Field(default=False, description="True when the set can be combined")
 
