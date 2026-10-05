@@ -75,6 +75,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The amount axes of the Growth and Performance charts no longer print the same label twice (`5.5k` shown as `6k` next to a real `6k`, `1.25M` as `1.3M`), and an axis edge placed automatically beyond the data is no longer labelled as if it were a regular step. Chart amounts take their minus sign from your browser's language; the Growth tooltip's total P&L now reads `EUR -12.00` like the other amounts, instead of `−EUR 12.00`.
 - The lot comparison chart no longer leaves an empty strip left of its amounts, most visibly on phones.
 
+#### ⚡ Faster reports
+
+- **Reports and the Dashboard no longer stall on long currency histories.** A currency conversion now loads only the exchange rates it can use, instead of the whole history of the pair, with identical results: on a real portfolio with rates going back to 2000, a report in a currency other than the base one went from 10–27 s to under 3 s. Thanks to Martin Sova ([#30](https://github.com/Librefolio/LibreFolio/pull/30)).
+
 #### 📱 Sign-in, app icons and small screens
 
 - Browsers offer saved credentials on the sign-in username field too, and registration and password change are recognised by password managers, so changing a password updates the right saved account.
