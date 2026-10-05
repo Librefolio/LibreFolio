@@ -10,11 +10,12 @@ The Dashboard is your **portfolio's command center** — a single screen that te
 
 ## 🗂️ Tabbed Layout
 
-The Dashboard interface is organized into three primary tabs, allowing you to switch between different levels of detail:
+The Dashboard interface is organized into four primary tabs, allowing you to switch between different levels of detail:
 
 1. **Overview** (default): Key metrics, cash balances, and visual charts of your portfolio.
 2. **[Positions & Analysis](positions.md)**: Open holdings, weights, and detailed tax lot (FIFO) analysis.
-3. **Transactions**: Recent operations list with a read-only detail viewer.
+3. **Risk**: The **Portfolio risk** panel, which answers four questions in turn: **How much can it hurt?**, **Am I as diversified as I think?**, **Am I being paid for this risk?**, and **What if…?** It always covers your whole portfolio: it follows the dashboard date range and target currency, but not the broker filter — when a filter is on, a subtitle says so. See [Risk Metrics](../../financial-theory/technical-analysis/risk-metrics/index.md) for the theory behind it.
+4. **Transactions**: The operations in the selected date range and broker scope, as a paginated, read-only list — double-click a row to open its detail viewer. See [Transactions](../transactions/index.md) for the full guide.
 
 ---
 
@@ -26,7 +27,7 @@ The Overview tab is the default landing page. It is structured into the followin
 |---------|-------------|
 | **[KPI Cards](kpi-cards.md)** | Summary of Net Worth, Period P&L, and rate-of-return metrics. |
 | **Cash Balances** | Liquid balances grouped by currency across the active broker scope. |
-| **[Growth Chart](charts.md#portfolio-growth-chart)** | Stacked area chart showing asset cost, cash, and returns over time. |
+| **[Growth Chart](charts.md#portfolio-growth-chart)** | Portfolio value over time in three views: absolute values (Abs), rates of return (%), and the money actually earned (P&L). |
 | **[Allocation Panel](charts.md#allocation-panel)** | Donut and historical stacked charts grouped by Type, Sector, and Geography. |
 
 ### 🪙 Cash Balances

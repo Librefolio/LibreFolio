@@ -1225,7 +1225,8 @@
       "weekRange": "Week {start} – {end}",
       "monthLabel": "{month}",
       "valueAt": "Value at {date}",
-      "eventsInPeriod": "Events in period:"
+      "eventsInPeriod": "Events in period:",
+      "partialBucket": "Partial: {days} of {total} days"
     },
     "resolution": {
       "weekly": "Weekly",
@@ -1646,7 +1647,6 @@
     "pnlSubmodeLine": "Line",
     "pnlSubmodeCandles": "Candles",
     "pnlSubmodeIncome": "Income",
-    "pnlCandlesHypothetical": "Synthetic — cross-asset high/low are hypothetical and non-simultaneous, not a real intraday series.",
     "pnlCandlesHypotheticalShort": "Synthetic — cross-asset high/low are hypothetical and non-simultaneous",
     "pnlAcqNewCapital": "New capital",
     "pnlAcqReinvested": "Reinvested"
