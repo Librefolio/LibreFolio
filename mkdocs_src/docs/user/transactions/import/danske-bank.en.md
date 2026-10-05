@@ -1,8 +1,8 @@
 # 📥 <img src="https://danskebank.fi/favicon.ico" alt=""> Danske Bank
 
-!!! info "Beta"
+!!! info "Alpha"
 
-    This importer is in **Beta**: it was built from the exports of a single account, shared in [issue #26](https://github.com/Librefolio/LibreFolio/issues/26). If your files look different, or a row is imported in a way that looks wrong, please tell us there.
+    This importer is in **Alpha**: it was built from the exports of a single account, shared in [issue #26](https://github.com/Librefolio/LibreFolio/issues/26). If your files look different, or a row is imported in a way that looks wrong, please tell us there.
 
 LibreFolio imports the **equity savings account** (*osakesäästötili*) of **Danske Bank Finland**. The bank splits this account into **two exports**, and neither is enough on its own:
 
