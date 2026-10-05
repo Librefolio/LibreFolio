@@ -47,7 +47,7 @@ The **Type** and **Currency** chips narrow the assets that **Select all**, **Des
 
 !!! note "The toolbar filters belong to the Assets tab"
 
-    The search box and the type, currency and archived filters of the page toolbar stay visible on this tab, but they do not apply here: the Correlation tab always works from the full asset list, through its own filters described above. The toolbar's **date range** is the exception — it sets the window the tab's figures are measured over (see [One Shared Window](#one-shared-window)).
+    On this tab the page toolbar hides the search box and the type, currency and archived filters: they narrow the Assets tab's list, while this tab always works from the full asset list, through its own search and filters in the **+** panel described above. The toolbar keeps the **date range**, which sets the window the tab's figures are measured over (see [One Shared Window](#one-shared-window)), and two buttons that act on the selection: **Sync selection**, for the prices of the selected assets and the exchange rates that convert them, and **Reload All**, which reloads every analysis of the selection.
 
 ### 🏦 Preloading a Broker's Assets {: #preloading-a-brokers-assets }
 
