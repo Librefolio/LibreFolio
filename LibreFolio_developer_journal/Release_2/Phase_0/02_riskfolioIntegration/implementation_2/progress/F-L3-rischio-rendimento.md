@@ -1068,3 +1068,397 @@ tantum, solo per questa divisione:
 > Dopo il commit: la fusione vera della punta di Risk (con D371), poi D371 lato mio, il banner e la tappa 1, e una
 > review unica a selettore completo.
 > Stato: **FROZEN** fino al commit.
+
+> ✅ **Committato** (13:0x): `f778901b7` G1 · `5053c3f65` G2 · `054f95d0e` G3 · `9a8dbdf55` G4 · `ac6145784` G5. Verificato
+> in sola lettura (`/tmp/libreFolio_f4/verify_l6.sh`): **PASS**, blob identici (`d570c9d2…`).
+>
+> **Note scritte durante il congelamento** (tenute fuori dal worktree finché il diario era nel checkpoint):
+> - **Dati reali** (coordinatore e Risk, 12:5x):
+>   - `chmod -R go-rwx /tmp/librefolio-r2-f-prodcopy`: `drwx------`, 0 file leggibili da altri;
+>   - cancellati, senza handle aperti (`lsof`) e con `ls` come prova, i log dei server di review che puntavano alla
+>     copia: i due che Risk aveva nominato (`/tmp/libreFolio_FL3b_server_6164.log`, `…_r2.log`) e altri 7 miei
+>     (`/tmp/libreFolio_f4/l{1,3,4,5,5b,6}_server_6164*.log`);
+>   - `/tmp/libreFolio_f4` ora è `go-rwx`, e lì vanno i log di review nuovi.
+>   - Non miei, segnalati e non toccati: `/tmp/libreFolio_i_integ_check.log` e `/tmp/librefolio-r2-prod-snapshot`
+>     (`dr-xr-xr-x`).
+>   - La copia si cancella dopo la review finale (`lsof +D`, poi `ls`, poi una nota qui).
+> - **Concessioni a Risk** (13:0x e 13:1x), una tantum, sul suo ramo, per F3, il blocco del replay:
+>   - `AssetSetReplaySection.svelte:108/111` (ragioni ed errori via `replaySectionView`) e il punto 📌 del suo
+>     docblock (`:43-47`, solo commenti);
+>   - `AssetSetReplaySection.test.ts:309` e il cablaggio;
+>   - in `risk-lab.spec.ts`, il cancello `risk-replay-audit` (~`:600`) e lo stub del replay (~`:917-1011`).
+>   - Mi arrivano con la sua punta.
+> - **Concessione di Risk a me**, solo commenti, per D371: in `riskAnalysisHelpers.ts`, il JSDoc di
+>   `assetSetBenchmarkId` (`:266-268`) e il paragrafo «The reference may not also be one of the measured…»
+>   (`:357-360`).
+> - **Da correggere** (Risk): il docblock di `AssetSetComparisonLevels.svelte` cita `service.py:170`; va citato il
+>   simbolo, la chiamata `_prepare_asset_series` in `RiskService.execute`.
+>
+> **Fusione della punta di Risk** (13:2x): `a8c1d8d77`, genitori `ac6145784` + `a9f6bcf9f` (D371: `asset_set_comparison`
+> 1.1.0), albero `5aaa75f43`, pulito.
+> - Validata nella 6154 (`/tmp/libreFolio_f4/merge_a8c1_gates.sh`, log in `/tmp/libreFolio_f4/merge_a8c1/`):
+>   - build 0; `front check` al pavimento;
+>   - `core-unit` 107/2955; `component-unit` 98/2416; orfani pulito; i18n 3509;
+>   - E2E `risk` 13/13, `risk-benchmark-shared` 4/4; backend `services risk-asset-set` **30/30** (il backend di D371
+>     tocca la mia L3°).
+> - **⚠️ Fuori pista: `risk-lab` exit 1, con 38 verdi, 1 non eseguito e 1 errore fuori dai test.**
+>   - Il caso del preset broker (`:5193`) lascia una `route.fetch` in volo alla sua fine, nel gestore di
+>     `captureReports` (`risk-lab.spec.ts:2542`): «route.fetch: Test ended».
+>   - Playwright la conta come errore fuori dai test e salta il caso seguente (`:5360`, «a report discarded by a
+>     portfolio mutation in flight…»).
+>   - La fusione non tocca lo spec, quindi è una fragilità del test e non un difetto di prodotto; probabilmente
+>     intermittente, da verificare.
+>
+> ⏸️ **PAUSA** (13:3x, coordinatore, su richiesta del developer). Nessun comando in corso; nessun server; 6154 e 6164
+> libere; nessuna operazione Git; il lavoro resta nel worktree com'è.
+> - **Fatto**: giri 1–6a committati; la fusione `a8c1d8d77` validata, tranne il rosso qui sopra.
+> - **In corso**: niente; il diario è l'unico file modificato.
+> - **Prossimo passo esatto**, alla ripresa:
+>   1. triage del rosso di `risk-lab` (skill test-triage: rilanciare `risk-lab` una volta e leggere se torna);
+>      se torna, test-author rende il gestore di `captureReports` tollerante alla fine del test, per esempio con
+>      `page.unrouteAll({behavior: 'ignoreErrors'})` in fondo al caso del preset broker, o con un gestore che
+>      ignora l'errore «Test ended»;
+>   2. poi il mio lato di D371:
+>      - `labBenchmarkId` accetta un valore fra i selezionati, e `measuredAssetIds={[]}`;
+>      - trattino e tooltip del developer nella riga del riferimento;
+>      - il punto unico nel grafico, da portare in review;
+>      - i due commenti concessi e il docblock di `service.py:170`;
+>      - la guida;
+>      - i test che fissavano «mai uno dei confrontati»;
+>   3. poi il banner della qualità dei dati, poi la tappa 1 del pannello, poi la review unica a selettore completo.
+
+## Ripresa · 2026-10-05, dalle 09:4x
+
+> ▶️ **Riprendi** (coordinatore, 09:48). La mia corsia è sopravvissuta alla pulizia di macOS su `/tmp` delle 00:01:
+> `app.db` del 02/10. Lo snapshot condiviso `/tmp/librefolio-r2-prod-snapshot` invece è stato cancellato dalla pulizia.
+> - **Copia di prod**: il developer ha deciso di toglierla subito. L'ha cancellata il coordinatore alle 09:49:37: niente
+>   in ascolto sulla 6164, `lsof +D` vuoto, `ls` «No such file or directory», e verificato anche da me. In `/tmp` non
+>   resta nessuna copia di prod. La review finale userà una copia nuova, fatta dopo l'aggiornamento dei prezzi e con
+>   l'OK del developer.
+
+### Triage del rosso di `risk-lab` (skill test-triage) · 2026-10-05
+
+> **Evidenza** (log del 02/10, `/tmp/libreFolio_f4/merge_a8c1/07_risklab.log`):
+> - «route.fetch: Test ended», dentro `captureReports` (`risk-lab.spec.ts:2542`), alla fine del caso del preset broker
+>   (`:5193`); Playwright lo conta come «1 error was not a part of any test» e salta il caso seguente (`:5360`).
+> - La richiesta ha `referer: /dashboard`: è il report che la Dashboard manda dopo il login del `beforeEach`. Il caso
+>   installa `captureReports` mentre la pagina è ancora sulla Dashboard, quindi il gestore inoltra anche quel report
+>   con `route.fetch()`. Poi la pagina va su `/assets`, ma la `route.fetch` lato Node resta in attesa del backend; se il
+>   backend è lento, è ancora in volo quando il test finisce.
+> - La fusione `a8c1d8d77` non tocca lo spec né il codice coinvolto.
+>
+> **Rilancio** una volta, come chiesto dal coordinatore (build ancora più recente dei sorgenti): `risk-lab` **39/39**
+> (`/tmp/libreFolio_f4/triage_risklab_rerun.log`).
+>
+> **Verdetto: assumption** (§8 della skill). Il test presume che i suoi gestori siano fermi quando finisce, e inoltra una
+> richiesta che non gli serve. Un rilancio verde non toglie una corsa che il log mostra; «flaky» non è un verdetto.
+> **Cura nello stesso giro**, solo nel test (file mio), con test-author:
+> - `page.unrouteAll({behavior: 'ignoreErrors'})` alla fine di ogni caso, come suggerisce Playwright stesso e come fanno
+>   già `stale-price-banner.spec.ts:100`, `toolbar-width-sweep.spec.ts:275` e `asset-mobile-layout.spec.ts:105`;
+> - e, se si può fare senza fragilità, `captureReports` che non inoltra i report di altre pagine.
+>
+> **Prima cura** (test-author `triage-route-teardown`):
+> - `afterEach` con `unrouteAll({behavior: 'ignoreErrors'})`;
+> - `captureReports` che inoltra solo i report con `Referer` `/assets` (`sentByLab`);
+> - una route di contesto che annulla il poll dei prezzi, messa davanti al blocco di `holdLivePricePoll`. test-author
+>   aveva letto, e io ho verificato nel sorgente di playwright-core 1.61 (`Route.removeHandler` →
+>   `continue({isFallback: true})`), che togliere una route rilascia le richieste che tiene ferme.
+> - Risultato: `risk-lab` **39/39**, i tre casi del preset broker eseguiti.
+>
+> **⚠️ Fuori pista: una regressione trovata nel log del backend della corsia.**
+> - Durante quel giro (`/tmp/libreFolio_f4/triage_backend_window.log`, 08:17:47–50Z) il poll dei prezzi ha raggiunto il
+>   backend: «Started live quote feed» ×2 (justETF), Yahoo (AAPL, BTC-USD), Borsa Italiana, «[F.2 bootstrap]» ×6 e
+>   «Current-price persist: … commit OK (8 row(s) written/updated)», cioè i prezzi di oggi scritti nel DB della corsia.
+> - Nel rilancio senza cura (07:5xZ, backend appena avviato) non c'era niente di tutto questo: nessun avvio di feed e
+>   nessun bootstrap. Il file è scritto apposta per non scrivere nel DB.
+> - Conclusione: con questo teardown l'`unrouteAll` rilascia il poll trattenuto, e la route di contesto non lo ferma.
+>   Il percorso nel sorgente dice che dovrebbe; il log dice di no, e vale il log.
+> - **Cura rivista**:
+>   - niente `unrouteAll` alla fine dei casi, e `holdLivePricePoll` com'era: il poll trattenuto muore con il contesto;
+>   - resta la parte 2, `sentByLab`, che toglie la causa;
+>   - i gestori che inoltrano al backend (`captureReports`, quello del broker senza posizioni, `release` di
+>     `gateReports`) assorbono da sé il proprio errore, così niente può lanciare fuori da un test. È lo stesso principio
+>     della guardia del poll.
+> - Effetto sul DB della corsia: 8 righe di prezzi del 05/10 (e alcune estensioni intra-giornaliere). Gli altri spec
+>   scrivono prezzi a ogni visita, e questi test leggono le proprie risposte, quindi non c'è bisogno di rigenerare il DB.
+>
+> **Cura rivista** (test-author `triage-route-teardown-2`):
+> - via l'`afterEach` e la route di contesto; `holdLivePricePoll` di nuovo com'era nel commit, più una frase sul perché
+>   qui niente toglie le route alla fine;
+> - resta `sentByLab`;
+> - nuovo `routeQuietly(page, url, handler)` per `captureReports`, per il gestore del broker senza posizioni e per la
+>   callback di `gateReports`: un errore della callback lascia la richiesta senza risposta e scrive una riga
+>   `[risk-lab]` su stderr, invece di lanciare fuori da un test.
+> - A metà test un inoltro fallito fa comunque fallire il caso sulle sue barriere (15–20 s), sotto il timeout di 30 s
+>   di axios. `release` non assorbe nulla, perché i casi lo attendono.
+>
+> **Prova** (`/tmp/libreFolio_f4/triage_risklab_fixed2.log`): `risk-lab` **39/39**, nessun errore fuori dai test,
+> nessuna riga `[risk-lab]`. Nel log del backend, appena avviato, per tutta la finestra del giro: **0** avvii di feed,
+> **0** «Current-price persist», **0** bootstrap, **0** prezzi da Yahoo o Borsa Italiana.
+> - Verdetto chiuso: **assumption**, curata nel test. Va nel prossimo checkpoint come gruppo a sé.
+
+## Giro 7 · D371 lato mio: un asset selezionato come benchmark · 2026-10-05
+
+**Decisione** (il developer, riportato da Risk), testuale: «per le metriche che si calcolano con il benchmark e l'asset
+stesso è il benckmar, mettici un trattino e un tooltip che spiega che non è applicabile perchè se stesso è già il
+banckmark». **Backend** (`asset_set_comparison` 1.1.0, già nel mio ramo con `a8c1d8d77`):
+- il riferimento selezionato resta nella selezione e viene **saltato** negli `items` (beta e correlazione con sé stesso
+  sarebbero 1 per costruzione: una tautologia);
+- la finestra non cambia.
+
+**Contratto (mio)**:
+- `labBenchmarkId(state, value)`: il valore se lo stato è `set`, altrimenti `null`. Il parametro della selezione sparisce.
+  Nel pannello `BenchmarkSelect` è senza `measuredAssetIds` (cioè `[]`) e senza `measuredHint`, quindi niente ⚠, e la
+  chiave `risk.assetSet.benchmark.measuredHint` si toglie.
+- `AssetSetPaidRow.isReference`: vero per la riga il cui `assetId` è il `comparison_asset_id` della risposta.
+- Celle di beta e correlazione della riga di riferimento: trattino, `data-reference="true"` e un tooltip con la chiave
+  nuova `risk.assetSet.levels.l3.referenceItself`, al posto della spiegazione generica del trattino.
+- `buildAssetSetChartPoints(rows, benchmark)`: un punto per riga piazzabile; quello del riferimento, se c'è, ha ruolo
+  `benchmark` e tiene l'id `asset-<id>`, così la selezione collegata funziona; il punto `benchmark` a parte solo se il
+  riferimento non è fra i punti. È la proposta di Risk: un punto solo, **da portare alla review del developer**.
+- I commenti diventati falsi:
+  - `riskAnalysisHelpers.ts`: il JSDoc di `assetSetBenchmarkId` e il paragrafo «The reference may not also be one of
+    the measured» (concessione di Risk, solo commenti);
+  - il docblock del pannello, `buildAssetSetBenchmarkPoint`, il commento dello stub E2E;
+  - il docblock dei livelli: `service.py:170` diventa la chiamata `_prepare_asset_series` in `RiskService.execute`.
+- Guida: le frasi sull'asset selezionato come benchmark (`:127-128`).
+
+**Passi**:
+
+| # | passo | stato |
+|---|---|---|
+| L7-1 | chiave `risk.assetSet.levels.l3.referenceItself` × 4 | ✅ 2026-10-05 (`/tmp/libreFolio_f4/l7_i18n_add.sh`) |
+| L7-2 | test rossi: unitari (helper, righe, punti, sezione) ed E2E (caso (c) riscritto, elenco del selettore con i selezionati) | ✅ 2026-10-05 |
+| L7-3 | codice; via `measuredHint` e la sua chiave; commenti | ✅ 2026-10-05 |
+| L7-4 | guida; cancelli; poi il banner e la tappa 1, prima della review unica | ✅ 2026-10-05 guida e cancelli; banner → giro 8 |
+
+### L7-2 · test rossi prima, E2E (test-author `l7-e2e`)
+
+> - **(c) riscritto**: il benchmark salvato è uno dei selezionati.
+>   - Il selettore è `set` con `data-measured="false"` e senza ⚠.
+>   - Una richiesta di L3° porta il confronto con quell'id, nessuna di L1°.
+>   - Beta e correlazione ci sono, e nella riga del riferimento sono trattini con `data-reference="true"` e il
+>     tooltip `referenceItself`; nelle altre righe sono misurate.
+>   - Punti del grafico = numero dei selezionati.
+> - **(f) nuovo**: il selettore offre ogni asset selezionato, e uno scelto fra loro si applica.
+> - Aiutanti: `L3_BENCHMARK_CELLS`; `paidCell` con beta e correlazione; `castBenchmark` restituisce anche `selected`;
+>   `expectComparisonWith` attende un punto in più solo se il riferimento è fuori dalla selezione.
+> - Commenti riallineati (lo stub del confronto, `pickUnselectedAssetId`, il caso delle colonne del benchmark e (a)).
+> - Verificato da me (build, poi `risk-lab`): **2 rossi, 38 verdi**, ciascuno sul comportamento che manca:
+>   - (c) a `:4979`: `data-measured` è ancora `"true"`;
+>   - (f) a `:5138`: un asset selezionato non è fra le opzioni.
+
+### L7-2 · test rossi prima, unitari (test-author `l7-unit`) · L7-3 · il codice ✅ 2026-10-05
+
+> - **Unitari**: 322 casi nei 3 file, **48 rossi** prima del codice, tutti sul comportamento che manca:
+>   - `labBenchmarkId` che filtra ancora (6);
+>   - `isReference` assente (10);
+>   - `buildAssetSetChartPoints` che non esiste (21);
+>   - le celle del riferimento senza `data-reference` e con il tooltip generico (9);
+>   - il grafico con un punto `benchmark` in più (2).
+> - Prova di test-author: un'implementazione di riferimento in `/tmp` passa 322/322; 4 errori voluti, ciascuno preso.
+> - Due punti di test-author:
+>   - **il riferimento da solo non disegna il grafico**: un punto solo, e il minimo resta due. Coerente;
+>   - **un clic sul punto del riferimento selezionato seleziona la sua riga**: punto e riga sono lo stesso asset. La
+>     vecchia regola («il punto del benchmark non seleziona nulla») valeva perché il benchmark non aveva una riga. Da
+>     mostrare al developer in review.
+> - **Codice**:
+>   - `assetSetSelection.ts`: `labBenchmarkId(state, value)`;
+>   - `assetSetLevels.ts`: `isReference` letto dal `comparison_asset_id` validato; `AssetSetChartPoint` e
+>     `buildAssetSetChartPoints`; il commento di `buildAssetSetBenchmarkPoint`;
+>   - L3°: i punti da `buildAssetSetChartPoints`; nelle colonne di beta e correlazione la riga del riferimento ha il
+>     trattino, `data-reference="true"` e il tooltip `referenceItself`;
+>   - pannello: `BenchmarkSelect` senza `measuredAssetIds` e senza `measuredHint`; docblock riscritto;
+>   - `riskAnalysisHelpers.ts`: i due commenti concessi;
+>   - livelli: il docblock cita `RiskService.execute` / `_prepare_asset_series` invece di `service.py:170`;
+>   - `dev.py i18n remove risk.assetSet.benchmark.measuredHint -f` (non resta nessun uso; i test della primitiva usano
+>     una stringa loro).
+> - vitest su 6 file (i 3 di prima più livelli, `assetSetI18n` e `BenchmarkSelect`): **411/411**; prettier pulito.
+> - Dopo il codice, una cosa per volta nella 6154:
+>   - `front check`: **3 errori e 41 avvisi in 4 file**, la soglia, nessuno mio;
+>   - `front build --debug`: completo;
+>   - E2E `risk-lab`: **40 passati** (1,7 min), i due rossi di L7-2 compresi.
+>   - Log in `/tmp/libreFolio_f4/l7_{check,build,risklab}.log`.
+
+### L7-4 · la guida (docs-writer `l7-guide`) ✅ 2026-10-05
+
+> - `correlation.en.md`, solo EN (la pagina non ha traduzioni):
+>   - `:128`: il benchmark **può essere uno dei selezionati**. Il selettore li elenca tutti; quella riga tiene le sue
+>     cifre, con il trattino e il tooltip in beta e correlazione; nel grafico compare una volta, come benchmark;
+>   - `:117`: solo un benchmark *fuori* dalla selezione non ha riga, quindi il clic sul suo punto non seleziona nulla;
+>   - `:171`: un benchmark già selezionato non sposta nessuna finestra;
+>   - `:182`: il trattino che vuol dire «non si applica».
+>   - La frase del rombo (`:125`) è intatta: aspetta `SYMBOL_BY_ROLE` di A.
+> - Ho controllato tutte e quattro le frasi sul codice: sono vere.
+> - `mkdocs build` (strict) pulito; `check-links` **88 / 8 / 3**, uguale a prima; `sw.js` invariato.
+> - **⚠️ Fuori pista**: docs-writer ha trovato un commento falso in un mio file. In `AssetSetRiskReturnSection.svelte`,
+>   il JSDoc di `benchmarkApplies` diceva «…it is not itself in the selection». Corretto: «…the comparison against it
+>   was measured», che è quanto `AssetSetComparisonLevels.svelte:168` deriva davvero.
+> - Una ricerca nei miei file degli altri «outside the selection» e «not in the selection» non trova altro di falso.
+>   Il fuori-selezione resta un caso valido.
+
+> **Da Risk (2026-10-05), per la guida, da fare nel mio giro dopo che F3 (D372) arriva nel mio ramo** (me lo segnala):
+> - `correlation.en.md` §What If…? (`:130-146`):
+>   - il blocco del replay elenca gli asset lasciati fuori, raggruppati per motivo, sotto le barre; i motivi della
+>     sezione non riportano più quelle frasi (i montaggi passano `replaySectionView`). Se la frase d'esempio cita il
+>     vecchio avviso d'esclusione, va tolta;
+>   - aggiungere il periodo comune: quando i bordi della finestra lasciano fuori degli asset, un pulsante «Replay from
+>     {start} to {end}: N assets come back» imposta le date e rilancia con un clic.
+> - Ancore nuove linkabili in `historical-replay.en.md`: `#what-the-result-shows`, `#the-common-period`,
+>   `#what-takes-its-place`.
+> - Nei miei file, sotto le concessioni:
+>   - `AssetSetReplaySection.svelte`: `replaySectionView` a `:108` e `:111`, più i codici d'errore del risultato; il
+>     punto 📌 del docblock;
+>   - il suo test: `:309` fissa il principio sull'avviso dei prezzi fermi; 3 casi di cablaggio;
+>   - `risk-lab.spec.ts`: solo il cancello e lo stub del replay. Lo stub lascia fuori l'ultima posizione, e un aiutante
+>     nuovo, `expectReplayLeftOutWithoutWeight`, sostituisce la barriera dell'audit.
+
+### L7-4 · i cancelli ✅ 2026-10-05, 11:28-11:35
+
+> `/tmp/libreFolio_f4/l7_gates.sh` (derivato da `l6_gates.sh`, più `BenchmarkSelect.test.ts` e
+> `services risk-asset-set`), nella 6154, un comando per volta, su `a8c1d8d77` più l'albero (16 file):
+> - prettier sui file toccati: pulito;
+> - vitest su 28 file: **1189/1189**;
+> - `front check`: **3 errori e 41 avvisi in 4 file**, la soglia (BrokerSharingPanel, GlobalSettingsTab,
+>   TransactionFormModal.test, ToolExecutionMetrics);
+> - `tsc -p tsconfig.e2e.json`: 4 errori, la soglia, 0 negli spec di rischio;
+> - `front build --debug`: completo;
+> - E2E: `risk-lab` **40/40**, `risk` **13/13**, `risk-benchmark-shared` **4/4**;
+> - `risk-controller-unit` **59/59**, `risk-levels-component` **75/75**, `core-unit` **2984/2984** (107 file),
+>   `component-unit` **2437/2437** (98 file);
+> - backend `services risk-asset-set` **30/30**;
+> - `check-orphans` pulito; i18n 3509 chiavi, 382 inutilizzate (uguale al giro 6); `check-links` **88 / 8 / 3**;
+> - `git diff --check` pulito; `sw.js` invariato; 6154 libera.
+> - Log in `/tmp/libreFolio_f4/l7final/`.
+
+## Giro 8 · gli avvisi sulla qualità dei dati: analisi · 2026-10-05
+
+**🔴 Presupposto falso** (il disegno confermato da Risk era: «`DataQualityBanner` alimentato dalle `dataQualityIssues`
+dei tre controller, azioni su `openSync`»):
+- nel laboratorio le `dataQualityIssues` sono **sempre vuote**. Il backend riempie `data_quality.issues` solo per il
+  perimetro portafoglio (`portfolio_engine`, tramite `portfolio_data_quality`). Per `asset_set` il rapporto viene da
+  `series_preparation`, che lo costruisce in tre punti senza mai `issues`, e il servizio di rischio non le aggiunge
+  mai (`_merge_data_quality` unisce solo le liste dei due rapporti). Un `DataQualityBanner` così non comparirebbe mai;
+- verificato leggendo, non misurato. Ho provato una sonda in sola lettura sulla 6154
+  (`/tmp/libreFolio_f4/l7_dq_probe.py`), ma dopo ogni corsa il DB della lane è vuoto (niente asset né utenti), e
+  ripopolarlo non è in un piano approvato. **⚠️ Fuori pista**: per la sonda ho creato `e2e_test_user` con
+  `dev.py user --test-db create`. Senza conseguenze: ogni corsa E2E cancella il DB (`populate --force`) prima di
+  creare gli utenti. Server fermato; 6154 libera; log `600` nella cartella privata.
+
+**Che cosa ha visto il developer** («Giornata storta: Parziale · Mese storto: Parziale · Discese per asset:
+Parziale · Prezzi fermi da più di 7 giorni per 2 asset», ripetuto in L1° e L3°):
+- sono la salute e i motivi di ogni cornice (`RiskLevelSection`). La frase sui prezzi fermi è un **avviso del
+  risultato** (`data_quality_stale_prices`, `service.py:961-963`), che arriva su ogni risultato con dati non integri
+  insieme allo stato `partial`; nel laboratorio è l'unico canale;
+- in Dashboard la stessa cosa la dice **`RiskPartialNotice`**, una volta sopra i livelli (la sua decisione del
+  24/09): le cornici L1-L3 tengono solo `levelErrorHealth` (non disponibili e falliti) e nessun motivo; L4 tiene i
+  suoi. Il `DataQualityBanner` della Dashboard è un'altra cosa: le questioni del portafoglio, con i pulsanti.
+
+**Opzioni**:
+- **A** (consigliata): `RiskPartialNotice` una volta in cima al laboratorio, sotto la scheda della selezione,
+  alimentato dai risultati che correlazione, L1° e L3° mostrano. Cornici con `levelErrorHealth`, senza motivi; il
+  replay invariato. Solo frontend, file miei, nessuna chiave nuova;
+- **B**: A più il `DataQualityBanner` con «Sincronizza» → `openSync`. Serve che il backend (Risk) produca le
+  `issues` anche per `asset_set`; la frase dei prezzi fermi comparirebbe due volte, come in Dashboard;
+- **C**: un banner costruito nel frontend dagli avvisi: sconsigliata (seconda fonte delle questioni, logica nel
+  frontend).
+
+**Decisione del developer (ask_user, 2026-10-05), testuale**: «B — A più il banner con «Sincronizza» (lavoro backend di
+Risk)». Ha visto il mock-up delle tre varianti (oggi, A, B) e la nota sulle due frasi con un benchmark dai prezzi fermi.
+
+**Mandato a Risk** (inviato): `data_quality.issues` anche per `asset_set`, aggregate una per categoria come nel
+portafoglio (`code + group_key` unico in una risposta), con una delle cinque `cta_action` che il banner conosce.
+Proposta mia, in attesa di conferma: deduplicare le quattro fonti (correlazione, L1°, L3°, replay) per
+`code + group_key`, la chiave dell'`{#each}` del banner. A parità di chiave con asset diversi, unione degli `affected_*`,
+`count` e `message_params.count` alla dimensione dell'unione, `cta_target` il primo.
+
+**Disegno, lato mio**:
+- ogni sezione esporta `qualitySource()` → `{results, labels, issues}`:
+  - correlazione: `[correlation]`;
+  - livelli: i tre di L1° e i tre di L3°, nell'ordine della pagina, con le etichette dei due VaR;
+  - replay (in B): `results` vuoti, perché la sua cornice tiene la sua salute, e le sue `issues`;
+- il pannello le legge con `bind:this` (il precedente è `labPanel` in `+page.svelte:215`). Ne deriva
+  `partialNotice(...)` per `RiskPartialNotice` e, in B, le questioni unite per `DataQualityBanner`. Ordine come in
+  Dashboard: banner, poi nota, sotto la scheda della selezione e prima della correlazione;
+- cornici di correlazione, L1° e L3°: `levelErrorHealth`, senza `reasons`; il replay invariato;
+- il tipo, e poi in B l'aiutante dell'unione, in `assetSetLevels.ts`, così il test è già registrato e il runner
+  non si tocca.
+
+| # | passo | stato |
+|---|---|---|
+| L8-1 | A: test rossi (test-author): unitari delle due sezioni, E2E (b), (c), (d) e la posizione della nota | ✍️ scritti, accantonati per il checkpoint del giro 7 |
+| L8-2 | A: codice | ⏳ |
+| L8-3 | B: rossi e codice sui mock, dopo la conferma di Risk sulla regola dell'unione | ⏳ |
+| L8-4 | cancelli; poi la tappa 1 del pannello; poi la review unica (con la punta di Risk) | ⏳ |
+
+### L8-1 · i rossi di A (test-author `l8-notice`) ✍️ 2026-10-05
+
+> - Unitari, nei due file delle sezioni: **16 rossi e 46 verdi**. I verdi sono i 44 di prima più 2 guardie nuove: un
+>   `unavailable` o `failed` della correlazione resta nella cornice, oggi e dopo. I rossi:
+>   - un `partial` ancora nella salute della cornice;
+>   - i motivi ancora nella cornice;
+>   - `qualitySource` che non esiste.
+> - Note di test-author:
+>   - l'identità dei risultati si confronta con le voci di `historicalResults` del controller, perché `$state` li
+>     avvolge in un proxy;
+>   - le questioni piantate sul risultato `correlation` di ogni risposta, l'unico che `allResults` legge;
+>   - la reattività provata anche dentro un effetto.
+> - E2E: (c) rosso sulla visibilità della nota; (b) e (d) verdi oggi e dopo, perché provano solo l'assenza della nota.
+>   I numeri derivati dallo stub (`labNoticeFor`, che ricostruisce le risposte con `resultFor`): in (c) **6** misure
+>   parziali (1 correlazione, 3 di L1°, 2 di L3°), una frase sola con 6 occorrenze; in (d) zero.
+
+**Risposta di Risk (2026-10-05)**:
+- **sì a B**. La regola dell'unione è mia, ma sta in **un posto solo, il suo**: `mergeQualityIssues(issues)`,
+  esportata pura da `riskPanelController.svelte.ts`. La usa anche il controller, perché la collisione avviene anche
+  dentro un controller solo (il replay prepara finestre diverse). **Non ne scrivo una mia.** La regola:
+  - chiave `code|group_key ?? ''`, nell'ordine della prima comparsa;
+  - unione di `affected_asset_ids` (nomi allineati per id, vince il primo) e di `affected_fx_pairs`;
+  - `count` e `message_params.count` alla dimensione dell'unione;
+  - `cta_target` e gli altri parametri dal primo;
+  - `severity` la più grave;
+  - per `MISSING_FX_RATES`: `date_from` il minimo, `date_to` il massimo, `dates_count` il maggiore;
+- mappatura backend:
+  - prezzi portati oltre i 7 giorni → `STALE_PRICE` (`sync_asset_prices`);
+  - prezzi inutilizzabili → `MISSING_PRICE` (`navigate_asset`);
+  - cambi divisi come nel portafoglio: `add_fx_pair`, `sync_fx_pair`, `navigate_fx`;
+  - cambi portati avanti → `MISSING_FX_RATES`;
+- ordine:
+  1. **io ora**: checkpoint del lavoro sporco (correzione di `risk-lab` e D371), prima della sua punta; poi A;
+  2. Risk: fusione `dev_release2` → Risk, poi D15 con `mergeQualityIssues`, rossi prima, in un checkpoint: B lo
+     cablo su quella;
+  3. Risk: le `issues` per `asset_set` nel backend, in un checkpoint suo;
+- F3 è committato (`c42bbad9e`): la mia nota della guida su §What If…? può entrare nel prossimo giro.
+
+**⚠️ Fuori pista: i rossi di A erano già nell'albero** quando è arrivata la richiesta di checkpoint. In
+`risk-lab.spec.ts` stavano accanto al giro 7. Li ho tolti dal checkpoint senza perderli:
+- copia privata in `/tmp/libreFolio_f4/l8_A_backup/` (`700`/`600`), sha256:
+  - `risk-lab.spec.ts` `42a7311d…`;
+  - `AssetSetComparisonLevels.test.ts` `4223f6d5…`;
+  - `AssetSetCorrelationSection.test.ts` `105e590c…`;
+- i due unitari riportati a HEAD con `git show HEAD:<file> > <file>` (nessun comando Git che modifichi lo stato);
+  `git diff --quiet` lo conferma;
+- dallo spec, tolti gli 11 blocchi di A con `l8_strip_A.py` (il diff `-U0` applicato al contrario, dal basso);
+- prova con `l8_verify_strip.py`: i blocchi rimasti, contati sui numeri di riga di HEAD, sono **identici, 38 su 38**, ai
+  blocchi non-A della copia; nessun identificatore di A rimasto;
+- l'albero torna ai 16 file del giro 7, e i cancelli girano di nuovo su quell'albero.
+
+Dopo il commit e la fusione della punta di Risk, A torna con `git merge-file`:
+- base: lo spec del giro 7 committato;
+- nostro: lo spec fuso;
+- loro: la copia.
+
+### Checkpoint del giro 7 · i cancelli sull'albero consegnato ✅ 2026-10-05, 12:17-12:22
+
+> `/tmp/libreFolio_f4/l7ckpt_gates.sh`, nella 6154, un comando per volta, sui 16 file del giro 7 (senza A):
+> - prettier pulito; vitest **1189/1189** (28 file);
+> - `front check` e `tsc e2e` alla soglia, 0 negli spec di rischio;
+> - build completo; `risk-lab` **40/40**; `check-orphans` pulito; `git diff --check` pulito; `sw.js` invariato;
+>   6154 libera.
+> - Log in `/tmp/libreFolio_f4/l7ckpt/`.
+> - **Nessuna attività dei provider** durante le corse di `risk-lab` di oggi (09:30Z e 10:20Z) nel log della lane.
+>   Il log è cumulativo dal 29/09, e il conteggio grezzo (496) va letto per finestra di corsa.
+> - **Reperto, non mio**: durante la corsa `front-portfolio risk` dei cancelli (backend avviato alle 09:31:54Z, spec
+>   di E) il poll dei prezzi live della Dashboard ha raggiunto i provider veri (justETF, Borsa Italiana, Kitco) e ha
+>   scritto **8 righe di prezzo**, due volte, nel DB della mia lane, alle 09:32:20Z. Raffiche uguali di 14 righe
+>   ricorrono nei giorni precedenti, quindi è preesistente. È lo stesso meccanismo che in `risk-lab` tiene
+>   `holdLivePricePoll`. Segnalato a Risk.
