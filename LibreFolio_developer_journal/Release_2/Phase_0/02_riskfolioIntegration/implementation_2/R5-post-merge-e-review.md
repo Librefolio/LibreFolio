@@ -2840,3 +2840,42 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 > - dopo il D15, `primaryAssetType` non ha più chiamanti in produzione: è nel backlog del coordinator;
 > - prima la poll dei prezzi live va ad A, nel suo prossimo checkpoint dopo la mia punta (`holdLivePricePoll`, come in
 >   `risk-lab`).
+
+### Checkpoint 2: il banner «Sincronizza» anche nel laboratorio (D373) · ✅ 05/10/2026
+
+> **Le decisioni**: il developer, tramite F: *«B — A più il banner con «Sincronizza» (lavoro backend di Risk)»*. Sulla
+> portata, a me: *«Solo il laboratorio, come deciso»*. Asset Detail resta com'è. Registrato come D373.
+>
+> **Il backend**: `RiskService._with_asset_set_quality_issues`, dopo i nomi degli avvisi e solo per lo scope
+> `asset_set`, dà a ogni risultato `data_quality.issues`, anche ai risultati non disponibili e al replay, che usa il
+> rapporto della sua finestra. C'è una voce per categoria, costruita dalle stesse liste che `_data_quality_warnings`
+> mette in parole:
+> - `STALE_PRICE`, da `stale_prices` ∪ `carried_forward_price_asset_ids`, con azione sincronizza;
+> - `MISSING_PRICE` (error), dagli esclusi per prezzo, con azione apri l'asset;
+> - per le coppie di valute (in forma `BASE-QUOTE` ordinata), divise con la lettura delle rotte di
+>   `PortfolioService`: senza percorso `MISSING_FX_MARKET`, che chiede di aggiungerla; con provider
+>   `MISSING_FX_RATES`, sincronizza; manuale `MISSING_FX_RATES`, apri la coppia.
+> Ogni `code + group_key` compare una volta sola, e i conteggi e i nomi sono allineati agli id. Le chiavi sono scritte
+> come `message_i18n_key="…"`, così l'audit le vede. Le 4 frasi nuove `risk.quality.*` sono state aggiunte con
+> `dev.py i18n`, nelle 4 lingue. Lo schema non cambia, quindi niente `api sync`.
+>
+> **I test** (test-author, rossi prima): 11 rossi, tutti sull'asserzione delle `issues`, e 3 pin verdi:
+> - una selezione con rapporto OK non ha voci;
+> - il portafoglio tiene esattamente le voci del motore, che vengono dal costruttore vero;
+> - l'asset singolo non ne ha (D373).
+> In più, un caso sull'unione ordinata delle coppie (4b), e i risultati non disponibili compresi.
+>
+> **Verifica** (6152):
+> - backend: `risk-asset-set` 44 · `risk-all` 824 · `schemas risk` 47 · `api risk` 14;
+> - frontend: `core-unit` 2896 · orfani ✅;
+> - i18n 3512 chiavi, tutte tradotte, le 4 nuove viste come chiavi del backend; ruff, black e prettier puliti.
+> **Mutanti 7 su 7 uccisi**: le voci su ogni scope, i prezzi fermi solo da `stale_prices`, provider e manuale
+> scambiati, coppie non normalizzate, risultati non disponibili saltati, nomi mai letti, prezzo mancante come warning.
+>
+> **⚠️ Fuori pista**:
+> - `api risk` è stato rosso al primo giro perché la corsia non era popolata: le categorie dei servizi la
+>   ricreano vuota. È lo stesso caso visto con D371. Dopo `db populate --force`, 14 su 14.
+> - La mia previsione di fusione del checkpoint 1 verso F era sbagliata. La riga `$(basename $p)=$?` azzerava il
+>   codice d'uscita di `merge-file`, quindi ogni file risultava a zero conflitti. Il coordinator l'ha scoperto
+>   facendo la fusione vera; ho dato a F l'unione esatta. D'ora in poi il codice d'uscita si salva subito dopo il
+>   comando.

@@ -3059,7 +3059,11 @@
       "carried_forward": "Carried forward",
       "partial": "Partial",
       "carriedPrices": "Carried price points",
-      "carriedFx": "Carried FX points"
+      "carriedFx": "Carried FX points",
+      "missingPrice": "{count} asset(s) have no price in this period — left out of the analysis",
+      "missingFx": "{count} currency pair(s) have no exchange-rate source — the assets quoted in them are left out",
+      "missingFxRates": "Exchange rates missing or older than {days} days for {count} pair(s) — sync to complete the analysis",
+      "missingFxRatesManual": "Exchange rates missing for {count} manual pair(s) — add them by hand"
     },
     "assetSet": {
       "assetsTab": "Assets",

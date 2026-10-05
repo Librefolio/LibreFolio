@@ -14,22 +14,54 @@ any of these payloads, and on the risk/return scatter that absence is what makes
 Capital Market Line undrawable — the judgement "paid well for the risk" cannot be
 restored through the data. The defence is a shape, so it is tested as a shape.
 
-No DB, no server, no network: every context here is built from an in-memory prepared
-series set, and each test owns the fixture it measures.
+CLAUSE ② — A DEGRADED SELECTION SAYS WHAT TO FIX. The lab shows the data-quality banner
+above its notice, and the banner's actions are read from ``data_quality.issues``. Every
+asset-set result whose report is not OK carries one issue per category; a single-asset or
+a portfolio result keeps what it has (D373).
+
+No server, no network. Clauses ⓪ and ① need no DB either: every context there is built
+from an in-memory prepared series set, and each test owns the fixture it measures. Clause
+② cannot, because asset names and FX routes live in the database: its tests run the
+service against rows that section writes to the test database and deletes afterwards.
 """
 
 from __future__ import annotations
 
+import asyncio
+import json
 import math
 import statistics
+from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
+from typing import NamedTuple
+from uuid import uuid4
 
 import pytest
 from pydantic import TypeAdapter, ValidationError
+from sqlalchemy import delete
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.schemas.common import DateRangeModel
-from backend.app.schemas.portfolio import DataQualityReport
+from backend.test_scripts.test_db_config import setup_test_database
+
+setup_test_database()
+
+from backend.app.db.models import Asset, AssetType, FxConversionRoute, FxRate, PriceHistory
+from backend.app.db.session import get_async_engine
+from backend.app.schemas.common import Currency, DateRangeModel
+from backend.app.schemas.portfolio import (
+    DataQualityExclusionReason,
+    DataQualityIssue,
+    DataQualityReport,
+    DataQualityStatus,
+    IssueCode,
+    IssueDomain,
+    IssueSeverity,
+    PortfolioHolding,
+    PortfolioReportResponse,
+    PortfolioSummary,
+    StalePriceAsset,
+)
 from backend.app.schemas.prices import FAPricePoint, FAPriceQueryResult
 from backend.app.schemas.risk import (
     AssetReturnPoint,
@@ -41,6 +73,7 @@ from backend.app.schemas.risk import (
     PreparedAssetSeriesSet,
     RiskAnalyticOutput,
     RiskAnalyticRequest,
+    RiskAnalyticResult,
     RiskAssetSetComparisonItem,
     RiskAssetSetComparisonOutput,
     RiskAssetSetDrawdownOutput,
@@ -59,6 +92,10 @@ from backend.app.schemas.risk import (
     RiskReturnOutput,
     RiskScopeKind,
 )
+from backend.app.schemas.wac import WACMissingPairInfo
+from backend.app.services.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
+from backend.app.services.portfolio_engine import DerivedViewsBuilder, _normalize_fx_pair_slug
+from backend.app.services.portfolio_service import PortfolioService
 from backend.app.services.provider_registry import RiskAnalyticRegistry
 from backend.app.services.risk.base import RiskAnalytic, RiskExecutionContext, RiskUnavailableError
 from backend.app.services.risk.metrics import historical_var_cvar
@@ -1266,3 +1303,508 @@ def test_asset_set_outputs_round_trip_through_the_discriminated_union():
         assert isinstance(restored, expected_classes[output.kind]), payload["kind"]
         assert restored.model_dump(mode="json") == payload
         assert [item.asset_id for item in restored.items] == [item.asset_id for item in output.items]
+
+
+# ---------------------------------------------------------------------------
+# Clause ② — a degraded selection says what to fix (developer's decisions of 05/10/2026, D373).
+#
+# Until now only the portfolio engine built `DataQualityIssue`s, and they reached risk only
+# through the portfolio's own report. An asset-set report comes from `series_preparation`,
+# which never builds one, so the lab's banner had no action to offer however degraded the
+# selection was. Every asset-set result whose report is not OK carries one issue per
+# category, `code + group_key` once, `count` and `message_params.count` the length of its
+# list, `affected_asset_names` the display names beside `affected_asset_ids`:
+#
+# - stale prices (`stale_prices` ∪ `carried_forward_price_asset_ids`): STALE_PRICE, warning,
+#   `dataQuality.stalePrice`, `sync_asset_prices` on the first id, group `stale_price`;
+# - no price (`unusable_assets` for a missing price ∪ `missing_price_assets`): MISSING_PRICE,
+#   error, `risk.quality.missingPrice`, `navigate_asset` on the first id, group `missing_price`;
+# - FX pairs, the sorted slugs of `unresolved_fx_pairs` ∪ `missing_fx_pairs` ∪
+#   `carried_forward_fx_pairs`, split by route as `PortfolioService._get_configured_fx_pair_sets`
+#   reads it: none → MISSING_FX_MARKET (`risk.quality.missingFx`, `add_fx_pair`, no target,
+#   group `missing_fx`); a provider step → MISSING_FX_RATES (`risk.quality.missingFxRates`
+#   with `days`, `sync_fx_pair` on the first pair, group `missing_fx_rates`); MANUAL steps only
+#   → MISSING_FX_RATES (`risk.quality.missingFxRatesManual`, `navigate_fx` on the first pair,
+#   group `missing_fx_rates_manual`). Asset categories are in the `asset` domain, FX in `forex`.
+#
+# The lab only (D373): a single-asset result and a portfolio result keep what they have.
+#
+# Every test here verifies its premise on the report first — the report fields exist today —
+# so a red can only be the issues the report does not yet carry.
+# ---------------------------------------------------------------------------
+
+# Dates of 2006 and 2007 nothing else in the suite prices, and currencies nothing else in it
+# stores a rate or a route for.
+LAB_PRICES_FROM = date(2006, 8, 14)
+# A crisis to replay, with a twelve-day pause of one asset in the middle of it.
+REPLAY_WINDOW = (date(2006, 9, 4), date(2006, 10, 27))
+REPLAY_PAUSE = (date(2006, 9, 25), date(2006, 10, 6))
+# The window the lab analyses, and the last quote of its stale assets, three weeks before its end.
+LAB_WINDOW = (date(2007, 3, 5), date(2007, 4, 27))
+STALE_LAST_QUOTE = date(2007, 4, 6)
+# The only rate ever stored for a foreign currency: after the window, so inside it nothing converts.
+FX_RATE_DAY = date(2007, 5, 14)
+# Three weeks after that rate every conversion carries it beyond the threshold.
+LATE_WINDOW = (date(2007, 6, 4), date(2007, 7, 27))
+# Across the rate: unconverted before it, converted with an ageing rate after it.
+ACROSS_RATE_WINDOW = (date(2007, 5, 4), date(2007, 6, 13))
+LAB_PRICES_TO = LATE_WINDOW[1]
+
+
+def every_day(first: date, last: date, *, pause: tuple[date, date] | None = None) -> list[date]:
+    days = [first + timedelta(days=offset) for offset in range((last - first).days + 1)]
+    return [day for day in days if pause is None or not pause[0] <= day <= pause[1]]
+
+
+# key: (currency of its quotes, the days it is quoted on)
+LAB_ASSETS: dict[str, tuple[str, list[date]]] = {
+    "fresh": ("EUR", every_day(LAB_PRICES_FROM, LAB_PRICES_TO)),
+    "fresh_b": ("EUR", every_day(LAB_PRICES_FROM, LAB_PRICES_TO)),
+    "stale": ("EUR", every_day(LAB_PRICES_FROM, STALE_LAST_QUOTE)),
+    "stale_b": ("EUR", every_day(LAB_PRICES_FROM, STALE_LAST_QUOTE - timedelta(days=2))),
+    # Never priced and nothing assigned to price it: excluded as `no_price_source`.
+    "never": ("EUR", []),
+    # Priced, but only after the window: an ordinary missing price.
+    "after": ("EUR", every_day(LAB_WINDOW[1] + timedelta(days=10), LAB_WINDOW[1] + timedelta(days=30))),
+    "paused": ("EUR", every_day(LAB_PRICES_FROM, LAB_PRICES_TO, pause=REPLAY_PAUSE)),
+    "fx_btn": ("BTN", every_day(LAB_PRICES_FROM, LAB_PRICES_TO)),
+    "fx_mwk": ("MWK", every_day(LAB_PRICES_FROM, LAB_PRICES_TO)),
+    "fx_gel": ("GEL", every_day(LAB_PRICES_FROM, LAB_PRICES_TO)),
+    "fx_azn": ("AZN", every_day(LAB_PRICES_FROM, LAB_PRICES_TO)),
+}
+# One rate on FX_RATE_DAY per foreign currency, except MWK, which never had one.
+LAB_FX_RATES: dict[str, Decimal] = {"BTN": Decimal("0.011"), "GEL": Decimal("2.9"), "AZN": Decimal("0.5")}
+# A route with a provider step, and one with the MANUAL sentinel only. BTN and MWK have none.
+LAB_FX_ROUTES: dict[str, list[dict[str, str]]] = {
+    "GEL": [{"from": "EUR", "to": "GEL", "provider": "MOCKFX"}],
+    "AZN": [{"from": "AZN", "to": "EUR", "provider": "MANUAL"}],
+}
+
+
+class FxSplit(NamedTuple):
+    """One FX case: the pair as the report names it, as the issue publishes it, and the issue it is."""
+
+    asset_key: str
+    raw_pair: str
+    slug: str
+    route: str
+    code: IssueCode
+    message_i18n_key: str
+    cta_action: str
+    group_key: str
+
+
+NO_ROUTE = FxSplit("fx_btn", "BTN/EUR", "BTN-EUR", "no_route", IssueCode.MISSING_FX_MARKET, "risk.quality.missingFx", "add_fx_pair", "missing_fx")
+# The same category, for a currency that sorts after EUR: its slug puts EUR first.
+NO_ROUTE_AFTER_EUR = FxSplit("fx_mwk", "MWK/EUR", "EUR-MWK", "no_route", IssueCode.MISSING_FX_MARKET, "risk.quality.missingFx", "add_fx_pair", "missing_fx")
+PROVIDER_ROUTE = FxSplit("fx_gel", "GEL/EUR", "EUR-GEL", "provider", IssueCode.MISSING_FX_RATES, "risk.quality.missingFxRates", "sync_fx_pair", "missing_fx_rates")
+MANUAL_ROUTE = FxSplit("fx_azn", "AZN/EUR", "AZN-EUR", "manual", IssueCode.MISSING_FX_RATES, "risk.quality.missingFxRatesManual", "navigate_fx", "missing_fx_rates_manual")
+FX_SPLITS = (NO_ROUTE, PROVIDER_ROUTE, MANUAL_ROUTE)
+LAB_KPI: dict[str, object] = {"instance_id": "kpi", "analytic_code": "asset_set_kpi"}
+
+
+@dataclass(frozen=True)
+class LabAssets:
+    ids: dict[str, int]
+    names: dict[int, str]
+
+
+def lab_session() -> AsyncSession:
+    return AsyncSession(get_async_engine(), expire_on_commit=False)
+
+
+def lab_close(index: int, day: date) -> Decimal:
+    """A drifting close that never repeats the day before, so no stored row reads as a carry."""
+    offset = (day - LAB_PRICES_FROM).days
+    return Decimal("100") + Decimal(offset % (5 + index)) + Decimal(offset) / Decimal("10")
+
+
+@pytest.fixture(scope="module")
+def lab_assets():
+    marker = uuid4().hex
+    rate_ids: list[int] = []
+    route_ids: list[int] = []
+
+    async def setup() -> LabAssets:
+        async with lab_session() as db:
+            assets = {key: Asset(display_name=f"Lab issues {key} {marker}", currency=currency, asset_type=AssetType.STOCK, active=True) for key, (currency, _days) in LAB_ASSETS.items()}
+            db.add_all(assets.values())
+            await db.flush()
+            db.add_all(PriceHistory(asset_id=assets[key].id, date=day, close=lab_close(index, day), currency=currency, source_plugin_key="lab_issues_test") for index, (key, (currency, quote_days)) in enumerate(LAB_ASSETS.items()) for day in quote_days)
+            rates = [FxRate(base=min(currency, "EUR"), quote=max(currency, "EUR"), date=FX_RATE_DAY, rate=rate, source="MANUAL") for currency, rate in LAB_FX_RATES.items()]
+            routes = [FxConversionRoute(base=min(currency, "EUR"), quote=max(currency, "EUR"), priority=1, chain_steps=json.dumps(steps)) for currency, steps in LAB_FX_ROUTES.items()]
+            db.add_all([*rates, *routes])
+            await db.commit()
+            rate_ids.extend(rate.id for rate in rates)
+            route_ids.extend(route.id for route in routes)
+            return LabAssets(ids={key: asset.id for key, asset in assets.items()}, names={asset.id: asset.display_name for asset in assets.values()})
+
+    async def cleanup(data: LabAssets) -> None:
+        # Whoever writes, cleans up: only the rows this section stored.
+        async with lab_session() as db:
+            owned = list(data.ids.values())
+            await db.execute(delete(FxConversionRoute).where(FxConversionRoute.id.in_(route_ids)))
+            await db.execute(delete(FxRate).where(FxRate.id.in_(rate_ids)))
+            await db.execute(delete(PriceHistory).where(PriceHistory.asset_id.in_(owned)))
+            await db.execute(delete(Asset).where(Asset.id.in_(owned)))
+            await db.commit()
+
+    data = asyncio.run(setup())
+    yield data
+    asyncio.run(cleanup(data))
+
+
+def risk_request(scope: dict[str, object], window: tuple[date, date], analytics: list[dict[str, object]], *, mode: str = "historical") -> RiskQueryRequest:
+    payload: dict[str, object] = {
+        "scope": scope,
+        "date_range": {"start": window[0].isoformat(), "end": window[1].isoformat()},
+        "target_currency": "EUR",
+        "mode": mode,
+        "analytics": analytics,
+    }
+    if mode == "current_composition":
+        payload["composition_policy"] = "current_buy_and_hold"
+    return RiskQueryRequest.model_validate(payload)
+
+
+async def run_risk(request: RiskQueryRequest) -> dict[str, RiskAnalyticResult]:
+    async with lab_session() as db:
+        response = await RiskService(db).execute(user_id=1, request=request)
+    return {item.instance_id: item for item in response.items}
+
+
+async def ask_the_lab(asset_ids: list[int], window: tuple[date, date], *analytics: dict[str, object], mode: str = "historical") -> dict[str, RiskAnalyticResult]:
+    """The lab's request: a weightless selection over one window, results keyed by instance."""
+    return await run_risk(risk_request({"kind": "asset_set", "asset_ids": asset_ids}, window, list(analytics) or [LAB_KPI], mode=mode))
+
+
+async def route_of(slug: str) -> str:
+    """How the portfolio reads one pair's configuration: the premise of every FX case, verified."""
+    async with lab_session() as db:
+        configured, real_provider = await PortfolioService(db)._get_configured_fx_pair_sets()
+    if slug not in configured:
+        return "no_route"
+    return "provider" if slug in real_provider else "manual"
+
+
+def issue_keys(result: RiskAnalyticResult) -> list[tuple[IssueCode, str]]:
+    """The `code + group_key` of every issue of a result, sorted: each category once, nothing else."""
+    return sorted((issue.code, issue.group_key or "") for issue in result.data_quality.issues)
+
+
+def issue_of(result: RiskAnalyticResult, group_key: str) -> DataQualityIssue:
+    (issue,) = (issue for issue in result.data_quality.issues if issue.group_key == group_key)
+    return issue
+
+
+def assert_asset_issue(issue: DataQualityIssue, names: dict[int, str], asset_ids: set[int], *, code: IssueCode, severity: IssueSeverity, message_i18n_key: str, cta_action: str) -> None:
+    """Every field of an asset issue: each asset once, its name beside it, the first one as the target."""
+    assert (issue.domain, issue.code, issue.severity, issue.message_i18n_key) == (IssueDomain.ASSET, code, severity, message_i18n_key)
+    assert sorted(issue.affected_asset_ids) == sorted(asset_ids)
+    assert issue.count == len(issue.affected_asset_ids)
+    assert issue.message_params.get("count") == issue.count
+    assert issue.affected_asset_names == [names.get(asset_id) for asset_id in issue.affected_asset_ids]
+    assert (issue.cta_action, issue.cta_target) == (cta_action, str(issue.affected_asset_ids[0]))
+
+
+def assert_stale_price_issue(result: RiskAnalyticResult, names: dict[int, str], asset_ids: set[int]) -> None:
+    issue = issue_of(result, "stale_price")
+    assert_asset_issue(issue, names, asset_ids, code=IssueCode.STALE_PRICE, severity=IssueSeverity.WARNING, message_i18n_key="dataQuality.stalePrice", cta_action="sync_asset_prices")
+
+
+def assert_missing_price_issue(result: RiskAnalyticResult, names: dict[int, str], asset_ids: set[int]) -> None:
+    issue = issue_of(result, "missing_price")
+    assert_asset_issue(issue, names, asset_ids, code=IssueCode.MISSING_PRICE, severity=IssueSeverity.ERROR, message_i18n_key="risk.quality.missingPrice", cta_action="navigate_asset")
+
+
+def assert_fx_issue(result: RiskAnalyticResult, names: dict[int, str], *splits: FxSplit) -> None:
+    """Every field of one FX issue: the sorted slugs of its pairs, each once, and its action."""
+    split = splits[0]
+    issue = issue_of(result, split.group_key)
+    assert (issue.domain, issue.code, issue.severity, issue.message_i18n_key) == (IssueDomain.FOREX, split.code, IssueSeverity.WARNING, split.message_i18n_key)
+    assert issue.affected_fx_pairs == sorted(item.slug for item in splits)
+    assert issue.count == len(issue.affected_fx_pairs)
+    assert issue.message_params.get("count") == issue.count
+    if split.route == "provider":
+        assert issue.message_params.get("days") == STALE_PRICE_THRESHOLD_DAYS
+    expected_target = None if split.route == "no_route" else issue.affected_fx_pairs[0]
+    assert (issue.cta_action, issue.cta_target) == (split.cta_action, expected_target)
+    assert issue.affected_asset_names == [names.get(asset_id) for asset_id in issue.affected_asset_ids]
+
+
+@pytest.mark.asyncio
+async def test_a_stale_asset_gives_exactly_one_stale_price_issue(lab_assets):
+    """A price carried beyond the threshold is one STALE_PRICE issue, and nothing besides it.
+
+    The stale asset needs a fresh neighbour: only a day some asset is quoted on enters the
+    joint calendar, so alone its carried days would never be read at all.
+    """
+    ids, names = lab_assets.ids, lab_assets.names
+
+    (result,) = (await ask_the_lab([ids["stale"], ids["fresh"]], LAB_WINDOW)).values()
+
+    # The premise: computed, and degraded by that carried price alone.
+    assert result.output is not None, result.error
+    report = result.data_quality
+    assert report.data_quality_status == DataQualityStatus.CARRIED_FORWARD
+    assert report.carried_forward_price_asset_ids == [ids["stale"]]
+    assert (report.unusable_assets, report.unresolved_fx_pairs, report.carried_forward_fx_pairs) == ([], [], [])
+
+    assert issue_keys(result) == [(IssueCode.STALE_PRICE, "stale_price")]
+    assert_stale_price_issue(result, names, {ids["stale"]})
+
+
+@pytest.mark.asyncio
+async def test_assets_without_a_price_in_the_window_give_one_missing_price_issue(lab_assets):
+    """Never priced or priced only later, both are one MISSING_PRICE error that opens the first.
+
+    The notice tells the two apart — `no_price_source` for the asset nothing has ever priced —
+    but the report records both as a missing price, and so does the issue.
+    """
+    ids, names = lab_assets.ids, lab_assets.names
+
+    (result,) = (await ask_the_lab([ids["never"], ids["after"], ids["fresh"]], LAB_WINDOW)).values()
+
+    assert result.output is not None, result.error
+    report = result.data_quality
+    assert sorted((item.asset_id, item.reason) for item in report.unusable_assets) == sorted([(ids["never"], DataQualityExclusionReason.MISSING_PRICE), (ids["after"], DataQualityExclusionReason.MISSING_PRICE)])
+    assert {(ids["never"], "no_price_source"), (ids["after"], "missing_price")} <= {(item.asset_id, item.reason) for item in result.metadata.excluded_assets}
+
+    assert issue_keys(result) == [(IssueCode.MISSING_PRICE, "missing_price")]
+    assert_missing_price_issue(result, names, {ids["never"], ids["after"]})
+
+
+@pytest.mark.parametrize("split", FX_SPLITS, ids=lambda split: split.route)
+@pytest.mark.asyncio
+async def test_a_currency_nothing_converts_in_the_window_gives_the_issue_of_its_route(lab_assets, split):
+    """No rate on or before any day of the window: what to do depends on the pair's route.
+
+    Without a route the user adds the pair, with a provider step they sync it, with the MANUAL
+    sentinel alone they go and type the rates. The route each pair has is read back the way the
+    portfolio reads it, not assumed from the seed.
+    """
+    ids, names = lab_assets.ids, lab_assets.names
+    assert _normalize_fx_pair_slug(split.raw_pair) == split.slug
+    assert await route_of(split.slug) == split.route
+
+    (result,) = (await ask_the_lab([ids[split.asset_key], ids["fresh"]], LAB_WINDOW)).values()
+
+    assert result.output is not None, result.error
+    report = result.data_quality
+    assert report.unresolved_fx_pairs == [split.raw_pair]
+    assert [(item.asset_id, item.reason) for item in report.unusable_assets] == [(ids[split.asset_key], DataQualityExclusionReason.MISSING_FX)]
+
+    assert issue_keys(result) == [(split.code, split.group_key)]
+    assert_fx_issue(result, names, split)
+
+
+@pytest.mark.parametrize("split", FX_SPLITS, ids=lambda split: split.route)
+@pytest.mark.asyncio
+async def test_a_rate_carried_beyond_the_threshold_gives_the_issue_of_its_route(lab_assets, split):
+    """A stale rate still converts, so the asset stays in — and the pair gets the same three actions."""
+    ids, names = lab_assets.ids, lab_assets.names
+    assert await route_of(split.slug) == split.route
+
+    (result,) = (await ask_the_lab([ids[split.asset_key], ids["fresh"]], LATE_WINDOW)).values()
+
+    assert result.output is not None, result.error
+    report = result.data_quality
+    assert report.data_quality_status == DataQualityStatus.CARRIED_FORWARD
+    assert report.carried_forward_fx_pairs == [split.raw_pair]
+    assert (report.unresolved_fx_pairs, report.unusable_assets, report.carried_forward_price_asset_ids) == ([], [], [])
+
+    assert issue_keys(result) == [(split.code, split.group_key)]
+    assert_fx_issue(result, names, split)
+
+
+@pytest.mark.asyncio
+async def test_fx_pairs_are_the_sorted_union_of_unconverted_and_stale_pairs(lab_assets):
+    """One slug per pair whichever list of the report names it, in sorted order.
+
+    Across its only rate a pair is in both lists — unconverted before it, stale after it — and it
+    is still one pair. And where the stale pair sorts before the unconverted one, the issue lists
+    them sorted, not in the order of the lists they came from.
+    """
+    ids, names = lab_assets.ids, lab_assets.names
+
+    (across,) = (await ask_the_lab([ids[PROVIDER_ROUTE.asset_key], ids["fresh"]], ACROSS_RATE_WINDOW)).values()
+    (late,) = (await ask_the_lab([ids[NO_ROUTE_AFTER_EUR.asset_key], ids[NO_ROUTE.asset_key], ids["fresh"]], LATE_WINDOW)).values()
+
+    assert across.output is not None, across.error
+    assert across.data_quality.unresolved_fx_pairs == [PROVIDER_ROUTE.raw_pair]
+    assert across.data_quality.carried_forward_fx_pairs == [PROVIDER_ROUTE.raw_pair]
+    # MWK never had a rate, BTN's is three weeks old: the stale pair is the one that sorts first.
+    assert late.output is not None, late.error
+    assert late.data_quality.unresolved_fx_pairs == [NO_ROUTE_AFTER_EUR.raw_pair]
+    assert late.data_quality.carried_forward_fx_pairs == [NO_ROUTE.raw_pair]
+
+    assert issue_keys(across) == [(PROVIDER_ROUTE.code, PROVIDER_ROUTE.group_key)]
+    assert_fx_issue(across, names, PROVIDER_ROUTE)
+    assert issue_keys(late) == [(NO_ROUTE.code, NO_ROUTE.group_key)]
+    assert_fx_issue(late, names, NO_ROUTE, NO_ROUTE_AFTER_EUR)
+
+
+@pytest.mark.asyncio
+async def test_every_category_at_once_is_one_issue_each_on_every_result(lab_assets):
+    """Five categories in one selection: five issues, each `code + group_key` once, counted and named.
+
+    The two rate issues share a code and are told apart by their group key. Every result of the
+    request carries them — the one the horizon refuses as much as the one that computes: an
+    unavailable result is the one that most needs to say what to fix.
+    """
+    ids, names = lab_assets.ids, lab_assets.names
+    selection = [ids[key] for key in ("stale", "stale_b", "never", "after", "fx_btn", "fx_mwk", "fx_gel", "fx_azn", "fresh")]
+
+    results = await ask_the_lab(selection, LAB_WINDOW, LAB_KPI, {"instance_id": "var", "analytic_code": "asset_set_var", "parameters": {"horizon_days": 365}})
+
+    kpi, var = results["kpi"], results["var"]
+    assert kpi.output is not None, kpi.error
+    # A year of compounding over eight weeks is refused, and still judged on the same report.
+    assert (var.status, var.error.code) == (RiskResultStatus.UNAVAILABLE, RiskErrorCode.INSUFFICIENT_HISTORY)
+    assert var.data_quality is not None
+    assert var.data_quality.model_dump(exclude={"issues"}) == kpi.data_quality.model_dump(exclude={"issues"})
+    report = kpi.data_quality
+    assert report.carried_forward_price_asset_ids == sorted([ids["stale"], ids["stale_b"]])
+    assert {item.asset_id for item in report.unusable_assets if item.reason == DataQualityExclusionReason.MISSING_PRICE} == {ids["never"], ids["after"]}
+    assert report.unresolved_fx_pairs == sorted(split.raw_pair for split in (NO_ROUTE, NO_ROUTE_AFTER_EUR, PROVIDER_ROUTE, MANUAL_ROUTE))
+
+    expected_keys = sorted(
+        [
+            (IssueCode.STALE_PRICE, "stale_price"),
+            (IssueCode.MISSING_PRICE, "missing_price"),
+            (NO_ROUTE.code, NO_ROUTE.group_key),
+            (PROVIDER_ROUTE.code, PROVIDER_ROUTE.group_key),
+            (MANUAL_ROUTE.code, MANUAL_ROUTE.group_key),
+        ]
+    )
+    for result in (kpi, var):
+        assert issue_keys(result) == expected_keys, result.instance_id
+        assert_stale_price_issue(result, names, {ids["stale"], ids["stale_b"]})
+        assert_missing_price_issue(result, names, {ids["never"], ids["after"]})
+        assert_fx_issue(result, names, NO_ROUTE, NO_ROUTE_AFTER_EUR)
+        assert_fx_issue(result, names, PROVIDER_ROUTE)
+        assert_fx_issue(result, names, MANUAL_ROUTE)
+
+
+@pytest.mark.asyncio
+async def test_a_selection_with_an_ok_report_has_no_issue(lab_assets):
+    """Nothing degraded, nothing to fix: the list is empty, not absent."""
+    ids = lab_assets.ids
+
+    (result,) = (await ask_the_lab([ids["fresh"], ids["fresh_b"]], LAB_WINDOW)).values()
+
+    assert result.status == RiskResultStatus.OK, result.warnings
+    assert result.data_quality.data_quality_status == DataQualityStatus.OK
+    assert result.data_quality.issues == []
+
+
+@pytest.mark.asyncio
+async def test_a_portfolio_result_keeps_exactly_the_issues_of_the_engine(lab_assets, monkeypatch):
+    """Pin (a): a portfolio's issues are the engine's, and nothing of the lab is added to them.
+
+    The holdings are the lab's own degraded assets, so the per-asset report merged into this
+    result carries a stale price and an unconverted pair — what an asset-set result turns into
+    issues. The engine has already said it, in its own words and in the portfolio domain. Only
+    the portfolio report is a double: built by the engine's own builder, it is what
+    `PortfolioService.get_report` would hand over; prices and routes are the stored rows.
+    """
+    ids, names = lab_assets.ids, lab_assets.names
+    engine_report = DerivedViewsBuilder(daily_states=[], target_currency="EUR").build_data_quality_report(
+        stale_prices_dto=[StalePriceAsset(asset_id=ids["stale"], name=names[ids["stale"]], last_price_date=STALE_LAST_QUOTE, stale_days=(LAB_WINDOW[1] - STALE_LAST_QUOTE).days)],
+        missing_fx_pairs_dto=[WACMissingPairInfo(pair=NO_ROUTE.raw_pair, dates=[LAB_WINDOW[1]])],
+        configured_fx_pairs=set(),
+        real_provider_fx_pairs=set(),
+    )
+    # The engine has issues to keep, so the equality below cannot hold by both being empty.
+    assert [(issue.domain, issue.code) for issue in engine_report.issues] == [(IssueDomain.PORTFOLIO, IssueCode.STALE_PRICE), (IssueDomain.PORTFOLIO, IssueCode.MISSING_FX_MARKET)]
+    holdings = {ids["stale"]: Decimal("400"), ids["fresh"]: Decimal("400"), ids[NO_ROUTE.asset_key]: Decimal("200")}
+    report = PortfolioReportResponse.model_construct(
+        summary=PortfolioSummary.model_construct(
+            net_worth=Currency(code="EUR", amount=sum(holdings.values(), Decimal("0"))),
+            cash_total=Currency(code="EUR", amount=Decimal("0")),
+            in_transit_market_value=None,
+            holdings=[PortfolioHolding.model_construct(asset_id=asset_id, current_value=value) for asset_id, value in holdings.items()],
+        ),
+        history=[],
+        data_quality=engine_report,
+    )
+
+    async def report_of_the_portfolio(_self, *, user_id, query):
+        return report
+
+    async def accessible_broker_ids(_user_id):
+        return (1,)
+
+    monkeypatch.setattr(PortfolioService, "get_report", report_of_the_portfolio)
+    request = risk_request({"kind": "portfolio"}, LAB_WINDOW, [{"instance_id": "correlation", "analytic_code": "correlation"}], mode="current_composition")
+    async with lab_session() as db:
+        service = RiskService(db)
+        monkeypatch.setattr(service, "_accessible_broker_ids", accessible_broker_ids)
+        (result,) = (await service.execute(user_id=1, request=request)).items
+
+    # The premise: the per-asset report of the lab's assets did reach this result.
+    assert result.output is not None, result.error
+    assert ids["stale"] in result.data_quality.carried_forward_price_asset_ids
+    assert NO_ROUTE.raw_pair in result.data_quality.unresolved_fx_pairs
+
+    assert result.data_quality.issues == engine_report.issues
+
+
+@pytest.mark.asyncio
+async def test_a_single_asset_result_has_no_issue_even_with_a_stale_price(lab_assets):
+    """Pin (b), D373: the Asset Detail page does not change.
+
+    The benchmark is what puts the stale asset's carried days on the calendar, so the report is
+    genuinely degraded — by the same stale price the lab would turn into an issue.
+    """
+    ids = lab_assets.ids
+    request = risk_request(
+        {"kind": "asset", "asset_id": ids["stale"]},
+        LAB_WINDOW,
+        [
+            {"instance_id": "comparison", "analytic_code": "comparison", "parameters": {"comparison_asset_id": ids["fresh"]}},
+            {"instance_id": "kpi", "analytic_code": "historical_kpi"},
+        ],
+    )
+
+    results = await run_risk(request)
+
+    assert set(results) == {"comparison", "kpi"}
+    for result in results.values():
+        assert result.output is not None, result.error
+        assert result.data_quality.data_quality_status == DataQualityStatus.CARRIED_FORWARD
+        assert result.data_quality.carried_forward_price_asset_ids == [ids["stale"]]
+        assert result.data_quality.issues == [], result.instance_id
+
+
+@pytest.mark.asyncio
+async def test_a_replay_of_a_selection_carries_the_issues_of_its_own_window(lab_assets):
+    """A replay is judged on its replay window, so its issues come from there.
+
+    The paused asset stops quoting for twelve days in the middle of the crisis, and is quoted
+    every day of the analysis window. The replay's report is the stale one and the analysis's is
+    clean: the replay cannot have borrowed its issue, nor the correlation beside it the replay's.
+    """
+    ids, names = lab_assets.ids, lab_assets.names
+    selection = [ids["fresh"], ids["paused"]]
+    replay_range = {"start": REPLAY_WINDOW[0].isoformat(), "end": REPLAY_WINDOW[1].isoformat()}
+
+    results = await ask_the_lab(
+        selection,
+        LAB_WINDOW,
+        {"instance_id": "replay", "analytic_code": "stress", "parameters": {"method": "historical_replay", "replay_range": replay_range}},
+        {"instance_id": "correlation", "analytic_code": "correlation"},
+        mode="current_composition",
+    )
+
+    replay, correlation = results["replay"], results["correlation"]
+    # The premise: both assets replayed, the pause carried beyond the threshold, the analysis clean.
+    assert replay.output is not None, replay.error
+    assert {impact.asset_id for impact in replay.output.impacts} == set(selection)
+    assert replay.data_quality.carried_forward_price_asset_ids == [ids["paused"]]
+    assert correlation.output is not None, correlation.error
+    assert correlation.data_quality.data_quality_status == DataQualityStatus.OK
+
+    assert issue_keys(replay) == [(IssueCode.STALE_PRICE, "stale_price")]
+    assert_stale_price_issue(replay, names, {ids["paused"]})
+    assert correlation.data_quality.issues == []
