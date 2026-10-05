@@ -34,7 +34,8 @@
         placeholder?: string;
         /** Test id for E2E targeting. */
         testid?: string;
-        /** Compact trigger padding (matches standard inputs). */
+        /** Compact trigger: standard-input padding, and the chosen asset on one line, so the
+         *  trigger is as tall with a value as without one. */
         compact?: boolean;
         /** Label for the "Create new" footer button (e.g. "+ New asset"). */
         createLabel?: string;
@@ -188,29 +189,47 @@
     <SearchSelect value={stringValue} {options} {disabled} {loading} placeholder={placeholder ?? $t('common.select')} {compact} inlineSearch={true} {dropdownPosition} {dropdownMinWidth} testId={testid} {createLabel} {onCreateNew} onchange={handleChange}>
         {#snippet selectedItem(option)}
             {@const a = asAsset(option.data)}
-            <div class="flex items-center gap-2 min-w-0">
-                {#if option.icon}
-                    <span class="shrink-0 w-7 h-7 flex items-center justify-center bg-libre-green/10 dark:bg-libre-green/20 rounded overflow-hidden">
-                        <img src={option.icon} alt="" class="w-5 h-5 object-contain" onerror={hideOnError} />
-                    </span>
-                {/if}
-                <div class="min-w-0 flex-1">
-                    <div class="font-medium text-gray-900 dark:text-gray-100 truncate text-sm flex items-center gap-1.5">
-                        <span class="truncate">{a?.identifier_ticker || option.label}</span>
-                        {#if a?.active === false}
-                            <span data-testid="asset-select-selected-inactive-badge" class="shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-gray-400">
-                                {$t('assets.edit.status.inactive')}
-                            </span>
-                        {/if}
-                    </div>
-                    <div class="text-xs text-gray-500 dark:text-gray-400 truncate">
-                        {option.label}{#if a?.currency}{@const ci = getCurrencyInfo(a.currency)} ·
-                            <span class="inline-flex items-center gap-0.5"
-                                >{#if ci.symbol && ci.symbol !== a.currency}<span>{ci.symbol}</span>{/if}{#if ci.flag_emoji}<span class="emoji-flag">{ci.flag_emoji}</span>{/if}<span>{a.currency}</span></span
-                            >{/if}
+            {#if compact}
+                <!-- One line, like the dropdown row: the 28px box and the second line made a
+                     compact trigger grow taller once a value was chosen (risk benchmark
+                     picker, developer review of 05/10/2026). The badge says «inactive», so the
+                     row's opacity-60 is not repeated here. -->
+                <div class="flex items-center gap-2 min-w-0">
+                    {#if option.icon}
+                        <img src={option.icon} alt="" class="w-4 h-4 rounded-sm object-contain shrink-0" onerror={hideOnError} />
+                    {/if}
+                    <span class="truncate text-sm text-gray-900 dark:text-gray-100">{a?.identifier_ticker ? `${a.identifier_ticker} · ${option.label}` : option.label}</span>
+                    {#if a?.active === false}
+                        <span data-testid="asset-select-selected-inactive-badge" class="shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-gray-400">
+                            {$t('assets.edit.status.inactive')}
+                        </span>
+                    {/if}
+                </div>
+            {:else}
+                <div class="flex items-center gap-2 min-w-0">
+                    {#if option.icon}
+                        <span class="shrink-0 w-7 h-7 flex items-center justify-center bg-libre-green/10 dark:bg-libre-green/20 rounded overflow-hidden">
+                            <img src={option.icon} alt="" class="w-5 h-5 object-contain" onerror={hideOnError} />
+                        </span>
+                    {/if}
+                    <div class="min-w-0 flex-1">
+                        <div class="font-medium text-gray-900 dark:text-gray-100 truncate text-sm flex items-center gap-1.5">
+                            <span class="truncate">{a?.identifier_ticker || option.label}</span>
+                            {#if a?.active === false}
+                                <span data-testid="asset-select-selected-inactive-badge" class="shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-gray-400">
+                                    {$t('assets.edit.status.inactive')}
+                                </span>
+                            {/if}
+                        </div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 truncate">
+                            {option.label}{#if a?.currency}{@const ci = getCurrencyInfo(a.currency)} ·
+                                <span class="inline-flex items-center gap-0.5"
+                                    >{#if ci.symbol && ci.symbol !== a.currency}<span>{ci.symbol}</span>{/if}{#if ci.flag_emoji}<span class="emoji-flag">{ci.flag_emoji}</span>{/if}<span>{a.currency}</span></span
+                                >{/if}
+                        </div>
                     </div>
                 </div>
-            </div>
+            {/if}
         {/snippet}
         {#snippet item(option)}
             {@const a = asAsset(option.data)}
