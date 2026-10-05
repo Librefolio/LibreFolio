@@ -239,9 +239,8 @@ describe('warning translator sites — the source tree', () => {
                 'lib/components/risk/RiskResultFrame.svelte · warningSentence',
                 'lib/components/risk/levels/RiskLevelsPanel.svelte · partialNotice',
                 'lib/components/risk/levels/RiskLevelsPanel.svelte · resultReasons',
-                'lib/components/risk/AssetSetCorrelationSection.svelte · resultReasons',
+                'lib/components/risk/AssetSetRiskPanel.svelte · partialNotice',
                 'lib/components/risk/AssetSetReplaySection.svelte · resultReasons',
-                'lib/components/risk/AssetSetComparisonLevels.svelte · resultReasons',
             ]),
         );
         // Control: the translated sites are recognised as translated, so the next assertion is not

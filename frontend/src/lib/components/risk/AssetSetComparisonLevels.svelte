@@ -41,11 +41,13 @@
      * short window the honest answer is one `ok` beside four `unavailable`, and
      * without disclosure the reader sees four blanks and one table and cannot
      * tell whether the page is broken or the window is short. Each level
-     * therefore declares **its own** slice — health, reasons, error codes and
-     * provenance — through `RiskLevelSection`, and the slices are built by
-     * explicit code, never as "everything minus what I know about": a blanket
+     * therefore declares **its own** slice — what did not come back at all, error
+     * codes and provenance — through `RiskLevelSection`, and the slices are built
+     * by explicit code, never as "everything minus what I know about": a blanket
      * filter reports an analytic no level renders as a fault of whichever level
-     * happened to catch it.
+     * happened to catch it. What is *partial*, and every warning, the lab says
+     * once, in the notice above the sections (`qualitySource()`; the developer,
+     * 05/10): one stale price read under every frame was four problems.
      */
     import {_ as t} from '$lib/i18n';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
@@ -53,10 +55,11 @@
     import {ANSWER_DISCARDED_CODE, createRiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
 
     import AssetSetLossComparisonSection from './AssetSetLossComparisonSection.svelte';
-    import type {AssetSetHurtRow, AssetSetPaidRow} from './assetSetLevels';
+    import type {AssetSetHurtRow, AssetSetPaidRow, AssetSetQualitySource} from './assetSetLevels';
     import AssetSetRiskReturnSection from './AssetSetRiskReturnSection.svelte';
     import {ASSET_SET_DAILY_VAR_INSTANCE, ASSET_SET_MONTHLY_VAR_INSTANCE, resultByCode, resultByInstance} from './riskAnalysisHelpers';
-    import {degradedResults, levelMetadata, resultErrorCodes, resultReasons} from './levels/levelHelpers';
+    import {degradedResults, levelMetadata, resultErrorCodes} from './levels/levelHelpers';
+    import {levelErrorHealth} from './levels/partialNotice';
     import RiskLevelSection from './levels/RiskLevelSection.svelte';
 
     interface Props {
@@ -138,8 +141,9 @@
     let l1Results = $derived([dailyVar, monthlyVar, drawdown]);
     let l3Results = $derived([riskReturn, kpi, comparison]);
 
-    let l1Health = $derived(degradedResults(l1Results, VAR_LABELS));
-    let l1Reasons = $derived(resultReasons(l1Results, $t));
+    // Each frame keeps only what did not come back at all; what is partial, and why, the lab's
+    // one notice says above the sections, from `qualitySource()` (the developer, 05/10).
+    let l1Health = $derived(levelErrorHealth(degradedResults(l1Results, VAR_LABELS)));
     /**
      * A base answer discarded twice running is said once, by the frame, with the same
      * code the replay and the Dashboard's L4 use (`answer_discarded`); the body only
@@ -151,10 +155,23 @@
     let l1Errors = $derived([...resultErrorCodes(l1Results), ...lossDiscardedCodes]);
     let l1Metadata = $derived(levelMetadata(l1Results));
 
-    let l3Health = $derived(degradedResults(l3Results));
-    let l3Reasons = $derived(resultReasons(l3Results, $t));
+    let l3Health = $derived(levelErrorHealth(degradedResults(l3Results)));
     let l3Errors = $derived([...resultErrorCodes(l3Results), ...paidDiscardedCodes]);
     let l3Metadata = $derived(levelMetadata(l3Results));
+
+    /**
+     * What the panel reads through `bind:this` for the lab's one notice: the six results the two
+     * frames render, the controllers' own objects in page order (`null` where an answer had
+     * none), the two VaR horizons' labels, and both controllers' data-quality issues, L1°'s
+     * first. A function, so a `$derived` in the panel tracks what it reads here.
+     */
+    export function qualitySource(): AssetSetQualitySource {
+        return {
+            results: [dailyVar, monthlyVar, drawdown, riskReturn, kpi, comparison],
+            labels: VAR_LABELS,
+            issues: [...lossController.dataQualityIssues, ...paidController.dataQualityIssues],
+        };
+    }
 
     /**
      * Whether the beta and correlation columns have a reference at all.
@@ -177,7 +194,7 @@
     let riskTable = $state<DataTable<AssetSetPaidRow>>();
 </script>
 
-<RiskLevelSection title={$t('risk.assetSet.levels.l1.title')} level={1} testId="risk-asset-set-loss" health={l1Health} reasons={l1Reasons} errorCodes={l1Errors} metadata={l1Metadata} docsPath="financial-theory/technical-analysis/risk-metrics/" actions={lossTable ? lossActions : undefined}>
+<RiskLevelSection title={$t('risk.assetSet.levels.l1.title')} level={1} testId="risk-asset-set-loss" health={l1Health} errorCodes={l1Errors} metadata={l1Metadata} docsPath="financial-theory/technical-analysis/risk-metrics/" actions={lossTable ? lossActions : undefined}>
     <AssetSetLossComparisonSection
         bind:tableRef={lossTable}
         {assetIds}
@@ -201,7 +218,7 @@
     <ColumnVisibilityToggle tableRef={riskTable} />
 {/snippet}
 
-<RiskLevelSection title={$t('risk.assetSet.levels.l3.title')} level={3} testId="risk-asset-set-paid" health={l3Health} reasons={l3Reasons} errorCodes={l3Errors} metadata={l3Metadata} docsPath="financial-theory/technical-analysis/risk-metrics/" actions={riskTable ? riskActions : undefined}>
+<RiskLevelSection title={$t('risk.assetSet.levels.l3.title')} level={3} testId="risk-asset-set-paid" health={l3Health} errorCodes={l3Errors} metadata={l3Metadata} docsPath="financial-theory/technical-analysis/risk-metrics/" actions={riskTable ? riskActions : undefined}>
     <AssetSetRiskReturnSection
         bind:tableRef={riskTable}
         {assetIds}
