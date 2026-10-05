@@ -521,8 +521,15 @@ class StressAnalytic(RiskAnalytic):
             )
 
         all_excluded = excluded_asset_ids | set(auto_excluded)
+        weighted_scope = context.scope_kind == RiskScopeKind.PORTFOLIO
+        exclusion_reasons = {asset_id: auto_excluded.get(asset_id, RiskHistoricalReplayExclusionReason.MANUAL_EXCLUSION) for asset_id in all_excluded}
         if not selected:
-            details: dict = {"excluded_asset_ids": sorted(all_excluded)}
+            details: dict = {
+                "excluded_asset_ids": sorted(all_excluded),
+                # With nothing left there is no audit to say why each asset is missing, so the details
+                # do (D372): the reason and, on a weighted scope, the weight, as the audit would.
+                "excluded_assets": [{"asset_id": asset_id, "reason": exclusion_reasons[asset_id].value, "weight": context.weights.get(asset_id) if weighted_scope else None} for asset_id in sorted(all_excluded)],
+            }
             if replay.suggested_range is not None:
                 # With nothing left there is no audit to carry it, and this is when the proposal
                 # matters most: a scope made only of assets the window's edges exclude.
@@ -540,7 +547,6 @@ class StressAnalytic(RiskAnalytic):
             )
 
         asset_returns = {asset_id: compounded_return(values) for asset_id, (_source_asset_id, _dates, values) in selected.items()}
-        weighted_scope = context.scope_kind == RiskScopeKind.PORTFOLIO
         portfolio_return: Optional[float] = None
         excluded_weight_total = sum(context.weights.get(asset_id, 0.0) for asset_id in all_excluded) if weighted_scope else 0.0
         if weighted_scope:
@@ -554,7 +560,6 @@ class StressAnalytic(RiskAnalytic):
             portfolio_return = asset_returns[scope_asset_ids[0]]
 
         exclusion_treatment = RiskHistoricalReplayExclusionTreatment.ZERO_RETURN_RESIDUAL if weighted_scope else RiskHistoricalReplayExclusionTreatment.OMITTED_FROM_REPLAY
-        exclusion_reasons = {asset_id: auto_excluded.get(asset_id, RiskHistoricalReplayExclusionReason.MANUAL_EXCLUSION) for asset_id in all_excluded}
         excluded_audit = [
             RiskHistoricalReplayExcludedAsset(
                 asset_id=asset_id,

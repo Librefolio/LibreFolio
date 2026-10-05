@@ -611,23 +611,12 @@ function metadata(request: RiskRequest, analytic: RiskAnalyticRequest, options: 
         algorithm_version: MOCK_ALGORITHM_VERSION,
         computed_at: '2026-01-31T12:00:00Z',
         // `service.py:860` copies the plugin's audit into the metadata of every
-        // replay, and `L4Replay` gates `risk-replay-audit` on it. Omitting it here
-        // would leave one of the presence barriers below unsatisfiable — a barrier
-        // that can never turn green is not stricter, it is broken.
-        ...(isHistoricalReplay(analytic)
-            ? {
-                  historical_replay_audit: {
-                      proxy_count: 0,
-                      proxy_assets: [],
-                      excluded_count: 0,
-                      excluded_assets: [],
-                      excluded_weight_total: 0,
-                      missing_history_policy: 'manual_proxy_or_exclude',
-                      composition_policy: 'current_buy_and_hold',
-                      proxy_series_usage: 'returns_only',
-                  },
-              }
-            : {}),
+        // replay, and `L4Replay` lists what the replay left out from it
+        // (`risk-replay-excluded`) — the presence barrier the no-money tests stand
+        // on since D372 retired the one-line audit. Omitting it here would leave
+        // that barrier unsatisfiable — a barrier that can never turn green is not
+        // stricter, it is broken.
+        ...(isHistoricalReplay(analytic) ? {historical_replay_audit: replayAudit(request)} : {}),
     };
 }
 
@@ -955,10 +944,12 @@ function assetSetLevelOutput(request: RiskRequest, analytic: RiskAnalyticRequest
  * `configured_buckets` (`stress.py:561-567`), which is what makes `tornadoRows`
  * take its per-asset branch — the branch that reads `impact_amount`. A bucket
  * row carries `amount: null` and would have quietly disarmed the row half of
- * this test.
+ * this test. And the holding the replay left out ({@link replayLeftOutAssetId})
+ * has no bar: on an unweighted scope it is omitted from the replay, not carried.
  */
 function replayOutput(request: RiskRequest) {
-    const assetIds = replayAssetIds(request);
+    const leftOut = replayLeftOutAssetId(request);
+    const assetIds = replayAssetIds(request).filter((assetId) => assetId !== leftOut);
     return {
         kind: 'stress',
         method: 'historical_replay',
@@ -978,6 +969,74 @@ function replayOutput(request: RiskRequest) {
             metadata_fallback: false,
         })),
     };
+}
+
+/**
+ * The holding the stubbed replay leaves out: the last of the scope, which the client
+ * canonicalises ascending — read off the request, never assumed.
+ *
+ * Since 24/09 the engine leaves out, on its own, every holding whose quotes do not
+ * cover the window, and on an unweighted scope it is *omitted* from the replay, with
+ * no weight (`stress.py::_historical`). Leaving one out of every replay is what gives
+ * the no-money tests their presence barrier since D372 retired the one-line audit:
+ * `risk-replay-excluded` is drawn from `historical_replay_audit` alone, which no other
+ * analytic carries — and it is one more place a weight, a share of a portfolio that
+ * does not exist, could surface. A selection of one is left whole: leaving out its
+ * only holding would leave nothing to replay.
+ */
+function replayLeftOutAssetId(request: RiskRequest): number | null {
+    const assetIds = replayAssetIds(request);
+    return assetIds.length >= 2 ? assetIds[assetIds.length - 1] : null;
+}
+
+/** The audit `stress.py` attaches to the replay: the holding it left out, omitted and unweighted, and a total pinned at 0.0 on an unweighted scope. */
+function replayAudit(request: RiskRequest) {
+    const leftOut = replayLeftOutAssetId(request);
+    const excluded = leftOut === null ? [] : [{asset_id: leftOut, reason: 'no_prices_in_window', weight: null, treatment: 'omitted_from_replay'}];
+    return {
+        proxy_count: 0,
+        proxy_assets: [],
+        excluded_count: excluded.length,
+        excluded_assets: excluded,
+        excluded_weight_total: 0,
+        missing_history_policy: 'manual_proxy_or_exclude',
+        composition_policy: 'current_buy_and_hold',
+        proxy_series_usage: 'returns_only',
+    };
+}
+
+/**
+ * The exclusion warning `_replay_exclusion_warning` sends for that holding, one per reason,
+ * named the way `service.py` names an asset it has no display name for. The section leaves
+ * it to the block since D372; nothing here reads it, it is sent because the engine sends it.
+ */
+function replayExclusionWarnings(request: RiskRequest) {
+    const leftOut = replayLeftOutAssetId(request);
+    if (leftOut === null) return [];
+    return [
+        {
+            code: 'historical_replay_assets_excluded',
+            message: 'Historical replay excluded assets with no prices in the replay window.',
+            details: {asset_ids: [leftOut], treatment: 'omitted_from_replay', reason: 'no_prices_in_window'},
+            degrades_result: true,
+            message_i18n_key: 'risk.warnings.historical_replay_excluded_no_prices',
+            message_params: {treatment: 'omitted_from_replay', names: unnamedAsset(leftOut), count: 1},
+        },
+    ];
+}
+
+/**
+ * The presence barrier of the no-money tests, on the replay: what it left out is listed,
+ * as a selection must list it — omitted, with no total weight and no weight per holding,
+ * since a weight here would be a share of a portfolio the reader never described.
+ */
+async function expectReplayLeftOutWithoutWeight(page: Page): Promise<void> {
+    const leftOut = page.getByTestId('risk-replay-excluded');
+    await expect(leftOut, 'the replay answer never listed what it left out: the answer is not on screen, or is not a replay').toBeVisible({timeout: 20_000});
+    await expect(leftOut).toHaveAttribute('data-treatment', 'omitted_from_replay');
+    await expect(leftOut, 'a total weight was published for a selection, which carries no weights').not.toHaveAttribute('data-weight-total');
+    await expect(leftOut.getByTestId('risk-replay-excluded-asset')).toHaveCount(1);
+    await expect(leftOut.locator('[data-testid="risk-replay-excluded-asset"][data-weight]'), 'a holding of a selection was listed with a weight').toHaveCount(0);
 }
 
 function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options: RiskStubOptions = {}): Record<string, unknown> {
@@ -1026,9 +1085,13 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
     if (analytic.analytic_code === 'correlation') return {...answered, output: correlationOutput(request, options)};
     if (isAssetSetLevel(analytic)) return {...answered, output: assetSetLevelOutput(request, analytic, options)};
     // The replay is prepared by itself (`_prepare_historical_replay` sets
-    // `excluded_assets=()`), so it is answered from `base` and never degrades
-    // with the historical wave.
-    if (isHistoricalReplay(analytic)) return {...base, status: 'ok', output: replayOutput(request)};
+    // `excluded_assets=()`), so it never degrades with the historical wave; what
+    // its own window leaves out degrades it instead — `partial`, with the
+    // exclusion warning beside the audit that lists it.
+    if (isHistoricalReplay(analytic)) {
+        const warnings = replayExclusionWarnings(request);
+        return {...base, status: warnings.length > 0 ? 'partial' : 'ok', warnings, output: replayOutput(request)};
+    }
 
     // Anything else reaching this page is a change in what the panel requests, and
     // should say so loudly rather than render an empty frame. The *hypothetical
@@ -3154,11 +3217,12 @@ test.describe('Asset Global risk laboratory', () => {
         // are not decoration: each one is a place the stubbed amount would surface.
         // `risk-replay-total` interpolates the top-level `impact_amount`
         // (`L4Replay:213`), every tornado row runs `rowAmount` (`:147`), and
-        // `risk-replay-audit` proves the answer is a *replay* — no other analytic
-        // carries `historical_replay_audit`.
+        // `risk-replay-excluded` proves the answer is a *replay* — it is drawn from
+        // `historical_replay_audit`, which no other analytic carries — while listing
+        // what the replay left out without a single weight.
         await expect(page.getByTestId('risk-replay-total')).toBeVisible({timeout: 20_000});
         await expect(page.getByTestId('risk-l4-replay').getByTestId('risk-replay-tornado-row').first()).toBeVisible({timeout: 20_000});
-        await expect(page.getByTestId('risk-replay-audit')).toBeVisible({timeout: 20_000});
+        await expectReplayLeftOutWithoutWeight(page);
         await expect
             .poll(() => requests.some((request) => request.scope.kind === 'asset_set' && request.mode === 'current_composition' && request.analytics.some((analytic) => isHistoricalReplay(analytic))), {
                 timeout: 15_000,
@@ -3239,10 +3303,10 @@ test.describe('Asset Global risk laboratory', () => {
         await expectChartCanvas(page, 'risk-asset-set-l3-scatter', 20_000);
 
         // The bait: the replay, where the stubbed amounts arrive, run behind the same
-        // presence barriers — the total, a tornado row, and the audit that proves the
-        // answer is a replay.
+        // presence barriers — the total, a tornado row, and the list of what it left
+        // out that proves the answer is a replay, without a weight.
         await openAndRunReplay(page);
-        await expect(page.getByTestId('risk-replay-audit')).toBeVisible({timeout: 20_000});
+        await expectReplayLeftOutWithoutWeight(page);
         await expect
             .poll(() => requests.some((request) => request.scope.kind === 'asset_set' && request.mode === 'current_composition' && request.analytics.some((analytic) => isHistoricalReplay(analytic))), {
                 timeout: 15_000,

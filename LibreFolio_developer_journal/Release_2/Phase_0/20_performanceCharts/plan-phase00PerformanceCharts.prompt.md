@@ -1,12 +1,15 @@
 # Performance charts - SP06 G3/G1c and SP07 G1a/G1b
 
-**Status:** I10 and initial I60 integrated/validated; I60
-UX/axis/comparison follow-up reopened for manual-review round 2.
+**Status:** contratto §3 (G3, G1a, G1b, G1c) consegnato e integrato in `dev_release2`; I60 accettata dal
+developer (review 22/09 §8.3). **Round 4** — le correzioni della review d'uso post-merge del 22/09 (I90) — in
+esecuzione dal 2026-09-24: §6.0.20 e il [piano del round 4](plan-phase00PerformanceChartsRound4-PostMergeReview.prompt.md).
 **Implementation:** I10 completed on 2026-09-10. I60 implementation and
 post-merge combined validation completed on 2026-09-11. Manual review closed
-the I60 follow-up contract on 2026-09-11. All portfolio/GrowthChart phases
-remain FROZEN.
+the I60 follow-up contract on 2026-09-11. I20–I50 completed on 2026-09-18,
+I70 and I80 on 2026-09-21 (§6).
 **Revision:** 11 - I60 selected-range boundary and secondary-axis correction, 2026-09-12.
+*(Contatore non più mantenuto dopo questa data: le revisioni successive sono la sequenza §6.0.x, ultima
+§6.0.20 del 2026-09-24.)*
 **Analysis baseline:** `f90d9801bd7a2d74aac6a27efe305314c6c004cc`
 (`refs/heads/dev_release2`).
 **Gate-0 execution baseline:** `0af66da5f366a9559549154631a4ee15ca620915`,
@@ -24,6 +27,7 @@ including the committed I60 implementation and merged H renderer normalization.
 target contained, port 6157 free.
 **Portfolio implementation baseline:** not yet authorized. It will be the later
 post-H target SHA supplied after the H-before-I integration gate.
+*(Superato: autorizzata e consegnata — I20–I40 COMPLETE 2026-09-18, §6.)*
 **Coordinator:** Release 2 coordinator, session
 `c8328a01-f208-4ade-a352-0486d1f14de2`.
 **Future runtime lane:** port `6157`, absolute data directory
@@ -1805,8 +1809,11 @@ Il merge lo esegue il developer. Questo workstream non esegue mai merge/rebase/c
 **Lavoro aperto, in ordine e non iniziato:**
 1. ladder di risoluzione a 8 rung (goldens già a terra, `d87d45e07`) — è il difetto di
    leggibilità reale, DBT-7; deve partire dalla vista del developer, non da questa pianificazione;
+   *→ consegnata il 2026-09-21 da §6.0.16, in locale a `GrowthChart` (nota del 2026-09-24);*
 2. generalizzazione del parametro di `groupPointsByBucket` (4 consumer, `aggregateEnvelope`
    incluso);
+   *→ superata (nota del 2026-09-24): era il veicolo condiviso della voce 1, che §6.0.16 ha consegnato senza
+   passare dai riduttori condivisi — vedi DBT-C in §6.0.11;*
 3. fix del flag `missing` in `aggregateSumSeries` — **dopo** che i goldens hanno provato
    l'identità del refactor, come commit separato in cui il delta golden è l'evidenza;
 4. decisione su `aggregateEnvelope`, esportata e senza chiamante di produzione.
@@ -2139,7 +2146,7 @@ difetto residuo.
 |---|---|---|---|
 | DBT-A | `aggregateSumSeries` propaga `missing` da `{...lastPoint}` su bucket con somma reale non nulla | **soddisfatto**: corpus golden esistente | Commit separato, in cui il delta golden è l'*evidenza*. Le barre Income sono immuni due volte (`aggregateFlowMetric` costruisce `{date, value}` senza campo `missing` e legge solo `value`) |
 | DBT-B | `aggregateEnvelope` esportata con **zero chiamanti di produzione** | decisione di chi sa perché fu scritta | Non è una decisione da prendere in silenzio dentro un refactor meccanico |
-| DBT-C | ② ladder di risoluzione a 8 rung | il developer, viste le candele a 44 px, dichiara che i **salti** gli danno fastidio | Costo misurato: `mapDateToBucket` in 9 file, tripletta conteggi in 8, deroga su `ChartResolution`, goldens da rigenerare |
+| DBT-C | ② ladder di risoluzione a 8 rung | il developer, viste le candele a 44 px, dichiara che i **salti** gli danno fastidio | Costo misurato: `mapDateToBucket` in 9 file, tripletta conteggi in 8, deroga su `ChartResolution`, goldens da rigenerare. **SUPERATO 2026-09-24**: il bisogno di prodotto — la scala a otto gradini — è consegnato da §6.0.16 **in locale** a `GrowthChart`, che dichiara i riduttori condivisi non riusabili per larghezze in giorni. Il refactor condiviso resta possibile, ma nessuna voce aperta lo richiede |
 | DBT-D | `chartCoreHelpers.test.ts`: asserzioni che specchiano **il testo sorgente** | nessuno — valutabile subito | Tre ri-pinnature in una settimana, tutte di sola grafia. La stessa proprietà è esprimibile **eseguendo** la funzione invece di leggerne il sorgente |
 
 #### Backlog adiacente — non debito di questo piano
@@ -2819,7 +2826,16 @@ difetto di prodotto.**
 | 11 | `selectZoomWindow drives the EXISTING shared zoom rather than a parallel windowing system` | **funzione rimossa**; la scala non guida lo zoom, per contratto |
 | 12 | `exposes one button per implemented preset — 1W/1M/1Y/All, with no Custom entry` | il selettore è ora la scala a otto gradini |
 
-**Quattro (6, 8, 9, 10, 11) descrivono comportamenti che il developer ha chiesto di togliere**:
+> ⏭️ **2026-09-24, round 4 (S9)** — le righe #8 e #9 sono scadute. La didascalia sotto le candele
+> consuma di nuovo `dashboard.pnlCandlesHypotheticalShort` (decisione D5 = a del round 4), e la
+> chiave lunga è stata rimossa dai cataloghi.
+> - **#8 è verde, e non si cancella**: è una guardia vera.
+> - **#9 resta rosso**, ma perché la coppia corta/lunga non esiste più. Si cancella in S10 del round 4.
+>
+> I cinque «da cancellare» qui sotto sono quindi quattro. Il conteggio vivo è nel registro S9 di
+> [`plan-phase00PerformanceChartsRound4-PostMergeReview.prompt.md`](plan-phase00PerformanceChartsRound4-PostMergeReview.prompt.md).
+
+**Cinque (6, 8, 9, 10, 11) descrivono comportamenti che il developer ha chiesto di togliere**:
 non sono rossi da riparare, sono residui da cancellare. Gli altri sette sono ri-pinnabili sulle
 nuove firme.
 
@@ -2840,22 +2856,42 @@ nuove firme.
 > eredita, uno con causa si ri-discute. La conversione non è stata respinta nel merito: è stata
 > messa dopo un allineamento che costa di più ogni ora che passa.
 
+### 6.0.20 Round 4 — review d'uso post-merge del 22/09 (piano 2026-09-23, esecuzione dal 2026-09-24)
+
+Il piano del round ha un file proprio: **[plan-phase00PerformanceChartsRound4-PostMergeReview.prompt.md](plan-phase00PerformanceChartsRound4-PostMergeReview.prompt.md)**. Qui resta solo il
+puntatore, perché il round è largo (sette voci di prodotto, due di privacy, una dall'analisi statica) e questo
+documento è già oltre le 5 500 righe.
+
+- **Sorgenti:** [review d'uso](../09_feedbackJobs/08_review_visiva_20260922.md) (R5–R11, R21) e
+  [analisi statica](../09_feedbackJobs/09_reperti_analisi_statica_20260922.md) (§2.5; leggere la §9 prima della §1).
+- **Baseline:** `dev_release2` = `f1047f766`, dopo il consolidamento Alembic in `004_release_1_2_0_schema` —
+  **nessuna migrazione nuova** in questo round.
+- **Perimetro:** privacy degli importi in Crescita e Performance (R5/R6/R7, P4-11), candele e barre Income
+  (R8, R10), valore di acquisto nelle barre Income (R11), didascalia delle candele (R9), memoria della vista in
+  Crescita e Allocazione (R21), un default che trasformava un'omissione in un consenso (§2.5), emoji di tipo in
+  Allocazione storica (segnalazione di K).
+- **Ordine vincolato:** la privacy (S2) parte solo dopo il gate-prep di J su `moneyRenderSites.test.ts`, fuso dal
+  developer nel ramo di I.
+- **Indicatori riallineati in S0 (2026-09-24)**, con un passaggio meccanico su tutti i punti di lettura rapida
+  (regola di §6.0.11): stato in testa, contatore di revisione, baseline portfolio, righe G0/I60/I90 e I60.6,
+  §6.3, DBT-C, due voci di §6.0.7, refuso di §6.0.19 («Quattro» → «Cinque»), footer §12.
+
 ## 6. Dependency-safe phases and owners
 
 | Phase | Size | Owner | Dependency | Deliverable | Status |
 |---|---:|---|---|---|---|
 | I00 | XS | Workstream I planner | Plan-only developer authorization | Durable product contract, split, storyboards and backlog links | COMPLETE 2026-09-10 |
-| G0 | M analysis | Coordinator + assigned integrators | F integrated on `dev_release2` | Post-F technical refresh + phase-specific implementation authorization | I10 RELEASED ONLY 2026-09-10; PORTFOLIO BLOCKED |
+| G0 | M analysis | Coordinator + assigned integrators | F integrated on `dev_release2` | Post-F technical refresh + phase-specific implementation authorization | I10 RELEASED 2026-09-10; portfolio rilasciato dopo H0 (I20–I40 COMPLETE 2026-09-18) |
 | H0 | external | H + coordinator | H/YOC accepted and integrated | Release portfolio service/schema/tests, provide exact target SHA, I re-read | COMPLETE 2026-09-11 |
 | I10 | M | G3 backend owner | G0 developer authorization; no H/F files | Calendar-return backend series + provenance, no resolver duplication | COMPLETE AND INTEGRATED 2026-09-10 |
 | I20 | L | Portfolio backend integrator | G0 + H0 + F engine released | Additive daily broker P&L + signed canonical income | COMPLETE 2026-09-18 (`8ed7a0f0d`, esteso `d5e834de4`) |
 | I30 | L | Portfolio backend integrator | I20 + same-resolver OHLC envelope | Daily total candles + flat fallback + strict close identity | COMPLETE 2026-09-18 (`8ed7a0f0d`; fix crash asse category `eba37ba41`) |
 | I40 | M | Portfolio backend integrator + coordinator | I20 + I30 + post-H report contract | DTO/report/cache wiring, then coordinator API sync | COMPLETE 2026-09-18 (`8ed7a0f0d`, `d5e834de4`; API sync e i18n eseguiti dal coordinatore) |
 | I50 | L | GrowthChart owner | I40 | Value/Return/P&L core modes; Line/Candles/Income P&L submodes; broker lines and sum aggregation | COMPLETE 2026-09-18 (`8ed7a0f0d` → `69d0d27c6`); leggibilità candele risolta 2026-09-21 (`70e87ac3a`, soglia per grammatica — §6.0.10), resta la conferma visiva del developer |
-| I60 | XL follow-up | G3 Asset UI + shared chart owner | Initial I60 integrated; explicit developer authorization | Compact duration, contextual Asset/FX axes, separate Return measures, same-N Asset comparisons | IMPLEMENTAZIONE COMPLETA 2026-09-16 (vedi §6.6, ultime note); resta aperta **solo** l'accettazione manuale desktop/mobile del developer |
+| I60 | XL follow-up | G3 Asset UI + shared chart owner | Initial I60 integrated; explicit developer authorization | Compact duration, contextual Asset/FX axes, separate Return measures, same-N Asset comparisons | IMPLEMENTAZIONE COMPLETA 2026-09-16 (vedi §6.6, ultime note); **ACCETTATA 2026-09-22** dal developer (review 22/09 §8.3: *«Mi pare funzioni MOOOLTO bene»*) |
 | I70 | L | Test author + owners | Relevant implementation phases; H test ownership released | Targeted backend/frontend regressions and integration gates | COMPLETE 2026-09-21 — §6.0.13: 9 casi E2E sulla superficie P&L (dashboard 14/14, broker detail 28/28), oltre agli unit backend |
 | I80 | S | Docs writer + coordinator | Stable integrated UI | English docs, coordinator i18n/runner/changelog records | COMPLETE 2026-09-21 — docs G3 in `2d22130bd` (`assets/detail/chart\|measures\|signals`, `fx/chart-settings`); docs G1a/G1b/G1c in `d44065d70` (`dashboard/charts.en.md`, sezione `P&L mode` +104 righe, cinque heading con anchor espliciti). Voce condizionale di §10 (pagina di teoria P&L) valutata e **non** eseguita — motivazione in §6.0.14 |
-| I90 | M | Developer + coordinator | I50 + I60 + I70 + I80 | Desktop/mobile operational review, corrections, integration handoff | **SBLOCCATA 2026-09-21**: I50/I60/I70/I80 tutte consegnate. Gate del developer, non implementabile da questo workstream |
+| I90 | M | Developer + coordinator | I50 + I60 + I70 + I80 | Desktop/mobile operational review, corrections, integration handoff | **IN CORSO**: la review d'uso del 22/09 (`08_review_visiva_20260922.md`) è I90; le sue correzioni sono il round 4 (§6.0.20), in esecuzione dal 2026-09-24 |
 
 > **Note implementazione (I00, 2026-09-10):** only the durable plan, final
 > product decisions, updated ASCII v2 storyboards and minimal feedback-job
@@ -2914,6 +2950,9 @@ shared-file blocker. No I owner edits a reserved file before the coordinator
 records its release.
 
 ### 6.3 Remaining developer/coordinator gates
+
+> *Superato (2026-09-24): i cinque gate qui sotto sono tutti soddisfatti — I10–I80 consegnate (§6). Le
+> condizioni aperte oggi sono quelle del round 4, §6.0.20.*
 
 No product decision remains open. Readiness still requires:
 
@@ -3034,7 +3073,7 @@ No product decision remains open. Readiness still requires:
 | I60.3 | Asset primary mode/window controls and request lifecycle | COMPLETE 2026-09-11; DESKTOP/MOBILE E2E GREEN |
 | I60.4 | PriceChartFull percentage-unit, missing-point and provenance presentation seams | COMPLETE 2026-09-11 |
 | I60.5 | Focused frontend gates, static checks and review corrections | AUTHORIZED GATES COMPLETE 2026-09-11 |
-| I60.6 | Evidence, manifest and frozen integration handoff | COMBINED VALIDATION COMPLETE 2026-09-11; MANUAL REVIEW PENDING |
+| I60.6 | Evidence, manifest and frozen integration handoff | COMBINED VALIDATION COMPLETE 2026-09-11; MANUAL REVIEW ACCEPTED 2026-09-22 (review 22/09 §8.3) |
 
 > **Note implementazione (I60.0, 2026-09-11):** verified exact clean HEAD
 > `0d57874303b1311c0f5ea3b8653d24a33d4245a6`. I60 can avoid the three
@@ -5562,9 +5601,15 @@ No pending row may be marked complete from a plan, fixture or test name alone.
 The current durable state remains:
 
 ```text
-IMPLEMENTAZIONE COMPLETA (19 commit, rivalidata sulla revisione combinata 4473d7f89)
-RESIDUO: solo accettazione visiva del developer (I90 / I60F.7) + debiti §6.0.11
+CONTRATTO §3 CONSEGNATO E INTEGRATO in dev_release2 (fast-forward 22b82e3fb)
+I60 ACCETTATA 2026-09-22 · I90 = review d'uso 22/09 → ROUND 4 IN ESECUZIONE (§6.0.20)
+DEBITI APERTI: DBT-A, DBT-B, DBT-D (§6.0.11; DBT-C superato) + 12 rossi nominati di §6.0.19 (rimisura: round 4 S1)
 ```
+
+Aggiornato **2026-09-24**. Il ramo è entrato nel target in fast-forward (`22b82e3fb`) e il developer ha fatto
+la review d'uso sull'integrato: I60 è accettata (review §8.3) e le correzioni di I90 sono il round 4, con un
+piano proprio ([plan-phase00PerformanceChartsRound4-PostMergeReview.prompt.md](plan-phase00PerformanceChartsRound4-PostMergeReview.prompt.md)). Le due note che seguono sono del 21/09: restano come
+storia, non come stato.
 
 Aggiornato **2026-09-21** (secondo giro, stesso giorno). Il contratto di prodotto §3 —
 G3, G1a, G1b, G1c — è **interamente consegnato e verificato**; la leggibilità delle candele,

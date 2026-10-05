@@ -342,7 +342,7 @@ async function setCashAmount(testid: string, amount: string) {
     await fireEvent.blur(input);
 }
 
-function expectNoImportantNeutralQuantityBorder(input: HTMLInputElement) {
+function expectNoImportantNeutralQuantityBorder(input: HTMLElement) {
     expect(input.classList).not.toContain('!border-gray-200');
     expect(input.classList).not.toContain('dark:!border-slate-600');
 }
