@@ -20,7 +20,7 @@ do, so `currentStepId` is never a number and there is nothing to renumber when a
 | # | `StepId` | Always shown | Purpose |
 |---|---|---|---|
 | 1 | `upload` | ✅ | Pick the broker, drop one or more files. |
-| 2 | `select` | ✅ | Pick which of the broker's stored files to parse and, per file, which BRIM plugin reads it. A [report set](#report-sets) is one row, with its card. |
+| 2 | `select` | ✅ | Pick which of the broker's stored files to parse and, per file, which BRIM plugin reads it. A [report set](#report-sets) is one card, above the table of the broker's other files. |
 | 3 | `analyze` | ✅ | Parse each file (backend), show per-file stats via `ParseDetailModal`. A report set is combined first, then its combined file is parsed. |
 | — | `assets` | ⚪ conditional | **Unify assets** — decide how many distinct instruments the files actually describe (`AssetGroupStep`). |
 | — | `fix` | ⚪ conditional | **Corrections** — retype rows the plugin flagged as incomplete (`FixFlaggedStep`). |
@@ -181,7 +181,7 @@ calls:
 | `buildParseUnits(selected, sets)` | The analysis units: the selected files of a set, read with the set's plugin, become **one** `set` unit; every other file is a `file` unit |
 | `setBlocksAnalysis(set, selectedIds, state?)` | `true` when a selected set's preview is still loading, failed, or says `complete: false` |
 | `combinedFileForSet(set, files)` | The newest combined file of the same broker, batch and plugin, or `null` |
-| `buildSetTimeline(preview, roleOrder)` | The card's timeline: one row per role with a bar per file, plus the bar of LibreFolio's history from H0 |
+| `buildSetTimeline(preview, roleOrder)` | The card's timeline, `null` when no member has a coverage. `rows`: one per role that has bars, in `roleOrder`, with a bar per coverage entry, ordered by start then end and carrying the file's `rows` (`null` when unknown), and the role's `gaps`: walking the bars by start and keeping the furthest end reached `e`, a bar starting after `e + 1` opens a gap from `e + 1` to the eve of its start — never before the first bar or after the last. `history`: from H0 to the later of H0 and `history_end` (an opening correction, dated the eve of H0, may be the history's last transaction), with `count` (`history_count`, else 0); `null` without H0. The span (`start`, `end`) includes the history's end; every bar, gap and history is placed in percentages of it |
 | `setsOfFiles(files, plugins)`, `fileSetBadges(file, ctx)` | The FilesTable badges ([below](#report-set-badges)) |
 
 ### ⬆️ Step `upload`: the missing export
@@ -202,8 +202,10 @@ goes on to `select`, where the set shows as incomplete.
 ### 🗂️ Step `select`: `ReportSetCard.svelte`
 
 Each broker panel shows one `ReportSetCard` per set above its table, which keeps only the single
-files. The sets uploaded in this session are selected and open; older sets stay listed,
-unselected. Every set's preview runs in the background.
+files; when the broker has at least one set, that table is headed **Other files of this broker**
+(`import-wizard-other-files-<brokerId>`, absent for a broker without sets). The sets uploaded in
+this session are selected and open; older sets stay listed, unselected. Every set's preview runs in
+the background.
 
 - A set is selected or deselected **as a whole** (`toggleSetSelection`), and its members take the
   set's plugin (`pickBestPlugin` asks `setPluginFor` first). The card offers no per-member plugin
@@ -212,13 +214,35 @@ unselected. Every set's preview runs in the background.
 - The card (`report-set-card`, with `data-set-key`, `data-batch-id`, `data-plugin-code`,
   `data-set-status` — `loading`, `complete`, `incomplete` or `error` — `data-selected` and
   `data-analysed`) shows, per role, its localised name (`importWizard.reportSet.roleName.<code>`,
-  else the plugin's `description`), its extensions and `max_history`; per file, the coverage, the
-  rows, a preview and a delete button; per missing role, the period and **Upload the missing
-  file** (`report-set-upload-missing`), which uploads with the same broker and `batch_id`, re-reads
-  the broker's files and the set's preview, and selects the new file when the set was selected;
-  the preview's warnings (`report-set-warning`, `data-code`); the history note
-  (`report-set-history`, `data-kind` `first` or `later`); and the timeline. Everything is plain
-  Svelte text: file names and plugin notices are data.
+  else the plugin's `description`), its extensions and `max_history`, then the role's files in a
+  table (below); per missing role, the period and **Upload the missing file**
+  (`report-set-upload-missing`), which uploads with the same broker and `batch_id`, re-reads the
+  broker's files and the set's preview, and selects the new file when the set was selected; the
+  files no role recognises, apart (`report-set-unrecognised`, `data-file-id`); the timeline
+  (below); the preview's warnings (`report-set-warning`, `data-code`); and the history note
+  (`report-set-history`, `data-kind` `first` or `later`). Everything is plain Svelte text: file
+  names and plugin notices are data.
+- **The role tables**: each role with files gets a shared `DataTable` inside
+  `report-set-role-table` (`data-role`), with body rows `tr[data-row-id=<file_id>]` and the columns
+  **File**, **Period** (the earliest start → the latest end of the file's coverage entries) and
+  **Rows**. The rows are ordered by that start, then by filename in natural order; files without
+  coverage come last. The row menu (⋮ `row-actions-<file_id>`) holds `context-menu-action-preview`
+  and `context-menu-action-delete`, and a double click previews the file. Sorting, filters,
+  pagination and row selection are off: the set is chosen whole with `report-set-select`, and its
+  files keep their period order.
+- **The timeline** (`report-set-timeline`, built by `buildSetTimeline`): one row per role, where
+  each coverage entry is a bar `report-set-timeline-bar` (`data-role`, `data-file-id`,
+  `data-start`, `data-end`, `data-rows` — empty when unknown) and the days no file of the role
+  covers between two of its files are a dashed gap `report-set-timeline-gap` (`data-role`,
+  `data-start`, `data-end`); the last row, labelled *LibreFolio* and present only with an H0, is
+  the history LibreFolio already holds, `report-set-timeline-history` (`data-start` = H0,
+  `data-end` = the history's last day, `data-count`). Each bar, gap and history sits in a
+  `Tooltip` — after 200 ms of hover, or at once on a click — with its period and, for a file, its
+  role, name and rows (when known); for a gap, that no export of the role covers those days; for
+  the history, how many transactions LibreFolio holds. Next to each row, its overall span (first
+  start → furthest end). The legend `report-set-timeline-legend` has a
+  `report-set-timeline-legend-item` per kind: `data-kind="file"` always, `history` and `gap` only
+  when the timeline has some.
 - While a selected set blocks (`setBlocksAnalysis`), **Parse** is disabled with the
   `import-wizard-set-blocks` hint, and the card offers **Exclude from the import**
   (`report-set-exclude`), which deselects the set so that the other files can go on.
@@ -234,9 +258,16 @@ key and becomes the combined file's id. A combine or parse error lands on that r
 rows go on.
 
 `ParseDetailModal` adds, for a set, the **Matching securities ↔ cash** section
-(`parse-detail-pairing`): the counters of `summary.outcomes` (`pair`, `standalone`, `summarized`,
-`deferred`, `excluded`) and `summary.reasons`, the member names, and a link that downloads the
-combined file.
+(`parse-detail-pairing`, whose `data-pair` … `data-excluded` attributes keep the counts of
+`summary.outcomes`): the member names; the five outcomes as chips `parse-detail-pairing-outcome`
+(`data-outcome`, `data-count`), always in the order `pair`, `standalone`, `summarized`, `deferred`,
+`excluded`, those at zero dimmed; when `summary.reasons` has entries, the table
+`parse-detail-pairing-reasons` (Reason, Rows), one row `parse-detail-pairing-reason` (`data-reason`,
+`data-count`) per reason, labelled through `importWizard.reportSet.reason.<code>`; and two commands.
+**Preview the combined file** (`parse-detail-preview-combined`) is a button, present only when the
+modal gets `onPreview`: the wizard passes one that opens the file preview on the row's `fileId`,
+which for a set is the combined file. **Download the combined file**
+(`parse-detail-download-combined`) is a link to `/api/v1/brokers/import/files/{file_id}/download`.
 
 ### 👀 Step `review`: rows before H0 {: #rows-before-history }
 
@@ -286,15 +317,54 @@ counts within the checkpoint), its message localised through
 `needsCost` marks a proposal with a blocker on `cost_basis_override`. A failed request is a group
 with its `error` and no rows.
 
-**`GapFixStep.svelte`** is controlled: the wizard owns `gapFixSelected` and flips keys in
-`onToggle`. Per group (`gapfix-group`) and per checkpoint (`gapfix-checkpoint`, *Starting point*
-for `opening`, *After the gap* for `gap`) it shows the LibreFolio / Bank / Difference table (cash
-through `CurrencyAmount`, position quantities through `maskableQuantity`, *at least* for
-`at_least`), the explanation (`gapfix-explanation`, notes localised by code) and the proposals
-(`gapfix-proposal`, toggled by `gapfix-proposal-toggle`) with type, date, asset, quantity, cash,
-*cost to enter* and the `gap_fix` tag. The verifications (`gapfix-verification`, `data-ok`) read
-*Matches* or *Does not match*; a failed group shows `gapfix-error`. Plain Svelte text, no
-`{@html}`.
+**`GapFixStep.svelte`** is controlled: the wizard owns `gapFixSelected`, and the step only asks.
+Its props are `view`, `selected`, `onToggle(key)` (flip one correction),
+`onSetSelected(keys, selected)` (keep or drop several in one update: the wizard passes
+`setGapFixProposals`, which assigns `gapFixSelected` once), `assetName` and `brokerName`. The root
+`import-wizard-gapfix` carries `data-proposal-count` and `data-selected-count`, and ends with
+`gapfix-info-hidden-titles` (a security that never moved cannot be seen). Each group
+(`gapfix-group`, `data-broker-id`, `data-plugin-code`) is headed by its broker's name; a failed
+request shows `gapfix-error` and nothing else, otherwise the group shows, top to bottom:
+
+- **The summary cards**: one button `gapfix-summary` per truth point (`data-key`, `data-kind`
+  `opening` | `gap` | `verification`, `data-as-of`, `aria-pressed`), in date order — on a shared
+  date the checkpoint first — under a hint on what a click does. A checkpoint card (also
+  `data-proposals`, `data-positions` — the positions with a non-zero difference — and `data-notes`)
+  shows its title (*Starting point · date* or *After the gap · date*), its non-zero cash
+  differences through `CurrencyAmount` (masked by the privacy mode), and how many positions (when
+  any), corrections and notes (when any). A verification card (also `data-ok`) shows its title
+  (*End-of-period check · date*) and reads *Matches*, or *Does not match* with its non-zero
+  differences.
+- **The active point**: a click makes a card the group's active point (one per group, none when
+  the step opens), and a second click clears it. The active point opens `gapfix-point-details`
+  (`data-key`) with its full comparison, in the C3 markup. A checkpoint renders `gapfix-checkpoint`
+  (`data-as-of`, `data-kind`): the LibreFolio / Bank / Difference table — `gapfix-cash-row`
+  (`data-currency`, `data-difference`) through `CurrencyAmount`, `gapfix-position-row`
+  (`data-asset-id`, `data-exactness`) with quantities through `maskableQuantity`, *at least* for
+  `at_least` — then the explanation (`gapfix-explanation`) and its notes (`gapfix-note`,
+  `data-code`, localised by code). A verification renders `gapfix-verification` (`data-as-of`,
+  `data-ok`) and, when it does not hold, its `gapfix-verification-cash-row`s. An active checkpoint
+  narrows the table to its own corrections (none: *This point needs no correction*). An active
+  verification opens its comparison and leaves the table whole: a verification corrects nothing,
+  and an empty table would look like lost corrections.
+- **The table**: `gapfix-table`, one per group and only when the group proposes corrections — a
+  shared `DataTable`, sortable by point, date, type and asset, 10 rows a page by default — with
+  rows `tr[data-row-id=<proposal key>]`, the unselected ones dimmed. Columns: the selection;
+  **Point** (*Starting point* or *After the gap*); **Date**; **Type**, with its icon through the
+  DataTable's `image` cell (no new HTML); **Asset**; **Quantity**, visible because a correction is
+  a transaction (the holdings in the comparison stay masked); **Cash** through `CurrencyAmount`;
+  **Tags**, `gap_fix`, or *cost to enter* when the correction needs a cost. The selection switch is
+  `GapFixToggle.svelte`, a `custom` cell: the button `gapfix-proposal-toggle` (`aria-pressed`,
+  `data-key`, `data-type`, `data-date`, `data-point` — its checkpoint's key) calls `onToggle`. The
+  shared `editable-checkbox` cell draws the same switch, but without a testid or the row's facts,
+  and the shared DataTable stays untouched.
+- **The commands**, the review's, above the table next to the group's selected count:
+  `gapfix-select-all` and `gapfix-deselect-all` act on every correction of the group, whatever the
+  active point; `gapfix-select-visible` selects the rows on the table's current page
+  (`getPageRowIds()`) — with a checkpoint active, only that point's — and leaves the others as they
+  are. The C3 list `gapfix-proposal` no longer exists.
+
+Everything is plain Svelte text, no `{@html}`: asset names, notes and errors are data.
 
 **The footer**: **Back** (`import-wizard-back`), the count `import-wizard-gapfix-count`
 (`data-count`) and **Continue** (`import-wizard-gapfix-continue`, guide anchor

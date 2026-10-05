@@ -34,8 +34,8 @@ Import the files **as downloaded**: don't open and re-save them in Excel first.
 ## 🧺 Upload both files together
 
 1. Open the **[Import Wizard](how-to.md)**. In **Upload**, drop **both** files and assign them to your Danske Bank broker.
-2. Files uploaded together for the same broker form one **report set**. In **Select Files** the set is a single row with its own card: the two files and the period each covers, a timeline, and a note on what this import will do. The set you have just uploaded is already ticked.
-3. **Parse** combines the two files into one **combined file** and analyses it, so the set stays a single row. Its detail (**Matching securities ↔ cash**) counts the trades paired with their cash, the rows that exist in one file only, the rows left out and why, and lets you **download the combined file**.
+2. Files uploaded together for the same broker form one **report set**. In **Select Files** the set is one card, already ticked when you have just uploaded it. The card lists the files by kind — *Securities transactions* and *Cash statement* — each kind in a small table, its files ordered by the period they cover, with **Preview** and **Delete** in each row's **⋮** menu (a double click opens the preview too). The card's timeline shows each file as a bar, any days that no export of a kind covers between two of its files as a dashed gap, and — when LibreFolio already holds this broker's history — a grey bar up to the last day it holds: point at a bar, or click it, to read its dates and its number of rows (or, for the grey bar, of transactions already in LibreFolio). A note tells you what this import will do. Any other files you uploaded for the broker are listed below the card, under **Other files of this broker**.
+3. **Parse** combines the two files into one **combined file** and analyses it, so the set stays a single row. Its detail (**Matching securities ↔ cash**) shows the outcome as chips — the trades paired with their cash, the rows that exist in one file only, the movements summarised in a starting point or after a gap, the trades left for your next import, the rows left out — then the reasons in a table, with their number of rows, and lets you **preview** or **download the combined file**.
 
 Uploading from the [Files](../../files/index.md#broker-reports) page, or from a broker's **Uploaded Reports**, works the same way: the files you upload in one go form one set, which you then tick in the wizard's **Select Files**.
 
@@ -110,12 +110,14 @@ The old line carries a warning instead: removing those shares does not lower you
 
 On the first import of a Danske Bank broker, LibreFolio does not replay years of old movements. Everything before the first day of your securities export is summarised in a **starting point**, at the end of the previous day; from that first day on, every movement is imported one by one. The set's card in **Select Files** tells you the date.
 
-After the **Review**, **Import N transactions** opens a new step, **Align with the bank**. For the starting point it shows what LibreFolio will hold next to what the bank states, and proposes the transactions that close the difference:
+After the **Review**, **Import N transactions** opens a new step, **Align with the bank**. It compares what LibreFolio will hold with what the bank states, and proposes the transactions that close the difference:
 
 - a **Deposit** that brings the cash to the balance of the cash statement;
 - an **Adjustment** for each position your files prove.
 
-These corrections are **selected by default** and carry the tag `gap_fix`: untick any you don't want, then **Continue** to the editor.
+At the top, the step shows one card per point, in date order: the **Starting point**; an **After the gap** point after each period that no securities export covers (see [Gaps](#gaps)); and the **End-of-period check**, which reads **Matches** or **Does not match**. The card of a starting point or of an *After the gap* point shows its cash difference, how many positions differ and how many corrections it proposes. Click it to see its full comparison — what LibreFolio will hold next to what the bank states, and where the difference comes from — and only its corrections; click it again to see them all.
+
+The corrections are listed in one table, **selected by default** and tagged `gap_fix`: untick any you don't want, or use **Select All**, **Select visible** (the rows of the page you are looking at) or **Deselect All**, then **Continue** to the editor.
 
 Each position the step adds needs its **average cost**, marked *cost to enter*. In the editor, enter the cost per share — the bank's website shows the average purchase price of each holding. **Save All** stays disabled until every cost is filled in.
 
@@ -146,7 +148,7 @@ When two securities exports uploaded together leave a hole between them, the set
 
 ## ✅ End-of-period check
 
-**Align with the bank** also compares LibreFolio's cash with the statement's balance at the end of the last securities period. The **End-of-period check** shows **Matches** or **Does not match**, and it is **never corrected** automatically: the next import brings the trades of the last days, and a correction there would count them twice. If it does not match, look at the rows the import left out (the set's detail in **Parse**): once you add the missing movement by hand, the balance matches.
+**Align with the bank** also compares LibreFolio's cash with the statement's balance at the end of the last securities period. Its card, **End-of-period check**, reads **Matches**, or **Does not match** with the difference: then click it to see LibreFolio's balance next to the bank's — the list of corrections stays as it is, since the check proposes none. It is **never corrected** automatically: the next import brings the trades of the last days, and a correction there would count them twice. If it does not match, look at the rows the import left out (the set's detail in **Parse**): once you add the missing movement by hand, the balance matches.
 
 ---
 
