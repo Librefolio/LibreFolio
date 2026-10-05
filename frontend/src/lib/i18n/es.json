@@ -1225,7 +1225,8 @@
       "weekRange": "Semana {start} – {end}",
       "monthLabel": "{month}",
       "valueAt": "Valor al {date}",
-      "eventsInPeriod": "Eventos en el período:"
+      "eventsInPeriod": "Eventos en el período:",
+      "partialBucket": "Parcial: {days} de {total} días"
     },
     "resolution": {
       "weekly": "Semanal",
@@ -1646,7 +1647,6 @@
     "pnlSubmodeLine": "Línea",
     "pnlSubmodeIncome": "Ingresos",
     "pnlSubmodeCandles": "Velas",
-    "pnlCandlesHypothetical": "Sintético — los máximos/mínimos entre activos son hipotéticos y no simultáneos, no una serie intradía real.",
     "pnlCandlesHypotheticalShort": "Sintético — los máximos/mínimos entre activos son hipotéticos y no simultáneos",
     "pnlAcqNewCapital": "Nuevo capital",
     "pnlAcqReinvested": "Reinvertido"
