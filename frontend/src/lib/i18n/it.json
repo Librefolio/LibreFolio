@@ -3059,7 +3059,11 @@
       "carried_forward": "Dati mantenuti",
       "partial": "Parziale",
       "carriedPrices": "Punti prezzo mantenuti",
-      "carriedFx": "Punti FX mantenuti"
+      "carriedFx": "Punti FX mantenuti",
+      "missingPrice": "{count} asset senza prezzo in questo periodo — esclusi dall'analisi",
+      "missingFx": "{count} coppie di valute senza fonte di cambio — gli asset quotati in queste valute sono esclusi",
+      "missingFxRates": "Cambi mancanti o più vecchi di {days} giorni per {count} coppie — sincronizza per completare l'analisi",
+      "missingFxRatesManual": "Cambi mancanti per {count} coppie manuali — aggiungili a mano"
     },
     "assetSet": {
       "assetsTab": "Asset",
