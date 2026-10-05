@@ -1577,3 +1577,370 @@ Richiesta del developer tramite il coordinatore: che il plugin di un set non lo 
 - Dopo il checkpoint della validazione: un'analisi senza codice, da discutere col developer nella chat di L.
 - Poi due righe di decisione al coordinatore, per l'ordine delle integrazioni e per il CHANGELOG.
 - La bozza dell'analisi è nella cartella di sessione, fuori dal repo.
+
+> **Commit della validazione** (developer, 2026-10-05): `adf3b8cd7` «docs(import): Danske Bank is alpha» e `8c6853281` journal.
+> - **Danske è integrato**: `dev_release2` è avanzato a `8c6853281`, poi il commit `c8daff33f` del coordinatore con le righe del CHANGELOG. Il ramo di L resta un commit indietro, ed è normale.
+> - Il D28 (`#rolling-return` in it/fr/es) è il rosso accettato, confermato dal coordinatore.
+
+## 14. Passo G — la scelta del plugin di un set (2026-10-05)
+
+**Base**: `8c6853281`, corsia 6156. **Via del coordinatore**: «Via al passo G sul tuo ramo… prima il piano nel journal… poi i test rossi col test-author; poi l'implementazione e il checkpoint. G deve entrare prima del taglio della release.»
+
+> **⚠️ Fuori pista**: prima di cominciare ho lanciato per riflesso un `git fetch -q origin`. Aggiorna solo i riferimenti remoti, non il ramo né i file, ma non è un comando di sola lettura, quindi non va fatto: non lo ripeto.
+
+### G.0 Decisioni del developer (testuali, nella chat di L, 2026-10-05)
+
+- **La richiesta** (dal coordinatore): che nel caso del set il plugin non lo scelga l'utente sembra al developer «abbastanza grave».
+- **Il perimetro**: «A + B + C: tutto, con D dietro (Consigliato)». Le opzioni erano disegnate nei bozzetti mostrati al developer, salvati nella cartella di sessione:
+  - A = «Letto come» sulla card;
+  - B = dal menu di un file, «Leggi da solo con…» oppure «Togli dal set»;
+  - C = l'avviso;
+  - D = `exclude_file_ids`.
+- **I tempi**: «Dopo l'integrazione di Danske, ma prima del taglio della release (Consigliato)».
+- **La memoria**: «la scelta se è un set o meno, è nella fase di import, quindi finchè siamo solo in "upload" ci sta non salvare nulla, quando poi si passa al "parsed" il gioco è fatto e mi aspetto che il set sia salvato e ricordato, posso accettare che venga modificato in seguito, ma la memoria dovrebbe rimanere».
+  - Il bozzetto della memoria, «Sì, è questo il comportamento (Consigliato)»: dopo l'analisi il set ricorda i suoi file e il suo plugin, e un file analizzato da solo ricorda il suo plugin. Riaprendo, la memoria conta più del rilevamento; si cambia con gli stessi comandi, e la nuova scelta diventa la memoria alla prossima analisi.
+  - Non serve un campo nuovo: la memoria si ricava da quello che il server salva già all'analisi.
+
+### G.1 Stato verificato (2026-10-05)
+
+- `setPluginFor(file, plugins, override?)` sa già usare un override:
+  - verso un plugin a set, il file entra in quel set;
+  - verso un altro plugin, diventa file singolo.
+
+  I test lo coprono già. Però **nessun punto dell'interfaccia** imposta l'override di un membro: la colonna «Plugin» esiste solo nella tabella dei file singoli. Anche `pickBestPlugin` mette sui membri il plugin del set.
+- Il backend non conosce la scelta: `BRIMSetRequest` contiene solo `{broker_id, plugin_code, batch_id}`, e `collect_members` prende tutti gli originali del caricamento che il plugin legge.
+- Il rilevamento sui campioni sintetici dà questo: l'XLSX dei titoli lo legge solo `broker_danske_bank`; il CSV di cassa lo leggono `broker_danske_bank` e `broker_generic_csv`. Danske ha due ruoli, `custody` e `cash`, entrambi `required` e `multiple`.
+- Quello che il server salva già:
+  - per un file combinato: `kind`, `batch_id`, `derived_from` (`file_id`, `deleted`), `status`, `processed_at`, `parsed_plugin_code`, `uploaded_at`;
+  - per un originale: `combined_into`, `status`, `processed_at`, `parsed_plugin_code`, `compatible_plugins`, `uploaded_at`.
+- Anche FilesTable (la pagina File e i report del broker) chiede la preview dei set, per la badge «Incompleto», con la stessa richiesta del wizard.
+
+### G.2 Contratto
+
+**D · backend** (`schemas/brim.py`, `services/brim_report_sets.py`, `api/v1/brokers.py`):
+- `BRIMSetRequest.exclude_file_ids: List[str] = []`: il default vuoto lo rende compatibile, e il modello resta strict.
+- `collect_members(..., exclude_file_ids=())`: toglie gli esclusi dai membri. Preview e combine lo usano tutti e due.
+- Un id escluso che non è un originale di quel broker e di quel caricamento dà **422** con `BRIMSetExcludeUnknown` (codice `exclude_unknown`).
+- Se non resta nessun membro, vale il 404 di oggi (`members_not_found`).
+- Le risposte non cambiano. Il riuso del combinato resta per insieme esatto di membri (`members_key`).
+- Poi `api sync`; all'integrazione il client va rigenerato.
+
+**Logica pura** (`importReportSets.ts`):
+- `setPluginFor`: un override `''` vuol dire «file singolo senza plugin» e restituisce `null`. `null` o `undefined` restano «nessuna scelta».
+- `rememberedChoices(files, plugins) → Map<file_id, override>`: la memoria dopo l'analisi. Per ogni originale con un caricamento si considerano tre eventi, contando solo i combinati con `status === 'parsed'`:
+  - **E1, membro**: un combinato analizzato dello stesso broker e caricamento elenca il file fra i `derived_from` non cancellati. Il valore è il plugin del combinato, cioè il suo `parsed_plugin_code`; l'istante è il `processed_at` del combinato;
+  - **E2, letto da solo**: il file ha `status === 'parsed'` con un `parsed_plugin_code` che non è un plugin a set. Il valore è quel plugin; l'istante è il `processed_at` del file;
+  - **E3, lasciato fuori**: un combinato analizzato dello stesso caricamento non lo elenca, il file è compatibile col suo plugin ed esisteva già quando il combinato è nato (`uploaded_at` del file ≤ `uploaded_at` del combinato). Il valore è `''`; l'istante è il `processed_at` del combinato.
+
+  Il risultato:
+  - se l'E1 più recente è più recente di ogni E2 ed E3, il file sta nel set di quel plugin;
+  - altrimenti, se c'è un E2 più recente dell'ultimo E1, il file resta singolo con quel plugin. Un E2 e un E3 della stessa analisi non si contraddicono: tutti e due dicono «fuori dal set»;
+  - altrimenti, se c'è un E3, il valore è `''`;
+  - altrimenti non c'è memoria, e vale il rilevamento.
+- `setPluginChoices(set, plugins)`: i plugin a set compatibili con **tutti** i membri, primo quello del set.
+- `readAlonePlugins(file, plugins, brokerDefault?)`: i plugin compatibili che non sono a set, con prima il predefinito del broker se c'è fra questi.
+- `otherSetPlugins(file, setPluginCode, plugins)`: gli altri plugin a set compatibili col file (C2).
+- `defaultPluginNote(set, brokerDefault, plugins)`: il predefinito del broker, se è diverso dal plugin del set e compatibile con almeno un membro; altrimenti `null` (C1).
+- `setRequest(set, files)`: `{broker_id, plugin_code, batch_id, exclude_file_ids}`. Gli esclusi sono gli originali dello stesso broker e caricamento, compatibili col plugin, non `failed` e non membri del set. La usano il wizard e FilesTable.
+- `combinedFileForSet(set, files)`: in più chiede che gli id non cancellati di `derived_from` coincidano coi membri del set. Così un set con un membro tolto non risulta «già analizzato» a causa di un combinato vecchio, e un originale cancellato dopo non cambia nulla, come in v5.3.
+- `setsOfFiles(files, plugins)`: per ogni broker applica `rememberedChoices`, e le badge seguono la memoria.
+
+**A, B, C · `ReportSetCard.svelte`**:
+- Prop nuove:
+  - `plugins: SetPluginInfo[]`, il catalogo;
+  - `brokerDefaultPlugin: string | null`;
+  - `onReadAs(code: string | null)`;
+  - `onReadAlone(fileId, code)`;
+  - `onRemoveFromSet(fileId)`.
+- **A**: nell'intestazione, `<select data-testid="report-set-read-as">` col valore del plugin del set. Un'opzione per ogni plugin di `setPluginChoices`, quello del set marcato «rilevato», più `value=""` per «Leggi i file uno per uno». Il cambio chiama `onReadAs(code)`, oppure `onReadAs(null)` per `""`.
+- **B**: nel menu di riga della tabella del ruolo:
+  - un'azione `read-alone-<code>` per ogni plugin di `readAlonePlugins`, visibile solo sulle righe dei file che quel plugin legge; produce `context-menu-action-read-alone-<code>` e chiama `onReadAlone(fileId, code)`;
+  - `remove-from-set`, che produce `context-menu-action-remove-from-set` e chiama `onRemoveFromSet(fileId)`.
+
+  Anteprima ed Elimina restano.
+- **C1**: `report-set-default-note` con `data-default-plugin`, quando `defaultPluginNote` non è `null`.
+- **C2**: un `report-set-also-recognised` per file, con `data-file-id` e `data-plugins`, l'elenco dei codici separati da virgola.
+
+**Wizard** (`ImportWizardModal.svelte`):
+- **Override efficaci**: la memoria (`rememberedChoices` sui file del broker) più le scelte della sessione (`filePluginOverrides`); vincono quelle della sessione. Li usano `brokerSetGroups` e `pickBestPlugin`. Le scelte della sessione si azzerano ancora alla chiusura, come oggi.
+- **`readSetAs(set, code)`**:
+  - con un plugin a set, l'override va a ogni membro, e i membri selezionati prendono quel plugin;
+  - con `null`, ogni membro prende il suo miglior plugin non a set, oppure `''`. I membri con `''` si deselezionano, gli altri restano selezionati col nuovo plugin.
+- **`readFileAlone(fileId, code)`**: l'override va al file, che resta selezionato se lo era.
+- **`removeFileFromSet(fileId)`**: override `''`, e il file si deseleziona.
+- **Rientro nel set**: si sceglie il plugin del set nella colonna «Plugin» dei file singoli, con `updateFilePlugin` di oggi.
+- **Preview**: si salvano per chiave del set e per insieme dei membri. Dopo ogni cambio si rileggono quelle cambiate, con `setRequest`.
+- **Combine**: la richiesta porta gli `exclude_file_ids` dell'unità d'analisi.
+- **FilesTable**: chiede le preview con `setRequest`.
+
+**Memoria non mostrata con un testo nuovo** (proposta mia): «come all'ultima analisi» si capisce già dallo stato «Analizzato» del file e dal plugin preselezionato. Nella tabella dei singoli non aggiungo un'etichetta, per non toccare `ImportPluginSelect`, che è condiviso.
+
+**i18n** (via `dev.py i18n add`, 4 lingue): `importWizard.reportSet.{readAs, readAsOneByOne, detected, readAloneWith, removeFromSet, defaultPluginNote, alsoRecognisedBy}`.
+
+**Documentazione** (docs-writer, solo EN, senza stamp): la pagina utente Danske (come cambiare la lettura di un set, e la memoria); `import-wizard.md`; `brim_plugin_guide.md` (`exclude_file_ids` e la regola della memoria).
+
+**Test** (test-author, rossi prima, solo dati inventati, corsia 6156):
+- backend: `test_brim_report_sets.py` (`services brim-report-sets`) e `test_brim_api.py` (`api brim`);
+- Vitest: `importReportSets.test.ts` e `ReportSetCard.test.ts` (`tx-unit`);
+- E2E `tx-import-report-set.spec.ts`: G-A, G-B, G-C e la memoria. Per la memoria serve un terzo estratto conto sintetico, generato in una cartella temporanea.
+
+**Gate**:
+- backend BRIM, i Vitest e `front check` a 0/0;
+- `front build --debug`, gli E2E d'import, `check-orphans`;
+- `mkdocs build` strict e `check-links` (il D28 è accettato);
+- privacy; porta libera.
+
+**Definition of done**: tutti i test rossi diventano verdi, i gate sono verdi, e il checkpoint contiene le righe del CHANGELOG di G.
+
+### G.3 ✅ Il rosso (test-author) — 2026-10-05
+
+> **Note implementazione — il rosso di G (2026-10-05)**, test-author, corsia 6156, solo dati inventati, nessun file di prodotto toccato:
+>
+> | Comando | Esito | Rosso |
+> |---|---|---|
+> | `services brim-report-sets` | 23 rossi, 232 verdi | i 23 test nuovi di D |
+> | `front-transaction tx-unit` | 42 rossi, 580 verdi | `importReportSets` 30, `ReportSetCard` 12 |
+> | `front-transaction tx-import-report-set` | 7 rossi, 9 verdi | i 6 test nuovi di G, più R1 sulla sola asserzione del body del combine (`exclude_file_ids: []`) |
+> | `api brim` (lanciato per ultimo) | 8 rossi, 64 verdi | gli 8 test nuovi (RS-G01…G04) |
+> | `check-orphans` | pulito | — |
+>
+> **⚠️ Fuori pista — cosa ha trovato il test-author**:
+> - **Il CSV generico** si dichiara compatibile con qualsiasi `.csv` che abbia un'intestazione (`can_parse`), ma in analisi pretende `date` e `type`. Quindi l'estratto di cassa Danske non lo può leggere, e «Leggi da solo con CSV generico» fallirebbe sempre. Per il test «memoria, da solo» il test-author ha scritto un estratto sintetico con in più le colonne `date;type;amount;currency`, che Danske ignora.
+> - **Un originale con analisi fallita** (`failed`): `collect_members` lo scarta (regola A2), mentre il raggruppamento del frontend lo rimetterebbe nel set, e la card mostrerebbe un file che la preview non legge.
+> - In più non sono coperti dagli E2E la scelta di un altro plugin a set in A (c'è solo Danske) e `setRequest` usata da FilesTable (coperta solo dai test unitari).
+>
+> **Decisioni del developer** (testuali, chat di L, 2026-10-05):
+> - «credo che il problema sia di CSV generico che per ora guarda solo l'estenzione, dovrebbe guardare le colonne e vedere se tutte le obbligatorie, in almeno una delle lingue, ci sono»;
+> - sulla proposta (`can_parse` vero solo se l'intestazione ha `date` e `type`, coi sinonimi multilingue di `HEADER_MAPPINGS`): «Sì, così, dentro G (Consigliato)».
+>
+> **Il contratto cambia così**:
+> - `broker_generic_csv.can_parse` = estensione `.csv` **e** un'intestazione in cui `_detect_columns` trova `date` e `type`. Il resto del plugin non cambia.
+> - Sul frontend un originale `failed` non entra mai in un set: `setPluginFor` restituisce `null` anche con un override, come `collect_members` sul server (regola A2).
+> - Gli E2E che contavano sul generico «largo» vanno adattati:
+>   - R1 (A18, il broker col generico come predefinito), G-A, G-B e G-C usano l'estratto sintetico a due formati;
+>   - sul vero estratto Danske, «Leggi da solo» non offre più nulla e resta solo «Togli dal set».
+> - **Superfici nuove**, segnalate al coordinatore con la richiesta di controllare i conflitti: `broker_generic_csv.py`, `test_brim_providers.py` e le pagine `generic-csv.*.md` (solo EN, debito di traduzione).
+
+> **Coordinatore** (2026-10-05): nessun altro ramo tocca `broker_generic_csv.py`, `test_brim_providers.py` o `generic-csv.*.md`; sono superfici di G. Due avvertenze:
+> - nei gate di G va anche `external brim-providers`;
+> - nel checkpoint, una riga su cosa vede un utente con un CSV senza `date`/`type` che prima proponeva il generico.
+>
+> **Note implementazione — il rosso emendato (2026-10-05)**, test-author:
+>
+> | Comando | Esito | Rosso |
+> |---|---|---|
+> | `external brim-providers` | 10 rossi, 597 verdi, 2 saltati (già prima) | i 10 test nuovi di `TestGenericCSVDeclaresOnlyWhatItReads` |
+> | `front-transaction tx-unit` | 45 rossi, 581 verdi | i 3 nuovi sul file `failed` più i 42 del primo giro |
+> | `front-transaction tx-import-report-set` | 8 rossi, 10 verdi | R1 (solo il body del combine) e 7 test G; A18, ora su un estratto a due formati, è verde |
+> | `check-orphans` | pulito | — |
+>
+> - **Spostamenti negli E2E**: A18, G-A, G-B, G-C e G-no-memory usano ora l'estratto sintetico «a due formati», che Danske e il CSV generico leggono tutti e due. Ogni caricamento ne verifica i `compatible_plugins`.
+>   - G-real (nuovo) controlla l'estratto vero: sulla riga di cassa non c'è nessun «Leggi da solo», c'è «Togli dal set».
+>   - R1 gira sui campioni veri, con un broker senza plugin predefinito.
+> - **⚠️ Fuori pista**:
+>   - `test_generic_can_parse_any_csv` chiedeva al generico di accettare **ogni** campione CSV, cioè il contrario della decisione del developer. Il test-author l'ha rinominato in `test_generic_can_parse_every_csv_sample_with_date_and_type` e ne ha tenuto la parte che resta vera; la parte rovesciata è il nuovo test rosso sul corpus dei campioni. È una conseguenza diretta della decisione.
+>   - L'helper `_upload_main_set_and_third_cash` di `test_brim_api.py` (riga 1859) dà per scontato che il terzo estratto sintetico sia compatibile anche col generico, e dopo la correzione cadrà prima delle sue verifiche: va riparato dal test-author.
+>   - Nella corsia restano file dei test API sui broker 11–54: per i gate E2E servirà ancora un `--clean`, autorizzato dal coordinatore.
+>   - Dopo la correzione, un'analisi col generico di un CSV senza `date`/`type` risponde «Plugin 'broker_generic_csv' cannot parse file …» invece di «Required column 'date' not found». È ancora un 400, il file va ancora in `failed`, e nessun test controlla il testo.
+
+### G.4 ✅ La cura — 2026-10-05
+
+> **Note implementazione — la cura di G (2026-10-05)**:
+> - **D** (backend):
+>   - `BRIMSetRequest.exclude_file_ids` e `BRIMSetExcludeUnknown` (422, `exclude_unknown`);
+>   - `collect_members` prima raccoglie gli originali del broker e del caricamento, poi rifiuta gli id estranei, poi toglie gli esclusi;
+>   - `preview_set` e `combine_set` passano l'elenco; gli endpoint lo leggono dalla richiesta;
+>   - `api sync`.
+> - **Il CSV generico**: `can_parse` = estensione `.csv` **e** un'intestazione in cui `_detect_columns` trova `date` e `type`.
+> - **Logica pura** (`importReportSets.ts`):
+>   - `setPluginFor`: un originale `failed` non entra mai in un set; `''` = singolo senza plugin;
+>   - `combinedFileForSet` confronta i membri vivi;
+>   - `rememberedChoices` applica la regola E1/E2/E3, con gli istanti letti con `Date.parse`, e in parità vince «letto da solo»;
+>   - poi `setPluginChoices`, `readAlonePlugins`, `otherSetPlugins`, `defaultPluginNote`, `setRequest`; `setsOfFiles` usa la memoria.
+> - **`ReportSetCard.svelte`**:
+>   - la select «Letto come» nell'intestazione, col plugin rilevato marcato;
+>   - le azioni di riga `read-alone-<codice>`, visibili per file, e `remove-from-set`;
+>   - le note C1 e C2 nel corpo.
+> - **Wizard**:
+>   - `rememberedByBroker` e `choicesFor`, dove la sessione conta più della memoria;
+>   - `pickBestPlugin` parte dalla scelta in vigore;
+>   - `readSetAs`, `readFileAlone` e `removeFileFromSet`;
+>   - la cache delle preview tiene anche i membri (`memberSignature`), e `refreshChangedSetPreviews` rilegge quelle cambiate, anche dopo un'eliminazione;
+>   - preview e combine mandano `setRequest` ed `excludeFileIds`.
+> - **FilesTable**: la preview manda `setRequest`.
+> - **i18n**: 7 chiavi nuove in 4 lingue (`importWizard.reportSet.{readAs, readAsOneByOne, detected, readAloneWith, removeFromSet, defaultPluginNote, alsoRecognisedBy}`). L'argomento di C1 si chiama `{defaultPlugin}`, perché `default` è un nome a rischio in ICU.
+>
+> **Primi verdi**:
+>
+> | Verifica | Esito |
+> |---|---|
+> | `services brim-report-sets` | `255 passed` (i 23 rossi di D sono verdi) |
+> | `external brim-providers` | `595 passed`, 1 saltato. I casi sono 13 in meno perché il generico rivendica meno campioni: per esempio la matrice Windows-1252 scende a 22 casi, di cui 4 col generico, e il salto Degiro×generico non c'è più. Nessun test perso |
+> | `front check` | **0/0**. Un errore di tipo, il predicato `code is string` negato in un `filter`, corretto con un helper booleano |
+> | `front-transaction tx-unit` | `626 passed` (i 45 rossi sono verdi) |
+> | `front-utility core-unit` / `component-unit` / `onboarding-component-unit` | `2704` / `2203` / `409 passed` |
+> | `front build --debug` | ok |
+>
+> **`--clean` prima degli E2E di G**, autorizzato dal coordinatore («una volta, solo su `/private/tmp/librefolio-r2-l`»):
+> - **prima**: la cartella `broker_reports` non c'era proprio, quindi 0 file. La causa non è chiara: non sono i fixture delle suite di servizio, che lavorano in `tmp_path`;
+> - `test … db populate --force --clean`: exit 0;
+> - **dopo**: `uploaded`, `parsed` e `failed` esistono, vuote, con 0 file.
+>
+> **E2E di G, primo giro** (in corso): `tx-import-report-set`, 4 rossi e 14 verdi.
+> - **R3, difetto mio**: «Carica il file mancante» rilegge la preview passando l'oggetto del set di **prima** del caricamento. Con `setRequest`, il file appena caricato risulta un originale del caricamento che non è membro, quindi finisce fra gli esclusi, e il set resta incompleto.
+>   - Correzione: dopo il caricamento si rilegge la preview del set **attuale**, cioè quello con la stessa chiave in `allReportSets`.
+>   - Non la applico finché il giro E2E è in corso: un sorgente cambiato farebbe ricostruire il frontend al prossimo avvio del server.
+> - **G-memory (set), G-memory (alone) e G-no-memory**, difetto di test: `reopenOnStep2` clicca il pulsante Import della barra mentre l'editor (`tx-bulk-modal`), rimasto aperto dopo la chiusura del wizard, intercetta il clic. Il pulsante della pagina apre l'editor col wizard dentro, e chiudere il wizard lascia l'editor vuoto aperto.
+>   - Riparazione per il test-author: riaprire il wizard dall'editor (`tx-bulk-import`), oppure chiudere prima l'editor (`closeEditorWithoutSaving`).
+>   - In più, la premessa di `test_brim_api.py:1859` va adattata al generico più stretto: il terzo estratto è compatibile con `[DANSKE_CODE]`, cioè come il campione di cassa.
+>
+> **E2E di G, primo giro concluso** (corsia 6156, un comando per volta):
+> - **verdi**:
+>   - `-guide` 2, `tx-bulk-import-handoff` 2, `tx-import-file-selection` 2, `tx-import-upload` 9, `tx-import-flow` 10, `tx-import-resolution` 12;
+>   - `tx-import-matching` 6, `tx-import-asset-inspector` 5, `tx-import-duplicate-precedence` 6;
+>   - `tx-wac-bulk` 10, `tx-bulk-diagnostics` 2, `tx-bulk-operations` 10, `tx-paired-edit` 4;
+>   - `front-utility files` 22, `select` 17, `image-crop` 42, `onboarding-tour` 10;
+>   - `front-broker detail` 33;
+> - rossi accettati: T1 e CAC-011/012;
+> - `tx-import-report-set`: i 4 rossi analizzati sopra. **R3 è corretto** (si rilegge la preview del set attuale); `front check` resta a 0/0.
+>
+> **⚠️ Fuori pista — `front-utility files-uploader`, 6/6 rossi.** Verdetto della test-triage: **assumption** del test, che non viene da G.
+> - La spec ha un elenco chiuso di GET permessi e riceve `GET /api/v1/settings/onboarding`, l'avvio dell'onboarding (`onboardingApi.ts:81`); la pagina File non si apre mai.
+> - La spec è cambiata l'ultima volta in `ef722b552`; le modifiche di G non toccano onboarding, layout né la spec.
+> - L'ho segnalato al coordinatore: non è un mio file.
+>
+> **⚠️ Fuori pista — la corsia dopo il giro**:
+> - CAC ha lasciato file `ca-*` sui broker 9–21, gli id che `tx-import-report-set` riusa;
+> - ogni populate senza `--clean` aggiunge un'altra copia dei campioni ai broker finti 1–7 (25 copie ciascuno).
+>
+> Ho chiesto al coordinatore un `--clean` prima di ogni giro E2E di G.
+
+> **Decisioni del coordinatore (2026-10-05)**:
+> - **`--clean` prima di ogni giro E2E di G**: permesso fino alla fine di G, solo sulla corsia, con il comando esatto `… test --test-port 6156 --data-dir /private/tmp/librefolio-r2-l db populate --force --clean`, un comando alla volta e senza backend sulla 6156.
+> - **`files-uploader` assegnata a L**, solo test, in un commit separato `test(e2e): …`. La spec resta severa sulle chiamate della pagina File; la GET dell'onboarding si dichiara come contratto dell'app, con una risposta sintetica in cui le guide risultano completate. Non si toccano `onboardingApi.ts` né il layout.
+> - I file `ca-*` di CAC e le copie dei campioni: backlog di fine round del coordinatore.
+
+> **Note implementazione — la riparazione dei test (2026-10-05)**:
+> - **La corsia**: `--clean` autorizzato, da 426 file a 0.
+> - **Il test-author**:
+>   - `tx-import-report-set`: `reopenOnStep2` riapre il wizard dall'editor (`tx-bulk-import`); i tre G-memory sono verdi;
+>   - `test_brim_api.py:1859`: la premessa segue il generico più stretto;
+>   - `files-uploader.spec.ts`: `GET /api/v1/settings/onboarding` è nell'elenco come contratto dell'app, con una risposta sintetica (tutte le guide completate) validata sullo schema.
+> - **Esiti**:
+>
+> | Verifica | Esito |
+> |---|---|
+> | `tx-import-report-set` | `18 passed` a 1 worker e a 4 worker |
+> | `front-utility files-uploader` | `6 passed` |
+> | `api brim` | `72 passed` |
+> | `check-orphans` | pulito |
+>
+> - **⚠️ Fuori pista — un possibile difetto fuori da G**, visto dal test-author: `TransactionBulkModal.svelte` (~483) mette `initialOpsKey = ''` quando i tipi di transazione non sono ancora in cache, e allora un editor vuoto chiede «Scartare le modifiche?». Non riprodotto dalla pagina Transazioni. Va al backlog del coordinatore.
+
+> **Note implementazione — la documentazione di G (2026-10-05)**, dal docs-writer, solo EN, senza stamp:
+> - `user/transactions/import/danske-bank.en.md`: la sezione nuova «🔀 How the set is read» (`#how-the-set-is-read`): «Read as», il menu di riga (Read alone with / Remove from the set), le due note, la memoria dopo l'analisi; più una frase sui badge.
+> - `developer/frontend/components/features/import-wizard.md`: la tabella degli helper, le sezioni nuove `#set-read-as` e `#set-memory` (E1/E2/E3 e la precedenza), il combine con `excludeFileIds`, i badge con la memoria.
+> - `developer/architecture/patterns/brim_plugin_guide.md`: un plugin non rivendica un file che non sa leggere (la regola del generico); `exclude_file_ids`, 404 `members_not_found`, 422 `exclude_unknown`.
+> - `user/transactions/import/generic-csv.en.md`: due frasi su quando il CSV generico si propone. La pagina ha traduzioni: è **debito di traduzione**.
+> - `providers_list.md`: non toccato. «Accepts any CSV matching the Generic CSV spec» è già condizionale.
+> - **Gate**: `mkdocs build` strict ok; `check-links` 81 validi e il solo rosso D28 accettato; `translate-validate` senza problemi strutturali su generic-csv (un'ancora interna tolta perché i titoli tradotti cambiano slug).
+> - **Dal codice, cose che la doc ora dice giuste**:
+>   - un file tolto dal set si rimette nel set spuntandolo e scegliendo il plugin del set;
+>   - le due note si vedono solo a scheda aperta;
+>   - in parità di istante, nella memoria vince «letto da solo».
+> - **⚠️ Fuori pista — deriva fuori da G, per il backlog**:
+>   - il ripiego `auto` → CSV generico (`brokers.py:894`) fallisce sempre, sia prima sia dopo G;
+>   - la mappatura manuale delle colonne è descritta in `generic-csv.en.md:3,15-17`, `how-to.en.md:84` e `index.en.md:288`, ma non esiste: le colonne si riconoscono dal nome;
+>   - un file che nessun plugin riconosce può ricevere a mano un plugin di set: il wizard lo mette nel set, il server no. Viene da C2, non da G.
+> - **⚠️ Fuori pista — il messaggio d'errore del CSV generico**, che viene da G. Forzare il generico su un CSV senza `date` o `type` prima dava «Parse error: Required column 'date' not found in CSV header»; ora la guardia di `parse_file` (`brim_provider.py:1431`) risponde «Plugin 'broker_generic_csv' cannot parse file '…'». L'esito è lo stesso, il file finisce in `failed`, ma il messaggio non dice più quale colonna manca. Domanda al developer.
+
+### G.5 ✅ Il motivo del rifiuto (2026-10-05)
+
+**Decisione del developer** (ask_user, testuale): «Correggi dentro G con il metodo opzionale (Consigliato)».
+
+**Contratto**:
+1. **Il metodo del plugin**. `BRIMProvider.cannot_parse_reason(file_path) -> Optional[str]` è un metodo concreto della classe base, non astratto, che di default restituisce `None`.
+   - Dà, in una frase inglese breve, senza maiuscola iniziale né punto finale, il motivo per cui `can_parse` rifiuta il file: qualcosa che l'utente può correggere. `None` vuol dire «niente da aggiungere».
+   - Lo chiama solo la guardia del parse, dopo un `can_parse` falso. Deve costare quanto `can_parse` e non sollevare mai eccezioni.
+2. **La guardia di `parse_file`** (`brim_provider.py` ~1431). Quando rifiuta, il messaggio è `Plugin '{code}' cannot parse file '{name}'`, più `: {motivo}` se c'è un motivo.
+   - Il motivo si chiede sul percorso controllato per ultimo, cioè quello spostato se il file si è mosso.
+   - Il metodo si legge con `getattr`: i plugin duck-typed dei test e i plugin scritti sulla base vecchia restano validi.
+   - Un'eccezione del metodo si registra nel log e si ignora: resta il messaggio semplice, mai un 500.
+   - Per il resto non cambia nulla: `ValueError`, quindi 400 dall'API, e il file va in `failed` con quel messaggio.
+3. **Il CSV generico** implementa il metodo:
+
+   | Caso | Motivo |
+   |---|---|
+   | estensione diversa da `.csv` | «the Generic CSV reads only .csv files» |
+   | file illeggibile | «the file could not be read» |
+   | nessuna riga d'intestazione | «the file has no header row» |
+   | intestazione senza `date` e/o `type` | «required column 'date' not found in the CSV header», la stessa frase con 'type', oppure «required columns 'date' and 'type' not found in the CSV header» |
+   | file leggibile dal plugin | `None` |
+
+   - Invariante: `can_parse(p) is (cannot_parse_reason(p) is None)`, per costruzione, perché `can_parse` si appoggia al motivo.
+4. **Cosa vede l'utente** nel riquadro degli errori del wizard: «x.csv — Plugin 'broker_generic_csv' cannot parse file '‹id›.csv': required column 'date' not found in the CSV header».
+   - Il nome tra apici è quello salvato, `{file_id}{ext}`, e non viene da G: la guardia ha sempre usato `file_path.name`. Va al backlog, ed è fuori da G.
+
+**Test** (test-author, prima rossi):
+- `external brim-providers`: il motivo per ogni intestazione rifiutata, `None` per quelle accettate, i casi di estensione, file vuoto e file mancante, l'invariante su tutti i campioni, e il default della base.
+- `services brim-parse-race`: il messaggio della guardia con e senza motivo, il plugin senza metodo, il metodo che solleva un'eccezione, il percorso spostato, e il generico vero.
+- `api brim`: il parse forzato col generico su un CSV senza `date` risponde 400 col motivo, e il file finisce in `failed`.
+
+**Doc** (docs-writer, solo EN): `brim_plugin_guide.md` (il metodo opzionale) e `generic-csv.en.md` (la frase dell'errore).
+
+> **Note implementazione — G.5 (2026-10-05)**:
+> - **Il rosso** (test-author):
+>   - `external brim-providers`: la classe nuova `TestGenericCSVSaysWhyItRefuses`, 31 rossi per `AttributeError`; la parametrizzazione dei rifiuti ora dichiara a mano le colonne mancanti (`_HEADERS_MISSING_DATE_OR_TYPE`), e i 33 test esistenti restano verdi con gli stessi id;
+>   - `services brim-parse-race`: 7 rossi e una guardia nuova già verde (il plugin senza metodo tiene il messaggio semplice, verificato per uguaglianza);
+>   - `api brim`: RS-G05, rosso solo sulla fine di `detail`.
+> - **La cura**:
+>   - `BRIMProvider.cannot_parse_reason` (default `None`);
+>   - `_refusal_message` in `brim_provider.py`, chiamata dalla guardia di `parse_file` col percorso controllato per ultimo, metodo letto con `getattr`, eccezioni registrate e ignorate;
+>   - il CSV generico implementa il motivo, e `can_parse` è `cannot_parse_reason(p) is None`.
+> - **Verdi**:
+>
+> | Verifica | Esito |
+> |---|---|
+> | `external brim-providers` | `626 passed`, 1 saltato (595 + 31) |
+> | `services brim-parse-race` | `14 passed` |
+> | `services brim-parse-pool` / `brim-parse-error` / `brim-report-sets` | `8` / `4` / `255 passed` |
+> | `api brim` (per ultimo) | `73 passed` (72 + RS-G05) |
+> | `dev.py lint`, `black --check` | puliti |
+>
+> - **Doc di G.5** (docs-writer, solo EN, senza stamp):
+>   - `brim_plugin_guide.md`: la riga del metodo nella tabella dei metodi opzionali, la sottosezione «🗣️ Saying why a file is refused» (`#cannot-parse-reason`) e il messaggio nel flusso;
+>   - `generic-csv.en.md`: il messaggio ora dice cosa manca, più una frase su come correggere il file.
+>   - `mkdocs build` strict ok; `check-links` col solo D28; `translate-validate` senza problemi su generic-csv.
+> - **⚠️ Fuori pista — `compatible_plugins` è calcolato al caricamento** e non si ricalcola più (`brim_provider.py:711`, `:723`, `:800`). Per un CSV caricato prima di G il CSV generico resta quindi proposto; sceglierlo ora fallisce col motivo. È un limite noto, per il backlog.
+
+### G.6 ✅ Gate finali (2026-10-05), corsia 6156, un comando per volta
+
+- `front build --debug` ok (dopo R3).
+- `--clean` autorizzato prima del giro: da 46 file a 0.
+- Il giro: script `/tmp/libreFolio_l_g_final_e2e.sh`, log in `/tmp/libreFolio_l_g_final_*.log`.
+
+| Verifica | Esito |
+|---|---|
+| `tx-import-report-set` / `-guide` / `tx-bulk-import-handoff` / `tx-import-file-selection` | `18` / `2` / `2` / `2 passed` |
+| `tx-import-upload` / `-flow` / `-resolution` / `-matching` / `-duplicate-precedence` | `9` / `10` / `12` / `6` / `6 passed` |
+| `tx-wac-bulk` / `tx-bulk-diagnostics` / `tx-bulk-operations` / `tx-paired-edit` | `10` / `2` / `10` / `4 passed` |
+| `front-utility files` / `files-uploader` / `select` / `image-crop` / `onboarding-tour` / `settings` | `22` / `6` / `17` / `42` / `10` / `45 passed` |
+| `front-broker detail` | `33 passed` |
+| Vitest `tx-unit` / `component-unit` / `core-unit` / `onboarding-component-unit` | `626` / `2203` / `2704` / `409 passed` |
+| `tx-import-asset-inspector` | `4 passed`, **E2-001 rosso** (vedi sotto) |
+| `tx-brim-import` / `tx-ca-contract` | T1 e CAC-011/012, rossi già accettati; `10 passed` in CAC |
+| `front check` | **0/0** |
+| `check-orphans` | pulito: 96 E2E, 281 Vitest e 227 backend raggiungibili |
+| privacy (`/tmp/libreFolio_l_e_privacy.py 8c6853281`) | 0 collisioni su 3399 righe aggiunte |
+| `git diff --check` | pulito; 26 file tracciati modificati, 0 nuovi; porte 6156 e 6166 libere |
+
+> **⚠️ Fuori pista — E2-001 (`tx-import-asset-inspector`)**:
+> - Rosso alla riga 476. Dopo «Annulla» sulla modale di cambio valuta, il clic sul combobox della valuta non apre la listbox: nello snapshot la modale «Edit Asset» è aperta, la valuta è «USD» e il combobox è chiuso.
+> - Non viene da G. Risk lo riproduce 4 volte su 5 senza G (snapshot del coordinatore in `/tmp/lf-triage-k3/`), e G non tocca AssetModal, SearchSelect né la modale della valuta. Nel primo giro di G era verde.
+
+> **Decisione di L sulla proposta del coordinatore (CAC-011/012 ed E2-001 nel giro di G): non costano poco, quindi backlog, oppure un mini-giro dopo il commit di G.**
+> - **CAC**: la spec usa `isVisible({timeout})` 14 volte come condizione di ramo (`walkToReview`, `confirmNotices` e altri). Playwright ignora quel timeout e risponde subito, quindi renderla deterministica significa riscrivere quegli helper di una spec che non è di L.
+> - **E2-001**: serve una test-triage vera, con trace. Potrebbe essere una corsa sul focus fra modali annidate, cioè un difetto del prodotto.
+> - Lo stesso schema `isVisible({timeout})` è usato in circa 30 punti di altre spec (`tx-wac-fx`, `broker-sharing`, `brokers-detail`, `image-crop`, `tx-wac-formmodal`, `tx-bulk-suggest-ux`).
+
+### G — ✅ pronta per il checkpoint (2026-10-05)
