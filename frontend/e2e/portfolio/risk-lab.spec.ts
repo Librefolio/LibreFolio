@@ -444,8 +444,10 @@ function isHistoricalReplay(analytic: RiskAnalyticRequest): boolean {
  * neither invents one. That distinction is the whole reason they are options rather
  * than separate hand-written payloads: a stub that can only produce the happy path
  * makes the unhappy paths unreachable, and a stub that produces an impossible
- * one tests a page against a world that does not exist. The last two are not states
- * at all: the same ordinary answer, with one column's figures in another order.
+ * one tests a page against a world that does not exist. The two after them are not
+ * states at all: the same ordinary answer, with one column's figures in another order.
+ * The last one plants what the backend attaches to an asset set's reports since D373:
+ * the data-quality banner's issues.
  */
 interface RiskStubOptions {
     /**
@@ -489,7 +491,29 @@ interface RiskStubOptions {
      * gain of 0.3% although it is larger. The benchmark's active return follows the same figure.
      */
     zigzagExpectedReturn?: boolean;
+    /**
+     * Data-quality issues to plant in the answers to one section's requests (decision B).
+     *
+     * Since D373 `service.py::_with_asset_set_quality_issues` gives every result of an asset-set
+     * request that carries a report the banner's issues, one per category. So what this returns
+     * rides on every result of the request {@link labSectionsOf} attributes to `section`, built from
+     * that request — its own scope, never the page's. The controllers read a report where they read
+     * any (`allResults`): a base wave's `correlation`, the one asset-set analytic they know, and
+     * their on-demand answers, the replay's among them.
+     */
+    qualityIssues?: (section: LabSection, request: RiskRequest) => readonly QualityIssue[];
 }
+
+/** A data-quality issue as the API sends it, read off the generated contract the client validates every answer with. */
+type QualityIssue = ReturnType<typeof schemas.DataQualityIssue.parse>;
+
+/**
+ * The lab's sections, as their requests are told apart on the wire: the correlation section, L1°,
+ * L3°, and the replay's own runs. The replay section's *base wave* is not a fifth: it asks the
+ * correlation section's question, `[correlation]`, and `queryRisk` serves the two from one flight
+ * (see {@link assetSetLevelRequests}).
+ */
+type LabSection = 'correlation' | 'loss' | 'paid' | 'replay';
 
 /** True when this analytic is one of the five the comparison levels read. */
 function isAssetSetLevel(analytic: RiskAnalyticRequest): boolean {
@@ -620,16 +644,28 @@ function metadata(request: RiskRequest, analytic: RiskAnalyticRequest, options: 
     };
 }
 
-/** Clean data quality: this file is about what the panel prints, not about its banners. */
-function dataQuality() {
+/**
+ * The data-quality report every result carries: clean, unless a test plants issues in it
+ * ({@link RiskStubOptions.qualityIssues}). A report with issues does not call itself `ok`: a missing
+ * price leaves it `partial`, a stale one `carried_forward`. Nothing on this page reads the status;
+ * it is set so the report stays one the backend could send.
+ */
+function dataQuality(issues: readonly QualityIssue[] = []) {
     return {
-        issues: [],
+        issues: [...issues],
         carried_forward_price_points: 0,
         carried_forward_fx_points: 0,
         carried_forward_price_asset_ids: [],
         carried_forward_fx_pairs: [],
-        data_quality_status: 'ok',
+        data_quality_status: issues.length === 0 ? 'ok' : issues.some((issue) => issue.severity === 'error') ? 'partial' : 'carried_forward',
     };
+}
+
+/** What {@link RiskStubOptions.qualityIssues} plants in the answers to `request`: for each section that asked it, in page order. */
+function plantedQualityIssues(request: RiskRequest, options: RiskStubOptions): QualityIssue[] {
+    const plant = options.qualityIssues;
+    if (plant === undefined) return [];
+    return labSectionsOf(request).flatMap((section) => [...plant(section, request)]);
 }
 
 /**
@@ -1045,7 +1081,7 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
         instance_id: analytic.instance_id,
         analytic_code: analytic.analytic_code,
         metadata: metadata(request, analytic, options),
-        data_quality: dataQuality(),
+        data_quality: dataQuality(plantedQualityIssues(request, options)),
         warnings: [],
     };
 
@@ -1524,6 +1560,128 @@ function paidRequestsFor(requests: readonly RiskRequest[], selection: readonly n
 function correlationRequestsFor(requests: readonly RiskRequest[], selection: readonly number[]): RiskRequest[] {
     const wanted = scopeKey(selection);
     return assetSetHistoricalRequests(requests).filter((request) => request.scope.kind === ASSET_SET_SCOPE && scopeKey(request.scope.asset_ids) === wanted && codesOf(request).has('correlation') && !request.analytics.some((analytic) => isAssetSetLevel(analytic)));
+}
+
+/** The replay's own runs about exactly this selection, in the order they left: a `stress` asked as a historical replay. */
+function replayRequestsFor(requests: readonly RiskRequest[], selection: readonly number[]): RiskRequest[] {
+    const wanted = scopeKey(selection);
+    return requests.filter((request) => request.scope.kind === ASSET_SET_SCOPE && scopeKey(request.scope.asset_ids) === wanted && request.analytics.some((analytic) => isHistoricalReplay(analytic)));
+}
+
+/**
+ * Which of the lab's sections asked `request`, told apart by the analytics it carries — through the
+ * classifiers the assertions read the captured requests with, applied to this one request about its
+ * own scope, so the stub and its oracle cannot disagree about whose request is whose. Normally one
+ * section; a request carrying both levels' codes — the one the levels shared before their split — is
+ * L1°'s and L3°'s at once, as {@link lossRequestsFor} says; anything else on the wire is none.
+ */
+function labSectionsOf(request: RiskRequest): LabSection[] {
+    if (request.scope.kind !== ASSET_SET_SCOPE) return [];
+    const scope = request.scope.asset_ids;
+    const sections: Array<[LabSection, (requests: readonly RiskRequest[], selection: readonly number[]) => RiskRequest[]]> = [
+        ['correlation', correlationRequestsFor],
+        ['loss', lossRequestsFor],
+        ['paid', paidRequestsFor],
+        ['replay', replayRequestsFor],
+    ];
+    return sections.filter(([, requestsFor]) => requestsFor([request], scope).length > 0).map(([section]) => section);
+}
+
+/**
+ * An asset issue as `service.py::_asset_issue` builds it (D373): the backend's own key, action and
+ * group for its code, one entry per asset in the order given, named the way the backend names an
+ * asset it has no display name for ({@link unnamedAsset}) — the stub knows no names. Parsed through
+ * the generated contract the client validates every answer with, so an issue it would refuse fails
+ * here, by field, and not as a section that silently failed to load.
+ */
+function assetQualityIssue(code: 'STALE_PRICE' | 'MISSING_PRICE', assetIds: readonly number[]): QualityIssue {
+    const stale = code === 'STALE_PRICE';
+    return schemas.DataQualityIssue.parse({
+        domain: 'asset',
+        code,
+        severity: stale ? 'warning' : 'error',
+        message_i18n_key: stale ? 'dataQuality.stalePrice' : 'risk.quality.missingPrice',
+        message_params: {count: assetIds.length},
+        count: assetIds.length,
+        affected_asset_ids: [...assetIds],
+        affected_asset_names: assetIds.map(unnamedAsset),
+        cta_action: stale ? 'sync_asset_prices' : 'navigate_asset',
+        cta_target: String(assetIds[0]),
+        group_key: stale ? 'stale_price' : 'missing_price',
+    });
+}
+
+/** A pair with no exchange-rate route, as `service.py::_fx_issue` builds `MISSING_FX_MARKET`: it asks for one (`add_fx_pair`) and names no target. */
+function unroutedPairIssue(pairs: readonly string[]): QualityIssue {
+    return schemas.DataQualityIssue.parse({
+        domain: 'forex',
+        code: 'MISSING_FX_MARKET',
+        severity: 'warning',
+        message_i18n_key: 'risk.quality.missingFx',
+        message_params: {count: pairs.length},
+        count: pairs.length,
+        affected_fx_pairs: [...pairs],
+        cta_action: 'add_fx_pair',
+        cta_target: null,
+        group_key: 'missing_fx',
+    });
+}
+
+/** ISO 4217's code reserved for testing: no route can exist for it, which is what an unrouted pair says. */
+const UNROUTED_CURRENCY = 'XTS';
+
+/** The three selected assets the data-quality case names. */
+interface QualityCast {
+    a: number;
+    b: number;
+    c: number;
+}
+
+/**
+ * The data-quality case's cast, from a scope: its three lowest ids, with **A the highest of the
+ * three and C the lowest**. So the order the banner must draw them in — first appearance across the
+ * sections — runs against id order, and a banner that sorted its links by id, or read L3° before
+ * L1°, would draw them in an order the case refuses. `null` under three assets.
+ */
+function qualityCast(assetIds: readonly number[]): QualityCast | null {
+    const lowest = [...new Set(assetIds)].sort((left, right) => left - right).slice(0, 3);
+    if (lowest.length < 3) return null;
+    const [c, b, a] = lowest;
+    return {a, b, c};
+}
+
+/**
+ * What the data-quality case plants, per section, from the scope the request asks about
+ * ({@link RiskStubOptions.qualityIssues}):
+ *
+ * - stale prices naming [A, B] in the correlation section's answer and [B, C] in L3°'s — two
+ *   windows that would, in real life, find different assets stale;
+ * - a missing price naming [A] in L1°'s answer and [C] in L3°'s;
+ * - in the replay's own answer, a pair with no route: a code no other section sends.
+ *
+ * 📌 The correlation section's request is the replay section's base wave too (one flight, see
+ * {@link LabSection}), so its stale prices reach both controllers. The panel meets the second copy
+ * last — the replay comes after L3° — and it names no asset the first did not, so it adds no item,
+ * no asset and moves nothing. The missing price rides only on the levels' requests, which nothing
+ * shares.
+ */
+function labQualityIssues(section: LabSection, request: RiskRequest): QualityIssue[] {
+    const cast = qualityCast(request.scope.kind === ASSET_SET_SCOPE ? request.scope.asset_ids : []);
+    if (cast === null) return [];
+    if (section === 'correlation') return [assetQualityIssue('STALE_PRICE', [cast.a, cast.b])];
+    if (section === 'loss') return [assetQualityIssue('MISSING_PRICE', [cast.a])];
+    if (section === 'paid') return [assetQualityIssue('STALE_PRICE', [cast.b, cast.c]), assetQualityIssue('MISSING_PRICE', [cast.c])];
+    return [unroutedPairIssue([pairSlug(UNROUTED_CURRENCY, request.target_currency)])];
+}
+
+/** The ids the issues of one code name, merged the way `mergeQualityIssues` merges asset ids: their union, by first appearance. */
+function idsByFirstAppearance(issues: readonly QualityIssue[], code: string): number[] {
+    const ids: number[] = [];
+    for (const issue of issues) {
+        if (issue.code !== code) continue;
+        for (const assetId of issue.affected_asset_ids ?? []) if (!ids.includes(assetId)) ids.push(assetId);
+    }
+    return ids;
 }
 
 /** The request each section feeding the lab's notice last sent about one selection. */
@@ -2060,6 +2218,47 @@ async function partialNoticePlacement(page: Page): Promise<string> {
         const precedes = (first: Element, second: Element) => !first.contains(second) && !second.contains(first) && (first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
         if (!precedes(card, notice)) return 'above the selection card';
         if (!precedes(notice, correlation)) return 'below the correlation section';
+        return 'between';
+    });
+}
+
+/**
+ * The lab's data-quality banner (decision B, the developer, 05/10/2026): one `DataQualityBanner`,
+ * `mode="grouped"`, over the issues of every section, drawn above the one notice. Scoped to the lab;
+ * born folded, its rows drawn only once its toggle says it is open.
+ */
+const labBanner = (page: Page) => page.getByTestId('asset-global-risk-panel').getByTestId('data-quality-banner');
+
+/**
+ * Where the lab's data-quality banner sits, as one verdict: `'between'` when it follows the selection
+ * card and precedes the notice — when one is drawn — and the correlation section, inside none of them:
+ * at the top of what the sections say, above the one notice; otherwise what is wrong.
+ *
+ * The notice is optional *here* because it is drawn only when something came back partial or warned;
+ * a caller that means to check the banner's place above it makes the notice a premise first. Document
+ * order, not pixels. One read, not a retry: a caller polls it, or fronts it with barriers.
+ */
+async function qualityBannerPlacement(page: Page): Promise<string> {
+    return page.getByTestId('asset-global-risk-panel').evaluate((panel) => {
+        const find = (testId: string) => panel.querySelector(`[data-testid="${testId}"]`);
+        const card = find('risk-asset-set-controls');
+        const banner = find('data-quality-banner');
+        const notice = find('risk-partial-notice');
+        const correlation = find('risk-correlation-section');
+        if (!card || !banner || !correlation) return `missing: card=${card !== null} banner=${banner !== null} correlation=${correlation !== null}`;
+        const others: Array<[string, Element | null]> = [
+            ['the selection card', card],
+            ['the notice', notice],
+            ['the correlation section', correlation],
+        ];
+        for (const [name, other] of others) {
+            if (other?.contains(banner)) return `inside ${name}`;
+            if (other && banner.contains(other)) return `wrapping ${name}`;
+        }
+        const precedes = (first: Element, second: Element) => (first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+        if (!precedes(card, banner)) return 'above the selection card';
+        if (notice && !precedes(banner, notice)) return 'below the notice';
+        if (!precedes(banner, correlation)) return 'below the correlation section';
         return 'between';
     });
 }
@@ -4205,6 +4404,12 @@ test.describe('Asset Global risk laboratory', () => {
         // warning" rather than "not every answer has landed".
         await waitForNoticeFrames(page);
         await expect(labNotice(page), 'the wave came back whole and the lab still shows a notice: it calls something partial when nothing is').toHaveCount(0);
+        // Nor its data-quality banner (decision B), behind the same barriers: no answer the stub
+        // sent carries an issue (`dataQuality()` is clean unless a test plants one), and the banner
+        // draws nothing without issues. Its positive control is (e) below, which plants issues and
+        // demands the banner: that is what keeps this absence from passing about a banner that was
+        // never built.
+        await expect(labBanner(page), 'no answer carries a data-quality issue and the lab still draws a banner: it reports a problem nobody sent').toHaveCount(0);
     });
 
     /**
@@ -4401,6 +4606,118 @@ test.describe('Asset Global risk laboratory', () => {
         expect(expected.sentences, 'premise: a short window planted a warning on a result the notice reads').toBe(0);
         await waitForNoticeFrames(page);
         await expect(labNotice(page), "nothing the lab draws is partial or warned, and the lab shows a notice anyway: what did not come back at all is its frame's to say").toHaveCount(0);
+    });
+
+    /**
+     * (e) — the lab's data-quality banner (decision B, the developer, 05/10/2026).
+     *
+     * Since D373 the backend gives an asset set's reports the banner's issues, one per category
+     * (`service.py::_data_quality_issues`): stale prices offer a sync, a missing price opens the
+     * asset, a pair with no route asks for one. Each section holds its own controllers, each
+     * controller merges the issues of every answer it holds (`mergeQualityIssues`), and the panel
+     * merges the sections' in page order — the correlation section, L1°, L3°, the replay — by the
+     * same rule into one `DataQualityBanner`, drawn above its one notice. So the reader meets one item
+     * per code and group, naming every asset any section named, in the order they first appeared;
+     * and the banner's actions are the lab's (`labQualityAction`): a sync opens the lab's own sync,
+     * the rest navigate.
+     *
+     * What is planted, and why there, is {@link labQualityIssues}; the cast is {@link qualityCast},
+     * read off the selection on screen. `dropLastAsset` draws the notice, so the banner's place above
+     * it is checked, not skipped.
+     *
+     * Red until the panel draws the banner: today it draws none, and the first assertion on it fails.
+     */
+    test("the lab's data-quality banner: one item per code and group across the sections, above the notice, its Sync opening the lab's own sync", async ({page}) => {
+        // One replay, a modal cycle and a navigation: the budget pays for the work, and every wait
+        // below is still a barrier on a published state.
+        test.setTimeout(60_000);
+        const options: RiskStubOptions = {dropLastAsset: true, qualityIssues: labQualityIssues};
+        const requests = await installRiskMocks(page, options);
+        // Nothing here runs a sync. Should something, no provider is reached, and the calls are counted.
+        const syncCalls = await installSyncMocks(page);
+        await openAssetGlobalRisk(page);
+        // Three assets for the cast, and a fourth for `dropLastAsset` to leave out — the highest id, so
+        // never one of the cast, which takes the three lowest.
+        await ensureSelectionAtLeast(page, MINIMUM_SELECTION);
+        await waitForRiskCatalog(page);
+
+        // The cast, from the selection on screen: the scope every section asks about, so the very ids
+        // the stub planted — it reads them off each request's own scope, through the same function.
+        const selected = await chipIds(page);
+        const cast = qualityCast(selected);
+        if (cast === null) throw new Error(`The data-quality case needs three selected assets and the selection holds ${selected.length}. Check populate_mock_data.py.`);
+
+        // Every section feeding the notice has asked about this selection and drawn its answer, and the
+        // notice the banner must precede is on screen: what follows is about the banner, not about an
+        // answer still on its way.
+        const sent = await noticeRequestsFor(requests, selected);
+        await waitForLossTable(page);
+        await waitForNoticeFrames(page);
+        await expect(labNotice(page), 'premise: dropLastAsset answered partial results and the lab draws no notice, so the banner would have nothing to be above').toBeVisible();
+
+        // ── one item per code and group, across the sections ─────────────────
+        const banner = labBanner(page);
+        await expect(banner, 'the sections hold data-quality issues and the lab draws no banner: the reader is never told').toBeVisible({timeout: 10_000});
+        const toggle = banner.getByTestId('data-quality-toggle');
+        // Asked, never pressed blind: the banner is born folded, and a press on an open one folds it.
+        if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+        await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+
+        const issueRow = (code: string) => banner.getByTestId(`data-quality-issue-${code}`);
+        await expect(issueRow('STALE_PRICE'), "stale prices planted in the correlation section's answer and in L3°'s must be one item").toHaveCount(1, {timeout: 10_000});
+        await expect(issueRow('MISSING_PRICE'), "a missing price planted in L1°'s answer and in L3°'s must be one item").toHaveCount(1);
+        // Nobody has run the replay, so the code only its own answer carries is not listed yet. Read
+        // behind the two rows above, which are its presence barrier.
+        await expect(issueRow('MISSING_FX_MARKET'), 'the replay has not run, and the banner already lists what only its answer carries').toHaveCount(0);
+
+        // ── above the notice ──────────────────────────────────────────────────
+        await expect.poll(() => qualityBannerPlacement(page), {message: 'the banner must follow the selection card and precede the notice and the correlation section, inside none of them'}).toBe('between');
+
+        // ── the replay's own answer reaches it too ────────────────────────────
+        await openAndRunReplay(page);
+        await expect(issueRow('MISSING_FX_MARKET'), "the replay's answer carries a pair with no route and the banner does not list it: the panel does not read the replay section").toHaveCount(1, {timeout: 10_000});
+        await expect(issueRow('STALE_PRICE'), "the replay's controller holds the correlation section's stale prices too (one flight): still one item").toHaveCount(1);
+        await expect(issueRow('MISSING_PRICE')).toHaveCount(1);
+
+        // ── the missing price's links: the union, by first appearance ─────────
+        await expect.poll(() => replayRequestsFor(requests, selected).length, {message: 'the replay never asked about the selection on screen'}).toBeGreaterThan(0);
+        const replayRun = replayRequestsFor(requests, selected).at(-1) as RiskRequest;
+        // Derived from the stub's own planting, in the order the panel merges the sections: the
+        // correlation section, L1°, L3°, then the replay — whose controller holds the correlation
+        // section's answer as its base wave (one flight), then its own run's.
+        const inPanelOrder = [...labQualityIssues('correlation', sent.correlation), ...labQualityIssues('loss', sent.loss), ...labQualityIssues('paid', sent.paid), ...labQualityIssues('correlation', sent.correlation), ...labQualityIssues('replay', replayRun)];
+        const missingInOrder = idsByFirstAppearance(inPanelOrder, 'MISSING_PRICE');
+        expect(missingInOrder, "premise: the planting names A in L1°'s answer and C in L3°'s, and nothing else").toEqual([cast.a, cast.c]);
+        expect(cast.a, 'premise: A is the higher id, so the order below is first appearance and not id order').toBeGreaterThan(cast.c);
+
+        const missingLinks = banner.getByTestId('data-quality-nav-assets-MISSING_PRICE');
+        await expect(missingLinks).toBeVisible();
+        const linkIds = () => missingLinks.getByTestId(/^data-quality-nav-asset-\d+$/).evaluateAll((nodes) => nodes.map((node) => Number((node.getAttribute('data-testid') ?? '').slice('data-quality-nav-asset-'.length))));
+        await expect.poll(linkIds, {timeout: 15_000, message: `the missing price must link exactly [${missingInOrder.join(', ')}], each once: L1°'s asset, then L3°'s — by first appearance, not by id, and not L3° first`}).toEqual(missingInOrder);
+
+        // ── its Sync: the lab's own ───────────────────────────────────────────
+        // `openSync` opens only while the selection has something to sync; the toolbar's sync, which
+        // reaches the same modal, is enabled exactly then — the precondition, published.
+        await expect(page.getByTestId('assets-controls').getByTestId('risk-sync-button')).toBeEnabled();
+        const before = page.url();
+        await banner.getByTestId('data-quality-cta-STALE_PRICE').click();
+        // On this page the only `page-sync-modal` is the lab's (the grid's prices-only sync is
+        // `asset-sync-modal`), and the page stayed where it was: the lab's own sync, opened in place.
+        const modal = page.getByTestId('page-sync-modal');
+        await expect(modal, "the banner's Sync opened no sync").toBeVisible();
+        expect(page.url(), "the banner's Sync left the page instead of opening the lab's own sync").toBe(before);
+        await expect(page.getByTestId('asset-sync-modal'), "the banner's Sync opened the grid's prices-only sync, not the lab's").toHaveCount(0);
+        // Closed as it was opened, without a run: no provider may have been asked for anything.
+        await modal.getByTestId('sync-modal-close').click();
+        await expect(modal).toBeHidden();
+        expect(syncCalls.assets.length + syncCalls.fxPairs.length, 'the sync was opened and closed, never run, and still reached a sync endpoint').toBe(0);
+
+        // ── a link opens its asset — last, since it leaves the page ───────────
+        await missingLinks.getByTestId(`data-quality-nav-asset-${cast.a}`).click();
+        await page.waitForURL((url) => url.pathname === `/assets/${cast.a}`, {timeout: 15_000});
+
+        // Nothing to restore: every route is this page's own, and the sync stubs and the held price
+        // poll stay in place on the asset page the case ends on.
     });
 
     /**
