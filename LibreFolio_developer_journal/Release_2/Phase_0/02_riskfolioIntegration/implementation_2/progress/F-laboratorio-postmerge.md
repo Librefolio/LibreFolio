@@ -425,7 +425,7 @@ vitest, 7 path ⇒ Test Files 7 passed (7) · 260 test
 ## Correzione del coordinatore su F2 (23/09)
 
 > Sul perimetro `asset_set` un asset senza prezzi è **escluso** (`missing_price`, avviso `assets_excluded`), non liquidità:
-> misurato da A sulla copia (574 osservazioni con e senza il crowdfunding). F2 vale per il **portafoglio**. Per ρ̄ (F-4):
+> misurato da A sulla copia (le stesse osservazioni con e senza gli asset privi di prezzi). F2 vale per il **portafoglio**. Per ρ̄ (F-4):
 > l'esclusione va **mostrata**.
 
 ## Quattro reperti dello specialista doc di A nei miei file — verificati
@@ -546,7 +546,7 @@ vitest, 7 path ⇒ Test Files 7 passed (7) · 260 test
 > Server di misura sulla copia rinfrescata alle 17:37:18 CEST (`--port 6164 --data-dir /tmp/librefolio-r2-f-prodcopy`), log dello stdout
 > del server nella cartella di sessione (`files/F3_server_measure.log`). ⚠️ **Corretto il 24/09**: la copia **non era intatta**
 > alla partenza di questo server. Il primo server sulla stessa copia (avviato alle 15:37:32Z, fermato prima di questo)
-> ci aveva già fatto scrivere il suo scheduler: vedi le 575 osservazioni in F-3. Il conteggio dei polling qui sotto non ne dipende. ⚠️ **Qui le righe d'accesso di uvicorn ci
+> ci aveva già fatto scrivere il suo scheduler: vedi le osservazioni in F-3. Il conteggio dei polling qui sotto non ne dipende. ⚠️ **Qui le righe d'accesso di uvicorn ci
 > sono**, a differenza di `librefolio.log`: il conteggio si fa per percorso. Tutte le navigazioni sono **in-app**.
 > Orari in UTC, dagli eventi JSON `Current-price persist: commit OK`.
 >
@@ -584,23 +584,23 @@ vitest, 7 path ⇒ Test Files 7 passed (7) · 260 test
 > `-dirty`. Verificato leggendo il campo: i tipi (`generated.ts`) non sono cambiati.
 >
 > **Verificato per uso sul server di misura** (stessa build; ~~stessa copia prima dei polling~~: **falso**, corretto il 24/09.
-> La copia aveva già le scritture dello scheduler del primo server, delle 15:37Z; vedi le 575 osservazioni qui sotto):
-> - `data-selection-source` = `mine` al primo accesso: tutti i 15 asset dell'utente, di cui **4 senza prezzi** (crowdfunding),
+> La copia aveva già le scritture dello scheduler del primo server, delle 15:37Z; vedi le osservazioni qui sotto):
+> - `data-selection-source` = `mine` al primo accesso: tutti gli asset dell'utente, compresi quelli **senza prezzi**,
 >   esclusi con avviso. Il pannello scrive subito la selezione sotto `lf_1_…`; al ritorno, e con `[1,3,8]` scritto
 >   nella chiave, il valore è `persisted` e i chip sono esattamente 1, 3, 8 ✅. Chiave di prova rimossa dal browser del canvas.
 > - **Nessun `€` e nessun `•••`** nel pannello (`asset-global-risk-panel`). «EUR» compare solo come etichetta del filtro
 >   valuta (`risk-filter-currency-EUR`) e dentro i nomi di alcuni asset.
-> - **Privacy ON**: l'`innerText` del pannello è **identico byte per byte** (3174 caratteri, FNV `3565dd0a` prima e dopo).
+> - **Privacy ON**: l'`innerText` del pannello è **identico byte per byte** (lunghezza e impronta uguali prima e dopo).
 >   Nessun `•••` in tutta la pagina del tab. Replay aperto ed eseguito con privacy ON: solo percentuali, nessun
 >   `•••` né `€`.
 > - I tre fatti del coordinatore (justETF scrive nel weekend, la griglia è l'unione), **riprodotti nel laboratorio**:
 >   - con `[1,3,8]` sul 3M: *Correlazione: Parziale* con il solo motivo *carried-forward*. *Dettagli calcolo*:
->     Osservazioni 93, Copertura 100.0%, fattore 365.00. Il fattore 365 dice che i weekend sono dentro;
->   - con `[1,3,8]` dal 2024-01-01: Osservazioni **575**, Copertura **57.7%**, nessun avviso di copertura. Le celle,
+>     copertura piena e fattore 365: il fattore 365 dice che i weekend sono dentro;
+>   - con `[1,3,8]` dal 2024-01-01: copertura **parziale**, nessun avviso di copertura. Le celle,
 >     nel tooltip, riportano la loro copertura, che il coordinatore misura a 1,0.
->     Sulla snapshot il coordinatore misura 574/995. ~~**Non verificato**: la mia ipotesi è che l'osservazione in più
+>     Sulla snapshot il coordinatore misura un'osservazione in meno. ~~**Non verificato**: la mia ipotesi è che l'osservazione in più
 >     sia la riga di oggi, scritta dal polling durante la mia misura.~~
->     ✅ **Fatto (24/09)**: 575 = 574 + la riga del **2026-09-23** degli asset 1, 3 e 8, e 575/996 = 0,577. La riga non
+>     ✅ **Fatto (24/09)**: l'osservazione in più è la riga del **2026-09-23** di alcuni asset [id tolti]. La riga non
 >     esiste nella snapshot, dove la data massima è il 09-22. L'ha verificato il coordinatore sulla copia
 >     `.prev-20260923-180034`; io l'ho riverificato con una lettura `immutable=1` (nessun file laterale creato) e coi
 >     log dei due server.
@@ -623,7 +623,7 @@ vitest, 7 path ⇒ Test Files 7 passed (7) · 260 test
 >     non corregge»*.
 >     📌 **Sul server di review è già successo.** Alle 07:30:47Z del 24/09, 5 s dopo l'avvio, lo scheduler ha creato la
 >     riga del **2026-09-24** (`existing rows today: 0`, poi `F.2 bootstrap` per 1, 3 e 8), con **0** richieste
->     `prices/current` e **0** login. Le cifre che vedrà il developer quindi **non** saranno 575 / 57,7%. Non le ho rimisurate.
+>     `prices/current` e **0** login. Le cifre che vedrà il developer quindi **non** saranno quelle misurate sopra. Non le ho rimisurate.
 >   - La contraddizione fra le due coperture compare **solo dietro un'interazione**: il `<details>` *Dettagli calcolo*,
 >     chiuso di default, e il tooltip della cella, al passaggio del mouse.
 > - Visibile ma **non mio**:
@@ -668,10 +668,10 @@ vitest, 7 path ⇒ Test Files 7 passed (7) · 260 test
 > **⚠️ Fuori pista minore**: il mio primo `kill $pid` in un ciclo è stato rifiutato dall'harness, che vuole un PID
 > letterale. Nessun processo era sopravvissuto: verificato PID per PID.
 
-## Le 575 osservazioni: riga confermata, autore corretto — 2026-09-24, 09:32–09:40
+## L'osservazione in più: riga confermata, autore corretto — 2026-09-24, 09:32–09:40
 
 > Il coordinatore ha confermato la mia ipotesi sulla copia `.prev-20260923-180034`: c'è una riga del 2026-09-23 per
-> gli asset 1, 3 e 8. **La riga è quella giusta, l'autore no**: non l'ha scritta il polling, l'ha creata lo scheduler.
+> alcuni asset [id tolti]. **La riga è quella giusta, l'autore no**: non l'ha scritta il polling, l'ha creata lo scheduler.
 > Il dettaglio e l'evidenza (log dei due server, `fetched_at` = ultima scrittura) sono in **F-3**, dove stava
 > l'ipotesi. Corretta in F-2d anche la frase «stessa copia prima dei polling»: era falsa.
 >
@@ -917,12 +917,12 @@ vitest, 7 path ⇒ Test Files 7 passed (7) · 260 test
 > | V2 | le azioni rapide vanno bene, ma disposte meglio | — | F |
 > | V3 | precarica per broker, tipo e valuta: ripensare e avvicinare. Alla fine un **«+»** che apre una lista di asset **con filtri**, non una select fissa | «Aggiungi asset alla matrice» è `AssetSelect`: una select singola con ricerca. Non esiste un selettore multiplo di asset con filtri (`AssetPickerModal` è per le immagini), quindi serve un componente nuovo. Il filtro per tipo andrà sulla select di K | F (+ K per i tipi) |
 > | V4 | «Correlazione: Parziale» e la frase che segue non sono chiari | li disegna `RiskLevelSection`, di Risk: lo stato del risultato e il messaggio del backend **alla lettera** (`data_quality_degraded`; *«Verbatim, or nothing»* in `levelHelpers.resultReasons`). La causa, sui dati del developer, sono i punti riportati: weekend, festivi e la baseline (F-2e). Quindi comparirà **quasi sempre** | Risk |
-> | V5 | nomi troncati, fuori posto, coperti dalla matrice; la matrice non segue la finestra; meglio un pan che uscire dallo schermo | (a) l'unica etichetta **senza emoji** (`Btp Piu' Sc Fb33…`: il 🇮🇹 finale lo taglia il troncamento a 18 caratteri) è al posto giusto su **entrambi** gli assi. Tutte quelle che iniziano con un'emoji finiscono dentro il disegno: ECharts misura male la larghezza delle emoji nel canvas, e i nomi sono dati dell'utente. (b) Il canvas è largo 861 px in una card di 729 px (dall'HTML ispezionato). La causa esatta è ancora da misurare | F (unico scrittore); la montano anche `L2Diversification` (Risk, Dashboard) e il legacy |
-> | V6 | l'ordine «Per nome» deve ignorare le emoji | confermato: oggi raggruppa per emoji iniziale, e «Btp» finisce ultimo | F · ✅ sotto |
+> | V5 | nomi troncati, fuori posto, coperti dalla matrice; la matrice non segue la finestra; meglio un pan che uscire dallo schermo | (a) l'unica etichetta **senza emoji** (un'obbligazione la cui bandiera finale la toglie il troncamento a 18 caratteri) è al posto giusto su **entrambi** gli assi. Tutte quelle che iniziano con un'emoji finiscono dentro il disegno: ECharts misura male la larghezza delle emoji nel canvas, e i nomi sono dati dell'utente. (b) Il canvas è largo 861 px in una card di 729 px (dall'HTML ispezionato). La causa esatta è ancora da misurare | F (unico scrittore); la montano anche `L2Diversification` (Risk, Dashboard) e il legacy |
+> | V6 | l'ordine «Per nome» deve ignorare le emoji | confermato: oggi raggruppa per emoji iniziale, e l'unico nome senza emoji finisce ultimo | F · ✅ sotto |
 > | V7 | nel titolo, a destra, l'icona del manuale: tooltip che spiega la card, descrizione più ampia, click verso una pagina di documentazione. Uguale in Dashboard e ovunque ci sia correlazione | `DocsLink` esiste (icona libro, tooltip `label`). Il titolo lo disegna `RiskLevelSection` (Risk), che non ha un posto per l'icona. La pagina di teoria `financial-theory/technical-analysis/risk-metrics/correlation/` esiste (solo EN, registro rigoroso); **nessuna pagina utente** (quella di Asset Global la scrive A, D7). La Dashboard (`L2Diversification`) non ha l'icona. La descrizione è `risk.analytics.correlation.description`, chiave del catalogo del backend (`description_i18n_key`): cambiarla la cambia ovunque | Risk (titolo, Dashboard) · A (pagina utente) · F (testo) |
 > | V8 | «I più simili» / «Quelli che si compensano»: *«assolutamente incomprensibile, dammi dei suggerimenti»* | le liste promettono più di quanto le soglie garantiscano (`topPairs`). «Simili» = qualunque ρ > 0: top 5, dentro anche 0,55, che è «moderato». «Si compensano» = qualunque ρ < 0: dentro anche −0,01, che è indipendenza e non compensazione. Il blu scatta solo sopra 0,7. I nomi stanno su una riga troncata con «↔». Non c'è scala, né legame con la matrice | F |
 >
-> **Non è un difetto** (verificato): il contatore diceva «15 selezionati su 15» mentre la matrice aveva 7 asset. Gli
+> **Non è un difetto** (verificato): il contatore diceva «N selezionati su N» mentre la matrice aveva meno asset. Gli
 > elementi ispezionati vengono da momenti diversi: con asset esclusi, fra i motivi comparirebbe il messaggio di
 > `assets_excluded` (`resultReasons` li mostra tutti), e non c'era.
 >
@@ -956,8 +956,8 @@ vitest, 7 path ⇒ Test Files 7 passed (7) · 260 test
 > **Note implementazione**: `nameOrder` confronta `sortableName(nome)`, cioè il nome senza emoji né i caratteri
 > invisibili che le compongono (bandiere, toni della pelle, keycap, sequenze ZWJ). Un nome fatto di sole emoji resta
 > intero; la parità si risolve ancora per id.
-> **Prova sui nomi reali** (sonda node, stessi 7 nomi della review): prima raggruppati per emoji iniziale, con «Btp»
-> ultimo; dopo in ordine alfabetico (Amundi, Amundi, Btp, iShares, Xtrackers ×3). Casi limite: `🇮🇹` → resta
+> **Prova sui nomi della review** (sonda node): prima raggruppati per emoji iniziale, con l'unico nome senza emoji
+> ultimo; dopo in ordine alfabetico. Casi limite: `🇮🇹` → resta
 > `🇮🇹`; `1️⃣ Uno` → `1 Uno`; `👍🏽 Bravo` → `Bravo`.
 > ```
 > cd frontend && npx vitest run src/lib/components/risk/correlationHelpers.test.ts → Test Files 1 passed (1) · 64 test
@@ -1075,9 +1075,9 @@ vitest, 7 path ⇒ Test Files 7 passed (7) · 260 test
 >   quella del box che scorre, osservato con `ResizeObserver`, non più del grafico.
 >
 > **Prova sui numeri** (sonda del solo helper puro):
-> - 7 asset, triangolo 6×6: in una card da 729 px → grafico 728×448, celle 84×52, **entra**; in 1100 px → celle al
->   massimo, 752 px; in 420 px → celle al minimo, **scorre**;
-> - 15 asset, calcolato a mano: 14 colonne da 44 px → 840 px, **scorre**.
+> - la selezione della review: in una card da 729 px **entra**; in 1100 px → celle al massimo; in 420 px → celle al
+>   minimo, **scorre**;
+> - tutti gli asset della copia, calcolato a mano con colonne da 44 px: **scorre**.
 >
 > ```
 > front check: 3 errori + 41 avvisi negli stessi 4 file del pavimento, 0 nei miei · prettier pulito
@@ -1089,7 +1089,7 @@ vitest, 7 path ⇒ Test Files 7 passed (7) · 260 test
 >   cache utente (`~/.npm/_npx/fd45a72a545557e9/`). Nel progetto non è cambiato niente: manifest intatti, nessun
 >   `tsx` in `node_modules`. È un'installazione non autorizzata, anche se involontaria, ed è segnalata al coordinatore.
 >   D'ora in poi le sonde TypeScript passano da vitest, che c'è già.
-> - L'ultima riga della stessa sonda l'ha tagliata un mio `| head -6`, contato prima degli avvisi. Il caso da 15 asset
+> - L'ultima riga della stessa sonda l'ha tagliata un mio `| head -6`, contato prima degli avvisi. Il caso con tutti gli asset della copia
 >   l'ho quindi ricalcolato a mano invece di rilanciare.
 >
 > **Per V8**, visto qui: il tooltip dice *«si muovono in direzioni opposte»* anche a ρ = −0,08, perché
@@ -1139,10 +1139,10 @@ vitest, 7 path ⇒ Test Files 7 passed (7) · 260 test
 > ```
 > **Settore e area: la mia valutazione, da decidere col developer.**
 > - **I dati ci sono**: distribuzioni con pesi che sommano a 1 (`classification_params.sector_area` e
->   `.geographic_area`), lette in una sola richiesta (`GET /api/v1/assets?asset_ids=…`). Sui suoi 15 asset ce le hanno
->   10 per il settore e 9 per l'area.
+>   `.geographic_area`), lette in una sola richiesta (`GET /api/v1/assets?asset_ids=…`). Sulla copia non tutti gli asset
+>   le hanno, né per il settore né per l'area.
 > - **Regola proposta, «prevalente»**:
->   - gruppo = il peso più grande se ≥ 50% (es. *Tecnologia 95%*), altrimenti **Diversificato**;
+>   - gruppo = il peso più grande se ≥ 50% (es. un settore al 95%), altrimenti **Diversificato**;
 >   - non classificati in fondo;
 >   - nel gruppo, per peso decrescente e poi per nome;
 >   - il gruppo compare nel tooltip.
@@ -1172,7 +1172,7 @@ vitest, 7 path ⇒ Test Files 7 passed (7) · 260 test
 > - **Etichette**: settori con `sectors.<sectorI18nKey>`, ripiego sulla chiave grezza, mai `sectors.…` a schermo;
 >   paesi con `getCountryInfo(iso3).name`; `Other` → `common.other`. Icona del settore o bandiera del paese solo in HTML.
 > - **Lettura**: una fila di etichette sopra la matrice con i gruppi nell'ordine della matrice e il loro numero
->   (`risk-correlation-groups`); nel tooltip, sotto ogni nome, il gruppo con la quota (*Tecnologia 95%*). I due
+>   (`risk-correlation-groups`); nel tooltip, sotto ogni nome, il gruppo con la quota (es. un settore al 95%). I due
 >   pulsanti compaiono solo se almeno un asset ha la distribuzione. La barra degli ordini ora scorre invece di
 >   uscire dalla card.
 > - **i18n** (`dev.py i18n`): altre 4 chiavi (`ordering.sector/region`, `group.diversified/unclassified`). Cumulativo
@@ -1242,7 +1242,7 @@ vitest, 7 path ⇒ Test Files 7 passed (7) · 260 test
 > - **Correzioni di mio codice trovate da `test-author`**:
 >   - `plainName` toglieva anche `®`, `©` e `™`, perché `Extended_Pictographic` li comprende: «SPDR® S&P 500®»
 >     perdeva le ® sull'asse. Ora toglie solo le emoji *come emoji* (presentazione emoji, pittogrammi con VS16,
->     bandiere, toni, ZWJ, keycap, tag). Provato su 11 nomi: le ® restano, 👑 🇪🇺 ❤️ spariscono;
+>     bandiere, toni, ZWJ, keycap, tag). Provato sui nomi della review: le ® restano, le emoji spariscono;
 >   - `exposureOrder` confrontava i gruppi per verità delle chiavi: una chiave `''` stava fra i gruppi con nome ma
 >     saltava il confronto, e l'ordine dipendeva dall'ingresso. Ora si confronta per livello, e `dominantExposure`
 >     ignora le chiavi vuote.
@@ -1464,15 +1464,15 @@ riceve un «+» con ricerca e scelta multipla.
 3. **«Seleziona tutti» e «Deseleziona tutti» non funzionavano subito.** ⏳ Ipotesi da riverificare col developer: agiscono
    sui candidati filtrati da Tipo e Valuta, quindi con un filtro attivo sembrano non fare niente. Con i filtri dentro il
    «+» agiranno su tutto il catalogo analizzabile.
-4. **«15 selezionati su 15» non dice su cosa.** ⏳ Diventa «N in analisi su M analizzabili», con un tooltip: M è il
+4. **«N selezionati su N» non dice su cosa.** ⏳ Diventa «N in analisi su M analizzabili», con un tooltip: M è il
    catalogo intero, non solo gli asset del developer.
 5. **All'apertura, «Tutti i miei».** Decisione (`ask_user`): **si riparte dall'ultima selezione; se non c'è, da «Tutti
    i miei»** (le holdings al `dateEnd`, non più `tx_count_own`), poi il piccolo insieme di ripiego. ⏳ Dopo il merge.
 6. **Filtri Tipo e Valuta dentro il «+».** ⏳ Dopo il merge; `LabCheckMenu` allora sparisce.
-7. **I 4 asset proposti come selezionabili.** Il developer: «il punto non è il tipo crowdfunding, ma che quei asset
+7. **Gli asset senza prezzi proposti come selezionabili.** Il developer: «il punto non è il tipo [di asset], ma che quei asset
    hanno 0 prezzi registrati», e la cosa «si dovrebbe ricollegare all'engine di ammissibilità». Verificato in sola
-   lettura sulla copia (`sqlite/app.db` con `immutable=1`, solo id, tipo e conteggi): gli asset 12–15 hanno **0 righe**
-   in `price_history`, tutti gli altri arrivano al 2026-09-24. Nessuna regola nel frontend: domanda sul contratto inviata
+   lettura sulla copia (`sqlite/app.db` con `immutable=1`, solo id, tipo e conteggi): alcuni asset [id tolti] non hanno
+   **nessuna riga** in `price_history`, tutti gli altri arrivano all'ultimo giorno della copia. Nessuna regola nel frontend: domanda sul contratto inviata
    a Risk (sessione «Risk management analysis»), coordinatore in copia. **Decisione del developer, relayata dal
    coordinatore**: il backend di Risk si collega adesso nel ramo di F. Quindi checkpoint, merge Risk → F a `14c334d85`,
    e solo dopo il collegamento del «+» agli stati di idoneità.
@@ -1538,7 +1538,7 @@ Log in `/tmp/libreFolio_f3b/ckpt2_*.log`.
 | 6 | `i18n audit` (0 mancanti) | ✅ exit 0 · «No Missing Translations» · 3455 chiavi · fra le 418 «forse inutilizzate» del laboratorio solo `risk.assetSet.panelTitle`, già annotata |
 | 7 | E2E `front-portfolio risk` (6154) | ✅ 13 passati su 13 dichiarati (Risk ha ampliato `risk-analysis.spec.ts` da 3 a 13), 27,7 s |
 | 8 | E2E `front-portfolio risk-lab` (rosso atteso sui selettori, F-6) | 🟡 8 passati, 8 falliti, **tutti sui pezzi tolti dalla riprogettazione**: 2 sul filtro Tipo a etichette (la regex ora trova `risk-filter-type-button`), 2 su `risk-asset-add-select`, 1 su `risk-broker-option-all`, 3 su `risk-sync-button` dentro la scheda. I due del preset broker (`:2615`, `:2668`) sono l'unica copertura rimasta: F-6 li riallinea, non li toglie |
-| 9 | copia rinfrescata, 6164 rialzata, replay del laboratorio dal vivo | ✅ copia dalla snapshot (vecchia in `.prev-20260924-161807`, `chmod -R u+w`, Alembic `004_release_1_2_0_schema`, 15 asset, 0 utenti `e2e_*`) · server PID 57685, cwd nel worktree, `db_path` della copia, `/health` 200, `index.html` servito = costruito `37a1f65d93a01e3a`, `/risk/eligibility` senza login → 401 · ⏳ **replay dal vivo**: serve il login del developer (credenziali non trascritte), si verifica nella sua review |
+| 9 | copia rinfrescata, 6164 rialzata, replay del laboratorio dal vivo | ✅ copia dalla snapshot (vecchia in `.prev-20260924-161807`, `chmod -R u+w`, Alembic `004_release_1_2_0_schema`, 0 utenti `e2e_*`) · server PID 57685, cwd nel worktree, `db_path` della copia, `/health` 200, `index.html` servito = costruito `37a1f65d93a01e3a`, `/risk/eligibility` senza login → 401 · ⏳ **replay dal vivo**: serve il login del developer (credenziali non trascritte), si verifica nella sua review |
 
 > ⚠️ **Fuori pista — `api risk` rosso per infrastruttura, non per il prodotto (16:05–16:07)**
 > - Comando: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6154 --data-dir
@@ -1905,7 +1905,7 @@ descrizione del runner, copertura di `risk-reload-button`). Poi i cancelli compl
 >     di testo trascinata fuori.
 > - **Reperto 3**: la copertura di `risk-reload-button` la scrive test-author, nello stesso spec.
 > - **Snapshot (correzione del coordinatore, 09:15)**: la snapshot delle 09:05 era sbagliata (marcatore di produzione,
->   `logs/`, file `-shm`/`-wal`). Quella rifatta alle 09:15 contiene solo `sqlite/app.db` (sha `5c0a681bc4e4b59c`),
+>   `logs/`, file `-shm`/`-wal`). Quella rifatta alle 09:15 contiene solo `sqlite/app.db`,
 >   `broker_reports/`, `custom-uploads/` e `scheduler_state.json`. F non aveva ancora fatto nessuna copia dopo il riavvio:
 >   la copia per la 6164 si fa da quella nuova, con verifica dello sha.
 
@@ -1988,8 +1988,8 @@ descrizione del runner, copertura di `risk-reload-button`). Poi i cancelli compl
 > ```
 > **6164**:
 > - `front build` exit 0;
-> - copia nuova dalla snapshot corretta (4 voci, `app.db` sha `5c0a681bc4e4b59c`, Alembic `004_release_1_2_0_schema`,
->   15 asset, 0 utenti `e2e_*`);
+> - copia nuova dalla snapshot corretta (4 voci, Alembic `004_release_1_2_0_schema`,
+>   0 utenti `e2e_*`);
 > - server PID 45601, cwd nel worktree, `db_path` della copia, `/health` 200, `/risk/eligibility` senza login → 401;
 > - il server ha ricostruito il bundle all'avvio (`auto_build_frontend`, `dev.py:216`): servito = costruito =
 >   `c66640e278c03145`, nessun sorgente più nuovo del bundle;

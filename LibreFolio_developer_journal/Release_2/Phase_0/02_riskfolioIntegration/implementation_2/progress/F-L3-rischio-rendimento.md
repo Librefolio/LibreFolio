@@ -189,7 +189,7 @@
 ### L3-5 · review del developer sulla 6164 · 2026-09-30, dalle 17:30
 
 > **Preparazione**:
-> - copia di prod fresca (`app.db` sha `5c0a681bc4e4b59c`); build di debug aggiornata, nessun sorgente più recente;
+> - copia di prod fresca; build di debug aggiornata, nessun sorgente più recente;
 > - server `dev.py server --test --port 6164 --data-dir /tmp/librefolio-r2-f-prodcopy`, shell `l3server`, PID 1509.
 >
 > **Primo giro (ask_user), alla lettera**: «guarda, mi pare tutto ottimo, ma sai cosa, invertirei tabella e grafico, così
@@ -309,7 +309,7 @@
 > letto, e nessuna serie porta `symbol:` → il benchmark si disegna **cerchio**, non il rombo che i commenti descrivono
 > (anche il mio, in `AssetSetRiskReturnSection.svelte`, «labelled the diamond»). Cambierebbe anche la Dashboard: decide A.
 
-> **Terzo giro di review** (2026-10-01): copia di prod fresca (`5c0a681bc4e4b59c`), build di debug più recente di ogni
+> **Terzo giro di review** (2026-10-01): copia di prod fresca, build di debug più recente di ogni
 > sorgente, server sulla 6164.
 > - **⚠️ Fuori pista**: il developer ha riavviato il programma per aggiornarlo, e il riavvio ha fermato il server (era
 >   legato alla sessione). Nel frattempo la copia era stata scritta (`3ae5f49f…`) → sostituita con una copia fresca,
@@ -633,7 +633,7 @@ Il selettore (variante B) arriva dopo, con la primitiva `BenchmarkSelect` di Ris
 
 ### L4-6 · review del developer sulla 6164 · 2026-10-01, dalle 19:3x
 
-> **Preparazione**: copia di prod fresca (`5c0a681bc4e4b59c`), build del codice definitivo, server `l4server` sulla 6164.
+> **Preparazione**: copia di prod fresca, build del codice definitivo, server `l4server` sulla 6164.
 >
 > **Risposta del developer (ask_user), alla lettera**: «quando scrivi: Periodo: dal 1 lug 2026 al 1 ott 2026 (93
 > giorni). Volatilità e rendimento medio sono annualizzati; Sharpe e Sortino derivano da questi. non mettere 93 giorni,
@@ -816,7 +816,7 @@ Il selettore (variante B) arriva dopo, con la primitiva `BenchmarkSelect` di Ris
 > **Review del selettore sulla 6164** (2026-10-02):
 > - **⚠️ Fuori pista**: il developer ha riavviato il programma per aggiornarlo, e il riavvio ha fermato il server (era
 >   legato alla sessione); la domanda di review era rimasta a metà. La copia era stata scritta (`e689ab09…`) →
->   sostituita con una copia fresca (`5c0a681bc4e4b59c`); la build era ancora più recente di ogni sorgente; server
+>   sostituita con una copia fresca; la build era ancora più recente di ogni sorgente; server
 >   riavviato (shell `l5server2`, PID 93092), `/assets` 200. HEAD invariata (`c221ed22d`), albero invariato (10 file).
 >
 > **Review del developer (ask_user, 2026-10-02 09:5x), alla lettera**: «l componente che fa il cerca, vorrei sfruttasse
@@ -829,9 +829,9 @@ Il selettore (variante B) arriva dopo, con la primitiva `BenchmarkSelect` di Ris
 > per scegliere un asset di riferimento, considerato il "rischio base" e fa capire, asset per asset, se il rischio è
 > superiore o meno, o insomma una frase così, informativa. Nella lista degli asset che compaiono non ci sono quelli
 > selezionati, mi pareva avessimo deciso che potessero essere scelti anche loro, o è in risk ancora? Per altro mettere
-> Lonate Pozzolo o gli altri asset con 0 prezzi, similmente a quanto avviene con "+" divrebbero essere esclusi perchè non
+> [un suo asset] o gli altri asset con 0 prezzi, similmente a quanto avviene con "+" divrebbero essere esclusi perchè non
 > ammissibili. Poi mettendone 1 ottengo: Giornata storta: Parziale · Mese storto: Parziale · Discese per asset: Parziale
-> Prezzi fermi da più di 7 giorni per 2 asset: […] ma non in un banner come abbiamo sviluppato, ma sia dentro "quanto
+> Prezzi fermi da più di 7 giorni per N asset: […] ma non in un banner come abbiamo sviluppato, ma sia dentro "quanto
 > fa male?" che "quanto ha pagato ciascuno" A livello di posizionamento, io lo ripeterei dentro ogni pannel in cui è
 > utile poterlo editare, senza fare continuamente sopra sotto, altrimenti lo mettevamo direttamente in cima.»
 >
@@ -1346,7 +1346,7 @@ dei tre controller, azioni su `openSync`»):
   creare gli utenti. Server fermato; 6154 libera; log `600` nella cartella privata.
 
 **Che cosa ha visto il developer** («Giornata storta: Parziale · Mese storto: Parziale · Discese per asset:
-Parziale · Prezzi fermi da più di 7 giorni per 2 asset», ripetuto in L1° e L3°):
+Parziale · Prezzi fermi da più di 7 giorni per N asset», ripetuto in L1° e L3°):
 - sono la salute e i motivi di ogni cornice (`RiskLevelSection`). La frase sui prezzi fermi è un **avviso del
   risultato** (`data_quality_stale_prices`, `service.py:961-963`), che arriva su ogni risultato con dati non integri
   insieme allo stato `partial`; nel laboratorio è l'unico canale;
@@ -1722,3 +1722,336 @@ insieme di asset `data_quality.issues` arriva una per categoria, `code + group_k
 >   - Il mio `risk-lab`, che ha girato dopo le 13:30Z: **0** righe, `current_value` compreso.
 >   - Il mio filtro dei provider non conteneva `current_value for` (le chiamate a Yahoo); da qui in poi lo
 >     comprende.
+
+### Giro 8b committato ✅ 2026-10-05, 16:15
+
+> - `c20ae9382` (G1), `457a7a4ab` (G2), `84d12b814` (G3), `8cb564ace` (G4), albero `44637ca2c`.
+> - Verifica in sola lettura: messaggi, file e blob uguali al registro (digest `f9295233…`).
+> - Risk ha fatto il fast-forward allo stesso commit. Il suo test-author riallinea al limite di 3 tentativi tre miei
+>   file di test. **Non li tocco fino alla fusione del suo checkpoint**:
+>   - `AssetSetComparisonLevels.test.ts`;
+>   - `AssetSetCorrelationSection.test.ts`;
+>   - `AssetSetReplaySection.test.ts`.
+> - Dopo quella fusione: il commento di `risk-lab.spec.ts:6354` («re-asked once»).
+
+## Giro 9 · la guida della barra e la tappa 1 del pannello · 2026-10-05
+
+| # | passo | stato |
+|---|---|---|
+| L9-1 | guida: `user/assets/index.en.md:37` (compito dal coordinatore via Risk). Nella scheda Correlation la sincronizzazione della barra è «Sync selection», per prezzi e cambi. Solo EN, via docs-writer | ✅ 2026-10-05, più `:33-35` e `correlation.en.md:50` |
+| L9-2 | tappa 1: analisi del pannello riusabile in `ui/select/` (scelta singola e multipla, estratto da `LabAssetPicker`); contratto con Risk, che lo adotta nella tappa 2 | ✅ 2026-10-05 (D-a, D-b, D-c) |
+| L9-3 | tappa 1: rossi, codice (file nuovi più una riga in `component-unit`, poi `check-orphans`), laboratorio identico | ✅ 2026-10-05 codice, mutanti e guida; cancelli sotto |
+| L9-4 | cancelli prima e dopo il fast-forward a k3 (`bb8d68ad2`), poi il checkpoint | ✅ 2026-10-05, 18:05 |
+
+### L9-2 · tappa 1: analisi del pannello riusabile (verificata su `8cb564ace`)
+
+**Stato reale**:
+- `LabAssetPicker.svelte` (317 righe, mio) è il «+» del laboratorio, a scelta multipla:
+  - ricerca, e i filtri di tipo e valuta (`LabCheckMenu`) con i conteggi di ciò che si può ancora aggiungere;
+  - righe con icona, nome che scorre, tipo e valuta, e ⚠ per gli avvisi;
+  - una sezione in sola lettura per i non ammissibili, con i motivi;
+  - «seleziona visibili», il limite `room`, Annulla e «Aggiungi N», Invio che conferma.
+- Le sue primitive sono mie e del solo laboratorio:
+  - `LabPopover` (90 righe; lo usa anche il menu del preset broker del pannello);
+  - `LabCheckMenu` (95);
+  - gli aiutanti di `assetSetSelection.ts` (`applyFilters`, `pickerRows`, `toggleVisibleRows`,
+    `visibleRowsAllChecked`) e `nameOrder` di `correlationHelpers.ts`;
+  - `EligibilityView` (`{level, codes, texts}`), già generico.
+  - Nessun test unitario per i tre componenti: li copre `risk-lab`, con 21 usi dei loro testid, tutti nel mio spec.
+- I consumatori delle tappe 2 e 3 usano `AssetSelect` allo stesso modo (`BenchmarkSelect` e
+  `SignalAssetParamControl`): `value`, `filter`, una sezione «Benchmark» in testa, `compact`,
+  `dropdownPosition="auto"`, `dropdownMinWidth=280`, `placeholder`, `testid`, `onchange`. Cerca per ISIN, ticker e
+  altri codici, non per valuta o tipo (P3/A6). Oggi nessun comando riporta la scelta a «nessuno»: `SearchSelect`
+  azzera solo la ricerca.
+- In `ui/` non c'è un popover generico: un pannello in `ui/select/` non può importare da `risk/`.
+
+**Proposta** (file nuovi in `ui/select/`):
+1. `AssetPickerPanel.svelte`, con `mode: 'single' | 'multi'`:
+   - in comune:
+     - `assets` passati dal chiamante; `searchText`, per difetto gli identificativi come `AssetSelect` (il
+       laboratorio passa il suo: nome, valuta, tipo);
+     - `verdicts` e `blockedLabel` (la sezione in sola lettura); `sections` e `restLabel`; i filtri;
+     - lo snippet `trigger` (il «+» del laboratorio). Per difetto, in `single`, una casella con l'asset scelto e
+       la freccia;
+     - `testId` come prefisso unico di tutti i testid;
+     - nessun importo;
+   - `multi`: `selected`, `room`, `onadd`;
+   - `single`: `value`, `onchange`; un clic sceglie e chiude; la scelta corrente è marcata.
+2. `SelectPopover.svelte` e `CheckMenu.svelte`: `LabPopover` e `LabCheckMenu` spostati così come sono e resi
+   generici. `LabPopover` porta il comportamento delicato del clic (F-6).
+3. `assetPicker.ts`: i quattro aiutanti, `SelectionFilters` e `nameOrder`, spostati. I miei moduli li importano da lì.
+4. `AssetPickerPanel.test.ts` (jsdom): i due modi e gli aiutanti, con i test spostati da
+   `assetSetSelection.test.ts`. Una riga in `component-unit`.
+
+**I miei file**:
+- `LabAssetPicker` diventa un involucro sottile: `multi`, `testId="risk-asset-add"`, il suo «+», le etichette del
+  laboratorio;
+- il pannello usa `SelectPopover`;
+- `LabPopover` e `LabCheckMenu` si tolgono;
+- in `risk-lab.spec.ts` cambiano solo i 7 usi dei testid dei filtri, al prefisso (`risk-filter-type` →
+  `risk-asset-add-filter-type`, …);
+- i18n: chiavi generiche `assetPicker.*` × 4 con il testo di oggi; quelle del laboratorio che sostituiscono si
+  tolgono.
+
+**Decisioni**:
+- **D-a** (developer): il comportamento della scelta singola, con un mock-up;
+- **D-b** (coordinatore): la concessione parlava del pannello e del suo test. Qui i file nuovi in `ui/select/` sono
+  quattro, più il test, e la riga del runner resta una;
+- **D-c** (Risk): il contratto delle tappe 2 e 3.
+
+**Conflitti**:
+- `ui/select/` ha solo file nuovi; `AssetSelect` e `index.ts` non si toccano;
+- i18n: aggiunte, più la rimozione di chiavi mie;
+- i tre test che Risk riallinea non sono fra i miei file di questa tappa.
+
+**Decisioni (2026-10-05)**:
+- **D-a, il developer** (ask_user, col mock-up della scelta singola nel selettore «Confrontato con»), testuale: «Così:
+  un clic sceglie e chiude, stessi filtri e sezioni del «+» (Consigliata)». Quindi: ✓ sulla scelta corrente,
+  «Benchmark» in testa, i non analizzabili in sola lettura, nessuna riga «nessuno».
+- **D-b, il coordinatore**: sì, dentro la concessione, con questi limiti:
+  - in `ui/select/` solo i 5 file nuovi (`AssetPickerPanel.svelte`, `SelectPopover.svelte`, `CheckMenu.svelte`,
+    `assetPicker.ts`, `AssetPickerPanel.test.ts`). I file esistenti non si toccano: `index.ts`, e
+    `AssetSelect.svelte`, che ora Risk modifica con una sua concessione;
+  - nessun doppione: in `ui/` non c'è un popover né un menu a spunte. **Omonimia**: `ui/media/AssetPickerModal.svelte`
+    sceglie un file d'immagine, quindi l'intestazione di `AssetPickerPanel` dice che sceglie asset del portafoglio;
+  - una sola riga nel runner;
+  - i18n solo via `dev.py i18n`. Prima di togliere le chiavi del laboratorio, cercarle nel sorgente; nella
+    consegna, l'elenco delle chiavi aggiunte e tolte (L, D e Risk toccano i cataloghi in altri namespace);
+  - dopo la tappa 1 i file nuovi diventano condivisi: quando la tappa 2 di Risk li usa, ogni modifica passa dal
+    coordinatore;
+  - guida: `:33-36` nello stesso giro, solo EN, senza timbro.
+- **D-c, Risk**: in attesa (il contratto: `assets` passati dal chiamante o un involucro sul negozio; il periodo per
+  i verdetti; i testid col prefisso).
+
+### L9-1 · la guida della barra (docs-writer) · 2026-10-05
+
+> - `user/assets/index.en.md:37`: la sincronizzazione e il ricaricamento valgono così sulla scheda **Assets**. Sulla
+>   scheda **Correlation** gli stessi due pulsanti agiscono sulla selezione: **Sync selection** (prezzi e cambi che
+>   li convertono) e **Reload All** (ogni analisi della selezione). Link alla pagina del laboratorio.
+> - **Nessun timbro**: la pagina aveva già un debito di traduzione (IT/FR/ES non sincronizzate dal 04/09; manca loro
+>   tutto il punto Abs/%). Timbrare l'avrebbe nascosto, quindi il debito resta in coda. Il coordinatore è d'accordo.
+> - **⚠️ Fuori pista**: `:33-35` era falso (Abs/% «you can switch it from the **Correlation** tab too»). L'hanno
+>   scritto il commit della pagina (`e2327e9a3`) e il mio F-3b (`abcf21860`), lo stesso giorno su rami paralleli, e
+>   la fusione l'ha reso falso. Riscritto:
+>   - il comando c'è solo sulla scheda Assets, in griglia;
+>   - l'impostazione è della pagina e sopravvive al passaggio dalla scheda Correlation;
+>   - la scelta di una singola carta no;
+>   - non si salva.
+>   Solo EN, senza timbro.
+> - **⚠️ Fuori pista**: lo stesso conflitto fra rami nella mia pagina, la nota `correlation.en.md:48-50` (la ricerca e
+>   i filtri della barra «stay visible on this tab»). Da F-3b sono nascosti; la correzione è in corso.
+> - Controlli: `mkdocs build` strict pulito; `check-links` 88/8/3 + D28; `sw.js` invariato.
+- **D-c, Risk** (2026-10-05, 16:24): sì, con queste modifiche.
+  - `assets` passati dal chiamante; i wrapper con il negozio sono `BenchmarkSelect` e
+    `SignalAssetParamControl`. In più `loading?` e `disabled?`.
+  - **`single` è un sostituto diretto dei testid di `SearchSelect`**: la radice `{testId}`, `{testId}-trigger`,
+    `{testId}-search`, le opzioni `search-select-option-{id}` dentro la radice (niente portal). Li usano 4 spec
+    con 3 proprietari, uno fuori dalla famiglia (`asset-detail`).
+  - I miei suffissi in più e `data-level` / `data-reasons` / `aria-selected` vanno bene; `multi` tiene il mio schema.
+  - Il trigger di difetto in `single` è uguale alla voce compatta che Risk porta in k3 (`AssetSelect`): una riga,
+    icona `w-4 h-4`, `ticker · name` come nella riga dell'elenco, il badge «inactive». **Stessa altezza con e senza
+    valore**, fissata da un test strutturale: è il difetto che il developer ha visto.
+  - Tastiera come `SearchSelect`: le frecce saltano le righe bloccate (gli aiutanti di passo di
+    `optionFilter.ts`), Invio sceglie, Esc chiude e rende il focus al trigger. Posizione `auto`, larghezza minima
+    280, che stia anche sul mobile.
+  - **Il valore corrente non sparisce mai**: nel trigger qualunque sia il suo verdetto; nell'elenco segnato come
+    corrente, e nella sezione dei bloccati se non è ammissibile.
+  - Il tipo del verdetto sta in `assetPicker.ts`: `ui/select` non importa `risk/eligibility.ts`, ed
+    `EligibilityView` resta compatibile per struttura.
+  - La regola di ricerca: `assetSearchText(asset)` esportata da `assetPicker.ts` e usata per difetto. Nella tappa 2
+    Risk la usa in `AssetSelect.svelte:109`, con una concessione, così la regola P3/A6 ha una copia sola.
+  - i18n in uno spazio neutro, non `risk.*`, spostato con `dev.py i18n` nelle 4 lingue.
+  - Guida per sviluppatori: il pannello in `developer/frontend/components/core-ui/select.md` (EN, docs-writer).
+  - I verdetti della tappa 2 si decidono nella sua analisi.
+> - `correlation.en.md:50` (la nota «The toolbar filters belong to the Assets tab»): riscritta, non tolta. Dice dove
+>   sono finiti la ricerca e i filtri della barra in questa scheda (nascosti: il laboratorio lavora sull'elenco
+>   intero, con la ricerca e i filtri del suo «+») e che cosa la barra tiene (le date, Sync selection, Reload All).
+>   È l'unico punto della pagina che nomina Reload All.
+> - Tutto solo EN; `mkdocs build` pulito; `check-links` 88/8/3 + D28; `sw.js` invariato.
+
+### L9-2 · il contratto finale della tappa 1 (D-a, D-b, D-c) e i rossi
+
+> - L'ordine resta quello del chiamante: il laboratorio ordina con il suo `nameOrder`, che resta dov'è.
+>   `assetSelectOrder` (prima gli attivi, poi il nome) si esporta da `assetPicker.ts` per la tappa 2 (proposto a
+>   Risk). Gli aiutanti che si spostano sono i quattro del «+» più `SelectionFilters`, usati oggi solo da
+>   `LabAssetPicker`.
+> - Il trigger di `single` copierà la voce compatta di k3 quando Risk ne manda il markup. Intanto i rossi fissano
+>   solo l'invariante: la stessa classe d'altezza con e senza valore, e una riga.
+> - Risk (16:4x) ha mandato il markup della voce compatta di k3, che confermerà col blob:
+>   - la scatola è quella compatta di `SearchSelect` (`w-full flex items-center justify-between gap-2 px-3 py-2
+>     text-sm border rounded-lg`); il segnaposto è `<span class="text-gray-400">`;
+>   - la riga: un'icona `w-4 h-4 rounded-sm object-contain shrink-0`, poi un solo span `truncate text-sm` con
+>     `ticker · nome`, poi il badge `asset-select-selected-inactive-badge`;
+>   - niente valuta e niente seconda riga: 38 px con e senza valore.
+>   Ha confermato anche `assetSelectOrder`: una copia esatta di `AssetSelect.svelte:98-101`, `localeCompare` senza
+>   locale compreso. Passato a test-author (`l9-picker`) mentre scrive i rossi.
+
+### ⚠️ Fuori pista: i dati del developer nei miei journal (regola di privacy, 2026-10-05)
+
+> **Regola** (dal coordinatore, via Risk; il repo è pubblico): in un journal non resta nessun nome, importo,
+> percentuale o conteggio che venga dai dati del developer. Risk ne ha segnalate due righe; la scansione dei miei tre
+> journal non ancora in `dev_release2` ne ha trovate altre.
+> - Tolti, per categoria (senza ripeterli qui):
+>   - il nome di un'obbligazione e gli emittenti dei suoi asset;
+>   - l'impronta del DB della copia (7 punti), e lunghezza e impronta del testo del pannello;
+>   - i conteggi: asset, nomi con emoji, asset senza prezzi, «N selezionati su N», asset dentro due citazioni;
+>   - le osservazioni e le coperture misurate sulla copia, e le percentuali di C3 sui suoi dati;
+>   - un suo asset nominato in una citazione, e un tipo di asset che ne rivelava la composizione.
+> - Restano il metodo, i casi limite, gli id degli asset della copia, le impronte delle build e i conteggi dei test.
+>   Le citazioni corrette lo segnano fra parentesi quadre.
+> - **Terza passata** (18:1x, rilanciando la scansione prima del checkpoint; `l9_privacy_fix3.py`, 3 sostituzioni
+>   esatte): un id da solo resta, ma tre righe di `F-laboratorio-postmerge.md` legavano degli id a un fatto dei suoi
+>   dati (quali asset non hanno prezzi, e quali hanno avuto la riga dello scheduler). L'intervallo di id diceva anche
+>   quanti erano. Gli id sono tolti e segnati «[id tolti]»; il metodo e il caso limite restano.
+> - Strumenti: `/tmp/libreFolio_f4/l9_privacy_scan.py` e due passate di sostituzioni esatte, ciascuna verificata
+>   (`l9_privacy_fix.py`, 30; `l9_privacy_fix2.py`, 7). La scansione finale non trova nulla.
+> - `implementation/progress/F-esecuzione.md` (già in `dev_release2`): scansionato, pulito.
+> - Se riscrivere la storia lo decide il developer, tramite il coordinatore.
+> - **Decisione del developer sulla storia** (via Risk): «Sì, basta toglierli dai file». Nessuna riscrittura.
+> - **Da fare dopo la fusione di k3 di Risk** (D374, 3 tentativi in tutto, `RISK_DISCARD_ATTEMPTS`), solo commenti:
+>   - nei `.svelte` (`AssetSetRiskReturnSection`, `AssetSetLossComparisonSection`, `AssetSetCorrelationSection`,
+>     `AssetSetReplaySection`, `AssetSetComparisonLevels`): «discarded twice running» → «discarded on every attempt»;
+>   - in `AssetSetRiskPanel`: togliere «the policy `loadBase` adopted». Il singolo nuovo tentativo del preset broker
+>     resta com'è (il developer: «ho il dubbio che stai overtinkando»);
+>   - nei test lasciati a me (`AssetSetComparisonLevels.test.ts` intestazione e titolo,
+>     `AssetSetCorrelationSection.test.ts`) e in `risk-lab.spec.ts:6354`. Dopo la fusione cercare `twice running` e
+>     `re-asked once`.
+
+### L9-3 · i rossi, il codice, i mutanti e la guida della tappa 1 ✅ 2026-10-05
+
+> **Note implementazione**
+> - **Rossi** (test-author `l9-picker`), tutti rossi prima del codice:
+>   - `ui/select/AssetPickerPanel.test.ts`, 93 test: i due modi, `dropdownPlacement`, gli aiutanti spostati
+>     (21 test tolti da `assetSetSelection.test.ts`, invariati nella sostanza) e il confine (`ui/select` non importa
+>     da `components/risk/`, letto dai sorgenti della cartella);
+>   - `risk-lab.spec.ts`, 11 righe: i testid dei filtri passano al prefisso del pannello
+>     (`risk-asset-add-filter-{type,currency}-*`, `risk-asset-add-filters-clear`);
+>   - una riga nel runner: `component-unit` (`_frontend_utility.py:179`).
+> - **Codice**: cinque file nuovi in `ui/select/`.
+>   - `assetPicker.ts` (160 righe). I tipi `PickerAsset`, `PickerVerdict`, `PickerSection` e `SelectionFilters`.
+>     Spostati: `applyFilters`, `foldForSearch`, `pickerRows`, `toggleVisibleRows`, `visibleRowsAllChecked`. Nuovi:
+>     - `assetSearchText` (gli identificativi, mai valuta o tipo: P3/A6);
+>     - `assetSelectOrder` (copia esatta di `AssetSelect.svelte:98-101`);
+>     - `dropdownPlacement`.
+>   - `SelectPopover.svelte` (122): `LabPopover` spostato com'è, più `placement` (posizione fissa che segue
+>     scroll e resize) e `rootClass`.
+>   - `CheckMenu.svelte` (97): `LabCheckMenu` su `SelectPopover`; testid `{testId}-button|-panel|-clear|-{value}`.
+>   - `AssetPickerPanel.svelte` (665): i due modi. `single` è il sostituto diretto di `SearchSelect` (testid,
+>     ricerca `filterOptions`, tastiera `stepSelectable`); trigger di una riga a `h-[38px]`, con e senza valore.
+>   - `AssetPickerPanel.test.ts`: **93/93**.
+> - **Laboratorio identico**:
+>   - `LabAssetPicker.svelte` da 317 a 84 righe: un involucro (`multi`, `testId="risk-asset-add"`, `nameOrder`,
+>     la sua ricerca per nome, valuta e tipo, le sue etichette, il suo «+»);
+>   - il menu del preset broker di `AssetSetRiskPanel` usa `SelectPopover`;
+>   - `LabPopover.svelte` e `LabCheckMenu.svelte` tolti; gli aiutanti tolti da `assetSetSelection.ts` (−77 righe).
+> - **i18n**, 4 lingue, stessi valori di prima (`/tmp/libreFolio_f4/l9_i18n_move.py`, con `dev.py i18n`):
+>   - aggiunte 7: `assetPicker.filters.{type,currency,clear}`,
+>     `assetPicker.{selectVisible,deselectVisible,confirm,allSelected}`;
+>   - tolte 7, dopo la ricerca nel sorgente: `risk.assetSet.filters.{type,currency,clear}`,
+>     `risk.assetSet.picker.{selectVisible,deselectVisible,confirm,allSelected}`. Resta
+>     `risk.assetSet.picker.notAnalysable`.
+>
+> **⚠️ Fuori pista**
+> - `foldForSearch` è uscito con `pickerRows`, ma il suo blocco di test era rimasto in
+>   `assetSetSelection.test.ts`, che falliva all'import. Test-author l'ha spostato (3 test) e ha corretto
+>   l'intestazione del test («five helpers»). Ora 96 + 72.
+> - Svelte 5: uno `{#snippet trigger}` dentro il componente oscura la prop omonima. La prop si chiama `trigger`
+>   fuori e `customTrigger` dentro.
+> - prettier ha riformattato `AssetPickerPanel.svelte` in tre punti, solo forma.
+> - Un mio commento in `risk-lab.spec.ts:3878` attribuiva a `SelectPopover` un fatto di `LabPopover`; ora li nomina
+>   entrambi.
+> - L'intestazione di `AssetPickerPanel.svelte` dava `search-select-header-{key}`; il testid vero è
+>   `search-select-header-__section:{key}`. Segnalato dal docs-writer, corretto.
+>
+> **Mutanti** (`/tmp/libreFolio_f4/l9_mutants.py`, ciascuno ripristinato e verificato con sha256):
+> - M1, il valore corrente nascosto se bloccato: rosso, 1 (`shows a ruled-out current value…`);
+> - M2, `disabled: false` sulle opzioni bloccate: **sopravvive, ed è equivalente**. Le righe bloccate sono `disabled`
+>   nel markup, senza `onclick`, e non entrano mai in `listed`: il flag è un metadato vero che nessuno legge. Resta;
+> - M2b, righe bloccate senza `disabled` e cliccabili: rosso, 2;
+> - M3, l'altezza del trigger che dipende dal valore (`h-9` da vuoto): rosso, 1 (il test strutturale);
+> - M4, un import `../../risk/eligibility` in `assetPicker.ts`: rosso, 1 (il confine).
+>
+> **Guida per sviluppatori** (docs-writer `l9-devdoc`): `developer/frontend/components/core-ui/select.md`, la
+> sezione `🧺 AssetPickerPanel`, più quattro punti in testa alla pagina che altrimenti la contraddirebbero (l'intro,
+> il nodo del diagramma, il suo stile, la legenda). Nessun timbro: il manuale dello sviluppatore è solo EN
+> (`EN_ONLY_SECTIONS`). `mkdocs build` strict pulito; `check-links` 88/8/3 + D28; `sw.js` invariato.
+>
+> **Reperto per Risk (tappa 3)**: il segnale «Confronto Asset» del grafico sceglie l'asset con un `SearchSelect` in
+> `charts/ChartSignalsSection.svelte:~680` (`configuredAssets`). `SignalAssetParamControl` è un'altra cosa: il
+> parametro «Comparison asset» dei segnali backend, oggi Rolling Beta. La tappa 3 deve dire quale dei due adotta il
+> pannello.
+>
+> **Prima dei cancelli** (fuori corsia): `front check` 0/0; `tsc e2e` 2 errori (gli altri file, il pavimento);
+> prettier pulito; la lista vitest **1384** (1312 − 24 + 96).
+
+### L9-4 · i cancelli, prima e dopo il fast-forward a k3 ✅ 2026-10-05, 17:42-18:05
+
+> **Note implementazione**
+> - **Prima** (`/tmp/libreFolio_f4/l9_gates.sh`, su `8cb564ace` più i 23 percorsi): tutto verde. È la stessa lista del
+>   giro 8b, con tre differenze:
+>   - prettier esclude i file cancellati e vede quelli nuovi;
+>   - la lista vitest comprende `AssetPickerPanel.test.ts`;
+>   - il conteggio dei provider cerca anche «current_value for».
+> - **Fast-forward** (script del coordinatore `/tmp/libreFolio_ff_f_to_rk3.sh`, eseguito dal developer al mio punto di
+>   pausa): `8cb564ace` → `bb8d68ad2`, cioè k3 di Risk (D374: tre tentativi per una risposta scartata; la voce
+>   compatta di `AssetSelect` su una riga; lo spec del benchmark che trattiene i prezzi live). I 23 percorsi sono
+>   intatti: il manifesto sha256 di prima e quello di dopo coincidono. Nulla in stage.
+> - **La voce compatta di k3 confrontata col mio trigger**: stesse classi (prettier ne cambia solo l'ordine),
+>   icona `w-4 h-4`, `ticker · nome` oppure il solo nome, badge `asset-select-selected-inactive-badge`, regola
+>   dell'icona identica. 38 px in entrambi.
+> - **Dopo** (`/tmp/libreFolio_f4/l9ff_gates.sh`, su `bb8d68ad2` più i 23 percorsi), uno per volta nella corsia 6154:
+>
+> | cancello | prima | dopo |
+> |---|---|---|
+> | `front build --debug`, `mkdocs build` (0 WARNING) | ✅ | ✅ |
+> | `front check` | 0/0 | 0/0 |
+> | `tsc -p tsconfig.e2e.json` | 2 (gli altri file) | 2 |
+> | prettier sui file toccati | pulito | pulito |
+> | lista vitest | 1384 | 1401 |
+> | `core-unit` | 2966 | 2966 |
+> | `component-unit` | 2581 | 2583 |
+> | `risk-controller-unit` | 82 | 96 (k3) |
+> | `risk-levels-component` | 92 | 92 |
+> | `risk-lab` | **41/41** | **41/41** |
+> | `risk` · `risk-benchmark-shared` · `services risk-asset-set` | 14 · 4 · 44 | 14 · 4 · 44 |
+> | `check-orphans` · `i18n audit` | ok · 3520 chiavi, 382 inutilizzate | uguale |
+> | `mkdocs check-links` | 88/8/3 + D28 | uguale |
+> | righe di provider: `risk-lab` · `risk` · `bench` | 0 · 27 · 9 | 0 · 27 · **0** |
+>
+> - `git diff --check` pulito; `sw.js` invariato; porta 6154 libera alla fine.
+>
+> **⚠️ Fuori pista: le righe di provider negli spec di Risk.**
+> - `risk-benchmark-shared`: il mio reperto dell'8b (una chiamata `current_value` a Yahoo, dopo l'apertura di Wall
+>   Street) è curato da k3: 9 righe prima, 0 dopo.
+> - `risk` (`risk-analysis.spec.ts`): in ogni giro feed live, «Current-price persist» e uno scraping di Borsa Italiana
+>   nel DB della corsia: 14 righe nell'8a, 20 nell'8b, 27 ora. Non è il mio spec e questo giro non lo tocca, ma non
+>   l'avevo segnalato. Va a Risk nel checkpoint.
+>
+> **Da A** (rischio dashboard), annuncio sul grafico a dispersione condiviso (`charts/ScatterChart.svelte`, suo):
+> - il benchmark diventa un rombo, e nel laboratorio cambiano solo il rombo e il margine. I punti del laboratorio non
+>   portano mai `weight` né `detail` (`assetSetLevels.ts:231-238`, `:289-294`), e nessun mio test fissa simbolo,
+>   `grid` o i 64 px. OK dato ad A;
+> - **concessione ad A**, solo il blocco `assetSetI18n.test.ts:194-233` (il commento e il controllo positivo): lo punta
+>   a `risk.levels.l3.scatter.notes.line`, sua, e toglie `risk.levels.l3.scatter.note` nello stesso cambiamento, così
+>   nel catalogo non resta una chiave morta. Il coordinatore è informato;
+> - **da fare quando il rombo arriva nel mio ramo**: `correlation.en.md:117` dice «its dot» per un benchmark non
+>   selezionato.
+>
+> **Giro 10, prima voce**: l'allineamento dei commenti a k3 (D374), elencato sopra nel fuori pista della privacy. Non
+> sta nel giro 9 perché toccherebbe `AssetSetRiskPanel.svelte` e `risk-lab.spec.ts`, che sono già nel gruppo del
+> codice, e un percorso non può stare in due gruppi.
+
+### Checkpoint del giro 9 · 2026-10-05, 18:2x (verso Risk)
+
+> - Base: `bb8d68ad2` (k3, dopo il fast-forward). 23 percorsi: 16 modificati, 5 nuovi (tutti in `ui/select/`, compreso
+>   il test), 2 cancellati. Quattro gruppi, e ogni commit resta verde da solo:
+>   - **G1** il codice della tappa 1, 17 percorsi. Ci stanno anche i rinomini dei testid in `risk-lab.spec.ts`:
+>     senza di loro il commit del codice romperebbe `risk-lab`;
+>   - **G2** la guida della barra (`index.en.md`, `correlation.en.md`);
+>   - **G3** la guida per sviluppatori (`core-ui/select.md`);
+>   - **G4** i tre journal, con la correzione di privacy.
+> - Strumenti: `/tmp/libreFolio_f4/l9_msgs.py` e `l9_record.sh`. Il record segna i cancellati come `deleted <path>`.
+> - **CHANGELOG**: nessuna riga. Il laboratorio è identico e la tappa 1 non cambia niente che si veda; la voce verrà con
+>   la tappa 2, quando il selettore del benchmark cambierà.
+> - Reperti per Risk: la tappa 3 deve dire quale selettore adotta il pannello; e le righe di provider dello spec `risk`.
+> - Stato dopo l'invio: **FROZEN** fino al commit.
