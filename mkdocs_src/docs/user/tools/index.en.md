@@ -14,9 +14,8 @@ The Tool platform is **experimental**. The catalogue currently offers exactly
 |---|---|
 | [PAC allocator](pac-allocator/index.md) | Plans which purchases bring an allocation as close as possible to its target, using the cash and contributions available now. |
 
-It is listed and documented, but **not usable interactively yet**: its
-interface has not been rebuilt, so its card cannot be opened. Its own page
-describes what that looks like and what the calculation engine behind it does.
+Its card opens a guided planner. Its own page explains how to use it and what
+the calculation engine behind it does.
 
 !!! note "A second tool was withdrawn"
 
@@ -46,7 +45,7 @@ A usable Tool needs both a compatible backend operation and its matching **tool-
 | The catalogue contains a tool with a compatible interface | Its declared operations can be presented by that interface; the entry does not promise additional features. |
 | The catalogue is empty | No tools are being offered by that catalogue. |
 | A tool is unavailable | The backend could not offer that plugin under the current contract and policy. Other healthy tools can remain available. |
-| The interface is not included in this frontend build | The backend tool is installed and listed, but no matching interface ships in the frontend you are running. The tool cannot be opened and no calculation is started. This is the PAC allocator's current state. |
+| The interface is not included in this frontend build | The backend tool is installed and listed, but no matching interface ships in the frontend you are running. The tool cannot be opened and no calculation is started. |
 | The frontend does not recognize the interface or its version | The tool must be treated as unavailable in that frontend, not opened through a guessed or generic form. |
 | A request no longer matches the advertised versions | It is a compatibility error, not a result for your scenario. |
 
