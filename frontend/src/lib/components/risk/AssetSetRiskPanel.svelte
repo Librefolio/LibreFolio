@@ -544,29 +544,31 @@
     /**
      * The benchmark the comparison levels measure against, when one applies.
      *
-     * Chosen in the shared picker (`BenchmarkSelect`), mounted above the two comparison
-     * levels: the developer's rule is that wherever a page measures against a benchmark it
-     * can be chosen there, and that the picker opens on the current one. The choice itself
-     * still lives in the shared `riskBenchmark` store, so choosing it here chooses it on every
-     * risk page — `03-mappa-livelli-pagine` §3.1: two pages comparing against different
+     * Chosen in the shared picker (`BenchmarkSelect`), the last row of the selection card:
+     * the developer's rule is that wherever a page measures against a benchmark it can be
+     * chosen there, and that the picker opens on the current one. The choice itself still
+     * lives in the shared `riskBenchmark` store, so choosing it here chooses it on every risk
+     * page — `03-mappa-livelli-pagine` §3.1: two pages comparing against different
      * references stop being comparable.
      *
      * The picker confirms a stored choice against the asset list before it says `set`
      * (`pending` until then), and only a confirmed choice reaches a request
-     * (`labBenchmarkId`). A choice that is also one of the analysed assets stays shown, with
-     * its ⚠, but is withheld: `RiskAssetSetComparisonOutput` rejects a yardstick that is also
-     * one of the measured.
+     * (`labBenchmarkId`). A choice that is also one of the selected assets is offered and
+     * used like any other (D371): the backend keeps it in the selection, measures it like
+     * the others and leaves it out of the comparison's items, and L3° says in its own row
+     * why its beta and correlation are blank. So the picker leaves nothing out and shows no
+     * ⚠ here.
      *
      * 🔴 **The levels mount only once the picker has stopped saying `pending`.** Their
-     * controller asks for its base wave the moment it mounts. Mounted earlier, every load
-     * with a stored benchmark would ask twice — first without the benchmark, over another
-     * window, then with it — and L1° and L3° would show figures that are replaced a moment
+     * controllers ask for their base waves the moment they mount. Mounted earlier, every
+     * load with a stored benchmark would ask L3° twice — first without the benchmark, over
+     * another window, then with it — and it would show figures that are replaced a moment
      * later. Starting at `pending` keeps them out until the picker reports; with nothing
      * stored it reports `none` while it mounts.
      */
     let benchmarkValue = $state<number | null>(null);
     let benchmarkState = $state<RiskBenchmarkState>('pending');
-    let benchmarkId = $derived(labBenchmarkId(benchmarkState, benchmarkValue, analysedIds));
+    let benchmarkId = $derived(labBenchmarkId(benchmarkState, benchmarkValue));
 
     function runBulkAction(action: BulkAction): void {
         selectionTouched = true;
@@ -766,7 +768,7 @@
             <Tooltip text={$t('risk.assetSet.benchmark.help')} position="bottom" maxWidth="320px">
                 <span class="inline-flex text-gray-400 dark:text-gray-500" data-testid="risk-asset-set-benchmark-help"><Info size={14} aria-hidden="true" /></span>
             </Tooltip>
-            <BenchmarkSelect bind:value={benchmarkValue} bind:state={benchmarkState} measuredAssetIds={analysedIds} measuredHint={$t('risk.assetSet.benchmark.measuredHint')} testid="risk-asset-set-benchmark" />
+            <BenchmarkSelect bind:value={benchmarkValue} bind:state={benchmarkState} testid="risk-asset-set-benchmark" />
         </div>
     </section>
 

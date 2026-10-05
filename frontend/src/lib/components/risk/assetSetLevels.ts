@@ -60,6 +60,13 @@ export interface AssetSetPaidRow {
     beta: number | null;
     /** Correlation with that benchmark, over the same joint calendar. */
     correlation: number | null;
+    /**
+     * This asset is the benchmark itself (D371: a selected asset may be the reference).
+     * Its beta and correlation are then not blanks but inapplicable — measured against
+     * itself they would be 1 by construction — and the backend leaves it out of the
+     * comparison's items.
+     */
+    isReference: boolean;
 }
 
 /** The benchmark's own coordinates, so a scatter can place it beside the rest. */
@@ -165,7 +172,9 @@ export function buildAssetSetHurtRows(assetIds: readonly number[], names: Readon
 export function buildAssetSetPaidRows(assetIds: readonly number[], names: ReadonlyMap<number, string>, riskReturn: RiskAnalyticResult | null, kpi: RiskAnalyticResult | null, comparison: RiskAnalyticResult | null): AssetSetPaidRow[] {
     const points = byAsset(riskOutput(riskReturn, schemas.RiskAssetSetReturnOutput)?.items);
     const kpis = byAsset(riskOutput(kpi, schemas.RiskAssetSetKpiOutput)?.items);
-    const versus = byAsset(riskOutput(comparison, schemas.RiskAssetSetComparisonOutput)?.items);
+    const comparisonOutput = riskOutput(comparison, schemas.RiskAssetSetComparisonOutput);
+    const versus = byAsset(comparisonOutput?.items);
+    const referenceId = comparisonOutput?.comparison_asset_id ?? null;
 
     return assetIds.map((assetId) => {
         const point = points.get(assetId);
@@ -183,6 +192,7 @@ export function buildAssetSetPaidRows(assetIds: readonly number[], names: Readon
             sortino: num(stats?.sortino),
             beta: num(against?.beta),
             correlation: num(against?.correlation),
+            isReference: assetId === referenceId,
         };
     });
 }
@@ -224,13 +234,43 @@ export function buildAssetSetBenchmarkPoint(comparison: RiskAnalyticResult | nul
     // Both coordinates or no dot: a benchmark plotted on one axis would sit at a
     // position half of which nobody measured.
     if (volatility === null || expectedReturn === null) return null;
-    // 🔴 The selection's label map can never name the reference: the payload
-    // validator rejects a reference that is also among the compared, so by
-    // construction it is not in the selection. Without `resolveName` the dot is
-    // `#id` on every chart — which is how it shipped.
+    // The selection's label map names the reference when it is also selected (D371);
+    // otherwise it cannot, and without `resolveName` the dot would be `#id` on every
+    // chart — which is how it once shipped.
     const assetId = output.comparison_asset_id;
     const name = names.get(assetId) ?? resolveName?.(assetId) ?? label(assetId, names);
     return {assetId, name, volatility, expectedReturn};
+}
+
+/** A dot of L3°'s chart: an asset, or the benchmark it is compared against. */
+export interface AssetSetChartPoint {
+    id: string;
+    name: string;
+    volatility: number;
+    annualReturn: number;
+    role: 'asset' | 'benchmark';
+}
+
+/**
+ * The dots of L3°'s chart, the benchmark among them, and never twice the same asset.
+ *
+ * One dot per row that has both coordinates, in the order of the rows. When the
+ * benchmark is one of them (D371: a selected asset may be the reference), that row's
+ * own dot is drawn as the benchmark — its id stays `asset-<id>`, so it still selects
+ * its row, and its coordinates are the row's, so the chart cannot disagree with the
+ * table. Only a benchmark no row places gets a dot of its own, last, so it draws over
+ * the cloud.
+ *
+ * Its role is `benchmark`, never `portfolio`. That is not cosmetic: `role` is what
+ * `capitalMarketLine()` searches for, so labelling the reference as a portfolio would
+ * anchor a verdict line on an asset that is not the reader's holdings.
+ */
+export function buildAssetSetChartPoints(rows: readonly AssetSetPaidRow[], benchmark: AssetSetBenchmarkPoint | null): AssetSetChartPoint[] {
+    const points: AssetSetChartPoint[] = buildAssetSetScatterPoints(rows).map((point) => (benchmark !== null && point.id === `asset-${benchmark.assetId}` ? {...point, role: 'benchmark'} : point));
+    if (benchmark !== null && !points.some((point) => point.role === 'benchmark')) {
+        points.push({id: 'benchmark', name: benchmark.name, volatility: benchmark.volatility, annualReturn: benchmark.expectedReturn, role: 'benchmark'});
+    }
+    return points;
 }
 
 /** The period L3°'s figures were calculated on, as its note states it. All days are ISO `YYYY-MM-DD`. */

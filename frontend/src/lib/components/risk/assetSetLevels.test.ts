@@ -20,7 +20,10 @@
  *    carries a negative maximum, peak and trough dates in order, and a
  *    recovered ratio; only a `recovered` episode may carry a recovery date.
  *  - `RiskAssetSetComparisonOutput` — the reference is never one of the items
- *    it is the yardstick for.
+ *    it is the yardstick for. It may be one of the *selection* (D371,
+ *    `asset_set_comparison` 1.1.0): the backend then measures it like the
+ *    others and skips it in `items`, and a selection made of the reference
+ *    alone answers with `items == []`.
  *  - `RiskAnalyticResult` — `ok` and `partial` *must* carry an output;
  *    `unavailable` and `failed` must *not*, and must carry an error instead.
  *    That is why no fixture here fakes an unavailable result holding a payload:
@@ -46,7 +49,7 @@ import {schemas} from '$lib/api';
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 
 import {ASSET_SET_DAILY_VAR_INSTANCE, ASSET_SET_MONTHLY_VAR_INSTANCE} from './riskAnalysisHelpers';
-import {assetSetCalculationWindow, buildAssetSetBenchmarkPoint, buildAssetSetHurtRows, buildAssetSetPaidRows, buildAssetSetScatterPoints, calendarLength, type AssetSetPaidRow, type CalendarLength} from './assetSetLevels';
+import {assetSetCalculationWindow, buildAssetSetBenchmarkPoint, buildAssetSetChartPoints, buildAssetSetHurtRows, buildAssetSetPaidRows, buildAssetSetScatterPoints, calendarLength, type AssetSetBenchmarkPoint, type AssetSetPaidRow, type CalendarLength} from './assetSetLevels';
 
 type Payload = Record<string, unknown>;
 
@@ -57,7 +60,11 @@ type Payload = Record<string, unknown>;
  */
 const SELECTION = [7, 3, 12];
 
-/** The shared reference. Never a member of the selection — the model forbids it. */
+/**
+ * The shared reference, outside `SELECTION`. Since D371 the reader may select it
+ * too — the cases that do say so — but it is never one of the comparison's
+ * `items`: the model forbids that.
+ */
 const BENCHMARK_ID = 41;
 
 /** The label map the sections build from the asset store. */
@@ -221,6 +228,16 @@ function rowFor<T extends {assetId: number}>(rows: readonly T[], assetId: number
     const found = rows.find((row) => row.assetId === assetId);
     if (!found) throw new Error(`no row for asset ${assetId}: the selection is supposed to guarantee one`);
     return found;
+}
+
+/** A row with both coordinates, for the cases a payload would only obscure. Not the reference unless a case says so. */
+function paidRow(overrides: Partial<AssetSetPaidRow> = {}): AssetSetPaidRow {
+    return {assetId: 7, name: 'Vanguard FTSE All-World', volatility: 0.21, expectedReturn: 0.094, sharpe: 0.62, sortino: 0.81, beta: null, correlation: null, isReference: false, ...overrides};
+}
+
+/** Whether a result's output satisfies the generated comparison schema — the parse every reader of it goes through. */
+function parsesAsComparison(result: RiskAnalyticResult | null): boolean {
+    return schemas.RiskAssetSetComparisonOutput.safeParse(result?.output).success;
 }
 
 describe('buildAssetSetHurtRows', () => {
@@ -391,6 +408,7 @@ describe('buildAssetSetPaidRows', () => {
             sortino: null,
             beta: null,
             correlation: null,
+            isReference: false,
         });
         expect(rowFor(rows, 7).sharpe).toBe(0.62);
     });
@@ -453,14 +471,55 @@ describe('buildAssetSetPaidRows', () => {
         expect(rows.map((row) => row.assetId)).toEqual([7, 3, 12]);
         expect(rows.every((row) => row.volatility === null && row.expectedReturn === null && row.sharpe === null && row.beta === null)).toBe(true);
     });
+
+    /**
+     * `isReference` (D371): the reference may be one of the selection. Its row is measured like any
+     * other, but the backend skips it in the comparison's `items` — its beta and correlation with itself
+     * would be 1 by construction — so those two stay null, and the flag says why. Read from the *parsed*
+     * output's `comparison_asset_id`: a payload the schema refuses names no reference, whatever its raw
+     * fields say.
+     */
+    const REFERENCE_CASES: {case: string; selection: number[]; comparison: RiskAnalyticResult | null; parses: boolean; reference: number | null}[] = [
+        {case: 'the reference selected first', selection: SELECTION, comparison: comparisonResult([comparisonItem(3), comparisonItem(12)], {comparison_asset_id: 7}), parses: true, reference: 7},
+        {case: 'the reference selected mid-list', selection: SELECTION, comparison: comparisonResult([comparisonItem(7), comparisonItem(12)], {comparison_asset_id: 3}), parses: true, reference: 3},
+        {case: 'the reference selected last', selection: SELECTION, comparison: comparisonResult([comparisonItem(7), comparisonItem(3)], {comparison_asset_id: 12}), parses: true, reference: 12},
+        // What the backend answers for it: not one item, the reference's own coordinates beside them.
+        {case: 'the reference selected alone', selection: [3], comparison: comparisonResult([], {comparison_asset_id: 3}), parses: true, reference: 3},
+        {case: 'the reference outside the selection', selection: SELECTION, comparison: comparisonResult([comparisonItem(7), comparisonItem(3), comparisonItem(12)]), parses: true, reference: null},
+        {case: 'no comparison asked for', selection: SELECTION, comparison: null, parses: false, reference: null},
+        {case: 'the comparison could not run', selection: SELECTION, comparison: unavailable('asset_set_comparison'), parses: false, reference: null},
+        // A tracking error is a standard deviation: the schema refuses a negative one, and with it the
+        // whole payload — the selected reference it still names included.
+        {case: 'malformed, naming a selected reference', selection: SELECTION, comparison: comparisonResult([comparisonItem(7), comparisonItem(12, {tracking_error: -0.052})], {comparison_asset_id: 3}), parses: false, reference: null},
+    ];
+
+    it.each(REFERENCE_CASES)('$case: isReference true on the row the parsed comparison names, false on every other', ({selection, comparison, parses, reference}) => {
+        // Barrier: the fixture is what its case says — read, or refused by the schema the builder parses with.
+        expect(parsesAsComparison(comparison), 'premise: the comparison parses, or not, as the case says').toBe(parses);
+        const rows = buildAssetSetPaidRows(selection, LABELS, null, null, comparison);
+
+        expect(rows.map((row) => row.assetId)).toEqual(selection);
+        // `false` itself on every other row, never an absent flag — and so one row at most.
+        expect(rows.map((row) => row.isReference)).toEqual(selection.map((assetId) => assetId === reference));
+    });
+
+    it('measures a selected reference like any other asset, and leaves only its beta and correlation null', () => {
+        // Asset 3 is the reference. Against it, the active return is the asset's minus the reference's,
+        // the information ratio is active ÷ tracking error exactly, and the reference's own coordinates
+        // are its risk/return point: the backend measures both on the same joint window.
+        const against3 = [comparisonItem(7, {active_return: 0.146, tracking_error: 0.292, information_ratio: 0.5, correlation: 0.52, beta: 0.32}), comparisonItem(12, {active_return: 0.04, tracking_error: 0.32, information_ratio: 0.125, correlation: 0.42, beta: 0.07})];
+        const comparison = comparisonResult(against3, {comparison_asset_id: 3, comparison_volatility: 0.34, comparison_expected_annual_return: -0.052});
+        const kpi = kpiResult([kpiItem(3, {volatility: 0.34, max_drawdown: -0.4, max_drawdown_duration_days: 725, sharpe: -0.15, sortino: -0.21})]);
+        const rows = buildAssetSetPaidRows(SELECTION, LABELS, returnResult([returnItem(7, 0.21, 0.094), returnItem(3, 0.34, -0.052), returnItem(12, 0.058, -0.012)]), kpi, comparison);
+
+        // Barrier: the comparison was read — the others carry their beta and correlation from its items.
+        expect(rowFor(rows, 7)).toMatchObject({beta: 0.32, correlation: 0.52});
+        expect(rowFor(rows, 12)).toMatchObject({beta: 0.07, correlation: 0.42});
+        expect(rowFor(rows, 3)).toEqual({assetId: 3, name: 'iShares Core MSCI EM IMI', volatility: 0.34, expectedReturn: -0.052, sharpe: -0.15, sortino: -0.21, beta: null, correlation: null, isReference: true});
+    });
 });
 
 describe('buildAssetSetScatterPoints', () => {
-    /** A row with both coordinates, for the cases a payload would only obscure. */
-    function paidRow(overrides: Partial<AssetSetPaidRow> = {}): AssetSetPaidRow {
-        return {assetId: 7, name: 'Vanguard FTSE All-World', volatility: 0.21, expectedReturn: 0.094, sharpe: 0.62, sortino: 0.81, beta: null, correlation: null, ...overrides};
-    }
-
     it('emits one dot per placeable row and never a portfolio one', () => {
         // 🔴 `capitalMarketLine()` draws only when a point whose role is
         // `portfolio` exists, so "no portfolio point" *is* the mechanism that
@@ -513,6 +572,76 @@ describe('buildAssetSetScatterPoints', () => {
     });
 });
 
+/**
+ * buildAssetSetChartPoints — the scatter's dots, the reference's among them (D371).
+ *
+ * One `asset` dot per row with both coordinates, `asset-<id>`, in row order. The
+ * reference gets one dot whenever it has a point: when it is one of the placeable
+ * rows, that row's own dot takes the role `benchmark` and keeps everything else —
+ * its id, its place, its name and its coordinates; otherwise its own `benchmark`
+ * point is appended last, as before D371. Never two dots for one asset.
+ */
+describe('buildAssetSetChartPoints', () => {
+    /** The contract's dot, written out rather than read off the implementation's own type. */
+    type Dot = {id: string; name: string; volatility: number; annualReturn: number; role: 'asset' | 'benchmark'};
+
+    const WORLD = paidRow({assetId: 7, name: 'Vanguard FTSE All-World', volatility: 0.21, expectedReturn: 0.094});
+    const EMERGING = paidRow({assetId: 3, name: 'iShares Core MSCI EM IMI', volatility: 0.34, expectedReturn: -0.052});
+    const BONDS = paidRow({assetId: 12, name: 'Xtrackers EUR Corporate Bond', volatility: 0.058, expectedReturn: -0.012});
+    /** A selected reference's row: measured on the same joint window as its point, so the two agree. */
+    const ACWI = paidRow({assetId: BENCHMARK_ID, name: 'MSCI ACWI', volatility: 0.142, expectedReturn: 0.081, isReference: true});
+    /** The reference's point, as `buildAssetSetBenchmarkPoint` reads it off the comparison. */
+    const REFERENCE: AssetSetBenchmarkPoint = {assetId: BENCHMARK_ID, name: 'MSCI ACWI', volatility: 0.142, expectedReturn: 0.081};
+    /** The reference's own dot, when no row carries it. */
+    const SEPARATE: Dot = {id: 'benchmark', name: 'MSCI ACWI', volatility: 0.142, annualReturn: 0.081, role: 'benchmark'};
+
+    /** A placeable row's own dot. */
+    function dot(row: AssetSetPaidRow, role: Dot['role'] = 'asset'): Dot {
+        return {id: `asset-${row.assetId}`, name: row.name, volatility: row.volatility as number, annualReturn: row.expectedReturn as number, role};
+    }
+
+    const CASES: {case: string; rows: AssetSetPaidRow[]; benchmark: AssetSetBenchmarkPoint | null; dots: Dot[]}[] = [
+        {case: 'no benchmark', rows: [WORLD, EMERGING, BONDS], benchmark: null, dots: [dot(WORLD), dot(EMERGING), dot(BONDS)]},
+        {case: 'a benchmark outside the selection', rows: [WORLD, EMERGING, BONDS], benchmark: REFERENCE, dots: [dot(WORLD), dot(EMERGING), dot(BONDS), SEPARATE]},
+        {case: 'the benchmark is the first row', rows: [ACWI, WORLD, BONDS], benchmark: REFERENCE, dots: [dot(ACWI, 'benchmark'), dot(WORLD), dot(BONDS)]},
+        {case: 'the benchmark is a middle row', rows: [WORLD, ACWI, BONDS], benchmark: REFERENCE, dots: [dot(WORLD), dot(ACWI, 'benchmark'), dot(BONDS)]},
+        {case: 'the benchmark is the last row', rows: [WORLD, BONDS, ACWI], benchmark: REFERENCE, dots: [dot(WORLD), dot(BONDS), dot(ACWI, 'benchmark')]},
+        {case: 'the selection is the benchmark alone', rows: [ACWI], benchmark: REFERENCE, dots: [dot(ACWI, 'benchmark')]},
+        // Selected but not placeable: no row dot carries it, so it is drawn as before D371 — its own point, last.
+        {case: 'the benchmark row has no volatility', rows: [WORLD, {...ACWI, volatility: null}, BONDS], benchmark: REFERENCE, dots: [dot(WORLD), dot(BONDS), SEPARATE]},
+        {case: 'the benchmark row has no return', rows: [WORLD, {...ACWI, expectedReturn: null}, BONDS], benchmark: REFERENCE, dots: [dot(WORLD), dot(BONDS), SEPARATE]},
+        {case: 'no row, a benchmark', rows: [], benchmark: REFERENCE, dots: [SEPARATE]},
+        {case: 'no row and no benchmark', rows: [], benchmark: null, dots: []},
+    ];
+
+    it.each(CASES)('$case: the dots in row order, the reference marked where it is drawn', ({rows, benchmark, dots}) => {
+        expect(buildAssetSetChartPoints(rows, benchmark)).toEqual(dots);
+    });
+
+    it.each(CASES)('$case: one dot per asset, and exactly one benchmark dot whenever there is a benchmark', ({rows, benchmark}) => {
+        // The rule itself, read off the output rather than off the expected list above.
+        const points = buildAssetSetChartPoints(rows, benchmark);
+        const ids = points.map((point) => point.id);
+        const referenceIds = benchmark === null ? [] : ids.filter((id) => id === 'benchmark' || id === `asset-${benchmark.assetId}`);
+        const benchmarkIds = points.filter((point) => point.role === 'benchmark').map((point) => point.id);
+        const strangers = points.filter((point) => point.role !== 'asset' && point.role !== 'benchmark').map((point) => point.id);
+
+        expect(new Set(ids).size, `a dot drawn twice: ${ids.join(', ')}`).toBe(ids.length);
+        expect(referenceIds.length, `the reference drawn twice, as its row and as its own point: ${referenceIds.join(', ')}`).toBeLessThanOrEqual(1);
+        expect(benchmarkIds, 'one benchmark dot when there is a benchmark, none without').toHaveLength(benchmark === null ? 0 : 1);
+        expect(strangers, 'a dot neither an asset nor the benchmark — a portfolio dot would anchor the capital market line').toEqual([]);
+    });
+
+    it("draws a selected reference with its row's own name and coordinates, never the comparison's", () => {
+        // In production the two agree: the backend measures both on the same joint window. They are made to
+        // disagree here, because agreement cannot show which one was read — and the row is what the table
+        // beside the chart shows, so the dot must not contradict it.
+        const row = {...ACWI, name: '#41', volatility: 0.15, expectedReturn: 0.07};
+
+        expect(buildAssetSetChartPoints([WORLD, row, BONDS], REFERENCE)).toEqual([dot(WORLD), {id: 'asset-41', name: '#41', volatility: 0.15, annualReturn: 0.07, role: 'benchmark'}, dot(BONDS)]);
+    });
+});
+
 describe('buildAssetSetBenchmarkPoint', () => {
     it('places the reference when both of its coordinates arrived', () => {
         const point = buildAssetSetBenchmarkPoint(comparisonResult([comparisonItem(7)]), LABELS);
@@ -545,20 +674,20 @@ describe('buildAssetSetBenchmarkPoint', () => {
         expect(point?.name).toBe('#41');
     });
 
-    it('is handed a label map that includes the reference, because the selection one never can', () => {
-        // The reference may not also be one of the compared — the payload validator
-        // rejects that — so a map built from the *selection* has, by construction, no
-        // entry for it, and the dot shipped labelled `#41` on every chart. The other
-        // tests here used a `LABELS` that happens to contain 41: green over a state
-        // production cannot produce.
-        const selectionOnly = labels({7: 'Vanguard FTSE All-World'});
-
-        expect(buildAssetSetBenchmarkPoint(comparisonResult([comparisonItem(7)]), selectionOnly)?.name, 'a selection map cannot name the reference').toBe('#41');
+    it.each<{reference: string; names: ReadonlyMap<number, string>; name: string}>([
+        // Outside the selection, a map built from the *selection* has no entry for the reference, and without
+        // a resolver the dot shipped labelled `#41` on every chart — which is why the section passes one (below).
+        {reference: 'outside the selection', names: labels({7: 'Vanguard FTSE All-World'}), name: '#41'},
+        // Since D371 the reader may select it too: the backend skips it in `items`, and the selection's own map
+        // names it. A `LABELS` holding 41, as in the cases above, is a state production can now produce.
+        {reference: 'also selected', names: labels({7: 'Vanguard FTSE All-World', 41: 'MSCI ACWI'}), name: 'MSCI ACWI'},
+    ])('a reference $reference: the selection map alone labels it $name', ({names, name}) => {
+        expect(buildAssetSetBenchmarkPoint(comparisonResult([comparisonItem(7)]), names)?.name).toBe(name);
     });
 
     it('names the reference through the resolver when the selection map cannot', () => {
-        // The contract `AssetSetRiskReturnSection` relies on: it passes the asset
-        // store's lookup, the same one the portfolio L3 uses for its benchmark name.
+        // The contract `AssetSetRiskReturnSection` relies on for a reference outside the selection: it passes
+        // the asset store's lookup, the same one the portfolio L3 uses for its benchmark name.
         const selectionOnly = labels({7: 'Vanguard FTSE All-World'});
         const store = (assetId: number) => (assetId === BENCHMARK_ID ? 'MSCI ACWI' : undefined);
 

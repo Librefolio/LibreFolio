@@ -3148,7 +3148,8 @@
             "years": "{count, plural, one {# an} other {# ans}}",
             "months": "{count, plural, one {# mois} other {# mois}}",
             "days": "{count, plural, one {# jour} other {# jours}}"
-          }
+          },
+          "referenceItself": "Non applicable : cet actif est la référence elle-même, et il ne se compare pas à lui-même."
         }
       },
       "legend": {
@@ -3188,7 +3189,6 @@
         "hint": "Déplace la période en haut sur l'intervalle où tous les actifs sélectionnés qui ont des prix sont cotés. Reviennent dans l'analyse : {names}."
       },
       "benchmark": {
-        "measuredHint": "Cette référence fait aussi partie des actifs mesurés et ne peut pas servir de mesure à elle-même : le bêta et la corrélation sont laissés de côté. Choisissez-en une autre pour les retrouver.",
         "help": "L'actif de référence, le « risque de base » : le bêta indique, actif par actif, si chacun a bougé plus (au-dessus de 1) ou moins (en dessous de 1) que lui ; la corrélation, à quel point ensemble."
       }
     },

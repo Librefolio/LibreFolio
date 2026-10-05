@@ -264,9 +264,9 @@ export interface BaseAnalyticsContext {
     /** Only L3°'s share: the KPI, the risk/return pair and, with a benchmark, the comparison. */
     includeAssetSetPaidLevels?: boolean;
     /**
-     * The shared L3 benchmark, when one is chosen and it is not itself in the
-     * selection. Drives `asset_set_comparison` inside the same request — see the
-     * note where it is added.
+     * The shared L3 benchmark, when one is chosen — possibly one of the selected assets
+     * (D371). Drives `asset_set_comparison` inside the same request — see the note where
+     * it is added.
      */
     assetSetBenchmarkId?: number | null;
 }
@@ -354,10 +354,10 @@ export function buildBaseAnalytics(mode: RiskMode, ctx: BaseAnalyticsContext): R
             // length for the singular case: "the dot would land in a place no
             // measurement puts it, on a chart that still looks right".
             //
-            // The reference may not also be one of the measured — the payload
-            // validator rejects that outright — so a benchmark that is itself in
-            // the selection is not requested at all, and the section says so
-            // rather than showing an error the reader cannot act on.
+            // The reference may also be one of the selected assets (D371): the engine
+            // keeps it in the selection, measures it like the others and leaves it out
+            // of the comparison's `items` — the payload validator still refuses a
+            // yardstick among the measured, and it never is one.
             //
             // L3°'s share only: L1°'s request never carries the benchmark, so it never
             // joins L1°'s window.
