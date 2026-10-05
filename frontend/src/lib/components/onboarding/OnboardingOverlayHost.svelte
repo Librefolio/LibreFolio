@@ -551,6 +551,14 @@
             hostRoute: '/transactions',
             allowedModalDepth: 2,
         },
+        'import.gapFix': {
+            ...importPresentation,
+            anchorId: 'import.action.gapFix',
+            titleKey: 'onboarding.importGuide.steps.gapFix.title',
+            descriptionKey: 'onboarding.importGuide.steps.gapFix.description',
+            hostRoute: '/transactions',
+            allowedModalDepth: 2,
+        },
         'import.bulk': {
             ...importPresentation,
             anchorId: 'import.bulk.save-all',

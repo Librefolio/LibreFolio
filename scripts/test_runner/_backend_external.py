@@ -228,6 +228,17 @@ def external_brim_providers(verbose: bool = False, test_names: list = None,
     return run_command(cmd, "BRIM providers tests", verbose=verbose)
 
 
+def external_brim_danske_bank(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Danske Bank report-set plugin (custody XLSX + cash CSV)."""
+    print_section("External: BRIM Danske Bank Report-Set Tests")
+    print_info("Testing: broker_danske_bank — recognition, reading, classification, rule M, pairing")
+    print_info("Tests: zones and outcomes, truth points, combined format, parse of the combined file, sample facts")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_danske_bank.py",
+                            test_names or None)
+    return run_command(cmd, "BRIM Danske Bank tests", verbose=verbose)
+
+
 def external_all(verbose: bool = False,
                  providers: list = None, exclude_providers: list = None) -> bool:
     """Run all external tests (network-dependent)."""
@@ -270,6 +281,9 @@ These tests verify external API integrations:
     add_test(cat, "brim-providers", external_brim_providers, name="BRIM Providers",
              desc="Test broker report import plugins", prereq="Sample files in test fixtures",
              tests="Plugin discovery, file parsing, auto-detection")
+    add_test(cat, "brim-danske-bank", external_brim_danske_bank, name="BRIM Danske Bank",
+             desc="Test the Danske Bank report-set plugin", prereq="Sample files in test fixtures",
+             tests="Roles, combine (zones, pairing, truth points), parse of the combined file")
     add_test(cat, "all", external_all, test_names=False, name="All External Tests",
              desc="Run all external tests")
     registry["external"] = cat

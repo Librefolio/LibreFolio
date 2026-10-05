@@ -20,9 +20,15 @@ These tests do NOT require a database connection.
 
 from __future__ import annotations
 
+import ast
+import atexit
 import csv
 import io
 import re
+import shutil
+import tempfile
+import unicodedata
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from enum import Enum
@@ -36,6 +42,8 @@ from pydantic import BaseModel
 from backend.app.config import PROJECT_ROOT
 from backend.app.db.models import TransactionType
 from backend.app.schemas.brim import (
+    COMBINED_REQUIRED_HEADERS,
+    BRIMCombinedTable,
     BRIMExtractedAssetInfo,
     BRIMNotice,
     BRIMParseOutput,
@@ -43,7 +51,7 @@ from backend.app.schemas.brim import (
     is_fake_asset_id,
 )
 from backend.app.schemas.transactions import TXCreateItem
-from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
+from backend.app.services.brim_provider import BRIMParseError, BRIMProvider, BRIMSetRequiredError, write_combined_csv
 from backend.app.services.brim_providers import broker_credit_agricole as ca
 from backend.app.services.brim_providers._brim_io import MATURITY_NOTICE_KIND, model_bond_maturity, read_rows
 from backend.app.services.brim_providers.broker_coinbase import CoinbaseBrokerProvider, _parse_coinbase_amount, _parse_coinbase_datetime
@@ -120,8 +128,54 @@ def get_all_sample_files() -> List[Path]:
     return files
 
 
+def _sample_sets(plugin: BRIMProvider) -> list:
+    """A report-set plugin's ``test_sample_sets``: one ``{role: [sample names]}`` per set (``[]`` if it declares none)."""
+    return list(getattr(plugin, "test_sample_sets", None) or [])
+
+
+def _set_members(sample_set: dict) -> dict:
+    """``{role: [paths]}`` of one declared sample set, as ``combine`` takes it."""
+    return {role: [SAMPLE_DIR / name for name in names] for role, names in sample_set.items()}
+
+
+_COMBINED_SAMPLE_DIR: List[Path] = []
+_COMBINED_SAMPLES: dict = {}
+
+
+def _combined_sample(plugin: BRIMProvider, position: int) -> Path:
+    """The combined file of ``plugin.test_sample_sets[position]``.
+
+    Combined by the plugin and written by the core (``write_combined_csv``), as the
+    set API does, into a temporary folder kept for the whole session: the tests that
+    parse samples read it like any other sample file.
+    """
+    key = (plugin.provider_code, position)
+    if key not in _COMBINED_SAMPLES:
+        if not _COMBINED_SAMPLE_DIR:
+            folder = Path(tempfile.mkdtemp(prefix="lf-brim-combined-samples-"))
+            atexit.register(shutil.rmtree, folder, True)
+            _COMBINED_SAMPLE_DIR.append(folder)
+        table = plugin.combine(_set_members(_sample_sets(plugin)[position]))
+        path = _COMBINED_SAMPLE_DIR[0] / f"{plugin.provider_code}-set{position + 1}-combined.csv"
+        write_combined_csv(path, table)
+        _COMBINED_SAMPLES[key] = path
+    return _COMBINED_SAMPLES[key]
+
+
+def _combined_samples_for(plugin: BRIMProvider) -> List[Path]:
+    """Every combined sample of a report-set plugin, one per declared set."""
+    return [_combined_sample(plugin, position) for position in range(len(_sample_sets(plugin)))]
+
+
 def get_sample_files_for_plugin(plugin: BRIMProvider) -> List[Path]:
-    """Get sample files that a plugin can parse."""
+    """Get sample files that a plugin can parse.
+
+    A report-set plugin (non-empty ``report_roles``) parses combined files only: its
+    samples are the combined files built from its ``test_sample_sets``, never the
+    members, which it refuses on their own by design.
+    """
+    if plugin.report_roles:
+        return _combined_samples_for(plugin)
     if not SAMPLE_DIR.exists():
         return []
     return [f for f in SAMPLE_DIR.glob("*.csv") if plugin.can_parse(f)]
@@ -168,7 +222,12 @@ def _all_samples_for_plugin(plugin: BRIMProvider) -> List[Path]:
 
 
 def _representative_samples(plugin: BRIMProvider) -> List[Path]:
-    """All samples to exercise for a plugin: every declared variant, else one fallback."""
+    """All samples to exercise for a plugin: every declared variant, else one fallback.
+
+    A report-set plugin: the combined file of each of its sample sets, never a member.
+    """
+    if plugin.report_roles:
+        return _combined_samples_for(plugin)
     samples = _all_samples_for_plugin(plugin)
     if samples:
         return samples
@@ -426,6 +485,104 @@ class TestBRIMPlugin:
                 assert len(out.transactions) > 0, f"No transactions from {sample.name}"
             except Exception as e:
                 pytest.fail(f"{code} failed to parse {sample.name}: {e}")
+
+
+# =============================================================================
+# CATEGORY 2a: REPORT-SET PLUGINS — sample sets, members, combine, combined files
+# =============================================================================
+
+_REPORT_SET_PARAMS = [(code, plugin) for code, plugin in _PLUGIN_PARAMS if plugin.report_roles]
+_REPORT_SET_IDS = [code for code, _ in _REPORT_SET_PARAMS]
+
+
+class TestReportSetSamplesExist:
+    """Guard: the report-set suite below runs on at least one plugin, so it is never green by being empty."""
+
+    def test_a_report_set_plugin_declares_sample_sets(self):
+        declaring = sorted(code for code, plugin in _PLUGIN_PARAMS if plugin.report_roles and _sample_sets(plugin))
+
+        assert declaring, "No registered BRIM plugin declares report roles and test_sample_sets: TestReportSetPlugin runs on nothing (BRIM report sets, phase B: Danske Bank)"
+
+
+@pytest.mark.parametrize(("code", "plugin"), _REPORT_SET_PARAMS, ids=_REPORT_SET_IDS)
+class TestReportSetPlugin:
+    """Every report-set plugin (non-empty ``report_roles``), on every sample set it declares.
+
+    A member is never parsed alone: the set is combined by the plugin, written by the
+    core, and the combined file is parsed. ``TestBRIMPlugin`` then applies its usual
+    checks to those combined files (see ``_representative_samples``).
+    """
+
+    def test_declared_samples_exist(self, code: str, plugin: BRIMProvider):
+        sets = _sample_sets(plugin)
+        roles = {role.code: role for role in plugin.report_roles}
+
+        assert sets, f"{code} declares report roles but no test_sample_sets"
+        for position, sample_set in enumerate(sets):
+            assert set(sample_set) <= set(roles), f"{code} set {position}: unknown roles {sorted(set(sample_set) - set(roles))}"
+            assert {name for name, role in roles.items() if role.required} <= {name for name, files in sample_set.items() if files}, f"{code} set {position} lacks a required role"
+            missing = [name for names in sample_set.values() for name in names if not (SAMPLE_DIR / name).is_file()]
+            assert not missing, f"{code} set {position}: not in sample_reports/: {missing}"
+
+    def test_members_are_recognised_with_their_role(self, code: str, plugin: BRIMProvider):
+        for sample_set in _sample_sets(plugin):
+            for role, names in sample_set.items():
+                for name in names:
+                    path = SAMPLE_DIR / name
+                    assert plugin.detect_role(path) == role, f"{code}: {name}"
+                    assert plugin.can_parse(path) is True, f"{code}: {name}"
+                    assert BRIMProviderRegistry.auto_detect_plugin(path) == code, f"{code}: {name}"
+
+    def test_members_are_described(self, code: str, plugin: BRIMProvider):
+        for sample_set in _sample_sets(plugin):
+            for role, names in sample_set.items():
+                for name in names:
+                    summary = plugin.describe_member(SAMPLE_DIR / name)
+                    assert summary.role == role, f"{code}: {name}"
+                    assert summary.rows > 0 and summary.coverage, f"{code}: {name} has no rows or no coverage"
+
+    def test_every_set_has_a_segment(self, code: str, plugin: BRIMProvider):
+        for position, sample_set in enumerate(_sample_sets(plugin)):
+            assert plugin.describe_set(_set_members(sample_set)).segments, f"{code} set {position}"
+
+    def test_combine_is_pure_and_well_formed(self, code: str, plugin: BRIMProvider):
+        for position, sample_set in enumerate(_sample_sets(plugin)):
+            members = _set_members(sample_set)
+            before = {path: path.read_bytes() for paths in members.values() for path in paths}
+
+            first, second = plugin.combine(members), plugin.combine(_set_members(sample_set))
+
+            assert isinstance(first, BRIMCombinedTable), f"{code} set {position}"
+            assert set(COMBINED_REQUIRED_HEADERS) <= set(first.headers) and first.rows, f"{code} set {position}"
+            assert (first.headers, first.rows, first.summary) == (second.headers, second.rows, second.summary), f"{code} set {position}: combine is not pure"
+            assert {path: path.read_bytes() for path in before} == before, f"{code} set {position}: combine changed a member"
+
+    def test_combined_files_are_recognised_without_a_role(self, code: str, plugin: BRIMProvider):
+        for path in _combined_samples_for(plugin):
+            assert plugin.can_parse(path) is True, path.name
+            assert plugin.detect_role(path) is None, path.name
+            assert BRIMProviderRegistry.auto_detect_plugin(path) == code, path.name
+
+    def test_a_member_alone_is_refused(self, code: str, plugin: BRIMProvider):
+        for sample_set in _sample_sets(plugin):
+            for names in sample_set.values():
+                for name in names:
+                    with pytest.raises(BRIMSetRequiredError):
+                        plugin.parse(SAMPLE_DIR / name, broker_id=1)
+
+    def test_combined_parse_contract(self, code: str, plugin: BRIMProvider):
+        """Positions point at extracted assets; every transaction carries ``import`` and the history tag; one opening, the earliest."""
+        for path in _combined_samples_for(plugin):
+            out = plugin.parse(path, broker_id=1)
+
+            positions = {position.asset_id for checkpoint in out.checkpoints for position in checkpoint.positions}
+            assert positions <= set(out.extracted_assets), f"{path.name}: positions on assets that were not extracted: {positions - set(out.extracted_assets)}"
+            untagged = [tx.description for tx in out.transactions if not {"import", plugin.history_tag} <= set(tx.tags or [])]
+            assert not untagged, f"{path.name}: transactions without the import and {plugin.history_tag!r} tags: {untagged}"
+            kinds = [checkpoint.kind for checkpoint in out.checkpoints]
+            assert kinds.count("opening") == 1, f"{path.name}: checkpoint kinds {kinds}"
+            opening = next(checkpoint for checkpoint in out.checkpoints if checkpoint.kind == "opening")
+            assert opening.as_of == min(checkpoint.as_of for checkpoint in out.checkpoints), path.name
 
 
 # =============================================================================
@@ -1905,6 +2062,15 @@ class TestBrokerParserCoverageHelpers:
 # =============================================================================
 
 
+@dataclass(frozen=True)
+class _ContractSampleSet:
+    """``test_sample_sets[position]`` of a report-set plugin; the contract tests parse its combined file."""
+
+    plugin_code: str
+    position: int
+    name: str
+
+
 class TestPluginFrontendContract:
     """The shape a plugin must speak so the wizard can render it.
 
@@ -1919,10 +2085,13 @@ class TestPluginFrontendContract:
     """
 
     # Samples whose plugin emits the richest contract surface. Add a file here and the
-    # whole class applies to it.
+    # whole class applies to it. A report-set plugin's entry names one of its sample sets:
+    # the test parses the set's combined file, built when the test runs (a member alone is refused).
     CONTRACT_SAMPLES = [
         ("broker_credit_agricole", CA_CONTI_SAMPLE),
         ("broker_credit_agricole", CA_SAMPLE),
+        ("broker_danske_bank", _ContractSampleSet("broker_danske_bank", 0, "danske_bank-main-set")),
+        ("broker_danske_bank", _ContractSampleSet("broker_danske_bank", 1, "danske_bank-gap-set")),
     ]
 
     KNOWN_ASSET_NOTICE_KINDS = {MATURITY_NOTICE_KIND}
@@ -1934,11 +2103,32 @@ class TestPluginFrontendContract:
         "ca_account_trade_sell_quantity_presumed",
         "ca_account_trade_unresolved",
         "derived_quantity",
+        # Danske Bank (report sets, phase B): charges inside Summa, and the two legs of a demerger.
+        "danske_trade_charges_included",
+        "demerger",
+        "demerger_old_leg",
     }
 
     @staticmethod
-    def _parse(path):
-        return CreditAgricoleBrokerProvider().parse(path, broker_id=1)
+    def _plugin(code: str) -> BRIMProvider:
+        plugin = BRIMProviderRegistry.get_provider_instance(code)
+        if plugin is None:
+            pytest.fail(f"no BRIM plugin is registered as {code}: not implemented yet (BRIM report sets, phase B)", pytrace=False)
+        return plugin
+
+    @classmethod
+    def _resolve(cls, plugin: str, path) -> Path:
+        """A sample file as is; a report-set sample set as its combined file."""
+        if not isinstance(path, _ContractSampleSet):
+            return path
+        provider = cls._plugin(path.plugin_code)
+        if len(_sample_sets(provider)) <= path.position:
+            pytest.fail(f"{path.plugin_code} declares no test_sample_sets[{path.position}]: not implemented yet (BRIM report sets, phase B)", pytrace=False)
+        return _combined_sample(provider, path.position)
+
+    @classmethod
+    def _parse(cls, path, plugin: str = "broker_credit_agricole"):
+        return cls._plugin(plugin).parse(cls._resolve(plugin, path), broker_id=1)
 
     @staticmethod
     def _line_count(path) -> int:
@@ -1952,7 +2142,7 @@ class TestPluginFrontendContract:
         ``tx_index`` is a position in the returned transaction list: out of range, the
         wizard shows a correction card wired to nothing.
         """
-        out = self._parse(path)
+        out = self._parse(path, plugin)
 
         for todo in out.field_todos:
             assert 0 <= todo.tx_index < len(out.transactions), f"{todo.reason_code}: tx_index {todo.tx_index} outside 0..{len(out.transactions) - 1}"
@@ -1966,7 +2156,7 @@ class TestPluginFrontendContract:
         panel from it. A missing or free-form code lands every todo in one anonymous
         group, which is the state the step was built to replace.
         """
-        out = self._parse(path)
+        out = self._parse(path, plugin)
 
         for todo in out.field_todos:
             assert todo.reason_code, f"todo on tx {todo.tx_index} has no reason_code"
@@ -1999,8 +2189,8 @@ class TestPluginFrontendContract:
         They are 1-based and must fall inside the file: the evidence table renders them as
         a link, and a number past the end sends the reader nowhere.
         """
-        out = self._parse(path)
-        lines = self._line_count(path)
+        out = self._parse(path, plugin)
+        lines = self._line_count(self._resolve(plugin, path))
 
         for todo in out.field_todos:
             if not isinstance(todo.context, dict):
@@ -2020,7 +2210,7 @@ class TestPluginFrontendContract:
         ``code``; evidence is rendered as a table with the comment as its explanation, so
         a table without one is a grid of numbers with no statement about them.
         """
-        out = self._parse(path)
+        out = self._parse(path, plugin)
 
         for notice in out.warnings:
             assert notice.severity in {"info", "warning"}, f"{notice.code}: severity {notice.severity!r}"
@@ -2035,7 +2225,7 @@ class TestPluginFrontendContract:
     @pytest.mark.parametrize("plugin,path", CONTRACT_SAMPLES, ids=lambda v: getattr(v, "name", v))
     def test_every_todo_evidence_is_renderable(self, plugin, path):
         """Same contract on the correction step's own evidence tables."""
-        out = self._parse(path)
+        out = self._parse(path, plugin)
 
         for todo in out.field_todos:
             for ev in todo.evidence:
@@ -2067,7 +2257,7 @@ class TestPluginFrontendContract:
     @pytest.mark.parametrize("plugin,path", CONTRACT_SAMPLES, ids=lambda v: getattr(v, "name", v))
     def test_no_sample_invents_a_reason_code_outside_the_registry(self, plugin, path):
         """Whatever the layout, the codes come from one declared list."""
-        out = self._parse(path)
+        out = self._parse(path, plugin)
 
         assert {t.reason_code for t in out.field_todos} <= self.KNOWN_REASON_CODES
 
@@ -4438,6 +4628,8 @@ class TestCreditAgricoleCanonicalCharacterization:
                     "notices": [{"kind": "maturity_suspected", "reason": "Rilevata almeno una transazione di scadenza/rimborso (es. «TITOLI SCADUTI» o «FONDI: " "RIMBORSO»).", "transaction_indexes": [70, 71]}],
                 },
             },
+            "checkpoints": [],
+            "verifications": [],
         },
         "account": {
             "transactions": [
@@ -5037,6 +5229,8 @@ class TestCreditAgricoleCanonicalCharacterization:
                 2147483645: {"extracted_symbol": None, "extracted_isin": "IT0000000003", "extracted_name": "BTP OTHER 1/9/2030", "notices": []},
                 2147483644: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP SAMPLE", "notices": [{"kind": "maturity_suspected", "reason": "Rilevata almeno una transazione di scadenza/rimborso (es. «TITOLI SCADUTI» o «FONDI: " "RIMBORSO»).", "transaction_indexes": [20]}]},
             },
+            "checkpoints": [],
+            "verifications": [],
         },
     }
 
@@ -5060,6 +5254,9 @@ class TestCreditAgricoleCanonicalCharacterization:
             "validation_issues",
             "field_todos",
             "extracted_assets",
+            # BRIM report sets (phase A1): truth points, always empty for single-file plugins like CA
+            "checkpoints",
+            "verifications",
         }
         assert set(TXCreateItem.model_fields) == {
             "broker_id",
@@ -5094,6 +5291,163 @@ class TestCreditAgricoleCanonicalCharacterization:
         xlsx_out = self._parse(xlsx_path)
 
         assert _normalize_ca_xlsx_evidence_row_numbers(xlsx_out, xlsx_evidence_offset) == expected, f"{layout}: complete XLSX parse output drifted beyond its documented evidence-row offset"
+
+
+# =============================================================================
+# WINDOWS-1252 INVARIANCE — THE BYTE ENCODING MUST NOT CHANGE THE PARSE
+# =============================================================================
+
+BRIM_PLUGIN_DIR = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers"
+
+
+def _cp1252_unencodable(text: str) -> list[str]:
+    """The characters of ``text`` that Windows-1252 has no byte for, as ``"U+202F NARROW NO-BREAK SPACE"``."""
+    found: list[str] = []
+    for char in sorted(set(text)):
+        try:
+            char.encode("cp1252")
+        except UnicodeEncodeError:
+            found.append(f"U+{ord(char):04X} {unicodedata.name(char, 'UNNAMED')}")
+    return found
+
+
+def _windows_1252_cases() -> list[Any]:
+    """One ``pytest.param(sample, code, plugin)`` per non-ASCII sample and plugin that claims it.
+
+    Top-level samples only: ``malformed/`` holds deliberately broken fixtures. An
+    ASCII-only sample is left out, since its bytes are the same in both encodings
+    and it proves nothing. A sample that Windows-1252 cannot represent stays in the
+    matrix, marked skip, and the reason names the characters.
+
+    Samples are read with ``BRIMProvider._read_text``, the plugins' own encoding
+    fallback: a sample that is not UTF-8 (Danske's cash statement is Latin-1, as the
+    bank writes it) must join the matrix, not break the collection of this module.
+    """
+    cases: list[Any] = []
+    for sample in sorted(SAMPLE_DIR.glob("*.csv")):
+        text = BRIMProvider._read_text(sample)
+        if text.isascii():
+            continue
+        unencodable = _cp1252_unencodable(text)
+        marks = [pytest.mark.skip(reason=f"{sample.name} cannot be saved as Windows-1252: it contains {', '.join(unencodable)}")] if unencodable else []
+        cases.extend(pytest.param(sample, code, plugin, id=f"{sample.stem}-{code}", marks=marks) for code, plugin in _PLUGIN_PARAMS if plugin.can_parse(sample))
+    return cases
+
+
+_WINDOWS_1252_CASES = _windows_1252_cases()
+
+
+def _parse_outcome(plugin: BRIMProvider, path: Path) -> tuple[str, Any]:
+    """What ``plugin.parse`` makes of ``path``, as plain data that compares with ``==``.
+
+    ``("BRIMParseOutput", model_dump(mode="json"))`` or
+    ``("BRIMParseError", {"message": ..., "details": ...})``. Any other exception
+    propagates: it is a crash, not an outcome.
+    """
+    try:
+        return "BRIMParseOutput", plugin.parse(path, broker_id=1).model_dump(mode="json")
+    except BRIMParseError as exc:
+        return "BRIMParseError", {"message": exc.message, "details": exc.details}
+
+
+def _summary(outcome: tuple[str, Any]) -> str:
+    """One line for a failure message: the error message, or the output's size."""
+    kind, data = outcome
+    if kind == "BRIMParseError":
+        return f"BRIMParseError({data['message']!r})"
+    return f"BRIMParseOutput ({len(data['transactions'])} transactions, {len(data['warnings'])} warnings)"
+
+
+def _relocated(value: Any, old: str, new: str) -> Any:
+    """``value`` with ``old`` replaced by ``new`` in every string it holds, through dicts, lists and tuples."""
+    if isinstance(value, str):
+        return value.replace(old, new)
+    if isinstance(value, dict):
+        return {key: _relocated(item, old, new) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return type(value)(_relocated(item, old, new) for item in value)
+    return value
+
+
+def _fixed_encoding_open_lines(module: Path) -> list[int]:
+    """Lines of ``module`` with a call named ``open`` (``open``, ``io.open``, ``path.open``…) that passes ``encoding=``."""
+    lines: list[int] = []
+    for node in ast.walk(ast.parse(module.read_text(encoding="utf-8"), filename=str(module))):
+        if not isinstance(node, ast.Call):
+            continue
+        callee = node.func.id if isinstance(node.func, ast.Name) else getattr(node.func, "attr", None)
+        if callee == "open" and any(keyword.arg == "encoding" for keyword in node.keywords):
+            lines.append(node.lineno)
+    return sorted(lines)
+
+
+class TestWindows1252Invariance:
+    """A CSV export parses the same whether it was saved as UTF-8 or as Windows-1252.
+
+    The bug: 27 plugins (31 call sites) read their file with
+    ``open(file_path, encoding="utf-8-sig")``. An export saved as Windows-1252,
+    which is what Excel on Windows and many European banks write, fails on its
+    first accented byte with ``UnicodeDecodeError``, raw or wrapped in a
+    ``BRIMParseError``. Detection mostly succeeds, because ``can_parse`` usually
+    goes through ``_read_file_head``, which already falls back: the format is
+    recognised, then the import fails. Where ``can_parse`` opens the file itself
+    (generic CSV, InvestEngine, Rabobank, Trade Republic), detection fails too.
+
+    Invariance: each top-level sample with a non-ASCII character is re-saved as
+    Windows-1252 in ``tmp_path``, under the same file name. Only the bytes change:
+    the BOM, if any, is dropped and line endings are kept. For every plugin whose
+    ``can_parse`` accepts the original, ``can_parse`` must accept the copy and
+    ``parse`` must give the same outcome: an equal ``model_dump(mode="json")``,
+    or a ``BRIMParseError`` with the same message and details. Before comparing,
+    the copy's directory is written as the sample directory, the one difference
+    that is not an encoding difference. Any other exception on the copy is a
+    failure. A sample that Windows-1252 cannot represent is listed as skipped,
+    with the character.
+
+    Written red-first, before the plugins moved to ``self._open_text``. Only the
+    plugins that read through ``_brim_io.read_rows`` (Crédit Agricole, Intesa,
+    Directa) passed then. The guard test pins the fix: no plugin may open a file
+    with a fixed encoding again.
+    """
+
+    def test_windows_1252_cases_are_not_vacuous(self):
+        """At least one (sample, plugin) case really runs: an empty or all-skipped matrix proves nothing."""
+        runnable = [case.id for case in _WINDOWS_1252_CASES if not case.marks]
+        assert runnable, "No sample reaches test_sample_parses_identically_when_saved_as_windows_1252: none has a non-ASCII character that Windows-1252 can encode, or no plugin claims one"
+
+    @pytest.mark.parametrize(("sample", "code", "plugin"), _WINDOWS_1252_CASES)
+    def test_sample_parses_identically_when_saved_as_windows_1252(self, sample: Path, code: str, plugin: BRIMProvider, tmp_path: Path):
+        """The Windows-1252 copy is accepted by ``can_parse`` and parses to the original's outcome."""
+        # Same file name: plugins check the extension, and error details may carry the name.
+        # The original is decoded like the plugins decode it, so a Latin-1 sample works too.
+        copy = tmp_path / sample.name
+        copy.write_bytes(BRIMProvider._read_text(sample).encode("cp1252"))
+
+        assert plugin.can_parse(copy), f"{code}.can_parse() accepts {sample.name} but rejects its Windows-1252 copy"
+
+        # A crash on the original would be a plugin bug unrelated to the encoding: let it surface as is.
+        expected = _parse_outcome(plugin, sample)
+        try:
+            outcome = _parse_outcome(plugin, copy)
+        except Exception as exc:
+            pytest.fail(f"{code}.parse() crashes on the Windows-1252 copy of {sample.name}: {type(exc).__name__}: {exc}")
+        actual = _relocated(outcome, str(tmp_path), str(SAMPLE_DIR))
+
+        assert actual[0] == expected[0], f"{code} on {sample.name}: the original gives {_summary(expected)}, its Windows-1252 copy gives {_summary(actual)}"
+        assert actual == expected, f"{code} on {sample.name}: the Windows-1252 copy gives a different {expected[0]} than the original"
+
+    def test_no_plugin_opens_files_with_a_fixed_encoding(self):
+        """No ``broker_*.py`` calls ``open(..., encoding=...)``: one fixed encoding cannot read every export."""
+        modules = sorted(BRIM_PLUGIN_DIR.glob("broker_*.py"))
+        assert modules, f"No broker_*.py found in {BRIM_PLUGIN_DIR}: the scan would pass on nothing"
+
+        offenders = [f"{module.relative_to(PROJECT_ROOT)}:{line}" for module in modules for line in _fixed_encoding_open_lines(module)]
+
+        assert not offenders, (
+            f"{len(offenders)} call(s) to open(..., encoding=...) in BRIM plugins. A fixed encoding cannot read an export saved as "
+            "Windows-1252 or Latin-1 (for example re-saved with Excel on Windows). Read the file with self._open_text(file_path), "
+            'or BRIMProvider._open_text(file_path, newline="") where the csv module needs the line endings verbatim:\n' + "\n".join(f"  {offender}" for offender in offenders)
+        )
 
 
 if __name__ == "__main__":

@@ -34,9 +34,12 @@ from backend.app.db.session import get_async_engine
 from backend.app.schemas.brokers import BRAccessBulkItem
 from backend.app.schemas.portfolio import (
     AssetPeriodContribution,
+    DataQualityStatus,
     IssueCode,
+    IssueSeverity,
     PortfolioAllocationSourceRequest,
     PortfolioReportQuery,
+    StalePriceAsset,
 )
 from backend.app.services.asset_source import AssetSourceManager
 from backend.app.services.broker_service import BrokerService
@@ -1203,6 +1206,256 @@ class TestTransactionImpliedDataQuality:
         # Narrow range behaves identically (the flag is as-of, not range-dependent).
         summary_narrow = await service.get_summary(user_id=test_user.id, date_from=date(2024, 3, 1), date_to=report_end)
         assert IssueCode.TRANSACTION_IMPLIED not in {i.code for i in summary_narrow.data_quality.issues}
+
+
+# =============================================================================
+# TestStalePriceDataQuality
+# =============================================================================
+
+
+class TestStalePriceDataQuality:
+    """STALE_PRICE ("prezzi non aggiornati") — decision D8 (30/09), R2 step 13 item 9.
+
+    The engine already knows, per open position, whether its market price has been
+    carried forward for more than ``STALE_PRICE_THRESHOLD_DAYS`` (7) days
+    (``DailyPositionState.valuation_stale``), and ``build_data_quality_report`` already
+    renders STALE_PRICE from ``stale_prices_dto``. But ``get_summary`` never passes that
+    argument — not since the engine rewrite 77b976ebc — so the banner never appears.
+
+    The approved rule: at ``date_to`` an asset is flagged when ALL of these hold —
+      * it has an open position (quantity above dust);
+      * that position is valued at a MARKET price, not at a trade price;
+      * that market price is carried forward more than 7 days;
+      * the asset has a provider assignment.
+    One ``StalePriceAsset`` per asset (never per broker), ``stale_days`` counted from the
+    carried price date to the valuation date, and the CTA is ``sync_asset_prices``.
+
+    Each test owns its user, broker(s), asset and prices — flushed, then rolled back by
+    the ``session`` fixture — so the portfolio under test is exactly what the test wrote;
+    that is what makes the exact assertions below legitimate. Dates are relative to
+    ``date.today()``: staleness is measured against the calendar, so a fixed date would
+    only test the day it was written. Every negative case first proves, through the
+    holding row, that its position is valued the way the case claims — an absence
+    assertion without that barrier would also pass on a portfolio that never held
+    anything.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _pin_today(self):
+        """Read the calendar once per test: seeding, ``date_to`` and the expected ages
+        then agree even if the test straddles midnight."""
+        self.today = date.today()
+
+    async def _seed_prices(self, session, asset: Asset, *days_ago: int) -> None:
+        """EUR market quotes ``days_ago`` before today, closes 100, 101, … in the given order."""
+        for index, days in enumerate(days_ago):
+            close = Decimal(100 + index)
+            session.add(PriceHistory(asset_id=asset.id, date=self.today - timedelta(days=days), open=close, high=close, low=close, close=close, volume=Decimal("1"), currency="EUR", source_plugin_key="manual_test"))
+        await session.flush()
+
+    async def _seed_position(self, session, broker: Broker, asset: Asset, *, bought_days_ago: int, sold_days_ago: int | None = None) -> None:
+        """Fund ``broker``, BUY 10 units at 100 EUR, and optionally SELL all of them."""
+        bought = self.today - timedelta(days=bought_days_ago)
+        rows = [
+            Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=bought, amount=Decimal("10000"), currency="EUR"),
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=bought, quantity=Decimal("10"), amount=Decimal("-1000"), currency="EUR"),
+        ]
+        if sold_days_ago is not None:
+            rows.append(Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.SELL, date=self.today - timedelta(days=sold_days_ago), quantity=Decimal("-10"), amount=Decimal("1000"), currency="EUR"))
+        session.add_all(rows)
+        await session.flush()
+
+    async def _summary(self, session, user: User, date_to: date | None = None):
+        return await PortfolioService(session).get_summary(user_id=user.id, date_to=date_to or self.today)
+
+    @staticmethod
+    def _stale_issue(summary):
+        return next((issue for issue in summary.data_quality.issues if issue.code == IssueCode.STALE_PRICE), None)
+
+    @staticmethod
+    def _only_holding(summary, asset_id: int):
+        rows = [holding for holding in summary.holdings if holding.asset_id == asset_id]
+        assert len(rows) == 1, f"expected exactly one open holding of asset {asset_id}, got {rows}"
+        return rows[0]
+
+    @classmethod
+    def _assert_not_flagged(cls, summary) -> None:
+        issue = cls._stale_issue(summary)
+        assert issue is None, f"unexpected STALE_PRICE issue: {issue}"
+        assert summary.data_quality.stale_prices == []
+
+    @pytest.mark.asyncio
+    async def test_provider_asset_with_ten_day_old_market_price_is_flagged(self, session, test_user, broker_with_access, test_asset_with_provider):
+        """Case 1 — the defect. An open position of a provider-priced asset whose last
+        quote is 10 days old is flagged once, with its carried date, its age in days and a
+        «Sincronizza» CTA. Red until ``get_summary`` passes ``stale_prices_dto``."""
+        broker, _ = broker_with_access
+        asset = test_asset_with_provider
+        today = self.today
+        await self._seed_position(session, broker, asset, bought_days_ago=40)
+        await self._seed_prices(session, asset, 40, 30, 20, 10)
+
+        summary = await self._summary(session, test_user)
+
+        holding = self._only_holding(summary, asset.id)
+        assert holding.valuation_source == "MARKET_PRICE"
+        assert holding.valuation_reference_date == today - timedelta(days=10)
+
+        issue = self._stale_issue(summary)
+        assert issue is not None, f"no STALE_PRICE issue; the report carries {[i.code for i in summary.data_quality.issues]}"
+        assert issue.severity == IssueSeverity.WARNING
+        assert issue.message_i18n_key == "dataQuality.stalePrice"
+        assert issue.message_params["count"] == 1
+        assert issue.count == 1
+        assert issue.affected_asset_ids == [asset.id]
+        assert issue.affected_asset_names == [asset.display_name]
+        assert issue.cta_action == "sync_asset_prices"
+        assert summary.data_quality.stale_prices == [StalePriceAsset(asset_id=asset.id, name=asset.display_name, last_price_date=today - timedelta(days=10), stale_days=10)]
+
+    @pytest.mark.asyncio
+    async def test_stale_price_alone_reports_carried_forward_status(self, session, test_user, broker_with_access, test_asset_with_provider):
+        """D8 §3 — a stale quote with nothing worse in the report makes the summary's
+        data quality ``carried_forward`` (derived by the schema) and lists the asset in
+        ``stale_prices``. Red today: ``stale_prices`` is never filled, so the status
+        reads ``ok``."""
+        broker, _ = broker_with_access
+        asset = test_asset_with_provider
+        await self._seed_position(session, broker, asset, bought_days_ago=40)
+        await self._seed_prices(session, asset, 40, 30, 20, 10)
+
+        dq = (await self._summary(session, test_user)).data_quality
+
+        # "Nothing worse": each of these would make the status PARTIAL instead.
+        assert dq.missing_price_assets == []
+        assert dq.missing_fx_pairs == []
+        assert dq.incomplete_nav_dates == []
+        assert asset.id in {stale.asset_id for stale in dq.stale_prices}
+        assert dq.data_quality_status == DataQualityStatus.CARRIED_FORWARD
+
+    @pytest.mark.asyncio
+    async def test_market_price_exactly_seven_days_old_is_not_stale(self, session, test_user, broker_with_access, test_asset_with_provider):
+        """Case 2 — control on the threshold: stale means carried *more than* 7 days, so a
+        quote exactly 7 days old is still current."""
+        broker, _ = broker_with_access
+        asset = test_asset_with_provider
+        today = self.today
+        await self._seed_position(session, broker, asset, bought_days_ago=40)
+        await self._seed_prices(session, asset, 40, 30, 20, 7)
+
+        summary = await self._summary(session, test_user)
+
+        holding = self._only_holding(summary, asset.id)
+        assert holding.valuation_source == "MARKET_PRICE"
+        assert holding.valuation_reference_date == today - timedelta(days=7)
+        self._assert_not_flagged(summary)
+
+    @pytest.mark.asyncio
+    async def test_fresh_market_price_is_not_flagged(self, session, test_user, broker_with_access, test_asset_with_provider):
+        """Case 3 — control: a quote carried for 2 days is ordinary (weekends do that)."""
+        broker, _ = broker_with_access
+        asset = test_asset_with_provider
+        today = self.today
+        await self._seed_position(session, broker, asset, bought_days_ago=40)
+        await self._seed_prices(session, asset, 40, 30, 20, 2)
+
+        summary = await self._summary(session, test_user)
+
+        holding = self._only_holding(summary, asset.id)
+        assert holding.valuation_source == "MARKET_PRICE"
+        assert holding.valuation_reference_date == today - timedelta(days=2)
+        self._assert_not_flagged(summary)
+
+    @pytest.mark.asyncio
+    async def test_manual_asset_with_stale_market_price_is_not_flagged(self, session, test_user, broker_with_access, test_asset):
+        """Case 4 — control on the provider condition: a manual asset (no provider
+        assignment) whose market price is 10 days old is exactly as stale as case 1 for
+        the engine, but there is nothing to sync, so it is never flagged."""
+        broker, _ = broker_with_access
+        asset = test_asset
+        today = self.today
+        assignment = (await session.execute(select(AssetProviderAssignment.id).where(AssetProviderAssignment.asset_id == asset.id))).first()
+        assert assignment is None, "precondition: the manual asset must have no provider assignment"
+        await self._seed_position(session, broker, asset, bought_days_ago=40)
+        await self._seed_prices(session, asset, 40, 30, 20, 10)
+
+        summary = await self._summary(session, test_user)
+
+        holding = self._only_holding(summary, asset.id)
+        assert holding.valuation_source == "MARKET_PRICE"
+        assert holding.valuation_reference_date == today - timedelta(days=10)
+        self._assert_not_flagged(summary)
+
+    @pytest.mark.asyncio
+    async def test_position_sold_before_date_to_is_not_flagged(self, session, test_user, broker_with_access, test_asset_with_provider):
+        """Case 5 — control on the open-position condition: the rule is evaluated at
+        ``date_to``, and a position fully sold before it has no price to be stale.
+
+        Barrier: the day before the sale the same holding was open and valued at a
+        market price already carried 9 days — the only thing that changes by today is
+        that the position is closed."""
+        broker, _ = broker_with_access
+        asset = test_asset_with_provider
+        today = self.today
+        await self._seed_position(session, broker, asset, bought_days_ago=40, sold_days_ago=5)
+        await self._seed_prices(session, asset, 40, 30, 20, 15)
+
+        before_sale = await self._summary(session, test_user, date_to=today - timedelta(days=6))
+        summary = await self._summary(session, test_user)
+
+        holding = self._only_holding(before_sale, asset.id)
+        assert holding.valuation_source == "MARKET_PRICE"
+        assert holding.valuation_reference_date == today - timedelta(days=15)
+        assert [h for h in summary.holdings if h.asset_id == asset.id] == []
+        self._assert_not_flagged(summary)
+
+    @pytest.mark.asyncio
+    async def test_trade_priced_provider_asset_is_left_to_transaction_implied(self, session, test_user, broker_with_access, test_asset_with_provider):
+        """Case 6 — control on the MARKET_PRICE condition: a provider asset with no quote
+        at all, bought 20 days ago, is valued at its trade price. The engine marks that
+        valuation stale too (20 days > 7), but it is TRANSACTION_IMPLIED's case — the
+        missing quote is already reported there — and must not be reported twice."""
+        broker, _ = broker_with_access
+        asset = test_asset_with_provider
+        await self._seed_position(session, broker, asset, bought_days_ago=20)
+
+        summary = await self._summary(session, test_user)
+
+        holding = self._only_holding(summary, asset.id)
+        assert holding.valuation_source == "LAST_TRADE_PRICE"
+        implied = next((issue for issue in summary.data_quality.issues if issue.code == IssueCode.TRANSACTION_IMPLIED), None)
+        assert implied is not None and asset.id in implied.affected_asset_ids, "barrier: past the 14-day grace the asset must be reported as valued at cost"
+        self._assert_not_flagged(summary)
+
+    @pytest.mark.asyncio
+    async def test_asset_held_at_two_brokers_is_one_stale_entry(self, session, test_user, broker_with_access, test_asset_with_provider):
+        """Case 7 — aggregation: one asset held at two brokers is one stale price, so one
+        ``StalePriceAsset`` and one affected id, not one per broker. Red today because
+        nothing is reported at all; a per-broker fix would be red with two entries."""
+        broker, _ = broker_with_access
+        second = Broker(name=f"PfBroker_stale_{uuid4().hex[:12]}")
+        session.add(second)
+        await session.flush()
+        session.add(BrokerUserAccess(broker_id=second.id, user_id=test_user.id, role=UserRole.OWNER, share_percentage=Decimal("1.0")))
+        await session.flush()
+        asset = test_asset_with_provider
+        today = self.today
+        await self._seed_position(session, broker, asset, bought_days_ago=40)
+        await self._seed_position(session, second, asset, bought_days_ago=35)
+        await self._seed_prices(session, asset, 40, 30, 20, 10)
+
+        summary = await self._summary(session, test_user)
+
+        holdings = [h for h in summary.holdings if h.asset_id == asset.id]
+        assert {h.broker_id for h in holdings} == {broker.id, second.id}
+        assert {(h.valuation_source, h.valuation_reference_date) for h in holdings} == {("MARKET_PRICE", today - timedelta(days=10))}
+
+        entries = [stale for stale in summary.data_quality.stale_prices if stale.asset_id == asset.id]
+        assert entries == [StalePriceAsset(asset_id=asset.id, name=asset.display_name, last_price_date=today - timedelta(days=10), stale_days=10)]
+        issue = self._stale_issue(summary)
+        assert issue is not None
+        assert issue.affected_asset_ids == [asset.id]
+        assert issue.count == 1
+        assert issue.message_params["count"] == 1
 
 
 # =============================================================================

@@ -531,7 +531,7 @@
     "todoBlockerCommitHint": "Completa tutti i campi obbligatori prima di salvare",
     "todoWarningVerifyHint": "{n, plural, one {# campo auto-derivato da verificare prima di salvare} other {# campi auto-derivati da verificare prima di salvare}}",
     "todoWarningConfirmTitle": "Verificare i campi auto-derivati?",
-    "todoWarningConfirmMessage": "{n} riga/e hanno un valore auto-derivato non ancora verificato (es. la quantità nominale dei titoli scaduti). Rivedili, oppure salva comunque se i valori derivati sono corretti.",
+    "todoWarningConfirmMessage": "{n} riga/e hanno un valore auto-derivato non ancora verificato. Rivedili, oppure salva comunque se i valori derivati sono corretti.",
     "todoWarningConfirmItemsLabel": "{n} campo/i da verificare",
     "todoWarningConfirmProceed": "Salva comunque",
     "todoWarningConfirmReview": "Rivedi",
@@ -742,7 +742,160 @@
       "body": "Collega un asset esistente o crealo a mano. Nei prossimi import verrà riconosciuto dall'identificativo salvato, se univoco."
     },
     "selectionChangedReview": "Il controllo finale dei duplicati ha cambiato la selezione. Rivedila prima di importare.",
-    "duplicatesChangedReview": "Il controllo finale dei duplicati ha trovato duplicati nuovi o cambiati fra i tuoi file. Rivedili prima di importare."
+    "duplicatesChangedReview": "Il controllo finale dei duplicati ha trovato duplicati nuovi o cambiati fra i tuoi file. Rivedili prima di importare.",
+    "reportSet": {
+      "selectSet": "Seleziona tutto il set",
+      "setLabel": "Set caricato il {date} · {plugin}",
+      "fileCount": "{n} file",
+      "setCount": "{n} set di export",
+      "status": {
+        "complete": "Completo",
+        "missing": "Manca un file",
+        "incomplete": "Non combinabile",
+        "loading": "Verifica…",
+        "error": "Verifica non riuscita",
+        "analysed": "Già analizzato"
+      },
+      "roleName": {
+        "custody": "Movimenti titoli",
+        "cash": "Estratto del conto"
+      },
+      "period": {
+        "years": "{n, plural, one {# anno} other {# anni}}",
+        "months": "{n, plural, one {# mese} other {# mesi}}",
+        "days": "{n, plural, one {# giorno} other {# giorni}}"
+      },
+      "maxHistory": "la banca esporta al massimo {period}",
+      "rows": "{n, plural, one {# riga} other {# righe}}",
+      "missingRole": "Manca: {role} ({ext})",
+      "missingPeriod": "Serve almeno dal {start} al {end}, meglio fino a qualche giorno dopo.",
+      "uploadMissing": "Carica il file mancante",
+      "howToExport": "Come esportarlo",
+      "howToExportBoth": "Come esportare i file",
+      "unrecognised": "Non riconosciuti",
+      "historyFirst": "Primo import di questo broker: alla fine ti proponiamo il saldo e le posizioni al {date}; da lì in poi importiamo ogni movimento.",
+      "historyLater": "LibreFolio ha già la storia di questo broker dal {date}: i movimenti già presenti risulteranno duplicati, e quelli precedenti non si reimportano.",
+      "exclude": "Escludi dall'import",
+      "selectedCount": "{sets} set e {n} file selezionati da {b} broker",
+      "incompleteBlocks": "Continua è disattivato finché un set selezionato è incompleto: carica il file mancante o escludilo.",
+      "step1Missing": "Per {plugin} serve anche: {role} ({ext}).",
+      "step1MissingHint": "Trascinalo qui sopra: entra nello stesso set. Puoi anche continuare: il set comparirà incompleto.",
+      "analyzeRowLabel": "Set del {date} · combinato ({n} file)",
+      "beforeHistoryCount": "{n} già in LibreFolio (nascoste)",
+      "showBeforeHistory": "mostra",
+      "hideBeforeHistory": "nascondi",
+      "beforeHistoryStatus": "Già in LibreFolio",
+      "beforeHistoryTooltip": "Prima dell'inizio della storia di questo broker in LibreFolio: è già rappresentata, dagli import precedenti o dal saldo d'apertura. Non si importa.",
+      "pairingTitle": "Abbinamento titoli ↔ cassa",
+      "outcome": {
+        "pair": "coppie",
+        "standalone": "righe autonome",
+        "summarized": "riassunte in un checkpoint",
+        "deferred": "col prossimo import",
+        "excluded": "escluse"
+      },
+      "reason": {
+        "no_counterpart": "senza controparte",
+        "ambiguous": "ambigue",
+        "status": "non eseguite o non contabilizzate",
+        "unknown_type": "tipo sconosciuto",
+        "invalid": "non valide",
+        "not_yet_settled": "non ancora regolate",
+        "outside_cash_coverage": "regolate prima dell'inizio dell'estratto",
+        "superseded": "sostituite da un file più recente"
+      },
+      "downloadCombined": "Scarica il combinato",
+      "warning": {
+        "unknown_role": "Un file non è un export che questo plugin combina: resta fuori dal set.",
+        "excess_files": "In un set è ammesso un solo export «{role}».",
+        "coverage_starts_late": "L'export «{role}» inizia dopo il periodo di «{covered_role}» ({date}): i trade regolati prima saranno esclusi. Esportalo da una data precedente.",
+        "coverage_ends_early": "L'export «{role}» finisce prima del periodo di «{covered_role}» ({date}): i trade degli ultimi giorni arriveranno col prossimo import.",
+        "mixed_accounts": "I file vengono da conti diversi: carica gli export di un solo conto.",
+        "before_history_segment": "Il periodo {start} – {end} è più vecchio della storia già in LibreFolio: non verrà importato.",
+        "covers_gap_fix": "Una correzione gap-fix del {date} cade dentro questo periodo: toglila dopo l'import, altrimenti la cassa conta due volte.",
+        "gap": "Nessun export dei titoli copre {start} – {end}: i trade di quel periodo sono riassunti. Se la banca lo ha ancora, esportalo.",
+        "overlap_mismatch": "Due export «{role}» non coincidono in {days} giorni fra il {first} e il {last}: per quei giorni vale il più recente.",
+        "balance_chain_broken": "Il saldo progressivo dell'estratto non torna dal {date}: i saldi si confrontano soltanto, non servono per le correzioni.",
+        "empty_member": "Un export «{role}» non ha righe.",
+        "mixed_accounts_in_file": "Un export dei titoli contiene più depositi titoli."
+      },
+      "gapFix": {
+        "stepTitle": "Allinea con la banca",
+        "intro": "Confrontiamo quello che LibreFolio avrà dopo l'import con quello che dice la banca, e ti proponiamo le transazioni che chiudono la differenza.",
+        "checkpointOpening": "Punto di partenza · {date}",
+        "checkpointGap": "Dopo il buco · {date}",
+        "bank": "Banca",
+        "difference": "Differenza",
+        "cashLabel": "Cassa {currency}",
+        "atLeast": "almeno {quantity}",
+        "absorbed": "{n, plural, one {# movimento precedente dell'export è riassunto qui.} other {# movimenti precedenti dell'export sono riassunti qui.}}",
+        "absorbedMissing": "{n, plural, one {# di questi non è in LibreFolio:} other {# di questi non sono in LibreFolio:}}",
+        "openingCash": "Saldo prima dell'export:",
+        "unexplained": "Non spiegato da questi movimenti:",
+        "note": {
+          "unresolved_asset": "Una posizione della banca riguarda un titolo non ancora risolto: è stata lasciata fuori."
+        },
+        "toggle": "Importa questa correzione",
+        "costToEnter": "costo da inserire",
+        "verificationTitle": "Verifica a fine periodo · {date}",
+        "verificationOk": "Torna",
+        "verificationKo": "Non torna",
+        "verificationKoHint": "Non la correggiamo: se aggiungi a mano il movimento che manca, la cassa torna.",
+        "hiddenTitles": "Un titolo che nei file non si è mosso e non ha pagato dividendi non si vede: controlla le posizioni sul sito della banca.",
+        "error": "Il confronto con la banca non è riuscito.",
+        "errorContinue": "Puoi proseguire senza correzioni.",
+        "selectedCount": "{n, plural, one {# correzione selezionata} other {# correzioni selezionate}}",
+        "todo": {
+          "gap_fix_cost": "Inserisci il costo per unità di questa posizione: il sito della banca mostra il prezzo medio."
+        },
+        "filterHint": "Clicca un punto per vederne il confronto completo e solo le sue correzioni; cliccalo di nuovo per vederle tutte.",
+        "pointOpening": "Punto di partenza",
+        "pointGap": "Dopo il buco",
+        "positions": "{n, plural, one {# posizione} other {# posizioni}}",
+        "corrections": "{n, plural, one {# correzione} other {# correzioni}}",
+        "notesCount": "{n, plural, one {# nota} other {# note}}",
+        "column": {
+          "point": "Punto"
+        },
+        "noProposals": "Questo punto non richiede correzioni."
+      },
+      "badge": {
+        "column": "Set di report",
+        "combined": "Combinato",
+        "combinedTooltip": "Costruito da: {names}",
+        "combinedDeleted": "eliminati: {names}",
+        "stale": "Da ricombinare",
+        "staleTooltip": "Costruito da una versione precedente del plugin: analizzando di nuovo il set si ricostruisce.",
+        "usedInCombined": "Usato in un combinato",
+        "usedInCombinedTooltip": "Questo export è entrato in un file combinato del suo set.",
+        "set": "Set del {date}",
+        "setTooltip": "Caricato insieme agli altri export del suo set.",
+        "incomplete": "Incompleto",
+        "incompleteTooltip": "Manca: {roles}"
+      },
+      "otherFiles": "Altri file di questo broker",
+      "column": {
+        "file": "File",
+        "period": "Periodo",
+        "rows": "Righe",
+        "reason": "Motivo"
+      },
+      "timeline": {
+        "legendFile": "File del set",
+        "legendHistory": "Già in LibreFolio",
+        "legendGap": "Buco fra due export",
+        "gapInfo": "Nessun export di questo tipo copre questi giorni",
+        "historyCount": "{n, plural, one {# transazione già in LibreFolio} other {# transazioni già in LibreFolio}}"
+      },
+      "previewCombined": "Anteprima del file combinato"
+    },
+    "parseDetail": {
+      "sourceRow": "Riga del file",
+      "charges": "Commissioni",
+      "suggestions": "Cosa ha trovato l'importatore",
+      "technical": "Dettagli tecnici"
+    },
+    "todoGoto": "Vai alla riga"
   },
   "brokers": {
     "title": "Broker",
@@ -1072,7 +1225,8 @@
       "weekRange": "Settimana {start} – {end}",
       "monthLabel": "{month}",
       "valueAt": "Valore al {date}",
-      "eventsInPeriod": "Eventi nel periodo:"
+      "eventsInPeriod": "Eventi nel periodo:",
+      "partialBucket": "Parziale: {days} su {total} giorni"
     },
     "resolution": {
       "weekly": "Settimanale",
@@ -1493,7 +1647,6 @@
     "pnlSubmodeLine": "Linea",
     "pnlSubmodeIncome": "Proventi",
     "pnlSubmodeCandles": "Candele",
-    "pnlCandlesHypothetical": "Sintetico — i massimi/minimi cross-asset sono ipotetici e non simultanei, non una serie intraday reale.",
     "pnlCandlesHypotheticalShort": "Sintetico — i massimi/minimi cross-asset sono ipotetici e non simultanei",
     "pnlAcqNewCapital": "Nuovo capitale",
     "pnlAcqReinvested": "Reinvestito"
@@ -1523,7 +1676,8 @@
       "navigate_asset": "Vedi asset",
       "navigate_fx": "Vedi FX",
       "add_fx_pair": "Aggiungi coppia FX",
-      "sync_fx_pair": "Sincronizza"
+      "sync_fx_pair": "Sincronizza",
+      "sync_asset_prices": "Sincronizza"
     },
     "referencePriceFallback": "Prezzo di apertura del lotto non disponibile alla data esatta — usato come riferimento l'ultimo prezzo noto {reference_price} per il rendimento relativo",
     "referencePriceUnavailable": "Nessun prezzo di riferimento disponibile per l'apertura di un lotto — rendimento relativo non calcolabile",
@@ -4147,7 +4301,7 @@
         },
         "select": {
           "title": "Scegli file e parser",
-          "description": "Seleziona uno o più report salvati. Per ciascun file scegli il plugin di analisi adatto; quando tutte le selezioni sono complete, usa il pulsante a destra per continuare. In base al plugin e ai dati estratti potranno comparire passaggi opzionali per unificare asset, correggere righe o gestire duplicati."
+          "description": "Seleziona uno o più report salvati. Per ciascun file scegli il plugin di analisi adatto; gli export di una banca caricati insieme formano un set, che si analizza come uno solo. Quando tutte le selezioni sono complete, usa il pulsante a destra per continuare. In base al plugin e ai dati estratti potranno comparire passaggi opzionali per unificare asset, correggere righe, gestire duplicati o allineare con la banca."
         },
         "analyze": {
           "title": "Analizza i dati estratti",
@@ -4172,6 +4326,10 @@
         "bulk": {
           "title": "Salva tutto scrive le transazioni",
           "description": "Rivedi e modifica le bozze delle transazioni, poi scegli Salva tutto quando sono pronte."
+        },
+        "gapFix": {
+          "title": "Allinea con la banca",
+          "description": "Per un set di export, confronta quello che LibreFolio avrà con quello che dice la banca, e tieni o togli le correzioni che chiudono la differenza prima di continuare."
         }
       }
     },

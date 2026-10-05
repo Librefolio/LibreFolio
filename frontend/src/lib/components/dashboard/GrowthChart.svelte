@@ -18,14 +18,20 @@
            ResizeObserver for responsive sizing.
 -->
 <script lang="ts">
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
     import {attachChartReady} from '$lib/utils/chartReady';
+    import {getUserStorage, setUserStorage} from '$lib/utils/storage';
+    import {maskFormattedNumber, shouldMaskAmount} from '$lib/utils/privacy/maskable';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
+    import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
+    import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS, namedPoint} from '$lib/components/charts/echartsAnimationConfig';
     import {_, locale} from '$lib/i18n';
     import {buildResponsiveXAxisPolicy} from '$lib/components/charts/responsiveXAxis';
     import {clampGrowthLogicalRange, type GrowthLogicalRange} from './growthChartRange';
+    import {planLadderAxis, ladderAxisOption, type LadderAxisPlan} from './growthLadderAxis';
     import ResolutionBadge from '$lib/components/charts/ResolutionBadge.svelte';
     import {aggregateLineSeries, mapDateToBucket, cascadeResolution, chooseInitialResolution, computeDensity, type ChartGrammar} from '$lib/components/charts/timeSeriesAggregation';
     import type {ChartResolution} from '$lib/components/charts/timeSeriesAggregation';
@@ -78,11 +84,44 @@
 
     // coreMode = value|return|pnl (plan §5.1); kept as the existing 'eur'/'pct'/'pnl'
     // literal union for minimal churn on the 14 existing branches, not a rename.
-    let viewMode: 'eur' | 'pct' | 'pnl' = $state('eur');
+    type GrowthMode = 'eur' | 'pct' | 'pnl';
+    type PnlSubmode = 'line' | 'candles' | 'income';
+
+    // The mode and the P&L submode persist per user, with one key shared by Dashboard and
+    // Broker detail (AllocationPanel and PositionsPanel do the same). The candle width is
+    // deliberately NOT persisted: every entry into the ladder applies its opening rule.
+    const MODE_STORAGE_KEY = 'dashboard-growth-mode';
+    const SUBMODE_STORAGE_KEY = 'dashboard-growth-pnl-submode';
+
+    function readStoredMode(): GrowthMode {
+        const stored = getUserStorage(MODE_STORAGE_KEY, 'eur');
+        return stored === 'pct' || stored === 'pnl' ? stored : 'eur';
+    }
+
+    function readStoredSubmode(): PnlSubmode {
+        const stored = getUserStorage(SUBMODE_STORAGE_KEY, 'line');
+        return stored === 'candles' || stored === 'income' ? stored : 'line';
+    }
+
+    const restoredMode = readStoredMode();
+    let viewMode: GrowthMode = $state(restoredMode);
     // pnlSubmode = line|candles|income (plan §5.1). All three submodes are live and the
     // picker is rendered (data-testid growth-pnl-submode-*); 'candles' is where the
     // synthetic OHLC series is shown.
-    let pnlSubmode: 'line' | 'candles' | 'income' = $state('line');
+    let pnlSubmode: PnlSubmode = $state(readStoredSubmode());
+    /** A restored % view still has to be checked against the loaded history (see below). */
+    let restoredPctUnchecked = restoredMode === 'pct';
+
+    function selectMode(mode: GrowthMode) {
+        viewMode = mode;
+        restoredPctUnchecked = false;
+        setUserStorage(MODE_STORAGE_KEY, mode);
+    }
+
+    function selectSubmode(submode: PnlSubmode) {
+        pnlSubmode = submode;
+        setUserStorage(SUBMODE_STORAGE_KEY, submode);
+    }
     // Named for the zoom it drives, NOT for a submode: it began life income-only, but
     // the mechanism was always the shared visible range. Deliberately "zoom" and not
     // "window" alone, to keep it distinct from the candle-WIDTH ladder (DBT-7), which
@@ -143,7 +182,7 @@
     /** Income bars start one rung up: a single day of personal cash flow is almost always empty. */
     const INCOME_MIN_WIDTH: CandleWidth = '1W';
     /**
-     * PROVISIONAL (2026-09-22) — narrowest body the ladder will still OFFER.
+     * Narrowest candle body the ladder will still OFFER.
      *
      * Deliberately NOT `CANDLE_MIN_SLOT_PX`, and the difference is the point. That
      * constant governs *silent* aggregation: there a body too thin to read is a
@@ -157,8 +196,32 @@
      * sit below that. 2.5 keeps 1D up to ~210 days and leaves room for narrower plots.
      */
     const LADDER_MIN_BODY_PX = 2.5;
+    /**
+     * Income draws three columns in every bucket — the income stack (dividends and
+     * interest above zero, costs below it), the deposit, the acquisition stack — so its
+     * rule is checked per COLUMN, not per bucket: a slot that holds one readable candle
+     * holds three bars a third as wide.
+     *
+     * The gaps are the ones the Income series declare, so the offer and the drawing cannot
+     * disagree: bar = slot × (1 − category gap) / (columns + (columns − 1) × bar gap).
+     */
+    const INCOME_COLUMNS = 3;
+    const INCOME_BAR_GAP = 0.1;
+    const INCOME_CATEGORY_GAP = 0.1;
+    const INCOME_BAR_SHARE = (1 - INCOME_CATEGORY_GAP) / (INCOME_COLUMNS + (INCOME_COLUMNS - 1) * INCOME_BAR_GAP);
+    /** Narrowest Income bar the ladder will still offer: below it a bar is a hairline, and a bucket no longer reads as three columns. */
+    const INCOME_MIN_BAR_PX = 2;
     /** Below three bodies a "chart" is a couple of rectangles — except at 1D, which is exempt. */
     const LADDER_MIN_BODIES = 3;
+    /**
+     * Opacity of the ladder's partial first bucket (candle or Income bars).
+     *
+     * The ladder closes its last bucket on the latest day, so the days left over sit in
+     * the FIRST bucket, which then spans fewer days than its rung. Drawn like a whole one,
+     * its sums would read as a weak period and its candle as a narrow range, when it is
+     * simply a shorter one. Fading it says "not comparable"; the tooltip says by how much.
+     */
+    const PARTIAL_BUCKET_OPACITY = 0.5;
     let candleWidth: CandleWidth = $state('1W');
     /** True until the ladder has picked its own opening rung; see reconcileCandleWidth(). */
     let candleWidthPending = $state(true);
@@ -172,6 +235,9 @@
      *  (`{name, data}` only, see CHART_SERIES_UPDATE_OPTS) cannot express. */
     let lastRenderedMode: string | null = null;
     let lastRenderedDark: boolean | null = null;
+    /** Privacy state the axis labels were last drawn with. ECharts caches axis labels, so a
+     *  toggle needs a full rebuild; the tooltip formatter reads the state on every hover. */
+    let lastRenderedMasked: boolean | null = null;
     let lastHistoryRef: PortfolioHistoryPoint[] | null = null;
     /**
      * First|last day of the data currently on screen.
@@ -188,21 +254,18 @@
         chartInstance?.resize();
         if (chartContainer) containerWidthPx = chartContainer.clientWidth;
         syncPlotGeometry();
-        if (chartInstance && chartContainer && activeChartData) {
-            const isCandlesSubmode = viewMode === 'pnl' && pnlSubmode === 'candles';
+        // The ladder's axis is planned from the measured grid, by the resolution sync
+        // below; the responsive policy is for the cascade's time axis only.
+        if (chartInstance && chartContainer && activeChartData && !ladderActive) {
             const policy = buildResponsiveXAxisPolicy({
                 width: chartContainer.clientWidth,
                 values: activeChartData.dates,
                 locale: $locale ?? undefined,
-                axisType: isCandlesSubmode ? 'category' : 'time',
+                axisType: 'time',
             });
             const wasCompact = responsiveXAxisCompact;
             responsiveXAxisCompact = policy.compact;
             if (policy.axisLabel) {
-                // splitNumber is a time/value/log-axis concept — ECharts ignores it on a
-                // category axis, so this stays unconditional (no need to fork on
-                // isCandlesSubmode): policy.splitNumber is simply undefined there already
-                // (see buildResponsiveXAxisPolicy).
                 chartInstance.setOption({xAxis: {splitNumber: policy.splitNumber, axisLabel: policy.axisLabel}}, {lazyUpdate: true});
             } else if (wasCompact) {
                 renderChart(true);
@@ -260,6 +323,8 @@
         bucketStart: string;
         bucketEnd: string;
         resolution: ChartResolution;
+        /** Only on the ladder's partial first bucket; see PARTIAL_BUCKET_OPACITY. */
+        itemStyle?: {opacity: number};
     };
 
     type EurSeriesKey = 'bookAssetLike' | 'cashContributed' | 'cashGenerated' | 'nav' | 'capitalBaseline' | 'totalPnl';
@@ -270,6 +335,9 @@
         bucketStart: string;
         bucketEnd: string;
         resolution: ChartResolution;
+        /** Set only on a ladder bucket that covers fewer days than its rung: the first
+         *  one, because the ladder is anchored at the last day of the series. */
+        partial?: {days: number; total: number};
     }
 
     interface AggregatedMetric {
@@ -304,6 +372,10 @@
 
     interface AggregatedResolutionData {
         resolution: ChartResolution;
+        /** True for an entry built by the ladder (P&L candles and Income): its buckets are
+         *  categories on the x axis, not points in time. A property of the entry, not of
+         *  the mode on screen, so a stale entry can never be read with the wrong geometry. */
+        ladder: boolean;
         dates: string[];
         buckets: BucketInfo[];
         eur: Record<EurSeriesKey, AggregatedMetric>;
@@ -333,9 +405,10 @@
      * Which rungs the current geometry can actually draw.
      *
      * Two rules, deliberately asymmetric:
-     *   (1) DENSITY  — a body must be at least LADDER_MIN_BODY_PX wide. Applies to every
-     *                  rung, 1D included, and 1D is the first to fall because it is the
-     *                  densest.
+     *   (1) DENSITY  — a candle body must be at least LADDER_MIN_BODY_PX wide; in Income,
+     *                  each of the bucket's three bars must be at least INCOME_MIN_BAR_PX
+     *                  wide. Applies to every rung, 1D included, and 1D is the first to
+     *                  fall because it is the densest.
      *   (2) SCARCITY — a rung needs at least LADDER_MIN_BODIES bodies to be a chart rather
      *                  than a couple of rectangles. 1D is EXEMPT: "deve sempre essere
      *                  possibile, anche se ci fosse solo 1 punto".
@@ -350,18 +423,21 @@
     const availableCandleWidths = $derived.by(() => {
         const dayCount = dates.length;
         const plotPx = plotWidthPxMeasured;
-        const floor = ladderActive && pnlSubmode === 'income' ? CANDLE_WIDTH_ORDER.indexOf(INCOME_MIN_WIDTH) : 0;
+        const income = ladderActive && pnlSubmode === 'income';
+        const floor = income ? CANDLE_WIDTH_ORDER.indexOf(INCOME_MIN_WIDTH) : 0;
         if (dayCount === 0 || plotPx <= 0) return CANDLE_WIDTH_ORDER.slice(floor);
 
         const offered = CANDLE_WIDTH_ORDER.slice(floor).filter((width) => {
             const bodies = Math.ceil(dayCount / CANDLE_WIDTH_DAYS[width]);
             const density = computeDensity(bodies, plotPx);
-            const dense = density > 0 && 1 / density >= LADDER_MIN_BODY_PX;
-            if (!dense) return false;
+            if (!(density > 0)) return false;
+            const slotPx = 1 / density;
+            const drawable = income ? slotPx * INCOME_BAR_SHARE >= INCOME_MIN_BAR_PX : slotPx >= LADDER_MIN_BODY_PX;
+            if (!drawable) return false;
             return width === '1D' || bodies >= LADDER_MIN_BODIES;
         });
 
-        // The list may never be empty: 1D is the documented floor even when nothing fits.
+        // The list may never be empty: the floor rung stays offered even when nothing fits.
         return offered.length > 0 ? offered : [CANDLE_WIDTH_ORDER[floor]];
     });
 
@@ -389,28 +465,24 @@
      *  AND the legend exclusion in applyFullOption) so the sentinel never becomes a
      *  magic string that a second site has to remember independently. */
     const PNL_REFERENCE_SERIES_NAME = '__pnlReference__';
-    /** Left inset of the plot area, in px. Used for BOTH `grid.left` and the floating
-     *  overlay cluster's `left`, so the controls clear the y-axis label gutter by
-     *  construction rather than by a coincidence that holds for today's tick labels.
-     *  Deliberately a single shared constant: with `containLabel: true` the gutter
-     *  width is computed by ECharts from the widest label, so any independently-chosen
-     *  CSS offset would silently desynchronise the moment a label grew (a different
-     *  base currency, a larger portfolio, a negative thousands value). */
     /**
-     * Fallback for the plot's left edge, used until ECharts has laid the grid out once.
+     * Fallback for the plot's left edge, used only until ECharts has laid the grid out once.
      *
-     * NOT the plot edge itself: with `containLabel: true` this is the grid's OUTER left,
-     * and ECharts draws the y tick labels INSIDE it — so the real plot starts at
-     * `CHART_PLOT_LEFT_PX + <width of the widest label>`. An overlay pinned to this
-     * constant therefore sits on top of the labels, which is what the developer saw
-     * ("1k" and "900" reading through the submode pill). The real edge is measured from
-     * the laid-out grid into `plotLeftPx` below.
+     * The grid itself does not use it: `grid.left` is `'3%'` with `containLabel: true`, so
+     * ECharts draws the y tick labels inside that inset and the real plot starts at
+     * `3% of the width + the widest label`. That edge is measured from the laid-out grid
+     * into `plotLeftPx` below, and the overlays follow the measurement. A px constant used
+     * to be the grid's `left` as well; once the overlays measured, it only left an empty
+     * gutter before the labels (developer review, on mobile).
      */
-    const CHART_PLOT_LEFT_PX = 52;
+    const PLOT_LEFT_FALLBACK_PX = 52;
     /** Measured left edge of the plotting rectangle; see syncPlotGeometry(). */
-    let plotLeftPx = $state(CHART_PLOT_LEFT_PX);
+    let plotLeftPx = $state(PLOT_LEFT_FALLBACK_PX);
     /** Measured width of the plotting rectangle; drives the candle-width availability rule. */
     let plotWidthPxMeasured = $state(0);
+    /** Measured room between the plot's right edge and the canvas edge: how far the ladder's
+     *  last label may reach before the canvas clips it. Read only by the axis planner. */
+    let plotRightRoomPx = 0;
     /**
      * Measured TOP of the plotting rectangle — where the highest y-axis label sits.
      *
@@ -498,6 +570,9 @@
         deposit: $_('transactions.types.DEPOSIT'),
         acqNewCapital: $_('dashboard.pnlAcqNewCapital'),
         acqReinvested: $_('dashboard.pnlAcqReinvested'),
+        // R11: the purchase value, the KPI card's own key, names both acquisition zones;
+        // the two labels above stay for the tooltip rows of its halves.
+        bookValue: $_('dashboard.bookValue'),
     });
 
     /**
@@ -644,6 +719,15 @@
     const hasPctData = $derived(history.some((pt) => pt.mwrr_cumulative != null || pt.twrr != null || pt.roi != null));
     const hasNonZeroPctData = $derived(history.some((pt) => Number(pt.mwrr_cumulative ?? 0) !== 0 || Number(pt.twrr ?? 0) !== 0 || Number(pt.roi ?? 0) !== 0));
 
+    // The % button is disabled without % data, so a restored % view must not outlive the
+    // first completed load that has none. It falls back to Abs for display only: the stored
+    // choice is kept, and comes back once the history can draw it.
+    $effect(() => {
+        if (!restoredPctUnchecked || loading) return;
+        restoredPctUnchecked = false;
+        if (!hasPctData) viewMode = 'eur';
+    });
+
     function resetResolutionState(preservedRange: GrowthLogicalRange | null = null) {
         resolutionCache.clear();
         ladderCache.clear();
@@ -693,8 +777,10 @@
     }
 
     /**
-     * Ladder buckets: consecutive runs of `spanDays` calendar days, anchored at the first
-     * date of the series.
+     * Ladder buckets: consecutive runs of `spanDays` calendar days, anchored at the LAST
+     * date of the series, so every bucket but the first is whole and the most recent one
+     * always closes on the latest day (D16-ii). The first bucket keeps whatever is left
+     * over and says so through `partial`.
      *
      * Kept separate from `buildBucketInfos` on purpose. That one delegates to the shared
      * calendar aggregators (`aggregateLineSeries` and friends), which can only express ISO
@@ -703,19 +789,26 @@
      * same `AggregatedResolutionData` the rest of the component already consumes, so this
      * is one pipeline with two bucket builders, not a second pipeline.
      *
+     * The history carries one point per calendar day, so a run of `spanDays` points is a
+     * run of `spanDays` days.
+     *
      * `resolution` is carried for the tooltip only: a one-day bucket prints a date, any
      * wider bucket prints its range. The calendar-month tooltip form is deliberately not
      * reachable from here, because `1M` on this ladder is thirty days, not a month.
      */
     function buildLadderBuckets(sourceDates: string[], spanDays: number): LadderBucket[] {
         const out: LadderBucket[] = [];
-        for (let start = 0; start < sourceDates.length; start += spanDays) {
-            const end = Math.min(start + spanDays - 1, sourceDates.length - 1);
+        const count = Math.ceil(sourceDates.length / spanDays);
+        for (let i = 0; i < count; i++) {
+            const end = sourceDates.length - 1 - spanDays * (count - 1 - i);
+            const start = Math.max(0, end - spanDays + 1);
+            const days = end - start + 1;
             out.push({
                 date: sourceDates[end],
                 bucketStart: sourceDates[start],
                 bucketEnd: sourceDates[end],
                 resolution: spanDays === 1 ? 'daily' : 'weekly',
+                ...(days < spanDays ? {partial: {days, total: spanDays}} : {}),
                 startIndex: start,
                 endIndex: end,
             });
@@ -919,6 +1012,7 @@
         const buckets = buildBucketInfos(resolution, inputs.dates);
         const entry: AggregatedResolutionData = {
             resolution,
+            ladder: false,
             dates: buckets.map((bucket) => bucket.date),
             buckets,
             eur: {
@@ -978,6 +1072,7 @@
         const empty: AggregatedMetric = {values: [], points: []};
         const entry: AggregatedResolutionData = {
             resolution: buckets[0]?.resolution ?? 'daily',
+            ladder: true,
             dates: buckets.map((bucket) => bucket.date),
             buckets,
             eur: {bookAssetLike: empty, cashContributed: empty, cashGenerated: empty, nav: empty, capitalBaseline: empty, totalPnl: empty},
@@ -1037,14 +1132,19 @@
     }
 
     function getLogicalRangeFromChart(): {startDate: string; endDate: string} | null {
-        if (!activeChartData || activeChartData.resolution !== currentResolution) return null;
         const entry = activeChartData;
+        // A cascade entry is only readable at the resolution it was built for; a ladder
+        // entry carries its own buckets, whatever the cascade's resolution says.
+        if (!entry || (!entry.ladder && entry.resolution !== currentResolution)) return null;
         if (entry.buckets.length === 0) return null;
 
         const {start, end} = getZoomPercent();
         const maxIndex = Math.max(entry.buckets.length - 1, 0);
-        const startIndex = Math.max(0, Math.min(maxIndex, Math.floor((start / 100) * maxIndex)));
-        const endIndex = Math.max(startIndex, Math.min(maxIndex, Math.ceil((end / 100) * maxIndex)));
+        // On the ladder's category axis ECharts snaps a window edge to the NEAREST bucket,
+        // so the window is read the way it is drawn. The cascade keeps its widening
+        // floor/ceil, which never loses a partly visible day.
+        const startIndex = Math.max(0, Math.min(maxIndex, entry.ladder ? Math.round((start / 100) * maxIndex) : Math.floor((start / 100) * maxIndex)));
+        const endIndex = Math.max(startIndex, Math.min(maxIndex, entry.ladder ? Math.round((end / 100) * maxIndex) : Math.ceil((end / 100) * maxIndex)));
         const startBucket = entry.buckets[startIndex];
         const endBucket = entry.buckets[endIndex];
 
@@ -1054,8 +1154,8 @@
         };
     }
 
-    function buildZoomWindow(resolution: ChartResolution, startDate: string, endDate: string): {start: number; end: number} {
-        const entry = getResolutionData(resolution);
+    /** The zoom percentages that put `entry`'s buckets holding `startDate` and `endDate` at the window edges. */
+    function buildZoomWindow(entry: AggregatedResolutionData, startDate: string, endDate: string): {start: number; end: number} {
         if (entry.buckets.length <= 1) return {start: 0, end: 100};
 
         const startIndex = Math.max(
@@ -1074,16 +1174,49 @@
         };
     }
 
-    /** Batch 2 — Income submode window selector (1W/1M/1Y/All), independent UI on top
-     *  of the SAME shared zoom/dataZoom mechanism the chart already uses for drag/scroll
-     *  zoom (not a parallel windowing system) — a preset button is just a convenient way
-     *  to set visibleStartDate/visibleEndDate + the resulting dataZoom percentages,
-     *  exactly as a manual zoom gesture would. Shared with Line/Candles since they use
-     *  the same underlying state: switching submodes after picking a window keeps it. */
+    /** Key of the ladder axis plan on screen; null while none is (fresh instance, cascade option). */
+    let lastLadderPlanKey: string | null = null;
+
     /**
-     * Pick a candle width. This does NOT move the visible range: the axis keeps showing
-     * the whole history and only the number of bodies changes, which is the entire point
-     * of the control and the opposite of what it used to do.
+     * The ladder axis plan for `entry` seen through `zoom`, on the grid measured last.
+     *
+     * The window is passed in, not read from the chart: a render plans the window it is
+     * about to send, which the chart does not hold yet. The planner rounds the fractional
+     * indices the way ECharts snaps a category window, and returns an empty plan (key '')
+     * while the grid is not measured.
+     */
+    function planLadderFor(entry: AggregatedResolutionData, zoom: {start: number; end: number}): LadderAxisPlan {
+        const last = Math.max(entry.buckets.length - 1, 0);
+        return planLadderAxis({
+            closingDates: entry.dates,
+            firstDate: entry.buckets[0]?.bucketStart ?? '',
+            visibleStartIndex: (zoom.start / 100) * last,
+            visibleEndIndex: (zoom.end / 100) * last,
+            plotWidthPx: plotWidthPxMeasured,
+            leftRoomPx: plotLeftPx,
+            rightRoomPx: plotRightRoomPx,
+            locale: $locale ?? 'en',
+        });
+    }
+
+    /**
+     * Re-plan the ladder axis for the window on screen, and send it only when the plan
+     * changed — as an `{xAxis}`-only option. A zoom calls this, so the update must not
+     * carry `dataZoom` (it would fight the gesture) nor series (nothing moved).
+     */
+    function refreshLadderAxis(zoom: {start: number; end: number} = getZoomPercent()) {
+        const entry = activeChartData;
+        if (!chartInstance || !ladderActive || !entry?.ladder) return;
+        const plan = planLadderFor(entry, zoom);
+        if (plan.key === lastLadderPlanKey) return;
+        lastLadderPlanKey = plan.key;
+        chartInstance.setOption({xAxis: ladderAxisOption(plan)});
+    }
+
+    /**
+     * Pick a candle width. This does NOT move the visible range: the window stays on the
+     * same days and only the number of bodies changes, which is the entire point of the
+     * control and the opposite of what it used to do.
      */
     function selectCandleWidth(width: CandleWidth) {
         if (!availableCandleWidths.includes(width)) return;
@@ -1129,21 +1262,31 @@
         }).format(new Date(Date.UTC(year, month - 1, day)));
     }
 
+    /** "Partial: 5 of 7 days" under the header of the ladder's partial first bucket; empty on any other bucket.
+     *  The translation is data inside tooltip HTML, so it is escaped and reads as written. */
+    function buildPartialBucketLine(bucket: BucketInfo, theme: ReturnType<typeof buildTooltipTheme>): string {
+        if (!bucket.partial) return '';
+        const partialText = $_('chart.tooltip.partialBucket', {values: {days: bucket.partial.days, total: bucket.partial.total}});
+        return `<div style="font-size:10px;color:${theme.mutedColor};margin-bottom:4px">${escapeHtml(partialText)}</div>`;
+    }
+
     function buildTooltipBucketHeader(bucket: BucketInfo, theme: ReturnType<typeof buildTooltipTheme>): string {
-        // A one-day bucket has nothing to span, so it keeps the plain date.
+        const partialHtml = buildPartialBucketLine(bucket, theme);
+        // A one-day bucket has nothing to span, so it keeps the plain date — even when it
+        // is the leftover first bucket of a wider rung, which still says it is partial.
         if (bucket.bucketStart === bucket.bucketEnd) {
-            return buildTooltipHeader(bucket.bucketEnd, theme.textColor);
+            return `${buildTooltipHeader(bucket.bucketEnd, theme.textColor)}${partialHtml}`;
         }
 
         if (ladderActive) {
             // "3D  2026-09-15 → 2026-09-17". The old form said "Week" for every bucket
             // wider than a day, which was simply false on a three-day or fourteen-day
             // rung — the label named a calendar unit the ladder does not use.
-            const header = buildTooltipHeader(`${candleWidthLabel(candleWidth)} - ${bucket.bucketStart} → ${bucket.bucketEnd}`, theme.textColor);
+            const headerHtml = `${buildTooltipHeader(`${candleWidthLabel(candleWidth)} - ${bucket.bucketStart} → ${bucket.bucketEnd}`, theme.textColor)}${partialHtml}`;
             // "Value at <date>" is true of a closing level and false of a sum, so the
             // Income submode — whose bars are sums over the bucket — does not claim it.
-            if (pnlSubmode === 'income') return header;
-            return `${header}<div style="font-size:10px;color:${theme.mutedColor};margin-bottom:4px">${$_('chart.tooltip.valueAt', {values: {date: bucket.bucketEnd}})}</div>`;
+            if (pnlSubmode === 'income') return headerHtml;
+            return `${headerHtml}<div style="font-size:10px;color:${theme.mutedColor};margin-bottom:4px">${$_('chart.tooltip.valueAt', {values: {date: bucket.bucketEnd}})}</div>`;
         }
 
         const contextLine = `<div style="font-size:10px;color:${theme.mutedColor};margin-bottom:4px">${$_('chart.tooltip.valueAt', {values: {date: bucket.bucketEnd}})}</div>`;
@@ -1179,13 +1322,6 @@
     function toCandlestickPoint(point: CandleSeriesPoint): number[] | string {
         if (point.open == null || point.close == null || point.low == null || point.high == null) return ECHARTS_EMPTY_VALUE;
         return buildOhlcQuad(point.open, point.close, point.low, point.high, false, 1);
-    }
-
-    /** A category xAxis aligns series data by position, not by `[date, value]`
-     *  pairs — extract the plain value so the broker-line overlay lines up with
-     *  the candlestick's category positions in `pnlSubmode==='candles'`. */
-    function toPositionalValue(point: SeriesPoint): number | null {
-        return point.value[1];
     }
 
     /** Clip a point's value to null when it doesn't match `keepPositive` — used to
@@ -1317,22 +1453,30 @@
             // one series that has to be read precisely the hardest one to see.
             // Candlestick data is structurally a flat quad, not a SeriesPoint — cast
             // through unknown; ECharts itself doesn't care, only the shared return-type
-            // annotation does (see buildFullSeries's matching cast).
-            return [{name: pnlLabels.total, data: entry.pnl.candle.points.map(toCandlestickPoint) as unknown as SeriesPoint[]}];
+            // annotation does (see buildFullSeries's matching cast). The partial first
+            // bucket wraps its quad as `{value, itemStyle}`, the item form ECharts reads
+            // through `isArray(item.value)`; a gap stays the bare sentinel.
+            const candles = entry.pnl.candle.points.map((point, index) => {
+                const quad = toCandlestickPoint(point);
+                return quad !== ECHARTS_EMPTY_VALUE && entry.buckets[index]?.partial ? {value: quad, itemStyle: {opacity: PARTIAL_BUCKET_OPACITY}} : quad;
+            });
+            return [{name: pnlLabels.total, data: candles as unknown as SeriesPoint[]}];
         }
 
         if (viewMode === 'pnl' && pnlSubmode === 'income') {
             // DIVIDEND/INTEREST stacked bars (plan §3.4) + batch 2's costs/deposit/
             // acquisition dimensions — no broker overlay for this submode (the plan's
             // hybrid-overlay rule is specific to Line/Candles). Fixed 6-slot order
-            // matches buildFullSeries's matching index reads exactly.
+            // matches buildFullSeries's matching index reads exactly. The partial first
+            // bucket is faded on every column alike.
+            const faded = (points: SeriesPoint[]): SeriesPoint[] => points.map((point, index) => (entry.buckets[index]?.partial ? {...point, itemStyle: {opacity: PARTIAL_BUCKET_OPACITY}} : point));
             return [
-                {name: pnlLabels.dividend, data: entry.pnl.income.dividend.points},
-                {name: pnlLabels.interest, data: entry.pnl.income.interest.points},
-                {name: pnlLabels.costs, data: entry.pnl.costs.points},
-                {name: pnlLabels.deposit, data: entry.pnl.deposits.points},
-                {name: pnlLabels.acqNewCapital, data: entry.pnl.acquisition.fromNewCapital.points},
-                {name: pnlLabels.acqReinvested, data: entry.pnl.acquisition.fromReinvested.points},
+                {name: pnlLabels.dividend, data: faded(entry.pnl.income.dividend.points)},
+                {name: pnlLabels.interest, data: faded(entry.pnl.income.interest.points)},
+                {name: pnlLabels.costs, data: faded(entry.pnl.costs.points)},
+                {name: pnlLabels.deposit, data: faded(entry.pnl.deposits.points)},
+                {name: pnlLabels.bookValue, data: faded(entry.pnl.acquisition.fromNewCapital.points)},
+                {name: pnlLabels.bookValue, data: faded(entry.pnl.acquisition.fromReinvested.points)},
             ];
         }
 
@@ -1479,17 +1623,26 @@
 
         if (viewMode === 'pnl' && pnlSubmode === 'income') {
             const cc = (key: keyof typeof COLORS) => COLORS[key][isDark ? 'dark' : 'light'];
+            // Three columns per bucket: the income stack (dividends and interest above zero,
+            // costs hanging below it — a same-sign stack splits by sign), the deposit, the
+            // acquisition stack. The gaps are the ones the rung offer assumes
+            // (INCOME_BAR_SHARE). ECharts keeps the last value it meets on the axis, so
+            // every series declares them rather than trusting one to be read.
+            const gaps = {barGap: `${Math.round(INCOME_BAR_GAP * 100)}%`, barCategoryGap: `${Math.round(INCOME_CATEGORY_GAP * 100)}%`};
             return [
-                {name: pnlLabels.dividend, type: 'bar' as const, stack: 'income', data: seriesData[0].data, itemStyle: {color: cc('dividend')}},
-                {name: pnlLabels.interest, type: 'bar' as const, stack: 'income', data: seriesData[1].data, itemStyle: {color: cc('interest')}},
-                {name: pnlLabels.costs, type: 'bar' as const, data: seriesData[2].data, itemStyle: {color: cc('costs')}},
-                {name: pnlLabels.deposit, type: 'bar' as const, data: seriesData[3].data, itemStyle: {color: cc('deposit')}},
-                // Acquisition 2-zone stacked bar (batch 2, plan §5.2): reuses the exact
-                // same capital/returns-pool colors as EUR mode's own cashContributed/
-                // cashGenerated areas — same underlying financial concept (K/R pool),
-                // so the same color means the same thing everywhere in the app.
-                {name: pnlLabels.acqNewCapital, type: 'bar' as const, stack: 'acquisition', data: seriesData[4].data, itemStyle: {color: cc('cashContributed')}},
-                {name: pnlLabels.acqReinvested, type: 'bar' as const, stack: 'acquisition', data: seriesData[5].data, itemStyle: {color: cc('cashGenerated')}},
+                {name: pnlLabels.dividend, type: 'bar' as const, stack: 'income', data: seriesData[0].data, itemStyle: {color: cc('dividend')}, ...gaps},
+                {name: pnlLabels.interest, type: 'bar' as const, stack: 'income', data: seriesData[1].data, itemStyle: {color: cc('interest')}, ...gaps},
+                {name: pnlLabels.costs, type: 'bar' as const, stack: 'income', data: seriesData[2].data, itemStyle: {color: cc('costs')}, ...gaps},
+                {name: pnlLabels.deposit, type: 'bar' as const, data: seriesData[3].data, itemStyle: {color: cc('deposit')}, ...gaps},
+                // Acquisition 2-zone stacked bar (batch 2, plan §5.2): the purchase value,
+                // split by the money that paid for it (R11). Both zones carry its name, so
+                // the legend lists it once and one click hides both. Each zone keeps the
+                // colour its money has in the Abs view (D26): new capital the KPI blue of
+                // the assets at cost, reinvested the green of the generated returns.
+                // The Abs area shows the same text and ECharts keeps legend state by name,
+                // so hiding it in one view hides it in the other too (accepted, D27).
+                {name: pnlLabels.bookValue, type: 'bar' as const, stack: 'acquisition', data: seriesData[4].data, itemStyle: {color: cc('bookAssetLike')}, ...gaps},
+                {name: pnlLabels.bookValue, type: 'bar' as const, stack: 'acquisition', data: seriesData[5].data, itemStyle: {color: cc('cashGenerated')}, ...gaps},
             ];
         }
 
@@ -1512,14 +1665,6 @@
         if (!chartInstance) return;
 
         const seriesData = buildChartUpdateSeries(isDark, entry, referenceDate);
-        const isCandlesSubmode = viewMode === 'pnl' && pnlSubmode === 'candles';
-        const xAxisPolicy = buildResponsiveXAxisPolicy({
-            width: chartContainer?.clientWidth ?? 0,
-            values: entry.dates,
-            locale: $locale ?? undefined,
-            axisType: isCandlesSubmode ? 'category' : 'time',
-        });
-        const wasCompact = responsiveXAxisCompact;
 
         // skipAnimation is only ever true for a resolution switch (daily <-> weekly/monthly),
         // where the data-point count per series changes drastically. If a tooltip is
@@ -1531,12 +1676,29 @@
             chartInstance.dispatchAction({type: 'hideTip'});
         }
 
-        if (wasCompact && !xAxisPolicy.compact) {
-            applyFullOption(isDark, buildFullSeries(isDark, seriesData), zoomWindow);
-            return;
+        let xAxis: Record<string, unknown>;
+        if (entry.ladder) {
+            // A category axis takes its positions from `data` alone, so the bucket closings
+            // travel with every update: a rung change replaces all of them. The labels are
+            // planned for the window this update sends, not for the one on screen.
+            const plan = planLadderFor(entry, zoomWindow);
+            lastLadderPlanKey = plan.key;
+            xAxis = {data: entry.dates, ...ladderAxisOption(plan)};
+        } else {
+            const xAxisPolicy = buildResponsiveXAxisPolicy({
+                width: chartContainer?.clientWidth ?? 0,
+                values: entry.dates,
+                locale: $locale ?? undefined,
+                axisType: 'time',
+            });
+            if (responsiveXAxisCompact && !xAxisPolicy.compact) {
+                applyFullOption(isDark, buildFullSeries(isDark, seriesData), zoomWindow);
+                return;
+            }
+            responsiveXAxisCompact = xAxisPolicy.compact;
+            xAxis = xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber, axisLabel: xAxisPolicy.axisLabel} : {};
         }
 
-        responsiveXAxisCompact = xAxisPolicy.compact;
         const series = seriesData.map((seriesEntry) => ({
             name: seriesEntry.name,
             data: seriesEntry.data,
@@ -1551,21 +1713,18 @@
                       }
                     : CHART_ANIMATION_CONFIG),
                 dataZoom: [{type: 'inside', ...INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG, start: zoomWindow.start, end: zoomWindow.end}],
-                // Candles submode's category axis must keep `data` (the bucket dates) in
-                // lockstep with `entry.dates` on every update — unlike the time axis, whose
-                // positions are computed from the timestamps embedded in each data point, a
-                // category axis's positions come ONLY from this array. A resolution switch
-                // (daily <-> weekly/monthly) changes both, so it can't be gated behind the
-                // `compact` check the time-axis branch uses for its label-only refresh.
-                xAxis: isCandlesSubmode ? {data: entry.dates, ...(xAxisPolicy.compact ? {axisLabel: xAxisPolicy.axisLabel} : {})} : xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber, axisLabel: xAxisPolicy.axisLabel} : {},
+                xAxis,
                 series,
             },
             CHART_SERIES_UPDATE_OPTS,
         );
-        // The partial path also relays out the grid — switching submode changes the axis
-        // type and therefore the label gutter — so the overlay geometry must be re-read
-        // here too, not only after a full build.
+        // The partial path also relays out the grid — new values can widen the y-axis
+        // labels and with them the gutter — so the overlay geometry must be re-read here
+        // too, not only after a full build. The ladder's labels were planned on the old
+        // grid, so they are planned again on the new one; the call sends nothing when the
+        // plan did not change.
         syncPlotGeometry();
+        if (entry.ladder) refreshLadderAxis(zoomWindow);
     }
 
     function syncResolutionToViewport() {
@@ -1577,10 +1736,16 @@
         visibleStartDate = logicalRange.startDate;
         visibleEndDate = logicalRange.endDate;
 
-        // Under the ladder the user owns the bucket width, so a zoom must not change it.
-        // Only the offered rungs may change, and reconcileCandleWidth() handles that on
-        // the render path.
-        if (ladderActive) return;
+        // Under the ladder the user owns the bucket width, so a zoom never changes it: only
+        // the axis labels are planned again, for the new window. A resize can still take
+        // the pressed rung out of the offer — the first measurement after an unmeasured
+        // first paint does exactly that — and then the chart is rebuilt at the rung
+        // reconcileCandleWidth() picks.
+        if (ladderActive) {
+            if (availableCandleWidths.includes(candleWidth)) refreshLadderAxis();
+            else renderChart();
+            return;
+        }
 
         const counts = computeBucketCounts(logicalRange.startDate, logicalRange.endDate);
         const plotWidthPx = chartInstance.getWidth();
@@ -1591,7 +1756,7 @@
         currentResolution = targetResolution;
         const entry = getResolutionData(targetResolution);
         const isDark = document.documentElement.classList.contains('dark');
-        const zoomWindow = buildZoomWindow(targetResolution, logicalRange.startDate, logicalRange.endDate);
+        const zoomWindow = buildZoomWindow(entry, logicalRange.startDate, logicalRange.endDate);
 
         activeChartData = entry;
         updateChartData(entry, isDark, zoomWindow, true, logicalRange.startDate);
@@ -1612,6 +1777,7 @@
         if (!rect || !Number.isFinite(rect.x) || !Number.isFinite(rect.width)) return;
         plotLeftPx = Math.round(rect.x);
         plotWidthPxMeasured = Math.round(rect.width);
+        plotRightRoomPx = Math.max(0, Math.round(chartInstance.getWidth() - rect.x - rect.width));
         if (Number.isFinite(rect.y)) plotTopPx = Math.round(rect.y);
     }
 
@@ -1641,7 +1807,9 @@
             resizeWatcher.disconnect();
             dataZoomTouchPanHandle?.dispose();
             dataZoomTouchPanHandle = null;
+            if (chartInstance) delete (chartInstance.getDom() as unknown as Record<string, unknown>).__lfChart;
             chartInstance?.dispose();
+            lastLadderPlanKey = null;
         };
     });
 
@@ -1673,6 +1841,9 @@
         void depositHistory;
         void acquisitionFunding;
         void $locale;
+        // Read here, not in renderChart: the render runs inside `tick().then`, where a read
+        // registers no dependency, so the privacy toggle would not redraw the axis.
+        void shouldMaskAmount();
 
         if (history !== lastHistoryRef) {
             // Keeping the visible window across a data refresh is a courtesy; keeping it
@@ -1727,15 +1898,22 @@
             dataZoomCleanup?.();
             dataZoomTouchPanHandle?.dispose();
             dataZoomTouchPanHandle = null;
+            delete (chartInstance.getDom() as unknown as Record<string, unknown>).__lfChart;
             chartInstance.dispose();
             chartInstance = undefined;
             lastRenderedMode = null;
             lastRenderedDark = null;
+            lastRenderedMasked = null;
+            lastLadderPlanKey = null;
         }
 
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
             attachChartReady(chartInstance, chartContainer, 'growth');
+            // ECharts draws to a canvas, so an axis label or a bar has no DOM a test could
+            // read. Exposing the instance is the only way to assert what reached the option
+            // — same hook, same name, as PriceChartFull.svelte.
+            (chartContainer as unknown as Record<string, unknown>).__lfChart = chartInstance;
             needsInitialLayoutStabilityPass = true;
             // Setup mobile tooltip auto-hide
             tooltipCleanup?.();
@@ -1765,15 +1943,18 @@
 
         // The ladder owns Candles and Income; the density cascade still owns Value and %.
         // reconcile() runs first so a rung the geometry can no longer draw is climbed out
-        // of BEFORE it is asked to produce buckets.
+        // of BEFORE it is asked to produce buckets. The window is then placed on the
+        // buckets of whichever grid is drawn, so a rung change, a privacy toggle or a new
+        // locale keeps what the user was looking at.
         if (ladderActive) reconcileCandleWidth();
         const activeData = getActiveAggregation();
-        const zoomWindow = ladderActive ? {start: 0, end: 100} : buildZoomWindow(currentResolution, logicalRange.startDate, logicalRange.endDate);
+        const zoomWindow = buildZoomWindow(activeData, logicalRange.startDate, logicalRange.endDate);
         activeChartData = activeData;
 
         // Determine if this is a data-only update (same mode+submode, same dark) or full re-init
         const renderedModeKey = viewMode === 'pnl' ? `pnl:${pnlSubmode}` : viewMode;
-        const needsFullInit = forceFullXAxisRebuild || lastRenderedMode !== renderedModeKey || lastRenderedDark !== isDark;
+        const masked = shouldMaskAmount();
+        const needsFullInit = forceFullXAxisRebuild || lastRenderedMode !== renderedModeKey || lastRenderedDark !== isDark || lastRenderedMasked !== masked;
         const seriesData = buildChartUpdateSeries(isDark, activeData, logicalRange.startDate);
 
         if (needsFullInit) {
@@ -1784,6 +1965,7 @@
 
         lastRenderedMode = renderedModeKey;
         lastRenderedDark = isDark;
+        lastRenderedMasked = masked;
     }
 
     function applyFullOption(isDark: boolean, series: echarts.SeriesOption[], zoomWindow: {start: number; end: number}) {
@@ -1798,28 +1980,44 @@
          * background it is drawn on).
          */
         const bucketLineColor = isDark ? '#64748b' : '#cbd5e1';
-        // Candles submode uses a category axis (see buildFullSeries's matching comment
-        // for why: candlestick silently fails to paint on a time axis, a known ECharts
-        // limitation) — every other mode/submode keeps the shared time axis. The zoom
-        // pipeline (buildZoomWindow/getLogicalRangeFromChart) is already index/percentage-
-        // based, never timestamp-based, so this fork needs no changes there.
-        const isCandlesSubmode = viewMode === 'pnl' && pnlSubmode === 'candles';
-        const xAxisPolicy = buildResponsiveXAxisPolicy({
-            width: chartContainer?.clientWidth ?? 0,
-            values: activeChartData?.dates ?? dates,
-            locale: $locale ?? undefined,
-            axisType: isCandlesSubmode ? 'category' : 'time',
-        });
-        responsiveXAxisCompact = xAxisPolicy.compact;
+        // The ladder (Candles and Income) draws on a category axis: one slot per bucket,
+        // so every bar and body gets the same width from the first render, whatever the
+        // zoom. Its labels and separators come from the ladder plan, not from the shared
+        // responsive policy, which only serves the time axis of the other modes. The zoom
+        // pipeline (buildZoomWindow/getLogicalRangeFromChart) is index/percentage-based,
+        // so it reads both axes the same way.
+        const xAxisPolicy = ladderActive
+            ? null
+            : buildResponsiveXAxisPolicy({
+                  width: chartContainer?.clientWidth ?? 0,
+                  values: activeChartData?.dates ?? dates,
+                  locale: $locale ?? undefined,
+                  axisType: 'time',
+              });
+        responsiveXAxisCompact = xAxisPolicy?.compact ?? false;
+        // Planned for the window this option is about to send. Before the first layout
+        // the grid is unmeasured and the plan is empty; refreshLadderAxis() below fills
+        // it in as soon as syncPlotGeometry() has read the grid.
+        const ladderPlan = ladderActive && activeChartData?.ladder ? planLadderFor(activeChartData, zoomWindow) : null;
+        lastLadderPlanKey = ladderPlan?.key ?? null;
+        const ladderAxis = ladderPlan ? ladderAxisOption(ladderPlan) : null;
 
         const yAxisFormatter =
             viewMode === 'pct'
                 ? (v: number) => `${v.toFixed(1)}%`
                 : (v: number) => {
-                      if (Math.abs(v) >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
-                      if (Math.abs(v) >= 1_000) return `${(v / 1_000).toFixed(0)}k`;
-                      return String(v);
+                      // D18: the scaled value prints exactly, so two ticks never share a label
+                      // (`5.5k`, `1.25M`) and a whole one has no decimals (`2k`, `1M`). D23: the
+                      // digits and the minus come from the locale; a negative zero prints `0`.
+                      // D8: the sign stays outside the mask, the k/M suffix inside it: `•••k`
+                      // would still disclose the order of magnitude.
+                      const abs = Math.abs(v);
+                      const [scale, suffix]: [number, string] = abs >= 1_000_000 ? [1_000_000, 'M'] : abs >= 1_000 ? [1_000, 'k'] : [1, ''];
+                      const scaled = v === 0 ? 0 : v / scale;
+                      return maskFormattedNumber(`${scaled.toLocaleString(undefined, {maximumSignificantDigits: 15})}${suffix}`);
                   };
+        // Income draws bars, which stand on zero; every other view draws a line or candles.
+        const incomeBars = viewMode === 'pnl' && pnlSubmode === 'income';
 
         /**
          * Colour for a signed amount: green up, red down, **neutral at zero**.
@@ -1827,11 +2025,30 @@
          * `v >= 0` painted every zero green, which reads as a gain that did not happen —
          * and in the Income submode most buckets are legitimately zero, so the tooltip was
          * mostly green for weeks in which nothing was earned.
+         *
+         * Zero is what the row prints as zero, as for the sign (D23b): `fmtCurrency` keeps two
+         * decimals, so under half a cent it prints `0.00` with no sign. A bucket sum can land
+         * there without being 0 (0.1 + 0.2 − 0.3 is 5.55e-17), and tested on the raw value it
+         * would print `EUR 0.00` in green.
          */
-        const signedValueColor = (v: number, dark: boolean, neutral: string) => (v === 0 ? neutral : v > 0 ? (dark ? '#4ade80' : '#16a34a') : dark ? '#f87171' : '#dc2626');
+        const signedValueColor = (v: number, dark: boolean, neutral: string) => (Math.abs(v) < 0.005 ? neutral : v > 0 ? (dark ? '#4ade80' : '#16a34a') : dark ? '#f87171' : '#dc2626');
 
-        /** Format a number as currency — same pattern as the dashboard formatMoney helper. */
-        const fmtCurrency = (v: number | null | undefined) => (v != null ? `${baseCurrency} ${v.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '—');
+        /**
+         * Format a number as currency: `EUR 1,234.56`, and with `signed` `EUR +5.00` or
+         * `EUR -12.00`, the one form of every signed tooltip row (D23b).
+         *
+         * The sign comes from the same `toLocaleString` call as the digits, so it is the one the
+         * browser locale writes (D23): `-` in the four UI languages, U+2212 in Swedish. `signed`
+         * adds `+` to a gain and no sign to an amount that rounds to zero. As in
+         * `formatCurrencyAmountPlain`, only the digits are masked; the currency and the sign stay
+         * readable (D8).
+         */
+        const fmtCurrency = (v: number | null | undefined, signed = false) => {
+            if (v == null) return '—';
+            // `-0 === 0`, so a negative zero becomes +0: `signDisplay: 'auto'` would print it `-0.00`.
+            const formatted = (v === 0 ? 0 : v).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2, signDisplay: signed ? 'exceptZero' : 'auto'});
+            return `${baseCurrency} ${maskFormattedNumber(formatted)}`;
+        };
 
         const option: echarts.EChartsOption = {
             ...CHART_ANIMATION_CONFIG,
@@ -1843,16 +2060,15 @@
             // keeps the plot honest at small heights: the chart shrinks by exactly the
             // band it gives away, instead of silently drawing content underneath a
             // control. Only P&L mode shows those overlays, so only it pays the cost.
-            // `left` is an explicit px constant shared with the floating overlay cluster
-            // (see CHART_PLOT_LEFT_PX): the controls must clear the y-axis label gutter,
-            // and with `containLabel: true` that gutter is COMPUTED from the widest tick
-            // label — so a hardcoded Tailwind offset on the overlay would align only by
-            // coincidence and break the first time a label got wider (another currency,
-            // a larger portfolio). One number, two uses, agreeing by construction.
+            // `left: '3%'` is the OUTER inset: with `containLabel: true` ECharts draws the
+            // y tick labels inside it, so the plot edge moves with the widest label (another
+            // currency, a larger portfolio). The floating overlays never assume that edge;
+            // they read it back after layout (syncPlotGeometry → plotLeftPx). A px constant
+            // here, shared with the overlays, left an empty gutter before the labels.
             // `top` stays 10px in every mode: the toggle is an OVERLAY and must float on
             // the plot, not push it down (developer review — reserving a band shortened
             // the chart, which was never what was asked for).
-            grid: {left: CHART_PLOT_LEFT_PX, right: '4%', bottom: '30px', top: '10px', containLabel: true},
+            grid: {left: '3%', right: '4%', bottom: '30px', top: '10px', containLabel: true},
             tooltip: {
                 trigger: 'axis',
                 // Bugfix: `appendToBody` moves the tooltip DOM to `document.body`, which
@@ -1896,7 +2112,7 @@
                         html += buildTooltipRow(eurLabels.capitalBaselineTooltip, fmtCurrency(baselineVal), cc('capitalBaseline'));
                         if (totalPnlVal != null) {
                             const pnlColor = signedValueColor(totalPnlVal, isDark, textColor);
-                            html += `<div style="display:flex;justify-content:space-between;gap:16px;color:${pnlColor}"><span><b>${$_('dashboard.totalPnl')}</b></span><b>${totalPnlVal === 0 ? '' : totalPnlVal > 0 ? '+' : '−'}${fmtCurrency(Math.abs(totalPnlVal))}</b></div>`;
+                            html += `<div style="display:flex;justify-content:space-between;gap:16px;color:${pnlColor}"><span><b>${$_('dashboard.totalPnl')}</b></span><b>${fmtCurrency(totalPnlVal, true)}</b></div>`;
                         }
                         html += `<div style="font-size:10px;color:${textColor};opacity:0.7">${$_('dashboard.pnlFormulaHint')}</div>`;
                         html += buildTooltipDivider(tooltipBorder);
@@ -1912,11 +2128,11 @@
                         const pnlRow = (label: string, v: number | null | undefined, color: string) => {
                             if (v == null) return buildTooltipRow(label, '—', color);
                             const signColor = signedValueColor(v, isDark, textColor);
-                            return `<div style="display:flex;justify-content:space-between;gap:16px;color:${color}"><span>${label}</span><b style="color:${signColor}">${v === 0 ? '' : v > 0 ? '+' : '−'}${fmtCurrency(Math.abs(v))}</b></div>`;
+                            return `<div style="display:flex;justify-content:space-between;gap:16px;color:${color}"><span>${label}</span><b style="color:${signColor}">${fmtCurrency(v, true)}</b></div>`;
                         };
                         html += pnlRow(`<b>${pnlLabels.total}</b>`, totalVal, cc('totalPnl'));
                         activeChartData?.pnl.brokers.forEach((broker, index) => {
-                            html += pnlRow(broker.brokerName, broker.metric.values[idx], brokerColor(index, isDark));
+                            html += pnlRow(escapeHtml(broker.brokerName), broker.metric.values[idx], brokerColor(index, isDark));
                         });
                         return html;
                     }
@@ -1933,14 +2149,13 @@
                         } else {
                             html += `<div style="color:${mutedColor}">${$_('common.noData')}</div>`;
                         }
-                        // Compact form for the tooltip; the always-visible caption below
-                        // the chart carries the full sentence (…HypotheticalShort vs
-                        // …Hypothetical — two distinct keys, not a truncation).
+                        // No synthetic-candle footnote in the tooltip: the caption under the
+                        // chart is the single disclosure.
                         activeChartData?.pnl.brokers.forEach((broker, index) => {
                             const v = broker.metric.values[idx];
                             if (v == null) return;
                             const signColor = signedValueColor(v, isDark, textColor);
-                            html += `<div style="display:flex;justify-content:space-between;gap:16px;color:${brokerColor(index, isDark)}"><span>${broker.brokerName}</span><b style="color:${signColor}">${v === 0 ? '' : v > 0 ? '+' : '−'}${fmtCurrency(Math.abs(v))}</b></div>`;
+                            html += `<div style="display:flex;justify-content:space-between;gap:16px;color:${brokerColor(index, isDark)}"><span>${escapeHtml(broker.brokerName)}</span><b style="color:${signColor}">${fmtCurrency(v, true)}</b></div>`;
                         });
                         return html;
                     }
@@ -1955,7 +2170,7 @@
                         const acqReinvestedVal = activeChartData?.pnl.acquisition.fromReinvested.values[idx] ?? 0;
                         const signedRow = (label: string, v: number, color: string) => {
                             const signColor = signedValueColor(v, isDark, textColor);
-                            return `<div style="display:flex;justify-content:space-between;gap:16px;color:${color}"><span>${label}</span><b style="color:${signColor}">${v === 0 ? '' : v > 0 ? '+' : '−'}${fmtCurrency(Math.abs(v))}</b></div>`;
+                            return `<div style="display:flex;justify-content:space-between;gap:16px;color:${color}"><span>${label}</span><b style="color:${signColor}">${fmtCurrency(v, true)}</b></div>`;
                         };
                         html += signedRow(pnlLabels.dividend, divVal, cc('dividend'));
                         html += signedRow(pnlLabels.interest, intVal, cc('interest'));
@@ -1969,8 +2184,11 @@
                             if (costVal !== 0) html += signedRow(pnlLabels.costs, costVal, cc('costs'));
                             if (depositVal !== 0) html += signedRow(pnlLabels.deposit, depositVal, cc('deposit'));
                             if (acqNewVal !== 0 || acqReinvestedVal !== 0) {
-                                html += signedRow(pnlLabels.acqNewCapital, acqNewVal, cc('cashContributed'));
-                                html += signedRow(pnlLabels.acqReinvested, acqReinvestedVal, cc('cashGenerated'));
+                                // R11: the purchase value in bold, like the income total, then
+                                // its two halves under it, each in its zone's colour (D26).
+                                html += signedRow(`<b>${pnlLabels.bookValue}</b>`, acqNewVal + acqReinvestedVal, textColor);
+                                html += signedRow(`↳ ${pnlLabels.acqNewCapital}`, acqNewVal, cc('bookAssetLike'));
+                                html += signedRow(`↳ ${pnlLabels.acqReinvested}`, acqReinvestedVal, cc('cashGenerated'));
                             }
                         }
                         return html;
@@ -1984,7 +2202,7 @@
                         .map((p: any) => {
                             const rawVal = Array.isArray(p.value) ? p.value[1] : p.value;
                             const val = `${Number(rawVal).toFixed(2)}%`;
-                            return buildTooltipRow(p.seriesName, val, p.color);
+                            return buildTooltipRow(escapeHtml(String(p.seriesName ?? '')), val, p.color);
                         })
                         .join('');
                     return html;
@@ -2008,47 +2226,45 @@
                 data: [...new Set(series.map((s) => s.name).filter((n): n is string => typeof n === 'string' && n !== PNL_REFERENCE_SERIES_NAME))],
             },
             dataZoom: [{type: 'inside', ...INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG, start: zoomWindow.start, end: zoomWindow.end}],
-            xAxis: isCandlesSubmode
+            xAxis: ladderAxis
                 ? {
                       type: 'category',
                       data: activeChartData?.dates ?? dates,
                       boundaryGap: true,
-                      axisLabel: {
-                          color: textColor,
-                          fontSize: 14,
-                          rotate: 0,
-                          ...(xAxisPolicy.axisLabel ?? {}),
-                      },
+                      axisLabel: {color: textColor, fontSize: 14, rotate: 0, ...ladderAxis.axisLabel},
                       axisLine: {lineStyle: {color: gridColor}},
-                      // Bucket separators. On a category axis with boundaryGap these fall
-                      // BETWEEN categories, i.e. exactly on the bucket boundaries — which
-                      // is what makes a wide body readable as one bucket instead of as a
-                      // shape floating in white space.
-                      splitLine: {show: true, lineStyle: {color: bucketLineColor, type: 'dashed'}},
+                      // Bucket separators. With boundaryGap they fall BETWEEN categories,
+                      // on the bucket boundaries, which is what makes a wide body read as
+                      // one bucket. Which boundaries carry one is the plan's decision, not
+                      // ECharts' `'auto'`, which follows the label interval and dropped
+                      // separators wherever a label was skipped. Declared once, here: a
+                      // later `splitLine` key in the same literal would silently win.
+                      splitLine: {show: true, lineStyle: {color: bucketLineColor, type: 'dashed'}, interval: ladderAxis.splitLine.interval},
                   }
                 : {
                       type: 'time',
-                      ...(xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber} : {}),
+                      ...(xAxisPolicy?.compact ? {splitNumber: xAxisPolicy.splitNumber} : {}),
                       axisLabel: {
                           color: textColor,
                           fontSize: 14,
                           rotate: 0,
-                          ...(xAxisPolicy.axisLabel ?? {}),
+                          ...(xAxisPolicy?.axisLabel ?? {}),
                       },
                       axisLine: {lineStyle: {color: gridColor}},
-                      // Bucket separators under the ladder (Income lives on this axis).
-                      // Declared HERE rather than spread in above: a later `splitLine`
-                      // key in the same object literal silently wins, which is exactly
-                      // what happened — the config was present, compiled, and drew
-                      // nothing.
-                      splitLine: ladderActive ? {show: true, lineStyle: {color: bucketLineColor, type: 'dashed'}} : {show: false},
+                      splitLine: {show: false},
                   },
             yAxis: {
                 type: 'value',
-                // Use a min function so the y-axis auto-scales rather than forcing 0.
-                // This gives detail visibility when portfolio values are large.
-                min: (value: {min: number; max: number}) => Math.floor(value.min - (value.max - value.min) * 0.08),
-                axisLabel: {color: textColor, fontSize: 14, formatter: yAxisFormatter},
+                // Lines and candles: a min function so the y-axis auto-scales rather than
+                // forcing 0, which gives detail visibility when portfolio values are large.
+                // ECharts labels that edge with its raw value, not a round tick, so the label
+                // is hidden and the edge stays where it is (D25). Income keeps ECharts'
+                // defaults: an axis that includes 0, like any bar chart. Its two keys stay
+                // PRESENT as `undefined`: the full rebuild merges `yAxis` into the previous
+                // option (CHART_FULL_UPDATE_OPTS replaces only `series` and `xAxis`), so an
+                // omitted key would keep the line's min function and hidden label.
+                min: incomeBars ? undefined : (value: {min: number; max: number}) => Math.floor(value.min - (value.max - value.min) * 0.08),
+                axisLabel: {color: textColor, fontSize: 14, formatter: yAxisFormatter, showMinLabel: incomeBars ? undefined : false},
                 axisLine: {show: false},
                 splitLine: {lineStyle: {color: gridColor, type: 'dashed'}},
             },
@@ -2059,6 +2275,7 @@
         // The grid is laid out by setOption, so the plot rectangle only becomes readable
         // after it — never before.
         syncPlotGeometry();
+        if (ladderAxis) refreshLadderAxis(zoomWindow);
         if (chartContainer) containerWidthPx = chartContainer.clientWidth;
         // Bugfix: on mobile, the very FIRST render can happen while the surrounding
         // layout (KPI cards etc.) is still settling, so ECharts caches stale internal
@@ -2103,23 +2320,30 @@
 
         <!-- Abs / % / P&L segmented toggle -->
         <div class="flex rounded-lg overflow-hidden border border-gray-200 dark:border-slate-600 text-xs font-medium">
-            <button class="px-3 py-1 transition-colors {viewMode === 'eur' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}" onclick={() => (viewMode = 'eur')} data-testid="growth-toggle-eur">
+            <button
+                class="px-3 py-1 transition-colors {viewMode === 'eur' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                onclick={() => selectMode('eur')}
+                aria-pressed={viewMode === 'eur'}
+                data-testid="growth-toggle-eur"
+            >
                 {$_('dashboard.abs')}
             </button>
             <button
                 class="px-3 py-1 transition-colors border-l border-gray-200 dark:border-slate-600 {viewMode === 'pct' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'} {!hasPctData
                     ? 'opacity-50 cursor-not-allowed'
                     : ''}"
-                onclick={() => hasPctData && (viewMode = 'pct')}
+                onclick={() => hasPctData && selectMode('pct')}
                 disabled={!hasPctData}
                 title={!hasPctData ? $_('common.noData') : ''}
+                aria-pressed={viewMode === 'pct'}
                 data-testid="growth-toggle-pct"
             >
                 {$_('dashboard.pct')}
             </button>
             <button
                 class="px-3 py-1 transition-colors border-l border-gray-200 dark:border-slate-600 {viewMode === 'pnl' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                onclick={() => (viewMode = 'pnl')}
+                onclick={() => selectMode('pnl')}
+                aria-pressed={viewMode === 'pnl'}
                 data-testid="growth-toggle-pnl"
             >
                 {$_('dashboard.pnl')}
@@ -2148,7 +2372,7 @@
                 <div class="flex rounded-lg border border-gray-200/70 dark:border-slate-600/70 overflow-hidden shadow-sm opacity-75 hover:opacity-100 transition-opacity text-xs font-medium">
                     <button
                         class="{controlsCompact ? 'px-2' : 'px-3'} py-1 transition-colors inline-flex items-center gap-1.5 {pnlSubmode === 'line' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                        onclick={() => (pnlSubmode = 'line')}
+                        onclick={() => selectSubmode('line')}
                         title={$_('dashboard.pnlSubmodeLine')}
                         aria-label={$_('dashboard.pnlSubmodeLine')}
                         aria-pressed={pnlSubmode === 'line'}
@@ -2161,7 +2385,7 @@
                         class="{controlsCompact ? 'px-2' : 'px-3'} py-1 transition-colors inline-flex items-center gap-1.5 border-l border-gray-200/70 dark:border-slate-600/70 {pnlSubmode === 'candles'
                             ? 'bg-libre-green text-white'
                             : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                        onclick={() => (pnlSubmode = 'candles')}
+                        onclick={() => selectSubmode('candles')}
                         title={$_('dashboard.pnlSubmodeCandles')}
                         aria-label={$_('dashboard.pnlSubmodeCandles')}
                         aria-pressed={pnlSubmode === 'candles'}
@@ -2174,7 +2398,7 @@
                         class="{controlsCompact ? 'px-2' : 'px-3'} py-1 transition-colors inline-flex items-center gap-1.5 border-l border-gray-200/70 dark:border-slate-600/70 {pnlSubmode === 'income'
                             ? 'bg-libre-green text-white'
                             : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                        onclick={() => (pnlSubmode = 'income')}
+                        onclick={() => selectSubmode('income')}
                         title={$_('dashboard.pnlSubmodeIncome')}
                         aria-label={$_('dashboard.pnlSubmodeIncome')}
                         aria-pressed={pnlSubmode === 'income'}
@@ -2240,7 +2464,8 @@
         </p>
     {/if}
     {#if !loading && viewMode === 'pnl' && pnlSubmode === 'candles'}
-        <!-- Mandatory always-visible synthetic-candle disclosure (plan §3.3). -->
-        <p class="text-center text-xs text-gray-400 dark:text-gray-500 italic mt-1" data-testid="growth-pnl-candles-hypothetical-label">{$_('dashboard.pnlCandlesHypothetical')}</p>
+        <!-- Mandatory always-visible synthetic-candle disclosure (plan §3.3): one line in the short
+             register, scrolling instead of wrapping where it does not fit (R9). -->
+        <p use:scrollOnOverflow class="{overflowScrollTextClass} text-center text-xs text-gray-400 dark:text-gray-500 italic mt-1" data-testid="growth-pnl-candles-hypothetical-label">{$_('dashboard.pnlCandlesHypotheticalShort')}</p>
     {/if}
 </div>

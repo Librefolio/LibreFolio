@@ -12,6 +12,7 @@
     import {_} from '$lib/i18n';
     import {axiosInstance, zodiosApi} from '$lib/api';
     import {trySave} from '$lib/utils/trySave';
+    import {generateUUID} from '$lib/utils/core/uuid';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {ExternalLink, FileUp, RefreshCw, Trash2, X} from 'lucide-svelte';
     import {fade} from 'svelte/transition';
@@ -116,12 +117,16 @@
         // existing UX (user sees the offending file name, can remove it and
         // retry). ``toast: false`` because the error is rendered inline in
         // the banner above the file list.
+        // Files uploaded together form one report set: they share a batch id.
+        const batchId = generateUUID();
         for (const file of uploadFiles) {
             const formData = new FormData();
             formData.append('file', file);
+            formData.append('broker_id', String(brokerId));
+            formData.append('batch_id', batchId);
             const result = await trySave(
                 // Use axios directly - Zodios doesn't handle FormData correctly
-                () => axiosInstance.post(`/api/v1/brokers/import/upload?broker_id=${brokerId}`, formData),
+                () => axiosInstance.post(`/api/v1/brokers/import/upload`, formData),
                 {toast: false, fallback: $_('uploads.uploadFailed'), prefix: file.name},
             );
             if (result.status === 'error') {
@@ -380,7 +385,7 @@
                 <RefreshCw class={loading ? 'animate-spin' : ''} size={16} />
                 {$_('common.refresh')}
             </button>
-            <button class="btn {showUploader ? 'btn-secondary' : 'btn-primary'}" disabled={uploading} onclick={() => (showUploader = !showUploader)}>
+            <button class="btn {showUploader ? 'btn-secondary' : 'btn-primary'}" disabled={uploading} onclick={() => (showUploader = !showUploader)} data-testid="import-files-upload-toggle">
                 <FileUp size={16} />
                 {showUploader ? $_('common.close') : $_('uploads.upload')}
             </button>
