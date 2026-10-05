@@ -2089,6 +2089,16 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
   `BrokerUserAccess`, `is_superuser`, impostazioni per utente) e sono legati all'id dell'utente, non
   al modo in cui entra. OIDC sostituisce solo il passo «chi sei», quindi funziona anche con più
   utenti.
+- **Le risposte del richiedente** (Johan3F, 01/10, nell'issue; esperienza personale da homelab):
+  - usa **Rauthy**, un provider piccolo, già funzionante con quasi tutte le sue app; si offre per i test;
+  - i permessi dovrebbero venire dal provider, con claim di gruppo configurabili e default sensati: il
+    provider resta la fonte di verità. Attenzione: in LibreFolio OWNER/EDITOR/VIEWER sono ruoli di
+    condivisione **per broker**, non globali. Dal provider si possono prendere solo il permesso di entrare
+    (un gruppo) e l'admin (`is_superuser`);
+  - creazione automatica al primo accesso, configurabile; lui la sceglie sempre;
+  - admin dal provider: il primo utente che entra, oppure chi ha un certo claim o gruppo;
+  - il login locale di riserva per lui non serve («se il provider è giù, il problema è altrove»): resta
+    un'opzione, spenta o accesa dall'admin.
 
 ### Azione Futura
 - Configurazione da variabili d'ambiente: indirizzo del provider, client id e secret, scope, testo
@@ -2112,18 +2122,19 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
     provider è giù;
   - un utente disattivato nel provider non entra più, ma la sessione aperta dura fino alla scadenza
     del JWT, a meno di disattivarlo anche in LibreFolio.
-- Test con un provider finto; guida per l'admin con esempi (Authelia, Authentik, Keycloak).
+- Test con un provider finto; guida per l'admin con esempi (Authelia, Authentik, Keycloak, Rauthy).
 - Alternativa scartata per ora: l'autenticazione fatta dal reverse proxy con un header («forward
   auth»), rischiosa se il backend è raggiungibile senza passare dal proxy.
 - Stima: qualche giorno, ben delimitato; non tocca i calcoli.
 
 ## ⚡ Motore del portafoglio — caricare solo i prezzi che servono
 
-**Data aggiunta**: 1 Ottobre 2026 · **Status**: ⏳ IN ATTESA — dopo il merge della PR #28 ·
+**Data aggiunta**: 1 Ottobre 2026 · **Status**: 📋 FUTURO — PR #30 (ex #28) entrata il 05/10/2026 ·
 **Priorità**: Media (prima va misurata)
 
 ### Contesto
-- La PR [#28](https://github.com/Librefolio/LibreFolio/pull/28) (msov19) corregge `convert_bulk`.
+- La PR [#30](https://github.com/Librefolio/LibreFolio/pull/30) di Martin Sova (msov19), che sostituisce la
+  [#28](https://github.com/Librefolio/LibreFolio/pull/28), corregge `convert_bulk`.
   La query dei cambi aveva solo il limite superiore e a ogni chiamata caricava tutta la storia della
   coppia. Ora carica la finestra [ultimo cambio ≤ prima data richiesta, ultima data richiesta] e
   cerca con `bisect`.
@@ -2153,7 +2164,7 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
   al calcolo intero, con e senza `date_from`.
 - Se conviene:
   - limitare la query a [ultimo prezzo ≤ `frame_start` per asset, `actual_to`], con la stessa
-    sottoquery «ancora» della PR #28;
+    sottoquery «ancora» della PR #30;
   - leggere solo le colonne usate (data, close, valuta; open/high/low solo con le candele), invece
     degli oggetti ORM.
 - Da verificare prima: nessuno deve chiedere al resolver una data precedente a `frame_start`
@@ -2165,7 +2176,7 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
   - poi `services portfolio-engine`, `services roi-fifo-utils`, `api portfolio`.
 - Minori, solo se la misura lo giustifica, in `get_prices_bulk`: la finestra è unica per tutte le
   richieste (minimo e massimo globali), e il prezzo «seme» si cerca con una query per asset. Si
-  possono fare per asset, in una query sola, come nella PR #28.
+  possono fare per asset, in una query sola, come nella PR #30.
 
 ## 💡 Traccia rischio/rendimento nel tempo («snail trail»)
 
