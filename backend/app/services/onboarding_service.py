@@ -57,6 +57,7 @@ ONBOARDING_FLOW_STEPS: Mapping[OnboardingFlow, tuple[str, ...]] = {
         "import.fix",
         "import.duplicates",
         "import.review",
+        "import.gapFix",
         "import.bulk",
     ),
 }

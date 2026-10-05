@@ -1,5 +1,6 @@
 import {type APIRequestContext, expect, type Page, type Request, test} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
+import {skipDueFlowsExcept} from '../fixtures/onboarding-accounts';
 import {TEST_ADMIN, TEST_USER, TEST_USER_2} from '../fixtures/test-users';
 import {uniqueSuffix} from '../fixtures/unique';
 
@@ -65,6 +66,19 @@ test.describe('Runes parity', () => {
         const response = await request.post('/api/v1/auth/login', {data: {username: user.username, password: user.password}});
         expect(response.ok()).toBe(true);
         expect((await response.json()).user.id).toBe(user.id);
+    }
+
+    // Unlike the canonical E2E users, a disposable account is not grandfathered
+    // past onboarding: signed in, it is gated on /welcome, and its intro tour or
+    // a page guide would then take over the broker routes. Skip every flow still
+    // due, for this account only, and read it back; skipping, unlike completing
+    // welcome, writes no user settings. The browser keeps the progress it loaded
+    // at sign-in until its next document load, so callers reach their route with
+    // navigateTo; the (app) layout never paints a route while the welcome
+    // redirect is due, so that route's own assertion proves the gate let us in.
+    async function loginPastOnboarding(page: Page, user: OwnedUser) {
+        await login(page, user);
+        await skipDueFlowsExcept(page, []);
     }
 
     // Each test owns two disposable accounts, their complete ACL, and one empty
@@ -176,7 +190,7 @@ test.describe('Runes parity', () => {
 
     test('owned modal resets and discards drafts, then saves the complete ACL and reopens clean', async ({page, request}) => {
         await withOwnedSharing(request, async ({owner, viewer, brokerId}) => {
-            await login(page, owner);
+            await loginPastOnboarding(page, owner);
             const path = `/api/v1/brokers/${brokerId}/access`;
             const puts: Grant[][] = [];
             const recordPut = (req: Request) => {
@@ -248,7 +262,7 @@ test.describe('Runes parity', () => {
 
     test('owned viewer reloads the Info panel read-only while self-service stays reachable', async ({page, request}) => {
         await withOwnedSharing(request, async ({owner, viewer, brokerId}) => {
-            await login(page, viewer);
+            await loginPastOnboarding(page, viewer);
             const writes: string[] = [];
             const recordWrite = (req: Request) => {
                 if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method()) && new URL(req.url()).pathname.startsWith(`/api/v1/brokers/${brokerId}/access`)) writes.push(req.url());
