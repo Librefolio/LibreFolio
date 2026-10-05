@@ -887,7 +887,14 @@
         "gapInfo": "Ninguna exportación de este tipo cubre estos días",
         "historyCount": "{n, plural, one {# transacción ya en LibreFolio} other {# transacciones ya en LibreFolio}}"
       },
-      "previewCombined": "Vista previa del archivo combinado"
+      "previewCombined": "Vista previa del archivo combinado",
+      "readAs": "Leído como",
+      "readAsOneByOne": "Leer los archivos uno a uno",
+      "detected": "detectado",
+      "readAloneWith": "Leer solo con {plugin}",
+      "removeFromSet": "Quitar del conjunto",
+      "defaultPluginNote": "Leído como conjunto {plugin}, no con el plugin predeterminado del bróker ({defaultPlugin}). Para cambiarlo, usa «Leído como» o el menú ⋮ de un archivo.",
+      "alsoRecognisedBy": "{file} también es reconocido por: {plugins}"
     },
     "parseDetail": {
       "sourceRow": "Línea del archivo",

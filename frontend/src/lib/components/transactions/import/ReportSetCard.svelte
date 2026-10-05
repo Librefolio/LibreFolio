@@ -9,16 +9,39 @@
   actions that make the set importable — upload the missing export into the same set, or
   exclude the set from this import.
 
+  The user chooses how the set is read (phase G): «Read as» in the header switches to another
+  report-set plugin that reads every member, or reads the files one by one; a file's row menu
+  reads it alone with a single-file plugin that can, or removes it from the set. Notes say when
+  the set is not read with the broker's default plugin, and when another report-set plugin also
+  recognises a file. The card only asks: the wizard owns the choices.
+
   Everything is rendered as Svelte text: file names and plugin notices are user/provider data.
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import {ChevronDown, ChevronRight, Eye, FileText, Layers, Trash2, Upload, ExternalLink, AlertTriangle, Info} from 'lucide-svelte';
+    import {ChevronDown, ChevronRight, Eye, FileText, Layers, Trash2, Upload, ExternalLink, AlertTriangle, Info, FileOutput, Unlink} from 'lucide-svelte';
     import LoadingSpinner from '$lib/components/ui/feedback/LoadingSpinner.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import type {ColumnDef, RowAction} from '$lib/components/table/types';
-    import {buildSetTimeline, dayBefore, formatIsoDay, parseIsoPeriod, type ReportSetGroup, type SetFileInfo, type SetPluginInfo, type SetPreviewState, type SetRoleInfo, type TimelineBar, type TimelineGap} from '$lib/utils/transactions/importReportSets';
+    import {
+        buildSetTimeline,
+        dayBefore,
+        defaultPluginNote,
+        formatIsoDay,
+        otherSetPlugins,
+        parseIsoPeriod,
+        readAlonePlugins,
+        setPluginChoices,
+        setPluginFor,
+        type ReportSetGroup,
+        type SetFileInfo,
+        type SetPluginInfo,
+        type SetPreviewState,
+        type SetRoleInfo,
+        type TimelineBar,
+        type TimelineGap,
+    } from '$lib/utils/transactions/importReportSets';
     import type {BrimSetPreview} from '$lib/types';
 
     interface Props {
@@ -37,9 +60,19 @@
         onExclude: () => void;
         onPreviewFile: (fileId: string) => void;
         onDeleteFile: (file: SetFileInfo) => void;
+        /** The plugin catalogue: names, and which plugins read report sets. */
+        plugins: SetPluginInfo[];
+        /** The broker's default import plugin, if it has one. */
+        brokerDefaultPlugin: string | null;
+        /** «Read as»: another report-set plugin, or `null` to read the files one by one. */
+        onReadAs: (code: string | null) => void;
+        /** Read one file alone with a single-file plugin: it leaves the set. */
+        onReadAlone: (fileId: string, code: string) => void;
+        /** Remove one file from the set, with no plugin. */
+        onRemoveFromSet: (fileId: string) => void;
     }
 
-    let {set, plugin, previewState, selection, expanded, analysed, uploadingRole, onToggleSelected, onToggleExpanded, onUploadMissing, onExclude, onPreviewFile, onDeleteFile}: Props = $props();
+    let {set, plugin, previewState, selection, expanded, analysed, uploadingRole, onToggleSelected, onToggleExpanded, onUploadMissing, onExclude, onPreviewFile, onDeleteFile, plugins, brokerDefaultPlugin, onReadAs, onReadAlone, onRemoveFromSet}: Props = $props();
 
     let preview = $derived(previewState?.preview ?? null);
     let status = $derived<'loading' | 'complete' | 'incomplete' | 'error'>(!previewState || previewState.status === 'loading' ? 'loading' : previewState.status === 'error' ? 'error' : previewState.preview?.complete ? 'complete' : 'incomplete');
@@ -163,8 +196,31 @@
         {id: 'rows', header: () => $t('importWizard.reportSet.column.rows'), type: 'number', sortable: false, filterable: false, width: 80, minWidth: 60, cell: (row) => row.rows ?? '—'},
     ]);
 
+    /** «Read as»: the report-set plugins that read every member, and which of them detection picks. */
+    let readAsChoices = $derived(setPluginChoices(set, plugins));
+    let detectedPlugin = $derived(set.files.length > 0 ? setPluginFor(set.files[0], plugins) : null);
+
+    function readAs(event: Event) {
+        const value = (event.currentTarget as HTMLSelectElement).value;
+        onReadAs(value === '' ? null : value);
+    }
+
+    /** The single-file plugins that can read each member alone, by file id. */
+    let readAloneByFile = $derived(new Map(set.files.map((file) => [file.file_id, readAlonePlugins(file, plugins, brokerDefaultPlugin)])));
+    let readAloneOptions = $derived([...readAloneByFile.values()].flat().filter((choice, index, list) => list.findIndex((other) => other.code === choice.code) === index));
+
     let memberActions = $derived<RowAction<MemberRow>[]>([
         {id: 'preview', icon: Eye, label: $t('common.preview'), onClick: (row) => onPreviewFile(row.fileId)},
+        ...readAloneOptions.map(
+            (choice): RowAction<MemberRow> => ({
+                id: `read-alone-${choice.code}`,
+                icon: FileOutput,
+                label: $t('importWizard.reportSet.readAloneWith', {values: {plugin: choice.name}}),
+                visible: (row) => (readAloneByFile.get(row.fileId) ?? []).some((option) => option.code === choice.code),
+                onClick: (row) => onReadAlone(row.fileId, choice.code),
+            }),
+        ),
+        {id: 'remove-from-set', icon: Unlink, label: $t('importWizard.reportSet.removeFromSet'), onClick: (row) => onRemoveFromSet(row.fileId)},
         {
             id: 'delete',
             icon: Trash2,
@@ -176,6 +232,11 @@
             },
         },
     ]);
+
+    /** C1: the broker's default plugin, when it is another one that reads a member. */
+    let defaultNote = $derived(defaultPluginNote(set, brokerDefaultPlugin, plugins));
+    /** C2: the members another report-set plugin also recognises. */
+    let alsoRecognised = $derived(set.files.map((file) => ({file, others: otherSetPlugins(file, set.pluginCode, plugins)})).filter((entry) => entry.others.length > 0));
 
     let hasTimelineGaps = $derived((timeline?.rows ?? []).some((row) => row.gaps.length > 0));
 
@@ -272,6 +333,21 @@
             <span class="truncate text-sm font-medium text-gray-800 dark:text-gray-200">{$t('importWizard.reportSet.setLabel', {values: {date: formatDay(set.uploadedAt), plugin: plugin?.name ?? set.pluginCode}})}</span>
             <span class="shrink-0 text-xs text-gray-500 dark:text-gray-400">{$t('importWizard.reportSet.fileCount', {values: {n: set.files.length}})}</span>
         </button>
+        <label class="flex shrink-0 items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+            <span class="hidden sm:inline">{$t('importWizard.reportSet.readAs')}</span>
+            <select
+                class="max-w-44 rounded-md border border-gray-300 bg-white py-0.5 pl-1.5 pr-6 text-xs text-gray-800 dark:border-gray-600 dark:bg-slate-800 dark:text-gray-100"
+                value={set.pluginCode}
+                onchange={readAs}
+                aria-label={$t('importWizard.reportSet.readAs')}
+                data-testid="report-set-read-as"
+            >
+                {#each readAsChoices as choice (choice.code)}
+                    <option value={choice.code}>{choice.code === detectedPlugin ? `${choice.name} (${$t('importWizard.reportSet.detected')})` : choice.name}</option>
+                {/each}
+                <option value="">{$t('importWizard.reportSet.readAsOneByOne')}</option>
+            </select>
+        </label>
         {#if analysed}
             <span class="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">{$t('importWizard.reportSet.status.analysed')}</span>
         {/if}
@@ -296,6 +372,19 @@
             {#if status === 'error'}
                 <p class="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400"><AlertTriangle size={14} />{previewState?.error ?? $t('common.error')}</p>
             {/if}
+
+            {#if defaultNote}
+                <p class="flex items-start gap-1.5 text-xs text-sky-700 dark:text-sky-300" data-testid="report-set-default-note" data-default-plugin={defaultNote.code}>
+                    <Info size={12} class="mt-0.5 shrink-0" />
+                    <span>{$t('importWizard.reportSet.defaultPluginNote', {values: {plugin: plugin?.name ?? set.pluginCode, defaultPlugin: defaultNote.name}})}</span>
+                </p>
+            {/if}
+            {#each alsoRecognised as entry (entry.file.file_id)}
+                <p class="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300" data-testid="report-set-also-recognised" data-file-id={entry.file.file_id} data-plugins={entry.others.map((other) => other.code).join(',')}>
+                    <AlertTriangle size={12} class="mt-0.5 shrink-0" />
+                    <span>{$t('importWizard.reportSet.alsoRecognisedBy', {values: {file: entry.file.filename, plugins: entry.others.map((other) => other.name).join(', ')}})}</span>
+                </p>
+            {/each}
 
             {#each roles as role (role.code)}
                 {@const missing = missingByRole.get(role.code)}

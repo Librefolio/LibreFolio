@@ -345,18 +345,33 @@ class GenericCSVBrokerProvider(BRIMProvider):
         """
         Check if this plugin can parse the file.
 
-        Returns True for .csv files that have a readable header row.
+        True for a .csv file whose header row names both required columns, ``date`` and ``type``,
+        in any of the header variations the plugin knows (``HEADER_MAPPINGS``). Any other CSV would
+        only fail at parse time, so the plugin does not offer itself for it. True exactly when
+        ``cannot_parse_reason`` has nothing to say.
         """
+        return self.cannot_parse_reason(file_path) is None
+
+    def cannot_parse_reason(self, file_path: Path) -> Optional[str]:
+        """Why ``can_parse`` refuses the file — the extension, an unreadable or empty file, or the required columns the header misses."""
         if file_path.suffix.lower() != ".csv":
-            return False
+            return "the Generic CSV reads only .csv files"
 
         try:
             with self._open_text(file_path) as f:
                 reader = csv.reader(f, delimiter=self.detect_csv_delimiter(file_path))
                 header = next(reader, None)
-                return header is not None and len(header) > 0
         except Exception:
-            return False
+            return "the file could not be read"
+        if not header:
+            return "the file has no header row"
+        column_map = self._detect_columns(header)
+        missing = [column for column in ("date", "type") if column not in column_map]
+        if not missing:
+            return None
+        if len(missing) == 1:
+            return f"required column '{missing[0]}' not found in the CSV header"
+        return "required columns " + " and ".join(f"'{column}'" for column in missing) + " not found in the CSV header"
 
     def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:  # noqa: C901 — flat row loop: header validation and per-row error handling, no nested logic
         """

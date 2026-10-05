@@ -1039,11 +1039,12 @@ async def preview_report_set(
 
     Returns each file's role and coverage, the roles still missing (with the period
     their export must cover), segments, gaps, the broker history already in
-    LibreFolio and warnings with stable codes. Writes nothing.
+    LibreFolio and warnings with stable codes. Writes nothing. The files listed in
+    ``exclude_file_ids`` (originals of the upload the user left out) are no members.
     """
     await _require_broker_editor(request.broker_id, current_user, session)
     try:
-        return await brim_report_sets.preview_set(session, broker_id=request.broker_id, plugin_code=request.plugin_code, batch_id=request.batch_id)
+        return await brim_report_sets.preview_set(session, broker_id=request.broker_id, plugin_code=request.plugin_code, batch_id=request.batch_id, exclude_file_ids=request.exclude_file_ids)
     except BRIMSetError as e:
         raise HTTPException(status_code=e.status_code, detail=_set_error_detail(e)) from e
 
@@ -1062,7 +1063,7 @@ async def combine_report_set(
     """
     await _require_broker_editor(request.broker_id, current_user, session)
     try:
-        return await brim_report_sets.combine_set(session, broker_id=request.broker_id, plugin_code=request.plugin_code, batch_id=request.batch_id, user_id=current_user.id)
+        return await brim_report_sets.combine_set(session, broker_id=request.broker_id, plugin_code=request.plugin_code, batch_id=request.batch_id, user_id=current_user.id, exclude_file_ids=request.exclude_file_ids)
     except BRIMSetError as e:
         raise HTTPException(status_code=e.status_code, detail=_set_error_detail(e)) from e
 
