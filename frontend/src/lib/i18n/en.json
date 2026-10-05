@@ -1072,7 +1072,8 @@
       "weekRange": "Week {start} – {end}",
       "monthLabel": "{month}",
       "valueAt": "Value at {date}",
-      "eventsInPeriod": "Events in period:"
+      "eventsInPeriod": "Events in period:",
+      "partialBucket": "Partial: {days} of {total} days"
     },
     "resolution": {
       "weekly": "Weekly",
@@ -1494,7 +1495,6 @@
     "pnlSubmodeLine": "Line",
     "pnlSubmodeCandles": "Candles",
     "pnlSubmodeIncome": "Income",
-    "pnlCandlesHypothetical": "Synthetic — cross-asset high/low are hypothetical and non-simultaneous, not a real intraday series.",
     "pnlCandlesHypotheticalShort": "Synthetic — cross-asset high/low are hypothetical and non-simultaneous",
     "pnlAcqNewCapital": "New capital",
     "pnlAcqReinvested": "Reinvested",
@@ -3527,17 +3527,24 @@
           },
           "truncation": "Declared over {declared} days, applied over {applied}: the cone answers the shorter question."
         },
-        "replayExcluded": "Left out:",
-        "replayNeedsChoice": "{name} has no usable history in this period. Leave it out, or give it a stand-in — a stand-in is an opinion about what it would have done.",
-        "replayProxyUnusable": "The stand-in chosen for {name} has no usable history either. Pick a different one.",
-        "replayExcludeAndRetry": "Leave it out and run again",
         "replayTotal": "This composition would have ended the period at {percent} {amount}",
-        "replayAudit": "Stand-ins: {proxies} · Left out: {excluded} ({weight} of the scope, carried at zero return)",
-        "replayAuditOmitted": "Stand-ins: {proxies} · Left out: {excluded} (omitted from the replay: the figures speak for the rest)",
         "shockShowDetail": "Show the shock per bucket",
         "shockHideDetail": "Hide the shock per bucket",
         "shockTotal": "This scenario would move the scope by {percent} {amount}",
-        "shockCoverage": "Only {percent} of the scope could be classified, so the total speaks for that part alone."
+        "shockCoverage": "Only {percent} of the scope could be classified, so the total speaks for that part alone.",
+        "replayPeriod": "Period",
+        "replayExcludedResidual": "Left out of the replay: {count, plural, one {# asset} other {# assets}}; {weight} of the value counts as cash at zero return.",
+        "replayExcludedOmitted": "Left out of the replay: {count, plural, one {# asset} other {# assets}}; the figures speak for the others.",
+        "replayReasonNoPrices": "No prices in the period",
+        "replayReasonStartsLate": "First quoted after the period began",
+        "replayReasonStaleAtStart": "No recent price when the period began",
+        "replayReasonStaleAtEnd": "No recent price at the end of the period",
+        "replayReasonMissingFx": "No exchange rate to your currency",
+        "replayReasonManual": "Left out by you",
+        "replayReasonOther": "Other reason",
+        "replayNothing": "Nothing to replay: no asset has usable prices over this period.",
+        "replaySuggested": "Replay from {start} to {end}: {count, plural, one {# asset comes back} other {# assets come back}}",
+        "replaySuggestedPartial": "Only part of the crisis."
       },
       "backtestNotice": "With a slice active, these figures are rebuilt from today’s composition: they say how it *would* have gone, not how it actually went.",
       "notice": {
