@@ -2123,8 +2123,8 @@ loro assunzioni, non golden di ottimalità.
 | fee per mercato | v1 profilo Broker/lato/valuta |
 | fee intraday dinamiche/degressive | già registrate nel TODO |
 | fee/limiti/tempi bonifico | trasferimenti v1 gratuiti/immediati |
-| multi-hop FX e routing globale | v1 single-hop dichiarato |
-| margine dinamico per volatilità | v1 `fx_buffer_rate` esplicito |
+| multi-hop FX (❌ non più da fare, developer, 02/10/2026) e routing globale | v1 single-hop dichiarato |
+| margine dinamico per volatilità | v1 `fx_buffer_rate` esplicito; entrambi ❌ non più da fare (developer, 02/10/2026) |
 | persistenza fonti/Broker manuali | v1 scenario-only |
 | profilo operativo Broker persistito | v1 parametri per-run |
 | aliquota plusvalenze persistita sull'Asset | v1 prefill 26% + override snapshot |

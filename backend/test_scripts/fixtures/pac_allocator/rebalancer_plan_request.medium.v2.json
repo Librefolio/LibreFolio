@@ -7,16 +7,6 @@
   },
   "as_of": "2026-09-15",
   "valuation_currency": "EUR",
-  "currency_specs": [
-    {
-      "currency": "EUR",
-      "minor_unit": "0.01"
-    },
-    {
-      "currency": "USD",
-      "minor_unit": "0.01"
-    }
-  ],
   "provenance": [
     {
       "kind": "domain_copy",
@@ -59,10 +49,6 @@
         "amount": "10",
         "currency": "EUR",
         "quote_base_quantity": "1",
-        "reference_date": "2026-09-15",
-        "freshness": {
-          "kind": "fresh"
-        },
         "provenance_id": "prov-market"
       },
       "exposures": [
@@ -102,10 +88,6 @@
         "amount": "20",
         "currency": "EUR",
         "quote_base_quantity": "1",
-        "reference_date": "2026-09-15",
-        "freshness": {
-          "kind": "fresh"
-        },
         "provenance_id": "prov-market"
       },
       "exposures": [
@@ -145,10 +127,6 @@
         "amount": "25",
         "currency": "USD",
         "quote_base_quantity": "1",
-        "reference_date": "2026-09-15",
-        "freshness": {
-          "kind": "fresh"
-        },
         "provenance_id": "prov-market"
       },
       "exposures": [
@@ -187,10 +165,6 @@
         "amount": "5",
         "currency": "EUR",
         "quote_base_quantity": "1",
-        "reference_date": "2026-09-15",
-        "freshness": {
-          "kind": "fresh"
-        },
         "provenance_id": "prov-manual"
       },
       "exposures": [
@@ -279,7 +253,8 @@
             }
           }
         }
-      ]
+      ],
+      "conversion_mode": "automatic"
     },
     {
       "broker_id": "broker-beta",
@@ -391,7 +366,8 @@
             }
           }
         }
-      ]
+      ],
+      "conversion_mode": "manual"
     }
   ],
   "holdings": [

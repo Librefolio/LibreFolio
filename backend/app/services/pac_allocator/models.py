@@ -11,67 +11,22 @@ from backend.app.services.pac_allocator.numeric import ExactRatio
 Checkpoint = Callable[[], None]
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def check_budget(checkpoint: Checkpoint | None) -> None:
     if checkpoint is not None:
         checkpoint()
 
 
-
-
 # Planner v2 exact domain ----------------------------------------------------
 #
 # These data-only records deliberately do not depend on a solver.  The public
-# request is normalized into these records once; the evaluator, exhaustive
-# oracle, and future solver adapter consume the same exact state.
+# request is normalized into these records once; the evaluator, the SCIP
+# compiler, and the exhaustive oracle of the test tree consume the same exact
+# state.
 
 type PlannerProduct = Literal["pac", "rebalancer"]
 type PlannerPolicy = Literal["proportional", "min_fragmentation", "invest_only", "invest_and_sell"]
 type IdentityKind = Literal["domain", "manual"]
-type FreshnessKind = Literal["fresh", "stale"]
+type ConversionMode = Literal["manual", "automatic"]
 type ProvenanceKind = Literal["manual", "domain_copy"]
 type CapabilityKind = Literal["whole_quantity", "monetary_amount"]
 type OrderSide = Literal["buy", "sell"]
@@ -194,21 +149,6 @@ class ExactMoney:
 
 
 @dataclass(frozen=True, slots=True)
-class ExactFreshness:
-    kind: FreshnessKind
-    age_days: int | None
-    accepted: bool
-
-    def __post_init__(self) -> None:
-        if self.kind == "fresh":
-            if self.age_days is not None or self.accepted:
-                raise ValueError("fresh observations cannot carry stale acceptance")
-            return
-        if self.age_days is None or self.age_days < 0 or not self.accepted:
-            raise ValueError("stale observations require nonnegative age and explicit acceptance")
-
-
-@dataclass(frozen=True, slots=True)
 class ExactSnapshot:
     snapshot_id: str
     draft_revision: int
@@ -284,8 +224,6 @@ class ExactExposure:
 class ExactAssetQuote:
     price: ExactMoney
     quote_base_quantity: ExactRatio
-    reference_date: date
-    freshness: ExactFreshness
     provenance_id: str
 
     def __post_init__(self) -> None:
@@ -300,7 +238,7 @@ class ExactAsset:
     source_asset_id: str | None
     name: str
     ticker: str | None
-    asset_class: str
+    asset_class: str | None
     quote: ExactAssetQuote
     exposures: tuple[ExactExposure, ...]
 
@@ -354,10 +292,15 @@ class ExactBroker:
     provenance_id: str
     capabilities: tuple[ExactOrderCapability, ...]
     fee_schedules: tuple[ExactFeeSchedule, ...]
+    # Presentation only: how the report shows this Broker's conversions. No
+    # constraint or objective reads it, so the computed plan does not depend on it.
+    conversion_mode: ConversionMode
 
     def __post_init__(self) -> None:
         if (self.identity_kind == "domain") != (self.source_broker_id is not None):
             raise ValueError("domain Broker identity requires source_broker_id and manual identity forbids it")
+        if self.conversion_mode not in ("manual", "automatic"):
+            raise ValueError(f"unknown Broker conversion mode {self.conversion_mode!r}")
         _require_canonical_tuple(self.capabilities, lambda capability: capability.capability_id, "broker capabilities")
         _require_canonical_tuple(self.fee_schedules, lambda schedule: (schedule.capability_id, schedule.side, schedule.fee_schedule_id), "broker fee schedules")
         _require_unique_values(
@@ -387,7 +330,6 @@ class ExactHolding:
 
 @dataclass(frozen=True, slots=True)
 class ExactExistingCash:
-    source_kind: Literal["local_broker_cash", "manual_cash"]
     cash_id: str
     broker_id: str
     available: ExactMoney
@@ -481,7 +423,8 @@ class ExactOrderRoute:
     side: OrderSide
     minimum_if_active: ExactOrderMinimum
     required_minimum: ExactOrderMinimum
-    cap: ExactOrderCap
+    # None: no cap of its own; a buy stays bounded by the resources, a sell by the holding.
+    cap: ExactOrderCap | None
     execution_margin_rate: ExactRatio
     priority: int
     provenance_id: str
@@ -1434,3 +1377,28 @@ class ExactEvaluation:
             )
         ):
             raise ValueError("invalid candidate contracts cannot carry economic results")
+
+
+@dataclass(frozen=True, slots=True)
+class ExactRoundingTopUp:
+    """Cash one pool (broker x currency) lacks because the replay rounds HALF_UP.
+
+    ``amount`` is the pool's negative final spendable balance, in the pool's own
+    currency; ``rounded_postings`` counts the pool's postings that carry a
+    quantum, the ones whose rounding can explain the deficit; and
+    ``valuation_amount`` is ``amount`` in the scenario's valuation currency.
+    """
+
+    broker_id: str
+    currency: str
+    amount: ExactRatio
+    rounded_postings: int
+    valuation_amount: ExactRatio
+
+    def __post_init__(self) -> None:
+        _require_text(self.broker_id, "top-up broker_id")
+        _require_currency(self.currency, "top-up currency")
+        _require_positive(self.amount, "top-up amount")
+        if isinstance(self.rounded_postings, bool) or not isinstance(self.rounded_postings, int) or self.rounded_postings < 1:
+            raise ValueError("top-up rounded_postings must be a positive integer")
+        _require_positive(self.valuation_amount, "top-up valuation_amount")

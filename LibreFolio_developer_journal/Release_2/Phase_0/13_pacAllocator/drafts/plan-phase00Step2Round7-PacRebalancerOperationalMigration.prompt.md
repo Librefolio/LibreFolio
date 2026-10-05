@@ -2573,8 +2573,8 @@ Already registered and excluded from v1:
 | persistent Asset tax rate | 26% prefill + per-run override |
 | market-specific/intraday/degressive fees | fixed + rate + min/max by side/currency |
 | transfer fee/limit/settlement | declared free/immediate v1 transfer |
-| multi-hop/global FX routing | declared single-hop only |
-| volatility-derived safety margin | explicit user input only |
+| multi-hop/global FX routing (❌ non più da fare, developer, 02/10/2026) | declared single-hop only |
+| volatility-derived safety margin | explicit user input only; both ❌ non più da fare (developer, 02/10/2026) |
 | persistent manual scenarios | local draft only |
 
 Do not duplicate TODO entries. New deferred item requires explicit developer decision.

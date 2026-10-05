@@ -5,6 +5,17 @@ contratto/Step 2 evaluator) risulta soddisfatto; resta bloccante solo G5
 capacity/runtime. Vedi §16.
 **Dipende da:** Step 1 capacity freeze, Step 2 evaluator.
 
+> ⚠️ **Nota 2026-09-24 (round 5).** Lane, selector e simboli P1 citati in questo piano
+> descrivono la fase in cui è stato scritto. Lo stato corrente è altrove:
+> - lane `6153` → oggi `6151` (suite) e `6161` (copia di prod);
+> - `pac-analyze`, `pac-tool` e `pac-planner-capacity` non esistono: i selector reali
+>   sono in [handoff §0.4](../../16_toolPlatform/handoff-pac-D.md);
+> - P1 `analyze` rimosso il 2026-09-21 (`b82e59ffa`).
+>
+> L'avanzamento è nella tabella del [README](README.md) e nel
+> [piano Round 5](plan-phase00PacRound5PostMerge.prompt.md). Le note datate qui sotto
+> restano come evidenza storica. Lo **Stato** in testa non è stato rimisurato.
+
 ← Master: [piano implementativo](plan-phase00PacRebalancerImplementation.prompt.md)
 ← Precedente: [core esatto e oracle](plan-phase00Step2PacRebalancerExactCore.prompt.md)
 ← Autorità: [policy](../plan-phase00PacRebalancerPolicies.prompt.md) ·
@@ -304,6 +315,10 @@ services pac-planner-capacity
 - [ ] 4. Implementare cascade MIQCP e tie.
 - [ ] 5. Implementare PAC `proportional`.
 - [ ] 6. Implementare PAC `min_fragmentation`.
+      > 2026-09-24 (Round5, Q-C0-4): la policy esce dal wire di 2.0.0
+      > (`plan-phase00PacRound5PostMerge.prompt.md`, C0b.2). Chiudere questo punto significa
+      > anche riallargare il `Literal` di `PacPlannerRequest.policy` e `PacScenarioBasis.policy`;
+      > la UI la mostra da sola perché legge le opzioni dal contratto.
 - [ ] 7. Implementare Rebalancer `invest_only`.
 - [ ] 8. Implementare estensione `invest_and_sell`.
 - [ ] 9. Implementare variante BUY-only e promotion.
@@ -311,8 +326,9 @@ services pac-planner-capacity
 - [ ] 11. Implementare SELL verifier.
 - [ ] 12. Implementare cancel/cleanup.
 - [ ] 13. Confrontare oracle e benchmark capacity.
-      **Due numeri di produzione dipendono da questo lavoro e vanno rimisurati qui**
-      (aggiunti il 2026-09-21, con il budget engine propagato):
+      **Tre numeri di produzione dipendono da questo lavoro e vanno rimisurati qui**
+      (i primi due aggiunti il 2026-09-21, con il budget engine propagato; il terzo il
+      2026-09-24):
       - `_POST_ENGINE_RESERVE_MS = 2_000` in `tool_plugins/pac_allocator.py` — la
         riserva post-solver per replay esatto e report. Misurata **~1 ms** sugli
         scenari di test attuali, ma cresce col dominio mentre la quota del solver
@@ -324,6 +340,15 @@ services pac-planner-capacity
         assente, `stop_reason: "node_limit"` (`schemas/pac_allocator.py:2406,2469`,
         prodotto da `planner_report.py:848`) è un valore di contratto dichiarato e
         **non producibile**.
+      - Tetto predefinito delle route `1000000000` (nell'unità della modalità d'ordine),
+        in `frontend/src/lib/features/tools/pac-allocator/planner/defaults.ts` con un
+        TODO. Decisione Q-C0-5 del developer (Round5): «per ora se ti devi predisporre
+        metti un numero alto e un todo che dice che andrà ridotto quando si saranno
+        fatte le simulazioni sui tempi di esecuzione». Oggi non allarga il dominio — il
+        limite di ogni ordine è il minimo fra tetto e risorse (`evaluator.py:784-845`),
+        e `compiler.py:146` lo passa a SCIP come `ub` — quindi il numero da trovare qui
+        è la soglia oltre la quale il tempo di calcolo smette di essere accettabile,
+        non un effetto del default attuale.
       > Sono elencati qui, e non solo nei rispettivi commenti, perché un commento
       > esatto invecchia senza farsi notare: `DEFAULT_SOLVER_TIME_BUDGET_SECONDS`
       > ha documentato fedelmente per cinque giorni una probe tarata su un
@@ -486,6 +511,9 @@ Questo confine non è nuovo — va solo rispettato meccanicamente in
 `solver.py`/`proof.py`.
 
 ### 16.3 Dove si innesta proof/oracle (e dove resta separato)
+
+> ⚠️ **2026-09-25:** superato da D-X1, per cui in produzione gira solo SCIP e l'oracolo resta nei
+> test ([Round 5, §2 e Passo F](plan-phase00PacRound5PostMerge.prompt.md)).
 
 - Le 3 dimensioni indipendenti restano quelle di Proof Semantics A:
   validazione incumbent (`decimal_verified`), evidenza solver (status/bound/
@@ -1371,6 +1399,10 @@ singolo per un percorso che non si aspetta venga mai preso.
 > del debito che cancella i propri errori è un registro non verificabile.
 
 ### Difetto A — `plan_pac_allocation` sollevava su un input legittimo
+
+> ⚠️ **2026-09-25:** la cura (SCIP fuori dal percorso quando decide l'oracolo) è superata da
+> D-X1, per cui l'infeasible di SCIP diventa uno stato completato
+> ([Round 5, Passo F1](plan-phase00PacRound5PostMerge.prompt.md)).
 
 Fixture + `required_minimum = 1 unità` (€5 di cassa contro €10 di prezzo
 unitario) faceva **sollevare** `ValidationError: Completed stops require

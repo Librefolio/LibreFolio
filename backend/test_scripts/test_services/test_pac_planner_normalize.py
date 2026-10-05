@@ -34,9 +34,10 @@ from backend.app.services.pac_allocator.issues import (
     normalizer_issue_definition,
     section_path,
 )
-from backend.app.services.pac_allocator.models import ExactPlannerScenario
+from backend.app.services.pac_allocator.models import ExactFeeSchedule, ExactMoney, ExactPlannerScenario
 from backend.app.services.pac_allocator.normalize import (
     PlannerV2NormalizationResult,
+    currency_minor_unit,
     exact_number_to_ratio,
     normalize_pac_plan,
     normalize_planner_request,
@@ -157,6 +158,8 @@ def _issue_wire_path(issue: PlannerIssue) -> JsonObject:
 
 
 def _stale_source_warning() -> PlannerIssue:
+    # Contract compaction withdrew `quote.freshness`; the warning stays a source-side fact
+    # about the quote, so it points at a quote field that still exists.
     return _source_issue(
         "allocation.provenance_stale_confirmed",
         kind="info",
@@ -165,7 +168,7 @@ def _stale_source_warning() -> PlannerIssue:
             "assets",
             "asset",
             "asset-one",
-            "quote.freshness",
+            "quote.provenance_id",
         ),
     )
 
@@ -360,11 +363,6 @@ def test_normalization_availability_uses_frozen_error_precedence(
     assert normalization_availability(issues) == expected
 
 
-def _mutate_currency_minor_unit(payload: JsonObject, value: str) -> None:
-    currency = _find_row(payload["currency_specs"], "currency", "EUR")
-    currency["minor_unit"] = value
-
-
 def _mutate_price(payload: JsonObject, value: str) -> None:
     asset = _find_row(payload["assets"], "asset_id", "asset-one")
     asset["quote"]["amount"] = value
@@ -433,7 +431,6 @@ def _mutate_tax_rate(payload: JsonObject, value: str) -> None:
 
 
 RANGE_MUTATORS: dict[str, Callable[[JsonObject, str], None]] = {
-    "currency-minor-unit": _mutate_currency_minor_unit,
     "price": _mutate_price,
     "quote-basis": _mutate_quote_basis,
     "exposure-weight": _mutate_exposure_weight,
@@ -459,14 +456,6 @@ def _apply_range_mutation(
 
 
 RANGE_ISSUE_CASES = (
-    pytest.param(
-        "pac",
-        "currency-minor-unit",
-        "0",
-        "allocation.currency_minor_unit_nonpositive",
-        _field_wire_path("input", "currency", "EUR", "minor_unit"),
-        id="currency-minor-unit",
-    ),
     pytest.param(
         "pac",
         "price",
@@ -600,92 +589,6 @@ def test_key_range_checks_emit_frozen_codes_and_paths(
     assert issue.kind == "invalid"
     assert issue.severity == "error"
     assert _issue_wire_path(issue) == expected_path
-
-
-@pytest.mark.parametrize(
-    "include_source_warning",
-    (
-        pytest.param(False, id="no-source-warning"),
-        pytest.param(True, id="preserve-source-warning"),
-    ),
-)
-def test_accepted_stale_observation_emits_no_w1_warning(
-    include_source_warning: bool,
-) -> None:
-    payload = _fixture(PAC_FIXTURE)
-    asset = _find_row(payload["assets"], "asset_id", "asset-one")
-    asset["quote"]["freshness"] = {
-        "kind": "stale",
-        "age_days": 3,
-        "accepted": True,
-    }
-    source_warning = _stale_source_warning() if include_source_warning else None
-    source_issues = (source_warning,) if source_warning is not None else ()
-
-    result = _normalize_payload(
-        "pac",
-        payload,
-        source_issues=source_issues,
-    )
-
-    assert result.availability == "ready"
-    assert result.ready is True
-    if source_warning is None:
-        assert result.issues == ()
-    else:
-        assert result.issues == (source_warning,)
-    scenario = result.normalized
-    assert scenario is not None
-    exact_asset = next(row for row in scenario.assets if row.asset_id == "asset-one")
-    assert exact_asset.quote.freshness.kind == "stale"
-    assert exact_asset.quote.freshness.age_days == 3
-    assert exact_asset.quote.freshness.accepted is True
-
-
-STALE_INVALID_CASES = (
-    pytest.param(
-        -1,
-        True,
-        "allocation.stale_age_negative",
-        id="negative-age",
-    ),
-    pytest.param(
-        3,
-        False,
-        "allocation.stale_observation_not_accepted",
-        id="not-accepted",
-    ),
-)
-
-
-@pytest.mark.parametrize(("age_days", "accepted", "code"), STALE_INVALID_CASES)
-def test_invalid_stale_observation_emits_exact_w1_error(
-    age_days: int,
-    accepted: bool,
-    code: PlannerIssueCode,
-) -> None:
-    payload = _fixture(PAC_FIXTURE)
-    asset = _find_row(payload["assets"], "asset_id", "asset-one")
-    asset["quote"]["freshness"] = {
-        "kind": "stale",
-        "age_days": age_days,
-        "accepted": accepted,
-    }
-
-    result = _normalize_payload("pac", payload)
-    issue = _single_issue(result, code)
-
-    assert result.availability == "invalid"
-    assert result.normalized is None
-    assert tuple(row.code for row in result.issues) == (code,)
-    assert issue.kind == "invalid"
-    assert issue.severity == "error"
-    assert _issue_wire_path(issue) == _field_wire_path(
-        "assets",
-        "asset",
-        "asset-one",
-        "quote.freshness",
-    )
 
 
 def _inactive_custody_only_payload() -> JsonObject:
@@ -963,8 +866,10 @@ def test_canonical_issue_universe_matches_schema_and_w1_map_is_explicit() -> Non
     schema_codes = tuple(get_args(PlannerIssueCode))
 
     assert schema_codes == CANONICAL_ISSUE_CODES
-    assert len(schema_codes) == 80
-    assert len(set(schema_codes)) == 80
+    assert len(schema_codes) == 76
+    assert len(set(schema_codes)) == 76
+    # Contract compaction: the planner reads neither a quote date nor a freshness any more.
+    assert not {"allocation.price_date_missing", "allocation.stale_age_negative", "allocation.stale_observation_not_accepted"} & set(schema_codes)
     assert set(W1_NORMALIZER_ISSUE_DEFINITIONS) < set(schema_codes)
     for code, definition in W1_NORMALIZER_ISSUE_DEFINITIONS.items():
         assert normalizer_issue_definition(code) is definition
@@ -1401,3 +1306,623 @@ def test_immutable_exact_models_reject_duplicate_semantic_identities(
 
     with pytest.raises(ValueError, match=message):
         mutation(scenario)
+
+
+# ---------------------------------------------------------------------------
+# R4.9 — each Broker's conversion mode travels from the request into the exact
+# model untouched, and the exact model admits only the two published modes.
+# ---------------------------------------------------------------------------
+
+CONVERSION_MODES = ("manual", "automatic")
+
+
+def _ready_pac_payload() -> JsonObject:
+    return _fixture(PAC_FIXTURE)
+
+
+CONVERSION_MODE_CARRY_CASES = tuple(
+    pytest.param(product, build_payload, broker_id, mode, id=f"{product}-{broker_id}-{mode}")
+    for product, build_payload, broker_id in (
+        ("pac", _ready_pac_payload, "broker-one"),
+        ("rebalancer", _ready_rebalancer_payload, "broker-alpha"),
+        ("rebalancer", _ready_rebalancer_payload, "broker-beta"),
+    )
+    for mode in CONVERSION_MODES
+)
+
+
+@pytest.mark.parametrize(
+    ("product", "build_payload", "broker_id", "mode"),
+    CONVERSION_MODE_CARRY_CASES,
+)
+def test_normalization_carries_each_broker_conversion_mode_into_the_exact_model(
+    product: str,
+    build_payload: Callable[[], JsonObject],
+    broker_id: str,
+    mode: str,
+) -> None:
+    payload = build_payload()
+    _find_row(payload["brokers"], "broker_id", broker_id)["conversion_mode"] = mode
+    requested = {row["broker_id"]: row["conversion_mode"] for row in payload["brokers"]}
+
+    result = _normalize_payload(product, payload)
+
+    assert result.availability == "ready", result.issues
+    assert result.normalized is not None
+    normalized = {broker.broker_id: broker.conversion_mode for broker in result.normalized.brokers}
+    assert normalized[broker_id] == mode
+    # Per Broker, not per request: every other Broker keeps the mode it asked for.
+    assert normalized == requested
+
+
+@pytest.mark.parametrize("mode", CONVERSION_MODES)
+def test_exact_broker_accepts_each_published_conversion_mode(mode: str) -> None:
+    broker = next(item for item in _ready_rebalancer_scenario().brokers if item.broker_id == "broker-alpha")
+
+    assert replace(broker, conversion_mode=mode).conversion_mode == mode
+
+
+@pytest.mark.parametrize(
+    "mode",
+    (
+        pytest.param("Manual", id="capitalised"),
+        pytest.param("auto", id="abbreviated"),
+        pytest.param("", id="empty"),
+        pytest.param(None, id="none"),
+    ),
+)
+def test_exact_broker_rejects_an_unknown_conversion_mode(mode: object) -> None:
+    broker = next(item for item in _ready_rebalancer_scenario().brokers if item.broker_id == "broker-alpha")
+
+    with pytest.raises(ValueError, match="unknown Broker conversion mode"):
+        replace(broker, conversion_mode=mode)
+
+
+# ---------------------------------------------------------------------------
+# C0b.3 — an Asset's exposures may not sum above one within a dimension.
+# ---------------------------------------------------------------------------
+
+EXPOSURE_WEIGHT_WIRE_PATH = _field_wire_path("assets", "asset", "asset-one", "exposures.weight")
+EXPOSURE_TOTAL_CODE: PlannerIssueCode = "allocation.exposure_total_exceeds_one"
+FIXTURE_EXPOSURE_CATEGORIES = (
+    ("asset_type", "equity"),
+    ("sector", "broad"),
+    ("geography", "unknown"),
+)
+
+
+def _exposure(dimension: str, category_id: str, weight: str) -> JsonObject:
+    return {
+        "dimension": dimension,
+        "category_id": category_id,
+        "label": f"{dimension} {category_id}",
+        "weight": weight,
+        "provenance_id": "prov-manual",
+    }
+
+
+def _pac_payload_with_exposures(*exposures: JsonObject) -> JsonObject:
+    payload = _fixture(PAC_FIXTURE)
+    asset = _find_row(payload["assets"], "asset_id", "asset-one")
+    asset["exposures"] = [deepcopy(exposure) for exposure in exposures]
+    return payload
+
+
+def _split_dimension(dimension: str, category_id: str, weights: tuple[str, ...]) -> list[JsonObject]:
+    return [_exposure(dimension, category_id if index == 0 else f"{category_id}-{index}", weight) for index, weight in enumerate(weights)]
+
+
+def _exposure_total_issues(result: PlannerV2NormalizationResult) -> list[PlannerIssue]:
+    return [issue for issue in result.issues if issue.code == EXPOSURE_TOTAL_CODE]
+
+
+def _dimension_params(issue: PlannerIssue) -> list[JsonObject]:
+    return [param.model_dump(mode="json") for param in issue.params]
+
+
+def test_exposure_dimension_total_above_one_is_one_typed_invalid_issue() -> None:
+    payload = _pac_payload_with_exposures(
+        _exposure("asset_type", "equity", "1"),
+        _exposure("sector", "broad", "0.7"),
+        _exposure("sector", "tech", "0.5"),
+        _exposure("geography", "unknown", "1"),
+    )
+
+    result = _normalize_payload("pac", payload)
+    issue = _single_issue(result, EXPOSURE_TOTAL_CODE)
+
+    assert result.availability == "invalid"
+    assert result.ready is False
+    assert result.normalized is None
+    assert tuple(row.code for row in result.issues) == (EXPOSURE_TOTAL_CODE,)
+    assert issue.model_dump(mode="json") == {
+        "code": EXPOSURE_TOTAL_CODE,
+        "severity": "error",
+        "kind": "invalid",
+        "path": EXPOSURE_WEIGHT_WIRE_PATH,
+        "message_key": EXPOSURE_TOTAL_CODE,
+        "params": [{"kind": "text", "name": "dimension", "value": "sector"}],
+    }
+    assert normalizer_issue_definition(EXPOSURE_TOTAL_CODE).kind == "invalid"
+
+
+@pytest.mark.parametrize(
+    "weights",
+    (
+        pytest.param(("0.5", "0.5"), id="exactly-one"),
+        pytest.param(("0.3333", "0.6667"), id="exactly-one-at-four-decimals"),
+        pytest.param(("0.3", "0.2"), id="below-one-keeps-a-residual"),
+        pytest.param(("0", "0"), id="zero"),
+    ),
+)
+def test_exposure_dimension_total_up_to_one_is_accepted(weights: tuple[str, ...]) -> None:
+    payload = _pac_payload_with_exposures(
+        _exposure("asset_type", "equity", "1"),
+        *_split_dimension("sector", "broad", weights),
+        _exposure("geography", "unknown", "1"),
+    )
+
+    result = _normalize_payload("pac", payload)
+
+    assert result.availability == "ready"
+    assert result.issues == ()
+
+
+@pytest.mark.parametrize(
+    "weights",
+    (
+        pytest.param(("1.25", "0.5"), id="above-one-weight"),
+        pytest.param(("-0.25", "1", "0.75"), id="negative-weight-with-total-above-one"),
+    ),
+)
+def test_out_of_range_exposure_weight_is_the_only_issue_for_its_dimension(weights: tuple[str, ...]) -> None:
+    payload = _pac_payload_with_exposures(
+        _exposure("asset_type", "equity", "1"),
+        *_split_dimension("sector", "broad", weights),
+        _exposure("geography", "unknown", "1"),
+    )
+
+    result = _normalize_payload("pac", payload)
+    issue = _single_issue(result, "allocation.exposure_weight_out_of_range")
+
+    assert result.availability == "invalid"
+    assert tuple(row.code for row in result.issues) == ("allocation.exposure_weight_out_of_range",)
+    assert _issue_wire_path(issue) == EXPOSURE_WEIGHT_WIRE_PATH
+    assert _exposure_total_issues(result) == []
+
+
+@pytest.mark.parametrize("over_dimension", ("asset_type", "sector", "geography"))
+def test_exposure_total_issue_names_only_the_dimension_above_one(over_dimension: str) -> None:
+    exposures: list[JsonObject] = []
+    for dimension, category_id in FIXTURE_EXPOSURE_CATEGORIES:
+        weights = ("0.7", "0.5") if dimension == over_dimension else ("0.6", "0.4")
+        exposures.extend(_split_dimension(dimension, category_id, weights))
+    payload = _pac_payload_with_exposures(*exposures)
+
+    result = _normalize_payload("pac", payload)
+    issue = _single_issue(result, EXPOSURE_TOTAL_CODE)
+
+    assert result.availability == "invalid"
+    assert tuple(row.code for row in result.issues) == (EXPOSURE_TOTAL_CODE,)
+    assert _issue_wire_path(issue) == EXPOSURE_WEIGHT_WIRE_PATH
+    assert _dimension_params(issue) == [{"kind": "text", "name": "dimension", "value": over_dimension}]
+
+
+def test_exposure_totals_are_checked_per_dimension() -> None:
+    payload = _pac_payload_with_exposures(
+        *_split_dimension("asset_type", "equity", ("0.8", "0.8")),
+        *_split_dimension("sector", "broad", ("1.5", "0.5")),
+        *_split_dimension("geography", "unknown", ("0.9", "0.2")),
+    )
+
+    result = _normalize_payload("pac", payload)
+
+    assert result.availability == "invalid"
+    # The out-of-range sector weight suppresses only the sector total.
+    _single_issue(result, "allocation.exposure_weight_out_of_range")
+    totals = _exposure_total_issues(result)
+    assert [_dimension_params(issue) for issue in totals] == [
+        [{"kind": "text", "name": "dimension", "value": "asset_type"}],
+        [{"kind": "text", "name": "dimension", "value": "geography"}],
+    ]
+    assert all(_issue_wire_path(issue) == EXPOSURE_WEIGHT_WIRE_PATH for issue in totals)
+
+
+@pytest.mark.parametrize(
+    ("weights", "expects_total_issue"),
+    (
+        pytest.param(("0.6", "0.6"), True, id="duplicates-sum-above-one"),
+        pytest.param(("0.5", "0.5"), False, id="duplicates-sum-to-one"),
+    ),
+)
+def test_duplicate_exposure_rows_still_count_toward_the_dimension_total(
+    weights: tuple[str, str],
+    expects_total_issue: bool,
+) -> None:
+    payload = _pac_payload_with_exposures(
+        _exposure("asset_type", "equity", "1"),
+        *(_exposure("sector", "broad", weight) for weight in weights),
+        _exposure("geography", "unknown", "1"),
+    )
+
+    result = _normalize_payload("pac", payload)
+
+    assert result.availability == "invalid"
+    _single_issue(result, "allocation.duplicate_id")
+    totals = _exposure_total_issues(result)
+    if expects_total_issue:
+        assert [_dimension_params(issue) for issue in totals] == [[{"kind": "text", "name": "dimension", "value": "sector"}]]
+    else:
+        assert totals == []
+
+
+# ---------------------------------------------------------------------------
+# C0b.1 — the currency quantum is CLDR's, via babel; the request carries none.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("currency", "expected"),
+    (
+        pytest.param("JPY", ExactRatio(1), id="jpy-zero-digits"),
+        pytest.param("EUR", ExactRatio(1, 100), id="eur-cldr-default-two-digits"),
+        pytest.param("USD", ExactRatio(1, 100), id="usd-two-digits"),
+        pytest.param("KWD", ExactRatio(1, 1000), id="kwd-three-digits"),
+    ),
+)
+def test_currency_minor_unit_is_the_cldr_quantum(currency: str, expected: ExactRatio) -> None:
+    assert currency_minor_unit(currency) == expected
+
+
+def test_normalized_scenario_derives_every_referenced_currency_quantum_from_babel() -> None:
+    payload = _fixture(PAC_FIXTURE)
+    assert "currency_specs" not in payload
+    payload["fx_rates"] = {"EUR/JPY": "160", "EUR/KWD": "0.33"}
+
+    result = _normalize_payload("pac", payload)
+
+    assert result.availability == "ready"
+    scenario = result.normalized
+    assert scenario is not None
+    assert tuple((spec.currency, spec.minor_unit) for spec in scenario.currency_specs) == (
+        ("EUR", ExactRatio(1, 100)),
+        ("JPY", ExactRatio(1)),
+        ("KWD", ExactRatio(1, 1000)),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Contract compaction — the wire may omit what has a default or is optional;
+# the normalizer resolves it into an exact scenario the engine already reads
+# (no transfer cap = the whole selected source; F1-extended fee instances).
+# ---------------------------------------------------------------------------
+
+COMPACT_PAC_FIXTURE = "pac_plan_request.compact.v2.json"
+CANDIDATE_MAX_PAC_FIXTURE = "pac_plan_request.candidate-max.v2.json"
+PAC_ROUTE_ID = "route-asset-one-broker-one-buy"
+PAC_CAPABILITY_ID = "cap-broker-one-eur-whole"
+PAC_FEE_SCHEDULE_ID = "fee-broker-one-eur-buy"
+ALPHA_CAPABILITY_ID = "cap-alpha-eur-whole"
+
+
+def _money(amount: ExactRatio, currency: str) -> ExactMoney:
+    return ExactMoney(amount=amount, currency=currency)
+
+
+def _zero_fee_instance(fee_schedule_id: str, capability_id: str, currency: str, rate: ExactRatio = ExactRatio(0)) -> ExactFeeSchedule:
+    return ExactFeeSchedule(
+        fee_schedule_id=fee_schedule_id,
+        capability_id=capability_id,
+        side="buy",
+        fixed_fee=_money(ExactRatio(0), currency),
+        proportional_rate=rate,
+        minimum_fee=_money(ExactRatio(0), currency),
+        maximum_fee=None,
+    )
+
+
+def _ready_scenario(product: str, payload: JsonObject) -> ExactPlannerScenario:
+    result = _normalize_payload(product, payload)
+    assert result.availability == "ready", tuple((issue.code, _issue_wire_path(issue)) for issue in result.issues)
+    assert result.issues == ()
+    assert result.normalized is not None
+    return result.normalized
+
+
+def _exact_fee_schedules(scenario: ExactPlannerScenario, broker_id: str) -> tuple[ExactFeeSchedule, ...]:
+    return next(row for row in scenario.brokers if row.broker_id == broker_id).fee_schedules
+
+
+def _route_fee_schedule_ids(scenario: ExactPlannerScenario) -> dict[str, str]:
+    return {route.route_id: route.fee_schedule_id for route in scenario.order_routes}
+
+
+def _ready_rebalancer_payload_with_every_route() -> JsonObject:
+    """`_ready_rebalancer_payload()` with route-c-alpha-buy (a USD asset at broker-alpha) restored."""
+    payload = _ready_rebalancer_payload()
+    payload["order_routes"] = _fixture(REBALANCER_FIXTURE)["order_routes"]
+    return payload
+
+
+def _pac_payload_with_uncapped_cash_funding_route() -> JsonObject:
+    payload = _ready_pac_payload()
+    cash = _find_row(payload["existing_cash"], "cash_id", "cash-broker-one-eur")
+    # 8 available, 5 selected: an absent cap must take the *selected* amount.
+    cash["available"]["amount"] = "8.00"
+    payload["funding_routes"] = [
+        {
+            "funding_route_id": "fund-cash-broker-one",
+            "source": {"kind": "existing_cash", "cash_id": "cash-broker-one-eur"},
+            "broker_id": "broker-one",
+            "currency": "EUR",
+            "provenance_id": "prov-manual",
+        }
+    ]
+    return payload
+
+
+def _rebalancer_payload_with_uncapped_contribution_route() -> JsonObject:
+    payload = _ready_rebalancer_payload()
+    del _find_row(payload["funding_routes"], "funding_route_id", "fund-contribution-alpha")["transfer_cap"]
+    return payload
+
+
+ABSENT_TRANSFER_CAP_CASES = (
+    pytest.param(
+        "pac",
+        _pac_payload_with_uncapped_cash_funding_route,
+        {"fund-cash-broker-one": (_money(ExactRatio(5), "EUR"), 0)},
+        id="existing-cash-takes-the-selected-amount",
+    ),
+    pytest.param(
+        "rebalancer",
+        _rebalancer_payload_with_uncapped_contribution_route,
+        {
+            "fund-contribution-alpha": (_money(ExactRatio(50), "EUR"), 1),
+            "fund-contribution-beta": (_money(ExactRatio(40), "EUR"), 2),
+        },
+        id="contribution-takes-its-whole-amount",
+    ),
+)
+
+
+@pytest.mark.parametrize(("product", "build_payload", "expected"), ABSENT_TRANSFER_CAP_CASES)
+def test_absent_transfer_cap_resolves_to_the_whole_selected_source(
+    product: str,
+    build_payload: Callable[[], JsonObject],
+    expected: dict[str, tuple[ExactMoney, int]],
+) -> None:
+    scenario = _ready_scenario(product, build_payload())
+
+    assert {route.route_id: (route.transfer_cap, route.priority) for route in scenario.funding_routes} == expected
+
+
+def test_compact_twin_buy_route_without_schedule_gets_the_implicit_zero_instance() -> None:
+    implicit_id = f"~zero~{PAC_CAPABILITY_ID}~EUR"
+
+    scenario = _ready_scenario("pac", _fixture(COMPACT_PAC_FIXTURE))
+
+    assert _exact_fee_schedules(scenario, "broker-one") == (_zero_fee_instance(implicit_id, PAC_CAPABILITY_ID, "EUR"),)
+    assert _route_fee_schedule_ids(scenario) == {PAC_ROUTE_ID: implicit_id}
+
+
+def test_buy_routes_without_schedule_share_one_implicit_zero_instance_per_capability_and_currency() -> None:
+    payload = _ready_rebalancer_payload()
+    for route_id in ("route-a-alpha-buy", "route-b-alpha-buy"):
+        del _find_row(payload["order_routes"], "route_id", route_id)["fee_schedule_id"]
+    implicit_id = f"~zero~{ALPHA_CAPABILITY_ID}~EUR"
+
+    scenario = _ready_scenario("rebalancer", payload)
+
+    schedules = _exact_fee_schedules(scenario, "broker-alpha")
+    assert tuple((row.capability_id, row.side, row.fee_schedule_id) for row in schedules) == (
+        (ALPHA_CAPABILITY_ID, "buy", "fee-alpha-eur-buy"),
+        (ALPHA_CAPABILITY_ID, "buy", implicit_id),
+        (ALPHA_CAPABILITY_ID, "sell", "fee-alpha-eur-sell"),
+    )
+    assert next(row for row in schedules if row.fee_schedule_id == implicit_id) == _zero_fee_instance(implicit_id, ALPHA_CAPABILITY_ID, "EUR")
+    routes = _route_fee_schedule_ids(scenario)
+    assert (routes["route-a-alpha-buy"], routes["route-b-alpha-buy"]) == (implicit_id, implicit_id)
+    assert (routes["route-d-alpha-buy"], routes["route-a-alpha-sell"]) == ("fee-alpha-eur-buy", "fee-alpha-eur-sell")
+
+
+def test_currency_free_schedule_gets_one_instance_per_quote_currency_that_uses_it() -> None:
+    payload = _ready_rebalancer_payload_with_every_route()
+    alpha = _find_row(payload["brokers"], "broker_id", "broker-alpha")
+    alpha["fee_schedules"] = [
+        _find_row(alpha["fee_schedules"], "fee_schedule_id", "fee-alpha-eur-sell"),
+        # No money field: the schedule takes the quote currency of each route using it.
+        {"fee_schedule_id": "fee-alpha-buy", "capability_id": ALPHA_CAPABILITY_ID, "side": "buy", "rate": "0.002"},
+        # Currency-free and used by no route: no instance at all.
+        {"fee_schedule_id": "fee-alpha-spare-buy", "capability_id": ALPHA_CAPABILITY_ID, "side": "buy", "rate": "0.01"},
+    ]
+    for route in payload["order_routes"]:
+        if route["fee_schedule_id"] == "fee-alpha-eur-buy":
+            route["fee_schedule_id"] = "fee-alpha-buy"
+
+    scenario = _ready_scenario("rebalancer", payload)
+
+    alpha_schedules = _exact_fee_schedules(scenario, "broker-alpha")
+    sell_schedule = next(row for row in alpha_schedules if row.fee_schedule_id == "fee-alpha-eur-sell")
+    assert alpha_schedules == (
+        _zero_fee_instance("fee-alpha-buy~EUR", ALPHA_CAPABILITY_ID, "EUR", ExactRatio(1, 500)),
+        _zero_fee_instance("fee-alpha-buy~USD", ALPHA_CAPABILITY_ID, "USD", ExactRatio(1, 500)),
+        sell_schedule,
+    )
+    # Currency-bearing schedules keep the caller's ID.
+    assert tuple(row.fee_schedule_id for row in _exact_fee_schedules(scenario, "broker-beta")) == (
+        "fee-beta-eur-buy",
+        "fee-beta-eur-sell",
+        "fee-beta-usd-buy",
+        "fee-beta-usd-sell",
+    )
+    assert _route_fee_schedule_ids(scenario) == {
+        "route-a-alpha-buy": "fee-alpha-buy~EUR",
+        "route-a-alpha-sell": "fee-alpha-eur-sell",
+        "route-b-alpha-buy": "fee-alpha-buy~EUR",
+        "route-b-beta-buy": "fee-beta-eur-buy",
+        "route-b-beta-sell": "fee-beta-eur-sell",
+        "route-c-alpha-buy": "fee-alpha-buy~USD",
+        "route-c-beta-buy": "fee-beta-usd-buy",
+        "route-d-alpha-buy": "fee-alpha-buy~EUR",
+        "route-d-beta-buy": "fee-beta-eur-buy",
+    }
+
+
+def _pac_payload_with_fee_schedule(**money_fields: JsonObject | str) -> JsonObject:
+    payload = _ready_pac_payload()
+    broker = _find_row(payload["brokers"], "broker_id", "broker-one")
+    broker["fee_schedules"] = [
+        {
+            "fee_schedule_id": PAC_FEE_SCHEDULE_ID,
+            "capability_id": PAC_CAPABILITY_ID,
+            "side": "buy",
+            **money_fields,
+        }
+    ]
+    return payload
+
+
+def _money_wire(amount: str, currency: str) -> JsonObject:
+    return {"amount": amount, "currency": currency}
+
+
+def _amount_cap_wire(amount: str, currency: str) -> JsonObject:
+    return {"kind": "amount", "amount": _money_wire(amount, currency)}
+
+
+PRESENT_MONEY_FIELD_CASES = (
+    pytest.param(
+        {"fixed_fee": _money_wire("1.50", "EUR")},
+        (ExactRatio(3, 2), ExactRatio(0), ExactRatio(0), None),
+        id="fixed-fee-only",
+    ),
+    pytest.param(
+        {"variable_floor": _money_wire("0.50", "EUR"), "rate": "0.01"},
+        (ExactRatio(0), ExactRatio(1, 100), ExactRatio(1, 2), None),
+        id="variable-floor-only",
+    ),
+    pytest.param(
+        # The absent floor counts as zero, so it cannot exceed the cap.
+        {"variable_cap": _amount_cap_wire("2", "EUR"), "rate": "0.01"},
+        (ExactRatio(0), ExactRatio(1, 100), ExactRatio(0), ExactRatio(2)),
+        id="variable-cap-only",
+    ),
+)
+
+
+@pytest.mark.parametrize(("money_fields", "expected"), PRESENT_MONEY_FIELD_CASES)
+def test_schedule_currency_is_the_one_of_its_present_money_fields_and_absent_money_is_zero(
+    money_fields: JsonObject,
+    expected: tuple[ExactRatio, ExactRatio, ExactRatio, ExactRatio | None],
+) -> None:
+    fixed_fee, rate, minimum_fee, maximum_fee = expected
+
+    scenario = _ready_scenario("pac", _pac_payload_with_fee_schedule(**money_fields))
+
+    assert _exact_fee_schedules(scenario, "broker-one") == (
+        ExactFeeSchedule(
+            fee_schedule_id=PAC_FEE_SCHEDULE_ID,
+            capability_id=PAC_CAPABILITY_ID,
+            side="buy",
+            fixed_fee=_money(fixed_fee, "EUR"),
+            proportional_rate=rate,
+            minimum_fee=_money(minimum_fee, "EUR"),
+            maximum_fee=None if maximum_fee is None else _money(maximum_fee, "EUR"),
+        ),
+    )
+    assert _route_fee_schedule_ids(scenario) == {PAC_ROUTE_ID: PAC_FEE_SCHEDULE_ID}
+
+
+SCHEDULE_CURRENCY_MISMATCH_CASES = (
+    pytest.param(
+        {"fixed_fee": _money_wire("1", "EUR"), "variable_floor": _money_wire("0.50", "USD")},
+        _field_wire_path("brokers", "broker", "broker-one", "fee_schedules"),
+        id="fixed-eur-floor-usd",
+    ),
+    pytest.param(
+        {"fixed_fee": _money_wire("1", "EUR"), "variable_cap": _amount_cap_wire("2", "USD")},
+        _field_wire_path("brokers", "broker", "broker-one", "fee_schedules"),
+        id="fixed-eur-cap-usd",
+    ),
+    pytest.param(
+        # A currency-bearing schedule still has to match the route's quote currency.
+        {"variable_floor": _money_wire("0.50", "USD")},
+        _field_wire_path("routing", "order_route", PAC_ROUTE_ID, "fee_schedule_id"),
+        id="usd-schedule-on-an-eur-route",
+    ),
+)
+
+
+@pytest.mark.parametrize(("money_fields", "expected_path"), SCHEDULE_CURRENCY_MISMATCH_CASES)
+def test_schedule_money_in_two_currencies_or_off_the_route_currency_is_a_currency_mismatch(
+    money_fields: JsonObject,
+    expected_path: JsonObject,
+) -> None:
+    payload = _pac_payload_with_fee_schedule(**money_fields)
+    # The USD fee money needs FX coverage, otherwise `allocation.fx_rate_missing` (missing) would outrank the mismatch (invalid).
+    payload["fx_rates"] = {**payload.get("fx_rates", {}), "EUR/USD": "1.10"}
+
+    result = _normalize_payload("pac", payload)
+
+    assert result.availability == "invalid"
+    assert result.normalized is None
+    blocking = tuple((issue.code, _issue_wire_path(issue)) for issue in result.issues if issue.severity == "error")
+    assert blocking == (("allocation.currency_mismatch", expected_path),)
+
+
+@pytest.mark.parametrize(
+    "keep_schedules",
+    (
+        pytest.param(True, id="other-schedules-present"),
+        pytest.param(False, id="broker-without-schedules"),
+    ),
+)
+def test_dangling_buy_fee_schedule_id_still_reports_fee_schedule_missing(keep_schedules: bool) -> None:
+    payload = _ready_pac_payload()
+    if not keep_schedules:
+        del _find_row(payload["brokers"], "broker_id", "broker-one")["fee_schedules"]
+    _find_row(payload["order_routes"], "route_id", PAC_ROUTE_ID)["fee_schedule_id"] = "fee-nowhere"
+
+    result = _normalize_payload("pac", payload)
+
+    issue = _single_issue(result, "allocation.fee_schedule_missing")
+    assert tuple(row.code for row in result.issues) == ("allocation.fee_schedule_missing",)
+    assert result.availability == "needs_input"
+    assert result.normalized is None
+    assert _issue_wire_path(issue) == _field_wire_path("routing", "order_route", PAC_ROUTE_ID, "fee_schedule_id")
+
+
+def test_missing_quote_reports_price_and_basis_but_no_quote_date() -> None:
+    payload = _ready_pac_payload()
+    _find_row(payload["assets"], "asset_id", "asset-one")["quote"] = None
+
+    result = _normalize_payload("pac", payload)
+
+    assert result.availability == "needs_input"
+    assert result.normalized is None
+    assert tuple((issue.code, _issue_wire_path(issue)) for issue in result.issues) == (
+        ("allocation.price_missing", _field_wire_path("assets", "asset", "asset-one", "quote.amount")),
+        ("allocation.quote_base_quantity_missing", _field_wire_path("assets", "asset", "asset-one", "quote.quote_base_quantity")),
+    )
+
+
+EXPLICIT_NORMALIZATION_CASES = (
+    pytest.param("pac", _ready_pac_payload, id="pac-min"),
+    pytest.param("pac", lambda: _fixture(CANDIDATE_MAX_PAC_FIXTURE), id="pac-candidate-max"),
+    pytest.param("rebalancer", _ready_rebalancer_payload, id="rebalancer-medium-ready"),
+)
+
+
+@pytest.mark.parametrize(("product", "build_payload"), EXPLICIT_NORMALIZATION_CASES)
+def test_defaults_omitted_dump_normalizes_exactly_like_the_explicit_request(
+    product: str,
+    build_payload: Callable[[], JsonObject],
+) -> None:
+    explicit = build_payload()
+    adapter = PAC_PLAN_INPUT_ADAPTER if product == "pac" else REBALANCER_PLAN_INPUT_ADAPTER
+    validated = adapter.validate_json(_wire(explicit), strict=True)
+    compact = validated.model_dump(mode="json", exclude_defaults=True)
+    assert compact != validated.model_dump(mode="json")
+
+    assert _normalize_payload(product, compact) == _normalize_payload(product, explicit)

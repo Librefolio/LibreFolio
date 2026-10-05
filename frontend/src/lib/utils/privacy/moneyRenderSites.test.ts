@@ -207,6 +207,12 @@ const REGISTRY: Site[] = [
         status: 'not-money',
         why: 'A cash delta rendered with no currency marker, used to rank candidate matches. Judgement site in the class of MeasurePanel: catching it would mean chasing toFixed over arbitrary numbers, and a gate that fires on arbitrary numbers is a gate someone switches off.',
     },
+    {
+        file: 'lib/features/tools/pac-allocator/planner/format.ts',
+        snippet: "return new Intl.NumberFormat('en', {style: 'currency', currency: currencyCode}).resolvedOptions().maximumFractionDigits ?? 2;",
+        status: 'not-money',
+        why: 'cldrCurrencyDigits: reads resolvedOptions().maximumFractionDigits for the arrow step of PAC planner money inputs and renders nothing — the same form-A false positive as snapshotDataRenderer. Every planner amount leaves through formatCurrencyAmountPlain/Html in the same file.',
+    },
 ];
 
 const key = (s: {file: string; snippet: string}): string => `${s.file}\u0000${s.snippet}`;

@@ -29,129 +29,14 @@ def _calendar_date(value: str) -> str:
     return value
 
 
-
-
 class AllocationStrictModel(StrictModel):
-    model_config = ConfigDict(strict=True, frozen=True, revalidate_instances="always")
+    # Input defaults let a caller omit neutral values; the serialization schema still lists
+    # every field as required, because results are dumped in full.
+    model_config = ConfigDict(strict=True, frozen=True, revalidate_instances="always", json_schema_serialization_defaults_required=True)
 
 
 CurrencyCode = Annotated[str, StringConstraints(strict=True, min_length=3, max_length=3, pattern=r"^[A-Z]{3}$"), AfterValidator(Currency.validate_code)]
 ReferenceDate = Annotated[str, StringConstraints(strict=True, min_length=10, max_length=10, pattern=_ISO_DATE), AfterValidator(_calendar_date)]
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 # =============================================================================
@@ -254,15 +139,14 @@ PlannerIssueCode = Literal[
     "allocation.classification_invalid",
     "allocation.classification_sector_missing",
     "allocation.coefficient_envelope_unsupported",
-    "allocation.currency_minor_unit_nonpositive",
     "allocation.currency_mismatch",
-    "allocation.currency_spec_missing",
     "allocation.deployment_omitted",
     "allocation.duplicate_id",
     "allocation.dynamic_fee_unsupported",
     "allocation.economic_share_out_of_range",
     "allocation.execution_margin_missing",
     "allocation.execution_margin_rate_out_of_range",
+    "allocation.exposure_total_exceeds_one",
     "allocation.exposure_weight_out_of_range",
     "allocation.fee_floor_exceeds_cap",
     "allocation.fee_rate_out_of_range",
@@ -289,7 +173,6 @@ PlannerIssueCode = Literal[
     "allocation.order_minimum_exceeds_cap",
     "allocation.order_minimum_negative",
     "allocation.planning_quantity_negative",
-    "allocation.price_date_missing",
     "allocation.price_missing",
     "allocation.price_order_invalid",
     "allocation.provenance_not_found",
@@ -301,8 +184,6 @@ PlannerIssueCode = Literal[
     "allocation.route_priority_negative",
     "allocation.saved_fx_invalid",
     "allocation.solver_limit_no_incumbent",
-    "allocation.stale_age_negative",
-    "allocation.stale_observation_not_accepted",
     "allocation.target_total_not_one",
     "allocation.target_weight_missing",
     "allocation.target_weight_out_of_range",
@@ -336,7 +217,6 @@ NotProvenReasonCode = Literal[
     "allocation.exact_proof_not_established",
     "portfolio_rebalancer.sell_irreducibility_unresolved",
 ]
-SolverNotRunReasonCode = Literal["allocation.solver_not_required"]
 PlannerMessageKey = Annotated[str, StringConstraints(strict=True, min_length=3, max_length=160, pattern=_PLANNER_MESSAGE_KEY)]
 PlannerLabel = Annotated[str, StringConstraints(strict=True, min_length=1, max_length=128), AfterValidator(_unicode_scalar_text)]
 PlannerLongLabel = Annotated[str, StringConstraints(strict=True, min_length=1, max_length=256), AfterValidator(_unicode_scalar_text)]
@@ -383,6 +263,7 @@ PlannerPositiveInteger = Annotated[int, Field(strict=True, gt=0, le=_JS_SAFE_INT
 PlannerWireInteger = Annotated[int, Field(strict=True, ge=-_JS_SAFE_INTEGER, le=_JS_SAFE_INTEGER)]
 QuantityUnit = Literal["asset_unit"]
 OrderSide = Literal["buy", "sell"]
+PlannerConversionMode = Literal["manual", "automatic"]
 
 
 class PlannerSnapshotInput(AllocationStrictModel):
@@ -392,7 +273,7 @@ class PlannerSnapshotInput(AllocationStrictModel):
 
 
 class CurrencySpec(AllocationStrictModel):
-    """Backend-derived currency quantum; never silently defaulted by the worker."""
+    """Published ISO 4217 minor unit, derived by the normalizer from CLDR (babel); never a request input."""
 
     currency: CurrencyCode
     minor_unit: PlannerFixedDecimal
@@ -410,28 +291,12 @@ class DomainCopyProvenance(AllocationStrictModel):
     provenance_id: PlannerId
     domain: Literal["portfolio", "market_data", "broker", "fx", "wac"]
     source_ref: PlannerRef
-    source_label: PlannerLabel | None
+    source_label: PlannerLabel | None = None
     captured_at: PlannerTimestamp
 
 
 type PlannerProvenance = Annotated[
     Union[ManualProvenance, DomainCopyProvenance],
-    Field(discriminator="kind"),
-]
-
-
-class FreshObservation(AllocationStrictModel):
-    kind: Literal["fresh"]
-
-
-class AcceptedStaleObservation(AllocationStrictModel):
-    kind: Literal["stale"]
-    age_days: PlannerWireInteger
-    accepted: bool
-
-
-type ObservationFreshness = Annotated[
-    Union[FreshObservation, AcceptedStaleObservation],
     Field(discriminator="kind"),
 ]
 
@@ -455,7 +320,7 @@ class ManualAssetIdentity(AllocationStrictModel):
     kind: Literal["manual_asset"]
     name: PlannerLabel
     ticker: PlannerLabel | None
-    asset_class: PlannerCode
+    asset_class: PlannerCode | None = None
 
 
 class DomainAssetIdentity(AllocationStrictModel):
@@ -463,7 +328,7 @@ class DomainAssetIdentity(AllocationStrictModel):
     source_asset_id: PlannerRef
     name: PlannerLabel
     ticker: PlannerLabel | None
-    asset_class: PlannerCode
+    asset_class: PlannerCode | None = None
 
 
 type PlannerAssetIdentity = Annotated[
@@ -476,8 +341,6 @@ class PlannerAssetQuoteInput(AllocationStrictModel):
     amount: PlannerFixedDecimal
     currency: CurrencyCode
     quote_base_quantity: PlannerFixedDecimal
-    reference_date: ReferenceDate
-    freshness: ObservationFreshness
     provenance_id: PlannerId
 
 
@@ -493,7 +356,7 @@ class PlannerAssetInput(AllocationStrictModel):
     asset_id: PlannerId
     identity: PlannerAssetIdentity = Field(description="Nested identity assembled from the authorized flat source Asset row.")
     quote: PlannerAssetQuoteInput | None = Field(description="One complete nested Price fact or explicit absence; never a partial object built from null source fields.")
-    exposures: list[PlannerExposureInput] = Field(description="Complete nested Classification facts assembled by the backend; the frontend performs no financial reconstruction.")
+    exposures: list[PlannerExposureInput] = Field(default=[], description="Complete nested Classification facts assembled by the backend; the frontend performs no financial reconstruction.")
 
 
 class ManualBrokerIdentity(AllocationStrictModel):
@@ -548,21 +411,24 @@ type FeeCap = Annotated[Union[NoFeeCap, AmountFeeCap], Field(discriminator="kind
 
 
 class BrokerFeeScheduleInput(AllocationStrictModel):
+    """An absent money field is zero. A schedule with no money field takes the quote currency of each route using it."""
+
     fee_schedule_id: PlannerId
     capability_id: PlannerId
     side: OrderSide
-    fixed_fee: PlannerMoneyInput
-    rate: PlannerFixedDecimal
-    variable_floor: PlannerMoneyInput
-    variable_cap: FeeCap
+    fixed_fee: PlannerMoneyInput | None = None
+    rate: PlannerFixedDecimal = "0"
+    variable_floor: PlannerMoneyInput | None = None
+    variable_cap: FeeCap = NoFeeCap(kind="none")
 
 
 class PlannerBrokerInput(AllocationStrictModel):
     broker_id: PlannerId
     identity: PlannerBrokerIdentity
     provenance_id: PlannerId
-    capabilities: list[BrokerOrderCapability]
-    fee_schedules: list[BrokerFeeScheduleInput]
+    capabilities: list[BrokerOrderCapability] = []
+    fee_schedules: list[BrokerFeeScheduleInput] = []
+    conversion_mode: PlannerConversionMode = Field(description="How the plan presents this Broker's currency conversions: 'manual' as numbered steps the user performs before buying, 'automatic' as conversions the Broker performs when the orders execute. It changes no figure of the plan.")
 
 
 class PlannerHoldingInput(AllocationStrictModel):
@@ -577,7 +443,6 @@ class PlannerHoldingInput(AllocationStrictModel):
 
 
 class PlannerExistingCashInput(AllocationStrictModel):
-    source_kind: Literal["local_broker_cash", "manual_cash"]
     cash_id: PlannerId
     broker_id: PlannerId
     available: PlannerMoneyInput
@@ -613,8 +478,8 @@ class PlannerFundingRouteInput(AllocationStrictModel):
     source: PlannerFundingSourceRef
     broker_id: PlannerId
     currency: CurrencyCode
-    priority: PlannerWireInteger
-    transfer_cap: PlannerMoneyInput
+    priority: PlannerWireInteger = 0
+    transfer_cap: PlannerMoneyInput | None = Field(default=None, description="Absent means the whole selected amount of the source.")
     provenance_id: PlannerId
 
 
@@ -650,8 +515,14 @@ class NotionalOrderCap(AllocationStrictModel):
     amount: PlannerMoneyInput
 
 
+class NoOrderCap(AllocationStrictModel):
+    """No cap of its own: a buy is still bounded by the resources, a sell by the holding."""
+
+    kind: Literal["none"]
+
+
 type OrderCap = Annotated[
-    Union[QuantityOrderCap, NotionalOrderCap],
+    Union[QuantityOrderCap, NotionalOrderCap, NoOrderCap],
     Field(discriminator="kind"),
 ]
 
@@ -662,17 +533,18 @@ class PlannerOrderRouteInput(AllocationStrictModel):
     broker_id: PlannerId
     capability_id: PlannerId
     side: OrderSide
-    priority: PlannerWireInteger
-    minimum_if_active: OrderMinimum
-    required_minimum: OrderMinimum
-    cap: OrderCap
-    execution_margin_rate: PlannerFixedDecimal
+    priority: PlannerWireInteger = 0
+    minimum_if_active: OrderMinimum = NoOrderMinimum(kind="none")
+    required_minimum: OrderMinimum = NoOrderMinimum(kind="none")
+    cap: OrderCap = NoOrderCap(kind="none")
+    execution_margin_rate: PlannerFixedDecimal = "0"
     fee_schedule_id: PlannerId
     provenance_id: PlannerId
 
 
 class PlannerBuyOrderRouteInput(PlannerOrderRouteInput):
     side: Literal["buy"]
+    fee_schedule_id: PlannerId | None = Field(default=None, description="Absent means a BUY without fees.")
 
 
 class PlannerSellOrderRouteInput(PlannerOrderRouteInput):
@@ -719,9 +591,9 @@ class PlannerBrokerWithholdingInput(AllocationStrictModel):
 class PlannerSellContextInput(AllocationStrictModel):
     """Complete explicit SELL facts; missing fiscal, tax, or withholding facts block assembly."""
 
-    cost_bases: list[PlannerCostBasisInput]
-    asset_taxes: list[PlannerAssetTaxInput]
-    broker_withholding: list[PlannerBrokerWithholdingInput]
+    cost_bases: list[PlannerCostBasisInput] = []
+    asset_taxes: list[PlannerAssetTaxInput] = []
+    broker_withholding: list[PlannerBrokerWithholdingInput] = []
 
 
 class _PlannerRequestBase(AllocationStrictModel):
@@ -729,15 +601,17 @@ class _PlannerRequestBase(AllocationStrictModel):
     snapshot: PlannerSnapshotInput
     as_of: ReferenceDate
     valuation_currency: CurrencyCode
-    currency_specs: list[CurrencySpec]
     provenance: list[PlannerProvenance] = Field(description="Root provenance records referenced by every copied or manually supplied fact.")
-    fx_rates: dict[str, PlannerFixedDecimal] = Field(description="Canonical global FX facts; key is an alphabetically sorted uppercase currency pair naming one unit of the first currency, value is units of the second currency per one unit of the first. May be empty.")
-    fx_spread_rate: PlannerFixedDecimal = Field(description="Single global adverse spread applied exactly once to every actual currency conversion; valuation always uses the official rate.")
+    fx_rates: dict[str, PlannerFixedDecimal] = Field(
+        default={},
+        description="Canonical global FX facts; key is an alphabetically sorted uppercase currency pair naming one unit of the first currency, value is units of the second currency per one unit of the first. May be empty.",
+    )
+    fx_spread_rate: PlannerFixedDecimal = Field(default="0", description="Single global adverse spread applied exactly once to every actual currency conversion; valuation always uses the official rate.")
     assets: list[PlannerAssetInput]
     brokers: list[PlannerBrokerInput]
-    existing_cash: list[PlannerExistingCashInput]
-    contributions: list[PlannerContributionInput]
-    funding_routes: list[PlannerFundingRouteInput]
+    existing_cash: list[PlannerExistingCashInput] = []
+    contributions: list[PlannerContributionInput] = []
+    funding_routes: list[PlannerFundingRouteInput] = []
     target_weights: list[PlannerTargetWeightInput]
 
     @model_validator(mode="after")
@@ -746,20 +620,26 @@ class _PlannerRequestBase(AllocationStrictModel):
         # pattern-keyed dict, so the tool-schema codegen allow-list never sees a
         # `patternProperties` keyword; this validator reapplies the same pair
         # format/ordering constraint (regex + `_planner_canonical_fx_pair`) at runtime.
+        # Both codes are ISO-validated like every `CurrencyCode`: the normalizer
+        # derives a minor unit for each referenced currency.
         for pair in self.fx_rates:
             if not re.fullmatch(_PLANNER_FX_PAIR, pair):
                 raise ValueError(f"FX rate key {pair!r} must be an uppercase 'AAA/BBB' currency pair")
             _planner_canonical_fx_pair(pair)
+            for code in pair.split("/"):
+                Currency.validate_code(code)
         return self
 
 
 class PacPlannerRequest(_PlannerRequestBase):
     order_routes: list[PacOrderRouteInput]
-    policy: Literal["proportional", "min_fragmentation"]
+    # `min_fragmentation` is deferred (TODO_FUTURI): the exact model keeps the
+    # branch, the wire does not accept it.
+    policy: Literal["proportional"]
 
 
 class _RebalancerPlannerRequestBase(_PlannerRequestBase):
-    holdings: list[PlannerHoldingInput]
+    holdings: list[PlannerHoldingInput] = []
     order_routes: list[RebalancerOrderRouteInput]
 
 
@@ -1098,13 +978,20 @@ class SolverToleranceEvidence(AllocationStrictModel):
 
 
 class SolverStageEvidence(AllocationStrictModel):
-    """Non-authoritative floating solver report; never an exact objective value."""
+    """Non-authoritative floating solver report; never an exact objective value.
+
+    ``infeasible`` is SCIP's own verdict on the first, still-global stage, and
+    it carries no observation: an infeasible solve has no primal, no dual and
+    no gap. No later stage can carry it — a face emptied by earlier pins is an
+    anomaly of the pins, not a statement about the scenario — so such a stage
+    is reported ``unfinished``.
+    """
 
     kind: Literal["reported_floating"]
     stage: PlannerId
     objective_code: ObjectiveCode
     ordinal: PlannerPositiveInteger
-    status: Literal["finished", "unfinished"]
+    status: Literal["finished", "unfinished", "infeasible"]
     scope: Literal["global", "incumbent_face"]
     sense: ObjectiveSense
     unit: NumericObjectiveUnit
@@ -1124,6 +1011,11 @@ class SolverStageEvidence(AllocationStrictModel):
         observations = (self.primal, self.dual, self.absolute_gap, self.relative_gap)
         if self.status == "finished" and any(value is None for value in observations):
             raise ValueError("Finished solver stage evidence requires finite primal, dual, and gaps")
+        if self.status == "infeasible":
+            if self.ordinal != 1 or self.scope != "global":
+                raise ValueError("Only the first, global solver stage can report infeasibility")
+            if any(value is not None for value in observations):
+                raise ValueError("An infeasible solver stage has no primal, dual, or gap")
         if self.primal is not None and self.dual is not None:
             primal = _fixed_fraction(self.primal)
             dual = _fixed_fraction(self.dual)
@@ -1134,12 +1026,9 @@ class SolverStageEvidence(AllocationStrictModel):
         return self
 
 
-class SolverNotRunEvidence(AllocationStrictModel):
-    kind: Literal["not_run"]
-    reason: SolverNotRunReasonCode
-
-
 class ReportedFloatingSolverEvidence(AllocationStrictModel):
+    """What SCIP did, stage by stage; every ready result carries it (D-X1)."""
+
     kind: Literal["reported_floating"]
     stages: Annotated[list[SolverStageEvidence], Field(min_length=1)]
 
@@ -1150,124 +1039,40 @@ class ReportedFloatingSolverEvidence(AllocationStrictModel):
         if ordinals != sorted(ordinals) or len(ordinals) != len(set(ordinals)) or len(codes) != len(set(codes)):
             raise ValueError("Solver stages must have unique codes and ascending ordinals")
         statuses = [stage.status for stage in self.stages]
+        if "infeasible" in statuses:
+            # Nothing runs after an infeasible first stage, so nothing is reported after it.
+            if len(statuses) != 1:
+                raise ValueError("An infeasible solver stage must be the only reported stage")
+            return self
         if statuses != sorted(statuses, key={"finished": 0, "unfinished": 1}.__getitem__):
             raise ValueError("Finished solver stages must precede unfinished stages")
         return self
 
 
-type PlannerSolverEvidence = Annotated[
-    Union[SolverNotRunEvidence, ReportedFloatingSolverEvidence],
-    Field(discriminator="kind"),
-]
+class SolverStatusWitness(AllocationStrictModel):
+    """SCIP's own status, which is the proof (D-X1).
 
+    Names the objective stages the solver closed — at the optimum for
+    ``optimal_proven``, as infeasible for ``infeasibility_proven``. Engine,
+    version, tolerances and gaps already live on the solver evidence, which
+    the ready result binds to this witness stage by stage.
+    """
 
-class ExhaustiveOracleWitness(AllocationStrictModel):
-    kind: Literal["exhaustive_oracle"]
-    enumerated_candidates: PlannerPositiveInteger
-    feasible_candidates: PlannerSafeInteger
-    objective_codes: list[ObjectiveCode]
-
-    @model_validator(mode="after")
-    def validate_candidate_counts(self) -> ExhaustiveOracleWitness:
-        if self.feasible_candidates > self.enumerated_candidates:
-            raise ValueError("Feasible oracle candidates cannot exceed enumerated candidates")
-        if len(self.objective_codes) != len(set(self.objective_codes)):
-            raise ValueError("Oracle objective codes must be unique")
-        return self
-
-
-class ScoreLatticeClosureWitness(AllocationStrictModel):
-    kind: Literal["score_lattice_closure"]
+    kind: Literal["solver_status"]
     objective_codes: Annotated[list[ObjectiveCode], Field(min_length=1)]
-    closed_stage_count: PlannerPositiveInteger
 
     @model_validator(mode="after")
-    def validate_closed_stages(self) -> ScoreLatticeClosureWitness:
+    def validate_objective_codes(self) -> SolverStatusWitness:
         if len(self.objective_codes) != len(set(self.objective_codes)):
-            raise ValueError("Closed objective codes must be unique")
-        if self.closed_stage_count != len(self.objective_codes):
-            raise ValueError("Closed stage count must equal the objective-code count")
+            raise ValueError("Solver-status witness objective codes must be unique")
         return self
-
-
-class DeterministicConflictWitness(AllocationStrictModel):
-    kind: Literal["deterministic_conflict"]
-    issue_codes: Annotated[list[PlannerIssueCode], Field(min_length=1)]
-    summary_code: PlannerIssueCode
-
-    @model_validator(mode="after")
-    def validate_issue_codes(self) -> DeterministicConflictWitness:
-        if len(self.issue_codes) != len(set(self.issue_codes)):
-            raise ValueError("Conflict issue codes must be unique")
-        if self.summary_code not in self.issue_codes:
-            raise ValueError("Conflict summary code must reference one listed issue")
-        return self
-
-
-type OptimalityWitness = Annotated[
-    Union[ExhaustiveOracleWitness, ScoreLatticeClosureWitness],
-    Field(discriminator="kind"),
-]
-type InfeasibilityWitness = Annotated[
-    Union[ExhaustiveOracleWitness, DeterministicConflictWitness],
-    Field(discriminator="kind"),
-]
 
 
 class OptimalProvenProof(AllocationStrictModel):
     kind: Literal["optimal_proven"]
-    proof_source: Literal["exhaustive_oracle", "score_lattice_closure"]
-    witness: OptimalityWitness
+    proof_source: Literal["solver_status"]
+    witness: SolverStatusWitness
     tie_break_closed: Literal[True]
-
-    @model_validator(mode="after")
-    def validate_source_matches_witness(self) -> OptimalProvenProof:
-        if self.proof_source != self.witness.kind:
-            raise ValueError("Proof source must match optimality witness kind")
-        if isinstance(self.witness, ExhaustiveOracleWitness):
-            if self.witness.feasible_candidates == 0:
-                raise ValueError("Optimal oracle proof must include a feasible candidate")
-            if not self.witness.objective_codes:
-                raise ValueError("Optimal oracle proof must cover an objective")
-        return self
-
-
-class BoundedObjectiveStage(AllocationStrictModel):
-    stage: PlannerId
-    objective_code: ObjectiveCode
-    ordinal: PlannerPositiveInteger
-    scope: Literal["global", "incumbent_face"]
-    sense: ObjectiveSense
-    unit: NumericObjectiveUnit
-    primal: PlannerFixedDecimal
-    dual: PlannerFixedDecimal
-    absolute_gap: PlannerNonNegativeDecimal
-    relative_gap: PlannerNonNegativeDecimal
-
-    @model_validator(mode="after")
-    def validate_objective_unit(self) -> BoundedObjectiveStage:
-        if self.unit.kind != _objective_unit_kind(self.objective_code):
-            raise ValueError("Bounded objective unit does not match objective code")
-        primal = _fixed_fraction(self.primal)
-        dual = _fixed_fraction(self.dual)
-        if (self.sense == "min" and dual > primal) or (self.sense == "max" and primal > dual):
-            raise ValueError("Bound ordering must match the objective sense")
-        if _fixed_fraction(self.absolute_gap) < abs(primal - dual):
-            raise ValueError("Absolute gap must bound the primal-dual difference")
-        return self
-
-
-class GapBoundedProof(AllocationStrictModel):
-    kind: Literal["gap_bounded"]
-    stage_bounds: Annotated[list[BoundedObjectiveStage], Field(min_length=1)]
-
-    @model_validator(mode="after")
-    def validate_stage_order(self) -> GapBoundedProof:
-        ordinals = [stage.ordinal for stage in self.stage_bounds]
-        codes = [stage.objective_code for stage in self.stage_bounds]
-        if ordinals != sorted(ordinals) or len(ordinals) != len(set(ordinals)) or len(codes) != len(set(codes)):
-            raise ValueError("Gap bounds must have unique objective codes and ascending ordinals")
-        return self
 
 
 class NotProvenProof(AllocationStrictModel):
@@ -1277,20 +1082,18 @@ class NotProvenProof(AllocationStrictModel):
 
 class InfeasibilityProvenProof(AllocationStrictModel):
     kind: Literal["infeasibility_proven"]
-    proof_source: Literal["exhaustive_oracle", "deterministic_conflict"]
-    witness: InfeasibilityWitness
+    proof_source: Literal["solver_status"]
+    witness: SolverStatusWitness
 
     @model_validator(mode="after")
-    def validate_source_matches_witness(self) -> InfeasibilityProvenProof:
-        if self.proof_source != self.witness.kind:
-            raise ValueError("Proof source must match infeasibility witness kind")
-        if isinstance(self.witness, ExhaustiveOracleWitness) and self.witness.feasible_candidates != 0:
-            raise ValueError("Infeasibility oracle proof cannot contain a feasible candidate")
+    def validate_first_stage_only(self) -> InfeasibilityProvenProof:
+        if len(self.witness.objective_codes) != 1:
+            raise ValueError("An infeasibility proof names exactly the first objective stage")
         return self
 
 
 type ReadyPlanProof = Annotated[
-    Union[OptimalProvenProof, GapBoundedProof, NotProvenProof],
+    Union[OptimalProvenProof, NotProvenProof],
     Field(discriminator="kind"),
 ]
 
@@ -1299,7 +1102,7 @@ class PlannerCatalogAsset(AllocationStrictModel):
     asset_id: PlannerId
     name: PlannerLabel
     ticker: PlannerLabel | None
-    asset_class: PlannerCode
+    asset_class: PlannerCode | None
 
 
 class PlannerCatalogBroker(AllocationStrictModel):
@@ -1339,7 +1142,7 @@ class PlannerScenarioCounts(AllocationStrictModel):
 class PlannerScenarioBasis(AllocationStrictModel):
     as_of: ReferenceDate
     valuation_currency: CurrencyCode
-    policy: Literal["proportional", "min_fragmentation", "invest_only", "invest_and_sell"]
+    policy: Literal["proportional", "invest_only", "invest_and_sell"]
     counts: PlannerScenarioCounts
     current_invested: ExactMoney
     selected_funding: ExactMoney
@@ -1384,8 +1187,8 @@ class PlannerFundingAction(AllocationStrictModel):
 
 class PlannerFxAction(AllocationStrictModel):
     action_id: PlannerId
-    sequence: PlannerPositiveInteger
-    order_route_id: PlannerId
+    conversion_id: PlannerId = Field(description="The Broker x currency-pair conversion this engine decision belongs to; the conversion, not the action, is what gets executed.")
+    order_route_id: PlannerId = Field(description="Key of the engine decision. The credit is pooled in the Broker's cash in the destination currency and funds every order of that Broker in that currency, so this is not the order the conversion pays for.")
     broker_id: PlannerId
     source_debit: PlannerPositiveMoneyInput
     destination_credit: PlannerPositiveMoneyInput
@@ -1410,6 +1213,42 @@ class PlannerFxAction(AllocationStrictModel):
             raise ValueError("Effective FX rate cannot exceed the approved spot rate")
         if _exact_fraction(self.spread_loss.value) < 0:
             raise ValueError("FX spread loss cannot be negative")
+        return self
+
+
+class PlannerConversion(AllocationStrictModel):
+    """One currency conversion per Broker and currency pair, aggregated from the engine's FX actions.
+
+    The engine decides FX per order route, but the credit lands in a cash pool that every
+    order of that Broker in that currency shares, so only the pair total is a fact of the
+    plan. ``source_debit`` and ``spread_loss`` sum the exact action figures;
+    ``destination_credit`` sums the posted credits the ledger reconciles against.
+    """
+
+    conversion_id: PlannerId
+    mode: PlannerConversionMode
+    sequence: PlannerPositiveInteger | None = Field(description="Execution step of a manual conversion; null when the Broker converts automatically at order time.")
+    broker_id: PlannerId
+    source_debit: PlannerPositiveMoneyInput
+    destination_credit: PlannerPositiveMoneyInput
+    spot_rate: ExactFxRate
+    effective_rate: ExactFxRate
+    spread_loss: ExactMoney
+    fx_action_ids: Annotated[list[PlannerId], Field(min_length=1)]
+    provenance_ids: Annotated[list[PlannerId], Field(min_length=1)]
+
+    @model_validator(mode="after")
+    def validate_conversion(self) -> PlannerConversion:
+        if (self.sequence is None) != (self.mode == "automatic"):
+            raise ValueError("A conversion has an execution sequence exactly when it is manual")
+        for rate in (self.spot_rate, self.effective_rate):
+            if (rate.source_currency, rate.destination_currency) != (self.source_debit.currency, self.destination_credit.currency):
+                raise ValueError("Conversion rates must follow the source-to-destination direction")
+        if _exact_fraction(self.effective_rate.value) > _exact_fraction(self.spot_rate.value):
+            raise ValueError("Effective conversion rate cannot exceed the approved spot rate")
+        if _exact_fraction(self.spread_loss.value) < 0:
+            raise ValueError("Conversion spread loss cannot be negative")
+        _require_unique(self.fx_action_ids, "Conversion FX action IDs")
         return self
 
 
@@ -1478,7 +1317,7 @@ class PlannerBuyOrderRow(AllocationStrictModel):
     execution_margin_cost: ExactMoney
     cash_debit: PlannerPositiveMoneyInput
     fee: PlannerNonNegativeMoneyInput
-    fx_cost: ExactMoney
+    fx_cost: ExactMoney = Field(description="Always zero: a conversion funds a shared Broker x currency cash pool, so its spread is published on the conversion, not attributed to one order.")
     buffer: PlannerNonNegativeMoneyInput
     explanation_keys: list[PlannerMessageKey]
     provenance_ids: Annotated[list[PlannerId], Field(min_length=1)]
@@ -1501,8 +1340,8 @@ class PlannerBuyOrderRow(AllocationStrictModel):
             raise ValueError("BUY mid value must be positive")
         if _exact_fraction(self.execution_margin_cost.value) < 0:
             raise ValueError("BUY execution-margin cost cannot be negative")
-        if _exact_fraction(self.fx_cost.value) < 0:
-            raise ValueError("BUY FX cost cannot be negative")
+        if _exact_fraction(self.fx_cost.value) != 0:
+            raise ValueError("BUY FX cost must be zero: conversion spreads are published on the conversion")
         return self
 
 
@@ -1600,6 +1439,9 @@ class PlannerLedgerRow(AllocationStrictModel):
 
     @model_validator(mode="after")
     def validate_ledger_identity(self) -> PlannerLedgerRow:
+        # The final balances may be negative: a PAC pool a few minor units short
+        # to HALF_UP rounding is published with the top-up that covers it
+        # (``PacPlanSolution``); ``RebalancerPlanSolution`` still refuses them.
         nonnegative_fields = (
             "initial_selected",
             "funding_in",
@@ -1612,8 +1454,6 @@ class PlannerLedgerRow(AllocationStrictModel):
             "sell_fees",
             "broker_withheld_tax",
             "self_reserved_tax",
-            "final_spendable",
-            "final_physical",
         )
         if any(_fixed_fraction(getattr(self, name)) < 0 for name in nonnegative_fields):
             raise ValueError("Published ledger amounts cannot be negative")
@@ -1634,6 +1474,29 @@ class PlannerLedgerRow(AllocationStrictModel):
             raise ValueError("Ledger spendable balance does not reconcile its posted debits and credits")
         if _fixed_fraction(self.final_spendable) + _fixed_fraction(self.self_reserved_tax) != _fixed_fraction(self.final_physical):
             raise ValueError("Ledger spendable balance does not reconcile")
+        return self
+
+
+class PlannerRoundingTopUp(AllocationStrictModel):
+    """Cash one ledger pool lacks because the exact replay rounds HALF_UP (QX1-b).
+
+    ``amount`` is what to add on ``broker_id`` in ``currency`` for the plan to
+    execute: the pool's negative final balance, negated. ``rounded_postings``
+    counts the pool's postings that carry a quantum (BUY debit, nonzero fee, FX
+    credit), and bounds ``amount`` at that many minor units. ``valuation_amount``
+    is ``amount`` in the scenario valuation currency.
+    """
+
+    broker_id: PlannerId
+    currency: CurrencyCode
+    amount: PlannerPositiveDecimal
+    rounded_postings: PlannerPositiveInteger
+    valuation_amount: ExactMoney
+
+    @model_validator(mode="after")
+    def validate_positive_valuation(self) -> PlannerRoundingTopUp:
+        if _money_fraction(self.valuation_amount) <= 0:
+            raise ValueError("PAC rounding top-up valuations must be positive")
         return self
 
 
@@ -1747,6 +1610,89 @@ class PlannerObjectiveResults(AllocationStrictModel):
         return self
 
 
+def _validate_action_ids_and_sequences(solution: PacPlanSolution | RebalancerPlanSolution, label: str) -> None:
+    """IDs unique across every action section; sequences unique across the sequenced ones.
+
+    FX actions carry no sequence: they are engine decisions, executed through their
+    conversion. A manual conversion is a step of its own; an automatic one happens
+    inside the orders, so it has no sequence either.
+    """
+    ids = [
+        *(row.action_id for row in solution.funding_actions),
+        *(row.action_id for row in solution.fx_actions),
+        *(row.conversion_id for row in solution.conversions),
+        *(row.order_id for row in solution.order_rows),
+    ]
+    _require_unique(ids, f"{label} action IDs")
+    sections = (
+        [row.sequence for row in solution.funding_actions],
+        [row.sequence for row in solution.conversions if row.sequence is not None],
+        [row.sequence for row in solution.order_rows],
+    )
+    _require_unique([sequence for section in sections for sequence in section], f"{label} action sequences")
+    if any(section != sorted(section) for section in sections):
+        raise ValueError(f"{label} action sections must be sequence-ordered")
+
+
+def _validate_conversions(solution: PacPlanSolution | RebalancerPlanSolution, label: str) -> None:
+    """Bind every FX action to its Broker x currency-pair conversion.
+
+    A conversion is a pure aggregate: it covers exactly the actions that reference it,
+    repeats their Broker, currency pair and rates, and carries their exact sums. One
+    conversion per pair, and one mode per Broker, because the mode is a Broker input.
+    """
+    _require_unique([row.conversion_id for row in solution.conversions], f"{label} conversion IDs")
+    _require_unique([(row.broker_id, row.source_debit.currency, row.destination_credit.currency) for row in solution.conversions], f"{label} conversion pairs")
+    modes: dict[str, str] = {}
+    if any(modes.setdefault(row.broker_id, row.mode) != row.mode for row in solution.conversions):
+        raise ValueError(f"{label} conversions must use one mode per Broker")
+    conversions = {row.conversion_id: row for row in solution.conversions}
+    members: dict[str, list[PlannerFxAction]] = {conversion_id: [] for conversion_id in conversions}
+    for action in solution.fx_actions:
+        conversion = conversions.get(action.conversion_id)
+        if conversion is None:
+            raise ValueError(f"{label} FX actions must reference a published conversion")
+        if (action.broker_id, action.source_debit.currency, action.destination_credit.currency) != (conversion.broker_id, conversion.source_debit.currency, conversion.destination_credit.currency):
+            raise ValueError(f"{label} FX actions must match their conversion's Broker and currency pair")
+        if _exact_fraction(action.spot_rate.value) != _exact_fraction(conversion.spot_rate.value) or _exact_fraction(action.effective_rate.value) != _exact_fraction(conversion.effective_rate.value):
+            raise ValueError(f"{label} FX actions must use their conversion's rates")
+        members[action.conversion_id].append(action)
+    for conversion_id, conversion in conversions.items():
+        actions = members[conversion_id]
+        if set(conversion.fx_action_ids) != {action.action_id for action in actions}:
+            raise ValueError(f"{label} conversions must list exactly the FX actions that reference them")
+        if (
+            _fixed_fraction(conversion.source_debit.amount) != sum((_fixed_fraction(action.source_debit.amount) for action in actions), Fraction())
+            or _fixed_fraction(conversion.destination_credit.amount) != sum((_fixed_fraction(action.destination_credit.amount) for action in actions), Fraction())
+            or _money_fraction(conversion.spread_loss) != sum((_money_fraction(action.spread_loss) for action in actions), Fraction())
+        ):
+            raise ValueError(f"{label} conversion totals must equal the exact sums of their FX actions")
+        if set(conversion.provenance_ids) != {provenance_id for action in actions for provenance_id in action.provenance_ids}:
+            raise ValueError(f"{label} conversion provenance must be the union of its FX actions' provenance")
+
+
+def _validate_pac_rounding_top_ups(solution: PacPlanSolution) -> None:
+    """Bind the top-ups to the ledger pools they excuse.
+
+    One top-up per negative pool, for exactly the missing amount; its rounded
+    postings can be no more than the pool's own rows carry: a BUY debit and a
+    fee per order paying from the pool, a credit per FX action into it. It is
+    only a cap: a fee that rounds to zero is not posted, and still counts in
+    the order row. The minor-unit bound needs the catalogue, so it lives in
+    ``_validate_ready_solution``.
+    """
+    _require_unique([(row.broker_id, row.currency) for row in solution.rounding_top_ups], "PAC rounding top-up scopes")
+    deficits = {(row.broker_id, row.currency): -_fixed_fraction(row.final_spendable) for row in solution.ledger_rows if _fixed_fraction(row.final_spendable) < 0}
+    if {(row.broker_id, row.currency): _fixed_fraction(row.amount) for row in solution.rounding_top_ups} != deficits:
+        raise ValueError("PAC rounding top-ups must cover exactly the negative ledger balances")
+    for top_up in solution.rounding_top_ups:
+        scope = (top_up.broker_id, top_up.currency)
+        orders = sum(1 for row in solution.order_rows if (row.broker_id, row.cash_debit.currency) == scope)
+        fx_credits = sum(1 for row in solution.fx_actions if (row.broker_id, row.destination_credit.currency) == scope)
+        if top_up.rounded_postings > 2 * orders + fx_credits:
+            raise ValueError("A PAC rounding top-up cannot count more rounded postings than its ledger scope carries")
+
+
 class PacPlanSolution(AllocationStrictModel):
     solution_id: PlannerId
     solution_kind: Literal["primary"]
@@ -1754,8 +1700,10 @@ class PacPlanSolution(AllocationStrictModel):
     asset_rows: list[PacAssetPlanRow]
     funding_actions: list[PlannerFundingAction]
     fx_actions: list[PlannerFxAction]
+    conversions: list[PlannerConversion] = Field(description="One conversion per Broker x currency pair, aggregating the FX actions; manual ones are numbered steps.")
     order_rows: list[PlannerBuyOrderRow]
     ledger_rows: list[PlannerLedgerRow]
+    rounding_top_ups: list[PlannerRoundingTopUp] = Field(description="One top-up per ledger pool left short by HALF_UP rounding; empty when every pool balances.")
     exposure_rows: list[PacExposurePlanRow]
     accounting: PlannerAccountingSummary
     costs: PlannerCostTotals
@@ -1764,14 +1712,11 @@ class PacPlanSolution(AllocationStrictModel):
     @model_validator(mode="after")
     def validate_authoritative_rows(self) -> PacPlanSolution:
         _require_unique([row.asset_id for row in self.asset_rows], "PAC Asset rows")
-        actions = [*self.funding_actions, *self.fx_actions, *self.order_rows]
-        _require_unique([action.action_id if hasattr(action, "action_id") else action.order_id for action in actions], "PAC action IDs")
-        sequences = [action.sequence for action in actions]
-        _require_unique(sequences, "PAC action sequences")
-        if any([row.sequence for row in rows] != sorted(row.sequence for row in rows) for rows in (self.funding_actions, self.fx_actions, self.order_rows)):
-            raise ValueError("PAC action sections must be sequence-ordered")
+        _validate_action_ids_and_sequences(self, "PAC")
+        _validate_conversions(self, "PAC")
         _require_unique([(row.broker_id, row.currency) for row in self.ledger_rows], "PAC ledger scopes")
         _require_unique([(row.dimension, row.category_id) for row in self.exposure_rows], "PAC exposure rows")
+        _validate_pac_rounding_top_ups(self)
         return self
 
 
@@ -1782,6 +1727,7 @@ class RebalancerPlanSolution(AllocationStrictModel):
     asset_rows: list[RebalancerAssetPlanRow]
     funding_actions: list[PlannerFundingAction]
     fx_actions: list[PlannerFxAction]
+    conversions: list[PlannerConversion] = Field(description="One conversion per Broker x currency pair, aggregating the FX actions; manual ones are numbered steps.")
     order_rows: list[RebalancerOrderRow]
     sell_irreducibility: list[SellIrreducibilityEvidence]
     ledger_rows: list[PlannerLedgerRow]
@@ -1793,16 +1739,12 @@ class RebalancerPlanSolution(AllocationStrictModel):
     @model_validator(mode="after")
     def validate_authoritative_rows(self) -> RebalancerPlanSolution:
         _require_unique([row.asset_id for row in self.asset_rows], "Rebalancer Asset rows")
-        actions = [*self.funding_actions, *self.fx_actions, *self.order_rows]
-        _require_unique(
-            [action.action_id if hasattr(action, "action_id") else action.order_id for action in actions],
-            "Rebalancer action IDs",
-        )
-        sequences = [action.sequence for action in actions]
-        _require_unique(sequences, "Rebalancer action sequences")
-        if any([row.sequence for row in rows] != sorted(row.sequence for row in rows) for rows in (self.funding_actions, self.fx_actions, self.order_rows)):
-            raise ValueError("Rebalancer action sections must be sequence-ordered")
+        _validate_action_ids_and_sequences(self, "Rebalancer")
+        _validate_conversions(self, "Rebalancer")
         _require_unique([(row.broker_id, row.currency) for row in self.ledger_rows], "Rebalancer ledger scopes")
+        # The Rebalancer has no rounding top-ups, so no pool of it may end short.
+        if any(_fixed_fraction(row.final_spendable) < 0 or _fixed_fraction(row.final_physical) < 0 for row in self.ledger_rows):
+            raise ValueError("Rebalancer ledger balances cannot be negative")
         _require_unique([(row.dimension, row.category_id) for row in self.exposure_rows], "Rebalancer exposure rows")
         _require_unique([row.evidence_id for row in self.sell_irreducibility], "SELL evidence IDs")
         _require_unique([row.order_id for row in self.sell_irreducibility], "SELL evidence order IDs")
@@ -1858,7 +1800,9 @@ def _validate_rebalancer_no_op(solution: RebalancerPlanSolution) -> None:
 class PacNoOpSolution(PacPlanSolution):
     funding_actions: Annotated[list[PlannerFundingAction], Field(max_length=0)]
     fx_actions: Annotated[list[PlannerFxAction], Field(max_length=0)]
+    conversions: Annotated[list[PlannerConversion], Field(max_length=0)]
     order_rows: Annotated[list[PlannerBuyOrderRow], Field(max_length=0)]
+    rounding_top_ups: Annotated[list[PlannerRoundingTopUp], Field(max_length=0)]
 
     @model_validator(mode="after")
     def validate_no_op_projection(self) -> PacNoOpSolution:
@@ -1870,6 +1814,7 @@ class PacNoOpSolution(PacPlanSolution):
 class RebalancerNoOpSolution(RebalancerPlanSolution):
     funding_actions: Annotated[list[PlannerFundingAction], Field(max_length=0)]
     fx_actions: Annotated[list[PlannerFxAction], Field(max_length=0)]
+    conversions: Annotated[list[PlannerConversion], Field(max_length=0)]
     order_rows: Annotated[list[RebalancerOrderRow], Field(max_length=0)]
     sell_irreducibility: Annotated[list[SellIrreducibilityEvidence], Field(max_length=0)]
 
@@ -1982,7 +1927,15 @@ def _validate_distinct_deployment(
             raise ValueError("Deployment objective delta must equal deployment minus primary")
 
 
-def _validate_accounting_summary(accounting: PlannerAccountingSummary) -> None:
+def _validate_accounting_summary(accounting: PlannerAccountingSummary, *, top_up_value: Fraction = Fraction(0)) -> None:
+    """Check the accounting identities; ``top_up_value`` is the PAC rounding top-ups' total value.
+
+    A top-up is cash the user adds before executing: reachable funding the
+    plan relies on, which the published accounting does not include. So it
+    relaxes the two rules that read the balance — free cash and the favorable
+    shortfall bound — by exactly its value, and nothing else. The Rebalancer
+    has no top-up and passes zero.
+    """
     nonnegative = (
         accounting.current_invested,
         accounting.selected_funding,
@@ -1990,20 +1943,21 @@ def _validate_accounting_summary(accounting: PlannerAccountingSummary) -> None:
         accounting.trapped_funding,
         accounting.fixed_reference,
         accounting.final_invested,
-        accounting.free_cash,
         accounting.physical_reserves,
         accounting.economic_losses,
         accounting.rounding_bound,
     )
     if any(_money_fraction(money) < 0 for money in nonnegative):
         raise ValueError("Nonnegative accounting totals cannot be negative")
+    if _money_fraction(accounting.free_cash) + top_up_value < 0:
+        raise ValueError("Free cash cannot be negative beyond the rounding top-ups")
     if _money_fraction(accounting.selected_funding) != _money_fraction(accounting.reachable_funding) + _money_fraction(accounting.trapped_funding):
         raise ValueError("Selected funding must equal reachable plus trapped funding")
     if _money_fraction(accounting.fixed_reference) != _money_fraction(accounting.current_invested) + _money_fraction(accounting.reachable_funding):
         raise ValueError("Fixed reference must equal current invested plus reachable funding")
     if abs(_money_fraction(accounting.rounding_delta)) > _money_fraction(accounting.rounding_bound):
         raise ValueError("Rounding delta must remain inside its exact bound")
-    if _money_fraction(accounting.shortfall) < -_money_fraction(accounting.rounding_bound):
+    if _money_fraction(accounting.shortfall) + top_up_value < -_money_fraction(accounting.rounding_bound):
         raise ValueError("Shortfall cannot exceed the favorable rounding bound")
     decomposition = _money_fraction(accounting.free_cash) + _money_fraction(accounting.physical_reserves) + _money_fraction(accounting.economic_losses) + _money_fraction(accounting.rounding_delta)
     if _money_fraction(accounting.shortfall) != decomposition:
@@ -2127,13 +2081,18 @@ def _validate_solution_financials(
             fields = ("before_value", *fields, "sell_mid_value")
         valuation_money.extend(getattr(row, name) for name in fields)
     valuation_money.extend(row.spread_loss for row in solution.fx_actions)
+    valuation_money.extend(row.spread_loss for row in solution.conversions)
     valuation_money.extend(row.execution_margin_cost for row in solution.order_rows)
     valuation_money.extend(row.fx_cost for row in solution.order_rows if isinstance(row, PlannerBuyOrderRow))
+    top_ups = solution.rounding_top_ups if isinstance(solution, PacPlanSolution) else []
+    valuation_money.extend(row.valuation_amount for row in top_ups)
     if any(money.currency != valuation_currency for money in valuation_money):
         raise ValueError("Asset, accounting, and cost projections must use the valuation currency")
+    if any(row.currency == valuation_currency and _money_fraction(row.valuation_amount) != _fixed_fraction(row.amount) for row in top_ups):
+        raise ValueError("A PAC rounding top-up in the valuation currency must be valued at its own amount")
     if any(_exact_fraction(getattr(solution.costs, name).value) < 0 for name in type(solution.costs).model_fields):
         raise ValueError("Cost totals cannot be negative")
-    _validate_accounting_summary(solution.accounting)
+    _validate_accounting_summary(solution.accounting, top_up_value=sum((_money_fraction(row.valuation_amount) for row in top_ups), Fraction()))
     if isinstance(solution, RebalancerPlanSolution) and _money_fraction(solution.accounting.final_invested) <= 0:
         raise ValueError("Ready Rebalancer solutions require positive final invested value")
     _validate_asset_projection(solution)
@@ -2142,6 +2101,18 @@ def _validate_solution_financials(
         raise ValueError("Valuation objective units must use the scenario valuation currency")
     if any(stage.objective_code == "shortfall" and _exact_fraction(stage.value) != _money_fraction(solution.accounting.shortfall) for stage in solution.objectives.stages):
         raise ValueError("The shortfall objective must equal the authoritative accounting shortfall")
+
+
+def _validate_pac_top_up_minor_units(
+    catalogs: PlannerCatalogs,
+    solution: PacPlanSolution | RebalancerPlanSolution,
+) -> None:
+    """``amount <= rounded_postings x minor unit``: the one top-up bound that needs the catalogue."""
+    if not isinstance(solution, PacPlanSolution):
+        return
+    minor_units = {row.currency: _fixed_fraction(row.minor_unit) for row in catalogs.currencies}
+    if any(_fixed_fraction(row.amount) > row.rounded_postings * minor_units[row.currency] for row in solution.rounding_top_ups):
+        raise ValueError("A PAC rounding top-up cannot exceed its rounded postings times the currency minor unit")
 
 
 def _validate_ready_solution(
@@ -2166,10 +2137,11 @@ def _validate_ready_solution(
         raise ValueError("Order rows must reference catalog Asset and Broker IDs")
     if not _collect_currency_codes(solution.model_dump(mode="python")) <= currencies:
         raise ValueError("Solution rows must reference catalog currencies")
-    referenced_provenance = {provenance_id for row in [*solution.funding_actions, *solution.fx_actions, *solution.order_rows, *solution.exposure_rows] for provenance_id in row.provenance_ids}
+    _validate_pac_top_up_minor_units(catalogs, solution)
+    referenced_provenance = {provenance_id for row in [*solution.funding_actions, *solution.fx_actions, *solution.conversions, *solution.order_rows, *solution.exposure_rows] for provenance_id in row.provenance_ids}
     if not referenced_provenance <= provenance_ids:
         raise ValueError("Solution rows must reference top-level provenance IDs")
-    for row in [*solution.funding_actions, *solution.fx_actions, *solution.order_rows, *solution.exposure_rows]:
+    for row in [*solution.funding_actions, *solution.fx_actions, *solution.conversions, *solution.order_rows, *solution.exposure_rows]:
         _require_unique(row.provenance_ids, "Result-row provenance IDs")
     _validate_solution_financials(solution, valuation_currency)
 
@@ -2260,37 +2232,32 @@ def _validate_not_proven_issue_binding(
         raise ValueError("SELL irreducibility reason requires a matching warning proof issue")
 
 
-def _validate_gap_proof(
+def _validate_solver_status_proof(
     proof: ReadyPlanProof | InfeasibilityProvenProof | None,
-    solver_evidence: PlannerSolverEvidence,
-    solution: PacPlanSolution | RebalancerPlanSolution | None,
+    solver_evidence: ReportedFloatingSolverEvidence,
 ) -> None:
-    if not isinstance(proof, GapBoundedProof):
-        return
-    if not isinstance(solver_evidence, ReportedFloatingSolverEvidence):
-        raise ValueError("gap_bounded requires reported_floating solver evidence")
-    unfinished = [stage for stage in solver_evidence.stages if stage.status == "unfinished"]
-    if [(stage.stage, stage.objective_code, stage.ordinal, stage.scope, stage.sense, stage.unit.model_dump_json()) for stage in proof.stage_bounds] != [(stage.stage, stage.objective_code, stage.ordinal, stage.scope, stage.sense, stage.unit.model_dump_json()) for stage in unfinished]:
-        raise ValueError("gap_bounded must cover every unfinished normative solver stage in order")
-    if solution is None:
-        raise ValueError("gap_bounded requires a published primary solution")
-    objectives = {(stage.objective_code, stage.ordinal, stage.sense, stage.unit.model_dump_json()): stage for stage in solution.objectives.stages}
-    for solver_stage, bound in zip(unfinished, proof.stage_bounds, strict=True):
-        key = (bound.objective_code, bound.ordinal, bound.sense, bound.unit.model_dump_json())
-        objective = objectives.get(key)
-        if objective is None:
-            raise ValueError("Gap-bound stages must match published objective stages, senses, and units")
-        solver_values = (solver_stage.primal, solver_stage.dual, solver_stage.absolute_gap, solver_stage.relative_gap)
-        if any(value is None for value in solver_values):
-            raise ValueError("gap_bounded requires finite floating evidence for every unfinished tier")
-        bound_values = (bound.primal, bound.dual, bound.absolute_gap, bound.relative_gap)
-        if any(_fixed_fraction(solver_value) != _fixed_fraction(bound_value) for solver_value, bound_value in zip(solver_values, bound_values, strict=True) if solver_value is not None):
-            raise ValueError("Gap-bound values must match their reported floating evidence")
-        exact_objective = _exact_fraction(objective.value)
-        primal = _fixed_fraction(bound.primal)
-        dual = _fixed_fraction(bound.dual)
-        if (bound.sense == "min" and not dual <= exact_objective <= primal) or (bound.sense == "max" and not primal <= exact_objective <= dual):
-            raise ValueError("Exact incumbent objective must lie inside the sense-aware solver bounds")
+    """Bind a ``solver_status`` proof to the evidence of the solve it rests on.
+
+    The proof is SCIP's own status (D-X1), so the evidence must show that
+    status: an optimum needs every reported stage finished, on exactly the
+    witness's objectives in order; an infeasibility needs the single first
+    stage infeasible, on the witness's one objective. And conversely, an
+    infeasible stage backs nothing but an infeasibility proof.
+    """
+    codes = [stage.objective_code for stage in solver_evidence.stages]
+    infeasible = any(stage.status == "infeasible" for stage in solver_evidence.stages)
+    if isinstance(proof, OptimalProvenProof):
+        if any(stage.status != "finished" for stage in solver_evidence.stages):
+            raise ValueError("optimal_proven requires every solver stage finished")
+        if codes != proof.witness.objective_codes:
+            raise ValueError("Optimal proof witness must name exactly the finished solver stages in order")
+    elif isinstance(proof, InfeasibilityProvenProof):
+        if not infeasible:
+            raise ValueError("infeasibility_proven requires an infeasible first solver stage")
+        if codes != proof.witness.objective_codes:
+            raise ValueError("Infeasibility proof witness must name the infeasible solver stage")
+    elif infeasible:
+        raise ValueError("An infeasible solver stage requires an infeasibility proof")
 
 
 def _validate_rebalancer_policy_solution(
@@ -2306,25 +2273,21 @@ def _validate_rebalancer_policy_solution(
 
 
 def _validate_solver_units(
-    solver_evidence: PlannerSolverEvidence,
+    solver_evidence: ReportedFloatingSolverEvidence,
     valuation_currency: CurrencyCode,
 ) -> None:
-    if not isinstance(solver_evidence, ReportedFloatingSolverEvidence):
-        return
     if any(stage.unit.kind in {"valuation_money", "valuation_money_squared"} and stage.unit.currency_code != valuation_currency for stage in solver_evidence.stages):
         raise ValueError("Solver valuation units must use the scenario valuation currency")
 
 
 def _validate_stop_evidence(
     stop_reason: str,
-    solver_evidence: PlannerSolverEvidence,
+    solver_evidence: ReportedFloatingSolverEvidence,
 ) -> None:
-    if stop_reason != "completed" and not isinstance(solver_evidence, ReportedFloatingSolverEvidence):
-        raise ValueError("Solver limit stops require reported_floating stage evidence")
-    if isinstance(solver_evidence, ReportedFloatingSolverEvidence):
-        unfinished = any(stage.status == "unfinished" for stage in solver_evidence.stages)
-        if (stop_reason == "completed") == unfinished:
-            raise ValueError("Completed stops require finished stages; limit stops require an unfinished stage")
+    # An infeasible stage is a verdict, not an interruption: it ends a completed search.
+    unfinished = any(stage.status == "unfinished" for stage in solver_evidence.stages)
+    if (stop_reason == "completed") == unfinished:
+        raise ValueError("Completed stops require no unfinished stage; limit stops require an unfinished stage")
 
 
 type PacDeployment = Annotated[
@@ -2343,7 +2306,7 @@ class PlannerResultSnapshot(AllocationStrictModel):
 
 
 class PacScenarioBasis(PlannerScenarioBasis):
-    policy: Literal["proportional", "min_fragmentation"]
+    policy: Literal["proportional"]
 
 
 class RebalancerScenarioBasis(PlannerScenarioBasis):
@@ -2404,7 +2367,7 @@ class _PacReadyResultBase(AllocationStrictModel):
     provenance: Annotated[list[PlannerProvenance], Field(min_length=1)]
     scenario_basis: PacScenarioBasis
     stop_reason: Literal["completed", "time_limit", "node_limit"]
-    solver_evidence: PlannerSolverEvidence
+    solver_evidence: ReportedFloatingSolverEvidence
     issues: list[PlannerIssue]
 
     @model_validator(mode="after")
@@ -2419,7 +2382,7 @@ class _PacReadyResultBase(AllocationStrictModel):
         _validate_solver_units(self.solver_evidence, self.scenario_basis.valuation_currency)
         _validate_not_proven_issue_binding("PAC", self.scenario_basis.policy, proof, self.issues)
         _validate_optimal_proof_objectives(proof, solution)
-        _validate_gap_proof(proof, self.solver_evidence, solution)
+        _validate_solver_status_proof(proof, self.solver_evidence)
         if solution is not None:
             _validate_basis_solution(self.scenario_basis, solution)
             _validate_ready_solution(self.catalogs, self.provenance, self.scenario_basis.valuation_currency, solution)
@@ -2457,6 +2420,9 @@ class PacPlannerReadyNoIncumbentResult(_PacReadyResultBase):
     result_state: Literal["ready_no_incumbent"]
     outcome: Literal["no_incumbent"]
     proof: NotProvenProof
+    # A completed search always holds a plan: the replay publishes it with its
+    # rounding top-ups or raises. "No plan" is only a limit stop (QX1-b).
+    stop_reason: Literal["time_limit", "node_limit"]
 
 
 class _RebalancerReadyResultBase(AllocationStrictModel):
@@ -2467,7 +2433,7 @@ class _RebalancerReadyResultBase(AllocationStrictModel):
     provenance: Annotated[list[PlannerProvenance], Field(min_length=1)]
     scenario_basis: RebalancerScenarioBasis
     stop_reason: Literal["completed", "time_limit", "node_limit"]
-    solver_evidence: PlannerSolverEvidence
+    solver_evidence: ReportedFloatingSolverEvidence
     issues: list[PlannerIssue]
 
     @model_validator(mode="after")
@@ -2482,7 +2448,7 @@ class _RebalancerReadyResultBase(AllocationStrictModel):
         _validate_solver_units(self.solver_evidence, self.scenario_basis.valuation_currency)
         _validate_not_proven_issue_binding("Rebalancer", self.scenario_basis.policy, proof, self.issues)
         _validate_optimal_proof_objectives(proof, solution)
-        _validate_gap_proof(proof, self.solver_evidence, solution)
+        _validate_solver_status_proof(proof, self.solver_evidence)
         if solution is not None:
             _validate_basis_solution(self.scenario_basis, solution)
             _validate_ready_solution(self.catalogs, self.provenance, self.scenario_basis.valuation_currency, solution)
@@ -2522,6 +2488,7 @@ class RebalancerPlannerReadyNoIncumbentResult(_RebalancerReadyResultBase):
     result_state: Literal["ready_no_incumbent"]
     outcome: Literal["no_incumbent"]
     proof: NotProvenProof
+    stop_reason: Literal["time_limit", "node_limit"]
 
 
 type PacPlannerResult = Annotated[

@@ -1,21 +1,32 @@
-"""PAC planner v2 orchestration (Step 3, Stage 5b).
+"""PAC planner v2 orchestration.
 
-One service function, ``plan_pac_allocation``, shaped exactly like P1's
-``analyze_pac_budget``: validate the request, normalize it, and either return
-a failure result or run the plan and project it onto the wire.
+One service function, ``plan_pac_allocation``: validate the request,
+normalize it, and either return a failure result or run the plan and project
+it onto the wire.
 
 The pipeline, and the reason each hop exists:
 
-    normalize -> build_exact_policy_view -> oracle-or-solver
+    normalize -> build_exact_policy_view -> compile -> SCIP
               -> evaluate_exact_candidate replay -> proof -> planner_report
 
-``evaluate_exact_candidate`` is **always** on the path. Neither search is
-trusted to report its own result: the oracle already replays every candidate
-it enumerates, and the solver's incumbent is a floating proposal that has to
-survive exact arithmetic before a single number of it is published. A
-candidate that fails replay does not degrade into a warning — it produces
-``ready_no_incumbent``, because publishing an unverified plan is the one
-outcome this package exists to prevent.
+SCIP is the only production search engine, and its own status is the proof
+(D-X1, developer decision of 2026-09-24): every stage closed ``optimal`` is
+``optimal_proven``, a first stage closed ``infeasible`` is
+``infeasibility_proven``, and a limit is ``not_proven`` with the best plan
+found, or with none. The exhaustive oracle is a test instrument
+(``backend/test_scripts``); production cannot reach it.
+
+``evaluate_exact_candidate`` is **always** on the path, and its verdict is
+authoritative. SCIP's incumbent is a floating proposal that has to survive
+exact arithmetic before a single number of it is published. The one deficit
+the replay tolerates is rounding (QX1-b, developer decision of 2026-09-25): a
+plan whose HALF_UP postings leave a cash pool (broker x currency) at most N
+minor units short, N being the pool's postings that carry a quantum, is
+published with one top-up per such pool — "this broker/currency needs D more".
+``evaluator.rounding_top_ups`` decides. Any other rejection raises
+``ExactReplayRejectedError``, which the Tool reports as ``execution_failed``:
+publishing an unverified plan is the one outcome this package exists to
+prevent, and a SCIP plan the replay rejects is a defect, not a result.
 
 Only ``plan_pac_allocation`` is exported. ``plan_rebalancing`` deliberately
 does not exist: every Rebalancer policy and the SELL verifier are deferred,
@@ -24,20 +35,15 @@ it invites wiring, whereas an absent one fails at import in the exact place
 the missing work is obvious.
 
 Tool registration (``ToolService``/``ToolOperationPolicy``) is **not** done
-here; this module ships service functions only, mirroring the existing P1
-split where ``tool_plugins/pac_allocator.py`` owns the dispatch.
+here; this module ships service functions only, and
+``tool_plugins/pac_allocator.py`` owns the dispatch.
 
 ``plan_pac_allocation`` is deliberately **not** re-exported from the package
 ``__init__``, and that absence is load-bearing rather than an oversight. The
 import chain is ``planner -> compiler -> pyscipopt`` (``compiler.py`` imports
 ``Model`` at module level, because unlike ``constraints``/``objectives`` it
-actually instantiates one). Re-exporting here would therefore make every
-consumer of the lightweight P1 analyses — ``analyze_pac_budget``,
-``analyze_rebalancing`` — drag SCIP in at import time for a solver they never
-call, and would silently falsify the package docstring's promise, *"Pure P1
-allocation analyses. No solver, order, lookup, or persistence."*, which is
-exactly the promise a reader relies on when deciding whether importing the
-package is cheap.
+actually instantiates one). Re-exporting it would drag SCIP into every
+consumer of the package at import time, for a solver most of them never call.
 
 Verified rather than asserted: importing ``backend.app.services.pac_allocator``
 leaves ``pyscipopt`` absent from ``sys.modules``, while importing this module
@@ -53,7 +59,6 @@ from dataclasses import dataclass
 
 from backend.app.schemas.pac_allocator import (
     DeploymentUnavailable,
-    ExhaustiveOracleWitness,
     InfeasibilityProvenProof,
     NotProvenProof,
     OptimalProvenProof,
@@ -70,34 +75,30 @@ from backend.app.schemas.pac_allocator import (
     PacPlannerUnsupportedResult,
     PlannerIssue,
     PlannerResultSnapshot,
-    SolverNotRunEvidence,
+    SolverStatusWitness,
 )
 from backend.app.services.pac_allocator import planner_report as report
 from backend.app.services.pac_allocator.compiler import compile_policy_program
-from backend.app.services.pac_allocator.evaluator import build_exact_policy_view, evaluate_exact_candidate
+from backend.app.services.pac_allocator.evaluator import build_exact_policy_view, evaluate_exact_candidate, rounding_top_ups
 from backend.app.services.pac_allocator.models import (
     CandidateActionVector,
     CandidateDecision,
     Checkpoint,
     ExactEvaluation,
+    ExactObjectiveCode,
     ExactPlannerScenario,
     ExactPolicyView,
+    ExactRoundingTopUp,
     check_budget,
 )
 from backend.app.services.pac_allocator.normalize import normalize_pac_plan
-from backend.app.services.pac_allocator.oracle import (
-    MAX_EXHAUSTIVE_ORACLE_CANDIDATES,
-    OracleDomainTooLargeError,
-    estimate_oracle_domain_size,
-    run_exhaustive_oracle,
-)
 from backend.app.services.pac_allocator.proof import (
     InfeasibilityProvenConclusion,
     OptimalProvenConclusion,
     PlanConclusion,
+    SolverStatusWitnessFacts,
     UnprovenConclusion,
-    conclude_with_oracle,
-    conclude_without_proof,
+    conclude_with_solver,
 )
 from backend.app.services.pac_allocator.solver import SolverRunResult, solve_policy_program
 
@@ -117,9 +118,7 @@ class _Search:
     """What the search stage found, before any of it is trusted."""
 
     candidate: CandidateActionVector | None
-    solver: SolverRunResult | None
-    oracle_enumerated: bool
-    oracle_result: object | None
+    solver: SolverRunResult
 
 
 def plan_pac_allocation(
@@ -130,9 +129,11 @@ def plan_pac_allocation(
 ) -> PacPlannerResult:
     """Plan a PAC allocation and return a wire result.
 
-    Never raises on a planning outcome: an infeasible scenario, an exhausted
-    budget and a candidate that fails replay are all *results*, each with its
-    own ``result_state``. Only a genuine contract violation propagates.
+    Never raises on a planning outcome: an infeasible scenario and an exhausted
+    budget are *results*, each with its own ``result_state``. A genuine
+    contract violation propagates, and so does ``ExactReplayRejectedError``: a
+    SCIP plan the exact replay rejects for more than rounding is a defect, not
+    an outcome to answer with.
 
     ``solver_time_budget_seconds`` is the engine window the caller has already
     claimed. It matters more than it looks: the lexicographic cascade is what
@@ -159,16 +160,15 @@ def plan_pac_allocation(
         return _no_incumbent_result(scenario, view, search, issues)
 
     # The single non-negotiable hop: nothing is published that exact
-    # arithmetic has not re-derived from the candidate itself.
+    # arithmetic has not re-derived from the candidate itself. Its verdict is
+    # final: a rounding deficit within the threshold comes back as top-ups,
+    # any other rejection raises.
     evaluation = evaluate_exact_candidate(scenario, view, search.candidate, checkpoint=checkpoint)
-    if not evaluation.feasible:
-        # A search proposed something the exact domain rejects. That is not a
-        # warning to attach to a published plan — there is no plan.
-        return _no_incumbent_result(scenario, view, search, issues)
+    top_ups = rounding_top_ups(scenario, evaluation)
 
-    conclusion = _conclude(search, evaluation)
+    conclusion = _conclude(view, search, published=search.candidate)
     check_budget(checkpoint)
-    return _ready_result(scenario, view, search, evaluation, conclusion, issues)
+    return _ready_result(scenario, view, search, evaluation, conclusion, issues, top_ups)
 
 
 def _search(
@@ -178,63 +178,36 @@ def _search(
     checkpoint: Checkpoint | None,
     solver_time_budget_seconds: float | None = None,
 ) -> _Search:
-    """Try the exhaustive oracle first; fall back to the solver.
+    """Compile the view and run SCIP, the only production search engine (D-X1).
 
-    The oracle is not merely another search: on a domain it can enumerate it
-    returns a *proven* optimum, so trying it first is what makes
-    ``optimal_proven`` reachable at all. When it settles the outcome the
-    solver is **not run**, and the result carries
-    ``SolverNotRunEvidence(reason="allocation.solver_not_required")`` — which
-    is literally what that single-valued reason code exists for.
-
-    Running the solver anyway would not merely be wasted work: an infeasible
-    SCIP stage is necessarily ``unfinished`` (a finished stage must carry a
-    finite primal, which an infeasible solve has none of), while
-    ``PacPlannerReadyInfeasibleResult`` pins ``stop_reason="completed"`` and
-    ``_validate_stop_evidence`` requires ``completed`` to mean *no* unfinished
-    stage. So a redundant solver run made ``ready_infeasible`` unemittable and
-    turned a perfectly ordinary infeasible scenario into a raised
-    ``ValidationError``.
-
-    What this deliberately gives up is a *diagnostic*, not a guarantee:
-    production no longer has a competing solver incumbent that could disagree
-    with the oracle. The oracle is exhaustive, so its answer is the answer,
-    and a disagreeing solver would have signalled a modelling bug rather than
-    a wrong published result. That cross-check still runs — in
-    ``test_pac_planner_solver.py``'s oracle-agreement gate, which drives both
-    engines directly and is where it caught the HALF_UP ledger defect.
-
-    Routing is internal and never wire-visible: a domain above the cap simply
-    falls back to the solver and an honest ``not_proven``.
+    There is no other route and no size threshold: the exhaustive oracle is a
+    test instrument that production cannot reach, and SCIP's cost grows with
+    the number of decisions, not with the size of the domain (see
+    ``planner_report.build_stop_reason``). SCIP's candidate stays a proposal
+    until the Decimal replay accepts it, and its statuses become a proof only
+    through ``proof.conclude_with_solver``.
     """
-    if estimate_oracle_domain_size(view) <= MAX_EXHAUSTIVE_ORACLE_CANDIDATES:
-        try:
-            oracle_result = run_exhaustive_oracle(scenario, view, checkpoint=checkpoint)
-        except OracleDomainTooLargeError:
-            oracle_result = None
-        if oracle_result is not None:
-            return _Search(candidate=oracle_result.best_candidate, solver=None, oracle_enumerated=True, oracle_result=oracle_result)
-
     program = compile_policy_program(scenario, view)
     solver = solve_policy_program(
         program,
         checkpoint=checkpoint,
         **({} if solver_time_budget_seconds is None else {"time_budget_seconds": solver_time_budget_seconds}),
     )
-    return _Search(candidate=solver.candidate, solver=solver, oracle_enumerated=False, oracle_result=None)
+    return _Search(candidate=solver.candidate, solver=solver)
 
 
-def _conclude(search: _Search, evaluation: ExactEvaluation) -> PlanConclusion:
+def _objective_codes(view: ExactPolicyView) -> tuple[ExactObjectiveCode, ...]:
+    """The view's objectives in cascade order, as ``build_objective_results`` publishes them."""
+    return tuple(ref.code for ref in sorted(view.objectives, key=lambda ref: ref.ordinal))
+
+
+def _conclude(view: ExactPolicyView, search: _Search, *, published: CandidateActionVector | None) -> PlanConclusion:
     """Decide the proof, which only ``proof.py`` may do.
 
-    Note what is *not* consulted: no field of ``search.solver`` can promote
-    anything. A fully-successful floating solve still yields ``not_proven``.
+    ``published`` is the candidate this result publishes — SCIP's, after the
+    Decimal replay accepted it — or ``None`` when nothing is published.
     """
-    if search.oracle_enumerated and search.oracle_result is not None:
-        return conclude_with_oracle(search.oracle_result, published=search.candidate)
-    if search.solver is None:
-        raise ValueError("a search with neither an oracle result nor a solver run cannot conclude anything")
-    return conclude_without_proof(search.solver)
+    return conclude_with_solver(search.solver, objective_codes=_objective_codes(view), published=published)
 
 
 def _ready_result(
@@ -244,10 +217,11 @@ def _ready_result(
     evaluation: ExactEvaluation,
     conclusion: PlanConclusion,
     issues: list[PlannerIssue],
+    top_ups: tuple[ExactRoundingTopUp, ...],
 ) -> PacPlannerResult:
     common = _common_ready_fields(scenario, view, search, evaluation, issues)
     proof = _wire_proof(conclusion)
-    parts = _build_solution_parts(scenario, view, evaluation)
+    parts = _build_solution_parts(scenario, view, evaluation, top_ups)
 
     # The no-op decision is made *before* choosing the solution model, not
     # after: `PacIncumbentSolution` requires at least one order row while
@@ -260,37 +234,25 @@ def _ready_result(
 
 
 def _no_incumbent_result(scenario: ExactPlannerScenario, view: ExactPolicyView, search: _Search, issues: list[PlannerIssue]) -> PacPlannerResult:
-    """No publishable plan: either nothing was found, or the domain was
-    exhaustively proven to contain nothing feasible.
+    """No publishable plan: SCIP proved there is none, or found none in time.
 
-    ``ready_infeasible`` requires an ``InfeasibilityProvenProof``, so it is
-    reachable **only** through the exhaustive oracle — a SCIP
-    ``reported_infeasible`` structurally cannot reach it, which is the point.
-    Its ``stop_reason`` is pinned to ``"completed"`` because a finished
-    enumeration is the only thing that proved it.
+    ``ready_infeasible`` needs an ``InfeasibilityProvenProof``, and only
+    ``proof.conclude_with_solver`` can conclude one: SCIP closed the first,
+    still-global stage ``infeasible``. Its ``stop_reason`` is ``completed``
+    because the search ended on that verdict, and ``build_stop_reason``
+    already says so — an infeasible stage is not an unfinished one.
 
-    The ``deterministic_conflict`` proof source is deliberately **not**
-    emitted in phase 1. ``DeterministicConflictWitness.issue_codes`` is typed
-    ``list[PlannerIssueCode]`` — the frozen 80-value ``allocation.*`` wire
-    universe — while ``ExactEvaluation.conflict_codes`` carries exact-domain
-    constraint codes such as ``ORDER_REQUIRED_MIN``. Those are two different
-    vocabularies, and no bridge should be invented between them: a
-    normalization-time statement about *declared inputs* and an
-    evaluation-time statement about a *candidate* are not the same claim, so
-    a mapping table would manufacture an equivalence and publish it as a
-    **witness** — precisely the class of thing ``proof.py`` exists to make
-    unrepresentable. Extending the enum is not available either: it is frozen
-    and ``RuntimeError``-guarded (``issues.py:48-50``). So proven
-    infeasibility comes from the oracle alone, and everything else is
-    honestly ``not_proven``.
+    Everything else is ``ready_no_incumbent`` with ``not_proven``: a limit that
+    left no solution. A SCIP plan the Decimal replay rejects never lands here:
+    it is published with its rounding top-ups, or ``plan_pac_allocation``
+    raises ``ExactReplayRejectedError``.
     """
     evaluation = _zero_candidate_evaluation(scenario, view)
     common = _common_ready_fields(scenario, view, search, evaluation, issues)
 
-    if search.oracle_enumerated and search.oracle_result is not None and search.oracle_result.feasible_candidates == 0:
-        conclusion = conclude_with_oracle(search.oracle_result, published=None)
-        if isinstance(conclusion, InfeasibilityProvenConclusion):
-            return PacPlannerReadyInfeasibleResult(result_state="ready_infeasible", outcome="infeasible_proven", proof=_wire_infeasibility(conclusion), **{**common, "stop_reason": "completed"})
+    conclusion = _conclude(view, search, published=None)
+    if isinstance(conclusion, InfeasibilityProvenConclusion):
+        return PacPlannerReadyInfeasibleResult(result_state="ready_infeasible", outcome="infeasible_proven", proof=_wire_infeasibility(conclusion), **common)
 
     return PacPlannerReadyNoIncumbentResult(result_state="ready_no_incumbent", outcome="no_incumbent", proof=NotProvenProof(kind="not_proven", reason_code=UnprovenConclusion().reason_code), **common)
 
@@ -303,33 +265,38 @@ def _common_ready_fields(scenario, view, search: _Search, evaluation: ExactEvalu
         "catalogs": report.build_planner_catalogs(scenario),
         "provenance": report.build_planner_provenance(scenario),
         "scenario_basis": report.build_scenario_basis(scenario, evaluation),
-        # No solver run means nothing stopped early, so "completed" is the
-        # only consistent stop_reason -- and `completed` + `not_run` is
-        # exactly the combination `_validate_stop_evidence` allows.
-        "stop_reason": "completed" if search.solver is None else report.build_stop_reason(search.solver),
-        "solver_evidence": SolverNotRunEvidence(kind="not_run", reason="allocation.solver_not_required") if search.solver is None else report.build_solver_evidence(scenario, view, search.solver),
+        "stop_reason": report.build_stop_reason(search.solver),
+        "solver_evidence": report.build_solver_evidence(scenario, view, search.solver),
         "issues": issues,
     }
 
 
-def _build_solution_parts(scenario: ExactPlannerScenario, view: ExactPolicyView, evaluation: ExactEvaluation) -> dict:
+def _build_solution_parts(scenario: ExactPlannerScenario, view: ExactPolicyView, evaluation: ExactEvaluation, top_ups: tuple[ExactRoundingTopUp, ...]) -> dict:
     """Assemble the primary solution.
 
-    One ``_SequenceAllocator`` is shared across funding, FX and order rows —
-    not one per section. The schema wants ids and sequences unique across all
-    three *and* each section internally ascending; three counters would
-    collide on row one, and a single dense counter satisfies both at once.
+    One ``_SequenceAllocator`` is shared across funding, manual conversions
+    and order rows — not one per section. The schema wants ids and sequences
+    unique across the sections *and* each section internally ascending;
+    separate counters would collide on row one, and a single dense counter
+    satisfies both at once. The call order is the execution order: funding
+    first, then the conversions the user performs, then the orders.
     """
     sequence = report._SequenceAllocator()
+    funding_actions = report.build_funding_actions(scenario, evaluation, sequence)
+    fx_actions = report.build_fx_actions(scenario, evaluation)
+    conversions = report.build_conversions(scenario, evaluation, fx_actions, sequence)
+    order_rows = report.build_order_rows(scenario, evaluation, sequence)
     return {
         "solution_id": _PRIMARY_SOLUTION_ID,
         "solution_kind": "primary",
         "validation": "decimal_verified",
         "asset_rows": report.build_asset_rows(scenario, evaluation),
-        "funding_actions": report.build_funding_actions(scenario, evaluation, sequence),
-        "fx_actions": report.build_fx_actions(scenario, evaluation, sequence),
-        "order_rows": report.build_order_rows(scenario, evaluation, sequence),
+        "funding_actions": funding_actions,
+        "fx_actions": fx_actions,
+        "conversions": conversions,
+        "order_rows": order_rows,
         "ledger_rows": report.build_ledger_rows(evaluation),
+        "rounding_top_ups": report.build_rounding_top_ups(scenario, top_ups),
         "exposure_rows": report.build_exposure_rows(scenario, evaluation),
         "accounting": report.build_accounting(scenario, evaluation),
         "costs": report.build_costs(scenario, evaluation),
@@ -345,9 +312,7 @@ def _zero_candidate_evaluation(scenario: ExactPlannerScenario, view: ExactPolicy
     """Evaluate the do-nothing candidate.
 
     Needed even when no plan is publishable, because every ready result still
-    carries a scenario basis, and because a deterministic conflict on the
-    all-zero candidate is one of the two legal routes to a proven
-    infeasibility.
+    carries a scenario basis.
     """
     candidate = CandidateActionVector(
         view_id=view.view_id,
@@ -372,41 +337,23 @@ def _baseline_quanta(access) -> int:
 
 
 def _wire_proof(conclusion: PlanConclusion):
-    """Project a proof conclusion onto the wire union.
-
-    ``gap_bounded`` is unreachable here on purpose: it needs a sound dual
-    bound, and deriving one from SCIP's floating dual would be exactly the
-    promotion ``proof.py`` exists to forbid.
-    """
+    """Project a published plan's conclusion onto the wire union."""
     if isinstance(conclusion, OptimalProvenConclusion):
         return OptimalProvenProof(
             kind="optimal_proven",
-            proof_source="exhaustive_oracle",
-            witness=_wire_oracle_witness(conclusion.witness),
+            proof_source="solver_status",
+            witness=_wire_solver_witness(conclusion.witness),
             tie_break_closed=True,
         )
     return NotProvenProof(kind="not_proven", reason_code=conclusion.reason_code if isinstance(conclusion, UnprovenConclusion) else UnprovenConclusion().reason_code)
 
 
 def _wire_infeasibility(conclusion: InfeasibilityProvenConclusion) -> InfeasibilityProvenProof:
-    """Project an oracle-backed infeasibility proof.
-
-    Only the ``exhaustive_oracle`` source is reachable here; see
-    ``_no_incumbent_result`` for why ``deterministic_conflict`` is not emitted
-    in phase 1.
-    """
-    if conclusion.proof_source != "exhaustive_oracle":
-        raise ValueError(f"phase 1 publishes only oracle-backed infeasibility proofs; got {conclusion.proof_source!r}")
-    return InfeasibilityProvenProof(kind="infeasibility_proven", proof_source="exhaustive_oracle", witness=_wire_oracle_witness(conclusion.witness))
+    return InfeasibilityProvenProof(kind="infeasibility_proven", proof_source="solver_status", witness=_wire_solver_witness(conclusion.witness))
 
 
-def _wire_oracle_witness(witness) -> ExhaustiveOracleWitness:
-    return ExhaustiveOracleWitness(
-        kind="exhaustive_oracle",
-        enumerated_candidates=witness.enumerated_candidates,
-        feasible_candidates=witness.feasible_candidates,
-        objective_codes=list(witness.objective_codes),
-    )
+def _wire_solver_witness(witness: SolverStatusWitnessFacts) -> SolverStatusWitness:
+    return SolverStatusWitness(kind="solver_status", objective_codes=list(witness.objective_codes))
 
 
 def _failure_result(availability: str, snapshot: PlannerResultSnapshot, issues: list[PlannerIssue]) -> PacPlannerResult:
