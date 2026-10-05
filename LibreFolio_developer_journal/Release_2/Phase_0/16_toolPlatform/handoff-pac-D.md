@@ -3,11 +3,16 @@
 > ⚠️ **Contratto superato — 2026-09-24 (workstream D, round 5).** I §1–§7 qui sotto
 > descrivono il pilot P1 `pac_allocator` `1.0.0` / `operation="analyze"`, **rimosso il
 > 2026-09-21** in `b82e59ffa` per decisione del developer («togli p1 e poi lavora su v2»).
-> Il contratto vivo è `2.0.0` / `operation="plan"` ed è descritto nella **§0**, misurata sul
+> Il contratto vivo è `1.0.0` / `operation="plan"` ed è descritto nella **§0**, misurata sul
 > codice. Il testo storico resta com'era, perché documenta come C e D si erano accordati; non
 > va più usato come istruzione. Correzione chiesta dall'analisi statica del round 5
 > (`09_feedbackJobs/09_reperti_analisi_statica_20260922.md` §9.5). Il developer ha confermato
 > che era il documento a essere rimasto indietro, non il codice.
+>
+> **Stesso numero, contratto diverso.** Il planner è nato come `2.0.0` e il 2026-10-02 (round 14
+> di D) il developer lo ha riportato a `1.0.0`, perché nessuna delle due versioni è mai stata
+> rilasciata. Il `1.0.0` di oggi è il planner `plan`; il `1.0.0` dei §1–§7 è il pilot `analyze`,
+> che non esiste più nel codice.
 
 **Data:** 2026-09-10
 **Stato C:** base completa e validata · nessun plugin/renderer PAC incluso
@@ -16,32 +21,33 @@
 Questo documento definisce il raccordo esatto. D non copia il worker, il registry,
 il client o gli schemi Tool; aggiunge il proprio dominio nei punti di estensione C.
 
-## 0. Contratto effettivo al `f1047f766` (misurato il 2026-09-24)
+## 0. Contratto effettivo al `111b0bbd0` (misurato il 2026-10-02)
 
 Ogni riga cita il file e la riga da cui è stata letta. Se il codice cambia, prevale il
-codice: questa sezione è una fotografia, non una specifica.
+codice: questa sezione è una fotografia, non una specifica. La fotografia precedente era al
+`f1047f766` (2026-09-24), con la versione `2.0.0`.
 
 ### 0.1 Backend
 
 | Voce | Valore | Fonte |
 |---|---|---|
-| Plugin | `PacAllocatorTool(ToolPlugin)` con **una** `ToolService` in `services` | `backend/app/services/tool_plugins/pac_allocator.py:89-116` |
-| Versioni | `contract_version = "2.0.0"`, `implementation_version = "2.0.0"` | `pac_allocator.py:91-92` |
-| Codice tool | `tool_code="pac_allocator"`, `category="allocation"`, `icon_key="calculator"` | `pac_allocator.py:96,101-102` |
-| Descrizione | chiavi `tools.pacAllocator.name` / `tools.pacAllocator.description`; fallback EN a `:98` | `pac_allocator.py:97-100` |
-| UI | `ToolUIDescriptor(kind="custom", component_key="pac-allocator", version="2.0.0")` | `pac_allocator.py:103-107` |
-| Documentazione | `path="user/tools/pac-allocator/"`, `version="2.0.0"` | `pac_allocator.py:108-111` |
-| Operazione | una sola: `plan` — `pure`, `deterministic`, `deduplication="none"` | `pac_allocator.py:70-86` |
-| Limiti di byte | parametri `262_144`, risultato `512 * 1024` | `pac_allocator.py:59,76-77` |
-| Timeout (ms) | queue `5_000` · engine `30_000` · job `45_000` · soft `44_000` · cleanup `5_000` · request `59_000` · client `65_000` | `pac_allocator.py:78-84` |
-| Riserva post-engine | `2_000` ms, passata a `context.claim_engine_window(...)` | `pac_allocator.py:68,145` |
-| Tipi wire | `input_type=PacPlannerRequest`, `output_type=PacPlannerResult` | `pac_allocator.py:113-114` |
-| Firma `compute` | `compute(self, tool_code: str, parameters: BaseModel, context: ToolExecutionContext) -> PacPlannerResult`; il dispatch è su `tool_code` e `operation`, mai sulla forma dei parametri; se non corrispondono, solleva `ToolExecutionError("invalid_parameters")` | `pac_allocator.py:118-151`; base `backend/app/services/tools/base.py:103` |
-| Motore | `plan_pac_allocation(request, *, checkpoint=None, solver_time_budget_seconds=None) -> PacPlannerResult`. Non solleva su un esito di pianificazione | `backend/app/services/pac_allocator/planner.py:125-130` |
+| Plugin | `PacAllocatorTool(ToolPlugin)` con **una** `ToolService` in `services` | `backend/app/services/tool_plugins/pac_allocator.py:130-157` |
+| Versioni | `contract_version = "1.0.0"`, `implementation_version = "1.0.0"` | `pac_allocator.py:132-133` |
+| Codice tool | `tool_code="pac_allocator"`, `category="allocation"`, `icon_key="calculator"` | `pac_allocator.py:137,142-143` |
+| Descrizione | chiavi `tools.pacAllocator.name` / `tools.pacAllocator.description`; fallback EN a `:138-139` | `pac_allocator.py:138-141` |
+| UI | `ToolUIDescriptor(kind="custom", component_key="pac-allocator", version="1.0.0")` | `pac_allocator.py:144-148` |
+| Documentazione | `path="user/tools/pac-allocator/"`, `version="1.0.0"` | `pac_allocator.py:149-152` |
+| Operazione | una sola: `plan` — `pure`, `deterministic`, `deduplication="none"` | `pac_allocator.py:81-97` |
+| Limiti di byte | parametri `262_144` (la piattaforma applica il minimo col proprio tetto di `131_072`), risultato `512 * 1024` | `pac_allocator.py:65,87-88` |
+| Timeout (ms) | queue `5_000` · engine `30_000` · job `45_000` · soft `44_000` · cleanup `5_000` · request `59_000` · client `65_000` | `pac_allocator.py:89-95` |
+| Riserva post-engine | `2_000` ms, passata a `context.claim_engine_window(...)` | `pac_allocator.py:79,186` |
+| Tipi wire | `input_type=PacPlannerRequest`, `output_type=PacPlannerResult` | `pac_allocator.py:154-155` |
+| Firma `compute` | `compute(self, tool_code: str, parameters: BaseModel, context: ToolExecutionContext) -> PacPlannerResult`; il dispatch è su `tool_code` e `operation`, mai sulla forma dei parametri; se non corrispondono, solleva `ToolExecutionError("invalid_parameters")` | `pac_allocator.py:159-199`; base `backend/app/services/tools/base.py:103` |
+| Motore | `plan_pac_allocation(request, *, checkpoint=None, solver_time_budget_seconds=None) -> PacPlannerResult`. Non solleva su un esito di pianificazione | `backend/app/services/pac_allocator/planner.py:124-128` |
 | Package | `backend/app/services/pac_allocator/__init__.py` non riesporta niente (`__all__ = []`, `:20`); importarlo non deve caricare `pyscipopt` (`:16`) | `__init__.py:16,20` |
-| Richiesta | `PacPlannerRequest` (`operation: Literal["plan"]` obbligatorio, senza default) | `backend/app/schemas/pac_allocator.py:728,756` |
-| Risultato | unione discriminata su `result_state`, sette stati: `needs_input`, `invalid`, `unsupported`, `ready_no_op`, `ready_incumbent`, `ready_infeasible`, `ready_no_incumbent` | `pac_allocator.py` (schema) `:2369-2459,2527-2538` |
-| Adapter per i test | `PAC_PLAN_INPUT_ADAPTER`, `PAC_PLAN_OUTPUT_ADAPTER` | schema `:2552-2553` |
+| Richiesta | `PacPlannerRequest` (`operation: Literal["plan"]` obbligatorio, senza default) | `backend/app/schemas/pac_allocator.py:617,648` |
+| Risultato | unione discriminata su `result_state`, sette stati: `needs_input`, `invalid`, `unsupported`, `ready_no_op`, `ready_incumbent`, `ready_infeasible`, `ready_no_incumbent` | schema `:2346-2357,2410-2434,2506-2517` |
+| Adapter per i test | `PAC_PLAN_INPUT_ADAPTER`, `PAC_PLAN_OUTPUT_ADAPTER` | schema `:2533-2534` |
 
 Il Rebalancer **non** ha un servizio registrato: i suoi tipi esistono nello schema
 (`RebalancerPlannerRequest`/`Result`), ma il plugin non li espone (`pac_allocator.py:10-14`).
@@ -49,37 +55,36 @@ Il Rebalancer **non** ha un servizio registrato: i suoi tipi esistono nello sche
 ### 0.2 Codegen
 
 - `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py api sync`
-  (oppure `--tools-only`, `dev.py:2422-2424`). Estrae lo schema in-process e non apre porte.
+  (oppure `--tools-only`, `dev.py:2439-2447`). Estrae lo schema in-process e non apre porte.
 - I cinque file generati sono **ignorati da git** (`frontend/src/lib/api/.gitignore:1-3`,
   `frontend/.gitignore:12-13`). Non arrivano col merge, quindi vanno rigenerati dopo ogni salto
   di baseline, prima di `front check`.
-- La mappa espone `toolContractMap.pac_allocator["2.0.0"]` con `componentKey: "pac-allocator"`,
-  `uiVersion: "2.0.0"` e `operations: ["plan"]`. Il 2026-09-24 alle 09:58, con il client
-  rigenerato al `f1047f766`, il fingerprint misurato è `schemaFingerprint: "e2b70735…"`.
+- La mappa espone `toolContractMap.pac_allocator["1.0.0"]` con `componentKey: "pac-allocator"`,
+  `uiVersion: "1.0.0"` e `operations: ["plan"]`. Il 2026-10-02, con il client rigenerato al
+  `111b0bbd0`, il fingerprint misurato è `schemaFingerprint: "bd84ef14…"` e la generazione
+  `bb77549b…`.
 - **`uiContractVersion` non esiste più**: il campo è `uiVersion`, una stringa uguale alla
   `version` del `ToolUIDescriptor`.
 
 ### 0.3 Renderer
 
-- Props: `ToolHostPropsV1<'pac_allocator', '2.0.0'>` = `{descriptor, accountGeneration}`
+- Props: `ToolHostPropsV1<'pac_allocator', '1.0.0'>` = `{descriptor, accountGeneration}`
   (`frontend/src/lib/features/tools/registry.ts:20-23`).
-- Registrazione:
+- Registrazione, nell'array compilato (`registry.ts:240-246`):
 
   ```ts
-  defineToolRenderer('pac_allocator', '2.0.0', {componentKey: 'pac-allocator', uiVersion: '2.0.0', load: () => import(...)})
+  defineToolRenderer('pac_allocator', '1.0.0', {componentKey: 'pac-allocator', uiVersion: '1.0.0', load: () => import('./pac-allocator/planner/PacPlannerTool.svelte')})
   ```
 
   Firma e opzioni in `registry.ts:25-29,126`. `componentKey` e `uiVersion` devono coincidere
   con la mappa generata (`registry.ts:162`).
-- L'array compilato è **vuoto** (`registry.ts:240-251`), quindi `resolveToolRenderer`
-  restituisce `renderer_missing` (`registry.ts:234`) e la card mostra «Interfacce non
-  disponibili in questa build». È lo stato che il developer ha visto nel round 5 (08 §3), e il
-  test lo fissa (`registry.test.ts:135-146`). Quel test passa a `ready` quando D registra il
-  renderer v2.
-- Esecuzione: `runTool('pac_allocator', '2.0.0', {descriptor, correlationId, parameters, signal})`
+- `resolveToolRenderer` restituisce `ready` (`registry.ts:235,249-251`), e il test lo fissa
+  (`registry.test.ts:135`). Se il renderer sparisce, il tool torna allo stato
+  `renderer_missing` (`registry.ts:234`) che il developer aveva visto nel round 5.
+- Esecuzione: `runTool('pac_allocator', '1.0.0', {descriptor, correlationId, parameters, signal})`
   (`frontend/src/lib/features/tools/client.ts:36-41,300`). `parameters` è
-  `ToolInput<'pac_allocator','2.0.0'>` e il risultato è
-  `ToolItemResult<'pac_allocator','2.0.0'>` (`client.ts:50-52`).
+  `ToolInput<'pac_allocator','1.0.0'>` e il risultato è
+  `ToolItemResult<'pac_allocator','1.0.0'>` (`client.ts:50-52`).
 - Restano valide le regole di §4 su `accountGeneration`, revisione della bozza, sequenza
   della richiesta, metriche fuori dal risultato finanziario e ruoli C/D.
 
@@ -92,16 +97,18 @@ services pac-planner-{core,evaluator,oracle,policies,  _backend_services.py:906-
           solver,proof,wire-numbers,report,service}
 services portfolio-allocation-source                   _backend_services.py:1040-1047
 services tools-registry | tools-lifecycle              _backend_services.py:1130-1145
-utils    tools-wire                                    _backend_utils.py:287-294
-api      tools                                         _backend_api.py:679
-front-utility core-unit       (client, registry, allocationSource)   _frontend_utility.py:101-103,438-446
-front-utility component-unit  (nessun test PAC a oggi)               _frontend_utility.py:447-455
+utils    tools-wire                                    _backend_utils.py:306-313
+api      tools                                         _backend_api.py:687
+api      pac-planner-tool                              _backend_api.py:688
+front-utility core-unit       (client, registry, allocationSource, decimal, format)   _frontend_utility.py:114-118,509-517
+front-utility component-unit  (ToolsHub, ToolHost, StateNotice, ResultCell)          _frontend_utility.py:254-257,518-526
+front-utility document-title  (E2E: /tools e /tools/<primo codice del catalogo>)      _frontend_utility.py:555
 test check-orphans                                     scripts/test_runner/_cli.py:466,510
 ```
 
 `schemas pac-analyze`, `services pac-analyze`, `api pac-tool` e `pac-planner-capacity`
 **non esistono**. Il test API end-to-end del planner (catalogo → compute → risultato
-validato) manca, ed è pianificato nel round 5 (TB1).
+validato) è `api pac-planner-tool`.
 
 ### 0.5 Lane (dal round 5)
 
@@ -110,9 +117,9 @@ La lane `6153` della §6 è superata. Oggi valgono:
 - suite `--test-port 6151 --data-dir /tmp/librefolio-r2-d`, solo `dev.py test`;
 - copia di prod `6161` + `/tmp/librefolio-r2-d-prodcopy`, per server e review.
 
-### 0.6 Definition of done del renderer v2 (sostituisce §7)
+### 0.6 Definition of done del renderer del planner (sostituisce §7)
 
-- Il catalogo contiene un solo `pac_allocator/2.0.0` sano. La mappa generata e il catalogo
+- Il catalogo contiene un solo `pac_allocator/1.0.0` sano. La mappa generata e il catalogo
   hanno lo stesso fingerprint e lo stesso `uiVersion`.
 - `resolveToolRenderer` restituisce `ready` e la card non mostra più `renderer_missing`.
 - La UI manuale funziona senza Asset/Broker nel DB e non calcola valori economici nel browser.
@@ -165,7 +172,7 @@ TypeAdapter dai tipi reali e ne deriva fingerprint e schema.
 
 ## 2. Thin plugin D
 
-> ⚠️ **Superato → §0.1.** Oggi il plugin dichiara `services = (ToolService(...),)`, versione `2.0.0`, operazione `plan`, e `compute(tool_code, parameters, context)`.
+> ⚠️ **Superato → §0.1.** Oggi il plugin dichiara `services = (ToolService(...),)`, versione `1.0.0` (il planner, non il pilot di questa sezione), operazione `plan`, e `compute(tool_code, parameters, context)`.
 
 File:
 
@@ -243,7 +250,7 @@ Niente costruttore parametrico, self-test/import compute, DB copy o scenario per
 
 ## 3. Codegen e descriptor atteso
 
-> ⚠️ **Superato → §0.2.** `uiContractVersion` è diventato `uiVersion: "2.0.0"`; la mappa è `toolContractMap.pac_allocator["2.0.0"]` con `operations: ["plan"]`.
+> ⚠️ **Superato → §0.2.** `uiContractVersion` è diventato `uiVersion: "1.0.0"`; la mappa è `toolContractMap.pac_allocator["1.0.0"]` con `operations: ["plan"]`.
 
 Dopo l'aggiunta del thin plugin:
 
