@@ -25,6 +25,7 @@
         'import.fix': 'onboarding.importGuide.steps.fix.title',
         'import.duplicates': 'onboarding.importGuide.steps.duplicates.title',
         'import.review': 'onboarding.importGuide.steps.review.title',
+        'import.gapFix': 'onboarding.importGuide.steps.gapFix.title',
         'import.bulk': 'onboarding.importGuide.steps.bulk.title',
     };
 

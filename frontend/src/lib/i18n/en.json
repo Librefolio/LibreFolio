@@ -531,7 +531,7 @@
     "todoBlockerCommitHint": "Complete all required fields before saving",
     "todoWarningVerifyHint": "{n, plural, one {# auto-derived field to verify before saving} other {# auto-derived fields to verify before saving}}",
     "todoWarningConfirmTitle": "Verify auto-derived fields?",
-    "todoWarningConfirmMessage": "{n} row(s) have an auto-derived value that hasn't been verified yet (e.g. the nominal quantity of matured bonds). Review them, or save anyway if the derived values are correct.",
+    "todoWarningConfirmMessage": "{n} row(s) have an auto-derived value that hasn't been verified yet. Review them, or save anyway if the derived values are correct.",
     "todoWarningConfirmItemsLabel": "{n} field(s) to verify",
     "todoWarningConfirmProceed": "Save anyway",
     "todoWarningConfirmReview": "Review",
@@ -742,7 +742,160 @@
       "body": "Link an existing asset or create it manually. Future imports will recognize its saved identifier when the match is unique."
     },
     "selectionChangedReview": "The final duplicate check changed the selection. Review it before importing.",
-    "duplicatesChangedReview": "The final duplicate check found new or changed duplicates between your files. Review them before importing."
+    "duplicatesChangedReview": "The final duplicate check found new or changed duplicates between your files. Review them before importing.",
+    "reportSet": {
+      "selectSet": "Select the whole set",
+      "setLabel": "Set uploaded on {date} · {plugin}",
+      "fileCount": "{n} file(s)",
+      "setCount": "{n} set(s) of exports",
+      "status": {
+        "complete": "Complete",
+        "missing": "A file is missing",
+        "incomplete": "Cannot be combined",
+        "loading": "Checking…",
+        "error": "Check failed",
+        "analysed": "Already analysed"
+      },
+      "roleName": {
+        "custody": "Securities transactions",
+        "cash": "Cash statement"
+      },
+      "period": {
+        "years": "{n, plural, one {# year} other {# years}}",
+        "months": "{n, plural, one {# month} other {# months}}",
+        "days": "{n, plural, one {# day} other {# days}}"
+      },
+      "maxHistory": "the bank exports at most {period}",
+      "rows": "{n, plural, one {# row} other {# rows}}",
+      "missingRole": "Missing: {role} ({ext})",
+      "missingPeriod": "Needed at least from {start} to {end}, better until a few days later.",
+      "uploadMissing": "Upload the missing file",
+      "howToExport": "How to export it",
+      "howToExportBoth": "How to export the files",
+      "unrecognised": "Not recognised",
+      "historyFirst": "First import of this broker: at the end we propose the balance and the positions on {date}; from then on every movement is imported.",
+      "historyLater": "LibreFolio already holds this broker's history from {date}: the movements it already has will show up as duplicates, and the earlier ones are not imported again.",
+      "exclude": "Exclude from the import",
+      "selectedCount": "{sets} set(s) and {n} file(s) selected from {b} broker(s)",
+      "incompleteBlocks": "Continue is disabled while a selected set is incomplete: upload its missing file or exclude it.",
+      "step1Missing": "{plugin} also needs: {role} ({ext}).",
+      "step1MissingHint": "Drop it here: it joins the same set. You can also continue: the set will show as incomplete.",
+      "analyzeRowLabel": "Set of {date} · combined ({n} files)",
+      "beforeHistoryCount": "{n} already in LibreFolio (hidden)",
+      "showBeforeHistory": "show",
+      "hideBeforeHistory": "hide",
+      "beforeHistoryStatus": "Already in LibreFolio",
+      "beforeHistoryTooltip": "Before the start of this broker's history in LibreFolio: already represented, by the earlier imports or by the opening balance. It is not imported.",
+      "pairingTitle": "Matching securities ↔ cash",
+      "outcome": {
+        "pair": "pairs",
+        "standalone": "standalone rows",
+        "summarized": "summarised in a checkpoint",
+        "deferred": "with the next import",
+        "excluded": "excluded"
+      },
+      "reason": {
+        "no_counterpart": "no counterpart",
+        "ambiguous": "ambiguous",
+        "status": "not executed or not booked",
+        "unknown_type": "unknown type",
+        "invalid": "invalid",
+        "not_yet_settled": "not settled yet",
+        "outside_cash_coverage": "settled before the cash statement starts",
+        "superseded": "replaced by a newer file"
+      },
+      "downloadCombined": "Download the combined file",
+      "warning": {
+        "unknown_role": "A file is not an export this plugin combines: it stays out of the set.",
+        "excess_files": "Only one “{role}” export is allowed in a set.",
+        "coverage_starts_late": "The “{role}” export starts after the “{covered_role}” period ({date}): the trades settled earlier will be excluded. Export it from an earlier date.",
+        "coverage_ends_early": "The “{role}” export ends before the “{covered_role}” period ({date}): the trades of the last days will come with the next import.",
+        "mixed_accounts": "The files come from different accounts: upload the exports of one account only.",
+        "before_history_segment": "The period {start} – {end} is older than the history already in LibreFolio: it will not be imported.",
+        "covers_gap_fix": "A gap-fix correction of {date} falls inside this period: remove it after the import, or the cash counts twice.",
+        "gap": "No securities export covers {start} – {end}: the trades of that period are summarised. If the bank still has it, export it.",
+        "overlap_mismatch": "Two “{role}” exports disagree on {days} day(s) between {first} and {last}: the newer one is used for those days.",
+        "balance_chain_broken": "The running balance of the cash statement does not add up from {date}: the balances are only compared, not used for corrections.",
+        "empty_member": "A “{role}” export has no rows.",
+        "mixed_accounts_in_file": "A securities export contains several custody accounts."
+      },
+      "gapFix": {
+        "stepTitle": "Align with the bank",
+        "intro": "We compare what LibreFolio will hold after this import with what the bank states, and propose the transactions that close the difference.",
+        "checkpointOpening": "Starting point · {date}",
+        "checkpointGap": "After the gap · {date}",
+        "bank": "Bank",
+        "difference": "Difference",
+        "cashLabel": "Cash {currency}",
+        "atLeast": "at least {quantity}",
+        "absorbed": "{n, plural, one {# earlier movement of the export is summarised here.} other {# earlier movements of the export are summarised here.}}",
+        "absorbedMissing": "{n, plural, one {# of them is not in LibreFolio:} other {# of them are not in LibreFolio:}}",
+        "openingCash": "Balance before the export:",
+        "unexplained": "Not explained by these movements:",
+        "note": {
+          "unresolved_asset": "A position of the bank refers to a security that is not resolved yet: it was left out."
+        },
+        "toggle": "Import this correction",
+        "costToEnter": "cost to enter",
+        "verificationTitle": "End-of-period check · {date}",
+        "verificationOk": "Matches",
+        "verificationKo": "Does not match",
+        "verificationKoHint": "Not corrected automatically: if you add the missing movement by hand, the balance matches.",
+        "hiddenTitles": "A security that did not move in the files and paid no dividends cannot be seen: check your positions on the bank's website.",
+        "error": "The comparison with the bank failed.",
+        "errorContinue": "You can continue without corrections.",
+        "selectedCount": "{n, plural, one {# correction selected} other {# corrections selected}}",
+        "todo": {
+          "gap_fix_cost": "Enter the per-unit cost of this position: the bank's website shows the average price."
+        },
+        "filterHint": "Click a point to see its full comparison and only its corrections; click it again to see them all.",
+        "pointOpening": "Starting point",
+        "pointGap": "After the gap",
+        "positions": "{n, plural, one {# position} other {# positions}}",
+        "corrections": "{n, plural, one {# correction} other {# corrections}}",
+        "notesCount": "{n, plural, one {# note} other {# notes}}",
+        "column": {
+          "point": "Point"
+        },
+        "noProposals": "This point needs no correction."
+      },
+      "badge": {
+        "column": "Report set",
+        "combined": "Combined",
+        "combinedTooltip": "Built from: {names}",
+        "combinedDeleted": "deleted: {names}",
+        "stale": "To re-combine",
+        "staleTooltip": "Built by an older version of the plugin: analysing the set again rebuilds it.",
+        "usedInCombined": "Used in a combined file",
+        "usedInCombinedTooltip": "This export went into a combined file of its set.",
+        "set": "Set of {date}",
+        "setTooltip": "Uploaded together with the other exports of its set.",
+        "incomplete": "Incomplete",
+        "incompleteTooltip": "Missing: {roles}"
+      },
+      "otherFiles": "Other files of this broker",
+      "column": {
+        "file": "File",
+        "period": "Period",
+        "rows": "Rows",
+        "reason": "Reason"
+      },
+      "timeline": {
+        "legendFile": "Files of the set",
+        "legendHistory": "Already in LibreFolio",
+        "legendGap": "Gap between two exports",
+        "gapInfo": "No export of this kind covers these days",
+        "historyCount": "{n, plural, one {# transaction already in LibreFolio} other {# transactions already in LibreFolio}}"
+      },
+      "previewCombined": "Preview the combined file"
+    },
+    "parseDetail": {
+      "sourceRow": "File line",
+      "charges": "Charges",
+      "suggestions": "What the importer found",
+      "technical": "Technical details"
+    },
+    "todoGoto": "Go to row"
   },
   "brokers": {
     "title": "Brokers",
@@ -5317,7 +5470,7 @@
         },
         "select": {
           "title": "Choose files and parsers",
-          "description": "Select one or more saved reports. Choose the appropriate analysis plugin for each file; when every selection is complete, use the button on the right to continue. Depending on the chosen plugin and extracted data, optional steps may appear to unify assets, correct rows, or manage duplicates."
+          "description": "Select one or more saved reports. Choose the appropriate analysis plugin for each file; exports of one bank uploaded together form a set, analysed as one. When every selection is complete, use the button on the right to continue. Depending on the chosen plugin and extracted data, optional steps may appear to unify assets, correct rows, manage duplicates, or align with the bank."
         },
         "analyze": {
           "title": "Analyze extracted data",
@@ -5342,6 +5495,10 @@
         "bulk": {
           "title": "Save All writes the transactions",
           "description": "Review and edit prepared transaction drafts, then choose Save All when they are ready."
+        },
+        "gapFix": {
+          "title": "Align with the bank",
+          "description": "For a set of exports, compare what LibreFolio will hold with what the bank states, and keep or untick the corrections that close the difference before continuing."
         }
       }
     },

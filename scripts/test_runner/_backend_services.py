@@ -533,6 +533,26 @@ def services_brim_provider_base(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "BRIM provider base tests", verbose=verbose)
 
 
+def services_brim_report_sets(verbose: bool = False, test_names: list = None) -> bool:
+    """Test BRIM report-set schemas, plugin-contract defaults and combined-file storage."""
+    print_section("Services: BRIM Report Sets")
+    print_info("Testing: backend/app/schemas/brim.py + backend/app/services/brim_provider.py (report roles, truth points, combined files)")
+    print_info("Tests: schemas, BRIMProvider set defaults, two-role fake plugin, batch_id, combined-file write/save/reuse/stale/delete/list")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_report_sets.py", test_names)
+    return run_command(cmd, "BRIM report sets tests", verbose=verbose)
+
+
+def services_brim_gap_fix(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the BRIM gap-fix: LibreFolio's balances at a date, the gap-fix schemas and compute_gap_fix."""
+    print_section("Services: BRIM Gap-fix")
+    print_info("Testing: backend/app/services/brim_gap_fix.py + TransactionService balances at a date + gap-fix schemas in backend/app/schemas/brim.py")
+    print_info("Tests: exclude_tx_ids, get_balances_at_end_of, request/response schemas, proposals, cost todos, explanation, verifications, one import vs three")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_gap_fix.py", test_names)
+    return run_command(cmd, "BRIM gap-fix tests", verbose=verbose)
+
+
 def services_brim_create_transaction(verbose: bool = False, test_names: list = None) -> bool:
     """Test BRIMProvider._create_transaction and _loc_to_field."""
     print_section("Services: BRIM Create Transaction")
@@ -1034,6 +1054,8 @@ Note: No backend server required.
     add_test(cat, "current-price-bootstrap", services_current_price_bootstrap, name="Current Price Bootstrap", desc="OHLC widening helper (F.2/F.3)")
     add_test(cat, "scheduled-investment-param-change", services_scheduled_investment_param_change, name="Scheduled Investment Param Change", desc="Symmetric wipe on provider_params change")
     add_test(cat, "brim-provider-base", services_brim_provider_base, name="BRIM Provider Base", desc="Abstract base defaults + text-encoding fallback")
+    add_test(cat, "brim-report-sets", services_brim_report_sets, name="BRIM Report Sets", desc="Report-set schemas, contract defaults, combined-file storage")
+    add_test(cat, "brim-gap-fix", services_brim_gap_fix, name="BRIM Gap-fix", desc="Gap-fix: bank truth points vs LibreFolio state, proposals and verifications")
     add_test(cat, "brim-create-transaction", services_brim_create_transaction, name="BRIM Create Transaction", desc="_create_transaction + _loc_to_field")
     add_test(cat, "financial-utils", services_financial_utils, name="Financial Utils", desc="WAC pure math (compute_wac_from_txlist, determine_target_currency)")
     add_test(cat, "roi-fifo-utils", services_roi_fifo_engine, name="ROI/FIFO/Portfolio Utils", desc="TWRR/MWRR/SimpleROI series, FIFO lots (FifoLotEngine), WAC multi-broker, price resolver")
