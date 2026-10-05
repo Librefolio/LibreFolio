@@ -26,8 +26,10 @@
  *    (groups of two and three), every member within 3° of its family's hue. The
  *    ruler is this file's own, proven on published reference data before it
  *    measures anything. Groups of up to three, and the default with no group
- *    size, are pinned byte for byte, so the history chart and every other caller
- *    stay where they are. And rule B itself is pinned shade by shade where the
+ *    size, are pinned byte for byte, so every group of three or fewer, and every
+ *    caller that passes no group size, stays where it is; since D15 the history
+ *    chart's ETF family, four to seven members, follows rule B like the pie's.
+ *    And rule B itself is pinned shade by shade where the
  *    criterion is blind — the gap capped at `step`, ties going to the first k —
  *    on values captured from the implementation the developer approved.
  *
@@ -643,11 +645,13 @@ const GENERATED_TS = fileURLToPath(new URL('../../../api/generated.ts', import.m
 describe('buildAllocationHierarchy — measured contrast across a whole family (K)', () => {
     /**
      * The pair rule above, stated for a whole family. A family is no longer `{pure, one subtype}`:
-     * by **content** — `primaryAssetType`, the history chart's grouping — REAL_ESTATE gathers
-     * ETF_REAL_ESTATE and CROWDFUND_REAL_ESTATE; by **vehicle** — `assetTypeFamily`, the pie's — the
-     * ETF family holds the generic ETF and every ETF subtype, seven members today. Each family is
-     * measured on the palettes of the chart that draws it and nowhere else: a family no chart draws
-     * is not a claim about the product.
+     * by **content** — `primaryAssetType`, a resolver no chart uses since D15 — REAL_ESTATE gathers
+     * ETF_REAL_ESTATE and CROWDFUND_REAL_ESTATE; by **vehicle** — `assetTypeFamily`, the pie's and,
+     * since D15, the history chart's — the ETF family holds the generic ETF and every ETF subtype,
+     * seven members today. The vehicle family is measured on the pie's palettes; the history chart
+     * draws it too since D15, on palettes this block does not measure it on yet. The content family
+     * is still measured on the history chart's palettes, which drew it until D15: a measure of
+     * `primaryAssetType` as a resolver, no longer a claim about any chart.
      *
      * The family of three keeps the pair rule — 15 lightness points, 1° of hue — which today's
      * one-sided walk meets. The family of seven is beyond it: the walk clamps to white or black after
@@ -670,7 +674,7 @@ describe('buildAllocationHierarchy — measured contrast across a whole family (
         return {primaryAssetType: assetTypes.primaryAssetType, assetTypeFamily: assetTypes.assetTypeFamily, ASSET_TYPES: [...assetTypes.ASSET_TYPES] as string[]};
     }
 
-    /** The history chart's two themes: the chart that groups by content. */
+    /** The history chart's two themes. Since D15 it groups by vehicle; the content case below measures `primaryAssetType` on them as a resolver, no longer used by any chart. */
     const HISTORY_PALETTES: ReadonlyArray<readonly [string, readonly string[]]> = [
         ['AllocationHistoryChart PALETTE_LIGHT', HISTORY_PALETTE_LIGHT],
         ['AllocationHistoryChart PALETTE_DARK', HISTORY_PALETTE_DARK],
@@ -730,7 +734,7 @@ describe('buildAllocationHierarchy — measured contrast across a whole family (
         expect(disagreements, 'the K2 stub of this file no longer mirrors primaryAssetType: the builder tests above would check a grouping no chart draws').toEqual([]);
     });
 
-    it.each(HISTORY_PALETTES)('by content, REAL_ESTATE holds REAL_ESTATE, ETF_REAL_ESTATE and CROWDFUND_REAL_ESTATE — one separable shade each, on its hue, for every entry of %s', async (_name, palette) => {
+    it.each(HISTORY_PALETTES)('by content — primaryAssetType as a resolver, no longer used by any chart — REAL_ESTATE holds REAL_ESTATE, ETF_REAL_ESTATE and CROWDFUND_REAL_ESTATE: one separable shade each, on its hue, for every entry of %s', async (_name, palette) => {
         const {primaryAssetType, ASSET_TYPES} = await importTaxonomy();
         const members = membersOf(ASSET_TYPES, primaryAssetType, 'REAL_ESTATE');
         // Anti-vacuous: K2 really makes this family, with the pure member leading.
@@ -739,7 +743,7 @@ describe('buildAllocationHierarchy — measured contrast across a whole family (
 
         const {defects, slotsChecked} = familyDefects(palette, members, primaryAssetType, 'REAL_ESTATE');
         expect(slotsChecked, 'the loop ran on fewer slots than the palette holds').toBe(palette.length);
-        expect(defects, `members of the ${members.length}-member REAL_ESTATE family the history chart cannot tell apart, or that leave its hue`).toEqual([]);
+        expect(defects, `members of the ${members.length}-member REAL_ESTATE family by primaryAssetType, a resolver no chart uses since D15, that cannot be told apart or that leave its hue`).toEqual([]);
     });
 
     // Restored 28/09 → 01/10/2026 from the parked block, with rule B's criterion in place of the pair rule.
@@ -1208,8 +1212,8 @@ const TODAYS_SHADES: ReadonlyArray<{base: string; step: 'default' | number; shad
 
 describe('shadeForDepth — a group of up to three is shaded as today, byte for byte', () => {
     /**
-     * The guard that lets rule B ship. The history chart groups by content — three members at most —
-     * and must not move by one hex digit; neither may a pie family of two or three. With a group size
+     * The guard that lets rule B ship. A family of two or three must not move by one hex digit, on
+     * the pie or on the history chart, which since D15 groups by vehicle too. With a group size
      * of three or less, `shadeForDepth` is today's one-sided walk exactly: on every slot of all four
      * palettes, against the transcription and against literal values snapshotted before the change.
      * Green today, and it must stay green.
