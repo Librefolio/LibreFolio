@@ -2756,3 +2756,87 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 >
 > **Passo 5 — checkpoint**: cinque gruppi (backend · blocco e montaggi · E2E · guida · journal). CHANGELOG al
 > coordinator.
+
+### `dev_release2` → Risk: K, I, il pavimento 0/0 e la PR #30 · ✅ 05/10/2026
+
+> **F3 committato** (`26338dc8a` … `c42bbad9e`, albero `73fb43066`). Il developer ha poi fuso `dev_release2`
+> `9b5291c25` nel ramo con lo script del coordinator: `bb513bf8a`, albero `b0e514b67`, identico alla simulazione.
+>
+> **Controllo semantico di `portfolio_service.py`**, l'unico file di codice cambiato da tutte e due le parti:
+> - la mia parte sposta due costanti in `data_quality_thresholds` (`QUANTITY_DUST_THRESHOLD`,
+>   `TRANSACTION_IMPLIED_GRACE_DAYS`);
+> - quella di `dev_release2` estende `needs_engine` a tutti i flag delle sezioni del report.
+> Le due modifiche sono indipendenti: `dev_release2` non tocca né la sede vecchia né quella nuova delle costanti, e
+> non ne aggiunge usi. Nel file fuso ci sono entrambe, l'import si risolve e ruff è pulito.
+>
+> **Validazione della revisione combinata** (6152, una cosa per volta):
+> - `front build --debug` ✅; `mkdocs build` senza avvisi; **`front check` 0 errori e 0 avvisi**, il pavimento
+>   nuovo; i18n 3508 chiavi, tutte tradotte;
+> - backend: `risk-all` 810 · `portfolio-engine` 42 · `schemas risk` 47 · `api risk` 14 · `api portfolio` 55;
+> - vitest: `risk-levels-unit` 296 · `risk-levels-component` 92 · `risk-controller-unit` 54 ·
+>   `risk-benchmark-unit` 13 · `allocation-unit` 211 · `core-unit` 2896 · `component-unit` 2380;
+> - E2E: `risk` 14 · `risk-lab` 31 · `risk-benchmark-shared` 4 · `risk-asset-detail` 2 · `dashboard` 24;
+> - orfani ✅.
+>
+> **Prossimo**: il D15 di I. In `AllocationHistoryChart.svelte`, `resolvePrimary` passa a `assetTypeFamily`, e la
+> dimensione «tipo» va a 12 chiavi (11 famiglie più «Liquidity») su 14 colori. Il commento della palette citerà
+> `DailyStateBuilder.build`, passo 4h. Le frasi di K in `assetTypes.ts` sono concesse; quelle di
+> `allocationHierarchy.ts` sono da chiedere. Nello stesso checkpoint va `mergeQualityIssues`, l'unione unica dei
+> problemi dei dati per il banner del laboratorio, che il developer ha chiesto tramite F il 05/10.
+
+### Checkpoint 1 dopo l'aggiornamento: il D15 di I e l'unione unica dei problemi dei dati · ✅ 05/10/2026
+
+> **Il D15 di I** (20_performanceCharts, giro 4 §7): il grafico storico dell'allocazione raggruppa per veicolo, come
+> la torta.
+> - In `AllocationHistoryChart.svelte`, `resolvePrimary` passa da `primaryAssetType` a `assetTypeFamily`. I dati non
+>   si sommano: ogni tipo grezzo resta una serie. Seguono la famiglia l'ordine nella pila e il colore, che diventa una
+>   sfumatura del colore della famiglia.
+> - Il commento della palette ora conta 12 colori base, cioè 11 famiglie più «Liquidity», e cita
+>   `DailyStateBuilder.build`, passo 4h, non più una riga di `portfolio_engine.py`.
+> - Riallineate le frasi che il D15 rendeva false, con le concessioni del coordinator:
+>   - quella di K in `assetTypes.ts`;
+>   - tre commenti di `allocationHierarchy.ts`;
+>   - i commenti dei test della gerarchia e degli anelli, più un titolo e il testo di un messaggio di fallimento;
+>     nessuna condizione cambia;
+>   - la desc di `allocation-unit`, al presente.
+> - Il test nuovo `AllocationHistoryChart.test.ts` è registrato in `allocation-unit`. Monta il grafico con echarts
+>   registrato e confronta ordine e colori con `buildAllocationHierarchy(…, assetTypeFamily)`.
+> - Il criterio di contrasto delle palette dello storico, (a) o (b), resta alla revisione combinata.
+>
+> **`mergeQualityIssues`**: l'unione unica dei problemi dei dati. È richiesta dal banner «Sincronizza» del laboratorio
+> (decisione del developer del 05/10, tramite F), ed è esportata dal controller, che la usa per primo.
+> - Il banner chiave le voci per `code + group_key`: due voci con la stessa coppia farebbero lanciare a Svelte
+>   `each_key_duplicate`. Con le richieste del laboratorio, che preparano finestre diverse, la coppia si ripete.
+> - La regola:
+>   - id e coppie si uniscono nell'ordine di arrivo;
+>   - i nomi restano allineati agli id; vince il primo nome vero, e `#<id>` compare solo se qualche voce porta nomi;
+>   - il conteggio è la dimensione dell'unione; senza elenchi, il maggiore dei due, che è un limite inferiore;
+>   - vince la severità più grave;
+>   - l'intervallo di date si allarga;
+>   - una voce identica a quella già tenuta si salta.
+>   Sulla Dashboard, dove i rapporti sono identici, il risultato non cambia: c'è un pin.
+> - La copia non usa `structuredClone`, perché i risultati del controller stanno in `$state` e i loro proxy non si
+>   clonano.
+> - **⚠️ Fuori pista — un difetto trovato da test-author**: con tre voci, il `#2` messo dalla prima unione bloccava un
+>   nome vero arrivato con la terza. È il percorso dell'unione di F fra i quattro controller. Corretto: un `#<id>` già
+>   tenuto non conta come nome.
+> - **⚠️ Fuori pista — il contratto**: test-author ha segnalato i punti che il brief lasciava aperti: voci senza
+>   elenco, elenchi assenti, parametri presenti solo più avanti, nomi mancanti. Li ho decisi, ed ognuno ha il suo caso.
+>
+> **Verifica** (6152):
+> - prettier pulito; `front check` 0/0;
+> - vitest: `risk-controller-unit` 77 · `allocation-unit` 214 · `risk-levels-unit` 296 · `risk-levels-component` 92 ·
+>   `core-unit` 2896 · `component-unit` 2380;
+> - E2E: `dashboard` 24 · `risk` 14 · `risk-lab` 31 · `risk-benchmark-shared` 4;
+> - orfani ✅; ruff del runner a 22 errori, come su HEAD.
+>
+> Rossi prima di tutto: 3 sul D15, 20 sull'unione (più il pin della Dashboard), poi i casi del contratto.
+>
+> **Mutanti uccisi 9 su 9**, con ripristino verificato con sha256: la chiave senza `group_key`, l'unione ordinata, il
+> conteggio non aggiornato, la severità del primo, le date non allargate, l'ultimo nome che vince, il salto delle voci
+> identiche, il controller con la vecchia deduplica, il D15 annullato.
+>
+> **Note per il seguito**:
+> - dopo il D15, `primaryAssetType` non ha più chiamanti in produzione: è nel backlog del coordinator;
+> - prima la poll dei prezzi live va ad A, nel suo prossimo checkpoint dopo la mia punta (`holdLivePricePoll`, come in
+>   `risk-lab`).
