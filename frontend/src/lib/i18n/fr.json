@@ -1072,7 +1072,8 @@
       "weekRange": "Semaine {start} – {end}",
       "monthLabel": "{month}",
       "valueAt": "Valeur au {date}",
-      "eventsInPeriod": "Événements sur la période :"
+      "eventsInPeriod": "Événements sur la période :",
+      "partialBucket": "Partiel : {days} sur {total} jours"
     },
     "resolution": {
       "weekly": "Hebdomadaire",
@@ -1494,7 +1495,6 @@
     "pnlSubmodeLine": "Ligne",
     "pnlSubmodeIncome": "Revenus",
     "pnlSubmodeCandles": "Bougies",
-    "pnlCandlesHypothetical": "Synthétique — les plus hauts/bas cross-actifs sont hypothétiques et non simultanés, pas une véritable série intrajournalière.",
     "pnlCandlesHypotheticalShort": "Synthétique — les plus hauts/bas cross-actifs sont hypothétiques et non simultanés",
     "pnlAcqNewCapital": "Nouveau capital",
     "pnlAcqReinvested": "Réinvesti",
