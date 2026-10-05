@@ -9,6 +9,7 @@
     import {formatRatio, resultByCode} from '../riskAnalysisHelpers';
     import {buildRiskAdjusted, uncoveredWeight} from './levelHelpers';
     import {buildRiskReturnPoints, selectKpiWave} from './l3Helpers';
+    import {formatShare} from './shareFormat';
 
     /**
      * L3 — "am I being paid for this risk?"
@@ -179,10 +180,10 @@
                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400" data-testid="risk-l3-scatter-note">
                     {$t('risk.levels.l3.scatter.note')}
                     {#if cashShare !== null && cashShare > 0}
-                        <span data-testid="risk-l3-scatter-cash">{$t('risk.levels.l3.scatter.cash', {values: {share: formatPercent(cashShare, {scale: 100, signed: false, digits: 0})}})}</span>
+                        <span data-testid="risk-l3-scatter-cash">{$t('risk.levels.l3.scatter.cash', {values: {share: formatShare(cashShare, 0)}})}</span>
                     {/if}
                     {#if unpricedShare !== null && unpricedShare > 0}
-                        <span data-testid="risk-l3-scatter-unpriced">{$t('risk.levels.l3.scatter.unpriced', {values: {share: formatPercent(unpricedShare, {scale: 100, signed: false, digits: 0})}})}</span>
+                        <span data-testid="risk-l3-scatter-unpriced">{$t('risk.levels.l3.scatter.unpriced', {values: {share: formatShare(unpricedShare, 0)}})}</span>
                     {/if}
                 </p>
             </div>

@@ -11,6 +11,7 @@
     import CorrelationHeatmap from '../CorrelationHeatmap.svelte';
     import {buildLookup, NEAR_IDENTICAL, topPairs} from '../correlationHelpers';
     import {buildConcentration, buildDivergenceRows, uncoveredWeight} from './levelHelpers';
+    import {formatShare} from './shareFormat';
 
     /**
      * L2 — "am I diversified like I think I am?"
@@ -152,9 +153,13 @@
         return $t(`risk.levels.l2.effectiveAssets.${key}`, {values: {positions}});
     });
 
-    /** A share of the portfolio: one decimal, never signed — a weight has no direction. */
+    /**
+     * A share of the portfolio: one decimal, never signed — a weight has no direction. Below
+     * 0.1 % it gains a second decimal, and below that «< 0.01%», so a holding is never shown
+     * as zero (`formatShare`).
+     */
     function share(fraction: number): string {
-        return formatPercent(fraction, {scale: 100, signed: false, digits: 1});
+        return formatShare(fraction, 1);
     }
 
     /**
