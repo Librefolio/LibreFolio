@@ -847,7 +847,17 @@
         "selectedCount": "{n, plural, one {# corrección seleccionada} other {# correcciones seleccionadas}}",
         "todo": {
           "gap_fix_cost": "Introduce el coste por unidad de esta posición: la web del banco muestra el precio medio."
-        }
+        },
+        "filterHint": "Haz clic en un punto para ver su comparación completa y solo sus correcciones; vuelve a hacer clic para verlas todas.",
+        "pointOpening": "Punto de partida",
+        "pointGap": "Después del hueco",
+        "positions": "{n, plural, one {# posición} other {# posiciones}}",
+        "corrections": "{n, plural, one {# corrección} other {# correcciones}}",
+        "notesCount": "{n, plural, one {# nota} other {# notas}}",
+        "column": {
+          "point": "Punto"
+        },
+        "noProposals": "Este punto no necesita correcciones."
       },
       "badge": {
         "column": "Conjunto de informes",
@@ -862,7 +872,22 @@
         "setTooltip": "Subido junto con las demás exportaciones de su conjunto.",
         "incomplete": "Incompleto",
         "incompleteTooltip": "Falta: {roles}"
-      }
+      },
+      "otherFiles": "Otros archivos de este bróker",
+      "column": {
+        "file": "Archivo",
+        "period": "Periodo",
+        "rows": "Filas",
+        "reason": "Motivo"
+      },
+      "timeline": {
+        "legendFile": "Archivos del conjunto",
+        "legendHistory": "Ya en LibreFolio",
+        "legendGap": "Hueco entre dos exportaciones",
+        "gapInfo": "Ninguna exportación de este tipo cubre estos días",
+        "historyCount": "{n, plural, one {# transacción ya en LibreFolio} other {# transacciones ya en LibreFolio}}"
+      },
+      "previewCombined": "Vista previa del archivo combinado"
     },
     "parseDetail": {
       "sourceRow": "Línea del archivo",

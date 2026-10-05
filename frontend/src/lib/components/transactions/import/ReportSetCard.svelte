@@ -3,8 +3,9 @@
 
   A report-set plugin imports several exports of the same bank as one: the files uploaded
   together for a broker and recognised by the plugin form a set (design D-S22). The set is one
-  row with its card: the files by role and the period each covers, what is missing and for
-  which period, the plugin's notices, the broker history LibreFolio already holds, and the
+  row with its card: the files of each role in a table, ordered by the period they cover; what
+  is missing and for which period; a timeline of the files, of the gaps between them and of the
+  broker history LibreFolio already holds, each with an infobox; the plugin's notices; and the
   actions that make the set importable — upload the missing export into the same set, or
   exclude the set from this import.
 
@@ -14,7 +15,10 @@
     import {_ as t} from '$lib/i18n';
     import {ChevronDown, ChevronRight, Eye, FileText, Layers, Trash2, Upload, ExternalLink, AlertTriangle, Info} from 'lucide-svelte';
     import LoadingSpinner from '$lib/components/ui/feedback/LoadingSpinner.svelte';
-    import {buildSetTimeline, dayBefore, formatIsoDay, parseIsoPeriod, type ReportSetGroup, type SetFileInfo, type SetPluginInfo, type SetPreviewState, type SetRoleInfo} from '$lib/utils/transactions/importReportSets';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
+    import DataTable from '$lib/components/table/DataTable.svelte';
+    import type {ColumnDef, RowAction} from '$lib/components/table/types';
+    import {buildSetTimeline, dayBefore, formatIsoDay, parseIsoPeriod, type ReportSetGroup, type SetFileInfo, type SetPluginInfo, type SetPreviewState, type SetRoleInfo, type TimelineBar, type TimelineGap} from '$lib/utils/transactions/importReportSets';
     import type {BrimSetPreview} from '$lib/types';
 
     interface Props {
@@ -47,8 +51,10 @@
         preview
             ? buildSetTimeline(
                   {
-                      members: (preview.members ?? []).map((member) => ({file_id: member.file_id, role: member.role ?? null, coverage: (member.coverage ?? []).map((c) => ({axis: c.axis, start: String(c.start), end: String(c.end)}))})),
+                      members: (preview.members ?? []).map((member) => ({file_id: member.file_id, role: member.role ?? null, rows: typeof member.rows === 'number' ? member.rows : null, coverage: (member.coverage ?? []).map((c) => ({axis: c.axis, start: String(c.start), end: String(c.end)}))})),
                       history_start: preview.history_start ? String(preview.history_start) : null,
+                      history_end: preview.history_end ? String(preview.history_end) : null,
+                      history_count: typeof preview.history_count === 'number' ? preview.history_count : 0,
                   },
                   roles.map((role) => role.code),
               )
@@ -117,6 +123,93 @@
 
     function fileOf(fileId: string): SetFileInfo | undefined {
         return set.files.find((file) => file.file_id === fileId);
+    }
+
+    /** A file of the set as its role table lists it: the period is the union of its coverages. */
+    interface MemberRow {
+        fileId: string;
+        filename: string;
+        start: string | null;
+        end: string | null;
+        rows: number | null;
+    }
+
+    function compareIso(a: string, b: string): number {
+        return a < b ? -1 : a > b ? 1 : 0;
+    }
+
+    /** The files of a role by period start, then name; a file without coverage last (U1-B). */
+    function memberRows(code: string): MemberRow[] {
+        return membersOf(code)
+            .map((member) => {
+                const starts = (member.coverage ?? []).map((c) => String(c.start).slice(0, 10)).sort(compareIso);
+                const ends = (member.coverage ?? []).map((c) => String(c.end).slice(0, 10)).sort(compareIso);
+                return {fileId: member.file_id, filename: member.filename, start: starts[0] ?? null, end: ends[ends.length - 1] ?? null, rows: typeof member.rows === 'number' ? member.rows : null};
+            })
+            .sort((a, b) => {
+                if (a.start !== b.start) {
+                    if (a.start === null) return 1;
+                    if (b.start === null) return -1;
+                    return compareIso(a.start, b.start);
+                }
+                return a.filename.localeCompare(b.filename, undefined, {numeric: true});
+            });
+    }
+
+    // Fixed order and no selection: the set is chosen whole, and the developer asked for the files by period.
+    let memberColumns = $derived<ColumnDef<MemberRow>[]>([
+        {id: 'file', header: () => $t('importWizard.reportSet.column.file'), type: 'text', sortable: false, filterable: false, minWidth: 160, cell: (row) => row.filename},
+        {id: 'period', header: () => $t('importWizard.reportSet.column.period'), type: 'text', sortable: false, filterable: false, width: 200, minWidth: 150, cell: (row) => (row.start ? `${formatDay(row.start)} → ${formatDay(row.end)}` : '—')},
+        {id: 'rows', header: () => $t('importWizard.reportSet.column.rows'), type: 'number', sortable: false, filterable: false, width: 80, minWidth: 60, cell: (row) => row.rows ?? '—'},
+    ]);
+
+    let memberActions = $derived<RowAction<MemberRow>[]>([
+        {id: 'preview', icon: Eye, label: $t('common.preview'), onClick: (row) => onPreviewFile(row.fileId)},
+        {
+            id: 'delete',
+            icon: Trash2,
+            label: $t('common.delete'),
+            variant: 'danger',
+            onClick: (row) => {
+                const file = fileOf(row.fileId);
+                if (file) onDeleteFile(file);
+            },
+        },
+    ]);
+
+    let hasTimelineGaps = $derived((timeline?.rows ?? []).some((row) => row.gaps.length > 0));
+
+    function period(start: string, end: string): string {
+        return `${formatDay(start)} → ${formatDay(end)}`;
+    }
+
+    /** The span a timeline row covers, from its first start to its furthest end. */
+    function rowSpan(bars: TimelineBar[]): string {
+        if (bars.length === 0) return '';
+        const end = bars.map((bar) => bar.end).sort(compareIso)[bars.length - 1];
+        return period(bars[0].start, end);
+    }
+
+    function barInfo(roleCode: string, bar: TimelineBar): string {
+        const name = (preview?.members ?? []).find((member) => member.file_id === bar.fileId)?.filename ?? '';
+        const lines = [
+            roleName(
+                roles.find((role) => role.code === roleCode),
+                roleCode,
+            ),
+            name,
+            period(bar.start, bar.end),
+        ];
+        if (typeof bar.rows === 'number') lines.push($t('importWizard.reportSet.rows', {values: {n: bar.rows}}));
+        return lines.filter((line) => line !== '').join('\n');
+    }
+
+    function gapInfo(gap: TimelineGap): string {
+        return `${period(gap.start, gap.end)}\n${$t('importWizard.reportSet.timeline.gapInfo')}`;
+    }
+
+    function historyInfo(history: TimelineBar & {count: number}): string {
+        return `LibreFolio\n${period(history.start, history.end)}\n${$t('importWizard.reportSet.timeline.historyCount', {values: {n: history.count}})}`;
     }
 
     /** Notice context, with role codes named and ISO dates shown in the user's format. */
@@ -214,32 +307,29 @@
                             <span class="font-normal text-gray-400">· {maxHistoryLabel(role)}</span>
                         {/if}
                     </div>
-                    {#each membersOf(role.code) as member (member.file_id)}
-                        {@const coverage = member.coverage?.[0]}
-                        <div class="flex items-center gap-2 pl-3 text-xs text-gray-700 dark:text-gray-300" data-testid="report-set-member" data-file-id={member.file_id} data-role={role.code}>
-                            <FileText size={12} class="shrink-0 text-gray-400" />
-                            <span class="min-w-0 flex-1 truncate" title={member.filename}>{member.filename}</span>
-                            {#if coverage}
-                                <span class="shrink-0 tabular-nums text-gray-500">{formatDay(String(coverage.start))} → {formatDay(String(coverage.end))}</span>
-                            {/if}
-                            <span class="shrink-0 text-gray-400">{$t('importWizard.reportSet.rows', {values: {n: member.rows ?? 0}})}</span>
-                            <button type="button" class="shrink-0 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-slate-700" title={$t('common.preview')} aria-label={$t('common.preview')} onclick={() => onPreviewFile(member.file_id)}>
-                                <Eye size={12} />
-                            </button>
-                            <button
-                                type="button"
-                                class="shrink-0 rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30"
-                                title={$t('common.delete')}
-                                aria-label={$t('common.delete')}
-                                onclick={() => {
-                                    const file = fileOf(member.file_id);
-                                    if (file) onDeleteFile(file);
-                                }}
-                            >
-                                <Trash2 size={12} />
-                            </button>
+                    {#if membersOf(role.code).length > 0}
+                        <div class="overflow-hidden rounded-md border border-gray-100 dark:border-gray-800" data-testid="report-set-role-table" data-role={role.code}>
+                            <DataTable
+                                data={memberRows(role.code)}
+                                columns={memberColumns}
+                                getRowId={(row) => row.fileId}
+                                storageKey={`import-wizard-set-role-${role.code}`}
+                                enableSelection={false}
+                                enableActions={true}
+                                actionsColumnWidth="48px"
+                                rowActions={memberActions}
+                                onRowDoubleClick={(row) => onPreviewFile(row.fileId)}
+                                enableSorting={false}
+                                enableColumnFilters={false}
+                                enableColumnResize={false}
+                                enablePagination={false}
+                                enableColumnVisibility={false}
+                                tableLayout="auto"
+                                stickyActions={false}
+                                enableContextMenu={true}
+                            />
                         </div>
-                    {/each}
+                    {/if}
                     {#if missing}
                         <div class="ml-3 space-y-1.5 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200" data-testid="report-set-missing" data-role={role.code}>
                             <p class="font-medium">{$t('importWizard.reportSet.missingRole', {values: {role: roleName(role, role.code), ext: extensionsLabel(role)}})}</p>
@@ -277,7 +367,7 @@
                 <div class="space-y-1">
                     <div class="text-xs font-medium text-gray-600 dark:text-gray-300">{$t('importWizard.reportSet.unrecognised')}</div>
                     {#each unrecognised as member (member.file_id)}
-                        <div class="flex items-center gap-2 pl-3 text-xs text-gray-500" data-testid="report-set-member" data-file-id={member.file_id} data-role="">
+                        <div class="flex items-center gap-2 pl-3 text-xs text-gray-500" data-testid="report-set-unrecognised" data-file-id={member.file_id}>
                             <FileText size={12} class="shrink-0" />
                             <span class="min-w-0 flex-1 truncate">{member.filename}</span>
                         </div>
@@ -286,19 +376,11 @@
             {/if}
 
             {#if timeline}
-                <div class="space-y-1" data-testid="report-set-timeline">
-                    <div class="flex justify-between pl-28 text-[10px] tabular-nums text-gray-400">
+                <div class="space-y-1.5" data-testid="report-set-timeline">
+                    <div class="flex justify-between pl-28 pr-44 text-[10px] tabular-nums text-gray-400">
                         <span>{formatDay(timeline.start)}</span>
                         <span>{formatDay(timeline.end)}</span>
                     </div>
-                    {#if timeline.history}
-                        <div class="flex items-center gap-2">
-                            <span class="w-26 shrink-0 truncate text-xs text-gray-500">LibreFolio</span>
-                            <div class="relative h-2 flex-1 rounded bg-gray-100 dark:bg-slate-800">
-                                <div class="absolute h-2 rounded bg-gray-400/70 dark:bg-gray-500/70" style="left: {timeline.history.leftPct}%; width: {Math.max(timeline.history.widthPct, 1)}%" title="{formatDay(timeline.history.start)} → {formatDay(timeline.history.end)}"></div>
-                            </div>
-                        </div>
-                    {/if}
                     {#each timeline.rows as row (row.role)}
                         <div class="flex items-center gap-2">
                             <span class="w-26 shrink-0 truncate text-xs text-gray-500"
@@ -307,13 +389,49 @@
                                     row.role,
                                 )}</span
                             >
-                            <div class="relative h-2 flex-1 rounded bg-gray-100 dark:bg-slate-800">
+                            <div class="relative h-3 flex-1 rounded bg-gray-100 dark:bg-slate-800">
+                                {#each row.gaps as gap, index (index)}
+                                    <div class="absolute inset-y-0" style="left: {gap.leftPct}%; width: {Math.max(gap.widthPct, 1)}%">
+                                        <Tooltip text={gapInfo(gap)} wrapperClass="h-full w-full" showDelayMs={200}>
+                                            <div class="h-full w-full rounded border border-dashed border-amber-500 bg-amber-50/60 dark:border-amber-400 dark:bg-amber-900/20" data-testid="report-set-timeline-gap" data-role={row.role} data-start={gap.start} data-end={gap.end}></div>
+                                        </Tooltip>
+                                    </div>
+                                {/each}
                                 {#each row.bars as bar, index (index)}
-                                    <div class="absolute h-2 rounded bg-libre-green/70" style="left: {bar.leftPct}%; width: {Math.max(bar.widthPct, 1)}%" title="{formatDay(bar.start)} → {formatDay(bar.end)}"></div>
+                                    <div class="absolute inset-y-0" style="left: {bar.leftPct}%; width: {Math.max(bar.widthPct, 1)}%">
+                                        <Tooltip text={barInfo(row.role, bar)} wrapperClass="h-full w-full" showDelayMs={200}>
+                                            <div class="h-full w-full rounded bg-libre-green/70 hover:bg-libre-green" data-testid="report-set-timeline-bar" data-role={row.role} data-file-id={bar.fileId} data-start={bar.start} data-end={bar.end} data-rows={bar.rows ?? ''}></div>
+                                        </Tooltip>
+                                    </div>
                                 {/each}
                             </div>
+                            <span class="w-42 shrink-0 truncate text-right text-[10px] tabular-nums text-gray-500">{rowSpan(row.bars)}</span>
                         </div>
                     {/each}
+                    {#if timeline.history}
+                        {@const history = timeline.history}
+                        <div class="flex items-center gap-2">
+                            <span class="w-26 shrink-0 truncate text-xs text-gray-500">LibreFolio</span>
+                            <div class="relative h-3 flex-1 rounded bg-gray-100 dark:bg-slate-800">
+                                <div class="absolute inset-y-0" style="left: {history.leftPct}%; width: {Math.max(history.widthPct, 1)}%">
+                                    <Tooltip text={historyInfo(history)} wrapperClass="h-full w-full" showDelayMs={200}>
+                                        <div class="h-full w-full rounded bg-gray-400/80 hover:bg-gray-500 dark:bg-gray-500/80" data-testid="report-set-timeline-history" data-start={history.start} data-end={history.end} data-count={history.count}></div>
+                                    </Tooltip>
+                                </div>
+                            </div>
+                            <span class="w-42 shrink-0 truncate text-right text-[10px] tabular-nums text-gray-500">{period(history.start, history.end)}</span>
+                        </div>
+                    {/if}
+                    <div class="flex flex-wrap items-center gap-x-4 gap-y-1 pl-28 text-[10px] text-gray-500" data-testid="report-set-timeline-legend">
+                        <span class="inline-flex items-center gap-1" data-testid="report-set-timeline-legend-item" data-kind="file"><span class="inline-block h-2 w-4 rounded bg-libre-green/70"></span>{$t('importWizard.reportSet.timeline.legendFile')}</span>
+                        {#if timeline.history}
+                            <span class="inline-flex items-center gap-1" data-testid="report-set-timeline-legend-item" data-kind="history"><span class="inline-block h-2 w-4 rounded bg-gray-400/80 dark:bg-gray-500/80"></span>{$t('importWizard.reportSet.timeline.legendHistory')}</span>
+                        {/if}
+                        {#if hasTimelineGaps}
+                            <span class="inline-flex items-center gap-1" data-testid="report-set-timeline-legend-item" data-kind="gap"><span class="inline-block h-2 w-4 rounded border border-dashed border-amber-500 dark:border-amber-400"></span>{$t('importWizard.reportSet.timeline.legendGap')}</span
+                            >
+                        {/if}
+                    </div>
                 </div>
             {/if}
 

@@ -847,7 +847,17 @@
         "selectedCount": "{n, plural, one {# correction sélectionnée} other {# corrections sélectionnées}}",
         "todo": {
           "gap_fix_cost": "Saisissez le coût unitaire de cette position : le site de la banque indique le prix moyen."
-        }
+        },
+        "filterHint": "Cliquez sur un point pour voir sa comparaison complète et seulement ses corrections ; cliquez à nouveau pour toutes les voir.",
+        "pointOpening": "Point de départ",
+        "pointGap": "Après la période manquante",
+        "positions": "{n, plural, one {# position} other {# positions}}",
+        "corrections": "{n, plural, one {# correction} other {# corrections}}",
+        "notesCount": "{n, plural, one {# remarque} other {# remarques}}",
+        "column": {
+          "point": "Point"
+        },
+        "noProposals": "Ce point ne demande aucune correction."
       },
       "badge": {
         "column": "Lot de rapports",
@@ -862,7 +872,22 @@
         "setTooltip": "Téléversé avec les autres exports de son lot.",
         "incomplete": "Incomplet",
         "incompleteTooltip": "Manquant : {roles}"
-      }
+      },
+      "otherFiles": "Autres fichiers de ce courtier",
+      "column": {
+        "file": "Fichier",
+        "period": "Période",
+        "rows": "Lignes",
+        "reason": "Motif"
+      },
+      "timeline": {
+        "legendFile": "Fichiers du lot",
+        "legendHistory": "Déjà dans LibreFolio",
+        "legendGap": "Période manquante entre deux exports",
+        "gapInfo": "Aucun export de ce type ne couvre ces jours",
+        "historyCount": "{n, plural, one {# transaction déjà dans LibreFolio} other {# transactions déjà dans LibreFolio}}"
+      },
+      "previewCombined": "Aperçu du fichier combiné"
     },
     "parseDetail": {
       "sourceRow": "Ligne du fichier",

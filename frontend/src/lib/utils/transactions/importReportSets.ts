@@ -83,14 +83,32 @@ export interface TimelineBar {
     leftPct: number;
     widthPct: number;
     fileId?: string;
+    /** The rows of the bar's file; `null` when the preview does not say. */
+    rows?: number | null;
+}
+
+/** Days that no export of a role covers, between two of its files. */
+export interface TimelineGap {
+    start: string;
+    end: string;
+    leftPct: number;
+    widthPct: number;
+}
+
+/** One role of a set's timeline: its bars in date order, and the gaps between them. */
+export interface TimelineRow {
+    role: string;
+    bars: TimelineBar[];
+    gaps: TimelineGap[];
 }
 
 /** A set's timeline: one row of bars per role, plus the broker history LibreFolio already holds. */
 export interface SetTimeline {
     start: string;
     end: string;
-    rows: Array<{role: string; bars: TimelineBar[]}>;
-    history: TimelineBar | null;
+    rows: TimelineRow[];
+    /** From H0 to the last day LibreFolio holds, with how many transactions it holds. */
+    history: (TimelineBar & {count: number}) | null;
 }
 
 const DAY_MS = 86_400_000;
@@ -229,39 +247,66 @@ export function formatIsoDay(iso: string | null | undefined): string {
 }
 
 interface TimelinePreview {
-    members: Array<{file_id: string; role?: unknown; coverage: Array<{axis: string; start: string; end: string}>}>;
+    members: Array<{file_id: string; role?: unknown; rows?: number | null; coverage: Array<{axis: string; start: string; end: string}>}>;
     history_start?: string | null;
+    history_end?: string | null;
+    history_count?: number | null;
 }
 
 /**
  * The timeline of a set: one row per role (in the plugin's order) with a bar for each file's
- * coverage, and the bar of the history LibreFolio already holds, from H0 to the end. Positions
- * are percentages of the span from the oldest to the newest date shown.
+ * coverage, in date order, and the days no file of the role covers between two of them; then the
+ * history LibreFolio already holds, from H0 to its last day. Positions are percentages of the span
+ * from the oldest to the newest date shown.
  */
 export function buildSetTimeline(preview: TimelinePreview, roleOrder: string[]): SetTimeline | null {
     const spans = preview.members.flatMap((member) => member.coverage.map((coverage) => ({member, coverage})));
     if (spans.length === 0) return null;
     const days = spans.flatMap(({coverage}) => [dayNumber(coverage.start), dayNumber(coverage.end)]);
-    if (preview.history_start) days.push(dayNumber(preview.history_start));
+    const historyStart = preview.history_start ? dayNumber(preview.history_start) : null;
+    // A history whose last transaction is the opening correction, dated on the eve of H0, ends on H0.
+    const historyEnd = historyStart === null ? null : Math.max(historyStart, preview.history_end ? dayNumber(preview.history_end) : historyStart);
+    if (historyStart !== null && historyEnd !== null) days.push(historyStart, historyEnd);
     const first = Math.min(...days);
     const last = Math.max(...days);
     const span = last - first;
-    const bar = (start: string, end: string, fileId?: string): TimelineBar => {
-        const from = dayNumber(start);
-        const to = dayNumber(end);
-        const leftPct = span === 0 ? 0 : ((from - first) / span) * 100;
-        const widthPct = span === 0 ? 100 : ((to - from) / span) * 100;
-        return {start: start.slice(0, 10), end: end.slice(0, 10), leftPct, widthPct, ...(fileId !== undefined ? {fileId} : {})};
-    };
+    const place = (from: number, to: number) => ({
+        leftPct: span === 0 ? 0 : ((from - first) / span) * 100,
+        widthPct: span === 0 ? 100 : ((to - from) / span) * 100,
+    });
+
     const rows = roleOrder
-        .map((role) => ({
-            role,
-            bars: spans.filter(({member}) => member.role === role).map(({member, coverage}) => bar(coverage.start, coverage.end, member.file_id)),
-        }))
+        .map((role): TimelineRow => {
+            const bars = spans
+                .filter(({member}) => member.role === role)
+                .map(
+                    ({member, coverage}): TimelineBar => ({
+                        start: coverage.start.slice(0, 10),
+                        end: coverage.end.slice(0, 10),
+                        ...place(dayNumber(coverage.start), dayNumber(coverage.end)),
+                        fileId: member.file_id,
+                        rows: typeof member.rows === 'number' ? member.rows : null,
+                    }),
+                )
+                .sort((a, b) => dayNumber(a.start) - dayNumber(b.start) || dayNumber(a.end) - dayNumber(b.end));
+            return {role, bars, gaps: gapsBetween(bars, place)};
+        })
         .filter((row) => row.bars.length > 0);
-    const end = isoOfDay(last);
-    const history = preview.history_start ? bar(preview.history_start, end) : null;
-    return {start: isoOfDay(first), end, rows, history};
+
+    const history = historyStart !== null && historyEnd !== null ? {start: isoOfDay(historyStart), end: isoOfDay(historyEnd), ...place(historyStart, historyEnd), count: typeof preview.history_count === 'number' ? preview.history_count : 0} : null;
+    return {start: isoOfDay(first), end: isoOfDay(last), rows, history};
+}
+
+/** The stretches no bar covers between the first and the last bar, the furthest end reached so far counting as covered. */
+function gapsBetween(bars: TimelineBar[], place: (from: number, to: number) => {leftPct: number; widthPct: number}): TimelineGap[] {
+    const gaps: TimelineGap[] = [];
+    let reached: number | null = null;
+    for (const bar of bars) {
+        const from = dayNumber(bar.start);
+        if (reached !== null && from > reached + 1) gaps.push({start: isoOfDay(reached + 1), end: isoOfDay(from - 1), ...place(reached + 1, from - 1)});
+        reached = reached === null ? dayNumber(bar.end) : Math.max(reached, dayNumber(bar.end));
+    }
+    return gaps;
 }
 
 // ---------------------------------------------------------------------------

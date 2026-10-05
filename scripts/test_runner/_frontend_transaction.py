@@ -21,6 +21,7 @@ def front_tx_unit(verbose: bool = False, ui: bool = False, headed: bool = False,
            "src/lib/utils/transactions/importReportSets.test.ts",
            "src/lib/utils/transactions/gapFixModel.test.ts",
            "src/lib/components/transactions/import/GapFixStep.test.ts",
+           "src/lib/components/transactions/import/ReportSetCard.test.ts",
            "src/lib/components/transactions/modals/ParseDetailModal.test.ts",
            "src/lib/utils/transactions/bulkTodos.test.ts",
            "src/routes/(app)/transactions/filterState.test.ts"]

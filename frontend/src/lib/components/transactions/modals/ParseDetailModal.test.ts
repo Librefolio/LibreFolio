@@ -27,6 +27,9 @@
  * The component is loaded once, in a `beforeAll` with its own timeout (the first transform is cold
  * and takes seconds); a load failure is recorded and every test then fails on its own, saying so.
  *
+ * Phase F2 (U3) adds, at the end of the file, the pairing section of a report set's detail: the
+ * outcome chips, the reasons table and the preview / download of the combined file.
+ *
  * Plan: `LibreFolio_developer_journal/Release_2/Phase_0/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md`, F.0 (F1 · D2).
  */
 import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
@@ -393,5 +396,114 @@ describe('ParseDetailModal — the summary of several files lists the same todos
         expect(technical.tagName).toBe('DETAILS');
         expect((technical as HTMLDetailsElement).open).toBe(false);
         expect(textOutsideTechnical(unknown)).not.toContain(UNKNOWN_VALUE);
+    });
+});
+
+// ===========================================================================
+// F2 · U3 — the pairing of a report set: outcome chips, reasons table, preview and download
+// ===========================================================================
+//
+// Pinned in the plan (F2.0, U3), section `parse-detail-pairing` (its data attributes stay):
+//   parse-detail-pairing-outcome (data-outcome, data-count) — all five outcomes, in the order
+//     pair · standalone · summarized · deferred · excluded, the zero ones included;
+//   parse-detail-pairing-reasons — a table, one row parse-detail-pairing-reason (data-reason,
+//     data-count) per reason; no table without reasons;
+//   parse-detail-preview-combined — a button, only when `onPreview` is given, calling it once;
+//   parse-detail-download-combined — the link stays: /api/v1/brokers/import/files/<id>/download.
+// The reason codes are invented: their label falls back to the code, which is never asserted on.
+
+const SET_OUTCOMES = ['pair', 'standalone', 'summarized', 'deferred', 'excluded'] as const;
+/** A combined file id that needs encoding in a URL: the download link must encode it. */
+const SET_FILE_ID = 'probe combined/1';
+/** `excluded` is absent from the summary: its chip still shows, at 0. */
+const SET_SUMMARY = {outcomes: {pair: 12, standalone: 15, summarized: 7, deferred: 1}, reasons: {probe_reason_alpha: 3, probe_reason_beta: 5}};
+
+function parsedSet(summary: Record<string, unknown> | null) {
+    return {...parsedFile(SET_FILE_ID, 'Probe Bank — combined 2020-02-03…2020-06-26.csv', []), set: {memberNames: ['probe-custody.xlsx', 'probe-cash.csv'], summary, reused: false}};
+}
+
+/** Mount the detail of a set's analysis row; returns its pairing section. */
+async function mountSet(summary: Record<string, unknown> | null = SET_SUMMARY, extra: Record<string, unknown> = {}): Promise<HTMLElement> {
+    render(modal(), {open: true, parseResult: parsedSet(summary), onClose: vi.fn(), ...extra});
+    await screen.findByTestId('parse-detail-modal');
+    return the('parse-detail-pairing');
+}
+
+describe('ParseDetailModal — F2 · U3: the pairing of a report set', () => {
+    it('keeps the counts of the combine on the section (guard: true before F2 too)', async () => {
+        const pairing = await mountSet();
+
+        expect(pairing).toHaveAttribute('data-pair', '12');
+        expect(pairing).toHaveAttribute('data-standalone', '15');
+        expect(pairing).toHaveAttribute('data-summarized', '7');
+        expect(pairing).toHaveAttribute('data-deferred', '1');
+        expect(pairing).toHaveAttribute('data-excluded', '0');
+    });
+
+    it('every outcome is a chip, all five in reading order, the zero ones included, each with its count', async () => {
+        const pairing = await mountSet();
+
+        const chips = all('parse-detail-pairing-outcome', pairing).map((chip) => [chip.dataset.outcome, chip.dataset.count]);
+        expect(chips).toEqual([
+            ['pair', '12'],
+            ['standalone', '15'],
+            ['summarized', '7'],
+            ['deferred', '1'],
+            ['excluded', '0'],
+        ]);
+        expect(chips.map(([outcome]) => outcome)).toEqual([...SET_OUTCOMES]);
+    });
+
+    it('the reasons are a table: one row per reason, with its count', async () => {
+        const pairing = await mountSet();
+
+        const table = the('parse-detail-pairing-reasons', {}, pairing);
+        const rows = all('parse-detail-pairing-reason', table);
+        expect(rows.map((row) => [row.dataset.reason, row.dataset.count])).toEqual(
+            expect.arrayContaining([
+                ['probe_reason_alpha', '3'],
+                ['probe_reason_beta', '5'],
+            ]),
+        );
+        expect(rows).toHaveLength(2);
+        for (const row of rows) {
+            expect(row.tagName, `${row.dataset.reason}: a row of the table`).toBe('TR');
+            expect(text(row), `${row.dataset.reason}: the count is shown, not only stored`).toContain(row.dataset.count ?? '∅');
+        }
+        // Nowhere else: no reason line outside the table.
+        expect(all('parse-detail-pairing-reason', pairing)).toHaveLength(2);
+    });
+
+    it('no reasons, no table — the chips are there all the same', async () => {
+        const pairing = await mountSet({outcomes: {pair: 2, standalone: 1}});
+
+        expect(all('parse-detail-pairing-outcome', pairing).map((chip) => chip.dataset.count)).toEqual(['2', '1', '0', '0', '0']);
+        expect(all('parse-detail-pairing-reasons')).toHaveLength(0);
+        expect(all('parse-detail-pairing-reason')).toHaveLength(0);
+    });
+
+    it('the preview of the combined file is a button that asks for it once', async () => {
+        const onPreview = vi.fn();
+        const pairing = await mountSet(SET_SUMMARY, {onPreview});
+
+        const preview = the('parse-detail-preview-combined', {}, pairing);
+        expect(preview.tagName).toBe('BUTTON');
+        await fireEvent.click(preview);
+
+        expect(onPreview).toHaveBeenCalledTimes(1);
+    });
+
+    it('without onPreview there is no preview button; the download link is there all the same', async () => {
+        const pairing = await mountSet();
+
+        the('parse-detail-download-combined', {}, pairing);
+        expect(all('parse-detail-preview-combined')).toHaveLength(0);
+    });
+
+    it('the download link stays: the encoded download URL of the combined file (guard: true before F2 too)', async () => {
+        const pairing = await mountSet(SET_SUMMARY, {onPreview: vi.fn()});
+
+        const download = the('parse-detail-download-combined', {}, pairing);
+        expect(download).toHaveAttribute('href', `/api/v1/brokers/import/files/${encodeURIComponent(SET_FILE_ID)}/download`);
     });
 });

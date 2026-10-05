@@ -13,6 +13,11 @@
  *
  * Phase C3 adds the badges of the files page and of the broker's import files (`FilesTable`):
  * `setsOfFiles` and `fileSetBadges`, at the end of the file, loaded the same way through `c3()`.
+ *
+ * Phase F2 (plan F2.0, U2-B) reworks the timeline: each bar carries its file's `rows` and the bars
+ * of a role come in order of start, then end; each role row gains its `gaps` (the holes between its
+ * bars, never before the first or after the last); the history runs from H0 to `history_end` — no
+ * longer to the end of the timeline — and carries `history_count`; `history_end` may stretch the span.
  */
 import {describe, expect, it} from 'vitest';
 
@@ -75,16 +80,35 @@ interface TimelineBar {
     leftPct: number;
     widthPct: number;
     fileId?: string;
+    /** F2: the rows of the bar's file; null when the member does not say. */
+    rows?: number | null;
+}
+/** F2: a stretch of a role's row that none of its files covers, between two of its bars. */
+interface TimelineGap {
+    start: string;
+    end: string;
+    leftPct: number;
+    widthPct: number;
+}
+/** F2: the history LibreFolio holds, from H0 to its newest tagged transaction, and how many it has. */
+interface TimelineHistory {
+    start: string;
+    end: string;
+    leftPct: number;
+    widthPct: number;
+    count: number;
 }
 interface SetTimeline {
     start: string;
     end: string;
-    rows: Array<{role: string; bars: TimelineBar[]}>;
-    history: TimelineBar | null;
+    rows: Array<{role: string; bars: TimelineBar[]; gaps: TimelineGap[]}>;
+    history: TimelineHistory | null;
 }
 interface TimelinePreview {
-    members: Array<{file_id: string; role?: string | null; coverage: Array<{axis: string; start: string; end: string}>}>;
+    members: Array<{file_id: string; role?: string | null; rows?: number | null; coverage: Array<{axis: string; start: string; end: string}>}>;
     history_start?: string | null;
+    history_end?: string | null;
+    history_count?: number | null;
 }
 
 interface ReportSetsModule {
@@ -598,33 +622,78 @@ describe('buildSetTimeline', () => {
         expect(cashBar.widthPct).toBeCloseTo(100, 6);
     });
 
-    it('draws the LibreFolio history from H0 to the end', async () => {
+    it('F2: draws the LibreFolio history from H0 to history_end — no longer to the end — with its count', async () => {
         const buildSetTimeline = await c2('buildSetTimeline');
-        const timeline = buildSetTimeline({members: [custody, cash], history_start: '2020-01-01'}, ROLES);
+        const timeline = buildSetTimeline({members: [custody, cash], history_start: '2020-01-01', history_end: '2020-03-31', history_count: 42}, ROLES);
 
         expect(timeline?.start).toBe('2019-07-01');
         expect(timeline?.end).toBe('2020-06-30');
-        expect(timeline?.history).toMatchObject({start: '2020-01-01', end: '2020-06-30'});
+        expect(timeline?.history).toMatchObject({start: '2020-01-01', end: '2020-03-31', count: 42});
+        // H0 is 184 days into the span; the history lasts 90 days to its newest transaction.
         expect(timeline?.history?.leftPct).toBeCloseTo((184 / SPAN) * 100, 6);
-        expect(timeline?.history?.widthPct).toBeCloseTo((181 / SPAN) * 100, 6);
+        expect(timeline?.history?.widthPct).toBeCloseTo((90 / SPAN) * 100, 6);
     });
 
-    it('stretches the span to an H0 older than every file', async () => {
+    it('F2: stretches the span to an H0 older than every file; the history still ends on history_end', async () => {
         const buildSetTimeline = await c2('buildSetTimeline');
-        const timeline = buildSetTimeline({members: [custody, cash], history_start: '2019-01-01'}, ROLES);
+        const timeline = buildSetTimeline({members: [custody, cash], history_start: '2019-01-01', history_end: '2019-12-31', history_count: 5}, ROLES);
         // 2019-01-01 → 2020-06-30 is 546 days.
         const [cashBar] = rowOf(timeline, 'cash')?.bars ?? [];
         const [custodyBar] = rowOf(timeline, 'custody')?.bars ?? [];
 
         expect(timeline?.start).toBe('2019-01-01');
         expect(timeline?.end).toBe('2020-06-30');
-        expect(timeline?.history).toMatchObject({start: '2019-01-01', end: '2020-06-30'});
+        expect(timeline?.history).toMatchObject({start: '2019-01-01', end: '2019-12-31', count: 5});
         expect(timeline?.history?.leftPct).toBeCloseTo(0, 6);
-        expect(timeline?.history?.widthPct).toBeCloseTo(100, 6);
+        expect(timeline?.history?.widthPct).toBeCloseTo((364 / 546) * 100, 6);
         expect(cashBar.leftPct).toBeCloseTo((181 / 546) * 100, 6);
         expect(cashBar.widthPct).toBeCloseTo((365 / 546) * 100, 6);
         expect(custodyBar.leftPct).toBeCloseTo((398 / 546) * 100, 6);
         expect(custodyBar.widthPct).toBeCloseTo((144 / 546) * 100, 6);
+    });
+
+    it('F2: a history_end newer than every file stretches the span to it', async () => {
+        const buildSetTimeline = await c2('buildSetTimeline');
+        const timeline = buildSetTimeline({members: [custody, cash], history_start: '2020-01-01', history_end: '2020-09-30', history_count: 12}, ROLES);
+        // 2019-07-01 → 2020-09-30 is 457 days; the history lasts 273 of them.
+        const [cashBar] = rowOf(timeline, 'cash')?.bars ?? [];
+
+        expect(timeline?.start).toBe('2019-07-01');
+        expect(timeline?.end).toBe('2020-09-30');
+        expect(timeline?.history).toMatchObject({start: '2020-01-01', end: '2020-09-30', count: 12});
+        expect(timeline?.history?.leftPct).toBeCloseTo((184 / 457) * 100, 6);
+        expect(timeline?.history?.widthPct).toBeCloseTo((273 / 457) * 100, 6);
+        expect(cashBar.leftPct).toBeCloseTo(0, 6);
+        expect(cashBar.widthPct).toBeCloseTo((365 / 457) * 100, 6);
+    });
+
+    it('F2: a history_end before H0 (the opening correction alone, dated on the eve) ends the history on H0', async () => {
+        const buildSetTimeline = await c2('buildSetTimeline');
+        const timeline = buildSetTimeline({members: [custody, cash], history_start: '2020-01-01', history_end: '2019-12-31', history_count: 1}, ROLES);
+
+        expect(timeline?.start).toBe('2019-07-01');
+        expect(timeline?.end).toBe('2020-06-30');
+        expect(timeline?.history).toMatchObject({start: '2020-01-01', end: '2020-01-01', count: 1});
+        expect(timeline?.history?.leftPct).toBeCloseTo((184 / SPAN) * 100, 6);
+        expect(timeline?.history?.widthPct).toBeCloseTo(0, 6);
+    });
+
+    it('F2: without history_end the history is H0 alone, and without history_count it counts 0', async () => {
+        const buildSetTimeline = await c2('buildSetTimeline');
+        const timeline = buildSetTimeline({members: [custody, cash], history_start: '2020-01-01', history_end: null}, ROLES);
+
+        expect(timeline?.end).toBe('2020-06-30');
+        expect(timeline?.history).toMatchObject({start: '2020-01-01', end: '2020-01-01', count: 0});
+        expect(timeline?.history?.leftPct).toBeCloseTo((184 / SPAN) * 100, 6);
+        expect(timeline?.history?.widthPct).toBeCloseTo(0, 6);
+    });
+
+    it('F2: no history without H0 (guard: true before F2 too)', async () => {
+        const buildSetTimeline = await c2('buildSetTimeline');
+        const timeline = buildSetTimeline({members: [custody, cash], history_start: null, history_end: null, history_count: 0}, ROLES);
+
+        expect(timeline).not.toBeNull();
+        expect(timeline?.history).toBeNull();
     });
 
     it('one bar per coverage entry: several files of a role, several axes of a file', async () => {
@@ -682,6 +751,126 @@ describe('buildSetTimeline', () => {
         const buildSetTimeline = await c2('buildSetTimeline');
         expect(buildSetTimeline({members: []}, ROLES)).toBeNull();
         expect(buildSetTimeline({members: [{file_id: 'f-empty', role: 'cash', coverage: []}], history_start: '2020-01-01'}, ROLES)).toBeNull();
+        // F2: the history fields do not draw a timeline on their own either.
+        expect(buildSetTimeline({members: [{file_id: 'f-empty', role: 'cash', rows: 0, coverage: []}], history_start: '2020-01-01', history_end: '2020-06-30', history_count: 9}, ROLES)).toBeNull();
+    });
+
+    // -----------------------------------------------------------------------
+    // F2 (U2-B): the rows of each bar, the order of the bars, the gaps of each role
+    // -----------------------------------------------------------------------
+
+    it('F2: each bar carries the rows of its file, every axis of a file the same; null when the member does not say', async () => {
+        const buildSetTimeline = await c2('buildSetTimeline');
+        const counted = {...custody, rows: 15};
+        const twoAxes = {
+            file_id: 'f-cash-2',
+            role: 'cash',
+            rows: 32,
+            coverage: [
+                {axis: 'trade', start: '2019-07-01', end: '2020-06-29'},
+                {axis: 'value', start: '2019-07-02', end: '2020-06-30'},
+            ],
+        };
+        const timeline = buildSetTimeline({members: [counted, twoAxes]}, ROLES);
+        const silent = buildSetTimeline({members: [cash]}, ROLES);
+
+        expect(rowOf(timeline, 'custody')?.bars.map((bar) => [bar.fileId, bar.rows])).toEqual([['f-custody', 15]]);
+        expect(rowOf(timeline, 'cash')?.bars.map((bar) => [bar.fileId, bar.rows])).toEqual([
+            ['f-cash-2', 32],
+            ['f-cash-2', 32],
+        ]);
+        expect(rowOf(silent, 'cash')?.bars).toHaveLength(1);
+        expect(rowOf(silent, 'cash')?.bars[0].rows).toBeNull();
+    });
+
+    it('F2: the bars of a role come in order of start, then end, whatever the order of the members and of their axes', async () => {
+        const buildSetTimeline = await c2('buildSetTimeline');
+        const late = {file_id: 'f-late', role: 'custody', coverage: [{axis: 'trade', start: '2020-07-01', end: '2020-12-30'}]};
+        const long = {file_id: 'f-long', role: 'custody', coverage: [{axis: 'trade', start: '2020-01-02', end: '2020-03-31'}]};
+        const short = {file_id: 'f-short', role: 'custody', coverage: [{axis: 'trade', start: '2020-01-02', end: '2020-02-14'}]};
+        const twoAxes = {
+            file_id: 'f-cash',
+            role: 'cash',
+            coverage: [
+                {axis: 'value', start: '2020-01-03', end: '2020-12-31'},
+                {axis: 'trade', start: '2020-01-02', end: '2020-12-30'},
+            ],
+        };
+        const timeline = buildSetTimeline({members: [late, twoAxes, long, short]}, ROLES);
+
+        expect(rowOf(timeline, 'custody')?.bars.map((bar) => [bar.fileId, bar.start, bar.end])).toEqual([
+            ['f-short', '2020-01-02', '2020-02-14'],
+            ['f-long', '2020-01-02', '2020-03-31'],
+            ['f-late', '2020-07-01', '2020-12-30'],
+        ]);
+        expect(rowOf(timeline, 'cash')?.bars.map((bar) => [bar.start, bar.end])).toEqual([
+            ['2020-01-02', '2020-12-30'],
+            ['2020-01-03', '2020-12-31'],
+        ]);
+    });
+
+    it('F2: a gap runs from the day after the furthest end reached to the eve of the next bar, placed like a bar', async () => {
+        const buildSetTimeline = await c2('buildSetTimeline');
+        const first = {file_id: 'f-c1', role: 'custody', coverage: [{axis: 'trade', start: '2020-01-02', end: '2020-03-31'}]};
+        const second = {file_id: 'f-c2', role: 'custody', coverage: [{axis: 'trade', start: '2020-07-01', end: '2020-12-30'}]};
+        const wholeYear = {file_id: 'f-cash', role: 'cash', coverage: [{axis: 'value', start: '2020-01-02', end: '2020-12-31'}]};
+        const timeline = buildSetTimeline({members: [second, wholeYear, first]}, ROLES);
+        // 2020-01-02 → 2020-12-31 is 364 days; the hole starts 90 days in and lasts 90.
+        const gaps = rowOf(timeline, 'custody')?.gaps ?? [];
+
+        expect(gaps).toHaveLength(1);
+        expect(gaps[0]).toMatchObject({start: '2020-04-01', end: '2020-06-30'});
+        expect(gaps[0].leftPct).toBeCloseTo((90 / 364) * 100, 6);
+        expect(gaps[0].widthPct).toBeCloseTo((90 / 364) * 100, 6);
+        expect(rowOf(timeline, 'cash')?.gaps).toEqual([]);
+    });
+
+    it('F2: one gap per hole, in date order', async () => {
+        const buildSetTimeline = await c2('buildSetTimeline');
+        const january = {file_id: 'f-jan', role: 'custody', coverage: [{axis: 'trade', start: '2020-01-02', end: '2020-01-31'}]};
+        const march = {file_id: 'f-mar', role: 'custody', coverage: [{axis: 'trade', start: '2020-03-02', end: '2020-03-31'}]};
+        const june = {file_id: 'f-jun', role: 'custody', coverage: [{axis: 'trade', start: '2020-06-01', end: '2020-06-30'}]};
+        const halfYear = {file_id: 'f-cash', role: 'cash', coverage: [{axis: 'value', start: '2020-01-02', end: '2020-06-30'}]};
+        const timeline = buildSetTimeline({members: [june, january, halfYear, march]}, ROLES);
+        // 2020-01-02 → 2020-06-30 is 180 days.
+        const gaps = rowOf(timeline, 'custody')?.gaps ?? [];
+
+        expect(gaps.map((gap) => [gap.start, gap.end])).toEqual([
+            ['2020-02-01', '2020-03-01'],
+            ['2020-04-01', '2020-05-31'],
+        ]);
+        expect(gaps[0].leftPct).toBeCloseTo((30 / 180) * 100, 6);
+        expect(gaps[0].widthPct).toBeCloseTo((29 / 180) * 100, 6);
+        expect(gaps[1].leftPct).toBeCloseTo((90 / 180) * 100, 6);
+        expect(gaps[1].widthPct).toBeCloseTo((60 / 180) * 100, 6);
+    });
+
+    it('F2: bars that touch or overlap leave no gap; the walk keeps the furthest end, not the previous bar\u2019s', async () => {
+        const buildSetTimeline = await c2('buildSetTimeline');
+        // Cash: the second statement starts the day after the first ends.
+        const cashQ1 = {file_id: 'f-cash-q1', role: 'cash', coverage: [{axis: 'value', start: '2020-01-02', end: '2020-03-31'}]};
+        const cashRest = {file_id: 'f-cash-rest', role: 'cash', coverage: [{axis: 'value', start: '2020-04-01', end: '2020-12-30'}]};
+        // Custody: a year-long export, and two short ones inside it — between those two, no hole.
+        const year = {file_id: 'f-year', role: 'custody', coverage: [{axis: 'trade', start: '2020-01-02', end: '2020-12-30'}]};
+        const march = {file_id: 'f-mar', role: 'custody', coverage: [{axis: 'trade', start: '2020-03-01', end: '2020-03-31'}]};
+        const june = {file_id: 'f-jun', role: 'custody', coverage: [{axis: 'trade', start: '2020-06-01', end: '2020-06-30'}]};
+        const timeline = buildSetTimeline({members: [june, cashRest, year, cashQ1, march]}, ROLES);
+
+        expect(rowOf(timeline, 'custody')?.bars).toHaveLength(3);
+        expect(rowOf(timeline, 'custody')?.gaps).toEqual([]);
+        expect(rowOf(timeline, 'cash')?.bars).toHaveLength(2);
+        expect(rowOf(timeline, 'cash')?.gaps).toEqual([]);
+    });
+
+    it('F2: never a gap before the first bar or after the last, whatever stretches the span', async () => {
+        const buildSetTimeline = await c2('buildSetTimeline');
+        // Custody sits inside a longer cash statement, and the history reaches past both.
+        const timeline = buildSetTimeline({members: [custody, cash], history_start: '2019-01-01', history_end: '2020-09-30', history_count: 3}, ROLES);
+
+        expect(timeline?.start).toBe('2019-01-01');
+        expect(timeline?.end).toBe('2020-09-30');
+        expect(rowOf(timeline, 'custody')?.gaps).toEqual([]);
+        expect(rowOf(timeline, 'cash')?.gaps).toEqual([]);
     });
 });
 

@@ -137,15 +137,22 @@ async def history_start(session: AsyncSession, *, broker_id: int, history_tag: s
     The oldest transaction tagged with the plugin's history tag; a gap-fix correction
     counts from the day after its date, because it summarises everything up to that day.
     """
-    dated = await _tagged_dates(session, broker_id=broker_id, history_tag=history_tag)
+    return _first_history_day(await _tagged_dates(session, broker_id=broker_id, history_tag=history_tag))
+
+
+def _first_history_day(dated: Sequence[Tuple[date, bool]]) -> Optional[date]:
     if not dated:
         return None
     return min(tx_date + timedelta(days=1) if is_gap_fix else tx_date for tx_date, is_gap_fix in dated)
 
 
+def _gap_fix_days(dated: Sequence[Tuple[date, bool]]) -> List[date]:
+    return sorted({tx_date for tx_date, is_gap_fix in dated if is_gap_fix})
+
+
 async def gap_fix_dates(session: AsyncSession, *, broker_id: int, history_tag: str) -> List[date]:
     """Dates of the gap-fix corrections already imported for this plugin."""
-    return sorted({tx_date for tx_date, is_gap_fix in await _tagged_dates(session, broker_id=broker_id, history_tag=history_tag) if is_gap_fix})
+    return _gap_fix_days(await _tagged_dates(session, broker_id=broker_id, history_tag=history_tag))
 
 
 # =============================================================================
@@ -173,6 +180,8 @@ def build_preview(  # noqa: C901 — one pass per concern (members, roles, cover
     batch_id: str,
     history_start: Optional[date],
     gap_fix_dates: Sequence[date],
+    history_end: Optional[date] = None,
+    history_count: int = 0,
 ) -> BRIMSetPreview:
     """Describe a set without combining it. Reads the member files through the plugin."""
     warnings: List[BRIMNotice] = []
@@ -260,17 +269,22 @@ def build_preview(  # noqa: C901 — one pass per concern (members, roles, cover
         segments=segments,
         gaps=gaps,
         history_start=history_start,
+        history_end=history_end,
+        history_count=history_count,
         warnings=warnings,
         complete=required_present and not excess and not mixed_accounts,
     )
 
 
 async def preview_set(session: AsyncSession, *, broker_id: int, plugin_code: str, batch_id: str) -> BRIMSetPreview:
-    """Preview one report set; reads the member files, writes nothing."""
+    """Preview one report set; reads the member files, writes nothing.
+
+    The broker history comes from one read of the tagged transactions: H0, its last day and its
+    size (gap-fix corrections included), shown by the set's timeline, and the gap-fix dates.
+    """
     plugin = get_set_plugin(plugin_code)
     members = await asyncio.to_thread(collect_members, broker_id=broker_id, plugin_code=plugin_code, batch_id=batch_id)
-    start = await history_start(session, broker_id=broker_id, history_tag=plugin.history_tag)
-    fixes = await gap_fix_dates(session, broker_id=broker_id, history_tag=plugin.history_tag)
+    dated = await _tagged_dates(session, broker_id=broker_id, history_tag=plugin.history_tag)
     return await asyncio.to_thread(
         build_preview,
         plugin,
@@ -278,8 +292,10 @@ async def preview_set(session: AsyncSession, *, broker_id: int, plugin_code: str
         broker_id=broker_id,
         plugin_code=plugin_code,
         batch_id=batch_id,
-        history_start=start,
-        gap_fix_dates=fixes,
+        history_start=_first_history_day(dated),
+        gap_fix_dates=_gap_fix_days(dated),
+        history_end=max((tx_date for tx_date, _is_gap_fix in dated), default=None),
+        history_count=len(dated),
     )
 
 

@@ -847,7 +847,17 @@
         "selectedCount": "{n, plural, one {# correzione selezionata} other {# correzioni selezionate}}",
         "todo": {
           "gap_fix_cost": "Inserisci il costo per unità di questa posizione: il sito della banca mostra il prezzo medio."
-        }
+        },
+        "filterHint": "Clicca un punto per vederne il confronto completo e solo le sue correzioni; cliccalo di nuovo per vederle tutte.",
+        "pointOpening": "Punto di partenza",
+        "pointGap": "Dopo il buco",
+        "positions": "{n, plural, one {# posizione} other {# posizioni}}",
+        "corrections": "{n, plural, one {# correzione} other {# correzioni}}",
+        "notesCount": "{n, plural, one {# nota} other {# note}}",
+        "column": {
+          "point": "Punto"
+        },
+        "noProposals": "Questo punto non richiede correzioni."
       },
       "badge": {
         "column": "Set di report",
@@ -862,7 +872,22 @@
         "setTooltip": "Caricato insieme agli altri export del suo set.",
         "incomplete": "Incompleto",
         "incompleteTooltip": "Manca: {roles}"
-      }
+      },
+      "otherFiles": "Altri file di questo broker",
+      "column": {
+        "file": "File",
+        "period": "Periodo",
+        "rows": "Righe",
+        "reason": "Motivo"
+      },
+      "timeline": {
+        "legendFile": "File del set",
+        "legendHistory": "Già in LibreFolio",
+        "legendGap": "Buco fra due export",
+        "gapInfo": "Nessun export di questo tipo copre questi giorni",
+        "historyCount": "{n, plural, one {# transazione già in LibreFolio} other {# transazioni già in LibreFolio}}"
+      },
+      "previewCombined": "Anteprima del file combinato"
     },
     "parseDetail": {
       "sourceRow": "Riga del file",

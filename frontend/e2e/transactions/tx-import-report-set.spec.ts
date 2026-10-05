@@ -79,6 +79,23 @@
  *   F1-D1 with the step-1 set warning shown, a mousedown outside the drop zone leaves it open (it
  *         used to fold, moving Next under the pointer and losing the click), and ONE Next reaches
  *         step 2.
+ *
+ * Phase F2 — the graphics (plan F2.0, U1–U4), written red first:
+ *
+ *   U1 the card lists its files in one table per role (`report-set-role-table`, rows
+ *      `tr[data-row-id=<file_id>]`; `report-set-member` is gone): R1–R4 read the members there. Above
+ *      the single files of a broker that also has a set, the heading `import-wizard-other-files-<id>`
+ *      (R4); never on a broker with only a set (R1) or only single files (R7).
+ *   U2 F2-U2: with history already in LibreFolio — two transactions tagged `danske_bank`, seeded over
+ *      the API before the upload — the timeline draws it from H0 to its newest transaction, with its
+ *      count, and the legend names it. It stops at step 2; the transactions go with the broker.
+ *   U3 R1: the pairing of the set's detail shows the five outcome chips, and its preview button opens
+ *      the combined file in the file preview.
+ *   U4 R5/R6: the gap-fix step has one summary card per truth point and one table of corrections; the
+ *      opening card filters the table and opens its comparison, a second click clears it. R6 unticks
+ *      the deposit through its row toggle (onToggle), then the rest with deselect all (onSetSelected).
+ *
+ * Each F2 scenario gives its first new element a short budget (`F2_FIRST`).
  */
 
 import {expect, test, type Locator, type Page, type Request, type Response} from '../fixtures/playwright';
@@ -128,6 +145,21 @@ const MAIN_TRUTH = {
 
 /** Budget of the first C3 element of a scenario: before the implementation it is the one that fails. */
 const C3_FIRST = 8_000;
+
+/**
+ * The two members of the main set (backend phase B, test_brim_danske_bank.py, MEMBER_FACTS): the
+ * custody export covers its trade dates, the cash statement its value dates.
+ */
+const MAIN_MEMBERS = {
+    custody: {rows: 15, start: '2020-02-03', end: '2020-06-26'},
+    cash: {rows: 32, start: '2019-01-07', end: '2020-07-03'},
+} as const;
+
+/** The tag of LibreFolio's Danske Bank history: `BRIMProvider.history_tag`, the plugin code without `broker_`. */
+const DANSKE_HISTORY_TAG = 'danske_bank';
+
+/** Budget of the first F2 element of a scenario: before the implementation it is the one that fails. */
+const F2_FIRST = 8_000;
 
 // ---------------------------------------------------------------------------
 // Owned data
@@ -185,6 +217,29 @@ async function deleteOwnedBrokerAndFiles(page: Page, brokerId: number, ownedSinc
         failures.push(`broker ${brokerId}: ${String(error)}`);
     }
     expect(failures, 'cleanup removes the BRIM files and the broker this test created').toEqual([]);
+}
+
+/**
+ * Give the owned broker the Danske Bank history an earlier import leaves: one DEPOSIT per date, with
+ * the plugin's history tag as an exact tag. Committed over the API, before the set is uploaded; the
+ * broker's forced delete in afterEach takes the rows with it. Read back, so the premise is checked.
+ */
+async function seedDanskeHistory(page: Page, brokerId: number, dates: readonly string[]): Promise<void> {
+    const marker = uniqueSuffix();
+    const response = await page.request.post(`${API}/transactions/commit`, {
+        data: {creates: dates.map((date) => ({broker_id: brokerId, type: 'DEPOSIT', date, cash: {code: 'EUR', amount: '100'}, tags: ['import', DANSKE_HISTORY_TAG], description: `F2-U2 history ${date} ${marker}`}))},
+    });
+    const body = await response.text();
+    expect(response.ok(), `seed the history: HTTP ${response.status()} ${body}`).toBe(true);
+    const committed = JSON.parse(body) as {committed: boolean; issues?: unknown; results: Array<{operation: string; ids: number[]}>};
+    expect(committed.committed, `the history rows were rolled back: ${JSON.stringify(committed.issues ?? [])}`).toBe(true);
+    const ids = committed.results.filter((result) => result.operation === 'create').flatMap((result) => result.ids);
+    expect(ids, 'one transaction per date').toHaveLength(dates.length);
+
+    const readback = await page.request.get(`${API}/transactions`, {params: {broker_id: brokerId}});
+    expect(readback.ok(), `read the history back: HTTP ${readback.status()}`).toBe(true);
+    const rows = ((await readback.json()) as Array<{id: number; date: string; tags?: string[] | null}>).filter((row) => ids.includes(row.id));
+    expect(rows.map((row) => `${row.date} ${(row.tags ?? []).includes(DANSKE_HISTORY_TAG)}`).sort(), 'the seeded rows carry the history tag, on their dates').toEqual(dates.map((date) => `${date} true`).sort());
 }
 
 // ---------------------------------------------------------------------------
@@ -308,20 +363,44 @@ function setCard(page: Page, brokerId: number, batchId: string): Locator {
     return page.getByTestId('import-wizard-step2').locator(`[data-testid="report-set-card"][data-set-key="set:${brokerId}:${DANSKE}:${batchId}"]`);
 }
 
-function cardMember(card: Locator, fileId: string): Locator {
-    return card.locator(`[data-testid="report-set-member"][data-file-id="${fileId}"]`);
+/** The table of one role in a card (F2 · U1). */
+function roleTable(card: Locator, role: string): Locator {
+    return card.locator(`[data-testid="report-set-role-table"][data-role="${role}"]`);
+}
+
+/** The row of one file in the table of its role (F2 · U1). */
+function roleRow(card: Locator, role: string, fileId: string): Locator {
+    return roleTable(card, role).locator(`tbody tr[data-row-id="${fileId}"]`);
+}
+
+/** The heading above the single files of a broker that also has a set (F2 · U1). */
+function otherFilesHeading(page: Page, brokerId: number): Locator {
+    return page.getByTestId(`import-wizard-other-files-${brokerId}`);
+}
+
+/** The selectable rows of a broker panel: the single files (the role tables of a set have no selection). */
+function singleFileRows(page: Page, brokerId: number): Locator {
+    return page.getByTestId(`import-wizard-broker-files-${brokerId}`).locator('[data-testid^="dt-row-checkbox-"]');
 }
 
 /**
  * Make sure the card body is open. Whether a card starts open is the product's call, so the
- * spec asks before toggling (rule 14) — and only once the card has settled on a terminal
- * status, when the members it shows are the final ones. Every set has at least one member.
+ * spec asks before toggling (rule 14) — and only once the card has settled on a terminal status.
+ */
+async function expandCard(card: Locator) {
+    await expect(card).toHaveAttribute('data-set-status', /^(complete|incomplete|error)$/, {timeout: 15_000});
+    const toggle = card.getByTestId('report-set-toggle');
+    if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+}
+
+/**
+ * Open the card and wait for its files — the final ones, since the card has settled. Every set
+ * here has at least one recognised export, so its role tables have at least one row (F2 · U1).
  */
 async function openCard(card: Locator) {
-    await expect(card).toHaveAttribute('data-set-status', /^(complete|incomplete|error)$/, {timeout: 15_000});
-    const member = card.getByTestId('report-set-member').first();
-    if (!(await member.isVisible())) await card.getByTestId('report-set-toggle').click();
-    await expect(member).toBeVisible({timeout: 5_000});
+    await expandCard(card);
+    await expect(card.locator('[data-testid="report-set-role-table"] tbody tr[data-row-id]').first(), 'the open card lists its files in one table per role').toBeVisible({timeout: F2_FIRST});
 }
 
 function currentStep(page: Page): Locator {
@@ -464,15 +543,44 @@ function expectGapFixCall(call: JsonCall, brokerId: number, selected: number) {
     ).toEqual([[MAIN_TRUTH.checkpoint.asOf, MAIN_TRUTH.deposit.currency, MAIN_TRUTH.deposit.amount]]);
 }
 
-/** The opening truth point holds the deposit, selected by default; the verification is there (whether it holds depends on the selection). */
+/**
+ * The opening truth point and its deposit, selected by default; the verification has its card.
+ *
+ * F2 · U4: every truth point is a summary card. The opening card is clicked to make it the active
+ * point — its comparison opens (`gapfix-point-details`) and the table keeps its corrections, the
+ * deposit among them, pressed — then clicked again, which clears the filter. Whether a card starts
+ * active is asked, not assumed (rule 14); the step is left with nothing active.
+ */
 async function expectOpeningDeposit(step: Locator) {
-    const opening = step.locator(`[data-testid="gapfix-checkpoint"][data-as-of="${MAIN_TRUTH.checkpoint.asOf}"][data-kind="${MAIN_TRUTH.checkpoint.kind}"]`);
-    await expect(opening, 'the opening truth point of the set').toHaveCount(1, {timeout: 5_000});
-    const deposit = opening.locator('[data-testid="gapfix-proposal"][data-type="DEPOSIT"]');
-    await expect(deposit).toHaveCount(1);
-    await expect(deposit).toHaveAttribute('data-selected', 'true');
+    const opening = step.locator(`[data-testid="gapfix-summary"][data-kind="${MAIN_TRUTH.checkpoint.kind}"][data-as-of="${MAIN_TRUTH.checkpoint.asOf}"]`);
+    await expect(opening, 'the opening truth point has its summary card').toHaveCount(1, {timeout: F2_FIRST});
+    await expect(step.locator(`[data-testid="gapfix-summary"][data-kind="verification"][data-as-of="${MAIN_TRUTH.verification}"]`), 'the verification has its summary card').toHaveCount(1);
+    const pointKey = await opening.getAttribute('data-key');
+    expect(pointKey, 'the opening card names its truth point').toBeTruthy();
+    const details = step.getByTestId('gapfix-point-details');
+
+    if ((await opening.getAttribute('aria-pressed')) === 'true') await opening.click();
+    await expect(opening).toHaveAttribute('aria-pressed', 'false');
+    await expect(details).toHaveCount(0);
+
+    // One click: the opening point is active, its comparison open, the table on its corrections.
+    await opening.click();
+    await expect(opening).toHaveAttribute('aria-pressed', 'true');
+    const openingDetails = step.locator(`[data-testid="gapfix-point-details"][data-key="${pointKey}"]`);
+    await expect(openingDetails, 'the active card opens its comparison').toBeVisible({timeout: 5_000});
+    await expect(details).toHaveCount(1);
+    await expect(openingDetails.locator(`[data-testid="gapfix-checkpoint"][data-as-of="${MAIN_TRUTH.checkpoint.asOf}"][data-kind="${MAIN_TRUTH.checkpoint.kind}"]`)).toHaveCount(1);
+    const deposit = step.locator('[data-testid="gapfix-table"] [data-testid="gapfix-proposal-toggle"][data-type="DEPOSIT"]');
+    await expect(deposit, 'the opening deposit is a row of the corrections').toHaveCount(1, {timeout: 5_000});
+    await expect(deposit).toHaveAttribute('aria-pressed', 'true');
     await expect(deposit).toHaveAttribute('data-date', MAIN_TRUTH.checkpoint.asOf);
-    await expect(step.locator(`[data-testid="gapfix-verification"][data-as-of="${MAIN_TRUTH.verification}"]`)).toHaveCount(1);
+    await expect(deposit).toHaveAttribute('data-point', pointKey ?? '');
+
+    // A second click clears it: no comparison, nothing filtered.
+    await opening.click();
+    await expect(opening).toHaveAttribute('aria-pressed', 'false');
+    await expect(details).toHaveCount(0);
+    await expect(deposit).toHaveAttribute('aria-pressed', 'true');
 }
 
 /** The wizard handed over and closed: the editor underneath, settled. */
@@ -600,10 +708,17 @@ test.describe('Import Wizard — report sets', () => {
         // Uploaded in this session: never combined, never analysed.
         await expect(card).toHaveAttribute('data-analysed', 'false');
         await openCard(card);
-        await expect(card.getByTestId('report-set-member')).toHaveCount(2);
-        await expect(cardMember(card, custody.file_id)).toHaveAttribute('data-role', 'custody');
-        await expect(cardMember(card, cash.file_id)).toHaveAttribute('data-role', 'cash');
+        // U1: one table per role, each listing its export of this upload; nothing listed the old way.
+        await expect(roleRow(card, 'custody', custody.file_id), 'the custody export in the custody table').toBeVisible();
+        await expect(roleRow(card, 'cash', cash.file_id), 'the cash statement in the cash table').toBeVisible();
+        await expect(roleTable(card, 'custody').locator('tbody tr[data-row-id]')).toHaveCount(1);
+        await expect(roleTable(card, 'cash').locator('tbody tr[data-row-id]')).toHaveCount(1);
+        await expect(card.getByTestId('report-set-member')).toHaveCount(0);
+        await expect(card.locator('[data-testid="report-set-role-table"] [data-testid^="dt-row-checkbox-"]'), 'the set is chosen whole: no row selection').toHaveCount(0);
         await expect(card.getByTestId('report-set-missing')).toHaveCount(0);
+        // U1: a broker with a set and no single file has no heading for "the other files".
+        await expect(singleFileRows(page, brokerId), 'precondition: the owned broker holds the set of this upload and nothing else').toHaveCount(0);
+        await expect(otherFilesHeading(page, brokerId)).toHaveCount(0);
         // A fresh broker: this is its first import.
         await expect(card.locator('[data-testid="report-set-history"][data-kind="first"]')).toBeVisible();
         await expect(card.getByTestId('report-set-timeline')).toBeVisible();
@@ -648,6 +763,19 @@ test.describe('Import Wizard — report sets', () => {
         for (const [outcome, count] of Object.entries(MAIN_SET.outcomes)) {
             await expect(pairing, `combine outcome "${outcome}"`).toHaveAttribute(`data-${outcome}`, String(count));
         }
+        // U3: the five outcomes are chips, in reading order, each with its count.
+        const chips = pairing.getByTestId('parse-detail-pairing-outcome');
+        await expect(chips, 'one chip per outcome of the combine').toHaveCount(Object.keys(MAIN_SET.outcomes).length, {timeout: F2_FIRST});
+        await expect.poll(() => chips.evaluateAll((elements) => elements.map((element) => `${element.getAttribute('data-outcome')}=${element.getAttribute('data-count')}`))).toEqual(Object.entries(MAIN_SET.outcomes).map(([outcome, count]) => `${outcome}=${count}`));
+        // U3: the preview opens the combined file — the one just built — over the detail.
+        await pairing.getByTestId('parse-detail-preview-combined').click();
+        const preview = page.getByTestId('file-preview-modal');
+        await expect(preview, 'the preview of the combined file opens').toBeVisible({timeout: 8_000});
+        await expect(page.getByTestId('file-preview-shell')).toHaveAttribute('data-busy', 'false', {timeout: 30_000});
+        await expect(page.getByTestId('file-preview-download'), 'the preview shows the combined file').toHaveAttribute('href', `${API}/brokers/import/files/${combined.file_id}/download`);
+        await preview.press('Escape');
+        await expect(preview).toHaveCount(0, {timeout: 5_000});
+        await expect(detail, 'closing the preview leaves the detail open').toBeVisible();
         await page.getByTestId('parse-detail-close').click();
         await expect(detail).toHaveCount(0, {timeout: 5_000});
 
@@ -724,9 +852,9 @@ test.describe('Import Wizard — report sets', () => {
         await expect(card).toHaveAttribute('data-set-status', 'complete', {timeout: 15_000});
         await expect(card).toHaveAttribute('data-selected', 'all');
         await openCard(card);
-        await expect(card.getByTestId('report-set-member')).toHaveCount(2);
-        await expect(cardMember(card, custody.file_id)).toHaveAttribute('data-role', 'custody');
-        await expect(cardMember(card, cash.file_id)).toHaveAttribute('data-role', 'cash');
+        await expect(roleRow(card, 'custody', custody.file_id), 'the export of the first upload in the custody table').toBeVisible();
+        await expect(roleRow(card, 'cash', cash.file_id), 'the statement dropped after the warning in the cash table').toBeVisible();
+        await expect(card.locator('[data-testid="report-set-role-table"] tbody tr[data-row-id]')).toHaveCount(2);
         await expect(page.getByTestId('import-wizard-parse')).toBeEnabled();
     });
 
@@ -752,8 +880,11 @@ test.describe('Import Wizard — report sets', () => {
         await expect(card).toHaveAttribute('data-set-status', 'incomplete', {timeout: 15_000});
         await expect(card).toHaveAttribute('data-selected', 'all');
         await openCard(card);
+        await expect(roleRow(card, 'custody', custody.file_id), 'the custody export in its table').toBeVisible();
+        // The role without a file keeps its missing block, and has no table.
         await expect(card.locator('[data-testid="report-set-missing"][data-role="cash"]')).toBeVisible();
         await expect(card.getByTestId('report-set-missing')).toHaveCount(1);
+        await expect(roleTable(card, 'cash')).toHaveCount(0);
         await expect(card.getByTestId('report-set-upload-missing')).toBeVisible();
         const parse = page.getByTestId('import-wizard-parse');
         await expect(parse).toBeDisabled();
@@ -773,7 +904,7 @@ test.describe('Import Wizard — report sets', () => {
         await waitForSettled(step2, 20_000);
         await expect(card).toHaveAttribute('data-selected', 'all');
         await openCard(card);
-        await expect(cardMember(card, cash.file_id)).toHaveAttribute('data-role', 'cash');
+        await expect(roleRow(card, 'cash', cash.file_id), 'the uploaded statement joins the cash table').toBeVisible();
         await expect(card.getByTestId('report-set-missing')).toHaveCount(0);
         await expect(page.getByTestId('import-wizard-set-blocks')).toHaveCount(0);
         await expect(parse).toBeEnabled();
@@ -801,10 +932,25 @@ test.describe('Import Wizard — report sets', () => {
         const card = setCard(page, brokerId, batchId);
         await expect(card).toHaveAttribute('data-set-status', 'incomplete', {timeout: 15_000});
         await expect(card).toHaveAttribute('data-selected', 'all');
-        await openCard(card);
-        // The generic file is a single: a selected row of the broker table, not a member of the set.
-        await expect(cardMember(card, generic.file_id)).toHaveCount(0);
         const genericCheckbox = page.getByTestId(`dt-row-checkbox-${generic.file_id}`);
+        await expect(genericCheckbox).toHaveAttribute('data-state', 'checked');
+        // U1: a broker with a set and a single file — the single files sit under their own heading, in
+        // the broker's panel, outside the card, before the row of the generic file.
+        const heading = otherFilesHeading(page, brokerId);
+        await expect(heading, 'the single files of a broker that has a set too have their heading').toBeVisible({timeout: F2_FIRST});
+        await expect(page.getByTestId(`import-wizard-broker-files-${brokerId}`).getByTestId(`import-wizard-other-files-${brokerId}`)).toHaveCount(1);
+        await expect(card.getByTestId(`import-wizard-other-files-${brokerId}`)).toHaveCount(0);
+        const headingFirst = await heading.evaluate((element, rowTestId) => {
+            const row = document.querySelector(`[data-testid="${rowTestId}"]`);
+            return row !== null && (element.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+        }, `dt-row-checkbox-${generic.file_id}`);
+        expect(headingFirst, 'the heading comes before the single file it introduces').toBe(true);
+
+        await openCard(card);
+        await expect(roleRow(card, 'custody', custody.file_id), 'the custody export in its table').toBeVisible();
+        // The generic file is a single: a selected row of the broker table, not a member of the set.
+        await expect(card.locator(`tr[data-row-id="${generic.file_id}"]`)).toHaveCount(0);
+        await expect(card.locator(`[data-testid="report-set-unrecognised"][data-file-id="${generic.file_id}"]`)).toHaveCount(0);
         await expect(genericCheckbox).toHaveAttribute('data-state', 'checked');
         const parse = page.getByTestId('import-wizard-parse');
         await expect(parse).toBeDisabled();
@@ -860,6 +1006,70 @@ test.describe('Import Wizard — report sets', () => {
     });
 
     // -----------------------------------------------------------------------
+    // F2 — U2: the history LibreFolio already holds, on the timeline of the card
+    // -----------------------------------------------------------------------
+
+    /**
+     * U2-B. An earlier import left the broker a Danske Bank history: two transactions tagged
+     * `danske_bank`, seeded over the API before this upload (out of date order, on purpose). The
+     * preview reads it — H0 is the oldest date, `history_end` the newest, `history_count` 2 — and the
+     * timeline draws it from H0 to that end, no longer to the end of the line; the legend names it.
+     * The files are drawn with their periods and rows, without a hole. Nothing is analysed or saved:
+     * the test stops at step 2, and the seeded rows go with the broker's forced delete.
+     */
+    test('F2-U2: the timeline draws the history LibreFolio holds, from H0 to its newest transaction, with its count', async ({page}) => {
+        test.setTimeout(90_000);
+        const brokerId = await startOnOwnedBroker(page, 'F2-U2');
+        const history = {dates: ['2020-04-20', '2019-11-04'], start: '2019-11-04', end: '2020-04-20'} as const;
+        await seedDanskeHistory(page, brokerId, history.dates);
+
+        await dropFiles(page, [CUSTODY_XLSX, CASH_CSV]);
+        await expect(pendingRows(page)).toHaveCount(2);
+        await assignOwnedBroker(page, brokerId);
+        const uploaded = await uploadsDuring(page, 2, async () => {
+            await page.getByTestId('import-wizard-next').click();
+            await expect(page.getByTestId('import-wizard-step2')).toBeVisible({timeout: 30_000});
+        });
+        const custody = uploadNamed(uploaded, 'danske_bank-custody.xlsx');
+        const cash = uploadNamed(uploaded, 'danske_bank-cash.csv');
+        const batchId = expectUuid(custody.batch_id, 'batch_id of the step-1 session');
+
+        await waitForSettled(page.getByTestId('import-wizard-step2'), 20_000);
+        const card = setCard(page, brokerId, batchId);
+        await expect(card).toHaveAttribute('data-set-status', 'complete', {timeout: 15_000});
+        await expandCard(card);
+        // Premise, read rather than inferred: the preview found the seeded history (the note of a later import).
+        await expect(card.locator('[data-testid="report-set-history"][data-kind="later"]'), 'the preview found the seeded history').toBeVisible();
+        const timeline = card.getByTestId('report-set-timeline');
+        await expect(timeline).toBeVisible();
+
+        const historyBar = timeline.getByTestId('report-set-timeline-history');
+        await expect(historyBar, 'the history starts on H0, its oldest transaction').toHaveAttribute('data-start', history.start, {timeout: F2_FIRST});
+        await expect(historyBar, 'the history ends on its newest transaction').toHaveAttribute('data-end', history.end);
+        await expect(historyBar, 'the history counts its transactions').toHaveAttribute('data-count', String(history.dates.length));
+
+        // The files, each one bar with its role, period and rows; no hole in either role.
+        for (const [role, file] of [
+            ['custody', custody],
+            ['cash', cash],
+        ] as const) {
+            const bar = timeline.locator(`[data-testid="report-set-timeline-bar"][data-file-id="${file.file_id}"]`);
+            await expect(bar, `${role}: one bar`).toHaveCount(1);
+            await expect(bar).toHaveAttribute('data-role', role);
+            await expect(bar).toHaveAttribute('data-start', MAIN_MEMBERS[role].start);
+            await expect(bar).toHaveAttribute('data-end', MAIN_MEMBERS[role].end);
+            await expect(bar).toHaveAttribute('data-rows', String(MAIN_MEMBERS[role].rows));
+        }
+        await expect(timeline.getByTestId('report-set-timeline-gap')).toHaveCount(0);
+
+        // The legend: the files and the history; no gap to name.
+        const legend = timeline.getByTestId('report-set-timeline-legend');
+        await expect(legend.locator('[data-testid="report-set-timeline-legend-item"][data-kind="file"]')).toHaveCount(1);
+        await expect(legend.locator('[data-testid="report-set-timeline-legend-item"][data-kind="history"]')).toHaveCount(1);
+        await expect(legend.locator('[data-testid="report-set-timeline-legend-item"][data-kind="gap"]')).toHaveCount(0);
+    });
+
+    // -----------------------------------------------------------------------
     // C3 — "Align with the bank" and the file badges
     // -----------------------------------------------------------------------
 
@@ -894,13 +1104,15 @@ test.describe('Import Wizard — report sets', () => {
         expect(calls, 'two Imports, two gap-fix requests').toHaveLength(2);
         for (const call of calls) expectGapFixCall(call, brokerId, selected);
 
-        // D-S14: every correction is selected by default.
-        const proposals = step.locator('[data-testid="gapfix-proposal"]');
-        const proposalCount = await proposals.count();
+        // D-S14: every correction is selected by default. Nothing is active (expectOpeningDeposit left it
+        // so): the table holds every correction of the group, each toggle pressed.
+        const proposalCount = Number(await step.getAttribute('data-proposal-count'));
         expect(proposalCount, 'at least the opening deposit is proposed').toBeGreaterThan(0);
-        await expect(step).toHaveAttribute('data-proposal-count', String(proposalCount));
         await expect(step).toHaveAttribute('data-selected-count', String(proposalCount));
-        await expect(step.locator('[data-testid="gapfix-proposal"][data-selected="true"]')).toHaveCount(proposalCount);
+        const toggles = step.locator('[data-testid="gapfix-table"] [data-testid="gapfix-proposal-toggle"]');
+        await expect(toggles, 'one row per correction').toHaveCount(proposalCount);
+        await expect(step.locator('[data-testid="gapfix-table"] [data-testid="gapfix-proposal-toggle"][aria-pressed="true"]')).toHaveCount(proposalCount);
+        await expect(step.getByTestId('gapfix-proposal'), 'the list of C3 is gone').toHaveCount(0);
         await expect(page.getByTestId('import-wizard-gapfix-count')).toHaveAttribute('data-count', String(proposalCount));
 
         // Continue: the review's rows and the selected corrections, tagged gap_fix, in the editor.
@@ -923,19 +1135,24 @@ test.describe('Import Wizard — report sets', () => {
         const step = page.getByTestId('import-wizard-gapfix');
         await expect(step).toBeVisible({timeout: 5_000});
         await expectOpeningDeposit(step);
+        const proposalCount = Number(await step.getAttribute('data-proposal-count'));
+        expect(proposalCount, 'at least the opening deposit is proposed').toBeGreaterThan(0);
+        await expect(step).toHaveAttribute('data-selected-count', String(proposalCount));
 
-        // Untick them one by one, by key, each to its end state.
-        const keys = await step.locator('[data-testid="gapfix-proposal"]').evaluateAll((proposals) => proposals.map((proposal) => proposal.getAttribute('data-key') ?? ''));
-        expect(keys.length, 'at least the opening deposit is proposed').toBeGreaterThan(0);
-        expect(new Set(keys).size, 'every proposal has its own key').toBe(keys.length);
-        for (const key of keys) {
-            const proposal = step.locator(`[data-testid="gapfix-proposal"][data-key="${key}"]`);
-            await expect(proposal).toHaveAttribute('data-selected', 'true');
-            await proposal.getByTestId('gapfix-proposal-toggle').click();
-            await expect(proposal).toHaveAttribute('data-selected', 'false', {timeout: 5_000});
-        }
+        // onToggle: the deposit unticked by the toggle of its own row.
+        const group = step.locator(`[data-testid="gapfix-group"][data-broker-id="${brokerId}"]`);
+        const deposit = group.locator('[data-testid="gapfix-table"] [data-testid="gapfix-proposal-toggle"][data-type="DEPOSIT"]');
+        await expect(deposit).toHaveAttribute('aria-pressed', 'true');
+        await deposit.click();
+        await expect(deposit).toHaveAttribute('aria-pressed', 'false', {timeout: 5_000});
+        await expect(step).toHaveAttribute('data-selected-count', String(proposalCount - 1));
+
+        // onSetSelected: every other correction of the group goes with deselect all, in one go.
+        await group.getByTestId('gapfix-deselect-all').click();
+        await expect(step).toHaveAttribute('data-selected-count', '0', {timeout: 5_000});
+        await expect(group.locator('[data-testid="gapfix-proposal-toggle"][aria-pressed="false"]')).toHaveCount(proposalCount);
+        await expect(group.locator('[data-testid="gapfix-proposal-toggle"][aria-pressed="true"]')).toHaveCount(0);
         await expect(page.getByTestId('import-wizard-gapfix-count')).toHaveAttribute('data-count', '0');
-        await expect(step).toHaveAttribute('data-selected-count', '0');
 
         await page.getByTestId('import-wizard-gapfix-continue').click();
         const bulk = await editorAfterHandoff(page);
@@ -969,6 +1186,9 @@ test.describe('Import Wizard — report sets', () => {
         });
         await waitForSettled(page.getByTestId('import-wizard-step2'), 20_000);
         await expect(page.getByTestId(`dt-row-checkbox-${uploaded.file_id}`)).toHaveAttribute('data-state', 'checked', {timeout: 5_000});
+        // U1: a broker with single files and no set has no heading for "the other files".
+        await expect(page.getByTestId(`import-wizard-broker-sets-${brokerId}`), 'precondition: the owned broker holds no set').toHaveCount(0);
+        await expect(otherFilesHeading(page, brokerId)).toHaveCount(0);
         const parse = page.getByTestId('import-wizard-parse');
         await expect(parse).toBeEnabled({timeout: 5_000});
         await parse.click();

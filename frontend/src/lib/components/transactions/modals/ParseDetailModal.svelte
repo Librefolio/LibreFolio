@@ -6,7 +6,7 @@
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import {CheckCircle, HelpCircle, X, CircleAlert, FileText, Wrench, Info} from 'lucide-svelte';
+    import {CheckCircle, HelpCircle, X, CircleAlert, FileText, Wrench, Info, Eye, Download} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
@@ -38,6 +38,7 @@
 
     /** The combine outcomes shown for a report set, in reading order. */
     const SET_OUTCOMES = ['pair', 'standalone', 'summarized', 'deferred', 'excluded'] as const;
+    const OUTCOME_ICON: Record<(typeof SET_OUTCOMES)[number], string> = {pair: '✅', standalone: '💶', summarized: '📦', deferred: '⏳', excluded: '🚫'};
 
     function summaryCounts(summary: Record<string, unknown> | null | undefined, key: string): Record<string, number> {
         const raw = summary?.[key];
@@ -257,24 +258,49 @@
                 <section data-testid="parse-detail-pairing" data-pair={outcomes.pair ?? 0} data-standalone={outcomes.standalone ?? 0} data-summarized={outcomes.summarized ?? 0} data-deferred={outcomes.deferred ?? 0} data-excluded={outcomes.excluded ?? 0}>
                     <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{$t('importWizard.reportSet.pairingTitle')}</h3>
                     <p class="mb-2 text-xs text-gray-500 dark:text-gray-400">{parseResult.set.memberNames.join(' + ')}</p>
-                    <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                    <div class="flex flex-wrap gap-1.5">
                         {#each SET_OUTCOMES as outcome}
-                            <div class="flex flex-col items-center rounded bg-gray-100 px-2 py-1.5 dark:bg-slate-800">
-                                <span class="text-sm font-semibold text-gray-900 dark:text-white">{outcomes[outcome] ?? 0}</span>
-                                <span class="text-center text-xs text-gray-500 dark:text-gray-400">{$t(`importWizard.reportSet.outcome.${outcome}`)}</span>
-                            </div>
+                            {@const count = outcomes[outcome] ?? 0}
+                            <span
+                                class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs {count > 0 ? 'bg-gray-100 text-gray-800 dark:bg-slate-800 dark:text-gray-100' : 'bg-gray-50 text-gray-400 dark:bg-slate-900 dark:text-gray-500'}"
+                                data-testid="parse-detail-pairing-outcome"
+                                data-outcome={outcome}
+                                data-count={count}
+                            >
+                                <span aria-hidden="true">{OUTCOME_ICON[outcome]}</span>
+                                <span class="font-semibold tabular-nums">{count}</span>
+                                <span>{$t(`importWizard.reportSet.outcome.${outcome}`)}</span>
+                            </span>
                         {/each}
                     </div>
                     {#if Object.keys(reasons).length > 0}
-                        <ul class="mt-2 space-y-0.5 text-xs text-gray-600 dark:text-gray-400">
-                            {#each Object.entries(reasons) as [reason, count]}
-                                <li data-testid="parse-detail-pairing-reason" data-reason={reason}>{reasonLabel(reason)}: {count}</li>
-                            {/each}
-                        </ul>
+                        <table class="mt-3 w-full max-w-md text-xs" data-testid="parse-detail-pairing-reasons">
+                            <thead>
+                                <tr class="text-gray-500 dark:text-gray-400">
+                                    <th class="py-1 pr-3 text-left font-normal">{$t('importWizard.reportSet.column.reason')}</th>
+                                    <th class="py-1 text-right font-normal">{$t('importWizard.reportSet.column.rows')}</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100 dark:divide-slate-700">
+                                {#each Object.entries(reasons) as [reason, count]}
+                                    <tr class="text-gray-700 dark:text-gray-300" data-testid="parse-detail-pairing-reason" data-reason={reason} data-count={count}>
+                                        <td class="py-1 pr-3">{reasonLabel(reason)}</td>
+                                        <td class="py-1 text-right font-mono tabular-nums">{count}</td>
+                                    </tr>
+                                {/each}
+                            </tbody>
+                        </table>
                     {/if}
-                    <a class="mt-2 inline-flex items-center gap-1 text-xs text-libre-green hover:underline" href={`/api/v1/brokers/import/files/${encodeURIComponent(parseResult.fileId)}/download`} data-testid="parse-detail-download-combined">
-                        <FileText size={12} />{$t('importWizard.reportSet.downloadCombined')}
-                    </a>
+                    <div class="mt-3 flex flex-wrap items-center gap-3 text-xs">
+                        {#if onPreview}
+                            <button type="button" class="inline-flex items-center gap-1 text-libre-green hover:underline" onclick={onPreview} data-testid="parse-detail-preview-combined">
+                                <Eye size={12} />{$t('importWizard.reportSet.previewCombined')}
+                            </button>
+                        {/if}
+                        <a class="inline-flex items-center gap-1 text-libre-green hover:underline" href={`/api/v1/brokers/import/files/${encodeURIComponent(parseResult.fileId)}/download`} data-testid="parse-detail-download-combined">
+                            <Download size={12} />{$t('importWizard.reportSet.downloadCombined')}
+                        </a>
+                    </div>
                 </section>
             {/if}
 
