@@ -2055,3 +2055,89 @@ insieme di asset `data_quality.issues` arriva una per categoria, `code + group_k
 >   la tappa 2, quando il selettore del benchmark cambierà.
 > - Reperti per Risk: la tappa 3 deve dire quale selettore adotta il pannello; e le righe di provider dello spec `risk`.
 > - Stato dopo l'invio: **FROZEN** fino al commit.
+
+### Giro 9 committato ✅ 2026-10-05, 18:3x
+
+> - Commit del developer: `ddbb51512`, `6fc57b3bb`, `f1de4ee63`, `0da41fb11`; `HEAD~4` = `bb8d68ad2`, albero `3f085d28b`,
+>   worktree pulito.
+> - `/tmp/libreFolio_f4/verify_l9.sh`: **PASS**. 4 commit lineari, messaggi e percorsi per gruppo identici al record, e
+>   impronta dei blob `5660cd68…` identica. L'intervallo dà 22 file e non 23 perché git abbina `LabCheckMenu.svelte` →
+>   `ui/select/CheckMenu.svelte` come rinomina (81%); con `--no-renames` sono 23.
+> - Da qui i 5 file nuovi di `ui/select/` sono condivisi: ogni modifica passa dal coordinatore. La tappa 2
+>   (`BenchmarkSelect` sul pannello) è di Risk, che manderà il contratto dopo il suo k4, compreso il punto aperto
+>   `verdicts` o `period`.
+> - **Correzione al reperto di L9-4** (le righe di provider dello spec `risk`): lo spec è di **A**, non di Risk. A l'ha
+>   già curato nel suo checkpoint 4 (`528f6154d`: il poll live e il catalogo dei provider di cambio trattenuti), che
+>   arriva nei nostri rami con l'integrazione della famiglia. Niente da fare per me.
+
+## Giro 10 · i commenti allineati a k3 (D374) · 2026-10-05
+
+| # | passo | stato |
+|---|---|---|
+| L10-1 | solo commenti e un titolo di test: «discarded twice running», «re-asked once» e «the policy `loadBase` adopted» non sono più veri con D374 (tre tentativi in tutto, `RISK_DISCARD_ATTEMPTS`) | ✅ 2026-10-05 |
+| L10-2 | cancelli, poi il checkpoint | ✅ 2026-10-05, 18:5x |
+| poi | `correlation.en.md:117` («its dot») quando il rombo di A arriva nel ramo; l'adozione della tappa 2 in `AssetSetRiskPanel` dopo il contratto di Risk; la review unica sulla 6164 con una copia nuova (OK del developer) | in attesa |
+
+### L10-1 · analisi (su `0da41fb11`)
+
+> - **Il fatto di k3** (`riskPanelController.svelte.ts:446-455` e `:510-515`): un'onda di base e un'analisi a richiesta
+>   si richiedono fino a `RISK_DISCARD_ATTEMPTS` (3) tentativi in tutto. `loadDiscarded` e `discarded[analysis]`
+>   scattano solo al terzo scarto.
+> - **Cosa ha già riallineato k3** nei miei tre test: i conteggi, i titoli dei `describe` («discarded three times
+>   running») e i commenti sul copione. Resta il mio testo che k3 non ha toccato:
+>   - produzione, solo commenti: `AssetSetRiskReturnSection.svelte:74` e `AssetSetLossComparisonSection.svelte:71`
+>     (la prop `discarded`), `AssetSetCorrelationSection.svelte:99`, `AssetSetReplaySection.svelte:115`,
+>     `AssetSetComparisonLevels.svelte:148`, `AssetSetRiskPanel.svelte:193` («`loadBase` asks again only once») e
+>     `:490` («the policy `loadBase` adopted»);
+>   - test: l'intestazione di `AssetSetCorrelationSection.test.ts:10`, l'intestazione di
+>     `AssetSetComparisonLevels.test.ts:13` e `:20`, il titolo del test a `:956`;
+>   - E2E: il commento di `risk-lab.spec.ts:6354` («a discarded answer is re-asked once»).
+> - **Restano com'è**:
+>   - `risk-lab.spec.ts:6176-6191`, il preset broker: il suo singolo nuovo tentativo è suo, e il developer l'ha voluto
+>     così;
+>   - i «`loadBase` has no emptiness check» in tre file: non c'entrano con D374.
+> - **Le parole**: in produzione «discarded on every attempt», col nome della costante dove serve, così un cambio del
+>   limite non li rende di nuovo falsi. Nei test «three times running», la parola di k3 negli stessi file: lì il
+>   copione scarta proprio tre volte.
+> - **Il titolo a `:956`** cambia solo nella parola: nessuna asserzione, conteggio invariato. Il runner lancia i file e
+>   non i titoli (verificato sotto).
+> - **Fuori dai miei file**: `levels/RiskLevelsPanel.svelte:148` dice ancora «An on-demand answer discarded twice
+>   running». Lo segnalo a Risk, senza toccarlo.
+
+### L10-1 · i commenti ✅ 2026-10-05 (`/tmp/libreFolio_f4/l10_comments.py`, 12 sostituzioni esatte, ciascuna trovata una volta)
+
+> **Note implementazione**
+> - Produzione, solo commenti, in 6 file: «discarded twice running» diventa «discarded on every attempt» in
+>   `AssetSetRiskReturnSection`, `AssetSetLossComparisonSection`, `AssetSetCorrelationSection`, `AssetSetReplaySection` e
+>   `AssetSetComparisonLevels`. In `AssetSetRiskPanel`:
+>   - `:193`: «`loadBase` re-asks only up to `RISK_DISCARD_ATTEMPTS` in all»;
+>   - `:490`: tolto «the policy `loadBase` adopted for the same guard». Il singolo nuovo tentativo del preset broker
+>     resta com'è.
+> - Test: «three times running», come scrive k3 negli stessi file, nelle due intestazioni e nel titolo di
+>   `AssetSetComparisonLevels.test.ts:956`.
+> - E2E: `risk-lab.spec.ts:6354`, «re-asked, up to three attempts in all».
+> - **Prova che è solo testo**: nel diff (32 righe) l'unica riga che non è un commento è il titolo del test. In nessuno
+>   dei miei file resta «twice running», «re-asked once», «asks again only once» o «the policy `loadBase` adopted».
+>
+> **⚠️ Fuori pista**: lo stesso testo vecchio sta in due file che non sono miei, e li segnalo senza toccarli.
+> - `levels/RiskLevelsPanel.svelte:148`: «An on-demand answer discarded twice running».
+> - La descrizione di `component-unit` in `scripts/test_runner/_frontend_utility.py:532` (del coordinatore): «a replay
+>   answer discarded twice running is disclosed as risk.errors.answer_discarded».
+
+### L10-2 · i cancelli ✅ 2026-10-05, 18:4x-18:5x (fuori corsia: nessun comando tocca la 6154)
+
+> - prettier sui 9 file pulito; `front check` 0/0; `tsc -p tsconfig.e2e.json` 2 errori (il pavimento, altri file);
+>   lista vitest **1401** (invariata); `git diff --check` pulito.
+> - Il titolo cambiato gira: `vitest --reporter=verbose` su `AssetSetComparisonLevels.test.ts` lo mostra due volte
+>   (L1° e L3°), e i test del file restano 50.
+> - **Non eseguiti, e perché**: `front build` e gli E2E. Nessun comportamento cambia: le modifiche ai `.svelte` sono
+>   commenti nello script, compilati da svelte-check e montati da vitest; lo spec cambia solo un commento, e `tsc e2e` lo
+>   compila.
+
+### Checkpoint del giro 10 · 2026-10-05 (verso Risk)
+
+> - Base `0da41fb11`, 10 percorsi, tutti modificati. Due gruppi: **G1** il testo nel codice (6 `.svelte`, 2 test,
+>   1 spec), **G2** questo journal.
+> - Strumenti: `/tmp/libreFolio_f4/l10_msgs.py`, `l10_record.sh` e `verify_l10.sh`.
+> - CHANGELOG: niente, perché nulla cambia per l'utente.
+> - Stato dopo l'invio: **FROZEN** fino al commit.
