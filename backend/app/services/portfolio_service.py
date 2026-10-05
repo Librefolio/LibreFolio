@@ -2418,7 +2418,19 @@ class PortfolioService:
                 selected_cash_broker_ids=list(allocation_cash_broker_ids),
             )
 
-        needs_engine = query.include_summary or query.include_history or query.include_allocation_history or query.include_positions_contribution
+        # Every section flag belongs here: the short branch below returns allocation_source alone.
+        needs_engine = (
+            query.include_summary
+            or query.include_history
+            or query.include_allocation_history
+            or query.include_positions_contribution
+            or query.include_broker_pnl_history
+            or query.include_pnl_candles
+            or query.include_income_history
+            or query.include_cost_history
+            or query.include_deposit_history
+            or query.include_acquisition_funding
+        )
         if allocation_source is not None and not needs_engine:
             report = PortfolioReportResponse(
                 metadata=PortfolioReportMetadata(

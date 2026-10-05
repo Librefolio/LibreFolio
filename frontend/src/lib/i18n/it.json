@@ -1072,7 +1072,8 @@
       "weekRange": "Settimana {start} – {end}",
       "monthLabel": "{month}",
       "valueAt": "Valore al {date}",
-      "eventsInPeriod": "Eventi nel periodo:"
+      "eventsInPeriod": "Eventi nel periodo:",
+      "partialBucket": "Parziale: {days} su {total} giorni"
     },
     "resolution": {
       "weekly": "Settimanale",
@@ -1493,7 +1494,6 @@
     "pnlSubmodeLine": "Linea",
     "pnlSubmodeIncome": "Proventi",
     "pnlSubmodeCandles": "Candele",
-    "pnlCandlesHypothetical": "Sintetico — i massimi/minimi cross-asset sono ipotetici e non simultanei, non una serie intraday reale.",
     "pnlCandlesHypotheticalShort": "Sintetico — i massimi/minimi cross-asset sono ipotetici e non simultanei",
     "pnlAcqNewCapital": "Nuovo capitale",
     "pnlAcqReinvested": "Reinvestito"

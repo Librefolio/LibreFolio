@@ -11,7 +11,7 @@
 import {readFileSync} from 'node:fs';
 import {expect, test} from '../fixtures/playwright';
 import type {Locator, Page} from '../fixtures/playwright';
-import {login} from '../fixtures/auth-helpers';
+import {login, setLanguage} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {waitForSettled} from '../fixtures/app-events';
 import {goToAssetDetailPage, goToAssetsPage} from './assets-helpers';
@@ -648,6 +648,32 @@ test.describe('Asset Detail Page', () => {
                 points: CalendarPointFixture[];
                 [key: string]: unknown;
             }>;
+            // Exactly what buildCalendarResult builds: buildI60GCalendarResult spreads it and its input_coverage.
+            availability: {
+                domain_compatible: boolean;
+                can_compute: boolean;
+                missing_price_fields: string[];
+                missing_event_types: string[];
+                input_coverage: {
+                    requested_points: number;
+                    available_points: number;
+                    contiguous_points: number;
+                    observed_points: number;
+                    backfilled_points: number;
+                    missing_points: number;
+                    max_consecutive_missing_points: number;
+                    internal_gap_count: number;
+                    coverage_ratio: number;
+                    field_coverage: {close: number};
+                    event_type_counts: Record<string, number>;
+                    first_available_date: string | null;
+                    last_available_date: string | null;
+                };
+                required_points: number;
+                warmup_complete: boolean;
+                partial_coverage_used: boolean;
+                reason_code: string | null;
+            };
             [key: string]: unknown;
         };
         type DeferredCalendarOutcome = 'ready' | 'partial' | 'stale-sync' | 'i60g-stale' | 'i60g-rejected' | 'i60g-primary-unavailable' | 'i60g-primary-failed' | 'i60h-query-rejected' | 'i60h-main-omitted' | 'i60h-ready-peer-omitted' | 'i60h-peer-unavailable-contract';
@@ -1967,16 +1993,19 @@ test.describe('Asset Detail Page', () => {
                 pendingMaxStandaloneRange !== null && priceComparisonSyncSucceeded && priceComparisonRaceOutcome !== 'stale' && priceComparisonRaceOutcome !== 'successor' && matchesPriceComparisonRequest(requests, comparisonPeerIds, pendingMaxStandaloneRange, asset.currency)
                     ? pendingMaxStandaloneRange
                     : null;
-            const acceptedCurrentMaxStandaloneEventDate = acceptedCurrentMaxStandaloneFxSyncRange === null ? null : (successorReadyEvents.find(({date}) => date >= acceptedCurrentMaxStandaloneFxSyncRange.start && date <= acceptedCurrentMaxStandaloneFxSyncRange.end)?.date ?? null);
-            if (acceptedCurrentMaxStandaloneFxSyncRange !== null && acceptedCurrentMaxStandaloneEventDate === null) {
-                throw new Error(`Accepted current MAX standalone FX-sync range ${acceptedCurrentMaxStandaloneFxSyncRange.start}..${acceptedCurrentMaxStandaloneFxSyncRange.end} contains no ready-peer event fixture`);
+            // Why derived from the window, not looked up in `successorReadyEvents`: the accepted
+            // window is relative to the request date (end - syntheticMaxResolutionSpanDays .. end)
+            // while that fixture has fixed dates, so the lookup stopped matching on 2026-09-18. The
+            // successor response relocates prices and events into the window anyway (start /
+            // interior / end), so the interior date only has to be strictly inside it; start + 1 is
+            // what the old lookup resolved to on its last green day (window 2026-08-03..2026-09-17,
+            // event on start).
+            const acceptedCurrentMaxStandaloneMiddleDate = acceptedCurrentMaxStandaloneFxSyncRange === null ? null : addDays(acceptedCurrentMaxStandaloneFxSyncRange.start, 1);
+            if (acceptedCurrentMaxStandaloneFxSyncRange !== null && acceptedCurrentMaxStandaloneMiddleDate !== null && acceptedCurrentMaxStandaloneMiddleDate >= acceptedCurrentMaxStandaloneFxSyncRange.end) {
+                throw new Error(
+                    `Accepted current MAX standalone FX-sync range ${acceptedCurrentMaxStandaloneFxSyncRange.start}..${acceptedCurrentMaxStandaloneFxSyncRange.end} (${acceptedCurrentMaxStandaloneFxSyncRange.spanDays} days) is too short to hold a strictly interior date: the successor response needs three distinct ready-peer price dates (start, interior, end)`,
+                );
             }
-            const acceptedCurrentMaxStandaloneMiddleDate =
-                acceptedCurrentMaxStandaloneFxSyncRange !== null && acceptedCurrentMaxStandaloneEventDate !== null
-                    ? acceptedCurrentMaxStandaloneEventDate === acceptedCurrentMaxStandaloneFxSyncRange.start || acceptedCurrentMaxStandaloneEventDate === acceptedCurrentMaxStandaloneFxSyncRange.end
-                        ? addDays(acceptedCurrentMaxStandaloneFxSyncRange.start, 1)
-                        : acceptedCurrentMaxStandaloneEventDate
-                    : null;
             const stalePriceComparisonGate = isStalePriceComparison ? stalePriceComparisonCandidate : null;
             if (deferredPriceOnly) {
                 deferredPriceOnlyResponse = null;
@@ -7792,6 +7821,94 @@ test.describe('Asset Detail Page', () => {
         expect(calendarRequestCount).toBeGreaterThanOrEqual(shortMaxCalendarRequestsBefore + 1);
         expect(backendSignalRequestCount).toBe(shortMaxBackendRequestsBefore);
         syntheticMaxResolutionSpanDays = null;
+    });
+
+    // ========================================================================
+    // D24: rolling-return guide link — the "?" at the end of the window row
+    // ========================================================================
+    // Rolling-return mode closes its window row (presets, then the custom control)
+    // with an icon-only DocsLink to the chart guide's #rolling-return section. It
+    // exists only in that mode, and the URL it opens follows the active UI language:
+    // no prefix in English, /mkdocs/it/ in Italian. The anchor itself reaches the
+    // English page later with the docs work, so this pins the URL the link opens,
+    // not where the guide scrolls. Read-only on the seeded Apple asset: it never
+    // touches the persisted window, and the language lives in this context's
+    // localStorage, so there is nothing to restore.
+    test('rolling-return guide link sits at the end of the window row and follows the active language', async ({page, context}) => {
+        // Two popups and a dictionary load on top of the usual login and detail-page setup.
+        test.setTimeout(60_000);
+        const docsKey = 'signals.riskRollingReturn.description';
+        // `t()` falls back to the key itself: guard it, or the name assertions below would compare a key with a key.
+        expect(t('en', docsKey), 'the EN catalogue must define the guide label').not.toBe(docsKey);
+        expect(t('it', docsKey), 'the IT catalogue must translate the guide label').not.toBe(t('en', docsKey));
+        // The URL is the subject; the stub only spares the popup a built MkDocs site.
+        await context.route('**/mkdocs/**', (route) => route.fulfill({status: 200, contentType: 'text/html', body: '<!doctype html><html><head><title>docs-stub</title></head><body></body></html>'}));
+
+        await goToSeededAssetDetail(page);
+        const chart = page.getByTestId('asset-detail-chart');
+        const pricePrimary = chart.getByTestId('asset-chart-primary-price');
+        const calendarPrimary = chart.getByTestId('asset-chart-primary-calendar-return');
+        const windowRow = chart.getByTestId('asset-calendar-window-controls');
+        const docsLink = windowRow.getByTestId('asset-calendar-return-docs');
+        // Page-wide on purpose: in Prices mode the link must exist nowhere, not merely outside the row.
+        const anyDocsLink = page.getByTestId('asset-calendar-return-docs');
+        const expectGuideOpensAt = async (pathname: string) => {
+            const popupPromise = page.waitForEvent('popup', {timeout: 10_000});
+            await docsLink.click();
+            const popup = await popupPromise;
+            await expect
+                .poll(
+                    () => {
+                        const url = new URL(popup.url());
+                        return {pathname: url.pathname, hash: url.hash};
+                    },
+                    {message: 'the guide link must open the chart guide at #rolling-return', timeout: 10_000},
+                )
+                .toEqual({pathname, hash: '#rolling-return'});
+            await popup.close();
+        };
+
+        // Prices mode in English, and no guide link. The pressed price button and the visible
+        // rolling-return button are the presence barrier the count-0 assertions need.
+        await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+        await expect(chart).toHaveAttribute('data-primary-mode', 'price');
+        await expect(pricePrimary).toHaveAttribute('aria-pressed', 'true');
+        await expect(calendarPrimary).toBeVisible();
+        await expect(windowRow).toHaveCount(0);
+        await expect(anyDocsLink).toHaveCount(0);
+
+        await calendarPrimary.click();
+        await expect(chart).toHaveAttribute('data-primary-mode', 'calendar-return');
+        await expect(calendarPrimary).toHaveAttribute('aria-pressed', 'true');
+        await expect(windowRow).toBeVisible({timeout: 10_000});
+        await expect(docsLink, 'rolling-return mode must close its window row with the guide link').toBeVisible();
+        // "At the end" is read as the row's last control, after the custom-window control. Not
+        // pixels: the row is flex-wrap. Not the last child: the link sits in a Tooltip wrapper and
+        // the bubble mounts right after it, but the bubble holds no control. Position is the
+        // subject here, so `.last()` over the row's own controls is the assertion, not a guess.
+        await expect(windowRow.getByTestId('asset-calendar-window-custom')).toBeVisible();
+        await expect(windowRow.locator('button, a[href], input, select, textarea, [role="button"]').last()).toHaveAttribute('data-testid', 'asset-calendar-return-docs');
+        await expect(docsLink).toHaveAccessibleName(t('en', docsKey));
+        await expectGuideOpensAt('/mkdocs/user/assets/detail/chart/');
+
+        // Rolling-return mode surviving the language switch is neither the subject nor
+        // guaranteed: a dictionary slower than svelte-i18n's 200 ms `loadingDelay` makes
+        // the root layout remount the page in Prices mode. Re-entering the mode is a no-op
+        // when it survived; then the link is relabelled and opens the Italian guide.
+        await setLanguage(page, 'it');
+        await calendarPrimary.click();
+        await expect(chart).toHaveAttribute('data-primary-mode', 'calendar-return');
+        await expect(calendarPrimary).toHaveAttribute('aria-pressed', 'true');
+        await expect(docsLink).toHaveAccessibleName(t('it', docsKey));
+        await expectGuideOpensAt('/mkdocs/it/user/assets/detail/chart/');
+
+        // Back to Prices: the row goes, and the link with it.
+        await pricePrimary.click();
+        await expect(chart).toHaveAttribute('data-primary-mode', 'price');
+        await expect(pricePrimary).toHaveAttribute('aria-pressed', 'true');
+        await expect(calendarPrimary).toHaveAttribute('aria-pressed', 'false');
+        await expect(windowRow).toHaveCount(0);
+        await expect(anyDocsLink).toHaveCount(0);
     });
 
     // ========================================================================
