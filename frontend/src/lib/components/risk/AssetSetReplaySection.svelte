@@ -112,8 +112,8 @@
     // explains a replay with nothing left (D372); the section gets the rest.
     let replayView = $derived(replaySectionView(controller.replayResult));
     let reasons = $derived(resultReasons([replayView], $t));
-    // A replay answer discarded twice running (the page's live price polling invalidates the
-    // cache every 30 s) is disclosed here, as the Dashboard's L4 does, instead of vanishing;
+    // A replay answer discarded on every attempt (the page's live price polling invalidates
+    // the cache every 30 s) is disclosed here, as the Dashboard's L4 does, instead of vanishing;
     // and so is a replay that failed outright, a timeout for one.
     let errorCodes = $derived([...resultErrorCodes([replayView]), ...discardedErrorCodes(controller.discarded, ['replay'])]);
     let metadata = $derived(levelMetadata([controller.replayResult]));

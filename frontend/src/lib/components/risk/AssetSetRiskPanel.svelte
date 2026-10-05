@@ -190,8 +190,8 @@
      * (`liveAssetIdsKey` in `assets/+page.svelte`). The order outlived the reason it
      * was introduced for, and is kept on purpose: it costs nothing, and it keeps the
      * sections clear of whatever that refresh sets off if the poll ever regresses,
-     * since `loadBase` asks again only once. `finally`, so a page refresh that fails
-     * still leaves the sections re-asked on the new data.
+     * since `loadBase` re-asks only up to `RISK_DISCARD_ATTEMPTS` in all. `finally`, so a
+     * page refresh that fails still leaves the sections re-asked on the new data.
      *
      * A run that was not accepted changed nothing, so it refreshes nothing.
      */
@@ -487,8 +487,8 @@
         // (`POST /assets/prices/current`), that is a portfolio mutation, and
         // `portfolioStore`'s mutation listener drops every report in flight. Read as
         // "no holdings", a null used to wipe the selection in silence. It is asked once
-        // more — the policy `loadBase` adopted for the same guard, and the right answer
-        // to a transient failure too — and a second null is reported as a failure.
+        // more — the right answer to a transient failure too — and a second null is
+        // reported as a failure.
         // Only the holdings are read, so the report is asked without its daily history and
         // allocation history: those two series are what made "All mine" wait, and nothing here
         // reads them. The lighter report is cached under its own key (`|nohist|noalloc`).
