@@ -130,8 +130,8 @@ const FRAME = 'risk-correlation-section';
  *
  *  - `nothing`: an answer with no result in it — nothing failed, nothing to draw;
  *  - `reject`: the request throws, as a failed wave does (`loadError`);
- *  - `discard`: `null`, an answer that arrived and was discarded. The controller re-asks once,
- *    and a second `null` is what sets `loadDiscarded`.
+ *  - `discard`: `null`, an answer that arrived and was discarded. The controller asks three times
+ *    in all, and a third `null` is what sets `loadDiscarded`.
  */
 type Outcome = 'nothing' | 'reject' | 'discard';
 const script = {outcome: 'nothing' as Outcome, asked: [] as {request: RiskQueryRequest; force: boolean}[]};
@@ -246,12 +246,12 @@ describe('AssetSetCorrelationSection — a base wave that fails', () => {
     });
 });
 
-describe('AssetSetCorrelationSection — a base answer discarded twice running', () => {
+describe('AssetSetCorrelationSection — a base answer discarded three times running', () => {
     it('offers the retry in the body, and the frame says why, once, as answer_discarded', async () => {
         script.outcome = 'discard';
         const controller = mount();
         await waitFor(() => expect(controller.loadDiscarded, 'the controller never recorded the discard: the path under test did not run').toBe(true));
-        expect(script.asked, 'the base question was not asked and then re-asked exactly once').toHaveLength(2);
+        expect(script.asked, 'the base question was not asked three times in all — the first attempt and two re-asks').toHaveLength(3);
 
         // The body, as it already was: a retry and nothing else.
         const block = await waitFor(() => screen.getByTestId('risk-correlation-discarded'));
@@ -556,17 +556,17 @@ describe("AssetSetCorrelationSection — why it did not come back: the result's 
         expect(screen.queryByTestId(`${FRAME}-errors`), 'the frame says why a correlation did not come back, and it came back whole').toBeNull();
     });
 
-    it("an unavailable correlation whose refreshed answer is discarded twice running: both codes, the result's first, then answer_discarded", async () => {
+    it("an unavailable correlation whose refreshed answer is discarded three times running: both codes, the result's first, then answer_discarded", async () => {
         answerWith([refusedCorrelation(NO_HISTORY)]);
         const {view, controller} = mountKeepingInstance();
         await frameDrew(controller, NO_HISTORY.status);
 
-        // An accepted sync re-reads the base, and its answer is discarded twice running.
+        // An accepted sync re-reads the base, and its answer is discarded three times running.
         discardEveryAnswer();
         const before = script.asked.length;
         await view.rerender({refreshVersion: 1});
         await waitFor(() => expect(controller.loadDiscarded, 'the controller never recorded the discard: the path under test did not run').toBe(true));
-        expect(script.asked.length - before, 'the refreshed question was not asked and then re-asked exactly once').toBe(2);
+        expect(script.asked.length - before, 'the refreshed question was not asked three times in all — the first attempt and two re-asks').toBe(3);
         expect(heldCorrelation(controller)?.status, 'premise: a discard is not an answer, yet the controller no longer holds the unavailable correlation').toBe(NO_HISTORY.status);
         // The barrier: the body settled on the discard's retry, which reads the flag the frame's line reads.
         await waitFor(() => expect(screen.queryByTestId('risk-correlation-discarded'), 'the section did not settle on its discarded state').not.toBeNull());
