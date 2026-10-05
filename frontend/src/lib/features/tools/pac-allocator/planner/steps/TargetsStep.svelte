@@ -59,7 +59,7 @@
 
     function barHtml(asset: DraftAsset): string {
         const width = Math.min(100, (percentNumber(draft.data.targets[asset.key]) / maxWeight) * 100);
-        return `<div data-testid="pac-planner-target-bar" data-asset-key="${escapeHtml(asset.key)}" aria-hidden="true" class="h-3 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-700"><div class="h-full rounded-full transition-all ${BAR_CLASS[totalState]}" style="width: ${width}%"></div></div>`;
+        return `<div data-testid="pac-planner-target-bar" data-asset-key="${escapeHtml(asset.key)}" aria-hidden="true" class="h-3 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-700"><div class="h-full rounded-full transition-all ${escapeHtml(BAR_CLASS[totalState])}" style="width: ${width}%"></div></div>`;
     }
 
     /** Gives this Asset what is missing, or takes away the excess, within 0–100. */

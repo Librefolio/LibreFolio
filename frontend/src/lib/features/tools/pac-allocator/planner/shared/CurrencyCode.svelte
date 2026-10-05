@@ -5,6 +5,7 @@
 <script lang="ts">
     import {currentLanguage} from '$lib/stores/app/language';
     import {currencyStoreVersion, ensureCurrenciesLoaded} from '$lib/stores/reference/currencyStore';
+    import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
     import {formatCurrencyCodeHtml} from '$lib/utils/currency/currencyFormat';
 
     interface Props {
@@ -25,4 +26,4 @@
     });
 </script>
 
-<span class="whitespace-nowrap" data-testid={testid} data-currency={code}>{@html html}</span>
+<span class="whitespace-nowrap" data-testid={testid} data-currency={code}>{@html sanitizeHtml(html)}</span>
