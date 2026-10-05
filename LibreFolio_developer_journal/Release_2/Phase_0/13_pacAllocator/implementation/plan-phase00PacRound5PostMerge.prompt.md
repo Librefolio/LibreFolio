@@ -5,6 +5,7 @@
 **Posizione:** `LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/implementation/plan-phase00PacRound5PostMerge.prompt.md`
 (copia del piano di sessione approvato).
 → Delta C0: [`plan-phase00PacRound5-C0UiDelta.prompt.md`](plan-phase00PacRound5-C0UiDelta.prompt.md).
+→ Successivo: [`plan-phase00PacContractCompaction.prompt.md`](plan-phase00PacContractCompaction.prompt.md) (compattazione del contratto 1.0.0, dopo R14.8).
 ← Precedente: [`plan-phase00PacSolverBudget.prompt.md`](plan-phase00PacSolverBudget.prompt.md).
 **Lane:** copia di prod `6161` + `/tmp/librefolio-r2-d-prodcopy`, ricavata dalla snapshot `/tmp/librefolio-r2-prod-snapshot` (server e review) · suite `6151` + `/tmp/librefolio-r2-d` (solo `dev.py test`).
 
@@ -3755,6 +3756,10 @@ La domanda «riuso dei margini = Piano operativo?» resta accettata (la risposta
   >   | `front build` (produzione, per ultimo; marcatore `.build-debug=0`) | ✅ |
   >
   >   6151 libera a fine catena (`lsof` vuoto). Il pavimento passa a 0/0 con il prossimo merge di `dev_release2`.
+  >
+  > **→ Seguito (2026-10-05):** checkpoint `0900f11fa` fix(pac) + `946095d58` docs(journal). La slice di
+  > compattazione del contratto 1.0.0 (decisione a del coordinator) prosegue in
+  > [`plan-phase00PacContractCompaction.prompt.md`](plan-phase00PacContractCompaction.prompt.md).
 
 ---
 
