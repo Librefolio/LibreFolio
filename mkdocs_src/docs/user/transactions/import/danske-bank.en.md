@@ -34,7 +34,7 @@ Import the files **as downloaded**: don't open and re-save them in Excel first.
 ## 🧺 Upload both files together
 
 1. Open the **[Import Wizard](how-to.md)**. In **Upload**, drop **both** files and assign them to your Danske Bank broker.
-2. Files uploaded together for the same broker form one **report set**. In **Select Files** the set is one card, already ticked when you have just uploaded it. The card lists the files by kind — *Securities transactions* and *Cash statement* — each kind in a small table, its files ordered by the period they cover, with **Preview** and **Delete** in each row's **⋮** menu (a double click opens the preview too). The card's timeline shows each file as a bar, any days that no export of a kind covers between two of its files as a dashed gap, and — when LibreFolio already holds this broker's history — a grey bar up to the last day it holds: point at a bar, or click it, to read its dates and its number of rows (or, for the grey bar, of transactions already in LibreFolio). A note tells you what this import will do. Any other files you uploaded for the broker are listed below the card, under **Other files of this broker**.
+2. Files uploaded together for the same broker form one **report set**. In **Select Files** the set is one card, already ticked when you have just uploaded it. The card lists the files by kind — *Securities transactions* and *Cash statement* — each kind in a small table, its files ordered by the period they cover, with **Preview** and **Delete** in each row's **⋮** menu (a double click opens the preview too). The card's timeline shows each file as a bar, any days that no export of a kind covers between two of its files as a dashed gap, and — when LibreFolio already holds this broker's history — a grey bar up to the last day it holds: point at a bar, or click it, to read its dates and its number of rows (or, for the grey bar, of transactions already in LibreFolio). A note tells you what this import will do. Any other files you uploaded for the broker are listed below the card, under **Other files of this broker**. To read the files another way, see [How the set is read](#how-the-set-is-read).
 3. **Parse** combines the two files into one **combined file** and analyses it, so the set stays a single row. Its detail (**Matching securities ↔ cash**) shows the outcome as chips — the trades paired with their cash, the rows that exist in one file only, the movements summarised in a starting point or after a gap, the trades left for your next import, the rows left out — then the reasons in a table, with their number of rows, and lets you **preview** or **download the combined file**.
 
 Uploading from the [Files](../../files/index.md#broker-reports) page, or from a broker's **Uploaded Reports**, works the same way: the files you upload in one go form one set, which you then tick in the wizard's **Select Files**.
@@ -48,6 +48,21 @@ You can also continue without it: in **Select Files** the set shows **A file is 
 !!! warning "Files uploaded at different times do not join"
 
     A set is made of the files you upload **together**. A cash statement uploaded on its own a few days earlier forms a separate, incomplete set: it never joins the securities file automatically. Add it again with **Upload the missing file** on the right card, then delete the leftover file.
+
+### 🔀 How the set is read {: #how-the-set-is-read }
+
+LibreFolio reads the exports it recognises as one set. You can change that on the set's card in **Select Files**:
+
+- **Read as**, in the card's header (visible even when the card is folded), shows how the set is read and lets you change it. It lists **Danske Bank (detected)** — the plugin that recognised the files — and **Read the files one by one**; any other plugin able to read every file of the set as a set would be listed too. Reading the files one by one dissolves the set: each file is read on its own, with the best plugin that can read it alone — your broker's **Default Import Plugin** first, when it can — and a file that no such plugin can read is left out of the import, unticked.
+- Each file's **⋮** menu offers **Read alone with ‹plugin›**, one entry for each plugin that can read that file on its own, and **Remove from the set**: the file leaves the set without being deleted, and is unticked. Handy, for example, for a statement of another account uploaded by mistake.
+
+Today only the Danske Bank plugin reads these exports: **Read alone** is never offered for them, and reading them one by one leaves both files out of the import. **Remove from the set** is always there.
+
+A file taken out of the set joins the broker's other files, below the card, under **Other files of this broker**. To put it back, tick it (if it is not ticked) and choose *Danske Bank* in its **Plugin** column. Taking out an export the set needs makes the set incomplete (*A file is missing*), which blocks **Parse** as long as the set is ticked: put the file back, upload the missing file, or use **Exclude from the import**, as in [If one file is missing](#if-one-file-is-missing).
+
+The card also tells you when the files could be read another way. When your broker's **Default Import Plugin** could read one of them, a note says that the set is read as a set rather than with that plugin, and how to change it. When another plugin for report sets also recognises one of the files, a note names it.
+
+**What LibreFolio remembers.** While the files are only uploaded, your choices last until you close the wizard: open it again and LibreFolio reads the files as it detects them. Once the files have been analysed (**Parse**), LibreFolio remembers how it read them: the set keeps the files it was analysed with and its plugin, a file analysed alone keeps its plugin, and a file left out of an analysed set stays out. When you open the wizard again it shows your files that way, and so does the **Report set** column of your [files](#your-files-in-librefolio). You can still change it with the same commands: your next analysis becomes the new memory.
 
 ---
 
@@ -164,7 +179,7 @@ When two securities exports uploaded together leave a hole between them, the set
 
 ## 🗂️ Your files in LibreFolio
 
-The [Files](../../files/index.md#broker-reports) page and a broker's **Uploaded Reports** show a **Report set** column: **Set of ‹date›** on the exports of a set, **Combined** on the file LibreFolio built from them, **Used in a combined file** on the exports already combined, **Incomplete** when a set still lacks an export, and **To re-combine** when a newer version of the importer will rebuild the combined file.
+The [Files](../../files/index.md#broker-reports) page and a broker's **Uploaded Reports** show a **Report set** column: **Set of ‹date›** on the exports of a set, **Combined** on the file LibreFolio built from them, **Used in a combined file** on the exports already combined, **Incomplete** when a set still lacks an export, and **To re-combine** when a newer version of the importer will rebuild the combined file. The column follows how the files were last analysed (see [How the set is read](#how-the-set-is-read)): a file left out of the set, or analysed alone, shows no **Set of ‹date›** badge.
 
 ## 🔗 Developer Reference
 
