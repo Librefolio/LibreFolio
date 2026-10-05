@@ -104,6 +104,30 @@
  * handing `days` to a message that asks for `{length}`; the catalogue case, the attributes, the note's
  * place and its absence pass on both.
  *
+ * ── D371 (the developer, 2026-10-05): the benchmark may be one of the selection ─────────────────
+ *
+ * «per le metriche che si calcolano con il benchmark e l'asset stesso è il benchmark, mettici un trattino
+ * e un tooltip che spiega che non è applicabile perché sé stesso è già il benchmark». `asset_set_comparison`
+ * 1.1.0 accepts a reference the reader also selected: it keeps its row, measured like the others, and is
+ * left out of the comparison's `items` — its beta and correlation with itself would be 1 by construction.
+ * So, on the reference's row (`isReference`, read from the parsed comparison):
+ *
+ *  - **its beta and correlation are the em dash** with `data-measured="false"` and `data-reference="true"`
+ *    on the cell's span, in the project's Tooltip worded from `risk.assetSet.levels.l3.referenceItself` —
+ *    not from the blank note. Every other dash keeps the blank note and carries no `data-reference`, and
+ *    the reference's other four columns are measured like any row's;
+ *  - **the scatter draws it once**: the points handed to `ScatterChart` are
+ *    `buildAssetSetChartPoints(rows, benchmarkPoint)` — the reference's own row dot, `asset-<id>`, takes the
+ *    role `benchmark` and no separate `benchmark` point is added, so a selection of the reference alone is
+ *    one dot and no chart. A reference outside the selection is drawn as before, its own point last.
+ *
+ * Red first, a fifth time: the reference's two cells (no `data-reference`, the blank note's sentence) and
+ * the scatter cases with the reference selected (a separate `benchmark` dot beside its row's) fail on the
+ * section as it stands; the fixtures, the catalogues, the reference's measured columns, the other dashes
+ * and a reference outside the selection pass on both. Not pinned, because the contract does not say it: what
+ * a click on the selected reference's dot does — it is `asset-<id>` and its row exists, while the second
+ * review's rule was that the benchmark's dot selects nothing.
+ *
  * **The scatter is a stand-in.** `ScatterChart` belongs to another workstream and draws through
  * ECharts, whose canvas jsdom does not implement (see `SemiDonutChartStub.svelte`). It is replaced by a
  * function with a Svelte component's calling convention, which records the props this section hands it
@@ -120,13 +144,15 @@
  * running backend. The payloads are shaped to be emittable — they satisfy the zod schemas
  * `assetSetLevels.ts` parses with (`buildAssetSetPaidRows`) and the pydantic models in
  * `backend/app/schemas/risk.py` that would have produced them: volatilities ≥ 0, falls ≤ 0, correlations
- * in [−1, 1], and a reference that is never one of the compared. They are also roughly coherent with
- * each other, so a reader can check them rather than trust them: with the zero risk-free rate the levels
- * charge, Sharpe ≈ return ÷ volatility; beta ≈ correlation × volatility ÷ the reference's 15%; the
- * tracking error follows from the two volatilities and the correlation. `data_quality` is omitted, as in
- * the neighbouring files: the section does not read it. `metadata` is omitted from the main fixtures
- * too — so the cases that are not about the period draw no period note — and the period cases attach a
- * complete one (`windowMetadata`), proved by the harness to parse with `schemas.RiskResultMetadata`.
+ * in [−1, 1], and a reference that is never one of the comparison's items — though since D371 it may be
+ * one of the selection, as in the `REFERENCE_SELECTED` and `REFERENCE_ALONE` mounts. They are also
+ * roughly coherent with each other, so a reader can check them rather than trust them: with the zero
+ * risk-free rate the levels charge, Sharpe ≈ return ÷ volatility; beta ≈ correlation × volatility ÷ the
+ * reference's 15%; the tracking error follows from the two volatilities and the correlation.
+ * `data_quality` is omitted, as in the neighbouring files: the section does not read it. `metadata` is
+ * omitted from the main fixtures too — so the cases that are not about the period draw no period note —
+ * and the period cases attach a complete one (`windowMetadata`), proved by the harness to parse with
+ * `schemas.RiskResultMetadata`.
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import {tick, type ComponentProps} from 'svelte';
@@ -221,7 +247,11 @@ const ICONS: ReadonlyMap<number, string> = new Map([
     [63, '/icons/asset-types/bond.png'],
     [65, '/icons/asset-types/etf.png'],
 ]);
-/** The shared reference: never one of the compared, as `validate_reference_is_not_a_subject` demands. */
+/**
+ * The shared reference: outside `SELECTION`, and never among the comparison's items, as
+ * `validate_reference_is_not_a_subject` demands. Since D371 the reader may select it too — the
+ * `REFERENCE_SELECTED` and `REFERENCE_ALONE` mounts do.
+ */
 const BENCHMARK_ID = 90;
 const BENCHMARK_VOLATILITY = 0.15;
 const BENCHMARK_RETURN = 0.058;
@@ -295,6 +325,38 @@ const DRAWN: ReadonlyMap<number, Record<ValueColumn, string>> = new Map([
     [64, {volatility: '31.0%', expectedReturn: '\u22123.4%', sortino: '-0.19', sharpe: '-0.11', beta: '-0.23', correlation: '-0.11'}],
     [65, {volatility: '26.0%', expectedReturn: '+9.1%', sortino: '0.48', sharpe: '0.35', beta: '0.62', correlation: '0.36'}],
 ]);
+
+/**
+ * D371: the reader selected the reference too, mid-list — neither first nor last, so no position can stand
+ * in for it. The comparison is `COMPARISON` itself: the backend leaves a selected reference out of `items`,
+ * and the reference always took part in the selection's joint window, so selecting it moves no other figure
+ * and its own coordinates are the comparison's. Its row is measured on them like any other: Sharpe ≈
+ * 0.058 ÷ 0.15.
+ */
+const SELECTION_WITH_REFERENCE: number[] = [UNMEASURED, 65, BENCHMARK_ID, 61, 64, 63];
+const REFERENCE_NAME = 'Invented reference R';
+const LABELS_WITH_REFERENCE: ReadonlyMap<number, string> = new Map<number, string>([...LABELS, [BENCHMARK_ID, REFERENCE_NAME]]);
+const REFERENCE_FIGURES = {volatility: BENCHMARK_VOLATILITY, expectedReturn: BENCHMARK_RETURN, sharpe: 0.39, sortino: 0.52, maxDrawdown: -0.19, maxDrawdownDays: 166};
+/** What the reference's four measured cells draw, read off the figures above by hand. */
+const REFERENCE_DRAWN: Record<(typeof BASE_VALUE_COLUMNS)[number], string> = {volatility: '15.0%', expectedReturn: '+5.8%', sortino: '0.52', sharpe: '0.39'};
+const REFERENCE_RETURN_ITEM = {asset_id: BENCHMARK_ID, volatility: REFERENCE_FIGURES.volatility, expected_annual_return: REFERENCE_FIGURES.expectedReturn};
+const REFERENCE_KPI_ITEM = {asset_id: BENCHMARK_ID, volatility: REFERENCE_FIGURES.volatility, max_drawdown: REFERENCE_FIGURES.maxDrawdown, max_drawdown_duration_days: REFERENCE_FIGURES.maxDrawdownDays, sharpe: REFERENCE_FIGURES.sharpe, sortino: REFERENCE_FIGURES.sortino};
+
+/** The main payloads with the reference's own item first, as `PAYLOAD_ORDER` lists them: by id, descending. */
+const RISK_RETURN_WITH_REFERENCE = ok('invented-risk-return-with-reference', 'asset_set_risk_return', {kind: 'risk_return_set', items: [REFERENCE_RETURN_ITEM, ...(RISK_RETURN.output as ReturnOutput).items]});
+const KPI_WITH_REFERENCE = ok('invented-kpi-with-reference', 'asset_set_kpi', {kind: 'kpi_set', drawdown_confidence_level: 0.95, items: [REFERENCE_KPI_ITEM, ...(KPI.output as KpiOutput).items]});
+
+/** The reference selected alone: the backend answers with not one item, and the reference's coordinates beside them. */
+const RISK_RETURN_REFERENCE_ALONE = ok('invented-risk-return-reference-alone', 'asset_set_risk_return', {kind: 'risk_return_set', items: [REFERENCE_RETURN_ITEM]});
+const KPI_REFERENCE_ALONE = ok('invented-kpi-reference-alone', 'asset_set_kpi', {kind: 'kpi_set', drawdown_confidence_level: 0.95, items: [REFERENCE_KPI_ITEM]});
+const COMPARISON_REFERENCE_ALONE = ok('invented-comparison-reference-alone', 'asset_set_comparison', {
+    kind: 'comparison_set',
+    comparison_asset_id: BENCHMARK_ID,
+    observations: 752,
+    comparison_volatility: BENCHMARK_VOLATILITY,
+    comparison_expected_annual_return: BENCHMARK_RETURN,
+    items: [],
+});
 
 /**
  * The orders each column must take, written out by hand from the figures drawn:
@@ -454,6 +516,10 @@ interface MountProps {
 const MAIN: MountProps = {assetIds: SELECTION, assetLabels: LABELS, assetIcons: ICONS, riskReturn: RISK_RETURN, kpi: KPI};
 /** The same, with a benchmark that applies. */
 const WITH_BENCHMARK: MountProps = {...MAIN, comparison: COMPARISON, benchmarkApplies: true};
+/** D371: the reference selected mid-list beside the others, the benchmark applying — `COMPARISON` unchanged. */
+const REFERENCE_SELECTED: MountProps = {assetIds: SELECTION_WITH_REFERENCE, assetLabels: LABELS_WITH_REFERENCE, assetIcons: ICONS, riskReturn: RISK_RETURN_WITH_REFERENCE, kpi: KPI_WITH_REFERENCE, comparison: COMPARISON, benchmarkApplies: true};
+/** D371: the reference selected alone — one row, and nothing to compare it with. */
+const REFERENCE_ALONE: MountProps = {assetIds: [BENCHMARK_ID], assetLabels: new Map([[BENCHMARK_ID, REFERENCE_NAME]]), riskReturn: RISK_RETURN_REFERENCE_ALONE, kpi: KPI_REFERENCE_ALONE, comparison: COMPARISON_REFERENCE_ALONE, benchmarkApplies: true};
 
 function propsOf({assetIds = SELECTION, assetLabels = LABELS, assetIcons = new Map(), riskReturn = null, kpi = null, comparison = null, benchmarkApplies = false, dateStart = SELECTED_START, dateEnd = SELECTED_END, loading = false, failed = false, discarded = false, onretry}: MountProps) {
     return {assetIds, assetLabels, assetIcons, riskReturn, kpi, comparison, benchmarkApplies, dateStart, dateEnd, loading, failed, discarded, ...(onretry ? {onretry} : {})};
@@ -607,6 +673,9 @@ const NO_BENCHMARK_KEY = 'risk.assetSet.levels.l3.noBenchmark';
 const BLANK_NOTE_TESTID = 'risk-asset-set-l3-blank-note';
 const BLANK_NOTE_KEY = 'risk.assetSet.levels.blankNote';
 
+/** D371: what the reference's own beta and correlation dashes say instead — it is the benchmark itself. */
+const REFERENCE_ITSELF_KEY = 'risk.assetSet.levels.l3.referenceItself';
+
 /** The period note (third review), and the three keys its sentences are worded from. */
 const PERIOD_TESTID = 'risk-asset-set-l3-period';
 const PERIOD_WINDOW_KEY = 'risk.assetSet.levels.l3.period.window';
@@ -716,6 +785,33 @@ describe('AssetSetRiskReturnSection — the harness itself', () => {
             const parsed = schemas.RiskResultMetadata.safeParse(metadata);
             expect(parsed.success, `${JSON.stringify(metadata.analyzed_range)}: ${parsed.success ? '' : parsed.error.message}`).toBe(true);
         }
+    });
+
+    it('the D371 fixtures parse too: the reference selected, measured like the others, and never among the compared', () => {
+        const parsed = {
+            riskReturnWithReference: schemas.RiskAssetSetReturnOutput.safeParse(RISK_RETURN_WITH_REFERENCE.output).success,
+            kpiWithReference: schemas.RiskAssetSetKpiOutput.safeParse(KPI_WITH_REFERENCE.output).success,
+            riskReturnAlone: schemas.RiskAssetSetReturnOutput.safeParse(RISK_RETURN_REFERENCE_ALONE.output).success,
+            kpiAlone: schemas.RiskAssetSetKpiOutput.safeParse(KPI_REFERENCE_ALONE.output).success,
+            comparisonAlone: schemas.RiskAssetSetComparisonOutput.safeParse(COMPARISON_REFERENCE_ALONE.output).success,
+        };
+        expect(parsed, 'a D371 payload is rejected by its schema: its cases would be red for the fixture, not the contract').toEqual({riskReturnWithReference: true, kpiWithReference: true, riskReturnAlone: true, kpiAlone: true, comparisonAlone: true});
+        expect(SELECTION_WITH_REFERENCE, 'the reference is one of the selection').toContain(BENCHMARK_ID);
+        const compared = (COMPARISON.output as ComparisonOutput).items.map((item) => item.asset_id);
+        expect(compared, 'validate_reference_is_not_a_subject: the reference is never among the compared').not.toContain(BENCHMARK_ID);
+
+        const rows = buildAssetSetPaidRows(SELECTION_WITH_REFERENCE, LABELS_WITH_REFERENCE, RISK_RETURN_WITH_REFERENCE, KPI_WITH_REFERENCE, COMPARISON);
+        const figuresOf = (assetId: number) => {
+            const row = rows.find((candidate) => candidate.assetId === assetId);
+            return row && {volatility: row.volatility, expectedReturn: row.expectedReturn, sortino: row.sortino, sharpe: row.sharpe, beta: row.beta, correlation: row.correlation};
+        };
+        const referenceFigures = {volatility: REFERENCE_FIGURES.volatility, expectedReturn: REFERENCE_FIGURES.expectedReturn, sortino: REFERENCE_FIGURES.sortino, sharpe: REFERENCE_FIGURES.sharpe, beta: null, correlation: null};
+        expect(figuresOf(BENCHMARK_ID), 'the reference is measured like the others, and compared with nothing').toEqual(referenceFigures);
+        for (const [assetId, figures] of MEASURED) {
+            const expected = {volatility: figures.volatility, expectedReturn: figures.expectedReturn, sortino: figures.sortino, sharpe: figures.sharpe, beta: figures.beta, correlation: figures.correlation};
+            expect(figuresOf(assetId), `asset ${assetId}: selecting the reference moved its figures`).toEqual(expected);
+        }
+        expect(figuresOf(UNMEASURED), 'the unmeasured asset stays blank beside a selected reference').toEqual({volatility: null, expectedReturn: null, sortino: null, sharpe: null, beta: null, correlation: null});
     });
 
     it("the stand-in scatter is the one the section mounts: it receives the section's testId and one point per measured asset", () => {
@@ -1312,7 +1408,7 @@ describe('AssetSetRiskReturnSection — the chart half of the selection', () => 
         expect(handed.selectedId, 'a cleared selection marks no dot').toBeNull();
     });
 
-    it('a click on the benchmark dot changes nothing: the reference has no row', async () => {
+    it('a click on the benchmark dot changes nothing: a reference outside the selection has no row', async () => {
         mountWith(WITH_BENCHMARK);
         const handed = handedToScatter();
         expect(typeof handed.onpointclick, 'the section hands the scatter no onpointclick').toBe('function');
@@ -1338,7 +1434,7 @@ describe('AssetSetRiskReturnSection — the chart half of the selection', () => 
         const handed = handedToScatter();
         expect(typeof handed.onpointclick, 'the section hands the scatter no onpointclick').toBe('function');
         // Presence first, then the absence: the table is drawn with a row per selected asset, and the
-        // reference's asset — never one of the compared — is not among them.
+        // reference's asset — outside this selection (D371 lets a reader select it) — is not among them.
         expect(drawnOrder(), 'premise: a row per selected asset').toEqual(SELECTION);
         expect(drawnOrder(), `premise: asset ${BENCHMARK_ID} has no row`).not.toContain(BENCHMARK_ID);
 
@@ -1636,5 +1732,128 @@ describe('AssetSetRiskReturnSection — the period the figures cover', () => {
             currentLanguage.set('en');
             await setupI18n('en');
         }
+    });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+// D371 (2026-10-05): the benchmark may be one of the selection
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+
+describe('AssetSetRiskReturnSection — a selected benchmark is not compared with itself (D371)', () => {
+    /** The reference's two benchmark cells, in each mount that selects it: beside the others, and alone. */
+    const REFERENCE_CELLS = [
+        {fixture: 'selected mid-list', props: REFERENCE_SELECTED},
+        {fixture: 'selected alone', props: REFERENCE_ALONE},
+    ].flatMap(({fixture, props}) => BENCHMARK_COLUMNS.map((column) => ({fixture, props, column})));
+
+    /** The dots the table can place — drawn rows whose volatility and average return are both measured — as `asset-<id>`, top to bottom. */
+    function placeableDots(): string[] {
+        const placeable = drawnOrder().filter((assetId) => cellOf(assetId, 'volatility').dataset.measured === 'true' && cellOf(assetId, 'expectedReturn').dataset.measured === 'true');
+        return placeable.map((assetId) => `asset-${assetId}`);
+    }
+
+    it.each(REFERENCE_CELLS)('$fixture, $column: the em dash, marked data-reference="true" beside data-measured="false"', ({props, column}) => {
+        mountWith(props);
+        // Barrier: the reference has a row of its own, and the benchmark's columns are drawn in it.
+        expect(drawnOrder(), `premise: asset ${BENCHMARK_ID} is selected and has a row`).toContain(BENCHMARK_ID);
+        const cell = cellOf(BENCHMARK_ID, column);
+
+        expect(cell, `${column}: the reference is not compared with itself, so nothing is measured`).toHaveAttribute('data-measured', 'false');
+        expect(normalize(cell.textContent), `${column}: the blank is the em dash`).toBe('\u2014');
+        expect(cell, `${column}: the reference's dash does not say it is the reference's`).toHaveAttribute('data-reference', 'true');
+    });
+
+    it.each(REFERENCE_CELLS)('$fixture, $column: the dash explains that the asset is the benchmark itself, not with the blank note', async ({props, column}) => {
+        mountWith(props);
+        const cell = cellOf(BENCHMARK_ID, column);
+        expect(normalize(cell.textContent), 'premise: the cell draws the em dash').toBe('\u2014');
+        const trigger = explainerOf(cell);
+        expect(trigger, `${column}: the reference's dash is bare — it must sit in the project's Tooltip, as HtmlCell.tooltip draws it`).not.toBeNull();
+        expect(trigger, 'the trigger is reachable from the keyboard').toHaveAttribute('tabindex', '0');
+        expect(screen.queryByRole('tooltip'), 'premise: nothing is open before the click').toBeNull();
+
+        const sentence = normalize(get(_)(REFERENCE_ITSELF_KEY));
+        expect(sentence, `premise: ${REFERENCE_ITSELF_KEY} resolves to a message, not to itself`).not.toBe(REFERENCE_ITSELF_KEY);
+        expect(sentence, `premise: ${REFERENCE_ITSELF_KEY} is not the blank note's sentence`).not.toBe(normalize(get(_)(BLANK_NOTE_KEY)));
+
+        await fireEvent.click(cell);
+        const help = await screen.findByRole('tooltip');
+        expect(help).toHaveAttribute('data-testid', 'tooltip-content');
+        expect(normalize(help.textContent), `${column}: the reference's dash is not explained with the message of ${REFERENCE_ITSELF_KEY}`).toBe(sentence);
+    });
+
+    it.each(BENCHMARK_COLUMNS)("%s: every other dash keeps the blank note's explanation, and no data-reference", async (column) => {
+        mountWith(REFERENCE_SELECTED);
+        // Barrier: the mount is the one that selects the reference — its row is drawn beside this one.
+        expect(drawnOrder(), `premise: asset ${BENCHMARK_ID} is selected and has a row`).toContain(BENCHMARK_ID);
+        const cell = cellOf(UNMEASURED, column);
+        expect(cell, 'premise: the asset is measured by no analytic').toHaveAttribute('data-measured', 'false');
+        expect(cell, `${column}: an unmeasured asset is not the reference`).not.toHaveAttribute('data-reference');
+
+        await fireEvent.click(cell);
+        const help = await screen.findByRole('tooltip');
+        expect(normalize(help.textContent), `${column}: an unmeasured dash must keep the message of ${BLANK_NOTE_KEY}`).toBe(normalize(get(_)(BLANK_NOTE_KEY)));
+    });
+
+    it.each<{fixture: string; props: MountProps; marked: string[]}>([
+        {fixture: 'the reference outside the selection', props: WITH_BENCHMARK, marked: []},
+        {fixture: 'the reference selected mid-list', props: REFERENCE_SELECTED, marked: [`${BENCHMARK_ID}:beta=true`, `${BENCHMARK_ID}:correlation=true`]},
+    ])("$fixture: data-reference marks the reference's beta and correlation, and no other value cell", ({props, marked}) => {
+        mountWith(props);
+        const cells = drawnOrder().flatMap((assetId) => VALUE_COLUMNS.map((column) => ({where: `${assetId}:${column}`, cell: cellOf(assetId, column)})));
+        // Presence first: every selected asset draws its six cells, so "no other" is about cells that exist.
+        expect(cells, 'premise: six value cells for every selected asset').toHaveLength((props.assetIds ?? SELECTION).length * VALUE_COLUMNS.length);
+        const found = cells.filter(({cell}) => cell.hasAttribute('data-reference')).map(({where, cell}) => `${where}=${cell.getAttribute('data-reference')}`);
+
+        expect(found, 'the value cells carrying data-reference, as asset:column=value').toEqual(marked);
+    });
+
+    it("the reference's own four columns are measured like any row's: its figures, bare and unmarked", () => {
+        mountWith(REFERENCE_SELECTED);
+
+        for (const column of BASE_VALUE_COLUMNS) {
+            const cell = cellOf(BENCHMARK_ID, column);
+            expect(cell, `${column}: the reference is measured like the others`).toHaveAttribute('data-measured', 'true');
+            expect(normalize(cell.textContent), column).toBe(REFERENCE_DRAWN[column]);
+            expect(explainerOf(cell), `${column}: a figure carries no explanation`).toBeNull();
+            expect(cell, `${column}: only beta and correlation are the reference's to mark`).not.toHaveAttribute('data-reference');
+        }
+    });
+
+    it.each([...SUPPORTED_LOCALES])("%s.json words the reference's explanation, a sentence of its own", (locale) => {
+        const catalogue = CATALOGUES[locale];
+
+        // Barrier: the walk reaches the level the key lives in.
+        expect(typeof at(catalogue, 'risk.assetSet.levels.l3.expectedReturn'), `${locale}.json: the walk never reached risk.assetSet.levels.l3`).toBe('string');
+        const message = at(catalogue, REFERENCE_ITSELF_KEY);
+        expect(typeof message === 'string' && message.trim() !== '', `${locale}.json: ${REFERENCE_ITSELF_KEY} is missing or empty — the tooltip would print its key`).toBe(true);
+        expect(message, `${locale}.json: the reference's explanation repeats the blank note`).not.toBe(at(catalogue, BLANK_NOTE_KEY));
+    });
+
+    it.each<{benchmark: string; props: MountProps; dots: (placeable: string[]) => string[]; benchmarkDot: string}>([
+        {benchmark: 'outside the selection', props: WITH_BENCHMARK, dots: (placeable) => [...placeable, 'benchmark'], benchmarkDot: 'benchmark'},
+        {benchmark: 'one of the selection', props: REFERENCE_SELECTED, dots: (placeable) => placeable, benchmarkDot: `asset-${BENCHMARK_ID}`},
+    ])('a benchmark $benchmark: one dot per placeable row, and the reference once — as $benchmarkDot', ({props, dots, benchmarkDot}) => {
+        mountWith(props);
+        const placeable = placeableDots();
+        // Barrier: the rows place a cloud, the reference's own row among it when it is selected.
+        expect(placeable.length, 'premise: the table places at least two dots').toBeGreaterThan(1);
+        const mounts = scatterMounts();
+        expect(mounts, 'barrier: the section drew one scatter').toHaveLength(1);
+        const ids = mounts[0].points.map((point) => point.id);
+        const roles = mounts[0].points.map((point) => point.role);
+
+        expect(ids, 'the dots handed to ScatterChart, in their order').toEqual(dots(placeable));
+        expect(roles, `${benchmarkDot} is the one benchmark dot, every other dot an asset`).toEqual(ids.map((id) => (id === benchmarkDot ? 'benchmark' : 'asset')));
+    });
+
+    it('the reference selected alone draws no scatter: its one dot is a fact, not a comparison', () => {
+        mountWith(REFERENCE_ALONE);
+
+        // Barrier: the section drew its table, the reference's one row placeable — the absence is the scatter's alone.
+        expect(l3Table()).toHaveAttribute('data-row-count', '1');
+        expect(placeableDots(), 'premise: the reference can be placed').toEqual([`asset-${BENCHMARK_ID}`]);
+        expect(scatterMounts(), 'a scatter was drawn: the reference counted twice, as its row and as its own point').toHaveLength(0);
+        expect(screen.queryByTestId('risk-asset-set-l3-risk-return')).toBeNull();
     });
 });

@@ -50,7 +50,7 @@
     import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 
     import {formatRatio} from './riskAnalysisHelpers';
-    import {assetSetCalculationWindow, buildAssetSetBenchmarkPoint, buildAssetSetPaidRows, buildAssetSetScatterPoints, calendarLength, type AssetSetPaidRow} from './assetSetLevels';
+    import {assetSetCalculationWindow, buildAssetSetBenchmarkPoint, buildAssetSetChartPoints, buildAssetSetPaidRows, calendarLength, type AssetSetPaidRow} from './assetSetLevels';
     import {assetNameColumn, figureCell} from './assetSetTable';
     import {dayFormatter} from './eligibility';
 
@@ -62,7 +62,7 @@
         riskReturn: RiskAnalyticResult | null;
         kpi: RiskAnalyticResult | null;
         comparison: RiskAnalyticResult | null;
-        /** Set when a benchmark is chosen and it is not itself in the selection. */
+        /** Set when a benchmark is chosen and the comparison against it was measured. */
         benchmarkApplies: boolean;
         loading?: boolean;
         /**
@@ -94,14 +94,12 @@
     let {assetIds, assetLabels, assetIcons, riskReturn, kpi, comparison, benchmarkApplies, loading = false, failed = false, discarded = false, onretry, tableRef = $bindable(), dateStart, dateEnd}: Props = $props();
 
     let rows = $derived(buildAssetSetPaidRows(assetIds, assetLabels, riskReturn, kpi, comparison));
-    let assetPoints = $derived(buildAssetSetScatterPoints(rows));
     /**
-     * The reference's name comes from the asset store, as the portfolio L3 names its
-     * own benchmark (`RiskLevelsPanel`, `benchmarkName`). `assetLabels` is the
-     * selection's map, and the reference is never in the selection — the payload
-     * validator forbids it — so reading the name from there labelled the diamond
-     * `#id` on every chart. `$assetStoreVersion` is read so a name that arrives after
-     * the first render replaces the fallback.
+     * The reference's name comes from the selection when it is one of the selected
+     * assets (D371), and otherwise from the asset store, as the portfolio L3 names its
+     * own benchmark (`RiskLevelsPanel`, `benchmarkName`): read only from the selection's
+     * map, a benchmark outside it was labelled `#id` on every chart. `$assetStoreVersion`
+     * is read so a name that arrives after the first render replaces the fallback.
      */
     let benchmarkPoint = $derived.by(() => {
         void $assetStoreVersion;
@@ -109,14 +107,11 @@
     });
 
     /**
-     * The dots, with the benchmark last so it draws over the cloud.
-     *
-     * Its role is `benchmark`, never `portfolio`. That is not cosmetic: `role`
-     * is what `capitalMarketLine()` searches for, so labelling the reference as
-     * a portfolio would anchor a verdict line on an asset that is not the
-     * reader's holdings — a judgement drawn from a mislabelled dot.
+     * The dots, the benchmark among them (`buildAssetSetChartPoints`): a selected
+     * reference is its own row's dot, drawn as the benchmark; any other gets a dot of
+     * its own, last, so it draws over the cloud.
      */
-    let points = $derived(benchmarkPoint === null ? assetPoints : [...assetPoints, {id: 'benchmark', name: benchmarkPoint.name, volatility: benchmarkPoint.volatility, annualReturn: benchmarkPoint.expectedReturn, role: 'benchmark' as const}]);
+    let points = $derived(buildAssetSetChartPoints(rows, benchmarkPoint));
 
     // Two dots are the least that can show a relationship; one is a fact without
     // a comparison, and this level exists to compare.
@@ -197,6 +192,12 @@
             filterable: false,
             getValue: (row) => figure(row),
             cell: (row) => {
+                // D371: the benchmark's own beta and correlation are not missing figures but
+                // inapplicable — measured against itself they would be 1 by construction — so
+                // its dash says so, in the developer's words, instead of the generic one.
+                if (row.isReference && (id === 'beta' || id === 'correlation')) {
+                    return figureCell(`<span class="${VALUE_CLASS}" data-testid="risk-asset-set-l3-${id}" data-measured="false" data-reference="true">\u2014</span>`, false, () => $t('risk.assetSet.levels.l3.referenceItself'));
+                }
                 const value = figure(row);
                 // A dash explains itself in a tooltip, as in L1° (`figureCell`); a figure carries none.
                 return figureCell(`<span class="${VALUE_CLASS}" data-testid="risk-asset-set-l3-${id}" data-measured="${value !== null}">${value === null ? '\u2014' : text(value)}</span>`, value !== null, () => $t('risk.assetSet.levels.blankNote'));
