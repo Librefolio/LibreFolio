@@ -3078,11 +3078,6 @@
         "invert": "Invert",
         "mine": "My assets"
       },
-      "filters": {
-        "type": "Type",
-        "currency": "Currency",
-        "clear": "Clear filters"
-      },
       "band": {
         "high": "they move together",
         "moderate": "they move together in part",
@@ -3178,10 +3173,6 @@
         "noneHeld": "Nothing is held there on the last day of the period: the selection is unchanged."
       },
       "picker": {
-        "selectVisible": "Select visible",
-        "deselectVisible": "Deselect visible",
-        "confirm": "Add {count}",
-        "allSelected": "Every asset is already in the selection.",
         "notAnalysable": "Cannot be analysed in the period"
       },
       "selectedCountHint": "The first number counts the assets the laboratory is analysing right now. The second counts how many it could analyse in the chosen period: every asset in LibreFolio, not only the ones you hold, as long as it has enough prices in that period. The assets that do not are still listed in the “+”, read-only, with the reason.",
@@ -4560,5 +4551,16 @@
       "dark": "Dark mode",
       "light": "Light mode"
     }
+  },
+  "assetPicker": {
+    "filters": {
+      "type": "Type",
+      "currency": "Currency",
+      "clear": "Clear filters"
+    },
+    "selectVisible": "Select visible",
+    "deselectVisible": "Deselect visible",
+    "confirm": "Add {count}",
+    "allSelected": "Every asset is already in the selection."
   }
 }

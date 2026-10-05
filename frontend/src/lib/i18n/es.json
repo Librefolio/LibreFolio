@@ -3078,11 +3078,6 @@
         "invert": "Invertir",
         "mine": "Mis activos"
       },
-      "filters": {
-        "type": "Tipo",
-        "currency": "Moneda",
-        "clear": "Borrar los filtros"
-      },
       "band": {
         "high": "se mueven juntos",
         "moderate": "se mueven juntos en parte",
@@ -3178,10 +3173,6 @@
         "noneHeld": "Allí no se posee nada el último día del período: la selección no cambia."
       },
       "picker": {
-        "selectVisible": "Seleccionar visibles",
-        "deselectVisible": "Deseleccionar visibles",
-        "confirm": "Añadir {count}",
-        "allSelected": "Todos los activos ya están en la selección.",
         "notAnalysable": "No analizables en el período"
       },
       "selectedCountHint": "El primer número cuenta los activos que el laboratorio está analizando ahora. El segundo cuenta cuántos podría analizar en el período elegido: todos los activos de LibreFolio, no solo los que posees, siempre que tengan suficientes precios en ese período. Los que no los tienen siguen en el «+», de solo lectura, con el motivo.",
@@ -4560,5 +4551,16 @@
       "dark": "Tema oscuro",
       "light": "Tema claro"
     }
+  },
+  "assetPicker": {
+    "filters": {
+      "type": "Tipo",
+      "currency": "Moneda",
+      "clear": "Borrar los filtros"
+    },
+    "selectVisible": "Seleccionar visibles",
+    "deselectVisible": "Deseleccionar visibles",
+    "confirm": "Añadir {count}",
+    "allSelected": "Todos los activos ya están en la selección."
   }
 }

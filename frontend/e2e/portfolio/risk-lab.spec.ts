@@ -1980,7 +1980,7 @@ async function waitForRiskCatalog(page: Page): Promise<void> {
  * press. What the engine rules out is listed too, read-only, under
  * `risk-asset-add-blocked`, with the same row testid on an `<li>` that carries
  * `data-level="ineligible"`. Its panel is mounted only while it is open
- * (`LabPopover`), so the panel's absence *is* "closed".
+ * (`SelectPopover`), so the panel's absence *is* "closed".
  */
 const addPanel = (page: Page) => page.getByTestId('risk-asset-add-panel');
 
@@ -2058,7 +2058,7 @@ type FilterMenu = 'type' | 'currency';
  * its own button, and end on it open and on its sibling closed.
  *
  * The sibling is not closed first. The press on this button is a click outside the
- * open sibling, and `LabPopover` closes a menu on exactly that: a completed click,
+ * open sibling, and `SelectPopover` closes a menu on exactly that: a completed click,
  * not the press that starts it. When it closed on the press, the page got shorter
  * mid-press, the release landed on whatever slid under the pointer, and moving
  * from one menu to the other took two presses — `one press on the currency menu
@@ -2066,22 +2066,22 @@ type FilterMenu = 'type' | 'currency';
  * every call made while it is open a check of the same path.
  */
 async function openFilterMenu(page: Page, kind: FilterMenu): Promise<Locator> {
-    const menu = page.getByTestId(`risk-filter-${kind}-panel`);
-    const button = addPanel(page).getByTestId(`risk-filter-${kind}-button`);
+    const menu = page.getByTestId(`risk-asset-add-filter-${kind}-panel`);
+    const button = addPanel(page).getByTestId(`risk-asset-add-filter-${kind}-button`);
     if (!(await menu.isVisible())) await button.click();
     await expect(menu).toBeVisible();
     await expect(button).toHaveAttribute('aria-expanded', 'true');
     const sibling: FilterMenu = kind === 'type' ? 'currency' : 'type';
-    await expect(page.getByTestId(`risk-filter-${sibling}-panel`), `opening the ${kind} menu must close the ${sibling} one by itself`).toHaveCount(0);
+    await expect(page.getByTestId(`risk-asset-add-filter-${sibling}-panel`), `opening the ${kind} menu must close the ${sibling} one by itself`).toHaveCount(0);
     return menu;
 }
 
 /**
  * A menu's options: what carries a pressed state. Its own "clear" shares the
  * testid prefix and has none, and so do the menu's button and panel — which is
- * what an unscoped `risk-filter-type-*` used to catch.
+ * what an unscoped `risk-asset-add-filter-type-*` used to catch.
  */
-const filterOptions = (page: Page, kind: FilterMenu) => page.getByTestId(`risk-filter-${kind}-panel`).locator(`[data-testid^="risk-filter-${kind}-"][aria-pressed]`);
+const filterOptions = (page: Page, kind: FilterMenu) => page.getByTestId(`risk-asset-add-filter-${kind}-panel`).locator(`[data-testid^="risk-asset-add-filter-${kind}-"][aria-pressed]`);
 
 /**
  * A type filter that leaves a workable set of rows in the "+".
@@ -3847,8 +3847,8 @@ test.describe('Asset Global risk laboratory', () => {
         await expect(rows).toHaveCount(unfiltered);
 
         // …by its menu's own "clear", which only exists while one of its values is on…
-        const menuClear = page.getByTestId('risk-filter-type-clear');
-        const clear = addPanel(page).getByTestId('risk-filters-clear');
+        const menuClear = page.getByTestId('risk-asset-add-filter-type-clear');
+        const clear = addPanel(page).getByTestId('risk-asset-add-filters-clear');
         await expect(menuClear).toHaveCount(0);
         await expect(clear).toHaveCount(0);
         await option.click();
@@ -3875,7 +3875,7 @@ test.describe('Asset Global risk laboratory', () => {
     test('one press on the currency menu opens it, even with the type menu hanging below the fold and the page scrolled into it', async ({page}) => {
         // The lost click, as it was measured: the Type menu open and reaching below
         // the viewport, the page scrolled to one of its options, one press on the
-        // Currency button. `LabPopover` used to close a menu on the `pointerdown` of
+        // Currency button. `LabPopover` (now `SelectPopover`) used to close a menu on the `pointerdown` of
         // a press outside it, so the Type menu went before the press was over; the
         // page, now shorter, scrolled back; the `pointerup` of the same press landed
         // on whatever slid under the pointer, and no click reached the Currency
@@ -3903,10 +3903,10 @@ test.describe('Asset Global risk laboratory', () => {
         await expect(pickerRows(page), 'no asset may answer the search, or the "+" list stays long').toHaveCount(0);
         await expect(panel.getByTestId('risk-asset-add-empty')).toBeVisible();
 
-        const typeButton = panel.getByTestId('risk-filter-type-button');
-        const typeMenu = page.getByTestId('risk-filter-type-panel');
-        const currencyButton = panel.getByTestId('risk-filter-currency-button');
-        const currencyMenu = page.getByTestId('risk-filter-currency-panel');
+        const typeButton = panel.getByTestId('risk-asset-add-filter-type-button');
+        const typeMenu = page.getByTestId('risk-asset-add-filter-type-panel');
+        const currencyButton = panel.getByTestId('risk-asset-add-filter-currency-button');
+        const currencyMenu = page.getByTestId('risk-asset-add-filter-currency-panel');
 
         // The Type menu, opened through its own button…
         await typeButton.click();
