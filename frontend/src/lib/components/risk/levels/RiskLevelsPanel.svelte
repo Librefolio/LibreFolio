@@ -10,6 +10,7 @@
     import L3RiskAdjusted from './L3RiskAdjusted.svelte';
     import L4WhatIf from './L4WhatIf.svelte';
     import L4Replay from './l4/L4Replay.svelte';
+    import {replaySectionView} from './l4/scenarioHelpers';
     import L4Shock from './l4/L4Shock.svelte';
     import L4Simulation from './l4/L4Simulation.svelte';
     import RiskLevelSection from './RiskLevelSection.svelte';
@@ -195,8 +196,12 @@
      * Naming the step and its state is all that is offered. A timeout is not a
      * question the reader can answer, so no remedy is promised — but it is still
      * something they have to be told.
+     *
+     * The replay enters as `replaySectionView` (D372): its exclusion and coverage
+     * warnings, and the error of a replay with nothing left, are read in the
+     * replay block beside the number, so the section keeps only its status line.
      */
-    let l4Results = $derived([controller.stressResult, controller.replayResult, controller.simulationResult]);
+    let l4Results = $derived([controller.stressResult, replaySectionView(controller.replayResult), controller.simulationResult]);
     let l4Health = $derived(degradedResults(l4Results));
     let l4Reasons = $derived(resultReasons(l4Results, $t));
     let l4Errors = $derived([...resultErrorCodes(l4Results), ...discardedErrorCodes(controller.discarded, LEVEL_ON_DEMAND_ANALYSES.l4)]);

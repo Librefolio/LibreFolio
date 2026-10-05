@@ -1072,7 +1072,8 @@
       "weekRange": "Semana {start} – {end}",
       "monthLabel": "{month}",
       "valueAt": "Valor al {date}",
-      "eventsInPeriod": "Eventos en el período:"
+      "eventsInPeriod": "Eventos en el período:",
+      "partialBucket": "Parcial: {days} de {total} días"
     },
     "resolution": {
       "weekly": "Semanal",
@@ -1494,7 +1495,6 @@
     "pnlSubmodeLine": "Línea",
     "pnlSubmodeIncome": "Ingresos",
     "pnlSubmodeCandles": "Velas",
-    "pnlCandlesHypothetical": "Sintético — los máximos/mínimos entre activos son hipotéticos y no simultáneos, no una serie intradía real.",
     "pnlCandlesHypotheticalShort": "Sintético — los máximos/mínimos entre activos son hipotéticos y no simultáneos",
     "pnlAcqNewCapital": "Nuevo capital",
     "pnlAcqReinvested": "Reinvertido",
@@ -3519,17 +3519,24 @@
           },
           "truncation": "Declarado sobre {declared} días, aplicado sobre {applied}: el cono responde a la pregunta más corta."
         },
-        "replayExcluded": "Excluidos:",
-        "replayNeedsChoice": "{name} no tiene histórico utilizable en este periodo. Exclúyelo, o dale un sustituto — un sustituto es una opinión sobre cómo habría ido.",
-        "replayProxyUnusable": "El sustituto elegido para {name} tampoco tiene histórico utilizable. Elige otro.",
-        "replayExcludeAndRetry": "Excluir y reintentar",
         "replayTotal": "Esta composición habría cerrado el periodo en {percent} {amount}",
-        "replayAudit": "Sustitutos: {proxies} · Excluidos: {excluded} ({weight} del ámbito, con rendimiento cero)",
-        "replayAuditOmitted": "Sustitutos: {proxies} · Excluidos: {excluded} (omitidos de la repetición: las cifras hablan por el resto)",
         "shockShowDetail": "Mostrar el choque por bucket",
         "shockHideDetail": "Ocultar el choque por bucket",
         "shockTotal": "Este escenario movería el ámbito un {percent} {amount}",
-        "shockCoverage": "Solo se pudo clasificar el {percent} del ámbito: el total habla solo de esa parte."
+        "shockCoverage": "Solo se pudo clasificar el {percent} del ámbito: el total habla solo de esa parte.",
+        "replayPeriod": "Periodo",
+        "replayExcludedResidual": "Fuera de la repetición: {count, plural, one {# activo} other {# activos}}; el {weight} del valor cuenta como liquidez con rendimiento cero.",
+        "replayExcludedOmitted": "Fuera de la repetición: {count, plural, one {# activo} other {# activos}}; las cifras hablan por los demás.",
+        "replayReasonNoPrices": "Sin precios en el periodo",
+        "replayReasonStartsLate": "Cotiza después del inicio del periodo",
+        "replayReasonStaleAtStart": "Sin precio reciente al inicio del periodo",
+        "replayReasonStaleAtEnd": "Sin precio reciente al final del periodo",
+        "replayReasonMissingFx": "Sin tipo de cambio a tu moneda",
+        "replayReasonManual": "Excluido por ti",
+        "replayReasonOther": "Otro motivo",
+        "replayNothing": "Nada que repetir: ningún activo tiene precios utilizables en este periodo.",
+        "replaySuggested": "Repetir del {start} al {end}: {count, plural, one {vuelve # activo} other {vuelven # activos}}",
+        "replaySuggestedPartial": "Solo una parte de la crisis."
       },
       "backtestNotice": "Con un subconjunto activo, estas cifras se reconstruyen sobre la composición de hoy: dicen cómo *habría* ido, no cómo fue en realidad.",
       "notice": {

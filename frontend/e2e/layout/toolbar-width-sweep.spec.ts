@@ -14,12 +14,23 @@
  * French next, and English dominated everywhere. So every bar runs in French, Italian (the developer's own) and
  * Spanish, one test per (bar, language): a red bar never hides another.
  *
- * The sweep. One page load, then the viewport narrows from 1700 to 320 px in 10 px steps at a fixed height of
- * 1000, like a window being dragged. The content column loses the sidebar below 1024 px, so the bar is
- * `vw − 66` px there and `vw − 338` above (headless: no scrollbar gutter; a headed run with classic scrollbars
- * shifts the viewport widths, never the bar widths): the same tiers are crossed twice, in two viewport ranges,
- * which is why the report groups by bar width. The widest bar is 1362 px, above every oneRow threshold; the
- * report says so if a recalibrated one ever lands out of reach.
+ * The sweep. One page load, then the viewport narrows from 1700 to 320 + g px in 10 px steps at a fixed height
+ * of 1000, like a window being dragged; g is the scrollbar gutter (below), and the last width is exactly 320 + g
+ * even when the 10 px grid misses it. The content column loses the sidebar below 1024 px, so the bar is
+ * `vw − 66 − g` px there and `vw − 338 − g` above: the same tiers are crossed twice, in two viewport ranges,
+ * which is why the report groups by bar width. Ending at 320 + g, every host sweeps the bars down to the same
+ * 254 px, a 320 px phone's. The widest bar, 1362 − g px, is above every oneRow threshold; the report says so if
+ * a recalibrated one ever lands out of reach.
+ *
+ * The scrollbar gutter. app.css sets `html { scrollbar-gutter: stable }`: the vertical scrollbar's thickness is
+ * reserved on the right of every page, whether it scrolls or not. Headless, Playwright launches Chromium with
+ * `--hide-scrollbars`, which hides the bar but not the reservation: with classic scrollbars (a Mac with a mouse
+ * connected, for one) the layout is still the theme's thickness narrower than the window, 15 px on the
+ * developer's Mac, headless and headed alike. Overlay scrollbars (a Mac with a trackpad only, the mobile project)
+ * reserve nothing. So g is measured once, after the page has loaded and settled: window.innerWidth − the width of
+ * <html>'s box. Not innerWidth − clientWidth: headless, clientWidth counts the hidden gutter as room and reads the
+ * whole window, so that difference is 0. The report and the attached JSON say what g was and where the sweep
+ * ended.
  *
  * The measure, at each width, inside the page:
  *   - the bar is the PageToolbar card (`testId`), tab row included. Every visible descendant box, and every
@@ -27,13 +38,20 @@
  *   - popups (listbox, dialog, tooltip, menu, anything `position: fixed`), invisible boxes, a spinning icon's
  *     rotated box and the content of scrolling or clipping containers are skipped: such a container is
  *     measured itself, and what it hides cannot stick out of it;
- *   - the page: documentElement.scrollWidth − clientWidth (clientWidth rather than innerWidth, so a visible
- *     scrollbar in a headed run is not counted as room). When it is positive, the outermost boxes past the
- *     viewport are named, inside the bar or not.
+ *   - the page: its right edge is the layout's, the right of <html>'s box (innerWidth − g). Every box and text
+ *     run of the page, visible or not (a hidden box widens the page all the same), is compared with it, except
+ *     popups, anything fixed, empty boxes and the content of scrolling or clipping containers: the furthest past
+ *     it is the page's overflow, and the outermost ones are named, inside the bar or not. Not scrollWidth −
+ *     clientWidth: headless, behind a gutter, clientWidth reads the whole window while scrollWidth reads the
+ *     layout's width when nothing overflows, so a box up to g px past the layout went unreported, although a
+ *     user with classic scrollbars would scroll sideways to reach it. The boxes rather than scrollWidth, so the
+ *     number and the names come from one measure; a pseudo-element is no box the DOM can measure, and is missed.
  * A violation is a box past the bar, or a page wider than the viewport, by more than 1 px; or a width whose
  * layout never settled. All of them are collected, and asserted once at the end. That assertion is an
- * absence, so it has two presence controls: before the sweep, a box the test hangs 200 px past the bar must
- * come back as the furthest offender, by name; and every settled width must have measured the bar's text.
+ * absence, so it has three presence controls: before the sweep, a box the test hangs 200 px past the bar must
+ * come back as the furthest offender, by name, and a box hung g/2 + 4 px past the layout's right edge, outside
+ * the bar, as page overflow, by name (behind a gutter it still ends inside the window, where clientWidth sees
+ * nothing); and every settled width must have measured the bar's text.
  *
  * Settling, without a sleep. After a resize the bar goes through ResizeObserver callbacks (delivered only
  * inside a rendering update), Svelte's flush, `requestAnimationFrame` re-fits of the action and tab labels
@@ -84,9 +102,12 @@ import {uniqueSuffix} from '../fixtures/unique';
 
 const API = '/api/v1';
 const SWEEP_FROM_PX = 1700;
+/** The narrowest layout swept: the last width is this plus the scrollbar gutter measured at load. */
 const SWEEP_TO_PX = 320;
 const STEP_PX = 10;
 const VIEWPORT_HEIGHT_PX = 1000;
+/** A classic scrollbar is 15–17 px thick: a wider gap between the window and <html> is not a gutter. */
+const MAX_GUTTER_PX = 30;
 /** Layout boxes are fractional: up to 1 px past an edge is rounding, more is a control out of its bar. */
 const TOLERANCE_PX = 1;
 /** Clock time run per settle round: DateRangePicker's 100 ms resize debounce, and the frame re-fits behind it. */
@@ -103,6 +124,12 @@ const TIER_ORDER: readonly string[] = ['oneRow', 'denseRow', 'stackFilters', 'on
 const PROBE_ID = 'toolbar-sweep-probe';
 const PROBE_PAST_PX = 200;
 /**
+ * The page check's positive control: a box hung past the layout's right edge, outside the bar, by half the
+ * scrollbar gutter plus this. Behind a gutter it still ends inside the window, where clientWidth sees no overflow.
+ */
+const PAGE_PROBE_ID = 'toolbar-sweep-page-probe';
+const PAGE_PROBE_PAST_PX = 4;
+/**
  * The asset detail header is widest for a long name: its title is capped at 15ch but cannot shrink below
  * that cap. A realistic ETF name for the asset the test creates when no eligible one is long enough; it gets
  * a unique suffix (display_name is unique), and marks the rows this spec creates, which are never borrowed.
@@ -113,7 +140,6 @@ const LONG_NAME_MIN_CHARS = 25;
 const OFFLINE_IDENTIFIER = 'INVALID_TICKER_12345';
 /** Daily closes up to today for the created asset: at least two points in any window the page opens with. */
 const OWN_PRICE_DAYS = 30;
-const WIDTHS: readonly number[] = Array.from({length: Math.floor((SWEEP_FROM_PX - SWEEP_TO_PX) / STEP_PX) + 1}, (_, i) => SWEEP_FROM_PX - i * STEP_PX);
 
 /** What the test created, by id, deleted at the end whatever happened. */
 interface Owned {
@@ -164,8 +190,12 @@ interface Reading {
     /** Boxes and text runs compared with the bar's edges: a reader that stops descending measures no text. */
     measuredBoxes: number;
     measuredTexts: number;
-    /** documentElement.scrollWidth − clientWidth, px. */
+    /**
+     * How far the furthest box or text run reaches past the page's right edge, px; 0 when everything is inside. The
+     * edge is the right of <html>'s box, the layout's: a reserved scrollbar gutter is not room.
+     */
     pageOverflow: number;
+    /** The outermost boxes and text runs past the page's right edge, furthest first. */
     pageCulprits: Array<Offender & {inBar: boolean}>;
 }
 
@@ -185,6 +215,14 @@ interface Step {
     reading: Reading;
     /** Exceptions a page timer threw while the clock ran: reported, never measured. */
     timerErrors: string[];
+}
+
+/** The widths one test sweeps. They depend on the scrollbar gutter measured at load; the bars they give do not. */
+interface SweepRange {
+    /** window.innerWidth − the width of <html>'s box at load, px: the gutter the layout reserves (0 with overlay scrollbars). */
+    gutter: number;
+    /** SWEEP_FROM_PX down every STEP_PX, then exactly SWEEP_TO_PX + gutter when the grid misses it. */
+    widths: number[];
 }
 
 // =============================================================================
@@ -294,7 +332,7 @@ const test = base.extend<{owned: Owned}>({
     },
 });
 
-// Login, the language switch, a full page load, 139 settled widths and the cleanup share the budget.
+// Login, the language switch, a full page load, at most 139 settled widths and the cleanup share the budget.
 test.setTimeout(330_000);
 
 /** The page's own busy flag: every load wave is in. */
@@ -338,6 +376,26 @@ async function keepOffline(page: Page, origin: string): Promise<void> {
 // =============================================================================
 // Reading the page
 // =============================================================================
+
+/**
+ * The scrollbar gutter, read once the page has loaded and settled, and the widths it sets. <html>'s box is the
+ * layout's width, gutter or not, headless or headed; clientWidth is not (headless it reads the full window).
+ * The last width is exactly SWEEP_TO_PX + gutter, so the narrowest bar is the same on every host.
+ */
+async function measureSweepRange(page: Page): Promise<SweepRange> {
+    const gutter = await page.evaluate(() => window.innerWidth - document.documentElement.getBoundingClientRect().width);
+    expect(gutter >= 0 && gutter <= MAX_GUTTER_PX, `precondition: the scrollbar gutter (window.innerWidth − the width of <html>) is 0–${MAX_GUTTER_PX} px, measured ${gutter} px`).toBe(true);
+    const floor = SWEEP_TO_PX + Math.ceil(gutter);
+    const widths: number[] = [];
+    for (let vw = SWEEP_FROM_PX; vw >= floor; vw -= STEP_PX) widths.push(vw);
+    if (widths.at(-1) !== floor) widths.push(floor);
+    return {gutter, widths};
+}
+
+/** "1700 → 335 px (320 + gutter 15)". */
+function describeRange({gutter, widths}: SweepRange): string {
+    return `${SWEEP_FROM_PX} → ${widths.at(-1)} px (${SWEEP_TO_PX} + gutter ${gutter})`;
+}
 
 /**
  * The frame barrier, captured before `page.clock.install()` replaces `requestAnimationFrame`: the clock's
@@ -473,30 +531,43 @@ async function readInPage({name, rootId, rowId, vw, tolerance, maxNamed}: Reader
         hash = Math.imul(hash, 0x01000193);
     }
 
-    // The page. Only boxes can widen it, visible or not; nothing inside a clipping box, nothing fixed.
-    const documentElement = document.documentElement;
-    const pageOverflow = documentElement.scrollWidth - documentElement.clientWidth;
+    // The page. Its right edge is the layout's, the right of <html>'s box: a reserved scrollbar gutter is not room,
+    // although headless Chromium counts it in clientWidth. The overflow is the furthest box or text run past that
+    // edge, so the number and the names come from the same boxes. Visible or not, they all widen the page; nothing
+    // inside a scrolling or clipping box, nothing fixed, no popup.
+    const edge = document.documentElement.getBoundingClientRect().right;
+    const textRange = document.createRange();
+    let pageOverflow = 0;
     const pageCulprits: Array<Offender & {inBar: boolean}> = [];
-    if (pageOverflow > tolerance) {
-        const edge = documentElement.clientWidth;
-        const scan = (element: Element, insideCulprit: boolean): void => {
-            if (element.matches(POPUP)) return;
-            const style = getComputedStyle(element);
-            if (style.display === 'none' || style.position === 'fixed') return;
-            const box = element.getBoundingClientRect();
-            let culprit = insideCulprit;
-            if (style.display !== 'contents' && box.width > 0 && box.height > 0) {
-                const past = box.right - edge;
-                culprit = past > tolerance;
-                if (culprit && !insideCulprit) pageCulprits.push({label: describe(element), over: past, inBar: root.contains(element)});
+    /** Says whether the box reaches past the page's edge, and names it unless an ancestor past the edge already is. */
+    const pastThePage = (box: DOMRect, insideCulprit: boolean, owner: Element, label: () => string): boolean => {
+        const past = box.right - edge;
+        pageOverflow = Math.max(pageOverflow, past);
+        if (past <= tolerance) return false;
+        if (!insideCulprit) pageCulprits.push({label: label(), over: past, inBar: root.contains(owner)});
+        return true;
+    };
+    const scan = (element: Element, insideCulprit: boolean): void => {
+        if (element.matches(POPUP)) return;
+        const style = getComputedStyle(element);
+        if (style.display === 'none' || style.position === 'fixed') return;
+        const box = element.getBoundingClientRect();
+        let culprit = insideCulprit;
+        if (style.display !== 'contents' && box.width > 0 && box.height > 0) culprit = pastThePage(box, insideCulprit, element, () => describe(element));
+        if (element instanceof SVGElement || CLIPPING.has(style.overflowX)) return;
+        for (const node of Array.from(element.childNodes)) {
+            if (node instanceof Element) {
+                scan(node, culprit);
+            } else if (node.nodeType === Node.TEXT_NODE && node.textContent?.trim()) {
+                textRange.selectNodeContents(node);
+                const textBox = textRange.getBoundingClientRect();
+                if (textBox.width > 0 && textBox.height > 0) pastThePage(textBox, culprit, element, () => `${describe(element)} › text ${quote(node.textContent ?? '')}`);
             }
-            if (element instanceof SVGElement || CLIPPING.has(style.overflowX)) return;
-            for (const child of Array.from(element.children)) scan(child, culprit);
-        };
-        for (const child of Array.from(document.body.children)) scan(child, false);
-        pageCulprits.sort((a, b) => b.over - a.over);
-        pageCulprits.splice(maxNamed);
-    }
+        }
+    };
+    for (const child of Array.from(document.body.children)) scan(child, false);
+    pageCulprits.sort((a, b) => b.over - a.over);
+    pageCulprits.splice(maxNamed);
 
     const thresholds: Record<string, number> = {};
     for (const [key, value] of Object.entries(layout.thresholds ?? {})) if (typeof value === 'number') thresholds[key] = value;
@@ -549,6 +620,33 @@ async function proveTheReaderSeesOverflow(page: Page, bar: Bar): Promise<void> {
     }
 }
 
+/**
+ * Positive control for the page check, before the sweep: a box hung past the layout's right edge, outside the
+ * bar, must come back as page overflow, by name. It ends half the gutter plus PAGE_PROBE_PAST_PX past the layout:
+ * behind a classic scrollbar's gutter that is still inside the window, the overflow headless Chromium's
+ * clientWidth does not see; with no gutter it is simply past the window. It is gone before the first width.
+ */
+async function proveThePageCheckSeesOverflow(page: Page, bar: Bar, gutter: number): Promise<void> {
+    const pastPx = gutter / 2 + PAGE_PROBE_PAST_PX;
+    await page.evaluate(
+        ({probeId, pastPx}) => {
+            const probe = document.createElement('div');
+            probe.dataset.testid = probeId;
+            probe.style.cssText = `position: absolute; top: 0; right: ${-pastPx}px; width: 20px; height: 2px;`;
+            document.body.append(probe);
+        },
+        {probeId: PAGE_PROBE_ID, pastPx},
+    );
+    try {
+        const reading = await read(page, bar, SWEEP_FROM_PX);
+        const probe = reading.pageCulprits.find((culprit) => culprit.label === PAGE_PROBE_ID);
+        expect(probe, `positive control: a box hung ${pastPx} px past the layout's right edge (scrollbar gutter ${gutter} px) is reported as page overflow, by name (page +${reading.pageOverflow} px: ${JSON.stringify(reading.pageCulprits)})`).toBeDefined();
+        expect(probe?.over, 'positive control: and by how far it was hung').toBeCloseTo(pastPx, 0);
+    } finally {
+        await page.evaluate((probeId) => document.querySelector(`[data-testid="${probeId}"]`)?.remove(), PAGE_PROBE_ID);
+    }
+}
+
 /** Resize, then read until a timer flush and two rendering updates change nothing. */
 async function measureAt(page: Page, bar: Bar, vw: number): Promise<Step> {
     const timerErrors: string[] = [];
@@ -569,10 +667,10 @@ async function measureAt(page: Page, bar: Bar, vw: number): Promise<Step> {
     return {vw, settled: false, rounds: MAX_SETTLE_ROUNDS, reading: previous, timerErrors};
 }
 
-async function sweep(page: Page, bar: Bar): Promise<{steps: Step[]; stoppedAt: number | null}> {
+async function sweep(page: Page, bar: Bar, widths: readonly number[]): Promise<{steps: Step[]; stoppedAt: number | null}> {
     const steps: Step[] = [];
     const deadline = Date.now() + SWEEP_BUDGET_MS;
-    for (const vw of WIDTHS) {
+    for (const vw of widths) {
         if (Date.now() > deadline) return {steps, stoppedAt: vw};
         steps.push(await measureAt(page, bar, vw));
     }
@@ -591,13 +689,16 @@ function px(value: number): string {
     return Number.isFinite(value) ? value.toFixed(1) : '?';
 }
 
-/** Sweep widths (descending) folded into runs: "1180→1100, 950→850". */
-function runs(widths: number[]): string {
+/**
+ * Sweep widths (descending) folded into runs of consecutive sweep widths: "1180→1100, 950→850, 350→335". Runs
+ * follow the swept list rather than STEP_PX: the last width, SWEEP_TO_PX + gutter, may sit off the 10 px grid.
+ */
+function runs(widths: number[], swept: readonly number[]): string {
     const out: string[] = [];
     let start: number | null = null;
     let last: number | null = null;
     for (const vw of widths) {
-        if (last !== null && last - vw === STEP_PX) {
+        if (last !== null && swept.indexOf(vw) === swept.indexOf(last) + 1) {
             last = vw;
             continue;
         }
@@ -626,7 +727,7 @@ function table(steps: Step[]): string[] {
         }
         if (reading.pageOverflow > TOLERANCE_PX) {
             const culprits = reading.pageCulprits.map((culprit) => `${culprit.label}${culprit.inBar ? '' : ' [outside the bar]'} +${px(culprit.over)}`).join(', ');
-            what.push(`page: ${culprits || 'no box past the viewport (a text run or a pseudo-element)'}`);
+            what.push(`page: ${culprits}`);
         }
         return [String(step.vw), reading.layoutMode, px(reading.barWidth), reading.over > TOLERANCE_PX ? `+${px(reading.over)}` : '-', reading.pageOverflow > TOLERANCE_PX ? `+${px(reading.pageOverflow)}` : '-', what.join(' | ')];
     });
@@ -635,15 +736,16 @@ function table(steps: Step[]): string[] {
     return [line(header), widths.map((width, column) => '-'.repeat(column === widths.length - 1 ? 4 : width)).join('-+-'), ...rows.map(line)];
 }
 
-function report(bar: Bar, lang: Language, subject: Subject, steps: Step[], stoppedAt: number | null): string {
+function report(bar: Bar, lang: Language, subject: Subject, range: SweepRange, steps: Step[], stoppedAt: number | null): string {
     const bad = steps.filter(violates);
+    const fold = (widths: number[]): string => runs(widths, range.widths);
     const thresholds = steps.find((step) => Object.keys(step.reading.thresholds).length > 0)?.reading.thresholds ?? {};
     const lines: string[] = [
         `${bar.name} · ${lang} — ${subject.label}, bar [data-testid="${bar.root}"]`,
         `thresholds (live, window.__lfLayouts.${bar.name}.thresholds): ${Object.entries(thresholds)
             .map(([key, value]) => `${key} ${value}`)
             .join(' · ')}`,
-        `swept ${SWEEP_FROM_PX} → ${SWEEP_TO_PX} px every ${STEP_PX} px at height ${VIEWPORT_HEIGHT_PX}: ${steps.length} widths measured, ${bad.length} in violation (a box past the bar or a page wider than the viewport by more than ${TOLERANCE_PX} px, or a layout that never settled)`,
+        `swept ${describeRange(range)} every ${STEP_PX} px at height ${VIEWPORT_HEIGHT_PX}: ${steps.length} widths measured, ${bad.length} in violation (a box past the bar or a page wider than the viewport by more than ${TOLERANCE_PX} px, or a layout that never settled)`,
     ];
     if (stoppedAt !== null) lines.push(`INCOMPLETE: the ${SWEEP_BUDGET_MS / 1000} s sweep budget ran out before vw ${stoppedAt}`);
     const widest = Math.max(...steps.map((step) => step.reading.barWidth).filter(Number.isFinite));
@@ -659,18 +761,18 @@ function report(bar: Bar, lang: Language, subject: Subject, steps: Step[], stopp
             const inTier = spills.filter((step) => step.reading.layoutMode === mode);
             const barWidths = inTier.map((step) => step.reading.barWidth);
             const top = furthest(inTier, (step) => step.reading.over);
-            lines.push(`  ${mode.padEnd(12)} bar ${px(Math.min(...barWidths))}–${px(Math.max(...barWidths))} px, vw ${runs(inTier.map((step) => step.vw))}; furthest +${px(top.reading.over)} px at vw ${top.vw}: ${top.reading.worst}`);
+            lines.push(`  ${mode.padEnd(12)} bar ${px(Math.min(...barWidths))}–${px(Math.max(...barWidths))} px, vw ${fold(inTier.map((step) => step.vw))}; furthest +${px(top.reading.over)} px at vw ${top.vw}: ${top.reading.worst}`);
         }
     }
     const wide = bad.filter((step) => step.reading.pageOverflow > TOLERANCE_PX);
     if (wide.length > 0) {
         const top = furthest(wide, (step) => step.reading.pageOverflow);
-        lines.push('', `page wider than the viewport at vw ${runs(wide.map((step) => step.vw))}; furthest +${px(top.reading.pageOverflow)} px at vw ${top.vw}`);
+        lines.push('', `page wider than the viewport at vw ${fold(wide.map((step) => step.vw))}; furthest +${px(top.reading.pageOverflow)} px at vw ${top.vw}`);
     }
     const unsettled = bad.filter((step) => !step.settled);
-    if (unsettled.length > 0) lines.push('', `never settled in ${MAX_SETTLE_ROUNDS} rounds at vw ${runs(unsettled.map((step) => step.vw))}`);
+    if (unsettled.length > 0) lines.push('', `never settled in ${MAX_SETTLE_ROUNDS} rounds at vw ${fold(unsettled.map((step) => step.vw))}`);
     const thrown = steps.filter((step) => step.timerErrors.length > 0);
-    if (thrown.length > 0) lines.push('', `page timers threw at vw ${runs(thrown.map((step) => step.vw))} (not a violation by itself): ${thrown[0].timerErrors[0]}`);
+    if (thrown.length > 0) lines.push('', `page timers threw at vw ${fold(thrown.map((step) => step.vw))} (not a violation by itself): ${thrown[0].timerErrors[0]}`);
     if (bad.length > 0) lines.push('', ...table(bad));
     return lines.join('\n');
 }
@@ -708,13 +810,15 @@ test.describe('Top toolbars: every control inside its bar at every width (K step
                     // of the bar moving under a still pointer would start hover transitions and hover-delayed tooltips.
                     await page.mouse.move(1, 1);
 
+                    const range = await measureSweepRange(page);
                     await installFrameHook(page);
                     await proveTheReaderSeesOverflow(page, bar);
+                    await proveThePageCheckSeesOverflow(page, bar, range.gutter);
                     // From here the page is only resized and read: no locator action, whose waits would run on the page clock.
                     await page.clock.install();
-                    const {steps, stoppedAt} = await sweep(page, bar);
+                    const {steps, stoppedAt} = await sweep(page, bar, range.widths);
 
-                    await testInfo.attach(`${bar.name}-${lang}-sweep.json`, {body: JSON.stringify({bar: bar.name, lang, subject, stoppedAt, steps}, null, 1), contentType: 'application/json'});
+                    await testInfo.attach(`${bar.name}-${lang}-sweep.json`, {body: JSON.stringify({bar: bar.name, lang, subject, gutter: range.gutter, range: describeRange(range), stoppedAt, steps}, null, 1), contentType: 'application/json'});
                     const modes = steps.map((step) => step.reading.layoutMode);
                     expect.soft(new Set(modes).size, `positive control: the sweep crossed at least two tier boundaries (${[...new Set(modes)].join(' → ')})`).toBeGreaterThanOrEqual(3);
                     expect.soft(modes.at(-1), 'positive control: the sweep ends in the narrowest tier').toBe('oneColumn');
@@ -724,7 +828,7 @@ test.describe('Top toolbars: every control inside its bar at every width (K step
                             'positive control: every settled width measured the text of the bar',
                         )
                         .toEqual([]);
-                    expect(steps.filter(violates).length + (stoppedAt === null ? 0 : 1), report(bar, lang, subject, steps, stoppedAt)).toBe(0);
+                    expect(steps.filter(violates).length + (stoppedAt === null ? 0 : 1), report(bar, lang, subject, range, steps, stoppedAt)).toBe(0);
                 });
             }
         });

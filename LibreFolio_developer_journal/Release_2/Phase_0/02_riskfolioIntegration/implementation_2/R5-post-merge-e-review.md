@@ -2453,3 +2453,390 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 > `onchange` o valore prima dello store, ⚠ mai mostrato, suggerimento della pagina ignorato, niente sezioni, ⚠ non
 > focalizzabile, stato non pubblicato o non scritto, valore dallo store invece che dalla risoluzione, scelta che non
 > arriva allo store); file ripristinati identici (SHA-256).
+
+### I piccoli debiti di documentazione, e un difetto di (a) che la guida ha fatto emergere · ✅ 01/10/2026 (sera)
+
+> **Commit della famiglia nel pomeriggio**: A `2b9362618` (avviso con la causa prima, residuo onesto di L3); il mio
+> checkpoint del benchmark `07f6bb01d` · `8a2cc16dd`; Risk ← F `a7f1dbea4` (validato: `core-unit` 2896,
+> `component-unit` 2356, E2E `risk-lab` 31, `risk` 13, `risk-benchmark-shared` 4, `risk-asset-detail` 2, `asset-list`
+> 28); la punta in A `738ddc064`, con il solo conflitto atteso sulle due righe del runner, risolto in modo additivo e
+> controllato byte per byte contro la mia risoluzione calcolata a parole.
+>
+> **Scelta del developer**: dopo F → Risk, prima i piccoli debiti di documentazione, poi il blocco replay o l'idoneità
+> del benchmark.
+>
+> **Note implementazione**
+> - **La guida dei plugin dei segnali** (docs-writer, solo EN: le pagine per sviluppatori non hanno traduzioni):
+>   `computes_on_quote_days` nel contratto, il filtro delle sedute nell'esecuzione (la copertura resta di calendario),
+>   il riscaldamento separato per sedute e giorni (`SESSION_WARMUP_DAY_MULTIPLIER = 2`), `sessions` contro `days` nei
+>   metadati dei parametri, la regola della versione. Ha corretto anche sette punti già sbagliati prima (la categoria
+>   `risk`, l'esempio completo che la registrazione avrebbe rifiutato, i campi semantici obbligatori, il tipo `area`,
+>   un nome di costante dei test superato). Build severa e link verdi.
+> - **⚠️ Fuori pista — un difetto di (a), trovato dal docs-writer leggendo il codice**: l'avviso di copertura parziale
+>   (`build_signal_availability_warnings`) contava come «esclusi» tutti i punti di calendario fuori da quelli scelti, e
+>   dal 30/09 quelli scelti sono le sole sedute: i giorni riportati dentro il segmento finivano fra gli esclusi, e il
+>   numero sul grafico (`signalProblem.ts:226` → `chartSignalsHelpers.ts:86`) era gonfiato. Rosso prima (test-author):
+>   15 esclusi contro 11, e i bordi del segmento dati come prima e ultima seduta invece che come estremi di calendario;
+>   un plugin gemello con `computes_on_quote_days = False` fa da metro. Cura: l'avviso riceve la selezione della
+>   copertura, prima del filtro delle sedute. Mutanti: tornare alle sedute, togliere il filtro: presi entrambi.
+>   Consumatori di `excluded_points`: solo l'avviso del grafico; l'AI Export legge degli avvisi solo codice e
+>   messaggio, e solo nel contesto del drawdown, che non usa le sedute: niente prova dell'AI Export.
+> - **Il pin «nessun id mentre è `pending`»** in `BenchmarkSelect.test.ts` (reperto di A): i due mutanti di A sulle sue
+>   guardie `state === 'set'` sopravvivevano solo perché la primitiva non pubblica un id non confermato, cosa che il
+>   contratto non fissava. Ora la fissa (39 test); il mutante che pubblica l'id salvato al montaggio muore anche nel
+>   caso di un id che la lista poi conferma, che prima nessun test copriva.
+>
+> **Verifica** (6152): `signal-service` 65 · matrice 92 · `asset-signals` 30 · plugin OHLC 75 e core 46 ·
+> `risk-levels-component` 75 · orfani ✅ · ruff e black puliti · `diff --check` pulito.
+>
+> **Restano**: la nota sul cancello della documentazione (`scripts/docs_links.py` riconosce `docsPath:` anche nei
+> commenti: falsi link rotti), passata al coordinator, a cui appartiene lo strumento; il limite delle sfumature della
+> torta (famiglie di 5–7 membri), da decidere col developer, cancello per `dev_release2`; poi il blocco replay (F3) o
+> l'idoneità del benchmark (F4).
+
+### Le sfumature della torta per le famiglie grandi — il cancello per `dev_release2` · ✅ 01/10/2026 (sera)
+
+> **Il difetto** (latente da R12-B, trovato il 28/09 dal test dei 7 membri, parcheggiato): la sfumatura sposta la
+> luminosità di 20 punti per livello in una sola direzione, lontano dall'estremo più vicino. Con la tassonomia di K la
+> famiglia ETF per veicolo ha 7 membri: dopo 2–4 passi la luminosità si blocca a 0 o 100, e gli ultimi sottotipi
+> diventano bianco puro (tema chiaro) o nero (tema scuro), tutti uguali: su 28 posizioni su 28 delle due palette della
+> torta. Sui dati del developer non si vede (la sua famiglia ETF ha 2 membri), ma con i sottotipi di K diventa normale.
+>
+> **La misura, prima della scelta** (formule HSL identiche a `colors.ts`, distanza percettiva CIEDE2000, script e
+> immagine fra i file della sessione):
+> - il criterio del test parcheggiato, «almeno 15 punti di luminosità fra i membri», **è irraggiungibile** per 7 membri
+>   che tengono il tono: in una fascia utilizzabile (circa 10–92, oltre si legge nero o bianco) il massimo ottenibile con
+>   la sola luminosità è circa 11,5 punti;
+> - la sola luminosità, anche distribuita sui due lati del colore base, lascia la coppia più vicina a ΔE2000 3,4 nel
+>   caso peggiore; le coppie di oggi (gruppi di 2–3) stanno a 5,4;
+> - aggiungendo la saturazione dimezzata a un membro sì e uno no, con la fascia [10, 90]: ΔE2000 minimo 6,97 (N=4),
+>   6,10 (5), 7,84 (6), 5,82 (7), sopra le coppie di oggi; tono spostato al massimo di 2,2° (quantizzazione dell'hex);
+>   da 8 membri la distanza scende a circa 3 (distinti, ma più deboli): limite dichiarato.
+>
+> **Decisione del developer**: la regola **B** (luminosità sui due lati in [10, 90], passo massimizzato e non oltre 20,
+> saturazione ×0,5 sulle profondità pari), preferita alla sola luminosità (A) e ai colori distinti nell'anello esterno,
+> dopo il confronto disegnato con ECharts (tema chiaro e scuro, il primo colore della palette e il caso peggiore).
+> I gruppi fino a 3 restano identici: il grafico storico di I (gruppi per contenuto, al massimo 3) non cambia.
+>
+> **Concessione del coordinator**: `allocationHierarchy.ts`, `allocationRings.ts` e i loro due test; il parametro della
+> dimensione del gruppo facoltativo, con il comportamento di oggi come predefinito; il pin byte per byte dei gruppi
+> fino a 3 sulle quattro palette come prova che il grafico di I non si muove; il limite da 8 membri scritto nel
+> modulo. Il nuovo criterio del test: ogni coppia almeno quanto la coppia più vicina di oggi, tono entro 3°.
+>
+> **Note implementazione** (test rossi prima, test-author: 18 rossi sul criterio, 118 guardie verdi; il righello
+> CIEDE2000 validato sulle coppie pubblicate di Sharma, Wu e Dalal; il minimo di oggi misurato dal test: 5,4123):
+> - `allocationHierarchy.ts`: `shadeForDepth(base, depth, step?, groupSize?)`; senza `groupSize`, o fino a 3, il
+>   cammino di oggi; da 4 la regola B (costanti nominate: gruppo a un lato fino a 3, fascia [10, 90], saturazione
+>   ×0,5); la nota «How many members a group holds» riscritta con la regola, la misura e il limite da 8 membri;
+>   `buildAllocationHierarchy` passa `members.length`.
+> - `allocationRings.ts`: l'anello esterno passa `1 + sottotipi`, perché l'arco interno tiene la profondità 0 anche
+>   quando il membro puro manca.
+> - Test: il test dei 7 membri ripristinato con il criterio nuovo; famiglie di 4–6 e di 8–10 (queste senza il minimo,
+>   col limite citato); gli anelli con e senza il membro puro; il pin byte per byte dei gruppi fino a 3 sulle quattro
+>   palette (il grafico storico di I non si muove) e del valore predefinito; i valori esatti della regola su tre basi
+>   (il tetto del passo, il pareggio fra due ripartizioni, il tema scuro).
+> - Mutanti: 9 su 9 presi. I due che il criterio percettivo non vede (il passo oltre 20, il pareggio vinto dall'ultima
+>   ripartizione) li prendono i valori esatti, aggiunti apposta.
+>
+> **Verifica** (6152, un comando alla volta): `allocation-unit` 211 · `component-unit` 2356 · `core-unit` 2896 ·
+> `front check` al pavimento di 3/41 · orfani ✅ · `front build --debug` ✅ · E2E `asset-list` 28 · E2E `dashboard`: i due
+> test dell'allocazione verdi, i 5 rossi sono quelli noti del GrowthChart di I. Il grafico storico non cambia: lo
+> prova il pin byte per byte dei gruppi fino a 3 sulle sue due palette.
+
+### Il D15 di I e le palette del grafico storico · ⏳ 02/10/2026
+
+> **La sequenza del coordinator** (decisione del developer, 02/10 alle 10:05: la revisione si fa sulla revisione
+> combinata, perché il secondo anello per veicolo vive solo nella nostra famiglia e i margini solo in I): K integrato,
+> poi I, poi la famiglia prende `dev_release2`, e chi entra per secondo applica il **D15 di I** (20_performanceCharts,
+> giro 4 §7, deciso il 24/09): il grafico storico si allinea alla torta per veicolo, `resolvePrimary` → `assetTypeFamily`
+> di K (`AllocationHistoryChart.svelte:614` sulla mia punta), con il commento della palette che cita
+> `DailyStateBuilder.build`, passo 4h, invece di una riga di `portfolio_engine.py`, e la frase di K in
+> `assetTypes.ts:61-62` corretta (concessione). Il D71 di I (colori per peso medio o di oggi) resta aperto.
+>
+> **⚠️ Fuori pista — una mia affermazione falsa, corretta**: al coordinator avevo scritto di aver già misurato le palette
+> del grafico storico, con «niente sotto la coppia più vicina di oggi». Non era vero: avevo misurato solo la torta. La
+> misura fatta dopo dice altro. Sulle palette dello storico (`AllocationHistoryChart.svelte:153-154`) la coppia più
+> vicina di oggi, nei gruppi di 2–3, sta a ΔE2000 **8,34** (sulla torta 5,41); con la regola B le famiglie di 4–7 membri
+> arrivano a 6,97, 6,10, 7,76 e 5,82: sopra il minimo della torta, **sotto** quello dello storico. Due posizioni sono
+> grigie (`#a3a3a3`, `#d4d4d4`): non hanno un tono da conservare, e il criterio del tono richiede un'eccezione.
+>
+> **Proposta, da portare al developer nella revisione combinata con le misure**: (a) un criterio comune, il minimo
+> della torta (5,4), per i due grafici; in alternativa (b) una regola B regolata per palette. Quando si applica il D15,
+> il test-author estende il criterio dei 7 membri a `HISTORY_PALETTES` con il criterio che il developer sceglie, rosso
+> prima se una posizione fallisce, e la descrizione di `allocation-unit` prende una frase in più nello stesso commit.
+
+### D371 — nel laboratorio un asset selezionato può fare da riferimento · ✅ backend 02/10/2026
+
+> **Origine**: la revisione del selettore del laboratorio con il developer, relata da F: *«Permettere di sceglierli:
+> diventa il riferimento degli altri (lavoro di Risk)»*: cinque ETF selezionati confrontati con quello di nucleo, che è
+> fra loro. Scelto dal developer come mio primo blocco, dopo la descrizione di F3 e F4 («prima facciamo l'asset
+> selezionato come benchmark: piccolo, e sblocca F»). La riga del riferimento, sua: *«per le metriche che si calcolano
+> con il benchmark e l'asset stesso è il benckmar, mettici un trattino e un tooltip che spiega che non è applicabile
+> perchè se stesso è già il banckmark»*.
+>
+> **Il contratto**: `asset_set_comparison` (1.0.0 → 1.1.0) non rifiuta più un riferimento che sta nella selezione;
+> calcola gli altri rispetto a lui e lo lascia fuori dagli `items`. Il validatore dell'uscita resta com'è (il
+> riferimento non è mai fra i misurati), così nessun beta 1 per costruzione passa per una misura: la riga del
+> riferimento la riconosce il frontend da `comparison_asset_id`. La finestra non cambia (il riferimento era già
+> preparato con la selezione); una selezione fatta del solo riferimento dà un risultato valido con `items` vuoto.
+>
+> **Note implementazione** (rossi prima, test-author: 8 rossi, fra cui un'equivalenza su quattro casi, il riferimento
+> primo, in mezzo, ultimo e piatto con i suoi avvisi, che pretende gli stessi `items` degli altri, campo per campo,
+> con il riferimento selezionato o no): il rifiuto tolto, il riferimento saltato nel ciclo prima di misurarlo, la
+> docstring con la regola, la versione. Mutanti 5 su 5, compreso il più sottile: misurare il riferimento contro sé
+> stesso e scartarlo dopo, che lascerebbe il suo id negli avvisi del beta e della correlazione indefiniti.
+>
+> **⚠️ Fuori pista**: nella riga D371 del registro avevo scritto che anche il validatore accettava il riferimento; il
+> test-author ha visto la contraddizione col contratto. Corretta: il validatore resta.
+>
+> **Verifica** (6152): `risk-asset-set` 30 · `risk-all` 807 · `schemas risk` 47 · `api risk` 14 (dopo un `db populate
+> --force` nella mia corsia: il primo giro era rosso per il database non popolato, non per il codice) · orfani ✅ · ruff
+> e black puliti.
+>
+> **Il lato del laboratorio è di F**, quando la mia punta arriva nel suo ramo: `labBenchmarkId` accetta un valore della
+> selezione, `measuredAssetIds={[]}`, il trattino col tooltip nella riga del riferimento, un solo punto nel grafico
+> (da portare alla revisione del developer), la guida `correlation.en.md:125`, i test che fissavano «mai uno dei
+> confrontati». La riga di CHANGELOG del selettore del laboratorio la riscrivo con D371.
+
+### Le copie dei dati reali in `/tmp` · ✅ 02/10/2026
+
+> Il coordinator ha chiesto di fare pulizia delle copie dei dati reali in `/tmp`. Sono leggibili da tutti
+> (`drwxr-xr-x`) e pesano circa 32 MB l'una. La mia, `/tmp/librefolio-r2-risk-prodcopy` del 28/09, non serviva a
+> nessuna revisione imminente: per la revisione combinata (D15) arriverà una copia nuova, con l'approvazione del
+> developer. L'ho cancellata il 02/10 alle 12:50, dopo un `lsof +D` vuoto e con le porte 6152 e 6162 libere; `ls`
+> conferma che non esiste più. Alle 12:53 ho cancellato anche altri sei file miei legati a quella copia, tutti senza
+> processi aperti. Tre sono i log del server di revisione sulla 6162 (`/tmp/lf_srv6162_review*.log`, con username e
+> richieste sui dati reali, leggibili da tutti). Due sono gli script Playwright di quelle revisioni, con lo username
+> reale (`libreFolio_g1_privacy_shots.cjs` e `libreFolio_repro_correlation_discard.cjs`): prima ne ho salvato una
+> copia privata nei file della sessione (`drwx------`), per la revisione combinata. L'ultimo è la password di quelle
+> revisioni (`/tmp/libreFolio_review_pw`). Le copie di A e di F spettano a loro: ho passato a ciascuno la sua parte.
+
+### F3 — il blocco del replay · ⏳ 02/10/2026
+
+> **Decisioni (D372)**, chieste al developer una alla volta:
+> 1. esclusione manuale: *«Toglierla»*;
+> 2. il pulsante del periodo comune imposta le date **e** rigioca, in un clic;
+> 3. sostituti in L4: *«teniamoli fuori, ma segnalo in todo_futuri con tutta la spiegazione annessa»*. Il testo è
+>    passato al coordinator, che lo registra su `dev_release2`;
+> 4. gli avvisi di esclusione e di copertura: *«Solo nel blocco del replay, vicino al numero»*.
+>
+> **Il piano** (da F3 del Tempo ②, approvato il 24/09):
+> - via il blocco «escludi e riprova» e `replayBlocker`;
+> - gli esclusi per motivo, con nomi e pesi;
+> - l'avviso forte (C3) sopra il totale;
+> - «niente da rigiocare»;
+> - `DateRangePicker` senza pulsanti rapidi;
+> - il pulsante del periodo comune (C2), con la nota «solo una parte della crisi»;
+> - il menu delle crisi che si apre dove c'è spazio.
+>
+> Si aggiungono due cose:
+> - la vista `replaySectionView`, che i montaggi di A e di F passano alla sezione;
+> - nel backend, i motivi e i pesi degli esclusi anche quando non resta niente da rigiocare.
+>
+> **Passi**:
+> 1. ⏳ rossi (test-author): backend, `scenarioHelpers`, `L4Replay`, i due montaggi, gli E2E del replay;
+> 2. ⏳ codice e i18n;
+> 3. ⏳ revisione visiva col developer;
+> 4. ⏳ guida;
+> 5. ⏳ checkpoint.
+>
+> **⚠️ Fuori pista — due cose che il piano descriveva male, trovate prima di scrivere codice**:
+> - **I motivi di esclusione si vedevano già**, con i nomi, nell'elenco ambra in cima alla sezione L4: vengono dagli
+>   avvisi del backend. Mancavano i pesi, e mancava la vicinanza al numero. Da qui la quarta domanda al developer.
+> - **Esiste una terza superficie del replay.** La scheda rischio di Asset Detail (`RiskAnalysisPanel.svelte`, scope
+>   `asset`) ha un replay suo, con date native, un selettore di sostituto per l'asset stesso e una casella «escludi».
+>   Al developer avevo detto che nessuno sceglie un sostituto: era inesatto. L'ho corretto nel testo di TODO_FUTURI,
+>   con le coppie di correzione mandate al coordinator prima del commit. F3 resta su L4.
+>
+> **Concessioni chieste**:
+> - ad A: `RiskLevelsPanel.svelte:174`, un solo termine;
+> - a F: `AssetSetReplaySection.svelte` `:108` e `:111`, il suo test `:309`, e i casi replay di `risk-lab.spec.ts`.
+>
+> **⏸️ Pausa del developer (02/10, ~13:30)**, chiesta dal coordinator a tutte le sessioni.
+> - **Fatto**:
+>   - le quattro decisioni D372, e D372 nel registro 04;
+>   - le concessioni di A (`RiskLevelsPanel:174`) e di F (`AssetSetReplaySection` `:108/:111`, il suo test `:309`, i
+>     casi replay di `risk-lab.spec.ts`, il punto 📌 del docblock);
+>   - le bozze del codice, fuori dal worktree, nei file della sessione (`f3-draft/`): helper, componente, i18n,
+>     backend, montaggi.
+> - **In corso**: test-author scrive i rossi. Al momento della pausa erano toccati due file di test del backend
+>   (`test_risk_analytics.py`, `test_risk_eligibility.py`); nessuna corsa in esecuzione, 6152 e 6162 libere.
+> - **⚠️ Fuori pista**: test-author non si può fermare a metà turno. Il messaggio di pausa gli è stato consegnato e
+>   lo legge al primo confine; i file che ha scritto restano nel worktree, non committati.
+> - **Prossimo passo, alla ripresa**: leggere il rapporto di test-author (file e sha256, rossi registrati e
+>   mancanti); fargli finire i rossi; poi applicare le bozze, i18n con `dev.py i18n`, e le verifiche.
+>
+> **▶️ Ripresa (05/10, 09:49)**, con il «riprendi» del coordinator.
+> - **⚠️ Fuori pista — test-author interrotto dalla rete**: il 02/10 il primo test-author si è fermato su un errore
+>   DNS verso il servizio del modello, non su un test. Aveva finito i rossi del backend (11, tutti sul campo mancante
+>   `excluded_assets`) e quelli degli helper (43 casi; 31 rossi su export mancanti). Per controllare che i test
+>   fossero soddisfacibili aveva lasciato nel worktree un file scratch con un'implementazione di riferimento. Il
+>   file è uscito dal worktree, ed è conservato con le prove in `/tmp/libreFolio_f3_reds/`.
+> - **Backend fatto**: in `stress.py::_historical`, quando non resta niente da rigiocare, i dettagli dell'errore
+>   portano anche `excluded_assets`, con asset, motivo e peso, e il peso solo sui portafogli. `weighted_scope` e i
+>   motivi ora si calcolano una volta sola, prima del ramo. `algorithm_version` resta 3.0.0, come per l'esclusione
+>   automatica: un dettaglio dell'errore in più non cambia il calcolo.
+>   - verifica: `risk-all` 810 verdi;
+>   - mutanti 2 su 2 uccisi: il peso senza la guardia dei portafogli fa 5 rossi, il motivo sempre «manuale» ne fa
+>     11; ripristino verificato con sha256.
+> - **Helper fatti**, in `scenarioHelpers.ts`: 42 test verdi su 43. L'unico rosso, «`replayBlocker` non più
+>   esportato», si chiude con la riscrittura del componente; fino ad allora `replayBlocker` resta, così i rossi del
+>   componente si registrano sul codice di oggi.
+> - **Il test della data del 1019 risponde a una domanda aperta**: oggi il backend rifiuta il replay perché tutti gli
+>   asset risultano «quotati dopo l'inizio» e propone già il periodo comune. Dopo F3 la schermata mostrerà «niente da
+>   rigiocare», i motivi e il pulsante del periodo comune.
+> - **In corso**: un nuovo test-author scrive i rossi che mancano: il componente, il montaggio del laboratorio, gli E2E.
+>
+> **Passo 1 — rossi ✅ (05/10)**. Il secondo test-author ha scritto quelli che mancavano, tutti rossi sul codice di
+> prima e per il motivo giusto:
+> - `L4Replay.test.ts`, riscritto: 25 casi, 19 rossi;
+> - `AssetSetReplaySection.test.ts`: 3 rossi. Il caso `:309`, sul principio delle chiavi del backend, ora usa
+>   l'avviso dei prezzi fermi, che resta nella sezione;
+> - E2E `risk`: 3 rossi. Il test bloccato è sostituito al suo posto, e sono riallineate le righe del replay nel test
+>   di A sul livello 4, che secondo la tabella dei proprietari spettano a me;
+> - E2E `risk-lab`: 2 rossi.
+> I file di A e di F sono toccati solo nei punti concessi.
+>
+> **Passo 2 — codice ✅ (05/10)**:
+> - via `replayBlocker`;
+> - `L4Replay.svelte` riscritto: `DateRangePicker` senza preset, menu `auto`, avviso forte sopra il totale,
+>   esclusi per motivo con nomi e pesi, «niente da rigiocare», periodo comune in un clic con la nota;
+> - i18n con `dev.py i18n`: 13 chiavi nuove e 6 tolte;
+> - i due montaggi passano `replaySectionView`, e il laboratorio ora dice anche gli errori del risultato;
+> - **⚠️ Fuori pista — l'italiano del pulsante**: «Rigioca dal {start} al {end}» avrebbe dato «dal 8 ott» invece di
+>   «dall'8». Ora è «Rigioca il periodo {start} – {end}: tornano N asset»;
+> - **⚠️ Fuori pista — la nota «solo una parte della crisi»** nella bozza guardava la crisi scelta nel menu, anche
+>   dopo una correzione a mano delle date. Ora guarda la crisi su cui il replay è stato chiesto (`askedCrisis`).
+>   Nessun test lo copriva, e il mutante M4 è sopravvissuto. test-author ha aggiunto il caso: si sceglie la crisi,
+>   si sposta la data d'inizio dentro la crisi, e la nota non deve comparire. È l'unico rosso sotto M4 e diventa
+>   verde sul codice vero (26 su 26).
+>
+> **Verifica**:
+> - vitest 78/78;
+> - `risk-levels-unit` 296, `risk-levels-component` 91, `component-unit` 2359;
+> - E2E `risk` 14 e `risk-lab` 31;
+> - orfani ✅; i18n 3508 chiavi, tutte tradotte;
+> - `front check` al pavimento (3 errori e 41 avvisi, nessuno nei miei file); prettier, ruff e black puliti.
+> - Mutanti uccisi 9 su 9, ripristino verificato con sha256:
+>   - la riga forte sotto il totale;
+>   - la vista della sezione che tiene gli avvisi, e quella che tiene l'errore;
+>   - il pulsante che non rigioca;
+>   - «residuo» che vince su «omesso»;
+>   - il laboratorio senza gli errori del risultato;
+>   - il selettore con i preset;
+>   - in E2E, la Dashboard senza la vista;
+>   - M4, la nota legata alla crisi scelta e non a quella chiesta, ucciso dal caso nuovo: 9 su 9.
+>
+> **Passo 3 — revisione visiva: rinviata, per scelta del developer (05/10)**. Avverrà dentro la revisione combinata
+> che segue l'aggiornamento della famiglia a `dev_release2` (D15 di I, anello della torta, margini, soglia delle
+> palette): una sola copia nuova dei dati, una sola sessione. Le eventuali correzioni faranno un giro successivo.
+>
+> **Passo 4 — guida ✅ (docs-writer, solo EN, la pagina non ha traduzioni)**. In `historical-replay.en.md` la
+> sezione «Holdings Without Enough History» diceva che l'analisi «refuses to run and asks for a decision». Ora
+> descrive l'esclusione automatica, in cinque sottosezioni con le loro ancore:
+> - i motivi, con le etichette che mostra lo schermo;
+> - il trattamento, liquidità a rendimento zero oppure omissione;
+> - cosa mostra il risultato;
+> - il periodo comune e il suo compromesso;
+> - i sostituti, che restano solo nella scheda dell'asset.
+> Anche «Interpretation» è riallineata. `mkdocs build` (strict) è pulito; `check-links` dà 88 link validi e 0 rotti.
+> Una frase superata nella guida di F (`correlation.en.md`, What If…?) l'ho passata a F.
+>
+> **Verifica finale sul codice vero** (6152): `risk-levels-unit` 296 · `risk-levels-component` 92 · E2E `risk` 14 ·
+> E2E `risk-lab` 31. Prima di questo giro l'ultima build era stata compilata con il mutante M9; il runner l'ha rifatta
+> dal codice vero.
+>
+> **Le concessioni usate**:
+> - A, `RiskLevelsPanel.svelte`: il termine `replaySectionView`, il suo import e tre righe di commento sopra
+>   `l4Results`;
+> - F, `AssetSetReplaySection.svelte`: `:108` e `:111`, i due import, il punto 📌 del docblock; il suo test, al
+>   `:309` e nel cablaggio;
+> - F, `risk-lab.spec.ts`: il cancello e lo stub del replay;
+> - in `risk-analysis.spec.ts`, che è di A, solo le parti del replay, che la tabella dei proprietari assegna a me.
+>
+> **Passo 5 — checkpoint**: cinque gruppi (backend · blocco e montaggi · E2E · guida · journal). CHANGELOG al
+> coordinator.
+
+### `dev_release2` → Risk: K, I, il pavimento 0/0 e la PR #30 · ✅ 05/10/2026
+
+> **F3 committato** (`26338dc8a` … `c42bbad9e`, albero `73fb43066`). Il developer ha poi fuso `dev_release2`
+> `9b5291c25` nel ramo con lo script del coordinator: `bb513bf8a`, albero `b0e514b67`, identico alla simulazione.
+>
+> **Controllo semantico di `portfolio_service.py`**, l'unico file di codice cambiato da tutte e due le parti:
+> - la mia parte sposta due costanti in `data_quality_thresholds` (`QUANTITY_DUST_THRESHOLD`,
+>   `TRANSACTION_IMPLIED_GRACE_DAYS`);
+> - quella di `dev_release2` estende `needs_engine` a tutti i flag delle sezioni del report.
+> Le due modifiche sono indipendenti: `dev_release2` non tocca né la sede vecchia né quella nuova delle costanti, e
+> non ne aggiunge usi. Nel file fuso ci sono entrambe, l'import si risolve e ruff è pulito.
+>
+> **Validazione della revisione combinata** (6152, una cosa per volta):
+> - `front build --debug` ✅; `mkdocs build` senza avvisi; **`front check` 0 errori e 0 avvisi**, il pavimento
+>   nuovo; i18n 3508 chiavi, tutte tradotte;
+> - backend: `risk-all` 810 · `portfolio-engine` 42 · `schemas risk` 47 · `api risk` 14 · `api portfolio` 55;
+> - vitest: `risk-levels-unit` 296 · `risk-levels-component` 92 · `risk-controller-unit` 54 ·
+>   `risk-benchmark-unit` 13 · `allocation-unit` 211 · `core-unit` 2896 · `component-unit` 2380;
+> - E2E: `risk` 14 · `risk-lab` 31 · `risk-benchmark-shared` 4 · `risk-asset-detail` 2 · `dashboard` 24;
+> - orfani ✅.
+>
+> **Prossimo**: il D15 di I. In `AllocationHistoryChart.svelte`, `resolvePrimary` passa a `assetTypeFamily`, e la
+> dimensione «tipo» va a 12 chiavi (11 famiglie più «Liquidity») su 14 colori. Il commento della palette citerà
+> `DailyStateBuilder.build`, passo 4h. Le frasi di K in `assetTypes.ts` sono concesse; quelle di
+> `allocationHierarchy.ts` sono da chiedere. Nello stesso checkpoint va `mergeQualityIssues`, l'unione unica dei
+> problemi dei dati per il banner del laboratorio, che il developer ha chiesto tramite F il 05/10.
+
+### Checkpoint 1 dopo l'aggiornamento: il D15 di I e l'unione unica dei problemi dei dati · ✅ 05/10/2026
+
+> **Il D15 di I** (20_performanceCharts, giro 4 §7): il grafico storico dell'allocazione raggruppa per veicolo, come
+> la torta.
+> - In `AllocationHistoryChart.svelte`, `resolvePrimary` passa da `primaryAssetType` a `assetTypeFamily`. I dati non
+>   si sommano: ogni tipo grezzo resta una serie. Seguono la famiglia l'ordine nella pila e il colore, che diventa una
+>   sfumatura del colore della famiglia.
+> - Il commento della palette ora conta 12 colori base, cioè 11 famiglie più «Liquidity», e cita
+>   `DailyStateBuilder.build`, passo 4h, non più una riga di `portfolio_engine.py`.
+> - Riallineate le frasi che il D15 rendeva false, con le concessioni del coordinator:
+>   - quella di K in `assetTypes.ts`;
+>   - tre commenti di `allocationHierarchy.ts`;
+>   - i commenti dei test della gerarchia e degli anelli, più un titolo e il testo di un messaggio di fallimento;
+>     nessuna condizione cambia;
+>   - la desc di `allocation-unit`, al presente.
+> - Il test nuovo `AllocationHistoryChart.test.ts` è registrato in `allocation-unit`. Monta il grafico con echarts
+>   registrato e confronta ordine e colori con `buildAllocationHierarchy(…, assetTypeFamily)`.
+> - Il criterio di contrasto delle palette dello storico, (a) o (b), resta alla revisione combinata.
+>
+> **`mergeQualityIssues`**: l'unione unica dei problemi dei dati. È richiesta dal banner «Sincronizza» del laboratorio
+> (decisione del developer del 05/10, tramite F), ed è esportata dal controller, che la usa per primo.
+> - Il banner chiave le voci per `code + group_key`: due voci con la stessa coppia farebbero lanciare a Svelte
+>   `each_key_duplicate`. Con le richieste del laboratorio, che preparano finestre diverse, la coppia si ripete.
+> - La regola:
+>   - id e coppie si uniscono nell'ordine di arrivo;
+>   - i nomi restano allineati agli id; vince il primo nome vero, e `#<id>` compare solo se qualche voce porta nomi;
+>   - il conteggio è la dimensione dell'unione; senza elenchi, il maggiore dei due, che è un limite inferiore;
+>   - vince la severità più grave;
+>   - l'intervallo di date si allarga;
+>   - una voce identica a quella già tenuta si salta.
+>   Sulla Dashboard, dove i rapporti sono identici, il risultato non cambia: c'è un pin.
+> - La copia non usa `structuredClone`, perché i risultati del controller stanno in `$state` e i loro proxy non si
+>   clonano.
+> - **⚠️ Fuori pista — un difetto trovato da test-author**: con tre voci, il `#2` messo dalla prima unione bloccava un
+>   nome vero arrivato con la terza. È il percorso dell'unione di F fra i quattro controller. Corretto: un `#<id>` già
+>   tenuto non conta come nome.
+> - **⚠️ Fuori pista — il contratto**: test-author ha segnalato i punti che il brief lasciava aperti: voci senza
+>   elenco, elenchi assenti, parametri presenti solo più avanti, nomi mancanti. Li ho decisi, ed ognuno ha il suo caso.
+>
+> **Verifica** (6152):
+> - prettier pulito; `front check` 0/0;
+> - vitest: `risk-controller-unit` 77 · `allocation-unit` 214 · `risk-levels-unit` 296 · `risk-levels-component` 92 ·
+>   `core-unit` 2896 · `component-unit` 2380;
+> - E2E: `dashboard` 24 · `risk` 14 · `risk-lab` 31 · `risk-benchmark-shared` 4;
+> - orfani ✅; ruff del runner a 22 errori, come su HEAD.
+>
+> Rossi prima di tutto: 3 sul D15, 20 sull'unione (più il pin della Dashboard), poi i casi del contratto.
+>
+> **Mutanti uccisi 9 su 9**, con ripristino verificato con sha256: la chiave senza `group_key`, l'unione ordinata, il
+> conteggio non aggiornato, la severità del primo, le date non allargate, l'ultimo nome che vince, il salto delle voci
+> identiche, il controller con la vecchia deduplica, il D15 annullato.
+>
+> **Note per il seguito**:
+> - dopo il D15, `primaryAssetType` non ha più chiamanti in produzione: è nel backlog del coordinator;
+> - prima la poll dei prezzi live va ad A, nel suo prossimo checkpoint dopo la mia punta (`holdLivePricePoll`, come in
+>   `risk-lab`).

@@ -25,7 +25,8 @@
     import {buildTooltipTheme, buildTooltipHeader, buildTooltipByThreshold, buildTooltipTopN, tooltipPositionSide, setupTooltipAutoHide, scheduleFirstRenderStabilityFix} from '$lib/components/charts/echartsTooltipHelpers';
     import {getCountryInfo, ensureCountriesLoaded} from '$lib/stores/reference/countryStore';
     import {getSectorEmoji, ensureSectorsLoaded} from '$lib/stores/reference/sectorStore';
-    import {sectorI18nKey, primaryAssetType} from '$lib/utils/assetTypes';
+    import {getAssetTypeEmoji} from '$lib/components/dashboard/allocationTypeEmoji';
+    import {assetTypeFamily, sectorI18nKey} from '$lib/utils/assetTypes';
     import {buildAllocationHierarchy} from '$lib/components/charts/allocationHierarchy';
     import {currentLanguage} from '$lib/stores/app/language';
     import {debug} from '$lib/debug';
@@ -119,14 +120,16 @@
     // Grown from 12 to 14. That closes ONE of the two dimensions this palette
     // serves:
     //
-    //   type   — 13 keys: 12 from the codomain of primaryAssetType, plus the
-    //            synthetic "Liquidity" bucket that portfolio_engine.py:1041
-    //            injects outside the enum. 13 <= 14, so no category is ever
-    //            handed another's colour. (At 12 slots it was, and the 13th took
+    //   type   — 12 base colours: the 11 families of assetTypeFamily (I's D15:
+    //            the chart groups by vehicle, like the pie), plus the synthetic
+    //            "Liquidity" bucket that `DailyStateBuilder.build` injects at its
+    //            step 4h, outside the enum. Subtypes take shades of their family's
+    //            colour. 12 <= 14, so no group is ever handed another's colour. (At
+    //            12 slots, grouping by content, it was: 13 keys, and the 13th took
     //            the colour of the 1st — the largest slice on screen.)
     //
     //   sector — 15 keys: the 14 of SECTOR_KEYS_FALLBACK, plus the same
-    //            "Liquidity", which that same backend line injects into
+    //            "Liquidity", which that same backend step injects into
     //            `by_sector` as well. 15 > 14, so ONE collision SURVIVES here:
     //            `palette[i % 14]` hands the 15th category the colour of the 1st.
     //            The names are sorted by weight, so that is the smallest slice
@@ -160,26 +163,7 @@
             if (rawName === 'Other' || rawName === 'Unknown') return '🏳️';
             return getCountryInfo(rawName).flag_emoji || '🌍';
         }
-        if (dimension === 'type') {
-            const typeEmojis: Record<string, string> = {
-                STOCK: '📈',
-                ETF: '📊',
-                BOND: '🏛️',
-                // Bitcoin sign (₿, U+20BF) is a currency symbol, not an emoji — it
-                // renders as a thin system-font glyph (no color-emoji font coverage),
-                // making it nearly invisible against the chart's pale area fill,
-                // unlike every other category here. 🪙 is a genuine color emoji with
-                // the same bold visual weight as the rest.
-                CRYPTO: '🪙',
-                FUND: '💼',
-                HOLD: '⏸️',
-                CROWDFUND: '🤝',
-                INDEX: '📉',
-                OTHER: '📦',
-                LIQUIDITY: '💰',
-            };
-            return typeEmojis[rawName.toUpperCase()] ?? '📊';
-        }
+        if (dimension === 'type') return getAssetTypeEmoji(rawName);
         return '';
     }
 
@@ -611,7 +595,7 @@
             dimension === 'type'
                 ? buildAllocationHierarchy(
                       dataset.sortedNames.map((name) => ({key: name, weight: dataset.avgWeights[name] ?? 0, item: name})),
-                      {resolvePrimary: primaryAssetType, palette},
+                      {resolvePrimary: assetTypeFamily, palette},
                   ).map(({item, color}) => ({name: item, color}))
                 : dataset.sortedNames.map((name, index) => ({name, color: palette[index % palette.length]}));
 

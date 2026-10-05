@@ -100,11 +100,16 @@
     let listenersAttached = $state(false);
 
     /** Single pending-hide timer, shared by both the pinned grace period and
-     *  the plain-hover bridge delay — always cancelled on re-entry. */
-    let pendingHideTimer: ReturnType<typeof setTimeout> | null = $state(null);
+     *  the plain-hover bridge delay — always cancelled on re-entry.
+     *
+     *  The timer handles are plain variables, not `$state`: nothing renders
+     *  them, and a teardown reads `$state` as it was before its latest write
+     *  unless an effect flush has run since — the destroy cleanup below saw
+     *  `null` and left the pending timer running after the tooltip was gone. */
+    let pendingHideTimer: ReturnType<typeof setTimeout> | null = null;
     /** Pending hover-open timer (T2) — cancelled when the pointer leaves before
      *  the delay elapses, and by any explicit open/close path. */
-    let pendingShowTimer: ReturnType<typeof setTimeout> | null = $state(null);
+    let pendingShowTimer: ReturnType<typeof setTimeout> | null = null;
 
     function clearPendingHide() {
         if (pendingHideTimer) {
@@ -245,10 +250,16 @@
         }
     });
 
-    // Clear pending timers on destroy so a removed tooltip can't fire later.
+    // Cancel every pending callback on destroy so a removed tooltip can't fire
+    // later. The position frame too: destroyed before its first re-render, the
+    // tooltip never ran the listeners effect whose teardown cancels it.
     $effect(() => () => {
         clearPendingShow();
         clearPendingHide();
+        if (pendingPositionFrame !== null) {
+            cancelAnimationFrame(pendingPositionFrame);
+            pendingPositionFrame = null;
+        }
     });
 
     /**

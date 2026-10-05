@@ -41,11 +41,12 @@
      *     null on an unweighted scope — so the sentence does not render at all,
      *     rather than printing a dash that reads like a number which failed to
      *     load. The per-asset bars are the whole answer here.
-     *   - the audit sentence **names the treatment the payload actually
-     *     carries**: `L4Replay`'s `omitted` predicate (`treatment ===
-     *     'omitted_from_replay'` on the excluded list) selects `replayAuditOmitted`
-     *     or `replayAudit`, instead of always claiming the
-     *     carried-at-zero-return handling that an unweighted scope never gets.
+     *   - the exclusions block **names the treatment the payload actually
+     *     carries**: `L4Replay` reads `treatment` off the excluded list and, as
+     *     soon as one asset was `omitted_from_replay`, says they were left out of
+     *     the replay instead of claiming the carried-at-zero-return handling that
+     *     an unweighted scope never gets (D372 moved this from the audit sentence
+     *     to the block: `replayExclusions` in `levels/l4/scenarioHelpers.ts`).
      * Both were invisible on `portfolio` and surfaced only on this scope, which
      * had no mount until this one — which is why they are recorded here rather
      * than left to be rediscovered.
@@ -56,7 +57,8 @@
     import {createRiskPanelController, discardedErrorCodes} from '$lib/stores/risk/riskPanelController.svelte';
     import L4WhatIf from './levels/L4WhatIf.svelte';
     import L4Replay from './levels/l4/L4Replay.svelte';
-    import {degradedResults, levelMetadata, resultReasons} from './levels/levelHelpers';
+    import {replaySectionView} from './levels/l4/scenarioHelpers';
+    import {degradedResults, levelMetadata, resultErrorCodes, resultReasons} from './levels/levelHelpers';
     import RiskLevelSection from './levels/RiskLevelSection.svelte';
 
     interface Props {
@@ -105,10 +107,14 @@
     });
 
     let health = $derived(degradedResults([controller.replayResult]));
-    let reasons = $derived(resultReasons([controller.replayResult], $t));
+    // The block reads the exclusion and coverage warnings itself, beside the number, and
+    // explains a replay with nothing left (D372); the section gets the rest.
+    let replayView = $derived(replaySectionView(controller.replayResult));
+    let reasons = $derived(resultReasons([replayView], $t));
     // A replay answer discarded twice running (the page's live price polling invalidates the
-    // cache every 30 s) is disclosed here, as the Dashboard's L4 does, instead of vanishing.
-    let errorCodes = $derived(discardedErrorCodes(controller.discarded, ['replay']));
+    // cache every 30 s) is disclosed here, as the Dashboard's L4 does, instead of vanishing;
+    // and so is a replay that failed outright, a timeout for one.
+    let errorCodes = $derived([...resultErrorCodes([replayView]), ...discardedErrorCodes(controller.discarded, ['replay'])]);
     let metadata = $derived(levelMetadata([controller.replayResult]));
 </script>
 
