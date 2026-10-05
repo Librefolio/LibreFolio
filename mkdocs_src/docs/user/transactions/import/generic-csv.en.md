@@ -8,6 +8,8 @@ The **Generic CSV** provider is a flexible fallback for brokers that are not dir
 - A supported broker changed its export format and the plugin hasn't been updated yet.
 - You have a custom spreadsheet or script-generated CSV you want to import.
 
+LibreFolio offers the Generic CSV for a file only when the file's first row names both required columns, **`date`** and **`type`** — in English or with one of the aliases in the column reference below. If no plugin recognises your file the wizard lists every plugin, but picking the Generic CSV for a file without those two columns stops the analysis with an error that tells you what is missing — for example *Plugin 'broker_generic_csv' cannot parse file '…': required column 'date' not found in the CSV header* — and the file is marked as failed. To fix it, add the missing column to the file's first row (or rename the column that already holds those values to one of the accepted names) and upload the corrected file.
+
 ## How It Works
 
 1. Upload your CSV file.
