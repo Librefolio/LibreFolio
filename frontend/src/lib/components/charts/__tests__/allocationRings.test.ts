@@ -168,8 +168,9 @@ const resolveByVehicle: Resolver = (key) => loadedTaxonomy().assetTypeFamily(key
 
 /**
  * Grouping by **content** — contract K2, K's `primaryAssetType`, called for real: the pie's until
- * 24/09 and still the allocation history chart's. `ETF_STOCK` rolls up into STOCK, and REAL_ESTATE
- * gathers ETF_REAL_ESTATE and CROWDFUND_REAL_ESTATE into a family of three.
+ * 24/09 and the allocation history chart's until D15, a resolver no chart uses since. `ETF_STOCK`
+ * rolls up into STOCK, and REAL_ESTATE gathers ETF_REAL_ESTATE and CROWDFUND_REAL_ESTATE into a
+ * family of three.
  *
  * Not the pie's grouping: it is used by the review case, to show the picture the review turned
  * down, and by the family of three, which shows that the builder takes families as given.
@@ -362,8 +363,9 @@ describe('the palettes under test', () => {
 describe('the pie groups by vehicle — the review case (R12, option B)', () => {
     it.each(PIE_PALETTES)('splits the ETF family alone, into ETF generico + ETF azionario, on %s', (_name, palette) => {
         // Barrier: this is the input on which the two groupings disagree. By content — K2, the
-        // pie's until 24/09 and still the history chart's — the same numbers put the equity ETF in
-        // a family of its own, "Azione", apart from the generic ETF: the picture the review turned down.
+        // pie's until 24/09 and the history chart's until D15, no chart's since — the same numbers
+        // put the equity ETF in a family of its own, "Azione", apart from the generic ETF: the
+        // picture the review turned down.
         const byContent = ringsFor(REVIEW_CASE_ENTRIES, {palette, resolve: resolveByContent}).layout;
         expect(byContent.base.map((arc) => arc.primary)).toEqual(['ETF', 'CROWDFUND', 'BOND', 'STOCK', 'LIQUIDITY']);
         expect(baseArcOf(byContent, 'ETF').split).toBe(false);
