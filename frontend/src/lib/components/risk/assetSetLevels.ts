@@ -35,11 +35,15 @@ import {riskMetadata, riskOutput, singleValue} from '$lib/risk/riskTypes';
  * what did not come back at all, so what is partial, and why, is said once, at the top.
  */
 export interface AssetSetQualitySource {
-    /** The results the section's frames render, in page order, `null` where the answer had none. */
+    /**
+     * What the lab's one notice reads from the section: the results its frames render, in page
+     * order, `null` where the answer had none. None at all from a section that keeps its own
+     * disclosure (the replay, which answers over a period of its own).
+     */
     results: Array<RiskAnalyticResult | null>;
     /** i18n keys naming results by instance, where the analytic's name is ambiguous (the two VaR horizons). */
     labels: Readonly<Record<string, string>>;
-    /** The data-quality issues of the section's controllers, in their order, not yet merged. */
+    /** The data-quality issues of the section's controllers, in their order, not yet merged: the lab's banner merges them. */
     issues: DataQualityIssue[];
 }
 

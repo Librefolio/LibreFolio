@@ -71,9 +71,11 @@
     import {untrack} from 'svelte';
     import {AlertTriangle, Briefcase, CheckCheck, ChevronDown, FlipHorizontal, Info, RefreshCw, Square, Wallet, X} from 'lucide-svelte';
 
+    import {goto} from '$app/navigation';
     import {_ as t} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
+    import {DataQualityBanner} from '$lib/components/ui/feedback';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
     import {singleValue} from '$lib/risk/riskTypes';
@@ -83,6 +85,7 @@
     import {brokerStoreVersion, ensureBrokersLoaded, getAccessibleBrokers} from '$lib/stores/reference/brokerStore';
     import {ensureFxRoutesLoaded, fxRoutesVersion, getConfiguredPairSlugs} from '$lib/stores/reference/fxRoutesStore';
     import {invalidateRisk} from '$lib/stores/risk/riskStore.svelte';
+    import {mergeQualityIssues} from '$lib/stores/risk/riskPanelController.svelte';
     import AssetSetCorrelationSection from './AssetSetCorrelationSection.svelte';
     import AssetSetComparisonLevels from './AssetSetComparisonLevels.svelte';
     import AssetSetReplaySection from './AssetSetReplaySection.svelte';
@@ -96,7 +99,7 @@
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {applyBulkAction, labBenchmarkId, MAX_SELECTED_ASSETS, readPersistedSelection, resolveInitialSelectionWithSource, writePersistedSelection, type BulkAction, type SelectionSource} from './assetSetSelection';
     import {dayFormatter, describeEligibility, eligibilityBatches, EMPTY_VERDICTS, fitPeriodOffer, isSelectable, mergeEligibilityAnswers, type DayRange, type EligibilityView, type EligibilityVerdicts} from './eligibility';
-    import {buildSyncTargets} from './syncTargets';
+    import {buildSyncTargets, labQualityAction} from './syncTargets';
 
     interface AssetOption {
         id: number;
@@ -580,18 +583,32 @@
      * problems. The frames now keep only what did not come back at all, and this notice says
      * what is partial, and why, once: from the results the correlation and the two levels
      * render, read through `bind:this`. The replay keeps its own, as L4 does on the Dashboard:
-     * it answers another question, over a period of its own.
+     * it answers another question, over a period of its own, so it hands the notice nothing.
+     *
+     * **And the banner above it** (decision B, 05/10): the data-quality issues of all four
+     * controllers — the replay's included, as the Dashboard's banner reads its replay — merged
+     * by Risk's one rule, `mergeQualityIssues`, on the key the banner renders them by. Its
+     * actions go through `labQualityAction`: a sync opens this panel's own sync (the
+     * selection's prices and rates), the rest navigate.
      */
     let correlationSection = $state<ReturnType<typeof AssetSetCorrelationSection>>();
     let levelsSection = $state<ReturnType<typeof AssetSetComparisonLevels>>();
-    let notice = $derived.by(() => {
-        const sources = [correlationSection?.qualitySource(), levelsSection?.qualitySource()].filter((source) => source !== undefined);
-        return partialNotice(
-            sources.flatMap((source) => source.results),
+    let replaySection = $state<ReturnType<typeof AssetSetReplaySection>>();
+    let qualitySources = $derived([correlationSection?.qualitySource(), levelsSection?.qualitySource(), replaySection?.qualitySource()].filter((source) => source !== undefined));
+    let notice = $derived(
+        partialNotice(
+            qualitySources.flatMap((source) => source.results),
             $t,
-            Object.fromEntries(sources.flatMap((source) => Object.entries(source.labels))),
-        );
-    });
+            Object.fromEntries(qualitySources.flatMap((source) => Object.entries(source.labels))),
+        ),
+    );
+    let qualityIssues = $derived(mergeQualityIssues(qualitySources.flatMap((source) => source.issues)));
+
+    function handleQualityAction(action: string, target: string | null): void {
+        const next = labQualityAction(action, target);
+        if (next?.kind === 'sync') openSync();
+        else if (next?.kind === 'navigate') void goto(next.href);
+    }
 
     function runBulkAction(action: BulkAction): void {
         selectionTouched = true;
@@ -796,12 +813,13 @@
     </section>
 
     {#if analysedIds.length > 0}
+        <DataQualityBanner issues={qualityIssues} mode="grouped" onaction={(action, target) => handleQualityAction(action, target)} />
         <RiskPartialNotice partial={notice.partial} reasons={notice.reasons} />
         <AssetSetCorrelationSection bind:this={correlationSection} assetIds={analysedIds} assetLabels={selectionLabels} assetTypes={selectionTypes} {dateStart} {dateEnd} {targetCurrency} refreshVersion={syncGeneration} />
         {#if benchmarkState !== 'pending'}
             <AssetSetComparisonLevels bind:this={levelsSection} assetIds={analysedIds} assetLabels={selectionLabels} assetIcons={selectionIcons} {dateStart} {dateEnd} {targetCurrency} {benchmarkId} refreshVersion={syncGeneration} />
         {/if}
-        <AssetSetReplaySection assetIds={analysedIds} assetLabels={selectionLabels} {dateStart} {dateEnd} {targetCurrency} refreshVersion={syncGeneration} />
+        <AssetSetReplaySection bind:this={replaySection} assetIds={analysedIds} assetLabels={selectionLabels} {dateStart} {dateEnd} {targetCurrency} refreshVersion={syncGeneration} />
     {:else if seeding}
         <div class="rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 p-8 text-center" data-testid="risk-asset-set-seeding">
             <RefreshCw size={20} class="mx-auto animate-spin text-libre-green" />
