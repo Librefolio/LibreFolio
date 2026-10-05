@@ -555,7 +555,15 @@ test.describe('Gallery Screenshots', () => {
                     await page.waitForTimeout(500); // Give e-charts time to redraw/stabilize
                 }
 
-                // Screenshot absolute mode (default)
+                // Select Abs explicitly: the growth chart remembers its last mode per user,
+                // and this loop clicks % in every iteration, so from the second iteration
+                // on 'main' would otherwise be captured in % mode.
+                const eurToggle = page.getByTestId('growth-toggle-eur');
+                if (await eurToggle.isVisible({timeout: 2000}).catch(() => false)) {
+                    await eurToggle.click();
+                    await expect(eurToggle).toHaveAttribute('aria-pressed', 'true');
+                    await page.waitForTimeout(500); // Give e-charts time to redraw
+                }
                 await screenshot(page, viewport, lang, theme, 'dashboard', 'main');
 
                 // Toggle and screenshot percentage mode
