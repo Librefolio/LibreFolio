@@ -5412,7 +5412,7 @@
     }
   },
   "user/transactions/import/index.en.md": {
-    "md5": "46e76c80f92d32d105782d1d23ee54ba",
+    "md5": "fd7f3f4f315d390aba41910a9bbdf647",
     "langs_done": [
       "es",
       "fr",
@@ -5432,7 +5432,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 143.7,
-        "stamped_at": "2026-10-01T20:37:21.111138+00:00",
+        "stamped_at": "2026-10-05T09:22:42.709746+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -5445,7 +5445,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 138.4,
-        "stamped_at": "2026-10-01T20:37:21.111138+00:00",
+        "stamped_at": "2026-10-05T09:22:42.709746+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -5458,7 +5458,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 138.3,
-        "stamped_at": "2026-10-01T20:37:21.111138+00:00",
+        "stamped_at": "2026-10-05T09:22:42.709746+00:00",
         "stamped_by": "translate-stamp"
       }
     }
