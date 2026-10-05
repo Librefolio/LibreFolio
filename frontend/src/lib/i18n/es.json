@@ -3438,7 +3438,10 @@
         "uncovered": {
           "label": "¿Cuánto de mí no se mide aquí?",
           "caption": "Liquidez, más toda posición sin una serie de precios utilizable",
-          "residual": "Las filas de abajo describen el resto de la cartera; {share} no está entre ellas"
+          "residual": "Las filas de abajo describen el resto de la cartera; {share} no está entre ellas",
+          "split": "{cash} en efectivo · {unpriced} sin precios",
+          "allUnpriced": "Todo en posiciones sin precios",
+          "allCash": "Todo en efectivo"
         },
         "rowsCaption": "La barra muestra la diferencia entre peso y riesgo: a la derecha más riesgo que peso, a la izquierda menos. Los pesos son cuotas de la cartera entera.",
         "correlation": {

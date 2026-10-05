@@ -19,6 +19,11 @@
  * loading still gets a jump. That is a caller-side contract (K5), and the test
  * records the shape so nobody later mistakes it for a bug in the card.
  *
+ * And one rule of the caption (developer's decision of 05/10/2026): it is read
+ * whole on the card, wrapping at most to two lines, so it carries no native
+ * tooltip. Wrapping needs a layout engine and is measured in the E2E; what a
+ * DOM can show is pinned here.
+ *
  * Asserted on `data-testid` and on values the test passed in — never on a
  * translated string.
  */
@@ -155,6 +160,28 @@ describe('RiskMetricCard', () => {
             // `tabular-nums` is the whole reason the number does not jitter while
             // it counts up; it is a behaviour, not a decoration.
             expect(screen.getByTestId('card-value').className).toContain('tabular-nums');
+        });
+    });
+
+    describe('the caption', () => {
+        // Developer's decision of 05/10/2026: a caption wraps, at most to two
+        // lines, instead of being cut to one with the rest left to a hover —
+        // a hover a reader has no reason to try and a touch screen never
+        // offers. Read whole on the card, a native `title` would only repeat
+        // it in the browser's own box. Whether it wraps needs a layout engine,
+        // so it is measured in the E2E (`risk-analysis.spec.ts`); jsdom can
+        // say what the node carries.
+        it('carries the whole caption and no native tooltip', async () => {
+            await setupI18n();
+            const caption = 'A caption written by the test, long enough to need a second line on a narrow card';
+            render(RiskMetricCard, {props: {...BASE, caption}});
+
+            const node = screen.getByTestId('card-caption');
+            // Barrier: the node holds the caption this test passed, whole — so
+            // the card cut nothing in code, and the absence below is about
+            // this caption's node and no other.
+            expect(node.textContent?.replace(/\s+/g, ' ').trim(), 'the caption is not rendered whole').toBe(caption);
+            expect(node, 'the caption still carries a native title: the sentence on the card is repeated in a tooltip').not.toHaveAttribute('title');
         });
     });
 

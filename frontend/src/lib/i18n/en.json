@@ -3438,7 +3438,10 @@
         "uncovered": {
           "label": "How much of me is not measured here?",
           "caption": "Cash, plus every holding without a usable price series",
-          "residual": "The rows below describe the rest of the portfolio; {share} is not among them"
+          "residual": "The rows below describe the rest of the portfolio; {share} is not among them",
+          "split": "{cash} cash · {unpriced} without prices",
+          "allUnpriced": "All in holdings without prices",
+          "allCash": "All in cash"
         },
         "rowsCaption": "The bar shows the gap between weight and risk: right means more risk than weight, left means less. Weights are shares of the whole portfolio.",
         "correlation": {
