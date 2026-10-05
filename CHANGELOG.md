@@ -24,6 +24,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Rolling Return in the asset chart.** A second mode next to Prices shows the price-only return against the close exactly N calendar days earlier — 1W, 1M, 3M or 1Y, or a custom number of weeks, months or years. History before the selected range is loaded, so a window longer than the range still draws; the tooltip shows the reference date and the price and FX observations used, partial data is shown apart from unavailable data, comparison assets use the same window and currency, and a **?** next to the window opens the guide.
 - **The Growth and Allocation charts remember the view you chose.**
 - **FX route metadata in the API** — route responses expose `is_chain` and a sorted, unique `providers_used` list of configured providers. Ordered `chain_steps` still preserves direction and repeated providers; request payloads remain unchanged, with no database migration required.
+- **Danske Bank (Finland) importer, alpha: one import from two exports.** The bank splits an equity savings account (*osakesäästötili*) into a securities export (XLSX) — purchases, sales, dividends, demergers — and a cash statement (CSV); upload the two together and LibreFolio imports them as one.
+  - **One card per set.** In *Select Files* the two exports form a single card: each kind of export in its own table, ordered by the period it covers, and a timeline of the files, of any days no export covers, and of the history LibreFolio already holds — point at a bar, or click it, for its dates and number of rows. The Files page shows which exports belong together and which file was combined from them.
+  - **A missing export is announced at once.** Upload only one of the two and the wizard says which one is missing and for which period, already at upload and again on the card; upload it into the same set from there, or leave the set out of this import.
+  - **Every trade paired with its cash.** The two files are combined into one; the analysis detail shows the outcome — trades paired with their cash movement, rows found in one file only, movements summarised or left for your next import, rows left out and why — and lets you preview or download the combined file. The importer's notes are in Finnish, like the bank's exports.
+  - **Commissions you can separate.** The bank gives one total per trade, commission included: the cash is imported exactly as booked, and for a security priced in euro the fix step suggests the likely commission, so you can separate it from the price if you track fees.
+  - **Align with the bank.** A first import summarises the older history in a starting point instead of replaying it, and later imports skip what LibreFolio already holds. After the review, a new step compares what LibreFolio will hold with the bank's balance and with the positions the files prove: one card per point — the starting point, and a point after each gap between exports — and one table of the proposed deposits and adjustments, selected by default and tagged `gap_fix`. An end-of-period check compares the cash with the statement's last balance and is never corrected automatically. The Import guide covers the new step.
+  - **Alpha.** Built from the exports of a single account, shared in [issue #26](https://github.com/Librefolio/LibreFolio/issues/26): if your files look different, or a row is imported in a way that looks wrong, please tell us there.
+- **Todo banners lead to their rows.** In the bulk editor, each entry of the banners that list the fields to complete or to verify pages to its row and highlights it.
 
 ### 🐛 Fixed
 
@@ -52,6 +60,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The Transactions page clears its selection after a saved bulk edit, clone, deletion, addition or import, and after linking or unlinking a pair; cancelling keeps it.
 - Uploading broker reports from the Files page or from a broker's import history no longer fails with a validation error. The failure dated back to v0.9.0; the import wizard was not affected.
 - Every CSV importer now reads broker exports saved as Windows-1252 or Latin-1 (for example re-saved with Excel on Windows): accented characters and the euro sign no longer make the import fail, and semicolon-separated files are no longer split on commas.
+- In the bulk editor, applying an imported row with Auto (WAC) cost now clears its *enter the cost* todo, even when Auto was already selected — no more switching to manual and back.
+- Rows handed over by an import are now validated once right away, whatever their number: above 50 rows the editor used to show no problems until *Validate now*.
+- The analysis detail of an import shows each field to complete as readable facts — the file row, the amounts, the importer's suggestions and the source rows — instead of raw JSON.
 
 #### 🧩 Asset providers and feedback
 
