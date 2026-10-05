@@ -62,7 +62,7 @@ from backend.app.services.brim_providers.broker_etoro import EtoroBrokerProvider
 from backend.app.services.brim_providers.broker_fineco import FinecoBrokerProvider
 from backend.app.services.brim_providers.broker_finpension import FinpensionBrokerProvider, _parse_finpension_date, _parse_finpension_number
 from backend.app.services.brim_providers.broker_freetrade import FreetradeBrokerProvider, _parse_freetrade_datetime, _parse_freetrade_number
-from backend.app.services.brim_providers.broker_generic_csv import parse_decimal
+from backend.app.services.brim_providers.broker_generic_csv import GenericCSVBrokerProvider, parse_decimal
 from backend.app.services.brim_providers.broker_ibkr import IBKRBrokerProvider, _parse_ibkr_date, _parse_ibkr_number
 from backend.app.services.brim_providers.broker_intesa import IntesaSanpaoloBrokerProvider
 from backend.app.services.brim_providers.broker_revolut import RevolutBrokerProvider, _parse_revolut_amount, _parse_revolut_datetime, _parse_revolut_quantity
@@ -658,6 +658,29 @@ class TestAutoDetection:
 # CATEGORY 4: GENERIC CSV SPECIFIC TESTS (not parametrized)
 # =============================================================================
 
+GENERIC_CSV_CODE = "broker_generic_csv"
+
+
+def _header_names_date_and_type(path: Path) -> bool:
+    """Decision 1 of workstream L, step G, restated as an oracle: the first row of ``path`` names a ``date`` and a ``type`` column.
+
+    The row is read the way the plugin reads its files — ``BRIMProvider._open_text`` (UTF-8 with or
+    without BOM, then Windows-1252, then Latin-1) split on ``BRIMProvider.detect_csv_delimiter`` — and
+    mapped by the plugin's own ``_detect_columns`` (case-insensitive, trimmed, any alias of
+    ``HEADER_MAPPINGS``): exactly the two columns ``parse`` requires before it reads a single row.
+    """
+    try:
+        with BRIMProvider._open_text(path) as handle:
+            header = next(csv.reader(handle, delimiter=BRIMProvider.detect_csv_delimiter(path)), None) or []
+    except Exception:
+        return False
+    return {"date", "type"} <= set(GenericCSVBrokerProvider()._detect_columns(header))
+
+
+_CSV_SAMPLES = sorted(sample for sample in get_all_sample_files() if sample.suffix.lower() == ".csv")
+_CSV_SAMPLES_WITH_DATE_AND_TYPE = [sample for sample in _CSV_SAMPLES if _header_names_date_and_type(sample)]
+_CSV_SAMPLES_WITHOUT_DATE_AND_TYPE = [sample for sample in _CSV_SAMPLES if not _header_names_date_and_type(sample)]
+
 
 class TestGenericCSVPlugin:
     """Specific tests for the generic CSV fallback plugin."""
@@ -674,15 +697,21 @@ class TestGenericCSVPlugin:
             filepath = SAMPLE_DIR / filename
             assert filepath.exists(), f"Required generic sample file missing: {filename}"
 
-    def test_generic_can_parse_any_csv(self):
-        plugin = BRIMProviderRegistry.get_provider_instance("broker_generic_csv")
+    def test_generic_can_parse_every_csv_sample_with_date_and_type(self):
+        """Every CSV sample whose first row names a ``date`` and a ``type`` column is the generic plugin's.
+
+        Was ``test_generic_can_parse_any_csv``, which held the generic plugin to every CSV sample. Decision 1
+        of workstream L, step G (issue #26) — the generic CSV declares only what it can read — reverses it
+        for the samples without those two columns: what survives of the old test is here, and the refusal
+        of the rest is ``TestGenericCSVDeclaresOnlyWhatItReads``. Binary spreadsheets stay out, as before.
+        """
+        plugin = BRIMProviderRegistry.get_provider_instance(GENERIC_CSV_CODE)
         assert plugin is not None
-        for sample_file in get_all_sample_files():
-            if sample_file.suffix.lower() != ".csv":
-                # The generic plugin is a CSV catch-all and intentionally rejects
-                # binary spreadsheet samples (see GenericCSVBrokerProvider.can_parse).
-                continue
-            assert plugin.can_parse(sample_file), f"Generic plugin should parse {sample_file.name}"
+        readable = {sample.name for sample in _CSV_SAMPLES_WITH_DATE_AND_TYPE}
+        # Positive control: the oracle still finds the generic samples, so the check below never passes on nothing.
+        assert set(self.REQUIRED_GENERIC_FILES) <= readable, f"The oracle finds no date and type column in {sorted(set(self.REQUIRED_GENERIC_FILES) - readable)}: it reads the headers wrong"
+        refused = [sample.name for sample in _CSV_SAMPLES_WITH_DATE_AND_TYPE if not plugin.can_parse(sample)]
+        assert not refused, f"Generic plugin should parse these CSV samples, whose header names a date and a type column: {refused}"
 
     def test_generic_handles_multiple_date_formats(self):
         plugin = BRIMProviderRegistry.get_provider_instance("broker_generic_csv")
@@ -705,6 +734,358 @@ class TestGenericCSVPlugin:
     def test_generic_has_no_test_file_pattern(self):
         plugin = BRIMProviderRegistry.get_provider_instance("broker_generic_csv")
         assert plugin.test_file_pattern is None
+
+
+# =============================================================================
+# CATEGORY 4b: THE GENERIC CSV DECLARES ONLY WHAT IT CAN READ (workstream L, step G — decision 1)
+# =============================================================================
+
+
+def _generic_plugin() -> BRIMProvider:
+    plugin = BRIMProviderRegistry.get_provider_instance(GENERIC_CSV_CODE)
+    assert plugin is not None, f"{GENERIC_CSV_CODE} is not registered"
+    return plugin
+
+
+# Headers that name both required columns, through the aliases of several languages, on both delimiters.
+# Two data rows each, so that the delimiter sniffing reads a table and not a single line.
+_HEADERS_WITH_DATE_AND_TYPE = [
+    pytest.param("generic.csv", b"date,type,quantity,amount,currency\n2025-01-03,BUY,10,-1000.00,EUR\n2025-01-04,DEPOSIT,0,500.00,EUR\n", id="english-comma"),
+    pytest.param("movimenti.csv", b"data;tipo;importo;valuta\n2025-01-03;acquisto;-1000,00;EUR\n2025-01-04;deposito;500,00;EUR\n", id="italian-semicolon"),
+    pytest.param("movimientos.csv", b"Fecha;Tipo;Cantidad;Importe\n03/01/2025;compra;10;-1000,00\n04/01/2025;deposito;0;500,00\n", id="spanish-semicolon"),
+    pytest.param("umsaetze.csv", "Datum,Action,Betrag,Währung\n03.01.2025,buy,-1000.00,EUR\n04.01.2025,deposit,500.00,EUR\n".encode(), id="german-comma-utf8"),
+    pytest.param("export.csv", b" SETTLEMENT_DATE ; Transaction_Type ; AMOUNT \n2025-01-03;BUY;-1000.00\n2025-01-04;DEPOSIT;500.00\n", id="upper-case-padded"),
+    pytest.param("export.csv", b"Konto,Foo,date,Bar,type,Baz\nX,1,2025-01-03,2,BUY,3\nY,4,2025-01-04,5,DEPOSIT,6\n", id="extra-unknown-columns"),
+    pytest.param("export.csv", b'"Date","Type","Amount"\n"2025-01-03","BUY","-1000.00"\n"2025-01-04","DEPOSIT","500.00"\n', id="quoted-header"),
+    pytest.param("export.csv", "data;tipo;importo\n2025-01-03;acquisto;-1000,00\n2025-01-04;deposito;500,00\n".encode("utf-8-sig"), id="utf8-bom"),
+    pytest.param("EXPORT.CSV", b"date,type,amount\n2025-01-03,BUY,-1000.00\n2025-01-04,DEPOSIT,500.00\n", id="upper-case-extension"),
+]
+
+# Headers that miss one required column or both: the plugin's parse could only fail on them. Each one carries the
+# required columns it misses, written by hand (step G.5 checks the sentence that names them): never computed by
+# ``_detect_columns``, which is the code under test.
+_HEADERS_MISSING_DATE_OR_TYPE = [
+    pytest.param(b"date,amount,currency\n2025-01-03,-1000.00,EUR\n2025-01-04,500.00,EUR\n", ("type",), id="only-date"),
+    pytest.param(b"type;amount;currency\nBUY;-1000,00;EUR\nDEPOSIT;500,00;EUR\n", ("date",), id="only-type"),
+    pytest.param(b"foo,bar\n1,2\n3,4\n", ("date", "type"), id="neither"),
+    pytest.param(b"date,trade_date,amount\n2025-01-03,2025-01-03,-1000.00\n2025-01-04,2025-01-04,500.00\n", ("type",), id="two-date-columns-no-type"),
+    # The header row is the first row, for parse as for the README of the samples: a preamble hides it.
+    pytest.param(b"Account: 12345,,\ndate,type,amount\n2025-01-03,BUY,-1000.00\n2025-01-04,DEPOSIT,500.00\n", ("date", "type"), id="date-and-type-below-the-first-row"),
+]
+# The same headers, contents only, as step G's refusal test takes them.
+_HEADERS_WITHOUT_DATE_AND_TYPE = [pytest.param(case.values[0], id=case.id) for case in _HEADERS_MISSING_DATE_OR_TYPE]
+
+_DANSKE_CASH_SAMPLES = ["danske_bank-cash.csv", "danske_bank-gap-cash.csv"]
+
+# The generic samples this file already parses (REQUIRED_GENERIC_FILES, _first_sample_for_plugin, the
+# samples auto-detected as generic) and the malformed one TestGenericMalformedRow reads.
+_GENERIC_SAMPLES = [*sorted(SAMPLE_DIR.glob("generic_*.csv")), SAMPLE_DIR / "malformed" / "generic_malformed_row.csv"]
+
+
+class TestGenericCSVDeclaresOnlyWhatItReads:
+    """Decision 1 of workstream L, step G (issue #26): the generic CSV declares only what it can read.
+
+    The developer: the generic CSV looked at the extension only; it should look at the columns, and see
+    whether every required one is there, in at least one of the languages. So ``can_parse`` is true only
+    for a ``.csv`` whose header row — read with the plugin's own encoding fallback (``_open_text``) and
+    ``detect_csv_delimiter`` — maps both required columns, ``date`` and ``type``, through
+    ``_detect_columns`` (case-insensitive, trimmed, any alias of ``HEADER_MAPPINGS``). Missing either,
+    empty or unreadable: false. Another extension: false, as before. Everything else of the plugin is
+    unchanged — ``parse`` still raises on a missing ``date`` or ``type``.
+
+    Why it matters beyond the plugin: ``compatible_plugins`` is what the import wizard offers. The bank's
+    own cash statement (Danske) names neither column, so the generic CSV could only fail on it, and yet
+    it was offered for it — "read it alone with the generic CSV", or the broker's default plugin noted
+    on a set it cannot read.
+
+    Every input is written in ``tmp_path``. The accepting tests are guards, true before the change too;
+    the refusals are red until ``can_parse`` reads the header. Each case first checks its premise
+    against ``parse``: what is accepted parses, what is refused raises ``BRIMParseError``.
+    """
+
+    @pytest.mark.parametrize(("name", "content"), _HEADERS_WITH_DATE_AND_TYPE)
+    def test_accepts_a_header_with_date_and_type(self, name: str, content: bytes, tmp_path: Path):
+        path = tmp_path / name
+        path.write_bytes(content)
+        plugin = _generic_plugin()
+        assert isinstance(plugin.parse(path, broker_id=1), BRIMParseOutput), f"premise: the generic plugin parses {name}"
+
+        assert plugin.can_parse(path) is True, f"{name}: a header that names a date and a type column is the generic plugin's"
+
+    def test_accepts_a_windows_1252_header_with_accented_words(self, tmp_path: Path):
+        """``Data;Tipo;Quantità;Importo`` saved as Windows-1252, as Excel on Windows writes it: read through the encoding fallback."""
+        content = "Data;Tipo;Quantità;Importo\n03/01/2025;acquisto;10;-1000,00\n04/01/2025;deposito;0;500,00\n".encode("cp1252")
+        with pytest.raises(UnicodeDecodeError):
+            content.decode("utf-8")  # premise: a UTF-8 read stops on the accented byte, so only the fallback reads this header
+        path = tmp_path / "movimenti.csv"
+        path.write_bytes(content)
+        plugin = _generic_plugin()
+        assert isinstance(plugin.parse(path, broker_id=1), BRIMParseOutput), "premise: the generic plugin parses the Windows-1252 file"
+
+        assert plugin.can_parse(path) is True, "a Windows-1252 header that names a date and a type column is the generic plugin's"
+
+    @pytest.mark.parametrize("content", _HEADERS_WITHOUT_DATE_AND_TYPE)
+    def test_refuses_a_header_without_date_and_type(self, content: bytes, tmp_path: Path):
+        path = tmp_path / "export.csv"
+        path.write_bytes(content)
+        plugin = _generic_plugin()
+        with pytest.raises(BRIMParseError):
+            plugin.parse(path, broker_id=1)  # premise: the generic plugin cannot read this file
+
+        assert plugin.can_parse(path) is False, f"The generic plugin claims a CSV whose first row names no date or no type column: {content.splitlines()[0]!r}"
+
+    def test_refuses_what_it_cannot_read(self, tmp_path: Path):
+        """An empty file, a missing one: no header row, nothing to declare (a guard, true before the change too)."""
+        empty = tmp_path / "empty.csv"
+        empty.write_bytes(b"")
+        plugin = _generic_plugin()
+
+        assert plugin.can_parse(empty) is False
+        assert plugin.can_parse(tmp_path / "missing.csv") is False
+
+    @pytest.mark.parametrize("name", ["export.txt", "export.tsv", "export.xlsx"])
+    def test_refuses_another_extension_even_with_date_and_type(self, name: str, tmp_path: Path):
+        """The extension still comes first, as before (a guard)."""
+        path = tmp_path / name
+        path.write_bytes(b"date,type,amount\n2025-01-03,BUY,-1000.00\n2025-01-04,DEPOSIT,500.00\n")
+
+        assert _generic_plugin().can_parse(path) is False
+
+    @pytest.mark.parametrize("name", _DANSKE_CASH_SAMPLES)
+    def test_refuses_the_danske_cash_statement(self, name: str):
+        """``Pvm;Saaja/Maksaja;Määrä;Saldo;Tila;Tarkastus``, Latin-1: no date and no type column the generic CSV knows."""
+        path = SAMPLE_DIR / name
+        plugin = _generic_plugin()
+        with pytest.raises(BRIMParseError):
+            plugin.parse(path, broker_id=1)  # premise: the generic plugin cannot read the bank's statement
+
+        assert plugin.can_parse(path) is False, f"The generic plugin claims {name}, which it cannot parse"
+
+    @pytest.mark.parametrize("name", _DANSKE_CASH_SAMPLES)
+    def test_only_danske_reads_its_cash_statement(self, name: str):
+        """What the upload records as ``compatible_plugins``, and the import wizard offers: Danske, and no generic CSV."""
+        assert BRIMProviderRegistry.get_compatible_plugins(SAMPLE_DIR / name) == ["broker_danske_bank"]
+
+    def test_the_generic_samples_are_all_listed(self):
+        """Guard: the parametrization below covers the generic samples the file relies on, so it is never green by being empty."""
+        listed = {sample.name for sample in _GENERIC_SAMPLES if sample.is_file()}
+
+        assert {*TestGenericCSVPlugin.REQUIRED_GENERIC_FILES, "generic_multilang.csv", "generic_malformed_row.csv"} <= listed
+
+    @pytest.mark.parametrize("sample", _GENERIC_SAMPLES, ids=lambda sample: sample.name)
+    def test_the_generic_samples_stay_generic(self, sample: Path):
+        """Every generic sample names its date and type columns: the generic plugin keeps them (a guard)."""
+        assert _generic_plugin().can_parse(sample) is True, f"The generic plugin refuses its own sample {sample.name}"
+        assert GENERIC_CSV_CODE in BRIMProviderRegistry.get_compatible_plugins(sample), f"{GENERIC_CSV_CODE} is not offered for {sample.name}"
+
+    def test_refuses_every_csv_sample_without_date_and_type(self):
+        """The other brokers' samples whose first row names no date or no type column are not the generic plugin's.
+
+        The real-format counterpart of the synthetic refusals: exports with a preamble (Directa, Fineco,
+        Intesa), a ``Type`` without a date (XTB), a date without a type (Delta), the bank's own words
+        (Danske, Avanza, Crédit Agricole…). Each keeps its own plugin (``test_all_sample_files_have_compatible_plugin``).
+        """
+        names = {sample.name for sample in _CSV_SAMPLES_WITHOUT_DATE_AND_TYPE}
+        # Positive control: the partition still holds the bank's statement, so the check below never passes on nothing.
+        assert "danske_bank-cash.csv" in names, f"The oracle finds a date and a type column in danske_bank-cash.csv: it reads the headers wrong ({sorted(names)})"
+        plugin = _generic_plugin()
+
+        claimed = sorted(sample.name for sample in _CSV_SAMPLES_WITHOUT_DATE_AND_TYPE if plugin.can_parse(sample))
+
+        assert not claimed, f"The generic plugin claims {len(claimed)} CSV sample(s) whose first row names no date or no type column: {claimed}"
+
+
+# =============================================================================
+# CATEGORY 4c: THE GENERIC CSV SAYS WHY IT REFUSES A FILE (workstream L, step G.5)
+# =============================================================================
+
+# The sentences of the contract, verbatim: one short English sentence each, lowercase start, no final period.
+_REASON_ONLY_CSV = "the Generic CSV reads only .csv files"
+_REASON_UNREADABLE = "the file could not be read"
+_REASON_NO_HEADER = "the file has no header row"
+# Keyed by the required columns a header misses, as _HEADERS_MISSING_DATE_OR_TYPE writes them.
+_REASON_MISSING = {
+    ("date",): "required column 'date' not found in the CSV header",
+    ("type",): "required column 'type' not found in the CSV header",
+    ("date", "type"): "required columns 'date' and 'type' not found in the CSV header",
+}
+
+# ``Data;Tipo;Quantità;Importo`` saved as Windows-1252, as Excel on Windows writes it: the file of
+# ``test_accepts_a_windows_1252_header_with_accented_words``, a header that only the encoding fallback reads.
+_WINDOWS_1252_HEADER = pytest.param(
+    "movimenti.csv",
+    "Data;Tipo;Quantità;Importo\n03/01/2025;acquisto;10;-1000,00\n04/01/2025;deposito;0;500,00\n".encode("cp1252"),
+    id="windows-1252-accented",
+)
+# A header that names both required columns, for the files refused for another reason than their columns.
+_DATE_AND_TYPE_ROWS = b"date,type,amount\n2025-01-03,BUY,-1000.00\n2025-01-04,DEPOSIT,500.00\n"
+_NOT_CSV_NAMES = ["export.txt", "export.tsv", "export.xlsx", "export"]
+# Nothing that could be a header row: no byte at all, a lone line break, a lone UTF-8 byte order mark.
+_WITHOUT_A_HEADER_ROW = [
+    pytest.param(b"", id="empty"),
+    pytest.param(b"\n", id="a-lone-line-break"),
+    pytest.param(b"\xef\xbb\xbf", id="a-lone-utf8-bom"),
+]
+# Nothing to read at the path: nothing there at all, or a folder named like a CSV.
+_UNREADABLE_PATHS = ["missing-path", "folder-named-like-a-csv"]
+
+
+def _unreadable_path(folder: Path, kind: str) -> Path:
+    """An ``export.csv`` path in ``folder`` with nothing to read behind it: missing, or a folder."""
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / "export.csv"
+    if kind == "folder-named-like-a-csv":
+        path.mkdir()
+    return path
+
+
+def _write_every_case(folder: Path) -> List[Path]:
+    """Every synthetic case of category 4c under ``folder``: one subfolder each, since the names repeat; then the unreadable paths."""
+    cases = [
+        *((case.values[0], case.values[1]) for case in [*_HEADERS_WITH_DATE_AND_TYPE, _WINDOWS_1252_HEADER]),
+        *(("export.csv", case.values[0]) for case in _HEADERS_MISSING_DATE_OR_TYPE),
+        *((name, _DATE_AND_TYPE_ROWS) for name in _NOT_CSV_NAMES),
+        *(("export.csv", case.values[0]) for case in _WITHOUT_A_HEADER_ROW),
+    ]
+    paths = []
+    for index, (name, content) in enumerate(cases):
+        path = folder / f"case-{index:02d}" / name
+        path.parent.mkdir()
+        path.write_bytes(content)
+        paths.append(path)
+    return [*paths, *(_unreadable_path(folder / kind, kind) for kind in _UNREADABLE_PATHS)]
+
+
+def _is_one_sentence(reason: object) -> bool:
+    """One short English sentence, as the contract wants it: a non-empty single-line string, no blank around it, lowercase start, no final period."""
+    return isinstance(reason, str) and reason != "" and reason == reason.strip() and "\n" not in reason and reason[0] == reason[0].lower() and not reason.endswith(".")
+
+
+class TestGenericCSVSaysWhyItRefuses:
+    """Step G.5 of workstream L (issue #26): a plugin can say why it refuses a file, and the generic CSV says which required column is missing.
+
+    Since step G the generic CSV refuses a CSV whose header names no ``date`` or no ``type`` column, so a parse forced on
+    such a file stops at the guard of ``parse_file`` — "Plugin 'broker_generic_csv' cannot parse file '…'" — where the
+    plugin's ``parse`` used to say "Required column 'date' not found in CSV header". The developer's decision, verbatim:
+    «Correggi dentro G con il metodo opzionale (Consigliato)».
+
+    So ``BRIMProvider`` gains a concrete, optional method, ``cannot_parse_reason(file_path) -> Optional[str]``, ``None`` by
+    default: one short English sentence (lowercase start, no final period) saying why ``can_parse`` refuses the file, or
+    ``None`` when there is nothing to add. It never raises. The generic CSV overrides it with the ``_REASON_*`` sentences
+    above, and ``can_parse(p) is (cannot_parse_reason(p) is None)`` on every path. What the guard of ``parse_file`` does
+    with the sentence is in ``test_services/test_brim_parse_race.py``; what the user reads, in RS-G05 of
+    ``test_api/test_brim_api.py``.
+
+    Every input is a sample or is written in ``tmp_path``, and every expected sentence is written out by hand. Each test
+    first checks its premise against ``can_parse`` (true before G.5 too), then asks the reason: red until the method exists.
+    """
+
+    @pytest.mark.parametrize(("content", "missing"), _HEADERS_MISSING_DATE_OR_TYPE)
+    def test_names_the_required_columns_the_header_misses(self, content: bytes, missing: tuple, tmp_path: Path):
+        path = tmp_path / "export.csv"
+        path.write_bytes(content)
+        plugin = _generic_plugin()
+        assert plugin.can_parse(path) is False, f"premise: the generic plugin refuses {content.splitlines()[0]!r}"
+
+        assert plugin.cannot_parse_reason(path) == _REASON_MISSING[missing]
+
+    @pytest.mark.parametrize("name", _DANSKE_CASH_SAMPLES)
+    def test_names_both_required_columns_for_the_danske_cash_statement(self, name: str):
+        """``Pvm;Saaja/Maksaja;Määrä;Saldo;Tila;Tarkastus``, Latin-1: neither a date nor a type column the generic CSV knows."""
+        path = SAMPLE_DIR / name
+        plugin = _generic_plugin()
+        assert plugin.can_parse(path) is False, f"premise: the generic plugin refuses {name}"
+
+        assert plugin.cannot_parse_reason(path) == _REASON_MISSING[("date", "type")]
+
+    @pytest.mark.parametrize(("name", "content"), [*_HEADERS_WITH_DATE_AND_TYPE, _WINDOWS_1252_HEADER])
+    def test_has_nothing_to_add_about_a_header_with_date_and_type(self, name: str, content: bytes, tmp_path: Path):
+        path = tmp_path / name
+        path.write_bytes(content)
+        plugin = _generic_plugin()
+        assert plugin.can_parse(path) is True, f"premise: the generic plugin accepts {name}"
+
+        assert plugin.cannot_parse_reason(path) is None
+
+    @pytest.mark.parametrize("name", _NOT_CSV_NAMES)
+    def test_says_it_reads_only_csv_files(self, name: str, tmp_path: Path):
+        """The extension comes first: the header names both required columns, and it does not matter."""
+        path = tmp_path / name
+        path.write_bytes(_DATE_AND_TYPE_ROWS)
+        plugin = _generic_plugin()
+        assert plugin.can_parse(path) is False, f"premise: the generic plugin refuses {name}"
+
+        assert plugin.cannot_parse_reason(path) == _REASON_ONLY_CSV
+
+    @pytest.mark.parametrize("content", _WITHOUT_A_HEADER_ROW)
+    def test_says_the_file_has_no_header_row(self, content: bytes, tmp_path: Path):
+        path = tmp_path / "export.csv"
+        path.write_bytes(content)
+        plugin = _generic_plugin()
+        assert plugin.can_parse(path) is False, f"premise: the generic plugin refuses {content!r}"
+
+        assert plugin.cannot_parse_reason(path) == _REASON_NO_HEADER
+
+    @pytest.mark.parametrize("kind", _UNREADABLE_PATHS)
+    def test_says_the_file_could_not_be_read(self, kind: str, tmp_path: Path):
+        """Nothing to read at the path, and no exception either: the method never raises."""
+        path = _unreadable_path(tmp_path, kind)
+        plugin = _generic_plugin()
+        assert plugin.can_parse(path) is False, f"premise: the generic plugin refuses a {kind}"
+
+        assert plugin.cannot_parse_reason(path) == _REASON_UNREADABLE
+
+    def test_can_parse_is_true_exactly_when_there_is_no_reason(self, tmp_path: Path):
+        """``can_parse(p) is (cannot_parse_reason(p) is None)`` on every file of ``sample_reports/`` (recursive, every extension) and every synthetic case above."""
+        corpus = sorted(path for path in SAMPLE_DIR.rglob("*") if path.is_file())
+        paths = [*corpus, *_write_every_case(tmp_path)]
+        plugin = _generic_plugin()
+        accepted = {path: plugin.can_parse(path) for path in paths}
+        # Positive controls: the corpus holds more than one kind of file, and both answers occur, so neither side of the invariant is vacuous.
+        assert len({path.suffix.lower() for path in corpus}) > 1, f"premise: sample_reports/ holds more than one kind of file: {[path.name for path in corpus]}"
+        assert set(accepted.values()) == {True, False}, "premise: the generic plugin accepts some of these files and refuses the others"
+
+        disagreements = []
+        for path in paths:
+            reason = plugin.cannot_parse_reason(path)
+            if accepted[path] is not (reason is None):
+                shown = path.relative_to(SAMPLE_DIR) if path.is_relative_to(SAMPLE_DIR) else path.relative_to(tmp_path)
+                disagreements.append(f"{shown}: can_parse={accepted[path]}, cannot_parse_reason={reason!r}")
+
+        assert not disagreements, f"can_parse and cannot_parse_reason disagree on {len(disagreements)} of {len(paths)} file(s): {disagreements}"
+
+    def test_the_base_method_is_concrete(self):
+        """A concrete method of ``BRIMProvider``, not an abstract one: every plugin written before G.5 stays valid without it."""
+        assert callable(getattr(BRIMProvider, "cannot_parse_reason", None)), "BRIMProvider has no cannot_parse_reason method"
+        assert "cannot_parse_reason" not in BRIMProvider.__abstractmethods__
+
+    @pytest.mark.parametrize("code", ["broker_degiro", "broker_danske_bank"])
+    def test_a_plugin_that_does_not_override_it_has_nothing_to_add(self, code: str, tmp_path: Path):
+        """The base default, ``None``, about a file the plugin refuses: the guard of ``parse_file`` keeps its plain message."""
+        plugin = BRIMProviderRegistry.get_provider_instance(code)
+        assert plugin is not None, f"{code} is not registered"
+        path = tmp_path / "export.csv"
+        path.write_bytes(_DATE_AND_TYPE_ROWS)
+        assert plugin.can_parse(path) is False, f"premise: {code} refuses a generic CSV"
+        assert type(plugin).cannot_parse_reason is BRIMProvider.cannot_parse_reason, f"premise: {code} does not override cannot_parse_reason"
+
+        assert plugin.cannot_parse_reason(path) is None
+
+    def test_every_plugin_answers_nothing_or_one_sentence(self, tmp_path: Path):
+        """The contract for every registered plugin, on every sample and on paths with nothing to read: ``cannot_parse_reason`` never raises, and answers ``None`` or one sentence."""
+        paths = [*sorted(path for path in SAMPLE_DIR.rglob("*") if path.is_file()), *(_unreadable_path(tmp_path / kind, kind) for kind in _UNREADABLE_PATHS)]
+        broken = []
+        for code, plugin in _PLUGIN_PARAMS:
+            for path in paths:
+                try:
+                    reason = plugin.cannot_parse_reason(path)
+                except Exception as exc:  # the contract: it never raises
+                    broken.append(f"{code} on {path.name}: raised {type(exc).__name__}: {exc}")
+                    continue
+                if reason is not None and not _is_one_sentence(reason):
+                    broken.append(f"{code} on {path.name}: {reason!r}")
+
+        assert not broken, f"{len(broken)} answer(s) break the contract of cannot_parse_reason, the first ones: {broken[:3]}"
 
 
 class TestBrokerParserCoverageHelpers:

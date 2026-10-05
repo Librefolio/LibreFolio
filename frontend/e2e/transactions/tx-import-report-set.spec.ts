@@ -96,6 +96,48 @@
  *      the deposit through its row toggle (onToggle), then the rest with deselect all (onSetSelected).
  *
  * Each F2 scenario gives its first new element a short budget (`F2_FIRST`).
+ *
+ * Phase G — the user chooses how a set is read (plan §14 G.2), written red first:
+ *
+ *   A   the card's `report-set-read-as` select: the set's plugin, or "one by one" (value "").
+ *   B   a member's row menu: `read-alone-<plugin>` (a single file read by that plugin) and
+ *       `remove-from-set` (a single file, unselected). Back into the set: the set's plugin, chosen in
+ *       the plugin select of the single file.
+ *   C1  `report-set-default-note[data-default-plugin]` on a broker whose default plugin is another one.
+ *   D   every POST /sets/preview and /sets/combine names the files left out: `exclude_file_ids`
+ *       (empty when nothing is); recorded as the browser sends them (`recordSetRequests`).
+ *   Memory: nothing is remembered before an analysis; after it, the wizard opens on what was analysed
+ *       (the set with its members, `data-analysed="true"`; a file read alone, alone with its plugin;
+ *       a file left out of the analysed set, out and unselected). The wizard is closed (discarding) and
+ *       opened again as a user does it, from the editor it lives in (`tx-bulk-import`): closing it leaves
+ *       that editor open, empty, over the toolbar. `reopenOnStep2` checks what the scenarios rest on —
+ *       step 2 reads the files again and selects nothing.
+ *
+ *   G-A, G-B, G-C, G-memory (set), G-memory (alone), G-no-memory, G-real; R1's combine body now carries
+ *   `exclude_file_ids: []` (a soft assertion: the rest of R1 still runs, and says what still works).
+ *
+ * Decision 1 (the developer, step G): the generic CSV declares only the CSVs whose header names a
+ * `date` and a `type` column, in any of its languages. The bank's cash statement names neither, so only
+ * Danske reads `danske_bank-cash.csv`: its row menu offers to remove it from the set and never to read
+ * it alone (G-real, on the samples themselves). Every scenario that needs a statement the generic CSV
+ * reads too — A18, G-A, G-B, G-C, G-memory (alone), G-no-memory — uploads the dual statement
+ * (`writeDualCash`): the sample's rows plus four columns the generic CSV maps (`date`, `type`, `amount`,
+ * `currency`) after the bank's, which Danske ignores. Its premise is read from its upload, never
+ * assumed (`dualCashUpload`): both plugins are among its `compatible_plugins`.
+ *
+ * A18 — a statement the generic CSV reads too joins the Danske set on a broker whose default is the
+ * generic CSV, and the analysis reads it through the combined file — used to be a premise of R1 on the
+ * sample; it is its own scenario now, on the dual statement. R1 runs on the samples, with no default.
+ *
+ * Decision 2 (rule A2): a failed original never joins a set — the server's `collect_members` skips it,
+ * and the wizard mirrors it (importReportSets.test.ts). A file "analysed alone" is one the analysis
+ * really parsed: G-memory (alone) reads the dual statement, which the generic CSV parses.
+ *
+ * Two files are written by the tests themselves, in their output folder, from the synthetic cash
+ * sample (Latin-1, `;`): the dual statement, and a third statement with invented rows of 2021 in the
+ * bank's format only, which only Danske reads, like the sample (G-memory (set)).
+ *
+ * Each G scenario gives its first G element a short budget (`G_FIRST`).
  */
 
 import {expect, test, type Locator, type Page, type Request, type Response} from '../fixtures/playwright';
@@ -111,6 +153,8 @@ import {fileURLToPath} from 'url';
 
 const API = '/api/v1';
 const UPLOAD_PATH = `${API}/brokers/import/upload`;
+const FILES_PATH = `${API}/brokers/import/files`;
+const PREVIEW_PATH = `${API}/brokers/import/sets/preview`;
 const COMBINE_PATH = `${API}/brokers/import/sets/combine`;
 const GAP_FIX_PATH = `${API}/brokers/import/gap-fix`;
 const PARSE_PATH = /^\/api\/v1\/brokers\/import\/files\/[^/]+\/parse$/;
@@ -161,11 +205,14 @@ const DANSKE_HISTORY_TAG = 'danske_bank';
 /** Budget of the first F2 element of a scenario: before the implementation it is the one that fails. */
 const F2_FIRST = 8_000;
 
+/** Budget of the first G element of a scenario: before the implementation it is the one that fails. */
+const G_FIRST = 8_000;
+
 // ---------------------------------------------------------------------------
 // Owned data
 // ---------------------------------------------------------------------------
 
-type UploadedInfo = {file_id: string; filename: string; uploaded_at: string; target_broker_id: number | null; batch_id?: string | null};
+type UploadedInfo = {file_id: string; filename: string; uploaded_at: string; target_broker_id: number | null; batch_id?: string | null; compatible_plugins?: string[] | null};
 
 /**
  * Margin on "uploaded after the broker was created": the server and the browser share this
@@ -314,13 +361,18 @@ async function goToTransactions(page: Page) {
     await waitForSettled(page.getByTestId('transactions-page'), 20_000);
 }
 
-/** Open the wizard via the toolbar Import button; wait until step 1 has settled. */
-async function openImportWizard(page: Page) {
-    await page.getByTestId('tx-import-button').click();
+/** The wizard is open, on step 1, settled. */
+async function wizardOnStep1(page: Page) {
     await expect(page.getByTestId('import-wizard-stepper')).toBeVisible({timeout: 8_000});
     const step1 = page.getByTestId('import-wizard-step1');
     await step1.waitFor({state: 'visible', timeout: 5_000});
     await waitForSettled(step1, 15_000);
+}
+
+/** Open the wizard via the toolbar Import button; wait until step 1 has settled. */
+async function openImportWizard(page: Page) {
+    await page.getByTestId('tx-import-button').click();
+    await wizardOnStep1(page);
 }
 
 /** The pending-file rows of the step-1 table (owned by this wizard instance). */
@@ -644,6 +696,215 @@ function badgeKinds(row: Locator): Promise<string[]> {
 }
 
 // ---------------------------------------------------------------------------
+// G: how a set is read
+// ---------------------------------------------------------------------------
+
+type SetRequestBody = {broker_id: number; plugin_code: string; batch_id: string; exclude_file_ids?: unknown};
+type SetRequestCall = {endpoint: 'preview' | 'combine'; body: SetRequestBody};
+
+/**
+ * Every POST /sets/preview and /sets/combine of this page from now on, as the browser sends it: the
+ * request body is the subject (D), whatever the answer. Read live, so a test can wait for the next
+ * one; armed before the action, like every recorder here.
+ */
+function recordSetRequests(page: Page): {calls: SetRequestCall[]; stop: () => void} {
+    const calls: SetRequestCall[] = [];
+    const listener = (request: Request) => {
+        if (request.method() !== 'POST') return;
+        const pathname = new URL(request.url()).pathname;
+        const endpoint = pathname === PREVIEW_PATH ? 'preview' : pathname === COMBINE_PATH ? 'combine' : null;
+        if (endpoint !== null) calls.push({endpoint, body: request.postDataJSON() as SetRequestBody});
+    };
+    page.on('request', listener);
+    return {calls, stop: () => page.off('request', listener)};
+}
+
+/** The bodies one set sent to one endpoint, in the order they were sent (the wizard previews every set it shows). */
+function setBodies(calls: SetRequestCall[], endpoint: 'preview' | 'combine', brokerId: number, batchId: string): SetRequestBody[] {
+    return calls.filter((call) => call.endpoint === endpoint && call.body.broker_id === brokerId && call.body.batch_id === batchId && call.body.plugin_code === DANSKE).map((call) => call.body);
+}
+
+function lastOf<T>(items: T[]): T | undefined {
+    return items.length > 0 ? items[items.length - 1] : undefined;
+}
+
+/** The files a request leaves out, sorted (their order is not pinned); `undefined` when the body does not say. */
+function excludedOf(body: SetRequestBody | undefined): string[] | undefined {
+    const excluded = body?.exclude_file_ids;
+    return Array.isArray(excluded) ? [...(excluded as string[])].sort() : undefined;
+}
+
+/** The names of the two plugins, from the endpoint the plugin select renders: backend product names, not translations. */
+async function pluginNames(page: Page): Promise<{danske: string; generic: string}> {
+    const response = await page.request.get(`${API}/brokers/import/plugins`);
+    expect(response.ok(), `GET ${API}/brokers/import/plugins: HTTP ${response.status()}`).toBe(true);
+    const byCode = new Map(((await response.json()) as Array<{code: string; name: string}>).map((plugin) => [plugin.code, plugin.name]));
+    const danske = byCode.get(DANSKE);
+    const generic = byCode.get(GENERIC);
+    if (!danske || !generic) throw new Error(`The backend serves no ${DANSKE} or no ${GENERIC} plugin: ${JSON.stringify([...byCode.keys()])}`);
+    return {danske, generic};
+}
+
+/** The row of a single file in its broker's table: the role tables of a card have no selection, so the checkbox tells them apart. */
+function singleRow(page: Page, brokerId: number, fileId: string): Locator {
+    return page
+        .getByTestId(`import-wizard-broker-files-${brokerId}`)
+        .locator(`tr[data-row-id="${fileId}"]`)
+        .filter({has: page.getByTestId(`dt-row-checkbox-${fileId}`)});
+}
+
+/** A single file, selected and read by `pluginName`: its checkbox ticked, its plugin select naming that plugin (and not `otherName`). */
+async function expectSelectedSingle(page: Page, brokerId: number, fileId: string, pluginName: string, otherName: string) {
+    const row = singleRow(page, brokerId, fileId);
+    await expect(row, `${fileId} is a single file of its broker`).toHaveCount(1, {timeout: 10_000});
+    await expect(row.getByTestId(`dt-row-checkbox-${fileId}`), `${fileId} is selected`).toHaveAttribute('data-state', 'checked');
+    const plugin = row.getByTestId('import-plugin-select').getByRole('combobox');
+    await expect(plugin, `${fileId} is read by ${pluginName}`).toContainText(pluginName, {timeout: 5_000});
+    await expect(plugin).not.toContainText(otherName);
+}
+
+/** A single file, not selected: its checkbox clear, and no plugin chosen for it. */
+async function expectUnselectedSingle(page: Page, brokerId: number, fileId: string) {
+    const row = singleRow(page, brokerId, fileId);
+    await expect(row, `${fileId} is a single file of its broker`).toHaveCount(1, {timeout: 10_000});
+    await expect(row.getByTestId(`dt-row-checkbox-${fileId}`), `${fileId} is not selected`).toHaveAttribute('data-state', 'unchecked');
+    await expect(row.getByTestId('import-plugin-select')).toHaveCount(0);
+}
+
+/** B: one action of a member's row menu, in the table of its role. The action is the first G element of its scenario. */
+async function runMemberAction(page: Page, card: Locator, role: string, fileId: string, actionId: string) {
+    const row = roleRow(card, role, fileId);
+    await expect(row, `${fileId} is in the ${role} table of the card`).toBeVisible();
+    await row.getByTestId(`row-actions-${fileId}`).click();
+    const menu = page.getByTestId('context-menu');
+    await expect(menu).toBeVisible({timeout: 5_000});
+    const action = menu.getByTestId(`context-menu-action-${actionId}`);
+    await expect(action, `the row menu of ${fileId} offers ${actionId}`).toBeVisible({timeout: G_FIRST});
+    await action.click();
+    await expect(menu).toHaveCount(0, {timeout: 5_000});
+}
+
+/** Drop `files` on step 1, give them to the owned broker, Next: the upload records, once step 2 has settled. */
+async function uploadToStep2(page: Page, brokerId: number, files: string[]): Promise<UploadedInfo[]> {
+    await dropFiles(page, files);
+    await expect(pendingRows(page)).toHaveCount(files.length);
+    await assignOwnedBroker(page, brokerId);
+    const uploaded = await uploadsDuring(page, files.length, async () => {
+        await page.getByTestId('import-wizard-next').click();
+        await expect(page.getByTestId('import-wizard-step2')).toBeVisible({timeout: 30_000});
+    });
+    await waitForSettled(page.getByTestId('import-wizard-step2'), 20_000);
+    return uploaded;
+}
+
+/** Close the wizard through its guard and discard: this session uploaded files, so closing asks first. */
+async function closeWizardDiscarding(page: Page) {
+    await page.getByTestId('import-wizard-close').click();
+    const discard = page.getByTestId('confirm-modal-confirm');
+    await expect(discard, 'the wizard holds this session’s work: closing it asks to discard it').toBeVisible({timeout: 5_000});
+    await discard.click();
+    await expect(page.getByTestId('import-wizard-stepper')).toHaveCount(0, {timeout: 10_000});
+}
+
+/**
+ * Open the wizard again the way a user does once it is closed: from the editor it lives in. The toolbar's Import
+ * opens the editor with the wizard inside it, and closing the wizard leaves that editor on screen — empty, since
+ * nothing was handed over — with its backdrop over the toolbar. The editor's own Import opens the wizard again.
+ *
+ * Then step 2 with nothing uploaded. The memory scenarios rest on what a reopened wizard does there, so it is
+ * checked rather than assumed: the step reads the brokers' files again (a new request, which holds the files
+ * `uploaded` before), and selects nothing — nothing to analyse, no set of the owned broker selected, no single
+ * file ticked.
+ */
+async function reopenOnStep2(page: Page, brokerId: number, uploaded: UploadedInfo[]): Promise<Locator> {
+    // The state the reopen starts from: no guard dialog left, the editor open, empty.
+    await expect(page.getByTestId('confirm-modal-confirm'), 'no guard dialog is left open').toHaveCount(0, {timeout: 5_000});
+    const bulk = page.getByTestId('tx-bulk-modal-root');
+    await expect(bulk, 'closing the wizard leaves the editor it was opened in').toBeVisible({timeout: 10_000});
+    await expect(bulk.getByTestId('tx-bulk-body').getByTestId('dt-empty'), 'the editor is empty: nothing was handed over').toBeVisible({timeout: 10_000});
+
+    await bulk.getByTestId('tx-bulk-import').click();
+    await wizardOnStep1(page);
+    await expect(pendingRows(page), 'the wizard opens again with nothing to upload').toHaveCount(0);
+
+    // Armed before the click: the listing is the subject here, the proof that the files are read again.
+    const listing = page.waitForResponse(
+        (response) => {
+            const url = new URL(response.url());
+            return response.request().method() === 'GET' && url.pathname === FILES_PATH && url.searchParams.getAll('broker_ids').includes(String(brokerId));
+        },
+        {timeout: 30_000},
+    );
+    await page.getByTestId('import-wizard-next').click();
+    const listed = await listing;
+    expect(listed.status(), `GET ${FILES_PATH} of step 2`).toBe(200);
+    const listedIds = ((await listed.json()) as UploadedInfo[]).filter((file) => file.target_broker_id === brokerId).map((file) => file.file_id);
+    expect(listedIds, 'step 2 reads again the files uploaded before').toEqual(expect.arrayContaining(uploaded.map((file) => file.file_id)));
+
+    const step2 = page.getByTestId('import-wizard-step2');
+    await expect(step2).toBeVisible({timeout: 30_000});
+    await waitForSettled(step2, 30_000);
+    // Nothing preselected. Presence barrier first: the owned broker's files are listed, unselected.
+    const panel = page.getByTestId(`import-wizard-broker-files-${brokerId}`);
+    await expect(panel.locator('[data-testid="report-set-card"][data-selected="none"], [data-testid^="dt-row-checkbox-"][data-state="unchecked"]').first(), 'step 2 lists the owned broker’s files, unselected').toBeVisible({timeout: 10_000});
+    await expect(page.getByTestId('import-wizard-parse'), 'nothing is selected: nothing to analyse').toBeDisabled();
+    await expect(panel.locator('[data-testid="report-set-card"]:not([data-selected="none"])'), 'no set of the owned broker is selected').toHaveCount(0);
+    await expect(panel.locator('[data-testid^="dt-row-checkbox-"][data-state="checked"]'), 'no single file of the owned broker is ticked').toHaveCount(0);
+    return step2;
+}
+
+/** The synthetic cash statement of the samples, line by line: Latin-1, `;`, the newest row first. */
+function sampleCashLines(): string[] {
+    return readFileSync(CASH_CSV, 'latin1')
+        .split(/\r?\n/)
+        .filter((line) => line !== '');
+}
+
+/**
+ * A third cash statement for the main set, invented: the sample's header and encoding, three rows of
+ * 2021 that continue its running balance (1657,96 after 03.07.2020). Danske reads it as a cash export
+ * after the custody period, so the set stays complete with it and without it. In the bank's format
+ * only, like the sample: the plugins that read it are the sample's.
+ */
+function writeThirdCashStatement(filePath: string): string {
+    const rows = ['15.03.2021;Palvelumaksut 03/2021;-3,5;1900,96;Toteutunut;Ei', '10.02.2021;Matti Meikäläinen;250;1904,46;Toteutunut;Ei', '05.01.2021;Palvelumaksut 12/2020;-3,5;1654,46;Toteutunut;Ei'];
+    mkdirSync(path.dirname(filePath), {recursive: true});
+    writeFileSync(filePath, Buffer.from([sampleCashLines()[0], ...rows, ''].join('\n'), 'latin1'));
+    return filePath;
+}
+
+/** What the dual statement needs of the test's `testInfo`: its output folder. */
+type OutputFolder = {outputPath: (...pathSegments: string[]) => string};
+
+/**
+ * The dual statement (decision 1): the sample cash statement that the generic CSV reads too — the same
+ * rows, plus four columns the generic CSV maps (`date`, `type`, `amount`, `currency`) after the bank's,
+ * which Danske ignores. The sample itself names no `date` nor `type` column, so only Danske reads it;
+ * every scenario that needs the generic CSV to read the statement uploads this one instead. Written in
+ * the test's output folder under a unique name, Latin-1 and `;` like the sample; it combines like it.
+ */
+function writeDualCash(testInfo: OutputFolder): string {
+    const filePath = testInfo.outputPath(`danske_bank-cash-both-${uniqueSuffix()}.csv`);
+    const [header, ...rows] = sampleCashLines();
+    const extended = rows.map((row) => {
+        const [day, , amount] = row.split(';');
+        const [dd, mm, yyyy] = day.split('.');
+        const value = Number(amount.replace(',', '.'));
+        return `${row};${yyyy}-${mm}-${dd};${value < 0 ? 'withdrawal' : 'deposit'};${value.toFixed(2)};EUR`;
+    });
+    mkdirSync(path.dirname(filePath), {recursive: true});
+    writeFileSync(filePath, Buffer.from([`${header};date;type;amount;currency`, ...extended, ''].join('\n'), 'latin1'));
+    return filePath;
+}
+
+/** The upload record of the dual statement, its premise read from the upload response: Danske and the generic CSV both read it. */
+function dualCashUpload(uploaded: UploadedInfo[], filePath: string): UploadedInfo {
+    const cash = uploadNamed(uploaded, path.basename(filePath));
+    expect(cash.compatible_plugins ?? [], `premise: Danske and the generic CSV both read the dual statement ${cash.filename}`).toEqual(expect.arrayContaining([DANSKE, GENERIC]));
+    return cash;
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -676,9 +937,10 @@ test.describe('Import Wizard — report sets', () => {
 
     test('R1: a complete set is one card, one analysis row through its combined file, and a review that hides the rows before H0', async ({page}) => {
         test.setTimeout(150_000);
-        // The broker's default plugin is the generic CSV, which also reads the cash CSV: A18 —
-        // a file a report-set plugin recognises belongs to that plugin's set, default or not.
-        const brokerId = await startOnOwnedBroker(page, 'R1', {default_import_plugin: GENERIC});
+        // The bank's own exports, on a broker with no default plugin. A18 — a set plugin wins over a broker
+        // default that reads a member too — is its own scenario, on the dual statement: the generic CSV does
+        // not read this sample, which names no date and no type column (decision 1).
+        const brokerId = await startOnOwnedBroker(page, 'R1');
 
         // ① both exports together, one Next: a complete set does not stop on step 1.
         await dropFiles(page, [CUSTODY_XLSX, CASH_CSV]);
@@ -735,10 +997,13 @@ test.describe('Import Wizard — report sets', () => {
         await expect(step3).toHaveAttribute('data-parse-state', 'ok');
         const calls = await stopRecording();
         const combines = calls.filter((call) => call.path === COMBINE_PATH);
-        expect(
-            combines.map((call) => [call.status, call.request]),
-            'one combine of the set',
-        ).toEqual([[200, {broker_id: brokerId, plugin_code: DANSKE, batch_id: batchId}]]);
+        // G (D): every set request names the files left out — none here. Soft, so the rest of R1 still runs and reports.
+        expect
+            .soft(
+                combines.map((call) => [call.status, call.request]),
+                'one combine of the set, leaving nothing out',
+            )
+            .toEqual([[200, {broker_id: brokerId, plugin_code: DANSKE, batch_id: batchId, exclude_file_ids: []}]]);
         const combined = (combines[0].body as {combined: {file_id: string; kind: string}}).combined;
         expect(combined.kind).toBe('combined');
         expect(
@@ -812,6 +1077,57 @@ test.describe('Import Wizard — report sets', () => {
         await expect(step4.locator('tbody tr[data-row-id] button[aria-pressed="true"][disabled]')).toHaveCount(0);
         await expect(step4).toHaveAttribute('data-total-count', String(importable));
         await expect(counter).toHaveAttribute('data-count', String(MAIN_SET.beforeHistory));
+    });
+
+    test('A18: on a broker that imports with the generic CSV by default, a statement both plugins read joins the Danske set and is analysed through its combined file', async ({page}, testInfo) => {
+        test.setTimeout(150_000);
+        // A18 — a file a report-set plugin recognises belongs to that plugin's set, default or not. The
+        // dual statement, because the generic CSV does not read the bank's own one (decision 1).
+        const brokerId = await startOnOwnedBroker(page, 'A18', {default_import_plugin: GENERIC});
+        const dualCash = writeDualCash(testInfo);
+        const uploaded = await uploadToStep2(page, brokerId, [CUSTODY_XLSX, dualCash]);
+        const custody = uploadNamed(uploaded, 'danske_bank-custody.xlsx');
+        const cash = dualCashUpload(uploaded, dualCash);
+        const batchId = expectUuid(custody.batch_id, 'batch_id of the step-1 session');
+        expect(cash.batch_id, 'the two exports of one step-1 session share its batch').toBe(batchId);
+
+        // ② the statement is a member of the Danske set: in its cash table, not a single file read with the default.
+        const step2 = page.getByTestId('import-wizard-step2');
+        const card = setCard(page, brokerId, batchId);
+        await expect(card).toHaveAttribute('data-set-status', 'complete', {timeout: 15_000});
+        await expect(card).toHaveAttribute('data-plugin-code', DANSKE);
+        await expect(card).toHaveAttribute('data-selected', 'all');
+        await expect(step2.locator(`[data-testid="report-set-card"][data-batch-id="${batchId}"]`), 'one card for the upload').toHaveCount(1);
+        await openCard(card);
+        await expect(roleRow(card, 'custody', custody.file_id)).toBeVisible();
+        await expect(roleRow(card, 'cash', cash.file_id), 'the dual statement is in the cash table of the Danske set').toBeVisible();
+        await expect(singleFileRows(page, brokerId), 'no file of the upload is a single file').toHaveCount(0);
+
+        // ③ one combine of the set, then one parse — of the combined file, with Danske: never the statement alone with the default.
+        const parse = page.getByTestId('import-wizard-parse');
+        await expect(parse).toBeEnabled({timeout: 5_000});
+        const stopRecording = recordJsonPosts(page, (pathname) => pathname === COMBINE_PATH || PARSE_PATH.test(pathname));
+        await parse.click();
+        const step3 = page.getByTestId('import-wizard-step3');
+        await expect(step3).toBeVisible({timeout: 10_000});
+        await waitForParseVerdict(page, 60_000);
+        await expect(step3).toHaveAttribute('data-parse-state', 'ok');
+        const calls = await stopRecording();
+        const combines = calls.filter((call) => call.path === COMBINE_PATH);
+        // The set's fields only: whether the body also names the files left out is G's (R1, G-B).
+        expect(
+            combines.map((call) => {
+                const body = call.request as SetRequestBody;
+                return [call.status, body.broker_id, body.plugin_code, body.batch_id];
+            }),
+            'one combine of the set, with Danske',
+        ).toEqual([[200, brokerId, DANSKE, batchId]]);
+        const combined = (combines[0].body as {combined: {file_id: string; derived_from: Array<{file_id: string}>}}).combined;
+        expect(combined.derived_from.map((ref) => ref.file_id).sort(), 'the combined file holds both exports').toEqual([custody.file_id, cash.file_id].sort());
+        expect(
+            calls.filter((call) => PARSE_PATH.test(call.path)).map((call) => [call.path, call.status, (call.request as {plugin_code?: string}).plugin_code]),
+            'one parse, of the combined file, with the set plugin',
+        ).toEqual([[`${API}/brokers/import/files/${combined.file_id}/parse`, 200, DANSKE]]);
     });
 
     test('R2: an export missing on step 1 is announced there, and the CSV dropped next joins the same batch', async ({page}) => {
@@ -1253,5 +1569,265 @@ test.describe('Import Wizard — report sets', () => {
         await expect.poll(() => badgeKinds(row(custody1.file_id)), {message: 'custody original of B1'}).toEqual(['usedInCombined', 'set']);
         await expect.poll(() => badgeKinds(row(cash1.file_id)), {message: 'cash original of B1'}).toEqual(['usedInCombined', 'set']);
         await expect.poll(() => badgeKinds(row(custody2.file_id)), {message: 'custody export of B2'}).toEqual(['set', 'incomplete']);
+    });
+
+    // -----------------------------------------------------------------------
+    // G — the user chooses how a set is read (plan §14 G.2)
+    // -----------------------------------------------------------------------
+
+    test('G-A: "read the files one by one" dissolves the set — the statement stays selected with the generic CSV, the custody export is left unselected', async ({page}, testInfo) => {
+        test.setTimeout(90_000);
+        const names = await pluginNames(page);
+        const brokerId = await startOnOwnedBroker(page, 'G-A');
+        // The dual statement: one by one, the generic CSV is the single-file plugin that reads it (decision 1).
+        const dualCash = writeDualCash(testInfo);
+        const uploaded = await uploadToStep2(page, brokerId, [CUSTODY_XLSX, dualCash]);
+        const custody = uploadNamed(uploaded, 'danske_bank-custody.xlsx');
+        const cash = dualCashUpload(uploaded, dualCash);
+        const batchId = expectUuid(custody.batch_id, 'batch_id of the step-1 session');
+        const card = setCard(page, brokerId, batchId);
+        await expect(card).toHaveAttribute('data-set-status', 'complete', {timeout: 15_000});
+        await expect(card).toHaveAttribute('data-selected', 'all');
+
+        // A: the card says how the set is read — with its plugin — and offers to read the files one by one.
+        const readAs = card.getByTestId('report-set-read-as');
+        await expect(readAs, 'the card says how the set is read').toHaveValue(DANSKE, {timeout: G_FIRST});
+        await expect(readAs.locator('option[value=""]'), 'the "one by one" choice').toHaveCount(1);
+        await readAs.selectOption({value: ''});
+
+        // No set any more: each file is a single, with its best single-file plugin or none.
+        const step2 = page.getByTestId('import-wizard-step2');
+        await expect(step2.locator(`[data-testid="report-set-card"][data-batch-id="${batchId}"]`), 'no card holds this upload any more').toHaveCount(0, {timeout: 10_000});
+        await expectSelectedSingle(page, brokerId, cash.file_id, names.generic, names.danske);
+        await expectUnselectedSingle(page, brokerId, custody.file_id);
+    });
+
+    test('G-B: "read it alone" takes the statement out of the set and the set requests say so; its plugin select brings it back', async ({page}, testInfo) => {
+        test.setTimeout(90_000);
+        const names = await pluginNames(page);
+        const brokerId = await startOnOwnedBroker(page, 'G-B');
+        // The dual statement: the generic CSV reads it, so it can be read alone with it (decision 1).
+        const dualCash = writeDualCash(testInfo);
+        const requests = recordSetRequests(page);
+        const uploaded = await uploadToStep2(page, brokerId, [CUSTODY_XLSX, dualCash]);
+        const custody = uploadNamed(uploaded, 'danske_bank-custody.xlsx');
+        const cash = dualCashUpload(uploaded, dualCash);
+        const batchId = expectUuid(custody.batch_id, 'batch_id of the step-1 session');
+        const card = setCard(page, brokerId, batchId);
+        await expect(card).toHaveAttribute('data-set-status', 'complete', {timeout: 15_000});
+        await openCard(card);
+        // D: nothing is left out yet, and every preview of the set says so with an empty list.
+        const firstPreviews = setBodies(requests.calls, 'preview', brokerId, batchId);
+        expect(firstPreviews.length, 'the wizard previewed the set it uploaded').toBeGreaterThan(0);
+        expect.soft(firstPreviews.map(excludedOf), 'a set with nothing left out sends exclude_file_ids: []').toEqual(firstPreviews.map(() => []));
+
+        // B: the statement, read alone with the generic CSV.
+        await runMemberAction(page, card, 'cash', cash.file_id, `read-alone-${GENERIC}`);
+        await expect(card.locator('[data-testid="report-set-missing"][data-role="cash"]'), 'without its statement the set misses the cash role').toBeVisible({timeout: 15_000});
+        await expect(card).toHaveAttribute('data-set-status', 'incomplete');
+        await expect(card.locator(`tr[data-row-id="${cash.file_id}"]`), 'the card no longer lists the statement').toHaveCount(0);
+        await expect(roleRow(card, 'custody', custody.file_id)).toBeVisible();
+        await expect(otherFilesHeading(page, brokerId), 'the statement is now one of the broker’s other files').toBeVisible();
+        await expectSelectedSingle(page, brokerId, cash.file_id, names.generic, names.danske);
+        await expect.poll(() => excludedOf(lastOf(setBodies(requests.calls, 'preview', brokerId, batchId))), {message: 'the next preview of the set leaves the statement out', timeout: 10_000}).toEqual([cash.file_id]);
+
+        // Back into the set: the set's plugin, chosen in the plugin select of the single file.
+        const previewsBefore = setBodies(requests.calls, 'preview', brokerId, batchId).length;
+        const pluginSelect = singleRow(page, brokerId, cash.file_id).getByTestId('import-plugin-select');
+        await optionsClosed(page);
+        await pluginSelect.getByRole('combobox').click();
+        const danskeOption = pluginSelect.getByTestId(`search-select-option-${DANSKE}`);
+        await expect(danskeOption).toBeVisible({timeout: 5_000});
+        await danskeOption.click();
+        await optionsClosed(page);
+        await expect(roleRow(card, 'cash', cash.file_id), 'the statement is back in the cash table of the card').toBeVisible({timeout: 15_000});
+        await expect(card).toHaveAttribute('data-set-status', 'complete', {timeout: 15_000});
+        await expect(card).toHaveAttribute('data-selected', 'all');
+        await expect(card.getByTestId('report-set-missing')).toHaveCount(0);
+        await expect(page.getByTestId(`dt-row-checkbox-${cash.file_id}`), 'no longer a single file').toHaveCount(0);
+        await expect.poll(() => excludedOf(lastOf(setBodies(requests.calls, 'preview', brokerId, batchId).slice(previewsBefore))), {message: 'the next preview of the set leaves nothing out', timeout: 10_000}).toEqual([]);
+        requests.stop();
+    });
+
+    test('G-C: a broker that imports with the generic CSV by default — the card of its set says so', async ({page}, testInfo) => {
+        test.setTimeout(90_000);
+        const brokerId = await startOnOwnedBroker(page, 'G-C', {default_import_plugin: GENERIC});
+        // The dual statement: the note needs a member the default reads, and it reads no export of the bank's own (decision 1).
+        const dualCash = writeDualCash(testInfo);
+        const uploaded = await uploadToStep2(page, brokerId, [CUSTODY_XLSX, dualCash]);
+        const cash = dualCashUpload(uploaded, dualCash);
+        const batchId = expectUuid(uploadNamed(uploaded, 'danske_bank-custody.xlsx').batch_id, 'batch_id of the step-1 session');
+        const card = setCard(page, brokerId, batchId);
+        await expect(card).toHaveAttribute('data-set-status', 'complete', {timeout: 15_000});
+        // A18: the set's plugin reads the set, default or not; C1 says that the default would read a member differently.
+        await expect(card).toHaveAttribute('data-plugin-code', DANSKE);
+        await openCard(card);
+        await expect(roleRow(card, 'cash', cash.file_id), 'premise: the member the default reads is in the set').toBeVisible();
+        await expect(card.locator(`[data-testid="report-set-default-note"][data-default-plugin="${GENERIC}"]`), 'the note names the broker’s default plugin').toBeVisible({timeout: G_FIRST});
+        await expect(card.getByTestId('report-set-default-note')).toHaveCount(1);
+    });
+
+    test('G-memory (set): reopened after an analysis, the set is the one analysed — the statement removed from it stays out, unselected', async ({page}, testInfo) => {
+        test.setTimeout(180_000);
+        const brokerId = await startOnOwnedBroker(page, 'G-MA');
+        const thirdPath = writeThirdCashStatement(testInfo.outputPath(`danske_bank-cash-2021-${uniqueSuffix()}.csv`));
+        const requests = recordSetRequests(page);
+        const uploaded = await uploadToStep2(page, brokerId, [CUSTODY_XLSX, CASH_CSV, thirdPath]);
+        const custody = uploadNamed(uploaded, 'danske_bank-custody.xlsx');
+        const cash = uploadNamed(uploaded, 'danske_bank-cash.csv');
+        const third = uploadNamed(uploaded, path.basename(thirdPath));
+        const batchId = expectUuid(custody.batch_id, 'batch_id of the step-1 session');
+        // In the bank's format only: the plugins that read it are the sample's — Danske, and since decision 1 only Danske.
+        expect(third.compatible_plugins, 'premise: the invented statement is read like the sample').toEqual(cash.compatible_plugins);
+        expect(third.compatible_plugins, 'premise: Danske reads the invented statement').toContain(DANSKE);
+        const card = setCard(page, brokerId, batchId);
+        await expect(card).toHaveAttribute('data-set-status', 'complete', {timeout: 15_000});
+        await openCard(card);
+        await expect(roleRow(card, 'cash', third.file_id), 'premise: the third statement is a member of the set').toBeVisible();
+
+        // B: removed from the set — a single file, unselected — and the set's preview leaves it out.
+        await runMemberAction(page, card, 'cash', third.file_id, 'remove-from-set');
+        await expect(card.locator(`tr[data-row-id="${third.file_id}"]`), 'the card no longer lists it').toHaveCount(0, {timeout: 15_000});
+        await expectUnselectedSingle(page, brokerId, third.file_id);
+        await expect.poll(() => excludedOf(lastOf(setBodies(requests.calls, 'preview', brokerId, batchId))), {message: 'the next preview of the set leaves the third statement out', timeout: 10_000}).toEqual([third.file_id]);
+        await expect(card).toHaveAttribute('data-set-status', 'complete', {timeout: 15_000});
+        await expect(card).toHaveAttribute('data-selected', 'all');
+        requests.stop();
+
+        // The analysis: the combine leaves it out too, and the combined file of the two kept exports is parsed.
+        const parse = page.getByTestId('import-wizard-parse');
+        await expect(parse).toBeEnabled({timeout: 10_000});
+        const stopRecording = recordJsonPosts(page, (pathname) => pathname === COMBINE_PATH || PARSE_PATH.test(pathname));
+        await parse.click();
+        await expect(page.getByTestId('import-wizard-step3')).toBeVisible({timeout: 10_000});
+        await waitForParseVerdict(page, 60_000);
+        const calls = await stopRecording();
+        const combines = calls.filter((call) => call.path === COMBINE_PATH);
+        expect(
+            combines.map((call) => [call.status, call.request]),
+            'one combine of the set, leaving the third statement out',
+        ).toEqual([[200, {broker_id: brokerId, plugin_code: DANSKE, batch_id: batchId, exclude_file_ids: [third.file_id]}]]);
+        const combined = (combines[0].body as {combined: {file_id: string; derived_from: Array<{file_id: string}>}}).combined;
+        expect(combined.derived_from.map((ref) => ref.file_id).sort(), 'the combined file holds the two kept exports').toEqual([custody.file_id, cash.file_id].sort());
+        expect(
+            calls.filter((call) => PARSE_PATH.test(call.path)).map((call) => [call.path, call.status]),
+            'one parse, of the combined file',
+        ).toEqual([[`${API}/brokers/import/files/${combined.file_id}/parse`, 200]]);
+
+        // Closed without importing, then opened again: what was analysed, not what detection would say.
+        await closeWizardDiscarding(page);
+        const step2 = await reopenOnStep2(page, brokerId, uploaded);
+        await expect(card, 'the set of the upload is a card again').toBeVisible({timeout: 15_000});
+        await expect(step2.locator(`[data-testid="report-set-card"][data-batch-id="${batchId}"]`), 'one card for the upload').toHaveCount(1);
+        await expect(card).toHaveAttribute('data-analysed', 'true');
+        await openCard(card);
+        await expect(roleRow(card, 'custody', custody.file_id)).toBeVisible();
+        await expect(roleRow(card, 'cash', cash.file_id)).toBeVisible();
+        await expect(card.locator('[data-testid="report-set-role-table"] tbody tr[data-row-id]'), 'exactly the two exports it was analysed with').toHaveCount(2);
+        await expect(card.locator(`tr[data-row-id="${third.file_id}"]`)).toHaveCount(0);
+        await expect(otherFilesHeading(page, brokerId), 'the third statement is one of the broker’s other files').toBeVisible();
+        await expectUnselectedSingle(page, brokerId, third.file_id);
+    });
+
+    test('G-memory (alone): reopened after an analysis, a statement analysed alone stays alone with its plugin; the custody export is an incomplete set by itself', async ({page}, testInfo) => {
+        test.setTimeout(180_000);
+        const names = await pluginNames(page);
+        const brokerId = await startOnOwnedBroker(page, 'G-MS');
+        // The dual statement: a file analysed alone is one the analysis really parsed, and the generic CSV parses this one.
+        const dualCash = writeDualCash(testInfo);
+        const uploaded = await uploadToStep2(page, brokerId, [CUSTODY_XLSX, dualCash]);
+        const custody = uploadNamed(uploaded, 'danske_bank-custody.xlsx');
+        const cash = dualCashUpload(uploaded, dualCash);
+        const batchId = expectUuid(custody.batch_id, 'batch_id of the step-1 session');
+        const card = setCard(page, brokerId, batchId);
+        await expect(card).toHaveAttribute('data-set-status', 'complete', {timeout: 15_000});
+        await openCard(card);
+
+        // B: the statement read alone with the generic CSV; the custody export alone is excluded from this import.
+        await runMemberAction(page, card, 'cash', cash.file_id, `read-alone-${GENERIC}`);
+        await expect(card.locator('[data-testid="report-set-missing"][data-role="cash"]')).toBeVisible({timeout: 15_000});
+        await expectSelectedSingle(page, brokerId, cash.file_id, names.generic, names.danske);
+        await card.getByTestId('report-set-exclude').click();
+        await expect(card).toHaveAttribute('data-selected', 'none', {timeout: 5_000});
+
+        // The analysis: one parse, of the statement alone, with the generic CSV; no combine.
+        const parse = page.getByTestId('import-wizard-parse');
+        await expect(parse).toBeEnabled({timeout: 10_000});
+        const stopRecording = recordJsonPosts(page, (pathname) => pathname === COMBINE_PATH || PARSE_PATH.test(pathname));
+        await parse.click();
+        await expect(page.getByTestId('import-wizard-step3')).toBeVisible({timeout: 10_000});
+        await waitForParseVerdict(page, 60_000);
+        const calls = await stopRecording();
+        expect(
+            calls.map((call) => [call.path, call.status, (call.request as {plugin_code?: string}).plugin_code]),
+            'one parse, of the statement alone, with the generic CSV',
+        ).toEqual([[`${API}/brokers/import/files/${cash.file_id}/parse`, 200, GENERIC]]);
+
+        // Closed without importing, then opened again.
+        await closeWizardDiscarding(page);
+        await reopenOnStep2(page, brokerId, uploaded);
+        // The custody export is a set by itself: incomplete, the statement is none of its members.
+        await expect(card).toHaveAttribute('data-set-status', 'incomplete', {timeout: 15_000});
+        await openCard(card);
+        await expect(roleRow(card, 'custody', custody.file_id)).toBeVisible();
+        await expect(card.locator('[data-testid="report-set-missing"][data-role="cash"]')).toBeVisible();
+        await expect(card.locator('[data-testid="report-set-role-table"] tbody tr[data-row-id]'), 'the custody export alone').toHaveCount(1);
+        // The statement is a single file — unselected, as everything after a reopen — read with the generic CSV once selected.
+        await expectUnselectedSingle(page, brokerId, cash.file_id);
+        await page.getByTestId(`dt-row-checkbox-${cash.file_id}`).click();
+        await expectSelectedSingle(page, brokerId, cash.file_id, names.generic, names.danske);
+    });
+
+    test('G-no-memory: a choice made before any analysis is not remembered — reopened, the statement is back in its set', async ({page}, testInfo) => {
+        test.setTimeout(90_000);
+        const brokerId = await startOnOwnedBroker(page, 'G-NM');
+        // The dual statement: the generic CSV reads it, so it can be read alone with it (decision 1).
+        const dualCash = writeDualCash(testInfo);
+        const uploaded = await uploadToStep2(page, brokerId, [CUSTODY_XLSX, dualCash]);
+        const custody = uploadNamed(uploaded, 'danske_bank-custody.xlsx');
+        const cash = dualCashUpload(uploaded, dualCash);
+        const batchId = expectUuid(custody.batch_id, 'batch_id of the step-1 session');
+        const card = setCard(page, brokerId, batchId);
+        await expect(card).toHaveAttribute('data-set-status', 'complete', {timeout: 15_000});
+        await openCard(card);
+        await runMemberAction(page, card, 'cash', cash.file_id, `read-alone-${GENERIC}`);
+        await expect(page.getByTestId(`dt-row-checkbox-${cash.file_id}`), 'read alone: a single file, for this session').toBeVisible({timeout: 10_000});
+
+        // Closed with the files only uploaded, then opened again: detection, as if nothing had been chosen.
+        await closeWizardDiscarding(page);
+        await reopenOnStep2(page, brokerId, uploaded);
+        await expect(card).toHaveAttribute('data-set-status', 'complete', {timeout: 15_000});
+        await openCard(card);
+        await expect(roleRow(card, 'custody', custody.file_id)).toBeVisible();
+        await expect(roleRow(card, 'cash', cash.file_id), 'the statement is back in the set').toBeVisible();
+        await expect(page.getByTestId(`dt-row-checkbox-${cash.file_id}`), 'and is no single file').toHaveCount(0);
+    });
+
+    test('G-real: the bank’s own statement can only be removed from its set — nothing offers to read it alone, not even the broker’s default', async ({page}) => {
+        test.setTimeout(90_000);
+        // The samples themselves, on a broker whose default is the generic CSV: a default that cannot read a file is no way to read it.
+        const brokerId = await startOnOwnedBroker(page, 'G-R', {default_import_plugin: GENERIC});
+        const uploaded = await uploadToStep2(page, brokerId, [CUSTODY_XLSX, CASH_CSV]);
+        const custody = uploadNamed(uploaded, 'danske_bank-custody.xlsx');
+        const cash = uploadNamed(uploaded, 'danske_bank-cash.csv');
+        const batchId = expectUuid(custody.batch_id, 'batch_id of the step-1 session');
+        // Decision 1, read from the upload: no `date` nor `type` column, so only Danske reads the bank's statement.
+        // Soft, so that the menu below still reports.
+        expect.soft(cash.compatible_plugins, 'decision 1: only Danske reads danske_bank-cash.csv').toEqual([DANSKE]);
+        const card = setCard(page, brokerId, batchId);
+        await expect(card).toHaveAttribute('data-set-status', 'complete', {timeout: 15_000});
+        await openCard(card);
+
+        const row = roleRow(card, 'cash', cash.file_id);
+        await expect(row, 'the statement is in the cash table of the card').toBeVisible();
+        await row.getByTestId(`row-actions-${cash.file_id}`).click();
+        const menu = page.getByTestId('context-menu');
+        await expect(menu).toBeVisible({timeout: 5_000});
+        // Presence barrier: the menu is open on its actions, so the absence below is not a menu still rendering.
+        await expect(menu.getByTestId('context-menu-action-preview'), 'the menu of a member offers its preview').toBeVisible();
+        await expect(menu.getByTestId('context-menu-action-remove-from-set'), 'the menu of a member offers to remove it from the set').toBeVisible({timeout: G_FIRST});
+        await expect(menu.locator('[data-testid^="context-menu-action-read-alone-"]'), 'no single-file plugin reads the bank’s statement: nothing offers to read it alone').toHaveCount(0);
+        await page.keyboard.press('Escape');
+        await expect(menu).toHaveCount(0, {timeout: 5_000});
     });
 });

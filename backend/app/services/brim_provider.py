@@ -314,6 +314,21 @@ class BRIMProvider(ABC):
             True if this plugin can likely parse the file
         """
 
+    def cannot_parse_reason(self, file_path: Path) -> Optional[str]:
+        """
+        Why ``can_parse`` refuses this file, in one short sentence the user can act on.
+
+        Called only by the parse guard, after ``can_parse`` answered False for a file the
+        user chose this plugin for: the sentence completes the "cannot parse file" error
+        (lowercase start, no final period, e.g. "required column 'date' not found in the
+        CSV header"). Override it when the refusal has a cause the user can fix in the
+        file. Keep it as cheap as ``can_parse`` and never raise.
+
+        Returns:
+            The reason, or None when there is nothing to add (the default)
+        """
+        return None
+
     @abstractmethod
     def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:
         """
@@ -994,6 +1009,25 @@ def _relocated_path(file_id: str, file_path: Path) -> Optional[Path]:
     return moved_path
 
 
+def _refusal_message(plugin: Any, plugin_code: str, file_path: Path, checked_path: Path) -> str:
+    """The parse guard's refusal, completed with the plugin's reason when it gives one.
+
+    The reason is asked on ``checked_path``, the path the guard looked at last. It is read
+    with ``getattr``, so a plugin without the method keeps the plain refusal; a reason
+    that raises is logged and dropped, so the user still gets this 400 and never a 500.
+    """
+    message = f"Plugin '{plugin_code}' cannot parse file '{file_path.name}'"
+    explain = getattr(plugin, "cannot_parse_reason", None)
+    if explain is None:
+        return message
+    try:
+        reason = explain(checked_path)
+    except Exception as e:
+        logger.warning("Plugin failed to explain its refusal", plugin_code=plugin_code, error=str(e))
+        return message
+    return f"{message}: {reason}" if reason else message
+
+
 def delete_file(file_id: str) -> bool:
     """
     Delete a file and its metadata.
@@ -1431,7 +1465,7 @@ def parse_file(file_id: str, plugin_code: str, broker_id: int) -> BRIMParseOutpu
     if not plugin.can_parse(file_path):
         moved_path = _relocated_path(file_id, file_path)
         if moved_path is None or not plugin.can_parse(moved_path):
-            raise ValueError(f"Plugin '{plugin_code}' cannot parse file '{file_path.name}'")
+            raise ValueError(_refusal_message(plugin, plugin_code, file_path, moved_path or file_path))
         logger.info("File moved before parse check, retrying at new location", file_id=file_id, new_path=str(moved_path))
         file_path = moved_path
 

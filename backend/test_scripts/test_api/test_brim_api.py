@@ -1815,6 +1815,250 @@ class TestDanskeReportSetEndToEnd:
 
 
 # ============================================================================
+# CATEGORY 11: THE FILES LEFT OUT OF A SET (phase G, plan §14 G.2, D)
+# ============================================================================
+#
+# The user chooses how a set is read, so the set request names the originals of the
+# upload left out of it: ``exclude_file_ids``, empty by default (every request above
+# still works without it). Proven over HTTP with the Danske plugin the test backend
+# knows, on the synthetic main set plus a third cash statement invented here (the
+# sample's header and Latin-1 encoding, three rows of 2021 that continue its running
+# balance): the cash role takes several files, so leaving the third one out keeps the
+# set complete. An id that is not an original of the broker and upload answers 422 with
+# ``exclude_unknown`` in the same ``{code, message}`` detail as the other set errors;
+# leaving every member out is the 404 ``members_not_found`` of today. Each test deletes
+# the files and the broker it created.
+
+DANSKE_THIRD_CASH_NAME = "danske_bank-cash-2021.csv"
+DANSKE_THIRD_CASH_ROWS = (
+    "15.03.2021;Palvelumaksut 03/2021;-3,5;1900,96;Toteutunut;Ei",
+    "10.02.2021;Matti Meikäläinen;250;1904,46;Toteutunut;Ei",
+    "05.01.2021;Palvelumaksut 12/2020;-3,5;1654,46;Toteutunut;Ei",
+)
+
+
+def _danske_third_cash() -> bytes:
+    """An invented third cash statement: the synthetic sample's header and encoding, newest row first, as the bank writes them."""
+    header = (DANSKE_SAMPLE_DIR / "danske_bank-cash.csv").read_bytes().decode("latin-1").splitlines()[0]
+    return ("\n".join([header, *DANSKE_THIRD_CASH_ROWS]) + "\n").encode("latin-1")
+
+
+async def _upload_main_set_and_third_cash(client: httpx.AsyncClient, broker_id: int, file_ids: list) -> tuple:
+    """The two main exports and the third cash statement in one upload batch; every stored id goes into ``file_ids`` for the cleanup."""
+    batch = str(uuid.uuid4())
+    uploaded = {}
+    for name, role in DANSKE_MAIN:
+        response = await _upload_sample(client, broker_id, name, batch)
+        assert response.status_code == 200, response.text
+        file_ids.append(response.json()["file_id"])
+        uploaded[role] = response.json()
+    third = await _upload_csv(client, broker_id, _danske_third_cash(), DANSKE_THIRD_CASH_NAME, batch_id=batch)
+    assert third.status_code == 200, third.text
+    file_ids.append(third.json()["file_id"])
+    uploaded["third"] = third.json()
+    # Premise: the invented statement is read like the sample cash statement — by the plugins that read the sample,
+    # Danske among them; which ones is the detectors' business (since step G the generic CSV wants a ``date`` and a
+    # ``type`` column, which neither names), not this category's.
+    assert uploaded["third"]["batch_id"] == batch, f"premise: the invented statement is in the upload batch: {uploaded['third']}"
+    assert uploaded["third"]["compatible_plugins"] == uploaded["cash"]["compatible_plugins"], f"premise: the invented statement is read like the sample cash statement: {uploaded['third']} vs {uploaded['cash']}"
+    assert DANSKE_CODE in uploaded["third"]["compatible_plugins"], f"premise: Danske reads the invented statement: {uploaded['third']}"
+    return batch, uploaded
+
+
+def _set_error(response: httpx.Response) -> dict:
+    """The ``detail`` of a set error: an object with its stable ``code`` and a ``message`` (``missing_roles`` too for an incomplete set)."""
+    detail = response.json().get("detail")
+    assert isinstance(detail, dict) and isinstance(detail.get("message"), str) and detail["message"], f"a set error carries {{code, message}}: {response.status_code} {response.text}"
+    return detail
+
+
+class TestReportSetExclusions:
+    """G · D — ``POST /sets/preview`` and ``POST /sets/combine`` read ``exclude_file_ids`` from the body."""
+
+    @pytest.mark.asyncio
+    async def test_preview_leaves_the_named_files_out(self, test_server):
+        """RS-G01: with nothing left out the third statement is a member; left out, it is not and the set stays complete;
+        with the two cash statements left out, the cash role is missing and the set is incomplete."""
+        print_section("RS-G01: the preview leaves the named files out")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+            file_ids = []
+            try:
+                await _require_plugin(client, DANSKE_CODE)
+                batch, uploaded = await _upload_main_set_and_third_cash(client, broker_id, file_ids)
+                custody, cash, third = (uploaded[role]["file_id"] for role in ("custody", "cash", "third"))
+                body = {"broker_id": broker_id, "plugin_code": DANSKE_CODE, "batch_id": batch}
+                whole = await client.post(_set_url("preview"), json=body, timeout=TIMEOUT)
+                assert whole.status_code == 200, whole.text
+                assert {member["file_id"] for member in whole.json()["members"]} == {custody, cash, third}, "presence barrier: the third statement is a member of the upload"
+
+                kept = await client.post(_set_url("preview"), json={**body, "exclude_file_ids": [third]}, timeout=TIMEOUT)
+
+                assert kept.status_code == 200, kept.text
+                assert {member["file_id"] for member in kept.json()["members"]} == {custody, cash}
+                assert kept.json()["complete"] is True
+
+                no_cash = await client.post(_set_url("preview"), json={**body, "exclude_file_ids": [cash, third]}, timeout=TIMEOUT)
+
+                assert no_cash.status_code == 200, no_cash.text
+                shape = no_cash.json()
+                assert [member["file_id"] for member in shape["members"]] == [custody]
+                assert {role["code"]: (role["status"], role["file_ids"]) for role in shape["roles"]} == {"custody": ("present", [custody]), "cash": ("missing", [])}
+                assert ([item["role"] for item in shape["missing"]], shape["complete"]) == (["cash"], False)
+                print_success("✓ the preview leaves the named files out")
+            finally:
+                await _delete_files(client, file_ids)
+                await _delete_created(client, broker_ids=[broker_id])
+
+    @pytest.mark.asyncio
+    async def test_combine_holds_the_kept_members_and_reuses_them_for_the_same_exclusion(self, test_server):
+        """RS-G02: leaving both statements out is 422 ``set_incomplete``; leaving the third out combines the other two, and the
+        same exclusion reuses that file; without the exclusion, another combined file holds all three."""
+        print_section("RS-G02: the combine keeps the kept members")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+            file_ids = []
+            try:
+                await _require_plugin(client, DANSKE_CODE)
+                batch, uploaded = await _upload_main_set_and_third_cash(client, broker_id, file_ids)
+                custody, cash, third = (uploaded[role]["file_id"] for role in ("custody", "cash", "third"))
+                body = {"broker_id": broker_id, "plugin_code": DANSKE_CODE, "batch_id": batch}
+
+                incomplete = await client.post(_set_url("combine"), json={**body, "exclude_file_ids": [cash, third]}, timeout=TIMEOUT)
+
+                assert incomplete.status_code == 422, incomplete.text
+                assert (_set_error(incomplete)["code"], _set_error(incomplete).get("missing_roles")) == ("set_incomplete", ["cash"])
+
+                first = await client.post(_set_url("combine"), json={**body, "exclude_file_ids": [third]}, timeout=TIMEOUT)
+
+                assert first.status_code == 200, first.text
+                combined = first.json()["combined"]
+                file_ids.append(combined["file_id"])
+                assert first.json()["reused"] is False
+                assert {ref["file_id"] for ref in combined["derived_from"] if not ref["deleted"]} == {custody, cash}
+
+                again = await client.post(_set_url("combine"), json={**body, "exclude_file_ids": [third]}, timeout=TIMEOUT)
+                whole = await client.post(_set_url("combine"), json=body, timeout=TIMEOUT)
+
+                assert again.status_code == 200, again.text
+                assert (again.json()["reused"], again.json()["combined"]["file_id"]) == (True, combined["file_id"])
+                assert whole.status_code == 200, whole.text
+                file_ids.append(whole.json()["combined"]["file_id"])
+                assert whole.json()["reused"] is False
+                assert whole.json()["combined"]["file_id"] != combined["file_id"]
+                assert {ref["file_id"] for ref in whole.json()["combined"]["derived_from"]} == {custody, cash, third}
+                print_success("✓ the combine keeps the kept members, and reuses them for the same exclusion")
+            finally:
+                await _delete_files(client, file_ids)
+                await _delete_created(client, broker_ids=[broker_id])
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("endpoint", SET_ENDPOINTS)
+    @pytest.mark.parametrize("stranger", ["unknown-id", "another-upload"])
+    async def test_a_file_that_is_not_an_original_of_the_upload_is_422_exclude_unknown(self, test_server, endpoint, stranger):
+        """RS-G03: an id that does not exist, or an original of another upload of the same broker, answers 422 with ``exclude_unknown``."""
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+            file_ids = []
+            try:
+                await _require_plugin(client, DANSKE_CODE)
+                batch, _uploaded = await _upload_main_set_and_third_cash(client, broker_id, file_ids)
+                if stranger == "unknown-id":
+                    excluded = str(uuid.uuid4())
+                else:
+                    elsewhere = await _upload_csv(client, broker_id, _danske_third_cash(), DANSKE_THIRD_CASH_NAME, batch_id=str(uuid.uuid4()))
+                    assert elsewhere.status_code == 200, elsewhere.text
+                    excluded = elsewhere.json()["file_id"]
+                    file_ids.append(excluded)
+
+                response = await client.post(_set_url(endpoint), json={"broker_id": broker_id, "plugin_code": DANSKE_CODE, "batch_id": batch, "exclude_file_ids": [excluded]}, timeout=TIMEOUT)
+
+                assert response.status_code == 422, response.text
+                assert _set_error(response)["code"] == "exclude_unknown", response.text
+                assert not [info for info in await _files_on(client, broker_id) if info.get("kind") == "combined"], "a refused request writes nothing"
+            finally:
+                await _delete_files(client, file_ids)
+                await _delete_created(client, broker_ids=[broker_id])
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("endpoint", SET_ENDPOINTS)
+    async def test_leaving_every_member_out_is_404_members_not_found(self, test_server, endpoint):
+        """RS-G04: with every original of the upload left out there is no set: 404 ``members_not_found``, as for an empty upload."""
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+            file_ids = []
+            try:
+                await _require_plugin(client, DANSKE_CODE)
+                batch, uploaded = await _upload_main_set_and_third_cash(client, broker_id, file_ids)
+                everything = [info["file_id"] for info in uploaded.values()]
+
+                response = await client.post(_set_url(endpoint), json={"broker_id": broker_id, "plugin_code": DANSKE_CODE, "batch_id": batch, "exclude_file_ids": everything}, timeout=TIMEOUT)
+
+                assert response.status_code == 404, response.text
+                assert _set_error(response)["code"] == "members_not_found", response.text
+            finally:
+                await _delete_files(client, file_ids)
+                await _delete_created(client, broker_ids=[broker_id])
+
+
+# ============================================================================
+# CATEGORY 12: WHY A PLUGIN REFUSES A FILE (phase G, plan G.5)
+# ============================================================================
+#
+# Since phase G the generic CSV refuses a CSV whose header names no ``date`` or no ``type``
+# column, so a parse forced on such a file stops at the guard of ``parse_file``. The developer's
+# decision, verbatim: «Correggi dentro G con il metodo opzionale (Consigliato)» — the plugin says
+# why (``cannot_parse_reason``) and the guard appends it: still a 400, the file still goes to
+# ``failed`` with the same message, which now names the missing column. The name between the
+# quotes is the stored one, ``{file_id}{ext}``, which G.5 does not change: not asserted. The
+# rules of the message are tested at service level, in test_services/test_brim_parse_race.py.
+# The test deletes the file and the broker it created.
+
+GENERIC_CSV_CODE = "broker_generic_csv"
+# A header with a ``type`` column and no date column under any alias the generic CSV knows (``HEADER_MAPPINGS``).
+CSV_WITHOUT_DATE = b"type,amount,currency,description\nBUY,-1000.00,EUR,Buy some shares\nDEPOSIT,500.00,EUR,Top-up\n"
+
+
+class TestParseRefusalReason:
+    """G.5 — a parse forced with a plugin that refuses the file answers 400 with the plugin's reason, and the file goes to ``failed``."""
+
+    @pytest.mark.asyncio
+    async def test_forcing_the_generic_csv_on_a_csv_without_date_names_the_missing_column(self, test_server):
+        """RS-G05: ``plugin_code="broker_generic_csv"`` on an uploaded CSV with ``type`` and no date column: 400, ``detail`` is
+        "Plugin 'broker_generic_csv' cannot parse file '…': required column 'date' not found in the CSV header", and the
+        file is ``failed`` with that message."""
+        print_section("RS-G05: the forced generic CSV names the missing column")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+            file_ids = []
+            try:
+                upload = await _upload_csv(client, broker_id, CSV_WITHOUT_DATE, f"no_date_{uuid.uuid4().hex[:8]}.csv")
+                assert upload.status_code == 200, upload.text
+                file_id = upload.json()["file_id"]
+                file_ids.append(file_id)
+                assert GENERIC_CSV_CODE not in upload.json()["compatible_plugins"], f"premise: the generic CSV does not offer itself for a CSV without a date column, so the parse forces it: {upload.json()}"
+
+                response = await client.post(f"{API_BASE}/brokers/import/files/{file_id}/parse", json={"plugin_code": GENERIC_CSV_CODE, "broker_id": broker_id}, timeout=TIMEOUT)
+
+                assert response.status_code == 400, response.text
+                detail = _detail_text(response)
+                assert detail.startswith(f"Plugin '{GENERIC_CSV_CODE}' cannot parse file '"), detail
+                info = await client.get(f"{API_BASE}/brokers/import/files/{file_id}", timeout=TIMEOUT)
+                assert info.status_code == 200, info.text
+                assert (info.json()["status"], info.json()["error_message"]) == ("failed", detail), "the refused file goes to failed, with the message the user reads"
+                assert detail.endswith("': required column 'date' not found in the CSV header"), f"the refusal does not say which column is missing: {detail!r}"
+                print_success("✓ the forced generic CSV names the missing column, and the file is failed")
+            finally:
+                await _delete_files(client, file_ids)
+                await _delete_created(client, broker_ids=[broker_id])
+
+
+# ============================================================================
 # Note: E2E tests are in test_e2e/test_brim_e2e.py
 # ============================================================================
 
