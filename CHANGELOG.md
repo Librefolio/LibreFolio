@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Asset types**: the type picker is a searchable two-level menu, with ETF and Crowdfunding families. Specialized ETF and crowdfunding types show their content icon overlaid on the container icon wherever the type appears, and a new type, *Real estate crowdfunding*, is available.
 - New users now get a Welcome setup, a versioned Core tour, and contextual Broker, FX, Asset and Import guides. A completed or skipped guide can be replayed from Settings, while a newer guide version becomes due automatically; Import guidance remains separate from transaction writes and Save All. Guides remember where you are in this browser — across tabs, reloads and logging out — resume at the step you left when you return to a page, and a guide finished in one tab closes in the others.
 - **Privacy mode** — an eye button in the page header hides how much you own: every portfolio amount (dashboard, positions, FIFO lots, brokers, risk panels, transactions) shows `•••` with its currency and sign still visible. Held quantities are hidden in positions and lots but stay visible in the transaction list; unit prices, WAC, percentages, FX rates, asset events and edit fields stay readable. It switches instantly both ways, belongs to this browser and survives reloads; AI Export and downloads still contain the real figures.
+- **P&L view in the Growth chart.** On the Dashboard and broker pages, a third view next to Abs and % plots cumulative total P&L, never rebased to the selected range. *Line* shows the accumulated P&L; *Candles* builds synthetic candles day by day from each asset's prices with that day's quantities, ownership and FX — highs and lows are hypothetical and not simultaneous, and there is no volume; *Income* stacks dividends and interest, fees and taxes, deposits, and purchases split into new and reinvested capital. A width picker from 1D to 1Y offers only the widths that can be drawn; periods count back from the last day, so the newest candle closes on it, and a shorter oldest period is faded and marked "Partial: N of M days".
+- **Rolling Return in the asset chart.** A second mode next to Prices shows the price-only return against the close exactly N calendar days earlier — 1W, 1M, 3M or 1Y, or a custom number of weeks, months or years. History before the selected range is loaded, so a window longer than the range still draws; the tooltip shows the reference date and the price and FX observations used, partial data is shown apart from unavailable data, comparison assets use the same window and currency, and a **?** next to the window opens the guide.
+- **The Growth and Allocation charts remember the view you chose.**
 - **FX route metadata in the API** — route responses expose `is_chain` and a sorted, unique `providers_used` list of configured providers. Ordered `chain_steps` still preserves direction and repeated providers; request payloads remain unchanged, with no database migration required.
 
 ### 🐛 Fixed
@@ -66,12 +69,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Borsa Italiana ETFs and ETCs take the currency they are quoted in (EUR), not the fund's denomination currency, whether they are found by search or added from their page address.
 - The Dashboard again warns about assets whose provider has not delivered a new price for more than 7 days. The warning now has a **Sync** button that refreshes those assets; manual assets are never flagged.
 
+#### 📈 Charts
+
+- **Allocation history shows the right emoji for commodities, real estate and unknown types**, instead of 📊, the ETF emoji, for all three.
+- The amount axes of the Growth and Performance charts no longer print the same label twice (`5.5k` shown as `6k` next to a real `6k`, `1.25M` as `1.3M`), and an axis edge placed automatically beyond the data is no longer labelled as if it were a regular step. Chart amounts take their minus sign from your browser's language; the Growth tooltip's total P&L now reads `EUR -12.00` like the other amounts, instead of `−EUR 12.00`.
+- The lot comparison chart no longer leaves an empty strip left of its amounts, most visibly on phones.
+
+#### ⚡ Faster reports
+
+- **Reports and the Dashboard no longer stall on long currency histories.** A currency conversion now loads only the exchange rates it can use, instead of the whole history of the pair, with identical results: on a real portfolio with rates going back to 2000, a report in a currency other than the base one went from 10–27 s to under 3 s. Thanks to Martin Sova ([#30](https://github.com/Librefolio/LibreFolio/pull/30)).
+
 #### 📱 Sign-in, app icons and small screens
 
 - Browsers offer saved credentials on the sign-in username field too, and registration and password change are recognised by password managers, so changing a password updates the right saved account.
 - The installed app no longer shows black corners on the Android splash screen or around the iPhone home-screen icon, and Android gets a proper maskable icon.
 - On phones, the asset dialog keeps Save and Cancel reachable, **Sync** on an asset page no longer looks crossed out while the page loads, and the asset page tabs show an icon.
 - The top toolbars of the Assets, asset detail, Dashboard, broker detail and FX pages no longer push buttons out of the bar at intermediate widths, in every interface language.
+- With a single broker selected, a long broker name in the Dashboard's broker filter is shortened with an ellipsis instead of sticking out of the bar on narrow screens.
 
 ### 🔄 Changed
 

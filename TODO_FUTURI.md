@@ -148,14 +148,66 @@ Chi riprende il lavoro deve **fattorizzare**: un unico motore di matching (quell
 
 La prima implementazione G6 resta startup-loaded, senza CRUD, database o watcher.
 
-### Proxy historical replay
+### Sostituti (proxy) nel replay storico
 
-- persistenza delle associazioni asset → proxy;
-- proposta di proxy solo esplicita e confermata dall'utente;
-- riuso delle associazioni nei replay successivi;
-- diagnostica di copertura/qualità prima di proporre il proxy.
+**Aggiornato**: 02 Ottobre 2026, decisione D372 (rifacimento del blocco del replay, F3)
+**Priorità**: bassa. Nessun utente l'ha chiesto
 
-G6 richiede invece scelta manuale per singola esecuzione o esclusione.
+Il developer, sul rifacimento del blocco del replay: *«teniamoli fuori, ma segnalo in todo_futuri con tutta la
+spiegazione annessa»*.
+
+**Cos'è.** Oggi, in L4 (Dashboard, Broker e laboratorio), un asset senza storia nella finestra di una crisi viene escluso
+dal replay e mostrato con il suo motivo. È il caso di un ETF nato nel 2015 davanti alla crisi del 2008. Un **sostituto** è un altro asset che ha storia in
+quella finestra: il replay usa i suoi rendimenti al posto di quelli che mancano. Può essere l'indice che l'ETF replica,
+oppure un ETF più vecchio sullo stesso indice. Il peso resta quello dell'asset originale. Del sostituto si usano solo
+i rendimenti giornalieri, non i prezzi.
+
+**Cosa sa già fare il motore** (verificato nel codice il 02/10/2026):
+
+- `StressParams.proxy_assets` (`backend/app/services/risk_plugins/stress.py`) accetta fino a 100 coppie
+  `{asset_id, proxy_asset_id}`. Il sostituto deve essere diverso dall'originale, e un asset non può essere sostituito
+  ed escluso insieme. L'unica politica dichiarata è `manual_proxy_or_exclude` (`schemas/risk_scenarios.py`).
+- `RiskService._prepare_historical_replay_context` (`backend/app/services/risk/service.py`) controlla due cose: che gli
+  asset sostituiti siano nello scope e che i sostituti esistano. L'asset sostituito salta l'esclusione automatica. Per
+  tutta la finestra il replay usa i rendimenti del sostituto: `proxy_series_usage: "returns_only"`, e non c'è nessuna
+  giunzione con la storia propria dell'asset.
+- Un sostituto senza storia utilizzabile dà un errore di parametri (`invalid_parameters`). L'errore porta `asset_id`,
+  `return_source_asset_id` e il motivo. Non diventa mai un'esclusione silenziosa, perché il sostituto è una scelta
+  esplicita dell'utente.
+- L'audit (`RiskHistoricalReplayAudit`) porta `proxy_count` e `proxy_assets`. L'avviso
+  `historical_replay_proxies_used` elenca gli asset sostituiti.
+
+**Perché è rinviato: cosa manca.**
+
+- **L'interfaccia.** L4 non manda mai `proxy_assets`. Servirebbe un selettore «usa un sostituto» accanto a ogni asset
+  escluso, con la ricerca fra gli asset del DB. Un modello c'è già, ma solo per l'asset singolo:
+  nella scheda rischio di Asset Detail (`RiskAnalysisPanel.svelte`, sezione `risk-replay-controls`) si sceglie un
+  sostituto per l'asset stesso con `SignalAssetParamControl`, oppure lo si esclude con una casella; l'audit mostra
+  l'associazione. Con F3 l'esclusione manuale esce da L4: `excluded_assets` lo manda ancora solo quella casella di
+  Asset Detail.
+- **Una regola su quale sostituto sia sensato.** Va deciso se servono la stessa valuta, la stessa classe e una
+  correlazione minima nel periodo in cui esistono entrambi. Senza una regola, un sostituto sbagliato dà un numero falso
+  che sembra preciso.
+- **Una diagnostica prima della scelta.** Deve dire quanto il sostituto copre la finestra e quanto i due si sono mossi
+  insieme nel periodo comune. Va mostrata prima di proporre il sostituto.
+- **La persistenza.** Oggi il sostituto andrebbe scelto di nuovo a ogni replay. Le associazioni asset → sostituto
+  andrebbero salvate per utente e riusate nei replay successivi. La proposta di un sostituto resta sempre esplicita e
+  confermata dall'utente.
+- ⚠️ **Un buco da verificare con un test prima di riaprire.** La copertura del sostituto non passa per
+  `replay_coverage`, che gira solo sugli asset senza sostituto (`own_ids` in
+  `_prepare_historical_replay_context`; `own_ids` e `replay_coverage` sono nel ramo della famiglia Risk ed entrano in
+  `dev_release2` con la sua integrazione). Un sostituto quotato dopo l'inizio della finestra entrerebbe quindi nella
+  serie congiunta. Il commento sull'esclusione automatica, nello stesso metodo, spiega cosa succede allora: un asset
+  che parte tardi sposta la base del replay e lo accorcia per tutti gli altri. Il sostituto andrà controllato con la
+  stessa regola e, se non copre la finestra, rifiutato con il suo motivo.
+
+**Quando riprenderlo.** Quando un utente chiede di rigiocare una crisi con asset più giovani della crisi stessa.
+L'ordine: prima la regola del sostituto sensato e la diagnostica, poi il buco della copertura, poi l'interfaccia.
+
+**Riferimenti**: `stress.py` (`StressParams`, `_historical`); `service.py` (`_prepare_historical_replay_context`);
+`schemas/risk.py` (`RiskHistoricalReplayProxyAsset`, `RiskHistoricalReplayAudit`); la guida
+`mkdocs_src/docs/financial-theory/technical-analysis/risk-metrics/historical-replay.en.md`; D372 in
+`LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/04-decisioni-e-questioni-aperte.md`.
 
 ### RQMC
 
@@ -562,7 +614,9 @@ La prima versione mantiene nello snapshot del singolo calcolo:
 - aliquota sulle plusvalenze per Asset, pre-popolata al `26%` e modificabile;
 - route Asset×Broker e priorità;
 - trasferimenti dichiarati, gratuiti e immediati;
-- FX single-hop e `fx_buffer_rate` esplicito (label UI “Margine di sicurezza FX”).
+- FX single-hop, con lo spread globale. ~~`fx_buffer_rate` esplicito (label UI “Margine di sicurezza FX”)~~ —
+  ❌ **non più da fare**, decisione del developer del 02/10/2026: non esiste e non esisterà (vedi «Non più da
+  fare» più sotto).
 
 Questi dati non diventano automaticamente impostazioni persistenti. Il Tool resta
 atomico e riceve sempre uno snapshot completo.
@@ -621,10 +675,40 @@ raccomandazione: richiede una decisione di prodotto.
 ### Modello Operativo Futuro
 
 - Fee, limiti e tempi di settlement dei trasferimenti.
-- Route FX multi-hop, solo con protezioni anti-ciclo e anti-arbitraggio.
-- Buffer FX dinamico per Asset/volatilità invece del solo `fx_buffer_rate`
-  esplicito.
+- ~~Route FX multi-hop, solo con protezioni anti-ciclo e anti-arbitraggio.~~ ❌ non più da fare nel PAC (02/10/2026).
+- ~~Buffer FX dinamico per Asset/volatilità invece del solo `fx_buffer_rate`
+  esplicito.~~ ❌ non più da fare (02/10/2026).
 - Persistenza opzionale delle fonti manuali.
+
+### Salvare l'analisi — sul client, non sul server (richiesta del developer, 02/10/2026)
+
+**Status**: 📋 FUTURO · **Priorità**: da stabilire
+
+Il developer, testuale (riportato dal workstream D): *«salvare l'analisi: stampa PDF e condivisione/salvataggio sul
+client, non sul server»*.
+
+- **Cosa**: il risultato del planner (KPI, esposizioni, piano operativo, prova) diventa un documento che l'utente
+  stampa in PDF, salva o condivide dal proprio dispositivo.
+- **Vincolo**: niente salvataggio sul server. Il Tool resta atomico e senza stato (vedi «Confine della Prima
+  Versione»): l'analisi vive solo sul client.
+- **Da decidere alla ripresa**:
+  - il formato: la stampa del browser con un foglio di stile dedicato, oppure un PDF generato nel client;
+  - il contenuto: gli input dello scenario, il risultato, la data e la versione del contratto;
+  - la condivisione: la Web Share API dove esiste, altrimenti il download;
+  - la privacy: il documento contiene importi reali, quindi va deciso se la modalità privacy vale anche lì.
+
+### ❌ Non più da fare — FX nel PAC (decisione del developer, 02/10/2026)
+
+Nel PAC/Rebalancer **non si faranno mai**:
+
+- un tasso o uno spread FX per Broker;
+- un margine di sicurezza sul tasso, fisso (`fx_buffer_rate`) o dinamico;
+- una commissione di conversione oltre lo spread;
+- conversioni in più passi (multi-hop).
+
+**Perché**: lo spread globale somma già tutti gli attori della conversione; il multi-hop spetta alla parte FX
+(rotte e provider), non al PAC. I piani di D sono già allineati (R13.11). Debito di contratto collegato: `fx_cost`
+della riga d'ordine, nella voce «🔎 Gate sui campi di contratto senza consumatore».
 
 Profili commissionali per mercato e formule intraday/degressive sono già descritti
 nella sezione precedente e non vengono duplicati qui.
@@ -781,6 +865,13 @@ irrigidirebbe contratti che cambiano ogni giorno e produrrebbe rumore su campi
 legittimamente non ancora consumati. Ha senso quando la superficie si
 stabilizza: a quel punto «dichiarato e non usato» smette di essere una fase
 normale dello sviluppo e torna a essere il segnale che è.
+
+**Terzo caso, un campo che non può più portare informazione** (02/10/2026): `fx_cost` della riga d'ordine del
+PAC (`PlannerBuyOrderRow.fx_cost` in `backend/app/schemas/pac_allocator.py`, costruito sempre a zero in
+`backend/app/services/pac_allocator/planner_report.py`, letto dal client dei Tool). Dopo la decisione del
+developer del 02/10 sugli FX nel PAC (nessuna commissione di conversione oltre lo spread) vale sempre 0 e non avrà
+mai un altro valore. Va tolto dal contratto: cambia il contratto e la versione del Tool, quindi non in questo
+round.
 
 **Collocazione**: debito trasversale fra contratto backend e consumatori
 frontend. Non appartiene a PAC/Rebalancer né alla piattaforma Tool: il caso che
@@ -1998,6 +2089,16 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
   `BrokerUserAccess`, `is_superuser`, impostazioni per utente) e sono legati all'id dell'utente, non
   al modo in cui entra. OIDC sostituisce solo il passo «chi sei», quindi funziona anche con più
   utenti.
+- **Le risposte del richiedente** (Johan3F, 01/10, nell'issue; esperienza personale da homelab):
+  - usa **Rauthy**, un provider piccolo, già funzionante con quasi tutte le sue app; si offre per i test;
+  - i permessi dovrebbero venire dal provider, con claim di gruppo configurabili e default sensati: il
+    provider resta la fonte di verità. Attenzione: in LibreFolio OWNER/EDITOR/VIEWER sono ruoli di
+    condivisione **per broker**, non globali. Dal provider si possono prendere solo il permesso di entrare
+    (un gruppo) e l'admin (`is_superuser`);
+  - creazione automatica al primo accesso, configurabile; lui la sceglie sempre;
+  - admin dal provider: il primo utente che entra, oppure chi ha un certo claim o gruppo;
+  - il login locale di riserva per lui non serve («se il provider è giù, il problema è altrove»): resta
+    un'opzione, spenta o accesa dall'admin.
 
 ### Azione Futura
 - Configurazione da variabili d'ambiente: indirizzo del provider, client id e secret, scope, testo
@@ -2021,7 +2122,158 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
     provider è giù;
   - un utente disattivato nel provider non entra più, ma la sessione aperta dura fino alla scadenza
     del JWT, a meno di disattivarlo anche in LibreFolio.
-- Test con un provider finto; guida per l'admin con esempi (Authelia, Authentik, Keycloak).
+- Test con un provider finto; guida per l'admin con esempi (Authelia, Authentik, Keycloak, Rauthy).
 - Alternativa scartata per ora: l'autenticazione fatta dal reverse proxy con un header («forward
   auth»), rischiosa se il backend è raggiungibile senza passare dal proxy.
 - Stima: qualche giorno, ben delimitato; non tocca i calcoli.
+
+## ⚡ Motore del portafoglio — caricare solo i prezzi che servono
+
+**Data aggiunta**: 1 Ottobre 2026 · **Status**: 📋 FUTURO — PR #30 (ex #28) entrata il 05/10/2026 ·
+**Priorità**: Media (prima va misurata)
+
+### Contesto
+- La PR [#30](https://github.com/Librefolio/LibreFolio/pull/30) di Martin Sova (msov19), che sostituisce la
+  [#28](https://github.com/Librefolio/LibreFolio/pull/28), corregge `convert_bulk`.
+  La query dei cambi aveva solo il limite superiore e a ogni chiamata caricava tutta la storia della
+  coppia. Ora carica la finestra [ultimo cambio ≤ prima data richiesta, ultima data richiesta] e
+  cerca con `bisect`.
+- Banco di prova del coordinatore (01/10, 10 anni di cambi, 3.650 conversioni giornaliere):
+  - la ricerca passa da 120–200 ms a meno di 1 ms;
+  - nel `convert_bulk` completo (~17 ms) il `bisect` pesa ~4%; il resto è la query e la creazione
+    degli oggetti `Currency`.
+  - **Valutato e scartato**: sostituire il `bisect` con una ricerca O(1) (dizionario per data con
+    passo indietro, dizionario pre-riempito per ogni giorno, cursore). Risparmierebbe meno dell'1%;
+    il cursore non aiuta perché `portfolio_engine` passa le date in ordine sparso (le raccoglie in
+    un `set`).
+- Lo stesso schema della query dei cambi c'è nel motore del portafoglio:
+  - `backend/app/services/portfolio_engine.py:2452` precarica i prezzi con solo `date <= actual_to`,
+    come oggetti ORM completi (`select(PriceHistory)`);
+  - quindi legge tutta la storia di ogni asset posseduto, anche gli anni prima del primo acquisto o
+    del periodo richiesto (`actual_from = date_from or first_tx_date`, `:2386`).
+- A cosa servono i prezzi caricati:
+  - il calcolo dei giorni che cambiano (`:855`), che dei prezzi precedenti a `frame_start` usa solo
+    l'ultimo;
+  - il resolver `AssetPriceSeries` (`backend/app/services/price_resolver.py:146`), che con `bisect`
+    trova l'ultima osservazione ≤ data.
+- `get_prices_bulk` (`backend/app/services/asset_sources/price_query.py:149`), il corrispettivo di
+  `convert_bulk` per i prezzi, ha già la finestra con minimo e massimo.
+
+### Azione Futura
+- **Prima misurare**, su una copia dei dati reali: righe lette e tempo della query a `:2452` rispetto
+  al calcolo intero, con e senza `date_from`.
+- Se conviene:
+  - limitare la query a [ultimo prezzo ≤ `frame_start` per asset, `actual_to`], con la stessa
+    sottoquery «ancora» della PR #30;
+  - leggere solo le colonne usate (data, close, valuta; open/high/low solo con le candele), invece
+    degli oggetti ORM.
+- Da verificare prima: nessuno deve chiedere al resolver una data precedente a `frame_start`
+  (periodo pre-frame, intervalli in transito, prezzi alle date dei BUY). Altrimenti l'ancora va
+  presa dalla prima di quelle date.
+- Test:
+  - confronto differenziale del risultato del motore, prima e dopo, su più utenti e periodi, come
+    quello fatto per la PR #28;
+  - poi `services portfolio-engine`, `services roi-fifo-utils`, `api portfolio`.
+- Minori, solo se la misura lo giustifica, in `get_prices_bulk`: la finestra è unica per tutte le
+  richieste (minimo e massimo globali), e il prezzo «seme» si cerca con una query per asset. Si
+  possono fare per asset, in una query sola, come nella PR #30.
+
+## 💡 Traccia rischio/rendimento nel tempo («snail trail»)
+
+**Data aggiunta**: 1 Ottobre 2026 · **Status**: 💡 IDEA — da approfondire prima di pianificarla ·
+**Priorità**: Bassa
+
+### Contesto
+- Origine: la review del developer di L3° di Asset Global (scheda Correlazione), 01/10/2026. Il
+  parere di F è nel suo diario di avanzamento di L3°
+  (`LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/progress/F-L3-rischio-rendimento.md`,
+  ancora sul ramo di F).
+- Cambiando il periodo, i punti del grafico rischio/rendimento si spostano. Per mostrare
+  quell'evoluzione il developer propone una traccia: con un periodo di 1A, un punto per ciascun
+  trimestre, uniti da una linea. In letteratura esiste e si chiama *snail trail*: i punti
+  rischio/rendimento di sotto-periodi successivi, uniti nel tempo.
+
+### ⚠️ Perché non a trimestri dentro un anno
+- **Asse orizzontale, la volatilità**: si stima bene già su ~63 sedute (errore relativo ≈ 1/√(2n),
+  cioè 9–14% con le code grasse), e cambia davvero nel tempo, perché i mercati alternano fasi calme e
+  agitate. Qui la traccia direbbe il vero.
+- **Asse verticale, il rendimento medio annuo**: anche per un asset che non cambia affatto, la media
+  annualizzata di un sotto-periodo lungo T anni si scosta per puro caso di σ/√T. Su un trimestre fa
+  2σ: ±40 punti per un ETF azionario al 20% di volatilità, ±140 per una cripto al 70%. In più,
+  annualizzare un trimestre lo moltiplica per quattro: un +10% nel trimestre diventa «+40% annuo».
+- **Il risultato**: punti che saltano di decine di punti, e un'evoluzione che si vede ma non c'è. È
+  il grafico «plausibile ma sbagliato» che il laboratorio evita.
+- **La leggibilità**: N asset per 4 punti, più N linee che si incrociano.
+
+### Azione Futura — la versione onesta, se un giorno la si vuole
+- Solo per l'asset selezionato: la selezione collegata fra tabella e grafico di L3° c'è già.
+- Segmenti di un anno solare: il rendimento davvero ottenuto in quell'anno, un fatto e non
+  un'estrapolazione. Quindi solo per periodi di almeno 3 anni.
+- Calcolata dal motore (Risk): un campo nuovo nell'uscita di `asset_set_risk_return`, con le regole
+  di copertura per segmento.
+- Prima di disegnarla, un prototipo sui dati veri, per vedere se la traccia dice qualcosa di più del
+  rumore.
+- Per «come cambia il rischio nel tempo» esistono già gli indicatori Rolling Volatility e Rolling
+  Sharpe nel grafico dell'asset.
+
+## 🆔 Gli id degli asset (e delle altre tabelle) si riusano dopo una cancellazione
+
+**Data aggiunta**: 1 Ottobre 2026 · **Status**: ⏳ IN ATTESA · **Priorità**: Media
+
+### Contesto
+- Trovato dal test-author di A (famiglia Risk) il 01/10/2026 e verificato sullo schema 004: `assets.id`
+  è `INTEGER PRIMARY KEY` **senza** `AUTOINCREMENT`. Lo stesso vale per tutte le altre tabelle
+  (`brokers`, `transactions`, `users`, `asset_events`, `fx_rates`…).
+- Senza `AUTOINCREMENT`, SQLite dà alla riga nuova `max(id)+1`: se si cancella l'asset più recente e
+  se ne crea un altro, quello nuovo prende il suo id.
+- Il client conserva degli id di asset:
+  - il benchmark condiviso del rischio (`riskBenchmarkStore`);
+  - la selezione persistita del laboratorio Asset Global (D19);
+  - gli asset di confronto dei grafici;
+  - i link salvati (`/assets/<id>`).
+
+  Dopo un riuso, puntano in silenzio a un asset diverso.
+- Il frontend non può accorgersene. `entityStore.ensureLoaded()` si risolve anche quando il
+  caricamento fallisce (`frontend/src/lib/stores/core/entityStore.ts:105`, «Fail silently»), quindi
+  «sparito» e «non caricato» non si distinguono.
+- Per questo il nuovo `BenchmarkSelect` (Risk) non cancella un id sconosciuto: lo tratta come non
+  scelto e lo lascia salvato.
+
+### Azione Futura
+- Backend: `AUTOINCREMENT` sulle tabelle i cui id escono dal backend e restano salvati, a partire da
+  `assets`.
+  - In SQLite serve ricostruire la tabella: una migrazione Alembic incrementale (ricreazione con
+    `batch_alter_table`), con `upgrade` e `downgrade` provati su un DB popolato.
+  - Dopo la copia, `sqlite_sequence` parte dal massimo id esistente: da lì in poi un id non torna
+    più.
+- ⚠️ **Rischi della migrazione** (verificati il 01/10/2026):
+  - **Durante le migrazioni le chiavi esterne sono attive.** Il processo di Alembic importa
+    `backend.app.db.session`, che registra su ogni `Engine` il listener `PRAGMA foreign_keys=ON`
+    (`session.py:20`, `:52`).
+  - Ricostruire `assets` vuol dire cancellare la tabella vecchia. Con le chiavi esterne attive,
+    SQLite prima cancella le sue righe:
+    - `price_history`, `asset_events` e `asset_provider_assignments` sono legate con
+      `ON DELETE CASCADE`, quindi verrebbero svuotate;
+    - `transactions` (`NO ACTION`) fa fallire l'istruzione: la migrazione si ferma e l'app non
+      parte, perché l'avvio esegue `alembic upgrade head` (`main.py:200`).
+    - Su un DB senza transazioni, invece, prezzi, eventi e assegnazioni sparirebbero in silenzio.
+  - Nessuna migrazione del progetto (001–004) ha mai ricostruito una tabella referenziata: questa
+    sarebbe la prima, senza uno schema già collaudato.
+  - Come farla:
+    - spegnere le chiavi esterne fuori dalla transazione
+      (`op.get_context().autocommit_block()` con `PRAGMA foreign_keys=OFF`) e riaccenderle;
+    - `PRAGMA foreign_key_check` alla fine;
+    - ricreare la tabella copiando esattamente il DDL scritto a mano dello schema (vincoli, indici,
+      default), più `AUTOINCREMENT`;
+    - provare `upgrade` e `downgrade` su una copia del DB vero.
+- Alternativa senza toccare il DB, per il caso del localStorage: gli asset hanno `created_at`. Il
+  client può salvare `{id, created_at}` e trattare una differenza come «sparito». Risolve benchmark
+  e selezioni, non i link salvati.
+- In alternativa: riferimenti stabili (un identificativo che non si riusa) per quello che il client
+  salva.
+- Prima: censire gli id che il frontend conserva (localStorage e URL), anche di broker e coppie FX.
+- Dopo la cura: decidere se `BenchmarkSelect` può tornare a cancellare gli id spariti.
+- Da correggere comunque: il rapporto di fattibilità del motore FIFO
+  (`LibreFolio_developer_journal/RoadmapV4_UI/fifo-engine/v1/high-level-plan_v1-feasibility-report.md:300`)
+  dà la PK per «autoincrementante mai riusata». Non è vero. Lì l'identità del lotto si calcola a ogni
+  esecuzione e non si salva, quindi oggi non fa danni.
