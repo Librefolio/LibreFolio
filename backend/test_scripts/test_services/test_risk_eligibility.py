@@ -956,23 +956,25 @@ async def test_replaying_the_proposed_range_brings_the_recovered_asset_back(wind
 
 
 @pytest.mark.parametrize(
-    ("key", "proposed"),
+    ("key", "proposed", "reason"),
     [
-        pytest.param("late", (LATE_FIRST_QUOTE + days(1), CRISIS_END), id="listing"),
-        pytest.param("gapped", (GAP_RESUMES + days(1), CRISIS_END), id="gap-at-the-start"),
+        pytest.param("late", (LATE_FIRST_QUOTE + days(1), CRISIS_END), Excluded.STARTS_AFTER_WINDOW_START, id="listing"),
+        pytest.param("gapped", (GAP_RESUMES + days(1), CRISIS_END), Excluded.STALE_AT_WINDOW_START, id="gap-at-the-start"),
     ],
 )
 @pytest.mark.asyncio
-async def test_a_replay_left_empty_by_its_edges_is_unavailable_with_the_proposal(window_assets, key, proposed):
+async def test_a_replay_left_empty_by_its_edges_is_unavailable_with_the_proposal(window_assets, key, proposed, reason):
     ids = window_assets.ids
 
     (result,) = (await replay([ids[key]])).items
 
-    # No audit to carry the proposal: the error does, since this is when it matters most.
+    # No audit to carry the proposal: the error does, since this is when it matters most — and,
+    # since D372 (02/10/2026), the asset with its reason, weightless on an asset set.
     assert result.status == RiskResultStatus.UNAVAILABLE
     assert result.error.code == RiskErrorCode.INSUFFICIENT_HISTORY
     assert result.error.details == {
         "excluded_asset_ids": [ids[key]],
+        "excluded_assets": [{"asset_id": ids[key], "reason": reason.value, "weight": None}],
         "suggested_range": {"start": proposed[0].isoformat(), "end": proposed[1].isoformat()},
         "suggested_range_recovers": [ids[key]],
     }
@@ -986,7 +988,47 @@ async def test_a_replay_of_assets_never_priced_in_the_window_is_unavailable_with
 
     assert result.status == RiskResultStatus.UNAVAILABLE
     assert result.error.code == RiskErrorCode.INSUFFICIENT_HISTORY
-    assert result.error.details == {"excluded_asset_ids": sorted([ids["empty"], ids["after_only"]])}
+    never_priced = sorted([ids["empty"], ids["after_only"]])
+    assert result.error.details == {
+        "excluded_asset_ids": never_priced,
+        "excluded_assets": [{"asset_id": asset_id, "reason": Excluded.NO_PRICES_IN_WINDOW.value, "weight": None} for asset_id in never_priced],
+    }
+
+
+# A window that opens centuries before any quote (D372, 02/10/2026: "prehistoric date"). Every asset
+# then starts quoting after the window begins, so the replay is refused with nothing left — and the
+# window's edges are all that excluded them, so the proposal is the common period: from the day after
+# the latest first quote to the window's end, recovering every asset. B3 pins today's behaviour (C2)
+# assertion by assertion before the field D372 adds, so a red here names which of the two moved.
+PREHISTORIC_START = date(1019, 1, 1)
+
+
+@pytest.mark.asyncio
+async def test_a_replay_from_a_prehistoric_date_is_refused_naming_every_late_starter_and_offering_the_common_period(window_assets, loader_calls):
+    ids = window_assets.ids
+    scope = sorted([ids["early"], ids["holiday"], ids["late"]])
+    # The late listing's first quote is the latest first quote of the three.
+    proposed = (LATE_FIRST_QUOTE + days(1), CRISIS_END)
+
+    (result,) = (await replay(scope, (PREHISTORIC_START, CRISIS_END))).items
+
+    assert result.status == RiskResultStatus.UNAVAILABLE, result
+    assert result.output is None
+    assert result.error is not None and result.error.code == RiskErrorCode.INSUFFICIENT_HISTORY, result.error
+    details = result.error.details
+    assert details["excluded_asset_ids"] == scope
+    assert (details.get("suggested_range"), details.get("suggested_range_recovers")) == ({"start": proposed[0].isoformat(), "end": proposed[1].isoformat()}, scope)
+    # Verified before it is offered: one reading of the window, a second of the proposal.
+    assert [call["window"] for call in loader_calls] == [(PREHISTORIC_START, CRISIS_END), proposed]
+    assert loader_calls[1]["asset_ids"] == set(scope)
+
+    # D372: each of them with its reason, the same for all three.
+    assert details == {
+        "excluded_asset_ids": scope,
+        "excluded_assets": [{"asset_id": asset_id, "reason": Excluded.STARTS_AFTER_WINDOW_START.value, "weight": None} for asset_id in scope],
+        "suggested_range": {"start": proposed[0].isoformat(), "end": proposed[1].isoformat()},
+        "suggested_range_recovers": scope,
+    }
 
 
 # ---------------------------------------------------------------------------
