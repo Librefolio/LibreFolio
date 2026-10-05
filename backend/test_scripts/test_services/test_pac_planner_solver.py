@@ -4,18 +4,21 @@
 cascade `fixed_l2 -> shortfall -> route_priority -> explicit_cost ->
 active_order_rows -> canonical tie-breaks` as a genuine lexicographic search:
 solve stage *k*, freeze its optimum as a hard constraint, then solve stage
-*k+1* on that face. It never decides anything about proof -- it returns a
-candidate plus a pile of explicitly floating, explicitly non-authoritative
-facts, and the only source of truth for feasibility and for every reported
-number is the Decimal-exact `evaluate_exact_candidate` replay.
+*k+1* on that face. It never decides anything about proof -- `proof.py` does,
+reading the statuses this module reports -- and it returns a candidate plus
+floating facts that are never authoritative for a number: the only source of
+truth for feasibility and for every published figure is the Decimal-exact
+`evaluate_exact_candidate` replay.
 
 The keystone here is `test_solver_incumbent_equals_exhaustive_oracle_optimum`
 (item B1): a parametrized gate asserting that, for every toy fixture, the
 solver's incumbent equals the exhaustive oracle's proven optimum *exactly* --
 same decision quanta and the same full lexicographic key (the tuple of exact
 objective values in ascending-ordinal order, plus `canonical_tie_quanta`).
-The oracle (`oracle.py`) has zero SCIP dependency and enumerates the whole
-discrete domain, so it is independent ground truth. Adding a fixture to
+The exhaustive oracle is a test instrument
+(`backend/test_scripts/test_services/_pac_exhaustive_oracle.py`, with no
+production role since D-X1): it has zero SCIP dependency and enumerates the
+whole discrete domain, so it is independent ground truth. Adding a fixture to
 `_ORACLE_AGREEMENT_FIXTURES` automatically extends the gate. From here on
 "solver green" means "oracle-agreement green".
 
@@ -23,17 +26,18 @@ Scope, as everywhere else in this package: PAC `proportional` policy,
 `primary` purpose only. Every fixture is small enough for the oracle to
 enumerate in a fraction of a second (the coarse funding/FX case, which is the
 fixture that caught the Step3 §16.11 HALF_UP ledger defect, has 585
-candidates; the rest are in the tens). Fixtures with a *binding* fee cap are
-deliberately excluded from the agreement gate: the fee epigraph is documented
-cap-oblivious (`compiler.py`), so a capped route could legitimately bias which
-candidate the solver prefers -- that is a known modelling limitation, not a
-disagreement the gate should police.
+candidates, the QX1-a example 501, the exact FX-credit tie case 240; the rest
+are in the tens). Fixtures with a *binding* fee cap are no longer excluded
+from the agreement gate: since QX1-a (found 2026-09-24) the fee epigraph
+models the cap exactly (`constraints.py`), so a capped route that makes the
+solver prefer another candidate is a disagreement like any other, and the
+gate polices it.
 
 These are pure in-process tests (`isolation="pure"`): no server, no database,
-no clock assertions, no network. Two ready-made scenario fixtures are imported
+no clock assertions, no network. Three ready-made scenario fixtures are imported
 from the sibling oracle suite (`_two_asset_pac_scenario`,
-`_coarse_funding_fx_scenario`), exactly the way that module imports its own
-primitives from `test_pac_planner_evaluator.py`.
+`_coarse_funding_fx_scenario`, `_credit_tie_fx_scenario`), exactly the way that
+module imports its own primitives from `test_pac_planner_evaluator.py`.
 """
 
 from __future__ import annotations
@@ -45,7 +49,6 @@ import pytest
 from backend.app.services.pac_allocator.compiler import compile_policy_program
 from backend.app.services.pac_allocator.evaluator import build_exact_policy_view, evaluate_exact_candidate
 from backend.app.services.pac_allocator.models import CandidateActionVector, ExactEvaluation, ExactPlannerScenario, ExactPolicyView
-from backend.app.services.pac_allocator.oracle import run_exhaustive_oracle
 from backend.app.services.pac_allocator.solver import (
     DEFAULT_SOLVER_TIME_BUDGET_SECONDS,
     ENGINE_NAME,
@@ -53,8 +56,9 @@ from backend.app.services.pac_allocator.solver import (
     SolverStageReport,
     solve_policy_program,
 )
+from backend.test_scripts.test_services._pac_exhaustive_oracle import run_exhaustive_oracle
 from backend.test_scripts.test_services.test_pac_planner_evaluator import ZERO, R, _pac_scenario
-from backend.test_scripts.test_services.test_pac_planner_oracle import _coarse_funding_fx_scenario, _two_asset_pac_scenario
+from backend.test_scripts.test_services.test_pac_planner_oracle import _coarse_funding_fx_scenario, _credit_tie_fx_scenario, _two_asset_pac_scenario
 
 # --------------------------------------------------------------------------
 # Shared helpers
@@ -85,8 +89,8 @@ def _lexicographic_key(view: ExactPolicyView, evaluation: ExactEvaluation) -> tu
 
     Built only from an `evaluate_exact_candidate` result, so every value is
     exact (`ExactRatio`) and comparable with `==`, never a SCIP float. This
-    is an independent re-implementation of the same key `oracle.py` uses --
-    it does not import `oracle._lexicographic_key`.
+    is an independent re-implementation of the same key the exhaustive oracle
+    uses -- it does not import the oracle's `_lexicographic_key`.
     """
     ordered_ref_ids = tuple(objective.ref_id for objective in sorted(view.objectives, key=lambda objective: objective.ordinal))
     values_by_ref_id = {objective.ref_id: objective.value for objective in evaluation.objectives}
@@ -105,9 +109,10 @@ def _single_buy_scenario() -> ExactPlannerScenario:
 
 
 def _proportional_fee_no_cap_scenario() -> ExactPlannerScenario:
-    """A proportional fee with a floor but *no* cap, so the fee epigraph is
-    exact (the cap-oblivious bias cannot apply) and `explicit_cost` genuinely
-    discriminates between candidates.
+    """A proportional fee with a floor but *no* cap, so only the floor and
+    linear rows of the fee epigraph are in play (the capped shapes are the
+    QX1-a fixtures below) and `explicit_cost` genuinely discriminates between
+    candidates.
     """
     return _pac_scenario(price=R(10), fee_rate=R(1, 10), fee_floor=R(5), fee_cap=None, route_cap=R(6), cash=R(1000))
 
@@ -119,12 +124,97 @@ def _execution_margin_scenario() -> ExactPlannerScenario:
     return _pac_scenario(price=R(10), margin=R(1, 20), route_cap=R(6))
 
 
+def _fee_floor_above_linear_upper_scenario() -> ExactPlannerScenario:
+    """X2 (found 2026-09-24): 0.19% with a EUR1.50 minimum on EUR100 of cash.
+    At the route's own upper bound (10 units, EUR100) the linear fee is only
+    EUR0.19, and the fee epigraph sized its Big-M from `rate *
+    notional_upper` alone -- so the minimum made the whole model infeasible,
+    order on or off, while the exact replay buys 9 units (EUR90 + EUR1.50).
+    """
+    return _pac_scenario(price=R(10), cash=R(100), fee_rate=R(19, 10000), fee_floor=R(3, 2), route_cap=R(100))
+
+
+def _small_route_cap_fee_floor_scenario() -> ExactPlannerScenario:
+    """X2 through a small per-title cap instead of a small budget: EUR10000 of
+    cash, but a 20-unit cap keeps `notional_upper` at EUR200, and 0.19% of it
+    (EUR0.38) is still below the EUR1.50 minimum.
+    """
+    return _pac_scenario(price=R(10), cash=R(10000), fee_rate=R(19, 10000), fee_floor=R(3, 2), route_cap=R(20))
+
+
+def _flat_minimum_fee_scenario() -> ExactPlannerScenario:
+    """X2 in a common real-world shape: a flat EUR2 minimum on a zero rate,
+    so `rate * notional_upper` is zero and any minimum at all sits above it.
+    """
+    return _pac_scenario(price=R(10), cash=R(100), fee_floor=R(2), route_cap=R(100))
+
+
+def _fee_cap_binds_scenario() -> ExactPlannerScenario:
+    """QX1-a (found 2026-09-24): 10% capped at EUR1 on EUR95 of cash. The
+    exact replay buys 9 units (EUR90 + EUR1); the fee epigraph ignored the
+    cap and priced them at the linear EUR9, EUR99 against EUR95, so the
+    solver stopped at 8.
+    """
+    return _pac_scenario(price=R(10), cash=R(95), fee_rate=R(1, 10), fee_cap=R(1), route_cap=R(100))
+
+
+def _fee_fixed_floor_cap_scenario() -> ExactPlannerScenario:
+    """QX1-a with every term of the fee in play: EUR0.50 fixed plus 10% with a
+    EUR0.50 minimum, capped at EUR1.50, on EUR97 of cash. The replay buys 9
+    units (EUR90 + EUR2); the model priced them at EUR0.50 + EUR9, EUR99.50
+    against EUR97, and stopped at 8.
+    """
+    return _pac_scenario(price=R(10), cash=R(97), fixed_fee=R(1, 2), fee_rate=R(1, 10), fee_floor=R(1, 2), fee_cap=R(3, 2), route_cap=R(100))
+
+
+def _fee_cap_binds_qx1a_example_scenario() -> ExactPlannerScenario:
+    """The QX1-a example the developer approved: EUR50,050 at EUR100 a unit,
+    0.19% capped at EUR18. The replay buys 500 units (EUR50,000 + EUR18); the
+    model priced them at the linear EUR95, EUR50,095 against EUR50,050, and
+    stopped at 499. 501 candidates, still a fraction of a second for the
+    oracle.
+    """
+    return _pac_scenario(price=R(100), cash=R(50050), fee_rate=R(19, 10000), fee_cap=R(18), route_cap=R(1000))
+
+
+def _fee_cap_never_binds_scenario() -> ExactPlannerScenario:
+    """Control for the QX1-a fixtures: the EUR95 and the 10% of
+    `fee_cap_binds`, but a EUR50 cap the route never reaches (the linear fee
+    tops out at EUR9 on 9 units). Model and replay agree on 8 units (EUR80 +
+    EUR8) whether the cap is modelled or not.
+    """
+    return _pac_scenario(price=R(10), cash=R(95), fee_rate=R(1, 10), fee_cap=R(50), route_cap=R(100))
+
+
+def _exact_credit_tie_fx_scenario() -> ExactPlannerScenario:
+    """Option A (R13): an exact FX-credit tie decides the optimum. 5 EUR at
+    3/2 with no spread is exactly 7.5 USD, a HALF_UP tie that posts 8, and
+    those 8 USD buy the 4th unit at 2 USD; without the round-up only 3 fit.
+    The oracle suite derives that optimum by hand. Zero fee and a whole-USD
+    price: a credit tie is reachable, no debit tie is. 240 candidates.
+    """
+    return _credit_tie_fx_scenario(price=R(2), cap=R(4))
+
+
 _ORACLE_AGREEMENT_FIXTURES = [
     pytest.param(_two_asset_pac_scenario, id="two_asset_pac"),
     pytest.param(_coarse_funding_fx_scenario, id="coarse_funding_fx"),  # the fixture that caught the Step3 §16.11 defect
     pytest.param(_single_buy_scenario, id="single_buy"),
     pytest.param(_proportional_fee_no_cap_scenario, id="proportional_fee_no_cap"),
     pytest.param(_execution_margin_scenario, id="execution_margin"),
+    # X2: fee minimum above `rate * notional_upper`. Every amount is whole cents, so no HALF_UP tie is reachable.
+    pytest.param(_fee_floor_above_linear_upper_scenario, id="fee_floor_above_linear_upper"),
+    pytest.param(_small_route_cap_fee_floor_scenario, id="small_route_cap_fee_floor"),
+    pytest.param(_flat_minimum_fee_scenario, id="flat_minimum_fee"),
+    # QX1-a: a fee cap that binds inside the route's range. Every amount is whole cents, so no HALF_UP tie is reachable.
+    pytest.param(_fee_cap_binds_scenario, id="fee_cap_binds"),
+    pytest.param(_fee_fixed_floor_cap_scenario, id="fee_fixed_floor_cap"),
+    pytest.param(_fee_cap_binds_qx1a_example_scenario, id="fee_cap_binds_qx1a_example"),
+    pytest.param(_fee_cap_never_binds_scenario, id="fee_cap_never_binds"),  # control: a cap the route never reaches
+    # Option A: an exact FX-credit tie is reachable and no debit tie is, so the optima must coincide exactly. The
+    # allowance for SCIP beating the oracle covers DEBIT ties only (X3 rejected): at a credit tie the model may post
+    # either neighbour, but whatever the lower one admits the true round-up admits too, so the feasible sets agree.
+    pytest.param(_exact_credit_tie_fx_scenario, id="credit_tie_fx"),
 ]
 
 
@@ -275,40 +365,43 @@ def test_zero_time_budget_yields_no_incumbent_without_fabricated_observations() 
 
 
 # --------------------------------------------------------------------------
-# B5: no false infeasibility claim
+# B5: the first-stage infeasible verdict, and nothing after it
 # --------------------------------------------------------------------------
 
 
-def test_infeasible_scenario_reports_floating_infeasible_only_from_global_stage() -> None:
+def test_infeasible_scenario_reports_only_the_first_global_stage_as_infeasible() -> None:
     """A genuinely infeasible scenario (`ORDER_REQUIRED_MIN` above the route's
     reachable cap -- the same construction the oracle suite proves infeasible)
-    must be reported as `reported_infeasible`, in the floating vocabulary that
-    is never a proof claim, and *only* from the first, still-global stage-0.
-    No later, `incumbent_face` stage may ever claim infeasibility.
+    closes the first, still-global stage `infeasible`: SCIP's verdict on the
+    scenario itself, and the only stage that can deliver one.
 
-    The exhaustive oracle corroborates that the scenario really is infeasible,
-    so `reported_infeasible` is not a false claim.
+    The run reports exactly that: `reported_infeasible`, one stage -- ordinal
+    1, `global`, `infeasible` -- with no primal, no dual and no gap, because an
+    infeasible solve has none, and nothing after it, because no face exists
+    for a later stage to run on (no `not_reached` rows). Deciding that the
+    verdict is a proof is `proof.py`'s job, not this module's.
+
+    The exhaustive oracle corroborates, independently of SCIP, that the
+    scenario has no feasible candidate, so the verdict is not a false claim.
     """
     scenario = _pac_scenario(required=R(5), route_cap=R(3))
     view, result = _run(scenario)
 
     assert result.outcome == "reported_infeasible"
-    assert "proven" not in result.outcome  # floating word, not a proof verdict
-    assert result.outcome != "infeasible"
     assert result.candidate is None
     assert result.anomaly is None
+    assert result.finished_stage_count == 0
 
-    stage_zero = result.stages[0]
-    assert stage_zero.ordinal == 1
-    assert stage_zero.scope == "global"
-    assert stage_zero.scip_status == "infeasible"
+    assert len(result.stages) == 1, result.stages
+    (stage,) = result.stages
+    first_objective_code = next(objective.code for objective in view.objectives if objective.ordinal == 1)
+    assert (stage.stage, stage.objective_code, stage.ordinal, stage.scope) == (first_objective_code, first_objective_code, 1, "global")
+    assert (stage.status, stage.scip_status) == ("infeasible", "infeasible")
+    assert (stage.primal, stage.dual, stage.absolute_gap, stage.relative_gap) == (None, None, None, None)
+    assert not any(report.scip_status == "not_reached" for report in result.stages)
 
-    for later_stage in result.stages[1:]:
-        assert later_stage.scope == "incumbent_face"
-        assert later_stage.scip_status != "infeasible"
-
-    # The floating "reported_infeasible" is corroborated by the exhaustive
-    # oracle -- it is not a false infeasibility claim.
+    # The verdict is corroborated by the exhaustive oracle -- it is not a
+    # false infeasibility claim.
     oracle = run_exhaustive_oracle(scenario, view)
     assert oracle.feasible_candidates == 0
     assert oracle.best_candidate is None

@@ -1,38 +1,43 @@
 """Contract tests for the proof-semantics layer of the PAC/Rebalancer planner.
 
-`proof.py` (Step 3, Stage 4) decides the third of three independent
-dimensions: incumbent validation is `evaluator.py`'s job, floating solver
-evidence is `solver.py`'s, and the *mathematical conclusion about the
-discrete domain* is this module's — and only this module's.
+`proof.py` decides the third of three independent dimensions of a ready
+result: incumbent validation is `evaluator.py`'s job, the floating solver
+report is `solver.py`'s, and the *conclusion about the discrete domain* is
+this module's — and only this module's.
 
-The headline property these tests exist to lock down is **unrepresentability**:
-the unsafe transition from a floating/limit-terminated SCIP solve to a
-`*_proven` outcome must be *absent by construction*, not merely un-taken. A
-caller cannot promote a solver result even by mistake, because:
+Since D-X1 SCIP is the only production search engine, and its own status is
+the proof. The properties these tests lock down:
 
-* `conclude_without_proof` is the only conclusion obtainable from solver
-  evidence and its return type is `UnprovenConclusion`; there is no function
-  that maps a `SolverRunResult` to a proven type (asserted here by annotation
-  introspection, not by eyeballing).
+* **The proof is SCIP's status, and one function reads it.**
+  `conclude_with_solver` is the module's only public callable:
+  `optimal_proven` when every stage of the cascade — the canonical `tie:*`
+  stages included — closed `optimal` with no anomaly; `infeasibility_proven`
+  when the run is exactly the first, still-global stage closed `infeasible`;
+  `not_proven` for everything else: a limit, an anomaly, any other shape.
+* **A proof is never transferred to a candidate SCIP did not return.** An
+  optimum is proven only for SCIP's own candidate — publish another, or none,
+  and the conclusion downgrades; an infeasibility only while SCIP returned
+  nothing and nothing is published.
+* **Witnesses are sealed.** A `SolverStatusWitnessFacts` built outside
+  `conclude_with_solver` raises `ProofForgeryError`, checked for its exact
+  type (a guard that throws the wrong type is worse than no guard), and so
+  does a run that would prove something about objectives other than the ones
+  the caller named.
 * `UnprovenConclusion` is a frozen dataclass whose `kind` is a single-valued
-  `Literal` — it has no field that could ever hold a proof kind.
-* Every proven conclusion carries a *sealed* witness; forging either witness
-  type outside this module raises `ProofForgeryError`, checked here for its
-  exact exception type (a guard that throws the wrong type is worse than no
-  guard).
+  `Literal`: it has no field that could ever hold a proof.
 
-Everything else is exercised against the *real* pipeline
-(`build_exact_policy_view` -> `run_exhaustive_oracle` /
-`compile_policy_program` -> `solve_policy_program`), reusing the sibling
-suites' fixtures exactly the way they already share them — never hand-built
-stubs. Candidate counts are read off the live `OracleResult` and the witness
-is asserted to mirror them; no global count (585/151/16/11/…) is hardcoded.
+The runs are real (`build_exact_policy_view` -> `compile_policy_program` ->
+`solve_policy_program`) on the sibling suites' scenario fixtures, and each
+fixture confirms its run's state before anything is concluded from it. The
+shapes a healthy SCIP does not produce on demand — a tie stage cut by a
+limit, an infeasible stage on a later ordinal, an anomaly — are
+`dataclasses.replace` variants of those real runs, each changing one named
+fact, so every downgrade is attributable to the fact the test names.
 
 These are pure in-process tests (`isolation="pure"`): no server, no database,
-no clock assertions, no sleeps, no network. Exact domain values compare with
-`==`; SCIP floats are never compared exactly (the "perfect solve" fixture is
-proven perfect by `scip_status == "optimal"` / `status == "finished"`, never
-by a float-gap equality).
+no clock assertions, no sleeps, no network. SCIP floats are never compared
+exactly: a perfect run is recognised by `status == "finished"` and
+`scip_status == "optimal"`, never by a gap equality.
 """
 
 from __future__ import annotations
@@ -45,60 +50,150 @@ import pytest
 
 from backend.app.services.pac_allocator import proof
 from backend.app.services.pac_allocator.compiler import compile_policy_program
-from backend.app.services.pac_allocator.evaluator import build_exact_policy_view, evaluate_exact_candidate
-from backend.app.services.pac_allocator.models import ExactEvaluation, ExactPlannerScenario, ExactPolicyView
-from backend.app.services.pac_allocator.oracle import run_exhaustive_oracle
+from backend.app.services.pac_allocator.evaluator import build_exact_policy_view
+from backend.app.services.pac_allocator.models import CandidateActionVector, ExactPlannerScenario, ExactPolicyView
 from backend.app.services.pac_allocator.proof import (
     NOT_PROVEN_REASON,
-    DeterministicConflictWitnessFacts,
-    ExhaustiveOracleWitnessFacts,
     InfeasibilityProvenConclusion,
     OptimalProvenConclusion,
     ProofForgeryError,
+    SolverStatusWitnessFacts,
     UnprovenConclusion,
-    conclude_infeasible_from_conflicts,
-    conclude_with_oracle,
-    conclude_without_proof,
-    describe_conclusion,
+    conclude_with_solver,
 )
-from backend.app.services.pac_allocator.solver import SolverRunResult, solve_policy_program
+from backend.app.services.pac_allocator.solver import SolverRunResult, SolverStageReport, solve_policy_program
 from backend.test_scripts.test_services.test_pac_planner_evaluator import R, _candidate, _pac_scenario
 from backend.test_scripts.test_services.test_pac_planner_oracle import _two_asset_pac_scenario
 
 # The one legitimate reach into a module-private. A *valid* sealed witness can
 # only be cut with the very seal that production code is structurally forbidden
-# from touching, so the positive-invariant tests below must read it here. That
-# production code cannot reach this object is exactly the property the forgery
-# tests assert; a test may, precisely because it is asserting the shape of a
-# real witness rather than manufacturing proof evidence at a call site.
+# from touching, so the forgery cases that must get past the seal to reach the
+# guard behind it read it here. That production code cannot reach this object
+# is exactly the property the seal cases assert; a test may, precisely because
+# it is probing the witness's own guards rather than manufacturing proof
+# evidence at a call site.
 _SEAL = proof._WITNESS_SEAL
 
+# Canonical tie-break stages carry a decision id, not an objective code: they
+# must close like every other stage, but no witness names them.
+_TIE_STAGE_PREFIX = "tie:"
+
+# Everything `proof.py` exports today. An export list that grows again is a
+# road to a proof that bypasses the one function reading SCIP's status.
+_PUBLIC_API = (
+    "NOT_PROVEN_REASON",
+    "InfeasibilityProvenConclusion",
+    "OptimalProvenConclusion",
+    "PlanConclusion",
+    "ProofForgeryError",
+    "ProvenConclusion",
+    "SolverStatusWitnessFacts",
+    "UnprovenConclusion",
+    "conclude_with_solver",
+)
+
+# The shape of a real anomaly: the solver's own message for an unexpected status.
+_ANOMALY = "stage 'shortfall' (ordinal 2) ended with unexpected solver status 'unknown'"
+
 
 # --------------------------------------------------------------------------
-# Shared helpers (real pipeline, never hand-built stubs)
+# Real runs (never hand-built stubs), and one-fact variants of them
 # --------------------------------------------------------------------------
 
 
-def _primary_view(scenario: ExactPlannerScenario) -> ExactPolicyView:
-    return build_exact_policy_view(scenario, purpose="primary")
+@dataclasses.dataclass(frozen=True)
+class _Run:
+    """A real SCIP run, the view it ran on, and that view's objective codes in
+    cascade order — exactly what the planner hands `conclude_with_solver`."""
+
+    view: ExactPolicyView
+    result: SolverRunResult
+    objective_codes: tuple[str, ...]
 
 
-def _real_solver_result(scenario: ExactPlannerScenario, **kwargs: object) -> SolverRunResult:
+def _real_run(scenario: ExactPlannerScenario, **kwargs: object) -> _Run:
     """Compile and solve a fresh model — a genuine `SolverRunResult`, never a
     stub. A fresh `compile_policy_program` per call keeps every solve on its
     own `Model` (the PySCIPOpt reuse trap the sibling suites document).
     """
-    view = _primary_view(scenario)
-    program = compile_policy_program(scenario, view)
-    return solve_policy_program(program, **kwargs)
+    view = build_exact_policy_view(scenario, purpose="primary")
+    result = solve_policy_program(compile_policy_program(scenario, view), **kwargs)
+    objective_codes = tuple(ref.code for ref in sorted(view.objectives, key=lambda ref: ref.ordinal))
+    return _Run(view=view, result=result, objective_codes=objective_codes)
 
 
-def _sealed_oracle_witness(*, enumerated: int, feasible: int, objective_codes: tuple[str, ...]) -> ExhaustiveOracleWitnessFacts:
-    return ExhaustiveOracleWitnessFacts(enumerated_candidates=enumerated, feasible_candidates=feasible, objective_codes=objective_codes, seal=_SEAL)
+def _is_tie(stage: SolverStageReport) -> bool:
+    return stage.objective_code.startswith(_TIE_STAGE_PREFIX)
+
+
+def _only_stage(result: SolverRunResult) -> SolverStageReport:
+    (stage,) = result.stages
+    return stage
+
+
+def _with_stage(result: SolverRunResult, stage_id: str, **changes: object) -> SolverRunResult:
+    """`result` with the one stage whose id is `stage_id` changed.
+
+    ``finished_stage_count`` is recounted so the variant stays a coherent run;
+    nothing else moves.
+    """
+    assert [stage.stage for stage in result.stages].count(stage_id) == 1, stage_id
+    stages = tuple(dataclasses.replace(stage, **changes) if stage.stage == stage_id else stage for stage in result.stages)
+    return dataclasses.replace(result, stages=stages, finished_stage_count=sum(stage.status == "finished" for stage in stages))
+
+
+def _second_stage_not_reached(run: _Run) -> SolverStageReport:
+    """The row the solver used to append after an infeasible first stage: the
+    second objective, on the incumbent face, never reached."""
+    code = run.objective_codes[1]
+    return dataclasses.replace(_only_stage(run.result), stage=code, objective_code=code, ordinal=2, status="unfinished", scope="incumbent_face", scip_status="not_reached")
+
+
+def _perturbed(candidate: CandidateActionVector, decision_id: str) -> CandidateActionVector:
+    """`candidate` with one decision moved by one quantum, staying nonnegative.
+
+    Only the quanta change — not the candidate id, not the view id — so a
+    downgrade can be attributed to the plan alone.
+    """
+    decisions = tuple(dataclasses.replace(decision, quanta=decision.quanta - 1 if decision.quanta > 0 else decision.quanta + 1) if decision.decision_id == decision_id else decision for decision in candidate.decisions)
+    return dataclasses.replace(candidate, decisions=decisions)
+
+
+@pytest.fixture(scope="module")
+def perfect_run() -> _Run:
+    """SCIP closes every stage of `_two_asset_pac_scenario` optimal, the tie-breaks included."""
+    run = _real_run(_two_asset_pac_scenario())
+    result = run.result
+    assert (result.outcome, result.anomaly) == ("incumbent", None)
+    assert result.candidate is not None and result.candidate.decisions
+    assert result.stages and all(stage.status == "finished" and stage.scip_status == "optimal" for stage in result.stages), result.stages
+    assert any(_is_tie(stage) for stage in result.stages), "the perfect run must include canonical tie-break stages"
+    return run
+
+
+@pytest.fixture(scope="module")
+def infeasible_run() -> _Run:
+    """A required minimum of 50 on a route capped at 10: SCIP closes the first, global stage infeasible."""
+    run = _real_run(_pac_scenario(required=R(50), route_cap=R(10)))
+    result = run.result
+    assert (result.outcome, result.anomaly, result.candidate) == ("reported_infeasible", None, None)
+    assert [(stage.ordinal, stage.scope, stage.status, stage.scip_status) for stage in result.stages] == [(1, "global", "infeasible", "infeasible")]
+    assert len(run.objective_codes) >= 2, "the view must name later objectives the infeasible run never reached"
+    return run
+
+
+@pytest.fixture(scope="module")
+def limited_run() -> _Run:
+    """No time at all: SCIP closes no stage, so nothing is found."""
+    run = _real_run(_two_asset_pac_scenario(), time_budget_seconds=0.0)
+    result = run.result
+    assert (result.outcome, result.anomaly, result.candidate) == ("no_incumbent", None, None)
+    assert result.stages and all(stage.status == "unfinished" for stage in result.stages), result.stages
+    return run
 
 
 # --------------------------------------------------------------------------
-# Constants + deliberately-absent phase-2 symbols
+# 1. The public surface
 # --------------------------------------------------------------------------
 
 
@@ -107,73 +202,71 @@ def test_not_proven_reason_is_the_single_phase_one_wire_code() -> None:
     assert UnprovenConclusion().reason_code == NOT_PROVEN_REASON
 
 
-def test_phase_two_symbols_are_deliberately_absent() -> None:
-    """`gap_bounded` needs a sound dual bound this build cannot derive, and
-    `score_lattice_closure` is out of scope until solver/oracle are
-    cross-validated on a wider corpus. Both must be *absent*, not stubbed —
-    an absent symbol cannot be emitted by accident.
+def test_public_surface_is_exactly_the_solver_status_api() -> None:
+    """`proof.py` exports today's API and nothing more, and
+    `conclude_with_solver` is its only public callable: there is no second
+    road to a proof.
     """
-    assert not hasattr(proof, "gap_bounded")
-    assert not hasattr(proof, "score_lattice_closure")
-    assert "gap_bounded" not in proof.__all__
-    assert "score_lattice_closure" not in proof.__all__
+    assert sorted(proof.__all__) == sorted(_PUBLIC_API)
+    assert all(hasattr(proof, name) for name in proof.__all__)
+    public_functions = {name for name, obj in inspect.getmembers(proof, inspect.isfunction) if obj.__module__ == proof.__name__ and not name.startswith("_")}
+    assert public_functions == {"conclude_with_solver"}
 
 
 # --------------------------------------------------------------------------
-# 1. Unrepresentability (headline)
+# 2. What each real outcome concludes
 # --------------------------------------------------------------------------
 
 
-def test_perfect_floating_solve_still_proves_nothing() -> None:
-    """The core rule: a *perfect* floating solve proves nothing.
+def test_perfect_solver_run_proves_optimal_over_the_view_objectives(perfect_run: _Run) -> None:
+    """Every stage closed `optimal` and the published plan is SCIP's own
+    candidate ⇒ `optimal_proven`, from `solver_status`, tie-break closed.
 
-    `_two_asset_pac_scenario` solves fully — every stage finishes `optimal`
-    (so the incumbent is extracted and every stage is on its own optimum). Yet
-    `conclude_without_proof` on that flawless run is still `not_proven`,
-    because no field of a floating run may influence a proof.
-
-    "Every stage finished optimal" is asserted structurally
-    (`status == "finished"`, `scip_status == "optimal"`); the zero gap is a
-    SCIP float and is deliberately *not* compared exactly.
+    The witness names the view's objectives in ascending ordinal: the stages
+    SCIP ran minus the canonical tie-breaks, which must close but are not
+    objectives.
     """
-    result = _real_solver_result(_two_asset_pac_scenario())
+    result = perfect_run.result
+    conclusion = conclude_with_solver(result, objective_codes=perfect_run.objective_codes, published=result.candidate)
 
-    assert result.outcome == "incumbent"
-    assert result.candidate is not None
-    assert result.finished_stage_count == len(result.stages)
-    assert all(stage.status == "finished" for stage in result.stages)
-    assert all(stage.scip_status == "optimal" for stage in result.stages)
-
-    conclusion = conclude_without_proof(result)
-    assert isinstance(conclusion, UnprovenConclusion)
-    assert conclusion.kind == "not_proven"
-    assert conclusion.reason_code == NOT_PROVEN_REASON
+    assert isinstance(conclusion, OptimalProvenConclusion)
+    assert conclusion.kind == "optimal_proven"
+    assert conclusion.proof_source == "solver_status"
+    assert conclusion.tie_break_closed is True
+    assert conclusion.witness.objective_codes == perfect_run.objective_codes
+    assert conclusion.witness.objective_codes == tuple(stage.objective_code for stage in sorted(result.stages, key=lambda stage: stage.ordinal) if not _is_tie(stage))
+    assert not any(code.startswith(_TIE_STAGE_PREFIX) for code in conclusion.witness.objective_codes)
 
 
-def test_conclude_without_proof_is_unproven_for_every_solver_outcome() -> None:
-    """No solver result — of *any* outcome — may conclude a proof.
+def test_each_real_outcome_concludes_only_what_scip_established(perfect_run: _Run, infeasible_run: _Run, limited_run: _Run) -> None:
+    """The outcome table, on three real runs whose states the fixtures confirm.
 
-    Three genuinely different `SolverRunResult`s are produced from the real
-    pipeline: a fully-successful `incumbent`, a `reported_infeasible` (SCIP's
-    floating infeasibility vocabulary), and a `no_incumbent` (limits exhausted
-    before any solution). All three collapse to the identical
-    `UnprovenConclusion`.
+    ====================================  ================  ====================
+    run                                   published         conclusion
+    ====================================  ================  ====================
+    incumbent, every stage optimal        SCIP's candidate  optimal_proven
+    reported_infeasible, first stage      nothing           infeasibility_proven
+    no_incumbent, budget exhausted        nothing           not_proven
+    ====================================  ================  ====================
     """
-    incumbent = _real_solver_result(_two_asset_pac_scenario())
-    reported_infeasible = _real_solver_result(_pac_scenario(required=R(50), route_cap=R(10)))
-    no_incumbent = _real_solver_result(_two_asset_pac_scenario(), time_budget_seconds=0.0)
+    optimal = conclude_with_solver(perfect_run.result, objective_codes=perfect_run.objective_codes, published=perfect_run.result.candidate)
+    assert isinstance(optimal, OptimalProvenConclusion)
 
-    # Confirm the three fixtures really did drive the solver into three
-    # distinct states, so the shared verdict below is not an accident.
-    assert incumbent.outcome == "incumbent"
-    assert reported_infeasible.outcome == "reported_infeasible"
-    assert no_incumbent.outcome == "no_incumbent"
+    infeasible = conclude_with_solver(infeasible_run.result, objective_codes=infeasible_run.objective_codes, published=None)
+    assert isinstance(infeasible, InfeasibilityProvenConclusion)
+    assert (infeasible.kind, infeasible.proof_source) == ("infeasibility_proven", "solver_status")
+    # The witness names the first objective of the view, which is the stage SCIP closed.
+    assert infeasible.witness.objective_codes == (infeasible_run.objective_codes[0],)
+    assert infeasible.witness.objective_codes == (_only_stage(infeasible_run.result).objective_code,)
 
-    for result in (incumbent, reported_infeasible, no_incumbent):
-        conclusion = conclude_without_proof(result)
-        assert isinstance(conclusion, UnprovenConclusion)
-        assert conclusion.kind == "not_proven"
-        assert conclusion.reason_code == NOT_PROVEN_REASON
+    unproven = conclude_with_solver(limited_run.result, objective_codes=limited_run.objective_codes, published=None)
+    assert isinstance(unproven, UnprovenConclusion)
+    assert (unproven.kind, unproven.reason_code) == ("not_proven", NOT_PROVEN_REASON)
+
+
+# --------------------------------------------------------------------------
+# 3. The unproven conclusion cannot hold a proof
+# --------------------------------------------------------------------------
 
 
 def test_unproven_conclusion_has_no_field_that_can_hold_a_proof() -> None:
@@ -183,7 +276,7 @@ def test_unproven_conclusion_has_no_field_that_can_hold_a_proof() -> None:
     """
     field_names = set(UnprovenConclusion.__dataclass_fields__)
     assert field_names == {"reason_code", "kind"}
-    assert not field_names & {"witness", "proof_source", "tie_break_closed", "enumerated_candidates", "feasible_candidates", "issue_codes"}
+    assert not field_names & {"witness", "proof_source", "tie_break_closed", "objective_codes"}
 
     conclusion = UnprovenConclusion()
     assert conclusion.kind == "not_proven"
@@ -196,312 +289,195 @@ def test_unproven_conclusion_is_frozen() -> None:
         conclusion.kind = "optimal_proven"
 
 
-def test_no_public_callable_maps_solver_result_to_a_proven_type() -> None:
-    """Introspect (never eyeball): any public callable that *consumes* a
-    `SolverRunResult` must return exactly `UnprovenConclusion` — never a
-    proven type, never a union that admits one. The unsafe transition is
-    absent, so there is nothing to call.
+# --------------------------------------------------------------------------
+# 4. Every forgery path, checked for its exact exception type
+# --------------------------------------------------------------------------
+
+_FORGERIES = (
+    pytest.param(lambda: SolverStatusWitnessFacts(objective_codes=("fixed_l2",)), "may only be built from a real solver run", id="witness_missing_seal"),
+    pytest.param(lambda: SolverStatusWitnessFacts(objective_codes=("fixed_l2",), seal=object()), "may only be built from a real solver run", id="witness_wrong_seal"),
+    pytest.param(lambda: SolverStatusWitnessFacts(objective_codes=(), seal=_SEAL), "at least one objective stage", id="witness_empty_codes"),
+    pytest.param(lambda: SolverStatusWitnessFacts(objective_codes=("fixed_l2", "fixed_l2"), seal=_SEAL), "must be unique", id="witness_duplicate_codes"),
+    pytest.param(lambda: InfeasibilityProvenConclusion(witness=SolverStatusWitnessFacts(objective_codes=("fixed_l2", "shortfall"), seal=_SEAL)), "exactly the first objective stage", id="infeasibility_naming_two_codes"),
+)
+
+
+@pytest.mark.parametrize(("forge", "reason"), _FORGERIES)
+def test_forging_a_witness_raises_proof_forgery_error(forge: Callable[[], object], reason: str) -> None:
+    """Each guard raises `ProofForgeryError` — exactly that type, not a
+    subclass nor an incidental `ValueError` — and for its own reason, so no
+    case passes on a neighbour's guard. The two-code infeasibility is built
+    on a validly sealed witness: the witness is sound, the claim it would back
+    is not.
     """
-    proven_type_names = {"OptimalProvenConclusion", "InfeasibilityProvenConclusion", "ProvenConclusion"}
-    checked_a_solver_consumer = False
-
-    for name, obj in inspect.getmembers(proof, inspect.isfunction):
-        if obj.__module__ != proof.__name__ or name.startswith("_"):
-            continue
-        annotations = inspect.get_annotations(obj)  # PEP 563: raw strings, not evaluated
-        parameter_annotations = [str(value) for key, value in annotations.items() if key != "return"]
-        if not any("SolverRunResult" in annotation for annotation in parameter_annotations):
-            continue
-        checked_a_solver_consumer = True
-        return_annotation = str(annotations.get("return", ""))
-        assert return_annotation == "UnprovenConclusion", f"{name} consumes a SolverRunResult but returns {return_annotation!r}"
-        assert not any(proven in return_annotation for proven in proven_type_names)
-
-    assert checked_a_solver_consumer, "expected at least one public callable to consume a SolverRunResult"
+    with pytest.raises(ProofForgeryError, match=reason) as raised:
+        forge()
+    assert type(raised.value) is ProofForgeryError
 
 
 # --------------------------------------------------------------------------
-# 2. Every raise path, checked for its exact exception type
+# 5. Optimal only when every stage closed — the tie-breaks included
+# --------------------------------------------------------------------------
+
+_OPEN_STAGE = (
+    pytest.param({"status": "unfinished", "scip_status": "timelimit"}, id="cut_by_the_time_limit"),
+    pytest.param({"status": "unfinished"}, id="status_unfinished"),
+    pytest.param({"scip_status": "timelimit"}, id="scip_status_not_optimal"),
+)
+
+
+@pytest.mark.parametrize("opening", _OPEN_STAGE)
+def test_optimal_requires_every_stage_closed_tie_breaks_included(perfect_run: _Run, opening: dict[str, str]) -> None:
+    """Leave any single stage open and the optimum is not proven.
+
+    Each stage of the perfect run is reopened in turn — a canonical `tie:*`
+    stage exactly like a normative one, because an open tie-break leaves the
+    published candidate one optimum among several, not the canonical one —
+    while SCIP's candidate is still the one published, so the open stage is
+    the only fact that changed. Both SCIP facts are read: a stage is closed
+    only when it is `finished` *and* SCIP's status for it is `optimal`.
+    """
+    result = perfect_run.result
+    reopened: dict[str, list[str]] = {"tie": [], "normative": []}
+    for stage in result.stages:
+        variant = _with_stage(result, stage.stage, **opening)
+        conclusion = conclude_with_solver(variant, objective_codes=perfect_run.objective_codes, published=variant.candidate)
+        assert isinstance(conclusion, UnprovenConclusion), f"stage {stage.stage!r} left open, yet {conclusion!r}"
+        reopened["tie" if _is_tie(stage) else "normative"].append(stage.stage)
+    assert reopened["tie"] and reopened["normative"], reopened
+
+
+# --------------------------------------------------------------------------
+# 6. Infeasibility only on a single, first, global stage
+# --------------------------------------------------------------------------
+
+_NOT_A_FIRST_STAGE_VERDICT = (
+    pytest.param(lambda run: _with_stage(run.result, _only_stage(run.result).stage, ordinal=2), id="ordinal_two"),
+    pytest.param(lambda run: _with_stage(run.result, _only_stage(run.result).stage, scope="incumbent_face"), id="incumbent_face"),
+    pytest.param(lambda run: dataclasses.replace(run.result, stages=(*run.result.stages, _second_stage_not_reached(run))), id="second_stage_appended"),
+    pytest.param(lambda run: _with_stage(run.result, _only_stage(run.result).stage, scip_status="timelimit"), id="scip_status_not_infeasible"),
+    pytest.param(lambda run: _with_stage(run.result, _only_stage(run.result).stage, status="unfinished"), id="status_not_infeasible"),
+)
+
+
+@pytest.mark.parametrize("variant", _NOT_A_FIRST_STAGE_VERDICT)
+def test_infeasibility_is_proven_only_by_a_single_first_global_stage(infeasible_run: _Run, variant: Callable[[_Run], SolverRunResult]) -> None:
+    """SCIP's `infeasible` is a verdict on the scenario only on the first,
+    still-global stage, and only when that stage is the whole run: a later
+    stage runs on a face earlier pins carved, so its emptiness says nothing
+    about the scenario. Every other shape is `not_proven`, never a forgery —
+    downgrading is always sound.
+    """
+    control = conclude_with_solver(infeasible_run.result, objective_codes=infeasible_run.objective_codes, published=None)
+    assert isinstance(control, InfeasibilityProvenConclusion)
+
+    conclusion = conclude_with_solver(variant(infeasible_run), objective_codes=infeasible_run.objective_codes, published=None)
+    assert isinstance(conclusion, UnprovenConclusion)
+
+
+# --------------------------------------------------------------------------
+# 7. A limit or an anomaly is never a proof
 # --------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
-    "build_forged_witness",
+    ("run_name", "changes", "publish_scip_candidate"),
     [
-        # Missing seal (default None) — both witness types.
-        pytest.param(lambda: ExhaustiveOracleWitnessFacts(enumerated_candidates=1, feasible_candidates=0, objective_codes=()), id="oracle_witness_missing_seal"),
-        pytest.param(lambda: DeterministicConflictWitnessFacts(issue_codes=("ORDER_REQUIRED_MIN",), summary_code="ORDER_REQUIRED_MIN"), id="conflict_witness_missing_seal"),
-        # A wrong seal object is no better than none — both witness types.
-        pytest.param(lambda: ExhaustiveOracleWitnessFacts(enumerated_candidates=1, feasible_candidates=0, objective_codes=(), seal=object()), id="oracle_witness_wrong_seal"),
-        pytest.param(lambda: DeterministicConflictWitnessFacts(issue_codes=("ORDER_REQUIRED_MIN",), summary_code="ORDER_REQUIRED_MIN", seal=object()), id="conflict_witness_wrong_seal"),
-        # Oracle witness numeric invariants (real seal, so the seal check passes first).
-        pytest.param(lambda: ExhaustiveOracleWitnessFacts(enumerated_candidates=0, feasible_candidates=0, objective_codes=(), seal=_SEAL), id="oracle_witness_enumerated_below_one"),
-        pytest.param(lambda: ExhaustiveOracleWitnessFacts(enumerated_candidates=2, feasible_candidates=3, objective_codes=(), seal=_SEAL), id="oracle_witness_feasible_exceeds_enumerated"),
-        pytest.param(lambda: ExhaustiveOracleWitnessFacts(enumerated_candidates=2, feasible_candidates=1, objective_codes=("fixed_l2", "fixed_l2"), seal=_SEAL), id="oracle_witness_duplicate_objective_codes"),
-        # Conflict witness structural invariants (real seal).
-        pytest.param(lambda: DeterministicConflictWitnessFacts(issue_codes=(), summary_code="ORDER_REQUIRED_MIN", seal=_SEAL), id="conflict_witness_empty_issue_codes"),
-        pytest.param(lambda: DeterministicConflictWitnessFacts(issue_codes=("A", "A"), summary_code="A", seal=_SEAL), id="conflict_witness_duplicate_issue_codes"),
-        pytest.param(lambda: DeterministicConflictWitnessFacts(issue_codes=("A", "B"), summary_code="C", seal=_SEAL), id="conflict_witness_summary_not_in_issue_codes"),
+        pytest.param("perfect_run", {"anomaly": _ANOMALY}, True, id="anomaly_on_a_perfect_run"),
+        pytest.param("infeasible_run", {"anomaly": _ANOMALY}, False, id="anomaly_on_an_infeasible_run"),
+        pytest.param("limited_run", {}, False, id="no_incumbent_budget_exhausted"),
+        pytest.param("perfect_run", {"outcome": "no_incumbent"}, True, id="no_incumbent_over_closed_stages"),
     ],
 )
-def test_forging_a_witness_raises_proof_forgery_error(build_forged_witness: Callable[[], object]) -> None:
-    """Exact type matters: each guard must raise `ProofForgeryError`, not some
-    incidental `AttributeError`/`ValueError` that would defeat a caller's
-    handling while looking deliberate.
+def test_a_limit_or_an_anomaly_is_never_a_proof(request: pytest.FixtureRequest, run_name: str, changes: dict[str, str], publish_scip_candidate: bool) -> None:
+    """An anomaly voids what the statuses would otherwise prove, on either kind
+    of run; and a run that found nothing proves nothing — whether a budget
+    stopped it, or its outcome says so over otherwise closed stages.
     """
-    with pytest.raises(ProofForgeryError):
-        build_forged_witness()
+    run: _Run = request.getfixturevalue(run_name)
+    variant = dataclasses.replace(run.result, **changes)
+    published = variant.candidate if publish_scip_candidate else None
 
-
-def test_optimal_conclusion_requires_a_feasible_candidate() -> None:
-    """A valid oracle witness with zero feasible candidates cannot back an
-    `optimal_proven` conclusion.
-    """
-    witness = _sealed_oracle_witness(enumerated=3, feasible=0, objective_codes=("fixed_l2",))
-    with pytest.raises(ProofForgeryError):
-        OptimalProvenConclusion(witness=witness)
-
-
-def test_optimal_conclusion_requires_at_least_one_objective() -> None:
-    """An optimality proof must cover at least one objective stage."""
-    witness = _sealed_oracle_witness(enumerated=3, feasible=2, objective_codes=())
-    with pytest.raises(ProofForgeryError):
-        OptimalProvenConclusion(witness=witness)
-
-
-def test_oracle_infeasibility_cannot_carry_a_feasible_candidate() -> None:
-    """An oracle-backed infeasibility proof is a claim of *zero* feasible
-    candidates; a witness that counts some is self-contradictory.
-    """
-    witness = _sealed_oracle_witness(enumerated=3, feasible=2, objective_codes=("fixed_l2",))
-    with pytest.raises(ProofForgeryError):
-        InfeasibilityProvenConclusion(witness=witness)
-
-
-def test_conclude_infeasible_from_conflicts_rejects_bad_explicit_summary_code() -> None:
-    """An explicit `summary_code` that is not among the evaluation's own
-    conflict codes is a forgery, not a relabelling.
-    """
-    scenario = _pac_scenario(required=R(50), route_cap=R(10))
-    view = _primary_view(scenario)
-    evaluation = evaluate_exact_candidate(scenario, view, _candidate(view, {}, candidate_id="all-zero"))
-    assert evaluation.conflict_codes  # precondition: there really are conflicts to summarise
-
-    with pytest.raises(ProofForgeryError):
-        conclude_infeasible_from_conflicts(evaluation, summary_code="NOT_A_REAL_CONFLICT_CODE")
-
-
-def test_self_contradictory_oracle_result_is_forgery() -> None:
-    """An `OracleResult` that reports no feasible candidates yet still returns
-    a `best_candidate` is internally impossible; `conclude_with_oracle` refuses
-    it rather than fabricating an infeasibility proof around a live candidate.
-    """
-    scenario = _two_asset_pac_scenario()
-    oracle = run_exhaustive_oracle(scenario, _primary_view(scenario))
-    assert oracle.best_candidate is not None  # a genuinely feasible oracle result ...
-    contradictory = dataclasses.replace(oracle, feasible_candidates=0)  # ... now made to lie about it
-
-    with pytest.raises(ProofForgeryError):
-        conclude_with_oracle(contradictory, published=None)
-
-
-# --------------------------------------------------------------------------
-# 3. Happy paths against REAL evidence
-# --------------------------------------------------------------------------
-
-
-def test_oracle_with_its_own_best_candidate_proves_optimal() -> None:
-    """The one legal promotion to `optimal_proven`: an exhaustive oracle plus
-    the very candidate it proved best. The witness mirrors the oracle's *live*
-    counts and objective codes — read off the result, never hardcoded.
-    """
-    scenario = _two_asset_pac_scenario()
-    view = _primary_view(scenario)
-    oracle = run_exhaustive_oracle(scenario, view)
-    assert oracle.best_candidate is not None
-    assert oracle.feasible_candidates > 0
-
-    conclusion = conclude_with_oracle(oracle, published=oracle.best_candidate)
-
-    assert isinstance(conclusion, OptimalProvenConclusion)
-    assert conclusion.kind == "optimal_proven"
-    assert conclusion.proof_source == "exhaustive_oracle"
-    assert conclusion.tie_break_closed is True
-    # Witness mirrors the oracle's actual facts (no global count literal).
-    assert conclusion.witness.enumerated_candidates == oracle.enumerated_candidates
-    assert conclusion.witness.feasible_candidates == oracle.feasible_candidates
-    assert conclusion.witness.objective_codes == oracle.objective_codes
-
-
-def test_oracle_with_agreeing_solver_incumbent_proves_optimal() -> None:
-    """When the floating solver's incumbent happens to equal the oracle's
-    proven optimum, publishing it promotes to `optimal_proven` — but the proof
-    still flows through the *oracle*, not through the solver evidence. The
-    solver only supplies a candidate to be checked against the oracle's truth.
-    """
-    scenario = _two_asset_pac_scenario()
-    view = _primary_view(scenario)
-    program = compile_policy_program(scenario, view)
-    solver_result = solve_policy_program(program)
-    assert solver_result.outcome == "incumbent"
-    assert solver_result.candidate is not None
-
-    oracle = run_exhaustive_oracle(scenario, view)
-    conclusion = conclude_with_oracle(oracle, published=solver_result.candidate)
-
-    assert isinstance(conclusion, OptimalProvenConclusion)
-    assert conclusion.proof_source == "exhaustive_oracle"
-
-
-def test_oracle_with_no_feasible_candidate_proves_infeasibility() -> None:
-    """A genuine unconditional-floor infeasibility (`ORDER_REQUIRED_MIN` above
-    the route's reachable cap) makes the exhaustive oracle reject every
-    candidate. That promotes to `infeasibility_proven` via `exhaustive_oracle`,
-    with a witness carrying zero feasible candidates.
-    """
-    scenario = _pac_scenario(required=R(50), route_cap=R(10))
-    view = _primary_view(scenario)
-    oracle = run_exhaustive_oracle(scenario, view)
-    assert oracle.feasible_candidates == 0
-    assert oracle.best_candidate is None
-
-    conclusion = conclude_with_oracle(oracle, published=None)
-
-    assert isinstance(conclusion, InfeasibilityProvenConclusion)
-    assert conclusion.kind == "infeasibility_proven"
-    assert conclusion.proof_source == "exhaustive_oracle"
-    assert conclusion.witness.feasible_candidates == 0
-    assert conclusion.witness.enumerated_candidates == oracle.enumerated_candidates
-
-
-def test_deterministic_conflict_proves_infeasibility() -> None:
-    """The exact evaluator's own named contract conflicts prove infeasibility
-    with no search at all. An all-zero candidate on the infeasible scenario
-    fails specifically on `ORDER_REQUIRED_MIN`, and that becomes an
-    `infeasibility_proven` via `deterministic_conflict`.
-    """
-    scenario = _pac_scenario(required=R(50), route_cap=R(10))
-    view = _primary_view(scenario)
-    evaluation = evaluate_exact_candidate(scenario, view, _candidate(view, {}, candidate_id="all-zero"))
-    assert evaluation.feasible is False
-    assert "ORDER_REQUIRED_MIN" in evaluation.conflict_codes
-
-    conclusion = conclude_infeasible_from_conflicts(evaluation)
-
-    assert isinstance(conclusion, InfeasibilityProvenConclusion)
-    assert conclusion.kind == "infeasibility_proven"
-    assert conclusion.proof_source == "deterministic_conflict"
-    assert conclusion.witness.summary_code in conclusion.witness.issue_codes
-    assert conclusion.witness.summary_code == "ORDER_REQUIRED_MIN"
-
-
-def test_feasible_evaluation_yields_no_fabricated_proof() -> None:
-    """`conclude_infeasible_from_conflicts` never invents a conflict: a
-    feasible evaluation (no conflict codes) downgrades to `not_proven` rather
-    than fabricating an infeasibility proof.
-    """
-    scenario = _two_asset_pac_scenario()
-    view = _primary_view(scenario)
-    oracle = run_exhaustive_oracle(scenario, view)
-    assert oracle.best_evaluation is not None
-    feasible_evaluation: ExactEvaluation = oracle.best_evaluation
-    assert feasible_evaluation.feasible is True
-    assert feasible_evaluation.conflict_codes == ()
-
-    conclusion = conclude_infeasible_from_conflicts(feasible_evaluation)
-
+    conclusion = conclude_with_solver(variant, objective_codes=run.objective_codes, published=published)
     assert isinstance(conclusion, UnprovenConclusion)
-    assert conclusion.kind == "not_proven"
+    assert conclusion.reason_code == NOT_PROVEN_REASON
 
 
 # --------------------------------------------------------------------------
-# 4. The oracle proves its OWN optimum only
+# 8. A proof is never transferred to a candidate SCIP did not return
 # --------------------------------------------------------------------------
 
 
-def test_oracle_optimum_does_not_transfer_to_a_perturbed_published_candidate() -> None:
-    """The oracle proves a statement about *its own* optimum. Publish a
-    candidate that differs from it — here the best candidate with one
-    decision's quanta perturbed — and the proof is downgraded, never
-    transferred. Downgrading is sound; transferring would not be.
+def test_a_proof_is_never_transferred_to_a_candidate_scip_did_not_return(perfect_run: _Run, infeasible_run: _Run) -> None:
+    """A proof is about the run's own candidate, and nobody else's.
+
+    SCIP's optimum holds for exactly the quanta SCIP returned: move any single
+    decision by one quantum — nothing else changed, not even the id — and the
+    optimum is no longer proven; publish nothing and there is no plan it could
+    be proven about. SCIP's infeasibility holds only while nothing is
+    published: a plan published against the verdict contradicts it.
     """
-    scenario = _two_asset_pac_scenario()
-    view = _primary_view(scenario)
-    oracle = run_exhaustive_oracle(scenario, view)
-    assert oracle.best_candidate is not None
+    result = perfect_run.result
+    codes = perfect_run.objective_codes
+    assert isinstance(conclude_with_solver(result, objective_codes=codes, published=result.candidate), OptimalProvenConclusion)
 
-    original = oracle.best_candidate.decisions[0]
-    bumped = dataclasses.replace(original, quanta=original.quanta + 1)
-    perturbed = dataclasses.replace(oracle.best_candidate, decisions=(bumped, *oracle.best_candidate.decisions[1:]))
+    for decision in result.candidate.decisions:
+        perturbed = _perturbed(result.candidate, decision.decision_id)
+        conclusion = conclude_with_solver(result, objective_codes=codes, published=perturbed)
+        assert isinstance(conclusion, UnprovenConclusion), decision.decision_id
 
-    conclusion = conclude_with_oracle(oracle, published=perturbed)
+    assert isinstance(conclude_with_solver(result, objective_codes=codes, published=None), UnprovenConclusion)
+
+    plan = _candidate(infeasible_run.view, {}, candidate_id="published-against-the-verdict")
+    conclusion = conclude_with_solver(infeasible_run.result, objective_codes=infeasible_run.objective_codes, published=plan)
     assert isinstance(conclusion, UnprovenConclusion)
-    assert conclusion.kind == "not_proven"
 
 
-def test_oracle_optimum_does_not_transfer_when_nothing_is_published() -> None:
-    """With a feasible optimum but nothing published, the oracle has proved an
-    optimum about no published candidate — so `not_proven`, not `optimal`.
+def test_infeasible_verdict_alongside_a_candidate_is_not_proven(infeasible_run: _Run) -> None:
+    """No fabricated proof: an infeasible verdict that comes back with a
+    candidate contradicts itself, so it proves nothing — whether or not that
+    candidate is then published. The verdict alone, nothing found and nothing
+    published, is the only shape that proves infeasibility.
     """
-    scenario = _two_asset_pac_scenario()
-    oracle = run_exhaustive_oracle(scenario, _primary_view(scenario))
-    assert oracle.feasible_candidates > 0
+    result = infeasible_run.result
+    codes = infeasible_run.objective_codes
+    assert isinstance(conclude_with_solver(result, objective_codes=codes, published=None), InfeasibilityProvenConclusion)
 
-    conclusion = conclude_with_oracle(oracle, published=None)
-    assert isinstance(conclusion, UnprovenConclusion)
-    assert conclusion.kind == "not_proven"
+    candidate = _candidate(infeasible_run.view, {}, candidate_id="returned-with-the-verdict")
+    contradicted = dataclasses.replace(result, candidate=candidate)
+    for published in (None, candidate):
+        conclusion = conclude_with_solver(contradicted, objective_codes=codes, published=published)
+        assert isinstance(conclusion, UnprovenConclusion), published
 
 
 # --------------------------------------------------------------------------
-# 5. describe_conclusion — right keys per kind, and no seal leak
+# 9. Objective codes that disagree with SCIP's stages are a forgery
 # --------------------------------------------------------------------------
 
-
-def test_describe_unproven_conclusion_reports_kind_and_reason() -> None:
-    described = describe_conclusion(UnprovenConclusion())
-    assert dict(described) == {"kind": "not_proven", "reason_code": NOT_PROVEN_REASON}
-
-
-def test_describe_optimal_proven_conclusion_reports_counts_without_leaking_the_seal() -> None:
-    scenario = _two_asset_pac_scenario()
-    view = _primary_view(scenario)
-    oracle = run_exhaustive_oracle(scenario, view)
-    conclusion = conclude_with_oracle(oracle, published=oracle.best_candidate)
-
-    described = describe_conclusion(conclusion)
-    assert set(described) == {"kind", "proof_source", "enumerated_candidates", "feasible_candidates"}
-    assert described["kind"] == "optimal_proven"
-    assert described["proof_source"] == "exhaustive_oracle"
-    assert described["enumerated_candidates"] == oracle.enumerated_candidates
-    assert described["feasible_candidates"] == oracle.feasible_candidates
-    assert "seal" not in described
-    assert _SEAL not in described.values()
+_MISNAMED_OBJECTIVES = (
+    pytest.param("perfect_run", lambda codes: tuple(reversed(codes)), "SCIP closed the stages", id="optimal_codes_reordered"),
+    pytest.param("perfect_run", lambda codes: codes[:-1], "SCIP closed the stages", id="optimal_codes_missing_one"),
+    pytest.param("perfect_run", lambda codes: (*codes, "turnover"), "SCIP closed the stages", id="optimal_codes_with_an_extra"),
+    pytest.param("infeasible_run", lambda codes: (*codes[1:], codes[0]), "infeasible, but the first objective is", id="infeasible_first_code_differs"),
+    pytest.param("infeasible_run", lambda codes: (), "infeasible, but the first objective is None", id="infeasible_no_objective_codes"),
+)
 
 
-def test_describe_oracle_infeasibility_reports_exhaustive_oracle_source() -> None:
-    scenario = _pac_scenario(required=R(50), route_cap=R(10))
-    view = _primary_view(scenario)
-    oracle = run_exhaustive_oracle(scenario, view)
-    conclusion = conclude_with_oracle(oracle, published=None)
+@pytest.mark.parametrize(("run_name", "misname", "reason"), _MISNAMED_OBJECTIVES)
+def test_objective_codes_disagreeing_with_scip_stages_are_a_forgery(request: pytest.FixtureRequest, run_name: str, misname: Callable[[tuple[str, ...]], tuple[str, ...]], reason: str) -> None:
+    """A run that would prove something, named against objectives other than
+    the stages SCIP closed (reordered, one missing, one extra, a different
+    first code, or none at all), is not downgraded: it raises. The view and the
+    compiled cascade disagree about what was optimized, so any conclusion would
+    be a claim SCIP never made — `ProofForgeryError`, exact type, and for this
+    reason.
+    """
+    run: _Run = request.getfixturevalue(run_name)
+    codes = misname(run.objective_codes)
+    assert codes != run.objective_codes
 
-    described = describe_conclusion(conclusion)
-    assert set(described) == {"kind", "proof_source", "enumerated_candidates", "feasible_candidates"}
-    assert described["kind"] == "infeasibility_proven"
-    assert described["proof_source"] == "exhaustive_oracle"
-    assert described["feasible_candidates"] == 0
-    assert _SEAL not in described.values()
-
-
-def test_describe_deterministic_conflict_reports_issue_codes_without_leaking_the_seal() -> None:
-    scenario = _pac_scenario(required=R(50), route_cap=R(10))
-    view = _primary_view(scenario)
-    evaluation = evaluate_exact_candidate(scenario, view, _candidate(view, {}, candidate_id="all-zero"))
-    conclusion = conclude_infeasible_from_conflicts(evaluation)
-
-    described = describe_conclusion(conclusion)
-    assert set(described) == {"kind", "proof_source", "issue_codes"}
-    assert described["kind"] == "infeasibility_proven"
-    assert described["proof_source"] == "deterministic_conflict"
-    assert described["issue_codes"] == ["ORDER_REQUIRED_MIN"]
-    assert "seal" not in described
-    assert _SEAL not in described.values()
+    # SCIP's own candidate on the optimal run; nothing on the infeasible one.
+    published = run.result.candidate
+    with pytest.raises(ProofForgeryError, match=reason) as raised:
+        conclude_with_solver(run.result, objective_codes=codes, published=published)
+    assert type(raised.value) is ProofForgeryError

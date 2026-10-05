@@ -4,6 +4,17 @@
 **Dipende da:** autorizzazione prodotto e audit API corrente.
 **Può procedere in parallelo con:** core esatto, input condiviso e shell fixture-driven.
 
+> ⚠️ **Nota 2026-09-24 (round 5).** Lane, selector e simboli P1 citati in questo piano
+> descrivono la fase in cui è stato scritto. Lo stato corrente è altrove:
+> - lane `6153` → oggi `6151` (suite) e `6161` (copia di prod);
+> - `pac-analyze`, `pac-tool` e `pac-planner-capacity` non esistono: i selector reali
+>   sono in [handoff §0.4](../../16_toolPlatform/handoff-pac-D.md);
+> - P1 `analyze` rimosso il 2026-09-21 (`b82e59ffa`).
+>
+> L'avanzamento è nella tabella del [README](README.md) e nel
+> [piano Round 5](plan-phase00PacRound5PostMerge.prompt.md). Le note datate qui sotto
+> restano come evidenza storica. Lo **Stato** in testa non è stato rimisurato.
+
 ← Master: [piano implementativo](plan-phase00PacRebalancerImplementation.prompt.md)
 ← Precedente: [solver e policy](plan-phase00Step3PacRebalancerSolverPolicies.prompt.md)
 

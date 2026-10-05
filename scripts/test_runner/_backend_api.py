@@ -134,6 +134,14 @@ def api_tools(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Tools API tests", verbose=verbose)
 
 
+def api_pac_planner_tool(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the PAC planner Tool through the live compute endpoint."""
+    print_section("PAC Planner Tool API Tests")
+    print_info("Testing pac_allocator/plan end to end: plan, needs_input, stale identity, repeats, withdrawn inputs")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_pac_planner_tool_api.py", test_names)
+    return run_command(cmd, "PAC planner Tool API tests", verbose=verbose)
+
+
 def api_risk(verbose: bool = False, test_names: list = None) -> bool:
     """Run deterministic risk catalog, query, and populated-DB tests."""
     print_section("Risk Analysis API Tests")
@@ -677,6 +685,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "signal-preview", api_signal_preview, name="Signal Preview", desc="Backend indicator compute on synthetic points (global chart preview)")
     add_test(api, "ai-export", api_ai_export, name="AI Export API", desc="Catalog, snapshots, authorization, and typed problems")
     add_test(api, "tools", api_tools, name="Tools API", desc="Catalog, bulk compute, diagnostics, and authorization")
+    add_test(api, "pac-planner-tool", api_pac_planner_tool, name="PAC Planner Tool API", desc="pac_allocator plan through the live compute endpoint")
     add_test(api, "risk", api_risk, name="Risk Analysis API", desc="Catalog, bulk query, isolation, and populated-DB analytics")
     add_test(api, "assets-provider", api_assets_provider, name="Assets Provider API", desc="Provider assignment endpoints")
     add_test(

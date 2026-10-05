@@ -24,16 +24,16 @@ checks, to resolve the handful of continuous epigraph/activation variables
 that pinning the integer decisions does not by itself fix) -- a
 single-point-feasible-region MIP, which SCIP solves instantly.
 
-Two ready-made scenario fixtures come from the sibling oracle suite
-(`_two_asset_pac_scenario`, `_coarse_funding_fx_scenario` --
-`test_pac_planner_oracle.py`), and every scenario-construction primitive
-comes from `test_pac_planner_evaluator.py` -- both already-established,
-precedented cross-test-file imports in this package. The handful of
-scenarios that are genuinely new to this file exist because they exercise
-something neither sibling fixture does: two BUY routes sharing one cash
-pool (a real ledger overspend reachable through nothing but each route's
-own already-tightened box bound, never a hand-widened one), two funding
-routes sharing one source, a single isolated funding route, and a
+Three ready-made scenario fixtures come from the sibling oracle suite
+(`_two_asset_pac_scenario`, `_coarse_funding_fx_scenario`,
+`_credit_tie_fx_scenario` -- `test_pac_planner_oracle.py`), and every
+scenario-construction primitive comes from `test_pac_planner_evaluator.py`
+-- both already-established, precedented cross-test-file imports in this
+package. The handful of scenarios that are genuinely new to this file exist
+because they exercise something no sibling fixture does: two BUY routes
+sharing one cash pool (a real ledger overspend reachable through nothing but
+each route's own already-tightened box bound, never a hand-widened one), two
+funding routes sharing one source, a single isolated funding route, and a
 multi-broker scenario where two brokers reuse the same raw capability/
 fee-schedule id string (proving the compiled lookup keys them by
 `(broker_id, id)`, never by `id` alone).
@@ -76,7 +76,6 @@ from backend.app.services.pac_allocator.constraints import (
     CompiledVariables,
     LedgerPostingScopeError,
     ScenarioFacts,
-    _half_up_tie_reachable,
     _require_modelled_rounded_families,
     as_float,
     build_scenario_facts,
@@ -119,6 +118,7 @@ from backend.test_scripts.test_services.test_pac_planner_evaluator import (
 )
 from backend.test_scripts.test_services.test_pac_planner_oracle import (
     _coarse_funding_fx_scenario,
+    _credit_tie_fx_scenario,
     _two_asset_pac_scenario,
 )
 
@@ -508,11 +508,11 @@ def test_funding_activation_constraint_boundary() -> None:
 
 def test_fee_epigraph_floor_and_linear_boundary() -> None:
     """The floor/linear part of the fee epigraph (no cap in play here -- the
-    cap-oblivious Big-M regression is its own test below): at a quantity
-    where the floor binds, the fee variable cannot go below the floor; at a
-    quantity where the linear term exceeds the floor, it cannot go below the
-    linear value either. Both boundaries also match the Decimal-exact
-    replay, since neither hits the documented cap gap.
+    cap has its own tests below, `test_fee_epigraph_cap_boundary` and
+    `test_fee_epigraph_cap_exact`): at a quantity where the floor binds, the
+    fee variable cannot go below the floor; at a quantity where the linear
+    term exceeds the floor, it cannot go below the linear value either. Both
+    boundaries also match the Decimal-exact replay.
     """
     scenario = _pac_scenario(price=R(10), fee_rate=R(1, 10), fee_floor=R(5), fee_cap=None, route_cap=R(10), cash=R(1000))
     view = build_exact_policy_view(scenario)
@@ -540,16 +540,140 @@ def test_fee_epigraph_floor_and_linear_boundary() -> None:
         assert order_evaluation.exact_fee == R(expected_fee)
 
 
-def test_fee_epigraph_cap_oblivious_regression() -> None:
-    """Documented, deliberate modelling gap (see `constraints.py`'s module
-    docstring): the fee epigraph's own upper bound (used only for its
-    Big-M) is cap-oblivious -- `rate * notional_upper`, ignoring
-    `maximum_fee` entirely. This can never cause false infeasibility and
-    never corrupts the reported/replayed fee, but it does mean: for a BUY
-    route whose cap actually binds at the route's own notional, SCIP's own
-    `buy_fee` value (when that route's fee alone is minimized) is HIGHER
-    than the true Decimal-exact replayed fee. This test locks in exactly
-    that gap as a real regression, not merely as prose.
+@pytest.mark.parametrize(
+    ("fixed_fee", "fee_rate", "fee_floor"),
+    [
+        pytest.param(ZERO, R(19, 10000), R(3, 2), id="rate-0.19pct-min-1.50"),
+        pytest.param(ZERO, ZERO, R(2), id="flat-min-2"),
+        pytest.param(ONE, R(19, 10000), R(3, 2), id="fixed-1-rate-0.19pct-min-1.50"),
+    ],
+)
+def test_fee_epigraph_floor_above_linear_upper_boundary(fixed_fee, fee_rate, fee_floor) -> None:
+    """X2 regression (found 2026-09-24): a fee minimum above the linear fee at
+    the route's own notional upper bound, `floor > rate * notional_upper`.
+    The epigraph took its upper bound and its Big-M from `rate *
+    notional_upper` alone, so the floor row could not be switched off: with
+    the order OFF it demanded `fee >= floor - rate * notional_upper > 0`
+    against `fee <= 0`, with it ON `fee >= fixed + floor` above the upper
+    bound -- the whole model was infeasible whatever the order did. And
+    `_fee_variable_upper` hands the same bound to the posted-fee units, so a
+    fee of `fixed + floor` could not be posted either: the order-off check
+    catches the epigraph, the q=9 check needs both sites.
+
+    EUR100 of cash at EUR10 a unit is the X2 probe: 10 units at most, 9 once
+    the minimum is paid. Shapes: the probe's 0.19% with a EUR1.50 minimum; a
+    flat EUR2 minimum on a zero rate, where any minimum at all sits above the
+    linear part; and the probe plus a EUR1 fixed fee, so the Big-M must still
+    carry `fixed`. Every boundary is cross-checked against the exact replay.
+    """
+    scenario = _pac_scenario(price=R(10), cash=R(100), fixed_fee=fixed_fee, fee_rate=fee_rate, fee_floor=fee_floor, fee_cap=None, route_cap=R(100))
+    view = build_exact_policy_view(scenario)
+    route_id = "route:buy:a"
+    decision_id = exact_decision_id("buy_quantum", route_id)
+    minimum_fee = fixed_fee + fee_floor  # the fee of every order this route can place
+
+    # Precondition, verified rather than assumed: at the route's own upper
+    # bound (10 units, EUR100) the linear fee is still below the minimum.
+    access = next(d for d in view.decisions if d.decision_id == decision_id)
+    assert access.upper_quanta == 10
+    assert fee_rate * R(10) * access.upper_quanta < fee_floor
+
+    # Order off: the fee sits at zero. The core of X2 -- this was infeasible.
+    assert _pinned_status(scenario, view, quanta={decision_id: 0}, buy_fee={route_id: 0.0}) == "optimal"
+
+    # q=9 (EUR90): the minimum binds; the fee reaches `fixed + floor` ...
+    assert _pinned_status(scenario, view, quanta={decision_id: 9}, buy_fee={route_id: as_float(minimum_fee)}) == "optimal"
+    # ... and not one cent less: the floor still binds.
+    assert _pinned_status(scenario, view, quanta={decision_id: 9}, buy_fee={route_id: as_float(minimum_fee - CENT)}) == "infeasible"
+    # q=10 spends the whole EUR100 on the notional, leaving nothing for the minimum.
+    assert _pinned_status(scenario, view, quanta={decision_id: 10}) == "infeasible"
+
+    # Decimal-exact replay: 9 units are feasible at exactly the minimum fee, 10 are not.
+    candidate = _candidate(view, {decision_id: 9}, candidate_id="candidate:fee-floor-above-linear-upper")
+    evaluation = evaluate_exact_candidate(scenario, view, candidate)
+    assert evaluation.feasible is True
+    order_evaluation = next(o for o in evaluation.orders if o.route_id == route_id)
+    assert order_evaluation.exact_fee == minimum_fee
+
+    over_budget = _candidate(view, {decision_id: 10}, candidate_id="candidate:fee-floor-over-budget")
+    over_budget_evaluation = evaluate_exact_candidate(scenario, view, over_budget)
+    assert over_budget_evaluation.feasible is False
+    assert "NO_SHORT_OR_LEVERAGE" in over_budget_evaluation.conflict_codes
+
+
+@pytest.mark.parametrize(
+    ("fixed_fee", "fee_rate", "fee_floor", "fee_cap"),
+    [
+        pytest.param(ZERO, R(1, 10), ZERO, R(3, 2), id="rate-10pct-cap-1.50"),
+        pytest.param(ZERO, R(1, 10), R(6, 5), R(3, 2), id="floor-1.20-rate-10pct-cap-1.50"),
+        pytest.param(R(1, 2), R(1, 10), ZERO, R(3, 2), id="fixed-0.50-rate-10pct-cap-1.50"),
+    ],
+)
+def test_fee_epigraph_cap_boundary(fixed_fee, fee_rate, fee_floor, fee_cap) -> None:
+    """QX1-a regression (found 2026-09-24): a fee cap that binds inside the
+    route's own range, `rate * notional_upper > cap`. The epigraph ignored
+    `maximum_fee`: its linear row `fee >= fixed + rate * notional - big_m *
+    (1 - active)` was always on, so past the cap it demanded more than
+    `calculate_fee` charges -- at 9 units `fixed + EUR9` instead of `fixed +
+    cap`. The posted fee is debited in the ledger, so the model also excluded
+    plans the replay accepts. Since QX1-a the cap is modelled exactly (a
+    binary per capped route, linear branch or flat cap branch): the minimal
+    fee the model admits is `calculate_fee` at every notional, minimum and
+    cap included.
+
+    EUR100 of cash at EUR10 a unit, 10% (EUR1 of linear fee a unit) capped at
+    EUR1.50. Shapes: the cap alone; a EUR1.20 minimum under it, so the floor
+    binds at 1 unit and the cap from 2; and a EUR0.50 fixed fee, so the Big-M
+    of the cap branch must still carry `fixed`. The exact replay is checked
+    first, as ground truth; then each boundary is pinned both ways (the fee
+    reaches `calculate_fee`, and not one cent less). The red core is the q=9
+    pin at `fixed + cap`: infeasible while the cap was ignored.
+    """
+    scenario = _pac_scenario(price=R(10), cash=R(100), fixed_fee=fixed_fee, fee_rate=fee_rate, fee_floor=fee_floor, fee_cap=fee_cap, route_cap=R(100))
+    view = build_exact_policy_view(scenario)
+    route_id = "route:buy:a"
+    decision_id = exact_decision_id("buy_quantum", route_id)
+    # `calculate_fee` by hand, in exact ratios, for a nonzero order: `fixed + clamp(rate * notional, floor, cap)`.
+    expected_fee = {quanta: fixed_fee + min(max(fee_rate * R(10) * quanta, fee_floor), fee_cap) for quanta in (1, 9)}
+
+    # Preconditions, verified rather than assumed: at the route's own upper
+    # bound (10 units, EUR100) the linear fee is above the cap, so the cap can
+    # bind in this route; at 1 unit the fee is below `fixed + cap`, at 9 it is
+    # exactly `fixed + cap`.
+    access = next(d for d in view.decisions if d.decision_id == decision_id)
+    assert access.upper_quanta == 10
+    assert fee_rate * R(10) * access.upper_quanta > fee_cap
+    assert expected_fee[1] < fixed_fee + fee_cap
+    assert expected_fee[9] == fixed_fee + fee_cap
+
+    # Ground truth first: the exact replay charges `expected_fee` on both orders, and both fit the EUR100.
+    for quanta, fee in expected_fee.items():
+        candidate = _candidate(view, {decision_id: quanta}, candidate_id=f"candidate:fee-cap-boundary-{quanta}")
+        evaluation = evaluate_exact_candidate(scenario, view, candidate)
+        assert evaluation.feasible is True
+        order_evaluation = next(o for o in evaluation.orders if o.route_id == route_id)
+        assert order_evaluation.exact_fee == fee
+
+    # Order off: the fee sits at zero -- whatever the cap adds switches off with the order.
+    assert _pinned_status(scenario, view, quanta={decision_id: 0}, buy_fee={route_id: 0.0}) == "optimal"
+
+    # q=1 (EUR10): below the cap; the fee reaches `calculate_fee` and not one cent less.
+    assert _pinned_status(scenario, view, quanta={decision_id: 1}, buy_fee={route_id: as_float(expected_fee[1])}) == "optimal"
+    assert _pinned_status(scenario, view, quanta={decision_id: 1}, buy_fee={route_id: as_float(expected_fee[1] - CENT)}) == "infeasible"
+
+    # q=9 (EUR90): the cap binds; the fee reaches `fixed + cap`. The core of
+    # QX1-a -- this was infeasible, the linear row demanded `fixed + EUR9`.
+    assert _pinned_status(scenario, view, quanta={decision_id: 9}, buy_fee={route_id: as_float(expected_fee[9])}) == "optimal"
+    # ... and not one cent less: the cap branch is still a floor at `fixed + cap`.
+    assert _pinned_status(scenario, view, quanta={decision_id: 9}, buy_fee={route_id: as_float(expected_fee[9] - CENT)}) == "infeasible"
+
+
+def test_fee_epigraph_cap_exact() -> None:
+    """QX1-a regression (found 2026-09-24): the fee epigraph used to ignore
+    the cap (`maximum_fee`). With one order of EUR100 at 10% capped at EUR2,
+    minimizing that route's fee alone, SCIP said EUR10 -- the linear fee --
+    while the Decimal-exact replay charges EUR2. Now the cap is modelled
+    exactly: SCIP's minimal fee is the replay's own capped EUR2.
     """
     scenario = _pac_scenario(price=R(10), cash=R(1000), fee_rate=R(1, 10), fee_cap=R(2), route_cap=R(10))
     view = build_exact_policy_view(scenario)
@@ -564,15 +688,15 @@ def test_fee_epigraph_cap_oblivious_regression() -> None:
     program.model.optimize()
     assert program.model.getStatus() == "optimal"
 
-    # Cap-oblivious estimate: rate * notional = 0.1 * 100 = EUR10, ignoring the EUR2 cap.
-    assert program.model.getVal(fee_var) == pytest.approx(10.0)
+    # Capped: rate * notional = 0.1 * 100 = EUR10 clamps to the EUR2 cap (SCIP said EUR10 before QX1-a).
+    assert program.model.getVal(fee_var) == pytest.approx(2.0)
 
-    # The Decimal-exact replay is the true source of truth, and it DOES apply the cap.
+    # The Decimal-exact replay is the source of truth, and it charges the same capped EUR2.
     candidate = _candidate(view, {decision_id: 10}, candidate_id="candidate:fee-cap")
     evaluation = evaluate_exact_candidate(scenario, view, candidate)
     assert evaluation.feasible is True
     order_evaluation = next(o for o in evaluation.orders if o.route_id == route_id)
-    assert order_evaluation.exact_fee == R(2)  # the true, capped fee -- far below SCIP's own EUR10 estimate
+    assert order_evaluation.exact_fee == R(2)
 
 
 # --------------------------------------------------------------------------
@@ -801,56 +925,62 @@ def test_half_up_ledger_fx_credit_regression_scip_agrees_with_exact_replay() -> 
 
 
 # --------------------------------------------------------------------------
-# Item A2: three-directional tie lock on `_half_up_tie_reachable`, kept in
-# lockstep with the real `numeric.post_half_up` rounding function.
+# Item A2: an exact FX-credit tie is admitted at its true HALF_UP value, and
+# not one quantum more -- SCIP and the Decimal-exact replay agree on both
+# sides of the tie, with no guard in between (option A).
 # --------------------------------------------------------------------------
 
 
-def test_half_up_tie_reachable_three_directional_and_cross_checked_against_post_half_up() -> None:
-    """`_half_up_tie_reachable` is an O(1) closed form: it must flag exactly
-    the ranges in which some achievable `coefficient * n` lands precisely on a
-    `.5` boundary of the quantum. Tested directly, then cross-checked against
-    `numeric.post_half_up` in all three directions (just below a tie rounds
-    down, exactly at rounds up, just above rounds up), then validated
-    behaviourally against a brute-force scan so the closed form and the real
-    rounding function cannot silently drift apart.
+def test_exact_fx_credit_tie_admits_the_true_round_up_and_not_one_quantum_more() -> None:
+    """`_posted_units_term` encodes a posting as `quantum * units` with the
+    non-strict pair `q*u - q/2 <= exact <= q*u + q/2`, so at an exact HALF_UP
+    tie `units` may take either neighbour, `k` or `k+1`, while the true
+    posting is `k+1`. For the FX credit that looseness can never decide
+    feasibility: the credit enters the ledger `>= 0` rows only with a `+`
+    sign and appears in no objective, so a point is feasible with some
+    `units` exactly when it is feasible with `k+1`. Before option A the
+    compiler refused this very scenario with `LedgerPostingScopeError` (the
+    credit-tie guard, now removed) before a model existed; `_pinned_status`
+    compiling it at all is the first half of this regression.
+
+    `_credit_tie_fx_scenario` converts 5 EUR at 3/2 with no spread into an
+    exact 7.5 USD -- a tie of the whole-USD quantum -- that posts 8 USD. With a
+    1 USD whole-unit asset and a zero fee no debit can land on a tie, so the
+    model's feasible set must equal the exact one: 8 units (exactly the
+    posted credit) feasible in both, 9 units (one quantum more) in neither.
     """
-    # Direct: the specified reachability cases.
-    assert _half_up_tie_reachable(R(1, 2), ONE, 0, 0) is False  # n=0 -> 0, no tie
-    assert _half_up_tie_reachable(R(1, 2), ONE, 0, 1) is True  # n=1 -> 0.5, a tie (ties at odd n)
-    assert _half_up_tie_reachable(R(297, 250), ONE, 0, 14) is False  # first tie only at n=125
-    assert _half_up_tie_reachable(R(297, 250), ONE, 0, 400) is True  # range now includes n=125
-    assert _half_up_tie_reachable(R(297, 250), ONE, 125, 125) is True  # exactly the tie point
-    assert _half_up_tie_reachable(R(297, 250), ONE, 126, 374) is False  # strictly between the 1st (125) and 2nd (375) tie
-    assert _half_up_tie_reachable(R(1, 3), ONE, 0, 10_000) is False  # odd denominator -> never a tie, any range
-    assert _half_up_tie_reachable(R(0), ONE, 0, 10_000) is False  # zero coefficient -> never a tie
+    scenario = _credit_tie_fx_scenario(price=R(1), cap=R(10))
+    view = build_exact_policy_view(scenario)
+    funding = exact_decision_id("funding_transfer", "route:funding:eur")
+    fx = exact_decision_id("fx_debit", "route:buy:usd:EUR")
+    buy = exact_decision_id("buy_quantum", "route:buy:usd")
 
-    # Cross-check the flagged tie point against the real rounding function.
-    tie_value = R(297, 250) * 125  # == 297/2 == 148.5, an exact HALF_UP tie of quantum 1
-    assert tie_value == R(297, 2)
-    assert post_half_up(tie_value, ONE).posted == R(149)  # exactly at the tie -> rounds up (away from zero)
-    assert post_half_up(tie_value, ONE).rounding_delta == ONE / 2  # sits exactly on the .5 boundary
-    assert post_half_up(tie_value - R(1, 1000), ONE).posted == R(148)  # just below -> rounds down
-    assert post_half_up(tie_value + R(1, 1000), ONE).posted == R(149)  # just above -> rounds up
+    # The real rounding function, independently of the ledger: 7.5 sits
+    # exactly on the .5 boundary of quantum ONE and rounds up to 8.
+    assert post_half_up(R(15, 2), ONE).posted == R(8)
+    assert post_half_up(R(15, 2), ONE).rounding_delta == ONE / 2
 
-    # Behavioural validation: a brute-force "is any post_half_up exactly on a
-    # .5 boundary" scan must agree with the closed form across varied inputs.
-    def _brute_force_tie_reachable(coefficient, quantum, lower_quanta: int, upper_quanta: int) -> bool:
-        half_quantum = quantum / 2
-        return any(abs(post_half_up(coefficient * n, quantum).rounding_delta) == half_quantum for n in range(lower_quanta, upper_quanta + 1))
+    for units, expected_feasible, expected_status, expected_usd_balance in (
+        (8, True, "optimal", ZERO),  # 8 posted credit - 8 posted debit
+        (9, False, "infeasible", R(-1)),  # one quantum more than the posted credit
+    ):
+        quanta = {funding: 5, fx: 5, buy: units}
+        candidate = _candidate(view, quanta, candidate_id=f"candidate:credit-tie:{units}")
+        evaluation = evaluate_exact_candidate(scenario, view, candidate)
+        assert evaluation.candidate_valid is True, units  # inside every box: only the cash rules can decide
 
-    scan_cases = [
-        (R(1, 2), ONE, 0, 6),
-        (R(297, 250), ONE, 0, 400),
-        (R(297, 250), ONE, 126, 374),
-        (R(3, 4), ONE, 0, 20),
-        (R(2, 5), R(1, 10), 0, 30),
-        (R(7, 3), ONE, 0, 50),  # odd denominator -> never a tie
-        (R(5), R(2), 0, 10),
-        (R(0), ONE, 0, 50),  # zero coefficient -> never a tie
-    ]
-    for coefficient, quantum, lower_quanta, upper_quanta in scan_cases:
-        assert _half_up_tie_reachable(coefficient, quantum, lower_quanta, upper_quanta) is _brute_force_tie_reachable(coefficient, quantum, lower_quanta, upper_quanta)
+        # Precondition, verified rather than assumed: the conversion really is
+        # an exact tie, posted at its true HALF_UP value.
+        fx_evaluation = next(item for item in evaluation.fx if item.order_route_id == "route:buy:usd" and item.source_currency == "EUR")
+        assert fx_evaluation.exact_destination_credit == R(15, 2), units  # 7.5 USD, an exact tie
+        assert fx_evaluation.posted_destination_credit == R(8), units
+
+        usd_cell = next(ledger for ledger in evaluation.ledgers if ledger.broker_id == "broker:destination" and ledger.currency == "USD")
+        assert (usd_cell.fx_credit, usd_cell.buy_debit) == (R(8), R(units)), units
+        assert usd_cell.final_spendable == expected_usd_balance, units
+
+        assert evaluation.feasible is expected_feasible, units
+        assert _pinned_status(scenario, view, quanta=quanta) == expected_status, units
 
 
 # --------------------------------------------------------------------------

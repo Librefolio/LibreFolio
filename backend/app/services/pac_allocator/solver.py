@@ -9,13 +9,13 @@ solve stage *k+1* on that face. The stage order is whatever
 ``ordinal`` values — never re-sorted or hardcoded here.
 
 **This module never decides anything about proof.** It returns a candidate
-plus a pile of explicitly floating, explicitly non-authoritative facts.
-Feasibility, every published number, and the lexicographic ranking that
-actually counts all come from ``evaluate_exact_candidate`` replay, and any
-promotion to ``optimal_proven``/``infeasibility_proven`` is ``proof.py``'s
-job via ``oracle.py`` or a deterministic conflict. That separation is why
-``SolverRunResult.outcome`` deliberately uses floating vocabulary
-(``reported_infeasible``, never ``infeasible``).
+plus the solver's own, floating facts — per-stage statuses, bounds and gaps.
+Feasibility and every published number come from ``evaluate_exact_candidate``
+replay, and whether SCIP's statuses amount to a proof — ``optimal_proven``
+when every stage closed at the optimum, ``infeasibility_proven`` when the
+first stage closed infeasible (D-X1) — is ``proof.py``'s decision alone. That
+separation is why ``SolverRunResult.outcome`` uses report vocabulary
+(``reported_infeasible``, never ``infeasibility_proven``).
 
 Cancellation (Step3 §16.4 risk 1, measured 2026-09-16): a Python-thread
 ``interruptSolve()`` did **not** preempt ``optimize()``. The primary guard
@@ -70,9 +70,9 @@ __all__ = [
 
 ENGINE_NAME = "SCIP"
 
-# Fallback budget for a caller with no engine window to claim — tests, probes,
-# and the exhaustive-oracle path that never reaches here. **Not** the product
-# budget: the Tool passes `engine_timeout_ms` (30 000 ms as of 2026-09-21) via
+# Fallback budget for a caller with no engine window to claim — tests and
+# probes. **Not** the product budget: the Tool passes `engine_timeout_ms`
+# (30 000 ms as of 2026-09-21) via
 # `plan_pac_allocation(solver_time_budget_seconds=…)`, and that is the number
 # that governs a user-facing plan.
 #
@@ -85,13 +85,16 @@ ENGINE_NAME = "SCIP"
 # optimum for today's system.
 DEFAULT_SOLVER_TIME_BUDGET_SECONDS = 3.5
 
-# Not an economic or policy epsilon. Its only job is to stop a stage pin from
+# Not an economic or policy epsilon. Its only job is to keep a stage pin from
 # being *unsatisfiable by float re-evaluation of the very expression that
-# produced the value*: float64 carries ~2.2e-16 relative error, and SCIP's own
-# 1e-6 absolute ``numerics/feastol`` stops covering that once a stage value
-# exceeds ~1e10 (``fixed_l2`` is money-*squared*, so that is reachable). The
-# slack is relative, so it vanishes for small values, and it is never applied
-# to a provably integral stage (see ``_is_integral_stage``).
+# produced the value*. SCIP already judges a linear row against a **relative**
+# ``numerics/feastol``: the violation is scaled by ``max(|lhs|, |activity|, 1)``
+# (SCIP 10.0 ``cons_linear.c``, ``set.c``, ``misc.c``), which by itself absorbs
+# float64's ~2.2e-16 relative error at any magnitude — ``fixed_l2``'s
+# money-squared values included. This slack is a harmless extra margin on top,
+# independent of that setting. It is relative too, so it vanishes for small
+# values, and it is never applied to a provably integral stage (see
+# ``_is_integral_stage``).
 STAGE_PIN_RELATIVE_SLACK = 1e-12
 
 # Stage codes whose expression is provably integral: ``route_priority`` sums
@@ -143,18 +146,19 @@ class SolverTolerances:
 
 @dataclass(frozen=True, slots=True)
 class SolverStageReport:
-    """Non-authoritative floating facts about one cascade stage.
+    """Floating facts about one cascade stage, as SCIP reported them.
 
     Mirrors ``schemas/pac_allocator.SolverStageEvidence`` field for field so
-    ``proof.py`` can project it without re-deriving anything, but stays a
-    plain dataclass: this module must not import wire schemas, and must not
-    be able to express a *proven* claim at all.
+    ``planner_report.py`` can project it without re-deriving anything, but
+    stays a plain dataclass: this module must not import wire schemas.
+    ``infeasible`` is reserved for SCIP's verdict on the first, still-global
+    stage; a later empty face is ``unfinished`` plus an anomaly.
     """
 
     stage: str
     objective_code: str
     ordinal: int
-    status: Literal["finished", "unfinished"]
+    status: Literal["finished", "unfinished", "infeasible"]
     scope: Literal["global", "incumbent_face"]
     sense: Literal["min"]
     primal: float | None
@@ -168,17 +172,16 @@ class SolverStageReport:
 
 @dataclass(frozen=True, slots=True)
 class SolverRunResult:
-    """What the search found, in deliberately floating vocabulary.
+    """What the search found, in the solver's own vocabulary.
 
-    ``outcome`` is never a proof claim:
+    ``outcome`` is never a proof claim; ``proof.py`` alone reads one out of it:
 
     * ``incumbent`` — a candidate was extracted; it still has to survive
       ``evaluate_exact_candidate`` replay before anyone may publish it.
-    * ``reported_infeasible`` — SCIP reported infeasibility on the *first*,
-      still-global stage. Only a ``deterministic_conflict`` or the exhaustive
-      oracle may ever turn that into ``infeasibility_proven``; a later-stage
-      infeasibility is an anomaly, never a scenario verdict (see
-      ``_solve_stages``).
+    * ``reported_infeasible`` — SCIP closed the *first*, still-global stage
+      as infeasible: that stage is reported ``infeasible`` and nothing runs
+      after it. A later-stage infeasibility is an anomaly of the pins, never
+      a scenario verdict (see ``_solve_stages``).
     * ``no_incumbent`` — limits were exhausted before any solution existed.
 
     ``exact_replay_required`` exists purely so a caller cannot forget: it is
@@ -207,7 +210,7 @@ def _objective_code(stage: ObjectiveStage) -> str:
     """The wire ``ObjectiveCode`` a stage reports under.
 
     Tie-break stages are not wire objectives — they carry the decision id
-    instead, and ``proof.py`` is responsible for excluding them from
+    instead, and ``planner_report.build_solver_evidence`` excludes them from
     ``ReportedFloatingSolverEvidence.stages`` (which admits only real
     ``ObjectiveCode`` values).
     """
@@ -392,12 +395,14 @@ def _solve_stages(
             outcome = "incumbent"
 
         finished = scip_status == "optimal" and has_solution
+        # Only the first, still-global stage can say anything about the scenario itself.
+        infeasible_verdict = index == 0 and scip_status == "infeasible"
         reports.append(
             SolverStageReport(
                 stage=stage.code,
                 objective_code=_objective_code(stage),
                 ordinal=ordinal,
-                status="finished" if finished else "unfinished",
+                status="finished" if finished else "infeasible" if infeasible_verdict else "unfinished",
                 scope=scope,
                 sense="min",
                 primal=primal,
@@ -414,16 +419,17 @@ def _solve_stages(
             pending_pin = (stage, _pin_value(stage, primal))
             continue
 
+        if infeasible_verdict:
+            # A verdict, not an interruption: no face exists for a later stage
+            # to run on, so none is run and none is reported.
+            outcome = "reported_infeasible"
+            break
+
         if scip_status == "infeasible":
-            if index == 0:
-                # Only the first, still-global stage can say anything about the
-                # scenario itself — and even then only as a floating report.
-                outcome = "reported_infeasible"
-            else:
-                # The face carved out by earlier pins came back empty. That is
-                # a pin/tolerance anomaly, never a scenario verdict: the
-                # previous stage's incumbent is still a valid candidate.
-                anomaly = f"stage {stage.code!r} (ordinal {ordinal}) reported infeasible on a face that stage {stages[index - 1].code!r} had already satisfied"
+            # The face carved out by earlier pins came back empty. That is a
+            # pin/tolerance anomaly, never a scenario verdict: the previous
+            # stage's incumbent is still a valid candidate.
+            anomaly = f"stage {stage.code!r} (ordinal {ordinal}) reported infeasible on a face that stage {stages[index - 1].code!r} had already satisfied"
         elif scip_status not in _LIMIT_STATUSES:
             anomaly = f"stage {stage.code!r} (ordinal {ordinal}) ended with unexpected solver status {scip_status!r}"
 

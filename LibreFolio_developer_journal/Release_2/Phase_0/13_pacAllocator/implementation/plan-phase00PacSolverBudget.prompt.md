@@ -1,6 +1,7 @@
 # Plan — Propagate the real engine budget to the solver
 
 > **Predecessor**: `plan-phase00PacP1ResidueRemoval.prompt.md` (`154182295`).
+> **Successor**: [`plan-phase00PacRound5PostMerge.prompt.md`](plan-phase00PacRound5PostMerge.prompt.md) — round-5 post-merge defects, planner v2 UI, detailed review (2026-09-24).
 > **Baseline**: `154182295`. **Lane**: port 6152, `/tmp/librefolio-r2-d`.
 > **Scope**: voice 1 of the remaining-work list, *narrowed by measurement*.
 
@@ -118,8 +119,8 @@ and none exists. The note the developer remembered **exists and was located** �
 
 ```
 plan-phase00PacRebalancerRemediation.prompt.md:105    "benchmark capacity no"
-plan-phase00Step3PacRebalancerSolverPolicies.prompt.md:313   "- [ ] 13. Confrontare oracle e benchmark capacity."
-plan-phase00Step6PacRebalancerIntegrationTestsDocs.prompt.md:279
+plan-phase00Step3PacRebalancerSolverPolicies.prompt.md:328   "- [ ] 13. Confrontare oracle e benchmark capacity."
+plan-phase00Step6PacRebalancerIntegrationTestsDocs.prompt.md:305   "10. payload witness e benchmark capacity;"
 ```
 
 No new note created. `stop_reason: "node_limit"` (`schemas/pac_allocator.py:2406,2469`,
