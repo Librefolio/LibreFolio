@@ -255,6 +255,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/tools/ToolHost.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/StateNotice.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/ResultCell.test.ts",
+            "src/lib/features/tools/pac-allocator/planner/request.test.ts",
             "src/lib/components/ui/display/BrokerBadge.test.ts",
             *(["-t", "|".join(test_names)] if test_names else []),
         ],

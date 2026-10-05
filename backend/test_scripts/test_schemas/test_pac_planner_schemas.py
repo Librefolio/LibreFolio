@@ -161,6 +161,11 @@ def _pac_request() -> JsonObject:
     return _fixture("pac_plan_request.min.v2.json")
 
 
+def _compact_pac_request() -> JsonObject:
+    """`min` in the form the UI sends: every default omitted, the all-zero fee schedule too."""
+    return _fixture("pac_plan_request.compact.v2.json")
+
+
 def _rebalancer_invest_and_sell_request() -> JsonObject:
     return _fixture("rebalancer_plan_request.medium.v2.json")
 
@@ -644,6 +649,24 @@ FIXTURE_CASES = (
 )
 
 
+# Contract compaction (plan-phase00PacContractCompaction §2): a request root may omit
+# exactly these fields, which validation fills with the neutral value; every other root
+# field (operation, snapshot, as_of, valuation_currency, provenance, assets, brokers,
+# order_routes, target_weights, policy, sell_context) stays required.
+ROOT_DEFAULTED_FIELDS: dict[str, Any] = {
+    "fx_rates": {},
+    "fx_spread_rate": "0",
+    "existing_cash": [],
+    "contributions": [],
+    "funding_routes": [],
+}
+REBALANCER_ROOT_DEFAULTED_FIELDS: dict[str, Any] = {**ROOT_DEFAULTED_FIELDS, "holdings": []}
+
+
+def _root_defaulted_fields(model_type: type[BaseModel]) -> dict[str, Any]:
+    return ROOT_DEFAULTED_FIELDS if model_type is PacPlannerRequest else REBALANCER_ROOT_DEFAULTED_FIELDS
+
+
 @pytest.mark.parametrize("adapter,model_type,factory", REQUEST_CASES)
 def test_all_three_request_roots_strict_roundtrip_and_reject_impossible_shapes(
     adapter: TypeAdapter[Any],
@@ -654,7 +677,8 @@ def test_all_three_request_roots_strict_roundtrip_and_reject_impossible_shapes(
     model, _emitted = _strict_roundtrip(adapter, payload)
 
     assert type(model) is model_type
-    assert all(field.is_required() for field in model_type.model_fields.values())
+    defaulted = _root_defaulted_fields(model_type)
+    assert {name for name, field in model_type.model_fields.items() if not field.is_required()} == set(defaulted)
 
     wrong_operation = deepcopy(payload)
     wrong_operation["operation"] = "analyze"
@@ -671,7 +695,13 @@ def test_all_three_request_roots_strict_roundtrip_and_reject_impossible_shapes(
     for field_name in model_type.model_fields:
         missing = deepcopy(payload)
         missing.pop(field_name)
-        _reject(adapter, missing)
+        if field_name not in defaulted:
+            _reject(adapter, missing)
+            continue
+        filled = adapter.validate_json(_wire(missing), strict=True)
+        assert type(filled) is model_type
+        assert getattr(filled, field_name) == defaulted[field_name], field_name
+        assert filled == adapter.validate_json(_wire({**missing, field_name: defaulted[field_name]}), strict=True)
 
 
 @pytest.mark.parametrize("product,state,adapter,result_type", RESULT_CASES)
@@ -1099,7 +1129,6 @@ EXPECTED_PLANNER_ISSUE_CODES = (
     "allocation.order_minimum_exceeds_cap",
     "allocation.order_minimum_negative",
     "allocation.planning_quantity_negative",
-    "allocation.price_date_missing",
     "allocation.price_missing",
     "allocation.price_order_invalid",
     "allocation.provenance_not_found",
@@ -1111,8 +1140,6 @@ EXPECTED_PLANNER_ISSUE_CODES = (
     "allocation.route_priority_negative",
     "allocation.saved_fx_invalid",
     "allocation.solver_limit_no_incumbent",
-    "allocation.stale_age_negative",
-    "allocation.stale_observation_not_accepted",
     "allocation.target_total_not_one",
     "allocation.target_weight_missing",
     "allocation.target_weight_out_of_range",
@@ -1162,6 +1189,13 @@ SUPERSEDED_PLANNER_ISSUE_CODES = (
     # allocation.currency_spec_missing in PortfolioPlannerSourceIssueCode.
     "allocation.currency_minor_unit_nonpositive",
     "allocation.currency_spec_missing",
+    # Contract compaction: the quote no longer carries a freshness or a reference
+    # date, so the planner cannot report a stale or undated price. The
+    # allocation-source API keeps its own allocation.price_date_missing in
+    # PortfolioPlannerSourceIssueCode.
+    "allocation.price_date_missing",
+    "allocation.stale_age_negative",
+    "allocation.stale_observation_not_accepted",
 )
 
 
@@ -1177,7 +1211,7 @@ def _catalogue_issue_specimen(code: str) -> JsonObject:
 
 
 def test_planner_issue_code_catalogue_is_exact_closed_and_sorted() -> None:
-    assert len(EXPECTED_PLANNER_ISSUE_CODES) == 79
+    assert len(EXPECTED_PLANNER_ISSUE_CODES) == 76
     assert EXPECTED_PLANNER_ISSUE_CODES == tuple(sorted(EXPECTED_PLANNER_ISSUE_CODES))
     assert get_args(pac_schemas.PlannerIssueCode) == EXPECTED_PLANNER_ISSUE_CODES
     assert PLANNER_ISSUE_CODE_ADAPTER.json_schema()["enum"] == list(EXPECTED_PLANNER_ISSUE_CODES)
@@ -1623,8 +1657,6 @@ DOWNSTREAM_NORMALIZER_ISSUE_CASES = (
     _normalizer_issue_case("allocation.nonpositive_fx_rate", "invalid", FX_RATE_ISSUE_PATH),
     _normalizer_issue_case("allocation.identity_fx_rate_not_allowed", "invalid", FX_RATE_ISSUE_PATH),
     _normalizer_issue_case("allocation.fx_spread_rate_out_of_range", "invalid"),
-    _normalizer_issue_case("allocation.stale_age_negative", "invalid"),
-    _normalizer_issue_case("allocation.stale_observation_not_accepted", "invalid"),
     _normalizer_issue_case("portfolio_rebalancer.tax_rate_missing", "needs_input", TAX_RATE_ISSUE_PATH),
     _normalizer_issue_case("portfolio_rebalancer.tax_rate_out_of_range", "invalid", TAX_RATE_ISSUE_PATH),
     _normalizer_issue_case("allocation.fiscal_currency_missing", "needs_input"),
@@ -1722,6 +1754,324 @@ def test_request_roots_reject_the_withdrawn_currency_specs_input(adapter: TypeAd
     _strict_roundtrip(adapter, payload)
     payload["currency_specs"] = [{"currency": "EUR", "minor_unit": "0.01"}]
     _assert_extra_forbidden(adapter, payload, "currency_specs")
+
+
+# --- Contract compaction (plan-phase00PacContractCompaction §1-§2) ---------------------------
+#
+# The wire is compact: a field whose value is the neutral default may be omitted, and
+# validation fills it with that default as a model INSTANCE, never a dict.  Three inputs
+# that no longer influence a plan are withdrawn and become extra fields.
+
+_NO_SCHEMA_DEFAULT = "<no default in schema>"
+
+
+def _select(node: Any, path: tuple[Any, ...]) -> Any:
+    """Walk a payload or a validated model; a ``(field, value)`` step selects one list row by identity."""
+    for step in path:
+        if isinstance(step, tuple):
+            field, value = step
+            rows = [row for row in node if (row.get(field) if isinstance(row, dict) else getattr(row, field)) == value]
+            assert len(rows) == 1, f"expected exactly one {field}={value!r} row"
+            node = rows[0]
+        else:
+            node = node[step] if isinstance(node, (dict, list)) else getattr(node, step)
+    return node
+
+
+WITHDRAWN_PAC_INPUT_FIELD_CASES = (
+    pytest.param(("assets", 0, "quote"), "freshness", {"kind": "fresh"}, id="quote-freshness"),
+    pytest.param(("assets", 0, "quote"), "reference_date", "2026-09-15", id="quote-reference-date"),
+    pytest.param(("existing_cash", 0), "source_kind", "local_broker_cash", id="existing-cash-source-kind"),
+)
+
+
+@pytest.mark.parametrize(("container_path", "field_name", "value"), WITHDRAWN_PAC_INPUT_FIELD_CASES)
+def test_pac_request_rejects_the_withdrawn_quote_and_cash_fields_as_extra_fields(
+    container_path: tuple[str | int, ...],
+    field_name: str,
+    value: Any,
+) -> None:
+    # `min` has exactly one asset and one cash row, so index 0 is the row this test edits.
+    payload = _pac_request()
+    container = _select(payload, container_path)
+    assert field_name not in container
+    container[field_name] = value
+
+    with pytest.raises(ValidationError) as exc_info:
+        PAC_PLAN_INPUT_ADAPTER.validate_json(_wire(payload), strict=True)
+
+    errors = exc_info.value.errors(include_url=False)
+    assert [(error["type"], error["loc"]) for error in errors] == [("extra_forbidden", (*container_path, field_name))]
+
+
+def test_compact_pac_request_fills_every_omitted_default_as_a_model_instance() -> None:
+    twin = _compact_pac_request()
+    model = PAC_PLAN_INPUT_ADAPTER.validate_json(_wire(twin), strict=True)
+
+    assert type(model) is PacPlannerRequest
+    assert model.fx_rates == {}
+    assert model.fx_spread_rate == "0"
+    assert model.contributions == []
+    assert model.funding_routes == []
+    assert _select(model, ("brokers", ("broker_id", "broker-one"))).fee_schedules == []
+    route = _select(model, ("order_routes", ("route_id", "route-asset-one-broker-one-buy")))
+    assert type(route.required_minimum) is pac_schemas.NoOrderMinimum
+    assert route.execution_margin_rate == "0"
+    assert route.fee_schedule_id is None
+    # What the twin does say is kept as sent.
+    assert route.priority == 1
+    assert type(route.minimum_if_active) is pac_schemas.WholeQuantityMinimum
+    assert type(route.cap) is pac_schemas.QuantityOrderCap
+    assert [row.cash_id for row in model.existing_cash] == ["cash-broker-one-eur"]
+
+    sparse = deepcopy(twin)
+    sparse.pop("existing_cash")
+    asset = _find(sparse["assets"], "asset_id", "asset-one")
+    asset.pop("exposures")
+    broker = _find(sparse["brokers"], "broker_id", "broker-one")
+    broker.pop("capabilities")
+    broker["fee_schedules"] = [{"fee_schedule_id": "fee-broker-one-buy", "capability_id": "cap-broker-one-eur-whole", "side": "buy"}]
+    sparse_route = _find(sparse["order_routes"], "route_id", "route-asset-one-broker-one-buy")
+    for key in ("priority", "minimum_if_active", "cap"):
+        sparse_route.pop(key)
+
+    model = PAC_PLAN_INPUT_ADAPTER.validate_json(_wire(sparse), strict=True)
+
+    assert model.existing_cash == []
+    assert _select(model, ("assets", ("asset_id", "asset-one"))).exposures == []
+    filled_broker = _select(model, ("brokers", ("broker_id", "broker-one")))
+    assert filled_broker.capabilities == []
+    schedule = _select(filled_broker.fee_schedules, (("fee_schedule_id", "fee-broker-one-buy"),))
+    assert schedule.fixed_fee is None
+    assert schedule.rate == "0"
+    assert schedule.variable_floor is None
+    assert type(schedule.variable_cap) is pac_schemas.NoFeeCap
+    filled_route = _select(model, ("order_routes", ("route_id", "route-asset-one-broker-one-buy")))
+    assert filled_route.priority == 0
+    assert type(filled_route.minimum_if_active) is pac_schemas.NoOrderMinimum
+    assert type(filled_route.required_minimum) is pac_schemas.NoOrderMinimum
+    assert type(filled_route.cap) is pac_schemas.NoOrderCap
+    assert filled_route.execution_margin_rate == "0"
+
+
+def test_reduced_rebalancer_request_fills_holdings_sell_context_lists_and_funding_priority() -> None:
+    payload = _rebalancer_invest_and_sell_request()
+    payload.pop("holdings")
+    payload["sell_context"] = {}
+    for funding_route in payload["funding_routes"]:
+        funding_route.pop("priority")
+
+    model = REBALANCER_PLAN_INPUT_ADAPTER.validate_json(_wire(payload), strict=True)
+
+    assert type(model) is RebalancerInvestAndSellRequest
+    assert model.holdings == []
+    assert model.sell_context.cost_bases == []
+    assert model.sell_context.asset_taxes == []
+    assert model.sell_context.broker_withholding == []
+    assert {row.funding_route_id: row.priority for row in model.funding_routes} == {"fund-contribution-alpha": 0, "fund-contribution-beta": 0}
+    # The transfer caps were sent, so they are kept.
+    assert {row.funding_route_id: row.transfer_cap.amount for row in model.funding_routes} == {"fund-contribution-alpha": "10", "fund-contribution-beta": "40"}
+
+
+OPTIONAL_INPUT_FIELD_CASES = (
+    pytest.param(PAC_PLAN_INPUT_ADAPTER, _pac_request, ("assets", ("asset_id", "asset-one"), "identity"), "asset_class", id="manual-asset-class"),
+    pytest.param(REBALANCER_PLAN_INPUT_ADAPTER, _rebalancer_invest_and_sell_request, ("assets", ("asset_id", "asset-a"), "identity"), "asset_class", id="domain-asset-class"),
+    pytest.param(REBALANCER_PLAN_INPUT_ADAPTER, _rebalancer_invest_and_sell_request, ("provenance", ("provenance_id", "prov-portfolio")), "source_label", id="domain-copy-source-label"),
+    pytest.param(
+        PAC_PLAN_INPUT_ADAPTER,
+        _pac_request,
+        ("brokers", ("broker_id", "broker-one"), "fee_schedules", ("fee_schedule_id", "fee-broker-one-eur-buy")),
+        "fixed_fee",
+        id="fee-fixed-fee",
+    ),
+    pytest.param(
+        PAC_PLAN_INPUT_ADAPTER,
+        _pac_request,
+        ("brokers", ("broker_id", "broker-one"), "fee_schedules", ("fee_schedule_id", "fee-broker-one-eur-buy")),
+        "variable_floor",
+        id="fee-variable-floor",
+    ),
+    pytest.param(PAC_PLAN_INPUT_ADAPTER, _pac_request, ("order_routes", ("route_id", "route-asset-one-broker-one-buy")), "fee_schedule_id", id="pac-buy-fee-schedule-id"),
+    pytest.param(
+        REBALANCER_PLAN_INPUT_ADAPTER,
+        _rebalancer_invest_and_sell_request,
+        ("order_routes", ("route_id", "route-a-alpha-buy")),
+        "fee_schedule_id",
+        id="rebalancer-buy-fee-schedule-id",
+    ),
+    pytest.param(
+        REBALANCER_PLAN_INPUT_ADAPTER,
+        _rebalancer_invest_and_sell_request,
+        ("funding_routes", ("funding_route_id", "fund-contribution-alpha")),
+        "transfer_cap",
+        id="funding-transfer-cap",
+    ),
+)
+
+
+@pytest.mark.parametrize(("adapter", "factory", "path", "field_name"), OPTIONAL_INPUT_FIELD_CASES)
+def test_optional_input_fields_may_be_omitted_and_read_back_as_absent(
+    adapter: TypeAdapter[Any],
+    factory: PayloadFactory,
+    path: tuple[Any, ...],
+    field_name: str,
+) -> None:
+    payload = factory()
+    assert _select(payload, path)[field_name] is not None, "the fixture must state the field for its omission to mean anything"
+    _select(payload, path).pop(field_name)
+
+    model = adapter.validate_json(_wire(payload), strict=True)
+
+    assert getattr(_select(model, path), field_name) is None
+    assert field_name not in _select(adapter.dump_python(model, mode="json", exclude_defaults=True), path)
+
+
+REQUIRED_KEPT_INPUT_FIELD_CASES = (
+    pytest.param(("provenance", ("provenance_id", "prov-manual")), "label", id="manual-provenance-label"),
+    pytest.param(("order_routes", ("route_id", "route-a-alpha-sell")), "fee_schedule_id", id="sell-route-fee-schedule-id"),
+)
+
+
+@pytest.mark.parametrize(("path", "field_name"), REQUIRED_KEPT_INPUT_FIELD_CASES)
+def test_manual_provenance_label_and_sell_route_fee_schedule_stay_required(path: tuple[Any, ...], field_name: str) -> None:
+    payload = _rebalancer_invest_and_sell_request()
+    _strict_roundtrip(REBALANCER_PLAN_INPUT_ADAPTER, payload)
+    _select(payload, path).pop(field_name)
+
+    with pytest.raises(ValidationError) as exc_info:
+        REBALANCER_PLAN_INPUT_ADAPTER.validate_json(_wire(payload), strict=True)
+
+    errors = exc_info.value.errors(include_url=False)
+    assert [(error["type"], error["loc"][-1]) for error in errors] == [("missing", field_name)]
+
+
+def test_catalog_asset_class_is_required_but_nullable() -> None:
+    assert pac_schemas.PlannerCatalogAsset.model_fields["asset_class"].is_required()
+
+    result = _pac_no_op_result()
+    catalog_asset = _find(result["catalogs"]["assets"], "asset_id", "asset-one")
+    catalog_asset["asset_class"] = None
+    model, _emitted = _strict_roundtrip(PAC_PLAN_OUTPUT_ADAPTER, result)
+    assert _select(model, ("catalogs", "assets", ("asset_id", "asset-one"))).asset_class is None
+
+    catalog_asset.pop("asset_class")
+    with pytest.raises(ValidationError) as exc_info:
+        PAC_PLAN_OUTPUT_ADAPTER.validate_json(_wire(result), strict=True)
+    errors = exc_info.value.errors(include_url=False)
+    assert [(error["type"], error["loc"][-1]) for error in errors] == [("missing", "asset_class")]
+
+
+def test_input_defaults_are_optional_in_validation_schema_and_required_in_serialization_schema() -> None:
+    assert pac_schemas.AllocationStrictModel.model_config.get("json_schema_serialization_defaults_required") is True
+
+    validation = generate_tool_schema(PAC_PLAN_INPUT_ADAPTER, "validation")
+    serialization = generate_tool_schema(PAC_PLAN_INPUT_ADAPTER, "serialization")
+    assert validation["title"] == serialization["title"] == "PacPlannerRequest"
+
+    assert "fx_rates" not in validation["required"]
+    assert validation["properties"]["fx_rates"]["default"] == {}
+    assert "fx_rates" in serialization["required"]
+
+    validation_route = validation["$defs"]["PacOrderRouteInput"]
+    serialization_route = serialization["$defs"]["PacOrderRouteInput"]
+    for field_name, default in (("priority", 0), ("cap", {"kind": "none"})):
+        assert field_name not in validation_route["required"], field_name
+        assert validation_route["properties"][field_name]["default"] == default, field_name
+        assert field_name in serialization_route["required"], field_name
+    # A field without a default stays required in both modes.
+    assert "route_id" in validation_route["required"]
+    assert "route_id" in serialization_route["required"]
+
+
+_ROUTE_SCHEMA_DEFAULTS: dict[str, Any] = {
+    "priority": 0,
+    "minimum_if_active": {"kind": "none"},
+    "required_minimum": {"kind": "none"},
+    "cap": {"kind": "none"},
+    "execution_margin_rate": "0",
+}
+_BUY_ROUTE_SCHEMA_DEFAULTS: dict[str, Any] = {**_ROUTE_SCHEMA_DEFAULTS, "fee_schedule_id": None}
+_SHARED_INPUT_SCHEMA_DEFAULTS: dict[str, dict[str, Any]] = {
+    "PlannerAssetInput": {"exposures": []},
+    "ManualAssetIdentity": {"asset_class": None},
+    "DomainAssetIdentity": {"asset_class": None},
+    "DomainCopyProvenance": {"source_label": None},
+    "PlannerBrokerInput": {"capabilities": [], "fee_schedules": []},
+    "BrokerFeeScheduleInput": {"fixed_fee": None, "rate": "0", "variable_floor": None, "variable_cap": {"kind": "none"}},
+    "PlannerFundingRouteInput": {"priority": 0, "transfer_cap": None},
+    "PacOrderRouteInput": _BUY_ROUTE_SCHEMA_DEFAULTS,
+}
+INPUT_SCHEMA_DEFAULT_CASES = (
+    pytest.param(PAC_PLAN_INPUT_ADAPTER, {**_SHARED_INPUT_SCHEMA_DEFAULTS, "PacPlannerRequest": ROOT_DEFAULTED_FIELDS}, id="pac"),
+    pytest.param(
+        REBALANCER_PLAN_INPUT_ADAPTER,
+        {
+            **_SHARED_INPUT_SCHEMA_DEFAULTS,
+            "RebalancerInvestOnlyRequest": REBALANCER_ROOT_DEFAULTED_FIELDS,
+            "RebalancerInvestAndSellRequest": REBALANCER_ROOT_DEFAULTED_FIELDS,
+            "PlannerSellContextInput": {"cost_bases": [], "asset_taxes": [], "broker_withholding": []},
+            "PlannerBuyOrderRouteInput": _BUY_ROUTE_SCHEMA_DEFAULTS,
+            # A SELL route keeps `fee_schedule_id` required.
+            "PlannerSellOrderRouteInput": _ROUTE_SCHEMA_DEFAULTS,
+        },
+        id="rebalancer",
+    ),
+)
+
+
+@pytest.mark.parametrize(("adapter", "expected"), INPUT_SCHEMA_DEFAULT_CASES)
+def test_input_schema_defaults_exactly_the_compaction_fields(adapter: TypeAdapter[Any], expected: dict[str, dict[str, Any]]) -> None:
+    schema = generate_tool_schema(adapter, "validation")
+    objects = {name: node for name, node in schema.get("$defs", {}).items() if isinstance(node.get("properties"), dict)}
+    if isinstance(schema.get("properties"), dict):
+        objects[schema["title"]] = schema
+
+    # Pydantic omits `required` altogether when every field of a model has a default.
+    observed = {
+        name: {
+            field: node["properties"][field].get("default", _NO_SCHEMA_DEFAULT)
+            for field in node["properties"]
+            if field not in node.get("required", [])
+        }
+        for name, node in objects.items()
+    }
+    assert {name: fields for name, fields in observed.items() if fields} == expected
+
+
+EXPLICIT_REQUEST_FIXTURE_CASES = (
+    pytest.param("pac_plan_request.min.v2.json", PAC_PLAN_INPUT_ADAPTER, id="pac-min"),
+    pytest.param("pac_plan_request.candidate-max.v2.json", PAC_PLAN_INPUT_ADAPTER, id="pac-candidate-max"),
+    pytest.param("rebalancer_plan_request.medium.v2.json", REBALANCER_PLAN_INPUT_ADAPTER, id="rebalancer-medium"),
+)
+
+
+@pytest.mark.parametrize(("name", "adapter"), EXPLICIT_REQUEST_FIXTURE_CASES)
+def test_explicit_request_fixture_survives_the_defaults_omitted_roundtrip(name: str, adapter: TypeAdapter[Any]) -> None:
+    payload = _fixture(name)
+    explicit = adapter.validate_json(_wire(payload), strict=True)
+
+    compact = explicit.model_dump(mode="json", exclude_defaults=True)
+
+    # Every explicit fixture spells out at least one default, so the compact form is a real change.
+    assert compact != explicit.model_dump(mode="json")
+    assert len(_wire(compact)) < len(_wire(payload))
+    assert adapter.validate_json(_wire(compact), strict=True) == explicit
+
+
+def test_compact_twin_is_min_without_its_defaults_and_a_fixed_point_of_the_compact_dump() -> None:
+    twin = _compact_pac_request()
+
+    expected = _pac_request()
+    for key in ("fx_rates", "fx_spread_rate", "contributions", "funding_routes"):
+        expected.pop(key)
+    _find(expected["brokers"], "broker_id", "broker-one").pop("fee_schedules")
+    route = _find(expected["order_routes"], "route_id", "route-asset-one-broker-one-buy")
+    for key in ("required_minimum", "execution_margin_rate", "fee_schedule_id"):
+        route.pop(key)
+    assert twin == expected
+
+    model = PAC_PLAN_INPUT_ADAPTER.validate_json(_wire(twin), strict=True)
+    assert model.model_dump(mode="json", exclude_defaults=True) == twin
 
 
 def test_pac_request_excludes_holdings_sell_context_and_sell_routes() -> None:
@@ -3412,13 +3762,13 @@ PLANNER_FULL_SCHEMA_FINGERPRINT_CASES = (
     pytest.param(
         PAC_PLAN_INPUT_ADAPTER,
         PAC_PLAN_OUTPUT_ADAPTER,
-        "bd84ef14dc43bc6185c8c4e009a336f924a3fee6cdff03a04b1263ab0246cc29",
+        "4f061103f96ac9f4fc2fbe69d94beed7381e2dce6e4fea2c57b2eb97f27b58bb",
         id="pac",
     ),
     pytest.param(
         REBALANCER_PLAN_INPUT_ADAPTER,
         REBALANCER_PLAN_OUTPUT_ADAPTER,
-        "0b43bd19dc8716ea6cffc4158764594a5f16fb06adcc43185f1bb54cfa91a1e0",
+        "be2bb19d144e07fb208ae08a26f31433ac418b722786aeab62b1021b82b18e62",
         id="rebalancer",
     ),
 )
@@ -3493,6 +3843,17 @@ def _open_map_property_schema_node_ids(schema: JsonObject) -> frozenset[int]:
     return frozenset(node_ids)
 
 
+def _property_schema_node_ids(schema: JsonObject) -> frozenset[int]:
+    """Node identities of every property schema: the only place a `default` may be published."""
+    return frozenset(
+        id(value)
+        for node in walk_schema(schema)
+        if isinstance(node.get("properties"), dict)
+        for value in node["properties"].values()
+        if isinstance(value, dict)
+    )
+
+
 @pytest.mark.parametrize("_label,adapter,mode,expected_roots,_root_discriminator", PLANNER_SCHEMA_CASES)
 def test_exported_planner_schema_profile_has_only_closed_required_codegen_safe_shapes(
     _label: str,
@@ -3507,9 +3868,11 @@ def test_exported_planner_schema_profile_has_only_closed_required_codegen_safe_s
     assert len(list(root_models(schema))) == expected_roots
     _assert_acyclic_local_references(schema)
     open_map_node_ids = _open_map_property_schema_node_ids(schema)
+    property_schema_ids = _property_schema_node_ids(schema)
 
     for node in walk_schema(schema):
-        assert "default" not in node
+        # Contract compaction: a neutral default is published on the property that has it, never on a type.
+        assert "default" not in node or id(node) in property_schema_ids
         assert "prefixItems" not in node
         assert "patternProperties" not in node
         assert "$dynamicRef" not in node
@@ -3532,13 +3895,21 @@ def test_exported_planner_schema_profile_has_only_closed_required_codegen_safe_s
             else:
                 assert node.get("additionalProperties") is False
                 properties = node.get("properties")
-                required = node.get("required")
                 assert isinstance(properties, dict)
-                assert isinstance(required, list)
-                assert set(required) == set(properties)
-                for property_schema in properties.values():
-                    assert isinstance(property_schema, dict)
-                    assert "default" not in property_schema
+                assert all(isinstance(property_schema, dict) for property_schema in properties.values())
+                if mode == "validation":
+                    # An input property is either required or carries its neutral default: never
+                    # both, never neither.  Pydantic omits `required` when it would be empty.
+                    required = node.get("required", [])
+                    assert isinstance(required, list)
+                    assert set(required) <= set(properties)
+                    for name, property_schema in properties.items():
+                        assert (name in required) != ("default" in property_schema), name
+                else:
+                    # json_schema_serialization_defaults_required: an emitted object carries every field.
+                    required = node.get("required")
+                    assert isinstance(required, list)
+                    assert set(required) == set(properties)
 
         pattern = node.get("pattern")
         if isinstance(pattern, str):

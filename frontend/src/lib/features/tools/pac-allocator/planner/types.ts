@@ -4,10 +4,18 @@
  * Nothing here is hand-written against the backend: every type is an
  * extraction of `ToolInput`/`ToolOutput`, so a contract change surfaces as a
  * type error instead of a silent mismatch.
+ *
+ * The request exists in two forms (plan-phase00PacContractCompaction §1):
+ * - `PacPlannerRequest` is the compact body that is sent: a field holding its
+ *   schema default may be left out;
+ * - `PacResolvedRequest` is the same body as the codec parses it, every
+ *   default filled in. The result views read this one.
  */
-import type {ToolInput, ToolOutput} from '$lib/features/tools/contracts';
+import type {z} from 'zod';
+import type {ToolContractMap, ToolInput, ToolOutput} from '$lib/features/tools/contracts';
 
 export type PacPlannerRequest = ToolInput<'pac_allocator', '1.0.0'>;
+export type PacResolvedRequest = z.output<ToolContractMap['pac_allocator']['1.0.0']['input']>;
 export type PacPlannerResult = ToolOutput<'pac_allocator', '1.0.0'>;
 export type PacResultState = PacPlannerResult['result_state'];
 
@@ -51,15 +59,19 @@ export type PacDeployment = PacPlanResult['deployment'];
 
 export type PacRequestAsset = PacPlannerRequest['assets'][number];
 export type PacRequestBroker = PacPlannerRequest['brokers'][number];
-export type PacRequestCapability = PacRequestBroker['capabilities'][number];
-export type PacRequestFeeSchedule = PacRequestBroker['fee_schedules'][number];
-export type PacRequestCash = PacPlannerRequest['existing_cash'][number];
-export type PacRequestContribution = PacPlannerRequest['contributions'][number];
-export type PacRequestFundingRoute = PacPlannerRequest['funding_routes'][number];
+export type PacRequestCapability = NonNullable<PacRequestBroker['capabilities']>[number];
+export type PacRequestFeeSchedule = NonNullable<PacRequestBroker['fee_schedules']>[number];
+export type PacRequestCash = NonNullable<PacPlannerRequest['existing_cash']>[number];
+export type PacRequestContribution = NonNullable<PacPlannerRequest['contributions']>[number];
+export type PacRequestFundingRoute = NonNullable<PacPlannerRequest['funding_routes']>[number];
 export type PacRequestOrderRoute = PacPlannerRequest['order_routes'][number];
 export type PacRequestProvenance = PacPlannerRequest['provenance'][number];
-export type PacRequestExposure = PacRequestAsset['exposures'][number];
+export type PacRequestExposure = NonNullable<PacRequestAsset['exposures']>[number];
 export type PacRequestPolicy = PacPlannerRequest['policy'];
+
+export type PacResolvedAsset = PacResolvedRequest['assets'][number];
+export type PacResolvedFundingRoute = PacResolvedRequest['funding_routes'][number];
+export type PacResolvedOrderRoute = PacResolvedRequest['order_routes'][number];
 
 /** The wizard steps, in screen order (C0 delta §3). */
 export const PLANNER_STEPS = ['scenario', 'liquidity', 'brokers', 'assets', 'routing', 'targets', 'fx', 'strategy', 'review'] as const;
