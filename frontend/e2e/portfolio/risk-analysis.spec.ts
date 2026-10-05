@@ -25,20 +25,26 @@ interface RiskRequest {
 interface RiskMockOptions {
     unavailableVar?: boolean;
     /**
-     * Makes the historical replay refuse to run until this holding is left out.
+     * Shapes the *portfolio* historical replay the way the engine answers when the
+     * window's edges leave holdings out (D372). Since 24/09 the engine excludes on
+     * its own every holding whose quotes do not cover the window, so there is no
+     * longer a question for the reader to answer — only a block to read:
      *
-     * `stress.py:451` stops at the **first** holding without usable history and
-     * refuses the whole replay, naming it in `details`. That is not a dead end
-     * but a question, and the only answer the reader can give is an exclusion —
-     * which has to travel on the *next* request for anything to change.
+     *  - `'partial'`: a late listing (holding 1, 0.6 of the value) and a holding
+     *    with no price in the window (holding 3, 0.05) are left out, carried as cash
+     *    at zero return, and together they hold more than half of the value — so
+     *    the answer carries the strong warning, the two exclusion warnings, and the
+     *    common period that brings the late listing back. Asked again from the
+     *    late listing's first quote, the replay gets it back, as the engine would.
+     *  - `'nothingLeft'`: both holdings are left out (1 starting late, 2 with no
+     *    price in the window), so the engine refuses with `insufficient_history`
+     *    and lists who and why in the error's details.
      *
-     * A stub that answered every replay with `ok` left that round trip
-     * unexercised, so the accumulating-exclusion loop was reachable only in
-     * production. Refusing until the id appears in `excluded_assets`, and
-     * succeeding once it does, is the smallest model of the server that makes
-     * the loop observable — and it is opt-in, so every other test is unmoved.
+     * The stories are told inside the replay stub (`resultFor`, `case 'stress'`).
+     * Opt-in, and the asset scope is never touched: with it absent the replay
+     * answers exactly as it always has, so every other test is unmoved.
      */
-    replayBlockedAssetId?: number;
+    replayExclusions?: 'partial' | 'nothingLeft';
     /**
      * Answers the simulation with `unavailable`, the way a busy worker, a
      * timeout or a series too short does.
@@ -66,7 +72,7 @@ interface RiskMockOptions {
      * results — which is the only way to exercise the deduplication, and the
      * reason `ResultReason` carries `occurrences` at all.
      *
-     * Opt-in, like `replayBlockedAssetId` above: with it absent
+     * Opt-in, like `replayExclusions` above: with it absent
      * `withInjectedWarnings` hands the result straight back, so every other
      * test's payload is unchanged down to the byte.
      */
@@ -596,33 +602,134 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
             const method = String(analytic.parameters?.method ?? 'hypothetical');
             const assetId = request.scope.kind === 'asset' ? request.scope.asset_id : matrixAssetIds(request)[0];
             if (method === 'historical_replay') {
-                const proxyAssets = (analytic.parameters?.proxy_assets ?? []) as Array<{asset_id: number; proxy_asset_id: number}>;
-                const excludedAssetIds = (analytic.parameters?.excluded_assets ?? []) as number[];
-                if (options.replayBlockedAssetId !== undefined && !excludedAssetIds.includes(options.replayBlockedAssetId)) {
-                    // The server's own shape, down to the branch: `stress.py:458`
-                    // sends `insufficient_history` with `return_source_asset_id`
-                    // **equal to** `asset_id` when the holding itself has no
-                    // history, and `invalid_parameters` with a different one when
-                    // a stand-in is the thing at fault. Only the first has an
-                    // answer the reader can give, and `replayBlocker` reads those
-                    // two fields to decide whether to offer it — so a stub that
-                    // set them carelessly would exercise the wrong branch while
-                    // still producing a red-looking-green blocker panel.
+                // The portfolio stories of `replayExclusions`, told as `stress.py::_historical`
+                // answers them. ⚠️ INVENTED, NOT MEASURED: holdings 1 and 2 keep the weights the
+                // `risk_contribution` answer above gives them (0.6 and 0.35), and the 0.05 that
+                // answer calls cash is here a third holding, with no price in the window. Every
+                // weight travels as the raw fraction it is, and the names are synthetic markers
+                // where `service.py` would put display names — so a test reads these numbers back
+                // and tells the sentences apart without reading a translated word. With the
+                // option absent, and on every other scope, the replay answers as it always has.
+                if (request.scope.kind === 'portfolio' && options.replayExclusions) {
+                    const askedRange = (analytic.parameters?.replay_range ?? request.date_range) as {start: string; end: string};
+                    // The late listing's first quote: 10 days after the panel's own window starts,
+                    // whatever window the replay asks over. The common period starts there.
+                    const lateListing = new Date(Date.parse(`${request.date_range.start}T00:00:00Z`) + 10 * 86_400_000).toISOString().slice(0, 10);
+                    if (options.replayExclusions === 'nothingLeft') {
+                        // Both holdings left out: `insufficient_history`, and with no audit to carry
+                        // them, who and why — with their weights — in the details, beside the period
+                        // that brings the late listing back. No output and no warnings, as
+                        // `_unavailable` answers.
+                        return {
+                            ...base,
+                            status: 'unavailable',
+                            output: null,
+                            error: {
+                                code: 'insufficient_history',
+                                message: 'No asset in the replay scope covers the replay window',
+                                details: {
+                                    excluded_asset_ids: [1, 2],
+                                    excluded_assets: [
+                                        {asset_id: 1, reason: 'starts_after_window_start', weight: 0.6},
+                                        {asset_id: 2, reason: 'no_prices_in_window', weight: 0.35},
+                                    ],
+                                    suggested_range: {start: lateListing, end: askedRange.end},
+                                    suggested_range_recovers: [1],
+                                },
+                            },
+                        };
+                    }
+                    // 'partial': holding 3 has no price in the window, and holding 1 is left out
+                    // while the window starts before its first quote. Both are carried as cash at
+                    // zero return, and past half of the value (0.6 + 0.05 = 0.65, written out) the
+                    // strong warning rides along. A replay asked over the proposal gets holding 1
+                    // back and proposes nothing more — what a real engine answers, and what makes
+                    // the one-click common period observable on screen, not only on the wire.
+                    const lateLeftOut = askedRange.start < lateListing;
+                    const leftOut = [...(lateLeftOut ? [{asset_id: 1, reason: 'starts_after_window_start', weight: 0.6}] : []), {asset_id: 3, reason: 'no_prices_in_window', weight: 0.05}];
+                    const leftOutTotal = lateLeftOut ? 0.65 : 0.05;
+                    const replayed = [...(lateLeftOut ? [] : [{asset_id: 1, weight: 0.6, shock: -0.2}]), {asset_id: 2, weight: 0.35, shock: -0.12}];
+                    const portfolioReturn = replayed.reduce((total, holding) => total + holding.weight * holding.shock, 0);
+                    const covered = Math.round((1 - leftOutTotal) * 10_000) / 10_000;
+                    const exclusionWarning = (reason: string, key: string, message: string, assetIds: number[]) => ({
+                        code: 'historical_replay_assets_excluded',
+                        message,
+                        details: {asset_ids: assetIds, treatment: 'zero_return_residual', reason},
+                        degrades_result: true,
+                        message_i18n_key: key,
+                        message_params: {treatment: 'zero_return_residual', names: assetIds.map((id) => `E2E replay left out #${id}`).join(', '), count: assetIds.length},
+                    });
                     return {
                         ...base,
-                        status: 'unavailable',
-                        output: null,
-                        error: {
-                            code: 'insufficient_history',
-                            message: `Asset ${options.replayBlockedAssetId} requires a manual proxy or explicit exclusion`,
-                            details: {
-                                asset_id: options.replayBlockedAssetId,
-                                return_source_asset_id: options.replayBlockedAssetId,
-                                reason: 'insufficient_history',
+                        status: 'partial',
+                        warnings: [
+                            ...(leftOutTotal > 0.5
+                                ? [
+                                      {
+                                          code: 'historical_replay_mostly_excluded',
+                                          message: `Historical replay describes only ${Math.round(covered * 100)}% of the portfolio: the rest is excluded.`,
+                                          details: {excluded_weight_total: leftOutTotal, threshold: 0.5},
+                                          degrades_result: true,
+                                          message_i18n_key: 'risk.warnings.historical_replay_mostly_excluded',
+                                          message_params: {covered},
+                                      },
+                                  ]
+                                : []),
+                            exclusionWarning('no_prices_in_window', 'risk.warnings.historical_replay_excluded_no_prices', 'Historical replay excluded assets with no prices in the replay window.', [3]),
+                            ...(lateLeftOut ? [exclusionWarning('starts_after_window_start', 'risk.warnings.historical_replay_excluded_starts_late', 'Historical replay excluded assets that start quoting after the replay window begins.', [1])] : []),
+                            // The stale prices `dataQuality()` reports for holding 1, as
+                            // `_data_quality_warnings` words them on any degraded answer: a warning
+                            // the section keeps, so the block's are the only ones that leave it.
+                            {
+                                code: 'data_quality_degraded',
+                                message: 'Risk result uses incomplete or carried-forward source data.',
+                                details: {status: 'carried_forward', cause: 'stale_prices', asset_ids: [1]},
+                                degrades_result: true,
+                                message_i18n_key: 'risk.warnings.data_quality_stale_prices',
+                                message_params: {days: 7, names: 'E2E replay stale prices', count: 1},
                             },
+                        ],
+                        metadata: {
+                            ...base.metadata,
+                            analyzed_range: askedRange,
+                            historical_replay_audit: {
+                                proxy_count: 0,
+                                proxy_assets: [],
+                                excluded_count: leftOut.length,
+                                excluded_assets: leftOut.map((item) => ({...item, treatment: 'zero_return_residual'})),
+                                excluded_weight_total: leftOutTotal,
+                                missing_history_policy: 'manual_proxy_or_exclude',
+                                composition_policy: 'current_buy_and_hold',
+                                proxy_series_usage: 'returns_only',
+                                suggested_range: lateLeftOut ? {start: lateListing, end: askedRange.end} : null,
+                                suggested_range_recovers: lateLeftOut ? [1] : [],
+                            },
+                        },
+                        output: {
+                            kind: 'stress',
+                            method: 'historical_replay',
+                            portfolio_return: portfolioReturn,
+                            impact_amount: (portfolioReturn * 10000).toFixed(2),
+                            replay_range: askedRange,
+                            impacts: [
+                                ...replayed.map((holding) => ({
+                                    asset_id: holding.asset_id,
+                                    weight: holding.weight,
+                                    shock_return: holding.shock,
+                                    contribution_return: holding.weight * holding.shock,
+                                    impact_amount: (holding.weight * holding.shock * 10000).toFixed(2),
+                                    metadata_fallback: false,
+                                    bucket_audit: [],
+                                })),
+                                // The residual: what was left out stays in the composition, at zero return.
+                                ...leftOut.map((item) => ({asset_id: item.asset_id, weight: item.weight, shock_return: 0, contribution_return: 0, impact_amount: '0.00', metadata_fallback: false, bucket_audit: []})),
+                            ],
+                            configured_buckets: [],
                         },
                     };
                 }
+                const proxyAssets = (analytic.parameters?.proxy_assets ?? []) as Array<{asset_id: number; proxy_asset_id: number}>;
+                const excludedAssetIds = (analytic.parameters?.excluded_assets ?? []) as number[];
                 const proxy = proxyAssets.find((mapping) => mapping.asset_id === assetId);
                 const excluded = excludedAssetIds.includes(assetId);
                 const replayRange = (analytic.parameters?.replay_range ?? request.date_range) as {start: string; end: string};
@@ -1557,10 +1664,19 @@ test.describe('Risk analysis functional integration', () => {
         // Every editor really mounted, with the defaults the request will carry.
         await expect(panel.getByTestId('risk-replay')).toBeVisible();
         await expect(panel.getByTestId('risk-replay-preset')).toBeVisible();
-        // Bound to the panel's own window rather than frozen at mount: the exact
-        // dates belong to the dashboard, so the shape is what is assertable here.
-        await expect(panel.getByTestId('risk-replay-start')).toHaveValue(/^\d{4}-\d{2}-\d{2}$/);
-        await expect(panel.getByTestId('risk-replay-end')).toHaveValue(/^\d{4}-\d{2}-\d{2}$/);
+        // One range picker for the replay's period, read inside L4's own replay block —
+        // Asset Detail's risk tab has a replay of its own, with the same testids. Bound
+        // to the panel's own window rather than frozen at mount: which window it holds
+        // is read after the run below, against the question the replay puts on the wire.
+        // No quick presets, since the crisis menu is this block's preset, and the two
+        // single-date pickers it replaces are gone.
+        const l4Replay = level4.getByTestId('risk-replay');
+        const replayPeriod = l4Replay.getByTestId('risk-replay-period');
+        await expect(replayPeriod.getByTestId('date-range-input-start')).toBeVisible();
+        await expect(replayPeriod.getByTestId('date-range-input-end')).toBeVisible();
+        await expect(replayPeriod.locator('[data-testid^="date-preset-"]')).toHaveCount(0);
+        await expect(l4Replay.getByTestId('risk-replay-start')).toHaveCount(0);
+        await expect(l4Replay.getByTestId('risk-replay-end')).toHaveCount(0);
         await expect(panel.getByTestId('risk-simulation-horizon')).toHaveValue('365');
         await expect(panel.getByTestId('risk-simulation-paths')).toHaveValue('8192');
 
@@ -1610,7 +1726,7 @@ test.describe('Risk analysis functional integration', () => {
             bucket_shocks: {STOCK: -0.2, CRYPTO: -0.3, BOND: -0.05, OTHER: 0},
         });
 
-        // --- Rung 1: the replay, its total and the audit beside it -------------
+        // --- Rung 1: the replay, its total, and what it left out ---------------
         await expect(panel.getByTestId('risk-replay-total')).toHaveCount(0);
         await panel.getByTestId('risk-replay-run').click();
         const replayTotal = panel.getByTestId('risk-replay-total');
@@ -1618,83 +1734,188 @@ test.describe('Risk analysis functional integration', () => {
         await expect(replayTotal).toContainText(loss('12.00%'));
         await expect(panel.getByTestId('risk-replay-tornado')).toBeVisible();
 
-        // The audit is not an appendix. A replay takes *today's* composition
-        // through a past period, so a stand-in is an opinion and an exclusion
-        // changes what the number means: both are stated where the number is
-        // read. Here neither was used, and the row says so rather than vanishing.
-        const replayAudit = panel.getByTestId('risk-replay-audit');
-        await expect(replayAudit).toBeVisible();
-        await expect(replayAudit).toHaveAttribute('data-proxy-count', '0');
-        await expect(replayAudit).toHaveAttribute('data-excluded-count', '0');
+        // Nothing was left out of this replay, so there is no block to read and no
+        // warning above the figure: the answer speaks for the whole portfolio. The total
+        // above is the barrier that makes these absences statements, and the one-line
+        // audit and the exclude-and-retry flow are gone from the block for good (D372).
+        await expect(l4Replay.getByTestId('risk-replay-excluded')).toHaveCount(0);
+        await expect(l4Replay.getByTestId('risk-replay-coverage')).toHaveCount(0);
+        for (const testId of RETIRED_REPLAY_TEST_IDS) await expect(l4Replay.getByTestId(testId), `${testId} belongs to the retired flow`).toHaveCount(0);
+
+        // The question went out over the window the picker holds — the panel's own,
+        // since nobody moved it — with nothing excluded by hand and no stand-in. The
+        // rendered total means the answer arrived, so its request is already in the
+        // array: a one-shot read, not a bet.
+        const replayRequest = requests.find((request) => request.analytics.some((analytic) => analytic.analytic_code === 'stress' && analytic.parameters?.method === 'historical_replay'));
+        if (!replayRequest) throw new Error('the replay answered on screen and no replay request was recorded');
+        const panelWindow = {start: replayRequest.date_range.start, end: replayRequest.date_range.end ?? replayRequest.date_range.start};
+        expect(replayRequest.analytics.find((analytic) => analytic.parameters?.method === 'historical_replay')?.parameters).toEqual({
+            method: 'historical_replay',
+            replay_range: panelWindow,
+            missing_history_policy: 'manual_proxy_or_exclude',
+            proxy_assets: [],
+            excluded_assets: [],
+        });
+        // Read last, because a focused field opens the calendar over the rungs: a field
+        // shows its ISO date while it is being edited, compact or not.
+        const replayStart = replayPeriod.getByTestId('date-range-input-start');
+        await replayStart.focus();
+        await expect(replayStart).toHaveValue(panelWindow.start);
+        const replayEnd = replayPeriod.getByTestId('date-range-input-end');
+        await replayEnd.focus();
+        await expect(replayEnd).toHaveValue(panelWindow.end);
     });
 
-    test('a blocked replay names the holding and the exclusion travels on retry', async ({page}) => {
-        // Not the holding the stub reports an impact for (`matrixAssetIds`[0] = 1):
-        // excluding *that* one would empty the tornado and leave a 0,00% total,
-        // which is indistinguishable from a replay that quietly did nothing. With
-        // a second holding at fault, the retry has a real answer to produce.
-        const blockedAssetId = 2;
-        const requests = await installRiskMocks(page, {replayBlockedAssetId: blockedAssetId});
+    /**
+     * Every handle of the retired exclude-and-retry flow and of the one-line audit (D372):
+     * none may come back, in any state of L4's replay. Asserted inside L4's own replay block,
+     * never on the page: Asset Detail's risk tab has a replay of its own, out of F3's scope,
+     * which reuses several of these testids.
+     */
+    const RETIRED_REPLAY_TEST_IDS = ['risk-replay-blocker', 'risk-replay-exclude', 'risk-replay-exclusions', 'risk-replay-exclusion', 'risk-replay-audit'];
+
+    test('a replay that leaves most of the portfolio out says so beside its figure, and its common period is one click away', async ({page}) => {
+        const requests = await installRiskMocks(page, {replayExclusions: 'partial'});
         const panel = await openDashboardRisk(page);
-        await openLevel4(panel);
+        const level4 = await openLevel4(panel);
+        // Every replay handle below is read inside L4's own replay block.
+        const replay = level4.getByTestId('risk-replay');
+        await expect(replay).toBeVisible();
 
-        /** `excluded_assets` of every replay the panel has put on the wire, in order. */
-        const replayExclusions = () =>
-            requests
-                .flatMap((request) => request.analytics)
-                .filter((analytic) => analytic.analytic_code === 'stress' && analytic.parameters?.method === 'historical_replay')
-                .map((analytic) => analytic.parameters?.excluded_assets);
+        /** Every replay the panel has put on the wire, in order: the panel's window, and the parameters it asked with. */
+        const replayQuestions = () => requests.flatMap((request) => request.analytics.filter((analytic) => analytic.analytic_code === 'stress' && analytic.parameters?.method === 'historical_replay').map((analytic) => ({panelWindow: request.date_range, parameters: analytic.parameters ?? {}})));
 
-        await expect(panel.getByTestId('risk-replay-run')).toBeEnabled();
-        await panel.getByTestId('risk-replay-run').click();
+        await expect(replay.getByTestId('risk-replay-run')).toBeEnabled();
+        await replay.getByTestId('risk-replay-run').click();
 
-        // The refusal is turned into a question, addressed to the reader, about
-        // the named holding. `data-asset-id` rather than the sentence: the
-        // sentence ships in four languages, the id is the claim.
-        const blocker = panel.getByTestId('risk-replay-blocker');
-        await expect(blocker).toBeVisible({timeout: 10_000});
-        await expect(blocker).toHaveAttribute('data-asset-id', String(blockedAssetId));
-        // The holding itself has no history, not a stand-in chosen for it — so
-        // there *is* an answer, and the button offering it is present. The other
-        // branch would be a "fix it" button that fixes nothing.
-        await expect(blocker).toHaveAttribute('data-proxy-at-fault', 'false');
-        const excludeButton = panel.getByTestId('risk-replay-exclude');
-        await expect(excludeButton).toBeVisible();
+        // Barrier: the answer reached the renderer — the figure everything below qualifies.
+        const total = replay.getByTestId('risk-replay-total');
+        await expect(total).toBeVisible({timeout: 10_000});
 
-        // Barrier established (the blocker is on screen and fed by this very
-        // answer), so the absences below are statements about the answer rather
-        // than about how far the page had got.
-        await expect(panel.getByTestId('risk-replay-total')).toHaveCount(0);
-        await expect(panel.getByTestId('risk-replay-exclusions')).toHaveCount(0);
+        // --- Who was left out, why, and the share each held -------------------
+        // Read off attributes, never off the translated sentences: the reason and
+        // the raw weight are the claims, the words are the catalogue's. The numbers
+        // are the stub's (`replayExclusions: 'partial'`): holding 1 starts late with
+        // 0.6 of the value, holding 3 has no price with 0.05, 0.65 together.
+        const block = replay.getByTestId('risk-replay-excluded');
+        await expect(block).toBeVisible();
+        await expect(block).toHaveAttribute('data-count', '2');
+        await expect(block).toHaveAttribute('data-treatment', 'zero_return_residual');
+        await expect(block).toHaveAttribute('data-weight-total', '0.65');
+        // In the block's order of reasons, which is not the order the engine lists them in.
+        await expect.poll(() => block.getByTestId('risk-replay-excluded-group').evaluateAll((groups) => groups.map((group) => group.getAttribute('data-reason')))).toEqual(['no_prices_in_window', 'starts_after_window_start']);
+        for (const {reason, assetId, weight} of [
+            {reason: 'no_prices_in_window', assetId: 3, weight: '0.05'},
+            {reason: 'starts_after_window_start', assetId: 1, weight: '0.6'},
+        ]) {
+            const item = block.locator(`[data-testid="risk-replay-excluded-group"][data-reason="${reason}"] [data-testid="risk-replay-excluded-asset"][data-asset-id="${assetId}"]`);
+            await expect(item, `holding ${assetId} is not listed under ${reason}`).toHaveCount(1);
+            await expect(item).toHaveAttribute('data-weight', weight);
+        }
 
-        await excludeButton.click();
+        // --- The strong warning, above the figure it qualifies ----------------
+        const coverage = replay.getByTestId('risk-replay-coverage');
+        await expect(coverage).toBeVisible();
+        // Both are on screen (the barriers above), so their order is read once.
+        const coverageFirst = await replay.evaluate((root) => {
+            const warning = root.querySelector('[data-testid="risk-replay-coverage"]');
+            const figure = root.querySelector('[data-testid="risk-replay-total"]');
+            return Boolean(warning && figure && warning.compareDocumentPosition(figure) & Node.DOCUMENT_POSITION_FOLLOWING);
+        });
+        expect(coverageFirst, 'the strong warning is read after the figure it qualifies').toBe(true);
 
-        // The round trip itself, and the only place it is observable: the reader's
-        // answer has to reach the server, or the loop never ends. Two requests —
-        // the first asking with nothing excluded, the second carrying the choice.
-        // A UI that remembered the exclusion locally and re-sent the old question
-        // would show the chip, look entirely convincing, and fail exactly here.
-        await expect.poll(replayExclusions, {timeout: 10_000}).toEqual([[], [blockedAssetId]]);
+        // --- …and not a second time, far from it, in the level's list ---------
+        // The answer carries four warnings: the strong one, two exclusions and the
+        // stale prices. Only the last is not the block's, so it is the one left in
+        // the level's reasons — the positive control that makes the rest an absence.
+        // Told apart by the stub's own synthetic names, never by translated words.
+        const reasons = level4.getByTestId('risk-level-4-reasons');
+        await expect(reasons).toHaveAttribute('data-count', '1');
+        await expect(reasons).toContainText('E2E replay stale prices');
+        await expect(reasons).not.toContainText('E2E replay left out');
+        // The level's own status line still says the replay is partial.
+        await expect(level4.getByTestId('risk-level-4-health')).toHaveAttribute('data-count', '1');
 
-        // …and only then does the answer change.
-        const replayTotal = panel.getByTestId('risk-replay-total');
-        await expect(replayTotal).toBeVisible({timeout: 10_000});
-        await expect(replayTotal).toContainText(loss('12.00%'));
-        await expect(panel.getByTestId('risk-replay-audit')).toHaveAttribute('data-excluded-count', '1');
-        await expect(blocker).toHaveCount(0);
+        // The retired flow is nowhere in the block — behind the total and the list above.
+        for (const testId of RETIRED_REPLAY_TEST_IDS) await expect(replay.getByTestId(testId), `${testId} belongs to the retired flow`).toHaveCount(0);
 
-        // An exclusion silently remembered is an assumption smuggled into the
-        // number, so the choice stays visible — and reversible.
-        const exclusionChip = panel.getByTestId('risk-replay-exclusion');
-        await expect(exclusionChip).toBeVisible();
-        await expect(exclusionChip).toHaveAttribute('data-asset-id', String(blockedAssetId));
-        await exclusionChip.click();
-        await expect(panel.getByTestId('risk-replay-exclusions')).toHaveCount(0);
-        // Taking the choice back retires the answer it produced: leaving the
-        // total on screen under an emptied form would make it a reply to a
-        // question nobody is asking any more.
-        await expect(replayTotal).toHaveCount(0);
-        await expect(panel.getByTestId('risk-replay-audit')).toHaveCount(0);
+        // --- The common period: one click sets the dates and asks, once -------
+        const [firstQuestion] = replayQuestions();
+        const firstWindow = firstQuestion?.parameters.replay_range as {start: string; end: string} | undefined;
+        if (!firstQuestion || !firstWindow) throw new Error('the replay answered on screen and no replay request was recorded');
+        // The stub's own proposal: from the late listing's first quote — 10 days after
+        // the panel's window starts, by the stub's rule — to the end of the window.
+        const proposal = {start: new Date(Date.parse(`${firstQuestion.panelWindow.start}T00:00:00Z`) + 10 * 86_400_000).toISOString().slice(0, 10), end: firstWindow.end};
+        const suggested = replay.getByTestId('risk-replay-suggested');
+        await expect(suggested).toHaveAttribute('data-start', proposal.start);
+        await expect(suggested).toHaveAttribute('data-end', proposal.end);
+        await expect(suggested).toHaveAttribute('data-recovers', '1');
+
+        const askedBefore = replayQuestions().length;
+        await suggested.click();
+
+        // Barrier: the answer over the common period. The late listing is back, so
+        // one holding is left out, and the share it held no longer trips the warning.
+        await expect(block).toHaveAttribute('data-count', '1', {timeout: 10_000});
+        await expect(block.locator('[data-testid="risk-replay-excluded-asset"]')).toHaveAttribute('data-asset-id', '3');
+        await expect(replay.getByTestId('risk-replay-coverage')).toHaveCount(0);
+
+        // One click, one question — over the proposal, with nothing excluded by hand and no stand-in.
+        const asked = replayQuestions().slice(askedBefore);
+        expect(
+            asked.map((question) => question.parameters.replay_range),
+            'one click on the common period must put exactly one replay on the wire, over that period',
+        ).toEqual([proposal]);
+        expect(asked[0]?.parameters).toMatchObject({excluded_assets: [], proxy_assets: []});
+
+        // …and the picker shows the period it asked over. Read last: a focused field
+        // shows its ISO date, compact or not, and opens the calendar over the rungs.
+        const period = replay.getByTestId('risk-replay-period');
+        const startInput = period.getByTestId('date-range-input-start');
+        await startInput.focus();
+        await expect(startInput).toHaveValue(proposal.start);
+        const endInput = period.getByTestId('date-range-input-end');
+        await endInput.focus();
+        await expect(endInput).toHaveValue(proposal.end);
+    });
+
+    test('a replay with nothing left to run says so in its block, not as an error of the level', async ({page}) => {
+        await installRiskMocks(page, {replayExclusions: 'nothingLeft'});
+        const panel = await openDashboardRisk(page);
+        const level4 = await openLevel4(panel);
+        // Every replay handle below is read inside L4's own replay block.
+        const replay = level4.getByTestId('risk-replay');
+        await expect(replay).toBeVisible();
+
+        await expect(replay.getByTestId('risk-replay-run')).toBeEnabled();
+        await replay.getByTestId('risk-replay-run').click();
+
+        // Barrier, and the block's half of the claim: the refusal is read as
+        // "nothing left to replay", not as a failure to explain.
+        await expect(replay.getByTestId('risk-replay-nothing')).toBeVisible({timeout: 10_000});
+
+        // Who and why, with the share each held — read off the refusal's details, whose
+        // numbers are the stub's (`replayExclusions: 'nothingLeft'`): holding 2 has no
+        // price with 0.35 of the value, holding 1 starts late with 0.6.
+        await expect.poll(() => replay.getByTestId('risk-replay-excluded-group').evaluateAll((groups) => groups.map((group) => group.getAttribute('data-reason')))).toEqual(['no_prices_in_window', 'starts_after_window_start']);
+        await expect(replay.locator('[data-testid="risk-replay-excluded-asset"][data-asset-id="2"]')).toHaveAttribute('data-weight', '0.35');
+        await expect(replay.locator('[data-testid="risk-replay-excluded-asset"][data-asset-id="1"]')).toHaveAttribute('data-weight', '0.6');
+        // The period that would bring the late listing back is still offered.
+        await expect(replay.getByTestId('risk-replay-suggested')).toHaveAttribute('data-recovers', '1');
+
+        // Nothing was replayed: no header naming a treatment, and no figure.
+        await expect(replay.getByTestId('risk-replay-excluded-header')).toHaveCount(0);
+        await expect(replay.getByTestId('risk-replay-total')).toHaveCount(0);
+        await expect(replay.getByTestId('risk-replay-tornado')).toHaveCount(0);
+
+        // The level keeps its status line — the replay is still unavailable — and
+        // does not call it an insufficient history beside the block that already
+        // said what happened.
+        await expect(level4.getByTestId('risk-level-4-health')).toHaveAttribute('data-count', '1');
+        await expect(level4.locator('[data-testid="risk-level-4-error"][data-code="insufficient_history"]')).toHaveCount(0);
+
+        // The retired flow is nowhere in the block — behind the nothing-left line above.
+        for (const testId of RETIRED_REPLAY_TEST_IDS) await expect(replay.getByTestId(testId), `${testId} belongs to the retired flow`).toHaveCount(0);
     });
 
     test('an unavailable simulation names the step and its state instead of rendering nothing', async ({page}) => {
