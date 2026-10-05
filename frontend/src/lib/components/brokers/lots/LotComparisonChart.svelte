@@ -179,6 +179,9 @@
     let currentResolution: ChartResolution = $state('daily');
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | undefined = undefined;
+    // Up only while chartInstance holds a full option (the LineChart guard). init() and clear() leave a model
+    // without a grid, and the lazy x-axis patch merged into it throws on `axisBuilder` in ECharts' next frame.
+    let chartOptionSet = false;
     let responsiveXAxisCompact = false;
     let resizeAnimationFrame: number | null = null;
     let lastObservedChartSize: {width: number; height: number} | null = null;
@@ -205,7 +208,7 @@
             const wasCompact = responsiveXAxisCompact;
             responsiveXAxisCompact = policy.compact;
             if (policy.axisLabel) {
-                chartInstance.setOption({xAxis: {splitNumber: policy.splitNumber, axisLabel: policy.axisLabel}}, {lazyUpdate: true});
+                if (chartOptionSet) chartInstance.setOption({xAxis: {splitNumber: policy.splitNumber, axisLabel: policy.axisLabel}}, {lazyUpdate: true});
             } else if (wasCompact) {
                 renderChart();
             }
@@ -1151,11 +1154,14 @@
         const multiYearAxis = !!axisDateRange && new Date(axisDateRange.min).getFullYear() !== new Date(axisDateRange.max).getFullYear();
         return {
             ...CHART_ANIMATION_CONFIG,
+            // With `containLabel: true`, `left` is only the empty inset BEFORE the y labels
+            // (ECharts adds the label width itself). 24 px left a visible empty strip on a phone
+            // (developer review, 2026-09-29): 10 px keeps the labels off the card edge.
             grid: {
                 top: 62,
                 right: 18,
                 bottom: 34,
-                left: 24,
+                left: 10,
                 containLabel: true,
             },
             legend: {
@@ -1270,6 +1276,7 @@
 
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            chartOptionSet = false;
             attachChartReady(chartInstance, chartContainer, 'lot-comparison');
             needsInitialLayoutStabilityPass = true;
             setupResizeObserver();
@@ -1285,10 +1292,12 @@
         const option = buildOption();
         if (!option) {
             chartInstance.clear();
+            chartOptionSet = false;
             return;
         }
 
         chartInstance.setOption(option, LOT_COMPARISON_SET_OPTION_OPTS);
+        chartOptionSet = true;
         if (needsInitialLayoutStabilityPass) {
             needsInitialLayoutStabilityPass = false;
             scheduleFirstRenderStabilityFix(chartInstance, chartContainer);
