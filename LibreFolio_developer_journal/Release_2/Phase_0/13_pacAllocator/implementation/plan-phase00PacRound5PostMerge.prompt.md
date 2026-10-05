@@ -3487,7 +3487,7 @@ La domanda «riuso dei margini = Piano operativo?» resta accettata (la risposta
   > ribilanciamento?»; (f) dopo le correzioni, integrare in `dev_release2` e aggiornare la baseline.
   > I punti (a)–(c) aprono il Round 14; (e) ha risposta nel Round 14; (f) passa al coordinatore.
 
-#### Round 14 — versione 1.0.0, testo dello spread, importi all'unità minima della valuta ✅ 2026-10-02
+#### Round 14 — versione 1.0.0, testo dello spread, importi all'unità minima della valuta ✅ 2026-10-02 (R14.8, gate sulla revisione unita: ✅ 2026-10-05)
 
 **Feedback del developer** (02/10, con la risposta al Round 13):
 1. «Backend/API 2.0.0 · UI 2.0.0» deve diventare 1.0.0: non è stato rilasciato nulla.
@@ -3632,6 +3632,129 @@ La domanda «riuso dei margini = Piano operativo?» resta accettata (la risposta
   >   - l'unico hunk rimasto è `:1741`: `source_revision="1.0.0"` in `_empty_planner_source_response`, che resta;
   >   - `ast.parse` OK; stesse 2542 righe di HEAD.
   > - Fino al merge il test torna allo stato del commit 5. `api portfolio` si rilancia dopo il merge, nella lane 6151, contro la versione di `dev_release2`.
+- R14.8 ✅ 2026-10-05 (aperto 2026-10-02) — Gate sulla revisione unita (punto 3 del coordinator) e §0 di `handoff-pac-D.md`.
+  > **Base**: il developer ha fatto i commit `6f29ec1cf` feat(pac) e `30d235b4d` docs(journal), poi il merge
+  > `111b0bbd0` (genitori `30d235b4d` + `dd538d650`, albero `ea9479db`, uguale alla simulazione del coordinator).
+  > Worktree pulito, stage vuoto, 6151 e 6161 libere.
+  > **Sovrapposizioni semantiche controllate prima dei gate** (diff `30d235b4d..111b0bbd0`, log
+  > `/tmp/libreFolio_d_r14/merge_shared_helpers.diff`):
+  > - motore PAC, `schemas/pac_allocator.py` e piattaforma Tool: nessun file toccato dal merge;
+  > - `portfolio_engine.py` e `portfolio_service.py` cambiano: alimentano `allocation-source`, quindi i gate
+  >   chiave sono `services portfolio-allocation-source` e `api portfolio`;
+  > - `echartsTooltipHelpers.ts`: ora fa l'escape dei nomi in `buildTooltipTopN/ByThreshold`; `buildTooltipRow` è
+  >   invariato e `exposureTooltip.ts:44-54` fa già l'escape di tutto quello che gli passa;
+  > - `Tooltip.svelte`: `{@html sanitizeHtml(...)}` (DOMPurify, config di default). I tooltip PAC con `html`/`math`
+  >   (`HelpTip`, `OutcomeHeader` via `tipHtml`) usano `<br>`, `<ul class>`, `<li>` e KaTeX, che restano;
+  > - route `/tools` e `/tools/[tool_code]`: tolto solo il `<title>` (lavoro del document-title).
+  > **Fatto**:
+  > - `api sync` rc=0 (`/tmp/libreFolio_d_r14m/01_api_sync.log`): fingerprint `bd84ef14…` e generazione
+  >   `bb77549b…` invariati; i file generati sono ignorati, `git status` mostra solo il piano.
+  > - `handoff-pac-D.md` §0 riscritta come misura al `111b0bbd0`: versione `1.0.0`, righe citate rimisurate,
+  >   fingerprint `bd84ef14…`. Corretti anche i fatti superati: il renderer è registrato e restituisce `ready`;
+  >   `api pac-planner-tool` esiste; `component-unit` ha 4 test PAC; aggiunto `document-title`. La nota in testa
+  >   spiega «stesso numero, contratto diverso» (P1 `1.0.0`/`analyze` contro planner `1.0.0`/`plan`).
+  > - Gate (script `/tmp/libreFolio_d_r14m/gates_backend.sh`, sequenziale, log `gate_<cat>_<action>.log`):
+  >   `services tools-registry` 93/0, `services portfolio-allocation-source` 89/0.
+  >
+  > **⚠️ Fuori pista — backend condiviso che non parte (rosso infrastrutturale, prima di pytest)**: `api portfolio`
+  > e `api pac-planner-tool` rc=1, entrambi con «Shared backend did not answer within 120s» → «shared test backend
+  > failed to start». Nessun test raccolto. `/tmp/librefolio-r2-d/logs/librefolio.log` si ferma alle 10:32 UTC
+  > (giro R14 di stamattina), quindi l'app non è nemmeno arrivata al log d'avvio. L'output del server non è
+  > nell'archivio `.testLog/00_archive/logs_20261002_1326*.tar.xz`. Ipotesi da verificare, in ordine:
+  > (1) import lento o bloccato sulla revisione unita, perché il merge tocca `borsa_italiana.py`,
+  > `asset_sources/core.py` e il venv ha borsa 0.3.2; (2) carico della macchina, con tre altre lane attive
+  > (6150, 6154, 6155). DB e file della lane non toccati oltre alla creazione del runner (`sqlite/` 13:24).
+  >
+  > **⚠️ Fuori pista — PAUSE del coordinator (2026-10-02, ~13:27)**: ho fermato la catena uccidendo solo lo script
+  > padre (pid 12749), mentre `api pac-planner-tool` era già partito. Quel gate è finito da solo (rosso, sopra).
+  > 6151 e 6161 libere (`lsof` vuoto). Nessun server mio acceso.
+  >
+  > **Non eseguiti**: `api tools`, `schemas pac-planner`, `schemas tools`, `services tools-lifecycle`,
+  > `utils tools-wire`, `services pac-planner-*` (9 suite), `check-orphans`, `i18n audit`, `front check`,
+  > `front build`, `front-utility core-unit`/`component-unit`, E2E `front-utility document-title`.
+  > Da fare in §0: le note puntatore di §2 (`:175`) e §3 (`:253`) dicono ancora `2.0.0`.
+  >
+  > **Prossimo passo esatto, dopo «riprendi»**: (a) diagnosi dell'avvio, un comando per volta nella 6151, con
+  > lo skill `test-triage`: rilanciare `api tools` da solo; se scade di nuovo, misurare il tempo di
+  > `import backend.app.main` col venv condiviso e cercare dove il runner scrive l'output del backend condiviso.
+  > (b) Poi riprendere lo script da `api portfolio` in giù, aggiungendo `front-utility core-unit` e
+  > `component-unit`, poi `check-orphans`, `i18n audit`, `front check`, `front build` e `document-title`.
+  > (c) Correggere le due note di §2/§3, `git diff --check`, `lsof`, e mandare il CHECKPOINT READY.
+  >
+  > **Ripresa 2026-10-05 («riprendi» del coordinator) — diagnosi chiusa, causa = build prima del bind**:
+  > - Codice: in test mode `cmd_server` forza `debug_mode=True` (`dev.py:185`). Poi, **prima** di aprire
+  >   la porta, chiama `auto_build_frontend(debug=True)` e `auto_build_mkdocs()` (`dev.py:214-221`). Il runner
+  >   lancia `dev.py server --test --no-reload --no-scheduler` con stdout/stderr su DEVNULL se non è verbose
+  >   (`scripts/test_runner/_server.py:207-232,269-270`) e aspetta `STARTUP_TIMEOUT = 120` (`:43`).
+  > - Stato misurato prima di ricostruire: 95 sorgenti in `frontend/src` più recenti di `frontend/build/index.html`
+  >   (build delle 12:52, prima del merge delle 13:18) e 8 `.md` più recenti di `mkdocs_src/site/index.html`
+  >   (28/09). Quindi tutte e due le build erano vecchie.
+  > - Misure, lane 6151, un comando per volta: `front build --debug` rc=0 in 88 s
+  >   (`/tmp/libreFolio_d_r14m/10_front_build_debug.log`); `mkdocs build` (strict) rc=0 in 42 s
+  >   (`11_mkdocs_build.log`, l'unico «Warning» è il banner del team Material). 88 + 42 = 130 s, cioè più dei
+  >   120 s anche senza carico; il 02/10 c'erano in più altre tre lane attive. Poi `api tools` da solo:
+  >   backend pronto in pochi secondi, **7 passed**, 21 s in tutto. L'ipotesi «import» è scartata: anche
+  >   `api sync`, che importa l'app, era passato.
+  > - **Lezione per la corsia** (resta valida per la slice e per l'integrazione): dopo un merge o una modifica a
+  >   sorgenti frontend o `.md`, prima di un gate con server conviene lanciare `front build --debug` e, se
+  >   servono, `mkdocs build`. E il `front build` di produzione va **dopo** l'ultimo gate con server: il
+  >   server di test, quando trova il marcatore `.build-debug=0`, ricostruisce in debug prima del bind
+  >   (`dev.py:2026-2031`). L'E2E invece no (`_frontend_common.py:92-96`, `debug=False` senza controllo del modo).
+  > - Note puntatore di §2 (`:175`) e §3 (`:253`) di `handoff-pac-D.md` corrette a `1.0.0`. Verificate su
+  >   `pac_allocator.py:132,147` e su `tool-contract-map.generated.ts:10,15,18`. Le righe `:12` e `:28` restano,
+  >   perché sono storia.
+  > - Gate ripresi con `/tmp/libreFolio_d_r14m/gates_resume.sh` (riassunto in `gates_resume.summary`), da
+  >   `api portfolio` in giù; `front build` di produzione per ultimo.
+  > - **Esiti 2026-10-05, revisione unita `111b0bbd0`, corsia 6151, un comando per volta** (log `gate_*.log`
+  >   nella stessa cartella):
+  >
+  >   | Gate | Esito |
+  >   |---|---|
+  >   | `api portfolio` (con il test a 13 chiavi di `dev_release2`) | 58 passed |
+  >   | `api pac-planner-tool` | 6 passed |
+  >   | `schemas pac-planner` / `schemas tools` | 522 / 271 passed |
+  >   | `services tools-lifecycle` / `utils tools-wire` | 91 / 196 passed |
+  >   | `services pac-planner-*` (core, evaluator, oracle, policies, solver, proof, wire-numbers, report, service) | 164 / 159 / 21 / 40 / 20 / 30 / 39 / 25 / 36 passed |
+  >   | `front-utility core-unit` | **2 failed** / 2876 passed — vedi sotto |
+  >   | `front-utility component-unit` | 2216 passed |
+  >   | `front-utility document-title` (E2E, unica spec sulla pagina Tools) | 22 passed |
+  >   | `test check-orphans` | ✅ tutto raggiungibile |
+  >   | `i18n audit` | rc=0, nessuna traduzione mancante; 521 potenzialmente inutilizzate (avviso) |
+  >   | `front check` | 3 errori / 41 warning in 4 file = pavimento vecchio; **nessun file PAC**. `ToolExecutionMetrics.svelte` è di C ed è identico su `dev_release2` |
+  >   | `front build` (produzione, per ultimo) | ✅ |
+  >
+  >   Porte 6151/6161 libere a fine catena (`lsof` vuoto).
+  >
+  >   > **⚠️ Fuori pista — conflitto semantico senza conflitto Git.** I 2 rossi di `core-unit` vengono dai gate
+  >   > nuovi di K, «K step 13, item 0» (`53219bc00 fix(security): escape user text in HTML sinks`, arrivati col
+  >   > merge; prima del merge non c'erano sul nostro lato). Scandiscono tutto `src` e colpiscono due file PAC:
+  >   > - `htmlInterpolation.gate.test.ts`: `TargetsStep.svelte:62`, `${BAR_CLASS[totalState]}` dentro l'HTML
+  >   >   costruito a mano. È una lettura per chiave calcolata, che il gate vuole «escaped or reported»; la sua
+  >   >   lista di eccezioni è vuota («NONE yet»).
+  >   > - `htmlSink.gate.test.ts`: `CurrencyCode.svelte:28`, `{@html html}`. Ogni sink deve essere
+  >   >   `sanitizeHtml(…)` per intero, o una voce di `REVIEWED_SINKS` (nel file del gate, di K).
+  >   >
+  >   > Correzione proposta, solo nei file PAC: `${escapeHtml(BAR_CLASS[totalState])}` (output identico: le
+  >   > classi sono statiche) e `{@html sanitizeHtml(html)}`. DOMPurify tiene span, classi ed emoji, e
+  >   > `formatCurrencyCodeHtml` resta la chiamata riconosciuta dal gate privacy. In attesa del via del
+  >   > coordinator. Dopo la correzione: `core-unit`, `component-unit` e di nuovo `front build`.
+  >
+  > **✅ Chiuso 2026-10-05 — correzione dei due sink, via del coordinator** (la proposta così com'è; niente voce
+  > in `REVIEWED_SINKS`, perché il file del gate è di K ed è condiviso, e la chiave `html` sarebbe fragile):
+  > - `TargetsStep.svelte:62` → `${escapeHtml(BAR_CLASS[totalState])}`. `escapeHtml` era già importato.
+  > - `CurrencyCode.svelte`: import di `sanitizeHtml` da `$lib/utils/core/sanitizeHtml` e `:29` →
+  >   `{@html sanitizeHtml(html)}`. `formatCurrencyCodeHtml` resta dentro il `$derived`.
+  > - Rilanci (script `/tmp/libreFolio_d_r14m/gates_htmlfix.sh`, riassunto `gates_htmlfix.summary`, log
+  >   `gate2_*.log`), corsia 6151, un comando per volta:
+  >
+  >   | Gate | Esito |
+  >   |---|---|
+  >   | `front-utility core-unit` | ✅ **2878 passed** (104 file); prima 2 failed / 2876 passed |
+  >   | `front-utility component-unit` | ✅ 2216 passed |
+  >   | `front check` | 3 errori / 41 warning negli stessi 4 file (BrokerSharingPanel, GlobalSettingsTab, TransactionFormModal.test.ts, ToolExecutionMetrics). Pavimento vecchio, **nessun file PAC** |
+  >   | `front build` (produzione, per ultimo; marcatore `.build-debug=0`) | ✅ |
+  >
+  >   6151 libera a fine catena (`lsof` vuoto). Il pavimento passa a 0/0 con il prossimo merge di `dev_release2`.
 
 ---
 
