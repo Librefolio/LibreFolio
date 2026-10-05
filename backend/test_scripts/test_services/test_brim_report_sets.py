@@ -51,6 +51,13 @@ The A2 tests whose docstring starts with "Fixture guard" check that infrastructu
 (the database, the fake's ``describe_set``, the plugin variants, the helpers), not
 the product: they pass before and after A2.
 
+Phase F2 (plan F2.0, U2-B) adds two fields to ``BRIMSetPreview``, for the timeline of
+the set card: ``history_end``, the date of the newest broker transaction carrying the
+plugin's history tag as an exact tag, and ``history_count``, how many there are (gap-fix
+corrections included). Written red-first in ``TestSetSchemas`` (defaults, round trip,
+strictness) and ``TestPreviewSet`` (filled by ``preview_set``), through
+``_require_history_fields``.
+
 Design: LibreFolio_developer_journal/Release_2/Phase_0/26_brimDanskeBank/design-phase00BrimReportSets.md (v5.3), §3.1–§3.5 and §3.8
 Plan: LibreFolio_developer_journal/Release_2/Phase_0/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md, §3 A1 and A2
 """
@@ -1443,6 +1450,21 @@ def _combined_files() -> List[BRIMFileInfo]:
     return [info for info in brim_provider.list_files(broker_ids=[BROKER_ID]) if info.target_broker_id == BROKER_ID and info.kind == "combined"]
 
 
+# Phase F2 (plan F2.0, U2-B): the preview also says where the history LibreFolio holds ends
+# (``history_end``) and how many transactions it has (``history_count``), for the timeline.
+F2 = "F2"
+HISTORY_FIELDS = ("history_end", "history_count")
+
+
+def _require_history_fields() -> Any:
+    """``BRIMSetPreview``, failing the test (not the collection) while it lacks the two F2 fields."""
+    set_preview = _schema("BRIMSetPreview", A2)
+    absent = [name for name in HISTORY_FIELDS if name not in set_preview.model_fields]
+    if absent:
+        _missing(f"BRIMSetPreview has no field {', '.join(absent)}", F2)
+    return set_preview
+
+
 async def _seed_history(session: AsyncSession, rows: Sequence[Tuple[int, date, Optional[str]]]) -> None:
     """Both brokers, and one transaction per ``(broker_id, date, tags)``; ``tags`` exactly as stored (comma-separated)."""
     for broker_id in sorted({BROKER_ID, OTHER_BROKER_ID, *(row[0] for row in rows)}):
@@ -1625,6 +1647,26 @@ class TestSetSchemas:
 
         assert isinstance(response.combined, BRIMFileInfo)
         assert (response.combined.file_id, response.summary, response.reused) == ("c-1", {}, False)
+
+    def test_preview_history_end_and_count_default_to_no_history(self) -> None:
+        """F2 (U2-B): a preview built without them has no history end and counts nothing."""
+        set_preview = _require_history_fields()
+
+        preview = set_preview(broker_id=7, plugin_code=FAKE_CODE, batch_id="b-1")
+
+        assert (preview.history_start, preview.history_end, preview.history_count) == (None, None, 0)
+
+    def test_preview_history_end_and_count_are_typed_round_trip_and_stay_strict(self) -> None:
+        """F2 (U2-B): the end is a date, the count an int; both survive JSON, and an unknown key is still refused."""
+        set_preview = _require_history_fields()
+        payload = {"broker_id": 7, "plugin_code": FAKE_CODE, "batch_id": "b-1", "history_start": "2025-01-08", "history_end": "2025-03-15", "history_count": 4}
+
+        preview = set_preview.model_validate(payload)
+
+        assert (preview.history_start, preview.history_end, preview.history_count) == (date(2025, 1, 8), date(2025, 3, 15), 4)
+        assert set_preview.model_validate_json(preview.model_dump_json()) == preview
+        with pytest.raises(ValidationError):
+            set_preview.model_validate({**payload, "history_rows": 4})
 
 
 # =============================================================================
@@ -2046,6 +2088,63 @@ class TestPreviewSet:
             await preview_set(db_session, broker_id=BROKER_ID, plugin_code=plugin_code, batch_id=str(uuid.uuid4()))
 
         assert (caught.value.status_code, caught.value.code) == SET_ERRORS[error]
+
+    # --- Phase F2 (U2-B): where the history LibreFolio holds ends, and how many transactions it has ---
+
+    async def _preview_with_history(self, db_session: AsyncSession, rows: Sequence[Tuple[int, date, Optional[str]]]) -> Any:
+        """``preview_set`` of a complete set of the fake on ``BROKER_ID``, with ``rows`` in the database (tags verbatim)."""
+        _require_history_fields()
+        preview_set = _sets("preview_set")
+        batch = str(uuid.uuid4())
+        _member(CUSTODY_JAN, CUSTODY_NAME, batch_id=batch)
+        _member(CASH_JAN, CASH_NAME, batch_id=batch)
+        await _seed_history(db_session, rows)
+        return await preview_set(db_session, broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch)
+
+    @pytest.mark.asyncio
+    async def test_history_end_and_count_include_the_gap_fix(self, set_storage: Path, fake_plugin: BRIMProvider, db_session: AsyncSession) -> None:
+        """F2: the end is the newest row with the history tag, a gap-fix correction included, and every such row counts (H0 unchanged)."""
+        preview = await self._preview_with_history(db_session, [(BROKER_ID, date(2025, 1, 8), f"import,{FAKE_CODE}"), (BROKER_ID, date(2025, 1, 9), f"import,{FAKE_CODE},gap_fix")])
+
+        assert (preview.history_start, preview.history_end, preview.history_count) == (date(2025, 1, 8), date(2025, 1, 9), 2)
+
+    @pytest.mark.asyncio
+    async def test_history_end_and_count_read_this_brokers_exact_tag_only(self, set_storage: Path, fake_plugin: BRIMProvider, db_session: AsyncSession) -> None:
+        """F2: every row of this broker with the exact tag counts, two on one day included; nothing else counts, not even for the end.
+
+        Not another broker's rows (newer than any of this broker's), not a tag that merely contains the
+        history tag (``broker_<tag>``, ``<tag>_old``), not a row without the tag.
+        """
+        preview = await self._preview_with_history(
+            db_session,
+            [
+                (BROKER_ID, date(2025, 1, 8), f"import,{FAKE_CODE}"),
+                (BROKER_ID, date(2025, 1, 8), f"{FAKE_CODE},import"),
+                (BROKER_ID, date(2025, 3, 15), FAKE_CODE),
+                (BROKER_ID, date(2025, 6, 1), f"import,broker_{FAKE_CODE}"),
+                (BROKER_ID, date(2025, 7, 1), f"import,{FAKE_CODE}_old"),
+                (BROKER_ID, date(2025, 8, 1), "manual"),
+                (BROKER_ID, date(2025, 9, 1), None),
+                (OTHER_BROKER_ID, date(2025, 12, 1), f"import,{FAKE_CODE}"),
+                (OTHER_BROKER_ID, date(2025, 12, 2), f"import,{FAKE_CODE},gap_fix"),
+            ],
+        )
+
+        assert (preview.history_start, preview.history_end, preview.history_count) == (date(2025, 1, 8), date(2025, 3, 15), 3)
+
+    @pytest.mark.asyncio
+    async def test_no_history_has_no_end_and_counts_nothing(self, set_storage: Path, fake_plugin: BRIMProvider, db_session: AsyncSession) -> None:
+        """F2: this broker holds none of the plugin's history (another broker does): no H0, no end, a zero count."""
+        preview = await self._preview_with_history(db_session, [(OTHER_BROKER_ID, date(2025, 1, 5), f"import,{FAKE_CODE}"), (BROKER_ID, date(2025, 1, 6), "manual")])
+
+        assert (preview.history_start, preview.history_end, preview.history_count) == (None, None, 0)
+
+    @pytest.mark.asyncio
+    async def test_a_lone_gap_fix_is_the_end_and_counts(self, set_storage: Path, fake_plugin: BRIMProvider, db_session: AsyncSession) -> None:
+        """F2: only the opening correction — H0 is the day after it (D-S25), the end is its own date, and it counts as one."""
+        preview = await self._preview_with_history(db_session, [(BROKER_ID, date(2024, 12, 31), f"import,{FAKE_CODE},gap_fix")])
+
+        assert (preview.history_start, preview.history_end, preview.history_count) == (date(2025, 1, 1), date(2024, 12, 31), 1)
 
 
 # =============================================================================

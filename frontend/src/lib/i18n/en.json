@@ -847,7 +847,17 @@
         "selectedCount": "{n, plural, one {# correction selected} other {# corrections selected}}",
         "todo": {
           "gap_fix_cost": "Enter the per-unit cost of this position: the bank's website shows the average price."
-        }
+        },
+        "filterHint": "Click a point to see its full comparison and only its corrections; click it again to see them all.",
+        "pointOpening": "Starting point",
+        "pointGap": "After the gap",
+        "positions": "{n, plural, one {# position} other {# positions}}",
+        "corrections": "{n, plural, one {# correction} other {# corrections}}",
+        "notesCount": "{n, plural, one {# note} other {# notes}}",
+        "column": {
+          "point": "Point"
+        },
+        "noProposals": "This point needs no correction."
       },
       "badge": {
         "column": "Report set",
@@ -862,7 +872,22 @@
         "setTooltip": "Uploaded together with the other exports of its set.",
         "incomplete": "Incomplete",
         "incompleteTooltip": "Missing: {roles}"
-      }
+      },
+      "otherFiles": "Other files of this broker",
+      "column": {
+        "file": "File",
+        "period": "Period",
+        "rows": "Rows",
+        "reason": "Reason"
+      },
+      "timeline": {
+        "legendFile": "Files of the set",
+        "legendHistory": "Already in LibreFolio",
+        "legendGap": "Gap between two exports",
+        "gapInfo": "No export of this kind covers these days",
+        "historyCount": "{n, plural, one {# transaction already in LibreFolio} other {# transactions already in LibreFolio}}"
+      },
+      "previewCombined": "Preview the combined file"
     },
     "parseDetail": {
       "sourceRow": "File line",
