@@ -63,6 +63,7 @@ al precedente in testa.
 | 8 | [Rimozione residui P1](plan-phase00PacP1ResidueRemoval.prompt.md) | P1 `analyze` rimosso, `plan` v2 cablato, pagine MkDocs | ✅ `b82e59ffa` … `154182295` |
 | 9 | [Budget del solver](plan-phase00PacSolverBudget.prompt.md) | budget reale dell'engine propagato a SCIP | ✅ `a7cd01b07`, `3e513fea2` |
 | 10 | [Round 5 post-merge](plan-phase00PacRound5PostMerge.prompt.md) | documenti allineati, descrizione della card, UI PAC 2.0.0 nella build, STOP per la review di dettaglio | ⏳ in esecuzione dal 2026-09-24 |
+| 11 | [Compattazione del contratto](plan-phase00PacContractCompaction.prompt.md) | wire compatto 1.0.0: freshness e data del prezzo tolte, default nello schema, commissioni facoltative; prima dell'integrazione | ⏳ S0–S9 chiusi il 2026-10-05, checkpoint in attesa del commit |
 
 ## Ordine e parallelismo
 

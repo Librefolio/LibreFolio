@@ -52,6 +52,20 @@
 >    UI mostra una nota con l'importo da aggiungere, per esempio «per eseguire il piano servono
 >    0,01 € in più su Broker X (EUR), per gli arrotondamenti all'unità minima». L'importo è un
 >    valore personale: passa dalla maschera della privacy.
+>
+> ⚠️ **Nota 2026-10-05 (compattazione del contratto, decisione del developer).** Prevale sul
+> testo sotto dove i due sono in conflitto. Dettagli nel
+> [piano della compattazione](implementation/plan-phase00PacContractCompaction.prompt.md).
+>
+> 1. **Versione.** Il `2.0.0` dell'erratum del 2026-09-24 è stato riportato a `1.0.0` il 2026-10-02:
+>    nessuna delle due versioni è mai stata rilasciata ([handoff §0](../16_toolPlatform/handoff-pac-D.md)).
+> 2. **Campi tolti.** La riga di cassa non ha più `source_kind` (§18.1, Regole: «una riga union
+>    `source_kind`»): la cassa esistente è una riga per Broker e valuta, i contributi sono una lista
+>    a parte. Il prezzo nella richiesta non porta più data né freschezza. L'età della copia resta un
+>    avviso del draft e non entra nel calcolo.
+> 3. **Wire compatto.** La UI non spedisce i valori di default. Le viste del risultato leggono la
+>    richiesta risolta dal codec, con tutti i default applicati.
+
 ## Come leggere l'artifact
 
 Le Review A/B/C/D e la configurazione finale sono state approvate dal developer.

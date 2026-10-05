@@ -21,11 +21,16 @@
 Questo documento definisce il raccordo esatto. D non copia il worker, il registry,
 il client o gli schemi Tool; aggiunge il proprio dominio nei punti di estensione C.
 
-## 0. Contratto effettivo al `111b0bbd0` (misurato il 2026-10-02)
+## 0. Contratto effettivo al `111b0bbd0` (misurato il 2026-10-02, compattato il 2026-10-05)
 
 Ogni riga cita il file e la riga da cui è stata letta. Se il codice cambia, prevale il
 codice: questa sezione è una fotografia, non una specifica. La fotografia precedente era al
 `f1047f766` (2026-09-24), con la versione `2.0.0`.
+
+Il 2026-10-05 la slice di compattazione
+(`13_pacAllocator/implementation/plan-phase00PacContractCompaction.prompt.md`) ha
+rimisurato le righe dello schema, il fingerprint e la generazione. Il numero resta `1.0.0`:
+il contratto non è mai stato rilasciato, ed entra in `dev_release2` già compattato.
 
 ### 0.1 Backend
 
@@ -45,9 +50,9 @@ codice: questa sezione è una fotografia, non una specifica. La fotografia prece
 | Firma `compute` | `compute(self, tool_code: str, parameters: BaseModel, context: ToolExecutionContext) -> PacPlannerResult`; il dispatch è su `tool_code` e `operation`, mai sulla forma dei parametri; se non corrispondono, solleva `ToolExecutionError("invalid_parameters")` | `pac_allocator.py:159-199`; base `backend/app/services/tools/base.py:103` |
 | Motore | `plan_pac_allocation(request, *, checkpoint=None, solver_time_budget_seconds=None) -> PacPlannerResult`. Non solleva su un esito di pianificazione | `backend/app/services/pac_allocator/planner.py:124-128` |
 | Package | `backend/app/services/pac_allocator/__init__.py` non riesporta niente (`__all__ = []`, `:20`); importarlo non deve caricare `pyscipopt` (`:16`) | `__init__.py:16,20` |
-| Richiesta | `PacPlannerRequest` (`operation: Literal["plan"]` obbligatorio, senza default) | `backend/app/schemas/pac_allocator.py:617,648` |
-| Risultato | unione discriminata su `result_state`, sette stati: `needs_input`, `invalid`, `unsupported`, `ready_no_op`, `ready_incumbent`, `ready_infeasible`, `ready_no_incumbent` | schema `:2346-2357,2410-2434,2506-2517` |
-| Adapter per i test | `PAC_PLAN_INPUT_ADAPTER`, `PAC_PLAN_OUTPUT_ADAPTER` | schema `:2533-2534` |
+| Richiesta | `PacPlannerRequest` (`operation: Literal["plan"]` obbligatorio, senza default) | `backend/app/schemas/pac_allocator.py:600,634` |
+| Risultato | unione discriminata su `result_state`, sette stati: `needs_input`, `invalid`, `unsupported`, `ready_no_op`, `ready_incumbent`, `ready_infeasible`, `ready_no_incumbent` | schema `:2332-2343,2396-2420,2492-2503` |
+| Adapter per i test | `PAC_PLAN_INPUT_ADAPTER`, `PAC_PLAN_OUTPUT_ADAPTER` | schema `:2519-2520` |
 
 Il Rebalancer **non** ha un servizio registrato: i suoi tipi esistono nello schema
 (`RebalancerPlannerRequest`/`Result`), ma il plugin non li espone (`pac_allocator.py:10-14`).
@@ -60,9 +65,25 @@ Il Rebalancer **non** ha un servizio registrato: i suoi tipi esistono nello sche
   `frontend/.gitignore:12-13`). Non arrivano col merge, quindi vanno rigenerati dopo ogni salto
   di baseline, prima di `front check`.
 - La mappa espone `toolContractMap.pac_allocator["1.0.0"]` con `componentKey: "pac-allocator"`,
-  `uiVersion: "1.0.0"` e `operations: ["plan"]`. Il 2026-10-02, con il client rigenerato al
-  `111b0bbd0`, il fingerprint misurato è `schemaFingerprint: "bd84ef14…"` e la generazione
-  `bb77549b…`.
+  `uiVersion: "1.0.0"` e `operations: ["plan"]`. Il 2026-10-05, con il client rigenerato dopo
+  la compattazione, il fingerprint misurato è `schemaFingerprint: "4f061103…"` e la generazione
+  `f636854e…`. Al `111b0bbd0` (2026-10-02) erano `bd84ef14…` e `bb77549b…`.
+- **Wire compatto, richiesta risolta.** Il codec d'ingresso porta i default dello schema come
+  `.optional().default(…)`: liste vuote, `"0"`, `{kind: "none"}`, e `null` per i facoltativi.
+  - `ToolInput<'pac_allocator','1.0.0'>` è lo `z.input` e accetta la forma compatta.
+  - Lo `z.output` dello stesso codec è la richiesta risolta, con ogni default applicato.
+  - Il client manda la forma compatta e legge la risolta.
+  - Nello schema di serializzazione i campi con default restano `required`
+    (`json_schema_serialization_defaults_required=True` su `AllocationStrictModel`), quindi la
+    forma dell'output non cambia.
+- **Tolti dal wire**: `freshness` e `reference_date` del prezzo, `source_kind` della cassa, e i
+  codici `allocation.price_date_missing`, `allocation.stale_age_negative` e
+  `allocation.stale_observation_not_accepted` (da 79 a 76 codici).
+- **Nuovi significati dell'assenza**:
+  - `transfer_cap` assente vale tutta la fonte;
+  - un campo di denaro assente in una tabella commissioni vale zero, nella valuta del prezzo della
+    route;
+  - una route BUY senza `fee_schedule_id` non paga commissioni.
 - **`uiContractVersion` non esiste più**: il campo è `uiVersion`, una stringa uguale alla
   `version` del `ToolUIDescriptor`.
 
