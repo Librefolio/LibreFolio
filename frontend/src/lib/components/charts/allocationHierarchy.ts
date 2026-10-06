@@ -42,9 +42,11 @@
  * - by **content** (`primaryAssetType`), a group holds its pure type and the subtypes
  *   that contain it — up to **three** today, `REAL_ESTATE` with `ETF_REAL_ESTATE` and
  *   `CROWDFUND_REAL_ESTATE`. No chart groups this way since I's D15;
- * - by **vehicle** (`assetTypeFamily`, the allocation pie and the allocation history
- *   chart), the ETF family holds the generic ETF and every ETF subtype — up to
- *   **seven** — and Crowdfund holds two.
+ * - by **vehicle** (`assetTypeFamily`), the allocation pie: the ETF family holds the generic
+ *   ETF and every ETF subtype — up to **seven** — and Crowdfund holds two. The allocation
+ *   history chart groups by the same families but draws each one as a single area, with no
+ *   shades and its subtypes in the tooltip only (D375): from this module it takes only the
+ *   family order and the base colours.
  *
  * Groups of up to three walk lightness `step` points at a time away from the nearer
  * extreme, as they always have. From four members on that walk clamps to black or
