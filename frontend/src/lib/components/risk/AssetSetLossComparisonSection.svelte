@@ -48,6 +48,7 @@
 
     import {buildAssetSetHurtRows, type AssetSetHurtRow} from './assetSetLevels';
     import {assetNameColumn, figureCell} from './assetSetTable';
+    import {headerWidth, measureHeaderTitle} from './riskReturnLevel';
 
     interface Props {
         assetIds: number[];
@@ -121,12 +122,21 @@
     }
 
     const LOSS_CLASS = 'tabular-nums text-red-600 dark:text-red-400';
-    // Minimums only: the table is laid out `auto`, and the DataTable draws its titles
-    // upper-case on one line, so every column widens to its own title in whatever
-    // language — a fixed width sized for Italian let a French title spill out of its
-    // column (the developer's review, 30/09).
-    const VALUE_WIDTH = 110;
-    const VALUE_MIN_WIDTH = 90;
+
+    type LossColumn = 'badDay' | 'badMonth' | 'worstFall' | 'currentFall' | 'toPeak';
+
+    /**
+     * A value column's width: its title's, measured in the reader's language — L3°'s rule
+     * (`headerWidth` in `riskReturnLevel`), shared rather than copied, so the two tables open
+     * the same way. Used as the width and as the minimum: the table is laid out `fixed`
+     * (the developer's review, 06/10: under `auto` a dragged width did not hold), so a column
+     * keeps the width the reader drags, and no drag narrows it below its title. DataTable
+     * draws its titles upper-case on one line; a width sized for Italian once let a French
+     * title spill out of its column (the developer's review, 30/09).
+     */
+    function titleWidth(id: LossColumn): number {
+        return headerWidth($t(`risk.assetSet.levels.l1.columns.${id}`), measureHeaderTitle);
+    }
 
     function cellHtml(column: string, measured: boolean, text: string, classes: string, extra = ''): string {
         return `<span class="${classes}" data-testid="risk-asset-set-l1-${column}" data-measured="${measured}"${extra}>${text}</span>`;
@@ -136,14 +146,15 @@
     const blankExplanation = () => $t('risk.assetSet.levels.blankNote');
 
     function lossColumn(id: 'badDay' | 'badMonth' | 'currentFall', figure: (row: AssetSetHurtRow) => number | null): ColumnDef<AssetSetHurtRow> {
+        const width = titleWidth(id);
         return {
             id,
             header: () => $t(`risk.assetSet.levels.l1.columns.${id}`),
             headerTooltip: () => $t(`risk.assetSet.levels.l1.columnHelp.${id}`),
             type: 'number',
             align: 'right',
-            width: VALUE_WIDTH,
-            minWidth: VALUE_MIN_WIDTH,
+            width,
+            minWidth: width,
             filterable: false,
             getValue: (row) => drawnLoss(figure(row)),
             cell: (row) => {
@@ -161,8 +172,10 @@
      * printed beside a multi-year drawdown with no declared change of scale. The
      * reader summed them. Transposing the table does not make that safe; only the
      * ordering and the headings do. Sorting reorders the rows, never the columns.
+     *
+     * Derived, so the widths follow the reader's language when it changes.
      */
-    const columns: ColumnDef<AssetSetHurtRow>[] = [
+    let columns = $derived<ColumnDef<AssetSetHurtRow>[]>([
         // The asset column is shared with L3° (`assetSetTable`): icon, one-line name, by-name order.
         assetNameColumn<AssetSetHurtRow>(
             () => $t('risk.assetSet.levels.asset'),
@@ -177,8 +190,8 @@
             headerTooltip: () => $t('risk.assetSet.levels.l1.columnHelp.worstFall'),
             type: 'number',
             align: 'right',
-            width: VALUE_WIDTH,
-            minWidth: VALUE_MIN_WIDTH,
+            width: titleWidth('worstFall'),
+            minWidth: titleWidth('worstFall'),
             filterable: false,
             getValue: (row) => drawnLoss(row.worstFall),
             // The deepest fall carries its duration as a second line: it refines one
@@ -202,13 +215,13 @@
             headerTooltip: () => $t('risk.assetSet.levels.l1.columnHelp.toPeak'),
             type: 'number',
             align: 'right',
-            width: VALUE_WIDTH,
-            minWidth: VALUE_MIN_WIDTH,
+            width: titleWidth('toPeak'),
+            minWidth: titleWidth('toPeak'),
             filterable: false,
             getValue: (row) => row.toPeak,
             cell: (row) => figureCell(cellHtml('toPeak', row.toPeak !== null, row.toPeak === null ? '\u2014' : rise(row.toPeak), 'tabular-nums text-gray-600 dark:text-gray-300'), row.toPeak !== null, blankExplanation),
         },
-    ];
+    ]);
 
     let tableWrapper: HTMLDivElement | undefined = $state();
 
@@ -240,20 +253,7 @@
         <p class="py-4 text-center text-sm text-gray-400 dark:text-gray-500" data-testid="risk-asset-set-l1-empty">{$t('risk.states.empty')}</p>
     {:else}
         <div bind:this={tableWrapper} data-testid="risk-asset-set-l1-table" data-row-count={rows.length}>
-            <DataTable
-                bind:this={tableRef}
-                data={rows}
-                {columns}
-                getRowId={(row) => String(row.assetId)}
-                storageKey="risk-asset-set-l1"
-                tableLayout="auto"
-                enableSelection={false}
-                selectionMode="none"
-                enableActions={false}
-                enableColumnFilters={false}
-                enablePagination={false}
-                enableContextMenu={false}
-            />
+            <DataTable bind:this={tableRef} data={rows} {columns} getRowId={(row) => String(row.assetId)} storageKey="risk-asset-set-l1" enableSelection={false} selectionMode="none" enableActions={false} enableColumnFilters={false} enablePagination={false} enableContextMenu={false} />
         </div>
     {/if}
 </div>

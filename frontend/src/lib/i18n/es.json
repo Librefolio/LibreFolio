@@ -3127,7 +3127,7 @@
         },
         "l3": {
           "title": "¿Cuánto pagó cada uno por su riesgo?",
-          "description": "Para cada activo seleccionado, cuánto osciló y cuánto rindió de media al año, en la tabla y en el gráfico; con un índice de referencia elegido en la parte superior de la pestaña, también cuánto se movió junto a él.",
+          "description": "Para cada activo seleccionado, cuánto osciló y cuánto rindió de media al año, en la tabla y en el gráfico; con un índice de referencia elegido justo arriba, también cuánto se movió junto a él.",
           "expectedReturn": "Rentabilidad media anual",
           "correlation": "Correlación",
           "columnHelp": {

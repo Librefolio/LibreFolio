@@ -2305,7 +2305,7 @@ insieme di asset `data_quality.issues` arriva una per categoria, `code + group_k
 |---|---|---|
 | L12-1 | analisi breve della via «solo pagina» nel `DataTable` condiviso, chiesta dal coordinatore prima di ogni concessione: chi lo chiama, come si comporta `navigateToRowId`, i test | ✅ 2026-10-06, in sola lettura |
 | L12-2 | la guida `correlation.en.md:116-117` (la retta dal benchmark, il rombo), quando i cambi di A arrivano nel mio ramo | in attesa |
-| L12-3 | il passo 1 di A: rivedere il diff dei miei file prima del suo checkpoint | in attesa |
+| L12-3 | il passo 1 di A: rivedere il diff dei miei file prima del suo checkpoint | ✅ 2026-10-06, 14:3x (approvato) |
 | L12-4 | `DataTable`: l'opzione «solo pagina» di `navigateToRowId`, rossi prima; commit a parte `feat(ui): …`, prima della paginazione di A | approvata in linea di principio; parte col passo 2, dopo la conferma della UX dal developer |
 | L12-5 | `risk-lab` raggiunge i provider di cambio veri (segnalato da A): la modale di sincronizzazione chiede `GET /fx/providers`. Correzione nello spec (test-author), prova nel log della corsia | ✅ 2026-10-06, 10:1x |
 
@@ -2474,4 +2474,495 @@ insieme di asset `data_quality.issues` arriva una per categoria, `code + group_k
 > - Strumenti: `/tmp/libreFolio_f4/l12_msgs.py`, `l12_record.sh` e `verify_l12.sh`.
 > - CHANGELOG: niente, perché nulla cambia per l'utente.
 > - Ad A, prima del commit (il mio impegno): fatto, lo spec cambia senza toccare i test di L3°.
+> - Stato dopo l'invio: **FROZEN** fino al commit.
+
+### Giro 12 committato ✅ 2026-10-06, 10:2x
+
+> - Commit del developer: `1d9c691f0` (G1) e `9008b21c2` (G2); `HEAD~2` = `cda8cba1c`, albero `184f192b9`.
+>   `/tmp/libreFolio_f4/verify_l12.sh`: **PASS**. Worktree pulito.
+
+### Quello che è arrivato dopo (10:3x-12:2x), in ordine
+
+> - **K e `DataTable` (coordinatore, 10:37)**: K aggiunge per primo un callback additivo `onRowOrderChange` sul suo ramo.
+>   Va in `dev_release2` e arriva alla famiglia con la fusione della base; i suoi test stanno in un file a parte. **Per
+>   L12-4**: prima di cominciare, verificare che il cambiamento di K sia nella mia base, e costruire sopra.
+> - **Passo 1b con A (10:59-11:02)**, decisioni del developer nella review di A:
+>   - anche nel laboratorio il benchmark diventa una riga in cima alla tabella, con lo sfondo del colore del suo punto;
+>   - le righe di riferimento partono in cima ma si ordinano con le altre, e `DataTable` non cambia.
+>   **Il contratto concordato**:
+>   - una riga aggiunta ha un id non numerico, `ref-<assetId>` (sulla Dashboard anche `ref-portfolio`), e celle
+>     `<prefisso>-ref-<colonna>`. Resta fuori da `data-row-count`, e `data-reference-count` conta solo le righe
+>     aggiunte;
+>   - nel caso D371 il riferimento selezionato resta una riga della selezione, con lo stesso id, gli stessi testid e
+>     `data-reference="true"` su beta e correlazione. Cambiano solo la posizione e lo sfondo;
+>   - riga e punto si selezionano a vicenda: `ref-portfolio` ↔ `'portfolio'`, il benchmark aggiunto ↔ `'benchmark'`, il
+>     resto ↔ `asset-<id>`.
+>   **L'ordine concordato**: A costruisce la capacità nel componente, a scelta del chiamante, e la usa sulla Dashboard;
+>   poi, dopo la fusione, io la porto nel laboratorio. **I test che cambiano per decisione del developer** (miei, coi
+>   rossi prima):
+>   - unitario `AssetSetRiskReturnSection.test.ts:1411`, ed E2E `:5940-5968` (oggi il punto del benchmark non seleziona
+>     nulla);
+>   - l'ordine d'apertura in D371;
+>   - i conteggi di `paidRows` (`:5108`, `:5174`, `:5248`, `:5955`), con un filtro;
+>   - la guida `:117`.
+> - **Concessione a Risk (11:27)**, una tantum, sulla mia `correlation.en.md` §What if…? (righe ~136-153): esattamente
+>   il suo diff (sha `bd531ff9…`) per D376.
+>   - Contenuto: periodi rapidi 1W…YTD senza All, «No preset», «one bar per asset replayed», il riquadro degli esclusi
+>     sopra le barre, il pulsante del periodo comune dentro il riquadro, «Only part of the crisis».
+>   - Rivisto da me; si applica pulito sulla mia punta. Nessun timbro: la pagina non ha traduzioni.
+> - **Concessione ad A (11:54)**: il suo test-author divide l'`it.each` di `scatterChartHelpers.test.ts:296-322`, coi
+>   rossi prima e nello stesso cambiamento del suo helper. Gli asset restano «più grandi, verdi e opachi»; portafoglio e
+>   benchmark diventano «più grandi e opachi, nel colore del loro ruolo» (il developer: «il simbolo nel grafico non deve
+>   cambiare colore»). Il resto del file non si tocca.
+> - **A, per informazione (11:54)**: nel componente condiviso, un segno di ruolo senza testo prima del nome
+>   (`data-role-mark`), le tinte delle righe finalmente visibili, il verde della riga scelta più chiaro su entrambe le
+>   pagine. Nessun mio test legge i colori.
+> - **Dove sta il selettore sulla Dashboard (A, 11:57)**:
+>   - `RiskLevelsPanel` monta `<L3Benchmark/>` fratello subito sopra `<L3RiskAdjusted/>`, primo figlio del corpo della
+>     sezione di L3;
+>   - nessuno slot: `RiskReturnLevel` si monta solo nel ramo dei dati, e un selettore passato lì sparirebbe durante il
+>     caricamento;
+>   - nessun cancello `pending`: il `comparison` della Dashboard parte a parte, quando lo stato è `set`.
+
+## Giro 13 · «Confrontato con» sopra la tabella di L3° · 2026-10-06, dalle 12:3x
+
+> **Le richieste del developer** (review 4 di A, alla lettera):
+> - «tutto perfetto eccetto il "Confrontato con" in lab che è ancora nella sezione della selezione asset, quando la
+>   sposti?»;
+> - e prima, nella review di A: «riguardo a risk-lab io metterei il selettore del benchmark non in cima ma sopra la
+>   tabella, esattamente come in dashboard, tanto sono gli unici a usarlo per ora.»
+>
+> Ad A ho detto che lo anticipo, perché non dipende dal suo 1b. Gli altri due errori, «stessi errori in risk lab» sulla
+> tabella di L1° (nomi fissati, larghezze che non si spostano), li correggo con la stessa cura di A per L3°: layout
+> `fixed`, larghezze misurate sui titoli, nomi non fissati. Aspetto però il suo passo 1 nel mio ramo, così riuso il suo
+> `headerWidth` di `riskReturnLevel.ts` invece di copiarlo. Va col giro di adozione dell'1b.
+
+| # | passo | stato |
+|---|---|---|
+| L13-0 | analisi (sotto) | ✅ 2026-10-06 |
+| L13-1 | rossi del selettore (test-author `l13-unit` e `l13-e2e`, in parallelo su file distinti): unitari di `AssetSetComparisonLevels`, E2E della posizione | ✅ 2026-10-06, 13:1x |
+| L13-1b | parcheggio dei rossi: patch nei file di sessione, i due file riportati a HEAD, per la fusione dell'1b di A (che tocca anche `risk-lab.spec.ts:5057`) | ✅ 2026-10-06, 13:2x |
+| L13-2 | **dopo la fusione dell'1b di A** (coordinatore, 12:4x): rossi rimessi; codice del selettore (pannello, livelli, il confine del controller di L3°) | ✅ 2026-10-06, 15:3x; E2E `risk-lab` 41/41 |
+| L13-3 | stesso giro: la tabella di L1° come L3° (layout `fixed`, `headerWidth` di A riusato, nomi non fissati); l'adozione 1b nel laboratorio (riga del benchmark, D371 in cima, i test che si capovolgono) | in attesa |
+| L13-4 | guida `correlation.en.md` (docs-writer, solo EN): il selettore, il rombo, la retta dal benchmark (`:116`), «its dot» (`:117`), il rendimento dai soli prezzi, la riga del benchmark | in attesa |
+| L13-5 | cancelli e mutanti, poi il checkpoint | in attesa |
+| **L13-A** | **checkpoint a sé del solo selettore**, per l'urgenza del developer: rossi di L1° parcheggiati, guida della posizione (docs-writer `l13-guide`), cancelli sull'albero del solo selettore, checkpoint | ✅ 2026-10-06, 15:5x (CHECKPOINT READY) |
+
+### L13-0 · analisi (su `9008b21c2`)
+
+> **Lo stato reale**:
+> - il selettore sta nella card della selezione, ultima riga (`AssetSetRiskPanel.svelte:802-812`, testid
+>   `risk-asset-set-benchmark-row`). `benchmarkValue` e `benchmarkState` sono del pannello, e `labBenchmarkId` passa ai
+>   livelli solo una scelta confermata;
+> - **il cancello** (`:819`): `{#if benchmarkState !== 'pending'}` intorno ad `AssetSetComparisonLevels`. I controller
+>   chiedono la loro onda appena montati, e montati prima, con un benchmark salvato, L3° chiederebbe due volte (senza e
+>   poi con il benchmark) e mostrerebbe cifre subito sostituite;
+> - `AssetSetComparisonLevels` crea entrambi i controller nello script (`:93-118`). Quello di L3° porta
+>   `assetSetBenchmarkId`;
+> - **perché non basta lo scope vuoto**: uno scope `asset_set` vuoto arriva all'API e torna 422, letto come errore di
+>   caricamento (`AssetSetCorrelationSection.svelte:4-12`). La regola documentata del codice è «il confine è la
+>   guardia»: un controller vive in un componente montato sotto l'`{#if}` che lo protegge.
+>
+> **Il progetto**:
+> 1. il pannello toglie la riga del selettore dalla card e toglie il cancello intorno ai livelli. Ai livelli passa
+>    `benchmarkId` (come oggi), `benchmarkPending` e uno snippet `benchmarkPicker`: la stessa riga, con l'etichetta,
+>    l'aiuto, `BenchmarkSelect` legato allo stato del pannello e lo stesso testid;
+> 2. i livelli rendono lo snippet come **primo figlio del corpo della cornice di L3°**, prima della sezione, come sulla
+>    Dashboard. L1° chiede subito, perché non usa il benchmark;
+> 3. **il controller di L3° nasce in un componente minuscolo**, montato sotto `{#if !benchmarkPending}`. Lo crea e lo
+>    lega al genitore, che tiene tutti i suoi derivati con `paidController?.…`. Mentre aspetta, la sezione di L3° mostra
+>    il caricamento;
+> 4. con la selezione vuota i livelli non si montano, quindi non c'è nemmeno il selettore. Non serve: senza L3° non c'è
+>    nulla da confrontare.
+>
+> **I test**:
+> - unitari (`AssetSetComparisonLevels.test.ts`, rossi nuovi):
+>   - con `benchmarkPending` L1° chiede e L3° no;
+>   - quando l'attesa finisce, L3° chiede una volta sola, col benchmark;
+>   - lo snippet sta nella cornice di L3°, prima della sua sezione.
+>   I test di oggi passano invariati (`benchmarkPending` vale `false` per difetto, lo snippet è facoltativo, e l'ordine
+>   di creazione dei controller resta L1° poi L3°);
+> - E2E: `benchmarkRowPlacement` (`risk-lab.spec.ts:2864`) e il test (a) (`:5455`) si capovolgono per decisione.
+>   «Dentro la card della selezione» diventa «dentro la cornice di L3°, dopo il titolo, prima della tabella, fuori dalla
+>   card»;
+> - nessun file del passo 1 di A si tocca.
+>
+> **I file**: `AssetSetRiskPanel.svelte`, `AssetSetComparisonLevels.svelte`, il componente nuovo, i due test e la
+> guida.
+
+> **Concessione ad A (12:4x)**, una tantum, per il suo test-author, nello stesso cambiamento del layout e coi rossi
+> prima sul codice vecchio. Tre punti miei li hanno resi rossi le modifiche a L3° che il developer ha approvato («tutto
+> perfetto»: layout `fixed`, il titolo corto «Rend. annuo», il nome intero nel menu delle colonne e nel tooltip):
+> - `AssetSetRiskReturnSection.test.ts:965-973`: nell'`it.each` cambia solo il caso `expectedReturn` (tooltip
+>   `risk.levels.l3.table.namedHelp`: il nome per primo, poi l'aiuto); gli altri 6 restano identici;
+> - `:992-996`: il titolo viene da `risk.levels.l3.table.expectedReturnShort`. Cambia anche il commento d'intestazione
+>   `:29-32`;
+> - `risk-lab.spec.ts:5057` (il suo `:4993`): `table-layout` passa a `fixed`, col messaggio riscritto, e si aggiunge un
+>   controllo che trascinare il bordo di una colonna ne cambia la larghezza. È la lamentela del developer.
+> - Verificato: i controlli del tooltip che seguono (`:5060-5066`) reggono già. Nient'altro nei due file, e i blocchi non
+>   toccano i miei del giro 13 (`:2864`, `:5455`, `AssetSetComparisonLevels.test.ts`).
+
+> **I tempi li decide il coordinatore (12:4x)**: il selettore e la correzione di L1° vanno nel giro di adozione dell'1b,
+> come avevo proposto all'inizio. Il codice parte quando il checkpoint 1b di A è committato e fuso nel mio ramo; la
+> fusione la prepara il coordinatore. La regola delle larghezze di A (`headerWidth` in `riskReturnLevel.ts`, layout
+> `fixed`, `minWidth` sul titolo) si riusa, senza una seconda copia. Adesso solo l'analisi, i rossi via test-author e
+> l'ordine.
+> - Avevo detto ad A che lo anticipavo: ho corretto, e A lo dice al developer.
+> - **Sovrapposizione con la fusione**: l'1b di A tocca anche `risk-lab.spec.ts` (la mia concessione a `:5057`). Una
+>   volta provati i rossi, li salvo come patch nei file di sessione e riporto i due file a HEAD, così la fusione trova un
+>   albero pulito; dopo la fusione li rimetto (blocchi distinti). Il coordinatore mi avvisa prima di fondere.
+> - La review sui dati del developer: una copia nuova solo dopo averla chiesta al coordinatore.
+
+### L13-1 · i rossi del selettore: E2E (test-author `l13-e2e`) ✅ 2026-10-06, 13:0x
+
+> - `risk-lab.spec.ts` (+60 −32), solo lui.
+> - **`benchmarkRowPlacement` (`:2877`)** dà `"above L3°'s table"` solo quando aiuto e selettore stanno nella cornice di
+>   L3° e nel suo corpo (`risk-asset-set-paid-body`), dopo il titolo (`risk-asset-set-paid-title`), l'aiuto prima del
+>   selettore, entrambi prima della sezione e quindi prima della tabella, e fuori dalla card, dai chip, dalla correlazione
+>   e da L1°. Nessun selettore CSS: `RiskLevelSection` ha i testid del titolo e del corpo.
+> - **Test (a) (`:5481`)** ha un titolo nuovo («… sits in L3°'s frame, below its title and above its table as on the
+>   Dashboard …»), la stringa nuova e il docblock del 06/10. Il resto del test è invariato.
+> - Altri punti legati alla vecchia posizione: tre commenti (`:2604`, `:5363`, `:5375`), nessuna asserzione.
+> - **Rosso**: `… front-portfolio risk-lab "benchmark picker sits"` → exit 1, `Expected "above L3°'s table"`, `Received
+>   "the picker is inside the selection card"` (`:5501`). Tutti i passi precedenti verdi. Nessuna ricostruzione (la build
+>   è aggiornata); `tsc e2e` 2 (il pavimento); prettier pulito; 6154 libera.
+> - **Da guardare al verde**: alcuni test controllano il tooltip aperto in tutta la pagina dopo un hover nelle tabelle di
+>   L3° (`:5062`, `:5865` e (a)). Con la ⓘ subito sopra la tabella, un suo tooltip aperto per caso li renderebbe ambigui.
+>   Nessuno passa sulla ⓘ, per ora.
+
+### L13-1 · i rossi del selettore: unitari (test-author `l13-unit`) ✅ 2026-10-06, 13:1x
+
+> - `AssetSetComparisonLevels.test.ts`: 7 test nuovi in un `describe` a sé (`:1321-1487`), con un docblock sulla
+>   decisione e sulla guardia; i 50 di prima passano ancora.
+>   - **Mentre il benchmark è in attesa** (`benchmarkId` 47, oppure `null` come fa davvero il pannello finché il
+>     selettore non dice `set`): L1° chiede e disegna; L3° non chiede nulla, mostra il caricamento e nessun errore. Le
+>     assenze si controllano solo dopo la barriera di L1°.
+>   - **Quando l'attesa finisce**: L3° chiede una volta sola in tutto, col 47, e L1° non richiede.
+>   - **Il selettore** compare una volta sola, nel corpo della cornice di L3°, prima della sezione e fuori da L1°: sia a
+>     regime sia durante l'attesa. Allo scadere dell'attesa resta lo stesso elemento, montato una volta.
+>     `BenchmarkSelect` torna a `pending` quando si monta, quindi un selettore rimontato ricomincerebbe l'attesa.
+>   - Le domande di L1° e di L3° si riconoscono dalle loro analisi (`questionsOf`, `LEVEL_CODES`), il benchmark da
+>     `comparison_asset_id`; nulla per posizione.
+> - **Rossi** (`/tmp/libreFolio_f4/l13_unit_red.log`): 7 falliti e 50 passati, tutti per asserzione e nessuno per un
+>   errore del banco. Il caso «`null` fino a ora» riceve `[null, 47]`: proprio la doppia domanda che la guardia esiste
+>   per evitare. Prettier pulito.
+
+### L13-1b · rossi parcheggiati ✅ 2026-10-06, 13:2x
+
+> - Le due patch (`git diff`) e le copie intere dei file rossi sono nei file della mia sessione, fuori dal repo
+>   (`l13_parked/`). Impronte delle copie: `AssetSetComparisonLevels.test.ts` `d1719116…`, `risk-lab.spec.ts`
+>   `a57f4ec3…`.
+> - I due file sono riportati a HEAD scrivendo il contenuto di `git show HEAD:<file>`, senza `checkout`. `git diff
+>   --quiet` è vuoto su entrambi, e `git apply --check` dice che le due patch si rimettono pulite.
+> - Nel worktree resta sporco solo questo journal, che la fusione dell'1b di A non tocca.
+> - **Dopo la fusione**: rimettere le patch (`git apply`, poi `git diff` per controllare), rilanciare i rossi (7 unitari,
+>   il test (a)), poi il codice.
+
+### L12-3 · revisione dei file miei nel passo 1 + 1b di A (prima del suo checkpoint 7) · 2026-10-06, 14:2x
+
+> - **Il riepilogo di A** (righe nuove):
+>   1. `AssetSetRiskReturnSection.svelte` (+41 −195): l'involucro. Props invariate; righe, punti, descrizione e 4 stati
+>      restano; il periodo va in `afterTable`; `scatterNote` ritirata;
+>   2. `AssetSetRiskReturnSection.test.ts` (+25 −7): l'intestazione `:29-33`, il caso `expectedReturn` (`:974-981`; gli
+>      altri 6 restano identici), il titolo capovolto (`:1001-1013`);
+>   3. `risk-lab.spec.ts` (+45 −1), `:4993-5037`: `fixed`, ogni titolo dentro il suo `th`, il trascinamento;
+>   4. `scatterChartHelpers.test.ts` (+104 −4): l'`it.each` diviso (`:300-353`), più le aggiunte concordate il 05/10
+>      (`:386-457`: rombo, area del rombo pesato, misura fissa senza peso);
+>   5. `ScatterChart.test.ts` (+45, solo aggiunte): la riga di dettaglio del tooltip;
+>   6. `assetSetI18n.test.ts` (+60 −22): **sconfinamento**. La concessione diceva `:194-233`, ma l'ultimo caso del blocco
+>      leggeva `renderedNoteKey()`, sparita con lo spostamento. Test-author ha riscritto tutto il blocco (nuovo
+>      `:195-278`): ogni nota che il laboratorio rende non nomina una retta, nelle 4 lingue, col controllo positivo su
+>      `risk.levels.l3.scatter.notes.line`.
+> - **Non posso leggere il diff**: è nel worktree di A, non committato, e il suo ramo è ancora `f6b7273f8` per i miei
+>   file. Ho chiesto ad A una patch per file in `/tmp/libreFolio_A_for_F/`, con le impronte.
+> - **Le mie risposte**:
+>   - sconfinamento sì, a patto che il resto del file sia identico byte per byte (lo controllo sulla patch);
+>   - i due commenti diventati falsi (`scatterChartHelpers.test.ts:230`, `risk-lab.spec.ts:4975-4977`) li cambia A nel
+>     checkpoint 7, con le sue parole, così sono veri quando cambia il codice.
+> - **Per la guida** (da A): titolo «Rend. annuo» / «Ann. return», col nome intero nella prima riga del tooltip e nel menu
+>   delle colonne; colonne ridimensionabili, ognuna larga quanto il suo titolo; nomi non fissati.
+
+> **La revisione** ✅ 2026-10-06, 14:3x, **approvata**. A ha esportato le patch in `/tmp/libreFolio_A_for_F/` (cartella
+> 700, file 600).
+> - **Integrità** (`/tmp/libreFolio_f4/l13_verify_A_export.sh`, PASS):
+>   - le impronte dell'esportazione coincidono;
+>   - ogni patch, applicata al blob committato di A (`f6b7273f8`), dà l'impronta dichiarata del suo worktree;
+>   - il file intero `07` coincide col risultato della patch 01.
+> - **01, l'involucro**:
+>   - Props e `tableRef` invariati;
+>   - restano righe, punti (D371), descrizione, i 4 stati e il periodo (in `afterTable`);
+>   - capacità esplicite `{ratios: true, benchmark: benchmarkApplies}`, stessi `testIdPrefix` e `storageKey`, nessun peso.
+> - **02**: solo i blocchi concessi. Il caso `expectedReturn` legge la prima riga e tutto `namedHelp`, gli altri 6 sono
+>   identici. Il test del titolo fissa anche il `displayName` del menu, e senza `tableRef` fallisce invece di passare a
+>   vuoto.
+> - **03**: solo dentro il test concesso, più il commento. **Un dettaglio non bloccante**: se un `th` non ha la
+>   larghezza inline, `own` vale `NaN` e la clausola «alla sua larghezza» passa in silenzio; resta solo `inside`. Lo
+>   chiudo io (`!Number.isFinite(own)` → colpevole) nel giro di adozione, così i cancelli di A non ripartono.
+> - **04**: le righe tolte sono solo i casi `benchmark` e `portfolio` e il commento di `:230`. Gli asset restano
+>   «verdi»; il nuovo `it.each` fissa il colore del ruolo (`colorForRole`), «non `SELECTED_LIGHT`» e «nient'altro
+>   cambia». Il resto sono aggiunte già concordate il 05/10; il test del tema scuro è intatto.
+> - **05**: 46 righe aggiunte, nessuna tolta.
+> - **06, lo sconfinamento: accettato.**
+>   - I due blocchi stanno dentro il blocco della guardia; gli import dinamici tengono dentro anche gli import nuovi;
+>   - la guardia fallisce chiusa («could not read which keys»);
+>   - la premessa è il vero `capitalMarketLineAnchor` sui punti del laboratorio;
+>   - il controllo positivo copre le 4 lingue.
+> - **Chiesto ad A per la consegna**:
+>   - le chiavi i18n tolte (`risk.assetSet.levels.l3.scatterNote`, `risk.levels.l3.scatter.note`) e quelle aggiunte,
+>     via `dev.py i18n`;
+>   - i conteggi dei miei test unitari accanto a `risk-lab` 41.
+
+### Il fast-forward all'1b di A ✅ 2026-10-06, 15:0x
+
+> - Comando del coordinatore, eseguito dal developer: HEAD = `001bebf12`, albero `8aefdd616`. Contiene il checkpoint 7
+>   di A (validato da A), il k6 di Risk e il mio giro 12. Il journal è rimasto com'era.
+> - **Cosa è arrivato nella mia area**:
+>   - `RiskReturnLevel.svelte` e `riskReturnLevel.ts` (di A);
+>   - la mia sezione di L3° come involucro, con i blocchi concessi nei miei test, che avevo rivisto;
+>   - la modifica di Risk alla mia guida (§What if…?);
+>   - il `331b07b46` di Risk: la domanda di L3° nel laboratorio porta tasso e obiettivo anche nel `comparison`, così la
+>     riga del benchmark avrà Sharpe e Sortino. `comparison_asset_id` resta, quindi i miei rossi riconoscono ancora la
+>     domanda di L3°.
+> - `AssetSetRiskPanel`, `AssetSetComparisonLevels`, `AssetSetLossComparisonSection` e `assetSetTable` sono invariati
+>   dal giro 12.
+> - **I rossi rimessi**: `git apply --check`, poi `git apply` delle due patch parcheggiate. Il test unitario coincide
+>   byte per byte con la copia rossa. Rilanciati sulla base nuova: 7 falliti e 50 passati, come prima.
+
+### L13-2 · il codice del selettore ✅ 2026-10-06, 15:1x-15:3x
+
+> **Note implementazione**
+> - **`RiskControllerHost.svelte`** (nuovo, mio): crea un controller dove viene montato e lo espone con
+>   `bind:controller`, così l'`{#if}` intorno decide quando il controller esiste, e quindi quando chiede. È la regola
+>   «il confine è la guardia» della sezione di correlazione. Le `inputs` si leggono a ogni domanda, le `options` una
+>   volta sola (`untrack`, voluto).
+> - **`AssetSetComparisonLevels.svelte`**:
+>   - due prop nuove: `benchmarkPending` (di difetto `false`) e lo snippet `benchmarkPicker`;
+>   - il controller di L3° non nasce più nello script: lo crea un `RiskControllerHost` sotto `{#if !benchmarkPending}`
+>     (L1° prima, poi L3°, come prima), e i derivati lo leggono con `paidController?.…`. Finché aspetta, L3° mostra il
+>     caricamento;
+>   - lo snippet si disegna in cima al corpo della cornice di L3°, prima della sezione, qualunque sia l'attesa. La
+>     cornice di L3° non è richiudibile, quindi il suo corpo c'è sempre e il selettore non si smonta mai a metà
+>     conferma;
+>   - il docblock spiega la decisione e la guardia.
+> - **`AssetSetRiskPanel.svelte`**:
+>   - la riga del selettore esce dalla card della selezione e diventa lo snippet `benchmarkPicker`, con gli stessi
+>     testid, l'aiuto ⓘ e lo stesso `BenchmarkSelect` legato allo stato del pannello. La larghezza è quella della
+>     Dashboard (`max-w-xs flex-1`, `boxClass="w-full"`);
+>   - il cancello `{#if benchmarkState !== 'pending'}` intorno ai livelli è tolto: ai livelli passa
+>     `benchmarkPending={benchmarkState === 'pending'}`;
+>   - i docblock sono aggiornati.
+> - **Prove** (fuori corsia):
+>   - `AssetSetComparisonLevels.test.ts` **57/57** (i 7 rossi verdi, i 50 di prima invariati);
+>   - `front check` **0/0**: un primo avviso su `options` letta una volta sola, chiuso con `untrack`;
+>   - prettier pulito; lista vitest **1484/1484** (32 file).
+>
+> **In attesa per L1°**: `headerWidth` è esportata, ma la funzione che misura (`measureTitle`) è privata in
+> `RiskReturnLevel.svelte:121-128`. Ho chiesto ad A di poterla spostare in `riskReturnLevel.ts` come
+> `measureHeaderTitle`: lo stesso comportamento, nessuna copia. `assetNameColumn` (mio) perderà `pinned: 'left'` e
+> `max-w-56` per entrambe le tabelle, ora tutte e due `fixed`; quelli di A diventano ridondanti ma innocui.
+>
+> **E2E del selettore** ✅ 15:1x-15:1x (corsia 6154; `front build --debug` prima):
+> - `front-portfolio risk-lab` **41/41**; il test (a), rosso prima, è verde;
+> - righe di provider nella finestra (13:12:02-13:16:53Z): **0**;
+> - 6154 libera alla fine. Carico 20-28.
+
+### L13-3a · `measureHeaderTitle` spostata (concessione di A, 15:3x) ✅ 2026-10-06
+
+> - **Lo spostamento puro, nei tre punti indicati da A**:
+>   - `riskReturnLevel.ts` esporta `measureHeaderTitle(text)` accanto a `headerWidth`, con la sua cache pigra (un
+>     `OffscreenCanvas`, oppure `null`), il font `${HEADER_FONT} ${…fontFamily}`, il ripiego per jsdom e il suo
+>     commento;
+>   - `RiskReturnLevel.svelte` cambia la riga d'import (`HEADER_FONT` esce, perché la usava solo la funzione spostata),
+>     perde la copia locale e chiama `measureHeaderTitle`.
+> - **Una differenza voluta**: la cache ora è del modulo, non di ogni istanza. Il comportamento non cambia.
+> - **Prove**: `riskReturnLevel.test.ts`, `L3RiskAdjusted.test.ts` (sul ripiego di jsdom) e
+>   `AssetSetRiskReturnSection.test.ts`: **163/163**.
+> - **Prima del checkpoint**: la patch dei due file di A, a A, come ha fatto lui con me. Più i suoi selettori nei miei
+>   cancelli: `risk-levels-unit`, `risk-levels-component` ed E2E `front-portfolio risk` (E4 misura le larghezze vere a
+>   1024 px).
+> - **Patch per A** in `/tmp/libreFolio_F_for_A/` (cartella 700, file 600, con `SHA256SUMS.txt`), contro `001bebf12`.
+> - **⚠️ Fuori pista, corretto subito**: nel messaggio ad A ho scritto che il `risk-lab` 41/41 era su una build con lo
+>   spostamento. Era falso: avevo costruito prima di spostare. Ho mandato la correzione: per ora la prova dello
+>   spostamento sono solo i 163 unitari. La build nuova e i suoi selettori vengono prima del checkpoint.
+
+### Il selettore esce da solo, prima del resto · 2026-10-06, 15:2x
+
+> - **Il developer** (via A, durante la sua review del k6 sui suoi dati): L3° della Dashboard è perfetto; nel
+>   laboratorio il selettore del benchmark non è ancora in L3° («è la 10° volta»), e in L3° del laboratorio non compare
+>   la retta tra lo 0 e il benchmark.
+> - **Il selettore** è già fatto e provato nel mio albero (unitari verdi, `risk-lab` 41/41 col test (a) verde), ma non
+>   ancora committato: per questo lui non lo vede. **Decisione**: esce in un checkpoint a sé (L13-A), prima di L1° e del
+>   resto del giro. **Stima data ad A per lui**: CHECKPOINT READY verso le 16:30.
+>   - Cosa lo tiene: test-author `l13-l1` scrive i rossi di L1° nello stesso spec e ha la corsia. Quando finisce, li
+>     parcheggio come nel L13-1b, faccio i cancelli sull'albero del solo selettore e mando il checkpoint.
+>   - La guida della nuova posizione (`correlation.en.md:127`, `:177`) la fa intanto docs-writer `l13-guide`.
+>   - Il modo più rapido perché lui lo veda: A fonde la mia punta nella sua build di review, appena committata.
+> - **La retta**: la causa era di A (`capitalMarketLineAnchor` dava `null` senza un punto del portafoglio). A l'ha
+>   corretta nel suo albero, non ancora committata: col benchmark la retta va da `(0, rf)` al rombo del benchmark,
+>   anche nel laboratorio, e le note guadagnano `above` e `lineBenchmark`. Senza benchmark, niente retta.
+> - **Concessione ad A** (15:2x), per il suo test-author, coi rossi prima e nello stesso cambiamento della sua
+>   correzione. Il nuovo invariante: «L3° descrive la retta esattamente quando la disegna».
+>   - `scatterChartHelpers.test.ts:119-122`, più ogni caso che fissi «niente retta senza portafoglio» con un benchmark
+>     presente;
+>   - il blocco della guardia `assetSetI18n.test.ts:240-281`, con la premessa sul vero `capitalMarketLineAnchor`, nelle
+>     4 lingue: senza benchmark nessuna nota sulla retta, col benchmark `above` e `lineBenchmark`;
+>   - il test E2E «L3° shows beta and correlation only when a benchmark applies…», solo se diventa davvero rosso, e
+>     lontano dalle mie due righe di commento (ora `:5408`, `:5420`), meglio dopo la fusione del mio checkpoint.
+> - **Miei, dopo la correzione di A nel mio ramo**: `riskFreeRate={0}` esplicito nel mio involucro (il laboratorio
+>   non ha un tasso: `appliedRiskFreePercent: 0`), e la guida `:116` («No line is drawn»).
+>
+> **Concessione a Risk (15:3x)**, una tantum, per il k5b, nella mia `correlation.en.md` §What if…? (su `001bebf12`).
+> Esattamente due frasi: `:139` («one row per asset replayed: its return over the period and a bar, worst first…»)
+> e `:143` («no table … In place of the table»), perché la replay passa dalle barre a una tabella (D376). Solo EN,
+> senza timbro. Prima di congelare, Risk mi manda il diff con la sua impronta. Il mio 13-A tocca `:127` e `:177`:
+> blocchi distinti, quindi la fusione resta additiva.
+
+### L13-A · la guida, e una frase dell'app rimasta indietro ✅ 2026-10-06, 15:4x
+
+> - **Guida** (docs-writer `l13-guide`), solo EN, senza timbro (la pagina non ha traduzioni):
+>   - `correlation.en.md:127`: «it is **chosen under *Compared with***, in the only section of the tab that measures
+>     against a benchmark: at the top of this section, above its table, as on the Dashboard.» Il resto del punto è
+>     invariato;
+>   - `:177`: «… [chosen](#what-did-each-pay) under *Compared with*, at the top of that section …»;
+>   - `mkdocs build` strict pulito; `check-links` 88/8/3 + D28; `sw.js` invariato. Le altre «panel at the top of the
+>     tab» della pagina (`:15`, `:201`, `:205`) parlano della selezione, della nota e del banner, che non si sono mossi.
+> - **⚠️ Fuori pista (trovato da docs-writer)**: la descrizione di L3°, che ora sta subito sotto il selettore,
+>   diceva ancora «with a benchmark chosen at the top of the tab», in tutte e 4 le lingue
+>   (`risk.assetSet.levels.l3.description`). Corretta con `dev.py i18n update`
+>   (`/tmp/libreFolio_f4/l13a_i18n.py`): «chosen just above» / «scelto qui sopra» / «choisie juste au-dessus» /
+>   «elegido justo arriba». Una riga per catalogo, nessun argomento ICU, quindi la parità non cambia. Va nel gruppo del
+>   codice del 13-A; nella consegna, la chiave **aggiornata** (nessuna aggiunta né tolta).
+>
+> **Risk, k5b (15:3x)**: le due frasi sono pronte (diff `e11bbeb5…`). La concessione si estende a `:141` («Above the
+> bars» → «Above the table», «it gets no bar» → «it gets no row»), diventata falsa con la tabella. Sullo stile, la
+> nuova `:139` aveva due due punti: ho chiesto di tornare al trattino originale dopo «replayed» («Read one row per asset
+> replayed — its return over the period and a bar, worst first: losses…»). Non posso leggere il suo worktree: gli ho
+> chiesto di esportare il diff in `/tmp/libreFolio_Risk_for_F/`, con le impronte.
+> - **Verificato (15:3x)**: l'esportazione di Risk (`/tmp/libreFolio_Risk_for_F/`) torna con le sue impronte (diff
+>   `3c5f03e3…`, pagina `29f50bab…`). Il diff, applicato a `001bebf12`, dà esattamente la pagina esportata, con un solo
+>   blocco che cambia solo `:139`, `:141` e `:143`, come concesso, col trattino ripristinato. Dalle mie modifiche del
+>   13-A (`:127`, `:177`) restano righe invariate in mezzo: fusione pulita.
+
+### L13-B · i rossi di L1° (test-author `l13-l1`) ✅ 2026-10-06, 15:1x-15:4x, e parcheggiati per il 13-A
+
+> - **E2E** (`risk-lab.spec.ts`):
+>   - aiutanti condivisi estratti dal test di L3°: `titlesSpillingOut` (col controllo su `NaN` della mia revisione: un
+>     `th` senza larghezza inline è colpevole), `columnEdge` e `dragRight`. Il test di L3° li usa, con le stesse
+>     asserzioni;
+>   - L1° «value columns carry their help…»: `table-layout: fixed`, ogni titolo dentro il suo `th`, il trascinamento;
+>   - L1° «names each asset…»: nessun nome fissato (letto sulle celle del corpo, perché l'intestazione è sempre sticky)
+>     e nessun tetto (`max-width: none`).
+> - **Unitari** (`AssetSetLossComparisonSection.test.ts`): per ognuna delle 4 lingue, le 5 colonne dei valori (c'è
+>   anche `currentFall`) aprono con `width` = `min-width` = `headerWidth(titolo, measureHeaderTitle)`. Il titolo dev'essere
+>   la stringa del catalogo di quella lingua. Il titolo e le celle dei nomi non hanno `left` né `right` inline.
+> - **Rossi**:
+>   - E2E: «not laid out fixed», ricevuto `auto`; 8 nomi fissati e 8 con tetto a 224 px;
+>   - unitari: 5 falliti, 52 passati, con 110/90 px ricevuti dove servono le larghezze dei titoli;
+>   - il test di L3° resta verde col controllo su `NaN`; `tsc e2e` 2 (il pavimento); prettier pulito.
+> - **Da sapere per il codice**:
+>   - a 1280 px in inglese la tabella di L1° sta nella sua scatola, e `auto` asseconda il trascinamento. Il rosso del
+>     trascinamento viene dall'asserzione `fixed`, che è proprio la causa, come nel test di L3° di A;
+>   - le colonne di L1° devono essere `$derived`, così le larghezze seguono un cambio di lingua;
+>   - il runner ha ricostruito da sé il frontend alle 15:33, per la mia modifica i18n.
+> - **Parcheggio per il 13-A** (`/tmp/libreFolio_f4/l13a_park.sh`, nessun checkout): copie intere e patch nei file
+>   della mia sessione (`l13b_parked/`):
+>   - lo spec completo `df73b485…`, la stessa impronta del giro rosso di test-author;
+>   - il test di L1°;
+>   - i due file di A dello spostamento di `measureHeaderTitle`.
+>   Riportati a HEAD; lo spec è HEAD più la sola patch del selettore. Restano 11 percorsi, quelli del 13-A.
+
+### L13-A · i cancelli sull'albero del solo selettore ✅ 2026-10-06, 15:44-15:49 (`/tmp/libreFolio_f4/l13a_gates.sh`, corsia 6154, uno per volta)
+
+> | cancello | esito |
+> |---|---|
+> | `front build --debug` · `mkdocs build` (0 WARNING) | ✅ · ✅ |
+> | `front check` | 0/0 |
+> | `tsc -p tsconfig.e2e.json` | 2 (il pavimento, altri file) |
+> | prettier sui file toccati | pulito |
+> | lista vitest | 1461/1461 (31 file) |
+> | `front-portfolio risk-lab` | **41/41**, il test (a) verde |
+> | `check-orphans` · `mkdocs check-links` | ok · 88/8/3 + D28 |
+> | righe di provider durante `risk-lab` | 0 |
+>
+> - `git diff --check` pulito; `sw.js` invariato; 6154 libera alla fine. Carico durante il giro: 37-53.
+> - **Non eseguiti, e perché**: `core-unit` e `component-unit` per intero (il test dei livelli è nella lista vitest),
+>   `risk` e `risk-benchmark-shared` (nessuno dei due monta il laboratorio, e solo il mio spec usa il suo selettore),
+>   `risk-controller-unit` (il controller non cambia), `i18n audit` (una sola chiave aggiornata, senza argomenti).
+
+### Checkpoint 13-A · 2026-10-06, 15:5x (verso Risk)
+
+> - Base `001bebf12`, 11 percorsi: 10 modificati e 1 nuovo. Tre gruppi:
+>   - **G1** il codice e i suoi test: pannello, livelli e il loro test, `RiskControllerHost.svelte` (nuovo), lo spec
+>     (solo i blocchi del selettore), i 4 cataloghi;
+>   - **G2** la guida;
+>   - **G3** questo journal.
+> - i18n: una chiave **aggiornata**, `risk.assetSet.levels.l3.description`, nelle 4 lingue. Nessuna aggiunta, nessuna
+>   tolta.
+> - Strumenti: `/tmp/libreFolio_f4/l13a_msgs.py`, `l13a_record.sh` e `verify_l13a.sh`.
+> - CHANGELOG: niente da me; il selettore dei benchmark condiviso è materia della famiglia.
+> - **Dopo il commit**: l'ordine del coordinatore (il checkpoint 8 di A più la fusione del mio 13-A in A, poi i
+>   fast-forward); poi rimetto il 13-B dal parcheggio.
+> - Stato dopo l'invio: **FROZEN** fino al commit.
+
+### 13-A committato, e il 13-B rimesso ✅ 2026-10-06, 15:5x
+
+> - Commit del developer: `14ec8438d`, `87e81e928`, `ef64d71e2`; `~3` = `001bebf12`, albero `ab8653079` (quello
+>   previsto dal coordinatore). `/tmp/libreFolio_f4/verify_l13a.sh`: **PASS**. Il coordinatore l'ha verificato, Risk
+>   l'ha controllato per conto suo.
+> - **Il 13-B rimesso**: lo spec di HEAD è esattamente quello del solo selettore (`746a0277…`), e gli altri tre file
+>   sono invariati da `001bebf12`. Le copie intere parcheggiate, ricopiate, ridanno esattamente HEAD più il 13-B: le 4
+>   impronte coincidono con quelle del parcheggio.
+> - Al coordinatore: il checkpoint 8 di A tocca `RiskReturnLevel.svelte` (e forse lo spec), quindi prima del suo
+>   fast-forward mi avvisa e io riparcheggio.
+
+### L13-B · il codice di L1° ✅ 2026-10-06, 16:0x
+
+> **Note implementazione**
+> - **`AssetSetLossComparisonSection.svelte`**:
+>   - via `tableLayout="auto"`: vale il `fixed` di difetto di `DataTable`, l'unico in cui una larghezza trascinata
+>     resta;
+>   - ogni colonna dei valori (le 5, `currentFall` compresa) ha `width` = `minWidth` = `titleWidth(id)`, cioè
+>     `headerWidth($t(titolo), measureHeaderTitle)`: la regola di A in `riskReturnLevel.ts`, riusata e non copiata;
+>   - le colonne sono `$derived`, così le larghezze seguono un cambio di lingua.
+> - **`assetSetTable.ts`**, per entrambe le tabelle: `assetNameColumn` perde `pinned: 'left'` e
+>   `assetNameCellHtml` perde `max-w-56`; i docblock spiegano perché. In `RiskReturnLevel` il `pinned: undefined` e il
+>   `max-width: none` di A diventano ridondanti ma innocui; li toglie A in un suo giro.
+> - **Prove** (fuori corsia):
+>   - vitest su L1°, L3°, i livelli, `riskReturnLevel` e `L3RiskAdjusted`: **277/277**, i 5 rossi di L1° verdi;
+>   - `front check` 0/0; prettier, che ha messo il `<DataTable>` di L1° su una riga.
+
+### L13-B · i cancelli ✅ 2026-10-06, 15:58-16:12 (`/tmp/libreFolio_f4/l13b_gates.sh`, corsia 6154, uno per volta)
+
+> | cancello | esito |
+> |---|---|
+> | `front build --debug` · `mkdocs build` (0 WARNING) | ✅ · ✅ |
+> | `front check` · `tsc -p tsconfig.e2e.json` · prettier | 0/0 · 2 (il pavimento) · pulito |
+> | lista vitest (con `riskReturnLevel.test.ts`) | 1489 |
+> | `core-unit` · `component-unit` · `risk-controller-unit` | 2972 · 2623 · 96 |
+> | `risk-levels-component` · `risk-levels-unit` (i selettori di A) | 155 · 366 |
+> | `front-portfolio risk-lab` | **41/41**: i due test di L1° coi rossi nuovi sono verdi, quello di L3° anche |
+> | `risk` (con l'E4 di A, le larghezze vere a 1024 px) · `risk-benchmark-shared` | 30 · 4 |
+> | `services risk-asset-set` · `check-orphans` | 51 · ok |
+> | `i18n audit` · `mkdocs check-links` | 3540 chiavi, 382 inutilizzate, nessuna mancante · 88/8/3 + D28 |
+> | righe di provider: `risk-lab` · `risk` · `bench` | 0 · 0 · 0 |
+>
+> - `git diff --check` pulito; `sw.js` invariato; 6154 libera alla fine.
+
+### Checkpoint 13-B · 2026-10-06, 16:1x (verso Risk)
+
+> - Base `ef64d71e2` (il 13-A), 7 percorsi modificati, tre gruppi in quest'ordine, perché L1° importa la funzione
+>   spostata:
+>   - **G1** lo spostamento di `measureHeaderTitle` nei due file di A (approvato da A);
+>   - **G2** L1°: il componente, `assetSetTable.ts`, i due test;
+>   - **G3** questo journal.
+> - **I miei blocchi in `RiskReturnLevel.svelte`** (per la simulazione del coordinatore contro il checkpoint 8 di A,
+>   che tocca il commento del trattino `undefined`): `:53` (l'import), `:117-129` vecchie (la copia locale tolta),
+>   `:207` vecchia, ora `:194` (la chiamata). In `riskReturnLevel.ts` solo l'aggiunta dopo `headerWidth` (`:111-123`).
+> - Nessuna chiave i18n toccata. CHANGELOG: niente da me.
+> - **Dopo il commit**: il checkpoint 8 di A fonde la punta del mio 13-B, quindi il mio fast-forward non chiede
+>   parcheggi.
+> - Restano per dopo, alla prossima fusione di A nel mio ramo:
+>   - l'adozione 1b nel laboratorio (la riga del benchmark in cima, D371 in cima, i test che si capovolgono);
+>   - `riskFreeRate={0}` esplicito;
+>   - la guida per la retta dal benchmark e il rombo.
 > - Stato dopo l'invio: **FROZEN** fino al commit.
