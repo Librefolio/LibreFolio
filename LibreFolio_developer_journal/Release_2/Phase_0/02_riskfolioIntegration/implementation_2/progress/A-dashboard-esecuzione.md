@@ -2817,3 +2817,80 @@ commit del checkpoint 1.
 >   - (e) le etichette con il nome del mese.
 >
 > **Prossimo**: aspetto le decisioni del developer, poi il codice. Il passo 24 (D378) aspetta la fase 2 di Risk.
+
+### La famiglia in A: il treno, F14 e la fase 2 di Risk · ✅ 06/10
+
+> **Coordinator (20:03–20:07)**:
+> - la famiglia entra ora con quello che è committato; la review sui dati veri si fa sulla prossima build;
+> - ORDINI lanciati dal developer:
+>   1. commit del journal `a79e3a820` («docs(journal): A, Income bucket analysis»);
+>   2. merge del treno `dev_release2` `a7d0b37ec` → `fdbc8e7cc` (albero `91f120b48`, un solo conflitto risolto dal
+>      coordinator nel runner `_backend_api.py`);
+>   3. i 4 commit della fase 2 di Risk, fusi → **`22ef9d091`** (albero `93004cd36`). Dentro ci sono il treno, F14 e la
+>      fase 2;
+> - **Income approvato dal developer** («riguardo i suggerimenti di A sono daccordo») con le raccomandazioni (a)–(e):
+>   - il calendario anche per le Candele;
+>   - blocchi fissi per 3D e 2W;
+>   - barra ≥ 4,5 px con il 30 % di spazio;
+>   - la riga «In corso»;
+>   - niente parti opzionali.
+>
+>   Parte dopo l'ingresso della famiglia in `dev_release2`.
+
+### Passo 27 — `assetScope` allineato; la validazione della famiglia · ✅ 06/10
+
+> **`assetScope`** (assegnato dal coordinator, in un commit a sé):
+> - la pagina Asset legge i pannelli dai flag `held_by_me`/`held_by_others` (decisione del 24/09), ma la copia privata
+>   in `assetBrowse.ts` (l'ordine prev/next della pagina dell'asset) leggeva ancora `tx_count_own`/`tx_count`. Sul
+>   codice fuso la guardia di K «stays identical to the list page original» era rossa, ed era l'unico rosso;
+> - **la copia è allineata** alla dichiarazione della pagina, con il commento che dice cosa legge: la guardia passa
+>   verde. A quel punto 12 casi diventano rossi, perché le loro fixture contavano ancora le transazioni;
+> - **test-author** (`ta-assetscope-fixtures`, `ta-assetscope-stale`):
+>   - le fixture dei due test usano i flag, e ogni asset resta nel suo pannello;
+>   - il caso «groups by…» diventa «held by me wins over held by others, a missing flag reads as false»;
+>   - una riga in più fissa la decisione del 24/09: una posizione venduta anni fa, con i conteggi vecchi ancora
+>     presenti, non è più «tua»;
+>   - **rossi**: con la copia vecchia rimessa, 13 rossi (i 12 casi più la guardia). Per la riga nuova serve una copia
+>     ibrida (flag o conteggi): senza la riga il caso passa, con la riga diventa rosso;
+>   - `assetBrowse.ts` ripristinato identico dopo ogni mutante (sha256 `0526abbe…`); 45/45 verdi.
+>
+> **Validazione della famiglia** (`22ef9d091` + `assetScope`, corsia 6153, carico 11–23):
+> - `front build --debug` OK; `front check` 0/0;
+> - vitest:
+>
+>   | selettore | test |
+>   |---|---|
+>   | `risk-levels-unit` | 376 |
+>   | `risk-levels-component` | 237 |
+>   | `risk-controller-unit` | 96 |
+>   | `risk-unit` | 31 |
+>   | `risk-request-unit` | 26 |
+>   | `risk-benchmark-unit` | 13 |
+>   | `risk-frame-component` | 13 |
+>   | `asset-unit` | 530 |
+>   | `core-unit` | 3336 |
+>   | `component-unit` | 2715 |
+>
+> - `check-orphans` OK; i18n 4640 chiavi, nessuna traduzione mancante; `mkdocs build` strict OK; `check-links` solo
+>   `#rolling-return`, ereditato;
+> - E2E:
+>
+>   | spec | passed | tempo |
+>   |---|---|---|
+>   | `risk` | 33 | 93 s |
+>   | `risk-lab` | 42 | 145 s |
+>   | `risk-asset-detail` | 4 | 46 s |
+>   | `risk-benchmark-shared` | 4 | 36 s |
+>   | `asset-browse` | 8 | 67 s |
+>   | `asset-list` | 28 | 83 s |
+>
+> - **Provider**: 0 chiamate in `risk`, `risk-lab`, `risk-benchmark-shared` e `asset-browse`. **20 righe in
+>   `risk-asset-detail` (di Risk) e 20 in `asset-list` (di K)**: feed live JustETF, prezzo corrente Yahoo, cache di
+>   `scheduled_investment`. Quelle specifiche non bloccano il polling dei prezzi. Non sono mie: le segnalo al
+>   coordinator.
+>
+> **CHANGELOG della famiglia** (il coordinator lo scrive): le mie voci, deduplicate rispetto a quelle di Risk e di F,
+> sono nei file di sessione (`changelog-family-A-draft.md`). Le voci di F (con la correzione della voce Asset Global
+> sulla retta) e di Risk sono arrivate verificate dai rispettivi autori.
+>
+> **Checkpoint 11 consegnato**: due commit, `assetScope` e journal. **Stato: FROZEN.**
