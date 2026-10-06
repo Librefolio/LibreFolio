@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.risk import (
     RiskErrorCode,
+    RiskFreeReference,
     RiskMode,
     RiskOutputKind,
     RiskReturnItem,
     RiskReturnOutput,
     RiskScopeKind,
+    RiskWarning,
 )
 from backend.app.services.data_quality_thresholds import RISK_MIN_OBSERVATIONS
 from backend.app.services.provider_registry import RiskAnalyticRegistry, register_plugin
@@ -26,12 +28,33 @@ from backend.app.services.risk.base import (
 )
 from backend.app.services.risk.metrics import (
     annualized_expected_return,
+    annualized_sharpe,
+    annualized_sortino,
     annualized_volatility,
 )
 
 
 class AssetRiskReturnParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+    risk_free_annual_rate: float = Field(
+        0.0,
+        gt=-1,
+        json_schema_extra={
+            "x-i18n-key": "chartSettings.params.riskFreeAnnualRate",
+            "x-control-order": 1,
+            "x-step": 0.001,
+        },
+    )
+    target_annual_return: float = Field(
+        0.0,
+        gt=-1,
+        json_schema_extra={
+            "x-i18n-key": "risk.params.targetAnnualReturn",
+            "x-control-order": 2,
+            "x-step": 0.001,
+        },
+    )
 
 
 @register_plugin(RiskAnalyticRegistry)
@@ -63,7 +86,9 @@ class AssetRiskReturnAnalytic(RiskAnalytic):
     # 1.1.0 — the reported numbers are unchanged; the payload additionally carries
     # `excluded_weight`, so a client can tell a zero excluded weight apart from a server
     # that predates the field.
-    algorithm_version = "1.1.0"
+    # 1.2.0 — every point also carries its Sharpe and Sortino, charged the rate and the target
+    # the request gives (both 0 by default); the other numbers are unchanged.
+    algorithm_version = "1.2.0"
     name_i18n_key = "risk.analytics.assetRiskReturn.name"
     description_i18n_key = "risk.analytics.assetRiskReturn.description"
     output_kind = RiskOutputKind.RISK_RETURN
@@ -73,7 +98,6 @@ class AssetRiskReturnAnalytic(RiskAnalytic):
     min_observations = RISK_MIN_OBSERVATIONS
 
     def compute(self, params, context):
-        del params
         asset_ids = context.scope_asset_ids
         if any(asset_id not in context.weights for asset_id in asset_ids):
             raise RiskUnavailableError(
@@ -84,6 +108,8 @@ class AssetRiskReturnAnalytic(RiskAnalytic):
         annualization = require_annualization_factor(context)
 
         items: list[RiskReturnItem] = []
+        undefined_sharpe: list[int] = []
+        undefined_sortino: list[int] = []
         for asset_id in asset_ids:
             _asset_dates, returns = prepared_asset_returns(context, asset_id)
             if len(returns) < 2:
@@ -91,12 +117,44 @@ class AssetRiskReturnAnalytic(RiskAnalytic):
                 # outcome: a zero would place the asset on the vertical axis as if it
                 # were riskless, which is a measurement nobody made.
                 continue
+            # On the returns and the factor the point is drawn from, so the ratio and the point are
+            # one measurement: a Sharpe from another request would sit on another calendar.
+            sharpe = annualized_sharpe(returns, annualization, annual_risk_free_rate=params.risk_free_annual_rate)
+            sortino = annualized_sortino(returns, annualization, annual_target_return=params.target_annual_return)
+            if sharpe is None:
+                undefined_sharpe.append(asset_id)
+            if sortino is None:
+                undefined_sortino.append(asset_id)
             items.append(
                 RiskReturnItem(
                     asset_id=asset_id,
                     weight=context.weights[asset_id],
                     volatility=annualized_volatility(returns, annualization),
                     expected_annual_return=annualized_expected_return(returns, annualization),
+                    sharpe=sharpe,
+                    sortino=sortino,
+                )
+            )
+
+        # One warning per condition naming the holdings, as `asset_set_kpi` does: an undefined ratio
+        # is None, never 0, and says why.
+        warnings: list[RiskWarning] = []
+        if undefined_sharpe:
+            warnings.append(
+                RiskWarning(
+                    code="sharpe_undefined",
+                    message_i18n_key="risk.warnings.sharpe_undefined_assets",
+                    message="Sharpe is undefined for one or more assets because sample volatility is zero.",
+                    details={"asset_ids": undefined_sharpe},
+                )
+            )
+        if undefined_sortino:
+            warnings.append(
+                RiskWarning(
+                    code="sortino_undefined",
+                    message_i18n_key="risk.warnings.sortino_undefined_assets",
+                    message="Sortino is undefined for one or more assets because downside deviation is zero.",
+                    details={"asset_ids": undefined_sortino},
                 )
             )
 
@@ -113,6 +171,12 @@ class AssetRiskReturnAnalytic(RiskAnalytic):
                 items=items,
             ),
             method="asset_risk_return_current_composition",
+            warnings=tuple(warnings),
+            risk_free=RiskFreeReference(
+                annual_rate=params.risk_free_annual_rate,
+                source="analytic_param",
+                currency=context.target_currency,
+            ),
             n_observations=context.prepared_series.n_observations if context.prepared_series else 0,
             calendar_days=context.prepared_series.calendar_days if context.prepared_series else 0,
             annualization_factor=annualization,
