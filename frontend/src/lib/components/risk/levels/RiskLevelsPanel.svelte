@@ -170,7 +170,7 @@
     // data", blaming the reader's portfolio for a limit of the analytic.
     let l1Errors = $derived(resultErrorCodes(l1Results));
     let l2Errors = $derived(resultErrorCodes([contributionResult, correlationResult]));
-    // An on-demand answer discarded twice running is disclosed where its figures would be: the
+    // An on-demand answer discarded on every attempt is disclosed where its figures would be: the
     // benchmark comparison under L3, the three what-if steps under L4.
     let l3Errors = $derived([...resultErrorCodes(l3Results), ...discardedErrorCodes(controller.discarded, LEVEL_ON_DEMAND_ANALYSES.l3)]);
 
@@ -201,8 +201,31 @@
      * warnings, and the error of a replay with nothing left, are read in the
      * replay block beside the number, so the section keeps only its status line.
      */
-    let l4Results = $derived([controller.stressResult, replaySectionView(controller.replayResult), controller.simulationResult]);
-    let l4Health = $derived(degradedResults(l4Results));
+    let replayView = $derived(replaySectionView(controller.replayResult));
+    let l4Results = $derived([controller.stressResult, replayView, controller.simulationResult]);
+
+    /**
+     * The status line names each step by the title its block wears below, in the
+     * blocks' order.
+     *
+     * Not by instance, the way L1 tells its two VaR apart. The shock and the replay
+     * are both the `stress` analytic, asked one at a time, so both come back as
+     * `single-stress`: a label keyed on the instance fits both at once, and without
+     * one both read "Stress test" — the replay announced as a shock nobody ran. The
+     * section's list is keyed on the same id, and two degraded steps would hand it
+     * the same key twice. So the step names the entry and gives it its key; the
+     * payload only says how it went.
+     */
+    const L4_STEP_LABELS = {replay: 'risk.levels.l4.replay', shock: 'risk.levels.l4.shock', simulation: 'risk.levels.l4.simulation'} as const;
+    let l4Health = $derived(
+        (
+            [
+                ['replay', replayView],
+                ['shock', controller.stressResult],
+                ['simulation', controller.simulationResult],
+            ] as const
+        ).flatMap(([step, result]) => degradedResults([result], result ? {[result.instance_id]: L4_STEP_LABELS[step]} : {}).map((entry) => ({...entry, instanceId: `l4-${step}`}))),
+    );
     let l4Reasons = $derived(resultReasons(l4Results, $t));
     let l4Errors = $derived([...resultErrorCodes(l4Results), ...discardedErrorCodes(controller.discarded, LEVEL_ON_DEMAND_ANALYSES.l4)]);
     let l4Metadata = $derived(levelMetadata(l4Results));

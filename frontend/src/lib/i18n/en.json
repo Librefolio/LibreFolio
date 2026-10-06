@@ -3468,14 +3468,37 @@
           "title": "Risk against return, asset by asset",
           "portfolio": "Portfolio",
           "axisVolatility": "Annualised volatility",
-          "axisReturn": "Expected annualised return",
+          "axisReturn": "Average annual return",
           "line": "Risk-return line",
           "note": "Above the line means better paid for the risk taken. The dots show the mean-variance expected return, the quantity in which the line's slope is the Sharpe ratio: on a very volatile asset the return actually lived through is lower, because volatility erodes compounding.",
-          "cash": "Cash ({share} of net worth) is not a dot: under the model it returns exactly zero, and drawing it would turn that into a measurement.",
-          "unpriced": "Holdings without a price series ({share} of net worth) are not dots either: they could not be measured, so the model carries them at exactly zero return."
+          "notes": {
+            "above": "Above the line: better paid for the risk taken.",
+            "line": "The line starts at the risk-free rate and, with no benchmark chosen, runs through the portfolio: its slope is the portfolio's Sharpe ratio.",
+            "expected": "The dots use the average annual return:",
+            "size": "A dot's size is its weight in the portfolio: the big dots are the ones that move the result the most.",
+            "outside": "Not plotted:",
+            "outsideCash": "cash {share}",
+            "outsideUnpriced": "holdings without prices {share}",
+            "expectedWarning": "on a very volatile asset, the return actually lived through is lower.",
+            "lineBenchmark": "The line starts at the risk-free rate and runs through the benchmark: its slope is the benchmark's Sharpe ratio.",
+            "priceOnly": "The return comes from prices alone: coupons and dividends are not included yet.",
+            "lineDocs": "Where the line comes from, and which benchmark to choose"
+          },
+          "tooltip": {
+            "weight": "Weight in the portfolio: {share}",
+            "benchmark": "Benchmark",
+            "heldBenchmark": "Benchmark · in the portfolio, weight {share}"
+          }
         },
         "rows": {
           "kpi": "Sortino, Sharpe and volatility"
+        },
+        "volatilityHelp": "How widely the return swings over a year, up and down alike: it measures the size of the moves, not their direction.",
+        "measures": {
+          "sortino": "return per unit of downside risk",
+          "sharpe": "return per unit of total volatility",
+          "volatility": "annualised σ",
+          "beta": "how much it moves with the benchmark"
         }
       },
       "l4": {
