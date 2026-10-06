@@ -225,6 +225,22 @@ the background.
   plugin (`pickBestPlugin` returns the choice in force first, then asks `setPluginFor`). Which
   plugin reads the set, and which files it holds, is the user's choice: see
   [How a set is read](#set-read-as).
+- **The single files** are ticked one by one in the broker's `DataTable`: `handleSelectionChange`
+  drops from `selectedFiles` the single files the table no longer ticks — a set's members are not
+  in the table, and keep their selection — and adds a newly ticked file with `pickBestPlugin`. The
+  **Plugin** column shows `—` for a file that is not selected. A selected file gets an
+  `ImportPluginSelect` that holds its `pluginCode` (*Select plugin…*, `importWizard.selectPlugin`,
+  while it is `''`) and offers its `compatible_plugins`, report-set plugins included (the whole
+  catalogue when the list is empty); a choice goes through `updateFilePlugin`. **Parse** needs a
+  plugin on every selected file (`step2CanParse`): until then it is disabled, with the
+  `importWizard.pluginRequired` hint — or the `import-wizard-set-blocks` one, which comes first
+  while a selected set blocks. The table reads the selection only when it mounts
+  (`initialSelectedIds`, read in `untrack`), so it sits in a `{#key}` on its files' ids and
+  remounts whenever a file joins or leaves it: a file arriving from a set keeps its tick, and a
+  click on another row cannot drop it. Without the remount, such a file would be selected with its
+  box clear, and the next click on another box would emit a selection without it. `DataTable`
+  emits `onSelectionChange` only on user actions, never when it mounts, so the remount leaves the
+  wizard's selection as it is.
 - The card (`report-set-card`, with `data-set-key`, `data-batch-id`, `data-plugin-code`,
   `data-set-status` — `loading`, `complete`, `incomplete` or `error` — `data-selected` and
   `data-analysed`, true when `combinedFileForSet` finds a parsed combined file of exactly its
@@ -258,10 +274,17 @@ the background.
   `data-end` = the history's last day, `data-count`). Each bar, gap and history sits in a
   `Tooltip` — after 200 ms of hover, or at once on a click — with its period and, for a file, its
   role, name and rows (when known); for a gap, that no export of the role covers those days; for
-  the history, how many transactions LibreFolio holds. Next to each row, its overall span (first
-  start → furthest end). The legend `report-set-timeline-legend` has a
-  `report-set-timeline-legend-item` per kind: `data-kind="file"` always, `history` and `gap` only
-  when the timeline has some.
+  the history, how many transactions LibreFolio holds. The legend `report-set-timeline-legend` has
+  a `report-set-timeline-legend-item` per kind: `data-kind="file"` always, `history` and `gap`
+  only when the timeline has some.
+- **The timeline's grid**: three columns — role label | bars | period — shared by every row, so
+  the bars of all rows start and end at the same point. The label column is `fit-content(40%)`:
+  as wide as the longest role name, it wraps only past 40% of the timeline's width, so a long name
+  such as *Securities transactions* is shown whole on desktop. Each label is a
+  `report-set-timeline-label` with `data-role`: the role code, `history` for the LibreFolio row.
+  The bars take `minmax(0,1fr)`, and the period column (`max-content`) holds each row's overall
+  span — first start → furthest end — or the history's. The date header (the span's first and
+  last day) sits in the bar column, and the legend starts there too, spanning the period column.
 - While a selected set blocks (`setBlocksAnalysis`), **Parse** is disabled with the
   `import-wizard-set-blocks` hint, and the card offers **Exclude from the import**
   (`report-set-exclude`), which deselects the set so that the other files can go on.
@@ -277,10 +300,15 @@ wizard owns the choices.
 `brokerDefaultPlugin` (the broker's `default_import_plugin`, or `null`), `onReadAs(code | null)`,
 `onReadAlone(fileId, code)` and `onRemoveFromSet(fileId)`.
 
-- **Read as** is a native `<select data-testid="report-set-read-as">` in the header, so a folded
-  card shows it too. Its value is the set's plugin; its options are `setPluginChoices(set, plugins)`
-  — the one detection picks for the set's first member labelled *(detected)* — then `value=""`,
-  *Read the files one by one*. A change calls `onReadAs(code)`, or `onReadAs(null)` for `""`.
+- **Read as** is LibreFolio's own select — a `compact` `SimpleSelect`, not the browser's native
+  `<select>` — in the header, so a folded card shows it too: `report-set-read-as` wraps it, its
+  trigger is `report-set-read-as-button` and its list `report-set-read-as-dropdown`. Its value is
+  the set's plugin; its options are `setPluginChoices(set, plugins)`, each
+  `report-set-read-as-option-<plugin_code>` — the one detection picks for the set's first member
+  labelled *(detected)* — then *Read the files one by one*,
+  `report-set-read-as-option-one-by-one`, whose value is the sentinel `__one_by_one__`
+  (`ONE_BY_ONE`), a value no plugin code can take: to the select, `''` — its default value — means
+  «nothing chosen». A choice calls `onReadAs(code)`, or `onReadAs(null)` for the sentinel.
 - **The row menu** of the role tables adds, after Preview, one action `read-alone-<code>` per
   plugin that `readAlonePlugins` gives for at least one member (testid
   `context-menu-action-read-alone-<code>`, label *Read alone with ‹plugin›*), visible only on the
@@ -299,17 +327,27 @@ The labels are
 **The wizard.** This session's choices live in `filePluginOverrides` (file id → choice), which
 `resetState()` clears when the wizard closes:
 
-- `readSetAs(set, code)`: with a report-set plugin, every member gets that choice and the selected
-  members take that plugin, so the set moves to that plugin's key. With `null`, every member gets
-  its first `readAlonePlugins` entry — the broker's default when it reads the file — or `''` when
-  it has none: the members with `''` leave the selection, the others keep it, with their new
-  plugin.
-- `readFileAlone(fileId, code)`: the file gets `code`, and keeps its selection with that plugin.
-- `removeFileFromSet(fileId)`: the file gets `''`, and leaves the selection.
+- `readSetAs(set, code)` changes how the members are read, never whether they are selected: it
+  records a choice for every member, and `selectedFiles` keeps the same files, each selected member
+  with its new plugin. With a report-set plugin, every member's choice is that plugin, so the set
+  moves to that plugin's key. With `null`, each member's choice is its first `readAlonePlugins`
+  entry — the broker's default when it reads the file — or `''` when it has none: the members
+  leave the set as single files, ticked or not as they were. A selected member with `''` has no
+  plugin — its `ImportPluginSelect` shows *Select plugin…* and still offers its
+  `compatible_plugins`, the set's plugin included — and **Parse** waits until it has one
+  (`step2CanParse`).
+- `readFileAlone(fileId, code)`: the file gets `code`, and only its plugin changes — selected, it
+  stays selected with `code`; unselected, it stays unselected, and `pickBestPlugin` gives it `code`
+  when it is ticked.
+- `removeFileFromSet(fileId)`: the file gets `''`, and leaves the selection. It is the only one of
+  these commands that changes the selection: a plugin choice never ticks or unticks a file.
 - **Back into the set**: a file out of its set is a single file, in the broker's table (headed
-  **Other files of this broker** while the broker has a set). Choosing the set's plugin in its
-  plugin column (the `ImportPluginSelect` shown once the file is selected) goes through
-  `updateFilePlugin`, and the file is a member again.
+  **Other files of this broker** while the broker has a set). Unselected, its plugin column shows
+  `—`; ticked, it gets its `ImportPluginSelect`. Choosing the set's plugin there goes through
+  `updateFilePlugin`, and the file is a member again. After `readSetAs(set, null)` the set is
+  re-formed this way, file by file: the first member given the set's plugin brings back the set —
+  same broker, plugin and batch, so the same key — and its card, holding that file only and
+  incomplete while a role it needs is out; each next member joins it.
 
 `choicesFor(brokerId)` lays this session's choices over the memory of the last analysis
 (`rememberedByBroker`: `rememberedChoices` per broker, [below](#set-memory)). The grouping
