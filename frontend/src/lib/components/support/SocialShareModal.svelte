@@ -4,7 +4,7 @@
     import {Check, Copy, Loader2, X} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import {notify} from '$lib/stores/app/notify.svelte';
-    import {SOCIAL_SHARE_CONFIG, buildSocialShareCopy, buildSocialShareUrl, type SocialPlatform} from './supportLinks';
+    import {SOCIAL_SHARE_CONFIG, buildSocialShareCopy, buildSocialShareUrl, withShareHashtags, type SocialPlatform} from './supportLinks';
     import {reserveShareTab, type ShareTab} from './shareNavigation';
     import SocialIcon from './SocialIcon.svelte';
     import {writeTextToClipboard} from '$lib/utils/clipboard';
@@ -29,7 +29,7 @@
     const titleId = $props.id();
 
     let shareConfig = $derived(SOCIAL_SHARE_CONFIG[platform]);
-    let shareMessage = $derived($_(shareConfig.messageKey));
+    let shareMessage = $derived(withShareHashtags($_(shareConfig.messageKey)));
     let shareHint = $derived($_(shareConfig.hintKey));
     let shareTitle = $derived(platform === 'reddit' ? $_('support.share.reddit.title') : undefined);
 

@@ -3652,26 +3652,26 @@
     "share": {
       "titleLabel": "Titolo suggerito",
       "x": {
-        "message": "Hey! Sto usando LibreFolio per seguire i miei investimenti e mi trovo benissimo. Provala anche tu!\n#LibreFolio #OpenSource #SelfHosted #Investimenti #Privacy",
+        "message": "Hey! Sto usando LibreFolio per seguire i miei investimenti e mi trovo benissimo. Provala anche tu!",
         "hint": "Il link al progetto viene aggiunto alla copia e al post. X si apre in una nuova scheda."
       },
       "reddit": {
-        "title": "Sto provando LibreFolio per seguire gli investimenti sul mio server",
-        "message": "Da un po' cercavo un modo più semplice per seguire i miei investimenti senza affidare tutti i dati del portafoglio a un servizio esterno. In questi giorni sto provando LibreFolio e mi sta piacendo avere tutto in un unico posto.\n\nÈ un programma open source che puoi installare sul tuo server per organizzare il portafoglio e analizzarne l'andamento, mantenendo i dati sotto il tuo controllo. Se cerchi qualcosa di simile, dagli un'occhiata!",
+        "title": "Sto provando LibreFolio, un gestore di portafoglio open source",
+        "message": "Da un po' cercavo un modo più semplice per seguire i miei investimenti senza affidare tutti i dati del portafoglio a un servizio esterno. In questi giorni sto provando LibreFolio e mi sta piacendo avere tutto in un unico posto.\n\nÈ un programma open source per organizzare il portafoglio e analizzarne l'andamento, mantenendo i dati sotto il tuo controllo. Se cerchi qualcosa di simile, dagli un'occhiata!",
         "hint": "Apriamo un post di testo con titolo e corpo separati. Se Reddit non compila il corpo, incolla il testo già copiato."
       },
       "facebook": {
-        "message": "Ultimamente sto usando LibreFolio per tenere d'occhio i miei investimenti e mi piace avere tutto in un unico posto senza rinunciare al controllo dei miei dati.\n\nSe cercate un gestore di portafoglio open source da installare sul vostro server, dateci un'occhiata!",
+        "message": "Ultimamente sto usando LibreFolio per tenere d'occhio i miei investimenti e mi piace avere tutto in un unico posto senza rinunciare al controllo dei miei dati.\n\nSe cercate un gestore di portafoglio open source che lasci i dati sotto il vostro controllo, dateci un'occhiata!",
         "hint": "Facebook prepara solo l'anteprima del link. Dopo l'apertura, incolla il testo copiato nel campo del messaggio del post.",
         "afterCopy": "Testo e link copiati. Incolla il testo nel messaggio del post su Facebook."
       },
       "instagram": {
-        "message": "Un po' più di ordine nei miei investimenti, senza lasciare i miei dati altrove. Sto provando LibreFolio: un gestore di portafoglio open source da ospitare sul proprio server.\n\n#LibreFolio #OpenSource #SelfHosted #Investimenti #Privacy",
+        "message": "Un po' più di ordine nei miei investimenti, senza lasciare i miei dati altrove. Sto provando LibreFolio, un gestore di portafoglio open source.",
         "hint": "Instagram non prepara un post da questo link. Dopo l'apertura scegli Crea (+), seleziona una foto o un video, poi incolla la didascalia copiata.",
         "afterCopy": "Didascalia e link copiati. Su Instagram: Crea (+), scegli foto/video e incolla la didascalia."
       },
       "tiktok": {
-        "message": "Il mio nuovo alleato per tenere d'occhio il portafoglio: LibreFolio. Open source, sul mio server, con i miei dati sotto controllo. Se ti piace smanettare, dagli un'occhiata!\n\n#LibreFolio #OpenSource #SelfHosted #FinanzaPersonale",
+        "message": "Il mio nuovo alleato per tenere d'occhio il portafoglio: LibreFolio. Open source, con i miei dati sotto controllo. Se ti piace smanettare, dagli un'occhiata!",
         "hint": "Apriamo la pagina Carica di TikTok; accedi se richiesto. Seleziona il tuo video, poi incolla la didascalia copiata. Non carichiamo video o testi automaticamente.",
         "afterCopy": "Didascalia e link copiati. Nella pagina Carica di TikTok scegli il video e incolla la didascalia."
       }
