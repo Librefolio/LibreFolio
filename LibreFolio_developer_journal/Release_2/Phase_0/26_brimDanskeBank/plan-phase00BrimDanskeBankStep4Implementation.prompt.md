@@ -1944,3 +1944,65 @@ Richiesta del developer tramite il coordinatore: che il plugin di un set non lo 
 > - Lo stesso schema `isVisible({timeout})` è usato in circa 30 punti di altre spec (`tx-wac-fx`, `broker-sharing`, `brokers-detail`, `image-crop`, `tx-wac-formmodal`, `tx-bulk-suggest-ux`).
 
 ### G — ✅ pronta per il checkpoint (2026-10-05)
+
+## 15. Integrazione di G (2026-10-05)
+
+### 15.1 ✅ I commit e il merge di baseline (2026-10-05)
+
+- I commit del developer, fatti con l'ORDER del coordinatore (`/tmp/libreFolio_ORDER_0510_lg.sh`) e verificati da lui; albero `5a4ed0eee`:
+  - `15c91d42a` feat(import): choose how a report set is read
+  - `a33eb243b` test(e2e): declare the onboarding GET in files-uploader
+  - `96b7a4903` docs(import): how a report set is read and when the generic CSV applies
+  - `a2dcf786f` docs(journal): Danske workstream step G
+- Il merge `361c1acbd` (`merge(l): dev_release2 into L before step G integration`): genitori `a2dcf786f` e `d9aad0ec9` (il PAC planner di D e il suo changelog); albero `e88472305`, uguale alla simulazione; worktree pulito.
+- Le correzioni ai messaggi, chieste da L prima del run e applicate dal coordinatore:
+  - C1, il punto «Memory»: la memoria non legge `combined_into` ma `derived_from`, `parsed_plugin_code` e `processed_at`. L'errore era nel mio checkpoint;
+  - C1, il punto «Wizard»;
+  - C2, la data in formato ISO;
+  - C3, il punto «Developer pages».
+- **Decisione del developer sui rossi** (testuale, tramite il coordinatore): «E2-001 da capire subito dopo G, CAC nel backlog (Consigliato)».
+
+### 15.2 ✅ Validazione della revisione unita `361c1acbd` (2026-10-05 → 2026-10-06), corsia 6156, un comando per volta — interrotta il 05/10 perché il developer stacca, ripresa il 06/10
+
+- G e D si sovrappongono solo nei cataloghi i18n ×4, che Git ha unito da solo.
+
+| Verifica | Esito |
+|---|---|
+| i18n a tre vie (`git show`, base `8c6853281`) | in ogni lingua 4505 chiavi = 3543 + 7 (G) + 955 (D); nessuna chiave mancante, in più o con valore diverso; le 7 chiavi di G ci sono tutte |
+| `api sync` / `front build --debug` / `mkdocs build` (strict) | ok / ok / ok, 0 WARNING e 0 ERROR |
+| `services brim-report-sets` / `brim-parse-race` / `brim-parse-pool` / `brim-parse-error` | `255` / `14` / `8` / `4 passed` |
+| `external brim-providers` | `626 passed`, 1 saltato |
+| `front check` | **0/0** |
+| `i18n audit` | completo (4505 chiavi). «Likely Unused» passa da 393 a 522: sono 129 chiavi `tools.*` in più, tutte di D, nessuna di G. `importWizard.reportSet.gapFix.stepTitle` resta il falso positivo già noto (§13.2) |
+| Vitest `tx-unit` / `component-unit` / `core-unit` / `onboarding-component-unit` | `626` / `2223` / `2898` / `409 passed` (crescono coi test di D) |
+| `--clean` autorizzato | ok, 0 file |
+| E2E di import | `report-set` 18, `-guide` 2, `handoff` 2, `file-selection` 2, `upload` 9, `flow` 10, `resolution` 12, `matching` 6, `duplicate-precedence` 6, `wac-bulk` 10, `bulk-diagnostics` 2, `bulk-operations` 10, `paired-edit` 4 |
+| E2E utility e broker | `files` 22, `files-uploader` 6, `select` 17, `image-crop` 42, `onboarding-tour` 10, `settings` 45; `front-broker detail` 33 |
+| Rossi | T1 e CAC-011/012, già accettati (CAC va nel backlog); **E2-001**, allo stesso punto del giro finale di G |
+
+- **Ripresa del 2026-10-06** («Riprendi» del coordinatore). Lo stato era come allo stop: HEAD `361c1acbd`, solo il piano modificato, la data-dir presente, le porte libere, `dev_release2` = `d9aad0ec9`, antenato di HEAD. La macchina è carica per i servizi di sistema; il carico (load average) è annotato prima e dopo ogni comando.
+
+| Verifica (06/10) | Esito | Carico |
+|---|---|---|
+| `api pac-planner-tool` | `7 passed` | da 17,9 a 18,2 |
+| `api brim` (per ultimo) | `73 passed` | da 17,6 a 30,1 |
+| `check-orphans` | pulito: 96 E2E, 286 Vitest, 228 backend | — |
+| `mkdocs check-links` | 81 link validi, i 3 gialli noti e il solo rosso D28 (`#rolling-return` in it/fr/es), già accettato | — |
+| `git diff --check` | pulito; l'unico file modificato è il piano | — |
+
+- La revisione unita è **pronta per l'integrazione**: l'avanzamento in fast-forward di `dev_release2`, da `d9aad0ec9` a `361c1acbd`, più il commit del journal con questo §15.
+- All'integrazione il client API va rigenerato (`api sync`), perché il client generato è ignorato.
+- I rossi restano T1 e CAC-011/012, già accettati (CAC va nel backlog), ed E2-001 (§15.3).
+- Alla fine del giro le porte 6156 e 6166 sono libere (`lsof` senza ascolto) e nessun processo del runner è attivo.
+- La pulizia di macOS può cancellare la data-dir della corsia: al rientro si ripopola con `db populate --force`, solo in `/tmp/librefolio-r2-l`.
+- Il materiale per riprendere è copiato fuori dal repo, nei file della sessione di L (`resume-g-merge/`): i log dei gate, gli script dei giri, lo scanner di privacy e gli snapshot di E2-001 presi da Risk (`/tmp/lf-triage-k3/`).
+
+### 15.3 ⏳ Dopo l'integrazione: la triage di E2-001
+
+- **Il rosso**: `tx-import-asset-inspector.spec.ts:653`, riga 476 (`chooseCurrency`), dentro la seconda `blockedSave` (riga 704), dopo «Annulla» sulla `currency-change-modal`. Il clic sul combobox della valuta non apre la listbox. Nello snapshot la modale «Edit Asset» è aperta, la valuta è «USD» e il combobox è chiuso.
+- **Frequenza**:
+  - da Risk, 4 corse su 5 senza G, con carico 8–23;
+  - nella corsia di L, verde nel primo giro di G, poi rosso nel giro finale di G e nella revisione unita.
+- **Metodo**: la skill test-triage, con la traccia di Playwright.
+  - Se la causa è nel prodotto (AssetModal, la modale della valuta o SearchSelect, tutti fuori dal perimetro di L), la diagnosi va al coordinatore **prima** di correggere.
+  - Se la causa è nel test, lo ripara il test-author, in un commit `test(e2e)` separato.
