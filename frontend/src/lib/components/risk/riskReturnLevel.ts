@@ -108,6 +108,19 @@ export function headerWidth(title: string, measure: (text: string) => number): n
     return Math.ceil(measure(text) + HEADER_LETTER_SPACING_PX * text.length) + HEADER_CHROME_PX;
 }
 
+let titleMeasure: OffscreenCanvasRenderingContext2D | null | undefined;
+
+/**
+ * A title's width in DataTable's header font, in the page's own typeface. Where there is no
+ * canvas (unit tests) a generous count of letters stands in.
+ */
+export function measureHeaderTitle(text: string): number {
+    if (titleMeasure === undefined) titleMeasure = typeof OffscreenCanvas === 'undefined' ? null : new OffscreenCanvas(1, 1).getContext('2d');
+    if (!titleMeasure) return text.length * 8.5;
+    titleMeasure.font = `${HEADER_FONT} ${getComputedStyle(document.body).fontFamily}`;
+    return titleMeasure.measureText(text).width;
+}
+
 /** What the page's payload carries, as the columns and notes that depend on it. */
 export interface RiskReturnCapabilities {
     /** Each row has a weight in a portfolio: a weight column, and the dots are sized by it. */
