@@ -16,7 +16,7 @@ import {formatCurrencyAmountHtml, formatCurrencyAmountPlain} from '$lib/utils/cu
 import {formatDateTime} from '$lib/utils/core/formatDateTime';
 import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
 import {formatPercent} from '$lib/utils/core/formatPercent';
-import {maskable, type AmountSensitivity} from '$lib/utils/privacy/maskable';
+import {maskable, shouldMaskAmount, type AmountSensitivity} from '$lib/utils/privacy/maskable';
 import {canonicalDecimal, decimalEqualsRatio, decimalScale, roundDecimal, roundRatio} from './decimal';
 import {defaultAsOf} from './defaults';
 import type {PacExactMoney, PacExactNumber, PacExactPrice, PacObjectiveUnit} from './types';
@@ -156,6 +156,36 @@ export function formatPlannerPlainDecimal(value: string | null | undefined): str
     if (value === null || value === undefined) return EMPTY;
     const canonical = canonicalDecimal(value);
     return canonical === null ? EMPTY : maskable(formatDecimalForDisplay(canonical, {maxFrac: MAX_DISPLAY_FRACTION}), 'public');
+}
+
+/**
+ * The ICU `count` of a decimal as it is shown, not as `Number()` would round it:
+ * the integer part, plus one half when the shown digits keep a fraction, so the
+ * plural rules still see `i` and `v > 0` (`1.00000000000000000001` is plural).
+ * NaN, the plural `other`, when the value is masked or missing: a singular
+ * would reveal a hidden 1.
+ */
+function pluralCount(value: string | null | undefined, sensitivity: AmountSensitivity): number {
+    if (shouldMaskAmount(sensitivity) || value === null || value === undefined) return NaN;
+    const canonical = canonicalDecimal(value);
+    if (canonical === null) return NaN;
+    const [whole, fraction = ''] = formatDecimalForDisplay(canonical, {maxFrac: MAX_DISPLAY_FRACTION}).replace(/^-/, '').split('.');
+    return Number(whole) + (fraction === '' ? 0 : 0.5);
+}
+
+/** The plural count of `formatPlannerQuantity`: wealth, so masked with it. */
+export function plannerQuantityCount(quantity: string | null | undefined): number {
+    return pluralCount(quantity, 'personal');
+}
+
+/** The plural count of `formatExactQuantity`. */
+export function exactQuantityCount(value: PacExactNumber): number {
+    return pluralCount(exactDisplay(value).text, 'personal');
+}
+
+/** The plural count of `formatPlannerPlainDecimal`: public. */
+export function plannerPlainDecimalCount(value: string | null | undefined): number {
+    return pluralCount(value, 'public');
 }
 
 /** An FX rate: public. */
