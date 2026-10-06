@@ -65,7 +65,12 @@
     "openFxPair": "Open FX pair detail",
     "editorTipDesktop": "Double-click on the chart to jump to that date",
     "editorTipMobile": "Long-press on the chart to jump to that date",
-    "aiExport": "AI Export"
+    "aiExport": "AI Export",
+    "browse": {
+      "previous": "Previous asset",
+      "next": "Next asset",
+      "position": "Asset {current} of {total}"
+    }
   },
   "assets": {
     "create": "New asset",
