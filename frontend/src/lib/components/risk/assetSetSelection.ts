@@ -228,3 +228,20 @@ function dedupe(ids: readonly number[]): number[] {
 export function labBenchmarkId(state: RiskBenchmarkState, value: number | null): number | null {
     return state === 'set' ? value : null;
 }
+
+/**
+ * Whether L3° must wait before it asks (D378, the developer's decision of 06/10/2026: a
+ * benchmark that cannot be measured over the period is not tried).
+ *
+ * It waits while the picker is still confirming a stored choice (`pending`), and — whenever a
+ * benchmark is chosen, `set` or `blocked` — until the lab's eligibility verdicts for the current
+ * list, period and currency have come back (or failed). The picker reads those verdicts as the
+ * lab hands them over and does not wait for them: with the map still empty it says `set`, and
+ * only when the verdict lands does it say `blocked`; on a new period it keeps the old verdict
+ * until the new one lands. Asked in between, L3° would ask by a verdict that no longer decides
+ * — trying a benchmark it must not, or leaving out one it may use — and then ask again. With no
+ * benchmark (`none`, `unknown`) there is nothing to wait for.
+ */
+export function labL3Waits(state: RiskBenchmarkState, eligibilitySettled: boolean): boolean {
+    return state === 'pending' || ((state === 'set' || state === 'blocked') && !eligibilitySettled);
+}
