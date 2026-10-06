@@ -44,8 +44,11 @@ Asset-level events (dividends, interest, splits, price adjustments) shown as mar
 
 ## 🔧 Header & Controls
 
-- **← Back button**: return to the asset list (or previous page)
+- **← Back button**: return to the asset list (or previous page) in one step, even after browsing with the arrows — the browser's Back button skips those moves too
 - **Asset info**: name, type badge, currency, current price
+- **‹ › Previous / Next asset**: step to the previous or next asset without going back to the list, keeping the same date range; the counter between the arrows (e.g. 3/12) shows where you are. There is no wrap-around: the arrow is disabled at either end, and both are hidden when there is only one asset to browse. The order they follow:
+    - **opened from the Assets page**: that list as you left it — its search, type, currency and archived filters, its grid or table view and, in the table, its column sort and filters
+    - **opened any other way** (a link or bookmark, a page reload, another page such as the Dashboard or Transactions), or for an asset that list does not show: every asset in the Assets page's default order — archived ones only when the asset you opened is archived itself
 - **Edit** (✏️): open the edit modal to modify asset properties
 - **Sync** (🔄): fetch latest price data from the provider
 - **Refresh** (↻): reload data from the database

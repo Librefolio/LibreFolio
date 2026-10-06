@@ -37,7 +37,7 @@ Navigate to **Assets** in the sidebar to see all your assets. The list page prov
 - 🔄 **Sync & Refresh**: Sync real-time pricing data for all configured providers or manually refresh the list.
 - 🖱️ **Context Menu**: Right-click any row in the data table layout for quick actions (**Sync**, **Refresh**, **Merge**, **Delete**). Sync is disabled for assets without a pricing provider and for archived assets; Merge folds a duplicate asset into another one — transactions, prices, and events converge on the target and the source asset is deleted.
 
-Click on any asset card to navigate to its **[detail page](detail/index.md)**.
+Click on any asset card to navigate to its **[detail page](detail/index.md)**. There, the **‹ ›** arrows in the header step through the assets in the order this list shows them — search, filters and sort included.
 
 ### 🗑️ Deleting an Asset
 

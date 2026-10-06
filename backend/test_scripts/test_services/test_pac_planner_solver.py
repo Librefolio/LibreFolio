@@ -42,13 +42,20 @@ module imports its own primitives from `test_pac_planner_evaluator.py`.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
+from dataclasses import dataclass, field
+from fractions import Fraction
 
 import pytest
+from pyscipopt import Model as ScipModel
 
+from backend.app.services.pac_allocator import compiler as compiler_module
+from backend.app.services.pac_allocator import planner_report as PR
 from backend.app.services.pac_allocator.compiler import compile_policy_program
 from backend.app.services.pac_allocator.evaluator import build_exact_policy_view, evaluate_exact_candidate
 from backend.app.services.pac_allocator.models import CandidateActionVector, ExactEvaluation, ExactPlannerScenario, ExactPolicyView
+from backend.app.services.pac_allocator.proof import OptimalProvenConclusion, conclude_with_solver
 from backend.app.services.pac_allocator.solver import (
     DEFAULT_SOLVER_TIME_BUDGET_SECONDS,
     ENGINE_NAME,
@@ -57,6 +64,7 @@ from backend.app.services.pac_allocator.solver import (
     solve_policy_program,
 )
 from backend.test_scripts.test_services._pac_exhaustive_oracle import run_exhaustive_oracle
+from backend.test_scripts.test_services._pac_synthetic_requests import V, make, scenario_of
 from backend.test_scripts.test_services.test_pac_planner_evaluator import ZERO, R, _pac_scenario
 from backend.test_scripts.test_services.test_pac_planner_oracle import _coarse_funding_fx_scenario, _credit_tie_fx_scenario, _two_asset_pac_scenario
 
@@ -433,3 +441,330 @@ def test_no_op_scenario_solver_incumbent_is_all_zero_and_matches_oracle() -> Non
     assert oracle.best_evaluation is not None
     assert _quanta(result.candidate) == _quanta(oracle.best_candidate)
     assert _lexicographic_key(view, solver_evaluation) == _lexicographic_key(view, oracle.best_evaluation)
+
+
+# --------------------------------------------------------------------------
+# Robustness: a stage pin never sits below the exact value, SCIP's bounds are
+# checked against the exact replay, a limit leaves the tail running, and
+# stage 1 keeps a reserve to resume on.
+# Solver robustness slice, 2026-10.
+# --------------------------------------------------------------------------
+
+_INTEGRAL_OBJECTIVE_CODES = frozenset({"route_priority", "active_order_rows"})
+_BOUND_TOLERANCE = Fraction(1, 10**6)
+
+
+def _argument(args: tuple, kwargs: dict, position: int, keyword: str, default: object = None) -> object:
+    """One call argument, whether it came by position or by keyword."""
+    if keyword in kwargs:
+        return kwargs[keyword]
+    return args[position] if len(args) > position else default
+
+
+@dataclass
+class _ScipLever:
+    """What one instrumented SCIP run did, and how the lever bends it.
+
+    Nothing is counted before `arm()`, called once `compile_policy_program`
+    has returned: the compiler's own calls are not part of the cascade. `log`
+    holds the mutating calls only, in call order; the getters are bent, never
+    logged. The stage index is the number of `setObjective` calls minus one.
+
+    `pins` maps a code to the right-hand side SCIP stores for `pin:<code>`.
+    That is the pin itself only for `fixed_l2`, whose expression has no
+    constant term: SCIP moves a constant to the right (on `two_asset_pac`,
+    `shortfall`'s `_rhs` is its pin minus 100).
+    """
+
+    target_stage: int | None = None
+    shift: Callable[[float], float] | None = None
+    fake_optimize_calls: frozenset[int] = frozenset()
+    armed: bool = False
+    objectives: int = 0
+    optimize_calls: int = 0
+    log: list[tuple] = field(default_factory=list)
+    pins: dict[str, float] = field(default_factory=dict)
+
+    def arm(self) -> None:
+        self.armed = True
+
+    def record(self, *entry: object) -> None:
+        if self.armed:
+            self.log.append(entry)
+
+    @property
+    def stage_index(self) -> int:
+        return self.objectives - 1
+
+    def bends_bounds(self) -> bool:
+        return self.shift is not None and self.stage_index == self.target_stage
+
+    def fakes_a_limit(self) -> bool:
+        """From the end of a listed `optimize()` call to the start of the next."""
+        return self.optimize_calls in self.fake_optimize_calls
+
+
+class _LeverModel(ScipModel):
+    """A `pyscipopt.Model` that reports to a `_ScipLever` and obeys it.
+
+    The Cython `Model`'s instance methods are read-only, so a subclass is the
+    only way in. Every override hands the full `*args, **kwargs` to `super()`
+    and returns its result: a lever that bends nothing changes nothing SCIP
+    does. `_install_scip_lever` binds `_lever` on a per-test subclass.
+    """
+
+    _lever: _ScipLever
+
+    def setObjective(self, *args: object, **kwargs: object) -> object:
+        if self._lever.armed:
+            self._lever.objectives += 1
+            self._lever.record("setObjective", self._lever.stage_index)
+        return super().setObjective(*args, **kwargs)
+
+    def optimize(self, *args: object, **kwargs: object) -> object:
+        if self._lever.armed:
+            self._lever.optimize_calls += 1
+            self._lever.record("optimize", self._lever.optimize_calls)
+        return super().optimize(*args, **kwargs)
+
+    def freeTransform(self, *args: object, **kwargs: object) -> object:
+        self._lever.record("freeTransform")
+        return super().freeTransform(*args, **kwargs)
+
+    def setParam(self, *args: object, **kwargs: object) -> object:
+        self._lever.record("setParam", _argument(args, kwargs, 0, "name"), _argument(args, kwargs, 1, "value"))
+        return super().setParam(*args, **kwargs)
+
+    def addCons(self, *args: object, **kwargs: object) -> object:
+        name = str(_argument(args, kwargs, 1, "name", ""))
+        if self._lever.armed and name.startswith("pin:"):
+            self._lever.pins[name[4:]] = _argument(args, kwargs, 0, "cons")._rhs
+            self._lever.record("addCons", name)
+        return super().addCons(*args, **kwargs)
+
+    def getPrimalbound(self, *args: object, **kwargs: object) -> object:
+        value = super().getPrimalbound(*args, **kwargs)
+        return self._lever.shift(value) if self._lever.bends_bounds() else value
+
+    def getDualbound(self, *args: object, **kwargs: object) -> object:
+        value = super().getDualbound(*args, **kwargs)
+        return self._lever.shift(value) if self._lever.bends_bounds() else value
+
+    def getStatus(self, *args: object, **kwargs: object) -> object:
+        return "timelimit" if self._lever.fakes_a_limit() else super().getStatus(*args, **kwargs)
+
+    def getNSols(self, *args: object, **kwargs: object) -> object:
+        return 0 if self._lever.fakes_a_limit() else super().getNSols(*args, **kwargs)
+
+
+def _install_scip_lever(monkeypatch: pytest.MonkeyPatch, **settings: object) -> _ScipLever:
+    """Make `compile_policy_program` build lever-instrumented models; return the lever."""
+    lever = _ScipLever(**settings)
+
+    class LeverModel(_LeverModel):
+        _lever = lever
+
+    monkeypatch.setattr(compiler_module, "Model", LeverModel)
+    return lever
+
+
+def _lever_run(monkeypatch: pytest.MonkeyPatch, scenario: ExactPlannerScenario, **settings: object) -> tuple[ExactPolicyView, SolverRunResult, _ScipLever]:
+    """Compile a fresh instrumented model, arm the lever, run the cascade on a 30 s budget."""
+    lever = _install_scip_lever(monkeypatch, **settings)
+    view = build_exact_policy_view(scenario, purpose="primary")
+    program = compile_policy_program(scenario, view)
+    assert isinstance(program.model, _LeverModel), "the lever must instrument the model the solver runs"
+    lever.arm()
+    return view, solve_policy_program(program, time_budget_seconds=30.0), lever
+
+
+def _objective_codes(view: ExactPolicyView) -> tuple[str, ...]:
+    return tuple(objective.code for objective in sorted(view.objectives, key=lambda objective: objective.ordinal))
+
+
+def _oracle_best(scenario: ExactPlannerScenario, view: ExactPolicyView) -> tuple[CandidateActionVector, dict[str, object]]:
+    """The oracle's optimum, and its exact objective values by code."""
+    oracle = run_exhaustive_oracle(scenario, view)
+    assert oracle.best_candidate is not None
+    assert oracle.best_evaluation is not None
+    values, _tie_quanta = _lexicographic_key(view, oracle.best_evaluation)
+    return oracle.best_candidate, dict(zip(_objective_codes(view), values, strict=True))
+
+
+def _time_limits(lever: _ScipLever) -> list[tuple[int, float]]:
+    """`(log index, value)` of every `limits/time` the run handed SCIP, in order."""
+    return [(index, entry[2]) for index, entry in enumerate(lever.log) if entry[:2] == ("setParam", "limits/time")]
+
+
+def _bound_contradiction(stage: SolverStageReport, exact: Fraction, target_count: int) -> str | None:
+    """SCIP's bounds for one finished named stage against the exact value of its objective.
+
+    Integral stages: `ceil(dual - 1e-6) <= v <= round(primal)`. Continuous
+    stages: `dual - tol <= v <= primal + tol`, `tol = 1e-6 * max(1, |bound|)`,
+    widened by `n * 1e-6` for `fixed_l2` (`n` target weights). `None` when
+    they agree.
+    """
+    assert stage.primal is not None and stage.dual is not None, stage
+    if stage.objective_code in _INTEGRAL_OBJECTIVE_CODES:
+        low, high = Fraction(math.ceil(Fraction(stage.dual) - _BOUND_TOLERANCE)), Fraction(round(stage.primal))
+    else:
+        primal, dual = Fraction(stage.primal), Fraction(stage.dual)
+        widening = target_count * _BOUND_TOLERANCE if stage.objective_code == "fixed_l2" else Fraction(0)
+        low = dual - _BOUND_TOLERANCE * max(1, abs(dual)) - widening
+        high = primal + _BOUND_TOLERANCE * max(1, abs(primal)) + widening
+    if low <= exact <= high:
+        return None
+    return f"{stage.objective_code}: exact {exact} outside [{float(low)!r}, {float(high)!r}] (primal {stage.primal!r}, dual {stage.dual!r})"
+
+
+def test_stage_pin_never_sits_below_the_exact_value_of_its_candidate(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A finished stage is pinned at `max(primal, exact)`, `exact` being its
+    own candidate's replayed value: SCIP's float may not cut off the optimum.
+
+    The lever makes SCIP report `fixed_l2` a thousandth low (499.5 for a true
+    500). A pin at that primal leaves the next face empty; a pin at the exact
+    value lets the cascade run on to the oracle's plan. The proof is not
+    asserted: the bound check is right to flag the shifted primal.
+    """
+    scenario = _two_asset_pac_scenario()
+    view, result, lever = _lever_run(monkeypatch, scenario, target_stage=0, shift=lambda value: value * 0.999)
+    best_candidate, best = _oracle_best(scenario, view)
+    assert (result.stages[0].stage, best["fixed_l2"]) == ("fixed_l2", R(500)), "PREMISE: stage 1 is fixed_l2, exact optimum 500"
+
+    assert "fixed_l2" in lever.pins, lever.log
+    assert Fraction(lever.pins["fixed_l2"]) >= 500, f"fixed_l2 pinned at {lever.pins['fixed_l2']!r}, below its exact value 500"
+    broken = [(stage.stage, stage.status, stage.scip_status) for stage in result.stages if stage.status == "infeasible" or stage.scip_status in {"infeasible", "not_reached"}]
+    assert broken == []
+    assert result.candidate is not None
+    assert _quanta(result.candidate) == _quanta(best_candidate)
+
+
+def test_an_integral_stage_scip_misreports_is_pinned_exactly_and_never_proven(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An integral stage is pinned at `max(round(primal), exact)`, and a
+    primal the exact replay contradicts is an anomaly that withholds the proof.
+
+    The lever makes SCIP report `route_priority` one unit low (primal and
+    dual). The order of the assertions is the order of the fixes: the exact
+    pin lets every stage finish (1) but alone would still prove the run
+    optimal; only the bound check raises the anomaly (2) that refuses the
+    proof (3). Every stage did finish, so the stop is `completed` (4).
+    """
+    scenario = _two_asset_pac_scenario()
+    view, result, _lever = _lever_run(monkeypatch, scenario, target_stage=2, shift=lambda value: value - 1)
+    objective_codes = list(_objective_codes(view))
+    _best_candidate, best = _oracle_best(scenario, view)
+    assert objective_codes[2] == "route_priority", f"PREMISE: stage 3 is route_priority, got {objective_codes}"
+    assert best["route_priority"] >= 1, f"PREMISE: the oracle's best route_priority is at least 1, got {best['route_priority']}"
+
+    assert all(stage.status == "finished" for stage in result.stages), [(stage.stage, stage.status, stage.scip_status) for stage in result.stages]
+    assert result.anomaly is not None
+    conclusion = conclude_with_solver(result, objective_codes=objective_codes, published=result.candidate)
+    assert not isinstance(conclusion, OptimalProvenConclusion), conclusion
+    assert PR.build_stop_reason(result) == "completed"
+
+
+@pytest.mark.parametrize("build_scenario", _ORACLE_AGREEMENT_FIXTURES)
+def test_finished_stage_bounds_bracket_the_exact_replay(build_scenario: Callable[[], ExactPlannerScenario]) -> None:
+    """On every oracle-agreement fixture, SCIP's dual and primal for each
+    finished named stage bracket the exact value of that stage's objective on
+    the published candidate, and the run carries no anomaly.
+
+    The false-positive guard of the bound check: an honest SCIP run must pass
+    it untouched, so the check can never withhold a proof SCIP earned. Tie
+    stages carry no named objective and are not checked.
+    """
+    scenario = build_scenario()
+    view, result = _run(scenario)
+    assert result.outcome == "incumbent"
+    assert result.candidate is not None
+    evaluation = evaluate_exact_candidate(scenario, view, result.candidate)
+    assert (evaluation.candidate_valid, evaluation.feasible) == (True, True)
+
+    ref_id_by_code = {objective.code: objective.ref_id for objective in view.objectives}
+    value_by_ref_id = {objective.ref_id: objective.value for objective in evaluation.objectives}
+    named = [stage for stage in result.stages if stage.status == "finished" and not stage.stage.startswith("tie:")]
+    assert named, [(stage.stage, stage.status) for stage in result.stages]
+    exact_values = [value_by_ref_id[ref_id_by_code[stage.objective_code]] for stage in named]
+    contradictions = [_bound_contradiction(stage, Fraction(exact.numerator, exact.denominator), len(scenario.target_weights)) for stage, exact in zip(named, exact_values, strict=True)]
+    assert [item for item in contradictions if item is not None] == []
+    assert result.anomaly is None
+
+
+def test_a_limited_first_stage_leaves_the_tail_running_on_its_face() -> None:
+    """When stage 1 stops on a limit holding a candidate, its face is pinned
+    and every later stage still runs: `unfinished`, on the incumbent face,
+    with its own SCIP observations -- never `not_reached`.
+
+    `node_limit=1` stops stage 1 of the synthetic 5x2 grid at `nodelimit`
+    with a candidate. The tail may only keep or improve that candidate
+    lexicographically (`<=`: a strict gain depends on SCIP's heuristics), and
+    the node limit that stopped stage 1 is the stop.
+    """
+    scenario, view = scenario_of(make(**V["5x2"]))
+    assert _objective_codes(view) == ("fixed_l2", "shortfall", "route_priority", "explicit_cost", "active_order_rows"), f"PREMISE: {_objective_codes(view)}"
+    result = solve_policy_program(compile_policy_program(scenario, view), time_budget_seconds=30.0, node_limit=1)
+
+    assert (result.stages[0].status, result.stages[0].scip_status) == ("unfinished", "nodelimit"), result.stages[0]
+    for stage in result.stages[1:]:
+        observed = (stage.stage, stage.status, stage.scope, stage.scip_status, stage.primal)
+        assert stage.status == "unfinished", observed
+        assert stage.scope == "incumbent_face", observed
+        assert stage.scip_status != "not_reached", observed
+        assert stage.primal is not None, observed
+
+    assert result.outcome == "incumbent"
+    assert result.candidate is not None
+    evaluation = evaluate_exact_candidate(scenario, view, result.candidate)
+    assert (evaluation.candidate_valid, evaluation.feasible) == (True, True)
+    assert result.anomaly is None
+    values, _tie_quanta = _lexicographic_key(view, evaluation)
+    assert values <= (R(17425, 4), R(65, 2), R(13), R(3187, 400), R(8)), values
+    assert PR.build_stop_reason(result) == "node_limit"
+
+
+def test_stage_one_reserve_is_a_tenth_of_the_budget_capped_at_three_seconds() -> None:
+    """Stage 1 keeps `min(3 s, 10% of the budget)` back, to resume on."""
+    from backend.app.services.pac_allocator.solver import stage_one_reserve_seconds  # noqa: PLC0415 — added by S3
+
+    assert stage_one_reserve_seconds(30.0) == 3.0
+    assert stage_one_reserve_seconds(3.5) == pytest.approx(0.35)
+
+
+def test_stage_one_time_limit_holds_the_reserve_back(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stage 1's `limits/time` is the remaining budget minus the reserve:
+    about 27 s of a 30 s budget, never the whole 30.
+    """
+    _view, _result, lever = _lever_run(monkeypatch, _two_asset_pac_scenario())
+    time_limits = _time_limits(lever)
+    assert time_limits, lever.log
+    assert 26.0 <= time_limits[0][1] <= 27.0, time_limits
+
+
+def test_stage_one_resumes_once_on_its_reserve_when_its_limit_left_no_solution(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stage 1 ending on a limit with no solution is resumed once on the same
+    transformed problem: `limits/time` raised by the reserve, then a second
+    `optimize()`, with no `freeTransform` and no new objective in between.
+
+    The lever fakes the limit after the first `optimize()` only. SCIP really
+    solved it, and resuming a solved model keeps its solutions, so the resume
+    surfaces the incumbent.
+    """
+    _view, result, lever = _lever_run(monkeypatch, _two_asset_pac_scenario(), fake_optimize_calls=frozenset({1}))
+
+    assert ("optimize", 2) in lever.log, f"stage 1 was not resumed: {lever.log}"
+    first_call, second_call = lever.log.index(("optimize", 1)), lever.log.index(("optimize", 2))
+    first_limit = [value for index, value in _time_limits(lever) if index < first_call][-1]
+    between = lever.log[first_call + 1 : second_call]
+    assert [entry[:2] for entry in between] == [("setParam", "limits/time")], between
+    assert between[0][2] == pytest.approx(first_limit + 3.0, abs=0.5), (first_limit, between)
+    assert result.outcome == "incumbent"
+
+
+def test_stage_one_resume_that_finds_nothing_is_still_no_incumbent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The resume happens once: still no solution after it is `no_incumbent`,
+    exactly as without a resume, after two `optimize()` calls in total.
+    """
+    _view, result, lever = _lever_run(monkeypatch, _two_asset_pac_scenario(), fake_optimize_calls=frozenset({1, 2}))
+
+    assert result.outcome == "no_incumbent"
+    assert lever.optimize_calls == 2, lever.log
