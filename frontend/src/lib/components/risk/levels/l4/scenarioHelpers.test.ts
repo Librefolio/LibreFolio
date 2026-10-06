@@ -164,6 +164,98 @@ describe('tornadoRows', () => {
 });
 
 // ---------------------------------------------------------------------------
+// k5b — the tornado becomes a table (D376): the two figures a row is drawn from
+// ---------------------------------------------------------------------------
+//
+// The bar is still drawn by `value`, and `value` is still chosen as before. What changes is
+// that the table beside the bar states the two figures `value` is chosen from: what the holding
+// (or the bucket) did on its own over the window, and what that did to the scope. Both travel on
+// the row as `ownReturn` and `contribution`, so the table never has to read the payload again.
+//
+// Read through a contract type declared here: the file type-checks before the two fields exist,
+// and a missing field fails these tests, not the file — the tests above keep running either way.
+
+/** A tornado row as k5b hands it over: its own return and its contribution, beside the value it is drawn by. */
+type TableRow = ReturnType<typeof tornadoRows>[number] & {ownReturn: number | null; contribution: number | null};
+
+/** The rows, read under the k5b contract. */
+function tableRows(output: unknown): TableRow[] {
+    return tornadoRows(output) as TableRow[];
+}
+
+/** The figures of a row the table states, and only those, so a red names exactly what is missing. */
+function figures(row: TableRow) {
+    return {key: row.key, value: row.value, ownReturn: row.ownReturn, contribution: row.contribution, amount: row.amount, weight: row.weight};
+}
+
+describe('tornadoRows — the figures the table states (k5b, D376)', () => {
+    it('carries each replayed asset’s own return and its contribution, a flat one’s zeros included, and still draws the contribution', () => {
+        // A weighted (portfolio) replay. The bar is the contribution; the table adds what the
+        // holding did on its own — the −50% that cost the portfolio −20% because of its weight.
+        // Holding 5 ended where it started: 0 is its figure twice over, never "absent" (D151).
+        const rows = tableRows({
+            impacts: [
+                {asset_id: 5, weight: 0.1, shock_return: 0, contribution_return: 0, impact_amount: '0.00'},
+                {asset_id: 3, weight: 0.5, shock_return: -0.1, contribution_return: -0.05, impact_amount: '-2400.00'},
+                {asset_id: 7, weight: 0.4, shock_return: -0.5, contribution_return: -0.2, impact_amount: '-8000.00'},
+            ],
+        });
+        expect(rows.map(figures), 'a replayed asset does not carry shock_return as ownReturn and contribution_return as contribution — or a zero was read as absent, or the value stopped being the contribution').toEqual([
+            {key: 'asset:7', value: -0.2, ownReturn: -0.5, contribution: -0.2, amount: -8000, weight: 0.4},
+            {key: 'asset:3', value: -0.05, ownReturn: -0.1, contribution: -0.05, amount: -2400, weight: 0.5},
+            {key: 'asset:5', value: 0, ownReturn: 0, contribution: 0, amount: 0, weight: 0.1},
+        ]);
+    });
+
+    it('has a null contribution on an unweighted selection — sent as null or not sent at all — and draws the own return', () => {
+        // The Asset Global lab: a set of assets carries no weights, so the backend sends no
+        // contribution and the bar falls back to the asset's own return, which the table now
+        // states under its own name. «Null when absent»: a missing field is null, never undefined.
+        const rows = tableRows({
+            impacts: [
+                {asset_id: 9, weight: null, shock_return: 0.05, contribution_return: null, impact_amount: null},
+                {asset_id: 7, weight: null, shock_return: -0.1, contribution_return: null, impact_amount: null},
+                {asset_id: 11, shock_return: -0.3},
+            ],
+        });
+        expect(rows.map(figures), 'an unweighted replay row does not carry its own return, or carries a contribution it was never sent').toEqual([
+            {key: 'asset:11', value: -0.3, ownReturn: -0.3, contribution: null, amount: null, weight: null},
+            {key: 'asset:7', value: -0.1, ownReturn: -0.1, contribution: null, amount: null, weight: null},
+            {key: 'asset:9', value: 0.05, ownReturn: 0.05, contribution: null, amount: null, weight: null},
+        ]);
+    });
+
+    it('has a null own return when the payload names none, and draws the contribution it does name', () => {
+        const rows = tableRows({impacts: [{asset_id: 12, weight: 0.2, contribution_return: -0.01, impact_amount: '-50.00'}]});
+        expect(rows.map(figures), 'an asset row without a shock_return must say so with a null own return, beside the contribution it is drawn by').toEqual([{key: 'asset:12', value: -0.01, ownReturn: null, contribution: -0.01, amount: -50, weight: 0.2}]);
+    });
+
+    it('still drops an asset that names neither figure: two new fields do not make a bar out of nothing (unchanged)', () => {
+        // A guard, green before k5b and required to stay green: the skip rule is the value's, and
+        // the two new fields must not resurrect a row that has no value to draw.
+        expect(tableRows({impacts: [{asset_id: 13, weight: 0.3, impact_amount: '-10.00'}]}), 'an asset with no return of any kind became a row').toEqual([]);
+    });
+
+    it('carries a configured bucket’s shock as its own return, and its contribution as both the contribution and the value', () => {
+        // The shock is what the reader typed; the contribution is what it did to this portfolio.
+        // The bar keeps the second (the test above explains why); the table states both.
+        const rows = tableRows({
+            dimension: 'asset_class',
+            configured_buckets: [
+                {bucket_id: 'BOND', shock: -0.05, applied_asset_count: 1, asset_exposure_total: 0.3, contribution_return: -0.015},
+                {bucket_id: 'STOCK', shock: -0.2, applied_asset_count: 2, asset_exposure_total: 0.6, contribution_return: -0.12},
+                {bucket_id: 'CRYPTO', shock: 0.1, applied_asset_count: 1, asset_exposure_total: 0.1, contribution_return: 0.01},
+            ],
+        });
+        expect(rows.map(figures), 'a configured bucket does not carry its shock as ownReturn and its contribution_return as contribution').toEqual([
+            {key: 'bucket:STOCK', value: -0.12, ownReturn: -0.2, contribution: -0.12, amount: null, weight: 0.6},
+            {key: 'bucket:BOND', value: -0.015, ownReturn: -0.05, contribution: -0.015, amount: null, weight: 0.3},
+            {key: 'bucket:CRYPTO', value: 0.01, ownReturn: 0.1, contribution: 0.01, amount: null, weight: 0.1},
+        ]);
+    });
+});
+
+// ---------------------------------------------------------------------------
 // F3 — the historical replay block (developer's decision D372 of 02/10/2026)
 // ---------------------------------------------------------------------------
 //

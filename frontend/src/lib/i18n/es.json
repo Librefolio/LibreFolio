@@ -3565,7 +3565,20 @@
         "replayNothing": "Nada que repetir: ningún activo tiene precios utilizables en este periodo.",
         "replaySuggested": "Repetir del {start} al {end}: {count, plural, one {vuelve # activo} other {vuelven # activos}}",
         "replaySuggestedPartial": "Solo una parte de la crisis.",
-        "replayPresetNone": "Sin preajuste"
+        "replayPresetNone": "Sin preajuste",
+        "tools": {
+          "empty": "Elige una herramienta: la repetición histórica muestra lo que ocurrió realmente, el choque hipotético aplica una hipótesis tuya, la simulación usa un modelo.",
+          "add": "Añadir:",
+          "close": "Cerrar {tool}"
+        },
+        "table": {
+          "asset": "Activo",
+          "weight": "Peso",
+          "return": "Rentabilidad",
+          "contribution": "Contribución",
+          "impact": "Impacto",
+          "bar": "Efecto"
+        }
       },
       "backtestNotice": "Con un subconjunto activo, estas cifras se reconstruyen sobre la composición de hoy: dicen cómo *habría* ido, no cómo fue en realidad.",
       "notice": {
