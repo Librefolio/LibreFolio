@@ -3768,7 +3768,8 @@
       }
     },
     "benchmark": {
-      "measuredHere": "Cette référence est aussi un actif mesuré ici et ne peut pas servir de mesure à elle-même : choisissez-en une autre pour la comparaison."
+      "measuredHere": "Cette référence est aussi un actif mesuré ici et ne peut pas servir de mesure à elle-même : choisissez-en une autre pour la comparaison.",
+      "blocked": "Inutilisables sur cette période"
     }
   },
   "updateCheck": {
