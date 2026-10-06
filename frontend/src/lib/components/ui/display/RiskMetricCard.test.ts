@@ -185,6 +185,28 @@ describe('RiskMetricCard', () => {
         });
     });
 
+    describe('the title and the subtitle', () => {
+        // V3 (developer's decision of 05/10/2026, "a capo come la didascalia"): like the
+        // caption, the title and the subtitle wrap, at most two lines each, instead of being
+        // cut to one line with the rest left to a hover. Read whole on the card, a native
+        // `title` would only repeat them in the browser's own box. Whether they wrap needs a
+        // layout engine, so it is measured in the E2E on the L1 and L2 cards
+        // (`risk-analysis.spec.ts`); jsdom can say what each node carries.
+        it.each([
+            {part: 'label', text: 'A title written by the test, long enough to need a second line on a narrow card'},
+            {part: 'technical', text: 'A subtitle written by the test, long enough to need a second line on a narrow card too'},
+        ])('the $part carries its whole text and no native tooltip', async ({part, text}) => {
+            await setupI18n();
+            render(RiskMetricCard, {props: {...BASE, label: part === 'label' ? text : BASE.label, technicalName: part === 'technical' ? text : BASE.technicalName}});
+
+            const node = screen.getByTestId(`card-${part}`);
+            // Barrier: the node holds the text this test passed, whole — so the card cut nothing in
+            // code, and the absence below is about this node and no other.
+            expect(node.textContent?.replace(/\s+/g, ' ').trim(), `the ${part} is not rendered whole`).toBe(text);
+            expect(node, `the ${part} still carries a native title: the text on the card is repeated in a tooltip`).not.toHaveAttribute('title');
+        });
+    });
+
     describe('the optional slots', () => {
         it('renders submetrics and sparkline only when supplied', async () => {
             await setupI18n();

@@ -227,7 +227,8 @@ describe('scatterChartHelpers', () => {
  *
  * The lab sets a table beside this scatter, and a row picked in one has to be findable
  * in the other. So the builder takes the caller's `selectedId` and draws that ONE datum
- * differently: larger, in the selection green, fully opaque.
+ * differently: larger and fully opaque; an asset in the selection green, the portfolio
+ * and the benchmark in their own role colour.
  *
  * Everything else is the contract of an ADDITIVE change, and it is where most of the
  * assertions below go: the Dashboard passes no selection, and its chart must not move.
@@ -298,10 +299,6 @@ describe('scatterChartHelpers — the selected point', () => {
         {id: 'asset-1', what: 'a weighted asset', premise: (datum: Datum) => datum.symbolSize > MIN_SYMBOL_PX && datum.symbolSize < MAX_SYMBOL_PX},
         // The dot the lab draws: its assets carry no weight.
         {id: 'asset-3', what: 'a weightless asset', premise: (datum: Datum) => datum.symbolSize === MIN_SYMBOL_PX},
-        {id: 'benchmark', what: 'the benchmark, already opaque', premise: (datum: Datum) => datum.itemStyle.opacity === 1},
-        // "Larger than it would otherwise be" holds at the ceiling too: a highlight clamped
-        // to MAX_SYMBOL_PX would leave the one bubble that is already largest its own size.
-        {id: 'portfolio', what: 'the portfolio, at the size ceiling', premise: (datum: Datum) => datum.symbolSize === MAX_SYMBOL_PX},
     ])('draws $what larger, green and opaque, and nothing else differs', ({id, what, premise}) => {
         const unselected = buildScatterOption(INPUT);
         const selected = buildScatterOption({...INPUT, selectedId: id});
@@ -313,6 +310,38 @@ describe('scatterChartHelpers — the selected point', () => {
         // The highlight, measured against the same datum unselected.
         expect(after.datum.itemStyle.color).toBe(SELECTED_LIGHT);
         expect(after.datum.itemStyle.color).not.toBe(before.datum.itemStyle.color);
+        expect(after.datum.itemStyle.opacity).toBe(1);
+        expect(after.datum.symbolSize).toBeGreaterThan(before.datum.symbolSize);
+
+        // Still the same point, where it was: a highlight moves, renames and re-files nothing.
+        expect({seriesId: after.seriesId, index: after.index, value: after.datum.value, name: after.datum.name, role: after.datum.role}).toEqual({seriesId: before.seriesId, index: before.index, value: before.datum.value, name: before.datum.name, role: before.datum.role});
+
+        // Put the unselected datum back and nothing is left to tell the two results apart.
+        expect(withDatum(selected, id, before.datum)).toEqual(unselected);
+    });
+
+    /**
+     * The portfolio and the benchmark keep their own colour when selected (developer's review of
+     * 06/10/2026: «il simbolo nel grafico non deve cambiare colore»): the colour is what names them,
+     * and in the selection green either would read as an asset. They grow and are drawn opaque.
+     */
+    it.each([
+        {id: 'benchmark', role: 'benchmark' as const, what: 'the benchmark, already opaque', premise: (datum: Datum) => datum.itemStyle.opacity === 1},
+        // "Larger than it would otherwise be" holds at the ceiling too: a highlight clamped
+        // to MAX_SYMBOL_PX would leave the one bubble that is already largest its own size.
+        {id: 'portfolio', role: 'portfolio' as const, what: 'the portfolio, at the size ceiling', premise: (datum: Datum) => datum.symbolSize === MAX_SYMBOL_PX},
+    ])('draws $what larger and opaque, in its role colour, and nothing else differs', ({id, role, what, premise}) => {
+        const unselected = buildScatterOption(INPUT);
+        const selected = buildScatterOption({...INPUT, selectedId: id});
+
+        const before = locate(unselected, id);
+        const after = locate(selected, id);
+        expect(premise(before.datum), `fixture premise: ${what}`).toBe(true);
+
+        // The highlight, measured against the same datum unselected: the colour stays the role's.
+        expect(after.datum.itemStyle.color, `${what}: a selection may not repaint the dot that names its role`).toBe(colorForRole(role, false));
+        expect(after.datum.itemStyle.color).toBe(before.datum.itemStyle.color);
+        expect(after.datum.itemStyle.color).not.toBe(SELECTED_LIGHT);
         expect(after.datum.itemStyle.opacity).toBe(1);
         expect(after.datum.symbolSize).toBeGreaterThan(before.datum.symbolSize);
 
@@ -353,5 +382,77 @@ describe('scatterChartHelpers — the selected point', () => {
         expect(buildScatterOption({...INPUT, selectedId: 'asset-1'})).not.toEqual(unselected);
 
         expect(buildScatterOption({...INPUT, selectedId})).toEqual(unselected);
+    });
+});
+
+/**
+ * The benchmark's diamond and the plot's left margin (developer's reviews of 05/10/2026, T12–T15 and V6).
+ *
+ * `SYMBOL_BY_ROLE` was declared and never applied: every dot was a circle, and the benchmark told
+ * itself apart by colour alone. It is a diamond now. A benchmark the reader holds arrives as its
+ * holding's dot with a weight (`buildRiskReturnPoints`), so it is sized like a holding — and a diamond
+ * fills half of the square ECharts fits it in where a circle fills π/4, so at one size the diamond
+ * would cover a third less than the circle of the same weight beside it. A benchmark nobody holds has
+ * no weight and keeps the fixed marker size it always had.
+ *
+ * V6: the left inset is relative, as on the growth chart, and the y-axis title starts at the axis
+ * and runs right, so no pixel strip is kept empty for a centred title `containLabel` never measures.
+ */
+describe('scatterChartHelpers — the benchmark’s diamond and the plot’s margins', () => {
+    interface Drawn {
+        id: string;
+        symbol?: string;
+        symbolSize: number;
+    }
+
+    /** Every scatter datum carrying `id`, with the series it is filed in. */
+    function drawn(result: ScatterOptionResult, id: string): {seriesId: string; datum: Drawn}[] {
+        return (result.option.series as {id: string; type: string; data: unknown[]}[]).flatMap((series) => (series.type === 'scatter' ? (series.data as Drawn[]).filter((datum) => datum.id === id).map((datum) => ({seriesId: series.id, datum})) : []));
+    }
+
+    /** A held benchmark as `buildRiskReturnPoints` hands it over: its holding's dot, `asset-<id>`, with the holding's weight. */
+    const HELD: RiskReturnPoint[] = [
+        point({id: 'portfolio', role: 'portfolio', volatility: 0.15, annualReturn: 0.08, weight: 1}),
+        point({id: 'asset-1', role: 'asset', volatility: 0.12, annualReturn: 0.05, weight: 0.35}),
+        point({id: 'asset-2', role: 'benchmark', volatility: 0.18, annualReturn: 0.07, weight: 0.35}),
+    ];
+
+    it('draws the benchmark once, as a diamond, and every other dot as a circle — a held benchmark too', () => {
+        const result = buildScatterOption({points: HELD, labels: LABELS});
+
+        const benchmark = drawn(result, 'asset-2');
+        expect(benchmark, 'the held benchmark must be drawn exactly once').toHaveLength(1);
+        expect(benchmark[0].seriesId).toBe('scatter-benchmark');
+        expect(benchmark[0].datum.symbol, 'the benchmark is told apart by its shape, not by its colour alone').toBe('diamond');
+        expect(drawn(result, 'asset-1')[0].datum.symbol).toBe('circle');
+        expect(drawn(result, 'portfolio')[0].datum.symbol).toBe('circle');
+    });
+
+    it('gives a weighted diamond the area of a circle of the same weight', () => {
+        const result = buildScatterOption({points: HELD, labels: LABELS});
+        const diamond = drawn(result, 'asset-2')[0].datum.symbolSize;
+        const circle = drawn(result, 'asset-1')[0].datum.symbolSize;
+
+        expect(circle, 'premise: the circle is sized by its weight').toBe(symbolSizeForWeight(0.35));
+        // ECharts fits each symbol in a square of side `symbolSize`: a diamond covers half of it, a circle π/4.
+        expect((diamond * diamond) / 2, 'a diamond of the same weight covers less ink than the circle beside it').toBeCloseTo((Math.PI * circle * circle) / 4, 9);
+        expect(diamond / circle).toBeCloseTo(Math.sqrt(Math.PI / 2), 12);
+    });
+
+    it('keeps a benchmark nobody holds — no weight — at the fixed marker size it always had', () => {
+        const result = buildScatterOption({points: [point({id: 'benchmark', role: 'benchmark', volatility: 0.18, annualReturn: 0.07}), point({id: 'asset-1', role: 'asset'})], labels: LABELS});
+        const benchmark = drawn(result, 'benchmark');
+
+        expect(benchmark).toHaveLength(1);
+        expect(benchmark[0].datum.symbol).toBe('diamond');
+        expect(benchmark[0].datum.symbolSize, 'a reference is not a holding: no weight, no area to match').toBe(MIN_SYMBOL_PX * 1.6);
+    });
+
+    it('insets the plot by a share of its width, and starts the y-axis title at the axis', () => {
+        const {option} = buildScatterOption({points: HELD, labels: LABELS});
+
+        expect(option.grid.left, 'a pixel inset was an empty strip before the y labels').toBe('3%');
+        expect(option.grid.containLabel, 'the labels are added to the inset, so they still fit').toBe(true);
+        expect(option.yAxis.nameTextStyle.align, 'a centred title hangs off the left edge, where containLabel does not measure').toBe('left');
     });
 });

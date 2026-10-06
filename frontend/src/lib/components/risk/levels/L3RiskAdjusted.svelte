@@ -1,41 +1,38 @@
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import RiskCardGrid from '$lib/components/ui/display/RiskCardGrid.svelte';
-    import RiskMetricCard from '$lib/components/ui/display/RiskMetricCard.svelte';
-    import ScatterChart from '$lib/components/charts/ScatterChart.svelte';
-    import DocsLink from '$lib/components/ui/DocsLink.svelte';
-    import {capitalMarketLineAnchor} from '$lib/components/charts/scatterChartHelpers';
-    import {formatPercent} from '$lib/utils/core/formatPercent';
+    import type DataTable from '$lib/components/table/DataTable.svelte';
     import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 
-    import {formatRatio, resultByCode} from '../riskAnalysisHelpers';
+    import {resultByCode} from '../riskAnalysisHelpers';
+    import RiskReturnLevel from '../RiskReturnLevel.svelte';
+    import type {RiskReturnRow} from '../riskReturnLevel';
     import {buildRiskAdjusted, uncoveredWeight} from './levelHelpers';
-    import {buildRiskReturnPoints, selectKpiWave} from './l3Helpers';
-    import {formatShare} from './shareFormat';
+    import {buildRiskReturnPoints, buildRiskReturnRows, selectKpiWave} from './l3Helpers';
 
     /**
      * L3 — "am I being paid for this risk?"
      *
-     * The only one of the four that looks outward. Sharpe, Sortino and beta used
-     * to appear as orphan cards; they were never bad metrics, they were metrics
-     * without a home, and the question is the home.
+     * The only one of the four that looks outward. Sharpe, Sortino and beta used to appear as
+     * orphan cards; they were never bad metrics, they were metrics without a home, and the
+     * question is the home.
      *
-     * Sortino leads and Sharpe follows. Sharpe divides by *total* volatility, so
-     * it punishes violent rises exactly as it punishes falls — it would rate a
-     * flat portfolio above a lumpy but rewarding one. Sharpe is still shown,
-     * quietly, because it is the number most readers have met elsewhere and
-     * hiding it would read as evasion. Neither is presented as a grade.
+     * **One table, the portfolio first** (developer's review of 06/10/2026: «leviamo le 4 card
+     * perchè si assorbono nella tabella»). The four cards became the portfolio's row: the
+     * portfolio opens the table, the benchmark follows, each tinted like its dot, then every
+     * holding — the same table, chart and notes as Asset Global's L3° (`RiskReturnLevel`).
+     * Sortino comes before Sharpe in it, as it did on the cards: Sharpe divides by *total*
+     * volatility, so it punishes violent rises exactly as it punishes falls. Sharpe stays,
+     * because it is the number most readers have met elsewhere. Neither is a grade.
      *
-     * ⚠️ EVERY FIGURE HERE SHARES ONE PERIMETER, AND THE CARD SAYS WHICH.
-     * This level reads the *current composition* wave: today's weights replayed
-     * over past asset returns. That is a backtest and is labelled as one. The
-     * alternative — the portfolio's real history — answers a different question,
-     * in the past tense, and for a portfolio that was mostly cash for most of the
-     * window it answers it uselessly: its correlation against a stock benchmark
-     * collapses towards zero, so the beta computed on it has nothing to estimate.
-     * The two perimeters can disagree on Sharpe and Sortino by more than half,
-     * which is why they may not be mixed silently, and why the perimeter is read
-     * from the payload's `metadata` rather than assumed here.
+     * ⚠️ EVERY FIGURE HERE SHARES ONE PERIMETER, AND THE TITLE SAYS WHICH.
+     * This level reads the *current composition* wave: today's weights replayed over past asset
+     * returns. That is a backtest and is labelled as one. The alternative — the portfolio's real
+     * history — answers a different question, in the past tense, and for a portfolio that was
+     * mostly cash for most of the window it answers it uselessly: its correlation against a stock
+     * benchmark collapses towards zero, so the beta computed on it has nothing to estimate. The
+     * two perimeters can disagree on Sharpe and Sortino by more than half, which is why they may
+     * not be mixed silently, and why the perimeter is read from the payload's `metadata` rather
+     * than assumed here.
      */
     interface Props {
         historicalResults: RiskAnalyticResult[];
@@ -44,18 +41,24 @@
         comparisonResult: RiskAnalyticResult | null;
         /** Name of the benchmark beta is measured against, when one is chosen. */
         benchmarkName?: string | null;
-        /** Display names for the scatter's dots, resolved by the panel. */
+        /** Display names for the table's rows and the chart's dots, resolved by the panel. */
         assetNames?: Record<number, string>;
+        /** Each asset's icon, for the table, resolved by the panel. */
+        assetIcons?: ReadonlyMap<number, string>;
         /** Anchors the Capital Market Line at x = 0. Percent, as the panel holds it. */
         appliedRiskFreePercent?: number;
         loading?: boolean;
+        /** The table's instance, for the column menu the panel draws beside the level's manual icon. */
+        tableRef?: DataTable<RiskReturnRow>;
     }
 
-    let {historicalResults, currentResults = [], comparisonResult, benchmarkName = null, assetNames = {}, appliedRiskFreePercent = 0, loading = false}: Props = $props();
+    let {historicalResults, currentResults = [], comparisonResult, benchmarkName = null, assetNames = {}, assetIcons = new Map(), appliedRiskFreePercent = 0, loading = false, tableRef = $bindable()}: Props = $props();
 
     let wave = $derived(selectKpiWave(currentResults, historicalResults));
     let figures = $derived(buildRiskAdjusted(wave.results, comparisonResult));
     let perimeterLabel = $derived(wave.perimeter === null ? '' : $t(`risk.levels.l3.perimeter.${wave.perimeter}`));
+    // The perimeter the cards used to state, now said once, beside the table's title.
+    let title = $derived(perimeterLabel ? `${$t('risk.levels.l3.scatter.title')} · ${perimeterLabel}` : $t('risk.levels.l3.scatter.title'));
 
     let riskReturnResult = $derived(resultByCode(currentResults, 'asset_risk_return'));
     let points = $derived(
@@ -78,158 +81,49 @@
     // is L2's own (`uncoveredWeight`), so the two levels cannot tell it differently;
     // when it is unknown, neither sentence is said rather than call it all cash.
     let uncovered = $derived(uncoveredWeight(riskReturnResult));
-    let cashShare = $derived(uncovered?.cash ?? null);
-    let unpricedShare = $derived(uncovered?.unpriced ?? null);
-    let hasCash = $derived(cashShare !== null && cashShare > 0);
-    let hasUnpriced = $derived(unpricedShare !== null && unpricedShare > 0);
+    let outside = $derived(uncovered === null ? null : {cash: uncovered.cash, unpriced: uncovered.unpriced});
 
-    let hasAny = $derived(figures.sortino !== null || figures.sharpe !== null || figures.volatility !== null || figures.beta !== null);
-    // Two dots are the least that can show a relationship; a lone one is a fact
-    // without a comparison, and no chart says more than half a chart.
-    let hasScatter = $derived(points.length >= 2);
-    // Which dot the line runs through, so the note names the line the chart draws.
-    let lineAnchor = $derived(capitalMarketLineAnchor(points));
-
-    function ratio(value: number): string {
-        return formatRatio(value);
-    }
-
-    function percent(value: number): string {
-        return formatPercent(value, {scale: 100, signed: false, digits: 1});
-    }
+    let rows = $derived(
+        buildRiskReturnRows({
+            riskReturnResult,
+            comparisonResult,
+            assetNames,
+            benchmarkName,
+            portfolioLabel: $t('risk.levels.l3.scatter.portfolio'),
+            portfolioKpi: {sortino: figures.sortino, sharpe: figures.sharpe, volatility: figures.volatility},
+        }),
+    );
+    // Beta and correlation need a benchmark the comparison actually measured.
+    let benchmarkApplies = $derived(figures.beta !== null || rows.some((row) => row.role === 'benchmark'));
 </script>
 
 <div class="space-y-4" data-testid="risk-l3" data-perimeter={wave.perimeter ?? ''}>
-    {#if loading && !hasAny}
-        <div class="grid grid-cols-2 gap-3 sm:grid-cols-4" data-testid="risk-l3-loading">
-            {#each [0, 1, 2, 3] as placeholder (placeholder)}
-                <div class="h-16 animate-pulse rounded bg-gray-100 dark:bg-slate-700"></div>
-            {/each}
-        </div>
-    {:else if !hasAny}
+    {#if loading && rows.length === 0}
+        <div class="h-40 animate-pulse rounded-lg bg-gray-100 dark:bg-slate-700" data-testid="risk-l3-loading"></div>
+    {:else if rows.length === 0}
         <p class="text-sm text-gray-500 dark:text-gray-400" data-testid="risk-l3-empty">{$t('risk.states.unavailable')}</p>
     {:else}
-        <RiskCardGrid testId="risk-l3-metrics">
-            <!-- Each card's title is the metric's own name, so the subtitle says what it
-                 measures and the ⓘ, on hover, what it is: repeating the name in both said
-                 nothing twice (developer's review of 05/10/2026). -->
-            <!-- Sortino first, and first is the argument. -->
-            <RiskMetricCard
-                label={$t('risk.levels.l3.sortino')}
-                technicalName={$t('risk.levels.l3.measures.sortino')}
-                numericValue={figures.sortino ?? undefined}
-                formatValue={ratio}
-                value={formatRatio(figures.sortino)}
-                caption={perimeterLabel}
-                docsPath="financial-theory/technical-analysis/risk-metrics/sortino-ratio/"
-                docsHint={$t('risk.levels.l3.sortinoHelp')}
-                {loading}
-                testId="risk-l3-sortino"
-            />
-
-            <RiskMetricCard
-                label={$t('risk.levels.l3.sharpe')}
-                technicalName={$t('risk.levels.l3.measures.sharpe')}
-                numericValue={figures.sharpe ?? undefined}
-                formatValue={ratio}
-                value={formatRatio(figures.sharpe)}
-                caption={perimeterLabel}
-                docsPath="financial-theory/technical-analysis/risk-metrics/sharpe-ratio/"
-                docsHint={$t('risk.levels.l3.sharpeHelp')}
-                {loading}
-                testId="risk-l3-sharpe"
-            />
-
-            <RiskMetricCard
-                label={$t('risk.levels.l3.volatility')}
-                technicalName={$t('risk.levels.l3.measures.volatility')}
-                numericValue={figures.volatility ?? undefined}
-                formatValue={percent}
-                value={formatPercent(figures.volatility, {scale: 100, signed: false, digits: 1})}
-                caption={perimeterLabel}
-                docsPath="financial-theory/technical-analysis/risk-metrics/volatility/"
-                docsHint={$t('risk.levels.l3.volatilityHelp')}
-                {loading}
-                testId="risk-l3-volatility"
-            />
-
-            <!-- A beta without its benchmark is not a number, it is a rumour — so the
-                 caption names the reference as soon as there is one, and falls back to
-                 the perimeter when there is not. -->
-            <RiskMetricCard
-                label={$t('risk.levels.l3.beta')}
-                technicalName={$t('risk.levels.l3.measures.beta')}
-                numericValue={figures.beta ?? undefined}
-                formatValue={ratio}
-                value={formatRatio(figures.beta)}
-                caption={figures.beta !== null && benchmarkName ? benchmarkName : perimeterLabel}
-                captionScroll={figures.beta !== null && !!benchmarkName}
-                docsPath="financial-theory/technical-analysis/risk-metrics/beta-active-return/"
-                docsHint={$t('risk.levels.l3.betaHelp')}
-                {loading}
-                testId="risk-l3-beta"
-            />
-        </RiskCardGrid>
-
-        {#if figures.beta !== null && benchmarkName}
-            <!-- The benchmark's name is inside the beta card's caption, which is where a
-                 reader looks. This keeps the name addressable on its own for the E2E
-                 that asserts it, without printing it twice on screen. -->
-            <p class="sr-only" data-testid="risk-l3-beta-benchmark">{benchmarkName}</p>
-        {/if}
-
-        {#if hasScatter}
-            <div data-testid="risk-l3-risk-return">
-                <h4 class="mb-1 text-sm font-medium text-gray-700 dark:text-gray-200">{$t('risk.levels.l3.scatter.title')}</h4>
-                <ScatterChart
-                    {points}
-                    labels={{
-                        volatility: $t('risk.levels.l3.scatter.axisVolatility'),
-                        return: $t('risk.levels.l3.scatter.axisReturn'),
-                        capitalMarketLine: $t('risk.levels.l3.scatter.line'),
-                    }}
-                    riskFreeRate={appliedRiskFreePercent / 100}
-                    testId="risk-l3-scatter"
-                    emptyLabel={$t('risk.states.unavailable')}
-                />
-                <!-- One idea per line, one under the other (developer's review of 05/10/2026: the
-                     paragraph was right but read as a wall). The axis label alone cannot carry the
-                     return's line: on a very volatile holding the average return and the one actually
-                     lived through differ by tens of percentage points, and a reader seeing "-11%"
-                     beside a coin that halved will not guess that the word "average" was the
-                     warning — so the warning is the part in bold. The line under it says the return
-                     is price-only until the backend adds income (Risk, 05/10/2026). The two lines
-                     about the line are said only when one is drawn; the second names the dot it runs
-                     through, and its ⓘ opens the manual's section on why. -->
-                <ul class="mt-1 space-y-0.5 text-xs text-gray-500 dark:text-gray-400" data-testid="risk-l3-scatter-note">
-                    <!-- What the chart leaves out comes first, right under it, in the same plain text
-                         as the rest (developer's review of 05/10/2026), each part only when it is. -->
-                    {#if hasCash || hasUnpriced}
-                        <li data-testid="risk-l3-scatter-outside">
-                            {$t('risk.levels.l3.scatter.notes.outside')}
-                            {#if hasCash}
-                                <span data-testid="risk-l3-scatter-cash"><span aria-hidden="true">💰</span> {$t('risk.levels.l3.scatter.notes.outsideCash', {values: {share: formatShare(cashShare, 0)}})}</span>
-                            {/if}
-                            {#if hasCash && hasUnpriced}<span aria-hidden="true">·</span>{/if}
-                            {#if hasUnpriced}
-                                <span data-testid="risk-l3-scatter-unpriced"><span aria-hidden="true">🏷️</span> {$t('risk.levels.l3.scatter.notes.outsideUnpriced', {values: {share: formatShare(unpricedShare, 0)}})}</span>
-                            {/if}
-                        </li>
-                    {/if}
-                    {#if lineAnchor !== null}
-                        <li>{$t('risk.levels.l3.scatter.notes.above')}</li>
-                    {/if}
-                    <li>{$t('risk.levels.l3.scatter.notes.expected')} <strong class="font-semibold text-gray-700 dark:text-gray-200">{$t('risk.levels.l3.scatter.notes.expectedWarning')}</strong></li>
-                    <li data-testid="risk-l3-scatter-price-only">{$t('risk.levels.l3.scatter.notes.priceOnly')}</li>
-                    {#if lineAnchor !== null}
-                        <li class="flex items-start gap-1" data-testid="risk-l3-scatter-line" data-anchor={lineAnchor}>
-                            <span>{$t(lineAnchor === 'benchmark' ? 'risk.levels.l3.scatter.notes.lineBenchmark' : 'risk.levels.l3.scatter.notes.line')}</span>
-                            <DocsLink path="financial-theory/technical-analysis/risk-metrics/benchmark-selection/#the-risk-return-line" label={$t('risk.levels.l3.scatter.notes.lineDocs')} size={12} testId="risk-l3-scatter-line-docs" />
-                        </li>
-                    {/if}
-                    <li>{$t('risk.levels.l3.scatter.notes.size')}</li>
-                </ul>
-            </div>
-        {/if}
+        <!-- The table, the chart and their notes are the shared level's (`RiskReturnLevel`, with
+             the lab's L3°). This page declares the weight, the ratios and — with a benchmark —
+             beta and correlation; its blocks keep the `risk-l3-*` names, and its cells take
+             `risk-l3-row-*`, so they never collide with another `risk-l3-*` name. -->
+        <RiskReturnLevel
+            {rows}
+            {points}
+            capabilities={{weight: true, ratios: true, benchmark: benchmarkApplies}}
+            {assetIcons}
+            testIdPrefix="risk-l3"
+            cellTestIdPrefix="risk-l3-row"
+            storageKey="risk-l3"
+            {title}
+            labels={{
+                volatility: $t('risk.levels.l3.scatter.axisVolatility'),
+                return: $t('risk.levels.l3.scatter.axisReturn'),
+                capitalMarketLine: $t('risk.levels.l3.scatter.line'),
+            }}
+            riskFreeRate={appliedRiskFreePercent / 100}
+            {outside}
+            bind:tableRef
+        />
     {/if}
 </div>
