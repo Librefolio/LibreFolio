@@ -235,6 +235,34 @@ function carried(source: Record<string, unknown>, field: string): number | null 
     return field in source && source[field] !== undefined ? finite(source[field]) : undefined;
 }
 
+/** A holding's beta and correlation against the benchmark, as `comparison` measured them. */
+type HoldingRelatives = Pick<RiskReturnRow, 'beta' | 'correlation'>;
+
+/**
+ * Each holding's beta and correlation, read off `comparison.items` (Risk's k6, 06/10/2026: one
+ * item per holding, measured in the same request, on the same calendar and with the same pairing
+ * as the portfolio's own beta).
+ *
+ * - No comparison, or an answer from before the field: `undefined`, not calculated here.
+ * - A list without the holding: `null`. The backend measured the others and could not measure
+ *   this one (no prepared series, fewer than two pairs), so its dash explains itself, never a 0.
+ *
+ * The benchmark itself is never an item: its own row says "against itself" (`isReference`).
+ */
+function holdingRelatives(comparison: Record<string, unknown> | null): (assetId: number) => HoldingRelatives {
+    if (!comparison || !Array.isArray(comparison.items)) return () => ({beta: undefined, correlation: undefined});
+    const byAsset = new Map<number, Record<string, unknown>>();
+    for (const raw of comparison.items) {
+        const item = record(raw);
+        const assetId = finite(item.asset_id);
+        if (assetId !== null) byAsset.set(assetId, item);
+    }
+    return (assetId) => {
+        const item = byAsset.get(assetId);
+        return item ? {beta: finite(item.beta), correlation: finite(item.correlation)} : {beta: null, correlation: null};
+    };
+}
+
 /**
  * The table's rows on a portfolio page (developer's review of 06/10/2026): the portfolio first,
  * the benchmark second, each tinted like its dot, then one row per holding the analytic measured,
@@ -244,11 +272,12 @@ function carried(source: Record<string, unknown>, field: string): number | null 
  * (`asset_risk_return`); its Sortino and Sharpe are `historical_kpi`'s, which read the same primary
  * returns with the same annualization in the same current-composition request — so its Sharpe is
  * the slope from the risk-free rate through its dot, up to the rate's daily conversion (confirmed
- * by Risk, 06/10/2026). A holding's figures are its item's; the benchmark nobody holds takes its
- * figures from `comparison`, on beta's calendar, like its dot.
+ * by Risk, 06/10/2026). A holding's figures are its item's, its beta and correlation the
+ * comparison's item for it (`holdingRelatives`); the benchmark nobody holds takes its figures from
+ * `comparison`, on beta's calendar, like its dot.
  *
- * A figure this payload does not carry stays `undefined` — the per-holding ratios until the
- * backend sends them — so its cell says "not calculated here", never "not measurable".
+ * A figure the payload does not carry stays `undefined` — an answer from before the per-holding
+ * ratios (Risk's k6) — so its cell says "not calculated here", never "not measurable".
  */
 export function buildRiskReturnRows({riskReturnResult, comparisonResult, assetNames, benchmarkName, portfolioLabel, portfolioKpi}: RiskReturnRowsInput): RiskReturnRow[] {
     const output = okOutput(riskReturnResult);
@@ -278,6 +307,7 @@ export function buildRiskReturnRows({riskReturnResult, comparisonResult, assetNa
 
     let benchmarkHeld = false;
     const holdings: RiskReturnRow[] = [];
+    const relativesOf = holdingRelatives(comparison);
     const items = output && Array.isArray(output.items) ? output.items : [];
     for (const raw of items) {
         const item = record(raw);
@@ -294,7 +324,7 @@ export function buildRiskReturnRows({riskReturnResult, comparisonResult, assetNa
             sortino: carried(item, 'sortino'),
             sharpe: carried(item, 'sharpe'),
             isReference: isBenchmark,
-            ...(isBenchmark ? {role: 'benchmark' as const} : {}),
+            ...(isBenchmark ? {role: 'benchmark' as const} : relativesOf(assetId)),
         });
     }
 
