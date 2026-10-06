@@ -192,24 +192,41 @@ describe('asset-set i18n — the four locales ask for the same arguments', () =>
 });
 
 /**
- * The text L3° actually puts on screen under its scatter, read from the component itself.
+ * The text L3° actually puts on screen under its scatter, read from the component that draws it.
  *
- * Why this exists: `AssetSetRiskReturnSection` borrowed the portfolio L3's note,
- * `risk.levels.l3.scatter.note`, which opens with "Above the line means better paid for the risk
+ * Why this exists: `AssetSetRiskReturnSection` once borrowed the portfolio L3's note,
+ * `risk.levels.l3.scatter.note`, which opened with "Above the line means better paid for the risk
  * taken". That sentence is right on Dashboard and Broker Detail, where the capital market line is
  * drawn. On this page the line cannot exist — `RiskAssetSetReturnOutput` has no field for a
  * portfolio aggregate, so `capitalMarketLine()` has no point to anchor on — and the borrowed note
  * put back, in words, the one judgement the payload's shape makes impossible. Every gate was green:
  * the key is present, valid ICU, and referenced.
  *
- * The key is read out of the component source rather than named here, so the test follows the
- * component if it ever switches to a different key.
+ * Since 06/10/2026 the notes are the shared `RiskReturnLevel`'s, one idea per line, each said only
+ * where it applies (`riskReturnNotes`). So the guard takes every note a chart without a line can
+ * carry — whatever the page declares, with or without anything left out of the plot, which covers
+ * the lab's — and every catalogue key the component renders for each of them, read out of its
+ * source rather than named here, so the test follows the component if a note changes its key.
  */
-const RISK_RETURN_SECTION_SOURCE = import.meta.glob('./AssetSetRiskReturnSection.svelte', {query: '?raw', import: 'default', eager: true})['./AssetSetRiskReturnSection.svelte'] as string;
+const RISK_RETURN_LEVEL_SOURCE = import.meta.glob('./RiskReturnLevel.svelte', {query: '?raw', import: 'default', eager: true})['./RiskReturnLevel.svelte'] as string;
+const {riskReturnNotes} = await import('./riskReturnLevel');
+const {capitalMarketLineAnchor} = await import('$lib/components/charts/scatterChartHelpers');
+type RiskReturnNote = import('./riskReturnLevel').RiskReturnNote;
+type RiskReturnCapabilities = import('./riskReturnLevel').RiskReturnCapabilities;
 
-function renderedNoteKey(): string | null {
-    const block = /data-testid="risk-asset-set-l3-scatter-note"[^>]*>\s*\{\$t\('([^']+)'\)/.exec(RISK_RETURN_SECTION_SOURCE);
-    return block?.[1] ?? null;
+/** The catalogue keys the component renders for one note: every key quoted in that note's branch of the list. */
+function renderedNoteKeys(note: RiskReturnNote): string[] {
+    const branch = RISK_RETURN_LEVEL_SOURCE.split(/\{(?:#if|:else if) note === '/)
+        .slice(1)
+        .find((candidate) => candidate.startsWith(`${note}'}`));
+    return branch === undefined ? [] : [...new Set([...branch.matchAll(/'(risk\.[A-Za-z0-9_.]+)'/g)].map((match) => match[1]))];
+}
+
+/** Every note a chart without a line can carry, whatever the page declares and whatever it leaves out of the plot. */
+function notesWithoutALine(): RiskReturnNote[] {
+    const declared: RiskReturnCapabilities[] = [{}, {ratios: true}, {ratios: true, benchmark: true}, {weight: true, ratios: true, benchmark: true}];
+    const outsides = [null, {cash: 0.046, unpriced: 0.004}];
+    return [...new Set(declared.flatMap((capabilities) => outsides.flatMap((outside) => riskReturnNotes({lineAnchor: null, capabilities, outside}))))];
 }
 
 /** Words that name a drawn line, in the four shipped languages. */
@@ -221,23 +238,44 @@ const LINE_WORDS: Record<SupportedLocale, RegExp> = {
 };
 
 describe('asset-set i18n — L3° never describes a line it cannot draw', () => {
-    it('finds the note the section renders, so the check below is not reading nothing', () => {
-        expect(RISK_RETURN_SECTION_SOURCE, 'the component source did not load').toContain('risk-asset-set-l3-scatter-note');
-        expect(renderedNoteKey(), 'could not read which key the scatter note renders — the check below would be vacuous').not.toBeNull();
+    it('finds the notes the lab can render and the keys each one renders, so the check below is not reading nothing', () => {
+        expect(RISK_RETURN_LEVEL_SOURCE, 'the component source did not load').toContain('-scatter-note');
+        // The lab's dots are assets and a benchmark, held or not, and never a portfolio: no anchor, no line.
+        const labDots = [
+            {id: 'asset-1', name: 'a', volatility: 0.2, annualReturn: 0.1, role: 'asset' as const},
+            {id: 'asset-2', name: 'b', volatility: 0.15, annualReturn: 0.05, role: 'benchmark' as const},
+            {id: 'benchmark', name: 'c', volatility: 0.18, annualReturn: 0.07, role: 'benchmark' as const},
+        ];
+        expect(capitalMarketLineAnchor(labDots), "premise: a chart of the lab's dots anchors no line").toBeNull();
+
+        const notes = notesWithoutALine();
+        expect(notes, 'the notes every chart carries were not found: the check below would read nothing').toEqual(expect.arrayContaining(['return', 'priceOnly']));
+        for (const note of notes) {
+            const keys = renderedNoteKeys(note);
+            expect(keys, `could not read which keys the "${note}" note renders`).not.toEqual([]);
+            for (const key of keys) expect(typeof at(en, key), `${key}, rendered by the "${note}" note, is not in en.json`).toBe('string');
+        }
+        // The reader reaches the line's own note too: what the positive control below stands on.
+        expect(renderedNoteKeys('line'), 'the reader no longer finds the keys of the line’s own note').toContain('risk.levels.l3.scatter.notes.line');
     });
 
-    it('positive control: the portfolio note, which is right where the line is drawn, would be caught', () => {
-        const portfolioNote = at(en, 'risk.levels.l3.scatter.note');
-        expect(typeof portfolioNote).toBe('string');
-        expect(LINE_WORDS.en.test(portfolioNote as string), 'the detector no longer recognises the sentence it was written for').toBe(true);
-    });
-
-    it('renders a note that mentions no line, in any of the four languages', () => {
-        const key = renderedNoteKey() as string;
-        const offenders = SUPPORTED_LOCALES.flatMap((locale) => {
-            const message = at(CATALOGUES[locale], key);
-            return typeof message === 'string' && LINE_WORDS[locale].test(message) ? [`${locale}: ${key} → ${JSON.stringify(message)}`] : [];
+    it("positive control: the line's own note, right where the line is drawn, would be caught in each language", () => {
+        const misses = SUPPORTED_LOCALES.flatMap((locale) => {
+            const message = at(CATALOGUES[locale], 'risk.levels.l3.scatter.notes.line');
+            return typeof message === 'string' && LINE_WORDS[locale].test(message) ? [] : [`${locale}: ${JSON.stringify(message)}`];
         });
+        expect(misses, 'the detector no longer recognises the sentence it is guarding against').toEqual([]);
+    });
+
+    it('renders notes that mention no line, in any of the four languages', () => {
+        const offenders = notesWithoutALine().flatMap((note) =>
+            renderedNoteKeys(note).flatMap((key) =>
+                SUPPORTED_LOCALES.flatMap((locale) => {
+                    const message = at(CATALOGUES[locale], key);
+                    return typeof message === 'string' && LINE_WORDS[locale].test(message) ? [`${locale}: ${note} → ${key} → ${JSON.stringify(message)}`] : [];
+                }),
+            ),
+        );
         expect(offenders, 'the scatter on Asset Global draws no line: a note that describes one restores, in words, the verdict the payload makes impossible').toEqual([]);
     });
 });

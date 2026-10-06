@@ -26,10 +26,11 @@
  *  - **the value cells** publish `data-measured`: the volatility as a percentage, the average annual
  *    return with its sign (`+` or U+2212), the ratios as `formatRatio` prints them today, `—` when
  *    nothing was measured;
- *  - **the return is renamed** "average annual return": the column's title key stays
- *    `risk.assetSet.levels.l3.expectedReturn` (its message changes), and the scatter's vertical axis is
- *    worded from a key of the lab's own, `risk.assetSet.levels.l3.axisReturn`, no longer from the
- *    portfolio L3's `risk.levels.l3.scatter.axisReturn`.
+ *  - **the return is renamed** "average annual return", and since the developer's review of 06/10/2026
+ *    its title is the short `risk.levels.l3.table.expectedReturnShort`: the full name,
+ *    `risk.assetSet.levels.l3.expectedReturn`, is the column menu's `displayName` and the first line of
+ *    the title's tooltip; the scatter's vertical axis is worded from a key of the lab's own,
+ *    `risk.assetSet.levels.l3.axisReturn`, no longer from the portfolio L3's `risk.levels.l3.scatter.axisReturn`.
  *
  * What does not change, and is pinned here so the rewrite cannot lose it: the error, loading, discarded
  * and empty branches with their retry; the scatter block (`-risk-return`, `-scatter`, `-scatter-note`).
@@ -970,6 +971,14 @@ describe('AssetSetRiskReturnSection — the headers explain, they do not link', 
         await fireEvent.click(screen.getByTestId(`dt-sort-${column}`));
         const help = await screen.findByRole('tooltip');
 
+        if (column === 'expectedReturn') {
+            // Its title is the short name since the developer's review of 06/10/2026, so its help opens
+            // with the full one, on a line of its own, and then says how it is computed.
+            const fullName = get(_)('risk.assetSet.levels.l3.expectedReturn');
+            expect((help.textContent ?? '').split('\n')[0].trim(), 'expectedReturn: the tooltip does not open with the full name, on a line of its own').toBe(fullName);
+            expect(normalize(help.textContent), `expectedReturn: the tooltip is not the full name followed by the message of ${helpKey(column)}`).toBe(normalize(get(_)('risk.levels.l3.table.namedHelp', {values: {name: fullName, help: get(_)(helpKey(column))}})));
+            return;
+        }
         expect(normalize(help.textContent), `${column}: the tooltip is not the message of ${helpKey(column)}`).toBe(normalize(get(_)(helpKey(column))));
     });
 
@@ -989,10 +998,19 @@ describe('AssetSetRiskReturnSection — the headers explain, they do not link', 
         expect(screen.queryByRole('tooltip'), 'the asset column has no help of its own to show').toBeNull();
     });
 
-    it('expectedReturn: its title is still worded from risk.assetSet.levels.l3.expectedReturn, whose message is what changes', () => {
-        mountWith(MAIN);
+    it('expectedReturn: its title is the short name, and the full name is the column menu’s and the tooltip’s first line', async () => {
+        const bound = mountBinding(MAIN);
+        const fullName = get(_)('risk.assetSet.levels.l3.expectedReturn');
 
-        expect(normalize(screen.getByTestId('dt-sort-expectedReturn').textContent), 'the return column must keep its key: the rename is a change of message, not of key').toBe(normalize(get(_)('risk.assetSet.levels.l3.expectedReturn')));
+        expect(normalize(screen.getByTestId('dt-sort-expectedReturn').textContent), 'the return column’s title must be the short name (the developer’s review of 06/10/2026)').toBe(normalize(get(_)('risk.levels.l3.table.expectedReturnShort')));
+
+        const table = bound.tableRef as {getColumnsForVisibility?: () => {id: string; displayName?: string | (() => string)}[]} | undefined;
+        const listed = table?.getColumnsForVisibility?.().find((column) => column.id === 'expectedReturn')?.displayName;
+        expect(typeof listed === 'function' ? listed() : listed, 'the column menu must name the return in full').toBe(fullName);
+
+        await fireEvent.click(screen.getByTestId('dt-sort-expectedReturn'));
+        const help = await screen.findByRole('tooltip');
+        expect((help.textContent ?? '').split('\n')[0].trim(), 'the title’s tooltip must open with the full name').toBe(fullName);
     });
 });
 

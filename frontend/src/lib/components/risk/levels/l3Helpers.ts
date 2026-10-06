@@ -35,6 +35,7 @@ import {finite, okOutput, record} from './levelHelpers';
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 import {resultByCode} from '../riskAnalysisHelpers';
 import type {RiskReturnPoint} from '$lib/components/charts/scatterChartHelpers';
+import type {RiskReturnRow} from '../riskReturnLevel';
 import {formatShare} from './shareFormat';
 
 /** Which series the figures on screen were measured on. */
@@ -127,6 +128,8 @@ export interface RiskReturnDetails {
  * (developer's review of 05/10/2026). The holding's coordinates win because they
  * share the calendar of every other dot on the plot; the comparison's are kept for
  * the benchmark the reader does not hold, which has no other place to come from.
+ * Its id stays the holding's, `asset-<id>`, as the lab's D371 reference does: the dot
+ * still selects its row in the table above it, and only its role says "benchmark".
  */
 export function buildRiskReturnPoints({riskReturnResult, comparisonResult, assetNames, benchmarkName, portfolioLabel, details}: RiskReturnInput): RiskReturnPoint[] {
     const output = okOutput(riskReturnResult);
@@ -163,7 +166,7 @@ export function buildRiskReturnPoints({riskReturnResult, comparisonResult, asset
         if (isBenchmark) benchmarkHeld = true;
         const detail = !details ? undefined : isBenchmark ? (share === null ? details.benchmark : details.heldBenchmark(share)) : share === null ? undefined : details.weight(share);
         points.push({
-            id: isBenchmark ? 'benchmark' : `asset-${assetId}`,
+            id: `asset-${assetId}`,
             name: assetNames[assetId] ?? (isBenchmark ? benchmarkName : null) ?? `#${assetId}`,
             volatility,
             annualReturn,
@@ -207,4 +210,112 @@ export function buildRiskReturnPoints({riskReturnResult, comparisonResult, asset
     }
 
     return points;
+}
+
+export interface RiskReturnRowsInput {
+    /** `asset_risk_return`, from the current-composition wave. */
+    riskReturnResult: RiskAnalyticResult | null;
+    /** `comparison`: which asset is the benchmark, its own figures, and the portfolio's beta against it. */
+    comparisonResult: RiskAnalyticResult | null;
+    /** Display names, resolved by the panel. */
+    assetNames: Record<number, string>;
+    /** The benchmark's name, or null when none is chosen. */
+    benchmarkName: string | null;
+    /** Label of the portfolio's own row, already translated. */
+    portfolioLabel: string;
+    /**
+     * The portfolio's Sortino, Sharpe and volatility from `historical_kpi` (`buildRiskAdjusted`),
+     * on the wave `selectKpiWave` picked.
+     */
+    portfolioKpi: {sortino: number | null; sharpe: number | null; volatility: number | null};
+}
+
+/** A ratio the payload may not carry at all: `undefined` when the field is absent, else a number or `null`. */
+function carried(source: Record<string, unknown>, field: string): number | null | undefined {
+    return field in source && source[field] !== undefined ? finite(source[field]) : undefined;
+}
+
+/**
+ * The table's rows on a portfolio page (developer's review of 06/10/2026): the portfolio first,
+ * the benchmark second, each tinted like its dot, then one row per holding the analytic measured,
+ * heaviest first. The four L3 cards are gone: their figures are the portfolio's row.
+ *
+ * ⚠️ EACH ROW AGREES WITH ITS OWN DOT. The portfolio's volatility and return are the dot's pair
+ * (`asset_risk_return`); its Sortino and Sharpe are `historical_kpi`'s, which read the same primary
+ * returns with the same annualization in the same current-composition request — so its Sharpe is
+ * the slope from the risk-free rate through its dot, up to the rate's daily conversion (confirmed
+ * by Risk, 06/10/2026). A holding's figures are its item's; the benchmark nobody holds takes its
+ * figures from `comparison`, on beta's calendar, like its dot.
+ *
+ * A figure this payload does not carry stays `undefined` — the per-holding ratios until the
+ * backend sends them — so its cell says "not calculated here", never "not measurable".
+ */
+export function buildRiskReturnRows({riskReturnResult, comparisonResult, assetNames, benchmarkName, portfolioLabel, portfolioKpi}: RiskReturnRowsInput): RiskReturnRow[] {
+    const output = okOutput(riskReturnResult);
+    const comparison = okOutput(comparisonResult);
+    const benchmarkId = finite(comparison?.comparison_asset_id);
+    const rows: RiskReturnRow[] = [];
+
+    // The portfolio is the whole of itself: weight 1, as its dot. Its asset id is never read — an
+    // added row is identified by its role (`rowIdOf`) — and 0 is no asset's id.
+    const hasKpi = portfolioKpi.sortino !== null || portfolioKpi.sharpe !== null || portfolioKpi.volatility !== null;
+    if (output || hasKpi) {
+        rows.push({
+            assetId: 0,
+            name: portfolioLabel,
+            role: 'portfolio',
+            added: true,
+            weight: 1,
+            // Without the current-composition answer, the KPI's own volatility, on its own perimeter.
+            volatility: output ? finite(output.portfolio_volatility) : portfolioKpi.volatility,
+            expectedReturn: output ? finite(output.portfolio_expected_annual_return) : null,
+            sortino: portfolioKpi.sortino,
+            sharpe: portfolioKpi.sharpe,
+            beta: comparison ? finite(comparison.beta) : undefined,
+            correlation: comparison ? finite(comparison.correlation) : undefined,
+        });
+    }
+
+    let benchmarkHeld = false;
+    const holdings: RiskReturnRow[] = [];
+    const items = output && Array.isArray(output.items) ? output.items : [];
+    for (const raw of items) {
+        const item = record(raw);
+        const assetId = finite(item.asset_id);
+        if (assetId === null) continue;
+        const isBenchmark = benchmarkId !== null && assetId === benchmarkId;
+        if (isBenchmark) benchmarkHeld = true;
+        holdings.push({
+            assetId,
+            name: assetNames[assetId] ?? `#${assetId}`,
+            weight: finite(item.weight),
+            volatility: finite(item.volatility),
+            expectedReturn: finite(item.expected_annual_return),
+            sortino: carried(item, 'sortino'),
+            sharpe: carried(item, 'sharpe'),
+            isReference: isBenchmark,
+            ...(isBenchmark ? {role: 'benchmark' as const} : {}),
+        });
+    }
+
+    // A benchmark nobody holds is a row of its own, added for the comparison: no weight, and its
+    // beta and correlation are against itself — the dash that says so (`isReference`).
+    if (comparison && benchmarkId !== null && !benchmarkHeld) {
+        rows.push({
+            assetId: benchmarkId,
+            name: benchmarkName ?? assetNames[benchmarkId] ?? `#${benchmarkId}`,
+            role: 'benchmark',
+            added: true,
+            isReference: true,
+            weight: null,
+            volatility: finite(comparison.comparison_volatility),
+            expectedReturn: finite(comparison.comparison_expected_annual_return),
+            sortino: carried(comparison, 'comparison_sortino'),
+            sharpe: carried(comparison, 'comparison_sharpe'),
+        });
+    }
+
+    // Holdings heaviest first; one without a weight goes last, then by id so the order is stable.
+    holdings.sort((left, right) => (right.weight ?? -Infinity) - (left.weight ?? -Infinity) || left.assetId - right.assetId);
+    return [...rows, ...holdings];
 }

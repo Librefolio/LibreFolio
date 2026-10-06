@@ -70,11 +70,6 @@
         sentiment?: 'positive' | 'negative' | 'neutral';
         /** MkDocs path for the ⓘ link. Omitted → no link. Slugs come from the docs mandate. */
         docsPath?: string;
-        /**
-         * What the ⓘ says on hover: one sentence on what the metric is. Omitted → the title,
-         * which on a card whose title is the metric's own name only repeats it.
-         */
-        docsHint?: string;
         /** Whether to show the skeleton instead of the value. */
         loading?: boolean;
         /** Stable E2E selector for the card root. */
@@ -85,7 +80,7 @@
         sparkline?: Snippet;
     }
 
-    let {label, technicalName, value = '—', numericValue, formatValue, caption, captionScroll = false, sentiment = 'neutral', docsPath, docsHint, loading = false, testId, submetrics, sparkline}: Props = $props();
+    let {label, technicalName, value = '—', numericValue, formatValue, caption, captionScroll = false, sentiment = 'neutral', docsPath, loading = false, testId, submetrics, sparkline}: Props = $props();
 
     const accentClass = $derived(sentiment === 'positive' ? 'bg-green-500 dark:bg-green-400' : sentiment === 'negative' ? 'bg-red-500 dark:bg-red-400' : null);
     const valueClass = $derived(sentiment === 'positive' ? 'text-green-700 dark:text-green-400' : sentiment === 'negative' ? 'text-red-700 dark:text-red-400' : 'text-gray-800 dark:text-gray-100');
@@ -106,7 +101,7 @@
             <div class="flex items-start gap-1">
                 <p class="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500 line-clamp-2" data-testid={testId ? `${testId}-label` : undefined}>{label}</p>
                 {#if docsPath}
-                    <DocsLink path={docsPath} label={docsHint ?? label} size={14} testId={testId ? `${testId}-docs` : undefined} />
+                    <DocsLink path={docsPath} {label} size={14} testId={testId ? `${testId}-docs` : undefined} />
                 {/if}
             </div>
             {#if technicalName}
