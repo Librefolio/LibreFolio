@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import sys
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Type
@@ -65,6 +66,10 @@ class AbstractPluginRegistry:
         setattr(cls, cls._get_storage_attribute(), {})
         cls._discovery_done = False
         cls._discovery_errors = ()
+        # Serialises the first discovery: callers run on worker threads (asyncio.to_thread), and a
+        # caller arriving mid-discovery must wait for the full catalogue. Re-entrant, so a plugin
+        # module that calls back into its own registry while it is being imported does not block.
+        cls._discovery_lock = threading.RLock()
 
     @classmethod
     def register(cls, plugin_class: Type) -> None:
@@ -110,10 +115,26 @@ class AbstractPluginRegistry:
 
     @classmethod
     def auto_discover(cls) -> None:
-        """Import plugin modules from the registry folder exactly once."""
+        """Import plugin modules from the registry folder exactly once, safely across threads.
+
+        ``_discovery_done`` turns true only after every module has been executed, and the whole
+        discovery runs under the registry's lock: a concurrent caller waits for it instead of
+        skipping the modules another thread has put in ``sys.modules`` but not executed yet, and
+        walking a half-filled catalogue.
+        """
         if cls._discovery_done:
             cls._raise_discovery_errors_if_needed()
             return
+        with cls._discovery_lock:
+            if cls._discovery_done:
+                cls._raise_discovery_errors_if_needed()
+                return
+            cls._discover_modules()
+        cls._raise_discovery_errors_if_needed()
+
+    @classmethod
+    def _discover_modules(cls) -> None:
+        """Import every plugin module of the folder; called once, under the discovery lock."""
         target_dir = cls._get_plugin_directory()
 
         if not target_dir.exists():
@@ -146,9 +167,9 @@ class AbstractPluginRegistry:
                 )
                 failures.append(failure)
                 logger.exception("Error importing plugin module", module_name=module_name, error_type=failure.error_type, error=failure.message)
-        cls._discovery_done = True
+        # Errors first: a caller that sees the discovery done without the lock also sees its errors.
         cls._discovery_errors = tuple(failures)
-        cls._raise_discovery_errors_if_needed()
+        cls._discovery_done = True
 
     @classmethod
     def get_discovery_errors(cls) -> tuple[PluginDiscoveryFailure, ...]:
@@ -248,7 +269,7 @@ class AbstractProviderRegistry(AbstractPluginRegistry):
     def list_providers(cls) -> List[Dict[str, str]]:
         providers = []
         cls.auto_discover()
-        for code, provider_class in cls._providers.items():
+        for code, provider_class in list(cls._providers.items()):
             try:
                 instance = provider_class()
                 name = getattr(instance, "provider_name", None) or getattr(instance, "name", code)
@@ -260,7 +281,7 @@ class AbstractProviderRegistry(AbstractPluginRegistry):
     @classmethod
     def shutdown_all_providers(cls) -> None:  # pragma: no cover
         cls.auto_discover()
-        for code, provider_class in cls._providers.items():
+        for code, provider_class in list(cls._providers.items()):
             try:
                 provider_class().shutdown()
             except Exception as e:
@@ -400,7 +421,7 @@ class BRIMProviderRegistry(AbstractProviderRegistry):
 
         # Get all plugins with their instances and priorities
         plugins_with_priority = []
-        for code, plugin_cls in cls._providers.items():
+        for code, plugin_cls in list(cls._providers.items()):
             try:
                 instance = plugin_cls()
                 priority = getattr(instance, "detection_priority", 100)
@@ -444,7 +465,7 @@ class BRIMProviderRegistry(AbstractProviderRegistry):
         """
         cls.auto_discover()
         compatible: list[tuple[str, int]] = []
-        for code, plugin_cls in cls._providers.items():
+        for code, plugin_cls in list(cls._providers.items()):
             try:
                 instance = plugin_cls()
                 if instance.can_parse(file_path):
@@ -464,7 +485,7 @@ class BRIMProviderRegistry(AbstractProviderRegistry):
         """
         cls.auto_discover()
         result = []
-        for _code, plugin_cls in cls._providers.items():
+        for _code, plugin_cls in list(cls._providers.items()):
             try:
                 instance = plugin_cls()
                 result.append(instance.to_plugin_info())

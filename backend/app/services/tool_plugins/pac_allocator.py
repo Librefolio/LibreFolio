@@ -70,12 +70,12 @@ _BACKEND_ROOT = Path(__file__).resolve().parents[3]
 _REPO_ROOT = _BACKEND_ROOT.parent
 
 # Time reserved *after* the solver returns, for the exact replay and the report.
-# See the comment in `compute()` for how it was sized — and note that this is a
-# *provisional* number pending the scale benchmark: it is registered as one of
-# the two values that work must re-measure, in
-# `13_pacAllocator/implementation/plan-phase00Step3PacRebalancerSolverPolicies.prompt.md`,
-# checklist item 13. Listed there rather than only here, because an accurate
-# comment ages without announcing it.
+# Re-measured on 2026-10-06 (step S5 of
+# `13_pacAllocator/implementation/plan-phase00PacSolverRobustness.prompt.md`,
+# which closes checklist item 13 of the Step3 solver-policies plan): that work
+# took 6.4-12.9 ms. The value stays as a deliberate over-reserve; the comment in
+# `compute()` says why it costs nothing. The measurements live in the plan
+# rather than only here, because an accurate comment ages without announcing it.
 _POST_ENGINE_RESERVE_MS = 2_000
 
 _PLAN_POLICY = (
@@ -170,19 +170,21 @@ class PacAllocatorTool(ToolPlugin):
             # reach SCIP instead of leaving the solver on its own 3.5 s default.
             #
             # The reserve covers what runs *after* the solver returns: the exact
-            # replay of the candidate plus report construction. Measured at
-            # 0.7-1.0 ms, and — corrected on 2026-09-22 — **flat in the size of
-            # the domain**: the replay evaluates one candidate, and a candidate
-            # has as many components as there are decisions, not as many as
-            # there are possible candidates. Across 16, 585 and 4 008 004
-            # candidates (2, 3 and 4 decisions) the replay does not move above
-            # noise. The earlier claim that it "grows with the domain" was
-            # wrong, not merely stale.
+            # replay of the candidate, the rounding top-ups, the conclusion and
+            # the report. Measured on 2026-10-06 at 6.4-12.9 ms on synthetic
+            # 5x2, 10x2 and 10x3 requests (assets x brokers), with a machine
+            # load between 6 and 28; SCIP itself overran its 30 s budget by at
+            # most 8 ms. It stays small because the replay evaluates one
+            # candidate, whose size is the number of decisions, not the number
+            # of possible candidates (the 0.7-1.0 ms measured on 2026-09-22
+            # covered the replay alone, flat across 16 to 4 008 004 candidates).
             #
-            # 2 000 ms is therefore a deliberate over-reserve against a decision
-            # count far beyond anything measured, not a projection. There are
-            # 14 000 ms between the effective engine (30 000) and soft (44 000)
-            # timeouts, so it leaves the window intact.
+            # 2 000 ms is therefore a deliberate over-reserve, not a projection,
+            # and it costs nothing: the claim only checks that the soft window
+            # (44 000 ms from the moment the job got its slot, child start-up
+            # included) still holds 30 000 + 2 000 ms. The JSON encoding and the
+            # strict output check run after this method returns, outside the
+            # reserve: at most 2.8 ms for a 28.5 KB result.
             window = context.claim_engine_window(post_engine_reserve_ms=_POST_ENGINE_RESERVE_MS)
             try:
                 return plan_pac_allocation(

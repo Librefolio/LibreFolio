@@ -532,6 +532,26 @@ Rebalancer: APPROVED | CHANGES REQUIRED
 - [ ] 12. Correggere e ripetere superfici respinte.
 - [ ] 13. Congelare doppio `APPROVED`.
 
+> **Nota 2026-10-05 (chiusura del round 5).** Il PAC è integrato in `dev_release2`
+> (`7038c2224`). Le caselle restano come sono: questa nota dice dove sono finiti i punti,
+> senza spuntarli. La UI è stata costruita nel Passo C del
+> [piano Round 5](plan-phase00PacRound5PostMerge.prompt.md) e rivista col developer nei
+> round 2–14.
+> - **1–6, 8–10 e 12. UI del PAC.** Fatti per il PAC: codice nel commit `6f29ec1cf` (02/10),
+>   correzioni in `0900f11fa` (05/10). Il developer l'ha provata nella copia di prod sulla
+>   porta 6161 e ha dato il via libera nel R14.5: «è tutto perfetto… procedi con
+>   l'integrazione».
+>   - Item 2: il planner non usa `ExactQuantityInput`. I campi decimali restano testo
+>     esatto, controllato da `planner/decimal.ts`, senza passare da `Number`.
+>   - Item 8: i test unitari registrati sono quelli di
+>     [handoff §0.4](../../16_toolPlatform/handoff-pac-D.md); `front check` e `front build`
+>     sono passati ai gate del 05/10.
+> - **7, 11 e 13. UI del Rebalancer e doppio `APPROVED`.** Non fatti: vanno con l'analisi
+>   del Rebalancer (riga 14 del [README](README.md)). Per ora c'è un solo `APPROVED`, quello
+>   del PAC.
+> - Gli E2E del PAC si fanno dopo il Rebalancer, insieme ai suoi, sulle parti comuni
+>   (decisione del developer del 05/10).
+
 ## 14. Stop conditions
 
 - DTO non congelato;
