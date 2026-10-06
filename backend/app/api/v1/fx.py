@@ -592,7 +592,7 @@ async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: exp
             except SignalRequestValidationError as e:
                 raise HTTPException(status_code=422, detail=str(e)) from e
             warmup_days = min(
-                plan.max_history_points_before_visible,
+                plan.max_history_days_before_visible,
                 (conversion.date_range.start - date.min).days,
             )
             signal_start = conversion.date_range.start - timedelta(days=warmup_days)

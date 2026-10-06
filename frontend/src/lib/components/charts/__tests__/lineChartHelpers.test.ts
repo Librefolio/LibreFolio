@@ -268,10 +268,10 @@ describe('buildBandSeries', () => {
         expect(result[1].data).toEqual([10, 10, 10]); // [10-0, 11-1, 12-2]
     });
 
-    it('maps a date absent from the signal to null across all three series', () => {
+    it('bridges an axis date absent from the signal on the fill by axis position, and leaves the middle line empty there', () => {
         const result = buildBandSeries(signal, ['2026-01-01', '2099-12-31', '2026-01-03'], false);
-        expect(result[0].data).toEqual([0, null, 2]);
-        expect(result[1].data).toEqual([10, null, 10]);
+        expect(result[0].data).toEqual([0, 1, 2]);
+        expect(result[1].data).toEqual([10, 10, 10]);
         expect(result[2].data).toEqual([5, null, 7]);
     });
 

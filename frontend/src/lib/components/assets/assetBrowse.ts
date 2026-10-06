@@ -76,12 +76,13 @@ export function resetAssetBrowse(): void {
 registerClientSessionReset('assetBrowse', resetAssetBrowse);
 
 // The list page's usage panels, copied: a +page.svelte cannot be imported. `assetBrowse.test.ts`
-// keeps this function identical to `assetScope` in `routes/(app)/assets/+page.svelte`.
+// keeps this function identical to `assetScope` in `routes/(app)/assets/+page.svelte`. The panels read
+// what is held now (`held_by_me`, `held_by_others` from the asset list), not who ever traded.
 type AssetScope = 'own' | 'others' | 'analysis';
 
-function assetScope(a: {tx_count?: number; tx_count_own?: number}): AssetScope {
-    if ((a.tx_count_own ?? 0) > 0) return 'own';
-    if ((a.tx_count ?? 0) > 0) return 'others';
+function assetScope(a: {held_by_me?: boolean; held_by_others?: boolean}): AssetScope {
+    if (a.held_by_me) return 'own';
+    if (a.held_by_others) return 'others';
     return 'analysis';
 }
 

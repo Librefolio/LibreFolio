@@ -27,7 +27,7 @@ import {untrack} from 'svelte';
 
 import {buildRiskAnalyticRequest, buildRiskQueryRequest, canonicalizeScope, type RiskAnalyticParameters} from '$lib/risk/riskRequest';
 import {riskDataQuality, type RiskDataQualityReport} from '$lib/risk/riskTypes';
-import {fetchRiskCatalog, fetchRiskScenarioCatalog, hasRiskCapability, invalidateRisk, queryRisk, type RiskAnalyticResult, type RiskCatalogResponse, type RiskMode, type RiskScenarioCatalogResponse, type RiskScope} from '$lib/stores/risk/riskStore.svelte';
+import {fetchRiskCatalog, fetchRiskScenarioCatalog, hasRiskCapability, invalidateRisk, queryRisk, RISK_DISCARD_ATTEMPTS, type RiskAnalyticResult, type RiskCatalogResponse, type RiskMode, type RiskScenarioCatalogResponse, type RiskScope} from '$lib/stores/risk/riskStore.svelte';
 
 import {buildBaseAnalytics, normalizeQualityIssue, resultByCode} from '$lib/components/risk/riskAnalysisHelpers';
 import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
@@ -36,6 +36,28 @@ import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBann
 export type OnDemandAnalysis = 'comparison' | 'stress' | 'replay' | 'simulation';
 
 export const ON_DEMAND_ANALYSES: readonly OnDemandAnalysis[] = ['comparison', 'stress', 'replay', 'simulation'];
+
+/** The error code a level shows when one of its on-demand answers was discarded on every attempt
+ *  (`RISK_DISCARD_ATTEMPTS`); worded as `risk.errors.answer_discarded`, like every other error
+ *  code a level shows. */
+export const ANSWER_DISCARDED_CODE = 'answer_discarded';
+
+/**
+ * The discarded-answer code for a level whose analyses include a discarded one, once however many.
+ *
+ * A level cannot say which of its steps lost its answer, and does not need to: the cure is the same
+ * — run it again — and one sentence says so.
+ */
+export function discardedErrorCodes(discarded: Readonly<Record<OnDemandAnalysis, boolean>>, analyses: readonly OnDemandAnalysis[]): string[] {
+    return analyses.some((analysis) => discarded[analysis]) ? [ANSWER_DISCARDED_CODE] : [];
+}
+
+/**
+ * Which level discloses each on-demand analysis: the benchmark comparison under L3, the three
+ * what-if steps under L4. Every analysis belongs to exactly one level, so a discarded answer is
+ * never disclosed twice, nor nowhere.
+ */
+export const LEVEL_ON_DEMAND_ANALYSES = {l3: ['comparison'], l4: ['stress', 'replay', 'simulation']} as const satisfies Record<'l3' | 'l4', readonly OnDemandAnalysis[]>;
 
 /** The reactive inputs a host component feeds in; read through a getter so the
  *  controller tracks them instead of capturing a snapshot at construction. */
@@ -99,6 +121,10 @@ export interface RiskControllerOptions {
      * half of clause ⓪, *one preparation per request*.
      */
     includeAssetSetLevels?: boolean;
+    /** L1°'s share of the per-asset wave only (`buildBaseAnalytics`): the lab's loss level, never with the benchmark. */
+    includeAssetSetLossLevels?: boolean;
+    /** L3°'s share of the per-asset wave only: the KPI, the risk/return pair and the comparison. */
+    includeAssetSetPaidLevels?: boolean;
 }
 
 /**
@@ -120,6 +146,131 @@ export function baseSignature(inputs: RiskControllerInputs): string {
         // existed.
         assetSetBenchmarkId: inputs.assetSetBenchmarkId ?? undefined,
     });
+}
+
+type SingleOutcome = {kind: 'answered'; result: RiskAnalyticResult | null} | {kind: 'unsupported'} | {kind: 'discarded'};
+
+const SEVERITY_RANK: Record<DataQualityIssue['severity'], number> = {info: 0, warning: 1, error: 2};
+/** Date-range parameters that widen on a merge instead of keeping the first issue's value. */
+const RANGE_PARAMS = ['date_from', 'date_to', 'dates_count'] as const;
+
+type IssueParams = NonNullable<DataQualityIssue['message_params']>;
+
+function isoOrNull(value: unknown): string | null {
+    return typeof value === 'string' && value !== '' ? value : null;
+}
+
+function numberOrNull(value: unknown): number | null {
+    return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+/** The first issue's parameters, with keys only the next one has added; ranges widen, `count` is set by the caller. */
+function mergeParams(first: IssueParams | undefined, next: IssueParams | undefined): IssueParams | undefined {
+    if (!first && !next) return undefined;
+    const merged: IssueParams = {...(next ?? {}), ...(first ?? {})};
+    const from = [isoOrNull(first?.date_from), isoOrNull(next?.date_from)].filter((value): value is string => value !== null).sort();
+    const to = [isoOrNull(first?.date_to), isoOrNull(next?.date_to)].filter((value): value is string => value !== null).sort();
+    if (from.length > 0) merged.date_from = from[0];
+    if (to.length > 0) merged.date_to = to[to.length - 1];
+    const datesCount = [numberOrNull(first?.dates_count), numberOrNull(next?.dates_count)].filter((value): value is number => value !== null);
+    if (datesCount.length > 0) merged.dates_count = Math.max(...datesCount);
+    return merged;
+}
+
+/**
+ * A copy of the issue's own shape. Not `structuredClone`: the controller's results live in
+ * `$state`, so an issue can hold Svelte proxies, which `structuredClone` refuses to clone.
+ */
+function copyIssue(issue: DataQualityIssue): DataQualityIssue {
+    const copy: DataQualityIssue = {...issue};
+    if (issue.message_params) copy.message_params = {...issue.message_params};
+    if (issue.affected_asset_ids) copy.affected_asset_ids = [...issue.affected_asset_ids];
+    if (issue.affected_asset_names) copy.affected_asset_names = [...issue.affected_asset_names];
+    if (issue.affected_fx_pairs) copy.affected_fx_pairs = [...issue.affected_fx_pairs];
+    return copy;
+}
+
+/** Order-insensitive on object keys, order-sensitive on lists: equal JSON after sorting keys. */
+function sameIssue(left: DataQualityIssue, right: DataQualityIssue): boolean {
+    const canonical = (value: unknown): unknown =>
+        Array.isArray(value)
+            ? value.map(canonical)
+            : value !== null && typeof value === 'object'
+              ? Object.fromEntries(
+                    Object.entries(value)
+                        .filter(([, entry]) => entry !== undefined)
+                        .sort(([a], [b]) => a.localeCompare(b))
+                        .map(([key, entry]) => [key, canonical(entry)]),
+                )
+              : value;
+    return JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
+}
+
+function combineIssues(first: DataQualityIssue, next: DataQualityIssue): DataQualityIssue {
+    const merged: DataQualityIssue = {...first};
+    if (first.affected_asset_ids !== undefined || next.affected_asset_ids !== undefined) {
+        // Names travel with their ids: the first real name seen for an id wins, and `#<id>` stands in
+        // only where no issue named it — and only when some issue carries names at all.
+        const ids: number[] = [];
+        const names = new Map<number, string>();
+        for (const issue of [first, next]) {
+            (issue.affected_asset_ids ?? []).forEach((id, index) => {
+                if (!ids.includes(id)) ids.push(id);
+                const name = issue.affected_asset_names?.[index];
+                // A held `#<id>` is a stand-in, not a name: a real one arriving later replaces it.
+                if (name !== undefined && name !== `#${id}` && !names.has(id)) names.set(id, name);
+            });
+        }
+        merged.affected_asset_ids = ids;
+        if (first.affected_asset_names !== undefined || next.affected_asset_names !== undefined) merged.affected_asset_names = ids.map((id) => names.get(id) ?? `#${id}`);
+    }
+    if (first.affected_fx_pairs !== undefined || next.affected_fx_pairs !== undefined) {
+        const pairs = [...(first.affected_fx_pairs ?? [])];
+        for (const pair of next.affected_fx_pairs ?? []) if (!pairs.includes(pair)) pairs.push(pair);
+        merged.affected_fx_pairs = pairs;
+    }
+    if (SEVERITY_RANK[next.severity] > SEVERITY_RANK[first.severity]) merged.severity = next.severity;
+    merged.message_params = mergeParams(first.message_params, next.message_params);
+    // The count speaks for the list the issue is about: the pairs, else the assets. With neither, each
+    // count keeps the larger of its two values, a lower bound since the counted things do not travel —
+    // `count` and `message_params.count` separately, so identical issues stay equal to their input.
+    const listed = (merged.affected_fx_pairs?.length ?? 0) > 0 ? merged.affected_fx_pairs!.length : (merged.affected_asset_ids?.length ?? 0) > 0 ? merged.affected_asset_ids!.length : null;
+    if (first.count != null || next.count != null) merged.count = listed ?? Math.max(numberOrNull(first.count) ?? 0, numberOrNull(next.count) ?? 0);
+    if (merged.message_params && 'count' in merged.message_params) {
+        merged.message_params = {...merged.message_params, count: listed ?? Math.max(numberOrNull(first.message_params?.count) ?? 0, numberOrNull(next.message_params?.count) ?? 0)};
+    }
+    if (merged.message_params === undefined) delete merged.message_params;
+    return merged;
+}
+
+/**
+ * Data-quality issues merged on the key the banner renders them by: `code` and `group_key`.
+ *
+ * `DataQualityBanner` keys each item by `code + group_key`, so two issues sharing that pair would
+ * make Svelte throw `each_key_duplicate`. They share it as soon as requests that prepare different
+ * windows carry issues — the Asset Global lab's controllers, a base wave beside a replay — each
+ * naming the stale assets of its own window. One item per key, naming everything any of them named:
+ * - asset ids and FX pairs are unions, in order of first appearance; names stay aligned with their
+ *   ids (the first name seen wins, `#<id>` when an issue names none);
+ * - `count` and `message_params.count` are the size of the union of the list the issue is about —
+ *   the pairs if it has any, else the assets; with neither, the larger count, a lower bound;
+ * - the most severe severity wins; everything else comes from the first issue, keys only a later
+ *   issue has are added, and a date range widens (`dates_count` keeps the larger, a lower bound,
+ *   since the dates themselves do not travel).
+ * Identical issues collapse to one, equal to the input — the Dashboard's case, unchanged. Inputs
+ * are never mutated. Exported because the lab merges its four controllers with the same rule.
+ */
+export function mergeQualityIssues(issues: Iterable<DataQualityIssue>): DataQualityIssue[] {
+    const merged = new Map<string, DataQualityIssue>();
+    for (const issue of issues) {
+        const key = `${issue.code}|${issue.group_key ?? ''}`;
+        const current = merged.get(key);
+        // An issue equal to the one already held adds nothing: skipping it keeps the Dashboard's
+        // identical reports equal to their input, whatever shape they arrive in.
+        if (current && sameIssue(current, issue)) continue;
+        merged.set(key, current ? combineIssues(current, issue) : copyIssue(issue));
+    }
+    return [...merged.values()];
 }
 
 export function createRiskPanelController(inputs: () => RiskControllerInputs, options: RiskControllerOptions = {}) {
@@ -152,6 +303,9 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
 
     let requestGeneration = 0;
     const generations: Record<OnDemandAnalysis, number> = {comparison: 0, stress: 0, replay: 0, simulation: 0};
+    /** On-demand answers that arrived and were discarded on every attempt — the same fact
+     *  `loadDiscarded` states for the base wave, kept per analysis. */
+    const discarded = $state<Record<OnDemandAnalysis, boolean>>({comparison: false, stress: false, replay: false, simulation: false});
     let lastBaseSignature = '';
     /**
      * Counts how many times the base signature actually moved.
@@ -211,11 +365,17 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
             generations[analysis] += 1;
             setResult(analysis, null);
             setLoading(analysis, false);
+            discarded[analysis] = false;
         }
         return inFlight;
     }
 
-    async function loadBase(force: boolean, reAskedAfterDiscard = false): Promise<void> {
+    /** The public entry: the bound on re-asks stays private, so no caller can start past it. */
+    function loadBase(force: boolean): Promise<void> {
+        return loadBaseAttempt(force, 1);
+    }
+
+    async function loadBaseAttempt(force: boolean, attempt: number): Promise<void> {
         const generation = ++requestGeneration;
         const {scope, dateStart, dateEnd, targetCurrency, appliedRiskFreePercent, assetSetBenchmarkId} = inputs();
         const hadResults = historicalResults.length > 0 || currentResults.length > 0;
@@ -242,6 +402,8 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
                 includeMonthlyVar: options.includeMonthlyVar === true,
                 includeCurrentCompositionRiskReturn: options.includeCurrentCompositionRiskReturn === true,
                 includeAssetSetLevels: options.includeAssetSetLevels === true,
+                includeAssetSetLossLevels: options.includeAssetSetLossLevels === true,
+                includeAssetSetPaidLevels: options.includeAssetSetPaidLevels === true,
                 assetSetBenchmarkId: assetSetBenchmarkId ?? null,
             };
             const historicalAnalytics = buildBaseAnalytics('historical', context);
@@ -280,12 +442,14 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
             // The analytics lengths are not decoration: the ternaries above *also* yield
             // null for "not asked", so without them the two nulls are indistinguishable.
             if ((historicalAnalytics.length > 0 && historical === null) || (currentAnalytics.length > 0 && current === null)) {
-                // Re-ask once, under the generation that did the discarding. The guard
-                // itself stays: discarding another account's answer is correct. What was
-                // missing is that a guard which protects by discarding must be able to
-                // say so, or the protection is indistinguishable from an absence of data.
-                if (!reAskedAfterDiscard) {
-                    await loadBase(force, true);
+                // Re-ask under the generation that did the discarding, up to
+                // RISK_DISCARD_ATTEMPTS in all (D374). The guard itself stays: discarding
+                // another account's answer is correct. What was missing is that a guard
+                // which protects by discarding must be able to say so, or the protection is
+                // indistinguishable from an absence of data. A superseded attempt never gets
+                // here: the generation check above returns first.
+                if (attempt < RISK_DISCARD_ATTEMPTS) {
+                    await loadBaseAttempt(force, attempt + 1);
                     return;
                 }
                 loadDiscarded = true;
@@ -305,9 +469,16 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
         }
     }
 
-    async function runSingle(code: string, mode: RiskMode, parameters: RiskAnalyticParameters): Promise<RiskAnalyticResult | null> {
+    /**
+     * One on-demand question, answered in one of three ways — kept apart because `queryRisk`
+     * answers in three: a response, a throw, and a *discard* (`null`, when the client session or
+     * the cache generation moved while the request was in flight). Folding the discard into "no
+     * result" made an analysis vanish without a word, which the live price polling of Asset Global
+     * (decision D11) turns from an accident into a routine: it invalidates the cache every 30 s.
+     */
+    async function runSingle(code: string, mode: RiskMode, parameters: RiskAnalyticParameters): Promise<SingleOutcome> {
         const {scope, dateStart, dateEnd, targetCurrency} = inputs();
-        if (!hasRiskCapability(catalog, code, scope.kind, mode)) return null;
+        if (!hasRiskCapability(catalog, code, scope.kind, mode)) return {kind: 'unsupported'};
         const response = await queryRisk(
             buildRiskQueryRequest({
                 scope,
@@ -319,7 +490,8 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
                 analytics: [buildRiskAnalyticRequest(`single-${code}`, code, parameters)],
             }),
         );
-        return response?.items?.[0] ?? null;
+        if (response === null) return {kind: 'discarded'};
+        return {kind: 'answered', result: response?.items?.[0] ?? null};
     }
 
     /**
@@ -331,10 +503,19 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
         const request = build();
         if (!request) return;
         const generation = ++generations[analysis];
+        discarded[analysis] = false;
         setLoading(analysis, true);
         try {
-            const result = await runSingle(request.code, request.mode, request.parameters);
-            if (generation === generations[analysis]) setResult(analysis, result);
+            let outcome = await runSingle(request.code, request.mode, request.parameters);
+            // Re-ask, as `loadBase` does, up to RISK_DISCARD_ATTEMPTS in all and only while this
+            // run is still the current question: a superseded run leaves everything to the one
+            // that replaced it. A throw is never re-asked; it goes to the catch below.
+            for (let attempt = 1; attempt < RISK_DISCARD_ATTEMPTS && outcome.kind === 'discarded' && generation === generations[analysis]; attempt += 1) {
+                outcome = await runSingle(request.code, request.mode, request.parameters);
+            }
+            if (generation !== generations[analysis]) return;
+            setResult(analysis, outcome.kind === 'answered' ? outcome.result : null);
+            discarded[analysis] = outcome.kind === 'discarded';
         } catch (error) {
             console.error(`[Risk] ${analysis} failed:`, error);
             if (generation === generations[analysis]) setResult(analysis, null);
@@ -400,17 +581,8 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
     );
     const qualityReports = $derived(allResults.map(riskDataQuality).filter((report): report is RiskDataQualityReport => report !== null));
 
-    const dataQualityIssues = $derived.by<DataQualityIssue[]>(() => {
-        const deduped = new Map<string, DataQualityIssue>();
-        for (const report of qualityReports) {
-            for (const issue of report?.issues ?? []) {
-                const normalized = normalizeQualityIssue(issue);
-                const key = [normalized.code, normalized.affected_asset_ids?.join(','), normalized.affected_fx_pairs?.join(',')].join('|');
-                deduped.set(key, normalized);
-            }
-        }
-        return [...deduped.values()];
-    });
+    // One item per banner key across every result, through the shared rule (`mergeQualityIssues`).
+    const dataQualityIssues = $derived(mergeQualityIssues(qualityReports.flatMap((report) => (report?.issues ?? []).map(normalizeQualityIssue))));
 
     const qualityStatus = $derived.by(() => {
         const statuses = qualityReports.map((report) => report?.data_quality_status);
@@ -492,11 +664,17 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
         get loadError() {
             return loadError;
         },
-        /** True when the base load's answer was discarded twice running. Distinct from
+        /** True when the base load's answer was discarded on every attempt. Distinct from
          *  `loadError` and from an empty result: the cure is to ask again, not to
          *  explain, so a surface reading this should offer the action, not a diagnosis. */
         get loadDiscarded() {
             return loadDiscarded;
+        },
+        /** Per on-demand analysis: its answer was discarded on every attempt. The same fact as
+         *  `loadDiscarded`, and the same cure: ask again. Cleared by a new run of that analysis,
+         *  by `resetAnalysis` and whenever the question changes. */
+        get discarded(): Readonly<Record<OnDemandAnalysis, boolean>> {
+            return discarded;
         },
         /** `ready` | `error` | `pending` — the attribute that separates "slow" from
          *  "failed", which a single `pending` could not say. */
@@ -531,6 +709,7 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
             generations[analysis] += 1;
             setResult(analysis, null);
             setLoading(analysis, false);
+            discarded[analysis] = false;
         },
         bumpGeneration: (analysis: OnDemandAnalysis) => {
             generations[analysis] += 1;

@@ -92,10 +92,10 @@ const REPLACE = {replaceState: true, keepFocus: true};
  * [3, 4, 1, 5]; with the inactive 2 open it is [3, 2, 4, 1, 5].
  */
 const API_ASSETS = [
-    {id: 1, display_name: 'Synthetic analysis A', currency: 'EUR', active: true, tx_count: 0, tx_count_own: 0},
-    {id: 2, display_name: 'Synthetic own, inactive', currency: 'EUR', active: false, tx_count: 3, tx_count_own: 3},
-    {id: 3, display_name: 'Synthetic own', currency: 'EUR', active: true, tx_count: 5, tx_count_own: 2},
-    {id: 4, display_name: 'Synthetic others', currency: 'EUR', active: true, tx_count: 4, tx_count_own: 0},
+    {id: 1, display_name: 'Synthetic analysis A', currency: 'EUR', active: true, held_by_me: false, held_by_others: false},
+    {id: 2, display_name: 'Synthetic own, inactive', currency: 'EUR', active: false, held_by_me: true, held_by_others: false},
+    {id: 3, display_name: 'Synthetic own', currency: 'EUR', active: true, held_by_me: true, held_by_others: true},
+    {id: 4, display_name: 'Synthetic others', currency: 'EUR', active: true, held_by_me: false, held_by_others: true},
     {id: 5, display_name: 'Synthetic analysis B', currency: 'USD', active: true},
 ];
 
@@ -439,7 +439,7 @@ describe('AssetBrowseNav — fewer than two assets to browse', () => {
     });
 
     it('shows no buttons when the default order holds only the open asset', async () => {
-        mocks.listAssets.mockResolvedValue([{id: 7, display_name: 'Synthetic only asset', currency: 'EUR', active: true, tx_count: 0, tx_count_own: 0}]);
+        mocks.listAssets.mockResolvedValue([{id: 7, display_name: 'Synthetic only asset', currency: 'EUR', active: true, held_by_me: false, held_by_others: false}]);
         mountOn(7);
         await arrive(DIRECT, 7);
 
