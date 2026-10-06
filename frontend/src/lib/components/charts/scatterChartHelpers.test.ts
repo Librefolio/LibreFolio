@@ -15,7 +15,7 @@
  */
 import {describe, expect, it} from 'vitest';
 
-import {buildScatterOption, capitalMarketLine, colorForRole, isPlaceable, MAX_SYMBOL_PX, MIN_SYMBOL_PX, symbolSizeForWeight, type RiskReturnPoint, type RiskReturnRole, type ScatterOptionInput, type ScatterOptionResult} from './scatterChartHelpers';
+import {buildScatterOption, capitalMarketLine, capitalMarketLineAnchor, colorForRole, isPlaceable, MAX_SYMBOL_PX, MIN_SYMBOL_PX, symbolSizeForWeight, type RiskReturnPoint, type RiskReturnRole, type ScatterOptionInput, type ScatterOptionResult} from './scatterChartHelpers';
 
 const LABELS = {volatility: 'Volatility', return: 'Return', capitalMarketLine: 'CML'};
 
@@ -116,9 +116,19 @@ describe('scatterChartHelpers', () => {
             expect(line![1][1]).toBeCloseTo(0.02 + 0.4 * 0.5, 10);
         });
 
-        /** No portfolio means no tangency point, so there is no line to assert. */
-        it('is absent without a portfolio point', () => {
-            expect(capitalMarketLine([point({id: 'a', role: 'asset'}), point({id: 'b', role: 'benchmark'})], 0.02)).toBeNull();
+        /**
+         * The benchmark anchors the line on any plot, a set of assets with no portfolio included
+         * (developer's review of 06/10/2026, on Asset Global's lab: «non compare la retta tra 0 e
+         * benchmark»): "better paid than the market" needs no aggregate to be true.
+         */
+        it('runs from the risk-free rate through the benchmark on a plot with no portfolio point', () => {
+            const line = capitalMarketLine([point({id: 'a', role: 'asset', volatility: 0.1, annualReturn: 0.05}), point({id: 'b', role: 'benchmark', volatility: 0.2, annualReturn: 0.1})], 0.02);
+
+            expect(line, 'a plot of assets and a benchmark draws no line').not.toBeNull();
+            expect(line![0]).toEqual([0, 0.02]);
+            // slope = (0.10 - 0.02) / 0.20 = 0.4; the benchmark is the widest dot, so the line ends on it.
+            expect(line![1][0]).toBeCloseTo(0.2, 10);
+            expect(line![1][1]).toBeCloseTo(0.1, 10);
         });
 
         it('is absent when the portfolio has no volatility, because the slope is undefined', () => {
@@ -144,6 +154,34 @@ describe('scatterChartHelpers', () => {
 
             expect(cml.silent).toBe(true);
             expect(cml.z).toBeLessThan(option.series.find((s: {id: string}) => s.id === 'scatter-portfolio').z);
+        });
+
+        /**
+         * The dot the line runs through (`capitalMarketLineAnchor`): the benchmark wherever one is placed,
+         * the portfolio only as the fallback, and nothing when neither has a volatility to give it a slope.
+         */
+        describe('the dot it runs through', () => {
+            it('is the benchmark on a plot with no portfolio point — a set of assets', () => {
+                expect(capitalMarketLineAnchor([point({id: 'asset-1', role: 'asset'}), point({id: 'benchmark', role: 'benchmark', volatility: 0.18, annualReturn: 0.07})])).toBe('benchmark');
+            });
+
+            it('falls back to the portfolio when no benchmark is placed', () => {
+                expect(capitalMarketLineAnchor([point({id: 'portfolio', role: 'portfolio', volatility: 0.15, annualReturn: 0.08}), point({id: 'asset-1', role: 'asset'})])).toBe('portfolio');
+            });
+
+            it('is nothing on a plot with neither a benchmark nor a portfolio', () => {
+                const plot = [point({id: 'asset-1', role: 'asset', volatility: 0.2}), point({id: 'asset-2', role: 'asset', volatility: 0.3})];
+
+                expect(capitalMarketLineAnchor(plot)).toBeNull();
+                expect(capitalMarketLine(plot, 0.02)).toBeNull();
+            });
+
+            it('is nothing when the benchmark has no volatility and no portfolio stands in for it', () => {
+                const plot = [point({id: 'asset-1', role: 'asset', volatility: 0.2}), point({id: 'benchmark', role: 'benchmark', volatility: 0, annualReturn: 0.03})];
+
+                expect(capitalMarketLineAnchor(plot), 'at zero volatility the slope is undefined: no vertical line').toBeNull();
+                expect(capitalMarketLine(plot, 0.02)).toBeNull();
+            });
         });
     });
 

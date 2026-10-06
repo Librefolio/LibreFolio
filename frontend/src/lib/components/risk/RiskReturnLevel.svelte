@@ -230,8 +230,9 @@
                 }
                 const raw = figure(row);
                 // `undefined`: not calculated here at all — a plain dash, with no tooltip to claim a
-                // measurement was attempted. Transitional: it ends when the backend sends the per-holding
-                // ratios (developer's review of 06/10/2026: «togli il tooltip, tanto al merge non ci dovrà essere»).
+                // measurement was attempted (developer's review of 06/10/2026: «togli il tooltip»).
+                // Since Risk's k6 the backend sends every per-holding ratio, so this is left for an
+                // answer that predates those fields; a holding k6 could not measure is `null`.
                 if (raw === undefined && RATIO_COLUMNS.has(id)) {
                     return {type: 'html', html: `<span class="${VALUE_CLASS}" data-testid="${testId}" data-measured="false" data-calculated="false">\u2014</span>`};
                 }

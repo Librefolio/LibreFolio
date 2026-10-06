@@ -18,7 +18,8 @@
  *  - **the notes under the chart, in reading order, each only where it applies** (`riskReturnNotes`):
  *    what is not plotted, what being above the line means, which return the dots use, that it comes
  *    from prices alone, where the line comes from, what a dot's size means. The two about the line need
- *    a line, so a chart without an anchor — the lab's — never describes one;
+ *    a line, so a chart without an anchor — the lab before a benchmark is placed — never describes one,
+ *    and the lab with a benchmark describes the line through it;
  *  - **a share is said only when it is a real, strictly positive number** (`outsideParts`).
  *
  * Every figure, name and id below is invented here. `measure` is a stand-in for the page's canvas:
@@ -185,9 +186,22 @@ describe('riskReturnNotes — one idea per line, in reading order, each only whe
         expect(riskReturnNotes({lineAnchor: 'portfolio', capabilities: PORTFOLIO_PAGE, outside: null})).toEqual(['above', 'return', 'priceOnly', 'line', 'size']);
     });
 
-    it('in the lab — no line, no weight, nothing outside — only the return and that it comes from prices', () => {
+    it('a chart with no line, no weight, nothing outside — the lab before a benchmark is placed — says only the return and that it comes from prices', () => {
         expect(riskReturnNotes({lineAnchor: null, capabilities: LAB})).toEqual(['return', 'priceOnly']);
         expect(riskReturnNotes({lineAnchor: null, capabilities: {ratios: true}})).toEqual(['return', 'priceOnly']);
+    });
+
+    /**
+     * The lab draws the line once a benchmark is placed (developer's review of 06/10/2026: «non compare la
+     * retta tra 0 e benchmark»): the benchmark anchors it on a plot with no portfolio (`capitalMarketLineAnchor`),
+     * so the lab says what being above it means and where it comes from — and still nothing of a dot's size,
+     * because its dots carry no weight.
+     */
+    it('in the lab with a benchmark — a line through it, no weight, nothing outside — what being above the line means, the return, prices only, where the line comes from, and no size', () => {
+        const notes = riskReturnNotes({lineAnchor: 'benchmark', capabilities: LAB});
+
+        expect(notes).toEqual(['above', 'return', 'priceOnly', 'line']);
+        expect(notes, 'the lab’s dots carry no weight: nothing to say about a dot’s size').not.toContain('size');
     });
 
     it('never describes a line it does not draw, whatever else the page declares', () => {

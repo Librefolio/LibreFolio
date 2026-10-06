@@ -25,9 +25,14 @@
      */
     interface Props {
         controller: RiskPanelController;
+        /**
+         * The risk-free rate the page applies, in percent. The benchmark's Sharpe is measured at
+         * the same rate as the portfolio's, or its row would rate it on a different footing.
+         */
+        riskFreePercent: number;
     }
 
-    let {controller}: Props = $props();
+    let {controller, riskFreePercent}: Props = $props();
 
     /** The choice in force, resolved by the picker: an id the asset list does not hold reads as null. */
     let selected = $state<number | null>(null);
@@ -93,7 +98,11 @@
         // not repeated here because the mock dataset moves under them.
         // The controller may call this launcher by itself (a re-run on a new period), so the
         // guard is here and not only in the effect: nothing but a confirmed choice is asked.
-        await controller.runGuarded('comparison', () => (benchmarkState !== 'set' || selected === null ? null : {code: 'comparison', mode: 'current_composition', parameters: {comparison_asset_id: selected}}));
+        //
+        // The two rates are `historical_kpi`'s (`riskAnalysisHelpers`), so the benchmark's Sharpe
+        // and Sortino stand beside the portfolio's on one footing. They are two because Sortino
+        // measures against a target return (the MAR), not against the risk-free rate.
+        await controller.runGuarded('comparison', () => (benchmarkState !== 'set' || selected === null ? null : {code: 'comparison', mode: 'current_composition', parameters: {comparison_asset_id: selected, risk_free_annual_rate: riskFreePercent / 100, target_annual_return: 0}}));
     }
 
     /**

@@ -169,6 +169,21 @@ interface RiskMockOptions {
      * byte for byte the payload of every other test.
      */
     concentration?: boolean;
+    /**
+     * Answers `comparison` as Risk's k6 answers it (06/10/2026): with `items`, one per holding the
+     * comparison could measure against the benchmark, carrying that holding's beta and correlation,
+     * beside the portfolio's own pair (`STUB_HOLDING_RELATIVES`).
+     *
+     * Holding 1 is on the list. Holding 2 is left off it, as the backend leaves off a holding with no
+     * prepared series or fewer than two pairs: its beta and correlation were measured and could not be,
+     * so its cells are the dash that explains itself — the case the list exists to tell apart from an
+     * answer that predates it. And the benchmark itself is never an item, held or not.
+     *
+     * Opt-in, and absent means ABSENT: without it the output carries no `items` key — an answer from
+     * before k6, which the contract still allows, since the field is optional — byte for byte the
+     * payload of every other test.
+     */
+    holdingRelatives?: boolean;
 }
 
 /**
@@ -406,6 +421,30 @@ function excludedWeightField(options: RiskMockOptions): {excluded_weight?: numbe
  */
 function concentrationFields(options: RiskMockOptions): {effective_number_of_assets?: number; diversification_ratio?: number} {
     return options.concentration ? {effective_number_of_assets: 2.07, diversification_ratio: 1.15} : {};
+}
+
+/** One `comparison` item as Risk's k6 sends it: a holding's beta and correlation, each optional, as the contract declares them. */
+interface StubComparisonItem {
+    asset_id: number;
+    beta?: number | null;
+    correlation?: number | null;
+}
+
+/**
+ * The holdings `comparison` measured, when a test asks for them (`holdingRelatives`): holding 1 alone, with
+ * a beta and a correlation of its own. ⚠️ INVENTED, like the rest of this stub, and apart from the
+ * portfolio's own pair (0.91 and 0.62), so a cell that read the wrong one shows it. Holding 2, the stub's
+ * other holding, is left off on purpose: see `holdingRelatives`.
+ */
+const STUB_HOLDING_RELATIVES: readonly StubComparisonItem[] = [{asset_id: 1, beta: 1.07, correlation: 0.74}];
+
+/**
+ * The `items` of the `comparison` output, only when a test asked for them (`holdingRelatives`). Spread like
+ * `excludedWeightField`: with the option absent no key is added. The benchmark is never one of its own
+ * items, so a held one is left off whatever the list holds.
+ */
+function holdingRelativesField(comparisonAssetId: number, options: RiskMockOptions): {items?: StubComparisonItem[]} {
+    return options.holdingRelatives ? {items: STUB_HOLDING_RELATIVES.filter((item) => item.asset_id !== comparisonAssetId)} : {};
 }
 
 function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options: RiskMockOptions): Record<string, unknown> {
@@ -699,6 +738,7 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
                         {date: '2025-02-01', primary_cumulative_return: 0.04, comparison_cumulative_return: 0.02, primary_drawdown: -0.01, comparison_drawdown: -0.015},
                         {date: '2025-03-01', primary_cumulative_return: 0.08, comparison_cumulative_return: 0.045, primary_drawdown: 0, comparison_drawdown: -0.005},
                     ],
+                    ...holdingRelativesField(comparisonAssetId, options),
                 },
             };
         }
@@ -3137,17 +3177,20 @@ test.describe('Risk analysis functional integration', () => {
         /** Every figure column with a benchmark in force, in order. */
         const L3_FIGURE_COLUMNS = ['weight', 'volatility', 'expectedReturn', 'sortino', 'sharpe', 'beta', 'correlation'] as const;
 
-        /** Opens L3 with a benchmark nobody holds already in force, and hands it back once every row is drawn. */
-        async function openWithUnheldBenchmark(page: Page): Promise<{panel: Locator; benchmarkId: number}> {
+        /**
+         * Opens L3 with a benchmark nobody holds already in force, and hands it back once every row is drawn,
+         * with the requests the page put on the wire. `options` go to the stub (`installRiskMocks`).
+         */
+        async function openWithUnheldBenchmark(page: Page, options: RiskMockOptions = {}): Promise<{panel: Locator; benchmarkId: number; requests: RiskRequest[]}> {
             const benchmarkId = await unheldBenchmarkId(page);
-            await installRiskMocks(page);
+            const requests = await installRiskMocks(page, options);
             await seedRiskBenchmark(page, benchmarkId);
             const panel = await openDashboardRisk(page);
             // Barriers: the portfolio's row, the benchmark's — added only once the comparison has answered — and both holdings.
             await expect(l3PortfolioRow(panel)).toBeVisible({timeout: 10_000});
             await expect(l3Table(panel).locator(`tbody tr[data-row-id="ref-${benchmarkId}"]`)).toBeVisible({timeout: 15_000});
             for (const assetId of STUB_HOLDINGS) await expect(l3Table(panel).locator(`tbody tr[data-row-id="${assetId}"]`)).toBeVisible();
-            return {panel, benchmarkId};
+            return {panel, benchmarkId, requests};
         }
 
         /** The light theme is the one the colours below are written for; `ScatterChart` reads the same class. */
@@ -3332,6 +3375,91 @@ test.describe('Risk analysis functional integration', () => {
             await expect(help, "resting on the return's title must open its help").toBeVisible();
             const fullName = await catalogueSentence(page, 'risk.assetSet.levels.l3.expectedReturn');
             await expect.poll(() => help.evaluate((element) => (element.textContent ?? '').split('\n')[0].trim()), {message: "the help does not open with the return's full name, on a line of its own"}).toBe(fullName);
+        });
+
+        /**
+         * Risk's k6, as the developer approved it on his own data (06/10/2026): with a benchmark in force,
+         * every holding shows its own beta and correlation against it, measured in the comparison's request
+         * (`comparison.items`). The stub lists holding 1 and leaves holding 2 off (`holdingRelatives`), as the
+         * backend leaves off a holding it could not measure — whose dash must explain itself, and not read as
+         * a figure nobody calculated.
+         *
+         * Each cell is read inside its own row. The figures are formatted numbers, which no locale
+         * translates; the dash's sentence is read from the catalogue in the language the page is drawn in.
+         */
+        test("each holding's beta and correlation are its own, from the comparison, and a holding it could not measure explains its dash", async ({page}) => {
+            try {
+                const {panel} = await openWithUnheldBenchmark(page, {holdingRelatives: true});
+                const table = l3Table(panel);
+                const listed = table.locator('tbody tr[data-row-id="1"]');
+                const leftOut = table.locator('tbody tr[data-row-id="2"]');
+
+                // Barrier: the comparison answered, and was read — the portfolio's beta is its own top-level one.
+                await expect(l3PortfolioCell(panel, 'beta')).toHaveText('0.91', {timeout: 15_000});
+
+                // Holding 1 is on the list: its own figures, measured. Red: the plain dash of an answer from before k6.
+                for (const [column, figure] of [
+                    ['beta', '1.07'],
+                    ['correlation', '0.74'],
+                ] as const) {
+                    const cell = listed.getByTestId(`risk-l3-row-${column}`);
+                    await expect(cell, `holding 1's ${column} is not its own item's figure`).toHaveText(figure);
+                    await expect(cell, `holding 1's ${column} is not a measured figure`).toHaveAttribute('data-measured', 'true');
+                }
+
+                // Holding 2 is not: measured and not measurable — the dash that explains itself, never the plain one.
+                for (const column of ['beta', 'correlation'] as const) {
+                    const cell = leftOut.getByTestId(`risk-l3-row-${column}`);
+                    await expect(cell, `holding 2's ${column}`).toHaveText('\u2014');
+                    await expect(cell, `holding 2's ${column}`).toHaveAttribute('data-measured', 'false');
+                    await expect(cell, `holding 2's ${column} reads as never calculated, not as measured and blank`).not.toHaveAttribute('data-calculated');
+                }
+
+                // A clean slate: the pointer rests on a figure, which has no help to open, so the help that
+                // opens next is the dash's. The Tooltip opens after its own hover delay, which the retrying
+                // assertion absorbs: nothing here waits on a clock.
+                await listed.getByTestId('risk-l3-row-beta').hover();
+                const help = page.getByTestId('tooltip-content');
+                await expect(help, 'a help is still open with the pointer resting on a measured figure').toHaveCount(0);
+                await leftOut.getByTestId('risk-l3-row-beta').hover();
+                await expect(help, 'resting on the dash of a holding the comparison could not measure must open its explanation').toHaveText(await catalogueSentence(page, 'risk.assetSet.levels.blankNote'));
+            } finally {
+                await clearRiskBenchmark(page);
+            }
+        });
+
+        /**
+         * The benchmark's Sharpe and Sortino are measured at the rates the page applies to the portfolio's
+         * (06/10/2026): the `comparison` request carries the risk-free rate and a zero target beside the
+         * benchmark's id — the pair `historical_kpi` sends — or the benchmark's row would be rated on another
+         * footing than the portfolio's above it.
+         *
+         * The page states its rate on the wire and nowhere else: `RiskLevelsPanel` seeds every KPI with
+         * `appliedRiskFreePercent / 100` and draws no control to move it. So the oracle is the page's own KPI
+         * of the same wave, read off the same capture, and the claim is that the comparison asks at that rate.
+         */
+        test('the comparison is asked at the rates the page applies: its risk-free rate and a zero target, beside the benchmark', async ({page}) => {
+            try {
+                const {benchmarkId, requests} = await openWithUnheldBenchmark(page);
+
+                // The page's applied rate, as it puts it on the wire: the current composition's KPI, the wave
+                // the comparison is asked in.
+                const kpis = portfolioAnalytics(requests, 'current_composition').filter((analytic) => analytic.analytic_code === 'historical_kpi');
+                expect(kpis.length, 'premise: the current composition wave asked for its KPI').toBeGreaterThan(0);
+                const appliedRate = kpis[0].parameters?.risk_free_annual_rate;
+                expect(typeof appliedRate === 'number' && Number.isFinite(appliedRate), `premise: the KPI carries the applied risk-free rate as a number, read ${JSON.stringify(appliedRate)}`).toBe(true);
+                for (const kpi of kpis) expect(kpi.parameters, 'premise: the wave asks every KPI at one rate and a zero target').toEqual({risk_free_annual_rate: appliedRate, target_annual_return: 0});
+
+                // The claim. Barrier first: the benchmark's row is drawn (`openWithUnheldBenchmark`), so its
+                // comparison was asked and recorded.
+                const comparisons = requests.filter((request) => request.scope.kind === 'portfolio' && (request.scope.broker_ids ?? []).length === 0).flatMap((request) => request.analytics.filter((analytic) => analytic.analytic_code === 'comparison'));
+                expect(comparisons.length, "barrier: the Dashboard's comparison is in the capture").toBeGreaterThan(0);
+                for (const comparison of comparisons) {
+                    expect(comparison.parameters, 'the comparison is not asked at the rates the page applies, beside its benchmark').toEqual({comparison_asset_id: benchmarkId, risk_free_annual_rate: appliedRate, target_annual_return: 0});
+                }
+            } finally {
+                await clearRiskBenchmark(page);
+            }
         });
     });
 

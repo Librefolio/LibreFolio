@@ -2285,3 +2285,270 @@ commit del checkpoint 1.
 > **Dopo la fusione** (passo 20): validare la revisione combinata (i miei cancelli più l'E2E `risk-lab`), poi
 > `api sync` e il lavoro di k6 elencato sopra (parametri su `L3Benchmark`, beta e correlazione per posizione da
 > `comparison.items`, test con i rossi provati sul codice di prima).
+
+### Checkpoint 7 committato, e le punte di Risk e di F fuse · ✅ 06/10
+
+> **Coordinator (14:36–14:37)**:
+> - checkpoint verificato: 24 percorsi, 24/24 blob, i18n +5 −10 con parità, nel runner solo le due registrazioni,
+>   privacy pulita;
+> - fondere F l'ha deciso lui: il mio ramo prende anche F, così F poi fa un fast-forward alla mia punta e adotta la
+>   tabella L3 nel lab;
+> - ORDINE lanciato dal developer e verificato:
+>   - commit `f55b2e42a` (albero `6c30bc17b`);
+>   - merge di Risk `22bba4494` (albero `eeab700b0`, k4 + k5a + k6);
+>   - merge di F `001bebf12` (albero `8aefdd616`, giro 12).
+>
+>   Genitori, file e messaggi tornano con il registro, e il worktree è pulito.
+> - Da ora la riga di `risk-levels-component` nel runner non la tocco più: Risk ci aggiunge i suoi file di k5b. Se mi
+>   serve, passo dal coordinator.
+
+### Passo 20 — la revisione combinata `001bebf12`, validata · ✅ 06/10
+
+> **Verificato prima**: HEAD `001bebf12`, albero `8aefdd616`, genitori `22bba4494` + `9008b21c2`, 0 percorsi in
+> corso. Le due fusioni portano 39 file: backend (`schemas/risk.py` e altri), 3 pagine di documentazione, 19 file
+> `frontend/src`, 2 spec e il runner.
+>
+> **Note implementazione** (corsia 6153, un comando alla volta):
+> - `front build --debug` OK; `front check` 0/0;
+> - vitest, con tre selettori in più perché coprono i test portati dalle fusioni:
+>
+>   | selettore | test |
+>   |---|---|
+>   | `risk-levels-unit` | 366 |
+>   | `risk-levels-component` | 155 |
+>   | `risk-controller-unit` (in più) | 96 |
+>   | `allocation-unit` (in più) | 228 |
+>   | `growth-chart-memo` (in più) | 77 |
+>   | `core-unit` | 2972 |
+>   | `component-unit` | 2611 |
+>
+> - `check-orphans` OK; i18n 3540 chiavi, nessuna traduzione mancante;
+> - `mkdocs build` strict OK. `check-links` segnala solo `#rolling-return` (ereditato, come al checkpoint 6) più i 3
+>   gialli già noti;
+> - E2E `risk` 30 passed (12:48–12:49 UTC), `risk-lab` 41 passed (12:49–12:51), **0 chiamate ai provider** in entrambe
+>   le finestre: lo SNB del lab l'ha tolto il giro 12 di F;
+> - esiti mandati al coordinator, che fa fare il fast-forward a F.
+> - ⚠️ **Fuori pista**: la prima tornata delle suite unitarie è uscita con exit 2 prima della raccolta (`dev.py: error:
+>   unrecognized arguments: --verbose`): il runner non ha un flag `--verbose`. DB e server non sono stati toccati. Le ho
+>   rilanciate senza il flag, e i conteggi stanno nel riepilogo di vitest.
+>
+> **Risk, k5b**: chiede due concessioni nei miei file per D377 (il selettore degli strumenti di L4: alla prima visita
+> nessuno strumento aperto; poi quelli lasciati aperti, ricordati per utente in questo browser; la × toglie lo
+> strumento e la sua risposta). Il coordinator lascia a me la decisione. **Concesse**, con condizioni:
+> - `RiskLevelsPanel.svelte:360`: solo `<L4WhatIf {controller}>`. Il mio k6 tocca `:341`, a 19 righe;
+> - `risk-analysis.spec.ts`: `openLevel4` (`:1206`) aggiunge i tre strumenti, più un test del selettore. Le condizioni:
+>   - i due punti che aprono L4 senza `openLevel4` (`:1877-1880`, `:2147-2150`) restano veri: il catalogo degli scenari
+>     si carica alla prima apertura di L4, e chiudere L4 tiene strumenti e risposte;
+>   - E7 (`:2507`), `:2127` e `:2460` passano da `openLevel4` con tre strumenti;
+>   - il test nuovo prova la prima visita su un contesto suo, solo testid, nessuna attesa a tempo;
+>   - prima del suo checkpoint Risk lancia la mia spec intera (anche `--workers 4`), e io rivedo la patch dei miei due
+>     file.
+
+### Passo 21 — k6 nella L3: rapporti, beta e correlazione per posizione · ✅ 06/10
+
+> **Contratto letto nello schema rigenerato**:
+> - `RiskComparisonOutput.items` è facoltativo: `RiskComparisonHoldingItem {asset_id, beta?, correlation?}`, dove i
+>   valori sono un numero o `null`;
+> - `RiskReturnItem.sharpe`/`.sortino` e `comparison_sharpe`/`_sortino` sono facoltativi e possono valere `null`.
+>
+> `api sync` dà exit 0 ma non cambia nulla: gli hash di `generated.ts` e `openapi.json` erano già quelli nuovi, perché
+> il client era stato rigenerato durante la validazione (dalla build o dal runner).
+>
+> **Note implementazione**:
+> - `l3Helpers.ts`, `holdingRelatives(comparison)`: per ogni posizione beta e correlazione da `comparison.items`,
+>   cercando per `asset_id`:
+>   - senza `comparison` o senza `items` (risposta di prima di k6) → `undefined`;
+>   - posizione assente dalla lista → `null` (trattino con la nota);
+>   - il benchmark posseduto non le prende: la sua riga resta `referenceItself`.
+>
+>   Aggiornato il commento di `buildRiskReturnRows`.
+> - `L3Benchmark.svelte`: nuova prop `riskFreePercent`. La richiesta porta
+>   `risk_free_annual_rate: riskFreePercent / 100, target_annual_return: 0`, gli stessi parametri della KPI
+>   (`riskAnalysisHelpers.ts:313-314`): Sortino usa il rendimento obiettivo (MAR), non il tasso.
+> - `RiskLevelsPanel.svelte:341`: `<L3Benchmark {controller} riskFreePercent={appliedRiskFreePercent} />`.
+> - `RiskReturnLevel.svelte`: il commento sul trattino `undefined` non lo dà più come transitorio. Con k6 resta solo per
+>   una risposta senza quei campi; una posizione che k6 non ha potuto misurare è `null`.
+> - Verdi: prettier, vitest su `l3Helpers`, `L3RiskAdjusted` e `riskReturnLevel` (64), `front check` 0/0.
+> - **Controllo a occhio sui dati di prova** (6153, `127.0.0.1`, utente di test, solo attributi):
+>   - senza benchmark: tutte le posizioni hanno Sortino e Sharpe misurati;
+>   - **benchmark non posseduto**: la richiesta porta `{comparison_asset_id, risk_free_annual_rate: 0,
+>     target_annual_return: 0}` e il backend la accetta. Ogni posizione ha beta, correlazione, Sortino e Sharpe
+>     misurati; la riga aggiunta del benchmark ha i suoi Sortino e Sharpe e i trattini `referenceItself`;
+>   - **benchmark posseduto**: la sua riga sale seconda con la tinta, con i trattini `referenceItself` e i suoi
+>     rapporti; le altre posizioni hanno tutto misurato; `data-reference-count` 1.
+>   - Poi ho tolto la scelta salvata nel browser e fermato il server. La 6153 è libera.
+> - ⚠️ **Fuori pista (vincolo Ⓓ)**: nella finestra del controllo ci sono 31 righe di provider (scraping, yahoo_finance,
+>   `[F.2 bootstrap]` che riscrive il close di oggi). Il server avviato a mano non blocca il polling dei prezzi come
+>   fanno gli E2E. Il danno resta nel DB di prova della mia corsia, che ogni E2E ripopola da zero (`--force`).
+>   D'ora in poi un controllo a occhio va messo in conto come una navigazione che riscrive il close.
+
+### Review visiva 5 sui dati veri (6163): k6 nella L3 · 06/10
+
+> **Developer**: «Sì, sui miei dati veri: copia nella 6163».
+> **Coordinator (15:11)**: via libera, dopo aver controllato snapshot intatto, nessun'altra copia, 6163 e 6040 libere.
+> **Copia**:
+> - impronta uguale a quella del coordinator;
+> - `umask 077` e `mkdir -m 700`, 0 voci leggibili da altri, nessun marcatore di produzione;
+> - server su `127.0.0.1:6163`, log `600` dentro la copia;
+> - la build servita (15:00 circa) era più recente dei file di k6 e li conteneva.
+>
+> **Cosa ha visto il developer** (le sue parole, senza dati):
+> - «L3 di dashboard è perfetto»;
+> - «l3 di risk lab continua a non avere il benckmark selector in L3. […] lo puoi fare per favore?!»;
+> - «In oltre in L3 di risk lab, non compare la retta tra 0 e benckmark».
+>
+> **La retta nel lab: la causa era mia**:
+> - `capitalMarketLineAnchor` (`scatterChartHelpers.ts`) restituiva `null` senza un punto portafoglio, e il lab non ne
+>   ha. La scelta veniva dal 05/10: senza un aggregato, una retta avrebbe dato un verdetto che il payload non regge. Ma
+>   questo vale per il ripiego sul portafoglio, non per la retta che passa per il benchmark: «pagato meglio del
+>   mercato» non ha bisogno di un aggregato.
+> - **Correzione**: il benchmark (posizionabile, con volatilità > 0) ancora la retta in qualunque grafico; il ripiego
+>   sul portafoglio resta solo dove il portafoglio c'è. Aggiornati il commento della funzione e quello di
+>   `riskReturnNotes`.
+> - Nel lab le note diventano `above` e `line`, nella forma `lineBenchmark`. Parlano del benchmark e non del
+>   portafoglio, quindi le frasi vanno bene anche lì.
+> - Build `--debug` sul posto, poi la pagina del lab ricaricata. Con il benchmark impostato compare
+>   `risk-asset-set-l3-scatter-line` con `data-anchor="benchmark"`.
+> - **Il developer: «ok per la retta»**.
+>
+> **Il selettore nel lab** (di F):
+> - F lo ha finito e provato nel suo albero (`risk-lab` 41/41 con il test «sits in L3's frame, below its title, above
+>   its table»). Lo stacca dal giro 13 in un checkpoint a sé, previsto verso le 16:30;
+> - il developer: «basta che qualcuno lo stia facendo, se riuscite ad allinearvi tu, f e risk non sarebbe male». La
+>   proposta di allineamento è andata al coordinator (vedi sotto).
+>
+> **F, nel frattempo**:
+> - ha fatto lo spostamento di `measureHeaderTitle` in `riskReturnLevel.ts` con la mia concessione. Ho rivisto la
+>   patch: le tre modifiche concordate, sha uguali, `git apply --check` passa sul mio albero → **approvata**;
+> - per la retta concede a test-author:
+>   - G5: `scatterChartHelpers.test.ts:119-122`, più i casi «nessuna retta senza portafoglio» con un benchmark;
+>   - G6: la guardia di `assetSetI18n.test.ts:240-281`, verso «L3° descrive la retta esattamente quando la
+>     disegna»;
+>   - G7: l'E2E del lab «…with no note about the benchmark either way», solo se diventa rosso e dopo la fusione del
+>     suo checkpoint del selettore;
+> - poi tocca a lui: `riskFreeRate={0}` esplicito nel suo involucro, e la frase della guida «No line is drawn»
+>   (`correlation.en.md:116`).
+>
+> **Chiusura**:
+> - server fermato; copia cancellata con la prova (`lsof +D` 0, nessun processo, `rm` exit 0, `ls` «No such file»);
+> - 6163, 6153 e 6040 libere; snapshot `dr-x------`;
+> - mandata al coordinator la riga di chiusura.
+>
+> **Proposta di allineamento al coordinator** (l'ordine lo decide lui):
+> 1. F, il checkpoint del solo selettore;
+> 2. A, il checkpoint 8 (k6 nella L3, la retta nel lab, i test), con nello stesso ORDINE la fusione della punta di F
+>    con il selettore. L'eventuale flip G7 viene dopo quella fusione;
+> 3. Risk, k5b (il selettore degli strumenti di L4), sopra la punta comune.
+>
+> **test-author avviato** (`ta-k6-labline`, in background):
+> - U1–U3 nei miei test unitari (`l3Helpers`, `L3RiskAdjusted`, `riskReturnLevel`);
+> - G5 e G6;
+> - E1 e E2 in `risk-analysis.spec.ts`: lo stub di `comparison` con `items` e una posizione lasciata fuori, e i due
+>   tassi sulla richiesta. Lontano da `openLevel4` e dai test di L4, dove c'è la concessione a Risk;
+> - G7 solo da riportare, non da toccare;
+> - mutanti M1–M3 con ripristino verificato per sha256, nessun file di test nuovo.
+>
+> **Coordinator (15:35): ordine approvato**, e comunicato anche a F e a Risk:
+> 1. il 13-A di F (solo il selettore);
+> 2. il mio checkpoint 8, in un ORDINE con la fusione della punta di F;
+> 3. F e Risk fanno il fast-forward alla mia punta.
+>
+> Le concessioni G5 e G6 vanno bene. Il checkpoint lo consegno con il registro (blob, percorsi, messaggio); la fusione
+> la simula il coordinator.
+>
+> **Blocchi di `risk-analysis.spec.ts` separati** (richiesta del coordinator, 15:37), contati su `001bebf12`:
+> - **miei**:
+>   - lo stub di `asset_risk_return` (`:514`) e quello di `comparison` (`:683-…`);
+>   - i test nuovi in coda al `describe` della tabella L3 (`:3136-3510`);
+> - **di Risk** (confermato alle 15:38):
+>   - l'area degli helper `:1195-1218` (`openLevel4Drawer`, `L4_TOOLS`, il nuovo `openLevel4`);
+>   - un'inserzione dopo `:2536` (il test del selettore, 67 righe), dentro l'area di L4.
+>
+>   Sulla sua punta la mia spec passa 31/31, anche con `--workers 4`, e `:1914` e `:2182-2189` passano invariati. La
+>   patch dei miei due file (`RiskLevelsPanel.svelte:360` e la spec) arriva in `/tmp/libreFolio_Risk_for_A/` per la
+>   mia review.
+>
+> **Review della patch k5b di Risk sui miei due file (15:50): APPROVATA**:
+> - export in `/tmp/libreFolio_Risk_for_A/`, sha uguali, basi uguali ai miei blob committati (spec `1e988e33e`, pannello
+>   `f5560d09e`);
+> - 4 hunk dentro le concessioni:
+>   - `RiskLevelsPanel:360` è solo `<L4WhatIf {controller}>`;
+>   - `openLevel4` diventa `openLevel4Drawer` (apre solo il cassetto), più `L4_TOOLS` e un nuovo `openLevel4` che
+>     aggiunge gli strumenti chiusi, scegliendo il clic dopo che lo stato si è stabilizzato;
+>   - il test del selettore (D377) è inserito dopo `:2534`;
+> - le mie condizioni sono rispettate:
+>   - prima visita provata sul suo contesto, senza cancellare nulla; solo testid; la riga di stato letta con
+>     `catalogueSentence`; nessuna attesa a tempo;
+>   - spec 31/31, anche con `--workers 4`, con `:1914` e `:2182-2189` invariati;
+>   - il mutante «× senza controller» viene ucciso;
+> - `git apply --check` passa sul mio albero di lavoro (k6 più il lavoro in corso di test-author), quindi la fusione
+>   resta additiva.
+>
+> **F 13-A committato (15:53)**: punta di F `ef64d71e2`, base `001bebf12`, verificata dal coordinator. Contiene il
+> selettore del benchmark dentro L3 del lab: 11 file, tra cui `AssetSetRiskPanel`, `AssetSetComparisonLevels` (+test),
+> un nuovo `RiskControllerHost.svelte`, 1 valore i18n × 4 e la guida.
+> - Lo fonde il mio ORDINE del checkpoint 8, insieme al k5b di Risk se arriva in tempo (Risk stima le 16:45).
+> - In `risk-lab.spec.ts`, dentro il test G7 (`:5341` sulla mia punta), il 13-A cambia solo le righe di commento `:5383`
+>   e `:5395`; il resto sono helper (`:2604`, `:2856-2890`) e altri test (`:5484-5518`). Se G7 diventa rosso, il flip
+>   nel mio commit resta lontano da quelle righe e dalle loro vicine.
+>
+> **Punte da fondere nel checkpoint 8** (coordinator, 16:14): Risk k5b `eda37b8de`; F `b7e70a949` (13-A + 13-B, compreso lo
+> spostamento di `measureHeaderTitle` nei miei due file, che avevo approvato). La simulazione del coordinator contro il
+> mio lavoro in corso dà rc=0.
+
+### Passo 21 (seguito) — i test di k6 e della retta del lab · ✅ 06/10
+
+> **test-author ha finito** (`ta-k6-labline`). Ogni asserzione nuova è stata vista rossa sotto il suo mutante, e ogni
+> mutante è stato ripristinato con lo sha256 uguale.
+> - **File e casi**:
+>   - `l3Helpers.test.ts`:
+>     - `:415`: beta e correlazione presi per `asset_id`, non per posizione (gli `items` sono in ordine inverso);
+>     - `:436`: posizione assente → `null`; posizione piatta → beta `0` e correlazione `null`;
+>     - `:459`: senza `comparison` o senza `items` → `undefined`;
+>     - `:479`: il benchmark posseduto non prende i valori e resta riferimento;
+>   - `L3RiskAdjusted.test.ts:398`: la posizione nella lista mostra le sue cifre; quella assente mostra il trattino
+>     con la nota presa dal catalogo;
+>   - `riskReturnLevel.test.ts`: titolo di `:189` riformulato; `:200` lab con l'ancora `benchmark` → `above`,
+>     `return`, `priceOnly`, `line`, senza `size`;
+>   - G5 (`scatterChartHelpers.test.ts`): `:124`, la retta che passa per il benchmark senza portafoglio; `:163-185`, i
+>     casi dell'ancora;
+>   - G6 (`assetSetI18n.test.ts`, solo il blocco da `:240`): «L3° descrive la retta esattamente quando la disegna», in
+>     4 lingue e in tre stati;
+>   - `risk-analysis.spec.ts`: l'opzione dello stub `holdingRelatives` (facoltativa: senza l'opzione il payload non
+>     cambia); E1 `:3390` (riga 1 misurata, riga 2 con il trattino e la nota); E2 `:3441` (la richiesta porta
+>     esattamente i due tassi). `openLevel4` e i test di L4 non sono stati toccati.
+> - **Rossi sotto i mutanti**:
+>   - M3, l'ancora di prima: G5 e G6;
+>   - M1, `holdingRelatives` che dà `undefined`: U1, U2, E1;
+>   - M2, i parametri di prima: E2.
+> - **Cancelli**:
+>   - vitest 5 file 123/123;
+>   - `risk-levels-unit` 371, `risk-levels-component` 156, `core-unit` 2978, `component-unit` 2611;
+>   - E2E `risk` 32/32 (13:58–14:01 UTC);
+>   - E2E `risk-lab` 40 + 1 rosso (14:01–14:05); il rosso ripetuto da solo passa;
+>   - `risk --workers 4`: 31 + 1 rosso (14:11–14:12);
+>   - prettier pulito, `front check` 0/0, `check-orphans` pulito.
+> - **G7 non serve**: il test del lab sul benchmark passa con la retta, e la spec del lab non controlla la retta né le
+>   sue note.
+> - **I due rossi, esaminati, non sono instabilità**:
+>   - `risk-lab.spec.ts:6041` (di F): l'oracolo `pageCatalogue()` legge l'*ultima* chiamata a `/risk/eligibility`, ma dal
+>     30/09 il lab la chiama anche per la selezione. È girato a F, che lo corregge lui;
+>   - `risk-analysis.spec.ts:1717` (mio), solo a 4 worker: `risk-sync-button` resta disabilitato oltre i 3 s di
+>     default, perché il pulsante si abilita solo quando arriva il report della Dashboard, e il test non ha una barriera.
+>     → **da correggere nel prossimo giro** (aspettare che il report sia arrivato prima del pulsante). Non è toccato da
+>     questo giro e passa a un worker.
+> - **Non fissato, con il motivo**: un tasso diverso da 0 sulla richiesta (la Dashboard non ha un comando per cambiarlo;
+>   servirebbe un test di componente di `L3Benchmark`, cioè un file nuovo); la retta disegnata nel lab in E2E (la spec
+>   del lab è di F).
+> - **Verificato io**:
+>   - i 6 file di test e i 3 sorgenti mutati coincidono con gli sha del resoconto, senza residui;
+>   - 13 percorsi modificati, nessun file nuovo; `diff --check` pulito; 6153 libera;
+>   - i miei hunk nella spec sono `172-186`, `426-449`, `741`, `3180-3193` e `3379-3463`, lontani da quelli di Risk;
+>   - la simulazione a tre vie contro le punte di F (`b7e70a949`) e di Risk (`eda37b8de`) dà 0 conflitti su tutte le
+>     sovrapposizioni.
+>
+> **Checkpoint 8 consegnato al coordinator** (06/10, ~16:30): `CHECKPOINT READY` con il registro (13 percorsi, blob in
+> `files/ckpt8-blobs.txt`, hunk esatti della spec) e il messaggio proposto (`/tmp/libreFolio_commit_ckpt8.txt`). L'ORDINE
+> lo prepara il coordinator: il mio commit, poi la fusione di F `b7e70a949`, poi quella di Risk `eda37b8de`, tutto
+> simulato. **Stato: FROZEN**. Dopo la fusione si valida la revisione combinata, e il prossimo giro parte con la
+> barriera di `:1717`.

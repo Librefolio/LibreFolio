@@ -156,8 +156,7 @@ export function outsideParts(outside: RiskReturnOutside | null | undefined): {ca
  * 6. `size` — what a dot's size means, only where the dots are sized by a weight.
  *
  * The two lines about the line can never appear on a chart without one, which is how
- * the lab, whose payload has no aggregate to anchor it, never describes a line it does
- * not draw.
+ * a chart with no line — the lab before a benchmark is placed — never describes one.
  */
 export function riskReturnNotes({lineAnchor, capabilities, outside}: RiskReturnNotesInput): RiskReturnNote[] {
     const parts = outsideParts(outside);

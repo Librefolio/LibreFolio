@@ -148,19 +148,20 @@ export function symbolSizeForWeight(weight: number | undefined): number {
  * when no benchmark is placed; the line through it says "better paid than my
  * portfolio as a whole" instead.
  *
- * Either way the line is drawn only on a plot that holds a portfolio. A set of
- * assets has no aggregate (Asset Global's lab), and there the line would carry a
- * verdict its payload cannot support, so the lab keeps drawing none.
+ * The benchmark anchors it on any plot, a set of assets included (developer's review
+ * of 06/10/2026, on Asset Global's lab: «non compare la retta tra 0 e benchmark»):
+ * "better paid than the market" needs no aggregate to be true. The fallback does —
+ * a set of assets has no whole to run a line through — so the lab draws a line only
+ * when a benchmark is placed.
  *
  * Only a strictly positive volatility can anchor it: at zero the slope is undefined,
  * and inventing a vertical line there would assert something the data does not say.
  */
 export function capitalMarketLineAnchor(points: readonly RiskReturnPoint[]): 'benchmark' | 'portfolio' | null {
     const placeable = points.filter(isPlaceable);
-    const portfolio = placeable.find((point) => point.role === 'portfolio');
-    if (!portfolio) return null;
     if (placeable.some((point) => point.role === 'benchmark' && point.volatility > 0)) return 'benchmark';
-    return portfolio.volatility > 0 ? 'portfolio' : null;
+    const portfolio = placeable.find((point) => point.role === 'portfolio');
+    return portfolio && portfolio.volatility > 0 ? 'portfolio' : null;
 }
 
 /**

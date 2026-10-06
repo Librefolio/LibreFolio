@@ -19,7 +19,9 @@
  *    added rows;
  *  - **each figure from its own part of the payload**: the portfolio's volatility and return from its
  *    dot's pair (`asset_risk_return`), its Sortino and Sharpe from the KPI the level drew, its beta and
- *    correlation from `comparison`. A benchmark nobody holds has no weight, and its dash says so
+ *    correlation from `comparison`; a holding's beta and correlation from the comparison's item for it
+ *    (Risk's k6), and a holding the comparison left off its list is the dash that explains itself. A
+ *    benchmark nobody holds has no weight, and its dash says so
  *    (`risk.levels.l3.table.notHeld`). A ratio the payload does not carry is a plain dash with no
  *    tooltip (`data-calculated="false"`), while a figure measured and not measurable keeps its explained
  *    dash;
@@ -116,6 +118,20 @@ const HISTORICAL_KPI = result('base-historical-historical_kpi', 'historical_kpi'
 const COMPARISON_UNHELD = result('single-comparison', 'comparison', {kind: 'comparison', comparison_asset_id: BENCHMARK_ID, beta: 0.91, correlation: 0.62, comparison_volatility: 0.15, comparison_expected_annual_return: 0.058});
 /** The lighter holding as the benchmark: held, so no row is added for it. */
 const COMPARISON_HELD = result('single-comparison', 'comparison', {kind: 'comparison', comparison_asset_id: 2, beta: 0.91, correlation: 0.62, comparison_volatility: 0.09, comparison_expected_annual_return: 0.04});
+/**
+ * The benchmark nobody holds, answered as Risk's k6 answers (06/10/2026): one item per holding the
+ * comparison could measure, sorted by asset id. Holding 1 is on the list; holdings 2 and 3 are left out —
+ * no prepared series, or fewer than two pairs — so their beta and correlation were measured and could not be.
+ */
+const COMPARISON_UNHELD_ITEMS = result('single-comparison', 'comparison', {
+    kind: 'comparison',
+    comparison_asset_id: BENCHMARK_ID,
+    beta: 0.91,
+    correlation: 0.62,
+    comparison_volatility: 0.15,
+    comparison_expected_annual_return: 0.058,
+    items: [{asset_id: 1, beta: 1.07, correlation: 0.74}],
+});
 
 /** What the portfolio's row draws, worked out by hand from the figures above. */
 const PORTFOLIO_DRAWN = {weight: '100.0%', volatility: '11.8%', expectedReturn: '+7.1%', sortino: '1.68', sharpe: '1.21', beta: '0.91', correlation: '0.62'};
@@ -133,6 +149,7 @@ const BASE: Props = {
 };
 const WITH_UNHELD: Props = {...BASE, comparisonResult: COMPARISON_UNHELD, benchmarkName: BENCHMARK_NAME};
 const WITH_HELD: Props = {...BASE, comparisonResult: COMPARISON_HELD, benchmarkName: ASSET_NAMES[2]};
+const WITH_UNHELD_ITEMS: Props = {...BASE, comparisonResult: COMPARISON_UNHELD_ITEMS, benchmarkName: BENCHMARK_NAME};
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
 // Harness
@@ -359,7 +376,8 @@ describe('L3RiskAdjusted — each figure from the part of the payload it belongs
     it('a ratio the payload does not carry is a plain dash with no tooltip; a figure measured and not measurable keeps its explained dash', async () => {
         mount(WITH_UNHELD);
 
-        // No holding carries its Sortino or Sharpe yet, nor a beta of its own: not calculated here.
+        // An answer from before Risk's k6: no item carries its holding's Sortino or Sharpe, and the comparison
+        // lists no item per holding — so not one of these was calculated here.
         for (const assetId of ['1', '2']) {
             for (const column of ['sortino', 'sharpe', 'beta', 'correlation']) {
                 const cell = cellOf(assetId, column);
@@ -375,6 +393,34 @@ describe('L3RiskAdjusted — each figure from the part of the payload it belongs
         expect(unmeasured).toHaveAttribute('data-measured', 'false');
         expect(unmeasured, 'a measured blank is not a ratio left uncalculated').not.toHaveAttribute('data-calculated');
         expect(await explanationOf(unmeasured)).toBe(normalize(t('risk.assetSet.levels.blankNote')));
+    });
+
+    it('a holding’s beta and correlation are the comparison’s item for it; a holding left off the list is the dash that explains itself, not the plain one', async () => {
+        mount(WITH_UNHELD_ITEMS);
+
+        // Barrier: the comparison was read — the portfolio's own pair is its top-level one, not an item's.
+        expect(normalize(cellOf('ref-portfolio', 'beta').textContent)).toBe(PORTFOLIO_DRAWN.beta);
+
+        // Holding 1 is on the list: its own figures, measured, and in no tooltip — only a dash owes the reader an explanation.
+        for (const [column, drawn] of [
+            ['beta', '1.07'],
+            ['correlation', '0.74'],
+        ]) {
+            const cell = cellOf('1', column);
+            expect(normalize(cell.textContent), `holding 1: ${column}`).toBe(drawn);
+            expect(cell, `holding 1: ${column} is a measured figure`).toHaveAttribute('data-measured', 'true');
+            expect(explainerOf(cell), `holding 1: ${column} is a figure, and a figure sits in no tooltip`).toBeNull();
+        }
+
+        // Holding 2 is not: the list came without it, so it was measured and could not be — the explained dash,
+        // never the plain one that says nobody calculated it.
+        for (const column of ['beta', 'correlation']) {
+            const cell = cellOf('2', column);
+            expect(normalize(cell.textContent), `holding 2: ${column}`).toBe('\u2014');
+            expect(cell, `holding 2: ${column}`).toHaveAttribute('data-measured', 'false');
+            expect(cell, `holding 2: ${column} is a measured blank, not a figure left uncalculated`).not.toHaveAttribute('data-calculated');
+            expect(await explanationOf(cell), `holding 2: ${column} explains its dash`).toBe(normalize(t('risk.assetSet.levels.blankNote')));
+        }
     });
 });
 

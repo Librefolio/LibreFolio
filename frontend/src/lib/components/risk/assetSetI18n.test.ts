@@ -237,45 +237,144 @@ const LINE_WORDS: Record<SupportedLocale, RegExp> = {
     es: /\brecta\b/i,
 };
 
-describe('asset-set i18n — L3° never describes a line it cannot draw', () => {
-    it('finds the notes the lab can render and the keys each one renders, so the check below is not reading nothing', () => {
-        expect(RISK_RETURN_LEVEL_SOURCE, 'the component source did not load').toContain('-scatter-note');
-        // The lab's dots are assets and a benchmark, held or not, and never a portfolio: no anchor, no line.
-        const labDots = [
-            {id: 'asset-1', name: 'a', volatility: 0.2, annualReturn: 0.1, role: 'asset' as const},
-            {id: 'asset-2', name: 'b', volatility: 0.15, annualReturn: 0.05, role: 'benchmark' as const},
-            {id: 'benchmark', name: 'c', volatility: 0.18, annualReturn: 0.07, role: 'benchmark' as const},
+describe('asset-set i18n — L3° describes the line exactly when it draws one', () => {
+    /*
+     * Since the developer's review of 06/10/2026 («non compare la retta tra 0 e benchmark») the lab draws the
+     * line once a benchmark is placed: the benchmark anchors it on a plot with no portfolio. So the guard is
+     * no longer "never a line" but "a line in words exactly when one is drawn". Its premise is the real anchor
+     * (`capitalMarketLineAnchor`) on the lab's real dots (`buildAssetSetChartPoints`, what
+     * `AssetSetRiskReturnSection` hands the shared level), and its notes are the real ones (`riskReturnNotes`)
+     * under what the lab declares: ratios always, a benchmark when one applies, never a weight, nothing left out
+     * of the plot. The keys are read out of the component's source, as above, and the line's own sentence is
+     * the side of the component's `lineAnchor === … ? … : …` that the anchor takes.
+     */
+    type AssetSetPaidRow = import('./assetSetLevels').AssetSetPaidRow;
+    type LineAnchor = ReturnType<typeof capitalMarketLineAnchor>;
+    /** No benchmark; one nobody selected, a dot of its own; or one of the selected assets, its row's dot (D371). */
+    type LabBenchmark = 'none' | 'unselected' | 'selected';
+
+    const LINE_KEY = 'risk.levels.l3.scatter.notes.line';
+    const LINE_BENCHMARK_KEY = 'risk.levels.l3.scatter.notes.lineBenchmark';
+    const ABOVE_KEY = 'risk.levels.l3.scatter.notes.above';
+
+    /** Two selected assets, both measured; `referenceId` marks the one that is the benchmark itself. */
+    function labRows(referenceId: number | null): AssetSetPaidRow[] {
+        return [
+            {assetId: 1, name: 'a', volatility: 0.2, expectedReturn: 0.1, sharpe: 0.4, sortino: 0.6, beta: null, correlation: null, isReference: referenceId === 1},
+            {assetId: 2, name: 'b', volatility: 0.15, expectedReturn: 0.05, sharpe: 0.3, sortino: 0.5, beta: null, correlation: null, isReference: referenceId === 2},
         ];
-        expect(capitalMarketLineAnchor(labDots), "premise: a chart of the lab's dots anchors no line").toBeNull();
+    }
 
-        const notes = notesWithoutALine();
-        expect(notes, 'the notes every chart carries were not found: the check below would read nothing').toEqual(expect.arrayContaining(['return', 'priceOnly']));
-        for (const note of notes) {
-            const keys = renderedNoteKeys(note);
-            expect(keys, `could not read which keys the "${note}" note renders`).not.toEqual([]);
-            for (const key of keys) expect(typeof at(en, key), `${key}, rendered by the "${note}" note, is not in en.json`).toBe('string');
-        }
-        // The reader reaches the line's own note too: what the positive control below stands on.
-        expect(renderedNoteKeys('line'), 'the reader no longer finds the keys of the line’s own note').toContain('risk.levels.l3.scatter.notes.line');
-    });
+    /** The dots the lab draws for one state of its benchmark, built by the lab's own builder. */
+    async function labDots(benchmark: LabBenchmark) {
+        const {buildAssetSetChartPoints} = await import('./assetSetLevels');
+        if (benchmark === 'none') return buildAssetSetChartPoints(labRows(null), null);
+        if (benchmark === 'unselected') return buildAssetSetChartPoints(labRows(null), {assetId: 90, name: 'c', volatility: 0.18, expectedReturn: 0.07});
+        return buildAssetSetChartPoints(labRows(2), {assetId: 2, name: 'b', volatility: 0.15, expectedReturn: 0.05});
+    }
 
-    it("positive control: the line's own note, right where the line is drawn, would be caught in each language", () => {
-        const misses = SUPPORTED_LOCALES.flatMap((locale) => {
-            const message = at(CATALOGUES[locale], 'risk.levels.l3.scatter.notes.line');
-            return typeof message === 'string' && LINE_WORDS[locale].test(message) ? [] : [`${locale}: ${JSON.stringify(message)}`];
-        });
-        expect(misses, 'the detector no longer recognises the sentence it is guarding against').toEqual([]);
-    });
-
-    it('renders notes that mention no line, in any of the four languages', () => {
-        const offenders = notesWithoutALine().flatMap((note) =>
-            renderedNoteKeys(note).flatMap((key) =>
-                SUPPORTED_LOCALES.flatMap((locale) => {
-                    const message = at(CATALOGUES[locale], key);
-                    return typeof message === 'string' && LINE_WORDS[locale].test(message) ? [`${locale}: ${note} → ${key} → ${JSON.stringify(message)}`] : [];
-                }),
-            ),
+    /** The source of one note's branch of the list, split the way `renderedNoteKeys` splits it. */
+    function noteBranch(note: RiskReturnNote): string {
+        return (
+            RISK_RETURN_LEVEL_SOURCE.split(/\{(?:#if|:else if) note === '/)
+                .slice(1)
+                .find((candidate) => candidate.startsWith(`${note}'}`)) ?? ''
         );
-        expect(offenders, 'the scatter on Asset Global draws no line: a note that describes one restores, in words, the verdict the payload makes impossible').toEqual([]);
+    }
+
+    /** The keys one note renders under `lineAnchor`: every key of its branch but the side of each `lineAnchor === '…' ? … : …` the anchor does not take. */
+    function keysFor(note: RiskReturnNote, lineAnchor: LineAnchor): string[] {
+        const notTaken = [...noteBranch(note).matchAll(/lineAnchor\s*===\s*'(\w+)'\s*\?\s*'(risk\.[A-Za-z0-9_.]+)'\s*:\s*'(risk\.[A-Za-z0-9_.]+)'/g)].map(([, anchor, whenEqual, otherwise]) => (lineAnchor === anchor ? otherwise : whenEqual));
+        return renderedNoteKeys(note).filter((key) => !notTaken.includes(key));
+    }
+
+    /** What the lab puts under its chart: the roles of its dots, the anchor they give, the notes it declares and the keys they render. */
+    async function renderedByTheLab(benchmark: LabBenchmark) {
+        const dots = await labDots(benchmark);
+        const lineAnchor = capitalMarketLineAnchor(dots);
+        const notes = riskReturnNotes({lineAnchor, capabilities: {ratios: true, benchmark: benchmark !== 'none'}, outside: null});
+        return {roles: dots.map((dot) => dot.role), lineAnchor, notes, keys: [...new Set(notes.flatMap((note) => keysFor(note, lineAnchor)))]};
+    }
+
+    /** One line per key whose message, in `locale`, names a drawn line. */
+    function namingALine(locale: SupportedLocale, keys: readonly string[]): string[] {
+        return keys.flatMap((key) => {
+            const message = at(CATALOGUES[locale], key);
+            return typeof message === 'string' && LINE_WORDS[locale].test(message) ? [`${locale}: ${key} → ${JSON.stringify(message)}`] : [];
+        });
+    }
+
+    it('reads the lab’s dots, the anchor they give and the keys each note renders for it, so the checks below are not reading nothing', async () => {
+        expect(RISK_RETURN_LEVEL_SOURCE, 'the component source did not load').toContain('-scatter-note');
+
+        // The real anchor on the lab's real dots: assets alone anchor nothing; a benchmark, selected or not,
+        // anchors the line; and no dot is ever a portfolio.
+        const bare = await renderedByTheLab('none');
+        expect(bare.roles, 'premise: without a benchmark the lab draws its assets alone').toEqual(['asset', 'asset']);
+        expect(bare.lineAnchor, "premise: a chart of the lab's assets anchors no line").toBeNull();
+        const unselected = await renderedByTheLab('unselected');
+        expect(unselected.roles, 'premise: a benchmark nobody selected is a dot of its own, last').toEqual(['asset', 'asset', 'benchmark']);
+        expect(unselected.lineAnchor, "premise: the lab's benchmark anchors the line").toBe('benchmark');
+        const selected = await renderedByTheLab('selected');
+        expect(selected.roles, 'premise: a selected benchmark is its row’s dot, drawn as the benchmark').toEqual(['asset', 'benchmark']);
+        expect(selected.lineAnchor, "premise: the lab's benchmark anchors the line, selected or not").toBe('benchmark');
+
+        // The reader takes the anchor's side of the line's sentence, and the two sides are two keys.
+        expect(keysFor('line', 'benchmark'), 'the reader lost the sentence for the line through the benchmark').toContain(LINE_BENCHMARK_KEY);
+        expect(keysFor('line', 'benchmark'), 'the reader kept both sides of the anchor’s choice').not.toContain(LINE_KEY);
+        expect(keysFor('line', 'portfolio'), 'the reader lost the sentence for the line through the portfolio').toContain(LINE_KEY);
+        expect(keysFor('line', 'portfolio'), 'the reader kept both sides of the anchor’s choice').not.toContain(LINE_BENCHMARK_KEY);
+
+        // Every key the lab renders, in each state, is in the catalogue the four languages are read from.
+        for (const {keys} of [bare, unselected, selected]) {
+            expect(keys, 'the lab renders no key: the checks below would read nothing').not.toEqual([]);
+            for (const key of keys) expect(typeof at(en, key), `${key}, rendered by the lab, is not in en.json`).toBe('string');
+        }
+    });
+
+    it('positive control: what being above the line means, and the line through the benchmark or through the portfolio, would each be caught in each language', () => {
+        const misses = SUPPORTED_LOCALES.flatMap((locale) => [ABOVE_KEY, LINE_BENCHMARK_KEY, LINE_KEY].flatMap((key) => (namingALine(locale, [key]).length === 1 ? [] : [`${locale}: ${key} → ${JSON.stringify(at(CATALOGUES[locale], key))}`])));
+        expect(misses, 'the detector no longer recognises the sentences about the line').toEqual([]);
+    });
+
+    it('without a benchmark the lab draws no line, and no note it renders — nor any a chart without a line carries — names one, in any of the four languages', async () => {
+        const lab = await renderedByTheLab('none');
+        expect(lab.lineAnchor, "premise: a chart of the lab's assets anchors no line").toBeNull();
+
+        // Presence first: the notes every chart carries were rendered, so the absences are about the line.
+        expect(lab.notes, 'the notes every chart carries were not found: the checks below would read nothing').toEqual(expect.arrayContaining(['return', 'priceOnly']));
+        expect(
+            lab.notes.filter((note) => note === 'above' || note === 'line'),
+            'the lab draws no line and describes one',
+        ).toEqual([]);
+        expect(
+            SUPPORTED_LOCALES.flatMap((locale) => namingALine(locale, lab.keys)),
+            'the lab draws no line without a benchmark: a note that names one restores, in words, a verdict nothing on screen draws',
+        ).toEqual([]);
+
+        // And whatever a page declares, a chart without a line — the lab's among them — renders no note that names one.
+        expect(notesWithoutALine(), "the lab's notes are among those a chart without a line can carry").toEqual(expect.arrayContaining(lab.notes));
+        const offenders = notesWithoutALine().flatMap((note) => SUPPORTED_LOCALES.flatMap((locale) => namingALine(locale, renderedNoteKeys(note)).map((offence) => `${note} → ${offence}`)));
+        expect(offenders, 'a chart with no line renders a note that describes one').toEqual([]);
+    });
+
+    it.each(['unselected', 'selected'] as const)('with a benchmark (%s), the lab draws the line through it and says what being above it means and that it runs through the benchmark — never through the portfolio — in all four languages', async (benchmark) => {
+        const lab = await renderedByTheLab(benchmark);
+        expect(lab.lineAnchor, "the lab's benchmark anchors the line").toBe('benchmark');
+
+        expect(lab.notes, 'the lab draws a line: it says what being above it means, and where it comes from').toEqual(expect.arrayContaining(['above', 'line']));
+        expect(lab.keys).toEqual(expect.arrayContaining([ABOVE_KEY, LINE_BENCHMARK_KEY]));
+        expect(lab.keys, 'the lab has no portfolio: its line never runs through one').not.toContain(LINE_KEY);
+        for (const locale of SUPPORTED_LOCALES) {
+            const rendered = lab.keys.map((key) => at(CATALOGUES[locale], key));
+            expect(
+                rendered.filter((message) => typeof message !== 'string'),
+                `${locale}: a key the lab renders has no message`,
+            ).toEqual([]);
+            expect(rendered, `${locale}: what being above the line means`).toContain(at(CATALOGUES[locale], ABOVE_KEY));
+            expect(rendered, `${locale}: the line through the benchmark`).toContain(at(CATALOGUES[locale], LINE_BENCHMARK_KEY));
+            expect(rendered, `${locale}: the line through the portfolio, which the lab does not have`).not.toContain(at(CATALOGUES[locale], LINE_KEY));
+            expect(namingALine(locale, lab.keys), `${locale}: the lab draws a line and no note names it`).not.toEqual([]);
+        }
     });
 });

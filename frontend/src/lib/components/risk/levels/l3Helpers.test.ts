@@ -370,9 +370,9 @@ describe('buildRiskReturnRows', () => {
 
     /**
      * Three readings of a ratio: a number; `null`, measured and not measurable — the dash with the blank
-     * note; `undefined`, not calculated here — a plain dash that claims no attempt. Today no item carries a
-     * holding's Sortino or Sharpe, so every holding's is `undefined`; the day Risk sends them, a missing
-     * one must not read as "not calculated".
+     * note; `undefined`, not calculated here — a plain dash that claims no attempt. Since Risk's k6
+     * (06/10/2026) every item carries its holding's Sortino and Sharpe, a number or `null`; an answer from
+     * before the fields carries neither, and only then is a holding's `undefined`.
      */
     it('tells a ratio the item does not carry from one it carries as null', () => {
         const rows = buildRiskReturnRows({
@@ -396,5 +396,100 @@ describe('buildRiskReturnRows', () => {
         expect(byId.get(2)?.sharpe).toBeUndefined();
         expect(byId.get(3)?.sortino, 'a field present but undefined is not carried either').toBeUndefined();
         expect(byId.get(3)?.sharpe, 'a field carried as a non-finite number is measured and not measurable').toBeNull();
+    });
+
+    /**
+     * A holding's beta and correlation against the benchmark are the comparison's item for it (Risk's k6,
+     * 06/10/2026: one item per holding, measured in the same request, on the same calendar and with the
+     * same pairing as the portfolio's own beta), and they read the three ways every ratio reads:
+     *
+     *  - the holding has an item: its figures — a flat holding's included, whose beta is 0 and whose
+     *    correlation is undefined, so `null`;
+     *  - the list came and the holding is not on it: `null`, measured and not measurable — no prepared
+     *    series, fewer than two pairs — so the dash with the blank note;
+     *  - no comparison, or an answer from before the field: `undefined`, not calculated here.
+     *
+     * The comparison lists its items by asset id and the analytic its own way (holding 2 first in
+     * `OUTPUT`), so a row that took the item at its own position would show its neighbour's figures.
+     */
+    it('takes each holding’s beta and correlation from the comparison’s item for it, by asset id, never by position', () => {
+        const rows = buildRiskReturnRows({
+            ...base,
+            riskReturnResult: riskReturnResult(OUTPUT),
+            comparisonResult: comparisonResult({
+                ...UNHELD,
+                items: [
+                    {asset_id: 1, beta: 1.07, correlation: 0.74},
+                    {asset_id: 2, beta: 0.38, correlation: 0.29},
+                ],
+            }),
+            portfolioKpi: KPI,
+        });
+        const byId = new Map(rows.map((row) => [row.assetId, row]));
+
+        expect(byId.get(1), 'holding 1: its own item’s figures').toMatchObject({beta: 1.07, correlation: 0.74});
+        expect(byId.get(2), 'holding 2: its own item’s figures').toMatchObject({beta: 0.38, correlation: 0.29});
+        // The portfolio's pair stays the comparison's own, and no item is its.
+        expect(rows[0]).toMatchObject({role: 'portfolio', beta: 0.91, correlation: 0.62});
+    });
+
+    it('reads a holding the list leaves out as measured and not measurable, and a flat one as 0 and null — never one as the other', () => {
+        const rows = buildRiskReturnRows({
+            ...base,
+            riskReturnResult: riskReturnResult({...OUTPUT, items: [...OUTPUT.items, {asset_id: 3, weight: 0.01, volatility: 0, expected_annual_return: 0}]}),
+            comparisonResult: comparisonResult({
+                ...UNHELD,
+                items: [
+                    {asset_id: 1, beta: 1.07, correlation: 0.74},
+                    {asset_id: 3, beta: 0, correlation: null},
+                ],
+            }),
+            portfolioKpi: KPI,
+        });
+        const byId = new Map(rows.map((row) => [row.assetId, row]));
+
+        // Barrier: the list was read — the holding on it carries its own figures.
+        expect(byId.get(1)).toMatchObject({beta: 1.07, correlation: 0.74});
+        expect(byId.get(2)?.beta, 'left out of the list: measured, and not measurable — never "not calculated", never 0').toBeNull();
+        expect(byId.get(2)?.correlation, 'left out of the list: measured, and not measurable').toBeNull();
+        expect(byId.get(3)?.beta, 'a flat holding moves with nothing: its beta is 0, a figure, not a blank').toBe(0);
+        expect(byId.get(3)?.correlation, 'and its correlation is undefined: null, measured and not measurable').toBeNull();
+    });
+
+    it('leaves every holding’s beta and correlation not calculated without a comparison, or with an answer from before the field', () => {
+        const cases = [
+            {what: 'no comparison', rows: buildRiskReturnRows({...base, riskReturnResult: riskReturnResult(OUTPUT), comparisonResult: null, portfolioKpi: KPI})},
+            {what: 'a comparison without items', rows: buildRiskReturnRows({...base, riskReturnResult: riskReturnResult(OUTPUT), comparisonResult: comparisonResult(UNHELD), portfolioKpi: KPI})},
+        ];
+        for (const {what, rows} of cases) {
+            const holdings = rows.filter((row) => !row.added);
+            expect(
+                holdings.map((row) => row.assetId),
+                `${what}: barrier — both holdings have a row`,
+            ).toEqual([1, 2]);
+            for (const row of holdings) {
+                expect(row.beta, `${what}: holding ${row.assetId}'s beta is not calculated here`).toBeUndefined();
+                expect(row.correlation, `${what}: holding ${row.assetId}'s correlation is not calculated here`).toBeUndefined();
+            }
+        }
+        // Barrier: the comparison without items was read — the portfolio carries its beta.
+        expect(cases[1].rows[0]).toMatchObject({role: 'portfolio', beta: 0.91, correlation: 0.62});
+    });
+
+    it('gives a held benchmark no beta or correlation of its own — it is the reference — while every other holding takes its item', () => {
+        // The benchmark itself is never an item (k6): held, its row is the reference, measured against nothing.
+        const rows = buildRiskReturnRows({
+            ...base,
+            riskReturnResult: riskReturnResult(OUTPUT),
+            comparisonResult: comparisonResult({...UNHELD, comparison_asset_id: 2, items: [{asset_id: 1, beta: 1.07, correlation: 0.74}]}),
+            portfolioKpi: KPI,
+        });
+        const held = rows.find((row) => row.assetId === 2);
+
+        // Barrier: the list was read — the other holding carries its item.
+        expect(rows.find((row) => row.assetId === 1)).toMatchObject({beta: 1.07, correlation: 0.74, isReference: false});
+        expect(held, 'the held benchmark is the holding’s own row, marked as the reference').toMatchObject({role: 'benchmark', isReference: true});
+        expect(held?.beta, 'the reference has no beta against itself: no value, and no blank to explain either').toBeUndefined();
+        expect(held?.correlation, 'the reference has no correlation against itself').toBeUndefined();
     });
 });

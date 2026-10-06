@@ -338,7 +338,7 @@
         {/snippet}
 
         <RiskLevelSection level={3} title={$t('risk.levels.l3.title')} testId="risk-level-3" docsPath="financial-theory/technical-analysis/risk-metrics/" health={levelErrorHealth(l3Health)} errorCodes={l3Errors} metadata={l3Metadata} actions={l3Table ? l3Actions : undefined}>
-            <L3Benchmark {controller} />
+            <L3Benchmark {controller} riskFreePercent={appliedRiskFreePercent} />
             <L3RiskAdjusted bind:tableRef={l3Table} {historicalResults} {currentResults} {assetNames} {assetIcons} {appliedRiskFreePercent} comparisonResult={controller.comparisonResult} {benchmarkName} loading={initialLoading} />
         </RiskLevelSection>
 
