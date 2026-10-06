@@ -3127,7 +3127,7 @@
         },
         "l3": {
           "title": "Quanto ha pagato ciascuno per il suo rischio?",
-          "description": "Per ogni asset selezionato, quanto ha oscillato e quanto ha reso in media all'anno, nella tabella e nel grafico; con un benchmark scelto in cima alla scheda, anche quanto si è mosso insieme a lui.",
+          "description": "Per ogni asset selezionato, quanto ha oscillato e quanto ha reso in media all'anno, nella tabella e nel grafico; con un benchmark scelto qui sopra, anche quanto si è mosso insieme a lui.",
           "expectedReturn": "Rendimento medio annuo",
           "correlation": "Correlazione",
           "columnHelp": {

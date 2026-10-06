@@ -2601,9 +2601,13 @@ async function pickUnselectedAssetId(page: Page): Promise<number> {
  * Developer decision, 01/10/2026: wherever a page measures against a benchmark there is a
  * picker, it opens on the current benchmark, and it is empty only when nothing is set. The lab
  * mounts Risk's one primitive for it, `BenchmarkSelect`, under the testid below, in a row of its
- * own — the label, an ⓘ help, the picker — and mounts the levels only once the picker is no
- * longer `pending`. Since 02/10/2026 that row is the selection card's last, below the chips and
- * their «+»: a parameter common to the whole lab sits beside the choice of what to analyse.
+ * own — the label, an ⓘ help, the picker. Since the developer's review of 06/10/2026 that row sits
+ * in L3°'s frame, the one level that measures against a benchmark, as the first thing in its body:
+ * below the frame's title, above L3°'s table — «non in cima ma sopra la tabella, esattamente come in
+ * dashboard», where the picker is likewise the first child of L3's body. From 02/10 it had been the
+ * selection card's last row. So the picker exists only while the levels are on screen — with a
+ * non-empty selection — and only L3°'s question waits for it to stop saying `pending`: L1° never
+ * reads the benchmark, and asks at once.
  *
  * Every case reads what the primitive publishes on its root, `<testid>-control`:
  * `data-benchmark-id` (`''` when there is none), `data-benchmark-state`
@@ -2853,13 +2857,22 @@ async function expectLossWithoutComparison(page: Page, requests: readonly RiskRe
 }
 
 /**
- * Where the lab's benchmark row sits, as one verdict: `'in the selection card'` when its help and
- * its picker sit inside the selection card, after its row of chips and «+» and outside that row,
- * and come before the correlation section and both comparison levels, inside none of those three
- * frames, the help before the picker.
+ * Where the lab's benchmark row sits, as one verdict: `"above L3°'s table"` when its help and its
+ * picker sit inside L3°'s frame and inside none of the selection card, its chips row, the
+ * correlation section and L1°; below the frame's title row; the help before the picker; and both
+ * before L3°'s section, so before the table it opens on. Otherwise, what is wrong.
  *
- * Document order, not pixels: the row may wrap on a narrow screen, and what the developer
- * decided is the order a reader meets things in. One read, not a retry: a caller polls it.
+ * "Below the title row" is read off the two marks `RiskLevelSection` draws, never a class or a
+ * tag: after its title (`<testId>-title`, the heading itself), and inside its body (`<testId>-body`),
+ * which the frame draws under its whole header. The title alone is not enough: it marks the heading,
+ * not its row, so a picker squeezed onto the heading's own line — beside the column toggle and the
+ * manual icon — would follow it too. And the table must be drawn for the verdict to be given at
+ * all: "above the table" is never said about one still loading.
+ *
+ * Document order, not pixels: the row may wrap on a narrow screen, and what the developer decided
+ * is where a reader meets it — inside the one level that measures against it, after that level's
+ * question and before its figures, as on the Dashboard — not how far down the page it is drawn.
+ * One read, not a retry: a caller polls it.
  */
 async function benchmarkRowPlacement(page: Page): Promise<string> {
     return page.getByTestId('asset-global-risk-panel').evaluate((panel) => {
@@ -2871,26 +2884,38 @@ async function benchmarkRowPlacement(page: Page): Promise<string> {
         const correlation = find('risk-correlation-section');
         const loss = find('risk-asset-set-loss');
         const paid = find('risk-asset-set-paid');
-        if (!card || !chips || !control || !help || !correlation || !loss || !paid) return `missing: card=${card !== null} chips=${chips !== null} picker=${control !== null} help=${help !== null} correlation=${correlation !== null} L1°=${loss !== null} L3°=${paid !== null}`;
-        if (!card.contains(control)) return 'the picker is outside the selection card';
-        if (!card.contains(help)) return 'the help is outside the selection card';
-        const frames: Array<[string, Element]> = [
+        const title = find('risk-asset-set-paid-title');
+        const body = find('risk-asset-set-paid-body');
+        const section = find('risk-asset-set-l3');
+        const table = find('risk-asset-set-l3-table');
+        if (!card || !chips || !control || !help || !correlation || !loss || !paid || !title || !body || !section || !table) {
+            return `missing: card=${card !== null} chips=${chips !== null} picker=${control !== null} help=${help !== null} correlation=${correlation !== null} L1°=${loss !== null} L3°=${paid !== null} L3°-title=${title !== null} L3°-body=${body !== null} L3°-section=${section !== null} L3°-table=${table !== null}`;
+        }
+        // Where the row must not be — the chips row before the card that holds it: the narrower frame is the better diagnosis.
+        const outside: Array<[string, Element]> = [
             ['the chips row', chips],
+            ['the selection card', card],
             ['the correlation section', correlation],
             ['L1°', loss],
-            ['L3°', paid],
         ];
-        for (const [name, frame] of frames) {
+        for (const [name, frame] of outside) {
             if (frame.contains(control)) return `the picker is inside ${name}`;
             if (frame.contains(help)) return `the help is inside ${name}`;
         }
+        if (!paid.contains(control)) return "the picker is outside L3°'s frame";
+        if (!paid.contains(help)) return "the help is outside L3°'s frame";
+        if (!body.contains(control)) return "the picker is in L3°'s frame but outside its body, so not below its title row";
+        if (!body.contains(help)) return "the help is in L3°'s frame but outside its body, so not below its title row";
         const precedes = (first: Element, second: Element) => !first.contains(second) && !second.contains(first) && (first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
-        if (!precedes(chips, help)) return 'the help is above the chips row';
+        if (!precedes(title, help)) return "the help is not below L3°'s title";
+        if (!precedes(title, control)) return "the picker is not below L3°'s title";
         if (!precedes(help, control)) return 'the help comes after the picker';
-        if (!precedes(control, correlation)) return 'the picker is below the correlation section';
-        if (!precedes(control, loss)) return 'the picker is below L1°';
-        if (!precedes(control, paid)) return 'the picker is below L3°';
-        return 'in the selection card';
+        if (section.contains(help)) return "the help is inside L3°'s section";
+        if (section.contains(control)) return "the picker is inside L3°'s section";
+        // L3°'s table is inside its section, so a row before the section is a row before the table.
+        if (!precedes(help, section)) return "the help is below L3°'s section";
+        if (!precedes(control, section)) return "the picker is below L3°'s section";
+        return "above L3°'s table";
     });
 }
 
@@ -5380,7 +5405,7 @@ test.describe('Asset Global risk laboratory', () => {
         const userId = await currentUserId(page);
         // Seeded through `localStorage` under the store's own key rather than
         // through the lab's picker — Risk's shared `BenchmarkSelect`, mounted
-        // above L1° and L3° as `risk-asset-set-benchmark` — because that picker
+        // in L3°'s frame as `risk-asset-set-benchmark` — because that picker
         // opens on the choice this key holds, the one shared with Dashboard and
         // Broker Detail, and this case is about the columns rather than about
         // choosing: the benchmark picker cases below drive the control itself.
@@ -5392,7 +5417,7 @@ test.describe('Asset Global risk laboratory', () => {
         // needed. The panel no longer reads the store: it binds `benchmarkValue`
         // and `benchmarkState` from `BenchmarkSelect`, derives `benchmarkId` from
         // them (`labBenchmarkId`) — the confirmed choice, whether or not the
-        // selection holds it (D371), or null — and mounts the levels only
+        // selection holds it (D371), or null — and lets L3° ask only
         // once the state is no longer `pending`. The picker is the store's one
         // reader here: `riskBenchmark.assetId` synchronously for its opening state,
         // then `resolveRiskBenchmark()` on mount, which confirms the id against the
@@ -5481,10 +5506,12 @@ test.describe('Asset Global risk laboratory', () => {
      *
      * The developer's decision of 01/10/2026: wherever a page measures against a benchmark there
      * is a picker, it opens on the current benchmark, and it is empty only when nothing is set. In
-     * the lab it is a row of its own — label, ⓘ help, picker — and, revised on 02/10/2026, it sits
-     * beside the choice of the assets to analyse, a parameter common to the whole lab: the
-     * selection card's last row, below the chips and their «+», outside that row. So it comes
-     * before the correlation section and both comparison levels, inside none of them.
+     * the lab it is a row of its own — label, ⓘ help, picker. Revised on 06/10/2026, «non in cima ma
+     * sopra la tabella, esattamente come in dashboard»: it leaves the selection card, whose last row
+     * it was from 02/10, for the one level that measures against it — L3°'s frame, as the first thing
+     * in its body: below the frame's title row, before L3°'s section and so above its table, as the
+     * Dashboard mounts its own above L3's. So it sits inside none of the selection card, its chips
+     * row, the correlation section and L1°.
      *
      * Opened on a stored benchmark the asset list confirms, one the selection does not hold (a
      * selected one is (c)'s): the root says `set`, with that id and nothing measured; an L3° request
@@ -5493,11 +5520,10 @@ test.describe('Asset Global risk laboratory', () => {
      * held on to — they are translated — but they must be the lab's own sentence, read from the
      * catalogue in the language the page is drawn in.
      *
-     * Red until the row moves into the selection card: today it sits after the card, between the
-     * correlation section and the two levels. Its L1° half is red until the levels ask apart: today
-     * the comparison rides in the one request both levels share.
+     * Red until the row moves into L3°'s frame: today it is still the selection card's last row, and
+     * the verdict says so — «the picker is inside the selection card».
      */
-    test('the benchmark picker sits in the selection card, before the correlation section and both comparison levels, with its help, and opens on the stored benchmark', async ({page}) => {
+    test("the benchmark picker sits in L3°'s frame, below its title and above its table as on the Dashboard, with its help, and opens on the stored benchmark", async ({page}) => {
         test.setTimeout(BENCHMARK_CASE_BUDGET);
         const requests = await installRiskMocks(page);
         const {selection, reference} = await castBenchmark(page);
@@ -5515,7 +5541,9 @@ test.describe('Asset Global risk laboratory', () => {
         // Where it sits, read once both levels are drawn to be placed against.
         await waitForLossTable(page);
         await waitForPaidTable(page);
-        await expect.poll(() => benchmarkRowPlacement(page), {message: 'the benchmark row must sit in the selection card, after the chips row, before the correlation section, L1° and L3°, inside none of them, its help before its picker'}).toBe('in the selection card');
+        await expect
+            .poll(() => benchmarkRowPlacement(page), {message: "the benchmark row must sit in L3°'s frame, in its body below its title row, before L3°'s section and its table, inside none of the selection card, its chips row, the correlation section and L1°, its help before its picker"})
+            .toBe("above L3°'s table");
 
         await expectComparisonWith(page, requests, selection, reference.id);
         // …in L3° alone: L1° is measured without it, read once L3°'s answer with the benchmark is drawn.

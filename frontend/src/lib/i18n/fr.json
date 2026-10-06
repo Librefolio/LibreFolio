@@ -3127,7 +3127,7 @@
         },
         "l3": {
           "title": "Combien chacun a-t-il payé pour son risque ?",
-          "description": "Pour chaque actif sélectionné, l'ampleur de ses variations et son rendement moyen annuel, dans le tableau et dans le graphique ; avec une référence choisie en haut de l'onglet, aussi à quel point il a évolué avec elle.",
+          "description": "Pour chaque actif sélectionné, l'ampleur de ses variations et son rendement moyen annuel, dans le tableau et dans le graphique ; avec une référence choisie juste au-dessus, aussi à quel point il a évolué avec elle.",
           "expectedReturn": "Rendement moyen annuel",
           "correlation": "Corrélation",
           "columnHelp": {

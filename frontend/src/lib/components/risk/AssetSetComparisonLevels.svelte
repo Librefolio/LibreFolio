@@ -48,11 +48,22 @@
      * happened to catch it. What is *partial*, and every warning, the lab says
      * once, in the notice above the sections (`qualitySource()`; the developer,
      * 05/10): one stale price read under every frame was four problems.
+     *
+     * **The benchmark picker sits in L3°'s frame, above its table** (the developer's
+     * review, 06/10: «sopra la tabella, esattamente come in dashboard»), drawn from the
+     * panel's `benchmarkPicker`, which owns the choice. Only L3° waits for it: the
+     * picker confirms a stored benchmark against the asset list before it says `set`,
+     * and while it says `pending` L3°'s controller does not exist yet — it is created by
+     * a `RiskControllerHost` mounted under `{#if !benchmarkPending}` — so L3° asks once,
+     * with the benchmark, instead of once without it and again with it. L1° never uses
+     * the benchmark, so it asks at once. The picker itself is drawn whatever the wait:
+     * it is what ends it, and a picker mounted again would start a new one.
      */
+    import type {Snippet} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import type DataTable from '$lib/components/table/DataTable.svelte';
-    import {ANSWER_DISCARDED_CODE, createRiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
+    import {ANSWER_DISCARDED_CODE, createRiskPanelController, type RiskControllerInputs, type RiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
 
     import AssetSetLossComparisonSection from './AssetSetLossComparisonSection.svelte';
     import type {AssetSetHurtRow, AssetSetPaidRow, AssetSetQualitySource} from './assetSetLevels';
@@ -61,6 +72,7 @@
     import {degradedResults, levelMetadata, resultErrorCodes} from './levels/levelHelpers';
     import {levelErrorHealth} from './levels/partialNotice';
     import RiskLevelSection from './levels/RiskLevelSection.svelte';
+    import RiskControllerHost from './RiskControllerHost.svelte';
 
     interface Props {
         /** Already non-empty: the caller's `{#if}` is the guard, see above. */
@@ -81,9 +93,16 @@
         benchmarkId: number | null;
         /** Bumped by the panel after an accepted sync (R2-128). Default: never. */
         refreshVersion?: number;
+        /**
+         * The picker has not yet confirmed a stored benchmark: L3° waits, and asks once
+         * it has (see above). Default: nothing to wait for.
+         */
+        benchmarkPending?: boolean;
+        /** The benchmark picker, drawn at the top of L3°'s frame, above its table. */
+        benchmarkPicker?: Snippet;
     }
 
-    let {assetIds, assetLabels, assetIcons, dateStart, dateEnd, targetCurrency, benchmarkId, refreshVersion = 0}: Props = $props();
+    let {assetIds, assetLabels, assetIcons, dateStart, dateEnd, targetCurrency, benchmarkId, refreshVersion = 0, benchmarkPending = false, benchmarkPicker}: Props = $props();
 
     // Sharpe and Sortino are charged against a zero risk-free rate here, as the
     // correlation section already does, because this page has no control to set
@@ -103,22 +122,24 @@
         {includeAssetSetLossLevels: true},
     );
 
-    /** L3°: its share of the wave, with the benchmark when one applies. */
-    const paidController = createRiskPanelController(
-        () => ({
-            scope: {kind: 'asset_set', asset_ids: assetIds},
-            dateStart,
-            dateEnd,
-            targetCurrency,
-            appliedRiskFreePercent: 0,
-            refreshVersion,
-            assetSetBenchmarkId: benchmarkId,
-        }),
-        {includeAssetSetPaidLevels: true},
-    );
+    /**
+     * L3°: its share of the wave, with the benchmark when one applies. Its controller is
+     * created by the `RiskControllerHost` below, once the benchmark is no longer pending,
+     * and read here; until then L3° has asked nothing and shows its loading state.
+     */
+    const paidInputs = (): RiskControllerInputs => ({
+        scope: {kind: 'asset_set', asset_ids: assetIds},
+        dateStart,
+        dateEnd,
+        targetCurrency,
+        appliedRiskFreePercent: 0,
+        refreshVersion,
+        assetSetBenchmarkId: benchmarkId,
+    });
+    let paidController = $state<RiskPanelController>();
 
     let lossHistorical = $derived(lossController.historicalResults);
-    let paidHistorical = $derived(paidController.historicalResults);
+    let paidHistorical = $derived(paidController?.historicalResults ?? []);
 
     // The two VaR horizons share an analytic code, so they are resolved by
     // instance: a lookup by code would return whichever arrived first and the
@@ -151,7 +172,7 @@
      * Each level reads its own controller: one level's discarded answer is not the other's.
      */
     let lossDiscardedCodes = $derived(lossController.loadDiscarded ? [ANSWER_DISCARDED_CODE] : []);
-    let paidDiscardedCodes = $derived(paidController.loadDiscarded ? [ANSWER_DISCARDED_CODE] : []);
+    let paidDiscardedCodes = $derived(paidController?.loadDiscarded ? [ANSWER_DISCARDED_CODE] : []);
     let l1Errors = $derived([...resultErrorCodes(l1Results), ...lossDiscardedCodes]);
     let l1Metadata = $derived(levelMetadata(l1Results));
 
@@ -169,7 +190,7 @@
         return {
             results: [dailyVar, monthlyVar, drawdown, riskReturn, kpi, comparison],
             labels: VAR_LABELS,
-            issues: [...lossController.dataQualityIssues, ...paidController.dataQualityIssues],
+            issues: [...lossController.dataQualityIssues, ...(paidController?.dataQualityIssues ?? [])],
         };
     }
 
@@ -218,7 +239,12 @@
     <ColumnVisibilityToggle tableRef={riskTable} />
 {/snippet}
 
+{#if !benchmarkPending}
+    <RiskControllerHost inputs={paidInputs} options={{includeAssetSetPaidLevels: true}} bind:controller={paidController} />
+{/if}
+
 <RiskLevelSection title={$t('risk.assetSet.levels.l3.title')} level={3} testId="risk-asset-set-paid" health={l3Health} errorCodes={l3Errors} metadata={l3Metadata} docsPath="financial-theory/technical-analysis/risk-metrics/" actions={riskTable ? riskActions : undefined}>
+    {@render benchmarkPicker?.()}
     <AssetSetRiskReturnSection
         bind:tableRef={riskTable}
         {assetIds}
@@ -230,9 +256,9 @@
         {benchmarkApplies}
         {dateStart}
         {dateEnd}
-        loading={paidController.initialLoading}
-        failed={paidController.loadError}
-        discarded={paidController.loadDiscarded}
-        onretry={() => void paidController.loadBase(true)}
+        loading={paidController?.initialLoading ?? true}
+        failed={paidController?.loadError ?? false}
+        discarded={paidController?.loadDiscarded ?? false}
+        onretry={() => void paidController?.loadBase(true)}
     />
 </RiskLevelSection>

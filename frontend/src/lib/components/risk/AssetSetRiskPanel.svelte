@@ -549,9 +549,12 @@
     /**
      * The benchmark the comparison levels measure against, when one applies.
      *
-     * Chosen in the shared picker (`BenchmarkSelect`), the last row of the selection card:
-     * the developer's rule is that wherever a page measures against a benchmark it can be
-     * chosen there, and that the picker opens on the current one. The choice itself still
+     * Chosen in the shared picker (`BenchmarkSelect`), drawn in L3°'s frame above its table,
+     * as on the Dashboard (the developer's review, 06/10: «sopra la tabella, esattamente come
+     * in dashboard»; until then it was the last row of the selection card): the developer's
+     * rule is that wherever a page measures against a benchmark it can be chosen there, and
+     * that the picker opens on the current one. The panel owns the choice and hands the levels
+     * the picker as a snippet (`benchmarkPicker`). The choice itself still
      * lives in the shared `riskBenchmark` store, so choosing it here chooses it on every risk
      * page — `03-mappa-livelli-pagine` §3.1: two pages comparing against different
      * references stop being comparable.
@@ -564,12 +567,14 @@
      * why its beta and correlation are blank. So the picker leaves nothing out and shows no
      * ⚠ here.
      *
-     * 🔴 **The levels mount only once the picker has stopped saying `pending`.** Their
-     * controllers ask for their base waves the moment they mount. Mounted earlier, every
-     * load with a stored benchmark would ask L3° twice — first without the benchmark, over
-     * another window, then with it — and it would show figures that are replaced a moment
-     * later. Starting at `pending` keeps them out until the picker reports; with nothing
-     * stored it reports `none` while it mounts.
+     * 🔴 **L3° asks only once the picker has stopped saying `pending`.** A controller asks
+     * its base wave the moment it exists. Created earlier, every load with a stored
+     * benchmark would ask L3° twice — first without the benchmark, over another window,
+     * then with it — and it would show figures that are replaced a moment later. Starting
+     * at `pending` holds L3°'s controller back (`benchmarkPending`: the levels create it
+     * only then); with nothing stored the picker reports `none` while it mounts. L1° does
+     * not wait: it never uses the benchmark. The levels are no longer held back as a
+     * whole, since the picker is drawn inside them and is what ends the wait.
      */
     let benchmarkValue = $state<number | null>(null);
     let benchmarkState = $state<RiskBenchmarkState>('pending');
@@ -799,26 +804,28 @@
         {#if atCapacity}
             <p class="mt-2 text-xs text-amber-600 dark:text-amber-400">{$t('risk.assetSet.maxAssets')}</p>
         {/if}
-        <!-- The benchmark is a parameter of the whole lab, chosen beside the assets it is set
-             against (the developer's review, 02/10): today only «What did each of these pay?»
-             uses it, for beta, correlation and its dot. Mounted with the card, so a stored
-             choice is confirmed before the levels below ask for their data. -->
-        <div class="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3 dark:border-slate-700" data-testid="risk-asset-set-benchmark-row">
+    </section>
+
+    <!-- The benchmark picker, drawn by the levels at the top of L3°'s frame, above its table, as
+         on the Dashboard (the developer's review, 06/10). Only «What did each of these pay?»
+         uses the benchmark, for beta, correlation and its dot. The help stays beside it. -->
+    {#snippet benchmarkPicker()}
+        <div class="mb-4 flex flex-wrap items-center gap-2" data-testid="risk-asset-set-benchmark-row">
             <span class="shrink-0 text-xs text-gray-500 dark:text-gray-400">{$t('risk.levels.l3.benchmark')}</span>
             <Tooltip text={$t('risk.assetSet.benchmark.help')} position="bottom" maxWidth="320px">
                 <span class="inline-flex text-gray-400 dark:text-gray-500" data-testid="risk-asset-set-benchmark-help"><Info size={14} aria-hidden="true" /></span>
             </Tooltip>
-            <BenchmarkSelect bind:value={benchmarkValue} bind:state={benchmarkState} testid="risk-asset-set-benchmark" />
+            <div class="min-w-0 max-w-xs flex-1">
+                <BenchmarkSelect bind:value={benchmarkValue} bind:state={benchmarkState} boxClass="w-full" testid="risk-asset-set-benchmark" />
+            </div>
         </div>
-    </section>
+    {/snippet}
 
     {#if analysedIds.length > 0}
         <DataQualityBanner issues={qualityIssues} mode="grouped" onaction={(action, target) => handleQualityAction(action, target)} />
         <RiskPartialNotice partial={notice.partial} reasons={notice.reasons} />
         <AssetSetCorrelationSection bind:this={correlationSection} assetIds={analysedIds} assetLabels={selectionLabels} assetTypes={selectionTypes} {dateStart} {dateEnd} {targetCurrency} refreshVersion={syncGeneration} />
-        {#if benchmarkState !== 'pending'}
-            <AssetSetComparisonLevels bind:this={levelsSection} assetIds={analysedIds} assetLabels={selectionLabels} assetIcons={selectionIcons} {dateStart} {dateEnd} {targetCurrency} {benchmarkId} refreshVersion={syncGeneration} />
-        {/if}
+        <AssetSetComparisonLevels bind:this={levelsSection} assetIds={analysedIds} assetLabels={selectionLabels} assetIcons={selectionIcons} {dateStart} {dateEnd} {targetCurrency} {benchmarkId} benchmarkPending={benchmarkState === 'pending'} {benchmarkPicker} refreshVersion={syncGeneration} />
         <AssetSetReplaySection bind:this={replaySection} assetIds={analysedIds} assetLabels={selectionLabels} {dateStart} {dateEnd} {targetCurrency} refreshVersion={syncGeneration} />
     {:else if seeding}
         <div class="rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 p-8 text-center" data-testid="risk-asset-set-seeding">
