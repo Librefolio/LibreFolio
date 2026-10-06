@@ -42,6 +42,20 @@ Broker reports have **restricted visibility** — you can only see reports for b
 
 **Context Menu**: Right-click any report row to access quick actions (Preview, Download, Delete).
 
+#### 🧩 Report sets {: #report-sets }
+
+Some banks split one account across several exports: [Danske Bank](../transactions/import/danske-bank.md), for example, needs a securities export and a cash statement. The exports of such a bank that you upload **together** form a **report set**, and LibreFolio imports them as one, through a **combined file** it builds from them. The **Report set** column tells you where each file stands (the same column appears in a broker's **Uploaded Reports**):
+
+| Badge | Meaning |
+|:--|:--|
+| **Set of ‹date›** | The file belongs to the set uploaded on that date, together with the other exports of the set. |
+| **Incomplete** | The set still lacks a required export: hover the badge to see which one. Add it from the set's card in the Import Wizard, with **Upload the missing file**. |
+| **Combined** | The file LibreFolio built from the exports of a set — the one the import actually reads. Hover the badge to see the files it was built from, and which of them have been deleted since. |
+| **Used in a combined file** | This export went into a combined file of its set. |
+| **To re-combine** | The combined file was built by an older version of the importer: analysing the set again rebuilds it. |
+
+You can preview, download and delete these files like any other report. Deleting one export of a set leaves its combined file in place, but to import the set again you first need to upload that export into it again.
+
 ---
 
 ## ⬆️ Uploading Files

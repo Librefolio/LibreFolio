@@ -428,6 +428,7 @@ ONBOARDING_STEPS = {
         "import.fix",
         "import.duplicates",
         "import.review",
+        "import.gapFix",
         "import.bulk",
     ),
 }

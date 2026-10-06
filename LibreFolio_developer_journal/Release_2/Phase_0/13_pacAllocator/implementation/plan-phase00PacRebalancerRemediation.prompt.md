@@ -332,6 +332,12 @@ valore predittivo.
 
 ### Fase 3 — Sbloccare il compilatore: `min_fragmentation` (§13 punto 6)
 
+> **Stato al 2026-09-24 (Round5, decisione Q-C0-4 del developer)**: «semplicemente non mettiamola,
+> la ui in questo deve essere dinamica». `min_fragmentation` esce dal wire di 2.0.0
+> (`PacPlannerRequest.policy` = `Literal["proportional"]`, `plan-phase00PacRound5PostMerge.prompt.md`
+> C0b.2). Questa fase resta la strada per reintrodurla: prima la cascata e il gate qui sotto, poi si
+> riallarga il `Literal`.
+
 Cascata `split_asset_count` in `objectives.py`; rilassare
 `_require_supported_scope` **in modo mirato**.
 
@@ -472,6 +478,8 @@ Raccolte qui perché il developer possa rispondere in blocco.
 4. **`min_fragmentation` può uscire solo per via oracolo?** Domini piccoli
    risolti provatamente, `not_proven` oltre il cap, prima che la cascata SCIP
    esista. È onesto, ma è una promessa di prodotto asimmetrica.
+   **Decisa il 2026-09-24 (Q-C0-4)**: no. La policy esce dal wire finché la
+   cascata SCIP non esiste (Round5 C0b.2).
 5. **DBT-5** (`stop_reason="time_limit"` non veritiero sul percorso solver
    infeasible): richiede un cambio al contratto congelato oppure una nota UI
    permanente che vieti di mostrare «time limit» all'utente su quel percorso.

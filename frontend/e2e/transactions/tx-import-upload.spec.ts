@@ -3,8 +3,8 @@
  *
  * The wizard's entry step is where a user drops files, the client validates them, and a
  * broker is assigned before anything is sent to the server. None of it touched the server:
- * files are only POSTed to /brokers/import/upload when "Next" is clicked, and these tests
- * never leave step 1, so they perform ZERO backend writes and need no cleanup.
+ * files are only POSTed to /brokers/import/upload when "Next" is clicked, and the tests of
+ * the first block never leave step 1, so they perform ZERO backend writes and need no cleanup.
  *
  * That also makes the whole file safe to run fully in parallel: each test opens its own
  * wizard instance (per page/context) which starts with an empty pending-file list, so the
@@ -21,6 +21,11 @@
  *   - clearAllPendingFiles + the "upload more" re-expand toggle
  *   - handleClose / confirmDiscard: the unsaved-work discard guard (both branches)
  *
+ * The last block ("upload batch", C1 of the report-set plan) is the one exception: it clicks
+ * "Next", so it creates its own broker, uploads two synthetic sample reports to it, and
+ * deletes the files and the broker afterwards. It checks that the files of one step-1
+ * session reach the server with one shared `batch_id`.
+ *
  * Entry point: the transactions toolbar "Import" button (`tx-import-button`) sets
  * bulkIntent={action:'import'}, and the BulkModal auto-opens the wizard on that intent —
  * a clean entry that never selects a table row by position.
@@ -29,8 +34,11 @@
 import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {waitForSettled} from '../fixtures/app-events';
+import {optionsClosed} from '../fixtures/probe';
 import {uniqueSuffix} from '../fixtures/unique';
 import {TEST_USER} from '../fixtures/test-users';
+import path from 'path';
+import {fileURLToPath} from 'url';
 
 test.setTimeout(30_000);
 
@@ -210,5 +218,134 @@ test.describe('Import Wizard — upload step', () => {
         await page.getByTestId('import-wizard-close').click();
         await page.getByTestId('confirm-modal-confirm').click();
         await expect(page.getByTestId('import-wizard-stepper')).toHaveCount(0, {timeout: 5_000});
+    });
+});
+
+// ---------------------------------------------------------------------------
+// C1 — the upload batch (the one block of this file that writes, and cleans up)
+// ---------------------------------------------------------------------------
+
+const API = '/api/v1';
+const BRIM_UPLOAD_PATH = `${API}/brokers/import/upload`;
+const SPEC_DIR = path.dirname(fileURLToPath(import.meta.url));
+/** The repository's synthetic Generic CSV samples — never a real broker export. */
+const SAMPLE_REPORTS = ['generic_simple.csv', 'generic_with_assets.csv'].map((name) => path.resolve(SPEC_DIR, '../../../backend/app/services/brim_providers/sample_reports', name));
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+type UploadedInfo = {file_id: string; filename: string; target_broker_id: number | null; batch_id?: string | null};
+
+/** A broker this test owns. The name goes through `uniqueSuffix()`: `brokers.name` is uniquely indexed. */
+async function createOwnedBroker(page: Page, name: string): Promise<number> {
+    const response = await page.request.post(`${API}/brokers`, {data: [{name, allow_cash_overdraft: true}]});
+    expect(response.ok(), `create owned broker: HTTP ${response.status()} ${await response.text()}`).toBe(true);
+    const {results} = (await response.json()) as {results: Array<{name: string; success: boolean; broker_id: number | null}>};
+    const created = results.find((result) => result.name === name);
+    if (!created?.success || typeof created.broker_id !== 'number') throw new Error(`Owned broker "${name}" was not created: ${JSON.stringify(results)}`);
+    return created.broker_id;
+}
+
+/** The BRIM files stored on one broker; the list also returns legacy files with no broker, so the target is filtered. */
+async function brimFilesOn(page: Page, brokerId: number): Promise<UploadedInfo[]> {
+    const response = await page.request.get(`${API}/brokers/import/files?broker_ids=${brokerId}`);
+    expect(response.ok(), `list the BRIM files of broker ${brokerId}: HTTP ${response.status()}`).toBe(true);
+    const files = (await response.json()) as UploadedInfo[];
+    return files.filter((file) => file.target_broker_id === brokerId);
+}
+
+/** Delete every BRIM file on the owned broker, then the broker: scoped to the id this test created. */
+async function deleteOwnedBrokerAndFiles(page: Page, brokerId: number): Promise<void> {
+    const failures: string[] = [];
+    try {
+        for (const file of await brimFilesOn(page, brokerId)) {
+            const response = await page.request.delete(`${API}/brokers/import/files/${file.file_id}`);
+            if (!response.ok()) failures.push(`BRIM file ${file.file_id}: HTTP ${response.status()}`);
+        }
+    } catch (error) {
+        failures.push(`list the BRIM files of broker ${brokerId}: ${String(error)}`);
+    }
+    try {
+        const response = await page.request.delete(`${API}/brokers?ids=${brokerId}&force=true`);
+        const body = (await response.json().catch(() => null)) as {results?: Array<{id: number; success: boolean}>} | null;
+        if (!response.ok() || !body?.results?.find((result) => result.id === brokerId)?.success) failures.push(`broker ${brokerId}: HTTP ${response.status()} ${JSON.stringify(body)}`);
+    } catch (error) {
+        failures.push(`broker ${brokerId}: ${String(error)}`);
+    }
+    expect(failures, 'cleanup removes the BRIM files and the broker this test created').toEqual([]);
+}
+
+/** The upload responses `action` produces on this page: exactly `expected` of them, each a 200. */
+async function uploadsDuring(page: Page, expected: number, action: () => Promise<void>): Promise<UploadedInfo[]> {
+    const replies: Array<Promise<{status: number; body: string}>> = [];
+    const listener = (response: Awaited<ReturnType<Page['waitForResponse']>>) => {
+        if (response.request().method() === 'POST' && new URL(response.url()).pathname === BRIM_UPLOAD_PATH) replies.push(response.text().then((body) => ({status: response.status(), body})));
+    };
+    // Armed before the action: a response is an edge, not a state.
+    page.on('response', listener);
+    try {
+        await action();
+        await expect.poll(() => replies.length, {message: `${expected} upload response(s) from one action`, timeout: 15_000}).toBe(expected);
+    } finally {
+        page.off('response', listener);
+    }
+    const settled = await Promise.all(replies);
+    for (const {status, body} of settled) expect(status, `POST ${BRIM_UPLOAD_PATH}: ${body}`).toBe(200);
+    return settled.map(({body}) => JSON.parse(body) as UploadedInfo);
+}
+
+function expectUuid(value: string | null | undefined, what: string): string {
+    expect(typeof value === 'string' && UUID_PATTERN.test(value), `${what}: ${JSON.stringify(value)} must be a UUID`).toBe(true);
+    return value as string;
+}
+
+test.describe('Import Wizard — upload batch', () => {
+    let ownedBrokerId: number | undefined;
+
+    test.beforeEach(async ({page}) => {
+        ownedBrokerId = undefined;
+        await login(page, TEST_USER);
+    });
+
+    // afterEach, not `finally`: a cleanup throwing from `finally` would replace the
+    // assertion error it follows, and that assertion is the point of this block.
+    test.afterEach(async ({page}) => {
+        if (ownedBrokerId === undefined) return;
+        // Unmount the wizard first, so nothing on the page reacts while its files go away.
+        await page.goto('about:blank');
+        await deleteOwnedBrokerAndFiles(page, ownedBrokerId);
+    });
+
+    test('C1 files uploaded together in step 1 share one batch id', async ({page}) => {
+        test.setTimeout(60_000);
+        const brokerName = `Upload batch wizard ${uniqueSuffix()}`;
+        const brokerId = await createOwnedBroker(page, brokerName);
+        ownedBrokerId = brokerId;
+        // Created before the page loads, so the wizard's broker list includes it.
+        await goToTransactions(page);
+        const step1 = await openImportWizard(page);
+
+        await step1.getByTestId('file-input').setInputFiles(SAMPLE_REPORTS);
+        await expect(pendingRows(page)).toHaveCount(SAMPLE_REPORTS.length);
+        await optionsClosed(page);
+        await step1.getByTestId('import-wizard-step1-broker-select').getByRole('combobox').click();
+        const option = page.getByTestId(`search-select-option-${brokerId}`);
+        await expect(option, `owned broker ${brokerName} must be offered by the "assign all" select`).toBeVisible({timeout: 8_000});
+        await option.click();
+        await optionsClosed(page);
+        const next = page.getByTestId('import-wizard-next');
+        await expect(next).toBeEnabled({timeout: 5_000});
+
+        const uploaded = await uploadsDuring(page, SAMPLE_REPORTS.length, async () => {
+            await next.click();
+            // goNext moves on to step 2 only once every upload has settled.
+            await expect(page.getByTestId('import-wizard-step2')).toBeVisible({timeout: 15_000});
+        });
+
+        expect(
+            uploaded.map((file) => file.target_broker_id),
+            'every file goes to the broker assigned in step 1',
+        ).toEqual([brokerId, brokerId]);
+        const batchIds = uploaded.map((file) => file.batch_id);
+        const batchId = expectUuid(batchIds[0], 'batch_id of this step-1 session');
+        expect(batchIds, 'the files of one step-1 session share one batch_id').toEqual([batchId, batchId]);
     });
 });

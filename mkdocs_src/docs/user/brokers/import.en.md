@@ -49,6 +49,7 @@ If your broker has no import plugin yet, you can help:
 Click the **Uploaded Reports** (`FileText` icon) button to manage the BRIM report files stored for this broker. The modal lets you:
 
 - Review the uploaded reports (name, upload date, size, status), with a quick **preview** of each file's content.
+- Follow your **report sets** in the **Report set** column: when a bank splits one account across several exports, such as Danske Bank, badges like **Set of ‹date›**, **Incomplete** or **Combined** show where each file stands — see **[Report sets](../files/index.md#report-sets)**.
 - **Upload** new reports directly — they are auto-assigned to this broker and become available in the wizard's Select Files step.
 - **Delete** reports you no longer need.
 - Jump to the full **[Files & Uploads](../files/index.md#broker-reports)** page, pre-filtered on this broker.

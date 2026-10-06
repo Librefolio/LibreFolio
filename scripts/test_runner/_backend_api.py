@@ -134,6 +134,14 @@ def api_tools(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Tools API tests", verbose=verbose)
 
 
+def api_pac_planner_tool(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the PAC planner Tool through the live compute endpoint."""
+    print_section("PAC Planner Tool API Tests")
+    print_info("Testing pac_allocator/plan end to end: plan, needs_input, stale identity, repeats, withdrawn inputs")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_pac_planner_tool_api.py", test_names)
+    return run_command(cmd, "PAC planner Tool API tests", verbose=verbose)
+
+
 def api_risk(verbose: bool = False, test_names: list = None) -> bool:
     """Run deterministic risk catalog, query, and populated-DB tests."""
     print_section("Risk Analysis API Tests")
@@ -239,6 +247,16 @@ def api_system(verbose: bool = False, test_names: list = None) -> bool:
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_system_api.py", test_names)
     return run_command(cmd, "System API tests", verbose=verbose)
+
+
+def api_http_compression(verbose: bool = False, test_names: list = None) -> bool:
+    """Test HTTP compression (GZipMiddleware) on the live backend."""
+    print_section("HTTP Compression Tests")
+    print_info("Testing: GZipMiddleware in main.py on API JSON, SvelteKit chunks, SPA fallback, PNG, SSE")
+    print_info("Tests: gzip + Vary, small bodies untouched, immutable Cache-Control/ETag (304), Range (206), PNG/SSE never encoded")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_http_compression_api.py", test_names)
+    return run_command(cmd, "HTTP compression tests", verbose=verbose)
 
 
 def api_backup(verbose: bool = False, test_names: list = None) -> bool:
@@ -677,6 +695,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "signal-preview", api_signal_preview, name="Signal Preview", desc="Backend indicator compute on synthetic points (global chart preview)")
     add_test(api, "ai-export", api_ai_export, name="AI Export API", desc="Catalog, snapshots, authorization, and typed problems")
     add_test(api, "tools", api_tools, name="Tools API", desc="Catalog, bulk compute, diagnostics, and authorization")
+    add_test(api, "pac-planner-tool", api_pac_planner_tool, name="PAC Planner Tool API", desc="pac_allocator plan through the live compute endpoint")
     add_test(api, "risk", api_risk, name="Risk Analysis API", desc="Catalog, bulk query, isolation, and populated-DB analytics, and per-period asset eligibility")
     add_test(api, "assets-provider", api_assets_provider, name="Assets Provider API", desc="Provider assignment endpoints")
     add_test(
@@ -731,6 +750,16 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "users-search", api_users_search, name="User Search API", desc="User search, share validation")
     add_test(api, "portfolio", api_portfolio, name="Portfolio API", desc="Summary, history, asset-history, FIFO lots endpoints")
     add_test(api, "portfolio-wac", api_portfolio_wac, name="Portfolio WAC API", desc="POST /portfolio/wac endpoint (A1-A8)")
+    add_test(
+        api,
+        "http-compression",
+        api_http_compression,
+        name="HTTP Compression",
+        desc="GZip Content-Encoding/Vary, immutable assets, 304/206, binaries untouched",
+        # GETs on public resources and on the static build; the one write is the
+        # throwaway user the SSE check needs for a session, deleted before it returns.
+        isolation="write-scoped",
+    )
     add_test(api, "all", api_test, test_names=False, name="All API Tests", desc="Run all API tests")
     registry["api"] = api
 

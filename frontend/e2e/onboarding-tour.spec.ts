@@ -761,7 +761,7 @@ test.describe('Onboarding Round 5', () => {
                 flows: Array<{flow: string; steps?: Array<{step_id: string}>}>;
             };
             expect(progress.flows).toHaveLength(15);
-            expect(progress.flows.find((flow) => flow.flow === 'import_guide')?.steps?.map((step) => step.step_id)).toEqual(['import.upload', 'import.select', 'import.analyze', 'import.assets', 'import.fix', 'import.duplicates', 'import.review', 'import.bulk']);
+            expect(progress.flows.find((flow) => flow.flow === 'import_guide')?.steps?.map((step) => step.step_id)).toEqual(['import.upload', 'import.select', 'import.analyze', 'import.assets', 'import.fix', 'import.duplicates', 'import.review', 'import.gapFix', 'import.bulk']);
             expect(progress.flows.find((flow) => flow.flow === 'transaction_bulk_guide')?.steps?.map((step) => step.step_id)).toEqual(BULK_STEPS);
             await expect(page.getByTestId('dashboard-page')).toBeVisible();
 

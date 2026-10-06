@@ -34,6 +34,7 @@
     import GeographyMap from '$lib/components/charts/GeographyMap.svelte';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
     import AssetIcon from '$lib/components/assets/AssetIcon.svelte';
+    import AssetBrowseNav from '$lib/components/assets/AssetBrowseNav.svelte';
     import AssetPriceSummary from '$lib/components/assets/AssetPriceSummary.svelte';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
@@ -1382,6 +1383,8 @@
         loading = true;
         error = null;
         // Reset state for new asset
+        // «All» resolves against the new asset's own history, not the earliest date of the one before.
+        rearmMaxPendingBeforeReload();
         assetInfo = null;
         providerAssignment = null;
         providerAssignmentLoaded = false;
@@ -2731,6 +2734,7 @@
         {:else if loading}
             <div class="h-8 w-48 bg-gray-200 dark:bg-slate-700 rounded animate-pulse"></div>
         {/if}
+        <AssetBrowseNav assetId={data.assetId} />
     </div>
 
     <!-- Error banner (not data-quality — dismissible runtime error) -->
@@ -3562,7 +3566,7 @@
         {@const createBase = createParts.length === 2 ? createParts[0] : assetInfo.currency}
         {@const createQuote = createParts.length === 2 ? createParts[1] : displayCurrency !== assetInfo.currency ? displayCurrency : ''}
         {@const fxCreationCallbacks = createFxPairCallbacks(data.assetId, !!fxPairCreateSlug, assetInfo.currency)}
-        <FxPairAddModal bind:open={showFxPairAddModal} readonlyBase={!fxPairCreateSlug} initialBase={createBase} initialQuote={createQuote} {dateStart} {dateEnd} oncreated={fxCreationCallbacks.oncreated} onsynced={fxCreationCallbacks.onsynced} onclose={fxCreationCallbacks.onclose} />
+        <FxPairAddModal bind:open={showFxPairAddModal} readonlyBase={!fxPairCreateSlug} initialBase={createBase} initialQuote={createQuote} oncreated={fxCreationCallbacks.oncreated} onsynced={fxCreationCallbacks.onsynced} onclose={fxCreationCallbacks.onclose} />
     {/if}
 
     <!-- Page Sync Modal (sync all assets + FX pairs) -->

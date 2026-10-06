@@ -163,6 +163,18 @@ def front_asset_mobile_layout(verbose: bool = False, ui: bool = False, headed: b
     return _run_playwright("assets/asset-mobile-layout.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_asset_browse(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the asset detail prev/next browse E2E tests (K step 16, item 2)."""
+    print_section("Frontend Asset Browse Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("assets/asset-browse.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_asset_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run all Asset tests (unit + E2E)."""
     if _common.nothing_left_to_run("front-asset"):
@@ -202,6 +214,14 @@ def populate_registry(registry: dict) -> None:
         name="Asset Mobile Layout",
         desc="Phone width (390/360 px, 1280 control): AssetModal footer reachable in create and edit (items 4 + 6a), Sync plain while the provider assignment loads and full-cell when blocked (6b), detail tabs never empty (7) — K step 13",
         tests="assets/asset-mobile-layout.spec.ts",
+    )
+    add_test(
+        cat,
+        "asset-browse",
+        front_asset_browse,
+        name="Asset Browse",
+        desc="Asset detail ‹ n/N › prev/next: follows the list left behind (searched grid in DOM order, table sorted by name), the default order on a direct entry, one Back to the list (header and browser), disabled at the edges, the query kept; at 390/360 px the nav fits and the page does not scroll sideways — K step 16, item 2",
+        tests="assets/asset-browse.spec.ts",
     )
     add_test(cat, "all", front_asset_all, test_names=False, name="All Asset Tests", desc="Run all Asset tests (unit + E2E)")
     registry["front-asset"] = cat

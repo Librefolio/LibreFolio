@@ -16,6 +16,29 @@ al piano implementativo.
 > file. Il bundle implementativo materializza i gate dei contratti senza
 > spostare calcoli fra layer o duplicare la piattaforma Tool del gruppo C.
 
+> **⚠️ Aggiornamento del 2026-09-25: prevale sul testo sotto dove i due sono in conflitto.**
+> Decisioni del developer D-X1 (24/09) e QX1-b (25/09). Si eseguono nel Passo F del
+> [piano Round5](implementation/plan-phase00PacRound5PostMerge.prompt.md), che le riporta al §2.
+>
+> - **In produzione gira solo SCIP, e il suo esito fa fede (D-X1).**
+>   - `optimal` su tutti gli stage della cascata → `optimal_proven`, fonte `solver_status`.
+>   - `infeasible` sul primo stage → `infeasibility_proven`, fonte `solver_status`.
+>   - Un limite (tempo, nodi, cancel) → `not_proven`, con il miglior piano verificato o senza piano.
+>
+>   L'oracolo esaustivo esce dal codice di produzione e va nell'albero dei test, come gate
+>   d'accordo su domini piccoli. Un test strutturale verifica che nessun modulo di produzione lo
+>   importi. Il replay Decimal resta la contabilità esatta del piano pubblicato.
+> - **Arrotondamenti oltre la cassa (QX1-b).** Ai pareggi esatti HALF_UP dei debiti il modello
+>   compilato resta permissivo.
+>   - Può capitare che il piano, contato dal replay, superi il saldo di una cassa (Broker × valuta).
+>     Se lo supera di al più `N` unità minime della sua valuta, esce lo stesso, con l'importo da
+>     aggiungere a quella cassa.
+>   - `N` conta gli importi arrotondati registrati nella cassa.
+>   - Oltre la soglia, o con qualunque altra violazione, è un errore del modello: errore Tool, non
+>     un risultato (§14).
+>
+> Sezioni toccate: §2 (flusso), §3.3, §12 e §14.
+
 ---
 
 ## 1. Principi architetturali
@@ -73,6 +96,9 @@ flowchart TD
     REPORT --> EXEC
     EXEC --> TOOLAPI
 ```
+
+> **⚠️ 2026-09-25 (D-X1).** Nel flusso di produzione l'oracolo non c'è più: lo sostituisce lo
+> status di SCIP. Resta nei test, come gate d'accordo su domini piccoli.
 
 ---
 
@@ -335,7 +361,7 @@ stabilisce solo ownership e completezza.
 
 Ogni route dichiara separatamente margine prudenziale/spread esecuzione BUY e
 SELL. Questi coefficienti valgono anche quando quotazione e ledger hanno la
-stessa valuta; non vengono confusi con spread o buffer FX.
+stessa valuta; non vengono confusi con spread o buffer FX (❌ non più da fare, developer, 02/10/2026).
 
 ### 6.3 Union esplicite
 
@@ -651,6 +677,9 @@ EvaluatedCandidate
 
 ## 12. Oracle
 
+> **⚠️ 2026-09-25 (D-X1).** L'oracolo mantiene questi requisiti, ma vive **solo nei test**. Là è
+> il gate d'accordo con SCIP sui domini piccoli, e non produce più prove per i risultati pubblicati.
+
 ### 12.1 Scopo
 
 L'oracle:
@@ -773,6 +802,12 @@ Evidenza solver interna può essere sintetizzata/hashata, previa review.
 ---
 
 ## 14. Mapping status
+
+> **⚠️ Superata in parte il 2026-09-25 (D-X1).**
+> - `proof_source` ammette `solver_status` per `optimal_proven` e per `infeasibility_proven`.
+> - `SearchOracleInfeasible` e l'evidenza dell'oracolo escono dalla produzione.
+>
+> Vedi la nota in testa.
 
 Forme discriminated, non record con opzionali arbitrari:
 

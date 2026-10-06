@@ -23,6 +23,21 @@ This directory contains sample broker report files for testing BRIM plugins.
 | `fineco-export.csv`    | Variant B (15 columns, with commission columns)         | Trades/dividends/coupons/redemptions + separate FEE rows    |
 | `fineco_variant_a.csv` | Variant A (11 columns, no commission columns)           | Same operations parsed, no FEE rows (currency from Divisa)  |
 
+### Danske Bank Plugin (`broker_danske_bank`) — report sets
+
+Synthetic files with invented values, built on the structure of the Finnish equity savings
+account exports (custody XLSX + cash CSV). A member is never parsed alone: each set is
+combined first, and the combined file is parsed. The sets are declared in the plugin's
+`test_sample_sets`.
+
+| Set  | File                             | Description                                                                                                          | Expected Result                                                                                                                                      |
+|------|----------------------------------|----------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------|
+| main | `danske_bank-custody.xlsx`       | Custody transactions: text dates, literal `<br/>` in the fee header, unnamed currency column, constant columns        | Role `custody`; buys, sells, identical partial fills, a `Tuotto`, a demerger (old line + two new lines), a foreign-quoted title                     |
+| main | `danske_bank-cash.csv`           | Cash statement: Latin-1, `;`, newest first, running `Saldo`, labels truncated at 24 characters                         | Role `cash`; one year of history before the custody period, a border orphan, standalone deposits, fees, a withdrawal with its tax, a deferred trade |
+| gap  | `danske_bank-gap-custody-1.xlsx` | First custody period                                                                                                  | Segment 1                                                                                                                                            |
+| gap  | `danske_bank-gap-custody-2.xlsx` | Second custody period, two months later                                                                               | Segment 2; the last trade settles after the cash export ends (`not_yet_settled`)                                                                    |
+| gap  | `danske_bank-gap-cash.csv`       | Cash statement covering both periods and the trades in between                                                        | A proven gap: an opening checkpoint and a gap checkpoint; the standalone rows of the gap are imported                                               |
+
 
 ## File Format
 
