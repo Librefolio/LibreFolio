@@ -141,6 +141,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The installation guide and the release notes name the image tags that exist: `latest` (light), `X.Y.Z` (full) and `X.Y.Z-light`, without a leading `v`. `latest-light` and `v1.1.0-light` never existed.
 - **The Tailscale guide's startup script restarts the container when Tailscale fails.** A failed `tailscale up` at boot used to leave the container running but unreachable; the script now exits so Docker restarts it, the compose example adds a health check, and the guide explains how to upgrade an existing container and what to check when it keeps restarting. The Tailscale compose examples of the Italian, French and Spanish guides are valid YAML again.
 
+#### 📚 Documentation
+
+- **Code examples in the Italian, French and Spanish documentation keep their indentation.** The translation step flattened them, so a compose file copied from those pages could be invalid; it no longer does, and the pages already affected are fixed as they are translated again.
+
 ### 🔄 Changed
 
 - **Pages download less data.** The server compresses its responses (gzip): a first visit downloads about 2.8 MB instead of 7.5 MB, and a typical session about 0.9 MB instead of 5.5 MB, which helps on slow or metered connections.
