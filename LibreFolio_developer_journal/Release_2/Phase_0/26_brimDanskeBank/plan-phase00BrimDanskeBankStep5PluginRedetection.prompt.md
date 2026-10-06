@@ -208,3 +208,11 @@ Nessuna modifica a schemi, API pubbliche, i18n o frontend.
 > | `lsof -nP -iTCP:6156 -sTCP:LISTEN` | porta libera |
 >
 > Delta: 11 file tracciati (3 di codice, 3 di test, 3 di docs, 2 piani), nessun file nuovo. Il `CHANGELOG.md` lo scrive il coordinatore all'integrazione, con le due righe di §6.
+
+### 8.5 ✅ Committata e validata (2026-10-06)
+
+> **Commit di L8** (developer, script del coordinatore, corpi scritti da L): `b0abeb07d` fix, `2b1a9d79f` docs, `b6ac553fc` journal; sopra la punta di K `7dd5e47e7`, albero `3bdccc7a9`. Prima del commit L ha corretto i corpi proposti: due frasi false (l'event loop «mai» fermo; il lock descritto anche nella pagina di architettura) e un corpo incompleto (C3).
+>
+> **Validazione sulla base nuova** (corsia 6156, un comando per volta, log nella sessione, in `files/l8-post/`): `api brim` 76, `services brim-parse-race` 42, `brim-report-sets` 259 passed; `check-orphans` pulito; porta libera, albero pulito. La catena di K non porta migrazioni.
+>
+> Il seguito, la robustezza dell'upload (F2–F4): [plan-phase00BrimDanskeBankStep6UploadRobustness.prompt.md](plan-phase00BrimDanskeBankStep6UploadRobustness.prompt.md).
