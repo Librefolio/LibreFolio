@@ -69,6 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Uploading broker reports from the Files page or from a broker's import history no longer fails with a validation error. The failure dated back to v0.9.0; the import wizard was not affected.
 - Every CSV importer now reads broker exports saved as Windows-1252 or Latin-1 (for example re-saved with Excel on Windows): accented characters and the euro sign no longer make the import fail, and semicolon-separated files are no longer split on commas.
 - The Generic CSV is offered only for a CSV whose first row names a date and a type column (in any language it knows), instead of every CSV it then failed to read; choosing it for another file now says which required column is missing.
+- A searchable list (currency, asset, type, broker…) now opens on the first click right after you choose from it: a guard against phantom taps on touch screens ignored any click within 200 ms of the list closing, mouse and keyboard included; it now applies to touch and pen only.
 - In the bulk editor, applying an imported row with Auto (WAC) cost now clears its *enter the cost* todo, even when Auto was already selected — no more switching to manual and back.
 - Rows handed over by an import are now validated once right away, whatever their number: above 50 rows the editor used to show no problems until *Validate now*.
 - The analysis detail of an import shows each field to complete as readable facts — the file row, the amounts, the importer's suggestions and the source rows — instead of raw JSON.
