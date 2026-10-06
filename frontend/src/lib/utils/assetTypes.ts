@@ -242,6 +242,24 @@ export function assetTypeFamily(type: string | null | undefined): string {
 }
 
 /**
+ * True when a proposed type only names the **family** of the current one: `ETF` against a stored
+ * `ETF_STOCK`. A provider that cannot tell the content — Borsa Italiana says `ETF` for all of
+ * ETFplus — agrees with the subtype rather than contradicting it: the developer's rule (K step 17,
+ * item 17) is that a parent-type suggestion counts as valid. Equal values, a refinement (`ETF` →
+ * `ETF_STOCK`), sibling subtypes, different families and blank input all return false. Case and
+ * surrounding spaces are ignored, as in {@link assetTypeFamily}.
+ *
+ * @example isFamilyOnlyProposal('ETF_STOCK', 'ETF')  // true
+ * @example isFamilyOnlyProposal('ETF', 'ETF_STOCK')  // false — a refinement is still offered
+ */
+export function isFamilyOnlyProposal(current: string | null | undefined, proposed: string | null | undefined): boolean {
+    const stored = (current ?? '').trim().toUpperCase();
+    const offered = (proposed ?? '').trim().toUpperCase();
+    if (stored === '' || offered === '' || stored === offered) return false;
+    return assetTypeFamily(stored) === offered;
+}
+
+/**
  * Screen order of the asset type menu, and the single place that decides it.
  *
  * ⚠️ Hand-written on purpose, and it must stay that way. `ASSET_TYPES` is derived from

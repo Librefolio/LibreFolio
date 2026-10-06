@@ -41,7 +41,7 @@
     import {userSettings} from '$lib/stores/app/settings';
     import {get} from 'svelte/store';
     import {trySave} from '$lib/utils/trySave';
-    import {ASSET_TYPES, IDENTIFIER_TYPES} from '$lib/utils/assetTypes';
+    import {ASSET_TYPES, IDENTIFIER_TYPES, isFamilyOnlyProposal} from '$lib/utils/assetTypes';
     import {generateUUID} from '$lib/utils/core/uuid';
     import {columnsToIdentifierRows, identifierRowsToColumns, nextAvailableIdentifierType, fieldToIdType} from './assetIdentifiers';
     import {isCurrencyChangeBlockedMessage, parseCurrencyChangeBlocker} from './currencyBlocker';
@@ -1068,7 +1068,9 @@
                 if (!currentVal && !touched) {
                     setFieldValue(field, providerVal);
                     autoFilledFields = new Set([...autoFilledFields, field]);
-                } else if (currentVal === providerVal) {
+                } else if (currentVal === providerVal || (field === 'asset_type' && isFamilyOnlyProposal(currentVal, providerVal))) {
+                    // A provider that only knows the family of the stored subtype (ETF for an
+                    // ETF_STOCK) agrees with it: no row, the subtype stays (K step 17, item 17).
                     if (!touched) autoFilledFields = new Set([...autoFilledFields, field]);
                 } else {
                     // Name/casing noise: the on-site search title and the metadata page title

@@ -26,7 +26,10 @@
  * `scripts/compose_asset_type_icons.py` from those very tables read as text. The
  * blocks at the end of this file hold the three tables to each other and to the
  * enum, and call `buildAssetTypeTree()` — the select of the asset dialog — to
- * check that what it builds out of them is what they say.
+ * check that what it builds out of them is what they say. The family view also
+ * decides the provider comparison (K17): `isFamilyOnlyProposal()`, the rule that
+ * keeps a stored subtype when a provider only knows its family, is pinned next to
+ * `assetTypeFamily()`, on which it stands.
  *
  * ## Where the list of types comes from
  *
@@ -836,6 +839,110 @@ describe('the asset type tree and the family view (R15)', () => {
                 return !ASSET_TYPES.includes(family) || assetTypeFamily(family) !== family;
             }),
             'assetTypeFamily() resolves these asset types to something that is not a family of its own — not an enum value, or a value that resolves further. A caller grouping by family would build groups that no table is keyed on.',
+        );
+    });
+
+    /**
+     * K17 — the family rule of the provider comparison, as the developer decided it: «se il suggerimento
+     * è di un tipo padre, allora è considerato valido comunque». Borsa Italiana answers `ETF` for every
+     * fund of ETFplus; against a stored `ETF_STOCK` that names the family the subtype already belongs to
+     * and knows nothing finer, so AssetModal must take it as agreement rather than offer a row whose
+     * default Apply downgrades the subtype. "Family" is the container view, `assetTypeFamily()`, never the
+     * content view: `STOCK` is what an equity ETF holds, not what it is.
+     */
+    it('accepts a proposal that only names the family of the stored type, and nothing else: isFamilyOnlyProposal() (K17)', async () => {
+        const module = await importAssetTypes();
+        // Read by name and checked here, not in importAssetTypes(): added to that shared list, a missing
+        // helper would turn every test of this block red instead of failing the one assertion naming it.
+        const candidate: unknown = Reflect.get(module, 'isFamilyOnlyProposal');
+        expect(
+            typeof candidate,
+            'src/lib/utils/assetTypes.ts does not export isFamilyOnlyProposal(current, proposed). AssetModal needs it to tell a provider that only knows the family of the stored type (Borsa Italiana says ETF for all of ETFplus) from one that disagrees: without it, ETF is offered as a difference against a stored ETF_STOCK, ticked by default, and Apply downgrades the subtype.',
+        ).toBe('function');
+        const isFamilyOnlyProposal = candidate as (current: string | null | undefined, proposed: string | null | undefined) => boolean;
+        const {assetTypeFamily} = module;
+        /** The answer, a throw included: the gap list must name every failing case, not stop at the first that throws. */
+        const answer = (current: string | null | undefined, proposed: string | null | undefined): unknown => {
+            try {
+                return isFamilyOnlyProposal(current, proposed);
+            } catch (error) {
+                return `a throw (${error instanceof Error ? error.message : String(error)})`;
+            }
+        };
+
+        const cases: Array<[string | null | undefined, string | null | undefined, boolean]> = [
+            // The proposal is the family the stored subtype belongs to: agreement, not a difference.
+            ['ETF_STOCK', 'ETF', true],
+            ['ETF_COMMODITY', 'ETF', true],
+            ['CROWDFUND_REAL_ESTATE', 'CROWDFUND', true],
+            // Case and surrounding spaces are ignored on both sides, as assetTypeFamily() ignores them.
+            ['etf_stock', 'etf', true],
+            ['  Etf_Monetary  ', ' ETF ', true],
+            ['crowdfund_real_estate', '  Crowdfund', true],
+            // The same type is no proposal at all, whatever its spelling.
+            ['ETF_STOCK', 'ETF_STOCK', false],
+            ['ETF', 'ETF', false],
+            ['ETF', '  etf  ', false],
+            ['etf_stock', ' ETF_STOCK ', false],
+            // A refinement is real information: the provider knows more than what is stored.
+            ['ETF', 'ETF_STOCK', false],
+            ['CROWDFUND', 'CROWDFUND_REAL_ESTATE', false],
+            // A sibling subtype contradicts the stored one.
+            ['ETF_BOND', 'ETF_STOCK', false],
+            ['ETF_STOCK', 'ETF_BOND', false],
+            // Another family altogether.
+            ['STOCK', 'ETF', false],
+            ['ETF_STOCK', 'CROWDFUND', false],
+            ['CROWDFUND_REAL_ESTATE', 'ETF', false],
+            // What a subtype holds is not its family: the content view (primaryAssetType) must not leak in.
+            ['ETF_STOCK', 'STOCK', false],
+            ['CROWDFUND_REAL_ESTATE', 'REAL_ESTATE', false],
+            // Never derived by splitting the string: REAL_ESTATE is no REAL, and an ETF_* nobody filed is its own family.
+            ['REAL_ESTATE', 'REAL', false],
+            ['ETF_SOMETHING_NOBODY_ADDED_YET', 'ETF', false],
+            // A missing value keeps or proposes nothing, on either side — although assetTypeFamily() folds it to OTHER.
+            [null, 'ETF', false],
+            [undefined, 'ETF', false],
+            ['', 'ETF', false],
+            ['   ', 'ETF', false],
+            [null, 'OTHER', false],
+            ['', 'OTHER', false],
+            ['   ', 'OTHER', false],
+            ['ETF_STOCK', null, false],
+            ['ETF_STOCK', undefined, false],
+            ['ETF_STOCK', '', false],
+            ['ETF_STOCK', '   ', false],
+            ['OTHER', null, false],
+            ['OTHER', '   ', false],
+            [null, null, false],
+            [undefined, undefined, false],
+            ['', '', false],
+            ['   ', null, false],
+        ];
+
+        expectNoGaps(
+            cases.filter(([current, proposed, expected]) => answer(current, proposed) !== expected).map(([current, proposed, expected]) => `isFamilyOnlyProposal(${JSON.stringify(current)}, ${JSON.stringify(proposed)}) is ${JSON.stringify(answer(current, proposed))}, expected ${expected}`),
+            'isFamilyOnlyProposal() in src/lib/utils/assetTypes.ts does not answer the K17 rule: true only when the proposal is the family (assetTypeFamily) of the stored type and the two differ — ETF against ETF_STOCK or ETF_COMMODITY, CROWDFUND against CROWDFUND_REAL_ESTATE —, case and surrounding spaces ignored; false for the same type, a refinement, a sibling subtype, another family, what the subtype contains (STOCK against ETF_STOCK), and for null, undefined, empty or blank input on either side. A true too many hides a real difference from the comparison; a false too many lets Apply downgrade a stored subtype.',
+        );
+
+        // The enum, swept: every subtype accepts its own family, and its family never accepts it back.
+        const subtypes = ASSET_TYPES.filter((type) => assetTypeFamily(type) !== type);
+        assertScraped('the subtypes of the enum (assetTypeFamily(type) !== type)', subtypes, FAMILY_ANCHORS);
+        expectNoGaps(
+            subtypes.filter((type) => answer(type, assetTypeFamily(type)) !== true).map((type) => `${type} → ${assetTypeFamily(type)}`),
+            'isFamilyOnlyProposal() rejects the family of these subtypes (stored → proposed). A provider that only knows the family would still be offered as a difference, and the default Apply would downgrade the stored subtype to it.',
+        );
+        expectNoGaps(
+            subtypes.filter((type) => answer(assetTypeFamily(type), type) !== false).map((type) => `${assetTypeFamily(type)} → ${type}`),
+            'isFamilyOnlyProposal() takes these refinements (stored → proposed) for family-only proposals. The provider knows the subtype the stored family does not say: hiding the row throws that information away.',
+        );
+        expectNoGaps(
+            ASSET_TYPES.filter((type) => answer(type, type) !== false),
+            'isFamilyOnlyProposal() calls these types a family-only proposal of themselves. An equal value proposes nothing: the predicate holds only where the two differ.',
+        );
+        expectNoGaps(
+            ASSET_TYPES.flatMap((current) => ASSET_TYPES.filter((proposed) => proposed !== current && proposed !== assetTypeFamily(current) && answer(current, proposed) !== false).map((proposed) => `${current} → ${proposed}`)),
+            'isFamilyOnlyProposal() accepts these pairs of the enum (stored → proposed), which are neither a subtype and its family nor the same type: siblings, refinements or other families — real differences the comparison must keep offering.',
         );
     });
 
