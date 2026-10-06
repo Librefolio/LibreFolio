@@ -1,6 +1,15 @@
 # Step 5 — shell frontend, PAC/Rebalancer e review umana
 
 **Stato:** PENDING CONTRACT, SOURCE COPY AND GENERATED CLIENT.
+> ⚠️ **Stato al 2026-09-24 (`f1047f766`).** I tre prerequisiti dell'header esistono:
+> - contratto `pac_allocator` `2.0.0` / `plan` ([handoff §0](../../16_toolPlatform/handoff-pac-D.md));
+> - copia di dominio `POST /portfolio/allocation-source`;
+> - client generato.
+>
+> La UI v2 non esiste ancora: la UI P1 è stata rimossa il 2026-09-21 in `b82e59ffa`. La
+> costruzione riparte nel [piano Round 5](plan-phase00PacRound5PostMerge.prompt.md), Passo C.
+> Da lì prevalgono §10 e §12 riallineate qui sotto.
+
 **Dipende da:** Step 1 contract, Step 4 copy, ExactQuantityInput, integrazione client.
 **Hard gate:** nessun E2E completo prima dell'approvazione umana.
 
@@ -336,6 +345,9 @@ PAC:
 - funding/contributi;
 - BUY-only;
 - `proportional` e `min_fragmentation`;
+  > 2026-09-24 (Round5, Q-C0-4): in 2.0.0 solo `proportional` è sul wire; le card della strategia
+  > nascono dalle opzioni del contratto generato, quindi `min_fragmentation` riappare da sola quando
+  > il backend la riammette (`plan-phase00PacRound5PostMerge.prompt.md`, C3).
 - target e risultato focalizzati sul nuovo capitale.
 
 Rebalancer:
@@ -405,8 +417,18 @@ Tutte le viste approvate:
 - no incumbent;
 - infeasible proven.
 
-Status, issue e label restano leggibili in privacy mode. Valori, quantità,
-percentuali e grafici vengono oscurati coerentemente.
+Status, issue e label restano leggibili in privacy mode.
+
+In privacy mode si oscura il patrimonio (decisione (c) del developer, 2026-09-22):
+- importi;
+- quantità detenute e da acquistare, per default, da confermare nella review;
+- valori degli ordini.
+
+Restano visibili percentuali, pesi e grafici in percentuale; prezzi di mercato e tassi FX
+passano con `sensitivity: 'public'`. Ogni importo passa da `formatCurrencyAmountPlain` o da
+`formatCurrencyAmountHtml`. Dettaglio in UiTarget §20.20.
+> Testo originale, superato il 2026-09-24: «Valori, quantità, percentuali e grafici vengono
+> oscurati coerentemente.»
 
 ## 11. Test prima della review umana
 
@@ -431,6 +453,22 @@ Non consentiti come gate:
 - il vecchio E2E P1 come acceptance della UI nuova.
 
 ## 12. Runbook review umana
+
+> ⚠️ **Ambiente superato il 2026-09-24.** Per decisione del developer, gli agenti lavorano
+> e fanno review su una **copia del DB di produzione**, così il developer riconosce i
+> propri dati e può giudicare un risultato. Una fixture sintetica non permette questo
+> giudizio.
+>
+> Vale:
+> - server `--test --port 6161 --data-dir /tmp/librefolio-r2-d-prodcopy`, ricavato dalla
+>   snapshot condivisa e rinfrescato prima di ogni review;
+> - suite automatiche solo in `6151` + `/tmp/librefolio-r2-d`, mai sulla copia di prod.
+>
+> Le lane per workstream sono separate, quindi gli altri workstream non devono più
+> sospendersi. Restano fuori da repo, log e screenshot docs tutti i dati reali.
+>
+> Runbook eseguibile: [piano Round 5](plan-phase00PacRound5PostMerge.prompt.md), Passo E.
+> Il testo storico segue invariato.
 
 Ambiente:
 
@@ -493,6 +531,26 @@ Rebalancer: APPROVED | CHANGES REQUIRED
 - [ ] 11. Eseguire review Rebalancer e registrare verdetto.
 - [ ] 12. Correggere e ripetere superfici respinte.
 - [ ] 13. Congelare doppio `APPROVED`.
+
+> **Nota 2026-10-05 (chiusura del round 5).** Il PAC è integrato in `dev_release2`
+> (`7038c2224`). Le caselle restano come sono: questa nota dice dove sono finiti i punti,
+> senza spuntarli. La UI è stata costruita nel Passo C del
+> [piano Round 5](plan-phase00PacRound5PostMerge.prompt.md) e rivista col developer nei
+> round 2–14.
+> - **1–6, 8–10 e 12. UI del PAC.** Fatti per il PAC: codice nel commit `6f29ec1cf` (02/10),
+>   correzioni in `0900f11fa` (05/10). Il developer l'ha provata nella copia di prod sulla
+>   porta 6161 e ha dato il via libera nel R14.5: «è tutto perfetto… procedi con
+>   l'integrazione».
+>   - Item 2: il planner non usa `ExactQuantityInput`. I campi decimali restano testo
+>     esatto, controllato da `planner/decimal.ts`, senza passare da `Number`.
+>   - Item 8: i test unitari registrati sono quelli di
+>     [handoff §0.4](../../16_toolPlatform/handoff-pac-D.md); `front check` e `front build`
+>     sono passati ai gate del 05/10.
+> - **7, 11 e 13. UI del Rebalancer e doppio `APPROVED`.** Non fatti: vanno con l'analisi
+>   del Rebalancer (riga 14 del [README](README.md)). Per ora c'è un solo `APPROVED`, quello
+>   del PAC.
+> - Gli E2E del PAC si fanno dopo il Rebalancer, insieme ai suoi, sulle parti comuni
+>   (decisione del developer del 05/10).
 
 ## 14. Stop conditions
 

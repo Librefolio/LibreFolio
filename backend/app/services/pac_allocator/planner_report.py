@@ -47,6 +47,7 @@ from backend.app.schemas.pac_allocator import (
     PlannerCatalogAsset,
     PlannerCatalogBroker,
     PlannerCatalogs,
+    PlannerConversion,
     PlannerCostTotals,
     PlannerFundingAction,
     PlannerFxAction,
@@ -56,6 +57,7 @@ from backend.app.schemas.pac_allocator import (
     PlannerPositiveMoneyInput,
     PlannerProvenance,
     PlannerResultSnapshot,
+    PlannerRoundingTopUp,
     PlannerScenarioCounts,
     ReportedFloatingSolverEvidence,
     SolverSettingEvidence,
@@ -71,8 +73,10 @@ from backend.app.services.pac_allocator.evaluator import exact_scenario_fingerpr
 from backend.app.services.pac_allocator.models import (
     ExactAsset,
     ExactEvaluation,
+    ExactFxEvaluation,
     ExactPlannerScenario,
     ExactPolicyView,
+    ExactRoundingTopUp,
 )
 from backend.app.services.pac_allocator.numeric import ExactRatio
 from backend.app.services.pac_allocator.solver import SolverRunResult
@@ -216,8 +220,9 @@ def _money(value: ExactRatio, currency: str) -> ExactMoney:
 def _declared_weight(asset: ExactAsset, dimension: str) -> ExactRatio:
     """Total exposure weight this asset declares in one dimension.
 
-    ``normalize.py`` validates each exposure's range and the uniqueness of
-    ``(dimension, category)`` but never requires a per-asset dimension to
+    ``normalize.py`` validates each exposure's range, the uniqueness of
+    ``(dimension, category)`` and that a dimension never totals more than one
+    (``allocation.exposure_total_exceeds_one``), but never requires it to
     close, so this legitimately returns less than one — an asset declaring 60%
     Tech and nothing else contributes the remaining 40% to the residual.
     """
@@ -473,9 +478,9 @@ def build_asset_rows(scenario: ExactPlannerScenario, evaluation: ExactEvaluation
 def build_funding_actions(scenario: ExactPlannerScenario, evaluation: ExactEvaluation, sequence: _SequenceAllocator) -> list[PlannerFundingAction]:
     """Project posted funding transfers.
 
-    ``sequence`` comes from a single allocator shared with the FX and order
-    builders: the schema requires each section to be sequence-ordered *and*
-    every action id and sequence to be unique across all three sections, so a
+    ``sequence`` comes from a single allocator shared with the conversion and
+    order builders: the schema requires each section to be sequence-ordered
+    *and* every action id and sequence to be unique across the sections, so a
     per-section counter starting at one would collide.
     """
     provenance_by_route = {route.route_id: route.provenance_id for route in scenario.funding_routes}
@@ -501,14 +506,21 @@ def build_funding_actions(scenario: ExactPlannerScenario, evaluation: ExactEvalu
     return actions
 
 
-def build_fx_actions(scenario: ExactPlannerScenario, evaluation: ExactEvaluation, sequence: _SequenceAllocator) -> list[PlannerFxAction]:
-    """Project posted FX conversions.
+def _conversion_id(action: ExactFxEvaluation) -> str:
+    return f"conversion:{action.broker_id}:{action.source_currency}:{action.destination_currency}"
+
+
+def build_fx_actions(scenario: ExactPlannerScenario, evaluation: ExactEvaluation) -> list[PlannerFxAction]:
+    """Project posted FX decisions, one per engine decision.
 
     ``destination_credit`` publishes the **posted** credit, not the exact one:
     the ledger identity reconciles on posted amounts (an exact 9.504 USD
     credit posts as 10), which is the same exact/posted distinction the
     compiled model had to learn in Step3 §16.11. ``spread_loss`` by contrast
     is an economic cost and stays exact, matching ``_evaluate_costs``.
+
+    An action has no sequence: what the user executes is its conversion
+    (``build_conversions``).
     """
     provenance_by_route = {route.route_id: route.provenance_id for route in scenario.order_routes}
     actions: list[PlannerFxAction] = []
@@ -516,7 +528,7 @@ def build_fx_actions(scenario: ExactPlannerScenario, evaluation: ExactEvaluation
         actions.append(
             PlannerFxAction(
                 action_id=f"fx:{action.order_route_id}:{action.source_currency}",
-                sequence=sequence.next(),
+                conversion_id=_conversion_id(action),
                 order_route_id=action.order_route_id,
                 broker_id=action.broker_id,
                 source_debit=_positive_money(action.source_debit, action.source_currency),
@@ -532,6 +544,52 @@ def build_fx_actions(scenario: ExactPlannerScenario, evaluation: ExactEvaluation
             )
         )
     return actions
+
+
+def build_conversions(scenario: ExactPlannerScenario, evaluation: ExactEvaluation, fx_actions: list[PlannerFxAction], sequence: _SequenceAllocator) -> list[PlannerConversion]:
+    """Aggregate the FX actions into one conversion per Broker and currency pair.
+
+    The engine decides FX per order route, but no constraint ties a decision to
+    its route's BUY: the credit lands in the Broker's cash in the destination
+    currency, which every order of that Broker in that currency shares, and the
+    canonical tie-break picks the route. So the pair total is the figure the
+    plan can present; rate and spread are global per pair.
+
+    ``fx_actions`` is ``build_fx_actions``'s output for the same evaluation,
+    one row per ``evaluation.fx`` entry in the same order. Manual conversions
+    take the next sequences in (Broker, source, destination) order, which puts
+    them between funding and orders; automatic ones happen inside the orders
+    and carry none.
+    """
+    mode_by_broker = {broker.broker_id: broker.conversion_mode for broker in scenario.brokers}
+    groups: dict[tuple[str, str, str], list[tuple[ExactFxEvaluation, PlannerFxAction]]] = {}
+    for exact, row in zip(evaluation.fx, fx_actions, strict=True):
+        groups.setdefault((exact.broker_id, exact.source_currency, exact.destination_currency), []).append((exact, row))
+    conversions: list[PlannerConversion] = []
+    for (broker_id, source_currency, destination_currency), members in sorted(groups.items()):
+        exacts = [exact for exact, _ in members]
+        rows = [row for _, row in members]
+        mode = mode_by_broker[broker_id]
+        conversions.append(
+            PlannerConversion(
+                conversion_id=_conversion_id(exacts[0]),
+                mode=mode,
+                sequence=sequence.next() if mode == "manual" else None,
+                broker_id=broker_id,
+                source_debit=_positive_money(sum((exact.source_debit for exact in exacts), _EXACT_ZERO), source_currency),
+                destination_credit=_positive_money(sum((exact.posted_destination_credit for exact in exacts), _EXACT_ZERO), destination_currency),
+                spot_rate=rows[0].spot_rate,
+                effective_rate=rows[0].effective_rate,
+                spread_loss=_money(sum((exact.spread_loss for exact in exacts), _EXACT_ZERO), scenario.valuation_currency),
+                fx_action_ids=[row.action_id for row in rows],
+                provenance_ids=_canonical_provenance_ids(
+                    {provenance_id for row in rows for provenance_id in row.provenance_ids},
+                    context=f"conversion {broker_id!r} {source_currency}->{destination_currency}",
+                    asset_ids=(),
+                ),
+            )
+        )
+    return conversions
 
 
 def build_order_rows(scenario: ExactPlannerScenario, evaluation: ExactEvaluation, sequence: _SequenceAllocator) -> list[PlannerBuyOrderRow]:
@@ -614,6 +672,25 @@ def build_ledger_rows(evaluation: ExactEvaluation) -> list[PlannerLedgerRow]:
     return rows
 
 
+def build_rounding_top_ups(scenario: ExactPlannerScenario, top_ups: tuple[ExactRoundingTopUp, ...]) -> list[PlannerRoundingTopUp]:
+    """Project the classifier's rounding top-ups, in the order it gave them.
+
+    ``evaluator.rounding_top_ups`` decided every figure, the valuation
+    included: the amount goes out as fixed-decimal text in the pool's own
+    currency, the valuation as exact money in the valuation currency.
+    """
+    return [
+        PlannerRoundingTopUp(
+            broker_id=top_up.broker_id,
+            currency=top_up.currency,
+            amount=ratio_to_fixed_decimal(top_up.amount),
+            rounded_postings=top_up.rounded_postings,
+            valuation_amount=_money(top_up.valuation_amount, scenario.valuation_currency),
+        )
+        for top_up in top_ups
+    ]
+
+
 def build_accounting(scenario: ExactPlannerScenario, evaluation: ExactEvaluation) -> PlannerAccountingSummary:
     """Project the accounting summary.
 
@@ -668,7 +745,8 @@ def build_objective_results(scenario: ExactPlannerScenario, view: ExactPolicyVie
     """Project the objective cascade plus the canonical tie-break vector.
 
     Stage order comes from the view's own ascending ``ordinal``, never a
-    hardcoded list, matching ``oracle.py`` and ``objectives.py``.
+    hardcoded list, matching ``objectives.py`` and the order in which
+    ``planner.py`` hands the objectives to ``proof.conclude_with_solver``.
     """
     value_by_ref = {item.ref_id: item.value for item in evaluation.objectives}
     stages = [
@@ -693,11 +771,11 @@ def build_objective_results(scenario: ExactPlannerScenario, view: ExactPolicyVie
 
 
 class _SequenceAllocator:
-    """One dense 1-based counter shared by the funding/FX/order builders.
+    """One dense 1-based counter shared by the funding/conversion/order builders.
 
     The schema requires every action id *and* every sequence to be unique
-    across all three sections while each section stays internally ordered, so
-    three independent counters would collide on the first row.
+    across the sections while each section stays internally ordered, so
+    independent counters would collide on the first row.
     """
 
     def __init__(self) -> None:
@@ -797,8 +875,24 @@ def build_solver_evidence(scenario: ExactPlannerScenario, view: ExactPolicyView,
     evidence list against the solver's stage count will see fewer rows and
     could reasonably suspect data loss. They are not lost — the tie-break is
     published separately, exactly once, as ``PlannerObjectiveResults.tie_break``.
+
+    **One fact about the tie stages does need a row, so it borrows one.** The
+    wire accepts a limit ``stop_reason`` only when some row is ``unfinished``
+    (``_validate_stop_evidence``). When every named stage finished but a
+    tie-break stage did not, no row could say so, and the result would fail
+    validation. So when any tie-break stage is ``unfinished``, the named row
+    with the highest ordinal is reported ``unfinished`` as well; its numbers
+    stay the ones SCIP reported.
+
+    **The absolute gap is recomputed, exactly.** The schema checks
+    ``absolute_gap >= |primal - dual|`` in exact arithmetic on the published
+    texts, and SCIP's float gap, printed on its own, can fall just short of
+    that. Whenever both bounds are published, the gap is their exact distance
+    instead (``_published_gap``).
     """
     unit_by_code = {ref.code: ref.unit for ref in view.objectives}
+    tie_unfinished = any(report.status == "unfinished" and report.objective_code not in unit_by_code for report in result.stages)
+    last_ordinal = max((report.ordinal for report in result.stages if report.objective_code in unit_by_code), default=None)
     settings = [SolverSettingEvidence(name=setting.name, value=setting.value) for setting in result.settings]
     tolerances = SolverToleranceEvidence(
         feasibility=_tolerance_text(result.tolerances.feasibility),
@@ -810,19 +904,21 @@ def build_solver_evidence(scenario: ExactPlannerScenario, view: ExactPolicyView,
     for report in result.stages:
         if report.objective_code not in unit_by_code:
             continue  # a tie:* stage — see the docstring
+        primal = _float_text(report.primal)
+        dual = _float_text(report.dual)
         stages.append(
             SolverStageEvidence(
                 kind="reported_floating",
                 stage=report.stage,
                 objective_code=report.objective_code,
                 ordinal=report.ordinal,
-                status=report.status,
+                status="unfinished" if tie_unfinished and report.ordinal == last_ordinal else report.status,
                 scope=report.scope,
                 sense=report.sense,
                 unit=_objective_unit(unit_by_code[report.objective_code], scenario.valuation_currency),
-                primal=_float_text(report.primal),
-                dual=_float_text(report.dual),
-                absolute_gap=_float_text(report.absolute_gap, nonnegative=True),
+                primal=primal,
+                dual=dual,
+                absolute_gap=_published_gap(primal, dual, report.absolute_gap),
                 relative_gap=_float_text(report.relative_gap, nonnegative=True),
                 tolerances=tolerances,
                 engine=result.engine,
@@ -839,28 +935,37 @@ def build_stop_reason(result: SolverRunResult) -> str:
     Determined, not chosen: ``_validate_stop_evidence`` requires
     ``completed`` **iff** no stage is ``unfinished``, so the only consistent
     mapping is the one below. Recorded here so the next reader does not have
-    to re-derive it from the validator. Which *limit* stopped a run is read
-    from the stage that actually stopped, never assumed to be the clock.
+    to re-derive it from the validator. An ``infeasible`` first stage is a
+    verdict, not an interruption, so it ends a ``completed`` search.
+
+    Which *limit* stopped a run is read from the stage that actually stopped,
+    never assumed to be the clock: the first ``unfinished`` stage that SCIP
+    did not close. After a limit the later stages still run inside pins
+    nobody proved, and SCIP may close them (``optimal``), so their status says
+    nothing about why the search stopped. If that stage reports ``nodelimit``
+    the answer is ``node_limit``; anything else — the clock, or a budget spent
+    before the stage could run — is ``time_limit``.
 
     **This field is also the plan's reproducibility statement**, which is worth
     stating because nothing in its name says so. SCIP's search is deterministic
     here — ``randomseedshift``/``permutationseed``/``lpseed`` are all 0 and no
     concurrent solve is enabled — so what varies between runs is *how much of
-    the lexicographic cascade completes*: each stage gets a wall-clock slice of
-    the remaining budget (``solver.py``), and the cascade is what makes the
+    the lexicographic cascade completes*: each stage gets all of the remaining
+    budget (stage 1 keeps a reserve back for the stages after a limit, which
+    split what is left; see ``solver.py``), and the cascade is what makes the
     answer unique. Therefore:
 
     - ``completed`` — every stage finished, the total order was fully applied,
       and the same input yields the same plan on any machine.
-    - ``time_limit`` / ``node_limit`` — the cascade was truncated, and *where*
-      it truncated depends on machine speed. The plan is valid and replayed in
-      exact arithmetic, but **it is not guaranteed to be reproducible**.
+    - ``time_limit`` / ``node_limit`` — a stage stopped on a limit, and *which*
+      stage, and how far the later ones got, depends on machine speed. The plan
+      is valid and replayed in exact arithmetic, but **it is not guaranteed to
+      be reproducible**.
 
-    Measured 2026-09-22 at the real 30 000 ms engine budget, **on scenarios that
-    actually reach the solver**. ``planner.py`` routes any view with
-    ``estimate_oracle_domain_size(view) <= 200 000`` to the exhaustive oracle and
-    never calls the solver at all, so a measurement taken on a 16-candidate
-    scenario describes a branch production does not execute.
+    Measured 2026-09-22 at the real 30 000 ms engine budget. Since D-X1 every
+    plan reaches the solver; on that date ``planner.py`` still routed views of
+    up to 200 000 candidates to the exhaustive oracle, which is why the grid
+    below was taken on scenarios large enough to reach SCIP.
 
     The cost driver is **the number of decisions, not the size of the domain**.
     Holding decisions fixed at 4 while growing the domain from 256 to
@@ -903,11 +1008,23 @@ def build_stop_reason(result: SolverRunResult) -> str:
     and one distinct candidate, at 7.6-8.1 s. The cascade still completes, so
     ``completed`` still means what it says — it just costs a quarter of the
     budget instead of a thousandth.
+
+    **Corrected 2026-10-06: brokers that sell the same asset bring the knee
+    far below this grid.** The grid gave every asset a single route. When an
+    asset can be bought at two brokers, the search must also choose between
+    routes that cost nearly the same, and that choice, not the number of
+    decisions, drives the cost: 5 assets with 2 brokers each closed stage 1
+    only after 22-24 s of the 30 s budget, and 10 such assets never closed it,
+    while the same 10 assets with one broker each took 85 ms (measured
+    2026-10-05 and 2026-10-06, on a loaded machine). So size a scenario in
+    assets x brokers, not in assets, and do not read the table above as a
+    promise.
     """
     unfinished = [stage for stage in result.stages if stage.status == "unfinished"]
     if not unfinished:
         return "completed"
-    return "node_limit" if any("nodelimit" in stage.scip_status for stage in unfinished) else "time_limit"
+    deciding = next((stage for stage in unfinished if stage.scip_status != "optimal"), None)
+    return "node_limit" if deciding is not None and "nodelimit" in deciding.scip_status else "time_limit"
 
 
 def _tolerance_text(value: float) -> str:
@@ -938,6 +1055,29 @@ def _float_text(value: float | None, *, nonnegative: bool = False) -> str | None
         # noise around zero, not a negative gap.
         return "0"
     return text
+
+
+def _published_gap(primal: str | None, dual: str | None, absolute_gap: float | None) -> str | None:
+    """The absolute gap of one evidence row: exact whenever both bounds are published.
+
+    The solver measures the gap as the float ``abs(primal - dual)``
+    (``solver._observe``), and each of the three numbers is then published as
+    its own shortest text. The schema checks ``absolute_gap >= |primal - dual|``
+    exactly, on those texts, and the float gap can print just below the exact
+    distance: 7.965 - 7.770482487229448 is 0.194517512770552, while the float
+    gap prints as 0.19451751277055163. So the gap is recomputed from the two
+    published texts in exact rational arithmetic: the solver's definition
+    without the float rounding, and without a Decimal context that would round
+    a difference longer than 28 digits. Without both bounds there is nothing to
+    subtract, and the solver's own number (absent in practice) is kept.
+
+    A difference longer than the wire's 96 characters raises in
+    ``ratio_to_fixed_decimal`` instead of being rounded; that needs the two
+    bounds some 80 orders of magnitude apart.
+    """
+    if primal is None or dual is None:
+        return _float_text(absolute_gap, nonnegative=True)
+    return ratio_to_fixed_decimal(abs(ExactRatio.from_decimal(Decimal(primal)) - ExactRatio.from_decimal(Decimal(dual))))
 
 
 def _decimal_text(value: Decimal) -> str:

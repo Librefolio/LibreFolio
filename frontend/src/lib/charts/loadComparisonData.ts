@@ -12,7 +12,8 @@
 import {zodiosApi} from '$lib/api';
 import type {SignalConfig} from '$lib/charts/signals';
 import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
-import {addDays, todayIso} from '$lib/utils/dateOnly';
+import {todayIso} from '$lib/utils/dateOnly';
+import {padSyncRange, subtractCalendarDaysOrMin} from '$lib/utils/sync/syncRange';
 
 export interface ComparisonAssetMeta {
     id: number;
@@ -37,18 +38,11 @@ export interface ComparisonSyncRange {
     end: string;
 }
 
-const COMPARISON_SYNC_PADDING_DAYS = 7;
-
-function subtractCalendarDaysOrMin(start: string, days: number): string {
-    if (start === 'min') return start;
-    try {
-        return addDays(start, -days);
-    } catch (error) {
-        if (error instanceof RangeError) return 'min';
-        throw error;
-    }
-}
-
+/**
+ * The range a comparison sync asks for: the selected range, moved back by the calendar
+ * lookback the primary mode needs, then widened by the shared one-week margin
+ * ({@link padSyncRange}).
+ */
 export function buildComparisonSyncRange(
     selectedRange: ComparisonSyncRange,
     options: {
@@ -63,13 +57,7 @@ export function buildComparisonSyncRange(
 
     const today = options.today ?? todayIso();
     const requiredStart = subtractCalendarDaysOrMin(selectedRange.start, calendarLookbackDays);
-    const paddedStart = subtractCalendarDaysOrMin(requiredStart, COMPARISON_SYNC_PADDING_DAYS);
-    const end = selectedRange.end === 'max' || selectedRange.end >= today ? today : addDays(selectedRange.end, COMPARISON_SYNC_PADDING_DAYS);
-    const cappedEnd = end > today ? today : end;
-    return {
-        start: paddedStart !== 'min' && paddedStart > cappedEnd ? cappedEnd : paddedStart,
-        end: cappedEnd,
-    };
+    return padSyncRange({start: requiredStart, end: selectedRange.end}, {today});
 }
 
 export const COMPARISON_ASSET_RUNTIME_PARAM_KEYS = ['_resolvedData', '_conversionFailed', '_conversionError', '_assetCurrency', '_targetCurrency', '_assetIconUrl', '_assetType', '_assetDisplayName'] as const;

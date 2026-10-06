@@ -9,7 +9,7 @@
   - Use onFiltersChange to sync filter changes back to URL
 -->
 <script lang="ts">
-    import {onDestroy, onMount} from 'svelte';
+    import {onDestroy, onMount, untrack} from 'svelte';
     import {t} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
@@ -27,6 +27,10 @@
     import {canPreviewFileData} from '$lib/utils/files/filePreview';
     import {getCachedPreview} from '$lib/stores/files/imagePreviewCache';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import FileSetBadges from '$lib/components/files/FileSetBadges.svelte';
+    import {getCachedPlugins, setCachedPlugins} from '$lib/components/ui/select/ImportPluginSelect.svelte';
+    import {fileSetBadges, setRequest, setsOfFiles, type FileSetBadgeContext, type ReportSetGroup, type SetPluginInfo, type SetPreviewState} from '$lib/utils/transactions/importReportSets';
+    import type {BrimPlugin, BrimSetPreview} from '$lib/types';
 
     interface Props {
         files: FileData[];
@@ -67,6 +71,69 @@
     let userLookup = $state(new Map<number, SearchUser>());
     let userLookupState = $state<'idle' | 'loading' | 'ready' | 'error'>('idle');
     let alive = true;
+
+    // Report-set badges (BRIM files only, design §5). The plugin catalogue tells which plugins read
+    // sets; each set's preview tells whether it is incomplete. A failed request only leaves the
+    // badge out: the table never waits for them.
+    let setPlugins = $state<SetPluginInfo[]>([]);
+    let setPreviews = $state(new Map<string, SetPreviewState>());
+    /** Set key → the member ids its preview was asked for: a set whose files change is asked again. */
+    const requestedPreviews = new Map<string, string>();
+    let fileSets = $derived(type === 'brim' && setPlugins.length > 0 ? setsOfFiles(files as BrimFile[], setPlugins) : new Map<string, ReportSetGroup>());
+    let badgeContext = $derived<FileSetBadgeContext>({sets: fileSets, files: type === 'brim' ? (files as BrimFile[]) : [], previews: setPreviews});
+
+    $effect(() => {
+        if (type !== 'brim') return;
+        void loadSetPlugins();
+    });
+
+    $effect(() => {
+        const sets = fileSets;
+        untrack(() => requestSetPreviews(sets));
+    });
+
+    async function loadSetPlugins() {
+        const generation = getClientSessionGeneration();
+        try {
+            let plugins = getCachedPlugins();
+            if (!plugins) {
+                plugins = ((await zodiosApi.list_plugins_api_v1_brokers_import_plugins_get()) as BrimPlugin[] | undefined) ?? [];
+                setCachedPlugins(plugins);
+            }
+            if (!alive || !isClientSessionCurrent(generation)) return;
+            setPlugins = plugins as unknown as SetPluginInfo[];
+        } catch {
+            // No catalogue, no set badges: the table itself is unaffected.
+        }
+    }
+
+    function requestSetPreviews(sets: ReadonlyMap<string, ReportSetGroup>) {
+        const unique = new Map<string, ReportSetGroup>();
+        for (const set of sets.values()) unique.set(set.key, set);
+        for (const set of unique.values()) {
+            const members = set.files
+                .map((file) => file.file_id)
+                .sort()
+                .join(',');
+            if (requestedPreviews.get(set.key) === members) continue;
+            requestedPreviews.set(set.key, members);
+            void previewSet(set, members);
+        }
+    }
+
+    async function previewSet(set: ReportSetGroup, members: string) {
+        const generation = getClientSessionGeneration();
+        let state: SetPreviewState;
+        try {
+            // The originals left out of the set by the last analysis are named, so the server previews the same set.
+            const preview = (await zodiosApi.preview_report_set_api_v1_brokers_import_sets_preview_post(setRequest(set, files as BrimFile[]))) as BrimSetPreview;
+            state = {status: 'ready', preview};
+        } catch (error) {
+            state = {status: 'error', error: error instanceof Error ? error.message : 'request-failed'};
+        }
+        if (!alive || !isClientSessionCurrent(generation) || requestedPreviews.get(set.key) !== members) return;
+        setPreviews = new Map(setPreviews).set(set.key, state);
+    }
 
     /** Expose the internal DataTable ref for ColumnVisibilityToggle */
     export function getTableRef() {
@@ -400,6 +467,24 @@
                 ],
                 width: 100,
                 getValue: (row) => (row as BrimFile).status,
+            });
+
+            cols.push({
+                id: 'reportSet',
+                urlKey: 'reportSet',
+                header: () => $t('importWizard.reportSet.badge.column'),
+                cell: (row) => {
+                    const badges = fileSetBadges(row as BrimFile, badgeContext);
+                    return badges.length === 0 ? '' : {type: 'custom' as const, component: FileSetBadges, props: {badges}};
+                },
+                type: 'custom',
+                sortable: false,
+                filterable: false,
+                width: 200,
+                getValue: (row) =>
+                    fileSetBadges(row as BrimFile, badgeContext)
+                        .map((badge) => badge.kind)
+                        .join(' '),
             });
         }
 

@@ -736,6 +736,7 @@ nav:
                   - Fineco: user/transactions/import/fineco.md
                   - Intesa Sanpaolo: user/transactions/import/intesa.md
                   - Crédit Agricole: user/transactions/import/credit_agricole.md
+                  - Danske Bank: user/transactions/import/danske-bank.md
                   - BUX: user/transactions/import/bux.md
                   - Rabobank: user/transactions/import/rabobank.md
               - 🪙 Crypto:

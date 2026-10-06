@@ -18,6 +18,12 @@ def front_tx_unit(verbose: bool = False, ui: bool = False, headed: bool = False,
            "src/lib/utils/transactions/fixRowLifecycle.test.ts",
            "src/lib/utils/transactions/duplicateRecheckPayload.test.ts",
            "src/lib/utils/transactions/bulkDisplay.test.ts",
+           "src/lib/utils/transactions/importReportSets.test.ts",
+           "src/lib/utils/transactions/gapFixModel.test.ts",
+           "src/lib/components/transactions/import/GapFixStep.test.ts",
+           "src/lib/components/transactions/import/ReportSetCard.test.ts",
+           "src/lib/components/transactions/modals/ParseDetailModal.test.ts",
+           "src/lib/utils/transactions/bulkTodos.test.ts",
            "src/routes/(app)/transactions/filterState.test.ts"]
     print(f"\n{Colors.BLUE}Running: TX Vitest unit tests{Colors.NC}")
     print(f"Command:\n└─▶ $ cd frontend && {' '.join(cmd)}")
@@ -362,6 +368,30 @@ def front_tx_import_upload(verbose: bool = False, ui: bool = False, headed: bool
     return _run_playwright("transactions/tx-import-upload.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_import_report_set(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run Import Wizard report-set E2E tests (Danske Bank sets through steps 1-4; each test owns its broker and uploads)."""
+    print_section("Frontend TX Import Report Set Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-import-report-set.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_tx_import_report_set_guide(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the import guide's gap-fix step on desktop and mobile (report sets C3, R9; a disposable account per test)."""
+    print_section("Frontend TX Import Report Set Guide Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-import-report-set-guide.spec.ts", ui=ui, headed=headed, debug=debug, project="", test_names=test_names, coverage=coverage)
+
+
 def front_tx_import_asset_inspector(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run Group E inspector metadata persistence and nested-dialog E2E regressions."""
     print_section("Frontend TX Import Asset Inspector Tests")
@@ -420,6 +450,18 @@ def front_tx_bulk_diagnostics(verbose: bool = False, ui: bool = False, headed: b
     if not _ensure_test_users():
         return False
     return _run_playwright("transactions/tx-bulk-diagnostics.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_tx_bulk_import_handoff(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the bulk editor after an import hand-over (F1: one validation per import, todo banners that lead to their rows)."""
+    print_section("Frontend TX Bulk Import Handoff Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-bulk-import-handoff.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_tx_import_file_selection(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -534,6 +576,22 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "tx-import-upload", front_tx_import_upload, name="TX Import Upload Tests", desc="Upload step: extension/size validation, error banner, broker assign, drop-zone collapse, discard guard", tests="transactions/tx-import-upload.spec.ts")
     add_test(
         cat,
+        "tx-import-report-set",
+        front_tx_import_report_set,
+        name="TX Import Report Set Tests",
+        desc="Report sets (C2): step-1 missing-export warning, step-2 set card (complete, incomplete, upload missing, exclude), the set as one analysis row with its pairing detail, review hiding the rows before H0; (C3) the gap-fix step after Import (R5 opening deposit selected by default, a new request on Back + Import, gap_fix rows in the editor; R6 none selected; R7 a single generic CSV never asks it) and the FilesTable set badges in the broker's import files (R8)",
+        tests="transactions/tx-import-report-set.spec.ts",
+    )
+    add_test(
+        cat,
+        "tx-import-report-set-guide",
+        front_tx_import_report_set_guide,
+        name="TX Import Report Set Guide Tests",
+        desc="Report sets (C3, R9) on desktop and mobile: the import guide's step on the gap-fix (import.gapFix, between review and bulk) anchored on the step's Continue, with a disposable account whose earlier import-guide steps are completed over the API",
+        tests="transactions/tx-import-report-set-guide.spec.ts",
+    )
+    add_test(
+        cat,
         "tx-import-asset-inspector",
         front_tx_import_asset_inspector,
         name="TX Import Asset Inspector Tests",
@@ -551,6 +609,14 @@ def populate_registry(registry: dict) -> None:
         tests="transactions/tx-import-duplicate-precedence.spec.ts",
     )
     add_test(cat, "tx-bulk-diagnostics", front_tx_bulk_diagnostics, name="TX Bulk Diagnostics Tests", desc="Complete balance-group rows, chronological display-only sorting, and stable payload identity", tests="transactions/tx-bulk-diagnostics.spec.ts")
+    add_test(
+        cat,
+        "tx-bulk-import-handoff",
+        front_tx_bulk_import_handoff,
+        name="TX Bulk Import Handoff Tests",
+        desc="F1 (D5) every import hand-over runs ONE validation, above the 50-row threshold too, an edit above it none, the next import one more; (D4) every entry of the todo banners (blockers and warnings) is a tx-bulk-todo-goto that pages the grid to its row and highlights it; owned broker, synthetic cash-only CSVs, nothing saved",
+        tests="transactions/tx-bulk-import-handoff.spec.ts",
+    )
     add_test(cat, "tx-import-file-selection", front_tx_import_file_selection, name="TX Import File Selection Tests", desc="Owned broker files: five-row pagination, cross-page selection and upload-only panel expansion", tests="transactions/tx-import-file-selection.spec.ts")
     add_test(cat, "tx-import-flow", front_tx_import_flow, name="TX Import Flow Tests", desc="Analyze step (detail modal, view-all, re-parse), step navigation, review selection toolbar + discard guard", tests="transactions/tx-import-flow.spec.ts")
     add_test(
@@ -570,6 +636,6 @@ def populate_registry(registry: dict) -> None:
         desc="Step 12a: after an executed edit, clone, delete, add, link or unlink the toolbar and the table checkboxes are empty and one click selects one row; after a cancelled editor, link or unlink both are unchanged",
         tests="transactions/tx-selection-after-bulk.spec.ts",
     )
-    add_test(cat, "tx-unit", front_tx_unit, test_names=False, name="TX Unit Tests (Vitest)", desc="Pure unit tests: txPayloadHelpers + txCommitApi + promoteHelpers + splitRowCharges + fixRowLifecycle + duplicateRecheckPayload", tests="vitest")
+    add_test(cat, "tx-unit", front_tx_unit, test_names=False, name="TX Unit Tests (Vitest)", desc="Pure unit tests: txPayloadHelpers + txCommitApi + promoteHelpers + splitRowCharges + fixRowLifecycle + duplicateRecheckPayload + importReportSets + gapFixModel + GapFixStep (jsdom)", tests="vitest")
     add_test(cat, "all", front_transaction_all, test_names=False, name="All Transaction Tests", desc="Run all Transaction E2E tests")
     registry["front-transaction"] = cat

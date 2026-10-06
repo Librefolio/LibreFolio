@@ -50,6 +50,18 @@ export type BrimPlugin = z.infer<typeof schemas.BRIMPluginInfo>;
 export type BrimParseResponse = z.infer<typeof schemas.BRIMParseResponse>;
 
 /**
+ * Preview of a report set: the files uploaded together for a broker and read by one plugin.
+ * Retrieved from POST /brokers/import/sets/preview
+ */
+export type BrimSetPreview = z.infer<typeof schemas.BRIMSetPreview>;
+
+/**
+ * The combined file of a report set.
+ * Retrieved from POST /brokers/import/sets/combine
+ */
+export type BrimSetCombineResponse = z.infer<typeof schemas.BRIMSetCombineResponse>;
+
+/**
  * Structured validation issue from BRIM parse.
  */
 export type BrimValidationIssue = z.infer<typeof schemas.BRIMValidationIssue>;

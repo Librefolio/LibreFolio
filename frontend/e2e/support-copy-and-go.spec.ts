@@ -5,6 +5,10 @@ import {t} from './fixtures/i18n-data';
 import {TEST_USER} from './fixtures/test-users';
 
 const PUBLIC_PROJECT_URL = 'https://librefolio.github.io/LibreFolio/';
+// One hashtag set on every share, the same in every language and on all five socials, appended by
+// the modal after one blank line. Duplicated on purpose, like PUBLIC_PROJECT_URL above: it mirrors
+// SHARE_HASHTAGS in src/lib/components/support/supportLinks.ts — change both together.
+const SHARE_HASHTAG_LINE = '#LibreFolio #OpenSource #SelfHosted #PortfolioTracker #PersonalFinance';
 const SOCIAL_DESTINATION_RE = /^https:\/\/(?:twitter\.com\/intent\/tweet|www\.reddit\.com\/submit|www\.facebook\.com\/sharer\/sharer\.php|www\.instagram\.com\/|www\.tiktok\.com\/upload)(?:\?.*)?$/;
 const TIKTOK_DESTINATION_RE = /^https:\/\/www\.tiktok\.com\/upload$/;
 
@@ -17,6 +21,11 @@ type SocialRequest = {
 };
 
 const SOCIAL_PLATFORMS: SocialPlatform[] = ['x', 'reddit', 'facebook', 'instagram', 'tiktok'];
+
+/** What the modal shows, copies and sends: the catalogue message, one blank line, the hashtag line. */
+function expectedShareMessage(lang: SupportedLocale, platform: SocialPlatform): string {
+    return `${t(lang, `support.share.${platform}.message`)}\n\n${SHARE_HASHTAG_LINE}`;
+}
 
 async function installClipboardHarness(context: BrowserContext) {
     await context.addInitScript(() => {
@@ -219,7 +228,7 @@ test.describe('Support copy-and-go', () => {
         const {message, title} = await visibleShareState(page);
 
         expect(title).toBeNull();
-        expect(message).toBe(t('en', 'support.share.x.message'));
+        expect(message).toBe(expectedShareMessage('en', 'x'));
 
         const since = await eventSeq(page);
         const popupPromise = page.waitForEvent('popup');
@@ -268,7 +277,7 @@ test.describe('Support copy-and-go', () => {
         await openAboutShareModal(page, 'reddit', 'fr');
         const {message, title} = await visibleShareState(page);
 
-        expect(message).toBe(t('fr', 'support.share.reddit.message'));
+        expect(message).toBe(expectedShareMessage('fr', 'reddit'));
         expect(title).toBe(t('fr', 'support.share.reddit.title'));
         expect(title).not.toBe(message);
 
@@ -308,7 +317,7 @@ test.describe('Support copy-and-go', () => {
         const {message, title} = await visibleShareState(page);
 
         expect(title).toBeNull();
-        expect(message).toBe(t('es', 'support.share.instagram.message'));
+        expect(message).toBe(expectedShareMessage('es', 'instagram'));
 
         const since = await eventSeq(page);
         const popupPromise = page.waitForEvent('popup');
@@ -339,7 +348,7 @@ test.describe('Support copy-and-go', () => {
         const {message, title} = await visibleShareState(page);
 
         expect(title).toBeNull();
-        expect(message).toBe(t('it', 'support.share.tiktok.message'));
+        expect(message).toBe(expectedShareMessage('it', 'tiktok'));
 
         const since = await eventSeq(page);
         const popupPromise = page.waitForEvent('popup');
@@ -371,7 +380,7 @@ test.describe('Support copy-and-go', () => {
         const {message, title} = await visibleShareState(page);
 
         expect(title).toBe(t('en', 'support.share.reddit.title'));
-        expect(message).toBe(t('en', 'support.share.reddit.message'));
+        expect(message).toBe(expectedShareMessage('en', 'reddit'));
 
         const since = await eventSeq(page);
         const popupPromise = page.waitForEvent('popup');

@@ -1,20 +1,24 @@
 """Exhaustive oracle for small-domain exact PAC/Rebalancer policy views.
 
+**Test instrument, not production code.** Since D-X1 (developer decision of
+2026-09-24) SCIP is the only production engine and its status is the proof;
+this module moved out of ``backend/app`` into the test tree so production
+cannot reach it (``test_exhaustive_oracle_is_test_only`` guards that). The
+leading underscore keeps pytest from collecting it.
+
 Enumerates every admissible discrete candidate for one `ExactPolicyView`,
 replays each candidate through `evaluate_exact_candidate` (the same exact
-Decimal/`ExactRatio` accounting used everywhere else in this package), and
+Decimal/`ExactRatio` accounting used everywhere else in the planner), and
 returns the lexicographically best feasible candidate together with the
-counts needed to build a wire `ExhaustiveOracleWitness`.
+enumerated and feasible candidate counts.
 
 This module has **zero SCIP/solver dependency** by design — see
 `LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/implementation/
-plan-phase00Step3PacRebalancerSolverPolicies.prompt.md` §16.5 step 1. It
-gives an honest `optimal_proven`/`infeasible_proven` result on small toy
-scenarios before any compiler/solver exists, and later cross-checks a
-solver incumbent on domains small enough to enumerate exhaustively. Whether
-and when that cross-check happens is `proof.py`'s decision (not yet
-built): this module only reports facts (candidate counts, the best
-candidate/evaluation found) and never assembles a wire proof itself.
+plan-phase00Step3PacRebalancerSolverPolicies.prompt.md` §16.5 step 1. That
+independence is what makes it a referee: tests enumerate a small domain here
+and check that SCIP's published plan and the evaluator's verdicts agree with
+it. It only reports facts (candidate counts, the best candidate/evaluation
+found) and never assembles a proof.
 
 The lexicographic comparison follows
 `plan-phase00PacRebalancerPolicies.prompt.md` §1.2-1.3 exactly: sequential
@@ -53,11 +57,8 @@ __all__ = [
     "run_exhaustive_oracle",
 ]
 
-# Internal safety constant, deliberately not wire-visible (Step3 plan
-# §16.7 Q3): callers decide what "too large" means for them (fall back to
-# solver-only, report `not_proven`) — this module only refuses to
-# enumerate past this point so it can never hang the process on a
-# real-sized scenario.
+# Safety cap: this module refuses to enumerate past this point so a test can
+# never hang on a real-sized scenario.
 MAX_EXHAUSTIVE_ORACLE_CANDIDATES = 200_000
 
 
@@ -71,8 +72,8 @@ class OracleResult:
 
     `best_candidate`/`best_evaluation` are `None` iff `feasible_candidates`
     is zero, i.e. the view is exhaustively proven infeasible.
-    `objective_codes` is ordered by ascending stage ordinal, matching the
-    order `ExhaustiveOracleWitness.objective_codes` expects on the wire.
+    `objective_codes` is ordered by ascending stage ordinal, the cascade
+    order SCIP optimizes in.
     """
 
     view_id: str
@@ -105,10 +106,8 @@ def _decision_value_range(access: DecisionAccess) -> tuple[int, ...]:
 def estimate_oracle_domain_size(view: ExactPolicyView) -> int:
     """Return the exact candidate count `run_exhaustive_oracle` would try.
 
-    Callers use this to decide, before calling `run_exhaustive_oracle`,
-    whether a view's domain is small enough to attempt. That routing
-    decision is internal (never a wire-visible contract) — see plan
-    §16.7 Q3.
+    Tests use this to check, before calling `run_exhaustive_oracle`,
+    whether a view's domain is small enough to enumerate.
     """
     size = 1
     for access in view.decisions:
@@ -158,9 +157,8 @@ def run_exhaustive_oracle(
     never re-derives feasibility or objective values independently, it only
     searches and compares already-trusted evaluations. Raises
     `OracleDomainTooLargeError` rather than enumerating past
-    `max_candidates`; callers choose the fallback (this is deliberately not
-    a silent truncation, which would corrupt the "exhaustive" guarantee the
-    proof layer relies on).
+    `max_candidates` (deliberately not a silent truncation, which would
+    corrupt the "exhaustive" guarantee the cross-checks rely on).
     """
     check_budget(checkpoint)
     domain_size = estimate_oracle_domain_size(view)

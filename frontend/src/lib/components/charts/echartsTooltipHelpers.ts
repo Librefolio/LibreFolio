@@ -58,6 +58,24 @@ export function buildTooltipRow(label: string, valueHtml: string, dotColor?: str
 }
 
 /**
+ * A tooltip row whose label gives way first: inside a box narrower than the row, the label shrinks
+ * and ends in an ellipsis while the value keeps its whole width. Inline-level, so rows can still be
+ * joined with `<br/>` and followed by inline notes. Both arguments are HTML: the caller escapes.
+ */
+export function buildFittedTooltipRow(labelHtml: string, valueHtml: string): string {
+    return `<span style="display:inline-flex;align-items:baseline;max-width:100%;min-width:0;vertical-align:bottom"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${labelHtml}</span><span style="flex-shrink:0;white-space:nowrap">${valueHtml}</span></span>`;
+}
+
+/**
+ * Cap a tooltip's content at `maxWidthPx`, so a row wider than its chart shrinks (see
+ * `buildFittedTooltipRow`) instead of leaving the screen. ECharts' box is `white-space:nowrap`:
+ * the frame lets the notes between the rows wrap again.
+ */
+export function fitTooltipToWidth(html: string, maxWidthPx: number): string {
+    return `<div style="max-width:${Math.max(0, Math.floor(maxWidthPx))}px;white-space:normal">${html}</div>`;
+}
+
+/**
  * Build a horizontal divider.
  */
 export function buildTooltipDivider(borderColor: string): string {

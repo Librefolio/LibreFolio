@@ -5,6 +5,39 @@
 **Scope corrente:** piani soltanto; nessuna implementazione prodotto è
 autorizzata da questi file.
 
+> ⚠️ **Stato al 2026-09-24 (`f1047f766`).** L'header sopra descrive il bundle alla sua
+> nascita. Da allora:
+> - il planner v2 è implementato e integrato (`3913fe217`);
+> - il P1 è stato rimosso (`b82e59ffa`);
+> - il budget del solver è propagato (`a7cd01b07`).
+>
+> Il lavoro in corso è il [piano Round 5](plan-phase00PacRound5PostMerge.prompt.md):
+> documenti allineati, UI PAC 2.0.0 nella build, STOP per la review di dettaglio.
+> L'ordine completo è nella tabella «Piani successivi all'integrazione», sotto «Piani di esecuzione».
+>
+> ⚠️ **Aggiornamento del 2026-09-25 (`0210f9848`).** Il Round 5 è committato. Prima dello STOP
+> entra il suo Passo F, con le decisioni del developer registrate al §2 del piano:
+> - **D-X1:** in produzione gira solo SCIP, e il suo esito fa fede. L'oracolo esaustivo resta
+>   solo nei test, come gate d'accordo su domini piccoli.
+> - **X2 e QX1-a:** il minimo e il tetto delle commissioni si modellano in modo esatto.
+> - **QX1-b:** un piano che dopo gli arrotondamenti supera una cassa di al più `N` unità minime
+>   esce con l'importo da aggiungere.
+>
+> I cinque design autorevoli hanno in testa una nota con la stessa data. Nel grafo sotto, «exact
+> core → exhaustive oracle» resta vero per lo Step 2, ma l'oracolo non è più una fonte di prova in
+> produzione.
+>
+> ⚠️ **Aggiornamento del 2026-10-05 (`7038c2224`).** Il Round 5 è chiuso e integrato.
+> `dev_release2` è avanzato a `7038c2224`, poi il coordinatore ha aggiunto il CHANGELOG
+> (`d9aad0ec9`). Il contratto pubblicato è la versione 1.0.0 compattata (riga 11).
+> - Il P1 rimosso il 24/09 era il tool `analyze`. Resta la sorgente `include_allocation_source` di
+>   `GET /portfolio/report`, con il suo client: la toglie la riga 13.
+> - Il lavoro seguente, approvato dal developer il 05/10, è nelle righe 12–14 della tabella «Piani
+>   successivi all'integrazione».
+> - Gli E2E del PAC si fanno dopo il Rebalancer, insieme ai suoi. Il server MCP resta fuori round.
+> - Le note di mappatura del 05/10 negli Step 1–6 dicono, voce per voce, dove è stato consegnato
+>   ogni gate e cosa resta aperto.
+
 Questo bundle traduce la suite target PAC/Rebalancer in workstream eseguibili,
 con dipendenze, ownership, gate, selector e Definition of Done. Non ridefinisce
 il prodotto: in caso di conflitto prevalgono i cinque design autorevoli e il
@@ -29,6 +62,22 @@ lavoro si ferma per una decisione esplicita.
 | 4 | [Copie dominio](plan-phase00Step4PacRebalancerDomainCopies.prompt.md) | Asset/Portfolio/Broker/FX, permessi, provenance | domain-copy checkpoint |
 | 5 | [Frontend e review umana](plan-phase00Step5PacRebalancerFrontendReview.prompt.md) | shell, PAC/Rebalancer, lifecycle, grafici, approvazione | UI APPROVED |
 | 6 | [Integrazione, test e docs](plan-phase00Step6PacRebalancerIntegrationTestsDocs.prompt.md) | plugin/client, runner, E2E post-review, docs, gate finali | final handoff |
+
+## Piani successivi all'integrazione
+
+Piani nati dopo il merge del planner v2, in ordine di esecuzione. Ciascuno ha il link
+al precedente in testa.
+
+| Ordine | Piano | Contenuto | Stato |
+|---:|---|---|---|
+| 7 | [Remediation](plan-phase00PacRebalancerRemediation.prompt.md) | fasi e gate dopo la verifica della checklist Step 3; sette decisioni del developer | ✅ committato `c7e25da93` |
+| 8 | [Rimozione residui P1](plan-phase00PacP1ResidueRemoval.prompt.md) | P1 `analyze` rimosso, `plan` v2 cablato, pagine MkDocs | ✅ `b82e59ffa` … `154182295` |
+| 9 | [Budget del solver](plan-phase00PacSolverBudget.prompt.md) | budget reale dell'engine propagato a SCIP | ✅ `a7cd01b07`, `3e513fea2` |
+| 10 | [Round 5 post-merge](plan-phase00PacRound5PostMerge.prompt.md) | documenti allineati, descrizione della card, UI PAC 2.0.0 nella build, STOP per la review di dettaglio | ✅ `4cd2cda56` … `946095d58`; integrato col fast-forward di `dev_release2` a `7038c2224` (chiuso il 2026-10-05) |
+| 11 | [Compattazione del contratto](plan-phase00PacContractCompaction.prompt.md) | wire compatto 1.0.0: freshness e data del prezzo tolte, default nello schema, commissioni facoltative; prima dell'integrazione | ✅ `ac18ce097`, `9e4140376`; merge `68483ddda`, gate finali verdi; pagine utente PAC allineate (S11) |
+| 12 | [Robustezza del solver](plan-phase00PacSolverRobustness.prompt.md) | A1, R10, P-a, P-c, P-d e voce 13, più R3 in sola lettura: prima la review matematica, poi i test rossi, poi il codice; nessun cambio di versione del contratto | ✅ consegnato il 2026-10-06, CHECKPOINT READY in tre commit (`chore(pac)` C901, `fix(pac)`, journal); contratto 1.0.0 e fingerprint invariati; SHA all'integrazione |
+| 13 | Rimozione finale del P1 — `plan-phase00PacP1FinalRemoval.prompt.md`, da creare | diversa dalla riga 8: toglie il ramo `include_allocation_source` di `GET /portfolio/report`, i suoi 7 schemi, `allocationSource.ts` e le chiavi i18n morte (le 28 `tools.portfolioRebalancer.*` comprese); il report passa da 13 a 12 sezioni | ⏳ approvato il 2026-10-05, dopo la riga 12 |
+| 14 | Analisi del Rebalancer — piano da definire | massimo riuso del PAC (compilatore, verifier, report, UI); domanda (b) sul numero di Asset con le misure; un solo salto di versione del contratto; E2E backend del motore; squadra e rischi | ⏳ dopo la riga 13 |
 
 ## Ordine e parallelismo
 
@@ -90,6 +139,13 @@ assegnata; il parallelismo dei file non autorizza runtime concorrenti.
    design autorevoli prima di proseguire.
 
 ## Stato
+
+**Stato al 2026-10-05.** Il bundle è stato eseguito. Il planner PAC 1.0.0 è integrato in
+`dev_release2` (righe 7–11). Restano le righe 12–14, nell'ordine approvato dal developer il
+05/10. Il Rebalancer non è ancora implementato: gli Step 1–6 restano il riferimento per il suo
+disegno, con le note di mappatura del 05/10.
+
+**Stato alla nascita del bundle** (testo originale):
 
 La materializzazione di questo bundle non apre il gate prodotto. Dopo il
 checkpoint planning-only servono:

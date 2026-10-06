@@ -28,14 +28,18 @@ A positive number means you earned money from investment activity. A negative nu
 
 ### The number below the hero
 
-Right under the Period P&L value, a smaller line shows something like `+45.20 (+3.10%)`.
+Right under the Period P&L value, a smaller line shows something like `+91.31 € (+16.36%)`.
 
 - The amount is the **day-over-day** (today vs. yesterday) change in your **Total P&L** — your all-time accumulated gain/loss, not just the selected period.
-- The percentage expresses it as a share of **yesterday's** Total P&L — it tells you how much today's move "weighed" relative to your accumulated all-time result.
+- The percentage compares that change with **yesterday's** Total P&L, taken without its sign — it tells you how much today's move "weighed" relative to your accumulated all-time result.
 
 \[\text{Daily change} = \text{Total P&L}_{\text{today}} - \text{Total P&L}_{\text{yesterday}}\]
 
-This line only appears once the history has at least two daily points.
+\[\text{%Daily change} = \frac{\text{Daily change}}{\left|\text{Total P&L}_{\text{yesterday}}\right|} \times 100\]
+
+The sign and the colour follow the direction of the change: `+` and green when your Total P&L went up, `-` and red when it went down — even while your Total P&L is a loss. For example, if it was `-558.10 €` yesterday and is `-466.79 €` today, the line reads `+91.31 € (+16.36%)`: your accumulated loss shrank by 16.36%.
+
+This line only appears once the history has at least two daily points. The percentage is left out only when yesterday's Total P&L is exactly zero, since there is nothing to compare against; a day without any change shows `0.00%`.
 
 ### The breakdown rows
 
@@ -73,9 +77,11 @@ The **Timing Effect** at the top of the card measures whether your deposit/withd
 
 ### The number below the Timing Effect
 
-Below the Timing Effect you'll see a small percentage (e.g. `+0.35%`) — it's the change in your **Total P&L** from **yesterday to today**, expressed as a share of yesterday's net worth:
+Below the Timing Effect you'll see a small percentage (e.g. `+0.35%`) — it's the change in your **Total P&L** from **yesterday to today**, compared with yesterday's net worth taken without its sign:
 
-\[\text{%Daily change} = \frac{\text{Total P&L}_{\text{today}} - \text{Total P&L}_{\text{yesterday}}}{\text{Net Worth}_{\text{yesterday}}} \times 100\]
+\[\text{%Daily change} = \frac{\text{Total P&L}_{\text{today}} - \text{Total P&L}_{\text{yesterday}}}{\left|\text{Net Worth}_{\text{yesterday}}\right|} \times 100\]
+
+Its sign and colour follow the same rule as the line under the [Period P&L](#card-1-period-pl): `+` and green when your Total P&L went up, `-` and red when it went down, even in the rare case of a negative net worth. It is hidden only when yesterday's net worth was exactly zero; a day without any change shows `0.00%`.
 
 It's a rough estimate of **today's** return — a quick pulse check. It is not the ROI, TWRR, or MWRR shown in the rows below, which stay anchored to the full selected period.
 

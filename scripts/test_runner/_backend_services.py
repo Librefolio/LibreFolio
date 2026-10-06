@@ -118,7 +118,7 @@ def services_pac_planner_evaluator(verbose: bool = False, test_names: list = Non
 
 
 def services_pac_planner_oracle(verbose: bool = False, test_names: list = None) -> bool:
-    """Test the zero-SCIP-dependency exhaustive oracle over one policy view's discrete domain."""
+    """Test the exhaustive oracle, a test-only referee with zero SCIP dependency, over one policy view's discrete domain."""
     print_section("Services: PAC/Rebalancer Exhaustive Oracle")
     cmd = _build_pytest_cmd(PAC_PLANNER_ORACLE_TEST_PATH, test_names)
     return run_command(cmd, "PAC/Rebalancer exhaustive oracle tests", verbose=verbose)
@@ -139,7 +139,7 @@ def services_pac_planner_solver(verbose: bool = False, test_names: list = None) 
 
 
 def services_pac_planner_proof(verbose: bool = False, test_names: list = None) -> bool:
-    """Test that a floating solve structurally cannot express a proven outcome."""
+    """Test that a proof comes only from SCIP's own closed statuses, through a sealed witness."""
     print_section("Services: PAC/Rebalancer Proof Semantics")
     cmd = _build_pytest_cmd(PAC_PLANNER_PROOF_TEST_PATH, test_names)
     return run_command(cmd, "PAC/Rebalancer proof semantics tests", verbose=verbose)
@@ -538,6 +538,26 @@ def services_brim_provider_base(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "BRIM provider base tests", verbose=verbose)
 
 
+def services_brim_report_sets(verbose: bool = False, test_names: list = None) -> bool:
+    """Test BRIM report-set schemas, plugin-contract defaults and combined-file storage."""
+    print_section("Services: BRIM Report Sets")
+    print_info("Testing: backend/app/schemas/brim.py + backend/app/services/brim_provider.py (report roles, truth points, combined files)")
+    print_info("Tests: schemas, BRIMProvider set defaults, two-role fake plugin, batch_id, combined-file write/save/reuse/stale/delete/list")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_report_sets.py", test_names)
+    return run_command(cmd, "BRIM report sets tests", verbose=verbose)
+
+
+def services_brim_gap_fix(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the BRIM gap-fix: LibreFolio's balances at a date, the gap-fix schemas and compute_gap_fix."""
+    print_section("Services: BRIM Gap-fix")
+    print_info("Testing: backend/app/services/brim_gap_fix.py + TransactionService balances at a date + gap-fix schemas in backend/app/schemas/brim.py")
+    print_info("Tests: exclude_tx_ids, get_balances_at_end_of, request/response schemas, proposals, cost todos, explanation, verifications, one import vs three")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_gap_fix.py", test_names)
+    return run_command(cmd, "BRIM gap-fix tests", verbose=verbose)
+
+
 def services_brim_create_transaction(verbose: bool = False, test_names: list = None) -> bool:
     """Test BRIMProvider._create_transaction and _loc_to_field."""
     print_section("Services: BRIM Create Transaction")
@@ -929,7 +949,7 @@ Note: No backend server required.
         "pac-planner-oracle",
         services_pac_planner_oracle,
         name="PAC/Rebalancer Exhaustive Oracle",
-        desc="Exhaustive candidate enumeration, domain-size estimation and cap, lexicographic best-candidate selection and checkpoint cancellation",
+        desc="Test-only referee: exhaustive candidate enumeration, domain-size estimation and cap, lexicographic best-candidate selection and checkpoint cancellation",
         isolation="pure",
     )
     add_test(
@@ -945,7 +965,7 @@ Note: No backend server required.
         "pac-planner-solver",
         services_pac_planner_solver,
         name="PAC/Rebalancer Lexicographic Solver",
-        desc="Lexicographic SCIP cascade adapter: exhaustive-oracle agreement, stage scoping, evidence shape, honest limits and floating infeasibility",
+        desc="Lexicographic SCIP cascade adapter: exhaustive-oracle agreement, stage scoping, evidence shape, honest limits and the first-stage infeasible verdict",
         isolation="pure",
     )
     add_test(
@@ -953,7 +973,7 @@ Note: No backend server required.
         "pac-planner-proof",
         services_pac_planner_proof,
         name="PAC/Rebalancer Proof Semantics",
-        desc="Sealed witnesses, oracle-only promotion and the structural impossibility of a floating solve claiming a proof",
+        desc="Sealed solver-status witnesses: optimal only when every stage closed, infeasible only at the first stage, limits and anomalies never proven",
         isolation="pure",
     )
     add_test(
@@ -977,7 +997,7 @@ Note: No backend server required.
         "pac-planner-service",
         services_pac_planner_service,
         name="PAC/Rebalancer Plan Orchestration",
-        desc="plan_pac_allocation end to end: ready states, failure availabilities, oracle-settled evidence and SCIP import isolation",
+        desc="plan_pac_allocation end to end: ready states, failure availabilities, solver-status proofs, no domain enumeration, test-only oracle and SCIP import isolation",
         isolation="pure",
     )
     add_test(cat, "asset-source", services_asset_source, name="Asset Source", desc="Provider assignment, synthetic yield")
@@ -1039,6 +1059,8 @@ Note: No backend server required.
     add_test(cat, "current-price-bootstrap", services_current_price_bootstrap, name="Current Price Bootstrap", desc="OHLC widening helper (F.2/F.3)")
     add_test(cat, "scheduled-investment-param-change", services_scheduled_investment_param_change, name="Scheduled Investment Param Change", desc="Symmetric wipe on provider_params change")
     add_test(cat, "brim-provider-base", services_brim_provider_base, name="BRIM Provider Base", desc="Abstract base defaults + text-encoding fallback")
+    add_test(cat, "brim-report-sets", services_brim_report_sets, name="BRIM Report Sets", desc="Report-set schemas, contract defaults, combined-file storage")
+    add_test(cat, "brim-gap-fix", services_brim_gap_fix, name="BRIM Gap-fix", desc="Gap-fix: bank truth points vs LibreFolio state, proposals and verifications")
     add_test(cat, "brim-create-transaction", services_brim_create_transaction, name="BRIM Create Transaction", desc="_create_transaction + _loc_to_field")
     add_test(cat, "financial-utils", services_financial_utils, name="Financial Utils", desc="WAC pure math (compute_wac_from_txlist, determine_target_currency)")
     add_test(cat, "roi-fifo-utils", services_roi_fifo_engine, name="ROI/FIFO/Portfolio Utils", desc="TWRR/MWRR/SimpleROI series, FIFO lots (FifoLotEngine), WAC multi-broker, price resolver")

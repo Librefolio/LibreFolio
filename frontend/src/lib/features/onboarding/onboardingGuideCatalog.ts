@@ -14,7 +14,7 @@ export const FX_DETAIL_STEP_IDS = ['fx.detail.header', 'fx.detail.provider', 'fx
 export const ASSET_PAGE_STEP_IDS = ['asset.page.overview', 'asset.page.filters', 'asset.page.sync', 'asset.page.add'] as const;
 export const ASSET_GUIDE_STEP_IDS = ['asset.search', 'asset.identity', 'asset.provider'] as const;
 export const ASSET_DETAIL_STEP_IDS = ['asset.detail.header', 'asset.detail.chart', 'asset.detail.editor', 'asset.detail.metadata', 'asset.detail.risk'] as const;
-export const IMPORT_GUIDE_STEP_IDS = ['import.upload', 'import.select', 'import.analyze', 'import.assets', 'import.fix', 'import.duplicates', 'import.review', 'import.bulk'] as const;
+export const IMPORT_GUIDE_STEP_IDS = ['import.upload', 'import.select', 'import.analyze', 'import.assets', 'import.fix', 'import.duplicates', 'import.review', 'import.gapFix', 'import.bulk'] as const;
 
 export type CoreTourStepId = (typeof CORE_TOUR_STEP_IDS)[number];
 export type TransactionsPageStepId = (typeof TRANSACTIONS_PAGE_STEP_IDS)[number];

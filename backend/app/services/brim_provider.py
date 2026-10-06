@@ -29,6 +29,7 @@ This module provides:
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import json
 import re
@@ -37,7 +38,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
 import structlog
 from pydantic import ValidationError
@@ -48,14 +49,19 @@ from backend.app.schemas.assets import FAAinfoFiltersRequest
 from backend.app.schemas.brim import (
     BRIMAssetCandidate,
     BRIMAssetMapping,
+    BRIMCombinedTable,
+    BRIMDerivedRef,
     BRIMDuplicateLevel,
     BRIMDuplicateMatch,
     BRIMDuplicateReport,
     BRIMFileInfo,
     BRIMFileStatus,
     BRIMMatchConfidence,
+    BRIMMemberSummary,
     BRIMParseOutput,
     BRIMPluginInfo,
+    BRIMReportRole,
+    BRIMSetShape,
     BRIMTXDuplicateCandidate,
     BRIMValidationIssue,
     is_fake_asset_id,
@@ -85,6 +91,14 @@ class BRIMParseError(Exception):
         super().__init__(message)
         self.message = message
         self.details = details or {}
+
+
+class BRIMSetRequiredError(BRIMParseError):
+    """Raised when a report-set member is parsed on its own instead of through its combined file."""
+
+    def __init__(self, message: str, missing_roles: Optional[List[str]] = None, details: Optional[Dict[str, Any]] = None):
+        super().__init__(message, details)
+        self.missing_roles: List[str] = list(missing_roles or [])
 
 
 # =============================================================================
@@ -300,6 +314,21 @@ class BRIMProvider(ABC):
             True if this plugin can likely parse the file
         """
 
+    def cannot_parse_reason(self, file_path: Path) -> Optional[str]:
+        """
+        Why ``can_parse`` refuses this file, in one short sentence the user can act on.
+
+        Called only by the parse guard, after ``can_parse`` answered False for a file the
+        user chose this plugin for: the sentence completes the "cannot parse file" error
+        (lowercase start, no final period, e.g. "required column 'date' not found in the
+        CSV header"). Override it when the refusal has a cause the user can fix in the
+        file. Keep it as cheap as ``can_parse`` and never raise.
+
+        Returns:
+            The reason, or None when there is nothing to add (the default)
+        """
+        return None
+
     @abstractmethod
     def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:
         """
@@ -391,6 +420,69 @@ class BRIMProvider(ABC):
         single = self.test_file_pattern
         return [single] if single else []
 
+    @property
+    def test_sample_sets(self) -> List[Dict[str, List[str]]]:
+        """Sample report sets for the test suite, one ``{role: [sample file names]}`` per set.
+
+        Only a report-set plugin declares them: its members are never parsed alone, so the
+        generic suite combines each set and parses the combined file. The names refer to
+        ``sample_reports/``. Default: ``[]``.
+        """
+        return []
+
+    # -------------------------------------------------------------------------
+    # Report sets (multi-file imports). Every default keeps a plugin single-file.
+    # -------------------------------------------------------------------------
+
+    @property
+    def report_roles(self) -> List[BRIMReportRole]:
+        """Export roles this plugin combines. Default: ``[]`` (single-file plugin)."""
+        return []
+
+    @property
+    def is_report_set_plugin(self) -> bool:
+        """True when the plugin combines several exports into one import."""
+        return bool(self.report_roles)
+
+    def detect_role(self, file_path: Path) -> Optional[str]:
+        """Role of ``file_path`` in a report set, or None. Default: None."""
+        return None
+
+    def describe_member(self, file_path: Path) -> BRIMMemberSummary:
+        """Role, rows and coverage of one member, read without combining."""
+        raise NotImplementedError(f"{self.provider_code} is not a report-set plugin")
+
+    def describe_set(self, members: Dict[str, List[Path]]) -> BRIMSetShape:
+        """Segments, proven gaps and notices of a set, read without combining."""
+        raise NotImplementedError(f"{self.provider_code} is not a report-set plugin")
+
+    def combine(self, members: Dict[str, List[Path]]) -> BRIMCombinedTable:
+        """Build the combined table from the members, grouped by role.
+
+        Must be a pure function of the members and of the plugin version: it never
+        reads the database, so the same set always yields the same combined file.
+        """
+        raise NotImplementedError(f"{self.provider_code} is not a report-set plugin")
+
+    @property
+    def settlement_lag_business_days(self) -> int:
+        """Longest settlement delay between an operation and its cash movement. Default: 0."""
+        return 0
+
+    @property
+    def pre_checkpoint_policy(self) -> str:
+        """What happens to rows before the first checkpoint: ``summarize`` (default) or ``import``."""
+        return "summarize"
+
+    @property
+    def history_tag(self) -> str:
+        """Tag this plugin puts on its transactions; the report sets use it to find the broker history.
+
+        Default: the provider code without its ``broker_`` prefix (``broker_credit_agricole`` becomes
+        ``credit_agricole``), which is the tag the existing plugins already write.
+        """
+        return self.provider_code.removeprefix("broker_")
+
     def to_plugin_info(self) -> BRIMPluginInfo:
         """Convert provider to BRIMPluginInfo DTO."""
         return BRIMPluginInfo(
@@ -402,6 +494,7 @@ class BRIMProvider(ABC):
             docs_url=self.docs_url,
             plugin_version=self.plugin_version,
             detection_priority=self.detection_priority,
+            report_roles=self.report_roles,
         )
 
     # -------------------------------------------------------------------------
@@ -580,6 +673,7 @@ def save_uploaded_file(
     original_filename: str,
     user_id: Optional[int] = None,
     broker_id: Optional[int] = None,
+    batch_id: Optional[str] = None,
 ) -> BRIMFileInfo:
     """
     Save an uploaded file to the 'uploaded' folder.
@@ -597,6 +691,7 @@ def save_uploaded_file(
         original_filename: Original filename (e.g., "report_2025.csv")
         user_id: ID of user uploading the file (optional, for tracking)
         broker_id: ID of target broker (optional, creates broker-specific folder)
+        batch_id: Upload batch (files uploaded together form a report set)
 
     Returns:
         BRIMFileInfo with file_id, compatible plugins, etc.
@@ -631,6 +726,7 @@ def save_uploaded_file(
         "uploaded_by_user_id": user_id,
         "target_broker_id": broker_id,
         "last_parse_result": None,
+        "batch_id": batch_id,
     }
 
     # Write metadata JSON
@@ -656,6 +752,7 @@ def save_uploaded_file(
         compatible_plugins=compatible_plugins,
         uploaded_by_user_id=user_id,
         target_broker_id=broker_id,
+        batch_id=batch_id,
     )
 
 
@@ -685,6 +782,14 @@ def _build_file_info_from_metadata(meta_path: Path) -> Optional[BRIMFileInfo]:
             if plugin is not None and plugin.plugin_version != parsed_plugin_version:
                 parse_is_stale = True
 
+        kind = metadata.get("kind", "original")
+        combine_is_stale = False
+        combine_plugin_code = metadata.get("combine_plugin_code")
+        if kind == "combined" and combine_plugin_code:
+            combine_plugin = BRIMProviderRegistry.get_provider_instance(combine_plugin_code)
+            if combine_plugin is not None and combine_plugin.plugin_version != metadata.get("combine_plugin_version"):
+                combine_is_stale = True
+
         return BRIMFileInfo(
             file_id=metadata["file_id"],
             filename=metadata["filename"],
@@ -700,6 +805,11 @@ def _build_file_info_from_metadata(meta_path: Path) -> Optional[BRIMFileInfo]:
             parsed_plugin_code=parsed_plugin_code,
             parsed_plugin_version=parsed_plugin_version,
             parse_is_stale=parse_is_stale,
+            batch_id=metadata.get("batch_id"),
+            kind=kind,
+            derived_from=[BRIMDerivedRef(**ref) for ref in metadata.get("derived_from", [])],
+            combined_into=list(metadata.get("combined_into", [])),
+            combine_is_stale=combine_is_stale,
         )
     except Exception as e:
         logger.warning("Error reading file metadata", meta_path=str(meta_path), error=str(e))
@@ -899,6 +1009,25 @@ def _relocated_path(file_id: str, file_path: Path) -> Optional[Path]:
     return moved_path
 
 
+def _refusal_message(plugin: Any, plugin_code: str, file_path: Path, checked_path: Path) -> str:
+    """The parse guard's refusal, completed with the plugin's reason when it gives one.
+
+    The reason is asked on ``checked_path``, the path the guard looked at last. It is read
+    with ``getattr``, so a plugin without the method keeps the plain refusal; a reason
+    that raises is logged and dropped, so the user still gets this 400 and never a 500.
+    """
+    message = f"Plugin '{plugin_code}' cannot parse file '{file_path.name}'"
+    explain = getattr(plugin, "cannot_parse_reason", None)
+    if explain is None:
+        return message
+    try:
+        reason = explain(checked_path)
+    except Exception as e:
+        logger.warning("Plugin failed to explain its refusal", plugin_code=plugin_code, error=str(e))
+        return message
+    return f"{message}: {reason}" if reason else message
+
+
 def delete_file(file_id: str) -> bool:
     """
     Delete a file and its metadata.
@@ -918,6 +1047,8 @@ def delete_file(file_id: str) -> bool:
     if not file_info:
         return False
 
+    _unlink_report_set_references(file_info)
+
     # Get extension and folder (broker-specific if set)
     ext = Path(file_info.filename).suffix.lower() or ".dat"
     folder = _get_folder_for_status(file_info.status, file_info.target_broker_id)
@@ -934,6 +1065,177 @@ def delete_file(file_id: str) -> bool:
 
     logger.info("Deleted file", file_id=file_id)
     return True
+
+
+# =============================================================================
+# REPORT SETS: combined files
+# =============================================================================
+
+
+def _members_key(member_ids: List[str]) -> str:
+    """Order-insensitive identity of a set of member files."""
+    return hashlib.sha256(",".join(sorted(member_ids)).encode("utf-8")).hexdigest()
+
+
+def _update_metadata(file_id: str, mutate: Callable[[Dict[str, Any]], None]) -> bool:
+    """Load a sidecar, apply ``mutate(metadata)`` and write it back atomically."""
+    meta_path = _find_metadata_path(file_id)
+    if meta_path is None:
+        return False
+    metadata = json.loads(meta_path.read_text())
+    mutate(metadata)
+    _write_metadata_atomic(meta_path, metadata)
+    return True
+
+
+def write_combined_csv(path: Path, table: BRIMCombinedTable) -> None:
+    """Write a combined table as UTF-8 with BOM, ``;``-separated, one row per line."""
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, delimiter=";", quoting=csv.QUOTE_MINIMAL, lineterminator="\n")
+    writer.writerow(table.headers)
+    writer.writerows(table.rows)
+    path.write_text(buffer.getvalue(), encoding="utf-8-sig", newline="")
+
+
+def save_combined_file(
+    *,
+    broker_id: int,
+    plugin_code: str,
+    plugin_version: str,
+    members: List[BRIMDerivedRef],
+    table: BRIMCombinedTable,
+    filename: str,
+    user_id: Optional[int] = None,
+) -> BRIMFileInfo:
+    """
+    Save the combined file of a report set next to its originals.
+
+    The combined file is an ordinary BRIM file (``kind = "combined"``) that only
+    its plugin can parse. Its sidecar records the originals it was built from,
+    the plugin code and version that built it and the combine summary; every
+    original gains the new file in ``combined_into``.
+    """
+    _ensure_dirs(broker_id)
+    if not filename.lower().endswith(".csv"):
+        filename = f"{filename}.csv"
+
+    file_id = str(uuid.uuid4())
+    uploaded_dir = _get_folder_for_status(BRIMFileStatus.UPLOADED, broker_id)
+    file_path = uploaded_dir / f"{file_id}.csv"
+    write_combined_csv(file_path, table)
+
+    member_ids = [member.file_id for member in members]
+    batch_ids = set()
+    for member_id in member_ids:
+        member_info = get_file_info(member_id)
+        batch_ids.add(member_info.batch_id if member_info else None)
+    batch_id = batch_ids.pop() if len(batch_ids) == 1 else None
+
+    now = utcnow()
+    metadata = {
+        "file_id": file_id,
+        "filename": filename,
+        "extension": ".csv",
+        "size_bytes": file_path.stat().st_size,
+        "status": BRIMFileStatus.UPLOADED.value,
+        "uploaded_at": now.isoformat(),
+        "processed_at": None,
+        "compatible_plugins": [plugin_code],
+        "error_message": None,
+        "uploaded_by_user_id": user_id,
+        "target_broker_id": broker_id,
+        "last_parse_result": None,
+        "batch_id": batch_id,
+        "kind": "combined",
+        "derived_from": [member.model_dump() for member in members],
+        "combine_plugin_code": plugin_code,
+        "combine_plugin_version": plugin_version,
+        "combine_summary": table.summary,
+        "members_key": _members_key(member_ids),
+    }
+    _write_metadata_atomic(uploaded_dir / f"{file_id}.json", metadata)
+
+    def _link(member_metadata: Dict[str, Any]) -> None:
+        combined_into = list(member_metadata.get("combined_into", []))
+        if file_id not in combined_into:
+            combined_into.append(file_id)
+        member_metadata["combined_into"] = combined_into
+
+    for member_id in member_ids:
+        _update_metadata(member_id, _link)
+
+    logger.info("Saved combined report-set file", file_id=file_id, plugin_code=plugin_code, members=len(member_ids), broker_id=broker_id)
+    info = get_file_info(file_id)
+    if info is None:  # pragma: no cover - the sidecar was just written
+        raise RuntimeError(f"combined file {file_id} vanished after being written")
+    return info
+
+
+def find_reusable_combined(
+    *,
+    broker_id: int,
+    plugin_code: str,
+    plugin_version: str,
+    member_ids: List[str],
+) -> Optional[BRIMFileInfo]:
+    """The combined file already built for exactly these members by this plugin version, if any."""
+    wanted = _members_key(member_ids)
+    for meta_path in _iter_metadata_paths(broker_id):
+        try:
+            metadata = json.loads(meta_path.read_text())
+        except Exception:
+            continue
+        if metadata.get("kind") == "combined" and metadata.get("target_broker_id") == broker_id and metadata.get("combine_plugin_code") == plugin_code and metadata.get("combine_plugin_version") == plugin_version and metadata.get("members_key") == wanted:
+            return _build_file_info_from_metadata(meta_path)
+    return None
+
+
+def read_combine_summary(file_id: str) -> Dict[str, Any]:
+    """The combine summary stored with a combined file; ``{}`` for originals or unknown files."""
+    meta_path = _find_metadata_path(file_id)
+    if meta_path is None:
+        return {}
+    try:
+        metadata = json.loads(meta_path.read_text())
+    except Exception:
+        return {}
+    summary = metadata.get("combine_summary") if metadata.get("kind") == "combined" else None
+    return dict(summary) if isinstance(summary, dict) else {}
+
+
+def _iter_metadata_paths(broker_id: int) -> Iterator[Path]:
+    """Every sidecar of one broker, across status folders."""
+    broker_reports_dir = get_broker_reports_dir()
+    for status in BRIMFileStatus:
+        broker_dir = broker_reports_dir / status.value / f"broker_{broker_id}"
+        if broker_dir.is_dir():
+            yield from broker_dir.glob("*.json")
+
+
+def _unlink_report_set_references(file_info: BRIMFileInfo) -> None:
+    """Keep report-set links consistent before a file is deleted.
+
+    Deleting an original marks it as deleted in its combined files, which stay
+    usable because they carry the verbatim values. Deleting a combined file
+    removes it from its originals' ``combined_into``.
+    """
+    deleted_id = file_info.file_id
+
+    def _mark_deleted(metadata: Dict[str, Any]) -> None:
+        refs = metadata.get("derived_from", [])
+        for ref in refs:
+            if ref.get("file_id") == deleted_id:
+                ref["deleted"] = True
+        metadata["derived_from"] = refs
+
+    def _drop_combined(metadata: Dict[str, Any]) -> None:
+        metadata["combined_into"] = [item for item in metadata.get("combined_into", []) if item != deleted_id]
+
+    for combined_id in file_info.combined_into:
+        _update_metadata(combined_id, _mark_deleted)
+    if file_info.kind == "combined":
+        for ref in file_info.derived_from:
+            _update_metadata(ref.file_id, _drop_combined)
 
 
 def move_to_parsed(file_id: str) -> bool:
@@ -1163,7 +1465,7 @@ def parse_file(file_id: str, plugin_code: str, broker_id: int) -> BRIMParseOutpu
     if not plugin.can_parse(file_path):
         moved_path = _relocated_path(file_id, file_path)
         if moved_path is None or not plugin.can_parse(moved_path):
-            raise ValueError(f"Plugin '{plugin_code}' cannot parse file '{file_path.name}'")
+            raise ValueError(_refusal_message(plugin, plugin_code, file_path, moved_path or file_path))
         logger.info("File moved before parse check, retrying at new location", file_id=file_id, new_path=str(moved_path))
         file_path = moved_path
 

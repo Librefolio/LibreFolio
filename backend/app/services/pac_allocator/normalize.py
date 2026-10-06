@@ -7,8 +7,9 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 
+from babel.numbers import get_currency_precision
+
 from backend.app.schemas.pac_allocator import (
-    AcceptedStaleObservation,
     AmountFeeCap,
     DomainAssetIdentity,
     DomainBrokerIdentity,
@@ -18,6 +19,7 @@ from backend.app.schemas.pac_allocator import (
     ManualProvenance,
     MonetaryAmountCapability,
     MonetaryAmountMinimum,
+    NoOrderCap,
     NotionalOrderCap,
     PacPlannerRequest,
     PlannerIssue,
@@ -60,7 +62,6 @@ from backend.app.services.pac_allocator.models import (
     ExactExistingCash,
     ExactExposure,
     ExactFeeSchedule,
-    ExactFreshness,
     ExactFundingRoute,
     ExactFxRate,
     ExactHolding,
@@ -109,6 +110,15 @@ def exact_number_to_ratio(value: WireExactNumber) -> ExactRatio:
     raise TypeError(f"Unsupported exact-number branch: {type(value).__name__}")
 
 
+def currency_minor_unit(currency: str) -> ExactRatio:
+    """ISO 4217 minor unit from CLDR via babel.
+
+    Codes CLDR does not list follow its own ``DEFAULT`` rule (2 digits): that is
+    the standard's fallback, not a planner default.
+    """
+    return ExactRatio(1, 10 ** get_currency_precision(currency))
+
+
 class _PlannerV2Normalizer:
     def __init__(self, request: _PlannerV2Request, source_issues: tuple[PlannerIssue, ...]) -> None:
         self.request = request
@@ -148,14 +158,6 @@ class _PlannerV2Normalizer:
     def money(self, value: PlannerMoneyInput, path: PlannerIssuePath) -> ExactRatio:
         self.currency(value.currency, path)
         return self.ratio(value.amount, path)
-
-    def freshness(self, freshness, path: PlannerIssuePath) -> None:
-        if not isinstance(freshness, AcceptedStaleObservation):
-            return
-        if freshness.age_days < 0:
-            self.issue("allocation.stale_age_negative", path)
-        if freshness.accepted is not True:
-            self.issue("allocation.stale_observation_not_accepted", path)
 
     def duplicates(self, values, identifier, path) -> set[str]:
         counts: dict[str, int] = defaultdict(int)
@@ -205,20 +207,6 @@ class _PlannerV2Normalizer:
             self.issue("allocation.reference_not_found", field_path("input", "scenario", self.request.snapshot.snapshot_id, "as_of"))
         self.currency(self.request.valuation_currency, field_path("input", "scenario", self.request.snapshot.snapshot_id, "valuation_currency"))
 
-    def validate_currency_specs(self) -> None:
-        currency_ids = self.duplicates(
-            self.request.currency_specs,
-            lambda item: item.currency,
-            lambda _item, item_id: field_path("input", "currency", item_id, "currency"),
-        )
-        for item in self.request.currency_specs:
-            minor_unit_path = field_path("input", "currency", item.currency, "minor_unit")
-            if self.ratio(item.minor_unit, minor_unit_path) <= ExactRatio(0):
-                self.issue("allocation.currency_minor_unit_nonpositive", minor_unit_path)
-        for currency, _path in sorted(self.currency_references.items()):
-            if currency not in currency_ids:
-                self.issue("allocation.currency_spec_missing", field_path("input", "currency", currency, "minor_unit"))
-
     def validate_assets(self) -> None:
         self.asset_ids = self.duplicates(
             self.request.assets,
@@ -243,13 +231,11 @@ class _PlannerV2Normalizer:
         if item.quote is None:
             self.issue("allocation.price_missing", field_path("assets", "asset", item.asset_id, "quote.amount"))
             self.issue("allocation.quote_base_quantity_missing", field_path("assets", "asset", item.asset_id, "quote.quote_base_quantity"))
-            self.issue("allocation.price_date_missing", field_path("assets", "asset", item.asset_id, "quote.reference_date"))
             return
         price_path = field_path("assets", "asset", item.asset_id, "quote.amount")
         basis_path = field_path("assets", "asset", item.asset_id, "quote.quote_base_quantity")
         self.currency(item.quote.currency, price_path)
         self.provenance(item.quote.provenance_id, field_path("assets", "asset", item.asset_id, "quote.provenance_id"))
-        self.freshness(item.quote.freshness, field_path("assets", "asset", item.asset_id, "quote.freshness"))
         if self.ratio(item.quote.amount, price_path) <= ExactRatio(0):
             self.issue("allocation.nonpositive_price", price_path)
         if self.ratio(item.quote.quote_base_quantity, basis_path) <= ExactRatio(0):
@@ -266,12 +252,21 @@ class _PlannerV2Normalizer:
                 IdIssueParam(kind="id", name="category_id", value=key[1]),
             ),
         )
+        exposure_path = field_path("assets", "asset", item.asset_id, "exposures.weight")
+        totals: dict[str, ExactRatio] = defaultdict(lambda: ExactRatio(0))
+        out_of_range_dimensions: set[str] = set()
         for exposure in item.exposures:
-            exposure_path = field_path("assets", "asset", item.asset_id, "exposures.weight")
             self.provenance(exposure.provenance_id, field_path("assets", "asset", item.asset_id, "exposures.provenance_id"))
             weight = self.ratio(exposure.weight, exposure_path)
+            totals[exposure.dimension] += weight
             if not self._ratio_in_unit_interval(weight):
+                out_of_range_dimensions.add(exposure.dimension)
                 self.issue("allocation.exposure_weight_out_of_range", exposure_path)
+        # A dimension may stay below one (the report keeps the residual); above
+        # one is contradictory. An out-of-range weight is already the root cause.
+        for dimension, total in sorted(totals.items()):
+            if dimension not in out_of_range_dimensions and total > ExactRatio(1):
+                self.issue("allocation.exposure_total_exceeds_one", exposure_path, params=(TextIssueParam(kind="text", name="dimension", value=dimension),))
 
     def validate_targets(self) -> None:
         target_ids = self.duplicates(
@@ -351,12 +346,24 @@ class _PlannerV2Normalizer:
         if step <= ExactRatio(0):
             self.issue("allocation.nonpositive_order_amount_step", step_path)
 
+    @staticmethod
+    def fee_schedule_currencies(fee) -> tuple[str, ...]:
+        """Currencies of the money fields present on a fee schedule, in field order.
+
+        An absent money field is zero. A schedule without any money field has no
+        currency of its own: it is priced in the quote currency of each route using it.
+        """
+        present = [fee.fixed_fee, fee.variable_floor]
+        if isinstance(fee.variable_cap, AmountFeeCap):
+            present.append(fee.variable_cap.amount)
+        return tuple(dict.fromkeys(money.currency for money in present if money is not None))
+
     def validate_fee_schedule(self, broker, fee, capability_ids: set[str]) -> None:
         fee_path = field_path("brokers", "broker", broker.broker_id, "fee_schedules")
         if fee.capability_id not in capability_ids:
             self.issue("allocation.reference_not_found", field_path("brokers", "broker", broker.broker_id, "fee_schedules.capability_id"))
-        fixed_fee = self.money(fee.fixed_fee, fee_path)
-        variable_floor = self.money(fee.variable_floor, fee_path)
+        fixed_fee = ExactRatio(0) if fee.fixed_fee is None else self.money(fee.fixed_fee, fee_path)
+        variable_floor = ExactRatio(0) if fee.variable_floor is None else self.money(fee.variable_floor, fee_path)
         rate = self.ratio(fee.rate, fee_path)
         cap = self.money(fee.variable_cap.amount, fee_path) if isinstance(fee.variable_cap, AmountFeeCap) else None
         money_values = (fixed_fee, variable_floor) if cap is None else (fixed_fee, variable_floor, cap)
@@ -366,10 +373,7 @@ class _PlannerV2Normalizer:
             self.issue("allocation.fee_rate_out_of_range", fee_path)
         if cap is not None and variable_floor > cap:
             self.issue("allocation.fee_floor_exceeds_cap", fee_path)
-        currencies = {fee.fixed_fee.currency, fee.variable_floor.currency}
-        if isinstance(fee.variable_cap, AmountFeeCap):
-            currencies.add(fee.variable_cap.amount.currency)
-        if len(currencies) != 1:
+        if len(self.fee_schedule_currencies(fee)) > 1:
             self.issue("allocation.currency_mismatch", fee_path)
 
     def validate_holdings(self) -> None:
@@ -454,7 +458,7 @@ class _PlannerV2Normalizer:
         if not funding_values and not isinstance(self.request, RebalancerInvestAndSellRequest):
             self.issue("allocation.no_selected_funding", section_path("funding"))
 
-    def validate_funding_routes(self, cash_by_id: dict[str, object], contribution_by_id: dict[str, object]) -> None:
+    def validate_funding_routes(self, cash_by_id: dict[str, object], contribution_by_id: dict[str, object]) -> None:  # noqa: C901 — flat per-route field checks plus one source lookup per source kind
         self.duplicates(
             self.request.funding_routes,
             lambda item: item.funding_route_id,
@@ -465,11 +469,11 @@ class _PlannerV2Normalizer:
             self.reference(item.broker_id, self.broker_ids, field_path("funding", "funding_route", item.funding_route_id, "broker_id"))
             self.provenance(item.provenance_id, field_path("funding", "funding_route", item.funding_route_id, "provenance_id"))
             self.currency(item.currency, route_path)
-            transfer_cap = self.money(item.transfer_cap, route_path)
-            if transfer_cap < ExactRatio(0):
-                self.issue("allocation.funding_cap_negative", route_path)
-            if item.transfer_cap.currency != item.currency:
-                self.issue("allocation.currency_mismatch", route_path)
+            if item.transfer_cap is not None:
+                if self.money(item.transfer_cap, route_path) < ExactRatio(0):
+                    self.issue("allocation.funding_cap_negative", route_path)
+                if item.transfer_cap.currency != item.currency:
+                    self.issue("allocation.currency_mismatch", route_path)
             if item.priority < 0:
                 self.issue("allocation.route_priority_negative", field_path("funding", "funding_route", item.funding_route_id, "priority"))
             source = None
@@ -498,8 +502,10 @@ class _PlannerV2Normalizer:
             return self.money(minimum.amount, path), "notional", minimum.amount.currency
         return ExactRatio(0), "none", None
 
-    def order_cap(self, route: PlannerOrderRouteInput) -> tuple[ExactRatio, str, str | None]:
+    def order_cap(self, route: PlannerOrderRouteInput) -> tuple[ExactRatio | None, str, str | None]:
         path = field_path("routing", "order_route", route.route_id, "cap")
+        if isinstance(route.cap, NoOrderCap):
+            return None, "none", None
         if isinstance(route.cap, NotionalOrderCap):
             return self.money(route.cap.amount, path), "notional", route.cap.amount.currency
         return self.ratio(route.cap.quantity, path), "quantity", None
@@ -530,15 +536,25 @@ class _PlannerV2Normalizer:
         quote_currency = asset.quote.currency if asset is not None and asset.quote is not None else None
         if quote_currency is not None:
             self.currency(quote_currency, entity_path("routing", "order_route", route.route_id))
+        self.validate_order_route_fee_schedule(route, quote_currency)
+        return capability, quote_currency
+
+    def validate_order_route_fee_schedule(self, route: PlannerOrderRouteInput, quote_currency: str | None) -> None:
+        if route.fee_schedule_id is None:
+            # Only a BUY route may omit it (the SELL schema requires it): the order pays no fee.
+            return
+        path = field_path("routing", "order_route", route.route_id, "fee_schedule_id")
         fee_schedule = self.fee_by_broker.get(route.broker_id, {}).get(route.fee_schedule_id)
         if fee_schedule is None:
             code = "portfolio_rebalancer.sell_fee_missing" if route.side == "sell" else "allocation.fee_schedule_missing"
-            self.issue(code, field_path("routing", "order_route", route.route_id, "fee_schedule_id"))
-        elif fee_schedule.side != route.side or fee_schedule.capability_id != route.capability_id:
-            self.issue("allocation.reference_not_found", field_path("routing", "order_route", route.route_id, "fee_schedule_id"))
-        elif quote_currency is not None and fee_schedule.fixed_fee.currency != quote_currency:
-            self.issue("allocation.currency_mismatch", field_path("routing", "order_route", route.route_id, "fee_schedule_id"))
-        return capability, quote_currency
+            self.issue(code, path)
+            return
+        if fee_schedule.side != route.side or fee_schedule.capability_id != route.capability_id:
+            self.issue("allocation.reference_not_found", path)
+            return
+        currencies = self.fee_schedule_currencies(fee_schedule)
+        if quote_currency is not None and currencies and currencies[0] != quote_currency:
+            self.issue("allocation.currency_mismatch", path)
 
     def validate_order_route_limits(self, route: PlannerOrderRouteInput, capability, quote_currency: str | None) -> None:
         minimum_if_active, minimum_if_active_kind, minimum_if_active_currency = self.order_minimum(route.minimum_if_active, route, "minimum_if_active")
@@ -548,11 +564,13 @@ class _PlannerV2Normalizer:
             self.issue("allocation.order_minimum_negative", field_path("routing", "order_route", route.route_id, "minimum_if_active"))
         if required_minimum < ExactRatio(0):
             self.issue("allocation.order_minimum_negative", field_path("routing", "order_route", route.route_id, "required_minimum"))
-        if cap <= ExactRatio(0):
+        if cap is not None and cap <= ExactRatio(0):
             self.issue("allocation.order_cap_nonpositive", field_path("routing", "order_route", route.route_id, "cap"))
         expected_kind = "quantity" if isinstance(capability, WholeQuantityCapability) else "notional" if isinstance(capability, MonetaryAmountCapability) else None
         self.validate_order_minimum_kind(route, capability, expected_kind, minimum_if_active_kind, minimum_if_active_currency, quote_currency, "minimum_if_active")
         self.validate_order_minimum_kind(route, capability, expected_kind, required_minimum_kind, required_minimum_currency, quote_currency, "required_minimum")
+        if cap is None:
+            return
         if expected_kind is not None and cap_kind != expected_kind:
             self.issue("allocation.reference_not_found", field_path("routing", "order_route", route.route_id, "cap"))
         if cap_currency is not None and isinstance(capability, MonetaryAmountCapability) and quote_currency is not None and cap_currency != quote_currency:
@@ -782,11 +800,6 @@ class _PlannerV2Normalizer:
             if total <= ExactRatio(0):
                 self.issue("portfolio_rebalancer.nonpositive_current_portfolio", section_path("holdings"))
 
-    def build_freshness(self, freshness) -> ExactFreshness:
-        if isinstance(freshness, AcceptedStaleObservation):
-            return ExactFreshness(kind="stale", age_days=freshness.age_days, accepted=freshness.accepted)
-        return ExactFreshness(kind="fresh", age_days=None, accepted=False)
-
     @staticmethod
     def build_money(value: PlannerMoneyInput) -> ExactMoney:
         return ExactMoney(amount=ExactRatio.from_decimal(Decimal(value.amount)), currency=value.currency)
@@ -850,8 +863,6 @@ class _PlannerV2Normalizer:
                     quote=ExactAssetQuote(
                         price=ExactMoney(amount=ExactRatio.from_decimal(Decimal(item.quote.amount)), currency=item.quote.currency),
                         quote_base_quantity=ExactRatio.from_decimal(Decimal(item.quote.quote_base_quantity)),
-                        reference_date=date.fromisoformat(item.quote.reference_date),
-                        freshness=self.build_freshness(item.quote.freshness),
                         provenance_id=item.quote.provenance_id,
                     ),
                     exposures=exposures,
@@ -859,7 +870,65 @@ class _PlannerV2Normalizer:
             )
         return tuple(result)
 
-    def build_brokers(self) -> tuple[ExactBroker, ...]:
+    def build_fee_schedule(self, fee_schedule_id: str, fee, currency: str) -> ExactFeeSchedule:
+        def money_or_zero(value: PlannerMoneyInput | None) -> ExactMoney:
+            return ExactMoney(amount=ExactRatio(0), currency=currency) if value is None else self.build_money(value)
+
+        return ExactFeeSchedule(
+            fee_schedule_id=fee_schedule_id,
+            capability_id=fee.capability_id,
+            side=fee.side,
+            fixed_fee=money_or_zero(fee.fixed_fee),
+            proportional_rate=ExactRatio.from_decimal(Decimal(fee.rate)),
+            minimum_fee=money_or_zero(fee.variable_floor),
+            maximum_fee=self.build_money(fee.variable_cap.amount) if isinstance(fee.variable_cap, AmountFeeCap) else None,
+        )
+
+    def build_fee_instances(self) -> tuple[dict[str, tuple[ExactFeeSchedule, ...]], dict[str, str]]:
+        """Give every ready order route one single-currency fee schedule.
+
+        A schedule with money fields keeps the caller's ID. A schedule without any
+        becomes one instance per quote currency of the routes using it
+        (``{id}~{CUR}``); an unused one produces none. A BUY route without a schedule
+        gets the implicit zero instance ``~zero~{capability_id}~{CUR}``. ``~`` is not
+        in the planner ID alphabet, so an instance ID cannot collide with a caller ID.
+        Returns the schedules per Broker in canonical order and the schedule of each route.
+        """
+        schedules: dict[str, dict[str, ExactFeeSchedule]] = defaultdict(dict)
+        for broker in self.request.brokers:
+            for fee in broker.fee_schedules:
+                currencies = self.fee_schedule_currencies(fee)
+                if currencies:
+                    schedules[broker.broker_id][fee.fee_schedule_id] = self.build_fee_schedule(fee.fee_schedule_id, fee, currencies[0])
+        route_fee_ids: dict[str, str] = {}
+        for route in self.request.order_routes:
+            broker_schedules = schedules[route.broker_id]
+            currency = self.asset_by_id[route.asset_id].quote.currency
+            if route.fee_schedule_id is None:
+                instance_id = f"~zero~{route.capability_id}~{currency}"
+                if instance_id not in broker_schedules:
+                    zero = ExactMoney(amount=ExactRatio(0), currency=currency)
+                    broker_schedules[instance_id] = ExactFeeSchedule(
+                        fee_schedule_id=instance_id,
+                        capability_id=route.capability_id,
+                        side="buy",
+                        fixed_fee=zero,
+                        proportional_rate=ExactRatio(0),
+                        minimum_fee=zero,
+                        maximum_fee=None,
+                    )
+            elif route.fee_schedule_id in broker_schedules:
+                instance_id = route.fee_schedule_id
+            else:
+                instance_id = f"{route.fee_schedule_id}~{currency}"
+                if instance_id not in broker_schedules:
+                    fee = self.fee_by_broker[route.broker_id][route.fee_schedule_id]
+                    broker_schedules[instance_id] = self.build_fee_schedule(instance_id, fee, currency)
+            route_fee_ids[route.route_id] = instance_id
+        ordered = {broker_id: tuple(sorted(rows.values(), key=lambda row: (row.capability_id, row.side, row.fee_schedule_id))) for broker_id, rows in schedules.items()}
+        return ordered, route_fee_ids
+
+    def build_brokers(self, fee_schedules: dict[str, tuple[ExactFeeSchedule, ...]]) -> tuple[ExactBroker, ...]:
         result = []
         for broker in sorted(self.request.brokers, key=lambda value: value.broker_id):
             capabilities = []
@@ -875,20 +944,6 @@ class _PlannerV2Normalizer:
                         order_step=step,
                     )
                 )
-            fees = []
-            for fee in sorted(broker.fee_schedules, key=lambda value: (value.capability_id, value.side, value.fee_schedule_id)):
-                maximum_fee = self.build_money(fee.variable_cap.amount) if isinstance(fee.variable_cap, AmountFeeCap) else None
-                fees.append(
-                    ExactFeeSchedule(
-                        fee_schedule_id=fee.fee_schedule_id,
-                        capability_id=fee.capability_id,
-                        side=fee.side,
-                        fixed_fee=self.build_money(fee.fixed_fee),
-                        proportional_rate=ExactRatio.from_decimal(Decimal(fee.rate)),
-                        minimum_fee=self.build_money(fee.variable_floor),
-                        maximum_fee=maximum_fee,
-                    )
-                )
             result.append(
                 ExactBroker(
                     broker_id=broker.broker_id,
@@ -898,7 +953,8 @@ class _PlannerV2Normalizer:
                     active=broker.identity.active if isinstance(broker.identity, DomainBrokerIdentity) else None,
                     provenance_id=broker.provenance_id,
                     capabilities=tuple(capabilities),
-                    fee_schedules=tuple(fees),
+                    fee_schedules=fee_schedules.get(broker.broker_id, ()),
+                    conversion_mode=broker.conversion_mode,
                 )
             )
         return tuple(result)
@@ -931,7 +987,9 @@ class _PlannerV2Normalizer:
             return ExactOrderMinimum(kind="monetary_amount", value=ExactRatio.from_decimal(Decimal(minimum.amount.amount)), currency=minimum.amount.currency)
         return ExactOrderMinimum(kind="none", value=ExactRatio(0), currency=None)
 
-    def build_order_cap(self, cap) -> ExactOrderCap:
+    def build_order_cap(self, cap) -> ExactOrderCap | None:
+        if isinstance(cap, NoOrderCap):
+            return None
         if isinstance(cap, NotionalOrderCap):
             return ExactOrderCap(kind="notional", value=ExactRatio.from_decimal(Decimal(cap.amount.amount)), currency=cap.amount.currency)
         return ExactOrderCap(kind="quantity", value=ExactRatio.from_decimal(Decimal(cap.quantity)), currency=None)
@@ -971,6 +1029,14 @@ class _PlannerV2Normalizer:
             ),
         )
 
+    def build_transfer_cap(self, item) -> ExactMoney:
+        """An absent cap is the whole selected amount of the source."""
+        if item.transfer_cap is not None:
+            return self.build_money(item.transfer_cap)
+        if item.source.kind == "existing_cash":
+            return self.build_money(next(cash.selected for cash in self.request.existing_cash if cash.cash_id == item.source.cash_id))
+        return self.build_money(next(row.amount for row in self.request.contributions if row.contribution_id == item.source.contribution_id))
+
     def build_scenario(self) -> ExactPlannerScenario:
         fx_rates = tuple(
             ExactFxRate(
@@ -982,7 +1048,6 @@ class _PlannerV2Normalizer:
         )
         existing_cash = tuple(
             ExactExistingCash(
-                source_kind=item.source_kind,
                 cash_id=item.cash_id,
                 broker_id=item.broker_id,
                 available=self.build_money(item.available),
@@ -1007,19 +1072,20 @@ class _PlannerV2Normalizer:
                 source_kind=item.source.kind,
                 source_id=item.source.cash_id if item.source.kind == "existing_cash" else item.source.contribution_id,
                 currency=item.currency,
-                transfer_cap=self.build_money(item.transfer_cap),
+                transfer_cap=self.build_transfer_cap(item),
                 priority=item.priority,
                 provenance_id=item.provenance_id,
             )
             for item in sorted(self.request.funding_routes, key=lambda value: value.funding_route_id)
         )
+        fee_schedules, route_fee_ids = self.build_fee_instances()
         order_routes = tuple(
             ExactOrderRoute(
                 route_id=item.route_id,
                 broker_id=item.broker_id,
                 asset_id=item.asset_id,
                 capability_id=item.capability_id,
-                fee_schedule_id=item.fee_schedule_id,
+                fee_schedule_id=route_fee_ids[item.route_id],
                 side=item.side,
                 minimum_if_active=self.build_order_minimum(item.minimum_if_active),
                 required_minimum=self.build_order_minimum(item.required_minimum),
@@ -1040,12 +1106,12 @@ class _PlannerV2Normalizer:
             policy=self.request.policy,
             as_of_date=date.fromisoformat(self.request.as_of),
             valuation_currency=self.request.valuation_currency,
-            currency_specs=tuple(ExactCurrencySpec(currency=item.currency, minor_unit=ExactRatio.from_decimal(Decimal(item.minor_unit))) for item in sorted(self.request.currency_specs, key=lambda value: value.currency)),
+            currency_specs=tuple(ExactCurrencySpec(currency=currency, minor_unit=currency_minor_unit(currency)) for currency in sorted(self.currency_references)),
             provenance=self.build_provenance(),
             fx_rates=fx_rates,
             fx_spread_rate=ExactRatio.from_decimal(Decimal(self.request.fx_spread_rate)),
             assets=self.build_assets(),
-            brokers=self.build_brokers(),
+            brokers=self.build_brokers(fee_schedules),
             holdings=self.build_holdings(),
             existing_cash=existing_cash,
             contributions=contributions,
@@ -1066,7 +1132,6 @@ class _PlannerV2Normalizer:
         self.validate_targets()
         self.validate_sell_context()
         self.validate_current_portfolio()
-        self.validate_currency_specs()
         self.validate_fx_pair_closure()
         issues = canonicalize_issues(self.issues)
         availability = normalization_availability(issues)

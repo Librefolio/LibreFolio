@@ -1,4 +1,6 @@
 import {expect, test, type Locator, type Page} from '../fixtures/playwright';
+import {schemas} from '../../src/lib/api/generated';
+import {waitForSettled} from '../fixtures/app-events';
 import {login} from '../fixtures/auth-helpers';
 import {showChartTooltip} from '../fixtures/charts';
 import {TEST_USER} from '../fixtures/test-users';
@@ -1739,5 +1741,96 @@ test.describe('GrowthChart candles caption at phone width (S9)', () => {
         await expect(caption).toBeVisible({timeout: 10_000});
         await expect(caption, 'one line: the caption never wraps').toHaveCSS('white-space', 'nowrap');
         await expect(caption, 'at 375px it does not fit, and says so').toHaveAttribute('data-overflowing', 'true', {timeout: 10_000});
+    });
+});
+
+/**
+ * D8 — the display-currency menu offers only currencies the user can convert to.
+ *
+ * With `configuredOnly` the menu keeps what fxRoutesStore calls reachable, plus the current
+ * value and the default currency. Syncing a chain stores the composed rate of its own pair and
+ * nothing else, so the currency a chain passes through is not convertible: offering it lets the
+ * user pick a currency every amount then fails to convert to. It becomes convertible — and is
+ * offered — once it is an endpoint of a configured pair of its own.
+ *
+ * The route list is this page's own: GET /fx/providers/routes is stubbed with complete read
+ * items, validated against the generated schema (the response model forbids extra fields). NOK
+ * is the intermediate because it is neither the default currency nor the selector's value, both
+ * of which the menu keeps whatever the routes say. Nothing is written.
+ */
+test.describe('Dashboard display currency menu (D8)', () => {
+    type RouteStep = {from: string; to: string; provider: string};
+
+    /** One configured route as GET /fx/providers/routes returns it (FXConversionRouteReadItem). */
+    function routeItem(base: string, quote: string, chainSteps: RouteStep[]) {
+        return {
+            base,
+            quote,
+            priority: 1,
+            chain_steps: chainSteps,
+            is_chain: chainSteps.length > 1,
+            providers_used: [...new Set(chainSteps.map((step) => step.provider))].sort(),
+        };
+    }
+
+    /** EUR-USD is configured, and reached through NOK: NOK is a leg, not an endpoint. */
+    const EUR_USD_VIA_NOK = routeItem('EUR', 'USD', [
+        {from: 'EUR', to: 'NOK', provider: 'ECB'},
+        {from: 'NOK', to: 'USD', provider: 'FED'},
+    ]);
+    /** A configured pair of its own whose endpoint is the chain's intermediate. */
+    const NOK_SEK_DIRECT = routeItem('NOK', 'SEK', [{from: 'NOK', to: 'SEK', provider: 'ECB'}]);
+
+    /** Serve `items` as the only configured routes, load the dashboard fresh, and open its currency menu. */
+    async function openDisplayCurrencyMenu(page: Page, items: Array<ReturnType<typeof routeItem>>): Promise<Locator> {
+        const body = {items};
+        schemas.FXConversionRoutesResponse.parse(body);
+        let served = 0;
+        await page.route('**/api/v1/fx/providers/routes*', async (route) => {
+            if (route.request().method() !== 'GET') {
+                await route.fallback();
+                return;
+            }
+            served += 1;
+            await route.fulfill({json: body});
+        });
+        // A fresh document: fxRoutesStore is module state, so only this load can fill it.
+        await page.goto('/dashboard');
+        const dashboard = page.getByTestId('dashboard-page');
+        await expect(dashboard).toBeVisible({timeout: 15_000});
+        await waitForSettled(dashboard, 30_000);
+        await expect.poll(() => served, {message: "the menu reads this page's routes"}).toBeGreaterThan(0);
+
+        const menu = page.getByTestId('dashboard-target-currency');
+        const trigger = page.getByTestId('dashboard-target-currency-trigger');
+        await expect(trigger).toBeVisible({timeout: 10_000});
+        await trigger.click();
+        return menu;
+    }
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('a chain route offers its two endpoints, never the currency it passes through', async ({page}) => {
+        try {
+            const menu = await openDisplayCurrencyMenu(page, [EUR_USD_VIA_NOK]);
+            // Presence first: USD can only come from the routes, so this is the loaded list.
+            await expect(menu.getByTestId('search-select-option-USD')).toBeVisible({timeout: 10_000});
+            await expect(menu.getByTestId('search-select-option-NOK')).toHaveCount(0);
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'});
+        }
+    });
+
+    test('the intermediate is offered once it is an endpoint of a configured pair of its own', async ({page}) => {
+        try {
+            const menu = await openDisplayCurrencyMenu(page, [EUR_USD_VIA_NOK, NOK_SEK_DIRECT]);
+            await expect(menu.getByTestId('search-select-option-USD')).toBeVisible({timeout: 10_000});
+            await expect(menu.getByTestId('search-select-option-NOK')).toBeVisible();
+            await expect(menu.getByTestId('search-select-option-SEK')).toBeVisible();
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'});
+        }
     });
 });

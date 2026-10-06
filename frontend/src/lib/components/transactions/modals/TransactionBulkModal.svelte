@@ -33,6 +33,7 @@
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import BrimEvidenceTable from '$lib/components/transactions/import/BrimEvidenceTable.svelte';
+    import {remainingTodos} from '$lib/utils/transactions/bulkTodos';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import TransactionResultBanner from '../shared/TransactionResultBanner.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
@@ -800,10 +801,7 @@
             }
             // Auto-clear todos whose field has now been filled
             if (merged.todos?.length) {
-                merged.todos = merged.todos.filter((todo) => {
-                    const val = merged.fields[todo.field as keyof DraftFields];
-                    return val == null || val === '';
-                });
+                merged.todos = remainingTodos(merged.todos, merged.fields);
                 if (merged.todos.length === 0) delete merged.todos;
             }
             return merged;
@@ -2109,6 +2107,20 @@
         return bulkDisplayText('transactions.bulk.workspaceRows', `Workspace rows: ${rows}`, {rows});
     }
 
+    /** Page the grid to the row of a todo and highlight it, as a validation issue does.
+     *  `rowId` is the visible row: a hidden partner's todo leads to its paired row. */
+    function jumpToTodoRow(rowId: string) {
+        if (!tableRef?.getSortedRowIds().includes(rowId)) {
+            notify({
+                name: 'tx.bulk.todo.row-hidden',
+                detail: {rowIds: [rowId]},
+                toast: {variant: 'warning', message: $t('transactions.bulk.issueRowsHidden')},
+            });
+            return;
+        }
+        tableRef.navigateToRowId(rowId);
+    }
+
     function jumpToIssue(issue: ValidationIssue) {
         if (lastIssueDraftKey !== lastDraftKey) return;
         const rows = getIssueRows(issue);
@@ -2160,7 +2172,10 @@
     let hasTodoBlockers = $derived(ops.some((op) => op.todos?.some((t) => t.severity === 'blocker')));
     /** Blocker todos with their row position, so the banner can name the offending rows.
      *  Without this the user only sees a red row and a disabled Save, never the reason. */
-    let todoBlockerEntries = $derived(ops.flatMap((op) => (op.todos ?? []).filter((t) => t.severity === 'blocker').map((todo) => ({rowNumber: visualRowLabels.get(op.tempId) ?? '—', date: op.fields.date, todo}))));
+    let todoBlockerEntries = $derived(ops.flatMap((op) => (op.todos ?? []).filter((t) => t.severity === 'blocker').map((todo) => ({rowId: op.pairedWith ?? op.tempId, rowNumber: visualRowLabels.get(op.tempId) ?? '—', date: op.fields.date, todo}))));
+    /** Warning todos with their row, so the banner can lead to each of them (D4). */
+    let todoWarningEntries = $derived(ops.flatMap((op) => (op.todos ?? []).filter((t) => t.severity === 'warning').map((todo) => ({rowId: op.pairedWith ?? op.tempId, rowNumber: visualRowLabels.get(op.tempId) ?? '—', todo}))));
+    let todoWarningsExpanded = $state(false);
     // Folded by default: with evidence tables attached, an expanded banner can be taller
     // than the viewport and push the grid — the thing the user has to fix — off-screen.
     let todoBlockersExpanded = $state(false);
@@ -2297,7 +2312,9 @@
         importGuideBulkProgress = guideProgress;
         importWizardOpen = false;
         toasts.success($t('importWizard.importedCount', {values: {n: creates.length}}));
-        scheduler.trigger('change');
+        // Every hand-over is validated once, whatever its size (D5): above the auto threshold the
+        // editor would otherwise say nothing until "Validate now". Later edits follow the usual rules.
+        scheduler.trigger('manual');
     }
 
     // BUG-C7: Suggest picker — opens PickerModal filtered to importable candidates
@@ -2457,10 +2474,7 @@
             if (sharedUuid) merged.link_uuid = sharedUuid;
             // Auto-clear todos whose field has now been filled
             if (merged.todos?.length) {
-                merged.todos = merged.todos.filter((todo) => {
-                    const val = merged.fields[todo.field as keyof DraftFields];
-                    return val == null || val === '';
-                });
+                merged.todos = remainingTodos(merged.todos, merged.fields);
                 if (merged.todos.length === 0) delete merged.todos;
             }
             return merged;
@@ -3152,10 +3166,10 @@
                         <ul class="max-h-72 space-y-2 overflow-y-auto px-3 pb-3">
                             {#each todoBlockerEntries as entry}
                                 <li class="space-y-1.5">
-                                    <p class="text-red-700 dark:text-red-300 leading-relaxed">
+                                    <button type="button" class="block w-full text-left text-red-700 dark:text-red-300 leading-relaxed hover:underline" onclick={() => jumpToTodoRow(entry.rowId)} title={$t('importWizard.todoGoto')} data-testid="tx-bulk-todo-goto" data-row-id={entry.rowId}>
                                         <span class="font-mono opacity-70">#{entry.rowNumber}</span>
                                         {entry.todo.message}
-                                    </p>
+                                    </button>
                                     {#each entry.todo.evidence ?? [] as evidence}
                                         <BrimEvidenceTable {evidence} tone="blocker" collapsible />
                                     {/each}
@@ -3167,7 +3181,28 @@
             {/if}
             {#if todoWarningRowCount > 0}
                 <InfoBanner variant="warning">
-                    <p data-testid="tx-bulk-todo-warnings">🔧 {$t('importWizard.todoWarningVerifyHint', {values: {n: todoWarningRowCount}})}</p>
+                    <div data-testid="tx-bulk-todo-warnings">
+                        <button type="button" class="flex w-full items-center gap-1.5 text-left" onclick={() => (todoWarningsExpanded = !todoWarningsExpanded)} data-testid="tx-bulk-todo-warnings-toggle">
+                            {#if todoWarningsExpanded}
+                                <ChevronDown size={14} class="shrink-0" />
+                            {:else}
+                                <ChevronRight size={14} class="shrink-0" />
+                            {/if}
+                            <span class="min-w-0 flex-1">🔧 {$t('importWizard.todoWarningVerifyHint', {values: {n: todoWarningRowCount}})}</span>
+                        </button>
+                        {#if todoWarningsExpanded}
+                            <ul class="mt-1.5 max-h-48 space-y-1 overflow-y-auto">
+                                {#each todoWarningEntries as entry}
+                                    <li>
+                                        <button type="button" class="block w-full text-left leading-relaxed hover:underline" onclick={() => jumpToTodoRow(entry.rowId)} title={$t('importWizard.todoGoto')} data-testid="tx-bulk-todo-goto" data-row-id={entry.rowId}>
+                                            <span class="font-mono opacity-70">#{entry.rowNumber}</span>
+                                            {entry.todo.message || entry.todo.field}
+                                        </button>
+                                    </li>
+                                {/each}
+                            </ul>
+                        {/if}
+                    </div>
                 </InfoBanner>
             {/if}
             {#if bannerSuggestions.length > 0}
