@@ -404,7 +404,41 @@ lsof -nP -iTCP:6158 -sTCP:LISTEN; lsof -nP -iTCP:6168 -sTCP:LISTEN   # free at h
 > - `developer/docs/release-pipeline.md` is stale beyond this change: it describes a `force_gallery` input and a screenshot cache that no longer exist, tags `vX.Y.Z`, `--workers 8`, and has a `file:///…` link to a local checkout.
 > - A manual `workflow_dispatch` on `main` would tag `latest` = full and create `latest-light`, because of `enable=main` at `release.yml:241,256`. That contradicts the documented logic; the tag mapping is out of scope.
 > - The `1.1.0` examples and the "Beta (version 1.1.0)" line need bumping at the 1.2 release. Note that the published 1.1.0 full image has no screenshots: that was the bug.
-### 6. ⏸ Tailscale watchdog (queued)
+### 6. ✅ Tailscale watchdog — 2026-10-06
+- **Go:** developer, via the coordinator: «Sì, M porta lo script nella guida adesso». The script was tested on his two containers (LibreFolio, Home Assistant); on Home Assistant it restarted on a real `tailscale up` failure instead of hanging.
+- **Script:** `mkdocs_src/docs/static/tailscale-guide/custom_startup.sh` replaced with the coordinator's 16:45 version (sha256 `2dd585bc…`; git mode `100644` kept). Diff reviewed: same variables, same socat proxy, funnel still in foreground mode (now supervised), plus the watchdog, explicit `TS_SOCKET`, `STARTUP_TIMEOUT` (180), `DEBUG=1`, a TERM trap and fail-fast required variables.
+- **Compose** (`admin/service_exposure.{en,it,fr,es}.md`, both Tailscale blocks):
+  - added `TS_ENABLE_HEALTH_CHECK=true`, `TS_LOCAL_ADDR_PORT=127.0.0.1:9002`, `STARTUP_TIMEOUT=180` (optional) and the `healthcheck` block (`wget … http://127.0.0.1:9002/healthz`, 30 s / 5 s / 3 retries / 120 s), with short comments written per language;
+  - applied by `LibreFolio-cloud-sizing/release-images/tailscale/ts_compose_edit.py`;
+  - check: all 8 blocks parse as YAML and are identical across languages once the localized placeholders are normalized (`compose_yaml_check.txt`).
+- **EN prose** (docs-writer, not stamped):
+  - the folded panel «Upgrading from an earlier version of the script» at the end of section 1. It uses `wget -O custom_startup.sh` because a plain `wget` would save `custom_startup.sh.1` next to the old file;
+  - the watchdog and health-check bullets, and the note that plain Docker does not restart an unhealthy container (so no autoheal);
+  - 4 parameter-table rows: `TS_ENABLE_HEALTH_CHECK`, `TS_LOCAL_ADDR_PORT`, `STARTUP_TIMEOUT`, `DEBUG`;
+  - the folded troubleshooting note in section 3: the line right after `Running 'tailscale up'` above `USAGE`, `--flag=value` or `--flag value`, the CasaOS tip, the other causes, `DEBUG=1`;
+  - an explicit `{: #3-startup-and-approval }` on the section 3 heading, the same slug, so translations keep the link.
+- **Verified with the real binaries** (`tailscale/tailscale:latest` = 1.102.5, busybox 1.37, `--network none`; `release-images/tailscale/flag_forms.txt`):
+  - the image has `CMD` containerboot and no entrypoint, so the guide's `command:` makes the script PID 1;
+  - `tailscale up` accepts `--advertise-tags=tag:container` and `--advertise-tags tag:container`, and a bare `--advertise-tags` gives `flag needs an argument: -advertise-tags`;
+  - the real containerboot splits `TS_EXTRA_ARGS` on spaces. With the truncated value it logs `Running 'tailscale up'` → the flag error → description → `USAGE` → `failed to auth tailscale: … exit status 2` and exits 1; with both value forms it keeps running;
+  - containerboot starts tailscaled with `--socket=/tmp/tailscaled.sock`, the script's default.
+  - Tailscale's docker-params page confirms `/healthz` (1.78+, 200 with a tailnet IP, else 503) and the `[::]:9002` default.
+- **Watchdog scenarios** (`release-images/tailscale/ts_watchdog_scenarios.sh`, fake containerboot/tailscale/socat bind-mounted, no network): **8/8** in the real tailscale image and **8/8** in `alpine:3.20`, each checked on exit code and log message:
+  - containerboot dies at boot → exit 1 in 3–4 s;
+  - Running never reached (`STARTUP_TIMEOUT=6`) → exit 1 in 6 s;
+  - funnel / containerboot / socat stop later → «X stopped.», exit 1 in 12–13 s;
+  - `HOST_IP` missing → message, exit 2;
+  - `docker stop` → exit 0 in 1 s;
+  - healthy → stays running.
+- **Before/after of the developer's bug** (`scenarios_before_after_hang.txt`), with containerboot dying at boot and `apk` available: the old script leaves the container **running after 21 s** in its `sleep 2` loop; the new one exits 1 in 4 s.
+- **Checks:** `sh -n` OK (host and busybox); `mkdocs build` strict OK.
+  - `check-links`: only the pre-existing `user/assets/detail/chart/#rolling-return` failure.
+  - `translate-validate` for `service_exposure`: 0 → 18 errors / 33 warnings (it/fr/es): real debt, not stamped.
+> **⚠️ Fuori pista**:
+> - **The IT/FR/ES compose blocks were not identical to EN.** The translation pipeline had **flattened their YAML indentation** (`tailscale-librefolio:` and `image:` at the same level), so anyone copying the compose from the IT/FR/ES guide got invalid YAML. Lines correspond one to one, so each line got the EN line's indentation back while keeping its translated text and placeholders (e.g. `<ruta_elegida>`).
+> - **The same defect is systemic:** 15 page/language pairs have code blocks whose relative indentation differs from EN, with otherwise identical code. YAML compose blocks are broken in `admin/docker_advanced` and `admin/service_exposure` (other blocks of this page: mermaid, JSON, text); also `user/assets/create-edit` and five technical-indicator pages. `translate-validate` does not detect it. Flagged to the coordinator for the pipeline; only the two Tailscale blocks were fixed here.
+> - The first scenario run mounted the repo file as is (`100644`): `exec … permission denied`, and one verdict was a false pass. The harness now mirrors the guide's `chmod +x` and checks the log message of each scenario.
+> - docs-writer briefly ran a local web server in `/tmp` to test `wget` overwrite behaviour, outside the lane ports. It was stopped and removed; no process of ours is listening.
 ### 7. ✅ Checkpoint handoff — 2026-10-06
 - **Final checks:** `git diff --check` clean. The 5 product files the images were built from in the proof scratch are byte-identical to the worktree (sha256 in `evidence/proof_scratch.txt`). Ports 6158/6168 free; no `lf-m-*` container, volume or image; no server.
 - **Cleanup:**
