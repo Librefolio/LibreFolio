@@ -855,6 +855,13 @@ class RiskReturnItem(StrictModel):
     # intercept has the Sharpe ratio as its slope. It is NOT what the holder earned —
     # on a highly volatile asset the two differ by tens of percentage points.
     expected_annual_return: FiniteFloat
+    # The holding's reward per unit of risk, on the returns and the annualization of this very
+    # point. Sharpe charges each observation the rate `expm1(log1p(rf) / f)`, so the line through
+    # the point with this slope crosses the return axis at `f` times that rate — at the origin when
+    # the rate is zero. Sortino charges the target return (MAR) instead, against the downside
+    # deviation. Either is None when undefined, never 0, and a warning names the holding.
+    sharpe: Optional[FiniteFloat] = None
+    sortino: Optional[FiniteFloat] = None
 
 
 class RiskReturnOutput(StrictModel):
@@ -995,6 +1002,14 @@ class RiskComparisonPoint(StrictModel):
     comparison_drawdown: FiniteFloat = Field(..., le=0)
 
 
+class RiskComparisonHoldingItem(StrictModel):
+    """One holding of the scope against the same comparison asset, measured in the same request."""
+
+    asset_id: PositiveInt
+    beta: Optional[FiniteFloat] = None
+    correlation: Optional[FiniteFloat] = Field(None, ge=-1, le=1)
+
+
 class RiskComparisonOutput(StrictModel):
 
     kind: Literal[RiskOutputKind.COMPARISON] = Field(default=RiskOutputKind.COMPARISON, json_schema_extra={"enum": ["comparison"]})
@@ -1015,7 +1030,27 @@ class RiskComparisonOutput(StrictModel):
     # services/risk/metrics.annualized_expected_return for why the convention is not
     # interchangeable with a compounded one.
     comparison_expected_annual_return: Optional[FiniteFloat] = None
+    # The reference's own Sharpe and Sortino, on the observations and the factor of its volatility
+    # and return above, so a benchmark row reads one measurement. They are charged the request's
+    # risk-free rate and target return, as the portfolio's KPI is.
+    comparison_sharpe: Optional[FiniteFloat] = None
+    comparison_sortino: Optional[FiniteFloat] = None
     series: List[RiskComparisonPoint] = Field(default_factory=list)
+    # On a portfolio scope, each holding against the same reference, measured in this request on
+    # its joint calendar — in current composition the calendar the portfolio's own beta is read on.
+    # The reference is never one of them, even when it is held (D371): it is the yardstick. Empty on
+    # an asset scope, whose only subject is the asset the fields above describe.
+    items: List[RiskComparisonHoldingItem] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_holdings(self) -> RiskComparisonOutput:
+        """The reference is the yardstick, so it is never also measured; each holding appears once."""
+        asset_ids = [item.asset_id for item in self.items]
+        if self.comparison_asset_id in asset_ids:
+            raise ValueError("the comparison asset cannot appear among the compared holdings")
+        if len(asset_ids) != len(set(asset_ids)):
+            raise ValueError("a holding cannot appear twice among the compared holdings")
+        return self
 
 
 class RiskVarCvarBin(StrictModel):
@@ -1569,6 +1604,9 @@ class RiskAssetSetComparisonOutput(StrictModel):
     observations: int = Field(..., ge=0)
     comparison_volatility: Optional[FiniteFloat] = Field(None, ge=0)
     comparison_expected_annual_return: Optional[FiniteFloat] = None
+    # The reference's own Sharpe and Sortino, on the same returns and factor as the two above.
+    comparison_sharpe: Optional[FiniteFloat] = None
+    comparison_sortino: Optional[FiniteFloat] = None
     items: List[RiskAssetSetComparisonItem]
 
     @model_validator(mode="after")
