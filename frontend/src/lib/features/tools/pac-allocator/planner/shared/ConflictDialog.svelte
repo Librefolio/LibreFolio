@@ -1,9 +1,8 @@
 <script lang="ts">
     import {t, locale} from '$lib/i18n';
     import type {CopyConflict} from '../copies';
-    import type {CopyRecord, CopyRef, DraftPrice, PlannerDraft} from '../draft.svelte';
-    import {formatPlannerDate, formatPlannerFxRate, formatPlannerMoneyPlain, formatPlannerPercentUnits, formatPlannerPlainDecimal, formatPlannerPricePlain, formatPlannerTimestamp} from '../format';
-    import {DIMENSION_FALLBACKS} from '../labels';
+    import type {CopyRecord, CopyRef, PlannerDraft} from '../draft.svelte';
+    import {formatPlannerMoneyPlain, formatPlannerTimestamp} from '../format';
     import {BUTTON_PRIMARY, BUTTON_SECONDARY, HINT} from '../ui';
     import PlannerDialog from './PlannerDialog.svelte';
 
@@ -29,14 +28,6 @@
     }
 
     const incomingAt = $derived(copy ? formatPlannerTimestamp(copy.capturedAt, $locale) : '—');
-
-    function priceText(price: DraftPrice | null): string {
-        if (!price) return '—';
-        return $t('tools.pacAllocator.planner.conflict.priceLine', {
-            default: '{price} per {units} · {date}',
-            values: {price: formatPlannerPricePlain(price.amount, price.currency), units: formatPlannerPlainDecimal(price.quoteBaseQuantity), date: formatPlannerDate(price.referenceDate, $locale)},
-        });
-    }
 </script>
 
 <PlannerDialog {open} {title} testid="pac-planner-conflict" onclose={() => onresolve('keep')} zIndex={60}>
@@ -44,42 +35,14 @@
     <ul class="space-y-3">
         {#each conflicts as conflict (conflict.id)}
             <li class="space-y-1 rounded-lg border border-gray-200 p-3 dark:border-gray-700" data-testid="pac-planner-conflict-row" data-kind={conflict.kind}>
-                <p class="font-medium">
-                    {conflict.label}{#if conflict.kind === 'cash'}
-                        · {conflict.currency}{/if}
-                </p>
+                <p class="font-medium">{conflict.label} · {conflict.currency}</p>
                 <dl class="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1">
-                    {#if conflict.kind === 'cash'}
-                        <dt>{$t('tools.pacAllocator.planner.conflict.cashPrevious', {default: 'Balance copied in the draft · {date}', values: {date: copiedAt(conflict.previousStamp)}})}</dt>
-                        <dd class="text-right tabular-nums" data-testid="pac-planner-conflict-previous">{formatPlannerMoneyPlain(conflict.previous, conflict.currency)}</dd>
-                        <dt>{$t('tools.pacAllocator.planner.conflict.cashIncoming', {default: 'Balance from the system · {date}', values: {date: incomingAt}})}</dt>
-                        <dd class="text-right tabular-nums" data-testid="pac-planner-conflict-incoming">{formatPlannerMoneyPlain(conflict.incoming, conflict.currency)}</dd>
-                        <dt>{$t('tools.pacAllocator.planner.conflict.cashSelected', {default: 'Amount to use (yours) · does not change'})}</dt>
-                        <dd class="text-right tabular-nums">{formatPlannerMoneyPlain(conflict.selected, conflict.currency)}</dd>
-                    {:else if conflict.kind === 'price'}
-                        <dt>{$t('tools.pacAllocator.planner.conflict.pricePrevious', {default: 'Price copied in the draft · {date}', values: {date: copiedAt(conflict.previousStamp)}})}</dt>
-                        <dd class="text-right tabular-nums" data-testid="pac-planner-conflict-previous">{priceText(conflict.previous)}</dd>
-                        <dt>{$t('tools.pacAllocator.planner.conflict.priceIncoming', {default: 'Price from the system · {date}', values: {date: incomingAt}})}</dt>
-                        <dd class="text-right tabular-nums" data-testid="pac-planner-conflict-incoming">{priceText(conflict.incoming)}</dd>
-                        <dt>{$t('tools.pacAllocator.planner.conflict.priceCurrent', {default: 'Price in the draft (yours) · does not change'})}</dt>
-                        <dd class="text-right tabular-nums">{priceText(conflict.current)}</dd>
-                    {:else if conflict.kind === 'exposures'}
-                        <dt>{$t('tools.pacAllocator.planner.conflict.exposuresPrevious', {default: 'Classification copied · {date}', values: {date: copiedAt(conflict.previousStamp)}})}</dt>
-                        <dd class="text-right">{$t('tools.pacAllocator.planner.conflict.exposuresYours', {default: 'your rows do not change'})}</dd>
-                        <dt>{$t('tools.pacAllocator.planner.conflict.exposuresIncoming', {default: 'Classification from the system · {date}', values: {date: incomingAt}})}</dt>
-                        <dd class="text-right" data-testid="pac-planner-conflict-incoming">
-                            {#each conflict.incoming as row (row.key)}
-                                <span class="block">{$t(`tools.pacAllocator.planner.dimensions.${row.dimension}`, {default: DIMENSION_FALLBACKS[row.dimension]})} · {row.label} · {formatPlannerPercentUnits(row.weightPercent)}</span>
-                            {/each}
-                        </dd>
-                    {:else}
-                        <dt>{$t('tools.pacAllocator.planner.conflict.fxPrevious', {default: 'Rate copied in the draft · {date}', values: {date: copiedAt(conflict.previousStamp)}})}</dt>
-                        <dd class="text-right tabular-nums" data-testid="pac-planner-conflict-previous">{formatPlannerFxRate(conflict.previous)}</dd>
-                        <dt>{$t('tools.pacAllocator.planner.conflict.fxIncoming', {default: 'Rate from the system · {date}', values: {date: incomingAt}})}</dt>
-                        <dd class="text-right tabular-nums" data-testid="pac-planner-conflict-incoming">{formatPlannerFxRate(conflict.incoming)}</dd>
-                        <dt>{$t('tools.pacAllocator.planner.conflict.fxCurrent', {default: 'Rate in the draft (yours) · does not change'})}</dt>
-                        <dd class="text-right tabular-nums">{formatPlannerFxRate(conflict.current)}</dd>
-                    {/if}
+                    <dt>{$t('tools.pacAllocator.planner.conflict.cashPrevious', {default: 'Balance copied in the draft · {date}', values: {date: copiedAt(conflict.previousStamp)}})}</dt>
+                    <dd class="text-right tabular-nums" data-testid="pac-planner-conflict-previous">{formatPlannerMoneyPlain(conflict.previous, conflict.currency)}</dd>
+                    <dt>{$t('tools.pacAllocator.planner.conflict.cashIncoming', {default: 'Balance from the system · {date}', values: {date: incomingAt}})}</dt>
+                    <dd class="text-right tabular-nums" data-testid="pac-planner-conflict-incoming">{formatPlannerMoneyPlain(conflict.incoming, conflict.currency)}</dd>
+                    <dt>{$t('tools.pacAllocator.planner.conflict.cashSelected', {default: 'Amount to use (yours) · does not change'})}</dt>
+                    <dd class="text-right tabular-nums">{formatPlannerMoneyPlain(conflict.selected, conflict.currency)}</dd>
                 </dl>
             </li>
         {/each}

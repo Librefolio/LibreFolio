@@ -699,19 +699,12 @@ export class PlannerDraft {
     /** The wizard steps on screen: FX only when a rate is needed. */
     readonly visibleSteps: readonly PlannerStep[] = $derived(PLANNER_STEPS.filter((step) => step !== 'fx' || this.fxNeeded));
 
-    /** Proposed pairs plus the ones already in the draft, in canonical order. */
-    readonly fxPairs = $derived([...new Set([...this.requiredPairs, ...this.data.fxRates.map((item) => item.pair)])].sort());
-
     ensureFx(pair: string): DraftFx {
         const existing = this.fx(pair);
         if (existing) return existing;
         const item: DraftFx = {pair, rate: '', copiedRate: null, stamp: null, source: null, referenceDate: null, manual: false, enteredAt: nowTimestamp()};
         this.data.fxRates.push(item);
         return this.data.fxRates[this.data.fxRates.length - 1];
-    }
-
-    removeFx(pair: string): void {
-        this.data.fxRates = this.data.fxRates.filter((item) => item.pair !== pair);
     }
 
     // -- copies --------------------------------------------------------------
