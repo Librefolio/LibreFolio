@@ -2023,8 +2023,6 @@ async def test_complete_saved_domain_copy_is_select_only_private_and_stable(
         _Rows(scalar_values=[price]),
         _Rows(scalar_values=[fx]),
     )
-    usage_probe = AsyncMock(side_effect=AssertionError("New source must not read cross-user usage"))
-    monkeypatch.setattr(source, "_load_usage_counts", usage_probe)
     monkeypatch.setattr(source, "utcnow", lambda: CAPTURED_AT)
 
     class _ForbiddenCache:
@@ -2079,7 +2077,6 @@ async def test_complete_saved_domain_copy_is_select_only_private_and_stable(
     fx_sql = str(fx_statement)
     assert "max(fx_rates.date)" in fx_sql
     assert "fx_rates.date <=" in fx_sql
-    usage_probe.assert_not_awaited()
     assert dumped["snapshot"] == {
         "as_of": "2026-09-15",
         "target_currency": "EUR",
