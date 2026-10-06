@@ -2132,3 +2132,149 @@ Richiesta del developer tramite il coordinatore: che il plugin di un set non lo 
 > **Note implementazione — la documentazione (2026-10-06)**: il docs-writer ha aggiunto un punto in `developer/frontend/components/core-ui/select.md`, sezione «🔎 SearchSelect». Dice che solo una chiusura col tocco o con la penna blocca la riapertura per 200 ms (`closedByTouch`), mentre mouse e tastiera non la bloccano mai. Ricorda anche la guardia separata e invariata su `Enter` subito dopo che il trigger prende il focus (`triggerFocusedAt`, solo con un valore impostato). `mkdocs build` strict ok; `check-links` col solo D28. Pagina senza traduzioni.
 
 ### 16 — ✅ pronta per il checkpoint (2026-10-06)
+
+> **Note implementazione — il gate in più, chiesto dal coordinatore prima dello script (2026-10-06)**:
+> - un solo `db populate --force --clean`, autorizzato, sulla corsia 6156 (`/private/tmp/librefolio-r2-l`): i file della corsia passano da 854 a 0;
+> - poi, sull'albero di allora e senza toccare file: `tx-import-report-set` **18 passed** (carico 36,8) e `tx-import-file-selection` **2 passed**.
+>
+> **Integrazione**: `5df39167a` (fix), `e09ec9b47` (docs), `eade0c135` (journal), poi il merge `af5591991` (albero `b2e5e16d4`). `dev_release2` = `aa74797ff` (`v1.1.0-471`), con la riga 🐛 nel CHANGELOG. Nel backlog di fine round del coordinatore: CAC-011/012, il ciclo `toPass` di `openSearchSelect` (`tx-fx-completeness.spec.ts:82`), l'opzione `--trace` del runner e la nota su Invio e `triggerFocusedAt`.
+
+## 17. Review del passo G (2026-10-06)
+
+**Richiesta del developer** (testuale, tramite il coordinatore): «Sì, L prepari ora la review sulla 6166».
+
+### 17.1 ✅ La corsia di review (2026-10-06)
+
+- **Codice**: il worktree a `af5591991`, cioè `dev_release2` meno il CHANGELOG. `front build --debug`; il server dice `v1.1.0-470-gaf5591991`.
+- **Data-dir**: `/tmp/librefolio-r2-l-review`, nuova e separata da quella dei test. Un solo `test --test-port 6166 --data-dir /tmp/librefolio-r2-l-review db populate --force --clean`, autorizzato solo lì.
+  - Utenti di test creati con `dev.py user --test-db create` (più `promote` dell'admin) e impostazioni globali con `init-settings`, tutti con `LIBREFOLIO_TEST_DATA_DIR` sulla stessa data-dir.
+  - Verifica: cambia solo l'`app.db` della review; in questo worktree non esiste un DB di test predefinito.
+- **Server**: `dev.py server --test --host 127.0.0.1 --port 6166 --data-dir /tmp/librefolio-r2-l-review --no-reload --no-scheduler`, senza `--force`. Ascolta solo su `127.0.0.1:6166`; il login di `e2e_test_user` risponde 200.
+- **File sintetici**, fuori dal repo, in `/tmp/librefolio-r2-l-review-files/`. Vengono solo dai campioni sintetici di `sample_reports/`, nessun dato reale. Chi li legge, controllato col registro dei plugin:
+
+| File | Plugin che lo leggono | Motivo del CSV generico |
+|---|---|---|
+| `danske_bank-custody.xlsx` | Danske | «the Generic CSV reads only .csv files» |
+| `danske_bank-cash.csv` (come la spedisce la banca) | Danske | colonne `date` e `type` assenti |
+| `danske_bank-cash-both.csv` (la cassa «doppia», come `writeDualCash` della spec) | Danske e CSV generico | — |
+| `generic_simple.csv` | CSV generico | — |
+| `generico-senza-date-type.csv` | nessuno | colonne `date` e `type` assenti |
+| `generico-solo-date.csv` | nessuno | colonna `type` assente |
+
+- **Un limite della review**: la nota «riconosciuto anche da…», cioè un altro plugin a set, non si può mostrare, perché oggi Danske è l'unico plugin a set.
+
+### 17.2 ⏳ Le osservazioni del developer, primo giro (2026-10-06)
+
+**Testuali**, nella chat di L:
+
+> «il selettore read as è fatto con un select os e non uno custom fatto da noi. in oltre se faccio ce lo voglio leggere 1 ad 1 on ho modo poi di tornare indietro nella scelta, devo fare step back e poi avanti, e sono ancora in quello singolo, poi se nel primo scelgo il plugin di danske bak solo il primo passa al set, se faccio anche il secondo pure e almeno si mettono nello stesso set.
+> Poi nella riga con le barre, securities transactions è troppo corto  come spazio e la parte finale viene troncata con i ... sono su desktop, mi aspettavo di vederlo tutto.
+>
+> il cash-both non ho capito che dovrei farci nel test, nel plugin dice giustamente che manca l'xlsx, se poi scelgo il generico rileva 9 depositi e 23 prelievi, ti torna?
+>
+> l'escludi dal set funziona, ma come prima non compare la possibilità di scegliere un plugin fino a che non faccio indietro e poi avanti
+>
+> quando scrivi "apri la scheda: c'è la nota «Letto come set Danske Bank, non col plugin predefinito del broker (Generic CSV)…»;" non ho capito dove guardare, ma ho notato che solo nei csv, nel kebab menù c'è l'opzione di rimuoverlo e leggerlo con il generic csv, intendevi lui? se lo clicco però all'inizio in tabella il plugin è -
+>
+> ho poi notato nele prove, uscendo e rientrando, che la memoria resta, quindi direi che funziona.
+>
+> intanto risolvi queste cose, poi rifacciamo da capo»
+
+- Server di review spento a fine giro: porta 6166 libera (`lsof` rc=1).
+- Il prossimo passo è l'analisi di ogni punto, da mandare al coordinatore prima di correggere, come al solito.
+
+### 17.3 ✅ Analisi delle osservazioni (2026-10-06)
+
+| # | Osservazione | Causa verificata nel codice | Proposta |
+|---|---|---|---|
+| R1 | «Letto come» è una select nativa del sistema operativo | `ReportSetCard.svelte:338`, un `<select>` HTML | `SimpleSelect`, la nostra select senza ricerca (tastiera, `compact`, `testId`; già usata da 15 componenti). Vanno aggiornati i test che usano `selectOption` / `change` (test-author) |
+| R2 | Dopo «Leggi i file uno per uno» non si torna indietro | `readSetAs(set, null)` dà a ogni membro un override fuori dal set, quindi il set e la sua scheda spariscono, e con loro il menu. Si torna al set solo scegliendo Danske nella colonna Plugin di ogni file | da decidere col developer (17.4) |
+| R3 | Nella timeline «Securities transactions» è troncato con «…» su desktop | `ReportSetCard.svelte:475`: l'etichetta del ruolo ha larghezza fissa `w-26` (104 px) e `truncate`; la riga delle date si allinea con `pl-28`/`pr-44` | colonna dell'etichetta larga quanto l'etichetta più lunga (griglia `max-content` / `1fr` / `max-content`, con le date allineate alla colonna delle barre); a capo solo se lo schermo è stretto |
+| R4 | Dopo «Togli dal set» la scelta del plugin compare solo dopo Indietro/Avanti; dopo «Leggi da solo con…» il plugin in tabella è «—» | La colonna Plugin mostra la select **solo sui file spuntati** (`ImportWizardModal.svelte`, colonna `plugin`: `if (!sel) return '—'`). «Togli dal set» toglie la spunta di proposito; «Leggi da solo» e «uno per uno» tengono la spunta solo se c'era già, e con un set incompleto non c'era. Indietro/Avanti rispunta da solo i file caricati in questa sessione (`pickBestPlugin`), ed è per questo che la select «compariva» | da decidere col developer (17.4) |
+| R5 | La nota del plugin predefinito non si trova | Il broker creato, «danske bank» (id 9), ha `default_import_plugin = NULL` (verificato sul DB della review, in sola lettura). La nota esiste solo se il predefinito del broker è un altro plugin che legge un file del set (per esempio Generic CSV con `cash-both`): la sua assenza è corretta, non è un difetto. Le voci del menu ⋮ sono un'altra cosa (B) | nel prossimo giro, guida più chiara: impostare Generic CSV come predefinito; la nota è la riga blu con (i) in cima alla scheda aperta |
+| R6 | `cash-both` col generico: 9 depositi e 23 prelievi, torna? | Sì: 32 righe; la colonna `type` del file di prova viene dal segno di ogni importo (9 positivi, 23 negativi) | spiegarlo al developer: `cash-both` serve solo perché è l'unico file che leggono sia Danske sia il generico |
+| R7 | La memoria resta uscendo e rientrando | — | ✅ confermata dal developer |
+
+### 17.4 ⏳ Decisioni del developer
+
+- **R2, come si torna indietro da «uno per uno»** (testuale): «direi che per tornare indietro devo rimettere il plugin della banca in ogniuno dei file, e per farlo ovviamente deve essere possibile raggiungere il menù, levare dal set i file poi trovo corretto li faccia anche deselezionare, singolarmente sono ancora selezionati, ad essere cambiato è stato il modo di parsarli».
+  - Quindi: niente scheda ridotta né riga «Leggili come set». Si torna al set rimettendo il plugin della banca file per file, nella colonna Plugin, che dev'essere raggiungibile;
+  - «Togli dal set» toglie anche la spunta: va bene così;
+  - «Leggi i file uno per uno» **lascia spuntati tutti i file**: cambia solo come vengono letti. Un file che nessun plugin singolo legge resta spuntato, senza plugin, con la select su «Seleziona plugin…», da cui si può rimettere la banca.
+- **R4, la select del plugin sui file non spuntati** (testuale): «il select dovrebbe stare al posto del - , è un bug che non ci sia, dalla tua risposta immagino sia perchè togliendoli dal set si despuntano, se non è quella la causa trovala tu».
+  - La causa è proprio quella: la colonna Plugin mostra `—` quando il file non è in `selectedFiles`;
+  - più un difetto latente trovato nell'analisi: la tabella dei file singoli prende la selezione solo quando si monta (`initialSelectedIds`, in `untrack`). Un file che arriva dal set in una tabella già montata, per esempio con «Leggi da solo», risulta in `selectedFiles` ma senza spunta, e il primo clic su un'altra casella della tabella lo deseleziona senza dirlo.
+- **R1** (a voce nella domanda, senza obiezioni): `SimpleSelect` al posto della select nativa. **R3**: l'etichetta prende tutta la larghezza che le serve.
+
+### 17.5 ⏳ Il piano delle correzioni (H), approvato
+
+**Via del coordinatore** (2026-10-06): R1, R2 come ha deciso il developer, R3, R4 più il difetto latente, con `DataTable` intatto. `--clean` sulla 6156 prima di ogni giro E2E fino alla fine di H; per il secondo giro di review, `populate --force --clean` solo sulla data-dir di review. Nessun ramo tocca i 6 file.
+
+**La spunta alla scelta del plugin**, confermata dal developer (ask_user, testuale): «Sì: scegliere un plugin su un file non spuntato lo spunta (Consigliato)». Vale anche per «Leggi da solo con…», che è una scelta di plugin.
+
+**⚠️ Fuori pista — R4 ridefinito dal developer, dopo i rossi del primo giro** (testuale, nella chat di L): «riguardo al file non spuntato, ripeto che l'errore non è mostrare - per quelli non spuntati, è despuntare i file tolti dal set quando si chiede di trattare tutto il set come file singoli, per l'excel capisco che venga mostrato "nessun plugin disponibile" ma sui csv ni, dipende».
+- Riepilogo proposto da L e confermato (ask_user, testuale: «Sì, è così (Consigliato)»), che **sostituisce** la conferma precedente:
+  1. «Leggi i file uno per uno» non despunta più nessun file e cambia solo come vengono letti. Il file che un plugin singolo legge lo prende (`cash-both` → Generic CSV). Il file che nessun plugin singolo legge (l'Excel, la cassa come la esporta la banca) resta spuntato senza plugin, con la select su «Seleziona plugin…» che offre comunque Danske per tornare al set; finché non si sceglie, «Analizza» resta bloccato;
+  2. i file non spuntati, per esempio dopo «Togli dal set», **tengono il «—» come oggi**: per scegliere il plugin si spuntano prima;
+  3. le scelte di plugin **non cambiano la spunta**: «Leggi da solo con…» lascia il file spuntato o no com'era. Resta la correzione del difetto latente: la casella della tabella dei singoli coincide sempre con la selezione del wizard.
+- Quindi cadono la select sui file non spuntati e la spunta alla scelta. I rossi H-E3, H-E4, H-E5 e i due G-memory adattati vanno riscritti sul nuovo contratto (test-author).
+
+1. **I test rossi** (test-author):
+   - Vitest `ReportSetCard.test.ts`: «Letto come» è una `SimpleSelect` (`report-set-read-as-button`, le opzioni via `optionTestId`), e la scelta chiama `onReadAs`;
+   - E2E `tx-import-report-set.spec.ts`:
+     - «uno per uno» lascia spuntati tutti i file; l'XLSX ha la select su «Seleziona plugin…»; «Analizza» resta bloccato finché si sceglie; rimettere Danske su ogni file riforma il set;
+     - «Togli dal set» toglie la spunta e mostra la select al posto di «—»; scegliere Danske rispunta il file e lo rimette nel set;
+     - «Leggi da solo con Generic CSV» da un set incompleto mostra Generic CSV, col file spuntato;
+     - la casella della tabella coincide sempre con la selezione;
+     - l'etichetta della timeline non è troncata su desktop (`scrollWidth ≤ clientWidth`);
+   - adattare i test G che usano la select nativa.
+2. **La correzione**:
+   - `ReportSetCard.svelte`: R1 con `SimpleSelect` `compact`; R3 con la timeline a griglia;
+   - `ImportWizardModal.svelte`:
+     - `readSetAs(set, null)` conserva la selezione di ogni membro;
+     - la colonna Plugin mostra la select anche sui file non spuntati, col valore della scelta in vigore, e scegliere un plugin spunta il file (proposta di L: il developer non ha obiettato, ma va confermato nel secondo giro);
+     - la tabella dei singoli si rimonta quando cambiano i suoi file, e spunta con `toggleRowSelectionById` quando la scelta lo richiede.
+3. **I gate**: `tx-unit`, `component-unit`, `front check`, `front build --debug`; E2E `report-set` (con `--clean` prima), `-guide`, `handoff`, `file-selection`, `upload`, `flow`; `select`.
+4. **La doc** (docs-writer, solo EN): `import-wizard.md` (testid e comportamento) e `danske-bank.en.md` (come si torna al set; i file tolti hanno la select).
+5. Checkpoint, poi il **secondo giro di review** sulla 6166, da capo, con una guida più chiara per la nota (Generic CSV come predefinito).
+
+### 17.6 ✅ H: il rosso, la cura, i gate (2026-10-06)
+
+> **Note implementazione**:
+> - **Il rosso** (test-author, due giri; il secondo dopo la ridefinizione di R4):
+>   - Vitest `ReportSetCard.test.ts`: 6 rossi, cioè 5 test R1 adattati a `SimpleSelect` e il nuovo R3 sulle etichette;
+>   - E2E `tx-import-report-set.spec.ts`: 5 rossi su 24, ciascuno sul suo punto: H-E1 e H-E2 ×2 (R1, il trigger manca; poi R2), H-E6 (difetto latente: la casella «unchecked» mentre il wizard tiene il file selezionato), H-E7 (R3). Più due guardie verdi: H-E3, la via del ritorno da «Togli dal set», e H-E5, «Leggi da solo» che non cambia la spunta. H-E4 è cancellato e i G-memory sono tornati a HEAD.
+> - **La cura**:
+>   - `ReportSetCard.svelte`:
+>     - R1: `SimpleSelect` `compact`, testid `report-set-read-as`, opzioni `report-set-read-as-option-<code>` e `-one-by-one` (valore sentinella `__one_by_one__`, perché un valore vuoto vorrebbe dire «nessuna scelta»);
+>     - R3: la timeline è una griglia `fit-content(40%)` / `minmax(0,1fr)` / `max-content`; le date e la legenda stanno nella colonna delle barre; le etichette hanno `report-set-timeline-label` e `data-role`, `history` per LibreFolio;
+>   - `ImportWizardModal.svelte`:
+>     - R2: `readSetAs` cambia solo il plugin dei membri e ne conserva la spunta;
+>     - difetto latente: la tabella dei singoli è dentro un `{#key}` sugli id dei suoi file, quindi si rimonta quando un file entra o esce e rilegge `initialSelectedIds`. `DataTable` emette `onSelectionChange` solo su azioni dell'utente, quindi il rimontaggio non tocca la selezione;
+>   - Prettier sui due file, con le modifiche confinate alle zone toccate.
+> - **I gate** (corsia 6156, un comando per volta, `--clean` prima del giro):
+>
+> | Verifica | Esito |
+> |---|---|
+> | `front-transaction tx-unit` | `627 passed` (i 6 rossi sono verdi) |
+> | `front check` | **0/0** |
+> | `front build --debug` | ok |
+> | `tx-import-report-set` | **24 passed** a 1 worker (carico 15) e **24 passed** a 4 worker |
+> | `-guide` / `tx-bulk-import-handoff` / `tx-import-file-selection` / `tx-import-upload` / `tx-import-flow` / `tx-import-resolution` | `2` / `2` / `2` / `9` / `10` / `12 passed` |
+> | `front-utility select` / `files` / `component-unit` | `17` / `22` / `2233 passed` |
+>
+> - Porta 6156 libera alla fine.
+
+> **Note implementazione — la doc di H (2026-10-06)**, dal docs-writer, solo EN:
+> - `user/transactions/import/danske-bank.en.md`, «🔀 How the set is read»: «uno per uno» cambia solo come vengono letti i file e non la spunta; un file spuntato senza plugin mostra *Select plugin…* e «Analizza» aspetta. «Leggi da solo» non cambia la spunta; solo «Togli dal set» toglie la spunta. Il file non spuntato mostra «—»: si spunta per scegliere il plugin, e Danske lo rimette nel set (dopo «uno per uno», file per file). La nota è «in cima alla scheda aperta», che risponde a R5. La pagina non ha traduzioni.
+> - `developer/frontend/components/features/import-wizard.md`: un punto nuovo sui file singoli (`handleSelectionChange`, colonna Plugin, `step2CanParse` e i due avvisi, il `{#key}` e perché); la griglia della timeline e `report-set-timeline-label`; «Read as» con `SimpleSelect` e i testid; `readSetAs`, `readFileAlone` e `removeFileFromSet` col nuovo contratto; il ritorno al set file per file.
+> - **⚠️ Fuori pista — crash dell'app verso le 14:18**, durante il lavoro del docs-writer, che non ha consegnato il rapporto:
+>   - stato ritrovato: HEAD `af5591991`, 7 file modificati, niente in stage, nessuna porta occupata e nessun processo rimasto;
+>   - i file di codice hanno l'ultima modifica alle 13:53, prima dei gate verdi, quindi i gate restano validi;
+>   - le due pagine (14:16 e 14:18) le ho rilette: sono complete, coerenti col codice e senza frasi vecchie rimaste (verificato con grep), e `importWizard.pluginRequired` e l'ordine degli avvisi esistono come la doc li descrive;
+>   - ho rifatto il passo interrotto, cioè i gate della doc: `mkdocs build` strict exit 0 con 0 WARNING/ERROR; `check-links` 81 validi, i 3 gialli noti e il solo rosso D28.
+> - **Controlli finali**: `git diff --check` pulito; Prettier `--check` sui 4 file del frontend pulito; privacy 0 collisioni su 745 righe aggiunte; porte 6156 e 6166 libere.
+
+### 17.7 ✅ H — pronta per il checkpoint (2026-10-06)
+
+- Poi il secondo giro di review sulla 6166, da capo, dopo il checkpoint.
