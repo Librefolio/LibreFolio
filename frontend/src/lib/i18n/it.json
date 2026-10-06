@@ -65,7 +65,12 @@
     "openFxPair": "Apri dettaglio coppia FX",
     "editorTipDesktop": "Doppio clic sul grafico per saltare a quella data",
     "editorTipMobile": "Pressione prolungata sul grafico per saltare a quella data",
-    "aiExport": "Export AI"
+    "aiExport": "Export AI",
+    "browse": {
+      "previous": "Asset precedente",
+      "next": "Asset successivo",
+      "position": "Asset {current} di {total}"
+    }
   },
   "assets": {
     "create": "Nuovo asset",

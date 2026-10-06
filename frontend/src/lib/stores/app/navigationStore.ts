@@ -27,6 +27,12 @@ import {registerClientSessionReset} from '$lib/stores/app/clientSession';
 let stack: string[] = [];
 
 /**
+ * Pathname of a navigation announced as a replacement (`expectReplaceNavigation`): when the next
+ * tracked navigation goes there, it takes the place of the top entry instead of stacking on it.
+ */
+let expectedReplacePathname: string | null = null;
+
+/**
  * Track a navigation event from afterNavigate().
  *
  * @param navigationType - `nav.type` from SvelteKit ('enter', 'link', 'goto', 'form', 'popstate')
@@ -34,7 +40,9 @@ let stack: string[] = [];
  */
 export function trackNavigation(navigationType: string | undefined, fullUrl: string | undefined) {
     if (!fullUrl) return;
-
+    // An announced replacement covers the next navigation only, wherever it goes.
+    const replacePathname = expectedReplacePathname;
+    expectedReplacePathname = null;
     if (navigationType === 'popstate') {
         // User pressed back/forward. Pop the top entry if it matches where
         // we were; otherwise trust the browser and re-anchor the stack.
@@ -53,14 +61,25 @@ export function trackNavigation(navigationType: string | undefined, fullUrl: str
         // query param updates on the same page.
         const currentPathname = stack.length > 0 ? stack[stack.length - 1].split('?')[0] : '';
         const newPathname = fullUrl.split('?')[0];
-        if (currentPathname === newPathname) {
+        if (currentPathname === newPathname || (stack.length > 0 && newPathname === replacePathname)) {
             // Same page, different query params (e.g. filter change via replaceState)
-            // → update in place instead of pushing.
+            // → update in place instead of pushing. Likewise an announced replacement
+            // (prev/next between assets): Back must skip it, not return to it.
             stack[stack.length - 1] = fullUrl;
         } else {
             stack.push(fullUrl);
         }
     }
+}
+
+/**
+ * Announce that the next navigation to `url` replaces the current page rather than going deeper —
+ * the caller navigates with `goto(url, {replaceState: true})`. Without this the stack would push it,
+ * and `goBack()` would return to the page it replaced. Consumed by the next tracked navigation,
+ * whatever its destination; `popstate`, `enter` and `resetNavDepth()` drop it too.
+ */
+export function expectReplaceNavigation(url: string) {
+    expectedReplacePathname = url.split('?')[0];
 }
 
 /**
@@ -89,6 +108,7 @@ export function goBack(fallbackPath: string) {
  */
 export function resetNavDepth() {
     stack = [];
+    expectedReplacePathname = null;
 }
 
 registerClientSessionReset('navigationStore', resetNavDepth);

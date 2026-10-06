@@ -65,7 +65,12 @@
     "openFxPair": "Ouvrir le détail de la paire FX",
     "editorTipDesktop": "Double-cliquez sur le graphique pour aller à cette date",
     "editorTipMobile": "Appui long sur le graphique pour aller à cette date",
-    "aiExport": "Export IA"
+    "aiExport": "Export IA",
+    "browse": {
+      "previous": "Actif précédent",
+      "next": "Actif suivant",
+      "position": "Actif {current} sur {total}"
+    }
   },
   "assets": {
     "create": "Nouvel actif",
