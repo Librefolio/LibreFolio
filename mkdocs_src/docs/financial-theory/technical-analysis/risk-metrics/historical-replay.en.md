@@ -77,7 +77,7 @@ Every holding left out carries exactly one reason:
 
 What becomes of a holding left out depends on whether the replay has weights.
 
-**On a portfolio** — the Risk tab of the Dashboard or of a broker's page — the holding leaves the replay, but its weight does not. The excluded weight is added to the cash share $c$, which means it is replayed as **earning exactly zero** for the whole episode.
+**On a portfolio** — the Risk tab of the Dashboard or of a broker's page — the holding leaves the replay, but its weight does not. The excluded weight is added to the cash share $c$, which means it is replayed as **earning exactly zero** for the whole episode. That zero belongs to the total, not to the holding: the holding gets no return of its own, and the per-holding returns list only the holdings that were replayed — a zero among them would state a return that nobody measured.
 
 That treatment is worth a moment, because it is not neutral. Leaving a holding out does not make the portfolio smaller; it makes that fraction of the portfolio flat. In an episode where everything fell, a 10% position held flat is an implicit claim that it would have been the best thing you owned. Nobody makes that claim on purpose — the engine applies it on its own — which is why the result names every holding it left out, with its reason and its share of the value.
 
@@ -85,17 +85,18 @@ That treatment is worth a moment, because it is not neutral. Leaving a holding o
 
 ### 🔎 What the Result Shows {: #what-the-result-shows }
 
-On those three tabs, the replay says what it left out next to the figures it reports:
+On those three tabs, the replay says what it left out before the figures it reports:
 
-- the holdings left out, **grouped by reason** — on a portfolio each with its share of the value, under a line stating how much of the value counts as cash at zero return;
-- a warning **above the total** when more than half of the portfolio's value is left out, stating the share the result still covers: past that point the total speaks for a minority of the portfolio, with the rest held flat beside it;
+- a warning **above everything else** when more than half of the portfolio's value is left out, stating the share the result still covers: past that point the total speaks for a minority of the portfolio, with the rest held flat beside it;
+- as soon as one holding is left out, a box **above the total, where there is one, and the bars** lists the holdings left out, **grouped by reason**, each as a badge with its icon and its name — on a portfolio with its share of the value too, under a line stating how much of the value counts as cash at zero return. The [common period](#the-common-period), when there is one, is offered in the same box;
+- the bars draw only the holdings that were **replayed**: a holding left out has [no return of its own](#what-takes-its-place), so it gets no bar, not a bar at zero;
 - when every holding is left out, no figure: the result says there is **nothing to replay**, and lists the reasons.
 
 ### 📆 The Common Period {: #the-common-period }
 
 When the window's edges are what left holdings out — a late start, a gap before the window, no recent price at its end — the analysis proposes the part of the window in which they are priced as well. That part begins the day after the latest first quote, inside the window, of a holding without a price at the start, so that this quote becomes its starting price; it ends at the earliest last quote of a holding without a recent price at the end. Before it is offered, a second reading of the quotes over that shorter window confirms it: every holding it brings back, and every holding the window already covered, must be priced at both of its ends, or nothing is proposed. A holding left out for having no prices in the window, or no exchange rate, is never part of it: no shorter window would bring it back.
 
-On those tabs, the proposal shows its dates and how many holdings it brings back, and one click replays it — also when nothing at all could be replayed over the original window. When the window was one of the built-in crises and the proposal is shorter, it is marked as covering only part of the crisis. That is the trade-off: you get the holdings back, but you replay a shorter stretch than the episode, and whatever the market did outside that stretch is no longer in the answer.
+On those tabs, the proposal is a button inside the box that lists what was left out: it shows its dates and how many holdings it brings back, and one click replays it — also when nothing at all could be replayed over the original window. When the replay ran over one of the built-in crises — still chosen in the menu, on the crisis's own dates — and the proposal is shorter, it is marked as covering only part of the crisis. That is the trade-off: you get the holdings back, but you replay a shorter stretch than the episode, and whatever the market did outside that stretch is no longer in the answer. Choosing **No preset**, a quick range or a date of your own sets the crisis aside: the next replay is of a period, no longer of the crisis, and carries no such mark.
 
 ### 🎭 Proxies {: #proxies }
 
@@ -109,7 +110,7 @@ A proxy lets another asset's return series stand in for a holding without the hi
 
 ## 💡 Interpretation {: #interpretation }
 
-The replay produces a compounded return for the episode, and per-holding returns underneath it. Read them as a **conditional statement**: *this composition, through those specific dates, with no rebalancing, cash flat — and flat with it every holding the engine left out — and a proxy only where one was chosen*. On a selection of assets there is no composition to compound and nothing is held flat: the per-asset returns stand alone, for the assets that could be replayed.
+The replay produces a compounded return for the episode, and underneath it a return for each holding it replayed. Read them as a **conditional statement**: *this composition, through those specific dates, with no rebalancing, cash flat — and flat with it every holding the engine left out — and a proxy only where one was chosen*. On a selection of assets there is no composition to compound and nothing is held flat: the per-asset returns stand alone, for the assets that could be replayed.
 
 Its strength is that every number in it happened. The sequence of returns is the one the market delivered — the drawdown path, the clustering of bad days, the speed of the recovery are all real, which is exactly what a distributional summary cannot reproduce. Its weakness is the mirror image: it is **one** episode. It happened once, and the next stress will not be a copy of it.
 
